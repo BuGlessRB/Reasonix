@@ -141,8 +141,8 @@ var (
 	legacyOpenCodeGoModels           = []string{"glm-5.2", "glm-5.1", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4-pro", "deepseek-v4-flash", "mimo-v2.5-pro", "mimo-v2.5"}
 	preVisionOpenCodeGoModels        = []string{"glm-5.3", "glm-5.2", "glm-5.1", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4-pro", "deepseek-v4-flash", "mimo-v2.5-pro", "mimo-v2.5", "hy3"}
 	preVisionOpenCodeGoVisionModels  = []string{"kimi-k3"}
-	opencodeGoModels                 = []string{"glm-5.3", "glm-5.2", "glm-5.1", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4-pro", "deepseek-v4-flash", openai.OfficialDeepSeekVisionModel, "mimo-v2.5-pro", "mimo-v2.5", "hy3"}
-	opencodeGoVisionModels           = []string{"kimi-k3", openai.OfficialDeepSeekVisionModel}
+	opencodeGoModels                 = provider.OpenCodeGoModelIDs(provider.OpenCodeGoRouteChat)
+	opencodeGoVisionModels           = provider.OpenCodeGoVisionModelIDs(provider.OpenCodeGoRouteChat)
 	opencodeZenAnthropicModels       = []string{"claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5", "qwen3.6-plus", "qwen3.5-plus", "qwen3.6-plus-free"}
 	opencodeZenAnthropicVisionModels = []string{"claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5"}
 

@@ -2,6 +2,13 @@ package config
 
 import "reasonix/internal/provider"
 
+var (
+	opencodeGoAnthropicModels       = provider.OpenCodeGoModelIDs(provider.OpenCodeGoRouteAnthropic)
+	opencodeGoAnthropicVisionModels = provider.OpenCodeGoVisionModelIDs(provider.OpenCodeGoRouteAnthropic)
+	opencodeGoResponsesModels       = provider.OpenCodeGoModelIDs(provider.OpenCodeGoRouteResponses)
+	opencodeGoResponsesVisionModels = provider.OpenCodeGoVisionModelIDs(provider.OpenCodeGoRouteResponses)
+)
+
 func withOpenCodeGoChatContextOverrides(base map[string]ProviderModelOverride) map[string]ProviderModelOverride {
 	if base == nil {
 		base = map[string]ProviderModelOverride{}
@@ -172,8 +179,8 @@ var opencodeGoRecommendedPreset = ProviderPreset{
 			Name:            "opencode-go-anthropic",
 			Kind:            "anthropic",
 			BaseURL:         "https://opencode.ai/zen/go",
-			Models:          []string{"qwen3.8-max", "qwen3.7-plus", "qwen3.7-max", "qwen3.6-plus", "minimax-m3", "minimax-m2.7", "minimax-m2.5"},
-			VisionModels:    []string{"qwen3.8-max", "qwen3.7-plus", "qwen3.6-plus"},
+			Models:          opencodeGoAnthropicModels,
+			VisionModels:    opencodeGoAnthropicVisionModels,
 			Default:         "qwen3.7-plus",
 			APIKeyEnv:       "OPENCODE_GO_API_KEY",
 			Thinking:        "adaptive",
@@ -186,8 +193,8 @@ var opencodeGoRecommendedPreset = ProviderPreset{
 			Name:             "opencode-go-responses",
 			Kind:             "responses",
 			BaseURL:          "https://opencode.ai/zen/go/v1",
-			Models:           []string{"grok-4.5", "gpt-5.6-luna", "muse-spark-1.2-contributor"},
-			VisionModels:     []string{"grok-4.5", "gpt-5.6-luna", "muse-spark-1.2-contributor"},
+			Models:           opencodeGoResponsesModels,
+			VisionModels:     opencodeGoResponsesVisionModels,
 			Default:          "grok-4.5",
 			APIKeyEnv:        "OPENCODE_GO_API_KEY",
 			ResponsesMode:    "stateless",
@@ -216,8 +223,8 @@ var opencodeGoAnthropicPreset = ProviderPreset{
 		Name:            "opencode-go-anthropic",
 		Kind:            "anthropic",
 		BaseURL:         "https://opencode.ai/zen/go",
-		Models:          []string{"qwen3.8-max", "qwen3.7-plus", "qwen3.7-max", "qwen3.6-plus", "minimax-m3", "minimax-m2.7", "minimax-m2.5"},
-		VisionModels:    []string{"qwen3.8-max", "qwen3.7-plus", "qwen3.6-plus"},
+		Models:          opencodeGoAnthropicModels,
+		VisionModels:    opencodeGoAnthropicVisionModels,
 		Default:         "qwen3.7-plus",
 		APIKeyEnv:       "OPENCODE_GO_API_KEY",
 		Thinking:        "adaptive",
@@ -243,8 +250,8 @@ var opencodeGoResponsesPreset = ProviderPreset{
 		Name:             "opencode-go-responses",
 		Kind:             "responses",
 		BaseURL:          "https://opencode.ai/zen/go/v1",
-		Models:           []string{"grok-4.5", "gpt-5.6-luna", "muse-spark-1.2-contributor"},
-		VisionModels:     []string{"grok-4.5", "gpt-5.6-luna", "muse-spark-1.2-contributor"},
+		Models:           opencodeGoResponsesModels,
+		VisionModels:     opencodeGoResponsesVisionModels,
 		Default:          "grok-4.5",
 		APIKeyEnv:        "OPENCODE_GO_API_KEY",
 		ResponsesMode:    "stateless",

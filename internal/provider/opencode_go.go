@@ -2,6 +2,7 @@ package provider
 
 import (
 	"net/url"
+	"sort"
 	"strings"
 )
 
@@ -28,43 +29,94 @@ const (
 
 // OpenCodeGoChatModels is the official Chat Completions catalog.
 func OpenCodeGoChatModels() map[string]OpenCodeGoModelLimits {
-	return map[string]OpenCodeGoModelLimits{
-		"glm-5.3":                      {Context: 1_000_000, MaxOutput: 131_072},
-		"glm-5.2":                      {Context: 1_000_000, MaxOutput: 131_072},
-		"glm-5.1":                      {Context: 202_752, MaxOutput: 32_768},
-		"kimi-k3":                      {Context: 1_048_576, MaxOutput: 131_072},
-		"kimi-k2.7-code":               {Context: 262_144, MaxOutput: 262_144},
-		"kimi-k2.6":                    {Context: 262_144, MaxOutput: 65_536},
-		"deepseek-v4-pro":              {Context: 1_000_000, MaxOutput: 384_000},
-		"deepseek-v4-flash":            {Context: 1_000_000, MaxOutput: 384_000},
-		"deepseek-v4-flash-vision-exp": {Context: 1_000_000, MaxOutput: 384_000},
-		"mimo-v2.5-pro":                {Context: 1_048_576, MaxOutput: 128_000},
-		"mimo-v2.5":                    {Context: 1_000_000, MaxOutput: 128_000},
-		"hy3":                          {Context: 256_000, MaxOutput: 64_000},
-	}
+	return mergeOpenCodeGoLimits(OpenCodeGoRouteChat, map[string]OpenCodeGoModelLimits{
+		"glm-5.3": {Context: 1_000_000, MaxOutput: 131_072}, "glm-5.2": {Context: 1_000_000, MaxOutput: 131_072},
+		"glm-5.1": {Context: 202_752, MaxOutput: 32_768}, "kimi-k3": {Context: 1_048_576, MaxOutput: 131_072},
+		"kimi-k2.7-code": {Context: 262_144, MaxOutput: 262_144}, "kimi-k2.6": {Context: 262_144, MaxOutput: 65_536},
+		"deepseek-v4-pro": {Context: 1_000_000, MaxOutput: 384_000}, "deepseek-v4-flash": {Context: 1_000_000, MaxOutput: 384_000},
+		"deepseek-v4-flash-vision-exp": {Context: 1_000_000, MaxOutput: 384_000}, "mimo-v2.5-pro": {Context: 1_048_576, MaxOutput: 128_000},
+		"mimo-v2.5": {Context: 1_000_000, MaxOutput: 128_000}, "hy3": {Context: 256_000, MaxOutput: 64_000},
+	})
 }
 
 // OpenCodeGoAnthropicModels is the official Anthropic-compatible catalog.
 func OpenCodeGoAnthropicModels() map[string]OpenCodeGoModelLimits {
-	return map[string]OpenCodeGoModelLimits{
-		"qwen3.8-max":  {Context: 1_000_000, MaxOutput: 131_072},
-		"qwen3.7-max":  {Context: 1_000_000, MaxOutput: 65_536},
-		"qwen3.7-plus": {Context: 1_000_000, MaxOutput: 65_536},
-		"qwen3.6-plus": {Context: 1_000_000, MaxOutput: 65_536},
-		"minimax-m3":   {Context: 1_000_000, MaxOutput: 131_072},
-		"minimax-m2.7": {Context: 204_800, MaxOutput: 131_072},
+	return mergeOpenCodeGoLimits(OpenCodeGoRouteAnthropic, map[string]OpenCodeGoModelLimits{
+		"qwen3.8-max": {Context: 1_000_000, MaxOutput: 131_072}, "qwen3.7-max": {Context: 1_000_000, MaxOutput: 65_536},
+		"qwen3.7-plus": {Context: 1_000_000, MaxOutput: 65_536}, "qwen3.6-plus": {Context: 1_000_000, MaxOutput: 65_536},
+		"minimax-m3": {Context: 1_000_000, MaxOutput: 131_072}, "minimax-m2.7": {Context: 204_800, MaxOutput: 131_072},
 		"minimax-m2.5": {Context: 204_800, MaxOutput: 65_536},
-	}
+	})
 }
 
 // OpenCodeGoResponsesModels is the official Responses API catalog. DeepSeek's
 // separately verified alternative Responses route remains supported below.
 func OpenCodeGoResponsesModels() map[string]OpenCodeGoModelLimits {
-	return map[string]OpenCodeGoModelLimits{
-		"grok-4.5":                   {Context: 500_000, MaxOutput: 500_000},
-		"gpt-5.6-luna":               {Context: 1_050_000, MaxOutput: 128_000},
+	return mergeOpenCodeGoLimits(OpenCodeGoRouteResponses, map[string]OpenCodeGoModelLimits{
+		"grok-4.5": {Context: 500_000, MaxOutput: 500_000}, "gpt-5.6-luna": {Context: 1_050_000, MaxOutput: 128_000},
 		"muse-spark-1.2-contributor": {Context: 1_048_576, MaxOutput: 131_072},
+	})
+}
+
+func mergeOpenCodeGoLimits(route string, compatibility map[string]OpenCodeGoModelLimits) map[string]OpenCodeGoModelLimits {
+	out := make(map[string]OpenCodeGoModelLimits, len(compatibility))
+	for id, limit := range compatibility {
+		out[id] = limit
 	}
+	for _, model := range piCatalogOpenCodeGoModels(route) {
+		out[model.ID] = OpenCodeGoModelLimits{Context: model.ContextWindow, MaxOutput: model.MaxTokens}
+	}
+	return out
+}
+
+// OpenCodeGoModelIDs returns the union of the embedded Pi catalog and the
+// verified compatibility catalog, preserving models still served by the
+// endpoint even if one catalog snapshot lags the other.
+func OpenCodeGoModelIDs(route string) []string {
+	var models map[string]OpenCodeGoModelLimits
+	switch route {
+	case OpenCodeGoRouteChat:
+		models = OpenCodeGoChatModels()
+	case OpenCodeGoRouteAnthropic:
+		models = OpenCodeGoAnthropicModels()
+	case OpenCodeGoRouteResponses:
+		models = OpenCodeGoResponsesModels()
+	}
+	ids := make([]string, 0, len(models))
+	for id := range models {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func OpenCodeGoVisionModelIDs(route string) []string {
+	ids := OpenCodeGoModelIDs(route)
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if info, ok := OpenCodeGoModelInfo(routeKind(route), routeURL(route), id); ok && info.SupportsInput(ModalityImage) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func routeKind(route string) string {
+	switch route {
+	case OpenCodeGoRouteAnthropic:
+		return "anthropic"
+	case OpenCodeGoRouteResponses:
+		return "responses"
+	default:
+		return "openai"
+	}
+}
+
+func routeURL(route string) string {
+	if route == OpenCodeGoRouteAnthropic {
+		return "https://opencode.ai/zen/go"
+	}
+	return "https://opencode.ai/zen/go/v1"
 }
 
 func officialOpenCodeGoPath(baseURL string) (string, bool) {

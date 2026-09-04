@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"sort"
 	"strings"
 
 	piAI "github.com/sky-valley/pi/ai"
@@ -72,6 +73,53 @@ func PiCatalogModelInfos(providerID string) []ModelInfo {
 		}
 	}
 	return out
+}
+
+// PiCatalogOpenCodeGoModelIDs returns the exact model IDs exposed by one
+// OpenCode Go wire route in the embedded catalog.
+func PiCatalogOpenCodeGoModelIDs(route string) []string {
+	models := piCatalogOpenCodeGoModels(route)
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		ids = append(ids, model.ID)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// PiCatalogOpenCodeGoVisionModelIDs returns the route's catalog models that
+// explicitly accept image input.
+func PiCatalogOpenCodeGoVisionModelIDs(route string) []string {
+	models := piCatalogOpenCodeGoModels(route)
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		if modelInfoFromPi(model).SupportsInput(ModalityImage) {
+			ids = append(ids, model.ID)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func piCatalogOpenCodeGoModels(route string) []*piAI.Model {
+	var wantAPI, wantBaseURL string
+	switch route {
+	case OpenCodeGoRouteChat:
+		wantAPI, wantBaseURL = "openai-completions", "https://opencode.ai/zen/go/v1"
+	case OpenCodeGoRouteAnthropic:
+		wantAPI, wantBaseURL = "anthropic-messages", "https://opencode.ai/zen/go"
+	case OpenCodeGoRouteResponses:
+		wantAPI, wantBaseURL = "openai-responses", "https://opencode.ai/zen/go/v1"
+	default:
+		return nil
+	}
+	models := make([]*piAI.Model, 0)
+	for _, model := range piAI.GetModels("opencode-go") {
+		if model != nil && strings.EqualFold(string(model.Api), wantAPI) && strings.TrimRight(model.BaseURL, "/") == wantBaseURL {
+			models = append(models, model)
+		}
+	}
+	return models
 }
 
 func modelInfoFromPi(model *piAI.Model) ModelInfo {

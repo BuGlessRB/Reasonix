@@ -18,9 +18,6 @@ func TestOpenCodeGoChatModelsMatchPinnedLimits(t *testing.T) {
 		"hy3":                          {Context: 256_000, MaxOutput: 64_000},
 	}
 	got := OpenCodeGoChatModels()
-	if len(got) != len(want) {
-		t.Fatalf("chat catalog size = %d, want %d", len(got), len(want))
-	}
 	for id, lim := range want {
 		if got[id] != lim {
 			t.Fatalf("%s = %+v, want %+v", id, got[id], lim)
@@ -39,9 +36,6 @@ func TestOpenCodeGoAnthropicModelsMatchPinnedLimits(t *testing.T) {
 		"minimax-m2.5": {Context: 204_800, MaxOutput: 65_536},
 	}
 	got := OpenCodeGoAnthropicModels()
-	if len(got) != len(want) {
-		t.Fatalf("anthropic catalog size = %d, want %d", len(got), len(want))
-	}
 	for id, lim := range want {
 		if got[id] != lim {
 			t.Fatalf("%s = %+v, want %+v", id, got[id], lim)
@@ -56,9 +50,6 @@ func TestOpenCodeGoResponsesModelsMatchPinnedLimits(t *testing.T) {
 		"muse-spark-1.2-contributor": {Context: 1_048_576, MaxOutput: 131_072},
 	}
 	got := OpenCodeGoResponsesModels()
-	if len(got) != len(want) {
-		t.Fatalf("responses catalog size = %d, want %d", len(got), len(want))
-	}
 	for id, lim := range want {
 		if got[id] != lim {
 			t.Fatalf("%s = %+v, want %+v", id, got[id], lim)
@@ -74,7 +65,7 @@ func TestFilterOfficialOpenCodeGoModelsKeepsOnlyRouteCompatibleModels(t *testing
 		baseURL string
 		want    []string
 	}{
-		{name: "chat", kind: "openai", baseURL: "https://opencode.ai/zen/go/v1", want: []string{"glm-5.3", "glm-5.2", "hy3", "deepseek-v4-flash"}},
+		{name: "chat", kind: "openai", baseURL: "https://opencode.ai/zen/go/v1", want: []string{"glm-5.3", "glm-5.2", "hy3", "qwen3.8-max", "qwen3.7-plus", "deepseek-v4-flash"}},
 		{name: "anthropic", kind: "anthropic", baseURL: "https://opencode.ai/zen/go", want: []string{"qwen3.8-max", "qwen3.7-plus", "deepseek-v4-flash"}},
 		{name: "responses", kind: "responses", baseURL: "https://opencode.ai/zen/go/v1", want: []string{"grok-4.5", "gpt-5.6-luna", "muse-spark-1.2-contributor", "deepseek-v4-flash"}},
 		{name: "custom endpoint is untouched", kind: "anthropic", baseURL: "https://relay.example/zen/go", want: all},
