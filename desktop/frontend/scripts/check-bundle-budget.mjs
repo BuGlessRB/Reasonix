@@ -357,8 +357,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // (2474.0 KiB measured in CI). Keep this narrowly attributable ratchet rather
 // than removing persisted-result visibility or changing chunk ownership.
 // On the current main-v2 base, the combined measured path is 2474.6 KiB;
-// the model-capability helper and localized status copy add 0.7 KiB; retain
+// the model-capability helper and localized status copy add 0.9 KiB; retain
 // the smallest bounded cross-platform ceiling.
-const rawInitialBudgetKiB = 2_475.4;
+const rawInitialBudgetKiB = 2_475.7;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
