@@ -12,7 +12,7 @@ import {
   providerSupportsServerWebSearchForView,
   providerVisionCapabilityForView,
 } from "../components/SettingsPanel";
-import type { ProviderView } from "../lib/types";
+import type { ProviderModelCapabilityView, ProviderView } from "../lib/types";
 
 let passed = 0;
 let failed = 0;
@@ -53,20 +53,31 @@ window.scrollTo = () => {};
 
 function renderPicker(
   candidates: string[],
-  visionCapability: "configurable" | "unsupported" = "configurable",
-  visionModels: string[] = [],
+  options: {
+    visionModels?: string[];
+    visionModelsConfigured?: boolean;
+    visionCapability?: "configurable" | "unsupported";
+    modelCapabilities?: ProviderModelCapabilityView[];
+  } = {},
 ) {
+  const {
+    visionModels = [],
+    visionModelsConfigured = false,
+    visionCapability = "configurable",
+    modelCapabilities = [],
+  } = options;
   return (
     <LocaleProvider>
       <ProviderEditorModelPicker
         candidates={candidates}
         selectedModels={[]}
         visionModels={visionModels}
+        visionModelsConfigured={visionModelsConfigured}
         visionCapability={visionCapability}
+        modelCapabilities={modelCapabilities}
         contextWindows={{}}
         disabled={false}
         onToggleModel={() => undefined}
-        onToggleVision={() => undefined}
         onContextWindowChange={() => undefined}
         onSelectAll={() => undefined}
         onClear={() => undefined}
@@ -100,13 +111,23 @@ ok(!threw, "model picker can render after async model fetch returns candidates")
 ok(rootEl.textContent?.includes("zen-v1") === true, "model picker shows fetched custom provider models");
 
 await act(async () => {
-  root.render(renderPicker(["deepseek-v4-flash"], "unsupported"));
+  root.render(renderPicker(["deepseek-v4-flash"], {
+    modelCapabilities: [{
+      model: "deepseek-v4-flash",
+      inputModalities: ["text"],
+      state: "unsupported",
+      source: "adapter",
+    }],
+  }));
   await flushPromises();
 });
 ok(rootEl.textContent?.includes("No image input") === true, "known text-only DeepSeek models show a read-only image capability");
 ok(rootEl.querySelectorAll('input[type="checkbox"]').length === 1, "text-only model card does not render a second image checkbox");
 await act(async () => {
-  root.render(renderPicker(["deepseek-v4-flash-vision-exp"], "unsupported", ["deepseek-v4-flash-vision-exp"]));
+  root.render(renderPicker(["deepseek-v4-flash-vision-exp"], {
+    visionModels: ["deepseek-v4-flash-vision-exp"],
+    visionModelsConfigured: true,
+  }));
   await flushPromises();
 });
 ok(rootEl.textContent?.includes("No image input") !== true, "pinned DeepSeek vision SKU does not show the text-only image label");
@@ -114,13 +135,30 @@ ok(rootEl.querySelectorAll('input[type="checkbox"]').length === 1, "pinned DeepS
 await act(async () => {
   root.render(renderPicker(
     ["deepseek-v4-flash", "deepseek-v4-flash-vision-exp"],
-    "configurable",
-    ["deepseek-v4-flash-vision-exp"],
+    {
+      modelCapabilities: [
+        {
+          model: "deepseek-v4-flash",
+          inputModalities: ["text"],
+          state: "unsupported",
+          source: "adapter",
+        },
+        {
+          model: "deepseek-v4-flash-vision-exp",
+          inputModalities: ["text", "image"],
+          state: "supported",
+          source: "adapter",
+        },
+      ],
+    },
   ));
   await flushPromises();
 });
-ok(rootEl.querySelectorAll('input[type="checkbox"]').length === 4, "configurable DeepSeek models expose image-input checkboxes");
-ok(rootEl.textContent?.includes("No image input") !== true, "configurable DeepSeek models do not use the read-only image-unsupported label");
+ok(rootEl.querySelectorAll('input[type="checkbox"]').length === 2, "model capability metadata does not expose image-input checkboxes");
+ok(
+  rootEl.textContent?.includes("Image input") === true && rootEl.textContent?.includes("No image input") === true,
+  "model capability metadata renders read-only supported and unsupported labels",
+);
 ok(providerSupportsServerWebSearch("responses", "https://api.deepseek.com"), "DeepSeek Responses exposes server-side web search");
 ok(providerSupportsServerWebSearch("anthropic", "https://api.deepseek.com/anthropic"), "DeepSeek Anthropic exposes server-side web search");
 ok(!providerSupportsServerWebSearch("openai", "https://api.deepseek.com"), "DeepSeek Chat Completions does not expose server-side web search");
@@ -207,6 +245,12 @@ const deepSeekResponsesProvider: ProviderView = {
   default: "deepseek-v4-flash",
   webSearch: true,
   serverWebSearchCapability: true,
+  modelCapabilities: [{
+    model: "deepseek-v4-flash",
+    inputModalities: ["text"],
+    state: "unsupported",
+    source: "adapter",
+  }],
 };
 
 const longCatAnthropicProvider: ProviderView = {
@@ -291,8 +335,11 @@ await act(async () => {
 const webSearchSwitch = rootEl.querySelector<HTMLInputElement>('input[role="switch"]');
 ok(rootEl.textContent?.includes("Server-side web search") === true, "DeepSeek Responses editor separates service capabilities from model selection");
 ok(webSearchSwitch?.checked === true, "curated DeepSeek Responses capability is enabled in the editor");
-ok(rootEl.textContent?.includes("Image input") === true, "DeepSeek Responses editor exposes per-model image-input checkboxes");
-ok(rootEl.textContent?.includes("No image input") !== true, "DeepSeek Responses editor does not use the read-only image-unsupported label");
+ok(rootEl.textContent?.includes("No image input") === true, "DeepSeek Responses editor renders model image capability read-only");
+ok(
+  rootEl.querySelectorAll('.provider-model-draft__capabilities input[type="checkbox"]').length === 0,
+  "DeepSeek Responses editor does not render an image-capability checkbox",
+);
 
 await act(async () => {
   root.render(renderProviderEditor(longCatAnthropicProvider));

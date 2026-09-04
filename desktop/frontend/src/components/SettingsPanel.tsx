@@ -5053,7 +5053,7 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
       candidates,
       selected: candidates.filter((model) => selected.includes(model)),
       visionModels: configuredVision,
-      visionModelsConfigured: p.visionModelsConfigured,
+      visionModelsConfigured: p.visionModelsConfigured, visionCapability: p.visionCapability,
       modelCapabilities: capabilities,
     };
   };
@@ -5356,7 +5356,7 @@ type ProviderModelDraft = {
   candidates: string[];
   selected: string[];
   visionModels: string[];
-  visionModelsConfigured: boolean;
+  visionModelsConfigured: boolean; visionCapability?: ProviderVisionCapability;
   modelCapabilities: ProviderModelCapabilityView[];
 };
 
@@ -6288,7 +6288,7 @@ function ProviderModelDraftPicker({
         {deferredCandidates.length > 0 ? deferredCandidates.map((model) => {
           const enabled = selected.has(model);
           const capability = providerModelVisionCapability(
-            { visionModelsConfigured: draft.visionModelsConfigured, modelCapabilities: draft.modelCapabilities },
+            { visionModelsConfigured: draft.visionModelsConfigured, visionCapability: draft.visionCapability, modelCapabilities: draft.modelCapabilities },
             model,
             draft.visionModels,
           );
@@ -6597,7 +6597,7 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
   candidates,
   selectedModels,
   visionModels,
-  visionModelsConfigured,
+  visionModelsConfigured, visionCapability,
   modelCapabilities,
   contextWindows,
   disabled,
@@ -6609,7 +6609,7 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
   candidates: string[];
   selectedModels: string[];
   visionModels: string[];
-  visionModelsConfigured: boolean;
+  visionModelsConfigured: boolean; visionCapability?: ProviderVisionCapability;
   modelCapabilities: ProviderModelCapabilityView[];
   contextWindows: Record<string, string>;
   disabled: boolean;
@@ -6662,7 +6662,7 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
         {deferredCandidates.length > 0 ? deferredCandidates.map((model) => {
           const enabled = selected.has(model);
           const capability = providerModelVisionCapability(
-            { visionModelsConfigured, modelCapabilities },
+            { visionModelsConfigured, visionCapability, modelCapabilities },
             model,
             visionModels,
           );
@@ -7202,7 +7202,7 @@ export function ProviderEditor({
         candidates={modelCandidateNames}
         selectedModels={modelNames}
         visionModels={visionModelNames}
-        visionModelsConfigured={visionModelsConfigured}
+        visionModelsConfigured={visionModelsConfigured} visionCapability={initial?.visionCapability}
         modelCapabilities={modelCapabilities}
         contextWindows={modelContextWindows}
         disabled={busy || fetchingModels}

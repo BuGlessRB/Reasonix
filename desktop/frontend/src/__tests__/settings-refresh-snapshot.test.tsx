@@ -842,7 +842,7 @@ window.go = {
     App: {
       Settings: async () => providerRefreshCancelSettings,
       FetchAllProviderModels: async () => ({}),
-      FetchProviderModels: async () => ["deepseek-v4-flash", "deepseek-v4-pro"],
+      FetchProviderModelCatalog: async () => ["deepseek-v4-flash", "deepseek-v4-pro"].map((model) => ({ model, inputModalities: ["text"], state: "unsupported", source: "adapter" })),
     } as Partial<AppBindings> as AppBindings,
   },
 };
