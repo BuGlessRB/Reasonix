@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"maps"
 	"net/url"
 	"sort"
 	"strings"
@@ -60,9 +61,7 @@ func OpenCodeGoResponsesModels() map[string]OpenCodeGoModelLimits {
 
 func mergeOpenCodeGoLimits(route string, compatibility map[string]OpenCodeGoModelLimits) map[string]OpenCodeGoModelLimits {
 	out := make(map[string]OpenCodeGoModelLimits, len(compatibility))
-	for id, limit := range compatibility {
-		out[id] = limit
-	}
+	maps.Copy(out, compatibility)
 	for _, model := range piCatalogOpenCodeGoModels(route) {
 		out[model.ID] = OpenCodeGoModelLimits{Context: model.ContextWindow, MaxOutput: model.MaxTokens}
 	}
