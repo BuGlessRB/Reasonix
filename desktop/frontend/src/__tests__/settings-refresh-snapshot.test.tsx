@@ -843,6 +843,10 @@ window.go = {
       Settings: async () => providerRefreshCancelSettings,
       FetchAllProviderModels: async () => ({}),
       FetchProviderModels: async () => ["deepseek-v4-flash", "deepseek-v4-pro"],
+      FetchProviderModelCatalog: async () => [
+        { model: "deepseek-v4-flash", inputModalities: ["text"], state: "unsupported", source: "adapter" },
+        { model: "deepseek-v4-pro", inputModalities: ["text"], state: "unsupported", source: "adapter" },
+      ],
     } as Partial<AppBindings> as AppBindings,
   },
 };
