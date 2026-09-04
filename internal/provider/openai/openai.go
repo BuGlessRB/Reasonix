@@ -715,7 +715,7 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 				// Kimi K3 requires the complete assistant message on multi-turn
 				// and tool-call requests, including provider-issued reasoning.
 				cm.ReasoningContent = &m.ReasoningContent
-			case (c.deepseek || c.RequiresToolCallReasoning()) && (len(m.ToolCalls) > 0 || m.ReasoningContent != ""):
+			case (c.deepseek || c.RequiresToolCallReasoning()) && hasReasoningOrToolCall(m):
 				if c.RequiresToolCallReasoning() || m.ReasoningContent != "" {
 					cm.ReasoningContent = &m.ReasoningContent
 				}

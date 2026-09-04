@@ -6,6 +6,10 @@ import (
 	"reasonix/internal/provider"
 )
 
+func hasReasoningOrToolCall(m provider.Message) bool {
+	return len(m.ToolCalls) > 0 || m.ReasoningContent != ""
+}
+
 // RequiresAssistantReasoningReplay keeps provider-issued reasoning replayable
 // on every DeepSeek-style assistant turn that carries it. Tool turns remain
 // required even when reasoning was lost because the wire accepts an empty key.

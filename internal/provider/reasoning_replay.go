@@ -108,7 +108,7 @@ func ProjectReasoningStrippedMessages(p Provider, msgs []Message) ([]Message, bo
 		work[i].ReasoningID = ""
 		work[i].ReasoningStatus = ""
 	}
-	projected, projectedChanged := ProjectReplaySafeMessages(p, work)
+	projected, projectedChanged := projectReplaySafeMessages(p, work, false)
 	return projected, stripped || projectedChanged
 }
 
@@ -123,7 +123,11 @@ func ProjectReasoningStrippedMessages(p Provider, msgs []Message) ([]Message, bo
 // results are omitted. Providers with an explicit empty-reasoning fallback do
 // not need projection.
 func ProjectReplaySafeMessages(p Provider, msgs []Message) ([]Message, bool) {
-	if AllowsEmptyReasoningFallback(p) {
+	return projectReplaySafeMessages(p, msgs, true)
+}
+
+func projectReplaySafeMessages(p Provider, msgs []Message, honorEmptyFallback bool) ([]Message, bool) {
+	if honorEmptyFallback && AllowsEmptyReasoningFallback(p) {
 		return msgs, false
 	}
 	isUnreplayable := func(m Message) bool {

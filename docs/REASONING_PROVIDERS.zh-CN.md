@@ -16,8 +16,8 @@ Reasonix 只暴露一个 `/effort` 开关（以及 provider 级的 `effort` / `t
 
 | Provider          | Base URL                                                    | 推理控制                                     | `/effort` 档位                           | 备注 |
 |-------------------|-------------------------------------------------------------|----------------------------------------------|------------------------------------------|-------|
-| DeepSeek V4 Flash | `api.deepseek.com`、`*.deepseek.com`                        | `thinking.type` + `reasoning_effort`（深度） | `auto`、`disabled`、`low`、`high`、`max` | 默认开启思考；`disabled` 通过 `thinking.type=disabled` 关闭。兼容性输入 `medium` 归一化为 `high`，`xhigh` 归一化为 `high`。 |
-| DeepSeek V4 Pro   | `api.deepseek.com`、`*.deepseek.com`                        | `thinking.type` + `reasoning_effort`（深度） | `auto`、`disabled`、`low`、`high`、`max` | 默认开启思考；`disabled` 通过 `thinking.type=disabled` 关闭。兼容性输入 `medium`、`xhigh` 归一化为 `high`。 |
+| DeepSeek V4 Flash | `api.deepseek.com`、`*.deepseek.com`                        | `thinking.type` + `reasoning_effort`（深度） | `auto`、`disabled`、`low`、`high`、`max` | 默认开启思考；`disabled` 通过 `thinking.type=disabled` 关闭。兼容性输入 `medium` 归一化为 `high`，`xhigh` 归一化为 `high`。历史 assistant 轮次只要携带 reasoning，都会回传，即使该轮没有工具调用。 |
+| DeepSeek V4 Pro   | `api.deepseek.com`、`*.deepseek.com`                        | `thinking.type` + `reasoning_effort`（深度） | `auto`、`disabled`、`low`、`high`、`max` | 默认开启思考；`disabled` 通过 `thinking.type=disabled` 关闭。兼容性输入 `medium`、`xhigh` 归一化为 `high`。历史 assistant 轮次只要携带 reasoning，都会回传，即使该轮没有工具调用。 |
 | MiniMax M3        | `api.minimaxi.com`、`*.minimaxi.com`                        | `thinking.type`（`adaptive`\|`disabled`）    | `auto`、`adaptive`、`disabled`           | 无深度档位；`reasoning_effort` 会被省略。 |
 | Zhipu GLM         | `open.bigmodel.cn` / `*.bigmodel.cn`、`api.z.ai` / `*.z.ai` | `thinking.type`（`enabled`\|`disabled`）     | `auto`、`enabled`、`disabled`            | **端点会静默忽略 `reasoning_effort`**，因此推理完全由 `thinking.type` 驱动。 |
 
@@ -70,6 +70,12 @@ provider（包括旧的 `deepseek-anthropic` 条目）保留其原协议。Reaso
 该预设为 Flash 和 Pro 暴露相同的模型专属 effort 档位：`auto`、`disabled`、
 `low`、`high` 和 `max`。Anthropic-compatible 端点在线上接受 `low|high|max`；
 遗留的 `medium`、`xhigh` 均归一化为 `high`。
+
+OpenAI-compatible 的 DeepSeek 路径采用相同的全轮回放规则：历史中每个保存了
+`reasoning_content` 的 assistant 轮次都会原样序列化回请求，不论该轮是否调用过工具。
+如果旧会话仍因提供方特有的 reasoning 回传 HTTP 400 失败，Reasonix 只重建去掉
+reasoning 的 provider-visible 消息投影并重试一次；后续轮次继续使用这个去 reasoning
+投影，而 canonical session history 不会被修改。
 
 ## 其他所有后端（标准 `reasoning_effort`）
 
