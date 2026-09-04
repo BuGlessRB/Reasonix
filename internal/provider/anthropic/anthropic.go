@@ -115,6 +115,14 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	if officialDeepSeek {
 		vision = openai.IsOfficialDeepSeekVisionModel(cfg.Model)
 	}
+	modelInfo := provider.ModelInfo{ID: cfg.Model, InputModalities: []provider.ModelModality{provider.ModalityText}}
+	if cfg.ModelInfo != nil {
+		modelInfo = *cfg.ModelInfo
+		modelInfo.ID = cfg.Model
+	}
+	if modelInfo.InputModalities == nil {
+		modelInfo.InputModalities = []provider.ModelModality{provider.ModalityText}
+	}
 	webSearch, _ := cfg.Extra["web_search"].(bool)
 	headers, _ := cfg.Extra["headers"].(map[string]string)
 	authHeader, _ := cfg.Extra["auth_header"].(bool)
@@ -149,6 +157,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		thinking:         thinking,
 		effort:           effort,
 		vision:           vision,
+		modelInfo:        modelInfo,
 		mimo:             provider.IsMiMoEndpoint(root),
 		webSearch:        webSearch,
 		headers:          cleanCustomHeaders(headers),
@@ -182,8 +191,9 @@ type client struct {
 	thinking         string // "adaptive" enables extended thinking; "" = off (config-driven)
 	effort           string // output_config.effort: low|medium|high|xhigh|max; "" = provider default
 	vision           bool   // model accepts image input — embed attached images as base64 image blocks
-	mimo             bool   // true for MiMo — upgrades legacy tuple schemas to Draft 2020-12
-	webSearch        bool   // enable server-side web_search tool (DeepSeek Anthropic API)
+	modelInfo        provider.ModelInfo
+	mimo             bool // true for MiMo — upgrades legacy tuple schemas to Draft 2020-12
+	webSearch        bool // enable server-side web_search tool (DeepSeek Anthropic API)
 	headers          map[string]string
 	authHeader       bool // send Authorization: Bearer instead of Anthropic's x-api-key header
 	defaultMaxTokens int
@@ -193,6 +203,15 @@ type client struct {
 }
 
 func (c *client) Name() string { return c.name }
+
+func (c *client) ModelInfo() provider.ModelInfo {
+	if c == nil {
+		return provider.ModelInfo{}
+	}
+	info := c.modelInfo
+	info.InputModalities = append([]provider.ModelModality(nil), info.InputModalities...)
+	return info
+}
 
 func (c *client) deepSeekThinkingEnabled() bool {
 	return c != nil && c.deepseek && c.thinking != "disabled" && c.effort != "disabled"

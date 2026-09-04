@@ -95,6 +95,14 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	if officialDeepSeek {
 		vision = IsOfficialDeepSeekVisionModel(cfg.Model)
 	}
+	modelInfo := provider.ModelInfo{ID: cfg.Model, InputModalities: []provider.ModelModality{provider.ModalityText}}
+	if cfg.ModelInfo != nil {
+		modelInfo = *cfg.ModelInfo
+		modelInfo.ID = cfg.Model
+	}
+	if modelInfo.InputModalities == nil {
+		modelInfo.InputModalities = []provider.ModelModality{provider.ModalityText}
+	}
 	visionDetail, _ := cfg.Extra["vision_detail"].(string)
 	visionDetail = strings.ToLower(strings.TrimSpace(visionDetail))
 	if visionDetail != "low" && visionDetail != "high" {
@@ -248,6 +256,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		mimo:            IsMiMo(cfg.BaseURL),
 		thinkingType:    thinkingType,
 		vision:          vision,
+		modelInfo:       modelInfo,
 		visionDetail:    visionDetail,
 		maxOutputTokens: maxOutputTokens,
 		effort:          effort,
@@ -280,13 +289,14 @@ type client struct {
 	model           string
 	http            *http.Client
 	deepseek        bool
-	minimax         bool          // true for api.minimaxi.com — emits MiniMax-M3's thinking knob instead of reasoning_effort
-	zhipu           bool          // true for Zhipu GLM (bigmodel.cn / z.ai) — gates thinking via thinking.type, ignores reasoning_effort
-	longcat         bool          // true for LongCat — gates thinking via thinking.type, ignores reasoning_effort
-	kimiK3          bool          // true for the explicit K3 protocol or kimi-k3 on Moonshot's direct API hosts
-	mimo            bool          // true for MiMo — upgrades legacy tuple schemas to Draft 2020-12
-	thinkingType    string        // explicit `thinking` config override (enabled|disabled); "" = no override
-	vision          bool          // model accepts image input — embed attached images as image_url parts
+	minimax         bool   // true for api.minimaxi.com — emits MiniMax-M3's thinking knob instead of reasoning_effort
+	zhipu           bool   // true for Zhipu GLM (bigmodel.cn / z.ai) — gates thinking via thinking.type, ignores reasoning_effort
+	longcat         bool   // true for LongCat — gates thinking via thinking.type, ignores reasoning_effort
+	kimiK3          bool   // true for the explicit K3 protocol or kimi-k3 on Moonshot's direct API hosts
+	mimo            bool   // true for MiMo — upgrades legacy tuple schemas to Draft 2020-12
+	thinkingType    string // explicit `thinking` config override (enabled|disabled); "" = no override
+	vision          bool   // model accepts image input — embed attached images as image_url parts
+	modelInfo       provider.ModelInfo
 	visionDetail    string        // image_url detail hint (low|high); "" = auto/omit
 	maxOutputTokens int           // resolved total output budget; <=0 omits the optional field
 	effort          string        // reasoning_effort for OpenAI; thinking.type for MiniMax; "" = auto/provider default
@@ -296,6 +306,15 @@ type client struct {
 }
 
 func (c *client) Name() string { return c.name }
+
+func (c *client) ModelInfo() provider.ModelInfo {
+	if c == nil {
+		return provider.ModelInfo{}
+	}
+	info := c.modelInfo
+	info.InputModalities = append([]provider.ModelModality(nil), info.InputModalities...)
+	return info
+}
 
 func (c *client) RequiresToolCallReasoning() bool {
 	if c == nil || c.thinkingType == "disabled" {
