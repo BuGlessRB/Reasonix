@@ -43,6 +43,11 @@ func openCodeGoRecommendedChatOverrides() map[string]ProviderModelOverride {
 		out[id] = ProviderModelOverride{ContextWindow: lim.Context, MaxOutputTokens: minPositive(lim.MaxOutput, 32_768)}
 	}
 	for id, ov := range map[string]ProviderModelOverride{
+		"deepseek-v4-flash-vision-exp": {
+			ReasoningProtocol: ReasoningProtocolDeepSeek,
+			SupportedEfforts:  []string{"disabled", "low", "high", "max"},
+			DefaultEffort:     "high",
+		},
 		"glm-5.3": {
 			ReasoningProtocol: ReasoningProtocolOpenAI,
 			SupportedEfforts:  []string{"low", "high", "max"},

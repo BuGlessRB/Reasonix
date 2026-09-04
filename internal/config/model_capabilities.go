@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -24,6 +25,8 @@ const (
 	CapabilityUnsupported CapabilityState = "unsupported"
 	CapabilityUnknown     CapabilityState = "unknown"
 )
+
+var modelCapabilityCacheWriteMu sync.Mutex
 
 type CapabilitySource string
 
@@ -238,9 +241,22 @@ func (r *ModelCapabilityResolver) providerFingerprint(entry ProviderEntry) strin
 	h := hmac.New(sha256.New, []byte("reasonix-model-capabilities-cache-v1"))
 	for _, value := range []string{
 		"reasonix-model-capabilities-v1", entry.Name, entry.Kind, entry.BaseURL,
-		entry.ModelsURL, entry.APIKeyEnv, fmt.Sprintf("%t", entry.AuthHeader),
+		entry.ModelsURL, entry.APIKeyEnv, fmt.Sprintf("%t", entry.AuthHeader), fmt.Sprintf("%t", entry.NoProxy),
 		CredentialStoreRevision(),
 	} {
+		_, _ = fmt.Fprintf(h, "%d:", len(value))
+		_, _ = h.Write([]byte(value))
+	}
+	type headerPair struct{ key, value string }
+	headers := make([]headerPair, 0, len(entry.Headers))
+	for key, value := range entry.Headers {
+		headers = append(headers, headerPair{key: strings.ToLower(strings.TrimSpace(key)), value: value})
+	}
+	sort.Slice(headers, func(i, j int) bool { return headers[i].key < headers[j].key })
+	for _, header := range headers {
+		key, value := header.key, header.value
+		_, _ = fmt.Fprintf(h, "%d:", len(key))
+		_, _ = h.Write([]byte(key))
 		_, _ = fmt.Fprintf(h, "%d:", len(value))
 		_, _ = h.Write([]byte(value))
 	}
@@ -251,12 +267,8 @@ func (r *ModelCapabilityResolver) load() {
 	if r.path == "" {
 		return
 	}
-	data, err := os.ReadFile(r.path)
-	if err != nil {
-		return
-	}
-	var file ModelCapabilityCacheFile
-	if json.Unmarshal(data, &file) != nil || file.Version != modelCapabilityCacheVersion {
+	file, ok := readModelCapabilityCacheFile(r.path)
+	if !ok {
 		return
 	}
 	now := time.Now()
@@ -276,6 +288,8 @@ func (r *ModelCapabilityResolver) persist() {
 	if r == nil || r.path == "" {
 		return
 	}
+	modelCapabilityCacheWriteMu.Lock()
+	defer modelCapabilityCacheWriteMu.Unlock()
 	r.mu.RLock()
 	entries := make([]ModelCapabilityCacheEntry, 0, len(r.entries))
 	now := time.Now()
@@ -304,6 +318,29 @@ func (r *ModelCapabilityResolver) persist() {
 		return
 	}
 	defer release()
+	// Merge with the latest on-disk snapshot after taking the cross-process
+	// lock. Separate settings refreshes must not erase one another's entries.
+	if existing, ok := readModelCapabilityCacheFile(r.path); ok {
+		seen := make(map[string]bool, len(entries))
+		for _, entry := range entries {
+			seen[entry.ProviderFingerprint+"\x00"+entry.ModelID] = true
+		}
+		for _, entry := range existing.Entries {
+			key := entry.ProviderFingerprint + "\x00" + entry.ModelID
+			if !seen[key] && time.Now().Before(entry.ExpiresAt) {
+				entries = append(entries, entry)
+			}
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].FetchedAt.After(entries[j].FetchedAt) })
+		if len(entries) > modelCapabilityCacheMaxItems {
+			entries = entries[:modelCapabilityCacheMaxItems]
+		}
+		file = ModelCapabilityCacheFile{Version: modelCapabilityCacheVersion, Entries: entries}
+		data, err = json.MarshalIndent(file, "", "  ")
+		if err != nil {
+			return
+		}
+	}
 	tmp, err := os.CreateTemp(dir, ".model-capabilities-*.tmp")
 	if err != nil {
 		return
@@ -321,6 +358,23 @@ func (r *ModelCapabilityResolver) persist() {
 			_ = os.Rename(tmpName, r.path)
 		}
 	}
+}
+
+func readModelCapabilityCacheFile(path string) (ModelCapabilityCacheFile, bool) {
+	fileHandle, err := os.Open(path)
+	if err != nil {
+		return ModelCapabilityCacheFile{}, false
+	}
+	defer fileHandle.Close()
+	data, err := io.ReadAll(io.LimitReader(fileHandle, modelCapabilityCacheMaxSize+1))
+	if err != nil || len(data) > modelCapabilityCacheMaxSize {
+		return ModelCapabilityCacheFile{}, false
+	}
+	var file ModelCapabilityCacheFile
+	if json.Unmarshal(data, &file) != nil || file.Version != modelCapabilityCacheVersion {
+		return ModelCapabilityCacheFile{}, false
+	}
+	return file, true
 }
 
 func acquireCapabilityFileLock(path string, wait time.Duration) (func(), error) {

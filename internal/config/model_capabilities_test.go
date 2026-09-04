@@ -131,6 +131,27 @@ func TestModelCapabilityResolverIgnoresExpiredCache(t *testing.T) {
 	}
 }
 
+func TestModelCapabilityResolverFingerprintIncludesCatalogHeaders(t *testing.T) {
+	r := &ModelCapabilityResolver{}
+	base := ProviderEntry{Name: "custom", Kind: "openai", BaseURL: "https://example.test", Model: "m"}
+	withHeader := base
+	withHeader.Headers = map[string]string{"X-Tenant": "tenant-a"}
+	if r.providerFingerprint(base) == r.providerFingerprint(withHeader) {
+		t.Fatal("catalog-affecting headers must invalidate capability cache identity")
+	}
+}
+
+func TestReadModelCapabilityCacheFileRejectsOversizedData(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "model-capabilities-v1.json")
+	data := []byte(strings.Repeat("x", modelCapabilityCacheMaxSize+1))
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := readModelCapabilityCacheFile(path); ok {
+		t.Fatal("oversized capability cache must be ignored")
+	}
+}
+
 func capabilityBoolPtr(value bool) *bool { return &value }
 
 func containsAny(value string, needles ...string) bool {

@@ -2,15 +2,15 @@
   "limits": {
     "banner": 13,
     "commented-code": 0,
-    "complexity": 1959,
+    "complexity": 1961,
     "essay": 1966,
-    "file-size": 108763,
-    "function-size": 8442,
+    "file-size": 108849,
+    "function-size": 8448,
     "layering": 1,
     "marker": 0,
     "narrative": 64,
     "struct-state": 115,
-    "test-file-size": 69698
+    "test-file-size": 69744
   },
   "files": {
     "cmd/e2ebench/main.go": {
@@ -265,7 +265,7 @@
     "desktop/settings_app.go": {
       "complexity": 29,
       "essay": 6,
-      "file-size": 3036
+      "file-size": 3035
     },
     "desktop/settings_app_test.go": {
       "test-file-size": 1856
@@ -573,10 +573,10 @@
       "test-file-size": 994
     },
     "internal/boot/boot.go": {
-      "complexity": 263,
+      "complexity": 264,
       "essay": 78,
-      "file-size": 2083,
-      "function-size": 1723,
+      "file-size": 2086,
+      "function-size": 1726,
       "narrative": 3
     },
     "internal/boot/boot_test.go": {
@@ -825,7 +825,7 @@
       "essay": 1
     },
     "internal/config/backfill_test.go": {
-      "test-file-size": 1122
+      "test-file-size": 1148
     },
     "internal/config/cache_policy.go": {
       "essay": 1
@@ -857,7 +857,7 @@
     },
     "internal/config/load.go": {
       "essay": 3,
-      "file-size": 1704,
+      "file-size": 1759,
       "function-size": 45
     },
     "internal/config/main_test.go": {
@@ -876,10 +876,10 @@
       "essay": 7
     },
     "internal/config/provider_presets.go": {
-      "file-size": 373
+      "file-size": 375
     },
     "internal/config/provider_presets_test.go": {
-      "test-file-size": 174
+      "test-file-size": 194
     },
     "internal/config/render.go": {
       "complexity": 240,
@@ -1223,7 +1223,7 @@
     "internal/provider/anthropic/anthropic.go": {
       "complexity": 28,
       "essay": 28,
-      "file-size": 55,
+      "file-size": 58,
       "function-size": 93,
       "struct-state": 6
     },
@@ -1231,10 +1231,10 @@
       "test-file-size": 209
     },
     "internal/provider/openai/openai.go": {
-      "complexity": 66,
+      "complexity": 67,
       "essay": 28,
-      "file-size": 540,
-      "function-size": 239,
+      "file-size": 543,
+      "function-size": 242,
       "struct-state": 9
     },
     "internal/provider/openai/openai_test.go": {
@@ -1253,7 +1253,7 @@
     "internal/provider/responses/responses.go": {
       "complexity": 54,
       "essay": 18,
-      "file-size": 75,
+      "file-size": 96,
       "function-size": 181,
       "struct-state": 6
     },
