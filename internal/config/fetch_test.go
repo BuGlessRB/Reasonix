@@ -334,6 +334,7 @@ func TestProviderFetchModelsFiltersOfficialOpenCodeGoCatalogByWireFormat(t *test
 }
 
 func TestProviderFetchModelsKeepsOpenCodeGoVisionModelOnChatRoute(t *testing.T) {
+	// This guards the DeepSeek vision catalog integration from #9717.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{
 			{"id": "deepseek-v4-flash"},
