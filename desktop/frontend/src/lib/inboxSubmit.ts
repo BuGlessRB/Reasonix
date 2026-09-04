@@ -21,17 +21,6 @@ export function normalizeTurnSubmit(displayText: string, submitText: string) {
   return { display, submit };
 }
 
-// Legacy fallback for hosts that predate the structured StartTurnForTab
-// disposition. Current hosts classify every submit on the backend.
-export function isLocalRuntimeCommand(input: string): boolean {
-  const trimmed = input.trim();
-  return trimmed === "/reload"
-    || trimmed === "/effort"
-    || trimmed.startsWith("/effort ")
-    || trimmed === "/compact"
-    || trimmed.startsWith("/compact ");
-}
-
 export async function answerPromptForActiveTurn(
   binding: AskAnswerBindings,
   tabId: string,

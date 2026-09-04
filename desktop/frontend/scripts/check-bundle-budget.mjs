@@ -341,7 +341,9 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // The scrollbar generation fence and drag rebase add 1.1 KiB raw; the merged
 // path measures 2470.932 KiB.
 // The reader-transaction offset absorption adds 0.8 KiB raw on top; the merged
-// path measures 2471.741 KiB.
-const rawInitialBudgetKiB = 2_471.8;
+// path measures 2471.741 KiB. Controller-owned management dispositions and
+// optimistic management settlement add 0.6 KiB raw; retain the smallest
+// one-decimal ceiling with bounded headroom.
+const rawInitialBudgetKiB = 2_472.4;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

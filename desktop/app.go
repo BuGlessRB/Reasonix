@@ -1114,33 +1114,46 @@ func (a *App) submitToTabResult(tabID, input string, fromBridge, classifyManagem
 		a.runEffortCommandForTab(tabID, trimmed)
 		return management, nil
 	}
-	tab, ctrl := a.tabAndCtrlByID(tabID)
-	if a.tabIsReadOnly(tab) {
-		return control.SubmitResult{}, readOnlyChannelErr()
-	}
-	if err := a.workspaceRuntimeAdmissionErr(tab, ctrl); err != nil {
-		return control.SubmitResult{}, err
-	}
-	if err := a.ensureTabControllerWorkspace(tab); err != nil {
-		return control.SubmitResult{}, err
-	}
-	ctrl = a.controllerForTab(tab)
-	if ctrl == nil {
-		return control.SubmitResult{}, a.workspaceNotReadyErr(tab)
-	}
 	if classifyManagement {
+		tab, ctrl := a.tabAndCtrlByID(tabID)
+		if a.tabIsReadOnly(tab) {
+			return control.SubmitResult{}, readOnlyChannelErr()
+		}
+		if err := a.workspaceRuntimeAdmissionErr(tab, ctrl); err != nil {
+			return control.SubmitResult{}, err
+		}
+		if err := a.ensureTabControllerWorkspace(tab); err != nil {
+			return control.SubmitResult{}, err
+		}
+		ctrl = a.controllerForTab(tab)
+		if ctrl == nil {
+			return control.SubmitResult{}, a.workspaceNotReadyErr(tab)
+		}
+		managementRoute := false
 		if classifier, ok := ctrl.(interface {
 			ClassifySubmitRoute(input string) control.SubmitDisposition
-		}); ok && classifier.ClassifySubmitRoute(input) == control.SubmitManagementHandled {
-			if !fromBridge && a.botBridge != nil {
-				a.botBridge.reclaimFromDesktop(tab.ID)
+		}); ok {
+			managementRoute = classifier.ClassifySubmitRoute(input) == control.SubmitManagementHandled
+		}
+		if managementRoute {
+			// Management commands still take the tab admission lock so they cannot
+			// race an active turn or a controller replacement.
+			admission, admittedCtrl, err := a.beginTabTurn(tabID, !fromBridge, submissionID...)
+			if err != nil {
+				return control.SubmitResult{}, err
 			}
-			if submitter, ok := ctrl.(interface {
+			defer admission.abort()
+			tab = admission.tab
+			a.ensureTabTopicIndexedForUserTurn(tab)
+			if submitter, supported := admittedCtrl.(interface {
 				SubmitDisplayWithResult(display, input string) control.SubmitResult
-			}); ok {
-				return submitter.SubmitDisplayWithResult(input, input), nil
+			}); supported {
+				result := submitter.SubmitDisplayWithResult(input, input)
+				admission.finish(admittedCtrl)
+				return result, nil
 			}
-			ctrl.SubmitDisplay(input, input)
+			admittedCtrl.SubmitDisplay(input, input)
+			admission.finish(admittedCtrl)
 			return management, nil
 		}
 	}
@@ -1149,7 +1162,7 @@ func (a *App) submitToTabResult(tabID, input string, fromBridge, classifyManagem
 		return control.SubmitResult{}, err
 	}
 	defer admission.abort()
-	tab = admission.tab
+	tab := admission.tab
 	a.ensureTabTopicIndexedForUserTurn(tab)
 	result := control.SubmitResult{Disposition: control.SubmitTurnStarted}
 	if submitter, ok := ctrl.(interface {
