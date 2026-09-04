@@ -417,6 +417,11 @@ eq(
   "local Goal profile is patched only after backend activation succeeds",
 );
 eq(
+  /displayGoal && !\["status", "clear", "off", "stop", "done", "pause", "resume"\]\.includes/.test(appSource) && /else if \(\["clear", "off", "stop", "done"\]\.includes/.test(appSource),
+  true,
+  "Goal pause and resume do not clear the active Goal before lifecycle handling",
+);
+eq(
   controllerSource.includes("await app.SetGoalForTab(tabId, goal)") && !/SetGoalForTab\(tabId, goal\)\.catch\(\(\) => \{\}\)/.test(controllerSource),
   true,
   "SetGoalForTab activation failures propagate to callers",

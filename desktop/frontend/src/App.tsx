@@ -2281,7 +2281,7 @@ export default function App() {
       if (goalCommand) {
         const arg = (goalCommand[1] ?? "").trim();
         const displayGoal = stripLegacyGoalBudgetFlags(arg);
-        if (displayGoal && !["status", "clear", "off", "stop", "done"].includes(displayGoal.toLowerCase())) {
+        if (displayGoal && !["status", "clear", "off", "stop", "done", "pause", "resume"].includes(displayGoal.toLowerCase())) {
           if (hasLegacyGoalBudgetFlag(arg)) {
             userPlanModeByTabRef.current = updateUserPlanModeIntent(userPlanModeByTabRef.current, activeTabId, false);
             patchActiveComposerProfile({
@@ -2292,7 +2292,7 @@ export default function App() {
           } else {
             await applyGoal(displayGoal);
           }
-        } else if (["clear", "off", "stop", "done", "pause", "resume"].includes(displayGoal.toLowerCase())) {
+        } else if (["clear", "off", "stop", "done"].includes(displayGoal.toLowerCase())) {
           await applyGoal("");
         }
         if (!controllerReady) return;
