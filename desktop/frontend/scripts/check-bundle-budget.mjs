@@ -350,6 +350,11 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // path measures 2471.741 KiB. Controller-owned management dispositions and
 // optimistic management settlement add 0.6 KiB raw; retain the smallest
 // one-decimal ceiling with bounded headroom.
-const rawInitialBudgetKiB = 2_472.4;
+// The outcome card and history hydration add 2.3 KiB raw on the initial path
+// (2474.0 KiB measured in CI). Keep this narrowly attributable ratchet rather
+// than removing persisted-result visibility or changing chunk ownership.
+// On the current main-v2 base, the combined measured path is 2474.6 KiB;
+// retain 0.1 KiB of bounded cross-platform headroom.
+const rawInitialBudgetKiB = 2_474.7;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
