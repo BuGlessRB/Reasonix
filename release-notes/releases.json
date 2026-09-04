@@ -2,6 +2,405 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "1.37.0",
+      "date": "2026-09-04",
+      "channel": "stable",
+      "targetingVersion": 1,
+      "title": {
+        "en": "Reasonix 1.37: deterministic agent core, model capabilities, and smoother desktop",
+        "zh": "Reasonix 1.37：确定性 Agent 核心、模型能力与更流畅的桌面体验"
+      },
+      "summary": {
+        "en": "This release simplifies the agent loop with explicit planner, continuation, and compaction behavior, replaces manual vision settings with model-level capabilities, adds ModelScope as a provider preset, and delivers a series of desktop reliability and scrolling fixes.",
+        "zh": "此版本简化了 Agent 循环，使 planner、续写和压缩行为更加明确，以模型级能力取代手动视觉设置，新增 ModelScope 提供商预设，并带来一系列桌面可靠性与滚动修复。"
+      },
+      "surfaces": [
+        "desktop",
+        "cli",
+        "site",
+        "service"
+      ],
+      "guides": [
+        {
+          "title": {
+            "en": "Agent Core Simplification",
+            "zh": "Agent 核心简化"
+          },
+          "body": {
+            "en": "Learn how the agent loop now uses explicit planner, continuation, and compaction behavior.",
+            "zh": "了解 Agent 循环现在如何使用显式的 planner、续写和压缩行为。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/2c643119f89aed3a0b6fb8d0ce3654d94f1f1d1c/docs/AGENT_CORE_SIMPLIFICATION.md"
+        },
+        {
+          "title": {
+            "en": "Model Capabilities",
+            "zh": "模型能力"
+          },
+          "body": {
+            "en": "Understand how model-level capabilities replace manual vision settings.",
+            "zh": "了解模型级能力如何取代手动视觉设置。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/2c643119f89aed3a0b6fb8d0ce3654d94f1f1d1c/docs/MODEL_CAPABILITIES.md"
+        },
+        {
+          "title": {
+            "en": "Reasoning Providers",
+            "zh": "推理提供商"
+          },
+          "body": {
+            "en": "Details on reasoning replay and recovery behavior for OpenAI-compatible providers.",
+            "zh": "关于 OpenAI 兼容提供商的推理回放与恢复行为的详细信息。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/2c643119f89aed3a0b6fb8d0ce3654d94f1f1d1c/docs/REASONING_PROVIDERS.md"
+        }
+      ],
+      "highlights": [
+        {
+          "kind": "improved",
+          "targets": [
+            "desktop",
+            "cli"
+          ],
+          "title": {
+            "en": "Deterministic agent core",
+            "zh": "确定性 Agent 核心"
+          },
+          "body": {
+            "en": "The agent loop now uses explicit planner, continuation, and compaction behavior. Ordinary requests are executor-only, planner is opt-in, and fallbacks are removed for predictable outcomes.",
+            "zh": "Agent 循环现在使用显式的 planner、续写和压缩行为。普通请求仅由执行器处理，planner 为可选，并移除了回退机制以实现可预测的结果。"
+          },
+          "refs": [
+            9794,
+            9788,
+            9767,
+            9776
+          ]
+        },
+        {
+          "kind": "new",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Model-level vision capabilities",
+            "zh": "模型级视觉能力"
+          },
+          "body": {
+            "en": "Vision support is now determined by model metadata instead of manual lists. The app automatically detects capabilities from provider responses and local catalogs.",
+            "zh": "视觉支持现在由模型元数据决定，而非手动列表。应用会自动从提供商响应和本地目录中检测能力。"
+          },
+          "refs": [
+            9787
+          ]
+        },
+        {
+          "kind": "new",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "ModelScope provider preset",
+            "zh": "ModelScope 提供商预设"
+          },
+          "body": {
+            "en": "ModelScope is now available as an OpenAI-compatible provider preset with curated models, making it easier to connect.",
+            "zh": "ModelScope 现在作为 OpenAI 兼容的提供商预设提供，包含精选模型，连接更加便捷。"
+          },
+          "refs": [
+            8771
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Smoother transcript scrolling",
+            "zh": "更流畅的会话滚动"
+          },
+          "body": {
+            "en": "Fixed multiple issues causing jumps and instability while scrolling long conversations, including reduced-motion conflicts and empty code blocks.",
+            "zh": "修复了滚动长对话时导致跳动和不稳定的多个问题，包括减少动画冲突和空代码块。"
+          },
+          "refs": [
+            9760,
+            9759,
+            9757,
+            9753,
+            9746
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Reliable subagent outcomes",
+            "zh": "可靠的子代理结果"
+          },
+          "body": {
+            "en": "Subagent results are now preserved and recoverable even when completion confirmation fails, with improved lifecycle handling.",
+            "zh": "即使完成确认失败，子代理结果现在也能被保留和恢复，并改进了生命周期处理。"
+          },
+          "refs": [
+            9775
+          ]
+        }
+      ],
+      "changes": {
+        "new": [
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "ModelScope provider preset",
+              "zh": "ModelScope 提供商预设"
+            },
+            "body": {
+              "en": "Added ModelScope as an OpenAI-compatible provider preset with curated models.",
+              "zh": "新增 ModelScope 作为 OpenAI 兼容的提供商预设，包含精选模型。"
+            },
+            "refs": [
+              8771
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Model-level vision capabilities",
+              "zh": "模型级视觉能力"
+            },
+            "body": {
+              "en": "Replaced manual vision model lists with automatic capability detection from provider metadata.",
+              "zh": "以提供商元数据的自动能力检测取代手动视觉模型列表。"
+            },
+            "refs": [
+              9787
+            ]
+          }
+        ],
+        "improved": [
+          {
+            "targets": [
+              "desktop",
+              "cli"
+            ],
+            "title": {
+              "en": "Deterministic agent loop",
+              "zh": "确定性 Agent 循环"
+            },
+            "body": {
+              "en": "Simplified agent behavior with explicit planner, continuation, and compaction; removed implicit fallbacks.",
+              "zh": "简化 Agent 行为，使用显式的 planner、续写和压缩；移除隐式回退。"
+            },
+            "refs": [
+              9794,
+              9788,
+              9767,
+              9776
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Stable prompt prefixes",
+              "zh": "稳定的提示词前缀"
+            },
+            "body": {
+              "en": "Moved dynamic context into versioned session snapshots to improve cache stability.",
+              "zh": "将动态上下文移入版本化会话快照，以提高缓存稳定性。"
+            },
+            "refs": [
+              9733
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Localized agent notices",
+              "zh": "本地化的 Agent 提示"
+            },
+            "body": {
+              "en": "User-visible agent notices now follow the selected language without restart.",
+              "zh": "用户可见的 Agent 提示现在无需重启即可跟随所选语言。"
+            },
+            "refs": [
+              9768
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Retired Classic desktop layout",
+              "zh": "下架经典桌面布局"
+            },
+            "body": {
+              "en": "Classic layout is removed; existing users are migrated to Workbench.",
+              "zh": "经典布局已移除；现有用户将迁移至工作台。"
+            },
+            "refs": [
+              9796
+            ]
+          }
+        ],
+        "fixed": [
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Transcript scrolling fixes",
+              "zh": "会话滚动修复"
+            },
+            "body": {
+              "en": "Fixed multiple scroll jump and instability issues, including reduced-motion conflicts and empty code blocks.",
+              "zh": "修复了多个滚动跳动和不稳定问题，包括减少动画冲突和空代码块。"
+            },
+            "refs": [
+              9760,
+              9759,
+              9757,
+              9753,
+              9746
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Subagent outcome recovery",
+              "zh": "子代理结果恢复"
+            },
+            "body": {
+              "en": "Preserved and recovered subagent results when completion confirmation fails.",
+              "zh": "在完成确认失败时保留并恢复子代理结果。"
+            },
+            "refs": [
+              9775
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Management command routing",
+              "zh": "管理命令路由"
+            },
+            "body": {
+              "en": "Management slash commands no longer require a durable turn ID, preventing false errors.",
+              "zh": "管理斜杠命令不再需要持久的回合 ID，避免误报错误。"
+            },
+            "refs": [
+              9774
+            ]
+          },
+          {
+            "targets": [
+              "service"
+            ],
+            "title": {
+              "en": "Crash dashboard reliability",
+              "zh": "崩溃面板可靠性"
+            },
+            "body": {
+              "en": "Bounded group-detail queries to prevent Worker 1101 errors on high-volume data.",
+              "zh": "限制分组详情查询，防止高数据量时出现 Worker 1101 错误。"
+            },
+            "refs": [
+              9756
+            ]
+          },
+          {
+            "targets": [
+              "site",
+              "service"
+            ],
+            "title": {
+              "en": "Web D1 query performance",
+              "zh": "网站 D1 查询性能"
+            },
+            "body": {
+              "en": "Optimized D1 queries with indexes and pagination for forum, crash dashboard, and registry.",
+              "zh": "通过索引和分页优化论坛、崩溃面板和注册表的 D1 查询。"
+            },
+            "refs": [
+              9752
+            ]
+          }
+        ]
+      },
+      "upgrade": [
+        {
+          "level": "info",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Classic layout migration",
+            "zh": "经典布局迁移"
+          },
+          "body": {
+            "en": "Existing Classic layout users will be automatically migrated to Workbench on startup.",
+            "zh": "现有经典布局用户将在启动时自动迁移至工作台。"
+          },
+          "refs": [
+            9796
+          ]
+        },
+        {
+          "level": "info",
+          "targets": [
+            "desktop",
+            "cli"
+          ],
+          "title": {
+            "en": "One-time cache invalidation",
+            "zh": "一次性缓存失效"
+          },
+          "body": {
+            "en": "Expect one cold request after upgrade due to intentional system prompt changes.",
+            "zh": "由于系统提示词的有意更改，升级后预计会出现一次冷请求。"
+          },
+          "refs": [
+            9733
+          ]
+        }
+      ],
+      "risks": [],
+      "contributors": [
+        "SivanCola",
+        "yrk111222"
+      ],
+      "links": {
+        "github": "https://github.com/esengine/DeepSeek-Reasonix/releases/tag/desktop-v1.37.0",
+        "compare": "https://github.com/esengine/DeepSeek-Reasonix/compare/desktop-v1.36.0...desktop-v1.37.0",
+        "download": "https://reasonix.io/?download=desktop&channel=stable#start"
+      },
+      "releaseId": "1.37.0",
+      "baseVersion": "1.37.0",
+      "status": "reviewed",
+      "previousRelease": "1.36.0",
+      "builds": {
+        "cli": "v1.37.0",
+        "desktop": "v1.37.0",
+        "npm": "1.37.0"
+      }
+    },
+    {
       "version": "1.36.0",
       "date": "2026-09-02",
       "channel": "stable",
