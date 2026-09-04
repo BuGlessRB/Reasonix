@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
@@ -65,9 +66,15 @@ func (a *Agent) handleSamplingError(
 	result, last streamedTurn,
 	billable *provider.Usage,
 ) (retry bool, terminal streamedTurn) {
-	if provider.IsStreamInterrupted(result.err) && attempt < maxSamplingAttempts {
-		streamSink.Discard()
+	retryableEmpty := errors.Is(result.err, provider.ErrEmptyResponse)
+	if (provider.IsStreamInterrupted(result.err) || retryableEmpty) && attempt < maxSamplingAttempts {
+		if streamSink != nil {
+			streamSink.Discard()
+		}
 		reason := provider.StreamInterruptReason(result.err)
+		if retryableEmpty {
+			reason = "empty_response"
+		}
 		a.emitStreamAttempt(attemptID, event.StreamAttemptDiscard, attempt, reason, result.err)
 		a.svc.sink.Emit(event.Event{
 			Kind: event.Retrying, RetryAttempt: attempt, RetryMax: maxStreamRecoveries,
