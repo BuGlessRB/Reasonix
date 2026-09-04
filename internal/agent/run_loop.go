@@ -399,7 +399,7 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 		a.emitStreamAttempt(attemptID, event.StreamAttemptCommit, attempt, "", nil)
 		result.usage = finalizeSamplingUsage(billable, result.usage)
 		if reasoningReplayRepaired {
-			a.activateReasoningReplayStrongProjection()
+			a.activateReasoningReplayStrongProjection(replayRecovery.cutoff)
 		}
 		return result
 	}

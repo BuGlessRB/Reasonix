@@ -566,7 +566,8 @@ func TestDeepSeekAnthropicThinking400CatchAndRepair(t *testing.T) {
 		t.Fatalf("streamed answer = %q, want the repaired response", answer.String())
 	}
 
-	// The next run keeps the strong projection: no reasoning reaches the wire.
+	// The next run keeps the repaired prefix stripped while replaying reasoning
+	// from the newly committed assistant turn normally.
 	if err := a.Run(withNoClosedLoop(context.Background()), "again"); err != nil {
 		t.Fatalf("second Run: %v", err)
 	}
@@ -577,8 +578,11 @@ func TestDeepSeekAnthropicThinking400CatchAndRepair(t *testing.T) {
 	if total != 3 {
 		t.Fatalf("HTTP requests = %d, want one more for the follow-up run", total)
 	}
-	if bytes.Contains(third, []byte(`"type":"thinking"`)) || bytes.Contains(third, []byte("stale thinking")) || bytes.Contains(third, []byte("fresh thinking")) {
-		t.Fatalf("strong projection did not persist into the next run: %s", third)
+	if bytes.Contains(third, []byte("stale thinking")) {
+		t.Fatalf("strong projection retained stale reasoning in the next run: %s", third)
+	}
+	if !bytes.Contains(third, []byte("fresh thinking")) {
+		t.Fatalf("strong projection dropped new-turn reasoning in the next run: %s", third)
 	}
 	for _, m := range session.Snapshot() {
 		if m.Role == provider.RoleAssistant && m.Content == "old answer" && m.ReasoningContent != "stale thinking" {

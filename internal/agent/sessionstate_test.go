@@ -138,6 +138,7 @@ func TestSetSessionRestartsTheConversationState(t *testing.T) {
 	a.sess.cacheHit.Store(11)
 	a.sess.cacheMiss.Store(7)
 	a.sess.missingReasoning = missingReasoningWatch{active: true, stateRecorded: true, healthyStreak: 2}
+	a.sess.reasoningReplayStrongProjection = 7
 	a.sess.compaction.stuck = true
 	a.sess.compaction.stuckInputHash = "old-input"
 	a.sess.compaction.consecutive = 3
@@ -157,6 +158,9 @@ func TestSetSessionRestartsTheConversationState(t *testing.T) {
 	}
 	if a.sess.missingReasoning != (missingReasoningWatch{}) {
 		t.Errorf("missingReasoning = %+v, want the incident to end with its conversation", a.sess.missingReasoning)
+	}
+	if a.sess.reasoningReplayStrongProjection != 0 {
+		t.Errorf("reasoningReplayStrongProjection = %d, want it restarted", a.sess.reasoningReplayStrongProjection)
 	}
 	if a.sess.compaction.stuck || a.sess.compaction.stuckInputHash != "" || a.sess.compaction.consecutive != 0 ||
 		a.sess.compaction.failedTurn.Load() != 0 || a.sess.compaction.lastTurn.Load() != 0 {

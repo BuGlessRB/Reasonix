@@ -382,6 +382,38 @@ func TestReasoningReplay400RepairsProjectionAndRetriesOnce(t *testing.T) {
 	}
 }
 
+func TestReasoningReplay400KeepsNewToolRoundOutsideStrongProjection(t *testing.T) {
+	call := provider.ToolCall{ID: "fresh", Name: "echo", Arguments: `{"text":"hello"}`}
+	mp := testutil.NewMock("strict-replay",
+		testutil.ErrorTurn(thinkingReplay400Error()),
+		testutil.Turn{Text: "repaired"},
+		testutil.Turn{Reasoning: "fresh reasoning", ToolCalls: []provider.ToolCall{call}},
+		testutil.Turn{Text: "fresh final"},
+	)
+	a := New(strictAssistantReasoningProvider{mp}, echoRegistry(), reasoningReplaySeededSession(), Options{}, event.Discard)
+	if err := a.Run(withNoClosedLoop(context.Background()), "first"); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	if err := a.Run(withNoClosedLoop(context.Background()), "second"); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+
+	requests := mp.Requests()
+	if len(requests) != 4 {
+		t.Fatalf("requests = %d, want repair plus a two-step follow-up", len(requests))
+	}
+	var sawFreshToolRound bool
+	for _, message := range requests[3].Messages {
+		if len(message.ToolCalls) > 0 || message.Role == provider.RoleTool {
+			sawFreshToolRound = true
+			break
+		}
+	}
+	if !sawFreshToolRound {
+		t.Fatal("strong projection dropped the new tool round from the follow-up request")
+	}
+}
+
 func TestReasoningReplay400RepairExhaustionStaysTerminal(t *testing.T) {
 	mp := testutil.NewMock("strict-replay",
 		testutil.ErrorTurn(thinkingReplay400Error()),

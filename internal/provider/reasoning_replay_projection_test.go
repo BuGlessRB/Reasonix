@@ -104,3 +104,36 @@ func TestProjectReasoningStrippedMessagesBypassesEmptyFallbackAfter400(t *testin
 		t.Fatal("strong projection mutated canonical history")
 	}
 }
+
+func TestProjectReasoningStrippedMessagesPrefixKeepsAppendedToolRound(t *testing.T) {
+	p := replayProjectionProvider{}
+	msgs := []Message{
+		{Role: RoleUser, Content: "inspect"},
+		{
+			Role:             RoleAssistant,
+			Content:          "old answer",
+			ReasoningContent: "stale reasoning",
+		},
+		{Role: RoleUser, Content: "continue"},
+		{
+			Role:             RoleAssistant,
+			ReasoningContent: "fresh reasoning",
+			ToolCalls:        []ToolCall{{ID: "fresh", Name: "read_file"}},
+		},
+		{Role: RoleTool, ToolCallID: "fresh", Name: "read_file", Content: "fresh result"},
+	}
+
+	got, changed := ProjectReasoningStrippedMessagesPrefix(p, msgs, 3)
+	if !changed {
+		t.Fatal("stale prefix was not projected")
+	}
+	if len(got) != len(msgs) {
+		t.Fatalf("projection length = %d, want %d", len(got), len(msgs))
+	}
+	if got[1].ReasoningContent != "" {
+		t.Fatalf("stale prefix reasoning survived: %#v", got[1])
+	}
+	if got[3].ReasoningContent != "fresh reasoning" || len(got[3].ToolCalls) != 1 || got[4].Role != RoleTool {
+		t.Fatalf("appended tool round changed: %#v", got)
+	}
+}

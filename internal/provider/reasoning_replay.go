@@ -90,9 +90,23 @@ func AllowsEmptyReasoningFallback(p Provider) bool {
 // be paired with its thinking block. Canonical session messages are never
 // modified; a history with nothing to strip keeps its backing slice.
 func ProjectReasoningStrippedMessages(p Provider, msgs []Message) ([]Message, bool) {
+	return projectReasoningStrippedMessages(p, msgs, len(msgs))
+}
+
+// ProjectReasoningStrippedMessagesPrefix applies the strong projection only
+// to the provider-visible prefix that was present when a replay 400 was fixed.
+// Messages appended after that prefix keep their normal reasoning/tool replay.
+func ProjectReasoningStrippedMessagesPrefix(p Provider, msgs []Message, prefix int) ([]Message, bool) {
+	if prefix < 0 || prefix > len(msgs) {
+		return msgs, false
+	}
+	return projectReasoningStrippedMessages(p, msgs, prefix)
+}
+
+func projectReasoningStrippedMessages(p Provider, msgs []Message, prefix int) ([]Message, bool) {
 	work := msgs
 	stripped := false
-	for i, m := range msgs {
+	for i, m := range msgs[:prefix] {
 		if m.Role != RoleAssistant {
 			continue
 		}
@@ -108,7 +122,7 @@ func ProjectReasoningStrippedMessages(p Provider, msgs []Message) ([]Message, bo
 		work[i].ReasoningID = ""
 		work[i].ReasoningStatus = ""
 	}
-	projected, projectedChanged := projectReplaySafeMessages(p, work, false)
+	projected, projectedChanged := projectReplaySafeMessages(p, work, prefix, false)
 	return projected, stripped || projectedChanged
 }
 
@@ -123,10 +137,10 @@ func ProjectReasoningStrippedMessages(p Provider, msgs []Message) ([]Message, bo
 // results are omitted. Providers with an explicit empty-reasoning fallback do
 // not need projection.
 func ProjectReplaySafeMessages(p Provider, msgs []Message) ([]Message, bool) {
-	return projectReplaySafeMessages(p, msgs, true)
+	return projectReplaySafeMessages(p, msgs, len(msgs), true)
 }
 
-func projectReplaySafeMessages(p Provider, msgs []Message, honorEmptyFallback bool) ([]Message, bool) {
+func projectReplaySafeMessages(p Provider, msgs []Message, prefix int, honorEmptyFallback bool) ([]Message, bool) {
 	if honorEmptyFallback && AllowsEmptyReasoningFallback(p) {
 		return msgs, false
 	}
@@ -136,14 +150,14 @@ func projectReplaySafeMessages(p Provider, msgs []Message, honorEmptyFallback bo
 			strings.TrimSpace(m.ReasoningContent) == ""
 	}
 
-	if !slices.ContainsFunc(msgs, isUnreplayable) {
+	if !slices.ContainsFunc(msgs[:prefix], isUnreplayable) {
 		return msgs, false
 	}
 
 	out := make([]Message, 0, len(msgs))
 	for i := 0; i < len(msgs); {
 		m := msgs[i]
-		if !isUnreplayable(m) {
+		if i >= prefix || !isUnreplayable(m) {
 			out = append(out, m)
 			i++
 			continue

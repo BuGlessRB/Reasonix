@@ -25,10 +25,10 @@ type sessionRuntime struct {
 
 	missingReasoning missingReasoningWatch
 
-	// reasoningReplayStrongProjection is set once a thinking-400 repair retry
-	// succeeds: this conversation's stored reasoning is stale for the provider,
-	// so later requests keep using the stripped projection.
-	reasoningReplayStrongProjection bool
+	// reasoningReplayStrongProjection is the provider-visible history prefix
+	// that was present when a thinking-400 repair succeeded; later messages stay
+	// on the normal replay path.
+	reasoningReplayStrongProjection int
 
 	// compactionMu guards projection snapshots/install and the in-memory sidecar
 	// generation. Network summarization never runs while this lock is held.
@@ -70,7 +70,7 @@ func (r *sessionRuntime) reset(s *Session) {
 	r.cacheMiss.Store(0)
 	r.output.reset()
 	r.missingReasoning = missingReasoningWatch{}
-	r.reasoningReplayStrongProjection = false
+	r.reasoningReplayStrongProjection = 0
 	r.compactionMu.Lock()
 	r.compactionState = CompactionState{} // lineage change; disk reloaded on Resume
 	r.cacheState = CacheStateUnknown
