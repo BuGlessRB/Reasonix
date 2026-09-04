@@ -58,6 +58,19 @@ ok(
 const metadata = provider({
   visionModels: [],
   visionModelsConfigured: false,
+  modelCapabilities: [
+    { model: "vision-model", inputModalities: ["text", "image"], state: "supported", source: "adapter" },
+    { model: "text-model", inputModalities: ["text"], state: "unsupported", source: "adapter" },
+  ],
+  modelOverrides: [],
+});
+const adapterMetadataVision = providerVisionModelsForView(metadata);
+ok(adapterMetadataVision.length === 1 && adapterMetadataVision[0] === "vision-model", "adapter metadata enables native vision without VisionModels");
+ok(providerModelVisionCapability(metadata, "text-model", adapterMetadataVision) === "unsupported", "adapter text-only metadata stays read-only");
+
+const overrideMetadata = provider({
+  visionModels: [],
+  visionModelsConfigured: false,
   modelOverrides: [{
     model: "vision-model",
     reasoningProtocol: "",
@@ -66,10 +79,10 @@ const metadata = provider({
     vision: true,
   }],
 });
-const metadataVision = providerVisionModelsForView(metadata);
-ok(metadataVision.length === 1 && metadataVision[0] === "vision-model", "model metadata enables native vision without VisionModels");
-ok(providerModelVisionCapability(metadata, "vision-model", metadataVision) === "supported", "supported model is marked read-only");
-ok(providerModelVisionCapability(metadata, "opaque-model", metadataVision) === "unknown", "unknown model stays conservative");
+const metadataVision = providerVisionModelsForView(overrideMetadata);
+ok(metadataVision.length === 1 && metadataVision[0] === "vision-model", "model override enables native vision without VisionModels");
+ok(providerModelVisionCapability(overrideMetadata, "vision-model", metadataVision) === "supported", "supported model is marked read-only");
+ok(providerModelVisionCapability(overrideMetadata, "opaque-model", metadataVision) === "unknown", "unknown model stays conservative");
 
 const modelScopePreset = createMockModelScopePreset(
   (input) => ({ ...provider(), ...input, visionModels: [], visionModelsConfigured: false }),

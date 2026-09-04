@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -55,8 +56,10 @@ type ModelCapabilityCacheEntry struct {
 }
 
 const (
-	modelCapabilityCacheVersion = 1
-	modelCapabilityCacheTTL     = 24 * time.Hour
+	modelCapabilityCacheVersion  = 1
+	modelCapabilityCacheTTL      = 24 * time.Hour
+	modelCapabilityCacheMaxSize  = 2 << 20
+	modelCapabilityCacheMaxItems = 4096
 )
 
 // ModelCapabilityResolver owns the single capability decision used by boot,
@@ -220,6 +223,7 @@ func (r *ModelCapabilityResolver) load() {
 		}
 		if normalized := normalizeInputModalities(entry.InputModalities); normalized != nil {
 			entry.InputModalities = normalized
+			entry.Source = CapabilitySourceCache
 			r.entries[entry.ProviderFingerprint+"\x00"+entry.ModelID] = entry
 		}
 	}
@@ -239,6 +243,10 @@ func (r *ModelCapabilityResolver) persist() {
 		}
 	}
 	r.mu.RUnlock()
+	sort.Slice(entries, func(i, j int) bool { return entries[i].FetchedAt.After(entries[j].FetchedAt) })
+	if len(entries) > modelCapabilityCacheMaxItems {
+		entries = entries[:modelCapabilityCacheMaxItems]
+	}
 	file := ModelCapabilityCacheFile{Version: modelCapabilityCacheVersion, Entries: entries}
 	data, err := json.MarshalIndent(file, "", "  ")
 	if err != nil {
@@ -248,6 +256,11 @@ func (r *ModelCapabilityResolver) persist() {
 	if os.MkdirAll(dir, 0o700) != nil {
 		return
 	}
+	release, err := acquireCapabilityFileLock(r.path+".lock", 2*time.Second)
+	if err != nil {
+		return
+	}
+	defer release()
 	tmp, err := os.CreateTemp(dir, ".model-capabilities-*.tmp")
 	if err != nil {
 		return
@@ -261,6 +274,23 @@ func (r *ModelCapabilityResolver) persist() {
 		err = closeErr
 	}
 	if err == nil {
-		_ = os.Rename(tmpName, r.path)
+		if len(data) <= modelCapabilityCacheMaxSize {
+			_ = os.Rename(tmpName, r.path)
+		}
+	}
+}
+
+func acquireCapabilityFileLock(path string, wait time.Duration) (func(), error) {
+	deadline := time.Now().Add(wait)
+	for {
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			_ = file.Close()
+			return func() { _ = os.Remove(path) }, nil
+		}
+		if !os.IsExist(err) || time.Now().After(deadline) {
+			return nil, err
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

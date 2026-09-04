@@ -112,6 +112,7 @@ import type {
   SessionCatalogBindings,
   PromptHistoryEntry,
   PromptHistoryResult,
+  ProviderModelCapabilityView,
   ProviderModelCatalogUpdate,
   ProviderPresetView,
   ProviderView,
@@ -555,6 +556,8 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   AddProviderPresetAccess(id: string, key: string): Promise<string>;
   ResetProviderPresetAccess(id: string): Promise<void>;
   FetchProviderModels(p: ProviderView): Promise<string[]>;
+  FetchProviderModelCatalog(p: ProviderView): Promise<ProviderModelCapabilityView[]>;
+  FetchAllProviderModelCatalogs(providers: ProviderView[]): Promise<Record<string, ProviderModelCapabilityView[]>>;
   FetchAllProviderModels(providers: ProviderView[]): Promise<Record<string, string[]>>;
   DeleteProvider(name: string): Promise<void>;
   RemoveProviderAccess(name: string): Promise<void>;
@@ -1092,7 +1095,7 @@ function bridgeBreadcrumb(method: string): string {
     return `model ${method}`;
   if (/^(SetDesktop|SetCloseBehavior|SetDisplayMode|SetStatusBar|SetReasoningDisplayMode|SetExpandThinking|SetAutoPlan|SetDefaultToolApprovalMode|SetCompactRatio|SetReasoningLanguage)/.test(method))
     return `settings ${method}`;
-  if (/^(SaveProvider|SetProviderWebSearch|SaveProviderModelCatalogs|AddOfficialProviderAccess|UpgradeDeepSeekProviderAccess|AddProviderPresetAccess|ResetProviderPresetAccess|RemoveProviderAccess|RemoveProviderAccesses|DeleteProvider|SaveProviderKey|SetProviderKey|ClearProviderKey|FetchProviderModels|FetchAllProviderModels|ConnectKey)/.test(method))
+  if (/^(SaveProvider|SetProviderWebSearch|SaveProviderModelCatalogs|AddOfficialProviderAccess|UpgradeDeepSeekProviderAccess|AddProviderPresetAccess|ResetProviderPresetAccess|RemoveProviderAccess|RemoveProviderAccesses|DeleteProvider|SaveProviderKey|SetProviderKey|ClearProviderKey|FetchProviderModelCatalog|FetchAllProviderModelCatalogs|FetchProviderModels|FetchAllProviderModels|ConnectKey)/.test(method))
     return `provider ${method}`;
   if (/^(CheckUpdate|ApplyUpdateRequest|OpenDownloadPage|OpenUserConfigPath|ReloadUserConfig)/.test(method)) return `update ${method}`;
   if (/^(AddMCPServer|InstallMCPServer|UpdateMCPServer|RemoveMCPServer|AuthorizeAndConnectMCPServer|AuthenticateMCPServer|ReconnectMCPServer|ClearMCPServerAuthentication|SetMCPServer)/.test(method))
@@ -4646,11 +4649,31 @@ function makeMockApp(): AppBindings {
       if (p.baseUrl.includes("xiaomimimo")) return ["mimo-v2.5-pro", "mimo-v2.5"];
       return ["gpt-5", "gpt-5-mini", "qwen3-coder"];
     },
+    async FetchProviderModelCatalog(p: ProviderView) {
+      const models = await this.FetchProviderModels(p);
+      return models.map((model) => ({
+        model,
+        inputModalities: p.modelCapabilities?.find((item) => item.model === model)?.inputModalities ?? ["text"],
+        state: p.modelCapabilities?.find((item) => item.model === model)?.state ?? "unsupported",
+        source: "adapter",
+      }));
+    },
     async FetchAllProviderModels(providers: ProviderView[]) {
       const out: Record<string, string[]> = {};
       for (const p of providers) {
         try {
           out[p.name] = await this.FetchProviderModels(p);
+        } catch {
+          out[p.name] = [];
+        }
+      }
+      return out;
+    },
+    async FetchAllProviderModelCatalogs(providers: ProviderView[]) {
+      const out: Record<string, ProviderModelCapabilityView[]> = {};
+      for (const p of providers) {
+        try {
+          out[p.name] = await this.FetchProviderModelCatalog(p);
         } catch {
           out[p.name] = [];
         }

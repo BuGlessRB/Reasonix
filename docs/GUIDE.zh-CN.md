@@ -1,5 +1,8 @@
 # Reasonix 使用指南
 
+Provider 模型能力元数据见
+[`MODEL_CAPABILITIES.zh-CN.md`](./MODEL_CAPABILITIES.zh-CN.md)。
+
 <a href="../README.zh-CN.md">README</a>
 &nbsp;·&nbsp;
 <a href="./GUIDE.md">English</a>

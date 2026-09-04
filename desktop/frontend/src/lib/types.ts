@@ -1714,6 +1714,7 @@ export interface ProviderView {
   supportedEfforts: string[]; // custom /effort levels; empty = use built-in Kind/BaseURL default
   defaultEffort: string; // /effort level when user picks "auto" or unset; "" = supportedEfforts[0]
   modelOverrides?: ProviderModelOverrideView[] | null;
+  modelCapabilities?: ProviderModelCapabilityView[] | null;
   recommendedUpgradeAvailable?: boolean; // official legacy OpenAI entry can switch to recommended Anthropic access
   modelCatalogFingerprint?: string; // opaque compare-and-apply token for background model discovery
 }
@@ -1724,6 +1725,19 @@ export interface ProviderModelCatalogUpdate {
   models: string[];
   default: string;
   visionModels: string[];
+  modelCapabilities?: ProviderModelCapabilityUpdate[];
+}
+
+export interface ProviderModelCapabilityView {
+  model: string;
+  inputModalities: string[];
+  state: "supported" | "unsupported" | "unknown" | string;
+  source: string;
+}
+
+export interface ProviderModelCapabilityUpdate {
+  model: string;
+  inputModalities: string[];
 }
 
 export interface ProviderPresetView {

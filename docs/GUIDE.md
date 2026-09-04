@@ -1,5 +1,8 @@
 # Reasonix Guide
 
+Provider model capability metadata is documented in
+[`MODEL_CAPABILITIES.md`](./MODEL_CAPABILITIES.md).
+
 <a href="../README.md">README</a>
 &nbsp;·&nbsp;
 <a href="./GUIDE.zh-CN.md">简体中文</a>

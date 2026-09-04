@@ -8,7 +8,7 @@ import { useDeferredClose } from "../lib/useMountTransition";
 import { app, COMPACT_RATIO_MAX_PERCENT, COMPACT_RATIO_MIN_PERCENT, openExternal } from "../lib/bridge";
 import { normalizeLangPref, useI18n, useT, type DictKey, type LangPref } from "../lib/i18n";
 import { apiKeyEnvFromProviderName, createLatestRequestGate, mergedFetchedProviderModels, mergeProviderModelContextWindows, providerApiKeyEnvForSave, providerDefaultModel, providerIsConfigured, providerModelCandidates, providerModelContextWindowDrafts, providerModelContextWindowIsSmall, providerRequiresKey } from "../lib/providerModels";
-import { cachedFetchProviderModels, invalidateProviderCacheByAPIKeyEnv, shouldSkipAutoRefresh } from "../lib/providerModelCache";
+import { cachedFetchProviderModelCatalog, cachedFetchProviderModels, invalidateProviderCacheByAPIKeyEnv, shouldSkipAutoRefresh } from "../lib/providerModelCache";
 import { providerBaseURLForSave, providerRequestURLFromConfig, trimmedBaseURL } from "../lib/providerEndpoint";
 import { providerModelVisionCapability, providerVisionModelsForView } from "../lib/providerVisionCapability";
 import { opencodeGoPresetDescriptionKeys } from "../lib/providerPresetDescriptions";
@@ -67,7 +67,7 @@ import {
   shortcutDefinitions,
   type ShortcutAction,
 } from "../lib/keyboardShortcuts";
-import type { BotAccessView, BotAllowlistView, BotConnectionDiagnostic, BotConnectionView, BotInstallStartResult, BotRouteView, BotSettingsView, HookConfigView, HooksSettingsView, NetworkView, ProviderModelCatalogUpdate, ProviderPresetView, ProviderView, SettingsTab, SettingsView } from "../lib/types";
+import type { BotAccessView, BotAllowlistView, BotConnectionDiagnostic, BotConnectionView, BotInstallStartResult, BotRouteView, BotSettingsView, HookConfigView, HooksSettingsView, NetworkView, ProviderModelCapabilityView, ProviderModelCatalogUpdate, ProviderPresetView, ProviderView, SettingsTab, SettingsView } from "../lib/types";
 import { AppearanceOverview } from "./AppearanceOverview";
 import { applyConfiguredBaseAppearance, setBaseAppearance } from "../lib/themePack";
 import { InlineConfirmButton } from "./InlineConfirmButton";
@@ -1362,6 +1362,18 @@ function normalizeExtraBodyMap(value: unknown): Record<string, unknown> {
 
 export function normalizeProviderView(p: ProviderView): ProviderView {
   const visionModels = asArray(p.visionModels);
+  const modelCapabilities = asArray(p.modelCapabilities).flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const raw = item as Partial<ProviderModelCapabilityView>;
+    const model = String(raw.model ?? "").trim();
+    if (!model) return [];
+    return [{
+      model,
+      inputModalities: asArray(raw.inputModalities).map(String),
+      state: String(raw.state ?? "unknown"),
+      source: String(raw.source ?? "unknown"),
+    }];
+  });
   const requiresKey = providerRequiresKey(p);
   return {
     ...p,
@@ -1373,6 +1385,7 @@ export function normalizeProviderView(p: ProviderView): ProviderView {
     requestUrl: p.requestUrl ?? "",
     models: asArray(p.models),
     visionModels,
+    modelCapabilities,
     visionModelsConfigured: Boolean(p.visionModelsConfigured ?? visionModels.length > 0),
     visionCapability: p.visionCapability === "unsupported" || p.visionCapability === "configurable"
       ? p.visionCapability
@@ -5031,7 +5044,7 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
     });
   };
 
-  const modelDraftForFetch = (p: ProviderView, fetched: string[]): ProviderModelDraft => {
+  const modelDraftForFetch = (p: ProviderView, fetched: string[], capabilities: ProviderModelCapabilityView[] = []): ProviderModelDraft => {
     const candidates = providerModelCandidates(p.models, fetched);
     const selected = mergedFetchedProviderModels(p.models, fetched, { preserveCurated: true });
     const configuredVision = providerVisionModelsForView(p, candidates);
@@ -5041,6 +5054,7 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
       selected: candidates.filter((model) => selected.includes(model)),
       visionModels: configuredVision,
       visionModelsConfigured: p.visionModelsConfigured,
+      modelCapabilities: capabilities,
     };
   };
 
@@ -5066,8 +5080,10 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
     setGroupModelDraft(group.id, null);
     try {
       let fetched: string[];
+      let fetchedCapabilities: ProviderModelCapabilityView[] = [];
       try {
-        fetched = await cachedFetchProviderModels((provider) => app.FetchProviderModels(provider), p, true);
+        fetchedCapabilities = await cachedFetchProviderModelCatalog((provider) => app.FetchProviderModelCatalog(provider), p, true);
+        fetched = fetchedCapabilities.map((item) => item.model);
       } catch (e) {
         if (!groupFetchIsCurrent(group.id, generation)) return;
         setGroupFetchResult(group.id, {
@@ -5084,7 +5100,7 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
         });
         return;
       }
-      const draft = modelDraftForFetch(p, fetched);
+      const draft = modelDraftForFetch(p, fetched, fetchedCapabilities);
       startTransition(() => {
         setGroupModelDraft(group.id, draft);
         setGroupFetchResult(group.id, {
@@ -5108,10 +5124,11 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
         await app.SaveProviderKey(apiKeyEnv, value);
         invalidateProviderCacheByAPIKeyEnv(apiKeyEnv);
         try {
-          const fetched = await cachedFetchProviderModels((provider) => app.FetchProviderModels(provider), { ...probe, apiKeyEnv });
+          const fetchedCapabilities = await cachedFetchProviderModelCatalog((provider) => app.FetchProviderModelCatalog(provider), { ...probe, apiKeyEnv });
+          const fetched = fetchedCapabilities.map((item) => item.model);
           if (!groupFetchIsCurrent(group.id, generation)) return;
           if (fetched.length > 0) {
-            const draft = modelDraftForFetch({ ...probe, apiKeyEnv }, fetched);
+            const draft = modelDraftForFetch({ ...probe, apiKeyEnv }, fetched, fetchedCapabilities);
             setGroupModelDraft(group.id, draft);
             setGroupFetchResult(group.id, {
               kind: "ok",
@@ -5340,6 +5357,7 @@ type ProviderModelDraft = {
   selected: string[];
   visionModels: string[];
   visionModelsConfigured: boolean;
+  modelCapabilities: ProviderModelCapabilityView[];
 };
 
 type AddProviderMode = null | "official" | "custom";
@@ -6270,7 +6288,7 @@ function ProviderModelDraftPicker({
         {deferredCandidates.length > 0 ? deferredCandidates.map((model) => {
           const enabled = selected.has(model);
           const capability = providerModelVisionCapability(
-            { visionModelsConfigured: draft.visionModelsConfigured },
+            { visionModelsConfigured: draft.visionModelsConfigured, modelCapabilities: draft.modelCapabilities },
             model,
             draft.visionModels,
           );
@@ -6580,6 +6598,7 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
   selectedModels,
   visionModels,
   visionModelsConfigured,
+  modelCapabilities,
   contextWindows,
   disabled,
   onToggleModel,
@@ -6591,6 +6610,7 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
   selectedModels: string[];
   visionModels: string[];
   visionModelsConfigured: boolean;
+  modelCapabilities: ProviderModelCapabilityView[];
   contextWindows: Record<string, string>;
   disabled: boolean;
   onToggleModel: (model: string) => void;
@@ -6642,7 +6662,7 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
         {deferredCandidates.length > 0 ? deferredCandidates.map((model) => {
           const enabled = selected.has(model);
           const capability = providerModelVisionCapability(
-            { visionModelsConfigured },
+            { visionModelsConfigured, modelCapabilities },
             model,
             visionModels,
           );
@@ -6730,6 +6750,7 @@ export function ProviderEditor({
   const [models, setModels] = useState((initial?.models ?? []).join(", "));
   const [modelCandidates, setModelCandidates] = useState<string[]>(initial?.models ?? []);
   const [legacyVisionModels] = useState(initial?.visionModels ?? []);
+  const [modelCapabilities, setModelCapabilities] = useState<ProviderModelCapabilityView[]>(initial?.modelCapabilities ?? []);
   const [visionModels, setVisionModels] = useState(() => providerVisionModelsForView(
     initial ?? { models: [], visionModels: [], modelOverrides: [] },
   ).join(", "));
@@ -6824,7 +6845,7 @@ export function ProviderEditor({
         await app.SaveProviderKey(effectiveApiKeyEnv, keyDraft.trim());
         invalidateProviderCacheByAPIKeyEnv(effectiveApiKeyEnv);
       }
-      const fetched = await cachedFetchProviderModels((provider) => app.FetchProviderModels(provider), {
+      const fetchedCapabilities = await cachedFetchProviderModelCatalog((provider) => app.FetchProviderModelCatalog(provider), {
         name: name.trim() || t("settings.newProviderDraftName"),
         builtIn: initial?.builtIn ?? false,
         added: initial?.added ?? true,
@@ -6853,11 +6874,13 @@ export function ProviderEditor({
         defaultEffort: cleanDefaultEffort,
         modelOverrides: mergeProviderModelContextWindows(initial?.modelOverrides, parseProviderListInput(models), modelContextWindows),
       }, true);
+      const fetched = fetchedCapabilities.map((item) => item.model);
       if (fetched.length === 0) {
         setFetchFallback(t("settings.fetchModelsManualFallbackEmpty"));
         return;
       }
       setModelCandidates(fetched);
+      setModelCapabilities(fetchedCapabilities);
       setModels(fetched.join(", "));
       setVisionModels((current) => {
         return parseProviderListInput(current).filter((model) => fetched.includes(model)).join(", ");
@@ -6908,6 +6931,7 @@ export function ProviderEditor({
       // NormalizeEffort would otherwise silently ignore an unsupported value.
       defaultEffort: cleanedSupportedEfforts.length > 0 ? cleanDefaultEffort : "",
       modelOverrides: mergeProviderModelContextWindows(initial?.modelOverrides, ms, modelContextWindows),
+      modelCapabilities,
     };
     try {
       await onSave(provider, keyDraft.trim() || undefined);
@@ -7179,6 +7203,7 @@ export function ProviderEditor({
         selectedModels={modelNames}
         visionModels={visionModelNames}
         visionModelsConfigured={visionModelsConfigured}
+        modelCapabilities={modelCapabilities}
         contextWindows={modelContextWindows}
         disabled={busy || fetchingModels}
         onToggleModel={toggleEditorModel}

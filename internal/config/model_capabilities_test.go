@@ -48,7 +48,7 @@ func TestModelCapabilityResolverLoadsIndependentCache(t *testing.T) {
 	writer.PutCatalog(entry, []provider.ModelInfo{{ID: "vision", InputModalities: []provider.ModelModality{provider.ModalityText, provider.ModalityImage}}})
 	reader := NewModelCapabilityResolver()
 	got := reader.Resolve(&entry)
-	if got.State != CapabilitySupported || got.Source != CapabilitySourceAdapter {
+	if got.State != CapabilitySupported || got.Source != CapabilitySourceCache {
 		t.Fatalf("reloaded capability = %+v", got)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "model-capabilities-v1.json")); err != nil {
