@@ -1,12 +1,14 @@
 package config
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -122,11 +124,8 @@ func capabilityFromBool(model string, vision bool, source CapabilitySource) Reso
 func capabilityFromModalities(model string, modalities []provider.ModelModality, source CapabilitySource) ResolvedModelCapability {
 	copyModalities := append([]provider.ModelModality(nil), modalities...)
 	state := CapabilityUnsupported
-	for _, modality := range copyModalities {
-		if modality == provider.ModalityImage {
-			state = CapabilitySupported
-			break
-		}
+	if slices.Contains(copyModalities, provider.ModalityImage) {
+		state = CapabilitySupported
 	}
 	if modalities == nil {
 		state = CapabilityUnknown
@@ -192,7 +191,7 @@ func (r *ModelCapabilityResolver) entryKey(entry *ProviderEntry, model string) s
 }
 
 func (r *ModelCapabilityResolver) providerFingerprint(entry ProviderEntry) string {
-	h := sha256.New()
+	h := hmac.New(sha256.New, []byte("reasonix-model-capabilities-cache-v1"))
 	for _, value := range []string{
 		"reasonix-model-capabilities-v1", entry.Name, entry.Kind, entry.BaseURL,
 		entry.ModelsURL, entry.APIKeyEnv, fmt.Sprintf("%t", entry.AuthHeader),

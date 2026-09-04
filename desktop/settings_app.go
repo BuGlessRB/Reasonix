@@ -3151,7 +3151,6 @@ func (a *App) FetchAllProviderModelCatalogs(providers []ProviderView) map[string
 	g, ctx := errgroup.WithContext(a.reqCtx())
 	sem := make(chan struct{}, 4)
 	for _, p := range providers {
-		p := p
 		g.Go(func() error {
 			select {
 			case sem <- struct{}{}:
