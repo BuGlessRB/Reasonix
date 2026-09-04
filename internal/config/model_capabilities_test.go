@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,6 +55,16 @@ func TestModelCapabilityResolverLoadsIndependentCache(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "model-capabilities-v1.json")); err != nil {
 		t.Fatalf("cache file missing: %v", err)
 	}
+	data, err := os.ReadFile(filepath.Join(dir, "model-capabilities-v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) == "" || string(data) == "\n" {
+		t.Fatal("cache file is unexpectedly empty")
+	}
+	if string(data) != "" && containsAny(string(data), "super-secret-api-key", "Authorization") {
+		t.Fatal("cache must not contain credential material")
+	}
 }
 
 func TestModelCapabilityResolverIgnoresExpiredCache(t *testing.T) {
@@ -72,3 +83,12 @@ func TestModelCapabilityResolverIgnoresExpiredCache(t *testing.T) {
 }
 
 func capabilityBoolPtr(value bool) *bool { return &value }
+
+func containsAny(value string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
+}
