@@ -32,7 +32,34 @@ func TestSubagentStorePartialOutcomeCanBeReadAndResumed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PrepareContinue partial: %v", err)
 	}
+	meta, err = store.LoadMeta(run.Ref)
+	if err != nil || meta.Status != SubagentRunning || meta.Outcome != "" {
+		t.Fatalf("resumed metadata = %+v/%v, want running without stale outcome", meta, err)
+	}
 	continued.Release()
+}
+
+func TestSubagentStoreDuplicateTerminalOutcomeIsIdempotent(t *testing.T) {
+	store := NewSubagentStore(t.TempDir())
+	spec := testSubagentSpec(t, "explore")
+	run, err := store.PrepareFresh(spec)
+	if err != nil {
+		t.Fatalf("PrepareFresh: %v", err)
+	}
+	defer run.Release()
+	answer := "same terminal answer"
+	run.Session.Add(provider.Message{Role: provider.RoleAssistant, Content: answer})
+	outcome := SubagentOutcome{Ref: run.Ref, Status: SubagentOutcomePartial, ErrorCode: "completion_uncertain", Retryable: true}
+	if err := store.SaveOutcome(run, outcome); err != nil {
+		t.Fatalf("first SaveOutcome: %v", err)
+	}
+	if err := store.SaveOutcome(run, outcome); err != nil {
+		t.Fatalf("duplicate SaveOutcome: %v", err)
+	}
+	meta, err := store.LoadMeta(run.Ref)
+	if err != nil || meta.Outcome != string(SubagentOutcomePartial) || meta.Status != SubagentFailed || !meta.Retryable {
+		t.Fatalf("duplicate terminal metadata = %+v/%v", meta, err)
+	}
 }
 
 func TestSubagentStoreFailedOutcomeRetainsReadableLastAnswer(t *testing.T) {

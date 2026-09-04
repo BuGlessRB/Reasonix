@@ -108,9 +108,7 @@ export const SUBAGENT_PROGRESS_NOTICE = "reasonix.subagent.notice";
 // to ordinary tool output on older frontends.
 const SUBAGENT_PROGRESS_PREFIX = "reasonix.subagent.";
 const TURN_ACTIVITY_KINDS = new Set(["turn_started", "text", "reasoning", "message", "tool_dispatch", "tool_progress", "tool_result_preview", "tool_result"]);
-const SUBAGENT_PROGRESS_PHASES = new Set([
-  "queued", "running", "reasoning", "responding", "tool", "retrying", "completed", "partial", "failed", "cancelled",
-]);
+const SUBAGENT_PROGRESS_PHASES = new Set(["queued", "running", "reasoning", "responding", "tool", "retrying", "completed", "partial", "failed", "cancelled"]);
 // Tool names that initialize a sub-agent progress card. parallel_tasks/fleet
 // are group cards: they settle when their whole child progress tree is
 // terminal, since they never receive a terminal status of their own.
@@ -122,9 +120,7 @@ const SUBAGENT_PREVIEW_REASONING_LIMIT = 8 << 10;
 const SUBAGENT_PREVIEW_TEXT_LIMIT = 8 << 10;
 const SUBAGENT_PREVIEW_NOTICE_LIMIT = 2 << 10;
 const RUNTIME_STATUS_ONLY = { hydrateSessionData: false } as const;
-export type SubagentPhase =
-  | "queued" | "running" | "reasoning" | "responding" | "tool" | "retrying"
-  | "completed" | "partial" | "failed" | "cancelled";
+export type SubagentPhase = "queued" | "running" | "reasoning" | "responding" | "tool" | "retrying" | "completed" | "partial" | "failed" | "cancelled";
 // In-memory-only sub-agent progress preview. Never persisted: history
 // hydration rebuilds tool items from the transcript without these fields, and
 // the full sub-agent transcript stays the source of truth after a restart.

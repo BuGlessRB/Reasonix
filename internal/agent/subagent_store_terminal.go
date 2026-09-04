@@ -17,6 +17,9 @@ func (s *SubagentStore) SaveOutcome(run *SubagentRun, outcome SubagentOutcome) e
 	if s == nil || run == nil || run.Ref == "" || s.parentDestroyed(run) {
 		return nil
 	}
+	if terminalOutcomeAlreadyRecorded(run.Meta, outcome) {
+		return nil
+	}
 	branchErr := s.ensureBranchCreatedAt(run)
 	var sessionErr error
 	if run.Session != nil {
@@ -37,6 +40,25 @@ func (s *SubagentStore) SaveOutcome(run *SubagentRun, outcome SubagentOutcome) e
 	meta.UpdatedAt = time.Now().UTC()
 	run.Meta = meta
 	return errors.Join(branchErr, sessionErr, s.saveMeta(meta))
+}
+
+func terminalOutcomeAlreadyRecorded(meta SubagentMeta, outcome SubagentOutcome) bool {
+	if meta.Outcome == "" {
+		return false
+	}
+	if meta.Outcome != string(outcome.Status) || meta.Retryable != outcome.Retryable || meta.ErrorCode != outcome.ErrorCode {
+		return false
+	}
+	switch outcome.Status {
+	case SubagentOutcomeCompleted:
+		return meta.Status == SubagentCompleted
+	case SubagentOutcomeCancelled:
+		return meta.Status == SubagentInterrupted
+	case SubagentOutcomePartial, SubagentOutcomeFailed:
+		return meta.Status == SubagentFailed
+	default:
+		return false
+	}
 }
 
 func runRef(run *SubagentRun) string {

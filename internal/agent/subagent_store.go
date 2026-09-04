@@ -437,6 +437,18 @@ func (s *SubagentStore) PrepareContinue(ref string, spec SubagentSpec) (*Subagen
 	}
 	meta.ParentSession = spec.ParentSession
 	meta.ParentToolCallID = spec.ParentToolCallID
+	// Re-acquire the running state while holding the per-ref lease so a resumed
+	// transcript is visible as active and stale cleanup cannot mark it
+	// interrupted while the continuation is executing.
+	meta.Status = SubagentRunning
+	meta.Outcome = ""
+	meta.Retryable = false
+	meta.ErrorCode = ""
+	meta.UpdatedAt = time.Now().UTC()
+	if err := s.saveMeta(meta); err != nil {
+		release()
+		return nil, fmt.Errorf("mark resumed subagent %q running: %w", ref, err)
+	}
 	return &SubagentRun{Ref: ref, Session: sess, Meta: meta, store: s, release: release}, nil
 }
 

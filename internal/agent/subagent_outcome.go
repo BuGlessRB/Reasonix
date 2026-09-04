@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"reasonix/internal/completioneval"
+	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
 )
@@ -90,8 +93,58 @@ func (t *TaskTool) failedSubagentResult(run *SubagentRun, cause error) (string, 
 	return subErr.SubagentOutput(), errors.Join(subErr, saveErr)
 }
 
+// resolveAmbiguousSubagentFailure applies the child-only completion policy.
+// Known partial causes are deterministic and never call a model. Only the
+// ambiguous completion boundary may use the existing bounded evaluator, at
+// most once, with no tools or history; all non-complete verdicts remain partial.
+func (t *TaskTool) resolveAmbiguousSubagentFailure(ctx context.Context, run *SubagentRun, taskText, modelRef string, sink event.Sink, cause error) (string, error) {
+	subErr := NewSubagentRunError(run, cause)
+	if subErr.Outcome.ErrorCode == "completion_uncertain" && strings.TrimSpace(subErr.Outcome.FinalAnswer) != "" && t != nil && t.completion.factory != nil && (ctx == nil || ctx.Err() == nil) {
+		evaluator := t.completion.factory(modelRef, sink)
+		if evaluator != nil {
+			verdict, evalErr := evaluator.Evaluate(ctx, completioneval.Evidence{
+				TaskText: taskText, CandidateAnswer: subErr.Outcome.FinalAnswer,
+				Mode: completioneval.ModeSubagent, HostSummary: "child completion status is ambiguous",
+			})
+			if evalErr == nil && verdict.Outcome == completioneval.OutcomeComplete {
+				subErr.Outcome.Status = SubagentOutcomeCompleted
+				subErr.Outcome.ErrorCode = ""
+				subErr.Outcome.Retryable = false
+				if t.transcripts != nil {
+					if saveErr := t.transcripts.SaveOutcome(run, subErr.Outcome); saveErr != nil {
+						return subErr.SubagentOutput(), errors.Join(subErr, saveErr)
+					}
+				}
+				return FormatSubagentRunResult(subErr.Outcome.FinalAnswer, run, false), nil
+			}
+		}
+	}
+	var saveErr error
+	if t != nil && t.transcripts != nil {
+		saveErr = t.transcripts.SaveOutcome(run, subErr.Outcome)
+	}
+	return subErr.SubagentOutput(), errors.Join(subErr, saveErr)
+}
+
+// ResolveAmbiguousSubagentFailure applies the same bounded child completion
+// policy to boot-wired skill runners.
+func (t *TaskTool) ResolveAmbiguousSubagentFailure(ctx context.Context, run *SubagentRun, taskText, modelRef string, sink event.Sink, cause error) (string, error) {
+	return t.resolveAmbiguousSubagentFailure(ctx, run, taskText, modelRef, sink, cause)
+}
+
+// failBeforeSubagentRelease preserves the run envelope on setup failures that
+// occur after a reference was allocated but before the normal RunProfileSpec
+// cleanup/defer is installed.
+func (t *TaskTool) failBeforeSubagentRelease(run *SubagentRun, cause error) (string, error) {
+	result, err := t.failedSubagentResult(run, cause)
+	if run != nil {
+		run.Release()
+	}
+	return result, err
+}
+
 func subagentErrorDisposition(err error) (string, SubagentOutcomeStatus, bool) {
-	if errors.Is(err, context.Canceled) {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return "cancelled", SubagentOutcomeCancelled, false
 	}
 	var completion *CompletionUncertainError
@@ -175,5 +228,62 @@ func ParseSubagentOutcome(text string) (SubagentOutcome, bool) {
 			}
 		}
 	}
-	return outcome, outcome.Ref != "" && outcome.Status != ""
+	return outcome, validSubagentRef(outcome.Ref) && validSubagentOutcomeStatus(outcome.Status)
+}
+
+func validSubagentOutcomeStatus(status SubagentOutcomeStatus) bool {
+	switch status {
+	case SubagentOutcomeCompleted, SubagentOutcomePartial, SubagentOutcomeFailed, SubagentOutcomeCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+func emitSubagentLifecycle(sink event.Sink, phase, parentToolCallID, skillName, model, effort string, run *SubagentRun, outcome *SubagentOutcome) {
+	if run == nil || run.Ref == "" || sink == nil {
+		return
+	}
+	info := event.SubagentLifecycleInfo{
+		Phase: phase, Ref: run.Ref, ParentToolCallID: parentToolCallID,
+		Skill: skillName, Model: model, Effort: effort,
+	}
+	if !run.Meta.CreatedAt.IsZero() {
+		info.StartUnixMs = run.Meta.CreatedAt.UnixMilli()
+	}
+	if outcome != nil {
+		info.Status = string(outcome.Status)
+		info.ErrorCode = outcome.ErrorCode
+		info.Retryable = outcome.Retryable
+		info.OutputBytes = len(outcome.FinalAnswer)
+		info.EndUnixMs = time.Now().UnixMilli()
+	} else if phase == "child_running" {
+		info.Status = "running"
+	} else {
+		info.Status = "queued"
+	}
+	event.RecordSubagentLifecycle(sink, info)
+}
+
+// EmitSubagentLifecycle publishes a content-free lifecycle transition for a
+// child runner implemented outside the agent package, such as boot-wired
+// skills.
+func EmitSubagentLifecycle(sink event.Sink, phase, parentToolCallID, skillName, model, effort string, run *SubagentRun, outcome *SubagentOutcome) {
+	emitSubagentLifecycle(sink, phase, parentToolCallID, skillName, model, effort, run, outcome)
+}
+
+func terminalSubagentLifecycle(runErr error) (string, *SubagentOutcome) {
+	if runErr == nil {
+		return "child_completed", &SubagentOutcome{Status: SubagentOutcomeCompleted}
+	}
+	if outcome := subagentOutcomeFromError(runErr); outcome != nil {
+		return "child_" + string(outcome.Status), outcome
+	}
+	subErr := NewSubagentRunError(nil, runErr)
+	return "child_" + string(subErr.Outcome.Status), &subErr.Outcome
+}
+
+// TerminalSubagentLifecycle classifies a runner error for lifecycle sinks.
+func TerminalSubagentLifecycle(runErr error) (string, *SubagentOutcome) {
+	return terminalSubagentLifecycle(runErr)
 }
