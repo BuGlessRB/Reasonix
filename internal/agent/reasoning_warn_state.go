@@ -422,37 +422,6 @@ func (s *missingReasoningWarnState) claim(fingerprint string) bool {
 	return s.claimAt(fingerprint, time.Now())
 }
 
-// activeAt reports whether the provider/configuration circuit is open. It is a
-// read-only transaction: failures return false so bookkeeping can never force
-// an unverified fallback mode.
-func (s *missingReasoningWarnState) activeAt(fingerprint string, observedAt time.Time) bool {
-	incident, exists := s.incidentAt(fingerprint, observedAt)
-	return exists && incident.LastMissingUnixNano > incident.LastResolvedAtUnixNano
-}
-
-func (s *missingReasoningWarnState) incidentAt(fingerprint string, observedAt time.Time) (missingReasoningIncident, bool) {
-	fingerprint = strings.TrimSpace(fingerprint)
-	if s == nil || s.dir == "" || !validMissingReasoningFingerprint(fingerprint) {
-		return missingReasoningIncident{}, false
-	}
-	observedAt = normalizeMissingReasoningObservedAt(observedAt)
-	processLock := s.processLock()
-	processLock.Lock()
-	defer processLock.Unlock()
-
-	release, err := s.acquire()
-	if err != nil {
-		return missingReasoningIncident{}, false
-	}
-	defer release()
-	incidents, err := s.load(missingReasoningTransactionNow(observedAt))
-	if err != nil {
-		return missingReasoningIncident{}, false
-	}
-	incident, exists := incidents[fingerprint]
-	return incident, exists
-}
-
 type missingReasoningResolveResult struct {
 	Recorded bool
 	Resolved bool
