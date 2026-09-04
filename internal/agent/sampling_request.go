@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
@@ -13,6 +15,14 @@ import (
 // messages, no schema reorder, no previous_response_id drift from failed attempts.
 type samplingRequest struct {
 	req provider.Request
+}
+
+func isEmptyStreamResult(text, reasoning string, calls []provider.ToolCall, responsesItems []json.RawMessage, serverSearch []provider.ServerSearchCall) bool {
+	return strings.TrimSpace(text) == "" &&
+		strings.TrimSpace(reasoning) == "" &&
+		len(calls) == 0 &&
+		len(responsesItems) == 0 &&
+		len(serverSearch) == 0
 }
 
 // modelInputMessages derives the stable provider-visible view from durable
@@ -65,9 +75,15 @@ func (a *Agent) handleSamplingError(
 	result, last streamedTurn,
 	billable *provider.Usage,
 ) (retry bool, terminal streamedTurn) {
-	if provider.IsStreamInterrupted(result.err) && attempt < maxSamplingAttempts {
-		streamSink.Discard()
+	retryableEmpty := errors.Is(result.err, provider.ErrEmptyResponse)
+	if (provider.IsStreamInterrupted(result.err) || retryableEmpty) && attempt < maxSamplingAttempts {
+		if streamSink != nil {
+			streamSink.Discard()
+		}
 		reason := provider.StreamInterruptReason(result.err)
+		if retryableEmpty {
+			reason = "empty_response"
+		}
 		a.emitStreamAttempt(attemptID, event.StreamAttemptDiscard, attempt, reason, result.err)
 		a.svc.sink.Emit(event.Event{
 			Kind: event.Retrying, RetryAttempt: attempt, RetryMax: maxStreamRecoveries,
