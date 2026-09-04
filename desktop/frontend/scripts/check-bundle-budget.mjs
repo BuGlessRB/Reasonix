@@ -190,7 +190,11 @@ console.log("\nbundle budgets");
 // Absorbing content-preserving block-window prepends into the active reader
 // transaction adds 0.2 KiB gzip on top; the merged path measures 463.292 KiB,
 // 8 bytes under the next decimal. Retain one cross-platform decimal step.
-const initialJSBudgetKiB = 463.4;
+// The subagent outcome envelope, partial-state card, and history hydration add
+// 0.5 KiB gzip on the initial path. Current cross-platform CI measures 463.9
+// KiB; keep this narrow ratchet explicit rather than removing recovery UI or
+// widening a chunk.
+const initialJSBudgetKiB = 463.9;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -254,7 +258,10 @@ for (const path of localeChunks) {
   // reclaim), while Sticky Context adds file-state and limit diagnostics. The
   // merged stable chunks measure 60.395 KiB zh and 61.232 KiB zh-TW; retain
   // only the next one-decimal ceiling for each dialect.
-  const budget = name.startsWith("zh-TW-") ? 61.3 * 1024 : 60.4 * 1024;
+  // The outcome card adds one short localized status label per dialect. CI's
+  // Windows zlib measured zh at 60.4 KiB exactly; retain the next decimal
+  // ceiling so platform compression variance does not fail the product build.
+  const budget = name.startsWith("zh-TW-") ? 61.3 * 1024 : 60.5 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -344,6 +351,11 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // path measures 2471.741 KiB. Controller-owned management dispositions and
 // optimistic management settlement add 0.6 KiB raw; retain the smallest
 // one-decimal ceiling with bounded headroom.
-const rawInitialBudgetKiB = 2_472.4;
+// The outcome card and history hydration add 2.3 KiB raw on the initial path
+// (2474.0 KiB measured in CI). Keep this narrowly attributable ratchet rather
+// than removing persisted-result visibility or changing chunk ownership.
+// On the current main-v2 base, the combined measured path is 2474.6 KiB;
+// retain 0.1 KiB of bounded cross-platform headroom.
+const rawInitialBudgetKiB = 2_474.7;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
