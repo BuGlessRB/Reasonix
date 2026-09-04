@@ -415,12 +415,13 @@ distinct regional endpoints. Kimi Coding Plan is therefore a dedicated plan
 endpoint, while Kimi direct API is split into CN and Global. The preset path
 usually needs only the provider API key: the key value is stored in Reasonix home
 `.env`, while `config.toml` stores the endpoint, model list, key
-environment-variable name, context window, vision model metadata, proxy bypass
+environment-variable name, context window, model capability metadata, proxy bypass
 for China-only endpoints, MiniMax `reasoning_split`, GLM/MiniMax thinking
 heuristics, Anthropic-compatible Bearer auth where needed, Ollama Cloud
 max-effort support, and OpenCode Go per-model reasoning overrides. Official DeepSeek Anthropic, Responses, and Chat Completions catalogs also
-include `deepseek-v4-flash-vision-exp`. In Settings, mark that SKU for image
-input with the same checkbox used by other providers, then select it. Composer
+include `deepseek-v4-flash-vision-exp`. Settings derives image support from
+model capability metadata; no per-provider vision-model checkbox is needed.
+Composer
 and `@` user images are sent as official visual input using the three documented
 shapes: inline base64 `data:` URLs for local files, `http(s)` image URLs as-is,
 and Files API `file-api-` ids (local images over 32 MiB on official DeepSeek are
