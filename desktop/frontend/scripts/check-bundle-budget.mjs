@@ -191,10 +191,11 @@ console.log("\nbundle budgets");
 // transaction adds 0.2 KiB gzip on top; the merged path measures 463.292 KiB,
 // 8 bytes under the next decimal. Retain one cross-platform decimal step.
 // The subagent outcome envelope, partial-state card, and history hydration add
-// 0.5 KiB gzip on the initial path. Current cross-platform CI measures 463.9
-// KiB; keep this narrow ratchet explicit rather than removing recovery UI or
-// widening a chunk.
-const initialJSBudgetKiB = 463.9;
+// 0.5 KiB gzip on the initial path. The model-capability resolver and its
+// read-only provider badges add a measured 0.2 KiB including gzip/toolchain
+// rounding; keep this narrow ratchet
+// explicit rather than restoring manual capability controls.
+const initialJSBudgetKiB = 464.1;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -259,9 +260,10 @@ for (const path of localeChunks) {
   // merged stable chunks measure 60.395 KiB zh and 61.232 KiB zh-TW; retain
   // only the next one-decimal ceiling for each dialect.
   // The outcome card adds one short localized status label per dialect. CI's
-  // Windows zlib measured zh at 60.4 KiB exactly; retain the next decimal
-  // ceiling so platform compression variance does not fail the product build.
-  const budget = name.startsWith("zh-TW-") ? 61.3 * 1024 : 60.5 * 1024;
+  // Windows zlib measured zh at 60.4 KiB exactly; capability-status copy adds
+  // a small 0.1 KiB ratchet, so retain the next decimal ceiling rather than
+  // dropping the unknown-state explanation.
+  const budget = name.startsWith("zh-TW-") ? 61.4 * 1024 : 60.6 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -355,7 +357,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // (2474.0 KiB measured in CI). Keep this narrowly attributable ratchet rather
 // than removing persisted-result visibility or changing chunk ownership.
 // On the current main-v2 base, the combined measured path is 2474.6 KiB;
-// retain 0.1 KiB of bounded cross-platform headroom.
-const rawInitialBudgetKiB = 2_474.7;
+// the model-capability helper and localized status copy add 0.9 KiB; retain
+// the smallest bounded cross-platform ceiling.
+const rawInitialBudgetKiB = 2_475.7;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
