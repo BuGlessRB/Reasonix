@@ -4484,7 +4484,7 @@ function ModelsSection({ s, busy, apply, backgroundApply, initialFocus }: Models
               />
             </SettingsField>
 
-            <SettingsField label={t("settings.imageUnderstandingModel")} hint={t("settings.visionCapabilityAutoHint")}>
+            <SettingsField label={t("settings.imageUnderstandingModel")} hint={t("settings.visionModelsHint")}>
               <ModelPicker
                 s={s}
                 refs={visionRefs}
