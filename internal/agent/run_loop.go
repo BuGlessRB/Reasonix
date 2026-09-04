@@ -123,12 +123,6 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string, pinned pinnedRev
 	}
 	a.turn.engine = runtimepolicy.NewEngine(a.turn.constraints)
 	a.rebuildTurnContract()
-	// Reuse an open provider/configuration circuit before projecting history or
-	// spending another pair of normal thinking-mode requests.
-	if a.beginMissingReasoningRecovery() {
-		event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningRetrySuppressed})
-		event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningFallback})
-	}
 	// A cancelled/error turn leaves a provider-excluded recovery record at the
 	// transcript tail. Fold its bounded facts into this new user turn exactly
 	// once; the user's raw text remains the source above.
@@ -357,7 +351,7 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 			event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningDetected})
 			if shouldRetry {
 				event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningRetryAttempted})
-				a.emitProtocolRetry(1, provider.SupportsMissingReasoningFallback(a.svc.prov))
+				a.emitProtocolRetry(1, false)
 				retrySink := newDeferredStreamSink(a.svc.sink)
 				retry := runAttempt(attemptID, retrySink)
 				billable = mergeSamplingUsage(billable, retry.usage)
@@ -374,18 +368,11 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 					// unreplayable client tool.
 					a.storeLatestRequestUsage(result.usage)
 					result.usage = finalizeSamplingUsage(billable, result.usage)
-					event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningFallback})
 					terminal := a.finishUnreplayableReasoning(result, streamSink, issue)
 					a.emitReasoningReplayAttemptOutcome(attemptID, attempt, terminal.err)
 					return terminal
 				}
 				streamSink.Discard()
-				if a.reasoningReplayIssue(retry) == ReasoningReplayMissing {
-					event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningDetected})
-					if fallback, ok := a.runMissingReasoningFallback(ctx, turn, &frozen, attemptID, attempt, billable, retrySink); ok {
-						return fallback
-					}
-				}
 				retry = a.finishReasoningReplayRetry(retry, retrySink, billable)
 				a.emitReasoningReplayAttemptOutcome(attemptID, attempt, retry.err)
 				return retry
