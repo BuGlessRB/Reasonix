@@ -11,6 +11,7 @@ import (
 type reasoningReplayRecoveryBudget struct {
 	retries int
 	cutoff  int
+	anchor  string
 }
 
 // recoverReasoningReplay400 applies the vendor-documented self-heal for a
@@ -31,6 +32,9 @@ func (a *Agent) recoverReasoningReplay400(frozen samplingRequest, err error, bud
 	}
 	budget.retries++
 	budget.cutoff = len(repaired)
+	if budget.cutoff > 0 {
+		budget.anchor = reasoningReplayMessageFingerprint(repaired[budget.cutoff-1])
+	}
 	next := frozen.req
 	next.Messages = repaired
 	return samplingRequest{req: next}, true
@@ -56,11 +60,12 @@ func (a *Agent) tryRecoverReasoningReplay400(streamSink *deferredStreamSink, fro
 
 // activateReasoningReplayStrongProjection records the repaired history prefix.
 // Messages appended after it keep their normal reasoning/tool replay.
-func (a *Agent) activateReasoningReplayStrongProjection(cutoff int) {
+func (a *Agent) activateReasoningReplayStrongProjection(cutoff int, anchor string) {
 	if a == nil {
 		return
 	}
 	a.sess.reasoningReplayStrongProjection = cutoff
+	a.sess.reasoningReplayStrongProjectionAnchor = anchor
 	event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryReasoningReplay400Recovered})
 	a.emitReasoningReplayRepairNotice()
 }

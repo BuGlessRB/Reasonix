@@ -414,6 +414,55 @@ func TestReasoningReplay400KeepsNewToolRoundOutsideStrongProjection(t *testing.T
 	}
 }
 
+func TestReasoningReplay400ProjectsAllStaleToolRoundsBeforeFreshRound(t *testing.T) {
+	old1 := provider.ToolCall{ID: "old-1", Name: "echo", Arguments: `{"text":"old one"}`}
+	old2 := provider.ToolCall{ID: "old-2", Name: "echo", Arguments: `{"text":"old two"}`}
+	old3 := provider.ToolCall{ID: "old-3", Name: "echo", Arguments: `{"text":"old three"}`}
+	fresh := provider.ToolCall{ID: "fresh", Name: "echo", Arguments: `{"text":"fresh"}`}
+	mp := testutil.NewMock("strict-replay",
+		testutil.ErrorTurn(thinkingReplay400Error()),
+		testutil.Turn{Text: "repaired"},
+		testutil.Turn{Reasoning: "fresh reasoning", ToolCalls: []provider.ToolCall{fresh}},
+		testutil.Turn{Text: "fresh final"},
+	)
+	session := NewSession("system")
+	session.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
+	session.Add(provider.Message{Role: provider.RoleAssistant, Content: "old one", ReasoningContent: "stale one", ToolCalls: []provider.ToolCall{old1}})
+	session.Add(provider.Message{Role: provider.RoleTool, ToolCallID: old1.ID, Name: old1.Name, Content: "old result one"})
+	session.Add(provider.Message{Role: provider.RoleUser, Content: "second"})
+	session.Add(provider.Message{Role: provider.RoleAssistant, Content: "old two", ReasoningContent: "stale two", ToolCalls: []provider.ToolCall{old2}})
+	session.Add(provider.Message{Role: provider.RoleTool, ToolCallID: old2.ID, Name: old2.Name, Content: "old result two"})
+	session.Add(provider.Message{Role: provider.RoleUser, Content: "third"})
+	session.Add(provider.Message{Role: provider.RoleAssistant, Content: "old three", ReasoningContent: "stale three", ToolCalls: []provider.ToolCall{old3}})
+	session.Add(provider.Message{Role: provider.RoleTool, ToolCallID: old3.ID, Name: old3.Name, Content: "old result three"})
+	a := New(strictAssistantReasoningProvider{mp}, echoRegistry(), session, Options{}, event.Discard)
+	if err := a.Run(withNoClosedLoop(context.Background()), "repair"); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	if err := a.Run(withNoClosedLoop(context.Background()), "fresh"); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	requests := mp.Requests()
+	if len(requests) != 4 {
+		t.Fatalf("requests = %d, want repair plus a two-step follow-up", len(requests))
+	}
+	for _, message := range requests[3].Messages {
+		if message.ReasoningContent == "stale one" || message.ReasoningContent == "stale two" || message.ReasoningContent == "stale three" {
+			t.Fatalf("stale reasoning survived prefix projection: %+v", message)
+		}
+	}
+	var sawFreshToolRound bool
+	for _, message := range requests[3].Messages {
+		if len(message.ToolCalls) > 0 || message.Role == provider.RoleTool {
+			sawFreshToolRound = true
+			break
+		}
+	}
+	if !sawFreshToolRound {
+		t.Fatal("strong projection dropped the fresh tool round")
+	}
+}
+
 func TestReasoningReplay400RepairExhaustionStaysTerminal(t *testing.T) {
 	mp := testutil.NewMock("strict-replay",
 		testutil.ErrorTurn(thinkingReplay400Error()),

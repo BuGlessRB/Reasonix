@@ -174,7 +174,8 @@ func (a *Agent) providerProjectionMessages(msgs []provider.Message) []provider.M
 			if strongCutoff > 0 {
 				// A repaired thinking-400 conversation keeps the stripped
 				// projection only for the history that caused the rejection.
-				if repaired, changed := provider.ProjectReasoningStrippedMessagesPrefix(a.svc.prov, msgs, strongCutoff); changed {
+				resolvedCutoff := resolveReasoningReplayPrefix(msgs, strongCutoff, a.sess.reasoningReplayStrongProjectionAnchor)
+				if repaired, changed := provider.ProjectReasoningStrippedMessagesPrefix(a.svc.prov, msgs, resolvedCutoff); changed {
 					msgs = repaired
 				}
 			} else if repaired, changed := provider.ProjectReplaySafeMessages(a.svc.prov, msgs); changed {

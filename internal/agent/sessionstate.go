@@ -25,10 +25,11 @@ type sessionRuntime struct {
 
 	missingReasoning missingReasoningWatch
 
-	// reasoningReplayStrongProjection is the provider-visible history prefix
-	// that was present when a thinking-400 repair succeeded; later messages stay
-	// on the normal replay path.
-	reasoningReplayStrongProjection int
+	// reasoningReplayStrongProjection records the provider-visible history cutoff
+	// after thinking-400 repair; later messages use normal replay. Its anchor
+	// resolves the cutoff after old tool-result messages are removed.
+	reasoningReplayStrongProjection       int
+	reasoningReplayStrongProjectionAnchor string
 
 	// compactionMu guards projection snapshots/install and the in-memory sidecar
 	// generation. Network summarization never runs while this lock is held.
@@ -71,6 +72,7 @@ func (r *sessionRuntime) reset(s *Session) {
 	r.output.reset()
 	r.missingReasoning = missingReasoningWatch{}
 	r.reasoningReplayStrongProjection = 0
+	r.reasoningReplayStrongProjectionAnchor = ""
 	r.compactionMu.Lock()
 	r.compactionState = CompactionState{} // lineage change; disk reloaded on Resume
 	r.cacheState = CacheStateUnknown

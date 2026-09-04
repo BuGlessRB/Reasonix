@@ -53,6 +53,34 @@ func (a *Agent) preserveRawReasoning(reasoning, signature, reasoningID, reasonin
 	})
 }
 
+// reasoningReplayMessageFingerprint identifies the last provider-visible
+// message in the repaired request. It deliberately ignores durable UI fields,
+// matching the same wire-visible fields used by the context projection hash.
+func reasoningReplayMessageFingerprint(message provider.Message) string {
+	return providerVisibleFingerprint(provider.ModelMessages([]provider.Message{message}))
+}
+
+// resolveReasoningReplayPrefix maps the repaired provider prefix back onto a
+// later canonical snapshot. Strong repair can remove old assistant/tool
+// messages, so a raw message count alone can point into a different old turn.
+func resolveReasoningReplayPrefix(msgs []provider.Message, hint int, anchor string) int {
+	if hint <= 0 || hint > len(msgs) {
+		return 0
+	}
+	if anchor == "" {
+		return hint
+	}
+	// Removed messages only make the canonical location move forward. Prefer
+	// the first matching anchor at/after the old provider-visible count; this
+	// also avoids selecting an earlier duplicate user message.
+	for i, message := range msgs {
+		if i+1 >= hint && reasoningReplayMessageFingerprint(message) == anchor {
+			return i + 1
+		}
+	}
+	return 0
+}
+
 func (a *Agent) emitReasoningReplayAttemptOutcome(id string, attempt int, err error) {
 	if err != nil {
 		a.emitStreamAttempt(id, event.StreamAttemptDiscard, attempt, "reasoning_replay", err)
