@@ -1838,9 +1838,7 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 					})
 				}
 				usage = provider.UsageWithRequestAttemptCount(ctx, usage)
-				if strings.TrimSpace(finalText) == "" &&
-					strings.TrimSpace(finalReasoning) == "" &&
-					len(calls) == 0 && len(responsesItems) == 0 && len(search.calls) == 0 {
+				if isEmptyStreamResult(finalText, finalReasoning, calls, responsesItems, search.calls) {
 					return streamedTurn{
 						usage: usage, partialCalls: partialCalls, maxArgChars: maxArgChars,
 						err: fmt.Errorf("%w: model returned a completed response with no content", provider.ErrEmptyResponse),

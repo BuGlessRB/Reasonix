@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
@@ -14,6 +15,14 @@ import (
 // messages, no schema reorder, no previous_response_id drift from failed attempts.
 type samplingRequest struct {
 	req provider.Request
+}
+
+func isEmptyStreamResult(text, reasoning string, calls []provider.ToolCall, responsesItems []json.RawMessage, serverSearch []provider.ServerSearchCall) bool {
+	return strings.TrimSpace(text) == "" &&
+		strings.TrimSpace(reasoning) == "" &&
+		len(calls) == 0 &&
+		len(responsesItems) == 0 &&
+		len(serverSearch) == 0
 }
 
 // modelInputMessages derives the stable provider-visible view from durable

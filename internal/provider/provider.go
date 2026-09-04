@@ -940,12 +940,6 @@ func IsStreamInterrupted(err error) bool {
 	return errors.As(err, &interrupted)
 }
 
-// ErrEmptyResponse marks a clean provider completion that carried no text,
-// reasoning, tool calls, response items, or server-side activity. The agent
-// may safely retry the frozen request because the empty attempt produced no
-// assistant message that can be committed to conversation history.
-var ErrEmptyResponse = errors.New("empty provider response")
-
 // Provider is a chat-capable model backend.
 type Provider interface {
 	// Name returns the provider instance name, e.g. "deepseek" / "mimo".
