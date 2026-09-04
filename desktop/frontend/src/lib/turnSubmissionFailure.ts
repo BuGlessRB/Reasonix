@@ -43,7 +43,7 @@ export function reduceSubmitFailure(
 
 export function reduceManagementConfirmation(state: State, submissionId: string, observedAt: number): State {
   if (state.pendingSubmissionId !== submissionId) return state;
-  const preserveRuntime = Boolean(state.activeTurnId || state.live || state.approval || state.ask || state.mcpInteraction);
+  const preserveRuntime = Boolean(state.turnActive || state.activeTurnId || state.live || state.approval || state.ask || state.mcpInteraction);
   return {
     ...state,
     items: state.items.filter((item) => !(item.kind === "user" && item.submissionId === submissionId)),

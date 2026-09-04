@@ -126,6 +126,11 @@ const managementPending = reducer(reducer(initialState, {
 }), { type: "management_confirmed", submissionId: "management-1" });
 eq(managementPending.items.some((item) => item.kind === "user" && item.text === "/context"), false, "handled management commands do not remain as conversation turns");
 eq(managementPending.running, false, "handled management commands release the composer");
+const managementDuringTurn = reducer(reducer({ ...initialState, running: true, turnActive: true, activeTurnId: "turn-active" }, {
+  type: "user", text: "/context", seq: 0, submissionId: "management-active",
+}), { type: "management_confirmed", submissionId: "management-active" });
+eq(managementDuringTurn.running, true, "management confirmation does not release an unrelated active turn");
+eq(managementDuringTurn.turnActive, true, "management confirmation preserves the active-turn gate");
 let rejectedVisibleOnlySubmit = false;
 try {
   normalizeTurnSubmit("visible prompt", "   ");
