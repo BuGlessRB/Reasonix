@@ -84,6 +84,17 @@ func (r *sessionRuntime) reset(s *Session) {
 	r.compaction.lastTurn.Store(0)
 }
 
+// clearReasoningReplayStrongProjection drops the process-local repair overlay.
+// The overlay is tied to one canonical history shape; any rewind, branch, or
+// other lineage rewrite must not let an old cutoff/anchor govern the new view.
+func (r *sessionRuntime) clearReasoningReplayStrongProjection() {
+	if r == nil {
+		return
+	}
+	r.reasoningReplayStrongProjection = 0
+	r.reasoningReplayStrongProjectionAnchor = ""
+}
+
 // session returns the bound conversation under the lock that guards the
 // pointer against a concurrent SetSession.
 func (r *sessionRuntime) session() *Session {

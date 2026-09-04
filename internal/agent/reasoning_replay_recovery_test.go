@@ -463,6 +463,38 @@ func TestReasoningReplay400ProjectsAllStaleToolRoundsBeforeFreshRound(t *testing
 	}
 }
 
+func TestReasoningReplayAnchorMissFallsBackToNormalProjection(t *testing.T) {
+	call := provider.ToolCall{ID: "stale", Name: "echo", Arguments: `{"text":"old"}`}
+	session := NewSession("system")
+	session.Add(provider.Message{Role: provider.RoleUser, Content: "old"})
+	session.Add(provider.Message{Role: provider.RoleAssistant, Content: "old answer", ToolCalls: []provider.ToolCall{call}})
+	session.Add(provider.Message{Role: provider.RoleTool, ToolCallID: call.ID, Name: call.Name, Content: "old result"})
+	a := New(strictAssistantReasoningProvider{testutil.NewMock("strict-replay")}, echoRegistry(), session, Options{}, event.Discard)
+	a.sess.reasoningReplayStrongProjection = 2
+	a.sess.reasoningReplayStrongProjectionAnchor = "anchor no longer present"
+
+	got := a.providerProjectionMessages(modelInputMessages(session.Snapshot()))
+	if a.sess.reasoningReplayStrongProjection != 0 || a.sess.reasoningReplayStrongProjectionAnchor != "" {
+		t.Fatalf("stale strong projection survived anchor miss: cutoff=%d anchor=%q", a.sess.reasoningReplayStrongProjection, a.sess.reasoningReplayStrongProjectionAnchor)
+	}
+	for _, message := range got {
+		if len(message.ToolCalls) > 0 || message.Role == provider.RoleTool {
+			t.Fatalf("normal projection did not remove unreplayable tool history: %+v", got)
+		}
+	}
+}
+
+func TestReasoningReplayProjectionInvalidationClearsOverlay(t *testing.T) {
+	a := New(nil, echoRegistry(), NewSession("system"), Options{}, event.Discard)
+	a.sess.reasoningReplayStrongProjection = 7
+	a.sess.reasoningReplayStrongProjectionAnchor = "anchor"
+
+	a.InvalidateProjection()
+	if a.sess.reasoningReplayStrongProjection != 0 || a.sess.reasoningReplayStrongProjectionAnchor != "" {
+		t.Fatalf("projection invalidation retained repair overlay: cutoff=%d anchor=%q", a.sess.reasoningReplayStrongProjection, a.sess.reasoningReplayStrongProjectionAnchor)
+	}
+}
+
 func TestReasoningReplay400RepairExhaustionStaysTerminal(t *testing.T) {
 	mp := testutil.NewMock("strict-replay",
 		testutil.ErrorTurn(thinkingReplay400Error()),
