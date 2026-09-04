@@ -10,6 +10,7 @@ import { normalizeLangPref, useI18n, useT, type DictKey, type LangPref } from ".
 import { apiKeyEnvFromProviderName, createLatestRequestGate, inferredVisionModels, mergedFetchedProviderModels, mergeProviderModelContextWindows, providerApiKeyEnvForSave, providerDefaultModel, providerIsConfigured, providerModelCandidates, providerModelContextWindowDrafts, providerModelContextWindowIsSmall, providerRequiresKey } from "../lib/providerModels";
 import { cachedFetchProviderModels, invalidateProviderCacheByAPIKeyEnv, shouldSkipAutoRefresh } from "../lib/providerModelCache";
 import { providerBaseURLForSave, providerRequestURLFromConfig, trimmedBaseURL } from "../lib/providerEndpoint";
+import { providerModelVisionCapability, providerVisionModelsForView } from "../lib/providerVisionCapability";
 import { opencodeGoPresetDescriptionKeys } from "../lib/providerPresetDescriptions";
 import { useUpdater } from "../lib/useUpdater";
 import {
@@ -4304,7 +4305,7 @@ function ModelsSection({ s, busy, apply, backgroundApply, initialFocus }: Models
       const [provider, ...parts] = ref.split("/");
       const model = parts.join("/");
       const view = s.providers.find((item) => item.name === provider);
-      return Boolean(view?.visionModels?.includes(model));
+      return Boolean(view && providerVisionModelsForView(view).includes(model));
     });
     return candidates.sort((a, b) => {
       const aSame = a.startsWith(`${defaultProviderName}/`);
@@ -4483,7 +4484,7 @@ function ModelsSection({ s, busy, apply, backgroundApply, initialFocus }: Models
               />
             </SettingsField>
 
-            <SettingsField label={t("settings.imageUnderstandingModel")} hint={t("settings.visionModelsHint")}>
+            <SettingsField label={t("settings.imageUnderstandingModel")} hint={t("settings.visionCapabilityAutoHint")}>
               <ModelPicker
                 s={s}
                 refs={visionRefs}
@@ -5033,16 +5034,16 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
   const modelDraftForFetch = (p: ProviderView, fetched: string[]): ProviderModelDraft => {
     const candidates = providerModelCandidates(p.models, fetched);
     const selected = mergedFetchedProviderModels(p.models, fetched, { preserveCurated: true });
-    const visionCapability = providerVisionCapabilityForView(p);
-    const visionSource = visionCapability === "unsupported"
-      ? p.visionModels
-      : (p.visionModelsConfigured ? p.visionModels : inferredVisionModels(candidates));
+    const configuredVision = providerVisionModelsForView(p, candidates);
+    const visionSource = p.visionModelsConfigured
+      ? configuredVision
+      : uniqueStrings([...configuredVision, ...inferredVisionModels(candidates)]);
     return {
       providerName: p.name,
       candidates,
       selected: candidates.filter((model) => selected.includes(model)),
       visionModels: candidates.filter((model) => visionSource.includes(model)),
-      visionCapability,
+      visionModelsConfigured: p.visionModelsConfigured,
     };
   };
 
@@ -5061,21 +5062,6 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
     });
   };
 
-  const toggleModelDraftVision = (groupID: string, model: string) => {
-    setModelDrafts((prev) => {
-      const draft = prev[groupID];
-      if (!draft) return prev;
-      return {
-        ...prev,
-        [groupID]: {
-          ...draft,
-          visionModels: draft.visionModels.includes(model)
-            ? draft.visionModels.filter((candidate) => candidate !== model)
-            : draft.candidates.filter((candidate) => candidate === model || draft.visionModels.includes(candidate)),
-        },
-      };
-    });
-  };
 
   const refreshModels = async (group: ProviderAccessGroup, p: ProviderView) => {
     const generation = beginGroupFetch(group.id);
@@ -5187,15 +5173,14 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
     const draft = modelDrafts[group.id];
     const provider = draft ? group.providers.find((p) => p.name === draft.providerName) : null;
     const models = uniqueStrings(draft?.selected ?? []);
-    const visionModels = uniqueStrings(draft?.visionModels ?? []).filter((model) => models.includes(model));
     if (!draft || !provider || models.length === 0) return;
     let saved = false;
     await apply(async () => {
       await app.SaveProvider({
         ...provider,
         models,
-        visionModels,
-        visionModelsConfigured: true,
+        // Vision capability is derived from model metadata. Keep legacy
+        // fields untouched so old configurations remain readable.
         default: providerDefaultModel(provider.default, models),
       });
       saved = true;
@@ -5278,7 +5263,6 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
                 ? draft.selected.filter((candidate) => candidate !== model)
                 : [...draft.selected, model]
             ))}
-            onToggleDraftVision={(model) => toggleModelDraftVision(group.id, model)}
             onSelectAllDraftModels={() => updateModelDraftSelection(group.id, (draft) => draft.candidates)}
             onClearDraftModels={() => updateModelDraftSelection(group.id, () => [])}
             onCancelDraftModels={() => {
@@ -5358,7 +5342,7 @@ type ProviderModelDraft = {
   candidates: string[];
   selected: string[];
   visionModels: string[];
-  visionCapability: ProviderVisionCapability;
+  visionModelsConfigured: boolean;
 };
 
 type AddProviderMode = null | "official" | "custom";
@@ -5879,7 +5863,6 @@ export function ProviderAccessCard({
   onSave,
   onRefresh,
   onToggleDraftModel,
-  onToggleDraftVision,
   onSelectAllDraftModels,
   onClearDraftModels,
   onCancelDraftModels,
@@ -5902,7 +5885,6 @@ export function ProviderAccessCard({
   onSave: (p: ProviderView, key?: string) => void | Promise<void>;
   onRefresh: (p: ProviderView) => void;
   onToggleDraftModel: (model: string) => void;
-  onToggleDraftVision: (model: string) => void;
   onSelectAllDraftModels: () => void;
   onClearDraftModels: () => void;
   onCancelDraftModels: () => void;
@@ -6045,7 +6027,6 @@ export function ProviderAccessCard({
           busy={busy}
           fetching={fetching}
           onToggle={onToggleDraftModel}
-          onToggleVision={onToggleDraftVision}
           onSelectAll={onSelectAllDraftModels}
           onClear={onClearDraftModels}
           onCancel={onCancelDraftModels}
@@ -6234,7 +6215,6 @@ function ProviderModelDraftPicker({
   busy,
   fetching,
   onToggle,
-  onToggleVision,
   onSelectAll,
   onClear,
   onCancel,
@@ -6244,7 +6224,6 @@ function ProviderModelDraftPicker({
   busy: boolean;
   fetching: boolean;
   onToggle: (model: string) => void;
-  onToggleVision: (model: string) => void;
   onSelectAll: () => void;
   onClear: () => void;
   onCancel: () => void;
@@ -6259,7 +6238,6 @@ function ProviderModelDraftPicker({
     return () => clearTimeout(timer);
   }, [query]);
   const selected = new Set(draft.selected);
-  const vision = new Set(draft.visionModels);
   const q = debouncedQuery.trim().toLowerCase();
   const visibleCandidates = useMemo(
     () => (q ? draft.candidates.filter((model) => model.toLowerCase().includes(q)) : draft.candidates),
@@ -6294,6 +6272,11 @@ function ProviderModelDraftPicker({
       <div className="provider-model-draft__list" role="list" aria-label={t("settings.modelCandidates")}>
         {deferredCandidates.length > 0 ? deferredCandidates.map((model) => {
           const enabled = selected.has(model);
+          const capability = providerModelVisionCapability(
+            { visionModelsConfigured: draft.visionModelsConfigured },
+            model,
+            draft.visionModels,
+          );
           return (
             <div className="provider-model-draft__option" key={model} role="listitem" style={{ contentVisibility: "auto", containIntrinsicSize: "auto 48px" }}>
               <label className="provider-model-draft__model">
@@ -6305,23 +6288,14 @@ function ProviderModelDraftPicker({
                 />
                 <span>{model}</span>
               </label>
-              {draft.visionCapability === "configurable" ? (
-                <label className="provider-model-draft__vision">
-                  <input
-                    type="checkbox"
-                    checked={enabled && vision.has(model)}
-                    disabled={disabled || !enabled}
-                    aria-label={t("settings.visionModelAria", { model })}
-                    onChange={() => onToggleVision(model)}
-                  />
-                  <span>{t("settings.visionModel")}</span>
-                </label>
-              ) : (
-                <div className="provider-model-draft__capabilities" aria-label={t("settings.modelCapabilitiesAria", { model })}>
-                  <span>{t("settings.textInput")}</span>
-                  <span>{vision.has(model) ? t("settings.visionModel") : t("settings.imageInputUnsupported")}</span>
-                </div>
-              )}
+              <div className="provider-model-draft__capabilities" aria-label={t("settings.modelCapabilitiesAria", { model })}>
+                <span>{t("settings.textInput")}</span>
+                <span>{capability === "supported"
+                  ? t("settings.visionModel")
+                  : capability === "unsupported"
+                    ? t("settings.imageInputUnsupported")
+                    : t("settings.imageInputUnknown")}</span>
+              </div>
             </div>
           );
         }) : (
@@ -6608,11 +6582,10 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
   candidates,
   selectedModels,
   visionModels,
-  visionCapability = "configurable",
+  visionModelsConfigured,
   contextWindows,
   disabled,
   onToggleModel,
-  onToggleVision,
   onContextWindowChange,
   onSelectAll,
   onClear,
@@ -6620,11 +6593,10 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
   candidates: string[];
   selectedModels: string[];
   visionModels: string[];
-  visionCapability?: ProviderVisionCapability;
+  visionModelsConfigured: boolean;
   contextWindows: Record<string, string>;
   disabled: boolean;
   onToggleModel: (model: string) => void;
-  onToggleVision: (model: string) => void;
   onContextWindowChange: (model: string, value: string) => void;
   onSelectAll: () => void;
   onClear: () => void;
@@ -6643,7 +6615,6 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
   const deferredCandidates = useDeferredValue(visibleCandidates);
   if (candidates.length === 0) return null;
   const selected = new Set(selectedModels);
-  const vision = new Set(visionModels);
   return (
     <div className="provider-model-draft provider-model-draft--inline">
       <div className="provider-model-draft__head">
@@ -6673,6 +6644,11 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
       <div className="provider-model-draft__list" role="list" aria-label={t("settings.modelCandidates")}>
         {deferredCandidates.length > 0 ? deferredCandidates.map((model) => {
           const enabled = selected.has(model);
+          const capability = providerModelVisionCapability(
+            { visionModelsConfigured },
+            model,
+            visionModels,
+          );
           return (
             <div className="provider-model-draft__option" key={model} role="listitem" style={{ contentVisibility: "auto", containIntrinsicSize: "auto 48px" }}>
               <label className="provider-model-draft__model">
@@ -6684,23 +6660,14 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
                 />
                 <span>{model}</span>
               </label>
-              {visionCapability === "configurable" ? (
-                <label className="provider-model-draft__vision">
-                  <input
-                    type="checkbox"
-                    checked={enabled && vision.has(model)}
-                    disabled={disabled || !enabled}
-                    aria-label={t("settings.visionModelAria", { model })}
-                    onChange={() => onToggleVision(model)}
-                  />
-                  <span>{t("settings.visionModel")}</span>
-                </label>
-              ) : (
-                <div className="provider-model-draft__capabilities" aria-label={t("settings.modelCapabilitiesAria", { model })}>
-                  <span>{t("settings.textInput")}</span>
-                  <span>{vision.has(model) ? t("settings.visionModel") : t("settings.imageInputUnsupported")}</span>
-                </div>
-              )}
+              <div className="provider-model-draft__capabilities" aria-label={t("settings.modelCapabilitiesAria", { model })}>
+                <span>{t("settings.textInput")}</span>
+                <span>{capability === "supported"
+                  ? t("settings.visionModel")
+                  : capability === "unsupported"
+                    ? t("settings.imageInputUnsupported")
+                    : t("settings.imageInputUnknown")}</span>
+              </div>
               <div className="provider-model-draft__context-field">
                 <label className="provider-model-draft__context">
                   <span>{t("settings.modelContextWindow")}</span>
@@ -6765,10 +6732,11 @@ export function ProviderEditor({
   const providerUrlHelpId = useId();
   const [models, setModels] = useState((initial?.models ?? []).join(", "));
   const [modelCandidates, setModelCandidates] = useState<string[]>(initial?.models ?? []);
-  const [visionModels, setVisionModels] = useState((initial?.visionModels ?? []).join(", "));
-  const [visionModelsConfigured, setVisionModelsConfigured] = useState(
-    Boolean(initial?.visionModelsConfigured ?? ((initial?.visionModels ?? []).length > 0)),
-  );
+  const [legacyVisionModels] = useState(initial?.visionModels ?? []);
+  const [visionModels, setVisionModels] = useState(() => providerVisionModelsForView(
+    initial ?? { models: [], visionModels: [], modelOverrides: [] },
+  ).join(", "));
+  const visionModelsConfigured = Boolean(initial?.visionModelsConfigured ?? legacyVisionModels.length > 0);
   const [modelsUrl, setModelsUrl] = useState(initial?.modelsUrl ?? "");
   const [apiKeyEnv, setApiKeyEnv] = useState(initial?.apiKeyEnv ?? "");
   const [headersDraft, setHeadersDraft] = useState(formatProviderHeaders(initial?.headers));
@@ -6804,16 +6772,6 @@ export function ProviderEditor({
   const effectiveLegacyChatUrl = effectiveKind.toLowerCase() === "openai" ? effectiveRequestUrl : initial?.chatUrl ?? "";
   const effectiveModelsUrl = modelsUrl.trim();
   const initialEffectiveBaseUrl = initial ? trimmedBaseURL(initial.baseUrl) : "";
-  const retainedVisionCapability = initial &&
-    effectiveKind.trim().toLowerCase() === initial.kind.trim().toLowerCase() &&
-    trimmedBaseURL(effectiveBaseUrl) === initialEffectiveBaseUrl
-    ? initial.visionCapability
-    : undefined;
-  const effectiveVisionCapability = providerVisionCapabilityForView({
-    kind: effectiveKind,
-    baseUrl: effectiveBaseUrl,
-    visionCapability: retainedVisionCapability,
-  });
   const retainedServerWebSearchCapability = initial &&
     effectiveKind.trim().toLowerCase() === initial.kind.trim().toLowerCase() &&
     trimmedBaseURL(effectiveBaseUrl) === initialEffectiveBaseUrl
@@ -6908,7 +6866,6 @@ export function ProviderEditor({
         const existing = parseProviderListInput(current).filter((model) => fetched.includes(model));
         return uniqueStrings([...existing, ...inferredVisionModels(fetched)]).filter((model) => fetched.includes(model)).join(", ");
       });
-      setVisionModelsConfigured(true);
       if (keyDraft.trim()) setKeyDraft("");
       setFetchStatus(t("settings.fetchModelsSuccess", { n: fetched.length }));
     } catch (e) {
@@ -6923,9 +6880,7 @@ export function ProviderEditor({
     setFetchStatus(null);
     setFetchFallback(null);
     const ms = parseProviderListInput(models);
-    const vms = effectiveVisionCapability === "unsupported"
-      ? []
-      : parseProviderListInput(visionModels).filter((model) => ms.includes(model));
+    const vms = legacyVisionModels.filter((model) => ms.includes(model));
     const effectiveApiKeyEnv = providerApiKeyEnvForSave(name, apiKeyEnv, keyDraft);
     const provider: ProviderView = {
       name: name.trim(),
@@ -6937,7 +6892,7 @@ export function ProviderEditor({
       requestUrl: effectiveRequestUrl,
       models: ms,
       visionModels: vms,
-      visionModelsConfigured: visionModelsConfigured || vms.length > 0,
+      visionModelsConfigured,
       default: ms[0] ?? "",
       apiKeyEnv: effectiveApiKeyEnv,
       headers: effectiveHeaders,
@@ -7015,23 +6970,9 @@ export function ProviderEditor({
 
   const toggleEditorModel = (model: string) => {
     const selected = new Set(modelNames);
-    if (selected.has(model)) {
-      selected.delete(model);
-      setVisionModels(visionModelNames.filter((candidate) => candidate !== model).join(", "));
-    } else {
-      selected.add(model);
-    }
+    if (selected.has(model)) selected.delete(model);
+    else selected.add(model);
     setModelsFromList(modelCandidateNames.filter((candidate) => selected.has(candidate)));
-    setVisionModelsConfigured(true);
-  };
-
-  const toggleEditorVisionModel = (model: string) => {
-    if (!modelNames.includes(model)) return;
-    const vision = new Set(visionModelNames);
-    if (vision.has(model)) vision.delete(model);
-    else vision.add(model);
-    setVisionModels(modelCandidateNames.filter((candidate) => vision.has(candidate)).join(", "));
-    setVisionModelsConfigured(true);
   };
 
   const updateEditorModelContextWindow = (model: string, value: string) => {
@@ -7040,14 +6981,10 @@ export function ProviderEditor({
 
   const selectAllEditorModels = () => {
     setModelsFromList(modelCandidateNames);
-    setVisionModels(visionModelNames.filter((model) => modelCandidateNames.includes(model)).join(", "));
-    setVisionModelsConfigured(true);
   };
 
   const clearEditorModels = () => {
     setModels("");
-    setVisionModels("");
-    setVisionModelsConfigured(true);
   };
 
   const advancedFields = (
@@ -7245,11 +7182,10 @@ export function ProviderEditor({
         candidates={modelCandidateNames}
         selectedModels={modelNames}
         visionModels={visionModelNames}
-        visionCapability={effectiveVisionCapability}
+        visionModelsConfigured={visionModelsConfigured}
         contextWindows={modelContextWindows}
         disabled={busy || fetchingModels}
         onToggleModel={toggleEditorModel}
-        onToggleVision={toggleEditorVisionModel}
         onContextWindowChange={updateEditorModelContextWindow}
         onSelectAll={selectAllEditorModels}
         onClear={clearEditorModels}

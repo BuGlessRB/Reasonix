@@ -1690,8 +1690,8 @@ export interface ProviderView {
   chatUrl?: string; // legacy OpenAI chat endpoint override; preserved for old-config compatibility
   requestUrl?: string; // exact provider request URL written by the current settings UI
   models: string[];
-  visionModels: string[]; // subset of models that accepts image input
-  visionModelsConfigured: boolean; // true when an empty list is an explicit choice
+  visionModels: string[]; // legacy subset; new UI derives capability from modelOverrides
+  visionModelsConfigured: boolean; // legacy explicit-list marker retained for old configs
   visionCapability?: "configurable" | "unsupported"; // backend authority; absent on older Wails payloads
   modelsUrl: string; // optional override for model discovery; empty derives from baseUrl
   default: string;

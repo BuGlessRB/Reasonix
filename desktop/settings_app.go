@@ -50,8 +50,8 @@ type ProviderView struct {
 	ChatURL                     string                      `json:"chatUrl"`
 	RequestURL                  string                      `json:"requestUrl"`
 	Models                      []string                    `json:"models"`
-	VisionModels                []string                    `json:"visionModels"`
-	VisionModelsSet             bool                        `json:"visionModelsConfigured"`
+	VisionModels                []string                    `json:"visionModels"`           // legacy capability projection for old frontends
+	VisionModelsSet             bool                        `json:"visionModelsConfigured"` // legacy explicit-list marker
 	VisionCapability            string                      `json:"visionCapability,omitempty"`
 	ModelsURL                   string                      `json:"modelsUrl"`
 	Default                     string                      `json:"default"`

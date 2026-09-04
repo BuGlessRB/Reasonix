@@ -26,8 +26,8 @@ const (
 )
 
 // InferVisionModels returns model IDs that look like chat models with image-input
-// support. It is intentionally conservative and meant for Settings defaults; an
-// explicit provider vision_models list remains the source of truth.
+// support. It is intentionally conservative and meant for Settings hints; an
+// explicit capability declaration remains the runtime source of truth.
 func InferVisionModels(models []string) []string {
 	out := make([]string, 0, len(models))
 	seen := map[string]bool{}
@@ -71,9 +71,9 @@ func modelTokenSeparator(r rune) bool {
 	return r == '-' || r == '_' || r == '.' || r == '/' || r == ':'
 }
 
-// CanConfigureVision reports whether Settings may expose per-model image-input
-// checkboxes. Official DeepSeek uses the same editor as other providers; the
-// wire layer still refuses Flash/Pro image payloads.
+// CanConfigureVision is retained for the Wails payload contract. Capability
+// choices are now derived from model metadata; the wire layer still refuses
+// unsupported official DeepSeek Flash/Pro image payloads.
 func CanConfigureVision(e *ProviderEntry) bool {
 	return e != nil
 }
@@ -98,6 +98,12 @@ func VisionCapabilityForModel(e *ProviderEntry) VisionCapability {
 	if e == nil {
 		return VisionCapabilityUnknown
 	}
+	if openai.IsDeepSeek(e.BaseURL) {
+		if officialDeepSeekEffectiveVision(e) {
+			return VisionCapabilitySupported
+		}
+		return VisionCapabilityUnsupported
+	}
 	if e.visionOverride != nil {
 		if *e.visionOverride {
 			return VisionCapabilitySupported
@@ -109,12 +115,6 @@ func VisionCapabilityForModel(e *ProviderEntry) VisionCapability {
 	}
 	if e.HasVisionModel(e.Model) {
 		return VisionCapabilitySupported
-	}
-	if openai.IsDeepSeek(e.BaseURL) {
-		if openai.IsOfficialDeepSeekVisionModel(e.Model) && e.VisionModels == nil {
-			return VisionCapabilitySupported
-		}
-		return VisionCapabilityUnsupported
 	}
 	if isOfficialMimoVisionEntry(e) {
 		return VisionCapabilitySupported
