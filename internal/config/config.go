@@ -1355,12 +1355,9 @@ type AgentConfig struct {
 	// PlanModeReadOnlyCommands is retained for old config/session round trips. Main
 	// Plan bash calls now use the ordinary Permissions classifier and Sandbox.
 	PlanModeReadOnlyCommands []string `toml:"plan_mode_read_only_commands"`
-	LegacyAnchorSafetyGate   bool     `toml:"legacy_anchor_safety_gate"` // user-global rollback to the full-read guard
-	// CompletionValidation is retained only so older reasonix.toml files remain
-	// readable. The completion validator was removed and this field is ignored.
-	CompletionValidation string `toml:"completion_validation"`
-	// CompletionEvaluatorModel is a retired compatibility field and is ignored.
-	CompletionEvaluatorModel string `toml:"completion_evaluator_model"`
+	LegacyAnchorSafetyGate   bool     `toml:"legacy_anchor_safety_gate"`  // user-global rollback to the full-read guard
+	CompletionValidation     string   `toml:"completion_validation"`      // retired; retained for old config reads
+	CompletionEvaluatorModel string   `toml:"completion_evaluator_model"` // retired; ignored
 }
 
 // ProviderEntry declares a model provider instance. ContextWindow is the model's

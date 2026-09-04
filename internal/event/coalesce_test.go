@@ -24,14 +24,13 @@ func (s *checkedRecordSink) EmitChecked(e Event) error {
 }
 
 type coalesceRecordSink struct {
-	mu         sync.Mutex
-	events     []Event
-	readiness  int
-	turns      int
-	recovery   int
-	workspace  int
-	runBudget  int
-	completion int
+	mu        sync.Mutex
+	events    []Event
+	readiness int
+	turns     int
+	recovery  int
+	workspace int
+	runBudget int
 }
 
 type blockingCapabilitySink struct {

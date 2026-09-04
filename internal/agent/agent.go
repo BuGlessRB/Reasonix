@@ -1838,12 +1838,6 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 					})
 				}
 				usage = provider.UsageWithRequestAttemptCount(ctx, usage)
-				if isEmptyStreamResult(finalText, finalReasoning, calls, responsesItems, search.calls) {
-					return streamedTurn{
-						usage: usage, partialCalls: partialCalls, maxArgChars: maxArgChars,
-						err: fmt.Errorf("%w: model returned a completed response with no content", provider.ErrEmptyResponse),
-					}
-				}
 				// A clean terminal never reports partialToolStarted: the calls
 				// slice is now authoritative and the partial cards were merged.
 				return streamedTurn{
