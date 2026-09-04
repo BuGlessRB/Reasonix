@@ -56,6 +56,9 @@ func TestSubagentStoreDuplicateTerminalOutcomeIsIdempotent(t *testing.T) {
 	if err := store.SaveOutcome(run, outcome); err != nil {
 		t.Fatalf("duplicate SaveOutcome: %v", err)
 	}
+	if err := store.SaveOutcome(run, SubagentOutcome{Ref: run.Ref, Status: SubagentOutcomeFailed, ErrorCode: "provider_error"}); err == nil {
+		t.Fatal("different terminal outcome overwrote a persisted partial outcome")
+	}
 	meta, err := store.LoadMeta(run.Ref)
 	if err != nil || meta.Outcome != string(SubagentOutcomePartial) || meta.Status != SubagentFailed || !meta.Retryable {
 		t.Fatalf("duplicate terminal metadata = %+v/%v", meta, err)

@@ -100,8 +100,9 @@ type SubagentRun struct {
 	Meta       SubagentMeta
 	ForkedFrom string
 
-	store   *SubagentStore
-	release func()
+	store             *SubagentStore
+	release           func()
+	terminalPersisted bool
 }
 
 // SubagentArtifact is a persisted sub-agent transcript and metadata pair owned
