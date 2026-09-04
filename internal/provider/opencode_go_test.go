@@ -170,6 +170,25 @@ func TestPiCatalogModelInfoForProviderRequiresExactServingRoute(t *testing.T) {
 	}
 }
 
+func TestPiCatalogContractKeepsKnownCapabilityFacts(t *testing.T) {
+	cases := []struct {
+		kind, baseURL, model string
+		image                bool
+	}{
+		{"openai", "https://opencode.ai/zen/go/v1", "kimi-k3", true},
+		{"openai", "https://opencode.ai/zen/go/v1", "glm-5.2", false},
+		{"openai", "https://opencode.ai/zen/go/v1", "deepseek-v4-flash-vision-exp", true},
+		{"anthropic", "https://opencode.ai/zen/go", "qwen3.8-flash", true},
+		{"responses", "https://opencode.ai/zen/go/v1", "grok-4.6", true},
+	}
+	for _, tc := range cases {
+		info, ok := PiCatalogModelInfo(tc.kind, tc.baseURL, tc.model)
+		if !ok || info.SupportsInput(ModalityImage) != tc.image {
+			t.Fatalf("pi catalog contract %s/%s = %+v, ok=%t", tc.kind, tc.model, info, ok)
+		}
+	}
+}
+
 func TestModelScopeModelInfoUsesVerifiedLocalCatalog(t *testing.T) {
 	vision, ok := ModelScopeModelInfo("openai", "https://api-inference.modelscope.cn/v1", "Qwen/Qwen3.5-27B")
 	if !ok || !vision.SupportsInput(ModalityImage) {

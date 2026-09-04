@@ -25,5 +25,9 @@ ModelScope Qwen3.5 SKU 的本地校验目录，因此不依赖模型列表请求
 （`GetModels`、`Model.Input` 及相关字段），不引入它的 Agent 或 Provider
 运行时。依赖版本固定在 `go.mod` 中，目录更新需要按数据和许可证变更审查。
 
+Dependabot 每周为 `sky-valley/pi` 单独创建升级 PR，不与无关的 Go 依赖混合。
+`internal/provider/opencode_go_test.go` 中的 catalog contract tests 会在关键
+模型能力发生漂移时失败，因此升级前必须审查 Provider、API 和 Endpoint 差异。
+
 文本模型和未知模型继续使用现有的 `Agent.VisionModel`、OCR、MCP vision
 fallback。原始图片不会发送给这些模型。

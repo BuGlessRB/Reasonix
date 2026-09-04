@@ -33,5 +33,11 @@ data only (`GetModels`/`Model.Input` and related facts), not its Agent or
 Provider runtime. The dependency is pinned in `go.mod`; catalog updates must
 be reviewed as data and license changes.
 
+Dependabot opens a dedicated weekly `sky-valley/pi` update PR instead of
+bundling it with unrelated Go upgrades. The catalog contract tests in
+`internal/provider/opencode_go_test.go` fail when important model capabilities
+drift, so an update is merged only after its provider/API/endpoint diff is
+reviewed.
+
 Text-only and unknown models use the existing `Agent.VisionModel`, OCR, and MCP
 vision fallback paths. Raw image payloads are never sent to those models.
