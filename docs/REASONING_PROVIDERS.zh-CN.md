@@ -78,18 +78,13 @@ reasoning 回传 HTTP 400 失败，Reasonix 只重建旧历史的 provider-visib
 重试一次；后续新增轮次继续走正常 reasoning/tool replay，而 canonical session history
 不会被修改。
 
-## 缺失 reasoning 时的 fallback
+## 缺失 reasoning 时的恢复
 
-对于已验证支持“缺失 reasoning fallback”的 provider，如果思考模式下的工具轮次
-多次结束却没有 provider 发出的、后续回放所需的 reasoning，Reasonix 可以临时关闭
-思考模式。执行工具前会先以请求级 fallback 模式重试 provider 请求，因此不会重写
-session history，工具轮次仍然可以被安全回放。fallback 模式的可见文本会立即流式
-输出；进入 fallback 或恢复 thinking 时，用户都会收到提示。
-
-启用共享恢复状态后，fallback 熔断器会在持久化的静默期结束后允许一次半开 thinking
-探测。当前退避阶梯为 2 分钟、10 分钟、1 小时、6 小时和 24 小时。探测响应连续健康
-达到正常健康阈值后会关闭熔断器；如果再次缺失 reasoning，则提升退避级别。没有显式、
-经过验证的 fallback 策略的 provider 不会进入此模式。
+如果 provider 要求工具轮次回放 reasoning，但模型返回了没有 reasoning 的完整工具
+调用，Reasonix 会在执行工具前，对同一份 frozen request 做一次精确重试。它不会在
+整个会话中关闭 thinking，也不会运行长期 provider fallback 熔断器。如果重试后仍然
+无法产生可回放的 reasoning，provider-specific 恢复策略会返回明确的协议错误；如果
+问题来自旧会话中已经持久化的历史，现有的一次性 reasoning 400 自愈仍然有效。
 
 ## 其他所有后端（标准 `reasoning_effort`）
 
