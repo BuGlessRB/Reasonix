@@ -1072,6 +1072,11 @@ var curatedProviderPresets = []ProviderPreset{
 			Models:    modelscopeModels,
 			Default:   "Qwen/Qwen3.5-397B-A17B",
 			APIKeyEnv: "MODELSCOPE_API_KEY",
+			ModelOverrides: map[string]ProviderModelOverride{
+				"Qwen/Qwen3.5-397B-A17B": {Vision: boolPointer(true)},
+				"Qwen/Qwen3.5-122B-A10B": {Vision: boolPointer(true)},
+				"Qwen/Qwen3.5-27B":       {Vision: boolPointer(true)},
+			},
 		}},
 	},
 	{

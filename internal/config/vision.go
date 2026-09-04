@@ -13,6 +13,18 @@ var mimoVisionModels = map[string]bool{
 	"mimo-v2-omni": true,
 }
 
+// VisionCapability is the model-level image-input fact used by settings and
+// turn preparation. Unknown is deliberately distinct from unsupported: an
+// unknown model is kept safe by the text-only path without claiming that the
+// provider can never accept images.
+type VisionCapability string
+
+const (
+	VisionCapabilityUnknown     VisionCapability = "unknown"
+	VisionCapabilitySupported   VisionCapability = "supported"
+	VisionCapabilityUnsupported VisionCapability = "unsupported"
+)
+
 // InferVisionModels returns model IDs that look like chat models with image-input
 // support. It is intentionally conservative and meant for Settings defaults; an
 // explicit provider vision_models list remains the source of truth.
@@ -75,19 +87,42 @@ func CanConfigureVision(e *ProviderEntry) bool {
 // deliberately limited to known MiMo endpoints so arbitrary OpenAI-compatible
 // proxies do not get image payloads unexpectedly.
 func EffectiveVision(e *ProviderEntry) bool {
+	return VisionCapabilityForModel(e) == VisionCapabilitySupported
+}
+
+// VisionCapabilityForModel resolves the selected model's image-input
+// capability without requiring a user-maintained provider-level list. Legacy
+// Vision/VisionModels values remain valid fallbacks while model overrides take
+// precedence after ResolveModel applies them.
+func VisionCapabilityForModel(e *ProviderEntry) VisionCapability {
 	if e == nil {
-		return false
+		return VisionCapabilityUnknown
 	}
-	if openai.IsDeepSeek(e.BaseURL) {
-		return officialDeepSeekEffectiveVision(e)
-	}
-	if enabled, explicit := explicitModelVision(e); explicit {
-		return enabled
+	if e.visionOverride != nil {
+		if *e.visionOverride {
+			return VisionCapabilitySupported
+		}
+		return VisionCapabilityUnsupported
 	}
 	if e.Vision {
-		return true
+		return VisionCapabilitySupported
 	}
-	return isOfficialMimoVisionEntry(e)
+	if e.HasVisionModel(e.Model) {
+		return VisionCapabilitySupported
+	}
+	if openai.IsDeepSeek(e.BaseURL) {
+		if openai.IsOfficialDeepSeekVisionModel(e.Model) && e.VisionModels == nil {
+			return VisionCapabilitySupported
+		}
+		return VisionCapabilityUnsupported
+	}
+	if isOfficialMimoVisionEntry(e) {
+		return VisionCapabilitySupported
+	}
+	if e.VisionModels != nil {
+		return VisionCapabilityUnsupported
+	}
+	return VisionCapabilityUnknown
 }
 
 // ExplicitModelVision reports whether the selected model has an explicit,
