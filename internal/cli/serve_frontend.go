@@ -61,6 +61,10 @@ type serveFrontendOptions struct {
 	pidFile     string
 	openBrowser bool
 	hasSession  bool
+	// brokered is a serve whose provider credentials come from the machine that
+	// started it. It holds none of its own, so anything reading them here fails
+	// by design rather than because something is wrong.
+	brokered bool
 }
 
 type serveFrontendResources struct {
@@ -135,7 +139,12 @@ func runServeFrontend(ctrl *control.Controller, srv serveHost, cfg config.ServeC
 	defer resources.release(false)
 	srv.EnableProviderSetupForListener(resources.displayAddr)
 	reportServeFrontend(ctrl, srv, cfg, resources.displayAddr, opts)
-	startServeBalanceDiagnostics(ctrl)
+	// Not for a brokered kernel: its credentials live on the machine that
+	// started it, so this fails by design into a log only opened during a
+	// fault, where a standing error is the first thing read.
+	if !opts.brokered {
+		startServeBalanceDiagnostics(ctrl)
+	}
 	return serveFrontendLoop(ctrl, srv, resources, opts)
 }
 
@@ -403,8 +412,8 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	return runServeFrontend(ctrl, hub, serveCfg, serveFrontendOptions{
 		command: opts.command, address: *addr,
 		portFile: *portFile, tokenFile: *tokenFile, pidFile: *pidFile,
-		openBrowser: *openBrowser && !*noOpen,
-		hasSession:  *resume != "" || *sessionID != "",
+		openBrowser: *openBrowser && !*noOpen, brokered: providerResolver != nil,
+		hasSession: *resume != "" || *sessionID != "",
 	})
 }
 
