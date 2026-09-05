@@ -742,6 +742,25 @@ for (const selector of [
   );
 }
 
+for (const selector of [
+  ".app--darwin.app--workbench .workbench-dock__tools",
+  ":root[data-theme-style] .app--darwin.app--workbench .workbench-dock__tools",
+]) {
+  ok(
+    finalDeclaration(selector, "padding-right") === "48px" &&
+      finalDeclaration(selector, "height") === undefined,
+    `${selector} keeps macOS tabs in the title row and reserves the workspace toggle`,
+  );
+}
+
+ok(
+  finalDeclaration(":root[data-theme-style] .app--darwin.app--workbench .workbench-dock__tabs", "flex") === "1 1 auto" &&
+    finalDeclaration(":root[data-theme-style] .app--darwin.app--workbench .workbench-dock__tabs", "width") === "100%" &&
+    finalDeclaration(":root[data-theme-style] .app--darwin.app--workbench .workbench-dock__tab", "flex") === "1 1 0" &&
+    finalDeclaration(":root[data-theme-style] .app--darwin.app--workbench .workbench-dock__tab", "min-width") === "0",
+  "macOS dock tabs divide the remaining row without overlapping the fixed toggle",
+);
+
 ok(
   finalDeclaration(".app--windows-frameless:not(.app--workbench) .workbench-dock__tools", "padding-right") === undefined &&
     finalDeclaration(":root[data-theme-style] .app--windows-frameless:not(.app--workbench) .workbench-dock__tools", "padding-right") === undefined,

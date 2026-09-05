@@ -19,10 +19,7 @@ let failed = 0;
 const testDir = dirname(fileURLToPath(import.meta.url));
 const appSource = readFileSync(resolve(testDir, "../App.tsx"), "utf8");
 const stylesSource = readFileSync(resolve(testDir, "../styles.css"), "utf8");
-const moreMenuSource = [
-  readFileSync(resolve(testDir, "../components/TopicbarMoreMenu.tsx"), "utf8"),
-  readFileSync(resolve(testDir, "../components/TopicbarMoreMenuContent.tsx"), "utf8"),
-].join("\n");
+const sessionActionsSource = readFileSync(resolve(testDir, "../components/TopicbarSessionActions.tsx"), "utf8");
 const terminalPanelSource = readFileSync(resolve(testDir, "../components/TerminalPanel.tsx"), "utf8");
 const terminalViewSource = readFileSync(resolve(testDir, "../components/TerminalView.tsx"), "utf8");
 const terminalRailSource = readFileSync(resolve(testDir, "../components/TerminalSessionRail.tsx"), "utf8");
@@ -257,8 +254,8 @@ const workspaceDockTabsSource = appSource.match(/<div className="workbench-dock_
 eq(
   workspaceDockTabsSource.length > 0
     && !/rightDock\.terminal|terminalPanelOpen|toggleTerminalPanel/.test(workspaceDockTabsSource)
-    && /<TopicbarMoreMenu[\s\S]*?toggleTerminal=\{toggleTerminalPanel\}/.test(appSource)
-    && /className="topicbar__menu-item"[\s\S]*?closeAndRun\(toggleTerminal\)[\s\S]*?t\("rightDock\.terminal"\)/.test(moreMenuSource),
+    && /<TopicbarSessionActions[\s\S]*?toggleTerminal=\{toggleTerminalPanel\}/.test(appSource)
+    && /aria-label=\{t\("rightDock\.terminal"\)\}[\s\S]*?onClick=\{toggleTerminal\}/.test(sessionActionsSource),
   true,
   "workspace dock omits the terminal view while the topic bar keeps the terminal drawer action",
 );
@@ -329,11 +326,11 @@ eq(
   "terminal and xterm remain in a lazy chunk",
 );
 eq(
-  /onPointerEnter=\{terminalEnabled \? prefetchTerminal : undefined\}/.test(moreMenuSource)
-    && /onFocus=\{terminalEnabled \? prefetchTerminal : undefined\}/.test(moreMenuSource)
+  /onPointerEnter=\{terminalEnabled \? prefetchTerminal : undefined\}/.test(sessionActionsSource)
+    && /onFocus=\{terminalEnabled \? prefetchTerminal : undefined\}/.test(sessionActionsSource)
     && /void import\("\.\.\/components\/TerminalPanel"\)/.test(terminalLifecycleSource),
   true,
-  "pointer and keyboard intent prefetch the terminal chunk before opening (More menu)",
+  "pointer and keyboard intent prefetch the terminal chunk before opening from the topic bar",
 );
 eq(
   /useWarmTerminalPanel\(terminalPanelOpen, terminalResizing\)/.test(appSource)
