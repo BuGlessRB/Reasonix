@@ -325,7 +325,7 @@ func TestDiscoveryFailurePreservesSuccessfulCache(t *testing.T) {
 	var mode atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if mode.Load() == 1 {
-			http.Error(w, "temporary failure", 503)
+			http.Error(w, "temporary failure", http.StatusServiceUnavailable)
 			return
 		}
 		fmt.Fprint(w, `{"data":[{"id":"relay-model","vision":true}]}`)

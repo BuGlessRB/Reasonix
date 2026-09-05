@@ -108,13 +108,11 @@ func TestCapabilityCacheNewestSuccessWinsAcrossResolvers(t *testing.T) {
 	}
 	// Concurrent cache reads and writes share no mutable Provider state.
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 8 {
+		wg.Go(func() {
 			old.PutCatalogAt(e, []provider.ModelInfo{{ID: "x"}}, now)
 			_ = old.Resolve(&e)
-		}()
+		})
 	}
 	wg.Wait()
 }
