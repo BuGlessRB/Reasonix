@@ -195,7 +195,10 @@ console.log("\nbundle budgets");
 // read-only provider badges add a measured 0.2 KiB including gzip/toolchain
 // rounding; keep this narrow ratchet
 // explicit rather than restoring manual capability controls.
-const initialJSBudgetKiB = 464.1;
+// Direct topic-bar actions replace the overflow trigger: the same-toolchain
+// base measures 464.073 KiB and the restored buttons measure 464.259 KiB
+// (+0.186 KiB). Export formats remain lazy; retain the next decimal ceiling.
+const initialJSBudgetKiB = 464.3;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -359,6 +362,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // On the current main-v2 base, the combined measured path is 2474.6 KiB;
 // the model-capability helper and localized status copy add 0.9 KiB; retain
 // the smallest bounded cross-platform ceiling.
-const rawInitialBudgetKiB = 2_475.7;
+// Direct topic-bar actions plus the macOS single-row dock tabs measure
+// 2476.5 KiB raw versus 2475.554 KiB on the same-toolchain base. The extra
+// CSS reserves the workspace-toggle hit area and lets all four tabs shrink;
+// retain only the next one-decimal ceiling.
+const rawInitialBudgetKiB = 2_476.6;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
