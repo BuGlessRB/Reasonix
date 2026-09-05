@@ -4725,8 +4725,7 @@ export default function App() {
                 <ExternalOpener key={activeTab.id} tabId={activeTab.id} dismissSignal={transientOverlayDismissSignal} />
               )}
               {!sidebarImDetailConnection && (
-                <TopicbarSessionActions
-                  key={activeTab?.id}
+                <TopicbarSessionActions key={activeTab?.id}
                   sessionHasContent={sessionHasContent}
                   getSessionMarkdown={getSessionMarkdown}
                   exportSession={(format) => void exportSession(format)}
