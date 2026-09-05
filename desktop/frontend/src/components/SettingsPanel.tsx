@@ -4406,9 +4406,9 @@ function ModelsSection({ s, busy, apply, backgroundApply, initialFocus }: Models
     void backgroundApply(async () => {
       // Batch-fetch models for all candidates in one round-trip.
       const providersToFetch = candidates.map((c) => c.provider).filter((p) => p.models && p.models.length > 0);
-      let batchResults: Record<string, string[]> = {};
+      let batchResults: Record<string, ProviderModelCapabilityView[]> = {};
       try {
-        batchResults = await app.FetchAllProviderModels(providersToFetch) as Record<string, string[]>;
+        batchResults = await app.FetchAllProviderModelCatalogs(providersToFetch);
       } catch {
         // Batch failed entirely — fall back to per-provider cached calls below.
       }
@@ -4419,7 +4419,7 @@ function ModelsSection({ s, busy, apply, backgroundApply, initialFocus }: Models
         if (stale()) return;
         if (!provider.models || provider.models.length === 0) continue;
         try {
-          const fetched = batchResults[provider.name]
+          const fetched = batchResults[provider.name]?.map((item) => item.model)
             ?? await cachedFetchProviderModels((p) => app.FetchProviderModels(p), provider);
           if (stale()) return;
           if (!fetched || fetched.length === 0) continue;

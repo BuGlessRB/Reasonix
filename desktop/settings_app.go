@@ -3163,18 +3163,16 @@ func (a *App) FetchAllProviderModels(providers []ProviderView) map[string][]stri
 		p := providers[i]
 		g.Go(func() error {
 			e := config.ProviderEntry{
-				Name:       p.Name,
-				Kind:       p.Kind,
-				BaseURL:    p.BaseURL,
+				Name: p.Name, Kind: p.Kind, BaseURL: p.BaseURL, ChatURL: p.ChatURL, RequestURL: p.RequestURL,
 				ModelsURL:  strings.TrimSpace(p.ModelsURL),
 				APIKeyEnv:  p.APIKeyEnv,
 				Headers:    p.Headers,
-				AuthHeader: p.AuthHeader,
+				AuthHeader: p.AuthHeader, NoProxy: p.NoProxy,
 			}
 			e.ResolveAPIKeyForRoot(root)
 			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			defer cancel()
-			models, err := e.FetchModelsWithProxy(ctx, proxy)
+			models, err := e.FetchModelsWithProxy(ctx, withProbeDirectHost(proxy, e.BaseURL, e.NoProxy))
 			if err != nil {
 				// Omit failed providers so the frontend can retry them through
 				// the cached single-provider path without emitting JSON null.

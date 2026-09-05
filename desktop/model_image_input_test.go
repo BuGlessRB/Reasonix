@@ -345,3 +345,22 @@ func TestDiscoveryFailurePreservesSuccessfulCache(t *testing.T) {
 		t.Fatalf("failure erased success: %+v", got)
 	}
 }
+
+func TestBatchDiscoveryPersistsFactsForNoProxyIdentity(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"data":[{"id":"relay-model","vision":true}]}`)
+	}))
+	defer srv.Close()
+
+	view := ProviderView{Name: "relay", Kind: "openai", BaseURL: srv.URL, NoProxy: true, Models: []string{"relay-model"}}
+	got := NewApp().FetchAllProviderModelCatalogs([]ProviderView{view})
+	if len(got[view.Name]) != 1 || got[view.Name][0].State != "supported" {
+		t.Fatalf("batch catalog = %+v", got)
+	}
+	entry := config.ProviderEntry{Name: view.Name, Kind: view.Kind, BaseURL: view.BaseURL, NoProxy: true, Model: "relay-model"}
+	if capability := config.NewModelCapabilityResolver().Resolve(&entry); capability.State != config.CapabilitySupported {
+		t.Fatalf("batch result was not stored under the no_proxy identity: %+v", capability)
+	}
+}

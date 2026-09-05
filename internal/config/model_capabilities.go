@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"reasonix/internal/fileutil"
 	"reasonix/internal/provider"
 	"reasonix/internal/provider/openai"
 )
@@ -431,22 +432,10 @@ func (r *ModelCapabilityResolver) persist() {
 		}
 	}
 	r.mu.Unlock()
-	tmp, err := os.CreateTemp(dir, ".model-capabilities-*.tmp")
-	if err != nil {
-		return
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if err = tmp.Chmod(0o600); err == nil {
-		_, err = tmp.Write(data)
-	}
-	if closeErr := tmp.Close(); err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		if len(data) <= modelCapabilityCacheMaxSize {
-			_ = os.Rename(tmpName, r.path)
-		}
+	if len(data) <= modelCapabilityCacheMaxSize {
+		// Use the repository's strict cross-platform replacement helper so an
+		// existing cache is replaced atomically on Windows as well as Unix.
+		_ = fileutil.AtomicWriteFileStrict(r.path, data, 0o600)
 	}
 }
 
