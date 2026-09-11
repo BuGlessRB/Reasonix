@@ -641,7 +641,7 @@
     },
     "internal/checkpoint/checkpoint.go": {
       "essay": 5,
-      "file-size": 174
+      "file-size": 158
     },
     "internal/checkpoint/transaction.go": {
       "complexity": 32,
@@ -853,8 +853,8 @@
     "internal/config/render.go": {
       "complexity": 229,
       "essay": 2,
-      "file-size": 962,
-      "function-size": 913
+      "file-size": 964,
+      "function-size": 915
     },
     "internal/config/render_test.go": {
       "test-file-size": 761
