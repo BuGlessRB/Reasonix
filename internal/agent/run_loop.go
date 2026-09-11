@@ -397,7 +397,12 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 			StopReason: reason,
 		}
 	}
+	// The phase belongs at the caller: ReadinessResult runs the same check for
+	// the host, outside any turn. Reopening working keeps the continuation paths
+	// below, each of which starts a provider round, out of the tool bucket.
+	a.emitTurnPhase(event.TurnPhaseVerifying)
 	readiness := a.finalReadinessCheckFor()
+	a.emitTurnPhase(event.TurnPhaseWorking)
 	if state.graceRound && (readiness.reason != "" || !hasVisibleFinalAnswer(text)) {
 		a.contextManager().ObserveUsage(usage)
 		return false, a.gracePause(state)
@@ -409,29 +414,8 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		a.contextManager().ObserveUsage(usage)
 		return false, a.gracePause(state)
 	}
-	if readiness.reason != "" {
-		// Standard ends with its answer/quality summary. Delivery and Goal hand
-		// the structured gap to the controller, which exposes an explicit recovery
-		// action or lets the Goal FSM decide whether to continue.
-		if a.readinessPauseActive(readiness) {
-			event.RecordReadinessAudit(a.svc.sink, readiness.audit(evidence.ReadinessErrored, false))
-			a.pending.finalReadinessRecovery = true
-			a.persistFinalReadinessRecovery(readiness.missingIDs())
-			gaps := a.readinessOperationGaps()
-			reason := readiness.reason
-			if named := describeReadinessGaps(gaps); named != "" {
-				reason += "; " + named
-			}
-			return false, &FinalReadinessError{
-				Attempts:          1,
-				Reason:            reason,
-				Missing:           readiness.missingIDs(),
-				ContinuationClass: readiness.continuationClass(),
-				ProgressKey:       readiness.progressSignature(),
-				Operations:        gaps,
-			}
-		}
-		event.RecordReadinessAudit(a.svc.sink, readiness.audit(evidence.ReadinessAllowed, a.turn.readinessRecovered))
+	if stopped, err := a.handleReadinessGap(readiness); stopped {
+		return false, err
 	}
 	if !hasVisibleFinalAnswer(text) {
 		// Harness-style termination accepts a reasoning-only clean stop. Only
@@ -471,6 +455,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 	// carries into the next turn un-folded and can overflow the model window.
 	// No-op below the trigger, so normal turns keep their warm cache.
 	a.contextManager().ObserveUsage(usage)
+	a.closeTurnPhase()
 	return false, nil // model gave a final answer
 }
 
@@ -503,7 +488,11 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 	if a.task.ledger != nil {
 		receiptMark = a.task.ledger.Len()
 	}
+	// The phase pair around the batch is what makes the accounting mean its
+	// names: it bills this round's wait to the provider and the batch to tools.
+	a.emitTurnPhase(event.TurnPhaseChecking)
 	batch := a.executeBatch(ctx, state, calls)
+	a.emitTurnPhase(event.TurnPhaseWorking)
 	if batch.err != nil {
 		// Any completed results are already stored; a failed durability barrier
 		// prevents starting the next tool.
@@ -517,6 +506,7 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 		// result is stored, so another acknowledgement adds no host value and can
 		// turn a valid bounded plan into a max-steps pause.
 		a.contextManager().ObserveUsage(usage)
+		a.closeTurnPhase()
 		return false, nil
 	}
 	if boundaryFinalizer {

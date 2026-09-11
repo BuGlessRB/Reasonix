@@ -1527,7 +1527,6 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
       const phase = (e.phase ?? e.text ?? "").trim();
       if (!phase) return s;
       const next = { ...s, turnPhase: phase, running: true, turnActive: true, cancellable: true };
-      if (phase === "verifying" || phase === "checking") return withTurnResult(next, { ...mergeTurnResult(s.completionSummary, undefined, e.turnId), checking: true });
       return withRunningChecks(next);
     }
     case "turn_status": {
