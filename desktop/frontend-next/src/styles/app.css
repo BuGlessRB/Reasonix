@@ -1731,8 +1731,11 @@
      reads as a table of cells rather than as things. The top highlight stays —
      it is where the light is, not an outline. Held by perf/surface.mjs: a
      layer that separates by fill has to be a layer you can see. */
+  /* 收到内容的宽度。整条对话里只有这一块是"你说的话"，而它此前不论长短都
+     铺满整栏：一句「帮我看下这个文件」占掉和一屏输出同样宽的一条白。 */
   .call[data-k="me"] .out .txt {
     color: var(--text); white-space: pre-wrap;
+    width: fit-content; max-width: 100%;
     padding: 11px 13px; background: var(--raised); border-radius: var(--r-md);
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
   }
