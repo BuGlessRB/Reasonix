@@ -6066,16 +6066,20 @@
   /* 领栏的那一个数字比其它块大一截 —— 它是不看也会被看见的那个。 */
 
   /* 成本先报数，再拆构成。一列小行表里的总额和它的分项长得一样，
-     扫一眼读不出哪个是总数。 */
-  .mrow { display: flex; align-items: baseline; gap: 8px; min-height: 26px }
-  .mrow .amt {
+     扫一眼读不出哪个是总数。
+     这一行曾经叫 .mrow —— 和连接面板里那种「一行一个模型」的可点行同名。
+     两个部件同名时，后写的那条只盖得住它自己列出的属性：底色、内边距和那条
+     下边线仍然来自列表行，于是栏里最大的那个数字被一块白板圈了起来，看着像
+     一个没填的输入框。名字是接口，这里要一个自己的。 */
+  .mtop { display: flex; align-items: baseline; gap: 8px; min-height: 26px }
+  .mtop .amt {
     font: var(--w-med) var(--fs-display)/1 var(--mono); color: var(--text);
     letter-spacing: var(--track-tight); font-variant-numeric: tabular-nums;
   }
-  .mrow .msub { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
-  .mrow .delta { margin-left: auto; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost) }
+  .mtop .msub { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
+  .mtop .delta { margin-left: auto; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost) }
   /* 第二币种矮一档：它是同一笔钱的另一种说法，不是另一笔支出。 */
-  .mrow[data-alt] .amt { font-size: var(--fs-lead); color: var(--muted) }
+  .mtop[data-alt] .amt { font-size: var(--fs-lead); color: var(--muted) }
   .mnote { margin: 2px 0 0; font: var(--w-reg) var(--fs-meta)/1.5 var(--ui); color: var(--ghost) }
 
   /* 设计稿那一行行内数字：名字弱、值强，横着排而不是堆成行表。 */

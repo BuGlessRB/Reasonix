@@ -29,7 +29,7 @@ export function Cost({ metrics, wallet, account, onRefreshWallet }: Props) {
   const avg = metrics.rounds.length ? Math.round(metrics.rounds.reduce((a, b) => a + b, 0) / metrics.rounds.length) : 0;
   return (
     <Grp id="cost" name={t("成本")} aside={t("本会话")}>
-      <div className="mrow">
+      <div className="mtop">
         <span className="amt">{money(metrics.cost, metrics.currency)}</span>
         {/* 一个按公布价计出来的数和一个拿兑底表估的数是两种断言。 */}
         {sources.length > 0 && (
@@ -41,7 +41,7 @@ export function Cost({ metrics, wallet, account, onRefreshWallet }: Props) {
         {sources.length === 0 && <span className="msub">{t("价目未上报")}</span>}
       </div>
       {metrics.alt && (
-        <div className="mrow" data-alt="">
+        <div className="mtop" data-alt="">
           <span className="amt">{money(metrics.alt.amount, metrics.alt.currency)}</span>
           <span className="msub">{t("原币种")}</span>
         </div>
