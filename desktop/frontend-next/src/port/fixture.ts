@@ -422,13 +422,18 @@ export const SCRIPT: Beat[] = [
     },
   },
   { wait: 100, ev: usage(6100, 400, 180, "subagent") },
-  { wait: 400, ev: { kind: "compaction_started", compaction: { trigger: "auto" } } },
+  // The fold names the bound that sent it. Without the pair the card falls
+  // back to "a threshold was reached", which is the reading this fixture is
+  // here to stop anyone shipping again.
+  { wait: 400, ev: { kind: "compaction_started", compaction: { trigger: "auto", boundary: "economic", triggerTokens: 160_000 } } },
   {
     wait: 900,
     ev: {
       kind: "compaction_done",
       compaction: {
         trigger: "auto",
+        boundary: "economic",
+        triggerTokens: 160_000,
         messages: 34,
         summary: "401 已证实是网关瞬时态（curl A/B，A 组 7 次 B 组 0 次）。处置是退避重试，不删 key。",
         // A fold that dropped one of its own changes: the case the card exists

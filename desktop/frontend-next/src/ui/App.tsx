@@ -125,6 +125,7 @@ export function App({ hub }: { hub: HubPort }) {
   const [runs, setRuns] = useState<Record<string, { run: string; live: boolean }>>({});
   const activeRef = useRef("");
   activeRef.current = active;
+  const reportsRef = useRef<Record<string, PaneReport>>({});
   const runsRef = useRef(runs);
   runsRef.current = runs;
 
@@ -139,8 +140,22 @@ export function App({ hub }: { hub: HubPort }) {
     setRuns((prev) =>
       prev[id]?.run === next.run && prev[id]?.live === next.live ? prev : { ...prev, [id]: { run: next.run, live: next.live } },
     );
+    // Every pane's last report, kept in a ref so a background pane's usage
+    // round does not re-render the window — and so switching tabs has
+    // something to read. Rendering from state here is the same figure at the
+    // cost of a window render per background beat.
+    reportsRef.current[id] = next;
     if (id === activeRef.current) setReport(next);
   }, []);
+
+  // The window's title, run pill and status belong to the pane in front. They
+  // were only ever written when a pane reported, so switching to an idle pane
+  // left the title naming the conversation that had last spoken — a pane that
+  // has nothing to say never says it again. Freshness follows the switch here
+  // rather than waiting for the new pane to happen to report.
+  useEffect(() => {
+    setReport(reportsRef.current[active] ?? NO_REPORT);
+  }, [active]);
 
   const reloadTree = useCallback(
     () =>
