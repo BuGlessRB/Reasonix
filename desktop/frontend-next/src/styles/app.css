@@ -6049,8 +6049,10 @@
   }
   .ctxwin button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink) }
   .ctxwin button:disabled { color: var(--ghost); cursor: default }
+  /* 段与段之间留 2px 的底色，而不是 1px：相邻两段之间那条缝是"这是两段"的
+     记号，细到 1px 时在深色下几乎看不见。 */
   .ctxbar {
-    position: relative; display: flex; gap: 1px; height: 6px; margin-top: 7px;
+    position: relative; display: flex; gap: 2px; height: 6px; margin-top: 7px;
     border-radius: var(--r-md); background: var(--overlay); overflow: visible; cursor: default;
   }
   .ctxbar > i {
@@ -6059,11 +6061,11 @@
   }
   .ctxbar > i:first-child { border-radius: var(--r-md) var(--r-xs) var(--r-xs) var(--r-md) }
   .ctxbar > i:last-of-type { border-radius: var(--r-xs) var(--r-md) var(--r-md) var(--r-xs) }
-  .ctxbar > i[data-p="system"] { background: var(--deleg) }
-  .ctxbar > i[data-p="tools"]  { background: var(--net) }
-  .ctxbar > i[data-p="user"]   { background: var(--accent-ink) }
-  .ctxbar > i[data-p="reply"]  { background: var(--ok) }
-  .ctxbar > i[data-p="output"] { background: var(--faint) }
+  .ctxbar > i[data-p="system"] { background: var(--cat-1) }
+  .ctxbar > i[data-p="tools"]  { background: var(--cat-2) }
+  .ctxbar > i[data-p="user"]   { background: var(--cat-3) }
+  .ctxbar > i[data-p="reply"]  { background: var(--cat-4) }
+  .ctxbar > i[data-p="output"] { background: var(--cat-5) }
 
   /* 到维护点的两级：内核在 75% 让模型收窄、92% 让它把结果落下来，这里画的是
      同一件事。压缩是例行维护不是故障，所以走 accent 而不是 warn/err —— 一旦
@@ -6091,11 +6093,11 @@
   .ctxlg { display: grid; gap: 4px }
   .ctxlg .r { display: flex; align-items: center; gap: 8px; font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted) }
   .ctxlg .r i { width: 8px; height: 8px; border-radius: 2px; flex: none }
-  .ctxlg .r i[data-p="system"] { background: var(--deleg) }
-  .ctxlg .r i[data-p="tools"]  { background: var(--net) }
-  .ctxlg .r i[data-p="user"]   { background: var(--accent-ink) }
-  .ctxlg .r i[data-p="reply"]  { background: var(--ok) }
-  .ctxlg .r i[data-p="output"] { background: var(--faint) }
+  .ctxlg .r i[data-p="system"] { background: var(--cat-1) }
+  .ctxlg .r i[data-p="tools"]  { background: var(--cat-2) }
+  .ctxlg .r i[data-p="user"]   { background: var(--cat-3) }
+  .ctxlg .r i[data-p="reply"]  { background: var(--cat-4) }
+  .ctxlg .r i[data-p="output"] { background: var(--cat-5) }
   .ctxlg .r em { font: var(--w-reg) var(--fs-micro) var(--mono); font-style: normal; color: var(--ghost) }
   .ctxlg .r b { margin-left: auto; font: var(--w-med) var(--fs-meta) var(--mono); color: var(--text) }
 
@@ -6136,11 +6138,11 @@
   .ctxpop .hd .n { margin-left: auto; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--muted) }
   .ctxpop .row { display: flex; align-items: center; gap: 7px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--muted) }
   .ctxpop .row > i { width: 7px; height: 7px; border-radius: var(--r-sm); flex: none }
-  .ctxpop .row > i[data-p="system"] { background: var(--deleg) }
-  .ctxpop .row > i[data-p="tools"]  { background: var(--net) }
-  .ctxpop .row > i[data-p="user"]   { background: var(--accent-ink) }
-  .ctxpop .row > i[data-p="reply"]  { background: var(--ok) }
-  .ctxpop .row > i[data-p="output"] { background: var(--faint) }
+  .ctxpop .row > i[data-p="system"] { background: var(--cat-1) }
+  .ctxpop .row > i[data-p="tools"]  { background: var(--cat-2) }
+  .ctxpop .row > i[data-p="user"]   { background: var(--cat-3) }
+  .ctxpop .row > i[data-p="reply"]  { background: var(--cat-4) }
+  .ctxpop .row > i[data-p="output"] { background: var(--cat-5) }
   .ctxpop .row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .ctxpop .row .v { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--text); font-variant-numeric: tabular-nums }
   .ctxpop .row .p { width: 30px; text-align: right; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost) }

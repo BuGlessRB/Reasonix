@@ -88,6 +88,17 @@
        same reason — a danger button was borrowing --accent-fg, which only
        worked while the two hues happened to share a lightness. */
     --accent-ink: #8B5100; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
+    /* 构成条的五段是一组分类色，不是状态色。它们此前借的是 deleg/net/accent/
+       ok/faint —— 那五个在这套配色里各有各的意思（派出去的、在自主跑、该你了、
+       成、中性事实），而"系统提示"不是其中任何一件事；借走它们，真正的状态
+       就少了五个可用的位置。借来的那一组也不成立：跑分类色的六项检查，它挂
+       在四项上，最要命的一项是"工具输出"（灰）和"模型回复"（绿）之间正常视力
+       下 ΔE 12.0 —— 低于 15 的下限，意思是看得见颜色的人也分不出这两段，而它
+       们是窗口里第二和第四大的两块。
+       这一组是按那六项检查选出来的，深浅两档各自验过：分类色的明度带、彩度
+       下限、相邻对的色觉分离（ΔE ≥ 8）、正常视力下限（≥ 15）、以及与底的
+       对比。浅色下四段低于 3:1，按"救济规则"由图例的文字标签兜底。 */
+    --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4;
     /* Terminal output and diffs carry Chinese, and none of the monospaced faces
        above has a Chinese glyph — the character fell through to whatever the OS
        picked, which on Windows is a serif. Naming the shipped face makes that
@@ -201,6 +212,7 @@
     --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
     --accent-ink: var(--accent); --warn-ink: var(--warn);
     --ok-ink: var(--ok); --err-ink: var(--err);
+    --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181;
     --face-sunk: oklch(14.2% .014 255); --face-code: oklch(16.4% .015 255);
     --float: oklch(25.5% .018 255); --float-hi: oklch(31% .020 255);
     --shadow-float:
@@ -222,6 +234,7 @@
     --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
     --accent-ink: var(--accent); --warn-ink: var(--warn);
     --ok-ink: var(--ok); --err-ink: var(--err);
+    --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181;
     --face-sunk: oklch(14.2% .014 255); --face-code: oklch(16.4% .015 255);
     --float: oklch(25.5% .018 255); --float-hi: oklch(31% .020 255);
     --shadow-float:
@@ -240,6 +253,17 @@
     --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28); --err-fg: #FFF;
     --warn: oklch(57.5% .118 45); --add: var(--ok); --del: var(--err);
     --accent-ink: #8B5100; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
+    /* 构成条的五段是一组分类色，不是状态色。它们此前借的是 deleg/net/accent/
+       ok/faint —— 那五个在这套配色里各有各的意思（派出去的、在自主跑、该你了、
+       成、中性事实），而"系统提示"不是其中任何一件事；借走它们，真正的状态
+       就少了五个可用的位置。借来的那一组也不成立：跑分类色的六项检查，它挂
+       在四项上，最要命的一项是"工具输出"（灰）和"模型回复"（绿）之间正常视力
+       下 ΔE 12.0 —— 低于 15 的下限，意思是看得见颜色的人也分不出这两段，而它
+       们是窗口里第二和第四大的两块。
+       这一组是按那六项检查选出来的，深浅两档各自验过：分类色的明度带、彩度
+       下限、相邻对的色觉分离（ΔE ≥ 8）、正常视力下限（≥ 15）、以及与底的
+       对比。浅色下四段低于 3:1，按"救济规则"由图例的文字标签兜底。 */
+    --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4;
     --face-sunk: oklch(95% .008 255); --face-code: oklch(97.6% .005 255);
     --float: oklch(100% 0 255); --float-hi: oklch(94.2% .010 255);
     --shadow-float:
