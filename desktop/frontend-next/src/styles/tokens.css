@@ -114,6 +114,10 @@
        accent=需要你介入 · net=系统在自主跑 · deleg=委派出去的 · ok=成
        warn=有风险但放行 · err=坏了或会毁东西 · ghost=中性事实（比如未命中）
        focus 单独立一个 token：焦点环不该跟「运行中」共用一个颜色的语义。 */
+    /* 一个转角，一种画法。树里的转角是描边折线，而折叠标题和设置里的展开箭头
+       是字体给的实心三角 —— 同一个意思，屏幕上两种形状。遮罩把同一条折线画在
+       任何地方，颜色仍旧由 currentColor 给。 */
+    --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3.5 10.5 8 6 12.5'/%3E%3C/svg%3E");
     --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
     --grain-a: .026;
     --focus: var(--net);

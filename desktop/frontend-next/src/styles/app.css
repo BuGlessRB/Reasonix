@@ -1865,7 +1865,11 @@
   details > summary::-webkit-details-marker { display: none }
   details > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
   .fold { display: inline-flex; align-items: center; gap: 5px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
-  .fold::before { content: "▸"; font-size: var(--fs-micro); color: var(--ghost); transition: transform var(--t-card) var(--ease) }
+  .fold::before {
+    content: ""; width: 9px; height: 9px; flex: none; color: var(--ghost); background: currentColor;
+    -webkit-mask: var(--chev) center / contain no-repeat; mask: var(--chev) center / contain no-repeat;
+    transition: transform var(--t-card) var(--ease);
+  }
   details[open] > summary .fold::before { transform: rotate(90deg) }
   .fold:hover { color: var(--text) }
 
@@ -3454,10 +3458,12 @@
   }
   .advset > summary::-webkit-details-marker { display: none }
   .advset > summary::after {
-    content: "▾"; margin-left: auto; flex: none; font-size: var(--fs-micro); color: var(--ghost);
+    content: ""; margin-left: auto; flex: none; width: 10px; height: 10px;
+    color: var(--ghost); background: currentColor; transform: rotate(90deg);
+    -webkit-mask: var(--chev) center / contain no-repeat; mask: var(--chev) center / contain no-repeat;
     transition: transform var(--m-line) ;
   }
-  .advset[open] > summary::after { transform: rotate(180deg) }
+  .advset[open] > summary::after { transform: rotate(270deg) }
   .advset > summary:hover { color: var(--text) }
   @media (hover: hover) {
     .advset:hover { border-color: color-mix(in srgb, var(--accent) 20%, var(--border)) }
