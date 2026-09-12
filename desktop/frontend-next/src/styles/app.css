@@ -1750,7 +1750,7 @@
   .out .acts { display: flex; gap: 6px; margin-top: 9px; margin-inline-start: -7px }
   .copy {
     display: inline-flex; align-items: center; gap: 5px;
-    border: 0; background: transparent; color: var(--ghost); cursor: pointer;
+    border: 0; background: transparent; color: var(--faint); cursor: pointer;
     font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); padding: 4px 7px;
     border-radius: var(--r-sm); transition: color var(--m-line), background var(--m-line);
   }
@@ -2062,7 +2062,7 @@
   .ask-pane { padding: 13px 13px 0; display: none }
   .ask-pane[data-on] { display: block }
   .ask-q { font: var(--w-med) var(--fs-ui)/1.5 var(--ui); color: var(--text); margin-bottom: 3px }
-  .ask-hint { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); margin-bottom: 10px }
+  .ask-hint { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); margin-bottom: 10px }
 
   .opts { display: flex; flex-direction: column }
   /* ask 卡的选项行和设置里的 .prow 是同一个控件，共用这一份定义。
@@ -2617,7 +2617,7 @@
     font: var(--w-reg) var(--fs-ui) var(--ui);
   }
   .wsfind input::placeholder { color: var(--ghost) }
-  .wsfind kbd { flex: none; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost) }
+  .wsfind kbd { flex: none; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--faint) }
   .wsfind .clr { flex: none; border: 0; background: none; cursor: pointer; color: var(--ghost); font-size: var(--fs-ui); line-height: 1; padding: 0 2px }
   .wsfind .clr:hover { color: var(--text) }
 
@@ -2632,7 +2632,7 @@
     width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: var(--r-pill);
     background: var(--accent-wash); color: var(--accent-ink); font: var(--w-semi) var(--fs-ui) var(--ui);
   }
-  .acctrow .ini[data-off] { background: var(--overlay); color: var(--ghost) }
+  .acctrow .ini[data-off] { background: var(--overlay); color: var(--faint) }
   .acctrow .who { display: flex; flex-direction: column; gap: 1px; min-width: 0 }
   .acctrow .who .n { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .acctrow .who .d { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -4814,7 +4814,7 @@
   .hl .fail {
     font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase;
     padding: 1.5px 5px; border-radius: var(--r-xs); flex: none;
-    color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent);
+    color: var(--err-ink); background: color-mix(in srgb, var(--err) 13%, transparent);
   }
 
   /* An extension's own surface. It reuses .find / .opt / .btn so a plugin card
@@ -5280,6 +5280,8 @@
     background: var(--raised); color: var(--text);
     box-shadow: inset 0 0 0 1px var(--hair);
   }
+  /* ghost 的余量是照 --page 给的，而这一行现在铺的是抬面。 */
+  .wsrow[data-open] .wsmeta { color: var(--faint) }
   .twist {
     flex: none; width: 10px; height: 10px; display: grid; place-items: center;
     border: 0; background: none; padding: 0; color: var(--ghost); cursor: pointer;
