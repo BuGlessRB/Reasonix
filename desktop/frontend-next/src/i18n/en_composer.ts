@@ -11,7 +11,6 @@ export const EN_COMPOSER: Record<string, string> = {
   "任务输入": "Task input",
   "命令与技能": "Commands and skills",
   "引用文件": "Reference files",
-  "Enter 发送 · Shift+Enter 换行": "Enter to send · Shift+Enter for a new line",
   "Enter 插话 · Shift+Enter 换行": "Enter to steer · Shift+Enter for a new line",
   "{n} 字 · {lines} 行": "{n} characters · {lines} lines",
   "知道了": "Got it",

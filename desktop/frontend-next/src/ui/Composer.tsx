@@ -559,7 +559,13 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
               ? t("正在添加附件…")
               : failed
                 ? t("有附件添加失败，请重试或移除")
-                : t(running ? "Enter 插话 · Shift+Enter 换行" : "Enter 发送 · Shift+Enter 换行")}
+                // 闲着的时候这一格是空的。Enter 发送是这类窗口里最不需要被
+                // 告知的一件事，而它写在那儿，就和上面那两个提示、下面那一排
+                // 控件一起，把一个空输入框堆成三条带。跑起来时 Enter 的含义
+                // 变了 —— 那一句值得写出来。
+                : running
+                  ? t("Enter 插话 · Shift+Enter 换行")
+                  : ""}
         </span>
         {showCount && <span className="fcount">{t("{n} 字 · {lines} 行", { n: text.length, lines })}</span>}
       </div>
