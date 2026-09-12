@@ -1773,7 +1773,10 @@
   /* 一步没成，读起来不能和正常输出一样。挡下来和跑失败在事件里分不开，所以
      用告警而不是错误 —— 说「这一步有问题」，不替它断定是哪一种。 */
   .out .txt.bad { padding-left: 10px; border-left: 2px solid var(--warn) }
-  .out .txt code { font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--deleg) }
+  /* 行内代码靠字面区分，不靠色相。这里原本是 --deleg —— 那个色在这套配色里
+     只说一件事：这段活派了出去。一个文件名、一个开关不是那件事，而设置页里
+     的行内代码一直都是中性的。 */
+  .out .txt code { font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--text) }
   /* 硬切的方波闪烁跟匀速流出的文字对不上拍，看着更抖 */
   .caret { display: inline-block; width: 6px; height: 13px; background: var(--net); vertical-align: -2px; animation: blink 1.1s var(--ease) infinite }
   @keyframes blink { 0%, 100% { opacity: 1 } 55% { opacity: .15 } }
@@ -1933,7 +1936,7 @@
   /* Persisted completion is static; replaying it on mount would call old work new. */
   .pip[data-settled] { background: var(--ok) !important }
   .nest-ret b { color: var(--text); font-weight: var(--w-med) }
-  .nest-ret code { font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--deleg) }
+  .nest-ret code { font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--text) }
   .par { display: flex; align-items: center; gap: 8px; margin: 4px 0 1px; font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--ghost) }
   .par::after { content: ""; flex: 1; height: 1px; background: var(--hair) }
 
@@ -2106,7 +2109,7 @@
   .opt .lb, .prow .lb { display: flex; align-items: baseline; gap: 8px; font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
   .opt .rec { font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--accent-ink); flex: none }
   .opt .ds, .prow .ds { display: block; margin-top: 3px; font-size: var(--fs-ui); line-height: 1.55; color: var(--muted) }
-  .opt .ds code, .prow .ds code { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--deleg) }
+  .opt .ds code, .prow .ds code { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--text) }
 
   .opt-other .lb { color: var(--muted) }
   .opt-other[data-on] .lb { color: var(--text) }
@@ -4724,12 +4727,16 @@
   /* A wide table scrolls inside its own box; the transcript never scrolls
      sideways. */
   .md-tw { margin: 0 0 .7em; overflow-x: auto }
+  /* 竖线不画：横线已经说清了哪些字在同一行，竖线只是再把它们切成格子 —— 一张
+     四列的表于是读起来像一份表单。第一列不留左内边距，表格的左缘就落在正文的
+     左缘上。表头用界面字：它是一句话，不是一个值。 */
   .md table { border-collapse: collapse; font-size: var(--fs-ui) }
   .md th, .md td {
-    padding: 5px 10px; text-align: left; border: 1px solid var(--hair); white-space: nowrap;
+    padding: 6px 16px 6px 0; text-align: left; border-bottom: 1px solid var(--hair); white-space: nowrap;
   }
-  .md th { color: var(--faint); font: var(--w-med) var(--fs-meta) var(--mono); background: var(--overlay) }
+  .md th { color: var(--faint); font: var(--w-med) var(--fs-meta) var(--ui); border-bottom-color: var(--border) }
   .md td { color: var(--muted) }
+  .md tr:last-child td { border-bottom: 0 }
   .md a { color: var(--net); text-decoration: underline; text-underline-offset: 2px }
   .md a:hover { color: var(--text) }
   .md img { max-width: 100%; border-radius: var(--r-sm) }
