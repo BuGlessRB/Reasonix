@@ -124,6 +124,14 @@ export const EN: Record<string, string> = {
   "自动批准": "Auto approve",
   "下次维护": "Next maintenance",
   "模型容量": "Model capacity",
+  "点这里改维护点": "Change the maintenance point",
+  "维护点": "Maintenance point",
+  "维护点（tokens）": "Maintenance point, in tokens",
+  "按容量": "By capacity",
+  "只按窗口容量整理，本会话即 {n}。": "Tidy up on the window's capacity alone, which is {n} for this session.",
+  "可见输入到达该值即整理。": "Tidy up once visible input reaches it.",
+  "默认 {n}，与窗口大小无关。": "The default, {n}, whatever the window holds.",
+  "会重建运行时；任务运行中改不了。": "It rebuilds the runtime; not while a task is running.",
   "维护点是固定输入量，不随窗口放大 —— 输入越大，每轮越慢。窗口那条线在 {n}。":
     "The maintenance point is a fixed input size and does not scale with the window — the larger the input, the slower each round. The window's own line is at {n}.",
   "接近维护点，模型已经被告知要收窄接下来的工作。":

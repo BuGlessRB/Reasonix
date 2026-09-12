@@ -4,6 +4,7 @@ import { reason } from "../../i18n/kernel";
 import type { AgentPort, ContextBreakdown } from "../../port/port";
 import { pct as percent, tokens } from "../../i18n/format";
 import { pinToViewport } from "../place";
+import { FoldBound } from "./FoldBound";
 import { Row } from "./kit";
 
 // The order is the order they arrive in a prompt, so the bar reads the way the
@@ -74,7 +75,11 @@ export function Context({ ctx, legend = false, port, onCtx }: {
   // rail mounts, and a guard above them made that render ask for hooks the
   // previous one never did.
   const [open, setOpen] = useState(false);
+  // The two ceilings are edited in the same column, so opening one closes the
+  // other: side by side they would be two boxes of numbers with no way to tell
+  // which figure each answers for.
   const [editing, setEditing] = useState(false);
+  const [tuning, setTuning] = useState(false);
   const bar = useRef<HTMLDivElement>(null);
 
   // A bubble placed once against the viewport goes stale the moment anything
@@ -99,6 +104,10 @@ export function Context({ ctx, legend = false, port, onCtx }: {
   const field = settable && (
     <DeclareWindow port={port} onSet={onCtx} was={ctx.window} onDone={() => setEditing(false)} />
   );
+  const openWindow = () => {
+    setEditing((v) => !v);
+    setTuning(false);
+  };
   // A window nobody declared has no denominator to draw against — but the
   // number still matters, and so does what else a zero window means: it is
   // what turns automatic compaction off. Vanishing said neither.
@@ -139,7 +148,7 @@ export function Context({ ctx, legend = false, port, onCtx }: {
           className="ctxden"
           aria-expanded={editing}
           title={t("该窗口值的来源无法确定 —— 点击可改为该模型的实际上限")}
-          onClick={() => setEditing((v) => !v)}
+          onClick={openWindow}
         >
           {tokens(ctx.window)}
         </button>
@@ -186,9 +195,33 @@ export function Context({ ctx, legend = false, port, onCtx }: {
           simply too small" and it is where a wrong window is corrected. */}
       {folds && (
         <div className="ctxcap">
+          {/* The fold point is a setting, and this is where it is read — so it
+              is also where it is changed. Behind a settings sheet it is found
+              only by readers who already knew it was there, which is not the
+              reader this footnote was written for. */}
           <Row
             k={t("下次维护")}
-            v={<span className="ctxq">{tokens(ctx.compact_at)}<em>{percent(used / ctx.compact_at)}</em></span>}
+            v={
+              <span className="ctxq">
+                {settable ? (
+                  <button
+                    className="ctxden"
+                    data-action="compaction.advanced"
+                    aria-expanded={tuning}
+                    title={t("点这里改维护点")}
+                    onClick={() => {
+                      setTuning((v) => !v);
+                      setEditing(false);
+                    }}
+                  >
+                    {tokens(ctx.compact_at)}
+                  </button>
+                ) : (
+                  tokens(ctx.compact_at)
+                )}
+                <em>{percent(used / ctx.compact_at)}</em>
+              </span>
+            }
           />
           <Row k={t("模型容量")} v={windowFigure} />
           {/* The fold point marked on the window it is a fraction of. Read as
@@ -200,13 +233,19 @@ export function Context({ ctx, legend = false, port, onCtx }: {
           </div>
           {/* Which bound is holding, said only where it is not self-evident: a
               fold at the window's own share explains itself, and a fold at a
-              fixed size against a window twenty times larger does not. */}
-          {ctx.boundary === "economic" && ctx.capacity_at > ctx.compact_at && (
+              fixed size against a window twenty times larger does not. It
+              stands down while the editor is open — the chosen mode says what
+              it does there, and two greyed paragraphs stacked on one column
+              read as one nobody finishes. */}
+          {ctx.boundary === "economic" && ctx.capacity_at > ctx.compact_at && !tuning && (
             <p className="ctxwhy">
               {t("维护点是固定输入量，不随窗口放大 —— 输入越大，每轮越慢。窗口那条线在 {n}。", {
                 n: tokens(ctx.capacity_at),
               })}
             </p>
+          )}
+          {settable && tuning && (
+            <FoldBound port={port} onCtx={onCtx} onDone={() => setTuning(false)} />
           )}
         </div>
       )}

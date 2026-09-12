@@ -6060,21 +6060,39 @@
   .ctxden:hover, .ctxden[aria-expanded="true"] { color: var(--accent-ink); border-bottom-color: var(--accent) }
   /* 只有这一处能把缺的窗口补上，所以字段是常驻的，不藏在 hover 或折叠后面。 */
   .ctxwin { margin-top: 7px }
-  .ctxwin .r { display: flex; gap: 6px }
-  .ctxwin input {
+  /* 维护点就地可改：读到这条线的地方就是改它的地方 —— 藏进设置表，只有本来
+     就知道它存在的人找得到，而这段脚注写的正是不知道的那些人。外观与窗口编辑
+     器共用一套：同一列里两种输入框，会读成两件不同的事。 */
+  .ctxfold { margin-top: 8px; display: grid; gap: 7px }
+  .ctxfold .ctxnote { margin: 0 }
+  /* 细则自成一行：与「这一档做什么」连排时，两句合起来跨两行，断点会落在
+     词中间，读起来像一句没写完的话。降一档字号说明它是条件而不是说明。 */
+  .ctxfold .ctxfine { margin: -2px 0 0; font: var(--w-reg) var(--fs-micro)/1.45 var(--ui); color: var(--ghost) }
+  /* 三档平分一整行。默认的 inline-flex 会让它缩到文字宽，在这一栏里读起来
+     像半行没画完。 */
+  .ctxfold .seg { display: flex; align-self: stretch }
+  /* 比设置表里那一组矮一档：这一栏的行高在 20px 上下，一组按设置表尺寸画的
+     分段控件放进来，读起来像另一个产品的零件掉了进来。 */
+  .ctxfold .seg button {
+    flex: 1 1 0; padding: 3px 4px; justify-content: center; text-align: center;
+    font: var(--w-reg) var(--fs-meta) var(--ui);
+  }
+  .ctxfold .seg button[aria-pressed="true"] { font-weight: var(--w-med) }
+  .ctxwin .r, .ctxfold .r { display: flex; gap: 6px }
+  .ctxwin input, .ctxfold .r input {
     flex: 1 1 auto; min-width: 0; padding: 4px 7px;
     border: 1px solid var(--border); border-radius: var(--r-xs);
     background: var(--surface); color: var(--text);
     font: var(--w-reg) var(--fs-ui) var(--mono); font-variant-numeric: tabular-nums;
   }
-  .ctxwin input:focus-visible { outline: none; border-color: var(--accent) }
-  .ctxwin button {
+  .ctxwin input:focus-visible, .ctxfold .r input:focus-visible { outline: none; border-color: var(--accent) }
+  .ctxwin button, .ctxfold .r button {
     flex: none; padding: 4px 11px; border: 1px solid var(--border); border-radius: var(--r-xs);
     background: var(--overlay); color: var(--text); font: var(--w-med) var(--fs-meta) var(--ui); cursor: pointer;
     transition: background var(--m-line), color var(--m-line), border-color var(--m-line);
   }
-  .ctxwin button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink) }
-  .ctxwin button:disabled { color: var(--ghost); cursor: default }
+  .ctxwin button:hover:not(:disabled), .ctxfold .r button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink) }
+  .ctxwin button:disabled, .ctxfold .r button:disabled { color: var(--ghost); cursor: default }
   /* 段与段之间留 2px 的底色，而不是 1px：相邻两段之间那条缝是"这是两段"的
      记号，细到 1px 时在深色下几乎看不见。 */
   .ctxbar {
