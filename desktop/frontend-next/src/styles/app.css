@@ -4624,10 +4624,14 @@
   .md h1, .md h2, .md h3, .md h4 {
     margin: 1.1em 0 .5em; font-weight: var(--w-semi); line-height: 1.35; color: var(--text);
   }
-  /* 跟着正文一起动，标题与正文的层级差是固定的 */
-  .md h1 { font-size: calc(var(--read) + 1.5px) } .md h2 { font-size: calc(var(--read) + .5px) }
-  .md h3 { font-size: var(--read) }
-  .md h4 { font-size: calc(var(--read) - .5px); color: var(--muted) }
+  /* 跟着正文一起动，标题与正文的层级差是固定的 —— 差值以前是 +1.5 / +.5 / 0
+     / -.5 像素。界面自己的字号表早就把这种半像素档判过一次死刑（「半个像素
+     不是一档」），但那条守卫放过 calc(--read)，于是唯一真正被人一段一段读的
+     那一列，四级标题挤在正文上下两像素里：模型写出来的层次，屏幕上读不出来。
+     改成比例梯，和字号表一样按比例展开，正文调大调小整梯跟着走。 */
+  .md h1 { font-size: calc(var(--read) * 1.38) } .md h2 { font-size: calc(var(--read) * 1.2) }
+  .md h3 { font-size: calc(var(--read) * 1.06) }
+  .md h4 { font-size: var(--read); color: var(--muted) }
   .md ul, .md ol { margin: 0 0 .7em; padding-left: 1.4em }
   .md li { margin: .18em 0 }
   .md li::marker { color: var(--ghost) }
