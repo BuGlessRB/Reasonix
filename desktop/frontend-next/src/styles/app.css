@@ -2251,7 +2251,10 @@
        那一版实测就把 900px 窗口的转录压到了 36%。 */
     --aux-budget: min(calc(34vh / var(--zoom, 1)), 320px);
     max-width: calc(var(--doc) - 20px - var(--srail-w));
-    border-radius: var(--r-lg); padding: 14px 15px 11px;
+    /* 地板那一层要退到这两个数之外去，所以它们有名字：写两遍就会差 —— 差了
+       1px，卡片的渐变就从地板的左右和下沿各露出一条缝。 */
+    --pad-x: 15px; --pad-b: 11px;
+    border-radius: var(--r-lg); padding: 14px var(--pad-x) var(--pad-b);
     background: linear-gradient(180deg,
       color-mix(in srgb, var(--raised) 94%, var(--text) 6%), var(--raised));
     box-shadow: 0 1px 2px rgba(0, 0, 0, .14), 0 18px 38px -30px rgb(0 0 0 / .48);
@@ -2389,9 +2392,12 @@
      台阶迈这么大，输入框就读成上下两个部件，中间那条线成了它们的缝。半档，
      加上那条毫发线，说的还是「这是地板」。 */
   .compose .row { position: relative; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin: 11px -14px -10px; padding: 8px 12px;
+    margin: 11px calc(var(--pad-x) * -1) calc(var(--pad-b) * -1); padding: 8px 12px;
     background: color-mix(in oklab, var(--raised) 72%, var(--page));
-    border-top: 1px solid var(--hair); border-radius: 0 0 var(--r-md) var(--r-md);
+    border-top: 1px solid var(--hair);
+    /* 内圆角配外圆角：两个独立的档位在同一个角上对不齐，外面 12 里面 9 时，
+       地板的圆弧会从卡片的圆弧里探出来。 */
+    border-radius: 0 0 calc(var(--r-lg) - 1px) calc(var(--r-lg) - 1px);
     -webkit-user-select: none; user-select: none }
   .compose .row .go { margin-left: auto }
   .turntools { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap }
