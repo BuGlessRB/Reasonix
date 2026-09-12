@@ -4,7 +4,7 @@ import { reason } from "../../i18n/kernel";
 import type { AgentPort, ContextBreakdown } from "../../port/port";
 import { pct as percent, tokens } from "../../i18n/format";
 import { pinToViewport } from "../place";
-import { FoldBound } from "./FoldBound";
+import { useFoldBound } from "./useFoldBound";
 import { Row } from "./kit";
 
 // The order is the order they arrive in a prompt, so the bar reads the way the
@@ -81,6 +81,11 @@ export function Context({ ctx, legend = false, port, onCtx }: {
   const [editing, setEditing] = useState(false);
   const [tuning, setTuning] = useState(false);
   const bar = useRef<HTMLDivElement>(null);
+  // The handle is the capacity bar's own mark, so its state lives here rather
+  // than in a control mounted beside it: an editor that owned the track would
+  // rebuild it on every open, and a bar remounted animates from zero, which
+  // reads as the session's usage jumping.
+  const fold = useFoldBound(port, ctx?.window ?? 0, onCtx);
 
   // A bubble placed once against the viewport goes stale the moment anything
   // moves it, and there is nothing useful to show mid-scroll — so it closes.
@@ -127,6 +132,10 @@ export function Context({ ctx, legend = false, port, onCtx }: {
   // placed where usage cannot reach it. There is no deadline left to count
   // down to, so the capacity row is the whole gauge rather than a footnote.
   const folds = ctx.compact_at > 0 && ctx.compact_at <= ctx.window;
+  // While the handle is held, it owns the figure: a mark that moves under the
+  // pointer while the number above it stays put is two controls disagreeing
+  // about one setting.
+  const at = fold.reading ?? ctx.compact_at;
   const denom = folds ? ctx.compact_at : ctx.window;
   const pct = Math.min((used / denom) * 100, 100);
   // The kernel's own two rungs, not a second opinion: it tells the model to
@@ -214,12 +223,12 @@ export function Context({ ctx, legend = false, port, onCtx }: {
                       setEditing(false);
                     }}
                   >
-                    {tokens(ctx.compact_at)}
+                    {tokens(at)}
                   </button>
                 ) : (
-                  tokens(ctx.compact_at)
+                  tokens(at)
                 )}
-                <em>{percent(used / ctx.compact_at)}</em>
+                <em>{percent(used / at)}</em>
               </span>
             }
           />
@@ -227,9 +236,40 @@ export function Context({ ctx, legend = false, port, onCtx }: {
           {/* The fold point marked on the window it is a fraction of. Read as
               two numbers, 160k against 1M is arithmetic nobody does; read as a
               notch this far along the bar, it is the whole answer at a glance. */}
-          <div className="ctxcapbar" role="presentation">
+          <div className="ctxcapbar" data-live={tuning || undefined}>
             <i style={{ width: `${Math.min((used / ctx.window) * 100, 100)}%` }} />
-            <b style={{ left: `${Math.min((ctx.compact_at / ctx.window) * 100, 100)}%` }} />
+            <b style={{ left: `${Math.min((at / ctx.window) * 100, 100)}%` }} />
+            {/* The mark, made to move. A native range brings the keyboard, the
+                touch target and the announced value with it; everything drawn
+                here is the bar that was already on screen, so the control the
+                reader grabs is the one they were already reading.
+                The track spans the window because the bar does: given its own
+                min..max the handle sat at one fraction of the track while the
+                mark sat at another, and the two drifted apart by the width of
+                everything the track had cut off. */}
+            {settable && tuning && fold.ready && (
+              <input
+                className="ctxslide"
+                type="range"
+                min={fold.step}
+                max={ctx.window}
+                step={fold.step}
+                value={Math.min(Math.max(fold.preview ?? ctx.compact_at, fold.step), ctx.window)}
+                disabled={fold.busy}
+                autoFocus
+                data-action-change="compaction.threshold"
+                data-action-pointerup="compaction.threshold"
+                data-action-keyup="compaction.threshold"
+                aria-label={t("维护点")}
+                aria-valuetext={tokens(at)}
+                onChange={(e) => fold.move(Number(e.currentTarget.value))}
+                onPointerUp={(e) => void fold.commit(Number(e.currentTarget.value))}
+                onKeyUp={(e) => {
+                  if (e.key === "Escape") return setTuning(false);
+                  void fold.commit(Number(e.currentTarget.value));
+                }}
+              />
+            )}
           </div>
           {/* Which bound is holding, said only where it is not self-evident: a
               fold at the window's own share explains itself, and a fold at a
@@ -244,8 +284,27 @@ export function Context({ ctx, legend = false, port, onCtx }: {
               })}
             </p>
           )}
-          {settable && tuning && (
-            <FoldBound port={port} onCtx={onCtx} onDone={() => setTuning(false)} />
+          {settable && tuning && fold.ready && (
+            <div className="ctxfold">
+              {fold.error && <p className="ctxnote" data-lvl="warn">{fold.error}</p>}
+              {/* Which of the three the handle is expressing, and where the
+                  other end is — one line, because a control that explains
+                  itself in a paragraph has stopped being a control. */}
+              <p className="ctxnote">
+                {fold.preview !== null
+                  ? fold.preview >= fold.capacity
+                    ? t("松开即只按窗口容量")
+                    : fold.detent
+                      ? t("松开即回到默认")
+                      : t("松开即生效")
+                  : fold.mode === "capacity"
+                    ? t("只按窗口容量 · {n}", { n: tokens(fold.capacity) })
+                    : fold.mode === "default"
+                      ? t("默认 {n} · 拖到最右只按窗口容量", { n: tokens(fold.fallback) })
+                      : t("自定义 {n} · 拖到最右只按窗口容量", { n: tokens(fold.stored) })}
+              </p>
+              <p className="ctxfine">{t("会重建运行时；任务运行中改不了。")}</p>
+            </div>
           )}
         </div>
       )}
