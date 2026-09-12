@@ -2652,8 +2652,13 @@
   .navbtn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
   .navbtn:hover { color: var(--text); background: var(--raised); box-shadow: var(--lit) }
   .navbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-  .navbtn[aria-current] { color: var(--accent-ink); background: var(--accent-wash) }
-  .navbtn[aria-current]::before { content: ""; position: absolute; left: -7px; top: 9px; bottom: 9px; width: 2px; border-radius: var(--r-pill); background: var(--accent) }
+  /* Where you are is not something that needs you. The session rows reached
+     that conclusion already — a hue that also means "a decision is waiting"
+     cannot say "you are reading this" — and this column asks the same question
+     one level up. A raised ground carries it, the bar says which one from the
+     edge, and the hue is left to the card that is actually waiting. */
+  .navbtn[aria-current] { color: var(--text); background: var(--raised); box-shadow: var(--lit), inset 0 0 0 1px var(--hair) }
+  .navbtn[aria-current]::before { content: ""; position: absolute; left: -7px; top: 9px; bottom: 9px; width: 2px; border-radius: var(--r-pill); background: var(--muted) }
   .navhint { position: absolute; left: calc(100% + 10px); top: 50%; z-index: 40; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--float); box-shadow: var(--shadow-float); color: var(--text); font: var(--w-med) var(--fs-ui) var(--ui); white-space: nowrap; opacity: 0; pointer-events: none; transform: translate(-3px, -50%); transition: opacity var(--m-line), transform var(--m-line) }
   .navbtn:hover .navhint, .navbtn:focus-visible .navhint { opacity: 1; transform: translate(0, -50%) }
 
@@ -5233,28 +5238,18 @@
      芯片跨两行居中就比它们低 8px —— 胉下来就是一排东西里只有它歪。 */
   .wsacts { grid-area: 1 / 4; align-self: center }
   .wsrow:hover { background: var(--overlay); color: var(--text) }
-  /* 选中的是项目节点，不是会话行：金色底 + 左边一条带辉的竖条，两行一起
-     包在里面。会话行只给中性底，没有竖条 —— 两个层级各自有自己的记号，
-     否则一列里两条金色竖条说不清到底选中的是哪一个。 */
-  /* Two marks, not four: the fill says which row, the bar says it from the edge
-     where the eye is already travelling down the list. A ring at 12% accent on
-     top of a fill adds a fourth reading of one state. */
-  /* --accent-wash is mixed against --raised, and the rail lays --page, which
-     sits only 4 L below it: the fill half of that pair measured ΔL 0.8 in
-     light, so the row was being said by the bar alone. Carrying a little of
-     the hue itself moves it away from the ground in both schemes — the wash is
-     lighter than --page in light and darker in dark, and --accent is on the
-     far side of it either way. */
+  /* 选中的是项目节点，不是会话行：两行一起包在一块抬起来的底上。
+     这块底以前是金的。琥珀在这套配色里只说一件事：有个决定在等你。一整条
+     常驻的行染上它，等待中的审批卡就再也不是屏幕上最响的东西了 —— 而那正是
+     它存在的全部理由。抬面在两种配色下都离地一档（浅 +4.2 L、深 +7.9 L），
+     说得出「你在这」，又不说别的。
+     竖条也一并去掉：底、内环、竖条是一个状态说三遍，而那条竖条是方的，压在
+     一个圆角的面上，把它的左边切成一个缺口。会话行选中也是这块底，两级靠缩进
+     和字重分，不靠第二种记号。 */
   .wsrow[data-open] {
-    background: color-mix(in oklab, var(--accent-wash), var(--accent) 9%);
-    color: var(--text);
+    background: var(--raised); color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--hair);
   }
-  .wsrow[data-open]::before {
-    content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px;
-    border-radius: 2px; background: var(--accent);
-    box-shadow: 0 0 8px color-mix(in oklab, var(--accent) 60%, transparent);
-  }
-  .wsrow[data-open] .wsadd { background: var(--raised) }
   .twist {
     flex: none; width: 10px; height: 10px; display: grid; place-items: center;
     border: 0; background: none; padding: 0; color: var(--ghost); cursor: pointer;
