@@ -67,7 +67,7 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
   const after = c.projectionTokens ?? 0;
   const shrank = before > 0 && after > 0 && after < before;
   return (
-    <div className="call">
+    <div className="call" data-k="host">
       <div className="g">
         <Sym glyph="⊘" />
         <span className="line" />

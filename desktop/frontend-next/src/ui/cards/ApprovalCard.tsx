@@ -37,14 +37,17 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
   };
   if (item.a.kind === "plan" || item.a.tool === PLAN_TOOL) return <PlanGate item={item} onPlan={onPlan} />;
   return (
-    <div className="call" data-k="ask">
+    // 咨询与授权此前共用 data-k="ask" 和同一个「?」：一个是模型想听你的意见，
+    // 另一个是它要动你的文件。授权借「写」的类别 —— 它本来就是一次写权限。
+    <div className="call" data-k="write">
       <div className="g">
-        <Sym glyph="?" />
+        <Sym glyph="⚿" />
         <span className="line" />
       </div>
       <div className="c">
         <div className="hl">
-          <span className="nm">{item.a.tool === FENCE_TOOL ? t("要求扩大可改范围") : t("即将执行")}</span>
+          <span className="nm">{item.a.tool === FENCE_TOOL ? t("要求扩大可改范围") : t("请求执行权限")}</span>
+          <span className="tag">{t("授权")}</span>
         </div>
         <div className="out">
           <div className="apv" data-sealed={sealed ? item.verdict : undefined} aria-busy={!!submitting}>
@@ -59,11 +62,13 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
                   disabled={!!submitting} onClick={() => void decide("once")}>
                   {submitting === "once" ? t("正在提交…") : t("允许这一次")}
                 </button>
-                <button className="btn" data-action="decision.tool" data-target={item.a.id} data-value="always"
+                {/* 永久扩权，所以它比「这一次」安静一档：三颗同样大小挨在一起时，
+                    读者分不出哪颗只管这一次、哪颗管以后所有次。 */}
+                <button className="btn" data-weak="" data-action="decision.tool" data-target={item.a.id} data-value="always"
                   disabled={!!submitting} onClick={() => void decide("always")}>
                   {t("此类操作不再询问")}
                 </button>
-                <button className="btn" data-action="decision.tool" data-target={item.a.id} data-value="deny"
+                <button className="btn" data-deny="" data-action="decision.tool" data-target={item.a.id} data-value="deny"
                   disabled={!!submitting} onClick={() => void decide("deny")}>
                   {t("拒绝")}
                 </button>

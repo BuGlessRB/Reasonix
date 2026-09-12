@@ -597,6 +597,7 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
               </svg>
             </span>
           </button>
+        <span className="shelfsep" aria-hidden="true" />
         {/* The one control on this shelf with no width of its own: a gateway
             can publish an id longer than the shelf is wide. It gives up
             characters before the shelf gives up a line, and the ref it was
@@ -640,6 +641,7 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
             kernel turns off the moment a plan is approved. The lifecycle is a
             separate reading — an approved plan is still running, and saying so
             here is not the same as offering to turn planning back on. */}
+        <span className="shelfsep" aria-hidden="true" />
         {status?.planPhase === "executing" && (
           <span className="mode plain" data-plan-phase="executing" title={t("正在执行已批准的计划")}>
             <span className="lb">{t("执行计划中")}</span>

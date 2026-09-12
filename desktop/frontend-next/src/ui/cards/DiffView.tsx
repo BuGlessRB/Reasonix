@@ -13,8 +13,58 @@ interface Props {
 // Reverting is two steps on purpose. The first answers "is this file still the
 // one the checkpoint captured"; only when it is not does the second need an
 // answer from the reader, and asking before knowing would ask every time.
+
+type Row = { sign: " " | "+" | "-"; text: string; no: number | null } | { skipped: number };
+
+// Unified diff 的行号住在 @@ 头里。此前整段按 \n 切开、序号直接用下标，于是一处
+// 改在第 205 行的改动在卡上标成 1、2、3 —— 而那个头本身还被当成代码渲染了出来。
+// 空行也不再丢：缩进块的形状就是靠它们读出来的。
+export function parseDiff(diff: string): Row[] {
+  const out: Row[] = [];
+  let oldNo = 0;
+  let newNo = 0;
+  let lastNew = 0;
+  let sawHunk = false;
+  for (const raw of diff.split("\n")) {
+    const at = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
+    if (at) {
+      const start = Number(at[2]);
+      if (sawHunk && start > lastNew + 1) out.push({ skipped: start - lastNew - 1 });
+      oldNo = Number(at[1]);
+      newNo = start;
+      sawHunk = true;
+      continue;
+    }
+    // 文件头不是内容，从来都不该出现在正文里。
+    if (/^(diff |index |--- |\+\+\+ |new file|deleted file|similarity index|rename )/.test(raw)) continue;
+    const c = raw[0];
+    const sign: " " | "+" | "-" = c === "+" || c === "-" ? c : " ";
+    const text = sign === " " ? raw : raw.slice(1);
+    if (!sawHunk) {
+      // 没有 @@ 头的裸片段：给不出真行号，就不给 —— 编一个比留空更坏。
+      out.push({ sign, text, no: null });
+      continue;
+    }
+    if (sign === "+") {
+      out.push({ sign, text, no: newNo });
+      lastNew = newNo++;
+    } else if (sign === "-") {
+      // 删掉的那一行在改动后的文件里不存在，所以这一格是空的。行号列自始至终
+      // 是同一件事：跳过去要落在第几行。混进旧文件的行号，两种数字长得一样，
+      // 读者没有办法分辨自己看的是哪一个文件。
+      out.push({ sign, text, no: null });
+      oldNo++;
+    } else {
+      out.push({ sign, text, no: newNo });
+      lastNew = newNo++;
+      oldNo++;
+    }
+  }
+  return out;
+}
+
 export function DiffView({ diff, path, onPrepare, onCommit }: Props) {
-  const lines = diff.split("\n").filter((l) => l.length > 0);
+  const lines = parseDiff(diff);
   const [plan, setPlan] = useState<RewindPlan | null>(null);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<"" | "reverted" | "kept" | "refused">("");
@@ -112,16 +162,24 @@ export function DiffView({ diff, path, onPrepare, onCommit }: Props) {
       )}
       {failed && <div className="dif-ask">{failed}</div>}
 
-      {lines.map((l, i) => {
-        const sign = l[0] === "+" || l[0] === "-" ? l[0] : " ";
-        return (
-          <div className="dl" key={i} data-d={sign === " " ? undefined : sign}>
-            <span className="no">{i + 1}</span>
-            <span className="sg">{sign}</span>
-            <span className="cd">{l.slice(sign === " " ? 0 : 1)}</span>
-          </div>
-        );
-      })}
+      {/* 长行横滚在这一层，不在整块上：行号列跟着滚出去，读者就找不到自己在哪
+          一行了。被改的那一段常常正好在行尾。 */}
+      <div className="dlwrap">
+        {lines.map((l, i) =>
+          "skipped" in l ? (
+            <div className="dhunk" key={i}>
+              <span>⋯</span>
+              <span>{t("跳过 {n} 行", { n: l.skipped })}</span>
+            </div>
+          ) : (
+            <div className="dl" key={i} data-d={l.sign === " " ? undefined : l.sign}>
+              <span className="no">{l.no ?? ""}</span>
+              <span className="sg">{l.sign}</span>
+              <span className="cd">{l.text}</span>
+            </div>
+          ),
+        )}
+      </div>
     </div>
   );
 }

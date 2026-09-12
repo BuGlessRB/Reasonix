@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { t } from "../../i18n";
 import { nestLabel } from "../delegation";
 import type { ExtensionSurface, Tool } from "../../port/wire";
@@ -99,6 +99,7 @@ export function ToolCard({
     // outside the transcript could point at one.
     <div
       className="call"
+      style={leadOf(tool)}
       data-call={tool.id || undefined}
       data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined}
       data-running={running ? "" : undefined}
@@ -235,6 +236,16 @@ function Steps({ tool }: { tool: Tool }) {
       ))}
     </div>
   );
+}
+
+// 耗时 → 这一步之后留多少空。走间距而不是走 gutter 线的长度：线是 flex:1，
+// 它填满剩余空间，而真实卡片带着输出块普遍高过两百像素 —— min-height 在那里
+// 永远不生效。间距不与内容高度相争，滚动时读出来的就是这一轮的时间节奏。
+function leadOf(tool: Tool): CSSProperties | undefined {
+  const ms = tool.durationMs;
+  if (!ms || ms < 800) return undefined;
+  const gap = Math.min(34, Math.round(7 * Math.log2(ms / 800)));
+  return gap >= 4 ? { marginBottom: gap + "px" } : undefined;
 }
 
 const childTokens = (kids: Tool[]) => kids.reduce((n, k) => n + (k.contextTokens ?? 0), 0);

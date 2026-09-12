@@ -1165,8 +1165,11 @@
 
   /* 定位条是一整条 pointer-events:auto 的命中框，靠右排的控件（撤回入口就在
      那里）落进去就点不到。让内容退到它左边 —— 层级对抗只会换成轨道点不到。 */
+  /* 居中而不是靠右：此前没有列宽上限，靠右就是铺满，两者一回事。收窄之后它们
+     分了家 —— 1920 下贴着定位条会在左边空出四百多像素，而输入框仍靠左，两者
+     错开四百像素。auto 两边同时生效，窄窗口下没有余量可分，行为和从前一样。 */
   .flow {
-    margin-top: auto; margin-left: auto; margin-right: var(--srail-w);
+    margin-top: auto; margin-inline: auto;
     width: calc(100% - var(--srail-w)); max-width: var(--doc);
     padding: 12px var(--flow-pad) 16px;
   }
@@ -1538,6 +1541,19 @@
   .call[data-k="deleg"] > .g .line { background: color-mix(in srgb, var(--deleg) 30%, transparent) }
   .call[data-k="write"] > .g .line { background: color-mix(in srgb, var(--warn) 34%, transparent) }
   .call[data-k="ask"]   > .g .line { background: color-mix(in srgb, var(--accent) 55%, transparent) }
+  /* 主机自己做的事：同一条线，材质不同。转录里有三个作者 —— 你、模型、主机 ——
+     而 data-k 只认工具名，于是主机的卡落在默认灰上，和一个没分类的工具同色。
+     虚线是这条 gutter 上唯一还空着的维度：颜色归类别，长度归耗时，动效归状态。
+     它也色盲友好 —— 形状不是色相。 */
+  .call[data-k="host"]  > .g .sym {
+    background: none; color: var(--ok);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 38%, transparent);
+  }
+  .call[data-k="host"]  > .g .line {
+    background: none; width: 0; border-radius: 0;
+    border-left: 2px dashed color-mix(in srgb, var(--ok) 48%, transparent);
+  }
+  .call[data-k="host"]  > .c .hl .nm { font-weight: var(--w-reg); color: var(--muted) }
 
   /* ── 四档份量 ────────────────────────────────────────────────────────────
      一轮的锚点、最终的回答、中间做过的事、要你定的事。四者原来共用一张卡的
@@ -1614,9 +1630,23 @@
     100% { box-shadow: 0 0 9px -2px color-mix(in srgb, currentColor 46%, transparent),
                        0 0 0 0 color-mix(in srgb, currentColor 0%, transparent) }
   }
+  /* 运行中的那一段线有一束光沿它下行。用的是已经在那儿的结构，不新增元素；
+     方向天然有意义 —— 向下就是「往下一步去」。落定即停，历史永远是静的。 */
   .call[data-running] > .g .line {
-    background: linear-gradient(to bottom,
-      color-mix(in srgb, var(--net) 65%, transparent) 0 42%, var(--hair) 42% 100%);
+    background:
+      linear-gradient(to bottom,
+        transparent 0 34%,
+        color-mix(in srgb, var(--net) 88%, transparent) 44%,
+        color-mix(in srgb, var(--net) 24%, transparent) 52%,
+        transparent 62% 100%),
+      color-mix(in srgb, var(--net) 22%, transparent);
+    background-size: 100% 260%, 100% 100%;
+    background-repeat: no-repeat, no-repeat;
+    animation: linepulse 2.3s linear infinite;
+  }
+  @keyframes linepulse {
+    from { background-position: 0 -160%, 0 0 }
+    to   { background-position: 0 160%, 0 0 }
   }
   .call > .g .sym {
     transition: opacity var(--t-card) var(--ease-out),
@@ -1725,7 +1755,8 @@
 
   .out { margin-top: 6px }
   /* 设计稿把正文封在 68ch 是排版上的道理，但一屏里只有它收着、终端块和卡片都
-     铺满，读起来就是右边豁了一块。要么全收要么全铺，这里选全铺。 */
+     铺满，读起来就是右边豁了一块。要么全收要么全铺 —— 现在是全收：收在外面那
+     一层（--doc），正文、终端块、卡片一起走同一条边界，内外不再各收一半。 */
   .out .txt { font-size: var(--read); line-height: 1.72; color: var(--muted) }
   /* 自己交代的任务是每轮的锚点，用中性表面而不是借用已有状态色；pre-wrap
      保留输入时的分行，让它仍像任务原文而不是系统生成的段落。 */
@@ -1954,10 +1985,21 @@
   .dif { margin-top: 7px; border: 1px solid var(--hair); border-radius: var(--r-sm); overflow: hidden }
   .dif-hd { display: flex; gap: 9px; padding: 6px 11px; background: var(--overlay); font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
   .dif-hd .ro { margin-left: auto; font-size: var(--fs-micro); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--ghost) }
-  .dl { display: grid; grid-template-columns: 36px 14px 1fr; font: var(--w-reg) var(--fs-ui)/20px var(--mono); white-space: pre }
-  .dl > .no { text-align: right; padding-right: 9px; color: var(--ghost); font-variant-numeric: tabular-nums; user-select: none }
+  /* 行可以横着滚：此前整块 overflow:hidden + 行内 ellipsis，长行被截了就真的
+     没了 —— 而被改的那一段常常正好在行尾。 */
+  .dlwrap { overflow-x: auto; overscroll-behavior-x: contain }
+  .dl { display: grid; grid-template-columns: 42px 14px 1fr; font: var(--w-reg) var(--fs-ui)/20px var(--mono); white-space: pre; min-width: max-content }
+  /* 跳过的那一段有自己的一行，否则两处相隔四十行的改动会连成一片。 */
+  .dhunk {
+    display: grid; grid-template-columns: 42px 1fr; font: var(--w-reg) var(--fs-micro)/18px var(--mono);
+    color: var(--ghost); background: color-mix(in srgb, var(--overlay) 55%, transparent);
+    border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair);
+  }
+  .dhunk > span:first-child { text-align: right; padding-right: 9px }
+  .dhunk > span:last-child { padding-left: 14px }
+  .dl > .no { position: sticky; left: 0; text-align: right; padding-right: 9px; color: var(--ghost); background: var(--raised); font-variant-numeric: tabular-nums; user-select: none }
   .dl > .sg { color: var(--ghost); user-select: none }
-  .dl > .cd { padding-right: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis }
+  .dl > .cd { padding-right: 11px; color: var(--muted) }
   .dl[data-d="+"] { background: color-mix(in srgb, var(--add) 9%, transparent) }
   .dl[data-d="+"] > .sg, .dl[data-d="+"] > .cd { color: color-mix(in srgb, var(--add) 62%, var(--text)) }
   .dl[data-d="-"] { background: color-mix(in srgb, var(--del) 8%, transparent) }
@@ -2039,6 +2081,12 @@
   .apv-hd .tool { font: var(--w-med) var(--fs-meta) var(--mono); letter-spacing: var(--track-lead); color: var(--warn-ink) }
   .apv-hd .sub { font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .apv-dt { padding: 9px 12px 0; font: var(--w-reg) var(--fs-ui)/1.6 var(--mono); color: var(--muted) }
+  /* 三颗按钮按后果排：永久扩权退一档，拒绝推到右端 —— 最常用的两颗不再挨着
+     最重的那颗，误触的代价就不一样了。 */
+  .apv-ft .btn[data-weak] { font-size: var(--fs-micro); color: var(--ghost); background: none; border-color: var(--hair) }
+  .apv-ft .btn[data-weak]:hover:not(:disabled) { color: var(--muted); border-color: var(--border) }
+  .apv-ft .btn[data-deny] { margin-left: auto; color: var(--err-ink, var(--err)); border-color: color-mix(in srgb, var(--err) 34%, transparent) }
+  .apv-ft .btn[data-deny]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--err) 58%, transparent) }
   .apv-ft { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 11px 12px }
   .apv-ft .hint { margin-left: auto; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
   /* 计划卡上那句「修改计划会留在计划模式里」。它不是提示性的补充，是这张卡
@@ -2256,12 +2304,15 @@
      因此仍然是同一条线 —— 只是这条线现在落在轨道的左边，而不是它的下面。 */
   .compose {
     position: relative; flex: none;
-    margin: 0 calc(var(--srail-w) + var(--flow-pad)) 18px var(--flow-pad);
+    /* 与 .flow 的内容区同宽同心：盒子等于「那一列减去两侧内距」，于是输入框的
+       两条边和卡片的两条边落在同一处，宽窄窗口都成立。 */
+    margin: 0 auto 18px;
+    width: calc(100% - var(--srail-w) - var(--flow-pad) * 2);
     /* 输入框以外堆在这儿的东西**合起来**最多这么高。写成一个数，是因为不变量
        只有一个：转录不能被挤没 —— 两个各自限高的区域加起来照样能超，46vh 的
        那一版实测就把 900px 窗口的转录压到了 36%。 */
     --aux-budget: min(calc(34vh / var(--zoom, 1)), 320px);
-    max-width: calc(var(--doc) - var(--flow-pad) - var(--srail-w));
+    max-width: calc(var(--doc) - var(--flow-pad) * 2);
     /* 地板那一层要退到这两个数之外去，所以它们有名字：写两遍就会差 —— 差了
        1px，卡片的渐变就从地板的左右和下沿各露出一条缝。 */
     --pad-x: 15px; --pad-b: 11px;
@@ -2412,6 +2463,12 @@
     -webkit-user-select: none; user-select: none }
   .compose .row .go { margin-left: auto }
   .turntools { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap }
+  /* 底排上是三类东西：给这条消息加东西、设这一轮怎么跑、现在就动手。它们此前
+     等距平铺，扫视时没有边界；两道细缝把它们分开，不占宽度也不加颜色。 */
+  .turntools .shelfsep {
+    flex: none; width: 1px; align-self: center; height: 16px;
+    background: var(--hair); margin: 0 1px;
+  }
   .turntools > .picker:first-of-type { min-width: 0 }
   .turntools > .picker:first-of-type > .mode { max-width: 100%; min-width: 0 }
   .turntools > .picker:first-of-type .nm { flex: 1; min-width: 0 }
