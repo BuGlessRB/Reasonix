@@ -65,7 +65,7 @@ export const EN_WINDOW: Record<string, string> = {
   "吞吐（输出）": "Throughput (output)",
   "成本（本会话）": "Cost (this session)",
   "代理与工具": "Agents and tools",
-  "子代理数量": "Sub-agents",
+  "数量": "Count",
   "工具调用次数": "Tool calls",
   "外部请求": "External requests",
   "失败步数": "Failed",

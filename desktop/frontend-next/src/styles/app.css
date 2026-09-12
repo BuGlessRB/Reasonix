@@ -1089,7 +1089,9 @@
      让开多少，输入框右边让开多少。分开写死的时候是 54 和 18 —— 中间那 36px 里，
      轨道在收指针而内容以为自己还能被点到，右对齐的控件（排队消息的「撤回」、
      回滚入口、审批卡的「不用了」）整个落在里面，看得见、按不到。 */
-  .pane { --srail-w: 54px }
+  /* 转录的左右留白：它同时定义输入框停在哪。两处各写一遍，凑出来的是同一个
+     左边界和差 20px 的右边界 —— 卡片右缘比输入框右缘内缩一档，量出来才看见。 */
+  .pane { --srail-w: 54px; --flow-pad: 20px }
   .railhost { position: sticky; top: 0; height: 0; z-index: 4; pointer-events: none }
   /* 转录不画原生滚动条：视窗框和滚动条的滑块说的是同一件事（你在哪），
      并排出现就是两条一模一样的东西。留下能被标记的那一条。 */
@@ -1165,7 +1167,8 @@
      那里）落进去就点不到。让内容退到它左边 —— 层级对抗只会换成轨道点不到。 */
   .flow {
     margin-top: auto; margin-left: auto; margin-right: var(--srail-w);
-    width: calc(100% - var(--srail-w)); max-width: var(--doc); padding: 12px 20px 16px;
+    width: calc(100% - var(--srail-w)); max-width: var(--doc);
+    padding: 12px var(--flow-pad) 16px;
   }
   /* 长会话里排版成本是按卡片数线性涨的，而屏外的那几百张没人看。让浏览器
      跳过它们的排版与绘制；记住的高度让滚动条不跳，查找仍能命中并展开。
@@ -2252,12 +2255,13 @@
   /* 左 18、右让开轨道那一条：活动流、运行条、输入框共用中栏这一个宽度，右缘
      因此仍然是同一条线 —— 只是这条线现在落在轨道的左边，而不是它的下面。 */
   .compose {
-    position: relative; flex: none; margin: 0 var(--srail-w) 18px 20px;
+    position: relative; flex: none;
+    margin: 0 calc(var(--srail-w) + var(--flow-pad)) 18px var(--flow-pad);
     /* 输入框以外堆在这儿的东西**合起来**最多这么高。写成一个数，是因为不变量
        只有一个：转录不能被挤没 —— 两个各自限高的区域加起来照样能超，46vh 的
        那一版实测就把 900px 窗口的转录压到了 36%。 */
     --aux-budget: min(calc(34vh / var(--zoom, 1)), 320px);
-    max-width: calc(var(--doc) - 20px - var(--srail-w));
+    max-width: calc(var(--doc) - var(--flow-pad) - var(--srail-w));
     /* 地板那一层要退到这两个数之外去，所以它们有名字：写两遍就会差 —— 差了
        1px，卡片的渐变就从地板的左右和下沿各露出一条缝。 */
     --pad-x: 15px; --pad-b: 11px;

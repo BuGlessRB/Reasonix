@@ -21,7 +21,7 @@ export function Agents({ tasks }: { tasks: Task[] }) {
   return (
     <Grp id="agents" name={t("子代理")} aside={live ? t("{n} 个运行中", { n: live }) : undefined}>
       <Row
-        k={t("子代理数量")}
+        k={t("数量")}
         v={live ? <span className="lk">{t("{n} 并行", { n: live })}</span> : agentsIn(tasks)}
       />
       <div className="agents">
