@@ -27,26 +27,56 @@ const read = () =>
     const list = document.querySelector(".slashmenu [role=listbox]");
     if (!list) return null;
     const panel = list.closest(".slashmenu");
-    // 十六进制来自令牌,color() 来自 color-mix,rgb() 来自其它一切。
-    const rgb = (s) => {
-      s = s.trim();
-      if (s.startsWith("#")) {
-        const h = s.length === 4 ? [...s.slice(1)].map((c) => c + c).join("") : s.slice(1);
-        return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)).concat(1);
-      }
-      const n = (s.match(/-?[\d.]+/g) ?? []).map(Number);
-      const [r = 0, g = 0, b = 0, a = 1] = n;
-      return s.startsWith("color(") ? [r * 255, g * 255, b * 255, a] : [r, g, b, a];
+    // 颜色一律先画出来再读。计算值的写法跟着作者写的那一种走 —— 令牌是
+    // oklch(...)、color-mix 是 oklab(...)、别处是 rgb(...) —— 而把这三种的分量
+    // 当成 RGB 去算,得到的数跟亮度没有关系:oklch 的第三个分量是色相角 255,
+    // 按蓝色通道算出来的「亮度」比整道题都大。画布按 CSS Color 4 解析,取回来
+    // 的是真正上屏的那三个字节。
+    const ink = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    const rgb = (css) => {
+      ink.clearRect(0, 0, 1, 1);
+      ink.fillStyle = "#000";
+      ink.fillStyle = css;
+      ink.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ink.getImageData(0, 0, 1, 1).data;
+      return [r, g, b, a / 255];
     };
     const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
     const st = getComputedStyle(panel);
     const floor = lum(rgb(st.backgroundColor));
+    // 悬停态没法从画面上读:键盘态下 .mi:hover:not([data-on]) 被显式抹平,而
+    // 指针一落到某行,那行就成了 data-on —— 屏幕上永远不存在「一行被悬停、
+    // 另一行被选中」。所以读 .mi:hover 这条规则自己声明的底色,再按令牌解析,
+    // 而不是把某个令牌名写死在守卫里:换了令牌,读到的跟着换。
+    const declared = () => {
+      for (const sheet of document.styleSheets) {
+        let rules;
+        try {
+          rules = sheet.cssRules;
+        } catch {
+          continue;
+        }
+        // CSSOM 的类型化取值器对 var() 一律返回空串 —— 它不是一个合法的
+        // <color>,而这条规则写的正是 background: var(--float-hi)。
+        for (const r of rules) {
+          if (r.selectorText !== ".mi:hover") continue;
+          const v = r.style?.getPropertyValue("background") || r.style?.getPropertyValue("background-color");
+          if (v) return v;
+        }
+      }
+      return null;
+    };
+    const hoverFill = (() => {
+      const v = declared();
+      if (!v) return null;
+      const m = /^var\((--[\w-]+)\)$/.exec(v.trim());
+      return lum(rgb(m ? getComputedStyle(panel).getPropertyValue(m[1]) : v)) - floor;
+    })();
     return {
       listId: list.id,
       kb: list.hasAttribute("data-kb"),
       caret: document.querySelector('[role="combobox"]').getAttribute("aria-activedescendant"),
-      // .mi:hover 画的就是这个令牌,所以读它等于读悬停态。
-      hover: lum(rgb(st.getPropertyValue("--float-hi"))) - floor,
+      hover: hoverFill,
       rows: [...list.querySelectorAll("button.mi")].map((b) => {
         const s = getComputedStyle(b);
         const c = rgb(s.backgroundColor);
@@ -91,8 +121,9 @@ async function suite(tag, token, park1, park2) {
   check(`${tag} 菜单开着,只有一行选中`, s && s.rows.filter((r) => r.on).length === 1, `${s?.rows.length} 行`);
 
   const on = s.rows.find((r) => r.on);
-  const beat = on.fill !== null && Math.sign(on.fill) === Math.sign(s.hover) && Math.abs(on.fill) >= Math.abs(s.hover) * OVER;
-  check(`${tag} 选中比悬停更重,方向一致`, beat && Math.abs(on.fill) >= FLOOR, `选中 ${on.fill?.toFixed(1)} / 悬停 ${s.hover.toFixed(1)}`);
+  // 读不出悬停画什么,就没有可比的对照 —— 那是守卫自己坏了,不是界面通过了。
+  const beat = s.hover !== null && on.fill !== null && Math.sign(on.fill) === Math.sign(s.hover) && Math.abs(on.fill) >= Math.abs(s.hover) * OVER;
+  check(`${tag} 选中比悬停更重,方向一致`, beat && Math.abs(on.fill) >= FLOOR, `选中 ${on.fill?.toFixed(1)} / 悬停 ${s.hover?.toFixed(1) ?? "读不出"}`);
   check(`${tag} 选中行有那条竖杠`, on.rail);
 
   await key("ArrowDown");
