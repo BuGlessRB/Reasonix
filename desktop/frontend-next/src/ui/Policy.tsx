@@ -5,6 +5,7 @@ import type { AgentPort, ApprovalMode, Preset, SessionStatus } from "../port/por
 import { useDismiss } from "./dismiss";
 import { Seg } from "./Seg";
 import { deviates, policySummary } from "./policyview";
+import { Warn } from "./glyphs";
 
 // 这一轮怎么跑，是三个变量共同回答的一个问题。它们原来分处窗口顶栏（执行方式）
 // 和输入框底栏（强度、批准），要知道下一轮会怎么执行得看两个地方。
@@ -105,7 +106,7 @@ export function Policy({ port, status, efforts, onChanged }: Props) {
                         risk row, and inheriting its display:flex and margin doubled
                         this pill's height in exactly the dangerous state. */}
                     <span className={sum.danger ? "polrisk" : undefined}>
-                      {sum.danger && <i className="polwarn" aria-hidden>⚠</i>}
+                      {sum.danger && <i className="polwarn" aria-hidden><Warn /></i>}
                       {sum.approval}
                     </span>
                   </>

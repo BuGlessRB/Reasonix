@@ -2441,7 +2441,11 @@
      在这个姿态」要付代价的状态，所以它反过来 —— 只染这一段，不染整颗按钮：
      整颗变红，安静下来的那些轮次就又开始有人盯着它了。 */
   .policy .vl .polrisk { color: var(--err-ink); font-weight: var(--w-med) }
-  .policy .vl .polwarn { margin-right: 3px; font-style: normal }
+  .policy .vl .polwarn { margin-right: 4px; font-style: normal; display: inline-grid; vertical-align: -1.5px }
+  .policy .vl .polwarn svg, .cachemoved i svg {
+    width: 12px; height: 12px; fill: none; stroke: currentColor;
+    stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+  }
   /* 选中「全放行」时这一格自己带危险语义，跟设置页的同一组一致。用 :has() 读
      选中态，Seg 这个基元就不必为一档专门长一个 prop。 */
   .polmenu .seg:has(button[data-value="yolo"][aria-pressed="true"]) {
@@ -2798,7 +2802,7 @@
     display: flex; align-items: baseline; gap: 5px; margin: 8px 0 0;
     font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--warn-ink);
   }
-  .cachemoved i { font-style: normal; font-size: var(--fs-micro) }
+  .cachemoved i { font-style: normal; display: inline-grid; vertical-align: -1.5px }
 
   .bar { display: flex; height: 3px; overflow: hidden; background: var(--hair); gap: 1px }
   .bar i { display: block; transition: flex-grow var(--t-live) var(--ease); position: relative }

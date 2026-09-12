@@ -12,3 +12,12 @@ export const Cross = () => (
     <path d="M5 5 11 11M11 5 5 11" />
   </svg>
 );
+
+// 「这一步有代价」的记号。它替掉的是字符 `⚠`：一个字体给的形状，站在一排
+// 16 格描边图形中间；这个码位又在 emoji 集里，呈现由平台决定，不由我们定。
+export const Warn = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M8 2.9 14 13.1H2Z" />
+    <path d="M8 6.6v2.6M8 11.1h.01" />
+  </svg>
+);

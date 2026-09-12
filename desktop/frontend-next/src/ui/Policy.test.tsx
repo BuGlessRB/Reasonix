@@ -54,7 +54,7 @@ describe("what the closed control says", () => {
     const { container } = draw({ status: status("balanced", "auto", "yolo") });
     const risk = container.querySelector(".vl .polrisk");
     expect(risk?.textContent).toContain("全部放行");
-    expect(container.querySelector(".vl .polwarn")?.textContent).toBe("⚠");
+    expect(container.querySelector(".vl .polwarn svg")).not.toBeNull();
     // The button itself stays quiet; only the segment that must be remembered
     // is toned, or every ordinary turn is watched too.
     expect(container.querySelector("button")?.className).not.toMatch(/risk|danger/);
