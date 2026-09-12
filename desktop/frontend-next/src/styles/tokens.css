@@ -70,18 +70,23 @@
        Declared apart, they also separate apart: machine output by the step
        (cut into the page), a code listing by its line (it has been set). */
     --face-sunk: oklch(95% .008 255); --face-code: oklch(97.6% .005 255);
-    --accent: #A76200; --accent-fg: #FFF; --accent-wash: #FFF2DC;
+    --accent: oklch(78% .135 78); --accent-fg: oklch(28% .058 70); --accent-wash: #FFF2DC;
     --net: oklch(50.8% .172 267); --net-wash: oklch(94.8% .026 264);
     --deleg: oklch(50.4% .092 211); --deleg-wash: oklch(94.8% .020 210);
-    --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28);
+    --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28); --err-fg: #FFF;
     --warn: oklch(57.5% .118 45); --add: var(--ok); --del: var(--err);
     /* A hue used as a surface and as text on a tint of itself needs two values.
-       --accent at 4.55:1 on white had no headroom left: white text on it fell to
-       4.42, and the hue itself on its own 13% tint reached only 3.3–3.8. The ink
-       is the reading value on a tint of the hue, while the base stays the fill.
-       In dark they coincide, because there the tint is darker than the hue
-       rather than lighter. The base carries --accent-fg, so it is pinned from
-       that side too: white on it sat at 4.4977, which is not 4.5. */
+       The ink is the reading value on a tint of the hue, while the base stays
+       the fill. In dark they coincide, because there the tint is darker than
+       the hue rather than lighter.
+       The base used to be dark enough to carry white (#A76200, with white on it
+       at 4.4977 — not 4.5, and nothing left over). A fill that has to be that
+       dark to hold white ink is brown, and it is the largest saturated area the
+       light scheme has. It is the hue itself now, with dark ink on it, which is
+       the arrangement the dark scheme has always used: one answer for both, and
+       the ink measured rather than assumed. --err carries its own ink for the
+       same reason — a danger button was borrowing --accent-fg, which only
+       worked while the two hues happened to share a lightness. */
     --accent-ink: #8B5100; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
     /* Terminal output and diffs carry Chinese, and none of the monospaced faces
        above has a Chinese glyph — the character fell through to whatever the OS
@@ -192,7 +197,7 @@
     --accent: #DDA144; --accent-fg: #171104; --accent-wash: #201907;
     --net: oklch(68.5% .118 262); --net-wash: oklch(21% .028 262);
     --deleg: oklch(68.1% .105 210); --deleg-wash: oklch(21% .024 210);
-    --ok: oklch(70.6% .120 155); --err: oklch(66.5% .150 27);
+    --ok: oklch(70.6% .120 155); --err: oklch(66.5% .150 27); --err-fg: #1A0604;
     --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
     --accent-ink: var(--accent); --warn-ink: var(--warn);
     --ok-ink: var(--ok); --err-ink: var(--err);
@@ -213,7 +218,7 @@
     --accent: #DDA144; --accent-fg: #171104; --accent-wash: #201907;
     --net: oklch(68.5% .118 262); --net-wash: oklch(21% .028 262);
     --deleg: oklch(68.1% .105 210); --deleg-wash: oklch(21% .024 210);
-    --ok: oklch(70.6% .120 155); --err: oklch(66.5% .150 27);
+    --ok: oklch(70.6% .120 155); --err: oklch(66.5% .150 27); --err-fg: #1A0604;
     --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
     --accent-ink: var(--accent); --warn-ink: var(--warn);
     --ok-ink: var(--ok); --err-ink: var(--err);
@@ -229,10 +234,10 @@
     --page: oklch(95.8% .008 255); --surface: oklch(98.9% .004 255);
     --raised: oklch(100% 0 255); --overlay: oklch(93.1% .012 255);
     --border: oklch(87.6% .016 255); --hair: oklch(91.7% .011 255);
-    --accent: #A76200; --accent-fg: #FFF; --accent-wash: #FFF2DC;
+    --accent: oklch(78% .135 78); --accent-fg: oklch(28% .058 70); --accent-wash: #FFF2DC;
     --net: oklch(50.8% .172 267); --net-wash: oklch(94.8% .026 264);
     --deleg: oklch(50.4% .092 211); --deleg-wash: oklch(94.8% .020 210);
-    --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28);
+    --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28); --err-fg: #FFF;
     --warn: oklch(57.5% .118 45); --add: var(--ok); --del: var(--err);
     --accent-ink: #8B5100; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
     --face-sunk: oklch(95% .008 255); --face-code: oklch(97.6% .005 255);

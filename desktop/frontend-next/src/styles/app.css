@@ -866,7 +866,7 @@
   .ws .goal > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .ws[aria-selected="true"] .goal { color: var(--text) }
   .ws .pip { margin-top: 6px }
-  .ws[data-s="awaiting"] .pip { background: var(--accent) }
+  .ws[data-s="awaiting"] .pip { background: var(--accent-ink) }
   .ws[data-s="running"] .pip { background: var(--net) }
   .ws[data-s="done"] .pip { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ok) }
   .ws .meta { margin-top: 3px; padding-left: 13px; display: flex; gap: 8px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); white-space: nowrap; overflow: hidden }
@@ -904,7 +904,7 @@
     display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-left: 13px;
     font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint);
   }
-  .ws .where .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none }
+  .ws .where .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-ink); flex: none }
   .ws[data-iso="on"] .where .dot { background: var(--ok) }
   .ws .where .p { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .ws .where .tag { flex: none; color: var(--accent-ink) }
@@ -952,7 +952,7 @@
      有东西可跟 —— 键盘上尤其。marker.ts 量活元素，这里只说它怎么走。 */
   .tabmark {
     position: absolute; bottom: 0; left: 0; height: 2px; border-radius: var(--r-xs);
-    background: var(--accent); pointer-events: none;
+    background: var(--accent-ink); pointer-events: none;
     transition: transform var(--m-panel) , width var(--m-panel) ;
   }
   .tab {
@@ -1134,7 +1134,7 @@
     transition: width var(--m-line), opacity var(--m-line), background-color var(--m-line);
   }
   .srail-m:focus-visible > i { outline: 2px solid var(--focus); outline-offset: 3px }
-  .srail-m[data-on] > i { background: var(--accent) }
+  .srail-m[data-on] > i { background: var(--accent-ink) }
   /* 平时几乎不存在：指针靠近这一侧才浮出来 */
   .pane:hover .srail-m > i { opacity: calc(.46 + .54 * var(--lit)) }
   .srail:hover ~ .srail-peek { opacity: 1 }
@@ -1520,7 +1520,7 @@
   .call[data-k="net"]   > .g .sym { color: var(--net); background: var(--net-wash) }
   .call[data-k="deleg"] > .g .sym { color: var(--deleg); background: var(--deleg-wash) }
   .call[data-k="write"] > .g .sym { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 14%, transparent) }
-  .call[data-k="ask"]   > .g .sym { color: var(--accent-fg); background: var(--accent) }
+  .call[data-k="ask"]   > .g .sym { color: var(--accent-wash); background: var(--accent-ink) }
   .call[data-k="mcp"]   > .g .sym { color: var(--net); background: var(--net-wash) }
   .call[data-k="mem"]   > .g .sym { color: var(--deleg) }
   .call[data-k="say"]   > .g .sym { background: transparent; color: var(--ghost) }
@@ -1978,7 +1978,7 @@
   .guard-hd .gauge { display: flex; gap: 2px; flex: none; align-self: center }
   .guard-hd .gauge i { width: 3px; height: 9px; border-radius: var(--r-xs); background: var(--hair) }
   .guard[data-risk="low"] .gauge i:nth-child(1) { background: var(--ok) }
-  .guard[data-risk="medium"] .gauge i:nth-child(-n+2) { background: var(--accent) }
+  .guard[data-risk="medium"] .gauge i:nth-child(-n+2) { background: var(--accent-ink) }
   .guard[data-risk="high"] .gauge i { background: var(--err) }
   .guard-why { margin-top: 3px; font-size: var(--fs-ui); line-height: 1.62; color: var(--muted) }
 
@@ -2056,7 +2056,7 @@
   .ask-tab:hover { color: var(--accent-ink) }
   .ask-tab[aria-selected="true"] { color: var(--accent-ink); border-bottom-color: var(--accent) }
   .ask-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-  .ask-tab .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); display: inline-block; margin-left: 5px; opacity: 0 }
+  .ask-tab .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-ink); display: inline-block; margin-left: 5px; opacity: 0 }
   .ask-tab[data-answered] .dot { opacity: 1 }
 
   .ask-pane { padding: 13px 13px 0; display: none }
@@ -2774,7 +2774,7 @@
   .gbar i { display: block; height: 100%; background: var(--faint); border-radius: inherit; transition: width var(--t-live) var(--ease) }
   .gbar[data-tone="ok"] i { background: var(--ok) }
   .gbar[data-tone="net"] i { background: var(--net) }
-  .gbar[data-tone="accent"] i { background: var(--accent) }
+  .gbar[data-tone="accent"] i { background: var(--accent-ink) }
 
   .cost-hero {
     padding: 1px 0 3px; font: var(--w-med) var(--fs-display)/1 var(--mono); color: var(--text);
@@ -4194,7 +4194,7 @@
   }
   .cmpbar > i {
     display: block; height: 100%; border-radius: var(--r-md);
-    background: var(--accent); transition: width var(--m-panel) ;
+    background: var(--accent-ink); transition: width var(--m-panel) ;
   }
   .cmp .note { margin-top: 8px }
 
@@ -4919,7 +4919,7 @@
   .xview .pip[data-tone="ok"] { background: var(--ok) }
   .xview .pip[data-tone="warn"] { background: var(--warn) }
   .xview .pip[data-tone="err"] { background: var(--err) }
-  .xview .pip[data-tone="accent"] { background: var(--accent) }
+  .xview .pip[data-tone="accent"] { background: var(--accent-ink) }
   /* 槽位轨：贴着输入框上沿的一条窄带。它不参与滚动，也不吃输入框的高度 —— 
      插件可以站在这里，不能把这里占满。 */
   .slotrail {
@@ -5216,7 +5216,7 @@
   .ptab .pip { flex: none; background: var(--ghost) }
   /* 后台那个也在跑，页签上得看得出来 */
   .ptab[data-run="running"] .pip { background: var(--net) }
-  .ptab[data-run="halt"] .pip { background: var(--accent) }
+  .ptab[data-run="halt"] .pip { background: var(--accent-ink) }
   .ptab[data-run="done"] .pip { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ok) }
   .ptab-x {
     flex: none; width: 17px; height: 17px; display: grid; place-items: center;
@@ -5359,7 +5359,7 @@
   /* 蓝点说的是「这条会话有活着的运行时」，不等于它此刻在推理。心跳只给真正在
      跑的那一条 —— 全局的运行状态在 .app 上，当前那条会话是 data-on。 */
   .app[data-run="running"] .sessrow[data-on][data-live] .pip { box-shadow: 0 0 0 2px color-mix(in srgb, var(--net) 14%, transparent) }
-  .app[data-run="halt"] .sessrow[data-on] .pip { background: var(--accent); opacity: 1 }
+  .app[data-run="halt"] .sessrow[data-on] .pip { background: var(--accent-ink); opacity: 1 }
   .sesstitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .sessmeta {
     flex: none; margin-right: 44px;
@@ -5712,7 +5712,7 @@
   .rmt[data-state="connected"] .rmtpip, .rmtrow[data-state="connected"] .rmtpip { background: var(--net) }
   .rmt[data-state="connecting"] .rmtpip, .rmtrow[data-state="connecting"] .rmtpip,
   .rmt[data-state="reconnecting"] .rmtpip, .rmtrow[data-state="reconnecting"] .rmtpip {
-    background: var(--accent);
+    background: var(--accent-ink);
   }
   .rmt[data-state="degraded"] .rmtpip, .rmtrow[data-state="degraded"] .rmtpip { background: var(--warn) }
   .rmt[data-state="stopped"] .rmtpip, .rmtrow[data-state="stopped"] .rmtpip { background: var(--err) }
@@ -5825,7 +5825,7 @@
     background: linear-gradient(90deg, var(--accent) var(--at, 50%), var(--border) var(--at, 50%));
   }
   .slider::-moz-range-track { height: 3px; border-radius: var(--r-sm); background: var(--border) }
-  .slider::-moz-range-progress { height: 3px; border-radius: var(--r-sm); background: var(--accent) }
+  .slider::-moz-range-progress { height: 3px; border-radius: var(--r-sm); background: var(--accent-ink) }
   .slider::-webkit-slider-container { height: 18px }
   .slider::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
@@ -5916,7 +5916,7 @@
   .wsconfirm-a button:hover { color: var(--text); border-color: var(--faint) }
   .wsconfirm-a button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .wsconfirm-a button[data-danger] { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)) }
-  .wsconfirm-a button[data-danger]:hover { background: var(--err); border-color: var(--err); color: var(--accent-fg) }
+  .wsconfirm-a button[data-danger]:hover { background: var(--err); border-color: var(--err); color: var(--err-fg) }
 
   /* 就地改名：双击页签，或右键菜单里选 */
   .ptab-in {
@@ -5964,7 +5964,7 @@
   .tabconfirm .a button:hover { color: var(--text); border-color: var(--faint) }
   .tabconfirm .a button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .tabconfirm .a button[data-danger] { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)) }
-  .tabconfirm .a button[data-danger]:hover { background: var(--err); border-color: var(--err); color: var(--accent-fg) }
+  .tabconfirm .a button[data-danger]:hover { background: var(--err); border-color: var(--err); color: var(--err-fg) }
 
   /* The absolute placement here was written for the old session card, where it
      landed on the pencil beside it. A project's row keeps its buttons in the
@@ -6054,7 +6054,7 @@
   .ctxbar > i:last-of-type { border-radius: var(--r-xs) var(--r-md) var(--r-md) var(--r-xs) }
   .ctxbar > i[data-p="system"] { background: var(--deleg) }
   .ctxbar > i[data-p="tools"]  { background: var(--net) }
-  .ctxbar > i[data-p="user"]   { background: var(--accent) }
+  .ctxbar > i[data-p="user"]   { background: var(--accent-ink) }
   .ctxbar > i[data-p="reply"]  { background: var(--ok) }
   .ctxbar > i[data-p="output"] { background: var(--faint) }
 
@@ -6086,7 +6086,7 @@
   .ctxlg .r i { width: 8px; height: 8px; border-radius: 2px; flex: none }
   .ctxlg .r i[data-p="system"] { background: var(--deleg) }
   .ctxlg .r i[data-p="tools"]  { background: var(--net) }
-  .ctxlg .r i[data-p="user"]   { background: var(--accent) }
+  .ctxlg .r i[data-p="user"]   { background: var(--accent-ink) }
   .ctxlg .r i[data-p="reply"]  { background: var(--ok) }
   .ctxlg .r i[data-p="output"] { background: var(--faint) }
   .ctxlg .r em { font: var(--w-reg) var(--fs-micro) var(--mono); font-style: normal; color: var(--ghost) }
@@ -6131,7 +6131,7 @@
   .ctxpop .row > i { width: 7px; height: 7px; border-radius: var(--r-sm); flex: none }
   .ctxpop .row > i[data-p="system"] { background: var(--deleg) }
   .ctxpop .row > i[data-p="tools"]  { background: var(--net) }
-  .ctxpop .row > i[data-p="user"]   { background: var(--accent) }
+  .ctxpop .row > i[data-p="user"]   { background: var(--accent-ink) }
   .ctxpop .row > i[data-p="reply"]  { background: var(--ok) }
   .ctxpop .row > i[data-p="output"] { background: var(--faint) }
   .ctxpop .row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -6146,7 +6146,7 @@
   .storage .vol .nm { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
   .storage .vol .sz { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
   .storage .meter { height: 5px; border-radius: var(--r-xs); background: var(--hair); overflow: hidden }
-  .storage .meter > i { display: block; height: 100%; background: var(--accent); transition: width var(--t-line) var(--ease-out) }
+  .storage .meter > i { display: block; height: 100%; background: var(--accent-ink); transition: width var(--t-line) var(--ease-out) }
   .storage .drives { margin: 10px 0 0 }
   .storage .drives p { margin: 0; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
 

@@ -71,16 +71,37 @@ const sweep = async (page, scheme, where) =>
         return el.tagName.toLowerCase() + (cls ? "." + cls : "");
       };
 
+      // 记号也要看得见：一个语义色被画在屏幕上，就是在说一件事，而 WCAG 1.4.11
+      // 给非文本的界面部件定的是 3:1。范围不按"细不细"划 —— 那会把分隔线也圈
+      // 进来，而发丝线本来就该若隐若现 —— 按**画的是不是语义色**划：accent /
+      // net / ok / err / warn / deleg 出现在哪里，哪里就在表达状态。
+      const HUES = ["--accent", "--net", "--ok", "--err", "--warn", "--deleg"];
+      const swatch = HUES.map((n) => ({ n, c: rgba(getComputedStyle(document.documentElement).getPropertyValue(n)) }));
+      const near = (c) => swatch.find((s) => Math.abs(s.c[0] - c[0]) + Math.abs(s.c[1] - c[1]) + Math.abs(s.c[2] - c[2]) <= 6);
+
       const out = [];
       const seen = new Set();
       for (const el of document.querySelectorAll("body *")) {
         const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
-        if (!own) continue;
         if (el.closest("[hidden], [disabled], [aria-disabled='true'], :disabled")) continue;
         const st = getComputedStyle(el);
         if (st.visibility !== "visible" || st.display === "none") continue;
         const box = el.getBoundingClientRect();
         if (box.width < 2 || box.height < 2) continue;
+        if (!own) {
+          // 画了语义色的那些：比的是它自己和它压着的那层。
+          const fill = rgba(st.backgroundColor);
+          const hue = fill[3] >= 0.9 && near(fill);
+          if (!hue || el.textContent.trim()) continue;
+          const under = groundOf(el.parentElement ?? el);
+          const got = ratio(over(fill, under), under);
+          if (got >= 3) continue;
+          const key = `${scheme}/记号 ${sig(el)} (${hue.n})`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push({ key, where, got: Math.round(got * 100) / 100, need: 3, size: Math.round(Math.min(box.width, box.height)), text: hue.n });
+          continue;
+        }
         // 透明度是整棵子树一起淡出，正文和它自己的底一起被稀释到祖先的底上。
         let alpha = 1;
         for (let n = el; n; n = n.parentElement) alpha *= Number(getComputedStyle(n).opacity);
