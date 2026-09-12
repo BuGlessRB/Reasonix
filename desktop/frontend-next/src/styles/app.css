@@ -1224,7 +1224,7 @@
   .tl-bar[data-c="round"] { top: 0; height: 9px; background: color-mix(in srgb, var(--muted) 42%, transparent) }
   .tl-tick[data-c="round"] { top: 0; height: 9px; background: var(--muted) }
   .tl-bar[data-c="read"], .tl-tick[data-c="read"] { background: var(--ghost) }
-  .tl-bar[data-c="write"], .tl-tick[data-c="write"] { background: var(--accent) }
+  .tl-bar[data-c="write"], .tl-tick[data-c="write"] { background: var(--warn) }
   .tl-bar[data-c="net"], .tl-tick[data-c="net"] { background: var(--net) }
   .tl-bar[data-c="deleg"], .tl-tick[data-c="deleg"] { background: var(--deleg) }
   .tl-bar[data-c="mcp"], .tl-tick[data-c="mcp"] { background: var(--deleg) }
@@ -1508,9 +1508,14 @@
   /* 子代理面板里的每一步是子步，不是主流程的一张卡 */
   .nest-bd .call > .c { padding: var(--y-line) 0 }
 
+  /* 类别用的是同一套语义色，而每个类别都对得上它的那句话：net 是联网，deleg
+     是派出去的，ask 是「该你了」。只有写不对 —— 写一个文件不需要人，它是
+     「这一步有代价」，那正是 warn 被从 accent 里分出来时写下的那句话。同一
+     条转录里，一次编辑和一张在等你的审批卡本来是同一个琥珀，滚过去分不出
+     哪张要人。 */
   .call[data-k="net"]   > .g .sym { color: var(--net); background: var(--net-wash) }
   .call[data-k="deleg"] > .g .sym { color: var(--deleg); background: var(--deleg-wash) }
-  .call[data-k="write"] > .g .sym { color: var(--accent-ink); background: var(--accent-wash) }
+  .call[data-k="write"] > .g .sym { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 14%, transparent) }
   .call[data-k="ask"]   > .g .sym { color: var(--accent-fg); background: var(--accent) }
   .call[data-k="mcp"]   > .g .sym { color: var(--net); background: var(--net-wash) }
   .call[data-k="mem"]   > .g .sym { color: var(--deleg) }
@@ -1524,7 +1529,7 @@
   }
   .call[data-k="net"]   > .g .line { background: color-mix(in srgb, var(--net) 30%, transparent) }
   .call[data-k="deleg"] > .g .line { background: color-mix(in srgb, var(--deleg) 30%, transparent) }
-  .call[data-k="write"] > .g .line { background: color-mix(in srgb, var(--accent) 34%, transparent) }
+  .call[data-k="write"] > .g .line { background: color-mix(in srgb, var(--warn) 34%, transparent) }
   .call[data-k="ask"]   > .g .line { background: color-mix(in srgb, var(--accent) 55%, transparent) }
 
   /* ── 四档份量 ────────────────────────────────────────────────────────────
@@ -2562,7 +2567,7 @@
     transition: background-color var(--t-line) var(--ease-out), color var(--t-line) var(--ease-out) }
   @media (hover: hover) { .tk-row:hover { background: var(--overlay); color: var(--text) } }
   .tk-row .dot { width: 5px; height: 5px; margin-left: 2px; align-self: center; border-radius: var(--r-pill); background: var(--ghost) }
-  .tk-row[data-c="write"] .dot { background: var(--accent) }
+  .tk-row[data-c="write"] .dot { background: var(--warn) }
   .tk-row[data-c="net"] .dot { background: var(--net) }
   .tk-row[data-c="deleg"] .dot { background: var(--deleg) }
   .tk-row[data-c="round"] .dot { background: var(--faint) }
@@ -3791,7 +3796,7 @@
      只有环=借来的。行本身沿用设置列表的发丝分隔，跟 .vrow/.skrow 是一家。 */
   .band { margin-top: 14px }
   .anchor { display: block; padding-bottom: 13px }
-  .anchor .cap { font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--accent-ink) }
+  .anchor .cap { font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--faint) }
   .anchor .nm { display: block; margin-top: 5px; font: var(--w-med) var(--fs-lead) var(--mono); color: var(--text);
     overflow-wrap: anywhere }
   .anchor .meta { display: block; margin-top: 3px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
