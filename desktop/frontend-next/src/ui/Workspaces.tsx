@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/hub";
 import type { Adder } from "./addws";
 import { useRailQuery } from "./railsearch";
+import { useTreeKeys } from "./tree";
 import { Cross, Pencil } from "./glyphs";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
@@ -52,6 +53,10 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   // What was already sent for this session, so Enter's commit and the blur it
   // causes do not both reach the host with the same name.
   const renamed = useRef<Record<string, string>>({});
+  // The arrows belong to the tree, not to any row: which row they move to is a
+  // question about the whole list, and every row would otherwise carry the
+  // answer for all the others.
+  const treeKeys = useTreeKeys();
   const rename = (session: { path: string; title?: string; name: string }, raw: string) => {
     const next = raw.trim();
     const was = session.title || session.name;
@@ -175,7 +180,14 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
       )}
 
       <div className="scroll">
-        <div role="tree" aria-label={t("机器、工作区与会话")}>
+        <div
+          className="tree"
+          role="tree"
+          aria-label={t("机器、工作区与会话")}
+          data-action-keydown="tree.navigate"
+          ref={treeKeys.ref}
+          onKeyDown={treeKeys.onKeyDown}
+        >
           {/* This machine is the first row of the list rather than another kind of
               thing, and its add button sits where a host's does: open a folder
               on this machine. */}
@@ -183,6 +195,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
             className="machrow"
             data-here=""
             role="treeitem"
+            aria-level={1}
             aria-expanded={!shutHere}
             onClick={() => setHereShut((v) => !v)}
           >
@@ -232,6 +245,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                   <div
                     className="wsrow"
                     role="treeitem"
+                    aria-level={2}
                     aria-expanded={!shut}
                     data-open={ws.open ? "" : undefined}
                     onClick={() => onFold(ws.root, !shut)}
@@ -312,6 +326,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         data-action="session.open"
                         className="sessrow"
                         role="treeitem"
+                        aria-level={3}
                         aria-selected={on}
                         data-on={on ? "" : undefined}
                         data-live={session.runtimeId ? "" : undefined}
@@ -414,6 +429,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                               key={copy.path}
                               className="sessrow sesscopy"
                               role="treeitem"
+                              aria-level={3}
                               data-busy={busy === copy.path ? "" : undefined}
                               onClick={() => void pick(ws, copy)}
                             >

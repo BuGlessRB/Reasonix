@@ -129,6 +129,9 @@ export const ACTIONS: UIAction[] = [
   // Taking back the innermost open thing: a popover, an inline form. One
   // intent, reached by pressing away and by Escape.
   { id: "layer.dismiss", kind: "navigation", target: "none", proof: "interaction" },
+  // Walking the sidebar tree. The arrows only move focus; what Enter reaches is
+  // the row's own action, so this one never writes anything itself.
+  { id: "tree.navigate", kind: "view", target: "none", proof: "interaction" },
   { id: "settings.close", kind: "navigation", target: "none", proof: "interaction" },
   { id: "pane.activate", kind: "navigation", target: "none", proof: "interaction" },
   // How this session is being read. One id across a bar button and a menu row,

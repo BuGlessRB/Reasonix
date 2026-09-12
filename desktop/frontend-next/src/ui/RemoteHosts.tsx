@@ -207,6 +207,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
               className="machrow"
               title={host.target}
               role="treeitem"
+              aria-level={1}
               aria-expanded={!folded}
               onClick={() => fold(host.name)}
             >
@@ -252,6 +253,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                       <div
                         className="wsrow rmtwsrow"
                         role="treeitem"
+                        aria-level={2}
                         aria-expanded={!folded}
                         onClick={() => fold(key)}
                       >
@@ -317,6 +319,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                                 key={session.path}
                                 className="sessrow"
                                 role="treeitem"
+                                aria-level={3}
                                 aria-selected={held?.id === active}
                                 data-on={held?.id === active ? "" : undefined}
                                 data-live={held ? "" : undefined}
@@ -354,6 +357,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                     key={rt.id}
                     className="sessrow"
                     role="treeitem"
+                    aria-level={3}
                     aria-selected={rt.id === active}
                     data-on={rt.id === active ? "" : undefined}
                     data-live=""
