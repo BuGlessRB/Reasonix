@@ -1893,7 +1893,11 @@
     transition: opacity var(--t-card) var(--ease-out);
   }
   .out-clip[data-open]::after { opacity: 0 }
+  /* 这颗按钮在裁剪框里面，而那道渐隐是裁剪框自己的 ::after —— 渐隐直到刚才
+     都是一条无效声明（它读的 --bg 从来不存在），一生效就盖在了「还有更多」
+     的唯一出口上。幕布之上，是控件该在的位置。 */
   .out-more {
+    position: relative; z-index: 1;
     margin-top: 5px; padding: 2px 7px; border: 0; border-radius: var(--r-xs); background: var(--overlay);
     font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); cursor: pointer;
   }
