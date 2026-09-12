@@ -400,6 +400,11 @@ export interface Compaction {
   coverageMissing?: number;
   // The host wrote the dropped facts in itself, because the digest did not.
   coverageBackstopped?: boolean;
+  // Which threshold sent this fold and how big it is. "Reached a threshold"
+  // is all the card can say without them, and a fold at 16% of the declared
+  // window is exactly the one that needs saying.
+  boundary?: string;
+  triggerTokens?: number;
 }
 
 export interface StreamAttempt {

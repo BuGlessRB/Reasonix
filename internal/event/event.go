@@ -394,9 +394,11 @@ type Compaction struct {
 	// otherwise indistinguishable from a clean one without reading the digest.
 	SourceTokens        int
 	ProjectionTokens    int
-	CoverageRequired    int  // changes and failures the folded region produced
-	CoverageMissing     int  // ...of those, how many the digest did not carry
-	CoverageBackstopped bool // the host wrote the dropped facts in itself
+	CoverageRequired    int    // changes and failures the folded region produced
+	CoverageMissing     int    // ...of those, how many the digest did not carry
+	CoverageBackstopped bool   // the host wrote the dropped facts in itself
+	Boundary            string // "capacity" | "economic": which threshold sent this fold
+	TriggerTokens       int    // ...and its size, so a card need not say only "a threshold"
 }
 
 // ContextMaintenance is the typed wire-safe receipt for snip/prune/noop/

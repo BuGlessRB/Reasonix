@@ -20,6 +20,7 @@ const (
 	tsVersionFile  = "desktop/frontend-next/src/port/version.ts"
 	tsModelFile    = "desktop/frontend-next/src/port/model.ts"
 	tsMcpFile      = "desktop/frontend-next/src/port/mcp.ts"
+	tsShellFile    = "desktop/frontend-next/src/port/shell.ts"
 )
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
@@ -60,6 +61,13 @@ var mirroredWireTypes = []wireMirror{
 	// attempt to bound its context — which is what its trajectory export said
 	// about the run that motivated the second boundary.
 	{"internal/eventwire/wire.go", "ContextMaintenance", tsWireFile, "ContextMaintenance"},
+	// The gauge and the two ceilings behind it. A panel that cannot read which
+	// bound fires draws a fold point at 16% of the declared window with nothing
+	// on the screen that explains it, which is what it read as.
+	{"internal/serve/context_window.go", "contextView", tsShellFile, "ContextBreakdown"},
+	// What sent one fold. Without the boundary and its size the card falls back
+	// to "a threshold was reached", and the reader supplies their own reason.
+	{"internal/eventwire/wire.go", "Compaction", tsWireFile, "Compaction"},
 	// Plan rewriting and plan advancement are told apart by three counters; a
 	// desktop that can read only some of them reads churn as work.
 	{"internal/eventwire/wire.go", "TodoProgress", tsWireFile, "TodoProgress"},

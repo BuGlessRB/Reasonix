@@ -6107,13 +6107,23 @@
   .ctxcap { margin-top: 9px }
   .ctxcap .drow .k, .ctxcap .drow .v { color: var(--ghost) }
   .ctxcapbar {
-    height: 3px; margin-top: 4px; border-radius: var(--r-md);
-    background: var(--overlay); overflow: hidden;
+    position: relative; height: 3px; margin-top: 4px; border-radius: var(--r-md);
+    background: var(--overlay);
   }
   .ctxcapbar > i {
     display: block; height: 100%; border-radius: var(--r-md);
     background: var(--faint); transition: width var(--m-panel) ;
   }
+  /* 维护点标在它所占的那段窗口上。160k 对 1M 是一道除法，没人会在读面板时做；
+     标成刻痕就不用做。探出条外，否则 3px 高的槽里根本认不出这是一个记号。
+     直角、本色，不用 accent：accent 与「模型回复」的类目色只差一点，而这根线
+     下面就是那份图例 —— 染上去，一个位置记号就被读成了第六个类目。 */
+  .ctxcapbar > b {
+    position: absolute; top: -2px; bottom: -2px; width: 1.5px; margin-left: -0.75px;
+    background: var(--text); transition: left var(--m-panel);
+  }
+  /* 归因只在维护点不自明时出现，所以它是脚注的脚注：比 .ctxnote 再轻一档。 */
+  .ctxwhy { margin: 6px 0 0; font: var(--w-reg) var(--fs-micro)/1.5 var(--ui); color: var(--ghost) }
 
   /* 常驻图例：这一块就是为构成而存在的，把构成藏到 hover 后面等于这块只剩一根条。 */
   .ctxlg { display: grid; gap: 4px }

@@ -341,6 +341,11 @@ export const EN_SETTINGS: Record<string, string> = {
   "退出登录": "Sign out",
   "忘掉中…": "Forgetting…",
   "压缩完成": "Compaction done",
+  "手动触发": "Triggered by hand",
+  "上下文达到阈值，自动触发": "Automatic: a context threshold was reached",
+  "自动触发 · 输入到达固定维护线 {n}": "Automatic · input reached the fixed maintenance line at {n}",
+  "自动触发 · 输入到达窗口容量线 {n}": "Automatic · input reached the window's capacity line at {n}",
+  "自动触发 · 输入到达 {n}": "Automatic · input reached {n}",
   "移除中…": "Removing…",
   "{err}　—— 本地功能不受影响，请稍后重试。": "{err} — nothing local is affected; try again later.",
   "已固定在 {v}，不会自动更新": "Pinned to {v}; updates will not move it",
@@ -403,8 +408,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "自定义 {n}": "Custom, {n}",
   "高级设置": "Advanced",
   "经济维护阈值": "Economic threshold",
-  "可见输入达到该大小即整理，与模型声明的窗口无关。默认 {n}。":
-    "Tidy up once visible input reaches this size, whatever window the model declares. Default {n}.",
+  "可见输入达到该大小即整理，与模型声明的窗口无关 —— 输入越大，每轮越慢。默认 {n}。":
+    "Tidy up once visible input reaches this size, whatever window the model declares — the larger the input, the slower each round. Default {n}.",
   "使用默认值": "Use the default",
   "自定义": "Custom",
   "只按模型容量保护": "Capacity guard only",

@@ -341,6 +341,11 @@ type Compaction struct {
 	CoverageMissing  int `json:"coverageMissing,omitempty"`
 	// The host completed a digest the summarizer left incomplete.
 	CoverageBackstopped bool `json:"coverageBackstopped,omitempty"`
+	// Which of the two thresholds sent this fold, and its size. A card without
+	// them can only say one was reached, which is what a fold at 16% of a
+	// declared window reads as when nothing names the boundary that fired.
+	Boundary      string `json:"boundary,omitempty"`
+	TriggerTokens int    `json:"triggerTokens,omitempty"`
 }
 
 func toWireCompaction(c event.Compaction) *Compaction {
@@ -350,6 +355,7 @@ func toWireCompaction(c event.Compaction) *Compaction {
 		SourceTokens: c.SourceTokens, ProjectionTokens: c.ProjectionTokens,
 		CoverageRequired: c.CoverageRequired, CoverageMissing: c.CoverageMissing,
 		CoverageBackstopped: c.CoverageBackstopped,
+		Boundary:            c.Boundary, TriggerTokens: c.TriggerTokens,
 	}
 }
 

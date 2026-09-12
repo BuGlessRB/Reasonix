@@ -57,6 +57,14 @@ func (a *Agent) emitContextMaintenance(r *ContextMaintenanceReceipt) {
 	}})
 }
 
+// compactionFrame stamps the boundary that sent a fold onto one frame. Every
+// emitter carries it, and four copies of the same two lookups is how one of
+// them comes to report a threshold the session is not running under.
+func (a *Agent) compactionFrame(c event.Compaction) event.Compaction {
+	c.Boundary, c.TriggerTokens = a.compactBoundary(), a.compactTrigger()
+	return c
+}
+
 // compactBoundary names the threshold that decides maintenance right now: the
 // window share, or the absolute visible-input size that does not come from it.
 func (a *Agent) compactBoundary() string {

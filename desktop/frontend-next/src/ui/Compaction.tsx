@@ -175,7 +175,7 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
             <span className="tx">
               <span className="lb">{t("经济维护阈值")}</span>
               <span className="ds">
-                {t("可见输入达到该大小即整理，与模型声明的窗口无关。默认 {n}。", { n: tokens(box.default_soft_limit) })}
+                {t("可见输入达到该大小即整理，与模型声明的窗口无关 —— 输入越大，每轮越慢。默认 {n}。", { n: tokens(box.default_soft_limit) })}
               </span>
             </span>
             <div className="seg" data-text role="group" aria-label={t("经济维护阈值")}>

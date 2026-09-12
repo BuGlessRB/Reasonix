@@ -8,6 +8,7 @@ import type { ContextBreakdown } from "../../port/port";
 // two numbers being different.
 const wide = (over: Partial<ContextBreakdown> = {}): ContextBreakdown => ({
   used: 82_000, window: 1_000_000, compact_at: 160_000,
+  boundary: "economic", capacity_at: 800_000,
   system: 20_000, tools: 12_000, user: 10_000, reply: 20_000, output: 20_000,
   ...over,
 });
@@ -52,6 +53,31 @@ describe("the context gauge's denominator", () => {
     const html = draw(wide());
     const cap = html.match(/class="ctxcapbar"[^>]*>.*?width:\s*([\d.]+)%/s)?.[1];
     expect(Number(cap)).toBeCloseTo(8.2, 1);
+  });
+});
+
+// The fold point was a bare number on a screen whose other number was twenty
+// times larger. Nothing said which of the two bounds produced it, so the reader
+// supplied the only explanation available: that the host folds for no reason.
+describe("why the fold point is where it is", () => {
+  it("marks the fold point on the window it is a fraction of", () => {
+    const html = draw(wide());
+    const notch = html.match(/class="ctxcapbar"[^>]*>.*?left:\s*([\d.]+)%/s)?.[1];
+    expect(Number(notch)).toBeCloseTo(16, 1);
+  });
+
+  it("says the bound is absolute and where the window's own line sits", () => {
+    const html = draw(wide());
+    expect(html).toContain("ctxwhy");
+    expect(html).toContain("不随窗口放大");
+    expect(html).toContain("800k");
+  });
+
+  // A fold at the window's own share explains itself; repeating it there would
+  // be a footnote on every session that never needed one.
+  it("stays silent when the window's own share is what fires", () => {
+    const html = draw(wide({ window: 200_000, compact_at: 160_000, boundary: "capacity", capacity_at: 160_000 }));
+    expect(html).not.toContain("ctxwhy");
   });
 });
 

@@ -14,7 +14,12 @@ import { Row } from "./kit";
 // and a module body runs before it — so a table built here froze five labels in
 // the source language and never followed the interface into English again. The
 // literals stay inside t() so the catalogue scanner still sees them.
-function parts(): [keyof ContextBreakdown, string, string][] {
+// The five message classes, named rather than "some key of the breakdown":
+// the type also carries the two ceilings and the boundary's name, and none of
+// those is a slice of the bar.
+type Part = "system" | "tools" | "user" | "reply" | "output";
+
+function parts(): [Part, string, string][] {
   return [
     ["system", t("系统提示"), t("基础指令、记忆、技能清单")],
     ["tools", t("工具定义"), t("发给模型的工具清单")],
@@ -186,9 +191,23 @@ export function Context({ ctx, legend = false, port, onCtx }: {
             v={<span className="ctxq">{tokens(ctx.compact_at)}<em>{percent(used / ctx.compact_at)}</em></span>}
           />
           <Row k={t("模型容量")} v={windowFigure} />
+          {/* The fold point marked on the window it is a fraction of. Read as
+              two numbers, 160k against 1M is arithmetic nobody does; read as a
+              notch this far along the bar, it is the whole answer at a glance. */}
           <div className="ctxcapbar" role="presentation">
             <i style={{ width: `${Math.min((used / ctx.window) * 100, 100)}%` }} />
+            <b style={{ left: `${Math.min((ctx.compact_at / ctx.window) * 100, 100)}%` }} />
           </div>
+          {/* Which bound is holding, said only where it is not self-evident: a
+              fold at the window's own share explains itself, and a fold at a
+              fixed size against a window twenty times larger does not. */}
+          {ctx.boundary === "economic" && ctx.capacity_at > ctx.compact_at && (
+            <p className="ctxwhy">
+              {t("维护点是固定输入量，不随窗口放大 —— 输入越大，每轮越慢。窗口那条线在 {n}。", {
+                n: tokens(ctx.capacity_at),
+              })}
+            </p>
+          )}
         </div>
       )}
       {folds && editing && field}

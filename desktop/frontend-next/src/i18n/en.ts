@@ -124,6 +124,8 @@ export const EN: Record<string, string> = {
   "自动批准": "Auto approve",
   "下次维护": "Next maintenance",
   "模型容量": "Model capacity",
+  "维护点是固定输入量，不随窗口放大 —— 输入越大，每轮越慢。窗口那条线在 {n}。":
+    "The maintenance point is a fixed input size and does not scale with the window — the larger the input, the slower each round. The window's own line is at {n}.",
   "接近维护点，模型已经被告知要收窄接下来的工作。":
     "Approaching the maintenance point; the model has been told to narrow what it takes on next.",
   "即将到达维护点，随后会自动整理上下文。":
