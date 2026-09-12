@@ -340,18 +340,22 @@
   .mi .dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5.5px; flex: none; background: var(--ghost) }
   /* Every menu answers the same question — which one is it right now — so it
      gets the rail's answer: a fill and a straight bar. A hue change on a 6px
-     dot was the whole mark in a value picker, and the eye resolves area. */
-  .mi[data-on] { background: color-mix(in srgb, var(--accent) 7%, transparent) }
+     dot was the whole mark in a value picker, and the eye resolves area.
+     The fill carries a little of the text colour rather than a hue: mixed that
+     way it steps away from hover in both schemes — darker than --float-hi in
+     light, lighter in dark — which is the only thing it has to do, and it does
+     not spend the colour that means a decision is waiting. */
+  .mi[data-on] { background: color-mix(in oklab, var(--float-hi), var(--text) 7%) }
   .mi[data-on]::before {
     content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px;
-    border-radius: 2px; background: var(--accent);
+    border-radius: 2px; background: var(--muted);
   }
-  .mi[data-on] .dot { background: var(--accent) }
+  .mi[data-on] .dot { background: var(--muted) }
   .mi .tx { min-width: 0; flex: 1 }
   .mi .lb { display: block; font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
   .mi .ds { display: block; margin-top: 2px; font: var(--w-reg) var(--fs-ui)/1.5 var(--ui); color: var(--muted) }
   .mi .rt { margin-left: auto; padding-left: 10px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); white-space: nowrap; flex: none }
-  .mi[data-on] .rt { color: var(--accent-ink) }
+  .mi[data-on] .rt { color: var(--muted) }
   .menu .div { height: 1px; margin: 5px 4px; background: var(--hair) }
   .mi.plain .lb { font-weight: var(--w-reg); color: var(--muted) }
 
@@ -394,7 +398,7 @@
      Not --accent-wash — it is mixed against --page and lands darker than
      --float, so on a dark theme the selected row would read as a hole. */
   .slashmenu .mi[data-on] {
-    background: color-mix(in srgb, var(--accent) 9%, var(--float-hi));
+    background: color-mix(in oklab, var(--float-hi), var(--text) 9%);
   }
   /* The same marker the rail draws on the workspace a pane is open in: a
      straight bar with an end of its own. An inset shadow was following the
@@ -402,7 +406,7 @@
      "this is the current row", drawn two ways. */
   .slashmenu .mi[data-on]::before {
     content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px;
-    border-radius: 2px; background: var(--accent);
+    border-radius: 2px; background: var(--muted);
   }
   /* 选中行本来就该更重，说明文字跟着提一档，正好也把它从 AA 线下拿回来。 */
   .slashmenu .mi[data-on] .ds { color: var(--text) }
@@ -3929,7 +3933,7 @@
   .mrow:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .mrow:last-child { border-bottom: 0 }
   button.mrow:hover { background: var(--overlay) }
-  .mrow[data-on] { background: var(--accent-wash); box-shadow: inset 2px 0 var(--accent) }
+  .mrow[data-on] { background: color-mix(in oklab, var(--raised), var(--text) 6%); box-shadow: inset 2px 0 var(--muted) }
   .mrow .pick {
     flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px;
     padding: 9px 12px; background: none; border: 0; text-align: left; cursor: pointer;
