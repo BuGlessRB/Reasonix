@@ -5296,15 +5296,15 @@
     background: transparent; color: var(--faint);
     transition: background var(--m-line), color var(--m-line);
   }
-  .wsadd svg {
+  .wsadd svg, .wsdel svg, .sessedit-btn svg {
     width: 13px; height: 13px; fill: none; stroke: currentColor;
-    stroke-width: 1.5; stroke-linecap: round;
+    stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
   }
   .wsadd:hover:not(:disabled) { background: var(--overlay); color: var(--text) }
   .wsadd:focus-visible, .wsdel:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
   .wsadd:disabled { opacity: .4; cursor: default }
   .wsadd[data-busy] { opacity: .5; pointer-events: none }
-  .wsdel { color: var(--ghost); font: var(--w-reg) var(--fs-lead)/1 var(--ui) }
+  .wsdel { color: var(--ghost) }
   .wsdel:hover { background: var(--overlay); color: var(--err) }
   .wscount { flex: none; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost) }
 
@@ -5367,10 +5367,12 @@
   .sessrow .wsdel, .sessrow .sessedit-btn { opacity: .45 }
   .sessrow:hover .wsdel, .sessrow:hover .sessedit-btn,
   .sessrow .wsdel:focus-visible, .sessrow .sessedit-btn:focus-visible { opacity: 1 }
+  /* 同一个盒子、同一张网格：改名和删除是一对，一个 11px 的字符配一个 15px 的
+     字符时，读起来是「删除比改名重要」。 */
   .sessedit-btn {
-    flex: none; width: 18px; height: 18px; display: grid; place-items: center;
+    flex: none; width: 20px; height: 20px; display: grid; place-items: center;
     border: 0; border-radius: var(--r-xs); background: transparent; color: var(--ghost);
-    font: var(--w-reg) var(--fs-micro)/1 var(--mono); cursor: pointer; transition: opacity var(--m-line), color var(--m-line);
+    cursor: pointer; transition: opacity var(--m-line), color var(--m-line), background var(--m-line);
   }
   .sessedit-btn:hover { color: var(--accent-ink) }
   .sessedit {

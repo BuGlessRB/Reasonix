@@ -5,6 +5,7 @@ import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { REMOTE_STEP_LABEL, REMOTE_STEPS, type RemoteHost } from "../port/remote";
 import { RemoteDirs } from "./RemoteDirs";
 import { workspacesOf } from "./Remotes";
+import { Cross } from "./glyphs";
 
 // The same ceiling the local column uses. A machine worked on for months holds
 // thousands of conversations, and drawing them all is what put 98k nodes in a
@@ -299,7 +300,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                                 void drop(host.name, ws.root);
                               }}
                             >
-                              ×
+                              <Cross />
                             </button>
                           ) : null}
                         </span>

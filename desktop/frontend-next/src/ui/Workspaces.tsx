@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/hub";
 import type { Adder } from "./addws";
 import { useRailQuery } from "./railsearch";
+import { Cross, Pencil } from "./glyphs";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -278,7 +279,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                           setConfirm(ws.root);
                         }}
                       >
-                        ×
+                        <Cross />
                       </button>
                     </span>
                   </div>
@@ -381,7 +382,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                             setEditing(session.path);
                           }}
                         >
-                          ✎
+                          <Pencil />
                         </button>
                         <button
                           className="wsdel"
@@ -392,7 +393,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                             setConfirm(session.path);
                           }}
                         >
-                          ×
+                          <Cross />
                         </button>
                       </div>
                       {open &&
@@ -428,7 +429,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                                   setConfirm(copy.path);
                                 }}
                               >
-                                ×
+                                <Cross />
                               </button>
                             </div>
                           ),
