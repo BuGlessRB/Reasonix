@@ -2491,36 +2491,18 @@
   /* 活动流刻意不是一叠卡片：一条流读的是先后。看板读的是「此刻站在哪」——
      四个互不相干的问题同屏，卡片正是把它们分开的东西。两种读法，两套版式。 */
   .tkv { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 28px; max-width: 1080px; margin: 0 auto; width: 100%; container-type: inline-size }
+  /* 一张卡就是一张卡。这里曾经每张各带一个色相（--tk-glow），指针一进就点亮
+     一道 520px 的径向渐变 —— 而卡片不是控件，指针进来并没有发生任何事；那四
+     个色相也不表示任何状态：「当前任务」和「快速操作」都摊到了琥珀。剩下的是
+     真的：里面有东西拿到焦点时，边框说一声。 */
   .tkcard {
-    --tk-glow: var(--accent);
-    position: relative; isolation: isolate;
+    position: relative;
     display: flex; flex-direction: column; gap: 10px; padding: 15px 17px;
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
     box-shadow: var(--lit), 0 12px 30px -28px rgb(0 0 0 / .5);
-    transition: border-color var(--t-card) var(--ease-out),
-                box-shadow var(--t-card) var(--ease-out);
+    transition: border-color var(--t-card) var(--ease-out);
   }
-  .tkcard::before {
-    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-    border-radius: inherit; opacity: 0;
-    background: radial-gradient(520px circle at 12% -24%,
-      color-mix(in srgb, var(--tk-glow) 12%, transparent), transparent 56%);
-    transition: opacity var(--t-card) var(--ease-out);
-  }
-  .tk-plan { --tk-glow: var(--net) }
-  .tk-traj { --tk-glow: var(--deleg) }
-  .tk-acts { --tk-glow: var(--accent) }
-  @media (hover: hover) {
-    .tkcard:hover {
-      border-color: color-mix(in srgb, var(--tk-glow) 28%, var(--border));
-      box-shadow: var(--lit), 0 18px 38px -28px color-mix(in srgb, var(--tk-glow) 34%, transparent);
-    }
-    .tkcard:hover::before { opacity: 1 }
-  }
-  .tkcard:focus-within {
-    border-color: color-mix(in srgb, var(--tk-glow) 38%, var(--border));
-    box-shadow: var(--lit), 0 0 0 3px color-mix(in srgb, var(--tk-glow) 8%, transparent);
-  }
+  .tkcard:focus-within { border-color: color-mix(in srgb, var(--focus) 38%, var(--border)) }
   .tk-h { display: flex; align-items: center; gap: 10px; font: var(--w-semi) var(--fs-ui) var(--ui); color: var(--text) }
   .tk-h .c { margin-left: auto; font: var(--w-med) var(--fs-ui) var(--mono); color: var(--faint); font-variant-numeric: tabular-nums }
   .tk-empty { margin: 0; font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--ghost) }
@@ -2537,7 +2519,14 @@
   .pill[data-tone="warn"] { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-ink) }
   .pill[data-tone="net"] i { box-shadow: 0 0 0 2px color-mix(in srgb, var(--net) 14%, transparent) }
 
-  .tk-now h2 { margin: 0; font: var(--w-semi) var(--fs-title)/1.45 var(--ui); color: var(--text); letter-spacing: var(--track-display) }
+  /* 这一段是这一页的答案（它在做什么、走到哪一步），所以它是页头而不是四张
+     等重卡片里的第一张：没有框，标题大一档，下面一条线把它和内容分开。 */
+  .tk-now {
+    display: flex; flex-direction: column; gap: 9px;
+    padding: 2px 2px 17px; border-bottom: 1px solid var(--border);
+  }
+  .tk-now .tk-h { color: var(--faint); font-weight: var(--w-med) }
+  .tk-now h2 { margin: 0; font: var(--w-semi) var(--fs-display)/1.35 var(--ui); color: var(--text); letter-spacing: var(--track-display) }
   .tk-now h2[data-empty] { font-size: var(--fs-lead); color: var(--faint); font-weight: var(--w-med); letter-spacing: 0 }
   .tk-now p { margin: 0; max-width: 68ch; font: var(--w-reg) var(--fs-ui)/1.75 var(--ui); color: var(--muted) }
   .tk-meta { display: flex; gap: 18px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
@@ -2560,12 +2549,10 @@
   .tk-plan li .tx { flex: 1; min-width: 0 }
   .tk-plan li .st { flex: none; font: var(--w-med) var(--fs-meta) var(--mono); color: var(--net) }
 
-  /* 轨迹占两栏、操作占一栏：一条实时的流比三个按钮更该拿到宽度 */
-  .tk-cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; align-items: start }
-  @container (max-width: 760px) { .tk-cols { grid-template-columns: minmax(0, 1fr) } }
-
+  /* 一条实时的流本来就该拿到整幅宽度；旁边那一栏原是三颗按钮，其中一颗和
+     这张卡标题上的入口是同一个去处。 */
   .tk-lk { margin-left: auto; border: 0; background: none; cursor: pointer; padding: 0;
-    font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--net) }
+    font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted) }
   .tk-lk:hover { text-decoration: underline }
   .tk-lk:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
 
@@ -2584,17 +2571,20 @@
   .tk-row .tx b { font-weight: var(--w-med); color: var(--text) }
   .tk-row .tx .num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--faint) }
 
+  /* 两条去处并排成页脚的一行：它们是这一页的出口，不是它的第四块内容 —— 第
+     三条原本是「查看执行轨迹」，和轨迹卡标题上那个入口去同一个地方。 */
+  .tk-acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; padding: 0 2px }
+  @container (max-width: 620px) { .tk-acts { grid-template-columns: minmax(0, 1fr) } }
   .tk-acts button {
     position: relative; display: flex; flex-direction: column; gap: 3px; text-align: left; width: 100%;
     padding: 10px 28px 10px 4px; border: 0; border-top: 1px solid var(--hair); border-radius: 0;
     background: transparent; cursor: pointer;
     transition: padding-left var(--t-line) var(--ease), background var(--t-line) var(--ease);
   }
-  .tk-acts button:last-child { border-bottom: 1px solid var(--hair) }
   .tk-acts button::after { content: "›"; position: absolute; right: 7px; top: 50%; translate: 0 -50%; color: var(--ghost); font: var(--w-reg) var(--fs-title)/1 var(--ui); transition: transform var(--t-line) var(--ease-out), color var(--t-line) var(--ease-out) }
   .tk-acts button:hover { padding-left: 8px; background: var(--overlay) }
   .tk-acts button:hover::after { color: var(--text); transform: translateX(3px) }
-  .tk-acts button:active { background: color-mix(in srgb, var(--tk-glow) 9%, var(--overlay)) }
+  .tk-acts button:active { background: var(--overlay) }
   .tk-acts button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .tk-acts button .n { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
   .tk-acts button .d { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }

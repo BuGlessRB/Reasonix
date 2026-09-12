@@ -52,7 +52,7 @@ export function Task({ goal, ask, plan, rows, t0, running, blocked, elapsed, onT
 
   return (
     <div className="tkv">
-      <section className="tkcard tk-now">
+      <section className="tk-now">
         <div className="tk-h">
           <span>{t("当前任务")}</span>
           <span className="pill" data-tone={state.tone}>
@@ -88,48 +88,41 @@ export function Task({ goal, ask, plan, rows, t0, running, blocked, elapsed, onT
         )}
       </section>
 
-      <div className="tk-cols">
-        <section className="tkcard tk-traj">
-          <div className="tk-h">
-            <span>{t("执行轨迹（实时）")}</span>
-            <button className="tk-lk" onClick={onTrajectory}>
-              {t("查看完整轨迹")}
-            </button>
+      <section className="tkcard tk-traj">
+        <div className="tk-h">
+          <span>{t("执行轨迹（实时）")}</span>
+          <button className="tk-lk" onClick={onTrajectory}>
+            {t("查看完整轨迹")}
+          </button>
+        </div>
+        {tail.length === 0 ? (
+          <p className="tk-empty">{t("尚无活动")}</p>
+        ) : (
+          <div className="tk-rows">
+            {tail.map((r) => (
+              <div className="tk-row" key={r.seq} data-c={r.kind === "model_round" ? "round" : r.tool ? categoryOf(r.tool) : "sys"}>
+                <i className="dot" aria-hidden="true" />
+                <span className="at">{t0 > 0 ? wall(t0 + r.at * 1000) : ""}</span>
+                <span className="tx">
+                  <Spans of={r.payload} />
+                </span>
+              </div>
+            ))}
           </div>
-          {tail.length === 0 ? (
-            <p className="tk-empty">{t("尚无活动")}</p>
-          ) : (
-            <div className="tk-rows">
-              {tail.map((r) => (
-                <div className="tk-row" key={r.seq} data-c={r.kind === "model_round" ? "round" : r.tool ? categoryOf(r.tool) : "sys"}>
-                  <i className="dot" aria-hidden="true" />
-                  <span className="at">{t0 > 0 ? wall(t0 + r.at * 1000) : ""}</span>
-                  <span className="tx">
-                    <Spans of={r.payload} />
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        )}
+      </section>
 
-        <section className="tkcard tk-acts">
-          <div className="tk-h">
-            <span>{t("快速操作")}</span>
-          </div>
-          <button onClick={onTrajectory}>
-            <span className="n">{t("查看执行轨迹")}</span>
-            <span className="d">{t("查看完整运行日志与步骤详情")}</span>
-          </button>
-          <button onClick={onLatest}>
-            <span className="n">{t("回到活动最新")}</span>
-            <span className="d">{t("跳回本轮正在写入的位置")}</span>
-          </button>
-          <button data-action="task.summarize-phase" onClick={onSummary}>
-            <span className="n">{t("生成阶段总结")}</span>
-            <span className="d">{t("汇总当前进度与潜在风险")}</span>
-          </button>
-        </section>
+      {/* 两条去处，不是第四张卡片。第三条曾经是「查看执行轨迹」—— 轨迹卡的
+          标题上就挂着同一个入口，一屏里两处点同一个地方。 */}
+      <div className="tk-acts">
+        <button onClick={onLatest}>
+          <span className="n">{t("回到活动最新")}</span>
+          <span className="d">{t("跳回本轮正在写入的位置")}</span>
+        </button>
+        <button data-action="task.summarize-phase" onClick={onSummary}>
+          <span className="n">{t("生成阶段总结")}</span>
+          <span className="d">{t("汇总当前进度与潜在风险")}</span>
+        </button>
       </div>
     </div>
   );
