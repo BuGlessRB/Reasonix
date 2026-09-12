@@ -2649,7 +2649,12 @@
   .acctrow .ini[data-off] { background: var(--overlay); color: var(--faint) }
   .acctrow .who { display: flex; flex-direction: column; gap: 1px; min-width: 0 }
   .acctrow .who .n { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .acctrow .who .d { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  /* 一句脚注，不是一个名字：放不下就换行，而不是把最后几个词吃掉。两行封顶，
+     再长的话这一行仍然不许把账号行顶高。 */
+  .acctrow .who .d {
+    font: var(--w-reg) var(--fs-meta)/1.45 var(--ui); color: var(--ghost);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  }
 
   /* 顶栏里唯一一直在说话的东西。窗口里判断「它还在跑吗」此前要去看输入框上
      那条运行条，而那条在设置页盖住中栏时是看不见的。 */
@@ -3322,7 +3327,10 @@
   .prefs-hd .btn { flex: none; align-self: center }
   .prefs-hd .esc { margin-left: 5px; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost) }
 
-  .prefs-body { flex: 1; display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 0 }
+  /* 224px 是照中文的名字定的：英文的「Tools and permissions」在那个宽度下要
+     138px，而一行里留给名字的只有 99.6px。加宽 16px 不能把差额补平，但它决定
+     了旁边那个值被挤到剩几个字符。 */
+  .prefs-body { flex: 1; display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 0 }
   .prefs-nav {
     display: grid; align-content: start; gap: 2px; padding: 14px 10px;
     border-right: 1px solid var(--hair); overflow: auto; background: var(--surface);
@@ -3351,7 +3359,9 @@
   /* The value gives up its width first. Chinese names fit in this column and
      English ones do not, and a row that truncates the section's own name to
      keep four characters of its value has traded the label for the footnote. */
-  .prefs-nav .nm { flex: 1; min-width: 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  /* 基准取内容宽度而不是 0：基准是 0 时这一行永远"没有溢出"，名字只是拿到剩下
+     的那点空间然后被裁掉，值那一侧从头到尾没被要求让过。 */
+  .prefs-nav .nm { flex: 1 1 auto; min-width: 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   /* A bar props up the selected row from the left. In a column of equal pills
      a fill alone gives out on one side or the other: this column lays --surface,
      and hover already spends the one step available under it. The row carries
@@ -3373,8 +3383,11 @@
   .prefs-nav button[aria-selected="true"] svg { color: var(--text); transform: scale(1.06) }
   .prefs-nav button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   /* 这一列是真信息不是装饰：ghost 在 10.5px 上对比度只有 2:1，读不出来 */
+  /* 收缩系数不是 1 而是 99：两边都可收缩时，浏览器按各自的基准等比例分摊，于是
+     名字也被削了一截 —— 上面那句「先让出宽度的是值」要成立，值得把整份收缩量
+     都吃下来。英文下「工具与权限」的名字就是这么被截掉 38px 的。 */
   .prefs-nav .nv {
-    flex: 0 1 auto; min-width: 0; max-width: 74px; overflow: hidden; text-overflow: ellipsis;
+    flex: 0 99 auto; min-width: 0; max-width: 74px; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint);
   }
   .prefs-nav button[aria-selected="true"] .nv { color: var(--muted) }

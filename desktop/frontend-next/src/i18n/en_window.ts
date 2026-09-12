@@ -29,7 +29,7 @@ export const EN_WINDOW: Record<string, string> = {
   "继续规划。": "Still planning.",
   "在下方说明需要修改的内容，规划者将据此重写该计划。": "Say what to change below and the planner rewrites the plan.",
   "主导航": "Main navigation",
-  "搜索会话 / 项目": "Search sessions and projects",
+  "搜索会话 / 项目": "Search sessions or projects",
   "没有匹配的会话": "Nothing matches",
   "清空": "Clear",
   "未登录": "Not signed in",
