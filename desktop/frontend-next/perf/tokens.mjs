@@ -21,8 +21,13 @@ const walk = (dir, ext) =>
 const css = walk(join(SRC, "styles"), ".css").map((p) => [p, readFileSync(p, "utf8")]);
 const code = [...walk(SRC, ".tsx"), ...walk(SRC, ".ts")].map((p) => readFileSync(p, "utf8")).join("\n");
 
+// 注释要先去掉。一句说明「从来没有过 --bg」的注释里就带着 `--bg:`，而这份
+// 守卫原样扫过去，于是**解释它不存在的那句话，成了它存在的证据** —— 七处
+// var(--bg) 就这么一直绿着。
+const bare = (text) => text.replace(/\/\*[\s\S]*?\*\//g, " ");
+
 const declared = new Set();
-for (const [, text] of css) for (const m of text.matchAll(/(--[\w-]+)\s*:/g)) declared.add(m[1]);
+for (const [, text] of css) for (const m of bare(text).matchAll(/(--[\w-]+)\s*:/g)) declared.add(m[1]);
 // 逐元素写进 style 的：style={{ "--x": … }} 和 setProperty("--x", …)
 for (const m of code.matchAll(/["'](--[\w-]+)["']\s*:/g)) declared.add(m[1]);
 for (const m of code.matchAll(/setProperty\(\s*["'](--[\w-]+)["']/g)) declared.add(m[1]);
@@ -30,7 +35,7 @@ for (const m of code.matchAll(/setProperty\(\s*["'](--[\w-]+)["']/g)) declared.a
 // 带兜底的 var(--x, …) 是明写的「可以没有」，只查不带兜底的那种。
 const used = [];
 for (const [path, text] of css)
-  for (const m of text.matchAll(/var\(\s*(--[\w-]+)\s*\)/g)) used.push([m[1], path]);
+  for (const m of bare(text).matchAll(/var\(\s*(--[\w-]+)\s*\)/g)) used.push([m[1], path]);
 
 console.log(`定义过的变量 ${declared.size} 个   不带兜底地被读的 ${new Set(used.map(([v]) => v)).size} 个`);
 // 一边扫成空说明路径挪了，不是「都对齐」。少了这一句，目录一改这份守卫就会

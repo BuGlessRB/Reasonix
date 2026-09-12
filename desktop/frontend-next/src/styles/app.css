@@ -1889,7 +1889,7 @@
   .out-clip[data-open] .out-body { max-height: max-content }
   .out-clip::after {
     content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 3rem; pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--bg));
+    background: linear-gradient(to bottom, transparent, var(--face-sunk));
     transition: opacity var(--t-card) var(--ease-out);
   }
   .out-clip[data-open]::after { opacity: 0 }
@@ -4747,7 +4747,7 @@
      carries the initial, so the bar states a fact instead of asking for one. */
   .acct-btn .ini {
     display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%;
-    background: var(--accent); color: var(--bg); font: var(--w-semi) var(--fs-micro) var(--ui); letter-spacing: 0;
+    background: var(--accent); color: var(--accent-fg); font: var(--w-semi) var(--fs-micro) var(--ui); letter-spacing: 0;
   }
   .acct-btn[data-on] { color: var(--text) }
 
@@ -5459,7 +5459,7 @@
   .askcard input {
     width: 100%; padding: 7px 10px; box-sizing: border-box;
     border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--bg); color: var(--text); font: var(--w-reg) var(--fs-ui) var(--mono);
+    background: var(--surface); color: var(--text); font: var(--w-reg) var(--fs-ui) var(--mono);
   }
   .askcard input:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
   .askfacts {
@@ -5497,7 +5497,7 @@
   .pickpath input {
     flex: 1; min-width: 0; padding: 6px 9px;
     border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--bg); color: var(--text); font: var(--w-reg) var(--fs-ui) var(--mono);
+    background: var(--surface); color: var(--text); font: var(--w-reg) var(--fs-ui) var(--mono);
   }
   .pickpath input:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
   .pickup, .pickgo {
@@ -5515,7 +5515,7 @@
   .picklist {
     flex: 1; min-height: 96px; margin-top: 12px; padding: 4px;
     overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r-sm);
-    background: var(--bg);
+    background: var(--surface);
   }
   /* Dimmed rather than emptied while the far side answers: clearing the rows
      takes away the only account of where the reader is. */
@@ -5631,7 +5631,7 @@
   .rmtf input {
     flex: 1; min-width: 0; padding: 5px 8px;
     border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--bg); color: var(--text); font: var(--w-reg) var(--fs-ui) var(--mono);
+    background: var(--surface); color: var(--text); font: var(--w-reg) var(--fs-ui) var(--mono);
   }
   .rmtf input:focus-visible, .rmtf select:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
   .rmtck { gap: 8px }
@@ -5641,7 +5641,7 @@
      .prule, the same shape the sandbox's writable list uses. */
   .rmtdirs { display: grid; gap: 2px }
   .rmtdirs .sublb { font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted) }
-  .rmtdirs .prule input { background: var(--bg) }
+  .rmtdirs .prule input { background: var(--surface) }
   .rmtdirs .tag {
     flex: none; padding: 1px 6px; border-radius: var(--r-pill);
     font: var(--w-med) var(--fs-micro) var(--ui); color: var(--accent-ink);
