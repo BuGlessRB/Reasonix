@@ -2759,16 +2759,18 @@
 
   /* ── 右 ───────────────────────────────────────────────────────────── */
   .side { border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0 }
-  .side .scroll { padding: 13px 15px 24px; display: flex; flex-direction: column; gap: 12px }
+  /* 组间松、组内紧。此前块间是 12px 加一条线、块内是 9px —— 两个数字差三像素，
+     于是九个组读起来是一列等距的行，哪几行回答同一个问题要靠读才知道。空白比
+     线更会分组：线只说「这里有个边界」，间距还说了「这一边比那一边更近」。 */
+  .side .scroll { padding: 13px 15px 24px; display: flex; flex-direction: column; gap: 22px }
   .block { display: flex; flex-direction: column; gap: 10px }
-  .side .block { padding: 11px 3px 0; gap: 9px }
+  .side .block { padding: 0 3px; gap: 9px }
   .block:has(.empty) { gap: 4px }   /* 空块压一行 */
 
   /* 六组仪表。此前是九块等距堆叠、字号字重全同，读起来是一份没填完的表单：
      没有一处说明哪几行回答同一个问题，于是每次都要从头读到尾。组头是能读的
      一行字而不是一枚 10px 全大写标签 —— 「跳过五组只看这一组」得先认得出组名。 */
   .dgrp { display: flex; flex-direction: column; gap: 7px; padding: 11px 2px 0 }
-  .side .scroll > * + * { border-top: 1px solid var(--border) }
   .side .scroll > *:first-child { padding-top: 4px }
 
   /* 折叠起来的那一半。栏回答「这一趟健康吗」，诊断退到一跳之外 —— 常驻九块
@@ -6226,7 +6228,12 @@
   .ctxlg .r em { font: var(--w-reg) var(--fs-micro) var(--mono); font-style: normal; color: var(--ghost) }
   .ctxlg .r b { margin-left: auto; font: var(--w-med) var(--fs-meta) var(--mono); color: var(--text) }
 
-  /* 领栏的那一个数字比其它块大一截 —— 它是不看也会被看见的那个。 */
+  /* 领栏的那一个数字比其它块大一截 —— 它是不看也会被看见的那个。
+     此前这句话没有对应的规则：.mtop .amt 无条件吃 display 档，而姿态早就把成本
+     排到了第五位（working 姿态的头一块是上下文）。于是一栏里最大的那个数字，
+     是这一栏里最不需要盯着的那个。大字号跟着位置走，不跟着块走。 */
+  .side .scroll .mtop .amt { font-size: var(--fs-lead) }
+  .side .scroll > *:first-child .mtop .amt { font-size: var(--fs-display) }
 
   /* 成本先报数，再拆构成。一列小行表里的总额和它的分项长得一样，
      扫一眼读不出哪个是总数。
