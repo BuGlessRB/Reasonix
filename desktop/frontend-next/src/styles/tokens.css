@@ -196,7 +196,7 @@
     --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
     --accent-ink: var(--accent); --warn-ink: var(--warn);
     --ok-ink: var(--ok); --err-ink: var(--err);
-    --face-sunk: oklch(12.4% .014 255); --face-code: oklch(15.6% .015 255);
+    --face-sunk: oklch(14.2% .014 255); --face-code: oklch(16.4% .015 255);
     --float: oklch(25.5% .018 255); --float-hi: oklch(31% .020 255);
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .06),
@@ -217,7 +217,7 @@
     --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
     --accent-ink: var(--accent); --warn-ink: var(--warn);
     --ok-ink: var(--ok); --err-ink: var(--err);
-    --face-sunk: oklch(12.4% .014 255); --face-code: oklch(15.6% .015 255);
+    --face-sunk: oklch(14.2% .014 255); --face-code: oklch(16.4% .015 255);
     --float: oklch(25.5% .018 255); --float-hi: oklch(31% .020 255);
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .06),

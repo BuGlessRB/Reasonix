@@ -906,7 +906,7 @@
   .ws .where .tag { flex: none; color: var(--accent-ink) }
   .ws[data-iso="on"] .where .tag { color: var(--ok) }
 
-  .railfoot { flex: none; display: flex; gap: 14px; padding: 9px 13px 11px; border-top: 1px solid var(--hair) }
+  .railfoot { flex: none; display: flex; gap: 14px; padding: 9px 12px 11px; border-top: 1px solid var(--hair) }
   .lnk {
     border: 0; background: none; padding: 2px 0; cursor: pointer;
     color: var(--muted); font: var(--w-reg) var(--fs-meta) var(--ui); text-align: left; transition: color var(--m-line);
@@ -2337,7 +2337,10 @@
     overflow-x: hidden; overflow-y: auto;
   }
   .compose textarea::placeholder { color: var(--ghost) }
-  .fmain { display: grid; grid-template-columns: 13px minmax(0, 1fr); gap: 0 9px; align-items: start }
+  /* 你读的那一列和你写的那一列是同一列。转录把卡片正文放在离中栏左缘 42px
+     处，输入框把光标放在 37px 处 —— 5px 的错位，眼睛读不出是错位，只读出
+     「这两块东西不是一起的」。列宽由记号那一格和这道间隙定，所以调间隙。 */
+  .fmain { display: grid; grid-template-columns: 13px minmax(0, 1fr); gap: 0 14px; align-items: start }
   .prompt {
     justify-self: center; line-height: 1.6; color: var(--ghost);
     font: var(--w-semi) var(--fs-lead) var(--mono);
@@ -2346,7 +2349,7 @@
   }
   .compose:focus-within .prompt { color: var(--accent-ink); transform: translateX(2px) }
   .composeguide {
-    display: flex; align-items: center; gap: 6px 14px; min-height: 18px; margin: 7px 1px 0 22px;
+    display: flex; align-items: center; gap: 6px 14px; min-height: 18px; margin: 7px 1px 0 27px;
     color: var(--ghost); font: var(--w-reg) var(--fs-meta) var(--ui); -webkit-user-select: none; user-select: none;
   }
   .composecaps { display: inline-flex; align-items: center; gap: 12px }
@@ -2366,9 +2369,12 @@
   /* The controls are a shelf under the box, not a line of content inside it.
      Negative margins take it back out to the card's edge, which is what makes
      the hairline read as a floor rather than as a rule someone drew. */
+  /* 这一档以前直接铺 --page：深色下比输入面暗 7.9 L，浅色下暗 4.2 L —— 一个
+     台阶迈这么大，输入框就读成上下两个部件，中间那条线成了它们的缝。半档，
+     加上那条毫发线，说的还是「这是地板」。 */
   .compose .row { position: relative; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     margin: 11px -14px -10px; padding: 8px 12px;
-    background: var(--page);
+    background: color-mix(in oklab, var(--raised) 72%, var(--page));
     border-top: 1px solid var(--hair); border-radius: 0 0 var(--r-md) var(--r-md);
     -webkit-user-select: none; user-select: none }
   .compose .row .go { margin-left: auto }
@@ -2583,13 +2589,13 @@
   /* 搜索与账号：一栏的两端。中间那段是会话树，它自己滚。 */
   /* .rail > * 把每个直接子元素钉在展开宽度上，好让收起的补间不重排内容 ——
      外边距于是加在那个宽度之外，右边的 ⌘K 被推出栏外。宽度自己减掉。 */
-  .rail > .wsfind { width: calc(var(--rail-open) - 20px) }
+  .rail > .wsfind { width: calc(var(--rail-open) - 24px) }
   /* This field draws its own clear button, and the native one Chromium adds for
      type=search would stand beside it: one action, two controls. */
   .wsfind input::-webkit-search-cancel-button,
   .wsfind input::-webkit-search-decoration { -webkit-appearance: none; appearance: none }
   .wsfind {
-    display: flex; align-items: center; gap: 7px; margin: 3px 10px 10px; padding: 7px 9px;
+    display: flex; align-items: center; gap: 7px; margin: 3px 12px 10px; padding: 7px 9px;
     border: 1px solid var(--border); border-radius: var(--r-md); background: var(--raised); box-shadow: inset 0 1px 0 rgb(255 255 255 / .2);
     transition: border-color var(--t-line) var(--ease);
   }
