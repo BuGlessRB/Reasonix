@@ -242,7 +242,10 @@ func announce(w io.Writer, b *bound) error {
 // or end at once, and neither says anything about a parent.
 func parentLease(f *os.File) io.Reader {
 	st, err := f.Stat()
-	if err != nil || st.Mode()&os.ModeNamedPipe == 0 {
+	// A socket counts: Node spawns this host, and libuv gives a child's stdio a
+	// socketpair rather than a FIFO — asking only for a named pipe read that as
+	// "nobody holds me open", so no launch had a watchdog.
+	if err != nil || st.Mode()&(os.ModeNamedPipe|os.ModeSocket) == 0 {
 		return nil
 	}
 	return f
