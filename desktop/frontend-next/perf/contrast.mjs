@@ -150,7 +150,9 @@ for (const scheme of ["light", "dark"]) {
     f({ kind: "text", text: "## 一段回答\n\n带 `行内代码`、**加重**，和一条列表：\n\n- 要点一\n" });
     f({ kind: "message" });
     f({ kind: "tool_dispatch", tool: { id: "w1", name: "edit_file", args: '{"path":"a.css"}' } });
-    f({ kind: "tool_result", tool: { id: "w1", name: "edit_file", args: '{"path":"a.css"}', output: "写入完成", added: 3, removed: 1, durationMs: 120 } });
+    // contextTokens 带上那个第二读数：.cost 的第二个 span 有自己的颜色规则，
+    // 没有它这条路径上一个元素都没有，扫过去就是空的。
+    f({ kind: "tool_result", tool: { id: "w1", name: "edit_file", args: '{"path":"a.css"}', output: "写入完成", added: 3, removed: 1, durationMs: 120, contextTokens: 82 } });
     f({ kind: "tool_dispatch", tool: { id: "b1", name: "bash", args: '{"command":"go test ./..."}' } });
     f({ kind: "tool_result", tool: { id: "b1", name: "bash", args: '{"command":"go test ./..."}', err: "exit status 1", durationMs: 900 } });
     f({ kind: "approval_request", approval: { id: "a1", tool: "bash", subject: "rm -rf build && make" } });

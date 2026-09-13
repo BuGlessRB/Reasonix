@@ -991,7 +991,9 @@
   .tab:hover { color: var(--text) }
   .tab[aria-selected="true"], .tab.on { background: var(--overlay); color: var(--text) }
   .tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-  .tab .n { font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost); margin-left: 5px; font-variant-numeric: tabular-nums }
+  /* faint, not ghost: ghost is calibrated on --page, and in dark a lighter
+     surface is the harder one for light ink — the tab strip lays --surface. */
+  .tab .n { font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--faint); margin-left: 5px; font-variant-numeric: tabular-nums }
   /* 诊断入口靠右：它不是第三个目的地，是另一层。 */
   .tabs > .picker { margin-left: auto }
   .tab.more { display: inline-flex; align-items: center; gap: 5px }
@@ -1706,19 +1708,21 @@
     border-radius: var(--r-xs); color: var(--deleg); background: var(--deleg-wash);
   }
 
-  .cost { margin-left: auto; display: inline-flex; align-items: baseline; gap: 7px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none }
+  .cost { margin-left: auto; display: inline-flex; align-items: baseline; gap: 7px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none }
   /* 两个量纲不同的数此前直接并排：「64.0s 82」读起来像一个数，而后一个还没有
      任何可见的单位 —— 它是这一步留在上下文里的估算 token，只有 title 说过。
      一个中点把它们分成两件事，并且它比耗时退一档：这一步花了多久是你在等的，
      它占了多少上下文是事后才问的。 */
-  .cost > span + span { color: color-mix(in srgb, var(--ghost) 76%, transparent) }
+  /* 退一档是靠档位，不是靠透明度：ghost 已经是按 4.5:1 校准的下限，再乘 76%
+     就掉出去了（深色下实测 3.30）。三个读数于是整体上移一档，档差不变。 */
+  .cost > span + span { color: var(--ghost) }
   .cost > span + span::before {
     content: "·"; margin-right: 7px; color: var(--hair); font-variant-numeric: normal;
   }
   .cost .hit { color: var(--ok) }
   /* 还在跑的那个读数。它跟落定的时长同一个槽、同一种字，所以调用结束时数字只是
      停住，而不是凭空出现一个别处来的值。颜色比落定值实一档：它是此刻的事实。 */
-  .cost .live { color: var(--faint) }
+  .cost .live { color: var(--muted) }
   /* 墙钟也画成一段：数字要一个个读，长短是扫出来的。条右端贴着数字，所以一
      列卡的条右对齐，左端参差就是这一轮的耗时分布。 */
   .cost .took {
@@ -2124,7 +2128,10 @@
   .apv-dt { padding: 9px 12px 0; font: var(--w-reg) var(--fs-ui)/1.6 var(--mono); color: var(--muted) }
   /* 三颗按钮按后果排：永久扩权退一档，拒绝推到右端 —— 最常用的两颗不再挨着
      最重的那颗，误触的代价就不一样了。 */
-  .apv-ft .btn[data-weak] { font-size: var(--fs-micro); color: var(--ghost); background: none; border-color: var(--hair) }
+  /* --ghost is calibrated against --page, the darkest surface it lands on. This
+     card is lifted onto --float, several steps lighter, and there the weakest
+     ink stops clearing AA. One step up keeps it secondary and readable. */
+  .apv-ft .btn[data-weak] { font-size: var(--fs-micro); color: var(--faint); background: none; border-color: var(--hair) }
   .apv-ft .btn[data-weak]:hover:not(:disabled) { color: var(--muted); border-color: var(--border) }
   .apv-ft .btn[data-deny] { margin-left: auto; color: var(--err-ink, var(--err)); border-color: color-mix(in srgb, var(--err) 34%, transparent) }
   .apv-ft .btn[data-deny]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--err) 58%, transparent) }
