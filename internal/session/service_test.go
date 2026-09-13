@@ -480,6 +480,58 @@ func TestServiceExportAndDeleteAreSessionDirectoryAtomic(t *testing.T) {
 	}
 }
 
+func TestServiceImportValidatesSelfContainedContentAndPublishesAtomically(t *testing.T) {
+	sourceRoot := filepath.Join(t.TempDir(), "source", "sessions-v4")
+	source, err := NewService("source", NewFilesystemPersistence(sourceRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := source.Create(t.Context(), CreateOptions{SessionID: "portable"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(map[string]any{"message": provider.Message{ID: "large", Role: provider.RoleUser, Content: strings.Repeat("portable", 20_000)}})
+	if _, err := runtime.Session().AppendBatch(t.Context(), "large", []Event{{Kind: "message/complete", Payload: payload}}); err != nil {
+		t.Fatal(err)
+	}
+	bundle := filepath.Join(t.TempDir(), "bundle")
+	if err := source.Export(t.Context(), runtime.Ref(), bundle); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Close(t.Context(), runtime.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Dir(sourceRoot)); err != nil {
+		t.Fatal(err)
+	}
+
+	targetRoot := filepath.Join(t.TempDir(), "target", "sessions-v4")
+	target, err := NewService("target", NewFilesystemPersistence(targetRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := target.Import(t.Context(), bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := target.Query().HistoryPage(t.Context(), ref, "", 10)
+	if err != nil || len(page.Messages) != 1 || page.Messages[0].ContentRef == nil {
+		t.Fatalf("imported history = %+v, %v", page, err)
+	}
+	if _, err := target.Import(t.Context(), bundle); !errors.Is(err, ErrSessionExists) {
+		t.Fatalf("duplicate import = %v", err)
+	}
+	entries, err := os.ReadDir(targetRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".portable.import-") {
+			t.Fatalf("failed import left staging directory %q", entry.Name())
+		}
+	}
+}
+
 func TestDeleteRefusesAnOwnedSession(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions-v4")
 	persistence := NewFilesystemPersistence(root)

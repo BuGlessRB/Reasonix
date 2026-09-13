@@ -305,6 +305,75 @@ func (s *Service) Export(ctx context.Context, ref SessionRef, destination string
 	return filesystem.exportCold(ctx, ref.SessionID, destination)
 }
 
+// Import validates and atomically adopts a self-contained exported directory.
+// The archive's immutable identity is retained; importing over an existing
+// identity is refused rather than merging two histories.
+func (s *Service) Import(ctx context.Context, source string) (SessionRef, error) {
+	filesystem, ok := s.persistence.(*FilesystemPersistence)
+	if !ok {
+		return SessionRef{}, errors.New("session: persistence does not support import")
+	}
+	id, err := filesystem.importDirectory(ctx, source)
+	if err != nil {
+		return SessionRef{}, err
+	}
+	return SessionRef{HostID: s.hostID, SessionID: id}, nil
+}
+
+func (p *FilesystemPersistence) importDirectory(ctx context.Context, source string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	source = filepath.Clean(strings.TrimSpace(source))
+	if source == "." {
+		return "", errors.New("session: import source is required")
+	}
+	info, err := os.Lstat(source)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", errors.New("session: import source must be a real directory")
+	}
+	manifest, err := readManifest(filepath.Join(source, "manifest.json"))
+	if err != nil {
+		return "", fmt.Errorf("validate import manifest: %w", err)
+	}
+	if err := validateSessionID(manifest.SessionID); err != nil {
+		return "", err
+	}
+	if manifest.ContentRoot != ".content-v1" {
+		return "", errors.New("session: import is not a self-contained export")
+	}
+	if err := os.MkdirAll(p.Root, 0o700); err != nil {
+		return "", err
+	}
+	target := filepath.Join(p.Root, manifest.SessionID)
+	if _, err := os.Lstat(target); err == nil {
+		return "", fmt.Errorf("%w: %s", ErrSessionExists, manifest.SessionID)
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	staging := filepath.Join(p.Root, "."+manifest.SessionID+".import-"+randomID())
+	if err := exportDirectory(ctx, source, staging); err != nil {
+		return "", err
+	}
+	published := false
+	defer func() {
+		if !published {
+			_ = os.RemoveAll(staging)
+		}
+	}()
+	if _, err := Replay(staging, nil); err != nil {
+		return "", fmt.Errorf("validate imported events: %w", err)
+	}
+	if err := os.Rename(staging, target); err != nil {
+		return "", fmt.Errorf("publish imported session: %w", err)
+	}
+	published = true
+	return manifest.SessionID, nil
+}
+
 func (s *Service) Delete(ctx context.Context, ref SessionRef) error {
 	if err := ref.validate(s.hostID); err != nil {
 		return err

@@ -194,7 +194,7 @@ func (q *Query) ReadContent(ctx context.Context, ref SessionRef, contentRef sess
 		}
 		return nil, err
 	}
-	return sessioncontent.New(filepath.Join(filesystem.Root, ".content-v1")).ReadRange(ctx, contentRef, offset, length)
+	return contentStoreForSessionDir(filepath.Join(filesystem.Root, ref.SessionID)).ReadRange(ctx, contentRef, offset, length)
 }
 
 func ensureHistoryIndex(ctx context.Context, persistence *FilesystemPersistence, sessionID, path string) error {
