@@ -1662,6 +1662,10 @@
      line's standing, the way back to this turn) and collapses when empty. */
   .hl:empty { display: none }
   .hl .arg { font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  /* 名字和标签回答同一个问题（这是什么工具、在哪个 shell 里跑），参数回答另一
+     个（这一次做了什么）。三者此前等距 8px，读起来是并列的三样东西。 */
+  .hl .nm + .tag, .hl .nm + .who, .hl .nm + .src { margin-left: -3px }
+  .hl .arg { margin-left: 3px }
   .hl .tag { font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase; padding: 1.5px 5px; border-radius: var(--r-xs); color: var(--faint); background: var(--overlay) }
   /* 来源比工具名重要：这一步是外部服务干的，颜色跟 mcp 卡的色相一致 */
   .hl .src {
@@ -1676,6 +1680,14 @@
   }
 
   .cost { margin-left: auto; display: inline-flex; align-items: baseline; gap: 7px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none }
+  /* 两个量纲不同的数此前直接并排：「64.0s 82」读起来像一个数，而后一个还没有
+     任何可见的单位 —— 它是这一步留在上下文里的估算 token，只有 title 说过。
+     一个中点把它们分成两件事，并且它比耗时退一档：这一步花了多久是你在等的，
+     它占了多少上下文是事后才问的。 */
+  .cost > span + span { color: color-mix(in srgb, var(--ghost) 76%, transparent) }
+  .cost > span + span::before {
+    content: "·"; margin-right: 7px; color: var(--hair); font-variant-numeric: normal;
+  }
   .cost .hit { color: var(--ok) }
   /* 还在跑的那个读数。它跟落定的时长同一个槽、同一种字，所以调用结束时数字只是
      停住，而不是凭空出现一个别处来的值。颜色比落定值实一档：它是此刻的事实。 */
