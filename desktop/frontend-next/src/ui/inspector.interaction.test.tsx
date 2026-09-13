@@ -147,3 +147,25 @@ describe("which reading the rail is for", () => {
     expect(posture("idle", false)).toBe("review");
   });
 });
+
+// The task view draws the same steps at full width. Two readings of one list
+// on one screen is not two sources of truth, but it is two hands: numbered
+// with a cursor in the rail, dotted with a label in the view.
+describe("the plan does not stand twice", () => {
+  it("keeps the rail's copy while the conversation is in front", () => {
+    const { order } = draw("working");
+    expect(order()).toContain("plan");
+  });
+
+  it("stands the rail's copy down while the task view holds it", () => {
+    const { order } = draw("working", { planShownElsewhere: true });
+    expect(order()).not.toContain("plan");
+  });
+
+  it("is a question about this panel, not about the order", () => {
+    const { order } = draw("working", { planShownElsewhere: true });
+    // Everything else the posture asked for is still there, in its own place.
+    expect(order()).toContain("ctx");
+    expect(before(order(), "ctx", "cost")).toBe(true);
+  });
+});

@@ -773,6 +773,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             done={!s.running}
             posture={posture(run, blocked)}
             plan={s.plan}
+            planShownElsewhere={tab === "task"}
             wallet={wallet}
             account={accountOf(status?.modelRef)}
             onRefreshWallet={refreshWallet}

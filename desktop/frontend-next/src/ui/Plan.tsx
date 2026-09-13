@@ -15,7 +15,7 @@ function keys(steps: PlanStep[]): string[] {
   });
 }
 
-export function Plan({ steps }: { steps: PlanStep[] }) {
+export function Plan({ steps, shownElsewhere }: { steps: PlanStep[]; shownElsewhere?: boolean }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [cursor, setCursor] = useState<{ y: number; h: number } | null>(null);
   const now = steps.findIndex((s) => !s.done);
@@ -32,6 +32,11 @@ export function Plan({ steps }: { steps: PlanStep[] }) {
   // to skip on every glance. The task tab is where "there is no plan yet" is
   // an answer worth a line.
   if (steps.length === 0) return null;
+  // That same tab draws this list at full width while the rail is still up, so
+  // the plan stands twice on one screen in two different hands — numbered with
+  // a cursor here, dotted with a label there. The wide one is the reading, and
+  // the rail has other things to say with the room.
+  if (shownElsewhere) return null;
 
   const id = keys(steps);
   return (

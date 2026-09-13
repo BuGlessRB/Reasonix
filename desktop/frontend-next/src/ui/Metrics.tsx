@@ -56,6 +56,8 @@ interface Props extends Rail {
   // comes back on that same call rather than on the next poll.
   onCtx: (next: ContextBreakdown) => void;
   yolo: boolean;
+  /** The task view has the plan at full width, so the rail's copy stands down. */
+  planShownElsewhere?: boolean;
   onSettings: () => void;
   panels: ExtensionSurface[];
   // Composed views that resolved to the rail — the default place for a standing
@@ -92,6 +94,7 @@ export const Metrics = memo(function Metrics({
   ctx,
   onCtx,
   yolo,
+  planShownElsewhere,
   onSettings,
   panels,
   views,
@@ -118,7 +121,7 @@ export const Metrics = memo(function Metrics({
     context: <Context key="context" ctx={ctx} legend port={port} onCtx={onCtx} />,
     agents: <Agents key="agents" tasks={tasks} />,
     runtime: <Runtime key="runtime" rate={rate} done={done} stats={stats} />,
-    plan: <Plan key="plan" steps={plan} />,
+    plan: <Plan key="plan" steps={plan} shownElsewhere={planShownElsewhere} />,
     files: (
       <Files key="files" changes={changes} yolo={yolo} tree={tree} open={openPath}
         onOpen={tree?.repo ? openPreview : undefined} />
