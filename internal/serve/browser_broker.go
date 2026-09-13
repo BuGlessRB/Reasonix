@@ -27,6 +27,7 @@ const (
 	capabilitySessionHistory     = "session-history-v1"
 	capabilitySessionIdentityV1  = "session-identity-v1"
 	capabilitySessionOwnershipV1 = "session-ownership-v1"
+	capabilitySessionContentV1   = "session-content-v1"
 	capabilityGoalLifecycleV2    = servecontract.GoalLifecycleV2
 )
 
@@ -235,7 +236,7 @@ func (s *Server) capabilities() []string {
 		capabilitySessionHistory,
 	}
 	if identity, ok := s.ctl().(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
-		caps = append(caps, capabilitySessionIdentityV1, capabilitySessionOwnershipV1, capabilityGoalLifecycleV2)
+		caps = append(caps, capabilitySessionIdentityV1, capabilitySessionOwnershipV1, capabilitySessionContentV1, capabilityGoalLifecycleV2)
 	}
 	if s.buildOptions.BrowserExecutor != nil {
 		caps = append(caps, capabilityBrowser)
