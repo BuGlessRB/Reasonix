@@ -192,104 +192,6 @@ func TestGoalTurnOutputCannotAdvanceReplacementGoal(t *testing.T) {
 	}
 }
 
-func TestGoalContinuationNoticeCannotMoveOldInterceptIntoReplacementGoal(t *testing.T) {
-	runner := &fakeTurnRunner{}
-	session := agent.NewSession("")
-	session.Add(provider.Message{
-		Role:    provider.RoleAssistant,
-		Content: "All done.",
-	})
-	executor := agent.New(nil, tool.NewRegistry(), session, agent.Options{}, event.Discard)
-	executor.SeedTodoState([]evidence.TodoItem{{
-		Content: "unfinished work from old goal",
-		Status:  "in_progress",
-	}})
-
-	var c *Controller
-	replaced := false
-	c = newOwnedTestController(t, Options{
-		Runner:   runner,
-		Executor: executor,
-		Sink: event.FuncSink(func(e event.Event) {
-			if replaced ||
-				e.Kind != event.Notice ||
-				!strings.Contains(e.Text, goalCompleteNotice) {
-				return
-			}
-			replaced = true
-			c.SetGoal("replacement goal")
-		}),
-	})
-	c.SetGoal("old goal")
-	scopeID, _, _ := c.goals.deliveryScope()
-	rec := c.goals.newTurnRecorder(scopeID, c.goals.continuationToken())
-	if _, err := rec.RecordGoalReport(tool.GoalReport{Status: GoalStatusComplete, Reason: ""}); err != nil {
-		t.Fatal(err)
-	}
-	c.goalUsageTee.setActiveRecorder(rec)
-
-	if err := newTurnOrchestrator(c).continueGoal(
-		context.Background(),
-		c.goals.continuationToken(),
-		nil,
-	); err != nil {
-		t.Fatal(err)
-	}
-	if !replaced {
-		t.Fatal("test setup: Notice callback did not replace the active Goal")
-	}
-	if got := c.Goal(); got != "replacement goal" {
-		t.Fatalf("Goal() = %q, want replacement goal", got)
-	}
-	if len(runner.inputs) != 0 {
-		t.Fatalf("stale continuation reached runner with input %q", runner.inputs[0])
-	}
-}
-
-func TestGoalContinuationOutputCannotAdvanceReplacementGoal(t *testing.T) {
-	session := agent.NewSession("system")
-	session.Add(provider.Message{
-		Role:    provider.RoleAssistant,
-		Content: "All done.",
-	})
-	executor := agent.New(nil, tool.NewRegistry(), session, agent.Options{}, event.Discard)
-	executor.SeedTodoState([]evidence.TodoItem{{
-		Content: "unfinished work from old goal",
-		Status:  "in_progress",
-	}})
-	runner := &goalReplacingRunner{executor: executor}
-	c := newOwnedTestController(t, Options{
-		Runner:     runner,
-		Executor:   executor,
-		SessionDir: t.TempDir(),
-	})
-	runner.c = c
-	c.SetGoal("old goal")
-	scopeID, _, _ := c.goals.deliveryScope()
-	rec := c.goals.newTurnRecorder(scopeID, c.goals.continuationToken())
-	if _, err := rec.RecordGoalReport(tool.GoalReport{Status: "continue", Reason: "keep going", NextAction: "implement"}); err != nil {
-		t.Fatal(err)
-	}
-	c.goalUsageTee.setActiveRecorder(rec)
-
-	if err := newTurnOrchestrator(c).continueGoal(
-		context.Background(),
-		c.goals.continuationToken(),
-		nil,
-	); err != nil {
-		t.Fatal(err)
-	}
-	if runner.calls != 1 {
-		t.Fatalf("runner calls = %d, want 1 old-Goal continuation", runner.calls)
-	}
-	if got := c.Goal(); got != "replacement goal" {
-		t.Fatalf("Goal() = %q, want replacement Goal to remain active", got)
-	}
-	if got := c.GoalStatus(); got != GoalStatusRunning {
-		t.Fatalf("GoalStatus() = %q, want replacement Goal to remain running", got)
-	}
-}
-
 func TestTurnOrchestratorStopHookIgnoresCanceledTurnContext(t *testing.T) {
 	runCtx, cancel := context.WithCancel(context.Background())
 	var stopCalls int
@@ -330,101 +232,6 @@ type recordingSessionRunner struct {
 	raw     []string
 }
 
-type deliveryScopeErrorRunner struct {
-	scopes        []agent.DeliveryExecutionScope
-	terminalAfter int
-	// usage stands in for the billable work a real executor would report; the
-	// goal's spend budget is measured in it.
-	usage event.Sink
-}
-
-func (r *deliveryScopeErrorRunner) Run(ctx context.Context, _ string) error {
-	if scope, ok := agent.DeliveryExecutionScopeFromContext(ctx); ok {
-		r.scopes = append(r.scopes, scope)
-	}
-	if r.usage != nil {
-		r.usage.Emit(event.Event{Kind: event.Usage, UsageSource: event.UsageSourceExecutor,
-			Usage: &provider.Usage{PromptTokens: 100, CompletionTokens: 10, TotalTokens: 110, RequestCount: 1}})
-	}
-	if r.terminalAfter > 0 && len(r.scopes) >= r.terminalAfter {
-		return errors.New("external provider stop")
-	}
-	return &agent.FinalReadinessError{Attempts: 1, Reason: "missing verification", Missing: []string{"verification"}}
-}
-
-func TestGoalReadinessFailureContinuesUntilExternalStop(t *testing.T) {
-	runner := &deliveryScopeErrorRunner{terminalAfter: 3}
-	executor := agent.New(nil, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
-	c := newOwnedTestController(t, Options{Runner: runner, Executor: executor})
-	c.SetGoal("ship the integration")
-
-	err := newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "start", "start", "")
-	if err == nil || len(runner.scopes) != 1 || c.goals.active() {
-		t.Fatalf("legacy error was resumed: %v scopes=%v", err, runner.scopes)
-	}
-}
-
-type recoveryPauseRunner struct {
-	scopes []agent.DeliveryExecutionScope
-	calls  int
-}
-
-func (r *recoveryPauseRunner) Run(ctx context.Context, _ string) error {
-	r.calls++
-	if scope, ok := agent.DeliveryExecutionScopeFromContext(ctx); ok {
-		r.scopes = append(r.scopes, scope)
-	}
-	return &agent.RecoveryPauseError{
-		Message:    "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send \"continue\" to start a fresh attempt, or add instructions to change direction.",
-		StopReason: "episode_failures",
-	}
-}
-
-func TestRecoveryPauseKeepsGoalRunningAndDeliveryScope(t *testing.T) {
-	runner := &recoveryPauseRunner{}
-	c := newOwnedTestController(t, Options{Runner: runner})
-	c.SetGoal("ship the integration")
-	if id, task, ok := c.goals.deliveryScope(); !ok || task != "ship the integration" {
-		t.Fatalf("initial scope = (%q, %q, %v)", id, task, ok)
-	}
-	scopeID, _, _ := c.goals.deliveryScope()
-
-	err := newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "start", "start", "")
-	var pause *agent.RecoveryPauseError
-	if !errors.As(err, &pause) {
-		t.Fatalf("run err = %v, want RecoveryPauseError", err)
-	}
-	// Recovery pause ends auto-continue only; Goal must stay running so the next
-	// ordinary "continue" keeps the same Goal prompt and delivery scope.
-	if got := c.GoalStatus(); got != GoalStatusStopped {
-		t.Fatalf("GoalStatus = %q, want running after recovery pause", got)
-	}
-	if id, task, ok := c.goals.deliveryScope(); ok {
-		t.Fatalf("scope after pause = (%q, %q, %v), want preserved running Goal", id, task, ok)
-	}
-	if len(runner.scopes) != 1 || runner.scopes[0].ID != scopeID {
-		t.Fatalf("delivery scopes = %+v, want one call with scope %q", runner.scopes, scopeID)
-	}
-
-	if !c.ResumeGoal() {
-		t.Fatal("explicit resume failed")
-	}
-	// A follow-up ordinary Goal turn reuses the same delivery scope without ResumeGoal.
-	err = newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "continue", "continue", "")
-	if !errors.As(err, &pause) {
-		t.Fatalf("follow-up err = %v, want RecoveryPauseError again", err)
-	}
-	if got := c.GoalStatus(); got != GoalStatusStopped {
-		t.Fatalf("GoalStatus after continue = %q, want running", got)
-	}
-	if id, task, ok := c.goals.deliveryScope(); ok {
-		t.Fatalf("scope after continue = (%q, %q, %v), want same Goal", id, task, ok)
-	}
-	if runner.calls != 2 || len(runner.scopes) != 2 || runner.scopes[1].ID != scopeID {
-		t.Fatalf("follow-up scopes = %+v calls=%d, want same delivery scope reused", runner.scopes, runner.calls)
-	}
-}
-
 func (r *recordingSessionRunner) Run(ctx context.Context, input string) error {
 	r.inputs = append(r.inputs, input)
 	r.raw = append(r.raw, agent.RawUserInput(ctx, input))
@@ -432,7 +239,7 @@ func (r *recordingSessionRunner) Run(ctx context.Context, input string) error {
 	return nil
 }
 
-func TestTurnOrchestratorGoalContinuationRunsStopPerUnit(t *testing.T) {
+func TestTurnOrchestratorRunsOneGoalTurnPerAdmission(t *testing.T) {
 	prov := &scriptedTurns{turns: flattenTurns(
 		goalToolTurn(GoalStatusRunning, "started", "next"),
 		goalToolTurn(GoalStatusComplete, "", ""),
@@ -461,11 +268,11 @@ func TestTurnOrchestratorGoalContinuationRunsStopPerUnit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if prov.call != 4 {
-		t.Fatalf("provider calls = %d, want initial + continuation (report + final answer each)", prov.call)
+	if prov.call != 2 {
+		t.Fatalf("provider calls = %d, want one admitted turn (tool call + final answer)", prov.call)
 	}
-	if stopEvents != 2 {
-		t.Fatalf("Stop hook events = %d, want one per goal-loop turn unit", stopEvents)
+	if stopEvents != 1 {
+		t.Fatalf("Stop hook events = %d, want one per admitted turn", stopEvents)
 	}
 }
 
@@ -1098,7 +905,9 @@ func TestResumeClearsStaleSyntheticInFlightTurn(t *testing.T) {
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "ship it"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "Started.\n\n[goal:continue]"})
 	start := len(sess.Messages)
-	sess.Add(provider.Message{Role: provider.RoleUser, Content: goalContinueTurn})
+	// Historical synthetic continuation prompt: retained only as imported test
+	// data so resume can remove an abandoned pre-driver turn.
+	sess.Add(provider.Message{Role: provider.RoleUser, Content: "Continue pursuing the active goal. Do the next useful work and report your judgment with update_goal: continue (give the next concrete step), complete (you judge the goal finished), or blocked (explain why you cannot continue). Keep execution results and any verification limitations accurate."})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "hidden continuation partial"})
 	if err := sess.Save(path); err != nil {
 		t.Fatal(err)
