@@ -29,6 +29,7 @@ export type Port = {
   editProvider(edit: ProviderEdit): Promise<void>;
   setProviderWebSearch(name: string, on: boolean): Promise<void>;
   setProviderThinking(name: string, on: boolean): Promise<void>;
+  setProviderContinuation(name: string, mode: string): Promise<void>;
 };
 
 // One account: every configured entry that answers on the same host.
@@ -138,6 +139,21 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
   );
 }
 
+// How a turn's context reaches the next one. Auto is vendor detection, which is
+// the only honest answer for an endpoint nobody has characterised; the other two
+// are what a reader picks when the endpoint has already contradicted it.
+const CONTINUATIONS: ReadonlyArray<readonly [string, string]> = [
+  ["", "自动"],
+  ["stateful", "引用上一轮"],
+  ["stateless", "每轮完整发送"],
+];
+
+const CONTINUATION_WHY: Record<string, string> = {
+  "": "按端点厂商判断。中转站若回报 previous_response_id 不受支持，改为「每轮完整发送」。",
+  stateful: "只发送新的一轮，历史由端点自己保存 —— 前缀缓存命中率最高，但要求端点真的存了。",
+  stateless: "每轮重发完整历史。中转站只转发、不保存状态时用这一档。",
+};
+
 // One account. The protocol is a switch on it rather than a fact on a row,
 // because both entries are the same key at the same host; 测一下 is what turns
 // "which protocol did we record" back into a finding when the endpoint moved.
@@ -178,6 +194,19 @@ function Conn({
     onFailed("");
     try {
       await port.setProviderThinking(entry.name, on);
+      onEdited();
+    } catch (e) {
+      onFailed(reason(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const setContinuation = async (mode: string) => {
+    setBusy(`continuation:${entry.name}`);
+    onFailed("");
+    try {
+      await port.setProviderContinuation(entry.name, mode);
       onEdited();
     } catch (e) {
       onFailed(reason(e));
@@ -279,6 +308,21 @@ function Conn({
           <span className="why">
             {t(entry.sendsThinking === false ? "只发送常规聊天参数，不再指定思考深度；模型自身的推理行为不受影响。" : "部分中转站不支持 thinking 字段，会拒绝整个请求。遇到这种情况请切换为「不发送」。")}
           </span>
+        </div>
+      )}
+      {entry.canSetContinuation && (
+        <div className="vway">
+          <span className="lb">{t("上下文续接")}</span>
+          <div className="seg" role="group" aria-label={t("{name} 的上下文续接方式", { name: a.label })}>
+            {CONTINUATIONS.map(([mode, label]) => (
+              <button key={mode} data-action="provider.continuation" data-target={entry.name} data-value={mode}
+                aria-pressed={(entry.continuation ?? "") === mode} disabled={busy !== ""}
+                onClick={() => setContinuation(mode)}>
+                {t(label)}
+              </button>
+            ))}
+          </div>
+          <span className="why">{t(CONTINUATION_WHY[entry.continuation ?? ""] ?? CONTINUATION_WHY[""])}</span>
         </div>
       )}
       {editing && (

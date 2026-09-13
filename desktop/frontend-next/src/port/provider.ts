@@ -27,6 +27,11 @@ export interface ProviderEntry {
   // where a relay can actually reject the request over it.
   canSetThinking?: boolean;
   sendsThinking?: boolean;
+  // How this endpoint carries context between turns, and whether its protocol
+  // has the choice at all. "" is vendor detection, which is what an endpoint
+  // nobody has characterised keeps doing.
+  canSetContinuation?: boolean;
+  continuation?: string;
   // Which request shape this endpoint controls thinking with, as declared.
   // Absent is "nobody said", which is why a relay's effort ladder comes out
   // empty — nothing can be probed for it.

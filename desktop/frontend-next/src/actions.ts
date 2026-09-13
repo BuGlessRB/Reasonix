@@ -260,6 +260,7 @@ export const ACTIONS: UIAction[] = [
   { id: "provider.protocol", kind: "kernel-mutation", target: "entity", proof: "interaction" },
   { id: "provider.web-search", kind: "kernel-mutation", target: "entity", proof: "interaction" },
   { id: "provider.thinking", kind: "kernel-mutation", target: "entity", proof: "interaction" },
+  { id: "provider.continuation", kind: "kernel-mutation", target: "entity", proof: "interaction" },
 
   // ── The two side panels. Reached from the keyboard here, and from each
   //    gutter's own grip, which this pass has not annotated yet.

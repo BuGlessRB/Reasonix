@@ -243,6 +243,46 @@ func (s *Server) setProviderThinking(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// setProviderContinuation pins how this endpoint carries context between turns.
+// A relay may answer the Responses protocol without storing any, and it rejects
+// the reference rather than ignoring it — so every turn after the first fails
+// until this is stateless. Declared rather than probed: a retry that happens to
+// succeed says nothing about why the first attempt did not.
+func (s *Server) setProviderContinuation(w http.ResponseWriter, r *http.Request) {
+	if !s.grants.providerEdit {
+		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+		Mode string `json:"mode"`
+	}
+	if !decodeProviderBody(w, r, &body) {
+		return
+	}
+	mode, ok := config.ParseContinuation(body.Mode)
+	if !ok {
+		badValue(w, "mode", string(config.ContinuationAuto), string(config.ContinuationStateful), string(config.ContinuationStateless))
+		return
+	}
+	edit := config.LoadForEdit(config.UserConfigPath())
+	entry, found := edit.Provider(strings.TrimSpace(body.Name))
+	if !found {
+		notFound(w, "provider", body.Name)
+		return
+	}
+	if !config.CanConfigureContinuation(entry) {
+		refuse(w, http.StatusBadRequest, "provider.no_continuation", "this protocol carries no stored state between turns", nil)
+		return
+	}
+	config.SetContinuation(entry, mode)
+	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // setProviderWebSearch records the tri-state for the endpoint-executed search
 // tool. It is a real per-entry choice, unlike the protocol: the wire format is
 // what makes it available, and this only says whether to use it.

@@ -39,6 +39,7 @@ const SAID: Record<string, string> = {
 
   // ── 来源：这个协议做不到 ─────────────────────────────────────────
   "provider.no_thinking_param": "该协议不发送思考参数，启用后不会生效",
+  "provider.no_continuation": "该协议在轮次之间不保留状态，无需选择续接方式",
   "request.bad_body": "无法解析本次请求的内容，请刷新页面后重试",
   "request.missing_field": "缺少「{field}」",
   "request.not_found": "找不到名为「{name}」的{kind}",

@@ -32,6 +32,11 @@ export class SseProvider extends SseBoundary {
   setProviderThinking(name: string, on: boolean) {
     return this.post("/providers/thinking", { name, on });
   }
+
+  setProviderContinuation(name: string, mode: string) {
+    return this.post("/providers/continuation", { name, mode });
+  }
+
   editProvider(edit: ProviderEdit) {
     return this.post("/providers/edit", edit);
   }

@@ -189,6 +189,17 @@ export const EN_SETTINGS: Record<string, string> = {
     "How this endpoint expresses thinking depth. It cannot be probed: a relay forwards someone else's model, and only you know what is behind it. Choosing one enables the reasoning level; choosing wrong makes the endpoint reject the request.",
   "自动 · 按模型和地址推断": "Auto · inferred from the model and address",
   "不发思考参数": "Send no thinking parameter",
+  "上下文续接": "Carrying context",
+  "{name} 的上下文续接方式": "How {name} carries context between turns",
+  "引用上一轮": "By reference",
+  "每轮完整发送": "Replay each turn",
+  "按端点厂商判断。中转站若回报 previous_response_id 不受支持，改为「每轮完整发送」。":
+    "Decided by the endpoint's vendor. If a relay reports that previous_response_id is unsupported, switch to Replay each turn.",
+  "只发送新的一轮，历史由端点自己保存 —— 前缀缓存命中率最高，但要求端点真的存了。":
+    "Sends only the new turn and lets the endpoint hold the history — the best prefix-cache hit rate, and it requires that the endpoint really stored it.",
+  "每轮重发完整历史。中转站只转发、不保存状态时用这一档。":
+    "Replays the whole history every turn. Use this where a relay forwards requests without storing any state.",
+
   "额外请求头": "Extra request headers",
   "每行一个「名称: 值」。中转站通常用它识别站点；密钥仍填写在上方。": "One name: value per line. Relays often use these to identify the site; the key still goes in the field above.",
   "额外请求体": "Extra request body",

@@ -35,6 +35,14 @@ export class MockProvider extends MockBoundary {
       hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_API_KEY",
       visionModels: ["gpt-4o"], canSetVision: true,
     },
+    // The Responses wire is the one that can carry a turn by reference, so it
+    // is the only entry here offering the choice.
+    {
+      name: "myrelay-responses", kind: "responses", baseUrl: "https://relay.example.com/v1",
+      models: ["gpt-4o"], default: "gpt-4o",
+      hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_API_KEY",
+      canSetContinuation: true, continuation: "",
+    },
     {
       name: "myrelay-work", kind: "openai", baseUrl: "https://relay.example.com/v1",
       models: ["gpt-4o"], default: "gpt-4o",
@@ -91,6 +99,10 @@ export class MockProvider extends MockBoundary {
 
   async setProviderWebSearch(name: string, on: boolean): Promise<void> {
     this.sources = this.sources.map((p) => (p.name === name ? { ...p, webSearch: on } : p));
+  }
+
+  async setProviderContinuation(name: string, mode: string): Promise<void> {
+    this.sources = this.sources.map((p) => (p.name === name ? { ...p, continuation: mode } : p));
   }
 
   async setProviderThinking(name: string, on: boolean): Promise<void> {

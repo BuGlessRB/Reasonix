@@ -94,6 +94,7 @@ export const EN_KERNEL: Record<string, string> = {
   "请至少选择一个模型": "Pick at least one model",
   "默认模型「{model}」不在已选择的模型中": "The default model “{model}” is not among the ones you picked",
   "该协议不发送思考参数，启用后不会生效": "This protocol never sends thinking parameters — turning it on does nothing",
+  "该协议在轮次之间不保留状态，无需选择续接方式": "This protocol keeps no state between turns, so there is nothing to choose",
   "该协议不支持由端点自行搜索": "This protocol has no wire format for a search the endpoint runs itself",
   "这台服务器不允许修改模型来源": "This server does not allow editing model sources",
   "请填写 API key": "An API key is required",

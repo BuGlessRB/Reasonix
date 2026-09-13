@@ -249,6 +249,7 @@ export interface AgentPort {
   editProvider(edit: ProviderEdit): Promise<void>;
   setProviderWebSearch(name: string, on: boolean): Promise<void>;
   setProviderThinking(name: string, on: boolean): Promise<void>;
+  setProviderContinuation(name: string, mode: string): Promise<void>;
 
   // Whether the opening sequence still owes this machine a showing, and the
   // acknowledgement that closes it out.

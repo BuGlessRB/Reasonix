@@ -40,6 +40,7 @@ func (s *Server) registerProviderRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /providers/edit", s.editProvider)
 	mux.HandleFunc("POST /providers/websearch", s.setProviderWebSearch)
 	mux.HandleFunc("POST /providers/thinking", s.setProviderThinking)
+	mux.HandleFunc("POST /providers/continuation", s.setProviderContinuation)
 	s.registerProviderCheckRoutes(mux)
 }
 
@@ -74,10 +75,15 @@ type providerView struct {
 	// SendsThinking is whether thinking/reasoning_effort may go on the wire.
 	// CanSetThinking is false where the protocol never carries them, so the UI
 	// offers the switch only where a gateway can actually reject the request.
-	CanSetThinking bool   `json:"canSetThinking"`
-	SendsThinking  bool   `json:"sendsThinking"`
-	Default        string `json:"default"`
-	HasKey         bool   `json:"hasKey"`
+	CanSetThinking bool `json:"canSetThinking"`
+	SendsThinking  bool `json:"sendsThinking"`
+	// Continuation is how this endpoint carries context between turns, and
+	// CanSetContinuation whether its protocol has the choice at all. Empty is
+	// vendor detection, which is what an uncharacterised endpoint must keep.
+	CanSetContinuation bool   `json:"canSetContinuation"`
+	Continuation       string `json:"continuation"`
+	Default            string `json:"default"`
+	HasKey             bool   `json:"hasKey"`
 	// KeyEnv names the credential slot. Two entries at one host holding
 	// different keys are two accounts and must not be shown as one.
 	KeyEnv string `json:"keyEnv,omitempty"`
@@ -110,26 +116,28 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 		p := &cfg.Providers[i]
 		settable := visionSettableOf(cfg, p)
 		out = append(out, providerView{
-			Name:              p.Name,
-			Kind:              strings.ToLower(strings.TrimSpace(p.Kind)),
-			BaseURL:           p.BaseURL,
-			Models:            nonNilStrings(p.ChatModelList()),
-			VisionModels:      nonNilStrings(visionModelsOf(cfg, p)),
-			CanSetVision:      len(settable) > 0 || config.CanConfigureVision(p),
-			VisionSettable:    nonNilStrings(settable),
-			CanWebSearch:      config.HasServerWebSearchCapability(p),
-			WebSearch:         config.EffectiveWebSearch(p),
-			CanSetThinking:    config.CanConfigureThinkingParams(p),
-			SendsThinking:     config.SendsThinkingParams(p),
-			Default:           p.DefaultModel(),
-			HasKey:            p.APIKey() != "",
-			KeyEnv:            p.APIKeyEnv,
-			InUse:             p.Name == current,
-			Preset:            strings.TrimSpace(p.PresetID) != "",
-			ReasoningProtocol: strings.ToLower(strings.TrimSpace(p.ReasoningProtocol)),
-			ContextWindow:     p.ContextWindow,
-			Headers:           p.Headers,
-			ExtraBody:         p.ExtraBody,
+			Name:               p.Name,
+			Kind:               strings.ToLower(strings.TrimSpace(p.Kind)),
+			BaseURL:            p.BaseURL,
+			Models:             nonNilStrings(p.ChatModelList()),
+			VisionModels:       nonNilStrings(visionModelsOf(cfg, p)),
+			CanSetVision:       len(settable) > 0 || config.CanConfigureVision(p),
+			VisionSettable:     nonNilStrings(settable),
+			CanWebSearch:       config.HasServerWebSearchCapability(p),
+			WebSearch:          config.EffectiveWebSearch(p),
+			CanSetThinking:     config.CanConfigureThinkingParams(p),
+			SendsThinking:      config.SendsThinkingParams(p),
+			CanSetContinuation: config.CanConfigureContinuation(p),
+			Continuation:       string(config.ContinuationOf(p)),
+			Default:            p.DefaultModel(),
+			HasKey:             p.APIKey() != "",
+			KeyEnv:             p.APIKeyEnv,
+			InUse:              p.Name == current,
+			Preset:             strings.TrimSpace(p.PresetID) != "",
+			ReasoningProtocol:  strings.ToLower(strings.TrimSpace(p.ReasoningProtocol)),
+			ContextWindow:      p.ContextWindow,
+			Headers:            p.Headers,
+			ExtraBody:          p.ExtraBody,
 		})
 	}
 	writeJSON(w, out)
