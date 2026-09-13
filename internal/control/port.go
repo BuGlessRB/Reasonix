@@ -51,12 +51,12 @@ type Lifecycle interface {
 // commands must use this surface instead of manufacturing transcript paths.
 type IdentityLifecycle interface {
 	SessionRef() (session.SessionRef, bool)
-	SessionV3Service() *session.Service
-	UsesExclusiveSessionV3() bool
-	BindFreshV3(context.Context, string) (session.SessionRef, error)
-	OpenV3(context.Context, session.SessionRef) (session.SessionRef, error)
-	ContinueLegacyV3(context.Context, string, string) (session.SessionRef, error)
-	ContinuePrototypeV3(context.Context, string) (session.SessionRef, error)
+	SessionService() *session.Service
+	UsesExclusiveSession() bool
+	BindFreshSession(context.Context, string) (session.SessionRef, error)
+	OpenSession(context.Context, session.SessionRef) (session.SessionRef, error)
+	ContinueLegacySession(context.Context, string, string) (session.SessionRef, error)
+	ContinuePrototypeSession(context.Context, string) (session.SessionRef, error)
 }
 
 // TurnControl covers driving a model turn and observing its run state: the

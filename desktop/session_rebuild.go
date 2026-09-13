@@ -8,19 +8,19 @@ import (
 	"reasonix/internal/session"
 )
 
-// sessionV3Binding is intentionally smaller than the public desktop control
+// sessionBinding is intentionally smaller than the public desktop control
 // surface. It lets rebuild code preserve the exact host-owned Runtime without
 // making legacy test controllers implement the final identity API.
-type sessionV3Binding interface {
-	SessionV3Binding() (*session.Service, *session.Runtime, bool)
+type persistedSessionBinding interface {
+	SessionBinding() (*session.Service, *session.Runtime, bool)
 }
 
-func exclusiveV3Binding(ctrl control.SessionAPI) (*session.Service, *session.Runtime, bool) {
-	bound, ok := ctrl.(sessionV3Binding)
+func exclusiveSessionBinding(ctrl control.SessionAPI) (*session.Service, *session.Runtime, bool) {
+	bound, ok := ctrl.(persistedSessionBinding)
 	if !ok || bound == nil {
 		return nil, nil, false
 	}
-	service, runtime, exclusive := bound.SessionV3Binding()
+	service, runtime, exclusive := bound.SessionBinding()
 	return service, runtime, exclusive && service != nil && runtime != nil
 }
 
@@ -54,8 +54,8 @@ func retireReplacedController(old, replacement control.SessionAPI) {
 	if old == nil || old == replacement {
 		return
 	}
-	_, oldRuntime, oldExclusive := exclusiveV3Binding(old)
-	_, newRuntime, newExclusive := exclusiveV3Binding(replacement)
+	_, oldRuntime, oldExclusive := exclusiveSessionBinding(old)
+	_, newRuntime, newExclusive := exclusiveSessionBinding(replacement)
 	if oldExclusive && newExclusive && oldRuntime == newRuntime {
 		if concrete, ok := old.(*control.Controller); ok {
 			concrete.ReleaseResources()
@@ -69,8 +69,8 @@ func discardReplacementController(candidate, current control.SessionAPI) {
 	if candidate == nil || candidate == current {
 		return
 	}
-	_, candidateRuntime, candidateExclusive := exclusiveV3Binding(candidate)
-	_, currentRuntime, currentExclusive := exclusiveV3Binding(current)
+	_, candidateRuntime, candidateExclusive := exclusiveSessionBinding(candidate)
+	_, currentRuntime, currentExclusive := exclusiveSessionBinding(current)
 	if candidateExclusive && currentExclusive && candidateRuntime == currentRuntime {
 		if concrete, ok := candidate.(*control.Controller); ok {
 			concrete.ReleaseResources()

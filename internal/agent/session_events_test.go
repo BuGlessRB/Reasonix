@@ -616,6 +616,29 @@ func TestEventLogCompactionBoundsGrowth(t *testing.T) {
 	}
 }
 
+func TestMigrationLoadRejectsDamagedAuthoritativeLog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	s := NewSession("sys")
+	s.Add(provider.Message{Role: provider.RoleUser, Content: "checkpoint"})
+	if err := s.SaveSnapshot(path); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(SessionEventLogPath(path), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString("{not-json}\n"); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSessionForMigration(t.Context(), path); !errors.Is(err, ErrSessionHistoryDamaged) {
+		t.Fatalf("migration error = %v, want ErrSessionHistoryDamaged", err)
+	}
+}
+
 func TestConcurrentLoadDuringAppendsStaysConsistent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "session.jsonl")
 	s := NewSession("sys")

@@ -23,7 +23,7 @@ func TestGoalDiagnosticsHTTPExportsAuthoritativeSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
-	ctrl := control.New(control.Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
+	ctrl := control.New(control.Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	t.Cleanup(ctrl.Close)
 	server := &Server{ctrl: ctrl}
 	recorder := httptest.NewRecorder()

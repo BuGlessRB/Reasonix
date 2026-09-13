@@ -126,7 +126,7 @@ func (c *Controller) ensureWriteAuthorityReady() error {
 			if service == nil {
 				return session.ErrSessionNotRunning
 			}
-			if _, err := c.BindFreshV3(context.Background(), ""); err != nil {
+			if _, err := c.BindFreshSession(context.Background(), ""); err != nil {
 				return err
 			}
 			_, runtime, _ = c.v3Binding()

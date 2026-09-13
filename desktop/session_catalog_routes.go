@@ -8,7 +8,7 @@ import (
 	"reasonix/internal/session"
 )
 
-func sessionV3Route(id string) string {
+func sessionRoute(id string) string {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return ""
@@ -16,18 +16,18 @@ func sessionV3Route(id string) string {
 	return remoteSessionIDRoutePrefix + id
 }
 
-func parseSessionV3Route(route string) (string, bool) {
+func parseSessionRoute(route string) (string, bool) {
 	id, ok := strings.CutPrefix(strings.TrimSpace(route), remoteSessionIDRoutePrefix)
 	id = strings.TrimSpace(id)
 	return id, ok && id != ""
 }
 
-func (a *App) listV3SessionsFromDir(dir, active string) []SessionMeta {
+func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
 	service := a.desktopSessionService(dir)
 	if service == nil {
 		return []SessionMeta{}
 	}
-	activeID, _ := parseSessionV3Route(active)
+	activeID, _ := parseSessionRoute(active)
 	query := service.Query()
 	result := make([]SessionMeta, 0)
 	cursor := ""
@@ -38,7 +38,7 @@ func (a *App) listV3SessionsFromDir(dir, active string) []SessionMeta {
 		}
 		for _, info := range page.Sessions {
 			meta := SessionMeta{
-				Path: sessionV3Route(info.SessionID), SessionID: info.SessionID,
+				Path: sessionRoute(info.SessionID), SessionID: info.SessionID,
 				HostID: service.HostID(), Codec: info.Codec, Error: info.Error,
 				Title: info.Title, Turns: info.Turns, TurnsState: "valid",
 				CreatedAt: info.CreatedAt.UnixMilli(), LastActivityAt: info.UpdatedAt.UnixMilli(),
@@ -64,7 +64,7 @@ func (a *App) listV3SessionsFromDir(dir, active string) []SessionMeta {
 }
 
 func sessionRefForRoute(service *session.Service, route string) (session.SessionRef, bool) {
-	id, ok := parseSessionV3Route(route)
+	id, ok := parseSessionRoute(route)
 	if !ok || service == nil {
 		return session.SessionRef{}, false
 	}

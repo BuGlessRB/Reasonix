@@ -63,7 +63,7 @@ func TestContinueImportedResolvesPairedHistoryStructurally(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetRoot := filepath.Join(root, "sessions-v3")
+	targetRoot := filepath.Join(root, "sessions-v4")
 	previewDir := filepath.Join(targetRoot, agent.BranchID(legacyPath))
 	writePrototypeStore(t, previewDir, []Event{{Kind: "context/replace", Payload: payload}}, "")
 
@@ -92,7 +92,7 @@ func TestContinueImportedRefusesDivergentPairedHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetRoot := filepath.Join(root, "sessions-v3")
+	targetRoot := filepath.Join(root, "sessions-v4")
 	writePrototypeStore(t, filepath.Join(targetRoot, agent.BranchID(legacyPath)), []Event{{Kind: "context/replace", Payload: payload}}, "")
 	if _, err := importSourceForLegacy(t.Context(), legacyPath, targetRoot, ""); !errors.Is(err, ErrImportConflict) {
 		t.Fatalf("conflicting import = %v", err)
@@ -148,7 +148,7 @@ func TestContinueImportedPublishesOnlyTheSelectedSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetRoot := filepath.Join(root, "sessions-v3")
+	targetRoot := filepath.Join(root, "sessions-v4")
 	writePrototypeStore(t, filepath.Join(targetRoot, agent.BranchID(legacyPath)), []Event{{Kind: "context/replace", Payload: payload}}, "")
 	result, err := importSourceForLegacy(t.Context(), legacyPath, targetRoot, "")
 	if err != nil {
@@ -208,7 +208,7 @@ func TestPreviewFreezeRefusesExactWriterOwnership(t *testing.T) {
 }
 
 func TestContinueStoredPreviewUpgradesLinearV3ToFinalCodec(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	oldDir := filepath.Join(root, "old-linear")
 	store, err := CreateStore(oldDir, "old-linear")
 	if err != nil {

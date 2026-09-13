@@ -587,7 +587,7 @@ func setTabSessionIdentity(tab *WorkspaceTab, identity string) {
 	if tab == nil {
 		return
 	}
-	if id, ok := parseSessionV3Route(identity); ok {
+	if id, ok := parseSessionRoute(identity); ok {
 		tab.SessionID = id
 		tab.SessionPath = ""
 		return
@@ -3750,27 +3750,27 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	acquiredLeaseKey := ""
 	restoredRuntime := buildRuntime
 	identity, usesExclusiveV3 := ctrl.(control.IdentityLifecycle)
-	if usesExclusiveV3 && identity.UsesExclusiveSessionV3() {
+	if usesExclusiveV3 && identity.UsesExclusiveSession() {
 		var ref session.SessionRef
 		var bindErr error
 		switch {
 		case strings.TrimSpace(tabSessionID) != "":
-			service := identity.SessionV3Service()
+			service := identity.SessionService()
 			if service == nil {
 				bindErr = errors.New("v3 session service is unavailable")
 			} else {
-				ref, bindErr = identity.OpenV3(buildCtx, session.SessionRef{HostID: service.HostID(), SessionID: strings.TrimSpace(tabSessionID)})
+				ref, bindErr = identity.OpenSession(buildCtx, session.SessionRef{HostID: service.HostID(), SessionID: strings.TrimSpace(tabSessionID)})
 			}
 		case strings.TrimSpace(startupSessionPath) != "":
 			if _, statErr := os.Stat(startupSessionPath); statErr == nil {
-				ref, bindErr = identity.ContinueLegacyV3(buildCtx, startupSessionPath, "")
+				ref, bindErr = identity.ContinueLegacySession(buildCtx, startupSessionPath, "")
 			} else if !os.IsNotExist(statErr) {
 				bindErr = statErr
 			} else {
-				ref, bindErr = identity.BindFreshV3(buildCtx, "")
+				ref, bindErr = identity.BindFreshSession(buildCtx, "")
 			}
 		default:
-			ref, bindErr = identity.BindFreshV3(buildCtx, "")
+			ref, bindErr = identity.BindFreshSession(buildCtx, "")
 		}
 		if bindErr != nil {
 			a.recordTabStartupFailure(tab, buildGeneration, appCtx, friendlySessionLoadError(bindErr))

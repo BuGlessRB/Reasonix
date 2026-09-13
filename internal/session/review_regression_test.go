@@ -29,7 +29,7 @@ func owner(t *testing.T, service *Service, runtime *Runtime) *RuntimeOwner {
 
 func reviewRuntime(t *testing.T) (*Service, *Runtime) {
 	t.Helper()
-	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestSessionIdentityRejectsSymlinkOutsideRoot(t *testing.T) {
 	if err := store.Close(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	root := filepath.Join(base, "sessions-v3")
+	root := filepath.Join(base, "sessions-v4")
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
 	}

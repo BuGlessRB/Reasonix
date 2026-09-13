@@ -249,7 +249,7 @@ type Controller struct {
 	// and its persistence, behind its own mutex so a per-turn goal save never
 	// stalls an approval or status poll on c.mu. See goal.go.
 	goals goalMachine
-	// goalLifecycle is the versioned session-v3 goal authority. The legacy
+	// goalLifecycle is the versioned session goal authority. The legacy
 	// goalMachine remains only while old sidecars are imported and must not be
 	// used as the execution source once the v3 lifecycle cutover is complete.
 	goalLifecycleMu         sync.RWMutex
@@ -400,16 +400,16 @@ type plannerSessionResetter interface {
 }
 
 type controllerSessionBinding struct {
-	// sessionRuntime is the final identity-bound v3 owner. When v3Exclusive is
+	// sessionRuntime is the final identity-bound v3 owner. When exclusiveSession is
 	// set, SessionPath is a legacy import/display locator only and no production
 	// transcript or business sidecar may be written through it.
-	sessionService *session.Service
-	sessionRuntime *session.Runtime
-	sessionBinding *session.ClientBinding
-	v3Exclusive    bool
-	v3BindingMu    sync.RWMutex
-	v3ActivityMu   sync.Mutex
-	v3Activity     *session.Activity
+	sessionService   *session.Service
+	sessionRuntime   *session.Runtime
+	sessionBinding   *session.ClientBinding
+	exclusiveSession bool
+	v3BindingMu      sync.RWMutex
+	v3ActivityMu     sync.Mutex
+	v3Activity       *session.Activity
 }
 
 type controllerPromptRouting struct {
@@ -584,12 +584,12 @@ type Options struct {
 	SessionPath         string
 	// SessionRuntime binds this Controller/Agent view to an already-published
 	// immutable v3 session identity. SessionService owns exact-instance close,
-	// fork, query and cancellation. ExclusiveSessionV3 disables legacy
+	// fork, query and cancellation. ExclusiveSession disables legacy
 	// transcript and business-sidecar writes.
-	SessionService     *session.Service
-	SessionRuntime     *session.Runtime
-	ExclusiveSessionV3 bool
-	Host               *plugin.Host
+	SessionService   *session.Service
+	SessionRuntime   *session.Runtime
+	ExclusiveSession bool
+	Host             *plugin.Host
 	// MCPHostProfile is the surface lazily created hosts declare; injected
 	// hosts keep their own profile.
 	MCPHostProfile plugin.HostProfile
@@ -781,7 +781,7 @@ func New(opts Options) *Controller {
 		sessionContextStatic:              opts.SessionContextStatic,
 		sessionDir:                        opts.SessionDir,
 		sessionPath:                       opts.SessionPath,
-		controllerSessionBinding:          controllerSessionBinding{sessionService: opts.SessionService, sessionRuntime: sessionRuntime, sessionBinding: sessionBinding, v3Exclusive: opts.ExclusiveSessionV3},
+		controllerSessionBinding:          controllerSessionBinding{sessionService: opts.SessionService, sessionRuntime: sessionRuntime, sessionBinding: sessionBinding, exclusiveSession: opts.ExclusiveSession},
 		commands:                          atomic.Pointer[[]command.Command]{},
 		skills:                            newSkillSet(opts.Skills, opts.AllSkills, opts.SkillStore, opts.AllSkillStore),
 		disableImplicitSkillInvocation:    opts.DisableImplicitSkillInvocation,
@@ -1109,7 +1109,7 @@ func ckptDir(sessionPath string) string {
 // construction and whenever the session path changes (NewSession/Resume/SetSessionPath).
 // Also re-wires the mutation observer so capture targets the new store.
 func (c *Controller) rebindCheckpoints(sessionPath string) {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		// Goal and runtime business state are v3 events. Legacy goal/checkpoint
 		// sidecars must not become a second restore source in exclusive mode.
 		c.goals.setStatePath("")
@@ -1134,7 +1134,7 @@ func (c *Controller) rebindCheckpoints(sessionPath string) {
 // The caller must already have claimed admission (running=true) under c.mu.
 func (c *Controller) spawnGuardedTurn(ctx context.Context, cancel context.CancelFunc, body func(ctx context.Context) error, goalRound *goalRoundReservation) {
 	ctx, completion := withGuardedTurnCompletion(ctx)
-	runtimeCtx, runtimeActivity, runtimeErr := c.beginV3RuntimeActivity(ctx, "turn")
+	runtimeCtx, runtimeActivity, runtimeErr := c.beginSessionRuntimeActivity(ctx, "turn")
 	if runtimeErr != nil {
 		go func() {
 			defer cancel()
@@ -1152,7 +1152,7 @@ func (c *Controller) spawnGuardedTurn(ctx context.Context, cancel context.Cancel
 	go func() {
 		defer cancel()
 		defer func() {
-			c.finishV3RuntimeActivity(runtimeActivity)
+			c.finishSessionRuntimeActivity(runtimeActivity)
 			c.finishGoalRoundActivity(goalRound)
 			c.kickGoalDriver()
 		}()
@@ -2857,7 +2857,7 @@ func (c *Controller) PlanMode() bool {
 // incomplete-todo intercept can never be overridden, so the flag is persisted
 // for compatibility with older frontends but no longer changes FSM behavior.
 func (c *Controller) GoalStrict(strict bool) {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		return
 	}
 	path, data, ok := c.goals.setStrict(strict)
@@ -2883,7 +2883,7 @@ func (c *Controller) LoadInactiveGoal(goal string) {
 // SetGoalDurable updates the Goal only when its sidecar can be replaced
 // atomically.
 func (c *Controller) SetGoalDurable(goal string) error {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		goal = strings.TrimSpace(goal)
 		current, err := c.goalLifecycleView()
 		if err != nil {
@@ -2951,7 +2951,7 @@ func (c *Controller) SetGoalDurable(goal string) error {
 }
 
 func (c *Controller) SetGoalWithResearchMode(goal string, researchMode GoalResearchMode) {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		if err := c.SetGoalDurable(goal); err != nil {
 			c.notice("goal: " + err.Error())
 		}
@@ -3001,7 +3001,7 @@ func (c *Controller) resolveGoalText(goal string, researchMode GoalResearchMode)
 // ResumeGoal re-enters a recoverable blocked/stopped Goal without resetting its
 // delivery evidence scope or accumulated usage statistics.
 func (c *Controller) ResumeGoal() bool {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		current, err := c.goalLifecycleView()
 		if err != nil || current == nil {
 			return false
@@ -3044,7 +3044,7 @@ func (c *Controller) ResumeGoal() bool {
 // runtime history; ResumeGoal restores it. Returns false when no
 // running Goal exists.
 func (c *Controller) PauseGoal() bool {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		current, err := c.goalLifecycleView()
 		if err != nil || current == nil || current.Phase != goaldomain.PhaseActive {
 			return false
@@ -3078,7 +3078,7 @@ func (c *Controller) PauseGoal() bool {
 
 // GoalRuntime returns the active Goal's usage/runtime summary for frontends.
 func (c *Controller) GoalRuntime() GoalRuntimeView {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		view, _ := c.goalLifecycleView()
 		if view == nil {
 			return GoalRuntimeView{}
@@ -3097,7 +3097,7 @@ func (c *Controller) GoalRuntime() GoalRuntimeView {
 }
 
 func (c *Controller) ClearGoal() {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		c.disarmGoalLifecycle("cleared")
 		_ = c.SetGoalDurable("")
 		c.goalDriverMu.Lock()
@@ -3112,7 +3112,7 @@ func (c *Controller) ClearGoal() {
 }
 
 func (c *Controller) Goal() string {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		view, _ := c.goalLifecycleView()
 		if view == nil {
 			return ""
@@ -3123,7 +3123,7 @@ func (c *Controller) Goal() string {
 }
 
 func (c *Controller) GoalStatus() string {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		view, err := c.goalLifecycleView()
 		if err != nil || view == nil {
 			return GoalStatusStopped
@@ -3194,8 +3194,8 @@ func (c *Controller) NewSession() error {
 		return err
 	}
 	defer c.endRotation()
-	if c.exclusiveV3Enabled() {
-		return c.rotateExclusiveV3Session(false)
+	if c.sessionEngineEnabled() {
+		return c.rotateExclusiveSession(false)
 	}
 	// Retire asynchronous recovery writes before Snapshot publishes the final
 	// old-session checkpoint. Otherwise an earlier write can outlive the path
@@ -3276,8 +3276,8 @@ func (c *Controller) ClearSession() error {
 		return err
 	}
 	defer c.endRotation()
-	if c.exclusiveV3Enabled() {
-		return c.rotateExclusiveV3Session(true)
+	if c.sessionEngineEnabled() {
+		return c.rotateExclusiveSession(true)
 	}
 	c.mu.Lock()
 	oldPath := c.sessionPath
@@ -3525,19 +3525,19 @@ func (c *Controller) summarizeAt(ctx context.Context, turn int, from bool) error
 // see the previous session's temporary files. Same-path Resume (hot rebuild
 // migration via AdoptHistory) keeps the generation.
 func (c *Controller) Resume(s *agent.Session, path string) {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		if _, runtime, _ := c.v3Binding(); runtime != nil && strings.TrimSpace(path) == "" {
 			c.restoreExecutorFromSessionEvents()
 			return
 		}
 		if strings.TrimSpace(path) == "" {
-			if _, err := c.BindFreshV3(context.Background(), ""); err != nil {
+			if _, err := c.BindFreshSession(context.Background(), ""); err != nil {
 				c.failTurnEventLedger(err)
 			}
 			return
 		}
 		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
-			if _, err := c.BindFreshV3(context.Background(), ""); err != nil {
+			if _, err := c.BindFreshSession(context.Background(), ""); err != nil {
 				c.failTurnEventLedger(err)
 				return
 			}
@@ -3550,7 +3550,7 @@ func (c *Controller) Resume(s *agent.Session, path string) {
 			}
 			return
 		}
-		if _, err := c.ContinueLegacyV3(context.Background(), path, ""); err != nil {
+		if _, err := c.ContinueLegacySession(context.Background(), path, ""); err != nil {
 			slog.Warn("controller: migrate legacy resume into v3", "path", path, "err", err)
 			c.failTurnEventLedger(err)
 		}
@@ -3752,7 +3752,7 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 			"label", c.Label(), "session_dir", c.SessionDir(), "message_count", len(s.Snapshot()))
 		return false, nil
 	}
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		if _, runtime, _ := c.v3Binding(); runtime == nil || c.sessionEventStore() == nil {
 			return false, errors.New("exclusive v3 controller has no bound session runtime")
 		}
@@ -4456,9 +4456,9 @@ func (c *Controller) snapshotActivityIfChanged(startMessages int) (bool, error) 
 // preference. Callers creating a genuinely fresh conversation should use
 // SetFreshSessionPath; callers resuming history should use Resume.
 func (c *Controller) SetSessionPath(p string) {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		// Path-based execution rebinding is intentionally unavailable. Hosts use
-		// ContinueLegacyV3 for imports or publish an exact SessionRuntime.
+		// ContinueLegacySession for imports or publish an exact SessionRuntime.
 		slog.Warn("controller: ignored legacy path rebind for exclusive v3 session", "path", p)
 		return
 	}
@@ -4469,7 +4469,7 @@ func (c *Controller) SetSessionPath(p string) {
 // session and samples the configured new-session recovery default.
 func (c *Controller) SetFreshSessionPath(p string) {
 	if service, _, exclusive := c.v3Binding(); exclusive && service != nil {
-		if _, err := c.BindFreshV3(context.Background(), ""); err != nil {
+		if _, err := c.BindFreshSession(context.Background(), ""); err != nil {
 			c.failTurnEventLedger(err)
 		}
 		return
@@ -4558,7 +4558,7 @@ func (c *Controller) History() []provider.Message {
 	}
 	if snapshot, ok := c.sessionEventSnapshot(); ok && snapshot.EventSequence > 0 {
 		projected := snapshot.Projection.Messages
-		if c.exclusiveV3Enabled() {
+		if c.sessionEngineEnabled() {
 			return append([]provider.Message(nil), projected...)
 		}
 		current := c.executor.Session().Snapshot()

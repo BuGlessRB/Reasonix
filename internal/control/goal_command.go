@@ -11,7 +11,7 @@ func (c *Controller) startGoalCommandTurn(cmd GoalCommand, display string) {
 	if c.GoalStatus() != GoalStatusRunning {
 		return
 	}
-	if !c.exclusiveV3Enabled() {
+	if !c.sessionEngineEnabled() {
 		c.goals.markExplicitStart()
 	}
 	c.notice(fmt.Sprintf(i18n.M.GoalSetFmt, ShortGoalForNotice(c.Goal())))

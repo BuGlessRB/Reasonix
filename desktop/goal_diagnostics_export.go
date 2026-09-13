@@ -40,7 +40,7 @@ func (a *App) ExportGoalDiagnostics() (string, error) {
 			ApplicationVersion: version,
 			BuildCommit:        buildCommit(),
 			ProtocolVersion:    hostrpc.ProtocolVersion,
-			Capabilities:       []string{"session-events-v3", "session-identity-v1", servecontract.GoalLifecycleV2},
+			Capabilities:       []string{"session-history-v1", "session-identity-v1", servecontract.GoalLifecycleV2},
 		})
 	} else if a.isRemoteTab(tab.ID) {
 		payload, err = a.exportRemoteGoalDiagnostics(tab.ID)

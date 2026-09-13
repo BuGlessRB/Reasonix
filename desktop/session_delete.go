@@ -6,7 +6,7 @@ import (
 	"reasonix/internal/control"
 )
 
-func (a *App) deleteV3Session(route string) error {
+func (a *App) deleteSession(route string) error {
 	service := a.desktopSessionService(a.activeSessionDir())
 	ref, ok := sessionRefForRoute(service, route)
 	if !ok {
@@ -25,7 +25,7 @@ func (a *App) deleteV3Session(route string) error {
 	if owner != nil {
 		ctrl := a.controllerForTab(owner)
 		identity, identityOK := ctrl.(control.IdentityLifecycle)
-		if !identityOK || !identity.UsesExclusiveSessionV3() {
+		if !identityOK || !identity.UsesExclusiveSession() {
 			return fmt.Errorf("session runtime identity is unavailable")
 		}
 		current, bound := identity.SessionRef()

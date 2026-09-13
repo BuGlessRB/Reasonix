@@ -35,8 +35,8 @@ func (s *Server) commitLoadedResume(w http.ResponseWriter, cur control.SessionAP
 	if hook := resumeBindHookForTest; hook != nil {
 		hook()
 	}
-	if identity, ok := cur.(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
-		ref, err := identity.ContinueLegacyV3(context.Background(), realPath, "")
+	if identity, ok := cur.(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
+		ref, err := identity.ContinueLegacySession(context.Background(), realPath, "")
 		if err != nil {
 			_ = s.rebindSessionLease(cur.SessionPath())
 			http.Error(w, "migrate session: "+err.Error(), http.StatusConflict)
@@ -60,7 +60,7 @@ func (s *Server) commitLoadedResume(w http.ResponseWriter, cur control.SessionAP
 	// Rebind dropped the controller handlers with the outgoing authority. Resume
 	// has now made loaded current, so restore its owner binding before the next
 	// /new, /clear, or /fork enters the ordinary authorized transition path.
-	if s.leases != nil && !ctrl.UsesExclusiveSessionV3() {
+	if s.leases != nil && !ctrl.UsesExclusiveSession() {
 		if err := s.leases.BindControllerAuthority(ctrl); err != nil {
 			slog.Warn("serve: rebind controller authority after resume", "err", err)
 		}

@@ -114,7 +114,7 @@ func TestCatalogMetadataRebuildAdvancesPagedCursor(t *testing.T) {
 // page was served from the manifest head, the log revision, and the metadata
 // cache alone.
 func TestWarmListDoesNotReplayEventBodies(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	persistence := NewFilesystemPersistence(root)
 	session, err := persistence.Create(CreateOptions{SessionID: "warm"})
 	if err != nil {

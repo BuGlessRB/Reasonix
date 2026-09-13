@@ -15,18 +15,18 @@ import (
 	"reasonix/internal/session"
 )
 
-func newExclusiveV3Serve(t *testing.T) (*Server, *control.Controller, *session.Service, session.SessionRef) {
+func newExclusiveSessionServe(t *testing.T) (*Server, *control.Controller, *session.Service, session.SessionRef) {
 	t.Helper()
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	service, err := session.NewService("serve-test", session.NewFilesystemPersistence(root))
 	if err != nil {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard)
 	ctrl := control.New(control.Options{
-		Executor: exec, SessionDir: t.TempDir(), SessionService: service, ExclusiveSessionV3: true,
+		Executor: exec, SessionDir: t.TempDir(), SessionService: service, ExclusiveSession: true,
 	})
-	ref, err := ctrl.BindFreshV3(t.Context(), "current")
+	ref, err := ctrl.BindFreshSession(t.Context(), "current")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func newExclusiveV3Serve(t *testing.T) (*Server, *control.Controller, *session.S
 }
 
 func TestExclusiveV3SessionsAndResumeUseImmutableIdentity(t *testing.T) {
-	srv, ctrl, service, current := newExclusiveV3Serve(t)
+	srv, ctrl, service, current := newExclusiveSessionServe(t)
 	target, err := service.Create(t.Context(), session.CreateOptions{SessionID: "target"})
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestExclusiveV3SessionsAndResumeUseImmutableIdentity(t *testing.T) {
 }
 
 func TestExclusiveV3MissingResumeDoesNotCreateOrReplaceCurrent(t *testing.T) {
-	srv, ctrl, service, current := newExclusiveV3Serve(t)
+	srv, ctrl, service, current := newExclusiveSessionServe(t)
 	resume := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/resume", strings.NewReader(`{"hostId":"serve-test","sessionId":"missing"}`))
 	srv.resume(resume, req)
@@ -97,7 +97,7 @@ func TestExclusiveV3MissingResumeDoesNotCreateOrReplaceCurrent(t *testing.T) {
 }
 
 func TestExclusiveV3RotationAndMutationFenceReturnSessionID(t *testing.T) {
-	srv, ctrl, _, current := newExclusiveV3Serve(t)
+	srv, ctrl, _, current := newExclusiveSessionServe(t)
 	stale := httptest.NewRequest(http.MethodPost, "/cancel", nil)
 	stale.Header.Set(expectedSessionIDHeader, "stale")
 	if err := srv.expectedSessionErrorLocked(stale); err == nil {

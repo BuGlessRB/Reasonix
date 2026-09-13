@@ -20,12 +20,12 @@ func (a *App) buildTabControllerBoot(ctx context.Context, opts boot.Options) (co
 	return boot.Build(ctx, opts)
 }
 
-func desktopSessionV3Root(sessionDir string) string {
+func desktopSessionRoot(sessionDir string) string {
 	return session.RootForLegacyDir(sessionDir)
 }
 
 func (a *App) desktopSessionService(sessionDir string) *session.Service {
-	root := desktopSessionV3Root(sessionDir)
+	root := desktopSessionRoot(sessionDir)
 	if a == nil || root == "" {
 		return nil
 	}

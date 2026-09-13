@@ -161,7 +161,7 @@ model = "x"
 	)
 	setBootTokenProfileTestProvider(t, prov)
 	var projectedPath string
-	ctrl, err := Build(context.Background(), withTestSessionV3(t, Options{
+	ctrl, err := Build(context.Background(), withTestSession(t, Options{
 		SessionDir:           sessionDir,
 		Sink:                 event.Discard,
 		HeadlessApprovalMode: control.ToolApprovalYolo,
@@ -185,7 +185,7 @@ model = "x"
 	if !ok || projectedPath != ref.SessionID {
 		t.Fatalf("projected identity = %q, current = %+v", projectedPath, ref)
 	}
-	_, runtime, bound := ctrl.SessionV3Binding()
+	_, runtime, bound := ctrl.SessionBinding()
 	if !bound || runtime.Session().Snapshot().Projection.Title != "Current integration task" {
 		t.Fatalf("title projection = %q, want current integration task", runtime.Session().Snapshot().Projection.Title)
 	}

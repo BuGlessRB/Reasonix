@@ -12,7 +12,7 @@ import (
 	"reasonix/internal/session"
 )
 
-func appendV3TestMessage(t *testing.T, runtime *session.Runtime, operationID string, message provider.Message) {
+func appendSessionTestMessage(t *testing.T, runtime *session.Runtime, operationID string, message provider.Message) {
 	t.Helper()
 	payload, err := json.Marshal(map[string]any{"message": message})
 	if err != nil {
@@ -26,7 +26,7 @@ func appendV3TestMessage(t *testing.T, runtime *session.Runtime, operationID str
 	}
 }
 
-func appendV3TestModel(t *testing.T, runtime *session.Runtime, operationID, modelRef string) {
+func appendSessionTestModel(t *testing.T, runtime *session.Runtime, operationID, modelRef string) {
 	t.Helper()
 	payload, err := json.Marshal(map[string]string{"modelRef": modelRef})
 	if err != nil {
@@ -50,21 +50,21 @@ func TestDesktopV3CatalogResumeRenameAndDeleteUseSessionIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	appendV3TestModel(t, first, "first-model", model)
-	appendV3TestMessage(t, first, "first-message", provider.Message{ID: "user-first", Role: provider.RoleUser, Content: "first conversation"})
+	appendSessionTestModel(t, first, "first-model", model)
+	appendSessionTestMessage(t, first, "first-message", provider.Message{ID: "user-first", Role: provider.RoleUser, Content: "first conversation"})
 	second, err := service.Create(t.Context(), session.CreateOptions{SessionID: "second-v3"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	appendV3TestModel(t, second, "second-model", targetModel)
-	appendV3TestMessage(t, second, "second-message", provider.Message{ID: "user-second", Role: provider.RoleUser, Content: "second conversation"})
+	appendSessionTestModel(t, second, "second-model", targetModel)
+	appendSessionTestMessage(t, second, "second-message", provider.Message{ID: "user-second", Role: provider.RoleUser, Content: "second conversation"})
 
 	ctrl, err := app.buildTabControllerBoot(app.ctx, boot.Options{Model: model, WorkspaceRoot: root, SessionDir: dir, Sink: event.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}
 	identity := ctrl.(control.IdentityLifecycle)
-	if _, err := identity.OpenV3(t.Context(), first.Ref()); err != nil {
+	if _, err := identity.OpenSession(t.Context(), first.Ref()); err != nil {
 		t.Fatal(err)
 	}
 	tab := &WorkspaceTab{ID: "v3-tab", Scope: "project", WorkspaceRoot: root, SessionID: first.Ref().SessionID, Ready: true, Ctrl: ctrl, sink: &tabEventSink{tabID: "v3-tab", app: app}, disabledMCP: map[string]ServerView{}}
@@ -82,7 +82,7 @@ func TestDesktopV3CatalogResumeRenameAndDeleteUseSessionIdentity(t *testing.T) {
 	if len(rows) != 2 || rows[0].SessionID == "" || rows[1].SessionID == "" {
 		t.Fatalf("v3 catalog rows = %+v", rows)
 	}
-	if _, err := app.ResumeSessionForTab(tab.ID, sessionV3Route(second.Ref().SessionID)); err != nil {
+	if _, err := app.ResumeSessionForTab(tab.ID, sessionRoute(second.Ref().SessionID)); err != nil {
 		t.Fatal(err)
 	}
 	if tab.SessionID != second.Ref().SessionID || tab.SessionPath != "" {
@@ -94,13 +94,13 @@ func TestDesktopV3CatalogResumeRenameAndDeleteUseSessionIdentity(t *testing.T) {
 	if got := tab.Ctrl.History(); len(got) != 1 || got[0].Content != "second conversation" {
 		t.Fatalf("resumed history = %+v", got)
 	}
-	if err := app.RenameSession(sessionV3Route(second.Ref().SessionID), "renamed v3"); err != nil {
+	if err := app.RenameSession(sessionRoute(second.Ref().SessionID), "renamed v3"); err != nil {
 		t.Fatal(err)
 	}
 	if snap, err := service.Query().Snapshot(t.Context(), second.Ref()); err != nil || snap.Projection.Title != "renamed v3" {
 		t.Fatalf("renamed snapshot = %+v, %v", snap, err)
 	}
-	if err := app.DeleteSession(sessionV3Route(second.Ref().SessionID)); err != nil {
+	if err := app.DeleteSession(sessionRoute(second.Ref().SessionID)); err != nil {
 		t.Fatal(err)
 	}
 	if tab.SessionID == second.Ref().SessionID || tab.SessionPath != "" {
@@ -121,21 +121,21 @@ func TestDesktopV3ResumeModelBuildFailureKeepsSourceRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	appendV3TestModel(t, source, "source-model", model)
-	appendV3TestMessage(t, source, "source-message", provider.Message{ID: "source-user", Role: provider.RoleUser, Content: "source remains"})
+	appendSessionTestModel(t, source, "source-model", model)
+	appendSessionTestMessage(t, source, "source-message", provider.Message{ID: "source-user", Role: provider.RoleUser, Content: "source remains"})
 	target, err := service.Create(t.Context(), session.CreateOptions{SessionID: "resume-broken-target"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	appendV3TestModel(t, target, "target-model", "missing/model")
-	appendV3TestMessage(t, target, "target-message", provider.Message{ID: "target-user", Role: provider.RoleUser, Content: "must not publish"})
+	appendSessionTestModel(t, target, "target-model", "missing/model")
+	appendSessionTestMessage(t, target, "target-message", provider.Message{ID: "target-user", Role: provider.RoleUser, Content: "must not publish"})
 
 	ctrl, err := app.buildTabControllerBoot(app.ctx, boot.Options{Model: model, WorkspaceRoot: root, SessionDir: dir, Sink: event.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}
 	identity := ctrl.(control.IdentityLifecycle)
-	if _, err := identity.OpenV3(t.Context(), source.Ref()); err != nil {
+	if _, err := identity.OpenSession(t.Context(), source.Ref()); err != nil {
 		t.Fatal(err)
 	}
 	tab := &WorkspaceTab{ID: "source-tab", Scope: "project", WorkspaceRoot: root, SessionID: source.Ref().SessionID, Ready: true, Ctrl: ctrl, model: model, sink: &tabEventSink{tabID: "source-tab", app: app}, disabledMCP: map[string]ServerView{}}
@@ -149,7 +149,7 @@ func TestDesktopV3ResumeModelBuildFailureKeepsSourceRuntime(t *testing.T) {
 		}
 	})
 
-	if _, err := app.ResumeSessionForTab(tab.ID, sessionV3Route(target.Ref().SessionID)); err == nil {
+	if _, err := app.ResumeSessionForTab(tab.ID, sessionRoute(target.Ref().SessionID)); err == nil {
 		t.Fatal("resume with an unavailable target model unexpectedly succeeded")
 	}
 	if tab.Ctrl != ctrl || tab.SessionID != source.Ref().SessionID || tab.SessionPath != "" {

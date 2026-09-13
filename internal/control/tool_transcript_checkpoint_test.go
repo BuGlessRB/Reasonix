@@ -52,7 +52,7 @@ func TestToolCheckpointSurvivesReloadWhileNextWriterRuns(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("second tool did not start")
 	}
-	loaded := loadDurableV3Projection(t, path)
+	loaded := loadDurableSessionProjection(t, path)
 	completed := false
 	for _, m := range loaded.Messages {
 		if m.Role != provider.RoleTool {

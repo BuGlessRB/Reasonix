@@ -108,9 +108,9 @@ func (gw *BotGateway) buildSessionState(ctx context.Context, key string, msg Inb
 	reusedRuntime := false
 	if previous != nil {
 		if binding, ok := previous.ctrl.(interface {
-			SessionV3Binding() (*session.Service, *session.Runtime, bool)
+			SessionBinding() (*session.Service, *session.Runtime, bool)
 		}); ok {
-			if service, runtime, bound := binding.SessionV3Binding(); bound {
+			if service, runtime, bound := binding.SessionBinding(); bound {
 				reusedRuntime = profile.sessionPath == "" && (profile.sessionRef.SessionID == "" || profile.sessionRef.SessionID == runtime.Ref().SessionID)
 				if reusedRuntime {
 					buildOptions.SessionService = service
@@ -143,12 +143,12 @@ func (gw *BotGateway) buildSessionState(ctx context.Context, key string, msg Inb
 		}
 		return nil, buildErr
 	}
-	if identity, ok := any(ctrl).(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
+	if identity, ok := any(ctrl).(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
 		ref, bindErr := bindBotSessionIdentity(ctx, identity, profile, msg)
 		if bindErr != nil {
 			if (profile.sessionRefOptional || profile.sessionPathOptional) && !reusedRuntime {
 				gw.logger.Warn("mapped bot session unavailable; starting fresh", "err", bindErr)
-				ref, bindErr = identity.BindFreshV3(ctx, "")
+				ref, bindErr = identity.BindFreshSession(ctx, "")
 				state.mappingDegraded = bindErr == nil
 			}
 			if bindErr != nil {
@@ -200,7 +200,7 @@ func (gw *BotGateway) buildSessionState(ctx context.Context, key string, msg Inb
 }
 
 func bindBotSessionIdentity(ctx context.Context, identity control.IdentityLifecycle, profile sessionRuntimeProfile, msg InboundMessage) (session.SessionRef, error) {
-	service := identity.SessionV3Service()
+	service := identity.SessionService()
 	if service == nil {
 		return session.SessionRef{}, errors.New("bot v3 session service is unavailable")
 	}
@@ -214,23 +214,23 @@ func bindBotSessionIdentity(ctx context.Context, identity control.IdentityLifecy
 		if ref.HostID == "" {
 			ref.HostID = service.HostID()
 		}
-		opened, err := identity.OpenV3(ctx, ref)
+		opened, err := identity.OpenSession(ctx, ref)
 		if err == nil {
 			return opened, nil
 		}
 		if !errors.Is(err, session.ErrSessionNotFound) || !profile.sessionRefOptional {
 			return session.SessionRef{}, err
 		}
-		return identity.BindFreshV3(ctx, ref.SessionID)
+		return identity.BindFreshSession(ctx, ref.SessionID)
 	}
 	if profile.sessionPath != "" {
-		return identity.ContinueLegacyV3(ctx, profile.sessionPath, "")
+		return identity.ContinueLegacySession(ctx, profile.sessionPath, "")
 	}
 	stableID := ""
 	if strings.TrimSpace(msg.ChatID) != "" {
 		stableID = "bot-" + BuildSessionKey(msg.Session())
 	}
-	return identity.BindFreshV3(ctx, stableID)
+	return identity.BindFreshSession(ctx, stableID)
 }
 
 func (gw *BotGateway) discardBuiltSession(built *builtBotSession, previous *sessionState) {

@@ -287,7 +287,7 @@ func TestEnsureBlankTabStartsProjectRuntimeWithCurrentWorkspaceContext(t *testin
 		t.Fatalf("project B controller session dir = %q, want %q", tabB.Ctrl.SessionDir(), desktopSessionDir(projectB))
 	}
 	identity, ok := tabB.Ctrl.(control.IdentityLifecycle)
-	if !ok || !identity.UsesExclusiveSessionV3() {
+	if !ok || !identity.UsesExclusiveSession() {
 		t.Fatalf("project B controller did not use exclusive v3 identity")
 	}
 	if ref, bound := identity.SessionRef(); !bound || strings.TrimSpace(ref.SessionID) == "" || strings.TrimSpace(tabB.Ctrl.SessionPath()) != "" {

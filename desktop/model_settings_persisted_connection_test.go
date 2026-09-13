@@ -34,7 +34,7 @@ func TestModelSettingsCredentialRefreshPersistsSelectedConnection(t *testing.T) 
 	if got := current.ModelRef(); got != want {
 		t.Fatalf("runtime model = %q, want %q", got, want)
 	}
-	_, runtime, ok := current.(*control.Controller).SessionV3Binding()
+	_, runtime, ok := current.(*control.Controller).SessionBinding()
 	if !ok {
 		t.Fatal("rebuilt controller lost its v3 runtime")
 	}

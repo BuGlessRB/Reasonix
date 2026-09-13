@@ -18,7 +18,7 @@ import (
 // therefore cannot block the driver; one model TurnDone is not completion of
 // an armed long-running goal.
 func (c *Controller) waitForGoalTerminal(ctx context.Context) error {
-	if c == nil || !c.exclusiveV3Enabled() {
+	if c == nil || !c.sessionEngineEnabled() {
 		return nil
 	}
 	ticker := time.NewTicker(10 * time.Millisecond)
@@ -183,7 +183,7 @@ func (c *Controller) driveOneGoalRound() bool {
 }
 
 func (c *Controller) recordGoalLifecycleUsage(e event.Event) {
-	if c == nil || !c.exclusiveV3Enabled() || e.Usage == nil {
+	if c == nil || !c.sessionEngineEnabled() || e.Usage == nil {
 		return
 	}
 	c.goalDriverMu.Lock()

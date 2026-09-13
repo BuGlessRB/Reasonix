@@ -48,6 +48,11 @@ const (
 // fall back to an older checkpoint: the event log may contain newer turns.
 var ErrSessionReplayLimitExceeded = errors.New("session history exceeds safe replay limits")
 
+// ErrSessionHistoryDamaged marks a frozen source whose authoritative event
+// log cannot be proven complete. Migration must fail closed instead of falling
+// back to an older checkpoint and silently dropping newer turns.
+var ErrSessionHistoryDamaged = errors.New("session history is damaged")
+
 // SessionReplayLimitError carries machine-readable diagnostics while keeping
 // Error free of local paths for Desktop surfaces that display startup errors.
 type SessionReplayLimitError struct {

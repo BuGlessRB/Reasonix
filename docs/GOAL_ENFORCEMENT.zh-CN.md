@@ -100,7 +100,7 @@ Todo 是回合内规划工具：每个真正接纳的顶层回合开始时清空
 `goal/state`。Append 表示 live projection 已接纳，Flush 才表示 durable；目标更新和回合结束
 不额外逐次 fsync。模型调用与顶层副作用前继续使用统一 Flush 检查点。
 
-旧会话继续工作时导入独立的 `sessions-v3` 副本，原件不变；旧版与新版不双写。未知必需目标
+旧会话继续工作时导入独立的 `sessions-v4` 副本，原件不变；旧版与新版不双写。未知必需目标
 版本或损坏的必要数据会阻止自动运行。历史 activation 仅用于诊断展示，永远不会恢复执行授权。
 
 RPC 能力目录使用 `goal-lifecycle-v2`。缺少该能力的远端明确拒绝目标操作，不回退旧 Goal API。

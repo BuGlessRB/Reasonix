@@ -89,7 +89,7 @@ func (a *App) syncTabSessionIdentity(tab *WorkspaceTab, ctrl control.SessionAPI)
 		return
 	}
 	identity, ok := ctrl.(control.IdentityLifecycle)
-	if !ok || !identity.UsesExclusiveSessionV3() {
+	if !ok || !identity.UsesExclusiveSession() {
 		return
 	}
 	ref, bound := identity.SessionRef()

@@ -434,15 +434,15 @@ func SessionDir() string {
 	return filepath.Join(dir, "sessions")
 }
 
-// SessionDirV3 is the execution-v2 session root. Keeping it physically
+// SessionStoreDir is the execution-v2 session root. Keeping it physically
 // separate prevents older binaries from treating v3 commits as legacy JSONL
 // transcripts and writing a format they do not understand.
-func SessionDirV3() string {
+func SessionStoreDir() string {
 	dir := userSupportDir()
 	if dir == "" {
 		return ""
 	}
-	return filepath.Join(dir, "sessions-v3")
+	return filepath.Join(dir, "sessions-v4")
 }
 
 // StatsDir is where usage statistics are persisted (one .jsonl per day, e.g.
@@ -473,8 +473,8 @@ func ProjectSessionDir(workspaceRoot string) string {
 	return filepath.Join(base, "projects", WorkspaceSlug(root), "sessions")
 }
 
-// ProjectSessionDirV3 is the per-workspace execution-v2 session root.
-func ProjectSessionDirV3(workspaceRoot string) string {
+// ProjectSessionStoreDir is the per-workspace execution-v2 session root.
+func ProjectSessionStoreDir(workspaceRoot string) string {
 	base := MemoryUserDir()
 	root := strings.TrimSpace(workspaceRoot)
 	if base == "" || root == "" {
@@ -483,7 +483,7 @@ func ProjectSessionDirV3(workspaceRoot string) string {
 	if abs, err := filepath.Abs(root); err == nil {
 		root = abs
 	}
-	return filepath.Join(base, "projects", WorkspaceSlug(root), "sessions-v3")
+	return filepath.Join(base, "projects", WorkspaceSlug(root), "sessions-v4")
 }
 
 // DesktopTopicStatePath returns the authoritative SQLite path for Desktop

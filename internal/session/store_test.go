@@ -390,7 +390,7 @@ func TestMigrateLegacyIsIdempotentAndUsesFrozenArtifacts(t *testing.T) {
 	if err := os.WriteFile(store.SessionGoalState(path), []byte(goal), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	v3root := filepath.Join(root, "sessions-v3")
+	v3root := filepath.Join(root, "sessions-v4")
 	first, err := MigrateLegacy(context.Background(), path, v3root)
 	if err != nil {
 		t.Fatal(err)
@@ -431,7 +431,7 @@ func TestMigrateEmptyLegacyTranscriptProducesValidExplicitEmptyHistory(t *testin
 	if err := os.WriteFile(legacy, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	result, err := MigrateLegacy(t.Context(), legacy, filepath.Join(root, "sessions-v3"))
+	result, err := MigrateLegacy(t.Context(), legacy, filepath.Join(root, "sessions-v4"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,13 +457,13 @@ func TestMigrateLegacyRefusesActiveSourceLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer lease.Release()
-	if _, err := MigrateLegacy(t.Context(), path, filepath.Join(dir, "sessions-v3")); !errors.Is(err, agent.ErrSessionLeaseHeld) {
+	if _, err := MigrateLegacy(t.Context(), path, filepath.Join(dir, "sessions-v4")); !errors.Is(err, agent.ErrSessionLeaseHeld) {
 		t.Fatalf("migration with active source lease error = %v", err)
 	}
 }
 
 func TestMigrationMapLeaseWaitIsContextCancellable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sessions-v3", "migration-map.json")
+	path := filepath.Join(t.TempDir(), "sessions-v4", "migration-map.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -511,7 +511,7 @@ func TestMigrateLegacyHeadsBecomeIndependentLinearSessions(t *testing.T) {
 		t.Fatalf("legacy root head missing: %+v", heads)
 	}
 
-	v3root := filepath.Join(dir, "sessions-v3")
+	v3root := filepath.Join(dir, "sessions-v4")
 	rootResult, err := MigrateLegacyHead(t.Context(), path, v3root, rootHead)
 	if err != nil {
 		t.Fatal(err)

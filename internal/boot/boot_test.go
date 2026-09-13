@@ -465,7 +465,7 @@ kind = "boot-subagent-test"
 model = "x"
 `)
 
-	ctrl, err := Build(context.Background(), withTestSessionV3(t, Options{Sink: event.Discard}))
+	ctrl, err := Build(context.Background(), withTestSession(t, Options{Sink: event.Discard}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -535,7 +535,7 @@ model = "x"
 `)
 
 	sessionDir := filepath.Join(t.TempDir(), "desktop-workspace-sessions")
-	ctrl, err := Build(context.Background(), withTestSessionV3(t, Options{Sink: event.Discard, SessionDir: sessionDir}))
+	ctrl, err := Build(context.Background(), withTestSession(t, Options{Sink: event.Discard, SessionDir: sessionDir}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -588,7 +588,7 @@ kind = "boot-subagent-test"
 model = "x"
 `)
 
-	ctrl, err := Build(context.Background(), withTestSessionV3(t, Options{Sink: event.Discard}))
+	ctrl, err := Build(context.Background(), withTestSession(t, Options{Sink: event.Discard}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -1121,7 +1121,7 @@ kind = "boot-headless-test"
 model = "x"
 `)
 
-	ctrl, err := Build(context.Background(), withTestSessionV3(t, Options{Sink: event.Discard}))
+	ctrl, err := Build(context.Background(), withTestSession(t, Options{Sink: event.Discard}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -1319,7 +1319,7 @@ model = "x"
 api_key_env = "REASONIX_TEST_KEY_UNSET"
 `)
 
-	ctrl, err := Build(context.Background(), withTestSessionV3(t, Options{WorkspaceRoot: dir, Sink: event.Discard}))
+	ctrl, err := Build(context.Background(), withTestSession(t, Options{WorkspaceRoot: dir, Sink: event.Discard}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

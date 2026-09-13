@@ -45,7 +45,7 @@ name = "test-model"
 kind = "boot-effect-message-ids"
 model = "x"
 `)
-	ctrl, err := Build(context.Background(), withTestSessionV3(t, Options{Sink: event.Discard, Ablation: ablation.Set{}}))
+	ctrl, err := Build(context.Background(), withTestSession(t, Options{Sink: event.Discard, Ablation: ablation.Set{}}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -53,7 +53,7 @@ model = "x"
 	if err := ctrl.Run(context.Background(), "reply ok"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	service, runtime, ok := ctrl.SessionV3Binding()
+	service, runtime, ok := ctrl.SessionBinding()
 	if !ok {
 		t.Fatal("controller did not bind a v3 session")
 	}

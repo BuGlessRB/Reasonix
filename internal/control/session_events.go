@@ -19,15 +19,15 @@ import (
 	"reasonix/internal/turnevent"
 )
 
-func sessionV3Directory(sessionPath string) string {
+func sessionDirectory(sessionPath string) string {
 	sessionPath = filepath.Clean(strings.TrimSpace(sessionPath))
 	if sessionPath == "." || sessionPath == "" {
 		return ""
 	}
 	parent := filepath.Dir(sessionPath)
-	root := filepath.Join(parent, "sessions-v3")
+	root := filepath.Join(parent, "sessions-v4")
 	if filepath.Base(parent) == "sessions" {
-		root = filepath.Join(filepath.Dir(parent), "sessions-v3")
+		root = filepath.Join(filepath.Dir(parent), "sessions-v4")
 	}
 	id := agent.BranchID(sessionPath)
 	if id == "" {
@@ -102,7 +102,7 @@ func (c *Controller) openSessionEventStore(sessionPath string) (*session.Session
 		// outside the v3.1 ownership boundary.
 		return nil, nil, nil
 	}
-	dir := sessionV3Directory(sessionPath)
+	dir := sessionDirectory(sessionPath)
 	if dir == "" {
 		return nil, nil, nil
 	}
@@ -238,10 +238,10 @@ func (c *Controller) restoreExecutorFromSessionEvents() {
 	c.executor.Session().Replace(append([]provider.Message(nil), snapshot.Projection.ModelMessages...))
 }
 
-// replaceV3ModelContext records an Agent/configuration rebuild without
+// replaceSessionModelContext records an Agent/configuration rebuild without
 // rewriting the UI transcript. The exact serialized model context becomes a
 // typed event, while the original messages remain available for history.
-func (c *Controller) replaceV3ModelContext(ctx context.Context, messages []provider.Message, reason string) error {
+func (c *Controller) replaceSessionModelContext(ctx context.Context, messages []provider.Message, reason string) error {
 	store := c.sessionEventStore()
 	if store == nil {
 		return errors.New("exclusive v3 controller has no session store")
@@ -269,7 +269,7 @@ func (c *Controller) replaceV3ModelContext(ctx context.Context, messages []provi
 	}
 	digest := sha256.Sum256(payload)
 	c.turnEvents.commitMu.Lock()
-	_, err = c.appendV3Batch(ctx, store, session.Batch{
+	_, err = c.appendSessionBatch(ctx, store, session.Batch{
 		OperationID: fmt.Sprintf("model-context:%x", digest[:16]),
 		TurnID:      snapshot.Projection.TurnID,
 		Events:      events,
@@ -305,7 +305,7 @@ func (c *Controller) adoptResumeSystemPrompt(incoming *agent.Session) error {
 	}
 	c.turnEvents.commitMu.Lock()
 	defer c.turnEvents.commitMu.Unlock()
-	_, err = c.appendV3Batch(context.Background(), store, session.Batch{
+	_, err = c.appendSessionBatch(context.Background(), store, session.Batch{
 		OperationID: fmt.Sprintf("system-prompt-refresh:%d", snapshot.EventSequence+1),
 		TurnID:      snapshot.Projection.TurnID,
 		Events:      []session.Event{{Kind: "history/replace", Payload: payload}},
@@ -369,7 +369,7 @@ func (c *Controller) appendSessionEventLocked(ctx context.Context, e event.Event
 	}
 	store := c.sessionEventStore()
 	if store == nil {
-		if c.exclusiveV3Enabled() {
+		if c.sessionEngineEnabled() {
 			return session.ErrSessionNotRunning
 		}
 		return nil
@@ -386,7 +386,7 @@ func (c *Controller) appendSessionEventLocked(ctx context.Context, e event.Event
 		return err
 	}
 	op := fmt.Sprintf("runtime:%s:%d:%d", e.TurnID, e.Sequence, e.Kind)
-	_, err = c.appendV3Batch(ctx, store, session.Batch{OperationID: op, TurnID: e.TurnID, Events: events})
+	_, err = c.appendSessionBatch(ctx, store, session.Batch{OperationID: op, TurnID: e.TurnID, Events: events})
 	if err != nil {
 		return fmt.Errorf("%w: %w", turnevent.ErrTurnLedgerUnavailable, err)
 	}
@@ -595,7 +595,7 @@ func (c *Controller) RecordSessionMessages(ctx context.Context, reason string, m
 	}
 	snapshot := store.Snapshot()
 	op := fmt.Sprintf("messages:%s:%d", reason, snapshot.EventSequence+1)
-	_, err := c.appendV3Batch(ctx, store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: events})
+	_, err := c.appendSessionBatch(ctx, store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: events})
 	return err
 }
 
@@ -622,7 +622,7 @@ func (c *Controller) RecordSessionMessageUpsert(ctx context.Context, reason stri
 	defer c.turnEvents.commitMu.Unlock()
 	snapshot := store.Snapshot()
 	op := fmt.Sprintf("message-upsert:%s:%s:%d", reason, message.ID, snapshot.EventSequence+1)
-	_, err = c.appendV3Batch(ctx, store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []session.Event{{Kind: "message/upsert", Payload: payload}}})
+	_, err = c.appendSessionBatch(ctx, store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []session.Event{{Kind: "message/upsert", Payload: payload}}})
 	return err
 }
 
@@ -649,7 +649,7 @@ func (c *Controller) replaceSessionEventProjection(ctx context.Context, reason s
 	defer c.turnEvents.commitMu.Unlock()
 	snapshot := store.Snapshot()
 	op := fmt.Sprintf("context-replace:%s:%d", reason, snapshot.EventSequence+1)
-	_, err = c.appendV3Batch(ctx, store, session.Batch{
+	_, err = c.appendSessionBatch(ctx, store, session.Batch{
 		OperationID: op,
 		TurnID:      snapshot.Projection.TurnID,
 		Events:      []session.Event{{Kind: "history/replace", Payload: payload}},
@@ -680,7 +680,7 @@ func (c *Controller) appendDomainState(kind string, payload json.RawMessage, rea
 	defer c.turnEvents.commitMu.Unlock()
 	snapshot := store.Snapshot()
 	op := fmt.Sprintf("domain:%s:%s:%d", kind, reason, snapshot.EventSequence+1)
-	_, err := c.appendV3Batch(context.Background(), store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []session.Event{{Kind: kind, Payload: append(json.RawMessage(nil), payload...)}}})
+	_, err := c.appendSessionBatch(context.Background(), store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []session.Event{{Kind: kind, Payload: append(json.RawMessage(nil), payload...)}}})
 	if err != nil {
 		return fmt.Errorf("%w: %w", turnevent.ErrTurnLedgerUnavailable, err)
 	}

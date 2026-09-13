@@ -1742,7 +1742,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			if controller == nil {
 				return errors.New("current session is unavailable")
 			}
-			if err := controller.SetSessionTitleV3(ctx, title); err != nil {
+			if err := controller.SetSessionTitle(ctx, title); err != nil {
 				return err
 			}
 			if opts.OnSessionTitleChanged != nil {
@@ -1844,7 +1844,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		SessionDir:                     sessionDir,
 		SessionService:                 sessionService,
 		SessionRuntime:                 opts.SessionRuntime,
-		ExclusiveSessionV3:             sessionService != nil,
+		ExclusiveSession:               sessionService != nil,
 		Host:                           pluginHost,
 		Commands:                       cmds,
 		Skills:                         skills,

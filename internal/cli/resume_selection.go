@@ -55,8 +55,8 @@ func copyResumableSession(model, resumePath string, cfg *config.Config) (string,
 // resumeWithPersistedSelection records the selection the resumed controller
 // actually accepted, so the next restart restores it instead of re-resolving.
 func resumeWithPersistedSelection(ctrl *control.Controller, session *agent.Session, path string) error {
-	if ctrl.UsesExclusiveSessionV3() {
-		if _, err := ctrl.ContinueLegacyV3(context.Background(), path, ""); err != nil {
+	if ctrl.UsesExclusiveSession() {
+		if _, err := ctrl.ContinueLegacySession(context.Background(), path, ""); err != nil {
 			return err
 		}
 		return nil
@@ -87,8 +87,8 @@ func prepareServeSessionPath(ctrl *control.Controller, session *agent.Session, r
 	if strings.TrimSpace(sessionID) == "" {
 		return nil
 	}
-	if ctrl.UsesExclusiveSessionV3() {
-		_, err := ctrl.BindFreshV3(context.Background(), strings.TrimSpace(sessionID))
+	if ctrl.UsesExclusiveSession() {
+		_, err := ctrl.BindFreshSession(context.Background(), strings.TrimSpace(sessionID))
 		return err
 	}
 	freshPath, err := freshWebSessionPath(ctrl.SessionDir(), sessionID)

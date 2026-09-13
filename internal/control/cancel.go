@@ -137,7 +137,7 @@ func (c *Controller) finishCancel(turnID string, cancelled bool) {
 	if c.goals.active() {
 		c.stopGoal(GoalStatusStopped)
 	}
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		c.disarmGoalLifecycle("cancelled")
 	}
 }

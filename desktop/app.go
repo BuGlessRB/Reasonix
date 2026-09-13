@@ -2070,7 +2070,7 @@ func (a *App) clearActiveSessionRuntime(tab *WorkspaceTab, oldCtrl control.Sessi
 	a.sessionRemovalMu.Lock()
 	defer a.sessionRemovalMu.Unlock()
 
-	if _, _, exclusive := exclusiveV3Binding(oldCtrl); exclusive {
+	if _, _, exclusive := exclusiveSessionBinding(oldCtrl); exclusive {
 		if oldCtrl.RuntimeStatus().Cancellable {
 			oldCtrl.Cancel()
 			if err := waitControllerStopped(oldCtrl); err != nil {
@@ -2728,7 +2728,7 @@ func (a *App) ListSessionsForTab(tabID string) []SessionMeta {
 }
 
 func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
-	v3 := a.listV3SessionsFromDir(dir, active)
+	v3 := a.listSessionsFromDir(dir, active)
 	catalog := a.sessionCatalog.Load()
 	if catalog == nil {
 		return v3
@@ -2912,8 +2912,8 @@ func channelDisplayName(provider, domain string) string {
 // has an in-process runtime, the runtime is cancelled and removed first so
 // autosave cannot recreate or append to the deleted file later.
 func (a *App) DeleteSession(path string) error {
-	if _, ok := parseSessionV3Route(path); ok {
-		return a.deleteV3Session(path)
+	if _, ok := parseSessionRoute(path); ok {
+		return a.deleteSession(path)
 	}
 	return friendlySessionFileError(a.deleteSession(path))
 }
@@ -3454,7 +3454,7 @@ func (a *App) purgeTrashedSession(path string, requireRedundantRecovery bool) er
 // the branch meta sidecar, with the legacy .titles.json map kept as a
 // compatibility write-through for older desktop data paths.
 func (a *App) RenameSession(path, title string) error {
-	if _, ok := parseSessionV3Route(path); ok {
+	if _, ok := parseSessionRoute(path); ok {
 		service := a.desktopSessionService(a.activeSessionDir())
 		ref, valid := sessionRefForRoute(service, path)
 		if !valid {
@@ -3542,13 +3542,13 @@ func (a *App) ResumeSessionForTab(tabID, path string) ([]HistoryMessage, error) 
 	if tab == nil || ctrl == nil {
 		return []HistoryMessage{}, fmt.Errorf("tab is not ready")
 	}
-	if _, isV3 := parseSessionV3Route(path); isV3 {
-		if _, err := a.resumeV3SessionForTranscript(tab, ctrl, path, defaultHistoryPageTurns, false); err != nil {
+	if _, isV3 := parseSessionRoute(path); isV3 {
+		if _, err := a.resumeSessionForTranscript(tab, ctrl, path, defaultHistoryPageTurns, false); err != nil {
 			return nil, err
 		}
 		return a.HistoryForTab(tab.ID), nil
 	}
-	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
+	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
 		if continued := a.continuePathForOpen(path); continued != "" {
 			path = continued
 		}
@@ -3556,7 +3556,7 @@ func (a *App) ResumeSessionForTab(tabID, path string) ([]HistoryMessage, error) 
 		if err != nil {
 			return nil, err
 		}
-		if _, err := a.continueLegacyV3ForTranscript(tab, ctrl, sessionPath, defaultHistoryPageTurns, false, false); err != nil {
+		if _, err := a.continueLegacySessionForTranscript(tab, ctrl, sessionPath, defaultHistoryPageTurns, false, false); err != nil {
 			return nil, err
 		}
 		return a.HistoryForTab(tab.ID), nil
@@ -3616,8 +3616,8 @@ func (a *App) OpenChannelSessionForTab(tabID, path string) ([]HistoryMessage, er
 	if tab == nil || ctrl == nil {
 		return []HistoryMessage{}, fmt.Errorf("tab is not ready")
 	}
-	if _, isV3 := parseSessionV3Route(path); isV3 {
-		if _, err := a.resumeV3SessionForTranscript(tab, ctrl, path, defaultHistoryPageTurns, false); err != nil {
+	if _, isV3 := parseSessionRoute(path); isV3 {
+		if _, err := a.resumeSessionForTranscript(tab, ctrl, path, defaultHistoryPageTurns, false); err != nil {
 			return nil, err
 		}
 		a.setTabReadOnly(tab.ID, true)
@@ -3627,8 +3627,8 @@ func (a *App) OpenChannelSessionForTab(tabID, path string) ([]HistoryMessage, er
 	if err != nil {
 		return nil, err
 	}
-	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
-		if _, err := a.continueLegacyV3ForTranscript(tab, ctrl, sessionPath, defaultHistoryPageTurns, false, true); err != nil {
+	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
+		if _, err := a.continueLegacySessionForTranscript(tab, ctrl, sessionPath, defaultHistoryPageTurns, false, true); err != nil {
 			return nil, err
 		}
 		return a.HistoryForTab(tab.ID), nil
@@ -3659,8 +3659,8 @@ func (a *App) openChannelSessionForTranscript(tabID, path string, limit int, inc
 		phases.Outcome = "tab_not_ready"
 		return HistoryPage{}, fmt.Errorf("tab is not ready")
 	}
-	if _, isV3 := parseSessionV3Route(path); isV3 {
-		page, err := a.resumeV3SessionForTranscript(tab, ctrl, path, limit, includeHistory)
+	if _, isV3 := parseSessionRoute(path); isV3 {
+		page, err := a.resumeSessionForTranscript(tab, ctrl, path, limit, includeHistory)
 		if err != nil {
 			phases.Outcome = "v3_rebind_failed"
 			return HistoryPage{}, err
@@ -3688,8 +3688,8 @@ func (a *App) openChannelSessionForTranscript(tabID, path string, limit int, inc
 	phases.LoadMs = elapsedMs(loadStarted)
 	phases.LoadedCount = loaded.Len()
 	phases.LoadedBytes = sessionFileBytes(sessionPath)
-	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
-		page, migrateErr := a.continueLegacyV3ForTranscript(tab, ctrl, sessionPath, limit, includeHistory, true)
+	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
+		page, migrateErr := a.continueLegacySessionForTranscript(tab, ctrl, sessionPath, limit, includeHistory, true)
 		if migrateErr != nil {
 			phases.Outcome = "legacy_migration_failed"
 			return HistoryPage{}, migrateErr
@@ -5285,9 +5285,9 @@ func historyPageFromMessagesForTab(tab *WorkspaceTab, ctrl control.SessionAPI, m
 	)
 	digest, _ := agent.ContentDigestForMessages(msgs)
 	identity := path
-	if sessionIdentity, ok := ctrl.(control.IdentityLifecycle); ok && sessionIdentity.UsesExclusiveSessionV3() {
+	if sessionIdentity, ok := ctrl.(control.IdentityLifecycle); ok && sessionIdentity.UsesExclusiveSession() {
 		if ref, bound := sessionIdentity.SessionRef(); bound {
-			identity = sessionV3Route(ref.SessionID)
+			identity = sessionRoute(ref.SessionID)
 		}
 	}
 	return historyPageWithFingerprint(page, identity, digest)
@@ -5301,7 +5301,7 @@ func historyPageWithFingerprint(page HistoryPage, sessionPath, contentDigest str
 	// Digest is derived from the exact full transcript used to build the page.
 	// Never copy a newer sidecar digest onto older page content.
 	page.Digest = contentDigest
-	if _, isV3 := parseSessionV3Route(sessionPath); !isV3 {
+	if _, isV3 := parseSessionRoute(sessionPath); !isV3 {
 		if meta, ok, err := agent.LoadBranchMeta(sessionPath); err == nil && ok {
 			if strings.TrimSpace(meta.ContentDigest) == contentDigest {
 				page.Revision = meta.Revision
@@ -9658,7 +9658,7 @@ func (a *App) SetModelForTab(tabID, name string) (retErr error) {
 	var carried []provider.Message
 	oldCtrl := a.controllerForTab(tab)
 	if oldCtrl != nil {
-		_, _, exclusiveV3 := exclusiveV3Binding(oldCtrl)
+		_, _, exclusiveV3 := exclusiveSessionBinding(oldCtrl)
 		if !exclusiveV3 {
 			if prevPath == "" {
 				prevPath = oldCtrl.SessionPath()
@@ -9865,7 +9865,7 @@ func (a *App) SetEffortForTab(tabID, level string) error {
 	var carried []provider.Message
 	oldCtrl := a.controllerForTab(tab)
 	if oldCtrl != nil {
-		_, _, exclusiveV3 := exclusiveV3Binding(oldCtrl)
+		_, _, exclusiveV3 := exclusiveSessionBinding(oldCtrl)
 		if !exclusiveV3 {
 			if prevPath == "" {
 				prevPath = oldCtrl.SessionPath()

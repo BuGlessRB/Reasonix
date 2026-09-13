@@ -7,9 +7,9 @@ import (
 	"reasonix/internal/session"
 )
 
-// withTestSessionV3 models the production host boundary explicitly. Boot no
+// withTestSession models the production host boundary explicitly. Boot no
 // longer creates a persistence service as a side effect of controller assembly.
-func withTestSessionV3(t *testing.T, opts Options) Options {
+func withTestSession(t *testing.T, opts Options) Options {
 	t.Helper()
 	sessionDir := opts.SessionDir
 	if sessionDir == "" {

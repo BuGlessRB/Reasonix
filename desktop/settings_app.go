@@ -2048,7 +2048,7 @@ func (a *App) buildSettingReplacementController(tab *WorkspaceTab, snap tabRunti
 		BeforeInboxDispatch:      a.beforeInboxDispatch,
 		OnSessionTitleChanged:    a.onSessionTitleChanged,
 	}
-	_, _, exclusiveV3 := exclusiveV3Binding(oldCtrl)
+	_, _, exclusiveV3 := exclusiveSessionBinding(oldCtrl)
 	if oldCtrl != nil && (reload || exclusiveV3) {
 		old, ok := oldCtrl.(*control.Controller)
 		if !ok {

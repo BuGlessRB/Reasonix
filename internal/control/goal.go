@@ -597,7 +597,7 @@ func ShortGoalForNotice(goal string) string {
 // executor guard preserves the original behavior of skipping persistence when
 // no executor is attached.
 func (c *Controller) persistGoalState(path string, data []byte, ok bool) {
-	if !ok && c.exclusiveV3Enabled() {
+	if !ok && c.sessionEngineEnabled() {
 		data, ok = c.goals.eventState()
 	}
 	if !ok || c.executor == nil {

@@ -14,7 +14,7 @@ import (
 )
 
 func TestServiceForkAndRewindUsePersistedTurnBoundaries(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	service, err := NewService("local", NewFilesystemPersistence(root))
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestServiceForkAndRewindUsePersistedTurnBoundaries(t *testing.T) {
 }
 
 func TestServiceConcurrentOpenPublishesOneExactRuntime(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	persistence := NewFilesystemPersistence(root)
 	handle, err := persistence.Create(CreateOptions{SessionID: "shared"})
 	if err != nil {
@@ -125,7 +125,7 @@ func TestServiceConcurrentOpenPublishesOneExactRuntime(t *testing.T) {
 }
 
 func TestServicePrepareCreateIsInvisibleUntilExactPublish(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	service, err := NewService("local", NewFilesystemPersistence(root))
 	if err != nil {
 		t.Fatal(err)
@@ -160,7 +160,7 @@ func TestServicePrepareCreateIsInvisibleUntilExactPublish(t *testing.T) {
 }
 
 func TestQueryListProjectsEventBackedTitleAndCompletedTurns(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	service, err := NewService("host-a", NewFilesystemPersistence(root))
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestQueryListProjectsEventBackedTitleAndCompletedTurns(t *testing.T) {
 }
 
 func TestServiceDiscardPreparedCreateReleasesWriter(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	service, err := NewService("local", NewFilesystemPersistence(root))
 	if err != nil {
 		t.Fatal(err)
@@ -220,7 +220,7 @@ func TestServiceDiscardPreparedCreateReleasesWriter(t *testing.T) {
 }
 
 func TestRuntimeCancellationUsesOwnedActivityWithoutTurnID(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	service, err := NewService("local", NewFilesystemPersistence(root))
 	if err != nil {
 		t.Fatal(err)
@@ -259,7 +259,7 @@ func TestRuntimeCancellationUsesOwnedActivityWithoutTurnID(t *testing.T) {
 }
 
 func TestServiceObserveDistinguishesLiveAcceptedAndColdDurablePrefixes(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	service, err := NewService("local", NewFilesystemPersistence(root))
 	if err != nil {
 		t.Fatal(err)
@@ -297,7 +297,7 @@ func TestServiceObserveDistinguishesLiveAcceptedAndColdDurablePrefixes(t *testin
 }
 
 func TestServiceClosePreservesBusyRuntime(t *testing.T) {
-	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +322,7 @@ func TestServiceClosePreservesBusyRuntime(t *testing.T) {
 }
 
 func TestServiceOpenClosesPersistedRuntimeWithoutRestoringAuthority(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	persistence := NewFilesystemPersistence(root)
 	handle, err := persistence.Create(CreateOptions{SessionID: "restart"})
 	if err != nil {
@@ -364,7 +364,7 @@ func TestServiceOpenClosesPersistedRuntimeWithoutRestoringAuthority(t *testing.T
 }
 
 func TestSessionQueryColdReadDoesNotAcquireWriter(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	persistence := NewFilesystemPersistence(root)
 	handle, err := persistence.Create(CreateOptions{SessionID: "cold"})
 	if err != nil {
@@ -414,7 +414,7 @@ func TestServiceContinueLegacyPublishesNewIdentityAndLeavesSourceUnchanged(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(root, "sessions-v3")))
+	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(root, "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +438,7 @@ func TestServiceContinueLegacyPublishesNewIdentityAndLeavesSourceUnchanged(t *te
 }
 
 func TestServiceExportAndDeleteAreSessionDirectoryAtomic(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	service, err := NewService("local", NewFilesystemPersistence(root))
 	if err != nil {
 		t.Fatal(err)
@@ -474,7 +474,7 @@ func TestServiceExportAndDeleteAreSessionDirectoryAtomic(t *testing.T) {
 }
 
 func TestDeleteRefusesAnOwnedSession(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	persistence := NewFilesystemPersistence(root)
 	handle, err := persistence.Create(CreateOptions{SessionID: "owned"})
 	if err != nil {
@@ -491,7 +491,7 @@ func TestDeleteRefusesAnOwnedSession(t *testing.T) {
 }
 
 func TestCancelledActivityCannotCommitLateBusinessResult(t *testing.T) {
-	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +519,7 @@ func TestCancelledActivityCannotCommitLateBusinessResult(t *testing.T) {
 }
 
 func TestRecoveryOwnerCanCommitOnlyTerminalRecoveryFacts(t *testing.T) {
-	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -559,7 +559,7 @@ func TestRecoveryOwnerCanCommitOnlyTerminalRecoveryFacts(t *testing.T) {
 }
 
 func TestCancelSessionIsIdempotentWithoutAttachedRuntime(t *testing.T) {
-	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := NewService("local", NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,9 +12,9 @@ import (
 	"reasonix/internal/session"
 )
 
-func (a *App) continueLegacyV3ForTranscript(tab *WorkspaceTab, ctrl control.SessionAPI, sourcePath string, limit int, includeHistory, readOnly bool) (HistoryPage, error) {
+func (a *App) continueLegacySessionForTranscript(tab *WorkspaceTab, ctrl control.SessionAPI, sourcePath string, limit int, includeHistory, readOnly bool) (HistoryPage, error) {
 	identity, ok := ctrl.(control.IdentityLifecycle)
-	if !ok || !identity.UsesExclusiveSessionV3() {
+	if !ok || !identity.UsesExclusiveSession() {
 		return HistoryPage{}, fmt.Errorf("session identity protocol is unavailable")
 	}
 
@@ -33,7 +33,7 @@ func (a *App) continueLegacyV3ForTranscript(tab *WorkspaceTab, ctrl control.Sess
 	if err := current.Snapshot(); err != nil {
 		return HistoryPage{}, err
 	}
-	if _, err := identity.ContinueLegacyV3(a.bootContext(), sourcePath, ""); err != nil {
+	if _, err := identity.ContinueLegacySession(a.bootContext(), sourcePath, ""); err != nil {
 		return HistoryPage{}, err
 	}
 	a.syncTabSessionIdentity(tab, current)
@@ -46,12 +46,12 @@ func (a *App) continueLegacyV3ForTranscript(tab *WorkspaceTab, ctrl control.Sess
 	return historyPageFromMessagesForTab(tab, current, current.History(), 0, limit), nil
 }
 
-func (a *App) resumeV3SessionForTranscript(tab *WorkspaceTab, ctrl control.SessionAPI, route string, limit int, includeHistory bool) (HistoryPage, error) {
+func (a *App) resumeSessionForTranscript(tab *WorkspaceTab, ctrl control.SessionAPI, route string, limit int, includeHistory bool) (HistoryPage, error) {
 	identity, ok := ctrl.(control.IdentityLifecycle)
-	if !ok || !identity.UsesExclusiveSessionV3() {
+	if !ok || !identity.UsesExclusiveSession() {
 		return HistoryPage{}, fmt.Errorf("session identity protocol is unavailable")
 	}
-	service := identity.SessionV3Service()
+	service := identity.SessionService()
 	ref, ok := sessionRefForRoute(service, route)
 	if !ok {
 		return HistoryPage{}, fmt.Errorf("invalid session identity")
@@ -79,11 +79,11 @@ func (a *App) resumeV3SessionForTranscript(tab *WorkspaceTab, ctrl control.Sessi
 		}
 		targetModel := strings.TrimSpace(target.Projection.ModelRef)
 		if targetModel != "" {
-			current, err = a.replaceControllerForV3OpenLocked(tab, current, service, ref, targetModel)
+			current, err = a.replaceControllerForSessionOpenLocked(tab, current, service, ref, targetModel)
 			if err != nil {
 				return HistoryPage{}, err
 			}
-		} else if _, err := identity.OpenV3(a.bootContext(), ref); err != nil {
+		} else if _, err := identity.OpenSession(a.bootContext(), ref); err != nil {
 			return HistoryPage{}, err
 		}
 	}
@@ -97,15 +97,15 @@ func (a *App) resumeV3SessionForTranscript(tab *WorkspaceTab, ctrl control.Sessi
 	return historyPageFromMessagesForTab(tab, current, current.History(), 0, limit), nil
 }
 
-// replaceControllerForV3OpenLocked prepares an Agent for the target session's
+// replaceControllerForSessionOpenLocked prepares an Agent for the target session's
 // recorded model before publishing it to the tab. The caller holds
 // runtimeRebuildMu and tab.turnStartMu, so the source remains usable until the
 // target model, writer, and event projection have all been validated.
-func (a *App) replaceControllerForV3OpenLocked(tab *WorkspaceTab, current control.SessionAPI, service *session.Service, ref session.SessionRef, targetModel string) (control.SessionAPI, error) {
+func (a *App) replaceControllerForSessionOpenLocked(tab *WorkspaceTab, current control.SessionAPI, service *session.Service, ref session.SessionRef, targetModel string) (control.SessionAPI, error) {
 	if tab == nil || current == nil || service == nil {
 		return nil, fmt.Errorf("session runtime changed while opening session")
 	}
-	transition, err := a.reserveSessionRuntimePath(tab, sessionV3Route(ref.SessionID))
+	transition, err := a.reserveSessionRuntimePath(tab, sessionRoute(ref.SessionID))
 	if err != nil {
 		return nil, userFacingSessionLeaseError("", err)
 	}
@@ -161,10 +161,10 @@ func (a *App) replaceControllerForV3OpenLocked(tab *WorkspaceTab, current contro
 		}
 	}()
 	candidateIdentity, ok := candidate.(control.IdentityLifecycle)
-	if !ok || !candidateIdentity.UsesExclusiveSessionV3() {
+	if !ok || !candidateIdentity.UsesExclusiveSession() {
 		return nil, fmt.Errorf("replacement session identity protocol is unavailable")
 	}
-	if _, err := candidateIdentity.OpenV3(a.bootContext(), ref); err != nil {
+	if _, err := candidateIdentity.OpenSession(a.bootContext(), ref); err != nil {
 		return nil, err
 	}
 	a.bindControllerDisplayRecorder(candidate)

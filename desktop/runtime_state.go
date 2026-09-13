@@ -274,7 +274,7 @@ func remoteRuntimeSessionID(route, fallback string, state event.RuntimeStateSnap
 	if id := strings.TrimSpace(state.SessionID); id != "" {
 		return id
 	}
-	if id, ok := parseSessionV3Route(route); ok {
+	if id, ok := parseSessionRoute(route); ok {
 		return id
 	}
 	return strings.TrimSpace(fallback)

@@ -723,8 +723,8 @@ func (s *service) sessionNew(ctx context.Context, raw json.RawMessage) (any, err
 	// Exclusive v3 sessions bind the ACP id directly to the immutable storage
 	// identity. They never manufacture an id.jsonl transcript or acquire its
 	// legacy lease. Older factories retain the isolated compatibility path.
-	if ctrl.UsesExclusiveSessionV3() {
-		if _, err := ctrl.BindFreshV3(ctx, id); err != nil {
+	if ctrl.UsesExclusiveSession() {
+		if _, err := ctrl.BindFreshSession(ctx, id); err != nil {
 			ctrl.Close()
 			return nil, &RPCError{Code: ErrInternal, Message: "session/new: " + err.Error()}
 		}
@@ -1025,13 +1025,13 @@ func (s *service) openExistingSession(ctx context.Context, method, id, cwdParam 
 
 	path := ""
 	var lease *agent.SessionLease
-	if ctrl.UsesExclusiveSessionV3() {
-		service := ctrl.SessionV3Service()
+	if ctrl.UsesExclusiveSession() {
+		service := ctrl.SessionService()
 		if service == nil {
 			ctrl.Close()
 			return SessionConfigState{}, &RPCError{Code: ErrInternal, Message: method + ": v3 session service is unavailable"}
 		}
-		if _, err := ctrl.OpenV3(ctx, session.SessionRef{HostID: service.HostID(), SessionID: id}); err != nil {
+		if _, err := ctrl.OpenSession(ctx, session.SessionRef{HostID: service.HostID(), SessionID: id}); err != nil {
 			ctrl.Close()
 			return SessionConfigState{}, &RPCError{Code: ErrInvalidParams, Message: method + ": unknown session " + id}
 		}

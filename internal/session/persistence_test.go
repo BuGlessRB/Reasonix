@@ -12,7 +12,7 @@ import (
 )
 
 func TestFilesystemCreateIsExclusiveAndOpenNeverCreates(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	persistence := NewFilesystemPersistence(root)
 
 	if _, err := persistence.Open("missing", ReadWrite); !errors.Is(err, ErrSessionNotFound) {
@@ -33,7 +33,7 @@ func TestFilesystemCreateIsExclusiveAndOpenNeverCreates(t *testing.T) {
 }
 
 func TestFilesystemReadOnlyQueryWritesIndexOutsideSessionDirectory(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions-v3")
+	root := filepath.Join(t.TempDir(), "sessions-v4")
 	persistence := NewFilesystemPersistence(root)
 	writer, err := persistence.Create(CreateOptions{SessionID: "readonly"})
 	if err != nil {

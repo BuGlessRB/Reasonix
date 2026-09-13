@@ -147,7 +147,7 @@ flushes. Idle is not a durability guarantee. Export, cold-disk verification,
 writer handoff, and clean shutdown wait for an explicit flush. Live snapshots
 carry both event and durable sequences, and the former may be newer.
 
-The new root is `sessions-v3`. Legacy continuation resolves the transcript and
+The new root is `sessions-v4`. Legacy continuation resolves the transcript and
 its paired preview event directory as one import decision, and it classifies
 before it publishes anything. It freezes the legacy transcript under its write
 lease and the paired preview under directory and writer ownership locks, then
@@ -177,7 +177,7 @@ boundary rather than materializing the complete log.
 At the final coordinated cutover, Desktop host RPC moves to protocol version 5.
 The Electron shell sends and validates the version from its embedded command
 contract, so shell and service cannot drift through separately maintained
-constants. Serve advertises `execution-v2`, `session-events-v3`, and
+constants. Serve advertises `execution-v2`, `session-history-v1`, and
 `session-identity-v1`, and `session-ownership-v1`. New Desktop builds reject execution control against a
 remote missing any capability instead of emulating the new state machine over
 old RPCs or path identities.

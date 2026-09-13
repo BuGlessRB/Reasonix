@@ -46,11 +46,11 @@ func (c *Controller) releaseSessionRuntimeBinding(service *session.Service) {
 	}
 }
 
-// BindFreshV3 creates and publishes a fresh identity-bound session. The caller
+// BindFreshSession creates and publishes a fresh identity-bound session. The caller
 // may provide an id allocated by its protocol; an empty id lets persistence
 // allocate one. Publication happens only after the initial event batch is
 // accepted, so failure leaves the currently-bound session usable.
-func (c *Controller) BindFreshV3(ctx context.Context, sessionID string) (session.SessionRef, error) {
+func (c *Controller) BindFreshSession(ctx context.Context, sessionID string) (session.SessionRef, error) {
 	service, _, _ := c.v3Binding()
 	if c == nil || service == nil || c.executor == nil {
 		return session.SessionRef{}, errors.New("v3 session service is unavailable")
@@ -74,7 +74,7 @@ func (c *Controller) BindFreshV3(ctx context.Context, sessionID string) (session
 		_ = service.Discard(context.Background(), prepared)
 		return session.SessionRef{}, err
 	}
-	if _, err = c.publishV3Runtime(candidate, fresh, true); err != nil {
+	if _, err = c.publishSessionRuntime(candidate, fresh, true); err != nil {
 		// This attempt published the identity, so an owner-scoped close is the
 		// correct cleanup. It still refuses while any client is bound.
 		_ = owner.Close(context.Background())
@@ -83,22 +83,22 @@ func (c *Controller) BindFreshV3(ctx context.Context, sessionID string) (session
 	return candidate.Ref(), nil
 }
 
-// ContinueLegacyV3 freezes and migrates the selected legacy head, then
+// ContinueLegacySession freezes and migrates the selected legacy head, then
 // publishes the returned immutable v3 identity. The source remains only as a
 // display/import locator and is never rebound as the execution store.
-func (c *Controller) ContinueLegacyV3(ctx context.Context, sourcePath, headID string) (session.SessionRef, error) {
-	return c.continueLegacyV3(ctx, sourcePath, headID, true)
+func (c *Controller) ContinueLegacySession(ctx context.Context, sourcePath, headID string) (session.SessionRef, error) {
+	return c.continueLegacySession(ctx, sourcePath, headID, true)
 }
 
-// ContinueLegacyV3ForRebuild performs the same fail-atomic import while an
+// ContinueLegacySessionForRebuild performs the same fail-atomic import while an
 // Agent generation is being replaced for the same logical session. The
 // SessionTemp generation belongs to that logical session, so this path must
 // not rotate it merely because persistence crossed the legacy/v3 boundary.
-func (c *Controller) ContinueLegacyV3ForRebuild(ctx context.Context, sourcePath, headID string) (session.SessionRef, error) {
-	return c.continueLegacyV3(ctx, sourcePath, headID, false)
+func (c *Controller) ContinueLegacySessionForRebuild(ctx context.Context, sourcePath, headID string) (session.SessionRef, error) {
+	return c.continueLegacySession(ctx, sourcePath, headID, false)
 }
 
-func (c *Controller) continueLegacyV3(ctx context.Context, sourcePath, headID string, rotateSessionTemp bool) (session.SessionRef, error) {
+func (c *Controller) continueLegacySession(ctx context.Context, sourcePath, headID string, rotateSessionTemp bool) (session.SessionRef, error) {
 	service, _, _ := c.v3Binding()
 	if c == nil || service == nil || c.executor == nil {
 		return session.SessionRef{}, errors.New("v3 session service is unavailable")
@@ -127,7 +127,7 @@ func (c *Controller) continueLegacyV3(ctx context.Context, sourcePath, headID st
 	}
 	messages := candidate.Session().Snapshot().Projection.ModelMessages
 	prepared := agent.NewSession("").CloneWithMessages(messages)
-	if _, err = c.publishV3Runtime(candidate, prepared, rotateSessionTemp); err != nil {
+	if _, err = c.publishSessionRuntime(candidate, prepared, rotateSessionTemp); err != nil {
 		_ = owner.Close(context.Background())
 		return session.SessionRef{}, err
 	}
@@ -135,9 +135,9 @@ func (c *Controller) continueLegacyV3(ctx context.Context, sourcePath, headID st
 	return candidate.Ref(), nil
 }
 
-// ContinuePrototypeV3 imports the retired sidecar codec through the restricted
+// ContinuePrototypeSession imports the retired sidecar codec through the restricted
 // fail-closed bridge, then publishes the final linear session identity.
-func (c *Controller) ContinuePrototypeV3(ctx context.Context, sourceDir string) (session.SessionRef, error) {
+func (c *Controller) ContinuePrototypeSession(ctx context.Context, sourceDir string) (session.SessionRef, error) {
 	service, _, _ := c.v3Binding()
 	if c == nil || service == nil || c.executor == nil {
 		return session.SessionRef{}, errors.New("v3 session service is unavailable")
@@ -155,14 +155,14 @@ func (c *Controller) ContinuePrototypeV3(ctx context.Context, sourceDir string) 
 		return session.SessionRef{}, err
 	}
 	prepared := agent.NewSession("").CloneWithMessages(candidate.Session().Snapshot().Projection.ModelMessages)
-	if _, err = c.publishV3Runtime(candidate, prepared, true); err != nil {
+	if _, err = c.publishSessionRuntime(candidate, prepared, true); err != nil {
 		_ = owner.Close(context.Background())
 		return session.SessionRef{}, err
 	}
 	return candidate.Ref(), nil
 }
 
-// OpenV3 attaches this Controller to an existing immutable session identity.
+// OpenSession attaches this Controller to an existing immutable session identity.
 // Opening never creates a missing session and publication retains the current
 // binding until the target projection and writer are ready.
 //
@@ -170,7 +170,7 @@ func (c *Controller) ContinuePrototypeV3(ctx context.Context, sourceDir string) 
 // client's own grant instead of disposing a runtime another client may already
 // be using. A retired stored codec is the one exception: importing it publishes
 // a brand-new identity that this attempt owns outright.
-func (c *Controller) OpenV3(ctx context.Context, ref session.SessionRef) (session.SessionRef, error) {
+func (c *Controller) OpenSession(ctx context.Context, ref session.SessionRef) (session.SessionRef, error) {
 	service, current, _ := c.v3Binding()
 	if c == nil || service == nil || c.executor == nil {
 		return session.SessionRef{}, errors.New("v3 session service is unavailable")
@@ -189,15 +189,15 @@ func (c *Controller) OpenV3(ctx context.Context, ref session.SessionRef) (sessio
 		if ownerErr != nil {
 			return session.SessionRef{}, ownerErr
 		}
-		return c.publishAttachedV3(upgraded, "upgrade", owner.Close)
+		return c.publishAttachedSession(upgraded, "upgrade", owner.Close)
 	}
 	if err != nil {
 		return session.SessionRef{}, err
 	}
 	target := binding.Runtime()
-	published, err := c.publishAttachedV3(target, "attach-existing", nil)
+	published, err := c.publishAttachedSession(target, "attach-existing", nil)
 	if err == nil {
-		// publishV3Runtime installs the controller's own client grant; this
+		// publishSessionRuntime installs the controller's own client grant; this
 		// temporary attach grant is no longer needed.
 		_ = binding.Release(context.Background())
 		return published, nil
@@ -210,15 +210,15 @@ func (c *Controller) OpenV3(ctx context.Context, ref session.SessionRef) (sessio
 	return session.SessionRef{}, err
 }
 
-// publishAttachedV3 publishes the prepared projection for an already-resolved
+// publishAttachedSession publishes the prepared projection for an already-resolved
 // runtime. retire is used only when this attempt owns a newly published
 // identity; pass nil to withdraw a client grant instead.
-func (c *Controller) publishAttachedV3(candidate *session.Runtime, reason string, retire func(context.Context) error) (session.SessionRef, error) {
+func (c *Controller) publishAttachedSession(candidate *session.Runtime, reason string, retire func(context.Context) error) (session.SessionRef, error) {
 	if candidate == nil {
 		return session.SessionRef{}, errors.New("v3 session runtime is unavailable")
 	}
 	prepared := agent.NewSession("").CloneWithMessages(candidate.Session().Snapshot().Projection.ModelMessages)
-	if _, err := c.publishV3Runtime(candidate, prepared, true); err != nil {
+	if _, err := c.publishSessionRuntime(candidate, prepared, true); err != nil {
 		if retire != nil {
 			_ = retire(context.Background())
 		}
@@ -227,8 +227,8 @@ func (c *Controller) publishAttachedV3(candidate *session.Runtime, reason string
 	return candidate.Ref(), nil
 }
 
-// SetSessionTitleV3 records mutable title state in the canonical event stream.
-func (c *Controller) SetSessionTitleV3(ctx context.Context, title string) error {
+// SetSessionTitle records mutable title state in the canonical event stream.
+func (c *Controller) SetSessionTitle(ctx context.Context, title string) error {
 	_, runtime, exclusive := c.v3Binding()
 	if !exclusive || runtime == nil {
 		return session.ErrSessionNotRunning
@@ -238,7 +238,7 @@ func (c *Controller) SetSessionTitleV3(ctx context.Context, title string) error 
 		return err
 	}
 	snapshot := runtime.Session().Snapshot()
-	_, err = c.appendV3Batch(ctx, runtime.Session(), session.Batch{
+	_, err = c.appendSessionBatch(ctx, runtime.Session(), session.Batch{
 		OperationID: "session-title:" + agent.NewMessageID(),
 		TurnID:      snapshot.Projection.TurnID,
 		Events:      []session.Event{{Kind: "session/title", Payload: payload}},
@@ -296,7 +296,7 @@ func sessionConfigEvent(modelRef, modelIdentity string) (session.Event, error) {
 	return session.Event{Kind: "session/config", Payload: payload}, nil
 }
 
-func (c *Controller) publishV3Runtime(candidate *session.Runtime, prepared *agent.Session, rotateSessionTemp bool) (*session.Runtime, error) {
+func (c *Controller) publishSessionRuntime(candidate *session.Runtime, prepared *agent.Session, rotateSessionTemp bool) (*session.Runtime, error) {
 	if candidate == nil || prepared == nil {
 		return nil, errors.New("v3 runtime publication candidate is unavailable")
 	}
@@ -308,7 +308,7 @@ func (c *Controller) publishV3Runtime(candidate *session.Runtime, prepared *agen
 		return nil, errors.New("v3 runtime candidate is not the exact published service instance")
 	}
 	projection := candidate.Session().Snapshot().Projection
-	if err := validateV3DomainProjection(projection); err != nil {
+	if err := validateSessionDomainProjection(projection); err != nil {
 		return nil, err
 	}
 	binding, err := service.Bind(candidate)
@@ -326,7 +326,7 @@ func (c *Controller) publishV3Runtime(candidate *session.Runtime, prepared *agen
 	// Domain parsing was validated above. Restore it before swapping the
 	// client binding so a future validation failure cannot expose a partially
 	// published controller or require closing a shared runtime.
-	if err := c.restoreV3DomainProjection(projection); err != nil {
+	if err := c.restoreSessionDomainProjection(projection); err != nil {
 		return nil, err
 	}
 	c.v3BindingMu.Lock()
@@ -334,7 +334,7 @@ func (c *Controller) publishV3Runtime(candidate *session.Runtime, prepared *agen
 	oldBinding := c.sessionBinding
 	c.sessionRuntime = candidate
 	c.sessionBinding = binding
-	c.v3Exclusive = true
+	c.exclusiveSession = true
 	c.v3BindingMu.Unlock()
 	c.mu.Lock()
 	// Legacy paths are import inputs only. Retaining one as the live path lets
@@ -344,7 +344,7 @@ func (c *Controller) publishV3Runtime(candidate *session.Runtime, prepared *agen
 	c.mu.Unlock()
 	c.executor.SetSession(prepared)
 	// The immutable session projection is the only Goal restore source. A true
-	// session switch installs a fresh, disarmed lifecycle; OpenV3's exact-runtime
+	// session switch installs a fresh, disarmed lifecycle; OpenSession's exact-runtime
 	// fast path returns before this point and therefore preserves live activation.
 	c.installGoalLifecycle(candidate)
 	// Transcript pages are a derived cache. A session switch invalidates the
@@ -377,7 +377,7 @@ func (c *Controller) publishV3Runtime(candidate *session.Runtime, prepared *agen
 	return old, nil
 }
 
-func validateV3DomainProjection(projection session.Projection) error {
+func validateSessionDomainProjection(projection session.Projection) error {
 	if len(projection.PlanState) > 0 {
 		var plan struct {
 			Enabled bool `json:"enabled"`
@@ -395,7 +395,7 @@ func validateV3DomainProjection(projection session.Projection) error {
 	return nil
 }
 
-func (c *Controller) restoreV3DomainProjection(projection session.Projection) error {
+func (c *Controller) restoreSessionDomainProjection(projection session.Projection) error {
 	var plan struct {
 		Enabled bool `json:"enabled"`
 	}
@@ -426,22 +426,22 @@ func (c *Controller) v3Binding() (*session.Service, *session.Runtime, bool) {
 		return nil, nil, false
 	}
 	c.v3BindingMu.RLock()
-	service, runtime, exclusive := c.sessionService, c.sessionRuntime, c.v3Exclusive
+	service, runtime, exclusive := c.sessionService, c.sessionRuntime, c.exclusiveSession
 	c.v3BindingMu.RUnlock()
 	return service, runtime, exclusive
 }
 
-// SessionV3Binding exposes the host-owned service/runtime pair for an Agent
+// SessionBinding exposes the host-owned service/runtime pair for an Agent
 // rebuild. Callers must attach the pair to the replacement Controller; they
 // must not close or republish the writer themselves.
-func (c *Controller) SessionV3Binding() (*session.Service, *session.Runtime, bool) {
+func (c *Controller) SessionBinding() (*session.Service, *session.Runtime, bool) {
 	service, runtime, exclusive := c.v3Binding()
 	return service, runtime, exclusive && service != nil && runtime != nil
 }
 
-// SessionV3Service exposes the host query/management owner without requiring
+// SessionService exposes the host query/management owner without requiring
 // an active runtime. Cold history listing must not create an Agent or writer.
-func (c *Controller) SessionV3Service() *session.Service {
+func (c *Controller) SessionService() *session.Service {
 	service, _, exclusive := c.v3Binding()
 	if !exclusive {
 		return nil
@@ -449,23 +449,23 @@ func (c *Controller) SessionV3Service() *session.Service {
 	return service
 }
 
-// UsesExclusiveSessionV3 reports the configured execution contract even when
+// UsesExclusiveSession reports the configured execution contract even when
 // a lazy fresh session has not yet been allocated. Hosts use it to avoid
 // manufacturing a legacy path during rebuild preparation.
-func (c *Controller) UsesExclusiveSessionV3() bool {
+func (c *Controller) UsesExclusiveSession() bool {
 	service, _, exclusive := c.v3Binding()
 	return exclusive && service != nil
 }
 
-func (c *Controller) exclusiveV3Enabled() bool {
+func (c *Controller) sessionEngineEnabled() bool {
 	_, _, exclusive := c.v3Binding()
 	return exclusive
 }
 
-// rotateExclusiveV3Session implements /new and /clear without allocating a
+// rotateExclusiveSession implements /new and /clear without allocating a
 // legacy transcript path. clear additionally deletes the closed source v3
 // directory; new leaves it available in history.
-func (c *Controller) rotateExclusiveV3Session(clear bool) error {
+func (c *Controller) rotateExclusiveSession(clear bool) error {
 	service, runtime, _ := c.v3Binding()
 	if service == nil || runtime == nil {
 		return errors.New("exclusive v3 session runtime is unavailable")
@@ -483,7 +483,7 @@ func (c *Controller) rotateExclusiveV3Session(clear bool) error {
 	}
 	c.hooks.SessionEnd(context.Background(), reason)
 	c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, oldRef.SessionID)
-	ref, err := c.BindFreshV3(context.Background(), "")
+	ref, err := c.BindFreshSession(context.Background(), "")
 	if err != nil {
 		return err
 	}

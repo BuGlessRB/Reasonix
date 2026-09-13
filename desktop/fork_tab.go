@@ -106,7 +106,7 @@ func (a *App) forkForTabWithOptions(tabID string, turn int, isolateWorkspace boo
 	}
 	exclusiveV3 := false
 	if identity, ok := ctrl.(control.IdentityLifecycle); ok {
-		exclusiveV3 = identity.UsesExclusiveSessionV3()
+		exclusiveV3 = identity.UsesExclusiveSession()
 	}
 	if !exclusiveV3 {
 		if err := copyPinnedContextState(ctrl.SessionPath(), newPath); err != nil {
@@ -192,7 +192,7 @@ func (a *App) openForkedSessionTabWithWorkspace(sourceTab *WorkspaceTab, newPath
 	}
 	exclusiveV3 := false
 	if identity, ok := sourceTab.Ctrl.(control.IdentityLifecycle); ok {
-		exclusiveV3 = identity.UsesExclusiveSessionV3()
+		exclusiveV3 = identity.UsesExclusiveSession()
 	}
 	if !exclusiveV3 {
 		m, _ := agent.EnsureBranchMeta(newPath)

@@ -81,8 +81,8 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		out = append(out, row)
 	}
 	if concrete, ok := ctrl.(*control.Controller); ok {
-		if service := concrete.SessionV3Service(); service != nil {
-			_, runtime, bound := concrete.SessionV3Binding()
+		if service := concrete.SessionService(); service != nil {
+			_, runtime, bound := concrete.SessionBinding()
 			page, listErr := service.Query().List(r.Context(), "", 100)
 			if listErr == nil {
 				for _, info := range page.Sessions {

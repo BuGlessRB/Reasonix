@@ -117,9 +117,9 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 	c.mu.Lock()
 	running, finishing, closed, cancelling, path := c.running, c.finishing, c.closed, c.canceling, c.sessionPath
 	c.mu.Unlock()
-	_, v3Runtime, v3Exclusive := c.v3Binding()
+	_, v3Runtime, exclusiveSession := c.v3Binding()
 	var v3RuntimeSnapshot session.RuntimeSnapshot
-	if v3Exclusive && v3Runtime != nil {
+	if exclusiveSession && v3Runtime != nil {
 		v3RuntimeSnapshot = v3Runtime.StateSnapshot()
 	}
 	ledger := c.turnEventLedger()
@@ -154,7 +154,7 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 	v3Snapshot, hasV3Snapshot := c.sessionStateSnapshot()
 	applyRuntimeSessionState(&next, v3Snapshot, hasV3Snapshot)
 	next.HeadID = agent.BranchID(path)
-	if v3Exclusive {
+	if exclusiveSession {
 		next.HeadID = ""
 	}
 	if hasV3Snapshot {
@@ -171,7 +171,7 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 	if next.Todos == nil {
 		next.Todos = []event.Todo{}
 	}
-	setRuntimePhase(&next, v3Exclusive, v3Runtime, v3RuntimeSnapshot, running, finishing, closed, cancelling)
+	setRuntimePhase(&next, exclusiveSession, v3Runtime, v3RuntimeSnapshot, running, finishing, closed, cancelling)
 	next.Running = running || finishing
 	next.CancelRequested = cancelling
 	identities, promptRevision := c.promptOwner.IdentitiesRevision()
@@ -195,7 +195,7 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 	currentGoal, currentGoalErr := c.goalLifecycleView()
 	stable = stable && reflect.DeepEqual(goalView, currentGoal)
 	stable = stable && ((goalErr == nil && currentGoalErr == nil) || (goalErr != nil && currentGoalErr != nil && goalErr.Error() == currentGoalErr.Error()))
-	if v3Exclusive && v3Runtime != nil {
+	if exclusiveSession && v3Runtime != nil {
 		_, currentRuntime, currentExclusive := c.v3Binding()
 		stable = stable && currentExclusive && currentRuntime == v3Runtime && currentRuntime.StateSnapshot().ActivityRevision == v3RuntimeSnapshot.ActivityRevision
 	}
@@ -285,9 +285,9 @@ func runtimeActivity(state event.RuntimeStateSnapshot, e event.Event, activity s
 	return activity
 }
 
-func setRuntimePhase(next *event.RuntimeStateSnapshot, v3Exclusive bool, v3Runtime *session.Runtime, v3RuntimeSnapshot session.RuntimeSnapshot, running, finishing, closed, cancelling bool) {
+func setRuntimePhase(next *event.RuntimeStateSnapshot, exclusiveSession bool, v3Runtime *session.Runtime, v3RuntimeSnapshot session.RuntimeSnapshot, running, finishing, closed, cancelling bool) {
 	next.Phase = "idle"
-	if v3Exclusive && v3Runtime != nil {
+	if exclusiveSession && v3Runtime != nil {
 		switch v3RuntimeSnapshot.Phase {
 		case session.RuntimeRunning:
 			next.Phase = "executing"

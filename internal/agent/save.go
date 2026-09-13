@@ -1379,10 +1379,17 @@ func loadSessionUnlockedWithLimits(path string, limits sessionReplayLimits) (*Se
 }
 
 func loadSessionUnlockedWithContext(ctx context.Context, path string, limits sessionReplayLimits) (*Session, error) {
+	return loadSessionUnlockedWithContextMode(ctx, path, limits, false)
+}
+
+func loadSessionUnlockedWithContextMode(ctx context.Context, path string, limits sessionReplayLimits, rejectDamage bool) (*Session, error) {
 	hasher := newSessionTranscriptHasher()
 	res, err := loadSessionTranscript(ctx, path, limits, hasher)
 	if err != nil {
 		return nil, err
+	}
+	if rejectDamage && res.damaged {
+		return nil, fmt.Errorf("%w: authoritative event log has no complete recoverable prefix", ErrSessionHistoryDamaged)
 	}
 	msgs := res.msgs
 	s := &Session{Messages: msgs, eventLogDamaged: res.damaged, head: sessionHeadState{ref: res.head, dag: res.dag, headCount: res.headCount, state: res.state, openTurn: res.openTurn, events: res.events}}
@@ -1453,7 +1460,7 @@ func LoadSessionForMigration(ctx context.Context, path string) (*Session, error)
 	}
 	unlock := lockSessionSavePath(path)
 	defer unlock()
-	return loadSessionUnlockedWithContext(ctx, path, migrationSessionReplayLimits())
+	return loadSessionUnlockedWithContextMode(ctx, path, migrationSessionReplayLimits(), true)
 }
 
 // SessionInfo summarises a saved session for the --resume picker: where it is on

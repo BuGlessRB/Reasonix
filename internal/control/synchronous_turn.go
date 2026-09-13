@@ -45,7 +45,7 @@ func (c *Controller) runSynchronousTurn(
 	c.canceling = false
 	c.mu.Unlock()
 	c.refreshRuntimeState(event.Event{})
-	runtimeCtx, runtimeActivity, runtimeErr := c.beginV3RuntimeActivity(ctx, "turn")
+	runtimeCtx, runtimeActivity, runtimeErr := c.beginSessionRuntimeActivity(ctx, "turn")
 	if runtimeErr != nil {
 		finish := func() {
 			c.mu.Lock()
@@ -75,7 +75,7 @@ func (c *Controller) runSynchronousTurn(
 		c.canceling = false
 		c.mu.Unlock()
 		c.refreshRuntimeState(event.Event{})
-		c.finishV3RuntimeActivity(runtimeActivity)
+		c.finishSessionRuntimeActivity(runtimeActivity)
 		c.kickGoalDriver()
 		cancel()
 	}

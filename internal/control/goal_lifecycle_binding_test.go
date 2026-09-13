@@ -62,7 +62,7 @@ func TestGoalLifecycleMalformedProjectionFailsClosed(t *testing.T) {
 }
 
 func TestExclusiveControllerLoadsGoalFromV3Projection(t *testing.T) {
-	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestExclusiveControllerLoadsGoalFromV3Projection(t *testing.T) {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
-	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
+	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	t.Cleanup(func() { c.Close() })
 	view, loadErr := c.goalLifecycleView()
 	if loadErr != nil {
@@ -87,7 +87,7 @@ func TestExclusiveControllerLoadsGoalFromV3Projection(t *testing.T) {
 }
 
 func TestGoalLifecycleMutationAppendsToActiveV3Session(t *testing.T) {
-	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,9 +96,9 @@ func TestGoalLifecycleMutationAppendsToActiveV3Session(t *testing.T) {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
-	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
+	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	t.Cleanup(func() { c.Close() })
-	ctx, activity, err := c.beginV3RuntimeActivity(t.Context(), "turn")
+	ctx, activity, err := c.beginSessionRuntimeActivity(t.Context(), "turn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,11 +122,11 @@ func TestGoalLifecycleMutationAppendsToActiveV3Session(t *testing.T) {
 	if err != nil || loaded.Get() == nil || loaded.Get().ID != created.ID {
 		t.Fatalf("projected goal = %+v, err = %v", loaded.Get(), err)
 	}
-	c.finishV3RuntimeActivity(activity)
+	c.finishSessionRuntimeActivity(activity)
 }
 
 func TestGoalLifecycleMutationRejectsStaleRuntimeAuthority(t *testing.T) {
-	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestGoalLifecycleMutationRejectsStaleRuntimeAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
-	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
+	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	t.Cleanup(func() { c.Close() })
 	_, err = c.CreateGoal(t.Context(), goaldomain.CreateRequest{Objective: "ship"}, tool.GoalAuthority{
 		Source: tool.GoalSourceDirectHuman, SessionID: "another-session", RuntimeEpoch: "old", ActivityID: 1,
@@ -149,7 +149,7 @@ func TestGoalLifecycleMutationRejectsStaleRuntimeAuthority(t *testing.T) {
 }
 
 func TestModelCannotResumeUserPausedGoal(t *testing.T) {
-	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,13 +158,13 @@ func TestModelCannotResumeUserPausedGoal(t *testing.T) {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
-	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
+	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	t.Cleanup(c.Close)
-	ctx, activity, err := c.beginV3RuntimeActivity(t.Context(), "turn")
+	ctx, activity, err := c.beginSessionRuntimeActivity(t.Context(), "turn")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.finishV3RuntimeActivity(activity)
+	defer c.finishSessionRuntimeActivity(activity)
 	snapshot := runtime.Snapshot()
 	authority := tool.GoalAuthority{Source: tool.GoalSourceDirectHuman, SessionID: runtime.Ref().SessionID,
 		RuntimeEpoch: snapshot.Epoch, ActivityID: snapshot.ActivityRevision}

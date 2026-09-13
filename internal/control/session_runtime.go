@@ -7,7 +7,7 @@ import (
 	"reasonix/internal/session"
 )
 
-func (c *Controller) beginV3RuntimeActivity(ctx context.Context, name string) (context.Context, *session.Activity, error) {
+func (c *Controller) beginSessionRuntimeActivity(ctx context.Context, name string) (context.Context, *session.Activity, error) {
 	_, runtime, exclusive := c.v3Binding()
 	if !exclusive || runtime == nil {
 		return ctx, nil, nil
@@ -22,7 +22,7 @@ func (c *Controller) beginV3RuntimeActivity(ctx context.Context, name string) (c
 	return runtimeCtx, activity, nil
 }
 
-func (c *Controller) finishV3RuntimeActivity(activity *session.Activity) {
+func (c *Controller) finishSessionRuntimeActivity(activity *session.Activity) {
 	if activity == nil {
 		return
 	}
@@ -34,7 +34,7 @@ func (c *Controller) finishV3RuntimeActivity(activity *session.Activity) {
 	activity.Finish(nil)
 }
 
-func (c *Controller) appendV3Batch(ctx context.Context, store *session.Session, batch session.Batch) (session.Commit, error) {
+func (c *Controller) appendSessionBatch(ctx context.Context, store *session.Session, batch session.Batch) (session.Commit, error) {
 	if store == nil {
 		return session.Commit{}, session.ErrSessionNotRunning
 	}

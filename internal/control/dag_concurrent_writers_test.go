@@ -64,7 +64,7 @@ func TestConcurrentControllersShareOneLogWithoutRecoveryCopies(t *testing.T) {
 			t.Fatalf("concurrent controllers created a transcript copy: %s", entry.Name())
 		}
 	}
-	commits, err := session.Replay(sessionV3Directory(path), nil)
+	commits, err := session.Replay(sessionDirectory(path), nil)
 	if err != nil {
 		t.Fatalf("Replay v3: %v", err)
 	}

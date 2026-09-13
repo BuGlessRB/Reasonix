@@ -1430,7 +1430,7 @@ func (gw *BotGateway) handleSlashCommandCore(ctx context.Context, adapter Adapte
 				if !exists {
 					override = sessionRuntimeOverride{}
 				}
-				if identity, ok := state.ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
+				if identity, ok := state.ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
 					if ref, bound := identity.SessionRef(); bound {
 						state.sessionRef = ref
 						state.sessionPath = ""
@@ -2386,11 +2386,11 @@ func (gw *BotGateway) getOrCreateSession(ctx context.Context, key string, msg In
 		return nil
 	}
 	state.ctrl = ctrl
-	if identity, ok := any(ctrl).(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
+	if identity, ok := any(ctrl).(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
 		ref, bindErr := bindBotSessionIdentity(ctx, identity, profile, msg)
 		if bindErr != nil && (profile.sessionRefOptional || profile.sessionPathOptional) {
 			gw.logger.Warn("mapped bot session unavailable; starting fresh", "err", bindErr)
-			ref, bindErr = identity.BindFreshV3(ctx, "")
+			ref, bindErr = identity.BindFreshSession(ctx, "")
 			state.mappingDegraded = bindErr == nil
 		}
 		if bindErr != nil {
@@ -2443,7 +2443,7 @@ func (gw *BotGateway) getOrCreateSession(ctx context.Context, key string, msg In
 	}
 	ctrl.EnableInteractiveApproval()
 	ctrl.SetToolApprovalMode(profile.toolApprovalMode)
-	if identity, ok := any(ctrl).(control.IdentityLifecycle); !ok || !identity.UsesExclusiveSessionV3() {
+	if identity, ok := any(ctrl).(control.IdentityLifecycle); !ok || !identity.UsesExclusiveSession() {
 		ctrl.EnsureSessionPath()
 		if err := rebindBotSessionWriteAuthority(state, ctrl.SessionPath()); err != nil {
 			ctrl.Close()
@@ -2713,7 +2713,7 @@ func (gw *BotGateway) rememberSessionReady(msg InboundMessage, ctrl botControlle
 	if gw.cfg.OnSessionReady == nil || ctrl == nil {
 		return
 	}
-	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
+	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
 		if ref, bound := identity.SessionRef(); bound {
 			gw.rememberSessionTarget(msg, botSessionRefTarget(ref))
 			return
