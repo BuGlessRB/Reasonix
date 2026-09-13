@@ -32,7 +32,7 @@ func TestGoalDiagnosticsHTTPExportsAuthoritativeSession(t *testing.T) {
 	if recorder.Code != 200 {
 		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
 	}
-	for _, want := range []string{"reasonix.session.linear/v3", "goal-lifecycle-v2", "activationChanges"} {
+	for _, want := range []string{sessionv3.Codec, "goal-lifecycle-v2", "activationChanges"} {
 		if !strings.Contains(recorder.Body.String(), want) {
 			t.Fatalf("diagnostic response missing %q: %s", want, recorder.Body.String())
 		}

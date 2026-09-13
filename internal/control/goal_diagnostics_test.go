@@ -44,7 +44,7 @@ func TestGoalDiagnosticExportReadsCompleteDurableV3Log(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(payload)
-	for _, want := range []string{`"schemaVersion": 1`, `"applicationVersion": "1.2.3"`, `"sessionCodec": "reasonix.session.linear/v3.1"`, `"full diagnostic output"`, `"goal-lifecycle-v2"`, `"activationChanges"`, `"activation": "armed"`} {
+	for _, want := range []string{`"schemaVersion": 1`, `"applicationVersion": "1.2.3"`, `"sessionCodec": "` + sessionv3.Codec + `"`, `"full diagnostic output"`, `"goal-lifecycle-v2"`, `"activationChanges"`, `"activation": "armed"`} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("diagnostic export missing %s:\n%s", want, text)
 		}

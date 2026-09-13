@@ -184,12 +184,22 @@ func TestUnknownRequiredPrefixDoesNotTruncateTail(t *testing.T) {
 	if err := runtime.close(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(store.dir, "events.jsonl")
+	path := filepath.Join(store.dir, currentLogName)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = bytes.Replace(data, []byte(`"kind":"diagnostic"`), []byte(`"kind":"future/required"`), 1)
+	unknown := Commit{
+		SchemaVersion: SchemaVersion, Codec: Codec, RecordType: "commit", ID: "future-commit",
+		OperationID: "future-operation", OperationHash: "future-hash", FirstSequence: 2,
+		EventCount: 1, WriterGeneration: store.Manifest().WriterGeneration, CreatedAt: time.Now().UTC(),
+		Events: []Event{{ID: "future-event", Sequence: 2, Kind: "future/required"}},
+	}
+	var encoded bytes.Buffer
+	if _, err := encodeV4Commits(t.Context(), &encoded, contentStoreForSessionDir(store.dir), []Commit{unknown}); err != nil {
+		t.Fatal(err)
+	}
+	data = append(data, encoded.Bytes()...)
 	data = append(data, []byte(`{"torn":`)...)
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)

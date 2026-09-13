@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -93,13 +92,8 @@ func writeForkChild(ctx context.Context, parentDir, parentID string, prefix []Co
 		inherited[i] = commit
 	}
 	var log bytes.Buffer
-	for _, commit := range inherited {
-		line, err := json.Marshal(commit)
-		if err != nil {
-			return Manifest{}, err
-		}
-		log.Write(line)
-		log.WriteByte('\n')
+	if _, err := encodeV4Commits(ctx, &log, contentStoreForSessionDir(childDir), inherited); err != nil {
+		return Manifest{}, err
 	}
 	digest := sha256.Sum256(log.Bytes())
 	manifest := Manifest{
@@ -129,7 +123,7 @@ func writeForkChild(ctx context.Context, parentDir, parentID string, prefix []Co
 	if err := writeManifestFile(filepath.Join(tmp, "manifest.json"), manifest); err != nil {
 		return Manifest{}, err
 	}
-	if err := fileutil.AtomicWriteFileStrict(filepath.Join(tmp, "events.jsonl"), log.Bytes(), 0o600); err != nil {
+	if err := fileutil.AtomicWriteFileStrict(filepath.Join(tmp, currentLogName), log.Bytes(), 0o600); err != nil {
 		return Manifest{}, err
 	}
 	if err := copyOwnedSessionFiles(ctx, parentDir, tmp); err != nil {

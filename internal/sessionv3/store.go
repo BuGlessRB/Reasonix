@@ -26,16 +26,20 @@ import (
 
 	"reasonix/internal/filelock"
 	"reasonix/internal/fileutil"
+	"reasonix/internal/sessioncontent"
 )
 
 const (
-	SchemaVersion = 3
-	// Codec identifies the final linear session format. Prototype stores used a
-	// different codec and must go through the explicit importer.
-	Codec             = "reasonix.session.linear/v3.1"
+	SchemaVersion = V4SchemaVersion
+	// Codec identifies the current framed linear session format. Earlier linear
+	// and prototype stores are immutable migration inputs.
+	Codec             = V4Codec
+	FinalV31Codec     = "reasonix.session.linear/v3.1"
 	LegacyLinearCodec = "reasonix.session.linear/v3"
 	PrototypeCodec    = "reasonix.session.events/v3"
 	LiveBatchDelay    = 200 * time.Millisecond
+	currentLogName    = "events.frames"
+	legacyLogName     = "events.jsonl"
 )
 
 var (
@@ -171,6 +175,7 @@ type Store struct {
 	releaseLease func()
 	closed       bool
 	index        sparseIndex
+	content      *sessioncontent.Store
 
 	writeFn func(context.Context, io.Writer, []byte) error
 	syncFn  func(*os.File) error
@@ -280,7 +285,7 @@ func CreateWithOptions(dir, sessionID string, opts OpenOptions) (*Session, error
 	if err := writeManifestFile(filepath.Join(dir, "manifest.json"), manifest); err != nil {
 		return nil, err
 	}
-	if err := fileutil.AtomicWriteFileStrict(filepath.Join(dir, "events.jsonl"), nil, 0o600); err != nil {
+	if err := fileutil.AtomicWriteFileStrict(filepath.Join(dir, currentLogName), nil, 0o600); err != nil {
 		return nil, err
 	}
 	created = false
@@ -306,7 +311,7 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 	if !info.IsDir() {
 		return nil, fmt.Errorf("sessionv3: session path is not a directory: %s", dir)
 	}
-	eventsPath := filepath.Join(dir, "events.jsonl")
+	eventsPath := filepath.Join(dir, currentLogName)
 	releaseLease, err := acquireSessionWriter(dir)
 	if err != nil {
 		if errors.Is(err, filelock.ErrHeld) {
@@ -331,14 +336,14 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 	if _, err := Replay(dir, nil); err != nil {
 		return fail(err)
 	}
-	if torn, err := hasTornTail(eventsPath); err != nil {
+	if durableEnd, torn, err := v4TornTail(eventsPath, contentStoreForSessionDir(dir)); err != nil {
 		return fail(err)
 	} else if torn {
 		// Cold readers deliberately stop at the last complete record. A writer
 		// may repair that tail only after acquiring the exclusive lease above:
 		// preserve the original bytes first, then truncate back to the durable
 		// commit boundary. This never invents or partially replays an event.
-		if _, err := preserveAndTruncateTornTail(eventsPath); err != nil {
+		if _, err := preserveAndTruncateTail(eventsPath, durableEnd, "torn"); err != nil {
 			return fail(fmt.Errorf("recover torn v3 tail: %w", err))
 		}
 	}
@@ -368,7 +373,7 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 	}
 	return &Store{
 		dir: dir, manifest: manifest, file: f, releaseLease: releaseLease,
-		index: index, writeFn: writeFn, syncFn: syncFn,
+		index: index, content: contentStoreForSessionDir(dir), writeFn: writeFn, syncFn: syncFn,
 	}, nil
 }
 
@@ -418,6 +423,40 @@ func writeManifestFile(path string, manifest Manifest) error {
 	return fileutil.AtomicWriteFileStrict(path, append(b, '\n'), 0o600)
 }
 
+func contentStoreForSessionDir(dir string) *sessioncontent.Store {
+	return sessioncontent.New(filepath.Join(filepath.Dir(dir), ".content-v1"))
+}
+
+func logPathForManifest(dir string, manifest Manifest) string {
+	if manifest.Codec == Codec {
+		return filepath.Join(dir, currentLogName)
+	}
+	return filepath.Join(dir, legacyLogName)
+}
+
+func supportedStoredManifest(manifest Manifest) bool {
+	if manifest.SchemaVersion == SchemaVersion && manifest.Codec == Codec {
+		return true
+	}
+	return (manifest.SchemaVersion == 3 || manifest.SchemaVersion == SchemaVersion) &&
+		(manifest.Codec == FinalV31Codec || manifest.Codec == LegacyLinearCodec || manifest.Codec == PrototypeCodec)
+}
+
+func readStoredManifest(path string) (Manifest, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return Manifest{}, err
+	}
+	var manifest Manifest
+	if err := json.Unmarshal(b, &manifest); err != nil {
+		return Manifest{}, err
+	}
+	if !supportedStoredManifest(manifest) {
+		return Manifest{}, fmt.Errorf("%w: manifest schema or codec", ErrUnsupportedVersion)
+	}
+	return manifest, nil
+}
+
 // Append writes already-committed batches in order. Sequence allocation,
 // validation, and idempotency belong to Session; this method is only the
 // physical hand-off and reports uncertainty rather than guessing.
@@ -458,10 +497,12 @@ func (s *Store) Append(ctx context.Context, commits []Commit) error {
 }
 
 func (s *Store) persist(ctx context.Context, file *os.File, commits []Commit) error {
-	written, lengths, err := encodeCommitLines(commits)
+	var encoded bytes.Buffer
+	lengths, err := encodeV4Commits(ctx, &encoded, s.content, commits)
 	if err != nil {
 		return err
 	}
+	written := encoded.Bytes()
 	start, err := file.Seek(0, io.SeekEnd)
 	if err != nil {
 		return err
@@ -571,7 +612,11 @@ func scanDurableCommits(dir string, knownKinds map[string]bool, visit func(Commi
 	if knownKinds == nil {
 		knownKinds = ProjectionKinds
 	}
-	file, err := os.Open(filepath.Join(dir, "events.jsonl"))
+	manifest, err := readStoredManifest(filepath.Join(dir, "manifest.json"))
+	if err != nil {
+		return err
+	}
+	file, err := os.Open(logPathForManifest(dir, manifest))
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -579,19 +624,23 @@ func scanDurableCommits(dir string, knownKinds map[string]bool, visit func(Commi
 		return err
 	}
 	defer file.Close()
-	return scanCommitFile(file, 0, 1, knownKinds, func(_ int64, commit Commit) bool {
+	adapter := func(_ int64, commit Commit) bool {
 		if visit == nil {
 			return true
 		}
 		return visit(commit)
-	})
+	}
+	if manifest.Codec == Codec {
+		return scanV4CommitFile(context.Background(), file, 0, 1, contentStoreForSessionDir(dir), knownKinds, adapter)
+	}
+	return scanCommitFileCodec(file, 0, 1, manifest.Codec, knownKinds, adapter)
 }
 
 // scanCommitFile validates complete records beginning at an already validated
 // commit boundary. startOffset and nextSequence come from the rebuildable
 // sparse index; callers that do not have one pass 0 and 1.
 func scanCommitFile(file *os.File, startOffset int64, nextSequence uint64, knownKinds map[string]bool, visit func(int64, Commit) bool) error {
-	return scanCommitFileCodec(file, startOffset, nextSequence, Codec, knownKinds, visit)
+	return scanV4CommitFile(context.Background(), file, startOffset, nextSequence, nil, knownKinds, visit)
 }
 
 func scanCommitFileCodec(file *os.File, startOffset int64, nextSequence uint64, codec string, knownKinds map[string]bool, visit func(int64, Commit) bool) error {
@@ -624,7 +673,7 @@ func scanCommitFileCodec(file *os.File, startOffset int64, nextSequence uint64, 
 		if err := json.Unmarshal(bytes.TrimSuffix(line, []byte{'\n'}), &commit); err != nil {
 			return fmt.Errorf("%w: decode complete commit: %w", ErrDamagedStore, err)
 		}
-		if commit.SchemaVersion != SchemaVersion || commit.Codec != codec {
+		if (commit.SchemaVersion != 3 && commit.SchemaVersion != SchemaVersion) || commit.Codec != codec {
 			return fmt.Errorf("%w: event codec", ErrUnsupportedVersion)
 		}
 		if commit.RecordType != "commit" || commit.ID == "" || commit.OperationID == "" ||
@@ -675,34 +724,98 @@ func hasTornTail(path string) (bool, error) {
 	return last[0] != '\n', nil
 }
 
+func v4TornTail(path string, content *sessioncontent.Store) (int64, bool, error) {
+	file, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return 0, false, err
+	}
+	var durableEnd int64
+	err = scanV4CommitFile(context.Background(), file, 0, 1, content, nil, func(_ int64, _ Commit) bool {
+		durableEnd, _ = file.Seek(0, io.SeekCurrent)
+		return true
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	return durableEnd, durableEnd < info.Size(), nil
+}
+
 func preserveAndTruncateTornTail(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	if len(data) == 0 || data[len(data)-1] == '\n' {
+	defer file.Close()
+	var cut int64
+	reader := bufio.NewReaderSize(file, 64<<10)
+	for {
+		line, readErr := reader.ReadBytes('\n')
+		if len(line) > 0 && line[len(line)-1] == '\n' {
+			cut += int64(len(line))
+		}
+		if readErr != nil {
+			if !errors.Is(readErr, io.EOF) {
+				return "", readErr
+			}
+			break
+		}
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	if cut == info.Size() {
 		return "", nil
 	}
-	cut := bytes.LastIndexByte(data, '\n') + 1
-	tail := append([]byte(nil), data[cut:]...)
-	backup := filepath.Join(filepath.Dir(path), fmt.Sprintf("events.torn-%d.tail", time.Now().UTC().UnixNano()))
-	if err := fileutil.AtomicWriteFileStrict(backup, tail, 0o600); err != nil {
-		return "", fmt.Errorf("preserve original tail: %w", err)
-	}
-	file, err := os.OpenFile(path, os.O_RDWR, 0o600)
+	return preserveAndTruncateTail(path, cut, "torn")
+}
+
+func preserveAndTruncateTail(path string, cut int64, label string) (string, error) {
+	input, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	if err := file.Truncate(int64(cut)); err != nil {
-		_ = file.Close()
-		return "", fmt.Errorf("truncate to durable prefix: %w", err)
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return "", fmt.Errorf("sync durable prefix: %w", err)
-	}
-	if err := file.Close(); err != nil {
+	info, err := input.Stat()
+	if err != nil {
+		_ = input.Close()
 		return "", err
+	}
+	if cut < 0 || cut > info.Size() {
+		_ = input.Close()
+		return "", fmt.Errorf("invalid durable tail offset %d for %d-byte log", cut, info.Size())
+	}
+	backup := filepath.Join(filepath.Dir(path), fmt.Sprintf("events.%s-%d.tail", label, time.Now().UTC().UnixNano()))
+	out, err := os.OpenFile(backup, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		_ = input.Close()
+		return "", fmt.Errorf("preserve original tail: %w", err)
+	}
+	_, seekErr := input.Seek(cut, io.SeekStart)
+	_, copyErr := io.CopyBuffer(out, input, make([]byte, 1<<20))
+	syncErr := out.Sync()
+	closeOutErr := out.Close()
+	closeInErr := input.Close()
+	if err := errors.Join(seekErr, copyErr, syncErr, closeOutErr, closeInErr); err != nil {
+		_ = os.Remove(backup)
+		return "", fmt.Errorf("preserve original tail: %w", err)
+	}
+	writable, err := os.OpenFile(path, os.O_RDWR, 0o600)
+	if err != nil {
+		return "", err
+	}
+	truncateErr := writable.Truncate(cut)
+	syncErr = writable.Sync()
+	closeErr := writable.Close()
+	if err := errors.Join(truncateErr, syncErr, closeErr); err != nil {
+		return "", fmt.Errorf("truncate to durable prefix: %w", err)
 	}
 	return backup, nil
 }

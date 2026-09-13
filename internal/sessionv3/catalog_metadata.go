@@ -75,9 +75,16 @@ type logRevision struct {
 	Exists    bool
 }
 
-// revisionOfLog inspects one events.jsonl without reading its body.
+// revisionOfLog inspects the manifest-selected event log without reading its body.
 func revisionOfLog(dir string) (logRevision, error) {
-	info, err := os.Stat(filepath.Join(dir, "events.jsonl"))
+	manifest, err := readStoredManifest(filepath.Join(dir, "manifest.json"))
+	if os.IsNotExist(err) {
+		return logRevision{}, nil
+	}
+	if err != nil {
+		return logRevision{}, err
+	}
+	info, err := os.Stat(logPathForManifest(dir, manifest))
 	if os.IsNotExist(err) {
 		return logRevision{}, nil
 	}

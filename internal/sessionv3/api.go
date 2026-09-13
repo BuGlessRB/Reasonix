@@ -86,7 +86,7 @@ type SessionPersistence interface {
 	List(context.Context, string, int) (SessionPage, error)
 }
 
-// FilesystemPersistence owns a versioned sessions-v3 root.
+// FilesystemPersistence owns a versioned sessions-v4 root.
 type FilesystemPersistence struct{ Root string }
 
 func NewFilesystemPersistence(root string) *FilesystemPersistence {
@@ -102,9 +102,9 @@ func RootForLegacyDir(sessionDir string) string {
 		return ""
 	}
 	if filepath.Base(dir) == "sessions" {
-		return filepath.Join(filepath.Dir(dir), "sessions-v3")
+		return filepath.Join(filepath.Dir(dir), "sessions-v4")
 	}
-	return filepath.Join(dir, "sessions-v3")
+	return filepath.Join(dir, "sessions-v4")
 }
 
 func (p *FilesystemPersistence) Create(options CreateOptions) (*Session, error) {
@@ -176,7 +176,7 @@ func (p *FilesystemPersistence) Stat(ctx context.Context, sessionID string) (Ses
 	}
 	updatedAt := manifest.CreatedAt
 	if revision.Exists {
-		if stat, statErr := os.Stat(filepath.Join(dir, "events.jsonl")); statErr == nil && stat.ModTime().After(updatedAt) {
+		if stat, statErr := os.Stat(logPathForManifest(dir, manifest)); statErr == nil && stat.ModTime().After(updatedAt) {
 			updatedAt = stat.ModTime()
 		}
 	}
@@ -199,8 +199,7 @@ func readCatalogManifest(path string) (Manifest, error) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return Manifest{}, err
 	}
-	if manifest.SchemaVersion != SchemaVersion ||
-		(manifest.Codec != Codec && manifest.Codec != LegacyLinearCodec && manifest.Codec != PrototypeCodec) {
+	if !supportedStoredManifest(manifest) {
 		return Manifest{}, fmt.Errorf("%w: manifest schema or codec", ErrUnsupportedVersion)
 	}
 	return manifest, nil
@@ -338,7 +337,7 @@ func openReadHandle(dir, id string, cacheDirs ...string) (*readHandle, error) {
 	if len(cacheDirs) > 0 && strings.TrimSpace(cacheDirs[0]) != "" {
 		cacheDir = cacheDirs[0]
 	}
-	manifest, err := readManifest(filepath.Join(dir, "manifest.json"))
+	manifest, err := readStoredManifest(filepath.Join(dir, "manifest.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("%w: %s", ErrSessionNotFound, id)
@@ -435,12 +434,16 @@ func readCommitPageWithCache(ctx context.Context, dir, cacheDir string, offset u
 		return page, nil
 	}
 	checkpoint := index.checkpoint(offset)
-	file, err := os.Open(filepath.Join(dir, "events.jsonl"))
+	manifest, err := readStoredManifest(filepath.Join(dir, "manifest.json"))
+	if err != nil {
+		return EventPage{}, err
+	}
+	file, err := os.Open(logPathForManifest(dir, manifest))
 	if err != nil {
 		return EventPage{}, err
 	}
 	defer file.Close()
-	err = scanCommitFile(file, checkpoint.Offset, checkpoint.FirstSequence, nil, func(_ int64, commit Commit) bool {
+	visit := func(_ int64, commit Commit) bool {
 		if ctx.Err() != nil {
 			return false
 		}
@@ -454,7 +457,12 @@ func readCommitPageWithCache(ctx context.Context, dir, cacheDir string, offset u
 		page.Commits = append(page.Commits, commit)
 		page.Next = commit.LastSequence()
 		return true
-	})
+	}
+	if manifest.Codec == Codec {
+		err = scanV4CommitFile(ctx, file, checkpoint.Offset, checkpoint.FirstSequence, contentStoreForSessionDir(dir), nil, visit)
+	} else {
+		err = scanCommitFileCodec(file, checkpoint.Offset, checkpoint.FirstSequence, manifest.Codec, nil, visit)
+	}
 	if err != nil {
 		return EventPage{}, err
 	}

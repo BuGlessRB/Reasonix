@@ -46,7 +46,11 @@ func loadOrBuildSparseIndex(ctx context.Context, dir, cacheDir string) (sparseIn
 	if err := ctx.Err(); err != nil {
 		return sparseIndex{}, err
 	}
-	logPath := filepath.Join(dir, "events.jsonl")
+	manifest, err := readStoredManifest(filepath.Join(dir, "manifest.json"))
+	if err != nil {
+		return sparseIndex{}, err
+	}
+	logPath := logPathForManifest(dir, manifest)
 	file, err := os.Open(logPath)
 	if os.IsNotExist(err) {
 		return sparseIndex{Codec: sparseIndexCodec, Entries: []sparseIndexEntry{}}, nil
@@ -78,7 +82,7 @@ func loadOrBuildSparseIndex(ctx context.Context, dir, cacheDir string) (sparseIn
 		Entries:      []sparseIndexEntry{},
 	}
 	commitIndex := 0
-	err = scanCommitFile(file, 0, 1, nil, func(offset int64, commit Commit) bool {
+	visit := func(offset int64, commit Commit) bool {
 		if ctx.Err() != nil {
 			return false
 		}
@@ -89,7 +93,12 @@ func loadOrBuildSparseIndex(ctx context.Context, dir, cacheDir string) (sparseIn
 		rebuilt.CommitCount++
 		rebuilt.LastSequence = commit.LastSequence()
 		return true
-	})
+	}
+	if manifest.Codec == Codec {
+		err = scanV4CommitFile(ctx, file, 0, 1, contentStoreForSessionDir(dir), nil, visit)
+	} else {
+		err = scanCommitFileCodec(file, 0, 1, manifest.Codec, nil, visit)
+	}
 	if err != nil {
 		return sparseIndex{}, err
 	}
@@ -126,7 +135,7 @@ func writeSparseIndex(cacheDir string, index sparseIndex) {
 	_ = fileutil.AtomicWriteFileStrict(sparseIndexPath(cacheDir), append(data, '\n'), 0o600)
 }
 
-func (s *Store) recordPersistedIndex(file *os.File, start int64, commits []Commit, lengths []int) {
+func (s *Store) recordPersistedIndex(file *os.File, start int64, commits []Commit, lengths []int64) {
 	if s == nil || file == nil || len(commits) == 0 || len(commits) != len(lengths) {
 		return
 	}

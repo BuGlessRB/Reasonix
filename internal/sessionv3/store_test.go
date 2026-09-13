@@ -277,12 +277,12 @@ func TestReplayIgnoresTornTailAndWriterRecoversUnderLease(t *testing.T) {
 	if err := s.Close(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "events.jsonl")
+	path := filepath.Join(dir, currentLogName)
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = file.WriteString(`{"schemaVersion":3,"recordType":"commit"`)
+	_, _ = file.WriteString(`{"torn`)
 	_ = file.Close()
 	commits, err := Replay(dir, nil)
 	if err != nil || len(commits) != 1 {
@@ -297,7 +297,7 @@ func TestReplayIgnoresTornTailAndWriterRecoversUnderLease(t *testing.T) {
 		t.Fatalf("torn tail backups = %v, %v", backups, err)
 	}
 	tail, err := os.ReadFile(backups[0])
-	if err != nil || string(tail) != `{"schemaVersion":3,"recordType":"commit"` {
+	if err != nil || string(tail) != `{"torn` {
 		t.Fatalf("preserved tail = %q, %v", tail, err)
 	}
 	if _, err := reopened.Append(t.Context(), Batch{OperationID: "after-recovery", Events: []Event{{Kind: "diagnostic", Optional: true}}}); err != nil {
