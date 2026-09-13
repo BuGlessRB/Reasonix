@@ -78,7 +78,7 @@ export function ModelChoice({
 
   return (
     <>
-      <div className="mfind">
+      <div className="msearch">
         <input
           type="search"
           value={q}
