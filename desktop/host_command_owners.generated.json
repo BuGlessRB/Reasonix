@@ -6292,6 +6292,38 @@
       ]
     }
   },
+  "SessionHistoryContentForTab": {
+    "domain": "desktop/session_history_service.go",
+    "owner": "App.SessionHistoryContentForTab",
+    "sources": [
+      "desktop/session_history_service.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SessionHistoryContentForTab",
+      "inputs": [
+        "tabID",
+        "ref",
+        "offset"
+      ]
+    }
+  },
+  "SessionHistoryPageForTab": {
+    "domain": "desktop/session_history_service.go",
+    "owner": "App.SessionHistoryPageForTab",
+    "sources": [
+      "desktop/session_history_service.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SessionHistoryPageForTab",
+      "inputs": [
+        "tabID",
+        "cursor",
+        "limit"
+      ]
+    }
+  },
   "SetActiveSessionVersion": {
     "domain": "desktop/recovery_lineage.go",
     "owner": "App.SetActiveSessionVersion",

@@ -2728,7 +2728,7 @@ func (a *App) ListSessionsForTab(tabID string) []SessionMeta {
 }
 
 func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
-	v3 := a.listSessionsFromDir(dir, active)
+	v3 := a.listCanonicalSessionsFromDir(dir, active)
 	catalog := a.sessionCatalog.Load()
 	if catalog == nil {
 		return v3
@@ -2913,7 +2913,7 @@ func channelDisplayName(provider, domain string) string {
 // autosave cannot recreate or append to the deleted file later.
 func (a *App) DeleteSession(path string) error {
 	if _, ok := parseSessionRoute(path); ok {
-		return a.deleteSession(path)
+		return a.deleteCanonicalSession(path)
 	}
 	return friendlySessionFileError(a.deleteSession(path))
 }
@@ -3543,7 +3543,7 @@ func (a *App) ResumeSessionForTab(tabID, path string) ([]HistoryMessage, error) 
 		return []HistoryMessage{}, fmt.Errorf("tab is not ready")
 	}
 	if _, isV3 := parseSessionRoute(path); isV3 {
-		if _, err := a.resumeSessionForTranscript(tab, ctrl, path, defaultHistoryPageTurns, false); err != nil {
+		if _, err := a.resumeCanonicalSessionForTranscript(tab, ctrl, path, defaultHistoryPageTurns, false); err != nil {
 			return nil, err
 		}
 		return a.HistoryForTab(tab.ID), nil
@@ -3617,7 +3617,7 @@ func (a *App) OpenChannelSessionForTab(tabID, path string) ([]HistoryMessage, er
 		return []HistoryMessage{}, fmt.Errorf("tab is not ready")
 	}
 	if _, isV3 := parseSessionRoute(path); isV3 {
-		if _, err := a.resumeSessionForTranscript(tab, ctrl, path, defaultHistoryPageTurns, false); err != nil {
+		if _, err := a.resumeCanonicalSessionForTranscript(tab, ctrl, path, defaultHistoryPageTurns, false); err != nil {
 			return nil, err
 		}
 		a.setTabReadOnly(tab.ID, true)
@@ -3660,7 +3660,7 @@ func (a *App) openChannelSessionForTranscript(tabID, path string, limit int, inc
 		return HistoryPage{}, fmt.Errorf("tab is not ready")
 	}
 	if _, isV3 := parseSessionRoute(path); isV3 {
-		page, err := a.resumeSessionForTranscript(tab, ctrl, path, limit, includeHistory)
+		page, err := a.resumeCanonicalSessionForTranscript(tab, ctrl, path, limit, includeHistory)
 		if err != nil {
 			phases.Outcome = "v3_rebind_failed"
 			return HistoryPage{}, err

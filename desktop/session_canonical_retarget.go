@@ -119,7 +119,7 @@ func (a *App) resumeSessionForTranscript(tabID, path string, limit int, includeH
 		return HistoryPage{}, fmt.Errorf("tab is not ready")
 	}
 	if _, isV3 := parseSessionRoute(path); isV3 {
-		page, err := a.resumeSessionForTranscript(tab, ctrl, path, limit, includeHistory)
+		page, err := a.resumeCanonicalSessionForTranscript(tab, ctrl, path, limit, includeHistory)
 		if err != nil {
 			phases.Outcome = "v3_rebind_failed"
 			return HistoryPage{}, err

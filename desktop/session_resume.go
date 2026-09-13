@@ -46,7 +46,7 @@ func (a *App) continueLegacySessionForTranscript(tab *WorkspaceTab, ctrl control
 	return historyPageFromMessagesForTab(tab, current, current.History(), 0, limit), nil
 }
 
-func (a *App) resumeSessionForTranscript(tab *WorkspaceTab, ctrl control.SessionAPI, route string, limit int, includeHistory bool) (HistoryPage, error) {
+func (a *App) resumeCanonicalSessionForTranscript(tab *WorkspaceTab, ctrl control.SessionAPI, route string, limit int, includeHistory bool) (HistoryPage, error) {
 	identity, ok := ctrl.(control.IdentityLifecycle)
 	if !ok || !identity.UsesExclusiveSession() {
 		return HistoryPage{}, fmt.Errorf("session identity protocol is unavailable")

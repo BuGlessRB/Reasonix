@@ -6,7 +6,7 @@ import (
 	"reasonix/internal/control"
 )
 
-func (a *App) deleteSession(route string) error {
+func (a *App) deleteCanonicalSession(route string) error {
 	service := a.desktopSessionService(a.activeSessionDir())
 	ref, ok := sessionRefForRoute(service, route)
 	if !ok {

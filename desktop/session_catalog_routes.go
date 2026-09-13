@@ -22,7 +22,7 @@ func parseSessionRoute(route string) (string, bool) {
 	return id, ok && id != ""
 }
 
-func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
+func (a *App) listCanonicalSessionsFromDir(dir, active string) []SessionMeta {
 	service := a.desktopSessionService(dir)
 	if service == nil {
 		return []SessionMeta{}
