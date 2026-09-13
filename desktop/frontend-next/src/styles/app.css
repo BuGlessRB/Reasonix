@@ -6099,7 +6099,11 @@
     background: transparent;
   }
   .sessrow .wsdel { flex: none; background: transparent }
-  .wsrow .wsdel { opacity: 1 }
+  /* 和会话行同一档：移除与「新建会话」隔着 6px，代价却差着一整个项目，两颗
+     不该同等份量。降权不是隐藏 —— 它占着宽度，藏起来就成了读作「没有这个
+     功能」的空位。 */
+  .wsrow .wsdel { opacity: .45 }
+  .wsrow:hover .wsdel, .wsrow .wsdel:focus-visible { opacity: 1 }
   .sessrow .wsdel:hover, .wsrow .wsdel:hover { background: var(--border); color: var(--err) }
 
   /* 页签是控件不是正文：能选中文字的话，右键出来的永远是系统菜单，自己的
