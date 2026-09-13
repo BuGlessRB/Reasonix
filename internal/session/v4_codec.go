@@ -95,7 +95,16 @@ func encodeV4Commits(ctx context.Context, dst io.Writer, content *sessioncontent
 				ID: event.ID, Sequence: event.Sequence, Kind: event.Kind,
 				Optional: event.Optional, Required: event.Required,
 			}
-			if len(event.Payload) > v4InlinePayloadBytes {
+			if event.PayloadRef != nil {
+				if len(event.Payload) != 0 || content == nil {
+					return nil, errors.New("sessionv4: referenced payload must have one available content store")
+				}
+				if err := content.Verify(ctx, *event.PayloadRef); err != nil {
+					return nil, fmt.Errorf("sessionv4: verify event %s payload: %w", event.ID, err)
+				}
+				ref := *event.PayloadRef
+				recordEvent.PayloadRef = &ref
+			} else if len(event.Payload) > v4InlinePayloadBytes {
 				if content == nil {
 					return nil, errors.New("sessionv4: content store is required for a large payload")
 				}
@@ -173,6 +182,18 @@ func writeV4RawRecord(ctx context.Context, dst io.Writer, encoder *zstd.Encoder,
 // whose end record and digest are complete. A partial final frame or final
 // batch is an uncommitted tail and therefore invisible.
 func scanV4CommitFile(ctx context.Context, file io.ReadSeeker, startOffset int64, nextSequence uint64, content *sessioncontent.Store, knownKinds map[string]bool, visit func(int64, Commit) bool) error {
+	return scanV4CommitFileMode(ctx, file, startOffset, nextSequence, content, knownKinds, true, visit)
+}
+
+// scanV4CommitFileRefs validates the same durable transaction stream while
+// leaving external payloads as references. Index rebuilds and history queries
+// use this path so cumulative history is never materialized merely to locate
+// records.
+func scanV4CommitFileRefs(ctx context.Context, file io.ReadSeeker, startOffset int64, nextSequence uint64, content *sessioncontent.Store, knownKinds map[string]bool, visit func(int64, Commit) bool) error {
+	return scanV4CommitFileMode(ctx, file, startOffset, nextSequence, content, knownKinds, false, visit)
+}
+
+func scanV4CommitFileMode(ctx context.Context, file io.ReadSeeker, startOffset int64, nextSequence uint64, content *sessioncontent.Store, knownKinds map[string]bool, resolvePayloads bool, visit func(int64, Commit) bool) error {
 	if knownKinds == nil {
 		knownKinds = ProjectionKinds
 	}
@@ -223,7 +244,9 @@ func scanV4CommitFile(ctx context.Context, file io.ReadSeeker, startOffset int64
 				ID: record.CommitID, OperationID: record.OperationID, OperationHash: record.OperationHash,
 				FirstSequence: record.FirstSequence, EventCount: record.EventCount, TurnID: record.TurnID,
 				WriterGeneration: record.WriterGeneration, CreatedAt: record.CreatedAt,
-				Events: make([]Event, 0, record.EventCount),
+				// Never trust an on-disk cumulative count as an allocation request.
+				// Capacity grows only as individually bounded frames validate.
+				Events: nil,
 			}
 			pendingOffset = recordOffset
 			digest = sha256.New()
@@ -239,23 +262,21 @@ func scanV4CommitFile(ctx context.Context, file io.ReadSeeker, startOffset int64
 				return fmt.Errorf("%w: invalid v4 event at sequence %d", ErrDamagedStore, wantSequence)
 			}
 			payload := append(json.RawMessage(nil), physical.Payload...)
+			var payloadRef *sessioncontent.Ref
 			if physical.PayloadRef != nil {
-				if content == nil {
-					return errors.New("sessionv4: content store is required to resolve a payload reference")
-				}
-				r, openErr := content.Open(ctx, *physical.PayloadRef)
-				if openErr != nil {
-					return fmt.Errorf("%w: open v4 event %s payload: %v", ErrDamagedStore, physical.ID, openErr)
-				}
-				payload, err = io.ReadAll(r)
-				closeErr := r.Close()
-				if err != nil || closeErr != nil {
-					return fmt.Errorf("%w: read v4 event %s payload: %v", ErrDamagedStore, physical.ID, errors.Join(err, closeErr))
+				ref := *physical.PayloadRef
+				payloadRef = &ref
+				if resolvePayloads {
+					payload, err = resolveContentPayload(ctx, content, ref)
+					if err != nil {
+						return fmt.Errorf("%w: read v4 event %s payload: %v", ErrDamagedStore, physical.ID, err)
+					}
+					payloadRef = nil
 				}
 			}
 			pending.Events = append(pending.Events, Event{
 				ID: physical.ID, Sequence: physical.Sequence, Kind: physical.Kind,
-				Optional: physical.Optional, Required: physical.Required, Payload: payload,
+				Optional: physical.Optional, Required: physical.Required, Payload: payload, PayloadRef: payloadRef,
 			})
 			_, _ = digest.Write(raw)
 			_, _ = digest.Write([]byte{0})
@@ -286,6 +307,25 @@ func scanV4CommitFile(ctx context.Context, file io.ReadSeeker, startOffset int64
 			return fmt.Errorf("%w: unknown v4 physical record %q", ErrUnsupportedVersion, record.RecordType)
 		}
 	}
+}
+
+func resolveContentPayload(ctx context.Context, content *sessioncontent.Store, ref sessioncontent.Ref) (json.RawMessage, error) {
+	if content == nil {
+		return nil, errors.New("sessionv4: content store is required to resolve a payload reference")
+	}
+	if ref.Bytes < 0 || uint64(ref.Bytes) > uint64(^uint(0)>>1) {
+		return nil, fmt.Errorf("sessionv4: payload size %d cannot be materialized by this process", ref.Bytes)
+	}
+	r, err := content.Open(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	payload := make([]byte, int(ref.Bytes))
+	if _, err := io.ReadFull(r, payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
 }
 
 func readV4Frame(ctx context.Context, reader io.Reader, decoder *zstd.Decoder) ([]byte, int64, bool, error) {

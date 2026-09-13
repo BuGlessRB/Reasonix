@@ -188,10 +188,11 @@ func (a *Activity) Append(ctx context.Context, batch Batch) (Commit, error) {
 		return Commit{}, err
 	}
 	runtime := a.runtime
-	prepared, err := runtime.session.PrepareBatch(batch.OperationID, batch)
+	prepared, err := runtime.session.PrepareBatchContext(ctx, batch.OperationID, batch)
 	if err != nil {
 		return Commit{}, err
 	}
+	defer prepared.Release()
 	a.commitGate.RLock()
 	defer a.commitGate.RUnlock()
 	runtime.mu.Lock()
@@ -330,16 +331,23 @@ func (r *Runtime) RequireRecovery(activity string) {
 // a tool result or another business-state transition.
 func (r *Runtime) RecordRecovery(ctx context.Context, batch Batch) (Commit, error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.phase != RuntimeRecoveryRequired || !recoveryClosureBatch(batch) {
+		r.mu.Unlock()
 		return Commit{}, ErrStaleActivity
 	}
+	r.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return Commit{}, err
 	}
-	prepared, err := r.session.PrepareBatch(batch.OperationID, batch)
+	prepared, err := r.session.PrepareBatchContext(ctx, batch.OperationID, batch)
 	if err != nil {
 		return Commit{}, err
+	}
+	defer prepared.Release()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.phase != RuntimeRecoveryRequired || !recoveryClosureBatch(batch) {
+		return Commit{}, ErrStaleActivity
 	}
 	return r.session.CommitPrepared(prepared)
 }
@@ -506,7 +514,11 @@ func (s *Service) ContinueStoredPreview(ctx context.Context, sessionID string) (
 	if err != nil {
 		return nil, PrototypeImportResult{}, err
 	}
-	result, err := importPreview(ctx, sourceDir, filesystem.Root)
+	frozen, err := freezePairedPreview(ctx, sourceDir)
+	if err != nil {
+		return nil, PrototypeImportResult{}, err
+	}
+	result, err := importFrozenPreview(ctx, frozen, filesystem.Root)
 	if err != nil {
 		return nil, result, err
 	}

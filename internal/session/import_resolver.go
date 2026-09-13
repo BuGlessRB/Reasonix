@@ -30,6 +30,7 @@ func importSourceForLegacy(ctx context.Context, sourcePath, targetRoot, headID s
 	if err != nil {
 		return ImportResult{}, err
 	}
+	defer os.RemoveAll(frozenLegacy.freezeDir)
 	legacy := frozenLegacy.messages
 
 	previewDir := filepath.Join(targetRoot, agent.BranchID(sourcePath))
@@ -104,7 +105,7 @@ func inspectFrozenPreview(ctx context.Context, frozen frozenPreview) ([]provider
 		_ = file.Close()
 		return nil, false, err
 	}
-	err = scanCommitFileCodec(file, 0, 1, frozen.manifest.Codec, knownKinds, func(_ int64, commit Commit) bool {
+	visit := func(_ int64, commit Commit) bool {
 		if ctx.Err() != nil {
 			return false
 		}
@@ -126,7 +127,12 @@ func inspectFrozenPreview(ctx context.Context, frozen frozenPreview) ([]provider
 			return false
 		}
 		return true
-	})
+	}
+	if frozen.manifest.Codec == Codec && frozen.manifest.StorageRevision == 0 {
+		err = scanV4CommitFile(ctx, file, 0, 1, contentStoreForSessionDir(frozen.dir), knownKinds, visit)
+	} else {
+		err = scanCommitFileCodec(file, 0, 1, frozen.manifest.Codec, knownKinds, visit)
+	}
 	_ = file.Close()
 	if err != nil {
 		return nil, false, err

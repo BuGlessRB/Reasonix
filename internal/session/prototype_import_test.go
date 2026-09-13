@@ -120,10 +120,11 @@ func assertNoMigrationTarget(t *testing.T, targetRoot, legacyPath, legacyDir str
 // sourceDigestForTest recomputes the frozen source digest the same way the
 // migration path does.
 func sourceDigestForTest(sourcePath, sourceDir string) (string, error) {
-	artifacts, source, err := freezeLegacyArtifacts(context.Background(), sourcePath)
+	artifacts, source, freezeDir, err := freezeLegacyArtifacts(context.Background(), sourcePath)
 	if err != nil {
 		return "", err
 	}
+	defer os.RemoveAll(freezeDir)
 	_ = artifacts
 	_ = sourceDir
 	return source.SHA256, nil
@@ -256,6 +257,64 @@ func TestContinueStoredPreviewUpgradesLinearV3ToFinalCodec(t *testing.T) {
 	}
 	if got := runtime.Session().Snapshot().Projection.Messages; len(got) != 1 || got[0].ID != "user" {
 		t.Fatalf("upgraded messages = %+v", got)
+	}
+}
+
+func TestContinueStoredPreviewUpgradesUnpublishedV4Draft(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions-v4")
+	draftDir := filepath.Join(root, "draft-v4")
+	store, err := CreateStore(draftDir, "draft-v4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(map[string]any{"message": provider.Message{ID: "user", Role: provider.RoleUser, Content: "hello"}})
+	if _, err := store.Append(t.Context(), Batch{OperationID: "message", Events: []Event{{Kind: "message/complete", Payload: payload}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := readManifest(filepath.Join(draftDir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.StorageRevision = 0
+	if err := writeManifestFile(filepath.Join(draftDir, "manifest.json"), manifest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(draftDir, "draft-v4"); !errors.Is(err, ErrUnsupportedVersion) {
+		t.Fatalf("direct draft Open error = %v", err)
+	}
+
+	service, err := NewService("local", NewFilesystemPersistence(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, result, err := service.ContinueStoredPreview(t.Context(), "draft-v4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.Close(context.Background(), runtime.Ref()) })
+	if result.Source.Version != Codec || runtime.Ref().SessionID == "draft-v4" {
+		t.Fatalf("upgrade = %+v, ref = %+v", result, runtime.Ref())
+	}
+	upgraded, err := readManifest(filepath.Join(root, runtime.Ref().SessionID, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upgraded.StorageRevision != StorageRevision {
+		t.Fatalf("storage revision = %d, want %d", upgraded.StorageRevision, StorageRevision)
+	}
+	if got := runtime.Session().Snapshot().Projection.Messages; len(got) != 1 || got[0].ID != "user" {
+		t.Fatalf("upgraded messages = %+v", got)
+	}
+	var original Manifest
+	originalBytes, err := os.ReadFile(filepath.Join(draftDir, "manifest.json"))
+	if err == nil {
+		err = json.Unmarshal(originalBytes, &original)
+	}
+	if err != nil || original.StorageRevision != 0 {
+		t.Fatalf("draft source changed: %+v, %v", original, err)
 	}
 }
 

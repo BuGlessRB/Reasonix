@@ -24,6 +24,7 @@ type frozenPreview struct {
 	eventBytes    []byte
 	manifest      Manifest
 	source        Source
+	logName       string
 }
 
 type PrototypeImportResult struct {
@@ -65,11 +66,9 @@ func freezePreview(ctx context.Context, sourceDir string) (frozenPreview, error)
 	return freezePreviewCodec(ctx, sourceDir, false)
 }
 
-// freezePairedPreview also accepts a current-codec directory because early
-// v3 integrations derived that directory from a legacy transcript path while
-// using whatever codec the binary considered current. Only the paired import
-// resolver may treat such a store as an import source; normal current-codec
-// sessions must continue to open by immutable session ID.
+// freezePairedPreview also accepts the unpublished v4 draft (missing
+// storageRevision). Only migration may interpret that layout; normal session
+// opens require the final revision explicitly.
 func freezePairedPreview(ctx context.Context, sourceDir string) (frozenPreview, error) {
 	return freezePreviewCodec(ctx, sourceDir, true)
 }
@@ -115,11 +114,15 @@ func freezePreviewCodec(ctx context.Context, sourceDir string, allowCurrent bool
 		return frozenPreview{}, fmt.Errorf("%w: prototype manifest: %w", ErrDamagedStore, err)
 	}
 	legacyCodec := manifest.SchemaVersion == 3 && (manifest.Codec == PrototypeCodec || manifest.Codec == LegacyLinearCodec || manifest.Codec == FinalV31Codec)
-	currentCodec := allowCurrent && manifest.SchemaVersion == SchemaVersion && manifest.Codec == Codec && manifest.StorageRevision == StorageRevision
-	if (!legacyCodec && !currentCodec) || strings.TrimSpace(manifest.SessionID) == "" {
+	draftCodec := allowCurrent && manifest.SchemaVersion == SchemaVersion && manifest.Codec == Codec && manifest.StorageRevision == 0
+	if (!legacyCodec && !draftCodec) || strings.TrimSpace(manifest.SessionID) == "" {
 		return frozenPreview{}, fmt.Errorf("%w: unsupported preview codec %q", ErrUnsupportedVersion, manifest.Codec)
 	}
-	eventBytes, err := os.ReadFile(filepath.Join(sourceDir, "events.jsonl"))
+	logName := legacyLogName
+	if draftCodec {
+		logName = currentLogName
+	}
+	eventBytes, err := os.ReadFile(filepath.Join(sourceDir, logName))
 	if os.IsNotExist(err) {
 		eventBytes = nil
 	} else if err != nil {
@@ -131,7 +134,7 @@ func freezePreviewCodec(ctx context.Context, sourceDir string, allowCurrent bool
 	digest.Write(eventBytes)
 	sourceDigest := hex.EncodeToString(digest.Sum(nil))
 	source := Source{Path: sourceDir, Size: int64(len(manifestBytes) + len(eventBytes)), SHA256: sourceDigest, Version: manifest.Codec}
-	return frozenPreview{dir: sourceDir, manifestBytes: manifestBytes, eventBytes: eventBytes, manifest: manifest, source: source}, nil
+	return frozenPreview{dir: sourceDir, manifestBytes: manifestBytes, eventBytes: eventBytes, manifest: manifest, source: source, logName: logName}, nil
 }
 
 func importFrozenPreview(ctx context.Context, frozen frozenPreview, targetRoot string) (PrototypeImportResult, error) {
@@ -170,11 +173,11 @@ func importFrozenPreview(ctx context.Context, frozen frozenPreview, targetRoot s
 	if err := fileutil.AtomicWriteFileStrict(filepath.Join(legacyDir, "manifest.json"), manifestBytes, 0o600); err != nil {
 		return PrototypeImportResult{}, err
 	}
-	if err := fileutil.AtomicWriteFileStrict(filepath.Join(legacyDir, "events.jsonl"), eventBytes, 0o600); err != nil {
+	if err := fileutil.AtomicWriteFileStrict(filepath.Join(legacyDir, frozen.logName), eventBytes, 0o600); err != nil {
 		return PrototypeImportResult{}, err
 	}
 
-	frozenLog, err := os.Open(filepath.Join(legacyDir, "events.jsonl"))
+	frozenLog, err := os.Open(filepath.Join(legacyDir, frozen.logName))
 	if err != nil {
 		return PrototypeImportResult{}, err
 	}
@@ -183,10 +186,15 @@ func importFrozenPreview(ctx context.Context, frozen frozenPreview, targetRoot s
 	if prototype.Codec == PrototypeCodec {
 		knownKinds = PrototypeProjectionKinds
 	}
-	err = scanCommitFileCodec(frozenLog, 0, 1, prototype.Codec, knownKinds, func(_ int64, commit Commit) bool {
+	visit := func(_ int64, commit Commit) bool {
 		prototypeCommits = append(prototypeCommits, cloneCommit(commit))
 		return true
-	})
+	}
+	if prototype.Codec == Codec && prototype.StorageRevision == 0 {
+		err = scanV4CommitFile(ctx, frozenLog, 0, 1, contentStoreForSessionDir(sourceDir), knownKinds, visit)
+	} else {
+		err = scanCommitFileCodec(frozenLog, 0, 1, prototype.Codec, knownKinds, visit)
+	}
 	_ = frozenLog.Close()
 	if err != nil {
 		return PrototypeImportResult{}, err

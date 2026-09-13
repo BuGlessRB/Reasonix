@@ -78,12 +78,13 @@ type Source struct {
 }
 
 type Event struct {
-	ID       string          `json:"id"`
-	Sequence uint64          `json:"seq"`
-	Kind     string          `json:"kind"`
-	Optional bool            `json:"optional,omitempty"`
-	Required bool            `json:"required,omitempty"`
-	Payload  json.RawMessage `json:"payload,omitempty"`
+	ID         string              `json:"id"`
+	Sequence   uint64              `json:"seq"`
+	Kind       string              `json:"kind"`
+	Optional   bool                `json:"optional,omitempty"`
+	Required   bool                `json:"required,omitempty"`
+	Payload    json.RawMessage     `json:"payload,omitempty"`
+	PayloadRef *sessioncontent.Ref `json:"payloadRef,omitempty"`
 }
 
 type Commit struct {
@@ -920,6 +921,10 @@ func cloneEvents(events []Event) []Event {
 	copy(out, events)
 	for i := range out {
 		out[i].Payload = append(json.RawMessage(nil), out[i].Payload...)
+		if out[i].PayloadRef != nil {
+			ref := *out[i].PayloadRef
+			out[i].PayloadRef = &ref
+		}
 	}
 	return out
 }

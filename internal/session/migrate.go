@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -97,6 +98,7 @@ type frozenLegacyHead struct {
 	modelRef      string
 	modelIdentity string
 	goal          map[string]any
+	freezeDir     string
 }
 
 // freezeLegacyHead acquires the source lease, copies every durable artifact
@@ -119,7 +121,7 @@ func freezeLegacyHead(ctx context.Context, sourcePath, legacyHeadID string, allo
 		}
 		lease = acquired
 	}
-	artifacts, source, err := freezeLegacyArtifacts(ctx, sourcePath)
+	artifacts, source, freezeDir, err := freezeLegacyArtifacts(ctx, sourcePath)
 	if lease != nil {
 		lease.Release()
 	}
@@ -129,13 +131,15 @@ func freezeLegacyHead(ctx context.Context, sourcePath, legacyHeadID string, allo
 	source.LegacyHeadID = legacyHeadID
 	parsed, err := parseFrozenLegacy(ctx, artifacts, sourcePath, legacyHeadID)
 	if err != nil {
+		_ = os.RemoveAll(freezeDir)
 		return nil, err
 	}
 	return &frozenLegacyHead{
 		sourcePath: sourcePath, headID: legacyHeadID, source: source, artifacts: artifacts,
 		targetID: migrationTargetID(sourcePath, source.SHA256, legacyHeadID),
 		messages: parsed.messages, modelRef: parsed.modelRef, modelIdentity: parsed.modelIdentity,
-		goal: parsed.goal,
+		goal:      parsed.goal,
+		freezeDir: freezeDir,
 	}, nil
 }
 
@@ -149,21 +153,24 @@ type frozenLegacyParse struct {
 // parseFrozenLegacy reads the frozen artifacts from a private directory so the
 // published target can never depend on bytes outside the frozen input.
 func parseFrozenLegacy(ctx context.Context, artifacts []frozenArtifact, sourcePath, legacyHeadID string) (frozenLegacyParse, error) {
-	dir, err := os.MkdirTemp("", "reasonix-legacy-freeze-")
-	if err != nil {
+	if len(artifacts) == 0 {
+		return frozenLegacyParse{}, os.ErrNotExist
+	}
+	if err := ctx.Err(); err != nil {
 		return frozenLegacyParse{}, err
 	}
-	defer os.RemoveAll(dir)
+	frozenSourcePath := ""
 	for _, artifact := range artifacts {
-		if err := ctx.Err(); err != nil {
-			return frozenLegacyParse{}, err
-		}
-		if err := saveFrozenArtifact(ctx, artifact.data, filepath.Join(dir, filepath.Base(artifact.path)), artifact.mode); err != nil {
-			return frozenLegacyParse{}, err
+		if artifact.path == sourcePath {
+			frozenSourcePath = artifact.frozenPath
+			break
 		}
 	}
-	frozenSourcePath := filepath.Join(dir, filepath.Base(sourcePath))
+	if frozenSourcePath == "" {
+		return frozenLegacyParse{}, os.ErrNotExist
+	}
 	var session *agent.Session
+	var err error
 	if legacyHeadID == "" {
 		session, err = agent.LoadSessionForMigration(ctx, frozenSourcePath)
 	} else {
@@ -194,6 +201,7 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 	if f == nil {
 		return MigrationResult{}, fmt.Errorf("session: nil frozen legacy head")
 	}
+	defer os.RemoveAll(f.freezeDir)
 	targetDir := filepath.Join(targetRoot, f.targetID)
 	result := MigrationResult{TargetID: f.targetID, TargetDir: targetDir, Source: f.source, MessageNum: len(f.messages)}
 
@@ -237,35 +245,54 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 		if err := ctx.Err(); err != nil {
 			return MigrationResult{}, err
 		}
-		if err := copyFrozenArtifact(ctx, artifact.data, filepath.Join(legacyDir, filepath.Base(artifact.path)), artifact.mode); err != nil {
+		if err := copyFrozenArtifact(ctx, artifact.frozenPath, filepath.Join(legacyDir, filepath.Base(artifact.path)), artifact.mode); err != nil {
 			return MigrationResult{}, err
 		}
 	}
 
-	payload := map[string]any{
-		"source":   f.source,
-		"messages": f.messages,
-	}
-	if f.modelRef != "" {
-		payload["modelRef"] = f.modelRef
-		payload["modelIdentity"] = f.modelIdentity
-	}
-	if f.goal != nil {
-		payload["goal"] = f.goal
-	}
-	raw, err := json.Marshal(payload)
+	target, err := Open(tmp, f.targetID)
 	if err != nil {
 		return MigrationResult{}, err
 	}
-	v3, err := Open(tmp, f.targetID)
-	if err != nil {
-		return MigrationResult{}, err
+	const messageBatchSize = 128
+	var appendErr error
+	for start := 0; start < len(f.messages) && appendErr == nil; start += messageBatchSize {
+		end := min(start+messageBatchSize, len(f.messages))
+		events := make([]Event, 0, end-start)
+		for _, message := range f.messages[start:end] {
+			raw, marshalErr := json.Marshal(struct {
+				Message provider.Message `json:"message"`
+			}{Message: message})
+			if marshalErr != nil {
+				appendErr = marshalErr
+				break
+			}
+			events = append(events, Event{Kind: "message/complete", Payload: raw})
+		}
+		if appendErr == nil {
+			_, appendErr = target.Append(ctx, Batch{OperationID: fmt.Sprintf("legacy-import:%s:messages:%d", f.source.SHA256, start/messageBatchSize), Events: events})
+		}
 	}
-	_, appendErr := v3.Append(ctx, Batch{OperationID: "legacy-import:" + f.source.SHA256, Events: []Event{{Kind: "legacy/import", Payload: raw}}})
+	if appendErr == nil && f.modelRef != "" {
+		raw, marshalErr := json.Marshal(map[string]string{"modelRef": f.modelRef, "modelIdentity": f.modelIdentity})
+		if marshalErr != nil {
+			appendErr = marshalErr
+		} else {
+			_, appendErr = target.Append(ctx, Batch{OperationID: "legacy-import:" + f.source.SHA256 + ":model", Events: []Event{{Kind: "session/config", Payload: raw}}})
+		}
+	}
+	if appendErr == nil && f.goal != nil {
+		raw, marshalErr := json.Marshal(f.goal)
+		if marshalErr != nil {
+			appendErr = marshalErr
+		} else {
+			_, appendErr = target.Append(ctx, Batch{OperationID: "legacy-import:" + f.source.SHA256 + ":goal", Events: []Event{{Kind: "goal/state", Payload: raw}}})
+		}
+	}
 	if appendErr == nil {
-		_, appendErr = v3.Flush(ctx)
+		_, appendErr = target.Flush(ctx)
 	}
-	closeErr := v3.Close(ctx)
+	closeErr := target.Close(ctx)
 	if appendErr != nil {
 		return MigrationResult{}, appendErr
 	}
@@ -284,25 +311,24 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 	return result, nil
 }
 
-// saveFrozenArtifact writes one frozen artifact without following a symlink
-// that may have replaced the destination.
-func saveFrozenArtifact(ctx context.Context, data []byte, target string, mode fs.FileMode) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
-		return err
-	}
-	return fileutil.AtomicWriteFileStrict(target, data, mode)
-}
-
 type frozenArtifact struct {
-	path string
-	mode fs.FileMode
-	data []byte
+	path       string
+	frozenPath string
+	mode       fs.FileMode
+	size       int64
 }
 
-func freezeLegacyArtifacts(ctx context.Context, sourcePath string) ([]frozenArtifact, Source, error) {
+func freezeLegacyArtifacts(ctx context.Context, sourcePath string) ([]frozenArtifact, Source, string, error) {
+	freezeDir, err := os.MkdirTemp("", "reasonix-legacy-freeze-")
+	if err != nil {
+		return nil, Source{}, "", err
+	}
+	keep := false
+	defer func() {
+		if !keep {
+			_ = os.RemoveAll(freezeDir)
+		}
+	}()
 	paths := append([]string{sourcePath}, store.SessionSidecarFiles(sourcePath)...)
 	seen := map[string]bool{}
 	artifacts := []frozenArtifact{}
@@ -311,7 +337,7 @@ func freezeLegacyArtifacts(ctx context.Context, sourcePath string) ([]frozenArti
 	var total int64
 	for _, path := range paths {
 		if err := ctx.Err(); err != nil {
-			return nil, Source{}, err
+			return nil, Source{}, "", err
 		}
 		path = filepath.Clean(path)
 		if seen[path] {
@@ -323,43 +349,105 @@ func freezeLegacyArtifacts(ctx context.Context, sourcePath string) ([]frozenArti
 			continue
 		}
 		if err != nil {
-			return nil, Source{}, err
+			return nil, Source{}, "", err
 		}
 		if !info.Mode().IsRegular() {
 			continue
 		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, Source{}, err
+		frozenPath := filepath.Join(freezeDir, filepath.Base(path))
+		if err := copyFrozenArtifact(ctx, path, frozenPath, info.Mode().Perm()); err != nil {
+			return nil, Source{}, "", err
 		}
-		artifacts = append(artifacts, frozenArtifact{path: path, mode: info.Mode().Perm(), data: data})
+		artifacts = append(artifacts, frozenArtifact{path: path, frozenPath: frozenPath, mode: info.Mode().Perm(), size: info.Size()})
 		if path == sourcePath {
 			foundSource = true
 		}
 	}
 	if !foundSource {
-		return nil, Source{}, os.ErrNotExist
+		return nil, Source{}, "", os.ErrNotExist
 	}
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].path < artifacts[j].path })
 	for _, artifact := range artifacts {
 		name := filepath.Base(artifact.path)
 		hash.Write([]byte(name))
 		hash.Write([]byte{0})
-		hash.Write(artifact.data)
+		file, err := os.Open(artifact.frozenPath)
+		if err != nil {
+			return nil, Source{}, "", err
+		}
+		_, copyErr := copyStreamWithContext(ctx, hash, file)
+		closeErr := file.Close()
+		if copyErr != nil || closeErr != nil {
+			return nil, Source{}, "", errors.Join(copyErr, closeErr)
+		}
 		hash.Write([]byte{0})
-		total += int64(len(artifact.data))
+		total += artifact.size
 	}
-	return artifacts, Source{Path: sourcePath, Size: total, SHA256: hex.EncodeToString(hash.Sum(nil)), Version: "legacy"}, nil
+	keep = true
+	return artifacts, Source{Path: sourcePath, Size: total, SHA256: hex.EncodeToString(hash.Sum(nil)), Version: "legacy"}, freezeDir, nil
 }
 
-func copyFrozenArtifact(ctx context.Context, data []byte, target string, mode fs.FileMode) error {
+func copyFrozenArtifact(ctx context.Context, source, target string, mode fs.FileMode) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		return err
 	}
-	return fileutil.AtomicWriteFileStrict(target, data, mode)
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	tmp, err := os.CreateTemp(filepath.Dir(target), ".frozen-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := copyStreamWithContext(ctx, tmp, in); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return fileutil.ReplaceFile(tmpPath, target)
+}
+
+func copyStreamWithContext(ctx context.Context, dst io.Writer, src io.Reader) (int64, error) {
+	buffer := make([]byte, 1<<20)
+	var total int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		n, readErr := src.Read(buffer)
+		if n > 0 {
+			written, writeErr := dst.Write(buffer[:n])
+			total += int64(written)
+			if writeErr != nil {
+				return total, writeErr
+			}
+			if written != n {
+				return total, io.ErrShortWrite
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return total, nil
+			}
+			return total, readErr
+		}
+	}
 }
 
 func sanitizedLegacyGoal(sourcePath string) map[string]any {

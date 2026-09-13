@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
+
 	"reasonix/internal/sessioncontent"
 )
 
@@ -64,6 +66,51 @@ func TestV4CodecExternalizesLargePayloadAndRoundTripsExactBytes(t *testing.T) {
 	entries, err := filepath.Glob(filepath.Join(content.Root(), "objects", "*", "*", "*"))
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("external objects = %v, err=%v", entries, err)
+	}
+}
+
+func TestV4ReferenceScanDoesNotMaterializeLargePayload(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	content := sessioncontent.New(filepath.Join(dir, "content"))
+	payload := bytes.Repeat([]byte("p"), 2*v4InlinePayloadBytes)
+	commit := v4TestCommit(payload)
+	var log bytes.Buffer
+	if _, err := encodeV4Commits(t.Context(), &log, content, []Commit{commit}); err != nil {
+		t.Fatal(err)
+	}
+	file := writeAndOpenV4TestLog(t, dir, "lazy.v4", log.Bytes())
+	defer file.Close()
+	if err := scanV4CommitFileRefs(t.Context(), file, 0, 1, content, nil, func(_ int64, got Commit) bool {
+		if len(got.Events) != 1 || len(got.Events[0].Payload) != 0 || got.Events[0].PayloadRef == nil || got.Events[0].PayloadRef.Bytes != int64(len(payload)) {
+			t.Fatalf("lazy event = %#v", got.Events)
+		}
+		return true
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestV4ReaderDoesNotPreallocateUntrustedEventCount(t *testing.T) {
+	t.Parallel()
+	record := v4Record{
+		SchemaVersion: V4SchemaVersion, Codec: V4Codec, RecordType: "batch/begin",
+		CommitID: "c", OperationID: "o", OperationHash: "h", FirstSequence: 1,
+		EventCount: int(^uint(0) >> 2), WriterGeneration: 1,
+	}
+	encoder, err := zstd.NewWriter(nil, zstd.WithEncoderConcurrency(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer encoder.Close()
+	var log bytes.Buffer
+	if err := writeV4Record(t.Context(), &log, encoder, record); err != nil {
+		t.Fatal(err)
+	}
+	file := writeAndOpenV4TestLog(t, t.TempDir(), "count.v4", log.Bytes())
+	defer file.Close()
+	if err := scanV4CommitFileRefs(t.Context(), file, 0, 1, nil, nil, nil); err != nil {
+		t.Fatalf("incomplete declared transaction should remain invisible: %v", err)
 	}
 }
 

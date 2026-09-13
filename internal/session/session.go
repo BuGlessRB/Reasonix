@@ -1,7 +1,9 @@
 package session
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/sessioncontent"
 )
 
 // Session is the in-memory typed event log and its projections. It owns every
@@ -43,10 +46,14 @@ type Session struct {
 // the activity commit gate. CommitPrepared then only assigns identity and
 // extends the log.
 type PreparedBatch struct {
-	operationID string
-	turnID      string
-	events      []Event
-	hash        string
+	sessionID        string
+	writerGeneration uint64
+	operationID      string
+	turnID           string
+	events           []Event
+	storedEvents     []Event
+	hash             string
+	reservation      *queueReservation
 }
 
 // OperationID reports the stable idempotency key of the prepared batch.
@@ -54,6 +61,10 @@ func (p PreparedBatch) OperationID() string { return p.operationID }
 
 // Empty reports whether the batch carries no committable event.
 func (p PreparedBatch) Empty() bool { return len(p.events) == 0 }
+
+// Release returns queue capacity when a prepared batch loses its activity or
+// CAS race before acceptance. It is safe after CommitPrepared consumes it.
+func (p PreparedBatch) Release() { p.reservation.release() }
 
 // newSession builds the live in-memory session over an already-open binding.
 // commits is the durable prefix replayed by the handle; the projection is
@@ -110,6 +121,13 @@ func (s *Session) EventSequence() uint64 {
 // PrepareBatch validates the logical batch and computes its idempotency digest
 // without touching the commit lock. Callers must treat the result as immutable.
 func (s *Session) PrepareBatch(operationID string, batch Batch) (PreparedBatch, error) {
+	return s.PrepareBatchContext(context.Background(), operationID, batch)
+}
+
+// PrepareBatchContext publishes large immutable payloads before the batch can
+// enter the accepted sequence. It performs all disk I/O outside the session
+// commit lock; CommitPrepared only revalidates identity and generation.
+func (s *Session) PrepareBatchContext(ctx context.Context, operationID string, batch Batch) (PreparedBatch, error) {
 	if s == nil {
 		return PreparedBatch{}, fmt.Errorf("session: nil session")
 	}
@@ -150,7 +168,44 @@ func (s *Session) PrepareBatch(operationID string, batch Batch) (PreparedBatch, 
 			events[i].ID = randomID()
 		}
 	}
-	return PreparedBatch{operationID: operationID, turnID: turnID, events: events, hash: hash}, nil
+	storedEvents := cloneEvents(events)
+	content := s.contentStore()
+	for i := range storedEvents {
+		if len(storedEvents[i].Payload) <= v4InlinePayloadBytes {
+			continue
+		}
+		if content == nil {
+			return PreparedBatch{}, errors.New("session: content store unavailable for large event payload")
+		}
+		ref, err := content.Put(ctx, bytes.NewReader(storedEvents[i].Payload), sessioncontent.Metadata{MediaType: "application/json"})
+		if err != nil {
+			return PreparedBatch{}, fmt.Errorf("prepare event %s content: %w", storedEvents[i].ID, err)
+		}
+		storedEvents[i].Payload = nil
+		storedEvents[i].PayloadRef = &ref
+	}
+	s.mu.Lock()
+	sessionID, writerGeneration, binding := s.id, s.manifest.WriterGeneration, s.binding
+	s.mu.Unlock()
+	if binding == nil {
+		return PreparedBatch{}, ErrReadOnly
+	}
+	reservation, err := binding.reserve(ctx, commitHotBytes(Commit{Events: storedEvents}))
+	if err != nil {
+		return PreparedBatch{}, err
+	}
+	return PreparedBatch{sessionID: sessionID, writerGeneration: writerGeneration, operationID: operationID, turnID: turnID, events: events, storedEvents: storedEvents, hash: hash, reservation: reservation}, nil
+}
+
+func (s *Session) contentStore() *sessioncontent.Store {
+	if s == nil || s.binding == nil {
+		return nil
+	}
+	store, _ := s.binding.handle.(*Store)
+	if store == nil {
+		return nil
+	}
+	return store.content
 }
 
 // CommitPrepared appends an already validated batch under one short memory
@@ -158,6 +213,7 @@ func (s *Session) PrepareBatch(operationID string, batch Batch) (PreparedBatch, 
 // write-behind queue, so this never performs file I/O and never blocks on a
 // subscriber.
 func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
+	defer prepared.Release()
 	if s == nil {
 		return Commit{}, fmt.Errorf("session: nil session")
 	}
@@ -165,6 +221,10 @@ func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
 		return Commit{}, fmt.Errorf("session: operation id and events are required")
 	}
 	s.mu.Lock()
+	if prepared.sessionID != s.id || prepared.writerGeneration != s.manifest.WriterGeneration {
+		s.mu.Unlock()
+		return Commit{}, ErrStaleGeneration
+	}
 	if s.readOnly {
 		s.mu.Unlock()
 		return Commit{}, ErrReadOnly
@@ -198,6 +258,11 @@ func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
 	for i := range commit.Events {
 		commit.Events[i].Sequence = commit.FirstSequence + uint64(i)
 	}
+	storedCommit := commit
+	storedCommit.Events = prepared.storedEvents
+	for i := range storedCommit.Events {
+		storedCommit.Events[i].Sequence = storedCommit.FirstSequence + uint64(i)
+	}
 	projection := cloneProjection(s.projection)
 	if err := applyProjectionCommit(&projection, commit); err != nil {
 		s.mu.Unlock()
@@ -211,7 +276,7 @@ func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
 	// Session and the persistence queue form one in-memory acceptance boundary.
 	// accept performs no I/O or callbacks; after projection validation there are
 	// no remaining fallible state changes in the closure.
-	err := binding.accept(commit, func() {
+	err := binding.accept(storedCommit, prepared.reservation, func() {
 		s.commits = append(s.commits, commit)
 		s.projection = projection
 		s.next = commit.LastSequence() + 1
@@ -235,7 +300,7 @@ func (s *Session) Append(ctx context.Context, batch Batch) (Commit, error) {
 	if err := ctx.Err(); err != nil {
 		return Commit{}, err
 	}
-	prepared, err := s.PrepareBatch(batch.OperationID, batch)
+	prepared, err := s.PrepareBatchContext(ctx, batch.OperationID, batch)
 	if err != nil {
 		return Commit{}, err
 	}

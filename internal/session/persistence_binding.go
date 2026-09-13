@@ -13,6 +13,32 @@ import (
 	"time"
 )
 
+const pendingHotBytes = 16 << 20
+
+type queueReservation struct {
+	binding *PersistenceBinding
+	bytes   int64
+	mu      sync.Mutex
+	state   uint8 // 0 reserved, 1 consumed, 2 released
+}
+
+func (r *queueReservation) release() {
+	if r == nil || r.binding == nil {
+		return
+	}
+	r.mu.Lock()
+	if r.state != 0 {
+		r.mu.Unlock()
+		return
+	}
+	r.state = 2
+	r.mu.Unlock()
+	r.binding.mu.Lock()
+	r.binding.reservedBytes -= r.bytes
+	r.binding.notifySpaceLocked()
+	r.binding.mu.Unlock()
+}
+
 // PersistenceBinding delivers accepted commits to one physical SessionHandle.
 //
 // It holds only the write-behind prefix of the same event sequence that Session
@@ -28,16 +54,19 @@ type PersistenceBinding struct {
 	// never holds a projection of its own.
 	metadataSource func(durable uint64) (catalogMetadata, bool)
 
-	mu         sync.Mutex
-	queue      []Commit
-	durable    uint64
-	timer      timerHandle
-	draining   bool
-	autoPaused bool
-	accepting  bool
-	closed     bool
-	writeErr   error
-	uncertain  *uncertainWrite
+	mu            sync.Mutex
+	queue         []Commit
+	durable       uint64
+	timer         timerHandle
+	draining      bool
+	autoPaused    bool
+	accepting     bool
+	closed        bool
+	writeErr      error
+	uncertain     *uncertainWrite
+	hotBytes      int64
+	reservedBytes int64
+	spaceChanged  chan struct{}
 
 	drainMu   sync.Mutex
 	closeOnce sync.Once
@@ -64,7 +93,44 @@ func newPersistenceBinding(handle SessionHandle, dir string, durable uint64, opt
 	return &PersistenceBinding{
 		handle: handle, dir: dir, durable: durable, accepting: true,
 		afterFunc: after, writeFn: writeFn, syncFn: syncFn,
+		spaceChanged: make(chan struct{}),
 	}
+}
+
+func (b *PersistenceBinding) reserve(ctx context.Context, bytes int64) (*queueReservation, error) {
+	if b == nil {
+		return nil, osClosedError()
+	}
+	charge := min(max(bytes, 1), int64(pendingHotBytes))
+	for {
+		b.mu.Lock()
+		if !b.accepting || b.closed {
+			b.mu.Unlock()
+			return nil, osClosedError()
+		}
+		if b.hotBytes+b.reservedBytes+charge <= pendingHotBytes {
+			b.reservedBytes += charge
+			reservation := &queueReservation{binding: b, bytes: charge}
+			b.mu.Unlock()
+			return reservation, nil
+		}
+		wait := b.spaceChanged
+		b.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-wait:
+		}
+	}
+}
+
+func (b *PersistenceBinding) notifySpaceLocked() {
+	if b.spaceChanged == nil {
+		b.spaceChanged = make(chan struct{})
+		return
+	}
+	close(b.spaceChanged)
+	b.spaceChanged = make(chan struct{})
 }
 
 // accept atomically adds an immutable commit to the write-behind queue and
@@ -73,15 +139,36 @@ func newPersistenceBinding(handle SessionHandle, dir string, durable uint64, opt
 // mutations in one boundary prevents a closed binding from rejecting a commit
 // after Session has already exposed it, and prevents Flush from persisting a
 // commit before Session exposes it.
-func (b *PersistenceBinding) accept(commit Commit, accepted func()) error {
+func (b *PersistenceBinding) accept(commit Commit, reservation *queueReservation, accepted func()) error {
 	if b == nil {
 		return osClosedError()
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if !b.accepting || b.closed {
+		if reservation != nil {
+			reservation.mu.Lock()
+			if reservation.state == 0 {
+				reservation.state = 2
+				b.reservedBytes -= reservation.bytes
+				b.notifySpaceLocked()
+			}
+			reservation.mu.Unlock()
+		}
 		return osClosedError()
 	}
+	if reservation == nil || reservation.binding != b {
+		return errors.New("session: missing or foreign queue reservation")
+	}
+	reservation.mu.Lock()
+	if reservation.state != 0 {
+		reservation.mu.Unlock()
+		return errors.New("session: queue reservation is no longer valid")
+	}
+	reservation.state = 1
+	reservation.mu.Unlock()
+	b.reservedBytes -= reservation.bytes
+	b.hotBytes += reservation.bytes
 	// Session transfers an immutable commit here. Keep one shared payload backing
 	// for the accepted log and write queue; cloning large bodies would turn the
 	// queue budget into multiple hidden copies.
@@ -93,12 +180,24 @@ func (b *PersistenceBinding) accept(commit Commit, accepted func()) error {
 	return nil
 }
 
+func commitHotBytes(commit Commit) int64 {
+	var bytes int64 = 512
+	for _, event := range commit.Events {
+		bytes += int64(len(event.ID)+len(event.Kind)+len(event.Payload)) + 256
+		if event.PayloadRef != nil {
+			bytes += int64(len(event.PayloadRef.Digest)+len(event.PayloadRef.IndexDigest)+len(event.PayloadRef.MediaType)+len(event.PayloadRef.Name)) + 64
+		}
+	}
+	return min(max(bytes, 1), int64(pendingHotBytes))
+}
+
 func (b *PersistenceBinding) stopAccepting() {
 	if b == nil {
 		return
 	}
 	b.mu.Lock()
 	b.accepting = false
+	b.notifySpaceLocked()
 	b.mu.Unlock()
 }
 
@@ -206,7 +305,11 @@ func (b *PersistenceBinding) drain(ctx context.Context, explicit bool) error {
 					b.mu.Unlock()
 					return err
 				}
+				for _, commit := range b.queue[:confirmed] {
+					b.hotBytes -= commitHotBytes(commit)
+				}
 				b.queue = b.queue[confirmed:]
+				b.notifySpaceLocked()
 				b.durable = pending[confirmed-1].LastSequence()
 				b.writeErr = nil
 				b.uncertain = nil
@@ -245,7 +348,11 @@ func (b *PersistenceBinding) drain(ctx context.Context, explicit bool) error {
 			b.mu.Unlock()
 			return err
 		}
+		for _, commit := range b.queue[:len(pending)] {
+			b.hotBytes -= commitHotBytes(commit)
+		}
 		b.queue = b.queue[len(pending):]
+		b.notifySpaceLocked()
 		b.durable = pending[len(pending)-1].LastSequence()
 		b.writeErr = nil
 		b.uncertain = nil
@@ -400,6 +507,7 @@ func (b *PersistenceBinding) Close(ctx context.Context) error {
 	b.closeOnce.Do(func() {
 		b.mu.Lock()
 		b.accepting = false
+		b.notifySpaceLocked()
 		b.mu.Unlock()
 		_, flushErr := b.Flush(context.Background())
 		b.drainMu.Lock()
@@ -412,6 +520,7 @@ func (b *PersistenceBinding) Close(ctx context.Context) error {
 		handle := b.handle
 		b.handle = nil
 		b.closed = true
+		b.notifySpaceLocked()
 		b.mu.Unlock()
 		var closeErr error
 		if handle != nil {

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -162,6 +163,62 @@ func TestAppendCommitsToMemoryBeforeDurability(t *testing.T) {
 	if scheduler.count() != 1 || scheduler.durations[0] != 200*time.Millisecond {
 		t.Fatalf("scheduled drains = %d at %v", scheduler.count(), scheduler.durations)
 	}
+}
+
+func TestPreparePublishesLargePayloadBeforeAcceptance(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "session")
+	scheduler := &manualScheduler{}
+	s, err := OpenWithOptions(dir, "s", OpenOptions{AfterFunc: scheduler.after})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close(context.Background()) })
+	payload := append([]byte(`{"text":"`), bytes.Repeat([]byte("x"), v4InlinePayloadBytes+1)...)
+	payload = append(payload, []byte(`"}`)...)
+	prepared, err := s.PrepareBatchContext(t.Context(), "large", Batch{Events: []Event{{Kind: "diagnostic", Payload: payload}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.EventSequence() != 0 {
+		t.Fatal("prepare advanced accepted sequence")
+	}
+	if len(prepared.storedEvents) != 1 || prepared.storedEvents[0].PayloadRef == nil || len(prepared.storedEvents[0].Payload) != 0 {
+		t.Fatalf("prepared storage event = %#v", prepared.storedEvents)
+	}
+	if err := s.contentStore().Verify(t.Context(), *prepared.storedEvents[0].PayloadRef); err != nil {
+		t.Fatalf("content was not durable before acceptance: %v", err)
+	}
+	if _, err := s.CommitPrepared(prepared); err != nil {
+		t.Fatal(err)
+	}
+	s.binding.mu.Lock()
+	queued := cloneCommit(s.binding.queue[0])
+	s.binding.mu.Unlock()
+	if len(queued.Events[0].Payload) != 0 || queued.Events[0].PayloadRef == nil {
+		t.Fatalf("write queue retained large body: %#v", queued.Events[0])
+	}
+	if got := s.Snapshot().Projection.CommittedSequence; got != 1 {
+		t.Fatalf("logical projection sequence = %d", got)
+	}
+}
+
+func TestPendingHotBudgetBackpressureIsCancellable(t *testing.T) {
+	binding := newPersistenceBinding(nil, t.TempDir(), 0, OpenOptions{})
+	first, err := binding.reserve(t.Context(), pendingHotBytes*4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := binding.reserve(ctx, 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("backpressure error = %v, want context cancellation", err)
+	}
+	first.release()
+	second, err := binding.reserve(t.Context(), 1)
+	if err != nil {
+		t.Fatalf("capacity was not returned: %v", err)
+	}
+	second.release()
 }
 
 func TestRejectedPersistenceAcceptanceDoesNotMutateSession(t *testing.T) {
