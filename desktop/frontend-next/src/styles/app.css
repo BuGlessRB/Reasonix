@@ -1647,21 +1647,10 @@
   .enterbox[data-enter] .hl .cost { animation: costin var(--t-card) var(--ease-out) both }
   @keyframes costin { from { opacity: 0; transform: translateX(5px) } to { opacity: 1; transform: none } }
 
-  /* 跑着的时候符号是灰的，落定才染上类别色 —— 颜色本身就是完成信号 */
-  /* 正在跑的那一步要比别人更实，不是更淡（原来是 opacity .5，方向反了）。
-     脉冲用 currentColor，所以它跟着这张卡的类别色走；连接线往下走光，说的是
-     「这一步还没完，后面还没有东西」。历史不降级 —— 滚回去看的内容不该变灰。 */
-  .call[data-running] > .g .sym {
-    animation: sympulse 1.9s var(--ease) infinite;
-  }
-  @keyframes sympulse {
-    0%   { box-shadow: 0 0 9px -2px color-mix(in srgb, currentColor 46%, transparent),
-                       0 0 0 0 color-mix(in srgb, currentColor 38%, transparent) }
-    70%  { box-shadow: 0 0 15px -2px color-mix(in srgb, currentColor 70%, transparent),
-                       0 0 0 6px color-mix(in srgb, currentColor 0%, transparent) }
-    100% { box-shadow: 0 0 9px -2px color-mix(in srgb, currentColor 46%, transparent),
-                       0 0 0 0 color-mix(in srgb, currentColor 0%, transparent) }
-  }
+  /* 跑着的时候符号是灰的，落定才染上类别色 —— 颜色本身就是完成信号。
+     所以这里不再加第二遍：符号原来还有一圈无限脉冲，和下面那束沿线下行的光
+     一起，同一张卡上就有两个循环信号在说同一件事。留下行进的那一个 —— 它多
+     说了一件脉冲说不出的事：这一步是在推进，不是卡住了。 */
   /* 运行中的那一段线有一束光沿它下行。用的是已经在那儿的结构，不新增元素；
      方向天然有意义 —— 向下就是「往下一步去」。落定即停，历史永远是静的。 */
   .call[data-running] > .g .line {
@@ -3222,7 +3211,9 @@
     .ask-foot { flex-direction: column; align-items: stretch; gap: 9px }
     .ask-foot .dismiss { align-self: flex-end; margin-left: 0; white-space: nowrap }
     .apv-ft .btn[data-primary] { flex: 1 0 100% }
-    .apv-ft .btn:not([data-primary]) { flex: 1 }
+    /* 并排的两颗等高：「不再询问」比「拒绝」小一档字，居中对齐后两者的顶边
+       差 1px —— 看着是没对齐的一行，数起来是两行。 */
+    .apv-ft .btn:not([data-primary]) { flex: 1; align-self: stretch }
   }
 
   /* ── 首次引导：一屏，一件事 ──────────────────────────────────────── */
