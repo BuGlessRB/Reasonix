@@ -72,7 +72,13 @@ describe("English catalogue", () => {
     // Chinese before the next "<" in the file reads to this pattern as markup
     // — which is a false positive on ordinary code, and a guard that cries on
     // valid source is one people learn to edit around.
-    const JSX_TEXT = /(?<!=)>([^<>{}]*[一-鿿][^<>{}]*)</g;
+    //
+    // Not before "=" either, for the same reason from the other side: the ">"
+    // closing a generic is followed by the assignment it annotates, so
+    // `Record<string, string> = { ... 中文 ... }` read as a tag whose text runs
+    // to the next "<" anywhere in the file. A table of wording that each call
+    // site passes through t() is exactly where that shape appears.
+    const JSX_TEXT = /(?<!=)>(?!\s*=)([^<>{}]*[一-鿿][^<>{}]*)</g;
     const ATTR = /\b(title|placeholder|aria-label|label|alt)="([^"]*[一-鿿][^"]*)"/g;
     const raw: string[] = [];
     for (const [file, body] of Object.entries(SOURCES)) {
