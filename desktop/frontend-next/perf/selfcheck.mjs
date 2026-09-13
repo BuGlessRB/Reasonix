@@ -1,9 +1,17 @@
 // 守卫的守卫：往每个断言脚本里塞一条必然为假的断言，看它是不是真的能让退出码
 // 变红。一条永远绿的守卫比没有守卫更糟——它替你担保了一件它其实没看的事。
-import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
-const GUARDS = ["verify", "look", "lang", "panels", "pick", "side", "models", "reason", "locale", "idle", "fold", "budget", "focus", "queue", "contrast"];
+// 名单是会烂的那个：手写的那份漏了 cards、composer、intrinsic、motion、
+// overflow、press、surface —— 七条从没被问过「你会红吗」的守卫。改为认这个
+// 目录里每个用 fails 表达失败的脚本，新加一条就自动进来。
+const HAS_FAILS = /^const fails = \[\];$/m;
+const GUARDS = readdirSync("perf")
+  .filter((f) => f.endsWith(".mjs") && f !== "selfcheck.mjs" && !f.startsWith("_probe_"))
+  .filter((f) => HAS_FAILS.test(readFileSync(`perf/${f}`, "utf8")))
+  .map((f) => f.slice(0, -4))
+  .sort();
 const rows = [];
 for (const g of GUARDS) {
   const path = `perf/${g}.mjs`;

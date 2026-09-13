@@ -1197,9 +1197,12 @@
   /* 居中而不是靠右：此前没有列宽上限，靠右就是铺满，两者一回事。收窄之后它们
      分了家 —— 1920 下贴着定位条会在左边空出四百多像素，而输入框仍靠左，两者
      错开四百像素。auto 两边同时生效，窄窗口下没有余量可分，行为和从前一样。 */
+  /* 让出两份轨道宽，不是一份：margin-inline:auto 把让出的空间平分到两侧，
+     一份只有一半落在轨道那边，正文于是伸进轨道底下 —— 而轨道整条都吃指针，
+     被压住的那几像素点下去是跳转，不是选字。 */
   .flow {
     margin-top: auto; margin-inline: auto;
-    width: calc(100% - var(--srail-w)); max-width: var(--doc);
+    width: calc(100% - var(--srail-w) * 2); max-width: var(--doc);
     padding: 12px var(--flow-pad) 16px;
   }
   /* 长会话里排版成本是按卡片数线性涨的，而屏外的那几百张没人看。让浏览器
