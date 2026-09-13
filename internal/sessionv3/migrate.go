@@ -228,7 +228,7 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 		}
 	}()
 
-	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: Codec, SessionID: f.targetID, CreatedAt: time.Now().UTC(), Source: &f.source}
+	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, SessionID: f.targetID, CreatedAt: time.Now().UTC(), Source: &f.source}
 	if err := writeManifest(filepath.Join(tmp, "manifest.json"), manifest); err != nil {
 		return MigrationResult{}, err
 	}
@@ -392,7 +392,7 @@ func readManifest(path string) (Manifest, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return Manifest{}, err
 	}
-	if m.SchemaVersion != SchemaVersion || m.Codec != Codec {
+	if m.SchemaVersion != SchemaVersion || m.Codec != Codec || m.StorageRevision != StorageRevision {
 		return Manifest{}, fmt.Errorf("%w: manifest schema or codec", ErrUnsupportedVersion)
 	}
 	return m, nil
@@ -401,6 +401,9 @@ func readManifest(path string) (Manifest, error) {
 func writeManifest(path string, m Manifest) error {
 	if m.Codec == "" {
 		m.Codec = Codec
+	}
+	if m.Codec == Codec && m.SchemaVersion == SchemaVersion && m.StorageRevision == 0 {
+		m.StorageRevision = StorageRevision
 	}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {

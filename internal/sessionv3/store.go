@@ -31,6 +31,10 @@ import (
 
 const (
 	SchemaVersion = V4SchemaVersion
+	// StorageRevision distinguishes the final v4 layout from unpublished v4
+	// drafts. Physical layout changes are migration boundaries even when the
+	// logical codec remains v4.
+	StorageRevision = 1
 	// Codec identifies the current framed linear session format. Earlier linear
 	// and prototype stores are immutable migration inputs.
 	Codec             = V4Codec
@@ -57,6 +61,7 @@ var (
 type Manifest struct {
 	SchemaVersion    int       `json:"schemaVersion"`
 	Codec            string    `json:"codec"`
+	StorageRevision  int       `json:"storageRevision,omitempty"`
 	SessionID        string    `json:"sessionId"`
 	CreatedAt        time.Time `json:"createdAt"`
 	WriterGeneration uint64    `json:"writerGeneration"`
@@ -282,7 +287,7 @@ func CreateWithOptions(dir, sessionID string, opts OpenOptions) (*Session, error
 			_ = os.RemoveAll(dir)
 		}
 	}()
-	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: Codec, SessionID: sessionID, CreatedAt: time.Now().UTC()}
+	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, SessionID: sessionID, CreatedAt: time.Now().UTC()}
 	if err := writeManifestFile(filepath.Join(dir, "manifest.json"), manifest); err != nil {
 		return nil, err
 	}
@@ -436,10 +441,10 @@ func logPathForManifest(dir string, manifest Manifest) string {
 }
 
 func supportedStoredManifest(manifest Manifest) bool {
-	if manifest.SchemaVersion == SchemaVersion && manifest.Codec == Codec {
+	if manifest.SchemaVersion == SchemaVersion && manifest.Codec == Codec && manifest.StorageRevision == StorageRevision {
 		return true
 	}
-	return (manifest.SchemaVersion == 3 || manifest.SchemaVersion == SchemaVersion) &&
+	return manifest.SchemaVersion == 3 &&
 		(manifest.Codec == FinalV31Codec || manifest.Codec == LegacyLinearCodec || manifest.Codec == PrototypeCodec)
 }
 
@@ -717,7 +722,7 @@ func scanCommitFileCodec(file *os.File, startOffset int64, nextSequence uint64, 
 		if err := json.Unmarshal(bytes.TrimSuffix(line, []byte{'\n'}), &commit); err != nil {
 			return fmt.Errorf("%w: decode complete commit: %w", ErrDamagedStore, err)
 		}
-		if (commit.SchemaVersion != 3 && commit.SchemaVersion != SchemaVersion) || commit.Codec != codec {
+		if commit.SchemaVersion != 3 || commit.Codec != codec {
 			return fmt.Errorf("%w: event codec", ErrUnsupportedVersion)
 		}
 		if commit.RecordType != "commit" || commit.ID == "" || commit.OperationID == "" ||

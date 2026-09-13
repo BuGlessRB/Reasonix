@@ -21,7 +21,7 @@ func writePrototypeStore(t *testing.T, dir string, events []Event, torn string) 
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: PrototypeCodec, SessionID: "prototype", CreatedAt: time.Now().UTC(), WriterGeneration: 1}
+	manifest := Manifest{SchemaVersion: 3, Codec: PrototypeCodec, SessionID: "prototype", CreatedAt: time.Now().UTC(), WriterGeneration: 1}
 	manifestBytes, _ := json.Marshal(manifest)
 	if err := fileutil.AtomicWriteFileStrict(filepath.Join(dir, "manifest.json"), append(manifestBytes, '\n'), 0o600); err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func writePrototypeStore(t *testing.T, dir string, events []Event, torn string) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		commit := Commit{SchemaVersion: SchemaVersion, Codec: PrototypeCodec, RecordType: "commit", ID: "prototype-commit", OperationID: "prototype-operation", OperationHash: hash, FirstSequence: 1, EventCount: len(events), WriterGeneration: 1, CreatedAt: time.Now().UTC(), Events: events}
+		commit := Commit{SchemaVersion: 3, Codec: PrototypeCodec, RecordType: "commit", ID: "prototype-commit", OperationID: "prototype-operation", OperationHash: hash, FirstSequence: 1, EventCount: len(events), WriterGeneration: 1, CreatedAt: time.Now().UTC(), Events: events}
 		line, _ := json.Marshal(commit)
 		log = append(line, '\n')
 	}
@@ -225,13 +225,14 @@ func TestContinueStoredPreviewUpgradesLinearV3ToFinalCodec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: LegacyLinearCodec, SessionID: "old-linear", CreatedAt: time.Now().UTC(), WriterGeneration: 1}
+	manifest := Manifest{SchemaVersion: 3, Codec: LegacyLinearCodec, SessionID: "old-linear", CreatedAt: time.Now().UTC(), WriterGeneration: 1}
 	manifestBytes, _ := json.Marshal(manifest)
 	if err := os.WriteFile(filepath.Join(oldDir, "manifest.json"), append(manifestBytes, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var log bytes.Buffer
 	for _, commit := range commits {
+		commit.SchemaVersion = 3
 		commit.Codec = LegacyLinearCodec
 		line, _ := json.Marshal(commit)
 		log.Write(line)

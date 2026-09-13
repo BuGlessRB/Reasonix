@@ -15,6 +15,22 @@ import (
 	"reasonix/internal/store"
 )
 
+func TestStoredManifestRequiresExactFormatBoundary(t *testing.T) {
+	t.Parallel()
+	if supportedStoredManifest(Manifest{SchemaVersion: SchemaVersion, Codec: Codec}) {
+		t.Fatal("unpublished v4 draft without storageRevision was accepted as final v4")
+	}
+	if !supportedStoredManifest(Manifest{SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision}) {
+		t.Fatal("final v4 manifest was rejected")
+	}
+	if !supportedStoredManifest(Manifest{SchemaVersion: 3, Codec: FinalV31Codec}) {
+		t.Fatal("frozen v3.1 input format was rejected")
+	}
+	if supportedStoredManifest(Manifest{SchemaVersion: SchemaVersion, Codec: FinalV31Codec}) {
+		t.Fatal("schema-4 data mislabeled as v3.1 was accepted")
+	}
+}
+
 func TestCommitBatchAndProjectionAreAtomic(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "s")
 	s, err := Open(dir, "s")

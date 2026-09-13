@@ -114,8 +114,8 @@ func freezePreviewCodec(ctx context.Context, sourceDir string, allowCurrent bool
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
 		return frozenPreview{}, fmt.Errorf("%w: prototype manifest: %w", ErrDamagedStore, err)
 	}
-	legacyCodec := (manifest.SchemaVersion == 3 || manifest.SchemaVersion == SchemaVersion) && (manifest.Codec == PrototypeCodec || manifest.Codec == LegacyLinearCodec || manifest.Codec == FinalV31Codec)
-	currentCodec := allowCurrent && manifest.SchemaVersion == SchemaVersion && manifest.Codec == Codec
+	legacyCodec := manifest.SchemaVersion == 3 && (manifest.Codec == PrototypeCodec || manifest.Codec == LegacyLinearCodec || manifest.Codec == FinalV31Codec)
+	currentCodec := allowCurrent && manifest.SchemaVersion == SchemaVersion && manifest.Codec == Codec && manifest.StorageRevision == StorageRevision
 	if (!legacyCodec && !currentCodec) || strings.TrimSpace(manifest.SessionID) == "" {
 		return frozenPreview{}, fmt.Errorf("%w: unsupported preview codec %q", ErrUnsupportedVersion, manifest.Codec)
 	}
@@ -197,7 +197,7 @@ func importFrozenPreview(ctx context.Context, frozen frozenPreview, targetRoot s
 		return PrototypeImportResult{}, err
 	}
 	finalManifest := Manifest{
-		SchemaVersion: SchemaVersion, Codec: Codec, SessionID: targetID,
+		SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, SessionID: targetID,
 		CreatedAt: time.Now().UTC(), InheritedEvents: lastSequence, Source: &source,
 	}
 	if err := writeManifestFile(filepath.Join(tmp, "manifest.json"), finalManifest); err != nil {
