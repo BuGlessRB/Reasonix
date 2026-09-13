@@ -191,7 +191,9 @@ func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
 		OperationID: prepared.operationID, OperationHash: prepared.hash, FirstSequence: s.next,
 		EventCount: len(prepared.events), TurnID: prepared.turnID,
 		WriterGeneration: s.manifest.WriterGeneration, CreatedAt: time.Now().UTC(),
-		Events: cloneEvents(prepared.events),
+		// PreparedBatch already owns a private clone. Transfer it into the
+		// immutable accepted commit instead of copying every payload again.
+		Events: prepared.events,
 	}
 	for i := range commit.Events {
 		commit.Events[i].Sequence = commit.FirstSequence + uint64(i)

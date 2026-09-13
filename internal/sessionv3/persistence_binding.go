@@ -82,7 +82,10 @@ func (b *PersistenceBinding) accept(commit Commit, accepted func()) error {
 	if !b.accepting || b.closed {
 		return osClosedError()
 	}
-	b.queue = append(b.queue, cloneCommit(commit))
+	// Session transfers an immutable commit here. Keep one shared payload backing
+	// for the accepted log and write queue; cloning large bodies would turn the
+	// queue budget into multiple hidden copies.
+	b.queue = append(b.queue, commit)
 	accepted()
 	if !b.autoPaused && !b.draining && b.timer == nil {
 		b.scheduleDrainLocked()
@@ -178,7 +181,9 @@ func (b *PersistenceBinding) drain(ctx context.Context, explicit bool) error {
 			return err
 		}
 		b.draining = true
-		pending := cloneCommits(b.queue)
+		// Detach only the queue header. Commit payloads are immutable after
+		// acceptance and can be streamed by the physical writer without copying.
+		pending := append([]Commit(nil), b.queue...)
 		handle := b.handle
 		b.mu.Unlock()
 
@@ -226,7 +231,6 @@ func (b *PersistenceBinding) drain(ctx context.Context, explicit bool) error {
 			var uncertainErr *uncertainAppendError
 			if errors.As(err, &uncertainErr) {
 				copy := uncertainErr.write
-				copy.data = append([]byte(nil), copy.data...)
 				b.uncertain = &copy
 			}
 			b.autoPaused = true
@@ -308,11 +312,23 @@ func (b *PersistenceBinding) reconcileUncertain(ctx context.Context, handle Sess
 	if tailLen == 0 {
 		return false, nil
 	}
-	tail := make([]byte, tailLen)
-	if _, err := file.ReadAt(tail, uncertain.start); err != nil {
+	staged, err := os.Open(uncertain.stagedPath)
+	if err != nil {
+		return false, fmt.Errorf("%w: open staged append evidence: %w", ErrPersistenceUncertain, err)
+	}
+	defer staged.Close()
+	stagedInfo, err := staged.Stat()
+	if err != nil || stagedInfo.Size() != uncertain.stagedBytes {
+		return false, fmt.Errorf("%w: staged append evidence changed: %v", ErrPersistenceUncertain, err)
+	}
+	if tailLen > uncertain.stagedBytes {
+		return false, fmt.Errorf("%w: on-disk tail exceeds staged batch at offset %d", ErrPersistenceUncertain, uncertain.start)
+	}
+	matches, err := equalReaderPrefix(ctx, io.NewSectionReader(file, uncertain.start, tailLen), staged, tailLen)
+	if err != nil {
 		return false, fmt.Errorf("%w: inspect uncertain tail: %w", ErrPersistenceUncertain, err)
 	}
-	if int64(len(uncertain.data)) == tailLen && bytes.Equal(tail, uncertain.data) {
+	if tailLen == uncertain.stagedBytes && matches {
 		if err := b.syncFn(file); err != nil {
 			return false, &uncertainAppendError{cause: fmt.Errorf("fsync verified append: %w", err), write: uncertain}
 		}
@@ -322,25 +338,46 @@ func (b *PersistenceBinding) reconcileUncertain(ctx context.Context, handle Sess
 		if err := physical.rebuildWriterIndex(file); err != nil {
 			return false, fmt.Errorf("%w: rebuild index after verified append: %w", ErrPersistenceUncertain, err)
 		}
+		_ = staged.Close()
+		_ = os.Remove(uncertain.stagedPath)
 		return true, nil
 	}
-	if tailLen < int64(len(uncertain.data)) && bytes.Equal(tail, uncertain.data[:len(tail)]) {
-		backup := filepath.Join(b.dir, fmt.Sprintf("events.uncertain-%d.tail", time.Now().UTC().UnixNano()))
-		if err := os.WriteFile(backup, tail, 0o600); err != nil {
+	if tailLen < uncertain.stagedBytes && matches {
+		backup, err := preserveAndTruncateTail(filepath.Join(b.dir, currentLogName), uncertain.start, "uncertain")
+		if err != nil {
 			return false, fmt.Errorf("%w: preserve partial tail: %w", ErrPersistenceUncertain, err)
 		}
-		if err := file.Truncate(uncertain.start); err != nil {
-			return false, fmt.Errorf("%w: truncate preserved partial tail: %w", ErrPersistenceUncertain, err)
-		}
+		_ = backup
 		if _, err := file.Seek(0, io.SeekEnd); err != nil {
 			return false, fmt.Errorf("%w: seek repaired log: %w", ErrPersistenceUncertain, err)
 		}
-		if err := b.syncFn(file); err != nil {
-			return false, fmt.Errorf("%w: sync repaired log: %w", ErrPersistenceUncertain, err)
-		}
+		_ = staged.Close()
+		_ = os.Remove(uncertain.stagedPath)
 		return false, nil
 	}
 	return false, fmt.Errorf("%w: on-disk tail does not match batch at offset %d", ErrPersistenceUncertain, uncertain.start)
+}
+
+func equalReaderPrefix(ctx context.Context, left, right io.Reader, length int64) (bool, error) {
+	leftBuffer := make([]byte, 1<<20)
+	rightBuffer := make([]byte, 1<<20)
+	remaining := length
+	for remaining > 0 {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		chunk := min(remaining, int64(len(leftBuffer)))
+		ln, leftErr := io.ReadFull(left, leftBuffer[:chunk])
+		rn, rightErr := io.ReadFull(right, rightBuffer[:chunk])
+		if leftErr != nil || rightErr != nil {
+			return false, errors.Join(leftErr, rightErr)
+		}
+		if ln != rn || !bytes.Equal(leftBuffer[:ln], rightBuffer[:rn]) {
+			return false, nil
+		}
+		remaining -= int64(ln)
+	}
+	return true, nil
 }
 
 // freezePhysical runs fn while the physical write chain is idle. Export uses it
@@ -406,6 +443,5 @@ func cloneUncertainWrite(in *uncertainWrite) *uncertainWrite {
 		return nil
 	}
 	out := *in
-	out.data = append([]byte(nil), in.data...)
 	return &out
 }

@@ -145,7 +145,8 @@ type operationRecord struct {
 
 type uncertainWrite struct {
 	start       int64
-	data        []byte
+	stagedPath  string
+	stagedBytes int64
 	commitCount int
 }
 
@@ -497,34 +498,77 @@ func (s *Store) Append(ctx context.Context, commits []Commit) error {
 }
 
 func (s *Store) persist(ctx context.Context, file *os.File, commits []Commit) error {
-	var encoded bytes.Buffer
-	lengths, err := encodeV4Commits(ctx, &encoded, s.content, commits)
+	staged, err := os.CreateTemp(s.dir, ".append-*.staged")
+	if err != nil {
+		return fmt.Errorf("stage v4 append: %w", err)
+	}
+	stagedPath := staged.Name()
+	keepStaged := false
+	defer func() {
+		_ = staged.Close()
+		if !keepStaged {
+			_ = os.Remove(stagedPath)
+		}
+	}()
+	lengths, err := encodeV4Commits(ctx, staged, s.content, commits)
 	if err != nil {
 		return err
 	}
-	written := encoded.Bytes()
+	if err := staged.Sync(); err != nil {
+		return fmt.Errorf("fsync staged v4 append: %w", err)
+	}
+	stagedInfo, err := staged.Stat()
+	if err != nil {
+		return err
+	}
+	if _, err := staged.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
 	start, err := file.Seek(0, io.SeekEnd)
 	if err != nil {
 		return err
 	}
-	if err := s.writeFn(ctx, file, written); err != nil {
+	if err := copyStagedAppend(ctx, staged, file, s.writeFn); err != nil {
 		end, statErr := file.Seek(0, io.SeekEnd)
 		if statErr == nil && end == start {
 			return err
 		}
-		if statErr == nil && end == start+int64(len(written)) {
+		if statErr == nil && end == start+stagedInfo.Size() {
 			if syncErr := s.syncFn(file); syncErr == nil {
 				s.recordPersistedIndex(file, start, commits, lengths)
 				return nil
 			}
 		}
-		return &uncertainAppendError{cause: err, write: uncertainWrite{start: start, data: append([]byte(nil), written...), commitCount: len(commits)}}
+		keepStaged = true
+		return &uncertainAppendError{cause: err, write: uncertainWrite{start: start, stagedPath: stagedPath, stagedBytes: stagedInfo.Size(), commitCount: len(commits)}}
 	}
 	if err := s.syncFn(file); err != nil {
-		return &uncertainAppendError{cause: fmt.Errorf("fsync: %w", err), write: uncertainWrite{start: start, data: append([]byte(nil), written...), commitCount: len(commits)}}
+		keepStaged = true
+		return &uncertainAppendError{cause: fmt.Errorf("fsync: %w", err), write: uncertainWrite{start: start, stagedPath: stagedPath, stagedBytes: stagedInfo.Size(), commitCount: len(commits)}}
 	}
 	s.recordPersistedIndex(file, start, commits, lengths)
 	return nil
+}
+
+func copyStagedAppend(ctx context.Context, source io.Reader, destination io.Writer, writeFn func(context.Context, io.Writer, []byte) error) error {
+	buffer := make([]byte, 1<<20)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		n, readErr := source.Read(buffer)
+		if n > 0 {
+			if err := writeFn(ctx, destination, buffer[:n]); err != nil {
+				return err
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return nil
+			}
+			return readErr
+		}
+	}
 }
 
 // Sync fsyncs the physical log and reports the durable sequence observed on
