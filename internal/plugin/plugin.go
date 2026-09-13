@@ -189,7 +189,7 @@ type Host struct {
 	// Close cancels those startup contexts and waits for their goroutines before
 	// taking the client snapshot, so a just-connected stdio child cannot escape
 	// teardown and keep a Windows workspace directory locked.
-	deferredCancels     map[string][]context.CancelFunc
+	deferredCancels     map[string][]context.CancelCauseFunc
 	deferredGenerations map[string]uint64
 	deferredWG          sync.WaitGroup
 
@@ -463,7 +463,7 @@ func (h *Host) Close() {
 		return
 	}
 	h.closed = true
-	var cancels []context.CancelFunc
+	var cancels []context.CancelCauseFunc
 	for _, serverCancels := range h.deferredCancels {
 		cancels = append(cancels, serverCancels...)
 	}
@@ -471,7 +471,7 @@ func (h *Host) Close() {
 	h.mu.Unlock()
 
 	for _, cancel := range cancels {
-		cancel()
+		cancel(ErrHostClosed)
 	}
 	h.deferredWG.Wait()
 
@@ -723,16 +723,17 @@ type ConnectionResult struct {
 // shutdown and Remove cancel the background work and wait for its goroutine.
 func (h *Host) EnsureConnectedInBackground(lifeCtx context.Context, s Spec) <-chan ConnectionResult {
 	result := make(chan ConnectionResult, 1)
-	startupBase, cancelStartupBase := context.WithCancel(lifeCtx)
+	startupBase, cancelStartupBase := context.WithCancelCause(lifeCtx)
 	generation := h.registerDeferredCancel(s.Name, cancelStartupBase)
 	if !h.beginDeferredSpawn() {
-		cancelStartupBase()
+		cancelStartupBase(ErrHostClosed)
 		result <- ConnectionResult{Err: fmt.Errorf("plugin host is closed")}
 		return result
 	}
 	go func() {
 		defer h.endDeferredSpawn()
-		defer cancelStartupBase()
+		// The handshake is over either way; nothing downstream reads this cause.
+		defer cancelStartupBase(context.Canceled)
 		started := time.Now()
 		startupCtx, cancelStartup := context.WithTimeout(startupBase, s.startupTimeout())
 		tools, err := h.EnsureConnectedWithLifecycle(lifeCtx, startupCtx, s, generation)
@@ -1143,7 +1144,7 @@ func (h *Host) addConnectedWithLifecycle(lifeCtx, callCtx context.Context, s Spe
 // the tool registry, and whether the server was connected.
 func (h *Host) Remove(name string) (toolPrefix string, found bool) {
 	h.mu.Lock()
-	cancels := append([]context.CancelFunc(nil), h.deferredCancels[name]...)
+	cancels := append([]context.CancelCauseFunc(nil), h.deferredCancels[name]...)
 	delete(h.deferredCancels, name)
 	if h.deferredGenerations == nil {
 		h.deferredGenerations = make(map[string]uint64)
@@ -1162,7 +1163,7 @@ func (h *Host) Remove(name string) (toolPrefix string, found bool) {
 	if idx < 0 {
 		h.mu.Unlock()
 		for _, cancel := range cancels {
-			cancel()
+			cancel(ErrServerRemoved)
 		}
 		if len(cancels) == 0 {
 			return "", false
@@ -1173,7 +1174,7 @@ func (h *Host) Remove(name string) (toolPrefix string, found bool) {
 	h.mu.Unlock()
 
 	for _, cancel := range cancels {
-		cancel()
+		cancel(ErrServerRemoved)
 	}
 	removed.close() // kills the subprocess: outside the lock
 
@@ -1189,6 +1190,15 @@ func (h *Host) deferredGenerationCurrent(name string, generation uint64) bool {
 // ErrDeferredSpawnCancelled marks a lazy generation invalidated by remove or
 // host shutdown before it could publish a client.
 var ErrDeferredSpawnCancelled = errors.New("deferred MCP spawn cancelled")
+
+// Why a lazily-started server's context ended. The host is the only one that
+// knows: past this point all a caller sees is "context canceled", which names
+// the mechanism and not one of the two things it could mean — and those two
+// have different things to do next.
+var (
+	ErrHostClosed    = errors.New("the MCP host shut down (session ended or runtime rebuilt)")
+	ErrServerRemoved = errors.New("this MCP server was removed, disabled, or reconnected")
+)
 
 // start opens the transport on lifeCtx (whose cancellation later closes the
 // subprocess) and uses callCtx for the initialize round-trip (whose cancellation
@@ -1210,6 +1220,14 @@ func start(lifeCtx, callCtx context.Context, s Spec) (*Client, error) {
 	}
 	t, err := newTransport(lifeCtx, s)
 	if err != nil {
+		// Reported in 0-4ms with no stderr, a bare "context canceled" reads like
+		// the server failed to launch. Which of the two cancelled it is
+		// something only the host knows, and they are different things to fix.
+		if errors.Is(err, context.Canceled) {
+			if cause := context.Cause(lifeCtx); cause != nil && !errors.Is(cause, context.Canceled) {
+				err = cause
+			}
+		}
 		return nil, newStartupFailure("launch", started, "", err)
 	}
 	tt := strings.ToLower(strings.TrimSpace(s.Type))

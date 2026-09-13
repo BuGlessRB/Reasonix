@@ -412,7 +412,7 @@ func LazyToolset(spec Spec, cs *CachedSchema, host *Host, reg *tool.Registry, se
 	// placeholders. This is read-only host preparation; no MCP process or network
 	// connection starts here.
 	spec = ResolveStoredAuthorization(sessionCtx, spec)
-	spawnCtx, cancel := context.WithCancel(sessionCtx)
+	spawnCtx, cancel := context.WithCancelCause(sessionCtx)
 	shared := &lazySpawn{
 		spec:       spec,
 		host:       host,
