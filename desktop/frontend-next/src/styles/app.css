@@ -190,8 +190,22 @@
   /* Inside the shell this row *is* the title bar, so it has to be the drag
      handle. Every control on it opts back out, or the menus stop opening. */
   /* Two spellings because the shells disagree: --wails-draggable is Wails'
-     own property, -webkit-app-region is Chromium's. Each ignores the other. */
+     own property, -webkit-app-region is Chromium's. Each ignores the other —
+     and they disagree about inheritance too, which is what the opt-out above
+     assumes. A custom property inherits, so under Wails every span on the row
+     was drag surface; -webkit-app-region does not, so under Chromium each one
+     computes to none and the row is draggable only where nothing is painted.
+     The breadcrumb alone is a thousand pixels of that. `inherit` is accepted
+     by the parser and then computes to none, so the row hands drag to its
+     children by naming them — everything except what a control draws inside
+     itself, which stays out of the union and is covered by that control's own
+     no-drag rectangle. One list of controls, used twice by reference. */
   [data-titlebar="app"] .chrome { --wails-draggable: drag; -webkit-app-region: drag }
+  [data-titlebar="app"] .chrome
+    *:not(:is(button, a[href], input, select, textarea, summary, .picker,
+              [role="button"], [role="tab"], [role="menuitem"], [role="switch"]) *) {
+    -webkit-app-region: drag;
+  }
   /* Membership is what the markup says is interactive, not a list of the
      controls that happened to be on the bar: the opt-out lived on the last
      selector of a list, a control was deleted, and the declaration left with
