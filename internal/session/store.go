@@ -149,6 +149,12 @@ type operationRecord struct {
 	commit Commit
 }
 
+func compactOperationRecord(commit Commit) operationRecord {
+	metadata := commit
+	metadata.Events = nil
+	return operationRecord{hash: commit.OperationHash, commit: metadata}
+}
+
 type uncertainWrite struct {
 	start       int64
 	stagedPath  string
@@ -183,9 +189,16 @@ type Store struct {
 	closed       bool
 	index        sparseIndex
 	content      *sessioncontent.Store
+	startup      *startupSessionState
 
 	writeFn func(context.Context, io.Writer, []byte) error
 	syncFn  func(*os.File) error
+}
+
+type startupSessionState struct {
+	projection Projection
+	operations map[string]operationRecord
+	durable    uint64
 }
 
 // ID returns the immutable session identity of the physical store.
@@ -338,14 +351,13 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 	if manifest.SessionID != sessionID {
 		return fail(fmt.Errorf("session: manifest belongs to %q", manifest.SessionID))
 	}
-	// Validate the complete prefix before repairing anything. A newer required
-	// event or a damaged complete batch must leave the original tail untouched.
-	if _, err := Replay(dir, nil); err != nil {
+	// Build runtime state in one streaming validation pass. A newer required
+	// event or a damaged complete batch leaves the original tail untouched.
+	startup, durableEnd, torn, err := loadStartupSessionState(context.Background(), dir, eventsPath)
+	if err != nil {
 		return fail(err)
 	}
-	if durableEnd, torn, err := v4TornTail(eventsPath, contentStoreForSessionDir(dir)); err != nil {
-		return fail(err)
-	} else if torn {
+	if torn {
 		// Cold readers deliberately stop at the last complete record. A writer
 		// may repair that tail only after acquiring the exclusive lease above:
 		// preserve the original bytes first, then truncate back to the durable
@@ -380,30 +392,61 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 	}
 	return &Store{
 		dir: dir, manifest: manifest, file: f, releaseLease: releaseLease,
-		index: index, content: contentStoreForSessionDir(dir), writeFn: writeFn, syncFn: syncFn,
+		index: index, content: contentStoreForSessionDir(dir), startup: startup, writeFn: writeFn, syncFn: syncFn,
 	}, nil
+}
+
+func loadStartupSessionState(ctx context.Context, dir, eventsPath string) (*startupSessionState, int64, bool, error) {
+	file, err := os.Open(eventsPath)
+	if os.IsNotExist(err) {
+		projection, _ := Project(nil)
+		return &startupSessionState{projection: projection, operations: map[string]operationRecord{}}, 0, false, nil
+	}
+	if err != nil {
+		return nil, 0, false, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, 0, false, err
+	}
+	projection, _ := Project(nil)
+	state := &startupSessionState{projection: projection, operations: map[string]operationRecord{}}
+	var durableEnd int64
+	var projectionErr error
+	err = scanV4CommitFile(ctx, file, 0, 1, contentStoreForSessionDir(dir), nil, func(_ int64, commit Commit) bool {
+		if applyErr := applyProjectionCommit(&state.projection, commit); applyErr != nil {
+			projectionErr = applyErr
+			return false
+		}
+		state.operations[commit.OperationID] = compactOperationRecord(commit)
+		state.durable = commit.LastSequence()
+		durableEnd, _ = file.Seek(0, io.SeekCurrent)
+		return true
+	})
+	if err != nil {
+		return nil, 0, false, err
+	}
+	if projectionErr != nil {
+		return nil, 0, false, projectionErr
+	}
+	return state, durableEnd, durableEnd < info.Size(), nil
 }
 
 // bindSession replays the durable prefix and constructs the in-memory Session
 // over a binding for the exact handle.
 func bindSession(handle *Store, opts OpenOptions) (*Session, error) {
 	dir := handle.Dir()
-	commits, err := Replay(dir, nil)
-	if err != nil {
-		_ = handle.Close(context.Background())
-		return nil, err
+	state := handle.startup
+	if state == nil {
+		projection, _ := Project(nil)
+		state = &startupSessionState{projection: projection, operations: map[string]operationRecord{}}
 	}
-	projection, err := Project(commits)
-	if err != nil {
-		_ = handle.Close(context.Background())
-		return nil, err
-	}
-	durable := uint64(0)
-	if len(commits) > 0 {
-		durable = commits[len(commits)-1].LastSequence()
-	}
-	binding := newPersistenceBinding(handle, dir, durable, opts)
-	session := newSession(handle.Manifest().SessionID, handle.Manifest(), commits, projection, binding)
+	handle.startup = nil
+	binding := newPersistenceBinding(handle, dir, state.durable, opts)
+	session := newSession(handle.Manifest().SessionID, handle.Manifest(), nil, state.projection, binding)
+	session.next = state.durable + 1
+	session.operations = state.operations
 	binding.metadataSource = session.metadataForDurable
 	return session, nil
 }
@@ -418,6 +461,13 @@ func (s *Session) metadataForDurable(durable uint64) (catalogMetadata, bool) {
 	defer s.mu.Unlock()
 	if durable+1 != s.next {
 		return catalogMetadata{}, false
+	}
+	cut := 0
+	for cut < len(s.commits) && s.commits[cut].LastSequence() <= durable {
+		cut++
+	}
+	if cut > 0 {
+		s.commits = append([]Commit(nil), s.commits[cut:]...)
 	}
 	return metadataFromProjection(s.manifest, durable, s.projection), true
 }

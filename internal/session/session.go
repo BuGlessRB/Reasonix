@@ -73,11 +73,11 @@ func newSession(id string, manifest Manifest, commits []Commit, projection Proje
 	operations := make(map[string]operationRecord, len(commits))
 	next := uint64(1)
 	for _, commit := range commits {
-		operations[commit.OperationID] = operationRecord{hash: commit.OperationHash, commit: commit}
+		operations[commit.OperationID] = compactOperationRecord(commit)
 		next = commit.LastSequence() + 1
 	}
 	return &Session{
-		id: id, manifest: manifest, next: next, commits: cloneCommits(commits),
+		id: id, manifest: manifest, next: next,
 		operations: operations, projection: projection, binding: binding,
 	}
 }
@@ -242,7 +242,11 @@ func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
 			s.mu.Unlock()
 			return Commit{}, fmt.Errorf("%w: %q", ErrOperationConflict, prepared.operationID)
 		}
-		commit := cloneCommit(prior.commit)
+		commit := prior.commit
+		commit.Events = cloneEvents(prepared.events)
+		for i := range commit.Events {
+			commit.Events[i].Sequence = commit.FirstSequence + uint64(i)
+		}
 		s.mu.Unlock()
 		return commit, nil
 	}
@@ -280,7 +284,7 @@ func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
 		s.commits = append(s.commits, commit)
 		s.projection = projection
 		s.next = commit.LastSequence() + 1
-		s.operations[prepared.operationID] = operationRecord{hash: prepared.hash, commit: commit}
+		s.operations[prepared.operationID] = compactOperationRecord(commit)
 	})
 	s.mu.Unlock()
 	if err != nil {
@@ -368,10 +372,30 @@ func (s *Session) AcceptedPage(ctx context.Context, offset uint64, limit int) (E
 		return EventPage{}, fmt.Errorf("session: read limit must be 1..1000 commits")
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	tail := cloneCommits(s.commits)
+	var handle SessionHandle
+	if s.binding != nil {
+		handle = s.binding.handle
+	} else {
+		handle = s.coldHandle
+	}
+	s.mu.Unlock()
 	page := EventPage{Commits: []Commit{}}
-	for _, commit := range s.commits {
+	if handle != nil {
+		var err error
+		page, err = handle.Read(ctx, offset, limit)
+		if err != nil {
+			return EventPage{}, err
+		}
+		if page.Truncated || len(page.Commits) == limit {
+			return page, nil
+		}
+	}
+	for _, commit := range tail {
 		if commit.LastSequence() <= offset {
+			continue
+		}
+		if len(page.Commits) > 0 && commit.LastSequence() <= page.Commits[len(page.Commits)-1].LastSequence() {
 			continue
 		}
 		if len(page.Commits) == limit {

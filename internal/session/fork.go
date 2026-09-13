@@ -33,14 +33,32 @@ func (s *Session) Fork(ctx context.Context, childDir, childID string, throughSeq
 	if _, err := s.Flush(ctx); err != nil {
 		return Manifest{}, fmt.Errorf("flush parent before fork: %w", err)
 	}
-	s.mu.Lock()
 	var prefix []Commit
-	for _, commit := range s.commits {
-		if commit.LastSequence() > throughSequence {
+	var cursor uint64
+	for {
+		previous := cursor
+		page, err := s.Read(ctx, cursor, 1000)
+		if err != nil {
+			return Manifest{}, err
+		}
+		stop := false
+		for _, commit := range page.Commits {
+			if commit.LastSequence() > throughSequence {
+				stop = true
+				break
+			}
+			prefix = append(prefix, commit)
+			cursor = commit.LastSequence()
+		}
+		if stop || !page.Truncated {
 			break
 		}
-		prefix = append(prefix, cloneCommit(commit))
+		if page.Next <= previous {
+			return Manifest{}, fmt.Errorf("%w: fork cursor did not advance", ErrDamagedStore)
+		}
+		cursor = page.Next
 	}
+	s.mu.Lock()
 	parentDir, parentID := s.dir(), s.id
 	s.mu.Unlock()
 	if throughSequence > 0 && (len(prefix) == 0 || prefix[len(prefix)-1].LastSequence() != throughSequence) {

@@ -476,6 +476,31 @@ func TestOperationRetryIsIdempotentAndConflictFails(t *testing.T) {
 	if !errors.Is(err, ErrOperationConflict) {
 		t.Fatalf("conflicting retry error = %v", err)
 	}
+	if _, err := s.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.commits) != 0 {
+		t.Fatalf("durable commits remained in the runtime: %d", len(s.commits))
+	}
+	if err := s.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(dir, "s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close(context.Background()) })
+	if len(reopened.commits) != 0 || len(reopened.operations["same"].commit.Events) != 0 {
+		t.Fatalf("reopen retained durable bodies: commits=%d operation=%+v", len(reopened.commits), reopened.operations["same"])
+	}
+	retried, err := reopened.Append(t.Context(), one)
+	if err != nil || retried.ID != first.ID || retried.FirstSequence != first.FirstSequence || len(retried.Events) != 1 {
+		t.Fatalf("reopened retry = %+v, %v", retried, err)
+	}
+	page, err := reopened.AcceptedPage(t.Context(), 0, 10)
+	if err != nil || len(page.Commits) != 1 || page.Commits[0].ID != first.ID {
+		t.Fatalf("accepted durable page = %+v, %v", page, err)
+	}
 }
 
 func TestExplicitFlushRepairsPreservedPartialAppendWithoutDuplicateCommit(t *testing.T) {
