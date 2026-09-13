@@ -108,6 +108,36 @@ func TestStoreReadRangeAndStat(t *testing.T) {
 	}
 }
 
+func TestStoreReadRangeVerifiesOnlyTouchedIntegrityBlocks(t *testing.T) {
+	t.Parallel()
+	store := New(t.TempDir())
+	body := bytes.Repeat([]byte("a"), 3*IntegrityBlockBytes)
+	ref, err := store.Put(t.Context(), bytes.NewReader(body), Metadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	object, err := os.OpenFile(store.objectPath(ref.Digest), os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := object.WriteAt([]byte("x"), 16); err != nil {
+		_ = object.Close()
+		t.Fatal(err)
+	}
+	if err := object.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := store.ReadRange(t.Context(), ref, 2*IntegrityBlockBytes, 32); err != nil || !bytes.Equal(got, body[2*IntegrityBlockBytes:2*IntegrityBlockBytes+32]) {
+		t.Fatalf("untouched range = %d bytes, err=%v", len(got), err)
+	}
+	if _, err := store.ReadRange(t.Context(), ref, 0, 32); err == nil {
+		t.Fatal("tampered range passed block verification")
+	}
+	if err := store.Verify(t.Context(), ref); err == nil {
+		t.Fatal("full verification accepted tampered object")
+	}
+}
+
 func TestStoreRejectsCancellationAndTampering(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
