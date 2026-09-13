@@ -2077,13 +2077,15 @@
   .steps .s[data-now] .b { color: var(--net) }
 
   /* ── 批准：不是「你想怎么做」，是「准不准动手」。run 在这里真的阻塞。 ── */
-  /* 阻塞着的那一张抬出流外。琥珀在这套语言里只说「需要你介入」，而它原来只
-     落在按钮上，卡片本身跟普通工具卡同权重。答复过就撤掉。 */
-  .call[data-k="ask"] > .c:has(.apv:not([data-sealed])) {
+  /* 阻塞着的那一张抬出流外。判据是有没有一张没答复的授权卡，不是它属于哪个
+     类别 —— 授权是 write，计划确认是 ask，两种都阻塞。答复过就撤掉。
+     抬起要靠层：边线只说得出这是哪一类，说不出它压着别的东西。 */
+  .call > .c:has(.apv:not([data-sealed])) {
     margin: 3px -14px; padding: 13px 14px; border-left: 2px solid var(--warn);
     border-radius: 0 var(--r-lg) var(--r-lg) 0;
     background: linear-gradient(102deg,
-      color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%);
+      color-mix(in srgb, var(--accent) 12%, transparent), transparent 72%), var(--float);
+    box-shadow: var(--shadow-float);
   }
   .apv {
     margin-top: 8px; overflow: hidden; background: none;
