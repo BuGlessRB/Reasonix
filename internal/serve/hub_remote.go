@@ -323,14 +323,6 @@ func (h *Hub) OpenRemote(ep RemoteEndpoint, release func()) (*Runtime, error) {
 	if err := ep.validate(); err != nil {
 		return nil, err
 	}
-	limit := maxRuntimes()
-	h.mu.RLock()
-	full := len(h.order) >= limit
-	h.mu.RUnlock()
-	if full {
-		return nil, refusal(http.StatusConflict, "hub.too_many_panes",
-			fmt.Errorf("already driving %d sessions — close one first", limit), map[string]any{"max": limit})
-	}
 	rt := &Runtime{
 		ID:     h.nextID(),
 		Root:   ep.Workspace,

@@ -15,7 +15,6 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
 	"reasonix/internal/boot"
-	"strconv"
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
@@ -41,22 +40,6 @@ func (h *Hub) decorateSink(sink event.Sink) event.Sink {
 // runtimePrefix is where a hub publishes its runtimes. The frontend builds
 // every request under it, so it is part of the wire contract.
 const runtimePrefix = "/rt/"
-
-// maxRuntimesDefault caps concurrently driven sessions: each runtime is a full
-// assembly — tools, extensions, MCP sidecars — so an unbounded pane count is an
-// unbounded process. Where the ceiling belongs depends on the machine, so
-// [desktop] max_panes moves it, up to 32.
-const maxRuntimesDefault = 8
-
-// maxRuntimes reads the ceiling for this machine. Opening a pane is not a hot
-// path, so it is read per call rather than cached into a stale number.
-func maxRuntimes() int {
-	cfg, err := config.Load()
-	if err != nil {
-		return maxRuntimesDefault
-	}
-	return cfg.DesktopMaxPanes(maxRuntimesDefault)
-}
 
 // Hub serves several sessions at the same time. Each Runtime is a complete
 // Server with its own controller, event stream, title cache and session lease,
@@ -278,14 +261,6 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 	if rt := h.findSession(req.SessionPath); rt != nil {
 		return rt, nil
 	}
-	limit := maxRuntimes()
-	h.mu.RLock()
-	full := len(h.order) >= limit
-	h.mu.RUnlock()
-	if full {
-		return nil, refusal(http.StatusConflict, "hub.too_many_panes",
-			fmt.Errorf("already driving %d sessions — close one first", limit), map[string]any{"max": limit})
-	}
 	root, err := h.resolveRoot(req)
 	if err != nil {
 		return nil, err
@@ -500,10 +475,7 @@ func (h *Hub) Handler() http.Handler {
 	return logMiddleware(h.auth.middleware(withPage(csrfGuard(mux), h.opts.Page)))
 }
 
-// The ceiling rides the list rather than a second endpoint: a client that
-// hardcoded it would grey out its control at the wrong count.
 func (h *Hub) listRuntimes(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("X-Panes-Max", strconv.Itoa(maxRuntimes()))
 	writeJSON(w, h.List())
 }
 

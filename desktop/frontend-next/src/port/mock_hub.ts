@@ -14,10 +14,6 @@ export class MockHub implements HubPort {
   private readonly roots = ["~/projects/DeepSeek-Reasonix", "~/projects/my-website"];
   private seq = 1;
 
-  maxPanes() {
-    return 8;
-  }
-
   runtimes() {
     return Promise.resolve([...this.views]);
   }

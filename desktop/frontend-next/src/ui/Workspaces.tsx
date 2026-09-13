@@ -68,10 +68,6 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   const [whole, setWhole] = useState<Set<string>>(new Set());
   // Conversations whose conflict copies the reader asked to see.
   const [spread, setSpread] = useState<Set<string>>(new Set());
-  // The kernel refuses past its own ceiling either way; this only decides when
-  // the button greys out instead of failing on click.
-  const maxPanes = hub.maxPanes();
-  const full = runtimes.length >= maxPanes;
   // Two folders can share a name — a worktree copy carries the project's own.
   // Only then is the extra word worth the room it takes.
   const twice = new Set(tree.map((w) => w.name).filter((n, i, all) => all.indexOf(n) !== i));
@@ -272,8 +268,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         data-action="session.new"
                         className="wsadd"
                         data-busy={busy === "new:" + ws.root ? "" : undefined}
-                        disabled={full || ws.missing}
-                        title={full ? t("最多同时打开 {n} 个面板，请先关闭一个", { n: maxPanes }) : t("在 {name} 下新建会话", { name: ws.name })}
+                        disabled={ws.missing}
+                        title={t("在 {name} 下新建会话", { name: ws.name })}
                         aria-label={t("在 {name} 下新建会话", { name: ws.name })}
                         onClick={(ev) => {
                           ev.stopPropagation();

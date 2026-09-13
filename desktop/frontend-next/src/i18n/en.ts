@@ -219,7 +219,6 @@ export const EN: Record<string, string> = {
   "已显示开头部分，模型可继续往下读": "Showing the start; the model can read on from there",
   "模型只收到 {kept}，共 {size} — 其余未进入上下文": "The model received only {kept} of {size} — the rest never entered its context",
   "在 {name} 下新建会话": "Start a new session in {name}",
-  "最多同时打开 {n} 个面板，请先关闭一个": "At most {n} panes at once — close one first",
   "关闭这个会话面板": "Close this pane",
   "不会删除任何文件": "No files are deleted",
   "将先关闭 {n} 个面板；不会删除任何文件": "Closes {n} panes first; no files are deleted",

@@ -61,9 +61,6 @@ export interface TreeWorkspace {
 // folders it can open. One AgentPort hangs off each pane.
 export interface HubPort {
   runtimes(): Promise<RuntimeView[]>;
-  // The pane ceiling this kernel reported, so a control greys out at the right
-  // count rather than at a number the client guessed.
-  maxPanes(): number;
   open(req: { root?: string; sessionPath?: string }): Promise<RuntimeView>;
   close(id: string): Promise<void>;
   tree(): Promise<TreeWorkspace[]>;
@@ -125,7 +122,6 @@ export class SseHub implements HubPort {
   private readonly ports = new Map<string, AgentPort>();
   // What this machine's kernel says it can drive at once, learned from the
   // last list. The default matches the kernel's own until one arrives.
-  private paneCeiling = 8;
   // Bindings the shell exposes are pane-independent; this reaches them without
   // pretending to belong to a runtime.
   private readonly shell = new SsePort();
@@ -180,13 +176,7 @@ export class SseHub implements HubPort {
   async runtimes() {
     const res = await fetch("/runtimes", { credentials: "same-origin" });
     if (!res.ok) throw new Error(`/runtimes: ${res.status}`);
-    const max = Number(res.headers.get("X-Panes-Max"));
-    if (max > 0) this.paneCeiling = max;
     return (await res.json()) as RuntimeView[];
-  }
-
-  maxPanes() {
-    return this.paneCeiling;
   }
 
   open(req: { root?: string; sessionPath?: string }) {

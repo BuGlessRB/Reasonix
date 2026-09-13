@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -209,38 +208,6 @@ func TestHubRefusalNamesTheMissingFolder(t *testing.T) {
 	_, err := h.resolveRoot(OpenRequest{})
 	if err == nil || !strings.Contains(err.Error(), "add a folder") {
 		t.Fatalf("err = %v, want it to point at adding a folder", err)
-	}
-}
-
-// The ceiling is a machine's own call: a laptop with no MCP servers holds far
-// more panes than one with five, so the number is configurable and the list
-// carries it. A client that hardcoded 8 would grey out its control at the wrong
-// count the moment the config differs.
-func TestPaneCeilingComesFromConfig(t *testing.T) {
-	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
-	path := config.UserConfigPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte("[desktop]\nmax_panes = 12\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := maxRuntimes(); got != 12 {
-		t.Fatalf("maxRuntimes = %d, want 12", got)
-	}
-	// Clamped rather than trusted: an unbounded pane count is an unbounded
-	// process however the number got into the file.
-	if err := os.WriteFile(path, []byte("[desktop]\nmax_panes = 900\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := maxRuntimes(); got != 32 {
-		t.Fatalf("maxRuntimes with an absurd value = %d, want it clamped to 32", got)
-	}
-	if err := os.WriteFile(path, []byte("[desktop]\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := maxRuntimes(); got != maxRuntimesDefault {
-		t.Fatalf("maxRuntimes unset = %d, want the default %d", got, maxRuntimesDefault)
 	}
 }
 

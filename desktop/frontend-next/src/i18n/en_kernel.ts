@@ -125,7 +125,6 @@ export const EN_KERNEL: Record<string, string> = {
     "Cannot reach that address. Check the network, or whether the address has a typo",
   "该地址有响应，但不是 OpenAI 或 Anthropic 类接口。请确认是否误将网页地址复制过来":
     "Something answered, but not as an OpenAI- or Anthropic-compatible API. Check a web page address was not pasted in",
-  "最多同时打开 {max} 个面板，请先关闭一个": "At most {max} panes at once — close one first",
   "无法解析本次请求的内容，请刷新页面后重试": "That request could not be read — reload the page and try again",
   "缺少「{field}」": "Still missing “{field}”",
   "找不到名为「{name}」的{kind}": "No {kind} called “{name}”",

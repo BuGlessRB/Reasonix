@@ -27,7 +27,6 @@ const SAID: Record<string, string> = {
   // ── 冲突：有东西挡着 ─────────────────────────────────────────────
   "workspace.has_open_panes": "该文件夹仍有 {n} 个打开的面板，请先关闭再移除",
   "provider.model_in_use": "该来源正在使用中，请先切换模型再删除",
-  "hub.too_many_panes": "最多同时打开 {max} 个面板，请先关闭一个",
 
   // ── 来源：填错了什么 ─────────────────────────────────────────────
   "provider.name_required": "请为该来源填写名称",
