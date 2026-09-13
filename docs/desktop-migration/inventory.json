@@ -3515,6 +3515,22 @@
     },
     {
       "kind": "command",
+      "name": "SessionHistoryContentForTab",
+      "detail": "(tabID string, ref sessioncontent.Ref, offset int64) (SessionHistoryContentChunk, error)",
+      "location": "desktop/session_history_service.go:38",
+      "class": "keep-business",
+      "owner": "hostrpc desktop/invoke"
+    },
+    {
+      "kind": "command",
+      "name": "SessionHistoryPageForTab",
+      "detail": "(tabID string, cursor string, limit int) (session.MessageHistoryPage, error)",
+      "location": "desktop/session_history_service.go:28",
+      "class": "keep-business",
+      "owner": "hostrpc desktop/invoke"
+    },
+    {
+      "kind": "command",
       "name": "SetActiveSessionVersion",
       "detail": "(req RecoveryPreferenceRequest) error",
       "location": "desktop/recovery_lineage.go:114",
