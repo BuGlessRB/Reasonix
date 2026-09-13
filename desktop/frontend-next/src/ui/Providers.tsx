@@ -5,7 +5,8 @@ import type { Protocol, ProviderCheck, ProviderEdit, ProviderEntry, ProviderMode
 import { AddProvider } from "./AddProvider";
 import { EditConn } from "./EditConn";
 import { KIND_LABEL, accountKey, accountLabel, disambiguate, hostOf } from "./vendors";
-import { reason } from "../i18n/kernel";
+import { PROVIDER_EDIT_DISABLED, reason } from "../i18n/kernel";
+import { HttpError } from "../port/http_error";
 
 // A connection is an account, not a config row. One endpoint answering two
 // protocols is two rows in the file and one service to the person paying for it,
@@ -148,6 +149,11 @@ function Conn({
   onEdited: () => void; onFailed: (why: string) => void;
 }) {
   const [found, setFound] = useState<ProviderCheck | null>(null);
+  // A refusal is not a failed probe. The kernel withholds these routes from a
+  // server reachable over the network, because adding a source writes a key
+  // into the credential store of the machine running the kernel — so nothing
+  // was tried, and "cannot connect" names the wrong thing to go fix.
+  const [refused, setRefused] = useState("");
   const [editing, setEditing] = useState(false);
   useEscape(editing, () => setEditing(false));
   const entry = a.byKind[kind] ?? a.byKind[a.kinds[0]];
@@ -183,10 +189,14 @@ function Conn({
   const check = async () => {
     setBusy(`check:${entry.name}`);
     setFound(null);
+    setRefused("");
     try {
       setFound(await port.checkProvider(entry.name));
     } catch (e) {
-      setFound({ ok: false, error: reason(e) });
+      // Read off the code the kernel sent, never the status: 403 is also what a
+      // gateway in front of it answers, and that is a different thing to do next.
+      if (e instanceof HttpError && e.reason?.code === PROVIDER_EDIT_DISABLED) setRefused(reason(e));
+      else setFound({ ok: false, error: reason(e) });
     } finally {
       setBusy("");
     }
@@ -283,6 +293,12 @@ function Conn({
             onEdited();
           }}
         />
+      )}
+      {refused && (
+        <div className="find" data-lvl="warn" role="status">
+          <span className="t">{refused}</span>
+          <span className="why">{t("模型来源要在运行内核的那台机器上配置。")}</span>
+        </div>
       )}
       {found && (
         <div className="find" data-lvl={found.ok ? "ok" : "warn"} role="status">

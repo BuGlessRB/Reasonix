@@ -11,6 +11,11 @@ import { t } from "./index";
 // The map goes code → Chinese source text, which then runs through the ordinary
 // t(): one translation mechanism for the whole app rather than a second
 // catalogue keyed by codes.
+// Codes a caller branches on rather than only renders. The table below keeps
+// its literal keys — the kernel's parity guard reads this file as text and can
+// only see those — so kernel.test.ts holds the two spellings together.
+export const PROVIDER_EDIT_DISABLED = "provider.editing_disabled";
+
 const SAID: Record<string, string> = {
   // ── 忙：不是出错，是「现在不行」 ─────────────────────────────────
   "plan.decision_stale": "该决定已不符合当前状态：计划在你回答前已发生变更",

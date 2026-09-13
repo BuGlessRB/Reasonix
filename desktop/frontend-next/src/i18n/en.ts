@@ -382,6 +382,7 @@ export const EN: Record<string, string> = {
   "推理": "Reasoning",
   "手动添加": "Write one manually",
   "无法连接": "Unreachable",
+  "模型来源要在运行内核的那台机器上配置。": "Model sources are configured on the machine running the kernel.",
   "连上了": "Connected",
   "{n} 条规则": "{n} rules",
   "忘记": "Forget",

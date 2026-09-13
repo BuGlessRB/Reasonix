@@ -5,7 +5,7 @@
 // function of the error and the installed catalogue.
 import { beforeEach, describe, expect, it } from "vitest";
 import { boot, STORAGE } from "./index";
-import { reason } from "./kernel";
+import { PROVIDER_EDIT_DISABLED, codes, reason } from "./kernel";
 import { HttpError } from "../port/port";
 
 // Pinned, not defaulted: with nothing stored the window follows the machine, so
@@ -75,5 +75,14 @@ describe("what a reader is told a refusal was", () => {
     expect(reason(coded("inbox item not found", "inbox.not_found"))).toBe(
       "That entry is no longer in the pending queue",
     );
+  });
+});
+
+// A code a caller branches on is spelled twice: once as the exported constant,
+// once as a literal key the kernel's parity guard can read as text. Nothing in
+// either language notices when one of them moves.
+describe("codes a caller branches on", () => {
+  it("spells the provider refusal the same in the constant and the catalogue", () => {
+    expect(codes[PROVIDER_EDIT_DISABLED]).toBeTruthy();
   });
 });
