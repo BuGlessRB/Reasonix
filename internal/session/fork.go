@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 // the physical layer only writes the child bytes.
 func (s *Session) Fork(ctx context.Context, childDir, childID string, throughSequence uint64) (Manifest, error) {
 	if s == nil {
-		return Manifest{}, fmt.Errorf("sessionv3: nil parent session")
+		return Manifest{}, fmt.Errorf("session: nil parent session")
 	}
 	if err := ctx.Err(); err != nil {
 		return Manifest{}, err
@@ -44,7 +44,7 @@ func (s *Session) Fork(ctx context.Context, childDir, childID string, throughSeq
 	parentDir, parentID := s.dir(), s.id
 	s.mu.Unlock()
 	if throughSequence > 0 && (len(prefix) == 0 || prefix[len(prefix)-1].LastSequence() != throughSequence) {
-		return Manifest{}, fmt.Errorf("sessionv3: fork cut %d is not an atomic batch boundary", throughSequence)
+		return Manifest{}, fmt.Errorf("session: fork cut %d is not an atomic batch boundary", throughSequence)
 	}
 	return writeForkChild(ctx, parentDir, parentID, prefix, childDir, childID, throughSequence)
 }
@@ -64,14 +64,14 @@ func writeForkChild(ctx context.Context, parentDir, parentID string, prefix []Co
 	childDir = filepath.Clean(strings.TrimSpace(childDir))
 	childID = strings.TrimSpace(childID)
 	if childDir == "." || childID == "" {
-		return Manifest{}, fmt.Errorf("sessionv3: child directory and id are required")
+		return Manifest{}, fmt.Errorf("session: child directory and id are required")
 	}
 	projection, err := Project(prefix)
 	if err != nil {
 		return Manifest{}, err
 	}
 	if projection.TurnID != "" || len(projection.Interactions) != 0 {
-		return Manifest{}, fmt.Errorf("sessionv3: fork boundary retains active runtime authority")
+		return Manifest{}, fmt.Errorf("session: fork boundary retains active runtime authority")
 	}
 
 	// Inherited events retain their stable IDs and sequences, while physical
@@ -102,7 +102,7 @@ func writeForkChild(ctx context.Context, parentDir, parentID string, prefix []Co
 		Source:          &Source{Path: parentDir, Size: int64(log.Len()), SHA256: hex.EncodeToString(digest[:]), Version: Codec},
 	}
 	if _, err := os.Stat(childDir); err == nil {
-		return Manifest{}, fmt.Errorf("sessionv3: child session already exists")
+		return Manifest{}, fmt.Errorf("session: child session already exists")
 	} else if !os.IsNotExist(err) {
 		return Manifest{}, err
 	}

@@ -12,8 +12,8 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
+	"reasonix/internal/session"
 	"reasonix/internal/sessioninbox"
-	"reasonix/internal/sessionv3"
 	"reasonix/internal/transcript"
 	"reasonix/internal/turnevent"
 )
@@ -36,7 +36,7 @@ type turnEventState struct {
 	mu                         sync.RWMutex
 	ledger                     *turnevent.Ledger
 	err                        error
-	v3                         *sessionv3.Session
+	v3                         *session.Session
 	v3Path                     string
 	v3Release                  func(context.Context) error
 	v3Err                      error

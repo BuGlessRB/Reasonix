@@ -15,7 +15,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // Fork branches the conversation at the start of turn into a NEW session file,
@@ -166,7 +166,7 @@ func (c *Controller) Branch(name string) (string, error) {
 	if c.exclusiveV3Enabled() {
 		_, runtime, _ := c.v3Binding()
 		if runtime == nil {
-			return "", c.rewindFail(sessionv3.ErrSessionNotRunning)
+			return "", c.rewindFail(session.ErrSessionNotRunning)
 		}
 		turns := runtime.Session().Snapshot().Projection.Turns
 		if len(turns) == 0 {
@@ -239,10 +239,10 @@ func (c *Controller) Branch(name string) (string, error) {
 func (c *Controller) forkNamedV3(turn int, name string, switchToFork bool) (string, error) {
 	service, parent, _ := c.v3Binding()
 	if service == nil || parent == nil {
-		return "", sessionv3.ErrSessionNotRunning
+		return "", session.ErrSessionNotRunning
 	}
 	projection := parent.Session().Snapshot().Projection
-	completed := make([]sessionv3.TurnBoundary, 0, len(projection.Turns))
+	completed := make([]session.TurnBoundary, 0, len(projection.Turns))
 	for _, boundary := range projection.Turns {
 		if boundary.EndSequence != 0 {
 			completed = append(completed, boundary)
@@ -266,7 +266,7 @@ func (c *Controller) forkNamedV3(turn int, name string, switchToFork bool) (stri
 		if marshalErr != nil {
 			return "", marshalErr
 		}
-		if _, appendErr := child.Session().AppendBatch(context.Background(), "fork-title:"+child.Ref().SessionID, []sessionv3.Event{{Kind: "session/title", Payload: payload}}); appendErr != nil {
+		if _, appendErr := child.Session().AppendBatch(context.Background(), "fork-title:"+child.Ref().SessionID, []session.Event{{Kind: "session/title", Payload: payload}}); appendErr != nil {
 			return "", appendErr
 		}
 	}
@@ -533,7 +533,7 @@ func (c *Controller) publishV3Child(newPath string, messages []provider.Message)
 		if _, err := parent.Flush(context.Background()); err != nil {
 			return err
 		}
-		commits, err := sessionv3.Replay(sessionV3Directory(c.SessionPath()), nil)
+		commits, err := session.Replay(sessionV3Directory(c.SessionPath()), nil)
 		if err != nil {
 			return err
 		}
@@ -542,7 +542,7 @@ func (c *Controller) publishV3Child(newPath string, messages []provider.Message)
 			if len(commit.Events) == 0 || commit.Events[len(commit.Events)-1].Kind != "turn/end" {
 				continue
 			}
-			projection, projectErr := sessionv3.Project(commits[:i+1])
+			projection, projectErr := session.Project(commits[:i+1])
 			if projectErr != nil {
 				return projectErr
 			}
@@ -551,7 +551,7 @@ func (c *Controller) publishV3Child(newPath string, messages []provider.Message)
 				return forkErr
 			}
 		}
-		projected, projectErr := sessionv3.Project(commits)
+		projected, projectErr := session.Project(commits)
 		if projectErr != nil {
 			return projectErr
 		}
@@ -562,13 +562,13 @@ func (c *Controller) publishV3Child(newPath string, messages []provider.Message)
 	if err := os.MkdirAll(filepath.Dir(childDir), 0o700); err != nil {
 		return err
 	}
-	child, err := sessionv3.CreateStore(childDir, childID)
+	child, err := session.CreateStore(childDir, childID)
 	if err != nil {
 		return err
 	}
 	payload, marshalErr := json.Marshal(map[string]any{"messages": messages})
 	if marshalErr == nil {
-		_, marshalErr = child.Append(context.Background(), sessionv3.Batch{OperationID: "history-import", Events: []sessionv3.Event{{Kind: "legacy/import", Payload: payload}}})
+		_, marshalErr = child.Append(context.Background(), session.Batch{OperationID: "history-import", Events: []session.Event{{Kind: "legacy/import", Payload: payload}}})
 	}
 	if marshalErr == nil {
 		_, marshalErr = child.Flush(context.Background())

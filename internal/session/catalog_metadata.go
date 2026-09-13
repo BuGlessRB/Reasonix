@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -106,7 +106,7 @@ func readCatalogMetadata(cacheDir string, manifest Manifest, revision logRevisio
 	if metadata.Version != catalogMetadataVersion || metadata.Codec != Codec || metadata.SessionID != manifest.SessionID ||
 		metadata.CreatedAt != manifest.CreatedAt.UTC().Format(time.RFC3339Nano) ||
 		metadata.LogSize != revision.Size || metadata.LogModTimeNS != revision.ModTimeNS || metadata.LogIdentity != revision.Identity {
-		return catalogMetadata{}, errors.New("sessionv3: catalog metadata cache is stale")
+		return catalogMetadata{}, errors.New("session: catalog metadata cache is stale")
 	}
 	return metadata, nil
 }

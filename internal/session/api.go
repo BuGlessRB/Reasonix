@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -135,7 +135,7 @@ func (p *FilesystemPersistence) Open(sessionID string, mode AccessMode) (*Sessio
 		return openReadSession(dir, id, filepath.Join(p.Root, ".query-cache", filepath.Base(id)))
 	}
 	if mode != ReadWrite {
-		return nil, fmt.Errorf("sessionv3: unsupported access mode %q", mode)
+		return nil, fmt.Errorf("session: unsupported access mode %q", mode)
 	}
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("%w: %s", ErrSessionNotFound, id)
@@ -236,7 +236,7 @@ func (p *FilesystemPersistence) sessionDir(id string, mustExist bool) (string, e
 		return "", err
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return "", fmt.Errorf("sessionv3: session identity %q is not a confined directory", id)
+		return "", fmt.Errorf("session: session identity %q is not a confined directory", id)
 	}
 	// Resolve the physical path through the rooted handle. This keeps protocol
 	// input out of the path propagated through the storage stack.
@@ -259,7 +259,7 @@ func (p *FilesystemPersistence) List(ctx context.Context, cursor string, limit i
 		limit = 50
 	}
 	if limit < 1 || limit > 100 {
-		return SessionPage{}, fmt.Errorf("sessionv3: list limit must be 1..100")
+		return SessionPage{}, fmt.Errorf("session: list limit must be 1..100")
 	}
 	entries, err := os.ReadDir(p.Root)
 	if os.IsNotExist(err) {
@@ -297,17 +297,17 @@ func validateSessionID(id string) error {
 	id = strings.TrimSpace(id)
 	if len(id) == 0 || len(id) > 255 || strings.HasPrefix(id, ".") || strings.HasSuffix(id, ".") ||
 		!filepath.IsLocal(id) || id == "." || filepath.Base(id) != id || strings.ContainsAny(id, `/\\<>:"|?*`) {
-		return fmt.Errorf("sessionv3: invalid session id %q", id)
+		return fmt.Errorf("session: invalid session id %q", id)
 	}
 	for _, char := range id {
 		if char < 0x20 {
-			return fmt.Errorf("sessionv3: invalid session id %q", id)
+			return fmt.Errorf("session: invalid session id %q", id)
 		}
 	}
 	base := strings.ToUpper(strings.SplitN(id, ".", 2)[0])
 	if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
 		(len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9') {
-		return fmt.Errorf("sessionv3: reserved session id %q", id)
+		return fmt.Errorf("session: reserved session id %q", id)
 	}
 	return nil
 }
@@ -345,7 +345,7 @@ func openReadHandle(dir, id string, cacheDirs ...string) (*readHandle, error) {
 		return nil, err
 	}
 	if manifest.SessionID != id {
-		return nil, fmt.Errorf("sessionv3: manifest belongs to %q", manifest.SessionID)
+		return nil, fmt.Errorf("session: manifest belongs to %q", manifest.SessionID)
 	}
 	return &readHandle{id: id, dir: dir, cacheDir: cacheDir, manifest: manifest}, nil
 }
@@ -423,7 +423,7 @@ func readCommitPageWithCache(ctx context.Context, dir, cacheDir string, offset u
 		limit = 100
 	}
 	if limit < 1 || limit > 1000 {
-		return EventPage{}, fmt.Errorf("sessionv3: read limit must be 1..1000 commits")
+		return EventPage{}, fmt.Errorf("session: read limit must be 1..1000 commits")
 	}
 	index, err := loadOrBuildSparseIndex(ctx, dir, cacheDir)
 	if err != nil {

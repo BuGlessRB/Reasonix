@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"bytes"
@@ -52,7 +52,7 @@ func importPreview(ctx context.Context, sourceDir, targetRoot string) (Prototype
 	sourceDir = filepath.Clean(strings.TrimSpace(sourceDir))
 	targetRoot = filepath.Clean(strings.TrimSpace(targetRoot))
 	if sourceDir == "." || targetRoot == "." {
-		return PrototypeImportResult{}, fmt.Errorf("sessionv3: prototype source and target root are required")
+		return PrototypeImportResult{}, fmt.Errorf("session: prototype source and target root are required")
 	}
 	frozen, err := freezePreview(ctx, sourceDir)
 	if err != nil {
@@ -96,7 +96,7 @@ func freezePreviewCodec(ctx context.Context, sourceDir string, allowCurrent bool
 		return frozenPreview{}, err
 	}
 	if !info.IsDir() {
-		return frozenPreview{}, fmt.Errorf("sessionv3: preview path is not a directory: %s", sourceDir)
+		return frozenPreview{}, fmt.Errorf("session: preview path is not a directory: %s", sourceDir)
 	}
 	releaseWriter, err := filelock.TryAcquireMode(filepath.Join(sourceDir, "writer.lock"), filelock.ModeShared)
 	if err != nil {

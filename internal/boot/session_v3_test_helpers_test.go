@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // withTestSessionV3 models the production host boundary explicitly. Boot no
@@ -16,7 +16,7 @@ func withTestSessionV3(t *testing.T, opts Options) Options {
 		sessionDir = config.SessionDir()
 		opts.SessionDir = sessionDir
 	}
-	service, err := sessionv3.NewService("local", sessionv3.NewFilesystemPersistence(sessionv3.RootForLegacyDir(sessionDir)))
+	service, err := session.NewService("local", session.NewFilesystemPersistence(session.RootForLegacyDir(sessionDir)))
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}

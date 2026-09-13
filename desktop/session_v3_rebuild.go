@@ -5,17 +5,17 @@ import (
 
 	"reasonix/internal/boot"
 	"reasonix/internal/control"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // sessionV3Binding is intentionally smaller than the public desktop control
 // surface. It lets rebuild code preserve the exact host-owned Runtime without
 // making legacy test controllers implement the final identity API.
 type sessionV3Binding interface {
-	SessionV3Binding() (*sessionv3.Service, *sessionv3.Runtime, bool)
+	SessionV3Binding() (*session.Service, *session.Runtime, bool)
 }
 
-func exclusiveV3Binding(ctrl control.SessionAPI) (*sessionv3.Service, *sessionv3.Runtime, bool) {
+func exclusiveV3Binding(ctrl control.SessionAPI) (*session.Service, *session.Runtime, bool) {
 	bound, ok := ctrl.(sessionV3Binding)
 	if !ok || bound == nil {
 		return nil, nil, false

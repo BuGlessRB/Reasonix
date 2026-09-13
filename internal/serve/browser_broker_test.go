@@ -14,7 +14,7 @@ import (
 	"reasonix/internal/browser"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // brokerTestExecutor records the session header each call arrived with.
@@ -161,7 +161,7 @@ func TestServerCapabilitiesFollowBroker(t *testing.T) {
 }
 
 func TestServerAdvertisesImmutableSessionIdentityOnlyForExclusiveV3(t *testing.T) {
-	service, err := sessionv3.NewService("serve", sessionv3.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("serve", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
 	if err != nil {
 		t.Fatal(err)
 	}

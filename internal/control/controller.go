@@ -55,10 +55,10 @@ import (
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/session"
 	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessioninbox"
 	"reasonix/internal/sessiontemp"
-	"reasonix/internal/sessionv3"
 	"reasonix/internal/shellrun"
 	"reasonix/internal/skill"
 	"reasonix/internal/store"
@@ -403,13 +403,13 @@ type controllerSessionBinding struct {
 	// sessionRuntime is the final identity-bound v3 owner. When v3Exclusive is
 	// set, SessionPath is a legacy import/display locator only and no production
 	// transcript or business sidecar may be written through it.
-	sessionService *sessionv3.Service
-	sessionRuntime *sessionv3.Runtime
-	sessionBinding *sessionv3.ClientBinding
+	sessionService *session.Service
+	sessionRuntime *session.Runtime
+	sessionBinding *session.ClientBinding
 	v3Exclusive    bool
 	v3BindingMu    sync.RWMutex
 	v3ActivityMu   sync.Mutex
-	v3Activity     *sessionv3.Activity
+	v3Activity     *session.Activity
 }
 
 type controllerPromptRouting struct {
@@ -586,8 +586,8 @@ type Options struct {
 	// immutable v3 session identity. SessionService owns exact-instance close,
 	// fork, query and cancellation. ExclusiveSessionV3 disables legacy
 	// transcript and business-sidecar writes.
-	SessionService     *sessionv3.Service
-	SessionRuntime     *sessionv3.Runtime
+	SessionService     *session.Service
+	SessionRuntime     *session.Runtime
 	ExclusiveSessionV3 bool
 	Host               *plugin.Host
 	// MCPHostProfile is the surface lazily created hosts declare; injected
@@ -4535,10 +4535,10 @@ func (c *Controller) SessionPath() string {
 // SessionRef returns the immutable v3 execution identity. The legacy path is
 // intentionally absent from this contract and may only remain as an import or
 // display locator while hosts complete their catalog transition.
-func (c *Controller) SessionRef() (sessionv3.SessionRef, bool) {
+func (c *Controller) SessionRef() (session.SessionRef, bool) {
 	_, runtime, _ := c.v3Binding()
 	if runtime == nil {
-		return sessionv3.SessionRef{}, false
+		return session.SessionRef{}, false
 	}
 	return runtime.Ref(), true
 }

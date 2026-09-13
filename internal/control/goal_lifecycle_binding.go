@@ -9,7 +9,7 @@ import (
 	"time"
 
 	goaldomain "reasonix/internal/goal"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 type legacyGoalProjection struct {
@@ -99,7 +99,7 @@ func importLegacyGoalProjection(machine *goaldomain.Machine, raw json.RawMessage
 	return machine, nil
 }
 
-func (c *Controller) installGoalLifecycle(runtime *sessionv3.Runtime) {
+func (c *Controller) installGoalLifecycle(runtime *session.Runtime) {
 	machine := goaldomain.NewMachine(nil, nil)
 	var loadErr error
 	if runtime != nil && runtime.Session() != nil {

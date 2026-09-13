@@ -12,13 +12,13 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
-func newExclusiveV3Serve(t *testing.T) (*Server, *control.Controller, *sessionv3.Service, sessionv3.SessionRef) {
+func newExclusiveV3Serve(t *testing.T) (*Server, *control.Controller, *session.Service, session.SessionRef) {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "sessions-v3")
-	service, err := sessionv3.NewService("serve-test", sessionv3.NewFilesystemPersistence(root))
+	service, err := session.NewService("serve-test", session.NewFilesystemPersistence(root))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func newExclusiveV3Serve(t *testing.T) (*Server, *control.Controller, *sessionv3
 
 func TestExclusiveV3SessionsAndResumeUseImmutableIdentity(t *testing.T) {
 	srv, ctrl, service, current := newExclusiveV3Serve(t)
-	target, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "target"})
+	target, err := service.Create(t.Context(), session.CreateOptions{SessionID: "target"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestExclusiveV3MissingResumeDoesNotCreateOrReplaceCurrent(t *testing.T) {
 	if got, ok := ctrl.SessionRef(); !ok || got != current {
 		t.Fatalf("current identity changed to %+v, bound=%v", got, ok)
 	}
-	if _, err := service.Query().Snapshot(t.Context(), sessionv3.SessionRef{HostID: "serve-test", SessionID: "missing"}); err == nil {
+	if _, err := service.Query().Snapshot(t.Context(), session.SessionRef{HostID: "serve-test", SessionID: "missing"}); err == nil {
 		t.Fatal("missing Open created a session")
 	}
 }

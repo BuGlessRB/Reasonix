@@ -23,8 +23,8 @@ import (
 	"reasonix/internal/fileutil"
 	"reasonix/internal/notify"
 	"reasonix/internal/provider"
+	"reasonix/internal/session"
 	"reasonix/internal/sessiontitle"
-	"reasonix/internal/sessionv3"
 	"reasonix/internal/store"
 	"reasonix/internal/turnevent"
 	"slices"
@@ -3625,7 +3625,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	// a different provider when the process restarts.
 	if strings.TrimSpace(tabSessionID) != "" {
 		service := a.desktopSessionService(sessionDir)
-		ref := sessionv3.SessionRef{HostID: service.HostID(), SessionID: strings.TrimSpace(tabSessionID)}
+		ref := session.SessionRef{HostID: service.HostID(), SessionID: strings.TrimSpace(tabSessionID)}
 		if snapshot, snapshotErr := service.Query().Snapshot(buildCtx, ref); snapshotErr == nil && strings.TrimSpace(snapshot.Projection.ModelRef) != "" {
 			model = strings.TrimSpace(snapshot.Projection.ModelRef)
 		}
@@ -3751,7 +3751,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	restoredRuntime := buildRuntime
 	identity, usesExclusiveV3 := ctrl.(control.IdentityLifecycle)
 	if usesExclusiveV3 && identity.UsesExclusiveSessionV3() {
-		var ref sessionv3.SessionRef
+		var ref session.SessionRef
 		var bindErr error
 		switch {
 		case strings.TrimSpace(tabSessionID) != "":
@@ -3759,7 +3759,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 			if service == nil {
 				bindErr = errors.New("v3 session service is unavailable")
 			} else {
-				ref, bindErr = identity.OpenV3(buildCtx, sessionv3.SessionRef{HostID: service.HostID(), SessionID: strings.TrimSpace(tabSessionID)})
+				ref, bindErr = identity.OpenV3(buildCtx, session.SessionRef{HostID: service.HostID(), SessionID: strings.TrimSpace(tabSessionID)})
 			}
 		case strings.TrimSpace(startupSessionPath) != "":
 			if _, statErr := os.Stat(startupSessionPath); statErr == nil {

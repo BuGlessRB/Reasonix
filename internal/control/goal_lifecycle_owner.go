@@ -7,7 +7,7 @@ import (
 
 	"reasonix/internal/event"
 	goaldomain "reasonix/internal/goal"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
@@ -62,7 +62,7 @@ func (c *Controller) applyGoalMutation(
 	mutate func(*goaldomain.Machine) (goaldomain.View, error),
 ) (goaldomain.View, error) {
 	if c == nil || mutate == nil {
-		return goaldomain.View{}, sessionv3.ErrSessionNotRunning
+		return goaldomain.View{}, session.ErrSessionNotRunning
 	}
 	c.goalLifecycleMutationMu.Lock()
 	defer c.goalLifecycleMutationMu.Unlock()
@@ -77,7 +77,7 @@ func (c *Controller) applyGoalMutation(
 		return goaldomain.View{}, fmt.Errorf("goal lifecycle is unavailable: %w", loadErr)
 	}
 	if machine == nil {
-		return goaldomain.View{}, sessionv3.ErrSessionNotRunning
+		return goaldomain.View{}, session.ErrSessionNotRunning
 	}
 	candidate := machine.Clone()
 	view, err := mutate(candidate)
@@ -92,13 +92,13 @@ func (c *Controller) applyGoalMutation(
 	activity := c.v3Activity
 	c.v3ActivityMu.Unlock()
 	if activity == nil {
-		return goaldomain.View{}, sessionv3.ErrStaleActivity
+		return goaldomain.View{}, session.ErrStaleActivity
 	}
 	operationID := fmt.Sprintf("goal:%s:%s:%d:%s", runtime.Ref().SessionID, view.ID, view.Revision, action)
-	if _, err := activity.Append(ctx, sessionv3.Batch{
+	if _, err := activity.Append(ctx, session.Batch{
 		OperationID: operationID,
 		TurnID:      runtime.Session().Snapshot().Projection.TurnID,
-		Events:      []sessionv3.Event{{Kind: "goal/state", Payload: json.RawMessage(payload)}},
+		Events:      []session.Event{{Kind: "goal/state", Payload: json.RawMessage(payload)}},
 	}); err != nil {
 		return goaldomain.View{}, err
 	}
@@ -121,16 +121,16 @@ func (c *Controller) applyGoalMutation(
 	return view, nil
 }
 
-func (c *Controller) validateGoalAuthority(authority tool.GoalAuthority, action tool.GoalAction) (*sessionv3.Runtime, error) {
+func (c *Controller) validateGoalAuthority(authority tool.GoalAuthority, action tool.GoalAction) (*session.Runtime, error) {
 	if !authority.Allows(action) {
 		return nil, &goaldomain.Error{Code: goaldomain.ErrUserAuthorityRequired, Message: "current execution is not allowed to perform this goal action"}
 	}
 	_, runtime, exclusive := c.v3Binding()
 	if !exclusive || runtime == nil {
-		return nil, sessionv3.ErrSessionNotRunning
+		return nil, session.ErrSessionNotRunning
 	}
 	snapshot := runtime.Snapshot()
-	if snapshot.Phase != sessionv3.RuntimeRunning ||
+	if snapshot.Phase != session.RuntimeRunning ||
 		authority.SessionID != snapshot.Ref.SessionID ||
 		authority.RuntimeEpoch != snapshot.Epoch ||
 		authority.ActivityID != snapshot.ActivityRevision {

@@ -3,7 +3,7 @@ package cli
 import (
 	"sync"
 
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // cliSessionServices is the process host registry shared by chat, run, serve,
@@ -11,11 +11,11 @@ import (
 // registry for the same root.
 var cliSessionServices = struct {
 	sync.Mutex
-	byRoot map[string]*sessionv3.Service
-}{byRoot: map[string]*sessionv3.Service{}}
+	byRoot map[string]*session.Service
+}{byRoot: map[string]*session.Service{}}
 
-func cliSessionService(sessionDir string) *sessionv3.Service {
-	root := sessionv3.RootForLegacyDir(sessionDir)
+func cliSessionService(sessionDir string) *session.Service {
+	root := session.RootForLegacyDir(sessionDir)
 	if root == "" {
 		return nil
 	}
@@ -24,7 +24,7 @@ func cliSessionService(sessionDir string) *sessionv3.Service {
 	if service := cliSessionServices.byRoot[root]; service != nil {
 		return service
 	}
-	service, err := sessionv3.NewService("local", sessionv3.NewFilesystemPersistence(root))
+	service, err := session.NewService("local", session.NewFilesystemPersistence(root))
 	if err != nil {
 		return nil
 	}

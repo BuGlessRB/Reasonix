@@ -51,9 +51,9 @@ import (
 	"reasonix/internal/proc"
 	"reasonix/internal/provider"
 	"reasonix/internal/repair"
+	"reasonix/internal/session"
 	"reasonix/internal/sessioncatalog"
 	"reasonix/internal/sessiontemp"
-	"reasonix/internal/sessionv3"
 	"reasonix/internal/skill"
 	"reasonix/internal/store"
 	"reasonix/internal/taskcatalog"
@@ -196,7 +196,7 @@ type App struct {
 	// root. Controllers for tabs in the same scope attach to this registry
 	// instead of constructing competing Service instances over the same files.
 	sessionServicesMu sync.Mutex
-	sessionServices   map[string]*sessionv3.Service
+	sessionServices   map[string]*session.Service
 
 	// tabsRestored is closed when restoreOrBuildTabs has finished populating
 	// a.tabs from desktop-tabs.json (or built the first-launch tab). Startup
@@ -459,7 +459,7 @@ func NewApp() *App {
 		tabs:                 map[string]*WorkspaceTab{},
 		runtimeByID:          map[string]*desktopSessionRuntime{},
 		runtimeBySessionKey:  map[string]*desktopSessionRuntime{},
-		sessionServices:      map[string]*sessionv3.Service{},
+		sessionServices:      map[string]*session.Service{},
 		catalogReconcileJobs: map[string]*desktopCatalogReconcileJob{},
 		detachedSessions:     map[string]*WorkspaceTab{},
 		mediaTokens:          newMediaTokenStore(),

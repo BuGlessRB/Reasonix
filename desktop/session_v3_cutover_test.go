@@ -9,16 +9,16 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
-func appendV3TestMessage(t *testing.T, runtime *sessionv3.Runtime, operationID string, message provider.Message) {
+func appendV3TestMessage(t *testing.T, runtime *session.Runtime, operationID string, message provider.Message) {
 	t.Helper()
 	payload, err := json.Marshal(map[string]any{"message": message})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.Session().AppendBatch(t.Context(), operationID, []sessionv3.Event{{Kind: "message/complete", Payload: payload}}); err != nil {
+	if _, err := runtime.Session().AppendBatch(t.Context(), operationID, []session.Event{{Kind: "message/complete", Payload: payload}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := runtime.Session().Flush(t.Context()); err != nil {
@@ -26,13 +26,13 @@ func appendV3TestMessage(t *testing.T, runtime *sessionv3.Runtime, operationID s
 	}
 }
 
-func appendV3TestModel(t *testing.T, runtime *sessionv3.Runtime, operationID, modelRef string) {
+func appendV3TestModel(t *testing.T, runtime *session.Runtime, operationID, modelRef string) {
 	t.Helper()
 	payload, err := json.Marshal(map[string]string{"modelRef": modelRef})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.Session().AppendBatch(t.Context(), operationID, []sessionv3.Event{{Kind: "session/config", Payload: payload}}); err != nil {
+	if _, err := runtime.Session().AppendBatch(t.Context(), operationID, []session.Event{{Kind: "session/config", Payload: payload}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -46,13 +46,13 @@ func TestDesktopV3CatalogResumeRenameAndDeleteUseSessionIdentity(t *testing.T) {
 	dir := desktopSessionDir(root)
 	service := app.desktopSessionService(dir)
 
-	first, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "first-v3"})
+	first, err := service.Create(t.Context(), session.CreateOptions{SessionID: "first-v3"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	appendV3TestModel(t, first, "first-model", model)
 	appendV3TestMessage(t, first, "first-message", provider.Message{ID: "user-first", Role: provider.RoleUser, Content: "first conversation"})
-	second, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "second-v3"})
+	second, err := service.Create(t.Context(), session.CreateOptions{SessionID: "second-v3"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,13 +117,13 @@ func TestDesktopV3ResumeModelBuildFailureKeepsSourceRuntime(t *testing.T) {
 	dir := desktopSessionDir(root)
 	service := app.desktopSessionService(dir)
 
-	source, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "resume-source"})
+	source, err := service.Create(t.Context(), session.CreateOptions{SessionID: "resume-source"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	appendV3TestModel(t, source, "source-model", model)
 	appendV3TestMessage(t, source, "source-message", provider.Message{ID: "source-user", Role: provider.RoleUser, Content: "source remains"})
-	target, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "resume-broken-target"})
+	target, err := service.Create(t.Context(), session.CreateOptions{SessionID: "resume-broken-target"})
 	if err != nil {
 		t.Fatal(err)
 	}

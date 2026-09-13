@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -111,14 +111,14 @@ func (s *Session) EventSequence() uint64 {
 // without touching the commit lock. Callers must treat the result as immutable.
 func (s *Session) PrepareBatch(operationID string, batch Batch) (PreparedBatch, error) {
 	if s == nil {
-		return PreparedBatch{}, fmt.Errorf("sessionv3: nil session")
+		return PreparedBatch{}, fmt.Errorf("session: nil session")
 	}
 	operationID = strings.TrimSpace(operationID)
 	if operationID == "" {
 		operationID = strings.TrimSpace(batch.OperationID)
 	}
 	if operationID == "" || len(batch.Events) == 0 {
-		return PreparedBatch{}, fmt.Errorf("sessionv3: operation id and events are required")
+		return PreparedBatch{}, fmt.Errorf("session: operation id and events are required")
 	}
 	turnID := strings.TrimSpace(batch.TurnID)
 	if turnID == "" && batchContains(batch.Events, "turn/start") {
@@ -129,7 +129,7 @@ func (s *Session) PrepareBatch(operationID string, batch Batch) (PreparedBatch, 
 		event := &events[i]
 		event.Kind = strings.TrimSpace(event.Kind)
 		if event.Kind == "" {
-			return PreparedBatch{}, fmt.Errorf("sessionv3: events[%d].kind is required", i)
+			return PreparedBatch{}, fmt.Errorf("session: events[%d].kind is required", i)
 		}
 		if !event.Optional && !ProjectionKinds[event.Kind] {
 			return PreparedBatch{}, fmt.Errorf("%w: unknown required event %q", ErrUnsupportedVersion, event.Kind)
@@ -159,10 +159,10 @@ func (s *Session) PrepareBatch(operationID string, batch Batch) (PreparedBatch, 
 // subscriber.
 func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
 	if s == nil {
-		return Commit{}, fmt.Errorf("sessionv3: nil session")
+		return Commit{}, fmt.Errorf("session: nil session")
 	}
 	if prepared.Empty() {
-		return Commit{}, fmt.Errorf("sessionv3: operation id and events are required")
+		return Commit{}, fmt.Errorf("session: operation id and events are required")
 	}
 	s.mu.Lock()
 	if s.readOnly {
@@ -300,7 +300,7 @@ func (s *Session) AcceptedPage(ctx context.Context, offset uint64, limit int) (E
 		limit = 100
 	}
 	if limit < 1 || limit > 1000 {
-		return EventPage{}, fmt.Errorf("sessionv3: read limit must be 1..1000 commits")
+		return EventPage{}, fmt.Errorf("session: read limit must be 1..1000 commits")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

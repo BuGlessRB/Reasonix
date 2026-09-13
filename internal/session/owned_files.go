@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -38,7 +38,7 @@ func copyOwnedSessionFiles(ctx context.Context, source, target string) error {
 				return os.MkdirAll(destination, 0700)
 			}
 			if !info.Mode().IsRegular() {
-				return fmt.Errorf("sessionv3: owned artifact is not a regular file: %s", relative)
+				return fmt.Errorf("session: owned artifact is not a regular file: %s", relative)
 			}
 			return copySessionFile(ctx, path, destination, 0600)
 		})

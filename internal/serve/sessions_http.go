@@ -9,7 +9,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/control"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/store"
 )
 
@@ -93,7 +93,7 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 					}
 					if live, exists := service.Runtime(info.Ref); exists {
 						phase := live.Snapshot().Phase
-						row.Running = phase == sessionv3.RuntimeRunning || phase == sessionv3.RuntimeCancelling || phase == sessionv3.RuntimeRecoveryRequired
+						row.Running = phase == session.RuntimeRunning || phase == session.RuntimeCancelling || phase == session.RuntimeRecoveryRequired
 					}
 					out = append(out, row)
 				}

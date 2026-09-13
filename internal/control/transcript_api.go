@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/transcript"
 	"reasonix/internal/turnevent"
 )
@@ -73,7 +73,7 @@ func (c *Controller) transcriptProjection() (*transcript.Projection, error) {
 	return c.turnEvents.projection, nil
 }
 
-func (c *Controller) v3TranscriptProjection(runtime sessionv3.RuntimeSnapshot) (*transcript.Projection, error) {
+func (c *Controller) v3TranscriptProjection(runtime session.RuntimeSnapshot) (*transcript.Projection, error) {
 	sequence := runtime.Session.EventSequence
 	sessionID, epoch := runtime.Ref.SessionID, runtime.Epoch
 	c.turnEvents.mu.RLock()

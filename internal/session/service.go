@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -19,7 +19,7 @@ type SessionRef struct {
 
 func (r SessionRef) validate(hostID string) error {
 	if r.HostID == "" || r.HostID != hostID {
-		return fmt.Errorf("sessionv3: session host %q does not match service host %q", r.HostID, hostID)
+		return fmt.Errorf("session: session host %q does not match service host %q", r.HostID, hostID)
 	}
 	return validateSessionID(r.SessionID)
 }
@@ -449,7 +449,7 @@ func (s *Service) Flush(ctx context.Context, ref SessionRef) (DurableReceipt, er
 func (s *Service) ContinueLegacy(ctx context.Context, sourcePath, headID string) (*Runtime, MigrationResult, error) {
 	filesystem, ok := s.persistence.(*FilesystemPersistence)
 	if !ok {
-		return nil, MigrationResult{}, errors.New("sessionv3: persistence does not support legacy migration")
+		return nil, MigrationResult{}, errors.New("session: persistence does not support legacy migration")
 	}
 	result, err := migrateLegacyHeadForHost(ctx, sourcePath, filesystem.Root, headID)
 	if err != nil {
@@ -466,7 +466,7 @@ func (s *Service) ContinueLegacy(ctx context.Context, sourcePath, headID string)
 func (s *Service) ContinueImported(ctx context.Context, sourcePath, headID string) (*Runtime, ImportResult, error) {
 	filesystem, ok := s.persistence.(*FilesystemPersistence)
 	if !ok {
-		return nil, ImportResult{}, errors.New("sessionv3: persistence does not support imported sessions")
+		return nil, ImportResult{}, errors.New("session: persistence does not support imported sessions")
 	}
 	result, err := importSourceForLegacy(ctx, sourcePath, filesystem.Root, headID)
 	if err != nil {
@@ -481,7 +481,7 @@ func (s *Service) ContinueImported(ctx context.Context, sourcePath, headID strin
 func (s *Service) ContinuePrototype(ctx context.Context, sourceDir string) (*Runtime, PrototypeImportResult, error) {
 	filesystem, ok := s.persistence.(*FilesystemPersistence)
 	if !ok {
-		return nil, PrototypeImportResult{}, errors.New("sessionv3: persistence does not support prototype import")
+		return nil, PrototypeImportResult{}, errors.New("session: persistence does not support prototype import")
 	}
 	result, err := ImportPrototype(ctx, sourceDir, filesystem.Root)
 	if err != nil {
@@ -497,7 +497,7 @@ func (s *Service) ContinuePrototype(ctx context.Context, sourceDir string) (*Run
 func (s *Service) ContinueStoredPreview(ctx context.Context, sessionID string) (*Runtime, PrototypeImportResult, error) {
 	filesystem, ok := s.persistence.(*FilesystemPersistence)
 	if !ok {
-		return nil, PrototypeImportResult{}, errors.New("sessionv3: persistence does not support preview import")
+		return nil, PrototypeImportResult{}, errors.New("session: persistence does not support preview import")
 	}
 	if err := validateSessionID(sessionID); err != nil {
 		return nil, PrototypeImportResult{}, err
@@ -523,7 +523,7 @@ func (s *Service) Fork(ctx context.Context, ref SessionRef, afterTurnID, childID
 	}
 	turn, ok := completedTurn(runtime.session.Snapshot().Projection.Turns, afterTurnID)
 	if !ok {
-		return nil, fmt.Errorf("sessionv3: completed turn %q not found", afterTurnID)
+		return nil, fmt.Errorf("session: completed turn %q not found", afterTurnID)
 	}
 	return s.forkAt(ctx, runtime, turn.EndSequence, childID)
 }
@@ -536,7 +536,7 @@ func (s *Service) Rewind(ctx context.Context, ref SessionRef, beforeTurnID, chil
 	}
 	turn, ok := completedTurn(runtime.session.Snapshot().Projection.Turns, beforeTurnID)
 	if !ok {
-		return nil, fmt.Errorf("sessionv3: completed turn %q not found", beforeTurnID)
+		return nil, fmt.Errorf("session: completed turn %q not found", beforeTurnID)
 	}
 	return s.forkAt(ctx, runtime, turn.StartSequence-1, childID)
 }
@@ -553,7 +553,7 @@ func completedTurn(turns []TurnBoundary, id string) (TurnBoundary, bool) {
 func (s *Service) forkAt(ctx context.Context, parent *Runtime, sequence uint64, childID string) (*Runtime, error) {
 	filesystem, ok := s.persistence.(*FilesystemPersistence)
 	if !ok {
-		return nil, errors.New("sessionv3: persistence does not support filesystem fork")
+		return nil, errors.New("session: persistence does not support filesystem fork")
 	}
 	if childID == "" {
 		childID = randomID()

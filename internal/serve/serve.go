@@ -31,8 +31,8 @@ import (
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/session"
 	"reasonix/internal/sessiontitle"
-	"reasonix/internal/sessionv3"
 	"reasonix/internal/stats"
 	"reasonix/internal/store"
 )
@@ -1280,7 +1280,7 @@ func (s *Server) resumeV3(w http.ResponseWriter, r *http.Request, hostID, sessio
 	if hostID == "" && bound {
 		hostID = current.HostID
 	}
-	ref, err := ctrl.OpenV3(r.Context(), sessionv3.SessionRef{HostID: hostID, SessionID: strings.TrimSpace(sessionID)})
+	ref, err := ctrl.OpenV3(r.Context(), session.SessionRef{HostID: hostID, SessionID: strings.TrimSpace(sessionID)})
 	if err != nil {
 		http.Error(w, "open session: "+err.Error(), http.StatusConflict)
 		return

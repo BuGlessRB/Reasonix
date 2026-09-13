@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -52,7 +52,7 @@ func (q *Query) Close() {
 
 func (q *Query) Snapshot(ctx context.Context, ref SessionRef) (Snapshot, error) {
 	if q == nil || q.persistence == nil {
-		return Snapshot{}, fmt.Errorf("sessionv3: nil session query")
+		return Snapshot{}, fmt.Errorf("session: nil session query")
 	}
 	if err := ref.validate(q.hostID); err != nil {
 		return Snapshot{}, err
@@ -101,7 +101,7 @@ func (q *Query) History(ctx context.Context, ref SessionRef) ([]provider.Message
 
 func (q *Query) List(ctx context.Context, cursor string, limit int) (SessionPage, error) {
 	if q == nil || q.persistence == nil {
-		return SessionPage{}, fmt.Errorf("sessionv3: nil session query")
+		return SessionPage{}, fmt.Errorf("session: nil session query")
 	}
 	page, err := q.persistence.List(ctx, cursor, limit)
 	if err != nil {

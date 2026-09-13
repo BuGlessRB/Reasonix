@@ -58,9 +58,9 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/secrets"
+	"reasonix/internal/session"
 	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessiontemp"
-	"reasonix/internal/sessionv3"
 	"reasonix/internal/skill"
 	"reasonix/internal/stats"
 	"reasonix/internal/taskmonitor"
@@ -153,8 +153,8 @@ type Options struct {
 	// the previous service and runtime so changing model/settings replaces only
 	// the Agent while the immutable session identity and writer remain owned by
 	// the same SessionRuntime.
-	SessionService *sessionv3.Service
-	SessionRuntime *sessionv3.Runtime
+	SessionService *session.Service
+	SessionRuntime *session.Runtime
 	SessionHostID  string
 	// SharedHost is an optional plugin.Host shared across controllers for the
 	// same workspace root. When set, boot.Build reuses its running clients

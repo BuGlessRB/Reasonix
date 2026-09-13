@@ -1,11 +1,11 @@
-// Package sessionv3 owns Reasonix's linear, append-only session event log.
+// Package session owns Reasonix's linear, append-only session event log.
 //
 // The package separates three concerns. Session owns the in-memory typed event
 // log and its projections. PersistenceBinding owns the write-behind queue and
 // durability progress. Store owns the physical JSONL bytes and the writer
 // lease. A commit is accepted into Session and the binding's queue before it is
 // durable; Flush establishes an explicit semantic checkpoint.
-package sessionv3
+package session
 
 import (
 	"bufio"
@@ -267,7 +267,7 @@ func CreateWithOptions(dir, sessionID string, opts OpenOptions) (*Session, error
 	dir = filepath.Clean(strings.TrimSpace(dir))
 	sessionID = strings.TrimSpace(sessionID)
 	if dir == "." || sessionID == "" {
-		return nil, fmt.Errorf("sessionv3: directory and session id are required")
+		return nil, fmt.Errorf("session: directory and session id are required")
 	}
 	if err := validateSessionID(sessionID); err != nil {
 		return nil, err
@@ -302,7 +302,7 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 	dir = filepath.Clean(strings.TrimSpace(dir))
 	sessionID = strings.TrimSpace(sessionID)
 	if dir == "." || sessionID == "" {
-		return nil, fmt.Errorf("sessionv3: directory and session id are required")
+		return nil, fmt.Errorf("session: directory and session id are required")
 	}
 	if err := validateSessionID(sessionID); err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 		return nil, err
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("sessionv3: session path is not a directory: %s", dir)
+		return nil, fmt.Errorf("session: session path is not a directory: %s", dir)
 	}
 	eventsPath := filepath.Join(dir, currentLogName)
 	releaseLease, err := acquireSessionWriter(dir)
@@ -335,7 +335,7 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 		return fail(err)
 	}
 	if manifest.SessionID != sessionID {
-		return fail(fmt.Errorf("sessionv3: manifest belongs to %q", manifest.SessionID))
+		return fail(fmt.Errorf("session: manifest belongs to %q", manifest.SessionID))
 	}
 	// Validate the complete prefix before repairing anything. A newer required
 	// event or a damaged complete batch must leave the original tail untouched.
@@ -468,7 +468,7 @@ func readStoredManifest(path string) (Manifest, error) {
 // physical hand-off and reports uncertainty rather than guessing.
 func (s *Store) Append(ctx context.Context, commits []Commit) error {
 	if s == nil {
-		return fmt.Errorf("sessionv3: nil store")
+		return fmt.Errorf("session: nil store")
 	}
 	if err := ctx.Err(); err != nil {
 		return err

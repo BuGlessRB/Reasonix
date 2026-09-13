@@ -9,16 +9,16 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
 func TestGoalDiagnosticsHTTPExportsAuthoritativeSession(t *testing.T) {
-	service, err := sessionv3.NewService("serve", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("serve", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "diagnostic-http"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "diagnostic-http"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestGoalDiagnosticsHTTPExportsAuthoritativeSession(t *testing.T) {
 	if recorder.Code != 200 {
 		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
 	}
-	for _, want := range []string{sessionv3.Codec, "goal-lifecycle-v2", "activationChanges"} {
+	for _, want := range []string{session.Codec, "goal-lifecycle-v2", "activationChanges"} {
 		if !strings.Contains(recorder.Body.String(), want) {
 			t.Fatalf("diagnostic response missing %q: %s", want, recorder.Body.String())
 		}

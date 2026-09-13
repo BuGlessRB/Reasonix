@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -89,7 +89,7 @@ func (p *FilesystemPersistence) exportCold(ctx context.Context, sessionID, desti
 	}
 	release, err := filelock.AcquireMode(ctx, filepath.Join(source, "writer.lock"), filelock.ModeShared)
 	if err != nil {
-		return fmt.Errorf("sessionv3: freeze cold export: %w", err)
+		return fmt.Errorf("session: freeze cold export: %w", err)
 	}
 	defer release()
 	return exportDirectory(ctx, source, destination)
@@ -99,7 +99,7 @@ func exportDirectory(ctx context.Context, source, destination string) error {
 	source = filepath.Clean(source)
 	destination = filepath.Clean(strings.TrimSpace(destination))
 	if destination == "." || destination == source || strings.HasPrefix(destination+string(os.PathSeparator), source+string(os.PathSeparator)) {
-		return fmt.Errorf("sessionv3: invalid export destination %q", destination)
+		return fmt.Errorf("session: invalid export destination %q", destination)
 	}
 	if _, err := os.Stat(destination); err == nil {
 		return fmt.Errorf("%w: export destination", ErrSessionExists)
@@ -143,13 +143,13 @@ func exportDirectory(ctx context.Context, source, destination string) error {
 			return err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("sessionv3: export refuses symlink %s", relative)
+			return fmt.Errorf("session: export refuses symlink %s", relative)
 		}
 		if entry.IsDir() {
 			return os.MkdirAll(target, info.Mode().Perm())
 		}
 		if !info.Mode().IsRegular() {
-			return fmt.Errorf("sessionv3: export refuses non-regular file %s", relative)
+			return fmt.Errorf("session: export refuses non-regular file %s", relative)
 		}
 		return copySessionFile(ctx, path, target, info.Mode().Perm())
 	})
@@ -228,7 +228,7 @@ func (p *FilesystemPersistence) Delete(ctx context.Context, sessionID string) er
 	}
 	release, err := filelock.Acquire(ctx, filepath.Join(source, "writer.lock"))
 	if err != nil {
-		return fmt.Errorf("sessionv3: delete ownership: %w", err)
+		return fmt.Errorf("session: delete ownership: %w", err)
 	}
 	release()
 	trashRoot := filepath.Join(p.Root, ".trash")
@@ -252,7 +252,7 @@ func (s *Service) Export(ctx context.Context, ref SessionRef, destination string
 	}
 	filesystem, ok := s.persistence.(*FilesystemPersistence)
 	if !ok {
-		return errors.New("sessionv3: persistence does not support export")
+		return errors.New("session: persistence does not support export")
 	}
 	return filesystem.exportCold(ctx, ref.SessionID, destination)
 }
@@ -271,7 +271,7 @@ func (s *Service) Delete(ctx context.Context, ref SessionRef) error {
 	}
 	filesystem, ok := s.persistence.(*FilesystemPersistence)
 	if !ok {
-		return errors.New("sessionv3: persistence does not support delete")
+		return errors.New("session: persistence does not support delete")
 	}
 	s.query.invalidateCatalog(ref.SessionID)
 	return filesystem.Delete(ctx, ref.SessionID)

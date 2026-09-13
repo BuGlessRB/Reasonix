@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 func sessionV3Route(id string) string {
@@ -63,10 +63,10 @@ func (a *App) listV3SessionsFromDir(dir, active string) []SessionMeta {
 	return result
 }
 
-func sessionRefForRoute(service *sessionv3.Service, route string) (sessionv3.SessionRef, bool) {
+func sessionRefForRoute(service *session.Service, route string) (session.SessionRef, bool) {
 	id, ok := parseSessionV3Route(route)
 	if !ok || service == nil {
-		return sessionv3.SessionRef{}, false
+		return session.SessionRef{}, false
 	}
-	return sessionv3.SessionRef{HostID: service.HostID(), SessionID: id}, true
+	return session.SessionRef{HostID: service.HostID(), SessionID: id}, true
 }

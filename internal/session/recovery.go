@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 // projection; the physical handle only writes the resulting commit.
 func (s *Session) RecoverInterrupted(ctx context.Context) (Commit, bool, error) {
 	if s == nil {
-		return Commit{}, false, fmt.Errorf("sessionv3: nil session")
+		return Commit{}, false, fmt.Errorf("session: nil session")
 	}
 	if s.readOnly {
 		return Commit{}, false, ErrReadOnly

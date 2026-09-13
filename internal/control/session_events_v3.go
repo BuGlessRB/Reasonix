@@ -15,7 +15,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/turnevent"
 )
 
@@ -37,7 +37,7 @@ func sessionV3Directory(sessionPath string) string {
 }
 
 type sharedSessionEventStore struct {
-	store *sessionv3.Session
+	store *session.Session
 	refs  int
 }
 
@@ -46,16 +46,16 @@ var processSessionEventStores = struct {
 	stores map[string]*sharedSessionEventStore
 }{stores: map[string]*sharedSessionEventStore{}}
 
-func acquireSessionEventStore(dir, id string) (*sessionv3.Session, func(context.Context) error, bool, error) {
+func acquireSessionEventStore(dir, id string) (*session.Session, func(context.Context) error, bool, error) {
 	processSessionEventStores.Lock()
 	defer processSessionEventStores.Unlock()
 	if entry := processSessionEventStores.stores[dir]; entry != nil {
 		entry.refs++
 		return entry.store, releaseSessionEventStore(dir, entry), true, nil
 	}
-	store, err := sessionv3.Open(dir, id)
-	if errors.Is(err, sessionv3.ErrSessionNotFound) {
-		store, err = sessionv3.CreateStore(dir, id)
+	store, err := session.Open(dir, id)
+	if errors.Is(err, session.ErrSessionNotFound) {
+		store, err = session.CreateStore(dir, id)
 	}
 	if err != nil {
 		return nil, nil, false, err
@@ -93,7 +93,7 @@ func releaseSessionEventStore(dir string, entry *sharedSessionEventStore) func(c
 	}
 }
 
-func (c *Controller) openSessionEventStore(sessionPath string) (*sessionv3.Session, func(context.Context) error, error) {
+func (c *Controller) openSessionEventStore(sessionPath string) (*session.Session, func(context.Context) error, error) {
 	if service, runtime, exclusive := c.v3Binding(); runtime != nil {
 		return runtime.Session(), nil, nil
 	} else if exclusive && service != nil {
@@ -259,17 +259,17 @@ func (c *Controller) replaceV3ModelContext(ctx context.Context, messages []provi
 	if err != nil {
 		return err
 	}
-	events := []sessionv3.Event{{Kind: "model/context-replace", Payload: payload}}
+	events := []session.Event{{Kind: "model/context-replace", Payload: payload}}
 	if strings.TrimSpace(c.ModelRef()) != "" {
 		configPayload, err := json.Marshal(map[string]string{"modelRef": c.ModelRef(), "modelIdentity": c.ModelSelectionIdentity()})
 		if err != nil {
 			return err
 		}
-		events = append(events, sessionv3.Event{Kind: "session/config", Payload: configPayload})
+		events = append(events, session.Event{Kind: "session/config", Payload: configPayload})
 	}
 	digest := sha256.Sum256(payload)
 	c.turnEvents.commitMu.Lock()
-	_, err = c.appendV3Batch(ctx, store, sessionv3.Batch{
+	_, err = c.appendV3Batch(ctx, store, session.Batch{
 		OperationID: fmt.Sprintf("model-context:%x", digest[:16]),
 		TurnID:      snapshot.Projection.TurnID,
 		Events:      events,
@@ -305,15 +305,15 @@ func (c *Controller) adoptResumeSystemPrompt(incoming *agent.Session) error {
 	}
 	c.turnEvents.commitMu.Lock()
 	defer c.turnEvents.commitMu.Unlock()
-	_, err = c.appendV3Batch(context.Background(), store, sessionv3.Batch{
+	_, err = c.appendV3Batch(context.Background(), store, session.Batch{
 		OperationID: fmt.Sprintf("system-prompt-refresh:%d", snapshot.EventSequence+1),
 		TurnID:      snapshot.Projection.TurnID,
-		Events:      []sessionv3.Event{{Kind: "history/replace", Payload: payload}},
+		Events:      []session.Event{{Kind: "history/replace", Payload: payload}},
 	})
 	return err
 }
 
-func (c *Controller) sessionEventStore() *sessionv3.Session {
+func (c *Controller) sessionEventStore() *session.Session {
 	if c == nil {
 		return nil
 	}
@@ -344,18 +344,18 @@ func (c *Controller) sessionEventCommitAllowed() bool {
 	return auth != nil && auth.Covers(path)
 }
 
-func (c *Controller) sessionEventSnapshot() (sessionv3.Snapshot, bool) {
+func (c *Controller) sessionEventSnapshot() (session.Snapshot, bool) {
 	store := c.sessionEventStore()
 	if store == nil {
-		return sessionv3.Snapshot{}, false
+		return session.Snapshot{}, false
 	}
 	return store.Snapshot(), true
 }
 
-func (c *Controller) sessionStateSnapshot() (sessionv3.Snapshot, bool) {
+func (c *Controller) sessionStateSnapshot() (session.Snapshot, bool) {
 	store := c.sessionEventStore()
 	if store == nil {
-		return sessionv3.Snapshot{}, false
+		return session.Snapshot{}, false
 	}
 	return store.StateSnapshot(), true
 }
@@ -370,7 +370,7 @@ func (c *Controller) appendSessionEventLocked(ctx context.Context, e event.Event
 	store := c.sessionEventStore()
 	if store == nil {
 		if c.exclusiveV3Enabled() {
-			return sessionv3.ErrSessionNotRunning
+			return session.ErrSessionNotRunning
 		}
 		return nil
 	}
@@ -386,41 +386,41 @@ func (c *Controller) appendSessionEventLocked(ctx context.Context, e event.Event
 		return err
 	}
 	op := fmt.Sprintf("runtime:%s:%d:%d", e.TurnID, e.Sequence, e.Kind)
-	_, err = c.appendV3Batch(ctx, store, sessionv3.Batch{OperationID: op, TurnID: e.TurnID, Events: events})
+	_, err = c.appendV3Batch(ctx, store, session.Batch{OperationID: op, TurnID: e.TurnID, Events: events})
 	if err != nil {
 		return fmt.Errorf("%w: %w", turnevent.ErrTurnLedgerUnavailable, err)
 	}
 	return nil
 }
 
-func (c *Controller) v3EventsFor(e event.Event, projection sessionv3.Projection) ([]sessionv3.Event, error) {
+func (c *Controller) v3EventsFor(e event.Event, projection session.Projection) ([]session.Event, error) {
 	makePayload := func(value any) (json.RawMessage, error) { return json.Marshal(value) }
-	var out []sessionv3.Event
+	var out []session.Event
 	switch e.Kind {
 	case event.TurnStarted:
 		payload, err := makePayload(map[string]any{"status": event.TurnInProgress})
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, sessionv3.Event{Kind: "turn/start", Payload: payload})
+		out = append(out, session.Event{Kind: "turn/start", Payload: payload})
 		if e.DomainKind != "" {
 			if e.DomainKind != "goal/state" || len(e.DomainPayload) == 0 {
 				return nil, fmt.Errorf("unsupported turn admission domain event %q", e.DomainKind)
 			}
-			out = append(out, sessionv3.Event{Kind: e.DomainKind, Payload: append(json.RawMessage(nil), e.DomainPayload...)})
+			out = append(out, session.Event{Kind: e.DomainKind, Payload: append(json.RawMessage(nil), e.DomainPayload...)})
 		}
 	case event.ToolDispatch:
 		payload, err := makePayload(v3ToolPayload(e.Tool, false))
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, sessionv3.Event{Kind: "tool/call", Payload: payload})
+		out = append(out, session.Event{Kind: "tool/call", Payload: payload})
 	case event.ToolStarted:
 		payload, err := makePayload(map[string]any{"id": e.Tool.ID, "name": e.Tool.Name})
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, sessionv3.Event{Kind: "tool/start", Payload: payload})
+		out = append(out, session.Event{Kind: "tool/start", Payload: payload})
 	case event.ToolResult:
 		// Tool results are emitted before Agent mutates its derived conversation
 		// cache. Commit the exact message and structured result together so a
@@ -430,7 +430,7 @@ func (c *Controller) v3EventsFor(e event.Event, projection sessionv3.Projection)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, sessionv3.Event{Kind: "message/complete", Payload: messagePayload})
+			out = append(out, session.Event{Kind: "message/complete", Payload: messagePayload})
 		}
 		payload, err := makePayload(v3ToolPayload(e.Tool, true))
 		if err != nil {
@@ -441,9 +441,9 @@ func (c *Controller) v3EventsFor(e event.Event, projection sessionv3.Projection)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, sessionv3.Event{Kind: "todo/write", Payload: todoPayload})
+			out = append(out, session.Event{Kind: "todo/write", Payload: todoPayload})
 		}
-		out = append(out, sessionv3.Event{Kind: "tool/result", Payload: payload})
+		out = append(out, session.Event{Kind: "tool/result", Payload: payload})
 	case event.StreamAttempt:
 		payload, err := makePayload(map[string]any{
 			"id": e.StreamAttempt.ID, "messageId": e.MessageID,
@@ -453,7 +453,7 @@ func (c *Controller) v3EventsFor(e event.Event, projection sessionv3.Projection)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, sessionv3.Event{Kind: "assistant/attempt", Payload: payload})
+		out = append(out, session.Event{Kind: "assistant/attempt", Payload: payload})
 	case event.AskRequest, event.ApprovalRequest, event.MCPInteractionRequest:
 		kind := strings.TrimSpace(e.PromptKind)
 		if kind == "" {
@@ -474,7 +474,7 @@ func (c *Controller) v3EventsFor(e event.Event, projection sessionv3.Projection)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, sessionv3.Event{Kind: "interaction/created", Payload: payload})
+		out = append(out, session.Event{Kind: "interaction/created", Payload: payload})
 	case event.PromptAnswered:
 		state := strings.TrimSpace(e.InteractionState)
 		if state == "" {
@@ -484,9 +484,9 @@ func (c *Controller) v3EventsFor(e event.Event, projection sessionv3.Projection)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, sessionv3.Event{Kind: "interaction/resolved", Payload: payload})
+		out = append(out, session.Event{Kind: "interaction/resolved", Payload: payload})
 		if e.DomainKind != "" {
-			out = append(out, sessionv3.Event{Kind: e.DomainKind, Payload: append(json.RawMessage(nil), e.DomainPayload...)})
+			out = append(out, session.Event{Kind: e.DomainKind, Payload: append(json.RawMessage(nil), e.DomainPayload...)})
 		}
 	case event.TurnStatusChanged:
 		if e.Status == event.TurnRecoveryRequired && e.Recovery != nil {
@@ -494,7 +494,7 @@ func (c *Controller) v3EventsFor(e event.Event, projection sessionv3.Projection)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, sessionv3.Event{Kind: "runtime/recovery", Payload: payload})
+			out = append(out, session.Event{Kind: "runtime/recovery", Payload: payload})
 		}
 	case event.CompactionDone:
 		// An empty summary denotes an aborted pass and must not replace the
@@ -507,7 +507,7 @@ func (c *Controller) v3EventsFor(e event.Event, projection sessionv3.Projection)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, sessionv3.Event{Kind: "compaction", Payload: payload})
+			out = append(out, session.Event{Kind: "compaction", Payload: payload})
 		}
 	case event.TurnDone:
 		interactionState := "unavailable"
@@ -519,20 +519,20 @@ func (c *Controller) v3EventsFor(e event.Event, projection sessionv3.Projection)
 			if marshalErr != nil {
 				return nil, marshalErr
 			}
-			out = append(out, sessionv3.Event{Kind: "interaction/resolved", Payload: interactionPayload})
+			out = append(out, session.Event{Kind: "interaction/resolved", Payload: interactionPayload})
 		}
 		if e.Recovery != nil && e.Recovery.State == "recovery_required" {
 			recoveryPayload, marshalErr := makePayload(e.Recovery)
 			if marshalErr != nil {
 				return nil, marshalErr
 			}
-			out = append(out, sessionv3.Event{Kind: "runtime/recovery", Payload: recoveryPayload})
+			out = append(out, session.Event{Kind: "runtime/recovery", Payload: recoveryPayload})
 		}
 		payload, err := makePayload(map[string]any{"status": terminalTurnStatus(e)})
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, sessionv3.Event{Kind: "turn/end", Payload: payload})
+		out = append(out, session.Event{Kind: "turn/end", Payload: payload})
 	}
 	return out, nil
 }
@@ -582,7 +582,7 @@ func (c *Controller) RecordSessionMessages(ctx context.Context, reason string, m
 	}
 	c.turnEvents.commitMu.Lock()
 	defer c.turnEvents.commitMu.Unlock()
-	events := make([]sessionv3.Event, 0, len(messages))
+	events := make([]session.Event, 0, len(messages))
 	for _, message := range messages {
 		if strings.TrimSpace(message.ID) == "" {
 			return errors.New("record session message: missing stable message id")
@@ -591,11 +591,11 @@ func (c *Controller) RecordSessionMessages(ctx context.Context, reason string, m
 		if err != nil {
 			return err
 		}
-		events = append(events, sessionv3.Event{Kind: "message/complete", Payload: payload})
+		events = append(events, session.Event{Kind: "message/complete", Payload: payload})
 	}
 	snapshot := store.Snapshot()
 	op := fmt.Sprintf("messages:%s:%d", reason, snapshot.EventSequence+1)
-	_, err := c.appendV3Batch(ctx, store, sessionv3.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: events})
+	_, err := c.appendV3Batch(ctx, store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: events})
 	return err
 }
 
@@ -622,7 +622,7 @@ func (c *Controller) RecordSessionMessageUpsert(ctx context.Context, reason stri
 	defer c.turnEvents.commitMu.Unlock()
 	snapshot := store.Snapshot()
 	op := fmt.Sprintf("message-upsert:%s:%s:%d", reason, message.ID, snapshot.EventSequence+1)
-	_, err = c.appendV3Batch(ctx, store, sessionv3.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []sessionv3.Event{{Kind: "message/upsert", Payload: payload}}})
+	_, err = c.appendV3Batch(ctx, store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []session.Event{{Kind: "message/upsert", Payload: payload}}})
 	return err
 }
 
@@ -649,18 +649,18 @@ func (c *Controller) replaceSessionEventProjection(ctx context.Context, reason s
 	defer c.turnEvents.commitMu.Unlock()
 	snapshot := store.Snapshot()
 	op := fmt.Sprintf("context-replace:%s:%d", reason, snapshot.EventSequence+1)
-	_, err = c.appendV3Batch(ctx, store, sessionv3.Batch{
+	_, err = c.appendV3Batch(ctx, store, session.Batch{
 		OperationID: op,
 		TurnID:      snapshot.Projection.TurnID,
-		Events:      []sessionv3.Event{{Kind: "history/replace", Payload: payload}},
+		Events:      []session.Event{{Kind: "history/replace", Payload: payload}},
 	})
 	return err
 }
 
-func (c *Controller) flushSessionEvents(ctx context.Context) (sessionv3.DurableReceipt, error) {
+func (c *Controller) flushSessionEvents(ctx context.Context) (session.DurableReceipt, error) {
 	store := c.sessionEventStore()
 	if store == nil {
-		return sessionv3.DurableReceipt{}, nil
+		return session.DurableReceipt{}, nil
 	}
 	return store.Flush(ctx)
 }
@@ -680,7 +680,7 @@ func (c *Controller) appendDomainState(kind string, payload json.RawMessage, rea
 	defer c.turnEvents.commitMu.Unlock()
 	snapshot := store.Snapshot()
 	op := fmt.Sprintf("domain:%s:%s:%d", kind, reason, snapshot.EventSequence+1)
-	_, err := c.appendV3Batch(context.Background(), store, sessionv3.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []sessionv3.Event{{Kind: kind, Payload: append(json.RawMessage(nil), payload...)}}})
+	_, err := c.appendV3Batch(context.Background(), store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []session.Event{{Kind: kind, Payload: append(json.RawMessage(nil), payload...)}}})
 	if err != nil {
 		return fmt.Errorf("%w: %w", turnevent.ErrTurnLedgerUnavailable, err)
 	}

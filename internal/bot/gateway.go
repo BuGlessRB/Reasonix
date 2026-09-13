@@ -19,8 +19,8 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/secrets"
+	"reasonix/internal/session"
 	"reasonix/internal/sessioninbox"
-	"reasonix/internal/sessionv3"
 )
 
 // GatewayConfig 是 BotGateway 的配置。
@@ -198,7 +198,7 @@ type BotGateway struct {
 	buildController         func(context.Context, boot.Options) (*control.Controller, error)
 
 	sessionServicesMu sync.Mutex
-	sessionServices   map[string]*sessionv3.Service
+	sessionServices   map[string]*session.Service
 
 	logger *slog.Logger
 }
@@ -225,7 +225,7 @@ type sessionState struct {
 	workspaceRoot       string
 	toolApprovalMode    string
 	sessionPath         string
-	sessionRef          sessionv3.SessionRef
+	sessionRef          session.SessionRef
 	releaseRuntimeOnly  bool
 	onSessionTransition func(control.SessionTransitionInfo) error
 	// mappingDegraded records that this state intentionally runs on a fresh
@@ -250,7 +250,7 @@ type sessionRuntimeProfile struct {
 	workspaceRoot    string
 	toolApprovalMode string
 	sessionPath      string
-	sessionRef       sessionv3.SessionRef
+	sessionRef       session.SessionRef
 	// sessionPathOptional marks sessionPath as a persisted session_mappings
 	// binding rather than an explicit /attach: when the mapped file cannot be
 	// loaded or leased, the session degrades to a fresh path instead of
@@ -332,7 +332,7 @@ func NewGatewayWithAdapterBindings(cfg GatewayConfig, adapters []AdapterBinding,
 		outboundMessageIDs:      make(map[string]time.Time),
 		adapterHealth:           make(map[string]*AdapterHealthSnapshot),
 		sessionOverrides:        make(map[string]sessionRuntimeOverride),
-		sessionServices:         make(map[string]*sessionv3.Service),
+		sessionServices:         make(map[string]*session.Service),
 		buildController:         boot.Build,
 		logger:                  logger.With("component", "bot_gateway"),
 	}
@@ -2509,7 +2509,7 @@ func (gw *BotGateway) sessionProfileForMessage(msg InboundMessage) sessionRuntim
 func (gw *BotGateway) sessionProfileForResolvedOverride(msg InboundMessage, override sessionRuntimeOverride, enabled bool) sessionRuntimeProfile {
 	model, workspaceRoot, toolApprovalMode := gw.sessionOptionsForResolvedOverride(msg, override, enabled)
 	var sessionPath string
-	var sessionRef sessionv3.SessionRef
+	var sessionRef session.SessionRef
 	sessionPathOptional := false
 	sessionRefOptional := false
 	if enabled {
@@ -2539,7 +2539,7 @@ func (gw *BotGateway) sessionProfileForResolvedOverride(msg InboundMessage, over
 	// one conversation across restarts (dsh-dingtalk-channel's `ding-<chatId>`
 	// analogue). Optional, mirroring mapping degrade semantics.
 	if sessionPath == "" && sessionRef.SessionID == "" && strings.TrimSpace(msg.ChatID) != "" {
-		sessionRef = sessionv3.SessionRef{SessionID: "bot-" + BuildSessionKey(msg.Session())}
+		sessionRef = session.SessionRef{SessionID: "bot-" + BuildSessionKey(msg.Session())}
 		sessionRefOptional = true
 	}
 	return sessionRuntimeProfile{
@@ -2738,23 +2738,23 @@ func (gw *BotGateway) rememberSessionTarget(msg InboundMessage, sessionID string
 	}
 }
 
-func botSessionRefTarget(ref sessionv3.SessionRef) string {
+func botSessionRefTarget(ref session.SessionRef) string {
 	if strings.TrimSpace(ref.HostID) == "" || strings.TrimSpace(ref.SessionID) == "" {
 		return ""
 	}
 	return "session:" + ref.HostID + ":" + ref.SessionID
 }
 
-func parseBotSessionRefTarget(target string) (sessionv3.SessionRef, bool) {
+func parseBotSessionRefTarget(target string) (session.SessionRef, bool) {
 	target = strings.TrimSpace(target)
 	if !strings.HasPrefix(target, "session:") {
-		return sessionv3.SessionRef{}, false
+		return session.SessionRef{}, false
 	}
 	parts := strings.SplitN(strings.TrimPrefix(target, "session:"), ":", 2)
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return sessionv3.SessionRef{}, false
+		return session.SessionRef{}, false
 	}
-	return sessionv3.SessionRef{HostID: strings.TrimSpace(parts[0]), SessionID: strings.TrimSpace(parts[1])}, true
+	return session.SessionRef{HostID: strings.TrimSpace(parts[0]), SessionID: strings.TrimSpace(parts[1])}, true
 }
 
 // botSessionRecoveredHandler keeps the controller path, its writer lease, and

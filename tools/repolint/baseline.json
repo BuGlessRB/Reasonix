@@ -1345,7 +1345,7 @@
     "internal/sessiontemp/manager.go": {
       "essay": 1
     },
-    "internal/sessionv3/store.go": {
+    "internal/session/store.go": {
       "essay": 1
     },
     "internal/shellrun/runner.go": {

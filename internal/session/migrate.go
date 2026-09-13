@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -74,7 +74,7 @@ func migrateLegacyHeadForHost(ctx context.Context, sourcePath, targetRoot, legac
 func migrateLegacyHead(ctx context.Context, sourcePath, targetRoot, legacyHeadID string, allowCurrentOwner bool) (MigrationResult, error) {
 	targetRoot = filepath.Clean(strings.TrimSpace(targetRoot))
 	if targetRoot == "." {
-		return MigrationResult{}, fmt.Errorf("sessionv3: source and target root are required")
+		return MigrationResult{}, fmt.Errorf("session: source and target root are required")
 	}
 	frozen, err := freezeLegacyHead(ctx, sourcePath, legacyHeadID, allowCurrentOwner)
 	if err != nil {
@@ -109,7 +109,7 @@ func freezeLegacyHead(ctx context.Context, sourcePath, legacyHeadID string, allo
 	sourcePath = agent.CanonicalSessionPath(sourcePath)
 	legacyHeadID = strings.TrimSpace(legacyHeadID)
 	if sourcePath == "" {
-		return nil, fmt.Errorf("sessionv3: source is required")
+		return nil, fmt.Errorf("session: source is required")
 	}
 	var lease *agent.SessionLease
 	if !allowCurrentOwner || !agent.SessionLeaseHeldByCurrentRuntime(sourcePath) {
@@ -192,7 +192,7 @@ func parseFrozenLegacy(ctx context.Context, artifacts []frozenArtifact, sourcePa
 // reader never observes a partial session.
 func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (MigrationResult, error) {
 	if f == nil {
-		return MigrationResult{}, fmt.Errorf("sessionv3: nil frozen legacy head")
+		return MigrationResult{}, fmt.Errorf("session: nil frozen legacy head")
 	}
 	targetDir := filepath.Join(targetRoot, f.targetID)
 	result := MigrationResult{TargetID: f.targetID, TargetDir: targetDir, Source: f.source, MessageNum: len(f.messages)}
@@ -210,7 +210,7 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 			result.Reused = true
 			return result, nil
 		}
-		return MigrationResult{}, fmt.Errorf("sessionv3: target %s already exists for different input", f.targetID)
+		return MigrationResult{}, fmt.Errorf("session: target %s already exists for different input", f.targetID)
 	} else if !os.IsNotExist(err) {
 		return MigrationResult{}, err
 	}

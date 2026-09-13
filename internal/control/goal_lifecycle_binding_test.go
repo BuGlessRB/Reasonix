@@ -10,7 +10,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	goaldomain "reasonix/internal/goal"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
@@ -62,16 +62,16 @@ func TestGoalLifecycleMalformedProjectionFailsClosed(t *testing.T) {
 }
 
 func TestExclusiveControllerLoadsGoalFromV3Projection(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-session"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-session"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	raw := json.RawMessage(`{"version":1,"current":{"id":"goal-v3","revision":3,"objective":"finish runtime","phase":"active","maxGoalRounds":null,"roundsStarted":2,"createdAt":"2026-09-13T10:00:00Z","updatedAt":"2026-09-13T10:00:00Z"}}`)
-	if _, err := runtime.Session().AppendBatch(context.Background(), "goal-seed", []sessionv3.Event{{Kind: "goal/state", Payload: raw}}); err != nil {
+	if _, err := runtime.Session().AppendBatch(context.Background(), "goal-seed", []session.Event{{Kind: "goal/state", Payload: raw}}); err != nil {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
@@ -87,11 +87,11 @@ func TestExclusiveControllerLoadsGoalFromV3Projection(t *testing.T) {
 }
 
 func TestGoalLifecycleMutationAppendsToActiveV3Session(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-mutation"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-mutation"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,11 +126,11 @@ func TestGoalLifecycleMutationAppendsToActiveV3Session(t *testing.T) {
 }
 
 func TestGoalLifecycleMutationRejectsStaleRuntimeAuthority(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-stale"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-stale"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,11 +149,11 @@ func TestGoalLifecycleMutationRejectsStaleRuntimeAuthority(t *testing.T) {
 }
 
 func TestModelCannotResumeUserPausedGoal(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-paused"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-paused"})
 	if err != nil {
 		t.Fatal(err)
 	}

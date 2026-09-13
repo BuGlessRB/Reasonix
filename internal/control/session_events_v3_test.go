@@ -14,18 +14,18 @@ import (
 	"reasonix/internal/agent/testutil"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/store"
 	"reasonix/internal/tool"
 )
 
-func loadDurableV3Projection(t *testing.T, legacyPath string) sessionv3.Projection {
+func loadDurableV3Projection(t *testing.T, legacyPath string) session.Projection {
 	t.Helper()
-	commits, err := sessionv3.Replay(sessionV3Directory(legacyPath), nil)
+	commits, err := session.Replay(sessionV3Directory(legacyPath), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := sessionv3.Project(commits)
+	projection, err := session.Project(commits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestRuntimeSnapshotRecoversRecoveryRequiredFromV3Alone(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := c.sessionEventStore()
-	if _, err := store.Append(t.Context(), sessionv3.Batch{OperationID: "v3-only-recovery", Events: []sessionv3.Event{{Kind: "runtime/recovery", Payload: payload}}}); err != nil {
+	if _, err := store.Append(t.Context(), session.Batch{OperationID: "v3-only-recovery", Events: []session.Event{{Kind: "runtime/recovery", Payload: payload}}}); err != nil {
 		t.Fatal(err)
 	}
 	c.refreshRuntimeState(event.Event{})
@@ -55,11 +55,11 @@ func TestRuntimeSnapshotRecoversRecoveryRequiredFromV3Alone(t *testing.T) {
 
 func TestExclusiveControllerUsesBoundSessionIdentityAndWritesNoLegacyTranscript(t *testing.T) {
 	root := t.TempDir()
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(filepath.Join(root, "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(root, "sessions-v3")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "stable-session"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "stable-session"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestExclusiveControllerUsesBoundSessionIdentityAndWritesNoLegacyTranscript(
 		t.Fatalf("session ref = %+v, %v", ref, ok)
 	}
 	state := c.RuntimeStateSnapshot()
-	if state.HostID != ref.HostID || state.SessionID != ref.SessionID || state.SessionCodec != sessionv3.Codec {
+	if state.HostID != ref.HostID || state.SessionID != ref.SessionID || state.SessionCodec != session.Codec {
 		t.Fatalf("runtime identity = %+v", state)
 	}
 	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
@@ -98,19 +98,19 @@ func TestExclusiveControllerUsesBoundSessionIdentityAndWritesNoLegacyTranscript(
 }
 
 func TestOpenFailureDoesNotCloseAnotherControllersRuntime(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "first"})
+	first, err := service.Create(t.Context(), session.CreateOptions{SessionID: "first"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "second"})
+	second, err := service.Create(t.Context(), session.CreateOptions{SessionID: "second"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	newController := func(runtime *sessionv3.Runtime) *Controller {
+	newController := func(runtime *session.Runtime) *Controller {
 		exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
 		return newOwnedTestController(t, Options{
 			Executor: exec, Sink: event.Discard, SessionService: service,
@@ -122,7 +122,7 @@ func TestOpenFailureDoesNotCloseAnotherControllersRuntime(t *testing.T) {
 	caller := newController(first)
 	t.Cleanup(caller.Close)
 
-	if _, err := second.Session().AppendBatch(t.Context(), "bad-plan", []sessionv3.Event{{Kind: "plan/state", Payload: []byte(`{"enabled":"invalid"}`)}}); err != nil {
+	if _, err := second.Session().AppendBatch(t.Context(), "bad-plan", []session.Event{{Kind: "plan/state", Payload: []byte(`{"enabled":"invalid"}`)}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := caller.OpenV3(t.Context(), second.Ref()); err == nil {
@@ -131,17 +131,17 @@ func TestOpenFailureDoesNotCloseAnotherControllersRuntime(t *testing.T) {
 	if got, ok := service.Runtime(second.Ref()); !ok || got != second {
 		t.Fatal("failed client publication disposed another controller's runtime")
 	}
-	if _, err := second.Session().AppendBatch(t.Context(), "still-owned", []sessionv3.Event{{Kind: "diagnostic", Optional: true}}); err != nil {
+	if _, err := second.Session().AppendBatch(t.Context(), "still-owned", []session.Event{{Kind: "diagnostic", Optional: true}}); err != nil {
 		t.Fatalf("shared runtime is unusable after another controller failed to bind: %v", err)
 	}
 }
 
 func TestExclusiveControllerRuntimeSnapshotAndCancelUseExactV3Instance(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "runtime-owned"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "runtime-owned"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,11 +183,11 @@ func TestExclusiveControllerRuntimeSnapshotAndCancelUseExactV3Instance(t *testin
 }
 
 func TestExclusiveSessionSwitchRestoresPlanAndGoalWithoutTodo(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "first-domain"})
+	first, err := service.Create(t.Context(), session.CreateOptions{SessionID: "first-domain"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestExclusiveSessionSwitchRestoresPlanAndGoalWithoutTodo(t *testing.T) {
 		t.Fatalf("goal event retained todo state: %s", goalRaw)
 	}
 
-	second, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "second-domain"})
+	second, err := service.Create(t.Context(), session.CreateOptions{SessionID: "second-domain"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,12 +230,12 @@ func TestExclusiveSessionSwitchRestoresPlanAndGoalWithoutTodo(t *testing.T) {
 
 func TestExclusiveControllerNewPublishesFreshIdentityAndKeepsOldHistory(t *testing.T) {
 	root := t.TempDir()
-	persistence := sessionv3.NewFilesystemPersistence(filepath.Join(root, "sessions-v3"))
-	service, err := sessionv3.NewService("desktop", persistence)
+	persistence := session.NewFilesystemPersistence(filepath.Join(root, "sessions-v3"))
+	service, err := session.NewService("desktop", persistence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "old-session"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "old-session"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,10 +248,10 @@ func TestExclusiveControllerNewPublishesFreshIdentityAndKeepsOldHistory(t *testi
 	if !ok || ref.SessionID == "old-session" {
 		t.Fatalf("new identity = %+v, ok=%v", ref, ok)
 	}
-	if _, ok := service.Runtime(sessionv3.SessionRef{HostID: "desktop", SessionID: "old-session"}); ok {
+	if _, ok := service.Runtime(session.SessionRef{HostID: "desktop", SessionID: "old-session"}); ok {
 		t.Fatal("old runtime remained published")
 	}
-	read, err := persistence.Open("old-session", sessionv3.ReadOnly)
+	read, err := persistence.Open("old-session", session.ReadOnly)
 	if err != nil {
 		t.Fatalf("old history was removed by NewSession: %v", err)
 	}
@@ -261,25 +261,25 @@ func TestExclusiveControllerNewPublishesFreshIdentityAndKeepsOldHistory(t *testi
 
 func TestExclusiveControllerOpenMissingKeepsCurrentExactRuntime(t *testing.T) {
 	root := t.TempDir()
-	persistence := sessionv3.NewFilesystemPersistence(filepath.Join(root, "sessions-v3"))
-	service, err := sessionv3.NewService("desktop", persistence)
+	persistence := session.NewFilesystemPersistence(filepath.Join(root, "sessions-v3"))
+	service, err := session.NewService("desktop", persistence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "current"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "current"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
 	c := newOwnedTestController(t, Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
-	if _, err := c.OpenV3(t.Context(), sessionv3.SessionRef{HostID: "desktop", SessionID: "missing"}); !errors.Is(err, sessionv3.ErrSessionNotFound) {
+	if _, err := c.OpenV3(t.Context(), session.SessionRef{HostID: "desktop", SessionID: "missing"}); !errors.Is(err, session.ErrSessionNotFound) {
 		t.Fatalf("OpenV3 missing error = %v", err)
 	}
 	ref, ok := c.SessionRef()
 	if !ok || ref != runtime.Ref() {
 		t.Fatalf("failed open changed binding to %+v", ref)
 	}
-	if _, err := persistence.Stat(t.Context(), "missing"); !errors.Is(err, sessionv3.ErrSessionNotFound) {
+	if _, err := persistence.Stat(t.Context(), "missing"); !errors.Is(err, session.ErrSessionNotFound) {
 		t.Fatalf("failed open created missing session: %v", err)
 	}
 	c.Close()
@@ -287,12 +287,12 @@ func TestExclusiveControllerOpenMissingKeepsCurrentExactRuntime(t *testing.T) {
 
 func TestExclusiveControllerClearDeletesClosedSourceAfterPublishingFreshIdentity(t *testing.T) {
 	root := t.TempDir()
-	persistence := sessionv3.NewFilesystemPersistence(filepath.Join(root, "sessions-v3"))
-	service, err := sessionv3.NewService("desktop", persistence)
+	persistence := session.NewFilesystemPersistence(filepath.Join(root, "sessions-v3"))
+	service, err := session.NewService("desktop", persistence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "clear-source"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "clear-source"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +305,7 @@ func TestExclusiveControllerClearDeletesClosedSourceAfterPublishingFreshIdentity
 	if !ok || ref.SessionID == "clear-source" {
 		t.Fatalf("clear identity = %+v, ok=%v", ref, ok)
 	}
-	if _, err := persistence.Stat(t.Context(), "clear-source"); !errors.Is(err, sessionv3.ErrSessionNotFound) {
+	if _, err := persistence.Stat(t.Context(), "clear-source"); !errors.Is(err, session.ErrSessionNotFound) {
 		t.Fatalf("cleared source remains in catalog: %v", err)
 	}
 	c.Close()
@@ -313,12 +313,12 @@ func TestExclusiveControllerClearDeletesClosedSourceAfterPublishingFreshIdentity
 
 func TestExclusiveControllerForkUsesTypedTurnBoundaryAndNoLegacyTranscript(t *testing.T) {
 	root := t.TempDir()
-	persistence := sessionv3.NewFilesystemPersistence(filepath.Join(root, "sessions-v3"))
-	service, err := sessionv3.NewService("desktop", persistence)
+	persistence := session.NewFilesystemPersistence(filepath.Join(root, "sessions-v3"))
+	service, err := session.NewService("desktop", persistence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "fork-parent"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "fork-parent"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestExclusiveControllerForkUsesTypedTurnBoundaryAndNoLegacyTranscript(t *te
 	c.Close()
 }
 
-func runtimeSnapshotForTest(t *testing.T, c *Controller) sessionv3.Snapshot {
+func runtimeSnapshotForTest(t *testing.T, c *Controller) session.Snapshot {
 	t.Helper()
 	_, runtime, ok := c.SessionV3Binding()
 	if !ok {
@@ -472,7 +472,7 @@ func TestControllerUsesV3AsBusinessEventStore(t *testing.T) {
 	if snapshot.DurableSequence != snapshot.EventSequence {
 		t.Fatalf("durable=%d event=%d", snapshot.DurableSequence, snapshot.EventSequence)
 	}
-	commits, err := sessionv3.Replay(sessionV3Directory(legacyPath), nil)
+	commits, err := session.Replay(sessionV3Directory(legacyPath), nil)
 	if err != nil || len(commits) == 0 {
 		t.Fatalf("Replay = %d commits, %v", len(commits), err)
 	}
@@ -569,7 +569,7 @@ func TestTurnEndClosesPendingInteractionsInTheSameBatch(t *testing.T) {
 	if _, err := c.flushSessionEvents(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	commits, err := sessionv3.Replay(sessionV3Directory(legacyPath), nil)
+	commits, err := session.Replay(sessionV3Directory(legacyPath), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -606,7 +606,7 @@ func TestPromptResolutionAndPlanStateShareOneAtomicBatch(t *testing.T) {
 	if _, err := c.flushSessionEvents(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	commits, err := sessionv3.Replay(sessionV3Directory(legacyPath), nil)
+	commits, err := session.Replay(sessionV3Directory(legacyPath), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

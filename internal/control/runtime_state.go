@@ -10,7 +10,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/jobs"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/turnevent"
 )
 
@@ -118,7 +118,7 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 	running, finishing, closed, cancelling, path := c.running, c.finishing, c.closed, c.canceling, c.sessionPath
 	c.mu.Unlock()
 	_, v3Runtime, v3Exclusive := c.v3Binding()
-	var v3RuntimeSnapshot sessionv3.RuntimeSnapshot
+	var v3RuntimeSnapshot session.RuntimeSnapshot
 	if v3Exclusive && v3Runtime != nil {
 		v3RuntimeSnapshot = v3Runtime.StateSnapshot()
 	}
@@ -140,7 +140,7 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 	if ref, ok := c.SessionRef(); ok {
 		next.HostID = ref.HostID
 		next.SessionID = ref.SessionID
-		next.SessionCodec = sessionv3.Codec
+		next.SessionCodec = session.Codec
 		next.RuntimeEpoch = v3RuntimeSnapshot.Epoch
 		next.ActivityRevision = v3RuntimeSnapshot.ActivityRevision
 	} else {
@@ -285,17 +285,17 @@ func runtimeActivity(state event.RuntimeStateSnapshot, e event.Event, activity s
 	return activity
 }
 
-func setRuntimePhase(next *event.RuntimeStateSnapshot, v3Exclusive bool, v3Runtime *sessionv3.Runtime, v3RuntimeSnapshot sessionv3.RuntimeSnapshot, running, finishing, closed, cancelling bool) {
+func setRuntimePhase(next *event.RuntimeStateSnapshot, v3Exclusive bool, v3Runtime *session.Runtime, v3RuntimeSnapshot session.RuntimeSnapshot, running, finishing, closed, cancelling bool) {
 	next.Phase = "idle"
 	if v3Exclusive && v3Runtime != nil {
 		switch v3RuntimeSnapshot.Phase {
-		case sessionv3.RuntimeRunning:
+		case session.RuntimeRunning:
 			next.Phase = "executing"
-		case sessionv3.RuntimeCancelling:
+		case session.RuntimeCancelling:
 			next.Phase = "cancelling"
-		case sessionv3.RuntimeRecoveryRequired:
+		case session.RuntimeRecoveryRequired:
 			next.Phase = "recovery_required"
-		case sessionv3.RuntimeClosed:
+		case session.RuntimeClosed:
 			next.Phase = "closed"
 		}
 	} else {
@@ -314,7 +314,7 @@ func setRuntimePhase(next *event.RuntimeStateSnapshot, v3Exclusive bool, v3Runti
 	}
 }
 
-func applyRuntimeSessionState(next *event.RuntimeStateSnapshot, v3Snapshot sessionv3.Snapshot, hasV3Snapshot bool) {
+func applyRuntimeSessionState(next *event.RuntimeStateSnapshot, v3Snapshot session.Snapshot, hasV3Snapshot bool) {
 	if hasV3Snapshot {
 		snapshot := v3Snapshot
 		next.CommittedSeq = snapshot.EventSequence
@@ -337,7 +337,7 @@ func applyRuntimeSessionState(next *event.RuntimeStateSnapshot, v3Snapshot sessi
 	}
 }
 
-func setRuntimeRecovery(next *event.RuntimeStateSnapshot, v3Snapshot sessionv3.Snapshot, hasV3Snapshot bool, ledger *turnevent.Ledger, activity string) {
+func setRuntimeRecovery(next *event.RuntimeStateSnapshot, v3Snapshot session.Snapshot, hasV3Snapshot bool, ledger *turnevent.Ledger, activity string) {
 	next.Recovery = nil
 	if next.Phase == "recovery_required" {
 		if hasV3Snapshot && v3Snapshot.Projection.Recovery != nil {

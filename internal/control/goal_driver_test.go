@@ -13,7 +13,7 @@ import (
 	"reasonix/internal/event"
 	goaldomain "reasonix/internal/goal"
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
@@ -83,11 +83,11 @@ func (r *lifecycleDriverRunner) Run(ctx context.Context, input string) error {
 }
 
 func TestGoalDriverContinuesAfterFinalAndCompletesThroughExactRoundAuthority(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-driver"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-driver"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,11 +161,11 @@ func (r *limitedGoalRunner) Run(ctx context.Context, _ string) error {
 }
 
 func TestGoalDriverTurnsExplicitRoundLimitIntoBlockedState(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-limit"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-limit"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,11 +244,11 @@ func (r *gatedGoalRunner) Run(ctx context.Context, _ string) error {
 }
 
 func TestConcurrentIdleKicksCannotAdmitParallelGoalRounds(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-dedup"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-dedup"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,11 +306,11 @@ func (r *cancelGoalRunner) Run(ctx context.Context, _ string) error {
 }
 
 func TestPausingRunningGoalRoundCancelsActivityAndPersistsPaused(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-cancel"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-cancel"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,11 +363,11 @@ func (r *completeThenCancelGoalRunner) Run(ctx context.Context, _ string) error 
 }
 
 func TestCancellationAfterAcceptedCompleteDoesNotRewriteGoalToPaused(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-complete-then-cancel"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-complete-then-cancel"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,11 +424,11 @@ func (r *unlimitedGoalRunner) Run(ctx context.Context, _ string) error {
 }
 
 func TestUnlimitedGoalDriverRunsBeyondHarnessDefaultCeiling(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-unlimited"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-unlimited"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,14 +449,14 @@ func TestUnlimitedGoalDriverRunsBeyondHarnessDefaultCeiling(t *testing.T) {
 	waitForGoalDriverIdle(t, c, runtime)
 }
 
-func waitForGoalDriverIdle(t *testing.T, c *Controller, runtime *sessionv3.Runtime) {
+func waitForGoalDriverIdle(t *testing.T, c *Controller, runtime *session.Runtime) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		c.goalDriverMu.Lock()
 		settled := !c.goalDriverPending && c.goalDriverActive == nil
 		c.goalDriverMu.Unlock()
-		if settled && !c.Running() && runtime.Snapshot().Phase == sessionv3.RuntimeIdle {
+		if settled && !c.Running() && runtime.Snapshot().Phase == session.RuntimeIdle {
 			return
 		}
 		time.Sleep(time.Millisecond)
@@ -485,11 +485,11 @@ func (r *budgetedGoalRunner) Run(ctx context.Context, _ string) error {
 }
 
 func TestGoalDriverBlocksAtExplicitHostTokenBudget(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-budget"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-budget"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -536,11 +536,11 @@ func (r *modelErrorGoalRunner) Run(ctx context.Context, _ string) error {
 }
 
 func TestGoalRoundModelErrorDisarmsWithoutCompleting(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-model-error"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-model-error"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,34 +564,34 @@ func TestGoalRoundModelErrorDisarmsWithoutCompleting(t *testing.T) {
 }
 
 type failingFlushPersistence struct {
-	session *sessionv3.Session
+	session *session.Session
 }
 
-func (p failingFlushPersistence) Create(sessionv3.CreateOptions) (*sessionv3.Session, error) {
+func (p failingFlushPersistence) Create(session.CreateOptions) (*session.Session, error) {
 	return p.session, nil
 }
-func (p failingFlushPersistence) Open(string, sessionv3.AccessMode) (*sessionv3.Session, error) {
-	return nil, sessionv3.ErrSessionNotFound
+func (p failingFlushPersistence) Open(string, session.AccessMode) (*session.Session, error) {
+	return nil, session.ErrSessionNotFound
 }
-func (p failingFlushPersistence) Stat(context.Context, string) (sessionv3.SessionInfo, error) {
-	return sessionv3.SessionInfo{}, sessionv3.ErrSessionNotFound
+func (p failingFlushPersistence) Stat(context.Context, string) (session.SessionInfo, error) {
+	return session.SessionInfo{}, session.ErrSessionNotFound
 }
-func (p failingFlushPersistence) List(context.Context, string, int) (sessionv3.SessionPage, error) {
-	return sessionv3.SessionPage{}, nil
+func (p failingFlushPersistence) List(context.Context, string, int) (session.SessionPage, error) {
+	return session.SessionPage{}, nil
 }
 
 func TestGoalDriverFlushFailureStartsNoAutomaticModelCall(t *testing.T) {
-	store, err := sessionv3.CreateWithOptions(t.TempDir()+"/goal-flush", "goal-flush", sessionv3.OpenOptions{
+	store, err := session.CreateWithOptions(t.TempDir()+"/goal-flush", "goal-flush", session.OpenOptions{
 		Sync: func(*os.File) error { return errors.New("injected sync failure") },
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := sessionv3.NewService("desktop", failingFlushPersistence{session: store})
+	service, err := session.NewService("desktop", failingFlushPersistence{session: store})
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-flush"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-flush"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -644,7 +644,7 @@ func TestUserInputArrivingDuringGoalFlushWinsAdmission(t *testing.T) {
 	flushStarted := make(chan struct{})
 	releaseFlush := make(chan struct{})
 	var once sync.Once
-	store, err := sessionv3.CreateWithOptions(t.TempDir()+"/goal-user-wins", "goal-user-wins", sessionv3.OpenOptions{
+	store, err := session.CreateWithOptions(t.TempDir()+"/goal-user-wins", "goal-user-wins", session.OpenOptions{
 		Sync: func(*os.File) error {
 			once.Do(func() { close(flushStarted) })
 			<-releaseFlush
@@ -654,11 +654,11 @@ func TestUserInputArrivingDuringGoalFlushWinsAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := sessionv3.NewService("desktop", failingFlushPersistence{session: store})
+	service, err := session.NewService("desktop", failingFlushPersistence{session: store})
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-user-wins"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-user-wins"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -730,12 +730,12 @@ func (r *restoredGoalRunner) Run(ctx context.Context, _ string) error {
 
 func TestColdRestoredGoalCanResumeFromNaturalUserRequestAndContinue(t *testing.T) {
 	root := t.TempDir()
-	persistence := sessionv3.NewFilesystemPersistence(root)
-	seedService, err := sessionv3.NewService("desktop", persistence)
+	persistence := session.NewFilesystemPersistence(root)
+	seedService, err := session.NewService("desktop", persistence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	seedRuntime, err := seedService.Create(t.Context(), sessionv3.CreateOptions{SessionID: "restored-goal"})
+	seedRuntime, err := seedService.Create(t.Context(), session.CreateOptions{SessionID: "restored-goal"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -751,7 +751,7 @@ func TestColdRestoredGoalCanResumeFromNaturalUserRequestAndContinue(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := activity.Append(t.Context(), sessionv3.Batch{OperationID: "seed-goal", Events: []sessionv3.Event{{Kind: "goal/state", Payload: payload}}}); err != nil {
+	if _, err := activity.Append(t.Context(), session.Batch{OperationID: "seed-goal", Events: []session.Event{{Kind: "goal/state", Payload: payload}}}); err != nil {
 		t.Fatal(err)
 	}
 	activity.Finish(nil)
@@ -759,11 +759,11 @@ func TestColdRestoredGoalCanResumeFromNaturalUserRequestAndContinue(t *testing.T
 		t.Fatal(err)
 	}
 
-	service, err := sessionv3.NewService("desktop", persistence)
+	service, err := session.NewService("desktop", persistence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	binding, err := service.Open(t.Context(), sessionv3.SessionRef{HostID: "desktop", SessionID: "restored-goal"})
+	binding, err := service.Open(t.Context(), session.SessionRef{HostID: "desktop", SessionID: "restored-goal"})
 	if err != nil {
 		t.Fatal(err)
 	}

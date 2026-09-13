@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"reflect"

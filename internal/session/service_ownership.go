@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"context"
@@ -65,7 +65,7 @@ func (p *PreparedRuntime) Runtime() *Runtime {
 
 func NewService(hostID string, persistence SessionPersistence) (*Service, error) {
 	if hostID == "" || persistence == nil {
-		return nil, errors.New("sessionv3: host id and persistence are required")
+		return nil, errors.New("session: host id and persistence are required")
 	}
 	service := &Service{
 		hostID: hostID, persistence: persistence,
@@ -114,12 +114,12 @@ func (s *Service) PrepareCreate(ctx context.Context, options CreateOptions) (*Pr
 // ClientBinding and can only detach themselves.
 func (s *Service) Publish(prepared *PreparedRuntime) (*RuntimeOwner, error) {
 	if prepared == nil || prepared.service != s || prepared.runtime == nil {
-		return nil, errors.New("sessionv3: invalid prepared runtime")
+		return nil, errors.New("session: invalid prepared runtime")
 	}
 	prepared.mu.Lock()
 	defer prepared.mu.Unlock()
 	if prepared.discarded {
-		return nil, errors.New("sessionv3: prepared runtime was discarded")
+		return nil, errors.New("session: prepared runtime was discarded")
 	}
 	candidate := prepared.runtime
 	if prepared.published {
@@ -201,7 +201,7 @@ func (s *Service) Discard(ctx context.Context, prepared *PreparedRuntime) error 
 	prepared.mu.Lock()
 	defer prepared.mu.Unlock()
 	if prepared.published {
-		return errors.New("sessionv3: published runtime cannot be discarded")
+		return errors.New("session: published runtime cannot be discarded")
 	}
 	if prepared.discarded {
 		return prepared.runtime.close(ctx)
@@ -253,7 +253,7 @@ func (s *Service) openRuntime(ctx context.Context, ref SessionRef) (*Runtime, er
 	if _, _, recoverErr := session.RecoverInterrupted(ctx); recoverErr != nil {
 		_ = session.Close(context.Background())
 		s.finishPrepare(ref)
-		return nil, fmt.Errorf("sessionv3: close interrupted runtime: %w", recoverErr)
+		return nil, fmt.Errorf("session: close interrupted runtime: %w", recoverErr)
 	}
 	candidate := newRuntime(ref, session)
 	candidate.owner = s

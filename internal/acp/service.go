@@ -26,8 +26,8 @@ import (
 	"reasonix/internal/jobs"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
+	"reasonix/internal/session"
 	"reasonix/internal/sessioninbox"
-	"reasonix/internal/sessionv3"
 	"reasonix/internal/store"
 	"reasonix/internal/tool/builtin"
 )
@@ -1031,7 +1031,7 @@ func (s *service) openExistingSession(ctx context.Context, method, id, cwdParam 
 			ctrl.Close()
 			return SessionConfigState{}, &RPCError{Code: ErrInternal, Message: method + ": v3 session service is unavailable"}
 		}
-		if _, err := ctrl.OpenV3(ctx, sessionv3.SessionRef{HostID: service.HostID(), SessionID: id}); err != nil {
+		if _, err := ctrl.OpenV3(ctx, session.SessionRef{HostID: service.HostID(), SessionID: id}); err != nil {
 			ctrl.Close()
 			return SessionConfigState{}, &RPCError{Code: ErrInvalidParams, Message: method + ": unknown session " + id}
 		}

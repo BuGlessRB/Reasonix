@@ -8,21 +8,21 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	goaldomain "reasonix/internal/goal"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
 func TestGoalDiagnosticExportReadsCompleteDurableV3Log(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-diagnostic"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-diagnostic"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	toolPayload := json.RawMessage(`{"id":"call-1","name":"bash","output":"full diagnostic output"}`)
-	if _, err := runtime.Session().AppendBatch(t.Context(), "tool-evidence", []sessionv3.Event{{Kind: "tool/result", Payload: toolPayload}}); err != nil {
+	if _, err := runtime.Session().AppendBatch(t.Context(), "tool-evidence", []session.Event{{Kind: "tool/result", Payload: toolPayload}}); err != nil {
 		t.Fatal(err)
 	}
 	machine := goaldomain.NewMachine(nil, func() string { return "goal-1" })
@@ -33,7 +33,7 @@ func TestGoalDiagnosticExportReadsCompleteDurableV3Log(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.Session().AppendBatch(t.Context(), "goal:goal-1:1:create", []sessionv3.Event{{Kind: "goal/state", Payload: goalPayload}}); err != nil {
+	if _, err := runtime.Session().AppendBatch(t.Context(), "goal:goal-1:1:create", []session.Event{{Kind: "goal/state", Payload: goalPayload}}); err != nil {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
@@ -44,7 +44,7 @@ func TestGoalDiagnosticExportReadsCompleteDurableV3Log(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(payload)
-	for _, want := range []string{`"schemaVersion": 1`, `"applicationVersion": "1.2.3"`, `"sessionCodec": "` + sessionv3.Codec + `"`, `"full diagnostic output"`, `"goal-lifecycle-v2"`, `"activationChanges"`, `"activation": "armed"`} {
+	for _, want := range []string{`"schemaVersion": 1`, `"applicationVersion": "1.2.3"`, `"sessionCodec": "` + session.Codec + `"`, `"full diagnostic output"`, `"goal-lifecycle-v2"`, `"activationChanges"`, `"activation": "armed"`} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("diagnostic export missing %s:\n%s", want, text)
 		}

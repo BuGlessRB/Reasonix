@@ -85,7 +85,7 @@ view preference.
 
 ## v3 session boundary
 
-`internal/sessionv3` defines the ownership-cutover codec
+`internal/session` defines the ownership-cutover codec
 `reasonix.session.linear/v3.1`. The retired `reasonix.session.events/v3`
 prototype and `reasonix.session.linear/v3` preview cannot be opened for
 execution and must pass through the restricted importer. Unknown required

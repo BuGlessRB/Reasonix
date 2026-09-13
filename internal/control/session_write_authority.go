@@ -8,7 +8,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // BindSessionWriteAuthority issues a generation-bound write authority from
@@ -124,22 +124,22 @@ func (c *Controller) ensureWriteAuthorityReady() error {
 	if service, runtime, exclusive := c.v3Binding(); exclusive {
 		if runtime == nil {
 			if service == nil {
-				return sessionv3.ErrSessionNotRunning
+				return session.ErrSessionNotRunning
 			}
 			if _, err := c.BindFreshV3(context.Background(), ""); err != nil {
 				return err
 			}
 			_, runtime, _ = c.v3Binding()
 			if runtime == nil {
-				return sessionv3.ErrSessionNotRunning
+				return session.ErrSessionNotRunning
 			}
 		}
 		phase := runtime.Snapshot().Phase
-		if phase == sessionv3.RuntimeRecoveryRequired {
-			return sessionv3.ErrRecoveryRequired
+		if phase == session.RuntimeRecoveryRequired {
+			return session.ErrRecoveryRequired
 		}
-		if phase == sessionv3.RuntimeClosed {
-			return sessionv3.ErrSessionNotRunning
+		if phase == session.RuntimeClosed {
+			return session.ErrSessionNotRunning
 		}
 		return nil
 	}

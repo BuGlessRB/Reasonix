@@ -11,7 +11,7 @@ import (
 	"time"
 
 	goaldomain "reasonix/internal/goal"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // GoalDiagnosticMetadata is supplied by the host so a user-exported artifact
@@ -27,11 +27,11 @@ type goalDiagnosticExport struct {
 	SchemaVersion     int                        `json:"schemaVersion"`
 	ExportedAt        time.Time                  `json:"exportedAt"`
 	Metadata          GoalDiagnosticMetadata     `json:"metadata"`
-	Runtime           sessionv3.RuntimeSnapshot  `json:"runtime"`
+	Runtime           session.RuntimeSnapshot    `json:"runtime"`
 	Observation       any                        `json:"observation"`
 	AcceptedThrough   uint64                     `json:"acceptedThrough"`
 	DurableThrough    uint64                     `json:"durableThrough"`
-	Commits           []sessionv3.Commit         `json:"commits"`
+	Commits           []session.Commit           `json:"commits"`
 	ActivationChanges []goalDiagnosticTransition `json:"activationChanges"`
 	Unavailable       []string                   `json:"unavailable"`
 }
@@ -52,7 +52,7 @@ type goalDiagnosticTransition struct {
 // frontend's currently loaded transcript window.
 func (c *Controller) ExportGoalDiagnostics(ctx context.Context, metadata GoalDiagnosticMetadata) ([]byte, error) {
 	if c == nil {
-		return nil, sessionv3.ErrSessionNotRunning
+		return nil, session.ErrSessionNotRunning
 	}
 	_, runtime, exclusive := c.v3Binding()
 	if !exclusive || runtime == nil {
@@ -69,7 +69,7 @@ func (c *Controller) ExportGoalDiagnostics(ctx context.Context, metadata GoalDia
 	if err := runtime.Session().Export(ctx, frozen); err != nil {
 		return nil, err
 	}
-	commits, err := sessionv3.Replay(frozen, nil)
+	commits, err := session.Replay(frozen, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func fillGoalDiagnosticBuildMetadata(metadata *GoalDiagnosticMetadata) {
 	}
 }
 
-func goalActivationChanges(commits []sessionv3.Commit) []goalDiagnosticTransition {
+func goalActivationChanges(commits []session.Commit) []goalDiagnosticTransition {
 	changes := make([]goalDiagnosticTransition, 0)
 	activation := goaldomain.ActivationDisarmed
 	for _, commit := range commits {

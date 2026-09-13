@@ -9,7 +9,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/plugin"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 func (a *App) continueLegacyV3ForTranscript(tab *WorkspaceTab, ctrl control.SessionAPI, sourcePath string, limit int, includeHistory, readOnly bool) (HistoryPage, error) {
@@ -101,7 +101,7 @@ func (a *App) resumeV3SessionForTranscript(tab *WorkspaceTab, ctrl control.Sessi
 // recorded model before publishing it to the tab. The caller holds
 // runtimeRebuildMu and tab.turnStartMu, so the source remains usable until the
 // target model, writer, and event projection have all been validated.
-func (a *App) replaceControllerForV3OpenLocked(tab *WorkspaceTab, current control.SessionAPI, service *sessionv3.Service, ref sessionv3.SessionRef, targetModel string) (control.SessionAPI, error) {
+func (a *App) replaceControllerForV3OpenLocked(tab *WorkspaceTab, current control.SessionAPI, service *session.Service, ref session.SessionRef, targetModel string) (control.SessionAPI, error) {
 	if tab == nil || current == nil || service == nil {
 		return nil, fmt.Errorf("session runtime changed while opening session")
 	}

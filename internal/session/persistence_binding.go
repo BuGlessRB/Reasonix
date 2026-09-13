@@ -1,4 +1,4 @@
-package sessionv3
+package session
 
 import (
 	"bytes"
@@ -130,7 +130,7 @@ func (b *PersistenceBinding) progress() (uint64, PersistenceStatus, string) {
 // caller's wait never cancels the shared physical write.
 func (b *PersistenceBinding) Flush(ctx context.Context) (DurableReceipt, error) {
 	if b == nil {
-		return DurableReceipt{}, fmt.Errorf("sessionv3: nil persistence binding")
+		return DurableReceipt{}, fmt.Errorf("session: nil persistence binding")
 	}
 	if err := ctx.Err(); err != nil {
 		return DurableReceipt{}, err

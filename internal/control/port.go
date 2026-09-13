@@ -16,7 +16,7 @@ import (
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/skill"
 )
 
@@ -50,13 +50,13 @@ type Lifecycle interface {
 // type-assert it while legacy read/import DTOs remain available; new execution
 // commands must use this surface instead of manufacturing transcript paths.
 type IdentityLifecycle interface {
-	SessionRef() (sessionv3.SessionRef, bool)
-	SessionV3Service() *sessionv3.Service
+	SessionRef() (session.SessionRef, bool)
+	SessionV3Service() *session.Service
 	UsesExclusiveSessionV3() bool
-	BindFreshV3(context.Context, string) (sessionv3.SessionRef, error)
-	OpenV3(context.Context, sessionv3.SessionRef) (sessionv3.SessionRef, error)
-	ContinueLegacyV3(context.Context, string, string) (sessionv3.SessionRef, error)
-	ContinuePrototypeV3(context.Context, string) (sessionv3.SessionRef, error)
+	BindFreshV3(context.Context, string) (session.SessionRef, error)
+	OpenV3(context.Context, session.SessionRef) (session.SessionRef, error)
+	ContinueLegacyV3(context.Context, string, string) (session.SessionRef, error)
+	ContinuePrototypeV3(context.Context, string) (session.SessionRef, error)
 }
 
 // TurnControl covers driving a model turn and observing its run state: the
