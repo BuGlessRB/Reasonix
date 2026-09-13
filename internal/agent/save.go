@@ -1371,8 +1371,16 @@ func LoadSession(path string) (*Session, error) {
 }
 
 func loadSessionUnlocked(path string) (*Session, error) {
+	return loadSessionUnlockedWithContext(context.Background(), path, defaultSessionReplayLimits)
+}
+
+func loadSessionUnlockedWithLimits(path string, limits sessionReplayLimits) (*Session, error) {
+	return loadSessionUnlockedWithContext(context.Background(), path, limits)
+}
+
+func loadSessionUnlockedWithContext(ctx context.Context, path string, limits sessionReplayLimits) (*Session, error) {
 	hasher := newSessionTranscriptHasher()
-	res, err := loadSessionTranscript(context.Background(), path, defaultSessionReplayLimits, hasher)
+	res, err := loadSessionTranscript(ctx, path, limits, hasher)
 	if err != nil {
 		return nil, err
 	}
@@ -1433,6 +1441,19 @@ func loadSessionUnlocked(path string) (*Session, error) {
 		}
 	}
 	return s, nil
+}
+
+// LoadSessionForMigration reads a frozen legacy transcript without applying
+// the interactive 128 MiB/record-count replay budgets. Callers must first stop
+// writers and freeze the source bytes; ordinary UI and runtime opens must keep
+// using LoadSession so an untrusted or corrupt live file cannot exhaust memory.
+func LoadSessionForMigration(ctx context.Context, path string) (*Session, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	unlock := lockSessionSavePath(path)
+	defer unlock()
+	return loadSessionUnlockedWithContext(ctx, path, migrationSessionReplayLimits())
 }
 
 // SessionInfo summarises a saved session for the --resume picker: where it is on

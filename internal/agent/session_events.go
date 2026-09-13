@@ -83,6 +83,20 @@ var defaultSessionReplayLimits = sessionReplayLimits{
 	maxCollectionItems: sessionEventReplayMaxCollectionItems,
 }
 
+// migrationSessionReplayLimits removes cumulative interactive-history caps for
+// an already frozen migration source. The migration path is still expected to
+// move large payloads into its target store as it reads them; these values only
+// keep the legacy decoder from rejecting valid historical totals before that
+// conversion can happen.
+func migrationSessionReplayLimits() sessionReplayLimits {
+	return sessionReplayLimits{
+		maxBytes:           int64(^uint64(0)>>1) - 1,
+		maxRecords:         int(^uint(0) >> 1),
+		maxMessages:        int(^uint(0) >> 1),
+		maxCollectionItems: int(^uint(0) >> 1),
+	}
+}
+
 func sessionReplayLimitError(path, resource string, value, limit int64) error {
 	err := &SessionReplayLimitError{Path: path, Resource: resource, Value: value, Limit: limit}
 	slog.Warn("session: refusing unsafe event-log replay",

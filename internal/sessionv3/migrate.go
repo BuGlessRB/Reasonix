@@ -165,9 +165,9 @@ func parseFrozenLegacy(ctx context.Context, artifacts []frozenArtifact, sourcePa
 	frozenSourcePath := filepath.Join(dir, filepath.Base(sourcePath))
 	var session *agent.Session
 	if legacyHeadID == "" {
-		session, err = agent.LoadSession(frozenSourcePath)
+		session, err = agent.LoadSessionForMigration(ctx, frozenSourcePath)
 	} else {
-		session, err = agent.LoadSessionHeadReadOnly(frozenSourcePath, legacyHeadID)
+		session, err = agent.LoadSessionHeadForMigration(ctx, frozenSourcePath, legacyHeadID)
 	}
 	if err != nil {
 		return frozenLegacyParse{}, fmt.Errorf("read legacy transcript: %w", err)

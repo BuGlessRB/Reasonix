@@ -88,7 +88,20 @@ func (s *Session) SwitchHead(path, headID string) error {
 // appending a select marker or changing the source log's default head. New
 // runtimes use it to migrate historical heads into independent v3 sessions.
 func LoadSessionHeadReadOnly(path, headID string) (*Session, error) {
-	st, err := replayDAGForHeadOpReadOnly(path)
+	return loadSessionHeadReadOnlyWithLimits(context.Background(), path, headID, defaultSessionReplayLimits)
+}
+
+// LoadSessionHeadForMigration materializes one head from a frozen legacy DAG
+// without applying cumulative interactive-history replay budgets.
+func LoadSessionHeadForMigration(ctx context.Context, path, headID string) (*Session, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return loadSessionHeadReadOnlyWithLimits(ctx, path, headID, migrationSessionReplayLimits())
+}
+
+func loadSessionHeadReadOnlyWithLimits(ctx context.Context, path, headID string, limits sessionReplayLimits) (*Session, error) {
+	st, err := replayDAGForHeadOpReadOnlyWithLimits(ctx, path, limits)
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +115,10 @@ func LoadSessionHeadReadOnly(path, headID string) (*Session, error) {
 }
 
 func replayDAGForHeadOpReadOnly(path string) (*sessionDAGState, error) {
+	return replayDAGForHeadOpReadOnlyWithLimits(context.Background(), path, defaultSessionReplayLimits)
+}
+
+func replayDAGForHeadOpReadOnlyWithLimits(ctx context.Context, path string, limits sessionReplayLimits) (*sessionDAGState, error) {
 	probe, err := probeSessionEventLog(path)
 	if err != nil {
 		return nil, err
@@ -109,7 +126,7 @@ func replayDAGForHeadOpReadOnly(path string) (*sessionDAGState, error) {
 	if !probe.dag {
 		return nil, ErrSessionNotDAG
 	}
-	st, err := replaySessionDAG(context.Background(), store.SessionEventLog(path), defaultSessionReplayLimits)
+	st, err := replaySessionDAG(ctx, store.SessionEventLog(path), limits)
 	if err != nil {
 		return nil, err
 	}
