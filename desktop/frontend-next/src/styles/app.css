@@ -5344,7 +5344,8 @@
   /* Three levels read as three only when each starts further in than its
      parent. Machine and project both began at the rail's edge, so the tree had
      two levels drawn at one depth and a third under a guide line. */
-  .wsnode { padding-bottom: 2px; padding-left: 12px }
+  /* 项目是这一栏的工作单位，此前它们之间是 0px —— 一列贴在一起的行。 */
+  .wsnode { padding-bottom: 7px; padding-left: 12px }
   .wsnode[data-missing] .wsname { color: var(--err); text-decoration: line-through }
   /* 一个项目占两行：名字一行，它是什么一行。名字于是拿到整行宽度 —— 在 236px
      的栏里，名字、标签、计数、删除挤在一行时被截掉的永远是名字，而那正是这一
@@ -5774,14 +5775,21 @@
      remote below", and in this list they are one kind of thing. */
   .rmts { margin-top: 8px }
   .rmt { padding-bottom: 2px }
-  .rmt + .rmt { margin-top: 8px }
+  /* 机器是顶级分组。8px 在 264px 宽的栏里读不出是一道边界，只读得出「这两行
+     离得稍远」—— 和右栏那一处同源：组间要明显大于组内，空白才在分组。
+     本机那一组和第一台远程之间是同一道边界，所以吃同一个数。 */
+  .rmt + .rmt, .rail .scroll > .rmt:first-of-type { margin-top: 20px }
   /* 同一个节点形状：名字一行，它是哪台机器一行。此前 target 挤在名字右边争同
      一行宽度，而 ada@build.internal 这种长度一来，被截的是主机名。 */
   .machrow {
     display: grid; gap: 0 7px; align-items: center;
     grid-template-columns: 10px 6px minmax(0, 1fr) auto;
     padding: 6px 6px 7px 6px; border-radius: var(--r-sm); cursor: pointer;
-    font: var(--w-semi) var(--fs-ui) var(--ui); color: var(--muted);
+    /* 字重与颜色此前各说各的：机器名是全栏最粗的一档（700）却用 --muted，
+       项目名轻一档却用 --text。两个维度指向相反的次序，扫一眼读不出谁在上面。
+       这一栏里人找的是项目和会话，不是机器 —— 所以降的是字重，不是提颜色。
+       机器行还靠不缩进、状态圆点和「N 个项目」和项目行分开，够用。 */
+    font: var(--w-med) var(--fs-ui) var(--ui); color: var(--muted);
     transition: background var(--m-line), color var(--m-line);
   }
   .machrow:hover { background: var(--overlay); color: var(--text) }
