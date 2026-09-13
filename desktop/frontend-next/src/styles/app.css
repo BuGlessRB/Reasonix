@@ -256,7 +256,13 @@
      塞进 1px 宽、带底色的盒子里，笔画整个溢出去。 */
   .crumb .crumbsep { color: var(--ghost); }
   .crumb b { font-weight: var(--w-reg); color: var(--text); }
-  .crumb-proj { font-weight: var(--w-med); color: var(--muted) }
+  /* 收缩的是盒子，裁剪得自己做：min-width:0 让 .crumb 能收窄，但子元素默认
+     overflow:visible，于是长名字照样画到盒子外面，横穿顶栏压在右侧控件上。
+     这两条原先只写在「两栏都折叠」那一档里，而顶爆顶栏不挑窗口宽度。 */
+  .crumb-proj {
+    font-weight: var(--w-med); color: var(--muted);
+    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .chrome .r { margin-left: auto; display: flex; align-items: center; gap: 8px; }
   .btn {
     padding: 4px 11px; border-radius: var(--r-sm); border: 1px solid var(--border);
@@ -662,7 +668,11 @@
   @keyframes bumpup { 0% { transform: translateY(2px); opacity: .5 } 100% { transform: none; opacity: 1 } }
 
   /* 目标和度量都归了运行头卡，顶栏只剩身份：哪个项目、哪一份会话。 */
-  .chrome .crumb > .picker, .chrome .crumb > b, .chrome .crumb > .crumbsep { flex: none }
+  .chrome .crumb > .picker, .chrome .crumb > .crumbsep { flex: none }
+  .chrome .crumb > b {
+    flex: 0 1 auto; min-width: 4em; max-width: 48%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .chrome .badge { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--accent-ink); padding: 2.5px 8px; border-radius: var(--r-pill); background: var(--accent-wash); white-space: nowrap; flex: none }
   .chrome .badge[hidden] { display: none }
   .chrome .badge[data-err] { color: var(--err-ink); background: color-mix(in srgb, var(--err) 13%, transparent); white-space: normal; max-width: 24ch }
@@ -3150,12 +3160,6 @@
   [data-fold~="rail"][data-fold~="side"] .srail-m > i { max-width: 14px !important }
   [data-fold~="rail"][data-fold~="side"] .srail-peek {
     right: 26px; width: min(280px, calc(100vw - 54px));
-  }
-  [data-fold~="rail"][data-fold~="side"] .chrome .crumb > .crumb-proj {
-    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  [data-fold~="rail"][data-fold~="side"] .chrome .crumb > b {
-    flex: 0 1 auto; min-width: 4em; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   [data-fold~="side"] .chrome .goal,
   [data-fold~="side"] .chrome .crumb .sep:last-of-type { display: none }
