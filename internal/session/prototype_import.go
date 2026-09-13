@@ -205,7 +205,7 @@ func importFrozenPreview(ctx context.Context, frozen frozenPreview, targetRoot s
 		return PrototypeImportResult{}, err
 	}
 	finalManifest := Manifest{
-		SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, SessionID: targetID,
+		SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, ContentRoot: sharedContentRoot, SessionID: targetID,
 		CreatedAt: time.Now().UTC(), InheritedEvents: lastSequence, Source: &source,
 	}
 	if err := writeManifestFile(filepath.Join(tmp, "manifest.json"), finalManifest); err != nil {

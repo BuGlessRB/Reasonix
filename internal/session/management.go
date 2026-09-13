@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"reasonix/internal/filelock"
+	"reasonix/internal/sessioncontent"
 )
 
 // SetTitle updates mutable session metadata through the canonical event log.
@@ -160,6 +161,13 @@ func exportDirectory(ctx context.Context, source, destination string) error {
 	if err != nil {
 		return fmt.Errorf("validate export manifest: %w", err)
 	}
+	if err := copyExportContentClosure(ctx, source, tmp, manifest); err != nil {
+		return fmt.Errorf("export referenced content: %w", err)
+	}
+	manifest.ContentRoot = ".content-v1"
+	if err := writeManifestFile(filepath.Join(tmp, "manifest.json"), manifest); err != nil {
+		return err
+	}
 	if _, err := Replay(tmp, nil); err != nil {
 		return fmt.Errorf("validate export events: %w", err)
 	}
@@ -170,6 +178,46 @@ func exportDirectory(ctx context.Context, source, destination string) error {
 		return err
 	}
 	published = true
+	return nil
+}
+
+func copyExportContentClosure(ctx context.Context, source, target string, manifest Manifest) error {
+	if manifest.Codec != Codec {
+		return nil
+	}
+	log, err := os.Open(logPathForManifest(target, manifest))
+	if err != nil {
+		return err
+	}
+	defer log.Close()
+	refs := map[string]sessioncontent.Ref{}
+	if err := scanV4CommitFileRefs(ctx, log, 0, 1, nil, nil, func(_ int64, commit Commit) bool {
+		for _, event := range commit.Events {
+			if event.PayloadRef != nil {
+				key := fmt.Sprintf("%s:%d:%s", event.PayloadRef.Digest, event.PayloadRef.Bytes, event.PayloadRef.IndexDigest)
+				refs[key] = *event.PayloadRef
+			}
+		}
+		return true
+	}); err != nil {
+		return err
+	}
+	sourceContent := contentStoreForSessionDir(source)
+	targetContent := sessioncontent.New(filepath.Join(target, ".content-v1"))
+	for _, ref := range refs {
+		reader, err := sourceContent.Open(ctx, ref)
+		if err != nil {
+			return err
+		}
+		published, putErr := targetContent.Put(ctx, reader, sessioncontent.Metadata{MediaType: ref.MediaType, Name: ref.Name})
+		closeErr := reader.Close()
+		if putErr != nil || closeErr != nil {
+			return errors.Join(putErr, closeErr)
+		}
+		if published.Digest != ref.Digest || published.Bytes != ref.Bytes || published.IndexDigest != ref.IndexDigest {
+			return fmt.Errorf("%w: exported content identity changed", ErrDamagedStore)
+		}
+	}
 	return nil
 }
 

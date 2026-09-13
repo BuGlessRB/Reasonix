@@ -62,12 +62,15 @@ type Manifest struct {
 	SchemaVersion    int       `json:"schemaVersion"`
 	Codec            string    `json:"codec"`
 	StorageRevision  int       `json:"storageRevision,omitempty"`
+	ContentRoot      string    `json:"contentRoot,omitempty"`
 	SessionID        string    `json:"sessionId"`
 	CreatedAt        time.Time `json:"createdAt"`
 	WriterGeneration uint64    `json:"writerGeneration"`
 	InheritedEvents  uint64    `json:"inheritedEventCount,omitempty"`
 	Source           *Source   `json:"source,omitempty"`
 }
+
+const sharedContentRoot = "../.content-v1"
 
 type Source struct {
 	Path         string `json:"path"`
@@ -301,7 +304,7 @@ func CreateWithOptions(dir, sessionID string, opts OpenOptions) (*Session, error
 			_ = os.RemoveAll(dir)
 		}
 	}()
-	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, SessionID: sessionID, CreatedAt: time.Now().UTC()}
+	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, ContentRoot: sharedContentRoot, SessionID: sessionID, CreatedAt: time.Now().UTC()}
 	if err := writeManifestFile(filepath.Join(dir, "manifest.json"), manifest); err != nil {
 		return nil, err
 	}
@@ -481,7 +484,20 @@ func writeManifestFile(path string, manifest Manifest) error {
 }
 
 func contentStoreForSessionDir(dir string) *sessioncontent.Store {
-	return sessioncontent.New(filepath.Join(filepath.Dir(dir), ".content-v1"))
+	root := filepath.Join(filepath.Dir(dir), ".content-v1")
+	if data, err := os.ReadFile(filepath.Join(dir, "manifest.json")); err == nil {
+		var location struct {
+			ContentRoot string `json:"contentRoot"`
+		}
+		if json.Unmarshal(data, &location) == nil && strings.TrimSpace(location.ContentRoot) != "" {
+			candidate := filepath.Clean(filepath.Join(dir, location.ContentRoot))
+			relative, relErr := filepath.Rel(dir, candidate)
+			if relErr == nil && (relative == ".content-v1" || relative == sharedContentRoot) {
+				root = candidate
+			}
+		}
+	}
+	return sessioncontent.New(root)
 }
 
 func logPathForManifest(dir string, manifest Manifest) string {

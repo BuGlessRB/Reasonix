@@ -236,7 +236,7 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 		}
 	}()
 
-	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, SessionID: f.targetID, CreatedAt: time.Now().UTC(), Source: &f.source}
+	manifest := Manifest{SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, ContentRoot: sharedContentRoot, SessionID: f.targetID, CreatedAt: time.Now().UTC(), Source: &f.source}
 	if err := writeManifest(filepath.Join(tmp, "manifest.json"), manifest); err != nil {
 		return MigrationResult{}, err
 	}

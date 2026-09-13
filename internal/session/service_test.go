@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -447,7 +448,7 @@ func TestServiceExportAndDeleteAreSessionDirectoryAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, _ := json.Marshal(map[string]any{"message": provider.Message{ID: "m", Role: provider.RoleUser, Content: "exported"}})
+	payload, _ := json.Marshal(map[string]any{"message": provider.Message{ID: "m", Role: provider.RoleUser, Content: strings.Repeat("exported", 20_000)}})
 	if _, err := runtime.Session().AppendBatch(t.Context(), "message", []Event{{Kind: "message/complete", Payload: payload}}); err != nil {
 		t.Fatal(err)
 	}
@@ -470,6 +471,12 @@ func TestServiceExportAndDeleteAreSessionDirectoryAtomic(t *testing.T) {
 	}
 	if _, err := service.Query().Snapshot(t.Context(), ref); !errors.Is(err, os.ErrNotExist) && !errors.Is(err, ErrSessionNotFound) {
 		t.Fatalf("deleted session was revived by query cache: %v", err)
+	}
+	if err := os.RemoveAll(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Replay(exported, nil); err != nil {
+		t.Fatalf("export depended on the source content store: %v", err)
 	}
 }
 

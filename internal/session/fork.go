@@ -115,7 +115,7 @@ func writeForkChild(ctx context.Context, parentDir, parentID string, prefix []Co
 	}
 	digest := sha256.Sum256(log.Bytes())
 	manifest := Manifest{
-		SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, SessionID: childID, CreatedAt: time.Now().UTC(),
+		SchemaVersion: SchemaVersion, Codec: Codec, StorageRevision: StorageRevision, ContentRoot: sharedContentRoot, SessionID: childID, CreatedAt: time.Now().UTC(),
 		InheritedEvents: throughSequence,
 		Source:          &Source{Path: parentDir, Size: int64(log.Len()), SHA256: hex.EncodeToString(digest[:]), Version: Codec},
 	}
