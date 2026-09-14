@@ -134,6 +134,17 @@ Default is none — the code is the truth. Write one only when the **why** is
 non-obvious: a hidden constraint, a workaround anchored to something verifiable,
 an invariant the type system cannot express, or an external-protocol quirk.
 
+A comment states the constraint that holds now. It does not narrate how the code
+got here: a reader who has never seen an earlier version must lose nothing, and
+past tense about this code's own behaviour is the tell — an external protocol's
+history is not. "Ids alone do not answer it" is the rule; "ids alone were the
+wrong question, so the list went on reading as the model wrote it" is the
+incident behind the rule, and the incident belongs in the commit message. This
+outranks the surrounding style: much of the tree reads as prose and none of it
+is the standard. No gate reads register — telling narrative from a statement of
+constraint needs a phrase table, which is the one thing this repo does not
+build — so this rule is held by review.
+
 - Declaration doc: ≤5 lines. Package comment: ≤8 lines, or ≤40 in a `doc.go`.
 - Every other comment: ≤3 lines. Struct-field and trailing `//`: 1 line.
 - Never: restatements of the code, phase/stage narrative, incident or
@@ -143,13 +154,13 @@ an invariant the type system cannot express, or an external-protocol quirk.
   their length tracks how many cases they cover, not how many concerns they
   carry, so splitting one only scatters a subject's table across files.
 
-`go run ./tools/repolint` enforces all of it against a ratchet baseline: recorded
-debt is tolerated, anything new fails CI. Never widen the baseline to land a
-change — fix the code. `-update` lowers budgets freely and refuses to raise one
-without `-allow-widen`, so carrying debt through a rename or an extraction is
-asked for in the command and justified in the PR. A clean run also reports
-budget the tree stopped using: it is only reclaimed by an `-update`, and until
-then it is room a file can grow back into.
+`go run ./tools/repolint` enforces the budgets above against a ratchet baseline:
+recorded debt is tolerated, anything new fails CI. Never widen the baseline to
+land a change — fix the code. `-update` lowers budgets freely and refuses to
+raise one without `-allow-widen`, so carrying debt through a rename or an
+extraction is asked for in the command and justified in the PR. A clean run also
+reports budget the tree stopped using: it is only reclaimed by an `-update`, and
+until then it is room a file can grow back into.
 
 ## Context projection
 
