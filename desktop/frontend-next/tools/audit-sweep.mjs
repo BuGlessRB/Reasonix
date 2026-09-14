@@ -68,6 +68,11 @@ const P = `(() => {
   const path = (el) => { const p = []; let c = el;
     while (c && c !== document.body && p.length < 3) { p.push(c.tagName.toLowerCase() + (typeof c.className === "string" && c.className.trim() ? "." + c.className.trim().split(/\\s+/).slice(0,2).join(".") : "")); c = c.parentElement; }
     return p.reverse().join(">"); };
+  // A box past the viewport edge inside a scroller is reachable by scrolling to
+  // it, which is what .prefs-nav does at the narrowest window — an edge is only
+  // an edge when nothing between here and it scrolls.
+  const scrolled = (el) => { let c = el.parentElement; while (c && c !== document.body) {
+    const s = getComputedStyle(c); if (/auto|scroll/.test(s.overflowX) && c.scrollWidth > c.clientWidth + 1) return true; c = c.parentElement; } return false; };
   const behind = (el) => { let c = el; while (c && c !== document.body) { if (parseFloat(getComputedStyle(c).opacity) < .9) return true; c = c.parentElement; } return false; };
   const nm = (el) => (el.textContent||"").trim() || el.getAttribute("aria-label") || el.getAttribute("title") || (el.getAttribute("aria-labelledby") ? (document.getElementById(el.getAttribute("aria-labelledby"))?.textContent||"").trim() : "") || el.getAttribute("placeholder") || "";
   const out = { truncated: [], clippedY: [], offscreen: [], overflowX: [], unnamed: [], dupId: [], imgNoAlt: [], spill: [], contrast: [] };
@@ -116,14 +121,16 @@ const P = `(() => {
       if (el.scrollHeight > el.clientHeight + 1 && /hidden|clip/.test(s.overflowY) && s.webkitLineClamp === "none") out.clippedY.push(path(el) + " | " + txt.slice(0, 44));
     }
     const r = el.getBoundingClientRect();
-    if (s.position !== "fixed" && r.width > 4 && !behind(el)) {
+    if (s.position !== "fixed" && r.width > 4 && !behind(el) && !scrolled(el)) {
       if (r.right > window.innerWidth + 1) out.offscreen.push(path(el) + " right=" + Math.round(r.right));
       if (r.left < -1) out.offscreen.push(path(el) + " left=" + Math.round(r.left));
     }
   }
   if (document.documentElement.scrollWidth > window.innerWidth + 1) out.overflowX.push("scrollWidth=" + document.documentElement.scrollWidth);
   for (const el of document.querySelectorAll('button,a[href],[role="button"],[role="tab"],input:not([type=hidden]),select,textarea'))
-    if (vis(el) && !nm(el)) out.unnamed.push(path(el));
+    // aria-hidden takes an element out of the accessibility tree on purpose: the
+    // row is the control and the twist beside it is decoration.
+    if (vis(el) && !el.closest('[aria-hidden="true"],[inert]') && !nm(el)) out.unnamed.push(path(el));
   const seen = new Map();
   for (const el of document.querySelectorAll("[id]")) seen.set(el.id, (seen.get(el.id)||0)+1);
   for (const [i, n] of seen) if (n > 1) out.dupId.push(i + " x" + n);
