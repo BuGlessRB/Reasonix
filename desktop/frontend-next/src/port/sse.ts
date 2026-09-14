@@ -258,7 +258,10 @@ export class SsePort extends SseTheme implements AgentPort {
   // launch that booted from no update has nothing to retire.
   async acknowledgeLaunchHealth(): Promise<void> {
     try {
-      await fetch("/update/health", { method: "POST", credentials: "same-origin" });
+      // The CSRF guard refuses a POST that is not application/json, and refuses
+      // it the way a missing route answers — so leaving the header off made this
+      // a call that could never land and, being silent, never said so.
+      await fetch("/update/health", { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin" });
     } catch {
       // Offline, or the kernel went away. The next launch asks again.
     }
@@ -595,7 +598,7 @@ export class SsePort extends SseTheme implements AgentPort {
       const off = bus.EventsOn(this.rt ? `${WAILS_EVENT}:${this.rt}` : WAILS_EVENT, feed);
       // Subscribing to the bus is not the handshake /events is: ask the shell
       // to replay whatever prompt is already waiting for an answer.
-      void fetch(this.base + WAILS_REPLAY, { method: "POST" }).catch(() => {});
+      void fetch(this.base + WAILS_REPLAY, { method: "POST", headers: { "content-type": "application/json" } }).catch(() => {});
       detach = off;
     } else {
       // EventSource resumes on its own: it reconnects carrying the last id it
