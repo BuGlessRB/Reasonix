@@ -115,7 +115,7 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 		return
 	} // construction has not finished
 	c.mu.Lock()
-	running, finishing, closed, cancelling, path := c.running, c.finishing, c.closed, c.canceling, c.sessionPath
+	running, finishing, closed, cancelling, path := c.bodyActiveLocked(), c.finalizingLocked(), c.closed, c.cancelRequestedLocked(), c.sessionPath
 	c.mu.Unlock()
 	_, v3Runtime, exclusiveSession := c.v3Binding()
 	var v3RuntimeSnapshot session.RuntimeSnapshot
@@ -172,8 +172,12 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 		next.Todos = []event.Todo{}
 	}
 	setRuntimePhase(&next, exclusiveSession, v3Runtime, v3RuntimeSnapshot, running, finishing, closed, cancelling)
-	next.Running = running || finishing
-	next.CancelRequested = cancelling
+	// Close is immediately authoritative for the public controller view even
+	// while the session runtime remains in its private finalizing barrier. The
+	// latter keeps commit authority alive until TurnDone is durable; exposing it
+	// here would make a closed controller look runnable again.
+	next.Running = (running || finishing) && !closed
+	next.CancelRequested = cancelling && !closed
 	identities, promptRevision := c.promptOwner.IdentitiesRevision()
 	next.PendingPrompt = len(identities) > 0
 	next.Interactions = make([]event.PendingInteraction, len(identities))
@@ -287,12 +291,18 @@ func runtimeActivity(state event.RuntimeStateSnapshot, e event.Event, activity s
 
 func setRuntimePhase(next *event.RuntimeStateSnapshot, exclusiveSession bool, v3Runtime *session.Runtime, v3RuntimeSnapshot session.RuntimeSnapshot, running, finishing, closed, cancelling bool) {
 	next.Phase = "idle"
+	if closed {
+		next.Phase = "closed"
+		return
+	}
 	if exclusiveSession && v3Runtime != nil {
 		switch v3RuntimeSnapshot.Phase {
 		case session.RuntimeRunning:
 			next.Phase = "executing"
 		case session.RuntimeCancelling:
 			next.Phase = "cancelling"
+		case session.RuntimeFinalizing:
+			next.Phase = "finishing"
 		case session.RuntimeRecoveryRequired:
 			next.Phase = "recovery_required"
 		case session.RuntimeClosed:
@@ -357,5 +367,5 @@ func setRuntimeRecovery(next *event.RuntimeStateSnapshot, v3Snapshot session.Sna
 func (c *Controller) runtimeBoundaryStable(running, finishing, closed, cancelling bool, path string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return running == c.running && finishing == c.finishing && closed == c.closed && cancelling == c.canceling && path == c.sessionPath
+	return running == c.bodyActiveLocked() && finishing == c.finalizingLocked() && closed == c.closed && cancelling == c.cancelRequestedLocked() && path == c.sessionPath
 }

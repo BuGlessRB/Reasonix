@@ -274,11 +274,24 @@ func (c *Controller) replaceSessionModelContext(ctx context.Context, messages []
 	}
 	digest := sha256.Sum256(payload)
 	c.turnEvents.commitMu.Lock()
-	_, err = c.appendSessionBatch(ctx, store, session.Batch{
+	batch := session.Batch{
 		OperationID: fmt.Sprintf("model-context:%x", digest[:16]),
 		TurnID:      snapshot.Projection.TurnID,
 		Events:      events,
-	})
+	}
+	_, runtime, exclusive := c.v3Binding()
+	if exclusive && runtime != nil && runtime.Session() == store && !runtime.OwnsExecution(c.ExecutionGeneration()) {
+		prepared, prepareErr := store.PrepareBatchContext(ctx, batch.OperationID, batch)
+		if prepareErr == nil {
+			if previous := c.turnEvents.pendingExecutionCommit; previous != nil {
+				previous.Release()
+			}
+			c.turnEvents.pendingExecutionCommit = &prepared
+		}
+		err = prepareErr
+	} else {
+		_, err = c.appendSessionBatch(ctx, store, batch)
+	}
 	c.turnEvents.commitMu.Unlock()
 	if err != nil {
 		return err
@@ -333,7 +346,7 @@ func (c *Controller) sessionEventStore() *session.Session {
 // until the tab's final lease handoff succeeds.
 func (c *Controller) sessionEventCommitAllowed() bool {
 	if _, runtime, _ := c.v3Binding(); runtime != nil {
-		return true
+		return runtime.OwnsExecution(c.ExecutionGeneration())
 	}
 	if c == nil || !c.managedSessionEvents.Load() {
 		return true
@@ -379,18 +392,24 @@ func (c *Controller) appendSessionEventLocked(ctx context.Context, e event.Event
 		}
 		return nil
 	}
-	projection := store.ExecutionSnapshot().Projection
+	snapshot := store.ExecutionSnapshot()
+	projection := snapshot.Projection
 	if projection.Recovery != nil && projection.Recovery.State == "recovery_required" && e.Kind != event.TurnDone {
-		// The cancelled activity no longer owns business-state mutation. Its
-		// eventual return is observed by the runtime watchdog; late semantic
-		// output must never reactivate tools, interactions, Goal, or Todo.
+		// Recovery has sealed business-state mutation. The watchdog observes
+		// the uncooperative worker; late semantic output must never reactivate
+		// tools, interactions, Goal, or Todo.
 		return nil
+	}
+	if e.TurnID == "" {
+		if _, turnID, active := c.currentTurnToken(); active {
+			e.TurnID = turnID
+		}
 	}
 	events, err := c.v3EventsFor(e, projection)
 	if err != nil || len(events) == 0 {
 		return err
 	}
-	op := fmt.Sprintf("runtime:%s:%d:%d", e.TurnID, e.Sequence, e.Kind)
+	op := fmt.Sprintf("runtime:%s:%d:%d", e.TurnID, snapshot.EventSequence+1, e.Kind)
 	_, err = c.appendSessionBatch(ctx, store, session.Batch{OperationID: op, TurnID: e.TurnID, Events: events})
 	if err != nil {
 		return fmt.Errorf("%w: %w", turnevent.ErrTurnLedgerUnavailable, err)

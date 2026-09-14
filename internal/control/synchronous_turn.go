@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"reasonix/internal/event"
-	"reasonix/internal/extension"
+	"reasonix/internal/session"
 )
 
 // runSynchronousTurn owns the blocking transport lifecycle. Durable steer
@@ -23,62 +23,59 @@ func (c *Controller) runSynchronousTurn(
 	if ledger := c.turnEventLedger(); ledger != nil && ledger.CurrentStatus() == event.TurnRecoveryRequired {
 		return ErrRecoveryRequired
 	}
-	ctx, cancel := context.WithCancel(extension.ContextWithRuntimeOwner(ctx, c.RuntimeOwner()))
+	parent := ctx
 	c.mu.Lock()
 	// Finishing is part of the gate: TurnDone is still fanning out. Closed
 	// seals a torn-down controller. Blocking callers get an error rather than
 	// parking because they already own and enforce the request boundary.
-	if c.running || c.finishing || c.rotating || c.closed {
+	if c.bodyActiveLocked() || c.finalizingLocked() || c.rotating || c.closed || c.recoveryRequiredLocked() {
 		c.mu.Unlock()
-		cancel()
 		return ErrTurnRunning
 	}
 	if c.rejectDrainingGenerationLocked() {
 		c.mu.Unlock()
-		cancel()
 		c.emitDrainingNotice()
 		return ErrRuntimeDraining
 	}
-	c.cancel = cancel
-	c.activeDone = make(chan struct{})
-	c.turnBoundary.beginIdle()
-	c.running = true
-	c.canceling = false
-	c.mu.Unlock()
-	c.refreshRuntimeState(event.Event{})
-	runtimeCtx, runtimeActivity, runtimeErr := c.beginSessionRuntimeActivity(ctx, "turn")
-	if runtimeErr != nil {
-		finish := func() {
-			c.mu.Lock()
-			c.running = false
-			if c.activeDone != nil {
-				close(c.activeDone)
-				c.activeDone = nil
-			}
-			c.cancel = nil
-			c.canceling = false
-			c.turnBoundary.endIdle()
-			c.mu.Unlock()
-			c.refreshRuntimeState(event.Event{})
-			cancel()
-		}
-		finish()
-		return runtimeErr
+	ctx, cancel, admitted := c.startTurnLocked(ctx, queuedTurn{})
+	if !admitted {
+		c.mu.Unlock()
+		c.emitDrainingNotice()
+		return ErrRuntimeDraining
 	}
-	ctx = runtimeCtx
+	c.mu.Unlock()
+	if parent != nil {
+		stop := context.AfterFunc(parent, func() { c.signalTurnCancel() })
+		defer stop()
+	}
+	c.refreshRuntimeState(event.Event{})
 	finish := func() {
 		c.mu.Lock()
-		c.running = false
-		if c.activeDone != nil {
-			close(c.activeDone)
-			c.activeDone = nil
+		if c.turns.done != nil {
+			close(c.turns.done)
+			c.turns.done = nil
 		}
-		c.cancel = nil
-		c.canceling = false
-		c.turnBoundary.endIdle()
+		c.turns.cancel = nil
+		c.turns.cancelRequested = false
+		closing := c.closed
+		recovery := c.turns.phase == session.RuntimeRecoveryRequired
+		c.turns.finishingBound.end()
+		c.turns.finishingBound.endIdle()
+		if !recovery {
+			c.turns.lastToken = c.turns.token
+			if closing {
+				c.turns.phase = session.RuntimeClosed
+			} else {
+				c.turns.phase = session.RuntimeIdle
+			}
+			c.turns.turnID = ""
+			c.noteExecutionLocked(session.RuntimeIdle, "")
+		}
 		c.mu.Unlock()
+		if closing {
+			c.finalizeControllerClose()
+		}
 		c.refreshRuntimeState(event.Event{})
-		c.finishSessionRuntimeActivity(runtimeActivity)
 		c.kickGoalDriver()
 		cancel()
 	}
@@ -99,6 +96,22 @@ func (c *Controller) runSynchronousTurn(
 	// turn by itself.
 	run = c.prepareTurnAdmission(run)
 	runErr := run(ctx)
+	// Keep the execution binding through the synchronous terminal commit just
+	// like the asynchronous loop. Close may make the public controller view
+	// closed here, but it cannot release the ledger/session underneath TurnDone.
+	c.mu.Lock()
+	if c.turns.done != nil {
+		close(c.turns.done)
+		c.turns.done = nil
+	}
+	c.turns.cancel = nil
+	if c.turns.phase != session.RuntimeRecoveryRequired {
+		c.turns.phase = session.RuntimeFinalizing
+		c.turns.finishingBound.begin(true)
+		c.noteExecutionLocked(session.RuntimeFinalizing, "turn")
+	}
+	c.mu.Unlock()
+	c.refreshRuntimeState(event.Event{})
 	if ledger := c.turnEventLedger(); ledger != nil && ledger.ActiveTurnID() != "" && !ledger.CurrentStatus().Terminal() {
 		cancelled := errors.Is(ctx.Err(), context.Canceled)
 		done := event.Event{Kind: event.TurnDone, Err: runErr, Cancelled: cancelled, Outcome: turnOutcome(runErr)}

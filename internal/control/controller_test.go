@@ -32,6 +32,7 @@ import (
 	"reasonix/internal/plugin"
 	"reasonix/internal/pluginpkg"
 	"reasonix/internal/provider"
+	"reasonix/internal/session"
 	"reasonix/internal/skill"
 	"reasonix/internal/store"
 	"reasonix/internal/tool"
@@ -2363,7 +2364,7 @@ func TestNewSessionRefusesWhileTurnRunning(t *testing.T) {
 	c := newOwnedTestController(t, Options{Executor: exec, SystemPrompt: "sys", SessionDir: dir, SessionPath: path, Label: "test"})
 
 	c.mu.Lock()
-	c.running = true
+	c.turns.phase = session.RuntimeRunning
 	c.mu.Unlock()
 
 	if err := c.NewSession(); err == nil {
@@ -2377,7 +2378,7 @@ func TestNewSessionRefusesWhileTurnRunning(t *testing.T) {
 	}
 
 	c.mu.Lock()
-	c.running = false
+	c.turns.phase = session.RuntimeIdle
 	c.mu.Unlock()
 	if err := c.NewSession(); err != nil {
 		t.Fatalf("NewSession after the turn stopped: %v", err)
@@ -2528,7 +2529,7 @@ func TestSessionMutationsRefuseWhileRotating(t *testing.T) {
 	// Conversely: while a turn runs, every mutation is refused with its own
 	// message and the gate cannot be claimed.
 	c.mu.Lock()
-	c.running = true
+	c.turns.phase = session.RuntimeRunning
 	c.mu.Unlock()
 	if err := c.beginRotation(); !errors.Is(err, errTurnRunningRotation) {
 		t.Fatalf("beginRotation while running = %v, want errTurnRunningRotation", err)
@@ -4516,11 +4517,9 @@ func TestRunGuardedPanicEmitsTurnDone(t *testing.T) {
 	}
 done:
 
-	c.mu.Lock()
-	running := c.running
-	c.mu.Unlock()
-	if running {
-		t.Fatal("c.running should be false after panic recovery")
+	waitIdle(t, c)
+	if c.Running() {
+		t.Fatal("controller still running after panic recovery")
 	}
 }
 
