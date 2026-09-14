@@ -2474,7 +2474,7 @@
     width: 100%; border: 0; background: transparent; color: var(--text);
     font-family: var(--ui); font-size: var(--read, var(--fs-lead)); font-weight: var(--w-reg); line-height: 1.6;
     resize: none; outline: none; padding: 0;
-    max-height: min(calc(var(--read, 13.5px) * 14.4), calc(32vh / var(--zoom, 1)));
+    max-height: min(calc(var(--read, 15px) * 14.4), calc(32vh / var(--zoom, 1)));
     overflow-x: hidden; overflow-y: auto;
   }
   .compose textarea::placeholder { color: var(--ghost) }
@@ -3201,7 +3201,7 @@
      the variable: when type rose, fixed chrome took a few more pixels at short
      heights, and what yields has to stay this. */
   [data-fold~="short"] .compose { --aux-budget: min(calc(24vh / var(--zoom, 1)), 176px) }
-  [data-fold~="short"] .compose textarea { max-height: min(calc(var(--read, 13.5px) * 9.6), calc(24vh / var(--zoom, 1))) }
+  [data-fold~="short"] .compose textarea { max-height: min(calc(var(--read, 15px) * 9.6), calc(24vh / var(--zoom, 1))) }
   [data-fold~="short"] .slashmenu { max-height: min(calc(38vh / var(--zoom, 1)), 220px) }
   [data-fold~="short"][data-fold~="side"] .side { max-height: calc(26vh / var(--zoom, 1)) }
   /* 运行头收成一行：说明和时间戳是第二眼才读的，标题和状态记号不是。同一套规则

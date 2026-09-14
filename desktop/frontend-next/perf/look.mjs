@@ -57,9 +57,9 @@ const readPx = () =>
 const rootVar = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
 
 const base = await readPx();
-// 默认字号按界面语言分档（readDefault(): 中文 14.5、西文 13.5）—— 写死一个常数
+// 默认字号按界面语言分档（readDefault(): 中文 16、西文 15）—— 写死一个常数
 // 的时候，这条在中文界面上一直是红的，而红的是断言不是产品。
-const wantRead = (await page.evaluate(() => document.documentElement.lang)).startsWith("zh") ? 14.5 : 13.5;
+const wantRead = (await page.evaluate(() => document.documentElement.lang)).startsWith("zh") ? 16 : 15;
 check("默认正文字号", Math.abs(base - wantRead) < 0.6, `${base}px（该是 ${wantRead}px）`);
 
 // 打开设置 → 外观

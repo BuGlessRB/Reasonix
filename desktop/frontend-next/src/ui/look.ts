@@ -3,23 +3,23 @@ import { current } from "../i18n";
 import { refresh as refreshWidth } from "./viewport";
 
 /** 正文起点。汉字同字号下笔画更密，中文高一档。求值留到调用时：模块加载早于
- *  i18n 定语言。 */
-export const readDefault = (): number => (current() === "zh" ? 14.5 : 13.5);
+ *  i18n 定语言。这一档和 --doc 一起定行长：两个数只有一起看才有意义。 */
+export const readDefault = (): number => (current() === "zh" ? 16 : 15);
 
 /** 字号档位。中间那档就是 readDefault()，两边一起改。 */
 export const readSteps = (): [number, string][] =>
   current() === "zh"
     ? [
-        [12.5, "小"],
-        [14.5, "标准"],
-        [16, "大"],
-        [18, "更大"],
+        [14.5, "小"],
+        [16, "标准"],
+        [18, "大"],
+        [20, "更大"],
       ]
     : [
-        [12, "小"],
-        [13.5, "标准"],
-        [15, "大"],
-        [17, "更大"],
+        [13.5, "小"],
+        [15, "标准"],
+        [17, "大"],
+        [19, "更大"],
       ];
 
 // The user's own settings, applied after a pack so they win: a pack is a
