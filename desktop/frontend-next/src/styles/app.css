@@ -1527,7 +1527,9 @@
   .call > .g .sym {
     width: 28px; height: 28px; margin-top: 5px; display: grid; place-items: center;
     border-radius: var(--r-lg); font: var(--w-med) var(--fs-meta)/1 var(--mono); color: var(--faint);
-    background: var(--overlay); flex: none;
+    /* 无底色是常态。染色的那几类（net/write/ask/deleg/mcp）各自在下面取回自己的
+       底，所以底色本身成了「这一步不只是读」的信号，而不是每张卡都有的装饰。 */
+    background: transparent; flex: none;
     box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent), var(--lit);
   }
   .call > .g .sym svg {
@@ -1609,8 +1611,12 @@
     background: linear-gradient(color-mix(in srgb, var(--border) 88%, transparent) 0 0)
                 no-repeat 50% 0 / 2px 16px;
   }
-  .call[data-k="say"] > .c { padding: var(--y-panel) 0 }
-  .call[data-k="say"] > .c > .out > .txt { color: var(--text); line-height: 1.78 }
+  .call[data-k="say"] > .c { padding: var(--y-say) 0 }
+  /* 回答和机器输出此前只差颜色与行高，同字号一列扫下去两者等重。一档字级把
+     「这是答案」和「这是过程」分开；机器输出留在 --read，所以只动了一边。 */
+  .call[data-k="say"] > .c > .out > .txt {
+    color: var(--text); line-height: 1.78; font-size: calc(var(--read) * 1.08);
+  }
 
   /* 中间做过的事是扫的，不是读的：一步一行，参数长了省略，而不是把这一行折成
      两行 —— 折行让同一类卡在一屏里高矮不齐，层次就得逐张对齐才看得出来。
@@ -1676,6 +1682,10 @@
   .call > .g .sym[data-done] { animation: symdone var(--m-panel) }
   @keyframes symdone { 0% { transform: scale(1) } 38% { transform: scale(.86) } 100% { transform: scale(1) } }
   .hl .nm { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
+  /* 一次读取的标题和一次写入的标题此前同重。有后果的那几类留在 --w-med，其余
+     退一档：一列卡扫下去，重的那几行就是这一轮真正动了什么的地方。 */
+  .call:not([data-k="net"], [data-k="write"], [data-k="ask"], [data-k="deleg"], [data-k="mcp"], [data-k="me"], [data-k="say"])
+    > .c .hl .nm { font-weight: var(--w-reg) }
   /* A tool's headline names the call, which is the only way to know which one
      it is. The turn anchor and the answer had one too, and it named the
      speaker — which the mark in the gutter has already said, a column to the
@@ -1955,6 +1965,12 @@
 
   /* 一个输出预算,三种形态共用:裁到固定高度而不是塌成一行标签,内容始终可扫 */
   .out-clip { position: relative }
+  /* 跑成功且已结算的调用，输出只留一眼的高度。一条转录读起来该是对话，机器痕迹
+     不该占掉九成的高 —— 要看的那一条自己点开，Clip 按调用记着，不会再问第二次。
+     不收到零行：只剩一个按钮时，你不知道里面是什么；两行留下「它跑出来是这个
+     形状」。失败的和正在跑的不收 —— 一次失败的输出正是这一步唯一说得出话的地方。 */
+  .call:not([data-running]):not(:has(> .c > .hl .fail)) .out-clip { --out-peek: 5.5rem }
+  .call:not([data-running]):not(:has(> .c > .hl .fail)) .out-clip:not([data-open])::after { height: 2rem }
   .out-body {
     max-height: var(--out-peek, 16rem); overflow: auto;
     transition: max-height var(--t-panel) var(--ease-out);
@@ -5161,16 +5177,20 @@
                          100% { opacity: 0; stroke-dashoffset: -20 } }
 
   /* 高光沿字面扫过一趟。渐变本身就是字的填充，所以 color 必须透明。 */
+  /* 名字用这个产品自己的母语来写。Inter 200 是任何一家 AI 产品都会伸手去拿的
+     那一档；等宽是编码代理自己的字，而且它已经在包里，一个字节都不必多加。 */
   .oobe-brand {
-    margin: 26px 0 0; font: 200 44px/1.15 var(--ui); letter-spacing: .012em; white-space: nowrap;
+    margin: 26px 0 0; font: 300 40px/1.15 var(--mono); letter-spacing: -.02em; white-space: nowrap;
     background: linear-gradient(100deg,
       #7C766A 0%, #7C766A 34%, #FFEFCB 45%, #FFFFFF 50%, #FFEFCB 55%, #7C766A 66%, #7C766A 100%);
     background-size: 260% 100%; background-position: 130% 0;
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
+  /* 一行 .34em 字距的全大写小标是「不论主题都长这样」的那种 chrome。它是一句
+     话，不是一枚徽章 —— 照写就行。 */
   .oobe-sub {
-    margin: 12px 0 0; font: 300 var(--fs-lead) var(--ui); letter-spacing: .34em;
-    text-transform: uppercase; color: rgb(255 255 255 / .34);
+    margin: 14px 0 0; font: 400 var(--fs-ui) var(--mono); letter-spacing: .01em;
+    color: rgb(255 255 255 / .38);
   }
   .oobe[data-play] .oobe-brand {
     opacity: 0;
@@ -6167,6 +6187,15 @@
   .ctxnote[data-lvl="warn"] { color: var(--warn-ink) }
   /* 分母是可改的，所以虚线一直在 —— hover 才显形的入口，读起来是"这里没东西"。 */
   .drow .v .ctxq { display: inline }
+  /* 这一栏读起来是一份清单，因为它排版上就是：总量、折叠点、容量和五个类别名
+     全在 13px，没有一处告诉你先看哪儿。层次不靠把五样东西缩小来造——中文字面
+     在 11px 就开始糊——而是让该看的那一个离开队伍。条同时长高：一根 6px 的条
+     是装饰，读不出剩多少。 */
+  .block[data-b="ctx"] > .drow:first-of-type .v .ctxq {
+    font: var(--w-semi) var(--fs-display)/1.1 var(--mono);
+    font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+  }
+  .block[data-b="ctx"] .ctxbar { height: 10px; margin-top: 10px }
   /* Each ceiling carries its own share, set apart from the figure it is a share
      of: read together they would be one number, and these are two answers. */
   .drow .v .ctxq em { font-style: normal; margin-left: 7px; color: var(--ghost) }
