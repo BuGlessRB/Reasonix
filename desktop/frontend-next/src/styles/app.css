@@ -2204,6 +2204,10 @@
   .opt[data-on] .mark::after, .prow[data-on] .mark::after { opacity: 1 }
 
   .opt .txt, .prow .tx { min-width: 0 }
+  /* .seg does not shrink, so a row that pairs one with a label shrank the label
+     instead and ran its text under the first segment. The group wraps now. */
+  .prow:has(> .seg) > .tx { flex: none }
+  .prow > .seg { flex: 0 1 auto; min-width: 0 }
   .opt .lb, .prow .lb { display: flex; align-items: baseline; gap: 8px; font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
   .opt .rec { font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--accent-ink); flex: none }
   .opt .ds, .prow .ds { display: block; margin-top: 3px; font-size: var(--fs-ui); line-height: 1.55; color: var(--muted) }
