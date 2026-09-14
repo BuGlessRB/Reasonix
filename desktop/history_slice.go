@@ -20,6 +20,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
+	"reasonix/internal/session"
 	"reasonix/internal/store"
 )
 
@@ -320,11 +321,74 @@ func (a *App) HistorySliceForTab(tabID string, req HistorySliceRequest) HistoryS
 		}
 		return slice
 	}
+	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
+		ref, bound := identity.SessionRef()
+		service := identity.SessionService()
+		if !bound || service == nil || service.Query() == nil {
+			return failedHistorySlice("canonical session identity is unavailable")
+		}
+		slice, err := a.canonicalHistorySlice(service.Query(), ref, sessionDir, sessionPath, req)
+		if err != nil {
+			slog.Debug("desktop: canonical history slice failed", "session", ref.SessionID, "err", err)
+			return failedHistorySlice(err.Error())
+		}
+		return slice
+	}
 	if p := ctrl.SessionPath(); strings.TrimSpace(p) != "" {
 		sessionPath = p
 		sessionDir = controllerSessionDir(ctrl)
 	}
 	return a.liveHistorySlice(ctrl, sessionDir, sessionPath, req)
+}
+
+func (a *App) canonicalHistorySlice(query *session.Query, ref session.SessionRef, sessionDir, sessionPath string, req HistorySliceRequest) (HistorySlice, error) {
+	src, err := canonicalHistorySliceSource(query, ref)
+	if err != nil {
+		return emptyHistorySlice(), err
+	}
+	resolver := sessionDisplayResolver(sessionDir, sessionPath)
+	slice, err := a.pageHistorySliceSource(src, req, resolver, nil, nil, "")
+	if err != nil {
+		return emptyHistorySlice(), err
+	}
+	slice.Source = "canonical-index"
+	return slice, nil
+}
+
+func canonicalHistorySliceSource(query *session.Query, ref session.SessionRef) (*historySliceSource, error) {
+	shape, err := query.HistoryShape(context.Background(), ref)
+	if err != nil {
+		return nil, err
+	}
+	turns := make([]int, len(shape.Positions))
+	roles := make([]provider.Role, len(shape.Positions))
+	for i, position := range shape.Positions {
+		if position.Position != int64(i+1) {
+			return nil, fmt.Errorf("canonical history position %d, want %d", position.Position, i+1)
+		}
+		turns[i] = position.VisibleTurn
+		roles[i] = position.Role
+	}
+	snapshot := shape.SnapshotSequence
+	src := &historySliceSource{
+		sessionID:  ref.SessionID,
+		total:      len(shape.Positions),
+		turns:      turns,
+		roles:      roles,
+		totalTurns: shape.TotalTurns,
+		revision:   int64(snapshot),
+		revKnown:   true,
+		digest:     canonicalHistoryDigest(ref.SessionID, snapshot),
+		epoch:      session.StorageRevision,
+		fetch: func(lo, hi int) ([]provider.Message, error) {
+			return query.HistoryWindow(context.Background(), ref, snapshot, lo, hi)
+		},
+	}
+	return src, nil
+}
+
+func canonicalHistoryDigest(sessionID string, snapshot uint64) string {
+	return fmt.Sprintf("v4:%s:%d", sessionID, snapshot)
 }
 
 // liveHistorySlice pages a tab with a running controller. The display index
@@ -1136,6 +1200,31 @@ func (a *App) HistoryContentForTab(tabID string, ref HistoryContentRef, chunkInd
 		sessionPath = tab.currentSessionPath()
 	}
 	a.mu.RUnlock()
+	if ctrl != nil {
+		if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
+			sessionRef, bound := identity.SessionRef()
+			service := identity.SessionService()
+			if !bound || service == nil || service.Query() == nil || entryIDSession(ref.EntryID) != sessionRef.SessionID {
+				out.Stale = true
+				return out
+			}
+			src, err := canonicalHistorySliceSource(service.Query(), sessionRef)
+			if err != nil || !src.identityMatches(ref.Revision, ref.RevKnown, ref.Digest) {
+				out.Stale = true
+				return out
+			}
+			value, found, stale := a.historyFieldValueForSource(src, msgIndex, sub, ref, sessionDisplayResolver(sessionDir, sessionPath), nil, nil)
+			if stale || !found || len(value) != ref.Size {
+				out.Stale = true
+				return out
+			}
+			data, chunks := historyContentChunkAt(value, chunkIndex)
+			out.Chunks = chunks
+			out.Data = data
+			out.Done = chunkIndex >= chunks-1
+			return out
+		}
+	}
 	if ctrl != nil {
 		if p := ctrl.SessionPath(); strings.TrimSpace(p) != "" {
 			sessionPath = p

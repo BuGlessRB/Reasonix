@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"reasonix/internal/boot"
@@ -11,6 +12,59 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/session"
 )
+
+func TestDesktopHistorySliceUsesCanonicalDurableIndex(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	model, _ := configureSwitchableDefaultModels(t)
+	app := NewApp()
+	app.ctx = context.Background()
+	root := t.TempDir()
+	dir := desktopSessionDir(root)
+	service := app.desktopSessionService(dir)
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "canonical-history"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendSessionTestMessage(t, runtime, "history-user", provider.Message{ID: "history-user", Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "durable user turn"})
+
+	ctrl, err := app.buildTabControllerBoot(app.ctx, boot.Options{Model: model, WorkspaceRoot: root, SessionDir: dir, Sink: event.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ctrl.(control.IdentityLifecycle).OpenSession(t.Context(), runtime.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	large := "durable assistant " + strings.Repeat("x", historyInlineRefThreshold+1024)
+	// Append after the controller's agent projection was created. The legacy
+	// live-history path cannot see this message; the canonical query can.
+	appendSessionTestMessage(t, runtime, "history-assistant", provider.Message{ID: "history-assistant", Role: provider.RoleAssistant, Content: large})
+	tab := &WorkspaceTab{ID: "canonical-history-tab", Scope: "project", WorkspaceRoot: root, SessionID: runtime.Ref().SessionID, Ready: true, Ctrl: ctrl, sink: &tabEventSink{tabID: "canonical-history-tab", app: app}, disabledMCP: map[string]ServerView{}}
+	app.tabs = map[string]*WorkspaceTab{tab.ID: tab}
+	app.tabOrder = []string{tab.ID}
+	app.activeTabID = tab.ID
+	t.Cleanup(func() { ctrl.Close() })
+
+	page := app.HistorySliceForTab(tab.ID, HistorySliceRequest{Turns: 12, Entries: 120, Bytes: 512 << 10})
+	if page.Error != "" || page.Source != "canonical-index" {
+		t.Fatalf("canonical history page = source %q error %q", page.Source, page.Error)
+	}
+	if page.TotalTurns != 1 || len(page.Entries) != 2 {
+		t.Fatalf("canonical history shape = turns %d entries %d, want 1/2", page.TotalTurns, len(page.Entries))
+	}
+	assistant := page.Entries[1]
+	if len(assistant.Refs) != 1 || assistant.Refs[0].Field != "content" {
+		t.Fatalf("large canonical message refs = %+v", assistant.Refs)
+	}
+	chunk := app.HistoryContentForTab(tab.ID, assistant.Refs[0], 0)
+	if chunk.Stale || !chunk.Done || chunk.Data != large {
+		t.Fatalf("canonical expanded content = stale:%v done:%v bytes:%d, want %d", chunk.Stale, chunk.Done, len(chunk.Data), len(large))
+	}
+
+	appendSessionTestMessage(t, runtime, "history-next", provider.Message{ID: "history-next", Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "new turn"})
+	if stale := app.HistoryContentForTab(tab.ID, assistant.Refs[0], 0); !stale.Stale {
+		t.Fatal("content ref from older durable snapshot must become stale after append")
+	}
+}
 
 func appendSessionTestMessage(t *testing.T, runtime *session.Runtime, operationID string, message provider.Message) {
 	t.Helper()

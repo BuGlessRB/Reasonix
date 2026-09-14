@@ -14,13 +14,14 @@ import (
 	"slices"
 	"strings"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/projectiondb"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontent"
 )
 
 const (
-	historyIndexVersion     = 3
+	historyIndexVersion     = 4
 	HistoryPageDefaultLimit = 100
 	HistoryPageMaxLimit     = 500
 	HistoryPageMaxBytes     = 2 << 20
@@ -47,6 +48,24 @@ type MessageHistoryPage struct {
 	HasMore          bool                `json:"hasMore"`
 }
 
+// HistoryPosition is the bounded display metadata for one message in a fixed
+// durable snapshot. It deliberately excludes message bodies so callers can
+// plan a window without pulling the transcript into memory.
+type HistoryPosition struct {
+	Position    int64         `json:"position"`
+	VisibleTurn int           `json:"visibleTurn"`
+	Role        provider.Role `json:"role"`
+}
+
+// HistoryShape describes the complete ordering of a fixed durable snapshot
+// using only small per-message metadata. Message bodies are fetched later via
+// HistoryWindow.
+type HistoryShape struct {
+	SnapshotSequence uint64            `json:"snapshotSequence"`
+	Positions        []HistoryPosition `json:"positions"`
+	TotalTurns       int               `json:"totalTurns"`
+}
+
 type historyCursor struct {
 	SessionID        string `json:"sessionId"`
 	StorageRevision  int    `json:"storageRevision"`
@@ -57,7 +76,9 @@ type historyCursor struct {
 
 type historyBuildState struct {
 	nextPosition int64
+	visibleTurn  int
 	positions    map[string]int64
+	turns        map[string]int
 	versions     map[string]int
 }
 
@@ -88,6 +109,9 @@ var historyMigrations = []projectiondb.Migration{{Version: 1, Apply: func(ctx co
 	// SQLite scans and sorts the full message-body table for every page; on a
 	// GiB history that turns a bounded result into seconds of disk traffic.
 	_, err := tx.ExecContext(ctx, `CREATE INDEX messages_snapshot_position ON messages(position DESC, event_sequence, valid_to)`)
+	return err
+}}, {Version: 4, Apply: func(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `ALTER TABLE messages ADD COLUMN visible_turn INTEGER NOT NULL DEFAULT 0`)
 	return err
 }}}
 
@@ -206,6 +230,127 @@ func (q *Query) HistoryPage(ctx context.Context, ref SessionRef, cursor string, 
 	}
 	slices.Reverse(page.Messages)
 	return page, nil
+}
+
+// HistoryShape returns the ordering and visible-turn boundaries for the
+// current durable snapshot without materializing any message body.
+func (q *Query) HistoryShape(ctx context.Context, ref SessionRef) (HistoryShape, error) {
+	filesystem, path, err := q.prepareHistoryIndex(ctx, ref)
+	if err != nil {
+		return HistoryShape{}, err
+	}
+	_ = filesystem
+	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
+	if err != nil {
+		return HistoryShape{}, err
+	}
+	defer handle.DB.Close()
+	var snapshot uint64
+	if err := scanMetadataUint(handle.DB.QueryRowContext(ctx, `SELECT value FROM metadata WHERE key='durable_sequence'`), &snapshot); err != nil {
+		return HistoryShape{}, err
+	}
+	rows, err := handle.DB.QueryContext(ctx, `SELECT position,visible_turn,role FROM messages WHERE event_sequence<=? AND (valid_to=0 OR valid_to>?) ORDER BY position`, snapshot, snapshot)
+	if err != nil {
+		return HistoryShape{}, err
+	}
+	defer rows.Close()
+	shape := HistoryShape{SnapshotSequence: snapshot, Positions: []HistoryPosition{}}
+	for rows.Next() {
+		var position HistoryPosition
+		if err := rows.Scan(&position.Position, &position.VisibleTurn, &position.Role); err != nil {
+			return HistoryShape{}, err
+		}
+		shape.Positions = append(shape.Positions, position)
+		shape.TotalTurns = max(shape.TotalTurns, position.VisibleTurn)
+	}
+	if err := rows.Err(); err != nil {
+		return HistoryShape{}, err
+	}
+	return shape, nil
+}
+
+// HistoryWindow materializes exactly [start,end) from a previously obtained
+// durable snapshot. The snapshot must still be representable by the current
+// projection; an append is allowed because version intervals retain the old
+// view, while an index rebuild remains transparent.
+func (q *Query) HistoryWindow(ctx context.Context, ref SessionRef, snapshot uint64, start, end int) ([]provider.Message, error) {
+	filesystem, path, err := q.prepareHistoryIndex(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	if start < 0 || end < start {
+		return nil, errors.New("session: invalid history window")
+	}
+	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
+	if err != nil {
+		return nil, err
+	}
+	defer handle.DB.Close()
+	var current uint64
+	if err := scanMetadataUint(handle.DB.QueryRowContext(ctx, `SELECT value FROM metadata WHERE key='durable_sequence'`), &current); err != nil {
+		return nil, err
+	}
+	if snapshot > current {
+		return nil, errors.New("session: history snapshot is newer than durable state")
+	}
+	if start == end {
+		return []provider.Message{}, nil
+	}
+	rows, err := handle.DB.QueryContext(ctx, `SELECT inline,content_digest,content_bytes,content_index_digest FROM messages WHERE position>? AND position<=? AND event_sequence<=? AND (valid_to=0 OR valid_to>?) ORDER BY position`, start, end, snapshot, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	content := contentStoreForSessionDir(filepath.Join(filesystem.Root, ref.SessionID))
+	messages := make([]provider.Message, 0, end-start)
+	for rows.Next() {
+		var inline []byte
+		var digest, indexDigest string
+		var contentBytes int64
+		if err := rows.Scan(&inline, &digest, &contentBytes, &indexDigest); err != nil {
+			return nil, err
+		}
+		body := json.RawMessage(inline)
+		if digest != "" {
+			body, err = resolveContentPayload(ctx, content, sessioncontent.Ref{Digest: digest, Bytes: contentBytes, IndexDigest: indexDigest, IntegrityBlock: sessioncontent.IntegrityBlockBytes, MediaType: "application/json"})
+			if err != nil {
+				return nil, err
+			}
+		}
+		var message provider.Message
+		if err := json.Unmarshal(body, &message); err != nil {
+			return nil, fmt.Errorf("session: decode indexed message: %w", err)
+		}
+		messages = append(messages, message)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(messages) != end-start {
+		return nil, fmt.Errorf("session: history window length %d, want %d", len(messages), end-start)
+	}
+	return messages, nil
+}
+
+func (q *Query) prepareHistoryIndex(ctx context.Context, ref SessionRef) (*FilesystemPersistence, string, error) {
+	if q == nil {
+		return nil, "", errors.New("session: nil query")
+	}
+	if err := ref.validate(q.hostID); err != nil {
+		return nil, "", err
+	}
+	filesystem, ok := q.persistence.(*FilesystemPersistence)
+	if !ok {
+		return nil, "", errors.New("session: history index requires filesystem persistence")
+	}
+	path := historyIndexPath(filesystem.Root, ref.SessionID)
+	q.rebuildMu.Lock()
+	err := ensureHistoryIndex(ctx, filesystem, ref.SessionID, path)
+	q.rebuildMu.Unlock()
+	if err != nil {
+		return nil, "", err
+	}
+	return filesystem, path, nil
 }
 
 func (q *Query) ReadContent(ctx context.Context, ref SessionRef, contentRef sessioncontent.Ref, offset, length int64) ([]byte, error) {
@@ -377,7 +522,7 @@ func rebuildHistoryIndex(ctx context.Context, dir, path, sessionID string, revis
 			return err
 		}
 		defer tx.Rollback()
-		state := historyBuildState{positions: map[string]int64{}, versions: map[string]int{}}
+		state := historyBuildState{positions: map[string]int64{}, turns: map[string]int{}, versions: map[string]int{}}
 		var durable uint64
 		var buildErr error
 		err = scanV4CommitFileRefs(ctx, log, 0, 1, content, nil, func(_ int64, commit Commit) bool {
@@ -469,7 +614,9 @@ func replaceIndexedMessages(ctx context.Context, tx *sql.Tx, content *sessioncon
 		return err
 	}
 	state.nextPosition = 0
+	state.visibleTurn = 0
 	state.positions = map[string]int64{}
+	state.turns = map[string]int{}
 	state.versions = map[string]int{}
 	for _, message := range messages {
 		if err := indexOneMessage(ctx, tx, content, state, message, sequence, false); err != nil {
@@ -485,10 +632,16 @@ func indexOneMessage(ctx context.Context, tx *sql.Tx, content *sessioncontent.St
 		return errors.New("session: indexed message has no stable id")
 	}
 	position, exists := state.positions[id]
+	visibleTurn := state.turns[id]
 	if !exists {
 		state.nextPosition++
 		position = state.nextPosition
 		state.positions[id] = position
+		if agent.IsUserAuthoredTurnMessage(message) {
+			state.visibleTurn++
+		}
+		visibleTurn = state.visibleTurn
+		state.turns[id] = visibleTurn
 	} else if !upsert {
 		return fmt.Errorf("session: duplicate indexed message id %q", id)
 	}
@@ -516,7 +669,7 @@ func indexOneMessage(ctx context.Context, tx *sql.Tx, content *sessioncontent.St
 	} else {
 		inline = body
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO messages(message_id,version,position,event_sequence,valid_to,role,preview,inline,content_digest,content_bytes,content_index_digest,current,search_text) VALUES(?,?,?,?,0,?,?,?,?,?,?,1,?)`, id, version, position, sequence, string(message.Role), messagePreview(message), inline, ref.Digest, ref.Bytes, ref.IndexDigest, messageSearchText(message))
+	_, err = tx.ExecContext(ctx, `INSERT INTO messages(message_id,version,position,event_sequence,valid_to,role,preview,inline,content_digest,content_bytes,content_index_digest,current,search_text,visible_turn) VALUES(?,?,?,?,0,?,?,?,?,?,?,1,?,?)`, id, version, position, sequence, string(message.Role), messagePreview(message), inline, ref.Digest, ref.Bytes, ref.IndexDigest, messageSearchText(message), visibleTurn)
 	return err
 }
 
