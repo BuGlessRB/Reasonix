@@ -1584,6 +1584,8 @@
   .call[data-k="deleg"] > .g .line { background: color-mix(in srgb, var(--deleg) 30%, transparent) }
   .call[data-k="write"] > .g .line { background: color-mix(in srgb, var(--warn) 34%, transparent) }
   .call[data-k="ask"]   > .g .line { background: color-mix(in srgb, var(--accent) 55%, transparent) }
+  .call[data-k="mcp"]   > .g .line { background: color-mix(in srgb, var(--net) 30%, transparent) }
+  .call[data-k="mem"]   > .g .line { background: color-mix(in srgb, var(--deleg) 30%, transparent) }
   /* 主机自己做的事：同一条线，材质不同。转录里有三个作者 —— 你、模型、主机 ——
      而 data-k 只认工具名，于是主机的卡落在默认灰上，和一个没分类的工具同色。
      虚线是这条 gutter 上唯一还空着的维度：颜色归类别，长度归耗时，动效归状态。
