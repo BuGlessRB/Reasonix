@@ -27,6 +27,7 @@ function open(visible: boolean) {
     return subscribe(onEvent, onGap, bootstrap);
   });
   const status = vi.spyOn(port, "status");
+  const todos = vi.spyOn(port, "todos");
   const props = {
     port: port as AgentPort,
     rt,
@@ -47,6 +48,7 @@ function open(visible: boolean) {
   const view = render(<Pane {...props} />);
   return {
     status,
+    todos,
     show: (next: boolean) => act(() => void view.rerender(<Pane {...props} active={next} visible={next} />)),
     start: () => act(() => emit({ kind: "turn_started" } as WireEvent)),
     // Polls over one second of a running turn, counted from zero so a pane's
@@ -74,6 +76,13 @@ describe("what a pane costs while nobody is looking at it", () => {
     const shown = open(true);
     shown.start();
     expect(shown.pollsOverASecond()).toBeGreaterThan(1);
+  });
+
+  // The task list is the kernel's and the transcript cannot answer for it:
+  // /history alone carries the list as the model last wrote it, without the
+  // complete_step advances since.
+  it("asks the kernel for the task list rather than deriving it", () => {
+    expect(open(true).todos).toHaveBeenCalled();
   });
 
   // A pane brought forward must not show pre-hide state for up to 250ms.

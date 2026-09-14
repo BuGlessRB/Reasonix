@@ -14,7 +14,7 @@ export type { MemoryEdit } from "./memory";
 export type { Money, UsageDay, UsageModel, UsageProvider, UsageReport } from "./usage";
 import type { CompactionSettings, Completion, CompletionItem, ModelEntry, ModelPrice, RoleAssignments } from "./model";
 import type { NetworkProbe, NetworkSettings } from "./network";
-import type { ApprovalMode, ApprovalVerdict, Checkpoint, HistoryMessage, JobEntry, Preset, RewindPlan, RewindResult, RewindScope, SessionEntry, SessionStatus, WalletLine, WalletReading, PlanAction } from "./session";
+import type { ApprovalMode, ApprovalVerdict, Checkpoint, HistoryMessage, HostTodo, JobEntry, Preset, RewindPlan, RewindResult, RewindScope, SessionEntry, SessionStatus, WalletLine, WalletReading, PlanAction } from "./session";
 import type { ContextBreakdown, ShellOption, ShellSettings } from "./shell";
 import type { SkillCatalog, SkillEntry } from "./skill";
 import type { UpdateProgress, VersionEntry, VersionHub } from "./version";
@@ -24,7 +24,7 @@ import type { ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, Wor
 // wire and the layers below already do. This is where a reader still finds
 // them all.
 export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, CapabilityScope,
-  Checkpoint, CompactionSettings, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage,
+  Checkpoint, CompactionSettings, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage, HostTodo,
   HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource, JobEntry, McpCatalog, McpDraft,
   McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpRisk, McpTool, MemoryCatalog,
   MemoryEntry, ModelEntry, ModelPrice, NetworkProbe, NetworkSettings, Preset, RewindPlan,
@@ -300,6 +300,9 @@ export interface AgentPort {
    *  could not be read. That one refuses, with a code saying which failure. */
   balance(): Promise<WalletReading | null>;
   history(): Promise<HistoryMessage[]>;
+  // The kernel's canonical task list. The plan panel answers to it and does not
+  // restate it.
+  todos(): Promise<HostTodo[]>;
   // One entry per user turn, oldest first. files is how many the writer tools
   // touched that turn — zero is normal and means there is nothing to restore.
   checkpoints(): Promise<Checkpoint[]>;

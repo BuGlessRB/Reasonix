@@ -47,6 +47,9 @@ var mirroredWireTypes = []wireMirror{
 	// model's work from the host's own bookkeeping, and a page that cannot read
 	// it folds them together.
 	{"internal/eventwire/wire.go", "Tool", tsWireFile, "Tool"},
+	// The canonical task list, which the panel reads rather than derives. A
+	// status the page cannot read is a signed-off step drawn as the current one.
+	{"internal/serve/todos.go", "todoItem", tsSessionFile, "HostTodo"},
 	{"internal/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
 	// The MCP row: a status the host answered with and the page cannot read is a
 	// row that goes back to reading the server's own prose for it.

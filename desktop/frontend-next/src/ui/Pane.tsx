@@ -8,7 +8,8 @@ import { HttpError } from "../port/port";
 import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, Queue as QueueSnapshot, RewindScope, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import type { TrajectoryRead } from "../port/wire";
-import { fromHistory, initialState, localId, quoteAmount, reduce } from "../state/session";
+import { initialState, localId, quoteAmount, reduce } from "../state/session";
+import { refreshTodos, restoreSession } from "../state/restore";
 import { pairCheckpoints } from "../state/checkpoints";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { ExecutionStore } from "../state/execution";
@@ -113,13 +114,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // stream could not close: the transcript is the record, so rebuilding from it
   // is how a hole gets filled rather than rendered as a quiet turn.
   const rebuild = useCallback(() => {
-    port
-      .history()
-      .then((msgs) => {
-        const restored = fromHistory(msgs);
-        dispatch({ kind: "__restore", ...restored });
-      })
-      .catch(() => {});
+    void restoreSession(port).then(dispatch).catch(() => {});
   }, [port]);
 
   // /status is polled four times a second while a turn runs, and most of those
@@ -183,11 +178,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     // to the network — the provider's wallet endpoint rides it — and pairing the
     // two made the conversation wait on a round trip that has nothing to do with
     // it. Whichever lands first shows what it knows.
-    port.history().then((msgs) => {
-      if (!alive) return;
-      const restored = fromHistory(msgs);
-      dispatch({ kind: "__restore", ...restored });
-    });
+    void restoreSession(port).then((ev) => alive && dispatch(ev)).catch(() => {});
     port.status().then((st) => {
       if (!alive) return;
       setStatus(st);
@@ -216,9 +207,14 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       .catch((e) => setWallet({ kind: "unread", why: reason(e) }));
   }, [port]);
 
+  // A turn's end is where the kernel may have moved the list with no event: a
+  // cancel makes it rebuild its own canonical state.
   useEffect(() => {
-    if (!s.running) refreshWallet();
-  }, [s.running, refreshWallet]);
+    if (!s.running) {
+      refreshWallet();
+      void refreshTodos(port, dispatch);
+    }
+  }, [s.running, refreshWallet, port]);
 
   useEffect(() => {
     if (pulse) refreshStatus();
@@ -244,10 +240,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     port.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([]));
     // Two reads, the same way the first mount takes them: the record does not
     // wait behind the numbers over it.
-    port.history().then((msgs) => {
-      const r = fromHistory(msgs);
-      dispatch({ kind: "__restore", ...r });
-    });
+    void restoreSession(port).then(dispatch).catch(() => {});
     port.status().then((st) => {
       applyStatus(st);
       dispatch({

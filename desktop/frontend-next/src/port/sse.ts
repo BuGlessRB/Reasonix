@@ -1,5 +1,5 @@
 import { PLAN_ACTIONS, type PlanAction } from "./session";
-import type { AccountState, AgentPort, Appearance, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
@@ -428,6 +428,10 @@ export class SsePort extends SseTheme implements AgentPort {
 
   history() {
     return this.get<HistoryMessage[]>("/history");
+  }
+
+  todos() {
+    return this.get<HostTodo[]>("/todos");
   }
 
   checkpoints() {

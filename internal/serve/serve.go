@@ -1284,20 +1284,3 @@ func previewTitle(first string) string {
 	}
 	return first
 }
-
-// todos returns the canonical task list (latest todo_write state merged with
-// complete_step advances) so the frontend can render a live task panel.
-func (s *Server) todos(w http.ResponseWriter, _ *http.Request) {
-	type todoItem struct {
-		Content    string `json:"content"`
-		Status     string `json:"status"`
-		ActiveForm string `json:"activeForm,omitempty"`
-		Level      int    `json:"level,omitempty"`
-	}
-	raw := s.ctl().Todos()
-	out := make([]todoItem, len(raw))
-	for i, t := range raw {
-		out[i] = todoItem{Content: t.Content, Status: t.Status, ActiveForm: t.ActiveForm, Level: t.Level}
-	}
-	writeJSON(w, out)
-}

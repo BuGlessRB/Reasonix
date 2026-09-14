@@ -1,6 +1,6 @@
 import type { PlanAction } from "./session";
 import { HttpError } from "./port";
-import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
+import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT, mockMsgIndex, mockTurnStart } from "./fixture";
@@ -452,6 +452,11 @@ export class MockPort extends MockTheme implements AgentPort {
   }
 
   async history(): Promise<HistoryMessage[]> {
+    return [];
+  }
+
+  // Mock mode holds no task list; an absent one must render as absent.
+  async todos(): Promise<HostTodo[]> {
     return [];
   }
 

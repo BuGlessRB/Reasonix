@@ -18,6 +18,16 @@ export interface HistoryMessage {
   toolName?: string;
 }
 
+// GET /todos as internal/serve writes it: the canonical task list, the latest
+// todo_write merged with every complete_step advance. Deriving it from the
+// transcript instead loses the advances and keeps the refused writes.
+export interface HostTodo {
+  content: string;
+  status: string;
+  activeForm?: string;
+  level?: number;
+}
+
 // GET /checkpoints as internal/serve writes it: the snapshot the kernel took
 // before each turn's first write. prompt is the user's own text, with the
 // compose prefixes already stripped kernel-side.
