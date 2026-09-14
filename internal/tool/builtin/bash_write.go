@@ -112,9 +112,6 @@ func (b bash) specForCall(ctx context.Context) sandbox.Spec {
 		spec.WriteRoots = nil
 		spec.MinimalWrites = true
 	case permissionpreset.WorkspaceWrite:
-		// Permission presets own the enforcement decision. A legacy
-		// [sandbox].bash="off" cannot silently turn workspace access into an
-		// unconfined shell.
 		spec.Mode = "enforce"
 		spec.ReadOnly = false
 		spec.MinimalWrites = true
@@ -130,6 +127,13 @@ func (b bash) specForCall(ctx context.Context) sandbox.Spec {
 	// boundaries there and bash runs as the OS user after the approval gate.
 	if !sandbox.OSSandboxSupported() {
 		spec.Mode = "off"
+	}
+	// An explicit [sandbox].bash="off" disables OS enforcement for this session
+	// regardless of the permission preset. Under an outer sandbox
+	// (landrun/Landlock) bash must stay unconfined to remain effective.
+	if b.sb.Mode == "off" {
+		spec.Mode = "off"
+		spec.ReadOnly = false
 	}
 	if preset == permissionpreset.WorkspaceWrite {
 		if b.rootSet != nil {
