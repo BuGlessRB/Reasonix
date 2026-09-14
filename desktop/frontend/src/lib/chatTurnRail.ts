@@ -25,7 +25,12 @@ export function recordIdOf(item: LoadedTurnNode): string | undefined {
   if (item.id.startsWith(RECORD_ITEM_PREFIX)) return item.id.slice(RECORD_ITEM_PREFIX.length);
   // A committed row already carries the outline's own form.
   if (item.id.startsWith("m:")) return item.id;
-  return item.messageId ? `m:${item.messageId}` : undefined;
+  if (item.messageId) return `m:${item.messageId}`;
+  // `he:<entryId>` belongs to the windowed legacy store, whose ids live in a
+  // different key space and which never has an outline: a tab on that path
+  // never installs a snapshot, so the rail stays in its loaded-turn mode.
+  // Reporting no identity is correct — guessing one could match the wrong turn.
+  return undefined;
 }
 
 /** Mounted user turns indexed by both stable identities they can be found by. */
