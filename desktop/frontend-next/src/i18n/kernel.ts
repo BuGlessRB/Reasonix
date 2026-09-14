@@ -111,6 +111,8 @@ const SAID: Record<string, string> = {
   "session.disabled": "这台服务器已关闭会话切换",
   "session.pending_cleanup": "该会话正在清理，请稍后再打开",
   "session.in_use": "该会话正被其他位置占用，请先关闭该处",
+  // 占用者在另一个进程时，这个窗口里没有可关闭的对象，pid 是唯一可操作的事实。
+  "session.in_use_by": "该会话被另一个进程占用（{host} 上的 pid {pid}），结束它之后再删",
   "session.bind_failed": "接管该会话失败，请重新打开窗口",
   "session.has_open_pane": "该会话仍有打开的面板，请先关闭",
   "session.outside_workspace": "该路径不属于任何已知的工作区",

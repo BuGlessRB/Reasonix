@@ -37,6 +37,14 @@ describe("what a reader is told a refusal was", () => {
     expect(after).toBe(before);
   });
 
+  // The pane map is one window's, so a holder in another process leaves nothing
+  // in this window to close. The pid is the only actionable fact.
+  it("names the process holding a conversation open", () => {
+    const said = reason(coded("another process holds this conversation open", "session.in_use_by", { pid: 77941, host: "mac-mini.local" }));
+    expect(said).toContain("77941");
+    expect(said).toContain("mac-mini.local");
+  });
+
   it("fills a code's sentence from the params, not from the kernel's prose", () => {
     const said = reason(coded("workspace has 3 open panes", "workspace.has_open_panes", { n: 3 }));
     expect(said).toContain("3");

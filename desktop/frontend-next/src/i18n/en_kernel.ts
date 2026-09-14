@@ -104,6 +104,7 @@ export const EN_KERNEL: Record<string, string> = {
   "这台服务器已关闭会话切换": "This server has session switching turned off",
   "该会话正在清理，请稍后再打开": "This session is being cleaned up; open it again in a moment",
   "该会话正被其他位置占用，请先关闭该处": "This session is held elsewhere — close it there first",
+  "该会话被另一个进程占用（{host} 上的 pid {pid}），结束它之后再删": "Another process holds this session open (pid {pid} on {host}); end it, then delete",
   "接管该会话失败，请重新打开窗口": "Could not take over this session; reopen the window",
   "该会话仍有打开的面板，请先关闭": "This session still has a pane open — close it first",
   "该路径不属于任何已知的工作区": "That path is not inside any known workspace",
