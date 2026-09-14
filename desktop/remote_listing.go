@@ -203,6 +203,7 @@ func serveDoForSession(ctx context.Context, client *http.Client, method, url str
 const serveCapabilitiesHeader = "X-Reasonix-Serve-Capabilities"
 const serveCapabilityExecutionV2 = "execution-v2"
 const serveCapabilitySessions = "session-history-v1"
+const serveCapabilitySessionContentV1 = "session-content-v1"
 const serveCapabilitySessionIdentityV1 = "session-identity-v1"
 const serveCapabilitySessionOwnershipV1 = "session-ownership-v1"
 const serveCapabilityGoalLifecycleV2 = servecontract.GoalLifecycleV2

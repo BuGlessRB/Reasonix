@@ -8576,6 +8576,75 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/remote_transcript_api.go",
+      "name": "RemoteSessionHistoryContentForTab",
+      "owner": "App.RemoteSessionHistoryContentForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "object",
+          "ref": "sessioncontent.Ref"
+        },
+        {
+          "kind": "integer"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionHistoryContentChunk"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "ref",
+          "offset"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.RemoteSessionHistoryContentForTab"
+      },
+      "sources": [
+        "desktop/remote_transcript_api.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/remote_transcript_api.go",
+      "name": "RemoteSessionHistoryPageForTab",
+      "owner": "App.RemoteSessionHistoryPageForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "integer"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "session.MessageHistoryPage"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "cursor",
+          "limit"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.RemoteSessionHistoryPageForTab"
+      },
+      "sources": [
+        "desktop/remote_transcript_api.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/remote_tab_commands.go",
       "name": "RemoteTabBranches",
       "owner": "App.RemoteTabBranches",

@@ -43,6 +43,9 @@ func (a *App) SessionHistoryContentForTab(tabID string, ref sessioncontent.Ref, 
 	if offset < 0 || offset > ref.Bytes {
 		return SessionHistoryContentChunk{}, errors.New("invalid session history content offset")
 	}
+	if offset == ref.Bytes {
+		return SessionHistoryContentChunk{NextOffset: offset, Done: true}, nil
+	}
 	length := min(int64(sessionHistoryContentChunkBytes), ref.Bytes-offset)
 	data, err := query.ReadContent(context.Background(), sessionRef, ref, offset, length)
 	if err != nil {

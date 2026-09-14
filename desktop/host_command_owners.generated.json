@@ -4616,6 +4616,38 @@
       ]
     }
   },
+  "RemoteSessionHistoryContentForTab": {
+    "domain": "desktop/remote_transcript_api.go",
+    "owner": "App.RemoteSessionHistoryContentForTab",
+    "sources": [
+      "desktop/remote_transcript_api.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RemoteSessionHistoryContentForTab",
+      "inputs": [
+        "tabID",
+        "ref",
+        "offset"
+      ]
+    }
+  },
+  "RemoteSessionHistoryPageForTab": {
+    "domain": "desktop/remote_transcript_api.go",
+    "owner": "App.RemoteSessionHistoryPageForTab",
+    "sources": [
+      "desktop/remote_transcript_api.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RemoteSessionHistoryPageForTab",
+      "inputs": [
+        "tabID",
+        "cursor",
+        "limit"
+      ]
+    }
+  },
   "RemoteTabBranches": {
     "domain": "desktop/remote_tab_commands.go",
     "owner": "App.RemoteTabBranches",

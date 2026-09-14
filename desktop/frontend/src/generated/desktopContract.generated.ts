@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 6;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:5991d2fe9f2d4832285b32cb36f71a7bc297881e738e261496d02b08f4e44f90";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:6abd8332faea999ddc85520e21922390544e5fa6fcdb9e0c83b6c3e6e9b6286b";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -332,6 +332,8 @@ export const DESKTOP_COMMANDS = [
   "RemoteProjectSessions",
   "RemoteServerLogs",
   "RemoteServerStatus",
+  "RemoteSessionHistoryContentForTab",
+  "RemoteSessionHistoryPageForTab",
   "RemoteTabBranches",
   "RemoteTabMetadata",
   "RemoteTabSkills",
@@ -4916,6 +4918,8 @@ export interface GeneratedDesktopCommands {
   RemoteProjectSessions(arg0: string, arg1: string): Promise<RemoteSessionView[]>;
   RemoteServerLogs(arg0: string, arg1: string, arg2: number): Promise<string>;
   RemoteServerStatus(arg0: string, arg1: string): Promise<RemoteServerView>;
+  RemoteSessionHistoryContentForTab(arg0: string, arg1: Ref, arg2: number): Promise<SessionHistoryContentChunk>;
+  RemoteSessionHistoryPageForTab(arg0: string, arg1: string, arg2: number): Promise<MessageHistoryPage>;
   RemoteTabBranches(arg0: string): Promise<unknown>;
   RemoteTabMetadata(arg0: string): Promise<RemoteTabSnapshot>;
   RemoteTabSkills(arg0: string): Promise<unknown>;
