@@ -1,10 +1,9 @@
-// Package session owns Reasonix's linear, append-only session event log.
+// Package session owns Reasonix's canonical session service.
 //
-// The package separates three concerns. Session owns the in-memory typed event
-// log and its projections. PersistenceBinding owns the write-behind queue and
-// durability progress. Store owns the physical JSONL bytes and the writer
-// lease. A commit is accepted into Session and the binding's queue before it is
-// durable; Flush establishes an explicit semantic checkpoint.
+// Runtime owns live business state and activity authority, PersistenceBinding
+// owns accepted work and durability progress, Store owns framed bytes and the
+// writer lease, and Query owns rebuildable disk projections. A commit is
+// accepted before it is durable; Flush establishes a semantic checkpoint.
 package session
 
 import (
@@ -48,9 +47,9 @@ const (
 )
 
 var (
-	ErrUnsupportedVersion   = errors.New("unsupported v3 session version")
-	ErrDamagedStore         = errors.New("damaged v3 session store")
-	ErrStaleGeneration      = errors.New("stale v3 writer generation")
+	ErrUnsupportedVersion   = errors.New("unsupported session storage version")
+	ErrDamagedStore         = errors.New("damaged session store")
+	ErrStaleGeneration      = errors.New("stale session writer generation")
 	ErrOperationConflict    = errors.New("session operation id conflicts with an earlier batch")
 	ErrPersistenceUncertain = errors.New("session persistence result is uncertain")
 	ErrSessionNotFound      = errors.New("session not found")
@@ -181,7 +180,7 @@ func (e *uncertainAppendError) Error() string {
 
 func (e *uncertainAppendError) Unwrap() error { return ErrPersistenceUncertain }
 
-// Store is the physical JSONL handle for one session directory. It owns the
+// Store is the physical framed-log handle for one session directory. It owns the
 // writer lease, the open file, and the rebuildable sparse offset index. It
 // deliberately holds no projection, operation table, or accepted commit list:
 // those belong to Session.

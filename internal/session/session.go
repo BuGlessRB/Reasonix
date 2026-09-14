@@ -14,11 +14,10 @@ import (
 	"reasonix/internal/sessioncontent"
 )
 
-// Session is the in-memory typed event log and its projections. It owns every
-// piece of business state for one session identity: committed batches, the
-// operation-idempotency table, sequence allocation, and the projection. The
-// physical SessionHandle behind PersistenceBinding owns only bytes, the writer
-// lease, and durability progress.
+// Session owns the live business state for one session identity: sequence
+// allocation, the bounded accepted tail, compact operation identities, and the
+// current projection. Durable history bodies and searchable operation details
+// live behind Query; the physical handle owns bytes and the writer lease.
 //
 // A commit becomes observable here before it is durable. That is deliberate and
 // mirrors DSH: accepting an event updates the projection and the UI, while the
