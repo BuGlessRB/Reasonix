@@ -343,6 +343,7 @@ type Messages struct {
 	GoalNotRunning               string
 	GoalNotPaused                string
 	GoalPaused                   string
+	AwaitingUserFmt              string
 	ImagesNotReadable            string
 	ImagesNeedVisionRole         string
 	ImagesDropped                string

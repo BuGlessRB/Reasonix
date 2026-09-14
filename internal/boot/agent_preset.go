@@ -64,10 +64,13 @@ func CoreProviderToolNames() []string {
 }
 
 // HostControlToolNames are collaboration/contract tools that may appear in the
-// provider schema independently of the Agent role setting.
+// provider schema independently of the Agent role setting. The turn-exit tools
+// are here because the host names them as ways out of an unfinished turn, and a
+// name the schema does not carry is one the model cannot call.
 func HostControlToolNames() []string {
 	return []string{
 		"ask",
+		"await_user",
 		"update_goal",
 		"todo_write",
 		"complete_step",
@@ -83,8 +86,8 @@ func GoalOnlyToolNames() []string {
 
 // EvidenceToolNames are the tools whose whole purpose is the evidence
 // contract, which the evidence arm drops from the schema. todo_write is not
-// one: a task list is not an evidence claim, and an arm removing both would
-// measure two things at once.
+// one, and neither is await_user: neither is an evidence claim, and an arm
+// dropping them would measure more than the contract.
 func EvidenceToolNames() []string {
 	return []string{"complete_step"}
 }

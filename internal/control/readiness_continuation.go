@@ -28,6 +28,7 @@ const (
 const completionWaysOut = "Mark each finished item with complete_step — that is what advances the list; a todo_write that flips an item to completed is rejected. " +
 	"If an item should no longer be done — the request changed, or it was superseded — send a todo_write without it. " +
 	"If one turns on a decision only the user can make, put it to them with ask; not having heard back is not an answer to assume one from. " +
+	"If one cannot go on until the user says something only they can say, call await_user naming it — the list is kept and this message stops. " +
 	"If one cannot be done as specified, call conclude_blocked with the evidence for why."
 
 // continueUntilReady runs the missing requirements as further turns. turnErr is

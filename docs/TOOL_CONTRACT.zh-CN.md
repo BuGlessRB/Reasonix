@@ -77,7 +77,8 @@ read/diff 证据。
 Executor 刻意保留直接 `mcp__*` 工具，因此安装、连接或刷新这些直接工具时，Executor 的整体 provider
 前缀仍可能变化。
 
-`ask`, `docs`, `explore`, `fleet`, `forget`, `history`, `install_skill`, `install_source`,
+`ask`, `await_user`, `docs`, `explore`, `fleet`, `forget`, `history`, `install_skill`,
+`install_source`,
 `list_sessions`, `lsp_definition`, `lsp_diagnostics`, `lsp_hover`,
 `lsp_references`, `memory`, `parallel_tasks`, `read_only_skill`,
 `read_only_task`, `read_session`, `read_skill`, `read_subagent_result`, `remember`, `research`,

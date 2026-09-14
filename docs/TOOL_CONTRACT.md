@@ -98,7 +98,8 @@ not change when MCP inventory changes. Balanced Executor deliberately retains
 its direct `mcp__*` tools, so its overall provider prefix may still change when
 those direct tools are installed, connected, or refreshed.
 
-`ask`, `docs`, `explore`, `fleet`, `forget`, `history`, `install_skill`, `install_source`,
+`ask`, `await_user`, `docs`, `explore`, `fleet`, `forget`, `history`, `install_skill`,
+`install_source`,
 `list_sessions`, `list_subagents`, `lsp_definition`, `lsp_diagnostics`, `lsp_hover`,
 `lsp_references`, `memory`, `parallel_tasks`, `read_only_skill`,
 `read_only_task`, `read_session`, `read_skill`, `read_subagent_result`, `remember`, `research`,
@@ -131,6 +132,12 @@ coding tools, background-shell lifecycle tools, and the stable capability proxy:
 `bash`, `bash_output`, `edit_file`, `kill_shell`, `read_file`, `wait`,
 `write_file`, `compress`, `recall` and `context_budget` (when registered), and
 `use_capability`.
+
+The host-control tools ride the same surface at every setting: `todo_write` and
+`complete_step` for the task list, and `ask` and `await_user` for the turns that
+end on the model's terms. `conclude_blocked` is registered but not yet on this
+surface, so it is reachable only through `use_capability` even where the host
+names it as a way out of an unfinished turn.
 
 Optional tools (`glob`, `grep`, `ls`, `web_fetch`, MCP, skills, subagents, docs,
 session history, memory mutation, workflow, and so on) remain in the host

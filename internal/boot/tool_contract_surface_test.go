@@ -14,6 +14,7 @@ import (
 func unifiedBootToolNames() []string {
 	return []string{
 		"ask",
+		"await_user",
 		"bash",
 		"bash_output",
 		"complete_step",

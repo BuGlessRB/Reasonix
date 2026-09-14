@@ -243,6 +243,11 @@ func (a *Agent) appendIncompleteTodoGap(out *finalReadinessCheck, missing []stri
 	if !hasTodos || len(incomplete) == 0 || !a.task.ledger.HasSuccessfulTodoProgressReceipt() {
 		return missing
 	}
+	// A list gated on the user is not an unfinished one: another turn cannot
+	// supply what it waits for, so the gap is not owed.
+	if _, gated := a.task.ledger.UserGateThisTurn(); gated {
+		return missing
+	}
 	out.applies = true
 	out.incompleteTodos = len(incomplete)
 	return append(missing, finalReadinessIncompleteTodos(incomplete))

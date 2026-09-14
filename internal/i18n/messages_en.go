@@ -345,6 +345,7 @@ var English = Messages{
 	GoalNotRunning:               "no running goal to pause",
 	GoalNotPaused:                "no paused or blocked goal to resume",
 	GoalPaused:                   "goal paused — /goal resume continues it",
+	AwaitingUserFmt:              "waiting for you: %s",
 	ImagesNotReadable:            "this model cannot read images — %d attached, handed to a delegated read instead",
 	ImagesNeedVisionRole:         "this model cannot read images — %d attached and going nowhere. %s can read them: assign it to the vision role in Settings › Models › Roles.",
 	ImagesDropped:                "this model cannot read images — %d attached and dropped before the request. No configured model reads images.",

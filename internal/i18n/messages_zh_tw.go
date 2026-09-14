@@ -583,6 +583,7 @@ var ChineseTraditional = Messages{
 	GoalNotRunning:             "沒有執行中的目標可暫停",
 	GoalNotPaused:              "沒有已暫停或被阻擋的目標可恢復",
 	GoalPaused:                 "目標已暫停 — /goal resume 可繼續",
+	AwaitingUserFmt:            "等待你的輸入：%s",
 	ImagesNotReadable:          "當前模型不讀圖 — 已附 %d 張，改由委派的子代理去看",
 	ImagesNeedVisionRole:       "當前模型不讀圖 — 已附 %d 張，現在沒人讀得了。%s 能讀圖：到 設定 › 模型 › 分工 裡把「看圖」指給它。",
 	ImagesDropped:              "當前模型不讀圖 — 已附 %d 張，會在送出去之前被丟掉。設定裡沒有任何模型能讀圖。",
