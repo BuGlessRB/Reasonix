@@ -8,6 +8,9 @@ import { ChatSource } from "../lib/chatViewSource";
 import { ChatScrollController } from "../lib/chatScrollController";
 import { ChatContentLoader } from "../lib/chatContentLoader";
 import { ChatMountedOrder } from "../lib/chatMountedOrder";
+import { ChatTurnJump } from "../lib/chatTurnJump";
+import { loadedTurnKey } from "../lib/chatTurnRail";
+import { addBreadcrumb } from "../lib/breadcrumbs";
 import { useT } from "../lib/i18n";
 import { InvocationMetadataContext } from "./Message";
 import { MarkdownImageTabContext } from "./MarkdownImageContext";
@@ -34,6 +37,9 @@ export type TranscriptProps = {
   hydrating?: boolean;
   hasOlderHistory?: boolean;
   historyStartTurn?: number;
+  /** Total turns the snapshot reports, used to keep the rail area while the
+   * outline loads without showing it on a brand-new conversation. */
+  totalTurns?: number;
   loadingOlderHistory?: boolean;
   olderHistoryError?: string;
   onLoadOlderHistory?: (targetTurn?: number, trigger?: HistoryLoadTrigger) => boolean | Promise<boolean>;
@@ -113,20 +119,53 @@ function ChatSession(props: TranscriptProps & { sessionKey: string }) {
     drawerWasOpen.current = Boolean(activeDetails);
   }, [activeDetails]);
   const [pagingError, setPagingError] = useState(false);
-  const paging = useRef(false);
-  const loadOlder = async () => {
-    if (paging.current || !onLoadOlderHistory) return;
+  // Manual paging and navigation jumps share one queue. A page already in
+  // flight is awaited rather than submitted twice, so a jump that collides
+  // with the button continues from that page instead of failing.
+  const pagingPromise = useRef<Promise<boolean> | null>(null);
+  const loadOlder = (trigger: HistoryLoadTrigger = "viewport-user"): Promise<boolean> => {
+    if (pagingPromise.current) return pagingPromise.current;
+    if (!onLoadOlderHistory) return Promise.resolve(false);
     const generation = lifetime.current;
-    paging.current = true; setPagingError(false); scroll.beforeChange();
-    try { await onLoadOlderHistory(undefined, "viewport-user"); }
-    catch { if (generation === lifetime.current) setPagingError(true); }
-    finally { if (generation === lifetime.current) paging.current = false; }
+    setPagingError(false);
+    scroll.beforeChange();
+    const run = (async (): Promise<boolean> => {
+      try { return await onLoadOlderHistory(undefined, trigger); }
+      catch { if (generation === lifetime.current) setPagingError(true); return false; }
+    })();
+    pagingPromise.current = run;
+    void run.finally(() => { if (pagingPromise.current === run) pagingPromise.current = null; });
+    return run;
   };
+  // The jump outlives a single render, so it reads the live paging state
+  // through refs rather than through the closure it was built with.
+  const loadOlderRef = useRef(loadOlder); loadOlderRef.current = loadOlder;
+  const hasOlderRef = useRef(false); hasOlderRef.current = hasOlderHistory && Boolean(onLoadOlderHistory);
+  const lifetimeRef = useRef(lifetime.current); lifetimeRef.current = lifetime.current;
+  const jump = useMemo(() => new ChatTurnJump({
+    mounts, scroll,
+    loadOlder: () => loadOlderRef.current("question-jump"),
+    hasOlder: () => hasOlderRef.current,
+    // Re-read the mounted set on every attempt: the whole point is that the
+    // answer changes as the progressive mount advances.
+    resolveKey: (entry) => loadedTurnKey(entry, new Set(mounts.getSnapshot())),
+    isCurrent: () => lifetimeRef.current === lifetime.current,
+  }), [mounts, scroll]);
+  const jumpState = useSyncExternalStore(jump.subscribe, jump.getSnapshot, jump.getSnapshot);
+  useEffect(() => () => jump.dispose(), [jump]);
+  useEffect(() => {
+    if (jumpState.status !== "failed") return;
+    setPagingError(true);
+    addBreadcrumb("chat.jump", `turn jump failed: ${jumpState.error ?? "unknown"}`);
+  }, [jumpState.status, jumpState.error]);
   return <InvocationMetadataContext.Provider value={props.invocationMetadata ?? {}}>
     <MarkdownImageTabContext.Provider value={tabId ?? ""}>
       <section className="chat-transcript">
         <div className="chat-surface" inert={Boolean(activeDetails)}>
-          <Suspense fallback={null}><ChatTurnNavigator source={source} scroll={scroll} mounts={mounts} /></Suspense>
+          <Suspense fallback={null}><ChatTurnNavigator source={source} scroll={scroll} mounts={mounts}
+            tabId={tabId} knownTurns={props.totalTurns ?? 0}
+            busyTurn={jumpState.status === "loading" ? jumpState.turn : null}
+            onJump={(entry) => { void jump.jump(entry); }} /></Suspense>
           <div ref={scroller} className="transcript chat-flow-scroll" tabIndex={0} data-transcript-render-mode="full"
             data-transcript-hydrating={hydrating} data-scroll-mode={position.following ? "tail" : "reader"}>
             <div ref={column} className="chat-column">

@@ -1,11 +1,14 @@
-// Ported from DeepSeek Harness c291e7961a (MIT). Only loaded Reasonix turns navigate.
+// Ported from DeepSeek Harness c291e7961a (MIT). The rail lists the complete
+// conversation outline; a turn whose body is not loaded yet still navigates.
 import {
   memo, useEffect, useId, useRef, useState,
   type CSSProperties, type MouseEvent, type PointerEvent,
 } from 'react'
 import type { ReactNode } from 'react'
 import type { useT } from '../../lib/i18n'
-export interface TurnRailItem { turn: string; ordinal: number; prompt: string; response: string; answerKey?: string; anchor: { kind: 'loaded' } }
+/** A mark either already has a mounted node, or must page history in first. */
+export type TurnRailAnchor = { kind: 'loaded' } | { kind: 'unloaded'; recordId: string; messageId?: string }
+export interface TurnRailItem { turn: string; ordinal: number; prompt: string; response: string; answerKey?: string; anchor: TurnRailAnchor; unloaded?: boolean }
 import css from './TurnNavigator.styles'
 
 interface TurnNavigatorProps {
@@ -16,6 +19,15 @@ interface TurnNavigatorProps {
   readonly onNavigate: (item: TurnRailItem) => void
   readonly renderPreview: (item: TurnRailItem) => ReactNode
   readonly t: ReturnType<typeof useT>
+  /**
+   * The conversation outline is known to hold more than one turn. Keeps the
+   * rail's area while the outline loads, so a returning reader does not see
+   * navigation appear and disappear.
+   */
+  readonly loading?: boolean
+  /** The outline could not be read; known markers stay and a retry is offered. */
+  readonly failed?: boolean
+  readonly onRetry?: () => void
 }
 
 /** Fixed pitch between neighbouring marks; overflow scrolls inside the frame. */
@@ -76,7 +88,7 @@ function sameRailScrollState(left: RailScrollState, right: RailScrollState): boo
     && left.viewportHeight === right.viewportHeight
 }
 
-function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPreview, t }: TurnNavigatorProps) {
+function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPreview, t, loading, failed, onRetry }: TurnNavigatorProps) {
   const [previewTurn, setPreviewTurn] = useState<string | null>(null)
   const [scrollState, setScrollState] = useState<RailScrollState>(RAIL_AT_REST)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
@@ -123,7 +135,30 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPrev
     }
   }, [activeTurn, items, scrollState.top, scrollState.viewportHeight])
 
-  if (items.length < 2) return null
+  // A known multi-turn conversation keeps its rail area while the outline is
+  // still loading, and keeps the markers it already has after a failure.
+  if (items.length < 2) {
+    if (!loading && !failed) return null
+    return (
+      <div className={css.slot}>
+        <nav className={css.frame} aria-label={t('chat.turnNavigation.label')} aria-busy={loading ? 'true' : undefined}
+          style={frameStyle(Math.max(items.length, 2), 0)}>
+          <div className={css.scroller}>
+            <div className={css.marks}>
+              {items.map((item, index) => (
+                <div key={item.turn} className={css.markPosition} style={itemPosition(index)}>
+                  <span className={css.mark} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </nav>
+        {failed && onRetry !== undefined && (
+          <button type="button" className="btn" onClick={onRetry}>{t('chat.turnNavigation.retry')}</button>
+        )}
+      </div>
+    )
+  }
   const previewIndex = items.findIndex(item => item.turn === previewTurn)
   const preview = previewIndex < 0 ? undefined : items[previewIndex]
   const previewPosition = previewIndex < 0 ? undefined : itemPosition(previewIndex)
@@ -177,6 +212,7 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPrev
                 <div key={item.turn} className={css.markPosition} style={itemPosition(index)}>
                   <button
                     data-nav-turn={item.turn}
+                    data-nav-unloaded={item.anchor.kind === 'unloaded' ? 'true' : undefined}
                     type="button"
                     className={classes.join(' ')}
                     aria-label={t(
@@ -205,6 +241,11 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPrev
           </div>
         )}
       </nav>
+      {failed && onRetry !== undefined && (
+        <button type="button" className="btn chat-turn-navigation-retry" onClick={onRetry}>
+          {t('chat.turnNavigation.retry')}
+        </button>
+      )}
     </div>
   )
 }

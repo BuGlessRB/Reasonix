@@ -78,15 +78,23 @@ export class TranscriptSnapshotClient {
   private readonly cuts = new Map<string, Cut>();
   private readonly generations = new Map<string, number>();
   constructor(private readonly transport: SnapshotTransport, private readonly projector: TurnEventProjector,
-    private readonly pinned: (tabId: string) => boolean = () => true) {}
+    private readonly pinned: (tabId: string) => boolean = () => true,
+    /** Notified whenever a tab's cut is installed, extended, or released, so
+     * consumers bound to the snapshot identity can re-align without every
+     * loader call site having to remember them. */
+    private readonly onCutChanged: (tabId: string, snapshotId: string | undefined) => void = () => {}) {}
 
   release(tabId: string) {
     this.generations.set(tabId, (this.generations.get(tabId) ?? 0) + 1);
     this.cuts.delete(tabId);
     this.projector.release(tabId);
+    this.onCutChanged(tabId, undefined);
   }
 
   installed(tabId: string): boolean { return this.projector.snapshotBoundary(tabId) !== undefined; }
+
+  /** The snapshot the tab's cut is bound to, or undefined when none is installed. */
+  installedSnapshotId(tabId: string): string | undefined { return this.cuts.get(tabId)?.snapshot.snapshotId; }
 
   acceptContent(tabId: string, record: TranscriptRecord) {
     const cut = this.cuts.get(tabId);
@@ -161,6 +169,7 @@ export class TranscriptSnapshotClient {
           commit(snapshot);
           this.cuts.set(tabId, cut);
           this.prune();
+          this.onCutChanged(tabId, cut.snapshot.snapshotId);
         });
       }
       throw new Error("transcript snapshot expired during loading");

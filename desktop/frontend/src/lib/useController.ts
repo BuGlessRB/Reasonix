@@ -54,6 +54,7 @@ import { isHostRecoveryGuidance } from "./hostRecoverySteer";
 import { activeTabHydrationPlan, canAdoptUnboundLiveSurface, duplicateLiveItemIds, hasCachedLiveTurn, hasReusableCachedTranscript, hydratedHistoryApplyMode, sameSessionHydrateIdentity, sameSessionPlaceholderItems, shouldPreferResidentHistory, type HydrateSurfacePolicy } from "./hydrateHistoryApply";
 import { hydrateIdentityCurrent } from "./sessionIdentity";
 import { historyPageRequestBudget } from "./historyPaging";
+import { getTranscriptOutlineStore, localOutlineRead } from "./transcriptOutlineStore";
 import { withRemoteProviderUnreachable, withRemoteTurnInterrupted } from "./remoteTurnState";
 import type { NavigationResult, SurfaceDataCommit, SurfaceDataOutcome } from "./navigationSurfaceTransition";
 import { sameTodoList } from "./todoVisibility";
@@ -2559,11 +2560,27 @@ export function useController() {
   const historyOlderSeq = useRef(new Map<string, number>());
   const cancelHydrateSeq = useRef(new Map<string, number>());
   const turnEventProjector = useRef(new TurnEventProjector()).current;
+  // The complete turn index is bound to the installed snapshot, so it aligns
+  // whenever a cut is installed or replaced rather than at each loader call
+  // site. Local tabs read the controller binding.
+  const outlineStore = getTranscriptOutlineStore();
   const snapshotClient = useRef(new TranscriptSnapshotClient({
     snapshot: (tabId, request) => app.TranscriptSnapshotForTab!(tabId, request),
     page: (tabId, request) => app.TranscriptPageForTab!(tabId, request),
     content: (tabId, request) => app.TranscriptContentForTab!(tabId, request),
-  }, turnEventProjector, (tabId) => getTranscriptStore().tabIsPinned(tabId))).current;
+  }, turnEventProjector, (tabId) => getTranscriptStore().tabIsPinned(tabId),
+  (tabId, snapshotId) => {
+    if (!snapshotId) { outlineStore.release(tabId); return; }
+    // A retry after a recycled cut installs a fresh snapshot; only that
+    // explicit request may replace the body the reader is looking at.
+    outlineStore.register(tabId, localOutlineRead, () => {
+      void snapshotClientRef.current?.load(tabId, (snapshot) => dispatchToRef.current(tabId, { type: "transcript_snapshot", snapshot })).catch(() => {});
+    });
+    void outlineStore.sync(tabId, snapshotId);
+  })).current;
+  const snapshotClientRef = useRef<TranscriptSnapshotClient>(snapshotClient);
+  const dispatchToRef = useRef(dispatchTo);
+  dispatchToRef.current = dispatchTo;
   const sessionLoadInFlight = useRef(new Map<string, { sessionPath: string; revision?: number; digest?: string; promise: Promise<void> }>());
   const transcriptSubscriptions = useRef(new Map<string, () => void>());
   const bumpMetaRefreshSeq = useCallback((tabId: string): number => {

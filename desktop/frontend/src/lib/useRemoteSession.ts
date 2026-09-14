@@ -8,6 +8,7 @@ import { historyMessagesToItems, initialState, reducer, type ControllerLiveStore
 import { TurnEventProjector } from "./turnEventProjection";
 import { rebaseSnapshotContentPatches, resolveSnapshotItems, resolveSnapshotTool, StaleCut, TranscriptSnapshotClient } from "./transcriptSnapshotClient";
 import { getTranscriptStore } from "./transcriptStore";
+import { getTranscriptOutlineStore, remoteOutlineRead } from "./transcriptOutlineStore";
 import { isAuthoritativeRemoteStatus, remoteCheckpoints, remoteComposerState, remoteGoalRuntime, remoteGoalView, remoteStatusToAction, type RemoteStatus } from "./remoteStatus";
 import type { CollaborationMode, CommandInfo, EffortInfo, GoalLifecycleView, GoalRuntime, GoalStatus, HistoryMessage, QualityFloor, RemoteTabStateValue, TabMeta, ToolApprovalMode, WireEvent } from "./types";
 import type { RemoteAskAnswer } from "./remoteTypes";
@@ -204,6 +205,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     let modern = false;
     let supportsModern: boolean | undefined;
     let negotiating = typeof app.RemoteTranscriptSnapshotForTab === "function";
+    const outlineStore = getTranscriptOutlineStore();
+    const loadModernRef: { current?: () => Promise<boolean> } = {};
     const projector = new TurnEventProjector({ replay: (id, after, identity) => {
       if (!identity || !app.RemoteTranscriptReplayForTab) throw new Error("remote transcript replay unavailable");
       return app.RemoteTranscriptReplayForTab(id, { identity, after });
@@ -217,7 +220,15 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       },
       page: (id, request) => app.RemoteTranscriptPageForTab!(id, request),
       content: (id, request) => app.RemoteTranscriptContentForTab!(id, request),
-    }, projector);
+    }, projector, undefined, (id, snapshotId) => {
+      // The remote outline is capability-negotiated; a Serve that does not
+      // advertise it keeps the loaded-turn rail rather than failing.
+      if (!snapshotId) { outlineStore.release(id); return; }
+      // A retry after a recycled cut re-installs the snapshot; only that
+      // explicit request may replace the body the reader is looking at.
+      outlineStore.register(id, remoteOutlineRead, () => { void loadModernRef.current?.(); });
+      void outlineStore.sync(id, snapshotId);
+    });
     projector.bind((event) => {
       snapshots.observeEvent(tabId, event);
       setTranscript((current) => reducer(current, { type: "event", e: event, remote: true }));
@@ -227,6 +238,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       return snapshots.load(tabId, (snapshot) => setTranscript((current) => reducer(current, { type: "transcript_snapshot", snapshot, remote: true })),
         () => !cancelled && generation === connectionGeneration);
     };
+    loadModernRef.current = loadModern;
     projector.bindReset(async () => loadModern());
     const offContent = getTranscriptStore().registerContentResolver(tabId, async (entryId, field) => {
       try {

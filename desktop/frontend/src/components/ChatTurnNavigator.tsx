@@ -2,6 +2,9 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { ChatSource } from "../lib/chatViewSource";
 import type { ChatScrollController } from "../lib/chatScrollController";
 import type { ChatMountedOrder } from "../lib/chatMountedOrder";
+import { loadedTurnKey } from "../lib/chatTurnRail";
+import { getTranscriptOutlineStore, type TranscriptOutlineView } from "../lib/transcriptOutlineStore";
+import type { TranscriptOutlineEntry } from "../lib/transcriptProtocol";
 import { useT } from "../lib/i18n";
 import { TurnNavigator, type TurnRailItem } from "./harness-chat/TurnNavigator";
 import css from "./harness-chat/TurnNavigator.styles";
@@ -9,33 +12,112 @@ import "./harness-chat/TurnNavigator.css";
 
 function Preview({ source, item }: { source: ChatSource; item: TurnRailItem }) {
   const subscribe = useCallback((notify: () => void) => {
-    const user = source.subscribeNode(item.turn, notify);
+    const user = item.anchor.kind === "loaded" ? source.subscribeNode(item.turn, notify) : undefined;
     const answer = item.answerKey ? source.subscribeNode(item.answerKey, notify) : undefined;
-    return () => { user(); answer?.(); };
+    return () => { user?.(); answer?.(); };
   }, [source, item]);
   const snapshot = useCallback(() => {
-    const user = source.getNodeSnapshot(item.turn);
+    // An unloaded turn has no node to read, so its outline preview is used as
+    // it arrived. Prefer the loaded body when there is one: it carries the
+    // running turn's text that the snapshot could not have seen yet.
+    const user = item.anchor.kind === "loaded" ? source.getNodeSnapshot(item.turn) : undefined;
     const answer = item.answerKey ? source.getNodeSnapshot(item.answerKey) : undefined;
-    return JSON.stringify([user?.kind === "user" ? user.item.text.slice(0, 300) : "", answer?.kind === "assistant" ? answer.item.text.slice(0, 500) : ""]);
+    const prompt = user?.kind === "user" ? user.item.text.slice(0, 300) : item.prompt;
+    const response = answer?.kind === "assistant" && answer.item.text.trim() ? answer.item.text.slice(0, 500) : item.response;
+    return JSON.stringify([prompt, response]);
   }, [source, item]);
   const [prompt, response] = JSON.parse(useSyncExternalStore(subscribe, snapshot, snapshot)) as string[];
   return <><div className={css.previewPrompt}>{prompt || item.ordinal}</div><div className={css.previewResponse}>{response}</div></>;
 }
 
-export default function ChatTurnNavigator({ source, scroll, mounts }: { source: ChatSource; scroll: ChatScrollController; mounts: ChatMountedOrder }) {
+export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onJump, busyTurn, knownTurns = 0 }: {
+  source: ChatSource;
+  scroll: ChatScrollController;
+  mounts: ChatMountedOrder;
+  tabId?: string;
+  onJump?: (entry: TranscriptOutlineEntry) => void;
+  busyTurn?: string | null;
+  /** Turns the session is already known to hold, independent of the outline. */
+  knownTurns?: number;
+}) {
   const t = useT();
+  const store = useMemo(() => getTranscriptOutlineStore(), []);
+  // An unknown tab id resolves to the store's frozen legacy view, so the
+  // snapshot stays referentially stable when no tab is bound yet.
+  const subscribeOutline = useCallback((notify: () => void) => (tabId ? store.subscribe(tabId, notify) : () => {}), [store, tabId]);
+  const readOutline = useCallback((): TranscriptOutlineView => store.getView(tabId ?? ""), [store, tabId]);
+  const outline = useSyncExternalStore(subscribeOutline, readOutline, readOutline);
   const order = useSyncExternalStore(mounts.subscribe, mounts.getSnapshot, mounts.getSnapshot);
   const position = useSyncExternalStore(scroll.subscribe, scroll.getSnapshot, scroll.getSnapshot);
+
+  // The mounted set is a Set for lookup and the order array for sequencing.
+  const mountedKeys = useMemo(() => new Set(order), [order]);
+  // Bumped whenever the outline identity changes so the merge re-runs.
+  const outlineEntries = outline.entries;
+
   const items = useMemo(() => {
     const turns: TurnRailItem[] = [];
+    const byTurn = new Map<string, TurnRailItem>();
     for (const key of order) {
       const node = source.getNodeSnapshot(key);
-      if (node?.kind === "user") turns.push({ turn: key, ordinal: turns.length + 1, prompt: "", response: "", anchor: { kind: "loaded" } });
-      else if (node?.kind === "assistant" && turns.length) turns[turns.length - 1].answerKey = key;
+      if (node?.kind === "user") {
+        const item: TurnRailItem = {
+          turn: key, ordinal: turns.length + 1, prompt: "", response: "",
+          anchor: { kind: "loaded" },
+        };
+        turns.push(item);
+        byTurn.set(key, item);
+      } else if (node?.kind === "assistant" && turns.length) turns[turns.length - 1].answerKey = key;
     }
-    return turns;
-  }, [order, source]);
-  const navigate = useCallback((item: TurnRailItem) => scroll.jump(item.turn), [scroll]);
+    if (outline.mode !== "ready") return turns;
+
+    // The outline is the complete conversation; loaded turns only enrich it.
+    // Ordering and numbering come from the outline so loading an earlier page
+    // never renumbers the rail.
+    const merged: TurnRailItem[] = [];
+    const claimed = new Set<string>();
+    for (const entry of outlineEntries) {
+      const key = loadedTurnKey(entry, mountedKeys);
+      if (key) claimed.add(key);
+      const loaded = key ? byTurn.get(key) : undefined;
+      merged.push({
+        turn: key ?? entry.id,
+        ordinal: entry.turn > 0 ? entry.turn : merged.length + 1,
+        prompt: loaded?.prompt || entry.prompt,
+        response: loaded?.response || entry.answer || "",
+        answerKey: loaded?.answerKey,
+        anchor: key ? { kind: "loaded" } : { kind: "unloaded", recordId: entry.id, messageId: entry.messageId },
+        unloaded: key === undefined,
+      });
+    }
+    // A question submitted while the outline was being read is not in it yet.
+    // Keep it rather than dropping a turn the reader can already see, but never
+    // list one turn twice when its identities disagree.
+    const emitted = new Set(merged.map(item => item.turn));
+    for (const item of turns) {
+      if (claimed.has(item.turn) || emitted.has(item.turn)) continue;
+      emitted.add(item.turn);
+      merged.push({ ...item, ordinal: merged.length + 1, unloaded: false });
+    }
+    return merged;
+  }, [order, mountedKeys, source, outline.mode, outlineEntries]);
+
+  const navigate = useCallback((item: TurnRailItem) => {
+    if (item.anchor.kind === "loaded") { scroll.jump(item.turn); return; }
+    onJump?.({
+      id: item.anchor.recordId, messageId: item.anchor.messageId,
+      turn: item.ordinal, order: 0, prompt: item.prompt, answer: item.response,
+    });
+  }, [scroll, onJump]);
+  const retry = useCallback(() => { if (tabId) void store.retry(tabId); }, [store, tabId]);
   const preview = useCallback((item: TurnRailItem) => <Preview key={item.turn} source={source} item={item} />, [source]);
-  return <TurnNavigator items={items} activeTurn={position.activeKey || null} busyTurn={null} onNavigate={navigate} renderPreview={preview} t={t} />;
+  // Only a session already known to hold more than one turn keeps the rail's
+  // area while the outline is still loading; a fresh conversation shows nothing.
+  // A failure is different: whatever markers are already known stay, and the
+  // retry entry is offered whether or not any are.
+  const failed = outline.mode === "error";
+  const loading = knownTurns > 1 && items.length < 2 && outline.mode === "loading";
+  return <TurnNavigator items={items} activeTurn={position.activeKey || null} busyTurn={busyTurn ?? null}
+    onNavigate={navigate} renderPreview={preview} t={t}
+    loading={loading} failed={failed} onRetry={failed ? retry : undefined} />;
 }

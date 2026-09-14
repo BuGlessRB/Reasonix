@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 6;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:36d13e77ffca2b587b4f0b57a3a4618f1d4c2540e5228530a94372dde7d58297";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:022a6f5058e0f3b1bc808f9498360423a044db8b43bcaa04e0df8da6019e3c7d";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -343,6 +343,7 @@ export const DESKTOP_COMMANDS = [
   "RemoteTabSnapshot",
   "RemoteTabStatus",
   "RemoteTranscriptContentForTab",
+  "RemoteTranscriptOutlineForTab",
   "RemoteTranscriptPageForTab",
   "RemoteTranscriptReplayForTab",
   "RemoteTranscriptSnapshotForTab",
@@ -596,6 +597,7 @@ export const DESKTOP_COMMANDS = [
   "ToggleMaximiseMainWindow",
   "ToolResultForTab",
   "TranscriptContentForTab",
+  "TranscriptOutlineForTab",
   "TranscriptPageForTab",
   "TranscriptReplayForTab",
   "TranscriptSnapshotForTab",
@@ -4442,6 +4444,35 @@ export interface Message {
   serverSearch?: ServerSearchCall[];
 }
 
+export interface OutlineEntry {
+  id: string;
+  messageId?: string;
+  turn: number;
+  order: number;
+  prompt: string;
+  answer?: string;
+}
+
+export interface OutlinePage {
+  protocolVersion: number;
+  snapshotId: string;
+  identity: Identity;
+  projectionRevision: number;
+  coveredThroughSeq: number;
+  entries: OutlineEntry[];
+  nextOffset: number;
+  done: boolean;
+  total: number;
+  stale: boolean;
+}
+
+export interface OutlineRequest {
+  snapshotId: string;
+  offset: number;
+  entries: number;
+  bytes: number;
+}
+
 export interface PageRequest {
   snapshotId: string;
   before: number;
@@ -4948,6 +4979,7 @@ export interface GeneratedDesktopCommands {
   RemoteTabSnapshot(arg0: string): Promise<RemoteTabSnapshot>;
   RemoteTabStatus(arg0: string): Promise<unknown>;
   RemoteTranscriptContentForTab(arg0: string, arg1: ContentRequest): Promise<ContentChunk>;
+  RemoteTranscriptOutlineForTab(arg0: string, arg1: OutlineRequest): Promise<OutlinePage>;
   RemoteTranscriptPageForTab(arg0: string, arg1: PageRequest): Promise<Snapshot>;
   RemoteTranscriptReplayForTab(arg0: string, arg1: TranscriptReplayRequest): Promise<TranscriptReplay>;
   RemoteTranscriptSnapshotForTab(arg0: string, arg1: PageRequest): Promise<RemoteTranscriptSnapshot>;
@@ -5201,6 +5233,7 @@ export interface GeneratedDesktopCommands {
   ToggleMaximiseMainWindow(): Promise<void>;
   ToolResultForTab(arg0: string, arg1: string): Promise<ToolResultData | null>;
   TranscriptContentForTab(arg0: string, arg1: ContentRequest): Promise<ContentChunk>;
+  TranscriptOutlineForTab(arg0: string, arg1: OutlineRequest): Promise<OutlinePage>;
   TranscriptPageForTab(arg0: string, arg1: PageRequest): Promise<Snapshot>;
   TranscriptReplayForTab(arg0: string, arg1: TranscriptReplayRequest): Promise<TranscriptReplay>;
   TranscriptSnapshotForTab(arg0: string, arg1: PageRequest): Promise<Snapshot>;
