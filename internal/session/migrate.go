@@ -49,14 +49,14 @@ type MigrationResult struct {
 var migrationMu sync.Mutex
 
 // MigrateLegacy freezes one legacy session under its write lease, constructs a
-// complete v3 directory in a sibling temporary directory, then publishes it by
+// complete canonical directory in a sibling temporary directory, then publishes it by
 // rename. Original artifacts are copied byte-for-byte under legacy/ and are
 // never rewritten or removed.
 func MigrateLegacy(ctx context.Context, sourcePath, targetRoot string) (MigrationResult, error) {
 	return MigrateLegacyHead(ctx, sourcePath, targetRoot, "")
 }
 
-// MigrateLegacyHead turns one reachable legacy DAG head into its own linear v3
+// MigrateLegacyHead turns one reachable legacy DAG head into its own canonical
 // session. An empty head ID imports the legacy file's selected/default view.
 // Head identity participates in both the deterministic target ID and migration
 // map key, so continuing two old heads can never merge their future writes.
@@ -339,7 +339,7 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 		return MigrationResult{}, closeErr
 	}
 	if err := os.Rename(tmp, targetDir); err != nil {
-		return MigrationResult{}, fmt.Errorf("publish v3 session: %w", err)
+		return MigrationResult{}, fmt.Errorf("publish canonical session: %w", err)
 	}
 	published = true
 	if err := appendMigrationMapping(ctx, targetRoot, MigrationEntry{SourcePath: f.sourcePath, SourceSize: f.source.Size, SourceSHA256: f.source.SHA256, LegacyHeadID: f.headID, TargetCodec: Codec, TargetID: f.targetID, CreatedAt: time.Now().UTC()}); err != nil {

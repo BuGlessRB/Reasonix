@@ -1,11 +1,13 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"reasonix/internal/projectiondb"
 	"reasonix/internal/provider"
 )
 
@@ -116,5 +118,34 @@ func TestSearchHistoryUsesStableSnapshotAndOpaqueQueryCursor(t *testing.T) {
 	}
 	if _, err := service.Query().SearchHistory(t.Context(), runtime.Ref(), "different", first.NextCursor, 10); err == nil {
 		t.Fatal("search cursor was accepted for another query")
+	}
+}
+
+func TestHistoryIndexHasSnapshotPositionIndex(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.sqlite")
+	handle, err := projectiondb.Open(t.Context(), projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handle.DB.Close()
+	rows, err := handle.DB.QueryContext(context.Background(), `PRAGMA index_list(messages)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	found := false
+	for rows.Next() {
+		var sequence, unique, partial int
+		var name, origin string
+		if err := rows.Scan(&sequence, &name, &unique, &origin, &partial); err != nil {
+			t.Fatal(err)
+		}
+		found = found || name == "messages_snapshot_position"
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("snapshot-position query index is missing")
 	}
 }

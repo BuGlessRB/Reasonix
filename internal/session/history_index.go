@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	historyIndexVersion     = 2
+	historyIndexVersion     = 3
 	HistoryPageDefaultLimit = 100
 	HistoryPageMaxLimit     = 500
 	HistoryPageMaxBytes     = 2 << 20
@@ -82,6 +82,12 @@ var historyMigrations = []projectiondb.Migration{{Version: 1, Apply: func(ctx co
 	return nil
 }}, {Version: 2, Apply: func(ctx context.Context, tx *sql.Tx) error {
 	_, err := tx.ExecContext(ctx, `ALTER TABLE messages ADD COLUMN search_text TEXT NOT NULL DEFAULT ''`)
+	return err
+}}, {Version: 3, Apply: func(ctx context.Context, tx *sql.Tx) error {
+	// Fixed-snapshot pages walk positions newest-to-oldest. Without this index,
+	// SQLite scans and sorts the full message-body table for every page; on a
+	// GiB history that turns a bounded result into seconds of disk traffic.
+	_, err := tx.ExecContext(ctx, `CREATE INDEX messages_snapshot_position ON messages(position DESC, event_sequence, valid_to)`)
 	return err
 }}}
 

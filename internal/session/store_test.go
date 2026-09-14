@@ -1,9 +1,11 @@
 package session
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -422,6 +424,89 @@ func TestMigrateLegacyIsIdempotentAndUsesFrozenArtifacts(t *testing.T) {
 	legacyGoal := filepath.Join(first.TargetDir, "legacy", filepath.Base(store.SessionGoalState(path)))
 	if string(mustRead(t, legacyGoal)) != goal {
 		t.Fatal("raw goal sidecar was not preserved byte-for-byte")
+	}
+}
+
+func TestMigrateLegacyBeyondFormer128MiBReplayLimit(t *testing.T) {
+	if os.Getenv("REASONIX_LARGE_SESSION_TEST") != "1" {
+		t.Skip("set REASONIX_LARGE_SESSION_TEST=1 to run the exact 134,308,416-byte regression")
+	}
+	const (
+		totalBytes = int64(134_308_416)
+		messages   = 8_192
+	)
+	root := t.TempDir()
+	legacy := filepath.Join(root, "oversized.jsonl")
+	file, err := os.OpenFile(legacy, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefixBytes := int64(len(fmt.Sprintf(`{"role":"user","id":"m-%08d","content":"`, 0)))
+	suffix := []byte("\"}\n")
+	contentBytes := totalBytes - int64(messages)*(prefixBytes+int64(len(suffix)))
+	if contentBytes <= 0 {
+		t.Fatal("invalid oversized fixture dimensions")
+	}
+	base, extra := contentBytes/int64(messages), contentBytes%int64(messages)
+	chunk := bytes.Repeat([]byte{'x'}, 32<<10)
+	for i := range messages {
+		prefix := fmt.Sprintf(`{"role":"user","id":"m-%08d","content":"`, i)
+		if _, err := file.WriteString(prefix); err != nil {
+			t.Fatal(err)
+		}
+		n := base
+		if int64(i) < extra {
+			n++
+		}
+		for n > 0 {
+			part := min(n, int64(len(chunk)))
+			if _, err := file.Write(chunk[:part]); err != nil {
+				t.Fatal(err)
+			}
+			n -= part
+		}
+		if _, err := file.Write(suffix); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := file.Sync(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(legacy)
+	if err != nil || info.Size() != totalBytes {
+		t.Fatalf("legacy fixture size = %d, %v", info.Size(), err)
+	}
+	targetRoot := filepath.Join(root, "sessions-v4")
+	result, err := MigrateLegacy(t.Context(), legacy, targetRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Source.Size != totalBytes || result.MessageNum != messages {
+		t.Fatalf("migration result = %+v", result)
+	}
+	service, err := NewService("capacity", NewFilesystemPersistence(targetRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := service.Open(t.Context(), SessionRef{HostID: "capacity", SessionID: result.TargetID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := binding.Runtime().Session().AppendBatch(t.Context(), "continued-after-oversized-migration", []Event{{Kind: "session/title", Payload: json.RawMessage(`{"title":"continued"}`)}}); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := binding.Runtime().Session().Flush(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.DurableSequence != messages+1 {
+		t.Fatalf("continued durable sequence = %d, want %d", receipt.DurableSequence, messages+1)
+	}
+	if err := binding.Release(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 }
 
