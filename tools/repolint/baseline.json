@@ -2,15 +2,15 @@
   "limits": {
     "banner": 13,
     "commented-code": 0,
-    "complexity": 1857,
-    "essay": 1923,
-    "file-size": 99693,
-    "function-size": 8009,
+    "complexity": 1883,
+    "essay": 1925,
+    "file-size": 99772,
+    "function-size": 8054,
     "layering": 1,
     "marker": 0,
     "narrative": 63,
     "struct-state": 105,
-    "test-file-size": 64226
+    "test-file-size": 64269
   },
   "files": {
     "cmd/e2ebench/main.go": {
@@ -25,7 +25,7 @@
     "desktop/app.go": {
       "complexity": 56,
       "essay": 60,
-      "file-size": 11305,
+      "file-size": 11214,
       "function-size": 359,
       "struct-state": 10
     },
@@ -69,7 +69,7 @@
       "essay": 1
     },
     "desktop/frontend/src/__tests__/composer-goal-toggle.test.tsx": {
-      "test-file-size": 1732
+      "test-file-size": 1730
     },
     "desktop/frontend/src/__tests__/composer-run-strip.test.tsx": {
       "test-file-size": 26
@@ -96,7 +96,7 @@
       "file-size": 2643
     },
     "desktop/frontend/src/components/Composer.tsx": {
-      "file-size": 3874
+      "file-size": 3854
     },
     "desktop/frontend/src/components/ContextPanel.tsx": {
       "file-size": 36
@@ -135,7 +135,7 @@
       "file-size": 177
     },
     "desktop/frontend/src/lib/bridge.ts": {
-      "file-size": 4907
+      "file-size": 4936
     },
     "desktop/frontend/src/lib/crash.ts": {
       "file-size": 98
@@ -147,7 +147,7 @@
       "file-size": 1627
     },
     "desktop/frontend/src/lib/useController.ts": {
-      "file-size": 4228
+      "file-size": 4172
     },
     "desktop/heartbeat.go": {
       "essay": 7
@@ -156,7 +156,7 @@
       "banner": 1,
       "complexity": 6,
       "essay": 34,
-      "file-size": 758,
+      "file-size": 847,
       "function-size": 8
     },
     "desktop/history_slice_test.go": {
@@ -366,10 +366,10 @@
       "test-file-size": 1364
     },
     "internal/acp/service.go": {
-      "complexity": 4,
+      "complexity": 1,
       "essay": 37,
-      "file-size": 2319,
-      "function-size": 114,
+      "file-size": 2285,
+      "function-size": 97,
       "struct-state": 2
     },
     "internal/acp/service_lock_test.go": {
@@ -456,7 +456,7 @@
     "internal/agent/save.go": {
       "complexity": 30,
       "essay": 79,
-      "file-size": 1393,
+      "file-size": 1421,
       "function-size": 103
     },
     "internal/agent/save_test.go": {
@@ -477,7 +477,7 @@
     },
     "internal/agent/session_events_test.go": {
       "essay": 3,
-      "test-file-size": 33
+      "test-file-size": 78
     },
     "internal/agent/session_lease.go": {
       "essay": 2
@@ -643,7 +643,7 @@
     "internal/cli/chat_tui.go": {
       "complexity": 276,
       "essay": 80,
-      "file-size": 4222,
+      "file-size": 4176,
       "function-size": 1093
     },
     "internal/cli/chat_tui_paste.go": {
@@ -844,7 +844,7 @@
     "internal/control/controller.go": {
       "complexity": 13,
       "essay": 97,
-      "file-size": 5398,
+      "file-size": 5345,
       "function-size": 88,
       "narrative": 4,
       "struct-state": 23
@@ -897,7 +897,7 @@
       "essay": 2,
       "function-size": 15
     },
-    "internal/control/session_events_v3.go": {
+    "internal/control/session_events.go": {
       "complexity": 14,
       "function-size": 22
     },
@@ -1324,7 +1324,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 1052,
+      "file-size": 1036,
       "function-size": 8
     },
     "internal/serve/serve_test.go": {
@@ -1337,15 +1337,33 @@
     "internal/serve/session_ownership_test.go": {
       "test-file-size": 169
     },
+    "internal/session/import_resolver.go": {
+      "essay": 1
+    },
+    "internal/session/migrate.go": {
+      "complexity": 7,
+      "function-size": 20
+    },
+    "internal/session/prototype_import.go": {
+      "complexity": 8,
+      "function-size": 36
+    },
+    "internal/session/session.go": {
+      "essay": 1
+    },
+    "internal/session/store.go": {
+      "essay": 1,
+      "file-size": 249
+    },
+    "internal/session/v4_codec.go": {
+      "complexity": 14
+    },
     "internal/sessioncatalog/lineage.go": {
       "complexity": 29,
       "essay": 4,
       "function-size": 69
     },
     "internal/sessiontemp/manager.go": {
-      "essay": 1
-    },
-    "internal/session/store.go": {
       "essay": 1
     },
     "internal/shellrun/runner.go": {
@@ -1479,6 +1497,9 @@
     },
     "sdk/go/wire.go": {
       "essay": 1
+    },
+    "tools/sessioncapacity/main.go": {
+      "function-size": 6
     },
     "workers/crash-report/src/index.ts": {
       "file-size": 874
