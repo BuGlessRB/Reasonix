@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -392,6 +393,38 @@ func TestPrototypeRequiresExplicitImportAndPreservesTornTail(t *testing.T) {
 	reused, err := ImportPrototype(t.Context(), source, filepath.Join(root, "final"))
 	if err != nil || !reused.Reused || reused.TargetID != result.TargetID {
 		t.Fatalf("reused import = %+v, %v", reused, err)
+	}
+}
+
+func TestPrototypeImportAcceptsLegacyRecordLargerThan64MiB(t *testing.T) {
+	if testing.Short() {
+		t.Skip("capacity regression")
+	}
+	root := t.TempDir()
+	source := filepath.Join(root, "prototype-large-record")
+	large := strings.Repeat("x", (64<<20)+(1<<20))
+	payload, err := json.Marshal(map[string]any{"message": provider.Message{ID: "large-message", Role: provider.RoleAssistant, Content: large}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writePrototypeStore(t, source, []Event{{Kind: "message/complete", Payload: payload}}, "")
+	result, err := ImportPrototype(t.Context(), source, filepath.Join(root, "final"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(result.TargetDir, result.TargetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close(context.Background())
+	messages := store.Snapshot().Projection.Messages
+	if len(messages) != 1 || messages[0].Content != large {
+		t.Fatalf("large legacy record round trip = %d messages / %d bytes", len(messages), func() int {
+			if len(messages) == 0 {
+				return 0
+			}
+			return len(messages[0].Content)
+		}())
 	}
 }
 

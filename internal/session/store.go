@@ -810,9 +810,6 @@ func scanCommitFileCodec(file *os.File, startOffset int64, nextSequence uint64, 
 			return readErr
 		}
 		offset += int64(len(line))
-		if len(line) > 64<<20 {
-			return fmt.Errorf("%w: event record exceeds 64 MiB", ErrDamagedStore)
-		}
 		var commit Commit
 		if err := json.Unmarshal(bytes.TrimSuffix(line, []byte{'\n'}), &commit); err != nil {
 			return fmt.Errorf("%w: decode complete commit: %w", ErrDamagedStore, err)

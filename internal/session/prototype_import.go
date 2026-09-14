@@ -1,7 +1,6 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,13 +14,13 @@ import (
 
 	"reasonix/internal/filelock"
 	"reasonix/internal/fileutil"
-	"reasonix/internal/sessioncontent"
 )
 
 type frozenPreview struct {
 	dir           string
+	freezeDir     string
 	manifestBytes []byte
-	eventBytes    []byte
+	eventPath     string
 	manifest      Manifest
 	source        Source
 	logName       string
@@ -59,6 +58,7 @@ func importPreview(ctx context.Context, sourceDir, targetRoot string) (Prototype
 	if err != nil {
 		return PrototypeImportResult{}, err
 	}
+	defer os.RemoveAll(frozen.freezeDir)
 	return importFrozenPreview(ctx, frozen, targetRoot)
 }
 
@@ -122,24 +122,53 @@ func freezePreviewCodec(ctx context.Context, sourceDir string, allowCurrent bool
 	if draftCodec {
 		logName = currentLogName
 	}
-	eventBytes, err := os.ReadFile(filepath.Join(sourceDir, logName))
-	if os.IsNotExist(err) {
-		eventBytes = nil
+	freezeDir, err := os.MkdirTemp("", "reasonix-preview-freeze-*")
+	if err != nil {
+		return frozenPreview{}, err
+	}
+	keepFreeze := false
+	defer func() {
+		if !keepFreeze {
+			_ = os.RemoveAll(freezeDir)
+		}
+	}()
+	frozenManifestPath := filepath.Join(freezeDir, "manifest.json")
+	if err := fileutil.AtomicWriteFileStrict(frozenManifestPath, manifestBytes, 0o600); err != nil {
+		return frozenPreview{}, err
+	}
+	frozenEventPath := filepath.Join(freezeDir, logName)
+	sourceEventPath := filepath.Join(sourceDir, logName)
+	if err := copyFrozenArtifact(ctx, sourceEventPath, frozenEventPath, 0o600); os.IsNotExist(err) {
+		if err := fileutil.AtomicWriteFileStrict(frozenEventPath, nil, 0o600); err != nil {
+			return frozenPreview{}, err
+		}
 	} else if err != nil {
 		return frozenPreview{}, err
 	}
 	digest := sha256.New()
 	digest.Write(manifestBytes)
 	digest.Write([]byte{0})
-	digest.Write(eventBytes)
+	eventFile, err := os.Open(frozenEventPath)
+	if err != nil {
+		return frozenPreview{}, err
+	}
+	eventSize, err := copyStreamWithContext(ctx, digest, eventFile)
+	closeErr := eventFile.Close()
+	if err != nil {
+		return frozenPreview{}, err
+	}
+	if closeErr != nil {
+		return frozenPreview{}, closeErr
+	}
 	sourceDigest := hex.EncodeToString(digest.Sum(nil))
-	source := Source{Path: sourceDir, Size: int64(len(manifestBytes) + len(eventBytes)), SHA256: sourceDigest, Version: manifest.Codec}
-	return frozenPreview{dir: sourceDir, manifestBytes: manifestBytes, eventBytes: eventBytes, manifest: manifest, source: source, logName: logName}, nil
+	source := Source{Path: sourceDir, Size: int64(len(manifestBytes)) + eventSize, SHA256: sourceDigest, Version: manifest.Codec}
+	keepFreeze = true
+	return frozenPreview{dir: sourceDir, freezeDir: freezeDir, manifestBytes: manifestBytes, eventPath: frozenEventPath, manifest: manifest, source: source, logName: logName}, nil
 }
 
 func importFrozenPreview(ctx context.Context, frozen frozenPreview, targetRoot string) (PrototypeImportResult, error) {
 	prototype, source := frozen.manifest, frozen.source
-	manifestBytes, eventBytes, sourceDir := frozen.manifestBytes, frozen.eventBytes, frozen.dir
+	manifestBytes, sourceDir := frozen.manifestBytes, frozen.dir
 	targetID := deterministicID("prototype-import\x00" + prototype.Codec + "\x00" + sourceDir + "\x00" + source.SHA256)
 	targetDir := filepath.Join(targetRoot, targetID)
 	result := PrototypeImportResult{TargetID: targetID, TargetDir: targetDir, Source: source}
@@ -173,35 +202,88 @@ func importFrozenPreview(ctx context.Context, frozen frozenPreview, targetRoot s
 	if err := fileutil.AtomicWriteFileStrict(filepath.Join(legacyDir, "manifest.json"), manifestBytes, 0o600); err != nil {
 		return PrototypeImportResult{}, err
 	}
-	if err := fileutil.AtomicWriteFileStrict(filepath.Join(legacyDir, frozen.logName), eventBytes, 0o600); err != nil {
+	if err := copyFrozenArtifact(ctx, frozen.eventPath, filepath.Join(legacyDir, frozen.logName), 0o600); err != nil {
 		return PrototypeImportResult{}, err
 	}
 
-	frozenLog, err := os.Open(filepath.Join(legacyDir, frozen.logName))
+	frozenLog, err := os.Open(frozen.eventPath)
 	if err != nil {
 		return PrototypeImportResult{}, err
 	}
-	prototypeCommits := []Commit{}
+	finalLogPath := filepath.Join(tmp, currentLogName)
+	finalLog, err := os.OpenFile(finalLogPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		_ = frozenLog.Close()
+		return PrototypeImportResult{}, err
+	}
+	content := contentStoreForSessionDir(tmp)
+	projection := Projection{}
+	var importedCommits int
+	var lastSequence uint64
+	var convertErr error
+	pending := make([]Commit, 0, 64)
+	flushPending := func() error {
+		if len(pending) == 0 {
+			return nil
+		}
+		_, err := encodeV4Commits(ctx, finalLog, content, pending)
+		pending = pending[:0]
+		return err
+	}
 	knownKinds := ProjectionKinds
 	if prototype.Codec == PrototypeCodec {
 		knownKinds = PrototypeProjectionKinds
 	}
 	visit := func(_ int64, commit Commit) bool {
-		prototypeCommits = append(prototypeCommits, cloneCommit(commit))
-		return true
+		converted, err := convertPrototypeCommit(commit, prototype.SessionID, targetID, prototype.Codec)
+		if err == nil {
+			err = applyProjectionCommit(&projection, converted)
+		}
+		if err == nil {
+			pending = append(pending, converted)
+			if len(pending) == cap(pending) {
+				err = flushPending()
+			}
+		}
+		if err != nil {
+			convertErr = err
+			return false
+		}
+		importedCommits++
+		lastSequence = converted.LastSequence()
+		return ctx.Err() == nil
 	}
 	if prototype.Codec == Codec && prototype.StorageRevision == 0 {
 		err = scanV4CommitFile(ctx, frozenLog, 0, 1, contentStoreForSessionDir(sourceDir), knownKinds, visit)
 	} else {
 		err = scanCommitFileCodec(frozenLog, 0, 1, prototype.Codec, knownKinds, visit)
 	}
-	_ = frozenLog.Close()
+	frozenCloseErr := frozenLog.Close()
 	if err != nil {
+		_ = finalLog.Close()
 		return PrototypeImportResult{}, err
 	}
-
-	finalLog, lastSequence, err := convertPrototypeCommits(ctx, prototypeCommits, prototype.SessionID, targetID, prototype.Codec, contentStoreForSessionDir(tmp))
-	if err != nil {
+	if convertErr != nil {
+		_ = finalLog.Close()
+		return PrototypeImportResult{}, convertErr
+	}
+	if err := flushPending(); err != nil {
+		_ = finalLog.Close()
+		return PrototypeImportResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		_ = finalLog.Close()
+		return PrototypeImportResult{}, err
+	}
+	if frozenCloseErr != nil {
+		_ = finalLog.Close()
+		return PrototypeImportResult{}, frozenCloseErr
+	}
+	if err := finalLog.Sync(); err != nil {
+		_ = finalLog.Close()
+		return PrototypeImportResult{}, err
+	}
+	if err := finalLog.Close(); err != nil {
 		return PrototypeImportResult{}, err
 	}
 	finalManifest := Manifest{
@@ -211,12 +293,26 @@ func importFrozenPreview(ctx context.Context, frozen frozenPreview, targetRoot s
 	if err := writeManifestFile(filepath.Join(tmp, "manifest.json"), finalManifest); err != nil {
 		return PrototypeImportResult{}, err
 	}
-	if err := fileutil.AtomicWriteFileStrict(filepath.Join(tmp, currentLogName), finalLog, 0o600); err != nil {
+	validatedLog, err := os.Open(finalLogPath)
+	if err != nil {
 		return PrototypeImportResult{}, err
 	}
-	if replayed, replayErr := Replay(tmp, nil); replayErr != nil || len(replayed) != len(prototypeCommits) {
+	validatedProjection := Projection{}
+	validatedCommits := 0
+	var validationErr error
+	replayErr := scanV4CommitFile(ctx, validatedLog, 0, 1, content, nil, func(_ int64, commit Commit) bool {
+		if err := applyProjectionCommit(&validatedProjection, commit); err != nil {
+			validationErr = err
+			return false
+		}
+		validatedCommits++
+		return true
+	})
+	closeErr := validatedLog.Close()
+	replayErr = errors.Join(replayErr, validationErr, closeErr)
+	if replayErr != nil || validatedCommits != importedCommits || validatedProjection.CommittedSequence != lastSequence {
 		if replayErr == nil {
-			replayErr = fmt.Errorf("replayed %d of %d commits", len(replayed), len(prototypeCommits))
+			replayErr = fmt.Errorf("replayed %d commits through sequence %d; want %d through %d", validatedCommits, validatedProjection.CommittedSequence, importedCommits, lastSequence)
 		}
 		return PrototypeImportResult{}, fmt.Errorf("validate prototype target: %w", replayErr)
 	}
@@ -228,35 +324,22 @@ func importFrozenPreview(ctx context.Context, frozen frozenPreview, targetRoot s
 	return result, nil
 }
 
-func convertPrototypeCommits(ctx context.Context, prototypeCommits []Commit, sourceID, targetID, sourceCodec string, content *sessioncontent.Store) ([]byte, uint64, error) {
-	finalCommits := make([]Commit, len(prototypeCommits))
-	var lastSequence uint64
-	for i, original := range prototypeCommits {
-		commit := cloneCommit(original)
-		commit.SchemaVersion = SchemaVersion
-		commit.Codec = Codec
-		commit.ID = deterministicID("prototype-commit\x00" + targetID + "\x00" + original.ID)
-		commit.OperationID = "prototype:" + sourceID + ":" + original.ID
-		commit.WriterGeneration = 1
-		for eventIndex := range commit.Events {
-			if sourceCodec == PrototypeCodec && commit.Events[eventIndex].Kind == "context/replace" {
-				commit.Events[eventIndex].Kind = "history/replace"
-			}
+func convertPrototypeCommit(original Commit, sourceID, targetID, sourceCodec string) (Commit, error) {
+	commit := cloneCommit(original)
+	commit.SchemaVersion = SchemaVersion
+	commit.Codec = Codec
+	commit.ID = deterministicID("prototype-commit\x00" + targetID + "\x00" + original.ID)
+	commit.OperationID = "prototype:" + sourceID + ":" + original.ID
+	commit.WriterGeneration = 1
+	for eventIndex := range commit.Events {
+		if sourceCodec == PrototypeCodec && commit.Events[eventIndex].Kind == "context/replace" {
+			commit.Events[eventIndex].Kind = "history/replace"
 		}
-		operationHash, hashErr := hashOperation(targetID, commit.TurnID, commit.Events)
-		if hashErr != nil {
-			return nil, 0, hashErr
-		}
-		commit.OperationHash = operationHash
-		finalCommits[i] = commit
-		lastSequence = commit.LastSequence()
 	}
-	if _, err := Project(finalCommits); err != nil {
-		return nil, 0, fmt.Errorf("validate imported prototype projection: %w", err)
+	operationHash, err := hashOperation(targetID, commit.TurnID, commit.Events)
+	if err != nil {
+		return Commit{}, err
 	}
-	var finalLog bytes.Buffer
-	if _, err := encodeV4Commits(ctx, &finalLog, content, finalCommits); err != nil {
-		return nil, 0, err
-	}
-	return finalLog.Bytes(), lastSequence, nil
+	commit.OperationHash = operationHash
+	return commit, nil
 }

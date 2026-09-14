@@ -65,6 +65,7 @@ func importSourceForLegacy(ctx context.Context, sourcePath, targetRoot, headID s
 	if err != nil {
 		return ImportResult{}, fmt.Errorf("inspect paired session events: %w", err)
 	}
+	defer os.RemoveAll(frozenPreview.freezeDir)
 	preview, meaningful, err := inspectFrozenPreview(ctx, frozenPreview)
 	if err != nil {
 		return ImportResult{}, fmt.Errorf("inspect paired session events: %w", err)
@@ -168,18 +169,8 @@ func inspectFrozenPreview(ctx context.Context, frozen frozenPreview) ([]provider
 	if frozen.manifest.Codec == PrototypeCodec {
 		knownKinds = PrototypeProjectionKinds
 	}
-	file, err := os.CreateTemp("", "reasonix-preview-events-*.jsonl")
+	file, err := os.Open(frozen.eventPath)
 	if err != nil {
-		return nil, false, err
-	}
-	name := file.Name()
-	defer os.Remove(name)
-	if _, err := file.Write(frozen.eventBytes); err != nil {
-		_ = file.Close()
-		return nil, false, err
-	}
-	if _, err := file.Seek(0, 0); err != nil {
-		_ = file.Close()
 		return nil, false, err
 	}
 	visit := func(_ int64, commit Commit) bool {
