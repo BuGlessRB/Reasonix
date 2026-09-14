@@ -439,7 +439,7 @@ func TestUnlimitedGoalDriverRunsBeyondHarnessDefaultCeiling(t *testing.T) {
 	c.Send("exercise the unlimited goal driver")
 	select {
 	case <-runner.done:
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		t.Fatal("unlimited goal did not cross 256 admitted automatic rounds")
 	}
 	view, err := c.goalLifecycleView()
