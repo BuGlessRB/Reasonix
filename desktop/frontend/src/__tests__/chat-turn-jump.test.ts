@@ -17,6 +17,13 @@ function flushFrames(): void {
   for (const callback of pending) callback(0);
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+
 /** Records the writes a jump asks the shared gateway to make. */
 function fakeScroll() {
   const jumps: string[] = [];
@@ -46,7 +53,7 @@ function jumpFor(mounts: ChatMountedOrder, options: {
   hasOlder?: () => boolean;
   current?: () => boolean;
   snapshotId?: () => string;
-  refresh?: () => Promise<void>;
+  refresh?: (entry: TranscriptOutlineEntry) => Promise<TranscriptOutlineEntry | undefined>;
   drainMs?: number;
 }) {
   const fake = fakeScroll();
@@ -67,7 +74,7 @@ function jumpFor(mounts: ChatMountedOrder, options: {
     hasOlder: options.hasOlder ?? (() => true),
     resolveKey: (entry) => (options.mounted.has(entry.id) ? entry.id : undefined),
     currentSnapshotId: options.snapshotId ?? (() => "cut"),
-    refreshSnapshot: options.refresh ?? (async () => {}),
+    refreshSnapshot: options.refresh ?? (async (entry) => entry),
     isCurrent: options.current ?? (() => true),
     drainMs: options.drainMs,
   });
@@ -159,7 +166,7 @@ async function main() {
       hasOlder: () => true,
       resolveKey: () => undefined,
       currentSnapshotId: () => "cut",
-      refreshSnapshot: async () => {},
+      refreshSnapshot: async (entry) => entry,
       isCurrent: () => true,
     });
     await jump.jump(target("m:1"));
@@ -190,7 +197,7 @@ async function main() {
       hasOlder: () => true,
       resolveKey: () => mounted,
       currentSnapshotId: () => snapshot,
-      refreshSnapshot: async () => { refreshes += 1; stale = false; snapshot = "cut:2"; },
+      refreshSnapshot: async (entry) => { refreshes += 1; stale = false; snapshot = "cut:2"; return entry; },
       isCurrent: () => true,
       drainMs: 0,
     });
@@ -206,13 +213,64 @@ async function main() {
     // A newer click during the refresh abandons the retry, like any other
     // pending transaction.
     const mounts = new ChatMountedOrder();
-    const state = jumpFor(mounts, { mounted: new Set(), pages: [[], ["m:1"]], hasOlder: () => true });
-    await state.jump.jump(target("m:1"));
-    const pending = state.jump.retry();
-    state.jump.jumpTo("u9");
+    const refreshed = deferred<TranscriptOutlineEntry | undefined>();
+    let refreshStarted = false;
+    const fake = fakeScroll();
+    const jump = new ChatTurnJump({
+      mounts, scroll: fake.scroll,
+      loadOlder: async () => "stale" as const,
+      hasOlder: () => true,
+      resolveKey: () => undefined,
+      currentSnapshotId: () => "cut",
+      refreshSnapshot: async () => { refreshStarted = true; return refreshed.promise; },
+      isCurrent: () => true,
+    });
+    const entry = target("m:1");
+    await jump.jump(entry);
+    const pending = jump.retry();
+    assert.equal(refreshStarted, true, "the retry is waiting inside snapshot refresh");
+    jump.jumpTo("u9");
+    refreshed.resolve(entry);
     await pending;
-    assert.deepEqual(state.fake.jumps, ["u9"], "a click during the refresh wins");
-    assert.equal(state.jump.getSnapshot().status, "idle");
+    assert.deepEqual(fake.jumps, ["u9"], "a click during the refresh wins");
+    assert.equal(jump.getSnapshot().status, "idle");
+  }
+
+  {
+    // A transient refresh failure keeps the original target retryable. The
+    // next retry must call the refresher again and can then reach the turn.
+    const mounts = new ChatMountedOrder();
+    const fake = fakeScroll();
+    let refreshes = 0;
+    let stale = true;
+    let mounted: string | undefined;
+    const jump = new ChatTurnJump({
+      mounts, scroll: fake.scroll,
+      loadOlder: async () => {
+        if (stale) return "stale" as const;
+        mounted = "m:1";
+        mounts.publish(["m:1"]);
+        return "loaded" as const;
+      },
+      hasOlder: () => true,
+      resolveKey: () => mounted,
+      currentSnapshotId: () => stale ? "cut" : "cut:2",
+      refreshSnapshot: async (entry) => {
+        refreshes += 1;
+        if (refreshes === 1) throw new Error("network down");
+        stale = false;
+        return entry;
+      },
+      isCurrent: () => true,
+    });
+    await jump.jump(target("m:1"));
+    await jump.retry();
+    assert.equal(jump.getSnapshot().status, "failed", "a failed refresh returns to a retryable state");
+    assert.equal(jump.getSnapshot().reason, "snapshotExpired");
+    assert.ok(jump.getSnapshot().retry, "the failed refresh retains its target");
+    await jump.retry();
+    assert.equal(refreshes, 2, "the second retry invokes snapshot refresh again");
+    assert.deepEqual(fake.jumps, ["m:1"], "the second retry can reach the refreshed target");
   }
 
   {
@@ -319,7 +377,7 @@ async function main() {
       hasOlder: () => pages < 3,
       resolveKey: () => undefined,
       currentSnapshotId: () => "cut",
-      refreshSnapshot: async () => {},
+      refreshSnapshot: async (entry) => entry,
       isCurrent: () => true,
     });
     let settled = false;

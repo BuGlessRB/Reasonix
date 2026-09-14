@@ -2582,12 +2582,12 @@ export function useController() {
     page: (tabId, request) => app.TranscriptPageForTab!(tabId, request),
     content: (tabId, request) => app.TranscriptContentForTab!(tabId, request),
   }, turnEventProjector, (tabId) => getTranscriptStore().tabIsPinned(tabId),
-  (tabId, snapshotId) => {
-    if (!snapshotId) { outlineStore.release(tabId); return; }
+  (tabId, snapshotId, change) => {
+    if (!snapshotId) { if (change === "loading") outlineStore.invalidate(tabId); else outlineStore.release(tabId); return; }
     // A retry after a recycled cut installs a fresh snapshot; only that
     // explicit request may replace the body the reader is looking at.
     outlineStore.register(tabId, localOutlineRead, async () => {
-      await snapshotClientRef.current?.load(tabId, (snapshot) => dispatchToRef.current(tabId, { type: "transcript_snapshot", snapshot })).catch(() => undefined);
+      if (!await snapshotClientRef.current.load(tabId, snapshot => dispatchToRef.current(tabId, { type: "transcript_snapshot", snapshot }))) throw new Error("transcript snapshot refresh was superseded");
     });
     void outlineStore.sync(tabId, snapshotId);
   })).current;

@@ -10,7 +10,7 @@ export const zhTW: Record<DictKey, string> = {
   "chat.turnNavigation.retry": "重新載入對話輪次",
   "chat.turnNavigation.retryJump": "重新跳轉到該輪",
   "chat.turnNavigation.cancel": "停止載入",
-  "chat.turnNavigation.truncated": "僅索引了最近的輪次",
+  "chat.turnNavigation.truncated": "僅顯示部分對話輪次",
   "chat.turnNavigation.reasonExpired": "載入期間正文快照已變更",
   "chat.turnNavigation.reasonBudget": "該輪次過早，無法一次載入到位",
   "chat.turnNavigation.reasonUnavailable": "該輪次沒有可定位的內容",

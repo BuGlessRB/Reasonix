@@ -220,13 +220,17 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       },
       page: (id, request) => app.RemoteTranscriptPageForTab!(id, request),
       content: (id, request) => app.RemoteTranscriptContentForTab!(id, request),
-    }, projector, undefined, (id, snapshotId) => {
+    }, projector, undefined, (id, snapshotId, change) => {
       // The remote outline is capability-negotiated; a Serve that does not
       // advertise it keeps the loaded-turn rail rather than failing.
-      if (!snapshotId) { outlineStore.release(id); return; }
+      if (change === "loading") { outlineStore.invalidate(id); return; }
+      if (change === "released" || !snapshotId) { outlineStore.release(id); return; }
       // A retry after a recycled cut re-installs the snapshot; only that
       // explicit request may replace the body the reader is looking at.
-      outlineStore.register(id, remoteOutlineRead, async () => { await loadModernRef.current?.().catch(() => undefined); });
+      outlineStore.register(id, remoteOutlineRead, async () => {
+        const load = loadModernRef.current;
+        if (!load || !(await load())) throw new Error("remote transcript snapshot refresh was superseded");
+      });
       void outlineStore.sync(id, snapshotId);
     });
     projector.bind((event) => {

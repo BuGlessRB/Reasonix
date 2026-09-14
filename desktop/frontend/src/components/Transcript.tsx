@@ -177,7 +177,12 @@ function ChatSession(props: TranscriptProps & { sessionKey: string }) {
     currentSnapshotId: () => (tabId ? getTranscriptOutlineStore().getView(tabId).snapshotId : ""),
     // Only a reader-initiated retry reaches this, and it is what lets a target
     // resolve against a fresh cut instead of the recycled one.
-    refreshSnapshot: async () => { if (tabId) await getTranscriptOutlineStore().refresh(tabId); },
+    refreshSnapshot: async (entry) => {
+      if (!tabId) return undefined;
+      const store = getTranscriptOutlineStore();
+      await store.refresh(tabId);
+      return store.resolve(tabId, entry);
+    },
     isCurrent: () => lifetimeRef.current === lifetime.current,
   }), [mounts, scroll, source, tabId]);
   const jumpState = useSyncExternalStore(jump.subscribe, jump.getSnapshot, jump.getSnapshot);

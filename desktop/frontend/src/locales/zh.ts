@@ -10,7 +10,7 @@ export const zh: Record<DictKey, string> = {
   "chat.turnNavigation.retry": "重新载入对话轮次",
   "chat.turnNavigation.retryJump": "重新跳转到该轮",
   "chat.turnNavigation.cancel": "停止加载",
-  "chat.turnNavigation.truncated": "仅索引了最近的轮次",
+  "chat.turnNavigation.truncated": "仅显示部分对话轮次",
   "chat.turnNavigation.reasonExpired": "加载期间正文快照已变更",
   "chat.turnNavigation.reasonBudget": "该轮次过早，无法一次加载到位",
   "chat.turnNavigation.reasonUnavailable": "该轮次没有可定位的内容",

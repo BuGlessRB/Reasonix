@@ -113,6 +113,29 @@ async function main() {
   }
 
   {
+    // Replacing a cut hides and fences the old outline without unbinding its
+    // owner. A transient snapshot refresh failure must leave a second retry
+    // able to call the same refresher and rebuild the index.
+    const store = new TranscriptOutlineStore();
+    let snapshotId = "s1";
+    let refreshes = 0;
+    store.register("tab", async (_tabId, request) => page(request.snapshotId, [entry(1)], 1, true), async () => {
+      refreshes += 1;
+      if (refreshes === 1) throw new Error("network down");
+      snapshotId = "s2";
+      await store.load("tab", snapshotId);
+    });
+    await store.sync("tab", snapshotId);
+    store.invalidate("tab");
+    assert.equal(store.getView("tab").mode, "legacy", "the replaced cut is hidden during refresh");
+    await assert.rejects(store.refresh("tab"), /network down/);
+    await store.refresh("tab");
+    assert.equal(refreshes, 2, "the failed refresh did not discard the owner binding");
+    assert.equal(store.getView("tab").snapshotId, "s2");
+    assert.deepEqual(store.getView("tab").entries.map(item => item.id), ["m:1"]);
+  }
+
+  {
     // A hostile or buggy host that never finishes must not drive an unbounded
     // request-and-append loop. Each page advances the cursor by one and claims
     // there is more, so only the page cap can stop it.

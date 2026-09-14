@@ -78,8 +78,17 @@ export class TranscriptOutlineStore {
    * says. A navigation jump that hit a recycled cut needs this even when the
    * outline itself still reads as ready, so it is not gated on the view's mode.
    */
-  refresh(tabId: string): Promise<void> {
-    return this.refreshers.get(tabId)?.() ?? Promise.resolve();
+  async refresh(tabId: string): Promise<void> {
+    const refresh = this.refreshers.get(tabId);
+    if (!refresh) throw new Error("transcript snapshot refresh is unavailable");
+    await refresh();
+    // The cut notification starts outline synchronization without blocking the
+    // controller commit. A reader retry, however, must wait until the fresh
+    // identity is usable before it resolves its target again.
+    const pending = this.pending.get(tabId);
+    if (pending) await pending;
+    const view = this.views.get(tabId);
+    if (view?.mode === "error") throw new Error(view.error || "transcript outline refresh failed");
   }
 
   /**
@@ -106,14 +115,33 @@ export class TranscriptOutlineStore {
     return this.views.get(tabId) ?? LEGACY;
   }
 
-  /** Drop a tab's index and fence every read still in flight for it. */
-  release(tabId: string): void {
+  /** Resolve an entry again after refreshing its snapshot. Message identity
+   * wins because an optimistic mounted key can differ from the durable record
+   * id learned later in the same app session. */
+  resolve(tabId: string, target: TranscriptOutlineEntry): TranscriptOutlineEntry | undefined {
+    const entries = this.views.get(tabId)?.entries ?? EMPTY_ENTRIES;
+    if (target.messageId) {
+      const byMessage = entries.find(entry => entry.messageId === target.messageId);
+      if (byMessage) return byMessage;
+    }
+    return entries.find(entry => entry.id === target.id);
+  }
+
+  /** Fence and hide a cut being replaced while preserving the owning host
+   * binding. A failed refresh can therefore be retried instead of degrading
+   * permanently to the legacy rail. */
+  invalidate(tabId: string): void {
     this.generations.set(tabId, (this.generations.get(tabId) ?? 0) + 1);
     this.views.delete(tabId);
     this.pending.delete(tabId);
+    this.publish(tabId);
+  }
+
+  /** Drop a tab's index and fence every read still in flight for it. */
+  release(tabId: string): void {
+    this.invalidate(tabId);
     this.readers.delete(tabId);
     this.refreshers.delete(tabId);
-    this.publish(tabId);
   }
 
   /**

@@ -9,7 +9,7 @@ export const en = {
   "chat.turnNavigation.retry": "Reload conversation turns",
   "chat.turnNavigation.retryJump": "Try that jump again",
   "chat.turnNavigation.cancel": "Stop loading",
-  "chat.turnNavigation.truncated": "Only the most recent turns are indexed",
+  "chat.turnNavigation.truncated": "Only part of the conversation is indexed",
   "chat.turnNavigation.reasonExpired": "The transcript snapshot changed while loading",
   "chat.turnNavigation.reasonBudget": "That turn is too far back to load in one go",
   "chat.turnNavigation.reasonUnavailable": "That turn has no content to scroll to",

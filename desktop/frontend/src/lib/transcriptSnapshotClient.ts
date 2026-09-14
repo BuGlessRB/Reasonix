@@ -72,6 +72,10 @@ export interface SnapshotTransport {
 type Cut = { snapshot: TranscriptSnapshot; records: Map<string, TranscriptRecord>; touched: Set<string>; expired?: boolean; reads?: Map<string, Promise<TranscriptRecord>> };
 export class StaleCut extends Error {}
 
+/** Why the snapshot identity notification fired. A load gap is temporary and
+ * must not tear down the owning reader; a release permanently unbinds it. */
+export type TranscriptCutChange = "loading" | "installed" | "released";
+
 /** Owns immutable page/content leases; the projector owns event admission.
  * A stale response can neither advance coverage nor mutate another cut. */
 export class TranscriptSnapshotClient {
@@ -82,13 +86,13 @@ export class TranscriptSnapshotClient {
     /** Notified whenever a tab's cut is installed, extended, or released, so
      * consumers bound to the snapshot identity can re-align without every
      * loader call site having to remember them. */
-    private readonly onCutChanged: (tabId: string, snapshotId: string | undefined) => void = () => {}) {}
+    private readonly onCutChanged: (tabId: string, snapshotId: string | undefined, change: TranscriptCutChange) => void = () => {}) {}
 
   release(tabId: string) {
     this.generations.set(tabId, (this.generations.get(tabId) ?? 0) + 1);
     this.cuts.delete(tabId);
     this.projector.release(tabId);
-    this.onCutChanged(tabId, undefined);
+    this.onCutChanged(tabId, undefined, "released");
   }
 
   installed(tabId: string): boolean { return this.projector.snapshotBoundary(tabId) !== undefined; }
@@ -144,7 +148,7 @@ export class TranscriptSnapshotClient {
     // the tab to a different session entirely. Announce the gap before the
     // round trip so nothing keeps describing the previous session's cut under
     // this tab id; the install below re-announces with the new identity.
-    this.onCutChanged(tabId, undefined);
+    this.onCutChanged(tabId, undefined, "loading");
     const lease = this.projector.beginSnapshot(tabId);
     const valid = () => this.generations.get(tabId) === generation && current();
     try {
@@ -174,7 +178,7 @@ export class TranscriptSnapshotClient {
           commit(snapshot);
           this.cuts.set(tabId, cut);
           this.prune();
-          this.onCutChanged(tabId, cut.snapshot.snapshotId);
+          this.onCutChanged(tabId, cut.snapshot.snapshotId, "installed");
         });
       }
       throw new Error("transcript snapshot expired during loading");

@@ -58,14 +58,17 @@ try {
   // conversation, which is the reported defect.
   let windowStart = TOTAL - 1;
   let pages = 0;
+  const pageCommits: Array<(loaded: boolean) => void> = [];
   const render = () => harness.render(turnsFrom(windowStart), {
     tabId: TAB, totalTurns: TOTAL, hasOlderHistory: windowStart > 1, historyStartTurn: windowStart - 1,
     onLoadOlderHistory: async () => {
       pages += 1;
       if (windowStart <= 1) return false;
       windowStart = Math.max(1, windowStart - 2);
-      await render();
-      return true;
+      // The parent commit is driven outside the click's act() scope. Rendering
+      // recursively from this callback creates overlapping act() calls and can
+      // leave later props uncommitted, which previously disguised hasOlder.
+      return new Promise<boolean>(resolve => { pageCommits.push(resolve); });
     },
   });
   await render();
@@ -100,7 +103,13 @@ try {
 
   // Clicking an unloaded turn pages history in until its node is mounted.
   const targetMark = marks().find(mark => mark.dataset.navTurn === "m:u1")!;
-  await act(async () => { targetMark.click(); });
+  act(() => { targetMark.click(); });
+  for (let page = 0; page < 2; page += 1) {
+    await harness.waitFor(() => pageCommits.length > 0, `history page ${page + 1} to be requested`);
+    await render();
+    const commit = pageCommits.shift()!;
+    await act(async () => { commit(true); await Promise.resolve(); });
+  }
   await harness.waitFor(
     () => harness.container.querySelector('[data-chat-anchor-key="u1"]') !== null,
     "the oldest turn's node to mount",
@@ -132,23 +141,33 @@ try {
   const phantom: TranscriptOutlineEntry = {
     id: "m:u9", messageId: "u9", turn: TOTAL + 1, order: 99, prompt: "phantom prompt", answer: "",
   };
-  store.register(TAB, async () => ({
-    ...outlinePage(), snapshotId: "snapshot-2",
+  let outlineSnapshot = "snapshot-2";
+  let outlineRefreshes = 0;
+  store.register(TAB, async (_tabId, request) => ({
+    ...outlinePage(), snapshotId: request.snapshotId,
     entries: [...outlinePage().entries, phantom], total: TOTAL + 1, nextOffset: TOTAL + 1,
-  }));
-  await store.load(TAB, "snapshot-2");
+  }), async () => {
+    outlineRefreshes += 1;
+    outlineSnapshot = `snapshot-retry-${outlineRefreshes}`;
+    await store!.load(TAB, outlineSnapshot);
+  });
+  await act(async () => { await store!.load(TAB, outlineSnapshot); });
+  let jumpLoads = 0;
   await harness.render(turnsFrom(TOTAL - 1), {
-    tabId: TAB, totalTurns: TOTAL + 1, hasOlderHistory: true, historyStartTurn: TOTAL - 2,
-    onLoadOlderHistory: async () => { pages += 1; return false; },
+    tabId: TAB, geometrySessionKey: "outline-jump-phantom", totalTurns: TOTAL + 1,
+    hasOlderHistory: true, historyStartTurn: TOTAL - 2,
+    onLoadOlderHistory: async () => {
+      pages += 1;
+      jumpLoads += 1;
+      return jumpLoads === 1 ? "stale" : "empty";
+    },
   });
   await harness.waitFor(() => marks().length === TOTAL + 1, "the rail to list the phantom turn");
+  assert.ok(harness.container.querySelector(".chat-older"), "the remounted session committed hasOlderHistory=true");
   const phantomMark = marks().find(mark => mark.dataset.navTurn === "m:u9")!;
-  const pagesBefore = pages;
   await act(async () => { phantomMark.click(); });
   await harness.settle();
-  await new Promise(r => setTimeout(r, 6000));
-  await harness.settle();
-    await harness.waitFor(
+  await harness.waitFor(
     () => harness.container.querySelector('[data-nav-retry="jump"]') !== null,
     "the failed jump to offer its own retry",
   );
@@ -160,12 +179,14 @@ try {
     null,
     "no outline-retry entry is offered when only the jump failed",
   );
+  const pagesBeforeRetry = pages;
   await act(async () => { retryButton.click(); });
-  await harness.waitFor(() => pages > pagesBefore, "the retry to re-run the jump", 400);
+  await harness.waitFor(() => outlineRefreshes === 1, "the retry to refresh the snapshot", 400);
+  await harness.waitFor(() => pages > pagesBeforeRetry, "the retry to re-run the jump", 400);
 
   console.log("chat turn outline jump: complete rail, unloaded marks, absolute numbering, mount-confirmed jump and failed-jump retry passed");
 } finally {
-  store?.release(TAB);
   await harness.unmount();
+  store?.release(TAB);
   await harness.close();
 }

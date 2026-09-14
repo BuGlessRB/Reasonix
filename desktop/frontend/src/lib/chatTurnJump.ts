@@ -50,7 +50,7 @@ export interface TurnJumpDeps {
    * needs it, and only a reader-initiated retry calls it, so navigation never
    * replaces the body on its own.
    */
-  refreshSnapshot: () => Promise<void>;
+  refreshSnapshot: (entry: TranscriptOutlineEntry) => Promise<TranscriptOutlineEntry | undefined>;
   /** Overrides the post-exhaustion wall-clock budget; tests shorten it. */
   drainMs?: number;
 }
@@ -120,11 +120,29 @@ export class ChatTurnJump {
       this.detach();
       this.watchReader();
       this.publish({ turn: entry.id, status: "loading", retry: entry });
-      await this.deps.refreshSnapshot().catch(() => undefined);
+      let refreshed: TranscriptOutlineEntry | undefined;
+      try {
+        refreshed = await this.deps.refreshSnapshot(entry);
+      } catch {
+        if (this.interaction !== interaction || !this.deps.isCurrent()) {
+          this.bail(interaction);
+          return;
+        }
+        // Keep the same retryable failure. A transient refresh error must not
+        // fall through into paging an absent cut or consume the retry target.
+        this.fail(entry, interaction, "snapshotExpired");
+        return;
+      }
       if (this.interaction !== interaction || !this.deps.isCurrent()) {
         this.bail(interaction);
         return;
       }
+      if (!refreshed) {
+        this.fail(entry, interaction, "turnUnavailable");
+        return;
+      }
+      await this.jump(refreshed);
+      return;
     }
     await this.jump(entry);
   }
