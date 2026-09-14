@@ -70,4 +70,9 @@ export const EN_WINDOW: Record<string, string> = {
   "外部请求": "External requests",
   "失败步数": "Failed",
   "待确认": "Awaiting you",
+  "筛选 {n} 项": "Filter {n} entries",
+  "关闭其他（{n}）": "Close the others ({n})",
+  "全部关闭（{n}）": "Close all ({n})",
+  "从列表移除「{name}」？": "Remove “{name}” from the list?",
+  "删除「{name}」？": "Delete “{name}”?",
 };

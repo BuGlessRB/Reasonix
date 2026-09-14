@@ -280,10 +280,10 @@ export function PaneTabs({ tabs, active, showRoot, onFocus, onClose, onRename }:
             disabled={tabs.length < 2}
             onClick={() => { const id = menu.id; setMenu(null); close(others(id), "others", id); }}
           >
-            关闭其他（{Math.max(tabs.length - 1, 0)}）
+            {t("关闭其他（{n}）", { n: Math.max(tabs.length - 1, 0) })}
           </button>
           <button role="menuitem" data-action="pane.close" data-value="all" onClick={() => { const id = menu.id; setMenu(null); close(tabs.map((t) => t.rt.id), "all", id); }}>
-            全部关闭（{tabs.length}）
+            {t("全部关闭（{n}）", { n: tabs.length })}
           </button>
         </div>
       )}

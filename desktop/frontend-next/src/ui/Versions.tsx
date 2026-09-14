@@ -175,7 +175,7 @@ export function Versions({ port }: { port: Port }) {
       )}
       {hub.stalePin && (
         <div className="find" data-lvl="warn">
-          <span className="t">固定版本为 {hub.pinned}，当前运行的是 {hub.current}</span>
+          <span className="t">{t("固定版本为 {pinned}，当前运行的是 {current}", { pinned: hub.pinned, current: hub.current })}</span>
           <span className="why">
             {t("该固定已与实际情况不符，自动更新按未固定处理。")}
               <button className="lnk" data-action="versions.pin" onClick={() => pin("")} disabled={locked}>
@@ -186,14 +186,14 @@ export function Versions({ port }: { port: Port }) {
       )}
       {!hub.err && hub.newer && !hub.pinned && (
         <div className="find" data-lvl="ok">
-          <span className="t">有新版本 {hub.latest}</span>
+          <span className="t">{t("有新版本 {v}", { v: hub.latest })}</span>
           <span className="why">{t("可在下方对应行安装，安装完成后会自动重启。")}</span>
         </div>
       )}
       {progress?.phase === "error" && (
         <div className="find" data-lvl="warn">
-          <span className="t">切换到 {progress.version} 失败</span>
-          <span className="why">{progress.err}　—— 当前版本未被改动，可以重试。</span>
+          <span className="t">{t("切换到 {v} 失败", { v: progress.version })}</span>
+          <span className="why">{t("{err}　—— 当前版本未被改动，可以重试。", { err: progress.err ?? "" })}</span>
         </div>
       )}
       {/* Going back is the one move with a consequence the user cannot undo by
@@ -214,10 +214,10 @@ export function Versions({ port }: { port: Port }) {
             style={{ animationDelay: `${Math.min(i, 8) * 34}ms` }}
           >
             <span className="nm">{v.version}</span>
-            <span className="ds">{v.current ? "正在运行" : v.older ? "更早的版本" : "更新的版本"}</span>
+            <span className="ds">{t(v.current ? "正在运行" : v.older ? "更早的版本" : "更新的版本")}</span>
             {/* A row the catalog does not carry has no date. Saying so beats an
                 empty column: it is why this version has no download page. */}
-            <span className="sc">{v.publishedAt ? when(v.publishedAt) : v.current ? "未发布" : ""}</span>
+            <span className="sc">{v.publishedAt ? when(v.publishedAt) : v.current ? t("未发布") : ""}</span>
             {going === v.version && progress ? (
               <span className="sa">{say(progress)}</span>
             ) : (

@@ -360,6 +360,14 @@ export const EN_SETTINGS: Record<string, string> = {
   "移除中…": "Removing…",
   "{err}　—— 本地功能不受影响，请稍后重试。": "{err} — nothing local is affected; try again later.",
   "已固定在 {v}，不会自动更新": "Pinned to {v}; updates will not move it",
+  "固定版本为 {pinned}，当前运行的是 {current}": "Pinned to {pinned}; what is running is {current}",
+  "有新版本 {v}": "{v} is out",
+  "切换到 {v} 失败": "Switching to {v} failed",
+  "{err}　—— 当前版本未被改动，可以重试。": "{err} — the running version was not touched; you can try again.",
+  "正在运行": "Running now",
+  "更早的版本": "An earlier version",
+  "更新的版本": "A newer version",
+  "未发布": "Not published",
   "（无正文）": "(no body)",
   "没有可用的贡献": "Nothing usable inside",
   "删除 {name}？其提供的技能、命令与服务将一并移除。若只是暂时停用，关闭开关即可。": "Delete {name}? The skills, commands and services it brought go with it. To just set it aside, the switch is enough.",
@@ -428,4 +436,24 @@ export const EN_SETTINGS: Record<string, string> = {
   "容量保护": "Capacity guard",
   "模型窗口的 {p}%，始终生效 —— 关闭经济阈值不会影响它。":
     "{p}% of the model's window, always in force — turning the economic threshold off does not turn this off.",
+  // ── 装上/接上之后说了什么 ─────────────────────────────────────
+  "在浏览器里打开的页面输入这串代码。没自动打开就手动访问 {uri}":
+    "Type this code into the page your browser opened. If none opened, go to {uri}",
+  "装好了，下一轮就能用": "Installed — the next turn can use it",
+  "装好了，但这一轮还在跑：等它结束或新建会话后生效":
+    "Installed, but this turn is still running: it takes effect when the turn ends, or in a new session",
+  "没装上": "Not installed",
+  "这个地址上已经有「{name}」了。留空 key": "This address already holds “{name}”. Leave the key blank",
+  "已就位 · {n} 个工具，下一轮就能用": "In place · {n} tools, ready next turn",
+  "配置留下了，去授权后在列表里点重连": "The configuration was kept — authorise it, then reconnect from the list",
+  "没装上，什么都没留下": "Not added; nothing was left behind",
+  "{name} 有几项没生效": "A few of {name}'s entries did not take",
+  "没能删掉": "It could not be removed",
+  "这个包和当前版本不兼容，已经被停用。": "This package does not work with the current version and has been switched off.",
+  "里面的密钥值已经去掉，装它的人要自己提供：{names}":
+    "The key values were stripped out; whoever installs it supplies their own: {names}",
+  "该包不需要填写任何密钥。": "This package asks for no keys.",
+  "用不了：{why}": "Unusable: {why}",
+  "key 有效，协议也对得上。": "The key works, and the protocol is the one on file.",
+  "走代理连不上、直连可以。": "The proxy cannot reach it; a direct connection can.",
 };

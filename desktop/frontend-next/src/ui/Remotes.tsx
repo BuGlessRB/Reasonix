@@ -120,7 +120,7 @@ export function Remotes({ hub, onError }: Props) {
 
   const field = (key: keyof RemoteHostEdit, label: string, placeholder?: string) => (
     <label className="rmtf">
-      <span>{t(label)}</span>
+      <span>{label}</span>
       <input
         value={String(draft?.[key] ?? "")}
         placeholder={placeholder ? t(placeholder) : undefined}
@@ -226,9 +226,9 @@ export function Remotes({ hub, onError }: Props) {
 
       {draft ? (
         <div className="rmtform">
-          {field("name", "名称", "gpu-box")}
-          {field("host", "地址", "10.0.0.4")}
-          {field("user", "用户", "ada")}
+          {field("name", t("名称"), "gpu-box")}
+          {field("host", t("地址"), "10.0.0.4")}
+          {field("user", t("用户"), "ada")}
           <label className="rmtf">
             <span>{t("端口")}</span>
             <input
@@ -238,7 +238,7 @@ export function Remotes({ hub, onError }: Props) {
               onChange={(ev) => setDraft((d) => (d ? { ...d, port: Number(ev.target.value.replace(/\D/g, "")) || 0 } : d))}
             />
           </label>
-          {field("proxyJump", "跳板机", "bastion.example.com")}
+          {field("proxyJump", t("跳板机"), "bastion.example.com")}
           {/* Same shape the sandbox's writable list uses: one row per thing,
               then what you can do to it. The head carries the default badge
               rather than a separate field, because it is the same folder. */}
@@ -284,11 +284,11 @@ export function Remotes({ hub, onError }: Props) {
               ) : null}
             </div>
           </div>
-          {field("identityFile", "私钥文件", "~/.ssh/id_ed25519")}
+          {field("identityFile", t("私钥文件"), "~/.ssh/id_ed25519")}
           {/* Named, not carried: this is the variable to read, never the secret
               itself, so nothing typed here is a password on its way anywhere. */}
-          {field("passphraseEnv", "私钥口令的环境变量名", "GPU_BOX_PASSPHRASE")}
-          {field("passwordEnv", "登录密码的环境变量名", "GPU_BOX_PASSWORD")}
+          {field("passphraseEnv", t("私钥口令的环境变量名"), "GPU_BOX_PASSPHRASE")}
+          {field("passwordEnv", t("登录密码的环境变量名"), "GPU_BOX_PASSWORD")}
           {/* 装不上时内核会点名让人改这一项，所以它必须在这里 —— 一条说「改成
               npm 装」的错误，配上一个改不了的设置，等于没说。 */}
           <label className="rmtf">

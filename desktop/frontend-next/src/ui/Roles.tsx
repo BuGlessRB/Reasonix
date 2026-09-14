@@ -71,7 +71,7 @@ export function Roles({ models, roles, main, busy, onSet }: Props) {
       </div>
       <p className="note">
         {readable
-          ? `主模型看不了的图会交给 ${visionModel?.model}，它读图，所以附件真的会被看到。`
+          ? t("主模型看不了的图会交给 {model}，它读图，所以附件真的会被看到。", { model: visionModel?.model ?? "" })
           : t("主模型无法识别的图片当前无人处理 —— 会在发送前被丢弃。为「看图」指定一个带「读图」标签的模型即可接管。")}
       </p>
     </>
@@ -125,7 +125,7 @@ function Slot({
               onClick={() => onPick(m.ref)}
             >
               {m.model}
-              <span className="sub">{m.vision ? "读图" : m.provider}</span>
+              <span className="sub">{m.vision ? t("读图") : m.provider}</span>
             </button>
           ))}
         </div>

@@ -3,6 +3,7 @@ import { ExtensionView } from "./ExtensionView";
 import type { ExtensionSurface, ExtensionFormField } from "../../port/wire";
 import { LazyMarkdown } from "../LazyMarkdown";
 import { Sym } from "../Sym";
+import { t } from "../../i18n";
 
 interface Props {
   ext: ExtensionSurface;
@@ -138,7 +139,7 @@ export function ExtensionCard({ ext, onInvoke, onSubmit }: Props) {
                       onSubmit?.(ext.pluginId, ext.surfaceId, values);
                     }}
                   >
-                    {missing.length ? `提交（还差 ${missing.length} 项）` : "提交"}
+                    {missing.length ? t("提交（还差 {n} 项）", { n: missing.length }) : t("提交")}
                   </button>
                 </div>
               )}

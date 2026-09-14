@@ -347,11 +347,11 @@ function Outcome({ plan }: { plan: PluginPlan }) {
   return (
     <div className="outcome" data-state={state}>
       <i className="pip" />
-      <span className="nm">{plan.actions?.[0]?.name || "安装"}</span>
+      <span className="nm">{plan.actions?.[0]?.name || t("安装")}</span>
       <span className="dt">
-        {state === "ready" && "装好了，下一轮就能用"}
-        {state === "action_required" && "装好了，但这一轮还在跑：等它结束或新建会话后生效"}
-        {state === "issue" && (plan.error || plan.next || "没装上")}
+        {state === "ready" && t("装好了，下一轮就能用")}
+        {state === "action_required" && t("装好了，但这一轮还在跑：等它结束或新建会话后生效")}
+        {state === "issue" && (plan.error || plan.next || t("没装上"))}
       </span>
     </div>
   );

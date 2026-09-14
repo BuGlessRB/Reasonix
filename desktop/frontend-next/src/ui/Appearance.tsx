@@ -257,7 +257,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               log — so it is here, next to the thing that looks wrong. */}
           {packs.filter((p) => p.warnings?.length).map((p) => (
             <div className="find" data-lvl="warn" key={p.id}>
-              <span className="t">{p.name} 有几项没生效</span>
+              <span className="t">{t("{name} 有几项没生效", { name: p.name })}</span>
               {p.warnings?.map((w) => (
                 <span className="why" key={w}>
                   {w}

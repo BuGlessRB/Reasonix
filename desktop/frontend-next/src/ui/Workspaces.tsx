@@ -230,7 +230,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
               <div className="wsnode" key={ws.root} data-missing={ws.missing ? "" : undefined}>
                 {confirm === ws.root ? (
                   <Confirm
-                    what={`从列表移除「${ws.name}」？`}
+                    what={t("从列表移除「{name}」？", { name: ws.name })}
                     hint={removeHint(doomed.length, busyPanes)}
                     go={t("移除")}
                     danger={busyPanes > 0}
@@ -305,9 +305,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                       return (
                         <Confirm
                           key={session.path}
-                          what={`删除「${session.title || session.name}」？`}
+                          what={t("删除「{name}」？", { name: session.title || session.name })}
                           hint={t(session.runtimeId ? "它的面板会先关掉" : "连同其记录一并删除")}
-                          go="删除"
+                          go={t("删除")}
                           danger
                           onGo={() => void dropSession(session)}
                           onCancel={() => setConfirm("")}

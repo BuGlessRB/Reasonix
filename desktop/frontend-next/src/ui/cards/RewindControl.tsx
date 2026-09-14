@@ -138,7 +138,7 @@ export function RewindControl({
                     <span className="tx">
                       <span className="lb">{s.label}</span>
                     </span>
-                    {s.files && <span className="rt">{cp.files} 个文件</span>}
+                    {s.files && <span className="rt">{t("{n} 个文件", { n: cp.files })}</span>}
                   </button>
                 ))}
               {stage.at === "menu" && cp.files === 0 && (
@@ -166,7 +166,7 @@ export function RewindControl({
                       <span className="ds">
                         {(stage.plan.coverageGaps ?? [])
                           .map((g) => GAP_REASONS[g.reason] ?? g.detail)
-                          .join("；") || "部分改动不在快照内"}
+                          .join("；") || t("部分改动不在快照内")}
                       </span>
                     </span>
                   </div>
@@ -176,7 +176,7 @@ export function RewindControl({
                     <span className="tx">
                       <span className="lb">{t("仍还原其余部分")}</span>
                     </span>
-                    <span className="rt">{stage.plan.fileCount} 个文件</span>
+                    <span className="rt">{t("{n} 个文件", { n: stage.plan.fileCount })}</span>
                   </button>
                   <button className="mi plain" role="menuitem" onClick={() => setStage({ at: "closed" })}>
                     <span className="dot" />
@@ -191,7 +191,7 @@ export function RewindControl({
                   <div className="mi plain">
                     <span className="dot" />
                     <span className="tx">
-                      <span className="lb">已还原 {stage.files} 个文件</span>
+                      <span className="lb">{t("已还原 {n} 个文件", { n: stage.files })}</span>
                     </span>
                   </div>
                   <div className="div" />

@@ -154,6 +154,9 @@ export const EN: Record<string, string> = {
   "命中 {rate}%": "{rate}% hit",
   "若不命中": "If it all missed",
   "价目未上报": "No pricing reported",
+  "尚未产生用量": "No usage yet",
+  "多币种未合并": "Currencies not combined",
+  "显示币种不可用": "Display currency unavailable",
   "主循环": "Main loop",
   "压缩": "Compaction",
   "规划": "Planning",
@@ -513,6 +516,8 @@ export const EN: Record<string, string> = {
   "还原失败": "Could not restore",
   "本轮未修改任何文件": "This turn changed no files",
   "本轮有改动无法还原": "Some of this turn's changes cannot be restored",
+  "部分改动不在快照内": "Some of the changes are outside the snapshot",
+  "已还原 {n} 个文件": "{n} files restored",
 
   // ── 开场 ─────────────────────────────────────────────────────────
   "欢迎使用 Reasonix。": "Welcome to Reasonix.",
@@ -637,6 +642,8 @@ export const EN: Record<string, string> = {
   "所有角色均跟随主模型": "Every role follows it",
   "已指派": "Assigned",
   "{name}用哪个模型": "Which model for {name}",
+  "主模型看不了的图会交给 {model}，它读图，所以附件真的会被看到。":
+    "Images the main model cannot read go to {model}, which reads them — so an attachment really is seen.",
   "主模型无法识别的图片当前无人处理 —— 会在发送前被丢弃。为「看图」指定一个带「读图」标签的模型即可接管。":
     "Images the main model cannot read now have no reader — they are dropped before anything is sent. Assign Vision a model tagged as reading images and they get through.",
   "仅生成计划，不写入": "Drafts a plan, read-only",
@@ -781,6 +788,10 @@ export const EN: Record<string, string> = {
   "该供应商拒绝了当前密钥，无法读取余额": "The provider refused this key, so the balance cannot be read",
   "该供应商的余额接口无响应": "The provider's balance endpoint did not answer",
   "无法解析该供应商余额接口返回的内容": "The provider's balance endpoint answered in a shape this build cannot read",
+
+  "{n} 个问题": "{n} questions",
+  "提交（还差 {n} 项）": "Submit ({n} still to fill)",
+  "提交": "Submit",
 
   // ── 钱包 ───────────────────────────────────────────────────────
   "钱包": "Wallet",

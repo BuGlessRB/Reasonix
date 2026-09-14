@@ -355,8 +355,8 @@ function Conn({
             {!found.ok && found.error}
             {found.ok && found.matches === false &&
               t("记的是 {had}，但它答的是 {got}。", { had: t(KIND_LABEL[entry.kind] ?? entry.kind), got: t(KIND_LABEL[found.kind ?? ""] ?? found.kind ?? "") })}
-            {found.ok && found.matches !== false && "key 有效，协议也对得上。"}
-            {found.ok && found.noProxy && " 走代理连不上、直连可以。"}
+            {found.ok && found.matches !== false && t("key 有效，协议也对得上。")}
+            {found.ok && found.noProxy && " " + t("走代理连不上、直连可以。")}
             {/* A stored list cannot learn that the vendor shipped something. The
                 probe already knows, so saying it costs nothing and is the only
                 moment anyone finds out. */}
