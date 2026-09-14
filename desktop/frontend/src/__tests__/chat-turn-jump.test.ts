@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { ChatMountedOrder } from "../lib/chatMountedOrder";
 import { ChatTurnJump } from "../lib/chatTurnJump";
 import type { ChatScrollController } from "../lib/chatScrollController";
-import { alignOutlineEntries, loadedTurnKey } from "../lib/chatTurnRail";
+import { alignOutlineEntries, findLoadedTurn } from "../lib/chatTurnRail";
 import type { TranscriptOutlineEntry } from "../lib/transcriptProtocol";
 
 // Node has no animation frame; the mount-settle path is driven by the mounted
@@ -202,20 +202,30 @@ async function main() {
   }
 
   {
-    // Identity resolution: a settled question is found by its message ID, and
-    // a question that has not been committed is found by its record ID. Both
-    // must resolve to the node the rail would scroll to.
+    // Identity resolution. The node's own identity decides, never the shape of
+    // its anchor key: a question written in this app session keeps its
+    // optimistic `u<seq>` id after the authoritative message arrives and only
+    // gains a messageId, so a key-shaped match would miss the turns the reader
+    // just wrote — the exact regression this covers.
     const settled: TranscriptOutlineEntry = { id: "m:abc", messageId: "abc", turn: 1, order: 0, prompt: "", answer: "" };
-    assert.equal(loadedTurnKey(settled, new Set(["m:abc"])), "m:abc", "a settled question resolves by message ID");
-    assert.equal(loadedTurnKey(settled, new Set()), undefined, "an unmounted question has no key");
+    const nodes = new Map([
+      ["u7", { id: "u7", messageId: "abc" }],
+      ["m:other", { id: "m:other" }],
+    ]);
+    const read = (key: string) => nodes.get(key);
+    assert.equal(findLoadedTurn(["u7"], read, settled), "u7", "an optimistically submitted question is found by its message ID");
+    assert.equal(findLoadedTurn([], read, settled), undefined, "an unmounted question has no key");
+    assert.equal(findLoadedTurn(["m:other"], read, settled), undefined, "an unrelated node is not claimed");
 
-    const optimistic: TranscriptOutlineEntry = { id: "m:tmp", turn: 2, order: 2, prompt: "", answer: "" };
-    assert.equal(loadedTurnKey(optimistic, new Set(["m:tmp"])), "m:tmp", "an uncommitted question resolves by record ID");
-    assert.equal(loadedTurnKey(optimistic, new Set(["m:other"])), undefined, "an unrelated node is not claimed");
+    const uncommitted: TranscriptOutlineEntry = { id: "m:tmp", turn: 2, order: 2, prompt: "", answer: "" };
+    nodes.set("m:tmp", { id: "m:tmp" });
+    assert.equal(findLoadedTurn(["m:tmp"], read, uncommitted), "m:tmp", "an uncommitted question resolves by record ID");
 
-    // A message ID wins over a shadowing record ID, so settlement cannot move
-    // a mark that already points at the canonical node.
-    assert.equal(loadedTurnKey(settled, new Set(["m:abc", "m:abc:legacy"])), "m:abc", "message ID outranks the record ID fallback");
+    // A message ID match wins even when a record-ID-only match appears earlier
+    // in the mounted order, so settlement cannot move a mark to a stale node.
+    nodes.set("m:abc:legacy", { id: "m:abc" });
+    assert.equal(findLoadedTurn(["m:abc:legacy", "u7"], read, settled), "u7",
+      "a message ID match outranks an earlier record ID match");
 
     const aligned = alignOutlineEntries([
       { id: "m:b", turn: 2, order: 2, prompt: "", answer: "" },

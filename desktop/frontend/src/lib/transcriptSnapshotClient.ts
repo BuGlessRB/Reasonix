@@ -140,6 +140,11 @@ export class TranscriptSnapshotClient {
   async load(tabId: string, commit: (snapshot: TranscriptSnapshot) => void, current: () => boolean = () => true): Promise<boolean> {
     const generation = (this.generations.get(tabId) ?? 0) + 1;
     this.generations.set(tabId, generation);
+    // A load replaces the cut this tab was bound to, and it may be re-binding
+    // the tab to a different session entirely. Announce the gap before the
+    // round trip so nothing keeps describing the previous session's cut under
+    // this tab id; the install below re-announces with the new identity.
+    this.onCutChanged(tabId, undefined);
     const lease = this.projector.beginSnapshot(tabId);
     const valid = () => this.generations.get(tabId) === generation && current();
     try {

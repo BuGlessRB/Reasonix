@@ -113,6 +113,35 @@ async function main() {
   }
 
   {
+    // A hostile or buggy host that never finishes must not drive an unbounded
+    // request-and-append loop. Each page advances the cursor by one and claims
+    // there is more, so only the page cap can stop it.
+    let requests = 0;
+    const store = new TranscriptOutlineStore();
+    store.register("tab", async (_tabId, request) => {
+      requests += 1;
+      const offset = request.offset ?? 0;
+      return page("s1", [entry(offset)], offset + 1, false);
+    });
+    await store.sync("tab", "s1");
+    assert.equal(store.getView("tab").mode, "error", "an endless host ends the read");
+    assert.equal(store.getView("tab").error, "outline is too large");
+    assert.ok(requests <= 64, `endless host issued ${requests} requests`);
+  }
+
+  {
+    // The same bound applies to an oversized-but-finishing host.
+    const store = new TranscriptOutlineStore();
+    store.register("tab", async (_tabId, request) => {
+      const offset = request.offset ?? 0;
+      const entries = Array.from({ length: 1000 }, (_, index) => entry(offset + index));
+      return page("s1", entries, offset + entries.length, false);
+    });
+    await store.sync("tab", "s1");
+    assert.equal(store.getView("tab").mode, "error", "an oversized outline ends the read");
+  }
+
+  {
     // An unregistered tab never claims the capability.
     const store = new TranscriptOutlineStore();
     await store.sync("unbound", "s1");

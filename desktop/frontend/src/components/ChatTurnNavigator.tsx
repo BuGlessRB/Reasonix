@@ -2,7 +2,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { ChatSource } from "../lib/chatViewSource";
 import type { ChatScrollController } from "../lib/chatScrollController";
 import type { ChatMountedOrder } from "../lib/chatMountedOrder";
-import { loadedTurnKey } from "../lib/chatTurnRail";
+import { findLoadedTurn, type LoadedTurnNode } from "../lib/chatTurnRail";
 import { getTranscriptOutlineStore, type TranscriptOutlineView } from "../lib/transcriptOutlineStore";
 import type { TranscriptOutlineEntry } from "../lib/transcriptProtocol";
 import { useT } from "../lib/i18n";
@@ -12,7 +12,7 @@ import "./harness-chat/TurnNavigator.css";
 
 function Preview({ source, item }: { source: ChatSource; item: TurnRailItem }) {
   const subscribe = useCallback((notify: () => void) => {
-    const user = item.anchor.kind === "loaded" ? source.subscribeNode(item.turn, notify) : undefined;
+    const user = item.anchor.kind === "loaded" ? source.subscribeNode(item.anchor.key, notify) : undefined;
     const answer = item.answerKey ? source.subscribeNode(item.answerKey, notify) : undefined;
     return () => { user?.(); answer?.(); };
   }, [source, item]);
@@ -20,7 +20,7 @@ function Preview({ source, item }: { source: ChatSource; item: TurnRailItem }) {
     // An unloaded turn has no node to read, so its outline preview is used as
     // it arrived. Prefer the loaded body when there is one: it carries the
     // running turn's text that the snapshot could not have seen yet.
-    const user = item.anchor.kind === "loaded" ? source.getNodeSnapshot(item.turn) : undefined;
+    const user = item.anchor.kind === "loaded" ? source.getNodeSnapshot(item.anchor.key) : undefined;
     const answer = item.answerKey ? source.getNodeSnapshot(item.answerKey) : undefined;
     const prompt = user?.kind === "user" ? user.item.text.slice(0, 300) : item.prompt;
     const response = answer?.kind === "assistant" && answer.item.text.trim() ? answer.item.text.slice(0, 500) : item.response;
@@ -50,23 +50,23 @@ export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onJum
   const order = useSyncExternalStore(mounts.subscribe, mounts.getSnapshot, mounts.getSnapshot);
   const position = useSyncExternalStore(scroll.subscribe, scroll.getSnapshot, scroll.getSnapshot);
 
-  // The mounted set is a Set for lookup and the order array for sequencing.
-  const mountedKeys = useMemo(() => new Set(order), [order]);
-  // Bumped whenever the outline identity changes so the merge re-runs.
+  // A new array identity whenever the outline changes so the merge re-runs.
   const outlineEntries = outline.entries;
 
   const items = useMemo(() => {
     const turns: TurnRailItem[] = [];
     const byTurn = new Map<string, TurnRailItem>();
+    const identity = new Map<string, LoadedTurnNode>();
     for (const key of order) {
       const node = source.getNodeSnapshot(key);
       if (node?.kind === "user") {
         const item: TurnRailItem = {
           turn: key, ordinal: turns.length + 1, prompt: "", response: "",
-          anchor: { kind: "loaded" },
+          anchor: { kind: "loaded", key },
         };
         turns.push(item);
         byTurn.set(key, item);
+        identity.set(key, { id: node.item.id, messageId: node.item.messageId });
       } else if (node?.kind === "assistant" && turns.length) turns[turns.length - 1].answerKey = key;
     }
     if (outline.mode !== "ready") return turns;
@@ -74,36 +74,42 @@ export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onJum
     // The outline is the complete conversation; loaded turns only enrich it.
     // Ordering and numbering come from the outline so loading an earlier page
     // never renumbers the rail.
+    const read = (key: string) => identity.get(key);
     const merged: TurnRailItem[] = [];
+    // Mark identities already emitted, and the mounted nodes they consumed, so
+    // a turn is never listed twice under two different identities.
+    const emitted = new Set<string>();
     const claimed = new Set<string>();
     for (const entry of outlineEntries) {
-      const key = loadedTurnKey(entry, mountedKeys);
-      if (key) claimed.add(key);
+      const key = findLoadedTurn(order, read, entry);
+      // The mark keeps the outline's record id as its identity for its whole
+      // life, so finishing a load never remounts it or moves its position.
+      if (emitted.has(entry.id)) continue;
+      emitted.add(entry.id);
+      if (key !== undefined) claimed.add(key);
       const loaded = key ? byTurn.get(key) : undefined;
       merged.push({
-        turn: key ?? entry.id,
+        turn: entry.id,
         ordinal: entry.turn > 0 ? entry.turn : merged.length + 1,
         prompt: loaded?.prompt || entry.prompt,
         response: loaded?.response || entry.answer || "",
         answerKey: loaded?.answerKey,
-        anchor: key ? { kind: "loaded" } : { kind: "unloaded", recordId: entry.id, messageId: entry.messageId },
+        anchor: key ? { kind: "loaded", key } : { kind: "unloaded", recordId: entry.id, messageId: entry.messageId },
         unloaded: key === undefined,
       });
     }
     // A question submitted while the outline was being read is not in it yet.
-    // Keep it rather than dropping a turn the reader can already see, but never
-    // list one turn twice when its identities disagree.
-    const emitted = new Set(merged.map(item => item.turn));
+    // Keep it rather than dropping a turn the reader can already see.
     for (const item of turns) {
       if (claimed.has(item.turn) || emitted.has(item.turn)) continue;
       emitted.add(item.turn);
       merged.push({ ...item, ordinal: merged.length + 1, unloaded: false });
     }
     return merged;
-  }, [order, mountedKeys, source, outline.mode, outlineEntries]);
+  }, [order, source, outline.mode, outlineEntries]);
 
   const navigate = useCallback((item: TurnRailItem) => {
-    if (item.anchor.kind === "loaded") { scroll.jump(item.turn); return; }
+    if (item.anchor.kind === "loaded") { scroll.jump(item.anchor.key); return; }
     onJump?.({
       id: item.anchor.recordId, messageId: item.anchor.messageId,
       turn: item.ordinal, order: 0, prompt: item.prompt, answer: item.response,

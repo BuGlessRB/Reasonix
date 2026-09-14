@@ -6,8 +6,16 @@ import {
 } from 'react'
 import type { ReactNode } from 'react'
 import type { useT } from '../../lib/i18n'
-/** A mark either already has a mounted node, or must page history in first. */
-export type TurnRailAnchor = { kind: 'loaded' } | { kind: 'unloaded'; recordId: string; messageId?: string }
+/**
+ * A mark either already has a mounted node — then `key` is the DOM anchor to
+ * scroll to — or must page history in first.
+ */
+export type TurnRailAnchor = { kind: 'loaded'; key: string } | { kind: 'unloaded'; recordId: string; messageId?: string }
+/**
+ * `turn` is the mark's stable identity and React key: it is the outline record
+ * id, so it does not change when that turn finishes loading. `anchor` carries
+ * where to scroll and how to resolve an unloaded target.
+ */
 export interface TurnRailItem { turn: string; ordinal: number; prompt: string; response: string; answerKey?: string; anchor: TurnRailAnchor; unloaded?: boolean }
 import css from './TurnNavigator.styles'
 
@@ -200,7 +208,8 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPrev
           <div className={css.marks}>
             {items.slice(firstVisible, lastVisible).map((item, visibleIndex) => {
               const index = firstVisible + visibleIndex
-              const active = item.turn === activeTurn
+              // The active mark is the mounted node, not the outline identity.
+              const active = item.anchor.kind === 'loaded' && item.anchor.key === activeTurn
               const showingPreview = item.turn === previewTurn
               const previewDistance = previewIndex < 0 ? -1 : Math.abs(index - previewIndex)
               const classes = [css.mark]

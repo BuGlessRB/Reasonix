@@ -30,6 +30,12 @@ export interface TranscriptOutlineView {
 const EMPTY_ENTRIES: readonly TranscriptOutlineEntry[] = [];
 const LEGACY: TranscriptOutlineView = Object.freeze({ mode: "legacy", snapshotId: "", entries: EMPTY_ENTRIES });
 
+// A hostile or buggy host drives this loop, so it is bounded like every other
+// server-driven read in this codebase (MAX_REPLAY_PAGES, MAX_JUMP_PAGES).
+// 64 pages of 1000 entries is far beyond any real conversation.
+const MAX_OUTLINE_PAGES = 64;
+const MAX_OUTLINE_ENTRIES = 20_000;
+
 /**
  * The complete turn index of the installed snapshot, shared by the local
  * controller and remote sessions. Paging the body changes what is mounted, not
@@ -125,7 +131,11 @@ export class TranscriptOutlineStore {
     const seen = new Set<string>();
     try {
       let offset = 0;
-      for (;;) {
+      for (let pages = 0; ; pages++) {
+        if (pages >= MAX_OUTLINE_PAGES) {
+          this.set(tabId, { mode: "error", snapshotId, entries: EMPTY_ENTRIES, error: "outline is too large" });
+          return;
+        }
         const page = await read(tabId, { snapshotId, offset });
         if (!current()) return;
         if (page.stale) {
@@ -145,6 +155,10 @@ export class TranscriptOutlineStore {
           if (seen.has(entry.id)) continue;
           seen.add(entry.id);
           entries.push(entry);
+          if (entries.length >= MAX_OUTLINE_ENTRIES) {
+            this.set(tabId, { mode: "error", snapshotId, entries: EMPTY_ENTRIES, error: "outline is too large" });
+            return;
+          }
         }
         if (page.done) break;
         if (!Number.isSafeInteger(page.nextOffset) || page.nextOffset <= offset) {
@@ -195,7 +209,7 @@ export function getTranscriptOutlineStore(): TranscriptOutlineStore {
 export function localOutlineRead(tabId: string, request: TranscriptOutlineRequest): Promise<TranscriptOutlinePage> {
   const read = app.TranscriptOutlineForTab;
   if (typeof read !== "function") return Promise.reject(new OutlineUnsupported("transcript outline is unavailable"));
-  return read(tabId, request);
+  return read(tabId, request).catch((error: unknown) => { throw unavailable(error); });
 }
 
 /**
@@ -206,10 +220,16 @@ export function localOutlineRead(tabId: string, request: TranscriptOutlineReques
 export function remoteOutlineRead(tabId: string, request: TranscriptOutlineRequest): Promise<TranscriptOutlinePage> {
   const read = app.RemoteTranscriptOutlineForTab;
   if (typeof read !== "function") return Promise.reject(new OutlineUnsupported("remote transcript outline is unavailable"));
-  return read(tabId, request).catch((error: unknown) => {
-    if (message(error).toLowerCase().includes("transcript projection is unavailable")) {
-      throw new OutlineUnsupported("remote transcript outline is unavailable");
-    }
-    throw error;
-  });
+  return read(tabId, request).catch((error: unknown) => { throw unavailable(error); });
+}
+
+/**
+ * The host answering "this controller has no outline projection" is a
+ * compatibility answer, not a failure: both transports must degrade to the
+ * loaded-turn rail rather than offer a retry that can never succeed.
+ */
+function unavailable(error: unknown): unknown {
+  return message(error).toLowerCase().includes("transcript projection is unavailable")
+    ? new OutlineUnsupported("transcript outline is unavailable")
+    : error;
 }

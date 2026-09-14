@@ -25,11 +25,16 @@ function outlinePage(): TranscriptOutlinePage {
 }
 
 /** The loaded body window: the newest turns, oldest first, as the transcript
- * loads them — an earlier page prepends above this. */
+ * loads them — an earlier page prepends above this.
+ *
+ * The user items carry the runtime shape of a question written in this app
+ * session: the reducer keeps the optimistic `u<seq>` id after the authoritative
+ * message settles and only attaches `messageId`, so matching the rail by the
+ * shape of the anchor key would miss them. */
 function turnsFrom(start: number): Item[] {
   const items: Item[] = [];
   for (let index = start; index <= TOTAL; index += 1) {
-    items.push({ kind: "user", id: `m:u${index}`, text: `loaded prompt ${index}`, historyTurn: index });
+    items.push({ kind: "user", id: `u${index}`, messageId: `u${index}`, text: `loaded prompt ${index}`, historyTurn: index });
     items.push({ kind: "assistant", id: `a${index}`, text: `loaded answer ${index}`, reasoning: "", streaming: false });
   }
   return items;
@@ -78,7 +83,16 @@ try {
   const unloaded = marks().filter(mark => mark.dataset.navUnloaded === "true");
   assert.deepEqual(unloaded.map(mark => mark.dataset.navTurn), ["m:u1", "m:u2", "m:u3", "m:u4"],
     "turns without a mounted body are marked unloaded");
-  assert.equal(harness.container.querySelector('[data-chat-anchor-key="m:u1"]'), null, "the oldest turn is not loaded yet");
+  assert.equal(harness.container.querySelector('[data-chat-anchor-key="u1"]'), null, "the oldest turn is not loaded yet");
+
+  // A question written in this app session keeps its optimistic `u<seq>` anchor
+  // key, which does not match its outline record id. It must still be one mark
+  // — matched by identity — and not a duplicate "unloaded" entry beside a
+  // loaded one.
+  const keys = new Set(marks().map(mark => mark.dataset.navTurn));
+  assert.equal(keys.size, TOTAL, "every turn appears exactly once despite mismatched anchor keys");
+  assert.equal(marks().find(mark => mark.dataset.navTurn === "m:u6")?.dataset.navUnloaded, undefined,
+    "a loaded turn with an optimistic anchor key is not marked unloaded");
 
   // Absolute turn numbering must survive loading an earlier page.
   const labelsBefore = marks().map(mark => mark.getAttribute("aria-label"));
@@ -88,7 +102,7 @@ try {
   const targetMark = marks().find(mark => mark.dataset.navTurn === "m:u1")!;
   await act(async () => { targetMark.click(); });
   await harness.waitFor(
-    () => harness.container.querySelector('[data-chat-anchor-key="m:u1"]') !== null,
+    () => harness.container.querySelector('[data-chat-anchor-key="u1"]') !== null,
     "the oldest turn's node to mount",
   );
   await harness.settle();

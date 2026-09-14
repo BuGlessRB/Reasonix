@@ -15,6 +15,8 @@ const IDLE: TurnJumpState = Object.freeze({ turn: null, status: "idle" });
 
 /** Frames to let the progressive mount advance before re-checking the target. */
 const MOUNT_SETTLE_FRAMES = 120;
+/** Wall-clock ceiling for the same wait; frames stop arriving when hidden. */
+const MOUNT_SETTLE_MS = 2000;
 /** Pages a single jump may pull before giving up, independent of entry count. */
 const MAX_JUMP_PAGES = 400;
 
@@ -132,13 +134,25 @@ export class ChatTurnJump {
     return new Promise((resolve) => {
       let elapsed = 0;
       let handle = 0;
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        if (handle) cancelAnimationFrame(handle);
+        clearTimeout(timer);
+        resolve();
+      };
       const step = (): void => {
-        if (this.deps.mounts.getSnapshot() !== previous || elapsed >= MOUNT_SETTLE_FRAMES) { resolve(); return; }
+        if (settled) return;
+        if (this.deps.mounts.getSnapshot() !== previous || elapsed >= MOUNT_SETTLE_FRAMES) { finish(); return; }
         elapsed++;
         handle = requestAnimationFrame(step);
       };
+      // A hidden or occluded window stops delivering frames, so a frame count
+      // alone can leave the mark pulsing until the window is shown again. Bound
+      // the wait by wall clock as well and let the next attempt re-check.
+      const timer = setTimeout(finish, MOUNT_SETTLE_MS);
       handle = requestAnimationFrame(step);
-      void handle;
     });
   }
 

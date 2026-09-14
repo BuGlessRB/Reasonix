@@ -9,7 +9,7 @@ import { ChatScrollController } from "../lib/chatScrollController";
 import { ChatContentLoader } from "../lib/chatContentLoader";
 import { ChatMountedOrder } from "../lib/chatMountedOrder";
 import { ChatTurnJump } from "../lib/chatTurnJump";
-import { loadedTurnKey } from "../lib/chatTurnRail";
+import { findLoadedTurn } from "../lib/chatTurnRail";
 import { addBreadcrumb } from "../lib/breadcrumbs";
 import { useT } from "../lib/i18n";
 import { InvocationMetadataContext } from "./Message";
@@ -147,10 +147,15 @@ function ChatSession(props: TranscriptProps & { sessionKey: string }) {
     loadOlder: () => loadOlderRef.current("question-jump"),
     hasOlder: () => hasOlderRef.current,
     // Re-read the mounted set on every attempt: the whole point is that the
-    // answer changes as the progressive mount advances.
-    resolveKey: (entry) => loadedTurnKey(entry, new Set(mounts.getSnapshot())),
+    // answer changes as the progressive mount advances. Matching goes through
+    // the node's own identity, so an optimistically submitted question is
+    // found under its `u<seq>` anchor key rather than its eventual message id.
+    resolveKey: (entry) => findLoadedTurn(mounts.getSnapshot(), (key) => {
+      const node = source.getNodeSnapshot(key);
+      return node?.kind === "user" ? { id: node.item.id, messageId: node.item.messageId } : undefined;
+    }, entry),
     isCurrent: () => lifetimeRef.current === lifetime.current,
-  }), [mounts, scroll]);
+  }), [mounts, scroll, source]);
   const jumpState = useSyncExternalStore(jump.subscribe, jump.getSnapshot, jump.getSnapshot);
   useEffect(() => () => jump.dispose(), [jump]);
   useEffect(() => {
