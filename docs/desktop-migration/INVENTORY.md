@@ -151,7 +151,7 @@ Every entry carries one class: `keep-business` keeps its Go implementation and c
 | `EnsureBlankSurface` | `(scope string, workspaceRoot string) (TabMeta, error)` | desktop/tabs.go:2451 | keep-business (保留业务实现) | hostrpc desktop/invoke |
 | `EnsureBlankTab` | `(scope string, workspaceRoot string) (TabMeta, error)` | desktop/tabs.go:2490 | keep-business (保留业务实现) | hostrpc desktop/invoke |
 | `EnsureRemoteProjectSessions` | `(hostID string, workspace string) ([]RemoteSessionView, error)` | desktop/remote_listing.go:379 | keep-business (保留业务实现) | hostrpc desktop/invoke |
-| `ExportGoalDiagnostics` | `() (string, error)` | desktop/goal_diagnostics_export.go:18 | migrate-host (迁移宿主实现) | `business in Go; native step through nativeHost host/*` |
+| `ExportGoalDiagnostics` | `() (string, error)` | desktop/goal_diagnostics_export.go:22 | migrate-host (迁移宿主实现) | `business in Go; native step through nativeHost host/*` |
 | `ExportScrollDiagnostics` | `(payload string) (string, error)` | desktop/scroll_diagnostics_export.go:358 | migrate-host (迁移宿主实现) | `business in Go; native step through nativeHost host/*` |
 | `ExportThemePack` | `(id string, destPath string) (string, error)` | desktop/theme_app.go:710 | migrate-host (迁移宿主实现) | `business in Go; native step through nativeHost host/*` |
 | `ExtensionActions` | `(tabID string) ([]ExtensionActionView, error)` | desktop/extensions_app.go:57 | keep-business (保留业务实现) | hostrpc desktop/invoke |
@@ -206,11 +206,11 @@ Every entry carries one class: `keep-business` keeps its Go implementation and c
 | `HeartbeatTriggerNow` | `(id string)` | desktop/heartbeat.go:655 | keep-business (保留业务实现) | hostrpc desktop/invoke |
 | `History` | `() []HistoryMessage` | desktop/app.go:5195 | keep-business (保留业务实现) | hostrpc desktop/invoke |
 | `HistoryCheckpointTurnsForTab` | `(tabID string) []int` | desktop/app.go:5402 | keep-business (保留业务实现) | hostrpc desktop/invoke |
-| `HistoryContentForTab` | `(tabID string, ref HistoryContentRef, chunkIndex int) HistoryContentChunk` | desktop/history_slice.go:1122 | keep-business (保留业务实现) | hostrpc desktop/invoke |
+| `HistoryContentForTab` | `(tabID string, ref HistoryContentRef, chunkIndex int) HistoryContentChunk` | desktop/history_slice.go:1186 | keep-business (保留业务实现) | hostrpc desktop/invoke |
 | `HistoryForTab` | `(tabID string) []HistoryMessage` | desktop/app.go:5370 | keep-business (保留业务实现) | hostrpc desktop/invoke |
 | `HistoryPage` | `(beforeTurn int, limit int) HistoryPage` | desktop/app.go:5199 | keep-business (保留业务实现) | hostrpc desktop/invoke |
 | `HistoryPageForTab` | `(tabID string, beforeTurn int, limit int) HistoryPage` | desktop/app.go:5203 | keep-business (保留业务实现) | hostrpc desktop/invoke |
-| `HistorySliceForTab` | `(tabID string, req HistorySliceRequest) HistorySlice` | desktop/history_slice.go:299 | keep-business (保留业务实现) | hostrpc desktop/invoke |
+| `HistorySliceForTab` | `(tabID string, req HistorySliceRequest) HistorySlice` | desktop/history_slice.go:300 | keep-business (保留业务实现) | hostrpc desktop/invoke |
 | `HooksSettings` | `(scope string) HooksSettingsView` | desktop/hooks_settings_app.go:34 | keep-business (保留业务实现) | hostrpc desktop/invoke |
 | `ImportThemePack` | `(sourcePath string, replace bool) (ThemeImportResult, error)` | desktop/theme_app.go:639 | migrate-host (迁移宿主实现) | `business in Go; native step through nativeHost host/*` |
 | `InboxHasItems` | `(tabID string) (bool, error)` | desktop/inbox_app.go:470 | keep-business (保留业务实现) | hostrpc desktop/invoke |

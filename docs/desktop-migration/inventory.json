@@ -1037,7 +1037,7 @@
       "kind": "command",
       "name": "ExportGoalDiagnostics",
       "detail": "() (string, error)",
-      "location": "desktop/goal_diagnostics_export.go:18",
+      "location": "desktop/goal_diagnostics_export.go:22",
       "class": "migrate-host",
       "owner": "business in Go; native step through nativeHost host/*"
     },
@@ -1477,7 +1477,7 @@
       "kind": "command",
       "name": "HistoryContentForTab",
       "detail": "(tabID string, ref HistoryContentRef, chunkIndex int) HistoryContentChunk",
-      "location": "desktop/history_slice.go:1122",
+      "location": "desktop/history_slice.go:1186",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -1509,7 +1509,7 @@
       "kind": "command",
       "name": "HistorySliceForTab",
       "detail": "(tabID string, req HistorySliceRequest) HistorySlice",
-      "location": "desktop/history_slice.go:299",
+      "location": "desktop/history_slice.go:300",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
