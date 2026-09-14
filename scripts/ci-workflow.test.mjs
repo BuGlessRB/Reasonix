@@ -21,6 +21,28 @@ function shellStep(body, name) {
 }
 const ci = workflow("ci");
 const release = workflow("release-desktop");
+const appMemory = workflow("app-memory");
+
+test("App memory workflow tiers pull requests and keeps full scheduled coverage", () => {
+  assert.match(appMemory, /schedule:\n    - cron: "17 3 \* \* \*"/);
+  assert.match(appMemory, /\[ "\$EVENT_NAME" = workflow_dispatch \] \|\| \[ "\$EVENT_NAME" = schedule \]/);
+  assert.match(appMemory, /matrix:\n        shard: \$\{\{ fromJSON\(needs\.changes\.outputs\.memory_shards\) \}\}/);
+  assert.match(appMemory, /REASONIX_APP_MEMORY_PROFILE: \$\{\{ needs\.changes\.outputs\.memory_profile \}\}/);
+  const script = shellStep(job(appMemory, "changes"), "Select memory profile");
+  const run = env => spawnSync("bash", ["-e", "-c", script], {
+    env: { ...process.env, GITHUB_OUTPUT: "/dev/stdout", GITHUB_STEP_SUMMARY: "/dev/null", ...env }, encoding: "utf8",
+  });
+  for (const [env, expected] of [
+    [{ EVENT_NAME: "pull_request", MEMORY: "true", MEMORY_FULL: "false" }, "profile=short\nshards=[1]\n"],
+    [{ EVENT_NAME: "pull_request", MEMORY: "true", MEMORY_FULL: "true" }, "profile=full\nshards=[1,2,3]\n"],
+    [{ EVENT_NAME: "push", MEMORY: "true", MEMORY_FULL: "false" }, "profile=full\nshards=[1,2,3]\n"],
+    [{ EVENT_NAME: "pull_request", MEMORY: "false", MEMORY_FULL: "false" }, "profile=off\nshards=[1]\n"],
+  ]) {
+    const result = run(env);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, expected);
+  }
+});
 
 test("macOS signing diagnostics require protected main and cannot publish", () => {
   const source = workflow("macos-signing-check");
