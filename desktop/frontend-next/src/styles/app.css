@@ -2000,6 +2000,15 @@
     transition: opacity var(--t-card) var(--ease-out);
   }
   .out-clip[data-open]::after { opacity: 0 }
+  .out-clip { timeline-scope: --out-x }
+  .out-clip > .out-body { scroll-timeline: --out-x inline }
+  .out-clip::before {
+    content: ""; position: absolute; inset-block: 0; right: 0; width: 2.25rem; z-index: 1;
+    pointer-events: none; opacity: 0;
+    background: linear-gradient(to right, transparent, var(--face-sunk));
+    animation: out-x-more linear both; animation-timeline: --out-x;
+  }
+  @keyframes out-x-more { 0%, 88% { opacity: 1 } 100% { opacity: 0 } }
   /* 这颗按钮在裁剪框里面，而那道渐隐是裁剪框自己的 ::after —— 渐隐直到刚才
      都是一条无效声明（它读的 --bg 从来不存在），一生效就盖在了「还有更多」
      的唯一出口上。幕布之上，是控件该在的位置。 */
