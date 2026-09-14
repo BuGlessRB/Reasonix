@@ -2,8 +2,10 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -23,6 +25,29 @@ type ImportResult struct {
 }
 
 func importSourceForLegacy(ctx context.Context, sourcePath, targetRoot, headID string) (ImportResult, error) {
+	// The identity cutover deliberately reuses BranchID(sourcePath) for the
+	// canonical runtime. Once a final v4 store exists at that identity it is
+	// authoritative: treating it as a retired "paired preview" both rejects a
+	// valid codec and can remigrate an older checkpoint over newer v4 work.
+	previewDir := filepath.Join(targetRoot, agent.BranchID(sourcePath))
+	if final, finalErr := readManifest(filepath.Join(previewDir, "manifest.json")); finalErr == nil {
+		if final.SessionID != agent.BranchID(sourcePath) {
+			return ImportResult{}, fmt.Errorf("session: canonical store identity %q does not match legacy identity %q", final.SessionID, agent.BranchID(sourcePath))
+		}
+		source := Source{Path: sourcePath, Version: Codec}
+		if final.Source != nil {
+			source = *final.Source
+		}
+		return ImportResult{TargetID: final.SessionID, Source: source, Reused: true, Kind: "final"}, nil
+	}
+	if _, statErr := os.Stat(previewDir); errors.Is(statErr, fs.ErrNotExist) {
+		frozenLegacy, err := freezeLegacyHead(ctx, sourcePath, headID, true)
+		if err != nil {
+			return ImportResult{}, err
+		}
+		defer os.RemoveAll(frozenLegacy.freezeDir)
+		return publishLegacyImport(ctx, frozenLegacy, targetRoot)
+	}
 	// Freeze and parse every candidate before publication. Inspecting a paired
 	// sidecar after publishing legacy history can omit newer work and leave an
 	// adopted target behind after a refused import.
@@ -31,9 +56,6 @@ func importSourceForLegacy(ctx context.Context, sourcePath, targetRoot, headID s
 		return ImportResult{}, err
 	}
 	defer os.RemoveAll(frozenLegacy.freezeDir)
-	legacy := frozenLegacy.messages
-
-	previewDir := filepath.Join(targetRoot, agent.BranchID(sourcePath))
 	frozenPreview, err := freezePairedPreview(ctx, previewDir)
 	if errors.Is(err, fs.ErrNotExist) {
 		// No paired sidecar (or no target root yet) means the transcript is the
@@ -51,20 +73,75 @@ func importSourceForLegacy(ctx context.Context, sourcePath, targetRoot, headID s
 		return publishLegacyImport(ctx, frozenLegacy, targetRoot)
 	}
 
-	switch {
-	case messagesEqual(legacy, preview), messagesPrefix(legacy, preview):
+	relation, legacyMessages, firstDifference, err := compareLegacySpool(frozenLegacy.messageSpool, preview)
+	if err != nil {
+		return ImportResult{}, err
+	}
+	switch relation {
+	case importMessagesEqual, importLegacyPrefix:
 		// The event sidecar carries the same history or a strictly longer one,
 		// so it is the only source that can be resumed without losing work.
 		imported, importErr := importFrozenPreview(ctx, frozenPreview, targetRoot)
 		return ImportResult{TargetID: imported.TargetID, Source: imported.Source, Reused: imported.Reused, Kind: "events"}, importErr
-	case messagesPrefix(preview, legacy):
+	case importPreviewPrefix:
 		// The transcript is strictly newer; the sidecar is an earlier prefix.
 		return publishLegacyImport(ctx, frozenLegacy, targetRoot)
 	default:
 		// Neither source is a provable prefix of the other. Both originals stay
 		// read-only and no executable target is created.
-		left, right := comparableImportMessages(legacy), comparableImportMessages(preview)
-		return ImportResult{}, fmt.Errorf("%w: legacy=%s events=%s legacy_messages=%d event_messages=%d first_difference=%d", ErrImportConflict, sourcePath, frozenPreview.source.Version, len(left), len(right), firstMessageDifference(left, right))
+		return ImportResult{}, fmt.Errorf("%w: legacy=%s events=%s legacy_messages=%d event_messages=%d first_difference=%d", ErrImportConflict, sourcePath, frozenPreview.source.Version, legacyMessages, len(comparableImportMessages(preview)), firstDifference)
+	}
+}
+
+type importMessageRelation uint8
+
+const (
+	importMessagesEqual importMessageRelation = iota
+	importLegacyPrefix
+	importPreviewPrefix
+	importMessagesConflict
+)
+
+// compareLegacySpool proves the same prefix relation as the old in-memory
+// comparison while retaining only one legacy message at a time.
+func compareLegacySpool(path string, preview []provider.Message) (importMessageRelation, int, int, error) {
+	preview = comparableImportMessages(preview)
+	file, err := os.Open(path)
+	if err != nil {
+		return importMessagesConflict, 0, 0, err
+	}
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	legacyCount := 0
+	firstDifference := -1
+	for {
+		var message provider.Message
+		err := decoder.Decode(&message)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return importMessagesConflict, legacyCount, max(firstDifference, 0), err
+		}
+		comparable := comparableImportMessages([]provider.Message{message})
+		if len(comparable) == 0 {
+			continue
+		}
+		if firstDifference < 0 && (legacyCount >= len(preview) || !reflect.DeepEqual(comparable[0], preview[legacyCount])) {
+			firstDifference = legacyCount
+		}
+		legacyCount++
+	}
+	if firstDifference >= 0 {
+		return importMessagesConflict, legacyCount, firstDifference, nil
+	}
+	switch {
+	case legacyCount == len(preview):
+		return importMessagesEqual, legacyCount, legacyCount, nil
+	case legacyCount < len(preview):
+		return importLegacyPrefix, legacyCount, legacyCount, nil
+	default:
+		return importPreviewPrefix, legacyCount, len(preview), nil
 	}
 }
 

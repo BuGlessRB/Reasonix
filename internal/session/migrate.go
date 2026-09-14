@@ -94,7 +94,8 @@ type frozenLegacyHead struct {
 	source        Source
 	artifacts     []frozenArtifact
 	targetID      string
-	messages      []provider.Message
+	messageSpool  string
+	messageCount  int
 	modelRef      string
 	modelIdentity string
 	goal          map[string]any
@@ -136,15 +137,17 @@ func freezeLegacyHead(ctx context.Context, sourcePath, legacyHeadID string, allo
 	}
 	return &frozenLegacyHead{
 		sourcePath: sourcePath, headID: legacyHeadID, source: source, artifacts: artifacts,
-		targetID: migrationTargetID(sourcePath, source.SHA256, legacyHeadID),
-		messages: parsed.messages, modelRef: parsed.modelRef, modelIdentity: parsed.modelIdentity,
+		targetID:     migrationTargetID(sourcePath, source.SHA256, legacyHeadID),
+		messageSpool: parsed.messageSpool, messageCount: parsed.messageCount,
+		modelRef: parsed.modelRef, modelIdentity: parsed.modelIdentity,
 		goal:      parsed.goal,
 		freezeDir: freezeDir,
 	}, nil
 }
 
 type frozenLegacyParse struct {
-	messages      []provider.Message
+	messageSpool  string
+	messageCount  int
 	modelRef      string
 	modelIdentity string
 	goal          map[string]any
@@ -169,24 +172,32 @@ func parseFrozenLegacy(ctx context.Context, artifacts []frozenArtifact, sourcePa
 	if frozenSourcePath == "" {
 		return frozenLegacyParse{}, os.ErrNotExist
 	}
-	var session *agent.Session
-	var err error
-	if legacyHeadID == "" {
-		session, err = agent.LoadSessionForMigration(ctx, frozenSourcePath)
-	} else {
-		session, err = agent.LoadSessionHeadForMigration(ctx, frozenSourcePath, legacyHeadID)
-	}
+	messageSpool := filepath.Join(filepath.Dir(frozenSourcePath), ".migration-messages.jsons")
+	spool, err := os.OpenFile(messageSpool, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0o600)
 	if err != nil {
-		return frozenLegacyParse{}, fmt.Errorf("read legacy transcript: %w", err)
+		return frozenLegacyParse{}, err
 	}
-	messages := session.Snapshot()
-	if messages == nil {
-		// An empty legacy transcript is valid. Encode an explicit empty list so
-		// strict replay can distinguish it from a damaged import missing the
-		// required messages field.
-		messages = []provider.Message{}
+	encoder := json.NewEncoder(spool)
+	reset := func() error {
+		if err := spool.Truncate(0); err != nil {
+			return err
+		}
+		_, err := spool.Seek(0, io.SeekStart)
+		return err
 	}
-	parsed := frozenLegacyParse{messages: messages}
+	emit := func(message provider.Message) error { return encoder.Encode(message) }
+	stream, streamErr := agent.StreamSessionMessagesForMigration(ctx, frozenSourcePath, legacyHeadID, reset, emit)
+	if streamErr == nil {
+		streamErr = spool.Sync()
+	}
+	closeErr := spool.Close()
+	if streamErr != nil {
+		return frozenLegacyParse{}, fmt.Errorf("read legacy transcript: %w", streamErr)
+	}
+	if closeErr != nil {
+		return frozenLegacyParse{}, closeErr
+	}
+	parsed := frozenLegacyParse{messageSpool: messageSpool, messageCount: stream.Messages}
 	if modelRef, modelIdentity, ok := agent.LoadSessionModelSelection(frozenSourcePath); ok && strings.TrimSpace(modelRef) != "" {
 		parsed.modelRef, parsed.modelIdentity = strings.TrimSpace(modelRef), strings.TrimSpace(modelIdentity)
 	}
@@ -203,7 +214,7 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 	}
 	defer os.RemoveAll(f.freezeDir)
 	targetDir := filepath.Join(targetRoot, f.targetID)
-	result := MigrationResult{TargetID: f.targetID, TargetDir: targetDir, Source: f.source, MessageNum: len(f.messages)}
+	result := MigrationResult{TargetID: f.targetID, TargetDir: targetDir, Source: f.source, MessageNum: f.messageCount}
 
 	migrationMu.Lock()
 	defer migrationMu.Unlock()
@@ -250,16 +261,41 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 		}
 	}
 
-	target, err := Open(tmp, f.targetID)
+	target, err := OpenWithOptions(tmp, f.targetID, OpenOptions{ExternalHistory: true})
 	if err != nil {
 		return MigrationResult{}, err
 	}
 	const messageBatchSize = 128
 	var appendErr error
-	for start := 0; start < len(f.messages) && appendErr == nil; start += messageBatchSize {
-		end := min(start+messageBatchSize, len(f.messages))
-		events := make([]Event, 0, end-start)
-		for _, message := range f.messages[start:end] {
+	spool, err := os.Open(f.messageSpool)
+	if err != nil {
+		_ = target.Close(context.Background())
+		return MigrationResult{}, err
+	}
+	decoder := json.NewDecoder(&contextReader{ctx: ctx, reader: spool})
+	events := make([]Event, 0, messageBatchSize)
+	batchNumber := 0
+	flushMessages := func() error {
+		if len(events) == 0 {
+			return nil
+		}
+		_, err := target.Append(ctx, Batch{OperationID: fmt.Sprintf("legacy-import:%s:messages:%d", f.source.SHA256, batchNumber), Events: events})
+		batchNumber++
+		events = make([]Event, 0, messageBatchSize)
+		return err
+	}
+	for appendErr == nil {
+		var message provider.Message
+		decodeErr := decoder.Decode(&message)
+		if errors.Is(decodeErr, io.EOF) {
+			appendErr = flushMessages()
+			break
+		}
+		if decodeErr != nil {
+			appendErr = decodeErr
+			break
+		}
+		{
 			raw, marshalErr := json.Marshal(struct {
 				Message provider.Message `json:"message"`
 			}{Message: message})
@@ -269,9 +305,12 @@ func (f *frozenLegacyHead) publish(ctx context.Context, targetRoot string) (Migr
 			}
 			events = append(events, Event{Kind: "message/complete", Payload: raw})
 		}
-		if appendErr == nil {
-			_, appendErr = target.Append(ctx, Batch{OperationID: fmt.Sprintf("legacy-import:%s:messages:%d", f.source.SHA256, start/messageBatchSize), Events: events})
+		if len(events) == messageBatchSize {
+			appendErr = flushMessages()
 		}
+	}
+	if closeErr := spool.Close(); appendErr == nil {
+		appendErr = closeErr
 	}
 	if appendErr == nil && f.modelRef != "" {
 		raw, marshalErr := json.Marshal(map[string]string{"modelRef": f.modelRef, "modelIdentity": f.modelIdentity})

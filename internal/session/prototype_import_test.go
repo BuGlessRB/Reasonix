@@ -76,6 +76,42 @@ func TestContinueImportedResolvesPairedHistoryStructurally(t *testing.T) {
 	}
 }
 
+func TestContinueImportedReusesFinalCanonicalStore(t *testing.T) {
+	root := t.TempDir()
+	legacyPath := filepath.Join(root, "legacy.jsonl")
+	legacy := agent.NewSession("system")
+	legacy.Add(provider.Message{Role: provider.RoleUser, Content: "old"})
+	if err := legacy.Save(legacyPath); err != nil {
+		t.Fatal(err)
+	}
+	targetRoot := filepath.Join(root, "sessions-v4")
+	id := agent.BranchID(legacyPath)
+	canonical, err := Open(filepath.Join(targetRoot, id), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(struct {
+		Message provider.Message `json:"message"`
+	}{Message: provider.Message{ID: "new", Role: provider.RoleAssistant, Content: "newer canonical work"}})
+	if _, err := canonical.Append(t.Context(), Batch{OperationID: "canonical", Events: []Event{{Kind: "message/complete", Payload: payload}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonical.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := canonical.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := importSourceForLegacy(t.Context(), legacyPath, targetRoot, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TargetID != id || !result.Reused || result.Kind != "final" {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
 func TestContinueImportedRefusesDivergentPairedHistory(t *testing.T) {
 	root := t.TempDir()
 	legacyDir := filepath.Join(root, "sessions")
@@ -255,7 +291,7 @@ func TestContinueStoredPreviewUpgradesLinearV3ToFinalCodec(t *testing.T) {
 	if result.Source.Version != LegacyLinearCodec || runtime.Ref().SessionID == "old-linear" {
 		t.Fatalf("upgrade = %+v, ref = %+v", result, runtime.Ref())
 	}
-	if got := runtime.Session().Snapshot().Projection.Messages; len(got) != 1 || got[0].ID != "user" {
+	if got := runtime.Session().Snapshot().Projection.ModelMessages; len(got) != 1 || got[0].ID != "user" {
 		t.Fatalf("upgraded messages = %+v", got)
 	}
 }
@@ -305,7 +341,7 @@ func TestContinueStoredPreviewUpgradesUnpublishedV4Draft(t *testing.T) {
 	if upgraded.StorageRevision != StorageRevision {
 		t.Fatalf("storage revision = %d, want %d", upgraded.StorageRevision, StorageRevision)
 	}
-	if got := runtime.Session().Snapshot().Projection.Messages; len(got) != 1 || got[0].ID != "user" {
+	if got := runtime.Session().Snapshot().Projection.ModelMessages; len(got) != 1 || got[0].ID != "user" {
 		t.Fatalf("upgraded messages = %+v", got)
 	}
 	var original Manifest
