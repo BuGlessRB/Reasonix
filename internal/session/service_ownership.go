@@ -100,6 +100,7 @@ func (s *Service) PrepareCreate(ctx context.Context, options CreateOptions) (*Pr
 	if err != nil {
 		return nil, err
 	}
+	session.externalizeDurableHistory()
 	ref := SessionRef{HostID: s.hostID, SessionID: session.ID()}
 	candidate := newRuntime(ref, session)
 	candidate.owner = s
@@ -255,6 +256,7 @@ func (s *Service) openRuntime(ctx context.Context, ref SessionRef) (*Runtime, er
 		s.finishPrepare(ref)
 		return nil, fmt.Errorf("session: close interrupted runtime: %w", recoverErr)
 	}
+	session.externalizeDurableHistory()
 	candidate := newRuntime(ref, session)
 	candidate.owner = s
 	s.mu.Lock()

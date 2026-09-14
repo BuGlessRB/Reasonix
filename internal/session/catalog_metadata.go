@@ -57,7 +57,7 @@ func metadataFromProjection(manifest Manifest, sequence uint64, projection Proje
 	}
 	for _, message := range projection.Messages {
 		if message.Role == provider.RoleUser && strings.TrimSpace(message.Content) != "" {
-			metadata.Preview = strings.TrimSpace(message.Content)
+			metadata.Preview = messagePreview(message)
 			break
 		}
 	}

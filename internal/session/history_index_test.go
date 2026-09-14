@@ -34,12 +34,16 @@ func TestHistoryPageKeepsSnapshotAndAuthorizesReferencedContent(t *testing.T) {
 	appendMessage("one", "first")
 	appendMessage("two", strings.Repeat("large", 20000))
 	appendMessage("three", "third")
+	projection := runtime.Session().Snapshot().Projection
+	if len(projection.Messages) != 0 || len(projection.ModelMessages) != 3 {
+		t.Fatalf("service runtime retained durable UI bodies: messages=%d model=%d", len(projection.Messages), len(projection.ModelMessages))
+	}
 	ref := runtime.Ref()
 	first, err := service.Query().HistoryPage(t.Context(), ref, "", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first.Messages) != 1 || first.Messages[0].MessageID != "one" || !first.HasMore || first.NextCursor == "" {
+	if len(first.Messages) != 1 || first.Messages[0].MessageID != "three" || !first.HasMore || first.NextCursor == "" {
 		t.Fatalf("first page = %+v", first)
 	}
 	appendMessage("four", "must not enter the fixed snapshot")
@@ -47,10 +51,10 @@ func TestHistoryPageKeepsSnapshotAndAuthorizesReferencedContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(second.Messages) != 2 || second.Messages[0].MessageID != "two" || second.Messages[1].MessageID != "three" {
+	if len(second.Messages) != 2 || second.Messages[0].MessageID != "one" || second.Messages[1].MessageID != "two" {
 		t.Fatalf("fixed snapshot second page = %+v", second)
 	}
-	large := second.Messages[0]
+	large := second.Messages[1]
 	if large.ContentRef == nil || len(large.Inline) != 0 {
 		t.Fatalf("large message was not referenced: %+v", large)
 	}

@@ -35,6 +35,11 @@ type Session struct {
 	sealed      bool
 	sealedError error
 	readOnly    bool
+	// externalHistory means durable UI messages live in HistoryQuery rather
+	// than this runtime projection. Messages then contains only the accepted,
+	// not-yet-durable tail; ModelMessages remains the exact provider workset.
+	externalHistory bool
+	catalogPreview  string
 	// coldHandle backs a read-only session, which has no binding because it
 	// never enqueues or drains anything.
 	coldHandle SessionHandle
@@ -350,12 +355,37 @@ func (s *Session) CatalogMetadata() catalogMetadata {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return metadataFromProjection(s.manifest, s.next-1, s.projection)
+	metadata := metadataFromProjection(s.manifest, s.next-1, s.projection)
+	if metadata.Preview == "" {
+		metadata.Preview = s.catalogPreview
+	}
+	return metadata
 }
 
 // DeriveMessages returns the model history projection.
 func (s *Session) DeriveMessages() []provider.Message {
 	return append([]provider.Message(nil), s.Snapshot().Projection.ModelMessages...)
+}
+
+// externalizeDurableHistory switches a Service-owned runtime to the bounded
+// history model. It is intentionally not used by the low-level Store API,
+// whose compatibility callers still request a complete projection.
+func (s *Session) externalizeDurableHistory() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.externalHistory {
+		return
+	}
+	for _, message := range s.projection.Messages {
+		if message.Role == provider.RoleUser && s.catalogPreview == "" {
+			s.catalogPreview = messagePreview(message)
+		}
+	}
+	s.projection.Messages = nil
+	s.externalHistory = true
 }
 
 // AcceptedPage returns the live accepted prefix, including events that have not

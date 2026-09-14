@@ -26,6 +26,7 @@ import (
 
 	"reasonix/internal/filelock"
 	"reasonix/internal/fileutil"
+	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontent"
 )
 
@@ -145,6 +146,10 @@ type OpenOptions struct {
 	AfterFunc func(time.Duration, func()) timerHandle
 	Write     func(context.Context, io.Writer, []byte) error
 	Sync      func(*os.File) error
+	// ExternalHistory keeps durable UI messages out of the live projection.
+	// Production SessionService enables it; low-level compatibility callers
+	// retain the historical full-projection behavior unless requested.
+	ExternalHistory bool
 }
 
 type operationRecord struct {
@@ -199,9 +204,10 @@ type Store struct {
 }
 
 type startupSessionState struct {
-	projection Projection
-	operations map[string]operationRecord
-	durable    uint64
+	projection     Projection
+	operations     map[string]operationRecord
+	durable        uint64
+	catalogPreview string
 }
 
 // ID returns the immutable session identity of the physical store.
@@ -356,7 +362,7 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 	}
 	// Build runtime state in one streaming validation pass. A newer required
 	// event or a damaged complete batch leaves the original tail untouched.
-	startup, durableEnd, torn, err := loadStartupSessionState(context.Background(), dir, eventsPath)
+	startup, durableEnd, torn, err := loadStartupSessionState(context.Background(), dir, eventsPath, opts.ExternalHistory)
 	if err != nil {
 		return fail(err)
 	}
@@ -399,7 +405,7 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 	}, nil
 }
 
-func loadStartupSessionState(ctx context.Context, dir, eventsPath string) (*startupSessionState, int64, bool, error) {
+func loadStartupSessionState(ctx context.Context, dir, eventsPath string, externalHistory bool) (*startupSessionState, int64, bool, error) {
 	file, err := os.Open(eventsPath)
 	if os.IsNotExist(err) {
 		projection, _ := Project(nil)
@@ -421,6 +427,14 @@ func loadStartupSessionState(ctx context.Context, dir, eventsPath string) (*star
 		if applyErr := applyProjectionCommit(&state.projection, commit); applyErr != nil {
 			projectionErr = applyErr
 			return false
+		}
+		if externalHistory {
+			for _, message := range state.projection.Messages {
+				if message.Role == provider.RoleUser && state.catalogPreview == "" {
+					state.catalogPreview = messagePreview(message)
+				}
+			}
+			state.projection.Messages = nil
 		}
 		state.operations[commit.OperationID] = compactOperationRecord(commit)
 		state.durable = commit.LastSequence()
@@ -450,6 +464,8 @@ func bindSession(handle *Store, opts OpenOptions) (*Session, error) {
 	session := newSession(handle.Manifest().SessionID, handle.Manifest(), nil, state.projection, binding)
 	session.next = state.durable + 1
 	session.operations = state.operations
+	session.externalHistory = opts.ExternalHistory
+	session.catalogPreview = state.catalogPreview
 	binding.metadataSource = session.metadataForDurable
 	return session, nil
 }
@@ -472,7 +488,20 @@ func (s *Session) metadataForDurable(durable uint64) (catalogMetadata, bool) {
 	if cut > 0 {
 		s.commits = append([]Commit(nil), s.commits[cut:]...)
 	}
-	return metadataFromProjection(s.manifest, durable, s.projection), true
+	metadata := metadataFromProjection(s.manifest, durable, s.projection)
+	if s.catalogPreview == "" && metadata.Preview != "" {
+		s.catalogPreview = metadata.Preview
+	}
+	if metadata.Preview == "" {
+		metadata.Preview = s.catalogPreview
+	}
+	if s.externalHistory {
+		// The history index reconstructs every durable message from the log.
+		// Keeping the same bodies here would make steady-state RSS scale with
+		// total conversation size and duplicate provider-visible work.
+		s.projection.Messages = nil
+	}
+	return metadata, true
 }
 
 func writeManifestFile(path string, manifest Manifest) error {

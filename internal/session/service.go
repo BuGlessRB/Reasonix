@@ -671,7 +671,9 @@ func (s *Service) Observe(ctx context.Context, ref SessionRef, cursor uint64, li
 		return ObserveResult{}, err
 	}
 	if runtime, ok := s.Runtime(ref); ok {
-		snapshot := runtime.Snapshot()
+		// Observe reports runtime state plus an explicitly paged event tail. It
+		// must not duplicate the provider model workset into every poll.
+		snapshot := runtime.StateSnapshot()
 		page, err := runtime.session.AcceptedPage(ctx, cursor, limit)
 		return ObserveResult{Runtime: &snapshot, Events: page}, err
 	}

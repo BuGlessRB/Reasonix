@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"reasonix/internal/projectiondb"
@@ -49,7 +50,7 @@ type historyCursor struct {
 	SessionID        string `json:"sessionId"`
 	StorageRevision  int    `json:"storageRevision"`
 	SnapshotSequence uint64 `json:"snapshotSequence"`
-	AfterPosition    int64  `json:"afterPosition"`
+	BeforePosition   int64  `json:"beforePosition"`
 	Projection       int    `json:"projection"`
 }
 
@@ -111,7 +112,9 @@ func (q *Query) HistoryPage(ctx context.Context, ref SessionRef, cursor string, 
 	if err := scanMetadataUint(handle.DB.QueryRowContext(ctx, `SELECT value FROM metadata WHERE key='durable_sequence'`), &snapshot); err != nil {
 		return MessageHistoryPage{}, err
 	}
-	after := int64(0)
+	// Empty cursor means the newest page. Subsequent cursors move toward older
+	// positions while the snapshot sequence remains fixed.
+	before := int64(^uint64(0) >> 1)
 	if cursor != "" {
 		parsed, err := decodeHistoryCursor(cursor)
 		if err != nil {
@@ -121,9 +124,12 @@ func (q *Query) HistoryPage(ctx context.Context, ref SessionRef, cursor string, 
 			return MessageHistoryPage{}, errors.New("session: history cursor no longer matches this snapshot")
 		}
 		snapshot = parsed.SnapshotSequence
-		after = parsed.AfterPosition
+		if parsed.BeforePosition <= 0 {
+			return MessageHistoryPage{}, errors.New("session: invalid history cursor position")
+		}
+		before = parsed.BeforePosition
 	}
-	rows, err := handle.DB.QueryContext(ctx, `SELECT message_id,position,version,role,preview,event_sequence,inline,content_digest,content_bytes,content_index_digest FROM messages WHERE position>? AND event_sequence<=? AND (valid_to=0 OR valid_to>?) ORDER BY position LIMIT ?`, after, snapshot, snapshot, limit+1)
+	rows, err := handle.DB.QueryContext(ctx, `SELECT message_id,position,version,role,preview,event_sequence,inline,content_digest,content_bytes,content_index_digest FROM messages WHERE position<? AND event_sequence<=? AND (valid_to=0 OR valid_to>?) ORDER BY position DESC LIMIT ?`, before, snapshot, snapshot, limit+1)
 	if err != nil {
 		return MessageHistoryPage{}, err
 	}
@@ -158,12 +164,13 @@ func (q *Query) HistoryPage(ctx context.Context, ref SessionRef, cursor string, 
 		return MessageHistoryPage{}, err
 	}
 	if page.HasMore && len(page.Messages) > 0 {
-		last := page.Messages[len(page.Messages)-1]
-		page.NextCursor, err = encodeHistoryCursor(historyCursor{SessionID: ref.SessionID, StorageRevision: StorageRevision, SnapshotSequence: snapshot, AfterPosition: last.Position, Projection: historyIndexVersion})
+		oldest := page.Messages[len(page.Messages)-1]
+		page.NextCursor, err = encodeHistoryCursor(historyCursor{SessionID: ref.SessionID, StorageRevision: StorageRevision, SnapshotSequence: snapshot, BeforePosition: oldest.Position, Projection: historyIndexVersion})
 		if err != nil {
 			return MessageHistoryPage{}, err
 		}
 	}
+	slices.Reverse(page.Messages)
 	return page, nil
 }
 

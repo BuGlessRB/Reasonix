@@ -119,7 +119,7 @@ func (p *FilesystemPersistence) Create(options CreateOptions) (*Session, error) 
 	if err != nil {
 		return nil, err
 	}
-	return CreateStore(dir, id)
+	return CreateWithOptions(dir, id, OpenOptions{ExternalHistory: true})
 }
 
 func (p *FilesystemPersistence) Open(sessionID string, mode AccessMode) (*Session, error) {
@@ -142,7 +142,7 @@ func (p *FilesystemPersistence) Open(sessionID string, mode AccessMode) (*Sessio
 	} else if err != nil {
 		return nil, err
 	}
-	return Open(dir, id)
+	return OpenWithOptions(dir, id, OpenOptions{ExternalHistory: true})
 }
 
 func (p *FilesystemPersistence) Stat(ctx context.Context, sessionID string) (SessionInfo, error) {

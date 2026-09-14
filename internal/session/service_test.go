@@ -40,7 +40,7 @@ func TestServiceForkAndRewindUsePersistedTurnBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	childMessages := child.Session().Snapshot().Projection.Messages
+	childMessages := child.Session().Snapshot().Projection.ModelMessages
 	if len(childMessages) != 1 || childMessages[0].ID != "message-a" {
 		t.Fatalf("fork messages = %#v", childMessages)
 	}
@@ -52,7 +52,7 @@ func TestServiceForkAndRewindUsePersistedTurnBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rewoundMessages := rewound.Session().Snapshot().Projection.Messages
+	rewoundMessages := rewound.Session().Snapshot().Projection.ModelMessages
 	if len(rewoundMessages) != 1 || rewoundMessages[0].ID != "message-a" {
 		t.Fatalf("rewind messages = %#v", rewoundMessages)
 	}
@@ -430,7 +430,7 @@ func TestServiceContinueLegacyPublishesNewIdentityAndLeavesSourceUnchanged(t *te
 	if err != nil || string(after) != string(before) {
 		t.Fatal("legacy source changed during continue")
 	}
-	if got := runtime.Session().Snapshot().Projection.Messages; len(got) != 2 || got[1].ID != "user" {
+	if got := runtime.Session().Snapshot().Projection.ModelMessages; len(got) != 2 || got[1].ID != "user" {
 		t.Fatalf("migrated history = %#v", got)
 	}
 	if err := service.Close(t.Context(), runtime.Ref()); err != nil {
