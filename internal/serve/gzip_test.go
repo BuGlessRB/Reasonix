@@ -92,6 +92,28 @@ func TestGzipMiddlewareKeepsSmallResponsesPlain(t *testing.T) {
 	if rr.Body.String() != "small" {
 		t.Fatalf("small body = %q", rr.Body.String())
 	}
+	if got := rr.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+		t.Fatalf("small response Content-Type = %q", got)
+	}
+	if got := rr.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("small response X-Content-Type-Options = %q", got)
+	}
+}
+
+func TestGzipMiddlewareDoesNotRenderUntypedReflectedHTML(t *testing.T) {
+	h := gzipMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(r.URL.Query().Get("value")))
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/status?value=%3Cscript%3Ealert(1)%3C/script%3E", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if got := rr.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+		t.Fatalf("reflected response Content-Type = %q", got)
+	}
+	if got := rr.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("reflected response X-Content-Type-Options = %q", got)
+	}
 }
 
 func TestGzipMiddlewareHonorsDisabledEncoding(t *testing.T) {

@@ -319,6 +319,13 @@ func (s *Store) indexPath(digest string) string {
 	return filepath.Join(s.root, "indexes", digest[:2], digest[2:4], digest+".json")
 }
 
+func (s *Store) indexRelativePath(digest string) string {
+	if len(digest) < 4 {
+		return filepath.Join("indexes", digest+".json")
+	}
+	return filepath.Join("indexes", digest[:2], digest[2:4], digest+".json")
+}
+
 type blockDigestWriter struct {
 	dst    io.Writer
 	full   hash.Hash
@@ -439,7 +446,18 @@ func (s *Store) readIndex(ctx context.Context, ref Ref) (integrityIndex, error) 
 	if err := ctx.Err(); err != nil {
 		return integrityIndex{}, err
 	}
-	data, err := os.ReadFile(s.indexPath(ref.Digest))
+	if err := validateRef(ref); err != nil {
+		return integrityIndex{}, err
+	}
+	if s == nil || s.root == "" {
+		return integrityIndex{}, errors.New("session content store unavailable")
+	}
+	root, err := os.OpenRoot(s.root)
+	if err != nil {
+		return integrityIndex{}, fmt.Errorf("open session content root: %w", err)
+	}
+	defer root.Close()
+	data, err := root.ReadFile(s.indexRelativePath(ref.Digest))
 	if err != nil {
 		return integrityIndex{}, fmt.Errorf("read session content %s integrity index: %w", ref.Digest, err)
 	}

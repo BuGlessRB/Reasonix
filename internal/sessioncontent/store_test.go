@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -105,6 +106,15 @@ func TestStoreReadRangeAndStat(t *testing.T) {
 	}
 	if _, err := store.ReadRange(context.Background(), ref, 9, 2); err == nil {
 		t.Fatal("out-of-bounds range was accepted")
+	}
+}
+
+func TestStoreRejectsUntrustedIntegrityIndexPath(t *testing.T) {
+	t.Parallel()
+	store := New(t.TempDir())
+	ref := Ref{Digest: "../../outside", Bytes: 1, IndexDigest: strings.Repeat("0", sha256.Size*2), IntegrityBlock: IntegrityBlockBytes}
+	if _, err := store.readIndex(t.Context(), ref); err == nil {
+		t.Fatal("readIndex accepted an untrusted digest path")
 	}
 }
 
