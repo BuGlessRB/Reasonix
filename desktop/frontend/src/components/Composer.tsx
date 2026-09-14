@@ -4568,8 +4568,7 @@ export function Composer({
               <PermissionPresetChoice
                 key={`approval-${tabId}`}
                 value={permissionPreset}
-                disabled={approvalBarDisabled}
-                dismissSignal={transientDismissSignal}
+                disabled={approvalBarDisabled} dismissSignal={transientDismissSignal}
                 scopeKey={`${tabId ?? ""}:${sessionKey ?? ""}:${workspaceScopeKey ?? ""}`}
                 projectConfirmationKey={fullAccessConfirmationKey}
                 onPick={chooseApprovalMode}
@@ -4605,8 +4604,7 @@ export function Composer({
                   currency={currency}
                   cacheHitTokens={cacheHitTokens}
                   cacheMissTokens={cacheMissTokens}
-                  balance={balance}
-                  dismissSignal={transientDismissSignal}
+                  balance={balance} dismissSignal={transientDismissSignal}
                 />
               )}
               <Suspense fallback={<span className="modelsw__label">{modelLabel}</span>}><ModelSwitcher composerMenu label={modelLabel} tabId={tabId} ready={ready} sessionKey={sessionKey} disabled={suspendedByDecision} dismissSignal={transientDismissSignal} onPick={onSwitchModel} onManage={() => {
@@ -4617,8 +4615,7 @@ export function Composer({
                 <ComposerChoice key={`effort-${tabId}`} label={effortLabel(currentEffort)}
                   ariaLabel={`${t("status.effortTitle")}: ${effortLabel(currentEffort)}`}
                   icon={<Brain size={16} />} showChevron
-                  value={currentEffort} disabled={disabled || readOnly || running}
-                  dismissSignal={transientDismissSignal}
+                  value={currentEffort} disabled={disabled || readOnly || running} dismissSignal={transientDismissSignal}
                   onPick={chooseEffortLevel}
                   options={effortLevels.map(level => ({ value: level, label: effortLabel(level) }))} />
               </div>}
