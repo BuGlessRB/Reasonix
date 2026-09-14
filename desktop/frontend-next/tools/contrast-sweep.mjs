@@ -13,9 +13,11 @@
 //
 // Two things it deliberately does NOT do quietly: a probe that fails to
 // evaluate throws rather than returning an empty list, because an empty list
-// reads exactly like a clean sweep. And getComputedStyle returns
-// `color(srgb r g b / a)` for color-mix results — 0-1 channels, not 0-255 —
-// which parsed as 8-bit turns a pale tint into a mid grey.
+// reads exactly like a clean sweep. And colours are resolved by painting them
+// — getComputedStyle hands back whichever notation the value was authored in,
+// `color(srgb r g b / a)` on 0-1 channels or `oklch(0.85 0.012 255)` with a
+// lightness under 1 and a hue past 255, and reading either as 8-bit RGB
+// invents a colour nothing on screen has.
 const list = await (await fetch("http://127.0.0.1:9333/json/list")).json();
 const t = list.find((x) => x.type === "page");
 const ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -32,13 +34,17 @@ const probe = `(() => {
     const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
-  const parse = (s) => {
-    const nums = (s.match(/[\\d.]+/g) || []).map(Number);
-    if (/^color\\(/.test(s)) {
-      const [r, g, b, a] = nums;
-      return a === undefined ? [r * 255, g * 255, b * 255] : [r * 255, g * 255, b * 255, a];
-    }
-    return nums.slice(0, 4);
+  const _cx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d", { willReadFrequently: true });
+  // Painted rather than parsed: the canvas takes every CSS colour notation and
+  // answers in 8-bit. The reset matters — an unparseable value leaves fillStyle
+  // at whatever it held last, which would report the previous element's colour.
+  const parse = (x) => {
+    _cx.clearRect(0, 0, 1, 1);
+    _cx.fillStyle = "#000";
+    _cx.fillStyle = x;
+    _cx.fillRect(0, 0, 1, 1);
+    const d = _cx.getImageData(0, 0, 1, 1).data;
+    return [d[0], d[1], d[2], d[3] / 255];
   };
   const over = (fg, bg) => {
     const a = fg.length > 3 ? fg[3] : 1;
