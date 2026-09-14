@@ -7,7 +7,7 @@
     "complexity": 1496,
     "error-text": 12,
     "essay": 3218,
-    "file-size": 38390,
+    "file-size": 38277,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
@@ -300,7 +300,7 @@
     },
     "internal/agent/usecapability.go": {
       "essay": 9,
-      "file-size": 867,
+      "file-size": 754,
       "function-size": 2
     },
     "internal/agent/width.go": {
