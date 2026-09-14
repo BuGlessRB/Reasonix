@@ -130,3 +130,32 @@ func TestGzipMiddlewareHonorsDisabledEncoding(t *testing.T) {
 		}
 	}
 }
+
+func TestGzipPlainWritesPreserveDeclaredMediaType(t *testing.T) {
+	for _, mediaType := range []string{"", "application/json", "text/html; charset=utf-8", "application/octet-stream"} {
+		t.Run(mediaType, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			if mediaType != "" {
+				rr.Header().Set("Content-Type", mediaType)
+			}
+			writer := &gzipBufferedWriter{ResponseWriter: rr}
+			writer.startPlain()
+			payload := []byte("<script>alert(1)</script>")
+			if _, err := writer.Write(payload); err != nil {
+				t.Fatal(err)
+			}
+			response := rr.Result()
+			defer response.Body.Close()
+			wantType := mediaType
+			if wantType == "" {
+				wantType = "text/plain; charset=utf-8"
+			}
+			if got := response.Header.Get("Content-Type"); got != wantType {
+				t.Fatalf("committed content type = %q, want %q", got, wantType)
+			}
+			if response.Header.Get("X-Content-Type-Options") != "nosniff" || !bytes.Equal(rr.Body.Bytes(), payload) {
+				t.Fatal("plain write changed payload or omitted nosniff")
+			}
+		})
+	}
+}
