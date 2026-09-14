@@ -43,6 +43,11 @@ on:
         required: false
         default: false
         type: boolean
+      reuse_manual_artifacts:
+        description: "Recover the verified v1.38.8 artifacts from run 34816299501"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: stable-release-${{ inputs.tag || github.ref_name }}
@@ -194,6 +199,7 @@ jobs:
       orchestrated: true
       signing_preflight: true
       desktop_manual_only: ${{ inputs.desktop_manual_only || false }}
+      reuse_manual_artifacts: ${{ inputs.reuse_manual_artifacts || false }}
     secrets: inherit
 
   desktop:
@@ -209,6 +215,7 @@ jobs:
       orchestrated: true
       signing_preflight_verified: true
       desktop_manual_only: ${{ inputs.desktop_manual_only || false }}
+      reuse_manual_artifacts: ${{ inputs.reuse_manual_artifacts || false }}
       preflight_artifact_prefix: ${{ needs.signpath-preflight.outputs.artifact_prefix }}
     secrets: inherit
 

@@ -99,6 +99,11 @@ on:
         required: false
         default: false
         type: boolean
+      reuse_manual_artifacts:
+        description: "Reuse the exact verified v1.38.8 manual producer run"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   # A channel pointer is a monotonic public state machine. Serialize every
@@ -122,7 +127,7 @@ jobs:
       prerelease: ${{ steps.release.outputs.prerelease }}
       notes_version: ${{ steps.release.outputs.notes_version }}
       sha: ${{ steps.candidate.outputs.sha }}
-      artifact_prefix: desktop-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.signing_preflight && 'preflight' || 'release' }}
+      artifact_prefix: ${{ inputs.reuse_manual_artifacts && 'desktop-34816299501-1-preflight' || format('desktop-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.signing_preflight && 'preflight' || 'release') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -212,6 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     outputs:
       fingerprint: ${{ steps.contract.outputs.fingerprint }}
     steps:
@@ -230,6 +236,10 @@ jobs:
         env:
           PREFLIGHT_ARTIFACT_PREFIX: ${{ inputs.preflight_artifact_prefix }}
         run: |
+          if [ "${{ inputs.reuse_manual_artifacts }}" = "true" ] && [ "${{ inputs.desktop_manual_only }}" != "true" ]; then
+            echo "::error::artifact recovery requires the scoped manual Desktop exception"
+            exit 1
+          fi
           if [ "${{ inputs.desktop_manual_only }}" = "true" ]; then
             if [ "${{ inputs.orchestrated }}" != "true" ] || [ "${{ inputs.channel }}" != "stable" ] || [ "${{ needs.resolve.outputs.tag }}" != "desktop-v1.38.8" ] || [ "${{ needs.resolve.outputs.sha }}" != "7278072720a2dc7a31cce0eec18c1eacc149c0e0" ]; then
               echo "::error::manual Desktop exception is restricted to the approved immutable v1.38.8 candidate"
@@ -249,14 +259,24 @@ jobs:
               echo "::error::artifact reuse requires a verified stable orchestrator preflight"
               exit 1
             fi
-            [[ "$PREFLIGHT_ARTIFACT_PREFIX" =~ ^desktop-${GITHUB_RUN_ID}-[1-9][0-9]*-preflight$ ]] || exit 1
+            if [ "${{ inputs.reuse_manual_artifacts }}" = "true" ]; then
+              test "$PREFLIGHT_ARTIFACT_PREFIX" = desktop-34816299501-1-preflight
+            else
+              [[ "$PREFLIGHT_ARTIFACT_PREFIX" =~ ^desktop-${GITHUB_RUN_ID}-[1-9][0-9]*-preflight$ ]] || exit 1
+            fi
           fi
 
       - name: Validate and fingerprint SignPath contract
         id: contract
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           go run ./cmd/signpath-contract validate
           fingerprint="$(go run ./cmd/signpath-contract fingerprint)"
+          if [ "${{ inputs.reuse_manual_artifacts }}" = "true" ]; then
+            node scripts/verify-manual-desktop-producer.mjs
+            fingerprint=v1:48c45e7bb52e5a9d0883b917c36e8cb0f4e7d34b6703ff44019d8ef5d52ebf21
+          fi
           echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
 
       - name: Require current standalone signing attestation
@@ -307,7 +327,7 @@ jobs:
     # Recovery reads this exact per-platform, per-invocation name in attempt history.
     name: build (${{ matrix.name }}, ${{ inputs.signing_preflight && 'preflight' || 'release' }})
     needs: [resolve, cache-guard, signing-contract]
-    if: ${{ always() && !cancelled() && needs.resolve.result == 'success' && needs.cache-guard.result == 'success' && inputs.preflight_artifact_prefix == '' }}
+    if: ${{ always() && !cancelled() && needs.resolve.result == 'success' && needs.cache-guard.result == 'success' && inputs.preflight_artifact_prefix == '' && !inputs.reuse_manual_artifacts }}
     permissions:
       contents: read # checkout only; the publish job holds contents: write
       actions: read # SignPath reads run details + downloads the unsigned artifact
@@ -788,11 +808,12 @@ jobs:
 
   mac-universal-intel:
     name: verify Universal candidate on Intel
-    needs: [resolve, build]
-    if: ${{ always() && !cancelled() && needs.build.result == 'success' && inputs.preflight_artifact_prefix == '' }}
+    needs: [resolve, build, signing-contract, cache-guard]
+    if: ${{ always() && !cancelled() && needs.signing-contract.result == 'success' && needs.cache-guard.result == 'success' && (needs.build.result == 'success' || (needs.build.result == 'skipped' && inputs.reuse_manual_artifacts)) && inputs.preflight_artifact_prefix == '' }}
     runs-on: macos-15-intel
     permissions:
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -800,10 +821,20 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
+      - uses: pnpm/action-setup@v6.1.0
+        with:
+          version: 10
+      - name: Install packaged smoke dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: pnpm --dir desktop install --frozen-lockfile
       - uses: actions/download-artifact@v8
         with:
           name: ${{ needs.resolve.outputs.artifact_prefix }}-darwin-universal
           path: ${{ runner.temp }}/universal-bundle
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.reuse_manual_artifacts && '34816299501' || github.run_id }}
       - name: Mount and smoke-test the exact Universal DMG
         run: |
           mount_dir="$RUNNER_TEMP/reasonix-universal"
@@ -823,6 +854,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     # Approved orchestrators have already passed the matching GitHub environment.
     # Direct prereleases and manual Stable recovery pass release-gate above. The
     # SignPath CI identity records each payload and installer approval after it.
@@ -872,17 +904,24 @@ jobs:
         with:
           path: ${{ runner.temp }}/desktop-bundles
           pattern: ${{ inputs.preflight_artifact_prefix || needs.resolve.outputs.artifact_prefix }}-*
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.reuse_manual_artifacts && '34816299501' || github.run_id }}
 
       - name: Verify complete signed artifact handoff
         env:
           RELEASE_SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
-          RELEASE_CONTROL_SHA: ${{ github.workflow_sha }}
+          RELEASE_CONTROL_SHA: ${{ inputs.reuse_manual_artifacts && '09cdab3866d77c6ff0d007ee61b6aca3128ebe54' || github.workflow_sha }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
           RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
           RELEASE_CHANNEL: ${{ needs.resolve.outputs.channel }}
           RELEASE_SIGNING_FINGERPRINT: ${{ needs.signing-contract.outputs.fingerprint }}
           RELEASE_ARTIFACT_PREFIX: ${{ inputs.preflight_artifact_prefix || needs.resolve.outputs.artifact_prefix }}
-        run: node release-control/scripts/desktop-release-artifacts.mjs collect "$RUNNER_TEMP/desktop-bundles" dist
+        run: |
+          if [ "${{ inputs.reuse_manual_artifacts }}" = "true" ]; then
+            GITHUB_RUN_ID=34816299501 GITHUB_RUN_ATTEMPT=1 node release-control/scripts/desktop-release-artifacts.mjs collect "$RUNNER_TEMP/desktop-bundles" dist
+          else
+            node release-control/scripts/desktop-release-artifacts.mjs collect "$RUNNER_TEMP/desktop-bundles" dist
+          fi
 
       # Generate latest.json with GitHub release download URLs; the mirror step
       # rewrites them to R2 afterwards. GITHUB_REPOSITORY is provided by the runner.
