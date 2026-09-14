@@ -68,8 +68,8 @@ func (a *Agent) classTokens(msgs []provider.Message, schemas bool) int {
 		}
 		req.Messages = projected
 	}
-	if schemas && a.svc.tools != nil {
-		req.Tools = a.svc.tools.Schemas()
+	if schemas {
+		req.Tools = a.estimationSurface()
 	}
 	if len(req.Messages) == 0 && len(req.Tools) == 0 {
 		return 0
@@ -85,4 +85,20 @@ func messagesWithRole(msgs []provider.Message, role provider.Role) []provider.Me
 		}
 	}
 	return out
+}
+
+// estimationSurface is the tool surface an estimate is measured against: what
+// the last request actually carried, or the whole provider-visible set before
+// one has gone out — which overstates rather than understates.
+func (a *Agent) estimationSurface() []provider.ToolSchema {
+	if a == nil {
+		return nil
+	}
+	if sent := a.sess.lastProviderSchemas; len(sent) > 0 {
+		return sent
+	}
+	if a.svc.tools == nil {
+		return nil
+	}
+	return a.svc.tools.Schemas()
 }

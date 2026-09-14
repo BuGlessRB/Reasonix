@@ -268,6 +268,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		}
 
 		schemas := a.svc.tools.ProviderSchemas(ctx)
+		a.sess.lastProviderSchemas = schemas
 		prefixShape := a.capturePrefixShape(schemas)
 		prevPrefixShape := a.sess.lastPrefixShape
 		if !a.sess.haveLastPrefixShape {
