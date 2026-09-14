@@ -23,6 +23,7 @@
 /workgroupassay
 /write_heartbeat
 /catalog-detector
+/tool-surface-cache
 
 # Website (Astro) build output
 /site/dist/
