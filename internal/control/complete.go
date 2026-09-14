@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/fileref"
+	"reasonix/internal/gitignore"
 	"reasonix/internal/plugin"
 )
 
@@ -206,11 +207,23 @@ func RefDirItems(root, token string, scoped bool) []SlashItem {
 	// Directories first; ReadDir is already name-sorted.
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].IsDir() && !entries[j].IsDir() })
 
+	// Read from .gitignore, not from a list of names: "node_modules" is one
+	// ecosystem's answer and the file is where this repository stated its own.
+	ignored := gitignore.At(readDir, gitignore.Options{})
+	// Inside a directory the rules already exclude, they exclude everything —
+	// which is an empty list, not an answer. A user who typed their way in here
+	// has named it, the way grep searches a path named explicitly.
+	if ignored.Ignored(readDir, true) {
+		ignored = nil
+	}
 	showHidden := strings.HasPrefix(fsFrag, ".")
 	var items []SlashItem
 	for _, e := range entries {
 		name := e.Name()
 		if !strings.HasPrefix(name, fsFrag) || (!showHidden && strings.HasPrefix(name, ".")) {
+			continue
+		}
+		if ignored.Ignored(filepath.Join(readDir, name), e.IsDir()) {
 			continue
 		}
 		if e.IsDir() {

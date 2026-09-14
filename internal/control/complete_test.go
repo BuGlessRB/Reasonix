@@ -211,3 +211,68 @@ func TestCompleteReportsTheQueryItFilteredOn(t *testing.T) {
 		t.Fatalf("query = %q, want the typed command word", slash.Query)
 	}
 }
+
+// A reference names something the repository keeps. Offering what .gitignore
+// excludes puts a path in front of the user that the tree does not track and the
+// turn has no reason to read — node_modules being the one every JavaScript
+// project carries, and the reason this is read from the file rather than from a
+// list of names somebody guessed.
+func TestRefDirItemsSkipsIgnoredEntries(t *testing.T) {
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, ".git"))
+	mustWrite(t, filepath.Join(root, ".gitignore"), "node_modules/\ndist/\n")
+	for _, d := range []string{"node_modules", "dist", "internal"} {
+		mustMkdir(t, filepath.Join(root, d))
+	}
+	mustWrite(t, filepath.Join(root, "go.mod"), "module x\n")
+
+	labels := map[string]bool{}
+	for _, it := range RefDirItems(root, "", true) {
+		labels[it.Label] = true
+	}
+	for _, want := range []string{"internal/", "go.mod"} {
+		if !labels[want] {
+			t.Errorf("%q missing from the listing: %v", want, labels)
+		}
+	}
+	for _, unwanted := range []string{"node_modules/", "dist/"} {
+		if labels[unwanted] {
+			t.Errorf("%q is ignored by the repository and was still offered", unwanted)
+		}
+	}
+}
+
+// Filtering the listing must not lock the directory away: a user who types the
+// path has said what they mean, the way grep searches a path named explicitly.
+func TestRefDirItemsStillDescendsIntoAnIgnoredDirectory(t *testing.T) {
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, ".git"))
+	mustWrite(t, filepath.Join(root, ".gitignore"), "node_modules/\n")
+	mustMkdir(t, filepath.Join(root, "node_modules", "left-pad"))
+	mustWrite(t, filepath.Join(root, "node_modules", "left-pad", "index.js"), "")
+
+	items := RefDirItems(root, "node_modules/left-pad/", true)
+	found := false
+	for _, it := range items {
+		if it.Label == "index.js" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("typing the path into an ignored directory completed nothing: %+v", items)
+	}
+}
+
+func mustMkdir(t *testing.T, p string) {
+	t.Helper()
+	if err := os.MkdirAll(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWrite(t *testing.T, p, body string) {
+	t.Helper()
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
