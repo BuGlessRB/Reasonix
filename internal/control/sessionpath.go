@@ -22,7 +22,7 @@ func (c *Controller) EnsureSessionPath() {
 		return
 	}
 	if service, _, exclusive := c.v3Binding(); exclusive && service != nil {
-		if _, err := c.BindFreshV3(context.Background(), ""); err != nil {
+		if _, err := c.BindFreshSession(context.Background(), ""); err != nil {
 			c.failTurnEventLedger(err)
 		}
 		return
@@ -43,7 +43,7 @@ func (c *Controller) EnsureSessionPath() {
 // Resume/SetSessionPath choice in one place avoids the orphaned-duplicate class
 // of bug (#2807) recurring as each surface copied it.
 func (c *Controller) AdoptHistory(msgs []provider.Message, path string) {
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		if _, ok := c.SessionRef(); ok {
 			if len(msgs) > 0 {
 				if err := c.replaceSessionEventProjection(context.Background(), "explicit-history-adopt", msgs); err != nil {
@@ -69,7 +69,7 @@ func (c *Controller) AdoptHistory(msgs []provider.Message, path string) {
 		}
 		if path != "" {
 			if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
-				if _, err := c.BindFreshV3(context.Background(), ""); err != nil {
+				if _, err := c.BindFreshSession(context.Background(), ""); err != nil {
 					c.failTurnEventLedger(err)
 					return
 				}
@@ -82,7 +82,7 @@ func (c *Controller) AdoptHistory(msgs []provider.Message, path string) {
 				}
 				return
 			}
-			if _, err := c.ContinueLegacyV3(context.Background(), path, ""); err != nil {
+			if _, err := c.ContinueLegacySession(context.Background(), path, ""); err != nil {
 				slog.Warn("controller: legacy continue into v3 failed", "path", path, "err", err)
 				c.failTurnEventLedger(err)
 			}
@@ -116,7 +116,7 @@ func (c *Controller) AdoptHistory(msgs []provider.Message, path string) {
 // bound v3 session. It changes only the provider-visible context; UI history
 // and stable message identity remain sourced from the original event stream.
 func (c *Controller) AdoptRebuiltModelContext(msgs []provider.Message) error {
-	if !c.exclusiveV3Enabled() {
+	if !c.sessionEngineEnabled() {
 		return errors.New("model-context adoption requires an exclusive v3 session")
 	}
 	if len(msgs) == 0 {
@@ -124,5 +124,5 @@ func (c *Controller) AdoptRebuiltModelContext(msgs []provider.Message) error {
 			msgs = snapshot.Projection.ModelMessages
 		}
 	}
-	return c.replaceV3ModelContext(context.Background(), msgs, "agent-rebuild")
+	return c.replaceSessionModelContext(context.Background(), msgs, "agent-rebuild")
 }

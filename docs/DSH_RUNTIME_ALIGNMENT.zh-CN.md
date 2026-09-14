@@ -58,7 +58,7 @@ todo schema 和能力分页形成一次明确的稳定前缀升级。同版本�
 
 ## v3 会话边界
 
-`internal/sessionv3` 定义所有权切换后的 codec `reasonix.session.linear/v3.1`。
+`internal/session` 定义所有权切换后的 codec `reasonix.session.linear/v3.1`。
 旧原型 `reasonix.session.events/v3` 和预览格式 `reasonix.session.linear/v3` 不能直接用于
 执行，只能通过受限导入器转换；
 未知必需事件、完整损坏记录或无法解释的历史替换都会保留原件并拒绝继续执行。
@@ -100,7 +100,7 @@ Controller 只取得可发送和观察的 `ClientBinding`；
 idle 不代表 durable；导出、冷盘校验、写者交接和正常关闭必须显式等待 flush。实时
 快照同时返回 event sequence 和 durable sequence，前者可以更大。
 
-新版根目录是 `sessions-v3`。继续旧会话时把 transcript 与配对的预览事件目录作为一次
+新版根目录是 `sessions-v4`。继续旧会话时把 transcript 与配对的预览事件目录作为一次
 导入决策，并且**先分类、后发布**：先在 transcript 写租约下冻结源文件，再在目录锁和
 writer 锁下冻结预览事件，两边都只解析冻结副本。预览中的结构化消息等于或严格包含
 legacy 消息时采用预览，legacy 严格包含预览时采用 transcript；两边存在无法解释的新
@@ -118,5 +118,5 @@ legacy 消息时采用预览，legacy 严格包含预览时采用 transcript；�
 
 最终整体切换时 Desktop host RPC 提升到协议版本 5；Electron 壳直接使用嵌入 command
 contract 的版本发起并校验握手，避免壳与服务各维护一份易漂移常量。Serve 同时声明
-`execution-v2`、`session-events-v3`、`session-identity-v1` 和 `session-ownership-v1`。新版 Desktop 拒绝把运行
+`execution-v2`、`session-history-v1`、`session-identity-v1` 和 `session-ownership-v1`。新版 Desktop 拒绝把运行
 和取消命令发给缺少任一能力的远端，避免用路径身份或旧 RPC 模拟新版状态机。

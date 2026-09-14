@@ -12,7 +12,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
@@ -75,7 +75,7 @@ func TestEnsureBlankTabReusesExistingBlankTab(t *testing.T) {
 		t.Fatalf("EnsureBlankTab identity = id %q path %q", first.SessionID, first.SessionPath)
 	}
 	service := app.desktopSessionService(app.activeSessionDir())
-	if _, err := service.Query().Snapshot(t.Context(), sessionv3.SessionRef{HostID: service.HostID(), SessionID: first.SessionID}); err != nil {
+	if _, err := service.Query().Snapshot(t.Context(), session.SessionRef{HostID: service.HostID(), SessionID: first.SessionID}); err != nil {
 		t.Fatalf("pre-created blank v3 session should exist: %v", err)
 	}
 	second, err := app.EnsureBlankTab("global", "")
@@ -287,7 +287,7 @@ func TestEnsureBlankTabStartsProjectRuntimeWithCurrentWorkspaceContext(t *testin
 		t.Fatalf("project B controller session dir = %q, want %q", tabB.Ctrl.SessionDir(), desktopSessionDir(projectB))
 	}
 	identity, ok := tabB.Ctrl.(control.IdentityLifecycle)
-	if !ok || !identity.UsesExclusiveSessionV3() {
+	if !ok || !identity.UsesExclusiveSession() {
 		t.Fatalf("project B controller did not use exclusive v3 identity")
 	}
 	if ref, bound := identity.SessionRef(); !bound || strings.TrimSpace(ref.SessionID) == "" || strings.TrimSpace(tabB.Ctrl.SessionPath()) != "" {

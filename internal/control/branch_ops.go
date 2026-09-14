@@ -15,7 +15,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // Fork branches the conversation at the start of turn into a NEW session file,
@@ -56,8 +56,8 @@ func (c *Controller) forkNamedReady(turn int, name string, switchToFork bool, ki
 	if c.executor == nil {
 		return "", c.rewindFail(fmt.Errorf("checkpoints unavailable"))
 	}
-	if c.exclusiveV3Enabled() {
-		return c.forkNamedV3(turn, name, switchToFork)
+	if c.sessionEngineEnabled() {
+		return c.forkNamedSession(turn, name, switchToFork)
 	}
 	if c.sessionDir == "" {
 		return "", c.rewindFail(fmt.Errorf("fork needs session persistence, which is disabled"))
@@ -85,7 +85,7 @@ func (c *Controller) forkNamedReady(turn int, name string, switchToFork bool, ki
 	if err := sess.SaveIfAbsent(newPath); err != nil {
 		return "", c.rewindFail(err)
 	}
-	if err := c.publishV3Child(newPath, forked); err != nil {
+	if err := c.publishSessionChild(newPath, forked); err != nil {
 		_ = os.Remove(newPath)
 		return "", c.rewindFail(fmt.Errorf("publish v3 fork: %w", err))
 	}
@@ -163,16 +163,16 @@ func (c *Controller) Branch(name string) (string, error) {
 		return "", c.rewindFail(err)
 	}
 	defer c.endRotation()
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		_, runtime, _ := c.v3Binding()
 		if runtime == nil {
-			return "", c.rewindFail(sessionv3.ErrSessionNotRunning)
+			return "", c.rewindFail(session.ErrSessionNotRunning)
 		}
-		turns := runtime.Session().Snapshot().Projection.Turns
+		turns := runtime.Session().ExecutionSnapshot().Projection.Turns
 		if len(turns) == 0 {
 			return "", c.rewindFail(fmt.Errorf("nothing to branch yet"))
 		}
-		return c.forkNamedV3(len(turns), name, true)
+		return c.forkNamedSession(len(turns), name, true)
 	}
 	if !c.executor.Session().HasContent() {
 		return "", c.rewindFail(fmt.Errorf("nothing to branch yet"))
@@ -191,7 +191,7 @@ func (c *Controller) Branch(name string) (string, error) {
 	if err := sess.SaveIfAbsent(newPath); err != nil {
 		return "", c.rewindFail(err)
 	}
-	if err := c.publishV3Child(newPath, branched); err != nil {
+	if err := c.publishSessionChild(newPath, branched); err != nil {
 		_ = os.Remove(newPath)
 		return "", c.rewindFail(fmt.Errorf("publish v3 branch: %w", err))
 	}
@@ -233,16 +233,16 @@ func (c *Controller) Branch(name string) (string, error) {
 	return newPath, nil
 }
 
-// forkNamedV3 creates a child from an exact persisted turn boundary. The
+// forkNamedSession creates a child from an exact persisted turn boundary. The
 // compatibility integer is resolved only against the typed turn index; no
 // message count, transcript snapshot, or sidecar participates.
-func (c *Controller) forkNamedV3(turn int, name string, switchToFork bool) (string, error) {
+func (c *Controller) forkNamedSession(turn int, name string, switchToFork bool) (string, error) {
 	service, parent, _ := c.v3Binding()
 	if service == nil || parent == nil {
-		return "", sessionv3.ErrSessionNotRunning
+		return "", session.ErrSessionNotRunning
 	}
-	projection := parent.Session().Snapshot().Projection
-	completed := make([]sessionv3.TurnBoundary, 0, len(projection.Turns))
+	projection := parent.Session().ExecutionSnapshot().Projection
+	completed := make([]session.TurnBoundary, 0, len(projection.Turns))
 	for _, boundary := range projection.Turns {
 		if boundary.EndSequence != 0 {
 			completed = append(completed, boundary)
@@ -266,7 +266,7 @@ func (c *Controller) forkNamedV3(turn int, name string, switchToFork bool) (stri
 		if marshalErr != nil {
 			return "", marshalErr
 		}
-		if _, appendErr := child.Session().AppendBatch(context.Background(), "fork-title:"+child.Ref().SessionID, []sessionv3.Event{{Kind: "session/title", Payload: payload}}); appendErr != nil {
+		if _, appendErr := child.Session().AppendBatch(context.Background(), "fork-title:"+child.Ref().SessionID, []session.Event{{Kind: "session/title", Payload: payload}}); appendErr != nil {
 			return "", appendErr
 		}
 	}
@@ -276,8 +276,8 @@ func (c *Controller) forkNamedV3(turn int, name string, switchToFork bool) (stri
 	if !switchToFork {
 		return child.Ref().SessionID, nil
 	}
-	prepared := agent.NewSession("").CloneWithMessages(child.Session().Snapshot().Projection.ModelMessages)
-	_, err = c.publishV3Runtime(child, prepared, true)
+	prepared := agent.NewSession("").CloneWithMessages(child.Session().ExecutionSnapshot().Projection.ModelMessages)
+	_, err = c.publishSessionRuntime(child, prepared, true)
 	if err != nil {
 		return "", err
 	}
@@ -341,7 +341,7 @@ func (c *Controller) SwitchBranch(ref string) (agent.BranchInfo, error) {
 		if err := loaded.SaveIfAbsent(newPath); err != nil {
 			return agent.BranchInfo{}, c.rewindFail(err)
 		}
-		if err := c.publishV3Child(newPath, loaded.Messages); err != nil {
+		if err := c.publishSessionChild(newPath, loaded.Messages); err != nil {
 			_ = os.Remove(newPath)
 			return agent.BranchInfo{}, c.rewindFail(fmt.Errorf("migrate legacy head: %w", err))
 		}
@@ -519,12 +519,12 @@ func (c *Controller) headBranchSession() *agent.Session {
 	return nil
 }
 
-// publishV3Child creates a self-contained child before any UI/session switch.
+// publishSessionChild creates a self-contained child before any UI/session switch.
 // When the selected message prefix is an exact completed-turn boundary it
 // copies the parent's immutable event batches. Legacy or pre-first-turn cuts
 // are imported as history only and carry no activity or authorization state.
-func (c *Controller) publishV3Child(newPath string, messages []provider.Message) error {
-	childDir := sessionV3Directory(newPath)
+func (c *Controller) publishSessionChild(newPath string, messages []provider.Message) error {
+	childDir := sessionDirectory(newPath)
 	childID := agent.BranchID(newPath)
 	if childDir == "" || childID == "" {
 		return fmt.Errorf("invalid child identity")
@@ -533,7 +533,7 @@ func (c *Controller) publishV3Child(newPath string, messages []provider.Message)
 		if _, err := parent.Flush(context.Background()); err != nil {
 			return err
 		}
-		commits, err := sessionv3.Replay(sessionV3Directory(c.SessionPath()), nil)
+		commits, err := session.Replay(sessionDirectory(c.SessionPath()), nil)
 		if err != nil {
 			return err
 		}
@@ -542,7 +542,7 @@ func (c *Controller) publishV3Child(newPath string, messages []provider.Message)
 			if len(commit.Events) == 0 || commit.Events[len(commit.Events)-1].Kind != "turn/end" {
 				continue
 			}
-			projection, projectErr := sessionv3.Project(commits[:i+1])
+			projection, projectErr := session.Project(commits[:i+1])
 			if projectErr != nil {
 				return projectErr
 			}
@@ -551,7 +551,7 @@ func (c *Controller) publishV3Child(newPath string, messages []provider.Message)
 				return forkErr
 			}
 		}
-		projected, projectErr := sessionv3.Project(commits)
+		projected, projectErr := session.Project(commits)
 		if projectErr != nil {
 			return projectErr
 		}
@@ -562,13 +562,13 @@ func (c *Controller) publishV3Child(newPath string, messages []provider.Message)
 	if err := os.MkdirAll(filepath.Dir(childDir), 0o700); err != nil {
 		return err
 	}
-	child, err := sessionv3.CreateStore(childDir, childID)
+	child, err := session.CreateStore(childDir, childID)
 	if err != nil {
 		return err
 	}
 	payload, marshalErr := json.Marshal(map[string]any{"messages": messages})
 	if marshalErr == nil {
-		_, marshalErr = child.Append(context.Background(), sessionv3.Batch{OperationID: "history-import", Events: []sessionv3.Event{{Kind: "legacy/import", Payload: payload}}})
+		_, marshalErr = child.Append(context.Background(), session.Batch{OperationID: "history-import", Events: []session.Event{{Kind: "legacy/import", Payload: payload}}})
 	}
 	if marshalErr == nil {
 		_, marshalErr = child.Flush(context.Background())

@@ -85,7 +85,7 @@ func rebuildWithPrevious(ctx context.Context, old *control.Controller, previous 
 	if opts.Owner == nil {
 		opts.Owner = old.RuntimeOwner()
 	}
-	if service, runtime, ok := old.SessionV3Binding(); ok {
+	if service, runtime, ok := old.SessionBinding(); ok {
 		opts.SessionService = service
 		opts.SessionRuntime = runtime
 		opts.SessionHostID = runtime.Ref().HostID
@@ -204,14 +204,14 @@ type runtimeMigration struct {
 // error return is the fail-atomic seam for steps that gain failure modes.
 func migrateRuntimeState(ctrl, old *control.Controller, m runtimeMigration) error {
 	carried := spliceFreshSystemPrompt(m.carried, ctrl.History())
-	if ctrl.UsesExclusiveSessionV3() {
-		if _, _, ok := ctrl.SessionV3Binding(); ok {
+	if ctrl.UsesExclusiveSession() {
+		if _, _, ok := ctrl.SessionBinding(); ok {
 			if err := ctrl.AdoptRebuiltModelContext(carried); err != nil {
 				return err
 			}
 		} else if m.prevPath != "" {
 			path := agent.ContinueSessionPath(m.prevPath, ctrl.SessionDir(), ctrl.Label())
-			if _, err := ctrl.ContinueLegacyV3ForRebuild(context.Background(), path, ""); err != nil {
+			if _, err := ctrl.ContinueLegacySessionForRebuild(context.Background(), path, ""); err != nil {
 				return err
 			}
 			if err := ctrl.AdoptRebuiltModelContext(carried); err != nil {

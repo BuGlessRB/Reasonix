@@ -24,8 +24,8 @@ func activateGoalDriverAfterRebuild(ctrl control.SessionAPI) control.SessionAPI 
 }
 
 func (m *chatTUI) setGoalCommand(cmd control.GoalCommand, input string) tea.Cmd {
-	v3, exclusive := m.ctrl.(interface{ UsesExclusiveSessionV3() bool })
-	if exclusive && v3.UsesExclusiveSessionV3() {
+	canonical, exclusive := m.ctrl.(interface{ UsesExclusiveSession() bool })
+	if exclusive && canonical.UsesExclusiveSession() {
 		if err := m.ctrl.SetGoalDurable(cmd.Text); err != nil {
 			m.echoLocalCommand(input)
 			m.notice("goal: " + err.Error())
@@ -57,8 +57,8 @@ func (m *chatTUI) runGoalSubcommand(input string) tea.Cmd {
 		return m.setGoalCommand(cmd, input)
 	case control.GoalCommandClear:
 		m.echoLocalCommand(input)
-		v3, exclusive := m.ctrl.(interface{ UsesExclusiveSessionV3() bool })
-		if exclusive && v3.UsesExclusiveSessionV3() {
+		canonical, exclusive := m.ctrl.(interface{ UsesExclusiveSession() bool })
+		if exclusive && canonical.UsesExclusiveSession() {
 			if err := m.ctrl.SetGoalDurable(""); err != nil {
 				m.notice("goal: " + err.Error())
 				break

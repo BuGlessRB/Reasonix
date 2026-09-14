@@ -13,7 +13,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/jobs"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 type rejectingGoalAPI struct {
@@ -77,15 +77,15 @@ func TestGoalRouteReportsPersistenceFailureBeforeChangingPlanMode(t *testing.T) 
 
 func TestGoalEditRoutePreservesGoalIdentity(t *testing.T) {
 	bc := NewBroadcaster()
-	service, err := sessionv3.NewService("serve", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("serve", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-edit-route"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-edit-route"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctrl := control.New(control.Options{Sink: bc, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
+	ctrl := control.New(control.Options{Sink: bc, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	defer ctrl.ReleaseResources()
 	if err := ctrl.SetGoalDurable("original"); err != nil {
 		t.Fatal(err)

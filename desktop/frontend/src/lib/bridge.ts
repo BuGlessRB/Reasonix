@@ -1,7 +1,14 @@
 import { makeMockModelSettingsBindings, type ModelSettingsBindings } from "./modelSettingsBridge";
 import { mockProviderTemplate, mockPreset, mockBundlePreset, mockKimiAPIModels, mockLongCatModels, mockTokenRhythmModels, mockTokenRhythmModelOverrides, mockMiMoV25Models, mockMiniMaxModels, mockGLMAPIModels, mockGLMCodingModels, mockGLMAnthropicModels, mockQwenAPIModels, mockQwenPlanModels, mockQwenPlanVisionModels, mockStepFunModels, mockOpenCodeGoModels, mockNovitaModels, mockGMIModels, mockVercelModels, mockOllamaCloudModels } from "./mockProviderTemplates";
 // The Electron host and the browser mock share this React-to-Go contract.
-import type { CancelReceipt, DesktopCommandName } from "../generated/desktopContract.generated";
+import type {
+  CancelReceipt,
+  DesktopCommandName,
+  MessageHistoryPage,
+  Ref as SessionContentRef,
+  SearchHistoryPage,
+  SessionHistoryContentChunk,
+} from "../generated/desktopContract.generated";
 import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
 import { addBreadcrumb } from "./breadcrumbs";
@@ -356,6 +363,12 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   // Windowed history paging (supersedes HistoryPageForTab for tab history).
   HistorySliceForTab(tabID: string, req: HistorySliceRequest): Promise<HistorySlice>;
   HistoryContentForTab(tabID: string, ref: HistoryContentRef, chunkIndex: number): Promise<HistoryContentChunk>;
+  SessionHistoryPageForTab(tabID: string, cursor: string, limit: number): Promise<MessageHistoryPage>;
+  SessionHistoryContentForTab(tabID: string, ref: SessionContentRef, offset: number): Promise<SessionHistoryContentChunk>;
+  RemoteSessionHistoryPageForTab(tabID: string, cursor: string, limit: number): Promise<MessageHistoryPage>;
+  RemoteSessionHistoryContentForTab(tabID: string, ref: SessionContentRef, offset: number): Promise<SessionHistoryContentChunk>;
+  SearchSessionHistoryForTab(tabID: string, textQuery: string, cursor: string, limit: number): Promise<SearchHistoryPage>;
+  RemoteSearchSessionHistoryForTab(tabID: string, textQuery: string, cursor: string, limit: number): Promise<SearchHistoryPage>;
   HistoryCheckpointTurnsForTab(tabID: string): Promise<number[]>;
   Checkpoints(): Promise<CheckpointMeta[]>;
   CheckpointsForTab(tabID: string): Promise<CheckpointMeta[]>;
@@ -3245,6 +3258,24 @@ function makeMockApp(): AppBindings {
           out.data = mockHistoryContentField(message, ref);
           out.chunks = 1;
           return out;
+        },
+        async SessionHistoryPageForTab(): Promise<MessageHistoryPage> {
+          return { messages: [], snapshotSequence: 0, hasMore: false };
+        },
+        async SessionHistoryContentForTab(_tabID: string, ref: SessionContentRef, offset: number): Promise<SessionHistoryContentChunk> {
+          return { data: "", nextOffset: Math.min(offset, ref.bytes), done: offset >= ref.bytes };
+        },
+        async RemoteSessionHistoryPageForTab(): Promise<MessageHistoryPage> {
+          return { messages: [], snapshotSequence: 0, hasMore: false };
+        },
+        async RemoteSessionHistoryContentForTab(_tabID: string, ref: SessionContentRef, offset: number): Promise<SessionHistoryContentChunk> {
+          return { data: "", nextOffset: Math.min(offset, ref.bytes), done: offset >= ref.bytes };
+        },
+        async SearchSessionHistoryForTab(): Promise<SearchHistoryPage> {
+          return { hits: [], snapshotSequence: 0, hasMore: false };
+        },
+        async RemoteSearchSessionHistoryForTab(): Promise<SearchHistoryPage> {
+          return { hits: [], snapshotSequence: 0, hasMore: false };
         },
     async ListSessions() {
       return sessions.map((s) => ({ ...s }));

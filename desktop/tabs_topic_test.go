@@ -1661,8 +1661,8 @@ api_key_env = "REASONIX_TEST_KEY"
 	if tab.Ctrl != nil || tab.Ready {
 		t.Fatalf("unsafe session runtime = hasCtrl:%v ready:%v, want failed startup", tab.Ctrl != nil, tab.Ready)
 	}
-	if !strings.Contains(tab.StartupErr, agent.ErrSessionReplayLimitExceeded.Error()) || strings.Contains(tab.StartupErr, path) {
-		t.Fatalf("startup error = %q, want path-free replay-budget error", tab.StartupErr)
+	if !strings.Contains(tab.StartupErr, errSessionHistoryUnreadable.Error()) || strings.Contains(tab.StartupErr, path) {
+		t.Fatalf("startup error = %q, want path-free damaged-history error", tab.StartupErr)
 	}
 	if filepath.Clean(tab.SessionPath) != filepath.Clean(path) {
 		t.Fatalf("session path = %q, want original %q", tab.SessionPath, path)

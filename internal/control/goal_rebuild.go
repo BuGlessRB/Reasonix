@@ -2,7 +2,7 @@ package control
 
 import (
 	goaldomain "reasonix/internal/goal"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // InheritLifecycleFrom carries same-session lifecycle state across controller
@@ -34,7 +34,7 @@ func (c *Controller) InheritLifecycleFrom(prev *Controller) error {
 	prev.goalDriverMu.Lock()
 	defer prev.goalDriverMu.Unlock()
 	if prev.goalDriverPending || prev.goalDriverActive != nil {
-		return sessionv3.ErrRuntimeBusy
+		return session.ErrRuntimeBusy
 	}
 	prev.goalLifecycleMu.RLock()
 	previousMachine, previousLoadErr := prev.goalLifecycle, prev.goalLifecycleLoadErr

@@ -44,7 +44,7 @@ func TestProtocolRecoveryControllerDurabilityAndConcurrentAdmission(t *testing.T
 	if action == nil {
 		t.Fatal("missing recovery token")
 	}
-	loaded := loadDurableV3Projection(t, path)
+	loaded := loadDurableSessionProjection(t, path)
 	var pending bool
 	for _, m := range loaded.Messages {
 		r, ok := provider.DecodeProtocolRecovery(m.ProtocolRecovery)
@@ -56,7 +56,7 @@ func TestProtocolRecoveryControllerDurabilityAndConcurrentAdmission(t *testing.T
 	done := make(chan error, 1)
 	go func() { done <- c.RunProtocolRecoveryWithAdmission(context.Background(), action.ID, "", nil) }()
 	<-p.entered
-	loaded = loadDurableV3Projection(t, path)
+	loaded = loadDurableSessionProjection(t, path)
 	var consumed bool
 	for _, m := range loaded.Messages {
 		r, ok := provider.DecodeProtocolRecovery(m.ProtocolRecovery)

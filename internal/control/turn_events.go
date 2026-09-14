@@ -12,8 +12,8 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
+	"reasonix/internal/session"
 	"reasonix/internal/sessioninbox"
-	"reasonix/internal/sessionv3"
 	"reasonix/internal/transcript"
 	"reasonix/internal/turnevent"
 )
@@ -36,7 +36,7 @@ type turnEventState struct {
 	mu                         sync.RWMutex
 	ledger                     *turnevent.Ledger
 	err                        error
-	v3                         *sessionv3.Session
+	v3                         *session.Session
 	v3Path                     string
 	v3Release                  func(context.Context) error
 	v3Err                      error
@@ -471,7 +471,7 @@ func (c *Controller) rebindTurnEvents(sessionPath string) {
 	if c == nil {
 		return
 	}
-	desiredV3Path := sessionV3Directory(sessionPath)
+	desiredV3Path := sessionDirectory(sessionPath)
 	ledgerID := agent.BranchID(sessionPath)
 	if _, runtime, _ := c.v3Binding(); runtime != nil {
 		ref := runtime.Ref()
@@ -526,7 +526,7 @@ func (c *Controller) rebindTurnEvents(sessionPath string) {
 	c.turnEvents.mu.Unlock()
 	var projection *transcript.Projection
 	var projectionErr error
-	if !c.exclusiveV3Enabled() {
+	if !c.sessionEngineEnabled() {
 		projection, projectionErr = c.restoreTranscriptProjection(sessionPath, ledger)
 	}
 	c.turnEvents.mu.Lock()
@@ -540,7 +540,7 @@ func (c *Controller) rebindTurnEvents(sessionPath string) {
 	// An exclusive v3 handle belongs to SessionRuntime. Runtime publication
 	// closes the exact previous instance through SessionService after the new
 	// binding is visible; this compatibility cleanup must never close it early.
-	if previousV3 != nil && previousV3 != v3 && !c.exclusiveV3Enabled() {
+	if previousV3 != nil && previousV3 != v3 && !c.sessionEngineEnabled() {
 		var closeErr error
 		if previousV3Release != nil {
 			closeErr = previousV3Release(context.Background())

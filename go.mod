@@ -21,6 +21,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
 	github.com/kevinburke/ssh_config v1.6.0
+	github.com/klauspost/compress v1.18.4
 	github.com/larksuite/oapi-sdk-go/v3 v3.11.0
 	github.com/mattn/go-runewidth v0.0.29
 	github.com/modelcontextprotocol/go-sdk v1.8.0-pre.2

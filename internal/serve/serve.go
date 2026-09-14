@@ -31,8 +31,8 @@ import (
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/session"
 	"reasonix/internal/sessiontitle"
-	"reasonix/internal/sessionv3"
 	"reasonix/internal/stats"
 	"reasonix/internal/store"
 )
@@ -1211,7 +1211,7 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(body.SessionID) != "" {
-		s.resumeV3(w, r, body.HostID, body.SessionID)
+		s.resumeIdentitySession(w, r, body.HostID, body.SessionID)
 		return
 	}
 	if body.Path == "" {
@@ -1244,14 +1244,14 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 	s.resumeSession(w, r, realPath)
 }
 
-func (s *Server) resumeV3(w http.ResponseWriter, r *http.Request, hostID, sessionID string) {
+func (s *Server) resumeIdentitySession(w http.ResponseWriter, r *http.Request, hostID, sessionID string) {
 	s.bindMu.Lock()
 	defer s.bindMu.Unlock()
 	if !s.validateSwitchExpectedLocked(w, r) {
 		return
 	}
 	ctrl, ok := s.ctl().(*control.Controller)
-	if !ok || !ctrl.UsesExclusiveSessionV3() {
+	if !ok || !ctrl.UsesExclusiveSession() {
 		http.Error(w, "session identity protocol is unavailable", http.StatusConflict)
 		return
 	}
@@ -1264,7 +1264,7 @@ func (s *Server) resumeV3(w http.ResponseWriter, r *http.Request, hostID, sessio
 	if hostID == "" && bound {
 		hostID = current.HostID
 	}
-	ref, err := ctrl.OpenV3(r.Context(), sessionv3.SessionRef{HostID: hostID, SessionID: strings.TrimSpace(sessionID)})
+	ref, err := ctrl.OpenSession(r.Context(), session.SessionRef{HostID: hostID, SessionID: strings.TrimSpace(sessionID)})
 	if err != nil {
 		http.Error(w, "open session: "+err.Error(), http.StatusConflict)
 		return

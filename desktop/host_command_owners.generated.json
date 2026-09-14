@@ -4617,6 +4617,23 @@
       ]
     }
   },
+  "RemoteSearchSessionHistoryForTab": {
+    "domain": "desktop/remote_transcript_api.go",
+    "owner": "App.RemoteSearchSessionHistoryForTab",
+    "sources": [
+      "desktop/remote_transcript_api.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RemoteSearchSessionHistoryForTab",
+      "inputs": [
+        "tabID",
+        "textQuery",
+        "cursor",
+        "limit"
+      ]
+    }
+  },
   "RemoteServerLogs": {
     "domain": "desktop/remote_app.go",
     "owner": "App.RemoteServerLogs",
@@ -4645,6 +4662,38 @@
       "inputs": [
         "hostID",
         "workspace"
+      ]
+    }
+  },
+  "RemoteSessionHistoryContentForTab": {
+    "domain": "desktop/remote_transcript_api.go",
+    "owner": "App.RemoteSessionHistoryContentForTab",
+    "sources": [
+      "desktop/remote_transcript_api.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RemoteSessionHistoryContentForTab",
+      "inputs": [
+        "tabID",
+        "ref",
+        "offset"
+      ]
+    }
+  },
+  "RemoteSessionHistoryPageForTab": {
+    "domain": "desktop/remote_transcript_api.go",
+    "owner": "App.RemoteSessionHistoryPageForTab",
+    "sources": [
+      "desktop/remote_transcript_api.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RemoteSessionHistoryPageForTab",
+      "inputs": [
+        "tabID",
+        "cursor",
+        "limit"
       ]
     }
   },
@@ -6321,6 +6370,55 @@
       "resolver": "App.SearchHistoryContent",
       "inputs": [
         "req"
+      ]
+    }
+  },
+  "SearchSessionHistoryForTab": {
+    "domain": "desktop/session_history_service.go",
+    "owner": "App.SearchSessionHistoryForTab",
+    "sources": [
+      "desktop/session_history_service.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SearchSessionHistoryForTab",
+      "inputs": [
+        "tabID",
+        "textQuery",
+        "cursor",
+        "limit"
+      ]
+    }
+  },
+  "SessionHistoryContentForTab": {
+    "domain": "desktop/session_history_service.go",
+    "owner": "App.SessionHistoryContentForTab",
+    "sources": [
+      "desktop/session_history_service.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SessionHistoryContentForTab",
+      "inputs": [
+        "tabID",
+        "ref",
+        "offset"
+      ]
+    }
+  },
+  "SessionHistoryPageForTab": {
+    "domain": "desktop/session_history_service.go",
+    "owner": "App.SessionHistoryPageForTab",
+    "sources": [
+      "desktop/session_history_service.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SessionHistoryPageForTab",
+      "inputs": [
+        "tabID",
+        "cursor",
+        "limit"
       ]
     }
   },

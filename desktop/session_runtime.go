@@ -232,8 +232,8 @@ func (a *App) advanceSessionRuntimeEpochLocked(tab *WorkspaceTab) string {
 	// A final-format session already has the process-generation identity that
 	// fences late events and prompt answers. Reuse that exact epoch in the
 	// Desktop registry instead of inventing a second, UI-only generation.
-	if _, runtime, exclusive := exclusiveV3Binding(tab.Ctrl); exclusive && runtime != nil {
-		rt.Epoch = runtime.Snapshot().Epoch
+	if _, runtime, exclusive := exclusiveSessionBinding(tab.Ctrl); exclusive && runtime != nil {
+		rt.Epoch = runtime.StateSnapshot().Epoch
 	}
 	rt.Phase = sessionRuntimeReady
 	rt.Issue = nil

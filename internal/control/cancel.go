@@ -5,7 +5,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // CancelReceipt acknowledges a session-scoped Stop request. Accepted means the
@@ -47,8 +47,8 @@ func (c *Controller) CancelSession() CancelReceipt {
 	if exclusive && runtime != nil && service != nil {
 		if v3Receipt, err := service.CancelSession(runtime.Ref()); err == nil {
 			epoch = v3Receipt.RuntimeEpoch
-			alreadyIdle = v3Receipt.Phase == sessionv3.RuntimeIdle
-			recoveryRequired = v3Receipt.Phase == sessionv3.RuntimeRecoveryRequired
+			alreadyIdle = v3Receipt.Phase == session.RuntimeIdle
+			recoveryRequired = v3Receipt.Phase == session.RuntimeRecoveryRequired
 		}
 	}
 	// Interaction teardown, status persistence, and Goal bookkeeping are
@@ -137,7 +137,7 @@ func (c *Controller) finishCancel(turnID string, cancelled bool) {
 	if c.goals.active() {
 		c.stopGoal(GoalStatusStopped)
 	}
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		c.disarmGoalLifecycle("cancelled")
 	}
 }

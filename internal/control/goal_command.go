@@ -12,7 +12,7 @@ func (c *Controller) startGoalCommandTurn(cmd GoalCommand, display string) {
 	if c.GoalStatus() != GoalStatusRunning {
 		return
 	}
-	if !c.exclusiveV3Enabled() {
+	if !c.sessionEngineEnabled() {
 		c.goals.markExplicitStart()
 	}
 	c.notice(fmt.Sprintf(i18n.M.GoalSetFmt, ShortGoalForNotice(c.Goal())))
@@ -33,7 +33,7 @@ func (c *Controller) applyGoalCommand(input, display string) bool {
 	}
 	switch cmd.Action {
 	case GoalCommandSet:
-		if c.exclusiveV3Enabled() {
+		if c.sessionEngineEnabled() {
 			if err := c.SetGoalDurable(cmd.Text); err != nil {
 				c.notice("goal: " + err.Error())
 				break
@@ -45,7 +45,7 @@ func (c *Controller) applyGoalCommand(input, display string) bool {
 		c.GoalStrict(cmd.Strict)
 		c.startGoalCommandTurn(cmd, display)
 	case GoalCommandClear:
-		if c.exclusiveV3Enabled() {
+		if c.sessionEngineEnabled() {
 			if err := c.SetGoalDurable(""); err != nil {
 				c.notice("goal: " + err.Error())
 				break

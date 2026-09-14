@@ -61,14 +61,14 @@ model = "x"
 		t.Fatal(err)
 	}
 
-	ctrl, err := Build(context.Background(), withTestSessionV3(t, Options{SessionDir: legacyDir, Sink: event.Discard, Ablation: ablation.Set{}}))
+	ctrl, err := Build(context.Background(), withTestSession(t, Options{SessionDir: legacyDir, Sink: event.Discard, Ablation: ablation.Set{}}))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	ref, err := ctrl.ContinueLegacyV3(context.Background(), legacyPath, "")
+	ref, err := ctrl.ContinueLegacySession(context.Background(), legacyPath, "")
 	if err != nil {
 		ctrl.Close()
-		t.Fatalf("ContinueLegacyV3: %v", err)
+		t.Fatalf("ContinueLegacySession: %v", err)
 	}
 	if ctrl.SessionPath() != "" {
 		t.Fatalf("migrated v3 runtime retained legacy execution path %q", ctrl.SessionPath())
@@ -81,7 +81,7 @@ model = "x"
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, runtime, ok := ctrl.SessionV3Binding()
+	service, runtime, ok := ctrl.SessionBinding()
 	if !ok || runtime.Ref() != ref {
 		t.Fatalf("bound runtime = %+v, want %+v", runtime, ref)
 	}

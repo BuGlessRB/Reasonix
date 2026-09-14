@@ -14,7 +14,7 @@ import (
 	"reasonix/internal/control"
 )
 
-func requireTabV3Model(t *testing.T, tab *WorkspaceTab, want string) {
+func requireTabSessionModel(t *testing.T, tab *WorkspaceTab, want string) {
 	t.Helper()
 	if tab == nil || tab.Ctrl == nil || tab.SessionID == "" || tab.SessionPath != "" {
 		t.Fatalf("tab has no exclusive v3 identity: %+v", tab)
@@ -27,7 +27,7 @@ func requireTabV3Model(t *testing.T, tab *WorkspaceTab, want string) {
 	if !bound || ref.SessionID != tab.SessionID {
 		t.Fatalf("controller identity = %+v, %v; tab session = %q", ref, bound, tab.SessionID)
 	}
-	snapshot, err := identity.SessionV3Service().Query().Snapshot(t.Context(), ref)
+	snapshot, err := identity.SessionService().Query().Snapshot(t.Context(), ref)
 	if err != nil {
 		t.Fatalf("query v3 session: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestEnsureBlankTabUsesGlobalSessionDefaultsForModelAndToolApproval(t *testi
 	if src.model != "deepseek-flash/deepseek-v4-flash" || src.toolApprovalMode != control.ToolApprovalAsk {
 		t.Fatalf("existing tab should not be overwritten, got model=%q approval=%q", src.model, src.toolApprovalMode)
 	}
-	requireTabV3Model(t, created, "deepseek-pro/deepseek-v4-pro")
+	requireTabSessionModel(t, created, "deepseek-pro/deepseek-v4-pro")
 }
 
 func TestEnsureBlankTabRetargetsReusedSameNameModelToDefaultProvider(t *testing.T) {
@@ -198,7 +198,7 @@ func TestEnsureBlankTabRetargetsReusedSameNameModelToDefaultProvider(t *testing.
 	if tab.model != defaultRef || tab.Ctrl.ModelRef() != defaultRef {
 		t.Fatalf("reused runtime model = tab:%q controller:%q, want %q", tab.model, tab.Ctrl.ModelRef(), defaultRef)
 	}
-	requireTabV3Model(t, tab, defaultRef)
+	requireTabSessionModel(t, tab, defaultRef)
 
 	current := ""
 	for _, info := range app.ModelsForTab(tab.ID) {
@@ -256,7 +256,7 @@ func TestEnsureBlankTabRepairsStaleStoredProviderWhenRuntimeAlreadyDefault(t *te
 	if tab.model != defaultRef || tab.Ctrl.ModelRef() != defaultRef {
 		t.Fatalf("runtime model = tab:%q controller:%q, want %q", tab.model, tab.Ctrl.ModelRef(), defaultRef)
 	}
-	requireTabV3Model(t, tab, defaultRef)
+	requireTabSessionModel(t, tab, defaultRef)
 	if stored, ok := agent.LoadSessionModel(path); !ok || stored != oldRef {
 		t.Fatalf("legacy source model = %q, %v, want unchanged %q", stored, ok, oldRef)
 	}
@@ -337,7 +337,7 @@ func TestEnsureBlankTabConcurrentModelSwitchKeepsLastSelection(t *testing.T) {
 	if tab.model != oldRef || tab.Ctrl.ModelRef() != oldRef {
 		t.Fatalf("last selected runtime = tab:%q controller:%q, want %q (default was %q)", tab.model, tab.Ctrl.ModelRef(), oldRef, defaultRef)
 	}
-	requireTabV3Model(t, tab, oldRef)
+	requireTabSessionModel(t, tab, oldRef)
 }
 
 func TestEnsureBlankTabRestartsStartingBlankWithDefaultProvider(t *testing.T) {
@@ -385,7 +385,7 @@ func TestEnsureBlankTabRestartsStartingBlankWithDefaultProvider(t *testing.T) {
 	if !tab.Ready || tab.Ctrl == nil || tab.model != defaultRef || tab.Ctrl.ModelRef() != defaultRef {
 		t.Fatalf("restarted blank runtime = ready:%v controller:%v tab:%q, want %q", tab.Ready, tab.Ctrl != nil, tab.model, defaultRef)
 	}
-	requireTabV3Model(t, tab, defaultRef)
+	requireTabSessionModel(t, tab, defaultRef)
 }
 
 func configureSameNameModelProviders(t *testing.T) (model, oldRef, defaultRef string) {
@@ -607,7 +607,7 @@ func TestDesktopNewSessionDefaultsUsesProjectDefaultAndSkipsItsKeylessProvider(t
 	if created.model != "test-prov/test-model" {
 		t.Fatalf("new project session model = %q, want configured fallback test-prov/test-model", created.model)
 	}
-	requireTabV3Model(t, created, "test-prov/test-model")
+	requireTabSessionModel(t, created, "test-prov/test-model")
 }
 
 func TestSetDefaultModelPreservesExistingSession(t *testing.T) {
@@ -678,8 +678,8 @@ func TestNewSessionForTabUsesConfiguredDefaultModel(t *testing.T) {
 	if tab.model != newRef {
 		t.Fatalf("new session tab model = %q, want configured default %q", tab.model, newRef)
 	}
-	requireTabV3Model(t, tab, newRef)
-	oldSnapshot, err := identity.SessionV3Service().Query().Snapshot(t.Context(), oldSessionRef)
+	requireTabSessionModel(t, tab, newRef)
+	oldSnapshot, err := identity.SessionService().Query().Snapshot(t.Context(), oldSessionRef)
 	if err != nil || oldSnapshot.Projection.ModelRef != oldRef {
 		t.Fatalf("previous v3 session model = %q, err=%v, want unchanged %q", oldSnapshot.Projection.ModelRef, err, oldRef)
 	}
@@ -717,7 +717,7 @@ func TestNewSessionForTabAlignsBlankTabToDefault(t *testing.T) {
 	if tab.model != newRef {
 		t.Fatalf("blank tab model = %q, want configured default %q", tab.model, newRef)
 	}
-	requireTabV3Model(t, tab, newRef)
+	requireTabSessionModel(t, tab, newRef)
 }
 
 func configureSwitchableDefaultModels(t *testing.T) (oldRef, newRef string) {

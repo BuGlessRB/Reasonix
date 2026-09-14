@@ -13,7 +13,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/secrets"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 type builtBotSession struct {
@@ -41,20 +41,20 @@ func (gw *BotGateway) buildBotController(ctx context.Context, opts boot.Options)
 	return boot.Build(ctx, opts)
 }
 
-func (gw *BotGateway) botSessionService(sessionDir string) *sessionv3.Service {
-	root := sessionv3.RootForLegacyDir(sessionDir)
+func (gw *BotGateway) botSessionService(sessionDir string) *session.Service {
+	root := session.RootForLegacyDir(sessionDir)
 	if root == "" {
 		return nil
 	}
 	gw.sessionServicesMu.Lock()
 	defer gw.sessionServicesMu.Unlock()
 	if gw.sessionServices == nil {
-		gw.sessionServices = make(map[string]*sessionv3.Service)
+		gw.sessionServices = make(map[string]*session.Service)
 	}
 	if service := gw.sessionServices[root]; service != nil {
 		return service
 	}
-	service, err := sessionv3.NewService("local", sessionv3.NewFilesystemPersistence(root))
+	service, err := session.NewService("local", session.NewFilesystemPersistence(root))
 	if err != nil {
 		return nil
 	}
@@ -108,9 +108,9 @@ func (gw *BotGateway) buildSessionState(ctx context.Context, key string, msg Inb
 	reusedRuntime := false
 	if previous != nil {
 		if binding, ok := previous.ctrl.(interface {
-			SessionV3Binding() (*sessionv3.Service, *sessionv3.Runtime, bool)
+			SessionBinding() (*session.Service, *session.Runtime, bool)
 		}); ok {
-			if service, runtime, bound := binding.SessionV3Binding(); bound {
+			if service, runtime, bound := binding.SessionBinding(); bound {
 				reusedRuntime = profile.sessionPath == "" && (profile.sessionRef.SessionID == "" || profile.sessionRef.SessionID == runtime.Ref().SessionID)
 				if reusedRuntime {
 					buildOptions.SessionService = service
@@ -143,12 +143,12 @@ func (gw *BotGateway) buildSessionState(ctx context.Context, key string, msg Inb
 		}
 		return nil, buildErr
 	}
-	if identity, ok := any(ctrl).(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
+	if identity, ok := any(ctrl).(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
 		ref, bindErr := bindBotSessionIdentity(ctx, identity, profile, msg)
 		if bindErr != nil {
 			if (profile.sessionRefOptional || profile.sessionPathOptional) && !reusedRuntime {
 				gw.logger.Warn("mapped bot session unavailable; starting fresh", "err", bindErr)
-				ref, bindErr = identity.BindFreshV3(ctx, "")
+				ref, bindErr = identity.BindFreshSession(ctx, "")
 				state.mappingDegraded = bindErr == nil
 			}
 			if bindErr != nil {
@@ -199,10 +199,10 @@ func (gw *BotGateway) buildSessionState(ctx context.Context, key string, msg Inb
 	return &builtBotSession{state: state, reusedLease: reusedLease}, nil
 }
 
-func bindBotSessionIdentity(ctx context.Context, identity control.IdentityLifecycle, profile sessionRuntimeProfile, msg InboundMessage) (sessionv3.SessionRef, error) {
-	service := identity.SessionV3Service()
+func bindBotSessionIdentity(ctx context.Context, identity control.IdentityLifecycle, profile sessionRuntimeProfile, msg InboundMessage) (session.SessionRef, error) {
+	service := identity.SessionService()
 	if service == nil {
-		return sessionv3.SessionRef{}, errors.New("bot v3 session service is unavailable")
+		return session.SessionRef{}, errors.New("bot v3 session service is unavailable")
 	}
 	if current, ok := identity.SessionRef(); ok {
 		if profile.sessionRef.SessionID == "" || profile.sessionRef.SessionID == current.SessionID {
@@ -214,23 +214,23 @@ func bindBotSessionIdentity(ctx context.Context, identity control.IdentityLifecy
 		if ref.HostID == "" {
 			ref.HostID = service.HostID()
 		}
-		opened, err := identity.OpenV3(ctx, ref)
+		opened, err := identity.OpenSession(ctx, ref)
 		if err == nil {
 			return opened, nil
 		}
-		if !errors.Is(err, sessionv3.ErrSessionNotFound) || !profile.sessionRefOptional {
-			return sessionv3.SessionRef{}, err
+		if !errors.Is(err, session.ErrSessionNotFound) || !profile.sessionRefOptional {
+			return session.SessionRef{}, err
 		}
-		return identity.BindFreshV3(ctx, ref.SessionID)
+		return identity.BindFreshSession(ctx, ref.SessionID)
 	}
 	if profile.sessionPath != "" {
-		return identity.ContinueLegacyV3(ctx, profile.sessionPath, "")
+		return identity.ContinueLegacySession(ctx, profile.sessionPath, "")
 	}
 	stableID := ""
 	if strings.TrimSpace(msg.ChatID) != "" {
 		stableID = "bot-" + BuildSessionKey(msg.Session())
 	}
-	return identity.BindFreshV3(ctx, stableID)
+	return identity.BindFreshSession(ctx, stableID)
 }
 
 func (gw *BotGateway) discardBuiltSession(built *builtBotSession, previous *sessionState) {

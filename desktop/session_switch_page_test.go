@@ -305,12 +305,12 @@ func TestResumeSessionPageFollowsCanonicalContinuation(t *testing.T) {
 	v3Ctrl := control.New(control.Options{
 		Executor:   agent.New(nil, nil, parent, agent.Options{}, event.Discard),
 		SessionDir: dir, Label: "parent", Sink: event.Discard,
-		SessionService: service, ExclusiveSessionV3: true,
+		SessionService: service, ExclusiveSession: true,
 	})
 	// A unified import refuses to wait behind a live retired sidecar writer.
 	// The host retires its legacy producer before preparing the replacement.
 	ctrl.Close()
-	ref, err := v3Ctrl.ContinueLegacyV3(t.Context(), parentPath, "")
+	ref, err := v3Ctrl.ContinueLegacySession(t.Context(), parentPath, "")
 	if err != nil {
 		t.Fatalf("migrate parent: %v", err)
 	}

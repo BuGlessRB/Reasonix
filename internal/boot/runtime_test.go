@@ -208,7 +208,7 @@ func TestRebuildMigratesSessionState(t *testing.T) {
 	t.Chdir(dir)
 	writeRuntimeFixture(t, dir)
 
-	old, err := BuildRuntime(context.Background(), withTestSessionV3(t, Options{}))
+	old, err := BuildRuntime(context.Background(), withTestSession(t, Options{}))
 	if err != nil {
 		t.Fatalf("BuildRuntime v3: %v", err)
 	}

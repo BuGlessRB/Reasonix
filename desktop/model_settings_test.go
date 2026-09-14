@@ -30,15 +30,15 @@ func modelSettingsBootTab(t *testing.T, app *App, id, root, model string) *Works
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref, err := ctrl.BindFreshV3(t.Context(), "model-settings-"+id)
+	ref, err := ctrl.BindFreshSession(t.Context(), "model-settings-"+id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, runtime, ok := ctrl.SessionV3Binding()
+	_, runtime, ok := ctrl.SessionBinding()
 	if !ok {
 		t.Fatal("controller did not publish v3 runtime")
 	}
-	appendV3TestMessage(t, runtime, "model-settings-history-"+id, provider.Message{ID: "model-settings-user-" + id, Role: provider.RoleUser, Content: "keep history " + id})
+	appendSessionTestMessage(t, runtime, "model-settings-history-"+id, provider.Message{ID: "model-settings-user-" + id, Role: provider.RoleUser, Content: "keep history " + id})
 	tab := &WorkspaceTab{ID: id, Scope: "project", WorkspaceRoot: root, Ready: true, Ctrl: ctrl, model: model, SessionID: ref.SessionID, disabledMCP: map[string]ServerView{}, sink: &tabEventSink{tabID: id, app: app}}
 	if app.tabs == nil {
 		app.tabs = map[string]*WorkspaceTab{}

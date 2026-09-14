@@ -153,7 +153,7 @@ func (c *Controller) Compose(text string) string {
 
 func (c *Controller) compose(text, source string, includeHookContext bool) string {
 	goal, goalStatus := c.goals.snapshot()
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		if view, err := c.goalLifecycleView(); err == nil && view != nil {
 			goal = view.Objective
 			if view.Phase == goaldomain.PhaseActive && view.Activation == goaldomain.ActivationArmed {

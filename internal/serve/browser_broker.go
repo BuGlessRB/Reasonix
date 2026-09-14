@@ -24,9 +24,10 @@ const (
 	capabilityPermissionPresets  = "permission-presets-v1"
 	capabilityPresentFiles       = "present-files-v1"
 	capabilityExecutionV2        = "execution-v2"
-	capabilitySessionEventsV3    = "session-events-v3"
+	capabilitySessionHistory     = "session-history-v1"
 	capabilitySessionIdentityV1  = "session-identity-v1"
 	capabilitySessionOwnershipV1 = "session-ownership-v1"
+	capabilitySessionContentV1   = "session-content-v1"
 	capabilityGoalLifecycleV2    = servecontract.GoalLifecycleV2
 )
 
@@ -232,10 +233,10 @@ func (s *Server) capabilities() []string {
 		capabilityPermissionPresets,
 		capabilityPresentFiles,
 		capabilityExecutionV2,
-		capabilitySessionEventsV3,
+		capabilitySessionHistory,
 	}
-	if identity, ok := s.ctl().(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
-		caps = append(caps, capabilitySessionIdentityV1, capabilitySessionOwnershipV1, capabilityGoalLifecycleV2)
+	if identity, ok := s.ctl().(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
+		caps = append(caps, capabilitySessionIdentityV1, capabilitySessionOwnershipV1, capabilitySessionContentV1, capabilityGoalLifecycleV2)
 	}
 	if s.buildOptions.BrowserExecutor != nil {
 		caps = append(caps, capabilityBrowser)

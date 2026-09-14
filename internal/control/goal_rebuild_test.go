@@ -7,22 +7,22 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	goaldomain "reasonix/internal/goal"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
 func TestInheritLifecycleCarriesLiveGoalStateAcrossSameRuntimeRebuild(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-rebuild"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-rebuild"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	newController := func() *Controller {
 		exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
-		return New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true, GoalTokenBudget: 1000})
+		return New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true, GoalTokenBudget: 1000})
 	}
 	old := newController()
 	t.Cleanup(old.ReleaseResources)
@@ -55,17 +55,17 @@ func TestInheritLifecycleCarriesLiveGoalStateAcrossSameRuntimeRebuild(t *testing
 }
 
 func TestInheritLifecycleRejectsActiveGoalDriverReservation(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-rebuild-busy"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-rebuild-busy"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	newController := func() *Controller {
 		exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
-		return New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
+		return New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	}
 	old := newController()
 	replacement := newController()
@@ -80,22 +80,22 @@ func TestInheritLifecycleRejectsActiveGoalDriverReservation(t *testing.T) {
 		old.goalDriverMu.Unlock()
 	}()
 
-	if err := replacement.InheritLifecycleFrom(old); !errors.Is(err, sessionv3.ErrRuntimeBusy) {
+	if err := replacement.InheritLifecycleFrom(old); !errors.Is(err, session.ErrRuntimeBusy) {
 		t.Fatalf("inherit error = %v, want runtime busy", err)
 	}
 }
 
 func TestEditGoalDurablePreservesIdentityAndAdmittedRounds(t *testing.T) {
-	service, err := sessionv3.NewService("desktop", sessionv3.NewFilesystemPersistence(t.TempDir()))
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-edit"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-edit"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
-	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
+	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	t.Cleanup(c.ReleaseResources)
 	if err := c.SetGoalDurable("original objective"); err != nil {
 		t.Fatal(err)

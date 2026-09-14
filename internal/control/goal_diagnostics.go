@@ -1,16 +1,19 @@
 package control
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"runtime/debug"
 	"strings"
 	"time"
 
 	goaldomain "reasonix/internal/goal"
 	"reasonix/internal/secrets"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // GoalDiagnosticMetadata is supplied by the host so a user-exported artifact
@@ -20,21 +23,6 @@ type GoalDiagnosticMetadata struct {
 	BuildCommit        string   `json:"buildCommit,omitempty"`
 	ProtocolVersion    int      `json:"protocolVersion,omitempty"`
 	Capabilities       []string `json:"capabilities"`
-}
-
-type goalDiagnosticExport struct {
-	SchemaVersion     int                         `json:"schemaVersion"`
-	ExportedAt        time.Time                   `json:"exportedAt"`
-	Metadata          GoalDiagnosticMetadata      `json:"metadata"`
-	Runtime           sessionv3.RuntimeSnapshot   `json:"runtime"`
-	Observation       any                         `json:"observation"`
-	AcceptedThrough   uint64                      `json:"acceptedThrough"`
-	DurableThrough    uint64                      `json:"durableThrough"`
-	PersistenceStatus sessionv3.PersistenceStatus `json:"persistenceStatus"`
-	PersistenceError  string                      `json:"persistenceError,omitempty"`
-	Commits           []sessionv3.Commit          `json:"commits"`
-	ActivationChanges []goalDiagnosticTransition  `json:"activationChanges"`
-	Unavailable       []string                    `json:"unavailable"`
 }
 
 type goalDiagnosticTransition struct {
@@ -48,87 +36,158 @@ type goalDiagnosticTransition struct {
 	Inferred      bool                  `json:"inferred"`
 }
 
-// ExportGoalDiagnostics reads the authoritative accepted v3 event prefix and
-// attempts a durability checkpoint first. A failed Flush is evidence to export,
-// not a reason to hide the events and persistence status needed to diagnose it.
-// Credential-like material is redacted at this explicit diagnostic boundary.
+// ExportGoalDiagnostics is the compatibility in-memory form. Production hosts
+// use WriteGoalDiagnostics so diagnostic size is not a memory or RPC limit.
 func (c *Controller) ExportGoalDiagnostics(ctx context.Context, metadata GoalDiagnosticMetadata) ([]byte, error) {
+	var output bytes.Buffer
+	if err := c.WriteGoalDiagnostics(ctx, &output, metadata); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+// WriteGoalDiagnostics streams the authoritative accepted event prefix after
+// attempting a Flush checkpoint. A failed Flush is exported as evidence, and
+// credential-like material is redacted one commit at a time.
+func (c *Controller) WriteGoalDiagnostics(ctx context.Context, dst io.Writer, metadata GoalDiagnosticMetadata) error {
 	if c == nil {
-		return nil, sessionv3.ErrSessionNotRunning
+		return session.ErrSessionNotRunning
 	}
 	_, runtime, exclusive := c.v3Binding()
 	if !exclusive || runtime == nil {
-		return nil, errors.New("goal diagnostics require a linear v3 session")
+		return errors.New("goal diagnostics require a canonical session")
 	}
-	flushErr := error(nil)
-	if _, err := runtime.Session().Flush(ctx); err != nil {
-		flushErr = err
-	}
-	runtimeSnapshot := runtime.StateSnapshot()
-	runtimeSnapshot.Session.PersistenceError = secrets.RedactCredentials(runtimeSnapshot.Session.PersistenceError)
-	commits, err := acceptedGoalDiagnosticCommits(ctx, runtime.Session(), runtimeSnapshot.Session.EventSequence)
-	if err != nil {
-		return nil, err
-	}
+	_, flushErr := runtime.Session().Flush(ctx)
 	if metadata.Capabilities == nil {
 		metadata.Capabilities = []string{}
 	}
 	fillGoalDiagnosticBuildMetadata(&metadata)
+	state := runtime.StateSnapshot()
+	state.Session.PersistenceError = secrets.RedactCredentials(state.Session.PersistenceError)
+	observation := c.RuntimeStateSnapshot()
+	observation.PersistenceErr = secrets.RedactCredentials(observation.PersistenceErr)
 	unavailable := []string{
 		"activation transitions are inferred from recorded Goal events; process-local activation history before export is unavailable",
 	}
 	if flushErr != nil {
 		unavailable = append(unavailable, "durability checkpoint failed: "+secrets.RedactError(flushErr))
 	}
-	observation := c.RuntimeStateSnapshot()
-	observation.PersistenceErr = secrets.RedactCredentials(observation.PersistenceErr)
-	export := goalDiagnosticExport{
-		SchemaVersion:     1,
-		ExportedAt:        time.Now().UTC(),
-		Metadata:          metadata,
-		Runtime:           runtimeSnapshot,
-		Observation:       observation,
-		AcceptedThrough:   runtimeSnapshot.Session.EventSequence,
-		DurableThrough:    runtimeSnapshot.Session.DurableSequence,
-		PersistenceStatus: runtimeSnapshot.Session.PersistenceStatus,
-		PersistenceError:  runtimeSnapshot.Session.PersistenceError,
-		Commits:           commits,
-		ActivationChanges: goalActivationChanges(commits),
-		Unavailable:       unavailable,
+	if _, err := io.WriteString(dst, "{\n"); err != nil {
+		return err
 	}
-	payload, err := json.MarshalIndent(export, "", "  ")
+	fields := []struct {
+		name  string
+		value any
+	}{
+		{"schemaVersion", 1},
+		{"exportedAt", time.Now().UTC()},
+		{"metadata", metadata},
+		{"runtime", state},
+		{"observation", observation},
+		{"acceptedThrough", state.Session.EventSequence},
+		{"durableThrough", state.Session.DurableSequence},
+		{"persistenceStatus", state.Session.PersistenceStatus},
+		{"persistenceError", state.Session.PersistenceError},
+	}
+	for _, field := range fields {
+		if err := writeGoalDiagnosticField(dst, field.name, field.value, true); err != nil {
+			return err
+		}
+	}
+	if _, err := io.WriteString(dst, "  \"commits\": ["); err != nil {
+		return err
+	}
+	first := true
+	changes := []goalDiagnosticTransition{}
+	activation := goaldomain.ActivationDisarmed
+	err := visitAcceptedGoalDiagnosticCommits(ctx, runtime.Session(), state.Session.EventSequence, func(commit session.Commit) error {
+		encoded, err := json.MarshalIndent(commit, "    ", "  ")
+		if err != nil {
+			return err
+		}
+		encoded = []byte(secrets.Redact(string(encoded)))
+		if !json.Valid(encoded) {
+			return errors.New("redacted goal diagnostic commit is not valid JSON")
+		}
+		separator := "\n    "
+		if !first {
+			separator = ",\n    "
+		}
+		if _, err := io.WriteString(dst, separator); err != nil {
+			return err
+		}
+		if _, err := dst.Write(encoded); err != nil {
+			return err
+		}
+		first = false
+		changes = append(changes, goalActivationChangesForCommit(commit, &activation)...)
+		return nil
+	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	redacted := []byte(secrets.Redact(string(payload)))
-	if !json.Valid(redacted) {
-		return nil, errors.New("redacted goal diagnostics are not valid JSON")
+	if !first {
+		if _, err := io.WriteString(dst, "\n  "); err != nil {
+			return err
+		}
 	}
-	return redacted, nil
+	if _, err := io.WriteString(dst, "],\n"); err != nil {
+		return err
+	}
+	if err := writeGoalDiagnosticField(dst, "activationChanges", changes, true); err != nil {
+		return err
+	}
+	if err := writeGoalDiagnosticField(dst, "unavailable", unavailable, false); err != nil {
+		return err
+	}
+	_, err = io.WriteString(dst, "}\n")
+	return err
 }
 
-func acceptedGoalDiagnosticCommits(ctx context.Context, session *sessionv3.Session, through uint64) ([]sessionv3.Commit, error) {
-	commits := make([]sessionv3.Commit, 0)
+func visitAcceptedGoalDiagnosticCommits(ctx context.Context, store *session.Session, through uint64, visit func(session.Commit) error) error {
 	offset := uint64(0)
 	for {
-		page, err := session.AcceptedPage(ctx, offset, 1000)
+		page, err := store.AcceptedPage(ctx, offset, 1000)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, commit := range page.Commits {
 			if commit.LastSequence() > through {
-				return commits, nil
+				return nil
 			}
-			commits = append(commits, commit)
+			if err := visit(commit); err != nil {
+				return err
+			}
 		}
 		if !page.Truncated {
-			return commits, nil
+			return nil
 		}
 		if page.Next <= offset {
-			return nil, errors.New("goal diagnostics accepted-page cursor did not advance")
+			return errors.New("goal diagnostics accepted-page cursor did not advance")
 		}
 		offset = page.Next
 	}
+}
+
+func writeGoalDiagnosticField(dst io.Writer, name string, value any, comma bool) error {
+	encoded, err := json.MarshalIndent(value, "  ", "  ")
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(dst, "  %q: ", name); err != nil {
+		return err
+	}
+	if _, err := dst.Write(encoded); err != nil {
+		return err
+	}
+	if comma {
+		_, err = io.WriteString(dst, ",")
+		if err != nil {
+			return err
+		}
+	}
+	_, err = io.WriteString(dst, "\n")
+	return err
 }
 
 func fillGoalDiagnosticBuildMetadata(metadata *GoalDiagnosticMetadata) {
@@ -153,44 +212,41 @@ func fillGoalDiagnosticBuildMetadata(metadata *GoalDiagnosticMetadata) {
 	}
 }
 
-func goalActivationChanges(commits []sessionv3.Commit) []goalDiagnosticTransition {
-	changes := make([]goalDiagnosticTransition, 0)
-	activation := goaldomain.ActivationDisarmed
-	for _, commit := range commits {
-		hasTurnStart := false
-		for _, item := range commit.Events {
-			hasTurnStart = hasTurnStart || item.Kind == "turn/start"
+func goalActivationChangesForCommit(commit session.Commit, activation *goaldomain.Activation) []goalDiagnosticTransition {
+	changes := []goalDiagnosticTransition{}
+	hasTurnStart := false
+	for _, item := range commit.Events {
+		hasTurnStart = hasTurnStart || item.Kind == "turn/start"
+	}
+	for _, item := range commit.Events {
+		if item.Kind != "goal/state" {
+			continue
 		}
-		for _, item := range commit.Events {
-			if item.Kind != "goal/state" {
-				continue
-			}
-			var document struct {
-				Current *goaldomain.Snapshot `json:"current"`
-			}
-			if json.Unmarshal(item.Payload, &document) != nil {
-				continue
-			}
-			transition := goalDiagnosticTransition{Sequence: item.Sequence, OperationID: commit.OperationID, Activation: goaldomain.ActivationDisarmed, Inferred: true}
-			if document.Current != nil {
-				transition.GoalID = document.Current.ID
-				transition.Revision = document.Current.Revision
-				transition.Phase = document.Current.Phase
-				transition.RoundsStarted = document.Current.RoundsStarted
-				if document.Current.Phase == goaldomain.PhaseActive {
-					op := strings.ToLower(commit.OperationID)
-					if hasTurnStart || strings.Contains(op, ":create") || strings.Contains(op, ":resume") || strings.Contains(op, "goal-control:set") {
-						activation = goaldomain.ActivationArmed
-					}
-				} else {
-					activation = goaldomain.ActivationDisarmed
+		var document struct {
+			Current *goaldomain.Snapshot `json:"current"`
+		}
+		if json.Unmarshal(item.Payload, &document) != nil {
+			continue
+		}
+		transition := goalDiagnosticTransition{Sequence: item.Sequence, OperationID: commit.OperationID, Activation: goaldomain.ActivationDisarmed, Inferred: true}
+		if document.Current != nil {
+			transition.GoalID = document.Current.ID
+			transition.Revision = document.Current.Revision
+			transition.Phase = document.Current.Phase
+			transition.RoundsStarted = document.Current.RoundsStarted
+			if document.Current.Phase == goaldomain.PhaseActive {
+				op := strings.ToLower(commit.OperationID)
+				if hasTurnStart || strings.Contains(op, ":create") || strings.Contains(op, ":resume") || strings.Contains(op, "goal-control:set") {
+					*activation = goaldomain.ActivationArmed
 				}
-				transition.Activation = activation
 			} else {
-				activation = goaldomain.ActivationDisarmed
+				*activation = goaldomain.ActivationDisarmed
 			}
-			changes = append(changes, transition)
+			transition.Activation = *activation
+		} else {
+			*activation = goaldomain.ActivationDisarmed
 		}
+		changes = append(changes, transition)
 	}
 	return changes
 }

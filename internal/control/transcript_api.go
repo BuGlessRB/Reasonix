@@ -1,11 +1,12 @@
 package control
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/transcript"
 	"reasonix/internal/turnevent"
 )
@@ -56,8 +57,12 @@ func (c *Controller) BindTranscriptRuntimeEpoch(epoch string) {
 }
 
 func (c *Controller) transcriptProjection() (*transcript.Projection, error) {
-	if _, runtime, exclusive := c.v3Binding(); exclusive && runtime != nil {
-		return c.v3TranscriptProjection(runtime.Snapshot())
+	if service, runtime, exclusive := c.v3Binding(); exclusive && service != nil && runtime != nil {
+		messages, err := service.Query().History(context.Background(), runtime.Ref())
+		if err != nil {
+			return nil, errors.Join(ErrTranscriptProjectionUnavailable, err)
+		}
+		return c.v3TranscriptProjection(runtime.StateSnapshot(), messages)
 	}
 	c.turnEvents.mu.RLock()
 	defer c.turnEvents.mu.RUnlock()
@@ -73,7 +78,7 @@ func (c *Controller) transcriptProjection() (*transcript.Projection, error) {
 	return c.turnEvents.projection, nil
 }
 
-func (c *Controller) v3TranscriptProjection(runtime sessionv3.RuntimeSnapshot) (*transcript.Projection, error) {
+func (c *Controller) v3TranscriptProjection(runtime session.RuntimeSnapshot, messages []provider.Message) (*transcript.Projection, error) {
 	sequence := runtime.Session.EventSequence
 	sessionID, epoch := runtime.Ref.SessionID, runtime.Epoch
 	c.turnEvents.mu.RLock()
@@ -83,7 +88,7 @@ func (c *Controller) v3TranscriptProjection(runtime sessionv3.RuntimeSnapshot) (
 	}
 	c.turnEvents.mu.RUnlock()
 
-	rows := transcript.History(runtime.Session.Projection.Messages, transcript.HistoryOptions{
+	rows := transcript.History(messages, transcript.HistoryOptions{
 		CheckpointTurns: c.CheckpointTurnsByMessageIndex(),
 		SubmitContent: func(m provider.Message) string {
 			return StripReferencedContextPrefix(StripComposePrefixes(m.Content))
@@ -153,7 +158,7 @@ func (c *Controller) TranscriptReplay(req TranscriptReplayRequest) (TranscriptRe
 
 func (c *Controller) transcriptReplay(req TranscriptReplayRequest) (TranscriptReplay, error) {
 	if _, runtime, exclusive := c.v3Binding(); exclusive && runtime != nil {
-		p, err := c.v3TranscriptProjection(runtime.Snapshot())
+		p, err := c.transcriptProjection()
 		if err != nil {
 			return TranscriptReplay{}, err
 		}

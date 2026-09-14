@@ -11,7 +11,7 @@ import (
 // EditGoalDurable edits the current v3 Goal without replacing its identity or
 // resetting admitted rounds. A nil limit explicitly selects unlimited rounds.
 func (c *Controller) EditGoalDurable(objective string, maxGoalRounds *uint64) error {
-	if !c.exclusiveV3Enabled() {
+	if !c.sessionEngineEnabled() {
 		return errors.New("editing a goal in place requires a linear v3 session")
 	}
 	current, err := c.goalLifecycleView()

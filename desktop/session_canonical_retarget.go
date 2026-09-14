@@ -118,8 +118,8 @@ func (a *App) resumeSessionForTranscript(tabID, path string, limit int, includeH
 		phases.Outcome = "tab_not_ready"
 		return HistoryPage{}, fmt.Errorf("tab is not ready")
 	}
-	if _, isV3 := parseSessionV3Route(path); isV3 {
-		page, err := a.resumeV3SessionForTranscript(tab, ctrl, path, limit, includeHistory)
+	if _, isV3 := parseSessionRoute(path); isV3 {
+		page, err := a.resumeCanonicalSessionForTranscript(tab, ctrl, path, limit, includeHistory)
 		if err != nil {
 			phases.Outcome = "v3_rebind_failed"
 			return HistoryPage{}, err
@@ -143,9 +143,9 @@ func (a *App) resumeSessionForTranscript(tabID, path string, limit int, includeH
 		return HistoryPage{}, err
 	}
 	phases.ResolveMs = elapsedMs(resolveStarted)
-	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSessionV3() {
+	if identity, ok := ctrl.(control.IdentityLifecycle); ok && identity.UsesExclusiveSession() {
 		migrateStarted := time.Now()
-		page, migrateErr := a.continueLegacyV3ForTranscript(tab, ctrl, sessionPath, limit, includeHistory, false)
+		page, migrateErr := a.continueLegacySessionForTranscript(tab, ctrl, sessionPath, limit, includeHistory, false)
 		if migrateErr != nil {
 			phases.Outcome = "legacy_migration_failed"
 			return HistoryPage{}, migrateErr

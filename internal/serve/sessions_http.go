@@ -9,7 +9,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/control"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/store"
 )
 
@@ -81,8 +81,8 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		out = append(out, row)
 	}
 	if concrete, ok := ctrl.(*control.Controller); ok {
-		if service := concrete.SessionV3Service(); service != nil {
-			_, runtime, bound := concrete.SessionV3Binding()
+		if service := concrete.SessionService(); service != nil {
+			_, runtime, bound := concrete.SessionBinding()
 			page, listErr := service.Query().List(r.Context(), "", 100)
 			if listErr == nil {
 				for _, info := range page.Sessions {
@@ -93,7 +93,7 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 					}
 					if live, exists := service.Runtime(info.Ref); exists {
 						phase := live.Snapshot().Phase
-						row.Running = phase == sessionv3.RuntimeRunning || phase == sessionv3.RuntimeCancelling || phase == sessionv3.RuntimeRecoveryRequired
+						row.Running = phase == session.RuntimeRunning || phase == session.RuntimeCancelling || phase == session.RuntimeRecoveryRequired
 					}
 					out = append(out, row)
 				}

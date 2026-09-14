@@ -13,7 +13,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
@@ -72,11 +72,11 @@ func TestToolRecoveryCrashAfterEffect(t *testing.T) {
 	if _, err = c.ResolveToolRecovery(context.Background(), req); err == nil || !strings.Contains(err.Error(), "tool_recovery_retired") {
 		t.Fatalf("retired recovery action err=%v", err)
 	}
-	projection := loadDurableV3Projection(t, path)
+	projection := loadDurableSessionProjection(t, path)
 	if len(projection.ActiveTools) != 0 || projection.TurnStatus != event.TurnInterrupted {
 		t.Fatal("retired endpoint rewrote the historical unknown fact")
 	}
-	commits, err := sessionv3.Replay(sessionV3Directory(path), nil)
+	commits, err := session.Replay(sessionDirectory(path), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

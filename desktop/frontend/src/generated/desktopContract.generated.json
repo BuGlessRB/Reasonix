@@ -8579,6 +8579,44 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/remote_transcript_api.go",
+      "name": "RemoteSearchSessionHistoryForTab",
+      "owner": "App.RemoteSearchSessionHistoryForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "integer"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "session.SearchHistoryPage"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "textQuery",
+          "cursor",
+          "limit"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.RemoteSearchSessionHistoryForTab"
+      },
+      "sources": [
+        "desktop/remote_transcript_api.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/remote_app.go",
       "name": "RemoteServerLogs",
       "owner": "App.RemoteServerLogs",
@@ -8638,6 +8676,75 @@
       },
       "sources": [
         "desktop/remote_app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/remote_transcript_api.go",
+      "name": "RemoteSessionHistoryContentForTab",
+      "owner": "App.RemoteSessionHistoryContentForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "object",
+          "ref": "sessioncontent.Ref"
+        },
+        {
+          "kind": "integer"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionHistoryContentChunk"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "ref",
+          "offset"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.RemoteSessionHistoryContentForTab"
+      },
+      "sources": [
+        "desktop/remote_transcript_api.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/remote_transcript_api.go",
+      "name": "RemoteSessionHistoryPageForTab",
+      "owner": "App.RemoteSessionHistoryPageForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "integer"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "session.MessageHistoryPage"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "cursor",
+          "limit"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.RemoteSessionHistoryPageForTab"
+      },
+      "sources": [
+        "desktop/remote_transcript_api.go"
       ]
     },
     {
@@ -11775,6 +11882,113 @@
       },
       "sources": [
         "desktop/history_catalog.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_history_service.go",
+      "name": "SearchSessionHistoryForTab",
+      "owner": "App.SearchSessionHistoryForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "integer"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "session.SearchHistoryPage"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "textQuery",
+          "cursor",
+          "limit"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SearchSessionHistoryForTab"
+      },
+      "sources": [
+        "desktop/session_history_service.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_history_service.go",
+      "name": "SessionHistoryContentForTab",
+      "owner": "App.SessionHistoryContentForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "object",
+          "ref": "sessioncontent.Ref"
+        },
+        {
+          "kind": "integer"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionHistoryContentChunk"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "ref",
+          "offset"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SessionHistoryContentForTab"
+      },
+      "sources": [
+        "desktop/session_history_service.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_history_service.go",
+      "name": "SessionHistoryPageForTab",
+      "owner": "App.SessionHistoryPageForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "integer"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "session.MessageHistoryPage"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "cursor",
+          "limit"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SessionHistoryPageForTab"
+      },
+      "sources": [
+        "desktop/session_history_service.go"
       ]
     },
     {
@@ -16470,7 +16684,7 @@
     "topic:activation",
     "updater:progress"
   ],
-  "protocolVersion": 5,
+  "protocolVersion": 6,
   "types": {
     "agent.ToolRecoveryStatistics": {
       "fields": [
@@ -31404,6 +31618,28 @@
         }
       ]
     },
+    "main.SessionHistoryContentChunk": {
+      "fields": [
+        {
+          "name": "data",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "nextOffset",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "done",
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ]
+    },
     "main.SessionMeta": {
       "fields": [
         {
@@ -35632,6 +35868,209 @@
         },
         {
           "name": "durationMs",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        }
+      ]
+    },
+    "session.MessageHistoryPage": {
+      "fields": [
+        {
+          "name": "messages",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "session.PersistentMessage"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "snapshotSequence",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "nextCursor",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "hasMore",
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ]
+    },
+    "session.PersistentMessage": {
+      "fields": [
+        {
+          "name": "messageId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "position",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "version",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "role",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "preview",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "eventSequence",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "inline",
+          "optional": true,
+          "type": {
+            "kind": "any"
+          }
+        },
+        {
+          "name": "contentRef",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "sessioncontent.Ref"
+            },
+            "kind": "nullable"
+          }
+        }
+      ]
+    },
+    "session.SearchHistoryHit": {
+      "fields": [
+        {
+          "name": "messageId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "position",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "role",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "preview",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "eventSequence",
+          "type": {
+            "kind": "integer"
+          }
+        }
+      ]
+    },
+    "session.SearchHistoryPage": {
+      "fields": [
+        {
+          "name": "hits",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "session.SearchHistoryHit"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "snapshotSequence",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "nextCursor",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "hasMore",
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ]
+    },
+    "sessioncontent.Ref": {
+      "fields": [
+        {
+          "name": "digest",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "bytes",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "mediaType",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "name",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "indexDigest",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "integrityBlockBytes",
           "optional": true,
           "type": {
             "kind": "integer"

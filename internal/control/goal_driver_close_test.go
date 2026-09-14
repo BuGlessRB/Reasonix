@@ -8,7 +8,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
@@ -16,7 +16,7 @@ func TestControllerCloseCancelsGoalDriverFlushWait(t *testing.T) {
 	flushStarted := make(chan struct{})
 	releaseFlush := make(chan struct{})
 	var once sync.Once
-	store, err := sessionv3.CreateWithOptions(t.TempDir()+"/goal-close-flush", "goal-close-flush", sessionv3.OpenOptions{
+	store, err := session.CreateWithOptions(t.TempDir()+"/goal-close-flush", "goal-close-flush", session.OpenOptions{
 		Sync: func(*os.File) error {
 			once.Do(func() { close(flushStarted) })
 			<-releaseFlush
@@ -26,11 +26,11 @@ func TestControllerCloseCancelsGoalDriverFlushWait(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := sessionv3.NewService("desktop", failingFlushPersistence{session: store})
+	service, err := session.NewService("desktop", failingFlushPersistence{session: store})
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := service.Create(t.Context(), sessionv3.CreateOptions{SessionID: "goal-close-flush"})
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-close-flush"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestControllerCloseCancelsGoalDriverFlushWait(t *testing.T) {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
-	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSessionV3: true})
+	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	if err := c.SetGoalDurable("close without waiting for a stuck disk"); err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,7 @@ func (c *Controller) bindExecutorProjection(path string, loadSidecar bool) {
 	if c == nil || c.executor == nil {
 		return
 	}
-	if c.exclusiveV3Enabled() {
+	if c.sessionEngineEnabled() {
 		return
 	}
 	c.executor.BindSessionPath(path, loadSidecar)

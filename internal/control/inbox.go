@@ -207,7 +207,7 @@ func (c *Controller) ensureInbox() (*sessioninbox.Store, error) {
 	path := c.SessionPath()
 	c.inbox.mu.Lock()
 	defer c.inbox.mu.Unlock()
-	if path == "" && c.exclusiveV3Enabled() {
+	if path == "" && c.sessionEngineEnabled() {
 		if c.inbox.tempLease == nil {
 			lease, err := c.sessionTemp.Acquire()
 			if err != nil {
@@ -272,7 +272,7 @@ func (c *Controller) rebindInbox() {
 		c.inbox.tempLease.Release()
 		c.inbox.tempLease = nil
 	}
-	if path == "" && c.exclusiveV3Enabled() {
+	if path == "" && c.sessionEngineEnabled() {
 		lease, err := c.sessionTemp.Acquire()
 		if err != nil {
 			slog.Warn("controller: open v3 runtime inbox", "err", err)

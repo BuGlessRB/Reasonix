@@ -193,7 +193,7 @@ type ledgerTurnState struct {
 // NewMemory creates the compatibility runtime projection used by execution-v2.
 // It allocates turn identities and retains reconnect envelopes for the lifetime
 // of the process, but never opens or writes a sidecar. Durable business facts
-// belong to sessionv3; this ledger adapts the existing event.Sink surface while
+// belong to session; this ledger adapts the existing event.Sink surface while
 // clients move to SessionQuery.
 func NewMemory(sessionID string) *Ledger {
 	return &Ledger{

@@ -8,7 +8,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 // BindSessionWriteAuthority issues a generation-bound write authority from
@@ -70,7 +70,7 @@ func (c *Controller) activateManagedSessionEvents(sess *agent.Session) error {
 		if err := c.seedSessionEventsFromExecutor("managed-runtime-activation"); err != nil {
 			return err
 		}
-	} else if !reflect.DeepEqual(snapshot.Projection.Messages, messages) {
+	} else if !reflect.DeepEqual(snapshot.Projection.ModelMessages, messages) {
 		if err := c.replaceSessionEventProjection(context.Background(), "managed-runtime-activation", messages); err != nil {
 			return err
 		}
@@ -124,22 +124,22 @@ func (c *Controller) ensureWriteAuthorityReady() error {
 	if service, runtime, exclusive := c.v3Binding(); exclusive {
 		if runtime == nil {
 			if service == nil {
-				return sessionv3.ErrSessionNotRunning
+				return session.ErrSessionNotRunning
 			}
-			if _, err := c.BindFreshV3(context.Background(), ""); err != nil {
+			if _, err := c.BindFreshSession(context.Background(), ""); err != nil {
 				return err
 			}
 			_, runtime, _ = c.v3Binding()
 			if runtime == nil {
-				return sessionv3.ErrSessionNotRunning
+				return session.ErrSessionNotRunning
 			}
 		}
-		phase := runtime.Snapshot().Phase
-		if phase == sessionv3.RuntimeRecoveryRequired {
-			return sessionv3.ErrRecoveryRequired
+		phase := runtime.StateSnapshot().Phase
+		if phase == session.RuntimeRecoveryRequired {
+			return session.ErrRecoveryRequired
 		}
-		if phase == sessionv3.RuntimeClosed {
-			return sessionv3.ErrSessionNotRunning
+		if phase == session.RuntimeClosed {
+			return session.ErrSessionNotRunning
 		}
 		return nil
 	}

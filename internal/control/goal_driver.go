@@ -11,7 +11,7 @@ import (
 
 	"reasonix/internal/event"
 	goaldomain "reasonix/internal/goal"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 	"reasonix/internal/tool"
 )
 
@@ -19,7 +19,7 @@ import (
 // therefore cannot block the driver; one model TurnDone is not completion of
 // an armed long-running goal.
 func (c *Controller) waitForGoalTerminal(ctx context.Context) error {
-	if c == nil || !c.exclusiveV3Enabled() {
+	if c == nil || !c.sessionEngineEnabled() {
 		return nil
 	}
 	ticker := time.NewTicker(10 * time.Millisecond)
@@ -197,7 +197,7 @@ func (c *Controller) driveOneGoalRound() bool {
 }
 
 func (c *Controller) recordGoalLifecycleUsage(e event.Event) {
-	if c == nil || !c.exclusiveV3Enabled() || e.Usage == nil {
+	if c == nil || !c.sessionEngineEnabled() || e.Usage == nil {
 		return
 	}
 	c.goalDriverMu.Lock()
@@ -230,27 +230,27 @@ func (c *Controller) resetGoalResourceBudget() {
 	c.goalResourceMu.Unlock()
 }
 
-func (c *Controller) goalRoundEligibility() (*goaldomain.View, *sessionv3.Runtime, sessionv3.RuntimeSnapshot, bool) {
+func (c *Controller) goalRoundEligibility() (*goaldomain.View, *session.Runtime, session.RuntimeSnapshot, bool) {
 	if c == nil || c.PendingPrompt() || c.hasPendingUserWork() {
-		return nil, nil, sessionv3.RuntimeSnapshot{}, false
+		return nil, nil, session.RuntimeSnapshot{}, false
 	}
 	c.mu.Lock()
 	busy := c.running || c.finishing || c.rotating || c.canceling || c.closed
 	c.mu.Unlock()
 	if busy {
-		return nil, nil, sessionv3.RuntimeSnapshot{}, false
+		return nil, nil, session.RuntimeSnapshot{}, false
 	}
 	view, err := c.goalLifecycleView()
 	if err != nil || view == nil || view.Phase != goaldomain.PhaseActive || view.Activation != goaldomain.ActivationArmed {
-		return nil, nil, sessionv3.RuntimeSnapshot{}, false
+		return nil, nil, session.RuntimeSnapshot{}, false
 	}
 	_, runtime, exclusive := c.v3Binding()
 	if !exclusive || runtime == nil {
-		return nil, nil, sessionv3.RuntimeSnapshot{}, false
+		return nil, nil, session.RuntimeSnapshot{}, false
 	}
-	snapshot := runtime.Snapshot()
-	if snapshot.Phase != sessionv3.RuntimeIdle {
-		return nil, nil, sessionv3.RuntimeSnapshot{}, false
+	snapshot := runtime.StateSnapshot()
+	if snapshot.Phase != session.RuntimeIdle {
+		return nil, nil, session.RuntimeSnapshot{}, false
 	}
 	return view, runtime, snapshot, true
 }
@@ -266,10 +266,10 @@ func (c *Controller) commitGoalRoundAdmission(reservation *goalRoundReservation)
 	defer c.goalLifecycleMutationMu.Unlock()
 	_, runtime, exclusive := c.v3Binding()
 	if !exclusive || runtime == nil {
-		return sessionv3.ErrSessionNotRunning
+		return session.ErrSessionNotRunning
 	}
-	runtimeSnapshot := runtime.Snapshot()
-	if runtimeSnapshot.Phase != sessionv3.RuntimeRunning || runtimeSnapshot.Ref.SessionID != reservation.SessionID ||
+	runtimeSnapshot := runtime.StateSnapshot()
+	if runtimeSnapshot.Phase != session.RuntimeRunning || runtimeSnapshot.Ref.SessionID != reservation.SessionID ||
 		runtimeSnapshot.Epoch != reservation.RuntimeEpoch || runtimeSnapshot.ActivityRevision != reservation.IdleActivityRevision+1 {
 		return &goaldomain.Error{Code: goaldomain.ErrStaleRevision, Message: "goal round runtime reservation is stale"}
 	}
@@ -280,7 +280,7 @@ func (c *Controller) commitGoalRoundAdmission(reservation *goalRoundReservation)
 		return loadErr
 	}
 	if machine == nil {
-		return sessionv3.ErrSessionNotRunning
+		return session.ErrSessionNotRunning
 	}
 	candidate := machine.Clone()
 	view, err := candidate.AdmitRound(reservation.Goal)
@@ -355,8 +355,8 @@ func (c *Controller) goalAuthorityForRound(reservation *goalRoundReservation) (t
 	if !exclusive || runtime == nil {
 		return tool.GoalAuthority{}, false
 	}
-	snapshot := runtime.Snapshot()
-	if snapshot.Phase != sessionv3.RuntimeRunning || snapshot.Ref.SessionID != reservation.SessionID || snapshot.Epoch != reservation.RuntimeEpoch {
+	snapshot := runtime.StateSnapshot()
+	if snapshot.Phase != session.RuntimeRunning || snapshot.Ref.SessionID != reservation.SessionID || snapshot.Epoch != reservation.RuntimeEpoch {
 		return tool.GoalAuthority{}, false
 	}
 	return tool.GoalAuthority{Source: tool.GoalSourceGoalRound, SessionID: reservation.SessionID,
@@ -369,8 +369,8 @@ func (c *Controller) directHumanGoalAuthority() (tool.GoalAuthority, bool) {
 	if !exclusive || runtime == nil {
 		return tool.GoalAuthority{}, false
 	}
-	snapshot := runtime.Snapshot()
-	if snapshot.Phase != sessionv3.RuntimeRunning {
+	snapshot := runtime.StateSnapshot()
+	if snapshot.Phase != session.RuntimeRunning {
 		return tool.GoalAuthority{}, false
 	}
 	return tool.GoalAuthority{Source: tool.GoalSourceDirectHuman, SessionID: snapshot.Ref.SessionID,
@@ -394,7 +394,7 @@ func (c *Controller) disarmGoalLifecycle(reason string) {
 // idle; it never bypasses v3 with a direct sidecar write.
 func (c *Controller) applyHostGoalMutation(ctx context.Context, reason string, mutate func(*goaldomain.Machine) (*goaldomain.View, error)) (*goaldomain.View, error) {
 	if c == nil || mutate == nil {
-		return nil, sessionv3.ErrSessionNotRunning
+		return nil, session.ErrSessionNotRunning
 	}
 	c.goalLifecycleMutationMu.Lock()
 	defer c.goalLifecycleMutationMu.Unlock()
@@ -405,7 +405,7 @@ func (c *Controller) applyHostGoalMutation(ctx context.Context, reason string, m
 		return nil, loadErr
 	}
 	if machine == nil {
-		return nil, sessionv3.ErrSessionNotRunning
+		return nil, session.ErrSessionNotRunning
 	}
 	candidate := machine.Clone()
 	view, err := mutate(candidate)
@@ -418,34 +418,35 @@ func (c *Controller) applyHostGoalMutation(ctx context.Context, reason string, m
 	}
 	_, runtime, exclusive := c.v3Binding()
 	if !exclusive || runtime == nil {
-		return nil, sessionv3.ErrSessionNotRunning
+		return nil, session.ErrSessionNotRunning
 	}
-	snapshot := runtime.Snapshot()
-	var activity *sessionv3.Activity
+	snapshot := runtime.StateSnapshot()
+	var activity *session.Activity
 	owned := false
 	switch snapshot.Phase {
-	case sessionv3.RuntimeIdle:
+	case session.RuntimeIdle:
 		_, activity, err = runtime.BeginOwnedActivity(ctx, "goal-control")
 		if err != nil {
 			return nil, err
 		}
 		owned = true
-	case sessionv3.RuntimeRunning:
+	case session.RuntimeRunning:
 		c.v3ActivityMu.Lock()
 		activity = c.v3Activity
 		c.v3ActivityMu.Unlock()
 		if activity == nil {
-			return nil, sessionv3.ErrStaleActivity
+			return nil, session.ErrStaleActivity
 		}
 	default:
-		return nil, sessionv3.ErrRuntimeBusy
+		return nil, session.ErrRuntimeBusy
 	}
 	if owned {
 		defer activity.Finish(nil)
 	}
-	op := fmt.Sprintf("goal-control:%s:%d:%s", reason, runtime.Session().Snapshot().EventSequence+1, snapshot.Epoch)
-	if _, err := activity.Append(ctx, sessionv3.Batch{OperationID: op, TurnID: runtime.Session().Snapshot().Projection.TurnID,
-		Events: []sessionv3.Event{{Kind: "goal/state", Payload: payload}}}); err != nil {
+	execution := runtime.ExecutionSnapshot()
+	op := fmt.Sprintf("goal-control:%s:%d:%s", reason, execution.Session.EventSequence+1, snapshot.Epoch)
+	if _, err := activity.Append(ctx, session.Batch{OperationID: op, TurnID: execution.Session.Projection.TurnID,
+		Events: []session.Event{{Kind: "goal/state", Payload: payload}}}); err != nil {
 		return nil, err
 	}
 	_, currentRuntime, stillExclusive := c.v3Binding()

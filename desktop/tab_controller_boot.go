@@ -6,7 +6,7 @@ import (
 
 	"reasonix/internal/boot"
 	"reasonix/internal/control"
-	"reasonix/internal/sessionv3"
+	"reasonix/internal/session"
 )
 
 var errTabControllerExtensionsChanged = errors.New("desktop: controller extensions changed during build")
@@ -20,24 +20,24 @@ func (a *App) buildTabControllerBoot(ctx context.Context, opts boot.Options) (co
 	return boot.Build(ctx, opts)
 }
 
-func desktopSessionV3Root(sessionDir string) string {
-	return sessionv3.RootForLegacyDir(sessionDir)
+func desktopSessionRoot(sessionDir string) string {
+	return session.RootForLegacyDir(sessionDir)
 }
 
-func (a *App) desktopSessionService(sessionDir string) *sessionv3.Service {
-	root := desktopSessionV3Root(sessionDir)
+func (a *App) desktopSessionService(sessionDir string) *session.Service {
+	root := desktopSessionRoot(sessionDir)
 	if a == nil || root == "" {
 		return nil
 	}
 	a.sessionServicesMu.Lock()
 	defer a.sessionServicesMu.Unlock()
 	if a.sessionServices == nil {
-		a.sessionServices = map[string]*sessionv3.Service{}
+		a.sessionServices = map[string]*session.Service{}
 	}
 	if service := a.sessionServices[root]; service != nil {
 		return service
 	}
-	service, err := sessionv3.NewService("local", sessionv3.NewFilesystemPersistence(root))
+	service, err := session.NewService("local", session.NewFilesystemPersistence(root))
 	if err != nil {
 		return nil
 	}
