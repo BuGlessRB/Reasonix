@@ -11,6 +11,8 @@
 //   overflowX the document itself scrolling sideways
 //   unnamed   a control no assistive technology can announce
 //   dupId     two elements answering to one id
+//   hanCaps   Han text under Latin small-caps typography — letterspacing pulls
+//             the characters apart and uppercase means nothing to them
 //
 // Run it with a kernel and the dev server up, and a headless Chrome on 9333:
 //
@@ -75,7 +77,7 @@ const P = `(() => {
     const s = getComputedStyle(c); if (/auto|scroll/.test(s.overflowX) && c.scrollWidth > c.clientWidth + 1) return true; c = c.parentElement; } return false; };
   const behind = (el) => { let c = el; while (c && c !== document.body) { if (parseFloat(getComputedStyle(c).opacity) < .9) return true; c = c.parentElement; } return false; };
   const nm = (el) => (el.textContent||"").trim() || el.getAttribute("aria-label") || el.getAttribute("title") || (el.getAttribute("aria-labelledby") ? (document.getElementById(el.getAttribute("aria-labelledby"))?.textContent||"").trim() : "") || el.getAttribute("placeholder") || "";
-  const out = { truncated: [], clippedY: [], offscreen: [], overflowX: [], unnamed: [], dupId: [], imgNoAlt: [], spill: [], contrast: [] };
+  const out = { truncated: [], clippedY: [], offscreen: [], overflowX: [], unnamed: [], dupId: [], imgNoAlt: [], spill: [], contrast: [], hanCaps: [] };
   // What the pixels resolve to, not what the token table promises: a colour is
   // checked against the surface it was designed for, then used on another one.
   const lum = (c) => { const [r,g,b] = c.map((v) => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }); return 0.2126*r+0.7152*g+0.0722*b; };
@@ -135,6 +137,17 @@ const P = `(() => {
   for (const el of document.querySelectorAll("[id]")) seen.set(el.id, (seen.get(el.id)||0)+1);
   for (const [i, n] of seen) if (n > 1) out.dupId.push(i + " x" + n);
   for (const el of document.querySelectorAll("img")) if (vis(el) && el.getAttribute("alt") === null) out.imgNoAlt.push(path(el));
+  // Small-caps typography is Latin lettering. Tracking separates words there and
+  // pulls Han characters apart instead; uppercase has nothing to act on. The
+  // judgement reads the resolved style, so it holds whatever rule set it.
+  for (const el of document.querySelectorAll("*")) {
+    if (!vis(el)) continue;
+    const own = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim()).map((n) => n.textContent.trim()).join("");
+    if (!own || !/[\u4e00-\u9fff]/.test(own)) continue;
+    const s = getComputedStyle(el), ls = parseFloat(s.letterSpacing);
+    if ((!isNaN(ls) && Math.abs(ls) > 0.4) || s.textTransform === "uppercase")
+      out.hanCaps.push(path(el) + " ls=" + s.letterSpacing + " " + s.textTransform + " | " + own.slice(0, 24));
+  }
   return out;
 })()`;
 
@@ -168,7 +181,7 @@ if (!n) skipped.push("settings"); else for (let i = 0; i < n; i++) {
   const nm2 = await ev(`(()=>{const b=document.querySelectorAll('.prefs-nav button')[${i}];b.click();return b.id||b.textContent.trim().slice(0,12)})()`);
   await wait(800); res.push({ label: nm2, ...(await ev(P)) });
 }
-const KEYS = ["contrast", "truncated", "clippedY", "offscreen", "overflowX", "spill", "unnamed", "dupId", "imgNoAlt"];
+const KEYS = ["contrast", "truncated", "clippedY", "offscreen", "overflowX", "spill", "unnamed", "dupId", "imgNoAlt", "hanCaps"];
 const agg = Object.fromEntries(KEYS.map((k) => [k, new Map()]));
 for (const r of res) for (const k of KEYS) for (const v of (r[k]||[])) if (!agg[k].has(v)) agg[k].set(v, r.label);
 console.log(`\n##### ${url} theme=${theme} ${W}x${H} steps=${res.length} skipped=[${skipped.join(",")}]`);

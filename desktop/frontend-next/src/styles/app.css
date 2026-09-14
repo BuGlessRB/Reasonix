@@ -26,9 +26,11 @@
   /* 小型大写标签是拉丁字母的排版：mono 栈里没有汉字，字距把词拆开，uppercase
      对汉字无意义，10px 更是压在可读下限之下。英文那套原样留着，这里只把中文
      接住 —— 同一个类，两种文字，本来就该是两套排版。 */
-  :lang(zh) :is(.lbl, .isolab, .traj th, .hl .tag, .copy, .rgroup .hd, .par,
-    .apv-hd .tool, .opt .rec, .money .col .k, .anchor .cap, .menu .mi.head .lb,
-    .remember .tag, .rc-hd, .vnow .pin, .runhead .tile dt, .tl-badge) {
+  :lang(zh) :is(.lbl, .isolab, .traj th, .hl .tag, .hl .fail, .copy, .rgroup .hd,
+    .par, .apv-hd .tool, .opt .rec, .money .col .k, .anchor .cap,
+    .menu .mi.head .lb, .qhd .lb, .remember .tag, .rc-hd, .vnow .pin,
+    .runhead .tile dt, .tl-badge, .dgrp-h, .seglb, .dif-hd .ro, .uhero-k,
+    .utile .k, .prefs-nav .navsec, .prefs-intro-overline, .prefs-found .where) {
     font-family: var(--ui); font-size: var(--fs-meta);
     letter-spacing: 0; text-transform: none;
   }
