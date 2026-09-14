@@ -7,13 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"time"
 
 	goaldomain "reasonix/internal/goal"
+	"reasonix/internal/secrets"
 	"reasonix/internal/session"
 )
 
@@ -34,6 +33,8 @@ type goalDiagnosticExport struct {
 	Observation       any                        `json:"observation"`
 	AcceptedThrough   uint64                     `json:"acceptedThrough"`
 	DurableThrough    uint64                     `json:"durableThrough"`
+	PersistenceStatus session.PersistenceStatus  `json:"persistenceStatus"`
+	PersistenceError  string                     `json:"persistenceError,omitempty"`
 	Commits           []session.Commit           `json:"commits"`
 	ActivationChanges []goalDiagnosticTransition `json:"activationChanges"`
 	Unavailable       []string                   `json:"unavailable"`
@@ -47,6 +48,7 @@ type goalDiagnosticTransition struct {
 	Phase         goaldomain.Phase      `json:"phase,omitempty"`
 	Activation    goaldomain.Activation `json:"activation"`
 	RoundsStarted uint64                `json:"roundsStarted,omitempty"`
+	Inferred      bool                  `json:"inferred"`
 }
 
 // ExportGoalDiagnostics is the compatibility in-memory form. Production hosts
@@ -59,9 +61,9 @@ func (c *Controller) ExportGoalDiagnostics(ctx context.Context, metadata GoalDia
 	return output.Bytes(), nil
 }
 
-// WriteGoalDiagnostics streams the authoritative event log after a Flush
-// checkpoint. Complete tool payloads are emitted one commit at a time; the
-// cumulative log is never replayed into a []Commit or marshalled as one blob.
+// WriteGoalDiagnostics streams the authoritative accepted event prefix after
+// attempting a Flush checkpoint. A failed Flush is exported as evidence, and
+// credential-like material is redacted one commit at a time.
 func (c *Controller) WriteGoalDiagnostics(ctx context.Context, dst io.Writer, metadata GoalDiagnosticMetadata) error {
 	if c == nil {
 		return session.ErrSessionNotRunning
@@ -70,23 +72,21 @@ func (c *Controller) WriteGoalDiagnostics(ctx context.Context, dst io.Writer, me
 	if !exclusive || runtime == nil {
 		return errors.New("goal diagnostics require a canonical session")
 	}
-	temporaryRoot, err := os.MkdirTemp("", "reasonix-goal-diagnostics-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(temporaryRoot)
-	frozen := filepath.Join(temporaryRoot, "session")
-	// Store.Export owns the commit and drain boundaries around its Flush, so the
-	// diagnostic never pairs a manifest from one prefix with events from another.
-	if err := runtime.Session().Export(ctx, frozen); err != nil {
-		return err
-	}
+	_, flushErr := runtime.Session().Flush(ctx)
 	if metadata.Capabilities == nil {
 		metadata.Capabilities = []string{}
 	}
 	fillGoalDiagnosticBuildMetadata(&metadata)
 	state := runtime.StateSnapshot()
-	through := state.Session.DurableSequence
+	state.Session.PersistenceError = secrets.RedactCredentials(state.Session.PersistenceError)
+	observation := c.RuntimeStateSnapshot()
+	observation.PersistenceErr = secrets.RedactCredentials(observation.PersistenceErr)
+	unavailable := []string{
+		"activation transitions are inferred from recorded Goal events; process-local activation history before export is unavailable",
+	}
+	if flushErr != nil {
+		unavailable = append(unavailable, "durability checkpoint failed: "+secrets.RedactError(flushErr))
+	}
 	if _, err := io.WriteString(dst, "{\n"); err != nil {
 		return err
 	}
@@ -98,9 +98,11 @@ func (c *Controller) WriteGoalDiagnostics(ctx context.Context, dst io.Writer, me
 		{"exportedAt", time.Now().UTC()},
 		{"metadata", metadata},
 		{"runtime", state},
-		{"observation", c.RuntimeStateSnapshot()},
-		{"acceptedThrough", through},
-		{"durableThrough", through},
+		{"observation", observation},
+		{"acceptedThrough", state.Session.EventSequence},
+		{"durableThrough", state.Session.DurableSequence},
+		{"persistenceStatus", state.Session.PersistenceStatus},
+		{"persistenceError", state.Session.PersistenceError},
 	}
 	for _, field := range fields {
 		if err := writeGoalDiagnosticField(dst, field.name, field.value, true); err != nil {
@@ -113,10 +115,14 @@ func (c *Controller) WriteGoalDiagnostics(ctx context.Context, dst io.Writer, me
 	first := true
 	changes := []goalDiagnosticTransition{}
 	activation := goaldomain.ActivationDisarmed
-	err = session.VisitCommits(ctx, frozen, func(commit session.Commit) error {
+	err := visitAcceptedGoalDiagnosticCommits(ctx, runtime.Session(), state.Session.EventSequence, func(commit session.Commit) error {
 		encoded, err := json.MarshalIndent(commit, "    ", "  ")
 		if err != nil {
 			return err
+		}
+		encoded = []byte(secrets.Redact(string(encoded)))
+		if !json.Valid(encoded) {
+			return errors.New("redacted goal diagnostic commit is not valid JSON")
 		}
 		separator := "\n    "
 		if !first {
@@ -146,11 +152,36 @@ func (c *Controller) WriteGoalDiagnostics(ctx context.Context, dst io.Writer, me
 	if err := writeGoalDiagnosticField(dst, "activationChanges", changes, true); err != nil {
 		return err
 	}
-	if err := writeGoalDiagnosticField(dst, "unavailable", []string{}, false); err != nil {
+	if err := writeGoalDiagnosticField(dst, "unavailable", unavailable, false); err != nil {
 		return err
 	}
 	_, err = io.WriteString(dst, "}\n")
 	return err
+}
+
+func visitAcceptedGoalDiagnosticCommits(ctx context.Context, store *session.Session, through uint64, visit func(session.Commit) error) error {
+	offset := uint64(0)
+	for {
+		page, err := store.AcceptedPage(ctx, offset, 1000)
+		if err != nil {
+			return err
+		}
+		for _, commit := range page.Commits {
+			if commit.LastSequence() > through {
+				return nil
+			}
+			if err := visit(commit); err != nil {
+				return err
+			}
+		}
+		if !page.Truncated {
+			return nil
+		}
+		if page.Next <= offset {
+			return errors.New("goal diagnostics accepted-page cursor did not advance")
+		}
+		offset = page.Next
+	}
 }
 
 func writeGoalDiagnosticField(dst io.Writer, name string, value any, comma bool) error {
@@ -221,7 +252,7 @@ func goalActivationChangesForCommit(commit session.Commit, activation *goaldomai
 		if json.Unmarshal(item.Payload, &document) != nil {
 			continue
 		}
-		transition := goalDiagnosticTransition{Sequence: item.Sequence, OperationID: commit.OperationID, Activation: goaldomain.ActivationDisarmed}
+		transition := goalDiagnosticTransition{Sequence: item.Sequence, OperationID: commit.OperationID, Activation: goaldomain.ActivationDisarmed, Inferred: true}
 		if document.Current != nil {
 			transition.GoalID = document.Current.ID
 			transition.Revision = document.Current.Revision

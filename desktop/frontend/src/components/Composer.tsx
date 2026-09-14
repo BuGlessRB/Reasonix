@@ -90,6 +90,7 @@ import {
 } from "../lib/selectedTextContext";
 import { formatGoalWorkTime } from "../lib/goalRuntime";
 import { ComposerContentMenuActions } from "./ComposerContentMenuActions";
+import { GoalLifecycleActions } from "./GoalLifecycleActions";
 
 interface Attachment {
   path: string;
@@ -568,6 +569,7 @@ export function Composer({
   onSetCollaborationMode,
   onSetToolApprovalMode,
   onClearGoal,
+  onEditGoal,
   onPauseGoal,
   onResumeGoal,
   onSwitchModel,
@@ -657,6 +659,7 @@ export function Composer({
   onSetCollaborationMode: (mode: CollaborationMode) => void;
   onSetToolApprovalMode: (mode: ToolApprovalMode) => void;
   onClearGoal: () => void;
+  onEditGoal: (objective: string, maxGoalRounds: number | null) => void;
   onPauseGoal: () => void;
   onResumeGoal: () => void;
   onSwitchModel: (name: string) => boolean | Promise<boolean>;
@@ -3953,7 +3956,7 @@ export function Composer({
         }}
       />
       {!heroMode && <AnchoredPopover
-        open={(contentMenuOpen || intentMenuOpen) && !disabled && !readOnly && !running}
+        open={(contentMenuOpen || intentMenuOpen) && !disabled && !readOnly && (!running || (goalModeOn && Boolean(activeGoal)))}
         anchorRef={contentMenuOpen ? contentMenuAnchorRef : intentMenuAnchorRef}
         onClose={() => { setContentMenuOpen(false); closeIntentMenu(); }}
         className="composer-access-menu composer-content-menu composer-intent-menu composer-menu-surface"
@@ -4041,33 +4044,10 @@ export function Composer({
                   </span>
                 )}
               </div>
-              {goalView?.phase === "paused" || goalView?.phase === "blocked" || (goalView?.phase === "active" && goalView.activation === "disarmed") || (!goalView && goalStatus === "blocked") ? (
-                <button
-                  type="button"
-                  className="composer-intent-menu__stop"
-                  onClick={onResumeGoal}
-                  disabled={disabled}
-                >
-                  {t("composer.taskModeResumeGoal")}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="composer-intent-menu__stop"
-                  onClick={onPauseGoal}
-                  disabled={disabled || running}
-                >
-                  {t("composer.taskModePauseGoal")}
-                </button>
-              )}
-              <button
-                type="button"
-                className="composer-intent-menu__stop"
-                onClick={stopGoalMode}
-                disabled={disabled || running}
-              >
-                {t("composer.taskModeStopGoal")}
-              </button>
+              <GoalLifecycleActions
+                goalView={goalView} goalStatus={goalStatus} disabled={disabled} running={running}
+                onEditGoal={onEditGoal} onPauseGoal={onPauseGoal} onResumeGoal={onResumeGoal} onStopGoal={stopGoalMode}
+              />
             </div>
           )}
         </div>
@@ -4574,7 +4554,7 @@ export function Composer({
                     type="button"
                     className={`composer-content-trigger${contentMenuOpen ? " composer-content-trigger--open" : ""}`}
                     onClick={() => (contentMenuOpen ? setContentMenuOpen(false) : openContentMenu())}
-                    disabled={disabled || readOnly || running}
+                    disabled={disabled || readOnly || (running && !(goalModeOn && activeGoal))}
                     aria-haspopup="menu"
                     aria-expanded={contentMenuOpen}
                     aria-label={t("composer.contentMenuTitle")}

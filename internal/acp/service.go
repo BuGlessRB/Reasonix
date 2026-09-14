@@ -797,31 +797,14 @@ func (s *service) sessionSetMode(ctx context.Context, raw json.RawMessage) (any,
 	sess.stateChangeMu.Lock()
 	defer sess.stateChangeMu.Unlock()
 	ctrl := sess.currentCtrl()
-	nextMode := p.ModeID
-	legacyApproval := ""
-	switch p.ModeID {
-	case sessionModeNormal:
-		ctrl.SetPlanMode(false)
-		ctrl.ClearGoal()
-	case sessionModePlan:
-		ctrl.ClearGoal()
-		ctrl.SetPlanMode(true)
-	case sessionModeGoal:
-		ctrl.SetPlanMode(false)
-	case sessionModeLegacyDefault:
-		nextMode = sessionModeNormal
-		legacyApproval = control.ToolApprovalReadOnly
-		ctrl.SetPlanMode(false)
-		ctrl.ClearGoal()
-	case sessionModeLegacyAuto:
-		nextMode = sessionModeNormal
-		legacyApproval = control.ToolApprovalWorkspaceWrite
-		ctrl.SetPlanMode(false)
-		ctrl.ClearGoal()
-	default:
-		return nil, &RPCError{Code: ErrInvalidParams, Message: "session/set_mode: unknown modeId " + p.ModeID}
+	nextMode, legacyApproval, rpcErr := applyACPSessionMode(ctrl, p.ModeID)
+	if rpcErr != nil {
+		return nil, rpcErr
 	}
-	sess.setGoalDraftMode(nextMode == sessionModeGoal && ctrl.GoalStatus() != control.GoalStatusRunning)
+	// Entering Goal mode only arms a draft when no lifecycle exists. A restored,
+	// blocked, paused, or disarmed Goal must retain its complete objective so the
+	// user's next prompt can authorize recovery instead of replacing it.
+	sess.setGoalDraftMode(selectedGoalDraftMode(nextMode, ctrl.Goal()))
 	if legacyApproval != "" {
 		ctrl.SetToolApprovalMode(legacyApproval)
 		sess.setToolApprovalMode(legacyApproval)
@@ -1069,22 +1052,7 @@ func (s *service) openExistingSession(ctx context.Context, method, id, cwdParam 
 		toolApprovalMode = control.ToolApprovalWorkspaceWrite
 	}
 	ctrl.SetToolApprovalMode(toolApprovalMode)
-	modeID := normalizeACPCollaborationMode(saved.CollaborationMode)
-	goalDraftMode := false
-	switch modeID {
-	case sessionModePlan:
-		ctrl.SetPlanMode(true)
-	case sessionModeGoal:
-		ctrl.SetPlanMode(false)
-		goalDraftMode = ctrl.GoalStatus() != control.GoalStatusRunning
-	default:
-		if ctrl.GoalStatus() == control.GoalStatusRunning {
-			modeID = sessionModeGoal
-		} else {
-			modeID = sessionModeNormal
-			ctrl.SetPlanMode(false)
-		}
-	}
+	modeID, goalDraftMode := applyLoadedACPMode(ctrl, saved.CollaborationMode)
 
 	meta := metadataForLoadedSession(path, id, cwd, ctrl.History())
 	meta.Model = cfgState.Model
@@ -1218,6 +1186,9 @@ func (s *service) sessionPrompt(ctx context.Context, raw json.RawMessage) (any, 
 		cancel()
 	}()
 	statusStarted := false
+	if rpcErr := prepareACPGoalPrompt(sess, text); rpcErr != nil {
+		return nil, rpcErr
+	}
 	beginTurn := func() {
 		if sess.status == nil {
 			sess.status = newStatusTelemetry()
@@ -1225,10 +1196,6 @@ func (s *service) sessionPrompt(ctx context.Context, raw json.RawMessage) (any, 
 		sess.status.beginTurn()
 		s.publishStatus(sess, "phase")
 		sess.sink.setTurnContext(runCtx)
-		if sess.takeGoalDraftMode() {
-			sess.currentCtrl().SetGoal(text)
-			sess.saveMetaIfPresent()
-		}
 		statusStarted = true
 	}
 	var runErr error
@@ -1499,6 +1466,7 @@ func (s *service) reloadSessionExtensionsLocked(ctx context.Context, sess *acpSe
 		_ = saveACPMeta(sess.transcript, sess.metaLocked())
 	}
 	sess.mu.Unlock()
+	newCtrl.ActivateGoalDriverAfterRebuild()
 	sink.bindControllerPrompts(newCtrl, rebuildParams.MCPInteractions)
 
 	// Release the outgoing controller only after the swap published the
@@ -1962,12 +1930,9 @@ func (s *service) rebuildSessionLocked(ctx context.Context, sess *acpSession, cf
 	// InheritLifecycleFrom wires two concrete controllers' turn/hook state; it's a
 	// construction concern, not part of the driving port. cur is always the
 	// *control.Controller the factory built for this session, so this is safe.
-	if prev, ok := cur.(*control.Controller); ok {
-		newCtrl.InheritLifecycleFrom(prev)
-		// A rebuild must not force the user to re-approve tools already granted
-		// for this session, or re-trust Plan-mode read-only commands already
-		// trusted this session.
-		newCtrl.RestoreSessionAuthorizations(prev.SessionAuthorizations())
+	if rpcErr := inheritACPControllerLifecycle(newCtrl, cur); rpcErr != nil {
+		newCtrl.ReleaseResources()
+		return rpcErr
 	}
 	// Persist before publishing the replacement. If this fails, the outgoing
 	// controller and transcript still agree and remain fully usable; publishing
@@ -2002,6 +1967,7 @@ func (s *service) rebuildSessionLocked(ctx context.Context, sess *acpSession, cf
 		_ = saveACPMeta(sess.transcript, sess.metaLocked())
 	}
 	sess.mu.Unlock()
+	newCtrl.ActivateGoalDriverAfterRebuild()
 	sink.bindControllerPrompts(newCtrl, rebuildParams.MCPInteractions)
 
 	cur.ReleaseResources()

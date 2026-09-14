@@ -1179,6 +1179,9 @@ func (a *App) submitInitialGoalToLocalTab(
 	if goal == "" {
 		return []string{}, fmt.Errorf("goal is required")
 	}
+	if err := syncTabGoalToController(ctrl, goal); err != nil {
+		return []string{}, fmt.Errorf("activate goal: %w", err)
+	}
 	a.mu.Lock()
 	if a.tabs[tab.ID] != tab {
 		a.mu.Unlock()
@@ -1192,7 +1195,6 @@ func (a *App) submitInitialGoalToLocalTab(
 
 	ctrl.SetPlanMode(false)
 	drained := applyTabToolApprovalModeToController(ctrl, toolApprovalMode)
-	syncTabGoalToController(ctrl, goal)
 	a.ensureTabTopicIndexedForUserTurn(tab)
 	if len(invocations) > 0 {
 		ctrl.SubmitInvocationDisplay(display, input, controlInvocationRequests(invocations))
@@ -1670,10 +1672,10 @@ func (a *App) SetPlanMode(on bool) {
 
 func (a *App) setPlanModeForTab(tabID string, on bool) {
 	if on {
-		a.SetCollaborationModeForTab(tabID, "plan")
+		_ = a.SetCollaborationModeForTab(tabID, "plan")
 		return
 	}
-	a.SetCollaborationModeForTab(tabID, "normal")
+	_ = a.SetCollaborationModeForTab(tabID, "normal")
 }
 
 // SetMode applies a composer gating mode ("plan" | "yolo" | "plan-yolo" |
@@ -1817,7 +1819,9 @@ func (a *App) SetComposerProfileForTab(tabID, collaborationMode, toolApprovalMod
 			ctrl.SetPlanMode(plan)
 		}
 		drained = applyTabToolApprovalModeToController(ctrl, toolApprovalMode)
-		syncTabGoalToController(ctrl, goal)
+		if err := syncTabGoalToController(ctrl, goal); err != nil {
+			return []string{}, err
+		}
 	}
 
 	a.mu.Lock()
@@ -1834,10 +1838,10 @@ func (a *App) SetComposerProfileForTab(tabID, collaborationMode, toolApprovalMod
 	return drained, nil
 }
 
-func (a *App) SetCollaborationModeForTab(tabID, mode string) {
+func (a *App) SetCollaborationModeForTab(tabID, mode string) error {
 	tab := a.tabByID(tabID)
 	if tab == nil {
-		return
+		return a.workspaceNotReadyErr(nil)
 	}
 	tab.turnStartMu.Lock()
 	defer tab.turnStartMu.Unlock()
@@ -1846,32 +1850,34 @@ func (a *App) SetCollaborationModeForTab(tabID, mode string) {
 	a.mu.Lock()
 	if a.tabs[tab.ID] != tab {
 		a.mu.Unlock()
-		return
+		return a.workspaceNotReadyErr(nil)
 	}
-	switch mode {
-	case "plan":
-		tab.mode = tabModeFromAxes(true, approvalMode == control.ToolApprovalYolo)
-		tab.goal = ""
-	case "goal":
-		tab.mode = tabModeFromAxes(false, approvalMode == control.ToolApprovalYolo)
-	default:
-		tab.mode = tabModeFromAxes(false, approvalMode == control.ToolApprovalYolo)
-		tab.goal = ""
+	nextGoal := tab.goal
+	nextMode := tabModeFromAxes(false, approvalMode == control.ToolApprovalYolo)
+	if mode == "plan" {
+		nextMode = tabModeFromAxes(true, approvalMode == control.ToolApprovalYolo)
+		nextGoal = ""
+	} else if mode != "goal" {
+		nextGoal = ""
 	}
 	ctrl := tab.Ctrl
-	goal := tab.goal
-	plan := tabModeHasPlan(tab.mode)
+	plan := tabModeHasPlan(nextMode)
 	tabIDForSave := tab.ID
 	a.mu.Unlock()
 	if ctrl != nil {
+		if err := syncTabGoalToController(ctrl, nextGoal); err != nil {
+			return err
+		}
 		ctrl.SetPlanMode(plan)
-		syncTabGoalToController(ctrl, goal)
 	}
 	a.mu.Lock()
 	if a.tabs[tabIDForSave] == tab {
+		tab.mode = nextMode
+		tab.goal = nextGoal
 		a.saveTabsLocked()
 	}
 	a.mu.Unlock()
+	return nil
 }
 
 // QuestionAnswer is the frontend's reply to one question in an ask_request.
@@ -6659,103 +6665,6 @@ func ctrlTodos(ctrl control.SessionAPI) *[]evidence.TodoItem {
 		todos = []evidence.TodoItem{}
 	}
 	return &todos
-}
-
-func (a *App) SetGoal(goal string) error {
-	return a.SetGoalForTab("", goal)
-}
-
-// SetGoalForTab activates or clears a Goal on the given tab.
-//
-// Failures must return error so the Wails Promise rejects: the first Goal turn
-// can submit a structured Skill without a /goal prose fallback, and the
-// frontend aborts that submit when activation fails.
-func (a *App) SetGoalForTab(tabID, goal string) error {
-	tab := a.tabByID(tabID)
-	if tab == nil {
-		return a.workspaceNotReadyErr(nil)
-	}
-	tab.turnStartMu.Lock()
-	defer tab.turnStartMu.Unlock()
-	goal = strings.TrimSpace(goal)
-	approvalMode := a.tabRuntimeSnapshot(tab).currentToolApprovalMode()
-	a.mu.Lock()
-	if a.tabs[tab.ID] != tab {
-		a.mu.Unlock()
-		return a.workspaceNotReadyErr(nil)
-	}
-	tab.goal = goal
-	if goal != "" {
-		tab.mode = tabModeFromAxes(false, approvalMode == control.ToolApprovalYolo)
-	}
-	ctrl := tab.Ctrl
-	plan := tabModeHasPlan(tab.mode)
-	tabIDForSave := tab.ID
-	a.mu.Unlock()
-	if ctrl != nil {
-		ctrl.SetPlanMode(plan)
-		syncTabGoalToController(ctrl, goal)
-	}
-	a.mu.Lock()
-	if a.tabs[tabIDForSave] == tab {
-		a.saveTabsLocked()
-	}
-	a.mu.Unlock()
-	return nil
-}
-
-// The composer re-syncs collaboration mode and Goal immediately before every
-// send. Keep those acknowledgements idempotent so one multi-turn Goal retains
-// its delivery scope; a terminal Goal with the same text still starts a fresh
-// scope when the user explicitly enters it again.
-func syncTabGoalToController(ctrl control.SessionAPI, goal string) {
-	if ctrl == nil {
-		return
-	}
-	goal = strings.TrimSpace(goal)
-	if goal != "" && strings.TrimSpace(ctrl.Goal()) == goal && ctrl.GoalStatus() == control.GoalStatusRunning {
-		return
-	}
-	ctrl.SetGoal(goal)
-}
-
-func (a *App) ClearGoalForTab(tabID string) error {
-	return a.SetGoalForTab(tabID, "")
-}
-
-// ResumeGoalForTab re-enters a blocked or stopped Goal while preserving its
-// delivery scope, runtime history, and persisted verification checkpoint.
-func (a *App) ResumeGoalForTab(tabID string) bool {
-	tab := a.tabByID(tabID)
-	if tab == nil {
-		return false
-	}
-	tab.turnStartMu.Lock()
-	defer tab.turnStartMu.Unlock()
-	ctrl := a.controllerForTab(tab)
-	if ctrl == nil || !ctrl.ResumeGoal() {
-		return false
-	}
-	a.mu.Lock()
-	if a.tabs[tab.ID] == tab {
-		tab.goal = strings.TrimSpace(ctrl.Goal())
-		a.saveTabsLocked()
-	}
-	a.mu.Unlock()
-	return true
-}
-
-// PauseGoalForTab suspends a running Goal without clearing it; ResumeGoalForTab
-// restores it (with one extra budget slice when it was budget-paused).
-func (a *App) PauseGoalForTab(tabID string) bool {
-	tab := a.tabByID(tabID)
-	if tab == nil {
-		return false
-	}
-	tab.turnStartMu.Lock()
-	defer tab.turnStartMu.Unlock()
-	ctrl := a.controllerForTab(tab)
-	return ctrl != nil && ctrl.PauseGoal()
 }
 
 // SetAutoApproveTools is retained for older desktop bundles. Both legacy

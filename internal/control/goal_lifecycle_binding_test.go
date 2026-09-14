@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,31 @@ func TestExclusiveControllerLoadsGoalFromV3Projection(t *testing.T) {
 	}
 	if view == nil || view.ID != "goal-v3" || view.Activation != goaldomain.ActivationDisarmed {
 		t.Fatalf("view = %+v", view)
+	}
+}
+
+func TestColdRestoredGoalComposeIncludesRecoverableGoalContext(t *testing.T) {
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v3")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := service.Create(t.Context(), session.CreateOptions{SessionID: "goal-recovery-context"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := json.RawMessage(`{"version":1,"current":{"id":"goal-v3","revision":3,"objective":"finish runtime","phase":"active","maxGoalRounds":null,"roundsStarted":2,"createdAt":"2026-09-13T10:00:00Z","updatedAt":"2026-09-13T10:00:00Z"}}`)
+	if _, err := runtime.Session().AppendBatch(t.Context(), "goal-seed", []session.Event{{Kind: "goal/state", Payload: raw}}); err != nil {
+		t.Fatal(err)
+	}
+	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
+	c := New(Options{Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
+	t.Cleanup(c.Close)
+
+	composed := c.Compose("continue")
+	for _, want := range []string{"<goal-recovery>", `"goalId":"goal-v3"`, `"revision":3`, "finish runtime", "update_goal with action resume"} {
+		if !strings.Contains(composed, want) {
+			t.Fatalf("composed input missing %q:\n%s", want, composed)
+		}
 	}
 }
 

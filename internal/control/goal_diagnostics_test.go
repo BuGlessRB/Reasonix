@@ -21,7 +21,7 @@ func TestGoalDiagnosticExportReadsCompleteDurableV3Log(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	toolPayload := json.RawMessage(`{"id":"call-1","name":"bash","output":"full diagnostic output"}`)
+	toolPayload := json.RawMessage(`{"id":"call-1","name":"bash","output":"full diagnostic output; Authorization: Bearer secret-token-123456; api_key=sk-proj-1234567890abcdef"}`)
 	if _, err := runtime.Session().AppendBatch(t.Context(), "tool-evidence", []session.Event{{Kind: "tool/result", Payload: toolPayload}}); err != nil {
 		t.Fatal(err)
 	}
@@ -48,9 +48,14 @@ func TestGoalDiagnosticExportReadsCompleteDurableV3Log(t *testing.T) {
 	if err := json.Unmarshal(payload, &document); err != nil {
 		t.Fatalf("diagnostic export is not valid JSON: %v\n%s", err, text)
 	}
-	for _, want := range []string{`"schemaVersion": 1`, `"applicationVersion": "1.2.3"`, `"sessionCodec": "` + session.Codec + `"`, `"full diagnostic output"`, `"goal-lifecycle-v2"`, `"activationChanges"`, `"activation": "armed"`} {
+	for _, want := range []string{`"schemaVersion": 1`, `"applicationVersion": "1.2.3"`, `"sessionCodec": "` + session.Codec + `"`, `"full diagnostic output`, `"goal-lifecycle-v2"`, `"activationChanges"`, `"activation": "armed"`, `"inferred": true`, `"persistenceStatus": "ready"`, `"unavailable"`} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("diagnostic export missing %s:\n%s", want, text)
+		}
+	}
+	for _, secret := range []string{"secret-token-123456", "sk-proj-1234567890abcdef"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("diagnostic export leaked credential %q", secret)
 		}
 	}
 }

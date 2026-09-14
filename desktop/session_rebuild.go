@@ -57,6 +57,9 @@ func retireReplacedController(old, replacement control.SessionAPI) {
 	_, oldRuntime, oldExclusive := exclusiveSessionBinding(old)
 	_, newRuntime, newExclusive := exclusiveSessionBinding(replacement)
 	if oldExclusive && newExclusive && oldRuntime == newRuntime {
+		if concrete, ok := replacement.(*control.Controller); ok {
+			concrete.ActivateGoalDriverAfterRebuild()
+		}
 		if concrete, ok := old.(*control.Controller); ok {
 			concrete.ReleaseResources()
 			return

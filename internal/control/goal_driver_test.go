@@ -20,13 +20,19 @@ import (
 func cleanupGoalDriverController(t *testing.T, c *Controller) {
 	t.Helper()
 	t.Cleanup(func() {
+		service, runtime, exclusive := c.v3Binding()
 		c.Close()
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {
 			c.goalDriverMu.Lock()
 			settled := !c.goalDriverPending && c.goalDriverActive == nil
 			c.goalDriverMu.Unlock()
-			if settled && !c.Running() {
+			runtimeRetired := true
+			if exclusive && service != nil && runtime != nil {
+				current, ok := service.Runtime(runtime.Ref())
+				runtimeRetired = !ok || current != runtime
+			}
+			if settled && !c.Running() && runtimeRetired {
 				return
 			}
 			time.Sleep(time.Millisecond)
@@ -439,6 +445,8 @@ func TestUnlimitedGoalDriverRunsBeyondHarnessDefaultCeiling(t *testing.T) {
 	c.Send("exercise the unlimited goal driver")
 	select {
 	case <-runner.done:
+	// The race detector instruments all 257 Flush/admission cycles and is
+	// intentionally much slower than the ordinary suite on CI runners.
 	case <-time.After(60 * time.Second):
 		t.Fatal("unlimited goal did not cross 256 admitted automatic rounds")
 	}
@@ -767,12 +775,12 @@ func TestColdRestoredGoalCanResumeFromNaturalUserRequestAndContinue(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = binding.Release(context.Background()) })
 	runtime := binding.Runtime()
 	runner := &restoredGoalRunner{done: make(chan struct{})}
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
 	c := New(Options{Runner: runner, Executor: exec, Sink: event.Discard, SessionService: service, SessionRuntime: runtime, ExclusiveSession: true})
 	cleanupGoalDriverController(t, c)
+	t.Cleanup(func() { _ = binding.Release(context.Background()) })
 	c.Send("继续把这个目标做完")
 	select {
 	case <-runner.done:
