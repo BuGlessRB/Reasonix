@@ -2380,7 +2380,7 @@ func TestEffortCommandWritesCurrentDeepSeekProvider(t *testing.T) {
 
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{Label: "deepseek-flash"})
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
@@ -2423,7 +2423,7 @@ func TestEffortCommandAutoClearsProviderEffort(t *testing.T) {
 
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{Label: "deepseek-flash"})
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
@@ -2528,7 +2528,7 @@ func TestLanguageCommandRefreshesCurrentController(t *testing.T) {
 	t.Cleanup(oldCtrl.Close)
 	m := newTestChatTUI()
 	m.ctrl = oldCtrl
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.runtimeProfile = "full"
 	var gotSpec controllerBuildSpec
 	m.buildController = func(spec controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
@@ -2560,7 +2560,7 @@ func TestCurrencyCommandPersistsAndRefreshesCurrentController(t *testing.T) {
 	t.Cleanup(oldCtrl.Close)
 	m := newTestChatTUI()
 	m.ctrl = oldCtrl
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.runtimeProfile = "full"
 	var gotSpec controllerBuildSpec
 	m.buildController = func(spec controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
@@ -2593,7 +2593,7 @@ func TestCurrencyRefreshFailureKeepsCurrentController(t *testing.T) {
 	t.Cleanup(oldCtrl.Close)
 	m := newTestChatTUI()
 	m.ctrl = oldCtrl
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.runtimeProfile = "full"
 	m.buildController = func(controllerBuildSpec, []provider.Message, string, control.SessionAPI) (*control.Controller, error) {
 		return nil, errors.New("build failed")

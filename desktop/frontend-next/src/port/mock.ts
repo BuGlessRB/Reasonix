@@ -67,7 +67,7 @@ export class MockPort extends MockTheme implements AgentPort {
   // The subagent runs somewhere cheaper; everything else rides the main model.
   private assigned: RoleAssignments = {
     planner: "",
-    subagent: "deepseek/deepseek-v4-flash",
+    subagent: "deepseek/deepseek-flash",
     guardian: "",
     vision: "",
   };
@@ -96,7 +96,7 @@ export class MockPort extends MockTheme implements AgentPort {
         efforts, effort: "high", contextWindow: 131072,
       },
       {
-        ref: "deepseek/deepseek-v4-flash", provider: "deepseek", model: "deepseek-v4-flash",
+        ref: "deepseek/deepseek-flash", provider: "deepseek", model: "deepseek-flash",
         kind: "openai", vendor: "api.deepseek.com", keyEnv: "DEEPSEEK_API_KEY", efforts, effort: "high",
         contextWindow: 131072, price: { input: 0.5, output: 2, currency: "CNY" },
       },
@@ -137,7 +137,7 @@ export class MockPort extends MockTheme implements AgentPort {
       const amount = priced[day];
       return {
         day: at, total,
-        byModel: (total ? { "deepseek/deepseek-v4-flash": total } : {}) as Record<string, number>,
+        byModel: (total ? { "deepseek/deepseek-flash": total } : {}) as Record<string, number>,
         byProvider: (total ? { deepseek: total } : {}) as Record<string, number>,
         requests: Math.round(total / 20_000), turns: Math.round(total / 150_000),
         cacheHit: Math.round(total * 0.92), cacheMiss: Math.round(total * 0.08),
@@ -153,11 +153,11 @@ export class MockPort extends MockTheme implements AgentPort {
       cache_miss: daily.reduce((a, d) => a + d.cacheMiss, 0),
       cost: [{ amount: "10.4882", currency: "CNY" }],
       active_days: daily.filter((d) => d.total > 0).length,
-      top_model: "deepseek/deepseek-v4-flash", top_provider: "deepseek",
+      top_model: "deepseek/deepseek-flash", top_provider: "deepseek",
       daily,
       models: [
-        { model: "deepseek/deepseek-v4-flash", provider: "deepseek", tokens: Math.round(tokens * 0.597), percent: 59.7 },
-        { model: "deepseek-flash/deepseek-v4-flash", provider: "deepseek-flash", tokens: Math.round(tokens * 0.401), percent: 40.1 },
+        { model: "deepseek/deepseek-flash", provider: "deepseek", tokens: Math.round(tokens * 0.597), percent: 59.7 },
+        { model: "deepseek-flash/deepseek-flash", provider: "deepseek-flash", tokens: Math.round(tokens * 0.401), percent: 40.1 },
         { model: "deepseek/deepseek-v4-pro", provider: "deepseek", tokens: Math.round(tokens * 0.002), percent: 0.2 },
       ],
       providers: [

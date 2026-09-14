@@ -230,7 +230,6 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	orig.UI.ShortcutLayout = "desktop"
 	orig.UI.CursorShape = "bar"
 	orig.Desktop.Language = "en"
-	orig.Desktop.LayoutStyle = "workbench"
 	orig.Desktop.Theme = "dark"
 	orig.Desktop.ThemeStyle = "graphite"
 	orig.Desktop.TerminalTheme = "light"
@@ -381,9 +380,6 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	}
 	if got.Desktop.Language != "en" {
 		t.Errorf("desktop.language = %q, want en", got.Desktop.Language)
-	}
-	if got.Desktop.LayoutStyle != "workbench" {
-		t.Errorf("desktop.layout_style = %q, want workbench", got.Desktop.LayoutStyle)
 	}
 	if got.Desktop.Theme != "dark" {
 		t.Errorf("desktop.theme = %q, want dark", got.Desktop.Theme)
@@ -672,24 +668,6 @@ func TestRenderTOMLPreservesMCPTimeouts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Plugins[0].ToolTimeoutSeconds, cfg.Plugins[0].ToolTimeoutSeconds) {
 		t.Fatalf("ToolTimeoutSeconds round trip = %v, want %v", got.Plugins[0].ToolTimeoutSeconds, cfg.Plugins[0].ToolTimeoutSeconds)
-	}
-}
-
-func TestRenderTOMLCreationLayoutStyle(t *testing.T) {
-	c := Default()
-	if err := c.SetDesktopLayoutStyle("creation"); err != nil {
-		t.Fatalf("SetDesktopLayoutStyle: %v", err)
-	}
-	rendered := RenderTOML(c)
-	var got Config
-	if _, err := toml.Decode(rendered, &got); err != nil {
-		t.Fatalf("rendered TOML does not parse: %v\n---\n%s", err, rendered)
-	}
-	if got.Desktop.LayoutStyle != "creation" {
-		t.Errorf("desktop.layout_style = %q, want creation", got.Desktop.LayoutStyle)
-	}
-	if got.DesktopLayoutStyle() != "creation" {
-		t.Errorf("DesktopLayoutStyle() = %q, want creation", got.DesktopLayoutStyle())
 	}
 }
 
@@ -1033,7 +1011,7 @@ func TestRenderTOMLRoundTripsPerModelPrices(t *testing.T) {
 		Models:    []string{"deepseek-v4-flash", "deepseek-v4-pro"},
 		Default:   "deepseek-v4-flash",
 		APIKeyEnv: "DEEPSEEK_API_KEY",
-		Prices:    DeepSeekV4PricesForCurrency("CNY"),
+		Prices:    DeepSeekOfficialPricesForCurrency("CNY"),
 	}}
 
 	var got Config
@@ -1044,7 +1022,7 @@ func TestRenderTOMLRoundTripsPerModelPrices(t *testing.T) {
 	if !ok {
 		t.Fatal("deepseek provider missing after round trip")
 	}
-	if p.Prices["deepseek-v4-flash"].Input != 1.5 || p.Prices["deepseek-v4-pro"].Output != 13.5 {
+	if p.Prices[DeepSeekFlashModel].Input != 1 || p.Prices[deepSeekProModel].Output != 13.5 {
 		t.Fatalf("prices after round trip = %+v", p.Prices)
 	}
 }

@@ -61,7 +61,7 @@ bot 和 agent 设置。Provider 条目只保存 `api_key_env` 里的凭据变量
 
 ```toml
 config_version = 1
-default_model = "deepseek/deepseek-v4-flash"
+default_model = "deepseek/deepseek-flash"
 language = "zh"
 credentials_store = "auto"   # 旧兼容字段；provider key 保存在 .env
 
@@ -77,8 +77,8 @@ provider_access = ["deepseek"]
 name        = "deepseek"
 kind        = "anthropic"
 base_url    = "https://api.deepseek.com/anthropic"
-models      = ["deepseek-v4-flash", "deepseek-v4-pro"]
-default     = "deepseek-v4-flash"
+models      = ["deepseek-flash", "deepseek-v4-pro"]
+default     = "deepseek-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 web_search  = true
 

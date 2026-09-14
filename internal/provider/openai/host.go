@@ -38,11 +38,13 @@ func IsDeepSeek(baseURL string) bool {
 }
 
 // deepSeekImageModels are the official DeepSeek models that accept image input.
-// Declared, not inferred: the host serves text-only and image-taking models
-// side by side, and nothing on the wire distinguishes them before a request is
-// rejected. A name is not evidence — "vision" in a model id is a word, and the
-// list is what the vendor documents.
+// Declared, not inferred: measured 2026-09-13 on both the OpenAI- and the
+// Anthropic-shaped endpoint, the flash names answer from the pixels while pro
+// takes the same image, returns 200 and answers as if it saw nothing. A refusal
+// would have been evidence; a name is not, and nothing here spells vision.
 var deepSeekImageModels = map[string]bool{
+	"deepseek-flash":               true,
+	"deepseek-v4-flash":            true,
 	"deepseek-v4-flash-vision-exp": true,
 }
 

@@ -33,7 +33,7 @@ func TestCustomPriceProtectedFromCatalog(t *testing.T) {
 }
 
 func TestQuoteForUsageUsesSelectedDisplay(t *testing.T) {
-	price := deepSeekV4FlashPriceUSD()
+	price := deepSeekOfficialRate(DeepSeekFlashModel, "USD")
 	q := QuoteForUsage(price, nil, "USD", "m", "executor", billing.BillingModePAYG, "")
 	if q.Complete {
 		t.Fatal("nil usage should be incomplete")

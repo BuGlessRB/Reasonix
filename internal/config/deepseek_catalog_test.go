@@ -3,14 +3,15 @@ package config
 import (
 	"slices"
 	"testing"
+
+	"reasonix/internal/provider"
 )
 
-// An installed user's model list is frozen in their config file, so a model the
-// vendor added afterwards reaches them only if something puts it there. The
-// bound on that is the same one every catalog migration takes: extend the entry
-// that still carries what we shipped, and otherwise only label a model already
-// present by its exact vendor-documented ID.
-func TestDeepSeekVisionCatalogOnlyTouchesTheShippedList(t *testing.T) {
+// An installed user's model list is frozen in their config file. The vendor
+// retired the names in it into one model that reads images, and nothing reaches
+// that user unless the load puts it there — while a relay serving the same
+// names is a different endpoint making its own promises.
+func TestRetiredDeepSeekFlashModelsMigrate(t *testing.T) {
 	cases := []struct {
 		name   string
 		entry  ProviderEntry
@@ -19,52 +20,40 @@ func TestDeepSeekVisionCatalogOnlyTouchesTheShippedList(t *testing.T) {
 		vision []string
 	}{
 		{
-			name: "the list we shipped gains the model, ticked",
+			name: "the list we shipped points at the model that serves it",
 			entry: ProviderEntry{
 				Name: "deepseek", Kind: "openai", BaseURL: "https://api.deepseek.com",
 				Models: []string{"deepseek-v4-flash", "deepseek-v4-pro"},
 			},
 			want:   true,
-			models: []string{"deepseek-v4-flash", "deepseek-v4-pro", DeepSeekVisionModel},
-			vision: []string{DeepSeekVisionModel},
+			models: []string{DeepSeekFlashModel, deepSeekProModel},
 		},
 		{
-			name: "a curated list is the user's and stays put",
+			name: "the experimental vision name folds into the same model",
+			entry: ProviderEntry{
+				Name: "deepseek-vision", Kind: "anthropic", BaseURL: "https://api.deepseek.com",
+				Models: []string{"deepseek-v4-flash-vision-exp"},
+			},
+			want:   true,
+			models: []string{DeepSeekFlashModel},
+		},
+		{
+			name: "an entry carrying both retired names lists the survivor once",
 			entry: ProviderEntry{
 				Name: "deepseek", Kind: "openai", BaseURL: "https://api.deepseek.com",
-				Models: []string{"deepseek-v4-pro"},
-			},
-			models: []string{"deepseek-v4-pro"},
-		},
-		{
-			name: "a probed vision-only list is recognised without another checkbox",
-			entry: ProviderEntry{
-				Name: "deepseek-vision", Kind: "responses", BaseURL: "https://api.deepseek.com",
-				Models: []string{DeepSeekVisionModel},
+				Models: []string{"deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "deepseek-v4-pro"},
 			},
 			want:   true,
-			models: []string{DeepSeekVisionModel},
-			vision: []string{DeepSeekVisionModel},
+			models: []string{DeepSeekFlashModel, deepSeekProModel},
 		},
 		{
-			name: "a vision choice already made is not overwritten",
+			name: "a curated list keeps its curation, under the new name",
 			entry: ProviderEntry{
 				Name: "deepseek", Kind: "openai", BaseURL: "https://api.deepseek.com",
-				Models: []string{"deepseek-v4-flash", "deepseek-v4-pro"}, VisionModels: []string{"deepseek-v4-pro"},
+				Models: []string{"deepseek-v4-flash"},
 			},
 			want:   true,
-			models: []string{"deepseek-v4-flash", "deepseek-v4-pro", DeepSeekVisionModel},
-			vision: []string{"deepseek-v4-pro"},
-		},
-		{
-			name: "responses accepts the same vision model",
-			entry: ProviderEntry{
-				Name: "deepseek", Kind: "responses", BaseURL: "https://api.deepseek.com",
-				Models: []string{"deepseek-v4-flash", "deepseek-v4-pro"},
-			},
-			want:   true,
-			models: []string{"deepseek-v4-flash", "deepseek-v4-pro", DeepSeekVisionModel},
-			vision: []string{DeepSeekVisionModel},
+			models: []string{DeepSeekFlashModel},
 		},
 		{
 			name: "a relay serving the same names is not this endpoint",
@@ -73,18 +62,20 @@ func TestDeepSeekVisionCatalogOnlyTouchesTheShippedList(t *testing.T) {
 				Models: []string{"deepseek-v4-flash", "deepseek-v4-pro"},
 			},
 			models: []string{"deepseek-v4-flash", "deepseek-v4-pro"},
+			vision: []string{},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			entry := tc.entry
-			if got := applyDeepSeekVisionCatalog(&entry); got != tc.want {
+			if got := migrateRetiredDeepSeekFlashModels(&entry); got != tc.want {
 				t.Fatalf("changed = %v, want %v", got, tc.want)
 			}
 			if !slices.Equal(entry.ModelList(), tc.models) {
 				t.Fatalf("models = %v, want %v", entry.ModelList(), tc.models)
 			}
+			tickDeepSeekFlashVision(&entry)
 			if tc.vision != nil && !slices.Equal(entry.VisionModels, tc.vision) {
 				t.Fatalf("vision_models = %v, want %v", entry.VisionModels, tc.vision)
 			}
@@ -92,26 +83,61 @@ func TestDeepSeekVisionCatalogOnlyTouchesTheShippedList(t *testing.T) {
 	}
 }
 
-// Running twice must not append twice, because a plain load does not persist
-// and the next one starts from the same file.
-func TestDeepSeekVisionCatalogIsIdempotent(t *testing.T) {
+// A price or an effort list is keyed by model. Left under the retired key it
+// stops answering for the model that replaced it, which reads to the user as
+// the rate they typed reverting to the default on its own.
+func TestRetiredDeepSeekFlashModelsCarryTheirPerModelSettings(t *testing.T) {
 	entry := ProviderEntry{
-		Name: "deepseek", Kind: "openai", BaseURL: "https://api.deepseek.com",
+		Name: "deepseek", Kind: "anthropic", BaseURL: deepSeekAnthropicBaseURL,
 		Models: []string{"deepseek-v4-flash", "deepseek-v4-pro"},
+		Prices: map[string]*provider.Pricing{
+			"deepseek-v4-flash": {CacheHit: 9, Input: 9, Output: 9, Currency: "$"},
+		},
+		ModelOverrides: map[string]ProviderModelOverride{
+			"deepseek-v4-flash": {SupportedEfforts: []string{"disabled", "max"}, DefaultEffort: "max"},
+		},
+		VisionModels: []string{"deepseek-v4-flash"},
+		Default:      "deepseek-v4-flash",
 	}
-	applyDeepSeekVisionCatalog(&entry)
-	if applyDeepSeekVisionCatalog(&entry) {
-		t.Fatal("a second pass reported a change; the list would grow every load")
+	if !migrateRetiredDeepSeekFlashModels(&entry) {
+		t.Fatal("nothing migrated")
 	}
-	if got := len(entry.ModelList()); got != 3 {
-		t.Fatalf("models = %v, want three", entry.ModelList())
+	if p := entry.Prices[DeepSeekFlashModel]; p == nil || p.Input != 9 {
+		t.Fatalf("price did not follow the rename: %+v", entry.Prices)
+	}
+	if _, stale := entry.Prices["deepseek-v4-flash"]; stale {
+		t.Fatal("the retired key still holds a price; the model now has two")
+	}
+	if ov := entry.ModelOverrides[DeepSeekFlashModel]; ov.DefaultEffort != "max" {
+		t.Fatalf("override did not follow the rename: %+v", entry.ModelOverrides)
+	}
+	if entry.Default != DeepSeekFlashModel {
+		t.Fatalf("default = %q", entry.Default)
+	}
+	if !slices.Equal(entry.VisionModels, []string{DeepSeekFlashModel}) {
+		t.Fatalf("vision_models = %v", entry.VisionModels)
 	}
 }
 
-// The protocol upgrade allow-lists the models it shipped. Backfilling a third
-// one must not read as curation, or the migration would strand exactly the
-// users it just reached.
-func TestVisionBackfillKeepsTheProtocolUpgradeAvailable(t *testing.T) {
+// Running twice must not change anything the second time: a plain load does not
+// persist, so the next one starts from the same file.
+func TestDeepSeekCatalogMigrationIsIdempotent(t *testing.T) {
+	c := &Config{Providers: []ProviderEntry{{
+		Name: "deepseek", Kind: "anthropic", BaseURL: deepSeekAnthropicBaseURL,
+		Models: []string{"deepseek-v4-flash", "deepseek-v4-pro"},
+	}}}
+	normalizeOfficialDeepSeekModels(c)
+	if normalizeOfficialDeepSeekModels(c) {
+		t.Fatal("a second pass reported a change; the file would be rewritten every load")
+	}
+	if got := c.Providers[0].ModelList(); !slices.Equal(got, []string{DeepSeekFlashModel, deepSeekProModel}) {
+		t.Fatalf("models = %v", got)
+	}
+}
+
+// The protocol upgrade allow-lists the models it shipped. Migrating them must
+// not read as curation, or it would strand exactly the users it just reached.
+func TestMigrationKeepsTheProtocolUpgradeAvailable(t *testing.T) {
 	entry := ProviderEntry{
 		Name: "deepseek", Kind: "openai", BaseURL: "https://api.deepseek.com",
 		APIKeyEnv: "DEEPSEEK_API_KEY", Models: []string{"deepseek-v4-flash", "deepseek-v4-pro"},
@@ -119,9 +145,9 @@ func TestVisionBackfillKeepsTheProtocolUpgradeAvailable(t *testing.T) {
 	if !CanUpgradeDeepSeekProviderProtocol(&entry) {
 		t.Fatal("fixture does not start upgradable")
 	}
-	applyDeepSeekVisionCatalog(&entry)
+	migrateRetiredDeepSeekFlashModels(&entry)
 	if !CanUpgradeDeepSeekProviderProtocol(&entry) {
-		t.Fatal("the backfill froze this entry out of the protocol upgrade")
+		t.Fatal("the migration froze this entry out of the protocol upgrade")
 	}
 }
 
@@ -130,19 +156,19 @@ func TestVisionBackfillKeepsTheProtocolUpgradeAvailable(t *testing.T) {
 // is how a dropped picture reads as a delivered one.
 func TestFirstVisionModelRefFindsAReaderOrSaysNone(t *testing.T) {
 	none := &Config{Providers: []ProviderEntry{{
-		Name: "deepseek", Kind: "openai", BaseURL: "https://api.deepseek.com",
-		Models: []string{"deepseek-v4-flash", "deepseek-v4-pro"},
+		Name: "deepseek-pro", Kind: "anthropic", BaseURL: deepSeekAnthropicBaseURL,
+		Models: []string{deepSeekProModel},
 	}}}
 	if got := none.FirstVisionModelRef(); got != "" {
 		t.Fatalf("text-only config offered %q", got)
 	}
 
 	withVision := &Config{Providers: []ProviderEntry{{
-		Name: "deepseek", Kind: "openai", BaseURL: "https://api.deepseek.com",
-		Models:       []string{"deepseek-v4-flash", "deepseek-v4-pro", DeepSeekVisionModel},
-		VisionModels: []string{DeepSeekVisionModel},
+		Name: "deepseek", Kind: "anthropic", BaseURL: deepSeekAnthropicBaseURL,
+		Models:       []string{DeepSeekFlashModel, deepSeekProModel},
+		VisionModels: []string{DeepSeekFlashModel},
 	}}}
-	if got := withVision.FirstVisionModelRef(); got != "deepseek/"+DeepSeekVisionModel {
+	if got := withVision.FirstVisionModelRef(); got != "deepseek/"+DeepSeekFlashModel {
 		t.Fatalf("offered %q, want the image-taking model", got)
 	}
 }

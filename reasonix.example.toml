@@ -17,7 +17,6 @@ show_turn_usage = true   # CLI/TUI: show per-request token and cost receipts in 
 [desktop]
 # language = "auto"   # auto|en|zh; auto follows the browser/OS locale
 # currency = "auto"   # legacy display currency; prefer [billing].display_currency
-layout_style = "classic"   # classic|workbench|creation; desktop layout style
 # theme = "auto"   # desktop only: auto|dark|light
 # terminal_theme = "auto"   # integrated terminal: auto|dark|light; auto follows the desktop app
 # theme_style = "graphite"   # graphite|aurora|slate|carbon|nocturne|amber and legacy aliases
@@ -68,8 +67,11 @@ compact_ratio       = 0.85  # sole auto trigger; presets 0.70 (active) / 0.80 (s
 name        = "deepseek"
 kind        = "openai"
 base_url    = "https://api.deepseek.com"
-models      = ["deepseek-v4-flash", "deepseek-v4-pro"]
-default     = "deepseek-v4-flash"   # optional; defaults to the first of `models`
+models      = ["deepseek-flash", "deepseek-v4-pro"]
+default     = "deepseek-flash"   # optional; defaults to the first of `models`
+# deepseek-flash reads images; deepseek-v4-pro takes them and answers as if it
+# saw nothing, so listing it here would drop pictures silently.
+vision_models = ["deepseek-flash"]
 api_key_env = "DEEPSEEK_API_KEY"
 context_window = 1000000
 # Per-turn total output budget (does not change compact_ratio):
@@ -78,13 +80,13 @@ context_window = 1000000
 # max_output_tokens = 65536   # heavy reasoning / long tool loops
 # max_output_tokens = 131072  # only after repeated finish_reason=length
 # Optional per-model context budgets. Omitted models inherit context_window.
-# model_overrides = { "deepseek-v4-flash" = { context_window = 1000000 } }
+# model_overrides = { "deepseek-flash" = { context_window = 1000000 } }
 # Official list prices are frozen per provider (billing_currency). Display
 # currency ([billing].display_currency) never rewrites these tables.
 # billing_currency = "USD"   # frozen list-price currency: CNY|USD
 # billing_mode = "payg"      # payg | subscription_equivalent (e.g. MiMo Token Plan)
 # Set prices explicitly only when you want to pin custom rates (always protected).
-# prices = { "deepseek-v4-flash" = { cache_hit = 0.02, input = 1, output = 2, currency = "¥" }, "deepseek-v4-pro" = { cache_hit = 0.025, input = 3, output = 6, currency = "¥" } }   # per 1M tokens
+# prices = { "deepseek-flash" = { cache_hit = 0.02, input = 1, output = 2, currency = "¥" }, "deepseek-v4-pro" = { cache_hit = 0.025, input = 3, output = 6, currency = "¥" } }   # per 1M tokens
 # DeepSeek thinking is always on; effort: high | max. Omit for auto (provider default).
 effort      = "high"
 

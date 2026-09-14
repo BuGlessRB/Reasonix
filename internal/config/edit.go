@@ -193,7 +193,7 @@ func (c *Config) SetLanguage(lang string) error {
 	default:
 		return fmt.Errorf("language %q: must be auto|en|zh", lang)
 	}
-	c.ApplyDeepSeekOfficialDefaultPricing()
+	c.ApplyOfficialDefaultPricing()
 	return nil
 }
 
@@ -226,7 +226,7 @@ func (c *Config) SetDesktopLanguage(lang string) error {
 	default:
 		return fmt.Errorf("desktop language %q: must be auto|en|zh", lang)
 	}
-	c.ApplyDeepSeekOfficialDefaultPricing()
+	c.ApplyOfficialDefaultPricing()
 	return nil
 }
 
@@ -267,22 +267,6 @@ func (c *Config) SetDesktopTerminalTheme(theme string) error {
 		c.Desktop.TerminalTheme = "light"
 	default:
 		return fmt.Errorf("desktop terminal theme %q: must be auto|dark|light", theme)
-	}
-	return nil
-}
-
-// SetDesktopLayoutStyle sets the desktop layout style. UI-only; it must not
-// affect CLI output or provider-visible request data.
-func (c *Config) SetDesktopLayoutStyle(style string) error {
-	switch strings.ToLower(strings.TrimSpace(style)) {
-	case "", "classic":
-		c.Desktop.LayoutStyle = "classic"
-	case "workbench", "workspace":
-		c.Desktop.LayoutStyle = "workbench"
-	case "creation":
-		c.Desktop.LayoutStyle = "creation"
-	default:
-		return fmt.Errorf("desktop layout style %q: must be classic|workbench|creation", style)
 	}
 	return nil
 }

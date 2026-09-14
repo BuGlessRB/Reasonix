@@ -1268,7 +1268,7 @@ func interactiveSetup(configPath, envPath string) int {
 		return 1
 	}
 	session.setLanguage(lang)
-	session.applyDeepSeekOfficialDefaultPricing()
+	session.applyOfficialDefaultPricing()
 	session.resetProviderSummaryBaseline()
 	i18n.DetectLanguage(lang)
 
@@ -1758,7 +1758,7 @@ func withBuiltinFamiliesForLanguage(providers []config.ProviderEntry, pricingLan
 	}
 	defaults := config.Default()
 	defaults.Language = pricingLanguage
-	defaults.ApplyDeepSeekOfficialDefaultPricing()
+	defaults.ApplyOfficialDefaultPricing()
 	for _, bp := range defaults.Providers {
 		if !haveName[bp.Name] {
 			providers = append(providers, bp)

@@ -44,6 +44,11 @@ var deepseekPeak = &PeakWindow{
 // checkedOn is when the tables below were last read off the vendors' pages.
 const checkedOn = "2026-08-22"
 
+// deepseekCheckedOn is when the DeepSeek rows were last read off that vendor's
+// page. Separate from checkedOn, because confirming one vendor's prices says
+// nothing about another's and a shared date would claim that it did.
+const deepseekCheckedOn = "2026-09-13"
+
 // CatalogSourceURLs document public pricing pages.
 const (
 	DocDeepSeekPricing   = "https://api-docs.deepseek.com/quick_start/pricing"
@@ -76,38 +81,11 @@ func OfficialProviderForEndpoint(baseURL string) string {
 	return officialEndpointHosts[strings.ToLower(u.Hostname())]
 }
 
-// OfficialCatalog is the built-in price book. Rates match config defaults.
+// OfficialCatalog is the built-in price book: the current generation of every
+// rate in officialRates, fingerprinted so a stored price can be recognised as
+// one of ours. User-custom prices always win over it.
 func OfficialCatalog() []CatalogEntry {
-	entries := []CatalogEntry{
-		// DeepSeek regional tables (official pricing doc). The base rate is the
-		// off-peak one, which is what a caller charging a single rate should
-		// quote; Peak is the same tokens inside deepseekPeak's hours.
-		{Provider: "deepseek", Model: "deepseek-v4-flash", Currency: "CNY", CacheHit: 0.05, Input: 1.5, Output: 4.5, Peak: &RateCard{CacheHit: 0.10, Input: 3.0, Output: 9.0}, Window: deepseekPeak, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG, CheckedOn: checkedOn},
-		{Provider: "deepseek", Model: "deepseek-v4-pro", Currency: "CNY", CacheHit: 0.15, Input: 4.5, Output: 13.5, Peak: &RateCard{CacheHit: 0.30, Input: 9.0, Output: 27.0}, Window: deepseekPeak, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG, CheckedOn: checkedOn},
-		{Provider: "deepseek", Model: "deepseek-v4-flash", Currency: "USD", CacheHit: 0.007, Input: 0.22, Output: 0.66, Peak: &RateCard{CacheHit: 0.014, Input: 0.44, Output: 1.32}, Window: deepseekPeak, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG, CheckedOn: checkedOn},
-		{Provider: "deepseek", Model: "deepseek-v4-pro", Currency: "USD", CacheHit: 0.022, Input: 0.66, Output: 1.98, Peak: &RateCard{CacheHit: 0.044, Input: 1.32, Output: 3.96}, Window: deepseekPeak, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG, CheckedOn: checkedOn},
-		// Vision bills at the flash rates; an image is charged as the tokens it
-		// scales to, so it arrives already counted in the prompt total and needs
-		// no per-image rate of its own.
-		{Provider: "deepseek", Model: "deepseek-v4-flash-vision-exp", Currency: "CNY", CacheHit: 0.05, Input: 1.5, Output: 4.5, Peak: &RateCard{CacheHit: 0.10, Input: 3.0, Output: 9.0}, Window: deepseekPeak, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG, CheckedOn: checkedOn},
-		{Provider: "deepseek", Model: "deepseek-v4-flash-vision-exp", Currency: "USD", CacheHit: 0.007, Input: 0.22, Output: 0.66, Peak: &RateCard{CacheHit: 0.014, Input: 0.44, Output: 1.32}, Window: deepseekPeak, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG, CheckedOn: checkedOn},
-
-		// LongCat dual currency tables: the launch discount, for which the vendor
-		// publishes no end date. List price is CNY 0.10/5/20, USD 0.015/0.75/2.95
-		// — what these revert to, and why CheckedOn earns its place here.
-		{Provider: "longcat", Model: "LongCat-2.0", Currency: "CNY", CacheHit: 0.04, Input: 2, Output: 8, DocURL: DocLongCatPricingCNY, BillingMode: BillingModePAYG, CheckedOn: checkedOn, Notes: "launch_discount_no_end_date"},
-		{Provider: "longcat", Model: "LongCat-2.0", Currency: "USD", CacheHit: 0.006, Input: 0.30, Output: 1.20, DocURL: DocLongCatPricingUSD, BillingMode: BillingModePAYG, CheckedOn: checkedOn, Notes: "launch_discount_no_end_date"},
-
-		// MiMo domestic PAYG; Token Plan uses the same rates as subscription_equivalent.
-		{Provider: "mimo", Model: "mimo-v2.5-pro", Currency: "CNY", CacheHit: 0.025, Input: 3, Output: 6, DocURL: DocMiMoPAYG, BillingMode: BillingModePAYG, CheckedOn: checkedOn},
-		{Provider: "mimo", Model: "mimo-v2.5", Currency: "CNY", CacheHit: 0.02, Input: 1, Output: 2, DocURL: DocMiMoPAYG, BillingMode: BillingModePAYG, CheckedOn: checkedOn},
-		// Not on the vendor's price page as of CheckedOn. Kept because removing a
-		// rate is what turns a still-configured model's cost silently into zero;
-		// a stale rate at least reads as a number somebody can question.
-		{Provider: "mimo", Model: "mimo-v2-flash", Currency: "CNY", CacheHit: 0.07, Input: 0.70, Output: 2.10, DocURL: DocMiMoPAYG, BillingMode: BillingModePAYG, CheckedOn: checkedOn, Notes: "not_on_vendor_page"},
-		{Provider: "mimo", Model: "mimo-v2.5-pro", Currency: "CNY", CacheHit: 0.025, Input: 3, Output: 6, DocURL: DocMiMoTokenPlan, BillingMode: BillingModeSubscriptionEquivalent, Notes: "payg_equivalent_not_plan_bill", CheckedOn: checkedOn},
-		{Provider: "mimo", Model: "mimo-v2.5", Currency: "CNY", CacheHit: 0.02, Input: 1, Output: 2, DocURL: DocMiMoTokenPlan, BillingMode: BillingModeSubscriptionEquivalent, Notes: "payg_equivalent_not_plan_bill", CheckedOn: checkedOn},
-	}
+	entries := officialCatalogRows()
 	for i := range entries {
 		entries[i].Fingerprint = PricingFingerprint(RateCard{
 			CacheHit: entries[i].CacheHit,

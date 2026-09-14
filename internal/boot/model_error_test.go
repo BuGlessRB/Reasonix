@@ -217,7 +217,7 @@ func TestBuildKeylessDefaultFallsBackToConfiguredProvider(t *testing.T) {
 	fenceBootTestHistoryCatalog(t)
 	t.Chdir(dir)
 	writeFile(t, dir, "reasonix.toml", `
-default_model = "deepseek/deepseek-v4-flash"
+default_model = "deepseek/deepseek-flash"
 
 [[providers]]
 name = "deepseek"
@@ -289,7 +289,7 @@ api_key_env = "`+configuredEnv+`"
 
 	_, err := Build(context.Background(), Options{
 		Sink:       event.Discard,
-		Model:      "deepseek/deepseek-v4-flash",
+		Model:      "deepseek/deepseek-flash",
 		RequireKey: true,
 	})
 	if err == nil {

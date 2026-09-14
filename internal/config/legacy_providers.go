@@ -4,13 +4,17 @@ package config
 
 import "strings"
 
-// normalizeLegacyProviderFields runs every fold. One call keeps the load
-// pipeline from growing a line per superseded field.
-func normalizeLegacyProviderFields(c *Config) {
+// normalizeLegacyProviderFields runs every fold, reporting whether it changed
+// anything. The rename goes first: a fold keyed by a retired name files the
+// user's price and window under a key the template also fills, leaving the
+// rename to choose between two values nothing tells apart.
+func normalizeLegacyProviderFields(c *Config) bool {
+	changed := migrateRetiredDeepSeekModels(c)
 	normalizeLegacyProviderModels(c)
 	normalizeLegacyResponsesMode(c)
 	canonicalizeOfficialDeepSeekSource(c)
 	foldLegacyDeepSeekPeers(c)
+	return changed
 }
 
 // normalizeLegacyResponsesMode folds responses_stateful into responses_mode, the

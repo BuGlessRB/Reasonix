@@ -168,10 +168,12 @@ func TestProbeReadsCapabilitiesFromTheSameRegistries(t *testing.T) {
 }
 
 func TestProbeUsesDeepSeekOfficialVisionCatalog(t *testing.T) {
-	models := []string{"deepseek-v4-flash", DeepSeekVisionModel, "deepseek-v5-vision"}
+	models := []string{DeepSeekFlashModel, deepSeekProModel, "deepseek-v5-vision"}
 	got := describe("https://api.deepseek.com", shape{kind: "openai"}, models)
-	if !slices.Equal(got.Vision, []string{DeepSeekVisionModel}) {
-		t.Fatalf("vision = %v, want only the vendor-declared model", got.Vision)
+	// Flash spells nothing about vision and pro does not refuse an image, so a
+	// name reading would take the wrong two of these three.
+	if !slices.Equal(got.Vision, []string{DeepSeekFlashModel}) {
+		t.Fatalf("vision = %v, want only the model the catalog declares", got.Vision)
 	}
 }
 
@@ -246,5 +248,49 @@ func TestLegacyResponsesStatefulFoldsIntoMode(t *testing.T) {
 				t.Fatal("the legacy field survived the fold, so downstream still has two forms to resolve")
 			}
 		})
+	}
+}
+
+// A curated preset states which of its models read images. Probing that same
+// address has to answer with what the preset says rather than with what the
+// names look like: the spelling misses every Kimi, Qwen, MiniMax and Claude
+// model these presets declare, so a user who typed the address instead of
+// picking the preset from the list would be told none of them can see.
+func TestProbeAnswersFromThePresetCoveringTheAddress(t *testing.T) {
+	checked := 0
+	for _, preset := range CuratedProviderPresets() {
+		for _, entry := range preset.Entries {
+			if len(entry.Models) == 0 || len(entry.VisionModels) == 0 {
+				continue
+			}
+			got := describe(entry.BaseURL, shape{kind: entry.Kind}, entry.Models)
+			for _, model := range entry.VisionModels {
+				if !containsString(entry.Models, model) {
+					continue
+				}
+				if !containsString(got.Vision, model) {
+					t.Errorf("%s: probing %s offered %v, and the preset declares %s reads images",
+						preset.ID, entry.BaseURL, got.Vision, model)
+				}
+				checked++
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no preset declared an image-taking model; this proved nothing")
+	}
+}
+
+// An address no preset covers is one nothing has declared, and the spelling is
+// all that is left. It stays a suggestion — conservative, and correctable in
+// Settings — rather than a claim about a vendor nobody has checked.
+func TestProbeFallsBackToTheSpellingForUndeclaredAddresses(t *testing.T) {
+	models := []string{"some-vl-model", "plain-text-model"}
+	got := describe("https://relay.example.com/v1", shape{kind: "openai"}, models)
+	if !containsString(got.Vision, "some-vl-model") || containsString(got.Vision, "plain-text-model") {
+		t.Fatalf("vision = %v, want the spelling's suggestion for an undeclared address", got.Vision)
+	}
+	if _, declared := declaredVisionModels("https://relay.example.com/v1", models); declared {
+		t.Fatal("an address no preset covers reported as declared")
 	}
 }

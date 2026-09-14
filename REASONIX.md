@@ -207,6 +207,44 @@ after the edit that enables it. Several edits to the *same* file are one
 `multi_edit` — it applies them against each other in memory and rewrites the
 file only if all of them land, so a failure midway leaves nothing half-edited.
 
+## Vendor rates
+
+Official list prices live in one place: `officialRates` in
+`internal/billing/rates.go`, oldest generation first, the last being what a
+model charges today. A price change is an **append, never an edit** — the
+superseded rate is what lets an installed config be recognised as holding one
+of ours and brought forward, instead of quoting a retired rate for the rest of
+its life. `config` reads these through `billing.CurrentRate` and
+`SupersededRates` and restates none of them; a table written twice is one that
+drifts, which is how a vendor's USD rate ended up published on one side only.
+
+`make pricecheck` reads each vendor's own page and compares it against that
+table, and reports how long ago a person last confirmed each one. It reaches
+the network, so it stays out of `make lint` and out of CI: run it before
+touching a rate and when a vendor announces a change. A page it cannot read
+exits non-zero — unread is its own verdict and never counts as agreement.
+
+## Curated presets
+
+A preset changing shape reaches the installs that already have the old one
+through `shippedPresets` in `internal/config/preset_upgrade.go`: one declared
+shape per generation, and one upgrade that brings a matching entry forward. The
+guard is the whole shape — catalog, window, default — because an entry holding
+what we shipped is ours to move and anything else its user curated.
+
+A preset is also what settles which of its models read images. Probing an
+address a preset covers answers from that declaration, because reading a name
+misses every Kimi, Qwen, MiniMax and Claude model they declare and `deepseek-
+flash` spells nothing at all; the spelling is the last resort for an address
+nothing has declared, and stays a correctable suggestion rather than a claim.
+
+Three distinctions are load-bearing, and each was a separate migration function
+before they were written down. A window the shape did not name is the user's,
+so only a shape identified by its window moves one. `vision_models` **narrows**,
+so an upgrade marks only the models it adds and only where the preset says they
+read images. And an explicitly empty list is a choice — nothing here reads
+images — which is not the same as the nil that means nobody has said.
+
 ## Pre-push CI simulation
 
 Run these **before every commit** to catch the fastest CI failures locally:

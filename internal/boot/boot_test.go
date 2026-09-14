@@ -1728,7 +1728,7 @@ func TestNewProviderBuildsDeepSeekAnthropicPreset(t *testing.T) {
 	if err := cfg.UpsertProvider(preset.Entries[0]); err != nil {
 		t.Fatalf("UpsertProvider: %v", err)
 	}
-	entry, ok := cfg.ResolveModel("deepseek-anthropic/deepseek-v4-flash")
+	entry, ok := cfg.ResolveModel("deepseek-anthropic/deepseek-flash")
 	if !ok {
 		t.Fatal("ResolveModel failed")
 	}
@@ -3422,7 +3422,7 @@ func TestBuildMigratesLegacyDeepSeekProtocolWithOneNotice(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(userPath), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(userPath, []byte(`default_model = "deepseek-flash/deepseek-v4-flash"
+	if err := os.WriteFile(userPath, []byte(`default_model = "deepseek-flash/deepseek-flash"
 
 [[providers]]
 name = "deepseek-flash"

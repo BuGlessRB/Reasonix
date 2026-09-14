@@ -9,7 +9,7 @@ GOEXE := $(shell go env GOEXE)
 # One pin for the Makefile and the CI lint job; see .github/workflows/ci.yml.
 GOLANGCI_VERSION := $(shell cat .golangci-version)
 
-.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update coverage-gate coverage-gate-update check test studio-test sdk-test sdk-test-race hooks cross clean studio
+.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update coverage-gate coverage-gate-update pricecheck check test studio-test sdk-test sdk-test-race hooks cross clean studio
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/reasonix$(GOEXE) ./cmd/reasonix
@@ -65,6 +65,13 @@ coverage-gate:
 
 coverage-gate-update:
 	go run ./tools/covergate -update
+
+# The vendors publish their rates on pages this reads and compares the table
+# against. It reaches the network, so it stays out of lint and out of CI: run it
+# before touching a rate and when a vendor announces a change. A page it cannot
+# read exits non-zero — unread never counts as agreement.
+pricecheck:
+	go run ./tools/pricecheck
 
 # Linting one GOOS leaves every //go:build windows and darwin file unchecked.
 lint-cross:

@@ -215,7 +215,7 @@ func TestNewChatTUIKeepsExplicitKeylessControllerModel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const explicit = "deepseek-flash/deepseek-v4-flash"
+	const explicit = "deepseek-flash/deepseek-flash"
 	ctrl, err := setupProfile(context.Background(), explicit, 0, false, event.Discard, "balanced", "")
 	if err != nil {
 		t.Fatalf("interactive build should remain reachable for missing-key recovery: %v", err)
@@ -225,7 +225,7 @@ func TestNewChatTUIKeepsExplicitKeylessControllerModel(t *testing.T) {
 	// The official source loads as one folded entry, so the ref resolves under
 	// the canonical name. The model asked for is what has to survive here — the
 	// global default must not have won.
-	const resolved = "deepseek/deepseek-v4-flash"
+	const resolved = "deepseek/deepseek-flash"
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
 	if got := m.modelRef; got != resolved {
 		t.Fatalf("TUI modelRef = %q, want explicit controller model %q (from %q)", got, resolved, explicit)

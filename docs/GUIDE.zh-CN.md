@@ -74,7 +74,7 @@ reasoning_language = "auto"      # 可见思考过程语言：auto|zh|en
 name        = "deepseek-flash"
 kind        = "anthropic"
 base_url    = "https://api.deepseek.com/anthropic"
-model       = "deepseek-v4-flash"
+model       = "deepseek-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 web_search  = true
 # 还有预设：deepseek-pro

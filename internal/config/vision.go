@@ -13,9 +13,11 @@ var mimoVisionModels = map[string]bool{
 	"mimo-v2-omni": true,
 }
 
-// InferVisionModels returns model IDs that look like chat models with image-input
-// support. It is intentionally conservative and meant for Settings defaults; an
-// explicit provider vision_models list remains the source of truth.
+// InferVisionModels returns model IDs that look like chat models with image
+// input. It is the last resort: an explicit vision_models list answers first, a
+// curated preset covering the address answers next, and reading a name is what
+// is left when nothing has been declared — so it stays conservative, and stays
+// a suggestion its user can correct rather than a claim about a vendor.
 func InferVisionModels(models []string) []string {
 	out := make([]string, 0, len(models))
 	seen := map[string]bool{}

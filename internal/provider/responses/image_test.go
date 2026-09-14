@@ -11,7 +11,7 @@ import (
 
 func TestOfficialDeepSeekResponsesImageMetadataMatchesTextOnlyWireBytes(t *testing.T) {
 	c := New(Config{
-		Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash",
+		Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-pro",
 		Extra: map[string]any{"vision": true},
 	}).(*client)
 	plain := []provider.Message{

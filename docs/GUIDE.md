@@ -80,7 +80,7 @@ reasoning_language = "auto"      # visible reasoning text: auto|zh|en
 name        = "deepseek-flash"
 kind        = "anthropic"
 base_url    = "https://api.deepseek.com/anthropic"
-model       = "deepseek-v4-flash"
+model       = "deepseek-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 web_search  = true
 # also preset: deepseek-pro

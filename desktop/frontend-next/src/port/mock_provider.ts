@@ -19,7 +19,7 @@ export class MockProvider extends MockBoundary {
   private sources: ProviderEntry[] = [
     {
       name: "deepseek", kind: "openai", baseUrl: "https://api.deepseek.com",
-      models: ["deepseek-v4-pro", "deepseek-v4-flash"], default: "deepseek-v4-pro",
+      models: ["deepseek-v4-pro", "deepseek-flash"], default: "deepseek-v4-pro",
       hasKey: true, inUse: true, preset: false, keyEnv: "DEEPSEEK_API_KEY", canSetVision: false,
     },
     {
@@ -69,7 +69,7 @@ export class MockProvider extends MockBoundary {
   async probeProvider(): Promise<ProviderProbe> {
     return {
       kind: "openai", kinds: ["openai", "responses"], authHeader: true,
-      models: ["deepseek-v4-pro", "deepseek-v4-flash"], default: "deepseek-v4-pro",
+      models: ["deepseek-v4-pro", "deepseek-flash"], default: "deepseek-v4-pro",
       efforts: ["high", "max"], effort: "high", vision: [],
       ambiguous: true, noProxy: false,
     };
@@ -82,8 +82,8 @@ export class MockProvider extends MockBoundary {
     if (name === "mimo") return { ok: false, error: "401 unauthorized: key 过期了" };
     const models = name.startsWith("myrelay")
       ? relayCatalog()
-      : ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"];
-    const vision = models.filter((m) => m === "gpt-4o" || m === "deepseek-v4-flash-vision-exp");
+      : ["deepseek-v4-pro", "deepseek-flash", "deepseek-flash-vision-exp"];
+    const vision = models.filter((m) => m === "gpt-4o" || m === "deepseek-flash-vision-exp");
     return { ok: true, kind: "openai", models, vision, ambiguous: true };
   }
 
@@ -135,7 +135,7 @@ function relayCatalog(): string[] {
   const families = [
     "qwen3-max", "qwen3-omni-flash", "qwen3-vl-plus", "qwen3-next-80b-a3b",
     "MiniMax-M2", "MiniMax/speech-02", "ZHIPU/GLM-5", "kimi-k2",
-    "deepseek-v4-pro", "deepseek-v4-flash", "gpt-4o", "claude-sonnet-4",
+    "deepseek-v4-pro", "deepseek-flash", "gpt-4o", "claude-sonnet-4",
     "gemini-3-pro", "llama-4-maverick", "mistral-large", "grok-4",
   ];
   const out: string[] = [];

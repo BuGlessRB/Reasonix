@@ -975,11 +975,11 @@ func TestOfficialDeepSeekResponsesVisionIsModelScoped(t *testing.T) {
 			Extra: map[string]any{"vision": true},
 		}).(*client)
 	}
-	plain := makeClient("deepseek-v4-flash")
+	plain := makeClient("deepseek-v4-pro")
 	if plain.vision {
-		t.Fatal("ordinary DeepSeek Flash must stay text-only despite stale vision metadata")
+		t.Fatal("DeepSeek Pro must stay text-only despite stale vision metadata")
 	}
-	vision := makeClient("deepseek-v4-flash-vision-exp")
+	vision := makeClient("deepseek-flash")
 	if !vision.vision {
 		t.Fatal("the documented DeepSeek Vision model must accept Responses input_image parts")
 	}

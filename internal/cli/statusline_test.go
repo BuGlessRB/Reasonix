@@ -294,7 +294,7 @@ func TestRefreshEffortStatusUsesCurrentModel(t *testing.T) {
 
 	ctrl := control.New(control.Options{})
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.refreshEffortStatus()
 	if m.effortLevel != "auto" {
 		t.Fatalf("effortLevel = %q, want auto", m.effortLevel)

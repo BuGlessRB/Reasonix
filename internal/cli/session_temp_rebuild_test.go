@@ -37,7 +37,7 @@ func TestCLIHotRebuildPathsKeepSessionTemp(t *testing.T) {
 
 			m := newTestChatTUI()
 			m.ctrl = oldCtrl
-			m.modelRef = "deepseek-flash/deepseek-v4-flash"
+			m.modelRef = "deepseek-flash/deepseek-flash"
 			m.runtimeProfile = boot.TokenModeFull
 			m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, outgoing control.SessionAPI) (*control.Controller, error) {
 				return control.New(control.Options{

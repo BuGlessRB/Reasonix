@@ -136,12 +136,12 @@ func (s *providerSetupSession) setLanguage(language string) {
 	s.cfg.Language = language
 }
 
-func (s *providerSetupSession) applyDeepSeekOfficialDefaultPricing() {
+func (s *providerSetupSession) applyOfficialDefaultPricing() {
 	before := make(map[string]config.ProviderEntry, len(s.cfg.Providers))
 	for _, provider := range s.cfg.Providers {
 		before[provider.Name] = provider
 	}
-	s.cfg.ApplyDeepSeekOfficialDefaultPricing()
+	s.cfg.ApplyOfficialDefaultPricing()
 	for i := range s.cfg.Providers {
 		after := s.cfg.Providers[i]
 		previous, existed := before[after.Name]

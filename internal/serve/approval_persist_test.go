@@ -43,10 +43,10 @@ api_key_env = "DEEPSEEK_API_KEY"
 		written, _ := os.ReadFile(path)
 		t.Fatalf("provider block lost by the approval write; file now:\n%s", written)
 	}
-	if entry.APIKeyEnv != "DEEPSEEK_API_KEY" || entry.Default != "deepseek-v4-flash" {
+	if entry.APIKeyEnv != "DEEPSEEK_API_KEY" || entry.Default != "deepseek-flash" {
 		t.Fatalf("provider entry damaged: %+v", entry)
 	}
-	if saved.DefaultModel != "deepseek-flash/deepseek-v4-flash" {
+	if saved.DefaultModel != "deepseek-flash/deepseek-flash" {
 		t.Fatalf("default_model = %q, want it preserved", saved.DefaultModel)
 	}
 }

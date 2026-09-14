@@ -996,7 +996,7 @@ func TestMigrateOfficialLegacyBaseURLUsesAnthropicEndpoint(t *testing.T) {
 			if err != nil {
 				t.Fatalf("load migrated config: %v", err)
 			}
-			for _, model := range []string{"deepseek-v4-flash", "deepseek-v4-pro"} {
+			for _, model := range []string{DeepSeekFlashModel, deepSeekProModel} {
 				p, ok := cfg.ResolveModel("deepseek/" + model)
 				if !ok || p.Kind != "anthropic" || p.BaseURL != deepSeekAnthropicBaseURL || !EffectiveWebSearch(p) {
 					t.Fatalf("%s official migration = %+v, want Anthropic endpoint with web search", model, p)

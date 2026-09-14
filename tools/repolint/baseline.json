@@ -1,18 +1,20 @@
 {
   "limits": {
     "banner": 0,
+    "build-artifact": 0,
     "claude-dialect": 1,
     "commented-code": 0,
-    "complexity": 1512,
+    "complexity": 1496,
     "error-text": 12,
-    "essay": 3242,
-    "file-size": 38938,
+    "essay": 3218,
+    "file-size": 38407,
+    "flat-view": 0,
     "frontend-parity": 150,
-    "function-size": 6595,
+    "function-size": 6555,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
-    "orphan": 123,
+    "orphan": 122,
     "refusal-path": 0,
     "spec-parity": 0,
     "struct-state": 41,
@@ -94,7 +96,7 @@
     "internal/agent/agent.go": {
       "complexity": 37,
       "essay": 45,
-      "file-size": 1398,
+      "file-size": 1386,
       "function-size": 102
     },
     "internal/agent/agent_options.go": {
@@ -145,8 +147,8 @@
       "essay": 5
     },
     "internal/agent/execute_batch.go": {
-      "complexity": 25,
-      "function-size": 128
+      "complexity": 22,
+      "function-size": 108
     },
     "internal/agent/execute_one.go": {
       "essay": 14
@@ -209,9 +211,6 @@
       "essay": 17
     },
     "internal/agent/recovery_gc_test.go": {
-      "essay": 1
-    },
-    "internal/agent/review_report.go": {
       "essay": 1
     },
     "internal/agent/review_unavailable.go": {
@@ -281,13 +280,13 @@
     },
     "internal/agent/subagent_store.go": {
       "essay": 5,
-      "file-size": 149
+      "file-size": 130
     },
     "internal/agent/task.go": {
-      "complexity": 22,
-      "essay": 50,
-      "file-size": 1167,
-      "function-size": 101,
+      "complexity": 12,
+      "essay": 35,
+      "file-size": 1162,
+      "function-size": 94,
       "orphan": 1
     },
     "internal/agent/task_test.go": {
@@ -428,7 +427,7 @@
     },
     "internal/checkpoint/checkpoint.go": {
       "essay": 8,
-      "file-size": 305
+      "file-size": 291
     },
     "internal/checkpoint/observer.go": {
       "essay": 1
@@ -457,10 +456,10 @@
       "essay": 15
     },
     "internal/cli/chat_tui.go": {
-      "complexity": 325,
+      "complexity": 324,
       "essay": 109,
-      "file-size": 4676,
-      "function-size": 1283
+      "file-size": 4665,
+      "function-size": 1277
     },
     "internal/cli/chat_tui_paste.go": {
       "essay": 9
@@ -615,7 +614,7 @@
     },
     "internal/config/config.go": {
       "essay": 50,
-      "file-size": 1439,
+      "file-size": 1417,
       "narrative": 2
     },
     "internal/config/credentials.go": {
@@ -636,7 +635,7 @@
     },
     "internal/config/edit.go": {
       "essay": 10,
-      "file-size": 1602,
+      "file-size": 1586,
       "orphan": 2
     },
     "internal/config/effort.go": {
@@ -648,8 +647,8 @@
     },
     "internal/config/load.go": {
       "essay": 24,
-      "file-size": 1470,
-      "function-size": 61,
+      "file-size": 1221,
+      "function-size": 58,
       "orphan": 2
     },
     "internal/config/main_test.go": {
@@ -687,8 +686,7 @@
     },
     "internal/config/provider_presets.go": {
       "claude-dialect": 1,
-      "file-size": 263,
-      "orphan": 1
+      "file-size": 219
     },
     "internal/config/render.go": {
       "complexity": 226,
@@ -730,8 +728,8 @@
       "frontend-parity": 2
     },
     "internal/control/controller.go": {
-      "essay": 57,
-      "file-size": 2465,
+      "essay": 56,
+      "file-size": 2436,
       "frontend-parity": 50,
       "narrative": 4
     },
@@ -815,7 +813,7 @@
     },
     "internal/control/refs.go": {
       "essay": 5,
-      "file-size": 425,
+      "file-size": 423,
       "frontend-parity": 2
     },
     "internal/control/rewind.go": {
@@ -912,7 +910,7 @@
     "internal/evidence/evidence.go": {
       "complexity": 6,
       "essay": 34,
-      "file-size": 1734
+      "file-size": 1729
     },
     "internal/evidence/review_report.go": {
       "essay": 7
@@ -1077,9 +1075,6 @@
     "internal/fileutil/replacefallback_windows_test.go": {
       "essay": 1
     },
-    "internal/frontmatter/frontmatter.go": {
-      "essay": 5
-    },
     "internal/gitcmd/gitcmd.go": {
       "essay": 14
     },
@@ -1210,7 +1205,7 @@
     },
     "internal/plugin/plugin.go": {
       "essay": 28,
-      "file-size": 972,
+      "file-size": 925,
       "function-size": 12,
       "orphan": 3
     },
@@ -1240,7 +1235,7 @@
       "essay": 1
     },
     "internal/plugin/transport_stdio.go": {
-      "essay": 12,
+      "essay": 11,
       "file-size": 4
     },
     "internal/pluginpkg/claude_compat.go": {
@@ -1270,10 +1265,10 @@
       "orphan": 1
     },
     "internal/provider/anthropic/anthropic.go": {
-      "complexity": 42,
+      "complexity": 40,
       "essay": 31,
-      "file-size": 87,
-      "function-size": 146,
+      "file-size": 80,
+      "function-size": 142,
       "struct-state": 5
     },
     "internal/provider/anthropic/anthropic_test.go": {
@@ -1285,7 +1280,7 @@
     "internal/provider/openai/openai.go": {
       "complexity": 58,
       "essay": 32,
-      "file-size": 517,
+      "file-size": 515,
       "function-size": 245,
       "struct-state": 9
     },
@@ -1297,7 +1292,7 @@
     },
     "internal/provider/provider.go": {
       "essay": 51,
-      "file-size": 289
+      "file-size": 274
     },
     "internal/provider/responses/responses.go": {
       "essay": 11,
@@ -1459,7 +1454,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 522
+      "file-size": 503
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3
@@ -1501,7 +1496,7 @@
     },
     "internal/skill/skill.go": {
       "essay": 7,
-      "file-size": 573
+      "file-size": 560
     },
     "internal/skill/tools.go": {
       "essay": 2
@@ -1584,7 +1579,7 @@
       "essay": 3
     },
     "internal/tool/builtin/grep.go": {
-      "essay": 2
+      "essay": 1
     },
     "internal/tool/builtin/managed_config.go": {
       "essay": 2

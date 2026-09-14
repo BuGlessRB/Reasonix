@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -144,18 +145,18 @@ func TestDeepSeekAnthropicPresetIsOptionalAndModelScoped(t *testing.T) {
 		t.Fatalf("DeepSeek Anthropic preset = %+v, want one entry", preset)
 	}
 	entry := preset.Entries[0]
-	if entry.Kind != "anthropic" || entry.BaseURL != deepSeekAnthropicBaseURL || entry.Default != "deepseek-v4-flash" || entry.Thinking != "enabled" || !EffectiveWebSearch(&entry) || entry.Vision || entry.APIKeyEnv != "DEEPSEEK_API_KEY" {
+	if entry.Kind != "anthropic" || entry.BaseURL != deepSeekAnthropicBaseURL || entry.Default != DeepSeekFlashModel || entry.Thinking != "enabled" || !EffectiveWebSearch(&entry) || entry.Vision || entry.APIKeyEnv != "DEEPSEEK_API_KEY" {
 		t.Fatalf("DeepSeek Anthropic preset entry = %+v", entry)
 	}
 	var cfg Config
 	if err := cfg.UpsertProvider(entry); err != nil {
 		t.Fatalf("UpsertProvider: %v", err)
 	}
-	flash, ok := cfg.ResolveModel("deepseek-anthropic/deepseek-v4-flash")
+	flash, ok := cfg.ResolveModel("deepseek-anthropic/" + DeepSeekFlashModel)
 	if !ok {
 		t.Fatal("Flash model did not resolve")
 	}
-	pro, ok := cfg.ResolveModel("deepseek-anthropic/deepseek-v4-pro")
+	pro, ok := cfg.ResolveModel("deepseek-anthropic/" + deepSeekProModel)
 	if !ok {
 		t.Fatal("Pro model did not resolve")
 	}
@@ -179,13 +180,13 @@ func TestDeepSeekResponsesPresetMatchesOfficialSupport(t *testing.T) {
 	if entry.Kind != "responses" || entry.BaseURL != "https://api.deepseek.com" || entry.ResponsesMode != "stateless" {
 		t.Fatalf("deepseek responses endpoint = %+v", entry)
 	}
-	if len(entry.Models) != 1 || entry.Models[0] != "deepseek-v4-flash" || entry.Default != "deepseek-v4-flash" {
+	if len(entry.Models) != 1 || entry.Models[0] != DeepSeekFlashModel || entry.Default != DeepSeekFlashModel {
 		t.Fatalf("deepseek responses models = %v default=%q", entry.Models, entry.Default)
 	}
 	if entry.ModelsURL != "" {
 		t.Fatalf("deepseek responses models URL = %q, want static supported-model list", entry.ModelsURL)
 	}
-	if !EffectiveWebSearch(&entry) || entry.Vision || entry.VisionModels != nil {
+	if !EffectiveWebSearch(&entry) || entry.Vision || !slices.Equal(entry.VisionModels, []string{DeepSeekFlashModel}) {
 		t.Fatalf("deepseek responses capabilities = web_search:%t vision:%t vision_models:%v", EffectiveWebSearch(&entry), entry.Vision, entry.VisionModels)
 	}
 }

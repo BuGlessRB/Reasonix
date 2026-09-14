@@ -340,19 +340,6 @@ func normalizeThemeStyle(style string) string {
 	}
 }
 
-func normalizeDesktopLayoutStyle(style string) string {
-	switch strings.ToLower(strings.TrimSpace(style)) {
-	case "classic":
-		return "classic"
-	case "workbench", "workspace":
-		return "workbench"
-	case "creation":
-		return "creation"
-	default:
-		return "workbench"
-	}
-}
-
 func normalizeCloseBehavior(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "quit", "exit":
@@ -426,15 +413,6 @@ func (c *Config) DesktopTerminalTheme() string {
 	default:
 		return "auto"
 	}
-}
-
-// DesktopLayoutStyle normalizes the desktop layout style. New installs default
-// to workbench; explicit classic remains respected.
-func (c *Config) DesktopLayoutStyle() string {
-	if strings.EqualFold(strings.TrimSpace(c.Desktop.ThemeStyle), "workbench") && strings.TrimSpace(c.Desktop.LayoutStyle) == "" {
-		return "workbench"
-	}
-	return normalizeDesktopLayoutStyle(c.Desktop.LayoutStyle)
 }
 
 // DesktopCloseBehavior normalizes the desktop close-window preference. It falls

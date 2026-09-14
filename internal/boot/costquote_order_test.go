@@ -45,7 +45,7 @@ func TestCostQuoteReachesInnerSinkBeforeRecording(t *testing.T) {
 	quoted := event.NewCostQuoteSink(inner, &event.QuoteContext{DisplayCurrency: "USD", Now: offPeak, CatalogProviderForModel: onDeepSeeksOwnEndpoint})
 	quoted.Emit(event.Event{
 		Kind:     event.Usage,
-		ModelRef: "deepseek-flash/deepseek-v4-flash",
+		ModelRef: "deepseek-flash/deepseek-flash",
 		Usage:    &provider.Usage{PromptTokens: 1_000_000, CompletionTokens: 0, TotalTokens: 1_000_000},
 		Pricing:  &provider.Pricing{CacheHit: 0.007, Input: 0.22, Output: 0.66, Currency: "$"},
 	})
@@ -70,9 +70,9 @@ func TestCostQuoteReachesInnerSinkBeforeRecording(t *testing.T) {
 	}), &event.QuoteContext{DisplayCurrency: "USD", Now: offPeak, CatalogProviderForModel: onDeepSeeksOwnEndpoint})
 	quoted2.Emit(event.Event{
 		Kind:     event.Usage,
-		ModelRef: "deepseek-flash/deepseek-v4-flash",
+		ModelRef: "deepseek-flash/deepseek-flash",
 		Usage:    &provider.Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000, TotalTokens: 2_000_000},
-		Pricing:  &provider.Pricing{CacheHit: 0.05, Input: 1.5, Output: 4.5, Currency: "¥"},
+		Pricing:  &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 4, Currency: "¥"},
 	})
 	if basis != billing.BasisOfficialTable {
 		t.Fatalf("USD valuation basis = %q, want official_table", basis)
