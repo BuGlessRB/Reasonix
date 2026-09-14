@@ -1,9 +1,12 @@
 package control
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -46,54 +49,129 @@ type goalDiagnosticTransition struct {
 	RoundsStarted uint64                `json:"roundsStarted,omitempty"`
 }
 
-// ExportGoalDiagnostics reads the authoritative v3 event log after a Flush
-// checkpoint. The returned JSON includes complete recorded tool payloads and
-// explicit accepted/durable sequences; it never derives state from the
-// frontend's currently loaded transcript window.
+// ExportGoalDiagnostics is the compatibility in-memory form. Production hosts
+// use WriteGoalDiagnostics so diagnostic size is not a memory or RPC limit.
 func (c *Controller) ExportGoalDiagnostics(ctx context.Context, metadata GoalDiagnosticMetadata) ([]byte, error) {
+	var output bytes.Buffer
+	if err := c.WriteGoalDiagnostics(ctx, &output, metadata); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+// WriteGoalDiagnostics streams the authoritative event log after a Flush
+// checkpoint. Complete tool payloads are emitted one commit at a time; the
+// cumulative log is never replayed into a []Commit or marshalled as one blob.
+func (c *Controller) WriteGoalDiagnostics(ctx context.Context, dst io.Writer, metadata GoalDiagnosticMetadata) error {
 	if c == nil {
-		return nil, session.ErrSessionNotRunning
+		return session.ErrSessionNotRunning
 	}
 	_, runtime, exclusive := c.v3Binding()
 	if !exclusive || runtime == nil {
-		return nil, errors.New("goal diagnostics require a linear v3 session")
+		return errors.New("goal diagnostics require a canonical session")
 	}
 	temporaryRoot, err := os.MkdirTemp("", "reasonix-goal-diagnostics-")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer os.RemoveAll(temporaryRoot)
 	frozen := filepath.Join(temporaryRoot, "session")
 	// Store.Export owns the commit and drain boundaries around its Flush, so the
 	// diagnostic never pairs a manifest from one prefix with events from another.
 	if err := runtime.Session().Export(ctx, frozen); err != nil {
-		return nil, err
-	}
-	commits, err := session.Replay(frozen, nil)
-	if err != nil {
-		return nil, err
+		return err
 	}
 	if metadata.Capabilities == nil {
 		metadata.Capabilities = []string{}
 	}
 	fillGoalDiagnosticBuildMetadata(&metadata)
-	through := uint64(0)
-	if len(commits) > 0 {
-		through = commits[len(commits)-1].LastSequence()
+	state := runtime.StateSnapshot()
+	through := state.Session.DurableSequence
+	if _, err := io.WriteString(dst, "{\n"); err != nil {
+		return err
 	}
-	export := goalDiagnosticExport{
-		SchemaVersion:     1,
-		ExportedAt:        time.Now().UTC(),
-		Metadata:          metadata,
-		Runtime:           runtime.StateSnapshot(),
-		Observation:       c.RuntimeStateSnapshot(),
-		AcceptedThrough:   through,
-		DurableThrough:    through,
-		Commits:           commits,
-		ActivationChanges: goalActivationChanges(commits),
-		Unavailable:       []string{},
+	fields := []struct {
+		name  string
+		value any
+	}{
+		{"schemaVersion", 1},
+		{"exportedAt", time.Now().UTC()},
+		{"metadata", metadata},
+		{"runtime", state},
+		{"observation", c.RuntimeStateSnapshot()},
+		{"acceptedThrough", through},
+		{"durableThrough", through},
 	}
-	return json.MarshalIndent(export, "", "  ")
+	for _, field := range fields {
+		if err := writeGoalDiagnosticField(dst, field.name, field.value, true); err != nil {
+			return err
+		}
+	}
+	if _, err := io.WriteString(dst, "  \"commits\": ["); err != nil {
+		return err
+	}
+	first := true
+	changes := []goalDiagnosticTransition{}
+	activation := goaldomain.ActivationDisarmed
+	err = session.VisitCommits(ctx, frozen, func(commit session.Commit) error {
+		encoded, err := json.MarshalIndent(commit, "    ", "  ")
+		if err != nil {
+			return err
+		}
+		separator := "\n    "
+		if !first {
+			separator = ",\n    "
+		}
+		if _, err := io.WriteString(dst, separator); err != nil {
+			return err
+		}
+		if _, err := dst.Write(encoded); err != nil {
+			return err
+		}
+		first = false
+		changes = append(changes, goalActivationChangesForCommit(commit, &activation)...)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !first {
+		if _, err := io.WriteString(dst, "\n  "); err != nil {
+			return err
+		}
+	}
+	if _, err := io.WriteString(dst, "],\n"); err != nil {
+		return err
+	}
+	if err := writeGoalDiagnosticField(dst, "activationChanges", changes, true); err != nil {
+		return err
+	}
+	if err := writeGoalDiagnosticField(dst, "unavailable", []string{}, false); err != nil {
+		return err
+	}
+	_, err = io.WriteString(dst, "}\n")
+	return err
+}
+
+func writeGoalDiagnosticField(dst io.Writer, name string, value any, comma bool) error {
+	encoded, err := json.MarshalIndent(value, "  ", "  ")
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(dst, "  %q: ", name); err != nil {
+		return err
+	}
+	if _, err := dst.Write(encoded); err != nil {
+		return err
+	}
+	if comma {
+		_, err = io.WriteString(dst, ",")
+		if err != nil {
+			return err
+		}
+	}
+	_, err = io.WriteString(dst, "\n")
+	return err
 }
 
 func fillGoalDiagnosticBuildMetadata(metadata *GoalDiagnosticMetadata) {
@@ -122,40 +200,46 @@ func goalActivationChanges(commits []session.Commit) []goalDiagnosticTransition 
 	changes := make([]goalDiagnosticTransition, 0)
 	activation := goaldomain.ActivationDisarmed
 	for _, commit := range commits {
-		hasTurnStart := false
-		for _, item := range commit.Events {
-			hasTurnStart = hasTurnStart || item.Kind == "turn/start"
+		changes = append(changes, goalActivationChangesForCommit(commit, &activation)...)
+	}
+	return changes
+}
+
+func goalActivationChangesForCommit(commit session.Commit, activation *goaldomain.Activation) []goalDiagnosticTransition {
+	changes := []goalDiagnosticTransition{}
+	hasTurnStart := false
+	for _, item := range commit.Events {
+		hasTurnStart = hasTurnStart || item.Kind == "turn/start"
+	}
+	for _, item := range commit.Events {
+		if item.Kind != "goal/state" {
+			continue
 		}
-		for _, item := range commit.Events {
-			if item.Kind != "goal/state" {
-				continue
-			}
-			var document struct {
-				Current *goaldomain.Snapshot `json:"current"`
-			}
-			if json.Unmarshal(item.Payload, &document) != nil {
-				continue
-			}
-			transition := goalDiagnosticTransition{Sequence: item.Sequence, OperationID: commit.OperationID, Activation: goaldomain.ActivationDisarmed}
-			if document.Current != nil {
-				transition.GoalID = document.Current.ID
-				transition.Revision = document.Current.Revision
-				transition.Phase = document.Current.Phase
-				transition.RoundsStarted = document.Current.RoundsStarted
-				if document.Current.Phase == goaldomain.PhaseActive {
-					op := strings.ToLower(commit.OperationID)
-					if hasTurnStart || strings.Contains(op, ":create") || strings.Contains(op, ":resume") || strings.Contains(op, "goal-control:set") {
-						activation = goaldomain.ActivationArmed
-					}
-				} else {
-					activation = goaldomain.ActivationDisarmed
+		var document struct {
+			Current *goaldomain.Snapshot `json:"current"`
+		}
+		if json.Unmarshal(item.Payload, &document) != nil {
+			continue
+		}
+		transition := goalDiagnosticTransition{Sequence: item.Sequence, OperationID: commit.OperationID, Activation: goaldomain.ActivationDisarmed}
+		if document.Current != nil {
+			transition.GoalID = document.Current.ID
+			transition.Revision = document.Current.Revision
+			transition.Phase = document.Current.Phase
+			transition.RoundsStarted = document.Current.RoundsStarted
+			if document.Current.Phase == goaldomain.PhaseActive {
+				op := strings.ToLower(commit.OperationID)
+				if hasTurnStart || strings.Contains(op, ":create") || strings.Contains(op, ":resume") || strings.Contains(op, "goal-control:set") {
+					*activation = goaldomain.ActivationArmed
 				}
-				transition.Activation = activation
 			} else {
-				activation = goaldomain.ActivationDisarmed
+				*activation = goaldomain.ActivationDisarmed
 			}
-			changes = append(changes, transition)
+			transition.Activation = *activation
+		} else {
+			*activation = goaldomain.ActivationDisarmed
 		}
+		changes = append(changes, transition)
 	}
 	return changes
 }

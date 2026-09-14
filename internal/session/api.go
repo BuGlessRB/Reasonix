@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,40 @@ import (
 	"sync"
 	"time"
 )
+
+// VisitCommits streams the complete durable commit prefix from one canonical
+// session directory. It is intended for exports and diagnostics that must not
+// materialize the cumulative event log.
+func VisitCommits(ctx context.Context, dir string, visit func(Commit) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	manifest, err := readStoredManifest(filepath.Join(dir, "manifest.json"))
+	if err != nil {
+		return err
+	}
+	file, err := os.Open(logPathForManifest(dir, manifest))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	var visitErr error
+	adapter := func(_ int64, commit Commit) bool {
+		if visit != nil {
+			visitErr = visit(commit)
+		}
+		return visitErr == nil
+	}
+	if manifest.Codec == Codec {
+		err = scanV4CommitFile(ctx, file, 0, 1, contentStoreForSessionDir(dir), nil, adapter)
+	} else {
+		err = scanCommitFileCodec(file, 0, 1, manifest.Codec, nil, adapter)
+	}
+	return errors.Join(err, visitErr)
+}
 
 // AccessMode separates cold readers from the single leased writer. Read-only
 // access never repairs, migrates, truncates, or advances writer generation.

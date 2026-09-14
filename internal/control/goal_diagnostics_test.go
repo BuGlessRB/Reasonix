@@ -44,6 +44,10 @@ func TestGoalDiagnosticExportReadsCompleteDurableV3Log(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(payload)
+	var document map[string]any
+	if err := json.Unmarshal(payload, &document); err != nil {
+		t.Fatalf("diagnostic export is not valid JSON: %v\n%s", err, text)
+	}
 	for _, want := range []string{`"schemaVersion": 1`, `"applicationVersion": "1.2.3"`, `"sessionCodec": "` + session.Codec + `"`, `"full diagnostic output"`, `"goal-lifecycle-v2"`, `"activationChanges"`, `"activation": "armed"`} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("diagnostic export missing %s:\n%s", want, text)
