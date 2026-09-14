@@ -223,6 +223,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
             // A fold is a resting-state preference; while a query is on it would hide
             // the very rows the query just found.
             const shut = needle ? false : folded.has(ws.root);
+            const tagged = ws.isolated || twice.has(ws.name);
             // Only while the question is on screen: panesOf walks every runtime.
             const doomed = confirm === ws.root ? panesOf(ws.root) : [];
             const busyPanes = liveIds(doomed).length;
@@ -256,13 +257,15 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                       {ws.name}
                     </span>
                     {/* 第二行是这个项目的身份，不是它的动作。名字于是拿到整行宽——
-                        在 214px 的栏里，名字、标签、计数、删除挤在一行，被截的总是名字。 */}
-                    <span className="wsmeta">
-                      {(ws.isolated || twice.has(ws.name)) && (
-                        <em className="wstag">{ws.isolated ? t("隔离") : parentOf(ws.root)}</em>
-                      )}
-                      {t("{n} 会话", { n: ws.sessions.length })}
-                    </span>
+                        在 214px 的栏里，名字、标签、计数、删除挤在一行，被截的总是名字。
+                        数零的计数不说：一个空项目说得出的是它旁边那个「+」，而
+                        「0 会话」是每次扫过都要跳过的一行。会话行早就这么做了。 */}
+                    {(tagged || ws.sessions.length > 0) && (
+                      <span className="wsmeta">
+                        {tagged && <em className="wstag">{ws.isolated ? t("隔离") : parentOf(ws.root)}</em>}
+                        {ws.sessions.length > 0 && t("{n} 会话", { n: ws.sessions.length })}
+                      </span>
+                    )}
                     <span className="wsacts">
                       <button
                         data-action="session.new"

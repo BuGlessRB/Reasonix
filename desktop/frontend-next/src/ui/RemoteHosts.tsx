@@ -219,7 +219,11 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
               <i className="rmtpip" aria-hidden="true" />
               <span className="rmtname">{host.name}</span>
               <span className="rmttarget" dir="ltr">{host.target}</span>
-              <span className="rmtsub">{note(host) || t("{n} 会话", { n: panes.length })}</span>
+              {/* 数的是开着的面板，所以静止时每台机器都会说「0 会话」。零说不出
+                  任何行看不出的事，于是不说。 */}
+              {(note(host) || panes.length > 0) && (
+                <span className="rmtsub">{note(host) || t("{n} 会话", { n: panes.length })}</span>
+              )}
               {/* Always drawn, never only on hover: an entry nobody can see is
                   read as a feature this build does not have. */}
               <button
@@ -269,7 +273,9 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                         {/* Only the far kernel knows what it holds. Cold, "0
                             会话" would be this window guessing, and guessing
                             zero about a project worked in for months. */}
-                        {tree ? <span className="wsmeta">{t("{n} 会话", { n: ws.sessions.length })}</span> : null}
+                        {tree && ws.sessions.length > 0 ? (
+                          <span className="wsmeta">{t("{n} 会话", { n: ws.sessions.length })}</span>
+                        ) : null}
                         <span className="wsacts">
                           <button
                             className="wsadd"
