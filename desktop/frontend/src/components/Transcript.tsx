@@ -175,6 +175,9 @@ function ChatSession(props: TranscriptProps & { sessionKey: string }) {
     // The rail describes one snapshot. A replacement invalidates the locators
     // this jump was resolved against, so it must not keep paging the new body.
     currentSnapshotId: () => (tabId ? getTranscriptOutlineStore().getView(tabId).snapshotId : ""),
+    // Only a reader-initiated retry reaches this, and it is what lets a target
+    // resolve against a fresh cut instead of the recycled one.
+    refreshSnapshot: async () => { if (tabId) await getTranscriptOutlineStore().refresh(tabId); },
     isCurrent: () => lifetimeRef.current === lifetime.current,
   }), [mounts, scroll, source, tabId]);
   const jumpState = useSyncExternalStore(jump.subscribe, jump.getSnapshot, jump.getSnapshot);
@@ -192,13 +195,14 @@ function ChatSession(props: TranscriptProps & { sessionKey: string }) {
             tabId={tabId} knownTurns={props.totalTurns ?? 0}
             busyTurn={jumpState.status === "loading" ? jumpState.turn : null}
             failedTurn={jumpState.status === "failed" ? jumpState.turn : null}
+            failedReason={jumpState.reason}
             // Every click takes the one transaction entry point, so a newer
             // selection always supersedes a pending jump instead of racing it.
             onNavigate={(target) => {
               if (target.anchor.kind === "loaded") jump.jumpTo(target.anchor.key);
               else void jump.jump(target.entry);
             }}
-            onRetryJump={() => jump.retry()}
+            onRetryJump={() => { void jump.retry(); }}
             onCancelJump={() => jump.cancel()} /></Suspense>
           <div ref={scroller} className="transcript chat-flow-scroll" tabIndex={0} data-transcript-render-mode="full"
             data-transcript-hydrating={hydrating} data-scroll-mode={position.following ? "tail" : "reader"}>

@@ -45,6 +45,12 @@ export interface TurnJumpDeps {
   currentSnapshotId: () => string;
   /** False once the session, tab, or snapshot this jump belongs to is gone. */
   isCurrent: () => boolean;
+  /**
+   * Ask the owning session to install a fresh snapshot. Only a recycled cut
+   * needs it, and only a reader-initiated retry calls it, so navigation never
+   * replaces the body on its own.
+   */
+  refreshSnapshot: () => Promise<void>;
   /** Overrides the post-exhaustion wall-clock budget; tests shorten it. */
   drainMs?: number;
 }
@@ -98,11 +104,29 @@ export class ChatTurnJump {
     this.listeners.clear();
   }
 
-  /** Re-run the jump that last failed, against a freshly resolved snapshot. */
-  retry(): void {
+  /**
+   * Re-run the jump that last failed. A recycled cut cannot be retried against
+   * itself, so the owning session installs a fresh snapshot first and the target
+   * is then re-resolved from it by its stable identity — which is what makes
+   * the retry able to succeed. The refresh is part of the transaction, so a
+   * newer click or a cancel abandons it just like a pending page loop.
+   */
+  async retry(): Promise<void> {
     const entry = this.state.retry;
+    const reason = this.state.reason;
     if (entry === undefined) return;
-    void this.jump(entry);
+    const interaction = ++this.interaction;
+    if (reason === "snapshotExpired") {
+      this.detach();
+      this.watchReader();
+      this.publish({ turn: entry.id, status: "loading", retry: entry });
+      await this.deps.refreshSnapshot().catch(() => undefined);
+      if (this.interaction !== interaction || !this.deps.isCurrent()) {
+        this.bail(interaction);
+        return;
+      }
+    }
+    await this.jump(entry);
   }
 
   /**
@@ -132,7 +156,7 @@ export class ChatTurnJump {
     let pages = 0;
     try {
       for (;;) {
-        if (!current()) return;
+        if (!current()) { this.bail(interaction); return; }
         const mounted = this.deps.resolveKey(entry);
         if (mounted !== undefined) {
           if (!current()) return;
@@ -155,7 +179,7 @@ export class ChatTurnJump {
         pages++;
         const before = this.deps.mounts.getSnapshot();
         const loaded = await this.deps.loadOlder();
-        if (!current()) return;
+        if (!current()) { this.bail(interaction); return; }
         if (loaded === "stale") {
           // The cut this jump resolved against was recycled. Replacing the body
           // is the reader's decision, not a side effect of navigation.
@@ -174,7 +198,7 @@ export class ChatTurnJump {
           return;
         }
         await this.settleMounts(before);
-        if (!current()) return;
+        if (!current()) { this.bail(interaction); return; }
       }
     } catch (error) {
       this.fail(entry, interaction, error instanceof Error && error.message === "stale" ? "snapshotExpired" : "turnUnavailable");
@@ -222,7 +246,7 @@ export class ChatTurnJump {
    */
   private async drainTo(entry: TranscriptOutlineEntry, interaction: number, current: () => boolean): Promise<void> {
     const mounted = await this.waitForMount(entry, current);
-    if (!current()) return;
+    if (!current()) { this.bail(interaction); return; }
     if (mounted !== undefined) {
       this.deps.scroll.jump(mounted);
       this.finish(entry, interaction);
@@ -259,6 +283,17 @@ export class ChatTurnJump {
       const timer = setTimeout(() => { finish(undefined); }, this.deps.drainMs ?? DRAIN_MOUNT_MS);
       handle = requestAnimationFrame(step);
     });
+  }
+
+  /**
+   * Release the state a jump still owns after it stops early. A superseding
+   * interaction owns the state itself, so only the current one may clear it —
+   * otherwise a stale loop would wipe the mark a newer click just set.
+   */
+  private bail(interaction: number): void {
+    if (this.interaction !== interaction) return;
+    this.detach();
+    this.publish(IDLE);
   }
 
   private finish(entry: TranscriptOutlineEntry, interaction: number): void {

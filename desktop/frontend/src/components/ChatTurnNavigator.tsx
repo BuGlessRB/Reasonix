@@ -4,6 +4,7 @@ import type { ChatScrollController } from "../lib/chatScrollController";
 import type { ChatMountedOrder } from "../lib/chatMountedOrder";
 import { findLoadedTurn, indexLoadedTurns, type LoadedTurnNode } from "../lib/chatTurnRail";
 import { getTranscriptOutlineStore, type TranscriptOutlineView } from "../lib/transcriptOutlineStore";
+import type { TurnJumpReason } from "../lib/chatTurnJump";
 import type { TranscriptOutlineEntry } from "../lib/transcriptProtocol";
 import { useT } from "../lib/i18n";
 import { TurnNavigator, type TurnRailAnchor, type TurnRailItem } from "./harness-chat/TurnNavigator";
@@ -30,7 +31,7 @@ function Preview({ source, item }: { source: ChatSource; item: TurnRailItem }) {
   return <><div className={css.previewPrompt}>{prompt || item.ordinal}</div><div className={css.previewResponse}>{response}</div></>;
 }
 
-export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onNavigate, onRetryJump, onCancelJump, busyTurn, failedTurn, knownTurns = 0 }: {
+export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onNavigate, onRetryJump, onCancelJump, busyTurn, failedTurn, failedReason, knownTurns = 0 }: {
   source: ChatSource;
   scroll: ChatScrollController;
   mounts: ChatMountedOrder;
@@ -41,6 +42,8 @@ export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onNav
   onCancelJump?: () => void;
   busyTurn?: string | null;
   failedTurn?: string | null;
+  /** Why the last jump failed, so the retry can say what it is recovering. */
+  failedReason?: TurnJumpReason;
   /** Turns the session is already known to hold, independent of the outline. */
   knownTurns?: number;
 }) {
@@ -136,8 +139,15 @@ export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onNav
   // A failed jump is retried against its own target, not by reading more
   // history; a jump that is still paging offers its own cancel.
   const jumpFailed = failedTurn !== null && failedTurn !== undefined;
+  // A budget running out and a recycled cut are different situations, so the
+  // retry says which one it is recovering from.
+  const jumpReasonKey = !jumpFailed ? undefined
+    : failedReason === "pageBudgetExhausted" ? "chat.turnNavigation.reasonBudget"
+    : failedReason === "snapshotExpired" ? "chat.turnNavigation.reasonExpired"
+    : "chat.turnNavigation.reasonUnavailable";
   return <TurnNavigator items={items} activeTurn={position.activeKey || null} busyTurn={busyTurn ?? null}
     onNavigate={navigate} renderPreview={preview} t={t}
     loading={loading} failed={failed} onRetry={failed ? reloadOutline : jumpFailed ? onRetryJump : undefined}
-    jumpFailed={jumpFailed} onCancelJump={busyTurn ? onCancelJump : undefined} />;
+    jumpFailed={jumpFailed} jumpReasonKey={jumpReasonKey} truncated={outline.truncated}
+    onCancelJump={busyTurn ? onCancelJump : undefined} />;
 }

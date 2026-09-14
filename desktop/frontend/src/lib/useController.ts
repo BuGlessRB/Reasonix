@@ -2586,8 +2586,8 @@ export function useController() {
     if (!snapshotId) { outlineStore.release(tabId); return; }
     // A retry after a recycled cut installs a fresh snapshot; only that
     // explicit request may replace the body the reader is looking at.
-    outlineStore.register(tabId, localOutlineRead, () => {
-      void snapshotClientRef.current?.load(tabId, (snapshot) => dispatchToRef.current(tabId, { type: "transcript_snapshot", snapshot })).catch(() => {});
+    outlineStore.register(tabId, localOutlineRead, async () => {
+      await snapshotClientRef.current?.load(tabId, (snapshot) => dispatchToRef.current(tabId, { type: "transcript_snapshot", snapshot })).catch(() => undefined);
     });
     void outlineStore.sync(tabId, snapshotId);
   })).current;

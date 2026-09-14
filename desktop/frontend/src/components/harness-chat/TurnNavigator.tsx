@@ -37,6 +37,10 @@ interface TurnNavigatorProps {
   readonly failed?: boolean
   /** True when the offered retry re-runs a failed jump rather than the read. */
   readonly jumpFailed?: boolean
+  /** Localized explanation of why the last jump failed. */
+  readonly jumpReasonKey?: Parameters<ReturnType<typeof useT>>[0]
+  /** The outline stopped short of the whole session; the rail says so. */
+  readonly truncated?: boolean
   readonly onRetry?: () => void
   /** Present while a jump can still be abandoned. */
   readonly onCancelJump?: () => void
@@ -100,7 +104,7 @@ function sameRailScrollState(left: RailScrollState, right: RailScrollState): boo
     && left.viewportHeight === right.viewportHeight
 }
 
-function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPreview, t, loading, failed, jumpFailed, onRetry, onCancelJump }: TurnNavigatorProps) {
+function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPreview, t, loading, failed, jumpFailed, jumpReasonKey, truncated, onRetry, onCancelJump }: TurnNavigatorProps) {
   const [previewTurn, setPreviewTurn] = useState<string | null>(null)
   const [scrollState, setScrollState] = useState<RailScrollState>(RAIL_AT_REST)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
@@ -208,6 +212,8 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPrev
           ref={scrollerRef}
           className={fadeClasses.join(' ')}
           onScroll={() => { syncScrollState() }}
+          data-nav-truncated={truncated ? 'true' : undefined}
+          title={truncated ? t('chat.turnNavigation.truncated') : undefined}
         >
           <div className={css.marks}>
             {items.slice(firstVisible, lastVisible).map((item, visibleIndex) => {
@@ -254,8 +260,9 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPrev
           </div>
         )}
       </nav>
-      {failed && onRetry !== undefined && (
-        <button type="button" className="btn chat-turn-navigation-retry" onClick={onRetry}>
+      {onRetry !== undefined && (
+        <button type="button" className="btn chat-turn-navigation-retry" data-nav-retry={jumpFailed ? 'jump' : 'outline'}
+          onClick={onRetry} title={jumpReasonKey === undefined ? undefined : t(jumpReasonKey)}>
           {t(jumpFailed ? 'chat.turnNavigation.retryJump' : 'chat.turnNavigation.retry')}
         </button>
       )}

@@ -126,7 +126,44 @@ try {
     "the busy state to clear",
   );
 
-  console.log("chat turn outline jump: complete rail, unloaded marks, absolute numbering and mount-confirmed jump passed");
+  // A jump that fails must offer its own retry. The outline stays perfectly
+  // readable here, so an entry gated on the outline's own failure never appears
+  // — which is exactly the case that used to render no button at all.
+  const phantom: TranscriptOutlineEntry = {
+    id: "m:u9", messageId: "u9", turn: TOTAL + 1, order: 99, prompt: "phantom prompt", answer: "",
+  };
+  store.register(TAB, async () => ({
+    ...outlinePage(), snapshotId: "snapshot-2",
+    entries: [...outlinePage().entries, phantom], total: TOTAL + 1, nextOffset: TOTAL + 1,
+  }));
+  await store.load(TAB, "snapshot-2");
+  await harness.render(turnsFrom(TOTAL - 1), {
+    tabId: TAB, totalTurns: TOTAL + 1, hasOlderHistory: true, historyStartTurn: TOTAL - 2,
+    onLoadOlderHistory: async () => { pages += 1; return false; },
+  });
+  await harness.waitFor(() => marks().length === TOTAL + 1, "the rail to list the phantom turn");
+  const phantomMark = marks().find(mark => mark.dataset.navTurn === "m:u9")!;
+  const pagesBefore = pages;
+  await act(async () => { phantomMark.click(); });
+  await harness.settle();
+  await new Promise(r => setTimeout(r, 6000));
+  await harness.settle();
+    await harness.waitFor(
+    () => harness.container.querySelector('[data-nav-retry="jump"]') !== null,
+    "the failed jump to offer its own retry",
+  );
+  const retryButton = harness.container.querySelector<HTMLButtonElement>('[data-nav-retry="jump"]')!;
+  assert.ok(retryButton.getAttribute("title"), "the retry says why the jump failed");
+  assert.equal(store.getView(TAB).mode, "ready", "the outline itself never failed");
+  assert.equal(
+    harness.container.querySelector('[data-nav-retry="outline"]'),
+    null,
+    "no outline-retry entry is offered when only the jump failed",
+  );
+  await act(async () => { retryButton.click(); });
+  await harness.waitFor(() => pages > pagesBefore, "the retry to re-run the jump", 400);
+
+  console.log("chat turn outline jump: complete rail, unloaded marks, absolute numbering, mount-confirmed jump and failed-jump retry passed");
 } finally {
   store?.release(TAB);
   await harness.unmount();

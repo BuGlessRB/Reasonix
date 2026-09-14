@@ -226,7 +226,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       if (!snapshotId) { outlineStore.release(id); return; }
       // A retry after a recycled cut re-installs the snapshot; only that
       // explicit request may replace the body the reader is looking at.
-      outlineStore.register(id, remoteOutlineRead, () => { void loadModernRef.current?.(); });
+      outlineStore.register(id, remoteOutlineRead, async () => { await loadModernRef.current?.().catch(() => undefined); });
       void outlineStore.sync(id, snapshotId);
     });
     projector.bind((event) => {

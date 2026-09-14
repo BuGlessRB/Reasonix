@@ -61,16 +61,25 @@ export class TranscriptOutlineStore {
   private readonly generations = new Map<string, number>();
   private readonly pending = new Map<string, Promise<void>>();
   private readonly readers = new Map<string, OutlineRead>();
-  private readonly refreshers = new Map<string, () => void>();
+  private readonly refreshers = new Map<string, () => Promise<void>>();
 
   /**
    * Bind a tab to the host that owns it. Local controllers and remote sessions
    * share this index, so the owning hook registers the reader for its own tabs
    * and a tab it never loaded stays in the legacy mode.
    */
-  register(tabId: string, read: OutlineRead, refresh?: () => void): void {
+  register(tabId: string, read: OutlineRead, refresh?: () => Promise<void>): void {
     this.readers.set(tabId, read);
     if (refresh) this.refreshers.set(tabId, refresh);
+  }
+
+  /**
+   * Have the owning session install a fresh snapshot, whatever the current view
+   * says. A navigation jump that hit a recycled cut needs this even when the
+   * outline itself still reads as ready, so it is not gated on the view's mode.
+   */
+  refresh(tabId: string): Promise<void> {
+    return this.refreshers.get(tabId)?.() ?? Promise.resolve();
   }
 
   /**
@@ -81,8 +90,7 @@ export class TranscriptOutlineStore {
    */
   retry(tabId: string): Promise<void> {
     const view = this.views.get(tabId);
-    const refresh = this.refreshers.get(tabId);
-    if (view?.error && refresh) { refresh(); return Promise.resolve(); }
+    if (view?.error && this.refreshers.has(tabId)) return this.refresh(tabId);
     if (!view?.snapshotId) return Promise.resolve();
     return this.load(tabId, view.snapshotId);
   }

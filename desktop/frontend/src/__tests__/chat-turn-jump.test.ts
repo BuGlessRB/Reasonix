@@ -46,6 +46,7 @@ function jumpFor(mounts: ChatMountedOrder, options: {
   hasOlder?: () => boolean;
   current?: () => boolean;
   snapshotId?: () => string;
+  refresh?: () => Promise<void>;
   drainMs?: number;
 }) {
   const fake = fakeScroll();
@@ -66,6 +67,7 @@ function jumpFor(mounts: ChatMountedOrder, options: {
     hasOlder: options.hasOlder ?? (() => true),
     resolveKey: (entry) => (options.mounted.has(entry.id) ? entry.id : undefined),
     currentSnapshotId: options.snapshotId ?? (() => "cut"),
+    refreshSnapshot: options.refresh ?? (async () => {}),
     isCurrent: options.current ?? (() => true),
     drainMs: options.drainMs,
   });
@@ -157,12 +159,60 @@ async function main() {
       hasOlder: () => true,
       resolveKey: () => undefined,
       currentSnapshotId: () => "cut",
+      refreshSnapshot: async () => {},
       isCurrent: () => true,
     });
     await jump.jump(target("m:1"));
     assert.equal(jump.getSnapshot().status, "failed");
     assert.equal(jump.getSnapshot().reason, "snapshotExpired", "a recycled cut is its own outcome");
     assert.deepEqual(fake.jumps, [], "a recycled cut never moves the viewport");
+  }
+
+  {
+    // Retrying a recycled cut must install a fresh snapshot first: re-running
+    // the same jump against the same dead cut just fails again.
+    const mounts = new ChatMountedOrder();
+    let snapshot = "cut";
+    let refreshes = 0;
+    let stale = true;
+    const fake = fakeScroll();
+    let mounted: string | undefined;
+    const jump = new ChatTurnJump({
+      mounts, scroll: fake.scroll,
+      loadOlder: async () => {
+        if (stale) return "stale" as const;
+        // The retry's page is productive and advances the mount, as a real one
+        // does; the recycled cut never got this far.
+        mounted = "m:1";
+        mounts.publish(["m:1"]);
+        return "loaded" as const;
+      },
+      hasOlder: () => true,
+      resolveKey: () => mounted,
+      currentSnapshotId: () => snapshot,
+      refreshSnapshot: async () => { refreshes += 1; stale = false; snapshot = "cut:2"; },
+      isCurrent: () => true,
+      drainMs: 0,
+    });
+    await jump.jump(target("m:1"));
+    assert.equal(jump.getSnapshot().reason, "snapshotExpired", "the recycled cut is reported");
+    await jump.retry();
+    assert.equal(refreshes, 1, "the retry installs a fresh snapshot");
+    assert.deepEqual(fake.jumps, ["m:1"], "the retry reaches the target on the new cut");
+    assert.equal(jump.getSnapshot().status, "idle", "a successful retry ends the transaction");
+  }
+
+  {
+    // A newer click during the refresh abandons the retry, like any other
+    // pending transaction.
+    const mounts = new ChatMountedOrder();
+    const state = jumpFor(mounts, { mounted: new Set(), pages: [[], ["m:1"]], hasOlder: () => true });
+    await state.jump.jump(target("m:1"));
+    const pending = state.jump.retry();
+    state.jump.jumpTo("u9");
+    await pending;
+    assert.deepEqual(state.fake.jumps, ["u9"], "a click during the refresh wins");
+    assert.equal(state.jump.getSnapshot().status, "idle");
   }
 
   {
@@ -177,6 +227,10 @@ async function main() {
     await pending;
     assert.deepEqual(state.fake.jumps, [], "a replaced snapshot cancels the pending jump");
     assert.equal(state.loads.length, 1, "no page is requested against the replaced snapshot");
+    // Stopping is not enough: the transaction must also release the state it
+    // still owns, or the mark pulses forever and the reader stays subscribed.
+    assert.equal(state.jump.getSnapshot().status, "idle", "a replaced snapshot ends the loading state");
+    assert.equal(state.fake.readerCount(), 0, "a replaced snapshot releases the reader subscription");
   }
 
   {
@@ -265,6 +319,7 @@ async function main() {
       hasOlder: () => pages < 3,
       resolveKey: () => undefined,
       currentSnapshotId: () => "cut",
+      refreshSnapshot: async () => {},
       isCurrent: () => true,
     });
     let settled = false;
