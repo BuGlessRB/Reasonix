@@ -107,6 +107,15 @@ func TestCanonicalSessionHistoryHTTPUsesAuthorizedContentRanges(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&page); err != nil || response.StatusCode != http.StatusOK || len(page.Messages) != 1 || page.Messages[0].ContentRef == nil {
 		t.Fatalf("history status=%d page=%+v err=%v", response.StatusCode, page, err)
 	}
+	searchResponse, err := http.Get(server.URL + "/session-history/search?sessionId=canonical&q=range&limit=10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer searchResponse.Body.Close()
+	var search canonical.SearchHistoryPage
+	if err := json.NewDecoder(searchResponse.Body).Decode(&search); err != nil || searchResponse.StatusCode != http.StatusOK || len(search.Hits) != 1 || search.Hits[0].MessageID != "large" {
+		t.Fatalf("search status=%d page=%+v err=%v", searchResponse.StatusCode, search, err)
+	}
 	request, _ := json.Marshal(sessionHistoryContentRequest{Ref: *page.Messages[0].ContentRef, Offset: 0, Length: 32})
 	contentResponse, err := http.Get(server.URL + "/session-history/content?sessionId=canonical&request=" + url.QueryEscape(string(request)))
 	if err != nil {

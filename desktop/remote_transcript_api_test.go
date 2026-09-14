@@ -115,6 +115,11 @@ func TestRemoteCanonicalSessionHistoryUsesNegotiatedIdentity(t *testing.T) {
 				t.Errorf("content request = %+v", request)
 			}
 			_ = json.NewEncoder(w).Encode(SessionHistoryContentChunk{Data: base64.StdEncoding.EncodeToString([]byte("big")), NextOffset: 3, Done: true})
+		case "/session-history/search":
+			if r.URL.Query().Get("q") != "needle" || r.URL.Query().Get("cursor") != "older" || r.URL.Query().Get("limit") != "5" {
+				t.Errorf("search query = %q", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(session.SearchHistoryPage{Hits: []session.SearchHistoryHit{{MessageID: "m1", Preview: "needle"}}, SnapshotSequence: 9})
 		default:
 			http.NotFound(w, r)
 		}
@@ -130,6 +135,10 @@ func TestRemoteCanonicalSessionHistoryUsesNegotiatedIdentity(t *testing.T) {
 	chunk, err := app.RemoteSessionHistoryContentForTab(tab.id, ref, 0)
 	if err != nil || chunk.Data != base64.StdEncoding.EncodeToString([]byte("big")) || !chunk.Done {
 		t.Fatalf("chunk = %+v, %v", chunk, err)
+	}
+	search, err := app.RemoteSearchSessionHistoryForTab(tab.id, "needle", "older", 5)
+	if err != nil || len(search.Hits) != 1 || search.Hits[0].MessageID != "m1" {
+		t.Fatalf("search = %+v, %v", search, err)
 	}
 }
 

@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 6;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:6abd8332faea999ddc85520e21922390544e5fa6fcdb9e0c83b6c3e6e9b6286b";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:83348ecbb26072463d45d8d2bfbcb31dccb3365d4a8f0f880300c6bbfbec87f0";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -330,6 +330,7 @@ export const DESKTOP_COMMANDS = [
   "RemoteHosts",
   "RemoteLastWorkspace",
   "RemoteProjectSessions",
+  "RemoteSearchSessionHistoryForTab",
   "RemoteServerLogs",
   "RemoteServerStatus",
   "RemoteSessionHistoryContentForTab",
@@ -447,6 +448,7 @@ export const DESKTOP_COMMANDS = [
   "SearchFileRefs",
   "SearchFileRefsForTab",
   "SearchHistoryContent",
+  "SearchSessionHistoryForTab",
   "SessionHistoryContentForTab",
   "SessionHistoryPageForTab",
   "SetActiveSessionVersion",
@@ -4242,6 +4244,21 @@ export interface PersistentMessage {
   contentRef?: Ref | null;
 }
 
+export interface SearchHistoryHit {
+  messageId: string;
+  position: number;
+  role: string;
+  preview: string;
+  eventSequence: number;
+}
+
+export interface SearchHistoryPage {
+  hits: SearchHistoryHit[];
+  snapshotSequence: number;
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
 export interface Ref {
   digest: string;
   bytes: number;
@@ -4916,6 +4933,7 @@ export interface GeneratedDesktopCommands {
   RemoteHosts(): Promise<RemoteHostView[]>;
   RemoteLastWorkspace(arg0: string): Promise<string>;
   RemoteProjectSessions(arg0: string, arg1: string): Promise<RemoteSessionView[]>;
+  RemoteSearchSessionHistoryForTab(arg0: string, arg1: string, arg2: string, arg3: number): Promise<SearchHistoryPage>;
   RemoteServerLogs(arg0: string, arg1: string, arg2: number): Promise<string>;
   RemoteServerStatus(arg0: string, arg1: string): Promise<RemoteServerView>;
   RemoteSessionHistoryContentForTab(arg0: string, arg1: Ref, arg2: number): Promise<SessionHistoryContentChunk>;
@@ -5033,6 +5051,7 @@ export interface GeneratedDesktopCommands {
   SearchFileRefs(arg0: string): Promise<DirEntry[]>;
   SearchFileRefsForTab(arg0: string, arg1: string): Promise<DirEntry[]>;
   SearchHistoryContent(arg0: HistorySearchRequest): Promise<HistorySearchPage>;
+  SearchSessionHistoryForTab(arg0: string, arg1: string, arg2: string, arg3: number): Promise<SearchHistoryPage>;
   SessionHistoryContentForTab(arg0: string, arg1: Ref, arg2: number): Promise<SessionHistoryContentChunk>;
   SessionHistoryPageForTab(arg0: string, arg1: string, arg2: number): Promise<MessageHistoryPage>;
   SetActiveSessionVersion(arg0: RecoveryPreferenceRequest): Promise<void>;

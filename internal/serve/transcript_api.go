@@ -19,6 +19,7 @@ func (s *Server) registerTranscriptRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /transcript/content", s.transcriptContent)
 	mux.HandleFunc("GET /transcript/replay", s.transcriptReplay)
 	mux.HandleFunc("GET /session-history/page", s.sessionHistoryPage)
+	mux.HandleFunc("GET /session-history/search", s.sessionHistorySearch)
 	mux.HandleFunc("GET /session-history/content", s.sessionHistoryContent)
 }
 
@@ -101,6 +102,35 @@ func (s *Server) sessionHistoryContent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(sessionHistoryContentResponse{Data: base64.StdEncoding.EncodeToString(data), NextOffset: next, Done: next == request.Ref.Bytes})
+}
+
+func (s *Server) sessionHistorySearch(w http.ResponseWriter, r *http.Request) {
+	s.bindMu.Lock()
+	defer s.bindMu.Unlock()
+	query, ref, ok := s.canonicalSessionQuery(w, r)
+	if !ok {
+		return
+	}
+	textQuery := r.URL.Query().Get("q")
+	if len(textQuery) > 4096 {
+		http.Error(w, "history search query is too large", http.StatusBadRequest)
+		return
+	}
+	limit := 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if _, err := fmt.Sscan(raw, &limit); err != nil {
+			http.Error(w, "invalid history search limit", http.StatusBadRequest)
+			return
+		}
+	}
+	page, err := query.SearchHistory(r.Context(), ref, textQuery, r.URL.Query().Get("cursor"), limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(page)
 }
 
 // transcriptRead binds each read to the selected controller. A file mirror

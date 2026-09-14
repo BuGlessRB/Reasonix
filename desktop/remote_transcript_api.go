@@ -231,3 +231,19 @@ func (a *App) RemoteSessionHistoryContentForTab(tabID string, ref sessioncontent
 	}
 	return chunk, err
 }
+
+func (a *App) RemoteSearchSessionHistoryForTab(tabID, textQuery, cursor string, limit int) (session.SearchHistoryPage, error) {
+	query := url.Values{"q": []string{textQuery}}
+	if cursor != "" {
+		query.Set("cursor", cursor)
+	}
+	if limit > 0 {
+		query.Set("limit", fmt.Sprint(limit))
+	}
+	var page session.SearchHistoryPage
+	supported, err := a.remoteSessionHistoryRead(tabID, "/session-history/search", query, &page, session.HistoryPageMaxBytes+(64<<10))
+	if err == nil && !supported {
+		err = control.ErrTranscriptProjectionUnavailable
+	}
+	return page, err
+}

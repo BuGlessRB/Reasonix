@@ -1029,7 +1029,7 @@
       "kind": "command",
       "name": "EnsureRemoteProjectSessions",
       "detail": "(hostID string, workspace string) ([]RemoteSessionView, error)",
-      "location": "desktop/remote_listing.go:378",
+      "location": "desktop/remote_listing.go:379",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -2589,7 +2589,15 @@
       "kind": "command",
       "name": "RemoteProjectSessions",
       "detail": "(hostID string, workspace string) ([]RemoteSessionView, error)",
-      "location": "desktop/remote_listing.go:365",
+      "location": "desktop/remote_listing.go:366",
+      "class": "keep-business",
+      "owner": "hostrpc desktop/invoke"
+    },
+    {
+      "kind": "command",
+      "name": "RemoteSearchSessionHistoryForTab",
+      "detail": "(tabID string, textQuery string, cursor string, limit int) (session.SearchHistoryPage, error)",
+      "location": "desktop/remote_transcript_api.go:235",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -2606,6 +2614,22 @@
       "name": "RemoteServerStatus",
       "detail": "(hostID string, workspace string) (RemoteServerView, error)",
       "location": "desktop/remote_app.go:849",
+      "class": "keep-business",
+      "owner": "hostrpc desktop/invoke"
+    },
+    {
+      "kind": "command",
+      "name": "RemoteSessionHistoryContentForTab",
+      "detail": "(tabID string, ref sessioncontent.Ref, offset int64) (SessionHistoryContentChunk, error)",
+      "location": "desktop/remote_transcript_api.go:214",
+      "class": "keep-business",
+      "owner": "hostrpc desktop/invoke"
+    },
+    {
+      "kind": "command",
+      "name": "RemoteSessionHistoryPageForTab",
+      "detail": "(tabID string, cursor string, limit int) (session.MessageHistoryPage, error)",
+      "location": "desktop/remote_transcript_api.go:196",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -2653,7 +2677,7 @@
       "kind": "command",
       "name": "RemoteTranscriptContentForTab",
       "detail": "(tabID string, req transcript.ContentRequest) (transcript.ContentChunk, error)",
-      "location": "desktop/remote_transcript_api.go:108",
+      "location": "desktop/remote_transcript_api.go:111",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -2661,7 +2685,7 @@
       "kind": "command",
       "name": "RemoteTranscriptPageForTab",
       "detail": "(tabID string, req transcript.PageRequest) (transcript.Snapshot, error)",
-      "location": "desktop/remote_transcript_api.go:99",
+      "location": "desktop/remote_transcript_api.go:102",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -2669,7 +2693,7 @@
       "kind": "command",
       "name": "RemoteTranscriptReplayForTab",
       "detail": "(tabID string, req control.TranscriptReplayRequest) (control.TranscriptReplay, error)",
-      "location": "desktop/remote_transcript_api.go:117",
+      "location": "desktop/remote_transcript_api.go:120",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -2677,7 +2701,7 @@
       "kind": "command",
       "name": "RemoteTranscriptSnapshotForTab",
       "detail": "(tabID string, req transcript.PageRequest) (RemoteTranscriptSnapshot, error)",
-      "location": "desktop/remote_transcript_api.go:90",
+      "location": "desktop/remote_transcript_api.go:93",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -3515,9 +3539,17 @@
     },
     {
       "kind": "command",
+      "name": "SearchSessionHistoryForTab",
+      "detail": "(tabID string, textQuery string, cursor string, limit int) (session.SearchHistoryPage, error)",
+      "location": "desktop/session_history_service.go:36",
+      "class": "keep-business",
+      "owner": "hostrpc desktop/invoke"
+    },
+    {
+      "kind": "command",
       "name": "SessionHistoryContentForTab",
       "detail": "(tabID string, ref sessioncontent.Ref, offset int64) (SessionHistoryContentChunk, error)",
-      "location": "desktop/session_history_service.go:38",
+      "location": "desktop/session_history_service.go:46",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -4958,7 +4990,7 @@
     {
       "kind": "event",
       "name": "remote-tab:updated",
-      "location": "desktop/remote_listing.go:544",
+      "location": "desktop/remote_listing.go:545",
       "class": "keep-business",
       "owner": "desktop/event frame (seq + generation), same payload"
     },

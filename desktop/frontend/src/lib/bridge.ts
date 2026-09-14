@@ -6,6 +6,7 @@ import type {
   DesktopCommandName,
   MessageHistoryPage,
   Ref as SessionContentRef,
+  SearchHistoryPage,
   SessionHistoryContentChunk,
 } from "../generated/desktopContract.generated";
 import type { InvocationRequest } from "./invocationDisplay";
@@ -364,6 +365,8 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   SessionHistoryContentForTab(tabID: string, ref: SessionContentRef, offset: number): Promise<SessionHistoryContentChunk>;
   RemoteSessionHistoryPageForTab(tabID: string, cursor: string, limit: number): Promise<MessageHistoryPage>;
   RemoteSessionHistoryContentForTab(tabID: string, ref: SessionContentRef, offset: number): Promise<SessionHistoryContentChunk>;
+  SearchSessionHistoryForTab(tabID: string, textQuery: string, cursor: string, limit: number): Promise<SearchHistoryPage>;
+  RemoteSearchSessionHistoryForTab(tabID: string, textQuery: string, cursor: string, limit: number): Promise<SearchHistoryPage>;
   HistoryCheckpointTurnsForTab(tabID: string): Promise<number[]>;
   Checkpoints(): Promise<CheckpointMeta[]>;
   CheckpointsForTab(tabID: string): Promise<CheckpointMeta[]>;
@@ -3269,6 +3272,12 @@ function makeMockApp(): AppBindings {
         },
         async RemoteSessionHistoryContentForTab(_tabID: string, ref: SessionContentRef, offset: number): Promise<SessionHistoryContentChunk> {
           return { data: "", nextOffset: Math.min(offset, ref.bytes), done: offset >= ref.bytes };
+        },
+        async SearchSessionHistoryForTab(): Promise<SearchHistoryPage> {
+          return { hits: [], snapshotSequence: 0, hasMore: false };
+        },
+        async RemoteSearchSessionHistoryForTab(): Promise<SearchHistoryPage> {
+          return { hits: [], snapshotSequence: 0, hasMore: false };
         },
     async ListSessions() {
       return sessions.map((s) => ({ ...s }));

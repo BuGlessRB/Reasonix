@@ -33,6 +33,14 @@ func (a *App) SessionHistoryPageForTab(tabID, cursor string, limit int) (session
 	return query.HistoryPage(context.Background(), ref, cursor, limit)
 }
 
+func (a *App) SearchSessionHistoryForTab(tabID, textQuery, cursor string, limit int) (session.SearchHistoryPage, error) {
+	query, ref, err := a.canonicalSessionQuery(tabID)
+	if err != nil {
+		return session.SearchHistoryPage{}, err
+	}
+	return query.SearchHistory(context.Background(), ref, textQuery, cursor, limit)
+}
+
 // SessionHistoryContentForTab reads the next bounded chunk only after Query
 // proves that the reference belongs to this session's durable view.
 func (a *App) SessionHistoryContentForTab(tabID string, ref sessioncontent.Ref, offset int64) (SessionHistoryContentChunk, error) {

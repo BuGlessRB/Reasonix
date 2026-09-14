@@ -76,3 +76,45 @@ func TestHistoryPageKeepsSnapshotAndAuthorizesReferencedContent(t *testing.T) {
 		t.Fatal("content hash without a session reference was authorized")
 	}
 }
+
+func TestSearchHistoryUsesStableSnapshotAndOpaqueQueryCursor(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions-v4")
+	service, err := NewService("local", NewFilesystemPersistence(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "search"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendMessage := func(id, content string) {
+		payload, _ := json.Marshal(map[string]any{"message": provider.Message{ID: id, Role: provider.RoleUser, Content: content}})
+		if _, err := runtime.Session().Append(t.Context(), Batch{OperationID: id, Events: []Event{{Kind: "message/complete", Payload: payload}}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := runtime.Session().Flush(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	appendMessage("one", "first needle")
+	appendMessage("two", "second needle")
+	appendMessage("three", "unrelated")
+	first, err := service.Query().SearchHistory(t.Context(), runtime.Ref(), "needle", "", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Hits) != 1 || first.Hits[0].MessageID != "two" || !first.HasMore || first.NextCursor == "" {
+		t.Fatalf("first search = %+v", first)
+	}
+	appendMessage("four", "new needle outside snapshot")
+	second, err := service.Query().SearchHistory(t.Context(), runtime.Ref(), "needle", first.NextCursor, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Hits) != 1 || second.Hits[0].MessageID != "one" {
+		t.Fatalf("second search = %+v", second)
+	}
+	if _, err := service.Query().SearchHistory(t.Context(), runtime.Ref(), "different", first.NextCursor, 10); err == nil {
+		t.Fatal("search cursor was accepted for another query")
+	}
+}

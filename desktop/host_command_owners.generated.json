@@ -4585,6 +4585,23 @@
       ]
     }
   },
+  "RemoteSearchSessionHistoryForTab": {
+    "domain": "desktop/remote_transcript_api.go",
+    "owner": "App.RemoteSearchSessionHistoryForTab",
+    "sources": [
+      "desktop/remote_transcript_api.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RemoteSearchSessionHistoryForTab",
+      "inputs": [
+        "tabID",
+        "textQuery",
+        "cursor",
+        "limit"
+      ]
+    }
+  },
   "RemoteServerLogs": {
     "domain": "desktop/remote_app.go",
     "owner": "App.RemoteServerLogs",
@@ -6321,6 +6338,23 @@
       "resolver": "App.SearchHistoryContent",
       "inputs": [
         "req"
+      ]
+    }
+  },
+  "SearchSessionHistoryForTab": {
+    "domain": "desktop/session_history_service.go",
+    "owner": "App.SearchSessionHistoryForTab",
+    "sources": [
+      "desktop/session_history_service.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SearchSessionHistoryForTab",
+      "inputs": [
+        "tabID",
+        "textQuery",
+        "cursor",
+        "limit"
       ]
     }
   },
