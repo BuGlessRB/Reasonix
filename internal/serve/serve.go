@@ -287,7 +287,10 @@ func (s *Server) switchModelLocked(ctx context.Context, ref string) error {
 	// this session.
 	if prev, ok := cur.(*control.Controller); ok {
 		newCtrl.RestoreSessionAuthorizations(prev.SessionAuthorizations())
-		newCtrl.InheritLifecycleFrom(prev)
+		if err := newCtrl.InheritLifecycleFrom(prev); err != nil {
+			s.closeTaggedController(newCtrl)
+			return fmt.Errorf("switch model: active Goal continuation must finish before rebuilding: %w", err)
+		}
 	}
 	// Persist before publishing the replacement. A failed write leaves cur and
 	// the on-disk transcript coherent and lets the caller retry; publishing first
@@ -335,6 +338,7 @@ func (s *Server) switchModelLocked(ctx context.Context, ref string) error {
 		s.closeTaggedController(newCtrl)
 		return fmt.Errorf("switch model: session changed during switch")
 	}
+	newCtrl.ActivateGoalDriverAfterRebuild()
 	tag.Activate()
 	s.refreshProviderSetup(currentModelRef(newCtrl))
 
@@ -401,6 +405,7 @@ func (s *Server) reloadExtensions(ctx context.Context) error {
 		s.closeTaggedController(newCtrl)
 		return fmt.Errorf("reload extensions: session changed during reload")
 	}
+	newCtrl.ActivateGoalDriverAfterRebuild()
 	if tag := s.tagFor(newCtrl); tag != nil {
 		tag.Activate()
 	}
@@ -594,6 +599,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /auto-approve-tools", s.foregroundMutation(s.autoApproveTools))
 	mux.HandleFunc("POST /bypass", s.foregroundMutation(s.bypass))
 	mux.HandleFunc("POST /goal", s.foregroundMutation(s.goal))
+	mux.HandleFunc("POST /goal/edit", s.foregroundMutation(s.goalEdit))
 	mux.HandleFunc("POST /goal/pause", s.foregroundMutation(s.goalPause))
 	mux.HandleFunc("POST /goal/resume", s.foregroundMutation(s.goalResume))
 	mux.HandleFunc("GET /goal-diagnostics", s.goalDiagnostics)
@@ -1191,28 +1197,6 @@ func (s *Server) permissionGrantRevoke(w http.ResponseWriter, r *http.Request) {
 // bypass is the legacy HTTP alias for autoApproveTools.
 func (s *Server) bypass(w http.ResponseWriter, r *http.Request) {
 	s.autoApproveTools(w, r)
-}
-
-// goal sets or clears the active goal. An empty goal string clears it.
-// Setting a non-empty goal disables plan mode (matching the desktop behavior).
-func (s *Server) goal(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Goal string `json:"goal"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
-		return
-	}
-	goal := strings.TrimSpace(body.Goal)
-	if goal == "" {
-		s.ctl().ClearGoal()
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	// Disable plan mode before setting the goal, mirroring the desktop.
-	s.ctl().SetPlanMode(false)
-	s.ctl().SetGoal(goal)
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // resume loads a previous session from a JSONL file.

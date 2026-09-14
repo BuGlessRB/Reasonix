@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 5;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:ee7af0ebd1aa172c2e4a905797012ad04a0e91f5f69214811748675fe5c712e3";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:ab532436618fe0d99f670ecf8fecf80e29e0082a0b901cc76a1d4a27a702acc9";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -125,6 +125,8 @@ export const DESKTOP_COMMANDS = [
   "DiagnoseBotConnection",
   "DisableThemePack",
   "DisconnectRemoteHost",
+  "EditGoalForTab",
+  "EditRemoteTabGoal",
   "Effort",
   "EffortForTab",
   "EnqueueInboxFollowup",
@@ -4674,6 +4676,8 @@ export interface GeneratedDesktopCommands {
   DiagnoseBotConnection(arg0: string): Promise<BotConnectionDiagnostic>;
   DisableThemePack(): Promise<void>;
   DisconnectRemoteHost(arg0: string): Promise<void>;
+  EditGoalForTab(arg0: string, arg1: string, arg2: number | null): Promise<void>;
+  EditRemoteTabGoal(arg0: string, arg1: string, arg2: number | null): Promise<void>;
   Effort(): Promise<EffortInfo>;
   EffortForTab(arg0: string): Promise<EffortInfo>;
   EnqueueInboxFollowup(arg0: string, arg1: string, arg2: string, arg3: string): Promise<InboxReceiptView>;

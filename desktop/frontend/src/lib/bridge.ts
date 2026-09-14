@@ -156,6 +156,7 @@ import type {
   WorkspaceView,
   SessionClearResult,
 } from "./types";
+import { editMockGoalTab } from "./mockGoalLifecycle";
 import { browserPreviewShellSupport } from "./shellSupportPreview";
 import { desktopHost } from "./desktopHost";
 export * from "./remoteTabEvents";
@@ -338,6 +339,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   SetComposerProfileForTab(tabID: string, collaborationMode: string, toolApprovalMode: string, goal: string): Promise<string[] | void>;
   SetGoal(goal: string): Promise<void>;
   SetGoalForTab(tabID: string, goal: string): Promise<void>;
+  EditGoalForTab(tabID: string, objective: string, maxGoalRounds: number | null): Promise<void>;
   ResumeGoalForTab(tabID: string): Promise<boolean>;
   PauseGoalForTab(tabID: string): Promise<boolean>;
   ClearGoalForTab(tabID: string): Promise<void>;
@@ -3120,10 +3122,7 @@ function makeMockApp(): AppBindings {
           });
           return drainMockApprovalPreviews(nextToolApproval);
         },
-        async SetGoal(goal) {
-          const active = mockTabs.find((tab) => tab.active);
-          if (active) await this.SetGoalForTab(active.id, goal);
-        },
+        async SetGoal(goal) { const active = mockTabs.find((tab) => tab.active); if (active) await this.SetGoalForTab(active.id, goal); },
         async SetGoalForTab(tabID, goal) {
           const nextGoal = goal.trim();
           mockTabs = mockTabs.map((tab) =>
@@ -3138,6 +3137,7 @@ function makeMockApp(): AppBindings {
               : tab,
           );
         },
+        async EditGoalForTab(tabID, objective, maxGoalRounds) { mockTabs = mockTabs.map((tab) => editMockGoalTab(tab, tabID, objective, maxGoalRounds)); },
         async ResumeGoalForTab(tabID) {
           let resumed = false;
           mockTabs = mockTabs.map((tab) => {
@@ -3156,9 +3156,7 @@ function makeMockApp(): AppBindings {
           });
           return paused;
         },
-        async ClearGoalForTab(tabID) {
-          await this.SetGoalForTab(tabID, "");
-        },
+        async ClearGoalForTab(tabID) { await this.SetGoalForTab(tabID, ""); },
         async Compact() {},
         async CompactForTab() {},
         async NewSession() {},

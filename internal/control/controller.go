@@ -263,6 +263,7 @@ type Controller struct {
 	goalDriverWG      sync.WaitGroup
 	goalDriverPending bool
 	goalDriverActive  *goalRoundReservation
+	goalDriverControl goalDriverControl
 	// legacyResearchArchive reads explicit pre-unification task paths. It never
 	// creates or mutates archive state. See
 	// autoresearch_manager.go.
@@ -749,6 +750,7 @@ func New(opts Options) *Controller {
 	}
 	runtimeOwner := runtimeOwnerOrDefault(opts.RuntimeOwner)
 	pluginCtx = extension.ContextWithRuntimeOwner(pluginCtx, runtimeOwner)
+	goalDriverCtx, goalDriverCancel := context.WithCancel(context.Background())
 	if opts.Hooks != nil {
 		opts.Hooks.SetSessionID(agent.BranchID(opts.SessionPath))
 	}
@@ -817,6 +819,7 @@ func New(opts Options) *Controller {
 		providerResolver:                  opts.ProviderResolver,
 		runtimeGeneration:                 opts.RuntimeGeneration,
 		runtimeOwner:                      runtimeOwner,
+		goalDriverControl:                 goalDriverControl{ctx: goalDriverCtx, cancel: goalDriverCancel},
 		approval:                          newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout),
 	}
 	c.initializeOwnedResources(opts)
@@ -1852,52 +1855,6 @@ func (c *Controller) rememberProjectNote(note string) {
 	} else {
 		c.notice("remembered → " + path)
 	}
-}
-
-func (c *Controller) applyGoalCommand(input, display string) bool {
-	cmd, ok := ParseGoalCommand(input)
-	if !ok {
-		return false
-	}
-	if cmd.DeprecatedBudgetFlag {
-		c.notice(GoalBudgetFlagDeprecatedNotice)
-	}
-	switch cmd.Action {
-	case GoalCommandSet:
-		c.SetPlanMode(false)
-		c.SetGoalWithResearchMode(cmd.Text, cmd.ResearchMode)
-		c.GoalStrict(cmd.Strict)
-		c.startGoalCommandTurn(cmd, display)
-	case GoalCommandClear:
-		c.ClearGoal()
-		c.notice(i18n.M.GoalCleared)
-	case GoalCommandPause:
-		if !c.PauseGoal() {
-			c.notice(i18n.M.GoalNotRunning)
-		}
-	case GoalCommandResume:
-		if !c.ResumeGoal() {
-			c.notice(i18n.M.GoalNotPaused)
-		}
-	default:
-		goal := c.Goal()
-		if strings.TrimSpace(goal) == "" {
-			c.notice(i18n.M.GoalEmpty)
-			break
-		}
-		rt := c.GoalRuntime()
-		c.notice(fmt.Sprintf(i18n.M.GoalCurrentFmt, goal))
-		c.notice(fmt.Sprintf(i18n.M.GoalRuntimeFmt,
-			rt.TurnsUsed, rt.RequestsUsed, rt.TokensUsed,
-			GoalWorkDurationText(rt.WorkDurationMs)))
-		if rt.LastReason != "" {
-			c.noticeDetail(i18n.M.GoalRuntimeLastReason, rt.LastReason)
-		}
-		if rt.StopCause != "" {
-			c.notice(fmt.Sprintf(i18n.M.GoalPausedFmt, rt.StopCause))
-		}
-	}
-	return true
 }
 
 // applyPlanExec is a command tombstone. The old path coupled Plan approval,
@@ -5267,28 +5224,6 @@ func (c *Controller) ModelSettingsState() (applied, desired string, err error) {
 // It is transport bookkeeping only, never part of the conversation.
 func (c *Controller) ModelSettingsSourceRevision() string { return c.modelSettings.sourceRevision }
 
-// InheritLifecycleFrom carries same-session lifecycle state across controller
-// rebuilds, such as model switches that preserve the conversation.
-func (c *Controller) InheritLifecycleFrom(prev *Controller) {
-	if prev == nil {
-		return
-	}
-	if c.workspaceRoot == prev.workspaceRoot && c.executor != nil {
-		c.executor.InheritFileObservationsFrom(prev.executor)
-	}
-	prev.mu.Lock()
-	started := prev.startedOnce
-	turn := prev.turn
-	prev.mu.Unlock()
-
-	c.mu.Lock()
-	c.startedOnce = started
-	if c.turn < turn {
-		c.turn = turn
-	}
-	c.mu.Unlock()
-}
-
 // SessionAuthorizations snapshots this controller's same-session tool
 // grants ("Allow for this session") and Plan-mode read-only command trust,
 // for carrying into a replacement controller across a rebuild — see
@@ -5366,6 +5301,9 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 			c.approval.clearAll()
 		} else {
 			c.promptOwner.Clear()
+		}
+		if c.goalDriverControl.cancel != nil {
+			c.goalDriverControl.cancel()
 		}
 		// Goal-driver workers may be inside the pre-admission durability
 		// checkpoint. Join them before closing the v3 writer so teardown cannot
