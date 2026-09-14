@@ -344,20 +344,21 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     onSessionChanged();
   }, [status?.sessionPath, s.running, onSessionChanged]);
 
-  // /status is the only source for background jobs and for settings the run does
-  // not echo, so a live turn has to re-read it rather than infer from events.
+  // /status carries what events do not — background jobs, settings the run does
+  // not echo — and every reader of it is on screen. Ungated, it costs each
+  // background pane a request and a full re-render four times a second.
   useEffect(() => {
-    if (!s.running) {
-      startedAt.current = 0;
-      return;
-    }
-    if (!startedAt.current) startedAt.current = Date.now();
-    const t = setInterval(() => {
+    if (!s.running) startedAt.current = 0;
+    else if (!startedAt.current) startedAt.current = Date.now();
+    if (!s.running || !visible) return;
+    const tick = () => {
       setElapsed((Date.now() - startedAt.current) / 1000);
       refreshStatus();
-    }, 250);
+    };
+    tick();
+    const t = setInterval(tick, 250);
     return () => clearInterval(t);
-  }, [s.running, refreshStatus]);
+  }, [s.running, visible, refreshStatus]);
 
   useEffect(() => {
     void port.surfaceSlots().then(setSlots).catch(() => setSlots({}));

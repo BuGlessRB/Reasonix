@@ -473,7 +473,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
           />
         ))}
         {live && <Row it={live} {...rowProps} cp={checkpoints.get(live.id)} />}
-        {waiting.ttftSince && <Await since={waiting.ttftSince} retry={waiting.retry} />}
+        {waiting.ttftSince && <Await since={waiting.ttftSince} retry={waiting.retry} seen={!hidden} />}
         <div ref={end} className="flow-end" aria-hidden="true" />
       </div>
     </div>
@@ -645,15 +645,18 @@ const Row = memo(function Row({
 // Counted from the stamp the wait carries rather than from this component's
 // mount: a retry landing in a wait already on screen has to restart the clock,
 // and a tick that only ever added 0.1 drifted from the time it claimed.
-function Await({ since, retry }: { since: number; retry?: Waiting["retry"] }) {
+function Await({ since, retry, seen }: { since: number; retry?: Waiting["retry"]; seen: boolean }) {
   const start = retry?.since ?? since;
   const [secs, setSecs] = useState(() => (Date.now() - start) / 1000);
+  // Ten redraws a second are wasted on a pane nobody has open. The reading comes
+  // from the stamp, so the tick on the way back in covers the whole wait.
   useEffect(() => {
+    if (!seen) return;
     const tick = () => setSecs((Date.now() - start) / 1000);
     tick();
     const t = setInterval(tick, 100);
     return () => clearInterval(t);
-  }, [start]);
+  }, [start, seen]);
   return (
     <div className="await" data-retry={retry ? "" : undefined}>
       <i />
