@@ -673,12 +673,12 @@
     flex: 0 1 auto; min-width: 4em; max-width: 48%;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .chrome .badge { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--accent-ink); padding: 2.5px 8px; border-radius: var(--r-pill); background: var(--accent-wash); white-space: nowrap; flex: none }
+  .chrome .badge { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--accent-ink); padding: 2.5px 8px; border-radius: var(--r-pill); background: var(--accent-wash); white-space: nowrap; flex: none }
   .chrome .badge[hidden] { display: none }
   .chrome .badge[data-err] { color: var(--err-ink); background: color-mix(in srgb, var(--err) 13%, transparent); white-space: normal; max-width: 24ch }
 
   /* 插话在流里，但还没生效 —— 这两件事得分得开 */
-  .pend { margin-left: auto; flex: none; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--accent-ink); padding: 1.5px 7px; border-radius: var(--r-pill); background: var(--accent-wash) }
+  .pend { margin-left: auto; flex: none; font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--accent-ink); padding: 1.5px 7px; border-radius: var(--r-pill); background: var(--accent-wash) }
   .pend[data-sent] { color: var(--ok); background: transparent; padding-inline: 0 }
   .call[data-pending] > .c { opacity: .7 }
   /* 排队中的那条还没发生，是屏幕上唯一还能撤回的东西。按钮就长在「排队中」
@@ -686,7 +686,7 @@
   .pcancel {
     position: relative; flex: none; padding: 3.5px 10px; border-radius: var(--r-pill);
     border: 1px solid var(--hair); background: transparent; cursor: pointer;
-    font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--muted);
+    font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--muted);
   }
   .pcancel:hover { color: var(--text); border-color: var(--muted) }
   .pcancel:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
@@ -866,7 +866,7 @@
   [data-cut] { cursor: help }
   [data-cut]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: var(--r-xs) }
 
-  .lbl { display: flex; align-items: baseline; gap: 9px; font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--ghost) }
+  .lbl { display: flex; align-items: baseline; gap: 9px; font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--ghost) }
   .lbl .c { margin-left: auto; letter-spacing: 0; font-variant-numeric: tabular-nums }
 
   /* ── 左：工作区 ────────────────────────────────────────────────────── */
@@ -929,7 +929,7 @@
   .ws .where { display: none }
   .ws[aria-selected="true"] .where {
     display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-left: 13px;
-    font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint);
+    font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint);
   }
   .ws .where .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-ink); flex: none }
   .ws[data-iso="on"] .where .dot { background: var(--ok) }
@@ -1291,7 +1291,7 @@
   /* 表在这条栏下面开始：导出是对这张表整体的操作，不是某一行的 */
   .traj-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px 0 }
   .traj-saved { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ok); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .traj-note { padding: 12px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
+  .traj-note { padding: 12px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
   .traj-note code { color: var(--faint) }
 
   /* ── 图：这一轮的执行结构。列 = 一批同时能跑的活，往右是等出来的顺序。 ── */
@@ -1747,7 +1747,7 @@
   .call > .c:hover .stepctl, .call > .c:focus-within .stepctl { opacity: 1 }
   .stepctl button {
     position: relative; border: 0; background: var(--overlay); color: var(--faint); cursor: pointer;
-    font: var(--w-med) var(--fs-micro) var(--mono); padding: 4px 9px; border-radius: var(--r-sm); white-space: nowrap;
+    font: var(--w-med) var(--fs-micro) var(--ui); padding: 4px 9px; border-radius: var(--r-sm); white-space: nowrap;
   }
   /* 这几个都是 10px 字号的小片，画得再大就压过它们标注的那一行了。所以长相不
      变，命中框自己往外让 5px —— 横向只让 2px，因为 .stepctl 的间隙是 5px，让多
@@ -1833,7 +1833,7 @@
   .copy {
     display: inline-flex; align-items: center; gap: 5px;
     border: 0; background: transparent; color: var(--faint); cursor: pointer;
-    font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); padding: 4px 7px;
+    font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap); padding: 4px 7px;
     border-radius: var(--r-sm); transition: color var(--m-line), background var(--m-line);
   }
   /* Set in prose, an unbounded word reads as one more line of it — this one had
@@ -1925,7 +1925,7 @@
      路径断得开 —— 拿正文字体铺成一坨，就会和标题糊在一起，也就是用户看到
      的那面墙。 */
   .find .why.nwhy {
-    margin-top: 5px; font: var(--w-reg) var(--fs-meta)/1.6 var(--mono); color: var(--faint);
+    margin-top: 5px; font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: var(--faint);
     white-space: pre-wrap; overflow-wrap: anywhere;
   }
 
@@ -1943,7 +1943,10 @@
   details > summary { cursor: pointer; list-style: none }
   details > summary::-webkit-details-marker { display: none }
   details > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
-  .fold { display: inline-flex; align-items: center; gap: 5px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .fold {
+    display: inline-flex; align-items: center; gap: 5px;
+    font: var(--w-reg) var(--fs-meta) var(--ui); font-variant-numeric: tabular-nums; color: var(--faint);
+  }
   .fold::before {
     content: ""; width: 9px; height: 9px; flex: none; color: var(--ghost); background: currentColor;
     -webkit-mask: var(--chev) center / contain no-repeat; mask: var(--chev) center / contain no-repeat;
@@ -1994,13 +1997,13 @@
   .out-more {
     position: relative; z-index: 1;
     margin-top: 5px; padding: 2px 7px; border: 0; border-radius: var(--r-xs); background: var(--overlay);
-    font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); cursor: pointer;
+    font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint); cursor: pointer;
   }
   .out-more:hover { color: var(--text) }
   .out-more:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
 
   /* 搬走和丢掉不是同一件事,只有后者是警告 */
-  .bound { margin-top: 5px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .bound { margin-top: 5px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .bound.bad { color: var(--err) }
 
   .hits { margin-top: 7px; display: flex; flex-direction: column; gap: 1px }
@@ -2015,7 +2018,7 @@
   .nest { margin-top: 8px; border-left: 2px solid var(--deleg); overflow: hidden }
   .nest-hd { display: flex; align-items: center; gap: 9px; padding: 6px 11px; border-bottom: 1px solid var(--hair) }
   .nest-hd .who { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--deleg) }
-  .nest-hd .prof { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .nest-hd .prof { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .nest-hd .doing { margin-left: auto; max-width: 46% }
   .nest-hd .rt { margin-left: 13px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; flex: none }
   .nest-bd { padding: 3px 11px 8px }
@@ -2096,7 +2099,7 @@
   .comp { margin-top: 7px }
   .comp-bar { height: 3px; background: color-mix(in srgb, var(--accent) 20%, var(--overlay)); overflow: hidden }
   .comp-bar i { display: block; height: 100%; background: var(--ok); transition: width var(--t-live) var(--ease-out) }
-  .comp-n { margin-top: 5px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .comp-n { margin-top: 5px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .comp-n b { color: var(--text); font-weight: var(--w-reg); font-variant-numeric: tabular-nums }
   .comp details { margin-top: 5px }
   .comp-l { margin-top: 5px; display: flex; flex-direction: column; gap: 3px }
@@ -2131,9 +2134,9 @@
     display: flex; align-items: baseline; gap: 9px; padding: 7px 12px;
     border-bottom: 1px solid var(--hair);
   }
-  .apv-hd .tool { font: var(--w-med) var(--fs-meta) var(--mono); letter-spacing: var(--track-lead); color: var(--warn-ink) }
+  .apv-hd .tool { font: var(--w-med) var(--fs-meta) var(--ui); letter-spacing: var(--track-lead); color: var(--warn-ink) }
   .apv-hd .sub { font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .apv-dt { padding: 9px 12px 0; font: var(--w-reg) var(--fs-ui)/1.6 var(--mono); color: var(--muted) }
+  .apv-dt { padding: 9px 12px 0; font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--muted) }
   /* 三颗按钮按后果排：永久扩权退一档，拒绝推到右端 —— 最常用的两颗不再挨着
      最重的那颗，误触的代价就不一样了。 */
   /* --ghost is calibrated against --page, the darkest surface it lands on. This
@@ -2144,7 +2147,7 @@
   .apv-ft .btn[data-deny] { margin-left: auto; color: var(--err-ink, var(--err)); border-color: color-mix(in srgb, var(--err) 34%, transparent) }
   .apv-ft .btn[data-deny]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--err) 58%, transparent) }
   .apv-ft { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 11px 12px }
-  .apv-ft .hint { margin-left: auto; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
+  .apv-ft .hint { margin-left: auto; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
   /* 计划卡上那句「修改计划会留在计划模式里」。它不是提示性的补充，是这张卡
      的一半：过去只有「拒绝」，而它其实就是继续规划 —— 想改计划的人以为自己
      把计划扔了。所以它常驻，不跟着 hover 走。 */
@@ -2183,7 +2186,7 @@
   .ask-pane { padding: 13px 13px 0; display: none }
   .ask-pane[data-on] { display: block }
   .ask-q { font: var(--w-med) var(--fs-ui)/1.5 var(--ui); color: var(--text); margin-bottom: 3px }
-  .ask-hint { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); margin-bottom: 10px }
+  .ask-hint { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint); margin-bottom: 10px }
 
   .opts { display: flex; flex-direction: column }
   /* ask 卡的选项行和设置里的 .prow 是同一个控件，共用这一份定义。
@@ -2340,7 +2343,7 @@
   /* 收起来的粘贴要能原样放回去 —— 自动改掉用户手打的内容，代价比帮的忙大 */
   .shot .undo {
     align-self: flex-start; border: 0; background: none; padding: 0; cursor: pointer;
-    font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--faint); text-decoration: underline;
+    font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--faint); text-decoration: underline;
     text-decoration-style: dotted; text-underline-offset: 2px;
   }
   .shot .undo:hover { color: var(--accent-ink) }
@@ -2503,7 +2506,7 @@
   .compose:focus-within .composecaps, .compose:focus-within .composehint { color: var(--faint) }
   .fcount {
     flex: none; white-space: nowrap; padding-left: 10px; border-left: 1px solid var(--hair);
-    color: var(--faint); font: var(--w-reg) var(--fs-micro) var(--mono); font-variant-numeric: tabular-nums;
+    color: var(--faint); font: var(--w-reg) var(--fs-micro) var(--ui); font-variant-numeric: tabular-nums;
   }
   /* 这一排是控件不是文字：能被拖选的标签会在按下拖出一点点时选中一片蓝，
      而这里唯一值得复制的是你打的字和上面的正文。 */
@@ -2858,7 +2861,7 @@
     margin: 0 0 3px; display: flex; align-items: baseline; gap: 8px;
     font: var(--w-semi) var(--fs-ui)/1.5 var(--ui); color: var(--text); letter-spacing: var(--track-tight);
   }
-  .dgrp-h .a { margin-left: auto; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost) }
+  .dgrp-h .a { margin-left: auto; font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost) }
 
   /* 两栏的段标题和块标题是同一个记号：小号、半粗、大字距、全大写、低对比，
      字体是 --ui；mono 留给右边那个限定词。此前右栏并存两套 —— Jobs/MCP 用小标签，
@@ -2922,7 +2925,7 @@
     padding: 1px 0 3px; font: var(--w-med) var(--fs-display)/1 var(--mono); color: var(--text);
     font-variant-numeric: tabular-nums; letter-spacing: var(--track-tight);
   }
-  .msub { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+  .msub { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost); font-variant-numeric: tabular-nums }
   /* 名单跟在计数行后面，是同一组里的两档：数是结论，名单是它的明细 */
   .dgrp .agents { margin-top: 4px }
 
@@ -2954,10 +2957,10 @@
   .money { display: flex; align-items: flex-end; justify-content: space-between; gap: 11px; padding-top: 10px; border-top: 1px solid var(--hair) }
   .money .col { display: flex; flex-direction: column; gap: 3px }
   .money .col:last-child { align-items: flex-end; text-align: right }
-  .money .col .k { font: var(--w-reg) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--ghost) }
+  .money .col .k { font: var(--w-reg) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--ghost) }
   .money .col .v { font: var(--w-med) var(--fs-title)/1 var(--mono); color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: var(--track-tight) }
   .money .col .v.sm { font-size: var(--fs-ui); color: var(--muted) }
-  .money .col .note { font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--faint) }
+  .money .col .note { font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--faint) }
 
   /* 上下行是两笔独立的账：上行按命中/未命中分档计价，下行只有一个价 */
   .rate { display: flex; align-items: baseline; gap: 7px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
@@ -3027,7 +3030,7 @@
   .job .kill:hover { background: var(--border); color: var(--err) }
   .job .kill:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .job[data-done] { color: var(--faint) }
-  .bgnote { margin-top: 6px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .bgnote { margin-top: 6px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
 
   /* 外部服务连不上：一行一个 —— 名字在左，去处在右，坏了这件事由红点说。
      原因不在这里读，它在设置页 .srv 的旁边，那儿才动得了手。它曾经借 .job 的
@@ -3069,7 +3072,7 @@
      under the same name hands its layout to the drawing inside it. */
   .sparkbox { display: grid; gap: 4px; margin-top: 2px }
   .sparkbox .sphd { display: flex; align-items: baseline; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
-  .sparkbox .sphd .m { margin-left: auto; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost) }
+  .sparkbox .sphd .m { margin-left: auto; font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost) }
   /* A viewBox with no width or height falls back to 300×150, which is a chart
      several times the height of the panel it sits in. */
   .sparkbox .spark { width: 100%; height: 30px; overflow: visible }
@@ -3115,7 +3118,7 @@
     from { background: color-mix(in srgb, var(--accent) 22%, transparent) }
     to { background: transparent }
   }
-  .empty { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
+  .empty { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
 
 
   @media (prefers-reduced-motion: reduce) {
@@ -3415,7 +3418,7 @@
   }
   .prefs-found button:hover { background: var(--float-hi) }
   .prefs-found button:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
-  .prefs-found .where { flex: none; font: var(--w-reg) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--faint) }
+  .prefs-found .where { flex: none; font: var(--w-reg) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--faint) }
   .prefs-found .what { flex: 1; min-width: 0; font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
   .prefs-found .cost { flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
   .prefs-found .none { margin: 0; padding: 9px; font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--faint) }
@@ -3424,7 +3427,7 @@
      真正该染色的是「任务运行中不能改」那种当下状态，不是这个。 */
   .apply {
     margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--hair);
-    font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost);
+    font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost);
     display: flex; align-items: center; gap: 5px;
   }
   .apply::before {
@@ -3507,7 +3510,7 @@
      都吃下来。英文下「工具与权限」的名字就是这么被截掉 38px 的。 */
   .prefs-nav .nv {
     flex: 0 99 auto; min-width: 0; max-width: 74px; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint);
+    white-space: nowrap; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint);
   }
   .prefs-nav button[aria-selected="true"] .nv { color: var(--muted) }
   .prefs-nav .nv[data-danger] { color: var(--err) }
@@ -3620,7 +3623,7 @@
   .grp > .grp-hd h3 { margin: 0; font: var(--w-semi) var(--fs-lead)/1.35 var(--ui); color: var(--text); letter-spacing: -.005em }
   .grp .now {
     margin-left: auto; flex: none; padding: 2px 7px; border-radius: var(--r-pill);
-    background: var(--overlay); font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint);
+    background: var(--overlay); font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint);
   }
   .grp-hd .act { margin-left: 12px; align-self: center }
   .grp-hd .now + .act { margin-left: 0 }
@@ -3696,7 +3699,7 @@
 
   .kv { display: flex; gap: 12px; align-items: baseline; padding: 10px 12px; border-top: 1px solid var(--hair) }
   .kv:last-of-type { border-bottom: 1px solid var(--hair) }
-  .kv .k { flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .kv .k { flex: none; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   /* anywhere rather than break-all: a value that offers its own break points
      (a path carries a <wbr> after each separator) uses those first, and only a
      token with none is cut through the middle. */
@@ -3734,7 +3737,7 @@
   .srv .srv-ab .ds { font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--faint); min-width: 0 }
   .srv .srv-ab .w {
     flex: none; padding: 1px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
-    font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost); font-style: normal;
+    font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost); font-style: normal;
   }
   /* 工具一行三段：名字（机器事实）、它自己的说明、以及会不会动你的东西。 */
   .srv .peek .trow { display: flex; align-items: baseline; gap: 9px; padding: 1px 0 }
@@ -3780,7 +3783,7 @@
   @keyframes nudge { 0%, 100% { transform: none } 30% { transform: translateX(-2px) } 70% { transform: translateX(2px) } }
 
   /* 按钮上放不下的那句:正在做什么,或者为什么没做 */
-  .rnote { margin-top: 9px; font: var(--w-reg) var(--fs-ui)/1.6 var(--mono); color: var(--faint); animation: modeval var(--t-line) var(--ease-out) }
+  .rnote { margin-top: 9px; font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--faint); animation: modeval var(--t-line) var(--ease-out) }
   .rnote[data-s="ok"] { color: var(--ok) }
   .rnote[data-s="bad"] { color: var(--err) }
 
@@ -3845,7 +3848,7 @@
   .reasons { margin-top: 7px }
   .reasons > summary { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost); cursor: pointer; list-style: none }
   .reasons > summary::-webkit-details-marker { display: none }
-  .reasons p { margin: 4px 0 0; font: var(--w-reg) var(--fs-meta)/1.6 var(--mono); color: var(--muted) }
+  .reasons p { margin: 4px 0 0; font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: var(--muted) }
 
   /* 一个包带进来的东西分两类：能被叫到的（技能、命令），和会自己跑的
      （常驻进程、钩子、外部服务）。后者不该和前者读起来一样。 */
@@ -3981,7 +3984,7 @@
   .slot:disabled { cursor: default }
   .slot:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .slot .role { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--muted) }
-  .slot .val { min-width: 0; font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--ghost); overflow-wrap: anywhere;
+  .slot .val { min-width: 0; font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--ghost); overflow-wrap: anywhere;
     animation: bumpup var(--t-line) var(--ease-out) both }
   .slot .tag { font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost); white-space: nowrap }
   /* 四行的值要落在同一条竖线上，所以角色列的宽度是四行共同的事，不是每行自己的。
@@ -4609,7 +4612,7 @@
     display: flex; flex-direction: column; gap: 8px }
   .memhist > .ds { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .memhist .histrow { display: grid; grid-template-columns: auto auto 1fr auto; align-items: baseline; gap: 9px }
-  .memhist .rev { font: var(--w-med) var(--fs-meta) var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
+  .memhist .rev { font: var(--w-med) var(--fs-meta) var(--ui); color: var(--muted); font-variant-numeric: tabular-nums }
   .memhist .at { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
   .memhist .histrow > .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted) }
@@ -4631,7 +4634,7 @@
   .remember .lb { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--deleg) }
   .remember[data-gone] .lb { color: var(--faint) }
   .remember .tag { font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); color: var(--ghost) }
-  .remember .meta { margin-left: auto; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .remember .meta { margin-left: auto; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .remember .act { margin-left: 10px; flex: none }
   .remember .bd { margin-top: 6px; display: flex; flex-direction: column; gap: 2px }
   .remember .ti { font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--text) }
@@ -4724,7 +4727,7 @@
   }
 
   .ws[data-busy] { opacity: .5; pointer-events: none }
-  .ws-empty { padding: 12px 13px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
+  .ws-empty { padding: 12px 13px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
 
   /* 一个被吞掉的失败比失败本身更糟：请求挂了就得说出来 */
   .errbar {
@@ -4779,7 +4782,7 @@
   /* 自己说明的不是主机查出来的，所以不挂警戒线。 */
   .rc-group[data-declared] { border-left-color: var(--hair) }
   .rc-hd {
-    padding: 2px 0 4px; font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap);
+    padding: 2px 0 4px; font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap);
     text-transform: uppercase; color: var(--ghost);
   }
   .rc-group[data-declared] .rc-hd { text-transform: none; letter-spacing: 0 }
@@ -4928,7 +4931,7 @@
      answer, the words are the footnote. */
   .vnow .lb { font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted); animation: card var(--t-card) var(--ease-out) .07s both }
   .vnow .pin {
-    font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); color: var(--ok);
+    font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap); color: var(--ok);
     padding: 2px 6px; border-radius: var(--r-pill); box-shadow: inset 0 0 0 1px var(--ok);
   }
 
@@ -5035,7 +5038,7 @@
   .pal-nm b, .pal-nm em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 16px }
   .pal-nm b { font-weight: var(--w-reg) }
   .pal[data-on] .pal-nm b { color: var(--text) }
-  .pal-nm em { margin-top: 2px; font: var(--w-reg) var(--fs-meta)/16px var(--mono); font-style: normal; color: var(--ghost) }
+  .pal-nm em { margin-top: 2px; font: var(--w-reg) var(--fs-meta)/16px var(--ui); font-style: normal; color: var(--ghost) }
 
   /* A standing panel sits in the side rail, so it is denser than the same
      content would be in the transcript and borrows the rail's own row rhythm. */
@@ -5867,7 +5870,7 @@
   }
   .rmtsub {
     grid-area: 2 / 4; justify-self: end; margin-top: 1px; flex: none;
-    font: var(--w-reg) var(--fs-micro)/1.25 var(--mono); color: var(--ghost);
+    font: var(--w-reg) var(--fs-micro)/1.25 var(--ui); color: var(--ghost);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px;
   }
   /* 一台主机只有六种状态，别让它们挤成两种：连上和没连上之间，还有「在连」、
@@ -6035,7 +6038,7 @@
   /* 攒了几百次对话时只列最近的，其余收在这一行后面 */
   .sessmore {
     width: 100%; padding: 5px 9px 7px 22px; border: 0; background: none; cursor: pointer;
-    text-align: left; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost);
+    text-align: left; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost);
     transition: color var(--m-line), background var(--m-line);
   }
   .sessmore:hover { color: var(--text); background: var(--overlay) }
@@ -6045,7 +6048,7 @@
   /* 同名的两个文件夹（隔离副本最常见）靠这一小块区分 */
   .wstag {
     flex: none; padding: 1px 5px; border-radius: var(--r-pill);
-    font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost);
+    font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost);
     background: var(--overlay); white-space: nowrap;
     max-width: 8ch; overflow: hidden; text-overflow: ellipsis;
   }
@@ -6330,7 +6333,7 @@
     font: var(--w-med) var(--fs-display)/1 var(--mono); color: var(--text);
     letter-spacing: var(--track-tight); font-variant-numeric: tabular-nums;
   }
-  .mtop .msub { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
+  .mtop .msub { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
   .mtop .delta { margin-left: auto; font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--ghost) }
   /* 第二币种矮一档：它是同一笔钱的另一种说法，不是另一笔支出。 */
   .mtop[data-alt] .amt { font-size: var(--fs-lead); color: var(--muted) }
