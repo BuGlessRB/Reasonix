@@ -52,13 +52,13 @@
     interpolate-size: allow-keywords;
 
     --rail-open: 264px; --side-open: 316px;
-    --page: oklch(95.8% .008 255); --surface: oklch(98.9% .004 255);
-    --raised: oklch(100% 0 255); --overlay: oklch(93.1% .012 255);
-    --border: oklch(87.6% .016 255); --hair: oklch(91.7% .011 255);
+    --page: oklch(95.8% .0092 85); --surface: oklch(98.9% .0046 85);
+    --raised: oklch(100% 0 85); --overlay: oklch(93.1% .0138 85);
+    --border: oklch(87.6% .0184 85); --hair: oklch(91.7% .0126 85);
     /* 浮在内容之上的层用这一组，不用 --raised：深色下 raised 和它压着的东西
        几乎同亮，黑影落在近黑的底上又等于没画，菜单于是看着像透明的。抬面比
        底色亮一档、顶一条内高光、影子更深更散，三样一起才让它离开背景。 */
-    --float: oklch(100% 0 255); --float-hi: oklch(94.2% .010 255);
+    --float: oklch(100% 0 85); --float-hi: oklch(94.2% .0115 85);
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .9),
       0 16px 40px -14px rgb(23 30 45 / .2),
@@ -69,7 +69,7 @@
        came to 2.7 L in dark — just past the line where a layer is visible.
        Declared apart, they also separate apart: machine output by the step
        (cut into the page), a code listing by its line (it has been set). */
-    --face-sunk: oklch(95% .008 255); --face-code: oklch(97.6% .005 255);
+    --face-sunk: oklch(95% .0092 85); --face-code: oklch(97.6% .0057 85);
     --accent: oklch(78% .135 78); --accent-fg: oklch(28% .058 70); --accent-wash: #FFF2DC;
     --net: oklch(50.8% .172 267); --net-wash: oklch(94.8% .026 264);
     --deleg: oklch(50.4% .092 211); --deleg-wash: oklch(94.8% .020 210);
@@ -252,9 +252,9 @@
       0 6px 18px -10px rgb(0 0 0 / .62);
   }
   :root[data-theme="light"] {
-    --page: oklch(95.8% .008 255); --surface: oklch(98.9% .004 255);
-    --raised: oklch(100% 0 255); --overlay: oklch(93.1% .012 255);
-    --border: oklch(87.6% .016 255); --hair: oklch(91.7% .011 255);
+    --page: oklch(95.8% .0092 85); --surface: oklch(98.9% .0046 85);
+    --raised: oklch(100% 0 85); --overlay: oklch(93.1% .0138 85);
+    --border: oklch(87.6% .0184 85); --hair: oklch(91.7% .0126 85);
     --accent: oklch(78% .135 78); --accent-fg: oklch(28% .058 70); --accent-wash: #FFF2DC;
     --net: oklch(50.8% .172 267); --net-wash: oklch(94.8% .026 264);
     --deleg: oklch(50.4% .092 211); --deleg-wash: oklch(94.8% .020 210);
@@ -272,8 +272,8 @@
        下限、相邻对的色觉分离（ΔE ≥ 8）、正常视力下限（≥ 15）、以及与底的
        对比。浅色下四段低于 3:1，按"救济规则"由图例的文字标签兜底。 */
     --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4;
-    --face-sunk: oklch(95% .008 255); --face-code: oklch(97.6% .005 255);
-    --float: oklch(100% 0 255); --float-hi: oklch(94.2% .010 255);
+    --face-sunk: oklch(95% .0092 85); --face-code: oklch(97.6% .0057 85);
+    --float: oklch(100% 0 85); --float-hi: oklch(94.2% .0115 85);
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .9),
       0 16px 40px -14px rgb(23 30 45 / .2),
@@ -305,13 +305,13 @@
      默认档从那条线起算，另外两档递增；正文一端不动 —— 深底上接近纯白会起
      光晕，收窄跨度才是柔和的意思。 */
   :root, :root[data-contrast="soft"] {
-  --text: oklch(30.5% .020 255); --muted: oklch(41% .018 255); --faint: oklch(47.5% .018 255); --ghost: oklch(51.5% .020 255);
+  --text: oklch(30.5% .023 85); --muted: oklch(41% .0207 85); --faint: oklch(47.5% .0207 85); --ghost: oklch(51.5% .023 85);
   }
   :root[data-contrast="normal"] {
-  --text: oklch(27.5% .019 255); --muted: oklch(37.5% .017 255); --faint: oklch(44% .017 255); --ghost: oklch(49.5% .019 255);
+  --text: oklch(27.5% .0218 85); --muted: oklch(37.5% .0196 85); --faint: oklch(44% .0196 85); --ghost: oklch(49.5% .0218 85);
   }
   :root[data-contrast="strong"] {
-  --text: oklch(20.4% .017 255); --muted: oklch(33.5% .016 255); --faint: oklch(40.5% .016 255); --ghost: oklch(46.5% .018 255);
+  --text: oklch(20.4% .0196 85); --muted: oklch(33.5% .0184 85); --faint: oklch(40.5% .0184 85); --ghost: oklch(46.5% .0207 85);
   }
 
   @media (prefers-color-scheme: dark) {
@@ -336,13 +336,13 @@
   --text: oklch(93.4% .010 255); --muted: oklch(81.8% .011 255); --faint: oklch(73.6% .012 255); --ghost: oklch(69.1% .014 255);
   }
   :root[data-theme="light"], :root[data-theme="light"][data-contrast="soft"] {
-  --text: oklch(30.5% .020 255); --muted: oklch(41% .018 255); --faint: oklch(47.5% .018 255); --ghost: oklch(51.5% .020 255);
+  --text: oklch(30.5% .023 85); --muted: oklch(41% .0207 85); --faint: oklch(47.5% .0207 85); --ghost: oklch(51.5% .023 85);
   }
   :root[data-theme="light"][data-contrast="normal"] {
-  --text: oklch(27.5% .019 255); --muted: oklch(37.5% .017 255); --faint: oklch(44% .017 255); --ghost: oklch(49.5% .019 255);
+  --text: oklch(27.5% .0218 85); --muted: oklch(37.5% .0196 85); --faint: oklch(44% .0196 85); --ghost: oklch(49.5% .0218 85);
   }
   :root[data-theme="light"][data-contrast="strong"] {
-  --text: oklch(20.4% .017 255); --muted: oklch(33.5% .016 255); --faint: oklch(40.5% .016 255); --ghost: oklch(46.5% .018 255);
+  --text: oklch(20.4% .0196 85); --muted: oklch(33.5% .0184 85); --faint: oklch(40.5% .0184 85); --ghost: oklch(46.5% .0207 85);
   }
 
   /* 系统开了「增强对比度」而用户没自己选过档，就按它来。明暗要单独判：手动
@@ -350,7 +350,7 @@
      正文刷到深背景上。 */
   @media (prefers-contrast: more) {
     :root:not([data-contrast]) {
-    --text: oklch(20.4% .017 255); --muted: oklch(33.5% .016 255); --faint: oklch(40.5% .016 255); --ghost: oklch(46.5% .018 255);
+    --text: oklch(20.4% .0196 85); --muted: oklch(33.5% .0184 85); --faint: oklch(40.5% .0184 85); --ghost: oklch(46.5% .0207 85);
     }
     :root[data-theme="dark"]:not([data-contrast]) {
     --text: oklch(93.4% .010 255); --muted: oklch(81.8% .011 255); --faint: oklch(73.6% .012 255); --ghost: oklch(69.1% .014 255);
@@ -361,6 +361,6 @@
     --text: oklch(93.4% .010 255); --muted: oklch(81.8% .011 255); --faint: oklch(73.6% .012 255); --ghost: oklch(69.1% .014 255);
     }
     :root[data-theme="light"]:not([data-contrast]) {
-    --text: oklch(20.4% .017 255); --muted: oklch(33.5% .016 255); --faint: oklch(40.5% .016 255); --ghost: oklch(46.5% .018 255);
+    --text: oklch(20.4% .0196 85); --muted: oklch(33.5% .0184 85); --faint: oklch(40.5% .0184 85); --ghost: oklch(46.5% .0207 85);
     }
   }
