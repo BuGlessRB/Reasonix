@@ -689,6 +689,39 @@ func (r *Registry) Names() []string {
 
 // Schemas exports tool definitions in stable name order for the provider.
 // When a provider-visible allowlist is set, only those tools appear.
+// ProviderSchemas is the surface one turn carries: stable tools first,
+// contextual after, each sorted — an absence is a byte prefix of a presence,
+// so the cache keeps every token before the boundary.
+func (r *Registry) ProviderSchemas(ctx context.Context) []provider.ToolSchema {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	r.mu.RLock()
+	var stable, dynamic []string
+	for _, name := range r.order {
+		t := r.tools[name]
+		if t == nil || !r.isProviderVisibleLocked(name) {
+			continue
+		}
+		if contextual, ok := t.(ContextualTool); ok {
+			if contextual.ProviderVisible(ctx) {
+				dynamic = append(dynamic, name)
+			}
+			continue
+		}
+		stable = append(stable, name)
+	}
+	sort.Strings(stable)
+	sort.Strings(dynamic)
+	out := make([]provider.ToolSchema, 0, len(stable)+len(dynamic))
+	for _, name := range append(stable, dynamic...) {
+		t := r.tools[name]
+		out = append(out, provider.ToolSchema{Name: t.Name(), Description: t.Description(), Parameters: r.canon[name]})
+	}
+	r.mu.RUnlock()
+	return out
+}
+
 func (r *Registry) Schemas() []provider.ToolSchema {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

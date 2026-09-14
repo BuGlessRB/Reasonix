@@ -42,8 +42,8 @@ func TestSubAgentDoesNotInheritParentGoalRecorder(t *testing.T) {
 		t.Fatalf("Goal child answer = %q", answer)
 	}
 	for i, req := range prov.requests {
-		if !slices.Contains(toolSchemaNames(req.Tools), "update_goal") {
-			t.Fatalf("child request %d changed the static tool surface: %v", i+1, toolSchemaNames(req.Tools))
+		if slices.Contains(toolSchemaNames(req.Tools), "update_goal") {
+			t.Fatalf("child request %d offers update_goal: the parent's recorder does not reach the child, so its schema must not carry the tool: %v", i+1, toolSchemaNames(req.Tools))
 		}
 	}
 	if len(recorder.reports) != 0 {
@@ -86,8 +86,8 @@ func TestCoordinatorPlannerCannotReportExecutorGoalDisposition(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	for i, req := range planner.requests {
-		if !slices.Contains(toolSchemaNames(req.Tools), "update_goal") {
-			t.Fatalf("planner request %d changed the static tool surface: %v", i+1, toolSchemaNames(req.Tools))
+		if slices.Contains(toolSchemaNames(req.Tools), "update_goal") {
+			t.Fatalf("planner request %d offers update_goal while the executor owns the disposition: %v", i+1, toolSchemaNames(req.Tools))
 		}
 	}
 	if got := lastToolResult(plannerSess, "update_goal"); !strings.Contains(got, "only available while an active goal turn") {
@@ -95,7 +95,7 @@ func TestCoordinatorPlannerCannotReportExecutorGoalDisposition(t *testing.T) {
 	}
 	for i, req := range exec.requests {
 		if !slices.Contains(toolSchemaNames(req.Tools), "update_goal") {
-			t.Fatalf("executor request %d lost update_goal: %v", i+1, toolSchemaNames(req.Tools))
+			t.Fatalf("executor request %d lost update_goal while holding the recorder: %v", i+1, toolSchemaNames(req.Tools))
 		}
 	}
 	if len(recorder.reports) != 0 {

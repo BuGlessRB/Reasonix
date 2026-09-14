@@ -267,7 +267,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: contextBudgetNoticeSummary(a.ContextBudget())})
 		}
 
-		schemas := a.svc.tools.Schemas()
+		schemas := a.svc.tools.ProviderSchemas(ctx)
 		prefixShape := a.capturePrefixShape(schemas)
 		prevPrefixShape := a.sess.lastPrefixShape
 		if !a.sess.haveLastPrefixShape {

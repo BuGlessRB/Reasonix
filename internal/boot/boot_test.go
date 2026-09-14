@@ -2384,10 +2384,7 @@ command = "reasonix-missing-mockmcp"
 		t.Fatalf("requests = %d, want 1", len(reqs))
 	}
 	req := reqs[0]
-	wantTools := unifiedBootToolNames()
-	if got := toolSchemaNames(req.Tools); !reflect.DeepEqual(got, wantTools) {
-		t.Fatalf("light first request tool order changed\ngot  %v\nwant %v", got, wantTools)
-	}
+	assertSegmentedSurface(t, "light first request", toolSchemaNames(req.Tools))
 	for _, want := range []string{"compress", "use_capability", "read_file", "edit_file", "write_file", "bash", "ask"} {
 		if !requestHasTool(req, want) {
 			t.Fatalf("light first request missing tool %q; tools=%v", want, toolSchemaNames(req.Tools))
