@@ -114,10 +114,6 @@ func loadSessionHeadReadOnlyWithLimits(ctx context.Context, path, headID string,
 	return s, nil
 }
 
-func replayDAGForHeadOpReadOnly(path string) (*sessionDAGState, error) {
-	return replayDAGForHeadOpReadOnlyWithLimits(context.Background(), path, defaultSessionReplayLimits)
-}
-
 func replayDAGForHeadOpReadOnlyWithLimits(ctx context.Context, path string, limits sessionReplayLimits) (*sessionDAGState, error) {
 	probe, err := probeSessionEventLog(path)
 	if err != nil {

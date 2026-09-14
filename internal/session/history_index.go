@@ -717,7 +717,7 @@ func insertHistoryRows(ctx context.Context, tx *sql.Tx, prefix string, columns i
 				query.WriteByte(',')
 			}
 			query.WriteByte('(')
-			for column := 0; column < columns; column++ {
+			for column := range columns {
 				if column > 0 {
 					query.WriteByte(',')
 				}

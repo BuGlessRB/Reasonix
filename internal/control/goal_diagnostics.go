@@ -25,21 +25,6 @@ type GoalDiagnosticMetadata struct {
 	Capabilities       []string `json:"capabilities"`
 }
 
-type goalDiagnosticExport struct {
-	SchemaVersion     int                        `json:"schemaVersion"`
-	ExportedAt        time.Time                  `json:"exportedAt"`
-	Metadata          GoalDiagnosticMetadata     `json:"metadata"`
-	Runtime           session.RuntimeSnapshot    `json:"runtime"`
-	Observation       any                        `json:"observation"`
-	AcceptedThrough   uint64                     `json:"acceptedThrough"`
-	DurableThrough    uint64                     `json:"durableThrough"`
-	PersistenceStatus session.PersistenceStatus  `json:"persistenceStatus"`
-	PersistenceError  string                     `json:"persistenceError,omitempty"`
-	Commits           []session.Commit           `json:"commits"`
-	ActivationChanges []goalDiagnosticTransition `json:"activationChanges"`
-	Unavailable       []string                   `json:"unavailable"`
-}
-
 type goalDiagnosticTransition struct {
 	Sequence      uint64                `json:"sequence"`
 	OperationID   string                `json:"operationId"`
@@ -225,15 +210,6 @@ func fillGoalDiagnosticBuildMetadata(metadata *GoalDiagnosticMetadata) {
 			return
 		}
 	}
-}
-
-func goalActivationChanges(commits []session.Commit) []goalDiagnosticTransition {
-	changes := make([]goalDiagnosticTransition, 0)
-	activation := goaldomain.ActivationDisarmed
-	for _, commit := range commits {
-		changes = append(changes, goalActivationChangesForCommit(commit, &activation)...)
-	}
-	return changes
 }
 
 func goalActivationChangesForCommit(commit session.Commit, activation *goaldomain.Activation) []goalDiagnosticTransition {

@@ -253,13 +253,3 @@ func comparableImportMessages(messages []provider.Message) []provider.Message {
 	}
 	return out
 }
-
-func firstMessageDifference(left, right []provider.Message) int {
-	limit := min(len(left), len(right))
-	for i := range limit {
-		if !reflect.DeepEqual(left[i], right[i]) {
-			return i
-		}
-	}
-	return limit
-}

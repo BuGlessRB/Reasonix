@@ -550,7 +550,7 @@ func resolveProjectionEvent(ctx context.Context, content *sessioncontent.Store, 
 	}
 	payload, err := resolveContentPayload(ctx, content, *event.PayloadRef)
 	if err != nil {
-		return Event{}, fmt.Errorf("%w: read v4 event %s payload: %v", ErrDamagedStore, event.ID, err)
+		return Event{}, fmt.Errorf("%w: read v4 event %s payload: %w", ErrDamagedStore, event.ID, err)
 	}
 	event.Payload, event.PayloadRef = payload, nil
 	return event, nil
@@ -905,13 +905,6 @@ func scanDurableCommits(dir string, knownKinds map[string]bool, visit func(Commi
 	return scanCommitFileCodec(file, 0, 1, manifest.Codec, knownKinds, adapter)
 }
 
-// scanCommitFile validates complete records beginning at an already validated
-// commit boundary. startOffset and nextSequence come from the rebuildable
-// sparse index; callers that do not have one pass 0 and 1.
-func scanCommitFile(file *os.File, startOffset int64, nextSequence uint64, knownKinds map[string]bool, visit func(int64, Commit) bool) error {
-	return scanV4CommitFile(context.Background(), file, startOffset, nextSequence, nil, knownKinds, visit)
-}
-
 func scanCommitFileCodec(file *os.File, startOffset int64, nextSequence uint64, codec string, knownKinds map[string]bool, visit func(int64, Commit) bool) error {
 	if knownKinds == nil {
 		knownKinds = ProjectionKinds
@@ -965,83 +958,6 @@ func scanCommitFileCodec(file *os.File, startOffset int64, nextSequence uint64, 
 		}
 	}
 	return nil
-}
-
-func hasTornTail(path string) (bool, error) {
-	file, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || info.Size() == 0 {
-		return false, err
-	}
-	if _, err := file.Seek(-1, io.SeekEnd); err != nil {
-		return false, err
-	}
-	var last [1]byte
-	if _, err := io.ReadFull(file, last[:]); err != nil {
-		return false, err
-	}
-	return last[0] != '\n', nil
-}
-
-func v4TornTail(path string, content *sessioncontent.Store) (int64, bool, error) {
-	file, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return 0, false, nil
-	}
-	if err != nil {
-		return 0, false, err
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return 0, false, err
-	}
-	var durableEnd int64
-	err = scanV4CommitFile(context.Background(), file, 0, 1, content, nil, func(_ int64, _ Commit) bool {
-		durableEnd, _ = file.Seek(0, io.SeekCurrent)
-		return true
-	})
-	if err != nil {
-		return 0, false, err
-	}
-	return durableEnd, durableEnd < info.Size(), nil
-}
-
-func preserveAndTruncateTornTail(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	var cut int64
-	reader := bufio.NewReaderSize(file, 64<<10)
-	for {
-		line, readErr := reader.ReadBytes('\n')
-		if len(line) > 0 && line[len(line)-1] == '\n' {
-			cut += int64(len(line))
-		}
-		if readErr != nil {
-			if !errors.Is(readErr, io.EOF) {
-				return "", readErr
-			}
-			break
-		}
-	}
-	info, err := file.Stat()
-	if err != nil {
-		return "", err
-	}
-	if cut == info.Size() {
-		return "", nil
-	}
-	return preserveAndTruncateTail(path, cut, "torn")
 }
 
 func preserveAndTruncateTail(path string, cut int64, label string) (string, error) {

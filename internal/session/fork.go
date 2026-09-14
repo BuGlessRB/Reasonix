@@ -48,7 +48,6 @@ func (s *Session) Fork(ctx context.Context, childDir, childID string, throughSeq
 				break
 			}
 			prefix = append(prefix, commit)
-			cursor = commit.LastSequence()
 		}
 		if stop || !page.Truncated {
 			break

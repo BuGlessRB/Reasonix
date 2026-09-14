@@ -3,7 +3,6 @@ package session
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -426,7 +425,7 @@ func (b *PersistenceBinding) reconcileUncertain(ctx context.Context, handle Sess
 	defer staged.Close()
 	stagedInfo, err := staged.Stat()
 	if err != nil || stagedInfo.Size() != uncertain.stagedBytes {
-		return false, fmt.Errorf("%w: staged append evidence changed: %v", ErrPersistenceUncertain, err)
+		return false, fmt.Errorf("%w: staged append evidence changed: %w", ErrPersistenceUncertain, err)
 	}
 	if tailLen > uncertain.stagedBytes {
 		return false, fmt.Errorf("%w: on-disk tail exceeds staged batch at offset %d", ErrPersistenceUncertain, uncertain.start)
@@ -529,22 +528,6 @@ func (b *PersistenceBinding) Close(ctx context.Context) error {
 		b.closeErr = errors.Join(flushErr, closeErr)
 	})
 	return b.closeErr
-}
-
-// encodeCommitLines serializes a physical batch in commit order.
-func encodeCommitLines(commits []Commit) ([]byte, []int, error) {
-	var data bytes.Buffer
-	lengths := make([]int, 0, len(commits))
-	for _, commit := range commits {
-		line, err := json.Marshal(commit)
-		if err != nil {
-			return nil, nil, err
-		}
-		data.Write(line)
-		data.WriteByte('\n')
-		lengths = append(lengths, len(line)+1)
-	}
-	return data.Bytes(), lengths, nil
 }
 
 func cloneUncertainWrite(in *uncertainWrite) *uncertainWrite {

@@ -226,7 +226,7 @@ func scanV4CommitFileMode(ctx context.Context, file io.ReadSeeker, startOffset i
 		offset += frameBytes
 		var record v4Record
 		if err := json.Unmarshal(raw, &record); err != nil {
-			return fmt.Errorf("%w: decode v4 record at %d: %v", ErrDamagedStore, recordOffset, err)
+			return fmt.Errorf("%w: decode v4 record at %d: %w", ErrDamagedStore, recordOffset, err)
 		}
 		if record.SchemaVersion != V4SchemaVersion || record.Codec != V4Codec {
 			return fmt.Errorf("%w: v4 physical record at %d", ErrUnsupportedVersion, recordOffset)
@@ -269,7 +269,7 @@ func scanV4CommitFileMode(ctx context.Context, file io.ReadSeeker, startOffset i
 				if resolvePayloads {
 					payload, err = resolveContentPayload(ctx, content, ref)
 					if err != nil {
-						return fmt.Errorf("%w: read v4 event %s payload: %v", ErrDamagedStore, physical.ID, err)
+						return fmt.Errorf("%w: read v4 event %s payload: %w", ErrDamagedStore, physical.ID, err)
 					}
 					payloadRef = nil
 				}
@@ -361,7 +361,7 @@ func readV4Frame(ctx context.Context, reader io.Reader, decoder *zstd.Decoder) (
 	}
 	raw, err := decoder.DecodeAll(compressed, make([]byte, 0, rawBytes))
 	if err != nil {
-		return nil, 0, false, fmt.Errorf("%w: decode v4 frame: %v", ErrDamagedStore, err)
+		return nil, 0, false, fmt.Errorf("%w: decode v4 frame: %w", ErrDamagedStore, err)
 	}
 	if len(raw) != rawBytes {
 		return nil, 0, false, fmt.Errorf("%w: v4 frame decoded %d bytes, expected %d", ErrDamagedStore, len(raw), rawBytes)

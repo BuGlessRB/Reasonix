@@ -191,7 +191,7 @@ func streamSchemaOneMigration(ctx context.Context, path string, emitter *migrati
 			return records, nil
 		}
 		if err != nil {
-			return records, fmt.Errorf("%w: decode schema-1 record: %v", ErrSessionHistoryDamaged, err)
+			return records, fmt.Errorf("%w: decode schema-1 record: %w", ErrSessionHistoryDamaged, err)
 		}
 		if delimiter, ok := token.(json.Delim); !ok || delimiter != '{' {
 			return records, fmt.Errorf("%w: schema-1 record is not an object", ErrSessionHistoryDamaged)
@@ -203,7 +203,7 @@ func streamSchemaOneMigration(ctx context.Context, path string, emitter *migrati
 		for decoder.More() {
 			nameToken, err := decoder.Token()
 			if err != nil {
-				return records, fmt.Errorf("%w: decode schema-1 field: %v", ErrSessionHistoryDamaged, err)
+				return records, fmt.Errorf("%w: decode schema-1 field: %w", ErrSessionHistoryDamaged, err)
 			}
 			name, ok := nameToken.(string)
 			if !ok {
@@ -234,11 +234,11 @@ func streamSchemaOneMigration(ctx context.Context, path string, emitter *migrati
 				err = decoder.Decode(&discard)
 			}
 			if err != nil {
-				return records, fmt.Errorf("%w: decode schema-1 %s: %v", ErrSessionHistoryDamaged, name, err)
+				return records, fmt.Errorf("%w: decode schema-1 %s: %w", ErrSessionHistoryDamaged, name, err)
 			}
 		}
 		if _, err := decoder.Token(); err != nil {
-			return records, fmt.Errorf("%w: close schema-1 record: %v", ErrSessionHistoryDamaged, err)
+			return records, fmt.Errorf("%w: close schema-1 record: %w", ErrSessionHistoryDamaged, err)
 		}
 		if schema != sessionEventSchemaVersion || !sawMessages {
 			return records, fmt.Errorf("%w: incomplete schema-1 record", ErrSessionHistoryDamaged)
