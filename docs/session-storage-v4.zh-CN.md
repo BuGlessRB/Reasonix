@@ -71,3 +71,19 @@ schema-1 与 checkpoint 按消息读取，经“单回合归一化窗口”写�
 
 系统不设置累计字节数、消息数、事件数或 Goal 轮数上限。64 KiB、1 MiB、2 MiB、8 MiB、16 MiB 分别用于决定存放位置、传输块、响应大小、单次分配和背压。磁盘不足、权限失败、非法输入或单次 provider 请求无法装入工作预算仍会明确报错，但不得因此删除、静默截断历史或提前改变模型上下文。
 
+## 容量验收
+
+容量程序走真实生产调用链，以 JSON 输出耗时、磁盘占用、Go 内存高水位，以及 Unix 上的进程峰值 RSS。默认参数用于快速烟测；发布规模必须显式传入，因此不会变成运行时准入上限：
+
+```sh
+go run ./tools/sessioncapacity
+
+go run ./tools/sessioncapacity \
+  -root /absolute/path/to/evidence/sessions-v4 \
+  -history-messages 50000 \
+  -history-bytes 1073741824 \
+  -attachment-bytes 1073741824 \
+  -workset-bytes 16777216
+```
+
+每条历史消息产生一个 `message/complete` 和一个用于约束模型工作集的 `model/context-replace` 事件；最后再写入工作集事件，因此完整命令会略多于 100,000 个事件。附件对象由确定性流生成，不分配附件等大的内存缓冲。程序随后关闭会话、冷启动、重建历史索引、验证保留的模型工作集，并测量有索引的最新页延迟。发布验收应显式传 `-root` 保留证据；省略 root 时，烟测数据会在运行结束后删除。

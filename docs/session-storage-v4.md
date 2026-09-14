@@ -111,3 +111,28 @@ allocation, and backpressure. Disk exhaustion, permission failure, invalid
 input, or a single provider request that cannot fit the provider work budget
 remain explicit errors; none permits deleting or silently truncating history.
 
+## Capacity acceptance
+
+The production-path capacity runner emits JSON timings, disk usage, Go memory
+high-water marks, and process peak RSS on Unix. Its default is a quick smoke
+run. The release-scale data set is explicit and therefore cannot become a
+runtime admission limit:
+
+```sh
+go run ./tools/sessioncapacity
+
+go run ./tools/sessioncapacity \
+  -root /absolute/path/to/evidence/sessions-v4 \
+  -history-messages 50000 \
+  -history-bytes 1073741824 \
+  -attachment-bytes 1073741824 \
+  -workset-bytes 16777216
+```
+
+Each history message contributes a `message/complete` and bounded
+`model/context-replace` event; the final workset event makes the full command
+slightly exceed 100,000 events. Attachment objects use a deterministic stream
+without allocating an attachment-sized buffer. The runner closes, cold-opens,
+rebuilds the history index, verifies the retained model workset, and measures
+indexed newest-page latency. Keep the stated `-root` for release evidence; an
+omitted root is deleted after the run.
