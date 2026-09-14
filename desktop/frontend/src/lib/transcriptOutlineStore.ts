@@ -25,6 +25,8 @@ export interface TranscriptOutlineView {
   readonly snapshotId: string;
   readonly entries: readonly TranscriptOutlineEntry[];
   readonly error?: string;
+  /** True when a read budget stopped the index short of the whole session. */
+  readonly truncated?: boolean;
 }
 
 const EMPTY_ENTRIES: readonly TranscriptOutlineEntry[] = [];
@@ -35,6 +37,13 @@ const LEGACY: TranscriptOutlineView = Object.freeze({ mode: "legacy", snapshotId
 // 64 pages of 1000 entries is far beyond any real conversation.
 const MAX_OUTLINE_PAGES = 64;
 const MAX_OUTLINE_ENTRIES = 20_000;
+
+/**
+ * A budget running out keeps the turns already indexed and marks the view
+ * truncated, so a huge conversation still navigates. Discarding the whole
+ * index would trade a bounded cost for losing navigation entirely.
+ */
+const TRUNCATED = "outline is incomplete";
 
 /**
  * The complete turn index of the installed snapshot, shared by the local
@@ -129,13 +138,11 @@ export class TranscriptOutlineStore {
     const current = () => this.generations.get(tabId) === generation;
     const entries: TranscriptOutlineEntry[] = [];
     const seen = new Set<string>();
+    let truncated = false;
     try {
       let offset = 0;
       for (let pages = 0; ; pages++) {
-        if (pages >= MAX_OUTLINE_PAGES) {
-          this.set(tabId, { mode: "error", snapshotId, entries: EMPTY_ENTRIES, error: "outline is too large" });
-          return;
-        }
+        if (pages >= MAX_OUTLINE_PAGES) { truncated = true; break; }
         const page = await read(tabId, { snapshotId, offset });
         if (!current()) return;
         if (page.stale) {
@@ -155,12 +162,9 @@ export class TranscriptOutlineStore {
           if (seen.has(entry.id)) continue;
           seen.add(entry.id);
           entries.push(entry);
-          if (entries.length >= MAX_OUTLINE_ENTRIES) {
-            this.set(tabId, { mode: "error", snapshotId, entries: EMPTY_ENTRIES, error: "outline is too large" });
-            return;
-          }
+          if (entries.length >= MAX_OUTLINE_ENTRIES) { truncated = true; break; }
         }
-        if (page.done) break;
+        if (truncated || page.done) break;
         if (!Number.isSafeInteger(page.nextOffset) || page.nextOffset <= offset) {
           this.set(tabId, { mode: "error", snapshotId, entries: EMPTY_ENTRIES, error: "outline cursor stalled" });
           return;
@@ -169,7 +173,7 @@ export class TranscriptOutlineStore {
       }
       if (!current()) return;
       entries.sort((left, right) => left.order - right.order);
-      this.set(tabId, { mode: "ready", snapshotId, entries });
+      this.set(tabId, { mode: "ready", snapshotId, entries, error: truncated ? TRUNCATED : undefined, truncated });
     } catch (error) {
       if (!current()) return;
       if (error instanceof OutlineUnsupported) {

@@ -253,6 +253,19 @@ export type ControllerLiveStore = {
 export type HistoryMutationKind = "replace" | "prepend" | "append" | "patch";
 export type HistoryMutation = { seq: number; kind: HistoryMutationKind };
 export type HistoryLoadTrigger = "viewport-user" | "question-jump" | "retry" | "auto-fill";
+
+/** Alias kept for call sites that read as a type name rather than a trigger. */
+export type HistoryLoadType = HistoryLoadTrigger;
+
+/**
+ * What one older-history request produced. `stale` is deliberately distinct
+ * from `empty`: a recycled snapshot is not the same as running out of history,
+ * and a navigation jump has to report it rather than silently swap the body.
+ */
+export type HistoryLoadOutcome = "loaded" | "empty" | "stale";
+
+/** Marks an older-history failure the reader can resolve by retrying. */
+export const STALE_HISTORY_ERROR = "history snapshot expired";
 export type HydrateReason = "switch-tab" | "new-session" | "resume-session" | "open-topic" | "startup" | "rewind" | "session-changed";
 type SyncActiveTabOptions = { preserveCachedHistory?: boolean; navigationIntentSeq?: number; surfacePolicy?: HydrateSurfacePolicy; deferHydration?: boolean };
 // A ticketed StartTopicActivation in flight. Only the latest one is tracked:
@@ -3007,23 +3020,32 @@ export function useController() {
     return getTranscriptStore().requestFullContent(tabId, entryId, field);
   }, [ensureTranscriptSubscription]);
 
-  const loadOlderHistory = useCallback(async (tabId?: string, targetTurn?: number, trigger: HistoryLoadTrigger = "retry"): Promise<boolean> => {
+  const loadOlderHistory = useCallback(async (tabId?: string, targetTurn?: number, trigger: HistoryLoadType = "retry"): Promise<HistoryLoadOutcome> => {
     const targetTabId = tabId || activeTabIdRef.current;
-    if (!targetTabId) return false;
+    if (!targetTabId) return "empty";
     const state = statesRef.current.get(targetTabId);
-    if (!state?.historyHasOlder || state.historyOlderLoading) return false;
+    if (!state?.historyHasOlder || state.historyOlderLoading) return "empty";
     if (snapshotClient.installed(targetTabId)) {
       dispatchTo(targetTabId, { type: "history_older_start" });
       try {
         const result = await snapshotClient.older(targetTabId, (snapshot) => dispatchTo(targetTabId, { type: "transcript_page", snapshot }));
-        if (result === "stale") return snapshotClient.load(targetTabId, (snapshot) => dispatchTo(targetTabId, { type: "transcript_snapshot", snapshot }));
-        return result === "loaded";
+        if (result === "stale") {
+          // A navigation jump must not silently swap the body the reader is
+          // looking at. It reports the recycled cut and lets the reader decide;
+          // an explicit history action keeps the existing recovery.
+          if (trigger === "question-jump") {
+            dispatchTo(targetTabId, { type: "history_older_error", error: STALE_HISTORY_ERROR });
+            return "stale";
+          }
+          return (await snapshotClient.load(targetTabId, (snapshot) => dispatchTo(targetTabId, { type: "transcript_snapshot", snapshot }))) ? "loaded" : "empty";
+        }
+        return result === "loaded" ? "loaded" : "empty";
       } catch (error) {
         dispatchTo(targetTabId, { type: "history_older_error", error: errorMessage(error) });
-        return false;
+        return "empty";
       }
     }
-    if (state.running) return false;
+    if (state.running) return "empty";
     const sessionPath = state.meta?.sessionPath ?? "";
     const sessionRevision = state.meta?.sessionRevision ?? state.historyRevision;
     const sessionDigest = state.meta?.sessionDigest ?? state.historyDigest;
@@ -3038,9 +3060,9 @@ export function useController() {
     const startedAt = Date.now();
     try {
       const result = await getTranscriptStore().loadOlder(targetTabId, sessionPath, pageBudget);
-      if (historyOlderSeq.current.get(targetTabId) !== requestSeq) return false;
+      if (historyOlderSeq.current.get(targetTabId) !== requestSeq) return "empty";
       const current = statesRef.current.get(targetTabId);
-      if (!current) return false;
+      if (!current) return "empty";
       const currentRevision = current?.meta?.sessionRevision ?? current?.historyRevision;
       const currentDigest = current?.meta?.sessionDigest ?? current?.historyDigest;
       const fingerprintMatches = (expected: number | undefined, actual: number | undefined) =>
@@ -3055,12 +3077,12 @@ export function useController() {
         (result !== undefined && (!fingerprintMatches(sessionRevision, result.revisionKnown ? result.revision : undefined) ||
           !digestMatches(sessionDigest, result.digest)))) {
         dispatchTo(targetTabId, { type: "history_older_error", error: "history identity changed" });
-        return false;
+        return "empty";
       }
       if (!result) {
         // Superseded (generation moved) or nothing older left.
         dispatchTo(targetTabId, { type: "history_older_error", error: "history page unavailable" });
-        return false;
+        return "empty";
       }
       if (result.kind === "reload") {
         // The cursor went stale (session rewritten): the store reloaded the
@@ -3090,13 +3112,13 @@ export function useController() {
         "tab.hydrate",
         `history older ${targetTabId} trigger=${trigger} kind=${result.kind} items=${result.kind === "prepend" ? result.prependItems.length : result.items.length} turns=${result.startTurn}-${result.endTurn}/${result.totalTurns} ms=${Date.now() - startedAt}`,
       );
-      return true;
+      return "loaded";
     } catch (err) {
-      if (historyOlderSeq.current.get(targetTabId) !== requestSeq) return false;
-      if (!statesRef.current.has(targetTabId)) return false;
+      if (historyOlderSeq.current.get(targetTabId) !== requestSeq) return "empty";
+      if (!statesRef.current.has(targetTabId)) return "empty";
       dispatchTo(targetTabId, { type: "history_older_error", error: errorMessage(err) });
       addBreadcrumb("tab.hydrate", `history older failed ${targetTabId}: ${errorMessage(err)}`);
-      return false;
+      return "empty";
     }
   }, [dispatchTo, ensureTranscriptSubscription, snapshotClient]);
 

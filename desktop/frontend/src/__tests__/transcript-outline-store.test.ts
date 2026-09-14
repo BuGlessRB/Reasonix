@@ -124,13 +124,15 @@ async function main() {
       return page("s1", [entry(offset)], offset + 1, false);
     });
     await store.sync("tab", "s1");
-    assert.equal(store.getView("tab").mode, "error", "an endless host ends the read");
-    assert.equal(store.getView("tab").error, "outline is too large");
+    const view = store.getView("tab");
     assert.ok(requests <= 64, `endless host issued ${requests} requests`);
+    assert.equal(view.truncated, true, "an endless host is cut off");
+    assert.equal(view.mode, "ready", "the turns that did arrive still navigate");
   }
 
   {
-    // The same bound applies to an oversized-but-finishing host.
+    // Running out of budget keeps what was indexed and says it is partial: a
+    // huge conversation must still navigate instead of losing its rail.
     const store = new TranscriptOutlineStore();
     store.register("tab", async (_tabId, request) => {
       const offset = request.offset ?? 0;
@@ -138,7 +140,10 @@ async function main() {
       return page("s1", entries, offset + entries.length, false);
     });
     await store.sync("tab", "s1");
-    assert.equal(store.getView("tab").mode, "error", "an oversized outline ends the read");
+    const view = store.getView("tab");
+    assert.equal(view.mode, "ready", "an oversized outline still navigates");
+    assert.equal(view.truncated, true, "the view reports that it is partial");
+    assert.ok(view.entries.length > 0 && view.entries.length <= 20_000, `kept ${view.entries.length} entries`);
   }
 
   {

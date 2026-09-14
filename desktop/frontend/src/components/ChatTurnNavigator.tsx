@@ -2,11 +2,11 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { ChatSource } from "../lib/chatViewSource";
 import type { ChatScrollController } from "../lib/chatScrollController";
 import type { ChatMountedOrder } from "../lib/chatMountedOrder";
-import { findLoadedTurn, type LoadedTurnNode } from "../lib/chatTurnRail";
+import { findLoadedTurn, indexLoadedTurns, type LoadedTurnNode } from "../lib/chatTurnRail";
 import { getTranscriptOutlineStore, type TranscriptOutlineView } from "../lib/transcriptOutlineStore";
 import type { TranscriptOutlineEntry } from "../lib/transcriptProtocol";
 import { useT } from "../lib/i18n";
-import { TurnNavigator, type TurnRailItem } from "./harness-chat/TurnNavigator";
+import { TurnNavigator, type TurnRailAnchor, type TurnRailItem } from "./harness-chat/TurnNavigator";
 import css from "./harness-chat/TurnNavigator.styles";
 import "./harness-chat/TurnNavigator.css";
 
@@ -30,13 +30,17 @@ function Preview({ source, item }: { source: ChatSource; item: TurnRailItem }) {
   return <><div className={css.previewPrompt}>{prompt || item.ordinal}</div><div className={css.previewResponse}>{response}</div></>;
 }
 
-export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onJump, busyTurn, knownTurns = 0 }: {
+export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onNavigate, onRetryJump, onCancelJump, busyTurn, failedTurn, knownTurns = 0 }: {
   source: ChatSource;
   scroll: ChatScrollController;
   mounts: ChatMountedOrder;
   tabId?: string;
-  onJump?: (entry: TranscriptOutlineEntry) => void;
+  /** The single entry point for every click: loaded and unloaded alike. */
+  onNavigate?: (target: { anchor: TurnRailAnchor; entry: TranscriptOutlineEntry }) => void;
+  onRetryJump?: () => void;
+  onCancelJump?: () => void;
   busyTurn?: string | null;
+  failedTurn?: string | null;
   /** Turns the session is already known to hold, independent of the outline. */
   knownTurns?: number;
 }) {
@@ -73,27 +77,28 @@ export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onJum
 
     // The outline is the complete conversation; loaded turns only enrich it.
     // Ordering and numbering come from the outline so loading an earlier page
-    // never renumbers the rail.
-    const read = (key: string) => identity.get(key);
+    // never renumbers the rail. One pass builds the identity index the merge
+    // then resolves from in constant time.
+    const loaded = indexLoadedTurns(order, (key) => identity.get(key));
     const merged: TurnRailItem[] = [];
     // Mark identities already emitted, and the mounted nodes they consumed, so
     // a turn is never listed twice under two different identities.
     const emitted = new Set<string>();
     const claimed = new Set<string>();
     for (const entry of outlineEntries) {
-      const key = findLoadedTurn(order, read, entry);
+      const key = findLoadedTurn(loaded, entry);
       // The mark keeps the outline's record id as its identity for its whole
       // life, so finishing a load never remounts it or moves its position.
       if (emitted.has(entry.id)) continue;
       emitted.add(entry.id);
       if (key !== undefined) claimed.add(key);
-      const loaded = key ? byTurn.get(key) : undefined;
+      const mounted = key ? byTurn.get(key) : undefined;
       merged.push({
         turn: entry.id,
         ordinal: entry.turn > 0 ? entry.turn : merged.length + 1,
-        prompt: loaded?.prompt || entry.prompt,
-        response: loaded?.response || entry.answer || "",
-        answerKey: loaded?.answerKey,
+        prompt: mounted?.prompt || entry.prompt,
+        response: mounted?.response || entry.answer || "",
+        answerKey: mounted?.answerKey,
         anchor: key ? { kind: "loaded", key } : { kind: "unloaded", recordId: entry.id, messageId: entry.messageId },
         unloaded: key === undefined,
       });
@@ -108,14 +113,19 @@ export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onJum
     return merged;
   }, [order, source, outline.mode, outlineEntries]);
 
+  // Every click goes through the caller's single transaction entry point so a
+  // newer selection supersedes a pending jump instead of racing it.
   const navigate = useCallback((item: TurnRailItem) => {
-    if (item.anchor.kind === "loaded") { scroll.jump(item.anchor.key); return; }
-    onJump?.({
-      id: item.anchor.recordId, messageId: item.anchor.messageId,
-      turn: item.ordinal, order: 0, prompt: item.prompt, answer: item.response,
+    onNavigate?.({
+      anchor: item.anchor,
+      entry: {
+        id: item.anchor.kind === "unloaded" ? item.anchor.recordId : item.turn,
+        messageId: item.anchor.kind === "unloaded" ? item.anchor.messageId : undefined,
+        turn: item.ordinal, order: 0, prompt: item.prompt, answer: item.response,
+      },
     });
-  }, [scroll, onJump]);
-  const retry = useCallback(() => { if (tabId) void store.retry(tabId); }, [store, tabId]);
+  }, [onNavigate]);
+  const reloadOutline = useCallback(() => { if (tabId) void store.retry(tabId); }, [store, tabId]);
   const preview = useCallback((item: TurnRailItem) => <Preview key={item.turn} source={source} item={item} />, [source]);
   // Only a session already known to hold more than one turn keeps the rail's
   // area while the outline is still loading; a fresh conversation shows nothing.
@@ -123,7 +133,11 @@ export default function ChatTurnNavigator({ source, scroll, mounts, tabId, onJum
   // retry entry is offered whether or not any are.
   const failed = outline.mode === "error";
   const loading = knownTurns > 1 && items.length < 2 && outline.mode === "loading";
+  // A failed jump is retried against its own target, not by reading more
+  // history; a jump that is still paging offers its own cancel.
+  const jumpFailed = failedTurn !== null && failedTurn !== undefined;
   return <TurnNavigator items={items} activeTurn={position.activeKey || null} busyTurn={busyTurn ?? null}
     onNavigate={navigate} renderPreview={preview} t={t}
-    loading={loading} failed={failed} onRetry={failed ? retry : undefined} />;
+    loading={loading} failed={failed} onRetry={failed ? reloadOutline : jumpFailed ? onRetryJump : undefined}
+    jumpFailed={jumpFailed} onCancelJump={busyTurn ? onCancelJump : undefined} />;
 }

@@ -4,7 +4,7 @@ import { useT } from "./i18n";
 import { createLegacyRemotePolicyNoticeTracker } from "./legacyRemotePolicyNotice";
 import { app, onRemoteTabEvent, onRemoteTabState } from "./bridge";
 import type { CancelOutcome } from "./inboxCancel";
-import { historyMessagesToItems, initialState, reducer, type ControllerLiveStore, type State } from "./useController";
+import { historyMessagesToItems, initialState, reducer, STALE_HISTORY_ERROR, type ControllerLiveStore, type HistoryLoadOutcome, type HistoryLoadTrigger, type State } from "./useController";
 import { TurnEventProjector } from "./turnEventProjection";
 import { rebaseSnapshotContentPatches, resolveSnapshotItems, resolveSnapshotTool, StaleCut, TranscriptSnapshotClient } from "./transcriptSnapshotClient";
 import { getTranscriptStore } from "./transcriptStore";
@@ -29,7 +29,7 @@ export interface RemoteSessionApi {
   liveStore: ControllerLiveStore;
   hydrated: boolean;
   syncMode?: "snapshot" | "legacy";
-  loadOlderHistory?: () => Promise<boolean>;
+  loadOlderHistory?: (targetTurn?: number, trigger?: HistoryLoadTrigger) => Promise<HistoryLoadOutcome>;
   running: boolean;
   /** The serve's label for the active model, for the composer capsule. */
   modelLabel: string;
@@ -125,7 +125,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   const [promptError, setPromptError] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [syncMode, setSyncMode] = useState<"snapshot" | "legacy">("legacy");
-  const olderRef = useRef<(() => Promise<boolean>) | undefined>(undefined);
+  const olderRef = useRef<((trigger?: HistoryLoadTrigger) => Promise<HistoryLoadOutcome>) | undefined>(undefined);
   const transcriptRef = useRef(transcript);
   const setTranscript = useCallback((update: State | ((state: State) => State)) => {
     const next = typeof update === "function" ? update(transcriptRef.current) : update;
@@ -252,16 +252,24 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
         throw error;
       }
     }, () => modern);
-    olderRef.current = async () => {
-      if (!modern || transcriptRef.current.historyOlderLoading) return false;
+    olderRef.current = async (trigger?: HistoryLoadTrigger): Promise<HistoryLoadOutcome> => {
+      if (!modern || transcriptRef.current.historyOlderLoading) return "empty";
       setTranscript((current) => reducer(current, { type: "history_older_start" }));
       try {
         const result = await snapshots.older(tabId, (snapshot) => setTranscript((current) => reducer(current, { type: "transcript_page", snapshot })));
-        if (result === "stale") return loadModern();
-        return result === "loaded";
+        if (result === "stale") {
+          // Same boundary as the local controller: a navigation jump reports a
+          // recycled cut instead of silently replacing the body.
+          if (trigger === "question-jump") {
+            setTranscript((current) => reducer(current, { type: "history_older_error", error: STALE_HISTORY_ERROR }));
+            return "stale";
+          }
+          return (await loadModern()) ? "loaded" : "empty";
+        }
+        return result === "loaded" ? "loaded" : "empty";
       } catch (error) {
         if (!cancelled) setTranscript((current) => reducer(current, { type: "history_older_error", error: String(error) }));
-        return false;
+        return "empty";
       }
     };
     // Reconcile durable history after a turn settles without advancing
@@ -771,7 +779,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   }, []);
 
   return {
-    state, error, transcript, liveStore, hydrated, syncMode, loadOlderHistory: () => olderRef.current?.() ?? Promise.resolve(false), running: transcript.running, modelLabel, commands,
+    state, error, transcript, liveStore, hydrated, syncMode, loadOlderHistory: (_targetTurn?: number, trigger?: HistoryLoadTrigger) => olderRef.current?.(trigger) ?? Promise.resolve("empty"), running: transcript.running, modelLabel, commands,
     composerProfile, goalRuntime, goalView, effort, surfaceGeneration, promptError, submit, runManagementCommand, compact, cancelTurn,
     approve, resolvePlanDecision, answer, clearExtensionForm, rewind, setModel, setEffort, setQualityFloor, pauseGoal, resumeGoal, editGoal, steer, cancelJob,
     drainApprovals, retryHydration,

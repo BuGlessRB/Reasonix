@@ -8,6 +8,8 @@ export const zh: Record<DictKey, string> = {
   "chat.turnNavigation.label": "对话轮次",
   "chat.turnNavigation.jump": "跳转到第 {turn} 轮",
   "chat.turnNavigation.retry": "重新载入对话轮次",
+  "chat.turnNavigation.retryJump": "重新跳转到该轮",
+  "chat.turnNavigation.cancel": "停止加载",
   "chat.turnNavigation.unavailable": "该轮次没有可定位的内容。",
   "chat.process": "查看执行过程",
   "chat.expandLines": "展开其余 {count} 行",

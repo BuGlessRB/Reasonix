@@ -7,6 +7,8 @@ export const en = {
   "chat.turnNavigation.label": "Conversation turns",
   "chat.turnNavigation.jump": "Jump to turn {turn}",
   "chat.turnNavigation.retry": "Reload conversation turns",
+  "chat.turnNavigation.retryJump": "Try that jump again",
+  "chat.turnNavigation.cancel": "Stop loading",
   "chat.turnNavigation.unavailable": "That turn has no content to scroll to.",
   "chat.process": "View process",
   "chat.expandLines": "Show {count} more lines",

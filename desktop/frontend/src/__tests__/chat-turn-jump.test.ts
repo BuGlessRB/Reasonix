@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { ChatMountedOrder } from "../lib/chatMountedOrder";
 import { ChatTurnJump } from "../lib/chatTurnJump";
 import type { ChatScrollController } from "../lib/chatScrollController";
-import { alignOutlineEntries, findLoadedTurn } from "../lib/chatTurnRail";
+import { alignOutlineEntries, findLoadedTurn, indexLoadedTurns, recordIdOf } from "../lib/chatTurnRail";
 import type { TranscriptOutlineEntry } from "../lib/transcriptProtocol";
 
 // Node has no animation frame; the mount-settle path is driven by the mounted
@@ -45,6 +45,8 @@ function jumpFor(mounts: ChatMountedOrder, options: {
   pages?: string[][];
   hasOlder?: () => boolean;
   current?: () => boolean;
+  snapshotId?: () => string;
+  drainMs?: number;
 }) {
   const fake = fakeScroll();
   let pageIndex = 0;
@@ -59,11 +61,13 @@ function jumpFor(mounts: ChatMountedOrder, options: {
       for (const key of revealed) options.mounted.add(key);
       // One page also advances the progressive mount.
       mounts.publish([...options.mounted]);
-      return revealed.length > 0;
+      return revealed.length > 0 ? "loaded" as const : "empty" as const;
     },
     hasOlder: options.hasOlder ?? (() => true),
     resolveKey: (entry) => (options.mounted.has(entry.id) ? entry.id : undefined),
+    currentSnapshotId: options.snapshotId ?? (() => "cut"),
     isCurrent: options.current ?? (() => true),
+    drainMs: options.drainMs,
   });
   return { jump, fake, loads, mounted: options.mounted };
 }
@@ -101,16 +105,91 @@ async function main() {
     await state.jump.jump(target("m:404"));
     assert.deepEqual(state.fake.jumps, [], "an unreachable target never moves the viewport");
     assert.equal(state.jump.getSnapshot().status, "failed");
-    assert.equal(state.jump.getSnapshot().error, "turnUnavailable");
+    assert.equal(state.jump.getSnapshot().reason, "turnUnavailable");
   }
 
   {
-    // No older history at all fails immediately instead of looping.
+    // No older history at all fails instead of looping. The wait for a
+    // progressively mounting last page is still honoured first.
     const mounts = new ChatMountedOrder();
-    const state = jumpFor(mounts, { mounted: new Set(), hasOlder: () => false });
+    const state = jumpFor(mounts, { mounted: new Set(), hasOlder: () => false, drainMs: 0 });
     await state.jump.jump(target("m:404"));
     assert.deepEqual(state.loads, [], "a missing target with no history is not retried");
     assert.equal(state.jump.getSnapshot().status, "failed");
+    assert.equal(state.jump.getSnapshot().reason, "turnUnavailable");
+  }
+
+  {
+    // Exhausted history is not the same as an unreachable turn: the last page
+    // mounts progressively, so the target can still appear afterwards.
+    const mounts = new ChatMountedOrder();
+    const state = jumpFor(mounts, { mounted: new Set(["m:9"]), pages: [["m:5"]], hasOlder: () => false });
+    const pending = state.jump.jump(target("m:1"));
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    // The reveal lands several frames after the page that carried it.
+    for (let i = 0; i < 50 && !settled; i++) {
+      await Promise.resolve();
+      state.mounted.add("m:1");
+      flushFrames();
+    }
+    await pending;
+    assert.deepEqual(state.fake.jumps, ["m:1"], "a target that mounts after the last page is still reached");
+    assert.equal(state.jump.getSnapshot().status, "idle");
+  }
+
+  {
+    // Budget exhaustion is reported as such, not as a missing turn.
+    const mounts = new ChatMountedOrder();
+    const state = jumpFor(mounts, { mounted: new Set(), pages: Array.from({ length: 500 }, (_, index) => [`m:${index}`]) });
+    await state.jump.jump(target("m:nowhere"));
+    assert.equal(state.jump.getSnapshot().status, "failed");
+    assert.equal(state.jump.getSnapshot().reason, "pageBudgetExhausted", "a page budget is not a missing turn");
+  }
+
+  {
+    // A recycled snapshot ends the jump instead of silently replacing the body.
+    const mounts = new ChatMountedOrder();
+    const fake = fakeScroll();
+    const jump = new ChatTurnJump({
+      mounts, scroll: fake.scroll,
+      loadOlder: async () => "stale" as const,
+      hasOlder: () => true,
+      resolveKey: () => undefined,
+      currentSnapshotId: () => "cut",
+      isCurrent: () => true,
+    });
+    await jump.jump(target("m:1"));
+    assert.equal(jump.getSnapshot().status, "failed");
+    assert.equal(jump.getSnapshot().reason, "snapshotExpired", "a recycled cut is its own outcome");
+    assert.deepEqual(fake.jumps, [], "a recycled cut never moves the viewport");
+  }
+
+  {
+    // A replaced snapshot invalidates the locators this jump was resolved
+    // against, so it stops rather than continuing against the new body.
+    const mounts = new ChatMountedOrder();
+    let snapshot = "cut";
+    const state = jumpFor(mounts, { mounted: new Set(), pages: [["m:5"], ["m:1"]], snapshotId: () => snapshot });
+    const pending = state.jump.jump(target("m:1"));
+    await Promise.resolve();
+    snapshot = "cut:2";
+    await pending;
+    assert.deepEqual(state.fake.jumps, [], "a replaced snapshot cancels the pending jump");
+    assert.equal(state.loads.length, 1, "no page is requested against the replaced snapshot");
+  }
+
+  {
+    // Clicking an already-loaded turn must supersede a pending jump rather than
+    // race it: both go through the same transaction.
+    const mounts = new ChatMountedOrder();
+    const state = jumpFor(mounts, { mounted: new Set(["u4"]), pages: [["m:5"], ["m:1"]] });
+    const pending = state.jump.jump(target("m:1"));
+    await Promise.resolve();
+    state.jump.jumpTo("u4");
+    await pending;
+    assert.deepEqual(state.fake.jumps, ["u4"], "the newest click wins and the pending jump is abandoned");
+    assert.equal(state.jump.getSnapshot().status, "idle");
   }
 
   {
@@ -182,9 +261,10 @@ async function main() {
     const jump = new ChatTurnJump({
       mounts,
       scroll: state.fake.scroll,
-      loadOlder: async () => { pages += 1; return true; },
+      loadOlder: async () => { pages += 1; return "loaded" as const; },
       hasOlder: () => pages < 3,
       resolveKey: () => undefined,
+      currentSnapshotId: () => "cut",
       isCurrent: () => true,
     });
     let settled = false;
@@ -208,24 +288,47 @@ async function main() {
     // gains a messageId, so a key-shaped match would miss the turns the reader
     // just wrote — the exact regression this covers.
     const settled: TranscriptOutlineEntry = { id: "m:abc", messageId: "abc", turn: 1, order: 0, prompt: "", answer: "" };
-    const nodes = new Map([
+    const nodes = new Map<string, { id: string; messageId?: string }>([
       ["u7", { id: "u7", messageId: "abc" }],
       ["m:other", { id: "m:other" }],
     ]);
-    const read = (key: string) => nodes.get(key);
-    assert.equal(findLoadedTurn(["u7"], read, settled), "u7", "an optimistically submitted question is found by its message ID");
-    assert.equal(findLoadedTurn([], read, settled), undefined, "an unmounted question has no key");
-    assert.equal(findLoadedTurn(["m:other"], read, settled), undefined, "an unrelated node is not claimed");
+    const index = (order: string[]) => indexLoadedTurns(order, (key) => nodes.get(key));
+    assert.equal(findLoadedTurn(index(["u7"]), settled), "u7", "an optimistically submitted question is found by its message ID");
+    assert.equal(findLoadedTurn(index([]), settled), undefined, "an unmounted question has no key");
+    assert.equal(findLoadedTurn(index(["m:other"]), settled), undefined, "an unrelated node is not claimed");
 
     const uncommitted: TranscriptOutlineEntry = { id: "m:tmp", turn: 2, order: 2, prompt: "", answer: "" };
     nodes.set("m:tmp", { id: "m:tmp" });
-    assert.equal(findLoadedTurn(["m:tmp"], read, uncommitted), "m:tmp", "an uncommitted question resolves by record ID");
+    assert.equal(findLoadedTurn(index(["m:tmp"]), uncommitted), "m:tmp", "an uncommitted question resolves by record ID");
+
+    // History that carries no message id is keyed `record:<recordId>` by the
+    // transcript, while the outline carries the bare record id. Comparing the
+    // two item keys directly never matches, so the conversion is part of the
+    // contract rather than an accident of the fixture.
+    nodes.set("record:m:xyz", { id: "record:m:xyz" });
+    const historical: TranscriptOutlineEntry = { id: "m:xyz", turn: 3, order: 4, prompt: "", answer: "" };
+    assert.equal(findLoadedTurn(index(["record:m:xyz"]), historical), "record:m:xyz",
+      "a history record without a message ID resolves through its record key");
+    assert.equal(recordIdOf({ id: "record:m:xyz" }), "m:xyz", "the item key converts back to the outline identity");
+    assert.equal(recordIdOf({ id: "u7", messageId: "abc" }), "m:abc", "a settled question converts through its message ID");
 
     // A message ID match wins even when a record-ID-only match appears earlier
     // in the mounted order, so settlement cannot move a mark to a stale node.
     nodes.set("m:abc:legacy", { id: "m:abc" });
-    assert.equal(findLoadedTurn(["m:abc:legacy", "u7"], read, settled), "u7",
+    assert.equal(findLoadedTurn(index(["m:abc:legacy", "u7"]), settled), "u7",
       "a message ID match outranks an earlier record ID match");
+
+    // Indexing once and looking up per entry is what keeps a long conversation
+    // linear instead of quadratic.
+    const wide = Array.from({ length: 4000 }, (_, i) => `u${i}`);
+    for (let i = 0; i < 4000; i++) nodes.set(`u${i}`, { id: `u${i}`, messageId: `${i}` });
+    const wideIndex = indexLoadedTurns(wide, (key) => nodes.get(key));
+    const started = Date.now();
+    for (let i = 0; i < 4000; i++) {
+      findLoadedTurn(wideIndex, { id: `m:${i}`, messageId: `${i}`, turn: i, order: i, prompt: "", answer: "" });
+    }
+    const elapsed = Date.now() - started;
+    assert.ok(elapsed < 500, `4000 lookups over 4000 nodes took ${elapsed}ms; the merge must not rescan per entry`);
 
     const aligned = alignOutlineEntries([
       { id: "m:b", turn: 2, order: 2, prompt: "", answer: "" },

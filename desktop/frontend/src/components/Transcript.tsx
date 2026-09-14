@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowDown } from "lucide-react";
-import type { ControllerLiveStore, HistoryLoadTrigger, Item, LiveStream } from "../lib/useController";
+import type { ControllerLiveStore, HistoryLoadOutcome, HistoryLoadTrigger, Item, LiveStream } from "../lib/useController";
 import type { CheckpointMeta } from "../lib/types";
 import type { InvocationMetadataMap } from "../lib/invocationDisplay";
 import { acquireMarkdownWorkerClient, releaseMarkdownWorkerClient } from "../lib/markdownWorkerClient";
@@ -9,7 +9,8 @@ import { ChatScrollController } from "../lib/chatScrollController";
 import { ChatContentLoader } from "../lib/chatContentLoader";
 import { ChatMountedOrder } from "../lib/chatMountedOrder";
 import { ChatTurnJump } from "../lib/chatTurnJump";
-import { findLoadedTurn } from "../lib/chatTurnRail";
+import { findLoadedTurn, indexLoadedTurns, type LoadedTurnIndex } from "../lib/chatTurnRail";
+import { getTranscriptOutlineStore } from "../lib/transcriptOutlineStore";
 import { addBreadcrumb } from "../lib/breadcrumbs";
 import { useT } from "../lib/i18n";
 import { InvocationMetadataContext } from "./Message";
@@ -42,7 +43,7 @@ export type TranscriptProps = {
   totalTurns?: number;
   loadingOlderHistory?: boolean;
   olderHistoryError?: string;
-  onLoadOlderHistory?: (targetTurn?: number, trigger?: HistoryLoadTrigger) => boolean | Promise<boolean>;
+  onLoadOlderHistory?: (targetTurn?: number, trigger?: HistoryLoadTrigger) => HistoryLoadOutcome | boolean | Promise<HistoryLoadOutcome | boolean>;
   turnStartAt?: number;
   invocationMetadata?: InvocationMetadataMap;
   surfaceCommitToken?: string;
@@ -122,16 +123,24 @@ function ChatSession(props: TranscriptProps & { sessionKey: string }) {
   // Manual paging and navigation jumps share one queue. A page already in
   // flight is awaited rather than submitted twice, so a jump that collides
   // with the button continues from that page instead of failing.
-  const pagingPromise = useRef<Promise<boolean> | null>(null);
-  const loadOlder = (trigger: HistoryLoadTrigger = "viewport-user"): Promise<boolean> => {
+  const pagingPromise = useRef<Promise<HistoryLoadOutcome> | null>(null);
+  const loadOlder = (trigger: HistoryLoadTrigger = "viewport-user"): Promise<HistoryLoadOutcome> => {
     if (pagingPromise.current) return pagingPromise.current;
-    if (!onLoadOlderHistory) return Promise.resolve(false);
+    if (!onLoadOlderHistory) return Promise.resolve("empty");
     const generation = lifetime.current;
     setPagingError(false);
     scroll.beforeChange();
-    const run = (async (): Promise<boolean> => {
-      try { return await onLoadOlderHistory(undefined, trigger); }
-      catch { if (generation === lifetime.current) setPagingError(true); return false; }
+    const run = (async (): Promise<HistoryLoadOutcome> => {
+      try {
+        // A host that still answers with a plain boolean is normalized here.
+        const result = await onLoadOlderHistory(undefined, trigger);
+        if (result === true) return "loaded";
+        if (result === false) return "empty";
+        return result ?? "empty";
+      } catch {
+        if (generation === lifetime.current) setPagingError(true);
+        return "empty";
+      }
     })();
     pagingPromise.current = run;
     void run.finally(() => { if (pagingPromise.current === run) pagingPromise.current = null; });
@@ -142,27 +151,39 @@ function ChatSession(props: TranscriptProps & { sessionKey: string }) {
   const loadOlderRef = useRef(loadOlder); loadOlderRef.current = loadOlder;
   const hasOlderRef = useRef(false); hasOlderRef.current = hasOlderHistory && Boolean(onLoadOlderHistory);
   const lifetimeRef = useRef(lifetime.current); lifetimeRef.current = lifetime.current;
+  // Rebuild the mounted identity index only when the mount advances, then
+  // resolve each target from it in constant time: scanning the mounted order
+  // per outline entry is quadratic on long conversations.
+  const turnIndex = useRef<{ order: readonly string[]; index: LoadedTurnIndex }>(undefined);
   const jump = useMemo(() => new ChatTurnJump({
     mounts, scroll,
     loadOlder: () => loadOlderRef.current("question-jump"),
     hasOlder: () => hasOlderRef.current,
-    // Re-read the mounted set on every attempt: the whole point is that the
-    // answer changes as the progressive mount advances. Matching goes through
-    // the node's own identity, so an optimistically submitted question is
-    // found under its `u<seq>` anchor key rather than its eventual message id.
-    resolveKey: (entry) => findLoadedTurn(mounts.getSnapshot(), (key) => {
-      const node = source.getNodeSnapshot(key);
-      return node?.kind === "user" ? { id: node.item.id, messageId: node.item.messageId } : undefined;
-    }, entry),
+    resolveKey: (entry) => {
+      const order = mounts.getSnapshot();
+      if (turnIndex.current?.order !== order) {
+        turnIndex.current = {
+          order,
+          index: indexLoadedTurns(order, (key) => {
+            const node = source.getNodeSnapshot(key);
+            return node?.kind === "user" ? { id: node.item.id, messageId: node.item.messageId } : undefined;
+          }),
+        };
+      }
+      return findLoadedTurn(turnIndex.current.index, entry);
+    },
+    // The rail describes one snapshot. A replacement invalidates the locators
+    // this jump was resolved against, so it must not keep paging the new body.
+    currentSnapshotId: () => (tabId ? getTranscriptOutlineStore().getView(tabId).snapshotId : ""),
     isCurrent: () => lifetimeRef.current === lifetime.current,
-  }), [mounts, scroll, source]);
+  }), [mounts, scroll, source, tabId]);
   const jumpState = useSyncExternalStore(jump.subscribe, jump.getSnapshot, jump.getSnapshot);
   useEffect(() => () => jump.dispose(), [jump]);
   useEffect(() => {
     if (jumpState.status !== "failed") return;
     setPagingError(true);
-    addBreadcrumb("chat.jump", `turn jump failed: ${jumpState.error ?? "unknown"}`);
-  }, [jumpState.status, jumpState.error]);
+    addBreadcrumb("chat.jump", `turn jump failed: ${jumpState.reason ?? "unknown"}`);
+  }, [jumpState.status, jumpState.reason]);
   return <InvocationMetadataContext.Provider value={props.invocationMetadata ?? {}}>
     <MarkdownImageTabContext.Provider value={tabId ?? ""}>
       <section className="chat-transcript">
@@ -170,7 +191,15 @@ function ChatSession(props: TranscriptProps & { sessionKey: string }) {
           <Suspense fallback={null}><ChatTurnNavigator source={source} scroll={scroll} mounts={mounts}
             tabId={tabId} knownTurns={props.totalTurns ?? 0}
             busyTurn={jumpState.status === "loading" ? jumpState.turn : null}
-            onJump={(entry) => { void jump.jump(entry); }} /></Suspense>
+            failedTurn={jumpState.status === "failed" ? jumpState.turn : null}
+            // Every click takes the one transaction entry point, so a newer
+            // selection always supersedes a pending jump instead of racing it.
+            onNavigate={(target) => {
+              if (target.anchor.kind === "loaded") jump.jumpTo(target.anchor.key);
+              else void jump.jump(target.entry);
+            }}
+            onRetryJump={() => jump.retry()}
+            onCancelJump={() => jump.cancel()} /></Suspense>
           <div ref={scroller} className="transcript chat-flow-scroll" tabIndex={0} data-transcript-render-mode="full"
             data-transcript-hydrating={hydrating} data-scroll-mode={position.following ? "tail" : "reader"}>
             <div ref={column} className="chat-column">

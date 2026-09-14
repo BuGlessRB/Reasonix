@@ -4,11 +4,22 @@ import type { TranscriptOutlineEntry } from "./transcriptProtocol";
 
 export type TurnJumpStatus = "idle" | "loading" | "failed";
 
+/** Why a turn could not be reached. Kept distinct so the rail can say which. */
+export type TurnJumpReason =
+  /** History is exhausted (or the budget ran out) and the node never appeared. */
+  | "turnUnavailable"
+  /** The snapshot was recycled; the target has to be resolved against a fresh one. */
+  | "snapshotExpired"
+  /** The jump pulled as many pages as it is allowed to. */
+  | "pageBudgetExhausted";
+
 export interface TurnJumpState {
   /** Stable identity of the turn being located, or null when idle. */
   readonly turn: string | null;
   readonly status: TurnJumpStatus;
-  readonly error?: string;
+  readonly reason?: TurnJumpReason;
+  /** The entry a failed jump can be retried against. */
+  readonly retry?: TranscriptOutlineEntry;
 }
 
 const IDLE: TurnJumpState = Object.freeze({ turn: null, status: "idle" });
@@ -17,19 +28,25 @@ const IDLE: TurnJumpState = Object.freeze({ turn: null, status: "idle" });
 const MOUNT_SETTLE_FRAMES = 120;
 /** Wall-clock ceiling for the same wait; frames stop arriving when hidden. */
 const MOUNT_SETTLE_MS = 2000;
-/** Pages a single jump may pull before giving up, independent of entry count. */
+/** How long to keep waiting for the target's node after history is exhausted. */
+const DRAIN_MOUNT_MS = 5000;
+/** Pages a single jump may pull before giving up. */
 const MAX_JUMP_PAGES = 400;
 
 export interface TurnJumpDeps {
   readonly mounts: ChatMountedOrder;
   readonly scroll: ChatScrollController;
-  /** One older body page. Resolves false when the page added nothing usable. */
-  loadOlder: () => Promise<boolean>;
+  /** One older body page. `stale` means the snapshot it was paging is gone. */
+  loadOlder: () => Promise<"loaded" | "empty" | "stale">;
   hasOlder: () => boolean;
   /** The DOM key of a turn once its node is mounted. */
   resolveKey: (entry: TranscriptOutlineEntry) => string | undefined;
+  /** Identity of the snapshot this rail is describing; a change ends the jump. */
+  currentSnapshotId: () => string;
   /** False once the session, tab, or snapshot this jump belongs to is gone. */
   isCurrent: () => boolean;
+  /** Overrides the post-exhaustion wall-clock budget; tests shorten it. */
+  drainMs?: number;
 }
 
 /**
@@ -38,9 +55,11 @@ export interface TurnJumpDeps {
  * "the DOM exists": each page commits, the progressive mount advances, and the
  * target is re-resolved before the viewport moves.
  *
- * One transaction at a time. Reader intent, an explicit cancel, a newer target,
- * or a session/snapshot replacement all end the pending transaction; a page
- * already in flight may finish, but it can never take scroll control back.
+ * Every navigation click goes through this one entry point, so a newer target
+ * always supersedes a pending one instead of racing it. Reader intent, an
+ * explicit cancel, a newer target, or a session/snapshot replacement all end
+ * the pending transaction; a page already in flight may finish, but it can
+ * never take scroll control back.
  */
 export class ChatTurnJump {
   private listeners = new Set<() => void>();
@@ -62,11 +81,15 @@ export class ChatTurnJump {
     this.unsubscribeReader ??= this.deps.scroll.subscribeReaderIntent(() => { this.cancel(); });
   }
 
+  private detach(): void {
+    this.unsubscribeReader?.();
+    this.unsubscribeReader = undefined;
+  }
+
   cancel(): void {
     if (this.state.status === "idle") return;
     this.interaction++;
-    this.unsubscribeReader?.();
-    this.unsubscribeReader = undefined;
+    this.detach();
     this.publish(IDLE);
   }
 
@@ -75,14 +98,34 @@ export class ChatTurnJump {
     this.listeners.clear();
   }
 
+  /** Re-run the jump that last failed, against a freshly resolved snapshot. */
+  retry(): void {
+    const entry = this.state.retry;
+    if (entry === undefined) return;
+    void this.jump(entry);
+  }
+
+  /**
+   * Scroll to a turn whose node is already mounted. It still goes through the
+   * transaction so it supersedes a pending jump instead of racing it: the
+   * reader's newest click must win, whatever is still paging behind it.
+   */
+  jumpTo(key: string): void {
+    this.interaction++;
+    this.detach();
+    this.publish(IDLE);
+    this.deps.scroll.stopFollowing();
+    this.deps.scroll.jump(key);
+  }
+
   async jump(entry: TranscriptOutlineEntry): Promise<void> {
     const interaction = ++this.interaction;
-    const current = () => this.interaction === interaction && this.deps.isCurrent();
+    const snapshotId = this.deps.currentSnapshotId();
+    const current = () => this.interaction === interaction && this.deps.isCurrent() && this.deps.currentSnapshotId() === snapshotId;
     // Exit follow first: the reader asked for a specific turn, and a tail pin
     // would otherwise fight the write that lands later.
     this.deps.scroll.stopFollowing();
-    this.unsubscribeReader?.();
-    this.unsubscribeReader = undefined;
+    this.detach();
     this.watchReader();
     this.publish({ turn: entry.id, status: "loading" });
 
@@ -92,33 +135,49 @@ export class ChatTurnJump {
         if (!current()) return;
         const mounted = this.deps.resolveKey(entry);
         if (mounted !== undefined) {
-          // The node exists in the document; the shared writer owns the move.
           if (!current()) return;
           this.deps.scroll.jump(mounted);
           this.finish(entry, interaction);
           return;
         }
         if (!this.deps.hasOlder()) {
-          this.fail(entry, interaction, "turnUnavailable");
+          // History is exhausted, but the last page mounts progressively. The
+          // data having covered the target is not the target being reachable
+          // yet, so keep waiting for its node before declaring it missing.
+          await this.drainTo(entry, interaction, current);
           return;
         }
         if (pages >= MAX_JUMP_PAGES) {
-          this.fail(entry, interaction, "turnUnavailable");
+          // A budget running out is not the same as the turn not existing.
+          this.fail(entry, interaction, "pageBudgetExhausted");
           return;
         }
         pages++;
         const before = this.deps.mounts.getSnapshot();
         const loaded = await this.deps.loadOlder();
         if (!current()) return;
-        if (!loaded) {
-          this.fail(entry, interaction, "turnUnavailable");
+        if (loaded === "stale") {
+          // The cut this jump resolved against was recycled. Replacing the body
+          // is the reader's decision, not a side effect of navigation.
+          this.fail(entry, interaction, "snapshotExpired");
+          return;
+        }
+        if (loaded === "empty") {
+          // A page the host could not fill while still claiming older history
+          // is a dead end, not a recycled cut; only exhaustion earns the
+          // progressive-mount wait.
+          if (this.deps.hasOlder()) {
+            this.fail(entry, interaction, "turnUnavailable");
+            return;
+          }
+          await this.drainTo(entry, interaction, current);
           return;
         }
         await this.settleMounts(before);
         if (!current()) return;
       }
     } catch (error) {
-      this.fail(entry, interaction, error instanceof Error ? error.message : "turnUnavailable");
+      this.fail(entry, interaction, error instanceof Error && error.message === "stale" ? "snapshotExpired" : "turnUnavailable");
     }
   }
 
@@ -156,18 +215,62 @@ export class ChatTurnJump {
     });
   }
 
+  /**
+   * Wait out the progressive mount once history is exhausted: the target may
+   * still be arriving on a later frame, so it is not missing yet. Ends the
+   * transaction either way.
+   */
+  private async drainTo(entry: TranscriptOutlineEntry, interaction: number, current: () => boolean): Promise<void> {
+    const mounted = await this.waitForMount(entry, current);
+    if (!current()) return;
+    if (mounted !== undefined) {
+      this.deps.scroll.jump(mounted);
+      this.finish(entry, interaction);
+      return;
+    }
+    this.fail(entry, interaction, "turnUnavailable");
+  }
+
+  /**
+   * Keep polling for the target's node after history is exhausted, so a
+   * progressively revealed last page is not mistaken for a missing turn.
+   * Returns its key, or undefined when the wait budget expires.
+   */
+  private waitForMount(entry: TranscriptOutlineEntry, current: () => boolean): Promise<string | undefined> {
+    const found = this.deps.resolveKey(entry);
+    if (found !== undefined) return Promise.resolve(found);
+    return new Promise((resolve) => {
+      let handle = 0;
+      let settled = false;
+      const finish = (key: string | undefined): void => {
+        if (settled) return;
+        settled = true;
+        if (handle) cancelAnimationFrame(handle);
+        clearTimeout(timer);
+        resolve(key);
+      };
+      const step = (): void => {
+        if (settled) return;
+        if (!current()) { finish(undefined); return; }
+        const key = this.deps.resolveKey(entry);
+        if (key !== undefined) { finish(key); return; }
+        handle = requestAnimationFrame(step);
+      };
+      const timer = setTimeout(() => { finish(undefined); }, this.deps.drainMs ?? DRAIN_MOUNT_MS);
+      handle = requestAnimationFrame(step);
+    });
+  }
+
   private finish(entry: TranscriptOutlineEntry, interaction: number): void {
     if (this.interaction !== interaction) return;
-    this.unsubscribeReader?.();
-    this.unsubscribeReader = undefined;
+    this.detach();
     this.publish({ turn: entry.id, status: "idle" });
   }
 
-  private fail(entry: TranscriptOutlineEntry, interaction: number, error: string): void {
+  private fail(entry: TranscriptOutlineEntry, interaction: number, reason: TurnJumpReason): void {
     if (this.interaction !== interaction) return;
-    this.unsubscribeReader?.();
-    this.unsubscribeReader = undefined;
-    this.publish({ turn: entry.id, status: "failed", error });
+    this.detach();
+    this.publish({ turn: entry.id, status: "failed", reason, retry: entry });
   }
 
   private publish(state: TurnJumpState): void {

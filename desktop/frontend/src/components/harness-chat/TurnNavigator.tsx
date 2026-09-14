@@ -35,7 +35,11 @@ interface TurnNavigatorProps {
   readonly loading?: boolean
   /** The outline could not be read; known markers stay and a retry is offered. */
   readonly failed?: boolean
+  /** True when the offered retry re-runs a failed jump rather than the read. */
+  readonly jumpFailed?: boolean
   readonly onRetry?: () => void
+  /** Present while a jump can still be abandoned. */
+  readonly onCancelJump?: () => void
 }
 
 /** Fixed pitch between neighbouring marks; overflow scrolls inside the frame. */
@@ -96,7 +100,7 @@ function sameRailScrollState(left: RailScrollState, right: RailScrollState): boo
     && left.viewportHeight === right.viewportHeight
 }
 
-function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPreview, t, loading, failed, onRetry }: TurnNavigatorProps) {
+function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPreview, t, loading, failed, jumpFailed, onRetry, onCancelJump }: TurnNavigatorProps) {
   const [previewTurn, setPreviewTurn] = useState<string | null>(null)
   const [scrollState, setScrollState] = useState<RailScrollState>(RAIL_AT_REST)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
@@ -252,7 +256,12 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, renderPrev
       </nav>
       {failed && onRetry !== undefined && (
         <button type="button" className="btn chat-turn-navigation-retry" onClick={onRetry}>
-          {t('chat.turnNavigation.retry')}
+          {t(jumpFailed ? 'chat.turnNavigation.retryJump' : 'chat.turnNavigation.retry')}
+        </button>
+      )}
+      {onCancelJump !== undefined && (
+        <button type="button" className="btn chat-turn-navigation-cancel" onClick={onCancelJump}>
+          {t('chat.turnNavigation.cancel')}
         </button>
       )}
     </div>
