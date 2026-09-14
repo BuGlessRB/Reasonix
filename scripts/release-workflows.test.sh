@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
+node --test "$repo_root/scripts/verify-manual-desktop-producer.test.mjs"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/reasonix-release-workflow-test.XXXXXX")"
 cleanup() {
 	case "$test_root" in
