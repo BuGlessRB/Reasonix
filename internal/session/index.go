@@ -95,7 +95,7 @@ func loadOrBuildSparseIndex(ctx context.Context, dir, cacheDir string) (sparseIn
 		return true
 	}
 	if manifest.Codec == Codec {
-		err = scanV4CommitFile(ctx, file, 0, 1, contentStoreForSessionDir(dir), nil, visit)
+		err = scanV4CommitFileRefs(ctx, file, 0, 1, contentStoreForSessionDir(dir), nil, visit)
 	} else {
 		err = scanCommitFileCodec(file, 0, 1, manifest.Codec, nil, visit)
 	}

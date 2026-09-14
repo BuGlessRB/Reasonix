@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	historyIndexVersion     = 4
+	historyIndexVersion     = 5
 	HistoryPageDefaultLimit = 100
 	HistoryPageMaxLimit     = 500
 	HistoryPageMaxBytes     = 2 << 20
+	historyIndexTxnEvents   = 512
+	historyIndexTxnBytes    = 8 << 20
 )
 
 // PersistentMessage is the storage/query representation of a message. It is
@@ -80,6 +82,48 @@ type historyBuildState struct {
 	positions    map[string]int64
 	turns        map[string]int
 	versions     map[string]int
+	tx           *sql.Tx
+	statements   *historyBuildStatements
+	transactions [][]any
+	events       [][]any
+	contentRefs  [][]any
+	messages     [][]any
+}
+
+type historyBuildStatements struct {
+	clear  *sql.Stmt
+	expire *sql.Stmt
+}
+
+func prepareHistoryBuildStatements(ctx context.Context, tx *sql.Tx) (*historyBuildStatements, error) {
+	statements := &historyBuildStatements{}
+	queries := []struct {
+		target **sql.Stmt
+		query  string
+	}{
+		{&statements.clear, `UPDATE messages SET current=0,valid_to=? WHERE current=1`},
+		{&statements.expire, `UPDATE messages SET current=0,valid_to=? WHERE message_id=? AND current=1`},
+	}
+	for _, candidate := range queries {
+		prepared, err := tx.PrepareContext(ctx, candidate.query)
+		if err != nil {
+			statements.close()
+			return nil, err
+		}
+		*candidate.target = prepared
+	}
+	return statements, nil
+}
+
+func (s *historyBuildStatements) close() {
+	if s == nil {
+		return
+	}
+	for _, statement := range []*sql.Stmt{s.clear, s.expire} {
+		if statement != nil {
+			_ = statement.Close()
+		}
+	}
 }
 
 func historyIndexPath(root, sessionID string) string {
@@ -112,6 +156,11 @@ var historyMigrations = []projectiondb.Migration{{Version: 1, Apply: func(ctx co
 	return err
 }}, {Version: 4, Apply: func(ctx context.Context, tx *sql.Tx) error {
 	_, err := tx.ExecContext(ctx, `ALTER TABLE messages ADD COLUMN visible_turn INTEGER NOT NULL DEFAULT 0`)
+	return err
+}}, {Version: 5, Apply: func(ctx context.Context, tx *sql.Tx) error {
+	// Revision 5 stops duplicating inline message bodies into search_text. The
+	// rebuild metadata version forces old indexes through an atomic rebuild.
+	_, err := tx.ExecContext(ctx, `SELECT 1`)
 	return err
 }}}
 
@@ -161,7 +210,7 @@ func (q *Query) HistoryPage(ctx context.Context, ref SessionRef, cursor string, 
 	if err != nil {
 		return MessageHistoryPage{}, err
 	}
-	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
+	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1, QuickCheck: true})
 	if err != nil {
 		return MessageHistoryPage{}, err
 	}
@@ -240,7 +289,7 @@ func (q *Query) HistoryShape(ctx context.Context, ref SessionRef) (HistoryShape,
 		return HistoryShape{}, err
 	}
 	_ = filesystem
-	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
+	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1, QuickCheck: true})
 	if err != nil {
 		return HistoryShape{}, err
 	}
@@ -281,7 +330,7 @@ func (q *Query) HistoryWindow(ctx context.Context, ref SessionRef, snapshot uint
 	if start < 0 || end < start {
 		return nil, errors.New("session: invalid history window")
 	}
-	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
+	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1, QuickCheck: true})
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +417,7 @@ func (q *Query) ReadContent(ctx context.Context, ref SessionRef, contentRef sess
 	if err != nil {
 		return nil, err
 	}
-	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
+	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1, QuickCheck: true})
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +460,7 @@ func (q *Query) SearchHistory(ctx context.Context, ref SessionRef, textQuery, cu
 	if err != nil {
 		return SearchHistoryPage{}, err
 	}
-	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
+	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1, QuickCheck: true})
 	if err != nil {
 		return SearchHistoryPage{}, err
 	}
@@ -433,7 +482,7 @@ func (q *Query) SearchHistory(ctx context.Context, ref SessionRef, textQuery, cu
 		snapshot, before = parsed.SnapshotSequence, parsed.BeforePosition
 	}
 	pattern := "%" + escapeHistoryLike(textQuery) + "%"
-	rows, err := handle.DB.QueryContext(ctx, `SELECT message_id,position,role,preview,event_sequence FROM messages WHERE position<? AND event_sequence<=? AND (valid_to=0 OR valid_to>?) AND search_text LIKE ? ESCAPE '\' ORDER BY position DESC LIMIT ?`, before, snapshot, snapshot, pattern, limit+1)
+	rows, err := handle.DB.QueryContext(ctx, `SELECT message_id,position,role,preview,event_sequence FROM messages WHERE position<? AND event_sequence<=? AND (valid_to=0 OR valid_to>?) AND (search_text LIKE ? ESCAPE '\' OR COALESCE(json_extract(inline,'$.content'),'') LIKE ? ESCAPE '\' OR COALESCE(json_extract(inline,'$.raw_content'),'') LIKE ? ESCAPE '\' OR COALESCE(json_extract(inline,'$.reasoning_content'),'') LIKE ? ESCAPE '\') ORDER BY position DESC LIMIT ?`, before, snapshot, snapshot, pattern, pattern, pattern, pattern, limit+1)
 	if err != nil {
 		return SearchHistoryPage{}, err
 	}
@@ -484,7 +533,7 @@ func historyIndexCurrent(ctx context.Context, path, sessionID string, revision l
 	if _, err := os.Stat(path); err != nil {
 		return false
 	}
-	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
+	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1, QuickCheck: true})
 	if err != nil {
 		return false
 	}
@@ -516,39 +565,97 @@ func rebuildHistoryIndex(ctx context.Context, dir, path, sessionID string, revis
 	}
 	defer log.Close()
 	content := contentStoreForSessionDir(dir)
-	return projectiondb.Rebuild(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1}, func(ctx context.Context, db *sql.DB) error {
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
+	return projectiondb.Rebuild(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1, QuickCheck: true}, func(ctx context.Context, db *sql.DB) error {
+		// Keep SQLite's derived-data working set explicit. The history database
+		// may be many GiB, but neither its page cache nor temporary sort state
+		// belongs in the runtime's cumulative memory footprint.
+		// Rebuild writes an unpublished, disposable replacement beside the live
+		// index. Avoid WAL and durability work for that private file; Rebuild
+		// validates it before one atomic publish, and the event log remains the
+		// durable source if a crash leaves or corrupts the temporary database.
+		for _, pragma := range []string{
+			`PRAGMA journal_mode=OFF`,
+			`PRAGMA synchronous=OFF`,
+			`PRAGMA locking_mode=EXCLUSIVE`,
+			`PRAGMA cache_size=-8192`,
+			`PRAGMA temp_store=FILE`,
+		} {
+			if _, err := db.ExecContext(ctx, pragma); err != nil {
+				return err
+			}
+		}
+		var tx *sql.Tx
+		state := historyBuildState{positions: map[string]int64{}, turns: map[string]int{}, versions: map[string]int{}}
+		defer func() {
+			state.statements.close()
+			if tx != nil {
+				_ = tx.Rollback()
+			}
+		}()
+		beginChunk := func() error {
+			var err error
+			tx, err = db.BeginTx(ctx, nil)
+			if err != nil {
+				return err
+			}
+			state.tx = tx
+			state.statements, err = prepareHistoryBuildStatements(ctx, tx)
 			return err
 		}
-		defer tx.Rollback()
-		state := historyBuildState{positions: map[string]int64{}, turns: map[string]int{}, versions: map[string]int{}}
+		if err := beginChunk(); err != nil {
+			return err
+		}
 		var durable uint64
 		var buildErr error
-		err = scanV4CommitFileRefs(ctx, log, 0, 1, content, nil, func(_ int64, commit Commit) bool {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO transactions(commit_id,first_sequence,last_sequence,operation_id,operation_hash,turn_id,created_at) VALUES(?,?,?,?,?,?,?)`, commit.ID, commit.FirstSequence, commit.LastSequence(), commit.OperationID, commit.OperationHash, commit.TurnID, commit.CreatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
-				buildErr = err
-				return false
+		chunkEvents := 0
+		var chunkBytes int64
+		commitChunk := func() error {
+			if err := flushHistoryBuildRows(ctx, tx, &state); err != nil {
+				return err
 			}
+			state.statements.close()
+			state.statements = nil
+			if err := tx.Commit(); err != nil {
+				return err
+			}
+			// modernc SQLite allocates its page cache on the Go heap. Release dirty
+			// pages after each bounded transaction so a multi-GiB derived index does
+			// not retain every completed chunk until the database closes.
+			if _, err := db.ExecContext(ctx, `PRAGMA shrink_memory`); err != nil {
+				return err
+			}
+			chunkEvents, chunkBytes = 0, 0
+			return beginChunk()
+		}
+		err = scanV4CommitFileRefs(ctx, log, 0, 1, content, nil, func(_ int64, commit Commit) bool {
+			state.transactions = append(state.transactions, []any{commit.ID, commit.FirstSequence, commit.LastSequence(), commit.OperationID, commit.OperationHash, commit.TurnID, commit.CreatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")})
 			for _, event := range commit.Events {
 				digest := ""
 				var bytes int64
 				if event.PayloadRef != nil {
 					digest, bytes = event.PayloadRef.Digest, event.PayloadRef.Bytes
-					if err := insertContentRef(ctx, tx, *event.PayloadRef); err != nil {
+					if err := insertContentRef(ctx, &state, *event.PayloadRef); err != nil {
 						buildErr = err
 						return false
 					}
 				}
-				if _, err := tx.ExecContext(ctx, `INSERT INTO events(sequence,commit_id,event_id,kind,payload_digest,payload_bytes) VALUES(?,?,?,?,?,?)`, event.Sequence, commit.ID, event.ID, event.Kind, digest, bytes); err != nil {
-					buildErr = err
-					return false
-				}
-				if err := indexMessageEvent(ctx, tx, content, &state, event); err != nil {
+				state.events = append(state.events, []any{event.Sequence, commit.ID, event.ID, event.Kind, digest, bytes})
+				if err := indexMessageEvent(ctx, content, &state, event); err != nil {
 					buildErr = err
 					return false
 				}
 				durable = event.Sequence
+				chunkEvents++
+				chunkBytes += int64(len(event.Payload))
+				if event.PayloadRef != nil {
+					chunkBytes += min(event.PayloadRef.Bytes, int64(historyIndexTxnBytes))
+				}
+				if chunkEvents >= historyIndexTxnEvents || chunkBytes >= historyIndexTxnBytes {
+					if err := commitChunk(); err != nil {
+						buildErr = err
+						return false
+					}
+				}
 			}
 			return true
 		})
@@ -558,17 +665,75 @@ func rebuildHistoryIndex(ctx context.Context, dir, path, sessionID string, revis
 		if buildErr != nil {
 			return buildErr
 		}
+		if err := flushHistoryBuildRows(ctx, tx, &state); err != nil {
+			return err
+		}
 		metadata := map[string]string{"session_id": sessionID, "log_size": fmt.Sprint(revision.Size), "log_mtime_ns": fmt.Sprint(revision.ModTimeNS), "storage_revision": fmt.Sprint(StorageRevision), "projection_version": fmt.Sprint(historyIndexVersion), "durable_sequence": fmt.Sprint(durable)}
 		for key, value := range metadata {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key,value) VALUES(?,?)`, key, value); err != nil {
 				return err
 			}
 		}
-		return tx.Commit()
+		state.statements.close()
+		state.statements = nil
+		err = tx.Commit()
+		tx = nil
+		return err
 	})
 }
 
-func indexMessageEvent(ctx context.Context, tx *sql.Tx, content *sessioncontent.Store, state *historyBuildState, event Event) error {
+func flushHistoryBuildRows(ctx context.Context, tx *sql.Tx, state *historyBuildState) error {
+	if err := insertHistoryRows(ctx, tx, `INSERT INTO transactions(commit_id,first_sequence,last_sequence,operation_id,operation_hash,turn_id,created_at) VALUES `, 7, state.transactions); err != nil {
+		return err
+	}
+	if err := insertHistoryRows(ctx, tx, `INSERT INTO events(sequence,commit_id,event_id,kind,payload_digest,payload_bytes) VALUES `, 6, state.events); err != nil {
+		return err
+	}
+	if err := insertHistoryRows(ctx, tx, `INSERT OR IGNORE INTO content_refs(digest,bytes,index_digest) VALUES `, 3, state.contentRefs); err != nil {
+		return err
+	}
+	if err := insertHistoryRows(ctx, tx, `INSERT INTO messages(message_id,version,position,event_sequence,valid_to,role,preview,inline,content_digest,content_bytes,content_index_digest,current,search_text,visible_turn) VALUES `, 14, state.messages); err != nil {
+		return err
+	}
+	state.transactions = state.transactions[:0]
+	state.events = state.events[:0]
+	state.contentRefs = state.contentRefs[:0]
+	state.messages = state.messages[:0]
+	return nil
+}
+
+func insertHistoryRows(ctx context.Context, tx *sql.Tx, prefix string, columns int, rows [][]any) error {
+	const rowsPerStatement = 128
+	for start := 0; start < len(rows); start += rowsPerStatement {
+		end := min(start+rowsPerStatement, len(rows))
+		var query strings.Builder
+		query.WriteString(prefix)
+		args := make([]any, 0, (end-start)*columns)
+		for rowIndex, row := range rows[start:end] {
+			if len(row) != columns {
+				return errors.New("session: invalid history index row width")
+			}
+			if rowIndex > 0 {
+				query.WriteByte(',')
+			}
+			query.WriteByte('(')
+			for column := 0; column < columns; column++ {
+				if column > 0 {
+					query.WriteByte(',')
+				}
+				query.WriteByte('?')
+			}
+			query.WriteByte(')')
+			args = append(args, row...)
+		}
+		if _, err := tx.ExecContext(ctx, query.String(), args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func indexMessageEvent(ctx context.Context, content *sessioncontent.Store, state *historyBuildState, event Event) error {
 	if event.Kind != "message/complete" && event.Kind != "message/upsert" && event.Kind != "history/replace" && event.Kind != "legacy/import" {
 		return nil
 	}
@@ -588,7 +753,7 @@ func indexMessageEvent(ctx context.Context, tx *sql.Tx, content *sessioncontent.
 		if err := strictPayload(payload, &body); err != nil || body.Message == nil {
 			return damagedPayload(event, err)
 		}
-		return indexOneMessage(ctx, tx, content, state, *body.Message, event.Sequence, event.Kind == "message/upsert")
+		return indexOneMessage(ctx, content, state, *body.Message, event.Sequence, event.Kind == "message/upsert")
 	case "history/replace":
 		var body struct {
 			Messages []provider.Message `json:"messages"`
@@ -596,7 +761,7 @@ func indexMessageEvent(ctx context.Context, tx *sql.Tx, content *sessioncontent.
 		if err := strictPayload(payload, &body); err != nil || body.Messages == nil {
 			return damagedPayload(event, err)
 		}
-		return replaceIndexedMessages(ctx, tx, content, state, body.Messages, event.Sequence)
+		return replaceIndexedMessages(ctx, content, state, body.Messages, event.Sequence)
 	case "legacy/import":
 		var body struct {
 			Messages []provider.Message `json:"messages"`
@@ -604,13 +769,16 @@ func indexMessageEvent(ctx context.Context, tx *sql.Tx, content *sessioncontent.
 		if err := strictPayload(payload, &body); err != nil || body.Messages == nil {
 			return damagedPayload(event, err)
 		}
-		return replaceIndexedMessages(ctx, tx, content, state, body.Messages, event.Sequence)
+		return replaceIndexedMessages(ctx, content, state, body.Messages, event.Sequence)
 	}
 	return nil
 }
 
-func replaceIndexedMessages(ctx context.Context, tx *sql.Tx, content *sessioncontent.Store, state *historyBuildState, messages []provider.Message, sequence uint64) error {
-	if _, err := tx.ExecContext(ctx, `UPDATE messages SET current=0,valid_to=? WHERE current=1`, sequence); err != nil {
+func replaceIndexedMessages(ctx context.Context, content *sessioncontent.Store, state *historyBuildState, messages []provider.Message, sequence uint64) error {
+	if err := flushHistoryBuildRows(ctx, state.tx, state); err != nil {
+		return err
+	}
+	if _, err := state.statements.clear.ExecContext(ctx, sequence); err != nil {
 		return err
 	}
 	state.nextPosition = 0
@@ -619,14 +787,14 @@ func replaceIndexedMessages(ctx context.Context, tx *sql.Tx, content *sessioncon
 	state.turns = map[string]int{}
 	state.versions = map[string]int{}
 	for _, message := range messages {
-		if err := indexOneMessage(ctx, tx, content, state, message, sequence, false); err != nil {
+		if err := indexOneMessage(ctx, content, state, message, sequence, false); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func indexOneMessage(ctx context.Context, tx *sql.Tx, content *sessioncontent.Store, state *historyBuildState, message provider.Message, sequence uint64, upsert bool) error {
+func indexOneMessage(ctx context.Context, content *sessioncontent.Store, state *historyBuildState, message provider.Message, sequence uint64, upsert bool) error {
 	id := strings.TrimSpace(message.ID)
 	if id == "" {
 		return errors.New("session: indexed message has no stable id")
@@ -648,7 +816,10 @@ func indexOneMessage(ctx context.Context, tx *sql.Tx, content *sessioncontent.St
 	version := state.versions[id] + 1
 	state.versions[id] = version
 	if exists {
-		if _, err := tx.ExecContext(ctx, `UPDATE messages SET current=0,valid_to=? WHERE message_id=? AND current=1`, sequence, id); err != nil {
+		if err := flushHistoryBuildRows(ctx, state.tx, state); err != nil {
+			return err
+		}
+		if _, err := state.statements.expire.ExecContext(ctx, sequence, id); err != nil {
 			return err
 		}
 	}
@@ -658,19 +829,21 @@ func indexOneMessage(ctx context.Context, tx *sql.Tx, content *sessioncontent.St
 	}
 	var inline []byte
 	var ref sessioncontent.Ref
+	searchText := ""
 	if len(body) > v4InlinePayloadBytes {
 		ref, err = content.Put(ctx, bytes.NewReader(body), sessioncontent.Metadata{MediaType: "application/json"})
 		if err != nil {
 			return err
 		}
-		if err := insertContentRef(ctx, tx, ref); err != nil {
+		if err := insertContentRef(ctx, state, ref); err != nil {
 			return err
 		}
+		searchText = messageSearchText(message)
 	} else {
 		inline = body
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO messages(message_id,version,position,event_sequence,valid_to,role,preview,inline,content_digest,content_bytes,content_index_digest,current,search_text,visible_turn) VALUES(?,?,?,?,0,?,?,?,?,?,?,1,?,?)`, id, version, position, sequence, string(message.Role), messagePreview(message), inline, ref.Digest, ref.Bytes, ref.IndexDigest, messageSearchText(message), visibleTurn)
-	return err
+	state.messages = append(state.messages, []any{id, version, position, sequence, 0, string(message.Role), messagePreview(message), inline, ref.Digest, ref.Bytes, ref.IndexDigest, 1, searchText, visibleTurn})
+	return nil
 }
 
 func messageSearchText(message provider.Message) string {
@@ -678,9 +851,12 @@ func messageSearchText(message provider.Message) string {
 	return strings.Join(parts, "\n")
 }
 
-func insertContentRef(ctx context.Context, tx *sql.Tx, ref sessioncontent.Ref) error {
-	_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO content_refs(digest,bytes,index_digest) VALUES(?,?,?)`, ref.Digest, ref.Bytes, ref.IndexDigest)
-	return err
+func insertContentRef(ctx context.Context, state *historyBuildState, ref sessioncontent.Ref) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	state.contentRefs = append(state.contentRefs, []any{ref.Digest, ref.Bytes, ref.IndexDigest})
+	return nil
 }
 
 func messagePreview(message provider.Message) string {

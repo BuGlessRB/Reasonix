@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"reasonix/internal/provider"
@@ -59,6 +60,9 @@ type report struct {
 	BaselineRuntimeSysBytes uint64 `json:"baselineRuntimeSysBytes"`
 	PeakRuntimeSysBytes     uint64 `json:"peakRuntimeSysBytes"`
 	ProcessPeakRSSBytes     uint64 `json:"processPeakRssBytes,omitempty"`
+	WritePeakHeapBytes      uint64 `json:"writePeakHeapBytes"`
+	ColdOpenPeakHeapBytes   uint64 `json:"coldOpenPeakHeapBytes"`
+	HistoryPeakHeapBytes    uint64 `json:"historyPeakHeapBytes"`
 }
 
 func main() {
@@ -111,15 +115,15 @@ func run(ctx context.Context, cfg config) (result report, err error) {
 	}
 	runtime.GC()
 	baseline := readMemory()
-	peak := baseline
+	peaks := newMemoryPeaks(baseline)
 	stopMemory := make(chan struct{})
 	memoryDone := make(chan struct{})
-	go sampleMemory(stopMemory, memoryDone, &peak)
+	go sampleMemory(stopMemory, memoryDone, peaks)
 	defer func() {
 		close(stopMemory)
 		<-memoryDone
-		latest := readMemory()
-		peak.max(latest)
+		peaks.observe(readMemory())
+		peak := peaks.totalPeak()
 		result.BaselineHeapAllocBytes = baseline.heap
 		result.PeakHeapAllocBytes = peak.heap
 		result.BaselineRuntimeSysBytes = baseline.sys
@@ -172,6 +176,7 @@ func run(ctx context.Context, cfg config) (result report, err error) {
 	if err := service.Close(ctx, ref); err != nil {
 		return report{}, err
 	}
+	result.WritePeakHeapBytes = peaks.nextStage().heap
 
 	second, err := session.NewService("capacity", session.NewFilesystemPersistence(cfg.Root))
 	if err != nil {
@@ -192,6 +197,7 @@ func run(ctx context.Context, cfg config) (result report, err error) {
 		_ = binding.Release(context.Background())
 		return report{}, fmt.Errorf("capacity: cold model workset is %d bytes, expected %d", result.ModelWorksetBytes, cfg.WorksetBytes)
 	}
+	result.ColdOpenPeakHeapBytes = peaks.nextStage().heap
 
 	indexStarted := time.Now()
 	page, err := second.Query().HistoryPage(ctx, ref, "", 100)
@@ -217,6 +223,7 @@ func run(ctx context.Context, cfg config) (result report, err error) {
 	if err := binding.Release(ctx); err != nil {
 		return report{}, err
 	}
+	result.HistoryPeakHeapBytes = peaks.nextStage().heap
 
 	result.SessionDiskBytes, err = treeBytes(filepath.Join(cfg.Root, cfg.SessionID))
 	if err != nil {
@@ -315,6 +322,40 @@ func (r *deterministicReader) Read(p []byte) (int, error) {
 
 type memorySample struct{ heap, sys, rss uint64 }
 
+type memoryPeaks struct {
+	mu    sync.Mutex
+	stage memorySample
+	total memorySample
+}
+
+func newMemoryPeaks(initial memorySample) *memoryPeaks {
+	return &memoryPeaks{stage: initial, total: initial}
+}
+
+func (p *memoryPeaks) observe(sample memorySample) {
+	p.mu.Lock()
+	p.stage.max(sample)
+	p.total.max(sample)
+	p.mu.Unlock()
+}
+
+func (p *memoryPeaks) nextStage() memorySample {
+	latest := readMemory()
+	p.mu.Lock()
+	p.stage.max(latest)
+	p.total.max(latest)
+	finished := p.stage
+	p.stage = latest
+	p.mu.Unlock()
+	return finished
+}
+
+func (p *memoryPeaks) totalPeak() memorySample {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.total
+}
+
 func readMemory() memorySample {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
@@ -327,7 +368,7 @@ func (m *memorySample) max(other memorySample) {
 	m.rss = max(m.rss, other.rss)
 }
 
-func sampleMemory(stop <-chan struct{}, done chan<- struct{}, peak *memorySample) {
+func sampleMemory(stop <-chan struct{}, done chan<- struct{}, peaks *memoryPeaks) {
 	defer close(done)
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
@@ -336,7 +377,7 @@ func sampleMemory(stop <-chan struct{}, done chan<- struct{}, peak *memorySample
 		case <-stop:
 			return
 		case <-ticker.C:
-			peak.max(readMemory())
+			peaks.observe(readMemory())
 		}
 	}
 }

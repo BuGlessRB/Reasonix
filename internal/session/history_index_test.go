@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,6 +11,79 @@ import (
 	"reasonix/internal/projectiondb"
 	"reasonix/internal/provider"
 )
+
+func TestExternalHistoryColdOpenDefersBodiesBeforeModelReset(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions-v4")
+	service, err := NewService("local", NewFilesystemPersistence(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "bounded-open"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldPayload, err := json.Marshal(map[string]any{"message": provider.Message{ID: "old", Role: provider.RoleUser, Content: strings.Repeat("old", 40<<10)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Session().AppendBatch(t.Context(), "old", []Event{{Kind: "message/complete", Payload: oldPayload}}); err != nil {
+		t.Fatal(err)
+	}
+	current := provider.Message{ID: "current", Role: provider.RoleUser, Content: "current workset"}
+	currentPayload, err := json.Marshal(map[string]any{"messages": []provider.Message{current}, "reason": "bounded cold open"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Session().AppendBatch(t.Context(), "reset", []Event{{Kind: "model/context-replace", Payload: currentPayload}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Session().Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	ref := runtime.Ref()
+	if err := service.Close(t.Context(), ref); err != nil {
+		t.Fatal(err)
+	}
+
+	log, err := os.Open(filepath.Join(root, ref.SessionID, "events.frames"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var historicalDigest string
+	err = scanV4CommitFileRefs(t.Context(), log, 0, 1, contentStoreForSessionDir(filepath.Join(root, ref.SessionID)), nil, func(_ int64, commit Commit) bool {
+		for _, event := range commit.Events {
+			if event.Kind == "message/complete" && event.PayloadRef != nil {
+				historicalDigest = event.PayloadRef.Digest
+			}
+		}
+		return true
+	})
+	_ = log.Close()
+	if err != nil || historicalDigest == "" {
+		t.Fatalf("historical content reference = %q, %v", historicalDigest, err)
+	}
+	object := filepath.Join(root, ".content-v1", "objects", historicalDigest[:2], historicalDigest[2:4], historicalDigest)
+	if err := os.Remove(object); err != nil {
+		t.Fatal(err)
+	}
+
+	reopenedService, err := NewService("local", NewFilesystemPersistence(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := reopenedService.Open(t.Context(), ref)
+	if err != nil {
+		t.Fatalf("cold open resolved retired history body: %v", err)
+	}
+	defer binding.Release(context.Background())
+	model := binding.Runtime().Session().DeriveMessages()
+	if len(model) != 1 || model[0].ID != current.ID || model[0].Content != current.Content {
+		t.Fatalf("cold model projection = %+v", model)
+	}
+	if _, err := reopenedService.Query().HistoryPage(t.Context(), ref, "", 100); err == nil {
+		t.Fatal("history query accepted a missing referenced body")
+	}
+}
 
 func TestHistoryPageKeepsSnapshotAndAuthorizesReferencedContent(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions-v4")
@@ -121,6 +195,47 @@ func TestSearchHistoryUsesStableSnapshotAndOpaqueQueryCursor(t *testing.T) {
 	}
 	if _, err := service.Query().SearchHistory(t.Context(), runtime.Ref(), "different", first.NextCursor, 10); err == nil {
 		t.Fatal("search cursor was accepted for another query")
+	}
+}
+
+func TestSearchHistoryCoversInlineFieldsAndReferencedBodies(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions-v4")
+	service, err := NewService("local", NewFilesystemPersistence(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "search-storage"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := []provider.Message{
+		{ID: "inline", Role: provider.RoleAssistant, RawContent: "raw-field-needle", ReasoningContent: "reasoning-field-needle"},
+		{ID: "referenced", Role: provider.RoleUser, Content: strings.Repeat("large-body-", 7000) + "referenced-field-needle"},
+	}
+	for _, message := range messages {
+		payload, marshalErr := json.Marshal(map[string]any{"message": message})
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if _, err := runtime.Session().AppendBatch(t.Context(), "append-"+message.ID, []Event{{Kind: "message/complete", Payload: payload}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := runtime.Session().Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for query, want := range map[string]string{
+		"raw-field-needle":        "inline",
+		"reasoning-field-needle":  "inline",
+		"referenced-field-needle": "referenced",
+	} {
+		page, err := service.Query().SearchHistory(t.Context(), runtime.Ref(), query, "", 10)
+		if err != nil {
+			t.Fatalf("search %q: %v", query, err)
+		}
+		if len(page.Hits) != 1 || page.Hits[0].MessageID != want {
+			t.Fatalf("search %q = %+v, want %q", query, page.Hits, want)
+		}
 	}
 }
 

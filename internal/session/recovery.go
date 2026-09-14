@@ -22,7 +22,10 @@ func (s *Session) RecoverInterrupted(ctx context.Context) (Commit, bool, error) 
 	if s.readOnly {
 		return Commit{}, false, ErrReadOnly
 	}
-	snapshot := s.Snapshot()
+	// Restart recovery needs only live authority, never historical message
+	// bodies or the provider workset. Using the full compatibility Snapshot here
+	// would replay the entire durable transcript on every cold open.
+	snapshot := s.StateSnapshot()
 	turnID := snapshot.Projection.TurnID
 	if turnID == "" {
 		return Commit{}, false, nil

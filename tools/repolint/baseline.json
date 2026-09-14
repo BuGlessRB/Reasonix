@@ -3,9 +3,9 @@
     "banner": 13,
     "commented-code": 0,
     "complexity": 1883,
-    "essay": 1925,
-    "file-size": 99772,
-    "function-size": 8054,
+    "essay": 1929,
+    "file-size": 100018,
+    "function-size": 8063,
     "layering": 1,
     "marker": 0,
     "narrative": 63,
@@ -1337,6 +1337,11 @@
     "internal/serve/session_ownership_test.go": {
       "test-file-size": 169
     },
+    "internal/session/history_index.go": {
+      "essay": 4,
+      "file-size": 121,
+      "function-size": 6
+    },
     "internal/session/import_resolver.go": {
       "essay": 1
     },
@@ -1353,7 +1358,7 @@
     },
     "internal/session/store.go": {
       "essay": 1,
-      "file-size": 249
+      "file-size": 374
     },
     "internal/session/v4_codec.go": {
       "complexity": 14
@@ -1499,7 +1504,7 @@
       "essay": 1
     },
     "tools/sessioncapacity/main.go": {
-      "function-size": 6
+      "function-size": 9
     },
     "workers/crash-report/src/index.ts": {
       "file-size": 874

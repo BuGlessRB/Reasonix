@@ -365,6 +365,15 @@ func openExistingHandle(dir, sessionID string, opts OpenOptions) (*Store, error)
 	if err != nil {
 		return fail(err)
 	}
+	if opts.ExternalHistory && startup.catalogPreview == "" {
+		revision, revisionErr := revisionOfLog(dir)
+		cacheDir := filepath.Join(filepath.Dir(dir), ".query-cache", filepath.Base(dir))
+		if revisionErr == nil {
+			if metadata, metadataErr := readCatalogMetadata(cacheDir, manifest, revision); metadataErr == nil {
+				startup.catalogPreview = metadata.Preview
+			}
+		}
+	}
 	if torn {
 		// Cold readers deliberately stop at the last complete record. A writer
 		// may repair that tail only after acquiring the exclusive lease above:
@@ -418,6 +427,9 @@ func loadStartupSessionState(ctx context.Context, dir, eventsPath string, extern
 	if err != nil {
 		return nil, 0, false, err
 	}
+	if externalHistory {
+		return loadBoundedStartupSessionState(ctx, dir, file, info)
+	}
 	projection, _ := Project(nil)
 	state := &startupSessionState{projection: projection, operations: map[string]operationRecord{}}
 	var durableEnd int64
@@ -447,6 +459,119 @@ func loadStartupSessionState(ctx context.Context, dir, eventsPath string, extern
 		return nil, 0, false, projectionErr
 	}
 	return state, durableEnd, durableEnd < info.Size(), nil
+}
+
+// loadBoundedStartupSessionState separates lightweight business recovery from
+// model-context recovery. The first pass validates every transaction without
+// resolving historical message bodies and locates the newest context reset.
+// The second pass materializes only the provider workset after that reset.
+func loadBoundedStartupSessionState(ctx context.Context, dir string, file *os.File, info os.FileInfo) (*startupSessionState, int64, bool, error) {
+	projection, _ := Project(nil)
+	state := &startupSessionState{projection: projection, operations: map[string]operationRecord{}}
+	modelOffset, modelSequence := int64(0), uint64(1)
+	var durableEnd int64
+	var projectionErr error
+	sawModelEvent := false
+	content := contentStoreForSessionDir(dir)
+	err := scanV4CommitFileRefs(ctx, file, 0, 1, content, nil, func(offset int64, commit Commit) bool {
+		business := commit
+		business.Events = nil
+		for _, event := range commit.Events {
+			if modelProjectionEvent(event.Kind) {
+				sawModelEvent = true
+				if modelProjectionReset(event.Kind) {
+					modelOffset, modelSequence = offset, commit.FirstSequence
+				}
+				continue
+			}
+			resolved, err := resolveProjectionEvent(ctx, content, event)
+			if err != nil {
+				projectionErr = err
+				return false
+			}
+			business.Events = append(business.Events, resolved)
+		}
+		if err := applyProjectionCommit(&state.projection, business); err != nil {
+			projectionErr = err
+			return false
+		}
+		state.operations[commit.OperationID] = compactOperationRecord(commit)
+		state.durable = commit.LastSequence()
+		durableEnd, _ = file.Seek(0, io.SeekCurrent)
+		return true
+	})
+	if err != nil {
+		return nil, 0, false, err
+	}
+	if projectionErr != nil {
+		return nil, 0, false, projectionErr
+	}
+	if sawModelEvent {
+		if err := loadCurrentModelProjection(ctx, file, content, state, modelOffset, modelSequence); err != nil {
+			return nil, 0, false, err
+		}
+	}
+	state.projection.Messages = nil
+	state.projection.CommittedSequence = state.durable
+	return state, durableEnd, durableEnd < info.Size(), nil
+}
+
+func loadCurrentModelProjection(ctx context.Context, file *os.File, content *sessioncontent.Store, state *startupSessionState, offset int64, sequence uint64) error {
+	var projectionErr error
+	err := scanV4CommitFileRefs(ctx, file, offset, sequence, content, nil, func(_ int64, commit Commit) bool {
+		model := commit
+		model.Events = nil
+		for _, event := range commit.Events {
+			if !modelProjectionEvent(event.Kind) {
+				continue
+			}
+			resolved, err := resolveProjectionEvent(ctx, content, event)
+			if err != nil {
+				projectionErr = err
+				return false
+			}
+			model.Events = append(model.Events, resolved)
+		}
+		if err := applyProjectionCommit(&state.projection, model); err != nil {
+			projectionErr = err
+			return false
+		}
+		return true
+	})
+	if err != nil {
+		return err
+	}
+	return projectionErr
+}
+
+func resolveProjectionEvent(ctx context.Context, content *sessioncontent.Store, event Event) (Event, error) {
+	if event.PayloadRef == nil {
+		return event, nil
+	}
+	payload, err := resolveContentPayload(ctx, content, *event.PayloadRef)
+	if err != nil {
+		return Event{}, fmt.Errorf("%w: read v4 event %s payload: %v", ErrDamagedStore, event.ID, err)
+	}
+	event.Payload, event.PayloadRef = payload, nil
+	return event, nil
+}
+
+func modelProjectionEvent(kind string) bool {
+	switch kind {
+	case "message/complete", "message/upsert", "history/replace", "model/context-replace", "compaction", "legacy/import":
+		return true
+	default:
+		return false
+	}
+}
+
+func modelProjectionReset(kind string) bool {
+	switch kind {
+	case "history/replace", "model/context-replace", "compaction", "legacy/import":
+		return true
+	default:
+		return false
+	}
 }
 
 // bindSession replays the durable prefix and constructs the in-memory Session
