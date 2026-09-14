@@ -4558,12 +4558,10 @@ func (c *Controller) History() []provider.Message {
 	}
 	if snapshot, ok := c.sessionEventSnapshot(); ok && snapshot.EventSequence > 0 {
 		if c.sessionEngineEnabled() {
-			if service, runtime, exclusive := c.v3Binding(); exclusive && service != nil && runtime != nil {
-				if projected, err := service.Query().History(context.Background(), runtime.Ref()); err == nil {
-					return projected
-				}
-			}
-			return c.executor.Session().Snapshot()
+			// Controller.History is the provider workset compatibility API used by
+			// rebuilds and model switches. Durable UI history is deliberately
+			// separate and flows through SessionService.Query/TranscriptReplay.
+			return append([]provider.Message(nil), snapshot.Projection.ModelMessages...)
 		}
 		projected := snapshot.Projection.ModelMessages
 		if store := c.sessionEventStore(); store != nil {
