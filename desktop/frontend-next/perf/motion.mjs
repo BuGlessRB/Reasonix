@@ -107,7 +107,7 @@ const thumb = page.locator(".srail-view");
 await thumb.focus();
 await page.keyboard.press("End");
 await page.waitForTimeout(80);
-check("消息定位轨可用键盘滚动", await page.evaluate(() => document.querySelector("#flowScroll").scrollTop > 0));
+check("消息定位轨可用键盘滚动", await page.evaluate(() => document.querySelector("[data-pane="flow"]").scrollTop > 0));
 
 const reduced = await browser.newPage({
   viewport: { width: 1440, height: 900 },

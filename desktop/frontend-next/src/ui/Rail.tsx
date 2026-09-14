@@ -32,6 +32,7 @@ interface Props {
   // Only the transcript on screen answers the keys; a pane on another tab keeps
   // its rail but must not fight for them.
   bound: boolean;
+  controls: string;
 }
 
 // The rail is a fisheye, not a map. Marks sit together in the middle at a fixed
@@ -65,7 +66,7 @@ function pull(i: number, focus: number): number {
   return d > REACH ? 0 : (Math.cos((Math.PI * d) / REACH) + 1) / 2;
 }
 
-export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound }: Props) {
+export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, controls }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const [tops, setTops] = useState<number[]>([]);
   const [view, setView] = useState({ top: 0, height: 0 });
@@ -254,7 +255,7 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound }: Prop
           style={{ top: view.top, height: view.height }}
           role="scrollbar"
           aria-label={t("你说过的话")}
-          aria-controls="flowScroll"
+          aria-controls={controls}
           aria-orientation="vertical"
           aria-valuemin={0}
           aria-valuemax={100}

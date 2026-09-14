@@ -1067,10 +1067,10 @@
 
   /* 空流时压到底部。用 margin-top:auto 而不是 justify-content:flex-end ——
      后者在滚动容器上会把溢出的内容锁在视口外，滚不到。 */
-  #flowScroll { display: flex; flex-direction: column }
+  [data-pane="flow"] { display: flex; flex-direction: column }
   /* 空态是邀请，不是一片留白 */
-  #flowScroll:has(.hero) { justify-content: center }
-  #flowScroll:has(.hero) .flow { margin-top: 0 }
+  [data-pane="flow"]:has(.hero) { justify-content: center }
+  [data-pane="flow"]:has(.hero) .flow { margin-top: 0 }
   .hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 20px 24px 34px }
   .hero .rmark { width: 78px; height: 78px; color: var(--faint); opacity: .92 }
   .hero .rmark path { stroke-width: .42; animation: drawin 1.4s var(--ease-out) both }
@@ -1097,7 +1097,7 @@
   }
   .stay:hover { color: var(--muted) }
   .pick:focus-visible, .stay:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
-  #flowScroll[hidden], #trajScroll[hidden] { display: none }
+  [data-pane="flow"][hidden], #trajScroll[hidden] { display: none }
 
   /* Content is cut off under the tab strip with nothing saying "more above". The
      fade rides a scroll timeline, not a scroll listener: it stays off the main
@@ -1133,8 +1133,8 @@
   .railhost { position: sticky; top: 0; height: 0; z-index: 4; pointer-events: none }
   /* 转录不画原生滚动条：视窗框和滚动条的滑块说的是同一件事（你在哪），
      并排出现就是两条一模一样的东西。留下能被标记的那一条。 */
-  #flowScroll { scrollbar-width: none }
-  #flowScroll::-webkit-scrollbar { display: none }
+  [data-pane="flow"] { scrollbar-width: none }
+  [data-pane="flow"]::-webkit-scrollbar { display: none }
   /* 宿主高度为零（它不能占布局），所以百分比高度在这里等于零 —— 轨道的高度
      由测量时写进来，它本来就在读滚动容器的几何。 */
   .srail {

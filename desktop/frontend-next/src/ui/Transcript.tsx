@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { decimals } from "../i18n/format";
 import { t } from "../i18n";
 import type { Item, Waiting } from "../state/session";
@@ -120,6 +120,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   const [pinned, setPinned] = useState(true);
   const end = useRef<HTMLDivElement>(null);
   const flow = useRef<HTMLDivElement>(null);
+  const scrollId = useId();
   const sizing = useRef({ px: SEED_PER_ENTRY, n: 0 });
   // Read from observer callbacks that must not be torn down and rebuilt every
   // time the reader crosses the bottom.
@@ -446,12 +447,12 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   return (
     <div
       className="scroll"
-      id="flowScroll"
+      id={scrollId}
       data-pane="flow"
       ref={scroll}
       hidden={hidden}
     >
-      <Rail marks={marks} total={items.length} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} />
+      <Rail marks={marks} total={items.length} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} controls={scrollId} />
       <div className="flow-edge" aria-hidden="true" />
       {/* 空转录是「窗口的空白」，壁纸该在那儿；一有内容它就是内容了。 */}
       <div className="flow" ref={flow} data-empty={items.length === 0 ? "" : undefined}>

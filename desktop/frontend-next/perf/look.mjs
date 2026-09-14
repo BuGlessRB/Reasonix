@@ -51,7 +51,7 @@ const clickIn = (group, label) =>
 
 const readPx = () =>
   page.evaluate(() => {
-    const el = document.querySelector("#flowScroll .out .txt");
+    const el = document.querySelector("[data-pane="flow"] .out .txt");
     return el ? parseFloat(getComputedStyle(el).fontSize) : 0;
   });
 const rootVar = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
