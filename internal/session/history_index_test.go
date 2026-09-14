@@ -36,9 +36,12 @@ func TestHistoryPageKeepsSnapshotAndAuthorizesReferencedContent(t *testing.T) {
 	appendMessage("one", "first")
 	appendMessage("two", strings.Repeat("large", 20000))
 	appendMessage("three", "third")
-	projection := runtime.Session().Snapshot().Projection
-	if len(projection.Messages) != 0 || len(projection.ModelMessages) != 3 {
-		t.Fatalf("service runtime retained durable UI bodies: messages=%d model=%d", len(projection.Messages), len(projection.ModelMessages))
+	runtime.Session().mu.Lock()
+	residentMessages := len(runtime.Session().projection.Messages)
+	residentModel := len(runtime.Session().projection.ModelMessages)
+	runtime.Session().mu.Unlock()
+	if residentMessages != 0 || residentModel != 3 {
+		t.Fatalf("service runtime retained durable UI bodies: messages=%d model=%d", residentMessages, residentModel)
 	}
 	ref := runtime.Ref()
 	first, err := service.Query().HistoryPage(t.Context(), ref, "", 1)

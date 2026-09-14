@@ -97,7 +97,7 @@ func (c *Controller) applyGoalMutation(
 	operationID := fmt.Sprintf("goal:%s:%s:%d:%s", runtime.Ref().SessionID, view.ID, view.Revision, action)
 	if _, err := activity.Append(ctx, session.Batch{
 		OperationID: operationID,
-		TurnID:      runtime.Session().Snapshot().Projection.TurnID,
+		TurnID:      runtime.Session().ExecutionSnapshot().Projection.TurnID,
 		Events:      []session.Event{{Kind: "goal/state", Payload: json.RawMessage(payload)}},
 	}); err != nil {
 		return goaldomain.View{}, err
@@ -129,7 +129,7 @@ func (c *Controller) validateGoalAuthority(authority tool.GoalAuthority, action 
 	if !exclusive || runtime == nil {
 		return nil, session.ErrSessionNotRunning
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := runtime.StateSnapshot()
 	if snapshot.Phase != session.RuntimeRunning ||
 		authority.SessionID != snapshot.Ref.SessionID ||
 		authority.RuntimeEpoch != snapshot.Epoch ||

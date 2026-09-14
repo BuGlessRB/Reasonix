@@ -103,7 +103,7 @@ func (c *Controller) installGoalLifecycle(runtime *session.Runtime) {
 	machine := goaldomain.NewMachine(nil, nil)
 	var loadErr error
 	if runtime != nil && runtime.Session() != nil {
-		snapshot := runtime.Session().Snapshot()
+		snapshot := runtime.Session().ExecutionSnapshot()
 		createdAt := runtime.Session().Handle().Manifest().CreatedAt
 		machine, loadErr = goalLifecycleFromProjection(snapshot.Projection.GoalState, runtime.Ref().SessionID, createdAt)
 	}

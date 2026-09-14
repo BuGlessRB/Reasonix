@@ -125,7 +125,7 @@ func (c *Controller) continueLegacySession(ctx context.Context, sourcePath, head
 		_ = owner.Close(context.Background())
 		return session.SessionRef{}, err
 	}
-	messages := candidate.Session().Snapshot().Projection.ModelMessages
+	messages := candidate.Session().ExecutionSnapshot().Projection.ModelMessages
 	prepared := agent.NewSession("").CloneWithMessages(messages)
 	if _, err = c.publishSessionRuntime(candidate, prepared, rotateSessionTemp); err != nil {
 		_ = owner.Close(context.Background())
@@ -154,7 +154,7 @@ func (c *Controller) ContinuePrototypeSession(ctx context.Context, sourceDir str
 		_ = owner.Close(context.Background())
 		return session.SessionRef{}, err
 	}
-	prepared := agent.NewSession("").CloneWithMessages(candidate.Session().Snapshot().Projection.ModelMessages)
+	prepared := agent.NewSession("").CloneWithMessages(candidate.Session().ExecutionSnapshot().Projection.ModelMessages)
 	if _, err = c.publishSessionRuntime(candidate, prepared, true); err != nil {
 		_ = owner.Close(context.Background())
 		return session.SessionRef{}, err
@@ -217,7 +217,7 @@ func (c *Controller) publishAttachedSession(candidate *session.Runtime, reason s
 	if candidate == nil {
 		return session.SessionRef{}, errors.New("v3 session runtime is unavailable")
 	}
-	prepared := agent.NewSession("").CloneWithMessages(candidate.Session().Snapshot().Projection.ModelMessages)
+	prepared := agent.NewSession("").CloneWithMessages(candidate.Session().ExecutionSnapshot().Projection.ModelMessages)
 	if _, err := c.publishSessionRuntime(candidate, prepared, true); err != nil {
 		if retire != nil {
 			_ = retire(context.Background())
@@ -237,7 +237,7 @@ func (c *Controller) SetSessionTitle(ctx context.Context, title string) error {
 	if err != nil {
 		return err
 	}
-	snapshot := runtime.Session().Snapshot()
+	snapshot := runtime.Session().ExecutionSnapshot()
 	_, err = c.appendSessionBatch(ctx, runtime.Session(), session.Batch{
 		OperationID: "session-title:" + agent.NewMessageID(),
 		TurnID:      snapshot.Projection.TurnID,
@@ -307,7 +307,7 @@ func (c *Controller) publishSessionRuntime(candidate *session.Runtime, prepared 
 	if current, ok := service.Runtime(candidate.Ref()); !ok || current != candidate {
 		return nil, errors.New("v3 runtime candidate is not the exact published service instance")
 	}
-	projection := candidate.Session().Snapshot().Projection
+	projection := candidate.Session().ExecutionSnapshot().Projection
 	if err := validateSessionDomainProjection(projection); err != nil {
 		return nil, err
 	}

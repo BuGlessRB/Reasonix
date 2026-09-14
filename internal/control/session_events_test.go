@@ -376,16 +376,16 @@ func TestSessionPathBindingSeedsTranscriptBeforeLaterStateEvents(t *testing.T) {
 
 	c.SetSessionPath(legacyPath)
 	snapshot, ok := c.sessionEventSnapshot()
-	if !ok || len(snapshot.Projection.Messages) != 3 {
-		t.Fatalf("bound projection = %#v, available=%v", snapshot.Projection.Messages, ok)
+	if !ok || len(snapshot.Projection.ModelMessages) != 3 {
+		t.Fatalf("bound projection = %#v, available=%v", snapshot.Projection.ModelMessages, ok)
 	}
-	for i, message := range snapshot.Projection.Messages {
+	for i, message := range snapshot.Projection.ModelMessages {
 		if message.ID == "" {
 			t.Fatalf("bound projection message %d has no stable id", i)
 		}
 	}
-	if snapshot.Projection.Messages[0].Role != provider.RoleSystem {
-		t.Fatalf("bound projection lost leading system message: %#v", snapshot.Projection.Messages)
+	if snapshot.Projection.ModelMessages[0].Role != provider.RoleSystem {
+		t.Fatalf("bound projection lost leading system message: %#v", snapshot.Projection.ModelMessages)
 	}
 
 	// A later state-only event must not become the first authoritative v3
@@ -430,7 +430,7 @@ func TestLateManagedHostBindingFencesCandidateUntilLeaseActivation(t *testing.T)
 		t.Fatal(err)
 	}
 	activated, _ := c.sessionEventSnapshot()
-	if got := activated.Projection.Messages; len(got) != 3 || got[2].Content != "candidate" {
+	if got := activated.Projection.ModelMessages; len(got) != 3 || got[2].Content != "candidate" {
 		t.Fatalf("activated projection = %#v", got)
 	}
 }
@@ -543,7 +543,7 @@ func TestTurnEndUsesExplicitFinalMessageCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot, _ := c.sessionEventSnapshot()
-	if snapshot.Projection.TurnID != "" || len(snapshot.Projection.Messages) == 0 {
+	if snapshot.Projection.TurnID != "" || len(snapshot.Projection.ModelMessages) == 0 {
 		t.Fatalf("terminal projection = %#v", snapshot.Projection)
 	}
 }

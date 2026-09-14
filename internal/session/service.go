@@ -122,6 +122,14 @@ func (r *Runtime) StateSnapshot() RuntimeSnapshot {
 	return state
 }
 
+// ExecutionSnapshot returns the provider projection and lightweight turn
+// boundaries without reconstructing the durable UI transcript.
+func (r *Runtime) ExecutionSnapshot() RuntimeSnapshot {
+	state := r.activitySnapshot()
+	state.Session = r.session.ExecutionSnapshot()
+	return state
+}
+
 func (r *Runtime) activitySnapshot() RuntimeSnapshot {
 	r.mu.Lock()
 	phase := r.phase
@@ -415,7 +423,7 @@ func (s *Service) Cancel(ref SessionRef) (RuntimeSnapshot, error) {
 		return RuntimeSnapshot{}, ErrSessionNotRunning
 	}
 	runtime.Cancel()
-	return runtime.Snapshot(), nil
+	return runtime.StateSnapshot(), nil
 }
 
 // CancelSession is the public session-scoped Stop contract. A missing runtime

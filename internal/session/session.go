@@ -316,22 +316,47 @@ func (s *Session) Append(ctx context.Context, batch Batch) (Commit, error) {
 }
 
 // Snapshot returns the full live view, including message and turn history.
-func (s *Session) Snapshot() Snapshot { return s.snapshot(true) }
+func (s *Session) Snapshot() Snapshot { return s.snapshot(true, true) }
 
 // StateSnapshot omits history so progress notifications do not copy every
 // message and completed turn on each activity update.
-func (s *Session) StateSnapshot() Snapshot { return s.snapshot(false) }
+func (s *Session) StateSnapshot() Snapshot { return s.snapshot(false, false) }
 
-func (s *Session) snapshot(includeHistory bool) Snapshot {
+// ExecutionSnapshot exposes the current provider projection and business
+// state without materializing durable UI history. Controllers use it for
+// turn/model decisions; UI history is obtained from Query.
+func (s *Session) ExecutionSnapshot() Snapshot { return s.snapshot(false, true) }
+
+func (s *Session) snapshot(includeHistory, includeModel bool) Snapshot {
 	if s == nil {
 		return Snapshot{PersistenceStatus: PersistenceFailed, PersistenceError: "nil session"}
 	}
 	s.mu.Lock()
 	projection := s.projection
 	sequence := s.next - 1
+	externalHistory := s.externalHistory
+	accepted := cloneCommits(s.commits)
+	var history eventPageReader
+	if s.binding != nil {
+		history = s.binding.handle
+	} else if s.coldHandle != nil {
+		history = s.coldHandle
+	}
 	s.mu.Unlock()
+	if includeHistory && externalHistory {
+		// Snapshot is the explicit full-history compatibility boundary. Service
+		// progress and Goal paths use StateSnapshot; paged clients use Query.
+		// Reconstructing here preserves existing callers without keeping a second
+		// durable UI transcript resident in every runtime.
+		if messages, err := materializeSnapshotMessages(history, accepted, sequence); err == nil {
+			projection.Messages = messages
+		}
+	}
 	if !includeHistory {
-		projection.Messages, projection.ModelMessages, projection.Turns = nil, nil, nil
+		projection.Messages = nil
+	}
+	if !includeModel {
+		projection.ModelMessages, projection.Turns = nil, nil
 	}
 	snapshot := Snapshot{EventSequence: sequence, Projection: cloneProjection(projection)}
 	if s.binding != nil {
@@ -363,7 +388,57 @@ func (s *Session) CatalogMetadata() catalogMetadata {
 
 // DeriveMessages returns the model history projection.
 func (s *Session) DeriveMessages() []provider.Message {
-	return append([]provider.Message(nil), s.Snapshot().Projection.ModelMessages...)
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	messages := detachMessages(s.projection.ModelMessages)
+	s.mu.Unlock()
+	return messages
+}
+
+func materializeSnapshotMessages(history eventPageReader, accepted []Commit, acceptedSequence uint64) ([]provider.Message, error) {
+	projection, _ := Project(nil)
+	var cursor uint64
+	if history != nil {
+		for {
+			startCursor := cursor
+			page, err := history.Read(context.Background(), cursor, 1000)
+			if err != nil {
+				return nil, err
+			}
+			for _, commit := range page.Commits {
+				if commit.LastSequence() > acceptedSequence {
+					break
+				}
+				if err := applyProjectionCommit(&projection, commit); err != nil {
+					return nil, err
+				}
+				// Only UI messages are requested at this compatibility boundary.
+				// Clearing the provider projection after each commit prevents a
+				// second cumulative model-history allocation during reconstruction.
+				projection.ModelMessages = nil
+				cursor = commit.LastSequence()
+			}
+			if !page.Truncated || cursor >= acceptedSequence {
+				break
+			}
+			if cursor <= startCursor {
+				return nil, fmt.Errorf("%w: full snapshot cursor did not advance", ErrDamagedStore)
+			}
+		}
+	}
+	for _, commit := range accepted {
+		if commit.LastSequence() <= cursor || commit.FirstSequence > acceptedSequence {
+			continue
+		}
+		if err := applyProjectionCommit(&projection, commit); err != nil {
+			return nil, err
+		}
+		projection.ModelMessages = nil
+		cursor = commit.LastSequence()
+	}
+	return projection.Messages, nil
 }
 
 // externalizeDurableHistory switches a Service-owned runtime to the bounded

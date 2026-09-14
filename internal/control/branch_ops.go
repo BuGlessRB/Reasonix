@@ -168,7 +168,7 @@ func (c *Controller) Branch(name string) (string, error) {
 		if runtime == nil {
 			return "", c.rewindFail(session.ErrSessionNotRunning)
 		}
-		turns := runtime.Session().Snapshot().Projection.Turns
+		turns := runtime.Session().ExecutionSnapshot().Projection.Turns
 		if len(turns) == 0 {
 			return "", c.rewindFail(fmt.Errorf("nothing to branch yet"))
 		}
@@ -241,7 +241,7 @@ func (c *Controller) forkNamedSession(turn int, name string, switchToFork bool) 
 	if service == nil || parent == nil {
 		return "", session.ErrSessionNotRunning
 	}
-	projection := parent.Session().Snapshot().Projection
+	projection := parent.Session().ExecutionSnapshot().Projection
 	completed := make([]session.TurnBoundary, 0, len(projection.Turns))
 	for _, boundary := range projection.Turns {
 		if boundary.EndSequence != 0 {
@@ -276,7 +276,7 @@ func (c *Controller) forkNamedSession(turn int, name string, switchToFork bool) 
 	if !switchToFork {
 		return child.Ref().SessionID, nil
 	}
-	prepared := agent.NewSession("").CloneWithMessages(child.Session().Snapshot().Projection.ModelMessages)
+	prepared := agent.NewSession("").CloneWithMessages(child.Session().ExecutionSnapshot().Projection.ModelMessages)
 	_, err = c.publishSessionRuntime(child, prepared, true)
 	if err != nil {
 		return "", err

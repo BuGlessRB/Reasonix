@@ -233,7 +233,7 @@ func (a *App) advanceSessionRuntimeEpochLocked(tab *WorkspaceTab) string {
 	// fences late events and prompt answers. Reuse that exact epoch in the
 	// Desktop registry instead of inventing a second, UI-only generation.
 	if _, runtime, exclusive := exclusiveSessionBinding(tab.Ctrl); exclusive && runtime != nil {
-		rt.Epoch = runtime.Snapshot().Epoch
+		rt.Epoch = runtime.StateSnapshot().Epoch
 	}
 	rt.Phase = sessionRuntimeReady
 	rt.Issue = nil

@@ -117,7 +117,7 @@ func (c *Controller) openSessionEventStore(sessionPath string) (*session.Session
 			return nil, nil, err
 		}
 	}
-	snapshot := store.Snapshot()
+	snapshot := store.StateSnapshot()
 	if snapshot.EventSequence != 0 {
 		return store, release, nil
 	}
@@ -209,7 +209,7 @@ func (c *Controller) importLegacyResumeOverPlaceholder(incoming *agent.Session) 
 		return nil
 	}
 	snapshot, ok := c.sessionEventSnapshot()
-	if !ok || len(snapshot.Projection.Messages) != 1 || len(incoming.Snapshot()) <= 1 {
+	if !ok || len(snapshot.Projection.ModelMessages) != 1 || len(incoming.Snapshot()) <= 1 {
 		return nil
 	}
 	messages := incoming.Snapshot()
@@ -246,7 +246,7 @@ func (c *Controller) replaceSessionModelContext(ctx context.Context, messages []
 	if store == nil {
 		return errors.New("exclusive v3 controller has no session store")
 	}
-	snapshot := store.Snapshot()
+	snapshot := store.ExecutionSnapshot()
 	modelMessages := provider.ModelMessages(messages)
 	if modelMessages == nil {
 		modelMessages = []provider.Message{}
@@ -292,8 +292,8 @@ func (c *Controller) adoptResumeSystemPrompt(incoming *agent.Session) error {
 	if store == nil || incoming == nil {
 		return nil
 	}
-	snapshot := store.Snapshot()
-	persisted, current := snapshot.Projection.Messages, incoming.Snapshot()
+	snapshot := store.ExecutionSnapshot()
+	persisted, current := snapshot.Projection.ModelMessages, incoming.Snapshot()
 	if len(persisted) == 0 || len(current) == 0 || persisted[0].Role != provider.RoleSystem || current[0].Role != provider.RoleSystem || reflect.DeepEqual(persisted[0], current[0]) {
 		return nil
 	}
@@ -349,7 +349,7 @@ func (c *Controller) sessionEventSnapshot() (session.Snapshot, bool) {
 	if store == nil {
 		return session.Snapshot{}, false
 	}
-	return store.Snapshot(), true
+	return store.ExecutionSnapshot(), true
 }
 
 func (c *Controller) sessionStateSnapshot() (session.Snapshot, bool) {
@@ -374,7 +374,7 @@ func (c *Controller) appendSessionEventLocked(ctx context.Context, e event.Event
 		}
 		return nil
 	}
-	projection := store.Snapshot().Projection
+	projection := store.ExecutionSnapshot().Projection
 	if projection.Recovery != nil && projection.Recovery.State == "recovery_required" && e.Kind != event.TurnDone {
 		// The cancelled activity no longer owns business-state mutation. Its
 		// eventual return is observed by the runtime watchdog; late semantic
@@ -577,7 +577,7 @@ func (c *Controller) RecordSessionMessages(ctx context.Context, reason string, m
 	if store == nil || len(messages) == 0 {
 		return nil
 	}
-	if recovery := store.Snapshot().Projection.Recovery; recovery != nil && recovery.State == "recovery_required" {
+	if recovery := store.ExecutionSnapshot().Projection.Recovery; recovery != nil && recovery.State == "recovery_required" {
 		return nil
 	}
 	c.turnEvents.commitMu.Lock()
@@ -593,7 +593,7 @@ func (c *Controller) RecordSessionMessages(ctx context.Context, reason string, m
 		}
 		events = append(events, session.Event{Kind: "message/complete", Payload: payload})
 	}
-	snapshot := store.Snapshot()
+	snapshot := store.ExecutionSnapshot()
 	op := fmt.Sprintf("messages:%s:%d", reason, snapshot.EventSequence+1)
 	_, err := c.appendSessionBatch(ctx, store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: events})
 	return err
@@ -620,7 +620,7 @@ func (c *Controller) RecordSessionMessageUpsert(ctx context.Context, reason stri
 	}
 	c.turnEvents.commitMu.Lock()
 	defer c.turnEvents.commitMu.Unlock()
-	snapshot := store.Snapshot()
+	snapshot := store.ExecutionSnapshot()
 	op := fmt.Sprintf("message-upsert:%s:%s:%d", reason, message.ID, snapshot.EventSequence+1)
 	_, err = c.appendSessionBatch(ctx, store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []session.Event{{Kind: "message/upsert", Payload: payload}}})
 	return err
@@ -647,7 +647,7 @@ func (c *Controller) replaceSessionEventProjection(ctx context.Context, reason s
 	}
 	c.turnEvents.commitMu.Lock()
 	defer c.turnEvents.commitMu.Unlock()
-	snapshot := store.Snapshot()
+	snapshot := store.ExecutionSnapshot()
 	op := fmt.Sprintf("context-replace:%s:%d", reason, snapshot.EventSequence+1)
 	_, err = c.appendSessionBatch(ctx, store, session.Batch{
 		OperationID: op,
@@ -673,12 +673,12 @@ func (c *Controller) appendDomainState(kind string, payload json.RawMessage, rea
 	if store == nil || len(payload) == 0 {
 		return nil
 	}
-	if recovery := store.Snapshot().Projection.Recovery; recovery != nil && recovery.State == "recovery_required" {
+	if recovery := store.ExecutionSnapshot().Projection.Recovery; recovery != nil && recovery.State == "recovery_required" {
 		return nil
 	}
 	c.turnEvents.commitMu.Lock()
 	defer c.turnEvents.commitMu.Unlock()
-	snapshot := store.Snapshot()
+	snapshot := store.ExecutionSnapshot()
 	op := fmt.Sprintf("domain:%s:%s:%d", kind, reason, snapshot.EventSequence+1)
 	_, err := c.appendSessionBatch(context.Background(), store, session.Batch{OperationID: op, TurnID: snapshot.Projection.TurnID, Events: []session.Event{{Kind: kind, Payload: append(json.RawMessage(nil), payload...)}}})
 	if err != nil {

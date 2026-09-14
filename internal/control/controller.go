@@ -858,7 +858,7 @@ func (c *Controller) initializeOwnedResources(opts Options) {
 		c.executor.SetSink(c.sink)
 		c.executor.SetSessionCheckpointer(c)
 		if _, runtime, _ := c.v3Binding(); runtime != nil {
-			if runtime.Session().Snapshot().EventSequence == 0 {
+			if runtime.StateSnapshot().Session.EventSequence == 0 {
 				if err := c.seedSessionEventsFromExecutor("session-open"); err != nil {
 					c.failTurnEventLedger(err)
 				}
@@ -4557,9 +4557,20 @@ func (c *Controller) History() []provider.Message {
 		return nil
 	}
 	if snapshot, ok := c.sessionEventSnapshot(); ok && snapshot.EventSequence > 0 {
-		projected := snapshot.Projection.Messages
 		if c.sessionEngineEnabled() {
-			return append([]provider.Message(nil), projected...)
+			if service, runtime, exclusive := c.v3Binding(); exclusive && service != nil && runtime != nil {
+				if projected, err := service.Query().History(context.Background(), runtime.Ref()); err == nil {
+					return projected
+				}
+			}
+			return c.executor.Session().Snapshot()
+		}
+		projected := snapshot.Projection.ModelMessages
+		if store := c.sessionEventStore(); store != nil {
+			// The retired path-bound compatibility store still owns its complete
+			// persisted transcript. Its provider projection intentionally strips
+			// host-origin metadata, so explicit history reads use the stored view.
+			projected = store.Snapshot().Projection.Messages
 		}
 		current := c.executor.Session().Snapshot()
 		// Compatibility runners and an interrupted pre-v3 caller can still leave
@@ -4591,7 +4602,7 @@ func (c *Controller) SessionHasUnsavedChanges() bool {
 		return snapshot.EventSequence > snapshot.DurableSequence ||
 			snapshot.PersistenceStatus == "failed" ||
 			snapshot.PersistenceStatus == "uncertain" ||
-			!reflect.DeepEqual(snapshot.Projection.Messages, current)
+			!reflect.DeepEqual(snapshot.Projection.ModelMessages, current)
 	}
 	return c.executor.Session().HasUnsavedChanges(c.SessionPath())
 }

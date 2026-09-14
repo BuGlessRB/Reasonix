@@ -234,7 +234,7 @@ func (c *Controller) goalRoundEligibility() (*goaldomain.View, *session.Runtime,
 	if !exclusive || runtime == nil {
 		return nil, nil, session.RuntimeSnapshot{}, false
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := runtime.StateSnapshot()
 	if snapshot.Phase != session.RuntimeIdle {
 		return nil, nil, session.RuntimeSnapshot{}, false
 	}
@@ -254,7 +254,7 @@ func (c *Controller) commitGoalRoundAdmission(reservation *goalRoundReservation)
 	if !exclusive || runtime == nil {
 		return session.ErrSessionNotRunning
 	}
-	runtimeSnapshot := runtime.Snapshot()
+	runtimeSnapshot := runtime.StateSnapshot()
 	if runtimeSnapshot.Phase != session.RuntimeRunning || runtimeSnapshot.Ref.SessionID != reservation.SessionID ||
 		runtimeSnapshot.Epoch != reservation.RuntimeEpoch || runtimeSnapshot.ActivityRevision != reservation.IdleActivityRevision+1 {
 		return &goaldomain.Error{Code: goaldomain.ErrStaleRevision, Message: "goal round runtime reservation is stale"}
@@ -341,7 +341,7 @@ func (c *Controller) goalAuthorityForRound(reservation *goalRoundReservation) (t
 	if !exclusive || runtime == nil {
 		return tool.GoalAuthority{}, false
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := runtime.StateSnapshot()
 	if snapshot.Phase != session.RuntimeRunning || snapshot.Ref.SessionID != reservation.SessionID || snapshot.Epoch != reservation.RuntimeEpoch {
 		return tool.GoalAuthority{}, false
 	}
@@ -355,7 +355,7 @@ func (c *Controller) directHumanGoalAuthority() (tool.GoalAuthority, bool) {
 	if !exclusive || runtime == nil {
 		return tool.GoalAuthority{}, false
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := runtime.StateSnapshot()
 	if snapshot.Phase != session.RuntimeRunning {
 		return tool.GoalAuthority{}, false
 	}
@@ -406,7 +406,7 @@ func (c *Controller) applyHostGoalMutation(ctx context.Context, reason string, m
 	if !exclusive || runtime == nil {
 		return nil, session.ErrSessionNotRunning
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := runtime.StateSnapshot()
 	var activity *session.Activity
 	owned := false
 	switch snapshot.Phase {
@@ -429,8 +429,9 @@ func (c *Controller) applyHostGoalMutation(ctx context.Context, reason string, m
 	if owned {
 		defer activity.Finish(nil)
 	}
-	op := fmt.Sprintf("goal-control:%s:%d:%s", reason, runtime.Session().Snapshot().EventSequence+1, snapshot.Epoch)
-	if _, err := activity.Append(ctx, session.Batch{OperationID: op, TurnID: runtime.Session().Snapshot().Projection.TurnID,
+	execution := runtime.ExecutionSnapshot()
+	op := fmt.Sprintf("goal-control:%s:%d:%s", reason, execution.Session.EventSequence+1, snapshot.Epoch)
+	if _, err := activity.Append(ctx, session.Batch{OperationID: op, TurnID: execution.Session.Projection.TurnID,
 		Events: []session.Event{{Kind: "goal/state", Payload: payload}}}); err != nil {
 		return nil, err
 	}

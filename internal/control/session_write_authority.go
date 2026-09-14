@@ -70,7 +70,7 @@ func (c *Controller) activateManagedSessionEvents(sess *agent.Session) error {
 		if err := c.seedSessionEventsFromExecutor("managed-runtime-activation"); err != nil {
 			return err
 		}
-	} else if !reflect.DeepEqual(snapshot.Projection.Messages, messages) {
+	} else if !reflect.DeepEqual(snapshot.Projection.ModelMessages, messages) {
 		if err := c.replaceSessionEventProjection(context.Background(), "managed-runtime-activation", messages); err != nil {
 			return err
 		}
@@ -134,7 +134,7 @@ func (c *Controller) ensureWriteAuthorityReady() error {
 				return session.ErrSessionNotRunning
 			}
 		}
-		phase := runtime.Snapshot().Phase
+		phase := runtime.StateSnapshot().Phase
 		if phase == session.RuntimeRecoveryRequired {
 			return session.ErrRecoveryRequired
 		}

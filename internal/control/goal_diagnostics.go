@@ -85,7 +85,7 @@ func (c *Controller) ExportGoalDiagnostics(ctx context.Context, metadata GoalDia
 		SchemaVersion:     1,
 		ExportedAt:        time.Now().UTC(),
 		Metadata:          metadata,
-		Runtime:           runtime.Snapshot(),
+		Runtime:           runtime.StateSnapshot(),
 		Observation:       c.RuntimeStateSnapshot(),
 		AcceptedThrough:   through,
 		DurableThrough:    through,
