@@ -50,6 +50,10 @@ var mirroredWireTypes = []wireMirror{
 	// The canonical task list, which the panel reads rather than derives. A
 	// status the page cannot read is a signed-off step drawn as the current one.
 	{"internal/serve/todos.go", "todoItem", tsSessionFile, "HostTodo"},
+	// A rebuilt transcript's tool calls. The proxy's resolved identity was on
+	// the kernel side and not on this one, so a reopened session drew
+	// use_capability where the live one drew what it reached.
+	{"internal/serve/history.go", "historyToolCall", tsSessionFile, "HistoryToolCall"},
 	{"internal/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
 	// The MCP row: a status the host answered with and the page cannot read is a
 	// row that goes back to reading the server's own prose for it.

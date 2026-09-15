@@ -729,7 +729,14 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions
         out.push({
           t: "tool",
           id: nextId(),
-          tool: { id: c.id, name: c.name, args: c.arguments, readOnly: true },
+          tool: {
+            id: c.id,
+            name: c.name,
+            args: c.arguments,
+            readOnly: true,
+            resolvedName: c.resolvedName,
+            capabilityId: c.capabilityId,
+          },
           running: false,
           children: [],
         });

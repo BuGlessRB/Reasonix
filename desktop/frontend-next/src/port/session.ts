@@ -13,9 +13,20 @@ export interface HistoryMessage {
   hostAuthored?: boolean;
   reasoning?: string;
   images?: number; // attachments on a user turn; an image-only one has no text
-  toolCalls?: { id: string; name: string; arguments?: string }[];
+  toolCalls?: HistoryToolCall[];
   toolCallId?: string;
   toolName?: string;
+}
+
+// One call inside a history message. resolvedName/capabilityId say what a
+// stable proxy reached: name stays the provider-visible call, so a card built
+// without them reads use_capability where the live one read the capability.
+export interface HistoryToolCall {
+  id: string;
+  name: string;
+  arguments?: string;
+  resolvedName?: string;
+  capabilityId?: string;
 }
 
 // GET /todos as internal/serve writes it: the canonical task list, the latest

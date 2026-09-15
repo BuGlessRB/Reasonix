@@ -7,7 +7,7 @@
     "complexity": 1496,
     "error-text": 12,
     "essay": 3218,
-    "file-size": 38277,
+    "file-size": 38207,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
@@ -1454,7 +1454,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 486
+      "file-size": 416
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3
