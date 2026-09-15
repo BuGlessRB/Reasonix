@@ -28,6 +28,7 @@ export type Kind =
   | "stream_attempt"
   | "context_maintenance"
   | "todo_progress"
+  | "workspace_lease"
   | "workspace_changed"
   | "completion_summary"
   | "inbox_changed"
@@ -375,6 +376,17 @@ export interface TodoProgress {
   progressRevision?: number;
 }
 
+/** One closed account of the workspace write lease. Waits under the notice
+ *  grace are counted here and nowhere else, and idleMs is the stretch held
+ *  after the last write asked for it. */
+export interface WorkspaceLease {
+  contended: number;
+  reported?: number;
+  waitedMs?: number;
+  heldMs: number;
+  idleMs: number;
+}
+
 // One context-maintenance transaction. status "noop" carries code: the attempt
 // ran and freed nothing, and code is what tells "already folded this turn" from
 // "nothing left to fold" — they read alike and mean opposite things about what
@@ -598,6 +610,7 @@ export interface WireEvent {
   compaction?: Compaction;
   maintenance?: ContextMaintenance;
   todoProgress?: TodoProgress;
+  workspaceLease?: WorkspaceLease;
   streamAttempt?: StreamAttempt;
   completion?: CompletionSummary;
   graph?: GraphDelta;

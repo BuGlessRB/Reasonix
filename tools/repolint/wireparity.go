@@ -99,6 +99,7 @@ var mirroredWireTypes = []wireMirror{
 	{"internal/update/progress.go", "Progress", tsVersionFile, "UpdateProgress"},
 	{"internal/checkpoint/types.go", "RewindResult", tsSessionFile, "RewindResult"},
 	{"internal/eventwire/wire.go", "ShellExecution", tsWireFile, "Execution"},
+	{"internal/eventwire/workspace_lease.go", "WorkspaceLease", tsWireFile, "WorkspaceLease"},
 }
 
 type wireMirror struct {

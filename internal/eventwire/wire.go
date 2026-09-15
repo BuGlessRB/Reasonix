@@ -29,6 +29,7 @@ type Event struct {
 	Compaction      *Compaction         `json:"compaction,omitempty"`
 	Maintenance     *ContextMaintenance `json:"maintenance,omitempty"`
 	TodoProgress    *TodoProgress       `json:"todoProgress,omitempty"`
+	WorkspaceLease  *WorkspaceLease     `json:"workspaceLease,omitempty"`
 	Guardian        *Guardian           `json:"guardian,omitempty"`
 	DecisionReceipt *DecisionReceipt    `json:"decisionReceipt,omitempty"`
 	Extension       *ExtensionSurface   `json:"extension,omitempty"`
@@ -127,11 +128,7 @@ func ToWire(e event.Event) Event {
 			w.DecisionReceipt = ToWireDecisionReceipt(e.DecisionReceipt)
 		}
 		w.Audience = string(e.Audience)
-		if e.Level == event.LevelWarn {
-			w.Level = "warn"
-		} else {
-			w.Level = "info"
-		}
+		w.Level = wireLevel(e.Level)
 	case event.ToolDispatch, event.ToolResult, event.ToolProgress:
 		w.Tool = toWireTool(e.Tool)
 	case event.GraphDelta:
@@ -181,6 +178,8 @@ func ToWire(e event.Event) Event {
 		}
 	case event.TodoProgressEvent:
 		w.TodoProgress = toWireTodoProgress(e.TodoProgress)
+	case event.WorkspaceLeaseEvent:
+		w.WorkspaceLease = toWireWorkspaceLease(e.WorkspaceLease)
 	case event.GuardianAssessment:
 		w.Guardian = ToWireGuardian(e.Guardian)
 	case event.ExtensionSurface, event.ExtensionStatus:
@@ -731,6 +730,7 @@ var kindNames = map[event.Kind]string{
 	event.StreamAttempt:           "stream_attempt",
 	event.ContextMaintenanceEvent: "context_maintenance",
 	event.TodoProgressEvent:       "todo_progress",
+	event.WorkspaceLeaseEvent:     "workspace_lease",
 	event.WorkspaceChanged:        "workspace_changed",
 	event.TurnPhase:               "turn_phase",
 	event.CompletionSummary:       "completion_summary",
