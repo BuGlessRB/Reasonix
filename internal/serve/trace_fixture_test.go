@@ -70,6 +70,11 @@ func stabilize(in []eventwire.Event) []eventwire.Event {
 			t.Added, t.Removed = 0, 0
 			e.Tool = &t
 		}
+		if e.WorkspaceLease != nil {
+			l := *e.WorkspaceLease
+			l.WaitedMs, l.HeldMs, l.IdleMs = 0, 0, 0 // measured durations, not turn structure
+			e.WorkspaceLease = &l
+		}
 		if e.Usage != nil {
 			continue // billing numbers, not turn structure
 		}

@@ -116,8 +116,8 @@
     "kind": "workspace_lease",
     "workspaceLease": {
      "contended": 0,
-     "heldMs": 24,
-     "idleMs": 24
+     "heldMs": 0,
+     "idleMs": 0
     }
    },
    {
@@ -304,8 +304,8 @@
     "kind": "workspace_lease",
     "workspaceLease": {
      "contended": 0,
-     "heldMs": 24,
-     "idleMs": 24
+     "heldMs": 0,
+     "idleMs": 0
     }
    },
    {
