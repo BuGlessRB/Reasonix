@@ -18,6 +18,7 @@
 // `color(srgb r g b / a)` on 0-1 channels or `oklch(0.85 0.012 255)` with a
 // lightness under 1 and a hue past 255, and reading either as 8-bit RGB
 // invents a colour nothing on screen has.
+const { STEPS, SETTINGS_OPEN, SETTINGS_COUNT, settingsTab, chooseTheme } = await import("./steps.mjs");
 const list = await (await fetch("http://127.0.0.1:9333/json/list")).json();
 const t = list.find((x) => x.type === "page");
 const ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -96,25 +97,40 @@ const probe = `(() => {
 for (const theme of ["light", "dark"]) {
   await send("Page.navigate", { url: process.argv[2] });
   await new Promise((r) => setTimeout(r, 2600));
-  await ev(`document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)})`);
-  await new Promise((r) => setTimeout(r, 600));
+  await ev(chooseTheme(theme));
+  await send("Page.navigate", { url: process.argv[2] });
+  await new Promise((r) => setTimeout(r, 3200));
   const all = new Map();
   const take = async (label) => {
     const got = await ev(probe);
     if (!Array.isArray(got)) throw new Error("probe did not evaluate — a silent [] would read as a clean sweep");
     for (const r of got) all.set(r.fg + "|" + r.bg, { ...r, where: label });
   };
-  await take("main");
-  await ev(`document.querySelector('.thbtn[aria-label="Settings"], .thbtn[aria-label="设置"]')?.click()`);
+  // The same walk audit-sweep takes: a panel this never opens is a panel it
+  // reports as clean. Reverting a bad ink and seeing nothing is how that reads.
+  for (const [label, act] of STEPS) {
+    if (act) {
+      if (!(await ev(act))) continue;
+      await new Promise((r) => setTimeout(r, /^turn-/.test(label) ? 4500 : 1100));
+    }
+    await take(label);
+  }
+  await ev(`document.body.click()`);
+  await new Promise((r) => setTimeout(r, 400));
+  await ev(SETTINGS_OPEN);
   await new Promise((r) => setTimeout(r, 1400));
-  const count = await ev(`document.querySelectorAll('.prefs-nav button').length`);
+  const count = await ev(SETTINGS_COUNT);
+  if (!count) throw new Error("settings did not open; the sweep would prove nothing");
   for (let i = 0; i < count; i++) {
-    const name = await ev(`(() => { const b = document.querySelectorAll('.prefs-nav button')[${i}]; b.click(); return b.id || String(${i}); })()`);
+    const name = await ev(settingsTab(i));
     await new Promise((r) => setTimeout(r, 850));
     await take(name);
   }
   const rows = [...all.values()].sort((a, b) => a.ratio - b.ratio);
-  console.log(`\n=== ${theme} — ${count} sections — below AA: ${rows.length} ===`);
+  // What rendered, not what was asked for: two passes over the same theme
+  // also report zero.
+  const painted = await ev(`document.documentElement.dataset.theme ?? "(none)"`);
+  console.log(`\n=== ${theme} (painted ${painted}) — ${count} sections — below AA: ${rows.length} ===`);
   for (const r of rows) console.log(`  ${String(r.ratio).padStart(5)} (need ${r.floor})  ${r.fg} on ${r.bg}   ${r.cls.padEnd(20)} @${r.where}`);
 }
 ws.close();

@@ -33,6 +33,7 @@
 const url = process.argv[2], theme = process.argv[3] || "dark";
 const W = Number(process.argv[4] || 1440), H = Number(process.argv[5] || 950);
 const { readFileSync } = await import("node:fs");
+const { STEPS, SETTINGS_OPEN, SETTINGS_COUNT, settingsTab } = await import("./steps.mjs");
 const list = await (await fetch("http://127.0.0.1:9333/json/list")).json();
 const t = list.find((x) => x.type === "page");
 const ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -160,46 +161,17 @@ const P = `(() => {
   return out;
 })()`;
 
-// Every step names the control it wants by the intent the interface declares
-// on it, never by what the button says or where it sits: the labels move with
-// the interface language, and the sweep runs in English against a window a
-// person reads in Chinese. Picking by shape is how `.sesstitle` — a class that
-// had not existed for months — went on "succeeding" into the rename button
-// beside the row it meant to open.
-const act = (a, v) => `[data-action="${a}"]` + (v ? `[data-value="${v}"]` : "");
-const click = (sel, pick = "[0]") => `(()=>{const b=[...document.querySelectorAll('${sel}')]${pick};if(!b)return false;b.click();return true})()`;
-const type = (t) => `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;ta.focus();const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,${JSON.stringify(t)});ta.dispatchEvent(new Event('input',{bubbles:true}));return true})()`;
-const STEPS = [
-  ["main", null],
-  // The busiest session, because a transcript with turns in it is the only one
-  // that renders tool cards, plans and approvals.
-  ["session-open", click(act("session.open"), `.sort((a,b)=>(+(b.querySelector('.sessmeta')?.textContent.match(/\\d+/)?.[0]||0))-(+(a.querySelector('.sessmeta')?.textContent.match(/\\d+/)?.[0]||0)))[0]`)],
-  ["tab-task", click(act("pane.view", "task"))],
-  ["tab-flow", click(act("pane.view", "flow"))],
-  ["picker-model", click(act("model.select"))],
-  ["picker-effort", `(()=>{document.body.click();return ${click(act("reasoning.effort"))}})()`],
-  ["picker-approvals", `(()=>{document.body.click();return ${click(act("tool-approval.mode"))}})()`],
-  ["policy", `(()=>{document.body.click();return ${click(act("chrome.policy"))}})()`],
-  ["plan-on", `(()=>{document.body.click();return ${click(act("plan.mode"))}})()`],
-  ["slash-palette", type("/")],
-  ["at-files", type("@")],
-  ["clear-composer", `(()=>{const ok=${type("")};document.body.click();return ok})()`],
-  ["send-turn", `(()=>{const ok=${type("Run the tests and fix what fails")};if(!ok)return false;return ${click(act("session.send"), ".filter(b=>!b.classList.contains('sug'))[0]")}})()`],
-  ["turn-mid", `(()=>true)()`],
-  ["turn-late", `(()=>true)()`],
-  ["turn-end", `(()=>true)()`],
-  ["account", click(act("chrome.account"))],
-];
+
 const res = [], skipped = [];
 for (const [label, act] of STEPS) {
   if (act) { const ok = await ev(act); if (!ok) { skipped.push(label); continue; } await wait(/^turn-/.test(label) ? 4500 : 1100); }
   res.push({ label, ...(await ev(P)) });
 }
 await ev(`document.body.click()`); await wait(400);
-await ev(`document.querySelector('[data-action="chrome.settings"]')?.click()`); await wait(1400);
-const n = await ev(`document.querySelectorAll('.prefs-nav button').length`);
+await ev(SETTINGS_OPEN); await wait(1400);
+const n = await ev(SETTINGS_COUNT);
 if (!n) skipped.push("settings"); else for (let i = 0; i < n; i++) {
-  const nm2 = await ev(`(()=>{const b=document.querySelectorAll('.prefs-nav button')[${i}];b.click();return b.id||b.textContent.trim().slice(0,12)})()`);
+  const nm2 = await ev(settingsTab(i));
   await wait(800); res.push({ label: nm2, ...(await ev(P)) });
 }
 const KEYS = ["contrast", "truncated", "clippedY", "offscreen", "overflowX", "spill", "unnamed", "dupId", "imgNoAlt", "hanCaps"];
