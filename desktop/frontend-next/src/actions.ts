@@ -138,6 +138,9 @@ export const ACTIONS: UIAction[] = [
   // because reaching a view from the bar and from the detail menu is one intent
   // in two places, not two things a person can do.
   { id: "pane.view", kind: "view", target: "none", proof: "interaction" },
+  { id: "transcript.find", kind: "view", target: "none", proof: "interaction" },
+  { id: "turn.edit", kind: "view", target: "entity", proof: "interaction" },
+  { id: "turn.resend", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   { id: "transcript.scroll", kind: "navigation", target: "none", proof: "browser" },
   { id: "session.new", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   // The bytes reach the host as the file is chosen, before anything is sent:

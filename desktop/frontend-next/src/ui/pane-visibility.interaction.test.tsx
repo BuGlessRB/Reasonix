@@ -40,6 +40,7 @@ function open(visible: boolean) {
     onReport: () => {},
     onSessionChanged: () => {},
     pulse: 0,
+    findPulse: 0,
     onSettings: () => {},
     needsProject: false,
     onOpenProject: () => {},

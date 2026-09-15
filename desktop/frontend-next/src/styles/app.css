@@ -2071,7 +2071,7 @@
   }
   .dhunk > span:first-child { text-align: right; padding-right: 9px }
   .dhunk > span:last-child { padding-left: 14px }
-  .dl > .no { position: sticky; left: 0; text-align: right; padding-right: 9px; color: var(--ghost); background: var(--raised); font-variant-numeric: tabular-nums; user-select: none }
+  .dl > .no { position: sticky; left: 0; text-align: right; padding-right: 9px; color: var(--faint); background: var(--raised); font-variant-numeric: tabular-nums; user-select: none }
   .dl > .sg { color: var(--ghost); user-select: none }
   .dl > .cd { padding-right: 11px; color: var(--muted) }
   .dl[data-d="+"] { background: color-mix(in srgb, var(--add) 9%, transparent) }
@@ -2779,6 +2779,72 @@
   .wsfind .clr { flex: none; border: 0; background: none; cursor: pointer; color: var(--ghost); font-size: var(--fs-ui); line-height: 1; padding: 0 2px }
   .wsfind .clr:hover { color: var(--text) }
 
+  .reask-open {
+    position: relative; flex: none; border: 0; background: var(--overlay); color: var(--faint); cursor: pointer;
+    font: var(--w-med) var(--fs-micro) var(--ui); padding: 4px 9px; border-radius: var(--r-sm); white-space: nowrap;
+    opacity: 0; transition: opacity var(--m-line), background var(--m-line), color var(--m-line);
+  }
+  .call > .c:hover .reask-open, .call > .c:focus-within .reask-open { opacity: 1 }
+  .reask-open::after { content: ""; position: absolute; inset: -5px -2px }
+  .reask-open:hover { background: var(--border); color: var(--text) }
+  .reask-open:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
+
+  .reask { display: flex; flex-direction: column; gap: 9px; margin-top: 4px }
+  .reask textarea {
+    width: 100%; box-sizing: border-box; resize: vertical; min-height: 60px;
+    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--raised); color: var(--text);
+    padding: 10px 12px; font: var(--w-reg) var(--fs-ui)/1.62 var(--ui); outline: 0;
+  }
+  .reask textarea:focus { border-color: var(--focus) }
+  .reask-ft { display: flex; align-items: center; gap: 12px; flex-wrap: wrap }
+  .reask-ft .dismiss {
+    background: none; border: 0; cursor: pointer; color: var(--faint); font: var(--w-reg) var(--fs-ui) var(--ui);
+    text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;
+  }
+  .reask-ft .dismiss:hover { color: var(--muted) }
+  .reask-ft .hint { margin-left: auto; font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost) }
+
+  .findhost { position: relative; height: 0; z-index: 6 }
+  .tfind {
+    position: absolute; top: 10px; right: calc(var(--srail-w) + 12px);
+    display: flex; align-items: center; gap: 6px; padding: 6px 7px 6px 9px;
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    background: var(--float); box-shadow: var(--shadow-float);
+  }
+  .tfind:focus-within { border-color: var(--focus) }
+  .tfind svg { width: 13px; height: 13px; flex: none; fill: none; stroke: var(--ghost); stroke-width: 1.5; stroke-linecap: round }
+  .tfind input::-webkit-search-cancel-button,
+  .tfind input::-webkit-search-decoration { -webkit-appearance: none; appearance: none }
+  .tfind input {
+    flex: none; width: 190px; min-width: 0; border: 0; background: none; outline: 0; color: var(--text);
+    font: var(--w-reg) var(--fs-ui) var(--ui);
+  }
+  .tfind input::placeholder { color: var(--ghost) }
+  .tfind .n {
+    flex: none; min-width: 52px; text-align: right; font: var(--w-reg) var(--fs-micro) var(--mono);
+    color: var(--faint); font-variant-numeric: tabular-nums;
+  }
+  .tfind .n[data-empty] { color: var(--muted) }
+  .tfind .st {
+    flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
+    border: 0; border-radius: var(--r-xs); background: none; cursor: pointer; color: var(--faint);
+  }
+  .tfind .st svg { stroke: currentColor }
+  .tfind .st:hover:not(:disabled) { background: var(--float-hi); color: var(--text) }
+  .tfind .st:disabled { opacity: .4; cursor: default }
+  .tfind .clr {
+    flex: none; border: 0; background: none; cursor: pointer; color: var(--ghost);
+    font-size: var(--fs-ui); line-height: 1; padding: 0 3px;
+  }
+  .tfind .clr:hover { color: var(--text) }
+  @container conversation (max-width: 460px) {
+    .tfind { right: 12px; left: 12px }
+    .tfind input { flex: 1; width: 0 }
+  }
+
+  ::highlight(rx-find) { background-color: var(--overlay); color: var(--text) }
+  ::highlight(rx-find-now) { background-color: var(--float-hi); color: var(--text) }
+
   .acctrow {
     display: flex; align-items: center; gap: 9px; width: 100%; flex: none; text-align: left;
     margin-top: auto; padding: 9px 11px; border: 0; border-top: 1px solid var(--hair);
@@ -3013,7 +3079,6 @@
   .planwrap .cursor[hidden] { display: none }
   .plan .s { display: flex; align-items: baseline; gap: 9px; padding: 6px 0 6px 10px; font-size: var(--fs-ui); color: var(--muted); border-bottom: 1px solid var(--hair); transition: color var(--m-card), opacity var(--m-card), background var(--m-line); border-radius: var(--r-xs) }
   .plan .s:hover { background: var(--overlay) }
-  .plan .s[data-done] { opacity: .72 }
   .plan .s:last-child { border-bottom: 0 }
   .plan .s .b { font: var(--w-reg) var(--fs-micro) var(--mono); width: 10px; flex: none; color: var(--ghost); font-variant-numeric: tabular-nums; transition: color var(--m-card) }
   .plan .s[data-done] { color: var(--faint) }
@@ -4862,6 +4927,15 @@
     tab-size: 4;
   }
   .md pre.term code { font: inherit; color: inherit; white-space: pre }
+  .md pre.term .hljs-comment, .md pre.term .hljs-quote { color: var(--faint); font-style: italic }
+  .md pre.term :is(.hljs-punctuation, .hljs-operator, .hljs-meta, .hljs-params, .hljs-subst) { color: var(--muted) }
+  .md pre.term :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-variable.language_) { color: var(--syn-key) }
+  .md pre.term :is(.hljs-string, .hljs-regexp, .hljs-char.escape_, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string) { color: var(--syn-str) }
+  .md pre.term :is(.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-link, .hljs-selector-attr, .hljs-template-variable) { color: var(--syn-num) }
+  .md pre.term :is(.hljs-title, .hljs-name, .hljs-section, .hljs-built_in, .hljs-type, .hljs-class, .hljs-attr, .hljs-property, .hljs-tag, .hljs-selector-class, .hljs-selector-id) { color: var(--syn-fn) }
+  .md pre.term .hljs-deletion { color: var(--del) }
+  .md pre.term :is(.hljs-strong, .hljs-title.function_, .hljs-title.class_) { font-weight: var(--w-med) }
+  .md pre.term .hljs-emphasis { font-style: italic }
   /* The language sits in that top padding rather than over the first line, and
      hands the corner to the copy control while the pointer is on the block:
      both answer "what is this", one after the other, so neither needs a row of

@@ -35,6 +35,9 @@ const BASE_REHYPE = [rehypeRaw, [rehypeSanitize, schema]];
 // — older WebKit treats it as a syntax error and takes the whole page down.
 const MATH = /\$\$[\s\S]+?\$\$|\$[^\n$]+\$/;
 const GEMOJI = /:[a-zA-Z0-9_+-]+:/;
+// Only a fence that named its language. rehype-highlight's own detection stays
+// off: guessing a grammar paints prose as code.
+const FENCED = /^```[a-zA-Z]/m;
 
 // Models reach for LaTeX's own delimiters as readily as for dollars, and
 // remark-math reads only dollars. Rewriting them keeps one parser instead of
@@ -57,6 +60,8 @@ function normalizeMath(md: string) {
 type Plugin = unknown;
 let katex: Plugin | null = null;
 let katexLoading: Promise<void> | null = null;
+let hljs: Plugin | null = null;
+let hljsLoading: Promise<void> | null = null;
 let gemoji: Plugin | null = null;
 let gemojiLoading: Promise<void> | null = null;
 
@@ -74,6 +79,25 @@ function useKatex(needed: boolean): Plugin | null {
     );
     // A failed chunk leaves the math as source text, which still reads.
     void katexLoading.then(() => alive && setPlugin(() => katex)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [needed]);
+  return plugin;
+}
+
+/** Grammars are fetched the first time a listing arrives, the shape katex rides.
+ *  Classes, not inline colours: a highlighter writing its own hex values would
+ *  leave the token system and stop following the theme. */
+function useHighlight(needed: boolean): Plugin | null {
+  const [plugin, setPlugin] = useState<Plugin | null>(hljs);
+  useEffect(() => {
+    if (!needed || hljs) return;
+    let alive = true;
+    hljsLoading ??= import("rehype-highlight").then((mod) => {
+      hljs = mod.default;
+    });
+    void hljsLoading.then(() => alive && setPlugin(() => hljs)).catch(() => {});
     return () => {
       alive = false;
     };
@@ -155,13 +179,13 @@ function textOf(node: ReactNode): string {
   return "";
 }
 
-const Block = memo(function Block({ src, math, emoji, tail }: { src: string; math: Plugin | null; emoji: Plugin | null; tail?: boolean }) {
+const Block = memo(function Block({ src, math, emoji, code, tail }: { src: string; math: Plugin | null; emoji: Plugin | null; code: Plugin | null; tail?: boolean }) {
   // Inside the memo, so a settled block normalises once instead of per chunk.
   const body = normalizeMath(tail ? balanceFences(src) : src);
   return (
     <ReactMarkdown
       remarkPlugins={(emoji ? [...BASE_REMARK, emoji] : BASE_REMARK) as never}
-      rehypePlugins={(math ? [...BASE_REHYPE, math] : BASE_REHYPE) as never}
+      rehypePlugins={([...BASE_REHYPE, math, code].filter(Boolean)) as never}
       components={{
         // Every link here comes from model output; a webview navigating away
         // would replace the app with the page.
@@ -192,6 +216,7 @@ export function Markdown({ text, streaming }: { text: string; streaming?: boolea
   const shown = useRevealed(text, streaming);
   const math = useKatex(MATH.test(text));
   const emoji = useGemoji(GEMOJI.test(text));
+  const code = useHighlight(FENCED.test(text));
   // Only a streamed message is split. Once it settles it parses whole again, so
   // nothing left in the transcript stands as a pile of separate documents.
   const cuts = streaming ? cutsOf(shown) : [];
@@ -206,9 +231,9 @@ export function Markdown({ text, streaming }: { text: string; streaming?: boolea
     // handing a listing over would hand over something that was never said.
     <div className="md" data-live={streaming ? "" : undefined}>
       {parts.map((p, i) => (
-        <Block key={i} src={p} math={math} emoji={emoji} />
+        <Block key={i} src={p} math={math} emoji={emoji} code={code} />
       ))}
-      <Block src={shown.slice(at)} math={math} emoji={emoji} tail />
+      <Block src={shown.slice(at)} math={math} emoji={emoji} code={code} tail />
       {streaming && <span className="caret" />}
     </div>
   );

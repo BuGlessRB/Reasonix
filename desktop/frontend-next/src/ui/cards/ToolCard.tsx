@@ -8,7 +8,7 @@ import { Sym, glyphFor } from "../Sym";
 import { GOAL_STATUS, argOf, goalUpdate, shortArgs } from "../args";
 import { Cost } from "../Cost";
 import { seconds, tokens } from "../../i18n/format";
-import { parsePlan } from "../../state/session";
+import { currentStep, parsePlan, stepDone, stepLabel } from "../../state/session";
 import { DiffView } from "./DiffView";
 import { Term, ToolOutput } from "./ToolOutput";
 import { ExtensionView } from "./ExtensionView";
@@ -116,7 +116,9 @@ export function ToolCard({
           {who && <span className="who" title={t("按技能 {name} 的设定运行的子代理", { name: who })}>{who}</span>}
           {from && <span className="src" title={t("外部服务 {name} 提供的工具", { name: from.server })}>{from.server}</span>}
           {tag && <span className="tag" title={tagHint(tool)}>{tag}</span>}
-          {arg && <span className={streaming ? "arg shim" : "arg"}>{arg}</span>}
+          {/* The row ellipsises it below about 1000px, and what gets cut is the
+              command. A title is the only way back to it. */}
+          {arg && <span className={streaming ? "arg shim" : "arg"} title={streaming ? undefined : arg}>{arg}</span>}
           {bad && <span className="fail">{badLabel}</span>}
           <Cost tools={[tool]} running={running} />
         </div>
@@ -202,7 +204,7 @@ function NestedCall({ tool }: { tool: Tool }) {
         <div className="hl">
           <span className="nm" title={shown}>{labelFor(shown)}</span>
           {tag && <span className="tag" title={tagHint(tool)}>{tag}</span>}
-          {tool.args && <span className="arg">{shortArgs(tool.args)}</span>}
+          {tool.args && <span className="arg" title={shortArgs(tool.args) || undefined}>{shortArgs(tool.args)}</span>}
           {bad && <span className="fail">{toolFailureLabel(tool)}</span>}
           <Cost tools={[tool]} />
         </div>
@@ -223,14 +225,20 @@ function NestedCall({ tool }: { tool: Tool }) {
 function Steps({ tool }: { tool: Tool }) {
   const steps = parsePlan(tool);
   if (!steps?.length) return <span className="fold">{t("计划已移入右栏")}</span>;
-  const now = steps.findIndex((s) => !s.done);
+  const now = currentStep(steps);
   return (
     <div className="steps">
       {steps.map((st, i) => (
-        <div className="s" key={i} data-done={st.done ? "" : undefined} data-now={i === now ? "" : undefined}>
-          <span className="b">{st.done ? "✓" : i + 1}</span>
+        <div
+          className="s"
+          key={i}
+          data-done={stepDone(st) ? "" : undefined}
+          data-now={i === now ? "" : undefined}
+          style={st.level ? { marginInlineStart: Math.min(st.level, 4) * 12 } : undefined}
+        >
+          <span className="b">{stepDone(st) ? "✓" : i + 1}</span>
           <span className="t">
-            <span className="ln">{st.text}</span>
+            <span className="ln">{stepLabel(st)}</span>
           </span>
         </div>
       ))}
@@ -262,7 +270,16 @@ const childTokens = (kids: Tool[]) => kids.reduce((n, k) => n + (k.contextTokens
 const tagFor = (tool: Tool): string | null => {
   const ex = tool.execution;
   if (ex?.kind === "shell" && ex.shell) return ex.shell;
-  return mcpOrigin(tool.resolvedName || tool.name)?.tool ?? null;
+  return mcpOrigin(tool.resolvedName || tool.name)?.tool ?? capabilityTag(tool);
+};
+
+// The catalogue entry the proxy resolved, when the name has not already said
+// it: `tool:grep` beside Search is one fact twice, `skill:review` is not.
+const capabilityTag = (tool: Tool): string | null => {
+  const id = tool.capabilityId?.trim();
+  if (!id) return null;
+  const at = id.indexOf(":");
+  return at > 0 && id.slice(at + 1) === (tool.resolvedName || tool.name) ? null : id;
 };
 
 const SHELL_HINT: Record<string, string> = {
@@ -274,7 +291,8 @@ const SHELL_HINT: Record<string, string> = {
 
 const tagHint = (tool: Tool) => {
   const ex = tool.execution;
-  return ex?.kind === "shell" && ex.shell ? SHELL_HINT[ex.shell] : undefined;
+  if (ex?.kind === "shell" && ex.shell) return SHELL_HINT[ex.shell];
+  return capabilityTag(tool) ? t("这次调用解析到的能力目录条目") : undefined;
 };
 
 // Only the categories the spec gives a colour to; the rest stay neutral.

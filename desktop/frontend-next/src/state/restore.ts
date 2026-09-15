@@ -2,12 +2,13 @@
 // and on a gap. Two authorities answer it — the transcript is the record, the
 // task list is the kernel's.
 
-import { fromHistory, type PlanStep, type SessionEvent } from "./session";
+import { fromHistory, todoStep, type PlanStep, type SessionEvent } from "./session";
 import type { AgentPort, HostTodo } from "../port/port";
 
-// planFromHost maps the kernel's list onto what the panel draws.
+/** The same mapping the streamed path uses, so the two ingest routes cannot
+ *  disagree about a step's state. */
 export function planFromHost(todos: HostTodo[]): PlanStep[] {
-  return todos.map((t) => ({ text: t.content, done: t.status === "completed" }));
+  return todos.map(todoStep);
 }
 
 // restoreSession reads both halves. The task list is not derivable from the

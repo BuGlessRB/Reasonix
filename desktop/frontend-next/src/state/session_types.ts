@@ -97,10 +97,27 @@ export interface Waiting {
   retry?: { attempt: number; max: number; scope?: "headers" | "stream"; since: number };
 }
 
+/** complete_step moves an item to completed and promotes the next one itself,
+ *  so which step is underway is the kernel's answer. A list it has not started
+ *  has no current step, which is not the first one being in hand. */
+export type TodoStatus = "pending" | "in_progress" | "completed";
+
 export interface PlanStep {
   text: string;
-  done: boolean;
+  status: TodoStatus;
+  /** The "-ing" wording the kernel keeps for while this is the step in hand. */
+  activeForm?: string;
+  /** Depth in the kernel's list. Sub-steps read as peers without it. */
+  level?: number;
 }
+
+export const stepDone = (s: PlanStep) => s.status === "completed";
+
+/** Which step the kernel says is underway, or -1. Never "the first one not
+ *  ticked": the host can leave earlier items pending and start a later one. */
+export const currentStep = (steps: PlanStep[]) => steps.findIndex((s) => s.status === "in_progress");
+
+export const stepLabel = (s: PlanStep) => (s.status === "in_progress" && s.activeForm?.trim() ? s.activeForm : s.text);
 
 export interface RuntimeNotice {
   id: string;

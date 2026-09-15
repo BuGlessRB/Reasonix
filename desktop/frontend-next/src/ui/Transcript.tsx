@@ -18,6 +18,7 @@ import { NoticeCard } from "./cards/NoticeCard";
 import { RememberCard } from "./cards/RememberCard";
 import { ExtensionCard } from "./cards/ExtensionCard";
 import { Rail, type RailMark } from "./Rail";
+import { clearFind, paintFind } from "./findpaint";
 
 interface Props {
   items: Item[];
@@ -33,6 +34,8 @@ interface Props {
   // node you clicked. The nonce, not the id, is what makes asking twice land
   // twice; null while nothing has been asked for.
   focus: { call: string; n: number } | null;
+  find?: { id: string; n: number } | null;
+  query?: string;
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => Promise<void>;
   onPlan: (itemId: string, id: string, action: PlanAction) => Promise<void>;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => Promise<void>;
@@ -53,6 +56,7 @@ interface Props {
   onOpenProject: () => void;
   onKeepHere: () => void;
   checkpoints: Map<string, Checkpoint>;
+  onResend?: (turn: number, text: string) => Promise<void>;
   onPrepareRewind: (turn: number, scope: RewindScope) => Promise<RewindPlan>;
   onPrepareFileRevert: (path: string) => Promise<RewindPlan>;
   onCommitFileRevert: (planId: string, resolution?: string) => Promise<RewindResult>;
@@ -108,7 +112,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, onApprove, onPlan, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
+export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, find, query = "", onApprove, onPlan, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onResend, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -188,6 +192,18 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   // Zero, not now: this stamp is what lets the bottom marker resume the follow,
   // and a gesture that just left the bottom must not also license going back to
   // it. Only a downward one does.
+  // Painted from the scroller's own handler: a second scroll listener is a
+  // second per-frame cost on the one element that already has one.
+  const painting = useRef(0);
+  const repaint = useRef(() => {});
+  repaint.current = () => {
+    if (painting.current) return;
+    painting.current = requestAnimationFrame(() => {
+      painting.current = 0;
+      if (!hidden) paintFind(flow.current, query, find?.id ?? null);
+    });
+  };
+
   const release = useCallback(() => {
     gesture.current = 0;
     if (!at.current) return;
@@ -214,6 +230,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       const top = root.scrollTop;
       const up = top < wasAt.current - 2;
       wasAt.current = top;
+      repaint.current();
       if (!up || self.current || !at.current || performance.now() < quiet.current) return;
       if (root.scrollHeight - top - root.clientHeight <= 48) return;
       release();
@@ -415,6 +432,29 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
     if (where) land(where.block, where.into, `[data-call="${CSS.escape(focus.call)}"]`);
   }, [hidden, focus, callBlock, land]);
 
+  const rowBlock = useMemo(() => {
+    const at = new Map<string, { block: number; into: number }>();
+    blocks.forEach((block, b) =>
+      block.forEach((it, i) => at.set(it.id, { block: b, into: block.length > 1 ? i / block.length : 0 })),
+    );
+    if (live) at.set(live.id, { block: blocks.length - 1, into: 1 });
+    return at;
+  }, [blocks, live]);
+
+  const found = useRef(0);
+  useEffect(() => {
+    if (hidden || !find || found.current === find.n) return;
+    found.current = find.n;
+    const where = rowBlock.get(find.id);
+    if (where) land(where.block, where.into, `[data-item="${CSS.escape(find.id)}"]`);
+  }, [hidden, find, rowBlock, land]);
+
+  useEffect(() => {
+    if (hidden) return clearFind();
+    paintFind(flow.current, query, find?.id ?? null);
+    return clearFind;
+  }, [hidden, query, find, items, revision]);
+
   // Drawn is spent. Not "the animation finished" — reduced motion runs none,
   // and a card can leave the document before one ends, either of which would
   // leave the debt standing and let the fact arrive a second time later.
@@ -423,7 +463,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   }, [entering, onEntered]);
   const owed = useMemo(() => new Set(entering), [entering]);
 
-  const rowProps = { owed, onApprove, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
+  const rowProps = { owed, onApprove, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, takeovers, onExtSubmit, onResend, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
 
   // What you said, and where it sits. Derived from the same blocks the
   // transcript renders, so a mark always knows which block holds it — that is
@@ -547,6 +587,7 @@ interface RowHandlers {
   onExtInvoke: Props["onExtInvoke"];
   takeovers: Record<string, ExtensionSurface>;
   onExtSubmit: Props["onExtSubmit"];
+  onResend: Props["onResend"];
   onPrepareRewind: Props["onPrepareRewind"];
   onCommitRewind: Props["onCommitRewind"];
   onUndoRewind: Props["onUndoRewind"];
@@ -569,6 +610,7 @@ const Row = memo(function Row({
   takeovers,
   onExtSubmit,
   cp,
+  onResend,
   onPrepareRewind,
   onCommitRewind,
   onUndoRewind,
@@ -583,7 +625,7 @@ const Row = memo(function Row({
   // display:contents, so this frame carries the one-shot mark and the card
   // stays exactly the child of .chunk that its layout is written against.
   return (
-    <div className="enterbox" data-enter={enter ? "" : undefined}>
+    <div className="enterbox" data-item={it.id} data-enter={enter ? "" : undefined}>
       {(() => {
   switch (it.t) {
     case "user":
@@ -591,6 +633,7 @@ const Row = memo(function Row({
         <UserCard
           item={it}
           cp={cp}
+          onResend={onResend}
           onCancelQueued={onCancelQueued}
           onPrepareRewind={onPrepareRewind}
           onCommitRewind={onCommitRewind}

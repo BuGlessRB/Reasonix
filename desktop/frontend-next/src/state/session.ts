@@ -3,13 +3,15 @@ import { noteTool, type Executions } from "./executions";
 import { estimateTokens, sample } from "../port/tokens";
 import type { HistoryMessage } from "../port/port";
 import { plural, t } from "../i18n";
-import type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TurnTerminal, Waiting } from "./session_types";
+import { currentStep, stepDone, stepLabel } from "./session_types";
+import type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TodoStatus, TurnTerminal, Waiting } from "./session_types";
 import { foldUsage, quoteAmount } from "./usage";
 import { showsReceipt } from "./prefs";
 
 // The types live next door; this stays their way in, so no reader of a
 // session has to know they were split off.
-export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TurnTerminal, Waiting };
+export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TodoStatus, TurnTerminal, Waiting };
+export { currentStep, stepDone, stepLabel };
 import { promptOpen, prompted, sealByReceipt } from "./prompts";
 import { nameTurnStart } from "./turn_start";
 import { appendText, foldMessage, sealSay } from "./say";
@@ -606,7 +608,7 @@ const stripControl = (s: string) => s.replace(CONTROL, "").trim();
 // if the next turn already has one. One definition, because the kernel keeps a
 // finished list and both ingest paths have to draw it the same.
 export function livePlan(steps: PlanStep[]): PlanStep[] {
-  return steps.length > 0 && steps.every((p) => p.done) ? [] : steps;
+  return steps.length > 0 && steps.every(stepDone) ? [] : steps;
 }
 
 // todo_write carries the plan as its payload; the panel needs it as state, not
@@ -618,13 +620,17 @@ export function parsePlan(tool: Tool): PlanStep[] | null {
     const v = JSON.parse(tool.args ?? "");
     const list = Array.isArray(v?.todos) ? v.todos : Array.isArray(v) ? v : null;
     if (!list) return null;
-    return list.map((x: { content?: string; status?: string }) => ({
-      text: String(x.content ?? ""),
-      done: x.status === "completed",
-    }));
+    return list.map(todoStep);
   } catch {
     return null;
   }
+}
+
+/** One row of the kernel's list, on either path it arrives by: a todo_write's
+ *  arguments, or GET /todos. Status is carried, never flattened. */
+export function todoStep(x: { content?: string; status?: string; activeForm?: string; level?: number }): PlanStep {
+  const status: TodoStatus = x.status === "completed" || x.status === "in_progress" ? x.status : "pending";
+  return { text: String(x.content ?? ""), status, activeForm: x.activeForm, level: x.level };
 }
 
 // The listing the kernel writes for the model: "- **title**" and, indented under

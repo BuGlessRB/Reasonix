@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import type { PlanStep } from "../state/session";
+import { currentStep, stepDone, stepLabel, type PlanStep } from "../state/session";
 import type { TrajRow } from "../state/trajectory";
 import { categoryOf } from "./icons";
 import { Spans } from "./Trajectory";
@@ -36,8 +36,8 @@ interface Props {
 
 export function Task({ goal, ask, plan, rows, t0, running, blocked, elapsed, onTrajectory, onLatest, onSummary }: Props) {
   const total = plan.length;
-  const done = plan.filter((s) => s.done).length;
-  const now = plan.findIndex((s) => !s.done);
+  const done = plan.filter(stepDone).length;
+  const now = currentStep(plan);
   const state = blocked
     ? { text: t("等待确认"), tone: "accent" }
     : running
@@ -78,9 +78,14 @@ export function Task({ goal, ask, plan, rows, t0, running, blocked, elapsed, onT
         ) : (
           <ol>
             {plan.map((st, i) => (
-              <li key={`${st.text}#${i}`} data-done={st.done ? "" : undefined} data-now={i === now ? "" : undefined}>
+              <li
+                key={`${st.text}#${i}`}
+                data-done={stepDone(st) ? "" : undefined}
+                data-now={i === now ? "" : undefined}
+                style={st.level ? { marginInlineStart: Math.min(st.level, 4) * 14 } : undefined}
+              >
                 <i className="mk" aria-hidden="true" />
-                <span className="tx">{st.text}</span>
+                <span className="tx">{stepLabel(st)}</span>
                 {i === now && running && <span className="st">{t("进行中")}</span>}
               </li>
             ))}

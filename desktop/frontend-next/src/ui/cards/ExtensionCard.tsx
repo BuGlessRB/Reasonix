@@ -229,6 +229,8 @@ function Field({
         {f.required && <i className="req">*</i>}
       </div>
       <input
+        aria-label={label}
+        aria-required={f.required || undefined}
         value={value === undefined || value === null ? "" : String(value)}
         readOnly={sealed}
         onChange={(e) => onChange(e.target.value)}

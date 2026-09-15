@@ -96,6 +96,7 @@ export function App({ hub }: { hub: HubPort }) {
   const [railW, setRailW] = useState(() => widthOf(RAIL));
   const [sideW, setSideW] = useState(() => widthOf(SIDE));
   const [report, setReport] = useState<PaneReport>(NO_REPORT);
+  const [findPulse, setFindPulse] = useState(0);
   const [error, setError] = useState("");
   // false = closed, true = open at its last section, a string = open there.
   const [settings, setSettings] = useState<string | boolean>(false);
@@ -460,6 +461,7 @@ export function App({ hub }: { hub: HubPort }) {
       { chord: "\\", action: "rail.toggle", run: () => setRail((v) => !v) },
       { chord: "\\", shift: true, action: "inspector.toggle", run: () => chooseSide((v) => !v) },
       { chord: ",", action: "chrome.settings", run: showPrefs },
+      { chord: "f", action: "transcript.find", run: () => setFindPulse((n) => n + 1) },
     ],
     [showPrefs, chooseSide],
   );
@@ -707,6 +709,7 @@ export function App({ hub }: { hub: HubPort }) {
                   // looks blank — the next history row would take it over.
                   onSessionChanged={reloadPanes}
                   pulse={settingsPulse}
+                  findPulse={findPulse}
                   needsProject={needsProject}
                   // 手输那条逃生口只在侧栏有一份 UI，所以先把栏打开再问。
                   onOpenProject={() => {

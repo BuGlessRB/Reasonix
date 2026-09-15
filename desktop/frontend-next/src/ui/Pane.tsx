@@ -5,10 +5,10 @@ import { t } from "../i18n";
 import { hasPendingDecision, posture, runState } from "./decisions";
 import { createPortal } from "react-dom";
 import { HttpError } from "../port/port";
-import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, Queue as QueueSnapshot, RewindScope, SessionStatus, WorkspaceChanges } from "../port/port";
+import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, Queue as QueueSnapshot, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import type { TrajectoryRead } from "../port/wire";
-import { initialState, localId, quoteAmount, reduce } from "../state/session";
+import { initialState, localId, quoteAmount, reduce, stepDone } from "../state/session";
 import { refreshTodos, restoreSession } from "../state/restore";
 import { pairCheckpoints } from "../state/checkpoints";
 import { initialTraj, reduceTraj } from "../state/trajectory";
@@ -18,6 +18,9 @@ import { Trajectory } from "./Trajectory";
 import { Graph } from "./Graph";
 import { Timeline } from "./Timeline";
 import { Composer } from "./Composer";
+import { Find } from "./Find";
+import { useFind } from "./usefind";
+import { useRewind } from "./userewind";
 import { Queue } from "./Queue";
 import { SlottedView } from "./SlottedView";
 import { Task } from "./Task";
@@ -68,6 +71,7 @@ interface Props {
   // its session. /status is polled only while a turn runs, so without this the
   // pane keeps reporting the posture it had when it opened.
   pulse: number;
+  findPulse: number;
   onSettings: () => void;
   // 这个窗口还没有人选过的项目文件夹。空转录是唯一说得出这句话的地方 —— 那里
   // 本来就在替一段还没开始的对话说明它该怎么开始。
@@ -76,7 +80,7 @@ interface Props {
   onKeepHere: () => void;
 }
 
-function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, onSettings, needsProject, onOpenProject, onKeepHere }: Props) {
+function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
   // The run graph is read, never accumulated: the kernel answers with what its
@@ -142,6 +146,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           // is the only precise signal for it — the turn boundary below is the
           // fallback for changes that arrive without an event.
           if (ev.kind === "mcp_surface_ready" || ev.kind === "extension_status") reloadMcp();
+          // complete_step advances the list host-side and writes no todo_write,
+          // so this frame is the only sign it moved — and it carries counters
+          // rather than the list, which is what the read beside it is for.
+          if (ev.kind === "todo_progress") void refreshTodos(port, dispatch);
           // A prompt opening or closing changes who the turn is waiting on, and
           // the kernel answers that in /status rather than in the frame. Same
           // shape the queue uses: the event says something moved, the read says
@@ -259,23 +267,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // A rewind rewrites the transcript and the files under it, so the whole
   // session is re-read rather than patched — the same treatment a session
   // switch gets, for the same reason.
-  const onPrepareRewind = useCallback((turn: number, scope: RewindScope) => port.prepareRewind(turn, scope), [port]);
-  const onCommitRewind = useCallback(
-    async (planId: string) => {
-      const result = await port.commitRewind(planId);
-      reloadSession();
-      return result;
-    },
-    [port, reloadSession],
-  );
-  const onUndoRewind = useCallback((transactionId: string) => port.undoRewind(transactionId).then(reloadSession), [port, reloadSession]);
-  // Reverting one file touches disk but not the transcript, so unlike a rewind
-  // it does not reload the session — only the file changes.
-  const onPrepareFileRevert = useCallback((path: string) => port.prepareFileRevert(path), [port]);
-  const onCommitFileRevert = useCallback(
-    (planId: string, resolution?: string) => port.commitFileRevert(planId, resolution),
-    [port],
-  );
+  const sendRef = useRef<(text: string) => Promise<unknown>>(async () => {});
+  const { onPrepareRewind, onCommitRewind, onUndoRewind, onResend, onPrepareFileRevert, onCommitFileRevert } =
+    useRewind(port, reloadSession, sendRef);
 
   // Both of these read only the user and tool cards, so they key off the
   // revision rather than the items array: a streamed answer leaves every card
@@ -409,6 +403,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     },
     [port, s.running, refreshStatus, fail],
   );
+  sendRef.current = submit;
 
   // The queue as the kernel holds it. The frame says only that it moved, so the
   // answer is read back whole — which is also what puts another window's lines,
@@ -570,6 +565,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // changes from one to another.
   const showView = useCallback((to: PaneView) => swapping(() => setTab(to), "tab"), []);
 
+  const onFindOpen = useCallback(() => showView("flow"), [showView]);
+  const find = useFind(s.items, findPulse, active, onFindOpen);
+
   // The timeline's tab is drawn only while the run has a graph, so a session
   // that delegated nothing is not offered an empty page. Leaving someone parked
   // on a tab that just lost its button is the other half of that.
@@ -609,14 +607,18 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       <PaneNav
         view={tab}
         onPick={showView}
-        done={s.plan.filter((x) => x.done).length}
+        done={s.plan.filter(stepDone).length}
         steps={s.plan.length}
         nodes={exec.graph.nodes.length}
         rows={traj.rows.length}
       />
 
+      <Find find={find} />
+
       <Transcript
         items={s.items}
+        find={find.at}
+        query={find.query}
         entering={s.entranceOwed}
         onEntered={(ids) => dispatch({ kind: "__entered", ids } as never)}
         revision={s.revision}
@@ -636,6 +638,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onExtInvoke={onExtInvoke}
         onExtSubmit={onExtSubmit}
         checkpoints={paired}
+        onResend={s.running ? undefined : onResend}
         onPrepareRewind={onPrepareRewind}
         onCommitRewind={onCommitRewind}
         onUndoRewind={onUndoRewind}

@@ -75,6 +75,8 @@
     --deleg: oklch(50.4% .092 211); --deleg-wash: oklch(94.8% .020 210);
     --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28); --err-fg: #FFF;
     --warn: oklch(57.5% .118 45); --add: var(--ok); --del: var(--err);
+    --syn-key: oklch(47% .155 305); --syn-str: oklch(45% .105 150);
+    --syn-num: oklch(50% .125 58); --syn-fn: oklch(46% .135 255);
     /* A hue used as a surface and as text on a tint of itself needs two values.
        The ink is the reading value on a tint of the hue, while the base stays
        the fill. In dark they coincide, because there the tint is darker than
@@ -218,6 +220,8 @@
     --deleg: oklch(68.1% .105 210); --deleg-wash: oklch(21% .024 210);
     --ok: oklch(70.6% .120 155); --err: oklch(66.5% .150 27); --err-fg: #1A0604;
     --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
+    --syn-key: oklch(78% .125 305); --syn-str: oklch(78% .105 150);
+    --syn-num: oklch(80% .105 58); --syn-fn: oklch(76% .110 255);
     --accent-ink: var(--accent); --warn-ink: var(--warn);
     --ok-ink: var(--ok); --err-ink: var(--err);
     --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181;
@@ -240,6 +244,8 @@
     --deleg: oklch(68.1% .105 210); --deleg-wash: oklch(21% .024 210);
     --ok: oklch(70.6% .120 155); --err: oklch(66.5% .150 27); --err-fg: #1A0604;
     --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
+    --syn-key: oklch(78% .125 305); --syn-str: oklch(78% .105 150);
+    --syn-num: oklch(80% .105 58); --syn-fn: oklch(76% .110 255);
     --accent-ink: var(--accent); --warn-ink: var(--warn);
     --ok-ink: var(--ok); --err-ink: var(--err);
     --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181;
@@ -260,6 +266,8 @@
     --deleg: oklch(50.4% .092 211); --deleg-wash: oklch(94.8% .020 210);
     --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28); --err-fg: #FFF;
     --warn: oklch(57.5% .118 45); --add: var(--ok); --del: var(--err);
+    --syn-key: oklch(47% .155 305); --syn-str: oklch(45% .105 150);
+    --syn-num: oklch(50% .125 58); --syn-fn: oklch(46% .135 255);
     --accent-ink: #8B5100; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
     /* 构成条的五段是一组分类色，不是状态色。它们此前借的是 deleg/net/accent/
        ok/faint —— 那五个在这套配色里各有各的意思（派出去的、在自主跑、该你了、

@@ -65,12 +65,27 @@ export type RewindScope = "code" | "conversation" | "both";
 // turn also changed things outside the snapshot, typically via bash.
 // What POST /rewind/commit answers. transactionId is what undo needs, and
 // undoAvailable says whether the kernel can still reverse it.
+export interface RewindFileStage {
+  path: string;
+  phase: string;
+  action?: string;
+  error?: string;
+  compensated?: boolean;
+  compensateError?: string;
+}
+
 export interface RewindResult {
   ok?: boolean;
   transactionId?: string;
   undoAvailable?: boolean;
   deleted?: string[];
   written?: string[];
+  files?: RewindFileStage[];
+  conversationOk?: boolean;
+  error?: string;
+  conflicts?: RewindConflict[];
+  coverage?: string;
+  coverageGaps?: { reason: string; detail: string; tool?: string }[];
 }
 
 export interface RewindPlan {

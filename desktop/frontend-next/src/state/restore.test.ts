@@ -42,8 +42,8 @@ describe("where the task panel gets its list", () => {
       { content: "item two", status: "in_progress" },
     ]));
     expect(run([ev]).plan).toEqual([
-      { text: "item one", done: true },
-      { text: "item two", done: false },
+      { text: "item one", status: "completed", activeForm: undefined, level: undefined },
+      { text: "item two", status: "in_progress", activeForm: undefined, level: undefined },
     ]);
   });
 
@@ -57,20 +57,20 @@ describe("where the task panel gets its list", () => {
   // A failed read is not a kernel with no plan, and blanking the panel would
   // state something the window does not know.
   it("leaves the panel alone when the list cannot be read", async () => {
-    const shown = run([{ kind: "__todos", plan: [{ text: "item one", done: false }] }]);
+    const shown = run([{ kind: "__todos", plan: [{ text: "item one", status: "pending" }] }]);
     const ev = await restoreSession(port(new Error("offline")));
-    expect(run([ev], shown).plan).toEqual([{ text: "item one", done: false }]);
+    expect(run([ev], shown).plan).toEqual([{ text: "item one", status: "pending" }]);
   });
 
   // A refused list is still a call in the transcript and an event on the wire.
   // Its payload is backed by no host state, and nothing later contradicts it.
   it("ignores a todo_write the kernel refused", () => {
-    const shown = run([{ kind: "__todos", plan: [{ text: "item one", done: false }] }]);
+    const shown = run([{ kind: "__todos", plan: [{ text: "item one", status: "pending" }] }]);
     const after = run(
       [{ kind: "tool_result", tool: { id: "t9", name: "todo_write", args: WROTE, err: "rejected", readOnly: true } } as SessionEvent],
       shown,
     );
-    expect(after.plan).toEqual([{ text: "item one", done: false }]);
+    expect(after.plan).toEqual([{ text: "item one", status: "pending" }]);
   });
 
   // A finished list is spent whichever ingest path carries it: the kernel keeps
@@ -83,6 +83,9 @@ describe("where the task panel gets its list", () => {
   it("re-reads only the list when asked", async () => {
     let got: SessionEvent | null = null;
     await refreshTodos(port([{ content: "item two", status: "in_progress" }]), (ev) => void (got = ev));
-    expect(got).toEqual({ kind: "__todos", plan: [{ text: "item two", done: false }] });
+    expect(got).toEqual({
+      kind: "__todos",
+      plan: [{ text: "item two", status: "in_progress", activeForm: undefined, level: undefined }],
+    });
   });
 });
