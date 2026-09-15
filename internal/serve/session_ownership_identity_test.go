@@ -394,3 +394,41 @@ func TestSessionsFoldsEngineMirrorOfLegacyTranscript(t *testing.T) {
 	}
 	retireExclusiveForeground(t, ctrl, service)
 }
+
+// TestIdentityStatusAnswersFreeWriterWithRouteMatch pins the serve-restart
+// recovery: a spectator identity whose writer exited and whose mirror entry
+// was lost to the restart must get an explicit route-matching status with
+// takenOver=false — the foreground snapshot names a different session and a
+// pinned tab would discard it, leaving the banner stuck until re-attach.
+func TestIdentityStatusAnswersFreeWriterWithRouteMatch(t *testing.T) {
+	_, ctrl, service, current := newExclusiveSessionServe(t)
+	lifecycle := newIdentityLifecycleServe(t, ctrl, current)
+	ts := httptest.NewServer(lifecycle.Handler())
+	defer ts.Close()
+	route := "session-id:" + current.SessionID
+
+	// Move the foreground off the identity and free its writer, mimicking a
+	// post-restart world where nothing holds the session.
+	if _, err := ctrl.BindFreshSession(t.Context(), "elsewhere"); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Close(t.Context(), current); err != nil {
+		t.Fatalf("release identity writer: %v", err)
+	}
+
+	resp, raw := serveBody(t, http.MethodGet, ts.URL+"/status?session="+route, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status code = %d body %s", resp.StatusCode, raw)
+	}
+	var status map[string]any
+	if err := json.Unmarshal([]byte(raw), &status); err != nil {
+		t.Fatal(err)
+	}
+	if sid, _ := status["sessionId"].(string); sid != current.SessionID {
+		t.Fatalf("status sessionId = %v, want the queried identity", status["sessionId"])
+	}
+	if taken, _ := status["takenOver"].(bool); taken {
+		t.Fatalf("free-writer identity status still reports takenOver: %v", status)
+	}
+	retireExclusiveForeground(t, ctrl, service)
+}

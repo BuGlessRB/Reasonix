@@ -1251,7 +1251,17 @@ func (s *Server) statusIdentityOverride(w http.ResponseWriter, raw string) bool 
 		writeJSON(w, s.identityStatusView(ref, dir))
 		return true
 	}
-	return false
+	// The identity is neither run here nor written anywhere: a spectator tab
+	// pinned by a writer that has since exited (typically around a serve
+	// restart, whose fresh registry has no mirror to auto-reclaim). Answer an
+	// explicit route-matching view with takenOver=false — falling through to
+	// the foreground snapshot would name a different session and the desktop
+	// discards foreign-route payloads while pinned, leaving the banner stuck
+	// until a manual re-attach.
+	view := s.identityStatusView(ref, dir)
+	view["takenOver"] = false
+	writeJSON(w, view)
+	return true
 }
 
 // identityColdHistory reads a final-format identity's committed messages
