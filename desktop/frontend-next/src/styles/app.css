@@ -1568,6 +1568,7 @@
     font: var(--w-reg) var(--fs-ui)/19px var(--mono); color: var(--muted); overflow-x: auto;
   }
   .term-l { white-space: pre }
+  .term[data-one] { margin: 5px 0 0; padding: 0; background: none; border-radius: 0 }
   .term .ok { color: var(--ok) } .term .er { color: var(--err) } .term .dim { color: var(--ghost) }
 
   details > summary { cursor: pointer; list-style: none }
@@ -1599,7 +1600,7 @@
   .out-clip { position: relative }
 
   .call:not([data-running]):not(:has(> .c > .hl .fail)) .out-clip { --out-peek: 5.5rem }
-  .call:not([data-running]):not(:has(> .c > .hl .fail)) .out-clip:not([data-open])::after { height: 2rem }
+  .call:not([data-running]):not(:has(> .c > .hl .fail)) .out-clip[data-over]:not([data-open])::after { height: 2rem }
   .out-body {
     max-height: var(--out-peek, 16rem); overflow: auto;
     transition: max-height var(--t-panel) var(--ease-out);
@@ -1608,12 +1609,12 @@
   .out-clip > .out-body > .term { width: max-content; min-width: 100%; overflow: visible; box-sizing: border-box }
 
   .out-clip[data-open] .out-body { max-height: max-content }
-  .out-clip::after {
+  .out-clip[data-over]::after {
     content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 3rem; pointer-events: none;
     background: linear-gradient(to bottom, transparent, var(--face-sunk));
     transition: opacity var(--t-card) var(--ease-out);
   }
-  .out-clip[data-open]::after { opacity: 0 }
+  .out-clip[data-open][data-over]::after { opacity: 0 }
   .out-clip { timeline-scope: --out-x }
   .out-clip > .out-body { scroll-timeline: --out-x inline }
   .out-clip::before {
@@ -1664,7 +1665,9 @@
   .par::after { content: ""; flex: 1; height: 1px; background: var(--hair) }
 
   .dif { margin-top: 7px; border: 1px solid var(--hair); border-radius: var(--r-sm); overflow: hidden }
-  .dif-hd { display: flex; gap: 9px; padding: 6px 11px; background: var(--overlay); font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .dif-hd { display: flex; align-items: center; gap: 9px; padding: 6px 11px; background: var(--overlay); font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .dif-hd > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .dif-hd > :is(.ro, .dif-act) { flex: none }
   .dif-hd .ro { margin-left: auto; font-size: var(--fs-micro); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--ghost) }
 
   .dlwrap { overflow-x: auto; overscroll-behavior-x: contain }

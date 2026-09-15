@@ -192,11 +192,11 @@ const SETTLED = 700;
 // worth, so the block arrives whole.
 const SPLIT_MAX = 300;
 
-export function Term({ text }: { text: string }) {
+export function Term({ text, one }: { text: string; one?: boolean }) {
   const lines = text.split("\n");
   if (lines.length > SPLIT_MAX) return <pre className="term">{text}</pre>;
   return (
-    <pre className="term">
+    <pre className="term" data-one={one ? "" : undefined}>
       {lines.map((l, i) => (
         <span
           className="term-l"
@@ -275,7 +275,10 @@ function shapeFor(name: string, text: string): ReactNode {
     const rows = parseSearchResults(text);
     if (rows) return <Hits rows={rows} />;
   }
-  return <Term text={text} />;
+  // A surface exists to cut a block of machine text into the page. One line is
+  // not a block: it costs the same 42px of padded ground as forty do, and a
+  // settled call whose whole output is "ok" then weighs what a test run does.
+  return text.includes("\n") ? <Term text={text} /> : <Term text={text} one />;
 }
 
 // One visual budget for every shape above, carried by CSS rather than counted
@@ -318,7 +321,7 @@ function Clip({ id, deps, children }: { id?: string; deps?: unknown; children: R
     if (id) opened.set(id, next);
   };
   return (
-    <div className="out-clip" data-open={open ? "" : undefined}>
+    <div className="out-clip" data-open={open ? "" : undefined} data-over={over ? "" : undefined}>
       <div className="out-body" ref={body}>
         {children}
       </div>

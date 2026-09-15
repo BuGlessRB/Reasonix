@@ -115,7 +115,7 @@ export function DiffView({ diff, path, onPrepare, onCommit }: Props) {
   return (
     <div className="dif">
       <div className="dif-hd">
-        <span>{path ?? t("改动")}</span>
+        <span title={path ?? undefined}>{path ?? t("改动")}</span>
         {outcome === "reverted" ? (
           <span className="ro">{t("已还原")}</span>
         ) : outcome === "kept" ? (
