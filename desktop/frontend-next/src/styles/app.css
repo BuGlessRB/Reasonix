@@ -1667,7 +1667,7 @@
   .dif { margin-top: 7px; border: 1px solid var(--hair); border-radius: var(--r-sm); overflow: hidden }
   .dif-hd { display: flex; align-items: center; gap: 9px; padding: 6px 11px; background: var(--overlay); font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
   .dif-hd > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .dif-hd > :is(.ro, .dif-act) { flex: none }
+  .dif-hd > :is(.ro, .dif-act) { flex: none; margin-left: auto }
   .dif-hd .ro { margin-left: auto; font-size: var(--fs-micro); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--ghost) }
 
   .dlwrap { overflow-x: auto; overscroll-behavior-x: contain }

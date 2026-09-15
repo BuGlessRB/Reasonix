@@ -28,7 +28,11 @@ type ShellExecution struct {
 	// run that did not succeed. Both streams share one pipe so model-visible
 	// interleaving stays in child-write order, which rules out a stderr-only
 	// tail. At most 16 KiB; never a shell executable absolute path.
-	OutputTail   string `json:"outputTail,omitempty"`
+	OutputTail string `json:"outputTail,omitempty"`
+	// Subject is the command with its leading environment assignments dropped,
+	// set only when dropping them changed it. Never a replacement for the
+	// command: authorization surfaces carry the full text.
+	Subject      string `json:"subject,omitempty"`
 	MutationRisk string `json:"mutationRisk,omitempty"` // none | not_started | may_have_completed | may_be_partial | unknown
 	Verification string `json:"verification,omitempty"` // not_verification | not_run | passed | failed
 	// PipeStatus is each stage's exit status for a run the host asked bash to

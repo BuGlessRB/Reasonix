@@ -54,15 +54,22 @@ export interface Profile {
 export interface Execution {
   kind?: string;
   shell?: string;
+  /** PowerShell 5.1 and 7 are two different languages to write a command in,
+   *  and the shell name alone cannot say which one answered. */
+  shellVersion?: string;
   platform?: string;
+  /** False on Windows PowerShell 5.1, where `&&` is a syntax error. */
+  supportsAndAnd?: boolean;
   state?: string;
   failurePhase?: string;
   exitCode?: number;
   outputTail?: string;
+  /** The command with its leading environment assignments dropped, when
+   *  dropping them changed it. What a row names; never what authorised it. */
+  subject?: string;
   mutationRisk?: string;
   verification?: string;
   durationMs?: number;
-  contextTokens?: number;
 }
 
 // How a result was fitted into the model's context, absent when it arrived

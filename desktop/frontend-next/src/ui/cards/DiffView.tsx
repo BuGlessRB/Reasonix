@@ -6,6 +6,8 @@ import type { RewindPlan, RewindResult } from "../../port/port";
 interface Props {
   diff: string;
   path?: string;
+  /** The surface around this diff already names the file. */
+  named?: boolean;
   onPrepare?: (path: string) => Promise<RewindPlan>;
   onCommit?: (planId: string, resolution?: string) => Promise<RewindResult>;
 }
@@ -63,7 +65,7 @@ export function parseDiff(diff: string): Row[] {
   return out;
 }
 
-export function DiffView({ diff, path, onPrepare, onCommit }: Props) {
+export function DiffView({ diff, path, named, onPrepare, onCommit }: Props) {
   const lines = parseDiff(diff);
   const [plan, setPlan] = useState<RewindPlan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -115,7 +117,10 @@ export function DiffView({ diff, path, onPrepare, onCommit }: Props) {
   return (
     <div className="dif">
       <div className="dif-hd">
-        <span title={path ?? undefined}>{path ?? t("改动")}</span>
+        {/* The card's own headline already names the file; saying it again
+            here truncates one fact twice. Where there is no headline — the
+            change preview — this row is the only thing that names it. */}
+        <span title={path ?? undefined}>{named ? "" : (path ?? t("改动"))}</span>
         {outcome === "reverted" ? (
           <span className="ro">{t("已还原")}</span>
         ) : outcome === "kept" ? (

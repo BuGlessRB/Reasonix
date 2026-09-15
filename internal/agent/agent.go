@@ -1643,10 +1643,10 @@ func toEventShellExecution(in *tool.ShellExecution, durationMs int64) *event.She
 		SupportsAndAnd: in.SupportsAndAnd,
 		State:          in.State,
 		FailurePhase:   in.FailurePhase,
-		OutputTail:     in.OutputTail,
-		MutationRisk:   in.MutationRisk,
-		Verification:   in.Verification,
-		DurationMs:     in.DurationMs,
+		OutputTail:     in.OutputTail, Subject: in.Subject,
+		MutationRisk: in.MutationRisk,
+		Verification: in.Verification,
+		DurationMs:   in.DurationMs,
 	}
 	if out.DurationMs == 0 && durationMs > 0 {
 		out.DurationMs = durationMs

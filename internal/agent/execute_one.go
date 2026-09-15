@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/permission"
 	"reasonix/internal/planmode"
 	"reasonix/internal/provider"
+	"reasonix/internal/shellrun"
 	"reasonix/internal/tool"
 )
 
@@ -675,6 +676,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		} else if execution != nil && execution.Verification == "" {
 			execution.Verification = tool.ShellVerificationNotVerification
 		}
+		annotateShellSubject(execution, runArgs)
 		// Sole opaque inline interpreters are allowed outside Delivery but cannot
 		// prove mutation completeness.
 		if execution != nil && evidence.BashCommandMayBeOpaqueMutation(runArgs) &&
@@ -745,4 +747,19 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		out.rawOutput = result
 	}
 	return out
+}
+
+// annotateShellSubject records the part of the command that names what it runs,
+// when an assignment prefix stands in front of it.
+func annotateShellSubject(execution *tool.ShellExecution, args json.RawMessage) {
+	if execution == nil || execution.Subject != "" {
+		return
+	}
+	cmd := bashCommandFromArgs(args)
+	if cmd == "" {
+		return
+	}
+	if subject, cut := shellrun.OperativeCommand(cmd); cut {
+		execution.Subject = subject
+	}
 }

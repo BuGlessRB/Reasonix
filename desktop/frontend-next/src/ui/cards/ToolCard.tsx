@@ -68,7 +68,12 @@ export function ToolCard({
   // Showing that count is the difference between a card that is visibly filling
   // and one that sits blank until the whole file arrives at once.
   const streaming = running && !tool.args && (tool.argChars ?? 0) > 0;
-  const arg = tool.name === "todo_write" ? "" : streaming ? `${tokens(tool.argChars!)} 字符` : shortArgs(tool.args ?? "");
+  // The kernel says which part of a shell command names what it runs, because
+  // only its parser can: a row that spends sixty characters on an assignment
+  // prefix never reaches the verb. The whole value stays one hover away.
+  const said = tool.execution?.subject?.trim() || tool.args || "";
+  const whole = argOf(tool.args, "command", "path", "file_path", "pattern", "query", "url");
+  const arg = tool.name === "todo_write" ? "" : streaming ? `${tokens(tool.argChars!)} 字符` : shortArgs(said);
   // A shell result carries its exit status separately from stdout, and stdout
   // alone cannot say whether the command worked.
   const bad = toolFailed(tool);
@@ -118,7 +123,11 @@ export function ToolCard({
           {tag && <span className="tag" title={tagHint(tool)}>{tag}</span>}
           {/* The row ellipsises it below about 1000px, and what gets cut is the
               command. A title is the only way back to it. */}
-          {arg && <span className={streaming ? "arg shim" : "arg"} title={streaming ? undefined : arg}>{arg}</span>}
+          {arg && (
+            <span className={streaming ? "arg shim" : "arg"} title={streaming ? undefined : whole || arg}>
+              {arg}
+            </span>
+          )}
           {bad && <span className="fail">{badLabel}</span>}
           <Cost tools={[tool]} running={running} />
         </div>
@@ -137,6 +146,7 @@ export function ToolCard({
           {tool.diff && (
             <DiffView
               diff={tool.diff}
+              named
               path={argOf(tool.args, "path", "file_path")}
               onPrepare={onPrepareFileRevert}
               onCommit={onCommitFileRevert}

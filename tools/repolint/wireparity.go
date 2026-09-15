@@ -98,6 +98,7 @@ var mirroredWireTypes = []wireMirror{
 	// the long pause after the last byte is indistinguishable from a hang.
 	{"internal/update/progress.go", "Progress", tsVersionFile, "UpdateProgress"},
 	{"internal/checkpoint/types.go", "RewindResult", tsSessionFile, "RewindResult"},
+	{"internal/eventwire/wire.go", "ShellExecution", tsWireFile, "Execution"},
 }
 
 type wireMirror struct {
