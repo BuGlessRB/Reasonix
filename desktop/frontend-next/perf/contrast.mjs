@@ -71,6 +71,20 @@ const sweep = async (page, scheme, where) =>
         return el.tagName.toLowerCase() + (cls ? "." + cls : "");
       };
 
+      const hex = (c) => "#" + c.slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, "0")).join("").toUpperCase();
+
+      // A signature is the dedup key, not an address: one class lands on four
+      // different grounds, and reporting the key alone says nothing about which.
+      const inside = (el) => {
+        const out = [];
+        for (let n = el.parentElement; n && n !== document.body && out.length < 4; n = n.parentElement) {
+          const op = getComputedStyle(n).opacity;
+          const bg = rgba(getComputedStyle(n).backgroundColor);
+          out.push(sig(n) + (op !== "1" ? `@${op}` : "") + (bg[3] > 0 ? "#bg" : ""));
+        }
+        return out.join(" < ");
+      };
+
       // 记号也要看得见：一个语义色被画在屏幕上，就是在说一件事，而 WCAG 1.4.11
       // 给非文本的界面部件定的是 3:1。范围不按"细不细"划 —— 那会把分隔线也圈
       // 进来，而发丝线本来就该若隐若现 —— 按**画的是不是语义色**划：accent /
@@ -110,6 +124,9 @@ const sweep = async (page, scheme, where) =>
         const ground = groundOf(el.parentElement ?? el);
         const bg = alpha >= 1 ? groundOf(el) : over([...groundOf(el).slice(0, 3), alpha], ground);
         const fgRaw = (rgba(st.color));
+        // Fully transparent text is not painted, so it has no contrast. Whether
+        // a hover-only control is reachable is a different judgement.
+        if (fgRaw[3] === 0) continue;
         const fg = over([fgRaw[0], fgRaw[1], fgRaw[2], fgRaw[3] * alpha], bg);
 
         const size = parseFloat(st.fontSize);
@@ -128,6 +145,9 @@ const sweep = async (page, scheme, where) =>
           need,
           size: Math.round(size * 10) / 10,
           text: (el.textContent || "").trim().slice(0, 18),
+          at: inside(el),
+          ink: hex(fg),
+          ground: hex(bg),
         });
       }
       return out;
@@ -135,10 +155,26 @@ const sweep = async (page, scheme, where) =>
     { scheme, where },
   );
 
+// Entrance animations are staggered and fill both ways, so an un-settled frame
+// measures a half-transparent one. Turning them off is what this asks: the
+// judgement is the steady-state colour, and every keyframe ends at opacity 1.
+const settled = async (page) => {
+  await page.addStyleTag({ content: "*, *::before, *::after { animation: none !important; transition: none !important }" });
+  await page.waitForTimeout(300);
+};
+
 const found = new Map();
 for (const scheme of ["light", "dark"]) {
   const page = await browser.newPage({ viewport: { width: 1512, height: 950 }, locale: "zh-CN", colorScheme: scheme });
   page.on("pageerror", (e) => fails.push("页面异常: " + e.message));
+  // The receipt card is off unless a machine asked for it, and an unrendered
+  // card is a palette nothing measures.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("rx-turn-receipt", "on");
+    } catch {
+    }
+  });
   await page.goto(PAGE, { waitUntil: "networkidle" });
   await page.waitForSelector(".compose");
   await page.waitForTimeout(400);
@@ -147,7 +183,7 @@ for (const scheme of ["light", "dark"]) {
   await page.evaluate(() => {
     const f = window.__feed;
     f({ kind: "turn_started" });
-    f({ kind: "text", text: "## 一段回答\n\n带 `行内代码`、**加重**，和一条列表：\n\n- 要点一\n" });
+    f({ kind: "text", text: "## 一段回答\n\n带 `行内代码`、**加重**，和一条列表：\n\n- 要点一\n\n```go\n// transient at the gateway\nfunc retry(n int) error {\n\tif n >= max {\n\t\treturn fmt.Errorf(\"gave up after %d\", n)\n\t}\n\treturn nil\n}\n```\n\n```\nplain\n```\n" });
     f({ kind: "message" });
     f({ kind: "tool_dispatch", tool: { id: "w1", name: "edit_file", args: '{"path":"a.css"}' } });
     // contextTokens 带上那个第二读数：.cost 的第二个 span 有自己的颜色规则，
@@ -157,12 +193,40 @@ for (const scheme of ["light", "dark"]) {
     f({ kind: "tool_result", tool: { id: "b1", name: "bash", args: '{"command":"go test ./..."}', err: "exit status 1", durationMs: 900 } });
     f({ kind: "approval_request", approval: { id: "a1", tool: "bash", subject: "rm -rf build && make" } });
     f({ kind: "ask_request", ask: { id: "q1", questions: [{ id: "q", header: "选一个", prompt: "走哪条路", options: [{ label: "方案 A" }, { label: "方案 B" }] }] } });
+    // Four cards is not the card set. Every kind carries its own ground and its
+    // own semantic colours, and ten of them had never been swept.
+    f({ kind: "tool_result", tool: { id: "d1", name: "edit_file", args: '{"path":"retry.go"}', diff: "@@ -1,2 +1,3 @@\n-\told()\n+\tif n < max {\n+\t\tnew()", durationMs: 90 } });
+    f({ kind: "tool_result", tool: { id: "p1", name: "todo_write", readOnly: true, output: "Todos updated", args: JSON.stringify({ todos: [
+      { content: "读历史", status: "completed" },
+      { content: "复现", status: "in_progress", activeForm: "正在复现" },
+      { content: "给修法", status: "pending", level: 1 },
+    ] }) } });
+    f({ kind: "tool_result", tool: { id: "r1", name: "read_file", readOnly: true, args: '{"path":"a.go"}', output: "  1→package a" } });
+    f({ kind: "tool_result", tool: { id: "r2", name: "read_file", readOnly: true, args: '{"path":"b.go"}', output: "  1→package b" } });
+    f({ kind: "tool_result", tool: { id: "g1", name: "read_file", readOnly: true, args: '{"path":"c.go"}', err: "no such file" } });
+    f({ kind: "tool_dispatch", tool: { id: "tk", name: "use_capability", resolvedName: "task", profile: { name: "security-review", count: 1 } } });
+    f({ kind: "tool_result", tool: { id: "tk-kid", parentId: "tk", name: "grep", readOnly: true, args: '{"pattern":"x"}', output: "a.go:1:x", contextTokens: 40 } });
+    f({ kind: "tool_result", tool: { id: "tk", name: "use_capability", resolvedName: "task", profile: { name: "security-review", count: 1 }, output: "没问题", durationMs: 8000 } });
+    f({ kind: "tool_result", tool: { id: "gl", name: "update_goal", args: JSON.stringify({ status: "blocked", reason: "缺少抓包" }), output: "ok" } });
+    f({ kind: "tool_result", tool: { id: "rm", name: "remember", output: "saved", args: JSON.stringify({ name: "n", title: "标题", description: "一句话", scope: "project", activation: "always", body: "正文" }) } });
+    f({ kind: "guardian_assessment", guardian: { id: "gd", tool: "bash", subject: "rm -rf /", outcome: "deny", risk_level: "critical", user_authorization: "unknown", rationale: "越界", duration_ms: 900 } });
+    for (const level of ["info", "warn", "error"]) f({ kind: "notice", level, text: `一条 ${level} 提示`, detail: "细节" });
+    f({ kind: "compaction_done", compaction: { trigger: "capacity", messages: 40, summary: "折叠了前 40 条。", sourceTokens: 90000, projectionTokens: 6000, coverageRequired: 6, coverageMissing: 2, boundary: "capacity", triggerTokens: 90000 } });
+    f({ kind: "extension_surface", extension: { pluginId: "cov", surfaceId: "c", kind: "card", card: { title: "覆盖率", text: "78.4%", fields: [{ key: "语句", value: "78.4%" }], progress: 0.78, actions: [{ actionId: "o", label: "打开" }] } } });
+    f({ kind: "extension_surface", extension: { pluginId: "dep", surfaceId: "f", kind: "form", form: { title: "部署", message: "选环境", fields: [{ key: "env", label: "环境", kind: "select", options: ["staging", "prod"], required: true }, { key: "note", label: "备注", kind: "input" }] } } });
+    f({ kind: "extension_surface", extension: { pluginId: "ci", surfaceId: "n", kind: "notification", notification: { title: "CI 失败", body: "一个用例红了", severity: "error" } } });
+    f({ kind: "extension_surface", extension: { pluginId: "bn", surfaceId: "v", kind: "view", view: { slot: "transcript", body: [
+      { kind: "text", value: "基准", tone: "strong" }, { kind: "kv", key: "P50", value: "12ms" },
+      { kind: "meter", label: "风险", progress: 0.3, tone: "ok" }, { kind: "pip", tone: "warn" },
+      { kind: "divider" }, { kind: "button", label: "明细", actionId: "d" },
+    ] } } });
+    f({ kind: "turn_done", receipt: { verdict: "partial", changes: [{ path: "a.go", reviewed: true }], verifications: [{ command: "go test ./...", passed: false, stale: true }], gaps: [{ kind: "unverified_mutation", detail: "改了没跑" }], risks: ["只在 darwin 验过"], unverified: ["Windows"], saysSomething: true } });
   });
-  await page.waitForTimeout(700);
+  await settled(page);
   for (const row of await sweep(page, scheme, "工作台")) found.set(row.key, row);
 
   await page.locator(".navbtn").nth(1).click();
-  await page.waitForTimeout(700);
+  await settled(page);
   for (const row of await sweep(page, scheme, "设置")) if (!found.has(row.key)) found.set(row.key, row);
   await page.close();
 }
@@ -173,6 +237,7 @@ const stale = [...KNOWN].filter((k) => !found.has(k));
 
 for (const r of rows.sort((a, b) => a.got - b.got)) {
   console.log(`  ${r.got.toFixed(2)} < ${r.need}  ${r.key}  ${r.size}px  ${r.where}  「${r.text}」${KNOWN.has(r.key) ? "  (在名单里)" : ""}`);
+  if (r.at) console.log(`        ${r.ink} on ${r.ground}   ${r.at}`);
 }
 check(`没有新的不达标处（名单 ${KNOWN.size} 条）`, fresh.length === 0, `新增 ${fresh.length} 处`);
 if (stale.length) console.log(`\n名单里已经修好的 ${stale.length} 条，删掉它们：\n  ` + stale.join("\n  "));

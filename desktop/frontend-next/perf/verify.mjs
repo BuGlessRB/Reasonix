@@ -43,12 +43,12 @@ await page.evaluate(async (n) => {
 }, 60);
 await page.waitForTimeout(500);
 
-const flow = page.locator("[data-pane="flow"]").first();
+const flow = page.locator('[data-pane="flow"]').first();
 const geom = () => flow.evaluate((el) => ({ top: el.scrollTop, h: el.scrollHeight, c: el.clientHeight }));
 
 // 1) 挂载的块真的画出来了，而不是留下一片占位空白。
-const cards = await page.locator("[data-pane="flow"] .call").count();
-const blocks = await page.locator("[data-pane="flow"] .chunk").count();
+const cards = await page.locator('[data-pane="flow"] .call').count();
+const blocks = await page.locator('[data-pane="flow"] .chunk').count();
 check("底部卡片已挂载", cards > 0, `${cards} 张 / ${blocks} 块`);
 check("远处的块已卸载", cards < blocks * 48, `挂载 ${cards}，全挂会是 ${blocks * 48}`);
 const visibleText = await flow.evaluate((el) => (el.innerText || "").trim().length);
@@ -94,7 +94,7 @@ const tallBefore = (await geom()).h;
 await flow.evaluate((el) => el.scrollTo({ top: el.scrollHeight * 0.08 }));
 await page.waitForTimeout(700);
 const upTop = await page.evaluate(() => {
-  const el = document.querySelector("[data-pane="flow"]");
+  const el = document.querySelector('[data-pane="flow"]');
   const cards = [...el.querySelectorAll(".call")];
   const r = el.getBoundingClientRect();
   return cards.filter((c) => { const b = c.getBoundingClientRect(); return b.bottom > r.top && b.top < r.bottom; }).length;
@@ -123,7 +123,7 @@ check("轨迹页有内容", trajRows > 50, `${trajRows} 行`);
 await page.screenshot({ path: `${SHOTS}/3-轨迹页.png` });
 await page.locator('[role="tab"]').nth(0).click();
 await page.waitForTimeout(400);
-const after = await page.locator("[data-pane="flow"] .call").count();
+const after = await page.locator('[data-pane="flow"] .call').count();
 check("切回后卡片仍在", after > 0, `${after} 张`);
 await page.screenshot({ path: `${SHOTS}/4-切回活动页.png` });
 

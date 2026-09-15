@@ -16,6 +16,14 @@ const rows = [];
 for (const g of GUARDS) {
   const path = `perf/${g}.mjs`;
   const src = readFileSync(path, "utf8");
+  // An exit code alone cannot tell a fired assertion from a file that does not
+  // parse: both are non-zero, and a guard that never ran reads as one that works.
+  try {
+    execFileSync("node", ["--check", path], { stdio: "pipe" });
+  } catch {
+    rows.push({ 守卫: g, "塞入必假断言后的退出码": "—", 结果: "解析不了，根本没在跑 ✗" });
+    continue;
+  }
   // check 的定义之后立刻塞一条假断言；各脚本的签名略有出入，找它的定义行。
   // 注入点选 fails 而不是 check：check 的签名各脚本不一，而「失败了要让退出码
   // 变红」这件事，每个脚本都是靠同一个数组表达的。
