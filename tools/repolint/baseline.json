@@ -7,7 +7,7 @@
     "complexity": 1496,
     "error-text": 12,
     "essay": 3217,
-    "file-size": 38188,
+    "file-size": 38171,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
@@ -1663,9 +1663,6 @@
     },
     "workers/crash-report/src/index.ts": {
       "file-size": 686
-    },
-    "workers/crash-report/src/stats.ts": {
-      "file-size": 17
     }
   }
 }
