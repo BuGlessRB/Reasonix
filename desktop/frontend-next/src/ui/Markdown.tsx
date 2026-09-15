@@ -34,7 +34,7 @@ const BASE_REHYPE = [rehypeRaw, [rehypeSanitize, schema]];
 // produce a formula, so it is fetched the first time one appears. No lookbehind
 // — older WebKit treats it as a syntax error and takes the whole page down.
 const MATH = /\$\$[\s\S]+?\$\$|\$[^\n$]+\$/;
-const GEMOJI = /:[a-zA-Z0-9_+-]+:/;
+const EMOJI = /:[a-zA-Z0-9_+-]+:/;
 // Only a fence that named its language. rehype-highlight's own detection stays
 // off: guessing a grammar paints prose as code.
 const FENCED = /^```[a-zA-Z]/m;
@@ -58,66 +58,41 @@ function normalizeMath(md: string) {
 }
 
 type Plugin = unknown;
-let katex: Plugin | null = null;
-let katexLoading: Promise<void> | null = null;
-let hljs: Plugin | null = null;
-let hljsLoading: Promise<void> | null = null;
-let gemoji: Plugin | null = null;
-let gemojiLoading: Promise<void> | null = null;
+type Slot = { plugin: Plugin | null; loading: Promise<void> | null; load: () => Promise<Plugin> };
 
-function useKatex(needed: boolean): Plugin | null {
-  const [plugin, setPlugin] = useState<Plugin | null>(katex);
-  useEffect(() => {
-    if (!needed || katex) return;
-    let alive = true;
-    katexLoading ??= Promise.all([import("rehype-katex"), import("katex/dist/katex.min.css")]).then(
-      ([mod]) => {
-        // Red source text beats an exception: the message stays readable and
-        // the render cannot take the window down with it.
-        katex = [mod.default, { throwOnError: false }];
-      },
-    );
-    // A failed chunk leaves the math as source text, which still reads.
-    void katexLoading.then(() => alive && setPlugin(() => katex)).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [needed]);
-  return plugin;
-}
-
-/** Grammars are fetched the first time a listing arrives, the shape katex rides.
- *  Classes, not inline colours: a highlighter writing its own hex values would
+const KATEX: Slot = {
+  plugin: null,
+  loading: null,
+  // Red source text beats an exception: the message stays readable and the
+  // render cannot take the window down with it.
+  load: () =>
+    Promise.all([import("rehype-katex"), import("katex/dist/katex.min.css")]).then(
+      ([mod]) => [mod.default, { throwOnError: false }] as Plugin,
+    ),
+};
+/** Classes, not inline colours: a highlighter writing its own hex values would
  *  leave the token system and stop following the theme. */
-function useHighlight(needed: boolean): Plugin | null {
-  const [plugin, setPlugin] = useState<Plugin | null>(hljs);
-  useEffect(() => {
-    if (!needed || hljs) return;
-    let alive = true;
-    hljsLoading ??= import("rehype-highlight").then((mod) => {
-      hljs = mod.default;
-    });
-    void hljsLoading.then(() => alive && setPlugin(() => hljs)).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [needed]);
-  return plugin;
-}
+const HLJS: Slot = { plugin: null, loading: null, load: () => import("rehype-highlight").then((m) => m.default) };
+const EMOJIS: Slot = { plugin: null, loading: null, load: () => import("remark-gemoji").then((m) => m.default) };
 
-function useGemoji(needed: boolean): Plugin | null {
-  const [plugin, setPlugin] = useState<Plugin | null>(gemoji);
+/** Fetched the first time the text calls for one. Every read of a slot goes
+ *  through a thunk because a plugin is a function: useState takes one as a lazy
+ *  initializer, and what it would store is the attacher's transformer — which
+ *  unified then calls as an attacher, handing it no tree at all. */
+function usePlugin(needed: boolean, slot: Slot): Plugin | null {
+  const [plugin, setPlugin] = useState<Plugin | null>(() => slot.plugin);
   useEffect(() => {
-    if (!needed || gemoji) return;
+    if (!needed || slot.plugin) return;
     let alive = true;
-    gemojiLoading ??= import("remark-gemoji").then((mod) => {
-      gemoji = mod.default;
+    // A failed chunk leaves the source text, which still reads.
+    slot.loading ??= slot.load().then((p) => {
+      slot.plugin = p;
     });
-    void gemojiLoading.then(() => alive && setPlugin(() => gemoji)).catch(() => {});
+    void slot.loading.then(() => alive && setPlugin(() => slot.plugin)).catch(() => {});
     return () => {
       alive = false;
     };
-  }, [needed]);
+  }, [needed, slot]);
   return plugin;
 }
 
@@ -214,9 +189,9 @@ const Block = memo(function Block({ src, math, emoji, code, tail }: { src: strin
 
 export function Markdown({ text, streaming }: { text: string; streaming?: boolean }) {
   const shown = useRevealed(text, streaming);
-  const math = useKatex(MATH.test(text));
-  const emoji = useGemoji(GEMOJI.test(text));
-  const code = useHighlight(FENCED.test(text));
+  const math = usePlugin(MATH.test(text), KATEX);
+  const emoji = usePlugin(EMOJI.test(text), EMOJIS);
+  const code = usePlugin(FENCED.test(text), HLJS);
   // Only a streamed message is split. Once it settles it parses whole again, so
   // nothing left in the transcript stands as a pile of separate documents.
   const cuts = streaming ? cutsOf(shown) : [];
