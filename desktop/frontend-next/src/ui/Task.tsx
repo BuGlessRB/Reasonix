@@ -2,7 +2,7 @@ import { t } from "../i18n";
 import { currentStep, stepDone, stepLabel, type PlanStep } from "../state/session";
 import type { TrajRow } from "../state/trajectory";
 import { categoryOf } from "./icons";
-import { Spans } from "./Trajectory";
+import { Spans, spanText } from "./Trajectory";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -108,7 +108,7 @@ export function Task({ goal, ask, plan, rows, t0, running, blocked, elapsed, onT
               <div className="tk-row" key={r.seq} data-c={r.kind === "model_round" ? "round" : r.tool ? categoryOf(r.tool) : "sys"}>
                 <i className="dot" aria-hidden="true" />
                 <span className="at">{t0 > 0 ? wall(t0 + r.at * 1000) : ""}</span>
-                <span className="tx">
+                <span className="tx" title={spanText(r.payload)}>
                   <Spans of={r.payload} />
                 </span>
               </div>

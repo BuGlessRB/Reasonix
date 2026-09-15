@@ -51,7 +51,7 @@
     --syn-key: oklch(47% .155 305); --syn-str: oklch(45% .105 150);
     --syn-num: oklch(50% .125 58); --syn-fn: oklch(46% .135 255);
 
-    --accent-ink: #8B5100; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
+    --accent-ink: #884F00; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
 
     --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4;
 
@@ -164,7 +164,7 @@
     --warn: oklch(57.5% .118 45); --add: var(--ok); --del: var(--err);
     --syn-key: oklch(47% .155 305); --syn-str: oklch(45% .105 150);
     --syn-num: oklch(50% .125 58); --syn-fn: oklch(46% .135 255);
-    --accent-ink: #8B5100; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
+    --accent-ink: #884F00; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
 
     --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4;
     --face-sunk: oklch(95% .0092 85); --face-code: oklch(97.6% .0057 85);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Clip } from "./Clip";
 import { useEscape } from "./dismiss";
 import { t } from "../i18n";
 import type { Protocol, ProviderCheck, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe } from "../port/port";
@@ -240,11 +241,9 @@ function Conn({
     <>
       <div className="vrow" data-on={inUse ? "" : undefined}>
         <span className="nm">{a.label}</span>
-        <span className="ds">
-          {a.host}
-          {models > 0 ? ` · ${t("{n} 个模型", { n: models })}` : ""}
-          {t(entry.hasKey ? "" : " · 缺 key")}
-        </span>
+        <Clip className="ds">
+          {a.host + (models > 0 ? ` · ${t("{n} 个模型", { n: models })}` : "") + t(entry.hasKey ? "" : " · 缺 key")}
+        </Clip>
         <span className="sc">{t(inUse ? "正在用" : "")}</span>
         {/* Hover-reveal is right for 删除; a diagnostic nobody can find is not
             a diagnostic, so this one stays on the row. */}

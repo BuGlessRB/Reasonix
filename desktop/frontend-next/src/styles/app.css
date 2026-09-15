@@ -3183,7 +3183,7 @@
   .srv .peek { margin: 7px 0 1px 15px }
 
   .srv .srv-ab { display: flex; align-items: baseline; gap: 8px; margin: 5px 0 0 15px }
-  .srv .srv-ab .ds { font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--faint); min-width: 0 }
+  .srv .srv-ab .ds { font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--faint); min-width: 0; overflow-wrap: anywhere }
   .srv .srv-ab .w {
     flex: none; padding: 1px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
     font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost); font-style: normal;
@@ -4012,9 +4012,6 @@
   .lrow .lb { font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--text) }
   .lrow .ds { font: var(--w-reg) var(--fs-meta)/1.55 var(--ui); color: var(--faint) }
   .lrow:last-of-type { border-bottom: 1px solid var(--hair) }
-  .lrow .nm { flex: none; min-width: 152px; font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--text) }
-  .lrow .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted) }
   .lrow .sa { margin-left: auto; flex: none }
   .lrow .sa + .sc { margin-left: 8px }
   .lrow .sc { margin-left: auto; flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
@@ -4939,12 +4936,12 @@
   .rmtprobe-why { margin: 3px 0 0; font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--warn-ink) }
   .rmtprobe-end { margin-top: 5px; font: var(--w-med) var(--fs-ui) var(--ui); color: var(--faint) }
   .rmtprobe[data-ok] .rmtprobe-end { color: var(--ok) }
-  .rmtrow .hd { display: flex; align-items: center; gap: 8px; font: var(--w-reg) var(--fs-ui) var(--ui) }
+  .rmtrow .hd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font: var(--w-reg) var(--fs-ui) var(--ui) }
   .rmtrow .hd b { font-weight: var(--w-med); color: var(--text) }
   .rmtrow .tg { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
 
-  .rmtrow .st { flex: 1; min-width: 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .rmtrow .st { flex: 1; min-width: fit-content; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .rmtrow[data-state="connected"] .st { color: var(--net) }
   .rmtrow[data-state="degraded"] .st { color: var(--warn-ink) }
   .rmtrow[data-state="stopped"] .st { color: var(--err) }

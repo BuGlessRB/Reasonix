@@ -63,6 +63,11 @@ grid to break.
   itself now, with dark ink on it. `--err` carries its own ink for the same
   reason: a danger button borrowed `--accent-fg`, which held only while the two
   hues happened to share a lightness.
+- An ink is read on every tint it lands on, not only the lightest one. The
+  light `--accent-ink` cleared the popover's own surface at 6.4:1 and the
+  selected row inside it — that same surface with 7% text mixed in — at 4.40,
+  under the line the rest of the scheme holds. The darkest surface an ink lands
+  on is the one that sets its value.
 - One colour, one job. `accent` = needs you · `net` = running on its own ·
   `deleg` = delegated out · `ok` = succeeded · `warn` = allowed, with a cost ·
   `err` = broken or destructive · `ghost` = a neutral fact. `focus` is its own
