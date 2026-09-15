@@ -75,23 +75,23 @@ func applyTranscriptMetadata(p *Projection, commit Commit, ev Event) {
 }
 
 func noteTranscriptInput(p *Projection, turnID string, m provider.Message) {
-	if m.Role != provider.RoleUser {
-		return
-	}
 	// A repair may restore an identity outside any active turn. Retain the
 	// original ownership across retraction/checkpoints rather than attaching
 	// it to the repair's empty (or unrelated) turn.
-	if original, ok := p.RetractedInputs[m.ID]; ok {
+	if original, ok := p.RetractedInputs[m.ID]; ok && m.Role == provider.RoleUser {
 		turnID = original
 		delete(p.RetractedInputs, m.ID)
 	}
 	for i := range p.TranscriptInputs {
 		if p.TranscriptInputs[i].ID == m.ID {
-			p.TranscriptInputs[i].Preview = messagePreview(m)
+			p.TranscriptInputs[i].Preview = catalogMessagePreview(m)
 			return
 		}
 	}
-	p.TranscriptInputs = append(p.TranscriptInputs, transcriptInput{ID: m.ID, TurnID: turnID, Preview: messagePreview(m)})
+	if m.Role != provider.RoleUser {
+		return
+	}
+	p.TranscriptInputs = append(p.TranscriptInputs, transcriptInput{ID: m.ID, TurnID: turnID, Preview: catalogMessagePreview(m)})
 	delete(p.HiddenTurns, turnID)
 }
 

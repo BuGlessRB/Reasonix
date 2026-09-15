@@ -90,13 +90,13 @@ cover rejected leases, invalid logs and failed atomic manifest publication.
 在日志验证和独占租约成立后原子同步新版 manifest，不改原日志；只读打开不升级、
 不写修复。故障测试覆盖租约冲突、损坏日志和 manifest 原子发布失败。
 
-History projection is version 6, search version 2, recovery projection version 3,
-catalog metadata version 2. Old derived caches rebuild on demand. Retraction
+History projection is version 8, search version 4, recovery projection version 5,
+catalog metadata version 3. Old derived caches rebuild on demand. Retraction
 expires MVCC rows without resetting version watermarks; changed visible-turn
 ordinals get new rows so previous snapshot cursors keep their previous view.
 Retracted inputs and replies disappear from current catalog/fork navigation.
 
-历史投影版本 6、搜索版本 2、恢复投影版本 3、目录元数据版本 2；旧缓存按需重建。
+历史投影版本 8、搜索版本 4、恢复投影版本 5、目录元数据版本 3；旧缓存按需重建。
 撤回使 MVCC 当前行过期，不重置版本水位；变化的回合序号写新版本行，旧快照仍可读。
 撤回输入与回复后，当前目录和 fork 导航同步更新。
 
@@ -201,3 +201,15 @@ PR 评审补充：不带活动回合的修复批次恢复已撤回输入时，�
 覆盖检查点及全量日志重开。回归先复现原回合仍被隐藏，再以仅含身份的撤回记录
 修复。此补充有 session/control 定向、race 和 lint 证据；上方包哈希早于此修复，
 不能作为重新构建后的最终提交包证据。
+
+Integration with the ProjectTree/session-recovery changes on `main-v2` retains
+their cold-history preparation, complete-batch indexing and authored-preview
+rules. The bounded catalog reducer now shares input metadata with the execution
+projection, including retracted/restored ownership, while discarding message
+bodies and full turn boundaries. All four derived projection versions advance
+beyond both branches so an older cache cannot mask either side's changes.
+
+与主分支 ProjectTree／会话恢复修复整合后，保留冷历史准备、完整批次索引和用户
+原文预览规则。有界目录重建器共享执行投影的输入元数据及撤回／恢复归属，同时
+丢弃消息正文和完整回合边界。四类派生投影版本均超过双方原版本，确保旧缓存不会
+掩盖任一方的修复。
