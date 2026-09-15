@@ -189,3 +189,15 @@ credentials. No production release is represented by this record.
 本地另行保留构建、session/control、Desktop、原生运行日志以及继续和
 重启后的窗口截图。全部使用临时数据目录和回环 HTTP 夹具，没有使用用户会话数据
 或厂商凭据。本记录不代表正式发布。
+
+PR review follow-up: restoring a retracted input in a repair batch without a
+live turn now preserves its original turn ownership through checkpoint and
+full-log reopen. The regression first failed with a hidden original turn and
+then passed after retaining an identity-only tombstone. This follow-up has
+focused session/control, race and lint evidence; the package hashes above
+predate it and must not be treated as rebuilt final-head packages.
+
+PR 评审补充：不带活动回合的修复批次恢复已撤回输入时，现在保留原回合归属，
+覆盖检查点及全量日志重开。回归先复现原回合仍被隐藏，再以仅含身份的撤回记录
+修复。此补充有 session/control 定向、race 和 lint 证据；上方包哈希早于此修复，
+不能作为重新构建后的最终提交包证据。

@@ -593,11 +593,12 @@ func loadBoundedStartupSessionState(ctx context.Context, dir string, file *os.Fi
 		return nil, 0, false, projectionErr
 	}
 	if sawModelEvent {
-		inputs, hidden := state.projection.TranscriptInputs, state.projection.HiddenTurns
+		inputs, hidden, retracted := state.projection.TranscriptInputs, state.projection.HiddenTurns, state.projection.RetractedInputs
 		if err := loadCurrentModelProjection(ctx, file, content, state, modelOffset, modelSequence); err != nil {
 			return nil, 0, false, err
 		}
 		state.projection.TranscriptInputs, state.projection.HiddenTurns = inputs, hidden
+		state.projection.RetractedInputs = retracted
 	}
 	state.projection.Messages = nil
 	state.projection.CommittedSequence = state.durable

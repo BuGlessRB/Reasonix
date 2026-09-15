@@ -18,6 +18,7 @@ func applyTranscriptMetadata(p *Projection, commit Commit, ev Event) {
 	case "history/replace", "legacy/import":
 		p.TranscriptInputs = nil
 		p.HiddenTurns = nil
+		p.RetractedInputs = nil
 		messages, err := replacementEventMessages(ev, ev.Payload)
 		if err != nil {
 			return
@@ -52,6 +53,10 @@ func applyTranscriptMetadata(p *Projection, commit Commit, ev Event) {
 					continue
 				}
 				if input.TurnID != "" {
+					if p.RetractedInputs == nil {
+						p.RetractedInputs = map[string]string{}
+					}
+					p.RetractedInputs[id] = input.TurnID
 					if p.HiddenTurns == nil {
 						p.HiddenTurns = map[string]bool{}
 					}
@@ -72,6 +77,13 @@ func applyTranscriptMetadata(p *Projection, commit Commit, ev Event) {
 func noteTranscriptInput(p *Projection, turnID string, m provider.Message) {
 	if m.Role != provider.RoleUser {
 		return
+	}
+	// A repair may restore an identity outside any active turn. Retain the
+	// original ownership across retraction/checkpoints rather than attaching
+	// it to the repair's empty (or unrelated) turn.
+	if original, ok := p.RetractedInputs[m.ID]; ok {
+		turnID = original
+		delete(p.RetractedInputs, m.ID)
 	}
 	for i := range p.TranscriptInputs {
 		if p.TranscriptInputs[i].ID == m.ID {

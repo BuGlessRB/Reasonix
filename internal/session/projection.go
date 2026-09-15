@@ -16,6 +16,7 @@ import (
 type Projection struct {
 	TranscriptInputs  []transcriptInput
 	HiddenTurns       map[string]bool
+	RetractedInputs   map[string]string
 	CommittedSequence uint64
 	TurnID            string
 	TurnStatus        event.TurnStatus
@@ -582,6 +583,7 @@ func projectionMessageIndex(messages []provider.Message, id string) int {
 func cloneProjection(projection Projection) Projection {
 	projection.TranscriptInputs = append([]transcriptInput(nil), projection.TranscriptInputs...)
 	projection.HiddenTurns = maps.Clone(projection.HiddenTurns)
+	projection.RetractedInputs = maps.Clone(projection.RetractedInputs)
 	projection.Messages = append([]provider.Message(nil), projection.Messages...)
 	projection.ModelMessages = append([]provider.Message(nil), projection.ModelMessages...)
 	projection.Turns = append([]TurnBoundary(nil), projection.Turns...)

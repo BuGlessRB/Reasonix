@@ -43,18 +43,3 @@ func (c *Controller) applyToolRecoveryTurnStatus(done *event.Event, completion *
 		done.Recovery = &event.RecoveryStatus{State: "interrupted", Reason: "silent_interruption"}
 	}
 }
-
-func (c *Controller) applyLedgerRecoveryFacts(r *provider.InterruptedTurnRecovery) {
-	if c == nil || r == nil {
-		return
-	}
-	e := c.ledgerTailEvidence()
-	if e == nil {
-		return
-	}
-	r.Cause = "runtime_restart"
-	r.TurnID = e.turnID
-	if len(r.ToolCalls) == 0 && len(r.CompletedTools) == 0 && !r.DroppedPartialText && !r.DroppedPartialReasoning {
-		r.SilentInterruption = true
-	}
-}

@@ -4120,19 +4120,13 @@ func (c *Controller) replaceSessionAfterCancel(msgs []provider.Message) {
 	c.replaceSessionAfterCancelFromScoped(c.executor.Session().Snapshot(), msgs, true)
 }
 
-func (c *Controller) replaceLegacySessionAfterCancel(msgs []provider.Message) {
+func (c *Controller) replaceLegacySessionAfterCancelLocked(msgs []provider.Message) {
 	// The whole cleanup is a save/recovery handoff like snapshot's: hold
 	// snapshotMu from the in-memory truncation onward. Truncating outside the
 	// lock would let an in-flight save capture the shortened transcript, read
 	// the longer partial autosave on disk as a stale-prefix conflict, and
 	// adopt it back into the executor — silently undoing the cancel cleanup
 	// before the flush below could persist it.
-	c.snapshotMu.Lock()
-	defer c.snapshotMu.Unlock()
-	c.replaceLegacySessionAfterCancelLocked(msgs)
-}
-
-func (c *Controller) replaceLegacySessionAfterCancelLocked(msgs []provider.Message) {
 	c.executor.Session().Replace(append([]provider.Message(nil), msgs...))
 	// The mid-turn autosave may have already written a partial transcript to
 	// disk. snapshotActivityIfChanged skips the write when messageCount()

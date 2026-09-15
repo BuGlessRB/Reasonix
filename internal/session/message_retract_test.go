@@ -54,6 +54,71 @@ func TestMessageRetractProjectionAndRestore(t *testing.T) {
 	check([]string{"retained", "removed"})
 }
 
+func TestMessageRetractRestoresOriginalTurnAfterReopen(t *testing.T) {
+	t.Run("checkpoint", func(t *testing.T) { testRetractedTurnRestore(t, false) })
+	t.Run("log-replay", func(t *testing.T) { testRetractedTurnRestore(t, true) })
+}
+
+func testRetractedTurnRestore(t *testing.T, removeCache bool) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	service, err := NewService("local", NewFilesystemPersistence(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
+	runtime, err := service.Create(t.Context(), CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := json.RawMessage(`{"message":{"id":"input","role":"user","content":"restored input"}}`)
+	if _, err := runtime.Session().Append(t.Context(), Batch{OperationID: "original", TurnID: "original-turn", Events: []Event{
+		{Kind: "turn/start", Payload: json.RawMessage(`{}`)},
+		{Kind: "message/complete", Payload: user},
+		{Kind: "turn/end", Payload: json.RawMessage(`{"status":"completed"}`)},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Session().Append(t.Context(), Batch{OperationID: "retract", Events: []Event{{Kind: "message/retract", Payload: json.RawMessage(`{"messageIds":["input"]}`)}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Session().Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	ref := runtime.Ref()
+	if err := service.Close(t.Context(), ref); err != nil {
+		t.Fatal(err)
+	}
+	if removeCache {
+		if err := os.RemoveAll(recoveryCacheDir(filepath.Join(root, ref.SessionID))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	binding, err := service.EnsureExecution(t.Context(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer binding.Release(t.Context())
+	runtime, _ = service.Runtime(ref)
+	// Repair batches intentionally have no live turn identity.
+	if _, err := runtime.Session().Append(t.Context(), Batch{OperationID: "restore", Events: []Event{{Kind: "message/upsert", Payload: user}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Session().Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	p := runtime.Session().Snapshot().Projection
+	if p.HiddenTurns["original-turn"] || len(p.TranscriptInputs) != 1 || p.TranscriptInputs[0].TurnID != "original-turn" {
+		t.Fatalf("restored input lost its original turn: hidden=%v inputs=%+v", p.HiddenTurns, p.TranscriptInputs)
+	}
+	info, err := service.Query().Stat(t.Context(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Turns != 1 || info.Preview != "restored input" || runtime.Session().RecentSnapshot().TotalTurns != 1 {
+		t.Fatalf("restored metadata disagrees: info=%+v recent=%+v", info, runtime.Session().RecentSnapshot())
+	}
+}
+
 func TestRecoveredLocalOnlyMessageClearsOnlyItsClosedReplyAnchor(t *testing.T) {
 	_, _, runtime := newSourceService(t, "recovery-anchor")
 	appendCompletedTurn(t, runtime, "first", "first-reply")
