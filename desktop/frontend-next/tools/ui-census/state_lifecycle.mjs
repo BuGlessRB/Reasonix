@@ -176,17 +176,24 @@ const stateR1b = (() => {
   // What a component's arrival and departure would run.
   const danger = [];
   for (const [id, list] of byOwner) {
+    const setupOpen = (e) => e.setup.open > 0;
+    const cleanupOpen = (e) => e.cleanup?.unresolved || (e.cleanup && e.cleanup.open > 0);
     const mounts = list.some((e) => e.setup.direct.length || e.setup.scheduled.length);
     const unmounts = list.some((e) => e.cleanup && !e.cleanup.unresolved && (e.cleanup.direct.length || e.cleanup.scheduled.length));
-    const mountOpen = list.some((e) => e.setup.open > 0);
-    const unmountOpen = list.some((e) => e.cleanup?.unresolved || (e.cleanup && e.cleanup.open > 0));
+    const mountOpen = list.some(setupOpen);
+    const unmountOpen = list.some(cleanupOpen);
     // Which effect carries it, so a verdict can name the thing it rests on.
-    const at = (f) => { const e = list.find(f); return e ? "effect:" + e.path + ":" + e.line : null; };
+    const key = (e) => "effect:" + e.path + ":" + e.line;
+    const at = (f) => { const e = list.find(f); return e ? key(e) : null; };
     if (mounts || unmounts || mountOpen || unmountOpen) {
       danger.push({ id, mounts, unmounts, mountOpen, unmountOpen,
+        // The effects the openness was decided over. Causes read these, because
+        // `by` names one effect for a line and need not be one that carries it.
+        mountOpenBy: list.filter(setupOpen).map(key),
+        unmountOpenBy: list.filter(cleanupOpen).map(key),
         by: at((e) => e.setup.direct.length || e.setup.scheduled.length) ??
             at((e) => e.cleanup && !e.cleanup.unresolved && (e.cleanup.direct.length || e.cleanup.scheduled.length)) ??
-            at((e) => e.setup.open > 0) ?? at((e) => e.cleanup?.unresolved || (e.cleanup && e.cleanup.open > 0)) });
+            at(setupOpen) ?? at(cleanupOpen) });
     }
   }
 
