@@ -184,12 +184,14 @@ jobs:
 
       # Full push suite still uses the same 8m package budget as Windows smoke:
       # agent/boot/control already hit 180s package timeouts under runner load,
-      # so 3m fails on slow machines without a code regression. Keep the step
-      # above normal full-suite wall time (~8-12m) so a hang still dies on the
-      # job budget rather than a false package timeout.
+      # so 3m fails on slow machines without a code regression. The step budget
+      # is what runner variance costs rather than what the suite takes: green
+      # runs on this branch spread 520s-976s while three pushes timed out at
+      # 1287-1305s, so 20m sat inside the distribution and reported a slow
+      # runner as failed tests. A hang still dies here rather than on a package.
       - name: test (full)
         if: env.RUN_STEPS == 'true' && runner.os == 'Windows' && github.event_name != 'pull_request'
-        timeout-minutes: 20
+        timeout-minutes: 30
         env:
           # Run the prompt-cache prefix-stability guard (TestCacheHit*) in CI: a
           # regression there silently tanks the cache hit rate the project is
