@@ -145,3 +145,46 @@ line that starts with `todo ` and does not parse raises rather than reading as
 "no semantic progress", which would quietly turn every later sample into a
 proxy. If the export ever carries the frame's fields structurally, read those
 instead.
+
+# lease_cost
+
+Reports what the workspace write lease cost, read from session wire logs.
+
+```bash
+python3 tools/trajectory/lease_cost.py ~/.reasonix          # every project
+python3 tools/trajectory/lease_cost.py ~/.reasonix/projects/<slug>/sessions
+python3 tools/trajectory/lease_cost.py session.wire.jsonl --json
+```
+
+Sessions are kept per project, so the root to hand it is usually
+`~/.reasonix` (or `$REASONIX_STATE_HOME`), not `~/.reasonix/sessions` — that
+last one holds only the sessions opened outside a project.
+
+Standard library only. Tests: `python3 -m unittest discover -s tools/trajectory
+-t tools/trajectory`.
+
+## What this measures, and what it does not
+
+**The population is holds, not sessions, and not waits.** One account is closed
+per release of the lease. A read-only turn never takes the lease and is not in
+the denominator; a session that wrote and never waited is, and is most of it.
+A rate quoted over contended holds alone is not a rate of anything.
+
+**The wait count cannot be taken from the notices.** A wait that clears inside
+the one-second grace never becomes one, and those are the common case. The
+kernel counts every contended acquisition and separately counts the subset that
+was reported; `contended` and `reported` are not the same number and neither
+substitutes for the other.
+
+**`idle/held` is the question, not `waited`.** Waiting says the serialisation
+was felt. The idle share says whether it needed to be: it is the part of each
+hold that came after the last write asked for the lease, which is what a
+release at the last verification rather than at the end of the turn would give
+back. A high contention rate with a low idle share means the lease is being
+used exactly as long as it is needed.
+
+**An incomplete log makes every number a floor.** A lease account is written
+when a turn ends, so the sessions that lose frames to the size cap are the long
+ones — which are also the ones most likely to have held the lease a while. The
+count of incomplete logs is printed beside the rest for that reason, and an
+unreadable truncation witness counts as incomplete rather than as intact.
