@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"slices"
 	"strings"
 
 	"reasonix/internal/event"
@@ -13,6 +14,9 @@ import (
 )
 
 type Projection struct {
+	TranscriptInputs  []transcriptInput
+	HiddenTurns       map[string]bool
+	RetractedInputs   map[string]string
 	CommittedSequence uint64
 	TurnID            string
 	TurnStatus        event.TurnStatus
@@ -31,6 +35,8 @@ type Projection struct {
 	TodoWritten   bool
 	Interactions  map[string]string
 	ActiveTools   map[string]string
+	StartedTools  map[string]bool
+	ActiveSteps   map[string]bool
 	Recovery      *event.RecoveryStatus
 	PlanState     json.RawMessage
 	GoalState     json.RawMessage
@@ -59,7 +65,7 @@ type TurnBoundary struct {
 }
 
 var ProjectionKinds = map[string]bool{
-	"message/complete": true, "message/upsert": true, "assistant/attempt": true,
+	"message/complete": true, "message/upsert": true, "message/retract": true, "assistant/attempt": true,
 	"tool/call": true, "tool/start": true, "tool/result": true,
 	"turn/start": true, "turn/end": true, "step/start": true, "step/end": true,
 	"todo/write": true, "interaction/created": true, "interaction/resolved": true,
@@ -87,12 +93,26 @@ func Project(commits []Commit) (Projection, error) {
 }
 
 func applyProjectionCommit(projection *Projection, commit Commit) error {
+	initializeProjectionMaps(projection)
+	return applyProjectionEvents(projection, commit)
+}
+
+func initializeProjectionMaps(projection *Projection) {
 	if projection.Interactions == nil {
 		projection.Interactions = map[string]string{}
 	}
 	if projection.ActiveTools == nil {
 		projection.ActiveTools = map[string]string{}
 	}
+	if projection.StartedTools == nil {
+		projection.StartedTools = map[string]bool{}
+	}
+	if projection.ActiveSteps == nil {
+		projection.ActiveSteps = map[string]bool{}
+	}
+}
+
+func applyProjectionEvents(projection *Projection, commit Commit) error {
 	closedBefore := len(projection.Turns)
 	for _, ev := range commit.Events {
 		projection.CommittedSequence = ev.Sequence
@@ -104,6 +124,8 @@ func applyProjectionCommit(projection *Projection, commit Commit) error {
 			err = projectMessageComplete(projection, commit, ev)
 		case "message/upsert":
 			err = projectMessageUpsert(projection, commit, ev)
+		case "message/retract":
+			err = projectMessageRetract(projection, commit, ev)
 		case "assistant/attempt":
 			err = projectAssistantAttempt(projection, commit, ev)
 		case "history/replace":
@@ -146,6 +168,7 @@ func applyProjectionCommit(projection *Projection, commit Commit) error {
 		if err != nil {
 			return err
 		}
+		applyTranscriptMetadata(projection, commit, ev)
 	}
 	// turn/end can be followed by more events in the same atomic commit. Only
 	// after the whole commit is projected do we know whether its cut leaves a
@@ -157,13 +180,7 @@ func applyProjectionCommit(projection *Projection, commit Commit) error {
 }
 
 func projectLegacyImport(projection *Projection, commit Commit, ev Event) error {
-	var body struct {
-		Source        Source             `json:"source"`
-		Messages      []provider.Message `json:"messages"`
-		Goal          json.RawMessage    `json:"goal,omitempty"`
-		ModelRef      string             `json:"modelRef,omitempty"`
-		ModelIdentity string             `json:"modelIdentity,omitempty"`
-	}
+	var body legacyImportPayload
 	if err := strictPayload(ev.Payload, &body); err != nil || body.Messages == nil {
 		return damagedPayload(ev, err)
 	}
@@ -228,7 +245,30 @@ func projectMessageUpsert(projection *Projection, commit Commit, ev Event) error
 		// append case is retained for explicitly-created records.
 		projection.ModelMessages = append(projection.ModelMessages, visible[0])
 	}
+	if projection.CurrentTurnMessageID == body.Message.ID && (body.Message.LocalOnly || body.Message.Role != provider.RoleAssistant) {
+		projection.CurrentTurnMessageID = ""
+	}
 	projection.recordTurnReply(*body.Message)
+	return nil
+}
+
+func projectMessageRetract(projection *Projection, commit Commit, ev Event) error {
+	ids, err := retractedMessageIDs(ev, ev.Payload)
+	if err != nil {
+		return err
+	}
+	removed := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		removed[id] = true
+	}
+	filter := func(messages []provider.Message) []provider.Message {
+		return slices.DeleteFunc(messages, func(message provider.Message) bool { return removed[message.ID] })
+	}
+	projection.Messages = filter(projection.Messages)
+	projection.ModelMessages = filter(projection.ModelMessages)
+	if removed[projection.CurrentTurnMessageID] {
+		projection.CurrentTurnMessageID = ""
+	}
 	return nil
 }
 
@@ -248,11 +288,7 @@ func projectAssistantAttempt(projection *Projection, commit Commit, ev Event) er
 }
 
 func projectHistoryReplace(projection *Projection, commit Commit, ev Event) error {
-	var body struct {
-		Messages []provider.Message `json:"messages"`
-		Reason   string             `json:"reason,omitempty"`
-		Sources  []uint64           `json:"sourceSequences,omitempty"`
-	}
+	var body historyReplacePayload
 	if err := strictPayload(ev.Payload, &body); err != nil || body.Messages == nil {
 		return damagedPayload(ev, err)
 	}
@@ -262,11 +298,7 @@ func projectHistoryReplace(projection *Projection, commit Commit, ev Event) erro
 }
 
 func projectModelContextReplace(projection *Projection, commit Commit, ev Event) error {
-	var body struct {
-		Messages []provider.Message `json:"messages"`
-		Reason   string             `json:"reason,omitempty"`
-		Sources  []uint64           `json:"sourceSequences,omitempty"`
-	}
+	var body historyReplacePayload
 	if err := strictPayload(ev.Payload, &body); err != nil || body.Messages == nil {
 		return damagedPayload(ev, err)
 	}
@@ -329,6 +361,11 @@ func projectStepStart(projection *Projection, commit Commit, ev Event) error {
 	if err := strictPayload(ev.Payload, &body); err != nil || body.ID == "" {
 		return damagedPayload(ev, err)
 	}
+	if ev.Kind == "step/start" {
+		projection.ActiveSteps[body.ID] = true
+	} else {
+		delete(projection.ActiveSteps, body.ID)
+	}
 	return nil
 }
 
@@ -368,6 +405,7 @@ func projectToolCall(projection *Projection, commit Commit, ev Event) error {
 	if err := strictPayload(ev.Payload, &body); err != nil || body.ID == "" || body.Name == "" {
 		return damagedPayload(ev, err)
 	}
+	projection.ActiveTools[body.ID] = body.Name
 	return nil
 }
 
@@ -380,6 +418,7 @@ func projectToolStart(projection *Projection, commit Commit, ev Event) error {
 		return damagedPayload(ev, err)
 	}
 	projection.ActiveTools[body.ID] = body.Name
+	projection.StartedTools[body.ID] = true
 	return nil
 }
 
@@ -425,6 +464,7 @@ func projectToolResult(projection *Projection, commit Commit, ev Event) error {
 		return damagedPayload(ev, err)
 	}
 	delete(projection.ActiveTools, body.ID)
+	delete(projection.StartedTools, body.ID)
 	return nil
 }
 
@@ -541,6 +581,9 @@ func projectionMessageIndex(messages []provider.Message, id string) int {
 }
 
 func cloneProjection(projection Projection) Projection {
+	projection.TranscriptInputs = append([]transcriptInput(nil), projection.TranscriptInputs...)
+	projection.HiddenTurns = maps.Clone(projection.HiddenTurns)
+	projection.RetractedInputs = maps.Clone(projection.RetractedInputs)
 	projection.Messages = append([]provider.Message(nil), projection.Messages...)
 	projection.ModelMessages = append([]provider.Message(nil), projection.ModelMessages...)
 	projection.Turns = append([]TurnBoundary(nil), projection.Turns...)
@@ -551,6 +594,8 @@ func cloneProjection(projection Projection) Projection {
 	tools := make(map[string]string, len(projection.ActiveTools))
 	maps.Copy(tools, projection.ActiveTools)
 	projection.ActiveTools = tools
+	projection.StartedTools = maps.Clone(projection.StartedTools)
+	projection.ActiveSteps = maps.Clone(projection.ActiveSteps)
 	if projection.Recovery != nil {
 		recovery := *projection.Recovery
 		projection.Recovery = &recovery
