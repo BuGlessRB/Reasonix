@@ -145,6 +145,16 @@ is the standard. No gate reads register — telling narrative from a statement o
 constraint needs a phrase table, which is the one thing this repo does not
 build — so this rule is held by review.
 
+- **Stylesheets carry none.** A rule's selector and its declarations are the
+  whole statement. What a `.css` comment would have said goes to whichever of
+  two places can act on it: a constraint a component has to honour belongs in
+  that component, and a decision about the medium itself — a measured colour, a
+  layout mechanic, why the obvious rule is the wrong one — belongs in the
+  stylesheet's companion document (`src/styles/TOKENS.md`, `LAYOUT.md`), which
+  is read end to end rather than met 600 times as an aside.
+- **English, always** — every comment, in every other language the tree is
+  written in. A codebase whose commentary is half one language reads as two
+  codebases, and the half a given reader cannot read is the half that rots.
 - Declaration doc: ≤5 lines. Package comment: ≤8 lines, or ≤40 in a `doc.go`.
 - Every other comment: ≤3 lines. Struct-field and trailing `//`: 1 line.
 - Never: restatements of the code, phase/stage narrative, incident or
