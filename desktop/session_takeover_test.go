@@ -683,3 +683,48 @@ func TestFailedReclaimKeepsSpectatorUntilOwnershipProbeCompletes(t *testing.T) {
 		t.Fatal("external owner probe cleared spectator state")
 	}
 }
+
+func TestSuccessfulReclaimRepublishesReadyBarrier(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/reclaim" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.Error(w, "not available", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	app := NewApp()
+	app.remoteTabs = map[string]*remoteTab{}
+	tab := &remoteTab{
+		id: "remote-1", state: "ready", gen: 4, client: srv.Client(), base: srv.URL, selectionRevision: 9,
+		routing:      remoteTabSessionRouting{currentPath: "/sessions/held.jsonl"},
+		session:      remoteTabSessionState{takenOver: true},
+		capabilities: map[string]bool{serveCapabilityExecutionV2: true, serveCapabilitySessions: true, serveCapabilitySessionIdentityV1: true, serveCapabilitySessionOwnershipV1: true},
+	}
+	app.remoteTabs[tab.id] = tab
+
+	var mu sync.Mutex
+	var events []string
+	app.remoteEventHook = func(name string, _ any) {
+		mu.Lock()
+		events = append(events, name)
+		mu.Unlock()
+	}
+	if err := app.ReclaimRemoteTabSession(tab.id); err != nil {
+		t.Fatal(err)
+	}
+	if tab.session.takenOver {
+		t.Fatal("successful reclaim left the spectator pin in place")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	sawReady := false
+	for _, name := range events {
+		if name == "remote-tab:remote-1:state" {
+			sawReady = true
+		}
+	}
+	if !sawReady {
+		t.Fatalf("reclaim did not republish the ready barrier: %v", events)
+	}
+}

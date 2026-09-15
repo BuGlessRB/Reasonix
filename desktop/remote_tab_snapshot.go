@@ -295,6 +295,13 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 	if readyBarrier {
 		a.emitRemoteEvent(fmt.Sprintf("remote-tab:%s:state", tabID), RemoteTabStateView{State: "ready"})
 	}
+	if before.TakenOver && !after.TakenOver && !readyBarrier {
+		// Ownership returned through polling (auto-reclaim after the local
+		// writer exited) rather than an explicit /reclaim: the surface is
+		// still on the spectator-era projection, so publish the same ready
+		// barrier that re-hydrates the view.
+		a.transitionRemoteTabStateLocked(tab, gen, "ready", "ready", "")
+	}
 	if pathChanged {
 		a.goRemoteTabSafe("remoteTabStatusTitle", func() { a.refreshRemoteTabTitle(tabID) })
 	}

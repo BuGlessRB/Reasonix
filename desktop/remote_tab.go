@@ -710,6 +710,12 @@ func (a *App) ReclaimRemoteTabSession(tabID string) error {
 		meta := remoteTabMetaLocked(tab)
 		a.remoteTabMu.Unlock()
 		a.emitRemoteEvent("remote-tab:updated", meta)
+		// The spectator era left the surface on a stale projection (frozen
+		// runtime epoch, cold history). Publish the ready barrier so the view
+		// re-hydrates and live frames from the re-owned writer are accepted —
+		// the same contract a session rotation relies on. Without it the tab
+		// renders the pre-reclaim view until the user switches away and back.
+		a.transitionRemoteTabStateLocked(tab, observedGen, "ready", "ready", "")
 	} else {
 		a.remoteTabMu.Unlock()
 	}
