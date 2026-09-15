@@ -118,17 +118,16 @@ func tsRecordKeys(t *testing.T, path, record string) map[string]bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := strings.Index(string(src), "const "+record)
-	if at < 0 {
+	_, body, ok := strings.Cut(string(src), "const "+record)
+	if !ok {
 		t.Fatalf("%s no longer declares %s; this test cannot see the table", path, record)
 	}
-	body := string(src)[at:]
-	end := strings.Index(body, "\n};")
-	if end < 0 {
+	table, _, ok := strings.Cut(body, "\n};")
+	if !ok {
 		t.Fatalf("%s: %s is not closed by a line of its own", path, record)
 	}
 	keys := map[string]bool{}
-	for _, m := range regexp.MustCompile(`([a-z_][a-z0-9_]*)\s*:\s*"`).FindAllStringSubmatch(body[:end], -1) {
+	for _, m := range regexp.MustCompile(`([a-z_][a-z0-9_]*)\s*:\s*"`).FindAllStringSubmatch(table, -1) {
 		keys[m[1]] = true
 	}
 	if len(keys) == 0 {
