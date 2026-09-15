@@ -8,6 +8,7 @@ import { MockPort } from "./mock";
 // without a kernel — the dev build's only reason to exist.
 export class MockHub implements HubPort {
   private readonly ports = new Map<string, AgentPort>();
+  private readonly machine = { configured: false };
   private readonly views: RuntimeView[] = [
     { id: "r1", base: "", root: "~/projects/DeepSeek-Reasonix", name: "DeepSeek-Reasonix", sessionPath: "/sessions/mock.jsonl" },
   ];
@@ -207,6 +208,7 @@ export class MockHub implements HubPort {
     const held = this.ports.get(rt.id);
     if (held) return held;
     const port = new MockPort();
+    port.machine = this.machine;
     this.ports.set(rt.id, port);
     return port;
   }

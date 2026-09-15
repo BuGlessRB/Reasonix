@@ -3,7 +3,6 @@ import { HttpError } from "./port";
 import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
-import { configured } from "./mock_provider";
 import { SCRIPT, mockMsgIndex, mockTurnStart } from "./fixture";
 import { MockExecutionHold, mockExecutionGraph } from "./mock_graph";
 import { mockStorage, mockStoragePlan } from "./mock_storage";
@@ -57,11 +56,11 @@ export class MockPort extends MockTheme implements AgentPort {
   private session: SessionEntry | null = null;
 
   async providerSetup(): Promise<ProviderSetup | null> {
-    return configured.yes ? null : { required: true, provider: "deepseek", model: "deepseek-v4-pro", keyEnv: "DEEPSEEK_API_KEY" };
+    return this.machine.configured ? null : { required: true, provider: "deepseek", model: "deepseek-v4-pro", keyEnv: "DEEPSEEK_API_KEY" };
   }
 
   async saveProviderKey(_apiKey: string) {
-    configured.yes = true;
+    this.machine.configured = true;
   }
 
   // The subagent runs somewhere cheaper; everything else rides the main model.

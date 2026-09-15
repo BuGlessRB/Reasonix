@@ -12,13 +12,15 @@ import { MockBoundary } from "./mock_boundary";
 // The sources half of the fixture. Chained on for the reason the others are:
 // MockPort satisfies AgentPort in one declaration, and each face keeps its own
 // file.
-// Whether this machine has been given a provider. The fixture opens without
-// one so the connect card can be designed, and every port built after that
-// reads the same answer: a key belongs to the machine, not to the pane that
-// asked for it. Held here because this is where it becomes true.
-export const configured = { yes: false };
-
 export class MockProvider extends MockBoundary {
+  // Whether this machine has been given a provider. The fixture opens without
+  // one so the connect card can be designed, and every port the same window
+  // builds reads the same answer: a key belongs to the machine, not to the
+  // pane that asked for it. MockHub hands its ports one of these, so a second
+  // window — or a second test — starts over.
+  machine = { configured: false };
+
+
   // Three shapes the account grouping has to keep apart: one vendor reached
   // under two protocols, a custom relay serving other vendors' models, and two
   // tenants of that same relay holding different keys.
@@ -102,7 +104,7 @@ export class MockProvider extends MockBoundary {
   }
 
   async saveProvider(): Promise<void> {
-    configured.yes = true;
+    this.machine.configured = true;
   }
 
   async setProviderWebSearch(name: string, on: boolean): Promise<void> {

@@ -55,4 +55,8 @@ export const EN_COMPOSER: Record<string, string> = {
   "登录": "Sign in",
   "登录（社区与崩溃跟进，不影响使用）": "Sign in (community and crash follow-up; not required to use it)",
   "账号：{name}": "Account: {name}",
+  "目录": "folder",
+  "资源": "resource",
+  "Tab 补全或进入目录 · ↑↓ 后回车确认 · Esc 关闭": "Tab completes or enters a folder · ↑↓ then Enter confirms · Esc closes",
+  "↑↓ 选择 · Tab 或回车补全 · Esc 关闭": "↑↓ selects · Tab or Enter completes · Esc closes",
 };

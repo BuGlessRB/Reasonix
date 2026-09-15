@@ -115,13 +115,12 @@ for (let i = 0; i < count; i++) {
   results.push(await scan(name));
 }
 
-let total = 0;
+// One string is one finding, wherever it was first seen: an error card rides
+// every section, and counting it 29 times buries the two other strings on the
+// screen under it.
+const seen = new Map();
+for (const { label, hits } of results) for (const h of hits) if (!seen.has(h)) seen.set(h, label);
 if (onb) console.log("entry:", JSON.stringify(onb));
-for (const { label, hits } of results) {
-  if (!hits.length) continue;
-  total += hits.length;
-  console.log(`\n[${label}] ${hits.length}`);
-  hits.slice(0, 12).forEach((h) => console.log("   " + h));
-}
-console.log(`\nsections walked: ${results.length}; skipped=[${skipped.join(",")}]; Chinese still rendered: ${total}`);
+for (const [hit, label] of seen) console.log(`  [${label}] ${hit}`);
+console.log(`\nsections walked: ${results.length}; skipped=[${skipped.join(",")}]; Chinese still rendered: ${seen.size}`);
 ws.close();
