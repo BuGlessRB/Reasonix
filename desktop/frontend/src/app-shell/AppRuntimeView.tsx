@@ -447,7 +447,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           surfaceOpen: terminalSurfaceOpen,
           contentVisible: local.terminalContentVisible,
           remote: core.remoteSurfaceActive,
-          readOnly: Boolean(activeTab?.readOnly),
+          readOnly: Boolean(activeTab?.readOnly && !activeTab.takenOver),
           tabId: activeTabId,
           meta: state.meta,
           fitEnabled: local.terminalFitEnabled,
