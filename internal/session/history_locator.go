@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	historyIndexVersion     = 5
+	historyIndexVersion     = 6
 	HistoryPageDefaultLimit = 100
 	HistoryPageMaxLimit     = 500
 	HistoryPageMaxBytes     = 2 << 20
@@ -181,6 +181,9 @@ var historyMigrations = []projectiondb.Migration{{Version: 1, Apply: func(ctx co
 	// Revision 5 stops duplicating inline message bodies into search_text. The
 	// rebuild metadata version forces old indexes through an atomic rebuild.
 	_, err := tx.ExecContext(ctx, `SELECT 1`)
+	return err
+}}, {Version: 6, Apply: func(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `ALTER TABLE messages ADD COLUMN visible_user INTEGER NOT NULL DEFAULT 0`)
 	return err
 }}}
 

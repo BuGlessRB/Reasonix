@@ -27,7 +27,7 @@ import (
 // commit. Version 1 checkpoints decode that field as empty, so accepting one
 // would incorrectly mark previously completed turns unverifiable until a full
 // replay. Rejecting the old projection rebuilds it from the durable log.
-const recoveryProjectionVersion = 2
+const recoveryProjectionVersion = 3
 
 const (
 	recoveryFormatVersion = 1
@@ -445,7 +445,7 @@ func (s *recoveryStore) publish(ctx context.Context, checkpoint recoveryCheckpoi
 		StorageGeneration: checkpoint.StorageGeneration, DurableSequence: checkpoint.DurableSequence,
 		Title:    checkpoint.Projection.Title,
 		ModelRef: checkpoint.Projection.ModelRef, ModelIdentity: checkpoint.Projection.ModelIdentity,
-		TotalTurns: len(checkpoint.Projection.Turns),
+		TotalTurns: visibleBoundaryCount(checkpoint.Projection, false),
 	}
 	recent.Entries, err = buildRecentEntries(ctx, s.sessionDir, checkpoint.RecentMessages, checkpoint.DurableSequence, recent.TotalTurns)
 	if err != nil {
@@ -677,7 +677,7 @@ func applyRecentCommit(messages *[]provider.Message, commit Commit) error {
 	recent.Events = nil
 	for _, event := range commit.Events {
 		switch event.Kind {
-		case "message/complete", "message/upsert", "history/replace", "legacy/import":
+		case "message/complete", "message/upsert", "message/retract", "history/replace", "legacy/import":
 			recent.Events = append(recent.Events, event)
 		}
 	}

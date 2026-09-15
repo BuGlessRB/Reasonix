@@ -57,6 +57,10 @@ type turnEventState struct {
 	// candidate and consumed atomically with Runtime execution activation.
 	// commitMu owns it and its queue reservation.
 	pendingExecutionCommit *session.PreparedBatch
+	pendingTermination     *TerminationPlan
+	turnMessageIDs         map[string]bool
+	finalizedTurn          string
+	terminationBoundary    *terminationBoundary
 }
 
 // projectVolatileTodo keeps the same event-derived projection for controllers
@@ -244,7 +248,6 @@ func (s *turnEventSink) persistAndPublish(e event.Event) error {
 		status = event.TurnWaitingUser
 	case event.TurnDone:
 		status = terminalTurnStatus(e)
-		e.ReadCompletion = s.c.updateTurnLedgerTranscript(ledger)
 	case event.TurnStatusChanged:
 		// The emitter supplied the exact transition in e.Status.
 	}
@@ -290,14 +293,27 @@ func lateBusinessEvent(kind event.Kind) bool {
 }
 
 func (s *turnEventSink) commitEnvelope(ledger *turnevent.Ledger, e event.Event, status event.TurnStatus) (event.Event, turnevent.Envelope, bool, error) {
+	if e.Kind == event.TurnDone {
+		s.c.snapshotMu.Lock()
+		defer s.c.snapshotMu.Unlock()
+	}
 	s.c.turnEvents.commitMu.Lock()
 	defer s.c.turnEvents.commitMu.Unlock()
 	if s.c.discardLateTurnEvent(e) {
 		slog.Info("controller: discarded late turn event", "kind", e.Kind, "turnId", e.TurnID)
 		return e, turnevent.Envelope{}, false, nil
 	}
-	if err := s.c.appendSessionEventLocked(context.Background(), e); err != nil {
+	ctx := context.Background()
+	if e.Kind == event.TurnDone {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, terminationFlushTimeout)
+		defer cancel()
+	}
+	if err := s.c.appendSessionEventLocked(ctx, e); err != nil {
 		return e, turnevent.Envelope{}, false, err
+	}
+	if e.Kind == event.TurnDone {
+		e.ReadCompletion = s.c.updateTurnLedgerTranscript(ledger)
 	}
 	stamped, envelope, ok, err := ledger.AppendEnvelope(e, status)
 	if err != nil || !ok || stamped.Sequence == 0 {
@@ -336,6 +352,7 @@ func (s *turnEventDurableSink) EmitChecked(e event.Event) error {
 		s.owner.c.mu.Lock()
 		s.owner.c.enterRecoveryLocked("terminal_commit_failed")
 		s.owner.c.mu.Unlock()
+		s.owner.c.disarmGoalLifecycle("persistence-error")
 	}
 	// Async stream callers cannot observe checked errors. Fail the Turn here so
 	// a poisoned WAL immediately cancels provider, prompt, and process work.
@@ -599,6 +616,9 @@ func (c *Controller) rebindTurnEvents(sessionPath string) {
 func classifyCommitError(err error) commitFailureKind {
 	if err == nil {
 		return commitOK
+	}
+	if errors.Is(err, errTerminationDurability) {
+		return commitUnexpected
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return commitLifecycle

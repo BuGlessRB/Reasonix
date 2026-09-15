@@ -156,6 +156,12 @@ func (s *Session) PrepareBatchContext(ctx context.Context, operationID string, b
 	for i := range events {
 		event := &events[i]
 		event.Kind = strings.TrimSpace(event.Kind)
+		if event.Kind == "message/retract" {
+			if event.Optional {
+				return PreparedBatch{}, fmt.Errorf("message/retract must be required")
+			}
+			event.Required = true
+		}
 		if event.Kind == "" {
 			return PreparedBatch{}, fmt.Errorf("session: events[%d].kind is required", i)
 		}
@@ -422,9 +428,6 @@ func (s *Session) CatalogMetadata() catalogMetadata {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	metadata := metadataFromProjection(s.manifest, s.next-1, s.projection)
-	if metadata.Preview == "" {
-		metadata.Preview = s.catalogPreview
-	}
 	return metadata
 }
 
@@ -486,7 +489,7 @@ func (s *Session) RecentSnapshot() RecentSnapshot {
 		Version: recoveryFormatVersion, SessionID: s.id, StorageGeneration: s.storageGeneration,
 		DurableSequence: durable,
 		Title:           s.projection.Title, ModelRef: s.projection.ModelRef, ModelIdentity: s.projection.ModelIdentity,
-		TotalTurns: len(s.projection.Turns),
+		TotalTurns: visibleBoundaryCount(s.projection, false),
 	}
 	s.mu.Unlock()
 	if sessionDir != "" {

@@ -9,7 +9,7 @@ func (c *Controller) cancelledTurnWasSilent(completion *guardedTurnCompletion) b
 	if c == nil || c.executor == nil || completion == nil || completion.checkpoint == nil {
 		return false
 	}
-	msgs := c.executor.Session().Snapshot()
+	msgs := c.terminationMessages()
 	start := completion.checkpoint.messageIndex
 	if start < 0 || start > len(msgs) {
 		return false
