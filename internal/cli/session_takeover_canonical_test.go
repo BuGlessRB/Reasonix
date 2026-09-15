@@ -341,3 +341,40 @@ func TestCanonicalReclaimCanTakeSameSessionAgain(t *testing.T) {
 		t.Fatal("second takeover left the CLI in reclaimed mode")
 	}
 }
+
+// TestDiscoverCLIServesSkipsDeadPIDs pins the discovery prune: state files
+// whose recorded process is gone must not surface as takeover candidates —
+// dialing their stale ports only produces connection-refused noise.
+func TestDiscoverCLIServesSkipsDeadPIDs(t *testing.T) {
+	home := t.TempDir()
+	stateDir := filepath.Join(home, "remote")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REASONIX_HOME", home)
+	write := func(slug, addr string, pid int) {
+		t.Helper()
+		state := map[string]any{"pid": pid, "addr": addr, "workspace": "/tmp/" + slug}
+		data, err := json.Marshal(state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(stateDir, "serve-"+slug+".json"), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(stateDir, "serve-"+slug+".token"), []byte("tok-"+slug), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("dead-one", "127.0.0.1:44173", 111)
+	write("alive-one", "127.0.0.1:33863", 222)
+
+	previous := cliServeProcessAlive
+	cliServeProcessAlive = func(pid int) bool { return pid == 222 }
+	t.Cleanup(func() { cliServeProcessAlive = previous })
+
+	records := discoverCLIServes()
+	if len(records) != 1 || records[0].base != "http://127.0.0.1:33863" || records[0].token != "tok-alive-one" {
+		t.Fatalf("discovery after prune = %+v, want only the alive record", records)
+	}
+}

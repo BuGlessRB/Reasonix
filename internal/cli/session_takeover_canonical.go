@@ -44,17 +44,30 @@ func cliTakeoverIdentityHeldSession(route string, manager *cliTakeoverManager) (
 	if manager != nil && manager.Reclaiming() {
 		return nil, fmt.Errorf("the remote side is reclaiming the current session")
 	}
-	records := discoverCLIServesForTakeover()
-	if len(records) == 0 {
-		return nil, fmt.Errorf("no resident serve on this machine holds this session")
-	}
+	// One re-discovery pass: a desktop reconnect respawns the serve and
+	// rewrites its state file, so an all-fail round may simply have raced the
+	// restart. PIDs of dead serves are pruned during discovery.
 	var lastErr error
-	for i := range records {
-		binding, err := cliTakeoverIdentityFromServe(route, &records[i])
-		if err == nil {
-			return binding, nil
+	for pass := 0; pass < 2; pass++ {
+		records := discoverCLIServesForTakeover()
+		if len(records) == 0 {
+			break
 		}
-		lastErr = err
+		tried := false
+		for i := range records {
+			binding, err := cliTakeoverIdentityFromServe(route, &records[i])
+			if err == nil {
+				return binding, nil
+			}
+			tried = true
+			lastErr = err
+		}
+		if !tried {
+			break
+		}
+	}
+	if lastErr == nil {
+		return nil, fmt.Errorf("no resident serve on this machine holds this session; check that the desktop is connected and retry")
 	}
 	return nil, lastErr
 }

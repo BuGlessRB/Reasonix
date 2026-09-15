@@ -63,9 +63,16 @@ type cliTakeoverBinding struct {
 	priorMirror *cliTakeoverBinding
 }
 
+// cliServeProcessAlive is the PID probe used to prune serve state files
+// whose process is gone. Variable so tests can model dead and live records.
+var cliServeProcessAlive = webInstanceProcessAlive
+
 // discoverCLIServes enumerates resident serve processes recorded under
 // <Reasonix home>/remote. This machine is the SSH target in the takeover
 // scenario, so the bootstrap's SFTP-written state files are local files here.
+// Records whose PID no longer exists are skipped: a restarted desktop
+// respawns the serve on a new port, and dialing the stale address only
+// produces connection-refused noise that can shadow a live record's result.
 func discoverCLIServes() []cliServeRecord {
 	dir := config.RemoteStateDir()
 	if dir == "" {
@@ -86,7 +93,7 @@ func discoverCLIServes() []cliServeRecord {
 			continue
 		}
 		state, err := bootstrap.UnmarshalState(data)
-		if err != nil || state.PID <= 0 {
+		if err != nil || state.PID <= 0 || !cliServeProcessAlive(state.PID) {
 			continue
 		}
 		slug := strings.TrimSuffix(strings.TrimPrefix(name, "serve-"), ".json")
