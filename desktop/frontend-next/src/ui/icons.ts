@@ -15,6 +15,13 @@ const LABEL: Record<string, string> = {
   notebook_edit: "Notebook", submit_plan: "Plan", ask: "Ask",
   fleet: "Fleet", read_only_task: "Task", read_subagent_result: "Result",
   complete_subtask: "Subtask", lsp_diagnostics: "Diagnostics",
+  lsp_definition: "Definition", lsp_references: "References", lsp_hover: "Hover",
+  parallel_tasks: "Tasks", list_subagents: "Subagents",
+  run_skill: "Skill", read_only_skill: "Skill", read_skill: "Playbook", install_skill: "Install",
+  recall: "Recall", memory: "Memory", forget: "Forget",
+  history: "History", list_sessions: "Sessions", read_session: "Session",
+  docs: "Docs", context_budget: "Budget", slash_command: "Command", install_source: "Install",
+  await_user: "Await", conclude_blocked: "Blocked", conclude_no_changes: "No Changes",
 };
 
 const RUNNING: Record<string, string> = {
@@ -43,12 +50,20 @@ export function runLabelFor(tool: string) {
   return RUNNING[categoryOf(tool)] ?? "正在处理…";
 }
 
-// A tool that changes the tree has to read as one. delete_range, delete_symbol,
-// move_file and notebook_edit all mutate and were falling through to the neutral
-// "sys" bucket — the colour is the only warning the row carries.
-const WRITE = new Set(["delete_range", "delete_symbol", "move_file", "notebook_edit"]);
-const DELEG = new Set(["task", "fleet", "read_only_task", "read_subagent_result", "complete_subtask"]);
-const READ = new Set(["read_file", "grep", "glob", "ls", "code_index", "lsp_diagnostics"]);
+// A tool that changes the tree has to read as one: the neutral bucket drops the
+// only warning the row carries. The two installs write what later turns run.
+const WRITE = new Set(["delete_range", "delete_symbol", "move_file", "notebook_edit", "install_skill", "install_source"]);
+// What this turn hands to a sub-agent, plus the calls that read one back: the
+// colour is the row's only sign that the work left this context.
+const DELEG = new Set([
+  "task", "fleet", "read_only_task", "read_subagent_result", "complete_subtask",
+  "parallel_tasks", "run_skill", "read_only_skill", "list_subagents",
+]);
+const READ = new Set([
+  "read_file", "grep", "glob", "ls", "code_index", "read_skill",
+  "lsp_diagnostics", "lsp_definition", "lsp_references", "lsp_hover",
+  "history", "list_sessions", "read_session", "docs", "context_budget", "recall", "memory",
+]);
 
 // MCP tools are registered as mcp__<server>__<tool>. Which server answered is
 // the one thing a raw id hides and the user needs: it is the difference between
@@ -65,7 +80,9 @@ export function categoryOf(tool: string): string {
   if (DELEG.has(tool)) return "deleg";
   if (WRITE.has(tool) || tool.startsWith("edit") || tool.startsWith("write") || tool.startsWith("multi")) return "write";
   if (tool === "use_capability" || tool.startsWith("mcp__")) return "mcp";
-  if (tool === "remember") return "mem";
+  // Saving a fact and deleting one are the same class of change, and neither
+  // touches the tree a write colour warns about.
+  if (tool === "remember" || tool === "forget") return "mem";
   if (tool === "todo_write" || tool === "submit_plan") return "plan";
   if (tool === "bash" || tool.startsWith("bash_") || tool === "kill_shell") return "bash";
   if (READ.has(tool)) return "read";

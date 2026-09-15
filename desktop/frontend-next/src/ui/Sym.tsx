@@ -21,6 +21,9 @@ const PATH: Record<string, string> = {
   "◦": "M8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8",
   "◎": "M8 3.1a4.9 4.9 0 1 0 0 9.8 4.9 4.9 0 0 0 0-9.8M8 6.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6",
   "⊛": "M8 2.6 12.5 4.3v4c0 2.6-1.9 4.3-4.5 5-2.6-.7-4.5-2.4-4.5-5v-4ZM6.2 8.1l1.4 1.4 2.4-2.7",
+  // Nothing else in the vocabulary means "stopped": ⊘ is two arrows meeting,
+  // which is compression.
+  "⊗": "M8 3.1a4.9 4.9 0 1 0 0 9.8 4.9 4.9 0 0 0 0-9.8M5.5 5.5l5 5",
 };
 
 // Which mark a tool gets, taken from the spec's own fixture. The write family
@@ -40,12 +43,23 @@ const BY_TOOL: Record<string, string> = {
   move_file: "±", delete_range: "±", delete_symbol: "±",
   review_report: "⊙",
   task: "⑃", fleet: "⑃", read_only_task: "⑃", read_subagent_result: "⑃",
-  ask: "?",
+  ask: "?", await_user: "?",
   compress: "⊘",
   guardian_assessment: "⊛",
+  // Reached through use_capability like the rest. A delegation, a memory write
+  // or an install falls through to the read mark without an entry here.
+  parallel_tasks: "⑃", read_only_skill: "⑃", run_skill: "⑃", list_subagents: "⑃",
+  install_skill: "±",
+  forget: "◇",
+  recall: "⊙", memory: "⊙", history: "⊙", list_sessions: "⊙",
+  read_session: "·", read_skill: "·", docs: "·",
+  slash_command: "≡", install_source: "±",
+  conclude_no_changes: "⊟", conclude_blocked: "⊗",
 };
 
-export const glyphFor = (tool: string) => BY_TOOL[tool] ?? (tool.startsWith("mcp__") ? "◈" : "·");
+// The fallback is a neutral dot, not "·": that one draws a page with a folded
+// corner, so an unmapped tool claimed to have read a file.
+export const glyphFor = (tool: string) => BY_TOOL[tool] ?? (tool.startsWith("mcp__") ? "◈" : "◦");
 
 // The one deliberate exception: a person's turn stays a character.
 export function Sym({ glyph, done }: { glyph: string; done?: boolean }) {
