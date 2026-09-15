@@ -341,7 +341,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   // or the follow would read this scroll as the transcript moving and stay
   // pinned to the bottom the reader just left.
   const land = useCallback(
-    (block: number, into: number, selector: string) => {
+    (block: number, into: number, selector: string, clear = 12) => {
       const root = scroll.current;
       const inner = flow.current;
       if (!root || !inner) return;
@@ -354,11 +354,11 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       // in the window" — writing that back as scrollTop barely moves anything.
       const topOf = (el: HTMLElement) => el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
       const chunk = inner.querySelectorAll<HTMLElement>(".chunk")[block];
-      if (chunk) root.scrollTop = topOf(chunk) + into * chunk.offsetHeight - 12;
+      if (chunk) root.scrollTop = topOf(chunk) + into * chunk.offsetHeight - clear;
       const settle = (tries: number) => {
         const el = inner.querySelector<HTMLElement>(selector);
         if (el) {
-          root.scrollTop = topOf(el) - 12;
+          root.scrollTop = topOf(el) - clear;
           el.setAttribute("data-hit", "");
           setTimeout(() => el.removeAttribute("data-hit"), 1200);
           return;
@@ -369,6 +369,10 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
     },
     [scroll, flow, onPinned],
   );
+
+  // The find bar floats over the transcript's top edge, so a row landed at the
+  // usual clearance arrives underneath it.
+  const FIND_BAR = 56;
 
   const jumpTo = useCallback(
     (mark: RailMark) => land(mark.block, mark.of > 1 ? mark.within / mark.of : 0, `[data-item="${CSS.escape(mark.id)}"]`),
@@ -446,7 +450,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
     if (hidden || !find || found.current === find.n) return;
     found.current = find.n;
     const where = rowBlock.get(find.id);
-    if (where) land(where.block, where.into, `[data-item="${CSS.escape(find.id)}"]`);
+    if (where) land(where.block, where.into, `[data-item="${CSS.escape(find.id)}"]`, FIND_BAR);
   }, [hidden, find, rowBlock, land]);
 
   useEffect(() => {
