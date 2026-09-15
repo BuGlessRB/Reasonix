@@ -327,7 +327,7 @@ export function App({ hub }: { hub: HubPort }) {
     const paint = () => {
       const scheme = theme === "auto" ? (mq.matches ? "dark" : "light") : theme;
       document.documentElement.dataset.theme = scheme;
-      applyThemePack(pack, scheme as "light" | "dark", running);
+      applyThemePack(pack, scheme as "light" | "dark", running, contrast);
       // After the pack, never before: size and type are the reader's, and a
       // palette someone else authored does not get to overrule them.
       applyLook(look, running);
@@ -336,7 +336,7 @@ export function App({ hub }: { hub: HubPort }) {
     mq.addEventListener("change", paint);
     localStorage.setItem("rx-theme", theme);
     return () => mq.removeEventListener("change", paint);
-  }, [theme, pack, running, look]);
+  }, [theme, pack, running, look, contrast]);
 
   useEffect(() => {
     if (contrast) document.documentElement.dataset.contrast = contrast;

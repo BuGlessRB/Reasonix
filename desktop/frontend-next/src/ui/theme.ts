@@ -41,10 +41,30 @@ const IMAGE_VARS = ["--bg-image", "--bg-x", "--bg-y", "--bg-alpha", "--bg-overla
 // a pack must never land half-applied.
 const SKY_VARS = ["--ray", "--ray-a", "--cloud-a", "--cloud-hi", "--cloud-gilt"];
 
+// How far each ink moves per contrast step, in OKLCH lightness points, read off
+// the built-in palette's own three steps. A pack states one set of inks, which
+// is the step someone who never opened the setting sees; the stronger two are
+// derived from it so choosing a palette never costs the reader their setting.
+const STEPS: Record<string, [number, number]> = { fg: [3.0, 10.1], fgDim: [3.5, 7.5], fgFaint: [3.5, 7.0] };
+
+// The reader's contrast outranks the author's palette, the same way reading
+// size does: an author chose colours, not how legible they have to be for
+// whoever is in front of them. Written as a lightness offset rather than a mix
+// because that is what the setting means; a browser without relative colour
+// drops the declaration and keeps the stylesheet's own step, which is the
+// safe way to be wrong here.
+function ink(value: string, name: string, scheme: "light" | "dark", contrast: string): string {
+  const step = STEPS[name];
+  if (!step) return value;
+  const by = contrast === "normal" ? step[0] : contrast === "strong" ? step[1] : 0;
+  if (!by) return value;
+  return `oklch(from ${value} calc(l ${scheme === "light" ? "-" : "+"} ${(by / 100).toFixed(3)}) c h)`;
+}
+
 /** apply paints a pack onto the document, or clears back to the stylesheet.
  *  `busy` dims the picture while a turn runs: a photo that is right behind an
  *  idle window is in the way of a transcript being read. */
-export function apply(pack: ThemePack | null, scheme: "light" | "dark", busy = false) {
+export function apply(pack: ThemePack | null, scheme: "light" | "dark", busy = false, contrast = "") {
   const root = document.documentElement;
   for (const v of [...IMAGE_VARS, ...SKY_VARS]) root.style.removeProperty(v);
   // The flag is what lets the page surface go transparent. It is removed first
@@ -60,7 +80,8 @@ export function apply(pack: ThemePack | null, scheme: "light" | "dark", busy = f
   const tokens = pack.tokens[scheme];
   if (!tokens) return;
   for (const [name, value] of Object.entries(tokens)) {
-    for (const v of SURFACE[name] ?? []) root.style.setProperty(v, value);
+    const paint = ink(value, name, scheme, contrast);
+    for (const v of SURFACE[name] ?? []) root.style.setProperty(v, paint);
   }
   // The washes are tints of the accent, so a pack that moves the accent has to
   // move them too or the tinted backgrounds keep pointing at the old hue.

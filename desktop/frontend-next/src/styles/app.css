@@ -4264,6 +4264,7 @@
   .vrow .nm { flex: none; min-width: 104px; font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--muted) }
 
   .vrow[data-on] .nm { font-weight: var(--w-med); color: var(--text) }
+  .vrow[data-on] .sc { color: var(--muted) }
   .vrow[data-side="ahead"] .nm { color: var(--text) }
   .vrow[data-side="past"] .nm, .vrow[data-side="past"] .ds { color: var(--faint) }
   .vrow .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

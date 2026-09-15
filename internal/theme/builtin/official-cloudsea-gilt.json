@@ -16,7 +16,7 @@
       "borderSoft": "#D7DFEA",
       "fg": "#151B24",
       "fgDim": "#4E5766",
-      "fgFaint": "#8B94A1",
+      "fgFaint": "#616976",
       "accent": "#9C6D0C",
       "accentFg": "#FFFFFF"
     },
@@ -29,7 +29,7 @@
       "borderSoft": "#252E3C",
       "fg": "#E8EEF6",
       "fgDim": "#9BA6B6",
-      "fgFaint": "#5E6875",
+      "fgFaint": "#808B98",
       "accent": "#E5BA72",
       "accentFg": "#241A08"
     }

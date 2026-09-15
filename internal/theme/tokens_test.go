@@ -1,6 +1,11 @@
 package theme
 
-import "testing"
+import (
+	"fmt"
+	"math"
+	"strings"
+	"testing"
+)
 
 // A value lands inside a stylesheet, so the question is not "is this sensible"
 // but "can this leave the property it was written into". Everything that could
@@ -106,4 +111,62 @@ func TestDecodeKeepsGoodTokensAndReportsBadOnes(t *testing.T) {
 	if len(pack.Warnings) != 2 {
 		t.Fatalf("warnings = %v, want one for the bad value and one for the unknown name", pack.Warnings)
 	}
+}
+
+// Contrast is a property of a pair, so it is the one thing the token validator
+// cannot see: every colour in a pack is a legal value on its own. What we ship
+// is held to AA on the surfaces its text lands on, because the default
+// appearance already is — below that line a pack does not read as themed, it
+// reads as a window that has gone wrong.
+func TestShippedPacksMeetTextContrast(t *testing.T) {
+	const aa = 4.5
+	inks := []string{"fg", "fgDim", "fgFaint"}
+	surfaces := []string{"bg", "bgSoft", "panel", "bgElev"}
+	packs := listBuiltin()
+	if len(packs) == 0 {
+		t.Fatal("no packs ship; the embed is broken")
+	}
+	for _, pack := range packs {
+		for _, scheme := range []string{"light", "dark"} {
+			tokens := pack.Tokens[scheme]
+			for _, ink := range inks {
+				for _, surface := range surfaces {
+					fg, ok := tokens[ink]
+					bg, ok2 := tokens[surface]
+					if !ok || !ok2 {
+						continue
+					}
+					if got := contrastRatio(t, fg, bg); got < aa {
+						t.Errorf("%s %s: %s %s on %s %s is %.2f, below AA %.2f",
+							pack.ID, scheme, ink, fg, surface, bg, got, aa)
+					}
+				}
+			}
+		}
+	}
+}
+
+func contrastRatio(t *testing.T, a, b string) float64 {
+	t.Helper()
+	la, lb := relativeLuminance(t, a), relativeLuminance(t, b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
+}
+
+func relativeLuminance(t *testing.T, hex string) float64 {
+	t.Helper()
+	var r, g, b uint8
+	if _, err := fmt.Sscanf(strings.TrimPrefix(hex, "#"), "%02x%02x%02x", &r, &g, &b); err != nil {
+		t.Fatalf("%q is not a six-digit hex colour: %v", hex, err)
+	}
+	lin := func(v uint8) float64 {
+		c := float64(v) / 255
+		if c <= 0.04045 {
+			return c / 12.92
+		}
+		return math.Pow((c+0.055)/1.055, 2.4)
+	}
+	return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
 }
