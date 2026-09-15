@@ -60,6 +60,7 @@ export const ACTIONS: UIAction[] = [
   { id: "chrome.settings", kind: "navigation", target: "none", proof: "interaction" },
   // The way out of a window whose assets an update replaced underneath it.
   { id: "chrome.reload", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "chrome.receipt", kind: "view", target: "none", proof: "interaction" },
   { id: "chrome.account", kind: "navigation", target: "none", proof: "interaction" },
 
   // ── The turn ─────────────────────────────────────────────────────────────

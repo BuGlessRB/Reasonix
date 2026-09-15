@@ -6,7 +6,7 @@ import { plural, t } from "../i18n";
 import { currentStep, stepDone, stepLabel } from "./session_types";
 import type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TodoStatus, TurnTerminal, Waiting } from "./session_types";
 import { foldUsage, quoteAmount } from "./usage";
-import { showsReceipt } from "./prefs";
+import { setShowsReceipt, showsReceipt } from "./prefs";
 
 // The types live next door; this stays their way in, so no reader of a
 // session has to know they were split off.
@@ -18,7 +18,7 @@ import { appendText, foldMessage, sealSay } from "./say";
 import { nextId } from "./ids";
 import { dropTool, foldLastRead, foldTool, mergeReads } from "./fold";
 export { quoteAmount };
-export { showsReceipt };
+export { setShowsReceipt, showsReceipt };
 
 // doing is what the status chip prints. These two values are also read back by
 // the reducer, so they get a name: a comparison against a sentence is one copy

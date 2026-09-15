@@ -728,6 +728,8 @@ export const EN: Record<string, string> = {
   "上一处": "Previous match",
   "下一处": "Next match",
   "关闭查找": "Close find",
+  "回合结束时给出回执": "End a turn with a receipt",
+  "列出这一轮改了什么、验了什么、哪些没有验；无话可说时不出现。下一轮起生效": "Lists what this turn changed, what it verified and what went unverified; absent when there is nothing to say. Takes effect from the next turn",
   "改写这条消息": "Rewrite this message",
   "改写这条消息并重新发送": "Rewrite this message and send it again",
   "✎ 改写": "✎ Edit",

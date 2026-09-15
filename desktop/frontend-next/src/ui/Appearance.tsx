@@ -6,6 +6,7 @@ import { STORAGE as LANG_KEY, t } from "../i18n";
 import { pct } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { Switch } from "./Switch";
+import { setShowsReceipt, showsReceipt } from "../state/session";
 
 // "" follows the machine; the rest are explicit, the same shape the light/dark
 // control uses.
@@ -113,6 +114,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
   // null in a browser tab, where there is no window to keep running and no
   // icon to bring one back. The whole section goes with it.
   const [tray, setTray] = useState<TrayPrefs | null>(null);
+  const [receipt, setReceipt] = useState(showsReceipt);
 
   useEffect(() => {
     let live = true;
@@ -479,6 +481,21 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
             {t("关闭窗口后需通过托盘图标重新打开主界面，下方选项依赖该图标。")}
           </p>
           <div className="grp-items">
+            <div className="lrow">
+              <span className="tx">
+                <span className="lb">{t("回合结束时给出回执")}</span>
+                <span className="ds">{t("列出这一轮改了什么、验了什么、哪些没有验；无话可说时不出现。下一轮起生效")}</span>
+              </span>
+              <Switch
+                data-action="chrome.receipt"
+                on={receipt}
+                label={t("回合结束时给出回执")}
+                onClick={() => {
+                  setShowsReceipt(!receipt);
+                  setReceipt(!receipt);
+                }}
+              />
+            </div>
             <div className="lrow">
               <span className="tx">
                 <span className="lb">{t("在托盘显示图标")}</span>
