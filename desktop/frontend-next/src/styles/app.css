@@ -84,7 +84,7 @@
   .rail, .side { background: var(--page) }
   .panes, .tabs { background: var(--surface) }
 
-  :root[data-bg] .panes { background: transparent }
+  :root[data-bg] .main, :root[data-bg] .panes { background: transparent }
 
   :root[data-bg] .rail, :root[data-bg] .side,
   :root[data-bg] .nav, :root[data-bg] .chrome {
