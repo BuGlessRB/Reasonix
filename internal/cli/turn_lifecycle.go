@@ -32,6 +32,10 @@ func (m *chatTUI) startControllerTurn(displayed, restore string, start func()) t
 }
 
 func (m *chatTUI) startControllerTurnWithQueue(displayed, restore, queued string, start func()) tea.Cmd {
+	if m.sessionReclaimed || m.takeover != nil && m.takeover.Returned() {
+		m.notice(sessionReclaimedNotice)
+		return nil
+	}
 	if m.takeover != nil && m.takeover.Reclaiming() {
 		m.notice("the remote side is taking this session back; new input is disabled")
 		return nil

@@ -17,25 +17,6 @@ import (
 
 const resumeListCap = 10
 
-// recentSessions returns the newest legacy transcript sessions under dir. It
-// keeps recovery groups intact at the display cap (a single group may make the
-// result slightly larger) so the 1-based indices match /resume <n> and its
-// completion without orphaning a conflict copy from its parent. A read error
-// yields an empty list. Production pickers layer this with the final-format
-// catalog through mergedResumeEntries; it stays exported for the legacy-only
-// tests and diagnostics.
-func recentSessions(dir string) []agent.SessionInfo {
-	if dir == "" {
-		return nil
-	}
-	sessions, err := agent.ListSessions(dir)
-	if err != nil {
-		return nil
-	}
-	sessions = orderResumeSessions(sessions)
-	return capResumeSessionGroups(sessions, resumeListCap)
-}
-
 // resumeEntry is one picker row: a session plus, for cross-project rows, the
 // project it belongs to. The current directory's sessions keep project empty
 // so existing labels are unchanged. The target carries whether the row is a
@@ -100,48 +81,6 @@ func otherProjectResumeEntries(excludeDir string) []resumeEntry {
 	})
 	if len(out) > resumeOtherProjectsCap {
 		out = out[:resumeOtherProjectsCap]
-	}
-	return out
-}
-
-// mostRecentSession returns the chronologically newest saved session for
-// --continue. Interactive resume surfaces deliberately group recovery families
-// and prefer visible leaves, but --continue promises the most recent session and
-// must not let that presentation ordering select an older recovery copy.
-func mostRecentSession(dir string) (agent.SessionInfo, bool) {
-	if dir == "" {
-		return agent.SessionInfo{}, false
-	}
-	sessions, err := agent.ListSessions(dir)
-	if err != nil || len(sessions) == 0 {
-		return agent.SessionInfo{}, false
-	}
-	return sessions[0], true
-}
-
-func capResumeSessionGroups(sessions []agent.SessionInfo, limit int) []agent.SessionInfo {
-	if limit <= 0 || len(sessions) <= limit {
-		return sessions
-	}
-	byID := make(map[string]agent.SessionInfo, len(sessions))
-	for _, session := range sessions {
-		byID[agent.BranchID(session.Path)] = session
-	}
-	out := make([]agent.SessionInfo, 0, limit)
-	for start := 0; start < len(sessions); {
-		key := recoveryResumeGroupKey(sessions[start], byID)
-		end := start + 1
-		for end < len(sessions) && recoveryResumeGroupKey(sessions[end], byID) == key {
-			end++
-		}
-		if len(out) > 0 && len(out)+(end-start) > limit {
-			break
-		}
-		out = append(out, sessions[start:end]...)
-		start = end
-		if len(out) >= limit {
-			break
-		}
 	}
 	return out
 }
@@ -271,17 +210,22 @@ func (m *chatTUI) runResumeCommand(input string) {
 		m.notice(i18n.M.ResumeAlreadyActive)
 		return
 	}
-	// Persist the conversation we're leaving so switching back later restores it.
-	// Snapshot before moving the lease: the outgoing session must be written
-	// while this process still owns it.
-	if err := m.ctrl.Snapshot(); err != nil {
-		m.notice("resume: snapshot current session: " + err.Error())
-		return
+	detached := m.sessionReclaimed || m.takeover != nil && m.takeover.Returned()
+	if !detached {
+		// Persist the conversation we're leaving so switching back later restores it.
+		// Snapshot before moving the lease: the outgoing session must be written
+		// while this process still owns it.
+		if err := m.ctrl.Snapshot(); err != nil {
+			m.notice("resume: snapshot current session: " + err.Error())
+			return
+		}
+		m.followSessionLease()
 	}
-	m.followSessionLease()
 	if target.target.canonical() {
 		if err := m.commitCanonicalSessionSwitch(target.target.ref); err != nil {
-			m.restoreSessionLease()
+			if !detached {
+				m.restoreSessionLease()
+			}
 			if errors.Is(err, session.ErrWriterOwned) {
 				m.pendingTakeoverPath = cliCanonicalRoute(target.target.ref.SessionID)
 				m.notice("resume: " + sessionWriterHeldNotice())
@@ -299,6 +243,7 @@ func (m *chatTUI) runResumeCommand(input string) {
 		}
 		return
 	}
+	m.resumeAfterReclaim()
 	m.replayActiveBranch(i18n.M.ResumedTitle)
 }
 

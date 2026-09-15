@@ -12,9 +12,12 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"reasonix/internal/agent"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/provider"
 	"reasonix/internal/session"
 )
 
@@ -33,7 +36,7 @@ func newCanonicalTakeoverTUI(t *testing.T) (*chatTUI, *control.Controller, *sess
 		t.Fatal("session service unavailable for test workspace")
 	}
 	ctrl := newOwnedTestController(t, control.Options{
-		Executor: agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard),
+		Executor:   agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard),
 		SessionDir: sessionDir, SessionService: service, ExclusiveSession: true,
 	})
 	if _, err := ctrl.BindFreshSession(t.Context(), "fresh-cli"); err != nil {
@@ -213,5 +216,128 @@ func TestCanonicalReclaimYieldsWithoutLegacyLease(t *testing.T) {
 	fake.mu.Unlock()
 	if len(ends) != 1 || ends[0] != route {
 		t.Fatalf("mirror-end requests = %v, want one for %q", ends, route)
+	}
+}
+
+// TestCanonicalReclaimKeepsTUIAliveAndSwitchesSession proves that reclaiming
+// one identity releases its writer while leaving the CLI process available to
+// resume another identity.
+func TestCanonicalReclaimKeepsTUIAliveAndSwitchesSession(t *testing.T) {
+	route := cliCanonicalRoute("held")
+	fake := newFakeCanonicalServe(t, route)
+	withFakeCanonicalDiscovery(t, fake.base)
+	m, ctrl, service, held := newCanonicalTakeoverTUI(t)
+	if err := ctrl.RecordSessionMessages(t.Context(), "reclaim-test", []provider.Message{{
+		ID: agent.NewMessageID(), Role: provider.RoleUser, Content: "existing session",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	m.runCanonicalTakeoverCommand(route)
+
+	yielded := make(chan struct{}, 1)
+	m.takeover.SetYieldCallback(func() { yielded <- struct{}{} })
+	fake.reclaim.Store(true)
+	m.takeover.Emit(event.Event{Kind: event.Text, Text: "answer"})
+	select {
+	case <-yielded:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reclaim did not yield the identity")
+	}
+
+	if next, cmd := m.Update(tuiSessionReclaimedMsg{}); cmd != nil {
+		t.Fatalf("reclaim updated TUI with quit command %T", cmd)
+	} else {
+		updated := next.(chatTUI)
+		m = &updated
+	}
+	// The reclaimed conversation stays rendered with a notice instead of a
+	// forced chooser; only the switch/takeover/exit commands are accepted.
+	if !m.sessionReclaimed || m.resumePick != nil {
+		t.Fatalf("reclaim state = %v picker=%v, want live TUI on the reclaimed session", m.sessionReclaimed, m.resumePick != nil)
+	}
+	if reclaimInputAllowed("hello") {
+		t.Fatal("reclaim gate accepted plain text")
+	}
+	if !reclaimInputAllowed("/resume 2") {
+		t.Fatal("reclaim gate rejected /resume")
+	}
+	dir, err := service.SessionDir(t.Context(), held)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.ProbeWriterHeld(dir) {
+		t.Fatal("reclaimed identity writer lock is still held by the CLI")
+	}
+
+	// /resume opens the chooser on demand and switching clears the reclaim state.
+	m.runResumeCommand("/resume")
+	if m.resumePick == nil {
+		t.Fatal("/resume after reclaim did not open the session chooser")
+	}
+	entries := m.resumePick.entries
+	for i, entry := range entries {
+		if entry.target.canonical() && entry.target.ref.SessionID == "fresh-cli" {
+			m.resumePick.sel = i
+			if m.resumePick.quick != nil {
+				m.resumePick.quick.selected = i
+			}
+			break
+		}
+	}
+	if m.resumePick.sel < 0 || m.resumePick.sel >= len(entries) || !entries[m.resumePick.sel].target.canonical() || entries[m.resumePick.sel].target.ref.SessionID != "fresh-cli" {
+		t.Fatalf("resume picker did not expose fresh-cli: %+v", entries)
+	}
+	// Confirm through the same key path used by the live picker. Calling
+	// applyResumePick directly would miss routing or quick-picker regressions.
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatalf("resume after reclaim returned unexpected command %T", cmd)
+	}
+	updated := next.(chatTUI)
+	m = &updated
+	if ref, bound := ctrl.SessionRef(); !bound || ref.SessionID != "fresh-cli" {
+		t.Fatalf("controller after reclaim resume = %+v bound=%v, want fresh-cli", ref, bound)
+	}
+	if m.sessionReclaimed || m.takeover.Returned() {
+		t.Fatal("reclaim marker remained after switching to another session")
+	}
+}
+
+// TestCanonicalReclaimCanTakeSameSessionAgain covers the complete ownership
+// round trip: CLI takeover, desktop reclaim, then CLI takeover once more.
+func TestCanonicalReclaimCanTakeSameSessionAgain(t *testing.T) {
+	route := cliCanonicalRoute("held")
+	fake := newFakeCanonicalServe(t, route)
+	withFakeCanonicalDiscovery(t, fake.base)
+	m, ctrl, _, held := newCanonicalTakeoverTUI(t)
+	m.runCanonicalTakeoverCommand(route)
+
+	yielded := make(chan struct{}, 1)
+	m.takeover.SetYieldCallback(func() { yielded <- struct{}{} })
+	fake.reclaim.Store(true)
+	m.takeover.Emit(event.Event{Kind: event.Text, Text: "answer"})
+	select {
+	case <-yielded:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reclaim did not yield the identity")
+	}
+	if next, cmd := m.Update(tuiSessionReclaimedMsg{}); cmd != nil {
+		t.Fatalf("reclaim updated TUI with quit command %T", cmd)
+	} else {
+		updated := next.(chatTUI)
+		m = &updated
+	}
+	if _, bound := ctrl.SessionRef(); bound {
+		t.Fatal("controller remained bound after desktop reclaim")
+	}
+
+	fake.reclaim.Store(false)
+	m.pendingTakeoverPath = route
+	m.runTakeoverCommand("/takeover")
+	if ref, bound := ctrl.SessionRef(); !bound || ref != held {
+		t.Fatalf("controller after second takeover = %+v bound=%v, want %+v", ref, bound, held)
+	}
+	if m.sessionReclaimed || m.takeover.Returned() {
+		t.Fatal("second takeover left the CLI in reclaimed mode")
 	}
 }

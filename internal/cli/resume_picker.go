@@ -35,10 +35,13 @@ func (m *chatTUI) openResumePicker() {
 	}
 	active := m.ctrl.SessionPath()
 	activeIdx := -1
+	reclaimedIdx := -1
 	for i, entry := range entries {
 		if entry.session.Path == active || resumeEntryIsActive(m.ctrl, entry) {
 			activeIdx = i
-			break
+		}
+		if resumeTargetMatches(m.reclaimedTarget, entry) {
+			reclaimedIdx = i
 		}
 	}
 	// Default selection: the first session after the active one, else 0.
@@ -46,11 +49,19 @@ func (m *chatTUI) openResumePicker() {
 	if activeIdx >= 0 && activeIdx+1 < len(entries) {
 		sel = activeIdx + 1
 	}
+	if m.sessionReclaimed && reclaimedIdx >= 0 && len(entries) > 1 {
+		sel = reclaimedIdx + 1
+		if sel >= len(entries) {
+			sel = 0
+		}
+	}
 	items := make([]quickPickerItem, 0, len(entries))
 	for i, entry := range entries {
 		status := ""
 		if i == activeIdx {
 			status = "active"
+		} else if i == reclaimedIdx {
+			status = "taken back"
 		}
 		label := sessionPickerLabel(entry.session)
 		description := entry.session.ModTime.Local().Format("2006-01-02 15:04")
@@ -67,6 +78,13 @@ func (m *chatTUI) openResumePicker() {
 		entries: entries, sel: sel, active: activeIdx,
 		quick: &quickPicker{kind: quickPickerResume, title: i18n.M.ResumePickTitle, items: items, selected: sel},
 	}
+}
+
+func resumeTargetMatches(target cliResumeTarget, entry resumeEntry) bool {
+	if target.canonical() || entry.target.canonical() {
+		return target.canonical() && entry.target.canonical() && target.ref == entry.target.ref
+	}
+	return target.path != "" && agent.CanonicalSessionPath(target.path) == agent.CanonicalSessionPath(entry.session.Path)
 }
 
 func (m chatTUI) handleResumePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -124,16 +142,21 @@ func (m chatTUI) applyResumePick() (tea.Model, tea.Cmd) {
 		m.notice(i18n.M.ResumeBusy)
 		return m, nil
 	}
-	// Snapshot before moving the lease: the outgoing session must be written
-	// while this process still owns it.
-	if err := m.ctrl.Snapshot(); err != nil {
-		m.notice("resume: snapshot current session: " + err.Error())
-		return m, nil
+	detached := m.sessionReclaimed || m.takeover != nil && m.takeover.Returned()
+	if !detached {
+		// Snapshot before moving the lease: the outgoing session must be written
+		// while this process still owns it.
+		if err := m.ctrl.Snapshot(); err != nil {
+			m.notice("resume: snapshot current session: " + err.Error())
+			return m, nil
+		}
+		m.followSessionLease()
 	}
-	m.followSessionLease()
 	if target.target.canonical() {
 		if err := m.commitCanonicalSessionSwitch(target.target.ref); err != nil {
-			m.restoreSessionLease()
+			if !detached {
+				m.restoreSessionLease()
+			}
 			if errors.Is(err, session.ErrWriterOwned) {
 				m.pendingTakeoverPath = cliCanonicalRoute(target.target.ref.SessionID)
 				m.notice("resume: " + sessionWriterHeldNotice())
@@ -151,6 +174,7 @@ func (m chatTUI) applyResumePick() (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	m.resumeAfterReclaim()
 	m.replayActiveBranch(i18n.M.ResumedTitle)
 	return m, nil
 }

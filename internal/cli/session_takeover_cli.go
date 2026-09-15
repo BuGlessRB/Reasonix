@@ -53,12 +53,13 @@ type cliTakeoverBinding struct {
 	path string
 	// canonical marks a final-format identity route ("session-id:<id>") as the
 	// binding's key: there is no transcript path lease to move, ownership is
-	// the session directory's writer lock and it releases with the process.
-	canonical  bool
-	record     cliServeRecord
-	client     *http.Client
-	grant      cliTakeoverGrant
-	previous   *control.SessionLeaseKeeper
+	// the session directory's writer lock and it is released explicitly when
+	// the TUI yields, with process exit remaining the crash-safety fallback.
+	canonical   bool
+	record      cliServeRecord
+	client      *http.Client
+	grant       cliTakeoverGrant
+	previous    *control.SessionLeaseKeeper
 	priorMirror *cliTakeoverBinding
 }
 
@@ -186,6 +187,39 @@ func cliTakeoverHeldSession(sessionPath string, leaseErr error, leases *control.
 }
 
 // cliTakeoverFromServe executes the handoff against one specific serve.
+
+// postCLITakeoverHandoff exchanges one serve's /handoff for a grant. Both the
+// legacy path-lease flow and the final-format identity flow validate the same
+// wire contract; only the target key and post-grant reservation differ.
+func postCLITakeoverHandoff(ctx context.Context, client *http.Client, base, sessionPath, errPrefix string) (cliTakeoverGrant, error) {
+	body, _ := json.Marshal(map[string]any{
+		"sessionPath": sessionPath, "targetWriterId": agent.SessionWriterID(),
+		"force": true, "mode": "wait", "timeoutMs": cliTakeoverTimeout.Milliseconds(),
+	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/handoff", bytes.NewReader(body))
+	if err == nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if err != nil {
+		return cliTakeoverGrant{}, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return cliTakeoverGrant{}, fmt.Errorf("%s: %w", errPrefix, err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	if resp.StatusCode != http.StatusOK {
+		return cliTakeoverGrant{}, fmt.Errorf("%s: %s", errPrefix, strings.TrimSpace(string(respBody)))
+	}
+	var grant cliTakeoverGrant
+	if json.Unmarshal(respBody, &grant) != nil || grant.MirrorID == "" || grant.HandoffID == "" ||
+		grant.ReturnHandoffID == "" || grant.SourceWriterID == "" || grant.TargetWriterID != agent.SessionWriterID() {
+		return cliTakeoverGrant{}, fmt.Errorf("%s: invalid handoff grant", errPrefix)
+	}
+	return grant, nil
+}
+
 func cliTakeoverFromServe(sessionPath string, record *cliServeRecord, leases *control.SessionLeaseKeeper, manager *cliTakeoverManager) (*cliTakeoverBinding, error) {
 	pid := record.pid
 	ctx, cancel := context.WithTimeout(context.Background(), cliTakeoverTimeout+15*time.Second)
@@ -194,30 +228,9 @@ func cliTakeoverFromServe(sessionPath string, record *cliServeRecord, leases *co
 	if err != nil {
 		return nil, fmt.Errorf("takeover from local serve (pid %d): %w", pid, err)
 	}
-	body, _ := json.Marshal(map[string]any{
-		"sessionPath": sessionPath, "targetWriterId": agent.SessionWriterID(),
-		"force": true, "mode": "wait", "timeoutMs": cliTakeoverTimeout.Milliseconds(),
-	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, record.base+"/handoff", bytes.NewReader(body))
-	if err == nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
+	grant, err := postCLITakeoverHandoff(ctx, client, record.base, sessionPath, fmt.Sprintf("takeover from local serve (pid %d)", pid))
 	if err != nil {
 		return nil, err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("takeover from local serve (pid %d): %w", pid, err)
-	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("takeover from local serve (pid %d): %s", pid, strings.TrimSpace(string(respBody)))
-	}
-	var grant cliTakeoverGrant
-	if json.Unmarshal(respBody, &grant) != nil || grant.MirrorID == "" || grant.HandoffID == "" ||
-		grant.ReturnHandoffID == "" || grant.SourceWriterID == "" || grant.TargetWriterID != agent.SessionWriterID() {
-		return nil, fmt.Errorf("takeover from local serve (pid %d): invalid handoff grant", pid)
 	}
 	binding := &cliTakeoverBinding{path: sessionPath, record: *record, client: client, grant: grant}
 	if manager != nil {
@@ -434,6 +447,24 @@ func (m *cliTakeoverManager) SetYieldCallback(fn func()) {
 
 func (m *cliTakeoverManager) Reclaiming() bool { return m != nil && m.reclaiming.Load() }
 func (m *cliTakeoverManager) Returned() bool   { return m != nil && m.returned.Load() }
+
+// ResumeAfterYield clears the terminal-side marker after the TUI has acquired
+// a different session. Returning a mirror ends that mirror permanently; the
+// manager must not keep blocking the new session just because the process that
+// hosted the old one stayed alive.
+func (m *cliTakeoverManager) ResumeAfterYield() {
+	if m == nil {
+		return
+	}
+	m.returnMu.Lock()
+	defer m.returnMu.Unlock()
+	m.mu.Lock()
+	if m.binding == nil {
+		m.returned.Store(false)
+		m.reclaiming.Store(false)
+	}
+	m.mu.Unlock()
+}
 
 func (m *cliTakeoverManager) snapshot() (*cliTakeoverBinding, control.SessionAPI, func(), uint64) {
 	m.mu.Lock()
@@ -655,7 +686,9 @@ func (m *cliTakeoverManager) readoptLocked(binding *cliTakeoverBinding, revision
 			agent.CanonicalSessionPath(grant.SessionPath) == agent.CanonicalSessionPath(binding.path) {
 			m.mu.Lock()
 			if m.binding == binding && m.revision == revision && !m.returned.Load() {
-				m.binding = &cliTakeoverBinding{path: binding.path, record: record, client: client, grant: grant}
+				next := *binding
+				next.record, next.client, next.grant = record, client, grant
+				m.binding = &next
 				m.revision++
 				m.failures = 0
 			}
@@ -720,8 +753,8 @@ func (m *cliTakeoverManager) returnLeaseFor(expected *cliTakeoverBinding, revisi
 	}
 	return m.returnMirrorTransaction(expectedPath, true, true, func(current *cliTakeoverBinding) error {
 		if current.canonical {
-			// The canonical writer lock releases with the process; the flushed
-			// snapshot above is the only durable step the reservation covered.
+			// The canonical writer lock is released by the live TUI handoff; the
+			// flushed snapshot above is the only durable step the reservation covered.
 			return nil
 		}
 		return m.leases.ReleaseForHandoff(current.grant.SourceWriterID, current.grant.ReturnHandoffID)

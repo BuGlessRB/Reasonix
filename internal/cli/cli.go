@@ -1328,7 +1328,7 @@ func chatREPL(args []string, version string) int {
 	// keep working; finalized transcript lines are emitted via tea.Println.
 	diagnostics.Milestone("terminal_takeover_begin")
 	p := tea.NewProgram(m)
-	takeoverManager.SetYieldCallback(func() { p.Send(tuiShutdownMsg{}) })
+	takeoverManager.SetYieldCallback(func() { p.Send(tuiSessionReclaimedMsg{}) })
 	diagnostics.StartWatchdog(p)
 	// SSH drop (SIGHUP) or service stop (SIGTERM): persist the conversation
 	// before the terminal goes away, then unwind through the normal close path

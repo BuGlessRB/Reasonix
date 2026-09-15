@@ -439,7 +439,6 @@ func (s *Server) detachedHasActiveWork(path string) bool {
 
 type handoffRequest struct {
 	SessionPath    string `json:"sessionPath"`
-	SessionID      string `json:"sessionId,omitempty"` // final-format identity (no legacy path)
 	TargetWriterID string `json:"targetWriterId"`
 	Force          bool   `json:"force"`
 	Mode           string `json:"mode"`
@@ -455,19 +454,14 @@ type handoffRequest struct {
 // the writer lease instead of a path lease.
 func (s *Server) handoff(w http.ResponseWriter, r *http.Request) {
 	var body handoffRequest
-	if err := decodeTakeoverJSON(w, r, &body); err != nil || strings.TrimSpace(body.TargetWriterID) == "" ||
-		(strings.TrimSpace(body.SessionPath) == "" && strings.TrimSpace(body.SessionID) == "") {
+	if err := decodeTakeoverJSON(w, r, &body); err != nil || strings.TrimSpace(body.SessionPath) == "" || strings.TrimSpace(body.TargetWriterID) == "" {
 		if err == nil {
 			http.Error(w, "missing sessionPath or targetWriterId", http.StatusBadRequest)
 		}
 		return
 	}
-	if isSessionIDRoute(body.SessionPath) || strings.TrimSpace(body.SessionID) != "" {
-		route := strings.TrimSpace(body.SessionPath)
-		if route == "" {
-			route = remoteSessionIDQueryPrefix + strings.TrimSpace(body.SessionID)
-		}
-		s.handoffIdentity(w, r, route, strings.TrimSpace(body.TargetWriterID), body)
+	if isSessionIDRoute(body.SessionPath) {
+		s.handoffIdentity(w, r, strings.TrimSpace(body.SessionPath), strings.TrimSpace(body.TargetWriterID), body)
 		return
 	}
 	mode := parseHandoffMode(body.Mode)
@@ -548,22 +542,24 @@ func (s *Server) handoffIdentity(w http.ResponseWriter, r *http.Request, route, 
 	writeJSON(w, m.grant("handed_off"))
 }
 
-// quietIdentityForHandoff waits for (or cancels toward) an idle foreground
-// bound to the identity before the release transaction runs.
-func (s *Server) quietIdentityForHandoff(ref session.SessionRef, mode handoffMode, timeout time.Duration) error {
+// quietHandoffTarget answers the drain/cancel poll for one handoff target:
+// held reports whether this serve currently runs the target, busy whether a
+// turn is still active on it. Callers cancel toward idle in interrupt mode.
+type quietHandoffTarget func() (ctrl control.SessionAPI, held, busy bool)
+
+// quietHandoffLoop waits for (or cancels toward) an idle handoff target before
+// the release transaction runs. It re-checks under bindMu afterwards: turn
+// admission holds bindMu, so once the caller holds it and the target is idle,
+// no new turn can start on it.
+func quietHandoffLoop(target quietHandoffTarget, mode handoffMode, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
-		cur, ok := s.ctl().(*control.Controller)
-		if !ok {
+		ctrl, held, busy := target()
+		if !held {
 			return errSessionNotHeld
 		}
-		current, bound := cur.SessionRef()
-		if !bound || current != ref {
-			return errSessionNotHeld
-		}
-		busy := controllerHasActiveRuntimeWork(cur)
-		if busy && mode == handoffModeInterrupt {
-			cur.Cancel()
+		if busy && mode == handoffModeInterrupt && ctrl != nil {
+			ctrl.Cancel()
 		}
 		if !busy {
 			return nil
@@ -576,6 +572,22 @@ func (s *Server) quietIdentityForHandoff(ref session.SessionRef, mode handoffMod
 		}
 		time.Sleep(handoffPollInterval)
 	}
+}
+
+// quietIdentityForHandoff waits for (or cancels toward) an idle foreground
+// bound to the identity before the release transaction runs.
+func (s *Server) quietIdentityForHandoff(ref session.SessionRef, mode handoffMode, timeout time.Duration) error {
+	return quietHandoffLoop(func() (control.SessionAPI, bool, bool) {
+		cur, ok := s.ctl().(*control.Controller)
+		if !ok {
+			return nil, false, false
+		}
+		current, bound := cur.SessionRef()
+		if !bound || current != ref {
+			return nil, false, false
+		}
+		return cur, true, controllerHasActiveRuntimeWork(cur)
+	}, mode, timeout)
 }
 
 // handoffIdentityLocked performs the identity release. Callers hold bindMu and
@@ -602,6 +614,10 @@ func (s *Server) handoffIdentityLocked(ctx context.Context, route string, ref se
 	if _, err := concrete.BindFreshSession(ctx, ""); err != nil {
 		return mirroredSession{}, fmt.Errorf("handoff: rotate foreground: %w", err)
 	}
+	// Re-point the frame tag at the rotated foreground: a stale tag stamps
+	// live frames with the handed-off identity and the desktop pump drops
+	// them as background.
+	s.setControllerPath(concrete, "")
 	service := concrete.SessionService()
 	if service == nil {
 		return mirroredSession{}, errors.New("handoff: session service unavailable after rotation")
@@ -654,47 +670,26 @@ var (
 )
 
 // quietSessionForHandoff waits for (or cancels toward) an idle session before
-// the binding transaction runs. It re-checks under bindMu afterwards: turn
-// admission holds bindMu, so once the caller holds it and the session is
-// idle, no new turn can start on it.
+// the binding transaction runs, covering both the foreground and a detached
+// holder of the path.
 func (s *Server) quietSessionForHandoff(realPath string, mode handoffMode, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for {
+	return quietHandoffLoop(func() (control.SessionAPI, bool, bool) {
 		cur := s.ctl()
-		foreground := cur != nil && agent.CanonicalSessionPath(cur.SessionPath()) == agent.CanonicalSessionPath(realPath)
-		var busy bool
-		switch {
-		case foreground:
-			busy = controllerHasActiveRuntimeWork(cur)
-			if busy && mode == handoffModeInterrupt {
-				cur.Cancel()
-			}
-		case s.detachedBusy(realPath):
-			s.detachedMu.Lock()
-			d := s.detached[agent.CanonicalSessionPath(realPath)]
-			ctrl := control.SessionAPI(nil)
-			if d != nil {
-				ctrl = d.ctrl
-			}
-			s.detachedMu.Unlock()
-			busy = ctrl != nil && controllerHasActiveRuntimeWork(ctrl)
-			if busy && mode == handoffModeInterrupt {
-				ctrl.Cancel()
-			}
-		default:
-			return errSessionNotHeld
+		if cur != nil && agent.CanonicalSessionPath(cur.SessionPath()) == agent.CanonicalSessionPath(realPath) {
+			return cur, true, controllerHasActiveRuntimeWork(cur)
 		}
-		if !busy {
-			return nil
+		if !s.detachedBusy(realPath) {
+			return nil, false, false
 		}
-		if time.Now().After(deadline) {
-			if mode == handoffModeInterrupt {
-				return fmt.Errorf("session did not stop within %s; retry", timeout)
-			}
-			return fmt.Errorf("session is still running after %s; retry with mode=interrupt to cancel it", timeout)
+		s.detachedMu.Lock()
+		d := s.detached[agent.CanonicalSessionPath(realPath)]
+		ctrl := control.SessionAPI(nil)
+		if d != nil {
+			ctrl = d.ctrl
 		}
-		time.Sleep(handoffPollInterval)
-	}
+		s.detachedMu.Unlock()
+		return ctrl, ctrl != nil, ctrl != nil && controllerHasActiveRuntimeWork(ctrl)
+	}, mode, timeout)
 }
 
 // handoffLocked performs the release transaction. Callers hold bindMu and
@@ -1069,6 +1064,10 @@ func (s *Server) reclaimIdentityLocked(w http.ResponseWriter, ctx context.Contex
 		}
 		return
 	}
+	// The re-owned identity is the foreground again: refresh the frame tag so
+	// live turns carry the reclaimed session's id (the pre-reclaim tag points
+	// elsewhere and the desktop pump would drop the frames).
+	s.setControllerPath(concrete, "")
 	if mirror.mirrorID != "" {
 		if _, ok := s.clearMirrored(route, mirror.mirrorID); !ok {
 			http.Error(w, "mirror generation changed", http.StatusConflict)
@@ -1298,17 +1297,8 @@ func (s *Server) adopt(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	realPath, err := s.resolveSessionPath(body.SessionPath)
-	if err != nil {
-		http.Error(w, err.Error(), resolveSessionPathStatus(err))
-		return
-	}
 	s.bindMu.Lock()
 	defer s.bindMu.Unlock()
-	if s.serveHoldsSession(realPath) {
-		http.Error(w, "session is held by this serve; use POST /handoff to take it over", http.StatusConflict)
-		return
-	}
 	if isSessionIDRoute(body.SessionPath) {
 		// Final-format identities prove ownership by the writer lock itself;
 		// there is no lease sidecar to inspect. The claim is accepted only when
@@ -1348,6 +1338,15 @@ func (s *Server) adopt(w http.ResponseWriter, r *http.Request) {
 			SessionPath: m.path,
 		})
 		writeJSON(w, m.grant("adopted"))
+		return
+	}
+	realPath, err := s.resolveSessionPath(body.SessionPath)
+	if err != nil {
+		http.Error(w, err.Error(), resolveSessionPathStatus(err))
+		return
+	}
+	if s.serveHoldsSession(realPath) {
+		http.Error(w, "session is held by this serve; use POST /handoff to take it over", http.StatusConflict)
 		return
 	}
 	info, held, inspectErr := agent.InspectSessionLease(realPath)
@@ -1535,10 +1534,10 @@ func (s *Server) mirrorEnd(w http.ResponseWriter, r *http.Request) {
 }
 
 // mirrorEndIdentity handles the local writer's farewell for a final-format
-// identity. The farewell is sent before process exit by the writer's return
-// transaction, so a still-held writer lock is expected, not an error: accept
-// it and let the outstanding reclaim (or the stale auto-reclaim) finish when
-// the lock drops with the process. Only an already-free lock re-owns now.
+// identity. The farewell is sent before the live writer releases its runtime,
+// so a still-held writer lock is expected, not an error: accept it and let the
+// outstanding reclaim finish when the lock drops. Process exit remains the
+// stale auto-reclaim fallback. Only an already-free lock re-owns now.
 func (s *Server) mirrorEndIdentity(w http.ResponseWriter, r *http.Request, route, mirrorID string) {
 	ref, dir, err := s.resolveSessionIdentity(route)
 	if err != nil {

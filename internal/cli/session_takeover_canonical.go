@@ -1,17 +1,12 @@
 package cli
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
-	"reasonix/internal/agent"
 	"reasonix/internal/control"
 	"reasonix/internal/i18n"
 	"reasonix/internal/session"
@@ -73,28 +68,11 @@ func cliTakeoverIdentityFromServe(route string, record *cliServeRecord) (*cliTak
 	if err != nil {
 		return nil, fmt.Errorf("takeover from local serve: %w", err)
 	}
-	body, _ := json.Marshal(map[string]any{
-		"sessionPath": route, "targetWriterId": agent.SessionWriterID(),
-		"force": true, "mode": "wait", "timeoutMs": cliTakeoverTimeout.Milliseconds(),
-	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, record.base+"/handoff", bytes.NewReader(body))
+	grant, err := postCLITakeoverHandoff(ctx, client, record.base, route, "takeover from local serve")
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("takeover from local serve: %w", err)
-	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("takeover from local serve: %s", strings.TrimSpace(string(respBody)))
-	}
-	var grant cliTakeoverGrant
-	if json.Unmarshal(respBody, &grant) != nil || grant.MirrorID == "" || grant.ReturnHandoffID == "" ||
-		grant.SourceWriterID == "" || grant.TargetWriterID != agent.SessionWriterID() ||
-		strings.TrimSpace(grant.SessionPath) != route {
+	if strings.TrimSpace(grant.SessionPath) != route {
 		return nil, fmt.Errorf("invalid handoff grant")
 	}
 	return &cliTakeoverBinding{path: route, canonical: true, record: *record, client: client, grant: grant}, nil
@@ -145,20 +123,27 @@ func (m *chatTUI) runCanonicalTakeoverCommand(route string) {
 		m.notice("takeover: " + err.Error())
 		return
 	}
-	if err := m.ctrl.Snapshot(); err != nil {
-		m.notice("takeover: snapshot current session: " + err.Error())
-		return
+	detached := m.sessionReclaimed || m.takeover != nil && m.takeover.Returned()
+	if !detached {
+		if err := m.ctrl.Snapshot(); err != nil {
+			m.notice("takeover: snapshot current session: " + err.Error())
+			return
+		}
+		m.followSessionLease()
 	}
-	m.followSessionLease()
 	binding, err := cliTakeoverIdentityHeldSession(route, m.takeover)
 	if err != nil {
-		m.restoreSessionLease()
+		if !detached {
+			m.restoreSessionLease()
+		}
 		m.notice("takeover: " + err.Error())
 		return
 	}
 	if err := m.commitCanonicalSessionSwitch(ref); err != nil {
 		cliEndFailedHandoff(binding)
-		m.restoreSessionLease()
+		if !detached {
+			m.restoreSessionLease()
+		}
 		m.notice("takeover: " + err.Error())
 		return
 	}
@@ -167,6 +152,7 @@ func (m *chatTUI) runCanonicalTakeoverCommand(route string) {
 		m.takeover.AttachController(m.ctrl)
 		m.takeover.Activate(binding)
 	}
+	m.resumeAfterReclaim()
 	m.replayActiveBranch(i18n.M.ResumedTitle)
 	m.notice("session taken over; the remote side is now read-only and can take it back")
 }
