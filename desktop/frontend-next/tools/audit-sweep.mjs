@@ -101,6 +101,11 @@ const P = `(() => {
   for (const el of document.querySelectorAll("*")) {
     if (el.children.length || !(el.textContent||"").trim() || !vis(el)) continue;
     const s2 = getComputedStyle(el);
+    // Text painted through a gradient has no single colour to weigh: its own
+    // is transparent by construction, which reads here as ink identical to the
+    // surface. Say nothing rather than report 1.00 against a heading nobody
+    // can see the problem in.
+    if (/text/.test(s2.webkitBackgroundClip || s2.backgroundClip || "")) continue;
     const px = parseFloat(s2.fontSize), bold = parseInt(s2.fontWeight,10) >= 700;
     const large = px >= 24 || (px >= 18.66 && bold);
     const need = large ? 3 : 4.5;

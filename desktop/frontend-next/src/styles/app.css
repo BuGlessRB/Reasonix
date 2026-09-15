@@ -2762,16 +2762,16 @@
   .onb-r path:nth-child(2) { animation-delay: .16s }
   .onb-r path:nth-child(3) { animation-delay: .32s }
   .onb-t { margin: 0; font: var(--w-reg) var(--fs-ui) var(--ui); color: rgb(255 255 255 / .62) }
-  .onb-s { margin: -4px 0 2px; font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: rgb(255 255 255 / .38) }
+  .onb-s { margin: -4px 0 2px; font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: rgb(255 255 255 / .48) }
 
   .onb-field { width: 100%; display: grid; gap: 5px; text-align: left }
 
   .onb-field > label {
     display: flex; align-items: center; gap: 6px;
-    font: var(--w-reg) var(--fs-meta) var(--mono); color: rgb(255 255 255 / .36); letter-spacing: var(--track-lead);
+    font: var(--w-reg) var(--fs-meta) var(--mono); color: rgb(255 255 255 / .48); letter-spacing: var(--track-lead);
   }
   .onb-field > label code {
-    font: var(--w-reg) var(--fs-micro) var(--mono); color: rgb(255 255 255 / .3);
+    font: var(--w-reg) var(--fs-micro) var(--mono); color: rgb(255 255 255 / .52);
     padding: 1px 5px; border-radius: var(--r-xs); background: rgb(255 255 255 / .06);
   }
   .onb-field > input {
@@ -2804,7 +2804,7 @@
     background: #DDA144; color: #171104; border: 1px solid #DDA144; border-radius: var(--r-sm);
   }
   .onb-go[disabled] { opacity: .45 }
-  .onb-note { font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: rgb(255 255 255 / .34) }
+  .onb-note { font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: rgb(255 255 255 / .48) }
 
   .prefs {
     position: fixed; inset: var(--chrome-h, 39px) 0 0; z-index: 50;
@@ -4474,7 +4474,7 @@
 
   .oobe-sub {
     margin: 14px 0 0; font: 400 var(--fs-ui) var(--mono); letter-spacing: .01em;
-    color: rgb(255 255 255 / .38);
+    color: rgb(255 255 255 / .48);
   }
   .oobe[data-play] .oobe-brand {
     opacity: 0;
@@ -4546,7 +4546,7 @@
   }
   .onb-chip[data-custom] { border-style: dashed }
 
-  .onb-field .lb { font: var(--w-reg) var(--fs-meta) var(--mono); color: rgb(255 255 255 / .36); letter-spacing: var(--track-lead) }
+  .onb-field .lb { font: var(--w-reg) var(--fs-meta) var(--mono); color: rgb(255 255 255 / .48); letter-spacing: var(--track-lead) }
   .onb-pick .picker { display: block }
 
   .onb-pick > .picker > button {
