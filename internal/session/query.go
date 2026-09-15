@@ -22,6 +22,8 @@ type Query struct {
 	generation    map[string]uint64
 	rebuildCtx    context.Context
 	rebuildStop   context.CancelFunc
+	rebuildWG     sync.WaitGroup
+	closed        bool
 	slots         *rebuildSlots
 	indexMu       sync.Mutex
 	indexLocks    map[string]*sync.Mutex
@@ -122,9 +124,18 @@ func (q *Query) projectionLock(kind, sessionID string) *sync.Mutex {
 // own shared rebuilds, so cancelling one request never cancels work another
 // caller may use; the host query lifetime is the cancellation boundary.
 func (q *Query) Close() {
-	if q != nil && q.rebuildStop != nil {
-		q.rebuildStop()
+	if q == nil {
+		return
 	}
+	q.rebuildMu.Lock()
+	if !q.closed {
+		q.closed = true
+		if q.rebuildStop != nil {
+			q.rebuildStop()
+		}
+	}
+	q.rebuildMu.Unlock()
+	q.rebuildWG.Wait()
 }
 
 func (q *Query) Snapshot(ctx context.Context, ref SessionRef) (Snapshot, error) {
@@ -176,6 +187,23 @@ func (q *Query) History(ctx context.Context, ref SessionRef) ([]provider.Message
 	return append([]provider.Message(nil), snapshot.Projection.Messages...), nil
 }
 
+// Stat returns one header-backed metadata observation without opening event
+// bodies. Live projection state overlays the disposable cache, matching List.
+func (q *Query) Stat(ctx context.Context, ref SessionRef) (SessionInfo, error) {
+	if q == nil || q.persistence == nil {
+		return SessionInfo{}, fmt.Errorf("session: nil session query")
+	}
+	if err := ref.validate(q.hostID); err != nil {
+		return SessionInfo{}, err
+	}
+	info, err := q.persistence.Stat(ctx, ref.SessionID)
+	if err != nil {
+		return SessionInfo{}, err
+	}
+	q.enrichInfo(&info)
+	return info, nil
+}
+
 func (q *Query) List(ctx context.Context, cursor string, limit int) (SessionPage, error) {
 	if q == nil || q.persistence == nil {
 		return SessionPage{}, fmt.Errorf("session: nil session query")
@@ -185,23 +213,25 @@ func (q *Query) List(ctx context.Context, cursor string, limit int) (SessionPage
 		return SessionPage{}, err
 	}
 	for i := range page.Sessions {
-		info := &page.Sessions[i]
-		info.Ref = SessionRef{HostID: q.hostID, SessionID: info.SessionID}
-		if info.Error != "" {
-			continue
-		}
-		if q.service != nil {
-			if runtime, ok := q.service.Runtime(info.Ref); ok {
-				metadata := runtime.Session().CatalogMetadata()
-				applyCatalogMetadata(info, metadata)
-				continue
-			}
-		}
-		if info.Codec == Codec && info.MetadataStatus != MetadataReady {
-			q.scheduleMetadataRebuild(info.SessionID)
-		}
+		q.enrichInfo(&page.Sessions[i])
 	}
 	return page, nil
+}
+
+func (q *Query) enrichInfo(info *SessionInfo) {
+	info.Ref = SessionRef{HostID: q.hostID, SessionID: info.SessionID}
+	if info.Error != "" {
+		return
+	}
+	if q.service != nil {
+		if runtime, ok := q.service.Runtime(info.Ref); ok {
+			applyCatalogMetadata(info, runtime.Session().CatalogMetadata())
+			return
+		}
+	}
+	if info.Codec == Codec && info.MetadataStatus != MetadataReady {
+		q.scheduleMetadataRebuild(info.SessionID)
+	}
 }
 
 func applyCatalogMetadata(info *SessionInfo, metadata catalogMetadata) {
@@ -214,6 +244,10 @@ func (q *Query) scheduleMetadataRebuild(sessionID string) {
 		return
 	}
 	q.rebuildMu.Lock()
+	if q.closed {
+		q.rebuildMu.Unlock()
+		return
+	}
 	if _, exists := q.rebuilding[sessionID]; exists {
 		q.rebuildMu.Unlock()
 		return
@@ -227,6 +261,7 @@ func (q *Query) scheduleMetadataRebuild(sessionID string) {
 		q.rebuildMu.Unlock()
 		return
 	}
+	q.rebuildWG.Add(1)
 	q.rebuildMu.Unlock()
 	go q.rebuildCatalogMetadata(sessionID, generation)
 }
@@ -244,6 +279,7 @@ func (q *Query) invalidateCatalog(sessionID string) {
 }
 
 func (q *Query) rebuildCatalogMetadata(sessionID string, generation uint64) {
+	defer q.rebuildWG.Done()
 	defer q.slots.release()
 	defer func() {
 		q.rebuildMu.Lock()

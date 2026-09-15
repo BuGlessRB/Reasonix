@@ -151,12 +151,12 @@ type Options struct {
 	// empty, the shared CLI/global session directory is used.
 	SessionDir string
 	// SessionService is shared by all controllers on one host. Rebuild injects
-	// the previous service and runtime so changing model/settings replaces only
-	// the Agent while the immutable session identity and writer remain owned by
-	// the same SessionRuntime.
-	SessionService *session.Service
-	SessionRuntime *session.Runtime
-	SessionHostID  string
+	// the previous service/runtime so model changes keep the immutable session
+	// identity and writer owned by the same SessionRuntime.
+	SessionService       *session.Service
+	SessionRuntime       *session.Runtime
+	SessionHostID        string
+	SessionCreateOptions session.CreateOptions
 	// SharedHost is an optional plugin.Host shared across controllers for the
 	// same workspace root. When set, boot.Build reuses its running clients
 	// instead of creating new subprocesses, and the caller manages the host's
@@ -187,6 +187,7 @@ type Options struct {
 	SessionRecoveryMeta func(control.SessionRecoveryRequest) agent.BranchMeta
 	OnSessionRecovered  func(control.SessionRecoveryInfo) error
 	OnSessionTransition func(control.SessionTransitionInfo) error
+	OnSessionRotation   func(context.Context, control.SessionRotationRequest) (control.SessionRotationPlan, error)
 	BeforeInboxDispatch func(*control.Controller) (func(), error)
 	// OnSessionTitleChanged lets a host project the canonical BranchMeta title
 	// into compatibility indexes and refresh notifications after the current
@@ -1904,6 +1905,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		SessionRecoveryMeta: opts.SessionRecoveryMeta,
 		OnSessionRecovered:  opts.OnSessionRecovered,
 		OnSessionTransition: opts.OnSessionTransition,
+		OnSessionRotation:   opts.OnSessionRotation,
 		BeforeInboxDispatch: opts.BeforeInboxDispatch,
 		// The merged catalog lets frontends enumerate sidecar providers.
 		ProviderResolver:  extensionResolver,
@@ -2344,7 +2346,7 @@ func normalizeAdditionalDirs(root string, dirs []string) ([]string, error) {
 
 func appendUniquePaths(base []string, extra ...string) []string {
 	out := append([]string(nil), base...)
-	seen := make(map[string]struct{}, len(out)+len(extra))
+	seen := make(map[string]struct{}, len(out))
 	for _, path := range out {
 		seen[pathComparisonKey(path)] = struct{}{}
 	}

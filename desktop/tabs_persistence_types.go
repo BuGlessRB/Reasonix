@@ -9,6 +9,7 @@ type desktopTabEntry struct {
 	ID                string  `json:"id"`
 	Scope             string  `json:"scope"`
 	WorkspaceRoot     string  `json:"workspaceRoot"`
+	WorkspaceID       string  `json:"workspaceId,omitempty"`
 	TopicID           string  `json:"topicId"`
 	SessionPath       string  `json:"sessionPath,omitempty"`
 	SessionID         string  `json:"sessionId,omitempty"`
@@ -35,11 +36,16 @@ type desktopTabsFile struct {
 	TabOrder       []string                `json:"tabOrder,omitempty"`
 }
 
+type desktopTabWorkspace struct {
+	ID string
+}
+
 func persistedDesktopTabEntry(tab *WorkspaceTab) desktopTabEntry {
 	return desktopTabEntry{
 		ID:                tab.ID,
 		Scope:             tab.Scope,
 		WorkspaceRoot:     tab.WorkspaceRoot,
+		WorkspaceID:       tab.SessionWorkspace.ID,
 		TopicID:           tab.TopicID,
 		SessionPath:       tab.currentSessionPath(),
 		SessionID:         tab.SessionID,

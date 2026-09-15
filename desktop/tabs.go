@@ -72,6 +72,7 @@ type WorkspaceTab struct {
 	ID                  string                   // stable random id
 	Scope               string                   // "project" | "global"
 	WorkspaceRoot       string                   // project root dir (empty for global)
+	SessionWorkspace    desktopTabWorkspace      // stable Workspace registry identity
 	SharedHostKey       string                   // opaque key for the shared plugin host (set by buildTabController)
 	TopicID             string                   // topic within the project
 	TopicTitle          string                   // display title
@@ -619,6 +620,7 @@ func cloneDetachedRuntimeTab(tab *WorkspaceTab, key, path string) *WorkspaceTab 
 		ID:                       detachedRuntimeTabID(key),
 		Scope:                    tab.Scope,
 		WorkspaceRoot:            tab.WorkspaceRoot,
+		SessionWorkspace:         tab.SessionWorkspace,
 		SharedHostKey:            tab.SharedHostKey,
 		TopicID:                  tab.TopicID,
 		TopicTitle:               tab.TopicTitle,
@@ -2112,6 +2114,7 @@ func (a *App) tabMeta(tab *WorkspaceTab, active bool) TabMeta {
 		ID:                tab.ID,
 		Scope:             tab.Scope,
 		WorkspaceRoot:     tab.WorkspaceRoot,
+		WorkspaceID:       tab.SessionWorkspace.ID,
 		WorkspaceName:     workspaceName(tab.WorkspaceRoot),
 		WorkspacePath:     tab.WorkspaceRoot,
 		TopicID:           tab.TopicID,
@@ -2140,6 +2143,9 @@ func (a *App) tabMeta(tab *WorkspaceTab, active bool) TabMeta {
 		Active:            active,
 		Cwd:               tab.WorkspaceRoot,
 		IsolatedWorktree:  floor.isolated,
+	}
+	if strings.TrimSpace(tab.SessionID) != "" {
+		m.Session = &session.SessionRef{HostID: "local", SessionID: strings.TrimSpace(tab.SessionID)}
 	}
 	switch tab.Scope {
 	case "global":
@@ -3174,13 +3180,8 @@ func (a *App) keepOnlyVisibleTab(tabID string) (TabMeta, error) {
 		for _, candidate := range candidates {
 			id, tab := candidate.id, candidate.tab
 			snapshotted[id] = tab
-			if err := a.snapshotTab(tab); err != nil {
-				slog.Warn("desktop: snapshot before pruning hidden tab failed", "tab", id, "err", err)
-				return TabMeta{}, fmt.Errorf("save current session before switching tabs: %w", err)
-			}
-			if err := a.saveTabSessionMetaForCurrentSession(tab); err != nil {
-				slog.Warn("desktop: session metadata before pruning hidden tab failed", "tab", id, "err", err)
-				return TabMeta{}, fmt.Errorf("save current session metadata before switching tabs: %w", err)
+			if err := a.persistHiddenTabBeforePrune(id, tab); err != nil {
+				return TabMeta{}, err
 			}
 		}
 
@@ -3708,9 +3709,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	extensionGen := a.currentExtensionGeneration()
 	sharedHost := a.acquireSharedHost(rootKey)
 	sink := a.desktopControllerSink(buildSink, cfg.Notifications)
-	buildCtx, registration := beginSharedHostMCPRegistration(buildCtx, sharedHost)
-	defer registration.rollback()
-	ctrl, err := a.buildTabControllerBootFenced(buildCtx, extensionGen, boot.Options{
+	booted := a.bootTabControllerWithModelFallback(buildCtx, tab, cfg, sharedHost, boot.Options{
 		Model:                model,
 		RequireKey:           false,
 		StatsSource:          "desktop",
@@ -3729,7 +3728,11 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 		OnSessionTransition:      a.handleTabSessionTransition(tab),
 		BeforeInboxDispatch:      a.beforeInboxDispatch,
 		OnSessionTitleChanged:    a.onSessionTitleChanged,
-	})
+	}, extensionGen, buildGeneration, tabSessionID, requestedModel)
+	buildCtx, registration := booted.ctx, booted.registration
+	defer func() { registration.rollback() }()
+	ctrl, err := booted.controller, booted.err
+	model, modelFallback := booted.model, booted.fallback
 	if a.handleTabControllerBootError(tab, registration, rootKey, buildGeneration, appCtx, err) {
 		return
 	}
@@ -3751,27 +3754,9 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	restoredRuntime := buildRuntime
 	identity, usesExclusiveV3 := ctrl.(control.IdentityLifecycle)
 	if usesExclusiveV3 && identity.UsesExclusiveSession() {
-		var ref session.SessionRef
-		var bindErr error
-		switch {
-		case strings.TrimSpace(tabSessionID) != "":
-			service := identity.SessionService()
-			if service == nil {
-				bindErr = errors.New("v3 session service is unavailable")
-			} else {
-				ref, bindErr = identity.OpenSession(buildCtx, session.SessionRef{HostID: service.HostID(), SessionID: strings.TrimSpace(tabSessionID)})
-			}
-		case strings.TrimSpace(startupSessionPath) != "":
-			if _, statErr := os.Stat(startupSessionPath); statErr == nil {
-				ref, bindErr = identity.ContinueLegacySession(buildCtx, startupSessionPath, "")
-			} else if !os.IsNotExist(statErr) {
-				bindErr = statErr
-			} else {
-				ref, bindErr = identity.BindFreshSession(buildCtx, "")
-			}
-		default:
-			ref, bindErr = identity.BindFreshSession(buildCtx, "")
-		}
+		ref, workspaceID, bindErr := a.bindTabCanonicalSession(
+			buildCtx, identity, cfg, tabScope, tabWorkspaceRoot, tabSessionID, startupSessionPath, model, modelFallback,
+		)
 		if bindErr != nil {
 			a.recordTabStartupFailure(tab, buildGeneration, appCtx, friendlySessionLoadError(bindErr))
 			ctrl.Close()
@@ -3786,6 +3771,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 		}
 		tab.SessionID = ref.SessionID
 		tab.SessionPath = ""
+		tab.SessionWorkspace.ID = workspaceID
 		a.mu.Unlock()
 		tab.replaceTelemetry(tabTelemetrySnapshot{}, sessionRuntimeKey(remoteSessionIDRoutePrefix+ref.SessionID))
 	} else if dir := ctrl.SessionDir(); dir != "" {
