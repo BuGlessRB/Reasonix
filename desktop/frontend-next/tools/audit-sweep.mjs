@@ -62,7 +62,11 @@ await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceSc
 await send("Page.navigate", { url }); await wait(2500);
 await ev(`localStorage.setItem("rx-lang","en");localStorage.setItem("rx-theme",${JSON.stringify(theme)})`);
 await send("Page.navigate", { url }); await wait(4500);
-if (process.env.ONB) { await ev(readFileSync(process.env.ONB, "utf8")); await wait(3500); }
+// What the entry script reached is reported, never dropped: a card it failed to
+// answer leaves every step behind it unreachable, and that reads in the output
+// as a dozen skipped steps rather than as the one thing that went wrong.
+let onb = null;
+if (process.env.ONB) { onb = await ev(readFileSync(process.env.ONB, "utf8")); await wait(3500); }
 
 const P = `(() => {
   const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
@@ -151,23 +155,35 @@ const P = `(() => {
   return out;
 })()`;
 
+// Every step names the control it wants by the intent the interface declares
+// on it, never by what the button says or where it sits: the labels move with
+// the interface language, and the sweep runs in English against a window a
+// person reads in Chinese. Picking by shape is how `.sesstitle` — a class that
+// had not existed for months — went on "succeeding" into the rename button
+// beside the row it meant to open.
+const act = (a, v) => `[data-action="${a}"]` + (v ? `[data-value="${v}"]` : "");
+const click = (sel, pick = "[0]") => `(()=>{const b=[...document.querySelectorAll('${sel}')]${pick};if(!b)return false;b.click();return true})()`;
+const type = (t) => `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;ta.focus();const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,${JSON.stringify(t)});ta.dispatchEvent(new Event('input',{bubbles:true}));return true})()`;
 const STEPS = [
   ["main", null],
-  ["session-12turns", `(()=>{const rows=[...document.querySelectorAll('.sessrow,.sess,[class*=sess]')].filter(e=>/turns/.test(e.textContent||''));const r=rows.sort((a,b)=>(+(b.textContent.match(/(\\d+) turns/)?.[1]||0))-(+(a.textContent.match(/(\\d+) turns/)?.[1]||0)))[0];const b=r&&(r.querySelector('.sesstitle')?.closest('button,[role=button]')||r.querySelector('button')||r);b&&b.click();return !!b})()`],
-  ["tab-trajectory", `(()=>{const b=[...document.querySelectorAll('.tab')].find(x=>/Trajectory/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["tab-activity", `(()=>{const b=[...document.querySelectorAll('.tab')].find(x=>/Activity/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["picker-model", `(()=>{const b=[...document.querySelectorAll('.picker button.mode')].find(x=>!/Effort|Approvals/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["picker-effort", `(()=>{document.body.click();const b=[...document.querySelectorAll('button.mode')].find(x=>/Effort/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["picker-approvals", `(()=>{document.body.click();const b=[...document.querySelectorAll('button.mode')].find(x=>/Approvals/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["plan-on", `(()=>{document.body.click();const b=[...document.querySelectorAll('button.mode.tog')].find(x=>/Plan/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["slash-palette", `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;ta.focus();const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,'/');ta.dispatchEvent(new Event('input',{bubbles:true}));return true})()`],
-  ["at-files", `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;ta.focus();const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,'@');ta.dispatchEvent(new Event('input',{bubbles:true}));return true})()`],
-  ["clear-composer", `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,'');ta.dispatchEvent(new Event('input',{bubbles:true}));document.body.click();return true})()`],
-  ["send-turn", `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;ta.focus();const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,'Run the tests and fix what fails');ta.dispatchEvent(new Event('input',{bubbles:true}));const b=[...document.querySelectorAll('button')].find(x=>/Send/i.test(x.textContent||''));b&&b.click();return !!b})()`],
+  // The busiest session, because a transcript with turns in it is the only one
+  // that renders tool cards, plans and approvals.
+  ["session-open", click(act("session.open"), `.sort((a,b)=>(+(b.querySelector('.sessmeta')?.textContent.match(/\\d+/)?.[0]||0))-(+(a.querySelector('.sessmeta')?.textContent.match(/\\d+/)?.[0]||0)))[0]`)],
+  ["tab-task", click(act("pane.view", "task"))],
+  ["tab-flow", click(act("pane.view", "flow"))],
+  ["picker-model", click(act("model.select"))],
+  ["picker-effort", `(()=>{document.body.click();return ${click(act("reasoning.effort"))}})()`],
+  ["picker-approvals", `(()=>{document.body.click();return ${click(act("tool-approval.mode"))}})()`],
+  ["policy", `(()=>{document.body.click();return ${click(act("chrome.policy"))}})()`],
+  ["plan-on", `(()=>{document.body.click();return ${click(act("plan.mode"))}})()`],
+  ["slash-palette", type("/")],
+  ["at-files", type("@")],
+  ["clear-composer", `(()=>{const ok=${type("")};document.body.click();return ok})()`],
+  ["send-turn", `(()=>{const ok=${type("Run the tests and fix what fails")};if(!ok)return false;return ${click(act("session.send"), ".filter(b=>!b.classList.contains('sug'))[0]")}})()`],
   ["turn-mid", `(()=>true)()`],
   ["turn-late", `(()=>true)()`],
   ["turn-end", `(()=>true)()`],
-  ["account", `(()=>{const b=document.querySelector('.acct-btn');b&&b.click();return !!b})()`],
+  ["account", click(act("chrome.account"))],
 ];
 const res = [], skipped = [];
 for (const [label, act] of STEPS) {
@@ -175,7 +191,7 @@ for (const [label, act] of STEPS) {
   res.push({ label, ...(await ev(P)) });
 }
 await ev(`document.body.click()`); await wait(400);
-await ev(`document.querySelector('.thbtn[aria-label="Settings"]')?.click()`); await wait(1400);
+await ev(`document.querySelector('[data-action="chrome.settings"]')?.click()`); await wait(1400);
 const n = await ev(`document.querySelectorAll('.prefs-nav button').length`);
 if (!n) skipped.push("settings"); else for (let i = 0; i < n; i++) {
   const nm2 = await ev(`(()=>{const b=document.querySelectorAll('.prefs-nav button')[${i}];b.click();return b.id||b.textContent.trim().slice(0,12)})()`);
@@ -185,6 +201,7 @@ const KEYS = ["contrast", "truncated", "clippedY", "offscreen", "overflowX", "sp
 const agg = Object.fromEntries(KEYS.map((k) => [k, new Map()]));
 for (const r of res) for (const k of KEYS) for (const v of (r[k]||[])) if (!agg[k].has(v)) agg[k].set(v, r.label);
 console.log(`\n##### ${url} theme=${theme} ${W}x${H} steps=${res.length} skipped=[${skipped.join(",")}]`);
+if (onb) console.log("  entry:", JSON.stringify(onb));
 for (const k of KEYS) { const m = agg[k]; if (!m.size) continue;
   console.log(`  ${k}: ${m.size}`); [...m.entries()].slice(0, 22).forEach(([v, w]) => console.log(`    [${w}] ${v}`)); }
 console.log(`  runtime: exc=${rt.exc.length} err=${rt.err.length} warn=${rt.warn.length} net4xx=${new Set(rt.net).size}`);
