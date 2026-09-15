@@ -23,14 +23,17 @@ func TestAnUncontendedHoldStillReports(t *testing.T) {
 	if err := owner.AcquireWrite(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	// Windows' monotonic clock advances about every 15ms, so an instant hold
+	// reads as zero there and says nothing about whether it was accounted for.
+	time.Sleep(40 * time.Millisecond)
 	owner.EndRun()
 
 	got := <-closed
 	if got.Contended != 0 || got.Reported != 0 || got.Waited != 0 {
 		t.Fatalf("an uncontended hold reported contention: %+v", got)
 	}
-	if got.Held <= 0 {
-		t.Fatalf("held is not a duration: %+v", got)
+	if got.Held < 30*time.Millisecond {
+		t.Fatalf("held did not span the hold: %+v", got)
 	}
 }
 
