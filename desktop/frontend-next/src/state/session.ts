@@ -749,7 +749,14 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions
       const at = m.toolCallId === undefined ? undefined : calls.get(m.toolCallId);
       if (at !== undefined) {
         const prev = out[at] as Extract<Item, { t: "tool" }>;
-        out[at] = { ...prev, tool: { ...prev.tool, output: m.content } };
+        out[at] = {
+          ...prev,
+          tool: {
+            ...prev.tool,
+            output: m.content,
+            ...(m.toolFailed ? { err: m.content, refusalCode: m.toolRefusalCode } : {}),
+          },
+        };
       }
     }
   }

@@ -36,7 +36,11 @@ type historyMessage struct {
 	HostAuthored bool              `json:"hostAuthored,omitempty"`
 	ToolCalls    []historyToolCall `json:"toolCalls,omitempty"`
 	ToolCallID   string            `json:"toolCallId,omitempty"`
-	ToolName     string            `json:"toolName,omitempty"`
+	// The host's own account of a result that did not succeed. Without it a
+	// rebuilt card has only the words, which a tool's own output can imitate.
+	ToolFailed      bool   `json:"toolFailed,omitempty"`
+	ToolRefusalCode string `json:"toolRefusalCode,omitempty"`
+	ToolName        string `json:"toolName,omitempty"`
 }
 
 func historyMessages(msgs []provider.Message) []historyMessage {
@@ -71,6 +75,10 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 		if m.Role == provider.RoleTool {
 			hm.ToolCallID = m.ToolCallID
 			hm.ToolName = m.Name
+			if m.ToolFailure != nil {
+				hm.ToolFailed = true
+				hm.ToolRefusalCode = m.ToolFailure.RefusalCode
+			}
 		}
 		out = append(out, hm)
 	}

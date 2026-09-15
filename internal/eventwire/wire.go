@@ -410,7 +410,7 @@ func toWireTool(t event.Tool) *Tool {
 	wt := &Tool{
 		ID: t.ID, Name: t.Name, Args: t.Args,
 		ResolvedName: t.ResolvedName, CapabilityID: t.CapabilityID,
-		Output: t.Output, Err: t.Err,
+		Output: t.Output, Err: t.Err, RefusalCode: t.RefusalCode,
 		ReadOnly: t.ReadOnly, Truncated: t.Bound.Lossy(),
 		DurationMs: t.DurationMs, ContextTokens: t.ContextTokens(),
 		Partial: t.Partial, StartedAt: t.StartedAt, EndedAt: t.EndedAt,
@@ -459,7 +459,11 @@ type Tool struct {
 	CapabilityID string `json:"capabilityId,omitempty"`
 	Output       string `json:"output,omitempty" externalizable:"true"`
 	Err          string `json:"err,omitempty" externalizable:"true"`
-	ReadOnly     bool   `json:"readOnly"`
+	// RefusalCode is the host's dotted identity for a refusal. Err is only its
+	// wording, and a reader that has to tell one refusal from another cannot
+	// use a sentence.
+	RefusalCode string `json:"refusalCode,omitempty"`
+	ReadOnly    bool   `json:"readOnly"`
 	// Truncated is the compatibility projection of Bound for journals written
 	// before it existed; Bound is what a current frontend reads.
 	Truncated  bool   `json:"truncated,omitempty"`

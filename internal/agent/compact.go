@@ -426,9 +426,12 @@ func isErrorMessage(m provider.Message) bool {
 	if m.Role != provider.RoleTool {
 		return false
 	}
-	if failedExecution(m.ToolExecution) {
+	if m.ToolFailure != nil || failedExecution(m.ToolExecution) {
 		return true
 	}
+	// The prefix match is what answers for a transcript written before the host
+	// recorded the fact; it cannot see a failure whose words do not start that
+	// way, which is why it is the fallback and not the rule.
 	s := strings.TrimSpace(strings.ToLower(m.Content))
 	return strings.HasPrefix(s, "error:") || strings.HasPrefix(s, "blocked:")
 }

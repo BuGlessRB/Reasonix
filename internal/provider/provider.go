@@ -106,28 +106,9 @@ type Message struct {
 	// persisted for Desktop/CLI/Serve cards and stripped by ModelMessages before
 	// any provider request so tool schemas and prompt-cache prefixes stay stable.
 	ToolExecution *ToolExecution `json:"tool_execution,omitempty"`
-}
-
-// ToolExecution is host-local shell metadata mirrored from tool.ShellExecution.
-// Provider serializers must never emit this object on the wire.
-type ToolExecution struct {
-	Kind           string `json:"kind,omitempty"`
-	Shell          string `json:"shell,omitempty"`
-	ShellVersion   string `json:"shellVersion,omitempty"`
-	Platform       string `json:"platform,omitempty"`
-	SupportsAndAnd bool   `json:"supportsAndAnd"`
-	State          string `json:"state,omitempty"`
-	FailurePhase   string `json:"failurePhase,omitempty"`
-	ExitCode       *int   `json:"exitCode,omitempty"`
-	OutputTail     string `json:"outputTail,omitempty"`
-	MutationRisk   string `json:"mutationRisk,omitempty"`
-	Verification   string `json:"verification,omitempty"`
-	DurationMs     int64  `json:"durationMs,omitempty"`
-	// DiagnosticLines are 1-based line numbers of Content that a model picked
-	// out as carrying the failure, recorded once so every later fold shortens
-	// the same way. Written during compaction, never by the tool run, and
-	// stripped from provider requests with the rest of this struct.
-	DiagnosticLines []int `json:"diagnosticLines,omitempty"`
+	// The host's own account of a result that did not succeed: non-nil is the
+	// fact, RefusalCode names a refusal. Local metadata, like ToolExecution.
+	ToolFailure *ToolFailure `json:"tool_failure,omitempty"`
 }
 
 // DecisionReceipt is durable, provider-excluded evidence of a user-owned

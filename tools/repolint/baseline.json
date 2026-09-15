@@ -6,8 +6,8 @@
     "commented-code": 0,
     "complexity": 1496,
     "error-text": 12,
-    "essay": 3218,
-    "file-size": 38207,
+    "essay": 3217,
+    "file-size": 38188,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
@@ -1291,8 +1291,8 @@
       "essay": 7
     },
     "internal/provider/provider.go": {
-      "essay": 51,
-      "file-size": 274
+      "essay": 50,
+      "file-size": 255
     },
     "internal/provider/responses/responses.go": {
       "essay": 11,

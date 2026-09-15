@@ -663,6 +663,11 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 		if i < len(batch.executions) {
 			msg.ToolExecution = toProviderToolExecution(batch.executions[i])
 		}
+		if i < len(batch.outcomes) {
+			if o := batch.outcomes[i]; o.errMsg != "" || o.blocked || o.refusalCode != "" {
+				msg.ToolFailure = &provider.ToolFailure{RefusalCode: o.refusalCode, Blocked: o.blocked}
+			}
+		}
 		a.sess.conversation.Add(msg)
 	}
 	// If the context was cancelled during tool execution, return after storing

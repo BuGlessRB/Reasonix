@@ -16,6 +16,10 @@ export interface HistoryMessage {
   toolCalls?: HistoryToolCall[];
   toolCallId?: string;
   toolName?: string;
+  // The host's own account of a result that did not succeed. Without it a
+  // rebuilt card has only the words, which a tool's own output can imitate.
+  toolFailed?: boolean;
+  toolRefusalCode?: string;
 }
 
 // One call inside a history message. resolvedName/capabilityId say what a

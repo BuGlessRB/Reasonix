@@ -98,6 +98,8 @@ export interface Tool {
   capabilityId?: string;
   output?: string;
   err?: string;
+  // The host's dotted identity for a refusal. err is only its wording.
+  refusalCode?: string;
   readOnly: boolean;
   // truncated is the pre-Bound projection kept for old journals; read bound.
   truncated?: boolean;
