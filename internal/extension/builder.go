@@ -7,6 +7,7 @@ import (
 	"maps"
 	"strings"
 
+	"reasonix/internal/extensioncontract"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
@@ -190,7 +191,7 @@ func validateContributions(cs []Contribution) error {
 		case KindTool:
 			errs = append(errs, validateToolContribution(ct)...)
 		case KindProvider:
-			if _, _, ok := splitProviderRef(ct.ID); !ok {
+			if _, _, ok := extensioncontract.SplitProviderRef(ct.ID); !ok {
 				errs = append(errs, &ValidationError{Kind: ct.Kind, ID: ct.ID, Reason: "provider ID must be a <name>/<model> ref"})
 			}
 		case KindInterceptor:

@@ -13,7 +13,7 @@
     "function-size": 6555,
     "layering": 0,
     "marker": 0,
-    "narrative": 57,
+    "narrative": 56,
     "orphan": 81,
     "refusal-path": 0,
     "spec-parity": 0,
@@ -967,7 +967,6 @@
     },
     "internal/extension/replace.go": {
       "essay": 1,
-      "narrative": 1,
       "orphan": 1
     },
     "internal/extension/replace_test.go": {

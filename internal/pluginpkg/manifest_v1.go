@@ -1,6 +1,8 @@
 package pluginpkg
 
 import (
+	"reasonix/internal/extensioncontract"
+
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -360,24 +362,8 @@ func validateRuntimeSlot(s string) error {
 	return fmt.Errorf("runtime.replaces: unknown slot %q", s)
 }
 
-// validRuntimeProviderRef mirrors the kernel's provider-slot target rule
-// (extension.validProviderSlotTarget): an ordinary <name>/<model> ref, or an
-// extension-hosted plugin/<pluginID>/<name>/<model> ref.
 func validRuntimeProviderRef(ref string) bool {
-	name, model, found := strings.Cut(ref, "/")
-	if found && name != "" && model != "" && !strings.Contains(model, "/") {
-		return true
-	}
-	rest, ok := strings.CutPrefix(ref, "plugin/")
-	if !ok {
-		return false
-	}
-	pluginID, nameModel, ok := strings.Cut(rest, "/")
-	if !ok || pluginID == "" || strings.ContainsAny(pluginID, " \t\n") {
-		return false
-	}
-	name, model, found = strings.Cut(nameModel, "/")
-	return found && name != "" && model != "" && !strings.Contains(model, "/")
+	return extensioncontract.ValidProviderTarget(ref)
 }
 
 // parseV1Runtime strict-decodes and validates the runtime block. Every
