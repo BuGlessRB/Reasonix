@@ -72,6 +72,10 @@ const probe = `(() => {
     if (!own) continue;
     const s = getComputedStyle(el);
     if (s.visibility === "hidden" || s.display === "none" || +s.opacity === 0) continue;
+    // WCAG exempts text in an inactive user interface component, and a control
+    // greys out precisely to say it is not one you can use. Reporting one puts
+    // a number nobody can act on above the ones somebody can.
+    if (el.closest("[disabled], [aria-disabled=true]")) continue;
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) continue;
     const size = parseFloat(s.fontSize), weight = +s.fontWeight || 400;

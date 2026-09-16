@@ -107,6 +107,9 @@ const P = `(() => {
     // surface. Say nothing rather than report 1.00 against a heading nobody
     // can see the problem in.
     if (/text/.test(s2.webkitBackgroundClip || s2.backgroundClip || "")) continue;
+    // WCAG exempts an inactive component: a disabled control is greyed to say
+    // it cannot be used, and holding it to body-text contrast buries the rest.
+    if (el.closest("[disabled], [aria-disabled=true]")) continue;
     const px = parseFloat(s2.fontSize), bold = parseInt(s2.fontWeight,10) >= 700;
     const large = px >= 24 || (px >= 18.66 && bold);
     const need = large ? 3 : 4.5;
