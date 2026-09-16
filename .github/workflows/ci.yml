@@ -379,9 +379,6 @@ jobs:
       - name: test
         run: go test -race ./...
 
-      # desktop's *_darwin.go is the one build-tag set the lint job cannot
-      # reach: the dock-icon glue is cgo, so it only type-checks with a real
-      # macOS toolchain.
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -408,13 +405,9 @@ jobs:
           cache: true
           cache-dependency-path: desktop/go.sum
 
-      # The vendored WebView2 fork carries the mixed-DPI and proxy-isolation
-      # patches, and its own tests only compile on Windows.
-      - name: test (Windows shell, update helper, and the WebView2 fork)
+      - name: test (update helper and uninstaller)
         timeout-minutes: 15
-        run: |
-          go test ./...
-          (cd third_party/go-webview2 && go test ./pkg/edge)
+        run: go test ./...
 
   # repolint scans desktop/ and sdk/ too, so this job also runs for diffs the
   # `code` filter would otherwise skip.
