@@ -190,7 +190,14 @@ func (c *Controller) OpenSession(ctx context.Context, ref session.SessionRef) (s
 		return session.SessionRef{}, errors.New("v3 session service is unavailable")
 	}
 	if current != nil && current.Ref() == ref {
-		return ref, nil
+		// The controller keeps rendering a runtime it no longer owns after a
+		// reclaim released the writer: the service closed that store, so its
+		// recovery database answers "not open" to the next turn append. Only
+		// the service's still-active instance may take the fast path; a closed
+		// one must fall through and be re-opened.
+		if active, ok := service.Runtime(ref); ok && active == current {
+			return ref, nil
+		}
 	}
 	binding, err := service.Open(ctx, ref)
 	if errors.Is(err, session.ErrUnsupportedVersion) {
