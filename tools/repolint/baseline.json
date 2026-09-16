@@ -5,9 +5,9 @@
     "claude-dialect": 1,
     "commented-code": 0,
     "complexity": 1496,
-    "error-text": 12,
+    "error-text": 9,
     "essay": 3210,
-    "file-size": 38146,
+    "file-size": 38143,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
@@ -377,9 +377,6 @@
       "essay": 1,
       "file-size": 202,
       "orphan": 1
-    },
-    "internal/bot/feishu/retry.go": {
-      "error-text": 1
     },
     "internal/bot/gateway.go": {
       "complexity": 59,
@@ -1147,9 +1144,6 @@
       "complexity": 17,
       "function-size": 17
     },
-    "internal/netclient/diagnose.go": {
-      "error-text": 2
-    },
     "internal/permission/bash_decompose.go": {
       "essay": 23
     },
@@ -1270,7 +1264,7 @@
     },
     "internal/provider/provider.go": {
       "essay": 50,
-      "file-size": 255
+      "file-size": 252
     },
     "internal/provider/responses/responses.go": {
       "essay": 11,

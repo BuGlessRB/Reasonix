@@ -12,13 +12,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"slices"
 	"sort"
 	"strings"
-	"syscall"
 	"unicode"
 
+	"reasonix/internal/neterr"
 	"reasonix/internal/nilutil"
 )
 
@@ -865,10 +864,8 @@ func ClassifyStreamInterrupt(err error) string {
 	switch {
 	case errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF):
 		return StreamInterruptPrematureEOF
-	case errors.Is(err, net.ErrClosed) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNABORTED):
-		return StreamInterruptConnectionReset
 	default:
-		if IsConnReset(err) {
+		if neterr.IsConnReset(err) {
 			return StreamInterruptConnectionReset
 		}
 		return StreamInterruptPrematureEOF

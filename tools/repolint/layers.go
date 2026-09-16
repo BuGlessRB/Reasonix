@@ -40,6 +40,7 @@ var leaves = []string{
 	"internal/frontmatter",
 	"internal/i18n",
 	"internal/mcpdiag",
+	"internal/neterr",
 	"internal/nilutil",
 	"internal/planmode",
 	"internal/proc",

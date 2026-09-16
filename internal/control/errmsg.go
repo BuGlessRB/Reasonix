@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/i18n"
+	"reasonix/internal/neterr"
 	"reasonix/internal/provider"
 	"reasonix/internal/secrets"
 )
@@ -22,7 +23,7 @@ func explainError(err error) error {
 	if provider.IsStreamInterrupted(err) {
 		return fmt.Errorf("model stream interrupted after recovery attempts: %s. The partial response was kept; retry or ask Reasonix to continue", err.Error())
 	}
-	if provider.IsConnReset(err) {
+	if neterr.IsConnReset(err) {
 		return fmt.Errorf("model stream disconnected before completion after retry attempts: %s. Check the provider/proxy connection, then retry or ask Reasonix to continue", err.Error())
 	}
 	var apiErr *provider.APIError

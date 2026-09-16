@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"reasonix/internal/neterr"
 	"reasonix/internal/provider"
 )
 
@@ -44,7 +45,7 @@ func streamFailure(emitted bool, err error) error {
 	// A failed read is named by provider.ReadCut where it happens and leaves
 	// through the branch above; this one is for transport errors arriving by
 	// another route.
-	if provider.IsConnReset(err) {
+	if neterr.IsConnReset(err) {
 		return provider.StreamInterrupt(err, provider.ClassifyStreamInterrupt(err))
 	}
 	var payload *provider.StreamPayloadError
