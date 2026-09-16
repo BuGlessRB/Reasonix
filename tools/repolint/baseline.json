@@ -6,7 +6,7 @@
     "commented-code": 0,
     "complexity": 1496,
     "error-text": 12,
-    "essay": 3217,
+    "essay": 3213,
     "file-size": 38171,
     "flat-view": 0,
     "frontend-parity": 150,
@@ -14,7 +14,7 @@
     "layering": 0,
     "marker": 0,
     "narrative": 57,
-    "orphan": 122,
+    "orphan": 115,
     "refusal-path": 0,
     "spec-parity": 0,
     "struct-state": 41,
@@ -919,8 +919,7 @@
       "essay": 1
     },
     "internal/extension/adapters.go": {
-      "essay": 5,
-      "orphan": 7
+      "essay": 3
     },
     "internal/extension/builder.go": {
       "essay": 21,
@@ -944,9 +943,6 @@
     },
     "internal/extension/metrics.go": {
       "struct-state": 5
-    },
-    "internal/extension/plugin_resources_test.go": {
-      "essay": 2
     },
     "internal/extension/protocol/dto_content.go": {
       "essay": 1
