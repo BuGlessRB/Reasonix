@@ -715,6 +715,10 @@ func (a *App) ReclaimRemoteTabSession(tabID string) error {
 	a.remoteTabMu.Lock()
 	if tab := a.remoteTabs[tabID]; stillCurrent(tab) {
 		tab.session.takenOver = false
+		// Fence status payloads reserved before this reclaim: they may still
+		// be in flight and carry the pre-reclaim takenOver=true, which would
+		// re-pin the spectator banner the moment ownership returned.
+		tab.reclaimRevision = tab.runtime.revision + 1
 		deferBarrier := tab.runtime.running || tab.runtime.pendingPrompt
 		tab.pendingReadyBarrier = deferBarrier
 		meta := remoteTabMetaLocked(tab)

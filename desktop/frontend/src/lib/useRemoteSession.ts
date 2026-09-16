@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRuntimeSession } from "./useRuntimeState";
 import { createLegacyRemotePolicyNoticeTracker } from "./legacyRemotePolicyNotice";
 import { app, onRemoteTabEvent, onRemoteTabState } from "./bridge";
+import { onRemoteTabUpdated } from "./remoteTabEvents";
 import { useRemoteForkTurn } from "./remoteForkTurn";
 import { useRemoteRunningWatchdog } from "./useRemoteRunningWatchdog";
 import { useT } from "./i18n";
@@ -130,6 +131,10 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   const [promptError, setPromptError] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [syncMode, setSyncMode] = useState<"snapshot" | "legacy">("legacy");
+  // True while the serve reports a local runtime on the host owns this
+  // session; a spectator surface idles with no other status polling, so this
+  // flag also drives a slow reconcile loop below.
+  const [spectator, setSpectator] = useState(false);
   const olderRef = useRef<((trigger?: HistoryLoadTrigger) => Promise<HistoryLoadOutcome>) | undefined>(undefined);
   const transcriptRef = useRef(transcript);
   const setTranscript = useCallback((update: State | ((state: State) => State)) => {
@@ -176,6 +181,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     setGoalRuntime(remoteGoalRuntime(status));
     setGoalView(remoteGoalView(status));
     setEffortInfo(next.effort);
+    setSpectator(Boolean(status.takenOver));
   }, []);
 
   useEffect(() => {
@@ -520,6 +526,12 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     if (revivedFromShell) {
       void app.SetActiveTab(tabId).catch(() => undefined);
     }
+    // Ownership flips arrive as tab meta updates (an explicit reclaim clears
+    // the pin there before any status poll runs); mirror them into the
+    // spectator flag that drives the reconcile loop below.
+    const offMeta = onRemoteTabUpdated((meta) => {
+      if (!cancelled && meta?.id === tabId) setSpectator(Boolean(meta.takenOver));
+    });
     const offEvent = onRemoteTabEvent(tabId, (raw) => {
       if (cancelled) return;
       const event = (raw ?? {}) as WireEvent;
@@ -559,6 +571,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       if (refreshStatusRef.current?.run === refreshStatus) refreshStatusRef.current = null;
       if (reconcileHistoryRef.current === reconcileHistory) reconcileHistoryRef.current = null;
       offState();
+      offMeta();
       offEvent();
     };
   }, [applyRemoteStatus, sessionId, sessionPath, tabId]);
@@ -588,6 +601,19 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     running: transcript.running,
     refreshStatusRef,
   });
+
+  // A spectator surface idles with no status traffic: the running watchdog
+  // only reconciles turns, and the read-only composer blocks the sends that
+  // would otherwise refresh status. A stale ownership observation could pin
+  // the takeover banner forever, so poll at a slow cadence until the serve
+  // reports the session free again.
+  useEffect(() => {
+    if (!tabId || state !== "ready" || !spectator) return;
+    const timer = window.setInterval(() => {
+      void refreshStatusRef.current?.run().catch(() => undefined);
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [tabId, state, spectator]);
 
   const submit = useCallback(async (text: string, displayText = text) => {
     if (!tabId) return;

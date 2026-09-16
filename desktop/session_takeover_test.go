@@ -731,8 +731,14 @@ func TestSuccessfulReclaimRepublishesReadyBarrier(t *testing.T) {
 
 func TestReclaimBarrierDefersWhileTurnInFlight(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/reclaim" {
+		switch r.URL.Path {
+		case "/reclaim":
 			w.WriteHeader(http.StatusNoContent)
+			return
+		case "/status":
+			// The post-reclaim refresh observes the surface idle and free.
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"sessionPath":"/sessions/held.jsonl","sessionId":"held","running":false,"takenOver":false}`))
 			return
 		}
 		http.Error(w, "not available", http.StatusServiceUnavailable)
@@ -771,18 +777,74 @@ func TestReclaimBarrierDefersWhileTurnInFlight(t *testing.T) {
 		t.Fatal("reclaim did not defer the barrier for the running turn")
 	}
 
-	// The deferred barrier fires once polling observes the surface idle.
-	status := json.RawMessage(`{"sessionId":"` + "held" + `","running":false,"takenOver":false}`)
-	app.recordRemoteTabSessionStatus("remote-1", srv.Client(), 4, 1, status)
-	mu.Lock()
-	defer mu.Unlock()
-	sawReady := false
-	for _, name := range events {
-		if name == "remote-tab:remote-1:state" {
-			sawReady = true
+	// The deferred barrier fires once polling observes the surface idle. The
+	// reclaim's own asynchronous status refresh drives that poll against the
+	// serve, so the test only waits for the ready publication.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		sawReady := false
+		for _, name := range events {
+			if name == "remote-tab:remote-1:state" {
+				sawReady = true
+			}
 		}
+		mu.Unlock()
+		pending := func() bool {
+			app.remoteTabMu.Lock()
+			defer app.remoteTabMu.Unlock()
+			return tab.pendingReadyBarrier
+		}()
+		if sawReady && !pending {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("deferred barrier did not fire on idle: ready=%v pending=%v", sawReady, pending)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
-	if !sawReady || tab.pendingReadyBarrier {
-		t.Fatalf("deferred barrier did not fire on idle: ready=%v pending=%v", sawReady, tab.pendingReadyBarrier)
+}
+
+// An in-flight /status response reserved before an explicit reclaim can land
+// after ownership returned, still mirroring the pre-reclaim takenOver=true.
+// The reclaim epoch must keep such a payload from re-pinning the banner.
+func TestStaleStatusCannotRepinTakenOverAfterReclaim(t *testing.T) {
+	a := &App{remoteTabs: map[string]*remoteTab{}}
+	client := &http.Client{}
+	tab := &remoteTab{
+		id: "remote-1", state: "ready", gen: 2, client: client,
+		routing: remoteTabSessionRouting{currentPath: "session-id:held"},
+		session: remoteTabSessionState{takenOver: false},
+		// The reclaim stamped epoch 5; the in-flight poll reserved revision 3.
+		runtime: remoteTabRuntimeState{revision: 3},
+	}
+	tab.reclaimRevision = 5
+	a.remoteTabs[tab.id] = tab
+	payload := []byte(`{"sessionId":"held","takenOver":true}`)
+
+	if !a.recordRemoteTabSessionStatus(tab.id, client, 2, 3, payload) {
+		t.Fatal("fenced recorder rejected the payload entirely")
+	}
+	if tab.session.takenOver {
+		t.Fatal("pre-reclaim status payload re-pinned the spectator banner")
+	}
+
+	// A post-reclaim observation (reserved after the epoch) still applies in
+	// both directions — including a genuine re-takeover by the local runtime.
+	tab.runtime.revision = 5
+	if !a.recordRemoteTabSessionStatus(tab.id, client, 2, 5, payload) {
+		t.Fatal("post-reclaim status payload was rejected")
+	}
+	if !tab.session.takenOver {
+		t.Fatal("post-reclaim ownership observation did not apply")
+	}
+	tab.runtime.revision = 6
+	tab.reclaimRevision = 6
+	released := []byte(`{"sessionId":"held","takenOver":false}`)
+	if !a.recordRemoteTabSessionStatus(tab.id, client, 2, 6, released) {
+		t.Fatal("fresh release observation was rejected")
+	}
+	if tab.session.takenOver {
+		t.Fatal("release observation did not clear the pin")
 	}
 }

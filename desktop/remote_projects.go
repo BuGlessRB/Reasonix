@@ -111,6 +111,11 @@ type remoteTab struct {
 	// connection generation, orphans the optimistic submission, and leaves a
 	// zombie "processing" indicator beside the rendered reply.
 	pendingReadyBarrier bool
+	// reclaimRevision fences in-flight status payloads against an explicit
+	// reclaim: responses reserved before the reclaim completed can still
+	// carry the pre-reclaim takenOver=true and must never re-pin the
+	// spectator banner after ownership returned.
+	reclaimRevision uint64
 }
 
 type remoteTabRuntimeState struct {

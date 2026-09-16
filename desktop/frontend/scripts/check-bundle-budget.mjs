@@ -456,6 +456,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // merged payload measures 2437.6 KiB. Retain the next tenth.
 // The snapshot orphan reconciliation (content fallback for id-less rebase)
 // adds 0.3 KiB raw; the merged payload measures 2437.9 KiB. Same ceiling rule.
-const rawInitialBudgetKiB = 2_438.0;
+// The spectator status reconcile loop and its status/meta plumbing measure
+// 2438.1 KiB. Retain the next tenth.
+const rawInitialBudgetKiB = 2_438.2;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

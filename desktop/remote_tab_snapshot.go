@@ -276,6 +276,13 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 		a.remoteTabMu.Unlock()
 		return false
 	}
+	// A payload reserved before an explicit reclaim completed can still be in
+	// flight and mirror the pre-reclaim ownership; dropping just its
+	// takenOver=true keeps the rest of its runtime facts usable without
+	// letting it re-pin the spectator banner.
+	if statusSeq < tab.reclaimRevision && payload.TakenOver != nil && *payload.TakenOver {
+		payload.TakenOver = nil
+	}
 	before := remoteTabMetaLocked(tab)
 	pathChanged := adoptRemoteTabSessionPathLocked(tab, payloadRoute)
 	if pathChanged {
