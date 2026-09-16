@@ -50,15 +50,7 @@ func (c *Controller) registerExternalRef(abs string) (token, displayPath string,
 		root, name = filepath.Dir(abs), filepath.Base(abs)
 	}
 	rootToken := externalFolderRefToken(root)
-	c.externalFolderRefsMu.Lock()
-	if c.externalFolderRefs == nil {
-		c.externalFolderRefs = map[string]string{}
-	}
-	c.externalFolderRefs[rootToken] = root
-	c.externalFolderRefsMu.Unlock()
-	if c.externalFolderToolRefs != nil {
-		c.externalFolderToolRefs.RegisterReadRoot(rootToken, root)
-	}
+	c.externalFolders.register(rootToken, root)
 	if name == "" {
 		return rootToken, filepath.ToSlash(abs), nil
 	}

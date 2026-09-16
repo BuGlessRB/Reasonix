@@ -6,8 +6,8 @@
     "commented-code": 0,
     "complexity": 1495,
     "error-text": 9,
-    "essay": 3208,
-    "file-size": 38037,
+    "essay": 3207,
+    "file-size": 38013,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6551,
@@ -698,8 +698,8 @@
       "frontend-parity": 2
     },
     "internal/control/controller.go": {
-      "essay": 56,
-      "file-size": 2436,
+      "essay": 55,
+      "file-size": 2432,
       "frontend-parity": 50
     },
     "internal/control/controller_test.go": {
@@ -777,7 +777,7 @@
     },
     "internal/control/refs.go": {
       "essay": 5,
-      "file-size": 423,
+      "file-size": 403,
       "frontend-parity": 2
     },
     "internal/control/rewind.go": {

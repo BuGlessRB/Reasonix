@@ -700,7 +700,7 @@ func TestDroppedRefResolvesScopedDirOutsideTheWorkspace(t *testing.T) {
 	expectedDisplayPath := filepath.ToSlash(expectedExternal)
 
 	registrar := &recordingExternalFolderToolRefs{}
-	c := &Controller{externalFolderToolRefs: registrar, controllerDeps: controllerDeps{workspaceRoot: workspace}}
+	c := &Controller{externalFolders: externalFolders{toolRefs: registrar}, controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	token, displayPath, err := c.DroppedRef(external)
 	if err != nil {
 		t.Fatalf("DroppedRef: %v", err)
@@ -955,7 +955,7 @@ func TestDroppedRefInsideTheWorkspaceStaysAWorkspacePath(t *testing.T) {
 	}
 
 	registrar := &recordingExternalFolderToolRefs{}
-	c := &Controller{externalFolderToolRefs: registrar, controllerDeps: controllerDeps{workspaceRoot: workspace}}
+	c := &Controller{externalFolders: externalFolders{toolRefs: registrar}, controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	token, displayPath, err := c.DroppedRef(file)
 	if err != nil {
 		t.Fatalf("DroppedRef: %v", err)
@@ -999,7 +999,7 @@ func TestDroppedRefOutsideTheWorkspaceResolvesTheFileItself(t *testing.T) {
 	}
 
 	registrar := &recordingExternalFolderToolRefs{}
-	c := &Controller{externalFolderToolRefs: registrar, controllerDeps: controllerDeps{workspaceRoot: workspace}}
+	c := &Controller{externalFolders: externalFolders{toolRefs: registrar}, controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	token, displayPath, err := c.DroppedRef(file)
 	if err != nil {
 		t.Fatalf("DroppedRef: %v", err)

@@ -134,13 +134,9 @@ type Controller struct {
 	proxyToolsFn   func() map[string][]plugin.CachedTool
 	runtimeProfile capability.Profile
 
-	// externalFolderRefs maps session-generated @ tokens to user-dropped
-	// directories outside workspaceRoot. It is intentionally per-controller:
-	// dragging a folder authorizes that folder for this chat session only, without
-	// widening scoped @ resolution to arbitrary absolute paths.
-	externalFolderRefsMu   sync.RWMutex
-	externalFolderRefs     map[string]string
-	externalFolderToolRefs externalFolderToolRefs
+	// externalFolders owns the @ tokens for user-dropped directories outside
+	// workspaceRoot, behind its own lock. See external_folders.go.
+	externalFolders externalFolders
 
 	// checkpoints owns the snapshot-based rewind bookkeeping (the per-session
 	// store, the monotonic turn counter, and the conversation-rewind boundary map)
@@ -455,16 +451,16 @@ func New(opts Options) *Controller {
 		opts.Hooks.SetSessionID(agent.BranchID(opts.SessionPath))
 	}
 	c := &Controller{
-		controllerDeps:         newControllerDeps(opts, sink, usageTee, runtimeOwner, pluginCtx),
-		guardianPath:           guardian.PathFor(opts.SessionPath),
-		systemPrompt:           opts.SystemPrompt,
-		sessionPath:            opts.SessionPath,
-		commands:               atomic.Pointer[[]command.Command]{},
-		onSessionRecovered:     opts.OnSessionRecovered,
-		runtimeProfile:         runtimeProfile,
-		externalFolderToolRefs: opts.ExternalFolderToolRefs,
-		providerResolver:       opts.ProviderResolver,
-		runtimeGeneration:      opts.RuntimeGeneration,
+		controllerDeps:     newControllerDeps(opts, sink, usageTee, runtimeOwner, pluginCtx),
+		guardianPath:       guardian.PathFor(opts.SessionPath),
+		systemPrompt:       opts.SystemPrompt,
+		sessionPath:        opts.SessionPath,
+		commands:           atomic.Pointer[[]command.Command]{},
+		onSessionRecovered: opts.OnSessionRecovered,
+		runtimeProfile:     runtimeProfile,
+		externalFolders:    externalFolders{toolRefs: opts.ExternalFolderToolRefs},
+		providerResolver:   opts.ProviderResolver,
+		runtimeGeneration:  opts.RuntimeGeneration,
 	}
 	// Session-private temporary directory: reuse a shared Manager on hot
 	// rebuild, otherwise create one. Retain so ReleaseResources/Close drop the

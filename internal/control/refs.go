@@ -256,22 +256,7 @@ func (c *Controller) externalFolderRefTarget(token string) (rootToken, rel, abs 
 	if !strings.HasPrefix(key, externalFolderRefPrefix+"/") {
 		return "", "", "", false
 	}
-	c.externalFolderRefsMu.RLock()
-	defer c.externalFolderRefsMu.RUnlock()
-	if abs, ok := c.externalFolderRefs[key]; ok {
-		return key, ".", abs, true
-	}
-	for registered, abs := range c.externalFolderRefs {
-		if !strings.HasPrefix(key, registered+"/") {
-			continue
-		}
-		sub, ok := cleanExternalFolderSubpath(strings.TrimPrefix(key, registered+"/"))
-		if !ok {
-			return "", "", "", false
-		}
-		return registered, sub, abs, true
-	}
-	return "", "", "", false
+	return c.externalFolders.resolve(key)
 }
 
 func cleanExternalFolderSubpath(sub string) (string, bool) {
@@ -374,12 +359,7 @@ func (c *Controller) SearchExternalFolderRefs(query string, limit int) []Externa
 	if limit <= 0 || len(query) < 2 || strings.ContainsAny(query, `/\`) {
 		return nil
 	}
-	c.externalFolderRefsMu.RLock()
-	roots := make([]externalRootRef, 0, len(c.externalFolderRefs))
-	for token, abs := range c.externalFolderRefs {
-		roots = append(roots, externalRootRef{token: token, abs: abs})
-	}
-	c.externalFolderRefsMu.RUnlock()
+	roots := c.externalFolders.roots()
 	sort.Slice(roots, func(i, j int) bool {
 		return externalFolderDisplayPath(roots[i].abs, ".") < externalFolderDisplayPath(roots[j].abs, ".")
 	})
