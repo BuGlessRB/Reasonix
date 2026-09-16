@@ -12,6 +12,13 @@ import (
 	"reasonix/internal/testenv"
 )
 
+// claimRenameForTest renames without the cross-device copy fallback, the shape
+// a caller uses when the rename itself is the claim: a copy would let two
+// claimants both win.
+func claimRenameForTest(src, dst string) error {
+	return replaceFile(src, dst, false)
+}
+
 func TestReplaceFileNoRetryWhenTmpMissing(t *testing.T) {
 	oldBase := replaceRetryBase
 	replaceRetryBase = 10 * time.Second
@@ -432,7 +439,7 @@ func TestClaimRenameNeverFallsBackToCopy(t *testing.T) {
 	if err := os.Mkdir(dst, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := ClaimRename(src, dst); err == nil {
+	if err := claimRenameForTest(src, dst); err == nil {
 		t.Fatal("want an error when the claim cannot rename")
 	}
 	if entries, err := os.ReadDir(dst); err != nil || len(entries) != 0 {
@@ -452,7 +459,7 @@ func TestClaimRenameDoesNotRetryWhenSourceIsGone(t *testing.T) {
 
 	dir := testenv.TempDir(t)
 	start := time.Now()
-	err := ClaimRename(filepath.Join(dir, "taken.json"), filepath.Join(dir, "taken.json.claimed"))
+	err := claimRenameForTest(filepath.Join(dir, "taken.json"), filepath.Join(dir, "taken.json.claimed"))
 	if err == nil {
 		t.Fatal("want an error when the record is already claimed")
 	}

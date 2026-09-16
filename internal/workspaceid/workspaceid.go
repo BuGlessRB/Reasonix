@@ -70,12 +70,6 @@ func Key(root string) string { return Describe(root).Key }
 // path for every linked worktree — or "" when root is not in a repository.
 func RepoDir(root string) string { return Describe(root).RepoDir }
 
-// SharesRepo reports whether two workspace roots resolve to one repository.
-func SharesRepo(a, b string) bool {
-	repo := RepoDir(a)
-	return repo != "" && repo == RepoDir(b)
-}
-
 // countTrees counts the main tree plus every linked worktree registration.
 func countTrees(commonDir string) int {
 	entries, err := os.ReadDir(filepath.Join(commonDir, "worktrees"))

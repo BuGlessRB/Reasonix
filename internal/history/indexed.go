@@ -40,10 +40,6 @@ func RegisterCatalogObserver(observer func(historycatalog.Status, []string, stri
 	processHistoryCatalog.mu.Unlock()
 }
 
-// SharedCatalog returns the process projection when opening has completed.
-// Nil means callers should return an explicit partial/opening response.
-func SharedCatalog() *historycatalog.Catalog { return processHistoryCatalog.get() }
-
 func FlushSharedCatalog(ctx context.Context) error {
 	if catalog := processHistoryCatalog.get(); catalog != nil {
 		return catalog.Flush(ctx)

@@ -7,14 +7,14 @@
     "complexity": 1496,
     "error-text": 9,
     "essay": 3210,
-    "file-size": 38143,
+    "file-size": 38138,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
-    "orphan": 99,
+    "orphan": 94,
     "refusal-path": 0,
     "spec-parity": 0,
     "struct-state": 41,
@@ -1037,13 +1037,10 @@
     },
     "internal/fileutil/atomicwrite.go": {
       "essay": 18,
-      "orphan": 2
+      "orphan": 1
     },
     "internal/fileutil/atomicwrite_test.go": {
       "essay": 2
-    },
-    "internal/fileutil/globset.go": {
-      "orphan": 1
     },
     "internal/fileutil/replacefallback_other.go": {
       "essay": 1
@@ -1058,7 +1055,7 @@
       "essay": 25
     },
     "internal/history/indexed.go": {
-      "orphan": 2
+      "orphan": 1
     },
     "internal/hook/hook.go": {
       "complexity": 15,
@@ -1231,10 +1228,6 @@
     },
     "internal/proc/kill_windows.go": {
       "essay": 5
-    },
-    "internal/productdocs/docs.go": {
-      "file-size": 5,
-      "orphan": 1
     },
     "internal/provider/anthropic/anthropic.go": {
       "complexity": 40,
@@ -1611,9 +1604,6 @@
     },
     "internal/update/manifest.go": {
       "essay": 1
-    },
-    "internal/workspaceid/workspaceid.go": {
-      "orphan": 1
     },
     "sdk/go/examples/fullsidecar/main.go": {
       "essay": 25

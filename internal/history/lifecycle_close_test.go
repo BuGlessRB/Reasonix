@@ -29,7 +29,7 @@ func TestCloseSharedCatalogReleasesTheProcessProjection(t *testing.T) {
 	if err := CloseSharedCatalog(ctx); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if got := SharedCatalog(); got != nil {
+	if got := processHistoryCatalog.get(); got != nil {
 		t.Fatal("catalog still published after close")
 	}
 	// A second close is what a host that closes on both paths performs.

@@ -147,12 +147,6 @@ func EmbeddedManifest() (Manifest, error) {
 	return c.manifest(), nil
 }
 
-// CommandOverview returns the local /docs help text and the identity of the
-// exact corpus compiled into this binary. It never calls a model or the network.
-func CommandOverview(language string) (string, error) {
-	return CommandOverviewFor(language, "/docs")
-}
-
 // CommandOverviewFor is CommandOverview with the invocation name selected by
 // the runtime resolver (for example /reasonix:docs when /docs is occupied).
 func CommandOverviewFor(language, commandName string) (string, error) {

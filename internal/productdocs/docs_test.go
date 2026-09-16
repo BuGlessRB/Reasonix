@@ -62,7 +62,7 @@ func TestEmbeddedAndSourceManifestsMatch(t *testing.T) {
 }
 
 func TestDocsCommandOverviewAndSearchUseEmbeddedCorpus(t *testing.T) {
-	overview, err := CommandOverview("zh-CN")
+	overview, err := CommandOverviewFor("zh-CN", "/docs")
 	if err != nil {
 		t.Fatal(err)
 	}
