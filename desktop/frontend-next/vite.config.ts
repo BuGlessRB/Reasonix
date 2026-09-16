@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
       port: 5273,
       // The dev server is cross-origin to serve, which its CSRF guard rejects.
       // Rewriting Origin makes the hop look same-origin, matching production
-      // and the Wails shell where the UI really is served from the kernel.
+      // where the UI really is served from the kernel.
       proxy: serve
         ? Object.fromEntries(
             ROUTES.map((r) => [
