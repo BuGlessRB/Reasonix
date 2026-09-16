@@ -49,7 +49,6 @@ export const EN_SETTINGS: Record<string, string> = {
   "在 Git worktree 中创建独立副本，修改不会影响当前分支": "Work in a separate Git worktree so changes do not land on the current branch",
 
   // ── 设置：模型 ───────────────────────────────────────────────────
-  "模型": "Model",
   "角色分工": "Roles",
   "每个位置默认使用主模型，只有明确指派过的才会单独设置。更换指派与更换主模型一样需要重建运行时，任务运行期间无法修改。":
     "Each slot uses the main model unless you assign one explicitly. Changing an assignment rebuilds the runtime just as changing the main model does, and cannot be done while a task is running.",
@@ -265,7 +264,6 @@ export const EN_SETTINGS: Record<string, string> = {
   "旧版桌面端": "Previous desktop app",
 
   // ── 设置：行内操作 ───────────────────────────────────────────────
-  "取消": "Never mind",
   "配置": "the config",
   "从 {where} 中删除 {name}？若只是暂时停用，关闭开关即可。":
     "Delete {name} from {where}? If you only want it out of the way for now, the switch is enough.",
@@ -335,7 +333,6 @@ export const EN_SETTINGS: Record<string, string> = {
   "覆盖已安装的版本": "Replace the installed copy",
   "勾「读图」的才会收到图片": "Only the ones marked “reads images” receive them",
   "关掉": "Close",
-  "还原": "Restore",
   "回退到这个版本": "Roll back to this version",
   "记住了": "Remembered",
   "接入": "Connect",
@@ -381,6 +378,7 @@ export const EN_SETTINGS: Record<string, string> = {
   "只发送常规聊天参数，不再指定思考深度；模型自身的推理行为不受影响。": "Sends only the ordinary chat parameters and stops specifying a thinking depth; the model reasons as it otherwise would.",
   "安装到「我的」，所有项目均可使用": "Install to “Mine”, available in every project",
   "最大化": "Maximize",
+  "向下还原": "Restore",
 
   // ── 对比度与钩子示例 ─────────────────────────────────────────
   "系统已开启「增强对比度」时使用最强档": "Uses the strongest step when the system asks for increased contrast",

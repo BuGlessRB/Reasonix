@@ -36,7 +36,6 @@ export const EN_COMPOSER: Record<string, string> = {
   "正在添加附件…": "Adding attachments…",
   "添加失败 · 重试": "Could not add · Retry",
   "有附件添加失败，请重试或移除": "An attachment failed; retry or remove it",
-  "移除 {name}": "Remove {name}",
   "当前模型不支持读图 · 图片将按看图模型设置处理":
     "This model does not read images · images follow the configured vision model",
   "该模型是否支持读图未声明 · 暂按不支持处理；在「连接」中勾选后即可直接发送":

@@ -395,7 +395,7 @@ function DeclareWindow({ port, onSet, was, onDone }: {
           }}
         />
         <button data-action="context.window-tokens" disabled={busy || !draft || Number(draft) === was} onClick={() => void commit()}>
-          {t("记录")}
+          {t("保存")}
         </button>
       </div>
       {error && <p className="ctxnote" data-lvl="warn">{error}</p>}
