@@ -7,7 +7,7 @@
     "complexity": 1495,
     "error-text": 9,
     "essay": 3207,
-    "file-size": 38013,
+    "file-size": 36805,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6551,
@@ -672,6 +672,9 @@
     "internal/control/approval.go": {
       "essay": 19
     },
+    "internal/control/approval_bridge.go": {
+      "essay": 1
+    },
     "internal/control/approval_orchestration.go": {
       "essay": 38,
       "frontend-parity": 7
@@ -689,7 +692,7 @@
       "frontend-parity": 3
     },
     "internal/control/checkpoint.go": {
-      "essay": 9
+      "essay": 16
     },
     "internal/control/config_problem.go": {
       "frontend-parity": 2
@@ -698,9 +701,9 @@
       "frontend-parity": 2
     },
     "internal/control/controller.go": {
-      "essay": 55,
-      "file-size": 2432,
-      "frontend-parity": 50
+      "essay": 38,
+      "file-size": 1224,
+      "frontend-parity": 30
     },
     "internal/control/controller_test.go": {
       "essay": 9
@@ -723,6 +726,10 @@
       "essay": 6,
       "file-size": 193,
       "struct-state": 9
+    },
+    "internal/control/goal_control.go": {
+      "essay": 1,
+      "frontend-parity": 10
     },
     "internal/control/goalusage.go": {
       "essay": 2
@@ -755,6 +762,10 @@
     },
     "internal/control/memory.go": {
       "essay": 12
+    },
+    "internal/control/memory_command.go": {
+      "essay": 2,
+      "frontend-parity": 4
     },
     "internal/control/network.go": {
       "frontend-parity": 3
@@ -794,7 +805,7 @@
       "frontend-parity": 6
     },
     "internal/control/session_snapshot.go": {
-      "essay": 15,
+      "essay": 16,
       "frontend-parity": 2
     },
     "internal/control/session_write_authority.go": {
@@ -810,7 +821,8 @@
       "essay": 2
     },
     "internal/control/skill.go": {
-      "essay": 4
+      "essay": 4,
+      "frontend-parity": 6
     },
     "internal/control/slash.go": {
       "complexity": 4,
@@ -823,7 +835,7 @@
       "essay": 1
     },
     "internal/control/turn_cancel.go": {
-      "essay": 17,
+      "essay": 22,
       "frontend-parity": 4,
       "function-size": 4
     },

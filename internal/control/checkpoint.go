@@ -2,7 +2,10 @@ package control
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,7 +13,9 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/diff"
+	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/store"
 )
 
 // checkpointManager owns the snapshot-based rewind bookkeeping: the per-session
@@ -256,4 +261,143 @@ func (m *checkpointManager) storeRef() *checkpoint.Store {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.store
+}
+
+// ckptDir derives a session's checkpoint directory from its file path
+// (…/<id>.jsonl → …/<id>.ckpt). Empty path → empty (in-memory checkpoints).
+func ckptDir(sessionPath string) string {
+	return store.SessionCheckpointDir(sessionPath)
+}
+
+// rebindCheckpoints points the store at the (possibly new) session, loading any
+// checkpoints already on disk, and resets the turn boundaries. Called on
+// construction and whenever the session path changes (NewSession/Resume/SetSessionPath).
+// Also re-wires the mutation observer so capture targets the new store.
+func (c *Controller) rebindCheckpoints(sessionPath string) {
+	c.goals.setStatePath(goalStatePath(sessionPath))
+	c.checkpoints.rebind(ckptDir(sessionPath), c.workspaceRoot)
+	if c.executor != nil {
+		c.wireMutationObserver()
+	}
+}
+
+// Checkpoints lists the session's rewind points (one per user turn), oldest first.
+//
+// Each Meta.Prompt is reduced to what the user typed. A checkpoint opens with
+// the composed turn, so the stored prompt can carry the plan-mode marker and
+// transient blocks; every consumer of this list is a label (the rewind picker,
+// the desktop change list, the workbench projection) and the picker also
+// restores the prompt into the composer, so composed text must not reach them.
+// Stripping on read rather than only on write keeps checkpoints already on disk
+// readable — they were recorded composed.
+func (c *Controller) Checkpoints() []checkpoint.Meta {
+	metas := c.checkpoints.list()
+	for i := range metas {
+		metas[i].Prompt = StripComposePrefixes(metas[i].Prompt)
+	}
+	return metas
+}
+
+func (c *Controller) CheckpointFileState(path string) (checkpoint.FileState, bool) {
+	return c.checkpoints.fileState(path)
+}
+
+func (c *Controller) CheckpointTurnsByMessageIndex() map[int]int {
+	return c.checkpoints.turnsByMessageIndex()
+}
+
+// rewindFail emits the error as a Warn notice (so a frontend that swallows the
+// returned error — e.g. the desktop bridge's .catch — still shows the user why
+// the rewind did nothing) and returns it.
+func (c *Controller) rewindFail(err error) error {
+	c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: err.Error()})
+	return err
+}
+
+func (c *Controller) CheckpointHasBoundary(turn int) bool {
+	boundary, ok := c.checkpoints.boundary(turn)
+	if !ok {
+		return false
+	}
+	// After compaction the key may still exist but the boundary value is
+	// stale (it points past the truncated message log).  Treat those
+	// turns the same as "no boundary" so the UI can disable the button.
+	// Len is lock-guarded: this runs on frontend goroutines while a turn appends.
+	return boundary <= c.executor.Session().Len()
+}
+
+// SummarizeFrom and SummarizeUpTo preserve the historical turn-index API while
+// changing only the model-visible context projection. The canonical transcript
+// and checkpoint boundaries remain available for rewind and undo.
+func (c *Controller) SummarizeFrom(ctx context.Context, turn int) error {
+	return c.summarizeAt(ctx, turn, true)
+}
+
+func (c *Controller) SummarizeUpTo(ctx context.Context, turn int) error {
+	return c.summarizeAt(ctx, turn, false)
+}
+
+func (c *Controller) summarizeAt(ctx context.Context, turn int, from bool) error {
+	if c.executor == nil {
+		return c.rewindFail(fmt.Errorf("checkpoints unavailable"))
+	}
+	// Hold the rotation gate from the checkpoint-boundary lookup through
+	// projection installation so a turn cannot start against an intermediate
+	// context view.
+	if err := c.beginRotation(); err != nil {
+		if errors.Is(err, errTurnRunningRotation) {
+			return c.rewindFail(fmt.Errorf("cannot summarize while a turn is running"))
+		}
+		return c.rewindFail(err)
+	}
+	defer c.endRotation()
+	boundary, hasBound := c.checkpoints.boundary(turn)
+	if !hasBound {
+		return c.rewindFail(fmt.Errorf("summarize unavailable for turn %d (resumed session)", turn))
+	}
+	var err error
+	if from {
+		err = c.executor.SummarizeFrom(ctx, boundary)
+	} else {
+		err = c.executor.SummarizeUpTo(ctx, boundary)
+	}
+	if err != nil {
+		return c.rewindFail(err)
+	}
+	return nil
+}
+
+// parseRewind parses the arguments after "/rewind". The user may provide:
+//
+//	/rewind              → latest checkpoint, both
+//	/rewind <turn>       → that turn, both
+//	/rewind <turn> <scope> → that turn, code|conversation|both
+//
+// If no turn is given, the latest checkpoint is used. If no scope is given, Both is assumed.
+func parseRewind(args string, cps []checkpoint.Meta) (int, RewindScope, error) {
+	fields := strings.Fields(args)
+	if len(fields) == 0 {
+		if len(cps) == 0 {
+			return 0, RewindBoth, fmt.Errorf("no checkpoints available")
+		}
+		return cps[len(cps)-1].Turn, RewindBoth, nil
+	}
+	turn, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return 0, RewindBoth, fmt.Errorf("invalid turn: %w", err)
+	}
+	scope := RewindBoth
+	if len(fields) >= 2 {
+		switch strings.ToLower(fields[1]) {
+		case "code":
+			scope = RewindCode
+		case "conversation":
+			scope = RewindConversation
+		case "both":
+			scope = RewindBoth
+		default:
+			return 0, RewindBoth, fmt.Errorf("unknown scope %q", fields[1])
+		}
+	}
+	return turn, scope, nil
 }

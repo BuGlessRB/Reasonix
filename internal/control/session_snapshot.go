@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -15,7 +16,10 @@ import (
 	"reasonix/internal/extension"
 	"reasonix/internal/extension/dispatch"
 	"reasonix/internal/guardian"
+	"reasonix/internal/jobs"
 	"reasonix/internal/provider"
+	"reasonix/internal/sessioninbox"
+	"reasonix/internal/store"
 )
 
 // Snapshot writes the executor's conversation to the active session file. No-op
@@ -465,4 +469,96 @@ func (c *Controller) SessionPersistedState() (agent.PersistedState, bool) {
 		return agent.PersistedState{}, false
 	}
 	return c.executor.Session().PersistedState(c.SessionPath())
+}
+
+func removeSessionArtifacts(path string) error {
+	if path == "" {
+		return nil
+	}
+	if err := jobs.RemoveArtifacts(path); err != nil {
+		return err
+	}
+	// Artifacts include the event log — the authoritative transcript. Leaving it
+	// behind would both leak the cleared conversation and let LoadSession
+	// resurrect it on the recycled path. The guardian transcript saves through
+	// the same session layer, so its own artifacts go the same way.
+	if err := store.RemoveSessionArtifacts(path); err != nil {
+		return err
+	}
+	if err := store.RemoveSessionArtifacts(guardian.PathFor(path), guardian.CursorPathFor(path)); err != nil {
+		return err
+	}
+	if err := sessioninbox.RemoveDir(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if dir := ckptDir(path); dir != "" {
+		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if err := agent.DeleteSubagentsByParent(filepath.Dir(path), agent.BranchID(path)); err != nil {
+		return err
+	}
+	if err := agent.ClearCleanupPending(path); err != nil {
+		return err
+	}
+	return nil
+}
+
+// RemoveSessionArtifacts removes a transcript and every durable artifact owned
+// by it. Remote runtimes use this when a newly-created fork fails before it can
+// be registered as a live session.
+func RemoveSessionArtifacts(path string) error {
+	return removeSessionArtifacts(path)
+}
+
+// ReconcileCleanupPending retries physical cleanup for logically removed
+// sessions that were left behind by a previous process.
+func ReconcileCleanupPending(dir string) error {
+	return agent.ReconcileCleanupPending(dir, func(item agent.CleanupPendingInfo) error {
+		return removeSessionArtifacts(item.SessionPath)
+	})
+}
+
+// snapshotConflictLogAttrs flattens a snapshot-conflict error into slog attrs.
+// Field reports of #6069-class "session changed on disk" spam are only
+// diagnosable when the logs say which trigger fired and what the revision
+// ledger looked like, so every recoverSnapshotConflict outcome logs these.
+func snapshotConflictLogAttrs(saveErr error, path, mode string) []any {
+	attrs := []any{"path", path, "mode", mode}
+	var conflict *agent.SessionSnapshotConflictError
+	if errors.As(saveErr, &conflict) && conflict != nil {
+		attrs = append(attrs,
+			"kind", string(conflict.Kind),
+			"disk_messages", conflict.ExistingMessages,
+			"snapshot_messages", conflict.SnapshotMessages,
+			"base_revision", conflict.BaseRevision,
+			"disk_revision", conflict.DiskRevision,
+		)
+	}
+	return attrs
+}
+
+func sessionRecoveryNotice(code, text string) event.Event {
+	return event.Event{
+		Kind:     event.Notice,
+		Level:    event.LevelWarn,
+		Audience: event.NoticeAudienceOperator,
+		Code:     code,
+		Text:     text,
+	}
+}
+
+func (c *Controller) messageCount() int {
+	if c.executor == nil {
+		return 0
+	}
+	return c.executor.Session().Len()
+}
+
+func (c *Controller) sessionMessageCount() int {
+	if c.executor == nil {
+		return 0
+	}
+	return c.executor.Session().Len()
 }

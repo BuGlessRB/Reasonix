@@ -153,3 +153,45 @@ func oneLineBranch(s string, maxRunes int) string {
 	}
 	return string(r[:maxRunes-1]) + "..."
 }
+
+// ResolveBranchRef resolves a /switch-style branch reference (id, unique
+// prefix, name, or path) against a branch listing, using the same matching
+// rules as SwitchBranch. Frontends use it to learn the target session path
+// before switching — e.g. to move their session lease first.
+func ResolveBranchRef(branches []agent.BranchInfo, ref string) (agent.BranchInfo, error) {
+	return resolveBranch(branches, strings.TrimSpace(ref))
+}
+
+func resolveBranch(branches []agent.BranchInfo, ref string) (agent.BranchInfo, error) {
+	refLower := strings.ToLower(ref)
+	var matches []agent.BranchInfo
+	for _, b := range branches {
+		nameLower := strings.ToLower(strings.TrimSpace(b.Name))
+		switch {
+		case b.ID == ref || strings.EqualFold(b.ID, ref):
+			return b, nil
+		case b.Name != "" && nameLower == refLower:
+			matches = append(matches, b)
+		case strings.HasPrefix(strings.ToLower(b.ID), refLower):
+			matches = append(matches, b)
+		case strings.HasPrefix(strings.ToLower(shortBranchID(b.ID)), refLower):
+			matches = append(matches, b)
+		case b.Path == ref:
+			return b, nil
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	if len(matches) > 1 {
+		return agent.BranchInfo{}, fmt.Errorf("branch %q is ambiguous", ref)
+	}
+	return agent.BranchInfo{}, fmt.Errorf("branch %q not found", ref)
+}
+
+func branchDisplayName(b agent.BranchInfo) string {
+	if strings.TrimSpace(b.Name) != "" {
+		return fmt.Sprintf("%s (%s)", b.Name, b.ID)
+	}
+	return b.ID
+}
