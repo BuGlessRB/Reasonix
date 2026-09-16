@@ -58,6 +58,13 @@ export function apply(look: Appearance | null, busy = false) {
   // stays where the layout put it.
   style.setProperty("--read", `${look?.readSize || readDefault()}px`);
 
+  // How far that prose runs is the other half of the same question, and the
+  // only one with two honest answers: a line short enough to read without
+  // losing your place, or a window used to the edge. Cards, commands and
+  // output answer to neither — they always have the width.
+  if (look?.measure === "full") root.dataset.measure = "full";
+  else delete root.dataset.measure;
+
   if (look?.fontUi) style.setProperty("--ui", `${look.fontUi}, ${FALLBACK_UI}`);
   else style.removeProperty("--ui");
   if (look?.fontMono) style.setProperty("--mono", `${look.fontMono}, ${FALLBACK_MONO}`);

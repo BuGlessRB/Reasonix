@@ -49,6 +49,7 @@ type appearanceView struct {
 	ReadSize  float64        `json:"readSize,omitempty"`
 	FontUI    string         `json:"fontUi,omitempty"`
 	FontMono  string         `json:"fontMono,omitempty"`
+	Measure   string         `json:"measure,omitempty"`
 	Wallpaper *wallpaperView `json:"wallpaper,omitempty"`
 }
 
@@ -67,7 +68,7 @@ func appearanceDir() string {
 }
 
 func viewOf(a config.AppearanceConfig, language string) appearanceView {
-	out := appearanceView{Language: language, Zoom: a.Zoom, ReadSize: a.ReadSize, FontUI: a.FontUI, FontMono: a.FontMono}
+	out := appearanceView{Language: language, Zoom: a.Zoom, ReadSize: a.ReadSize, FontUI: a.FontUI, FontMono: a.FontMono, Measure: a.Measure}
 	if a.Wallpaper.File != "" {
 		out.Wallpaper = &wallpaperView{
 			URL:     "/appearance/wallpaper/" + a.Wallpaper.File,
@@ -98,6 +99,7 @@ func (s *Server) saveAppearance(w http.ResponseWriter, r *http.Request) {
 		ReadSize float64 `json:"readSize"`
 		FontUI   string  `json:"fontUi"`
 		FontMono string  `json:"fontMono"`
+		Measure  string  `json:"measure"`
 		Opacity  float64 `json:"opacity"`
 		Dim      float64 `json:"dim"`
 		FocusX   float64 `json:"focusX"`
@@ -121,6 +123,13 @@ func (s *Server) saveAppearance(w http.ResponseWriter, r *http.Request) {
 	a.ReadSize = clampOrZero(body.ReadSize, 10, 26)
 	a.FontUI = sanitizeFamily(body.FontUI)
 	a.FontMono = sanitizeFamily(body.FontMono)
+	// Anything but the one named alternative is the default, the same way the
+	// language field above resolves an answer it does not know.
+	if strings.EqualFold(strings.TrimSpace(body.Measure), "full") {
+		a.Measure = "full"
+	} else {
+		a.Measure = ""
+	}
 	a.Wallpaper.Opacity = clamp01(body.Opacity)
 	a.Wallpaper.Dim = clamp01(body.Dim)
 	a.Wallpaper.FocusX = clamp01(body.FocusX)

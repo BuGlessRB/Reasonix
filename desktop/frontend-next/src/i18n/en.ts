@@ -819,4 +819,11 @@ export const EN: Record<string, string> = {
   "刚刚": "just now",
   "{n} 分钟前": "{n} min ago",
   "{n} 小时前": "{n} h ago",
+  "行宽": "Line width",
+  "正文行宽": "Body line width",
+  "适宜阅读": "Reading",
+  "铺满窗口": "Full width",
+  "每行长度控制在一眼能回到行首的范围": "Keeps a line short enough that your eye finds the next one",
+  "正文跟随窗口宽度，宽屏上不留两侧空白": "Prose follows the window, with nothing left empty at the sides",
+  "行宽只管正文：代码、命令与工具输出始终占满可用宽度。": "Line width applies to prose only — code, commands and tool output always use the width available.",
 };

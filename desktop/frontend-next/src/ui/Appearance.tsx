@@ -64,6 +64,14 @@ const WEIGHTS: [string, string, string][] = [
   ["heavy", "加粗", "小字号下更扎实，屏幕距离较远或有反光时更易读"],
 ];
 
+// Two answers, because there are two: a line short enough that the eye finds
+// the next one without hunting, or a window used to its edge. A step between
+// them would be a number nobody could tell apart from its neighbour.
+const MEASURES: [string, string, string][] = [
+  ["", "适宜阅读", "每行长度控制在一眼能回到行首的范围"],
+  ["full", "铺满窗口", "正文跟随窗口宽度，宽屏上不留两侧空白"],
+];
+
 const CONTRASTS: [string, string, string][] = [
   ["", "跟随系统", "系统已开启「增强对比度」时使用最强档"],
   ["soft", "柔和", "正文不易刺眼，长时间阅读更省力"],
@@ -327,7 +335,21 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               ))}
             </div>
           </div>
+          {/* Beside the size because they are one question asked twice: how big
+              the letters are, and how far they run before the eye comes back. */}
+          <div className="prow">
+            <span className="tx">{t("行宽")}</span>
+            <div className="seg" data-text role="group" aria-label={t("正文行宽")}>
+              {MEASURES.map(([id, name, why]) => (
+                <button key={id || "measure"} data-action="appearance.measure" data-value={id || "reading"}
+                  aria-pressed={(look.measure ?? "") === id} title={t(why)} onClick={() => set({ measure: id })}>
+                  {t(name)}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+        <p className="hint">{t("行宽只管正文：代码、命令与工具输出始终占满可用宽度。")}</p>
         <ApplyNote id="size" />
       </section>
 

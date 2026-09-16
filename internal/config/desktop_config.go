@@ -86,10 +86,14 @@ type DesktopConfig struct {
 // Zero means "unset" throughout, so an untouched config resolves to the
 // stylesheet's own defaults rather than to a number written here.
 type AppearanceConfig struct {
-	Zoom      float64         `toml:"zoom"`      // whole-interface scale, 0.8..1.6; 0 = 1.0
-	ReadSize  float64         `toml:"read_size"` // transcript body size in px; 0 = the stylesheet's
-	FontUI    string          `toml:"font_ui"`   // CSS font-family list for the interface
-	FontMono  string          `toml:"font_mono"` // CSS font-family list for code and output
+	Zoom     float64 `toml:"zoom"`      // whole-interface scale, 0.8..1.6; 0 = 1.0
+	ReadSize float64 `toml:"read_size"` // transcript body size in px; 0 = the stylesheet's
+	FontUI   string  `toml:"font_ui"`   // CSS font-family list for the interface
+	FontMono string  `toml:"font_mono"` // CSS font-family list for code and output
+	// Measure is how far the transcript's prose may run: "" holds it to a
+	// reading line length, "full" lets it use the window. Cards, commands and
+	// output are not governed by it — a clipped command is not a preference.
+	Measure   string          `toml:"measure"`
 	Wallpaper WallpaperConfig `toml:"wallpaper"`
 }
 

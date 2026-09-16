@@ -100,7 +100,7 @@
 
     --read: 16px;
 
-    --doc: min(100%, 706px);
+    --doc: min(100%, 706px); --wide: min(100%, 1120px);
 
     --srail-w: 54px;
   }
@@ -183,6 +183,8 @@
   :root[data-weight="light"], :root[data-weight="light"]:lang(zh) {
   --w-reg: 400; --w-med: 500; --w-semi: 600;
   }
+  :root[data-measure="full"] { --doc: 100%; --wide: 100% }
+
   :root[data-weight="heavy"] { --w-reg: 500; --w-med: 600; --w-semi: 700 }
 
   :root[data-weight="heavy"]:lang(zh) { --w-reg: 600; --w-med: 700; --w-semi: 700 }

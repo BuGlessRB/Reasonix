@@ -793,7 +793,7 @@
     position: relative;
     display: flex; align-items: center; gap: 2px; flex: none;
     border-bottom: 1px solid var(--hair);
-    padding: 8px 0; padding-inline: max(16px, calc((100% - var(--doc)) / 2 + 18px));
+    padding: 8px 0; padding-inline: max(16px, calc((100% - var(--wide)) / 2 + 18px));
   }
   .vtabs { display: flex; align-items: center; gap: 2px; min-width: 0 }
 
@@ -821,7 +821,7 @@
 
   .runhead {
     flex: none; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 13px;
-    margin: 12px max(16px, calc((100% - var(--doc)) / 2 + 18px)) 0;
+    margin: 12px max(16px, calc((100% - var(--wide)) / 2 + 18px)) 0;
     padding: 13px 15px 14px;
     border: 1px solid var(--border); border-radius: var(--r-lg);
     background: var(--raised); box-shadow: var(--lit), 0 12px 28px -24px rgb(0 0 0 / .38);
@@ -981,11 +981,12 @@
 
   .flow {
     margin-top: auto; margin-inline: auto;
-    width: calc(100% - var(--srail-w) * 2); max-width: var(--doc);
+    width: calc(100% - var(--srail-w) * 2); max-width: var(--wide);
     padding: 12px var(--flow-pad) 16px;
   }
 
   .chunk { display: flow-root }
+  .call[data-k="say"], .call[data-k="me"] { max-width: var(--doc) }
 
   .chunk > .enterbox > .call {
     content-visibility: auto;
@@ -1054,7 +1055,7 @@
   .traj-note { padding: 12px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
   .traj-note code { color: var(--faint) }
 
-  .tl { list-style: none; margin: 0; padding: 16px max(16px, calc((100% - var(--doc)) / 2 + 18px)) 30px }
+  .tl { list-style: none; margin: 0; padding: 16px max(16px, calc((100% - var(--wide)) / 2 + 18px)) 30px }
   .tl-step { position: relative; padding-left: 27px }
 
   .tl-step::before {
@@ -1966,7 +1967,7 @@
     position: relative; flex: none;
 
     margin: 0 auto 18px;
-    width: calc(100% - var(--srail-w) - var(--flow-pad) * 2);
+    width: calc(100% - var(--srail-w) * 2 - var(--flow-pad) * 2);
 
     --aux-budget: min(calc(34vh / var(--zoom, 1)), 320px);
     max-width: calc(var(--doc) - var(--flow-pad) * 2);
