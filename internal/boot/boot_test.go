@@ -45,6 +45,10 @@ import (
 	_ "reasonix/internal/provider/openai"
 )
 
+func newProviderForTest(e *config.ProviderEntry) (provider.Provider, error) {
+	return NewProviderWithProxy(e, netclient.ProxySpec{Mode: netclient.ModeAuto})
+}
+
 func TestAgentKeepPolicyFromConfig(t *testing.T) {
 	if got := agentKeepPolicy(nil); got != agent.KeepErrors|agent.KeepUserMarked {
 		t.Fatalf("nil keep policy = %v, want KeepErrors|KeepUserMarked", got)
@@ -1529,7 +1533,7 @@ func TestNewProviderAppliesConfiguredDefaultEffort(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:             "custom",
 		Kind:             "openai",
 		BaseURL:          srv.URL,
@@ -1567,7 +1571,7 @@ func TestNewProviderPreservesExplicitlySupportedKimiK3Efforts(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:              "opencode-go",
 		Kind:              "openai",
 		BaseURL:           srv.URL,
@@ -1606,7 +1610,7 @@ func TestNewProviderAppliesOfficialKimiK3RequestContract(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:              "kimi-cn",
 		Kind:              "openai",
 		BaseURL:           "https://api.moonshot.cn/v1",
@@ -1653,7 +1657,7 @@ func TestNewProviderPropagatesConfiguredMaxOutputTokens(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name: "openai", Kind: "openai", BaseURL: "https://api.openai.com/v1",
 		ChatURL: "https://legacy.invalid/chat/completions/", RequestURL: srv.URL, Model: "o3", MaxOutputTokens: 4096,
 	})
@@ -1690,7 +1694,7 @@ func TestNewProviderAppliesModelReasoningProtocol(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:    "deepseek-proxy",
 		Kind:    "openai",
 		BaseURL: srv.URL,
@@ -1732,7 +1736,7 @@ func TestNewProviderBuildsDeepSeekAnthropicPreset(t *testing.T) {
 	if !ok {
 		t.Fatal("ResolveModel failed")
 	}
-	p, err := NewProvider(entry)
+	p, err := newProviderForTest(entry)
 	if err != nil {
 		t.Fatalf("NewProvider: %v", err)
 	}
@@ -1752,7 +1756,7 @@ func TestNewProviderRejectsExplicitOfficialDeepSeekVisionModel(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:         "deepseek",
 		Kind:         "openai",
 		BaseURL:      "https://api.deepseek.com",

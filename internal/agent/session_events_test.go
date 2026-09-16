@@ -702,7 +702,7 @@ func TestLoadSessionUserMessagesSeesEventLogTurns(t *testing.T) {
 		t.Fatalf("SaveSnapshot append: %v", err)
 	}
 
-	users, err := LoadSessionUserMessages(path)
+	users, err := loadSessionUserMessagesWithLimits(path, defaultSessionReplayLimits)
 	if err != nil {
 		t.Fatalf("LoadSessionUserMessages: %v", err)
 	}
@@ -754,7 +754,7 @@ func TestLoadSessionUserMessagesDoesNotFallbackFromFutureEventSchema(t *testing.
 		t.Fatalf("write event log: %v", err)
 	}
 
-	users, err := LoadSessionUserMessages(path)
+	users, err := loadSessionUserMessagesWithLimits(path, defaultSessionReplayLimits)
 	if err == nil || !strings.Contains(err.Error(), "uses schema 99") {
 		t.Fatalf("load error = %v, want future-schema refusal", err)
 	}

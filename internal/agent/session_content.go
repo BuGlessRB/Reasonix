@@ -63,14 +63,6 @@ type SessionUserMessage struct {
 	At   time.Time
 }
 
-// LoadSessionUserMessages returns the session's user-role messages in
-// transcript order, event-log aware. Direct .jsonl decoding misses everything
-// after the first save once an event log exists, so surfaces like prompt
-// history must use this instead.
-func LoadSessionUserMessages(path string) ([]SessionUserMessage, error) {
-	return loadSessionUserMessagesWithLimits(path, defaultSessionReplayLimits)
-}
-
 func loadSessionUserMessagesWithLimits(path string, limits sessionReplayLimits) ([]SessionUserMessage, error) {
 	probe, err := probeSessionEventLogWithLimits(path, limits)
 	if err != nil {

@@ -19,13 +19,6 @@ const (
 	RenderScopeProject RenderScope = "project"
 )
 
-// RenderTOML renders the config as annotated TOML in the `reasonix setup` house style:
-// comments preserved, system_prompt as a multi-line string, helpful hints. The
-// output round-trips back through Load (see render_test.go).
-func RenderTOML(c *Config) string {
-	return RenderTOMLForScope(c, RenderScopeFull)
-}
-
 // RenderTOMLForScope renders an annotated TOML file for a specific persistence
 // target. User configs can carry desktop and account-level preferences; project
 // reasonix.toml stays focused on project behavior and intentionally excludes

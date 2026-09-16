@@ -132,11 +132,11 @@ func TestInstallableFixtureEnableDisableRemoveAndKernelContributions(t *testing.
 	if err := pluginpkg.SetEnabled(home, testPluginID, true); err != nil {
 		t.Fatalf("enable fixture: %v", err)
 	}
-	mgr, warnings, err := sidecar.StartPackages(context.Background(), home, protocol.SessionContext{
+	mgr, warnings, err := sidecar.StartPackagesWithPlan(context.Background(), home, protocol.SessionContext{
 		SessionID: "sess-installed", WorkspaceRoot: "/ws", Generation: 1,
-	}, nil)
+	}, nil, nil, nil)
 	if err != nil {
-		t.Fatalf("StartPackages: %v", err)
+		t.Fatalf("StartPackagesWithPlan: %v", err)
 	}
 	t.Cleanup(func() { _ = mgr.Close() })
 	if len(warnings) != 0 {

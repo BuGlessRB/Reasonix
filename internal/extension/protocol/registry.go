@@ -119,12 +119,6 @@ func LookupMethod(name Method) (MethodSpec, bool) {
 	return spec, ok
 }
 
-// DecodeHostRequestParams applies the registry's exact DTO and strict decoder
-// for a Host → Extension request.
-func DecodeHostRequestParams(method Method, raw json.RawMessage) (any, error) {
-	return decodeForDirection(method, raw, DirectionHostToExtensionRequest, true)
-}
-
 // DecodeHostRequestResult applies the frozen result DTO for a Host →
 // Extension request; the extension side decodes host answers with it.
 func DecodeHostRequestResult(method Method, raw json.RawMessage) (any, error) {
@@ -135,18 +129,6 @@ func DecodeHostRequestResult(method Method, raw json.RawMessage) (any, error) {
 // decoder for an Extension → Host request.
 func DecodeExtensionRequestParams(method Method, raw json.RawMessage) (any, error) {
 	return decodeForDirection(method, raw, DirectionExtensionToHostRequest, true)
-}
-
-// DecodeExtensionRequestResult applies the frozen result DTO for an
-// Extension → Host request; the host side decodes extension answers with it.
-func DecodeExtensionRequestResult(method Method, raw json.RawMessage) (any, error) {
-	return decodeForDirection(method, raw, DirectionExtensionToHostRequest, false)
-}
-
-// DecodeHostNotificationParams applies the strict decoder to a Host →
-// Extension notification payload.
-func DecodeHostNotificationParams(method Method, raw json.RawMessage) (any, error) {
-	return decodeForDirection(method, raw, DirectionHostToExtensionNotification, true)
 }
 
 // DecodeExtensionNotificationParams applies the strict decoder to an

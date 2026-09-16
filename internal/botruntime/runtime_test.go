@@ -11,6 +11,10 @@ import (
 	"reasonix/internal/testenv"
 )
 
+func rememberInboundSession(msg bot.InboundMessage, sessionID string) error {
+	return RememberInboundSessionWorkspace(msg, sessionID, "")
+}
+
 func TestAllowlistUserCountIncludesRoles(t *testing.T) {
 	allowlist := config.BotAllowlist{
 		FeishuApprovers: []string{"ou-approver"},
@@ -83,7 +87,7 @@ func TestRememberInboundSessionFillsExistingMappingSessionID(t *testing.T) {
 	if err := RememberInbound(msg); err != nil {
 		t.Fatalf("remember inbound: %v", err)
 	}
-	if err := RememberInboundSession(msg, "path:/sessions/20260614-120000.000000000-deepseek.jsonl"); err != nil {
+	if err := rememberInboundSession(msg, "path:/sessions/20260614-120000.000000000-deepseek.jsonl"); err != nil {
 		t.Fatalf("remember inbound session: %v", err)
 	}
 
@@ -107,7 +111,7 @@ func TestRememberInboundSessionCreatesMappingWithSessionID(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	if err := RememberInboundSession(bot.InboundMessage{
+	if err := rememberInboundSession(bot.InboundMessage{
 		Platform:     bot.PlatformFeishu,
 		ConnectionID: "feishu-lark",
 		Domain:       "lark",
@@ -137,10 +141,10 @@ func TestRememberInboundSessionKeepsDistinctGroupUsers(t *testing.T) {
 
 	msg1 := bot.InboundMessage{Platform: bot.PlatformFeishu, ConnectionID: "feishu-lark", Domain: "lark", ChatType: bot.ChatGroup, ChatID: "oc-group-1", UserID: "ou-user-1"}
 	msg2 := bot.InboundMessage{Platform: bot.PlatformFeishu, ConnectionID: "feishu-lark", Domain: "lark", ChatType: bot.ChatGroup, ChatID: "oc-group-1", UserID: "ou-user-2"}
-	if err := RememberInboundSession(msg1, "path:/sessions/user-1.jsonl"); err != nil {
+	if err := rememberInboundSession(msg1, "path:/sessions/user-1.jsonl"); err != nil {
 		t.Fatalf("remember user 1: %v", err)
 	}
-	if err := RememberInboundSession(msg2, "path:/sessions/user-2.jsonl"); err != nil {
+	if err := rememberInboundSession(msg2, "path:/sessions/user-2.jsonl"); err != nil {
 		t.Fatalf("remember user 2: %v", err)
 	}
 
@@ -166,10 +170,10 @@ func TestRememberInboundSessionSharesThreadMappingAcrossUsers(t *testing.T) {
 
 	msg1 := bot.InboundMessage{Platform: bot.PlatformFeishu, ConnectionID: "feishu-lark", Domain: "lark", ChatType: bot.ChatThread, ChatID: "oc-group-1", ThreadID: "thread-1", UserID: "ou-user-1"}
 	msg2 := bot.InboundMessage{Platform: bot.PlatformFeishu, ConnectionID: "feishu-lark", Domain: "lark", ChatType: bot.ChatThread, ChatID: "oc-group-1", ThreadID: "thread-1", UserID: "ou-user-2"}
-	if err := RememberInboundSession(msg1, "path:/sessions/thread-old.jsonl"); err != nil {
+	if err := rememberInboundSession(msg1, "path:/sessions/thread-old.jsonl"); err != nil {
 		t.Fatalf("remember user 1: %v", err)
 	}
-	if err := RememberInboundSession(msg2, "path:/sessions/thread-new.jsonl"); err != nil {
+	if err := rememberInboundSession(msg2, "path:/sessions/thread-new.jsonl"); err != nil {
 		t.Fatalf("remember user 2: %v", err)
 	}
 
@@ -195,7 +199,7 @@ func TestRememberInboundSessionPreservesExplicitMappingTarget(t *testing.T) {
 	}
 
 	msg := bot.InboundMessage{Platform: bot.PlatformWeixin, ConnectionID: "weixin-weixin", Domain: "weixin", ChatType: bot.ChatDM, ChatID: "wx-chat-1", UserID: "wx-user-1"}
-	if err := RememberInboundSession(msg, "path:/sessions/auto.jsonl"); err != nil {
+	if err := rememberInboundSession(msg, "path:/sessions/auto.jsonl"); err != nil {
 		t.Fatalf("remember inbound session: %v", err)
 	}
 
@@ -218,7 +222,7 @@ func TestRememberInboundSessionPreservesBareExplicitMappingTarget(t *testing.T) 
 	}
 
 	msg := bot.InboundMessage{Platform: bot.PlatformWeixin, ConnectionID: "weixin-weixin", Domain: "weixin", ChatType: bot.ChatDM, ChatID: "wx-chat-1", UserID: "wx-user-1"}
-	if err := RememberInboundSession(msg, "path:/sessions/auto.jsonl"); err != nil {
+	if err := rememberInboundSession(msg, "path:/sessions/auto.jsonl"); err != nil {
 		t.Fatalf("remember inbound session: %v", err)
 	}
 
@@ -288,7 +292,7 @@ func TestRememberInboundSessionUpdatesAutoMappingTarget(t *testing.T) {
 	}
 
 	msg := bot.InboundMessage{Platform: bot.PlatformWeixin, ConnectionID: "weixin-weixin", Domain: "weixin", ChatType: bot.ChatDM, ChatID: "wx-chat-1", UserID: "wx-user-1"}
-	if err := RememberInboundSession(msg, "path:/sessions/new.jsonl"); err != nil {
+	if err := rememberInboundSession(msg, "path:/sessions/new.jsonl"); err != nil {
 		t.Fatalf("remember inbound session: %v", err)
 	}
 

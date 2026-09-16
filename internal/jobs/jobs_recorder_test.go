@@ -10,6 +10,12 @@ import (
 	"reasonix/internal/event"
 )
 
+func newManagerWithRecorder(r TaskRecorder) *Manager {
+	m := NewManager(event.Discard)
+	m.SetTaskRecorder(r)
+	return m
+}
+
 // recordingRecorder captures lifecycle calls for assertions.
 type recordingRecorder struct {
 	mu     sync.Mutex
@@ -39,7 +45,7 @@ func (r *recordingRecorder) snapshot() (starts, dones []string, status []Status)
 
 func TestTaskRecorderHook_StartAndDone(t *testing.T) {
 	rec := &recordingRecorder{}
-	m := NewManager(event.Discard, WithTaskRecorder(rec))
+	m := newManagerWithRecorder(rec)
 	defer m.Close()
 
 	j := m.Start("task", "demo", func(ctx context.Context, out io.Writer) (string, error) {
@@ -61,7 +67,7 @@ func TestTaskRecorderHook_StartAndDone(t *testing.T) {
 
 func TestTaskRecorderHook_Failed(t *testing.T) {
 	rec := &recordingRecorder{}
-	m := NewManager(event.Discard, WithTaskRecorder(rec))
+	m := newManagerWithRecorder(rec)
 	defer m.Close()
 
 	j := m.Start("bash", "", func(ctx context.Context, out io.Writer) (string, error) {
@@ -79,7 +85,7 @@ func TestTaskRecorderHook_Failed(t *testing.T) {
 
 func TestTaskRecorderHook_Killed(t *testing.T) {
 	rec := &recordingRecorder{}
-	m := NewManager(event.Discard, WithTaskRecorder(rec))
+	m := newManagerWithRecorder(rec)
 	defer m.Close()
 
 	block := make(chan struct{})
@@ -116,7 +122,7 @@ func TestTaskRecorderHook_SetAfterConstruction(t *testing.T) {
 }
 
 func TestTaskRecorderHook_NilRecorderIsNoop(t *testing.T) {
-	m := NewManager(event.Discard, WithTaskRecorder(nil))
+	m := newManagerWithRecorder(nil)
 	defer m.Close()
 
 	j := m.Start("bash", "echo", func(ctx context.Context, out io.Writer) (string, error) {

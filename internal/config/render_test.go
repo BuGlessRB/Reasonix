@@ -163,7 +163,7 @@ func TestLoadForRootUsesWindowsHomeFallbackWhenConfigDirUnavailable(t *testing.T
 
 func TestRenderTOMLHeaderShowsResolvedConfigPath(t *testing.T) {
 	isolateUserConfigHome(t)
-	out := RenderTOML(Default())
+	out := RenderTOMLForScope(Default(), RenderScopeFull)
 	want := "> " + processRoots().userConfigDisplayPath() + " > built-in defaults."
 	if !strings.Contains(out, want) {
 		t.Fatalf("rendered header missing resolved config path %q", want)
@@ -347,7 +347,7 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	ds, _ := orig.Provider("deepseek-flash")
 	ds.Effort = "max"
 
-	rendered := RenderTOML(orig)
+	rendered := RenderTOMLForScope(orig, RenderScopeFull)
 
 	var got Config
 	if _, err := toml.Decode(rendered, &got); err != nil {
@@ -577,7 +577,7 @@ func TestRenderTOMLDocumentsPlanModeReadOnlyCommands(t *testing.T) {
 	cfg := Default()
 	cfg.Agent.PlanModeReadOnlyCommands = []string{"gh issue view"}
 
-	rendered := RenderTOML(cfg)
+	rendered := RenderTOMLForScope(cfg, RenderScopeFull)
 	var got Config
 	if _, err := toml.Decode(rendered, &got); err != nil {
 		t.Fatalf("rendered TOML does not parse: %v\n%s", err, rendered)
@@ -608,7 +608,7 @@ approval_mode = "prompt"
 		t.Fatalf("legacy config should still decode: %v", err)
 	}
 
-	rendered := RenderTOML(&cfg)
+	rendered := RenderTOMLForScope(&cfg, RenderScopeFull)
 	for _, retired := range []string{"trusted_read_only_tools", "default_tools_approval_mode", "approvals_reviewer", "\napproval_mode ="} {
 		if strings.Contains(rendered, retired) {
 			t.Fatalf("rendered config retained retired MCP field %q:\n%s", retired, rendered)
@@ -636,7 +636,7 @@ func TestRenderTOMLPreservesMCPTimeouts(t *testing.T) {
 		},
 	}}
 
-	rendered := RenderTOML(cfg)
+	rendered := RenderTOMLForScope(cfg, RenderScopeFull)
 	for _, want := range []string{
 		"mcp_call_timeout_seconds = 450",
 		"mcp_startup_timeout_seconds = 45",
@@ -761,7 +761,7 @@ func BenchmarkRenderTOMLWithLSPServers(b *testing.B) {
 
 	b.ReportAllocs()
 	for range b.N {
-		rendered := RenderTOML(cfg)
+		rendered := RenderTOMLForScope(cfg, RenderScopeFull)
 		if len(rendered) == 0 {
 			b.Fatal("empty render")
 		}
@@ -1015,7 +1015,7 @@ func TestRenderTOMLRoundTripsPerModelPrices(t *testing.T) {
 	}}
 
 	var got Config
-	if _, err := toml.Decode(RenderTOML(orig), &got); err != nil {
+	if _, err := toml.Decode(RenderTOMLForScope(orig, RenderScopeFull), &got); err != nil {
 		t.Fatalf("rendered TOML does not parse: %v", err)
 	}
 	p, ok := got.Provider("deepseek")
@@ -1051,7 +1051,7 @@ func TestRenderTOMLRoundTripsVisionModels(t *testing.T) {
 		},
 	}
 
-	rendered := RenderTOML(orig)
+	rendered := RenderTOMLForScope(orig, RenderScopeFull)
 	if !strings.Contains(rendered, `vision_models = ["qwen-vl-plus"]`) {
 		t.Fatalf("rendered TOML missing vision_models:\n%s", rendered)
 	}
@@ -1119,7 +1119,7 @@ func TestRenderTOMLRoundTripsProviderHeadersAndModelOverrides(t *testing.T) {
 		},
 	}}
 
-	rendered := RenderTOML(orig)
+	rendered := RenderTOMLForScope(orig, RenderScopeFull)
 	if !strings.Contains(rendered, `headers     = { HTTP-Referer = "https://app.example", X-Title = "Reasonix" }`) {
 		t.Fatalf("rendered TOML missing headers:\n%s", rendered)
 	}
@@ -1283,7 +1283,7 @@ func TestRenderTOMLConversationWidthRoundTrip(t *testing.T) {
 
 func TestRenderTOMLDefaultStepsOmitted(t *testing.T) {
 	isolateUserConfigHome(t)
-	out := RenderTOML(Default())
+	out := RenderTOMLForScope(Default(), RenderScopeFull)
 	agentLines := extractSectionLines(out, "[agent]")
 	for _, line := range agentLines {
 		if strings.Contains(line, "max_steps") || strings.Contains(line, "planner_max_steps") {
@@ -1333,7 +1333,7 @@ func TestRenderTOMLOmitsDeprecatedAgentStepLimits(t *testing.T) {
 	c := Default()
 	c.Agent.MaxSteps = 5
 	c.Agent.PlannerMaxSteps = 7
-	out := RenderTOML(c)
+	out := RenderTOMLForScope(c, RenderScopeFull)
 	for _, line := range extractSectionLines(out, "[agent]") {
 		if strings.Contains(line, "max_steps") || strings.Contains(line, "planner_max_steps") {
 			t.Fatalf("deprecated step limit should never be rendered, got: %s", line)

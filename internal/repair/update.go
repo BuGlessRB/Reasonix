@@ -2415,12 +2415,6 @@ func markUpdateHealthyMatching(runningVersion, expectedCreatedAt, expectedTransa
 	return nil
 }
 
-// CancelPendingUpdate removes a transaction that failed before control was
-// handed to the replacement build. A version mismatch is intentionally inert.
-func CancelPendingUpdate(toVersion string) error {
-	return cancelPendingUpdateInvocation(toVersion, "", "")
-}
-
 // CancelPendingUpdateMatching removes only the exact transaction prepared by
 // the caller. It is used by updater failure paths where a same-version retry can
 // replace pending-update.json before cleanup runs.

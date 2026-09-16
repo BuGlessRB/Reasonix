@@ -225,12 +225,6 @@ func WithSessionOwnershipProbe(probe func(path string) bool) Option {
 	return func(m *Manager) { m.sessionOwnershipProbe = probe }
 }
 
-// WithTaskRecorder installs an optional background-job lifecycle recorder for
-// task monitoring. A nil recorder disables recording.
-func WithTaskRecorder(r TaskRecorder) Option {
-	return func(m *Manager) { m.taskRecorder = r }
-}
-
 // SetTaskRecorder installs (or clears, with nil) the lifecycle recorder after
 // construction. Controllers that assemble their job manager before the
 // recorder's dependencies (workspace root, session id) are known use this.

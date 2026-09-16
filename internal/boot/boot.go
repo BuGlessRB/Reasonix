@@ -1602,13 +1602,6 @@ func subagentEffectiveIdentity(cfg *config.Config, resolver provider.Resolver, b
 	return modelID, strings.TrimSpace(config.EffectiveEffort(&entry))
 }
 
-// NewProvider builds a provider.Provider from a configured entry. Exported so
-// custom assemblers (e.g. the ACP per-session factory) can reuse it without
-// going through the full Build.
-func NewProvider(e *config.ProviderEntry) (provider.Provider, error) {
-	return NewProviderWithProxy(e, netclient.ProxySpec{Mode: netclient.ModeAuto})
-}
-
 // NewProviderWithProxy builds a provider.Provider with the configured ordinary
 // network proxy settings.
 func NewProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec) (provider.Provider, error) {

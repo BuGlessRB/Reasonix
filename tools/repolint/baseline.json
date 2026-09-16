@@ -6,15 +6,15 @@
     "commented-code": 0,
     "complexity": 1496,
     "error-text": 9,
-    "essay": 3210,
-    "file-size": 38138,
+    "essay": 3209,
+    "file-size": 38098,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
-    "orphan": 94,
+    "orphan": 81,
     "refusal-path": 0,
     "spec-parity": 0,
     "struct-state": 41,
@@ -243,7 +243,7 @@
       "essay": 3
     },
     "internal/agent/session_content.go": {
-      "orphan": 2
+      "orphan": 1
     },
     "internal/agent/session_display_index.go": {
       "essay": 18,
@@ -254,8 +254,7 @@
     },
     "internal/agent/session_events.go": {
       "essay": 9,
-      "file-size": 86,
-      "orphan": 1
+      "file-size": 82
     },
     "internal/agent/session_events_test.go": {
       "essay": 3
@@ -315,10 +314,9 @@
     "internal/boot/boot.go": {
       "complexity": 131,
       "essay": 77,
-      "file-size": 963,
+      "file-size": 956,
       "function-size": 1035,
-      "narrative": 3,
-      "orphan": 1
+      "narrative": 3
     },
     "internal/boot/boot_test.go": {
       "essay": 10
@@ -405,7 +403,7 @@
       "orphan": 1
     },
     "internal/botruntime/runtime.go": {
-      "orphan": 2
+      "orphan": 1
     },
     "internal/capability/audit.go": {
       "struct-state": 6
@@ -630,9 +628,9 @@
       "essay": 1
     },
     "internal/config/edit.go": {
-      "essay": 10,
-      "file-size": 1586,
-      "orphan": 2
+      "essay": 9,
+      "file-size": 1576,
+      "orphan": 1
     },
     "internal/config/effort.go": {
       "complexity": 1,
@@ -682,9 +680,8 @@
     "internal/config/render.go": {
       "complexity": 226,
       "essay": 2,
-      "file-size": 924,
-      "function-size": 858,
-      "orphan": 1
+      "file-size": 917,
+      "function-size": 858
     },
     "internal/config/vision.go": {
       "essay": 1,
@@ -877,8 +874,7 @@
       "essay": 12
     },
     "internal/environment/probe.go": {
-      "essay": 5,
-      "orphan": 1
+      "essay": 5
     },
     "internal/environment/snapshot.go": {
       "essay": 5
@@ -948,8 +944,7 @@
       "essay": 5
     },
     "internal/extension/protocol/registry.go": {
-      "essay": 1,
-      "orphan": 3
+      "essay": 1
     },
     "internal/extension/protocol/validate.go": {
       "complexity": 3
@@ -1009,9 +1004,6 @@
     },
     "internal/extension/sidecar/fake_test.go": {
       "essay": 9
-    },
-    "internal/extension/sidecar/manager.go": {
-      "orphan": 1
     },
     "internal/extension/sidecar/plan.go": {
       "orphan": 1
@@ -1118,8 +1110,8 @@
     },
     "internal/jobs/jobs.go": {
       "essay": 42,
-      "file-size": 1141,
-      "orphan": 2
+      "file-size": 1135,
+      "orphan": 1
     },
     "internal/jobs/jobs_extra_test.go": {
       "essay": 1
@@ -1372,10 +1364,10 @@
     "internal/repair/update.go": {
       "complexity": 109,
       "essay": 43,
-      "file-size": 2901,
+      "file-size": 2895,
       "function-size": 308,
       "narrative": 2,
-      "orphan": 13
+      "orphan": 12
     },
     "internal/repair/update_handoff_darwin_smoke_test.go": {
       "essay": 4

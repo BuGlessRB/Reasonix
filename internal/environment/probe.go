@@ -89,10 +89,6 @@ func DefaultProbes() []string {
 	}
 }
 
-func RunProbesWithOverrides(ctx context.Context, commands []string, overrides map[string]string) []ProbeResult {
-	return RunProbesWithOptions(ctx, commands, ProbeOptions{Overrides: overrides})
-}
-
 func RunProbesWithOptions(ctx context.Context, commands []string, opts ProbeOptions) []ProbeResult {
 	key := probeFingerprint(commands, opts)
 	now := probeNow()

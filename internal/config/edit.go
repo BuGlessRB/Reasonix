@@ -850,16 +850,6 @@ func (c *Config) ClearPluginAuthentication(name string) (PluginEntry, bool, erro
 	return PluginEntry{}, false, fmt.Errorf("clear plugin authentication: no plugin %q", name)
 }
 
-// ClearPluginAuthenticationInSource clears auth material in the file that actually
-// owns the MCP server. Load() merges user/project TOML and project .mcp.json into
-// one Config, so callers must not mutate that merged view and Save() it back: a
-// .mcp.json-only server would otherwise be serialized into reasonix.toml or the
-// user config. Source priority mirrors Load(): project TOML, user TOML, then the
-// project .mcp.json entry if TOML did not define that server.
-func ClearPluginAuthenticationInSource(name string) (PluginEntry, bool, string, error) {
-	return ClearPluginAuthenticationInSourceForRoot(".", name)
-}
-
 // ClearPluginAuthenticationInSourceForRoot clears auth material in the source
 // that owns name for the supplied workspace. The root is explicit so a desktop
 // action cannot drift to another project's reasonix.toml or .mcp.json after the

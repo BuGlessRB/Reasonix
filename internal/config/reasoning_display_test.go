@@ -80,7 +80,7 @@ func TestSetDesktopReasoningDisplayMode(t *testing.T) {
 
 func TestRenderTOMLIncludesExplicitReasoningDisplayMode(t *testing.T) {
 	cfg := Default()
-	renderedDefault := RenderTOML(cfg)
+	renderedDefault := RenderTOMLForScope(cfg, RenderScopeFull)
 	if strings.Contains(renderedDefault, "reasoning_display_mode =") {
 		t.Fatal("implicit default unexpectedly rendered reasoning_display_mode")
 	}
@@ -94,7 +94,7 @@ func TestRenderTOMLIncludesExplicitReasoningDisplayMode(t *testing.T) {
 	if err := cfg.SetDesktopReasoningDisplayMode("hidden"); err != nil {
 		t.Fatalf("SetDesktopReasoningDisplayMode: %v", err)
 	}
-	rendered := RenderTOML(cfg)
+	rendered := RenderTOMLForScope(cfg, RenderScopeFull)
 	if !strings.Contains(rendered, `reasoning_display_mode = "hidden"`) {
 		t.Fatalf("rendered config missing explicit reasoning display mode:\n%s", rendered)
 	}
@@ -107,7 +107,7 @@ func TestRenderTOMLOmitsUnknownReasoningDisplayMode(t *testing.T) {
 	cfg := Default()
 	cfg.Desktop.ReasoningDisplayMode = "future-mode"
 	cfg.Desktop.ExpandThinking = true
-	rendered := RenderTOML(cfg)
+	rendered := RenderTOMLForScope(cfg, RenderScopeFull)
 	if strings.Contains(rendered, "reasoning_display_mode =") {
 		t.Fatalf("unknown reasoning display mode was canonicalized into an explicit preference:\n%s", rendered)
 	}
@@ -132,7 +132,7 @@ func TestDesktopReasoningDisplayModeTOMLRoundTrip(t *testing.T) {
 		t.Fatalf("SetDesktopReasoningDisplayMode: %v", err)
 	}
 	var decoded Config
-	if _, err := toml.Decode(RenderTOML(cfg), &decoded); err != nil {
+	if _, err := toml.Decode(RenderTOMLForScope(cfg, RenderScopeFull), &decoded); err != nil {
 		t.Fatalf("decode rendered config: %v", err)
 	}
 	if got := decoded.DesktopReasoningDisplayMode(); got != "auto" {

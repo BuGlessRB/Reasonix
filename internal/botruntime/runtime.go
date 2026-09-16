@@ -455,10 +455,6 @@ func RememberInbound(msg bot.InboundMessage) error {
 	return rememberInbound(msg, "", "")
 }
 
-func RememberInboundSession(msg bot.InboundMessage, sessionID string) error {
-	return RememberInboundSessionWorkspace(msg, sessionID, "")
-}
-
 func RememberInboundSessionWorkspace(msg bot.InboundMessage, sessionID string, workspaceRoot string) error {
 	return rememberInbound(msg, strings.TrimSpace(sessionID), strings.TrimSpace(workspaceRoot))
 }
