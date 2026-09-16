@@ -68,7 +68,7 @@ const WEIGHTS: [string, string, string][] = [
 // the next one without hunting, or a window used to its edge. A step between
 // them would be a number nobody could tell apart from its neighbour.
 const MEASURES: [string, string, string][] = [
-  ["", "适宜阅读", "每行长度控制在一眼能回到行首的范围"],
+  ["standard", "适宜阅读", "每行长度控制在一眼能回到行首的范围"],
   ["full", "铺满窗口", "正文跟随窗口宽度，宽屏上不留两侧空白"],
 ];
 
@@ -341,8 +341,8 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
             <span className="tx">{t("行宽")}</span>
             <div className="seg" data-text role="group" aria-label={t("正文行宽")}>
               {MEASURES.map(([id, name, why]) => (
-                <button key={id || "measure"} data-action="appearance.measure" data-value={id || "reading"}
-                  aria-pressed={(look.measure ?? "") === id} title={t(why)} onClick={() => set({ measure: id })}>
+                <button key={id} data-action="appearance.measure" data-value={id}
+                  aria-pressed={(look.width || "standard") === id} title={t(why)} onClick={() => set({ width: id })}>
                   {t(name)}
                 </button>
               ))}

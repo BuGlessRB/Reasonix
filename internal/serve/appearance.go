@@ -44,12 +44,13 @@ func (s *Server) registerAppearanceRoutes(mux *http.ServeMux) {
 type appearanceView struct {
 	// Interface language: "zh", "en", or "" to follow the machine. It is not
 	// the language the model answers in — that follows each message you write.
-	Language  string         `json:"language,omitempty"`
-	Zoom      float64        `json:"zoom,omitempty"`
-	ReadSize  float64        `json:"readSize,omitempty"`
-	FontUI    string         `json:"fontUi,omitempty"`
-	FontMono  string         `json:"fontMono,omitempty"`
-	Measure   string         `json:"measure,omitempty"`
+	Language string  `json:"language,omitempty"`
+	Zoom     float64 `json:"zoom,omitempty"`
+	ReadSize float64 `json:"readSize,omitempty"`
+	FontUI   string  `json:"fontUi,omitempty"`
+	FontMono string  `json:"fontMono,omitempty"`
+	// standard | full — how far the transcript's prose runs.
+	Width     string         `json:"width,omitempty"`
 	Wallpaper *wallpaperView `json:"wallpaper,omitempty"`
 }
 
@@ -67,8 +68,8 @@ func appearanceDir() string {
 	return filepath.Join(config.MemoryUserDir(), "appearance")
 }
 
-func viewOf(a config.AppearanceConfig, language string) appearanceView {
-	out := appearanceView{Language: language, Zoom: a.Zoom, ReadSize: a.ReadSize, FontUI: a.FontUI, FontMono: a.FontMono, Measure: a.Measure}
+func viewOf(a config.AppearanceConfig, language, width string) appearanceView {
+	out := appearanceView{Language: language, Zoom: a.Zoom, ReadSize: a.ReadSize, FontUI: a.FontUI, FontMono: a.FontMono, Width: width}
 	if a.Wallpaper.File != "" {
 		out.Wallpaper = &wallpaperView{
 			URL:     "/appearance/wallpaper/" + a.Wallpaper.File,
@@ -87,7 +88,7 @@ func (s *Server) appearance(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, viewOf(cfg.Desktop.Appearance, cfg.DesktopLanguage()))
+	writeJSON(w, viewOf(cfg.Desktop.Appearance, cfg.DesktopLanguage(), cfg.DesktopConversationWidth()))
 }
 
 // Sizes are clamped rather than rejected: a value out of range is a slider
@@ -99,7 +100,7 @@ func (s *Server) saveAppearance(w http.ResponseWriter, r *http.Request) {
 		ReadSize float64 `json:"readSize"`
 		FontUI   string  `json:"fontUi"`
 		FontMono string  `json:"fontMono"`
-		Measure  string  `json:"measure"`
+		Width    string  `json:"width"`
 		Opacity  float64 `json:"opacity"`
 		Dim      float64 `json:"dim"`
 		FocusX   float64 `json:"focusX"`
@@ -125,10 +126,8 @@ func (s *Server) saveAppearance(w http.ResponseWriter, r *http.Request) {
 	a.FontMono = sanitizeFamily(body.FontMono)
 	// Anything but the one named alternative is the default, the same way the
 	// language field above resolves an answer it does not know.
-	if strings.EqualFold(strings.TrimSpace(body.Measure), "full") {
-		a.Measure = "full"
-	} else {
-		a.Measure = ""
+	if err := edit.SetDesktopConversationWidth(body.Width); err != nil {
+		_ = edit.SetDesktopConversationWidth("standard")
 	}
 	a.Wallpaper.Opacity = clamp01(body.Opacity)
 	a.Wallpaper.Dim = clamp01(body.Dim)
@@ -138,7 +137,7 @@ func (s *Server) saveAppearance(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, viewOf(edit.Desktop.Appearance, edit.DesktopLanguage()))
+	writeJSON(w, viewOf(edit.Desktop.Appearance, edit.DesktopLanguage(), edit.DesktopConversationWidth()))
 }
 
 func (s *Server) uploadWallpaper(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +178,7 @@ func (s *Server) uploadWallpaper(w http.ResponseWriter, r *http.Request) {
 	if prev != "" && prev != name {
 		_ = os.Remove(filepath.Join(appearanceDir(), prev))
 	}
-	writeJSON(w, viewOf(edit.Desktop.Appearance, edit.DesktopLanguage()))
+	writeJSON(w, viewOf(edit.Desktop.Appearance, edit.DesktopLanguage(), edit.DesktopConversationWidth()))
 }
 
 func (s *Server) clearWallpaper(w http.ResponseWriter, r *http.Request) {

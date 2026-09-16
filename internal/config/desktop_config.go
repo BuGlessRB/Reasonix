@@ -75,7 +75,7 @@ type DesktopConfig struct {
 	ProviderAccess          []string         `toml:"provider_access"`            // desktop-only list of provider entries shown in Settings > Model > Access
 	ExpandThinking          bool             `toml:"expand_thinking"`            // deprecated compatibility alias: true maps to auto
 	ReasoningDisplayMode    string           `toml:"reasoning_display_mode"`
-	ConversationWidth       string           `toml:"conversation_width"` // standard|full; max transcript width; empty = standard
+	ConversationWidth       string           `toml:"conversation_width"` // standard|full; how far prose runs; empty = standard
 	PinnedVersion           string           `toml:"pinned_version"`     // release pinned by a rollback; empty follows the channel
 	Appearance              AppearanceConfig `toml:"appearance"`
 }
@@ -86,14 +86,10 @@ type DesktopConfig struct {
 // Zero means "unset" throughout, so an untouched config resolves to the
 // stylesheet's own defaults rather than to a number written here.
 type AppearanceConfig struct {
-	Zoom     float64 `toml:"zoom"`      // whole-interface scale, 0.8..1.6; 0 = 1.0
-	ReadSize float64 `toml:"read_size"` // transcript body size in px; 0 = the stylesheet's
-	FontUI   string  `toml:"font_ui"`   // CSS font-family list for the interface
-	FontMono string  `toml:"font_mono"` // CSS font-family list for code and output
-	// Measure is how far the transcript's prose may run: "" holds it to a
-	// reading line length, "full" lets it use the window. Cards, commands and
-	// output are not governed by it — a clipped command is not a preference.
-	Measure   string          `toml:"measure"`
+	Zoom      float64         `toml:"zoom"`      // whole-interface scale, 0.8..1.6; 0 = 1.0
+	ReadSize  float64         `toml:"read_size"` // transcript body size in px; 0 = the stylesheet's
+	FontUI    string          `toml:"font_ui"`   // CSS font-family list for the interface
+	FontMono  string          `toml:"font_mono"` // CSS font-family list for code and output
 	Wallpaper WallpaperConfig `toml:"wallpaper"`
 }
 

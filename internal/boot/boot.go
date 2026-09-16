@@ -1108,7 +1108,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			}
 		}
 	}
-	ctrl := control.New(ctrlOpts)
+	ctrl := withWindowPosture(control.New(ctrlOpts), cfg, opts.StatsSource)
 	// Publish the controller to the extension UI hub's indirection: from here
 	// on, host/ui/* publishes ride ctrl.EmitExtensionEvent and blocking prompts
 	// ride ctrl.Ask, exactly as if the hub had been built after control.New.

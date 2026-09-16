@@ -91,12 +91,12 @@ func renderDesktopSection(b *strings.Builder, c *Config) {
 // written.
 func renderAppearanceSection(b *strings.Builder, a AppearanceConfig) {
 	paper := strings.TrimSpace(a.Wallpaper.File)
-	if a.Zoom == 0 && a.ReadSize == 0 && a.FontUI == "" && a.FontMono == "" && a.Measure == "" && paper == "" {
+	if a.Zoom == 0 && a.ReadSize == 0 && a.FontUI == "" && a.FontMono == "" && paper == "" {
 		return
 	}
 	// The child table implies the parent, so an empty [desktop.appearance] is
 	// noise in a file people read.
-	if a.Zoom != 0 || a.ReadSize != 0 || a.FontUI != "" || a.FontMono != "" || a.Measure != "" {
+	if a.Zoom != 0 || a.ReadSize != 0 || a.FontUI != "" || a.FontMono != "" {
 		b.WriteString("\n[desktop.appearance]\n")
 	}
 	if a.Zoom != 0 {
@@ -110,9 +110,6 @@ func renderAppearanceSection(b *strings.Builder, a AppearanceConfig) {
 	}
 	if a.FontMono != "" {
 		fmt.Fprintf(b, "font_mono = %q   # code and output font family\n", a.FontMono)
-	}
-	if a.Measure != "" {
-		fmt.Fprintf(b, "measure = %q   # how far prose runs: empty is a reading line length, \"full\" uses the window\n", a.Measure)
 	}
 	if paper == "" {
 		return
