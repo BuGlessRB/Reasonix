@@ -13,8 +13,12 @@ const { spawnSync } = require("node:child_process");
 // lipo'd together, and byte-identical thin slices are refused outright. A
 // single-architecture kernel copied into both legs is that third case.
 const OUT = path.join(__dirname, "..", "bin");
-const PKG = "../../cmd/reasonix-studio-host";
-const CWD = path.join(__dirname, "..");
+// The host is a main-module package, so it is built from the main module: run
+// from here and Go resolves it against desktop/go.mod, whose go.sum carries
+// only what the desktop module's own code imports.
+const ROOT = path.join(__dirname, "..", "..", "..");
+const PKG = "./cmd/reasonix-studio-host";
+const CWD = ROOT;
 
 // The symbol table and DWARF are 28% of this binary and nothing in a shipped
 // build reads them: a Go panic's traceback comes from the pclntab, which -w
@@ -38,7 +42,7 @@ function go(args, env) {
 
 if (process.platform !== "darwin") {
   // go build names the binary after the package and adds .exe where it belongs.
-  go(["build", "-ldflags", LDFLAGS, "-o", "bin/", PKG]);
+  go(["build", "-ldflags", LDFLAGS, "-o", OUT + path.sep, PKG]);
   console.log("built reasonix-studio-host");
   process.exit(0);
 }
