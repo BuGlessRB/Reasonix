@@ -107,10 +107,10 @@ test("required desktop aggregate rejects every failed, cancelled or unexpectedly
     for (const value of ["failure", "cancelled", "skipped", ""]) assert.notEqual(run({ ...success, [key]: value }), 0, `${key}=${value}`);
   }
   // A pull request that cannot affect the desktop module: every child skips
-  // except the browser aggregate, which always runs and validates its own.
+  // except the browser and Windows Go aggregates, which validate their groups.
   assert.equal(run({ ...success, PREPARE_REQUIRED: "false", NATIVE_REQUIRED: "false", FRONTEND_REQUIRED: "false", BROWSER_REQUIRED: "false",
     PACKAGE_REQUIRED: "false", PREPARE_RESULT: "skipped", GO_RESULT: "skipped", GO_RACE_RESULT: "skipped", FRONTEND_RESULT: "skipped",
-    BROWSER_RESULT: "success", MACOS_RESULT: "skipped", WINDOWS_RESULT: "skipped", WINDOWS_GO_RESULT: "skipped", PACKAGE_RESULT: "skipped" }), 0);
+    BROWSER_RESULT: "success", MACOS_RESULT: "skipped", WINDOWS_RESULT: "skipped", WINDOWS_GO_RESULT: "success", PACKAGE_RESULT: "skipped" }), 0);
   // Any pull request: packaging is push-only, so it must be skipped there.
   assert.equal(run({ ...success, PACKAGE_REQUIRED: "false", PACKAGE_RESULT: "skipped" }), 0);
   assert.notEqual(run({ ...success, PACKAGE_REQUIRED: "false", PACKAGE_RESULT: "success" }), 0);
@@ -120,6 +120,7 @@ test("required desktop aggregate rejects every failed, cancelled or unexpectedly
     CHANGES_RESULT: "success", SHOULD_RUN: "false", PREPARE_RESULT: "skipped", GROUP_RESULT: "skipped" } });
   assert.equal(browser.status, 0, "an unneeded browser aggregate succeeds after validating skipped groups");
   assert.notEqual(run({ ...success, BROWSER_REQUIRED: "false", BROWSER_RESULT: "skipped" }), 0);
+  assert.notEqual(run({ ...success, NATIVE_REQUIRED: "false", WINDOWS_GO_RESULT: "skipped" }), 0);
 });
 
 test("required lint aggregates code lint and the deduplicated frontend suite", () => {
@@ -324,12 +325,26 @@ test("Windows desktop Go partitions tests without verbose JSON cache overhead", 
   assert.doesNotMatch(windowsGo, /go-test-timing/);
   assert.doesNotMatch(windowsGo, /go test -run ['"]?\^\$/);
 
+  const groups = windowsGo.match(/group: \[([^\]]+)\]/)[1].split(",").map(value => value.trim());
+  assert.deepEqual(groups, windowsDesktopGroups);
+  assert.match(windowsGo, /fail-fast: false/);
+
   assert.match(windowsGo, /name: probe \(Windows ConPTY host integration\)[\s\S]*?continue-on-error: true[\s\S]*?run: go test -run '\^TestWindowsTerminalProcessConPTYSmoke\$' \./);
+  assert.match(windowsGo, /name: probe \(Windows ConPTY host integration\)\n\s+if: matrix.group == 'Q-Z'/);
+  assert.match(windowsGo, /name: test \(vendored systray identity\)\n\s+if: matrix.group == 'Q-Z'/);
   assert.match(windowsGo, /steps\.conpty-smoke\.outcome == 'failure'/);
-  const aggregate = job(ci, "desktop-windows-go");
-  const script = shellStep(aggregate, "Verify every native Windows Go group passed");
-  for (const result of ["success", "failure", "cancelled", "skipped", ""]) {
-    const status = spawnSync("bash", ["-e", "-c", script], { env: { ...process.env, GROUP_RESULT: result } }).status;
-    assert.equal(status === 0, result === "success");
-  }
+});
+
+test("Windows desktop Go aggregate rejects incomplete matrix results", () => {
+  const summary = job(ci, "desktop-windows-go");
+  assert.match(summary, /needs: \[changes, desktop-prepare, desktop-windows-go-group\]/);
+  const script = shellStep(summary, "Verify Windows desktop Go groups");
+  const success = { CHANGES_RESULT: "success", SHOULD_RUN: "true", PREPARE_RESULT: "success", GROUP_RESULT: "success" };
+  const run = patch => spawnSync("bash", ["-e", "-c", script], { env: { ...process.env, ...success, ...patch } }).status;
+  assert.equal(run({}), 0);
+  for (const key of ["CHANGES_RESULT", "PREPARE_RESULT", "GROUP_RESULT"])
+    for (const result of ["failure", "cancelled", "skipped", ""])
+      assert.notEqual(run({ [key]: result }), 0, `${key}=${result}`);
+  assert.equal(run({ SHOULD_RUN: "false", PREPARE_RESULT: "skipped", GROUP_RESULT: "skipped" }), 0);
+  assert.notEqual(run({ SHOULD_RUN: "false" }), 0);
 });

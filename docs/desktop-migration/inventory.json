@@ -6008,14 +6008,14 @@
       "name": "ci.yml/desktop-windows-go",
       "location": ".github/workflows/ci.yml",
       "class": "keep-business",
-      "owner": "aggregate of native Windows desktop Go test groups"
+      "owner": "fail-closed aggregate for Windows desktop Go partitions"
     },
     {
       "kind": "ci-job",
       "name": "ci.yml/desktop-windows-go-group",
       "location": ".github/workflows/ci.yml",
       "class": "keep-business",
-      "owner": "native Windows desktop Go suite on independent test-group runners"
+      "owner": "isolated parallel Windows desktop Go test partitions"
     },
     {
       "kind": "ci-job",

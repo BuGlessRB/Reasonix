@@ -514,7 +514,7 @@ jobs:
           # PREPARE_REQUIRED above.
           test "$MACOS_RESULT" = "$(expected "$NATIVE_REQUIRED")"
           test "$WINDOWS_RESULT" = "$(expected "$NATIVE_REQUIRED")"
-          test "$WINDOWS_GO_RESULT" = "$(expected "$NATIVE_REQUIRED")"
+          test "$WINDOWS_GO_RESULT" = success
           test "$PACKAGE_RESULT" = "$(expected "$PACKAGE_REQUIRED")"
 
   desktop-frontend:
@@ -1250,14 +1250,23 @@ jobs:
 
   desktop-windows-go:
     needs: [changes, desktop-prepare, desktop-windows-go-group]
-    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false')
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Verify every native Windows Go group passed
+      - name: Verify Windows desktop Go groups
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false' }}
+          PREPARE_RESULT: ${{ needs.desktop-prepare.result }}
           GROUP_RESULT: ${{ needs.desktop-windows-go-group.result }}
         run: |
-          test "$GROUP_RESULT" = success
+          test "$CHANGES_RESULT" = success
+          if [ "$SHOULD_RUN" = true ]; then
+            test "$PREPARE_RESULT" = success
+            test "$GROUP_RESULT" = success
+          else
+            test "$GROUP_RESULT" = skipped
+          fi
 
   # Installer packaging is packaging validation, not a code gate, and it shares
   # no state with the test steps above. It runs beside them instead of after
