@@ -359,13 +359,6 @@ func (c *Config) SetDesktopCheckUpdates(enabled bool) error {
 	return nil
 }
 
-// SetDesktopUpdateChannel is retained for pre-single-channel Wails clients.
-// Clearing the legacy field keeps the next canonical write channel-free.
-func (c *Config) SetDesktopUpdateChannel(_ string) error {
-	c.Desktop.UpdateChannel = ""
-	return nil
-}
-
 // SetCLIUpdateChannel is retained for older CLI scripts. Every recognized
 // historical value migrates to the official channel and is omitted on save.
 func (c *Config) SetCLIUpdateChannel(channel string) error {
