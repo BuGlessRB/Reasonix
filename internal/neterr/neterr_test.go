@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"syscall"
 	"testing"
 )
 
@@ -22,7 +21,7 @@ func TestIsConnReset(t *testing.T) {
 	}
 	for _, err := range []error{
 		io.ErrUnexpectedEOF,
-		&net.OpError{Op: "read", Err: syscall.ECONNRESET},
+		&net.OpError{Op: "read", Err: resetErrors[0]},
 		fmt.Errorf("read stream: %w", &net.OpError{Op: "read", Err: errors.New("wsarecv: forcibly closed")}),
 	} {
 		if !IsConnReset(err) {
@@ -43,7 +42,7 @@ func TestIsTransient(t *testing.T) {
 	}
 	for _, err := range []error{
 		io.ErrUnexpectedEOF,
-		&net.OpError{Op: "read", Err: syscall.ECONNRESET},
+		&net.OpError{Op: "read", Err: resetErrors[0]},
 		&net.OpError{Op: "dial", Err: refusedErrors[0]},
 		timeoutError{},
 	} {
