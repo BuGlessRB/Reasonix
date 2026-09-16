@@ -7,7 +7,7 @@
     "complexity": 1495,
     "error-text": 9,
     "essay": 3207,
-    "file-size": 34840,
+    "file-size": 33014,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6551,
@@ -371,10 +371,10 @@
       "orphan": 1
     },
     "internal/bot/gateway.go": {
-      "complexity": 59,
-      "essay": 23,
-      "file-size": 2173,
-      "function-size": 274,
+      "complexity": 3,
+      "essay": 13,
+      "file-size": 347,
+      "function-size": 20,
       "orphan": 1
     },
     "internal/bot/gateway_lock_test.go": {
@@ -389,6 +389,15 @@
     "internal/bot/render.go": {
       "essay": 5,
       "function-size": 24
+    },
+    "internal/bot/session_routing.go": {
+      "essay": 9,
+      "function-size": 16
+    },
+    "internal/bot/slash.go": {
+      "complexity": 56,
+      "essay": 1,
+      "function-size": 238
     },
     "internal/bot/turn_dispatch_test.go": {
       "essay": 3
