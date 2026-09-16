@@ -53,3 +53,18 @@ func (c *Controller) PlanMode() bool {
 	}
 	return false
 }
+
+// SetPlanMode flips the executor's plan-first workflow flag without touching the
+// cache-stable system/tool prefix, and remembers the state so Compose can prepend
+// the plan-mode marker to outgoing user turns.
+func (c *Controller) SetPlanMode(v bool) {
+	c.applyPlanMode(v)
+}
+
+func (c *Controller) applyPlanMode(v bool) {
+	c.plan().SetActive(v)
+	c.sharePlanRuntime()
+}
+
+// PlanPhase reports where the run sits in the plan lifecycle.
+func (c *Controller) PlanPhase() planmode.Phase { return c.plan().State().Phase }

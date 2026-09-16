@@ -7,7 +7,7 @@
     "complexity": 1495,
     "error-text": 9,
     "essay": 3207,
-    "file-size": 36805,
+    "file-size": 36211,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6551,
@@ -701,9 +701,9 @@
       "frontend-parity": 2
     },
     "internal/control/controller.go": {
-      "essay": 38,
-      "file-size": 1224,
-      "frontend-parity": 30
+      "essay": 32,
+      "file-size": 630,
+      "frontend-parity": 21
     },
     "internal/control/controller_test.go": {
       "essay": 9
@@ -719,7 +719,7 @@
       "frontend-parity": 2
     },
     "internal/control/extensions.go": {
-      "essay": 3
+      "essay": 5
     },
     "internal/control/goal.go": {
       "complexity": 2,
@@ -801,8 +801,8 @@
       "essay": 5
     },
     "internal/control/session_lifecycle.go": {
-      "essay": 7,
-      "frontend-parity": 6
+      "essay": 11,
+      "frontend-parity": 10
     },
     "internal/control/session_snapshot.go": {
       "essay": 16,
@@ -838,6 +838,9 @@
       "essay": 22,
       "frontend-parity": 4,
       "function-size": 4
+    },
+    "internal/control/turn_entry.go": {
+      "frontend-parity": 5
     },
     "internal/control/turn_orchestrator.go": {
       "essay": 10,

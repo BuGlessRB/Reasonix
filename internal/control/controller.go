@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -511,87 +510,6 @@ func (c *Controller) SetDisplayRecorder(fn func(content, display string)) {
 	c.displayRecorder = fn
 }
 
-// SetExtensions installs the extension dispatcher after construction. Boot
-// uses it because sidecars — and therefore the dispatcher — only exist after
-// snapshot assembly, which runs after New. First non-nil install wins for the
-// cold-start path; use ReplaceExtensions for generation-safe rebuild swaps.
-// Nil is a no-op. The executor agent receives the same dispatcher.
-func (c *Controller) SetExtensions(d *dispatch.Dispatcher) {
-	if d == nil {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.extensions != nil {
-		return
-	}
-	c.installExtensionsLocked(d)
-}
-
-// ReplaceExtensions atomically swaps the dispatcher for a reused controller
-// after a narrow rebuild. Updates sink strategy owner and executor together.
-func (c *Controller) ReplaceExtensions(d *dispatch.Dispatcher) {
-	if c == nil || d == nil {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.installExtensionsLocked(d)
-}
-
-func (c *Controller) installExtensionsLocked(d *dispatch.Dispatcher) {
-	c.extensions = d
-	// Keep the inbox observer as the outermost sink so Steer/unapplied events
-	// always update durable state, while still installing/updating the
-	// frontendEventSink wrapper underneath for extension rulings.
-	switch sink := c.sink.(type) {
-	case *inboxEventSink:
-		if existing, ok := sink.Inner.(*frontendEventSink); ok {
-			existing.setDispatcher(d)
-		} else {
-			sink.Inner = newFrontendEventSink(sink.Inner, d)
-		}
-	case *frontendEventSink:
-		sink.setDispatcher(d)
-		// Ensure inbox observer stays outer.
-		c.sink = &inboxEventSink{AuditForwarder: event.AuditForwarder{Inner: sink}, c: c}
-	default:
-		c.sink = &inboxEventSink{AuditForwarder: event.AuditForwarder{Inner: newFrontendEventSink(c.sink, d)}, c: c}
-	}
-	if c.executor != nil {
-		c.executor.SetExtensions(d)
-		c.executor.SetSink(c.sink)
-	}
-}
-
-// SetProviderResolver replaces the session's merged provider catalog (narrow
-// rebuild after sidecar Manager roll). Nil clears extension-hosted providers.
-func (c *Controller) SetProviderResolver(r provider.Resolver) {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	c.providerResolver = r
-	c.mu.Unlock()
-}
-
-// ApplyExtensionSystemPrompt swaps the executor to a fresh session carrying
-// the extension strategy's final system prompt and makes it the controller's
-// rotation prompt, so /new and /clear keep the strategy-composed prompt too.
-// Boot calls it when a system_prompt.build replacement changed the prompt
-// after the controller (and its session) was built with the host-composed
-// one. It must run before any turn or history resume: the fresh session holds
-// only the system message, so a later resume cleanly layers history on top.
-func (c *Controller) ApplyExtensionSystemPrompt(prompt string) {
-	if c == nil || c.executor == nil {
-		return
-	}
-	c.mu.Lock()
-	c.systemPrompt = prompt
-	c.mu.Unlock()
-	c.executor.SetSession(agent.NewSession(prompt))
-}
-
 func (c *Controller) recordDisplay(content, display string) {
 	if strings.TrimSpace(display) == "" || content == display {
 		return
@@ -696,27 +614,6 @@ func (c *Controller) markEditedForNewUser(startMessages int, original string) {
 
 // commands (frontend → controller)
 
-func turnOutcome(err error) string {
-	var readinessErr *agent.FinalReadinessError
-	if errors.As(err, &readinessErr) {
-		return event.TurnOutcomeFinalReadiness
-	}
-	return ""
-}
-
-// Send starts a turn with an uncomposed message. The controller applies
-// plan-mode, memory, and background-job framing inside the async turn path.
-func (c *Controller) Send(input string) {
-	c.SendWithRaw(input, input)
-}
-
-// SendWithRaw starts a turn with separate model input and raw prompt text.
-func (c *Controller) SendWithRaw(input, raw string) {
-	c.runGuarded(func(ctx context.Context) error {
-		return c.runTurnLoop(ctx, orchestratedTurn{input: input, raw: raw})
-	})
-}
-
 // planApprovalTool is the Tool name on the ApprovalRequest the controller emits
 // to gate a proposed plan. Frontends key their plan-approval UI on it (the
 // desktop renders a plan card; the chat TUI a plan banner).
@@ -747,97 +644,6 @@ const ManagedConfigWriteApprovalTool = "config_write"
 // planApprovedMessage is the follow-up turn sent once the user approves a plan —
 // the in-context nudge to execute and keep the (already-seeded) task list honest.
 const planApprovedMessage = "Plan approved — plan mode is off. Implement the plan now. The ordinary writer fallback is approved for this execution turn; explicit ask/deny rules and forced fresh reviews still apply. Use this serial workflow: 1) mark the first sub-step in_progress with todo_write (this establishes the task list); 2) execute the sub-step; 3) call complete_step with evidence — the host then marks that sub-step completed and moves the next one to in_progress for you. Repeat 2–3 for each remaining sub-step. You don’t need another todo_write to mark steps completed; each complete_step advances the list. Sign off one sub-step at a time — never batch multiple completions."
-
-// runTurnLoop runs one model turn under the plan-approval gate, then keeps
-// pursuing an active Goal with it — with no goal the loop is what a single turn
-// looks like, plus whatever that turn still owes. In Plan the model writes its
-// plan as an ordinary answer; approving it exits plan mode and continues into
-// execution, rejecting it leaves the next turn free to revise.
-func (c *Controller) runTurnLoop(ctx context.Context, turn orchestratedTurn) error {
-	return newTurnOrchestrator(c).runTurnLoop(ctx, turn)
-}
-
-// runOneTurn runs a single model turn with no Goal loop behind it.
-func (c *Controller) runOneTurn(ctx context.Context, turn orchestratedTurn) error {
-	return newTurnOrchestrator(c).runOrchestratedTurn(ctx, turn)
-}
-
-// RunTurn executes one foreground turn synchronously through the same lifecycle
-// used by interactive frontends: transient memory/background-job
-// composition, checkpoints, hooks, and plan approval. It is for transports that
-// need a blocking request/response boundary, such as ACP session/prompt.
-func (c *Controller) RunTurn(ctx context.Context, input string) error {
-	return c.runSynchronousTurn(ctx, nil, func(runCtx context.Context) error {
-		return c.runTurnLoop(runCtx, orchestratedTurn{input: input, raw: input})
-	})
-}
-
-// withTurnFormat binds a structured-output format to the turn context
-// (empty is a no-op). Extracted from the runTurnLoop closure so tests can
-// assert the format actually reaches the agent request path.
-func (c *Controller) withTurnFormat(ctx context.Context, format string) context.Context {
-	if format == "" {
-		return ctx
-	}
-	return agent.WithResponseFormat(ctx, format)
-}
-
-func (c *Controller) runSubagentSkillSlash(sk skill.Skill, task, raw, display string) {
-	sk = c.skills.prepare(sk)
-	c.runGuarded(func(ctx context.Context) error {
-		planMode := c.PlanMode()
-		runner := c.skillRunner
-		if runner == nil {
-			return fmt.Errorf("subagent skill runner is unavailable for /%s", sk.Name)
-		}
-		return newTurnOrchestrator(c).runSubagentSkillGoalLoop(ctx, sk, task, raw, display, runner, planMode)
-	})
-}
-
-// lastAssistantText returns the content of the most recent assistant message with
-// non-empty text — the model's final answer for the turn (its plan, in plan mode).
-func lastAssistantText(msgs []provider.Message) string {
-	for _, msg := range slices.Backward(msgs) {
-		if msg.Role == provider.RoleAssistant && strings.TrimSpace(msg.Content) != "" {
-			return msg.Content
-		}
-	}
-	return ""
-}
-
-// IsNonTurnInput reports input that has no turn to start: a management verb, a
-// memory note, a shell shortcut. A frontend that judges a submission by whether
-// a turn began has to ask this first — /compact does its work and emits a
-// notice without ever running one.
-func IsNonTurnInput(input string) bool { return isNonTurnHTTPInput(input) }
-
-// isNonTurnHTTPInput reports inputs that never reach the agent turn loop, so a
-// structured-output request attached to them would otherwise leak into the
-// next real turn (the format slot is consumed only by runTurnLoopWithRawDisplay).
-func isNonTurnHTTPInput(input string) bool {
-	trimmed := strings.TrimSpace(input)
-	if trimmed == "" {
-		return true
-	}
-	// Memory quick-add / remember shortcuts and goal commands bypass turns.
-	if _, ok := MemoryQuickAddNote(trimmed); ok {
-		return true
-	}
-	if _, ok := RememberCommandNote(trimmed); ok {
-		return true
-	}
-	// "!" shell commands are rejected by submitHTTP before the turn loop
-	// (403 over HTTP); a format attached to them would never be consumed.
-	if strings.HasPrefix(trimmed, "!") {
-		return true
-	}
-	// Slash commands are management verbs (/compact /new /clear /model ...)
-	// or notices, not completion turns.
-	if strings.HasPrefix(trimmed, "/") {
-		return true
-	}
-	return false
-}
 
 type preparedInvocationTurn struct {
 	composed  string
@@ -1041,38 +847,6 @@ type refTurn struct {
 	resolve func(context.Context, string) (string, []string)
 }
 
-// runRefTurn resolves the turn's @references into a context block and starts a
-// turn with it prepended (or the raw line when nothing resolved), under turn
-// admission.
-func (c *Controller) runRefTurn(r refTurn) {
-	c.runGuarded(func(ctx context.Context) error { return c.runRefTurnSync(ctx, r) })
-}
-
-// runRefTurnSync is runRefTurn on the caller's goroutine, for a caller that
-// already holds turn admission.
-func (c *Controller) runRefTurnSync(ctx context.Context, r refTurn) error {
-	ctx = c.withTurnFormat(ctx, r.format)
-	resolve := r.resolve
-	if resolve == nil {
-		resolve = c.ResolveRefs
-	}
-	refLine := r.refLine
-	if refLine == "" {
-		refLine = r.input
-	}
-	block, errs := resolve(ctx, refLine)
-	for _, e := range errs {
-		c.notice(e)
-	}
-	sent := r.input
-	if block != "" {
-		sent = "Referenced context:\n\n" + block + "\n\n" + r.input
-	}
-	return c.runTurnLoop(ctx, orchestratedTurn{
-		input: sent, raw: r.input, imageRefs: refLine, display: r.display, editedOriginal: r.original,
-	})
-}
-
 // notice emits an informational Notice event.
 func (c *Controller) notice(text string) {
 	c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: text})
@@ -1082,124 +856,11 @@ func (c *Controller) noticeDetail(text, detail string) {
 	c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: text, Detail: detail})
 }
 
-// Run executes a turn synchronously, returning the agent's error. Used by the
-// headless `reasonix run` path, where the Sink renders to stdout and the caller
-// just needs the exit status — no TurnDone event, no cancel bookkeeping.
-func (c *Controller) runReady(ctx context.Context, input string) (err error) {
-	ctx = extension.ContextWithRuntimeOwner(ctx, c.RuntimeOwner())
-	if c.RuntimePhase() == RuntimePhaseDraining {
-		c.emitDrainingNotice()
-		return ErrRuntimeDraining
-	}
-	defer event.RecordTurnCompletion(c.sink)
-	c.maybeSessionStart(ctx)
-	parentSession := c.parentSessionID()
-	ctx = agent.WithParentSession(ctx, parentSession)
-	ctx = jobs.WithSession(ctx, parentSession)
-	rawInput := input
-	ctx, turnImgs := c.withTurnImages(ctx, rawInput)
-	ctx = agent.WithRawUserInput(ctx, rawInput)
-	input = c.imageRoutingPrefix(turnImgs) + c.Compose(input)
-	// input.receive: same interception seam as the orchestrated turn — the
-	// composed headless input crosses the extension chain before it enters
-	// the session.
-	input, blocked, interceptErr := c.interceptInputReceive(ctx, input)
-	if interceptErr != nil {
-		return interceptErr
-	}
-	if blocked {
-		return nil
-	}
-	startMessages := c.messageCount()
-	var marker agent.InFlightTurnMeta
-	defer func() { c.finishInFlightTurn(startMessages, marker) }()
-	c.beginCheckpoint(ctx, input)
-	if c.hooks.Enabled() {
-		c.mu.Lock()
-		c.turn++
-		turn := c.turn
-		c.mu.Unlock()
-		if block, _ := c.hooks.PromptSubmit(ctx, input, turn); block {
-			return nil
-		}
-		defer func() { c.hooks.StopResult(context.Background(), lastAssistantText(c.History()), turn, err) }()
-	}
-	ctx, marker = c.beginTurn(ctx, startMessages, true)
-	ctx = c.announceAuthoredTurn(ctx, rawInput, startMessages)
-	ctx = c.withPlannerTurnMetadata(ctx, rawInput, false)
-	err = c.runSettled(ctx, c.withCapabilityRoute(ctx, input, rawInput))
-	return err
-}
-
-// RunSubagentProfile executes one named runAs=subagent skill synchronously and
-// returns only its final answer. It is the headless CLI counterpart to explicit
-// slash invocation: the child keeps an isolated session, while the caller owns
-// stdout rendering and exit status. readOnly selects the preview-safe runner
-// used by `reasonix subagent try`.
-func (c *Controller) RunSubagentProfile(ctx context.Context, name, task string, readOnly bool) (string, error) {
-	name = strings.TrimSpace(name)
-	task = strings.TrimSpace(task)
-	if name == "" {
-		return "", fmt.Errorf("subagent name is required")
-	}
-	if task == "" {
-		return "", fmt.Errorf("subagent task is required")
-	}
-	sk, ok := c.skills.bySlashName(name)
-	if !ok {
-		return "", fmt.Errorf("unknown or disabled subagent profile %q", name)
-	}
-	if sk.RunAs != skill.RunSubagent {
-		return "", fmt.Errorf("skill %q is not runAs=subagent", name)
-	}
-	sk = c.skills.prepare(sk)
-	runner := c.skillRunner
-	if readOnly {
-		runner = c.readOnlySkillRunner
-	}
-	if runner == nil {
-		return "", fmt.Errorf("subagent skill runner is unavailable for %q", name)
-	}
-
-	c.maybeSessionStart(ctx)
-	parentSession := c.parentSessionID()
-	ctx = agent.WithParentSession(ctx, parentSession)
-	ctx = jobs.WithSession(ctx, parentSession)
-	ctx, turnImgs := c.withTurnImages(ctx, task)
-	ctx = agent.WithResponseLanguagePreference(ctx, c.display.responseLanguage)
-	ctx = agent.WithReasoningLanguagePreference(ctx, c.display.reasoningLanguage)
-	ctx = agent.WithSubagentDepth(ctx, 0)
-	answer, err := runner(ctx, sk, c.imageRoutingPrefix(turnImgs)+task, skill.SubagentRunOptions{HostInitiated: true})
-	if err != nil {
-		return "", err
-	}
-	return tool.GuardSubagentHostDecisionText(answer), nil
-}
-
 // Running reports whether a turn is currently in flight.
 func (c *Controller) Running() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.gate.active()
-}
-
-// beginRotation claims the session-rotation gate. It fails if a turn is running
-// or another rotation is already in progress, so the caller holds exclusive
-// rights to swap the executor session from the check here through endRotation.
-// This closes the TOCTOU window that a bare `if c.gate.running` check left open:
-// between that check and the actual SetSession, a turn could start and then be
-// yanked out from under the run loop.
-func (c *Controller) beginRotation() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.gate.active() {
-		return errTurnRunningRotation
-	}
-	if c.gate.rotating {
-		return errRotationInProgress
-	}
-	c.gate.rotating = true
-	return nil
 }
 
 // RuntimeStatus reports the active work owned by the foreground controller.
@@ -1231,128 +892,10 @@ type plannerPlanApprover struct {
 	c *Controller
 }
 
-func (p plannerPlanApprover) RunWithPlannerApproval(ctx context.Context, plan string, run func(context.Context) error) error {
-	c := p.c
-	allow, _, err := c.requestApproval(ctx, approvalRequest{tool: planApprovalTool, reason: "Planner requested host approval before execution."})
-	if err != nil {
-		return err
-	}
-	if !allow {
-		return nil
-	}
-	todoArgs := c.seedPlanTodos(plan)
-	execStart := c.sessionMessageCount()
-	c.approval.setPlanAutoApprove(true)
-	defer c.approval.setPlanAutoApprove(false)
-	if err := run(ctx); err != nil {
-		return err
-	}
-	if todoArgs != "" && !c.hasTodoUpdateSince(execStart) {
-		c.completePlanTodos(todoArgs)
-	}
-	return nil
-}
-
-// TrySteer queues mid-turn guidance only when the active agent turn accepts it.
-func (c *Controller) TrySteer(text string) bool {
-	c.mu.Lock()
-	exec := c.executor
-	running := c.gate.running
-	c.mu.Unlock()
-	return running && exec != nil && exec.Steer(text)
-}
-
-// Steer is the compatibility path for callers that cannot observe admission.
-// Interactive hosts should call TrySteer so a rejected steer remains in their
-// draft/queue and can be retried as a regular follow-up.
-func (c *Controller) Steer(text string) {
-	if c.TrySteer(text) {
-		return
-	}
-	// No active turn accepted the steer: the frontend's runningRef was stale,
-	// the turn exited between our running check and the enqueue, or no
-	// executor is bound yet. Deliver it as a regular turn instead.
-	c.submitSteerFallback(text)
-}
-
-// submitSteerFallback records steer text that no active turn accepted as
-// unapplied guidance, not as a new task. This compatibility path deliberately
-// never opens a provider turn: replaying stale historical guidance as the
-// user's current request caused unintended code changes (#7045).
-func (c *Controller) submitSteerFallback(text string) admissionResult {
-	return c.runGuardedOrPark(func(context.Context) error {
-		if c.executor != nil {
-			c.executor.RecordUnappliedSteer(text)
-		}
-		return nil
-	})
-}
-
-// SteerConsumed returns true when the steer queue is empty after the last consume.
-func (c *Controller) SteerConsumed() bool {
-	c.mu.Lock()
-	exec := c.executor
-	c.mu.Unlock()
-	if exec != nil {
-		return exec.SteerConsumed()
-	}
-	return true
-}
-
 // promptQueueNoticeDelay is how long a prompt may wait behind another before
 // the user is told why nothing has appeared. Short enough to beat "it's stuck",
 // long enough that an approval answered promptly never emits a notice.
 var promptQueueNoticeDelay = 3 * time.Second
-
-// lockPromptFor acquires the prompt lock, emitting one notice if the wait is
-// long enough to look like a hang. It reports false only when ctx ended first;
-// the lock is held on true.
-func (c *Controller) lockPromptFor(ctx context.Context, kind string) bool {
-	acquired := make(chan struct{})
-	go func() {
-		c.approval.promptMu.Lock()
-		close(acquired)
-	}()
-	select {
-	case <-acquired:
-		return true
-	case <-ctx.Done():
-	case <-time.After(promptQueueNoticeDelay):
-	}
-	if ctx.Err() == nil {
-		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodePromptQueued,
-			Text:   "A " + kind + " is waiting for you to answer the prompt ahead of it.",
-			Detail: "the assistant asked something while an earlier approval or question was still open; it appears once that one is answered"})
-	}
-	select {
-	case <-acquired:
-		return true
-	case <-ctx.Done():
-		// The lock may still be handed to the goroutine above; release it so the
-		// next prompt is not blocked by this abandoned wait.
-		go func() {
-			<-acquired
-			c.approval.promptMu.Unlock()
-		}()
-		return false
-	}
-}
-
-func askAnswersHaveSelection(answers []event.AskAnswer) bool {
-	for _, answer := range answers {
-		if len(answer.Selected) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// SetPlanMode flips the executor's plan-first workflow flag without touching the
-// cache-stable system/tool prefix, and remembers the state so Compose can prepend
-// the plan-mode marker to outgoing user turns.
-func (c *Controller) SetPlanMode(v bool) {
-	c.applyPlanMode(v)
-}
 
 // SetAgentPreset updates the session role setting for subsequent turns without
 // rebuilding the controller, provider, or tool schemas. Callers must already
@@ -1417,11 +960,6 @@ func (c *Controller) AgentPreset() string {
 	}
 }
 
-func (c *Controller) applyPlanMode(v bool) {
-	c.plan().SetActive(v)
-	c.sharePlanRuntime()
-}
-
 // SetResponseLanguage updates the final-answer language preference for
 // subsequent turns.
 func (c *Controller) SetResponseLanguage(lang string) {
@@ -1449,9 +987,6 @@ func (c *Controller) SetReasoningLanguage(lang string) {
 		c.executor.SetReasoningLanguage(mode)
 	}
 }
-
-// PlanPhase reports where the run sits in the plan lifecycle.
-func (c *Controller) PlanPhase() planmode.Phase { return c.plan().State().Phase }
 
 // Compact runs one compaction pass on the executor's session on demand.
 // instructions is optional `/compact <focus>` guidance steering what to keep.
@@ -1481,15 +1016,6 @@ const (
 )
 
 // Rewind is implemented in rewind.go (transactional conversation+file restore).
-
-func shouldRotateSessionTempOnResume(prevPath, nextPath string) bool {
-	prevPath = strings.TrimSpace(prevPath)
-	nextPath = strings.TrimSpace(nextPath)
-	if prevPath == "" || nextPath == "" {
-		return false
-	}
-	return filepath.Clean(prevPath) != filepath.Clean(nextPath)
-}
 
 func (c *Controller) loadGuardianSession() {
 	if c.guardianSess == nil {
@@ -1852,132 +1378,12 @@ func (c *Controller) RestoreSessionAuthorizations(auth SessionAuthorizations) {
 	c.approval.restoreSessionAuthorizations(auth)
 }
 
-// ReleaseResources stops plugin subprocesses and releases resources without
-// firing SessionEnd. Use it only when replacing the controller for the same
-// logical session.
-func (c *Controller) ReleaseResources() {
-	c.close(false, closeJobsWithGrace)
-}
-
-// Close stops plugin subprocesses and releases resources. A session that ever
-// started fires SessionEnd so a teardown hook runs.
-func (c *Controller) Close() {
-	c.close(true, closeJobsWithGrace)
-}
-
-// CloseAfterDestroy releases controller resources after the caller has already
-// begun session-specific job teardown. It avoids a second synchronous job grace
-// wait while still cancelling the manager root and reaping temporary artifacts
-// once every job goroutine finally exits.
-func (c *Controller) CloseAfterDestroy() {
-	c.close(true, closeJobsAsync)
-}
-
 type closeJobsMode int
 
 const (
 	closeJobsWithGrace closeJobsMode = iota
 	closeJobsAsync
 )
-
-func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
-	// Desktop tab lifecycles can race a rebind/model-switch/close on the same
-	// controller; make teardown idempotent so a duplicate Close cannot re-fire
-	// SessionEnd hooks or re-run cleanup. The first caller's jobsMode wins.
-	c.closeOnce.Do(func() {
-		c.mu.Lock()
-		started := c.startedOnce
-		cancel := c.gate.cancel
-		// Seal turn admission and drop anything already parked: a parked turn
-		// must not start against a controller that is being torn down, and
-		// without the closed flag a submit landing after this critical
-		// section (while a running turn's TurnDone delivery is still in
-		// flight) would park again and start after teardown.
-		c.gate.closed = true
-		c.parkedTurns = nil
-		// A finishing-only controller no longer needs the delivery gate because
-		// closed seals every admission path. Keep running truthful until the
-		// foreground goroutine actually exits; clearing it here would report idle
-		// while tools and prompt waiters were still live.
-		c.gate.finishing = false
-		if cancel != nil {
-			c.gate.canceling = true
-		}
-		c.mu.Unlock()
-		if cancel != nil {
-			// clearAll deliberately does not signal waiters. Pair it with the
-			// foreground cancellation so approval/ask waits always unblock.
-			c.approval.clearAll()
-			cancel()
-		}
-		if fireSessionEnd && started {
-			c.hooks.SessionEnd(context.Background(), "other")
-			c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, c.SessionPath())
-		}
-		if c.jobs != nil {
-			switch jobsMode {
-			case closeJobsAsync:
-				c.jobs.CloseAsync()
-			default:
-				c.jobs.Close() // cancel any still-running background jobs
-			}
-		}
-		if c.cleanup != nil {
-			c.cleanup()
-		}
-		// Drop the Controller owner reference last so background job leases
-		// that outlive close still pin retired generations until they exit.
-		if c.sessionTemp != nil {
-			c.sessionTemp.Release()
-		}
-	})
-}
-
-// SessionTemp returns the logical-session private temporary directory manager.
-// Hot rebuilds pass this to the replacement Controller so the directory survives
-// model/settings swaps. Nil only when the Controller was constructed without one
-// (should not happen after New).
-func (c *Controller) SessionTemp() *sessiontemp.Manager {
-	if c == nil {
-		return nil
-	}
-	return c.sessionTemp
-}
-
-// rotateSessionTemp advances the private temporary generation so a new logical
-// session cannot see the previous session's temporary files. In-flight command
-// leases keep the old generation alive until they release.
-func (c *Controller) rotateSessionTemp() {
-	if c == nil || c.sessionTemp == nil {
-		return
-	}
-	c.sessionTemp.Rotate()
-}
-
-// Jobs returns the still-running background jobs for the status bar (nil when
-// background jobs are disabled).
-func (c *Controller) Jobs() []jobs.View {
-	if c.jobs == nil {
-		return nil
-	}
-	return c.jobs.RunningForSession(c.parentSessionID())
-}
-
-// KillJob cancels a running background job by ID.
-func (c *Controller) KillJob(id string) bool {
-	if c.jobs == nil {
-		return false
-	}
-	return c.jobs.Kill(id)
-}
-
-// CancelJob stops one background job owned by this controller's session.
-func (c *Controller) CancelJob(id string) bool {
-	if c.jobs == nil {
-		return false
-	}
-	return c.jobs.KillForSession(c.parentSessionID(), id)
-}
 
 // WorkspaceLeaseState reports only whether this controller owns or is waiting
 // for the Delivery workspace writer lease. It never exposes filesystem or
