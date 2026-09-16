@@ -147,3 +147,53 @@ func TestHistoryShowsWhatWasTypedNotWhatWasSent(t *testing.T) {
 		t.Fatalf("history[1] = %q, want the legacy turn unchanged", got[1].Content)
 	}
 }
+
+// The built-in verbs are worded by the kernel and read in a window, and the two
+// need not speak the same language: a machine whose CLI is Chinese can have an
+// English window on it. Reading the process's own catalogue put a Chinese menu
+// under an English composer.
+func TestCompleteVerbsFollowTheAskingWindow(t *testing.T) {
+	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t), WorkspaceRoot: testenv.TempDir(t)})
+	defer ctrl.Close()
+	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	hints := func(lang string) map[string]string {
+		t.Helper()
+		q := url.Values{"line": {"/"}, "cursor": {"1"}}
+		if lang != "" {
+			q.Set("lang", lang)
+		}
+		resp, err := http.Get(srv.URL + "/complete?" + q.Encode())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var got control.Completion
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, item := range got.Items {
+			out[item.Label] = item.Hint
+		}
+		return out
+	}
+
+	en, zh := hints("en"), hints("zh")
+	if len(en) == 0 {
+		t.Fatal("the menu came back empty; the rest proves nothing")
+	}
+	han := false
+	for label, hint := range en {
+		if strings.ContainsFunc(hint, func(r rune) bool { return r >= 0x4E00 && r <= 0x9FFF }) {
+			t.Errorf("%s reads %q in an English window", label, hint)
+		}
+		if zh[label] != hint {
+			han = true
+		}
+	}
+	if !han {
+		t.Fatal("every hint is identical in both languages; the language was not read")
+	}
+}

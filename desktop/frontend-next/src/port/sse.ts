@@ -5,6 +5,7 @@ import { SseTheme } from "./sse_theme";
 import type { StoragePlan, StorageState } from "./storage";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import { host } from "./host";
+import { current } from "../i18n";
 
 // The running project is the default, so its requests stay the bare path they
 // have always been and only a cross-project read carries the folder.
@@ -45,7 +46,9 @@ export class SsePort extends SseTheme implements AgentPort {
   }
 
   complete(line: string, cursor: number) {
-    const q = new URLSearchParams({ line, cursor: String(cursor) });
+    // The kernel renders the built-in verbs, and the language it would pick is
+    // the process's. Only this window knows what it is drawing in.
+    const q = new URLSearchParams({ line, cursor: String(cursor), lang: current() });
     return this.get<Completion>("/complete?" + q);
   }
 

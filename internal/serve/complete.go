@@ -33,12 +33,14 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		}
 		cursor = byteOffset(line, n)
 	}
-	// The built-in verbs are rendered by the kernel but read in a window, and
-	// the interface language is not the process's: a machine whose CLI speaks
-	// Chinese can have an English window in front of it.
-	lang := ""
-	if cfg, err := config.Load(); err == nil {
-		lang = cfg.DesktopLanguage()
+	// The kernel words the built-in verbs and a window reads them, in a
+	// language that is not this process's. The window is the authority on what
+	// it draws; the config answers only for a client that says nothing.
+	lang := q.Get("lang")
+	if lang == "" {
+		if cfg, err := config.Load(); err == nil {
+			lang = cfg.DesktopLanguage()
+		}
 	}
 	data := s.ctl().CompletionData(lang)
 	// A client of this server completes inside the workspace and nowhere else,
