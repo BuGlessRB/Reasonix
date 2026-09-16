@@ -14,7 +14,7 @@
     "layering": 0,
     "marker": 0,
     "narrative": 0,
-    "orphan": 81,
+    "orphan": 80,
     "refusal-path": 0,
     "spec-parity": 0,
     "struct-state": 41,
@@ -966,9 +966,6 @@
     },
     "internal/extension/sidecar/fake_test.go": {
       "essay": 9
-    },
-    "internal/extension/sidecar/plan.go": {
-      "orphan": 1
     },
     "internal/extension/sidecar/probe_client.go": {
       "orphan": 1

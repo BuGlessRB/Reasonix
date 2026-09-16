@@ -2,7 +2,9 @@ package extensioncontract
 
 import "strings"
 
-// PluginRefPrefix marks a provider ref as hosted by an extension package.
+// PluginRefPrefix marks an identifier as owned by an extension package: a
+// dependency-graph component id ("plugin/<name>") and a hosted provider ref
+// ("plugin/<name>/<model>") both carry it.
 const PluginRefPrefix = "plugin/"
 
 // SplitProviderRef splits the ordinary "<name>/<model>" ref. A provider
