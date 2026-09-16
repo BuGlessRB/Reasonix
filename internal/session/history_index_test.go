@@ -31,6 +31,56 @@ func searchHistoryReady(t *testing.T, query *Query, ref SessionRef, text, cursor
 	}
 }
 
+// A rebuild may scan appends made after its initial stat. Its continuation
+// offset must describe the same completed commit as its sequence watermark.
+func TestHistoryIndexRebuildPairsScannedSequenceAndOffset(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	persistence := NewFilesystemPersistence(root)
+	service, err := NewService("local", persistence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
+	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "rebuild-cut"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendMessage := func(id string) {
+		t.Helper()
+		payload, err := json.Marshal(map[string]any{"message": provider.Message{ID: id, Role: provider.RoleAssistant, Content: id}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = runtime.Session().AppendBatch(t.Context(), id, []Event{{Kind: "message/complete", Payload: payload}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = runtime.Session().Flush(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	appendMessage("before-stat")
+	dir := filepath.Join(root, runtime.Ref().SessionID)
+	staleRevision, err := revisionOfLog(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendMessage("after-stat")
+	path := historyIndexPath(root, runtime.Ref().SessionID)
+	if err := rebuildHistoryIndex(t.Context(), dir, path, runtime.Ref().SessionID, staleRevision); err != nil {
+		t.Fatal(err)
+	}
+	appendMessage("after-scan")
+	page := historyPageReady(t, service.Query(), runtime.Ref(), "", 32)
+	if len(page.Messages) != 3 {
+		t.Fatalf("messages = %+v", page.Messages)
+	}
+	for i, id := range []string{"before-stat", "after-stat", "after-scan"} {
+		if page.Messages[i].MessageID != id {
+			t.Fatalf("message %d = %+v", i, page.Messages[i])
+		}
+	}
+}
+
 func waitHistoryPage(t *testing.T, query *Query, ref SessionRef, cursor string, limit int) (MessageHistoryPage, error) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -64,6 +114,7 @@ func TestExternalHistoryColdOpenDefersBodiesBeforeModelReset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "bounded-open"})
 	if err != nil {
 		t.Fatal(err)
@@ -117,6 +168,7 @@ func TestExternalHistoryColdOpenDefersBodiesBeforeModelReset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = reopenedService.CloseAll(context.Background()) })
 	binding, err := reopenedService.Open(t.Context(), ref)
 	if err != nil {
 		t.Fatalf("cold open resolved retired history body: %v", err)
@@ -137,6 +189,7 @@ func TestHistoryPageKeepsSnapshotAndAuthorizesReferencedContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "paged"})
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +227,7 @@ func TestHistoryPageKeepsSnapshotAndAuthorizesReferencedContent(t *testing.T) {
 		t.Fatalf("first page = %+v", first)
 	}
 	appendMessage("four", "must not enter the fixed snapshot")
-	second, err := service.Query().HistoryPage(t.Context(), ref, first.NextCursor, 10)
+	second, err := waitHistoryPage(t, service.Query(), ref, first.NextCursor, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,6 +269,7 @@ func TestLocateMessageReturnsFixedSnapshotCursorWithoutBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "locate"})
 	if err != nil {
 		t.Fatal(err)
@@ -246,6 +300,7 @@ func TestHistoryLocatorGenerationSurvivesRebuildAndChangesOnReplacement(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "locator-generation"})
 	if err != nil {
 		t.Fatal(err)
@@ -287,7 +342,7 @@ func TestHistoryLocatorGenerationSurvivesRebuildAndChangesOnReplacement(t *testi
 	if _, err := service.Query().HistoryPage(t.Context(), runtime.Ref(), "", 1); err != nil {
 		t.Fatal(err)
 	}
-	stale, err := service.Query().HistoryPage(t.Context(), runtime.Ref(), first.NextCursor, 1)
+	stale, err := waitHistoryPage(t, service.Query(), runtime.Ref(), first.NextCursor, 1)
 	if err != nil || stale.Status != "stale_cursor" {
 		t.Fatalf("cursor after replacement = %+v, %v", stale, err)
 	}
@@ -299,6 +354,7 @@ func TestSearchHistoryUsesStableSnapshotAndOpaqueQueryCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "search"})
 	if err != nil {
 		t.Fatal(err)
@@ -348,6 +404,7 @@ func TestSearchHistoryCoversInlineFieldsAndReferencedBodies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "search-storage"})
 	if err != nil {
 		t.Fatal(err)
@@ -391,6 +448,7 @@ func TestSearchHistoryKeepsLiteralUnicodeSubstringSemanticsIndependently(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "literal-search"})
 	if err != nil {
 		t.Fatal(err)
@@ -466,6 +524,7 @@ func TestHistoryIndexAdvancesInPlaceAfterAppend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "incremental"})
 	if err != nil {
 		t.Fatal(err)
@@ -497,7 +556,7 @@ func TestHistoryIndexAdvancesInPlaceAfterAppend(t *testing.T) {
 	if _, err := runtime.Session().Flush(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	page, err := service.Query().HistoryPage(t.Context(), runtime.Ref(), "", 100)
+	page, err := waitHistoryPage(t, service.Query(), runtime.Ref(), "", 100)
 	if err != nil {
 		t.Fatal(err)
 	}

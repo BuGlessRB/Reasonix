@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -53,7 +54,12 @@ func TestSessionsDeduplicatesMigratedLegacySource(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(ctrl.Close)
-	srv := newLifecycleTestServer(t, ctrl, NewBroadcaster(), config.ServeConfig{})
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
+	// Service-backed controllers park their runtime in the idle cache after
+	// close, so the lifecycle fixture's writer-retire wait does not apply;
+	// these listing tests only need the HTTP surface.
+	srv := New(ctrl, NewBroadcaster(), config.ServeConfig{})
+	t.Cleanup(srv.Close)
 	recorder := httptest.NewRecorder()
 	srv.sessions(recorder, httptest.NewRequest(http.MethodGet, "/sessions", nil))
 	var rows []sessionListEntry
@@ -97,6 +103,7 @@ func TestDeleteSessionDeletesCanonicalIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(ctrl.Close)
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	srv := httptest.NewServer(newLifecycleTestServer(t, ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
 	defer srv.Close()
 	post := func(body string) int {
@@ -125,6 +132,7 @@ func newExclusiveSessionServe(t *testing.T) (*Server, *control.Controller, *sess
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	exec := agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard)
 	ctrl := control.New(control.Options{
 		Executor: exec, SessionDir: t.TempDir(), SessionService: service, ExclusiveSession: true,
@@ -134,6 +142,7 @@ func newExclusiveSessionServe(t *testing.T) (*Server, *control.Controller, *sess
 		t.Fatal(err)
 	}
 	t.Cleanup(ctrl.Close)
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	bc := NewBroadcaster()
 	srv := New(ctrl, bc, config.ServeConfig{})
 	// Production serve hosts register a frame tag per controller; the takeover
@@ -294,13 +303,13 @@ func TestExclusiveV3RotationAndMutationFenceReturnSessionID(t *testing.T) {
 // subset — including a session another runtime had just taken over. The
 // handler must follow NextCursor and surface every row in one response.
 func TestSessionsListsBeyondFirstHundredCanonicalSessions(t *testing.T) {
-	v4Root := filepath.Join(t.TempDir(), "sessions-v4")
+	v4Root := filepath.Join(robustTempDir(t), "sessions-v4")
 	service, err := session.NewService("serve-test", session.NewFilesystemPersistence(v4Root))
 	if err != nil {
 		t.Fatal(err)
 	}
 	exec := agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard)
-	ctrl := control.New(control.Options{Executor: exec, SessionDir: t.TempDir(), SessionService: service, ExclusiveSession: true})
+	ctrl := control.New(control.Options{Executor: exec, SessionDir: robustTempDir(t), SessionService: service, ExclusiveSession: true})
 	const total = 103
 	for i := range total {
 		created, err := service.Create(t.Context(), session.CreateOptions{SessionID: fmt.Sprintf("s%03d", i)})
@@ -332,7 +341,12 @@ func TestSessionsListsBeyondFirstHundredCanonicalSessions(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Cleanup(ctrl.Close)
-	srv := newLifecycleTestServer(t, ctrl, NewBroadcaster(), config.ServeConfig{})
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
+	// Service-backed controllers park their runtime in the idle cache after
+	// close, so the lifecycle fixture's writer-retire wait does not apply;
+	// these listing tests only need the HTTP surface.
+	srv := New(ctrl, NewBroadcaster(), config.ServeConfig{})
+	t.Cleanup(srv.Close)
 	recorder := httptest.NewRecorder()
 	srv.sessions(recorder, httptest.NewRequest(http.MethodGet, "/sessions", nil))
 	var rows []sessionListEntry

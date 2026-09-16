@@ -16,6 +16,7 @@ export interface HistorySliceRequest {
 // HistoryContentRef marks a string field replaced inline by a ≤4KiB preview;
 // the full value is fetchable in chunks via HistoryContentForTab.
 export interface HistoryContentRef {
+  transcriptRef?: import("./transcriptProtocol").TranscriptContentRef;
   entryId: string;
   field: string; // content|reasoning|submitText|detail|code|summary|archive|toolResultError|toolArguments|toolSubject|toolSummary|toolDiff
   size: number;
@@ -36,7 +37,14 @@ export interface HistoryEntry {
   refs: HistoryContentRef[];
 }
 
-export interface SessionClearResult { sessionPath: string; sessionRevision?: number; sessionDigest?: string; sessionGeneration: number }
+export interface SessionClearResult {
+  sessionPath: string;
+  sessionId?: string;
+  session?: { hostId: string; sessionId: string } | null;
+  sessionRevision?: number;
+  sessionDigest?: string;
+  sessionGeneration: number;
+}
 
 export interface HistorySlice {
   entries: HistoryEntry[];
@@ -67,6 +75,8 @@ export interface HistorySlice {
 // a fixed snapshot: appends keep them valid, a storage replacement or
 // projection rebuild answers stale_cursor.
 export interface HistoryWindowRequestView {
+  snapshotSequence?: number;
+  generation?: string;
   anchor: "newest" | "message" | "turn" | "cursor";
   messageId?: string;
   turn?: number;

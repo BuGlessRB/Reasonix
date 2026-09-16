@@ -68,12 +68,19 @@ func TestContinueImportedResolvesPairedHistoryStructurally(t *testing.T) {
 	previewDir := filepath.Join(targetRoot, agent.BranchID(legacyPath))
 	writePrototypeStore(t, previewDir, []Event{{Kind: "context/replace", Payload: payload}}, "")
 
-	result, err := importSourceForLegacy(t.Context(), legacyPath, targetRoot, "")
+	result, err := importSourceForLegacyWithHeader(t.Context(), legacyPath, targetRoot, "", CreateOptions{
+		CWD: "/workspace", Origin: SessionOriginLegacyImport,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.Kind != "events" || result.TargetID == agent.BranchID(legacyPath) {
 		t.Fatalf("resolved import = %+v", result)
+	}
+	info, err := NewFilesystemPersistence(targetRoot).Stat(t.Context(), result.TargetID)
+	// Headers record CWD in OS-native form; clean the expectation the same way.
+	if err != nil || info.CWD != filepath.Clean("/workspace") || info.Origin != SessionOriginLegacyImport {
+		t.Fatalf("imported header = %+v, %v", info, err)
 	}
 }
 
@@ -284,6 +291,7 @@ func TestContinueStoredPreviewUpgradesLinearV3ToFinalCodec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, result, err := service.ContinueStoredPreview(t.Context(), "old-linear")
 	if err != nil {
 		t.Fatal(err)
@@ -327,6 +335,7 @@ func TestContinueStoredPreviewUpgradesUnpublishedV4Draft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, result, err := service.ContinueStoredPreview(t.Context(), "draft-v4")
 	if err != nil {
 		t.Fatal(err)

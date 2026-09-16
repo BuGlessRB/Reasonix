@@ -13,6 +13,7 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontent"
+	"reasonix/internal/transcript"
 )
 
 // Session owns the live business state for one session identity: sequence
@@ -24,6 +25,7 @@ import (
 // mirrors DSH: accepting an event updates the projection and the UI, while the
 // binding batches the write-behind and Flush marks a semantic checkpoint.
 type Session struct {
+	transcript  *transcript.Projection
 	mu          sync.Mutex
 	id          string
 	manifest    Manifest
@@ -156,6 +158,12 @@ func (s *Session) PrepareBatchContext(ctx context.Context, operationID string, b
 	for i := range events {
 		event := &events[i]
 		event.Kind = strings.TrimSpace(event.Kind)
+		if event.Kind == "message/retract" {
+			if event.Optional {
+				return PreparedBatch{}, fmt.Errorf("message/retract must be required")
+			}
+			event.Required = true
+		}
 		if event.Kind == "" {
 			return PreparedBatch{}, fmt.Errorf("session: events[%d].kind is required", i)
 		}
@@ -249,6 +257,10 @@ func (s *Session) contentStore() *sessioncontent.Store {
 // write-behind queue, so this never performs file I/O and never blocks on a
 // subscriber.
 func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
+	return s.commitPrepared(prepared, nil)
+}
+
+func (s *Session) commitPrepared(prepared PreparedBatch, expectedTitle *string) (Commit, error) {
 	defer prepared.Release()
 	if s == nil {
 		return Commit{}, fmt.Errorf("session: nil session")
@@ -257,6 +269,10 @@ func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
 		return Commit{}, fmt.Errorf("session: operation id and events are required")
 	}
 	s.mu.Lock()
+	if expectedTitle != nil && s.projection.Title != *expectedTitle {
+		s.mu.Unlock()
+		return Commit{}, ErrSessionTitleChanged
+	}
 	if prepared.sessionID != s.id || prepared.writerGeneration != s.manifest.WriterGeneration {
 		s.mu.Unlock()
 		return Commit{}, ErrStaleGeneration
@@ -331,6 +347,7 @@ func (s *Session) CommitPrepared(prepared PreparedBatch) (Commit, error) {
 		_ = applyRecentCommit(&s.recentMessages, commit)
 		s.next = commit.LastSequence() + 1
 		s.operations[prepared.operationID] = compactOperationRecord(commit)
+		s.acceptTranscriptCommit(commit)
 	})
 	s.mu.Unlock()
 	if err != nil {
@@ -422,9 +439,6 @@ func (s *Session) CatalogMetadata() catalogMetadata {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	metadata := metadataFromProjection(s.manifest, s.next-1, s.projection)
-	if metadata.Preview == "" {
-		metadata.Preview = s.catalogPreview
-	}
 	return metadata
 }
 
@@ -486,7 +500,7 @@ func (s *Session) RecentSnapshot() RecentSnapshot {
 		Version: recoveryFormatVersion, SessionID: s.id, StorageGeneration: s.storageGeneration,
 		DurableSequence: durable,
 		Title:           s.projection.Title, ModelRef: s.projection.ModelRef, ModelIdentity: s.projection.ModelIdentity,
-		TotalTurns: len(s.projection.Turns),
+		TotalTurns: visibleBoundaryCount(s.projection, false),
 	}
 	s.mu.Unlock()
 	if sessionDir != "" {
@@ -552,8 +566,8 @@ func (s *Session) externalizeDurableHistory() {
 		return
 	}
 	for _, message := range s.projection.Messages {
-		if message.Role == provider.RoleUser && s.catalogPreview == "" {
-			s.catalogPreview = messagePreview(message)
+		if s.catalogPreview == "" {
+			s.catalogPreview = catalogMessagePreview(message)
 		}
 	}
 	s.projection.Messages = nil

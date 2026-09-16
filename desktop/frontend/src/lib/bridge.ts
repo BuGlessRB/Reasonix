@@ -7,6 +7,10 @@ import type {
   ChatFileReferenceResult,
   DesktopCommandName,
   MarkdownSVGView,
+  SessionArchitectureDiagnostics,
+  SessionRef,
+  WorkspaceSessionPage,
+  WorkspaceSnapshot,
 } from "../generated/desktopContract.generated";
 import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
@@ -24,7 +28,7 @@ import { providerIsConfigured, providerRequiresKey, removeProviderAccessesForMoc
 import { DEFAULT_STATUS_BAR_ITEMS } from "./statusBarItems";
 import { registerTrustedThemeBackgroundURLs } from "./themePack";
 import { modeHasAutoApproveTools, modeWithAutoApproveTools, modeWithPlan, normalizeCollaborationMode, normalizeMode, normalizeToolApprovalMode } from "./types";
-import { makeMockProjectTreeOrganizationBindings } from "./mockProjectTreeOrganization";
+import { makeMockProjectTreeOrganizationBindings, subscribeMockProjectTreeChanged, notifyMockProjectTreeChanged } from "./mockProjectTreeOrganization";
 import { decisionSurfaceMockFromInput, isLongDecisionOptionsMockInput } from "./decisionSurfaceMock";
 import { mockWorkspaceFile } from "./mockWorkspaceFile";
 import { mockAIRenameSession, type SessionTitleBindings } from "./mockSessionTitle";
@@ -37,7 +41,7 @@ import type { ForkTargetsBindings } from "./forkTargets";
 import type { ToolRecoveryBindings } from "./toolRecovery";
 import type { ScrollDiagnosticBindings } from "./scrollDiagnosticBridge";
 import type { TranscriptProtocolBindings } from "./transcriptProtocol";
-import { makeMockSessionReaderBindings, type SessionReaderBindings } from "./sessionReaderBridge";
+import { makeMockSessionReaderBindings, publishMockTranscriptEvent, type SessionReaderBindings } from "./sessionReaderBridge";
 import { makeMockMCPAppBindings, type MCPAppBindings } from "./mcpAppBridge";
 import { makeMockPinnedContextBindings, type PinnedContextBindings } from "./pinnedContextBridge";
 import { createDesktopPreferencesMock } from "./desktopPreferencesMock";
@@ -215,6 +219,20 @@ interface DesktopWindowState {
 // AppBindings is the hand-written React-to-Go contract. _CheckGeneratedBindings
 // catches generated methods missing here; update this interface and typecheck.
 export interface AppBindings extends ForkTargetsBindings, ToolRecoveryBindings, ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings, TranscriptProtocolBindings, SessionReaderBindings {
+  GetWorkspaceSnapshot(): Promise<WorkspaceSnapshot>;
+  CreateSession(workspaceId: string): Promise<SessionRef>;
+  ForkSession(ref: SessionRef, turnBoundary: string): Promise<SessionRef>;
+  ListWorkspaceSessions(workspaceId: string, query: string, cursor: string, limit: number, includeArchived: boolean): Promise<WorkspaceSessionPage>;
+  OpenSession(ref: SessionRef): Promise<HistoryPage>;
+  ReadSessionHistory(ref: SessionRef, cursor: string, limit: number): Promise<HistoryPage>;
+  RenameCanonicalSession(ref: SessionRef, title: string): Promise<void>;
+  ArchiveCanonicalSession(ref: SessionRef): Promise<void>;
+  RestoreCanonicalSession(ref: SessionRef): Promise<void>;
+  MoveWorkspaceSession(workspaceId: string, sessionId: string, beforeSessionId: string): Promise<void>;
+  RenameWorkspace(workspaceId: string, title: string): Promise<void>;
+  SetWorkspaceVisible(workspaceId: string, visible: boolean): Promise<void>;
+  MoveWorkspace(workspaceId: string, beforeWorkspaceId: string): Promise<void>;
+  GetSessionArchitectureDiagnostics(): Promise<SessionArchitectureDiagnostics>;
   Platform(): Promise<string>;
   MinimiseMainWindow(): Promise<void>;
   ToggleMaximiseMainWindow(): Promise<void>;
@@ -909,13 +927,15 @@ export function onRuntimeRebuilt(cb: (tabId?: string, runtimeEpoch?: string) => 
 export function onReady(cb: (tabId?: string) => void): () => void {
   const off = hostEvents("agent:ready", (tabId?: unknown) => cb(typeof tabId === "string" ? tabId : undefined));
   if (off) return off;
-  // In dev mock, fire immediately since there's no real boot sequence.
+  // The browser mock has no native event bridge, but SessionRef navigation
+  // still needs the same reload semantics as the desktop host.
+  mockReadyListeners.add(cb);
   cb();
-  return () => {};
+  return () => mockReadyListeners.delete(cb);
 }
 
 export function onProjectTreeChanged(cb: () => void): () => void {
-  return hostEvents("project-tree:changed", (payload?: unknown) => (payload as { reason?: unknown } | undefined)?.reason !== "runtime" && (payload as { reason?: unknown } | undefined)?.reason !== "catalog-v2" && cb()) ?? (() => {});
+  return hostEvents("project-tree:changed", (payload?: unknown) => (payload as { reason?: unknown } | undefined)?.reason !== "runtime" && (payload as { reason?: unknown } | undefined)?.reason !== "catalog-v2" && cb()) ?? subscribeMockProjectTreeChanged(cb);
 }
 
 // onTopicActivation subscribes to the "topic:activation" channel carrying the
@@ -944,6 +964,11 @@ export function onTabMeta(cb: (event: TabMetaRefreshEvent) => void): () => void 
 
 const mockTopicActivationListeners = new Set<(event: TopicActivationEvent) => void>();
 const mockTabMetaListeners = new Set<(event: TabMetaRefreshEvent) => void>();
+const mockReadyListeners = new Set<(tabId?: string) => void>();
+
+function emitMockReady(tabId?: string): void {
+  mockReadyListeners.forEach((listener) => listener(tabId));
+}
 
 export function __emitMockTopicActivation(event: TopicActivationEvent): void {
   mockTopicActivationListeners.forEach((listener) => listener(event));
@@ -1081,6 +1106,7 @@ function mockSubscribe(cb: (e: WireEvent) => void): () => void {
 
 function emit(e: WireEvent) {
   const event = mockScopedTabId && !e.tabId ? { ...e, tabId: mockScopedTabId } : e;
+  publishMockTranscriptEvent(event);
   listeners.forEach((l) => l(event));
 }
 
@@ -1127,12 +1153,6 @@ function browserPlatformOverride(): "darwin" | "windows" | "linux" | "" {
   return value === "darwin" || value === "windows" || value === "linux" ? value : "";
 }
 
-function browserMockDesktopLayoutStyle(): "workbench" | "creation" {
-  if (typeof window === "undefined" || desktopHost().app) return "workbench";
-  const value = new URLSearchParams(window.location.search).get("layout");
-  return value === "creation" ? value : "workbench";
-}
-
 function browserPreviewBashSandboxMode(): "enforce" | "off" {
   return browserPlatformOverride() === "windows" ? "off" : "enforce";
 }
@@ -1140,7 +1160,7 @@ function browserPreviewBashSandboxMode(): "enforce" | "off" {
 function browserPreviewEffectiveShell(prefer = "auto"): "bash" | "git-bash" | "powershell" | "pwsh" {
   const normalized = prefer.trim().toLowerCase();
   if (normalized === "powershell" || normalized === "pwsh") return normalized;
-  return browserPlatformOverride() === "windows" ? "git-bash" : "bash";
+  return browserPlatformOverride() === "windows" ? (normalized === "bash" ? "git-bash" : "pwsh") : "bash";
 }
 
 function mockScenario(): "demo" | "fresh" | "running" | "guidance" | "recovery" | "sandbox_escape" | "notice" | "deepseek_upgrade" | "bench" {
@@ -1755,7 +1775,6 @@ function makeMockApp(): AppBindings {
     },
     desktopLanguage: "",
     desktopCurrency: "",
-    desktopLayoutStyle: browserMockDesktopLayoutStyle(),
     desktopTheme: "auto",
     desktopThemeStyle: "graphite",
     desktopTerminalTheme: "auto",
@@ -2246,9 +2265,63 @@ function makeMockApp(): AppBindings {
       mockTabs = mockTabs.map((tab, index) => (index === 0 ? { ...tab, label } : tab));
     }
   };
+  const mockArchivedSessionIDs = new Set<string>();
+  const mockSessionIDForNode = (node: ProjectNode) => (node.topicId || node.key || "mock-session").replace(/[^a-zA-Z0-9._-]/g, "-");
+  const mockWorkspaceID = (node: ProjectNode) => node.kind === "global_folder" ? "global" : `project-${(node.root || node.key).replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+  const mockWorkspaceSnapshot = (): WorkspaceSnapshot => ({
+    generation: 1,
+    workspaces: mockProjectTreeForDisplay().filter((node) => node.kind === "project" || node.kind === "global_folder").map((node) => ({
+      id: mockWorkspaceID(node), root: node.root || "", title: node.label,
+      sessionIds: projectChildren(node).map(mockSessionIDForNode), visible: true, createdAt: 0, updatedAt: 0,
+    })),
+    archivedSessionIds: [...mockArchivedSessionIDs], pendingCreates: [],
+  });
   return {
     ...makeMockSessionCatalogBindings(cloneProjectTree),
     ...makeMockBlankProjectBindings(),
+    async GetWorkspaceSnapshot() { return mockWorkspaceSnapshot(); },
+    async CreateSession(_workspaceId: string) { return { hostId: "local", sessionId: `mock-${Date.now()}` }; },
+    async ForkSession(_ref: SessionRef, _turnBoundary: string) { return { hostId: "local", sessionId: `mock-fork-${Date.now()}` }; },
+    async ListWorkspaceSessions(workspaceId: string, query: string, _cursor: string, limit: number, includeArchived: boolean) {
+      const parent = mockProjectTreeForDisplay().find((node) => mockWorkspaceID(node) === workspaceId);
+      const needle = query.trim().toLowerCase();
+      const sessions = projectChildren(parent ?? { key: "", kind: "global_folder", label: "", children: [] }).map((node) => {
+        const sessionId = mockSessionIDForNode(node), isArchived = mockArchivedSessionIDs.has(sessionId);
+        return {
+          ref: { hostId: "local", sessionId }, workspaceId, title: node.label, preview: node.preview || "", turns: node.turns || 0,
+          createdAt: node.createdAt || 0, updatedAt: node.lastActivityAt || 0, blank: !node.turns && !node.preview,
+          archived: isArchived, running: Boolean(node.running), metadataStatus: "ready", health: "healthy",
+        };
+      }).filter((row) => (includeArchived || !row.archived) && (!needle || `${row.title}\n${row.preview}`.toLowerCase().includes(needle))).slice(0, limit);
+      return { sessions, registryGeneration: 1 };
+    },
+    async OpenSession(ref: SessionRef) {
+      if (ref.hostId !== "local") throw new Error(`unsupported mock session host: ${ref.hostId}`);
+      const { rebindMockSessionTab } = await import("./bridgeMockSessionNavigation");
+      const rebound = rebindMockSessionTab(ref, mockTabs.find((candidate) => candidate.active) ?? mockTabs[0], mockProjectTreeForDisplay(), globalWorkspaceRoot, mockTopicRunsInScenario);
+      // SessionRef navigation rebinds the existing surface; legacy Topic
+      // activation swaps tab ids and makes its ready event correctly stale.
+      pruneMockTabsTo(rebound.id);
+      mockTabs = [rebound];
+      emitMockReady(rebound.id);
+      return this.HistoryPageForTab(rebound.id, 0, 60);
+    },
+    async ReadSessionHistory(_ref: SessionRef, _cursor: string, _limit: number) { return { messages: [], startTurn: 0, endTurn: 0, totalTurns: 0, hasOlder: false }; },
+    async RenameCanonicalSession(_ref: SessionRef, _title: string) {},
+    async ArchiveCanonicalSession(ref: SessionRef) { mockArchivedSessionIDs.add(ref.sessionId); notifyMockProjectTreeChanged(); },
+    async RestoreCanonicalSession(ref: SessionRef) { mockArchivedSessionIDs.delete(ref.sessionId); notifyMockProjectTreeChanged(); },
+    async MoveWorkspaceSession(_workspaceId: string, _sessionId: string, _beforeSessionId: string) {},
+    async RenameWorkspace(_workspaceId: string, _title: string) {},
+    async SetWorkspaceVisible(_workspaceId: string, _visible: boolean) {},
+    async MoveWorkspace(_workspaceId: string, _beforeWorkspaceId: string) {},
+    async GetSessionArchitectureDiagnostics() {
+      return {
+        session_headers_total: 0, workspace_members_total: 0, unassigned_sessions: 0,
+        migration_pending: 0, migration_failed: 0, migration_completed: 0,
+        projection_pending: 0, projection_failed: 0, pending_create_recovered: 0,
+        prune_blocked_persistence: 0,
+      };
+    },
     async MinimiseMainWindow() {
       console.info("mock MinimiseMainWindow");
     },
@@ -4355,11 +4428,10 @@ function makeMockApp(): AppBindings {
       return this.SaveDoc(path, body);
     },
     async DesktopStartupSettings() {
-      const { bot, desktopLanguage, desktopLayoutStyle, desktopTheme, desktopThemeStyle, desktopTerminalTheme, displayMode, sessionExperience, reasoningDisplayMode, reasoningDisplayModeExplicit, statusBarStyle, statusBarItems, checkUpdates, conversationWidth } = settings;
+      const { bot, desktopLanguage, desktopTheme, desktopThemeStyle, desktopTerminalTheme, displayMode, sessionExperience, reasoningDisplayMode, reasoningDisplayModeExplicit, statusBarStyle, statusBarItems, checkUpdates, conversationWidth } = settings;
       return JSON.parse(JSON.stringify({
         bot,
         desktopLanguage,
-        desktopLayoutStyle,
         desktopTheme,
         desktopThemeStyle,
         desktopTerminalTheme,
@@ -4924,9 +4996,9 @@ function makeMockApp(): AppBindings {
         async PickThemeBackground() {
           return "";
         },
-        async SetDesktopLayoutStyle(style: string) {
-          settings.desktopLayoutStyle = style === "creation" ? "creation" : "workbench";
-        },
+        // The layout-style preference was removed from the UI; the binding
+        // stays because the generated host contract still declares it.
+        async SetDesktopLayoutStyle(_style: string) {},
         async SetDesktopZoomFactor(factor: number) {
           mockDesktopZoomFactor = Math.min(2.0, Math.max(0.5, Number.isFinite(factor) ? factor : 1.0));
         },

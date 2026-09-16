@@ -99,7 +99,7 @@ try {
   };
   // This first case is the original full-width disappearing-message regression.
   await measure("full-width long code");
-  for (const layout of ["creation", "workbench"]) {
+  for (const layout of ["workbench"]) {
     for (const width of ["standard", "full"]) {
       for (const viewport of [760, 820, 1000, 1280, 1920]) {
         await setViewport({ width: viewport, height: 1080 });
@@ -113,10 +113,21 @@ try {
     await configure({ sidebar, dock, launcher: true });
     await measure(`sidebar=${sidebar}/dock=${dock}`);
   }
-  await configure({ layout: "creation", sidebar: false, dock: false, launcher: true });
-  for (const width of [1009, 1010, 1011]) {
+  await configure({ layout: "workbench", sidebar: false, dock: false, launcher: true });
+  // Account for native DPI rounding and the chat pane's border when straddling
+  // the CSS threshold; assert against the actual rendered surface.
+  for (const width of [1006, 1010, 1014]) {
     await setViewport({ width, height: 1080 });
-    await page.waitForFunction(hidden => Boolean(document.querySelector(".dock-launcher")) !== hidden, width < 1010);
+    await page.waitForFunction(() => document.querySelector(".chat-pane").getBoundingClientRect().width >= innerWidth - 2);
+    const surfaceWidth = await page.locator(".chat-pane").evaluate(element => element.getBoundingClientRect().width);
+    if (width < 1010) assert.ok(surfaceWidth < 1010, "fixture reaches below launcher threshold");
+    if (width > 1010) assert.ok(surfaceWidth > 1010, `fixture reaches above launcher threshold: window=${width}, surface=${surfaceWidth}`);
+    await page.waitForFunction(hidden => Boolean(document.querySelector(".dock-launcher")) !== hidden, surfaceWidth < 1010).catch(async error => {
+      console.error("launcher threshold geometry", await page.evaluate(() => ({ innerWidth, devicePixelRatio, mode: document.documentElement.dataset.dockLauncher,
+        surface: document.querySelector(".chat-pane")?.getBoundingClientRect().width,
+        launcherParent: document.querySelector(".dock-launcher")?.parentElement?.getBoundingClientRect().width })));
+      throw error;
+    });
     await measure("launcher threshold " + width);
   }
   await configure({ launcher: false });

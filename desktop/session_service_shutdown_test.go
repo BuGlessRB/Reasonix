@@ -30,10 +30,11 @@ func TestShutdownReleasesCachedSessionOwner(t *testing.T) {
 	if _, ok := service.Runtime(runtime.Ref()); ok {
 		t.Fatal("shutdown retained the idle runtime")
 	}
-	reopened, err := session.NewService("local", session.NewFilesystemPersistence(desktopSessionRoot(dir)))
+	reopened, err := session.NewService("local", session.NewFilesystemPersistence(app.desktopSessions.root))
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = reopened.CloseAll(context.Background()) })
 	reader, err := reopened.EnsureExecution(t.Context(), runtime.Ref())
 	if err != nil {
 		t.Fatalf("shutdown retained the writer lease: %v", err)

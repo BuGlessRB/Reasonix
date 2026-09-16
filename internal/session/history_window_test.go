@@ -13,14 +13,20 @@ import (
 
 func windowReady(t *testing.T, query *Query, ref SessionRef, req HistoryWindowRequest) HistoryWindowPage {
 	t.Helper()
+	page, err := waitHistoryWindow(t, query, ref, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return page
+}
+
+func waitHistoryWindow(t *testing.T, query *Query, ref SessionRef, req HistoryWindowRequest) (HistoryWindowPage, error) {
+	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		page, err := query.ReadHistoryWindow(t.Context(), ref, req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if page.Status != "preparing" {
-			return page
+		if err != nil || page.Status != "preparing" {
+			return page, err
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("window stayed preparing: %+v", page)
@@ -72,6 +78,7 @@ func TestHistoryWindowNewestAndOlderPaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "windowed"})
 	if err != nil {
 		t.Fatal(err)
@@ -111,6 +118,7 @@ func TestHistoryWindowMessageAndTurnAnchors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "anchored"})
 	if err != nil {
 		t.Fatal(err)
@@ -159,6 +167,7 @@ func TestHistoryWindowRejectsForeignCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "fenced"})
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +211,7 @@ func TestReadMessageFieldReturnsBoundedAlignedFragments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
 	runtime, err := service.Create(t.Context(), CreateOptions{SessionID: "fields"})
 	if err != nil {
 		t.Fatal(err)

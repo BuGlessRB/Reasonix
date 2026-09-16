@@ -28,6 +28,18 @@ branch.
 
 ### Changed
 
+- **Persistent bash PTY:** ordinary foreground `bash` calls in a session now
+  share one PTY, so `cd`, exported variables, and shell functions survive
+  across calls. Output stays byte-identical to one-shot execution, stdin stays
+  detached, and a timeout or cancel reports partial output and says the shell
+  was reset. Background jobs, commands that background a child, per-call
+  write-root escalations, host terminals, and PowerShell hosts stay one-shot.
+  The bash tool schema and description are unchanged.
+
+- **CLI YOLO shortcuts:** the CLI displays the unrestricted preset as YOLO;
+  `Ctrl+Y` toggles the canonical `danger-full-access` permission, while
+  `Shift+Tab` cycles Read only → Workspace write → YOLO → Plan.
+
 - **Harness-style scheduling and recovery:** calls take effect in execution
   order, including same-batch read/edit sequences. Bounded reads create no
   completion debt. Unknown external effects are durable advisory facts and no

@@ -19,6 +19,21 @@ import (
 // A cold write acquires the ordinary writer lease, flushes the event, and then
 // releases the exact Runtime; no title sidecar becomes a second source of truth.
 func (s *Service) SetTitle(ctx context.Context, ref SessionRef, title string) error {
+	return s.setTitle(ctx, ref, nil, title)
+}
+
+var ErrSessionTitleChanged = errors.New("session title changed")
+
+// SetTitleIfUnchanged checks and commits at the same acceptance boundary as
+// manual title writes, so a delayed generated title cannot overwrite one.
+func (s *Service) SetTitleIfUnchanged(ctx context.Context, ref SessionRef, expectedTitle, title string) error {
+	return s.setTitle(ctx, ref, &expectedTitle, title)
+}
+
+func (s *Service) setTitle(ctx context.Context, ref SessionRef, expectedTitle *string, title string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := ref.validate(s.hostID); err != nil {
 		return err
 	}
@@ -38,10 +53,43 @@ func (s *Service) SetTitle(ctx context.Context, ref SessionRef, title string) er
 	if err != nil {
 		return err
 	}
-	if _, err = session.AppendBatch(ctx, "session-title:"+randomID(), []Event{{Kind: "session/title", Payload: payload}}); err != nil {
+	prepared, err := session.PrepareBatchContext(ctx, "session-title:"+randomID(), Batch{Events: []Event{{Kind: "session/title", Payload: payload}}})
+	if err != nil {
+		return err
+	}
+	if _, err = session.commitPrepared(prepared, expectedTitle); err != nil {
 		return err
 	}
 	_, err = session.Flush(ctx)
+	return err
+}
+
+// SetModel appends the same canonical session/config event used at creation.
+// It is used when a host restores history under a safe fallback controller.
+func (s *Service) SetModel(ctx context.Context, ref SessionRef, modelRef, modelIdentity string) error {
+	if err := ref.validate(s.hostID); err != nil {
+		return err
+	}
+	runtime, alreadyOpen := s.Runtime(ref)
+	var target *Session
+	var err error
+	if alreadyOpen {
+		target = runtime.Session()
+	} else {
+		target, err = s.persistence.Open(ref.SessionID, ReadWrite)
+		if err != nil {
+			return err
+		}
+		defer target.Close(context.Background())
+	}
+	payload, err := json.Marshal(map[string]string{"modelRef": strings.TrimSpace(modelRef), "modelIdentity": strings.TrimSpace(modelIdentity)})
+	if err != nil {
+		return err
+	}
+	if _, err := target.AppendBatch(ctx, "session-model:"+randomID(), []Event{{Kind: "session/config", Payload: payload}}); err != nil {
+		return err
+	}
+	_, err = target.Flush(ctx)
 	return err
 }
 
@@ -309,18 +357,25 @@ func (s *Service) Export(ctx context.Context, ref SessionRef, destination string
 // The archive's immutable identity is retained; importing over an existing
 // identity is refused rather than merging two histories.
 func (s *Service) Import(ctx context.Context, source string) (SessionRef, error) {
+	return s.ImportWithHeader(ctx, source, CreateOptions{})
+}
+
+// ImportWithHeader atomically adopts a self-contained export and installs
+// immutable Desktop ownership metadata before the target directory is
+// published. Existing import callers remain headerless by passing zero options.
+func (s *Service) ImportWithHeader(ctx context.Context, source string, options CreateOptions) (SessionRef, error) {
 	filesystem, ok := s.persistence.(*FilesystemPersistence)
 	if !ok {
 		return SessionRef{}, errors.New("session: persistence does not support import")
 	}
-	id, err := filesystem.importDirectory(ctx, source)
+	id, err := filesystem.importDirectory(ctx, source, options)
 	if err != nil {
 		return SessionRef{}, err
 	}
 	return SessionRef{HostID: s.hostID, SessionID: id}, nil
 }
 
-func (p *FilesystemPersistence) importDirectory(ctx context.Context, source string) (string, error) {
+func (p *FilesystemPersistence) importDirectory(ctx context.Context, source string, options CreateOptions) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -345,16 +400,23 @@ func (p *FilesystemPersistence) importDirectory(ctx context.Context, source stri
 	if manifest.ContentRoot != ".content-v1" {
 		return "", errors.New("session: import is not a self-contained export")
 	}
+	targetID := manifest.SessionID
+	if strings.TrimSpace(options.SessionID) != "" {
+		targetID = strings.TrimSpace(options.SessionID)
+	}
+	if err := validateSessionID(targetID); err != nil {
+		return "", err
+	}
 	if err := os.MkdirAll(p.Root, 0o700); err != nil {
 		return "", err
 	}
-	target := filepath.Join(p.Root, manifest.SessionID)
+	target := filepath.Join(p.Root, targetID)
 	if _, err := os.Lstat(target); err == nil {
-		return "", fmt.Errorf("%w: %s", ErrSessionExists, manifest.SessionID)
+		return "", fmt.Errorf("%w: %s", ErrSessionExists, targetID)
 	} else if !os.IsNotExist(err) {
 		return "", err
 	}
-	staging := filepath.Join(p.Root, "."+manifest.SessionID+".import-"+randomID())
+	staging := filepath.Join(p.Root, "."+targetID+".import-"+randomID())
 	if err := exportDirectory(ctx, source, staging); err != nil {
 		return "", err
 	}
@@ -364,14 +426,39 @@ func (p *FilesystemPersistence) importDirectory(ctx context.Context, source stri
 			_ = os.RemoveAll(staging)
 		}
 	}()
+	if targetID != manifest.SessionID {
+		manifest.SessionID = targetID
+		if err := writeManifestFile(filepath.Join(staging, "manifest.json"), manifest); err != nil {
+			return "", err
+		}
+		// Storage generations are scoped to the manifest identity. The imported
+		// event prefix remains valid, but a remapped SessionID must publish a new
+		// generation before any recovery/query projection can be trusted.
+		if _, err := ensureStorageIdentity(staging, manifest); err != nil {
+			return "", err
+		}
+	}
 	if _, err := Replay(staging, nil); err != nil {
 		return "", fmt.Errorf("validate imported events: %w", err)
+	}
+	if options.SessionID == "" {
+		options.SessionID = targetID
+	}
+	header, err := headerForCreate(options)
+	if err != nil {
+		return "", err
+	}
+	if header != nil {
+		header.CreatedAt = manifest.CreatedAt
+		if err := writeSessionHeader(staging, *header); err != nil {
+			return "", err
+		}
 	}
 	if err := os.Rename(staging, target); err != nil {
 		return "", fmt.Errorf("publish imported session: %w", err)
 	}
 	published = true
-	return manifest.SessionID, nil
+	return targetID, nil
 }
 
 func (s *Service) Delete(ctx context.Context, ref SessionRef) error {

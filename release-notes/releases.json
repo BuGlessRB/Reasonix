@@ -2,6 +2,554 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "1.38.9",
+      "date": "2026-09-15",
+      "channel": "stable",
+      "targetingVersion": 1,
+      "title": {
+        "en": "Reasonix v1.38.9: Session Reliability, Persistent Bash, and CDP Browser",
+        "zh": "Reasonix v1.38.9：会话可靠性、持久化 Bash 与 CDP 浏览器"
+      },
+      "summary": {
+        "en": "This release focuses on session persistence and recovery, adds persistent bash sessions and a CDP browser backend, and improves file navigation and conversation navigation.",
+        "zh": "本次发布聚焦会话持久化与恢复，新增持久化 bash 会话和 CDP 浏览器后端，并改进文件导航与对话导航。"
+      },
+      "surfaces": [
+        "desktop",
+        "cli",
+        "site"
+      ],
+      "guides": [
+        {
+          "title": {
+            "en": "Desktop Session v5",
+            "zh": "桌面会话 v5"
+          },
+          "body": {
+            "en": "Learn about the new SessionID-only persistence architecture for desktop sessions.",
+            "zh": "了解桌面会话全新的仅 SessionID 持久化架构。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/e4bfeb67f9125af238aca4ff9bf69b21cb1df998/docs/desktop-session-v5.md"
+        },
+        {
+          "title": {
+            "en": "CDP Browser Backend",
+            "zh": "CDP 浏览器后端"
+          },
+          "body": {
+            "en": "Documentation for the new CDP browser backend for CLI, Serve, and headless sessions.",
+            "zh": "面向 CLI、Serve 和无头会话的全新 CDP 浏览器后端文档。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/e4bfeb67f9125af238aca4ff9bf69b21cb1df998/docs/BROWSER_CDP.md"
+        },
+        {
+          "title": {
+            "en": "Dock File Navigation",
+            "zh": "Dock 文件导航"
+          },
+          "body": {
+            "en": "Details on the command-driven file navigation ownership model.",
+            "zh": "命令驱动的文件导航所有权模型详情。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/e4bfeb67f9125af238aca4ff9bf69b21cb1df998/docs/DOCK_FILE_NAVIGATION.md"
+        },
+        {
+          "title": {
+            "en": "Resource Governance Upgrade",
+            "zh": "资源治理升级"
+          },
+          "body": {
+            "en": "How desktop session resources are bounded and managed.",
+            "zh": "桌面会话资源如何受限与管理。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/e4bfeb67f9125af238aca4ff9bf69b21cb1df998/docs/RESOURCE_GOVERNANCE_UPGRADE.md"
+        },
+        {
+          "title": {
+            "en": "Transcript Outline Navigation",
+            "zh": "对话大纲导航"
+          },
+          "body": {
+            "en": "Design and acceptance record for the complete turn navigator.",
+            "zh": "完整轮次导航器的设计与验收记录。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/e4bfeb67f9125af238aca4ff9bf69b21cb1df998/docs/TRANSCRIPT_OUTLINE_NAVIGATION.md"
+        },
+        {
+          "title": {
+            "en": "Persistent Turn Fork Report",
+            "zh": "持久化轮次分叉报告"
+          },
+          "body": {
+            "en": "Report on forking completed turns from the persisted session log.",
+            "zh": "从持久化会话日志分叉已完成轮次的报告。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/e4bfeb67f9125af238aca4ff9bf69b21cb1df998/docs/persistent-turn-fork-report.md"
+        },
+        {
+          "title": {
+            "en": "Session Fast Recovery",
+            "zh": "会话快速恢复"
+          },
+          "body": {
+            "en": "How fast recovery and independent history work.",
+            "zh": "快速恢复与独立历史的工作原理。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/e4bfeb67f9125af238aca4ff9bf69b21cb1df998/docs/session-fast-recovery.md"
+        }
+      ],
+      "highlights": [
+        {
+          "kind": "new",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "SessionID-only Desktop Persistence",
+            "zh": "仅 SessionID 的桌面持久化"
+          },
+          "body": {
+            "en": "Desktop sessions now use a single SessionID-based persistence architecture, preventing session loss and improving reliability after restarts.",
+            "zh": "桌面会话现采用基于单一 SessionID 的持久化架构，防止会话丢失并提升重启后的可靠性。"
+          },
+          "refs": [
+            10326
+          ]
+        },
+        {
+          "kind": "new",
+          "targets": [
+            "desktop",
+            "cli"
+          ],
+          "title": {
+            "en": "Persistent Bash Sessions",
+            "zh": "持久化 bash 会话"
+          },
+          "body": {
+            "en": "Foreground bash calls now share a session-level PTY, so cd, exported variables, and shell functions persist across calls.",
+            "zh": "前台 bash 调用现共享会话级 PTY，因此 cd、导出变量和 shell 函数可在多次调用间保持。"
+          },
+          "refs": [
+            10327
+          ]
+        },
+        {
+          "kind": "new",
+          "targets": [
+            "desktop",
+            "cli"
+          ],
+          "title": {
+            "en": "CDP Browser Backend",
+            "zh": "CDP 浏览器后端"
+          },
+          "body": {
+            "en": "CLI, Serve, and headless sessions can now use the same browser tools as the Electron shell through the new CDP backend.",
+            "zh": "CLI、Serve 和无头会话现可通过新的 CDP 后端使用与 Electron 外壳相同的浏览器工具。"
+          },
+          "refs": [
+            10328
+          ]
+        },
+        {
+          "kind": "improved",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Complete Turn Navigator",
+            "zh": "完整轮次导航器"
+          },
+          "body": {
+            "en": "The turn navigator now indexes every turn of the conversation, not just loaded ones, with absolute ordinals and previews.",
+            "zh": "轮次导航器现在索引对话中的每个轮次，而不仅是已加载的轮次，并带有绝对序号和预览。"
+          },
+          "refs": [
+            10276
+          ]
+        },
+        {
+          "kind": "improved",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Command-Driven Dock File Navigation",
+            "zh": "命令驱动的 Dock 文件导航"
+          },
+          "body": {
+            "en": "Opening a file is now a command owned by the running instance, eliminating render loops and stale navigation races.",
+            "zh": "打开文件现在是由运行实例持有的命令，消除了渲染循环和过时的导航竞态。"
+          },
+          "refs": [
+            10280,
+            10268
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Session History Recovery on Model Startup Failure",
+            "zh": "模型启动失败时恢复会话历史"
+          },
+          "body": {
+            "en": "Durable session history remains visible even when a saved model connection no longer exists and controller startup fails.",
+            "zh": "即使保存的模型连接不再存在且控制器启动失败，持久会话历史仍保持可见。"
+          },
+          "refs": [
+            10287
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "Restored CLI YOLO Permission Shortcuts",
+            "zh": "恢复 CLI YOLO 权限快捷键"
+          },
+          "body": {
+            "en": "Ctrl+Y toggles YOLO mode with the canonical danger-full-access preset, and Shift+Tab cycles through all four permission states.",
+            "zh": "Ctrl+Y 使用规范的 danger-full-access 预设切换 YOLO 模式，Shift+Tab 循环切换全部四种权限状态。"
+          },
+          "refs": [
+            10356
+          ]
+        }
+      ],
+      "changes": {
+        "new": [
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "SessionID-only Desktop Persistence",
+              "zh": "仅 SessionID 的桌面持久化"
+            },
+            "body": {
+              "en": "Desktop sessions now use a single SessionID-based persistence architecture, preventing session loss and improving reliability after restarts.",
+              "zh": "桌面会话现采用基于单一 SessionID 的持久化架构，防止会话丢失并提升重启后的可靠性。"
+            },
+            "refs": [
+              10326
+            ]
+          },
+          {
+            "targets": [
+              "desktop",
+              "cli"
+            ],
+            "title": {
+              "en": "Persistent Bash Sessions",
+              "zh": "持久化 bash 会话"
+            },
+            "body": {
+              "en": "Foreground bash calls now share a session-level PTY, so cd, exported variables, and shell functions persist across calls.",
+              "zh": "前台 bash 调用现共享会话级 PTY，因此 cd、导出变量和 shell 函数可在多次调用间保持。"
+            },
+            "refs": [
+              10327
+            ]
+          },
+          {
+            "targets": [
+              "desktop",
+              "cli"
+            ],
+            "title": {
+              "en": "CDP Browser Backend",
+              "zh": "CDP 浏览器后端"
+            },
+            "body": {
+              "en": "CLI, Serve, and headless sessions can now use the same browser tools as the Electron shell through the new CDP backend.",
+              "zh": "CLI、Serve 和无头会话现可通过新的 CDP 后端使用与 Electron 外壳相同的浏览器工具。"
+            },
+            "refs": [
+              10328
+            ]
+          }
+        ],
+        "improved": [
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Complete Turn Navigator",
+              "zh": "完整轮次导航器"
+            },
+            "body": {
+              "en": "The turn navigator now indexes every turn of the conversation, not just loaded ones, with absolute ordinals and previews.",
+              "zh": "轮次导航器现在索引对话中的每个轮次，而不仅是已加载的轮次，并带有绝对序号和预览。"
+            },
+            "refs": [
+              10276
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Command-Driven Dock File Navigation",
+              "zh": "命令驱动的 Dock 文件导航"
+            },
+            "body": {
+              "en": "Opening a file is now a command owned by the running instance, eliminating render loops and stale navigation races.",
+              "zh": "打开文件现在是由运行实例持有的命令，消除了渲染循环和过时的导航竞态。"
+            },
+            "refs": [
+              10280,
+              10268
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Resolve and Preview Files Named in Chat Answers",
+              "zh": "识别并预览回答中提到的文件"
+            },
+            "body": {
+              "en": "Files mentioned in chat answers are now resolved and previewable, including SVG code blocks rendered as images.",
+              "zh": "回答中提到的文件现在可以被识别和预览，包括以图片形式渲染的 SVG 代码块。"
+            },
+            "refs": [
+              10277
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Fork Completed Turns from Persisted Session Log",
+              "zh": "从持久化会话日志分叉已结束轮次"
+            },
+            "body": {
+              "en": "Forking a completed turn now uses an immutable anchor, enabling the branch button even while a newer turn runs.",
+              "zh": "分叉已结束轮次现在使用不可变锚点，即使有更新的轮次正在运行，分支按钮也可用。"
+            },
+            "refs": [
+              10284
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Bound Desktop Session Resources",
+              "zh": "限制桌面会话资源占用"
+            },
+            "body": {
+              "en": "Transcript residency and expensive resources are now bounded with explicit budgets and ownership.",
+              "zh": "转录驻留和昂贵资源现在通过明确的预算和所有权进行限制。"
+            },
+            "refs": [
+              10295
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Fix Anchored Overlay Lifecycle",
+              "zh": "修复锚定弹层生命周期"
+            },
+            "body": {
+              "en": "Portaled overlays like the model selector now close correctly when their trigger becomes invalid.",
+              "zh": "模型选择器等传送门弹层现在在其触发器失效时正确关闭。"
+            },
+            "refs": [
+              10275
+            ]
+          },
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "Restored CLI YOLO Permission Shortcuts",
+              "zh": "恢复 CLI YOLO 权限快捷键"
+            },
+            "body": {
+              "en": "Ctrl+Y toggles YOLO mode with the canonical danger-full-access preset, and Shift+Tab cycles through all four permission states.",
+              "zh": "Ctrl+Y 使用规范的 danger-full-access 预设切换 YOLO 模式，Shift+Tab 循环切换全部四种权限状态。"
+            },
+            "refs": [
+              10356
+            ]
+          }
+        ],
+        "fixed": [
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Session History Recovery on Model Startup Failure",
+              "zh": "模型启动失败时恢复会话历史"
+            },
+            "body": {
+              "en": "Durable session history remains visible even when a saved model connection no longer exists and controller startup fails.",
+              "zh": "即使保存的模型连接不再存在且控制器启动失败，持久会话历史仍保持可见。"
+            },
+            "refs": [
+              10287
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Close Desktop Session Services Before Store Root Removal",
+              "zh": "在删除会话存储根目录前先关闭会话服务"
+            },
+            "body": {
+              "en": "Fixed a Windows-only test failure where session services held recovery database handles during cleanup.",
+              "zh": "修复了仅 Windows 上会话服务在清理期间持有恢复数据库句柄的测试失败。"
+            },
+            "refs": [
+              10354
+            ]
+          },
+          {
+            "targets": [
+              "desktop",
+              "cli"
+            ],
+            "title": {
+              "en": "Release Cold-Open Session Writer Lease",
+              "zh": "释放冷启动阶段的会话写者租约"
+            },
+            "body": {
+              "en": "Fixed a Windows-only leak where the cold-open session writer lease was not released, causing test failures.",
+              "zh": "修复了仅 Windows 上冷启动会话写者租约未释放导致的测试失败。"
+            },
+            "refs": [
+              10325
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Repair Windows Test Job",
+              "zh": "修复 Windows 测试任务"
+            },
+            "body": {
+              "en": "Fixed multiple root causes behind the Windows CI test job failures, including writer leases and watcher helper entry.",
+              "zh": "修复了 Windows CI 测试任务失败的多个根本原因，包括写者租约和监听 helper 入口。"
+            },
+            "refs": [
+              10321
+            ]
+          },
+          {
+            "targets": [
+              "desktop",
+              "cli"
+            ],
+            "title": {
+              "en": "Fix Edit-Blocks File System Races",
+              "zh": "修复编辑块文件系统竞态"
+            },
+            "body": {
+              "en": "Closed exists→write and read→write races in edit-blocks with a single fd-scoped flow.",
+              "zh": "通过单一 fd 作用域流程关闭了编辑块中的存在→写入和读取→写入竞态。"
+            },
+            "refs": [
+              301
+            ]
+          },
+          {
+            "targets": [
+              "site"
+            ],
+            "title": {
+              "en": "Probe Every Approved Manual Desktop Tag",
+              "zh": "探测全部已授权手动下载标签"
+            },
+            "body": {
+              "en": "The download page now probes every approved manual tag, preventing downgrades when a newer tag is not yet published.",
+              "zh": "下载页面现在探测所有已授权的手动标签，防止在较新标签尚未发布时降级。"
+            },
+            "refs": [
+              10353
+            ]
+          }
+        ]
+      },
+      "upgrade": [
+        {
+          "level": "warning",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Manual download required for this desktop release",
+            "zh": "本次桌面版需要手动下载安装"
+          },
+          "body": {
+            "en": "Code signing is temporarily unavailable, so this desktop release is published for manual download on every platform and automatic updates stay on the previous version. Windows packages carry no Reasonix Authenticode signature and may show an unknown-publisher warning; detached minisign signatures and SHA-256 checksums are still published for every artifact. CLI and npm distribution are unaffected.",
+            "zh": "由于代码签名服务暂不可用，本次桌面版所有平台均以手动下载方式发布，自动更新保留在上一版本。Windows 安装包不含 Reasonix Authenticode 签名，系统可能提示未知发布者；每个产物仍提供 minisign 签名和 SHA-256 校验值。CLI 和 npm 发布不受影响。"
+          },
+          "refs": [
+            10352
+          ]
+        },
+        {
+          "level": "warning",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Desktop Session v5 and downgrades",
+            "zh": "桌面会话 v5 与降级说明"
+          },
+          "body": {
+            "en": "Desktop sessions move to SessionID-only storage. The migrator reads existing v4 and legacy history without modifying it, so downgrading keeps your earlier sessions, but sessions created only under v5 are not visible to older releases. Protocol 9 is a hard desktop shell/host boundary; update the desktop app and CLI together.",
+            "zh": "桌面会话改为仅按 SessionID 存储。迁移器只读取而不修改既有 v4 与旧版历史，因此降级后原有会话仍在；但仅在 v5 下新建的会话，旧版本无法看到。Protocol 9 是桌面外壳与宿主的硬边界，请同步更新桌面端与 CLI。"
+          },
+          "refs": [
+            10326
+          ]
+        }
+      ],
+      "risks": [],
+      "contributors": [
+        "SivanCola",
+        "github-actions[bot]",
+        "esengine",
+        "Yizking"
+      ],
+      "links": {
+        "github": "https://github.com/esengine/DeepSeek-Reasonix/releases/tag/desktop-v1.38.9",
+        "compare": "https://github.com/esengine/DeepSeek-Reasonix/compare/desktop-v1.38.8...desktop-v1.38.9",
+        "download": "https://reasonix.io/?download=desktop&channel=stable#start"
+      },
+      "releaseId": "1.38.9",
+      "baseVersion": "1.38.9",
+      "status": "reviewed",
+      "previousRelease": "1.38.8",
+      "builds": {
+        "cli": "v1.38.9",
+        "desktop": "v1.38.9",
+        "npm": "1.38.9"
+      }
+    },
+    {
       "version": "1.38.8",
       "date": "2026-09-14",
       "channel": "stable",

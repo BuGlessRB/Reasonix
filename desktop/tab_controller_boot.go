@@ -17,6 +17,9 @@ func (a *App) buildTabControllerBoot(ctx context.Context, opts boot.Options) (co
 	if opts.SessionService == nil {
 		opts.SessionService = a.desktopSessionService(opts.SessionDir)
 	}
+	if opts.OnSessionRotation == nil {
+		opts.OnSessionRotation = a.prepareDesktopSessionRotation
+	}
 	return boot.Build(ctx, opts)
 }
 
@@ -25,14 +28,30 @@ func desktopSessionRoot(sessionDir string) string {
 }
 
 func (a *App) desktopSessionService(sessionDir string) *session.Service {
-	root := desktopSessionRoot(sessionDir)
-	if a == nil || root == "" {
+	if a == nil {
 		return nil
 	}
 	a.sessionServicesMu.Lock()
 	defer a.sessionServicesMu.Unlock()
+	root := a.desktopSessions.root
+	// Zero-value Apps in narrow tests retain an isolated legacy-derived root;
+	// NewApp always supplies the production v5 root.
+	if root == "" {
+		root = desktopSessionRoot(sessionDir)
+		a.desktopSessions.root = root
+	}
+	if root == "" {
+		return nil
+	}
 	if a.sessionServices == nil {
 		a.sessionServices = map[string]*session.Service{}
+	}
+	for _, service := range a.sessionServices {
+		// There is deliberately one local service even when a caller still
+		// carries a project-local legacy sessionDir during the cutover.
+		if service != nil {
+			return service
+		}
 	}
 	if service := a.sessionServices[root]; service != nil {
 		return service

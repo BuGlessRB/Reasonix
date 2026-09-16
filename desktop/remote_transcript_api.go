@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,15 +22,6 @@ type RemoteTranscriptSnapshot struct {
 }
 
 func (a *App) remoteTranscriptRead(tabID, route string, request any, destination any) (bool, error) {
-	return a.remoteTranscriptReadAttempt(tabID, route, request, destination, true)
-}
-
-// remoteTranscriptReadAttempt retries one 409 after refreshing the remote
-// tab's authoritative session identity. A Serve session can rotate while the
-// desktop is hydrating (for example after a model switch); retrying the old
-// route just repeats the conflict, while a status refresh updates the route
-// to the identity that the next request must use.
-func (a *App) remoteTranscriptReadAttempt(tabID, route string, request, destination any, refreshOnConflict bool) (bool, error) {
 	client, base, err := a.remoteTabCommandClient(tabID)
 	if err != nil {
 		return false, err
@@ -51,22 +43,34 @@ func (a *App) remoteTranscriptReadAttempt(tabID, route string, request, destinat
 		query.Set("session", sessionPath)
 	}
 	ctx, cancel := commandContext(a)
+	requestClient := client
+	if route == "/transcript/follow" {
+		cancel()
+		ctx = a.bootContext()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		ctx, cancel = context.WithCancel(ctx)
+		// Keep credentials and transport, but let the subscription context
+		// own cancellation instead of the command client's total deadline.
+		streamClient := *client
+		streamClient.Timeout = 0
+		requestClient = &streamClient
+	}
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serveURL(base, route)+"?"+query.Encode(), nil)
 	if err != nil {
-		cancel()
 		return false, err
 	}
-	response, err := client.Do(req)
+	response, err := requestClient.Do(req)
 	if err != nil {
-		cancel()
 		return false, err
 	}
+	defer response.Body.Close()
 	const maxResponseBytes = transcript.MaxResponseBytes
-	body, readErr := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	response.Body.Close()
-	cancel()
-	if readErr != nil {
-		return false, readErr
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil {
+		return false, err
 	}
 	if len(body) > maxResponseBytes {
 		return false, fmt.Errorf("remote transcript response exceeds limit")
@@ -81,13 +85,6 @@ func (a *App) remoteTranscriptReadAttempt(tabID, route string, request, destinat
 	switch response.StatusCode {
 	case http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusNotImplemented:
 		return false, nil
-	case http.StatusConflict:
-		if refreshOnConflict {
-			if _, refreshErr := a.RemoteTabStatus(tabID); refreshErr == nil {
-				return a.remoteTranscriptReadAttempt(tabID, route, request, destination, false)
-			}
-		}
-		return false, fmt.Errorf("remote transcript read failed (HTTP %d)", response.StatusCode)
 	case http.StatusOK:
 	default:
 		return false, fmt.Errorf("remote transcript read failed (HTTP %d)", response.StatusCode)
@@ -99,7 +96,11 @@ func (a *App) remoteTranscriptReadAttempt(tabID, route string, request, destinat
 		Stale           bool `json:"stale"`
 	}
 	if route != "/transcript/content" {
-		if json.Unmarshal(body, &header) != nil || header.ProtocolVersion != transcript.ProtocolVersion {
+		expected := transcript.ProtocolVersion
+		if route == "/transcript/follow" {
+			expected = transcript.FollowProtocolVersion
+		}
+		if json.Unmarshal(body, &header) != nil || header.ProtocolVersion != expected {
 			return false, nil
 		}
 	}
@@ -107,6 +108,22 @@ func (a *App) remoteTranscriptReadAttempt(tabID, route string, request, destinat
 		return false, fmt.Errorf("invalid remote transcript response: %w", err)
 	}
 	return true, nil
+}
+
+func (a *App) RemoteTranscriptFollowForTab(tabID string, req transcript.FollowRequest) (control.TranscriptFollowResponse, error) {
+	var result control.TranscriptFollowResponse
+	a.remoteTabMu.Lock()
+	tab := a.remoteTabs[tabID]
+	compatible := tab != nil && tab.capabilities[servecontract.TranscriptV2]
+	a.remoteTabMu.Unlock()
+	if !compatible {
+		return result, fmt.Errorf("transcript v2 is required; upgrade Serve and Desktop together")
+	}
+	supported, err := a.remoteTranscriptRead(tabID, "/transcript/follow", req, &result)
+	if err == nil && !supported {
+		err = fmt.Errorf("transcript v2 is required; upgrade Serve and Desktop together")
+	}
+	return result, err
 }
 
 func (a *App) RemoteTranscriptSnapshotForTab(tabID string, req transcript.PageRequest) (RemoteTranscriptSnapshot, error) {

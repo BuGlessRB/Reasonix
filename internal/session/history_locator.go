@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -17,7 +16,7 @@ import (
 )
 
 const (
-	historyIndexVersion     = 5
+	historyIndexVersion     = 8
 	HistoryPageDefaultLimit = 100
 	HistoryPageMaxLimit     = 500
 	HistoryPageMaxBytes     = 2 << 20
@@ -29,15 +28,19 @@ const (
 // deliberately separate from provider.Message: provider DTOs are materialized
 // only at model or compatibility boundaries.
 type PersistentMessage struct {
-	MessageID     string              `json:"messageId"`
-	Position      int64               `json:"position"`
-	Version       int                 `json:"version"`
-	Role          string              `json:"role"`
-	Preview       string              `json:"preview,omitempty"`
-	EventSequence uint64              `json:"eventSequence"`
-	VisibleTurn   int                 `json:"visibleTurn"`
-	Inline        json.RawMessage     `json:"inline,omitempty"`
-	ContentRef    *sessioncontent.Ref `json:"contentRef,omitempty"`
+	SamplingCount  *int                `json:"samplingCount,omitempty"`
+	ToolCount      *int                `json:"toolCount,omitempty"`
+	TurnFinal      bool                `json:"turnFinal,omitempty"`
+	TurnDurationMs int64               `json:"turnDurationMs,omitempty"`
+	MessageID      string              `json:"messageId"`
+	Position       int64               `json:"position"`
+	Version        int                 `json:"version"`
+	Role           string              `json:"role"`
+	Preview        string              `json:"preview,omitempty"`
+	EventSequence  uint64              `json:"eventSequence"`
+	VisibleTurn    int                 `json:"visibleTurn"`
+	Inline         json.RawMessage     `json:"inline,omitempty"`
+	ContentRef     *sessioncontent.Ref `json:"contentRef,omitempty"`
 }
 
 type MessageHistoryPage struct {
@@ -92,6 +95,8 @@ type historyCursor struct {
 }
 
 type historyBuildState struct {
+	commitTurn   string
+	commitTime   int64
 	nextPosition int64
 	visibleTurn  int
 	positions    map[string]int64
@@ -182,6 +187,19 @@ var historyMigrations = []projectiondb.Migration{{Version: 1, Apply: func(ctx co
 	// rebuild metadata version forces old indexes through an atomic rebuild.
 	_, err := tx.ExecContext(ctx, `SELECT 1`)
 	return err
+}}, {Version: 6, Apply: func(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `ALTER TABLE messages ADD COLUMN visible_user INTEGER NOT NULL DEFAULT 0`)
+	return err
+}}, {Version: 7, Apply: func(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `CREATE TABLE turn_summaries (turn_id TEXT PRIMARY KEY, start_sequence INTEGER NOT NULL DEFAULT 0, end_sequence INTEGER NOT NULL DEFAULT 0, started_at INTEGER NOT NULL DEFAULT 0, ended_at INTEGER NOT NULL DEFAULT 0, final_message_id TEXT NOT NULL DEFAULT '')`)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `CREATE INDEX turn_summaries_final ON turn_summaries(final_message_id)`)
+	return err
+}}, {Version: 8, Apply: func(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `CREATE TABLE turn_counts (turn_id TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY(turn_id,kind,id))`)
+	return err
 }}}
 
 type SearchHistoryHit struct {
@@ -227,23 +245,12 @@ func (q *Query) HistoryPage(ctx context.Context, ref SessionRef, cursor string, 
 	}
 	limit = min(limit, HistoryPageMaxLimit)
 	path := historyIndexPath(filesystem.Root, ref.SessionID)
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		preparation := q.prepareHistoryLocator(filesystem, ref.SessionID, path)
-		select {
-		case <-preparation.done:
-			if preparation.err != nil {
-				return MessageHistoryPage{Status: "failed"}, preparation.err
-			}
-		default:
-			return MessageHistoryPage{Messages: []PersistentMessage{}, Status: "preparing"}, nil
-		}
-	}
-	lock := q.projectionLock("history", ref.SessionID)
-	lock.Lock()
-	err := ensureHistoryIndex(ctx, filesystem, ref.SessionID, path)
-	lock.Unlock()
+	ready, err := q.historyLocatorReady(ctx, filesystem, ref.SessionID, path)
 	if err != nil {
 		return MessageHistoryPage{}, err
+	}
+	if !ready {
+		return MessageHistoryPage{Messages: []PersistentMessage{}, Status: "preparing"}, nil
 	}
 	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
 	if err != nil {
@@ -353,16 +360,12 @@ func (q *Query) LocateMessage(ctx context.Context, ref SessionRef, messageID str
 		return MessageLocation{}, errors.New("session: history locator requires filesystem persistence")
 	}
 	path := historyIndexPath(filesystem.Root, ref.SessionID)
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		q.prepareHistoryLocator(filesystem, ref.SessionID, path)
-		return MessageLocation{Status: "preparing", MessageID: messageID}, nil
-	}
-	lock := q.projectionLock("history", ref.SessionID)
-	lock.Lock()
-	err := ensureHistoryIndex(ctx, filesystem, ref.SessionID, path)
-	lock.Unlock()
+	ready, err := q.historyLocatorReady(ctx, filesystem, ref.SessionID, path)
 	if err != nil {
 		return MessageLocation{}, err
+	}
+	if !ready {
+		return MessageLocation{Status: "preparing", MessageID: messageID}, nil
 	}
 	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{Path: path, Migrations: historyMigrations, RequireDisk: true, MaxOpenConns: 1})
 	if err != nil {
@@ -396,13 +399,32 @@ func (q *Query) LocateMessage(ctx context.Context, ref SessionRef, messageID str
 func (q *Query) prepareHistoryLocator(filesystem *FilesystemPersistence, sessionID, path string) *historyPreparation {
 	q.historyMu.Lock()
 	if current := q.historyBuilds[sessionID]; current != nil {
-		q.historyMu.Unlock()
-		return current
+		select {
+		case <-current.done:
+			if current.err != nil {
+				q.historyMu.Unlock()
+				return current
+			}
+			// A completed build may have been invalidated by a newer append.
+		default:
+			q.historyMu.Unlock()
+			return current
+		}
 	}
 	preparation := &historyPreparation{done: make(chan struct{})}
 	q.historyBuilds[sessionID] = preparation
 	q.historyMu.Unlock()
+	q.rebuildMu.Lock()
+	if q.closed {
+		q.rebuildMu.Unlock()
+		preparation.err = context.Canceled
+		close(preparation.done)
+		return preparation
+	}
+	q.rebuildWG.Add(1)
+	q.rebuildMu.Unlock()
 	go func() {
+		defer q.rebuildWG.Done()
 		// A user-requested history page or locate: highest slot priority.
 		if err := q.slots.acquire(q.rebuildCtx, rebuildPriorityUser); err != nil {
 			preparation.err = err

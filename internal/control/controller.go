@@ -52,6 +52,7 @@ import (
 	"reasonix/internal/nilutil"
 	"reasonix/internal/permission"
 	"reasonix/internal/permissionpreset"
+	"reasonix/internal/persistentshell"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
@@ -189,6 +190,7 @@ type Controller struct {
 	sessionRecoveryMeta               func(SessionRecoveryRequest) agent.BranchMeta
 	onSessionRecovered                func(SessionRecoveryInfo) error
 	onSessionTransition               func(SessionTransitionInfo) error
+	onSessionRotation                 func(context.Context, SessionRotationRequest) (SessionRotationPlan, error)
 
 	// balanceURL/balanceKey target the active provider's optional wallet-balance
 	// endpoint (empty when the provider declares none). Captured at build so a
@@ -341,7 +343,8 @@ type Controller struct {
 	// sessionTemp owns the logical-session private temporary directory shared
 	// by Bash calls. Retained for this Controller's lifetime; rotated on
 	// /new, /clear, resume of another session, and branch switches.
-	sessionTemp *sessiontemp.Manager
+	sessionTemp     *sessiontemp.Manager
+	persistentShell *persistentshell.Manager
 	// snapshotMu serializes the whole save/recovery handoff for this controller.
 	// Agent-level path locks protect individual files, but recovery also moves
 	// controller-owned state (sessionPath, guardianPath, checkpoints, rewrite
@@ -696,6 +699,11 @@ type Options struct {
 	// OnSessionTransition transfers write ownership before an intentional
 	// fork, branch, or switch publishes a different Session.
 	OnSessionTransition func(SessionTransitionInfo) error
+	// OnSessionRotation lets an identity-owning host durably reserve a fresh
+	// SessionID before /new or /clear publishes it. When installed, the host
+	// also owns clear archival; the controller never permanently deletes the
+	// source session.
+	OnSessionRotation func(context.Context, SessionRotationRequest) (SessionRotationPlan, error)
 	// ApprovalTimeout bounds how long a tool-approval or ask prompt blocks waiting
 	// for a user decision. Zero (default) waits forever — right for an interactive
 	// terminal. Bot/headless frontends set a positive value so an unanswered
@@ -721,6 +729,11 @@ type Options struct {
 	// Controller. Hot rebuilds pass the previous Controller's Manager so the
 	// temporary directory survives model/settings swaps.
 	SessionTemp *sessiontemp.Manager
+	// PersistentShell is the session-scoped PTY used by ordinary foreground
+	// bash. Nil creates a fresh Manager owned by this Controller. Hot rebuilds
+	// pass the previous Controller's Manager so cwd and exported environment
+	// survive model/settings swaps.
+	PersistentShell *persistentshell.Manager
 }
 
 // New builds a Controller. A nil Sink becomes event.Discard; unless the caller
@@ -731,6 +744,13 @@ func controllerSessionTemp(existing *sessiontemp.Manager) *sessiontemp.Manager {
 		return existing
 	}
 	return sessiontemp.New()
+}
+
+func controllerPersistentShell(existing *persistentshell.Manager) *persistentshell.Manager {
+	if existing != nil {
+		return existing
+	}
+	return persistentshell.New()
 }
 
 func New(opts Options) *Controller {
@@ -803,6 +823,7 @@ func New(opts Options) *Controller {
 		sessionRecoveryMeta:               opts.SessionRecoveryMeta,
 		onSessionRecovered:                opts.OnSessionRecovered,
 		onSessionTransition:               opts.OnSessionTransition,
+		onSessionRotation:                 opts.OnSessionRotation,
 		balanceURL:                        opts.BalanceURL,
 		balanceKey:                        opts.BalanceKey,
 		balanceClient:                     opts.BalanceClient,
@@ -837,6 +858,8 @@ func (c *Controller) initializeOwnedResources(opts Options) {
 	// owner reference without racing a replacement Controller.
 	c.sessionTemp = controllerSessionTemp(opts.SessionTemp)
 	c.sessionTemp.Retain()
+	c.persistentShell = controllerPersistentShell(opts.PersistentShell)
+	c.persistentShell.Retain()
 	if strings.TrimSpace(opts.WorkspaceRoot) != "" {
 		c.legacyResearchArchive = legacyResearchArchive{store: autoresearch.NewStore(opts.WorkspaceRoot)}
 	}
@@ -1784,6 +1807,7 @@ func (c *Controller) RunShell(command string) {
 		start := time.Now()
 		res := shellrun.RunForeground(ctx, shellrun.Request{
 			Argv:           argv,
+			ProbeArgv:      shellrun.WindowsProbeArgv(sandbox.Spec{}, sh, ""),
 			Dir:            c.workspaceRoot,
 			Timeout:        shellTimeout,
 			WaitDelay:      shellWaitDelay,
@@ -3900,6 +3924,9 @@ func (c *Controller) stripTurnMessagesAfter(idx int) {
 	}
 	msgs := c.executor.Session().Snapshot()
 	if len(msgs) <= idx {
+		// Compaction may have removed the entire synthetic workset. The
+		// explicit turn identities still need retraction from display history.
+		c.replaceSessionAfterCancel(msgs)
 		return
 	}
 	c.replaceSessionAfterCancel(msgs[:idx])
@@ -3935,118 +3962,11 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 	if c.executor == nil {
 		return
 	}
-	msgs := c.executor.Session().Snapshot()
-	if start, ok := resolveInterruptedTurnStart(msgs, idx, true, startedAt, fallback); ok {
-		idx = start
+	before := c.executor.Session().Snapshot()
+	next := planCancelledMessages(before, idx, fallback, startedAt, c.executor.CanReplayAssistantMessage, c.ledgerTailEvidence())
+	if next != nil {
+		c.replaceSessionAfterCancelFrom(before, next)
 	}
-	if idx < 0 {
-		idx = 0
-	}
-	if idx > len(msgs) {
-		idx = len(msgs)
-	}
-	next := append([]provider.Message{}, msgs[:idx]...)
-	keptUser := false
-	userEnd := idx
-	for i, m := range msgs[idx:] {
-		if !agent.IsUserAuthoredTurnMessage(m) {
-			continue
-		}
-		m.Content = StripComposePrefixes(m.Content)
-		next = append(next, m)
-		keptUser = true
-		userEnd = idx + i + 1
-		break
-	}
-	if !keptUser && agent.IsUserAuthoredTurnMessage(fallback) {
-		fallback.Content = StripComposePrefixes(fallback.Content)
-		if strings.TrimSpace(fallback.Content) != "" {
-			fallback.Images = append([]string(nil), fallback.Images...)
-			next = append(next, fallback)
-			keptUser = true
-			userEnd = idx
-		}
-	}
-	if !keptUser && len(msgs) <= idx {
-		return
-	}
-	recovery := &provider.InterruptedTurnRecovery{Pending: true}
-	localIndexes := make([]int, 0, 1)
-	for i := userEnd; i < len(msgs); {
-		m := msgs[i]
-		if m.LocalOnly {
-			m.Role = provider.RoleTool
-			m.ToolCallID = provider.LocalOnlyToolID
-			m.Name = provider.LocalOnlyToolName
-			previousRecovery := m.InterruptedTurn
-			m.InterruptedTurn = nil
-			next = append(next, m)
-			localIndexes = append(localIndexes, len(next)-1)
-			recovery.DroppedPartialText = recovery.DroppedPartialText || strings.TrimSpace(m.Content) != ""
-			recovery.DroppedPartialReasoning = recovery.DroppedPartialReasoning || strings.TrimSpace(m.ReasoningContent) != ""
-			if previousRecovery != nil {
-				recovery.CompletedTools = append(recovery.CompletedTools, previousRecovery.CompletedTools...)
-				recovery.InterruptedTools = append(recovery.InterruptedTools, previousRecovery.InterruptedTools...)
-				recovery.NotStartedTools = append(recovery.NotStartedTools, previousRecovery.NotStartedTools...)
-				recovery.UnknownTools = append(recovery.UnknownTools, previousRecovery.UnknownTools...)
-			} else {
-				for _, call := range m.ToolCalls {
-					provider.RecordToolRecovery(recovery, interruptedToolSummary(call), provider.ToolRunUnknown)
-				}
-			}
-			i++
-			continue
-		}
-		// Auto-compaction can install a digest between the pinned current user
-		// message and its recent tool tail. It summarizes pre-turn/current work
-		// that is no longer present verbatim, so keep it provider-visible rather
-		// than silently dropping context during recovery.
-		if agent.IsCompactionSummary(m) {
-			next = append(next, m)
-			i++
-			continue
-		}
-		if m.Role == provider.RoleAssistant {
-			recordInterruptedAssistantRecovery(recovery, msgs, i, c.ledgerTailEvidence())
-		}
-		if end, ok := completeToolTurnEnd(msgs, i); ok && c.executor.CanReplayAssistantMessage(m) {
-			next = append(next, msgs[i:end]...)
-			i = end
-			continue
-		}
-		switch m.Role {
-		case provider.RoleAssistant:
-			local := m
-			local.Role = provider.RoleTool
-			local.LocalOnly = true
-			local.ToolCallID = provider.LocalOnlyToolID
-			local.Name = provider.LocalOnlyToolName
-			local.InterruptedTurn = nil
-			next = append(next, local)
-			localIndexes = append(localIndexes, len(next)-1)
-			recovery.DroppedPartialText = recovery.DroppedPartialText || strings.TrimSpace(local.Content) != ""
-			recovery.DroppedPartialReasoning = recovery.DroppedPartialReasoning || strings.TrimSpace(local.ReasoningContent) != ""
-		case provider.RoleTool:
-			local := m
-			local.LocalOnly = true
-			local.ToolCalls = []provider.ToolCall{{ID: m.ToolCallID, Name: m.Name}}
-			local.ToolCallID = provider.LocalOnlyToolID
-			local.Name = provider.LocalOnlyToolName
-			next = append(next, local)
-			localIndexes = append(localIndexes, len(next)-1)
-		}
-		i++
-	}
-	if len(localIndexes) == 0 {
-		next = append(next, provider.Message{
-			Role: provider.RoleTool, ToolCallID: provider.LocalOnlyToolID,
-			Name: provider.LocalOnlyToolName, LocalOnly: true,
-		})
-		localIndexes = append(localIndexes, len(next)-1)
-	}
-	c.applyLedgerRecoveryFacts(recovery)
-	next[localIndexes[len(localIndexes)-1]].InterruptedTurn = recovery
-	c.replaceSessionAfterCancel(next)
 }
 
 func (c *Controller) inFlightTurnStartedAt() time.Time {
@@ -4195,18 +4115,20 @@ func interruptedToolSummary(call provider.ToolCall) provider.InterruptedToolSumm
 }
 
 func (c *Controller) replaceSessionAfterCancel(msgs []provider.Message) {
+	if c.executor == nil {
+		return
+	}
+	c.replaceSessionAfterCancelFromScoped(c.executor.Session().Snapshot(), msgs, true)
+}
+
+func (c *Controller) replaceLegacySessionAfterCancelLocked(msgs []provider.Message) {
 	// The whole cleanup is a save/recovery handoff like snapshot's: hold
 	// snapshotMu from the in-memory truncation onward. Truncating outside the
 	// lock would let an in-flight save capture the shortened transcript, read
 	// the longer partial autosave on disk as a stale-prefix conflict, and
 	// adopt it back into the executor — silently undoing the cancel cleanup
 	// before the flush below could persist it.
-	c.snapshotMu.Lock()
-	defer c.snapshotMu.Unlock()
 	c.executor.Session().Replace(append([]provider.Message(nil), msgs...))
-	if err := c.replaceSessionEventProjection(context.Background(), "cancel-or-recovery-rewrite", msgs); err != nil {
-		slog.Warn("controller: record cancel/recovery transcript rewrite", "err", err)
-	}
 	// The mid-turn autosave may have already written a partial transcript to
 	// disk. snapshotActivityIfChanged skips the write when messageCount()
 	// returns to startMessages, so flush the cleaned transcript here. SaveRewrite
@@ -5243,6 +5165,9 @@ func (c *Controller) finalizeControllerClose() {
 		if c.sessionTemp != nil {
 			c.sessionTemp.Release()
 		}
+		if c.persistentShell != nil {
+			c.persistentShell.Release()
+		}
 	})
 }
 
@@ -5261,10 +5186,25 @@ func (c *Controller) SessionTemp() *sessiontemp.Manager {
 // session cannot see the previous session's temporary files. In-flight command
 // leases keep the old generation alive until they release.
 func (c *Controller) rotateSessionTemp() {
-	if c == nil || c.sessionTemp == nil {
+	if c == nil {
 		return
 	}
-	c.sessionTemp.Rotate()
+	if c.sessionTemp != nil {
+		c.sessionTemp.Rotate()
+	}
+	if c.persistentShell != nil {
+		c.persistentShell.Rotate()
+	}
+}
+
+// PersistentShell returns the session-scoped PTY manager. Hot rebuilds pass
+// this to the replacement Controller so shell state survives model/settings
+// swaps. Nil only when the Controller was constructed without one.
+func (c *Controller) PersistentShell() *persistentshell.Manager {
+	if c == nil {
+		return nil
+	}
+	return c.persistentShell
 }
 
 // Jobs returns the still-running background jobs for the status bar (nil when

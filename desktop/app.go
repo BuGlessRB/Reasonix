@@ -192,11 +192,11 @@ type App struct {
 	// App.mu guards both maps and every desktopSessionRuntime field.
 	runtimeByID         map[string]*desktopSessionRuntime
 	runtimeBySessionKey map[string]*desktopSessionRuntime
-	// sessionServices owns one final-format runtime registry per physical v3
-	// root. Controllers for tabs in the same scope attach to this registry
-	// instead of constructing competing Service instances over the same files.
+	// sessionServices contains one SessionID-only registry for the whole local
+	// Desktop host. desktopSessions owns its persistence and navigation state.
 	sessionServicesMu sync.Mutex
 	sessionServices   map[string]*session.Service
+	desktopSessions   desktopSessionState
 
 	// tabsRestored is closed when restoreOrBuildTabs has finished populating
 	// a.tabs from desktop-tabs.json (or built the first-launch tab). Startup
@@ -219,7 +219,6 @@ type App struct {
 	// one-conversation layout so overlapping navigation cannot remove the tab
 	// another navigation is still activating.
 	singleSurfaceMu sync.Mutex
-
 	// worktreeMergeMu serializes the inspect-confirm-merge/finalize mutation
 	// boundary. Git identities are still revalidated after workspace leases are
 	// acquired; this mutex only prevents duplicate in-process Wails calls.
@@ -460,6 +459,7 @@ func NewApp() *App {
 		runtimeByID:          map[string]*desktopSessionRuntime{},
 		runtimeBySessionKey:  map[string]*desktopSessionRuntime{},
 		sessionServices:      map[string]*session.Service{},
+		desktopSessions:      newDesktopSessionState(),
 		catalogReconcileJobs: map[string]*desktopCatalogReconcileJob{},
 		detachedSessions:     map[string]*WorkspaceTab{},
 		mediaTokens:          newMediaTokenStore(),
@@ -500,6 +500,7 @@ func (a *App) Platform() string {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.shuttingDown.Store(false)
+	a.initializeDesktopSessionRoot()
 	// Only the process that claimed the pre-shell diagnostics lock consumes
 	// lifecycle evidence.
 	initializeLifecycleDiagnostics(a)
@@ -508,6 +509,7 @@ func (a *App) startup(ctx context.Context) {
 	a.startNativeShellSupport()
 	a.enableDeferredRebuildRetry()
 	a.startHistoryIndexMigration()
+	a.startDesktopSessionMigration(ctx)
 
 	if cfg, err := config.Load(); err == nil && cfg.DesktopMetrics() && version != "dev" {
 		a.metrics.Store(newMetricsAggregator(config.MemoryUserDir()))
@@ -752,6 +754,7 @@ func (a *App) restoreOrBuildTabs() {
 				tab = a.createTabEntryWithID("global", globalTabWorkspaceRoot(), entry.TopicID, id)
 			}
 			tab.model = entry.Model
+			tab.SessionWorkspace.ID = restoredWorkspaceID(entry)
 			tab.effort = cloneStringPtr(entry.Effort)
 			// Legacy role fields remain readable, but the retired setting no
 			// longer changes restored-session behavior.
@@ -858,6 +861,7 @@ func (a *App) createTabEntryWithID(scope, workspaceRoot, topicID, id string) *Wo
 		ID:               id,
 		Scope:            scope,
 		WorkspaceRoot:    workspaceRoot,
+		SessionWorkspace: desktopTabWorkspace{ID: desktopWorkspaceID(scope, workspaceRoot)},
 		TopicID:          topicID,
 		TopicTitle:       topicTitleForTab(scope, workspaceRoot, topicID),
 		topicTitleSource: loadTopicTitleSource(topicTitleRoot(scope, workspaceRoot), topicID),
@@ -6480,59 +6484,6 @@ func (a *App) jobsForCtrl(ctrl control.SessionAPI, out []JobView) []JobView {
 	return out
 }
 
-// Meta describes the session for the frontend's header and status line.
-type Meta struct {
-	Label                 string             `json:"label"`
-	Ready                 bool               `json:"ready"`
-	Runtime               SessionRuntimeView `json:"runtime"`
-	StartupErr            string             `json:"startupErr,omitempty"`
-	EventChannel          string             `json:"eventChannel"`
-	SessionPath           string             `json:"sessionPath,omitempty"`
-	SessionID             string             `json:"sessionId,omitempty"`
-	SessionRevision       int64              `json:"sessionRevision,omitempty"`
-	SessionDigest         string             `json:"sessionDigest,omitempty"`
-	Cwd                   string             `json:"cwd"`
-	WorkspaceRoot         string             `json:"workspaceRoot,omitempty"`
-	WorkspaceName         string             `json:"workspaceName,omitempty"`
-	WorkspacePath         string             `json:"workspacePath,omitempty"`
-	GitBranch             string             `json:"gitBranch,omitempty"`
-	ImageInputEnabled     bool               `json:"imageInputEnabled"`
-	VisionFallbackEnabled bool               `json:"visionFallbackEnabled,omitempty"`
-	AutoApproveTools      bool               `json:"autoApproveTools"`
-	Bypass                bool               `json:"bypass"` // legacy JSON key for YOLO/full-access tool auto-approval
-	CollaborationMode     string             `json:"collaborationMode"`
-	ToolApprovalMode      string             `json:"toolApprovalMode"`
-	// TokenMode and AgentPreset are deprecated dual-write wire values pinned to
-	// their safe defaults; one-version-old frontends still parse them.
-	TokenMode   string           `json:"tokenMode"`
-	AgentPreset string           `json:"agentPreset,omitempty"`
-	Goal        string           `json:"goal,omitempty"`
-	GoalStatus  string           `json:"goalStatus,omitempty"`
-	GoalView    *goaldomain.View `json:"goalView,omitempty"`
-	GoalRuntime *GoalRuntimeView `json:"goalRuntime,omitempty"`
-	// Nil means no authoritative snapshot; non-nil empty means clear the panel.
-	CanonicalTodos *[]evidence.TodoItem `json:"canonicalTodos,omitempty"`
-	// PinnedFiles holds metadata about standing pinned context files for this tab.
-	PinnedFiles []PinnedFileInfo `json:"pinnedFiles,omitempty"`
-	// Remote marks a remote session tab; its readiness is carried by the
-	// remote-tab state channel rather than a local controller.
-	Remote *RemoteTabRef `json:"remote,omitempty"`
-}
-
-type GoalRuntimeView struct {
-	TurnsUsed        int    `json:"turnsUsed"`
-	TurnsLimit       int    `json:"turnsLimit"` // Deprecated: always 0.
-	TokensUsed       int    `json:"tokensUsed"`
-	RequestsUsed     int    `json:"requestsUsed,omitempty"`
-	WorkDurationMs   int64  `json:"workDurationMs,omitempty"`
-	TokensLimit      int    `json:"tokensLimit"` // Deprecated: always 0; retained for bridge compatibility.
-	NoProgressTurns  int    `json:"noProgressTurns"`
-	NoProgressLimit  int    `json:"noProgressLimit"` // Deprecated: always 0.
-	LastReason       string `json:"lastReason,omitempty"`
-	StopCause        string `json:"stopCause,omitempty"`
-	BudgetExtensions int    `json:"budgetExtensions"` // Deprecated: always 0.
-}
-
 func goalRuntimeViewFromController(ctrl control.SessionAPI) *GoalRuntimeView {
 	if ctrl == nil {
 		return nil
@@ -6615,6 +6566,12 @@ func (a *App) MetaForTab(tabID string) Meta {
 		goalView = reader.RuntimeStateSnapshot().Goal
 	}
 	sessionPath := strings.TrimSpace(snap.sessionPath)
+	sessionID := strings.TrimSpace(snap.sessionID)
+	var sessionRef *session.SessionRef
+	if sessionID != "" {
+		ref := session.SessionRef{HostID: localDesktopHostID, SessionID: sessionID}
+		sessionRef = &ref
+	}
 	var sessionRevision int64
 	var sessionDigest string
 	if branchMeta, ok, err := agent.LoadBranchMeta(sessionPath); err == nil && ok {
@@ -6628,7 +6585,8 @@ func (a *App) MetaForTab(tabID string) Meta {
 		StartupErr:            snap.startupErr,
 		EventChannel:          eventChannel,
 		SessionPath:           sessionPath,
-		SessionID:             strings.TrimSpace(snap.sessionID),
+		SessionID:             sessionID,
+		Session:               sessionRef,
 		SessionRevision:       sessionRevision,
 		SessionDigest:         sessionDigest,
 		Cwd:                   cwd,

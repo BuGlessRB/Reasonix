@@ -65,11 +65,17 @@ func (c *Controller) releaseSessionRuntimeBinding(service *session.Service) {
 // allocate one. Publication happens only after the initial event batch is
 // accepted, so failure leaves the currently-bound session usable.
 func (c *Controller) BindFreshSession(ctx context.Context, sessionID string) (session.SessionRef, error) {
+	return c.BindFreshSessionWithOptions(ctx, session.CreateOptions{SessionID: sessionID})
+}
+
+// BindFreshSessionWithOptions creates a fresh identity with immutable host
+// ownership metadata before publishing the runtime.
+func (c *Controller) BindFreshSessionWithOptions(ctx context.Context, options session.CreateOptions) (session.SessionRef, error) {
 	service, _, _ := c.v3Binding()
 	if c == nil || service == nil || c.executor == nil {
 		return session.SessionRef{}, errors.New("v3 session service is unavailable")
 	}
-	prepared, err := service.PrepareCreate(ctx, session.CreateOptions{SessionID: sessionID})
+	prepared, err := service.PrepareCreate(ctx, options)
 	if err != nil {
 		return session.SessionRef{}, err
 	}
@@ -101,18 +107,26 @@ func (c *Controller) BindFreshSession(ctx context.Context, sessionID string) (se
 // publishes the returned immutable v3 identity. The source remains only as a
 // display/import locator and is never rebound as the execution store.
 func (c *Controller) ContinueLegacySession(ctx context.Context, sourcePath, headID string) (session.SessionRef, error) {
-	return c.continueLegacySession(ctx, sourcePath, headID, true)
+	return c.continueLegacySession(ctx, sourcePath, headID, true, session.CreateOptions{})
 }
 
-// ContinueLegacySessionForRebuild performs the same fail-atomic import while an
-// Agent generation is being replaced for the same logical session. The
-// SessionTemp generation belongs to that logical session, so this path must
-// not rotate it merely because persistence crossed the legacy/v3 boundary.
-func (c *Controller) ContinueLegacySessionForRebuild(ctx context.Context, sourcePath, headID string) (session.SessionRef, error) {
-	return c.continueLegacySession(ctx, sourcePath, headID, false)
+// ContinueLegacySessionWithOptions installs immutable Desktop ownership in
+// the same publication that materializes the imported session.
+func (c *Controller) ContinueLegacySessionWithOptions(ctx context.Context, sourcePath, headID string, options session.CreateOptions) (session.SessionRef, error) {
+	return c.continueLegacySession(ctx, sourcePath, headID, true, options)
 }
 
-func (c *Controller) continueLegacySession(ctx context.Context, sourcePath, headID string, rotateSessionTemp bool) (session.SessionRef, error) {
+// ContinueLegacySessionForRebuildWithOptions performs the same fail-atomic
+// import while an Agent generation is being replaced for the same logical
+// session, and publishes host-owned immutable metadata in that same
+// transaction. The SessionTemp generation belongs to the logical session, so
+// this path must not rotate it merely because persistence crossed the
+// legacy/v3 boundary.
+func (c *Controller) ContinueLegacySessionForRebuildWithOptions(ctx context.Context, sourcePath, headID string, options session.CreateOptions) (session.SessionRef, error) {
+	return c.continueLegacySession(ctx, sourcePath, headID, false, options)
+}
+
+func (c *Controller) continueLegacySession(ctx context.Context, sourcePath, headID string, rotateSessionTemp bool, options session.CreateOptions) (session.SessionRef, error) {
 	service, _, _ := c.v3Binding()
 	if c == nil || service == nil || c.executor == nil {
 		return session.SessionRef{}, errors.New("v3 session service is unavailable")
@@ -127,7 +141,7 @@ func (c *Controller) continueLegacySession(ctx context.Context, sourcePath, head
 			restoreLegacyEvents()
 		}
 	}()
-	candidate, _, err := service.ContinueImported(ctx, sourcePath, headID)
+	candidate, _, err := service.ContinueImportedWithHeader(ctx, sourcePath, headID, options)
 	if err != nil {
 		return session.SessionRef{}, err
 	}
@@ -381,9 +395,6 @@ func (c *Controller) publishSessionRuntime(candidate *session.Runtime, prepared 
 	c.turnEvents.mu.Lock()
 	c.turnEvents.projection = nil
 	c.turnEvents.projectionErr = nil
-	c.turnEvents.v3ProjectionSequence = 0
-	c.turnEvents.v3ProjectionSession = ""
-	c.turnEvents.v3ProjectionEpoch = ""
 	c.turnEvents.mu.Unlock()
 	c.rebindCheckpoints("")
 	c.ResetPlannerSession()
@@ -490,6 +501,16 @@ func (c *Controller) sessionEngineEnabled() bool {
 	return exclusive
 }
 
+type SessionRotationRequest struct {
+	Source session.SessionRef
+	Reason string
+}
+
+type SessionRotationPlan struct {
+	CreateOptions session.CreateOptions
+	Commit        func(context.Context, session.SessionRef) error
+}
+
 // rotateExclusiveSession implements /new and /clear without allocating a
 // legacy transcript path. clear additionally deletes the closed source v3
 // directory; new leaves it available in history.
@@ -511,11 +532,24 @@ func (c *Controller) rotateExclusiveSession(clear bool) error {
 	}
 	c.hooks.SessionEnd(context.Background(), reason)
 	c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, oldRef.SessionID)
-	ref, err := c.BindFreshSession(context.Background(), "")
+	createOptions := session.CreateOptions{}
+	var commitRotation func(context.Context, session.SessionRef) error
+	if c.onSessionRotation != nil {
+		plan, planErr := c.onSessionRotation(context.Background(), SessionRotationRequest{Source: oldRef, Reason: reason})
+		if planErr != nil {
+			return planErr
+		}
+		createOptions, commitRotation = plan.CreateOptions, plan.Commit
+	}
+	ref, err := c.BindFreshSessionWithOptions(context.Background(), createOptions)
 	if err != nil {
 		return err
 	}
-	if clear {
+	if commitRotation != nil {
+		if err := commitRotation(context.Background(), ref); err != nil {
+			return fmt.Errorf("new session %s is active; publish workspace membership: %w", ref.SessionID, err)
+		}
+	} else if clear {
 		if err := service.Delete(context.Background(), oldRef); err != nil {
 			return fmt.Errorf("new session %s is active; delete cleared session: %w", ref.SessionID, err)
 		}

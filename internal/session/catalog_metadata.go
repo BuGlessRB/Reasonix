@@ -6,14 +6,28 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/fileutil"
 	"reasonix/internal/provider"
 )
 
-const catalogMetadataVersion = 1
+// Rebuild both authored previews and retracted input/turn metadata.
+const catalogMetadataVersion = 3
+
+// metadataForDurable publishes catalog metadata only for a durable prefix.
+func (s *Session) metadataForDurable(durable uint64) (catalogMetadata, bool) {
+	if s == nil {
+		return catalogMetadata{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if durable+1 != s.next {
+		return catalogMetadata{}, false
+	}
+	return metadataFromProjection(s.manifest, durable, s.projection), true
+}
 
 const (
 	MetadataReady   = "ready"
@@ -44,92 +58,41 @@ func catalogMetadataPath(cacheDir string) string {
 	return filepath.Join(cacheDir, "catalog-metadata.json")
 }
 
-// firstUserPreview returns the first user-authored text suitable as a list
-// preview. Host-injected directives (session-context snapshot, reasoning
-// language) ride the first user turn: Origin is the authoritative
-// provenance, with text recognition only for legacy records recorded before
-// the field existed. Injections are also prepended to real user turns, so
-// RawContent - the user's exact text - is preferred over Content.
-func firstUserPreview(messages []provider.Message) string {
-	for _, message := range messages {
-		if message.Role != provider.RoleUser {
-			continue
-		}
-		if message.Origin == provider.MessageOriginHost {
-			continue
-		}
-		text := strings.TrimSpace(message.RawContent)
-		if text == "" {
-			text = strings.TrimSpace(message.Content)
-		}
-		text = stripLeadingInjectedBlocks(text)
-		if text == "" {
-			continue
-		}
-		return messagePreview(provider.Message{Content: text})
-	}
-	return ""
-}
-
-// previewInjectedTags lists the leading block tags hosts prepend to user
-// turns. Keep in sync with agent.TransientUserBlockTags; session cannot
-// import agent (agent imports session), so the list is duplicated with this
-// pointer back.
-var previewInjectedTags = []string{"session-context", "reasoning-language", "response-language", "memory-update", "background-jobs", "active-goal", "hook-context", "capability-route", "interrupted-turn-recovery", "execution-policy"}
-
-// stripLeadingInjectedBlocks removes well-formed leading <tag>...</tag>
-// blocks the host injected before the user's own words, so a preview never
-// leaks host directives regardless of how they were recorded.
-func stripLeadingInjectedBlocks(text string) string {
-	for {
-		rest, stripped := stripOneLeadingInjectedBlock(text)
-		if !stripped {
-			return text
-		}
-		text = rest
-	}
-}
-
-func stripOneLeadingInjectedBlock(text string) (string, bool) {
-	s := strings.TrimLeft(text, " \t\r\n")
-	for _, tag := range previewInjectedTags {
-		open := "<" + tag + ">"
-		openAttr := "<" + tag + " "
-		var start int
-		if strings.HasPrefix(s, open) {
-			start = len(open)
-		} else if strings.HasPrefix(s, openAttr) {
-			if i := strings.Index(s, ">"); i >= 0 {
-				start = i + 1
-			} else {
-				continue
-			}
-		} else {
-			continue
-		}
-		close := "</" + tag + ">"
-		end := strings.Index(s[start:], close)
-		if end < 0 {
-			continue
-		}
-		return strings.TrimLeft(s[start+end+len(close):], " \t\r\n"), true
-	}
-	return text, false
-}
-
 func metadataFromProjection(manifest Manifest, sequence uint64, projection Projection) catalogMetadata {
 	metadata := catalogMetadata{
 		Version: catalogMetadataVersion, Codec: Codec, SessionID: manifest.SessionID,
 		CreatedAt: manifest.CreatedAt.UTC().Format(time.RFC3339Nano), Sequence: sequence,
 		Title: projection.Title, ModelRef: projection.ModelRef, ModelIdentity: projection.ModelIdentity,
 	}
-	for _, turn := range projection.Turns {
-		if turn.EndSequence != 0 {
-			metadata.Turns++
+	metadata.Turns = visibleBoundaryCount(projection, true)
+	for _, input := range projection.TranscriptInputs {
+		if input.Preview != "" {
+			metadata.Preview = input.Preview
+			return metadata
 		}
 	}
-	metadata.Preview = firstUserPreview(projection.Messages)
+	if len(projection.TranscriptInputs) > 0 {
+		return metadata
+	}
+	for _, message := range projection.Messages {
+		if preview := catalogMessagePreview(message); preview != "" {
+			metadata.Preview = preview
+			break
+		}
+	}
 	return metadata
+}
+
+// Catalog labels use authored display text, including literal markup in an
+// explicit RawContent. Host messages and mid-turn steers are not session names.
+func catalogMessagePreview(message provider.Message) string {
+	if message.Role != provider.RoleUser || agent.IsHostGeneratedUserMessage(message) {
+		return ""
+	}
+	if _, steer := agent.SteerText(message.Content); steer {
+		return ""
+	}
+	return messagePreview(message)
 }
 
 // logRevision identifies the durable file revision a cache entry describes.
@@ -199,15 +162,23 @@ func rebuildCatalogMetadata(ctx context.Context, handle eventPageReader, cacheDi
 }
 
 func reduceCatalogMetadata(ctx context.Context, handle eventPageReader, manifest Manifest) (catalogMetadata, error) {
-	projection := Projection{}
+	reducer := catalogReducer{}
+	if stream, ok := handle.(interface {
+		scanCatalog(context.Context, func(Commit) error) error
+	}); ok {
+		if err := stream.scanCatalog(ctx, reducer.apply); err != nil {
+			return catalogMetadata{}, err
+		}
+		return reducer.metadata(manifest), nil
+	}
 	var cursor uint64
 	for {
-		page, err := handle.Read(ctx, cursor, 1000)
+		page, err := handle.Read(ctx, cursor, 32)
 		if err != nil {
 			return catalogMetadata{}, err
 		}
 		for _, commit := range page.Commits {
-			if err := applyProjectionCommit(&projection, commit); err != nil {
+			if err := reducer.apply(commit); err != nil {
 				return catalogMetadata{}, err
 			}
 		}
@@ -219,7 +190,7 @@ func reduceCatalogMetadata(ctx context.Context, handle eventPageReader, manifest
 		}
 		cursor = page.Next
 	}
-	return metadataFromProjection(manifest, projection.CommittedSequence, projection), nil
+	return reducer.metadata(manifest), nil
 }
 
 // writeCatalogMetadataForSession stamps the cache with the exact durable bytes

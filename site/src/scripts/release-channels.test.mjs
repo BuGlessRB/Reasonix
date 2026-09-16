@@ -25,35 +25,83 @@ function cliAssets(tag, missing = []) {
 
 const desktopSHA256 = "a".repeat(64);
 
+// Every approved manual tag is probed. Selection must stay "newest that
+// actually resolves", so listing the next tag early cannot downgrade the page.
+const manualTagOf = (url) => (url.match(/desktop-v\d+\.\d+\.\d+/) || [])[0];
+
+test("a website pin requests only the exact Desktop version", async () => {
+  const requests = [];
+  const model = await fetchDesktopDownloadModel(async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => desktopManifest("v1.38.3") };
+  }, "v1.38.3");
+  assert.equal(model.version, "v1.38.3");
+  assert.deepEqual(requests, ["https://dl.reasonix.io/desktop-v1.38.3/latest.json"]);
+  assert.ok(Object.values(model.assets).every((url) => url.includes("/desktop-v1.38.3/")));
+});
+
+test("a website pin rejects mismatched manifests and falls back to the exact GitHub release", async () => {
+  const requests = [];
+  const model = await fetchDesktopDownloadModel(async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => url.includes("api.github.com")
+      ? desktopGitHubRelease("v1.38.3") : desktopManifest("v1.38.9") };
+  }, "v1.38.3");
+  assert.equal(model.version, "v1.38.3");
+  assert.deepEqual(requests, [
+    "https://dl.reasonix.io/desktop-v1.38.3/latest.json",
+    "https://api.github.com/repos/esengine/DeepSeek-Reasonix/releases/tags/desktop-v1.38.3",
+  ]);
+});
+
+test("an unavailable or mismatched website pin never selects a newer release", async () => {
+  for (const payload of [null, desktopManifest("v1.38.9"), desktopGitHubRelease("v1.38.9")]) {
+    assert.equal(await fetchDesktopDownloadModel(async () => ({
+      ok: true, json: async () => payload,
+    }), "v1.38.3"), null);
+  }
+  assert.equal(await fetchDesktopDownloadModel(async () => { throw new Error("offline"); }, "v1.38.3"), null);
+});
+
 test("manual desktop downloads advance independently and yield to future stable releases", async () => {
-  for (const stableVersion of ["v1.38.7", "v1.38.9", "v1.39.0"]) {
-    const model = await fetchDesktopDownloadModel(async (url) => ({
-      ok: true,
-      json: async () => desktopManifest(url.includes("desktop-v1.38.8") ? "v1.38.8" : stableVersion),
-    }));
-    const expected = stableVersion === "v1.38.7" ? "v1.38.8" : stableVersion;
+  for (const stableVersion of ["v1.38.7", "v1.38.8", "v1.39.0"]) {
+    const model = await fetchDesktopDownloadModel(async (url) => {
+      const tag = manualTagOf(url);
+      return { ok: true, json: async () => desktopManifest(tag ? tag.slice("desktop-".length) : stableVersion) };
+    });
+    const expected = stableVersion === "v1.39.0" ? stableVersion : "v1.38.9";
     assert.equal(model.version, expected);
     assert.ok(Object.values(model.assets).every((url) => url.includes(`desktop-${expected}/`)));
   }
 });
 
+test("an approved manual tag that is not published yet cannot downgrade the page", async () => {
+  const model = await fetchDesktopDownloadModel(async (url) => {
+    const tag = manualTagOf(url);
+    if (tag === "desktop-v1.38.9") throw new Error("not published yet");
+    if (tag === "desktop-v1.38.8") return { ok: true, json: async () => desktopManifest("v1.38.8") };
+    return { ok: true, json: async () => desktopManifest("v1.38.7") };
+  });
+  assert.equal(model.version, "v1.38.8");
+});
+
 test("manual desktop downloads survive CDN failure through the exact published GitHub release", async () => {
   const model = await fetchDesktopDownloadModel(async (url) => {
-    if (url.endsWith("/tags/desktop-v1.38.8")) {
-      return { ok: true, json: async () => desktopGitHubRelease("v1.38.8") };
+    if (url.endsWith("/tags/desktop-v1.38.9")) {
+      return { ok: true, json: async () => desktopGitHubRelease("v1.38.9") };
     }
     if (url.includes("/latest/latest.json")) {
       return { ok: true, json: async () => desktopManifest("v1.38.7") };
     }
     throw new Error("unavailable");
   });
-  assert.equal(model.version, "v1.38.8");
+  assert.equal(model.version, "v1.38.9");
 });
 
 test("invalid manual release cannot replace a validated stable download", async () => {
   const model = await fetchDesktopDownloadModel(async (url) => ({
     ok: true,
-    json: async () => url.includes("desktop-v1.38.8") ? {} : desktopManifest("v1.38.7"),
+    json: async () => manualTagOf(url) ? {} : desktopManifest("v1.38.7"),
   }));
   assert.equal(model.version, "v1.38.7");
   assert.equal(await fetchDesktopDownloadModel(async () => { throw new Error("offline"); }), null);

@@ -1,3 +1,4 @@
+import type { TranscriptTurnMetadata } from "./transcriptProtocol";
 import type { HistorySwitchPhases } from "./sessionDiagnostics";
 import type { ProviderCatalog } from "./providerCatalogTypes";
 export type { SettingsView } from "./settingsViewTypes";
@@ -14,10 +15,12 @@ import type { WireApproval } from "./approvalTypes";
 import type { RemoteProjectNodeFields, RemoteSessionMetaFields, RemoteTabMetaFields } from "./remoteTypes";
 import type { PinnedFileInfo } from "./pinnedContextBridge";
 import type { RecoveryLineageView } from "./sessionRecoveryTypes";
+import type { SessionRef, SessionRuntimeIssue } from "./sessionRef";
 export * from "./remoteTypes";
 export type { ContextBudgetInfo, ContextMaintenanceInfo, ContextMaintenanceReceipt, WireContextMaintenance } from "./contextMaintenanceTypes";
 export type { HistoryContentChunk, HistoryContentRef, HistoryEntry, HistorySlice, HistorySliceRequest, HistoryWindowPageView, HistoryWindowRequestView, HistoryWindowStatus, MessageFieldView, SessionClearResult } from "./historyTypes";
 export type { ProjectGroupsSnapshot, ProjectRuntimeTopic, ProjectTopicKey, ProjectTopicPage, ProjectTopicPageRequest, ProjectTreeChangedV2, ProjectTreeOrganizationBindings, ProjectTreeRuntimeSnapshot, ProjectTreeSnapshot, SessionCatalogBindings, SessionCatalogStatus, SessionGroup, SessionReference } from "./sessionCatalogTypes";
+export type { SessionRef, SessionRuntimeIssue } from "./sessionRef";
 export type EventKind =
   | "user_message"
   | "turn_started"
@@ -529,15 +532,6 @@ export interface WireWorkspaceChanged {
 
 export type SessionRuntimePhase = "starting" | "ready" | "lease_blocked" | "failed" | "closing";
 
-export interface SessionRuntimeIssue {
-  code: "session_lease_held" | "startup_failed";
-  message: string;
-  retryable: boolean;
-  holderPid?: number;
-  holderHost?: string;
-  acquiredAt?: string;
-}
-
 export interface SessionRuntimeView {
   phase: SessionRuntimePhase;
   epoch: string;
@@ -568,6 +562,7 @@ export interface TabMeta extends RemoteTabMetaFields {
   tabType?: "session" | "file";
   scope: string;
   workspaceRoot: string;
+  workspaceId?: string;
   workspaceName: string;
   workspacePath?: string;
   gitBranch?: string;
@@ -575,7 +570,7 @@ export interface TabMeta extends RemoteTabMetaFields {
   topicId: string;
   topicTitle: string;
   sessionPath?: string;
-  sessionId?: string;
+  sessionId?: string; session?: SessionRef | null;
   sessionRevision?: number;
   sessionDigest?: string;
   sessionGeneration?: number;
@@ -845,7 +840,7 @@ export interface ChangedFileInfo {
 }
 
 // Bound-method payloads (desktop/app.go).
-export interface HistoryMessage {
+export interface HistoryMessage extends TranscriptTurnMetadata {
 	historyTurn?: number;
 	recordId?: string;
 	attemptId?: string;
@@ -1042,7 +1037,7 @@ export interface Meta extends RemoteSessionMetaFields {
   startupErr?: string;
   eventChannel: string;
   sessionPath?: string;
-  sessionId?: string;
+  sessionId?: string; session?: SessionRef | null;
   sessionRevision?: number;
   sessionDigest?: string;
   sessionGeneration?: number;
@@ -2295,7 +2290,6 @@ export type { ModelSettingsChange, ModelSettingsResult } from "./modelSettingsTy
 export interface DesktopStartupSettingsView {
   bot: BotSettingsView;
   desktopLanguage: string; // "" | "en" | "zh"; empty = auto
-  desktopLayoutStyle: string; // "workbench" | "creation"
   desktopTheme: string; // "auto" | "dark" | "light"
   desktopThemeStyle: string;
   desktopTerminalTheme: string; // "auto" follows app | "dark" | "light"

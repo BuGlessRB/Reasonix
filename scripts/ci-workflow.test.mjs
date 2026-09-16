@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
 import test from "node:test";
+import { groups as windowsDesktopGroups, testArgs as windowsDesktopTestArgs } from "./desktop-windows-go-tests.mjs";
 
 const workflow = name => readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), "utf8");
 function job(source, name) {
@@ -24,6 +25,29 @@ function shellStep(body, name) {
 const ci = workflow("ci");
 const release = workflow("release-desktop");
 const appMemory = workflow("app-memory");
+
+test("Windows full runs use the partitioned suite without a duplicate module sweep", () => {
+  const body = job(ci, "test");
+  const enabled = (name, os, event, run = "true") => {
+    const step = body.split(`      - name: ${name}\n`)[1].split(/\n      - /)[0];
+    const expression = step.match(/^        if: (.+)$/m)[1];
+    return vm.runInNewContext(expression, {
+      env: { RUN_STEPS: run }, runner: { os }, github: { event_name: event },
+    });
+  };
+  for (const event of ["pull_request", "push", "workflow_dispatch"]) {
+    for (const os of ["Linux", "macOS", "Windows"]) {
+      assert.equal(enabled("test", os, event), os === "Linux" || (os === "macOS" && event !== "pull_request"));
+      assert.equal(enabled("test (full)", os, event), os === "Windows" && event !== "pull_request");
+      assert.equal(enabled("test (Windows smoke)", os, event), os === "Windows" && event === "pull_request");
+      assert.equal(enabled("test", os, event, "false"), false);
+      assert.equal(enabled("test (full)", os, event, "false"), false);
+    }
+  }
+  assert.match(body, /run: node scripts\/windows-go-tests\.mjs full/);
+  assert.match(job(ci, "windows-isolated"), /group: \[agent, boot\]/);
+  assert.match(job(ci, "windows-control"), /run: node scripts\/windows-go-tests\.mjs control/);
+});
 
 test("App memory workflow tiers pull requests and keeps full scheduled coverage", t => {
   assert.match(appMemory, /schedule:\n    - cron: "17 3 \* \* \*"/);
@@ -74,20 +98,29 @@ test("macOS signing diagnostics require protected main and cannot publish", () =
 test("required desktop aggregate rejects every failed, cancelled or unexpectedly skipped child", () => {
   const script = shellStep(job(ci, "desktop"), "Verify desktop validation jobs");
   const success = { CHANGES_RESULT: "success", PREPARE_REQUIRED: "true", NATIVE_REQUIRED: "true", FRONTEND_REQUIRED: "true", BROWSER_REQUIRED: "true",
-    PREPARE_RESULT: "success", GO_RESULT: "success", GO_RACE_RESULT: "success", FRONTEND_RESULT: "success", BROWSER_RESULT: "success" };
+    PACKAGE_REQUIRED: "true", PREPARE_RESULT: "success", GO_RESULT: "success", GO_RACE_RESULT: "success", FRONTEND_RESULT: "success", BROWSER_RESULT: "success",
+    MACOS_RESULT: "success", WINDOWS_RESULT: "success", WINDOWS_GO_RESULT: "success", PACKAGE_RESULT: "success" };
   const run = env => spawnSync("bash", ["-e", "-c", script], { env: { ...process.env, ...env } }).status;
   assert.equal(run(success), 0);
-  for (const key of ["PREPARE_RESULT", "GO_RESULT", "GO_RACE_RESULT", "FRONTEND_RESULT", "BROWSER_RESULT", "CHANGES_RESULT"]) {
+  for (const key of ["PREPARE_RESULT", "GO_RESULT", "GO_RACE_RESULT", "FRONTEND_RESULT", "BROWSER_RESULT", "CHANGES_RESULT",
+    "MACOS_RESULT", "WINDOWS_RESULT", "WINDOWS_GO_RESULT", "PACKAGE_RESULT"]) {
     for (const value of ["failure", "cancelled", "skipped", ""]) assert.notEqual(run({ ...success, [key]: value }), 0, `${key}=${value}`);
   }
+  // A pull request that cannot affect the desktop module: every child skips
+  // except the browser and Windows Go aggregates, which validate their groups.
   assert.equal(run({ ...success, PREPARE_REQUIRED: "false", NATIVE_REQUIRED: "false", FRONTEND_REQUIRED: "false", BROWSER_REQUIRED: "false",
-    PREPARE_RESULT: "skipped", GO_RESULT: "skipped", GO_RACE_RESULT: "skipped", FRONTEND_RESULT: "skipped", BROWSER_RESULT: "success" }), 0);
+    PACKAGE_REQUIRED: "false", PREPARE_RESULT: "skipped", GO_RESULT: "skipped", GO_RACE_RESULT: "skipped", FRONTEND_RESULT: "skipped",
+    BROWSER_RESULT: "success", MACOS_RESULT: "skipped", WINDOWS_RESULT: "skipped", WINDOWS_GO_RESULT: "success", PACKAGE_RESULT: "skipped" }), 0);
+  // Any pull request: packaging is push-only, so it must be skipped there.
+  assert.equal(run({ ...success, PACKAGE_REQUIRED: "false", PACKAGE_RESULT: "skipped" }), 0);
+  assert.notEqual(run({ ...success, PACKAGE_REQUIRED: "false", PACKAGE_RESULT: "success" }), 0);
   assert.equal(run({ ...success, FRONTEND_REQUIRED: "false", BROWSER_REQUIRED: "false", FRONTEND_RESULT: "skipped", BROWSER_RESULT: "success" }), 0);
   const browserScript = shellStep(job(ci, "desktop-browser"), "Verify desktop browser groups");
   const browser = spawnSync("bash", ["-e", "-c", browserScript], { env: { ...process.env,
     CHANGES_RESULT: "success", SHOULD_RUN: "false", PREPARE_RESULT: "skipped", GROUP_RESULT: "skipped" } });
   assert.equal(browser.status, 0, "an unneeded browser aggregate succeeds after validating skipped groups");
   assert.notEqual(run({ ...success, BROWSER_REQUIRED: "false", BROWSER_RESULT: "skipped" }), 0);
+  assert.notEqual(run({ ...success, NATIVE_REQUIRED: "false", WINDOWS_GO_RESULT: "skipped" }), 0);
 });
 
 test("required lint aggregates code lint and the deduplicated frontend suite", () => {
@@ -104,6 +137,59 @@ test("required lint aggregates code lint and the deduplicated frontend suite", (
   assert.equal(run({ ...success, FRONTEND_REQUIRED: "false", PREPARE_RESULT: "success", FRONTEND_RESULT: "skipped" }), 0);
   assert.doesNotMatch(job(ci, "lint-code"), /test:motion/);
   assert.match(body, /needs: \[changes, lint-code, desktop-prepare, desktop-frontend\]/);
+});
+
+test("required root aggregate covers the jobs the per-OS test legs do not", () => {
+  const body = job(ci, "root");
+  const script = shellStep(body, "Verify root validation jobs");
+  const success = { CHANGES_RESULT: "success", CODE_REQUIRED: "true", SITE_REQUIRED: "true", COVERAGE_REQUIRED: "true",
+    CONTROL_RESULT: "success", ISOLATED_RESULT: "success", SDK_RESULT: "success", SITE_RESULT: "success", COVERAGE_RESULT: "success" };
+  const run = env => spawnSync("bash", ["-e", "-c", script], { env: { ...process.env, ...env } }).status;
+  assert.equal(run(success), 0);
+  for (const key of ["CHANGES_RESULT", "CONTROL_RESULT", "ISOLATED_RESULT", "SDK_RESULT", "SITE_RESULT", "COVERAGE_RESULT"])
+    for (const value of ["failure", "cancelled", "skipped", ""]) assert.notEqual(run({ ...success, [key]: value }), 0, `${key}=${value}`);
+  // A pull request unrelated to code or site: the internally-gated jobs still
+  // report success, the skippable ones must actually be skipped.
+  assert.equal(run({ ...success, CODE_REQUIRED: "false", SITE_REQUIRED: "false", COVERAGE_REQUIRED: "false",
+    ISOLATED_RESULT: "skipped", SITE_RESULT: "skipped", COVERAGE_RESULT: "skipped" }), 0);
+  // Coverage is push-only; a pull request that ran it is a routing defect.
+  assert.notEqual(run({ ...success, COVERAGE_REQUIRED: "false", COVERAGE_RESULT: "success" }), 0);
+  assert.match(body, /needs: \[changes, windows-control, windows-isolated, sdk, site, coverage\]/);
+  // govulncheck sets continue-on-error, so needs.*.result is success even when
+  // it fails; aggregating it would be a tautology that reads like coverage.
+  assert.match(job(ci, "govulncheck"), /continue-on-error: true/);
+  assert.doesNotMatch(body, /GOVULN/);
+});
+
+// The gap that let a failing desktop-windows-go merge was a job nobody had
+// wired into a required aggregate. Keep that unrepeatable: every job must be
+// reachable from a required check, or be named here with a reason.
+test("every ci job is reachable from a required aggregate", () => {
+  const required = ["test", "race", "lint", "desktop", "root"];
+  const advisory = {
+    changes: "asserted by line one of every aggregate",
+    "ci-metrics": "reports queue and stage timing; failure must not block merges",
+    "prune-go-cache": "push-only cache housekeeping; cannot report on a pull request",
+    govulncheck: "continue-on-error by design — stdlib advisories precede Go patch releases",
+  };
+  const jobs = ci.slice(ci.indexOf("\njobs:\n")); // `on:` also nests two-space keys
+  const names = [...jobs.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].map(match => match[1]);
+  assert.ok(names.length > 20, `expected the full job list, got ${names.length}`);
+  // A bracketed list may wrap across lines, so consume up to its closing ].
+  const edges = new Map(names.map(name => [name, (job(ci, name).match(/^ {4}needs:\s*(\[[^\]]*\]|\S.*)$/m)?.[1] ?? "")
+    .replace(/[[\]]/g, "").split(",").map(entry => entry.trim()).filter(Boolean)]));
+  const reachable = new Set(required);
+  for (const name of required) for (const dependency of edges.get(name) ?? []) reachable.add(dependency);
+  for (let size = 0; size !== reachable.size;) {
+    size = reachable.size;
+    for (const name of [...reachable]) for (const dependency of edges.get(name) ?? []) reachable.add(dependency);
+  }
+  for (const name of names) {
+    if (reachable.has(name)) continue;
+    assert.ok(advisory[name], `${name} is gated by no required check and is not declared advisory`);
+  }
+  for (const name of Object.keys(advisory))
+    assert.ok(names.includes(name), `${name} is declared advisory but no longer exists`);
 });
 
 test("reuse skips only build work and still gates every publisher on validation", () => {
@@ -155,7 +241,7 @@ test("all desktop consumers verify the prepared build and reject a failed prepar
   assert.equal(ci.match(/test -n "\$\{\{ needs\.desktop-prepare\.outputs\.producer_attempt \}\}"/g)?.length, verifications);
   for (const [name, variant] of [
     ["desktop-go", "stable"], ["desktop-frontend", "stable"], ["desktop-browser-group", "stable"],
-    ["desktop-macos", "stable"], ["desktop-windows", "canary"], ["desktop-windows-go", "stable"],
+    ["desktop-macos", "stable"], ["desktop-windows", "canary"], ["desktop-windows-go-group", "stable"],
   ]) {
     const body = job(ci, name);
     if (["desktop-go", "desktop-frontend"].includes(name)) assert.ok(aggregate.includes(name));
@@ -203,19 +289,28 @@ test("browser matrix preserves five entry points and fails closed through deskto
 });
 
 test("Windows desktop Go partitions tests without verbose JSON cache overhead", () => {
-  const windowsGo = job(ci, "desktop-windows-go");
-  const suite = shellStep(windowsGo, "test (Windows desktop and update helper)");
-  const commands = suite.trim().split("\n").map(line => ({
-    run: line.match(/-run '([^']+)'/)?.[1],
-    skip: line.match(/-skip '([^']+)'/)?.[1],
-  }));
-  assert.equal(commands.length, 3);
-  assert.equal(suite.match(/^\s*go test /gm)?.length, commands.length);
+  const windowsGo = job(ci, "desktop-windows-go-group");
+  const context = { github: { event_name: "pull_request" }, needs: {
+    "desktop-prepare": { result: "success" }, changes: { outputs: { native: "true" } },
+  } };
+  assert.equal(condition(windowsGo, context), true);
+  assert.equal(condition(windowsGo, { ...context, cancelled: () => true }), false,
+    "superseded Windows workers must release the workflow concurrency slot");
+  assert.match(windowsGo, /run: node \.\.\/scripts\/desktop-windows-go-tests\.mjs \$\{\{ matrix.group \}\}/);
+  const commands = windowsDesktopGroups.map(group => {
+    const args = windowsDesktopTestArgs(group);
+    assert.equal(args[0], "test");
+    assert.equal(args.at(-1), "./...");
+    assert.ok(!args.some(arg => arg.startsWith("-timeout") || arg === "-json" || arg === "-v"));
+    return { run: args.includes("-run") ? args[args.indexOf("-run") + 1] : undefined,
+      skip: args.includes("-skip") ? args[args.indexOf("-skip") + 1] : undefined };
+  });
+  assert.equal(commands.length, 4);
   // Include non-test entry points and every possible first suffix character.
-  // The complement group must retain names outside the two selected ranges.
+  // The complement group must retain names outside the three selected ranges.
   const names = ["Example", "ExampleSession", "FuzzSession", "Test"];
   for (let code = 0; code <= 127; code++) names.push(`Test${String.fromCharCode(code)}Session`);
-  names.push("Test会话", "TestΩSession");
+  names.push("Test会话", "TestΩSession", "TestWindowsTerminalProcessConPTYSmoke");
   for (const name of names) {
     const owners = commands.filter(command =>
       (!command.run || new RegExp(command.run).test(name))
@@ -226,11 +321,30 @@ test("Windows desktop Go partitions tests without verbose JSON cache overhead", 
     }
     assert.equal(owners.length, 1, `${name} must run in exactly one group`);
   }
-  assert.doesNotMatch(suite, /go test[^\n]*-timeout/);
   assert.doesNotMatch(windowsGo, /go test -json/);
   assert.doesNotMatch(windowsGo, /go-test-timing/);
   assert.doesNotMatch(windowsGo, /go test -run ['"]?\^\$/);
 
+  const groups = windowsGo.match(/group: \[([^\]]+)\]/)[1].split(",").map(value => value.trim());
+  assert.deepEqual(groups, windowsDesktopGroups);
+  assert.match(windowsGo, /fail-fast: false/);
+
   assert.match(windowsGo, /name: probe \(Windows ConPTY host integration\)[\s\S]*?continue-on-error: true[\s\S]*?run: go test -run '\^TestWindowsTerminalProcessConPTYSmoke\$' \./);
+  assert.match(windowsGo, /name: probe \(Windows ConPTY host integration\)\n\s+if: matrix.group == 'Q-Z'/);
+  assert.match(windowsGo, /name: test \(vendored systray identity\)\n\s+if: matrix.group == 'Q-Z'/);
   assert.match(windowsGo, /steps\.conpty-smoke\.outcome == 'failure'/);
+});
+
+test("Windows desktop Go aggregate rejects incomplete matrix results", () => {
+  const summary = job(ci, "desktop-windows-go");
+  assert.match(summary, /needs: \[changes, desktop-prepare, desktop-windows-go-group\]/);
+  const script = shellStep(summary, "Verify Windows desktop Go groups");
+  const success = { CHANGES_RESULT: "success", SHOULD_RUN: "true", PREPARE_RESULT: "success", GROUP_RESULT: "success" };
+  const run = patch => spawnSync("bash", ["-e", "-c", script], { env: { ...process.env, ...success, ...patch } }).status;
+  assert.equal(run({}), 0);
+  for (const key of ["CHANGES_RESULT", "PREPARE_RESULT", "GROUP_RESULT"])
+    for (const result of ["failure", "cancelled", "skipped", ""])
+      assert.notEqual(run({ [key]: result }), 0, `${key}=${result}`);
+  assert.equal(run({ SHOULD_RUN: "false", PREPARE_RESULT: "skipped", GROUP_RESULT: "skipped" }), 0);
+  assert.notEqual(run({ SHOULD_RUN: "false" }), 0);
 });

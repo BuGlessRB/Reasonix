@@ -457,7 +457,13 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // The snapshot orphan reconciliation (content fallback for id-less rebase)
 // adds 0.3 KiB raw; the merged payload measures 2437.9 KiB. Same ceiling rule.
 // The spectator status reconcile loop and its status/meta plumbing measure
-// 2438.1 KiB. Retain the next tenth.
-const rawInitialBudgetKiB = 2_438.2;
+// 2438.1 KiB on the branch baseline; the merged main baseline below already
+// covers them.
+// SessionRef bridge methods, active-row identity and the mock hydration event
+// contract measure 2439.8 KiB. Extracting exact-tab mock rebinding from the
+// startup bridge measures 2439.6 KiB; retain 0.3 KiB bounded toolchain headroom.
+// History preparation and cancellation across startup and paging add 884 B
+// (0.035%) to the 2498286 B base. Measured 2499170 B; retain 0.1 KiB headroom.
+const rawInitialBudgetKiB = 2_440.7;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

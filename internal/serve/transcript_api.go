@@ -16,6 +16,7 @@ import (
 )
 
 func (s *Server) registerTranscriptRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /transcript/follow", s.transcriptFollow)
 	mux.HandleFunc("GET /transcript/snapshot", s.transcriptSnapshot)
 	mux.HandleFunc("GET /transcript/page", s.transcriptSnapshot)
 	mux.HandleFunc("GET /transcript/content", s.transcriptContent)
@@ -277,20 +278,39 @@ func (s *Server) transcriptRead(w http.ResponseWriter, r *http.Request, read fun
 // silently answered with an empty page.
 func (s *Server) transcriptBoundRead(w http.ResponseWriter, r *http.Request, read func(control.SessionAPI) (any, error)) {
 	s.bindMu.Lock()
-	defer s.bindMu.Unlock()
 	raw := strings.TrimSpace(r.URL.Query().Get("session"))
 	if raw != "" && !strings.HasPrefix(raw, remoteSessionIDQueryPrefix) {
 		if resolved, err := s.resolveSessionPath(raw); err == nil && s.sessionMirrored(agent.CanonicalSessionPath(resolved)) {
+			s.bindMu.Unlock()
 			http.Error(w, "transcript projection is unavailable", http.StatusNotImplemented)
 			return
 		}
 	}
 	ctrl := s.resolveReadControllerLocked(raw)
 	if ctrl == nil {
+		s.bindMu.Unlock()
 		http.Error(w, "transcript session is not bound to this runtime", http.StatusConflict)
 		return
 	}
+	if ctrl == s.ctl() {
+		if path := agent.CanonicalSessionPath(ctrl.SessionPath()); path != "" && s.sessionMirrored(path) {
+			s.bindMu.Unlock()
+			http.Error(w, "transcript projection is unavailable", http.StatusNotImplemented)
+			return
+		}
+	}
+	s.bindMu.Unlock()
 	value, err := read(ctrl)
+	s.bindMu.Lock()
+	// A detached or identity-routed read cannot be verified by a foreground
+	// path comparison; re-resolving the same reference and comparing the
+	// controller covers every routing case.
+	current := s.resolveReadControllerLocked(raw) == ctrl
+	s.bindMu.Unlock()
+	if !current {
+		http.Error(w, "transcript runtime changed during read", http.StatusConflict)
+		return
+	}
 	if errors.Is(err, errTranscriptCapabilityMissing) {
 		http.Error(w, "transcript projection is unavailable", http.StatusNotImplemented)
 		return
@@ -359,6 +379,20 @@ func controllerBoundToIdentity(ctrl control.SessionAPI, id string) bool {
 	}
 	bound, has := ref.SessionRef()
 	return has && bound.SessionID == id
+}
+
+func (s *Server) transcriptFollow(w http.ResponseWriter, r *http.Request) {
+	var req transcript.FollowRequest
+	if !transcriptRequest(w, r, &req) {
+		return
+	}
+	s.transcriptBoundRead(w, r, func(ctrl control.SessionAPI) (any, error) {
+		api, ok := ctrl.(control.TranscriptFollowAPI)
+		if !ok {
+			return nil, errTranscriptCapabilityMissing
+		}
+		return api.TranscriptFollow(r.Context(), req)
+	})
 }
 
 func transcriptRequest(w http.ResponseWriter, r *http.Request, dst any) bool {

@@ -1,11 +1,13 @@
 import { addBreadcrumb } from "./breadcrumbs";
 import { historyPageRequestBudget } from "./historyPaging";
 import { getTranscriptStore, type TranscriptProjection } from "./transcriptStore";
+import { hydrateIdentityCurrent, type SessionIdentity } from "./sessionIdentity";
 
 export type HistoryWindowLoadOutcome = "loaded" | "empty" | "stale";
 export type HistoryWindowDirection = "older" | "newer" | "latest";
 
 export type HistoryWindowState = {
+  transcriptProtocol?: number;
   historyStartTurn: number;
   historyTotalTurns: number;
   historyHasOlder: boolean;
@@ -15,7 +17,7 @@ export type HistoryWindowState = {
   historyRevision?: number;
   historyDigest?: string;
   running: boolean;
-  meta?: { sessionPath?: string; sessionRevision?: number; sessionDigest?: string };
+  meta?: SessionIdentity & { sessionRevision?: number; sessionDigest?: string };
 };
 
 export type HistoryWindowAction =
@@ -72,13 +74,17 @@ function digestMatches(expected: string | undefined, actual: string | undefined)
 /** Runs one protocol-7 window transition without owning React state or scroll. */
 export async function loadHistoryWindow(input: LoadInput): Promise<HistoryWindowLoadOutcome> {
   const { tabId, direction, state } = input;
-  if (state.running) return "empty";
+  if (state.running && state.transcriptProtocol !== 2) return "empty";
   if (direction === "older" && (!state.historyHasOlder || state.historyOlderLoading)) return "empty";
   if (direction === "newer" && (!state.historyHasNewer || state.historyNewerLoading)) return "empty";
   const sessionPath = state.meta?.sessionPath ?? "";
-  const expectedRevision = state.meta?.sessionRevision ?? state.historyRevision;
-  const expectedDigest = state.meta?.sessionDigest ?? state.historyDigest;
-  const request = historyPageRequestBudget(state.historyStartTurn, state.historyTotalTurns, input.targetTurn);
+  const sessionIdentity = state.meta ?? {};
+  const expectedRevision = state.transcriptProtocol === 2 ? undefined : state.meta?.sessionRevision ?? state.historyRevision;
+  const expectedDigest = state.transcriptProtocol === 2 ? state.historyDigest : state.meta?.sessionDigest ?? state.historyDigest;
+  const request = {
+    ...historyPageRequestBudget(state.historyStartTurn, state.historyTotalTurns, input.targetTurn),
+    current: () => input.isCurrent(input.requestSeq) && hydrateIdentityCurrent(sessionIdentity, input.currentState()?.meta),
+  };
   input.dispatch({ type: direction === "older" ? "history_older_start" : "history_newer_start" });
   const startedAt = Date.now();
   try {
@@ -87,9 +93,9 @@ export async function loadHistoryWindow(input: LoadInput): Promise<HistoryWindow
       const result = await store.loadOlder(tabId, sessionPath, request);
       if (!input.isCurrent(input.requestSeq)) return "empty";
       const current = input.currentState();
-      if (!current || !current.historyOlderLoading || (current.meta?.sessionPath ?? "") !== sessionPath ||
+      if (!current || !current.historyOlderLoading || !hydrateIdentityCurrent(sessionIdentity, current.meta) ||
         !fingerprintMatches(expectedRevision, current.meta?.sessionRevision ?? current.historyRevision) ||
-        !digestMatches(expectedDigest, current.meta?.sessionDigest ?? current.historyDigest)) {
+        !digestMatches(expectedDigest, current.transcriptProtocol === 2 ? current.historyDigest : current.meta?.sessionDigest ?? current.historyDigest)) {
         input.dispatch({ type: "history_older_error", error: "history identity changed" });
         return "empty";
       }
@@ -107,9 +113,9 @@ export async function loadHistoryWindow(input: LoadInput): Promise<HistoryWindow
       const result = await store.loadNewer(tabId, sessionPath, request);
       if (!input.isCurrent(input.requestSeq)) return "empty";
       const current = input.currentState();
-      if (!current || !current.historyNewerLoading || (current.meta?.sessionPath ?? "") !== sessionPath ||
+      if (!current || !current.historyNewerLoading || !hydrateIdentityCurrent(sessionIdentity, current.meta) ||
         !fingerprintMatches(expectedRevision, current.meta?.sessionRevision ?? current.historyRevision) ||
-        !digestMatches(expectedDigest, current.meta?.sessionDigest ?? current.historyDigest)) {
+        !digestMatches(expectedDigest, current.transcriptProtocol === 2 ? current.historyDigest : current.meta?.sessionDigest ?? current.historyDigest)) {
         input.dispatch({ type: "history_newer_error", error: "history identity changed" });
         return "empty";
       }
@@ -131,8 +137,8 @@ export async function loadHistoryWindow(input: LoadInput): Promise<HistoryWindow
     const current = input.currentState();
     if (!current) return "empty";
     const currentRevision = current.meta?.sessionRevision ?? current.historyRevision;
-    const currentDigest = current.meta?.sessionDigest ?? current.historyDigest;
-    if (!current.historyNewerLoading || (current.meta?.sessionPath ?? "") !== sessionPath ||
+    const currentDigest = current.transcriptProtocol === 2 ? current.historyDigest : current.meta?.sessionDigest ?? current.historyDigest;
+    if (!current.historyNewerLoading || !hydrateIdentityCurrent(sessionIdentity, current.meta) ||
       !fingerprintMatches(expectedRevision, currentRevision) || !digestMatches(expectedDigest, currentDigest)) {
       input.dispatch({ type: "history_newer_error", error: "history identity changed" });
       return "empty";

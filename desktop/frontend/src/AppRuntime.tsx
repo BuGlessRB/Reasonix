@@ -54,8 +54,8 @@ export function AppRuntime() {
   const { active: remoteSurfaceActive, session: remoteSession, ready: remoteComposerReady, onSend: remoteSend, onCancel: remoteCancel } = useActiveRemoteSession(activeTab, showToast);
   const activeSessionIdentity = sessionIdentityKey({
     tabId: activeTabId,
+    session: activeTab?.session ?? state.meta?.session,
     sessionPath: activeTab?.sessionPath ?? state.meta?.sessionPath,
-    sessionId: activeTab?.sessionId ?? state.meta?.sessionId,
     sessionGeneration: activeTab?.sessionGeneration ?? state.meta?.sessionGeneration ?? state.sessionGen,
     scope: activeTab?.scope,
     workspaceRoot: activeTab?.workspaceRoot ?? state.meta?.cwd,
@@ -71,8 +71,8 @@ export function AppRuntime() {
       ...tabMetas.filter(tab => tab.id !== activeTabId).map(tab => ({
         tabId: tab.id,
         sessionKey: sessionIdentityKey({ tabId: tab.id, sessionPath: tab.sessionPath,
-          sessionId: tab.sessionId,
-          sessionGeneration: tab.sessionGeneration, scope: tab.scope, workspaceRoot: tab.workspaceRoot, topicId: tab.topicId }),
+          session: tab.session, sessionGeneration: tab.sessionGeneration,
+          scope: tab.scope, workspaceRoot: tab.workspaceRoot, topicId: tab.topicId }),
       })),
     ],
   });

@@ -7,7 +7,7 @@ import { once } from "node:events";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startPreviewServer } from "./vite-preview-server.mjs";
-import { chooseAppLayout } from "./app-page-actions.mjs";
+import { readActiveSessionLabel, selectSession } from "./app-page-actions.mjs";
 import { attributeRetention, buildIdentity, evidenceIntegrity, retainedCohorts, screeningBlockers, summarizeHeap } from "./app-memory-evidence.mjs";
 import { completeShard, memoryProtocol, protocolSamples, verifyIdentity, MEMORY_FIXTURES } from "./app-memory-shards.mjs";
 
@@ -63,13 +63,13 @@ async function settleFrames(page, count = 6) {
 }
 
 async function selectFixture(page, fixture) {
-  const active = await timings.measure("navigation.active", () => page.locator(".project-tree__topic--active .project-tree__topic-label").textContent().catch(() => ""));
+  const active = await timings.measure("navigation.active", () => readActiveSessionLabel(page));
   if (active?.includes(fixture.label)) throw new Error(`invalid repeated navigation: ${fixture.label}`);
-  await timings.measure("navigation.click", () => page.locator(`.project-tree__topic-main:has-text("${fixture.label}")`).click());
+  await timings.measure("navigation.click", () => selectSession(page, fixture.label));
   // Sample a resting page, not a hover card whose 350ms timer races hydration.
   await timings.measure("navigation.pointer", () => page.mouse.move(0, 0));
   await timings.measure("navigation.ready", () => page.waitForFunction(({ label, marker }) => {
-    const activeLabel = document.querySelector(".project-tree__topic--active .project-tree__topic-label")?.textContent ?? "";
+    const activeLabel = document.querySelector('.project-tree__topic--active .project-tree__topic-label')?.textContent ?? "";
     const transcript = document.querySelector(".transcript");
     return activeLabel.includes(label)
       && transcript?.dataset.transcriptHydrating === "false"
@@ -150,17 +150,22 @@ async function runProcess(index) {
     await selectFixture(page, fixtures.full);
     await enterSafety(page);
     await selectFixture(page, fixtures.full);
-    for (const [label, className] of [["Creation", "app--creation"], ["Workbench", "app--workbench"]]) {
-      await chooseAppLayout(page, label, className);
-      await page.mouse.move(0, 0);
-      await settleFrames(page);
-    }
+    await page.mouse.move(0, 0);
+    await settleFrames(page);
     // Baseline and checkpoints share a post-navigation resting state. Layout
     // controls can still own transient listeners immediately after closing, so
     // one early reading can sit above the resting value and make every later
     // reading look displaced. Settle and require consecutive identical readings
     // before accepting the baseline; an unsettled baseline is reported instead
     // of being judged as drift.
+    //
+    // Warm every measured fixture the same way first. The safety excursion is
+    // the only earlier windowed visit and it runs with deliberately invalid
+    // geometry, so without this round trip the windowed surface reaches its
+    // first healthy render after the baseline and its one-time bounded setup
+    // is reported as drift. Accumulation is still measured: each phase keeps
+    // sampling every 32 round trips against this baseline.
+    await selectFixture(page, fixtures.windowed);
     await selectFixture(page, fixtures.geometry);
     await selectFixture(page, fixtures.full);
     const samples = [];

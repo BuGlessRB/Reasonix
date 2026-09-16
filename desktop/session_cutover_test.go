@@ -19,6 +19,7 @@ func TestDesktopHistorySliceUsesCanonicalDurableIndex(t *testing.T) {
 	isolateDesktopUserDirs(t)
 	model, _ := configureSwitchableDefaultModels(t)
 	app := NewApp()
+	t.Cleanup(app.closeSessionServices)
 	app.ctx = context.Background()
 	root := t.TempDir()
 	dir := desktopSessionDir(root)
@@ -66,11 +67,40 @@ func TestDesktopHistorySliceUsesCanonicalDurableIndex(t *testing.T) {
 	if stale := app.HistoryContentForTab(tab.ID, assistant.Refs[0], 0); !stale.Stale {
 		t.Fatal("content ref from older durable snapshot must become stale after append")
 	}
+	// Stop/recovery keeps message identities while rewriting their transcript.
+	// All desktop readers must accept the runtime's reason metadata and index
+	// new versions without colliding with the previously displayed messages.
+	payload, err := json.Marshal(map[string]any{
+		"reason": "cancel-or-recovery-rewrite",
+		"messages": []provider.Message{
+			{ID: "history-user", Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "durable user turn"},
+			{ID: "history-assistant", Role: provider.RoleAssistant, Content: large},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Session().Append(t.Context(), session.Batch{OperationID: "cancel-rewrite", Events: []session.Event{{Kind: "history/replace", Payload: payload}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Session().Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if page := app.HistorySliceForTab(tab.ID, HistorySliceRequest{Turns: 12}); page.Error != "" || len(page.Entries) != 2 {
+		t.Fatalf("compatibility reader after cancel rewrite: %+v", page)
+	}
+	if page, err := app.SessionHistoryWindowForTab(tab.ID, session.HistoryWindowRequest{Anchor: "newest"}); err != nil || page.Status != "ready" || len(page.Messages) != 2 {
+		t.Fatalf("window reader after cancel rewrite: %+v, %v", page, err)
+	}
+	if page, err := app.SessionHistoryPageForTab(tab.ID, "", 10); err != nil || page.Status != "ready" || len(page.Messages) != 2 {
+		t.Fatalf("page reader after cancel rewrite: %+v, %v", page, err)
+	}
 }
 
 func TestDesktopCanonicalHistoryRemainsReadableBeforeControllerReady(t *testing.T) {
 	isolateDesktopUserDirs(t)
 	app := NewApp()
+	t.Cleanup(app.closeSessionServices)
 	root := t.TempDir()
 	dir := desktopSessionDir(root)
 	service := app.desktopSessionService(dir)
@@ -185,23 +215,33 @@ func TestDesktopV3CatalogResumeRenameAndDeleteUseSessionIdentity(t *testing.T) {
 	isolateDesktopUserDirs(t)
 	model, targetModel := configureSwitchableDefaultModels(t)
 	app := NewApp()
+	t.Cleanup(app.closeSessionServices)
 	app.ctx = context.Background()
 	root := t.TempDir()
 	dir := desktopSessionDir(root)
 	service := app.desktopSessionService(dir)
 
-	first, err := service.Create(t.Context(), session.CreateOptions{SessionID: "first-v3"})
+	first, err := service.Create(t.Context(), session.CreateOptions{
+		SessionID: "first-v3", CWD: root, Origin: session.SessionOriginNew,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	appendSessionTestModel(t, first, "first-model", model)
 	appendSessionTestMessage(t, first, "first-message", provider.Message{ID: "user-first", Role: provider.RoleUser, Content: "first conversation"})
-	second, err := service.Create(t.Context(), session.CreateOptions{SessionID: "second-v3"})
+	second, err := service.Create(t.Context(), session.CreateOptions{
+		SessionID: "second-v3", CWD: root, Origin: session.SessionOriginNew,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	appendSessionTestModel(t, second, "second-model", targetModel)
 	appendSessionTestMessage(t, second, "second-message", provider.Message{ID: "user-second", Role: provider.RoleUser, Content: "second conversation"})
+	for _, ref := range []session.SessionRef{first.Ref(), second.Ref()} {
+		if _, err := app.attachDesktopSession(t.Context(), "project", root, ref); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	ctrl, err := app.buildTabControllerBoot(app.ctx, boot.Options{Model: model, WorkspaceRoot: root, SessionDir: dir, Sink: event.Discard})
 	if err != nil {
@@ -252,10 +292,11 @@ func TestDesktopV3CatalogResumeRenameAndDeleteUseSessionIdentity(t *testing.T) {
 	}
 }
 
-func TestDesktopV3ResumeModelBuildFailureKeepsSourceRuntime(t *testing.T) {
+func TestDesktopSessionRefOpenFallsBackAndPublishesHydrationReady(t *testing.T) {
 	isolateDesktopUserDirs(t)
-	model, _ := configureSwitchableDefaultModels(t)
+	model, fallbackModel := configureSwitchableDefaultModels(t)
 	app := NewApp()
+	t.Cleanup(app.closeSessionServices)
 	app.ctx = context.Background()
 	root := t.TempDir()
 	dir := desktopSessionDir(root)
@@ -267,12 +308,15 @@ func TestDesktopV3ResumeModelBuildFailureKeepsSourceRuntime(t *testing.T) {
 	}
 	appendSessionTestModel(t, source, "source-model", model)
 	appendSessionTestMessage(t, source, "source-message", provider.Message{ID: "source-user", Role: provider.RoleUser, Content: "source remains"})
-	target, err := service.Create(t.Context(), session.CreateOptions{SessionID: "resume-broken-target"})
+	target, err := service.Create(t.Context(), session.CreateOptions{SessionID: "resume-broken-target", CWD: root, Origin: session.SessionOriginNew})
 	if err != nil {
 		t.Fatal(err)
 	}
 	appendSessionTestModel(t, target, "target-model", "missing/model")
-	appendSessionTestMessage(t, target, "target-message", provider.Message{ID: "target-user", Role: provider.RoleUser, Content: "must not publish"})
+	appendSessionTestMessage(t, target, "target-message", provider.Message{ID: "target-user", Role: provider.RoleUser, Content: "target restored"})
+	if _, err := app.attachDesktopSession(t.Context(), "project", root, target.Ref()); err != nil {
+		t.Fatal(err)
+	}
 
 	ctrl, err := app.buildTabControllerBoot(app.ctx, boot.Options{Model: model, WorkspaceRoot: root, SessionDir: dir, Sink: event.Discard})
 	if err != nil {
@@ -293,13 +337,21 @@ func TestDesktopV3ResumeModelBuildFailureKeepsSourceRuntime(t *testing.T) {
 		}
 	})
 
-	if _, err := app.ResumeSessionForTab(tab.ID, sessionRoute(target.Ref().SessionID)); err == nil {
-		t.Fatal("resume with an unavailable target model unexpectedly succeeded")
+	readySignals := 0
+	app.readyHook = func() { readySignals++ }
+	if _, err := app.OpenSession(target.Ref()); err != nil {
+		t.Fatal(err)
 	}
-	if tab.Ctrl != ctrl || tab.SessionID != source.Ref().SessionID || tab.SessionPath != "" {
-		t.Fatalf("failed resume changed source binding: ctrl=%v session=%q path=%q", tab.Ctrl == ctrl, tab.SessionID, tab.SessionPath)
+	if readySignals != 1 {
+		t.Fatalf("SessionRef open ready signals = %d, want 1", readySignals)
 	}
-	if got := tab.Ctrl.History(); len(got) != 1 || got[0].Content != "source remains" {
-		t.Fatalf("failed resume changed source history: %+v", got)
+	if tab.Ctrl == ctrl || tab.SessionID != target.Ref().SessionID || tab.SessionPath != "" || tab.Ctrl.ModelRef() != fallbackModel {
+		t.Fatalf("fallback binding: replaced=%v session=%q path=%q model=%q", tab.Ctrl != ctrl, tab.SessionID, tab.SessionPath, tab.Ctrl.ModelRef())
+	}
+	if got := tab.Ctrl.History(); len(got) != 1 || got[0].Content != "target restored" {
+		t.Fatalf("fallback history = %+v", got)
+	}
+	if snapshot, err := service.Query().Snapshot(t.Context(), target.Ref()); err != nil || snapshot.Projection.ModelRef != fallbackModel {
+		t.Fatalf("fallback config was not persisted on target: %+v, %v", snapshot.Projection, err)
 	}
 }

@@ -53,6 +53,7 @@ import (
 	"reasonix/internal/netclient"
 	"reasonix/internal/outputstyle"
 	"reasonix/internal/permission"
+	"reasonix/internal/persistentshell"
 	"reasonix/internal/plugin"
 	"reasonix/internal/productdocs"
 	"reasonix/internal/provider"
@@ -150,12 +151,12 @@ type Options struct {
 	// empty, the shared CLI/global session directory is used.
 	SessionDir string
 	// SessionService is shared by all controllers on one host. Rebuild injects
-	// the previous service and runtime so changing model/settings replaces only
-	// the Agent while the immutable session identity and writer remain owned by
-	// the same SessionRuntime.
-	SessionService *session.Service
-	SessionRuntime *session.Runtime
-	SessionHostID  string
+	// the previous service/runtime so model changes keep the immutable session
+	// identity and writer owned by the same SessionRuntime.
+	SessionService       *session.Service
+	SessionRuntime       *session.Runtime
+	SessionHostID        string
+	SessionCreateOptions session.CreateOptions
 	// SharedHost is an optional plugin.Host shared across controllers for the
 	// same workspace root. When set, boot.Build reuses its running clients
 	// instead of creating new subprocesses, and the caller manages the host's
@@ -186,6 +187,7 @@ type Options struct {
 	SessionRecoveryMeta func(control.SessionRecoveryRequest) agent.BranchMeta
 	OnSessionRecovered  func(control.SessionRecoveryInfo) error
 	OnSessionTransition func(control.SessionTransitionInfo) error
+	OnSessionRotation   func(context.Context, control.SessionRotationRequest) (control.SessionRotationPlan, error)
 	BeforeInboxDispatch func(*control.Controller) (func(), error)
 	// OnSessionTitleChanged lets a host project the canonical BranchMeta title
 	// into compatibility indexes and refresh notifications after the current
@@ -221,6 +223,7 @@ type Options struct {
 	WorkspaceOnly          bool
 	PinnedContextLoader    control.PinnedContextLoader
 	SessionTemp            *sessiontemp.Manager // session-private temp manager; Rebuild reuses old's
+	PersistentShell        *persistentshell.Manager
 	RuntimeReload
 	// deferPublish keeps a replacement generation private until migration and
 	// commit succeed. Cold BuildRuntime leaves this false and publishes at boot.
@@ -741,19 +744,15 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	bashTimeout := time.Duration(cfg.BashTimeoutSeconds()) * time.Second
 	enabledBuiltins := cfg.Tools.Enabled
 	readPathResolver := builtin.NewPathResolver()
-	// Session-private temporary directory manager for Bash/grep. Rebuild
-	// reuses the previous Controller's Manager; a fresh build creates one
-	// here so tools and the Controller share the same instance from boot.
-	sessionTemp := opts.SessionTemp
-	if sessionTemp == nil {
-		sessionTemp = sessiontemp.New()
-	}
+	sessionTemp, persistentShell := sessionManagers(opts)
 	// Register the full built-in inventory for use_capability dispatch. The
 	// provider-visible surface is narrowed later via SetProviderVisibleTools.
 	addBuiltins(reg, enabledBuiltins, writeRoots, writeRootSet, bashSpec, bashTimeout, searchSpec, stderr, root, proxySpec, forbidReadRoots, readPathResolver, sessionGuard, managedConfig, opts.FileOverlay, opts.TerminalRunner, sessionTemp, fileWriteReceipt)
+	bindPersistentShell(reg, persistentShell)
 	addWebSearch(reg, cfg, entry, proxySpec, sink)
-	if opts.BrowserExecutor != nil {
-		for _, t := range browser.Tools(opts.BrowserExecutor) {
+	browserExec, closeBrowser := browserBackend(opts.BrowserExecutor, cfg.Browser, writeRoots)
+	if browserExec != nil {
+		for _, t := range browser.Tools(browserExec) {
 			reg.Add(t)
 		}
 	}
@@ -1906,6 +1905,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		SessionRecoveryMeta: opts.SessionRecoveryMeta,
 		OnSessionRecovered:  opts.OnSessionRecovered,
 		OnSessionTransition: opts.OnSessionTransition,
+		OnSessionRotation:   opts.OnSessionRotation,
 		BeforeInboxDispatch: opts.BeforeInboxDispatch,
 		// The merged catalog lets frontends enumerate sidecar providers.
 		ProviderResolver:  extensionResolver,
@@ -1913,7 +1913,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		RuntimeOwner:      owner,
 		// Share the Manager already bound into bash/grep so tools and the
 		// Controller observe the same temporary generation across rebuilds.
-		SessionTemp: sessionTemp,
+		SessionTemp:     sessionTemp,
+		PersistentShell: persistentShell,
 	}
 	if opts.ModelSettings != nil {
 		ctrlOpts.ModelSettingsSourceRevision = opts.ModelSettings.Revision
@@ -2039,7 +2040,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if runtimeSet != nil && runtimeSet.Len() > 0 {
 		_ = extension.TrackWatcher(runtimeSet.Scope(), "skill-catalogs", func() error { skillCleanup(); return nil })
 	}
-	cleanup = wireRuntimeScopeCleanup(runtimeSet, cleanup, opts.SharedHost, pluginHost, lspMgr, opts.SessionTemp)
+	cleanup = wireRuntimeScopeCleanup(runtimeSet, cleanup, opts.SharedHost, pluginHost, lspMgr, opts.SessionTemp, closeBrowser)
 	ctrl.SetExtensions(extensionDispatcher)
 	if extensionMgr == nil {
 		extUIHub = nil
@@ -2345,7 +2346,7 @@ func normalizeAdditionalDirs(root string, dirs []string) ([]string, error) {
 
 func appendUniquePaths(base []string, extra ...string) []string {
 	out := append([]string(nil), base...)
-	seen := make(map[string]struct{}, len(out)+len(extra))
+	seen := make(map[string]struct{}, len(out))
 	for _, path := range out {
 		seen[pathComparisonKey(path)] = struct{}{}
 	}

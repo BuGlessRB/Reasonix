@@ -71,9 +71,9 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 			b.WriteString("# theme_style = \"graphite\"   # graphite|aurora|slate|carbon|nocturne|amber and legacy aliases\n")
 		}
 		if layout := c.UIShortcutLayout(); layout != "classic" {
-			fmt.Fprintf(&b, "shortcut_layout = %q   # classic|desktop; compatibility setting; Shift+Tab cycles read-only/workspace/plan\n", layout)
+			fmt.Fprintf(&b, "shortcut_layout = %q   # classic|desktop; compatibility setting; Shift+Tab cycles read-only/workspace/YOLO/plan; Ctrl+Y toggles YOLO\n", layout)
 		} else {
-			b.WriteString("# shortcut_layout = \"desktop\"   # classic|desktop; compatibility setting; Shift+Tab cycles read-only/workspace/plan\n")
+			b.WriteString("# shortcut_layout = \"desktop\"   # classic|desktop; compatibility setting; Shift+Tab cycles read-only/workspace/YOLO/plan; Ctrl+Y toggles YOLO\n")
 		}
 		if strings.TrimSpace(c.UI.CursorShape) != "" {
 			fmt.Fprintf(&b, "cursor_shape = %q   # block|underline|bar; text input cursor shape\n", c.UICursorShape())
@@ -420,6 +420,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	}
 
 	renderLSPConfig(&b, c.LSP)
+	renderBrowserConfig(&b, c.Browser)
 
 	b.WriteString("[skills]\n")
 	if len(c.Skills.Paths) > 0 {
@@ -1088,6 +1089,11 @@ func RenderTOMLProjectDelta(c *Config) string {
 	// [lsp]
 	if !reflect.DeepEqual(c.LSP, d.LSP) {
 		renderLSPConfig(&b, c.LSP)
+	}
+
+	// [browser]
+	if !reflect.DeepEqual(c.Browser, d.Browser) {
+		renderBrowserConfig(&b, c.Browser)
 	}
 
 	// [skills]

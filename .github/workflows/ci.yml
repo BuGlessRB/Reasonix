@@ -101,7 +101,8 @@ jobs:
         with:
           module: root
 
-      - if: env.RUN_STEPS == 'true' && runner.os == 'Windows'
+      # Both non-Linux legs drive their package selection through a Node script.
+      - if: env.RUN_STEPS == 'true' && runner.os != 'Linux'
         uses: actions/setup-node@v7
         with:
           node-version: "22"
@@ -162,13 +163,27 @@ jobs:
         run: go build ./...
 
       - name: test
-        if: env.RUN_STEPS == 'true' && runner.os != 'Windows'
+        # Windows full coverage belongs to the disjoint selectors below and
+        # the isolated jobs; running ./... here would execute every test twice.
+        if: env.RUN_STEPS == 'true' && (runner.os == 'Linux' || (runner.os == 'macOS' && github.event_name != 'pull_request'))
         env:
           # Run the prompt-cache prefix-stability guard (TestCacheHit*) in CI: a
           # regression there silently tanks the cache hit rate the project is
           # built around.
           REASONIX_RELEASE_CACHE_GUARD: "1"
         run: go test ./...
+
+      # Public repositories get five concurrent macOS runners and one pull
+      # request already claims three. Linux proves the portable packages on
+      # every pull request, so this leg sweeps only the darwin-specific ones
+      # and pushes keep the full ./... run above — the same tiering the Windows
+      # legs and the race job already use.
+      - name: test (macOS platform packages)
+        if: env.RUN_STEPS == 'true' && runner.os == 'macOS' && github.event_name == 'pull_request'
+        timeout-minutes: 15
+        env:
+          REASONIX_RELEASE_CACHE_GUARD: "1"
+        run: node scripts/macos-go-tests.mjs darwin
 
       # Agent, boot and control own isolated Windows runners on PRs and pushes.
       # The shared selector excludes them here, preserving platform smoke
@@ -459,8 +474,14 @@ jobs:
         if: github.event_name != 'pull_request' && env.RUN_STEPS == 'true'
         run: go test -race ./...
 
+  # Required check. Every desktop job reaches the ruleset through this one name,
+  # so a job that is not listed here is not gated at all: that is how a failing
+  # desktop-windows-go merged. PACKAGE_REQUIRED mirrors desktop-windows-package's
+  # own `if:` verbatim rather than testing for `push`, so workflow_dispatch does
+  # not expect a skip from a job that runs.
   desktop:
-    needs: [changes, desktop-prepare, desktop-go, desktop-go-race, desktop-frontend, desktop-browser]
+    needs: [changes, desktop-prepare, desktop-go, desktop-go-race, desktop-frontend, desktop-browser,
+            desktop-macos, desktop-windows, desktop-windows-go, desktop-windows-package]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -470,11 +491,16 @@ jobs:
           PREPARE_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.desktop != 'false' }}
           NATIVE_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false' }}
           FRONTEND_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.frontend != 'false' || needs.changes.outputs.electron != 'false' }}
+          PACKAGE_REQUIRED: ${{ github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true' }}
           PREPARE_RESULT: ${{ needs.desktop-prepare.result }}
           GO_RESULT: ${{ needs.desktop-go.result }}
           GO_RACE_RESULT: ${{ needs.desktop-go-race.result }}
           FRONTEND_RESULT: ${{ needs.desktop-frontend.result }}
           BROWSER_RESULT: ${{ needs.desktop-browser.result }}
+          MACOS_RESULT: ${{ needs.desktop-macos.result }}
+          WINDOWS_RESULT: ${{ needs.desktop-windows.result }}
+          WINDOWS_GO_RESULT: ${{ needs.desktop-windows-go.result }}
+          PACKAGE_RESULT: ${{ needs.desktop-windows-package.result }}
         run: |
           test "$CHANGES_RESULT" = success
           expected() { if [ "$1" = true ]; then echo success; else echo skipped; fi; }
@@ -484,6 +510,12 @@ jobs:
           test "$FRONTEND_RESULT" = "$(expected "$FRONTEND_REQUIRED")"
           # The browser aggregate always runs and validates skipped groups itself.
           test "$BROWSER_RESULT" = success
+          # native ⇒ desktop by construction, so these can never contradict
+          # PREPARE_REQUIRED above.
+          test "$MACOS_RESULT" = "$(expected "$NATIVE_REQUIRED")"
+          test "$WINDOWS_RESULT" = "$(expected "$NATIVE_REQUIRED")"
+          test "$WINDOWS_GO_RESULT" = success
+          test "$PACKAGE_RESULT" = "$(expected "$PACKAGE_REQUIRED")"
 
   desktop-frontend:
     needs: [changes, desktop-prepare]
@@ -1123,13 +1155,17 @@ jobs:
   # single test runs (GOCACHE restored, Defender excluded). Running it beside
   # the Electron steps makes the leg's wall time the longer half rather than
   # the sum, and a Go flake reruns only this job.
-  desktop-windows-go:
+  desktop-windows-go-group:
     needs: [changes, desktop-prepare]
-    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false')
+    if: ${{ !cancelled() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false') }}
     runs-on: windows-latest
-    # Measured 17.1-17.3 minutes on three consecutive main-v2 runs; bound
-    # hangs, not duration.
+    # Independent runners prevent valid groups from consuming each other's
+    # step deadline. Go retains its default per-package ten-minute timeout.
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [A-D, E-H, I-P, Q-Z]
     defaults:
       run:
         shell: bash
@@ -1182,35 +1218,55 @@ jobs:
             --source-sha "$(git rev-parse HEAD)" --run-id "$GITHUB_RUN_ID" --attempt "${{ needs.desktop-prepare.outputs.producer_attempt }}" \
             --pnpm-version "$(pnpm --version)"
 
+      - name: Validate Windows test partition
+        run: node --test ../scripts/desktop-windows-go-tests.test.mjs
+
       - name: test (Windows desktop and update helper)
         # Keep native Go output here. JSON mode forces verbose output into the
         # test cache and spent 8-10 minutes finalizing it on Windows runners.
         timeout-minutes: 25
-        # Keep each package below Go's default 10-minute timeout without
-        # relaxing it. These disjoint filters cover every test exactly once;
-        # examples, fuzz seeds, and other test names remain in the first group.
-        run: |
-          go test -skip '^Test[I-Z]' ./...
-          go test -run '^Test[I-P]' ./...
-          go test -run '^Test[Q-Z]' -skip '^TestWindowsTerminalProcessConPTYSmoke$' ./...
+        # The driver checks the current native inventory for unique ownership.
+        run: node ../scripts/desktop-windows-go-tests.mjs ${{ matrix.group }}
 
       # ConPTY startup and teardown depend on the hosted runner's interactive
       # Windows environment. Keep the end-to-end probe visible without making
       # a single host scheduling stall equivalent to a Go correctness failure.
       - name: probe (Windows ConPTY host integration)
+        if: matrix.group == 'Q-Z'
         id: conpty-smoke
         continue-on-error: true
         timeout-minutes: 2
         run: go test -run '^TestWindowsTerminalProcessConPTYSmoke$' .
 
       - name: report ConPTY probe failure
-        if: always() && steps.conpty-smoke.outcome == 'failure'
+        if: always() && matrix.group == 'Q-Z' && steps.conpty-smoke.outcome == 'failure'
         shell: bash
         run: echo "::warning::The hosted Windows ConPTY integration probe failed; deterministic Windows Go tests still passed."
 
       - name: test (vendored systray identity)
+        if: matrix.group == 'Q-Z'
         timeout-minutes: 2
         run: go test -timeout=60s fyne.io/systray
+
+  desktop-windows-go:
+    needs: [changes, desktop-prepare, desktop-windows-go-group]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Windows desktop Go groups
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false' }}
+          PREPARE_RESULT: ${{ needs.desktop-prepare.result }}
+          GROUP_RESULT: ${{ needs.desktop-windows-go-group.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          if [ "$SHOULD_RUN" = true ]; then
+            test "$PREPARE_RESULT" = success
+            test "$GROUP_RESULT" = success
+          else
+            test "$GROUP_RESULT" = skipped
+          fi
 
   # Installer packaging is packaging validation, not a code gate, and it shares
   # no state with the test steps above. It runs beside them instead of after
@@ -1434,11 +1490,43 @@ jobs:
             .github/workflows/release-verify-issues.yml \
             .github/workflows/docs-impact.yml \
             .github/workflows/ci.yml
-          node --test scripts/desktop-release-artifacts.test.mjs scripts/signpath-checkpoint.test.mjs scripts/ci-workflow.test.mjs scripts/notarize-desktop.test.mjs scripts/verify-windows-gui-subsystem.test.mjs scripts/windows-go-tests.test.mjs
+          node --test scripts/desktop-windows-go-tests.test.mjs
+          node --test scripts/desktop-release-artifacts.test.mjs scripts/signpath-checkpoint.test.mjs scripts/ci-workflow.test.mjs scripts/notarize-desktop.test.mjs scripts/verify-windows-gui-subsystem.test.mjs scripts/windows-go-tests.test.mjs scripts/macos-go-tests.test.mjs
           bash scripts/release-workflows.test.sh
           node scripts/check-single-release-public-contract.mjs
 
   # `lint` is a protected check name. Keep it as the fail-closed aggregate so
+  # Required check for the root-module and site jobs the per-OS `test` legs do
+  # not cover. windows-control and sdk gate internally through RUN_STEPS and so
+  # always report a result: `success` here means "did not fail", not "validated
+  # this diff" — the same trade-off the required `test` legs already make. Do
+  # not add govulncheck: it sets continue-on-error, so needs.*.result is
+  # `success` even when its steps fail and the assertion would be a tautology.
+  root:
+    needs: [changes, windows-control, windows-isolated, sdk, site, coverage]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify root validation jobs
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          CODE_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.code != 'false' }}
+          SITE_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.site != 'false' }}
+          COVERAGE_REQUIRED: ${{ github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true' }}
+          CONTROL_RESULT: ${{ needs.windows-control.result }}
+          ISOLATED_RESULT: ${{ needs.windows-isolated.result }}
+          SDK_RESULT: ${{ needs.sdk.result }}
+          SITE_RESULT: ${{ needs.site.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          expected() { if [ "$1" = true ]; then echo success; else echo skipped; fi; }
+          test "$CONTROL_RESULT" = success
+          test "$SDK_RESULT" = success
+          test "$ISOLATED_RESULT" = "$(expected "$CODE_REQUIRED")"
+          test "$SITE_RESULT" = "$(expected "$SITE_REQUIRED")"
+          test "$COVERAGE_RESULT" = "$(expected "$COVERAGE_REQUIRED")"
+
   # frontend unit coverage can run once in desktop-frontend without weakening
   # the branch gate.
   lint:
@@ -1470,9 +1558,13 @@ jobs:
   # (safeNext) covered by node:test unit tests. Those tests use only Node
   # builtins, so no `npm install` is needed — run them directly on every PR so
   # a regression in redirect validation fails the build instead of shipping.
+  # The notes_only term matches every other gated job here. Without it a
+  # release-notes-only push runs this job while the root aggregate expects the
+  # house-style skip, which would leave main-v2 permanently red. A pure
+  # release-notes/** diff cannot touch site/, so skipping it loses no coverage.
   site:
     needs: changes
-    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.site != 'false')
+    if: always() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.site != 'false')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -1511,9 +1603,11 @@ jobs:
       - name: govulncheck
         run: govulncheck ./...
 
+  # `always()` matches every other gated job: a failed changes job makes this
+  # run the full sweep instead of silently reporting skipped to the aggregate.
   coverage:
     needs: changes
-    if: (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true')
+    if: always() && (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
