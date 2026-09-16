@@ -7,7 +7,7 @@
     "complexity": 1495,
     "error-text": 9,
     "essay": 3207,
-    "file-size": 33014,
+    "file-size": 31285,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6551,
@@ -898,12 +898,20 @@
       "essay": 2
     },
     "internal/evidence/evidence.go": {
-      "complexity": 6,
-      "essay": 34,
-      "file-size": 1729
+      "essay": 2
+    },
+    "internal/evidence/ledger_queries.go": {
+      "essay": 6
     },
     "internal/evidence/review_report.go": {
       "essay": 7
+    },
+    "internal/evidence/todos.go": {
+      "essay": 8
+    },
+    "internal/evidence/verification_command.go": {
+      "complexity": 6,
+      "essay": 18
     },
     "internal/evidence/verification_summary_test.go": {
       "essay": 1
