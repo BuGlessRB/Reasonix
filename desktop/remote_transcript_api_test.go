@@ -226,7 +226,7 @@ func TestRemoteCanonicalSessionHistoryUsesNegotiatedIdentity(t *testing.T) {
 	}))
 	defer server.Close()
 	app, tab := remoteTranscriptFixture(server)
-	tab.capabilities = map[string]bool{serveCapabilitySessionContentV1: true, serveCapabilitySessionReadV2: true}
+	tab.capabilities = map[string]bool{serveCapabilitySessions: true, serveCapabilitySessionContentV1: true, serveCapabilitySessionReadV2: true}
 	tab.session.sessionID = "canonical"
 	view, err := app.RemoteSessionOpenForTab(tab.id)
 	if err != nil || view.SnapshotSequence != 9 || len(view.Recent.Entries) != 1 {

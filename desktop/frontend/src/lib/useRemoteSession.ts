@@ -15,8 +15,7 @@ import { isAuthoritativeRemoteStatus, remoteCheckpoints, remoteComposerState, re
 import type { CollaborationMode, CommandInfo, EffortInfo, GoalLifecycleView, GoalRuntime, GoalStatus, HistoryMessage, QualityFloor, RemoteTabStateValue, TabMeta, ToolApprovalMode, WireEvent } from "./types";
 import type { RemoteAskAnswer } from "./remoteTypes";
 import type { ForkTargetView } from "./forkTargets";
-
-const loadRemoteSurface = () => import("../components/RemoteSessionSurface");
+import { hydrateRemoteTelemetry, loadRemoteStatusSnapshot } from "./remoteTelemetry";
 
 // The remote session reuses the local transcript pipeline end to end: serve
 // frames share the agent event wire form, so they run through the same
@@ -346,8 +345,6 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       if (cancelled || connectionGeneration !== expectedConnectionGeneration) return;
       const settledWithPossibleFrameLoss = transcriptRef.current.running
         && (status as RemoteStatus | null)?.running === false;
-      const { hydrateRemoteTelemetry } = await loadRemoteSurface();
-      if (cancelled || connectionGeneration !== expectedConnectionGeneration) return;
       applyRemoteStatus(status);
       if (modern) {
         projector.refresh(tabId);
@@ -387,7 +384,6 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
         // for, so surface a retry affordance promptly. Connecting tabs retain the
         // longer window for slow remote installs and tunnels.
         try {
-          const { hydrateRemoteTelemetry, loadRemoteStatusSnapshot } = await loadRemoteSurface();
           if (typeof app.RemoteTranscriptSnapshotForTab === "function") {
             negotiating = true;
             modern = await loadModern();
@@ -506,6 +502,13 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
         void app.SetActiveTab(tabId).catch(() => undefined);
       }
       if (s.state === "ready") {
+        // Every ready publication precedes a full re-hydration, and the
+        // hydrated transcript is authoritative about whether a turn is still
+        // running. Any optimistic pending submission from before the
+        // republish (e.g. frames lost across a reconnect) is stale; keeping
+        // it would block the runtime-idle reconciliation and leave a zombie
+        // "processing" indicator beside the rendered reply.
+        pendingTurnRef.current = null;
         void hydrate(true);
       }
       // Disconnection preserves the observed transcript and runtime; it does

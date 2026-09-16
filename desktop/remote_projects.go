@@ -106,6 +106,11 @@ type remoteTab struct {
 	// rejected request cannot restore metadata over a newer user selection.
 	selectionRevision uint64
 	pendingSelection  *remoteTabPendingOpenSelection
+	// pendingReadyBarrier defers the ownership-return re-hydration barrier
+	// while a turn is in flight: firing it mid-turn bumps the frontend's
+	// connection generation, orphans the optimistic submission, and leaves a
+	// zombie "processing" indicator beside the rendered reply.
+	pendingReadyBarrier bool
 }
 
 type remoteTabRuntimeState struct {

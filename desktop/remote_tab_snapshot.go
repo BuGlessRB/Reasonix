@@ -284,6 +284,23 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 	applyRemoteTabStatusPayload(tab, payload)
 	after := remoteTabMetaLocked(tab)
 	readyBarrier := remoteTabReadyBarrier(tab, pathChanged)
+	// Ownership returned through polling (auto-reclaim after the local writer
+	// exited) rather than an explicit /reclaim: the surface is still on the
+	// spectator-era projection and needs the ready barrier that re-hydrates
+	// the view. Defer it while a turn runs so the barrier never orphans an
+	// in-flight submission.
+	if before.TakenOver && !after.TakenOver {
+		if tab.runtime.running || tab.runtime.pendingPrompt {
+			tab.pendingReadyBarrier = true
+		} else {
+			readyBarrier = true
+		}
+	}
+	// A deferred barrier fires as soon as polling observes the surface idle.
+	deferredBarrier := tab.pendingReadyBarrier && !tab.runtime.running && !tab.runtime.pendingPrompt
+	if deferredBarrier {
+		tab.pendingReadyBarrier = false
+	}
 	a.remoteTabMu.Unlock()
 	if before.SessionPath != after.SessionPath || before.TopicID != after.TopicID ||
 		before.Running != after.Running || before.TurnStartedAt != after.TurnStartedAt ||
@@ -292,15 +309,8 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 		before.TakenOver != after.TakenOver {
 		a.emitRemoteEvent("remote-tab:updated", after)
 	}
-	if readyBarrier {
+	if readyBarrier || deferredBarrier {
 		a.emitRemoteEvent(fmt.Sprintf("remote-tab:%s:state", tabID), RemoteTabStateView{State: "ready"})
-	}
-	if before.TakenOver && !after.TakenOver && !readyBarrier {
-		// Ownership returned through polling (auto-reclaim after the local
-		// writer exited) rather than an explicit /reclaim: the surface is
-		// still on the spectator-era projection, so publish the same ready
-		// barrier that re-hydrates the view.
-		a.transitionRemoteTabStateLocked(tab, gen, "ready", "ready", "")
 	}
 	if pathChanged {
 		a.goRemoteTabSafe("remoteTabStatusTitle", func() { a.refreshRemoteTabTitle(tabID) })

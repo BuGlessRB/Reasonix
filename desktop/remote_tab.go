@@ -377,19 +377,28 @@ func (a *App) remoteTabPump(ctx context.Context, tabID string, gen uint64, opene
 	req.Header.Set("Accept", "text/event-stream")
 	resp, err := client.Do(req)
 	if err != nil {
-		signalOpened(err)
+		// Schedule recovery before signalling the opener: the reattach
+		// retirement bumps the generation first, so the opener's own retire
+		// for this error becomes a no-op instead of racing the recovery.
 		if ctx.Err() == nil {
 			log.Printf("[remote] remoteTabPump: /events DO-FAILED tab=%s err=%v", tabID, err)
-			a.emitRemoteTabStateForGeneration(tabID, gen, "error", err.Error())
+			// A tunnel that just dropped the old stream often refuses the
+			// replacement too; parking in error would strand a healthy tab.
+			// Route through the reattach loop, which re-ensures the server
+			// and retries while the transport heals.
+			a.startRemoteTabReattach(tabID, gen)
 		}
+		signalOpened(err)
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		err = fmt.Errorf("serve /events: status %d", resp.StatusCode)
+		if ctx.Err() == nil {
+			log.Printf("[remote] remoteTabPump: /events BAD-STATUS tab=%s status=%d", tabID, resp.StatusCode)
+			a.startRemoteTabReattach(tabID, gen)
+		}
 		signalOpened(err)
-		log.Printf("[remote] remoteTabPump: /events BAD-STATUS tab=%s status=%d", tabID, resp.StatusCode)
-		a.emitRemoteTabStateForGeneration(tabID, gen, "error", err.Error())
 		return
 	}
 	signalOpened(nil)
@@ -438,10 +447,7 @@ func (a *App) remoteTabPump(ctx context.Context, tabID string, gen uint64, opene
 	// Only the current generation reacts to an unexpected stream death.
 	// Reattach now; the host status hook also retries on connection recovery.
 	if ctx.Err() == nil {
-		if startRetry := a.reconnectRemoteTabGeneration(tabID, gen); startRetry {
-			log.Printf("[remote] remoteTabPump: DIED tab=%s gen=%d — reattaching", tabID, gen)
-			a.goRemoteTabSafe("remoteTabReattach", func() { a.reattachRemoteTab(tabID) })
-		}
+		a.startRemoteTabReattach(tabID, gen)
 	}
 }
 
@@ -704,9 +710,13 @@ func (a *App) ReclaimRemoteTabSession(tabID string) error {
 	// Reclaim succeeded: Serve now owns the session again. Clear the spectator
 	// pin immediately so the composer un-locks without waiting for the next
 	// status poll to observe takenOver=false.
+	observedTab.routeEventMu.Lock()
+	defer observedTab.routeEventMu.Unlock()
 	a.remoteTabMu.Lock()
 	if tab := a.remoteTabs[tabID]; stillCurrent(tab) {
 		tab.session.takenOver = false
+		deferBarrier := tab.runtime.running || tab.runtime.pendingPrompt
+		tab.pendingReadyBarrier = deferBarrier
 		meta := remoteTabMetaLocked(tab)
 		a.remoteTabMu.Unlock()
 		a.emitRemoteEvent("remote-tab:updated", meta)
@@ -715,7 +725,11 @@ func (a *App) ReclaimRemoteTabSession(tabID string) error {
 		// re-hydrates and live frames from the re-owned writer are accepted —
 		// the same contract a session rotation relies on. Without it the tab
 		// renders the pre-reclaim view until the user switches away and back.
-		a.transitionRemoteTabStateLocked(tab, observedGen, "ready", "ready", "")
+		// Defer while a turn runs: the barrier bumps the frontend connection
+		// generation and would orphan an in-flight submission.
+		if !deferBarrier {
+			a.transitionRemoteTabStateLocked(tab, observedGen, "ready", "ready", "")
+		}
 	} else {
 		a.remoteTabMu.Unlock()
 	}

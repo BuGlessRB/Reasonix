@@ -728,3 +728,61 @@ func TestSuccessfulReclaimRepublishesReadyBarrier(t *testing.T) {
 		t.Fatalf("reclaim did not republish the ready barrier: %v", events)
 	}
 }
+
+func TestReclaimBarrierDefersWhileTurnInFlight(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/reclaim" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.Error(w, "not available", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	app := NewApp()
+	app.remoteTabs = map[string]*remoteTab{}
+	tab := &remoteTab{
+		id: "remote-1", state: "ready", gen: 4, client: srv.Client(), base: srv.URL, selectionRevision: 9,
+		routing:      remoteTabSessionRouting{currentPath: "/sessions/held.jsonl"},
+		session:      remoteTabSessionState{takenOver: true},
+		runtime:      remoteTabRuntimeState{running: true},
+		capabilities: map[string]bool{serveCapabilityExecutionV2: true, serveCapabilitySessions: true, serveCapabilitySessionIdentityV1: true, serveCapabilitySessionOwnershipV1: true},
+	}
+	app.remoteTabs[tab.id] = tab
+
+	var mu sync.Mutex
+	var events []string
+	app.remoteEventHook = func(name string, _ any) {
+		mu.Lock()
+		events = append(events, name)
+		mu.Unlock()
+	}
+	if err := app.ReclaimRemoteTabSession(tab.id); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	for _, name := range events {
+		if name == "remote-tab:remote-1:state" {
+			mu.Unlock()
+			t.Fatal("reclaim published the ready barrier while a turn was in flight")
+		}
+	}
+	mu.Unlock()
+	if !tab.pendingReadyBarrier {
+		t.Fatal("reclaim did not defer the barrier for the running turn")
+	}
+
+	// The deferred barrier fires once polling observes the surface idle.
+	status := json.RawMessage(`{"sessionId":"` + "held" + `","running":false,"takenOver":false}`)
+	app.recordRemoteTabSessionStatus("remote-1", srv.Client(), 4, 1, status)
+	mu.Lock()
+	defer mu.Unlock()
+	sawReady := false
+	for _, name := range events {
+		if name == "remote-tab:remote-1:state" {
+			sawReady = true
+		}
+	}
+	if !sawReady || tab.pendingReadyBarrier {
+		t.Fatalf("deferred barrier did not fire on idle: ready=%v pending=%v", sawReady, tab.pendingReadyBarrier)
+	}
+}

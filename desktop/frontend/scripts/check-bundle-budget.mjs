@@ -450,6 +450,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // adding 3688 B (0.148%) over the base. Retain the next one-decimal ceiling.
 // Takeover-aware terminal access adds one startup-path predicate, measuring
 // 2492831 B. Retain only the next one-decimal ceiling.
-const rawInitialBudgetKiB = 2_434.5;
+// Statically importing remote telemetry into useRemoteSession removes the
+// late-resolving dynamic-chunk await between the connection-generation check
+// and status application; the module moves onto the startup path and the
+// merged payload measures 2437.6 KiB. Retain the next tenth.
+const rawInitialBudgetKiB = 2_437.7;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

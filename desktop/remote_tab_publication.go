@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -74,6 +75,18 @@ func (a *App) reconnectRemoteTabGeneration(tabID string, gen uint64) bool {
 	}
 	a.emitRemoteEvent(fmt.Sprintf("remote-tab:%s:state", tabID), RemoteTabStateView{State: "reconnecting"})
 	return startRetry
+}
+
+// startRemoteTabReattach retires a dead pump generation and hands the tab to
+// the reattach retry loop. It is the single recovery path for every stream
+// failure — mid-stream EOF, a refused replacement connection, or a non-200
+// /events response — so a healing tunnel always gets retried instead of
+// parking a healthy tab in a terminal state. Callers hold no tab locks.
+func (a *App) startRemoteTabReattach(tabID string, gen uint64) {
+	if startRetry := a.reconnectRemoteTabGeneration(tabID, gen); startRetry {
+		log.Printf("[remote] remoteTabPump: DIED tab=%s gen=%d — reattaching", tabID, gen)
+		a.goRemoteTabSafe("remoteTabReattach", func() { a.reattachRemoteTab(tabID) })
+	}
 }
 
 func (a *App) emitRemoteTabStateForGeneration(tabID string, gen uint64, state, errMsg string) bool {
