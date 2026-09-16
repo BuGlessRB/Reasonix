@@ -7,7 +7,7 @@
     "complexity": 1495,
     "error-text": 9,
     "essay": 3207,
-    "file-size": 36211,
+    "file-size": 34840,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6551,
@@ -79,13 +79,19 @@
       "essay": 1
     },
     "internal/acp/service.go": {
-      "essay": 61,
-      "file-size": 2247,
+      "essay": 49,
+      "file-size": 876,
       "function-size": 97,
       "struct-state": 2
     },
     "internal/acp/service_lock_test.go": {
       "essay": 7
+    },
+    "internal/acp/session.go": {
+      "essay": 6
+    },
+    "internal/acp/session_config.go": {
+      "essay": 6
     },
     "internal/acp/status.go": {
       "file-size": 20
