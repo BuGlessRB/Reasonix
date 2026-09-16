@@ -284,11 +284,6 @@ func ApplyUserConfigUpgradesOnStartup(path string) (bool, error) {
 	return true, nil
 }
 
-// ResetOfficialProviderPricingOnUpgrade is retained for older call sites.
-func ResetOfficialProviderPricingOnUpgrade(path string) (bool, error) {
-	return ApplyUserConfigUpgradesOnStartup(path)
-}
-
 func shouldMarkWindowsBashSandboxDefaultUpgrade(fromVersion int) bool {
 	return runtimeGOOS == "windows" && fromVersion < windowsBashSandboxDefaultConfigVersion
 }

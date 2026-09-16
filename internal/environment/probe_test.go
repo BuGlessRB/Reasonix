@@ -44,7 +44,7 @@ func TestFormatSectionSortsAndRedacts(t *testing.T) {
 }
 
 func TestRunProbesReportsMissingCommand(t *testing.T) {
-	results := RunProbes(context.Background(), []string{"__reasonix_missing_probe__ --version"})
+	results := RunProbesWithOverrides(context.Background(), []string{"__reasonix_missing_probe__ --version"}, nil)
 	if len(results) != 1 {
 		t.Fatalf("results len = %d, want 1", len(results))
 	}

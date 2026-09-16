@@ -39,17 +39,6 @@ func Acquire(ctx context.Context, path string) (func(), error) {
 	return acquire(ctx, path, 0)
 }
 
-// AcquireWithExternalTimeout obtains an exclusive lock while keeping the
-// in-process queue and cross-process file-lock budgets separate. ctx bounds
-// only the wait for another goroutine in this process; externalTimeout starts
-// after that queue is acquired and bounds retries against other processes.
-func AcquireWithExternalTimeout(ctx context.Context, path string, externalTimeout time.Duration) (func(), error) {
-	if externalTimeout <= 0 {
-		return nil, errors.New("external file lock timeout must be positive")
-	}
-	return acquire(ctx, path, externalTimeout)
-}
-
 func acquire(ctx context.Context, path string, externalTimeout time.Duration) (func(), error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -194,13 +183,6 @@ func releaseLocalFunc(key string, local *localLock) func() {
 			localRegistry.Unlock()
 		})
 	}
-}
-
-// RegistrySizeForTest returns the number of live local-lock entries (tests).
-func RegistrySizeForTest() int {
-	localRegistry.Lock()
-	defer localRegistry.Unlock()
-	return len(localRegistry.locks)
 }
 
 func canonicalLockPath(path string) (string, error) {

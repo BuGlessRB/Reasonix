@@ -442,8 +442,8 @@ func TestLoadForEditAppliesLegacyQwenContextWindowMigration(t *testing.T) {
 	if persisted, _ := disk.Provider("qwen-cn"); persisted == nil || persisted.ContextWindow != 0 {
 		t.Fatalf("read-only load rewrote qwen-cn = %+v, want legacy config preserved on disk", persisted)
 	}
-	if err := EditConfigFileWithoutCredentials(path, func(*Config) error { return nil }); err != nil {
-		t.Fatalf("EditConfigFileWithoutCredentials: %v", err)
+	if err := editConfigFile(path, false, func(*Config) error { return nil }); err != nil {
+		t.Fatalf("editConfigFile: %v", err)
 	}
 	disk = Config{}
 	if _, err := toml.DecodeFile(path, &disk); err != nil {
@@ -1476,9 +1476,9 @@ func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
 		t.Fatalf("SaveTo: %v", err)
 	}
 
-	changed, err := ResetOfficialProviderPricingOnUpgrade(path)
+	changed, err := ApplyUserConfigUpgradesOnStartup(path)
 	if err != nil {
-		t.Fatalf("ResetOfficialProviderPricingOnUpgrade: %v", err)
+		t.Fatalf("ApplyUserConfigUpgradesOnStartup: %v", err)
 	}
 	if !changed {
 		t.Fatal("upgrade reset did not run for config_version 2")
@@ -1515,9 +1515,9 @@ func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
 	if err := got.SaveTo(path); err != nil {
 		t.Fatalf("SaveTo after custom edit: %v", err)
 	}
-	changed, err = ResetOfficialProviderPricingOnUpgrade(path)
+	changed, err = ApplyUserConfigUpgradesOnStartup(path)
 	if err != nil {
-		t.Fatalf("second ResetOfficialProviderPricingOnUpgrade: %v", err)
+		t.Fatalf("second ApplyUserConfigUpgradesOnStartup: %v", err)
 	}
 	if changed {
 		t.Fatal("upgrade reset ran again after config_version was updated")

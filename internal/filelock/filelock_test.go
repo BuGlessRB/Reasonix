@@ -10,6 +10,12 @@ import (
 	"reasonix/internal/testenv"
 )
 
+func registrySize() int {
+	localRegistry.Lock()
+	defer localRegistry.Unlock()
+	return len(localRegistry.locks)
+}
+
 func TestAcquireHonorsDeadlineAndRecoversAfterRelease(t *testing.T) {
 	path := filepath.Join(testenv.TempDir(t), "state.lock")
 	release, err := Acquire(context.Background(), path)
@@ -31,7 +37,7 @@ func TestAcquireHonorsDeadlineAndRecoversAfterRelease(t *testing.T) {
 	secondRelease()
 }
 
-func TestAcquireWithExternalTimeoutBoundsOnlyFileLockRetries(t *testing.T) {
+func TestExternalTimeoutBoundsOnlyFileLockRetries(t *testing.T) {
 	path := filepath.Join(testenv.TempDir(t), "state.lock")
 	releaseExternal, err := tryLockFile(path)
 	if err != nil {
@@ -42,7 +48,7 @@ func TestAcquireWithExternalTimeoutBoundsOnlyFileLockRetries(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	started := time.Now()
-	_, err = AcquireWithExternalTimeout(ctx, path, 60*time.Millisecond)
+	_, err = acquire(ctx, path, 60*time.Millisecond)
 	elapsed := time.Since(started)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("external acquire error = %v, want deadline exceeded", err)
@@ -52,25 +58,18 @@ func TestAcquireWithExternalTimeoutBoundsOnlyFileLockRetries(t *testing.T) {
 	}
 }
 
-func TestAcquireWithExternalTimeoutRejectsInvalidBudget(t *testing.T) {
-	path := filepath.Join(testenv.TempDir(t), "state.lock")
-	if _, err := AcquireWithExternalTimeout(context.Background(), path, 0); err == nil {
-		t.Fatal("zero external timeout should be rejected")
-	}
-}
-
 func TestLocalRegistryReclaimsReleasedEntries(t *testing.T) {
-	before := RegistrySizeForTest()
+	before := registrySize()
 	path := filepath.Join(testenv.TempDir(t), "ephemeral.lock")
 	release, err := Acquire(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if RegistrySizeForTest() <= before {
+	if registrySize() <= before {
 		t.Fatal("registry should grow while lock is held")
 	}
 	release()
-	if got := RegistrySizeForTest(); got != before {
+	if got := registrySize(); got != before {
 		t.Fatalf("registry size after release = %d, want %d (reclaimed)", got, before)
 	}
 
@@ -80,7 +79,7 @@ func TestLocalRegistryReclaimsReleasedEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	release2()
-	if got := RegistrySizeForTest(); got != before {
+	if got := registrySize(); got != before {
 		t.Fatalf("registry size after second cycle = %d, want %d", got, before)
 	}
 }

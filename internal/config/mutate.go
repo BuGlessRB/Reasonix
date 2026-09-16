@@ -97,12 +97,6 @@ func EditConfigFile(path string, edit func(*Config) error) error {
 	return editConfigFile(path, true, edit)
 }
 
-// EditConfigFileWithoutCredentials is EditConfigFile without loading the
-// Reasonix credential environment.
-func EditConfigFileWithoutCredentials(path string, edit func(*Config) error) error {
-	return editConfigFile(path, false, edit)
-}
-
 func editConfigFile(path string, loadCredentials bool, edit func(*Config) error) error {
 	if edit == nil {
 		return fmt.Errorf("edit config: nil callback")

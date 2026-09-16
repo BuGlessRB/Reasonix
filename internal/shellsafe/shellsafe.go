@@ -279,15 +279,6 @@ func nestedReadOnlyArgsSafe(base, sub string, fields []string) bool {
 	return !ArgsMakeReadOnlyCommandWrite(base, sub, fields)
 }
 
-// CommandIsWorkspaceNonMutating reports commands that Delivery can execute
-// without acquiring the workspace writer. Permission-safe readers are a
-// subset; network probes live only in workspaceNonMutatingCommands so this
-// classification cannot silently widen approval or read-only subagent access.
-func CommandIsWorkspaceNonMutating(command string) (base, sub string, ok bool) {
-	base, sub, _, ok = ClassifyWorkspaceNonMutatingCommand(command)
-	return base, sub, ok
-}
-
 // ClassifyWorkspaceNonMutatingCommand is the field-carrying form used by
 // Delivery mutation accounting.
 func ClassifyWorkspaceNonMutatingCommand(command string) (base, sub string, fields []string, ok bool) {

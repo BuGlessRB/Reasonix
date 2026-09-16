@@ -89,10 +89,6 @@ func DefaultProbes() []string {
 	}
 }
 
-func RunProbes(ctx context.Context, commands []string) []ProbeResult {
-	return RunProbesWithOverrides(ctx, commands, nil)
-}
-
 func RunProbesWithOverrides(ctx context.Context, commands []string, overrides map[string]string) []ProbeResult {
 	return RunProbesWithOptions(ctx, commands, ProbeOptions{Overrides: overrides})
 }

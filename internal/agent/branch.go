@@ -314,11 +314,6 @@ func EnsureBranchMeta(sessionPath string) (BranchMeta, error) {
 	return out, err
 }
 
-// EnsureBranchMetaLocked is for callers that already hold LockSessionMetaPath.
-func EnsureBranchMetaLocked(sessionPath string) (BranchMeta, error) {
-	return ensureBranchMetaUnlocked(sessionPath)
-}
-
 func ensureBranchMetaUnlocked(sessionPath string) (BranchMeta, error) {
 	if sessionPath == "" {
 		return BranchMeta{}, fmt.Errorf("empty session path")
@@ -336,13 +331,6 @@ func ensureBranchMetaUnlocked(sessionPath string) (BranchMeta, error) {
 		UpdatedAt: when,
 	}
 	return m, saveBranchMeta(sessionPath, m, false)
-}
-
-func TouchBranchMeta(sessionPath string) error {
-	return UpdateBranchMeta(sessionPath, false, func(m *BranchMeta) error {
-		m.UpdatedAt = time.Now().UTC()
-		return nil
-	})
 }
 
 func MarkSessionInFlightTurn(sessionPath string, startMessageIndex int, preserveUser bool) error {

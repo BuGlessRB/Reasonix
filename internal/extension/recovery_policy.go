@@ -34,11 +34,6 @@ func DecideResume(store *ReceiptStore, gen uint64) ResumeDecision {
 	}
 }
 
-// DecideResumeDefault uses the compatibility owner's ledger.
-func DecideResumeDefault(gen uint64) ResumeDecision {
-	return DecideResume(RuntimeOwnerOrDefault(nil).Receipts, gen)
-}
-
 // RecordProviderSubmit marks a provider request as already submitted
 // (irreversible). Call after the sidecar accepts stream open.
 func RecordProviderSubmit(generation uint64, streamID, owner string) {

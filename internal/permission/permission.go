@@ -721,13 +721,6 @@ func RememberRuleForScope(toolName, subject string) string {
 	return toolName
 }
 
-// SessionGrantKey returns the in-memory rule for "allow this session". Bash
-// prefers a command prefix when one is available, falling back to the exact
-// command when unsafe. File mutation tools share a single Edit grant.
-func SessionGrantKey(toolName, subject string) string {
-	return SessionGrantRuleForScope(toolName, subject)
-}
-
 // SessionGrantRuleForScope returns the in-memory rule for a session grant.
 // Bash prefers a command prefix when one is available; file mutation tools
 // share a single Edit grant; all other tools return the bare tool name.

@@ -27,11 +27,6 @@ type HandlerResponse struct {
 	AfterWrite func(error)
 }
 
-// RespondThen wraps a handler result with an after-write callback.
-func RespondThen(result any, afterWrite func(error)) HandlerResponse {
-	return HandlerResponse{Result: result, AfterWrite: afterWrite}
-}
-
 // NotificationHandler handles an inbound JSON-RPC notification.
 type NotificationHandler func(ctx context.Context, params json.RawMessage)
 

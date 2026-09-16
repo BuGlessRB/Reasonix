@@ -6,15 +6,15 @@
     "commented-code": 0,
     "complexity": 1496,
     "error-text": 12,
-    "essay": 3213,
-    "file-size": 38171,
+    "essay": 3210,
+    "file-size": 38146,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
-    "orphan": 115,
+    "orphan": 99,
     "refusal-path": 0,
     "spec-parity": 0,
     "struct-state": 41,
@@ -107,7 +107,7 @@
     },
     "internal/agent/branch.go": {
       "essay": 10,
-      "orphan": 5
+      "orphan": 3
     },
     "internal/agent/cache_shape.go": {
       "essay": 3
@@ -554,8 +554,7 @@
     "internal/cli/select.go": {
       "complexity": 60,
       "essay": 1,
-      "function-size": 153,
-      "orphan": 1
+      "function-size": 153
     },
     "internal/cli/serve_frontend.go": {
       "complexity": 6,
@@ -647,7 +646,7 @@
     },
     "internal/config/load.go": {
       "essay": 24,
-      "file-size": 1221,
+      "file-size": 1215,
       "function-size": 58,
       "orphan": 2
     },
@@ -662,24 +661,19 @@
       "orphan": 1
     },
     "internal/config/mutate.go": {
-      "essay": 2,
-      "orphan": 1
+      "essay": 2
     },
     "internal/config/mutate_test.go": {
       "essay": 4
     },
     "internal/config/paths.go": {
-      "essay": 13,
-      "orphan": 1
+      "essay": 10
     },
     "internal/config/plugin_entry.go": {
       "essay": 9
     },
     "internal/config/plugin_packages.go": {
       "essay": 2
-    },
-    "internal/config/pricing.go": {
-      "orphan": 1
     },
     "internal/config/provider_isolation_test.go": {
       "essay": 3
@@ -799,7 +793,7 @@
       "essay": 6
     },
     "internal/control/planner_gate.go": {
-      "orphan": 2
+      "orphan": 1
     },
     "internal/control/port.go": {
       "essay": 8
@@ -898,9 +892,6 @@
     "internal/event/event.go": {
       "essay": 7
     },
-    "internal/event/fanout.go": {
-      "orphan": 1
-    },
     "internal/event/subagent_progress.go": {
       "essay": 9
     },
@@ -957,8 +948,7 @@
       "orphan": 1
     },
     "internal/extension/protocol/protocol.go": {
-      "essay": 5,
-      "orphan": 1
+      "essay": 5
     },
     "internal/extension/protocol/registry.go": {
       "essay": 1,
@@ -983,9 +973,6 @@
     "internal/extension/publish.go": {
       "orphan": 1
     },
-    "internal/extension/recovery_policy.go": {
-      "orphan": 1
-    },
     "internal/extension/replace.go": {
       "essay": 1,
       "narrative": 1,
@@ -999,8 +986,7 @@
     },
     "internal/extension/rpcwire/conn.go": {
       "essay": 11,
-      "file-size": 79,
-      "orphan": 1
+      "file-size": 74
     },
     "internal/extension/rpcwire/stall_test.go": {
       "essay": 1
@@ -1048,9 +1034,6 @@
     "internal/extension/uihub/hub.go": {
       "essay": 6,
       "narrative": 1
-    },
-    "internal/filelock/filelock.go": {
-      "orphan": 2
     },
     "internal/fileref/search.go": {
       "essay": 1
@@ -1172,8 +1155,7 @@
     },
     "internal/permission/permission.go": {
       "essay": 17,
-      "file-size": 78,
-      "orphan": 1
+      "file-size": 71
     },
     "internal/permission/permission_extra_test.go": {
       "essay": 1
@@ -1328,8 +1310,7 @@
     "internal/recovery/rules.go": {
       "complexity": 19,
       "essay": 1,
-      "file-size": 161,
-      "orphan": 1
+      "file-size": 154
     },
     "internal/recovery/types.go": {
       "essay": 1
@@ -1478,8 +1459,7 @@
       "essay": 5
     },
     "internal/shellsafe/shellsafe.go": {
-      "essay": 1,
-      "orphan": 1
+      "essay": 1
     },
     "internal/skill/builtincontent/embed.go": {
       "orphan": 1

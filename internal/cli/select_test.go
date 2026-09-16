@@ -64,9 +64,9 @@ func TestFrameLines(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FrameLines(tt.filtered, tt.termRows, tt.searching)
+			got := frameLines(tt.filtered, tt.termRows, tt.searching)
 			if got != tt.wantLines {
-				t.Errorf("FrameLines(%d, %d, %v) = %d, want %d",
+				t.Errorf("frameLines(%d, %d, %v) = %d, want %d",
 					tt.filtered, tt.termRows, tt.searching, got, tt.wantLines)
 			}
 		})
@@ -79,9 +79,9 @@ func TestFrameLinesNeverExceedsTerminal(t *testing.T) {
 	termRows := 24
 	for _, searching := range []bool{false, true} {
 		for n := range 201 {
-			lines := FrameLines(n, termRows, searching)
+			lines := frameLines(n, termRows, searching)
 			if lines > termRows {
-				t.Errorf("FrameLines(%d, %d, searching=%v) = %d, exceeds terminal",
+				t.Errorf("frameLines(%d, %d, searching=%v) = %d, exceeds terminal",
 					n, termRows, searching, lines)
 			}
 		}

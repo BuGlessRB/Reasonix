@@ -14,7 +14,6 @@
 package protocol
 
 import (
-	"fmt"
 	"strconv"
 )
 
@@ -50,11 +49,4 @@ func CompareProtocolVersion(peerID, peerVersion string) error {
 		return MustProtocolError(ErrUnsupportedVersion)
 	}
 	return nil
-}
-
-// HandshakeIdentity is the SchemaHash-bearing identity line a peer may log or
-// compare after a successful CompareProtocolVersion check. Two peers with
-// equal schema hashes run byte-identical contracts.
-func HandshakeIdentity() string {
-	return fmt.Sprintf("%s major=%d schema=%s", ProtocolID, ProtocolMajor, SchemaHash())
 }

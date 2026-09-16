@@ -262,12 +262,6 @@ func LoadBuiltinDefaultsForRoot(root string) *Config {
 	return cfg
 }
 
-// LoadRecoveryDefaultsForRoot is retained as an alias of LoadBuiltinDefaultsForRoot
-// for older recovery call sites.
-func LoadRecoveryDefaultsForRoot(root string) *Config {
-	return LoadBuiltinDefaultsForRoot(root)
-}
-
 func (c *Config) setExpansionEnv(env map[string]string) {
 	if c == nil {
 		return

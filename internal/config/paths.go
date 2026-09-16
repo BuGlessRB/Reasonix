@@ -515,18 +515,6 @@ func conventionSubdirsAsc(base, sub string) []string {
 	return out
 }
 
-// CommandDirs returns the directories scanned for custom slash commands, lowest
-// priority first, so a later (more specific) directory overrides an earlier one
-// on a name clash. Order: home-dir convention dirs (~/.claude/commands …
-// ~/.reasonix/commands), the Reasonix home commands dir, the legacy OS
-// app-support dir if different, then the project's
-// convention dirs (.claude/commands … .reasonix/commands). Scanning the .claude /
-// .agents / .agent dirs lets commands authored for other agent tools (same .md +
-// frontmatter format) work here unchanged.
-func CommandDirs() []string {
-	return CommandDirsForRoot(".")
-}
-
 // CommandDirsForRoot is like CommandDirs but resolves the project convention
 // dirs under root instead of the current working directory. Global dirs are
 // unchanged — they are always user-scoped.

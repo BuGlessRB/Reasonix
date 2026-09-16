@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"errors"
-	"strings"
 	"testing"
 )
 
@@ -46,13 +45,6 @@ func TestCompareProtocolVersion(t *testing.T) {
 				t.Fatalf("reason = %q, want %q", protocolErr.Reason, tt.reason)
 			}
 		})
-	}
-}
-
-func TestHandshakeIdentityEmbedsSchemaHash(t *testing.T) {
-	identity := HandshakeIdentity()
-	if !strings.Contains(identity, ProtocolID) || !strings.Contains(identity, SchemaHash()) {
-		t.Fatalf("HandshakeIdentity = %q, want protocol ID and schema hash embedded", identity)
 	}
 }
 
