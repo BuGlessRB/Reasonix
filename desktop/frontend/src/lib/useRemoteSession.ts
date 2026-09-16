@@ -4,9 +4,11 @@ import { createLegacyRemotePolicyNoticeTracker } from "./legacyRemotePolicyNotic
 import { app, onRemoteTabEvent, onRemoteTabState } from "./bridge";
 import { onRemoteTabUpdated } from "./remoteTabEvents";
 import { hydrateRemoteTelemetry, loadRemoteStatusSnapshot } from "./remoteTelemetry";
+import { remoteStatusToAction } from "./remoteStatus";
 import { useRemoteForkTurn } from "./remoteForkTurn";
 import { useT } from "./i18n";
 import type { CancelOutcome } from "./inboxCancel";
+import type { HistoryMessage } from "./types";
 import { initialState, reducer, type ControllerLiveStore, type HistoryLoadOutcome, type HistoryLoadTrigger, type State } from "./useController";
 import { TranscriptSessionFollower } from "./transcriptSessionFollower";
 import { getTranscriptStore } from "./transcriptStore";
@@ -246,7 +248,33 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
         setSurfaceGeneration(value => value + 1);
         void forkTargetsRefreshRef.current?.();
       } catch (error) {
-        if (!cancelled && ticket === generation) setError(String(error));
+        // The transcript protocol requires the live runtime that owns the
+        // session. A session taken over by a local runtime (the serve rotated
+        // its foreground away, the desktop is a spectator) answers 409, and
+        // the identity/legacy history view is the supported read path there.
+        const legacyLoaded = await loadRemoteStatusSnapshot(tabId, mountedState === "ready" ? 3 : 60,
+          () => cancelled || ticket !== generation, isAuthoritativeRemoteStatus, false);
+        if (!legacyLoaded || cancelled || ticket !== generation) {
+          if (!cancelled && ticket === generation) setError(String(error));
+          return;
+        }
+        const [snapshot, status] = legacyLoaded;
+        const messages = Array.isArray(snapshot.history) ? snapshot.history as HistoryMessage[] : [];
+        const checkpoints = remoteCheckpoints(snapshot.checkpoints);
+        applyRemoteStatus(status);
+        setCommands(Array.isArray(snapshot.commands) ? snapshot.commands as CommandInfo[] : []);
+        setTranscript(current => {
+          let next = reducer(current, { type: "history", messages, remote: true });
+          next = reducer(next, { type: "checkpoints", checkpoints });
+          next = reducer(next, remoteStatusToAction(status, Date.now(), next.running));
+          return hydrateRemoteTelemetry(next, status);
+        });
+        hydratedRef.current = true;
+        setState("ready");
+        setHydrated(true);
+        setError("");
+        setSurfaceGeneration(value => value + 1);
+        void forkTargetsRefreshRef.current?.();
       }
     };
     const offContent = getTranscriptStore().subscribe(tabId, change => dispatch({ type: "history_items_patch", patches: change.patches }));
