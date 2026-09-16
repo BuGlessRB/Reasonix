@@ -454,6 +454,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // late-resolving dynamic-chunk await between the connection-generation check
 // and status application; the module moves onto the startup path and the
 // merged payload measures 2437.6 KiB. Retain the next tenth.
-const rawInitialBudgetKiB = 2_437.7;
+// The snapshot orphan reconciliation (content fallback for id-less rebase)
+// adds 0.3 KiB raw; the merged payload measures 2437.9 KiB. Same ceiling rule.
+const rawInitialBudgetKiB = 2_438.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
