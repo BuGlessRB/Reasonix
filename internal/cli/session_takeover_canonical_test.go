@@ -332,7 +332,9 @@ func TestCanonicalReclaimCanTakeSameSessionAgain(t *testing.T) {
 	}
 
 	fake.reclaim.Store(false)
-	m.pendingTakeoverPath = route
+	// The user-facing path: after a reclaim the notice says "/takeover takes
+	// it back" — the command must resolve the remembered reclaimed target
+	// without a prior /resume (which would re-populate pendingTakeoverPath).
 	m.runTakeoverCommand("/takeover")
 	if ref, bound := ctrl.SessionRef(); !bound || ref != held {
 		t.Fatalf("controller after second takeover = %+v bound=%v, want %+v", ref, bound, held)

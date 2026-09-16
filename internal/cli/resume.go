@@ -306,6 +306,16 @@ func (m *chatTUI) runTakeoverCommand(input string) {
 			}
 		}
 	}
+	if target == "" && m.sessionReclaimed {
+		// The reclaim notice promises "/takeover takes it back": the session
+		// the desktop re-claimed is remembered in reclaimedTarget, not in
+		// pendingTakeoverPath (which only a refused resume populates).
+		if m.reclaimedTarget.canonical() {
+			target = cliCanonicalRoute(m.reclaimedTarget.ref.SessionID)
+		} else {
+			target = m.reclaimedTarget.path
+		}
+	}
 	if target == "" {
 		m.notice("takeover: no refused session; run /resume <n> first or pass an index")
 		return
