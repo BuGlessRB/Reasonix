@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -313,7 +313,7 @@ func normalize(server apiServer) (Entry, bool) {
 		return entry, true
 	}
 	if len(reasons) > 0 {
-		sort.Strings(reasons)
+		slices.Sort(reasons)
 		entry.UnavailableReason = reasons[0]
 	} else {
 		entry.UnavailableReason = "no supported stdio, Streamable HTTP, or SSE transport"

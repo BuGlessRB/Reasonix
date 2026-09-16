@@ -19,7 +19,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -1786,7 +1785,7 @@ func providersWithMissingKeys(cfg *config.Config) []config.ProviderEntry {
 		for key := range cfg.Agent.SubagentModels {
 			keys = append(keys, key)
 		}
-		sort.Strings(keys)
+		slices.Sort(keys)
 		for _, key := range keys {
 			refs = append(refs, cfg.Agent.SubagentModels[key])
 		}

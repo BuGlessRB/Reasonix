@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 )
@@ -583,7 +583,7 @@ func (a *quoteAccumulator) finish() CostQuote {
 		for code := range a.originalTotals {
 			codes = append(codes, code)
 		}
-		sort.Strings(codes)
+		slices.Sort(codes)
 		for _, code := range codes {
 			a.out.OriginalTotals = append(a.out.OriginalTotals, MoneyOf(a.originalTotals[code], code))
 		}

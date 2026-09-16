@@ -3,7 +3,7 @@ package theme
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -50,7 +50,7 @@ func TokenNames() []string {
 	for name := range Tokens {
 		out = append(out, name)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

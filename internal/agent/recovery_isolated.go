@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/provider"
@@ -55,7 +55,7 @@ func siblingRecoveryBranchWithDigest(originalPath, digestText string) (string, b
 	if err != nil {
 		return "", false
 	}
-	sort.Strings(matches)
+	slices.Sort(matches)
 	for _, path := range matches {
 		if path == originalPath || IsCleanupPending(path) {
 			continue

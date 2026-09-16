@@ -2,7 +2,7 @@ package remote
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"sync"
 	"testing"
@@ -11,7 +11,7 @@ import (
 	"reasonix/internal/remote/sshtest"
 )
 
-func deterministicRand() *rand.Rand { return rand.New(rand.NewSource(1)) }
+func deterministicRand() *rand.Rand { return rand.New(rand.NewPCG(uint64(1), uint64(1))) }
 
 // fakeClock is a controllable Clock. After() channels fire when advance() moves
 // past their deadline.

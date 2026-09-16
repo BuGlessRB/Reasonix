@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -344,7 +344,7 @@ func (s *SubagentStore) CleanupStaleRunning() (int, error) {
 	for parentID := range parents {
 		parentIDs = append(parentIDs, parentID)
 	}
-	sort.Strings(parentIDs)
+	slices.Sort(parentIDs)
 
 	now := time.Now().UTC()
 	cleaned := 0

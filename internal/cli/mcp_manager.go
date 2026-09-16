@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -404,7 +405,7 @@ func withMCPPluginConfig(v mcpServerView, p config.PluginEntry, workspace string
 		for k := range p.Env {
 			v.EnvKeys = append(v.EnvKeys, k)
 		}
-		sort.Strings(v.EnvKeys)
+		slices.Sort(v.EnvKeys)
 	}
 	auth := mcpdiag.DiagnoseAuth(v.Transport, v.Status, v.Error, v.URL, v.authConfigured)
 	v.AuthStatus = auth.Status

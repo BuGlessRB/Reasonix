@@ -7,7 +7,7 @@
     "complexity": 1496,
     "error-text": 9,
     "essay": 3208,
-    "file-size": 38097,
+    "file-size": 38073,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
@@ -453,7 +453,7 @@
     "internal/cli/cli.go": {
       "complexity": 65,
       "essay": 57,
-      "file-size": 1578,
+      "file-size": 1577,
       "function-size": 426
     },
     "internal/cli/cli_test.go": {
@@ -1007,7 +1007,7 @@
     "internal/hook/hook.go": {
       "complexity": 15,
       "essay": 44,
-      "file-size": 789
+      "file-size": 788
     },
     "internal/hook/hook_test.go": {
       "essay": 8
@@ -1082,7 +1082,7 @@
     },
     "internal/memory/store.go": {
       "essay": 6,
-      "file-size": 38
+      "file-size": 24
     },
     "internal/memory/store_v2.go": {
       "complexity": 17,
@@ -1163,7 +1163,7 @@
     "internal/pluginpkg/pluginpkg.go": {
       "complexity": 1,
       "essay": 2,
-      "file-size": 403
+      "file-size": 398
     },
     "internal/pluginpkg/state_lock_test.go": {
       "essay": 1
@@ -1202,7 +1202,7 @@
     },
     "internal/provider/provider.go": {
       "essay": 50,
-      "file-size": 252
+      "file-size": 251
     },
     "internal/provider/responses/responses.go": {
       "essay": 11,
@@ -1296,7 +1296,7 @@
     },
     "internal/repair/plan.go": {
       "essay": 2,
-      "file-size": 53,
+      "file-size": 51,
       "orphan": 2
     },
     "internal/repair/snapshot.go": {

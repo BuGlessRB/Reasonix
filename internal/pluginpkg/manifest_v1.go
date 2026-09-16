@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -190,7 +189,7 @@ func sortedKeys[V any](m map[string]V) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }
 
@@ -217,7 +216,7 @@ func unionPathLists(legacy, contrib []string) []string {
 			}
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -563,7 +562,7 @@ func globThemePattern(root, pattern string) ([]string, error) {
 		}
 		matches = next
 	}
-	sort.Strings(matches)
+	slices.Sort(matches)
 	return matches, nil
 }
 

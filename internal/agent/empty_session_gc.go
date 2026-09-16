@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -75,7 +75,7 @@ func ReclaimableEmptySessions(dir string, now time.Time, grace time.Duration) ([
 		}
 		out = append(out, path)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out, nil
 }
 

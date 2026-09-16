@@ -73,7 +73,7 @@ func (gw *BotGateway) buildProjectIndex() []botProjectEntry {
 	for platform := range gw.cfg.Channels {
 		platforms = append(platforms, string(platform))
 	}
-	sort.Strings(platforms)
+	slices.Sort(platforms)
 	for _, platform := range platforms {
 		channel := gw.cfg.Channels[Platform(platform)]
 		source := "channel:" + platform
@@ -85,7 +85,7 @@ func (gw *BotGateway) buildProjectIndex() []botProjectEntry {
 	for id := range gw.cfg.ConnectionChannels {
 		connections = append(connections, id)
 	}
-	sort.Strings(connections)
+	slices.Sort(connections)
 	for _, id := range connections {
 		channel := gw.cfg.ConnectionChannels[id]
 		source := "connection:" + id
@@ -154,7 +154,7 @@ func (c *botProjectCollector) entries() []botProjectEntry {
 	out := make([]botProjectEntry, 0, len(c.byRoot))
 	for _, entry := range c.byRoot {
 		copied := *entry
-		sort.Strings(copied.Sources)
+		slices.Sort(copied.Sources)
 		out = append(out, copied)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -186,7 +186,7 @@ func (gw *BotGateway) buildSessionIndex(projects []botProjectEntry) []botSession
 	for platform := range gw.cfg.Channels {
 		platforms = append(platforms, string(platform))
 	}
-	sort.Strings(platforms)
+	slices.Sort(platforms)
 	for _, platform := range platforms {
 		channel := gw.cfg.Channels[Platform(platform)]
 		addMappingSessions(collector, channel, "", "channel:"+platform)
@@ -196,7 +196,7 @@ func (gw *BotGateway) buildSessionIndex(projects []botProjectEntry) []botSession
 	for id := range gw.cfg.ConnectionChannels {
 		connections = append(connections, id)
 	}
-	sort.Strings(connections)
+	slices.Sort(connections)
 	for _, id := range connections {
 		channel := gw.cfg.ConnectionChannels[id]
 		addMappingSessions(collector, channel, id, "connection:"+id)

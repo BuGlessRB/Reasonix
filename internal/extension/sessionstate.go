@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/fileutil"
@@ -132,7 +132,7 @@ func (s *SessionExtensions) Plugins() []string {
 	for pluginID := range s.plugins {
 		out = append(out, pluginID)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

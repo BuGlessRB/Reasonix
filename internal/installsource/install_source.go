@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -535,7 +536,7 @@ func (t *installSourceTool) resolveRegisteredSkillRoot(name, scope, cfgPath stri
 		if !found {
 			continue
 		}
-		sort.Strings(names)
+		slices.Sort(names)
 		return action{
 			Kind:       "skill",
 			Action:     "remove_skill_root",

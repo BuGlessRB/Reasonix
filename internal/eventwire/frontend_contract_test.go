@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -54,7 +54,7 @@ func TestFrontendTypesReadOnlyFieldsTheWireCarries(t *testing.T) {
 			}
 		}
 		if len(missing) > 0 {
-			sort.Strings(missing)
+			slices.Sort(missing)
 			t.Errorf("%s declares %s, which this package never sends", m[1], strings.Join(missing, ", "))
 		}
 	}

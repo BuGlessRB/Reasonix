@@ -3,7 +3,7 @@ package pluginpkg
 import (
 	"fmt"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -18,7 +18,7 @@ func InstalledNames(reasonixHome string) ([]string, error) {
 	for _, p := range st.Plugins {
 		names = append(names, p.Name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names, nil
 }
 

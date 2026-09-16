@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 )
@@ -79,7 +79,7 @@ func collectServeState(dir string) (*serveState, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 	state := &serveState{Dir: dir, Now: time.Now().UnixMilli(), Tasks: []serveTask{}}
 	for _, path := range paths {
 		scan, err := scanTrajectoryFile(path)

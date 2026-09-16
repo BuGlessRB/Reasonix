@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -250,7 +249,7 @@ func lockRepairMutationsTimeout(timeout time.Duration, paths ...string) (func(),
 	if len(keys) == 0 {
 		return func() {}, nil
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	repairMutationBeforeLock(append([]string(nil), keys...))
 
 	if timeout <= 0 {

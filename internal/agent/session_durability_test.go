@@ -2,7 +2,7 @@ package agent
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -480,9 +480,9 @@ func TestDurabilityFuzzCrashConsistency(t *testing.T) {
 	}
 	for seed := int64(1); seed <= 20; seed++ {
 		t.Run(fmt.Sprintf("seed%02d", seed), func(t *testing.T) {
-			rng := rand.New(rand.NewSource(seed))
-			steps := 2 + rng.Intn(5)
-			crashStep := 1 + rng.Intn(steps)
+			rng := rand.New(rand.NewPCG(uint64(seed), uint64(seed)))
+			steps := 2 + rng.IntN(5)
+			crashStep := 1 + rng.IntN(steps)
 
 			type stepKind int
 			const (
@@ -491,7 +491,7 @@ func TestDurabilityFuzzCrashConsistency(t *testing.T) {
 			)
 			kinds := make([]stepKind, steps)
 			for i := range kinds {
-				if rng.Intn(10) < 8 || i == 0 {
+				if rng.IntN(10) < 8 || i == 0 {
 					kinds[i] = kindAppend
 				} else {
 					kinds[i] = kindRewrite
@@ -529,7 +529,7 @@ func TestDurabilityFuzzCrashConsistency(t *testing.T) {
 			if len(ops) == 0 {
 				t.Skip("crash step crossed no boundaries")
 			}
-			boundary := 1 + rng.Intn(len(ops))
+			boundary := 1 + rng.IntN(len(ops))
 
 			d := newDurabilityRun(t)
 			s := NewSession("system prompt")

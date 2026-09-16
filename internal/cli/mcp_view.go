@@ -2,7 +2,7 @@ package cli
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/plugin"
@@ -54,7 +54,7 @@ func extraMCPServers(seen map[string]bool, prompts map[string][]plugin.Prompt, r
 	for name := range set {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names
 }
 

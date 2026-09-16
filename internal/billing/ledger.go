@@ -2,6 +2,7 @@ package billing
 
 import (
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -182,7 +183,7 @@ func mergeOriginalTotals(existing []Money, q CostQuote) []Money {
 	for code := range amounts {
 		codes = append(codes, code)
 	}
-	sort.Strings(codes)
+	slices.Sort(codes)
 	out := make([]Money, 0, len(codes))
 	for _, code := range codes {
 		out = append(out, MoneyOf(amounts[code], code))

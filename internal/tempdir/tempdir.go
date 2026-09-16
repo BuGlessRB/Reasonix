@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -99,6 +99,6 @@ func sorted(set map[string]bool) []string {
 	for name := range set {
 		out = append(out, name)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }

@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -1175,7 +1175,7 @@ func renderPricingMap(prices map[string]*provider.Pricing) string {
 	if len(keys) == 0 {
 		return "{}"
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, model := range keys {
@@ -1233,7 +1233,7 @@ func renderEnvironmentConfig(b *strings.Builder, cfg EnvironmentConfig) {
 	for name := range cfg.Tools {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	for _, name := range names {
 		fmt.Fprintf(b, "%s = %q\n", renderTOMLKeyPart(name), cfg.Tools[name])
 	}
@@ -1293,7 +1293,7 @@ func renderLSPConfig(b *strings.Builder, cfg LSPConfig) {
 	for lang := range cfg.Servers {
 		langs = append(langs, lang)
 	}
-	sort.Strings(langs)
+	slices.Sort(langs)
 	for _, lang := range langs {
 		srv := cfg.Servers[lang]
 		fmt.Fprintf(b, "[%s]\n", renderTOMLTablePath("lsp", "servers", lang))
@@ -1385,7 +1385,7 @@ func renderStringMap(m map[string]string) string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, k := range keys {
@@ -1408,7 +1408,7 @@ func renderAnyMap(m map[string]any) string {
 			keys = append(keys, k)
 		}
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, k := range keys {
@@ -1486,7 +1486,7 @@ func renderModelOverrides(m map[string]ProviderModelOverride) string {
 		}
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, k := range keys {
@@ -1544,7 +1544,7 @@ func renderIntMap(m map[string]int) string {
 			keys = append(keys, k)
 		}
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, k := range keys {

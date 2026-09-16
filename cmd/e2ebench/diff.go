@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -607,7 +607,7 @@ func filterGo(out string, includeTests bool) []string {
 		}
 		keep = append(keep, f)
 	}
-	sort.Strings(keep)
+	slices.Sort(keep)
 	return keep
 }
 
@@ -621,7 +621,7 @@ func packagesOf(files []string) []string {
 			pkgs = append(pkgs, dir)
 		}
 	}
-	sort.Strings(pkgs)
+	slices.Sort(pkgs)
 	return pkgs
 }
 

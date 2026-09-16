@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -266,7 +266,7 @@ func runSFTMode(dir, suite, reportPath, out string) error {
 	if len(paths) == 0 {
 		return fmt.Errorf("no *.trajectory.jsonl files under %s", dir)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 	prompts, err := sftPrompts(suite)
 	if err != nil {
 		return err

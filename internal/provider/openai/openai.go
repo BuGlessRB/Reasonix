@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1063,7 +1063,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		}
 	}
 
-	sort.Ints(order)
+	slices.Sort(order)
 	for _, idx := range order {
 		tc := acc[idx]
 		if tc.ID == "" {

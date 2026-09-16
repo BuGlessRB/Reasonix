@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -152,7 +151,7 @@ func lockConfigFilesEdits(paths ...string) (func(), error) {
 		seenLocks[target.lockPath] = struct{}{}
 		lockPaths = append(lockPaths, target.lockPath)
 	}
-	sort.Strings(lockPaths)
+	slices.Sort(lockPaths)
 
 	ctx, cancel := context.WithTimeout(context.Background(), configEditLockTimeout)
 	defer cancel()

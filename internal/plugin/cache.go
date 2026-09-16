@@ -16,7 +16,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -281,7 +281,7 @@ func writeKeys(h io.Writer, key string, m map[string]string) {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for _, k := range keys {
 		writeField(h, key+"."+k, "present")
 	}

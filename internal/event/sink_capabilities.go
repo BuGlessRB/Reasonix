@@ -2,7 +2,7 @@ package event
 
 import (
 	"reflect"
-	"sort"
+	"slices"
 )
 
 // capabilityContracts is the single authority on the optional capabilities a
@@ -30,7 +30,7 @@ func CapabilityNames() []string {
 	for name := range capabilityContracts {
 		out = append(out, name)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -441,7 +442,7 @@ func sortedMapKeys(m map[string]string) []string {
 			keys = append(keys, k)
 		}
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }
 
@@ -521,6 +522,6 @@ func normalizedDenyRoots(roots []string) []string {
 			out = append(out, abs)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }

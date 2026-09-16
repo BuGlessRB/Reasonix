@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -48,7 +48,7 @@ func TestFrontendCallsOnlyPathsThisPackageServes(t *testing.T) {
 	}
 
 	if len(missing) > 0 {
-		sort.Strings(missing)
+		slices.Sort(missing)
 		t.Errorf("no route answers these:\n\t%s", strings.Join(missing, "\n\t"))
 	}
 	// Either side can be restructured out of the shape these patterns read. A

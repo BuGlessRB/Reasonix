@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -48,7 +48,7 @@ func rebuildDerivedStateBoundUnlocked(
 		for name := range paths {
 			names = append(names, name)
 		}
-		sort.Strings(names)
+		slices.Sort(names)
 	} else if _, ok := paths[target]; ok {
 		names = []string{target}
 	} else {
@@ -129,7 +129,7 @@ func derivedStateTargetPaths(target string) ([]string, error) {
 		for name := range paths {
 			names = append(names, name)
 		}
-		sort.Strings(names)
+		slices.Sort(names)
 		out := make([]string, 0, len(names))
 		for _, name := range names {
 			if path := paths[name]; path != "" {

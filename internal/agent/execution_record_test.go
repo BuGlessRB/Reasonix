@@ -7,7 +7,6 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -571,7 +570,7 @@ func completedChildRefs(t *testing.T, sessionPath string) []string {
 			out = append(out, a.Ref)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

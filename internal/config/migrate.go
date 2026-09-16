@@ -10,7 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
@@ -471,7 +471,7 @@ func credentialLines(assignments map[string]string) []string {
 	for key := range assignments {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	lines := make([]string, 0, len(keys))
 	for _, key := range keys {
 		lines = append(lines, key+"="+assignments[key])
@@ -647,7 +647,7 @@ func legacyPlugins(legacy legacyConfig) []PluginEntry {
 	for n := range legacy.MCPServers {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	for _, name := range names {
 		s := legacy.MCPServers[name]
 		pe := PluginEntry{

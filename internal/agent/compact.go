@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -784,6 +784,6 @@ func summarizeToolArgs(args string) string {
 	for k := range parsed {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return fmt.Sprintf("{%s} (%d keys)", strings.Join(keys, ", "), len(parsed))
 }

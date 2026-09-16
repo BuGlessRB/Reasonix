@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -244,7 +244,7 @@ func backoffDelay(attempt int, retryAfter time.Duration) time.Duration {
 		return retryAfter
 	}
 	d := min(time.Duration(1<<(attempt-1))*500*time.Millisecond, maxBackoff)
-	return d + time.Duration(rand.Intn(250))*time.Millisecond
+	return d + time.Duration(rand.IntN(250))*time.Millisecond
 }
 
 func parseRetryAfter(resp *http.Response) time.Duration {

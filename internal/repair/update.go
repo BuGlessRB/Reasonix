@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -1322,7 +1322,7 @@ func sameRepairMutationPaths(a, b []string) bool {
 			seen[key] = struct{}{}
 			result = append(result, key)
 		}
-		sort.Strings(result)
+		slices.Sort(result)
 		return result
 	}
 	return reflect.DeepEqual(keys(a), keys(b))

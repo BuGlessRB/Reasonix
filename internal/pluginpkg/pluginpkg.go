@@ -6,6 +6,7 @@
 package pluginpkg
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,7 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -296,7 +297,7 @@ func LoadState(reasonixHome string) (State, error) {
 	if st.Version == 0 {
 		st.Version = 1
 	}
-	sort.SliceStable(st.Plugins, func(i, j int) bool { return st.Plugins[i].Name < st.Plugins[j].Name })
+	slices.SortStableFunc(st.Plugins, func(a, b InstalledPlugin) int { return cmp.Compare(a.Name, b.Name) })
 	return st, nil
 }
 
@@ -304,7 +305,7 @@ func SaveState(reasonixHome string, st State) error {
 	if st.Version == 0 {
 		st.Version = 1
 	}
-	sort.SliceStable(st.Plugins, func(i, j int) bool { return st.Plugins[i].Name < st.Plugins[j].Name })
+	slices.SortStableFunc(st.Plugins, func(a, b InstalledPlugin) int { return cmp.Compare(a.Name, b.Name) })
 	b, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
@@ -707,7 +708,7 @@ func cleanPathList(paths []string) ([]string, error) {
 			out = append(out, slash)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out, nil
 }
 
@@ -842,7 +843,7 @@ func (p Package) SkillRoots() []string {
 	for _, rel := range p.Manifest.Skills {
 		out = append(out, filepath.Join(p.Root, filepath.FromSlash(rel)))
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -851,7 +852,7 @@ func (p Package) AgentRoots() []string {
 	for _, rel := range p.Manifest.Agents {
 		out = append(out, filepath.Join(p.Root, filepath.FromSlash(rel)))
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -862,7 +863,7 @@ func (p Package) CommandRoots() []string {
 	for _, rel := range p.Manifest.Commands {
 		out = append(out, filepath.Join(p.Root, filepath.FromSlash(rel)))
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -873,7 +874,7 @@ func (p Package) PromptRoots() []string {
 	for _, rel := range p.Manifest.Prompts {
 		out = append(out, filepath.Join(p.Root, filepath.FromSlash(rel)))
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -1012,11 +1013,8 @@ func (p Package) themeRefs() []ThemeRef {
 			})
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Name != out[j].Name {
-			return out[i].Name < out[j].Name
-		}
-		return out[i].Path < out[j].Path
+	slices.SortStableFunc(out, func(a, b ThemeRef) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Path, b.Path))
 	})
 	return out
 }
@@ -1040,11 +1038,8 @@ func (p Package) skillRefs() []SkillRef {
 		seen[key] = true
 		filtered = append(filtered, sk)
 	}
-	sort.SliceStable(filtered, func(i, j int) bool {
-		if filtered[i].Name != filtered[j].Name {
-			return filtered[i].Name < filtered[j].Name
-		}
-		return filtered[i].Path < filtered[j].Path
+	slices.SortStableFunc(filtered, func(a, b SkillRef) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Path, b.Path))
 	})
 	return filtered
 }
@@ -1154,7 +1149,7 @@ func (p Package) hookRefs() []HookRef {
 	for event := range p.Manifest.Hooks {
 		events = append(events, event)
 	}
-	sort.Strings(events)
+	slices.Sort(events)
 	var out []HookRef
 	for _, event := range events {
 		for _, hook := range p.Manifest.Hooks[event] {
@@ -1175,7 +1170,7 @@ func (p Package) mcpServerRefs() []MCPServerRef {
 	for name := range p.Manifest.MCPServers {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	out := make([]MCPServerRef, 0, len(names))
 	for _, name := range names {
 		server := p.Manifest.MCPServers[name]

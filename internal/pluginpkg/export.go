@@ -11,7 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -104,7 +104,7 @@ func Export(name, root string) ([]byte, []string, error) {
 	for n := range required {
 		out = append(out, n)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return buf.Bytes(), out, nil
 }
 
@@ -142,7 +142,7 @@ func StripCredentials(raw []byte) ([]byte, []string, error) {
 	for n := range required {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return append(out, '\n'), names, nil
 }
 

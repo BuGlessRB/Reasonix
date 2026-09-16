@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -121,7 +121,7 @@ func New(opts Options) (*Client, error) {
 	}
 	rng := opts.Rand
 	if rng == nil {
-		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+		rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	}
 	c := &Client{
 		opts:        opts,
@@ -430,7 +430,7 @@ func (c *Client) keepaliveOK(cl *ssh.Client) bool {
 // ended during the wait.
 func (c *Client) sleepBackoff(ctx context.Context, attempt int) bool {
 	ceil := c.opts.Backoff.delay(attempt - 1)
-	d := time.Duration(c.rng.Int63n(int64(ceil) + 1))
+	d := time.Duration(c.rng.Int64N(int64(ceil) + 1))
 	select {
 	case <-ctx.Done():
 		return false

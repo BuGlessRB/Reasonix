@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/fileutil"
@@ -126,7 +126,7 @@ func specsToEntries(specs map[string]mcpServerSpec, source MCPConfigSource, skip
 			names = append(names, name)
 		}
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	entries := make([]PluginEntry, 0, len(names))
 	for _, name := range names {
 		entry := pluginEntryFromMCPSpec(name, specs[name])

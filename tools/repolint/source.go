@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -76,7 +76,7 @@ func collect(root string) ([]string, error) {
 		out = append(out, filepath.ToSlash(rel))
 		return nil
 	})
-	sort.Strings(out)
+	slices.Sort(out)
 	return out, err
 }
 

@@ -25,7 +25,6 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -321,7 +320,7 @@ func appendPluginHooks(out *[]ResolvedHook, reasonixHomeDir, projectRoot string)
 		for event := range pkg.Manifest.Hooks {
 			events = append(events, event)
 		}
-		sort.Strings(events)
+		slices.Sort(events)
 		for _, eventName := range events {
 			event := Event(eventName)
 			if !validEvent(event) {
@@ -1070,7 +1069,7 @@ func CheckPackageRuntime(pkg pluginpkg.Package, options RuntimeOptions) []Runtim
 	for event := range pkg.Manifest.Hooks {
 		events = append(events, event)
 	}
-	sort.Strings(events)
+	slices.Sort(events)
 	var issues []RuntimeIssue
 	for _, eventName := range events {
 		for _, h := range pkg.Manifest.Hooks[eventName] {
@@ -1282,7 +1281,7 @@ func defaultSpawner(ctx context.Context, in SpawnInput, options RuntimeOptions) 
 		for k := range in.Env {
 			keys = append(keys, k)
 		}
-		sort.Strings(keys)
+		slices.Sort(keys)
 		for _, k := range keys {
 			env = append(env, k+"="+in.Env[k])
 		}

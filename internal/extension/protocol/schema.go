@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -96,7 +96,7 @@ func buildJSONSchema(defs map[string]any, typ reflect.Type) (any, error) {
 	}
 	if allowed, ok := enumTypes[typ]; ok {
 		values := append([]string(nil), allowed...)
-		sort.Strings(values)
+		slices.Sort(values)
 		enum := make([]any, len(values))
 		for i, value := range values {
 			enum[i] = value
@@ -188,7 +188,7 @@ func buildObjectSchema(defs map[string]any, typ reflect.Type) (map[string]any, e
 			return nil, fmt.Errorf("duplicate JSON field %q", required[i])
 		}
 	}
-	sort.Strings(required)
+	slices.Sort(required)
 	object := map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,

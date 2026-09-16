@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
@@ -196,7 +195,7 @@ func appendPluginInspect(out *Inspection, reasonixHomeDir, projectRoot string) {
 		for event := range pkg.Manifest.Hooks {
 			events = append(events, event)
 		}
-		sort.Strings(events)
+		slices.Sort(events)
 		for _, eventName := range events {
 			event := Event(eventName)
 			// Keep unknown event names so diagnostics can report them.

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -225,7 +225,7 @@ func (r *MCPCapabilityRuntime) catalogStateLocked() (entries []config.PluginEntr
 	for name := range r.servers {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	entries = make([]config.PluginEntry, 0, len(names))
 	cached = make(map[string][]plugin.CachedTool, len(names))
 	keyOK = make(map[string]bool, len(names))
@@ -261,7 +261,7 @@ func (r *MCPCapabilityRuntime) configuredServers() []mcpRuntimeServer {
 	for name := range r.servers {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	out := make([]mcpRuntimeServer, 0, len(names))
 	for _, name := range names {
 		server := r.servers[name]
@@ -1377,7 +1377,7 @@ func (t *UseCapabilityTool) configuredServers() []mcpRuntimeServer {
 			enabled: true,
 		})
 	}
-	sort.Slice(servers, func(i, j int) bool { return servers[i].spec.Name < servers[j].spec.Name })
+	slices.SortFunc(servers, func(a, b mcpRuntimeServer) int { return strings.Compare(a.spec.Name, b.spec.Name) })
 	return servers
 }
 

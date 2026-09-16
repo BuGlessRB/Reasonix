@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sort"
 	"strings"
 	"unicode"
 
@@ -1047,6 +1046,6 @@ func Kinds() []string {
 	for k := range registry {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }

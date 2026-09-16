@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
@@ -222,7 +222,7 @@ func loadCCSwitchLegacyConfig(path string) ([]PluginEntry, error) {
 	for key := range doc.MCP.Servers {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var entries []PluginEntry
 	for _, key := range keys {
 		srv := doc.MCP.Servers[key]

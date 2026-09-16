@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -409,7 +409,7 @@ func (s *providerSetupSession) credentialLines() []string {
 	for key := range s.pendingCredentials {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	lines := make([]string, 0, len(keys))
 	for _, key := range keys {
 		lines = append(lines, key+"="+s.pendingCredentials[key])
@@ -440,7 +440,7 @@ func (s *providerSetupSession) summary() []string {
 		for name := range s.removed {
 			names = append(names, name)
 		}
-		sort.Strings(names)
+		slices.Sort(names)
 		out = append(out, fmt.Sprintf(i18n.M.SetupSummaryRemovedFmt, strings.Join(names, ", ")))
 	}
 	if s.cfg.DefaultModel != s.originalDefault {

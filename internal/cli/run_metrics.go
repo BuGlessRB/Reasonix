@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"maps"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -402,7 +402,7 @@ func originalTotalsFromFloatMap(totals map[string]float64) []billing.Money {
 	for code := range totals {
 		codes = append(codes, code)
 	}
-	sort.Strings(codes)
+	slices.Sort(codes)
 	out := make([]billing.Money, 0, len(codes))
 	for _, code := range codes {
 		out = append(out, billing.MoneyOf(billing.NewAmountFromFloat(totals[code]), code))

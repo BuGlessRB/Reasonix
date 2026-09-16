@@ -531,7 +531,7 @@ func (s *Store) prepareTransaction(plan RewindPlan, applier ConversationApplier)
 		for p := range earliest {
 			paths = append(paths, p)
 		}
-		sort.Strings(paths)
+		slices.Sort(paths)
 		for targetIndex, p := range paths {
 			rev := earliest[p]
 			abs, err := safePath(s.root, p)
@@ -1383,7 +1383,7 @@ func (s *Store) filesFromTurnLocked(fromTurn int) []string {
 			out = append(out, pathKey)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -1505,7 +1505,7 @@ func (s *Store) restoreCheckpointBackup(backup []byte) error {
 	for t := range byTurn {
 		turns = append(turns, t)
 	}
-	sort.Ints(turns)
+	slices.Sort(turns)
 	s.done = nil
 	s.cur = nil
 	for _, t := range turns {

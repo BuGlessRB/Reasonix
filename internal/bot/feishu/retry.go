@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"time"
 
 	"reasonix/internal/bot"
@@ -42,7 +42,7 @@ func withTransientRetry(ctx context.Context, logger *slog.Logger, op string, fn 
 		if err == nil || attempt >= transientRetryAttempts || ctx.Err() != nil || !neterr.IsTransient(err) {
 			return err
 		}
-		wait := delay + time.Duration(mrand.Int63n(int64(delay/4)+1))
+		wait := delay + time.Duration(mrand.Int64N(int64(delay/4)+1))
 		logger.Warn("feishu transient error; retrying", "op", op, "attempt", attempt, "wait", wait, "err", err)
 		if !bot.SleepCtx(ctx, wait) {
 			return err

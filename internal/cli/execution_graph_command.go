@@ -2,7 +2,7 @@ package cli
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -82,7 +82,7 @@ func workerLines(g agentgraph.Graph) []string {
 		}
 		out = append(out, line)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

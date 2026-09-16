@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -54,7 +54,7 @@ func (b *Balance) Currencies() []string {
 	for cur := range seen {
 		result = append(result, cur)
 	}
-	sort.Strings(result)
+	slices.Sort(result)
 	return result
 }
 

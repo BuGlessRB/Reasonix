@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -57,7 +57,7 @@ func (h *Host) ConnectingServers() []string {
 	for name := range names {
 		out = append(out, name)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

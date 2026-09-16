@@ -15,7 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -131,7 +131,7 @@ func reportCheckedOn() {
 	for provider := range oldest {
 		providers = append(providers, provider)
 	}
-	sort.Strings(providers)
+	slices.Sort(providers)
 	fmt.Println("\nlast confirmed by a person:")
 	for _, provider := range providers {
 		fmt.Printf("    %-10s %s%s\n", provider, oldest[provider], ageOf(oldest[provider]))

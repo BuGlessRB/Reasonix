@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/evidence"
@@ -89,8 +89,8 @@ func foldFacts(region []provider.Message, facts func(string) evidence.ToolFacts)
 			}
 		}
 	}
-	sort.Strings(cov.Mutations)
-	sort.Strings(cov.Failures)
+	slices.Sort(cov.Mutations)
+	slices.Sort(cov.Failures)
 	return cov
 }
 

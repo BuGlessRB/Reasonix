@@ -3,7 +3,7 @@ package history
 import (
 	"context"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -281,7 +281,7 @@ func (s *IndexedSearcher) Search(ctx context.Context, req SearchRequest) ([]Hit,
 	for kind := range kinds {
 		kindNames = append(kindNames, string(kind))
 	}
-	sort.Strings(kindNames)
+	slices.Sort(kindNames)
 	result, err := catalog.Search(ctx, historycatalog.SearchRequest{
 		// Exact roots are the agent authority boundary. Catalog scope describes
 		// desktop grouping and must not change the history tool's project meaning.

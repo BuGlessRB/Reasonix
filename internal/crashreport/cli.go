@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -296,7 +297,7 @@ func prune(dir string) {
 		}
 		paths = append(paths, path)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 	for len(paths) > maxReports {
 		_ = os.Remove(paths[0])
 		paths = paths[1:]

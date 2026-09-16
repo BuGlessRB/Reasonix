@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -72,7 +72,7 @@ func TestBuildDeterminism(t *testing.T) {
 	}
 	var reference *fingerprint
 	for seed := range int64(100) {
-		r := rand.New(rand.NewSource(seed))
+		r := rand.New(rand.NewPCG(uint64(seed), uint64(seed)))
 		perm := r.Perm(len(contributors))
 		b := NewBuilder().WithSystemPrompt("system prompt v1").WithGeneration(7)
 		for _, idx := range perm {

@@ -10,7 +10,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -146,7 +146,7 @@ func TestFrontendsDeclareOnlyThePortsTheyDrive(t *testing.T) {
 					spare = append(spare, port)
 				}
 			}
-			sort.Strings(spare)
+			slices.Sort(spare)
 			if len(spare) > slackSubPorts {
 				t.Errorf("%s is handed %d sub-ports it never calls: %s\n"+
 					"Name the composite it actually drives (see GatewayAPI/EditorAPI), or add the calls.",

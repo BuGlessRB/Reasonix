@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -141,6 +141,6 @@ func keys(m map[string][]byte) []string {
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }

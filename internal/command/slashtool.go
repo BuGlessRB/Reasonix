@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/tool"
@@ -49,7 +49,7 @@ func NewSlashCommandTool(entries []SlashEntry) tool.Tool {
 	for n := range m {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return &slashCommandTool{entries: m, names: names}
 }
 

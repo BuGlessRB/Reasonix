@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"sort"
+	"slices"
 
 	"reasonix/internal/tool"
 )
@@ -17,7 +17,7 @@ func toolIdentity(reg *tool.Registry, ctx context.Context) ([]string, string) {
 	for _, schema := range schemas {
 		names = append(names, schema.Name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	data, _ := json.Marshal(schemas)
 	return names, bytesHash(data)
 }

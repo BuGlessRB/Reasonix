@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/evidence"
@@ -307,7 +307,7 @@ func runBarrierMode(dir string) (string, error) {
 		return "", err
 	}
 	paths = append(paths, direct...)
-	sort.Strings(paths)
+	slices.Sort(paths)
 	if len(paths) == 0 {
 		return "", fmt.Errorf("no *.trajectory.jsonl under %s", dir)
 	}

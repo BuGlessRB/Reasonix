@@ -343,7 +343,7 @@ func Builtins() []Tool {
 	for n := range builtins {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	out := make([]Tool, 0, len(names))
 	for _, n := range names {
 		out = append(out, builtins[n])
@@ -591,7 +591,7 @@ func (r *Registry) ResolveCall(name string) (resolved Tool, canonical string, ca
 		for canonicalName := range matches {
 			candidates = append(candidates, canonicalName)
 		}
-		sort.Strings(candidates)
+		slices.Sort(candidates)
 	}
 	return nil, "", candidates
 }
@@ -711,8 +711,8 @@ func (r *Registry) ProviderSchemas(ctx context.Context) []provider.ToolSchema {
 		}
 		stable = append(stable, name)
 	}
-	sort.Strings(stable)
-	sort.Strings(dynamic)
+	slices.Sort(stable)
+	slices.Sort(dynamic)
 	out := make([]provider.ToolSchema, 0, len(stable)+len(dynamic))
 	for _, name := range append(stable, dynamic...) {
 		t := r.tools[name]
@@ -732,7 +732,7 @@ func (r *Registry) Schemas() []provider.ToolSchema {
 			names = append(names, name)
 		}
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	out := make([]provider.ToolSchema, 0, len(names))
 	for _, name := range names {
@@ -781,7 +781,7 @@ func (r *Registry) SchemasForContext(ctx context.Context) []provider.ToolSchema 
 		}
 	}
 	r.mu.RUnlock()
-	sort.Strings(names)
+	slices.Sort(names)
 	out := make([]provider.ToolSchema, 0, len(names))
 	for _, name := range names {
 		entry, ok := entries[name]

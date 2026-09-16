@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -151,7 +152,7 @@ func (c codeIndex) collect(ctx context.Context, root string, limit int, outline 
 			return nil, false, fmt.Errorf("code_index walk %s: %w", root, err)
 		}
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 
 	var symbols []codeSymbol
 	truncated := len(files) >= codeIndexMaxFiles

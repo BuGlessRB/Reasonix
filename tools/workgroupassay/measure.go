@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/event"
@@ -174,7 +174,7 @@ func median(in []int) float64 {
 		return 0
 	}
 	s := append([]int(nil), in...)
-	sort.Ints(s)
+	slices.Sort(s)
 	mid := len(s) / 2
 	if len(s)%2 == 1 {
 		return float64(s[mid])
@@ -196,7 +196,7 @@ func histogram(in []int) string {
 	for k := range counts {
 		keys = append(keys, k)
 	}
-	sort.Ints(keys)
+	slices.Sort(keys)
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
 		parts = append(parts, fmt.Sprintf("%d×%d", counts[k], k))
@@ -220,7 +220,7 @@ func sortedKeys(m map[string][]int) []string {
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -229,6 +229,6 @@ func sortedCountKeys(m map[string]int) []string {
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }

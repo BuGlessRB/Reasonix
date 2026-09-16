@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -481,11 +482,11 @@ func (t *installSourceTool) localSkillActions(req request, path string, info os.
 		for root := range byRoot {
 			roots = append(roots, root)
 		}
-		sort.Strings(roots)
+		slices.Sort(roots)
 		actions := make([]action, 0, len(roots))
 		for _, root := range roots {
 			rootNames := byRoot[root]
-			sort.Strings(rootNames)
+			slices.Sort(rootNames)
 			actions = append(actions, t.skillRootAction(req, root, rootNames))
 		}
 		return actions, nil

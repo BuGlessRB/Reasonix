@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -193,7 +193,7 @@ func credentialEnvNamesFromConfig(cfg *Config) []string {
 		add(h.PassphraseEnv)
 		add(h.PasswordEnv)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -218,7 +218,7 @@ func (c *Config) CredentialEnvNames() []string {
 			names = append(names, name)
 		}
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names
 }
 
@@ -700,7 +700,7 @@ func storeCredentialsInFile(path string, assignments map[string]string) error {
 	for key := range assignments {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for _, key := range keys {
 		if !replaced[key] {
 			lines = append(lines, formatCredentialLine(key, assignments[key]))

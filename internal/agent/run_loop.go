@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -535,7 +535,7 @@ func sleepStreamRetryBackoff(ctx context.Context, attempt int) bool {
 	// attempt is 1-based for the failed attempt about to be retried.
 	shift := min(max(attempt-1, 0), 4)
 	base := time.Duration(1<<shift) * 500 * time.Millisecond
-	jitter := time.Duration(rand.Intn(250)) * time.Millisecond
+	jitter := time.Duration(rand.IntN(250)) * time.Millisecond
 	timer := time.NewTimer(base + jitter)
 	defer timer.Stop()
 	select {
