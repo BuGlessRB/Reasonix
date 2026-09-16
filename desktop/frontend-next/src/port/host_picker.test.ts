@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The folder picker is the first capability to cross from a Wails binding to
-// the shell port, so what is held here is that each shell answers it its own
-// way and that the three answers stay apart: a path, "" for a dismissed panel,
-// and null for a shell with no picker at all. A caller that conflates the last
-// two asks again and the panel opens twice.
+// What is held here is that the three answers a picker can give stay apart: a
+// path, "" for a dismissed panel, and null for a shell with no picker at all.
+// A caller that conflates the last two asks again and the panel opens twice.
 
 const workspaceInfo = (current: string) => ({ current, canSwitch: true, canIsolate: false, recents: [] });
 
@@ -67,25 +65,6 @@ describe("asking for a folder", () => {
     const { SsePort } = await import("./sse");
     expect(await new SsePort("", "r1").pickFolder()).toBe("/picked");
     expect(opened).toEqual([""]);
-  });
-
-  it("reaches the Wails binding, which resolves its own starting folder", async () => {
-    let called = 0;
-    const port = await portOver({
-      runtime: { Environment: async () => ({ platform: "darwin" }) },
-      go: {
-        main: {
-          App: {
-            PickWorkspace: async () => {
-              called++;
-              return "/from-wails";
-            },
-          },
-        },
-      },
-    });
-    expect(await port.pickFolder()).toBe("/from-wails");
-    expect(called).toBe(1);
   });
 
   it("answers null in a browser tab, which has no panel to open", async () => {

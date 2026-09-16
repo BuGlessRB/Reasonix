@@ -18,12 +18,9 @@ type Layout struct {
 	Launcher   string // thin launcher to restart through; else Executable
 }
 
-// Here resolves the running build's layout, which is the right answer only for
-// a process that is the application. A shell whose process is a resource inside
-// the application states its executable and calls At.
-func Here(line Line) Layout { return At(currentExecutable(), line) }
-
-// At resolves the layout of the build that executable belongs to. Every field
+// At resolves the layout of the build that executable belongs to. The caller
+// states the executable because a shell whose process is a resource inside the
+// application cannot be asked for it. Every field
 // is empty when there is no executable to resolve from — a caller must treat
 // that as "do not install", not as "install into the current directory".
 func At(exe string, line Line) Layout {
@@ -63,14 +60,6 @@ func (l Layout) Relaunch() error {
 // last. A flat install predates that and needs the transactional apply path.
 func (l Layout) Versioned() bool {
 	return l.Root != "" && installlayout.HasCurrent(l.Root)
-}
-
-func currentExecutable() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return ""
-	}
-	return exe
 }
 
 // launcherIn finds the entry point that survives the running binary being

@@ -103,15 +103,6 @@ func CapturePanic(home, version string, recovered any, stack []byte) error {
 	return capturePanic(home, version, "cli.go", "CLI", recovered, stack)
 }
 
-// CaptureStudioPanic is CapturePanic for the desktop window, named apart so a
-// report says which process died. It sees Go panics only: every Studio crash
-// reported so far has been a fatal signal inside GTK or WebKit, which no
-// recover can reach, and those survive in the stderr log the window redirects
-// instead.
-func CaptureStudioPanic(home, version string, recovered any, stack []byte) error {
-	return capturePanic(home, version, "studio.go", "Studio", recovered, stack)
-}
-
 func capturePanic(home, version, source, host string, recovered any, stack []byte) error {
 	if strings.TrimSpace(home) == "" {
 		return errors.New("crash report: empty Reasonix home")

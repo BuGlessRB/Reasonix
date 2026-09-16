@@ -155,7 +155,7 @@
     flex: none; background: color-mix(in srgb, var(--surface) 72%, var(--page)); border-bottom: 1px solid var(--border); box-shadow: 0 1px 0 rgb(0 0 0 / .025);
   }
 
-  [data-titlebar="app"] .chrome { --wails-draggable: drag; -webkit-app-region: drag }
+  [data-titlebar="app"] .chrome { -webkit-app-region: drag }
   [data-titlebar="app"] .chrome
     *:not(:is(button, a[href], input, select, textarea, summary, .picker,
               [role="button"], [role="tab"], [role="menuitem"], [role="switch"]) *) {
@@ -165,7 +165,6 @@
   [data-titlebar="app"] .chrome
     :is(button, a[href], input, select, textarea, summary, .picker,
         [role="button"], [role="tab"], [role="menuitem"], [role="switch"]) {
-    --wails-draggable: no-drag;
     -webkit-app-region: no-drag;
   }
 

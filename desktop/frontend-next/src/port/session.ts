@@ -234,7 +234,7 @@ export interface JobEntry {
 
 // The UI depends on this and nothing else. SsePort talks to internal/serve;
 // MockPort replays a fixture. Neither is allowed to leak transport details
-// upward, which is what keeps the same UI usable in a browser and in Wails.
+// upward, which is what keeps the same UI usable in a browser and in a shell.
 export interface SessionEntry {
   name: string;
   path: string;

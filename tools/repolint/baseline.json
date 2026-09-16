@@ -7,7 +7,7 @@
     "complexity": 1495,
     "error-text": 9,
     "essay": 3208,
-    "file-size": 38044,
+    "file-size": 38037,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6551,
@@ -611,7 +611,7 @@
     },
     "internal/config/edit.go": {
       "essay": 9,
-      "file-size": 1576,
+      "file-size": 1569,
       "orphan": 1
     },
     "internal/config/effort.go": {

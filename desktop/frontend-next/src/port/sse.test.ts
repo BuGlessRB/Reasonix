@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SsePort } from "./sse";
 import type { WireEvent } from "./wire";
 
-// Driven through the shell's bus, the transport with no reconnect to hide
-// behind: every frame is handed over by hand, so a gap is only ever closed by
-// the logic under test.
+// Driven through a stand-in EventSource that never reconnects on its own:
+// every frame is handed over by hand, so a gap is only ever closed by the
+// logic under test rather than by the transport resuming.
 type Feed = (raw: string) => void;
 type ReplyBody = { frames?: unknown[]; complete?: boolean } | null;
 
@@ -17,17 +17,18 @@ function attach(
   const asked: string[] = [];
   let gaps = 0;
 
-  vi.stubGlobal("window", {
-    runtime: {
-      EventsOn: (_name: string, cb: Feed) => {
-        feed = cb;
-        return () => {};
-      },
+  vi.stubGlobal(
+    "EventSource",
+    class {
+      onmessage: ((m: { data: string }) => void) | null = null;
+      constructor() {
+        feed = (raw: string) => this.onmessage?.({ data: raw });
+      }
+      close() {}
     },
-  });
+  );
   vi.stubGlobal("fetch", async (url: string) => {
     asked.push(url);
-    if (url.includes("/rx-replay")) return { ok: true, json: async () => ({}) };
     const body = reply(Number(new URL(url, "http://x").searchParams.get("lastEventId") ?? 0));
     if (!body) return { ok: false, status: 500, json: async () => ({}) };
     return { ok: true, json: async () => body };

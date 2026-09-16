@@ -9,9 +9,9 @@ import (
 
 // withWindowPosture hands back the controller in the posture its config names.
 // That posture is configuration, not something each shell repeats for itself:
-// the Wails shell read it and set it, the Electron one never did, so one config
-// opened two different postures depending on the binary. A terminal frontend
-// states its own on the command line and is left alone here.
+// a shell that reads it and one that does not turn a single config into two
+// postures depending on the binary. A terminal frontend states its own on the
+// command line and is left alone here.
 func withWindowPosture(ctrl *control.Controller, cfg *config.Config, src surface.Surface) *control.Controller {
 	if ctrl == nil || cfg == nil || src != surface.Desktop {
 		return ctrl

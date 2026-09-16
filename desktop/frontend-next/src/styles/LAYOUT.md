@@ -70,10 +70,9 @@ rules are written in.
 
 ## Title bar and chrome
 
-- Two spellings, because the shells disagree: `--wails-draggable` is Wails' own
-  property and `-webkit-app-region` is Chromium's. Inside the shell this row *is*
-  the title bar, so it has to be the drag handle, and every control on it opts
-  back out. Membership is what the markup says is interactive, not a list of the
+- `-webkit-app-region` is Chromium's drag property. Inside the shell this row
+  *is* the title bar, so it has to be the drag handle, and every control on it
+  opts back out. Membership is what the markup says is interactive, not a list of the
   controls that happen to be on the bar today.
 - macOS floats its window controls over the corner at a y AppKit owns — measured
   centre 25.5px. The reserved 78px is what the breadcrumb starts after, and the

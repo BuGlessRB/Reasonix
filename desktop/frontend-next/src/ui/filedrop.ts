@@ -1,5 +1,4 @@
 import { useCallback, useRef } from "react";
-import type { HubPort } from "../port/hub";
 import { host } from "../port/host";
 
 // What a drop hands over depends on which shell the page is in, and the two
@@ -122,7 +121,7 @@ function light(next: Zone | null, dt: DataTransfer | null = null) {
 // no zone mounted still has to refuse a file, or the webview navigates to it and
 // the app is replaced by whatever was dropped. Nothing else in the window
 // prevents that default, and there is no way back short of a reload.
-export function install(hub: HubPort) {
+export function install() {
   if (router) return;
   router = createDropRouter<Zone>((zone, d) => zone.onDrop(d), {
     now: () => Date.now(),
@@ -162,16 +161,13 @@ export function install(hub: HubPort) {
       const files = [...(dt?.files ?? [])];
       const text = files.length > 0 ? undefined : dt?.getData("text/uri-list") || dt?.getData("text/plain") || undefined;
       router?.dropped(zone, files, text);
-      // A shell that can place the files answers here and now; the grace period
-      // is for the one that reports them on a channel of its own.
+      // A shell that can place the files answers here and now; the grace
+      // period is what a browser tab, which never learns a path, waits out.
       const placed = host().pathsForFiles(files);
       if (placed.length > 0) router?.paths(placed);
     },
     true,
   );
-
-  // Absent in a browser tab, where the grace period is the only path taken.
-  hub.onDroppedPaths((paths) => router?.paths(paths));
 }
 
 // useFileDrop makes one element the target of a drop, and answers with the ref

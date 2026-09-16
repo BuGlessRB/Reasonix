@@ -75,11 +75,6 @@ const DECLARED_NON_MUTATION = {
     "POST /mcp/parse": { class: "pure-parse", why:
       "internal/serve/catalog.go's mcpParse decodes the body, calls mcpsetup.Parse, assembles servers and " +
       "risks and writes them back; internal/mcpsetup performs no write at all — no file, no store." },
-    "POST /rx-replay": { class: "attach-handshake", why:
-      "A bus subscription is not a request and cannot carry one, so the bus branch sends this; " +
-      "desktop/next/main.go answers it with Controller.ReplayPendingPromptsWith — a read of the pending " +
-      "prompts and an emit to the sink just attached, which is the same host operation GET /events " +
-      "performs inline on the EventSource branch (internal/serve/eventstream.go)." },
   },
   // The fixture tree declares its own, so the rule is exercised rather than the
   // product's vocabulary being borrowed into a test.

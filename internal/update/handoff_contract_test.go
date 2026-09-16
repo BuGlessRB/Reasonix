@@ -13,7 +13,6 @@ import (
 // them. A new shell adds its entry here, which is the point.
 var hostMains = []string{
 	"cmd/reasonix-studio-host/main.go",
-	"desktop/next/main.go",
 }
 
 // A contract kept by a sentence until it was not: the Electron host shipped

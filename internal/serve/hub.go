@@ -118,8 +118,8 @@ type HubOptions struct {
 	// Grant applies the host's capabilities (folder picking, provider edits) to
 	// each runtime, so a pane opened later can do what the first one could.
 	Grant func(*Server)
-	// OnOpen and OnClose let a host attach its own transport to a runtime — the
-	// Wails shell pumps each one's frames onto its bus, keyed by ID.
+	// OnOpen and OnClose let a host attach its own transport to a runtime,
+	// keyed by ID.
 	OnOpen  func(*Runtime)
 	OnClose func(*Runtime)
 	// DecorateSink wraps each runtime's event sink, the way Grant applies its

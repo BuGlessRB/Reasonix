@@ -13,9 +13,8 @@ import (
 	"strings"
 )
 
-// wailsjs holds Wails-generated Go bindings and is gitignored: measuring it
-// reports debt against a build product nobody can edit, and its presence
-// depends on whether a desktop build has run locally.
+// skipDirs are trees whose contents this repository does not author, so debt
+// measured there names nobody who could pay it.
 var skipDirs = map[string]bool{
 	"node_modules": true,
 	"third_party":  true,
@@ -23,7 +22,6 @@ var skipDirs = map[string]bool{
 	"testdata":     true,
 	"dist":         true,
 	"bin":          true,
-	"wailsjs":      true,
 }
 
 var generatedRe = regexp.MustCompile(`^// Code generated .* DO NOT EDIT\.$`)

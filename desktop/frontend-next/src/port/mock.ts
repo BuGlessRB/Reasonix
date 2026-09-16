@@ -249,11 +249,6 @@ export class MockPort extends MockTheme implements AgentPort {
     return () => {};
   }
 
-  // Both of these are the shell reporting on itself; the fixture has no shell.
-  onDroppedPaths(): () => void {
-    return () => {};
-  }
-
   async account(): Promise<AccountState> {
     return { signedIn: false };
   }

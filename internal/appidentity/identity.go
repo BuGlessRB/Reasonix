@@ -7,7 +7,7 @@ const (
 	AppUserModelID = "Reasonix"
 
 	// legacyTauriAppUserModelID was written to Windows shortcuts by Reasonix
-	// Desktop 0.53. Keep the current identity distinct so separately installed
-	// Tauri and Wails generations do not merge into one taskbar group.
+	// Desktop 0.53. Keep the current identity distinct so a separately
+	// installed older generation does not merge into one taskbar group.
 	legacyTauriAppUserModelID = "dev.reasonix.desktop"
 )

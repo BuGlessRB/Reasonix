@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 
-// Wails serves the window over a custom scheme on macOS and Linux, so those two
-// hosts are not a secure context and navigator.clipboard is undefined there.
-// execCommand is deprecated and is still the only path they have.
+// navigator.clipboard exists only in a secure context, which a browser reaching
+// `reasonix serve` over a plain address is not. execCommand is deprecated and
+// is still the only path left there.
 async function write(text: string) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
   const carrier = document.createElement("textarea");

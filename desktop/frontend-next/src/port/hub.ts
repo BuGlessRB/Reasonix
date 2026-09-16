@@ -105,12 +105,6 @@ export interface HubPort {
   // Absolute paths of every file dropped anywhere on the window. It belongs
   // here rather than on a pane because the window has one of it: the shell
   // registers its drop listener once and ignores a second call, so a per-pane
-  // subscription would quietly serve whichever pane opened first. Which element
-  // the drop landed on is decided in the page against the DOM — the shell can
-  // only offer coordinates, and coordinates part ways with CSS pixels under an
-  // interface zoom. A browser tab never learns a path; there this unsubscribes
-  // from nothing and dropped bytes go to AgentPort.attach instead.
-  onDroppedPaths(cb: (paths: string[]) => void): () => void;
   portFor(rt: RuntimeView): AgentPort;
 }
 
@@ -327,10 +321,6 @@ export class SseHub implements HubPort {
 
   pickFolder() {
     return this.shell.pickFolder();
-  }
-
-  onDroppedPaths(cb: (paths: string[]) => void) {
-    return this.shell.onDroppedPaths(cb);
   }
 
   portFor(rt: RuntimeView): AgentPort {
