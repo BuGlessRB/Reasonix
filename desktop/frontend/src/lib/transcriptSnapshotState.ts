@@ -29,8 +29,15 @@ type ApplyEvent = (state: State, event: WireEvent) => State;
 // Message identity survives optimistic keys, hydration and older-page merges.
 // Keep one matching rule for installation and delayed content patches.
 export function matchingSnapshotItem(items: Item[], item: Item): Item | undefined {
-  return items.find((candidate) => candidate.id === item.id || (item.kind === "user" && candidate.kind === "user" &&
-    ((item.messageId && candidate.messageId === item.messageId) || (item.submissionId && candidate.submissionId === item.submissionId))));
+  if (item.kind === "user") {
+    const users = items.filter((candidate): candidate is Extract<Item, { kind: "user" }> => candidate.kind === "user");
+    const message = item.messageId && users.find(candidate => candidate.messageId === item.messageId);
+    if (message) return message;
+    const submission = item.submissionId && users.find(candidate => candidate.submissionId === item.submissionId &&
+      (!candidate.messageId || !item.messageId || candidate.messageId === item.messageId));
+    if (submission) return submission;
+  }
+  return items.find(candidate => candidate.id === item.id);
 }
 
 function recordItemOrder(records: TranscriptRecord[], convert: Convert): Record<string, number> {
@@ -83,6 +90,11 @@ export function transcriptSnapshotState(state: State, snapshot: TranscriptSnapsh
   const order = projectedItems ? Object.fromEntries(projectedItems.map((item, index) => [item.id, index])) : recordItemOrder(records, convert);
   const users = state.items.filter((item): item is Extract<Item, { kind: "user" }> => item.kind === "user");
   const items = converted.items.map((item) => {
+    if (item.kind === "tool" && item.resultMissing && snapshot.runtime.status &&
+      ["queued", "in_progress", "waiting_user", "cancelling"].includes(snapshot.runtime.status) &&
+      messages.some(message => message.turnId === snapshot.runtime.turnId && message.toolCalls?.some(call => call.id === item.id))) {
+      return { ...item, status: "running" as const };
+    }
     if (item.kind !== "user") return item;
     const mounted = matchingSnapshotItem(users, item);
     if (mounted && mounted.id !== item.id) { order[mounted.id] = order[item.id]; delete order[item.id]; }
@@ -108,7 +120,8 @@ export function transcriptSnapshotState(state: State, snapshot: TranscriptSnapsh
       pendingRepresented = true;
     }
   }
-  const optimistic = pendingRepresented ? [] : users.filter((user) => user.submissionId && user.submissionId === state.pendingSubmissionId && !represented.has(user.submissionId));
+  const optimistic = pendingRepresented ? [] : users.filter((user) => user.submissionId &&
+    (user.submissionId === state.pendingSubmissionId || user.submissionId === snapshot.runtime.submissionId) && !represented.has(user.submissionId));
   let next: State = {
     ...state,
     transcriptProtocol: 1,

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/transcript"
 )
@@ -101,12 +103,15 @@ func newRuntime(ref SessionRef, session *Session) *Runtime {
 	if len(baseline) > 96 {
 		baseline = baseline[len(baseline)-96:]
 	}
-	runtime.transcript, _ = transcript.NewProjection(transcript.Identity{SessionID: ref.SessionID, RuntimeEpoch: runtime.epoch}, transcript.History(baseline, transcript.HistoryOptions{}), session.next-1)
+	runtime.transcript, _ = transcript.NewProjection(transcript.Identity{SessionID: ref.SessionID, RuntimeEpoch: runtime.epoch}, session.transcriptRows(baseline), session.next-1)
 	durable := uint64(0)
 	if session.binding != nil {
 		durable, _, _ = session.binding.progress()
 	}
 	restored := transcript.Runtime{TurnID: session.projection.TurnID, Status: session.projection.TurnStatus, FinalMessageID: session.projection.CurrentTurnMessageID}
+	if receipt, ok := session.projection.Submissions.byTurn[session.id+"\x00"+restored.TurnID]; ok {
+		restored.SubmissionID = receipt.SubmissionID
+	}
 	restored.SamplingCount, restored.ToolCount = len(session.projection.CurrentAttempts), len(session.projection.CurrentCalls)
 	if restored.TurnID != "" && !restored.Status.Terminal() {
 		// A persisted open turn is recovery evidence, not a running model.
@@ -350,6 +355,42 @@ func (s *Service) ContinuePrototype(ctx context.Context, sourceDir string) (*Run
 	result, err := ImportPrototype(ctx, sourceDir, filesystem.Root)
 	if err != nil {
 		return nil, result, err
+	}
+	runtime, err := s.openRuntime(ctx, SessionRef{HostID: s.hostID, SessionID: result.TargetID})
+	return runtime, result, err
+}
+
+// ContinueImportedFrom resolves legacy history against its original paired
+// store while publishing only into this service's separate staging root.
+func (s *Service) ContinueImportedFrom(ctx context.Context, sourcePath, sourceRoot, headID string) (*Runtime, ImportResult, error) {
+	return s.ContinueImportedSource(ctx, sourcePath, filepath.Join(sourceRoot, agent.BranchID(sourcePath)), headID)
+}
+
+// ContinueImportedSource accepts a provenance-linked directory whose identity
+// may have changed when a legacy head was previously converted.
+func (s *Service) ContinueImportedSource(ctx context.Context, sourcePath, sourceDir, headID string) (*Runtime, ImportResult, error) {
+	filesystem, ok := s.persistence.(*FilesystemPersistence)
+	if !ok {
+		return nil, ImportResult{}, errors.New("session: persistence does not support imported sessions")
+	}
+	result, err := importSourceForLegacyAt(ctx, sourcePath, sourceDir, filesystem.Root, headID, CreateOptions{})
+	if err != nil {
+		return nil, result, err
+	}
+	sourceRoot := filepath.Dir(sourceDir)
+	if result.Kind == "final" && filepath.Clean(sourceRoot) != filepath.Clean(filesystem.Root) {
+		tmp, err := os.MkdirTemp("", "reasonix-canonical-stage-")
+		if err != nil {
+			return nil, result, err
+		}
+		defer os.RemoveAll(tmp)
+		bundle := filepath.Join(tmp, "bundle")
+		if err := NewFilesystemPersistence(sourceRoot).exportCold(ctx, result.TargetID, bundle); err != nil {
+			return nil, result, err
+		}
+		if _, err := s.Import(ctx, bundle); err != nil {
+			return nil, result, err
+		}
 	}
 	runtime, err := s.openRuntime(ctx, SessionRef{HostID: s.hostID, SessionID: result.TargetID})
 	return runtime, result, err
