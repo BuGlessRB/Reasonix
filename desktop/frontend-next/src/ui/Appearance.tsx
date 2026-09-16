@@ -148,13 +148,14 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
   // the list and asks App to re-read which pack is active.
   const pick = useCallback(
     (id: string) => {
+      setFailed("");
       port
         .activateTheme(id)
         .then(() => {
           load();
           reloadThemes();
         })
-        .catch(() => {});
+        .catch((e) => setFailed(reason(e)));
     },
     [port, load, reloadThemes],
   );
@@ -191,7 +192,11 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
   );
 
   const dropPaper = useCallback(() => {
-    void port.clearWallpaper().then(() => onLook({ ...look, wallpaper: undefined })).catch(() => {});
+    setFailed("");
+    void port
+      .clearWallpaper()
+      .then(() => onLook({ ...look, wallpaper: undefined }))
+      .catch((e) => setFailed(reason(e)));
   }, [port, look, onLook]);
 
   const [view, setView] = useState<HTMLDivElement | null>(null);
@@ -224,6 +229,14 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
 
   return (
     <>
+      {/* Every refused write on this screen lands in one state and is said in
+          one place: a palette that would not activate is not news for the
+          wallpaper block, which is where this used to be written. */}
+      {failed && (
+        <div className="find" data-lvl="err" role="alert">
+          <span className="t">{failed}</span>
+        </div>
+      )}
       <section className="grp" id="set-mode" data-setting="mode">
         <div className="grp-hd">
           <h3>{t("明暗")}</h3>
@@ -348,11 +361,6 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
             </span>
             {t(look.wallpaper ? "换一张…" : "选择图片…")}
           </button>
-          {failed && (
-            <div className="find" data-lvl="err">
-              <span className="t">{failed}</span>
-            </div>
-          )}
           {/* Composited the way the window is: the picture, then page colour
               over it. The scrim fades out with the strength, or a picture
               turned down to nothing would still be sitting under a dark wash. */}
