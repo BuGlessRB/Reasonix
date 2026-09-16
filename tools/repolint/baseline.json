@@ -17,7 +17,7 @@
     "orphan": 80,
     "refusal-path": 0,
     "spec-parity": 0,
-    "struct-state": 41,
+    "struct-state": 32,
     "wire-parity": 0
   },
   "files": {
@@ -1229,8 +1229,7 @@
       "complexity": 58,
       "essay": 32,
       "file-size": 515,
-      "function-size": 245,
-      "struct-state": 9
+      "function-size": 245
     },
     "internal/provider/openai/openai_test.go": {
       "essay": 5

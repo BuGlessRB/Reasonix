@@ -191,8 +191,10 @@ func TestCheckProviderModelReportsAnEndpointThatRefusesTools(t *testing.T) {
 	if got.Status != "unavailable" || got.Reason != "tools" {
 		t.Fatalf("check = %+v, want the tools refusal named", got)
 	}
-	if withTools != 1 || withoutTools != 1 {
-		t.Fatalf("attempts with tools = %d, without = %d; want exactly one of each", withTools, withoutTools)
+	// Two downgrades meet and each asks once: the provider drops stream_options,
+	// this check drops the tools array.
+	if withTools != 2 || withoutTools != 1 {
+		t.Fatalf("attempts with tools = %d, without = %d; want each downgrade asked once", withTools, withoutTools)
 	}
 }
 
@@ -220,8 +222,11 @@ func TestCheckProviderModelKeepsRejectionWhenRemovingToolsDoesNotHelp(t *testing
 	if got.Status != "unavailable" || got.Reason != "rejected" {
 		t.Fatalf("check = %+v, want the model rejection kept", got)
 	}
-	if calls != 2 {
-		t.Fatalf("upstream calls = %d, want the probe and one retry without tools", calls)
+	// Bounded rather than doubling: the provider asks about stream_options once
+	// per endpoint however often a body is refused, so a gateway that rejects
+	// everything sees the probe, that one question, and the retry without tools.
+	if calls != 3 {
+		t.Fatalf("upstream calls = %d, want the probe and one question from each downgrade", calls)
 	}
 }
 
