@@ -15,7 +15,7 @@ import (
 	"reasonix/internal/extension/dispatch"
 )
 
-// Stage 6b1 dispatch wiring tests: the boot builds the dispatcher, runs the
+// Dispatch wiring tests: the boot builds the dispatcher, runs the
 // system_prompt.build strategy before the snapshot freezes, and broadcasts
 // the final prompt to observers — all without letting dispatch results flow
 // back into the frozen snapshot.
@@ -31,7 +31,7 @@ func TestBootSystemPromptStrategyReplacementLandsInSnapshot(t *testing.T) {
 	if got := res.Snapshot.SystemPrompt(); got != "EXTENSION PROMPT" {
 		t.Fatalf("snapshot system prompt = %q, want the strategy replacement %q", got, "EXTENSION PROMPT")
 	}
-	// Stage 6b2 handoff: the snapshot (and its cache hash) records the
+	// Prompt handoff: the snapshot (and its cache hash) records the
 	// strategy's final prompt, and the live executor session was swapped to
 	// the same prompt before the build returned — the session's system
 	// message is exactly what the agent will send on its first request.

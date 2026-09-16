@@ -106,7 +106,7 @@ func resolveProvider(resolver provider.Resolver, cfg *config.Config, proxy netcl
 }
 
 // mergeSidecarProviders wraps the build's resolver with the extension-hosted
-// provider adapter (stage 7) whenever a started sidecar declared providers.
+// provider adapter whenever a started sidecar declared providers.
 // It does not install stream routers — call installSidecarStreamRouters after
 // commit so failed narrow rebuilds never leave adopted clients on a discarded
 // generation resolver.

@@ -110,7 +110,7 @@ type Controller struct {
 	// afterwards, so wiring points read it without locking.
 	extensions *dispatch.Dispatcher
 	// extensionUI is the host extension UI hub for this controller generation
-	// (stage 8a), or nil when no v2 runtime packages started. Installed via
+	//, or nil when no v2 runtime packages started. Installed via
 	// SetExtensionUI before serving and never swapped; readers take c.mu.
 	extensionUI *uihub.Hub
 	// providerResolver is the build's merged provider catalog (extension
@@ -407,14 +407,14 @@ type Options struct {
 	// the backward-compatible Balanced profile.
 	RuntimeProfile capability.Profile
 	// Extensions is the frozen extension dispatcher for this controller
-	// generation (Extension Protocol v2, stage 6b1). Nil means no v2 runtime
+	// generation (Extension Protocol v2). Nil means no v2 runtime
 	// packages are installed: every extension wiring point takes an untouched
 	// fast path. Boot installs it through SetExtensions because sidecars (and
 	// therefore the dispatcher) only exist after snapshot assembly, which runs
 	// after New.
 	Extensions *dispatch.Dispatcher
 	// ProviderResolver is the build's merged provider catalog — extension
-	// sidecar providers folded over the config/broker base (stage 7). Nil when
+	// sidecar providers folded over the config/broker base. Nil when
 	// no v2 runtime sidecar declared providers; ProviderCatalog then returns
 	// nil and frontends enumerate providers from config alone, as before.
 	ProviderResolver provider.Resolver
@@ -522,7 +522,7 @@ func (c *Controller) SetDisplayRecorder(fn func(content, display string)) {
 // uses it because sidecars — and therefore the dispatcher — only exist after
 // snapshot assembly, which runs after New. First non-nil install wins for the
 // cold-start path; use ReplaceExtensions for generation-safe rebuild swaps.
-// Nil is a no-op. The executor agent receives the same dispatcher (stage 6b2).
+// Nil is a no-op. The executor agent receives the same dispatcher.
 func (c *Controller) SetExtensions(d *dispatch.Dispatcher) {
 	if d == nil {
 		return

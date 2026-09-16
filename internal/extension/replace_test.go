@@ -9,7 +9,7 @@ import (
 
 // TestParseSlot pins the accepted slot forms: the eight named slots, tool:
 // with a bare tool name, and provider: with a name/model ref — including the
-// extension-hosted plugin/<plugin>/<name>/<model> form (stage 7). Everything
+// extension-hosted plugin/<plugin>/<name>/<model> form. Everything
 // else is rejected so a typo can never open a slot nothing reads.
 func TestParseSlot(t *testing.T) {
 	valid := []string{

@@ -3050,10 +3050,10 @@ var (
 )
 
 // restoreReleaseUnit swaps every backup into place with compensation, so a
-// failed rollback never leaves a mixed old/new install. Phase 1 stages each
-// backup next to its target — a copy can fail halfway (disk full, unreadable
+// failed rollback never leaves a mixed old/new install. Every backup is first
+// staged next to its target — a copy can fail halfway (disk full, unreadable
 // backup) and staging keeps the live binaries untouched until every byte is
-// on the target filesystem. Phase 2 swaps via renames only: each target moves
+// on the target filesystem. The swap that follows is renames only: each target moves
 // aside first (renaming works even for the running executable, where
 // overwriting does not), so a failure renames the asides back and the unit
 // stays coherent on the new version for a retried rollback. Only when that

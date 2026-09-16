@@ -15,7 +15,7 @@ import (
 	"reasonix/internal/provider"
 )
 
-// Stage 7 end-to-end coverage: a fake sidecar declares and streams an
+// End-to-end coverage: a fake sidecar declares and streams an
 // extension-hosted provider through the merged resolver BuildRuntime exposes.
 
 // bootWithProviderPlugin installs the fake sidecar in provider mode and

@@ -45,7 +45,7 @@ type BuildResult struct {
 	// controller receives it through SetExtensions right after assembly.
 	Dispatcher *dispatch.Dispatcher
 	// ExtensionUI is the host extension UI hub for this runtime generation
-	// (stage 8a; nil when no sidecar started). It is bound to the build's
+	// (nil when no sidecar started). It is bound to the build's
 	// session ID and generation; the controller receives it through
 	// SetExtensionUI right after assembly, and a Rebuild creates a fresh hub
 	// on the new generation.
@@ -53,7 +53,7 @@ type BuildResult struct {
 	// ProviderResolver is the build's effective provider resolver: the
 	// caller-owned broker when Options.ProviderResolver is set, the local
 	// config-backed resolver otherwise, merged with any extension-hosted
-	// sidecar providers (stage 7). Plugin-namespaced refs route to the owning
+	// sidecar providers. Plugin-namespaced refs route to the owning
 	// sidecar; every other ref resolves through the base resolver.
 	ProviderResolver provider.Resolver
 	// BaseProviderResolver is the pre-sidecar catalog used to re-merge after
@@ -137,7 +137,7 @@ type legacyAssembly struct {
 
 // extensionBoot carries the extension sidecar launch inputs into snapshot
 // assembly: the session the sidecars serve, where non-fatal warnings go, and
-// (stage 8a) the UI hub the sidecars' host/ui/* calls bind to.
+// the UI hub the sidecars' host/ui/* calls bind to.
 type extensionBoot struct {
 	session   protocol.SessionContext
 	onWarning func(string)
@@ -207,7 +207,7 @@ func preflightExtensionRuntimes(ctx context.Context, home string, ext extensionB
 // dispute must land on the snapshot's Diagnostics without changing whether
 // the session boots.
 //
-// Extension sidecars (stage 5b): mgr is the Manager preflightExtensionRuntimes
+// Extension sidecars: mgr is the Manager preflightExtensionRuntimes
 // started before model resolution; this function takes OVER its ownership —
 // on every error path it closes mgr, and on success the Manager is registered
 // into the RuntimeSet at activation, so it dies with its controller
@@ -217,7 +217,7 @@ func preflightExtensionRuntimes(ctx context.Context, home string, ext extensionB
 // which the activator seam (post-freeze) could only do after the catalog
 // already settled.
 //
-// Dispatch wiring (stage 6b1): with live sidecars the boot also runs the
+// Dispatch wiring: with live sidecars the boot also runs the
 // system_prompt.build strategy BEFORE the freeze, so the frozen snapshot's
 // SystemPrompt and CacheHash cover the final (possibly replaced) prompt —
 // the hash honestly attributes the prompt the session was built with rather
@@ -226,7 +226,7 @@ func preflightExtensionRuntimes(ctx context.Context, home string, ext extensionB
 // builds the generation's Dispatcher from the snapshot's frozen chain and
 // replacements, and broadcasts the system_prompt.build event with the final
 // prompt to every observer. The replaced prompt lands in the snapshot; the
-// build's tail (stage 6b2) swaps the live executor session to the same final
+// build's tail swaps the live executor session to the same final
 // prompt when it differs from the host-composed one the session was built
 // with, so snapshot and session describe the same session before any turn.
 // With a nil Manager the path is byte-identical to the pre-sidecar one: no
@@ -507,7 +507,7 @@ func kernelID(id string) bool {
 // whose server can no longer be matched to a spec — stays at the builtin
 // tier: the registry is the compile-time default surface, and an
 // unattributable entry must not masquerade as a higher one. Tool IDs are
-// unique inside one registry, so in stage 3a the scope is provenance only and
+// unique inside one registry, so the scope is provenance only and
 // never decides a shadow race.
 func legacyToolSource(name string, specByName map[string]plugin.Spec) extension.ContributionSource {
 	if server, _, ok := tool.SplitMCPName(name); ok {

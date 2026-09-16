@@ -1,5 +1,5 @@
 // Package providerext adapts extension-hosted sidecar providers into the
-// host's provider.Resolver surface (Extension Protocol v2, stage 7). Each
+// host's provider.Resolver surface (Extension Protocol v2). Each
 // started sidecar holds its own provider credentials and runs streams; the
 // host only ever sees the credential-free wire DTOs. The Resolver merges the
 // base resolver's catalog with every sidecar's declared catalog and routes

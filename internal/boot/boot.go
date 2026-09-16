@@ -159,7 +159,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		slog.Warn("boot: extension runtime: "+redacted, "root", root)
 		report(sink, event.Event{Level: event.LevelWarn, Text: redacted})
 	}
-	// Stage 8a: the host extension UI hub serves every sidecar's host/ui/* calls
+	// The host extension UI hub serves every sidecar's host/ui/* calls
 	// for this generation — publications become frontend events through the
 	// controller sink, blocking prompts ride the controller's Ask channel. The
 	// controller only exists after control.New below, so both seams indirect
@@ -217,7 +217,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 
 	// The build's provider resolution base: the caller-owned broker when
 	// injected, the local config-backed resolver otherwise. When a started
-	// sidecar declares providers, fold them in NOW (stage 7) with the
+	// sidecar declares providers, fold them in NOW with the
 	// provider:<ref> slot claims from the same manifest data the kernel's
 	// ReplaceClaims pass uses, so first-boot model resolution sees them. A
 	// conflict with the base catalog that lacks the plugin's claim is fatal,
@@ -1222,7 +1222,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if providerResolver != nil {
 		ctrl.SetProviderResolver(providerResolver)
 	}
-	// Stage 6b2 system-prompt handoff: the 6b1 strategy pass may have replaced
+	// System-prompt handoff: the strategy pass may have replaced
 	// the prompt while the snapshot was freezing, but the executor session was
 	// built earlier with the host-composed prompt. Swap in a fresh session
 	// carrying the final prompt now — before any turn or history resume, so

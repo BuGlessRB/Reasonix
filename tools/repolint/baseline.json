@@ -6,14 +6,14 @@
     "commented-code": 0,
     "complexity": 1496,
     "error-text": 9,
-    "essay": 3209,
-    "file-size": 38098,
+    "essay": 3208,
+    "file-size": 38097,
     "flat-view": 0,
     "frontend-parity": 150,
     "function-size": 6555,
     "layering": 0,
     "marker": 0,
-    "narrative": 56,
+    "narrative": 0,
     "orphan": 81,
     "refusal-path": 0,
     "spec-parity": 0,
@@ -157,8 +157,7 @@
       "essay": 64
     },
     "internal/agent/extensions_test.go": {
-      "essay": 4,
-      "narrative": 1
+      "essay": 4
     },
     "internal/agent/final_readiness.go": {
       "complexity": 1
@@ -315,26 +314,19 @@
       "complexity": 131,
       "essay": 77,
       "file-size": 956,
-      "function-size": 1035,
-      "narrative": 3
+      "function-size": 1035
     },
     "internal/boot/boot_test.go": {
       "essay": 10
     },
     "internal/boot/extension_dispatch_test.go": {
-      "essay": 3,
-      "narrative": 2
+      "essay": 3
     },
     "internal/boot/extension_firstboot_test.go": {
-      "essay": 1,
-      "narrative": 1
-    },
-    "internal/boot/extension_provider_test.go": {
-      "narrative": 1
+      "essay": 1
     },
     "internal/boot/extension_sidecar_test.go": {
-      "essay": 28,
-      "narrative": 2
+      "essay": 28
     },
     "internal/boot/extension_ui_gate_test.go": {
       "essay": 1
@@ -354,13 +346,9 @@
     "internal/boot/reload.go": {
       "essay": 32
     },
-    "internal/boot/resolver.go": {
-      "narrative": 1
-    },
     "internal/boot/runtime.go": {
       "essay": 50,
-      "function-size": 1,
-      "narrative": 7
+      "function-size": 1
     },
     "internal/boot/token_profile.go": {
       "essay": 1
@@ -527,11 +515,7 @@
       "essay": 8
     },
     "internal/cli/rewind.go": {
-      "essay": 2,
-      "narrative": 4
-    },
-    "internal/cli/rewind_test.go": {
-      "narrative": 2
+      "essay": 2
     },
     "internal/cli/run_metrics.go": {
       "essay": 1
@@ -540,8 +524,7 @@
       "essay": 1
     },
     "internal/cli/runtime_rebuild.go": {
-      "essay": 2,
-      "narrative": 1
+      "essay": 2
     },
     "internal/cli/scroll_state.go": {
       "essay": 11
@@ -607,9 +590,8 @@
       "essay": 2
     },
     "internal/config/config.go": {
-      "essay": 50,
-      "file-size": 1417,
-      "narrative": 2
+      "essay": 49,
+      "file-size": 1416
     },
     "internal/config/credentials.go": {
       "essay": 1,
@@ -718,8 +700,7 @@
     "internal/control/controller.go": {
       "essay": 56,
       "file-size": 2436,
-      "frontend-parity": 50,
-      "narrative": 4
+      "frontend-parity": 50
     },
     "internal/control/controller_test.go": {
       "essay": 9
@@ -732,15 +713,10 @@
     },
     "internal/control/extension_ui.go": {
       "essay": 4,
-      "frontend-parity": 2,
-      "narrative": 1
+      "frontend-parity": 2
     },
     "internal/control/extensions.go": {
-      "essay": 3,
-      "narrative": 1
-    },
-    "internal/control/extensions_test.go": {
-      "narrative": 2
+      "essay": 3
     },
     "internal/control/goal.go": {
       "complexity": 2,
@@ -906,8 +882,7 @@
       "essay": 3
     },
     "internal/extension/builder.go": {
-      "essay": 21,
-      "narrative": 2
+      "essay": 21
     },
     "internal/extension/catalog.go": {
       "essay": 6
@@ -916,8 +891,7 @@
       "essay": 1
     },
     "internal/extension/dispatch/dispatch.go": {
-      "essay": 19,
-      "narrative": 1
+      "essay": 19
     },
     "internal/extension/dispatch/payloads.go": {
       "essay": 2
@@ -952,15 +926,11 @@
     "internal/extension/protocolgen/sdkgo.go": {
       "essay": 2
     },
-    "internal/extension/providerconv/providerconv.go": {
-      "narrative": 2
-    },
     "internal/extension/providerext/provider.go": {
       "essay": 1
     },
     "internal/extension/providerext/providerext.go": {
-      "essay": 5,
-      "narrative": 1
+      "essay": 5
     },
     "internal/extension/publish.go": {
       "orphan": 1
@@ -968,9 +938,6 @@
     "internal/extension/replace.go": {
       "essay": 1,
       "orphan": 1
-    },
-    "internal/extension/replace_test.go": {
-      "narrative": 1
     },
     "internal/extension/rpcwire/bootstrap.go": {
       "orphan": 1
@@ -989,11 +956,7 @@
       "orphan": 1
     },
     "internal/extension/sidecar/client.go": {
-      "essay": 3,
-      "narrative": 7
-    },
-    "internal/extension/sidecar/client_test.go": {
-      "narrative": 1
+      "essay": 3
     },
     "internal/extension/sidecar/content.go": {
       "essay": 2
@@ -1010,9 +973,6 @@
     "internal/extension/sidecar/probe_client.go": {
       "orphan": 1
     },
-    "internal/extension/sidecar/stream_router_test.go": {
-      "narrative": 1
-    },
     "internal/extension/snapshot.go": {
       "essay": 1
     },
@@ -1020,8 +980,7 @@
       "essay": 2
     },
     "internal/extension/uihub/hub.go": {
-      "essay": 6,
-      "narrative": 1
+      "essay": 6
     },
     "internal/fileref/search.go": {
       "essay": 1
@@ -1182,8 +1141,7 @@
       "essay": 18
     },
     "internal/plugin/stats_test.go": {
-      "essay": 1,
-      "narrative": 1
+      "essay": 1
     },
     "internal/plugin/stdio_cancel_test.go": {
       "essay": 1
@@ -1203,8 +1161,7 @@
       "function-size": 6
     },
     "internal/pluginpkg/manifest_v1.go": {
-      "essay": 7,
-      "narrative": 1
+      "essay": 7
     },
     "internal/pluginpkg/pluginpkg.go": {
       "complexity": 1,
@@ -1365,7 +1322,6 @@
       "essay": 43,
       "file-size": 2895,
       "function-size": 308,
-      "narrative": 2,
       "orphan": 12
     },
     "internal/repair/update_handoff_darwin_smoke_test.go": {

@@ -34,14 +34,14 @@ import (
 //	REASONIX_BOOT_FAKE_REPLACE_INPUT    answer input.receive replace with this text
 //	REASONIX_BOOT_FAKE_EVENT_LOG        append one "event payload" line per extension/event
 //
-// Provider steering for the stage 7 adapter tests:
+// Provider steering for the adapter tests:
 //
 //	REASONIX_BOOT_FAKE_PLUGIN_NAME      the installed plugin name (provider ref namespace)
 //	REASONIX_BOOT_FAKE_PROVIDER         when "1", declare plugin/<name>/fake/x and serve
 //	                                    catalog/stream/open/stream/cancel with a fixed
 //	                                    two-chunk completion plus usage
 //
-// UI steering for the stage 8a hub tests:
+// UI steering for the hub tests:
 //
 //	REASONIX_BOOT_FAKE_UI_PUBLISH       when "1", publish one credential-bearing
 //	                                    status surface through host/ui/publish after

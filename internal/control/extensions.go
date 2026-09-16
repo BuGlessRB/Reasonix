@@ -13,7 +13,7 @@ import (
 	"reasonix/internal/extension/dispatch"
 )
 
-// Extension dispatch wiring (stage 6b1). Nil dispatcher is a no-op.
+// Extension dispatch wiring. Nil dispatcher is a no-op.
 // SessionPayload carries only path + phase; the host owns file decisions.
 
 // extensionSessionEvent broadcasts one session.* point fire-and-forget.

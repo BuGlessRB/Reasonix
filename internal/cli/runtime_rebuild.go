@@ -128,9 +128,8 @@ func (m *chatTUI) scheduleRuntimeReload() tea.Cmd {
 		if res.Snapshot != nil {
 			notice = fmt.Sprintf(i18n.M.RuntimeReloadedGenerationFmt, res.Snapshot.Generation())
 		}
-		// res.Runtime is the stage-3a (always empty) runtime set; when stage 5
-		// binds sidecar processes it must retire alongside the controller via
-		// oldControllers.
+		// res.Runtime carries whatever live resources the build bound; it must
+		// retire alongside the controller through oldControllers.
 		return modelSwitchMsg{
 			ref:           spec.ModelRef,
 			ctrl:          c,

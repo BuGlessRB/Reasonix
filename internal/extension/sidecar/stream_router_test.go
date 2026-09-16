@@ -51,7 +51,7 @@ func openProviderStream(t *testing.T, client *Client, streamID string) {
 	}
 }
 
-// TestStreamRouterReceivesWireNotifications pins the stage 7 seam: inbound
+// TestStreamRouterReceivesWireNotifications pins the provider-stream seam: inbound
 // stream/chunk and stream/end notifications reach the installed router,
 // decoded and addressed by stream ID.
 func TestStreamRouterReceivesWireNotifications(t *testing.T) {

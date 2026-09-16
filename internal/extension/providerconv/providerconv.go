@@ -2,8 +2,8 @@
 // internal/provider values and the public Extension Protocol v2 wire DTOs.
 // The protocol package deliberately does not import internal/provider, so
 // every host surface that moves provider data across the extension boundary —
-// the agent's intercept wiring (stage 6b2) and the sidecar provider adapter
-// (stage 7) — shares these helpers. Wire DTOs never carry credentials:
+// the agent's intercept wiring and the sidecar provider adapter
+// — shares these helpers. Wire DTOs never carry credentials:
 // ProviderError messages must be redacted by the producer before they cross,
 // and the host defensively redacts them again at the trust boundary.
 package providerconv

@@ -342,7 +342,7 @@ var runtimeCapabilities = []string{"interceptors", "strategies", "providers", "u
 // validateRuntimeSlot mirrors extension.ParseSlot: bare names must be
 // declared slots; tool:/provider: forms must carry a well-formed target.
 // Provider targets are <name>/<model>, or plugin/<pluginID>/<name>/<model>
-// for extension-hosted providers (stage 7).
+// for extension-hosted providers.
 func validateRuntimeSlot(s string) error {
 	if runtimeNamedSlots[s] {
 		return nil

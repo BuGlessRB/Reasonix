@@ -1,5 +1,5 @@
 // Package uihub implements the host side of the Extension Protocol v2
-// structured UI surface (stage 8a). One Hub serves host/ui/publish and
+// structured UI surface. One Hub serves host/ui/publish and
 // host/ui/request for every sidecar client of a runtime generation:
 // publications are strict-decoded, credential-redacted, and emitted as
 // frontend events; blocking prompts are translated onto the host's Ask

@@ -10,7 +10,7 @@ import (
 	"reasonix/internal/extension/uihub"
 )
 
-// Extension UI hub wiring (Extension Protocol v2, stage 8a). The hub is the
+// Extension UI hub wiring (Extension Protocol v2). The hub is the
 // host side of the extension structured-UI surface: sidecar publications
 // arrive as events through EmitExtensionEvent, blocking prompts ride the
 // ordinary Ask channel, and handshake-declared actions are exposed to

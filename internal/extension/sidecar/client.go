@@ -43,8 +43,8 @@ const (
 	slowInterceptTimeout = 30 * time.Second
 )
 
-// UIHandler serves the extension's Extension → Host UI calls. Stage 8 wires
-// real frontends; the nil default answers "ui not available".
+// UIHandler serves the extension's Extension → Host UI calls. The nil
+// default answers "ui not available".
 type UIHandler interface {
 	Publish(ctx context.Context, p protocol.UIPublishParams) (protocol.UIPublishResult, error)
 	Request(ctx context.Context, p protocol.UIRequestParams) (protocol.UIRequestResult, error)
@@ -73,9 +73,9 @@ func (unavailableUIHandler) Request(context.Context, protocol.UIRequestParams) (
 	return protocol.UIRequestResult{}, &protocol.ProtocolError{Reason: protocol.ErrUnknownMethod, Message: "extension UI is not available on this host"}
 }
 
-// StreamRouter receives the extension's provider stream notifications. The
-// stage 7 adapter (internal/extension/providerext) installs the real router
-// through SetStreamRouter; the nil default drops with a debug log.
+// StreamRouter receives the extension's provider stream notifications.
+// internal/extension/providerext installs the real router through
+// SetStreamRouter; the nil default drops with a debug log.
 type StreamRouter interface {
 	RouteStreamChunk(p protocol.StreamChunkParams)
 	RouteStreamEnd(p protocol.StreamEndParams)
@@ -463,7 +463,7 @@ func (c *Client) Crashed() bool { return c.crashed.Load() }
 // on notifications that will never arrive.
 func (c *Client) Disconnected() <-chan struct{} { return c.serveExited }
 
-// SetStreamRouter swaps the provider stream router (stage 7). Nil restores
+// SetStreamRouter swaps the provider stream router. Nil restores
 // the drop-with-debug-log default. It is safe to call while notifications are
 // in flight; routing for later notifications uses the new router.
 func (c *Client) SetStreamRouter(r StreamRouter) {
@@ -584,7 +584,7 @@ func (c *Client) NotifyResourcesChanged(paths []string) error {
 	return c.conn.Notify(string(protocol.MethodExtensionResourcesChanged), protocol.ResourcesChangedParams{Paths: paths})
 }
 
-// UIAction invokes one handshake-declared UI action on the sidecar (stage 8).
+// UIAction invokes one handshake-declared UI action on the sidecar.
 // The host UI hub routes /<plugin>:<action> invocations here. A crashed or
 // shut-down sidecar fails fast with the provider_interrupted reason.
 func (c *Client) UIAction(ctx context.Context, params protocol.UIActionParams) (protocol.UIActionResult, error) {
@@ -602,7 +602,7 @@ func (c *Client) UIAction(ctx context.Context, params protocol.UIActionParams) (
 	return decoded.(protocol.UIActionResult), nil
 }
 
-// UISubmit delivers a form surface's values back to the sidecar (stage 8).
+// UISubmit delivers a form surface's values back to the sidecar.
 // The host UI hub routes submissions here.
 func (c *Client) UISubmit(ctx context.Context, params protocol.UISubmitParams) (protocol.UISubmitResult, error) {
 	if err := c.readyErr(); err != nil {
@@ -620,7 +620,7 @@ func (c *Client) UISubmit(ctx context.Context, params protocol.UISubmitParams) (
 }
 
 // ProviderCatalog fetches the sidecar's extension-hosted provider catalog
-// (stage 7). The result carries no credentials — the sidecar's refs,
+// . The result carries no credentials — the sidecar's refs,
 // descriptors, and declared capabilities only.
 func (c *Client) ProviderCatalog(ctx context.Context) ([]protocol.ProviderDescriptor, error) {
 	if err := c.readyErr(); err != nil {
@@ -637,7 +637,7 @@ func (c *Client) ProviderCatalog(ctx context.Context) ([]protocol.ProviderDescri
 	return decoded.(protocol.ProviderCatalogResult).Providers, nil
 }
 
-// ProviderStreamOpen asks the sidecar to start one provider stream (stage 7).
+// ProviderStreamOpen asks the sidecar to start one provider stream.
 // Accepted streams deliver chunks as extension/provider/stream/chunk
 // notifications routed to the installed StreamRouter and exactly one
 // stream/end. A crashed or shut-down sidecar fails fast with the
