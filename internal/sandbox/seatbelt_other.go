@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"reasonix/internal/fileutil"
 )
 
 var bwrapUsability sync.Map // resolved executable path -> bool
@@ -176,7 +178,7 @@ func bwrapForbidReadArgs(roots []string) []string {
 		}
 		covered := false
 		for _, parent := range paths {
-			if parent.isDir && parent.path != entry.path && pathWithin(entry.path, parent.path) {
+			if parent.isDir && parent.path != entry.path && fileutil.Under(entry.path, parent.path) {
 				covered = true
 				break
 			}
@@ -199,7 +201,7 @@ func bwrapExecutableMountArgs(args []string) []string {
 		return nil
 	}
 	destination := filepath.Clean(args[0])
-	if !filepath.IsAbs(destination) || !pathWithin(destination, "/tmp") {
+	if !filepath.IsAbs(destination) || !fileutil.Under(destination, "/tmp") {
 		return nil
 	}
 	source := destination
@@ -222,11 +224,6 @@ func bwrapExecutableMountArgs(args []string) []string {
 		out = append(out, "--dir", current)
 	}
 	return append(out, "--ro-bind", source, destination)
-}
-
-func pathWithin(path, root string) bool {
-	rel, err := filepath.Rel(root, path)
-	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func linuxWriteDirs() []string {

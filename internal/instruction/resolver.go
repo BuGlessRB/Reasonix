@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+
+	"reasonix/internal/fileutil"
 )
 
 type Scope string
@@ -84,7 +86,7 @@ func Resolve(opts ResolveOptions) Resolution {
 	}
 
 	var result Resolution
-	if !pathWithin(target, root) {
+	if !fileutil.AtOrUnder(target, root) {
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Code: "target_outside_workspace", Path: target,
 			Message: fmt.Sprintf("instruction target %q is outside workspace %q", target, root),
@@ -197,7 +199,7 @@ func readConfinedDocument(path, boundary, escapeCode string) (string, os.FileInf
 	if err != nil {
 		return "", nil, false, ""
 	}
-	if !pathWithin(realPath, boundary) {
+	if !fileutil.AtOrUnder(realPath, boundary) {
 		return "", nil, false, escapeCode
 	}
 	rel, err = filepath.Rel(boundary, realPath)
@@ -310,7 +312,7 @@ func confinedImportPath(target, sourceDir string, boundaries []string) (string, 
 		return "", "", "import_outside_source"
 	}
 	realPath, err := filepath.EvalSymlinks(path)
-	if err == nil && !pathWithin(realPath, realDirectory(boundary)) {
+	if err == nil && !fileutil.AtOrUnder(realPath, realDirectory(boundary)) {
 		return "", "", "import_symlink_escape"
 	}
 	return path, boundary, ""
@@ -318,7 +320,7 @@ func confinedImportPath(target, sourceDir string, boundaries []string) (string, 
 
 func importBoundaryForPath(path string, boundaries []string) string {
 	for _, boundary := range boundaries {
-		if pathWithin(path, boundary) {
+		if fileutil.AtOrUnder(path, boundary) {
 			return absolutePath(boundary)
 		}
 	}
@@ -345,7 +347,7 @@ func userInstructionImportRoots(userDir string) []string {
 }
 
 func directoryChain(root, target string) []string {
-	if !pathWithin(target, root) {
+	if !fileutil.AtOrUnder(target, root) {
 		return []string{root}
 	}
 	rel, err := filepath.Rel(root, target)
@@ -362,16 +364,6 @@ func directoryChain(root, target string) []string {
 		chain = append(chain, current)
 	}
 	return chain
-}
-
-func pathWithin(path, root string) bool {
-	path = absolutePath(path)
-	root = absolutePath(root)
-	if path == "" || root == "" {
-		return false
-	}
-	rel, err := filepath.Rel(root, path)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func absolutePath(path string) string {

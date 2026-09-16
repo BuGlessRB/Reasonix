@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"reasonix/internal/fileutil"
 	"reasonix/internal/proc"
 	"reasonix/internal/secrets"
 	"reasonix/internal/shellparse"
@@ -494,7 +495,7 @@ func blockedExecutable(path string, denyRoots []string) bool {
 		abs = filepath.Clean(path)
 	}
 	for _, root := range normalizedDenyRoots(denyRoots) {
-		if pathWithin(abs, root) {
+		if fileutil.AtOrUnder(abs, root) {
 			return true
 		}
 	}
@@ -522,17 +523,4 @@ func normalizedDenyRoots(roots []string) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func pathWithin(path, root string) bool {
-	path = filepath.Clean(path)
-	root = filepath.Clean(root)
-	if path == root {
-		return true
-	}
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return false
-	}
-	return rel != "." && rel != "" && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".."
 }
