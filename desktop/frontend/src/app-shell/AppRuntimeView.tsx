@@ -16,7 +16,6 @@ import type { useAppShellStores } from "../app-runtime/useAppShellStores";
 import type { useAppSessionComposition } from "../app-runtime/useAppSessionComposition";
 import type { useAppNavigationComposition } from "../app-runtime/useAppNavigationComposition";
 import type { HistoryViewState } from "../app-runtime/historyViewProjection";
-import type { TopicTimeFilter } from "../app-runtime/useLocalUiLifecycles";
 import { ShellHotkeys, TextSizeHotkeys } from "./HotkeyRegistrations";
 import { WindowChromeLifecycle } from "../app-runtime/WindowChromeLifecycle";
 import { StartupGateLifecycle } from "../app-runtime/StartupGateLifecycle";
@@ -73,8 +72,6 @@ export type AppRuntimeViewProps = {
   local: {
     tasksOpen: false | "session" | "all";
     setTasksOpen: React.Dispatch<React.SetStateAction<false | "session" | "all">>;
-    topicTimeFilter: TopicTimeFilter;
-    setTopicTimeFilter: (value: TopicTimeFilter) => void;
     sidebarImDetailConnectionId: string;
     setSidebarImDetailConnectionId: React.Dispatch<React.SetStateAction<string>>;
     tabRevealSignal: number;
@@ -123,6 +120,12 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
   const runtimeTransitioning = core.surface.transitioning;
   const presentationTransitioning = runtimeTransitioning && core.remoteSurfaceActive;
   const browserPreviewChrome = navigation.browserPreviewChrome;
+  const workspaceContextProject = Boolean(
+    activeTab?.remote || (activeTab?.scope === "project" && activeTab.workspaceRoot),
+  );
+  const workspaceContextRoot = workspaceContextProject
+    ? activeTab?.workspaceRoot ?? state.meta?.workspaceRoot ?? state.meta?.cwd ?? ""
+    : "";
 
   const workbenchChromeHidden = true;
   const sidebarClassName = [
@@ -236,7 +239,6 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           geometry: shellGeometry,
           projectTree: {
             activeTab, imTopicSources: shell.preferences.imTopicSources, refreshSignal: local.projectRevision,
-            timeFilter: local.topicTimeFilter, onTimeFilterChange: local.setTopicTimeFilter,
             searchExpanded: true, searchFocusSignal: shell.sidebarSearchFocusSignal,
             showShortcutBadges: navigation.topicShortcuts.showTopicBadges, shortcutPlatform: shell.desktopPlatform,
             onVisibleTopicsChange: navigation.topicShortcuts.handleVisibleTopicsChange,
@@ -408,6 +410,18 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
               transientDismissSignal: shell.transientOverlayDismissSignal,
               sessionKey: session.composerSessionKey,
               workspaceScopeKey: session.workspaceScopeKey,
+              workspaceContext: {
+                scope: workspaceContextProject ? "project" : "global",
+                workspaceRoot: workspaceContextRoot,
+                workspaceName: workspaceContextProject ? activeTab?.workspaceName ?? state.meta?.workspaceName : undefined,
+                gitBranch: workspaceContextProject && !activeTab?.remote ? state.meta?.gitBranch : undefined,
+                tabId: activeTabId,
+                scopeKey: session.workspaceScopeKey,
+                remote: Boolean(activeTab?.remote),
+                onSwitchWorkspace: navigation.projectTopicCommands.onAddProject,
+                onWorkWithoutProject: () => navigationCommands.openBlankSession("global", ""),
+                onRefreshProjects: navigation.projectTopicCommands.refreshProjectsAndTabs,
+              },
               fileRefRefreshKey: local.composerFileRefRefreshKey,
               guidance: session.transcript.latestGuidanceConsumed,
               guidanceQueuePreviewItems: navigation.guidanceQueueMockItems,

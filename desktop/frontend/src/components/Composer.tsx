@@ -17,6 +17,7 @@ import { useComposerInboxRefresh } from "../lib/useComposerInboxRefresh";
 import { useComposerImeGuard } from "../lib/useComposerImeGuard";
 import { useComposerCommandCatalog } from "../lib/useComposerCommandCatalog";
 import { guidanceIsInFlight, guidanceNeedsRetry, guidanceTextMatches, kickIdleGuidance, markGuidanceQueued } from "../lib/composerGuidance";
+import { createGuidanceReceiptTracker, type GuidanceReceiptTracker } from "../lib/composerGuidanceReceipt";
 import { canUsePromptHistory, composerEnterAction, composerEscapeAction, composerMenuKeyAction, insertComposerNewline, isFnKeyEvent, isImeKeyEvent, promptHistoryDirectionFromEvent } from "../lib/composerKeyboard";
 import { cacheGeneration, loadOlder } from "../lib/composerHistory";
 import { sessionTurnsLabel } from "../lib/sessionTurnsPresentation";
@@ -47,6 +48,7 @@ import { readStatusLabel, turnPhaseStatusLabel } from "../lib/readStatus";
 import { fullAccessProjectConfirmationKey } from "../lib/fullAccessConfirmation";
 import { normalizeToolApprovalMode, type CollaborationMode, type CommandInfo, type ComposerInsertRequest, type ContextInfo, type DirEntry, type EffortInfo, type GoalLifecycleView, type GoalRuntime, type HistoryMessage, type Mode, type PromptHistoryEntry, type SessionMeta, type SessionReference, type SlashArgItem, type SlashArgsResult, type ToolApprovalMode, type BalanceInfo, type WireReadStatus } from "../lib/types";
 import { ComposerPinnedFilesShelf } from "./ComposerPinnedFilesShelf";
+import type { ComposerWorkspaceContext } from "./ComposerWorkspaceContextBar";
 import {
   formatWorkspaceReference,
   parseWorkspaceReference,
@@ -59,6 +61,7 @@ import { ANCHORED_POPOVER_CLOSE_MS, AnchoredPopover } from "./AnchoredPopover";
 import { ComposerChoice } from "./ComposerChoice";
 import { PermissionPresetChoice } from "./PermissionPresetChoice";
 const ModelSwitcher = lazy(() => import("./ModelSwitcher").then((module) => ({ default: module.ModelSwitcher })));
+const ComposerWorkspaceContextBar = lazy(() => import("./ComposerWorkspaceContextBar"));
 import { Tooltip } from "./Tooltip";
 const RecoveryWaitBanner = lazy(() => import("./RecoveryWaitBanner").then((module) => ({ default: module.RecoveryWaitBanner })));
 import { ComposerContextCard } from "./ComposerContextCard";
@@ -176,43 +179,8 @@ type WebkitFileEntry = {
   isDirectory?: boolean;
 };
 
-type GuidanceReceiptTracker = {
-  start(draftKey: string): void;
-  recordConsumed(draftKey: string, itemId: string): void;
-  takeConsumed(draftKey: string, itemId: string): boolean;
-  finish(draftKey: string): void;
-};
-
 const DEFAULT_COMPOSER_DRAFT_KEY = "__default_composer_draft__";
 const MAX_COMPOSER_EDIT_HISTORY = 50;
-
-function createGuidanceReceiptTracker(): GuidanceReceiptTracker {
-  const inFlight = new Map<string, number>();
-  const consumedBeforeReceipt = new Map<string, Set<string>>();
-  return {
-    start(draftKey) {
-      inFlight.set(draftKey, (inFlight.get(draftKey) ?? 0) + 1);
-    },
-    recordConsumed(draftKey, itemId) {
-      if ((inFlight.get(draftKey) ?? 0) === 0) return;
-      const consumed = consumedBeforeReceipt.get(draftKey) ?? new Set<string>();
-      consumed.add(itemId);
-      consumedBeforeReceipt.set(draftKey, consumed);
-    },
-    takeConsumed(draftKey, itemId) {
-      return consumedBeforeReceipt.get(draftKey)?.delete(itemId) ?? false;
-    },
-    finish(draftKey) {
-      const remaining = (inFlight.get(draftKey) ?? 1) - 1;
-      if (remaining > 0) {
-        inFlight.set(draftKey, remaining);
-        return;
-      }
-      inFlight.delete(draftKey);
-      consumedBeforeReceipt.delete(draftKey);
-    },
-  };
-}
 
 function lineCount(s: string): number {
   if (s === "") return 0;
@@ -622,6 +590,7 @@ export function Composer({
   cacheMissTokens,
   balance,
   pinnedFiles,
+  workspaceContext,
   onInvocationMetadataChange,
 }: {
   running: boolean;
@@ -737,6 +706,7 @@ export function Composer({
   cacheMissTokens?: number;
   balance?: BalanceInfo;
   pinnedFiles?: import("../lib/pinnedContextBridge").PinnedFileInfo[];
+  workspaceContext?: ComposerWorkspaceContext;
 }) {
   const { t, locale } = useI18n();
   const { showToast } = useToast();
@@ -4371,12 +4341,21 @@ export function Composer({
         <span className="composer-guidance-item__text" title={pendingFollowup.display}>{pendingFollowup.display}</span>
         <span>{t("runtime.unconfirmed")}</span>
       </div>}
+      <div className={`composer-workspace-frame${workspaceContext ? " composer-workspace-frame--context" : " composer-workspace-frame--plain"}`}>
+      {workspaceContext && running && !waitingPrompt && !retry?.recovery?.waiting && !finishing && !runtimeState.unknown ? (
+        <span className="composer-glowring" aria-hidden="true"><i /></span>
+      ) : null}
+      {workspaceContext ? (
+        <Suspense fallback={<div className="composer-workspace-bar-fallback" aria-hidden="true" />}>
+          <ComposerWorkspaceContextBar context={workspaceContext} />
+        </Suspense>
+      ) : null}
       <div
         className={`composer-card${composerHeight !== null || composerResizing ? " composer-card--resized" : ""}${composerAutoExpanded ? " composer-card--autosized" : ""}${composerAutoOverflow ? " composer-card--auto-overflow" : ""}${composerResizing ? " composer-card--resizing" : ""}${running && !finishing && !runtimeState.unknown ? (waitingPrompt ? " composer-card--waiting" : " composer-card--running") : ""}`}
         ref={composerCardRef}
         style={composerCardStyle}
       >
-        {running && !waitingPrompt && !retry?.recovery?.waiting && (
+        {!workspaceContext && running && !waitingPrompt && !retry?.recovery?.waiting && (
           <span className="composer-glowring" aria-hidden="true"><i /></span>
         )}
         <button
@@ -4648,6 +4627,7 @@ export function Composer({
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
