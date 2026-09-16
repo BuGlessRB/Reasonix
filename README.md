@@ -132,20 +132,16 @@ make build      # -> bin/reasonix(.exe)
 make cross      # -> dist/ (darwin|linux|windows × amd64|arm64)
 ```
 
-#### Desktop
+#### Studio
 
-The desktop build additionally requires:
-
-- **Node 24+ and pnpm 10** (`npm install -g pnpm@10`) for the frontend
-- **Wails CLI** matching the shared `.wails-version` pin
+Studio additionally requires **Node 24+ and pnpm 10**
+(`npm install -g pnpm@10`) for the frontend.
 
 ```sh
-make wails-install
-cd desktop
-wails build
+make studio
 ```
 
-See the [desktop build guide](desktop/README.md#prerequisites) for platform
+See the [Studio build guide](desktop/README.md#prerequisites) for platform
 webview dependencies and Linux build tags.
 
 ## Quick start
