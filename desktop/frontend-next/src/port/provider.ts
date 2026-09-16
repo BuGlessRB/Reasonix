@@ -108,7 +108,10 @@ export type ProviderModelCheckReason =
   | "rate_limited"
   | "rejected"
   | "network"
-  | "timeout";
+  | "timeout"
+  // The endpoint answered chat and refused a tools array. Established by
+  // sending the same request again without one, not by reading the refusal.
+  | "tools";
 
 // A deliberate, billable check of one exact model id. Listing and calling are
 // separate facts: private models often accept requests without appearing in a catalog.

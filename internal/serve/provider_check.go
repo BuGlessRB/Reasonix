@@ -179,9 +179,48 @@ func (s *Server) checkProviderModel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, providerModelCheck{Model: model, Status: status, Reason: reason, HTTPStatus: httpStatus})
 }
 
+// errToolsUnsupported is the endpoint answering chat but refusing a tools
+// array. It is established by observation — the same request succeeds once the
+// array is removed — never by reading words out of the refusal.
+var errToolsUnsupported = errors.New("provider model check: endpoint refuses a tools array")
+
+// probeTool is the smallest tool an endpoint can be offered. The check carries
+// one because Reasonix is an agent: a model that answers chat and refuses tools
+// cannot run a turn here, and a check that never sent a tools array would
+// report that endpoint available and leave the failure to the first real turn.
+var probeTool = provider.ToolSchema{
+	Name:        "reasonix_probe",
+	Description: "Connectivity probe. Do not call it.",
+	Parameters:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+}
+
 func runProviderModelCheck(ctx context.Context, modelProvider provider.Provider) error {
+	err := probeProviderModel(ctx, modelProvider, []provider.ToolSchema{probeTool})
+	if err == nil || !worthAskingWithoutTools(err) {
+		return err
+	}
+	// The body was rejected. Ask again without the tools array: if that answers,
+	// the array was the whole objection, which is a different fact from "this
+	// model does not work" and one the refusal's own wording cannot settle.
+	if ctx.Err() == nil && probeProviderModel(ctx, modelProvider, nil) == nil {
+		return errToolsUnsupported
+	}
+	return err
+}
+
+// worthAskingWithoutTools reports whether a second attempt could answer
+// anything the first did not. A credential or a rate limit refuses the retry
+// for the same reason it refused the first, so only a rejection of the request
+// body earns the extra call.
+func worthAskingWithoutTools(err error) bool {
+	_, reason, _ := classifyProviderModelCheck(err)
+	return reason == "rejected"
+}
+
+func probeProviderModel(ctx context.Context, modelProvider provider.Provider, tools []provider.ToolSchema) error {
 	stream, err := modelProvider.Stream(ctx, provider.Request{
 		Messages:  []provider.Message{{Role: provider.RoleUser, Content: "OK"}},
+		Tools:     tools,
 		MaxTokens: 1,
 	})
 	if err != nil {
@@ -210,6 +249,9 @@ func runProviderModelCheck(ctx context.Context, modelProvider provider.Provider)
 func classifyProviderModelCheck(err error) (status, reason string, httpStatus int) {
 	if err == nil {
 		return "available", "", 0
+	}
+	if errors.Is(err, errToolsUnsupported) {
+		return "unavailable", "tools", 0
 	}
 	var auth *provider.AuthError
 	if errors.As(err, &auth) {

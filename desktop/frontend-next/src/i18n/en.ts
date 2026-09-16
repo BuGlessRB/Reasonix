@@ -373,6 +373,7 @@ export const EN: Record<string, string> = {
   "当前不可用": "Currently unavailable",
   "模型不存在或账号未开放": "The model does not exist or is not enabled for this account",
   "端点不接受这个模型": "The endpoint does not accept this model",
+  "能对话但不接受工具调用，用不了": "Answers chat but refuses tool calls, so it cannot run here",
   "待验证": "Not verified",
   "凭据未通过，尚未确认": "Credentials were rejected; availability is still unknown",
   "遇到限流，尚未确认": "Rate limited; availability is still unknown",
