@@ -90,9 +90,26 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 	if concrete, ok := ctrl.(*control.Controller); ok {
 		if service := concrete.SessionService(); service != nil {
 			_, runtime, bound := concrete.SessionBinding()
-			page, listErr := service.Query().List(r.Context(), "", 100)
-			if listErr == nil {
-				canonicalRows = make([]canonicalSessionRow, 0, len(page.Sessions))
+			// The persistence layer caps one listing at 100 rows ordered by the
+			// random session id, not by recency: any workspace beyond 100
+			// sessions would otherwise hide an arbitrary subset — including a
+			// just-taken-over conversation — from every desktop list. Follow
+			// NextCursor until the catalog is exhausted, bounded so a broken
+			// cursor cannot loop forever.
+			const pageLimit = 100
+			const maxCanonicalRows = 500
+			cursor := ""
+			listErr := error(nil)
+			pages := 0
+			for {
+				var page session.SessionPage
+				page, listErr = service.Query().List(r.Context(), cursor, pageLimit)
+				if listErr != nil {
+					break
+				}
+				if len(canonicalRows) == 0 {
+					canonicalRows = make([]canonicalSessionRow, 0, len(page.Sessions))
+				}
 				for _, info := range page.Sessions {
 					row := sessionListEntry{
 						HostID: info.Ref.HostID, SessionID: info.Ref.SessionID, Name: info.SessionID,
@@ -120,6 +137,11 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 					}
 					canonicalRows = append(canonicalRows, canonicalSessionRow{row: row, info: info})
 				}
+				pages++
+				if page.NextCursor == "" || page.NextCursor == cursor || pages*pageLimit >= maxCanonicalRows || len(canonicalRows) >= maxCanonicalRows {
+					break
+				}
+				cursor = page.NextCursor
 			}
 		}
 	}

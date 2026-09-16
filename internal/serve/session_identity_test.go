@@ -2,12 +2,14 @@ package serve
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
@@ -284,5 +286,66 @@ func TestExclusiveV3RotationAndMutationFenceReturnSessionID(t *testing.T) {
 	}
 	if got := rotate.Header().Get(sessionPathHeader); got != "" {
 		t.Fatalf("exclusive rotation exposed legacy path %q", got)
+	}
+}
+
+// The persistence list caps one page at 100 rows ordered by the random
+// session id, so a workspace with more canonical sessions hid an arbitrary
+// subset — including a session another runtime had just taken over. The
+// handler must follow NextCursor and surface every row in one response.
+func TestSessionsListsBeyondFirstHundredCanonicalSessions(t *testing.T) {
+	v4Root := filepath.Join(t.TempDir(), "sessions-v4")
+	service, err := session.NewService("serve-test", session.NewFilesystemPersistence(v4Root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec := agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard)
+	ctrl := control.New(control.Options{Executor: exec, SessionDir: t.TempDir(), SessionService: service, ExclusiveSession: true})
+	const total = 103
+	for i := range total {
+		created, err := service.Create(t.Context(), session.CreateOptions{SessionID: fmt.Sprintf("s%03d", i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := service.Close(t.Context(), created.Ref()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A catalog full of pending metadata keeps the query's background rebuild
+	// queue busy, which races the lifecycle fixture's writer-retire check.
+	// Drive the queue to quiescence before the handler under test runs.
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		page, err := service.Query().List(t.Context(), "", 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pending := 0
+		for _, info := range page.Sessions {
+			if info.MetadataStatus != session.MetadataReady {
+				pending++
+			}
+		}
+		if pending == 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Cleanup(ctrl.Close)
+	srv := newLifecycleTestServer(t, ctrl, NewBroadcaster(), config.ServeConfig{})
+	recorder := httptest.NewRecorder()
+	srv.sessions(recorder, httptest.NewRequest(http.MethodGet, "/sessions", nil))
+	var rows []sessionListEntry
+	if err := json.Unmarshal(recorder.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		seen[row.SessionID] = true
+	}
+	for i := range total {
+		if !seen[fmt.Sprintf("s%03d", i)] {
+			t.Fatalf("session s%03d missing from the list (%d rows returned)", i, len(rows))
+		}
 	}
 }
