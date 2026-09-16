@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -100,11 +101,7 @@ func Export(name, root string) ([]byte, []string, error) {
 	if err := zw.Close(); err != nil {
 		return nil, nil, err
 	}
-	out := make([]string, 0, len(required))
-	for n := range required {
-		out = append(out, n)
-	}
-	slices.Sort(out)
+	out := slices.Sorted(maps.Keys(required))
 	return buf.Bytes(), out, nil
 }
 
@@ -138,11 +135,7 @@ func StripCredentials(raw []byte) ([]byte, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	names := make([]string, 0, len(required))
-	for n := range required {
-		names = append(names, n)
-	}
-	slices.Sort(names)
+	names := slices.Sorted(maps.Keys(required))
 	return append(out, '\n'), names, nil
 }
 

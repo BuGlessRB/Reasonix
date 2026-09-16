@@ -1,6 +1,7 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -188,11 +189,7 @@ func detectDotEnvDuplicateKeys(path string) []string {
 			seen[key] = true
 		}
 	}
-	out := make([]string, 0, len(dups))
-	for key := range dups {
-		out = append(out, key)
-	}
-	slices.Sort(out)
+	out := slices.Sorted(maps.Keys(dups))
 	return out
 }
 

@@ -4,13 +4,13 @@
     "build-artifact": 0,
     "claude-dialect": 1,
     "commented-code": 0,
-    "complexity": 1496,
+    "complexity": 1495,
     "error-text": 9,
     "essay": 3208,
-    "file-size": 38073,
+    "file-size": 38044,
     "flat-view": 0,
     "frontend-parity": 150,
-    "function-size": 6555,
+    "function-size": 6551,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -278,7 +278,7 @@
     },
     "internal/agent/subagent_store.go": {
       "essay": 5,
-      "file-size": 130
+      "file-size": 127
     },
     "internal/agent/task.go": {
       "complexity": 12,
@@ -416,10 +416,10 @@
       "essay": 1
     },
     "internal/checkpoint/transaction.go": {
-      "complexity": 25,
+      "complexity": 24,
       "essay": 2,
-      "file-size": 746,
-      "function-size": 77
+      "file-size": 739,
+      "function-size": 73
     },
     "internal/cli/acp.go": {
       "essay": 7,
@@ -595,7 +595,7 @@
     },
     "internal/config/credentials.go": {
       "essay": 1,
-      "file-size": 57
+      "file-size": 54
     },
     "internal/config/credentials_keyring_unix.go": {
       "essay": 7
@@ -634,7 +634,7 @@
       "essay": 3
     },
     "internal/config/migrate.go": {
-      "file-size": 27,
+      "file-size": 23,
       "orphan": 1
     },
     "internal/config/mutate.go": {
@@ -662,7 +662,7 @@
     "internal/config/render.go": {
       "complexity": 226,
       "essay": 2,
-      "file-size": 917,
+      "file-size": 914,
       "function-size": 858
     },
     "internal/config/vision.go": {
@@ -1202,7 +1202,7 @@
     },
     "internal/provider/provider.go": {
       "essay": 50,
-      "file-size": 251
+      "file-size": 248
     },
     "internal/provider/responses/responses.go": {
       "essay": 11,
@@ -1296,7 +1296,7 @@
     },
     "internal/repair/plan.go": {
       "essay": 2,
-      "file-size": 51,
+      "file-size": 48,
       "orphan": 2
     },
     "internal/repair/snapshot.go": {
@@ -1403,7 +1403,7 @@
     },
     "internal/skill/skill.go": {
       "essay": 7,
-      "file-size": 560
+      "file-size": 557
     },
     "internal/skill/tools.go": {
       "essay": 2

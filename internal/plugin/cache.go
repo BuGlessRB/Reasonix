@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"maps"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -277,11 +278,7 @@ func writeKeys(h io.Writer, key string, m map[string]string) {
 		writeField(h, key, "")
 		return
 	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	for _, k := range keys {
 		writeField(h, key+"."+k, "present")
 	}

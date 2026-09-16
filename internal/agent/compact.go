@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -780,10 +781,6 @@ func summarizeToolArgs(args string) string {
 		// Not valid JSON — return a length hint instead of raw text.
 		return fmt.Sprintf("(%d bytes)", len(args))
 	}
-	keys := make([]string, 0, len(parsed))
-	for k := range parsed {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(parsed))
 	return fmt.Sprintf("{%s} (%d keys)", strings.Join(keys, ", "), len(parsed))
 }

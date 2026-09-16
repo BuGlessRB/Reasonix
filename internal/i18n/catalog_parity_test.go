@@ -1,6 +1,7 @@
 package i18n
 
 import (
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -107,10 +108,6 @@ func equalTokenSets(a, b map[string]bool) bool {
 }
 
 func sortedTokens(m map[string]bool) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	slices.Sort(out)
+	out := slices.Sorted(maps.Keys(m))
 	return out
 }

@@ -467,11 +467,7 @@ func markLegacyKeyringMigrationDone(key string) error {
 }
 
 func credentialLines(assignments map[string]string) []string {
-	keys := make([]string, 0, len(assignments))
-	for key := range assignments {
-		keys = append(keys, key)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(assignments))
 	lines := make([]string, 0, len(keys))
 	for _, key := range keys {
 		lines = append(lines, key+"="+assignments[key])

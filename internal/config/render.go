@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strconv"
@@ -1381,11 +1382,7 @@ func renderStringArray(ss []string) string {
 // renderStringMap renders a map[string]string as a TOML inline table with keys
 // in sorted order so output is deterministic (round-trips cleanly).
 func renderStringMap(m map[string]string) string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, k := range keys {

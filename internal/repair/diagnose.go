@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -208,11 +209,7 @@ func validatePermissions(report *DiagnosticReport, cfg *config.Config) {
 			}
 		}
 	}
-	rules := make([]string, 0, len(owners))
-	for rule := range owners {
-		rules = append(rules, rule)
-	}
-	slices.Sort(rules)
+	rules := slices.Sorted(maps.Keys(owners))
 	for _, rule := range rules {
 		if len(owners[rule]) > 1 {
 			report.add("warning", "permissions.conflict", "permissions", fmt.Sprintf("Permission rule %q appears in %s; deny takes precedence.", rule, strings.Join(owners[rule], ", ")), "Keep each exact rule in one permission list.")

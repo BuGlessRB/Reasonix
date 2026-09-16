@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -478,11 +479,7 @@ func (t *installSourceTool) localSkillActions(req request, path string, info os.
 			}
 			byRoot[root] = append(byRoot[root], cand.Name)
 		}
-		roots := make([]string, 0, len(byRoot))
-		for root := range byRoot {
-			roots = append(roots, root)
-		}
-		slices.Sort(roots)
+		roots := slices.Sorted(maps.Keys(byRoot))
 		actions := make([]action, 0, len(roots))
 		for _, root := range roots {
 			rootNames := byRoot[root]

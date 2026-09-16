@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/sha256"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -696,11 +697,7 @@ func storeCredentialsInFile(path string, assignments map[string]string) error {
 			replaced[key] = true
 		}
 	}
-	keys := make([]string, 0, len(assignments))
-	for key := range assignments {
-		keys = append(keys, key)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(assignments))
 	for _, key := range keys {
 		if !replaced[key] {
 			lines = append(lines, formatCredentialLine(key, assignments[key]))

@@ -7,6 +7,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -339,11 +340,7 @@ func RegisterBuiltin(t Tool) {
 
 // Builtins returns all registered built-in tools, sorted by name.
 func Builtins() []Tool {
-	names := make([]string, 0, len(builtins))
-	for n := range builtins {
-		names = append(names, n)
-	}
-	slices.Sort(names)
+	names := slices.Sorted(maps.Keys(builtins))
 	out := make([]Tool, 0, len(names))
 	for _, n := range names {
 		out = append(out, builtins[n])

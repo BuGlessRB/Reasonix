@@ -1,6 +1,7 @@
 package mcpsetup
 
 import (
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -75,10 +76,6 @@ func RedactURL(raw string) string {
 }
 
 func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	return keys
 }

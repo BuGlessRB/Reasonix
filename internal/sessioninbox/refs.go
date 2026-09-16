@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -216,11 +217,7 @@ func ApplyFrozenRefs(submit string, bodies map[string]string) string {
 	if len(bodies) == 0 {
 		return submit
 	}
-	paths := make([]string, 0, len(bodies))
-	for path := range bodies {
-		paths = append(paths, path)
-	}
-	slices.Sort(paths)
+	paths := slices.Sorted(maps.Keys(bodies))
 	var b strings.Builder
 	b.WriteString(submit)
 	b.WriteString("\n\n<!-- frozen inbox references (enqueue-time snapshot) -->\n")

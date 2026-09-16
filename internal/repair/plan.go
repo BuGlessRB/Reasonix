@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -808,11 +809,7 @@ func verifyRepairPlanFileStates(expectedStates map[string]string) error {
 	if len(expectedStates) == 0 {
 		return nil
 	}
-	paths := make([]string, 0, len(expectedStates))
-	for path := range expectedStates {
-		paths = append(paths, path)
-	}
-	slices.Sort(paths)
+	paths := slices.Sorted(maps.Keys(expectedStates))
 	for _, path := range paths {
 		if err := verifyRepairPlanFileState(path, expectedStates); err != nil {
 			return err

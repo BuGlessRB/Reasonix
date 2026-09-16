@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 	"unicode"
@@ -1042,10 +1043,6 @@ func New(kind string, cfg Config) (Provider, error) {
 
 // Kinds returns the registered kinds, sorted.
 func Kinds() []string {
-	out := make([]string, 0, len(registry))
-	for k := range registry {
-		out = append(out, k)
-	}
-	slices.Sort(out)
+	out := slices.Sorted(maps.Keys(registry))
 	return out
 }
