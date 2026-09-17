@@ -28,7 +28,7 @@
             "en": "Learn how sessions are owned and managed within the app.",
             "zh": "了解会话在应用中的所有权和管理方式。"
           },
-          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/1a6d490ec3be4af69d1ff99a38c60f01100d3452/docs/APP_SESSION_OWNERSHIP.md"
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/c71b77b37f3eefc5c03786cabb815bfcf735af41/docs/APP_SESSION_OWNERSHIP.md"
         },
         {
           "title": {
@@ -39,7 +39,7 @@
             "en": "Understand how independent sessions work and their lifecycle.",
             "zh": "了解独立会话的工作原理及其生命周期。"
           },
-          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/1a6d490ec3be4af69d1ff99a38c60f01100d3452/docs/INDEPENDENT_SESSIONS.md"
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/c71b77b37f3eefc5c03786cabb815bfcf735af41/docs/INDEPENDENT_SESSIONS.md"
         },
         {
           "title": {
@@ -50,7 +50,7 @@
             "en": "Explore management pages for sessions and archives.",
             "zh": "探索会话和归档的管理页面。"
           },
-          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/1a6d490ec3be4af69d1ff99a38c60f01100d3452/docs/MANAGEMENT_PAGES.md"
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/c71b77b37f3eefc5c03786cabb815bfcf735af41/docs/MANAGEMENT_PAGES.md"
         },
         {
           "title": {
@@ -61,7 +61,7 @@
             "en": "Details on the transcript architecture and its components.",
             "zh": "对话记录架构及其组件的详细信息。"
           },
-          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/1a6d490ec3be4af69d1ff99a38c60f01100d3452/docs/TRANSCRIPT_ARCHITECTURE.md"
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/c71b77b37f3eefc5c03786cabb815bfcf735af41/docs/TRANSCRIPT_ARCHITECTURE.md"
         },
         {
           "title": {
@@ -72,7 +72,7 @@
             "en": "Learn how persistent PowerShell preserves state and reports command completion on Windows.",
             "zh": "了解持久 PowerShell 如何在 Windows 上保留状态并报告命令完成情况。"
           },
-          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/1a6d490ec3be4af69d1ff99a38c60f01100d3452/docs/WINDOWS_AGENT_SHELL.md"
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/c71b77b37f3eefc5c03786cabb815bfcf735af41/docs/WINDOWS_AGENT_SHELL.md"
         },
         {
           "title": {
@@ -83,7 +83,7 @@
             "en": "Acceptance criteria for Windows installer builds.",
             "zh": "Windows 安装程序构建的验收标准。"
           },
-          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/1a6d490ec3be4af69d1ff99a38c60f01100d3452/docs/WINDOWS_INSTALLER_ACCEPTANCE.md"
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/c71b77b37f3eefc5c03786cabb815bfcf735af41/docs/WINDOWS_INSTALLER_ACCEPTANCE.md"
         }
       ],
       "highlights": [
