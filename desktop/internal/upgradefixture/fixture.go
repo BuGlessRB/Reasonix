@@ -98,6 +98,17 @@ func createFixture(ctx context.Context, home, reportPath string) error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return err
 	}
+	// Model an existing installation without credentials or a live provider.
+	// Otherwise first-run onboarding opens settings instead of the restored tab.
+	cfg := config.Default()
+	cfg.DefaultModel = "upgrade-fixture/offline"
+	cfg.Desktop.ProviderAccess = []string{"upgrade-fixture"}
+	cfg.Providers = []config.ProviderEntry{{
+		Name: "upgrade-fixture", Kind: "openai", BaseURL: "http://127.0.0.1:1/v1", Model: "offline",
+	}}
+	if err := cfg.SaveTo(config.UserConfigPath()); err != nil {
+		return err
+	}
 	legacyPath := filepath.Join(config.SessionDir(), fixtureSessionID+".jsonl")
 	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o700); err != nil {
 		return err

@@ -38,6 +38,8 @@ test("cancelled CI stops expensive workers but keeps result aggregation", () => 
 
 test("packaging changes run native installer acceptance before merge", () => {
   const body = job(ci, "desktop-windows-package");
+  for (const name of ["Install the Electron workspace", "Measure Electron diagnostic overhead"])
+    assert.match(body.split(`      - name: ${name}\n`)[1], /^        if: github.event_name != 'pull_request'\n/);
   for (const event of ["pull_request", "push"]) {
     for (const packaging of ["true", "false", ""]) {
       const context = { github: { event_name: event }, needs: {
@@ -430,6 +432,31 @@ test("browser matrix preserves five entry points and fails closed through deskto
   assert.equal(run({ CHANGES_RESULT: "success", SHOULD_RUN: "false", PREPARE_RESULT: "success", GROUP_RESULT: "skipped" }), 0);
 });
 
+test("Desktop race uses every verified partition and one shared cache writer", () => {
+  const body = job(ci, "desktop-go-race");
+  assert.deepEqual(body.match(/group: \[([^\]]+)\]/)[1].split(",").map(value => value.trim()), windowsDesktopGroups);
+  assert.match(body, /fail-fast: false/);
+  assert.match(body, /run: node \.\.\/scripts\/desktop-windows-go-tests\.mjs \$\{\{ matrix.group \}\} --race/);
+  for (const group of windowsDesktopGroups) {
+    const args = windowsDesktopTestArgs(group, true);
+    assert.deepEqual(args.filter(arg => arg !== "-race"), windowsDesktopTestArgs(group));
+    assert.equal(args.filter(arg => arg === "-race").length, 1);
+  }
+  assert.match(body, /matrix.group == 'A-B' && steps.gocache.outputs.key/);
+  assert.match(job(ci, "desktop"), /GO_RACE_RESULT: \$\{\{ needs.desktop-go-race.result \}\}/);
+});
+
+test("installer evidence excludes running payloads and cache files on every publisher", () => {
+  for (const body of [job(ci, "desktop-windows-package"), job(release, "build"), job(release, "windows-runtime-acceptance")]) {
+    const upload = body.match(/name: Upload (?:signed )?Windows installer acceptance evidence\n([\s\S]*?)(?=\n      - |$)/)?.[1];
+    assert.ok(upload);
+    for (const extension of ["json", "png", "log"])
+      assert.ok(upload.includes(`reasonix-installer-acceptance/**/*.${extension}`));
+    for (const excluded of ["installed/**", "**/cache/**"])
+      assert.ok(upload.includes(`!\${{ runner.temp }}/reasonix-installer-acceptance/${excluded}`));
+  }
+});
+
 test("Windows desktop Go partitions tests without verbose JSON cache overhead", () => {
   const windowsGo = job(ci, "desktop-windows-go-group");
   const context = { github: { event_name: "pull_request" }, needs: {
@@ -447,9 +474,9 @@ test("Windows desktop Go partitions tests without verbose JSON cache overhead", 
     return { run: args.includes("-run") ? args[args.indexOf("-run") + 1] : undefined,
       skip: args.includes("-skip") ? args[args.indexOf("-skip") + 1] : undefined };
   });
-  assert.equal(commands.length, 4);
+  assert.equal(commands.length, windowsDesktopGroups.length);
   // Include non-test entry points and every possible first suffix character.
-  // The complement group must retain names outside the three selected ranges.
+  // The complement group retains names outside the selected ranges.
   const names = ["Example", "ExampleSession", "FuzzSession", "Test"];
   for (let code = 0; code <= 127; code++) names.push(`Test${String.fromCharCode(code)}Session`);
   names.push("Test会话", "TestΩSession", "TestWindowsTerminalProcessConPTYSmoke");
@@ -472,8 +499,8 @@ test("Windows desktop Go partitions tests without verbose JSON cache overhead", 
   assert.match(windowsGo, /fail-fast: false/);
 
   assert.match(windowsGo, /name: probe \(Windows ConPTY host integration\)[\s\S]*?continue-on-error: true[\s\S]*?run: go test -run '\^TestWindowsTerminalProcessConPTYSmoke\$' \./);
-  assert.match(windowsGo, /name: probe \(Windows ConPTY host integration\)\n\s+if: matrix.group == 'Q-Z'/);
-  assert.match(windowsGo, /name: test \(vendored systray identity\)\n\s+if: matrix.group == 'Q-Z'/);
+  assert.match(windowsGo, /name: probe \(Windows ConPTY host integration\)\n\s+if: matrix.group == 'T-Z'/);
+  assert.match(windowsGo, /name: test \(vendored systray identity\)\n\s+if: matrix.group == 'T-Z'/);
   assert.match(windowsGo, /steps\.conpty-smoke\.outcome == 'failure'/);
 });
 

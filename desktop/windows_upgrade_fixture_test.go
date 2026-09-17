@@ -29,6 +29,9 @@ func TestWindowsUpgradeFixtureMigratesLegacyAndRestarts(t *testing.T) {
 	for _, phase := range []string{"first", "restart"} {
 		app := NewApp()
 		t.Cleanup(app.closeSessionServices)
+		if app.NeedsOnboarding() {
+			t.Fatal("legacy fixture must restore the conversation instead of opening first-run provider settings")
+		}
 		if err := app.migrateDesktopSessionsV5(t.Context()); err != nil {
 			t.Fatal(err)
 		}

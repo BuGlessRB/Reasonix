@@ -888,14 +888,17 @@ jobs:
           path: ${{ steps.gocache.outputs.paths }}
           key: ${{ steps.gocache.outputs.key }}
 
-  # `go test -race ./...` is ~7 of desktop-go's ~11 minutes and shares nothing
-  # with vet, lint, build and the plain test run beyond the frontend artifact.
-  # Running it beside them makes the job's wall time the longer half without
-  # changing what is race-checked.
+  # The full desktop race package exceeded Go's ten-minute package alarm.
+  # Reuse the verified test partition to keep complete coverage in parallel.
   desktop-go-race:
     needs: [changes, desktop-prepare]
     if: ${{ !cancelled() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false') }}
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [A-B, C, D, E-H, I-P, Q-S, T-Z]
     defaults:
       run:
         working-directory: desktop
@@ -941,12 +944,11 @@ jobs:
       # runtime (tab/rebuild fences, extension UI). Race-sweep the module so
       # regressions are CI-blocked, not just author-verified locally.
       - name: test -race
-        run: go test -race ./...
+        run: node ../scripts/desktop-windows-go-tests.mjs ${{ matrix.group }} --race
 
-      # Only main-v2 pushes save, one job per OS and module, so the cache
-      # stays a few pushes deep instead of churning on every pull request.
+      # One shard saves the shared compiler cache; all shards restore it.
       - uses: actions/cache/save@v4
-        if: always() && github.event_name == 'push' && steps.gocache.outputs.key != ''
+        if: ${{ !cancelled() && github.event_name == 'push' && matrix.group == 'A-B' && steps.gocache.outputs.key != '' }}
         with:
           path: ${{ steps.gocache.outputs.paths }}
           key: ${{ steps.gocache.outputs.key }}
@@ -1211,7 +1213,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [A-D, E-H, I-P, Q-Z]
+        group: [A-B, C, D, E-H, I-P, Q-S, T-Z]
     defaults:
       run:
         shell: bash
@@ -1276,19 +1278,19 @@ jobs:
       # Windows environment. Keep the end-to-end probe visible without making
       # a single host scheduling stall equivalent to a Go correctness failure.
       - name: probe (Windows ConPTY host integration)
-        if: matrix.group == 'Q-Z'
+        if: matrix.group == 'T-Z'
         id: conpty-smoke
         continue-on-error: true
         timeout-minutes: 2
         run: go test -run '^TestWindowsTerminalProcessConPTYSmoke$' .
 
       - name: report ConPTY probe failure
-        if: always() && matrix.group == 'Q-Z' && steps.conpty-smoke.outcome == 'failure'
+        if: always() && matrix.group == 'T-Z' && steps.conpty-smoke.outcome == 'failure'
         shell: bash
         run: echo "::warning::The hosted Windows ConPTY integration probe failed; deterministic Windows Go tests still passed."
 
       - name: test (vendored systray identity)
-        if: matrix.group == 'Q-Z'
+        if: matrix.group == 'T-Z'
         timeout-minutes: 2
         run: go test -timeout=60s fyne.io/systray
 
@@ -1409,19 +1411,23 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: windows-installer-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/reasonix-installer-acceptance
+          path: |
+            ${{ runner.temp }}/reasonix-installer-acceptance/**/*.json
+            ${{ runner.temp }}/reasonix-installer-acceptance/**/*.png
+            ${{ runner.temp }}/reasonix-installer-acceptance/**/*.log
+            !${{ runner.temp }}/reasonix-installer-acceptance/installed/**
+            !${{ runner.temp }}/reasonix-installer-acceptance/**/cache/**
           if-no-files-found: ignore
           retention-days: 7
 
-      # The overhead benchmark asserts no threshold: it only records
-      # overhead.json as 7-day evidence. It ran on the test leg, where its ~5
-      # minutes sat on the critical path and its numbers came from the runner
-      # with the widest spread. Keep it on Windows for comparable history, but
-      # on the push-only leg that has the headroom.
+      # The benchmark records evidence but asserts no product threshold.
+      # Keep its five-minute measurement on pushes, outside PR qualification.
       - name: Install the Electron workspace
+        if: github.event_name != 'pull_request'
         run: pnpm install --frozen-lockfile
 
       - name: Measure Electron diagnostic overhead
+        if: github.event_name != 'pull_request'
         timeout-minutes: 10
         run: node electron/scripts/performance-benchmark.mjs
 
