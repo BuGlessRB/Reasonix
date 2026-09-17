@@ -17,9 +17,13 @@ func (a *App) PurgeCanonicalSession(ref session.SessionRef) error {
 	if err := validateLocalSessionRef(ref); err != nil {
 		return err
 	}
+	state, err := a.workspaceRegistry().Load(a.bootContext())
+	if err != nil {
+		return err
+	}
 	release := a.lockRuntimeMutation("purge archived session")
 	defer release()
-	if err := a.purgeCanonicalSession(a.bootContext(), ref); err != nil {
+	if err := a.purgeCanonicalSession(a.bootContext(), ref, state.Generation); err != nil {
 		return err
 	}
 	a.emitProjectTreeChanged()
@@ -45,9 +49,13 @@ func (a *App) purgeCanonicalSessionWithOperation(ref session.SessionRef, operati
 		operationID = "delete-" + strings.TrimPrefix(newTabID(), "tab_")
 	}
 	a.cancelAISessionTitle(target.key())
+	state, err := a.workspaceRegistry().Load(a.bootContext())
+	if err != nil {
+		return SessionTarget{}, err
+	}
 	release := a.lockRuntimeMutation("purge archived session")
 	defer release()
-	if err := a.purgeCanonicalSession(a.bootContext(), ref); err != nil {
+	if err := a.purgeCanonicalSession(a.bootContext(), ref, state.Generation); err != nil {
 		return SessionTarget{}, err
 	}
 	if state, loadErr := a.workspaceRegistry().Load(a.bootContext()); loadErr == nil {
@@ -96,28 +104,48 @@ func (a *App) resolveCanonicalPurgeTarget(ref session.SessionRef) (SessionTarget
 	return target, nil
 }
 
-func (a *App) purgeCanonicalSession(ctx context.Context, ref session.SessionRef, expected ...uint64) error {
+func (a *App) purgeCanonicalSession(ctx context.Context, ref session.SessionRef, expected uint64) error {
+	return a.purgeCanonicalSessionWithPrepare(ctx, ref, false, func(store *workspacestate.Store) error {
+		return store.BeginPurge(ctx, ref.SessionID, expected)
+	})
+}
+
+func (a *App) resumeCanonicalPurge(ctx context.Context, ref session.SessionRef, observed workspacestate.Operation) error {
+	return a.purgeCanonicalSessionWithPrepare(ctx, ref, true, func(store *workspacestate.Store) error {
+		return store.ResumePurge(ctx, ref.SessionID, observed)
+	})
+}
+
+func (a *App) purgeCanonicalSessionWithPrepare(ctx context.Context, ref session.SessionRef, existingOnly bool, prepare func(*workspacestate.Store) error) error {
 	store := a.workspaceRegistry()
 	state, err := store.Load(ctx)
 	if err != nil {
 		return err
 	}
-	op, retry := state.PendingOperations["purge-"+ref.SessionID]
-	if retry && op.Phase == "committed" {
+	switch workspacestate.ClassifyPurge(state, ref.SessionID) {
+	case workspacestate.PurgeCommitted:
 		return nil
-	}
-	if !retry && state.SessionStates[ref.SessionID].Lifecycle != workspacestate.Archived {
-		return errors.New("only archived sessions can be permanently deleted")
+	case workspacestate.PurgePreparedStale:
+		// A restore or later lifecycle mutation already superseded this legacy
+		// prepare. Clean only the observed registry record; do not touch the
+		// runtime or filesystem for an obsolete deletion intent.
+		return prepare(store)
+	case workspacestate.PurgeInvalid:
+		return workspacestate.ErrMutationConflict
+	case workspacestate.PurgeAbsent:
+		if existingOnly {
+			return prepare(store)
+		}
+		if state.SessionStates[ref.SessionID].Lifecycle != workspacestate.Archived {
+			return errors.New("only archived sessions can be permanently deleted")
+		}
 	}
 	if err := a.retireArchivedSessionRuntime(ctx, ref); err != nil {
 		return fmt.Errorf("session runtime is still in use: %w", err)
 	}
 	filesystem := session.NewFilesystemPersistence(a.desktopSessions.root)
 	if err := filesystem.PurgeWithTombstone(ctx, ref.SessionID, func() error {
-		if err := store.BeginPurge(ctx, ref.SessionID, expected...); err != nil {
-			return err
-		}
-		return store.AdvancePurge(ctx, ref.SessionID, "tombstoned")
+		return prepare(store)
 	}); err != nil {
 		return err
 	}

@@ -83,7 +83,7 @@ func (a *App) ApplySessionLifecycle(req SessionLifecycleRequest) (SessionLifecyc
 	out.Items = []SessionLifecycleItem{}
 	archiveErr := a.archiveLifecycleCommand(req, key)
 	for i, target := range req.Targets {
-		if i < len(previous) && previous[i].Committed {
+		if i < len(previous) && (previous[i].Committed || !previous[i].Retryable) {
 			out.Items = append(out.Items, previous[i])
 			continue
 		}
@@ -99,14 +99,18 @@ func (a *App) ApplySessionLifecycle(req SessionLifecycleRequest) (SessionLifecyc
 	}
 	out.Generation = state.Generation + 1
 	out.Committed = true
+	final := true
 	for _, item := range out.Items {
 		out.Committed = out.Committed && item.Committed
+		if !item.Committed && item.Retryable {
+			final = false
+		}
 	}
 	body, err = json.Marshal(out)
 	if err != nil {
 		return out, err
 	}
-	if err := store.SaveCommandResult(ctx, key, body, out.Committed); err != nil {
+	if err := store.SaveCommandResult(ctx, key, body, final); err != nil {
 		return out, err
 	}
 	state, err = store.Load(ctx)
@@ -152,11 +156,12 @@ func (a *App) ListTrashEntries(query, cursor string, limit int) (TrashEntryPage,
 	service := a.desktopSessionService("")
 	for id, status := range state.SessionStates {
 		op := state.PendingOperations["purge-"+id]
-		pending := op.Kind == "purge" && op.Phase != "committed"
+		purgeState := workspacestate.ClassifyPurge(state, id)
+		pending := purgeState == workspacestate.PurgeTombstoned || purgeState == workspacestate.PurgeContentRemoved || purgeState == workspacestate.PurgeInvalid
 		if status.Lifecycle != workspacestate.Archived && !pending {
 			continue
 		}
-		row := TrashEntry{ID: id, Ref: session.SessionRef{HostID: localDesktopHostID, SessionID: id}, Title: state.Presentation[id].Title, ArchivedAt: status.ArchivedAt, CanPurge: true, Health: "ready"}
+		row := TrashEntry{ID: id, Ref: session.SessionRef{HostID: localDesktopHostID, SessionID: id}, Title: state.Presentation[id].Title, ArchivedAt: status.ArchivedAt, CanPurge: purgeState != workspacestate.PurgeInvalid, Health: "ready"}
 		for wid, w := range state.Workspaces {
 			if containsDesktopString(w.SessionIDs, id) {
 				row.WorkspaceID = wid
@@ -276,9 +281,13 @@ func (a *App) applyLifecycleTarget(req SessionLifecycleRequest, key string, inde
 	if loadErr != nil {
 		return item, loadErr
 	}
-	if target.Ref != nil && req.Action != "archive" && latest.PendingOperations[child].Phase != "committed" && latest.PendingOperations["purge-"+target.Ref.SessionID].Kind != "purge" && latest.SessionStates[target.Ref.SessionID].Generation > req.ExpectedGeneration {
-		item.ErrorCode = "state_conflict"
-		return item, nil
+	if target.Ref != nil && req.Action != "archive" && latest.PendingOperations[child].Phase != "committed" && latest.SessionStates[target.Ref.SessionID].Generation > req.ExpectedGeneration {
+		purgeState := workspacestate.ClassifyPurge(latest, target.Ref.SessionID)
+		resumingPurge := req.Action == "purge" && (purgeState == workspacestate.PurgeTombstoned || purgeState == workspacestate.PurgeContentRemoved || purgeState == workspacestate.PurgeCommitted)
+		if !resumingPurge {
+			item.ErrorCode = "state_conflict"
+			return item, nil
+		}
 	}
 	if target.Ref != nil {
 		for id, w := range state.Workspaces {

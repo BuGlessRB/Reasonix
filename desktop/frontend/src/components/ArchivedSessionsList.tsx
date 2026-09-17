@@ -7,7 +7,7 @@ import type { SessionRef } from "../lib/sessionRef";
 import { useConfirmDialog } from "./ConfirmDialog";
 import "./ArchivedSessionsList.css";
 
-type TrashRow = { key: string; ref: SessionRef; title: string; workspace: string; updatedAt: number; canRestore: boolean; canPreview: boolean; health: string };
+type TrashRow = { key: string; ref: SessionRef; title: string; workspace: string; updatedAt: number; canRestore: boolean; canPreview: boolean; canPurge: boolean; health: string };
 export function ArchivedSessionsList({ active, onOpenSession }: {
   active: boolean; onOpenSession: (ref: SessionRef) => Promise<void>;
   legacyList?: () => Promise<SessionMeta[]>; legacyRestore?: (path: string) => Promise<void>; legacyPurge?: (path: string) => Promise<void>;
@@ -29,6 +29,7 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
   const registryGeneration = useRef(0);
   const surfaceGeneration = useRef(0);
   const pendingRequest = useRef<import("../generated/desktopContract.generated").SessionLifecycleRequest | undefined>(undefined);
+  const selectedKey = useRef<string | undefined>(undefined);
   const generation = useRef(0), previewGeneration = useRef(0), mutating = useRef(false);
   const { confirm, dialog, dismiss } = useConfirmDialog();
   const reload = useCallback(async () => {
@@ -44,7 +45,7 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
         snapshotGeneration = page.generation;
         next.push(...page.items.map(row => ({ key: row.id, ref: row.ref, title: row.title,
           workspace: row.workspaceTitle, updatedAt: row.archivedAt, canRestore: row.canRestore,
-          canPreview: row.canPreview, health: row.health })));
+          canPreview: row.canPreview, canPurge: row.canPurge, health: row.health })));
         const after = page.nextCursor ?? "";
         if (after && after === cursor) throw new Error(t("history.failedLoadHistory"));
         cursor = after;
@@ -52,6 +53,11 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
       registryGeneration.current = snapshotGeneration ?? 0;
       if (seq !== generation.current) return;
       next.sort((a, b) => b.updatedAt - a.updatedAt || a.key.localeCompare(b.key));
+      const selectedRow = selectedKey.current ? next.find(row => row.key === selectedKey.current) : undefined;
+      if (selectedKey.current && !selectedRow?.canPreview) {
+        selectedKey.current = undefined; ++previewGeneration.current;
+        setSelected(undefined); setPreview([]); setPreviewCursor(""); setPreviewError("");
+      } else if (selectedRow) setSelected(selectedRow);
       setRows(next); setError("");
     } catch (err) {
       if (seq === generation.current) setError(err instanceof Error ? err.message : String(err));
@@ -67,6 +73,7 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
   useEffect(() => { if (!active) dismiss(); }, [active, dismiss]);
   const select = async (row: TrashRow, cursor = "") => {
     const seq = ++previewGeneration.current;
+    selectedKey.current = row.key;
     setSelected(row); setPreview([]); setPreviewLoading(true); setPreviewError(""); setPreviewCursor("");
     try {
       const page = await app.ReadSessionHistory(row.ref, cursor, 32);
@@ -75,14 +82,15 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
     } catch (err) { if (seq === previewGeneration.current) setPreviewError(String(err)); }
     finally { if (seq === previewGeneration.current) setPreviewLoading(false); }
   };
-  const closePreview = () => { ++previewGeneration.current; setSelected(undefined); setPreview([]); };
+  const closePreview = () => { selectedKey.current = undefined; ++previewGeneration.current; setSelected(undefined); setPreview([]); };
   const mutate = async (targets: TrashRow[], kind: "restore" | "purge", retry = false) => {
     if (mutating.current) return;
     const surface = surfaceGeneration.current;
     if (!retry) pendingRequest.current = undefined;
     mutating.current = true; setBusy(true); ++generation.current; setError(""); setNotice(""); setLastKind(kind); setFailedRows([]);
     let succeeded = 0;
-    const failures: TrashRow[] = [];
+    const retryableFailures: TrashRow[] = [];
+    let failed = 0, conflicts = 0;
     try {
       const request = pendingRequest.current ?? { operationId: crypto.randomUUID(), action: kind,
         targets: targets.map(row => ({ ref: row.ref })), expectedGeneration: registryGeneration.current };
@@ -92,17 +100,22 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
       for (const item of result.items) {
         const row = targets.find(row => row.ref.sessionId === item.target.ref?.sessionId);
         if (!row) continue;
-        if (!item.committed) { failures.push(row); continue; }
+        if (!item.committed) {
+          failed++;
+          if (item.retryable) retryableFailures.push(row);
+          if (item.errorCode === "state_conflict") conflicts++;
+          continue;
+        }
         succeeded++;
         setRows(current => current.filter(other => other.key !== row.key));
         if (selected?.key === row.key) closePreview();
       }
-      if (result.committed) pendingRequest.current = undefined;
-      if (result.items.some(item => !item.committed && item.retryable === false)) pendingRequest.current = undefined;
-      setFailedRows(failures);
+      if (!retryableFailures.length) pendingRequest.current = undefined;
+      setFailedRows(retryableFailures);
       setNotice(t(kind === "restore" ? "history.restoreComplete" : "history.purgeComplete", { n: succeeded }));
       try { await reload(); } catch { setNotice(t("history.operationRefreshFailed")); }
-      if (failures.length) setError(t("history.trashPartialFailure", { n: failures.length }));
+      if (conflicts) setError(t("history.stateConflict"));
+      else if (failed) setError(t("history.trashPartialFailure", { n: failed }));
       if (surface === surfaceGeneration.current && kind === "restore" && succeeded === 1 && targets.length === 1 && targets[0].ref) {
         try { await onOpenSession(targets[0].ref); } catch { setNotice(t("history.restoredRefreshFailed")); }
       }
@@ -112,11 +125,15 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
         pendingRequest.current = undefined;
         setFailedRows([]);
         await reload().catch(() => {});
-      } else setFailedRows(targets);
-      setError(message);
+        setError(t("history.stateConflict"));
+      } else {
+        setFailedRows(targets);
+        setError(message);
+      }
     } finally { mutating.current = false; setBusy(false); }
   };
   const purge = async (targets: TrashRow[]) => {
+    targets = targets.filter(row => row.canPurge);
     if (!targets.length || mutating.current) return;
     if (await confirm({ title: t(targets.length > 1 ? "history.emptyTrashConfirm" : "history.purgeConfirm"),
       message: targets.length > 1 ? t("history.emptyTrashExplanation", { n: targets.length }) : t("history.purgeExplanation", { name: targets[0].title }),
@@ -127,7 +144,7 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
     <div className="archived-sessions__toolbar">
       <label className="archived-sessions__search"><Search size={16} aria-hidden="true" /><input aria-label={t("history.searchPlaceholder")} placeholder={t("history.searchPlaceholder")} value={query} onChange={event => setQuery(event.target.value)} /></label>
       <button className="btn btn--small" disabled={busy || loading} onClick={() => void reload().catch(() => {})}><RotateCcw size={14} />{t("history.refreshTrash")}</button>
-      <button className="btn btn--small btn--danger history-clear" disabled={busy || loading || !!error || !rows.length} onClick={() => void purge([...rows])}><Trash2 size={14} />{t("history.clearTrash")}</button>
+      <button className="btn btn--small btn--danger history-clear" disabled={busy || loading || !!error || !rows.some(row => row.canPurge)} onClick={() => void purge([...rows])}><Trash2 size={14} />{t("history.clearTrash")}</button>
     </div>
     {notice && <div className="management-notice" role="status">{notice}</div>}
     {error && <div className="management-notice" role="alert">{error}<button className="btn btn--small" disabled={busy} onClick={() => failedRows.length ? void mutate(failedRows, lastKind, true) : void reload().catch(() => {})}>{t(failedRows.length ? "history.retryFailed" : "common.retry")}</button></div>}
@@ -138,7 +155,7 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
         {filtered.map(row => <div className="archived-sessions__row" key={row.key} data-selected={selected?.key === row.key || undefined}>
           <button className="archived-sessions__open" disabled={busy || !row.canPreview} onClick={() => void select(row)} title={row.title}><MessageSquare size={17} /><span><strong>{row.title}</strong><small>{row.workspace}{row.health === "purge_pending" && <> · {t("history.purgePending")}</>}{row.updatedAt > 0 && <> · {new Date(row.updatedAt).toLocaleDateString(getLocale())}</>}</small></span></button>
           <button className="btn btn--small" disabled={busy || !row.canRestore} aria-label={t("history.restoreSession")} onClick={() => void mutate([row], "restore")}><RotateCcw size={14} />{t("history.restore")}</button>
-          <button className="btn btn--small archived-sessions__delete" disabled={busy} aria-label={`${t("history.permanentlyDelete")} ${row.title}`} onClick={() => void purge([row])}><Trash2 size={14} /></button>
+          <button className="btn btn--small archived-sessions__delete" disabled={busy || !row.canPurge} aria-label={`${t("history.permanentlyDelete")} ${row.title}`} onClick={() => void purge([row])}><Trash2 size={14} /></button>
         </div>)}
       </div>
       {selected && <aside className="archived-sessions__preview" aria-label={t("history.previewRecovery")}>

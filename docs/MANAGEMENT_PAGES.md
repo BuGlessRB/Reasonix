@@ -18,6 +18,22 @@ Selection uses stable paths and advances to the nearest remaining row after a mu
 
 Permanent deletion requires confirmation with initial focus on Cancel. Empty Trash snapshots every ordinary deleted conversation, including filtered-out rows, and excludes system recovery copies. The batch runs sequentially, continues after individual failures, reports totals and offers an explicit failed-only retry. A successful mutation followed by a failed refresh is reported separately, so successful destructive operations are not resubmitted.
 
+The registry tombstone is the permanent-deletion commit point. Before that
+commit, restore may win and invalidates the older delete request; after it,
+restore and preview stay disabled while the same request resumes filesystem
+cleanup. Legacy `prepared` delete records are classified under the registry
+write lock: a still-archived, unchanged record may advance to the tombstone,
+while a record superseded by restore or a newer lifecycle generation is removed
+without touching session content. Merely opening or refreshing Trash never
+advances deletion.
+
+Lifecycle requests retain their original operation ID, target set and observed
+generation while retryable work remains. A `state_conflict` is final for that
+request: Trash refreshes and asks the user to start again, rather than silently
+granting the old request a newer generation. Mixed batches retry only targets
+whose failure is retryable; successful and final-failure targets keep their
+durable results.
+
 ## Automation drafts
 
 `useAutomationDraftStore` keeps per-ID baselines, editable values, frequency choice, detail tab, conflicts and operation versions in memory for the application run. Switching tasks, filters, pages, detail visibility and linked conversations preserves drafts. New unsaved tasks remain discoverable; changed existing tasks show an Unsaved badge. Reloading the webview or exiting the process clears drafts; minimize/tray hiding does not.

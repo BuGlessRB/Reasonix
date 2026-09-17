@@ -109,16 +109,56 @@ cancel the replacement session's `task-1`.
 
 ## Backups and rollback / 备份与回滚
 
-Permanent deletion uses `prepared → tombstoned → content_removed → committed`.
-It requires an archived, idle identity and filesystem ownership, retains a
-durable anti-resurrection tombstone, and validates a staging receipt on retry.
-Interrupted deletion remains visible in Trash. Shared objects, upgrade originals
-and independent backups are retained; this is not secure erasure. Empty-trash
-freezes the confirmed target set and reports partial failure.
+New permanent-deletion requests atomically validate the archived session
+generation and publish `deleted + tombstoned` in one registry write. The
+tombstone is the irreversible commit point; later work progresses through
+`content_removed → committed`. Before the tombstone commits, restore may win
+and the older deletion intent becomes invalid. After it commits, restore is
+rejected and cleanup remains resumable. Filesystem ownership and the session
+writer lock are acquired before publishing the tombstone; directory movement
+and content/cache removal run after the registry callback without holding the
+registry lock. Retry validates the deterministic staging receipt.
 
-彻底删除按上述独立阶段推进，只允许已归档且空闲的身份，在文件所有权保护下写入
-防复活墓碑。重试校验暂存凭据，删除未完成的条目仍显示在回收站。共享对象、升级
-原件和独立备份保留，不承诺安全擦除。清空冻结确认时的目标集合并反馈部分失败。
+Legacy `prepared` purge operations remain readable but are no longer emitted by
+new requests. Replay advances one only when its identity, archived lifecycle
+and original session generation still match. Restore or rearchive removes a
+superseded `prepared` record in the same registry commit; startup replay also
+cleans a stale record without closing a runtime or touching files. Invalid
+identity or phase combinations are preserved as evidence and fail closed.
+Listing Trash is read-only and never triggers purge replay.
+
+Lifecycle command receipts preserve the original request fingerprint,
+operation ID, target set and observed generation. Successes and non-retryable
+failures are final per target; only retryable failures run again. A batch
+command reaches its terminal `committed` phase when every target is either
+successful or finally failed, while `Result.Committed` continues to mean every
+target succeeded. A state conflict requires a refreshed, explicit user action;
+an old request never adopts a newer generation automatically.
+
+新永久删除请求在一次注册表写入中校验归档会话代际，并原子发布
+`deleted + tombstoned`。墓碑是不可撤销的提交点，后续只按
+`content_removed → committed` 完成清理。墓碑提交前，恢复可以先胜出并使旧删除
+意图失效；墓碑提交后，恢复必须失败，文件清理可以重放。发布墓碑前先取得目录
+ownership 锁和会话 writer 锁；注册表回调返回后再移动目录、删除正文与缓存，且不
+持有注册表锁。重试继续校验确定性的暂存凭据。
+
+旧版 `prepared` 删除操作仍可读取，但新请求不再写出该阶段。只有操作身份、归档
+生命周期和原始会话代际仍一致时，重放才会把它推进到墓碑。恢复或重新归档会在同一
+注册表提交中移除已淘汰的 `prepared`；启动恢复也会在不关闭运行时、不触碰文件的
+前提下清理过期记录。身份或阶段组合无法解释时保留证据并拒绝自动修复。列出回收站
+是只读操作，不会触发删除重放。
+
+生命周期命令凭据固定原请求指纹、`operationId`、目标集合和观察到的 generation。
+成功项与不可重试失败项均为单项目标终态，重放只执行可重试失败项。全部目标成功或
+已最终失败时，批次命令进入终态 `committed`；`Result.Committed` 仍只表示全部目标
+成功。状态冲突要求刷新后由用户明确重新操作，旧请求不能自动采用新代际。
+
+Interrupted deletion remains visible in Trash. Shared objects, upgrade
+originals and independent backups are retained; this is not secure erasure.
+Empty-trash freezes the confirmed target set and reports partial failure.
+
+删除中断的条目仍显示在回收站。共享对象、升级原件和独立备份保留，不承诺安全
+擦除。清空回收站冻结确认时的目标集合并反馈部分失败。
 
 Metadata backups are immutable and content-addressed. They include the
 registry, project/tab state, migration ledger, legacy topic JSON and consistent
