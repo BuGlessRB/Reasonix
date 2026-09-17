@@ -46,6 +46,7 @@ export const initialState: SessionState = {
   steerQueue: [],
   awaitingTurnStart: [],
   queueMoved: 0,
+  browserTabsMoved: 0,
   panels: [],
   views: [],
   takeovers: {},
@@ -135,6 +136,7 @@ const holdsWait = new Set<string>([
   "mcp_surface_ready",
   "workspace_changed",
   "inbox_changed",
+  "browser_tabs_changed",
   "context_maintenance",
   "extension_surface",
   "extension_status",
@@ -205,6 +207,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
   }
   if (ev.kind === "__runtime_seen") return { ...s, runtime: s.runtime.filter((n) => n.id !== ev.id) };
   if (ev.kind === "inbox_changed") return { ...s, queueMoved: s.queueMoved + 1 };
+  if (ev.kind === "browser_tabs_changed") return { ...s, browserTabsMoved: s.browserTabsMoved + 1 };
   // Both event.Message emitters carry assistant text, so nothing on the wire
   // echoes what you typed — only /history has it, and only after a reload. The
   // client owns its own turn. Mid-turn input stays pending until the steer

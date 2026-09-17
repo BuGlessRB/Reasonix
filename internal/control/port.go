@@ -5,6 +5,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
+	"reasonix/internal/browser"
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/command"
 	"reasonix/internal/config"
@@ -293,6 +294,7 @@ type Status interface {
 	Balance(ctx context.Context) billing.Reading
 	Jobs() []jobs.View
 	Todos() []evidence.TodoItem
+	BrowserTabs() []browser.TabInfo
 }
 
 // SessionPersistence covers snapshotting a session and tearing down its on-disk

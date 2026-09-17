@@ -36,6 +36,16 @@ export interface HistoryToolCall {
 // GET /todos as internal/serve writes it: the canonical task list, the latest
 // todo_write merged with every complete_step advance. Deriving it from the
 // transcript instead loses the advances and keeps the refused writes.
+// A tab the agent's browser has open. target is the browser's own id for the
+// page, which the window draws its view by; id is what the agent calls it.
+export interface BrowserTab {
+  id: string;
+  target: string;
+  url: string;
+  title: string;
+  active: boolean;
+}
+
 export interface HostTodo {
   content: string;
   status: string;

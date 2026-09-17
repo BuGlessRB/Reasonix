@@ -14,7 +14,7 @@ export type { MemoryEdit } from "./memory";
 export type { Money, UsageDay, UsageModel, UsageProvider, UsageReport } from "./usage";
 import type { CompactionSettings, Completion, CompletionItem, ModelEntry, ModelPrice, RoleAssignments } from "./model";
 import type { NetworkProbe, NetworkSettings } from "./network";
-import type { ApprovalMode, ApprovalVerdict, Checkpoint, HistoryMessage, HostTodo, JobEntry, Preset, RewindPlan, RewindResult, RewindScope, SessionEntry, SessionStatus, WalletLine, WalletReading, PlanAction } from "./session";
+import type { ApprovalMode, ApprovalVerdict, BrowserTab, Checkpoint, HistoryMessage, HostTodo, JobEntry, Preset, RewindPlan, RewindResult, RewindScope, SessionEntry, SessionStatus, WalletLine, WalletReading, PlanAction } from "./session";
 import type { ContextBreakdown, ShellOption, ShellSettings } from "./shell";
 import type { SkillCatalog, SkillEntry } from "./skill";
 import type { UpdateProgress, VersionEntry, VersionHub } from "./version";
@@ -24,7 +24,7 @@ import type { ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, Wor
 // wire and the layers below already do. This is where a reader still finds
 // them all.
 export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, CapabilityScope,
-  Checkpoint, CompactionSettings, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage, HostTodo,
+  Checkpoint, CompactionSettings, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage, HostTodo, BrowserTab,
   HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource, JobEntry, McpCatalog, McpDraft,
   McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpRisk, McpTool, MemoryCatalog,
   MemoryEntry, ModelEntry, ModelPrice, NetworkProbe, NetworkSettings, Preset, RewindPlan,
@@ -367,6 +367,8 @@ export interface AgentPort {
   // event says it moved and nothing more, so that one answer serves every
   // client instead of each rebuilding the queue from the frames it saw.
   queue(): Promise<Queue>;
+  // The agent's open tabs, read on every browser_tabs_changed frame.
+  browserTabs(): Promise<BrowserTab[]>;
   // The entry's full text. preview is cut to a manifest-sized line, so editing
   // against it would silently shorten what the user actually said.
   readQueued(itemId: string): Promise<string>;

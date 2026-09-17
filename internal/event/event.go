@@ -146,6 +146,10 @@ const (
 	// behind "interrupted" stay in one place instead of being rebuilt from the
 	// frames a client happened to see.
 	AdjudicationsChanged
+	// BrowserTabsChanged reports that the agent's browser opened, closed,
+	// switched or navigated a tab. Content-free: a window reads the tabs back,
+	// from the session that owns them.
+	BrowserTabsChanged
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount

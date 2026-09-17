@@ -50,6 +50,9 @@ var mirroredWireTypes = []wireMirror{
 	// The canonical task list, which the panel reads rather than derives. A
 	// status the page cannot read is a signed-off step drawn as the current one.
 	{"internal/serve/todos.go", "todoItem", tsSessionFile, "HostTodo"},
+	// The agent's tabs. The target id is what the window draws a view by, so a
+	// tab the page cannot read one for is a tab it cannot show.
+	{"internal/browser/session.go", "TabInfo", tsSessionFile, "BrowserTab"},
 	// A rebuilt transcript's tool calls. The proxy's resolved identity was on
 	// the kernel side and not on this one, so a reopened session drew
 	// use_capability where the live one drew what it reached.

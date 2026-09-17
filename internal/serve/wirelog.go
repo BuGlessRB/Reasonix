@@ -62,6 +62,8 @@ var wireLogSkipped = map[string]bool{
 	// Content-free invalidation: a reopened window reads /adjudications, and
 	// replaying the notice would tell it to re-read something it just read.
 	"adjudications_changed": true,
+	// The agent's tabs are read from the session that owns them.
+	"browser_tabs_changed": true,
 }
 
 // codeTrajectoryUnreadable refuses a read that could not establish coverage.

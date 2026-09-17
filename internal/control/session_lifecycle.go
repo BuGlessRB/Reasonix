@@ -586,7 +586,16 @@ func (c *Controller) adoptSessionResources(opts Options) {
 	if opts.BrowserSession != nil {
 		c.browser = opts.BrowserSession
 		c.browser.Retain()
+		c.browser.OnTabsChanged(func() { c.sink.Emit(event.Event{Kind: event.BrowserTabsChanged}) })
 	}
+}
+
+// BrowserTabs lists the agent's open tabs, none when it has no browser.
+func (c *Controller) BrowserTabs() []browser.TabInfo {
+	if c == nil || c.browser == nil {
+		return []browser.TabInfo{}
+	}
+	return c.browser.Tabs()
 }
 
 // BrowserSession is the agent's browser, which a rebuild hands to the

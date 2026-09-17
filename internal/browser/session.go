@@ -36,6 +36,7 @@ type Session struct {
 	closed   bool
 	owners   int
 	openedBy map[string]string // popup target id → opener tab id
+	changed  func()
 	// secretChecks maps a browser_act's arguments to whether its permission
 	// check treated it as entering a secret.
 	secretChecks map[string]bool
@@ -48,9 +49,11 @@ func NewSession(cfg Config) *Session {
 	return &Session{cfg: cfg, openedBy: map[string]string{}}
 }
 
-// TabInfo is what a tab is showing.
+// TabInfo is what a tab is showing. Target is the browser's own id for the
+// page, which a window drawing hosted views keys them by.
 type TabInfo struct {
 	ID     string `json:"id"`
+	Target string `json:"target"`
 	URL    string `json:"url"`
 	Title  string `json:"title"`
 	Active bool   `json:"active"`
@@ -91,6 +94,23 @@ func (s *Session) dropEngineLocked() {
 	eng := s.eng
 	s.eng = nil
 	go s.cfg.Pool.release(eng)
+}
+
+// OnTabsChanged names who hears that a tab opened, closed, became active or
+// navigated. It replaces whoever heard before.
+func (s *Session) OnTabsChanged(fn func()) {
+	s.mu.Lock()
+	s.changed = fn
+	s.mu.Unlock()
+}
+
+func (s *Session) tabsChanged() {
+	s.mu.Lock()
+	fn := s.changed
+	s.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
 }
 
 // Retain adds an owner. A session outlives a rebuild by being retained by the
@@ -160,7 +180,7 @@ func (s *Session) Tabs() []TabInfo {
 	out := make([]TabInfo, 0, len(s.tabs))
 	for _, t := range s.tabs {
 		url, title := t.location()
-		out = append(out, TabInfo{ID: t.id, URL: url, Title: title, Active: t == s.active})
+		out = append(out, TabInfo{ID: t.id, Target: t.targetID, URL: url, Title: title, Active: t == s.active})
 	}
 	return out
 }
@@ -220,6 +240,7 @@ func (s *Session) activate(t *tab) {
 	s.mu.Lock()
 	s.active = t
 	s.mu.Unlock()
+	defer s.tabsChanged()
 	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
 	defer cancel()
 	_ = t.call(ctx, "Page.bringToFront", nil, nil)
@@ -272,11 +293,13 @@ func (s *Session) attach(ctx context.Context, eng *engine, targetID string) (*ta
 		s.removeTab(t)
 		return nil, engineFailure(err)
 	}
+	s.tabsChanged()
 	return t, nil
 }
 
 func (s *Session) removeTab(t *tab) {
 	t.detach()
+	defer s.tabsChanged()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, candidate := range s.tabs {

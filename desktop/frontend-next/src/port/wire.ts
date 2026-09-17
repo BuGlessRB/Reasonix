@@ -33,6 +33,7 @@ export type Kind =
   | "completion_summary"
   | "inbox_changed"
   | "adjudications_changed"
+  | "browser_tabs_changed"
   | "graph_delta"
   // Transport frames, not kernel events: the stream describing itself. Handled
   // in the port and never reaching the reducer.

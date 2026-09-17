@@ -735,6 +735,7 @@ var kindNames = map[event.Kind]string{
 	event.TurnPhase:               "turn_phase",
 	event.CompletionSummary:       "completion_summary",
 	event.AdjudicationsChanged:    "adjudications_changed",
+	event.BrowserTabsChanged:      "browser_tabs_changed",
 	event.InboxChanged:            "inbox_changed",
 	event.GraphDelta:              "graph_delta",
 }

@@ -79,14 +79,22 @@ func TestSessionDrivesAHostedBrowserWithoutLaunchingOne(t *testing.T) {
 		return host, nil
 	})
 	s := NewSession(Config{Launch: LaunchSpec{Executable: "/nonexistent/chrome", ProfileDir: "/profiles/w1"}, Pool: pool})
+	var changes sync.WaitGroup
+	changes.Add(1)
+	var once sync.Once
+	s.OnTabsChanged(func() { once.Do(changes.Done) })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	info, err := s.Open(ctx, "https://example.com/", "", false)
 	if err != nil {
 		t.Fatalf("Open through the host: %v", err)
 	}
-	if info.Title != "Hosted" || dialed != "/profiles/w1" {
+	if info.Title != "Hosted" || info.Target != "view-1" || dialed != "/profiles/w1" {
 		t.Fatalf("info = %+v, dialed %q", info, dialed)
+	}
+	changes.Wait()
+	if tabs := s.Tabs(); len(tabs) != 1 || tabs[0].Target != "view-1" || !tabs[0].Active {
+		t.Fatalf("tabs = %+v", tabs)
 	}
 	s.Close()
 	host.mu.Lock()

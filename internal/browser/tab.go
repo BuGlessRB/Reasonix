@@ -192,7 +192,7 @@ func (t *tab) info(refreshTitle bool) TabInfo {
 		cancel()
 	}
 	url, title := t.location()
-	return TabInfo{ID: t.id, URL: url, Title: title, Active: t.s.activeTab() == t}
+	return TabInfo{ID: t.id, Target: t.targetID, URL: url, Title: title, Active: t.s.activeTab() == t}
 }
 
 func (t *tab) signalLocked() {
@@ -220,6 +220,7 @@ func (t *tab) onEvent(ev event) {
 		t.signalLocked()
 		t.mu.Unlock()
 		t.s.refs.retireTab(t.id)
+		t.s.tabsChanged()
 	case "Page.navigatedWithinDocument":
 		var p struct {
 			FrameID string `json:"frameId"`
@@ -244,11 +245,15 @@ func (t *tab) onEvent(ev event) {
 			return
 		}
 		t.mu.Lock()
-		if p.FrameID == t.mainFrame {
+		main := p.FrameID == t.mainFrame
+		if main {
 			t.loaded[p.LoaderID] = true
 			t.signalLocked()
 		}
 		t.mu.Unlock()
+		if main {
+			t.s.tabsChanged()
+		}
 	case "Page.javascriptDialogOpening":
 		var d Dialog
 		if json.Unmarshal(ev.Params, &d) != nil {
