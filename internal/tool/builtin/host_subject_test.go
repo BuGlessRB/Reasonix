@@ -20,6 +20,9 @@ func TestPermissionSubjectIsTheProjectedOneWhateverTheModelAdds(t *testing.T) {
 		{"browser_open", browserOpen{}.PermissionArgs(ctx, json.RawMessage(`{"url":"https://example.com/a","path":"/etc/passwd","command":"x"}`)), "https://example.com"},
 		{"browser_read unbound", browserRead{}.PermissionArgs(ctx, json.RawMessage(`{"what":"snapshot","origin":"https://model.example","file_path":"x"}`)), ""},
 		{"browser_act unbound", browserAct{}.PermissionArgs(ctx, json.RawMessage(`{"steps":[],"origin":"https://model.example","command":"x"}`)), ""},
+		{"computer_act", computerAct{}.PermissionArgs(ctx, json.RawMessage(`{"app":"com.apple.Notes","steps":[],"command":"com.apple.TextEdit"}`)), "com.apple.Notes"},
+		{"computer_read", computerRead{}.PermissionArgs(ctx, json.RawMessage(`{"what":"snapshot","app":"com.apple.Notes","pattern":"*"}`)), "com.apple.Notes"},
+		{"computer_read apps", computerRead{}.PermissionArgs(ctx, json.RawMessage(`{"what":"apps","app":"com.apple.Notes"}`)), computerAppsSubject},
 	}
 	for _, tc := range cases {
 		if got := permission.Subject(tc.got); got != tc.want {
@@ -30,5 +33,10 @@ func TestPermissionSubjectIsTheProjectedOneWhateverTheModelAdds(t *testing.T) {
 	_ = json.Unmarshal(cases[2].got, &kept)
 	if _, ok := kept["steps"]; !ok || len(kept) != 1 {
 		t.Errorf("the gate should read the declared steps and nothing else: %s", cases[2].got)
+	}
+	kept = nil
+	_ = json.Unmarshal(cases[3].got, &kept)
+	if _, ok := kept["steps"]; !ok || len(kept) != 2 {
+		t.Errorf("the gate should read the application and the declared steps: %s", cases[3].got)
 	}
 }

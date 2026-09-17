@@ -64,6 +64,8 @@ const dynamicBashApprovalReason = "This command uses nested or indirect shell ex
 
 const browserCredentialApprovalReason = "This browser step types a password, a one-time code or card details into the site. Auto, the site's grant and broad allow rules do not answer it; approve it or use YOLO."
 
+const computerApprovalReason = "This reads or operates another application on the computer, with whatever access that application has. Auto and broad allow rules do not answer it; approve it for this application or use YOLO."
+
 // explicitApprovalReason is why a call needs a person rather than auto or a
 // broad rule, or "" when it does not.
 func explicitApprovalReason(tool, subject string) string {
@@ -72,6 +74,8 @@ func explicitApprovalReason(tool, subject string) string {
 		return dynamicBashApprovalReason
 	case permission.IsBrowserTool(tool) && permission.BrowserSubjectRequiresExplicitApproval(subject):
 		return browserCredentialApprovalReason
+	case permission.IsComputerTool(tool):
+		return computerApprovalReason
 	}
 	return ""
 }

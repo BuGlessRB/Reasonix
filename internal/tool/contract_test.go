@@ -63,6 +63,8 @@ var acceptsDefaultSnip = map[string]bool{
 	"browser_read":   true, // same shape as browser_open, and paged by offset when longer
 	"code_index":     true,
 	"complete_step":  true,
+	"computer_act":   true, // step results lead, then the application's tree read top-down
+	"computer_read":  true, // an accessibility tree reads top-down, like a page snapshot
 	"compress":       true,
 	"context_budget": true, // a fixed four-number JSON; never large enough to snip
 	"delete_range":   true,

@@ -27,6 +27,7 @@ var leaves = []string{
 	"internal/agentpreset",
 	"internal/billing",
 	"internal/browser",
+	"internal/computer",
 	"internal/diff",
 	"internal/extension/rpcwire",
 	"internal/execgraph",

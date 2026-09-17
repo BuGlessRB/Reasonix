@@ -3,10 +3,12 @@ package permission
 
 // A rule group is a set of tools one grant covers: approving an edit answers
 // for every file writer, and approving a site answers for loading, reading and
-// operating it alike.
+// operating it alike, and approving an application answers for reading and
+// operating that application.
 const (
 	fileMutationGroup = "file_mutation"
 	browserGroup      = "browser"
+	computerGroup     = "computer"
 )
 
 // IsBrowserTool reports whether a tool operates the agent's browser.
@@ -18,6 +20,8 @@ func groupOf(toolName string) string {
 		return fileMutationGroup
 	case "browser_open", "browser_read", "browser_act":
 		return browserGroup
+	case "computer_read", "computer_act":
+		return computerGroup
 	}
 	return ""
 }
@@ -29,8 +33,8 @@ func inGroup(ruleTool, toolName string) bool {
 }
 
 // groupGrantRule is the grant a group records. File writers are granted as a
-// whole and a site by its origin; a browser call that names no site has no
-// grant any later call could reuse.
+// whole, a site by its origin and an application by its bundle id; a call that
+// names neither has no grant any later call could reuse.
 func groupGrantRule(toolName, subject string) (string, bool) {
 	switch groupOf(toolName) {
 	case fileMutationGroup:
@@ -38,6 +42,10 @@ func groupGrantRule(toolName, subject string) (string, bool) {
 	case browserGroup:
 		if subject != "" {
 			return "Browser=" + subject, true
+		}
+	case computerGroup:
+		if subject != "" {
+			return "Computer=" + subject, true
 		}
 	}
 	return "", false

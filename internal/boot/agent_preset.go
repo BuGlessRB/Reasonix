@@ -101,6 +101,16 @@ func BrowserToolNames() []string {
 	return names
 }
 
+// ComputerToolNames are shown when the host can operate this machine's
+// applications.
+func ComputerToolNames() []string {
+	var names []string
+	for _, t := range builtin.ComputerTools(nil) {
+		names = append(names, t.Name())
+	}
+	return names
+}
+
 // UnifiedProviderToolNames returns the provider-visible allowlist for a boot
 // with host-control tools enabled.
 func UnifiedProviderToolNames() []string {
@@ -151,6 +161,11 @@ func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bo
 	// config decides at boot, so the schema stays the same for the whole session.
 	for _, name := range BrowserToolNames() {
 		if t, ok := reg.Get(name); ok && builtin.BrowserBound(t) {
+			allow = append(allow, name)
+		}
+	}
+	for _, name := range ComputerToolNames() {
+		if t, ok := reg.Get(name); ok && builtin.ComputerBound(t) {
 			allow = append(allow, name)
 		}
 	}

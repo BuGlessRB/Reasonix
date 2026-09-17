@@ -256,6 +256,9 @@ func (p Policy) DecideSubject(toolName string, readOnly bool, subject string) De
 	if d, ok := p.decideBrowserCredential(toolName, subject); ok {
 		return d
 	}
+	if d, ok := p.decideComputer(toolName, subject); ok {
+		return d
+	}
 	switch {
 	case matchAny(p.Deny, toolName, subject):
 		return Deny
@@ -796,6 +799,8 @@ func canonicalRuleTool(toolName string) string {
 		return fileMutationGroup
 	case "Browser", "browser":
 		return browserGroup
+	case "Computer", "computer":
+		return computerGroup
 	default:
 		return toolName
 	}

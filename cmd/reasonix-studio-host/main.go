@@ -111,6 +111,7 @@ func main() {
 	// replace it.
 	studioApp := flag.String("studio-app", "", "the application executable this host runs inside")
 	studioAppPID := flag.Int("studio-app-pid", 0, "the process id of that application")
+	computerHelper := flag.String("computer-helper", "", "the native helper that operates this machine's applications")
 	stripGrants := flag.Bool("strip-package-grants", false, "remove app-package grants from the directory -studio-app runs from, print what changed, and exit")
 	flag.Parse()
 	if *stripGrants {
@@ -123,6 +124,7 @@ func main() {
 		fmt.Fprintln(os.Stdout, instanceid.Current())
 		return
 	}
+	boot.SetComputerHelper(*computerHelper)
 	shell := shellIdentity{version: *studioVersion, exe: *studioApp, pid: *studioAppPID}
 	os.Exit(run(parentLease(os.Stdin), os.Stdout, os.Stderr, *page, shell))
 }

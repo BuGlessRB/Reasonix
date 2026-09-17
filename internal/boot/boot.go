@@ -603,7 +603,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		prev := cleanup
 		cleanup = func() { prev(); lspMgr.Close() }
 	}
-	browserSession := bindBrowser(reg, cfg.Browser, root, opts.BrowserSession)
+	browserSession := bindMachineTools(reg, cfg.Browser, root, opts.BrowserSession)
 
 	timer.mark("mcp")
 	maxSteps := max(opts.MaxSteps, 0)
