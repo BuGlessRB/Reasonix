@@ -10,7 +10,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # Push cancellation is handled by Supersede CI, which preserves the code
+  # ancestor still required by a release-notes-only candidate.
+  group: ci-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -520,7 +522,7 @@ jobs:
           PREPARE_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.desktop != 'false' }}
           NATIVE_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false' }}
           FRONTEND_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.frontend != 'false' || needs.changes.outputs.electron != 'false' }}
-          PACKAGE_REQUIRED: ${{ github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true' }}
+          PACKAGE_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.packaging != 'false' }}
           PREPARE_RESULT: ${{ needs.desktop-prepare.result }}
           GO_RESULT: ${{ needs.desktop-go.result }}
           GO_RACE_RESULT: ${{ needs.desktop-go-race.result }}
@@ -1314,10 +1316,11 @@ jobs:
   # no state with the test steps above. It runs beside them instead of after
   # them so the Windows leg's wall time is the longer half rather than the sum,
   # and so a packaging failure costs a short rerun instead of the whole leg.
-  # Pushes to main-v2 only: the release pipeline builds installers again anyway.
+  # Packaging changes also qualify before merge, so installer/upgrade failures
+  # cannot first appear on the release candidate's push.
   desktop-windows-package:
     needs: [changes, desktop-prepare]
-    if: always() && needs.desktop-prepare.result == 'success' && (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true')
+    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.packaging != 'false')
     runs-on: windows-latest
     # Packaging measured 13m55s; the overhead benchmark and its workspace
     # install add about six more. Bound hangs, not duration.

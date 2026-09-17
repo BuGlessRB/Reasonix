@@ -160,10 +160,19 @@ test("CLI writes GitHub output and module import stays side-effect free", t => {
 // site and sdk are in this list because the required aggregates accept a
 // skipped site or a no-op sdk; a PR that edits the routing contract would
 // otherwise satisfy those expectations without running either surface.
-test("CI routing changes exercise every routed surface", () => {
-  for (const path of [".github/workflows/ci.yml", ".github/workflows/app-memory.yml", "scripts/ci-paths.mjs"]) {
+test("CI routing changes exercise their owning workflow surfaces", () => {
+  for (const path of [".github/workflows/ci.yml", "scripts/ci-paths.mjs"]) {
     const flags = classifyPaths([path]).flags;
-    for (const name of ["desktop", "desktop_go", "frontend", "browser", "memory", "memory_full", "electron", "native", "packaging", "site", "sdk"])
+    for (const name of ["desktop", "desktop_go", "frontend", "browser", "electron", "native", "packaging", "site", "sdk"])
       assert.equal(flags[name], true, `${path}: ${name}`);
   }
+  assert.equal(classifyPaths([".github/workflows/ci.yml"]).flags.memory, false);
+  for (const path of [".github/workflows/app-memory.yml", "scripts/ci-paths.mjs", "scripts/ci-paths.test.mjs"]) {
+    const flags = classifyPaths([path]).flags;
+    assert.equal(flags.memory, true, path);
+    assert.equal(flags.memory_full, true, path);
+  }
+  const memoryOnly = classifyPaths([".github/workflows/app-memory.yml"]).flags;
+  assert.equal(memoryOnly.packaging, false);
+  assert.equal(memoryOnly.sdk, false);
 });

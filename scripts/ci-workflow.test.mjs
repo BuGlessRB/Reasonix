@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -25,6 +25,69 @@ function shellStep(body, name) {
 const ci = workflow("ci");
 const release = workflow("release-desktop");
 const appMemory = workflow("app-memory");
+
+test("packaging changes run native installer acceptance before merge", () => {
+  const body = job(ci, "desktop-windows-package");
+  for (const event of ["pull_request", "push"]) {
+    for (const packaging of ["true", "false", ""]) {
+      const context = { github: { event_name: event }, needs: {
+        "desktop-prepare": { result: "success" }, changes: { outputs: { packaging, notes_only: "false" } },
+      } };
+      assert.equal(condition(body, context), event === "push" || packaging !== "false");
+      const aggregate = job(ci, "desktop").match(/PACKAGE_REQUIRED: \$\{\{ (.+) \}\}/)[1];
+      assert.equal(vm.runInNewContext(aggregate, context), condition(body, context));
+    }
+  }
+});
+
+test("notes pushes preserve required ancestor CI while code pushes cancel obsolete runs", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "reasonix-ci-cancel-"));
+  const git = (...args) => {
+    const result = spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    git("init", "-q");
+    git("config", "user.name", "test");
+    git("config", "user.email", "test@example.invalid");
+    const commit = (file, content) => {
+      writeFileSync(path.join(dir, file), content);
+      git("add", "."); git("commit", "-qm", "fixture");
+      return git("rev-parse", "HEAD");
+    };
+    const old = commit("code", "old");
+    const code = commit("code", "current");
+    mkdirSync(path.join(dir, "release-notes"));
+    const notes = commit("release-notes/record", "first");
+    const head = commit("release-notes/record", "reviewed");
+    const run = candidate => {
+      const script = `set -euo pipefail
+sleep() { :; }
+gh() {
+  if [ "$2" = "-X" ]; then printf '%s\\n' "$4" >> "$CANCEL_LOG";
+  elif [[ "$2" == *workflows/ci.yml/runs* ]]; then printf '%s\\n' "$ACTIVE_RUNS";
+  else echo completed; fi
+}
+${shellStep(job(workflow("supersede-ci"), "cancel-superseded"), "Cancel CI runs this push supersedes")}`;
+      const log = path.join(dir, "cancel-log");
+      writeFileSync(log, "");
+      const result = spawnSync("bash", ["-c", script], { cwd: dir, encoding: "utf8", env: {
+        ...process.env, GITHUB_REPOSITORY: "example/repo", GITHUB_SHA: candidate, CANCEL_LOG: log,
+        ACTIVE_RUNS: `11 ${old}\n12 ${code}\n13 ${notes}\n14 ${head}`,
+      } });
+      assert.equal(result.status, 0, result.stderr);
+      return readFileSync(log, "utf8").trim().split("\n");
+    };
+    assert.deepEqual(run(head), ["repos/example/repo/actions/runs/11/cancel"]);
+    const next = commit("code", "next");
+    assert.deepEqual(run(next), [11, 12, 13, 14].map(id => `repos/example/repo/actions/runs/${id}/cancel`));
+    const group = ci.match(/  group: (ci-.+)/)[1];
+    assert.match(group, /github.event_name == 'push' && github.sha \|\| github.ref/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("Certum signing survives skipped ancestor gates but requires successful inputs", () => {
   const body = job(release, "windows-sign");
@@ -132,7 +195,7 @@ test("required desktop aggregate rejects every failed, cancelled or unexpectedly
   assert.equal(run({ ...success, PREPARE_REQUIRED: "false", NATIVE_REQUIRED: "false", FRONTEND_REQUIRED: "false", BROWSER_REQUIRED: "false",
     PACKAGE_REQUIRED: "false", PREPARE_RESULT: "skipped", GO_RESULT: "skipped", GO_RACE_RESULT: "skipped", FRONTEND_RESULT: "skipped",
     BROWSER_RESULT: "success", MACOS_RESULT: "skipped", WINDOWS_RESULT: "skipped", WINDOWS_GO_RESULT: "success", PACKAGE_RESULT: "skipped" }), 0);
-  // Any pull request: packaging is push-only, so it must be skipped there.
+  // A pull request unrelated to packaging must skip it.
   assert.equal(run({ ...success, PACKAGE_REQUIRED: "false", PACKAGE_RESULT: "skipped" }), 0);
   assert.notEqual(run({ ...success, PACKAGE_REQUIRED: "false", PACKAGE_RESULT: "success" }), 0);
   assert.equal(run({ ...success, FRONTEND_REQUIRED: "false", BROWSER_REQUIRED: "false", FRONTEND_RESULT: "skipped", BROWSER_RESULT: "success" }), 0);
