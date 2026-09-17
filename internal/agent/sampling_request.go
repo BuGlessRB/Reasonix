@@ -102,11 +102,9 @@ func (a *Agent) buildSamplingRequest(ctx context.Context, trigger string) (sampl
 	if err != nil {
 		return samplingRequest{}, err
 	}
+	// The host tails are already here: Prepare answers from modelVisibleMessages,
+	// and the host context tail appends whatever it is given again.
 	requestMessages := append([]provider.Message(nil), provider.ModelMessages(prepared.Messages)...)
-	// Host state the request needs and the history cannot show. It rides this
-	// copy only: the session log and the projection never see it, so no later
-	// fold can freeze it and no restart can resurrect a stale one.
-	requestMessages = a.withTodoIdentityTail(a.withHostContextTail(requestMessages))
 	requestMessages = a.providerProjectionMessages(requestMessages)
 	for i := range requestMessages {
 		requestMessages[i].CreatedAt = 0
