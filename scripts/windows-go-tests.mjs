@@ -5,7 +5,7 @@ import { beneath, internalRoots, listPackages, runGoTest } from "./go-test-group
 export const isolatedGroups = ["agent", "boot", "control"];
 const smokeRoots = internalRoots(
   "appidentity", "checkpoint", "cli", "desktoplauncher", "extension/sidecar",
-  "filelock", "fileutil", "hook", "instruction", "mcplaunch", "notify",
+  "filelock", "fileops", "fileutil", "hook", "instruction", "mcplaunch", "notify",
   // persistentshell drives a real ConPTY and a PowerShell wrapper that no other
   // platform exercises, so Windows is the only lane that can prove it.
   "persistentshell", "proc",
