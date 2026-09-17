@@ -339,6 +339,7 @@ out of how a path is spelled, which cannot tell `internal/auth` from
 - sensitive: internal/pluginpkg/**
 - sensitive: internal/netclient/**
 - sensitive: internal/redirectguard/**
+- sensitive: internal/browser/**
 
 One declaration, two effects: the same list is also the coverage gate's subject.
 `make coverage-gate` holds each path to the coverage it already has, because

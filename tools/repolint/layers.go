@@ -26,6 +26,7 @@ var leaves = []string{
 	"internal/agentgraph",
 	"internal/agentpreset",
 	"internal/billing",
+	"internal/browser",
 	"internal/diff",
 	"internal/extension/rpcwire",
 	"internal/execgraph",

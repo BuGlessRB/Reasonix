@@ -1,4 +1,5 @@
 {
+  "internal/browser/**": 21.7,
   "internal/control/approval.go": 94.3,
   "internal/control/approval_bridge.go": 77,
   "internal/control/approval_orchestration.go": 90.7,

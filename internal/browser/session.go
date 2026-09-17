@@ -1,0 +1,351 @@
+package browser
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+)
+
+const navigationTimeout = 30 * time.Second
+
+// Config is what a Session needs from its host. Launch.Executable is the
+// configured browser, or empty to find one when the browser is first needed;
+// Roots bound which local files a page may be.
+type Config struct {
+	Launch LaunchSpec
+	Roots  []string
+	Pool   *Pool
+}
+
+// Session is one agent's view of the browser: the tabs it opened and the refs
+// it has been shown. Its browser starts on first use, is shared with other
+// sessions on the same profile, and is released by Close.
+type Session struct {
+	cfg Config
+
+	mu       sync.Mutex
+	eng      *engine
+	stopEng  func()
+	tabs     []*tab
+	active   *tab
+	nextTab  int
+	refs     refTable
+	closed   bool
+	openedBy map[string]string // popup target id → opener tab id
+}
+
+func NewSession(cfg Config) *Session {
+	if cfg.Pool == nil {
+		cfg.Pool = &Pool{}
+	}
+	return &Session{cfg: cfg, openedBy: map[string]string{}}
+}
+
+// TabInfo is what a tab is showing.
+type TabInfo struct {
+	ID     string `json:"id"`
+	URL    string `json:"url"`
+	Title  string `json:"title"`
+	Active bool   `json:"active"`
+}
+
+// ensureEngine returns a live browser, starting one when this session has none
+// or the one it had is gone. Tabs on a browser that went away go with it.
+func (s *Session) ensureEngine(ctx context.Context) (*engine, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, fail(CodeEngineFailed, "the browser session is closed")
+	}
+	if s.eng != nil && s.eng.alive() {
+		return s.eng, nil
+	}
+	if s.eng != nil {
+		s.dropEngineLocked()
+	}
+	spec := s.cfg.Launch
+	exe, err := Discover(spec.Executable)
+	if err != nil {
+		return nil, err
+	}
+	spec.Executable = exe
+	eng, err := s.cfg.Pool.acquire(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	s.eng = eng
+	s.stopEng = eng.listen(s.onBrowserEvent)
+	return eng, nil
+}
+
+func (s *Session) dropEngineLocked() {
+	if s.stopEng != nil {
+		s.stopEng()
+		s.stopEng = nil
+	}
+	for _, t := range s.tabs {
+		t.detach()
+	}
+	s.tabs, s.active = nil, nil
+	eng := s.eng
+	s.eng = nil
+	go s.cfg.Pool.release(eng)
+}
+
+// Close closes this session's tabs and releases its browser.
+func (s *Session) Close() {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.closed = true
+	eng, tabs := s.eng, s.tabs
+	s.mu.Unlock()
+	if eng == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
+	defer cancel()
+	for _, t := range tabs {
+		_ = eng.conn.call(ctx, "", "Target.closeTarget", map[string]any{"targetId": t.targetID}, nil)
+		t.detach()
+	}
+	s.mu.Lock()
+	if s.stopEng != nil {
+		s.stopEng()
+	}
+	s.eng = nil
+	s.mu.Unlock()
+	s.cfg.Pool.release(eng)
+}
+
+// Origin is the scheme, host and port of the page a tab shows ("" is the
+// active tab), or "" when it shows no page. A local file's origin is file://.
+func (s *Session) Origin(tabID string) string {
+	t, err := s.tab(tabID)
+	if err != nil {
+		return ""
+	}
+	raw, _ := t.location()
+	return OriginOf(raw)
+}
+
+// Tabs lists this session's tabs in the order they opened.
+func (s *Session) Tabs() []TabInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]TabInfo, 0, len(s.tabs))
+	for _, t := range s.tabs {
+		url, title := t.location()
+		out = append(out, TabInfo{ID: t.id, URL: url, Title: title, Active: t == s.active})
+	}
+	return out
+}
+
+// tab resolves a tab id, "" meaning the active tab.
+func (s *Session) tab(id string) (*tab, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if id == "" {
+		if s.active == nil {
+			return nil, fail(CodeNoTab, "no page is open; open one first")
+		}
+		return s.active, nil
+	}
+	for _, t := range s.tabs {
+		if t.id == id {
+			return t, nil
+		}
+	}
+	return nil, fail(CodeNoTab, "no tab %s in this session", id)
+}
+
+// Open navigates a tab to rawURL and waits for it to load. newTab opens a fresh
+// tab; otherwise the named tab, or the active one, navigates.
+func (s *Session) Open(ctx context.Context, rawURL, tabID string, newTab bool) (TabInfo, error) {
+	target, err := checkURL(rawURL, s.cfg.Roots)
+	if err != nil {
+		return TabInfo{}, err
+	}
+	eng, err := s.ensureEngine(ctx)
+	if err != nil {
+		return TabInfo{}, err
+	}
+	var t *tab
+	if newTab || (tabID == "" && s.activeTab() == nil) {
+		t, err = s.createTab(ctx, eng)
+	} else {
+		t, err = s.tab(tabID)
+	}
+	if err != nil {
+		return TabInfo{}, err
+	}
+	s.activate(t)
+	if err := t.navigate(ctx, target); err != nil {
+		return t.info(true), err
+	}
+	return t.info(true), nil
+}
+
+func (s *Session) activeTab() *tab {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.active
+}
+
+func (s *Session) activate(t *tab) {
+	s.mu.Lock()
+	s.active = t
+	s.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
+	defer cancel()
+	_ = t.call(ctx, "Page.bringToFront", nil, nil)
+}
+
+// Switch makes a tab the active one.
+func (s *Session) Switch(tabID string) (TabInfo, error) {
+	t, err := s.tab(tabID)
+	if err != nil {
+		return TabInfo{}, err
+	}
+	s.activate(t)
+	return t.info(true), nil
+}
+
+// CloseTab closes one tab; the most recently opened remaining tab becomes active.
+func (s *Session) CloseTab(ctx context.Context, tabID string) error {
+	t, err := s.tab(tabID)
+	if err != nil {
+		return err
+	}
+	_ = t.eng.conn.call(ctx, "", "Target.closeTarget", map[string]any{"targetId": t.targetID}, nil)
+	s.removeTab(t)
+	return nil
+}
+
+func (s *Session) createTab(ctx context.Context, eng *engine) (*tab, error) {
+	var created struct {
+		TargetID string `json:"targetId"`
+	}
+	if err := eng.conn.call(ctx, "", "Target.createTarget", map[string]any{"url": "about:blank"}, &created); err != nil {
+		return nil, engineFailure(err)
+	}
+	return s.attach(ctx, eng, created.TargetID)
+}
+
+func (s *Session) attach(ctx context.Context, eng *engine, targetID string) (*tab, error) {
+	var attached struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := eng.conn.call(ctx, "", "Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, &attached); err != nil {
+		return nil, engineFailure(err)
+	}
+	s.mu.Lock()
+	s.nextTab++
+	t := newTab(s, eng, fmt.Sprintf("t%d", s.nextTab), targetID, attached.SessionID)
+	s.tabs = append(s.tabs, t)
+	s.mu.Unlock()
+	if err := t.enable(ctx); err != nil {
+		s.removeTab(t)
+		return nil, engineFailure(err)
+	}
+	return t, nil
+}
+
+func (s *Session) removeTab(t *tab) {
+	t.detach()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, candidate := range s.tabs {
+		if candidate == t {
+			s.tabs = append(s.tabs[:i], s.tabs[i+1:]...)
+			break
+		}
+	}
+	if s.active == t {
+		s.active = nil
+		if n := len(s.tabs); n > 0 {
+			s.active = s.tabs[n-1]
+		}
+	}
+	s.refs.retireTab(t.id)
+}
+
+// onBrowserEvent follows tabs this session did not open itself: a page one of
+// its tabs opened, and any of its tabs closing.
+func (s *Session) onBrowserEvent(ev event) {
+	switch ev.Method {
+	case "Target.targetCreated":
+		var p struct {
+			TargetInfo struct {
+				TargetID string `json:"targetId"`
+				Type     string `json:"type"`
+				OpenerID string `json:"openerId"`
+			} `json:"targetInfo"`
+		}
+		if json.Unmarshal(ev.Params, &p) != nil || p.TargetInfo.Type != "page" || p.TargetInfo.OpenerID == "" {
+			return
+		}
+		opener := s.tabByTarget(p.TargetInfo.OpenerID)
+		if opener == nil {
+			return
+		}
+		s.mu.Lock()
+		eng := s.eng
+		s.mu.Unlock()
+		if eng == nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), launchTimeout)
+		defer cancel()
+		if popup, err := s.attach(ctx, eng, p.TargetInfo.TargetID); err == nil {
+			s.mu.Lock()
+			s.openedBy[popup.targetID] = opener.id
+			s.active = popup
+			s.mu.Unlock()
+			opener.notePopup(popup.id)
+		}
+	case "Target.targetDestroyed":
+		var p struct {
+			TargetID string `json:"targetId"`
+		}
+		if json.Unmarshal(ev.Params, &p) != nil {
+			return
+		}
+		if t := s.tabByTarget(p.TargetID); t != nil {
+			s.removeTab(t)
+		}
+	}
+}
+
+func (s *Session) tabByTarget(targetID string) *tab {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, t := range s.tabs {
+		if t.targetID == targetID {
+			return t
+		}
+	}
+	return nil
+}
+
+// engineFailure attributes an error from the connection itself. A protocol
+// error is the browser refusing a command and stays as it is.
+func engineFailure(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case CodeOf(err) != "":
+		return err
+	case errors.Is(err, errConnClosed):
+		return fail(CodeEngineFailed, "the browser closed; open a page again to restart it")
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return err
+	default:
+		return fail(CodeEngineFailed, "%v", err)
+	}
+}
