@@ -1,5 +1,6 @@
 export type { ProjectNode } from "./projectNodeTypes";
 import type { TranscriptTurnMetadata } from "./transcriptProtocol";
+import type { ConnectionAuthentication } from "./authenticationTypes";
 import type { HistorySwitchPhases } from "./sessionDiagnostics";
 import type { ProviderCatalog } from "./providerCatalogTypes";
 export type { SettingsView } from "./settingsViewTypes";
@@ -612,6 +613,8 @@ export interface TabMeta extends RemoteTabMetaFields {
   versionState?: "active" | "pending" | "resolved" | "trashed" | string;
   parentVersionId?: string;
   startupErr?: string;
+  authentication?: ConnectionAuthentication;
+  modelSettingsPending?: boolean;
   active: boolean;
   cwd: string;
 }
@@ -1726,6 +1729,14 @@ export interface CapabilityDiagnosticsReport {
     }>;
   };
   issues: CapabilityIssue[];
+}
+
+export interface CredentialDiagnosticReport {
+  home: string;
+  credentialPath: string;
+  pendingTransactions: number;
+  checks: Array<{ id: string; status: "passed" | "failed" | "unknown" | "not_checked" | string; path?: string; message?: string }>;
+  actions: string[];
 }
 
 export interface CapabilityAssetReport {

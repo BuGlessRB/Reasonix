@@ -23,10 +23,13 @@ func (c *Config) SaveModelSettingsTo(path, baseline string) error {
 	if c.editLoadErr != nil {
 		return c.editLoadErr
 	}
-	if err := currentUserConfigEditLockError(); err != nil {
-		return err
+	userConfig := IsUserConfigPath(path)
+	if userConfig {
+		if err := currentUserConfigEditLockError(); err != nil {
+			return err
+		}
 	}
-	resolved, err := resolveConfigAccessPath(path, true)
+	resolved, err := resolveConfigAccessPath(path, userConfig)
 	if err != nil {
 		return err
 	}
@@ -51,7 +54,7 @@ func (c *Config) SaveModelSettingsTo(path, baseline string) error {
 	if err := toml.NewEncoder(&encoded).Encode(doc); err != nil {
 		return err
 	}
-	return writeConfigFileResolved(resolved, encoded.String(), configFilePerm(path))
+	return c.writeModelConfigResolved(resolved, encoded.String(), configFilePerm(path))
 }
 
 func mergeModelSettingsDelta(doc, before, after map[string]any) {

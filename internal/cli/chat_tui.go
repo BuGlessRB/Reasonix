@@ -48,10 +48,11 @@ import (
 // normal buffer and commits finalized output to native scrollback via
 // tea.Println so taps can still focus the soft keyboard.
 type chatTUI struct {
-	ctrl        control.SessionAPI
-	shutdownErr error // final save's failure; reported after terminal release
-	label       string
-	missing     string // missing-key warning surfaced once in the banner, "" when ready
+	turnSettingsIntent *controllerTurnIntent
+	ctrl               control.SessionAPI
+	shutdownErr        error // final save's failure; reported after terminal release
+	label              string
+	missing            string // missing-key warning surfaced once in the banner, "" when ready
 	webHandoffState
 	// diagnostics is the process-owned TUI log/watchdog started before terminal
 	// takeover. Nil in unit tests that construct chatTUI without chatREPL.
@@ -327,6 +328,7 @@ type chatTUI struct {
 	// quickPick owns searchable single-choice overlays such as /model and
 	// /provider. It never invokes a raw-mode prompt inside Bubble Tea.
 	quickPick *quickPicker
+	setup     *connectionSetup
 	copyPick  *copyPicker
 	lastEsc   time.Time
 
@@ -576,6 +578,7 @@ func (m chatTUI) refreshGitStatus() tea.Cmd {
 // runs after the render completes, avoiding corruption of the terminal's raw
 // mode that would occur if Close() were called from the build goroutine.
 type modelSwitchMsg struct {
+	resumeTurn    *controllerTurnIntent
 	ref           string
 	ctrl          control.SessionAPI
 	oldCtrl       control.SessionAPI
@@ -1395,6 +1398,9 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.quickPick != nil {
 			return m.handleQuickPickerKey(msg)
 		}
+		if m.setup != nil {
+			return m.handleConnectionSetupKey(msg)
+		}
 		// The MCP manager is modal while open: keys navigate it.
 		if m.mcp != nil {
 			return m.handleMCPManagerKey(msg)
@@ -1900,71 +1906,16 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tuiShutdownMsg:
 		return m.shutdownAndQuit(msg.completion)
 
+	case turnModelSettingsMsg:
+		return m, m.handleTurnModelSettings(msg)
 	case modelSwitchMsg:
-		m.modelSwitchPending = false
-		m.pendingModelSwitch = nil
-		if msg.err != nil {
-			prefix := msg.failurePrefix
-			if prefix == "" {
-				prefix = "model"
-			}
-			m.notice(prefix + ": " + msg.err.Error())
-			// Build failed — no old controller to retire. The kept controller
-			// may still have been retargeted to a recovery branch by the
-			// pre-switch snapshot, so the lease must follow it.
-			m.followSessionLease()
-		} else {
-			if err := control.ActivateSessionAPIReplacement(msg.oldCtrl, msg.ctrl); err != nil {
-				if concrete, ok := msg.ctrl.(*control.Controller); ok {
-					concrete.ReleaseResources()
-				} else if msg.ctrl != nil {
-					msg.ctrl.Close()
-				}
-				m.notice("runtime activation: " + err.Error())
-				m.followSessionLease()
-				break
-			}
-			m.ctrl = activateGoalDriverAfterRebuild(msg.ctrl)
-			if m.takeover != nil {
-				m.takeover.AttachController(msg.ctrl)
-			}
-			m.updateWatchdogStatusProvider()
-			m.label = msg.label
-			m.commands = msg.commands
-			m.skills = msg.skills
-			m.setHostAndInvalidateSlashCatalog(msg.host)
-			m.modelRef = msg.ref
-			m.refreshEffortStatus()
-			// Defer Close to exit; skip when subgraph rebuild reused the pointer.
-			if msg.oldCtrl != nil && msg.oldCtrl != msg.ctrl {
-				m.oldControllers = append(m.oldControllers, msg.oldCtrl)
-			}
-			// The lease follows the controller's session file. Normally a
-			// no-op (a carried conversation keeps its file); it moves when
-			// the pre-switch snapshot recovered onto a recovery branch — a
-			// fresh file created by this process, so failure is theoretical.
-			m.followSessionLease()
-			if msg.successNotice != "" {
-				m.notice(msg.successNotice)
-			} else {
-				m.notice(fmt.Sprintf(i18n.M.ModelSwitchedFmt, m.label))
-			}
-			cmds = append(cmds, fetchBalance(m.ctrl))
-			if c := m.runStatusline(); c != nil {
-				cmds = append(cmds, c)
-			}
-			// Do NOT re-issue waitForAgentEvent here — the goroutine from the
-			// last agentEventMsg handler is still blocked on the same channel.
-			// Starting a second one creates a race: two goroutines compete on
-			// p.Send (unbuffered), and the receiver may read them out of order,
-			// garbling the streamed text (words appear reordered).
-		}
-		// A /reload queued behind this switch runs now that it settled. On a
-		// failed switch the old controller still serves, so the reload simply
-		// retries against it.
-		if c := m.drainQueuedRuntimeReload(); c != nil {
-			cmds = append(cmds, c)
-		}
+		cmds = append(cmds, m.handleModelSwitch(msg)...)
+
+	case connectionCredentialSavedMsg:
+		return m, m.handleConnectionCredentialSaved(msg)
+	case connectionCredentialTestedMsg:
+		m.handleConnectionCredentialTested(msg)
+		return m, nil
 
 	case promptResolvedMsg:
 		switch {
@@ -2234,6 +2185,7 @@ func (m chatTUI) bottomRows() int {
 		m.renderMCPImport(),
 		m.renderResumePicker(),
 		m.renderQuickPicker(),
+		m.renderConnectionSetup(),
 		m.renderCopyPicker(),
 		m.renderCompletion(),
 	} {
@@ -2275,7 +2227,7 @@ func (m chatTUI) bottomRows() int {
 // reserve rows for a composer that cannot receive input, leaving a confusing
 // blank/bordered area at the bottom of the TUI.
 func (m chatTUI) hideComposer() bool {
-	if m.mcp != nil || m.clearConfirm != nil || m.mcpImport != nil || m.skillPick != nil || m.resumePick != nil || m.quickPick != nil || m.copyPick != nil || m.rewind != nil || m.pendingApproval != nil {
+	if m.mcp != nil || m.clearConfirm != nil || m.mcpImport != nil || m.skillPick != nil || m.resumePick != nil || m.quickPick != nil || m.setup != nil || m.copyPick != nil || m.rewind != nil || m.pendingApproval != nil {
 		return true
 	}
 	return (m.chooser != nil && !m.chooser.typing) || (m.elicit != nil && !m.elicit.typing)
@@ -3382,6 +3334,10 @@ func (m chatTUI) View() tea.View {
 		parts = append(parts, card)
 		rowsAboveBox += strings.Count(card, "\n") + 1
 	}
+	if card := m.renderConnectionSetup(); card != "" {
+		parts = append(parts, card)
+		rowsAboveBox += strings.Count(card, "\n") + 1
+	}
 	if card := m.renderCopyPicker(); card != "" {
 		parts = append(parts, card)
 		rowsAboveBox += strings.Count(card, "\n") + 1
@@ -4181,15 +4137,15 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 	switch cmd {
 	case control.RecoverContextCommand:
 		id, guidance, _ := control.ParseProtocolRecoveryCommand(input)
-		return m.startControllerTurn(input, input, func() {
-			if runner, ok := m.ctrl.(interface{ SubmitProtocolRecovery(string, string) }); ok {
+		return m.startControllerTurn(input, input, func(ctrl control.SessionAPI) {
+			if runner, ok := ctrl.(interface{ SubmitProtocolRecovery(string, string) }); ok {
 				runner.SubmitProtocolRecovery(id, guidance)
 			}
 		})
 	case control.ContinueChecksCommand:
 		prompt, _ := control.ParseFinalReadinessRecoveryCommand(input)
-		return m.startControllerTurn(input, input, func() {
-			m.ctrl.SubmitFinalReadinessRecovery(input, prompt)
+		return m.startControllerTurn(input, input, func(ctrl control.SessionAPI) {
+			ctrl.SubmitFinalReadinessRecovery(input, prompt)
 		})
 	case "/compact":
 		m.echoLocalCommand(input)
@@ -4292,6 +4248,9 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 		if m.pendingModelSwitch != nil {
 			return m.pendingModelSwitch
 		}
+	case "/setup":
+		m.echoLocalCommand(input)
+		m.openConnectionSetup()
 	case "/skill", "/skills":
 		m.echoLocalCommand(input)
 		m.runSkillSubcommand(input)
@@ -4382,7 +4341,7 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 		if control.IsBuiltinDocsSlash(typedCmd, m.commands, m.skills) {
 			query := strings.TrimSpace(strings.TrimPrefix(input, typedCmd))
 			if query != "" {
-				return m.startControllerTurn(input, input, func() { m.ctrl.SubmitDisplay(input, input) })
+				return m.startControllerTurn(input, input, func(ctrl control.SessionAPI) { ctrl.SubmitDisplay(input, input) })
 			}
 			m.echoLocalCommand(input)
 			text, err := control.DocsCommandOverviewFor(typedCmd)
@@ -4407,7 +4366,7 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 					return nil
 				}
 			}
-			return m.startControllerTurn(input, input, func() { m.ctrl.SubmitDisplay(input, input) })
+			return m.startControllerTurn(input, input, func(ctrl control.SessionAPI) { ctrl.SubmitDisplay(input, input) })
 		}
 		// An extension action (/<plugin>:<action>) resolves last, before the
 		// unknown-command fallback; the invocation is a sidecar round-trip, so it
