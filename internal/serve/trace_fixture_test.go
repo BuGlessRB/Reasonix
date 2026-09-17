@@ -62,6 +62,11 @@ func stabilize(in []eventwire.Event) []eventwire.Event {
 			a.ID = name(barriers, "b", a.ID)
 			e.Ask = &a
 		}
+		if e.DecisionReceipt != nil {
+			r := *e.DecisionReceipt
+			r.ID = name(barriers, "b", r.ID)
+			e.DecisionReceipt = &r
+		}
 		if e.Tool != nil {
 			t := *e.Tool
 			t.AttemptID = name(rounds, "r", t.AttemptID)

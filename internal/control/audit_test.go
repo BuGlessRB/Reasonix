@@ -42,10 +42,9 @@ func TestLegacyApproveCannotAnswerADecisionItWasNotOffered(t *testing.T) {
 	waitForDecisions(t, c, 0)
 }
 
-// Decision identities are minted per runtime, so two panes hand out the same
-// strings. Nothing may treat one as globally unique: an id is only meaningful
-// against the runtime that issued it, and this records that as a property
-// rather than leaving it as an assumption a caller might not share.
+// Decision identities are issued per runtime. Nothing may resolve one against a
+// runtime that did not issue it: answering A's card on B resolves nothing there,
+// and answering it on A leaves B exactly where it was.
 func TestDecisionIdentitiesAreOnlyMeaningfulWithinTheirRuntime(t *testing.T) {
 	newPane := func() (*Controller, Decision) {
 		c := New(Options{Sink: event.Discard})
@@ -58,13 +57,12 @@ func TestDecisionIdentitiesAreOnlyMeaningfulWithinTheirRuntime(t *testing.T) {
 	b, cardB := newPane()
 	defer b.Close()
 
-	if cardA.ID != cardB.ID {
-		t.Fatalf("panes minted %q and %q; this test is measuring the wrong thing", cardA.ID, cardB.ID)
+	if err := b.ResolvePlanDecision(cardA.ID, PlanDecisionExitPlan); err == nil {
+		t.Fatalf("B resolved %q, a card only A issued", cardA.ID)
 	}
-
-	// Answering one leaves the other exactly where it was — the runtimes share
-	// no decision state, which is what makes routing the only thing that has to
-	// be right.
+	if got := b.Decisions(); len(got) != 1 || got[0].ID != cardB.ID {
+		t.Fatalf("A's id moved B: %+v", got)
+	}
 	if err := a.ResolvePlanDecision(cardA.ID, PlanDecisionExitPlan); err != nil {
 		t.Fatalf("exit on A: %v", err)
 	}

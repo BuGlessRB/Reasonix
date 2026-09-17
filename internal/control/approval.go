@@ -2,6 +2,8 @@ package control
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -34,7 +36,7 @@ type approvalManager struct {
 	approvals map[string]pendingApproval
 	asks      map[string]pendingAsk
 	granted   map[string]bool
-	nextID    int
+	ids       promptIDs
 	// toolApprovalMode is the runtime approval posture: "ask" prompts, "auto"
 	// lets the policy auto-approve the writer fallback while preserving ask/deny
 	// rules, and "yolo" skips ordinary tool prompts while deny rules and fresh
@@ -68,6 +70,7 @@ func newApprovalManager(policy permission.Policy, mode string, timeout time.Dura
 		approvals:        map[string]pendingApproval{},
 		asks:             map[string]pendingAsk{},
 		granted:          map[string]bool{},
+		ids:              newPromptIDs(),
 		toolApprovalMode: mode,
 		approvalTimeout:  timeout,
 	}
@@ -301,8 +304,7 @@ func (a *approvalManager) registerDecisionKind(tool, subject, reason string, fre
 func (a *approvalManager) registerDecisionKindWithInput(tool, subject, reason string, rawInput json.RawMessage, fresh, requireHuman bool, kind string, rec *event.RecoveryApproval) (string, chan approvalReply) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.nextID++
-	id := strconv.Itoa(a.nextID)
+	id := a.ids.issue()
 	reply := make(chan approvalReply, 1)
 	autoDrain := false
 	if !fresh && !requireHuman {
@@ -383,8 +385,30 @@ func (a *approvalManager) resolveTool(id, tool string) (pendingApproval, bool) {
 func (a *approvalManager) nextAskID() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.nextID++
-	return strconv.Itoa(a.nextID)
+	return a.ids.issue()
+}
+
+// promptIDs issues the identity an answer is correlated by. A rebuilt controller
+// keeps the pane's event stream and the session's adjudication journal, and a
+// frontend drops a request whose id it already answered, so ids must not repeat
+// across generations: the prefix is drawn once per manager.
+type promptIDs struct {
+	prefix string
+	next   int
+}
+
+func newPromptIDs() promptIDs {
+	var b [4]byte
+	_, _ = rand.Read(b[:])
+	return promptIDs{prefix: hex.EncodeToString(b[:])}
+}
+
+func (p *promptIDs) issue() string {
+	if p.prefix == "" {
+		*p = newPromptIDs()
+	}
+	p.next++
+	return p.prefix + "-" + strconv.Itoa(p.next)
 }
 
 // registerAsk records the pending question batch under an identity already
