@@ -456,8 +456,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Independent-session identity, organization CAS and unread/lifecycle guards
 // measure 2443.0 KiB against the same-toolchain main-v2 base of 2440.7 KiB
 // (+2.3 KiB, 0.095%). Retain one tenth; all other limits stay unchanged.
-// The unchanged release base measures 2501760 B, 26 B above the old ceiling.
-// Keep a tenth-KiB ceiling and report exact bytes for future boundary failures.
-const rawInitialBudgetKiB = 2_443.2;
+// Full 40-character identity measures 2501892 B in Electron and 2501946 B
+// in the browser build. Budget both; CI now stamps packaging's identity width.
+const rawInitialBudgetKiB = 2_443.4;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

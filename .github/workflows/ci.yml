@@ -702,6 +702,8 @@ jobs:
   desktop-prepare:
     needs: changes
     if: ${{ !cancelled() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.desktop != 'false') }}
+    env:
+      REASONIX_COMMIT: ${{ github.sha }}
     outputs:
       producer_attempt: ${{ steps.artifact-identity.outputs.attempt }}
       stable_artifact_name: desktop-frontend-stable-${{ github.run_id }}-${{ steps.artifact-identity.outputs.attempt }}

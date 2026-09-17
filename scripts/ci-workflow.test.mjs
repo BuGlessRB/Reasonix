@@ -37,6 +37,8 @@ test("cancelled CI stops expensive workers but keeps result aggregation", () => 
 });
 
 test("packaging changes run native installer acceptance before merge", () => {
+  assert.match(job(ci, "desktop-prepare"), /REASONIX_COMMIT: \$\{\{ github.sha \}\}/,
+    "prepared frontend must budget the full source identity used by native packaging");
   const body = job(ci, "desktop-windows-package");
   for (const name of ["Install the Electron workspace", "Measure Electron diagnostic overhead"])
     assert.match(body.split(`      - name: ${name}\n`)[1], /^        if: github.event_name != 'pull_request'\n/);

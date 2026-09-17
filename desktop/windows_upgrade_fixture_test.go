@@ -35,6 +35,12 @@ func TestWindowsUpgradeFixtureMigratesLegacyAndRestarts(t *testing.T) {
 		if err := app.migrateDesktopSessionsV5(t.Context()); err != nil {
 			t.Fatal(err)
 		}
+		if phase == "restart" {
+			// Real startup also snapshots the current registry before recovery.
+			if err := app.backupDesktopUpgradeMetadata(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if err := upgradefixture.Run("verify", home, reportPath, phase); err != nil {
 			t.Fatalf("%s: %v", phase, err)
 		}

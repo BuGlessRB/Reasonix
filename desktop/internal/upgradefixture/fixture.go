@@ -365,14 +365,10 @@ func verifyBackups(ctx context.Context, report fixtureReport) error {
 	if !markers["global"] || !markers["project"] {
 		return fmt.Errorf("topic backup markers=%v", markers)
 	}
-	registryBackups, err := filepath.Glob(filepath.Join(backupRoot, "workspace-state-v1.json-*.bak"))
-	if err != nil {
-		return fmt.Errorf("list metadata registry backups: %w", err)
-	}
-	if len(registryBackups) != 1 {
-		return fmt.Errorf("metadata registry backups=%d, want 1", len(registryBackups))
-	}
-	backupBody, err := os.ReadFile(registryBackups[0])
+	// Startup may snapshot the newer registry too. Bind acceptance to the
+	// immutable original instead of assuming no later snapshot can exist.
+	backupPath := filepath.Join(backupRoot, "workspace-state-v1.json-"+report.RegistrySHA256+".bak")
+	backupBody, err := os.ReadFile(backupPath)
 	if err != nil {
 		return err
 	}
