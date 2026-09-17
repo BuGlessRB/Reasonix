@@ -715,8 +715,8 @@ func RememberRuleForScope(toolName, subject string) string {
 		}
 		return "Bash=" + subject
 	}
-	if IsFileMutationTool(toolName) {
-		return "Edit"
+	if rule, ok := groupGrantRule(toolName, subject); ok {
+		return rule
 	}
 	return toolName
 }
@@ -732,8 +732,8 @@ func SessionGrantRuleForScope(toolName, subject string) string {
 		}
 		return "Bash=" + subject
 	}
-	if IsFileMutationTool(toolName) {
-		return "Edit"
+	if rule, ok := groupGrantRule(toolName, subject); ok {
+		return rule
 	}
 	return sessionGrantRule(toolName, subject)
 }
@@ -773,26 +773,15 @@ func isPackageManagerRun(base string) bool {
 	}
 }
 
-// IsFileMutationTool reports whether a built-in tool mutates workspace files.
-func IsFileMutationTool(toolName string) bool {
-	switch toolName {
-	case "write_file", "edit_file", "multi_edit", "move_file", "notebook_edit", "delete_range", "delete_symbol":
-		return true
-	default:
-		return false
-	}
-}
-
 func ruleToolMatches(ruleTool, toolName string) bool {
 	ruleTool = canonicalRuleTool(ruleTool)
-	return ruleTool == toolName || (ruleTool == "file_mutation" && IsFileMutationTool(toolName))
+	return ruleTool == toolName || inGroup(ruleTool, toolName)
 }
 
 func ruleToolCompatible(existingTool, candidateTool string) bool {
 	existingTool = canonicalRuleTool(existingTool)
 	candidateTool = canonicalRuleTool(candidateTool)
-	return existingTool == candidateTool ||
-		(existingTool == "file_mutation" && (candidateTool == "file_mutation" || IsFileMutationTool(candidateTool)))
+	return existingTool == candidateTool || inGroup(existingTool, candidateTool)
 }
 
 func canonicalRuleTool(toolName string) string {
@@ -800,7 +789,9 @@ func canonicalRuleTool(toolName string) string {
 	case "Bash", "bash":
 		return "bash"
 	case "Edit", "edit", "file_mutation":
-		return "file_mutation"
+		return fileMutationGroup
+	case "Browser", "browser":
+		return browserGroup
 	default:
 		return toolName
 	}

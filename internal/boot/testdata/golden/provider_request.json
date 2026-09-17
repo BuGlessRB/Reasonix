@@ -173,6 +173,131 @@
       }
     },
     {
+      "name": "browser_act",
+      "description": "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; select sets a \u003cselect\u003e; dialog answers alert/confirm/prompt.",
+      "parameters": {
+        "properties": {
+          "steps": {
+            "items": {
+              "properties": {
+                "accept": {
+                  "type": "boolean"
+                },
+                "action": {
+                  "enum": [
+                    "click",
+                    "double_click",
+                    "hover",
+                    "fill",
+                    "type",
+                    "press",
+                    "select",
+                    "scroll",
+                    "wait",
+                    "wait_for",
+                    "dialog",
+                    "back"
+                  ],
+                  "type": "string"
+                },
+                "delta_y": {
+                  "type": "number"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "ms": {
+                  "type": "integer"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "values": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tab": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "browser_open",
+      "description": "Load a page in your browser and return its snapshot: one element per line, with [eN] refs for browser_act. url is http(s), about:blank or a workspace file. Without url, tab switches to that tab; close closes it.",
+      "parameters": {
+        "properties": {
+          "close": {
+            "type": "boolean"
+          },
+          "new_tab": {
+            "type": "boolean"
+          },
+          "tab": {
+            "description": "t1, t2...; default active",
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "name": "browser_read",
+      "description": "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), screenshot (browser_act x/y use its pixels), logs (errors since you last read them), tabs.",
+      "parameters": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "tab": {
+            "type": "string"
+          },
+          "what": {
+            "enum": [
+              "snapshot",
+              "screenshot",
+              "logs",
+              "tabs"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
       "name": "complete_step",
       "description": "Record the evidence-backed completion of ONE step of an approved plan. Call it as you finish each step instead of silently moving on: a completion with no evidence is REJECTED, so don't claim a step is done until you can show why. The host advances the list for you — it marks this step completed and moves the next to in_progress, so a todo_write that marks such an item completed on its own is REJECTED too. Sign off one step per tool-call ROUND, not one per call: the sign-off promotes the next item, and a second sign-off sent beside it signs against the list as it stood before.",
       "parameters": {

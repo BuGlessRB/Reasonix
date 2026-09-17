@@ -92,6 +92,11 @@ func EvidenceToolNames() []string {
 	return []string{"complete_step"}
 }
 
+// BrowserToolNames are shown when the assembly has a browser to drive.
+func BrowserToolNames() []string {
+	return []string{"browser_act", "browser_open", "browser_read"}
+}
+
 // UnifiedProviderToolNames returns the provider-visible allowlist for a boot
 // with host-control tools enabled.
 func UnifiedProviderToolNames() []string {
@@ -135,6 +140,13 @@ func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bo
 			continue
 		}
 		if _, ok := reg.Get(name); ok {
+			allow = append(allow, name)
+		}
+	}
+	// A browser tool is shown only with a browser session behind it, which the
+	// config decides at boot, so the schema stays the same for the whole session.
+	for _, name := range BrowserToolNames() {
+		if t, ok := reg.Get(name); ok && builtin.BrowserBound(t) {
 			allow = append(allow, name)
 		}
 	}

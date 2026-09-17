@@ -58,6 +58,9 @@ func boolString(v bool) string {
 // from the tool surface.
 var acceptsDefaultSnip = map[string]bool{
 	"bash_output":    true, // streamed job output; tailing handled by the job, not the snip pass
+	"browser_act":    true, // step results lead; the page changes after them are the part a head keeps
+	"browser_open":   true, // a snapshot reads top-down, so the head is the top of the page
+	"browser_read":   true, // same shape as browser_open, and paged by offset when longer
 	"code_index":     true,
 	"complete_step":  true,
 	"compress":       true,

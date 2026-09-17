@@ -603,6 +603,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		prev := cleanup
 		cleanup = func() { prev(); lspMgr.Close() }
 	}
+	cleanup = withBrowser(reg, cfg.Browser, root, cleanup)
 
 	timer.mark("mcp")
 	maxSteps := max(opts.MaxSteps, 0)

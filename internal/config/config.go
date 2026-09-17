@@ -45,6 +45,7 @@ type Config struct {
 	Memory           MemoryConfig        `toml:"memory"`
 	Statusline       StatuslineConfig    `toml:"statusline"`
 	LSP              LSPConfig           `toml:"lsp"`
+	Browser          BrowserConfig       `toml:"browser"`
 	Bot              map[string]any      `toml:"bot"` // opaque; see passthrough.go
 	Serve            ServeConfig         `toml:"serve"`
 	Secrets          SecretsConfig       `toml:"secrets"`
@@ -659,30 +660,6 @@ func (c *Config) DesktopMetrics() bool {
 		return true
 	}
 	return *c.Desktop.Metrics
-}
-
-// LSPConfig governs the optional Language Server Protocol tools (lsp_definition,
-// lsp_references, lsp_hover, lsp_diagnostics). Enabled defaults to true; the
-// servers themselves are never bundled — each resolves on PATH and the tool
-// returns an install hint when it is missing, so the capability is dormant until
-// the user installs a server. Servers overrides or extends the built-in language
-// → server map, keyed by language id (e.g. "go", "rust", "python").
-type LSPConfig struct {
-	Enabled bool                 `toml:"enabled"`
-	Servers map[string]LSPServer `toml:"servers"`
-}
-
-// LSPServer overrides a built-in language's server or, when keyed by a new
-// language, adds one. An empty field falls back to the built-in default for that
-// language; Extensions is required when adding a language the built-ins don't
-// cover (e.g. ".ex" for Elixir) so files route to it.
-type LSPServer struct {
-	Command     string            `toml:"command"`
-	Args        []string          `toml:"args"`
-	Env         map[string]string `toml:"env"`
-	LanguageID  string            `toml:"language_id"`
-	Extensions  []string          `toml:"extensions"`
-	InstallHint string            `toml:"install_hint"`
 }
 
 // StatuslineConfig configures a custom status line. Command, when set, is run at
@@ -1612,6 +1589,7 @@ func Default() *Config {
 		// LSP tools on by default, but dormant until a language server is on PATH;
 		// a missing server yields an install hint rather than an error.
 		LSP:       LSPConfig{Enabled: true},
+		Browser:   BrowserConfig{Enabled: true},
 		Network:   NetworkConfig{ProxyMode: netclient.ModeAuto},
 		Providers: deepSeekDefaultProviders(),
 	}
