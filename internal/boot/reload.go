@@ -90,6 +90,9 @@ func rebuildWithPrevious(ctx context.Context, old *control.Controller, previous 
 	if opts.SessionTemp == nil {
 		opts.SessionTemp = old.SessionTemp()
 	}
+	if opts.BrowserSession == nil {
+		opts.BrowserSession = old.BrowserSession()
+	}
 
 	home := opts.roots().Home()
 	// fromGraph must be the PREVIOUS generation's graph when available.

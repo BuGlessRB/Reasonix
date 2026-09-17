@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/browser"
 	"reasonix/internal/event"
 	"reasonix/internal/extension"
 	"reasonix/internal/extension/dispatch"
@@ -567,7 +568,34 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 		if c.sessionTemp != nil {
 			c.sessionTemp.Release()
 		}
+		if c.browser != nil {
+			c.browser.Release()
+		}
 	})
+}
+
+// adoptSessionResources takes an owner reference on what outlives one runtime
+// generation — the private temporary directory and the browser — reusing what a
+// hot rebuild hands over, so ReleaseResources/Close never race a replacement.
+func (c *Controller) adoptSessionResources(opts Options) {
+	c.sessionTemp = opts.SessionTemp
+	if c.sessionTemp == nil {
+		c.sessionTemp = sessiontemp.New()
+	}
+	c.sessionTemp.Retain()
+	if opts.BrowserSession != nil {
+		c.browser = opts.BrowserSession
+		c.browser.Retain()
+	}
+}
+
+// BrowserSession is the agent's browser, which a rebuild hands to the
+// controller that replaces this one.
+func (c *Controller) BrowserSession() *browser.Session {
+	if c == nil {
+		return nil
+	}
+	return c.browser
 }
 
 // SessionTemp returns the logical-session private temporary directory manager.

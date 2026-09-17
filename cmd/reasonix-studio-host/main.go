@@ -300,6 +300,10 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 	// A first connect can stop for a host key nobody has seen or a locked key.
 	// Both are questions, and the broker is where they live until answered.
 	asks := serve.NewAskBroker(nil)
+	// The window draws the agent's browser: every pane's browser is a view in
+	// it while the shell holds the relay open, and a launched browser otherwise.
+	browserHost := serve.NewBrowserHost()
+	boot.SetBrowserHost(browserHost.Dial)
 	hubCfg := hostServeConfig(cfg.Serve)
 	hub := serve.NewHub(serve.HubOptions{
 		Serve:        hubCfg,
@@ -308,6 +312,7 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 		Grant:        grantHostCapabilities,
 		DecorateSink: decorate,
 		Tray:         &studioTray{tracker: tracker},
+		BrowserHost:  browserHost,
 		Asks:         asks,
 		Remote:       remotehost.New(ctx, version, asks),
 		OnClose:      func(rt *serve.Runtime) { tracker.Drop(paneKey(rt.Events)) },

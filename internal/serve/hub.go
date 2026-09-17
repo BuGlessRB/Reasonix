@@ -145,6 +145,9 @@ type HubOptions struct {
 	// unregistered and the link layer with nobody to ask, which is what makes
 	// the strict host-key path the default on a server with no window.
 	Asks *AskBroker
+	// BrowserHost draws hosted browser views in the window behind this hub. Nil
+	// leaves its routes unregistered, and browsers are launched instead.
+	BrowserHost *BrowserHost
 	// Tray is the window behind this hub, where there is one. Nil leaves the
 	// tray routes unregistered rather than answering for an icon that does not
 	// exist — a networked server has no window to put one on.
@@ -469,6 +472,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
 	h.registerTreeRoutes(mux)
 	h.registerTrayRoutes(mux)
+	h.registerBrowserHostRoutes(mux)
 	h.registerStudioVersionRoutes(mux)
 	h.registerUpdateRoutes(mux)
 	h.registerAskRoutes(mux)

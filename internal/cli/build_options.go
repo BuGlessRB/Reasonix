@@ -6,6 +6,7 @@ import (
 
 	"reasonix/internal/ablation"
 	"reasonix/internal/boot"
+	"reasonix/internal/browser"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
@@ -30,6 +31,9 @@ type cliBuildOverrides struct {
 	// SessionTemp carries the previous Controller's private temporary directory
 	// manager across model/profile rebuilds so temporary files survive.
 	SessionTemp *sessiontemp.Manager
+	// BrowserSession carries the previous Controller's browser across the same
+	// rebuilds, so its tabs stay open.
+	BrowserSession *browser.Session
 	// ProviderResolver routes model roles through a caller-owned catalog. A
 	// bootstrapped serve sets the broker's; nil keeps the local config path.
 	ProviderResolver provider.Resolver
@@ -44,6 +48,16 @@ func sessionTempFromCLIController(ctrl control.SessionAPI) *sessiontemp.Manager 
 		return nil
 	}
 	return prev.SessionTemp()
+}
+
+// carrySessionResources keeps what belongs to the logical session across a
+// model or profile switch: its private temporary directory (#7575) and the
+// browser with the tabs it has open.
+func carrySessionResources(overrides *cliBuildOverrides, ctrl control.SessionAPI) {
+	overrides.SessionTemp = sessionTempFromCLIController(ctrl)
+	if prev, ok := ctrl.(*control.Controller); ok && prev != nil {
+		overrides.BrowserSession = prev.BrowserSession()
+	}
 }
 
 func setupProfileWithOverrides(ctx context.Context, modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, overrides cliBuildOverrides) (*control.Controller, error) {
@@ -74,6 +88,7 @@ func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey b
 		OnSessionRecovered:   overrides.OnSessionRecovered,
 		Ablation:             overrides.Ablation,
 		SessionTemp:          overrides.SessionTemp,
+		BrowserSession:       overrides.BrowserSession,
 		ProviderResolver:     overrides.ProviderResolver,
 	}
 }

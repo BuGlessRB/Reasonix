@@ -4,6 +4,7 @@ import (
 	"io"
 	"time"
 
+	"reasonix/internal/browser"
 	"reasonix/internal/config"
 
 	"reasonix/internal/ablation"
@@ -127,6 +128,9 @@ type Options struct {
 	WorkspaceOnly          bool
 	// SessionTemp is the session-private temp manager; Rebuild reuses old's.
 	SessionTemp *sessiontemp.Manager
+	// BrowserSession is the agent's browser and the tabs it has open; Rebuild
+	// reuses old's so a model switch does not close them.
+	BrowserSession *browser.Session
 	RuntimeReload
 	// deferPublish keeps a replacement generation private until migration and
 	// commit succeed. Cold BuildRuntime leaves this false and publishes at boot.

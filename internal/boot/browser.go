@@ -15,26 +15,33 @@ import (
 // profile, and a profile admits one browser process.
 var browserPool = &browser.Pool{}
 
-// withBrowser gives the browser tools a browser session when the browser is
-// enabled, and returns cleanup extended to close it. Which browser is found at
-// first use, so the schema answers to the config alone and a machine without
-// one hears browser.engine_missing then.
-func withBrowser(reg *tool.Registry, cfg config.BrowserConfig, root string, cleanup func()) func() {
+// bindBrowser gives the browser tools a session when the browser is enabled:
+// reused, the one the replaced runtime had, otherwise a new one. Which browser
+// runs is found at first use, so the schema answers to the config alone and a
+// machine without one hears browser.engine_missing then.
+func bindBrowser(reg *tool.Registry, cfg config.BrowserConfig, root string, reused *browser.Session) *browser.Session {
 	profiles := config.BrowserProfilesDir()
 	if !cfg.Enabled || root == "" || profiles == "" {
-		return cleanup
+		return nil
 	}
-	session := browser.NewSession(browser.Config{
-		Launch: browser.LaunchSpec{
-			Executable: cfg.Executable,
-			ProfileDir: filepath.Join(profiles, strings.ReplaceAll(workspaceid.Key(root), ":", "-")),
-			Headless:   cfg.Headless,
-		},
-		Roots: []string{root},
-		Pool:  browserPool,
-	})
+	session := reused
+	if session == nil {
+		session = browser.NewSession(browser.Config{
+			Launch: browser.LaunchSpec{
+				Executable: cfg.Executable,
+				ProfileDir: filepath.Join(profiles, strings.ReplaceAll(workspaceid.Key(root), ":", "-")),
+				Headless:   cfg.Headless,
+			},
+			Roots: []string{root},
+			Pool:  browserPool,
+		})
+	}
 	for _, t := range builtin.BrowserTools(session) {
 		reg.Add(t)
 	}
-	return func() { cleanup(); session.Close() }
+	return session
 }
+
+// SetBrowserHost routes every browser this process starts through a window
+// that draws them, instead of launching one.
+func SetBrowserHost(dial browser.EndpointDialer) { browserPool.SetEndpoint(dial) }

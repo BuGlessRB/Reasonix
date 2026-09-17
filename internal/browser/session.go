@@ -34,6 +34,7 @@ type Session struct {
 	nextTab  int
 	refs     refTable
 	closed   bool
+	owners   int
 	openedBy map[string]string // popup target id → opener tab id
 	// secretChecks maps a browser_act's arguments to whether its permission
 	// check treated it as entering a secret.
@@ -69,13 +70,7 @@ func (s *Session) ensureEngine(ctx context.Context) (*engine, error) {
 	if s.eng != nil {
 		s.dropEngineLocked()
 	}
-	spec := s.cfg.Launch
-	exe, err := Discover(spec.Executable)
-	if err != nil {
-		return nil, err
-	}
-	spec.Executable = exe
-	eng, err := s.cfg.Pool.acquire(ctx, spec)
+	eng, err := s.cfg.Pool.acquire(ctx, s.cfg.Launch)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +91,27 @@ func (s *Session) dropEngineLocked() {
 	eng := s.eng
 	s.eng = nil
 	go s.cfg.Pool.release(eng)
+}
+
+// Retain adds an owner. A session outlives a rebuild by being retained by the
+// runtime that replaces its owner before that owner releases it.
+func (s *Session) Retain() {
+	s.mu.Lock()
+	s.owners++
+	s.mu.Unlock()
+}
+
+// Release drops an owner, and closes the session when it was the last one.
+func (s *Session) Release() {
+	s.mu.Lock()
+	if s.owners > 0 {
+		s.owners--
+	}
+	last := s.owners == 0
+	s.mu.Unlock()
+	if last {
+		s.Close()
+	}
 }
 
 // Close closes this session's tabs and releases its browser.

@@ -603,7 +603,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		prev := cleanup
 		cleanup = func() { prev(); lspMgr.Close() }
 	}
-	cleanup = withBrowser(reg, cfg.Browser, root, cleanup)
+	browserSession := bindBrowser(reg, cfg.Browser, root, opts.BrowserSession)
 
 	timer.mark("mcp")
 	maxSteps := max(opts.MaxSteps, 0)
@@ -1029,7 +1029,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		RuntimeOwner:      owner,
 		// Share the Manager already bound into bash/grep so tools and the
 		// Controller observe the same temporary generation across rebuilds.
-		SessionTemp: sessionTemp,
+		SessionTemp:    sessionTemp,
+		BrowserSession: browserSession,
 	}
 	// Guardian: when guardian_model is configured, spawn an LLM safety reviewer
 	// that can auto-allow safe Ask decisions and annotate risky ones before

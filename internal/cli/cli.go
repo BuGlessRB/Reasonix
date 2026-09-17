@@ -972,9 +972,7 @@ func chatREPL(args []string, version string) int {
 		if spec.EffortOverride != nil {
 			effectiveOverrides.Effort = spec.EffortOverride
 		}
-		// Keep the logical-session private temporary directory across model /
-		// profile switches (Issue #7575).
-		effectiveOverrides.SessionTemp = sessionTempFromCLIController(oldCtrl)
+		carrySessionResources(&effectiveOverrides, oldCtrl)
 		c, err := setupQuietProfile(ctx, spec.ModelRef, *maxSteps, false, sink, spec.RuntimeProfile, effectiveOverrides)
 		if err != nil {
 			return nil, err

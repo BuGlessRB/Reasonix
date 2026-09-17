@@ -222,6 +222,7 @@ const SAID: Record<string, string> = {
   // ── 本机通道：这个请求不是 Studio 自己发的 ───────────────────────
   "tray.rejected": "状态图标设置未能保存：{detail}",
   "update.rejected": "本次启动未能记录为健康状态：{detail}",
+  "browser_host.bad_frames": "内置浏览器的消息格式不正确，本次回传被丢弃",
 
   // ── 版本：这个内核背后有没有一个可更新的 Studio ─────────────────
   "studio.no_install": "这个内核不是由 Studio 启动的，没有可以查看或切换的版本",

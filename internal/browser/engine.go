@@ -3,6 +3,7 @@ package browser
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -234,15 +235,19 @@ func (e *engine) dispatch(ev event) {
 	}
 }
 
-// close asks the browser to quit and kills it when it does not.
+// close asks the browser to quit and kills it when it does not. A hosted
+// browser is the host's to keep; closing asks it to drop what this profile
+// opened, and ends the connection.
 func (e *engine) close() {
 	if e.conn != nil && e.alive() {
 		ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
 		_ = e.conn.call(ctx, "", "Browser.close", nil, nil)
 		cancel()
-		select {
-		case <-e.exited:
-		case <-time.After(closeTimeout):
+		if e.cmd != nil {
+			select {
+			case <-e.exited:
+			case <-time.After(closeTimeout):
+			}
 		}
 	}
 	e.kill()
@@ -252,17 +257,29 @@ func (e *engine) kill() {
 	if e.unsub != nil {
 		e.unsub()
 	}
-	e.job.Kill(e.cmd)
+	if e.cmd != nil {
+		e.job.Kill(e.cmd)
+	}
 	if e.conn != nil {
 		e.conn.shutdown()
 	}
 }
 
 // Pool shares one browser per profile among the sessions that use it: a
-// profile directory admits one browser process at a time.
+// profile directory admits one browser process at a time. A pool with a host
+// endpoint reaches the host's browser instead of launching one.
 type Pool struct {
 	mu      sync.Mutex
 	engines map[string]*pooledEngine
+	dial    EndpointDialer
+}
+
+// SetEndpoint routes every later browser start through a host. Engines already
+// running keep the browser they have.
+func (p *Pool) SetEndpoint(dial EndpointDialer) {
+	p.mu.Lock()
+	p.dial = dial
+	p.mu.Unlock()
 }
 
 type pooledEngine struct {
@@ -284,12 +301,32 @@ func (p *Pool) acquire(ctx context.Context, spec LaunchSpec) (*engine, error) {
 		delete(p.engines, spec.ProfileDir)
 		go pe.eng.kill()
 	}
-	eng, err := launch(ctx, spec)
+	eng, err := p.start(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
 	p.engines[spec.ProfileDir] = &pooledEngine{eng: eng, refs: 1}
 	return eng, nil
+}
+
+// start reaches the host's browser when one is attached, and otherwise
+// launches one found on this machine.
+func (p *Pool) start(ctx context.Context, spec LaunchSpec) (*engine, error) {
+	if p.dial != nil {
+		ep, err := p.dial(ctx, spec.ProfileDir)
+		switch {
+		case err == nil:
+			return attachEndpoint(ctx, spec, ep)
+		case !errors.Is(err, ErrNoHost):
+			return nil, fail(CodeEngineFailed, "the host browser refused a connection: %v", err)
+		}
+	}
+	exe, err := Discover(spec.Executable)
+	if err != nil {
+		return nil, err
+	}
+	spec.Executable = exe
+	return launch(ctx, spec)
 }
 
 func (p *Pool) release(eng *engine) {

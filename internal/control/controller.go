@@ -26,6 +26,7 @@ import (
 	"reasonix/internal/ablation"
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
+	"reasonix/internal/browser"
 	"reasonix/internal/capability"
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/command"
@@ -166,6 +167,7 @@ type Controller struct {
 	// by Bash calls. Retained for this Controller's lifetime; rotated on
 	// /new, /clear, resume of another session, and branch switches.
 	sessionTemp *sessiontemp.Manager
+	browser     *browser.Session
 	// recoveryDepthCapNotices records session paths that already surfaced the
 	// depth-cap recovery warning. Repeated saves on the same conflict copy are
 	// diagnostic noise for the UI; keep logging/diagnostics, but emit the user
@@ -417,7 +419,8 @@ type Options struct {
 	// shared by sandboxed Bash calls. Nil creates a fresh Manager owned by this
 	// Controller. Hot rebuilds pass the previous Controller's Manager so the
 	// temporary directory survives model/settings swaps.
-	SessionTemp *sessiontemp.Manager
+	SessionTemp    *sessiontemp.Manager
+	BrowserSession *browser.Session // the agent's browser; a rebuild hands on the same one
 }
 
 // New builds a Controller. A nil Sink becomes event.Discard; unless the caller
@@ -458,15 +461,7 @@ func New(opts Options) *Controller {
 		providerResolver:   opts.ProviderResolver,
 		runtimeGeneration:  opts.RuntimeGeneration,
 	}
-	// Session-private temporary directory: reuse a shared Manager on hot
-	// rebuild, otherwise create one. Retain so ReleaseResources/Close drop the
-	// owner reference without racing a replacement Controller.
-	if opts.SessionTemp != nil {
-		c.sessionTemp = opts.SessionTemp
-	} else {
-		c.sessionTemp = sessiontemp.New()
-	}
-	c.sessionTemp.Retain()
+	c.adoptSessionResources(opts)
 
 	c.publishPerProjectContext(opts)
 	if opts.Extensions != nil {

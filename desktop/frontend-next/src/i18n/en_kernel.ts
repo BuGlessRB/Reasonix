@@ -174,6 +174,7 @@ export const EN_KERNEL: Record<string, string> = {
   "本次连接已结束，该问题无需回答": "That connection has ended, so the question no longer needs an answer",
   "该问题已有其他答案": "That question already has a different answer",
   "状态图标设置未能保存：{detail}": "The status icon settings were not saved: {detail}",
+  "内置浏览器的消息格式不正确，本次回传被丢弃": "The built-in browser sent malformed messages, and they were dropped",
   "这个内核不是由 Studio 启动的，没有可以查看或切换的版本":
     "This kernel was not started by Studio, so it has no version of its own to show or change",
   "版本固定未能保存：{detail}": "The version hold was not saved: {detail}",

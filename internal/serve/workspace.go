@@ -282,6 +282,7 @@ func (s *Server) rebuildOptions(cur control.SessionAPI, ref string) boot.Options
 	// Keep the logical session's private temporary directory across the rebuild.
 	if ctrl, ok := cur.(*control.Controller); ok && ctrl != nil {
 		opts.SessionTemp = ctrl.SessionTemp()
+		opts.BrowserSession = ctrl.BrowserSession()
 	}
 	opts.RuntimeReload = s.reuseFromLastBuild()
 	return opts
