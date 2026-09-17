@@ -289,7 +289,7 @@ func verifyMigratedSession(ctx context.Context, report fixtureReport, reportPath
 	}
 	mappings := 0
 	for _, mapping := range state.SourceMappings {
-		if mapping.Path == report.LegacyPath {
+		if agent.CanonicalSessionPath(mapping.Path) == agent.CanonicalSessionPath(report.LegacyPath) {
 			mappings++
 			report.SessionID = mapping.SessionID
 		}

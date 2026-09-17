@@ -1384,6 +1384,9 @@ jobs:
       - name: Install NSIS
         run: pwsh -NoProfile -File ../scripts/install-nsis.ps1
 
+      - name: Verify uninstaller-only compilation preserves the shared uninstaller
+        run: node ../scripts/check-windows-uninstaller.mjs
+
       - name: Build Windows installer and portable archive
         timeout-minutes: 20
         env:
