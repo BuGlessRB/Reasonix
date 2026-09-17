@@ -814,6 +814,28 @@
   .tab .n { font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--faint); margin-left: 5px; font-variant-numeric: tabular-nums }
 
   .tabs > .picker { margin-left: auto }
+
+  .scroll[data-pane="browser"] { display: flex; flex-direction: column; overflow: hidden }
+  .scroll[data-pane="browser"][hidden] { display: none }
+  .bpanel { flex: 1; display: flex; flex-direction: column; min-height: 0 }
+  .bbar { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--hair) }
+  .bbar .vtabs { overflow-x: auto }
+  .btab { max-width: 220px; overflow: hidden; text-overflow: ellipsis }
+  .bnav { display: flex; align-items: center; gap: 4px }
+  .bbtn {
+    flex: none; width: 28px; height: 28px; border: 0; border-radius: var(--r-sm);
+    background: none; color: var(--faint); cursor: pointer; font: var(--w-med) var(--fs-ui) var(--ui);
+  }
+  .bbtn:hover { color: var(--text); background: var(--overlay) }
+  .bbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .baddr { flex: 1; min-width: 0 }
+  .baddr input {
+    width: 100%; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-sm);
+    background: var(--raised); color: var(--text); font: var(--w-reg) var(--fs-meta) var(--ui);
+  }
+  .baddr input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .bview { flex: 1; min-height: 0; display: grid; place-items: center; background: var(--surface) }
+  .bhint { margin: 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .tab.more { display: inline-flex; align-items: center; gap: 5px }
   .tab.more .cv { font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--faint); font-style: normal; transition: transform var(--t-card) var(--ease) }
   .tab.more[aria-expanded="true"] .cv { transform: rotate(180deg) }

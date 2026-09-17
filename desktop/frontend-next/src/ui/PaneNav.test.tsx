@@ -10,7 +10,7 @@ afterEach(cleanup);
 const draw = (over: Partial<Parameters<typeof PaneNav>[0]> = {}) => {
   const onPick = vi.fn();
   const r = render(
-    <PaneNav view="flow" onPick={onPick} done={3} steps={7} nodes={12} rows={186} {...over} />,
+    <PaneNav view="flow" onPick={onPick} done={3} steps={7} nodes={12} rows={186} pages={0} {...over} />,
   );
   return { onPick, ...r };
 };
@@ -197,5 +197,16 @@ describe("where the detail menu is rendered", () => {
     expect(menu?.parentElement).toBe(document.body);
     // Its rows are reachable where it now lives.
     expect(document.querySelectorAll(".menu[role='menu']:not([hidden]) button.mi").length).toBeGreaterThan(0);
+  });
+});
+
+describe("the browser tab", () => {
+  it("exists only while the agent has a page open, and names how many", async () => {
+    expect(standing(draw().container)).not.toContain("浏览器");
+    cleanup();
+    const { container, onPick } = draw({ pages: 2 });
+    expect(standing(container)).toEqual(["对话", "任务3/7", "浏览器2", "运行详情"]);
+    await userEvent.click(screen.getByRole("tab", { name: /浏览器/ }));
+    expect(onPick).toHaveBeenCalledWith("browser");
   });
 });

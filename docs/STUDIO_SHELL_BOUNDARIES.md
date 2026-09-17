@@ -61,7 +61,29 @@ The static page is served under one namespace, `/_studio/`, and every other
 path belongs to the kernel. The inverse — a list of the kernel's routes with everything else falling
 through to the page — has to be edited every time the kernel grows an endpoint.
 
-## 4. State taxonomy
+## 4. The agent's browser
+
+The agent's browser draws its pages in this window, and the split above holds
+for it too.
+
+- **The kernel** owns the session: which tabs exist, what each ref means, what
+  a page may be, and who approved a site.
+- **The main process** owns the views: `WebContentsView`s on their own
+  partitions, never the session the credential lives in. It answers the
+  browser-level half of the debugging protocol for them.
+- **The relay** is `GET /browser-host/stream` and `POST /browser-host/frames`,
+  reached over the same HTTP as everything else.
+- **The renderer** decides only where a view is drawn, through four
+  sender-checked verbs.
+
+A page that is not on screen overlaps the window by one pixel in its bottom-left
+corner. Moved wholly outside the window it lays out at nothing; hidden, it takes
+no input once a navigation has replaced its renderer.
+
+`desktop/electron/test/browser_live.js` (`pnpm browser-live`) drives this through
+the real kernel with a scripted model.
+
+## 5. State taxonomy
 
 Three kinds, carried three ways. Deciding which one a thing is comes before
 deciding its API.

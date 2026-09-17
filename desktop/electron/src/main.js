@@ -12,6 +12,9 @@ const { appIcon } = require("./appicon");
 const layout = require("./layout");
 const { offerCleanup } = require("./legacy");
 const { stripPackageGrants, unpaintedWindowCause } = require("./packagegrants");
+const { BrowserProtocol } = require("./browserprotocol");
+const { BrowserViews } = require("./browserviews");
+const { startBrowserRelay } = require("./browserrelay");
 
 // Must match serve.TokenCookie and the namespace the kernel serves the page on.
 const TOKEN_COOKIE = "reasonix_token";
@@ -36,6 +39,8 @@ let quitting = false;
 let client = null;
 let tray = null;
 let grants = null;
+let browserViews = null;
+let browserRelay = null;
 
 async function boot() {
   // Which build this is belongs to the shell: inside the bundle the kernel's
@@ -76,12 +81,28 @@ async function boot() {
   // something is left that brings it back.
   tray = installTray(client, { onOpen: showWindow, onQuit: () => app.quit() });
   win.on("close", onWindowClose);
+  hostAgentBrowser();
   await win.loadURL(origin + PAGE_PATH);
   await tray?.refresh();
   // After the window, deliberately. This asks about an install left behind by
   // the shell this one replaces, and a modal in front of a window that has not
   // painted reads as the application having failed to start.
   cleanUpLegacyInstalls();
+}
+
+// The agent's browser draws its pages as views in this window: the kernel
+// drives them through the relay, and the page decides where one is shown.
+function hostAgentBrowser() {
+  browserViews = new BrowserViews({ win, kernelOrigin: origin });
+  const protocol = new BrowserProtocol({
+    createView: (spec) => browserViews.create(spec),
+    post: (frame) => browserRelay?.post(frame),
+  });
+  browserRelay = startBrowserRelay({
+    client,
+    onFrame: (frame) => protocol.receive(frame),
+    onDrop: () => protocol.drop(),
+  });
 }
 
 // The Wails install a dmg download leaves beside this one. Detached from boot:
@@ -207,6 +228,18 @@ ipcMain.handle("window:is-maximised", (event) => fromWindow(event)?.isMaximized(
 ipcMain.handle("window:close", (event) => {
   fromWindow(event)?.close();
 });
+ipcMain.handle("browser:show", (event, targetId, rect) => {
+  if (fromWindow(event)) browserViews?.show(String(targetId), rect);
+});
+ipcMain.handle("browser:hide", (event) => {
+  if (fromWindow(event)) browserViews?.hide();
+});
+ipcMain.handle("browser:control", (event, targetId, action) => {
+  if (fromWindow(event)) browserViews?.control(String(targetId), String(action));
+});
+ipcMain.handle("browser:navigate", (event, targetId, address) =>
+  fromWindow(event) ? (browserViews?.navigate(String(targetId), String(address)) ?? false) : false,
+);
 ipcMain.handle("shell:open-external", (event, raw) => {
   if (!fromWindow(event)) return;
   const target = externalTarget(raw);
@@ -302,6 +335,7 @@ module.exports = { current: () => ({ win, tray, client, origin }) };
 
 app.on("before-quit", () => {
   quitting = true;
+  browserRelay?.stop();
   tray?.close();
   kernel?.child.stdin.end();
 });

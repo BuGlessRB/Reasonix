@@ -32,7 +32,25 @@ export interface HostPort {
    *  to open: the shell owns the dialog, the kernel owns which workspace runs,
    *  so the page carries one to the other. */
   pickFolder(startIn: string): Promise<string | null>;
+  /** Whether this shell draws the agent's browser pages inside the window. */
+  drawsBrowserViews(): boolean;
+  /** Draw one of the agent's pages over rect, in on-screen coordinates, and
+   *  hide every other; hideBrowserView puts them all away again. */
+  showBrowserView(target: string, rect: ViewRect): void;
+  hideBrowserView(): void;
+  controlBrowserView(target: string, action: BrowserControl): void;
+  /** Load what the person typed. false when the shell refused the address. */
+  navigateBrowserView(target: string, address: string): Promise<boolean>;
 }
+
+export interface ViewRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type BrowserControl = "back" | "forward" | "reload" | "stop";
 
 // The preload bridge. Verbs only: the origin the page was loaded from and the
 // credential that opens it never cross it.
@@ -49,6 +67,10 @@ interface ElectronBridge {
   saveText(name: string, content: string): Promise<string>;
   saveBytes(name: string, bytes: Uint8Array): Promise<string>;
   pickFolder(startIn: string): Promise<string>;
+  showBrowserView?(target: string, rect: ViewRect): Promise<void>;
+  hideBrowserView?(): Promise<void>;
+  controlBrowserView?(target: string, action: string): Promise<void>;
+  navigateBrowserView?(target: string, address: string): Promise<boolean>;
 }
 
 const bridge = () => (window as unknown as { reasonixHost?: ElectronBridge }).reasonixHost;
@@ -98,6 +120,22 @@ class ElectronHost implements HostPort {
   pickFolder(startIn: string) {
     return this.api.pickFolder(startIn);
   }
+  // A shell older than the verbs has no views to draw, and says so by lacking them.
+  drawsBrowserViews() {
+    return typeof this.api.showBrowserView === "function";
+  }
+  showBrowserView(target: string, rect: ViewRect) {
+    void this.api.showBrowserView?.(target, rect);
+  }
+  hideBrowserView() {
+    void this.api.hideBrowserView?.();
+  }
+  controlBrowserView(target: string, action: BrowserControl) {
+    void this.api.controlBrowserView?.(target, action);
+  }
+  navigateBrowserView(target: string, address: string) {
+    return this.api.navigateBrowserView?.(target, address) ?? Promise.resolve(false);
+  }
 }
 
 class BrowserHost implements HostPort {
@@ -124,6 +162,15 @@ class BrowserHost implements HostPort {
   }
   pickFolder() {
     return Promise.resolve(null);
+  }
+  drawsBrowserViews() {
+    return false;
+  }
+  showBrowserView() {}
+  hideBrowserView() {}
+  controlBrowserView() {}
+  navigateBrowserView() {
+    return Promise.resolve(false);
   }
 }
 

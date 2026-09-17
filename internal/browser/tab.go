@@ -186,8 +186,12 @@ func (t *tab) info(refreshTitle bool) TabInfo {
 		}
 		if t.call(ctx, "Runtime.evaluate", map[string]any{"expression": "document.title", "returnByValue": true}, &r) == nil {
 			t.mu.Lock()
+			retitled := t.title != r.Result.Value
 			t.title = r.Result.Value
 			t.mu.Unlock()
+			if retitled {
+				t.s.tabsChanged()
+			}
 		}
 		cancel()
 	}

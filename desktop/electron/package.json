@@ -13,7 +13,8 @@
     "test": "node --test test/unit.mjs",
     "build:app": "electron-builder --dir",
     "build:dist": "electron-builder",
-    "smoke": "electron test/smoke.js"
+    "smoke": "electron test/smoke.js",
+    "browser-live": "electron test/browser_live.js"
   },
   "devDependencies": {
     "electron": "44.1.0",

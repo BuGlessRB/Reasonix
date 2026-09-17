@@ -31,6 +31,7 @@ import { railOf } from "./panels/derive";
 import { ABSENT, accountOf, type Wallet } from "./wallet";
 import { swapping } from "./swap";
 import { PaneNav, type PaneView } from "./PaneNav";
+import { BrowserPanel, useBrowserTabs } from "./BrowserPanel";
 import { useRate } from "./num";
 
 // PaneReport is what the window's own chrome needs from whichever pane has
@@ -104,6 +105,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [queue, setQueue] = useState<QueueSnapshot | null>(null);
   const [slots, setSlots] = useState<Record<string, string>>({});
+  const pages = useBrowserTabs(port, s.browserTabsMoved);
   const flow = useRef<HTMLDivElement>(null);
   const startedAt = useRef(0);
   // Elapsed is a clock reading and belongs on the tick. Throughput is not: it
@@ -573,7 +575,8 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // on a tab that just lost its button is the other half of that.
   useEffect(() => {
     if (tab === "line" && exec.graph.nodes.length === 0) setTab("flow");
-  }, [tab, exec.graph.nodes.length]);
+    if (tab === "browser" && pages.length === 0) setTab("flow");
+  }, [tab, exec.graph.nodes.length, pages.length]);
 
   // Where the bottom is moves as blocks mount under it, so this only asks the
   // transcript to follow again and lets it scroll itself into place.
@@ -610,6 +613,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         done={s.plan.filter(stepDone).length}
         steps={s.plan.length}
         nodes={exec.graph.nodes.length}
+        pages={pages.length}
         rows={traj.rows.length}
       />
 
@@ -670,6 +674,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         )}
       </div>
 
+      <div className="scroll" data-pane="browser" hidden={tab !== "browser"}>{tab === "browser" && <BrowserPanel tabs={pages} shown={visible} />}</div>
       <div className="scroll" data-pane="task" hidden={tab !== "task"}>
         {tab === "task" && (
           <Task

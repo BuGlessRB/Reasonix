@@ -398,3 +398,112 @@ test("an unpainted window is attributed only to grants the kernel could not remo
   const zh = unpaintedWindowCause({ stripped: [], refused: refused.slice(0, 1) }, "zh-CN");
   assert.ok(zh.title.includes("无法打开窗口") && zh.detail.includes("C:\\Studio\\0.dll"));
 });
+
+const { BrowserProtocol, PAGE_SESSION } = require("../src/browserprotocol.js");
+const { guestNavigationAllowed, typedAddress } = require("../src/browserguard.js");
+const { sseData } = require("../src/browserrelay.js");
+
+function fakeBrowser() {
+  const posted = [];
+  const views = [];
+  const protocol = new BrowserProtocol({
+    post: (frame) => posted.push(frame),
+    createView: (spec) => {
+      const view = {
+        targetId: `view-${views.length + 1}`,
+        spec,
+        sent: [],
+        closed: false,
+        send: async (method, params) => {
+          view.sent.push([method, params]);
+          if (method === "Page.fail") throw new Error("nope");
+          return { echoed: method };
+        },
+        close: () => {
+          view.closed = true;
+          spec.onClosed();
+        },
+        mainFrame: () => "F1",
+      };
+      views.push(view);
+      return view;
+    },
+  });
+  const say = (conn, message) => protocol.receive({ conn, message });
+  const replies = (conn) => posted.filter((f) => f.conn === conn).map((f) => f.message);
+  return { protocol, posted, views, say, replies };
+}
+
+test("the window answers for targets and hands a page's commands to that page", async () => {
+  const b = fakeBrowser();
+  b.protocol.receive({ conn: "1", open: "reasonix-browser-abc" });
+  b.say("1", { id: 1, method: "Browser.getVersion" });
+  b.say("1", { id: 2, method: "Target.createTarget", params: { url: "about:blank" } });
+  assert.equal(b.views[0].spec.partition, "reasonix-browser-abc");
+  b.say("1", { id: 3, method: "Target.attachToTarget", params: { targetId: "view-1", flatten: true } });
+  b.say("1", { id: 4, method: "Page.navigate", params: { url: "https://example.com/" }, sessionId: PAGE_SESSION + "view-1" });
+  b.say("1", { id: 5, method: "Page.fail", sessionId: PAGE_SESSION + "view-1" });
+  b.say("1", { id: 6, method: "Tracing.start" });
+  await new Promise((r) => setImmediate(r));
+  const byId = Object.fromEntries(b.replies("1").filter((m) => m.id).map((m) => [m.id, m]));
+  assert.equal(byId[2].result.targetId, "view-1");
+  assert.equal(byId[3].result.sessionId, PAGE_SESSION + "view-1");
+  assert.deepEqual(byId[4].result, { echoed: "Page.navigate" });
+  assert.equal(byId[5].error.message, "nope");
+  assert.equal(byId[6].error.code, -32601);
+
+  b.views[0].spec.onEvent("Page.loadEventFired", {});
+  assert.deepEqual(b.replies("1").at(-1), { method: "Page.loadEventFired", params: {}, sessionId: PAGE_SESSION + "view-1" });
+});
+
+test("a popup becomes a target the kernel is told about, and closing ends every page", () => {
+  const b = fakeBrowser();
+  b.protocol.receive({ conn: "1", open: "p" });
+  b.say("1", { id: 1, method: "Target.createTarget", params: { url: "about:blank" } });
+  b.views[0].spec.onPopup("https://example.com/next");
+  const created = b.replies("1").find((m) => m.method === "Target.targetCreated");
+  assert.deepEqual(created.params.targetInfo, { targetId: "view-2", type: "page", openerId: "view-1", url: "https://example.com/next" });
+
+  b.views[0].spec.onDownload({ url: "https://example.com/a.csv", suggestedFilename: "a.csv" });
+  assert.equal(b.replies("1").at(-1).method, "Browser.downloadWillBegin");
+
+  b.protocol.receive({ conn: "1", close: true });
+  assert.ok(b.views.every((v) => v.closed), "a closed connection left pages open");
+  const destroyed = b.replies("1").filter((m) => m.method === "Target.targetDestroyed").map((m) => m.params.targetId);
+  assert.deepEqual(destroyed.sort(), ["view-1", "view-2"]);
+  b.say("1", { id: 9, method: "Target.createTarget" });
+  assert.equal(b.views.length, 2, "a closed connection still opened a page");
+});
+
+test("frames for connections nobody opened, or after the stream dropped, are ignored", () => {
+  const b = fakeBrowser();
+  b.say("ghost", { id: 1, method: "Target.createTarget" });
+  assert.equal(b.views.length, 0);
+  b.protocol.receive({ conn: "1", open: "p" });
+  b.say("1", { id: 1, method: "Target.createTarget" });
+  b.protocol.drop();
+  assert.ok(b.views[0].closed);
+  b.say("1", { id: 2, method: "Target.createTarget" });
+  assert.equal(b.views.length, 1);
+});
+
+test("a page may go to the web and never to the kernel's own origin", () => {
+  const kernel = "http://127.0.0.1:4455";
+  assert.equal(guestNavigationAllowed("https://example.com/a", kernel), true);
+  assert.equal(guestNavigationAllowed("http://127.0.0.1:5173/", kernel), true);
+  assert.equal(guestNavigationAllowed("about:blank", kernel), true);
+  for (const refused of ["http://127.0.0.1:4455/_studio/", "http://127.0.0.1:4455/rt/1/approve", "file:///etc/hosts", "javascript:alert(1)", "chrome://settings", "devtools://x", "not a url"]) {
+    assert.equal(guestNavigationAllowed(refused, kernel), false, refused);
+  }
+  assert.equal(typedAddress("example.com/docs"), "https://example.com/docs");
+  assert.equal(typedAddress("http://localhost:3000"), "http://localhost:3000");
+  assert.equal(typedAddress("  "), "");
+});
+
+test("the relay reads whole SSE data frames and keeps what is unfinished", () => {
+  const first = sseData(': connected\n\ndata: {"conn":"1"}\n\ndata: {"co');
+  assert.deepEqual(first.data, ['{"conn":"1"}']);
+  const second = sseData(first.rest + 'nn":"2"}\n\n: ping\n\n');
+  assert.deepEqual(second.data, ['{"conn":"2"}']);
+  assert.equal(second.rest, "");
+});

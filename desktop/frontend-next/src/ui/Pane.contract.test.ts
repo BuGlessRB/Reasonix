@@ -12,7 +12,7 @@ describe("what the pane still owns after the bar stopped listing it", () => {
   // rebuilt on each streamed delta — a second transcript's worth of work drawn
   // for nobody. Extracting one <View /> to make the markup symmetric is exactly
   // how that comes back, so the asymmetry is the contract.
-  it.each(["line", "traj", "graph", "task"])("mounts %s only while it is the view on screen", (view) => {
+  it.each(["line", "traj", "graph", "task", "browser"])("mounts %s only while it is the view on screen", (view) => {
     expect(pane).toMatch(new RegExp(`\\{ ?tab === "${view}" &&`));
   });
 
@@ -24,7 +24,7 @@ describe("what the pane still owns after the bar stopped listing it", () => {
 
   it("still holds the five view identities rather than a collapsed three", () => {
     expect(pane).toMatch(/useState<PaneView>\("flow"\)/);
-    for (const view of ["flow", "line", "traj", "graph", "task"]) {
+    for (const view of ["flow", "line", "traj", "graph", "task", "browser"]) {
       expect(pane).toContain(`"${view}"`);
     }
     // A second selection saying which detail is open would be a second answer
@@ -47,6 +47,12 @@ describe("the routes into a view that never went through the bar", () => {
   // on the timeline has to be sent somewhere that exists.
   it("still leaves the timeline when the run has no graph left", () => {
     expect(pane).toMatch(/tab === "line" && exec\.graph\.nodes\.length === 0\) setTab\("flow"\)/);
+  });
+
+  // The same for the browser: a reader on it when the agent's last page closes
+  // is sent back to the transcript rather than left on an empty view.
+  it("leaves the browser when the agent has no page left", () => {
+    expect(pane).toMatch(/tab === "browser" && pages\.length === 0\) setTab\("flow"\)/);
   });
 
   // One route, so a view reached from the bar, from the menu, from the task

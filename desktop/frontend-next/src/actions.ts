@@ -139,6 +139,12 @@ export const ACTIONS: UIAction[] = [
   // because reaching a view from the bar and from the detail menu is one intent
   // in two places, not two things a person can do.
   { id: "pane.view", kind: "view", target: "none", proof: "interaction" },
+  // The agent's browser as a person watches it: which of its pages is drawn,
+  // and the controls a person has over the page on screen. They reach the
+  // window's view of the page, never the kernel.
+  { id: "browser.tab", kind: "view", target: "entity", proof: "interaction" },
+  { id: "browser.control", kind: "shell-native", target: "entity", proof: "interaction" },
+  { id: "browser.navigate", kind: "shell-native", target: "entity", proof: "interaction" },
   { id: "transcript.find", kind: "view", target: "none", proof: "interaction" },
   { id: "turn.edit", kind: "view", target: "entity", proof: "interaction" },
   { id: "turn.resend", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
