@@ -202,6 +202,11 @@ func TestGoalContinuationKeepsCurrentTurnImageCandidatesWithoutCrossTurnLeak(t *
 
 	ctx := agent.WithSubagentImageCandidates(context.Background(), initial.images.candidates)
 	continuation := orchestratedTurn{goalContinuation: &goalContinuationSnapshot{}, synthetic: true, raw: goalContinueTurn}
+	c.modelRef = "custom/vision-pro"
+	if carried := c.imagesForOrchestratedTurn(ctx, continuation); carried.unreadable() != 0 {
+		t.Fatalf("a continuation under a vision model reports %d unreadable image(s)", carried.unreadable())
+	}
+	c.modelRef = "custom/text-only"
 	carried := c.imagesForOrchestratedTurn(ctx, continuation)
 	if len(carried.userImages) != 0 || len(carried.candidates) != 1 || carried.candidates[0] != initial.images.candidates[0] {
 		t.Fatalf("Goal continuation images = %v, candidates = %v; want original child candidate only", carried.userImages, carried.candidates)
