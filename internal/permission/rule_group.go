@@ -9,8 +9,8 @@ const (
 	browserGroup      = "browser"
 )
 
-// isBrowserTool reports whether a tool operates the agent's browser.
-func isBrowserTool(toolName string) bool { return groupOf(toolName) == browserGroup }
+// IsBrowserTool reports whether a tool operates the agent's browser.
+func IsBrowserTool(toolName string) bool { return groupOf(toolName) == browserGroup }
 
 func groupOf(toolName string) string {
 	switch toolName {

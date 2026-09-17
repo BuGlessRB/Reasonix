@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"reasonix/internal/event"
+	"reasonix/internal/evidence"
+	"reasonix/internal/permission"
 	"reasonix/internal/provider"
 )
 
@@ -165,5 +167,23 @@ func TestEffectBrowserSessionThroughTheRealAssembly(t *testing.T) {
 	}
 	if !strings.Contains(results[1], "Completed 2 of 2 step(s)") || !strings.Contains(results[1], `+ - text: "Hello, 李雷"`) {
 		t.Fatalf("the act result did not report the change it made:\n%s", results[1])
+	}
+}
+
+// Three packages recognise a browser tool by name and cannot import the tools
+// to ask: the grant group, the mutation classifier, and this schema rule. They
+// have to agree with the tools that exist.
+func TestBrowserToolIdentityAgreesAcrossTheKernel(t *testing.T) {
+	names := BrowserToolNames()
+	if len(names) != 3 {
+		t.Fatalf("browser tools = %v", names)
+	}
+	for _, name := range names {
+		if !permission.IsBrowserTool(name) {
+			t.Errorf("%s is not in the browser grant group", name)
+		}
+		if evidence.ToolCallMutates(name, json.RawMessage(`{}`), name == "browser_read") {
+			t.Errorf("%s is classified as a workspace mutation", name)
+		}
 	}
 }

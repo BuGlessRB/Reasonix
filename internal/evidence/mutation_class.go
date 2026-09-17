@@ -28,6 +28,10 @@ func ToolCallMutationClass(toolName string, args json.RawMessage, readOnly bool)
 	switch toolName {
 	case "ask", "todo_write", "complete_step", "bash_output", "wait":
 		return MutationNone
+	case "browser_open", "browser_act":
+		// Their effects land on the web: the browser downloads nothing and has no
+		// way to upload, so no call of theirs writes a workspace path.
+		return MutationNone
 	case "bash":
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal(args, &fields); err != nil {

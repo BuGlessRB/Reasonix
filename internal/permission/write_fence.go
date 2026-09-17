@@ -26,7 +26,7 @@ var subjectSensitiveTools = map[string]func(subject string) bool{
 // A browser grant names its origin without the decision returning to a person.
 func subjectScopedGrant(toolName string) bool {
 	_, ok := subjectSensitiveTools[canonicalRuleTool(toolName)]
-	return ok || isBrowserTool(toolName)
+	return ok || IsBrowserTool(toolName)
 }
 
 // unattendedAsk answers an Ask with no approver attached. Autonomy is a

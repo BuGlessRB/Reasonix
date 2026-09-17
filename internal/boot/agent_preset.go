@@ -94,7 +94,11 @@ func EvidenceToolNames() []string {
 
 // BrowserToolNames are shown when the assembly has a browser to drive.
 func BrowserToolNames() []string {
-	return []string{"browser_act", "browser_open", "browser_read"}
+	var names []string
+	for _, t := range builtin.BrowserTools(nil) {
+		names = append(names, t.Name())
+	}
+	return names
 }
 
 // UnifiedProviderToolNames returns the provider-visible allowlist for a boot
