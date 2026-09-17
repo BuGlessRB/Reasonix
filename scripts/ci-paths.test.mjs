@@ -56,6 +56,10 @@ test("App lifecycle and memory protocol inputs select the full memory screen", (
 });
 
 test("Go, Electron and packaging inputs stay on their owning surfaces", () => {
+	const uninstaller = classifyPaths(["scripts/check-windows-uninstaller.mjs"]).flags;
+	assert.equal(uninstaller.packaging, true);
+	assert.equal(uninstaller.native, true);
+	assert.equal(uninstaller.memory, false);
   let flags = classifyPaths(["internal/control/controller.go"]).flags;
   assert.equal(flags.code, true);
   assert.equal(flags.desktop_go, true);
