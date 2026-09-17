@@ -179,7 +179,7 @@ build_service() {
 # threaded through REASONIX_CHANNEL.
 package_shell() {
 	echo "==> package Electron shell ($PLATFORM)"
-	REASONIX_COMMIT="$GIT_COMMIT" REASONIX_BUILD_TIME="$BUILD_TIME_UTC" \
+	REASONIX_COMMIT="$SOURCE_SHA" REASONIX_BUILD_TIME="$BUILD_TIME_UTC" \
 		node "$ROOT/desktop/packaging/package.mjs" "$PLATFORM" "$VERSION" "$CHANNEL"
 }
 
