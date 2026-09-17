@@ -558,7 +558,7 @@ func parseDocument(name, content string) *document {
 }
 
 func parseDocumentWithParser(name, content string, markdownParser parser.Parser) *document {
-	source := []byte(content)
+	source := blankMetadataHeader([]byte(content))
 	doc := &document{
 		path:     path.Clean(name),
 		title:    strings.TrimSuffix(strings.TrimSuffix(name, ".md"), ".zh-CN"),
@@ -762,7 +762,7 @@ func detectDocumentLanguage(name, content string) string {
 func documentAudience(name string) string {
 	stem := strings.TrimSuffix(strings.TrimSuffix(name, ".md"), ".zh-CN")
 	switch strings.ToUpper(stem) {
-	case "RELEASING", "SIGNPATH_WINDOWS_ADMIN_SOP", "PRODUCTION_CHECKLIST", "THEME_ASSETS":
+	case "RELEASING", "SIGNPATH_WINDOWS_ADMIN_SOP", "PRODUCTION_CHECKLIST", "THEME_ASSETS", "STUDIO_RELEASE", "DOCS_STANDARD":
 		return "maintainer"
 	case "CHECKPOINTS", "GOAL_ENFORCEMENT", "SESSION_REFERENCE_ARCHITECTURE", "SPEC", "TASK_CONTRACT", "TOOL_CONTRACT":
 		return "developer"

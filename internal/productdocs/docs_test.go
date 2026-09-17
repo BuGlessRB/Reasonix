@@ -392,6 +392,27 @@ func TestParserIgnoresHeadingsInsideFencedCode(t *testing.T) {
 	}
 }
 
+// The ownership header is metadata for maintainers. Markdown alone would read
+// its closing --- as a setext underline and serve the owners as a section.
+func TestOwnershipHeaderIsNotASection(t *testing.T) {
+	content := "---\nowner: @a\nbackup: @b\nstatus: active\nreviewed: 2026-09-17\n---\n\n# Runbook\n\n## Steps\n\nDo it.\n"
+	doc := parseDocument("RUNBOOK.md", content)
+	if len(doc.sections) != 2 {
+		t.Fatalf("sections = %d (%+v), want the title and Steps only", len(doc.sections), doc.sections)
+	}
+	for _, sec := range doc.sections {
+		if strings.Contains(sec.heading, "owner") || strings.Contains(sec.content, "@a") {
+			t.Fatalf("header leaked into section %q: %q", sec.heading, sec.content)
+		}
+	}
+	if doc.title != "Runbook" || doc.sections[1].startLine != 10 {
+		t.Fatalf("title=%q steps line=%d, want Runbook at the file's own line 10", doc.title, doc.sections[1].startLine)
+	}
+	if got := parseDocument("NOTE.md", "---\nnot closed\n# Title\n"); len(got.sections) == 0 {
+		t.Fatal("an unterminated delimiter is ordinary Markdown and must still parse")
+	}
+}
+
 func TestGoldmarkHeadingsPreserveTextAndSetextSemantics(t *testing.T) {
 	doc := parseDocument("EXAMPLE.md", "# Example\n\n### Configure *MCP* with `reasonix.toml`, C#, and <https://example.com>\n\nBody.\n\nSetext section\n--------------\n\nMore.\n")
 	if len(doc.sections) != 3 {
