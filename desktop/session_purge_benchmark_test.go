@@ -19,7 +19,7 @@ func BenchmarkPurgeRuntimeLock(b *testing.B) {
 			b.StopTimer()
 			root := b.TempDir()
 			var held time.Duration
-			for n := 0; n < b.N; n++ {
+			for n := range b.N {
 				a := NewApp()
 				a.ctx = b.Context()
 				a.desktopSessions.root = filepath.Join(root, fmt.Sprint(n), "sessions")
@@ -36,7 +36,7 @@ func BenchmarkPurgeRuntimeLock(b *testing.B) {
 					if err := os.MkdirAll(dir, 0700); err != nil {
 						b.Fatal(err)
 					}
-					for j := 0; j < 128/count; j++ {
+					for j := range 128 / count {
 						if err := os.WriteFile(filepath.Join(dir, fmt.Sprint(j)), make([]byte, 4096), 0600); err != nil {
 							b.Fatal(err)
 						}

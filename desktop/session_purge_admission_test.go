@@ -52,7 +52,7 @@ func TestPurgeCommandValidPreparedAfterStartupWriterReleased(t *testing.T) {
 		t.Fatalf("page=%+v err=%v", page, err)
 	}
 	req := lifecycleRequest(t, a, ref, "resume-prepared", "purge")
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		result, err := a.ApplySessionLifecycle(req)
 		if err != nil || !result.Committed {
 			t.Errorf("fresh delete after writer released: result=%+v err=%v", result, err)
