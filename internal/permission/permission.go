@@ -253,6 +253,9 @@ func (p Policy) DecideSubject(toolName string, readOnly bool, subject string) De
 			return p.Mode
 		}
 	}
+	if d, ok := p.decideBrowserCredential(toolName, subject); ok {
+		return d
+	}
 	switch {
 	case matchAny(p.Deny, toolName, subject):
 		return Deny
@@ -510,7 +513,8 @@ func matchAnyAllow(rules []Rule, toolName, subject string) bool {
 	if matchAnyExact(rules, toolName, subject) {
 		return true
 	}
-	if canonicalRuleTool(toolName) == "bash" && bashSubjectRequiresExactRule(subject) {
+	if canonicalRuleTool(toolName) == "bash" && bashSubjectRequiresExactRule(subject) ||
+		IsBrowserTool(toolName) && BrowserSubjectRequiresExplicitApproval(subject) {
 		return false
 	}
 	return matchAny(rules, toolName, subject)

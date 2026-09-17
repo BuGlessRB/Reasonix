@@ -288,3 +288,25 @@ func TestDiffLinesListsWhatAppearedAndWhatLeft(t *testing.T) {
 		t.Fatalf("reverse changes = %+v", c)
 	}
 }
+
+func TestSecretMarkup(t *testing.T) {
+	cases := []struct {
+		name  string
+		attrs []string
+		want  bool
+	}{
+		{"input", []string{"type", "password"}, true},
+		{"input", []string{"type", "PASSWORD"}, true},
+		{"input", []string{"type", "email", "autocomplete", "username"}, false},
+		{"input", []string{"autocomplete", "shipping cc-number"}, true},
+		{"input", []string{"autocomplete", "one-time-code"}, true},
+		{"textarea", []string{"type", "password"}, false},
+		{"iframe", nil, true},
+		{"div", []string{"contenteditable", "true"}, false},
+	}
+	for _, tc := range cases {
+		if got := secretMarkup(tc.name, tc.attrs); got != tc.want {
+			t.Errorf("secretMarkup(%s %v) = %v, want %v", tc.name, tc.attrs, got, tc.want)
+		}
+	}
+}

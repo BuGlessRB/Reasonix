@@ -25,13 +25,16 @@ func (denyPermissionApprover) Approve(context.Context, string, string, json.RawM
 	return false, false, nil
 }
 
-// ApproveWithReason says which of the two refusals this is. Without it the gate
-// falls back to "the user declined this tool call", which is untrue when there
-// was no user, and it sends the model to ask someone who was never there: one
-// headless run rewrote its file, was refused again, and closed by offering the
-// user three choices about the file's contents.
-func (denyPermissionApprover) ApproveWithReason(context.Context, string, string, json.RawMessage) (bool, bool, string, error) {
-	return false, false, "this session has no interactive approver, so any call that needs approval is refused — nobody declined it, and neither retrying nor rewriting it can change that. If this work is meant to run unattended, it needs a permission mode that does not ask (or an explicit allow rule for this tool). Otherwise do the part that needs no approval and call conclude_blocked naming what was refused.", nil
+// ApproveWithReason says which refusal this is: without a reason the gate reports
+// "the user declined this tool call", untrue when there was no user, and the
+// model goes to ask someone who was never there. A call only a person may
+// answer leads with why, so the model learns which of its steps needed one.
+func (denyPermissionApprover) ApproveWithReason(_ context.Context, tool, subject string, _ json.RawMessage) (bool, bool, string, error) {
+	reason := "this session has no interactive approver, so any call that needs approval is refused — nobody declined it, and neither retrying nor rewriting it can change that. If this work is meant to run unattended, it needs a permission mode that does not ask (or an explicit allow rule for this tool). Otherwise do the part that needs no approval and call conclude_blocked naming what was refused."
+	if why := explicitApprovalReason(tool, subject); why != "" {
+		reason = why + " " + reason
+	}
+	return false, false, reason, nil
 }
 
 // rulesWithoutFreshHumanApproval drops any session-allow rule that targets a
@@ -58,6 +61,20 @@ func rulesWithoutFreshHumanApproval(rules []permission.Rule) []permission.Rule {
 type gateApprover struct{ c *Controller }
 
 const dynamicBashApprovalReason = "This command uses nested or indirect shell execution. Auto and broad allow rules cannot verify the inner command; approve this exact command or use YOLO."
+
+const browserCredentialApprovalReason = "This browser step types a password, a one-time code or card details into the site. Auto, the site's grant and broad allow rules do not answer it; approve it or use YOLO."
+
+// explicitApprovalReason is why a call needs a person rather than auto or a
+// broad rule, or "" when it does not.
+func explicitApprovalReason(tool, subject string) string {
+	switch {
+	case strings.EqualFold(tool, "bash") && permission.BashSubjectRequiresExplicitApproval(subject):
+		return dynamicBashApprovalReason
+	case permission.IsBrowserTool(tool) && permission.BrowserSubjectRequiresExplicitApproval(subject):
+		return browserCredentialApprovalReason
+	}
+	return ""
+}
 
 func (g gateApprover) Approve(ctx context.Context, tool, subject string, args json.RawMessage) (bool, bool, error) {
 	allow, remember, _, err := g.ApproveWithReason(ctx, tool, subject, args)
@@ -87,7 +104,8 @@ func (g gateApprover) approveWithPolicyReason(ctx context.Context, tool, subject
 		return true, false, "", nil
 	}
 	subject = approvalDisplaySubject(tool, subject, args)
-	requireHuman := strings.EqualFold(tool, "bash") && permission.BashSubjectRequiresExplicitApproval(subject)
+	humanReason := explicitApprovalReason(tool, subject)
+	requireHuman := humanReason != ""
 	// Check pre-approval first, before any prompt or Guardian review. Dynamic
 	// Bash accepts only YOLO or an exact session grant here; ordinary calls also
 	// accept the just-approved-plan window. Deny rules already bit at the policy
@@ -117,7 +135,7 @@ func (g gateApprover) approveWithPolicyReason(ctx context.Context, tool, subject
 		return true, remember, "", nil
 	}
 	if requireHuman {
-		reason := combineApprovalReasons(policyReason, dynamicBashApprovalReason)
+		reason := combineApprovalReasons(policyReason, humanReason)
 		allow, remember, err := g.c.requestApproval(ctx, approvalRequest{tool: tool, subject: subject, args: args, reason: reason, requireHuman: true})
 		return allow, remember, "", err
 	}

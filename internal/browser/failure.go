@@ -28,6 +28,7 @@ const (
 	CodeWaitTimeout       Code = "browser.wait_timeout"
 	CodeBadStep           Code = "browser.bad_step"
 	CodeScriptFailed      Code = "browser.script_failed"
+	CodeUnconfirmedSecret Code = "browser.unconfirmed_secret"
 )
 
 // Failure is a browser operation that did not happen, with the host's account

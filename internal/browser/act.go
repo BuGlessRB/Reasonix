@@ -41,7 +41,9 @@ type ActResult struct {
 
 // Act runs steps in order on a tab and stops at the first that fails. The
 // returned error is that step's failure; the result says what came before it.
-func (s *Session) Act(ctx context.Context, tabID string, steps []Step) (ActResult, error) {
+// secrets says the call was confirmed as entering one (see CredentialEntry);
+// without it a step that types into a secret field is refused.
+func (s *Session) Act(ctx context.Context, tabID string, steps []Step, secrets bool) (ActResult, error) {
 	t, err := s.tab(tabID)
 	if err != nil {
 		return ActResult{FailedAt: 0}, err
@@ -61,7 +63,7 @@ func (s *Session) Act(ctx context.Context, tabID string, steps []Step) (ActResul
 	}()
 	var stepErr error
 	for i, step := range steps {
-		note, err := s.runStep(ctx, t, step)
+		note, err := s.runStep(ctx, t, step, secrets)
 		if err != nil {
 			res.FailedAt, stepErr = i, err
 			break
@@ -87,7 +89,7 @@ func (s *Session) Act(ctx context.Context, tabID string, steps []Step) (ActResul
 	return res, stepErr
 }
 
-func (s *Session) runStep(ctx context.Context, t *tab, step Step) (string, error) {
+func (s *Session) runStep(ctx context.Context, t *tab, step Step, secrets bool) (string, error) {
 	action := strings.ToLower(strings.TrimSpace(step.Action))
 	if d := t.currentDialog(); d != nil && action != "dialog" {
 		return "", dialogFailure(d)
@@ -118,19 +120,7 @@ func (s *Session) runStep(ctx context.Context, t *tab, step Step) (string, error
 		}
 		return "hover " + target(step), nil
 	case "type", "fill":
-		if step.Ref != "" {
-			if err := s.focus(ctx, t, step.Ref, action == "fill"); err != nil {
-				return "", err
-			}
-		}
-		if step.Text == "" && action == "fill" {
-			if err := t.press(ctx, "Backspace"); err != nil {
-				return "", err
-			}
-		} else if err := t.call(ctx, "Input.insertText", map[string]any{"text": step.Text}, nil); err != nil {
-			return "", engineFailure(err)
-		}
-		return fmt.Sprintf("%s %d characters into %s", action, len([]rune(step.Text)), target(step)), nil
+		return s.enterText(ctx, t, step, action == "fill", secrets)
 	case "press":
 		if err := t.press(ctx, step.Key); err != nil {
 			return "", err
@@ -164,6 +154,27 @@ func (s *Session) runStep(ctx context.Context, t *tab, step Step) (string, error
 		return t.back(ctx)
 	}
 	return "", fail(CodeBadStep, "unknown action %q", step.Action)
+}
+
+// enterText types step.Text into its ref, or where focus is; fill replaces the
+// field's value instead of inserting at the cursor.
+func (s *Session) enterText(ctx context.Context, t *tab, step Step, fill, secrets bool) (string, error) {
+	if !secrets && s.holdsSecret(ctx, t, step.Ref) {
+		return "", &Failure{Code: CodeUnconfirmedSecret, Ref: step.Ref, Detail: "this step types into a field that holds a secret (a password, a one-time code or card details), which was not confirmed for this call; send it again in a browser_act of its own that names the field by ref"}
+	}
+	if step.Ref != "" {
+		if err := s.focus(ctx, t, step.Ref, fill); err != nil {
+			return "", err
+		}
+	}
+	if step.Text == "" && fill {
+		if err := t.press(ctx, "Backspace"); err != nil {
+			return "", err
+		}
+	} else if err := t.call(ctx, "Input.insertText", map[string]any{"text": step.Text}, nil); err != nil {
+		return "", engineFailure(err)
+	}
+	return fmt.Sprintf("%s %d characters into %s", step.Action, len([]rune(step.Text)), target(step)), nil
 }
 
 func target(step Step) string {

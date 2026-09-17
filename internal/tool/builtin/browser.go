@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"reasonix/internal/browser"
+	"reasonix/internal/permission"
 	"reasonix/internal/tool"
 )
 
@@ -240,12 +241,24 @@ func (browserAct) Schema() json.RawMessage {
 	return json.RawMessage(`{"type":"object","properties":{"tab":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","double_click","hover","fill","type","press","select","scroll","wait","wait_for","dialog","back"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"values":{"type":"array","items":{"type":"string"}},"x":{"type":"number"},"y":{"type":"number"},"delta_y":{"type":"number"},"ms":{"type":"integer"},"accept":{"type":"boolean"}},"required":["action"]}}},"required":["steps"]}`)
 }
 
-// PermissionArgs names the site the steps will operate.
-func (b browserAct) PermissionArgs(_ context.Context, args json.RawMessage) json.RawMessage {
+// PermissionArgs names the site the steps will operate, as a credential
+// subject when they would type a secret into it.
+func (b browserAct) PermissionArgs(ctx context.Context, args json.RawMessage) json.RawMessage {
 	if b.session == nil {
 		return withOrigin(args, "")
 	}
-	return withOrigin(args, b.session.Origin(tabArg(args)))
+	var p struct {
+		Tab   string         `json:"tab"`
+		Steps []browser.Step `json:"steps"`
+	}
+	_ = json.Unmarshal(args, &p)
+	origin := b.session.Origin(p.Tab)
+	secret := origin != "" && b.session.CredentialEntry(ctx, p.Tab, p.Steps)
+	b.session.NoteSecretCheck(args, secret)
+	if secret {
+		origin = permission.BrowserCredentialPrefix + origin
+	}
+	return withOrigin(args, origin)
 }
 
 func (browserAct) ReadOnly() bool                                   { return false }
@@ -265,7 +278,7 @@ func (b browserAct) Execute(ctx context.Context, args json.RawMessage) (string, 
 	if len(p.Steps) == 0 {
 		return "", &browser.Failure{Code: browser.CodeBadStep, Detail: "steps is empty"}
 	}
-	res, stepErr := b.session.Act(ctx, p.Tab, p.Steps)
+	res, stepErr := b.session.Act(ctx, p.Tab, p.Steps, b.session.SecretsConfirmed(args))
 	var out strings.Builder
 	fmt.Fprintf(&out, "Completed %d of %d step(s).\n", res.Done, len(p.Steps))
 	for i, note := range res.Notes {

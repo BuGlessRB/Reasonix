@@ -109,7 +109,7 @@ func TestLiveSnapshotAndAct(t *testing.T) {
 	plan := findRef(t, snap, `combobox "Plan"`)
 	submit := findRef(t, snap, `button "Submit"`)
 
-	res, err := s.Act(ctx, "", []Step{
+	res, err := actPlain(ctx, s, "", []Step{
 		{Action: "fill", Ref: email, Text: "李雷@example.com"},
 		{Action: "select", Ref: plan, Values: []string{"Pro"}},
 		{Action: "click", Ref: submit},
@@ -123,27 +123,27 @@ func TestLiveSnapshotAndAct(t *testing.T) {
 	}
 
 	hidden := findRef(t, snap, `button "Hidden"`)
-	_, err = s.Act(ctx, "", []Step{{Action: "click", Ref: hidden}})
+	_, err = actPlain(ctx, s, "", []Step{{Action: "click", Ref: hidden}})
 	if CodeOf(err) != CodeCovered || !strings.Contains(err.Error(), "veil") {
 		t.Fatalf("clicking under a veil = %v, want %s naming the veil", err, CodeCovered)
 	}
 
 	ask := findRef(t, snap, `button "Ask"`)
-	res, err = s.Act(ctx, "", []Step{{Action: "click", Ref: ask}})
+	res, err = actPlain(ctx, s, "", []Step{{Action: "click", Ref: ask}})
 	if err != nil || res.Dialog == nil || res.Dialog.Type != "confirm" {
 		t.Fatalf("confirm dialog: err=%v dialog=%+v", err, res.Dialog)
 	}
-	_, err = s.Act(ctx, "", []Step{{Action: "click", Ref: submit}})
+	_, err = actPlain(ctx, s, "", []Step{{Action: "click", Ref: submit}})
 	if CodeOf(err) != CodeDialogOpen {
 		t.Fatalf("acting under an open dialog = %v, want %s", err, CodeDialogOpen)
 	}
 	no := false
-	if _, err = s.Act(ctx, "", []Step{{Action: "dialog", Accept: &no}, {Action: "wait_for", Text: "no"}}); err != nil {
+	if _, err = actPlain(ctx, s, "", []Step{{Action: "dialog", Accept: &no}, {Action: "wait_for", Text: "no"}}); err != nil {
 		t.Fatalf("dismiss dialog: %v", err)
 	}
 
 	pop := findRef(t, snap, `button "Pop"`)
-	res, err = s.Act(ctx, "", []Step{{Action: "click", Ref: pop}, {Action: "wait", Ms: 500}})
+	res, err = actPlain(ctx, s, "", []Step{{Action: "click", Ref: pop}, {Action: "wait", Ms: 500}})
 	if err != nil || len(res.Opened) != 1 {
 		t.Fatalf("popup: err=%v opened=%v", err, res.Opened)
 	}
@@ -152,15 +152,15 @@ func TestLiveSnapshotAndAct(t *testing.T) {
 	}
 
 	next := findRef(t, snap, `link "Next page"`)
-	res, err = s.Act(ctx, "t1", []Step{{Action: "click", Ref: next}})
+	res, err = actPlain(ctx, s, "t1", []Step{{Action: "click", Ref: next}})
 	if err != nil || !strings.HasSuffix(res.Tab.URL, "/next") || res.Tab.Title != "Next" {
 		t.Fatalf("link: err=%v tab=%+v", err, res.Tab)
 	}
-	_, err = s.Act(ctx, "t1", []Step{{Action: "click", Ref: submit}})
+	_, err = actPlain(ctx, s, "t1", []Step{{Action: "click", Ref: submit}})
 	if CodeOf(err) != CodeStaleRef {
 		t.Fatalf("a ref from the previous page = %v, want %s", err, CodeStaleRef)
 	}
-	res, err = s.Act(ctx, "t1", []Step{{Action: "back"}})
+	res, err = actPlain(ctx, s, "t1", []Step{{Action: "back"}})
 	if err != nil || strings.HasSuffix(res.Tab.URL, "/next") {
 		t.Fatalf("back: err=%v tab=%+v", err, res.Tab)
 	}
@@ -181,7 +181,7 @@ func TestLiveScreenshotCoordinatesLandOnTheElement(t *testing.T) {
 	}
 	scale := s.activeTab().screenshotScale()
 	x, y := 640/scale, 430/scale
-	res, err := s.Act(ctx, "", []Step{{Action: "click", X: &x, Y: &y}})
+	res, err := actPlain(ctx, s, "", []Step{{Action: "click", X: &x, Y: &y}})
 	if err != nil || res.Tab.Title != "hit" {
 		t.Fatalf("coordinate click: err=%v title=%q scale=%v", err, res.Tab.Title, scale)
 	}
@@ -244,7 +244,7 @@ func TestLiveDownloadsAreRefusedAndReported(t *testing.T) {
 		t.Fatalf("Snapshot: %v", err)
 	}
 	link := findRef(t, snap, `link "Get report"`)
-	res, err := s.Act(ctx, "", []Step{{Action: "click", Ref: link}, {Action: "wait", Ms: 800}})
+	res, err := actPlain(ctx, s, "", []Step{{Action: "click", Ref: link}, {Action: "wait", Ms: 800}})
 	if err != nil {
 		t.Fatalf("Act: %v", err)
 	}
@@ -254,4 +254,52 @@ func TestLiveDownloadsAreRefusedAndReported(t *testing.T) {
 		}
 	}
 	t.Fatalf("the refused download was not reported: %+v", res.Logs)
+}
+
+func actPlain(ctx context.Context, s *Session, tab string, steps []Step) (ActResult, error) {
+	return s.Act(ctx, tab, steps, false)
+}
+
+func TestLiveSecretsNeedConfirmation(t *testing.T) {
+	s := liveSession(t, true)
+	srv := liveServer(t, map[string]string{"/": `<title>Login</title>
+<label>Email <input type="email" autocomplete="username"></label>
+<label>Password <input type="password" autocomplete="current-password"></label>
+<label>Card <input autocomplete="cc-number"></label>
+<button>Sign in</button>`})
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if _, err := s.Open(ctx, srv.URL+"/", "", false); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	snap, err := s.Snapshot(ctx, "", "")
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	email, password := findRef(t, snap, `textbox "Email"`), findRef(t, snap, `textbox "Password"`)
+	card := findRef(t, snap, `textbox "Card"`)
+	for _, tc := range []struct {
+		name  string
+		steps []Step
+		want  bool
+	}{
+		{"email", []Step{{Action: "fill", Ref: email, Text: "a@b.c"}}, false},
+		{"password", []Step{{Action: "fill", Ref: email, Text: "a@b.c"}, {Action: "fill", Ref: password, Text: "x"}}, true},
+		{"card", []Step{{Action: "type", Ref: card, Text: "4242"}}, true},
+		{"typed after a click", []Step{{Action: "click", Ref: password}, {Action: "type", Text: "x"}}, true},
+		{"typed where Tab left focus", []Step{{Action: "fill", Ref: email, Text: "a"}, {Action: "press", Key: "Tab"}, {Action: "type", Text: "x"}}, true},
+		{"typed after clicking the email", []Step{{Action: "click", Ref: email}, {Action: "type", Text: "x"}}, false},
+	} {
+		if got := s.CredentialEntry(ctx, "", tc.steps); got != tc.want {
+			t.Errorf("%s: CredentialEntry = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+
+	_, err = s.Act(ctx, "", []Step{{Action: "fill", Ref: email, Text: "a@b.c"}, {Action: "press", Key: "Tab"}, {Action: "type", Text: "hunter2"}}, false)
+	if CodeOf(err) != CodeUnconfirmedSecret {
+		t.Fatalf("typing into the password field without confirmation = %v, want %s", err, CodeUnconfirmedSecret)
+	}
+	if _, err := s.Act(ctx, "", []Step{{Action: "fill", Ref: password, Text: "hunter2"}}, true); err != nil {
+		t.Fatalf("confirmed secret entry: %v", err)
+	}
 }

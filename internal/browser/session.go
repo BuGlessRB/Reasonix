@@ -35,6 +35,9 @@ type Session struct {
 	refs     refTable
 	closed   bool
 	openedBy map[string]string // popup target id → opener tab id
+	// secretChecks maps a browser_act's arguments to whether its permission
+	// check treated it as entering a secret.
+	secretChecks map[string]bool
 }
 
 func NewSession(cfg Config) *Session {

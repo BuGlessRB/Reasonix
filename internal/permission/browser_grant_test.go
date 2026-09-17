@@ -55,3 +55,37 @@ func TestBrowserDecisionsFollowTheModeAndTheOrigin(t *testing.T) {
 		t.Fatal("a browser origin must not force a person in auto")
 	}
 }
+
+func TestBrowserCredentialAnswersOnlyToItsExactSubject(t *testing.T) {
+	const site = "https://bank.example"
+	credential := BrowserCredentialPrefix + site
+	args, _ := json.Marshal(map[string]any{"steps": []any{}, "origin": credential})
+	if got := Subjects(args); len(got) != 2 || got[0] != credential || got[1] != site {
+		t.Fatalf("subjects = %v, want the credential then its site", got)
+	}
+	cases := []struct {
+		name   string
+		policy Policy
+		want   Decision
+	}{
+		{"auto", New("allow", nil, nil, nil), Ask},
+		{"ask", New("ask", nil, nil, nil), Ask},
+		{"a site rule", New("allow", []string{"Browser(https://bank.example)"}, nil, nil), Ask},
+		{"a glob", New("allow", []string{"Browser(*)", "browser_act"}, nil, nil), Ask},
+		{"the exact subject", New("allow", []string{"Browser=" + credential}, nil, nil), Allow},
+		{"a denied site", New("allow", []string{"Browser=" + credential}, nil, []string{"Browser(https://*.example)"}), Deny},
+		{"deny mode", New("deny", nil, nil, nil), Deny},
+	}
+	for _, tc := range cases {
+		if got := tc.policy.Decide("browser_act", false, args); got != tc.want {
+			t.Errorf("%s: decision = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	if SessionGrantMatches(SessionGrantRuleForScope("browser_open", site), "browser_act", credential) {
+		t.Fatal("a grant for the site answered for typing a secret into it")
+	}
+	grant := SessionGrantRuleForScope("browser_act", credential)
+	if !SessionGrantMatches(grant, "browser_act", credential) || SessionGrantMatches(grant, "browser_act", BrowserCredentialPrefix+"https://other.example") {
+		t.Fatalf("credential grant %q does not cover exactly its own subject", grant)
+	}
+}

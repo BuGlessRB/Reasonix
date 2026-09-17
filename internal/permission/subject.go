@@ -43,6 +43,9 @@ func Subjects(args json.RawMessage) []string {
 		}
 		return out
 	}
+	if origin := stringArg(m, "origin"); BrowserSubjectRequiresExplicitApproval(origin) {
+		return browserSubjects(origin)
+	}
 	for _, k := range subjectKeys {
 		if s := stringArg(m, k); s != "" {
 			return []string{s}
