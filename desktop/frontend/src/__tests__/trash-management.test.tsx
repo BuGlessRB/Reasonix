@@ -60,7 +60,7 @@ assert.ok(document.querySelector('[role="dialog"]')?.textContent?.includes("thes
 assert.equal(document.activeElement?.textContent, "Cancel");
 await act(async () => button("Permanently delete").click());
 assert.deepEqual(calls, ["purge:a", "purge:b", "purge:c"]);
-assert.ok(document.body.textContent?.includes("The conversation changed"));
+assert.ok(document.body.textContent?.includes("changed state. Refresh and try again"));
 assert.equal(document.querySelectorAll('.archived-sessions__row').length, 2);
 await act(async () => button("Retry failed items").click());
 assert.deepEqual(calls, ["purge:a", "purge:b", "purge:c", "purge:b"]);
@@ -72,7 +72,7 @@ listFails = false;
 throwConflict = true;
 await act(async () => (document.querySelector('.archived-sessions__delete') as HTMLButtonElement).click());
 await act(async () => button("Permanently delete").click());
-assert.ok(document.body.textContent?.includes("The conversation changed"), "top-level conflict uses the refresh guidance");
+assert.ok(document.body.textContent?.includes("changed state. Refresh and try again"), "top-level conflict uses the refresh guidance");
 assert.equal(button("Retry").textContent?.trim(), "Retry", "terminal conflict is not eligible for request retry");
 await act(async () => root.render(render(false)));
 assert.equal(document.querySelector('[role="dialog"]'), null);

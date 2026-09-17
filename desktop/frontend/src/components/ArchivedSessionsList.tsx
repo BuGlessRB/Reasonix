@@ -28,8 +28,8 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
   const [lastKind, setLastKind] = useState<"restore" | "purge">("purge");
   const registryGeneration = useRef(0);
   const surfaceGeneration = useRef(0);
-  const pendingRequest = useRef<import("../generated/desktopContract.generated").SessionLifecycleRequest | undefined>(undefined);
-  const selectedKey = useRef<string | undefined>(undefined);
+  const pendingRequest = useRef<import("../generated/desktopContract.generated").SessionLifecycleRequest | null>(null);
+  const selectedKey = useRef("");
   const generation = useRef(0), previewGeneration = useRef(0), mutating = useRef(false);
   const { confirm, dialog, dismiss } = useConfirmDialog();
   const reload = useCallback(async () => {
@@ -53,10 +53,10 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
       registryGeneration.current = snapshotGeneration ?? 0;
       if (seq !== generation.current) return;
       next.sort((a, b) => b.updatedAt - a.updatedAt || a.key.localeCompare(b.key));
-      const selectedRow = selectedKey.current ? next.find(row => row.key === selectedKey.current) : undefined;
+      const selectedRow = next.find(row => row.key === selectedKey.current);
       if (selectedKey.current && !selectedRow?.canPreview) {
-        selectedKey.current = undefined; ++previewGeneration.current;
-        setSelected(undefined); setPreview([]); setPreviewCursor(""); setPreviewError("");
+        selectedKey.current = ""; ++previewGeneration.current;
+        setSelected(undefined); setPreview([]);
       } else if (selectedRow) setSelected(selectedRow);
       setRows(next); setError("");
     } catch (err) {
@@ -82,11 +82,11 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
     } catch (err) { if (seq === previewGeneration.current) setPreviewError(String(err)); }
     finally { if (seq === previewGeneration.current) setPreviewLoading(false); }
   };
-  const closePreview = () => { selectedKey.current = undefined; ++previewGeneration.current; setSelected(undefined); setPreview([]); };
+  const closePreview = () => { selectedKey.current = ""; ++previewGeneration.current; setSelected(undefined); setPreview([]); };
   const mutate = async (targets: TrashRow[], kind: "restore" | "purge", retry = false) => {
     if (mutating.current) return;
     const surface = surfaceGeneration.current;
-    if (!retry) pendingRequest.current = undefined;
+    if (!retry) pendingRequest.current = null;
     mutating.current = true; setBusy(true); ++generation.current; setError(""); setNotice(""); setLastKind(kind); setFailedRows([]);
     let succeeded = 0;
     const retryableFailures: TrashRow[] = [];
@@ -110,11 +110,11 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
         setRows(current => current.filter(other => other.key !== row.key));
         if (selected?.key === row.key) closePreview();
       }
-      if (!retryableFailures.length) pendingRequest.current = undefined;
+      if (!retryableFailures.length) pendingRequest.current = null;
       setFailedRows(retryableFailures);
       setNotice(t(kind === "restore" ? "history.restoreComplete" : "history.purgeComplete", { n: succeeded }));
       try { await reload(); } catch { setNotice(t("history.operationRefreshFailed")); }
-      if (conflicts) setError(t("history.stateConflict"));
+      if (conflicts) setError(t("projectTree.sessionError.targetChanged"));
       else if (failed) setError(t("history.trashPartialFailure", { n: failed }));
       if (surface === surfaceGeneration.current && kind === "restore" && succeeded === 1 && targets.length === 1 && targets[0].ref) {
         try { await onOpenSession(targets[0].ref); } catch { setNotice(t("history.restoredRefreshFailed")); }
@@ -122,10 +122,9 @@ export function ArchivedSessionsList({ active, onOpenSession }: {
     } catch (err) {
       const message = String(err);
       if (message.includes("workspace mutation conflicts with persisted state")) {
-        pendingRequest.current = undefined;
-        setFailedRows([]);
+        pendingRequest.current = null;
         await reload().catch(() => {});
-        setError(t("history.stateConflict"));
+        setError(t("projectTree.sessionError.targetChanged"));
       } else {
         setFailedRows(targets);
         setError(message);
