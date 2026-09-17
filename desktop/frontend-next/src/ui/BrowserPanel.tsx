@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "re
 import { t } from "../i18n";
 import type { AgentPort, BrowserTab } from "../port/port";
 import { host, type BrowserControl, type ViewRect } from "../port/host";
+import { SWAP_MARK } from "./swap";
 
 /** The agent's open pages, read back whenever the kernel says they moved. A
  *  shell that cannot draw them answers none, so nothing offers a view of them. */
@@ -71,6 +72,9 @@ export function BrowserPanel({ tabs, shown }: { tabs: BrowserTab[]; shown: boole
     resize.observe(el);
     const overlays = new MutationObserver(schedule);
     overlays.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "class", "style", "open", "data-prefs"] });
+    // A view transition covers the whole page while it runs, and its end changes
+    // nothing in the body: only the mark on the root says it is over.
+    overlays.observe(document.documentElement, { attributes: true, attributeFilter: [SWAP_MARK] });
     addEventListener("resize", schedule);
     return () => {
       if (frame) clearTimeout(frame);

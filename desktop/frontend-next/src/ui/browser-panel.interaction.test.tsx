@@ -71,6 +71,20 @@ describe("which page the shell draws, and where", () => {
     expect(bridge.hideBrowserView).toHaveBeenCalled();
   });
 
+  it("draws the page once a view transition that covered its rectangle has finished", async () => {
+    document.documentElement.setAttribute("data-vt", "pane");
+    over = document.documentElement;
+    await panel({ tabs, shown: true });
+    expect(bridge.showBrowserView).not.toHaveBeenCalled();
+    over = null;
+    await act(async () => {
+      document.documentElement.removeAttribute("data-vt");
+      await Promise.resolve();
+      vi.advanceTimersByTime(20);
+    });
+    expect(bridge.showBrowserView).toHaveBeenLastCalledWith("view-a", { x: 40, y: 60, width: 800, height: 500 });
+  });
+
   it("draws nothing for a pane that is not on screen", async () => {
     await panel({ tabs, shown: false });
     expect(bridge.showBrowserView).not.toHaveBeenCalled();

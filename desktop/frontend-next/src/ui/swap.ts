@@ -7,6 +7,9 @@ import { flushSync } from "react-dom";
 //
 // flushSync is required — the callback has to finish mutating the DOM before it
 // returns, or the transition captures the old frame.
+/** The attribute on the root naming the swap in progress; removed when it ends. */
+export const SWAP_MARK = "data-vt";
+
 export function swapping(apply: () => void, kind: string) {
   if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) {
     apply();
@@ -17,8 +20,8 @@ export function swapping(apply: () => void, kind: string) {
   // settings would slide the pane too. An attribute predates view-transition
   // types by a long way, and this only needs that much of it.
   const root = document.documentElement;
-  root.dataset.vt = kind;
+  root.setAttribute(SWAP_MARK, kind);
   document.startViewTransition(() => flushSync(apply)).finished.finally(() => {
-    if (root.dataset.vt === kind) delete root.dataset.vt;
+    if (root.getAttribute(SWAP_MARK) === kind) root.removeAttribute(SWAP_MARK);
   });
 }
