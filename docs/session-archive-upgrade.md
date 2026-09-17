@@ -191,3 +191,29 @@ Windows/Linux runs must be reported separately from cross-compilation.
 发布门禁包括归档→重启→恢复→侧栏可见→正文可读→再次重启、失败重放、身份与任务
 隔离、根模块与 Desktop 独立测试、竞态检查、前端测试/类型检查/构建，以及真实
 Electron 生产包握手与干净退出。Windows/Linux 原生运行与交叉编译必须分别报告。
+
+## Purge admission and interrupted staging / 删除准入与暂存中断
+
+Purge command admission accepts an older global snapshot while rejecting future
+generations. Each target's generation is checked in the tombstone transaction;
+unrelated session changes do not veto deletion. Archive, restore and historical
+import admission remain unchanged. Request receipts retain the original snapshot.
+
+Normal deletion resumes a valid legacy `prepared` operation by carrying its observed
+identity and the request generation into the registry lock. Removed or replaced
+operations conflict; recovery never creates replacement deletion intent. A crash
+after staging-receipt creation but before rename resumes using the validated receipt,
+including when the filesystem wraps its already-exists error.
+
+删除命令允许较旧的全局快照，拒绝未来版本；最终墓碑事务校验目标会话版本，其他会话
+变化不会否决删除。归档、恢复及历史导入的准入保持原规则，凭据保留请求原始版本。
+普通删除携带旧准备记录的观察身份和原请求版本，在注册表锁内重新校验并继续；记录
+消失或被替换时冲突，不创建替代删除意图。暂存凭据创建后、重命名前崩溃时，重启
+复用已校验凭据，正确识别被包装的文件已存在错误。
+
+Deterministic child-process tests cover filesystem and registry crash boundaries.
+A frozen previous-v2 implementation checks old reads and unrelated-field writeback.
+Format compatibility does not fix old writers' races; upgrade all shared-directory writers.
+
+确定性子进程测试覆盖文件及注册表中断边界；固定上一版 v2 实现验证旧读取与无关字段
+写回。格式兼容不表示旧写入器的竞态已修复，共享目录进程应统一升级。

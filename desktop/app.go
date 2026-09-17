@@ -265,6 +265,8 @@ type App struct {
 	// runtimeMutationBeforeLockHook is test-only. Set it before starting concurrent
 	// calls and never mutate it afterward.
 	runtimeMutationBeforeLockHook func(string)
+	// lifecycleCheckpointHook is instance-local and set only by crash tests.
+	lifecycleCheckpointHook func(string)
 	// modelSwitchTimingHook is test-only. Production diagnostics use the same
 	// sanitized timing record through debug logging.
 	modelSwitchTimingHook func(modelSwitchTiming)

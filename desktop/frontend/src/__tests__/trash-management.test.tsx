@@ -16,6 +16,7 @@ let latePreview!: () => void;
 let listFails = false;
 let throwConflict = false;
 const calls: string[] = [], requests: string[] = [];
+const fullRequests: string[] = [];
 const terminal = new Set<string>();
 installDesktopHostStub({
   ListTrashEntries: async () => { if (listFails) throw new Error("read failure"); return { items: rows, generation: 7 }; },
@@ -23,6 +24,7 @@ installDesktopHostStub({
   ReadSessionHistory: (ref: {sessionId:string}) => ref.sessionId === "a" ? new Promise(resolve => { latePreview = () => resolve({ messages: [{ messageId: "old", role: "user", content: "stale preview" }] }); }) : Promise.resolve({ messages: [{ messageId: "b", role: "user", content: "B history" }] }),
   ApplySessionLifecycle: async (request: { operationId:string; action:string; targets:{ref:{sessionId:string}}[] }) => {
     requests.push(request.operationId);
+    fullRequests.push(JSON.stringify(request));
     if (throwConflict) {
       throwConflict = false;
       throw new Error("workspace mutation conflicts with persisted state");
@@ -65,6 +67,7 @@ assert.equal(document.querySelectorAll('.archived-sessions__row').length, 2);
 await act(async () => button("Retry failed items").click());
 assert.deepEqual(calls, ["purge:a", "purge:b", "purge:c", "purge:b"]);
 assert.equal(requests[0], requests[1], "retry keeps the durable operation ID");
+assert.equal(fullRequests[0], fullRequests[1], "mixed retry keeps every original target and the original version");
 await act(async () => button("Restore").click());
 assert.ok(document.body.textContent?.includes("Operation completed. Refresh failed"));
 assert.equal(document.querySelectorAll('.archived-sessions__row').length, 1);

@@ -64,7 +64,7 @@ func (a *App) ApplySessionLifecycle(req SessionLifecycleRequest) (SessionLifecyc
 	}
 	key := "command-" + req.OperationID
 	if old, ok := state.PendingOperations[key]; ok {
-		if old.RequestFingerprint != fingerprint {
+		if old.Kind != "command" || old.RequestFingerprint != fingerprint {
 			return out, workspacestate.ErrMutationConflict
 		}
 		if len(old.Result) > 0 {
@@ -76,8 +76,14 @@ func (a *App) ApplySessionLifecycle(req SessionLifecycleRequest) (SessionLifecyc
 		if old.Phase == "committed" {
 			return out, nil
 		}
-	} else if err := store.BeginCommand(ctx, key, fingerprint, body, req.ExpectedGeneration); err != nil {
-		return out, err
+	} else {
+		begin := store.BeginCommand
+		if req.Action == "purge" {
+			begin = store.BeginPurgeCommand
+		}
+		if err := begin(ctx, key, fingerprint, body, req.ExpectedGeneration); err != nil {
+			return out, err
+		}
 	}
 	previous := out.Items
 	out.Items = []SessionLifecycleItem{}
@@ -110,9 +116,11 @@ func (a *App) ApplySessionLifecycle(req SessionLifecycleRequest) (SessionLifecyc
 	if err != nil {
 		return out, err
 	}
+	a.lifecycleCheckpoint("before-command-result")
 	if err := store.SaveCommandResult(ctx, key, body, final); err != nil {
 		return out, err
 	}
+	a.lifecycleCheckpoint("after-command-result")
 	state, err = store.Load(ctx)
 	if err != nil {
 		return out, err

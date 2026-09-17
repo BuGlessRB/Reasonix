@@ -143,16 +143,26 @@ func TestWorkspaceLifecycleProcessHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	store := NewStore(path)
+	var observed Operation
+	if action == "resume" {
+		state, loadErr := store.Load(t.Context())
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		observed = state.PendingOperations["purge-victim"]
+	}
 	fmt.Println("ready")
 	if _, err := bufio.NewReader(os.Stdin).ReadString('\n'); err != nil {
 		t.Fatal(err)
 	}
-	store := NewStore(path)
 	switch action {
 	case "restore":
 		err = store.RestoreSession(t.Context(), "victim")
 	case "purge":
 		err = store.BeginPurge(t.Context(), "victim", expected)
+	case "resume":
+		err = store.ResumePurge(t.Context(), "victim", observed)
 	default:
 		err = fmt.Errorf("unknown action %q", action)
 	}
@@ -163,5 +173,39 @@ func TestWorkspaceLifecycleProcessHelper(t *testing.T) {
 		fmt.Println("conflict")
 	default:
 		fmt.Printf("error:%v\n", err)
+	}
+}
+
+func TestWorkspaceOldPurgeProcessCannotReplaceNewOperation(t *testing.T) {
+	store, expected := seedArchivedProcessState(t)
+	if err := store.mutate(t.Context(), func(s *State) error {
+		s.PendingOperations["purge-victim"] = Operation{ID: "purge-victim", Kind: "purge", Phase: "prepared", Lifecycle: Deleted, SessionIDs: []string{"victim"}, ExpectedGeneration: expected}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	old := startLifecycleProcess(t, store.Path(), "resume", expected)
+	if err := store.RestoreSession(t.Context(), "victim"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ArchiveSession(t.Context(), "victim"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginPurge(t.Context(), "victim", state.Generation); err != nil {
+		t.Fatal(err)
+	}
+	if got := old.run(t); got != "conflict" {
+		t.Fatalf("old replay=%s", got)
+	}
+	state, err = store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ClassifyPurge(state, "victim") != PurgeTombstoned {
+		t.Fatal("old process changed new deletion")
 	}
 }

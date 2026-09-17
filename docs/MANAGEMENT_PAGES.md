@@ -34,6 +34,14 @@ granting the old request a newer generation. Mixed batches retry only targets
 whose failure is retryable; successful and final-failure targets keep their
 durable results.
 
+Permanent-delete requests capture their full target list, operation ID and observed
+generation before opening the confirmation dialog. Background refresh may update
+the list, but never the pending confirmation. Cancelling or leaving the page sends
+nothing. Unknown-result retries retain the complete original request, including
+completed and terminal-conflict children; list refresh cannot remove the retry control.
+A valid legacy purge preparation can be resumed from the normal delete action after
+a startup writer conflict clears. No extra confirmation is introduced.
+
 ## Automation drafts
 
 `useAutomationDraftStore` keeps per-ID baselines, editable values, frequency choice, detail tab, conflicts and operation versions in memory for the application run. Switching tasks, filters, pages, detail visibility and linked conversations preserves drafts. New unsaved tasks remain discoverable; changed existing tasks show an Unsaved badge. Reloading the webview or exiting the process clears drafts; minimize/tray hiding does not.

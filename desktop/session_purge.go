@@ -105,36 +105,44 @@ func (a *App) resolveCanonicalPurgeTarget(ref session.SessionRef) (SessionTarget
 }
 
 func (a *App) purgeCanonicalSession(ctx context.Context, ref session.SessionRef, expected uint64) error {
-	return a.purgeCanonicalSessionWithPrepare(ctx, ref, false, func(store *workspacestate.Store) error {
-		return store.BeginPurge(ctx, ref.SessionID, expected)
-	})
+	return a.executeCanonicalPurge(ctx, ref, expected, nil)
 }
 
 func (a *App) resumeCanonicalPurge(ctx context.Context, ref session.SessionRef, observed workspacestate.Operation) error {
-	return a.purgeCanonicalSessionWithPrepare(ctx, ref, true, func(store *workspacestate.Store) error {
-		return store.ResumePurge(ctx, ref.SessionID, observed)
-	})
+	return a.executeCanonicalPurge(ctx, ref, observed.ExpectedGeneration, &observed)
 }
 
-func (a *App) purgeCanonicalSessionWithPrepare(ctx context.Context, ref session.SessionRef, existingOnly bool, prepare func(*workspacestate.Store) error) error {
+func (a *App) executeCanonicalPurge(ctx context.Context, ref session.SessionRef, expected uint64, observed *workspacestate.Operation) error {
 	store := a.workspaceRegistry()
 	state, err := store.Load(ctx)
 	if err != nil {
 		return err
 	}
+	existingOnly := observed != nil
+	if observed == nil {
+		if op, exists := state.PendingOperations["purge-"+ref.SessionID]; exists {
+			observed = &op
+		}
+	}
+	prepare := func() error {
+		if observed != nil {
+			return store.ResumePurgeForRequest(ctx, ref.SessionID, expected, *observed)
+		}
+		return store.BeginPurge(ctx, ref.SessionID, expected)
+	}
 	switch workspacestate.ClassifyPurge(state, ref.SessionID) {
 	case workspacestate.PurgeCommitted:
-		return nil
+		return prepare()
 	case workspacestate.PurgePreparedStale:
 		// A restore or later lifecycle mutation already superseded this legacy
 		// prepare. Clean only the observed registry record; do not touch the
 		// runtime or filesystem for an obsolete deletion intent.
-		return prepare(store)
+		return prepare()
 	case workspacestate.PurgeInvalid:
 		return workspacestate.ErrMutationConflict
 	case workspacestate.PurgeAbsent:
 		if existingOnly {
-			return prepare(store)
+			return prepare()
 		}
 		if state.SessionStates[ref.SessionID].Lifecycle != workspacestate.Archived {
 			return errors.New("only archived sessions can be permanently deleted")
@@ -145,14 +153,31 @@ func (a *App) purgeCanonicalSessionWithPrepare(ctx context.Context, ref session.
 	}
 	filesystem := session.NewFilesystemPersistence(a.desktopSessions.root)
 	if err := filesystem.PurgeWithTombstone(ctx, ref.SessionID, func() error {
-		return prepare(store)
+		a.lifecycleCheckpoint("before-tombstone")
+		if err := prepare(); err != nil {
+			return err
+		}
+		a.lifecycleCheckpoint("after-tombstone")
+		return nil
 	}); err != nil {
-		return err
+		return fmt.Errorf("purge cleanup pending: %w", err)
 	}
+	a.lifecycleCheckpoint("after-file-cleanup")
 	if err := store.AdvancePurge(ctx, ref.SessionID, "content_removed"); err != nil {
 		return err
 	}
-	return store.CompletePurge(ctx, ref.SessionID)
+	a.lifecycleCheckpoint("after-content-removed")
+	if err := store.CompletePurge(ctx, ref.SessionID); err != nil {
+		return err
+	}
+	a.lifecycleCheckpoint("after-purge-committed")
+	return nil
+}
+
+func (a *App) lifecycleCheckpoint(phase string) {
+	if a.lifecycleCheckpointHook != nil {
+		a.lifecycleCheckpointHook(phase)
+	}
 }
 
 // Client release may retain an idle runtime for fast navigation. Archive and
