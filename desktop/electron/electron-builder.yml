@@ -46,6 +46,7 @@ extraResources:
     filter:
       - reasonix-studio-host
       - reasonix-studio-host.exe
+      - reasonix-computer-helper
   - from: ../frontend-next/dist
     to: frontend-next/dist
 

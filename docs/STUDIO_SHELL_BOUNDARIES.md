@@ -83,7 +83,30 @@ no input once a navigation has replaced its renderer.
 `desktop/electron/test/browser_live.js` (`pnpm browser-live`) drives this through
 the real kernel with a scripted model.
 
-## 5. State taxonomy
+## 5. Other applications
+
+On macOS the agent can read and operate other applications, and the split holds
+here as well.
+
+- **The kernel** owns what the model sees and may reach: bundle ids, the
+  applications never operated, screenshot geometry, and who approved which
+  application.
+- **The helper** (`desktop/computer-helper`, Swift) carries operations out over
+  JSON lines on stdin and stdout, and decides nothing.
+- **The main process** only finds the helper beside the kernel and passes its
+  path with `-computer-helper`.
+
+- The host starts the helper, so macOS attributes Accessibility and Screen
+  Recording to Reasonix Studio.
+- A click is an accessibility action on the element under a point. The person's
+  pointer and the frontmost application stay as they were.
+- The helper draws its own cursor where the agent acts. Escape pressed while it
+  shows stops the run between steps.
+
+`internal/computer/live_test.go` (`REASONIX_LIVE_COMPUTER=<helper>`) drives a
+real application through the helper.
+
+## 6. State taxonomy
 
 Three kinds, carried three ways. Deciding which one a thing is comes before
 deciding its API.

@@ -5,106 +5,31 @@
 const os = require("node:os");
 const path = require("node:path");
 const fs = require("node:fs");
-const http = require("node:http");
 const { execFileSync } = require("node:child_process");
-const { app, BrowserWindow } = require("electron");
+const { app } = require("electron");
+const { checker, listen, scriptedModel, seedHome, settledWindow, until } = require("./livekit");
 
 const PAGE = `<!doctype html><title>Greeter</title>
 <label>Name <input></label>
 <button onclick="document.querySelector('p').textContent='Hello, '+document.querySelector('input').value">Greet</button>
 <p></p>`;
 
-const failures = [];
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-function check(name, condition, detail) {
-  process.stdout.write(condition ? `  ok   ${name}\n` : `  FAIL ${name}${detail === undefined ? "" : ` — ${JSON.stringify(detail)}`}\n`);
-  if (!condition) failures.push(name);
-}
+const { check, failures } = checker();
 
-function listen(handler) {
-  return new Promise((resolve) => {
-    const server = http.createServer(handler);
-    server.listen(0, "127.0.0.1", () => resolve({ server, url: `http://127.0.0.1:${server.address().port}` }));
+// Each round's call is built from what the previous tool result showed.
+function browsingModel(pageURL) {
+  return scriptedModel((tools) => {
+    const last = tools.length ? tools[tools.length - 1] : "";
+    const ref = (role, name) => (last.match(new RegExp(`- ${role} "${name}" \\[(e\\d+)\\]`)) || [])[1];
+    if (tools.length === 0) return { name: "browser_open", arguments: { url: pageURL } };
+    if (tools.length === 1) {
+      return { name: "browser_act", arguments: { steps: [
+        { action: "fill", ref: ref("textbox", "Name"), text: "李雷" },
+        { action: "click", ref: ref("button", "Greet") },
+      ] } };
+    }
+    return null;
   });
-}
-
-// The scripted model: each request answers with the next tool call, built from
-// what the previous tool result showed it, then with a closing reply.
-const requests = [];
-function modelHandler(pageURL) {
-  return (req, res) => {
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
-      const parsed = JSON.parse(body || "{}");
-      requests.push(parsed);
-      const tools = (parsed.messages || []).filter((m) => m.role === "tool");
-      const last = tools.length ? String(tools[tools.length - 1].content || "") : "";
-      const ref = (role, name) => (last.match(new RegExp(`- ${role} "${name}" \\[(e\\d+)\\]`)) || [])[1];
-      let call = null;
-      if (tools.length === 0) call = { name: "browser_open", arguments: { url: pageURL } };
-      else if (tools.length === 1) {
-        call = { name: "browser_act", arguments: { steps: [
-          { action: "fill", ref: ref("textbox", "Name"), text: "李雷" },
-          { action: "click", ref: ref("button", "Greet") },
-        ] } };
-      }
-      res.writeHead(200, { "Content-Type": "text/event-stream" });
-      const chunk = (delta, finish) =>
-        res.write(`data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`);
-      if (call) {
-        chunk({ role: "assistant", tool_calls: [{ index: 0, id: `call-${tools.length}`, type: "function", function: { name: call.name, arguments: JSON.stringify(call.arguments) } }] }, null);
-        chunk({}, "tool_calls");
-      } else {
-        chunk({ role: "assistant", content: "done" }, null);
-        chunk({}, "stop");
-      }
-      res.write("data: [DONE]\n\n");
-      res.end();
-    });
-  };
-}
-
-function seedHome(home, modelURL, workspace) {
-  fs.mkdirSync(home, { recursive: true });
-  fs.writeFileSync(path.join(home, "config.toml"), [
-    'default_model = "fake/fake-model"',
-    "",
-    "[desktop]",
-    "welcomed = true",
-    'default_tool_approval_mode = "yolo"',
-    "",
-    "[[providers]]",
-    'name        = "fake"',
-    'kind        = "openai"',
-    `base_url    = "${modelURL}/v1"`,
-    'models      = ["fake-model"]',
-    'default     = "fake-model"',
-    'api_key_env = "FAKE_API_KEY"',
-    "",
-  ].join("\n"));
-  fs.writeFileSync(path.join(home, ".env"), "FAKE_API_KEY=fake\n");
-  process.chdir(workspace);
-}
-
-async function settledWindow() {
-  const deadline = Date.now() + 40000;
-  while (Date.now() < deadline) {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (win && !win.webContents.isLoading() && win.webContents.getURL()) return win;
-    await wait(200);
-  }
-  throw new Error("the shell never opened a loaded window");
-}
-
-async function until(what, fn, ms = 30000) {
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    const got = await fn();
-    if (got) return got;
-    await wait(200);
-  }
-  throw new Error(`timed out waiting for ${what}`);
 }
 
 async function main() {
@@ -112,7 +37,8 @@ async function main() {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(PAGE);
   });
-  const model = await listen(modelHandler(`${page.url}/`));
+  const { handler, requests } = browsingModel(`${page.url}/`);
+  const model = await listen(handler);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "rx-browser-live-"));
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "rx-browser-ws-"));
   process.env.REASONIX_HOME = home;

@@ -1,6 +1,7 @@
 "use strict";
 const { app, BrowserWindow, dialog, ipcMain, screen, session, shell } = require("electron");
 const fs = require("node:fs/promises");
+const { existsSync } = require("node:fs");
 const path = require("node:path");
 const { start } = require("./host");
 const { StudioHost } = require("./hostclient");
@@ -30,6 +31,7 @@ const where = {
   env: process.env,
 };
 const hostBinary = layout.hostBinary(where);
+const computerHelper = layout.computerHelper(where);
 const pageDir = layout.pageDir(where);
 
 let kernel = null;
@@ -49,6 +51,7 @@ async function boot() {
   // falls back to Electron's own, which named a Studio that never shipped and
   // ranked it ahead of every published release.
   const args = ["-page", pageDir];
+  if (computerHelper && existsSync(computerHelper)) args.push("-computer-helper", computerHelper);
   if (app.isPackaged) {
     args.push("-studio-version", app.getVersion());
     // The other half the kernel cannot work out: which file the application

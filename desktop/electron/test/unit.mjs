@@ -123,7 +123,7 @@ test("an unreachable kernel is an answer, not a crash", async () => {
   assert.equal(await dead.trayState(), null);
 });
 
-const { hostBinary, pageDir } = require("../src/layout.js");
+const { hostBinary, computerHelper, pageDir } = require("../src/layout.js");
 
 // Packaged, both live in resources/ beside app.asar. Reading them from inside
 // it is the failure this pins: a child process cannot be spawned out of an
@@ -139,6 +139,14 @@ test("the kernel and the page are found in both layouts", () => {
   for (const p of [hostBinary(packed), pageDir(packed)]) {
     assert.doesNotMatch(p, /app\.asar/, "resolved into the archive");
   }
+});
+
+test("the computer-use helper is found beside the kernel on macOS, and nowhere else", () => {
+  const mac = { packaged: true, resourcesPath: "/res", dirname: "/d/src", platform: "darwin" };
+  assert.equal(computerHelper(mac), path.join("/res", "bin", "reasonix-computer-helper"));
+  assert.equal(computerHelper({ ...mac, packaged: false, dirname: path.join("/repo", "electron", "src") }), path.join("/repo", "electron", "bin", "reasonix-computer-helper"));
+  assert.equal(computerHelper({ ...mac, platform: "win32" }), "");
+  assert.equal(computerHelper({ ...mac, platform: "linux", env: { REASONIX_COMPUTER_HELPER: "/custom/helper" } }), "/custom/helper");
 });
 
 test("Windows gets the suffix spawn needs, and an override wins over both", () => {
