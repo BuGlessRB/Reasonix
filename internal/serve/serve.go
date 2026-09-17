@@ -86,6 +86,9 @@ type Server struct {
 	// stance is the hub's Ask/Auto/YOLO posture, shared by every pane it drives.
 	// Nil for a server outside a hub, which speaks only for itself.
 	stance *approvalStance
+	// resolver is what every rebuild of this pane resolves models through, set
+	// by the hub. Nil leaves boot reading this machine's own config.
+	resolver provider.Resolver
 }
 
 // New builds a Server. bc must be what the controller's events reach; a host
@@ -859,6 +862,10 @@ func (s *Server) branches(w http.ResponseWriter, _ *http.Request) {
 
 // models lists configured chat models for the browser model picker.
 func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
+	if s.resolver != nil {
+		s.resolverModels(w)
+		return
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -922,36 +929,17 @@ func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
 			out = append(out, entry)
 		}
 	}
-	// ProviderCatalog is the controller-generation's authoritative merged view.
-	// Add descriptors not already represented by configured providers; this is
-	// where plugin/<plugin>/<provider>/<model> refs enter the Serve picker.
+	// ProviderCatalog is the controller-generation's authoritative merged view;
+	// its config-backed base was listed above, so only plugin refs enter here.
 	for _, d := range ctrl.ProviderCatalog() {
 		ref := strings.TrimSpace(d.Ref)
-		if ref == "" {
-			continue
-		}
-		if _, ok := seen[ref]; ok {
+		if _, ok := seen[ref]; ok || !isExtensionModelRef(ref) {
 			continue
 		}
 		seen[ref] = struct{}{}
-		parts := strings.Split(ref, "/")
-		if len(parts) < 4 || parts[0] != "plugin" {
-			// ProviderCatalog also contains the config-backed base. Configured
-			// base refs were handled above; do not resurrect unconfigured ones.
-			continue
+		if entry, ok := catalogModelEntry(d, current); ok {
+			out = append(out, entry)
 		}
-		providerName := strings.Join(parts[:3], "/")
-		model := strings.TrimSpace(d.Model)
-		if model == "" {
-			model = parts[len(parts)-1]
-		}
-		out = append(out, modelEntry{
-			Ref:      ref,
-			Provider: providerName,
-			Model:    model,
-			Kind:     "extension",
-			Active:   ref == current,
-		})
 	}
 	out = collapseModelRoutes(out, routes)
 	if out == nil {

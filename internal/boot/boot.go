@@ -61,7 +61,7 @@ import (
 // ErrUnknownModel is returned by Build when the configured model can't be
 // resolved to a provider — e.g. a default_model left over from a renamed or
 // removed provider. Callers can detect it (errors.Is) to re-run setup.
-var ErrUnknownModel = errors.New("unknown model")
+var ErrUnknownModel = provider.ErrUnknownModel
 
 func agentKeepPolicy(keep []string) agent.KeepPolicy {
 	if keep == nil {
@@ -258,9 +258,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// explicit opts.Model; explicit choices still fail loudly.
 	modelName := opts.Model
 	if modelName == "" {
-		if resolved, _, ok := cfg.ResolveNewSessionChatModel(); ok {
-			modelName = resolved
-		}
+		modelName = newSessionModel(opts.ProviderResolver, cfg)
 	}
 	config.NormalizeLegacyMimoCustomProvidersForRefs(cfg, modelName)
 	agentPreset := strings.TrimSpace(opts.AgentPreset)

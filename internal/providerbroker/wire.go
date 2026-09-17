@@ -74,6 +74,8 @@ const (
 	errKindCanceled    errKind = "canceled"
 	errKindDeadline    errKind = "deadline"
 	errKindOpaque      errKind = "opaque"
+	// errKindUnknownModel is a ref the broker's own catalog does not carry.
+	errKindUnknownModel errKind = "unknown_model"
 )
 
 // wireError is the tagged union of every provider error a caller matches on.
@@ -91,6 +93,7 @@ type wireError struct {
 	KeySource   string               `json:"keySource,omitempty"`
 	HasKey      bool                 `json:"hasKey,omitempty"`
 	Reason      string               `json:"reason,omitempty"`
+	Ref         string               `json:"ref,omitempty"`
 	Wrapped     *wireError           `json:"wrapped,omitempty"`
 }
 
@@ -131,6 +134,8 @@ func encodeError(err error) *wireError {
 		}
 	}
 	switch {
+	case errors.Is(err, provider.ErrUnknownModel):
+		return &wireError{Kind: errKindUnknownModel, Message: err.Error()}
 	case errors.Is(err, context.Canceled):
 		return &wireError{Kind: errKindCanceled, Message: err.Error()}
 	case errors.Is(err, context.DeadlineExceeded):
@@ -166,6 +171,8 @@ func (w *wireError) decode() error {
 		return context.Canceled
 	case errKindDeadline:
 		return context.DeadlineExceeded
+	case errKindUnknownModel:
+		return &UnknownModelError{Ref: w.Ref}
 	}
 	return errors.New(w.Message)
 }

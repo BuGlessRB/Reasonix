@@ -44,6 +44,17 @@ func resolveModelForCLI(explicitRef string, cfg *config.Config) (ref string, fal
 	return ref, fallback, nil
 }
 
+// serveStartModel is the model a serve's first pane starts on. Explicit flags
+// and a resumed session's model are kept verbatim; a brokered serve leaves the
+// rest implicit, because its default belongs to the broker.
+func serveStartModel(model, resume string, cfg *config.Config, brokered bool) string {
+	model = modelForResumePath(model, resume, cfg)
+	if brokered {
+		return model
+	}
+	return resolveServeModel(model)
+}
+
 // resolveServeModel keeps serve's implicit model scoped to the user config.
 // A project reasonix.toml may configure the served workspace, but it must not
 // replace the account-level model used for new serve sessions.
