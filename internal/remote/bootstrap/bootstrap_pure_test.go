@@ -268,6 +268,25 @@ func TestUsableTakesTheFloorAndForgivesAnUnreadableVersion(t *testing.T) {
 	}
 }
 
+// A kernel from before the broker owned a pane's model surface still drives a
+// pane on its own credentials, and is replaced for one that resolves at home.
+func TestPaneFloorRisesOnlyForABrokeredPane(t *testing.T) {
+	c := candidate{path: "/usr/bin/reasonix", version: "2.18.0", flags: map[string]bool{}}
+	for _, f := range LaunchFlags(true) {
+		c.flags[f] = true
+	}
+	if !c.usable(PaneFloor(false), LaunchFlags(false)) {
+		t.Fatal("a 2.18.0 kernel was refused for a pane on its own credentials")
+	}
+	if c.usable(PaneFloor(true), LaunchFlags(true)) {
+		t.Fatal("a 2.18.0 kernel was accepted for a brokered pane")
+	}
+	c.version = MinBrokeredPaneVersion
+	if !c.usable(PaneFloor(true), LaunchFlags(true)) {
+		t.Fatal("a kernel at the brokered floor was refused")
+	}
+}
+
 // probeConn answers the locate probe and nothing else: choosing between the
 // binaries a machine holds needs no file layer.
 type probeConn struct{ out string }

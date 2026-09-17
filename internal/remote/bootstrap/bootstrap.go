@@ -47,6 +47,21 @@ const (
 // asks nothing a 1.x kernel cannot do, so those callers pass none.
 const MinPaneVersion = "2.0.0"
 
+// MinBrokeredPaneVersion is the oldest kernel a pane can be driven by when its
+// models resolve through the broker. An older one starts sessions on its own
+// default_model and lists its own providers, which the broker then refuses.
+const MinBrokeredPaneVersion = "2.18.1"
+
+// PaneFloor is the version floor for a pane's kernel, by whether the connect
+// publishes a broker to it. A connect and a probe of it both read it here, so
+// neither can call usable a kernel the other would replace.
+func PaneFloor(brokered bool) string {
+	if brokered {
+		return MinBrokeredPaneVersion
+	}
+	return MinPaneVersion
+}
+
 // Broker points a bootstrapped serve at the provider broker on the machine
 // starting it: Addr is the remote loopback address an -R forward publishes it
 // on, and Token authenticates to it. A zero Broker leaves that host resolving
