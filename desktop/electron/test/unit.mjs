@@ -10,6 +10,7 @@ const { parse, readActs } = require("../src/host.js");
 const { contextTemplate } = require("../src/editmenu.js");
 const { externalTarget } = require("../src/links.js");
 const { offerCleanup, ownBundle } = require("../src/legacy.js");
+const { stripPackageGrants, readReport, unpaintedWindowCause } = require("../src/packagegrants.js");
 
 const TOKEN = "a".repeat(64);
 const line = (over) => JSON.stringify({ version: 1, origin: "http://127.0.0.1:8080", token: TOKEN, ...over });
@@ -351,4 +352,49 @@ test("consent trashes exactly what was answered for", async (t) => {
   });
   assert.deepEqual(trashed, [legacy]);
   assert.deepEqual(removed, [legacy]);
+});
+
+test("package grants are only stripped from a packaged Windows install", () => {
+  const never = () => assert.fail("the kernel was run");
+  const exe = "C:\\Studio\\Reasonix Studio.exe";
+  assert.equal(stripPackageGrants("host", { platform: "darwin", packaged: true, execPath: exe }, never), null);
+  assert.equal(stripPackageGrants("host", { platform: "linux", packaged: true, execPath: exe }, never), null);
+  assert.equal(stripPackageGrants("host", { platform: "win32", packaged: false, execPath: exe }, never), null);
+
+  let called;
+  const run = (binary, args) => {
+    called = { binary, args };
+    return JSON.stringify({ stripped: ["C:\\Studio"], refused: [{ path: "C:\\Studio\\ffmpeg.dll" }] }) + "\n";
+  };
+  const report = stripPackageGrants("host", { platform: "win32", packaged: true, execPath: exe }, run);
+  // The kernel is told which application, never which directory: it derives the
+  // tree from the executable it is shown.
+  assert.deepEqual(called, { binary: "host", args: ["-strip-package-grants", "-studio-app", exe] });
+  assert.deepEqual(report, { stripped: ["C:\\Studio"], refused: ["C:\\Studio\\ffmpeg.dll"] });
+});
+
+test("a grant report that does not parse is no report at all", () => {
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    const opts = { platform: "win32", packaged: true, execPath: "C:\\S.exe" };
+    assert.equal(stripPackageGrants("host", opts, () => { throw new Error("exit 2"); }), null);
+    assert.equal(stripPackageGrants("host", opts, () => "not json"), null);
+  } finally {
+    console.error = quiet;
+  }
+  assert.throws(() => readReport(JSON.stringify({ stripped: null, refused: [] })));
+  assert.throws(() => readReport(JSON.stringify({ stripped: [] })));
+});
+
+test("an unpainted window is attributed only to grants the kernel could not remove", () => {
+  assert.equal(unpaintedWindowCause(null, "en-US"), null);
+  assert.equal(unpaintedWindowCause({ stripped: ["C:\\Studio"], refused: [] }, "en-US"), null);
+
+  const refused = Array.from({ length: 7 }, (_, i) => `C:\\Studio\\${i}.dll`);
+  const en = unpaintedWindowCause({ stripped: [], refused }, "en-US");
+  assert.ok(en.detail.includes("C:\\Studio\\4.dll") && !en.detail.includes("C:\\Studio\\5.dll"));
+  assert.ok(en.detail.includes("2 more"));
+  const zh = unpaintedWindowCause({ stripped: [], refused: refused.slice(0, 1) }, "zh-CN");
+  assert.ok(zh.title.includes("无法打开窗口") && zh.detail.includes("C:\\Studio\\0.dll"));
 });

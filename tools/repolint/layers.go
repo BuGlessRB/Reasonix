@@ -42,6 +42,7 @@ var leaves = []string{
 	"internal/mcpdiag",
 	"internal/neterr",
 	"internal/nilutil",
+	"internal/packagegrant",
 	"internal/planmode",
 	"internal/proc",
 	"internal/redirectguard",

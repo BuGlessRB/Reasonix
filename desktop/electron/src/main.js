@@ -11,6 +11,7 @@ const { externalTarget } = require("./links");
 const { appIcon } = require("./appicon");
 const layout = require("./layout");
 const { offerCleanup } = require("./legacy");
+const { stripPackageGrants, unpaintedWindowCause } = require("./packagegrants");
 
 // Must match serve.TokenCookie and the namespace the kernel serves the page on.
 const TOKEN_COOKIE = "reasonix_token";
@@ -34,6 +35,7 @@ let origin = "";
 let quitting = false;
 let client = null;
 let tray = null;
+let grants = null;
 
 async function boot() {
   // Which build this is belongs to the shell: inside the bundle the kernel's
@@ -63,6 +65,11 @@ async function boot() {
   await armCredential(ready);
   win = createWindow();
   guard(win.webContents);
+  win.webContents.once("render-process-gone", (_event, details) => {
+    if (win.isVisible() || details.reason !== "crashed") return;
+    const cause = unpaintedWindowCause(grants, app.getLocale());
+    if (cause) dialog.showErrorBox(cause.title, cause.detail);
+  });
   installContextMenu(win.webContents, win);
   win.once("ready-to-show", () => win.show());
   // No icon, no backgrounding: the close button can only hide the window where
@@ -255,6 +262,10 @@ if (!primary) {
   app.quit();
 } else {
   app.on("second-instance", showWindow);
+  grants = stripPackageGrants(hostBinary, { ...where, execPath: process.execPath });
+  if (grants?.stripped.length) {
+    console.error(`reasonix-studio: removed app-package grants that stop sandboxed processes loading: ${grants.stripped.join(", ")}`);
+  }
 }
 
 app.whenReady().then(() => {

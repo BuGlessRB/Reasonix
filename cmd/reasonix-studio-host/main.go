@@ -111,7 +111,11 @@ func main() {
 	// replace it.
 	studioApp := flag.String("studio-app", "", "the application executable this host runs inside")
 	studioAppPID := flag.Int("studio-app-pid", 0, "the process id of that application")
+	stripGrants := flag.Bool("strip-package-grants", false, "remove app-package grants from the directory -studio-app runs from, print what changed, and exit")
 	flag.Parse()
+	if *stripGrants {
+		os.Exit(stripPackageGrants(os.Stdout, os.Stderr, *studioApp))
+	}
 	// Which launches are the same Studio is Reasonix's question, not a shell's:
 	// the answer is the canonicalized data home, and a shell asks for it rather
 	// than working it out from an environment it does not resolve.
