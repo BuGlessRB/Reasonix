@@ -722,8 +722,9 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		}
 		rawErr := fmt.Sprintf("error: %v\n%s", err, detail)
 		body, bound, truncMsg := a.boundToolOutput(rawErr, call.Name, call.ID, call.Arguments, true)
+		// A failed call's screenshot is often the only record of why it failed.
 		out := toolOutcome{
-			output: body, errMsg: firstLine(err.Error()), bound: bound, truncMsg: truncMsg,
+			output: body, images: images, errMsg: firstLine(err.Error()), bound: bound, truncMsg: truncMsg,
 			execution: execution,
 		}
 		if truncMsg != "" {

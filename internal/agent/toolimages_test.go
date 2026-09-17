@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -66,4 +67,38 @@ func TestToolResultImagesBypassTruncation(t *testing.T) {
 	if strings.Contains(msg.Content, dataURL) {
 		t.Fatal("image payload must not be embedded in the tool text")
 	}
+}
+
+type failingImageTool struct{ fakeImageTool }
+
+func (f *failingImageTool) ExecuteWithImages(context.Context, json.RawMessage) (string, []string, error) {
+	return f.text, f.images, errors.New("element not found")
+}
+
+// A failed call's screenshot is the state that explains the failure, so the
+// error result carries it like a success would.
+func TestFailedToolResultKeepsItsImages(t *testing.T) {
+	dataURL := "data:image/png;base64,QUFB"
+	reg := tool.NewRegistry()
+	reg.Add(&failingImageTool{fakeImageTool{text: "[image: image/png]", images: []string{dataURL}}})
+	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+		{toolCallChunk("c1", "shot", `{}`), {Type: provider.ChunkDone}},
+		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
+	}}
+	a := New(prov, reg, NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
+	if err := a.Run(context.Background(), "click the button"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, m := range prov.requests[len(prov.requests)-1].Messages {
+		if m.Role == provider.RoleTool && m.Name == "shot" {
+			if !strings.Contains(m.Content, "element not found") {
+				t.Fatalf("the failure did not reach the model: %q", m.Content)
+			}
+			if len(m.Images) != 1 || m.Images[0] != dataURL {
+				t.Fatalf("failed result images = %v, want the screenshot", m.Images)
+			}
+			return
+		}
+	}
+	t.Fatal("no tool result for shot reached the provider")
 }
