@@ -1,5 +1,5 @@
-// Shared page shell + UI kit. Visual language mirrors site/src/styles/global.css
-// — white, blue accent, large radii; crash stacks use the site's dark terminal.
+// Shared page shell + UI kit. Visual language mirrors the reasonix.io website:
+// white, blue accent, large radii; crash stacks use its dark terminal style.
 
 export function esc(s: unknown): string {
   return String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
