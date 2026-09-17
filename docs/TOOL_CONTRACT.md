@@ -1,7 +1,5 @@
 # Tool Contract
 
-<a href="./TOOL_CONTRACT.zh-CN.md">简体中文</a>
-
 This document records the provider-visible contract for Reasonix compile-time built-in tools. It is generated from the same canonical schema path used by the runtime registry.
 
 | Tool | Read-only | Description |

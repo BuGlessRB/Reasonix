@@ -584,8 +584,7 @@ events.
 
 The injected hook context is dynamic current-turn context. It does not change
 the stable system prompt, memory prefix, or tool schema, though dynamic content
-can still reduce cache reuse for that turn. The detailed desktop hook schema and
-loading model are documented in [the Chinese desktop hooks guide](./DESKTOP_HOOKS.zh-CN.md).
+can still reduce cache reuse for that turn.
 
 ## Keyboard shortcuts
 
@@ -1190,32 +1189,26 @@ MCP prompts also appear here as `/mcp__<server>__<prompt>`.
 
 ## Embedded documentation retrieval
 
-Reasonix bundles the Markdown files from `docs/` and the reviewed
-`release-notes/releases.json` catalog into each CLI and Desktop build. The
-read-only `docs` tool searches that exact offline corpus with local BM25
-retrieval and can read a complete matching section with source provenance. It
-renders every release in both languages under paths such as
-`changelog/v1.19.5.md` and `changelog/v1.19.5.zh-CN.md`, so questions about a
-specific version, upgrades, fixes, or known risks work offline. The agent should
-use the tool before web search or assumptions when a question concerns Reasonix
-configuration, CLI/Desktop behavior, release history, permissions, MCP, memory,
+Reasonix bundles the Markdown files from `docs/` into each CLI and Desktop
+build. The read-only `docs` tool searches that exact offline corpus with local
+BM25 retrieval and can read a complete matching section with source provenance.
+The agent should use the tool before web search or assumptions when a question
+concerns Reasonix configuration, CLI/Desktop behavior, permissions, MCP, memory,
 recovery, providers, or maintainer workflows.
 
 No setup, network connection, vector database, or embedding service is needed.
 Search results prefer the query language while retaining explicit `en`,
 `zh-CN`, audience, and catalog filters. Balanced and Delivery profiles expose the
 tool directly; Economy connects the `docs` source on demand. Every result reports
-the product version, immutable source revision, and corpus SHA-256 digest. Release
-CI compiles the CLI and rejects publication unless that embedded manifest matches
-the candidate's `docs/*.md`, `release-notes/releases.json`, and build identity. A
-newer online `main-v2` page therefore cannot silently replace version-matched
-local guidance or release history.
+the product version, immutable source revision, and corpus SHA-256 digest. The
+embedded manifest is bound to the candidate's `docs/*.md` and build identity, so
+an online page cannot silently replace version-matched local guidance.
 
 Use `/docs` to inspect the bundled corpus identity and usage examples without
 calling a model. Use `/docs <question>` (for example,
-`/docs 1.19.5 changelog`) to make Reasonix search the corpus locally first and
-then pass the version-matched evidence to the currently configured AI for a
-sourced answer. This command path does not depend on the model deciding to call
+`/docs how to configure an MCP server`) to make Reasonix search the corpus
+locally first and then pass the matched sections to the currently configured AI
+for a sourced answer. This command path does not depend on the model deciding to call
 the `docs` tool, while ordinary natural-language questions may still use the
 tool automatically. Existing custom commands and compatible plugin or skill
 aliases keep ownership of `/docs`; when that happens, CLI and Desktop normally

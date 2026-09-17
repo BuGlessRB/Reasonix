@@ -1,8 +1,6 @@
 # Task Contracts and Pause Policy
 
 <a href="./GUIDE.md">Guide</a>
-&nbsp;·&nbsp;
-<a href="./TASK_CONTRACT.zh-CN.md">Simplified Chinese</a>
 
 Reasonix works best when nontrivial work is described as a **task contract**:
 what the work is for, what action is requested, how the result should be

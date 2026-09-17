@@ -46,18 +46,15 @@ func docsManifestCommand(args []string, cliVersion string) int {
 		return 1
 	}
 	if sourceDir := strings.TrimSpace(*verifySource); sourceDir != "" {
-		source, err := productdocs.SourceManifest(
-			os.DirFS(filepath.Join(sourceDir, "docs")),
-			os.DirFS(filepath.Join(sourceDir, "release-notes")),
-		)
+		source, err := productdocs.SourceManifest(os.DirFS(filepath.Join(sourceDir, "docs")))
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error: load source documentation:", err)
 			return 1
 		}
-		if manifest.Digest != source.Digest || manifest.Documents != source.Documents || manifest.Sections != source.Sections || manifest.ReleaseNotes != source.ReleaseNotes {
-			fmt.Fprintf(os.Stderr, "error: embedded docs do not match %s: embedded=%s/%d/%d/%d source=%s/%d/%d/%d\n",
-				sourceDir, manifest.Digest, manifest.Documents, manifest.Sections, manifest.ReleaseNotes,
-				source.Digest, source.Documents, source.Sections, source.ReleaseNotes)
+		if manifest.Digest != source.Digest || manifest.Documents != source.Documents || manifest.Sections != source.Sections {
+			fmt.Fprintf(os.Stderr, "error: embedded docs do not match %s: embedded=%s/%d/%d source=%s/%d/%d\n",
+				sourceDir, manifest.Digest, manifest.Documents, manifest.Sections,
+				source.Digest, source.Documents, source.Sections)
 			return 1
 		}
 	}

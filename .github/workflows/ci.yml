@@ -461,11 +461,8 @@ jobs:
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 \
             -ignore 'label "windows-11-arm" is unknown' \
-            .github/workflows/prepare-release-notes.yml \
             .github/workflows/release-studio.yml \
-            .github/workflows/release-verify-issues.yml \
             .github/workflows/ci.yml
-          node scripts/check-single-release-public-contract.mjs
 
   # The site/ auth client has security-sensitive redirect-validation logic
   # (safeNext) covered by node:test unit tests. Those tests use only Node

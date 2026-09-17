@@ -2,8 +2,6 @@
 
 <a href="../README.md">README</a>
 &nbsp;·&nbsp;
-<a href="./ACP.zh-CN.md">简体中文</a>
-&nbsp;·&nbsp;
 <a href="./GUIDE.md">Guide</a>
 &nbsp;·&nbsp;
 <a href="https://agentclientprotocol.com/">ACP specification</a>

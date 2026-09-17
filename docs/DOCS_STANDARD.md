@@ -24,8 +24,8 @@ Current areas:
 | Area | Paths | Primary | Backup |
 | --- | --- | --- | --- |
 | Kernel, Studio shell, tooling, standing instructions | `*` | @esengine | @SivanCola |
-| User guides and references | `docs/`, `sdk/`, `README*`, `SECURITY.md`, `CHANGELOG.md` | @SivanCola | @esengine |
-| Studio contracts and processes | `docs/STUDIO_*.md`, `docs/DOCS_STANDARD.md`, `docs/research/` | @esengine | @SivanCola |
+| User guides and references | `docs/`, `sdk/`, `README*`, `SECURITY.md` | @SivanCola | @esengine |
+| Studio contracts and processes | `docs/STUDIO_*.md`, `docs/DOCS_STANDARD.md` | @esengine | @SivanCola |
 | Release notes and release signing | `release-notes/`, `.signpath/`, `release-studio.yml` | @esengine | @SivanCola |
 
 ## 2. Document classes

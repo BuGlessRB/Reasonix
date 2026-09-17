@@ -2,8 +2,6 @@
 
 <a href="../README.md">README</a>
 &nbsp;·&nbsp;
-<a href="./BOT_GUIDE.zh-CN.md">简体中文</a>
-&nbsp;·&nbsp;
 <a href="./GUIDE.md">General guide</a>
 
 > For desktop and CLI users. This guide explains how to connect Feishu, Lark,
