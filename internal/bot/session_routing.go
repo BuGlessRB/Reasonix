@@ -119,16 +119,10 @@ func botSessionHasActiveWork(state *sessionState) bool {
 	return status.Running || status.PendingPrompt || status.BackgroundJobs > 0
 }
 
-func safeBotControllerRuntimeStatus(ctrl botController) (status control.RuntimeStatus, ok bool) {
+func safeBotControllerRuntimeStatus(ctrl botController) (control.RuntimeStatus, bool) {
 	if ctrl == nil {
 		return control.RuntimeStatus{}, false
 	}
-	defer func() {
-		if recover() != nil {
-			status = control.RuntimeStatus{}
-			ok = false
-		}
-	}()
 	return ctrl.RuntimeStatus(), true
 }
 
@@ -393,16 +387,10 @@ func sessionStateMatchesRuntime(state *sessionState, profile sessionRuntimeProfi
 	return true
 }
 
-func safeBotControllerWorkspaceRoot(ctrl botController) (root string, ok bool) {
+func safeBotControllerWorkspaceRoot(ctrl botController) (string, bool) {
 	if ctrl == nil {
 		return "", false
 	}
-	defer func() {
-		if recover() != nil {
-			root = ""
-			ok = false
-		}
-	}()
 	return ctrl.WorkspaceRoot(), true
 }
 
@@ -410,9 +398,6 @@ func safeBotSetToolApprovalMode(ctrl botController, mode string) {
 	if ctrl == nil {
 		return
 	}
-	defer func() {
-		_ = recover()
-	}()
 	ctrl.SetToolApprovalMode(mode)
 }
 

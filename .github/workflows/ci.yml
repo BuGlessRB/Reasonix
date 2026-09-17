@@ -133,6 +133,14 @@ jobs:
         if: env.RUN_STEPS == 'true' && runner.os != 'Windows'
         run: python3 -m unittest discover -s tools/trajectory -t tools/trajectory
 
+      # A hardware exception on a Windows host whose CPU saves a large XSTATE
+      # (Intel AMX) can corrupt the Go heap (golang/go#81238). The runner pool
+      # mixes hosts, so a runtime crash is only attributable with the CPU on record.
+      - name: runner CPU
+        if: env.RUN_STEPS == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: Get-CimInstance Win32_Processor | Select-Object -ExpandProperty Name
+
       - name: test
         if: env.RUN_STEPS == 'true' && runner.os != 'Windows'
         env:
@@ -234,7 +242,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           REASONIX_RELEASE_CACHE_GUARD: "1"
-        run: go test -race ./internal/agent/... ./internal/plugin/... ./internal/jobs/... ./internal/proc/... ./internal/sandbox/... ./internal/filelock/... ./internal/eventwire/... ./internal/remote/... ./internal/extension/... ./internal/boot/... ./internal/control/... ./internal/tool/...
+        run: go test -race ./internal/agent/... ./internal/plugin/... ./internal/jobs/... ./internal/proc/... ./internal/sandbox/... ./internal/filelock/... ./internal/eventwire/... ./internal/remote/... ./internal/extension/... ./internal/boot/... ./internal/control/... ./internal/tool/... ./internal/bot/...
 
       - name: test -race (full)
         if: github.event_name != 'pull_request'

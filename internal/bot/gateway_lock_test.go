@@ -20,7 +20,7 @@ type closeProbeBotController struct {
 }
 
 type stopWaitBotController struct {
-	botController
+	stubBotController
 	started chan struct{}
 	release chan struct{}
 }
@@ -199,7 +199,7 @@ func (a *typingHoldAdapter) SendTyping(context.Context, string) error {
 }
 
 type cancelPublishBotController struct {
-	botController
+	stubBotController
 	closeEntered chan struct{} // one send when Close begins
 	closeHold    chan struct{} // Close parks here, pinning Stop inside the closeSessions loop
 	turnCtx      chan error    // ctx.Err() observed on RunTurn entry
