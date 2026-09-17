@@ -144,6 +144,9 @@ func (a *App) executeCanonicalPurge(ctx context.Context, ref session.SessionRef,
 		if existingOnly {
 			return prepare()
 		}
+		if state.SessionStates[ref.SessionID].Generation > expected {
+			return workspacestate.ErrMutationConflict
+		}
 		if state.SessionStates[ref.SessionID].Lifecycle != workspacestate.Archived {
 			return errors.New("only archived sessions can be permanently deleted")
 		}

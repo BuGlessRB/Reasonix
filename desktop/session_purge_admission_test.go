@@ -126,3 +126,25 @@ func TestPurgeCommandFirstDeliverySeparatesChangedTargets(t *testing.T) {
 		t.Fatalf("changed target lost body: %v", err)
 	}
 }
+
+func TestPurgeCommandRestoreWhileWaitingForRuntimeLock(t *testing.T) {
+	a, ref := lifecycleFixture(t)
+	if err := a.ArchiveCanonicalSession(ref); err != nil {
+		t.Fatal(err)
+	}
+	req := lifecycleRequest(t, a, ref, "restore-before-runtime-lock", "purge")
+	a.runtimeMutationBeforeLockHook = func(operation string) {
+		if operation == "purge lifecycle command" {
+			if err := a.workspaceRegistry().RestoreSession(t.Context(), ref.SessionID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	result, err := a.ApplySessionLifecycle(req)
+	if err != nil || len(result.Items) != 1 || result.Items[0].ErrorCode != "state_conflict" || result.Items[0].Retryable {
+		t.Fatalf("late conflict=%+v err=%v", result, err)
+	}
+	if history, err := a.desktopSessionService("").Query().History(t.Context(), ref); err != nil || len(history) == 0 {
+		t.Fatalf("restore lost body: %v", err)
+	}
+}
