@@ -1492,7 +1492,6 @@ export const en = {
   "projectTree.repairDeferred": "History repair will retry later",
   "projectTree.repairBlocked": "{count} histories need repair",
   "projectTree.recovered": "Recovered",
-  "projectTree.forkedFrom": "Forked from {source}",
   "projectTree.recoveryOnly": "Recoverable",
   "projectTree.rebuildCatalog": "Rebuild index",
   "projectTree.loadMore": "Load more",
