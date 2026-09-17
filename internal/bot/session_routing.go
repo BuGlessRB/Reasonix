@@ -134,32 +134,51 @@ func (gw *BotGateway) sessionRuntimeOverrideForMessage(msg InboundMessage) (sess
 	return override, ok
 }
 
+// sessionClaim is what claimSession decided about the session a message maps to.
+type sessionClaim int
+
+const (
+	sessionAbsent sessionClaim = iota
+	sessionReused
+	sessionChangeDeferred
+	sessionRetired
+)
+
+// claimSession decides, under the gateway lock, whether a session is reused,
+// kept despite a runtime change because it has work, or retired. The decision
+// calls into the controller, so the lock is released by defer: a panic there
+// must not leave every later message waiting on it.
+func (gw *BotGateway) claimSession(key string, msg InboundMessage, profile sessionRuntimeProfile) (*sessionState, sessionClaim) {
+	gw.mu.Lock()
+	defer gw.mu.Unlock()
+	state, ok := gw.controllers[key]
+	switch {
+	case !ok:
+		return nil, sessionAbsent
+	case sessionStateMatchesRuntime(state, profile):
+		updateSessionStateRuntime(state, msg, profile)
+		return state, sessionReused
+	case botSessionHasActiveWork(state):
+		return state, sessionChangeDeferred
+	}
+	delete(gw.controllers, key)
+	return state, sessionRetired
+}
+
 func (gw *BotGateway) getOrCreateSession(ctx context.Context, key string, msg InboundMessage) *sessionState {
 	profile := gw.sessionProfileForMessage(msg)
-	var stale *sessionState
-	gw.mu.Lock()
-	if state, ok := gw.controllers[key]; ok {
-		if !sessionStateMatchesRuntime(state, profile) {
-			if botSessionHasActiveWork(state) {
-				gw.mu.Unlock()
-				safeBotSetToolApprovalMode(state.ctrl, profile.toolApprovalMode)
-				gw.logger.Warn("bot session runtime change deferred while work is active", "platform", msg.Platform, "chat_type", msg.ChatType, "chat", hashID(msg.ChatID), "session", key[:8])
-				return state
-			}
-			delete(gw.controllers, key)
-			stale = state
-			gw.mu.Unlock()
-			gw.closeSessionState(stale)
-			gw.logger.Warn("bot session runtime changed; rebuilding", "platform", msg.Platform, "chat_type", msg.ChatType, "chat", hashID(msg.ChatID), "session", key[:8], "old_workspace_set", strings.TrimSpace(stale.workspaceRoot) != "", "new_workspace_set", profile.workspaceRoot != "", "old_model", stale.model, "new_model", profile.model)
-		} else {
-			updateSessionStateRuntime(state, msg, profile)
-			gw.mu.Unlock()
-			safeBotSetToolApprovalMode(state.ctrl, profile.toolApprovalMode)
-			gw.logger.Info("bot session reused", "platform", msg.Platform, "chat_type", msg.ChatType, "chat", hashID(msg.ChatID), "session", key[:8])
-			return state
-		}
-	} else {
-		gw.mu.Unlock()
+	switch state, reuse := gw.claimSession(key, msg, profile); reuse {
+	case sessionReused:
+		safeBotSetToolApprovalMode(state.ctrl, profile.toolApprovalMode)
+		gw.logger.Info("bot session reused", "platform", msg.Platform, "chat_type", msg.ChatType, "chat", hashID(msg.ChatID), "session", key[:8])
+		return state
+	case sessionChangeDeferred:
+		safeBotSetToolApprovalMode(state.ctrl, profile.toolApprovalMode)
+		gw.logger.Warn("bot session runtime change deferred while work is active", "platform", msg.Platform, "chat_type", msg.ChatType, "chat", hashID(msg.ChatID), "session", key[:8])
+		return state
+	case sessionRetired:
+		gw.closeSessionState(state)
+		gw.logger.Warn("bot session runtime changed; rebuilding", "platform", msg.Platform, "chat_type", msg.ChatType, "chat", hashID(msg.ChatID), "session", key[:8], "old_workspace_set", strings.TrimSpace(state.workspaceRoot) != "", "new_workspace_set", profile.workspaceRoot != "", "old_model", state.model, "new_model", profile.model)
 	}
 
 	// Create the lease owner before the controller so automatic conflict

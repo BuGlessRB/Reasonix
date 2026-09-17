@@ -407,3 +407,37 @@ func TestBotGatewayToolApprovalModeConcurrentWithConfigReaders(t *testing.T) {
 	}
 	<-writerDone
 }
+
+type panickingRootBotController struct {
+	stubBotController
+}
+
+func (panickingRootBotController) WorkspaceRoot() string { panic("workspace root unavailable") }
+
+// Deciding whether to reuse a session calls into its controller under the
+// gateway lock. A panic there has to release the lock on the way out: held, it
+// wedges every later message and the turn cleanup that runs while unwinding.
+func TestAPanicWhileClaimingASessionReleasesTheGatewayLock(t *testing.T) {
+	gw := NewGateway(GatewayConfig{Allowlist: AllowlistConfig{AllowAll: true}}, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	msg := InboundMessage{Platform: PlatformWeixin, ConnectionID: "weixin", ChatType: ChatDM, ChatID: "chat", UserID: "user"}
+	key := BuildSessionKey(msg.Session())
+	gw.controllers[key] = &sessionState{ctrl: panickingRootBotController{}, sink: &sessionEventSink{}}
+
+	panicked := make(chan any, 1)
+	go func() {
+		defer func() { panicked <- recover() }()
+		gw.getOrCreateSession(context.Background(), key, msg)
+	}()
+	if r := <-panicked; r == nil {
+		t.Fatal("the controller's panic did not reach the caller")
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for !gw.mu.TryLock() {
+		if time.Now().After(deadline) {
+			t.Fatal("the gateway lock is still held after the panic unwound")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	gw.mu.Unlock()
+}

@@ -14,7 +14,7 @@
     "file-size": 31285,
     "flat-view": 0,
     "frontend-parity": 150,
-    "function-size": 6551,
+    "function-size": 6539,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -560,7 +560,7 @@
     },
     "internal/bot/session_routing.go": {
       "essay": 9,
-      "function-size": 16
+      "function-size": 4
     },
     "internal/bot/slash.go": {
       "complexity": 56,
