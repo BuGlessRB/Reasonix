@@ -1102,25 +1102,10 @@ func TestNormalizeLegacyMimoCustomProvidersRecognizesBareModelRefs(t *testing.T)
 	}
 }
 
-func TestNormalizeLegacyMimoCustomProvidersScansBotRefs(t *testing.T) {
-	c := Default()
-	c.Bot.Model = "mimo-pro"
-	c.Bot.Connections = []BotConnectionConfig{{Model: "mimo-flash"}}
-	if !normalizeLegacyMimoCustomProviders(c) {
-		t.Fatal("legacy bot MiMo migration did not report a change")
-	}
-	if _, ok := c.Provider("mimo-pro"); !ok {
-		t.Fatal("mimo-pro provider missing")
-	}
-	if _, ok := c.Provider("mimo-flash"); !ok {
-		t.Fatal("mimo-flash provider missing")
-	}
-}
-
 func TestNormalizeLegacyDesktopProviderAccessIncludesUnconfiguredMimoRefs(t *testing.T) {
 	c := Default()
 	c.DefaultModel = "mimo-pro"
-	c.Bot.Connections = []BotConnectionConfig{{Model: "mimo-flash"}}
+	c.Agent.SubagentModels = map[string]string{"explore": "mimo-flash"}
 	normalizeLegacyMimoCustomProviders(c)
 	NormalizeLegacyDesktopProviderAccess(c)
 	access := desktopProviderAccessMap(c.Desktop.ProviderAccess)

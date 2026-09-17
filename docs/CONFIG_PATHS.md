@@ -64,9 +64,12 @@ mean `<Reasonix home>/config.toml`.
 
 `<Reasonix home>/config.toml` stores non-secret configuration shared by the CLI
 and desktop app. It may contain the same provider, plugin, UI, desktop, tool,
-skill, sandbox, bot, and agent settings that Reasonix renders into user config.
+skill, sandbox, and agent settings that Reasonix renders into user config.
 Provider entries store the name of the credential variable in `api_key_env`, not
 the secret value.
+
+A `[bot]` table written by a 1.x install is kept as written when the file is
+saved; this line does not run the IM bot gateway.
 
 Saved provider and bot credential variables are removed from every
 model-controlled child-process environment. The global credential `.env` is

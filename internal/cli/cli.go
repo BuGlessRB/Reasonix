@@ -167,9 +167,6 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 	case "review":
 		configureCLIThemeFromConfig()
 		return reviewCommand(rest)
-	case "bot":
-		configureCLIThemeFromConfig()
-		return botCommand(rest, version)
 	case "upgrade", "update":
 		configureCLIThemeFromConfig()
 		return upgradeCommand(rest, version)
@@ -210,7 +207,7 @@ func isDefaultInteractiveFlag(arg string) bool {
 
 func shouldMigrateLegacyConfigForCLI(cmd string) bool {
 	switch cmd {
-	case "", "run", "chat", "code", "serve", "web", "setup", "config", "init", "acp", "mcp", "remote", "plugin", "subagent", "doctor", "bot", "upgrade", "update", "login", "whoami", "logout":
+	case "", "run", "chat", "code", "serve", "web", "setup", "config", "init", "acp", "mcp", "remote", "plugin", "subagent", "doctor", "upgrade", "update", "login", "whoami", "logout":
 		return true
 	default:
 		return false

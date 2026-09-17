@@ -524,16 +524,6 @@ func (c *Controller) MoveInboxItem(id string, toIndex int) error {
 }
 
 func (c *Controller) SetInboxPaused(paused bool) error {
-	return c.setInboxPaused(paused, true)
-}
-
-// SetInboxPausedPassive changes pause state without starting a background turn.
-// Blocking transports such as Bot own their render sink and drain explicitly.
-func (c *Controller) SetInboxPausedPassive(paused bool) error {
-	return c.setInboxPaused(paused, false)
-}
-
-func (c *Controller) setInboxPaused(paused, dispatch bool) error {
 	st, err := c.ensureInbox()
 	if err != nil {
 		return err
@@ -543,7 +533,7 @@ func (c *Controller) setInboxPaused(paused, dispatch bool) error {
 	}
 	if paused {
 		sessioninbox.NotePaused()
-	} else if dispatch {
+	} else {
 		// On resume, try to dispatch if idle.
 		c.maybeDispatchInbox()
 	}
@@ -551,15 +541,6 @@ func (c *Controller) setInboxPaused(paused, dispatch bool) error {
 }
 
 func (c *Controller) RetryInboxItem(id string) error {
-	return c.retryInboxItem(id, true)
-}
-
-// RetryInboxItemPassive requeues an item without detached background dispatch.
-func (c *Controller) RetryInboxItemPassive(id string) error {
-	return c.retryInboxItem(id, false)
-}
-
-func (c *Controller) retryInboxItem(id string, dispatch bool) error {
 	st, err := c.ensureInbox()
 	if err != nil {
 		return err
@@ -567,9 +548,7 @@ func (c *Controller) retryInboxItem(id string, dispatch bool) error {
 	if err := st.RetryItem(id); err != nil {
 		return err
 	}
-	if dispatch {
-		c.maybeDispatchInbox()
-	}
+	c.maybeDispatchInbox()
 	return nil
 }
 

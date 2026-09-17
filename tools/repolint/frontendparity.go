@@ -16,11 +16,9 @@ type frontendPort struct {
 	port string // the interface in internal/control it drives
 }
 
-// botruntime is absent because it never reaches the controller at all. A shell
-// that drives the kernel over HTTP is covered by wire-parity instead.
+// A shell that drives the kernel over HTTP is absent: wire-parity covers it.
 var frontendPorts = []frontendPort{
 	{pkg: "internal/acp", port: "EditorAPI"},
-	{pkg: "internal/bot", port: "GatewayAPI"},
 	{pkg: "internal/cli", port: "SessionAPI"},
 	{pkg: "internal/serve", port: "SessionAPI"},
 }

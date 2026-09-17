@@ -146,7 +146,6 @@ CLI 进阶用法和详细配置见 **[CLI 命令参考](./docs/CLI.zh-CN.md)**�
   [Context Engine v2](./docs/SESSION_MEMORY_RETRIEVAL.md) ·
   [能力诊断](./docs/CAPABILITY_DIAGNOSTICS.md) ·
   [恢复与安全模式](./docs/RECOVERY.md) ·
-  [机器人使用指南](./docs/BOT_GUIDE.md) ·
   [Checkpoints 与 rewind](./docs/CHECKPOINTS.md)
 - **工程与迁移：** [规格](./docs/SPEC.md) ·
   [任务合约与暂停策略](./docs/TASK_CONTRACT.md) ·

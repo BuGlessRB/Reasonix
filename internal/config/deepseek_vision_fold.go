@@ -112,7 +112,7 @@ func migrateRetiredDeepSeekModelRefs(c *Config) bool {
 // retargetModelRefs applies rewrite to every field holding a provider/model ref.
 // Missing one leaves a ref pointing at what the others just stopped naming.
 func retargetModelRefs(c *Config, rewrite func(string) string) {
-	for _, field := range append([]*string{&c.DefaultModel, &c.Bot.Model}, c.roleModelRefTargets()...) {
+	for _, field := range append([]*string{&c.DefaultModel}, c.roleModelRefTargets()...) {
 		if ref := strings.TrimSpace(*field); ref != "" {
 			*field = rewrite(ref)
 		}

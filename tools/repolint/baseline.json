@@ -5,20 +5,20 @@
     "claude-dialect": 1,
     "codeowners": 0,
     "commented-code": 0,
-    "complexity": 1495,
+    "complexity": 1388,
     "doc-language": 0,
-    "doc-owner": 44,
-    "doc-prose": 2375,
+    "doc-owner": 43,
+    "doc-prose": 2345,
     "error-text": 9,
-    "essay": 3207,
-    "file-size": 31285,
+    "essay": 3155,
+    "file-size": 30182,
     "flat-view": 0,
-    "frontend-parity": 150,
-    "function-size": 6539,
+    "frontend-parity": 130,
+    "function-size": 5958,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
-    "orphan": 80,
+    "orphan": 76,
     "refusal-path": 0,
     "release-note": 661,
     "struct-state": 32,
@@ -30,9 +30,6 @@
     },
     "CONTRIBUTING.md": {
       "doc-owner": 1,
-      "doc-prose": 1
-    },
-    "README.md": {
       "doc-prose": 1
     },
     "REASONIX.md": {
@@ -95,10 +92,6 @@
       "doc-owner": 1,
       "doc-prose": 2
     },
-    "docs/BOT_GUIDE.md": {
-      "doc-owner": 1,
-      "doc-prose": 27
-    },
     "docs/CAPABILITY_DIAGNOSTICS.md": {
       "doc-owner": 1,
       "doc-prose": 5
@@ -144,7 +137,7 @@
     },
     "docs/GUIDE.md": {
       "doc-owner": 1,
-      "doc-prose": 366
+      "doc-prose": 365
     },
     "docs/GUIDE.zh-CN.md": {
       "doc-owner": 1,
@@ -180,7 +173,7 @@
     },
     "docs/SPEC.md": {
       "doc-owner": 1,
-      "doc-prose": 341
+      "doc-prose": 340
     },
     "docs/STUDIO_SHELL_BOUNDARIES.md": {
       "doc-owner": 1,
@@ -527,55 +520,6 @@
     "internal/boot/token_profile.go": {
       "essay": 1
     },
-    "internal/bot/connloop.go": {
-      "essay": 5
-    },
-    "internal/bot/desktop.go": {
-      "essay": 4
-    },
-    "internal/bot/feishu/feishu.go": {
-      "essay": 1,
-      "file-size": 202,
-      "orphan": 1
-    },
-    "internal/bot/gateway.go": {
-      "complexity": 3,
-      "essay": 13,
-      "file-size": 347,
-      "function-size": 20,
-      "orphan": 1
-    },
-    "internal/bot/gateway_lock_test.go": {
-      "essay": 8
-    },
-    "internal/bot/project_index.go": {
-      "file-size": 31
-    },
-    "internal/bot/qq/gateway.go": {
-      "function-size": 11
-    },
-    "internal/bot/render.go": {
-      "essay": 5,
-      "function-size": 24
-    },
-    "internal/bot/session_routing.go": {
-      "essay": 9,
-      "function-size": 4
-    },
-    "internal/bot/slash.go": {
-      "complexity": 56,
-      "essay": 1,
-      "function-size": 238
-    },
-    "internal/bot/turn_dispatch_test.go": {
-      "essay": 3
-    },
-    "internal/bot/weixin/weixin.go": {
-      "orphan": 1
-    },
-    "internal/botruntime/runtime.go": {
-      "orphan": 1
-    },
     "internal/capability/audit.go": {
       "struct-state": 6
     },
@@ -608,10 +552,6 @@
       "essay": 7,
       "function-size": 31
     },
-    "internal/cli/bot.go": {
-      "complexity": 18,
-      "function-size": 113
-    },
     "internal/cli/branch.go": {
       "essay": 2
     },
@@ -634,10 +574,10 @@
       "essay": 8
     },
     "internal/cli/cli.go": {
-      "complexity": 65,
+      "complexity": 64,
       "essay": 57,
-      "file-size": 1577,
-      "function-size": 426
+      "file-size": 1574,
+      "function-size": 423
     },
     "internal/cli/cli_test.go": {
       "essay": 9
@@ -729,7 +669,7 @@
       "file-size": 93
     },
     "internal/cli/shell_completion.go": {
-      "function-size": 100
+      "function-size": 90
     },
     "internal/cli/skill_hooks.go": {
       "essay": 1
@@ -773,12 +713,12 @@
       "essay": 2
     },
     "internal/config/config.go": {
-      "essay": 49,
-      "file-size": 1416
+      "essay": 48,
+      "file-size": 1228
     },
     "internal/config/credentials.go": {
       "essay": 1,
-      "file-size": 54
+      "file-size": 50
     },
     "internal/config/credentials_keyring_unix.go": {
       "essay": 7
@@ -806,7 +746,7 @@
     },
     "internal/config/load.go": {
       "essay": 24,
-      "file-size": 1215,
+      "file-size": 1205,
       "function-size": 58,
       "orphan": 2
     },
@@ -817,14 +757,13 @@
       "essay": 3
     },
     "internal/config/migrate.go": {
-      "file-size": 23,
       "orphan": 1
     },
     "internal/config/mutate.go": {
       "essay": 2
     },
     "internal/config/mutate_test.go": {
-      "essay": 4
+      "essay": 3
     },
     "internal/config/paths.go": {
       "essay": 10
@@ -843,10 +782,10 @@
       "file-size": 219
     },
     "internal/config/render.go": {
-      "complexity": 226,
+      "complexity": 197,
       "essay": 2,
-      "file-size": 914,
-      "function-size": 858
+      "file-size": 619,
+      "function-size": 700
     },
     "internal/config/vision.go": {
       "essay": 1,
@@ -860,7 +799,7 @@
     },
     "internal/control/approval_orchestration.go": {
       "essay": 38,
-      "frontend-parity": 7
+      "frontend-parity": 4
     },
     "internal/control/attachments.go": {
       "orphan": 2
@@ -872,7 +811,7 @@
       "frontend-parity": 1
     },
     "internal/control/capability_scope.go": {
-      "frontend-parity": 3
+      "frontend-parity": 2
     },
     "internal/control/checkpoint.go": {
       "essay": 16
@@ -886,7 +825,7 @@
     "internal/control/controller.go": {
       "essay": 32,
       "file-size": 630,
-      "frontend-parity": 21
+      "frontend-parity": 16
     },
     "internal/control/controller_test.go": {
       "essay": 9
@@ -924,7 +863,7 @@
       "frontend-parity": 4
     },
     "internal/control/inbox.go": {
-      "frontend-parity": 8
+      "frontend-parity": 3
     },
     "internal/control/input.go": {
       "essay": 4,
@@ -985,17 +924,17 @@
     },
     "internal/control/session_lifecycle.go": {
       "essay": 11,
-      "frontend-parity": 10
+      "frontend-parity": 9
     },
     "internal/control/session_snapshot.go": {
       "essay": 16,
       "frontend-parity": 2
     },
     "internal/control/session_write_authority.go": {
-      "frontend-parity": 3
+      "frontend-parity": 2
     },
     "internal/control/sessionpath.go": {
-      "essay": 7
+      "essay": 6
     },
     "internal/control/shell.go": {
       "frontend-parity": 2
@@ -1019,11 +958,11 @@
     },
     "internal/control/turn_cancel.go": {
       "essay": 22,
-      "frontend-parity": 4,
+      "frontend-parity": 3,
       "function-size": 4
     },
     "internal/control/turn_entry.go": {
-      "frontend-parity": 5
+      "frontend-parity": 4
     },
     "internal/control/turn_orchestrator.go": {
       "essay": 10,
@@ -1035,7 +974,7 @@
     "internal/control/turn_submit.go": {
       "complexity": 3,
       "essay": 5,
-      "frontend-parity": 6,
+      "frontend-parity": 4,
       "function-size": 23
     },
     "internal/doctor/report.go": {

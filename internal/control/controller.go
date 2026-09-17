@@ -74,7 +74,7 @@ var (
 
 // errNoSessionPath is returned by snapshot when a session has content to persist
 // but no resolved session path — a misconfiguration (e.g. an unresolvable data
-// dir in a bot deployment) that previously dropped conversations silently
+// dir in a headless deployment) that previously dropped conversations silently
 // (#4414). Callers log it and continue; it must never be swallowed quietly.
 var errNoSessionPath = errors.New("session has content but no session path; conversation cannot be persisted")
 
@@ -392,7 +392,7 @@ type Options struct {
 	OnSessionRecovered func(SessionRecoveryInfo) error
 	// ApprovalTimeout bounds how long a tool-approval or ask prompt blocks waiting
 	// for a user decision. Zero (default) waits forever — right for an interactive
-	// terminal. Bot/headless frontends set a positive value so an unanswered
+	// terminal. Headless frontends set a positive value so an unanswered
 	// prompt can't wedge the session indefinitely (#4626, #4402).
 	ApprovalTimeout time.Duration
 	// RuntimeProfile selects capability routing/filtering behavior. Empty keeps

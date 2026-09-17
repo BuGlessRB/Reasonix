@@ -14,9 +14,9 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
 - Layering (enforced): utility packages import nothing under `reasonix/` except
   one another — that layer is closed, so a leaf reaching a leaf drags no graph
   along, while refusing it leaves one judgement copied into several of them; only
-  the frontends `cli`, `serve`, `acp`, `bot`, `botruntime`, `boot` and the hosts
-  `cmd/`, `desktop/` may import `control`; nothing below a frontend may import
-  one. The declared sets live in `tools/repolint/layers.go`.
+  the frontends `cli`, `serve`, `acp`, `boot` and the hosts `cmd/`, `desktop/`
+  may import `control`; nothing below a frontend may import one. The declared
+  sets live in `tools/repolint/layers.go`.
 - Subagent delegation keeps five concepts apart: a profile says how a worker
   thinks, `TaskSpec` what this call wants, `CapabilityGrant` what it may touch,
   `ContextRequest` what it starts from, `SchedulerPolicy` when it runs. Put a

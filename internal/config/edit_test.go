@@ -1541,8 +1541,8 @@ temperature = 0.8
 	if cfg.DefaultModel != "deepseek-pro" {
 		t.Fatalf("default_model = %q, want project config to keep overriding unrelated fields", cfg.DefaultModel)
 	}
-	if cfg.Bot.MaxSteps != 21 {
-		t.Fatalf("bot.max_steps = %d, want independent bot limit preserved", cfg.Bot.MaxSteps)
+	if got := cfg.Bot["max_steps"]; got != int64(21) {
+		t.Fatalf("bot.max_steps = %v, want the [bot] table preserved", got)
 	}
 	for _, path := range []string{userPath, filepath.Join(root, "reasonix.toml")} {
 		raw, err := os.ReadFile(path)

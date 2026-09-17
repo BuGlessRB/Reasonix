@@ -251,9 +251,6 @@ func LoadBuiltinDefaultsForRoot(root string) *Config {
 	cfg := Default()
 	cfg.Plugins = nil
 	cfg.Skills = SkillsConfig{}
-	cfg.Bot.Enabled = false
-	cfg.Bot.Connections = nil
-	cfg.Bot.Routes = nil
 	cfg.Statusline.Command = ""
 	cfg.LSP.Enabled = false
 	cfg.setExpansionEnv(nil)
@@ -1271,12 +1268,9 @@ func legacyMimoConfigRefs(c *Config) []string {
 	if c == nil {
 		return nil
 	}
-	refs := append([]string{c.DefaultModel, c.Bot.Model}, c.roleModelRefs()...)
+	refs := append([]string{c.DefaultModel}, c.roleModelRefs()...)
 	for _, ref := range c.Agent.SubagentModels {
 		refs = append(refs, ref)
-	}
-	for _, conn := range c.Bot.Connections {
-		refs = append(refs, conn.Model)
 	}
 	refs = append(refs, c.Desktop.ProviderAccess...)
 	return refs
@@ -1433,10 +1427,6 @@ func NormalizeLegacyDesktopProviderAccess(c *Config) {
 	}
 	for _, ref := range c.Agent.SubagentModels {
 		addRef(ref)
-	}
-	addRef(c.Bot.Model)
-	for _, conn := range c.Bot.Connections {
-		addRef(conn.Model)
 	}
 	for i := range c.Providers {
 		p := &c.Providers[i]

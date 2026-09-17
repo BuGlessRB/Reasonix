@@ -323,7 +323,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		level := event.LevelInfo
 		text := "Deprecated agent step limits were removed."
 		detail := "[agent].max_steps and planner_max_steps are no longer used; Reasonix now manages interactive progress automatically. " +
-			"Use the CLI --max-steps flag for a one-off run or [bot].max_steps for unattended bot sessions."
+			"Use the CLI --max-steps flag for a one-off run."
 		if stepLimitMigErr != nil {
 			level = event.LevelWarn
 			text = "Deprecated agent step limits were ignored."
@@ -1081,7 +1081,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 		// HeadlessApprovalMode is an explicit declaration that this frontend has
 		// no decision channel (`reasonix run`). ApprovalTimeout is not a proxy for
-		// that capability: bots have a bounded timeout and can still answer cards.
+		// that capability: a frontend can bound the wait and still answer prompts.
 		ctrlOpts.RecoveryHeadless = recoveryHeadlessMode(opts)
 	}
 	// Goal evaluator: the same zero-config model fallback as the recovery

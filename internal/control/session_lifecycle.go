@@ -61,8 +61,8 @@ func (c *Controller) NewSession() error {
 	// Claim the rotation gate for the whole snapshot-then-swap sequence. A bare
 	// `if c.gate.running` check released before Snapshot() left a window where a turn
 	// could start during the snapshot and then have its live session replaced by
-	// the SetSession below. Submit ("/new") and the bot gateway call this
-	// asynchronously, so the gate is load-bearing, not defensive.
+	// the SetSession below. Submit ("/new") calls this asynchronously, so the
+	// gate is load-bearing, not defensive.
 	if err := c.beginRotation(); err != nil {
 		return err
 	}

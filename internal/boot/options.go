@@ -91,7 +91,7 @@ type Options struct {
 	// reconciler; frontends with different deletion semantics can override it.
 	CleanupPendingReconciler func(sessionDir string) error
 	// Bounds how long an approval or ask prompt blocks. Zero waits forever,
-	// correct for a terminal; headless/bot frontends pass a positive value so
+	// correct for a terminal; headless frontends pass a positive value so
 	// an unanswered prompt cannot wedge the session (#4626, #4402).
 	ApprovalTimeout time.Duration
 	// The non-interactive approval contract for every headless gate this build

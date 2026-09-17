@@ -85,7 +85,7 @@ What is **not** done:
   prompt changes, no configuration.
 - Previews are never persisted: after a restart the complete sub-agent
   transcript (and `read_subagent_result`) remains the source of truth.
-- ACP and bot consumers keep ignoring `ToolProgress` bodies entirely.
+- ACP consumers keep ignoring `ToolProgress` bodies entirely.
 
 ## Desktop
 

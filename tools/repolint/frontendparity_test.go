@@ -6,18 +6,16 @@ import (
 )
 
 // The fixture mirrors the tree's own shape: two frontends on the full port, one
-// on each narrower composite, so a capability can be out of reach for a reason
+// on a narrower composite, so a capability can be out of reach for a reason
 // port.go already compiles.
 var testPorts = []frontendPort{
 	{pkg: "internal/acp", port: "EditorAPI"},
-	{pkg: "internal/bot", port: "GatewayAPI"},
 	{pkg: "internal/cli", port: "SessionAPI"},
 	{pkg: "internal/serve", port: "SessionAPI"},
 }
 
 const (
 	acpPkg   = "internal/acp"
-	botPkg   = "internal/bot"
 	cliPkg   = "internal/cli"
 	servePkg = "internal/serve"
 )
@@ -48,7 +46,7 @@ func nameSet(names []string) map[string]bool {
 }
 
 func everyPort(names ...string) map[string][]string {
-	return map[string][]string{acpPkg: names, botPkg: names, cliPkg: names, servePkg: names}
+	return map[string][]string{acpPkg: names, cliPkg: names, servePkg: names}
 }
 
 func parityFor(t *testing.T, m parityMatrix, scopes ...frontendScope) []Finding {
@@ -63,36 +61,36 @@ func TestACapabilityEveryFrontendDrivesIsNotDebt(t *testing.T) {
 	}
 }
 
-// The defect the rule was written for: one frontend drives it, the other three
+// The defect the rule was written for: one frontend drives it, the other two
 // are handed it and never call it.
-func TestACapabilityOnlyOneFrontendDrivesIsThreeMissingEdges(t *testing.T) {
+func TestACapabilityOnlyOneFrontendDrivesIsTwoMissingEdges(t *testing.T) {
 	m := parityOf([]string{"SwitchBranch"}, everyPort("SwitchBranch"), map[string][]string{cliPkg: {"SwitchBranch"}})
 	got := parityFor(t, m)
 	if len(got) != 1 {
 		t.Fatalf("want one row per capability, got %d: %v", len(got), got)
 	}
-	if got[0].Weight != 3 {
-		t.Fatalf("the ratchet counts edges, not rows: weight %d, want 3", got[0].Weight)
+	if got[0].Weight != 2 {
+		t.Fatalf("the ratchet counts edges, not rows: weight %d, want 2", got[0].Weight)
 	}
-	if want := "Controller.SwitchBranch: acp=no bot=no cli=yes serve=no"; got[0].Msg != want {
+	if want := "Controller.SwitchBranch: acp=no cli=yes serve=no"; got[0].Msg != want {
 		t.Fatalf("report is the diagnosis:\n got %q\nwant %q", got[0].Msg, want)
 	}
 }
 
-func TestTwoOfFourWiredLeavesTwoMissingEdges(t *testing.T) {
+func TestTwoOfThreeWiredLeavesOneMissingEdge(t *testing.T) {
 	m := parityOf([]string{"Compact"}, everyPort("Compact"),
 		map[string][]string{cliPkg: {"Compact"}, servePkg: {"Compact"}})
 	got := parityFor(t, m)
-	if len(got) != 1 || got[0].Weight != 2 {
-		t.Fatalf("want one row weighing 2, got %v", got)
+	if len(got) != 1 || got[0].Weight != 1 {
+		t.Fatalf("want one row weighing 1, got %v", got)
 	}
-	if !strings.Contains(got[0].Msg, "acp=no") || !strings.Contains(got[0].Msg, "bot=no") {
+	if !strings.Contains(got[0].Msg, "acp=no") || strings.Contains(got[0].Msg, "serve=no") {
 		t.Fatalf("the row must name which frontends are missing: %q", got[0].Msg)
 	}
 }
 
 // A controller method no frontend drives is not shared behavior yet. Counting
-// it would make every internal helper a four-way parity defect and drown the
+// it would make every internal helper a three-way parity defect and drown the
 // rule in noise on its first run.
 func TestAnInternalControllerMethodNoFrontendDrivesIsNotACapability(t *testing.T) {
 	m := parityOf([]string{"SnapshotWithDurability"}, everyPort("SnapshotWithDurability"), nil)
@@ -111,7 +109,7 @@ func TestAPortThatDoesNotCarryTheCapabilityIsNotDebt(t *testing.T) {
 	if len(got) != 1 || got[0].Weight != 1 {
 		t.Fatalf("only serve can be missing here, got %v", got)
 	}
-	if want := "Controller.SwitchBranch: acp=n/a bot=n/a cli=yes serve=no"; got[0].Msg != want {
+	if want := "Controller.SwitchBranch: acp=n/a cli=yes serve=no"; got[0].Msg != want {
 		t.Fatalf("out-of-port frontends must read n/a:\n got %q\nwant %q", got[0].Msg, want)
 	}
 }
@@ -142,7 +140,7 @@ func TestAScopedRowStopsBeingAMissingEdgeAndBecomesTableDebt(t *testing.T) {
 			edges = f
 		}
 	}
-	if edges.Weight != 2 || !strings.Contains(edges.Msg, "serve=scoped") {
+	if edges.Weight != 1 || !strings.Contains(edges.Msg, "serve=scoped") {
 		t.Fatalf("the scoped frontend must leave the missing count and read scoped: %+v", edges)
 	}
 	if table.Weight != 1 || table.Line != 40 {
@@ -150,7 +148,7 @@ func TestAScopedRowStopsBeingAMissingEdgeAndBecomesTableDebt(t *testing.T) {
 	}
 	// Total is unchanged: declaring a scope moves debt into a file a reviewer
 	// opens, and never deletes it.
-	if edges.Weight+table.Weight != 3 {
+	if edges.Weight+table.Weight != 2 {
 		t.Fatalf("scoping changed the total debt: %d", edges.Weight+table.Weight)
 	}
 }
@@ -208,7 +206,7 @@ func TestOneMoreMissingEdgeOnAnAlreadyBaselinedCapabilityFails(t *testing.T) {
 func TestANewCapabilityWiredToOneFrontendFails(t *testing.T) {
 	b := budget(map[string]map[string]int{}, map[string]int{ruleFrontendParity: 0})
 	over, msgs := b.exceeded([]Finding{
-		{"internal/control/goal.go", 12, ruleFrontendParity, "Controller.SetGoal: acp=no bot=no cli=yes serve=no", 3}})
+		{"internal/control/goal.go", 12, ruleFrontendParity, "Controller.SetGoal: acp=no cli=yes serve=no", 2}})
 	if len(msgs) == 0 || len(over) != 1 {
 		t.Fatalf("a capability landing in an unbaselined file must fail: over=%v msgs=%v", over, msgs)
 	}
@@ -249,8 +247,8 @@ func TestRaisingTheParityCeilingIsRefusedWithoutAllowWiden(t *testing.T) {
 func TestLosingTheLastConsumerRetiresTheRowInsteadOfFailing(t *testing.T) {
 	wired := parityOf([]string{"SwitchBranch"}, everyPort("SwitchBranch"),
 		map[string][]string{cliPkg: {"SwitchBranch"}})
-	if got := parityFor(t, wired); len(got) != 1 || got[0].Weight != 3 {
-		t.Fatalf("one consumer must leave three missing edges: %v", got)
+	if got := parityFor(t, wired); len(got) != 1 || got[0].Weight != 2 {
+		t.Fatalf("one consumer must leave two missing edges: %v", got)
 	}
 	orphaned := parityOf([]string{"SwitchBranch"}, everyPort("SwitchBranch"), nil)
 	if got := parityFor(t, orphaned); len(got) != 0 {

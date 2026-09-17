@@ -3522,7 +3522,7 @@ api_key_env = "REASONIX_TEST_KEY_UNSET"
 	for _, notice := range notices {
 		if notice.Text == "Deprecated agent step limits were removed." {
 			migrationNotices++
-			if notice.Level != event.LevelInfo || !strings.Contains(notice.Detail, "--max-steps") || !strings.Contains(notice.Detail, "[bot].max_steps") {
+			if notice.Level != event.LevelInfo || !strings.Contains(notice.Detail, "--max-steps") {
 				t.Fatalf("migration notice = %+v", notice)
 			}
 		}

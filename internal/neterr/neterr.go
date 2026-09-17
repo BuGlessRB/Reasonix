@@ -33,23 +33,6 @@ func IsConnReset(err error) bool {
 	return errors.As(err, &netErr)
 }
 
-// IsTransient reports whether err is worth another attempt: a connection-level
-// drop, a refused connection, or a timeout the net package declares. A
-// cancelled or expired context is the caller's decision and never transient.
-func IsTransient(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
-	if errors.Is(err, io.ErrUnexpectedEOF) || isAny(err, resetErrors) || isAny(err, refusedErrors) {
-		return true
-	}
-	var netErr net.Error
-	return errors.As(err, &netErr) && netErr.Timeout()
-}
-
 func isAny(err error, targets []error) bool {
 	for _, target := range targets {
 		if errors.Is(err, target) {

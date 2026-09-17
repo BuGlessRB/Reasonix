@@ -183,12 +183,8 @@ func credentialEnvNamesFromConfig(cfg *Config) []string {
 	for _, p := range cfg.Providers {
 		add(p.APIKeyEnv)
 	}
-	add(cfg.Bot.QQ.AppSecretEnv)
-	add(cfg.Bot.Feishu.AppSecretEnv)
-	add(cfg.Bot.Weixin.TokenEnv)
-	for _, conn := range cfg.Bot.Connections {
-		add(conn.Credential.AppSecretEnv)
-		add(conn.Credential.TokenEnv)
+	for _, name := range passthroughCredentialEnvNames(cfg.Bot) {
+		add(name)
 	}
 	for _, h := range cfg.Remote.Hosts {
 		add(h.PassphraseEnv)
