@@ -41,24 +41,6 @@ func BrowserBound(t tool.Tool) bool {
 	return false
 }
 
-// withOrigin writes the host's account of which site a call concerns over any
-// origin the model sent, or removes it when there is none.
-func withOrigin(args json.RawMessage, origin string) json.RawMessage {
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(args, &fields) != nil || fields == nil {
-		fields = map[string]json.RawMessage{}
-	}
-	delete(fields, "origin")
-	if origin != "" {
-		fields["origin"], _ = json.Marshal(origin)
-	}
-	out, err := json.Marshal(fields)
-	if err != nil {
-		return args
-	}
-	return out
-}
-
 func tabArg(args json.RawMessage) string {
 	var p struct {
 		Tab string `json:"tab"`
@@ -91,12 +73,12 @@ func (b browserOpen) PermissionArgs(_ context.Context, args json.RawMessage) jso
 	}
 	_ = json.Unmarshal(args, &p)
 	if p.URL != "" {
-		return withOrigin(args, browser.OriginOf(p.URL))
+		return hostSubjectArgs(b.Schema(), args, "origin", browser.OriginOf(p.URL))
 	}
 	if b.session == nil {
-		return withOrigin(args, "")
+		return hostSubjectArgs(b.Schema(), args, "origin", "")
 	}
-	return withOrigin(args, b.session.Origin(p.Tab))
+	return hostSubjectArgs(b.Schema(), args, "origin", b.session.Origin(p.Tab))
 }
 
 func (browserOpen) ReadOnly() bool                                   { return false }
@@ -168,9 +150,9 @@ func (browserRead) Schema() json.RawMessage {
 // PermissionArgs names the site the tab being read shows.
 func (b browserRead) PermissionArgs(_ context.Context, args json.RawMessage) json.RawMessage {
 	if b.session == nil {
-		return withOrigin(args, "")
+		return hostSubjectArgs(b.Schema(), args, "origin", "")
 	}
-	return withOrigin(args, b.session.Origin(tabArg(args)))
+	return hostSubjectArgs(b.Schema(), args, "origin", b.session.Origin(tabArg(args)))
 }
 
 func (browserRead) ReadOnly() bool                                   { return true }
@@ -245,7 +227,7 @@ func (browserAct) Schema() json.RawMessage {
 // subject when they would type a secret into it.
 func (b browserAct) PermissionArgs(ctx context.Context, args json.RawMessage) json.RawMessage {
 	if b.session == nil {
-		return withOrigin(args, "")
+		return hostSubjectArgs(b.Schema(), args, "origin", "")
 	}
 	var p struct {
 		Tab   string         `json:"tab"`
@@ -258,7 +240,7 @@ func (b browserAct) PermissionArgs(ctx context.Context, args json.RawMessage) js
 	if secret {
 		origin = permission.BrowserCredentialPrefix + origin
 	}
-	return withOrigin(args, origin)
+	return hostSubjectArgs(b.Schema(), args, "origin", origin)
 }
 
 func (browserAct) ReadOnly() bool                                   { return false }
