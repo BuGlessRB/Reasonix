@@ -3,8 +3,12 @@
     "banner": 0,
     "build-artifact": 0,
     "claude-dialect": 1,
+    "codeowners": 0,
     "commented-code": 0,
     "complexity": 1495,
+    "doc-language": 33,
+    "doc-owner": 91,
+    "doc-prose": 2755,
     "error-text": 9,
     "essay": 3207,
     "file-size": 31285,
@@ -16,11 +20,36 @@
     "narrative": 0,
     "orphan": 80,
     "refusal-path": 0,
+    "release-note": 661,
     "spec-parity": 0,
     "struct-state": 32,
     "wire-parity": 0
   },
   "files": {
+    ".github/pull_request_template.md": {
+      "doc-prose": 1
+    },
+    "CHANGELOG.md": {
+      "doc-owner": 1,
+      "doc-prose": 94
+    },
+    "CONTRIBUTING.md": {
+      "doc-owner": 1,
+      "doc-prose": 1
+    },
+    "README.md": {
+      "doc-prose": 1
+    },
+    "README.zh-CN.md": {
+      "doc-prose": 1
+    },
+    "REASONIX.md": {
+      "doc-prose": 92
+    },
+    "SECURITY.md": {
+      "doc-owner": 1,
+      "doc-prose": 1
+    },
     "cmd/e2ebench/main.go": {
       "essay": 1
     },
@@ -29,6 +58,10 @@
     },
     "cmd/reasonix-plugin-example/main.go": {
       "essay": 19
+    },
+    "desktop/README.md": {
+      "doc-owner": 1,
+      "doc-prose": 2
     },
     "desktop/cmd/sign/main.go": {
       "essay": 14
@@ -47,8 +80,345 @@
     "desktop/cmd/update-helper/versioned_windows.go": {
       "essay": 10
     },
+    "desktop/frontend-next/perf/README.md": {
+      "doc-owner": 1,
+      "doc-prose": 21
+    },
+    "desktop/frontend-next/src/styles/LAYOUT.md": {
+      "doc-owner": 1,
+      "doc-prose": 128
+    },
+    "desktop/frontend-next/src/styles/TOKENS.md": {
+      "doc-owner": 1,
+      "doc-prose": 22
+    },
     "desktop/internal/winuninstall/registry_windows.go": {
       "essay": 1
+    },
+    "docs/ACP.md": {
+      "doc-owner": 1,
+      "doc-prose": 13
+    },
+    "docs/ACP.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 3
+    },
+    "docs/BILLING.md": {
+      "doc-owner": 1,
+      "doc-prose": 2
+    },
+    "docs/BILLING.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/BOT_GUIDE.md": {
+      "doc-owner": 1,
+      "doc-prose": 27
+    },
+    "docs/BOT_GUIDE.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 11
+    },
+    "docs/CAPABILITY_DIAGNOSTICS.md": {
+      "doc-owner": 1,
+      "doc-prose": 5
+    },
+    "docs/CAPABILITY_DIAGNOSTICS.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 3
+    },
+    "docs/CHECKPOINTS.md": {
+      "doc-owner": 1,
+      "doc-prose": 4
+    },
+    "docs/CHECKPOINTS.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 1
+    },
+    "docs/CLI.md": {
+      "doc-owner": 1,
+      "doc-prose": 50
+    },
+    "docs/CLI.zh-CN.md": {
+      "doc-owner": 1,
+      "doc-prose": 17
+    },
+    "docs/COLLABORATION_MODES.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/CONFIG_PATHS.md": {
+      "doc-owner": 1,
+      "doc-prose": 30
+    },
+    "docs/CONFIG_PATHS.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 12
+    },
+    "docs/DESKTOP_CRASH_DIAGNOSTICS_RUNBOOK.md": {
+      "doc-owner": 1,
+      "doc-prose": 11
+    },
+    "docs/DESKTOP_CRASH_DIAGNOSTICS_RUNBOOK.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 2
+    },
+    "docs/DESKTOP_HOOKS.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 10
+    },
+    "docs/EXTENSIONS.md": {
+      "doc-owner": 1,
+      "doc-prose": 16
+    },
+    "docs/EXTENSIONS.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 4
+    },
+    "docs/EXTENSION_PROTOCOL.generated.md": {
+      "doc-owner": 1
+    },
+    "docs/EXTENSION_PROTOCOL.md": {
+      "doc-owner": 1,
+      "doc-prose": 20
+    },
+    "docs/EXTENSION_PROTOCOL.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 6
+    },
+    "docs/EXTENSION_RUNTIME_V2.md": {
+      "doc-owner": 1,
+      "doc-prose": 13
+    },
+    "docs/EXTENSION_RUNTIME_V2.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 6
+    },
+    "docs/EXTENSION_RUNTIME_V2_PERF.md": {
+      "doc-owner": 1,
+      "doc-prose": 9
+    },
+    "docs/EXTENSION_RUNTIME_V2_PERF.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 3
+    },
+    "docs/GOAL_ENFORCEMENT.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 8
+    },
+    "docs/GUIDE.md": {
+      "doc-owner": 1,
+      "doc-prose": 372
+    },
+    "docs/GUIDE.zh-CN.md": {
+      "doc-owner": 1,
+      "doc-prose": 178
+    },
+    "docs/HISTORY_SEARCH_CATALOG.md": {
+      "doc-owner": 1,
+      "doc-prose": 8
+    },
+    "docs/HISTORY_SEARCH_CATALOG.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/MIGRATING.md": {
+      "doc-owner": 1,
+      "doc-prose": 44
+    },
+    "docs/MIGRATING.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 3
+    },
+    "docs/PLUGIN_PACKAGES.md": {
+      "doc-owner": 1,
+      "doc-prose": 103
+    },
+    "docs/PLUGIN_PACKAGES.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 69
+    },
+    "docs/REASONING_LANGUAGE.md": {
+      "doc-owner": 1,
+      "doc-prose": 3
+    },
+    "docs/REASONING_LANGUAGE.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/REASONING_PROVIDERS.md": {
+      "doc-owner": 1,
+      "doc-prose": 23
+    },
+    "docs/REASONING_PROVIDERS.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 11
+    },
+    "docs/RECOVERY.md": {
+      "doc-owner": 1,
+      "doc-prose": 2
+    },
+    "docs/RECOVERY.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/RELEASING.md": {
+      "doc-owner": 1,
+      "doc-prose": 7
+    },
+    "docs/SESSION_MEMORY_RETRIEVAL.md": {
+      "doc-owner": 1,
+      "doc-prose": 15
+    },
+    "docs/SESSION_MEMORY_RETRIEVAL.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 3
+    },
+    "docs/SESSION_REFERENCE_ARCHITECTURE.md": {
+      "doc-owner": 1
+    },
+    "docs/SIGNPATH_WINDOWS_ADMIN_SOP.md": {
+      "doc-owner": 1
+    },
+    "docs/SPEC.md": {
+      "doc-owner": 1,
+      "doc-prose": 341
+    },
+    "docs/SPEC.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 78
+    },
+    "docs/STUDIO_SHELL_BOUNDARIES.md": {
+      "doc-owner": 1,
+      "doc-prose": 2
+    },
+    "docs/SUBAGENT_PROFILES.md": {
+      "doc-owner": 1,
+      "doc-prose": 4
+    },
+    "docs/SUBAGENT_PROFILES.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/SUBAGENT_PROGRESS.md": {
+      "doc-owner": 1,
+      "doc-prose": 5
+    },
+    "docs/SUBAGENT_PROGRESS.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 1
+    },
+    "docs/TASK_CONTRACT.md": {
+      "doc-owner": 1,
+      "doc-prose": 1
+    },
+    "docs/TASK_CONTRACT.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/THEME_ASSETS.md": {
+      "doc-owner": 1,
+      "doc-prose": 2
+    },
+    "docs/THEME_ASSETS.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/THEME_PACK.md": {
+      "doc-owner": 1,
+      "doc-prose": 5
+    },
+    "docs/THEME_PACK.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 1
+    },
+    "docs/TOOL_APPROVAL_MODES.md": {
+      "doc-owner": 1,
+      "doc-prose": 10
+    },
+    "docs/TOOL_APPROVAL_MODES.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 1
+    },
+    "docs/TOOL_CONTRACT.md": {
+      "doc-owner": 1,
+      "doc-prose": 41
+    },
+    "docs/TOOL_CONTRACT.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1,
+      "doc-prose": 20
+    },
+    "docs/USAGE_CATALOG.md": {
+      "doc-owner": 1,
+      "doc-prose": 2
+    },
+    "docs/USAGE_CATALOG.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/WINDOWS_LTSC_2019_CRASH_RUNBOOK.md": {
+      "doc-owner": 1
+    },
+    "docs/WINDOWS_LTSC_2019_CRASH_RUNBOOK.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/production_checklist.md": {
+      "doc-owner": 1
+    },
+    "docs/production_checklist.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
+    },
+    "docs/research/cache-aware-compaction-design.md": {
+      "doc-owner": 1
+    },
+    "docs/research/goal-verification-authority.md": {
+      "doc-owner": 1
+    },
+    "docs/research/subagent-handoff-baseline.md": {
+      "doc-owner": 1,
+      "doc-prose": 3
+    },
+    "docs/superpowers/audits/2026-06-30-autoresearch-runtime-verification.md": {
+      "doc-owner": 1,
+      "doc-prose": 2
+    },
+    "docs/superpowers/plans/2026-06-29-autoresearch-runtime-implementation.md": {
+      "doc-owner": 1,
+      "doc-prose": 1
+    },
+    "docs/superpowers/plans/billing-currency-acceptance.md": {
+      "doc-owner": 1
+    },
+    "docs/superpowers/specs/2026-06-29-autoresearch-runtime-design.md": {
+      "doc-owner": 1,
+      "doc-prose": 2
+    },
+    "docs/superpowers/specs/2026-08-07-spatiotemporal-composability-v2.md": {
+      "doc-owner": 1,
+      "doc-prose": 3
     },
     "internal/acp/clientio.go": {
       "essay": 4
@@ -1039,6 +1409,9 @@
     "internal/guardian/guardian.go": {
       "essay": 25
     },
+    "internal/guardian/guardian_policy.md": {
+      "doc-prose": 1
+    },
     "internal/history/indexed.go": {
       "orphan": 1
     },
@@ -1586,8 +1959,93 @@
     "internal/update/manifest.go": {
       "essay": 1
     },
+    "release-notes/studio/2.0.0.md": {
+      "release-note": 29
+    },
+    "release-notes/studio/2.1.0.md": {
+      "doc-prose": 1,
+      "release-note": 25
+    },
+    "release-notes/studio/2.10.0.md": {
+      "doc-prose": 28,
+      "release-note": 46
+    },
+    "release-notes/studio/2.11.0.md": {
+      "doc-prose": 206,
+      "release-note": 75
+    },
+    "release-notes/studio/2.12.0.md": {
+      "doc-prose": 16,
+      "release-note": 35
+    },
+    "release-notes/studio/2.13.0.md": {
+      "release-note": 23
+    },
+    "release-notes/studio/2.14.0.md": {
+      "doc-prose": 28,
+      "release-note": 53
+    },
+    "release-notes/studio/2.14.1.md": {
+      "doc-prose": 16,
+      "release-note": 7
+    },
+    "release-notes/studio/2.15.0.md": {
+      "doc-prose": 110,
+      "release-note": 43
+    },
+    "release-notes/studio/2.16.0.md": {
+      "doc-prose": 107,
+      "release-note": 47
+    },
+    "release-notes/studio/2.17.0.md": {
+      "doc-prose": 43,
+      "release-note": 26
+    },
+    "release-notes/studio/2.2.0.md": {
+      "doc-prose": 1,
+      "release-note": 26
+    },
+    "release-notes/studio/2.3.0.md": {
+      "doc-prose": 2,
+      "release-note": 30
+    },
+    "release-notes/studio/2.4.0.md": {
+      "doc-prose": 1,
+      "release-note": 45
+    },
+    "release-notes/studio/2.5.0.md": {
+      "doc-prose": 10,
+      "release-note": 29
+    },
+    "release-notes/studio/2.6.0.md": {
+      "doc-prose": 8,
+      "release-note": 31
+    },
+    "release-notes/studio/2.7.0.md": {
+      "doc-prose": 44,
+      "release-note": 26
+    },
+    "release-notes/studio/2.8.0.md": {
+      "doc-prose": 58,
+      "release-note": 37
+    },
+    "release-notes/studio/2.9.0.md": {
+      "doc-prose": 32,
+      "release-note": 28
+    },
+    "sdk/go/README.md": {
+      "doc-owner": 1,
+      "doc-prose": 11
+    },
     "sdk/go/examples/fullsidecar/main.go": {
       "essay": 25
+    },
+    "sdk/go/examples/starterextension/README.md": {
+      "doc-owner": 1
+    },
+    "sdk/go/examples/starterextension/README.zh-CN.md": {
+      "doc-language": 1,
+      "doc-owner": 1
     },
     "sdk/go/sdk.go": {
       "essay": 27,
@@ -1601,6 +2059,18 @@
     },
     "tools/repolint/orphan.go": {
       "essay": 2
+    },
+    "tools/trajectory/README.md": {
+      "doc-owner": 1,
+      "doc-prose": 11
+    },
+    "tools/workgroupassay/README.md": {
+      "doc-owner": 1,
+      "doc-prose": 1
+    },
+    "workers/accounts/README.md": {
+      "doc-owner": 1,
+      "doc-prose": 4
     },
     "workers/crash-report/src/index.ts": {
       "file-size": 686

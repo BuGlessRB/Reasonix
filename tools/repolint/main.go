@@ -42,6 +42,11 @@ const (
 	ruleFrontendParity = "frontend-parity"
 	ruleFlatView       = "flat-view"
 	ruleBuildArtifact  = "build-artifact"
+	ruleCodeOwners     = "codeowners"
+	ruleDocOwner       = "doc-owner"
+	ruleDocProse       = "doc-prose"
+	ruleDocLanguage    = "doc-language"
+	ruleReleaseNote    = "release-note"
 )
 
 var allRules = []string{
@@ -50,6 +55,7 @@ var allRules = []string{
 	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText,
 	ruleClaudeDialect, ruleSpecParity, ruleWireParity, ruleOrphan,
 	ruleFrontendParity, ruleFlatView, ruleBuildArtifact,
+	ruleCodeOwners, ruleDocOwner, ruleDocProse, ruleDocLanguage, ruleReleaseNote,
 }
 
 func main() {
@@ -193,6 +199,8 @@ func run(root string) ([]Finding, error) {
 	findings = append(findings, checkLayering(imports)...)
 	findings = append(findings, checkSpecParity(root)...)
 	findings = append(findings, checkBuildArtifacts(root)...)
+	findings = append(findings, checkCodeOwners(root)...)
+	findings = append(findings, checkDocs(root)...)
 	findings = append(findings, wires.findings(root)...)
 	findings = append(findings, checkTransientTagParity(root)...)
 	findings = append(findings, checkInboxRefusalParity(root)...)
