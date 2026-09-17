@@ -303,3 +303,34 @@ func TestLiveSecretsNeedConfirmation(t *testing.T) {
 		t.Fatalf("confirmed secret entry: %v", err)
 	}
 }
+
+// A link to a server that takes a while to answer has started navigating long
+// before the new document commits; the act answers with the page it led to.
+func TestLiveAClickWaitsForTheSlowNavigationItStarted(t *testing.T) {
+	s := liveSession(t, true)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<title>Start</title><a href="/slow">Slow page</a>`))
+	})
+	mux.HandleFunc("/slow", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(1200 * time.Millisecond)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<title>Slow</title><h1>Arrived late</h1>`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if _, err := s.Open(ctx, srv.URL+"/", "", false); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	snap, err := s.Snapshot(ctx, "", "")
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	res, err := actPlain(ctx, s, "", []Step{{Action: "click", Ref: findRef(t, snap, `link "Slow page"`)}})
+	if err != nil || !strings.HasSuffix(res.Tab.URL, "/slow") || res.Tab.Title != "Slow" {
+		t.Fatalf("slow link: err=%v tab=%+v", err, res.Tab)
+	}
+}

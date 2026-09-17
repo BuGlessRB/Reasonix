@@ -6,8 +6,8 @@ const os = require("node:os");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
-const { app } = require("electron");
-const { checker, listen, scriptedModel, seedHome, settledWindow, until } = require("./livekit");
+const { app, BrowserWindow } = require("electron");
+const { checker, listen, scriptedModel, seedHome, settledWindow, until, wait } = require("./livekit");
 
 const PAGE = `<!doctype html><title>Greeter</title>
 <label>Name <input></label>
@@ -17,18 +17,23 @@ const PAGE = `<!doctype html><title>Greeter</title>
 const { check, failures } = checker();
 
 // Each round's call is built from what the previous tool result showed.
+// Which of the two turns the script is on; main() moves it before asking again.
+const script = { turn: 1, calls: 0 };
+
 function browsingModel(pageURL) {
   return scriptedModel((tools) => {
     const last = tools.length ? tools[tools.length - 1] : "";
     const ref = (role, name) => (last.match(new RegExp(`- ${role} "${name}" \\[(e\\d+)\\]`)) || [])[1];
-    if (tools.length === 0) return { name: "browser_open", arguments: { url: pageURL } };
-    if (tools.length === 1) {
-      return { name: "browser_act", arguments: { steps: [
-        { action: "fill", ref: ref("textbox", "Name"), text: "李雷" },
-        { action: "click", ref: ref("button", "Greet") },
-      ] } };
-    }
-    return null;
+    const greet = (name) => ({ name: "browser_act", arguments: { steps: [
+      { action: "fill", ref: ref("textbox", "Name"), text: name },
+      { action: "click", ref: ref("button", "Greet") },
+    ] } });
+    // The second turn runs with the window minimized: a fresh snapshot, then
+    // the same input again.
+    if (script.calls >= 2) return null;
+    script.calls++;
+    if (script.calls === 1) return { name: "browser_open", arguments: { url: pageURL } };
+    return greet(["李雷", "韩梅梅", "小明"][script.turn - 1]);
   });
 }
 
@@ -96,6 +101,32 @@ async function main() {
     await js(`document.querySelector('[data-action="pane.view"][data-value="flow"]').click()`);
     await until("the page put away again", async () => beneath());
     check("leaving the browser view stops drawing the page", beneath());
+
+    const greeting = async () => {
+      const view = guests()[0];
+      return view ? view.webContents.executeJavaScript("document.querySelector('p').textContent") : "";
+    };
+    const askFor = async (turn, name) => {
+      script.turn = turn;
+      script.calls = 0;
+      await client.request("POST", `${base}/submit`, { input: `greet ${name} as well` });
+      return until(`the greeting the agent typed for ${name}`, async () => ((await greeting()) === `Hello, ${name}` ? true : null), 60000).catch(() => false);
+    };
+
+    // A page in a minimized window, or in one another application covers, counts
+    // as hidden, and a hidden page drops the input the agent sends it. A person
+    // is in another application for most of a run, so both are ordinary.
+    win.minimize();
+    await wait(1000);
+    check("the agent's input reaches the page while the window is minimized", await askFor(2, "韩梅梅"), await greeting());
+
+    win.restore();
+    const cover = new BrowserWindow({ width: 1600, height: 1000, x: 0, y: 0, alwaysOnTop: true });
+    await cover.loadURL("data:text/html,<h1>cover</h1>");
+    cover.focus();
+    await wait(1200);
+    check("the agent's input reaches the page while another window covers this one", await askFor(3, "小明"), await greeting());
+    cover.destroy();
   } catch (err) {
     check("the run completed", false, err.message);
   }

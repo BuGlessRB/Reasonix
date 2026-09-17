@@ -24,8 +24,9 @@ function listen(handler) {
   });
 }
 
-// scriptedModel answers each request with next(messages), a tool call built from
-// what the conversation shows so far, or with a closing reply when it gives none.
+// scriptedModel answers each request with next(toolResults, messages): a tool
+// call built from what the conversation shows so far, or a closing reply when it
+// gives none.
 function scriptedModel(next) {
   const requests = [];
   const handler = (req, res) => {
@@ -35,7 +36,7 @@ function scriptedModel(next) {
       const parsed = JSON.parse(body || "{}");
       requests.push(parsed);
       const tools = (parsed.messages || []).filter((m) => m.role === "tool").map((m) => String(m.content || ""));
-      const call = next(tools);
+      const call = next(tools, parsed.messages || []);
       res.writeHead(200, { "Content-Type": "text/event-stream" });
       const chunk = (delta, finish) =>
         res.write(`data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`);

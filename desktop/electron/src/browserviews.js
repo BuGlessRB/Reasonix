@@ -24,6 +24,10 @@ class BrowserViews {
     win.on("resize", () => {
       for (const [id, entry] of this.entries) if (id !== this.shown) this.putAway(entry.view);
     });
+    // A page in a minimized window keeps its widget hidden, and a hidden widget
+    // drops the input the agent sends it — the protocol call does not even
+    // answer. Attaching the view again is what brings the widget back.
+    for (const state of ["minimize", "restore", "hide", "show"]) win.on(state, () => this.reattach());
   }
 
   // guard fixes what every page on a partition may do: ask for no permission,
@@ -128,6 +132,15 @@ class BrowserViews {
       width: Math.round(rect.width),
       height: Math.round(rect.height),
     });
+  }
+
+  reattach() {
+    for (const [id, entry] of this.entries) {
+      if (this.win.isDestroyed() || entry.view.webContents.isDestroyed()) continue;
+      this.win.contentView.removeChildView(entry.view);
+      this.win.contentView.addChildView(entry.view);
+      if (id !== this.shown) this.putAway(entry.view);
+    }
   }
 
   hide() {

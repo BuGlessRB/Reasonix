@@ -17,6 +17,13 @@ const { BrowserProtocol } = require("./browserprotocol");
 const { BrowserViews } = require("./browserviews");
 const { startBrowserRelay } = require("./browserrelay");
 
+// A page in a minimized or fully covered window counts as hidden, and a hidden
+// page drops the input the agent sends it: measured, its clicks never arrive and
+// the protocol call does not even answer. The agent works while the person is in
+// another app, so occlusion must not reach its pages. The cost is that this
+// application's renderers keep running at full rate while nobody is looking.
+app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+
 // Must match serve.TokenCookie and the namespace the kernel serves the page on.
 const TOKEN_COOKIE = "reasonix_token";
 const PAGE_PATH = "/_studio/";
