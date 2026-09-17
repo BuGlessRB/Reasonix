@@ -72,7 +72,7 @@ jobs:
   # the changes job itself fails (fail-open: an empty output != 'false').
   test:
     needs: changes
-    if: always()
+    if: ${{ !cancelled() }}
     # Backstop against a wedged step holding the workflow's concurrency group:
     # the Windows full-suite step has outlived its own timeout and kept the job
     # alive. Normal full-suite wall time is 8-12 minutes per platform.
@@ -280,7 +280,7 @@ jobs:
 
   windows-control:
     needs: changes
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: windows-latest
     env:
       RUN_STEPS: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.code != 'false' }}
@@ -328,7 +328,7 @@ jobs:
 
   windows-isolated:
     needs: changes
-    if: always() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.code != 'false')
+    if: ${{ !cancelled() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.code != 'false') }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -371,7 +371,7 @@ jobs:
 
   race:
     needs: changes
-    if: always() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.code != 'false')
+    if: ${{ !cancelled() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -432,7 +432,7 @@ jobs:
   # same three-OS matrix as the root tests.
   sdk:
     needs: changes
-    if: always()
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
@@ -550,7 +550,7 @@ jobs:
 
   desktop-frontend:
     needs: [changes, desktop-prepare]
-    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.frontend != 'false' || needs.changes.outputs.electron != 'false')
+    if: ${{ !cancelled() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.frontend != 'false' || needs.changes.outputs.electron != 'false') }}
     runs-on: ubuntu-22.04
     defaults:
       run:
@@ -594,7 +594,7 @@ jobs:
 
   desktop-browser-group:
     needs: [changes, desktop-prepare]
-    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.browser != 'false')
+    if: ${{ !cancelled() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -701,7 +701,7 @@ jobs:
 
   desktop-prepare:
     needs: changes
-    if: always() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.desktop != 'false')
+    if: ${{ !cancelled() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.desktop != 'false') }}
     outputs:
       producer_attempt: ${{ steps.artifact-identity.outputs.attempt }}
       stable_artifact_name: desktop-frontend-stable-${{ github.run_id }}-${{ steps.artifact-identity.outputs.attempt }}
@@ -821,7 +821,7 @@ jobs:
 
   desktop-go:
     needs: [changes, desktop-prepare]
-    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false')
+    if: ${{ !cancelled() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false') }}
     runs-on: ubuntu-22.04
     defaults:
       run:
@@ -894,7 +894,7 @@ jobs:
   # changing what is race-checked.
   desktop-go-race:
     needs: [changes, desktop-prepare]
-    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false')
+    if: ${{ !cancelled() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false') }}
     runs-on: ubuntu-22.04
     defaults:
       run:
@@ -955,7 +955,7 @@ jobs:
   # compile or exercise the native PTY and FSEvents implementations.
   desktop-macos:
     needs: [changes, desktop-prepare]
-    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false')
+    if: ${{ !cancelled() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false') }}
     runs-on: macos-latest
     defaults:
       run:
@@ -1085,7 +1085,7 @@ jobs:
   # run on the ubuntu leg above.
   desktop-windows:
     needs: [changes, desktop-prepare]
-    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false')
+    if: ${{ !cancelled() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.native != 'false') }}
     runs-on: windows-latest
     # A hung native step must not hold the workflow's concurrency group for the
     # six-hour default. This bounds hangs, not duration: the leg's own spread on
@@ -1320,7 +1320,7 @@ jobs:
   # cannot first appear on the release candidate's push.
   desktop-windows-package:
     needs: [changes, desktop-prepare]
-    if: always() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.packaging != 'false')
+    if: ${{ !cancelled() && needs.desktop-prepare.result == 'success' && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.packaging != 'false') }}
     runs-on: windows-latest
     # Packaging measured 13m55s; the overhead benchmark and its workspace
     # install add about six more. Bound hangs, not duration.
@@ -1463,7 +1463,7 @@ jobs:
   # prefix once the savers are done; restore-keys pick the newest anyway.
   prune-go-cache:
     needs: [test, race, desktop-go, desktop-go-race, desktop-macos]
-    if: always() && github.event_name == 'push'
+    if: ${{ !cancelled() && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -1493,7 +1493,7 @@ jobs:
   # `code` filter would otherwise skip.
   lint-code:
     needs: changes
-    if: always() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.code != 'false' || needs.changes.outputs.desktop != 'false' || needs.changes.outputs.sdk != 'false')
+    if: ${{ !cancelled() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.code != 'false' || needs.changes.outputs.desktop != 'false' || needs.changes.outputs.sdk != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -1628,7 +1628,7 @@ jobs:
   # release-notes/** diff cannot touch site/, so skipping it loses no coverage.
   site:
     needs: changes
-    if: always() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.site != 'false')
+    if: ${{ !cancelled() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.site != 'false') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -1671,7 +1671,7 @@ jobs:
   # run the full sweep instead of silently reporting skipped to the aggregate.
   coverage:
     needs: changes
-    if: always() && (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true')
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

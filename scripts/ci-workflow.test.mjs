@@ -26,6 +26,16 @@ const ci = workflow("ci");
 const release = workflow("release-desktop");
 const appMemory = workflow("app-memory");
 
+test("cancelled CI stops expensive workers but keeps result aggregation", () => {
+  for (const name of ["test", "windows-control", "windows-isolated", "race", "sdk", "desktop-prepare",
+    "desktop-frontend", "desktop-browser-group", "desktop-go", "desktop-go-race", "desktop-macos",
+    "desktop-windows", "desktop-windows-go-group", "desktop-windows-package", "lint-code", "site", "coverage", "prune-go-cache"]) {
+    assert.equal(condition(job(ci, name), { cancelled: () => true }), false, name);
+  }
+  for (const name of ["root", "lint", "desktop", "desktop-browser", "desktop-windows-go"])
+    assert.equal(condition(job(ci, name), { cancelled: () => true }), true, name);
+});
+
 test("packaging changes run native installer acceptance before merge", () => {
   const body = job(ci, "desktop-windows-package");
   for (const event of ["pull_request", "push"]) {
