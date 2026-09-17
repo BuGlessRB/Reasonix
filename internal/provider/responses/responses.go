@@ -393,7 +393,26 @@ func splitInstructions(messages []provider.Message) (string, []provider.Message)
 
 func messagesToInput(messages []provider.Message, vision, replayWebSearchItems bool, caps vendorCapabilities) []map[string]any {
 	input := make([]map[string]any, 0, len(messages)*2)
+	// A tool's images follow its run of outputs as a user turn: input_image on a
+	// user turn is the shape these vendors take, and a turn between two outputs
+	// would split the calls from their results.
+	var toolImages []string
+	flushToolImages := func() {
+		if len(toolImages) == 0 {
+			return
+		}
+		parts := make([]map[string]string, 0, len(toolImages)+1)
+		parts = append(parts, map[string]string{"type": "input_text", "text": "Images returned by the preceding tool call(s):"})
+		for _, url := range toolImages {
+			parts = append(parts, map[string]string{"type": "input_image", "image_url": url})
+		}
+		input = append(input, map[string]any{"role": "user", "content": parts})
+		toolImages = nil
+	}
 	for _, message := range messages {
+		if message.Role != provider.RoleTool {
+			flushToolImages()
+		}
 		switch message.Role {
 		case provider.RoleSystem, provider.RoleUser:
 			// Text-only turns keep the documented TextInput string shape.
@@ -460,8 +479,12 @@ func messagesToInput(messages []provider.Message, vision, replayWebSearchItems b
 			input = append(input, map[string]any{
 				"type": "function_call_output", "call_id": message.ToolCallID, "output": message.Content,
 			})
+			if vision {
+				toolImages = append(toolImages, message.Images...)
+			}
 		}
 	}
+	flushToolImages()
 	return input
 }
 
