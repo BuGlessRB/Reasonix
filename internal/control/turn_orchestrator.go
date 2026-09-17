@@ -63,7 +63,7 @@ func (o *turnOrchestrator) runComposedSyntheticTurn(ctx context.Context, text st
 	ctx = c.continueAnnouncedTurn(ctx)
 	ctx = agent.WithRawUserInput(ctx, text)
 	ctx = c.withPlannerTurnMetadata(ctx, text, true)
-	return c.runner.Run(ctx, c.ComposeSynthetic(text))
+	return c.runWithRunner(ctx, c.ComposeSynthetic(text))
 }
 
 // runSubagentSkillGoalLoop executes a slash-invoked runAs=subagent skill as a

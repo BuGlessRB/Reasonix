@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"reasonix/internal/ablation"
@@ -136,6 +137,18 @@ func (c *Controller) recallTail(source string, hasNotes bool) string {
 // cleared by one of those leaves the model holding state nobody sent it.
 func (c *Controller) runSettled(ctx context.Context, input string) error {
 	c.settleTurnProjections()
+	return c.runWithRunner(ctx, input)
+}
+
+// ErrNoRunner reports a turn started on a controller assembled without a
+// runner. Returned instead of calling through the nil interface: that fault is
+// a hardware exception on Windows, recovered or not.
+var ErrNoRunner = errors.New("controller has no runner")
+
+func (c *Controller) runWithRunner(ctx context.Context, input string) error {
+	if c.runner == nil {
+		return ErrNoRunner
+	}
 	return c.runner.Run(ctx, input)
 }
 
