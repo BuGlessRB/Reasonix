@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"reasonix/internal/agentpreset"
@@ -520,9 +521,14 @@ func (a *Agent) emitStreamAttempt(id string, action event.StreamAttemptAction, a
 	})
 }
 
+// streamAttemptSeq makes attempt ids unique by construction. A clock reading is
+// not: two rounds started within one tick of a coarse clock (seen on Windows)
+// shared an id, and events keyed by it landed on the wrong round.
+var streamAttemptSeq atomic.Uint64
+
 func newStreamAttemptID(attempt int) string {
 	// Host-local only: never persisted, never sent to the model.
-	return fmt.Sprintf("sa-%d-%d", attempt, time.Now().UnixNano())
+	return fmt.Sprintf("sa-%d-%d", attempt, streamAttemptSeq.Add(1))
 }
 
 // streamRetrySleep is the body-retry backoff. Tests replace it with a no-op so
