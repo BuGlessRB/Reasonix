@@ -18,7 +18,7 @@ const (
 // exception, or a request that failed.
 type LogEntry struct {
 	Seq   int64  `json:"seq"`
-	Kind  string `json:"kind"`  // console | exception | network
+	Kind  string `json:"kind"`  // console | exception | network | download
 	Level string `json:"level"` // error | warning | info
 	Text  string `json:"text"`
 }

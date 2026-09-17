@@ -219,3 +219,39 @@ func TestLiveWebSocketTransport(t *testing.T) {
 	}
 	findRef(t, snap, `button "Go"`)
 }
+
+func TestLiveDownloadsAreRefusedAndReported(t *testing.T) {
+	s := liveSession(t, true)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<title>Files</title><a href="/report.csv" download>Get report</a>`))
+	})
+	mux.HandleFunc("/report.csv", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", `attachment; filename="report.csv"`)
+		_, _ = w.Write([]byte("a,b\n"))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if _, err := s.Open(ctx, srv.URL+"/", "", false); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	snap, err := s.Snapshot(ctx, "", "")
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	link := findRef(t, snap, `link "Get report"`)
+	res, err := s.Act(ctx, "", []Step{{Action: "click", Ref: link}, {Action: "wait", Ms: 800}})
+	if err != nil {
+		t.Fatalf("Act: %v", err)
+	}
+	for _, e := range res.Logs {
+		if e.Kind == "download" && strings.Contains(e.Text, "report.csv") {
+			return
+		}
+	}
+	t.Fatalf("the refused download was not reported: %+v", res.Logs)
+}

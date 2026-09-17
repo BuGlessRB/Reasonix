@@ -137,6 +137,12 @@ func launch(ctx context.Context, spec LaunchSpec) (*engine, error) {
 		e.kill()
 		return nil, e.launchFailure(err)
 	}
+	// A download lands outside the workspace, where nothing the host observes
+	// can say it happened, so none is allowed; each refusal is reported.
+	if err := e.conn.call(ctx, "", "Browser.setDownloadBehavior", map[string]any{"behavior": "deny", "eventsEnabled": true}, nil); err != nil {
+		e.kill()
+		return nil, e.launchFailure(err)
+	}
 	return e, nil
 }
 

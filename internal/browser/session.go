@@ -309,6 +309,18 @@ func (s *Session) onBrowserEvent(ev event) {
 			s.mu.Unlock()
 			opener.notePopup(popup.id)
 		}
+	case "Browser.downloadWillBegin":
+		var p struct {
+			FrameID           string `json:"frameId"`
+			URL               string `json:"url"`
+			SuggestedFilename string `json:"suggestedFilename"`
+		}
+		if json.Unmarshal(ev.Params, &p) != nil {
+			return
+		}
+		if t := s.tabByFrame(p.FrameID); t != nil {
+			t.log("download", "error", fmt.Sprintf("download of %q from %s was refused: the agent's browser does not download files", p.SuggestedFilename, p.URL))
+		}
 	case "Target.targetDestroyed":
 		var p struct {
 			TargetID string `json:"targetId"`
@@ -320,6 +332,20 @@ func (s *Session) onBrowserEvent(ev event) {
 			s.removeTab(t)
 		}
 	}
+}
+
+func (s *Session) tabByFrame(frameID string) *tab {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, t := range s.tabs {
+		t.mu.Lock()
+		main := t.mainFrame
+		t.mu.Unlock()
+		if main == frameID {
+			return t
+		}
+	}
+	return nil
 }
 
 func (s *Session) tabByTarget(targetID string) *tab {
