@@ -324,6 +324,10 @@ type Approval struct {
 	Tool    string
 	Subject string
 	Reason  string // optional annotation explaining why approval is needed
+	// ReasonCode names the class of call that needs a person, for a frontend to
+	// render in the reader's language. Reason carries the same answer as the
+	// sentence the model was given.
+	ReasonCode string
 	// RawInput is the exact structured tool input. ACP permission clients use it
 	// together with locations/reason instead of parsing a human title.
 	RawInput json.RawMessage

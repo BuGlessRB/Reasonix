@@ -12,6 +12,19 @@ const PLAN_TOOL = "exit_plan_mode";
 // instead of "about to run extend_write_paths".
 const FENCE_TOOL = "extend_write_paths";
 
+// Why no posture answers for this call. The kernel names the class and writes
+// the sentence it gave the model; a reader gets that class in their own
+// language, and an unknown one falls back to what the model was told.
+const EXPLICIT_APPROVAL: Record<string, string> = {
+  dynamic_bash: "这条命令里嵌套或间接地执行了别的命令。自动放行和宽泛的允许规则都无法确认真正会跑的是什么；要么批准这一条，要么切到全部放行。",
+  browser_credential: "这一步会把密码、一次性验证码或银行卡信息输入网站。自动放行、该站点已有的授权和宽泛规则都不能代你回答；要么批准，要么切到全部放行。",
+  computer_use: "这会读取或操作电脑上的另一个应用，拿到的是那个应用本身的权限。自动放行和宽泛规则都不能代你回答；要么为这个应用批准，要么切到全部放行。",
+};
+
+function approvalReason(a: { reason?: string; reasonCode?: string }): string {
+  return (a.reasonCode && t(EXPLICIT_APPROVAL[a.reasonCode])) || a.reason || "";
+}
+
 import type { PlanAction } from "../../port/session";
 export type { PlanAction };
 
@@ -55,7 +68,7 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
               <span className="tool">{item.a.tool === FENCE_TOOL ? t("这个子任务声明之外的文件") : item.a.tool}</span>
               <span className="sub" title={item.a.subject}>{item.a.subject}</span>
             </div>
-            {item.a.reason && <div className="apv-dt">{item.a.reason}</div>}
+            {approvalReason(item.a) && <div className="apv-dt">{approvalReason(item.a)}</div>}
             {!sealed && (
               <div className="apv-ft">
                 <button className="btn" data-primary data-action="decision.tool" data-target={item.a.id} data-value="once"

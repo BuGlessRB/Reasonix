@@ -558,7 +558,7 @@ func (c *Controller) requestApprovalDecision(ctx context.Context, req approvalRe
 		id, reply = c.approval.registerWithInput(req.tool, req.subject, req.reason, req.args)
 	}
 
-	c.sink.Emit(c.approvalRequestEvent(event.Approval{ID: id, Tool: req.tool, Subject: req.subject, Reason: req.reason, RawInput: append(json.RawMessage(nil), req.args...), Fresh: req.fresh}))
+	c.sink.Emit(c.approvalRequestEvent(event.Approval{ID: id, Tool: req.tool, Subject: req.subject, Reason: req.reason, ReasonCode: ExplicitApprovalCode(req.tool, req.subject), RawInput: append(json.RawMessage(nil), req.args...), Fresh: req.fresh}))
 	c.approval.promptEmitMu.Unlock()
 	// The agent now needs the user's attention; a Notification hook can ping an
 	// external channel (desktop notice, phone) while the run blocks on the reply.

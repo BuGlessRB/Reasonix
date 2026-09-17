@@ -12,13 +12,16 @@ const { checker, listen, scriptedModel, seedHome, settledWindow, until, wait } =
 const PAGE = `<!doctype html><title>Greeter</title>
 <label>Name <input></label>
 <button onclick="document.querySelector('p').textContent='Hello, '+document.querySelector('input').value">Greet</button>
-<p></p>`;
+<p></p>
+<a href="/elsewhere" target="_blank">Open elsewhere</a>
+<a href="/report.csv" download>Get report</a>`;
 
 const { check, failures } = checker();
 
 // Each round's call is built from what the previous tool result showed.
-// Which of the two turns the script is on; main() moves it before asking again.
-const script = { turn: 1, calls: 0 };
+// Which turn the script is on, and what it does in it; main() moves both before
+// asking again.
+const script = { turn: 1, calls: 0, act: "greet" };
 
 function browsingModel(pageURL) {
   return scriptedModel((tools) => {
@@ -33,14 +36,21 @@ function browsingModel(pageURL) {
     if (script.calls >= 2) return null;
     script.calls++;
     if (script.calls === 1) return { name: "browser_open", arguments: { url: pageURL } };
-    return greet(["李雷", "韩梅梅", "小明"][script.turn - 1]);
+    if (script.act === "greet") return greet(["李雷", "韩梅梅", "小明"][script.turn - 1]);
+    const link = script.act === "popup" ? "Open elsewhere" : "Get report";
+    const at = (last.match(new RegExp(`- link "${link}" \\[(e\\d+)\\]`)) || [])[1];
+    return { name: "browser_act", arguments: { steps: [{ action: "click", ref: at }, { action: "wait", ms: 1200 }] } };
   });
 }
 
 async function main() {
-  const page = await listen((_req, res) => {
+  const page = await listen((req, res) => {
+    if (req.url === "/report.csv") {
+      res.writeHead(200, { "Content-Type": "text/csv", "Content-Disposition": 'attachment; filename="report.csv"' });
+      return res.end("a,b\n");
+    }
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(PAGE);
+    res.end(req.url === "/elsewhere" ? "<title>Elsewhere</title><h1>elsewhere</h1>" : PAGE);
   });
   const { handler, requests } = browsingModel(`${page.url}/`);
   const model = await listen(handler);
@@ -106,10 +116,18 @@ async function main() {
       const view = guests()[0];
       return view ? view.webContents.executeJavaScript("document.querySelector('p').textContent") : "";
     };
-    const askFor = async (turn, name) => {
-      script.turn = turn;
+    const turn = async (act, input) => {
+      script.turn += 1;
       script.calls = 0;
-      await client.request("POST", `${base}/submit`, { input: `greet ${name} as well` });
+      script.act = act;
+      const before = requests.length;
+      await client.request("POST", `${base}/submit`, { input });
+      // One request per call plus the one that reads the last result.
+      await until(`the turn that would ${act}`, async () => requests.length > before + 2, 60000);
+      return (requests.at(-1).messages || []).filter((m) => m.role === "tool").map((m) => String(m.content || "")).join("\n");
+    };
+    const askFor = async (name) => {
+      await turn("greet", `greet ${name} as well`);
       return until(`the greeting the agent typed for ${name}`, async () => ((await greeting()) === `Hello, ${name}` ? true : null), 60000).catch(() => false);
     };
 
@@ -118,15 +136,23 @@ async function main() {
     // is in another application for most of a run, so both are ordinary.
     win.minimize();
     await wait(1000);
-    check("the agent's input reaches the page while the window is minimized", await askFor(2, "韩梅梅"), await greeting());
+    check("the agent's input reaches the page while the window is minimized", await askFor("韩梅梅"), await greeting());
 
     win.restore();
     const cover = new BrowserWindow({ width: 1600, height: 1000, x: 0, y: 0, alwaysOnTop: true });
     await cover.loadURL("data:text/html,<h1>cover</h1>");
     cover.focus();
     await wait(1200);
-    check("the agent's input reaches the page while another window covers this one", await askFor(3, "小明"), await greeting());
+    check("the agent's input reaches the page while another window covers this one", await askFor("小明"), await greeting());
     cover.destroy();
+
+    // A popup is a tab of its own, and a download is refused and reported: both
+    // are this window's answer to the protocol, not a browser's.
+    const popped = await turn("popup", "open the other page");
+    check("a popup becomes a tab the model can act on", /Tab t2/.test(popped), popped.slice(0, 200));
+    check("the popup is a second view in this window", guests().length === 2, guests().length);
+    const downloaded = await turn("download", "get the report");
+    check("a download is refused and reported", /report\.csv.*refused/s.test(downloaded), downloaded.slice(0, 300));
   } catch (err) {
     check("the run completed", false, err.message);
   }

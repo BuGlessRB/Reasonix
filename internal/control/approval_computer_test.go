@@ -39,7 +39,7 @@ func TestComputerUseNeedsAPersonPerApplicationInAuto(t *testing.T) {
 	}
 
 	done := approve("computer_read", "com.apple.Notes")
-	if a := answer(true); a.Reason != computerApprovalReason || a.Subject != "com.apple.Notes" {
+	if a := answer(true); a.ReasonCode != computerUseApproval || a.Reason != explicitApprovalTexts[computerUseApproval] || a.Subject != "com.apple.Notes" {
 		t.Fatalf("approval = %+v, want the application and why a person is needed", a)
 	}
 	if !<-done {

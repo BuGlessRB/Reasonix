@@ -61,7 +61,7 @@ func TestBrowserCredentialEntryNeedsAPersonInAuto(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("credential entry did not ask a person in auto, despite a grant for the site")
 	}
-	if approval.Reason != browserCredentialApprovalReason {
+	if approval.Reason != explicitApprovalReason("browser_act", credential) || approval.ReasonCode != browserCredentialApprova {
 		t.Fatalf("approval reason = %q", approval.Reason)
 	}
 	c.Approve(approval.ID, true, false, false)
@@ -83,11 +83,11 @@ func TestBrowserCredentialEntryNeedsAPersonInAuto(t *testing.T) {
 
 func TestUnattendedRefusalNamesTheSecret(t *testing.T) {
 	_, _, reason, _ := denyPermissionApprover{}.ApproveWithReason(context.Background(), "browser_act", permission.BrowserCredentialPrefix+"https://bank.example", nil)
-	if !strings.HasPrefix(reason, browserCredentialApprovalReason) {
+	if !strings.HasPrefix(reason, explicitApprovalReason("browser_act", permission.BrowserCredentialPrefix+"https://bank.example")) {
 		t.Fatalf("unattended refusal = %q, want it to lead with why a person was needed", reason)
 	}
 	_, _, plain, _ := denyPermissionApprover{}.ApproveWithReason(context.Background(), "browser_act", "https://bank.example", nil)
-	if strings.Contains(plain, browserCredentialApprovalReason) {
+	if strings.Contains(plain, explicitApprovalTexts[browserCredentialApprova]) {
 		t.Fatalf("an ordinary refusal claimed a secret: %q", plain)
 	}
 }

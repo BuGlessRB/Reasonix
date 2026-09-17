@@ -209,7 +209,10 @@ export interface Approval {
   id: string;
   tool: string;
   subject: string;
+  // reason is the sentence the model was given; reasonCode is the same answer
+  // as an identity, which is what this window renders.
   reason?: string;
+  reasonCode?: string;
   fresh?: boolean;
   kind?: "tool" | "plan" | "recovery";
 }

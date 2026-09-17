@@ -60,24 +60,39 @@ func rulesWithoutFreshHumanApproval(rules []permission.Rule) []permission.Rule {
 // from the public Approve command (different signature, different direction).
 type gateApprover struct{ c *Controller }
 
-const dynamicBashApprovalReason = "This command uses nested or indirect shell execution. Auto and broad allow rules cannot verify the inner command; approve this exact command or use YOLO."
+// The classes of call no posture answers for. The code is the identity a
+// window renders in the reader's language; the sentence is what the model is
+// told, and it stays in the language the model is addressed in.
+const (
+	dynamicBashApproval      = "dynamic_bash"
+	browserCredentialApprova = "browser_credential"
+	computerUseApproval      = "computer_use"
+)
 
-const browserCredentialApprovalReason = "This browser step types a password, a one-time code or card details into the site. Auto, the site's grant and broad allow rules do not answer it; approve it or use YOLO."
+var explicitApprovalTexts = map[string]string{
+	dynamicBashApproval:      "This command uses nested or indirect shell execution. Auto and broad allow rules cannot verify the inner command; approve this exact command or use YOLO.",
+	browserCredentialApprova: "This browser step types a password, a one-time code or card details into the site. Auto, the site's grant and broad allow rules do not answer it; approve it or use YOLO.",
+	computerUseApproval:      "This reads or operates another application on the computer, with whatever access that application has. Auto and broad allow rules do not answer it; approve it for this application or use YOLO.",
+}
 
-const computerApprovalReason = "This reads or operates another application on the computer, with whatever access that application has. Auto and broad allow rules do not answer it; approve it for this application or use YOLO."
-
-// explicitApprovalReason is why a call needs a person rather than auto or a
-// broad rule, or "" when it does not.
-func explicitApprovalReason(tool, subject string) string {
+// ExplicitApprovalCode names why a call needs a person rather than auto or a
+// broad rule, or "" when it does not. It is derived from the call, so whoever
+// renders the prompt asks rather than being told.
+func ExplicitApprovalCode(tool, subject string) string {
 	switch {
 	case strings.EqualFold(tool, "bash") && permission.BashSubjectRequiresExplicitApproval(subject):
-		return dynamicBashApprovalReason
+		return dynamicBashApproval
 	case permission.IsBrowserTool(tool) && permission.BrowserSubjectRequiresExplicitApproval(subject):
-		return browserCredentialApprovalReason
+		return browserCredentialApprova
 	case permission.IsComputerTool(tool):
-		return computerApprovalReason
+		return computerUseApproval
 	}
 	return ""
+}
+
+// explicitApprovalReason is that same answer as the sentence the model reads.
+func explicitApprovalReason(tool, subject string) string {
+	return explicitApprovalTexts[ExplicitApprovalCode(tool, subject)]
 }
 
 func (g gateApprover) Approve(ctx context.Context, tool, subject string, args json.RawMessage) (bool, bool, error) {

@@ -552,7 +552,8 @@ func (a *approvalManager) snapshotPrompts() ([]event.Approval, []event.Ask) {
 	approvals := make([]event.Approval, 0, len(a.approvals))
 	for id, p := range a.approvals {
 		approvals = append(approvals, event.Approval{
-			ID: id, Tool: p.tool, Subject: p.subject, Reason: p.reason, RawInput: append(json.RawMessage(nil), p.rawInput...), Fresh: p.fresh,
+			ID: id, Tool: p.tool, Subject: p.subject, Reason: p.reason, ReasonCode: ExplicitApprovalCode(p.tool, p.subject),
+			RawInput: append(json.RawMessage(nil), p.rawInput...), Fresh: p.fresh,
 			Kind: p.kind, Recovery: p.recovery,
 		})
 	}
