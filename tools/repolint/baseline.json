@@ -3,8 +3,8 @@
     "banner": 13,
     "commented-code": 0,
     "complexity": 1878,
-    "essay": 1916,
-    "file-size": 100533,
+    "essay": 1915,
+    "file-size": 100466,
     "function-size": 8031,
     "layering": 1,
     "marker": 0,
@@ -25,7 +25,7 @@
     "desktop/app.go": {
       "complexity": 56,
       "essay": 60,
-      "file-size": 11117,
+      "file-size": 11111,
       "function-size": 368,
       "struct-state": 11
     },
@@ -141,19 +141,19 @@
       "file-size": 177
     },
     "desktop/frontend/src/lib/bridge.ts": {
-      "file-size": 5217
+      "file-size": 5219
     },
     "desktop/frontend/src/lib/crash.ts": {
       "file-size": 98
     },
     "desktop/frontend/src/lib/transcriptStore.ts": {
-      "file-size": 237
+      "file-size": 205
     },
     "desktop/frontend/src/lib/types.ts": {
-      "file-size": 1594
+      "file-size": 1576
     },
     "desktop/frontend/src/lib/useController.ts": {
-      "file-size": 4087
+      "file-size": 4085
     },
     "desktop/heartbeat.go": {
       "essay": 7
@@ -228,7 +228,7 @@
     },
     "desktop/session_draft.go": {
       "complexity": 12,
-      "file-size": 543,
+      "file-size": 532,
       "function-size": 5
     },
     "desktop/session_key_test.go": {
@@ -545,7 +545,7 @@
     "internal/boot/boot.go": {
       "complexity": 258,
       "essay": 78,
-      "file-size": 2029,
+      "file-size": 2042,
       "function-size": 1719,
       "narrative": 3
     },
@@ -874,7 +874,7 @@
     "internal/control/controller.go": {
       "complexity": 13,
       "essay": 97,
-      "file-size": 5180,
+      "file-size": 5182,
       "function-size": 88,
       "narrative": 4,
       "struct-state": 22
@@ -1176,7 +1176,7 @@
       "essay": 18
     },
     "internal/plugin/lazy_test.go": {
-      "essay": 5,
+      "essay": 4,
       "test-file-size": 275
     },
     "internal/plugin/plugin.go": {
@@ -1357,7 +1357,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 18,
-      "file-size": 948,
+      "file-size": 933,
       "function-size": 8
     },
     "internal/serve/serve_test.go": {

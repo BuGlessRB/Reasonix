@@ -456,8 +456,11 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Independent-session identity, organization CAS and unread/lifecycle guards
 // measure 2443.0 KiB against the same-toolchain main-v2 base of 2440.7 KiB
 // (+2.3 KiB, 0.095%). Retain one tenth; all other limits stay unchanged.
-// Full 40-character identity measures 2501892 B in Electron and 2501946 B
-// in the browser build. Budget both; CI now stamps packaging's identity width.
-const rawInitialBudgetKiB = 2_443.4;
+// Complete export execution/rendering remains lazy; only bounded progress,
+// lifecycle observation, and cross-page tool-state hydration enter startup.
+// A full 40-character identity measures 2064513 B in the browser build and
+// 2064459 B in Electron, versus 2064077 B on current main-v2 (+436 B, 0.021%).
+// Retain the smallest one-decimal ceiling; all other limits stay unchanged.
+const rawInitialBudgetKiB = 2_016.2;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
