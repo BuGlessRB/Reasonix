@@ -18,6 +18,10 @@ type Request struct {
 	Failed string // what the browser said when nothing arrived
 	Millis int64
 
+	// Page is which document of this tab asked: the list outlives a navigation,
+	// and a 404 the page before this one collected is not this page's.
+	Page int64
+
 	id    string
 	start float64 // the browser's own clock, in seconds
 }
@@ -40,7 +44,7 @@ func (s *Session) Requests(tabID string) ([]Request, TabInfo, error) {
 func (t *tab) requestStarted(id, method, url, kind string, at float64) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	r := &Request{Method: method, URL: url, Kind: kind, id: id, start: at}
+	r := &Request{Method: method, URL: url, Kind: kind, Page: t.navigated, id: id, start: at}
 	t.requests[id] = r
 	t.netlog = append(t.netlog, r)
 	if len(t.netlog) > maxRequests {

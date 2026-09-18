@@ -77,6 +77,18 @@ func TestTheNetworkListReadsNewestFirstAndNarrowsByURL(t *testing.T) {
 	if got := renderRequests(requests, "api/", 0); got != "- POST https://example.com/api/save [xhr] → 500 application/json 91 B" {
 		t.Errorf("narrowing by URL = %q", got)
 	}
+	// What the tab loaded before this page is not read as this page's.
+	older := append([]browser.Request{{Method: "GET", URL: "https://example.com/old", Kind: "document", Status: 200}}, requests...)
+	for i := range older[1:] {
+		older[i+1].Page = 1
+	}
+	changed := renderRequests(older, "", 0)
+	if !strings.Contains(changed, "Earlier, before the page changed:\n- GET https://example.com/old") {
+		t.Errorf("the navigation is not marked:\n%s", changed)
+	}
+	if strings.Count(changed, "Earlier, before") != 1 {
+		t.Errorf("the navigation is marked more than once:\n%s", changed)
+	}
 	if got := renderRequests(requests, "", 2); strings.Count(got, "\n") != 1 {
 		t.Errorf("a limit of 2 gave:\n%s", got)
 	}

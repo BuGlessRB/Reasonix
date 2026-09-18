@@ -28,7 +28,7 @@ func Discover(configured string) (string, error) {
 			return found, nil
 		}
 	}
-	return "", fail(CodeEngineMissing, "no Chrome, Edge or Chromium is installed; install one, or set [browser] executable to its path")
+	return "", fail(CodeEngineMissing, "no Chrome, Edge or Chromium is installed; install one, or set [browser] executable to its path — which is read when a session starts, so it takes a new one")
 }
 
 func installedCandidates(goos string, getenv func(string) string) []string {

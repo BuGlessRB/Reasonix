@@ -496,6 +496,24 @@ addEventListener("resize", show); show();
 		t.Errorf("the call that 404ed = %+v", gone)
 	}
 
+	// A navigation does not clear the list, and what came before it says so.
+	if _, err := s.Open(ctx, srv.URL+"/api/ok", "", false); err != nil {
+		t.Fatalf("Open again: %v", err)
+	}
+	after, _, err := s.Requests("")
+	if err != nil {
+		t.Fatalf("Requests: %v", err)
+	}
+	if len(after) <= len(requests) {
+		t.Fatalf("the list lost what the tab had asked for: %d then %d", len(requests), len(after))
+	}
+	if first, last := after[0].Page, after[len(after)-1].Page; first == last {
+		t.Fatalf("every request claims the same document across a navigation: %d", first)
+	}
+
+	if _, err := s.Open(ctx, srv.URL+"/", "", false); err != nil {
+		t.Fatalf("Open the page again: %v", err)
+	}
 	if _, err := actPlain(ctx, s, "", []Step{{Action: "resize", Width: 390, Height: 844}, {Action: "wait", Ms: 400}}); err != nil {
 		t.Fatalf("resize: %v", err)
 	}

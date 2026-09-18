@@ -468,12 +468,21 @@ func renderRequests(requests []browser.Request, match string, limit int) string 
 	}
 	match = strings.ToLower(strings.TrimSpace(match))
 	var lines []string
-	for i := len(requests) - 1; i >= 0 && len(lines) < limit; i-- {
+	kept := 0
+	page := int64(-1)
+	for i := len(requests) - 1; i >= 0 && kept < limit; i-- {
 		r := requests[i]
 		if match != "" && !strings.Contains(strings.ToLower(r.URL), match) {
 			continue
 		}
+		// The list outlives a navigation, so what the tab loaded before this
+		// page is said to be that rather than read as this page's.
+		if page >= 0 && r.Page != page {
+			lines = append(lines, "Earlier, before the page changed:")
+		}
+		page = r.Page
 		lines = append(lines, "- "+requestLine(r))
+		kept++
 	}
 	if len(lines) == 0 {
 		if match != "" {
