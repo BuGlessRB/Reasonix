@@ -24,17 +24,18 @@ type freshSessionCreator interface {
 // desktopSessionState groups the Desktop-only persistence and navigation
 // authority so App does not grow a second set of independent scalar owners.
 type desktopSessionState struct {
-	root                    string
-	workspaceState          *workspacestate.Store
-	navigationSeq           atomic.Uint64
-	pruneBlockedPersistence atomic.Uint64
-	pendingCreateRecovered  atomic.Uint64
+	beforeMigrationRegistryCommit func() error
+	root                          string
+	workspaceState                *workspacestate.Store
+	navigationSeq                 atomic.Uint64
+	pruneBlockedPersistence       atomic.Uint64
+	pendingCreateRecovered        atomic.Uint64
 }
 
 func newDesktopSessionState() desktopSessionState {
 	return desktopSessionState{
 		root:           config.DesktopSessionStoreDir(),
-		workspaceState: workspacestate.NewStore(config.DesktopWorkspaceStatePath()),
+		workspaceState: newDesktopWorkspaceStore(),
 	}
 }
 
@@ -76,9 +77,14 @@ func (a *App) workspaceRegistry() *workspacestate.Store {
 	a.sessionServicesMu.Lock()
 	defer a.sessionServicesMu.Unlock()
 	if a.desktopSessions.workspaceState == nil {
-		a.desktopSessions.workspaceState = workspacestate.NewStore(config.DesktopWorkspaceStatePath())
+		a.desktopSessions.workspaceState = newDesktopWorkspaceStore()
 	}
 	return a.desktopSessions.workspaceState
+}
+
+func newDesktopWorkspaceStore() *workspacestate.Store {
+	path := config.DesktopWorkspaceStatePath()
+	return workspacestate.NewStore(path, func(ctx context.Context) error { return backupDesktopUpgradeMetadataAt(ctx, path) })
 }
 
 func (a *App) ensureDesktopWorkspace(ctx context.Context, scope, workspaceRoot string) (string, error) {
@@ -98,12 +104,20 @@ func (a *App) ensureDesktopWorkspace(ctx context.Context, scope, workspaceRoot s
 }
 
 func (a *App) bindFreshDesktopSession(ctx context.Context, scope, workspaceRoot string, creator freshSessionCreator) (session.SessionRef, string, error) {
+	return a.bindFreshDesktopSessionWithIDs(ctx, scope, workspaceRoot, creator, "", "")
+}
+
+func (a *App) bindFreshDesktopSessionWithIDs(ctx context.Context, scope, workspaceRoot string, creator freshSessionCreator, sessionID, operationID string) (session.SessionRef, string, error) {
 	workspaceID, err := a.ensureDesktopWorkspace(ctx, scope, workspaceRoot)
 	if err != nil {
 		return session.SessionRef{}, "", err
 	}
-	sessionID := "desktop-" + strings.TrimPrefix(newTabID(), "tab_")
-	operationID := "create-" + strings.TrimPrefix(newTabID(), "tab_")
+	if sessionID = strings.TrimSpace(sessionID); sessionID == "" {
+		sessionID = "desktop-" + strings.TrimPrefix(newTabID(), "tab_")
+	}
+	if operationID = strings.TrimSpace(operationID); operationID == "" {
+		operationID = "create-" + strings.TrimPrefix(newTabID(), "tab_")
+	}
 	store := a.workspaceRegistry()
 	if err := store.BeginCreate(ctx, workspacestate.PendingCreate{OperationID: operationID, WorkspaceID: workspaceID, SessionID: sessionID}); err != nil {
 		return session.SessionRef{}, "", err
@@ -139,6 +153,15 @@ func (a *App) attachDesktopSession(ctx context.Context, scope, workspaceRoot str
 	}
 	if err := a.workspaceRegistry().AttachSession(ctx, "", workspaceID, ref.SessionID, ""); err != nil {
 		return "", err
+	}
+	if runtime, ok := a.desktopSessionService("").Runtime(ref); ok {
+		if source := runtime.Session().Manifest().Source; source != nil && source.Path != "" {
+			if fingerprint, err := desktopSourceFingerprint(source.Path); err == nil {
+				if err := a.recordDesktopSource(ctx, source.Path, "legacy", fingerprint, ref.SessionID, workspaceID); err != nil {
+					return "", err
+				}
+			}
+		}
 	}
 	return workspaceID, nil
 }
@@ -282,12 +305,12 @@ func (a *App) prepareDesktopSessionRotation(ctx context.Context, request control
 	sessionID := "desktop-" + strings.TrimPrefix(newTabID(), "tab_")
 	operationID := "rotate-" + strings.TrimPrefix(newTabID(), "tab_")
 	store := a.workspaceRegistry()
-	if err := store.BeginCreate(ctx, workspacestate.PendingCreate{OperationID: operationID, WorkspaceID: workspaceID, SessionID: sessionID}); err != nil {
-		return control.SessionRotationPlan{}, err
-	}
 	archiveSource := ""
 	if request.Reason == "clear" {
 		archiveSource = request.Source.SessionID
+	}
+	if err := store.BeginCreate(ctx, workspacestate.PendingCreate{OperationID: operationID, WorkspaceID: workspaceID, SessionID: sessionID, ArchiveSource: archiveSource}); err != nil {
+		return control.SessionRotationPlan{}, err
 	}
 	return control.SessionRotationPlan{
 		CreateOptions: session.CreateOptions{
@@ -303,14 +326,6 @@ func (a *App) prepareDesktopSessionRotation(ctx context.Context, request control
 			if err := store.CommitRotation(commitCtx, operationID, workspaceID, sessionID, "", archiveSource); err != nil {
 				return err
 			}
-			a.mu.Lock()
-			if current := a.tabs[owner.ID]; current == owner {
-				owner.SessionWorkspace.ID = workspaceID
-				owner.SessionID = sessionID
-				owner.SessionPath = ""
-				a.saveTabsLocked()
-			}
-			a.mu.Unlock()
 			return nil
 		},
 	}, nil

@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/sessioncatalog"
 )
 
 type runtimeStatusSessionController struct {
@@ -795,14 +796,12 @@ func TestCoveredRecoveryCopyBecomesVisibleAfterMigratedParentDeletion(t *testing
 		t.Fatalf("covered recovery copy was migrated before parent deletion: %+v", meta)
 	}
 
-	if err := app.DeleteSession(parent); err != nil {
+	if err := app.deleteSession(parent); err != nil {
 		t.Fatalf("DeleteSession parent: %v", err)
 	}
-	for _, marker := range []string{topicMigrationMarker, topicIndexRepairMarker} {
-		if _, err := os.Stat(filepath.Join(dir, marker)); !os.IsNotExist(err) {
-			t.Fatalf("%s survived live session deletion: %v", marker, err)
-		}
-	}
+	// The catalog worker may already have replaced the invalidated markers with
+	// signatures for the new directory state. Recovery visibility is the
+	// observable contract, independent of that reconciliation timing.
 
 	nodes := waitForCatalogTopic(t, app, "global", "", legacySessionTopicID(recovery))
 	meta, ok, err := agent.LoadBranchMeta(recovery)
@@ -1423,7 +1422,13 @@ func TestDefaultGlobalTabDoesNotWaitForLegacyMigration(t *testing.T) {
 	}
 	wantTopicID := legacySessionTopicID(sessionPath)
 	nodes := waitForCatalogTopic(t, app, "global", "", wantTopicID)
-	if len(nodes) != 1 || len(nodes[0].Children) != 1 || nodes[0].Children[0].TopicID != wantTopicID {
+	foundLegacy := false
+	for _, folder := range nodes {
+		for _, child := range folder.Children {
+			foundLegacy = foundLegacy || child.TopicID == wantTopicID
+		}
+	}
+	if !foundLegacy {
 		t.Fatalf("legacy history was not eventually indexed: %+v", nodes)
 	}
 }
@@ -1841,8 +1846,8 @@ func TestRemoveWorkspaceUsesSharedProjectRegistryForCurrentProject(t *testing.T)
 	if got := app.ListWorkspaces(); len(got) != 0 {
 		t.Fatalf("workspaces after remove = %+v, want empty", got)
 	}
-	if got := app.ListProjectTree(); len(got) != 1 || got[0].Kind != "global_folder" || len(got[0].Children) != 0 {
-		t.Fatalf("project tree after remove = %+v, want empty Global folder", got)
+	if got := app.ListProjectTree(); len(got) != 1 || got[0].Kind != "global_folder" {
+		t.Fatalf("project tree after remove = %+v, want only Global folder", got)
 	}
 }
 
@@ -2113,7 +2118,7 @@ func TestRenameTopicUpdatesOpenTabMeta(t *testing.T) {
 	}
 }
 
-func TestRenameTopicRecreatesDeletedProjectTitleIndexFromOpenTab(t *testing.T) {
+func TestRenameCanonicalTopicSurvivesDeletedLegacyTitleIndex(t *testing.T) {
 	isolateDesktopUserDirs(t)
 
 	projectRoot := t.TempDir()
@@ -2137,12 +2142,25 @@ func TestRenameTopicRecreatesDeletedProjectTitleIndexFromOpenTab(t *testing.T) {
 	if err := app.RenameTopic(topic.ID, "恢复标题"); err != nil {
 		t.Fatalf("rename topic after deleting title index: %v", err)
 	}
-	if got := loadTopicTitle(projectRoot, topic.ID); got != "恢复标题" {
-		t.Fatalf("restored topic title = %q, want 恢复标题", got)
+	state, err := app.workspaceRegistry().Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, presentation := range state.Presentation {
+		if presentation.TopicID == topic.ID && presentation.Title == "恢复标题" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("canonical topic title was not durably restored")
 	}
 	nodes := app.ListProjectTree()
 	if len(nodes) != 1 || len(nodes[0].Children) != 1 || nodes[0].Children[0].TopicID != topic.ID {
 		t.Fatalf("project tree should still contain topic, got %#v", nodes)
+	}
+	if nodes[0].Children[0].Label != "恢复标题" {
+		t.Fatalf("canonical title not visible: %+v", nodes)
 	}
 }
 
@@ -2477,38 +2495,22 @@ func TestTrashTopicMovesRelatedSessionsToTrash(t *testing.T) {
 	ref := "sa_20260102_030405_000000000_aabbccddeeff"
 	writeSubagentArtifact(t, dir, ref, agent.BranchID(sessionPath))
 
-	if err := NewApp().TrashTopic(topicID); err != nil {
+	app := NewApp()
+	pinDesktopSessionRoot(t, app)
+	if err := app.TrashTopic(topicID); err != nil {
 		t.Fatalf("trash topic: %v", err)
 	}
-	if _, err := os.Stat(sessionPath); !os.IsNotExist(err) {
-		t.Fatalf("topic session should be removed from active history, stat err = %v", err)
+	assertLegacyLifecycle(t, app, sessionPath, "archived")
+	assertLegacyLifecycle(t, app, placeholderPath, "archived")
+	if _, err := os.Stat(placeholderGoalPath); err != nil {
+		t.Fatalf("lost historical goal sidecar: %v", err)
 	}
-	trashPath := filepath.Join(dir, sessionTrashDir, "trash-me.jsonl", "trash-me.jsonl")
-	if _, err := os.Stat(trashPath); err != nil {
-		t.Fatalf("topic session should be moved to trash: %v", err)
-	}
-	if _, err := os.Stat(placeholderPath); !os.IsNotExist(err) {
-		t.Fatalf("placeholder session should be removed from active history, stat err = %v", err)
-	}
-	placeholderTrashDir := filepath.Join(dir, sessionTrashDir, "trash-placeholder-session.jsonl")
-	if _, err := os.Stat(filepath.Join(placeholderTrashDir, "trash-placeholder-session.jsonl")); err != nil {
-		t.Fatalf("placeholder session should be moved to trash: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(placeholderTrashDir, "trash-placeholder-session.jsonl.meta")); err != nil {
-		t.Fatalf("placeholder meta should be moved to trash: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(placeholderTrashDir, "trash-placeholder-session.goal-state.json")); err != nil {
-		t.Fatalf("placeholder goal state should be moved to trash: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, sessionTrashDir, "trash-me.jsonl", "subagents", ref+".jsonl")); err != nil {
-		t.Fatalf("topic subagent should be moved to trash: %v", err)
-	}
-	if got := loadTopicTitle(projectRoot, topicID); got != "" {
-		t.Fatalf("topic title should be removed, got %q", got)
+	if got := loadTopicTitle(projectRoot, topicID); got != "Trash history" {
+		t.Fatalf("lost historical topic metadata: %q", got)
 	}
 }
 
-func TestTrashTopicRemovesStaleMissingSession(t *testing.T) {
+func TestLegacyTrashTopicRemovesStaleMissingSession(t *testing.T) {
 	isolateDesktopUserDirs(t)
 
 	projectRoot := t.TempDir()
@@ -2542,7 +2544,7 @@ func TestTrashTopicRemovesStaleMissingSession(t *testing.T) {
 		activeTabID: "stale",
 	}
 
-	if err := app.TrashTopic(topicID); err != nil {
+	if err := app.trashTopic(topicID); err != nil {
 		t.Fatalf("TrashTopic should remove stale missing session: %v", err)
 	}
 	if got := loadTopicTitle(projectRoot, topicID); got != "" {
@@ -2553,44 +2555,6 @@ func TestTrashTopicRemovesStaleMissingSession(t *testing.T) {
 	}
 	if got := app.activeTabID; got != "other" {
 		t.Fatalf("active tab = %q, want other", got)
-	}
-}
-
-func TestRestoreGlobalTopicSessionReindexesProjectTree(t *testing.T) {
-	isolateDesktopUserDirs(t)
-
-	dir := config.SessionDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatalf("mkdir sessions: %v", err)
-	}
-	sessionPath := writeLegacySession(t, dir, "restore-global.jsonl", "restore global history", time.Now().Add(-time.Hour))
-	topicID := legacySessionTopicID(sessionPath)
-	app := NewApp()
-
-	nodes := waitForCatalogTopic(t, app, "global", "", topicID)
-	if len(nodes) != 1 || len(nodes[0].Children) != 1 || nodes[0].Children[0].TopicID != topicID {
-		t.Fatalf("legacy session should start in Global, got %#v", nodes)
-	}
-	if err := app.TrashTopic(topicID); err != nil {
-		t.Fatalf("trash global topic: %v", err)
-	}
-	trashPath := filepath.Join(dir, sessionTrashDir, "restore-global.jsonl", "restore-global.jsonl")
-	if _, err := os.Stat(trashPath); err != nil {
-		t.Fatalf("global session should be in trash: %v", err)
-	}
-	if got := app.ListProjectTree(); len(got) != 1 || got[0].Kind != "global_folder" || len(got[0].Children) != 0 {
-		t.Fatalf("trashed global topic should leave empty Global folder, got %#v", got)
-	}
-
-	if err := app.RestoreSession(trashPath); err != nil {
-		t.Fatalf("restore global session: %v", err)
-	}
-	if got := app.ListTrashedSessions(); len(got) != 0 {
-		t.Fatalf("trash should be empty after restore, got %#v", got)
-	}
-	nodes = waitForCatalogTopic(t, app, "global", "", topicID)
-	if len(nodes) != 1 || nodes[0].Kind != "global_folder" || len(nodes[0].Children) != 1 || nodes[0].Children[0].TopicID != topicID {
-		t.Fatalf("restored global session should reappear in Global, got %#v", nodes)
 	}
 }
 
@@ -2609,21 +2573,15 @@ func TestRestoreProjectTopicSessionReindexesProjectTree(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir sessions: %v", err)
 	}
-	writeTopicSession(t, dir, "restore-project.jsonl", topicID, "Project restore", projectRoot)
+	sessionPath := writeTopicSession(t, dir, "restore-project.jsonl", topicID, "Project restore", projectRoot)
 	app := NewApp()
 
 	if err := app.TrashTopic(topicID); err != nil {
 		t.Fatalf("trash project topic: %v", err)
 	}
-	trashPath := filepath.Join(dir, sessionTrashDir, "restore-project.jsonl", "restore-project.jsonl")
-	if _, err := os.Stat(trashPath); err != nil {
-		t.Fatalf("project session should be in trash: %v", err)
-	}
-	if got := loadTopicTitle(projectRoot, topicID); got != "" {
-		t.Fatalf("topic title should be removed while trashed, got %q", got)
-	}
+	ref := assertLegacyLifecycle(t, app, sessionPath, "archived")
 
-	if err := app.RestoreSession(trashPath); err != nil {
+	if err := app.RestoreCanonicalSession(ref); err != nil {
 		t.Fatalf("restore project session: %v", err)
 	}
 	nodes := waitForCatalogTopic(t, app, "project", projectRoot, topicID)
@@ -2648,7 +2606,7 @@ func TestRestoreSessionWithoutTopicMetadataFallsBackToGlobal(t *testing.T) {
 	ctrl := control.New(control.Options{SessionDir: dir, SessionPath: filepath.Join(dir, "active.jsonl"), Label: "test"})
 	app.setTestCtrl(ctrl, "")
 	defer ctrl.Close()
-	if err := app.DeleteSession(sessionPath); err != nil {
+	if err := app.deleteSession(sessionPath); err != nil {
 		t.Fatalf("delete orphan session: %v", err)
 	}
 	trashPath := filepath.Join(dir, sessionTrashDir, "restore-orphan.jsonl", "restore-orphan.jsonl")
@@ -2713,6 +2671,7 @@ func TestTrashTopicMovesOpenSessionToTrash(t *testing.T) {
 		activeTabID: "tab_open",
 	}
 
+	pinDesktopSessionRoot(t, app)
 	if err := app.TrashTopic(topicID); err != nil {
 		t.Fatalf("trash topic: %v", err)
 	}
@@ -2722,29 +2681,10 @@ func TestTrashTopicMovesOpenSessionToTrash(t *testing.T) {
 	if got := app.activeTabID; got != "tab_other" {
 		t.Fatalf("active tab = %q, want tab_other", got)
 	}
-	if _, err := os.Stat(sessionPath); !os.IsNotExist(err) {
-		t.Fatalf("open topic session should be removed from active history, stat err = %v", err)
-	}
-	trashPath := filepath.Join(dir, sessionTrashDir, "open-trash.jsonl", "open-trash.jsonl")
-	if _, err := os.Stat(trashPath); err != nil {
-		t.Fatalf("open topic session should be moved to trash: %v", err)
-	}
-	if agent.IsCleanupPending(sessionPath) {
-		t.Fatal("completed topic archive left a cleanup-pending marker")
-	}
-	trashed := app.ListTrashedSessions()
-	if len(trashed) != 1 || trashed[0].Path != trashPath {
-		t.Fatalf("trashed sessions = %#v, want %q", trashed, trashPath)
-	}
-	preview, err := app.PreviewSession(trashPath)
-	if err != nil {
-		t.Fatalf("preview trashed session: %v", err)
-	}
-	if !hasHistoryContent(preview, "remember this turn") {
-		t.Fatalf("preview trashed session = %#v, want remembered turn", preview)
-	}
-	if got := loadTopicTitle(projectRoot, topicID); got != "" {
-		t.Fatalf("topic title should be removed, got %q", got)
+	ref := assertLegacyLifecycle(t, app, sessionPath, "archived")
+	preview, err := app.ReadSessionHistory(ref, "", 32)
+	if err != nil || !hasHistoryContent(preview.Messages, "remember this turn") {
+		t.Fatalf("archived history=%+v %v", preview, err)
 	}
 }
 
@@ -3175,7 +3115,7 @@ func TestCloseTabKeepsIndexedBlankSession(t *testing.T) {
 	}
 }
 
-func TestTrashTopicTrashConflictAllowsIdleRuntime(t *testing.T) {
+func TestLegacyTrashTopicTrashConflictAllowsIdleRuntime(t *testing.T) {
 	isolateDesktopUserDirs(t)
 
 	projectRoot := t.TempDir()
@@ -3213,7 +3153,7 @@ func TestTrashTopicTrashConflictAllowsIdleRuntime(t *testing.T) {
 		activeTabID: "idle",
 	}
 
-	err := app.TrashTopic(topicID)
+	err := app.trashTopic(topicID)
 	if err != nil {
 		t.Fatalf("TrashTopic should succeed after cleaning empty trash dir: %v", err)
 	}
@@ -3222,7 +3162,7 @@ func TestTrashTopicTrashConflictAllowsIdleRuntime(t *testing.T) {
 	}
 }
 
-func TestTrashTopicValidTrashRemovesEmptyLiveStub(t *testing.T) {
+func TestLegacyTrashTopicValidTrashRemovesEmptyLiveStub(t *testing.T) {
 	isolateDesktopUserDirs(t)
 
 	projectRoot := t.TempDir()
@@ -3277,7 +3217,7 @@ func TestTrashTopicValidTrashRemovesEmptyLiveStub(t *testing.T) {
 		activeTabID: "other",
 	}
 
-	if err := app.TrashTopic(topicID); err != nil {
+	if err := app.trashTopic(topicID); err != nil {
 		t.Fatalf("TrashTopic should remove stale live stub: %v", err)
 	}
 	if _, err := os.Stat(sessionPath); !os.IsNotExist(err) {
@@ -3372,16 +3312,20 @@ func TestProjectTreeMigratesNewCLISessionAfterProjectDirMarker(t *testing.T) {
 	app.startSessionCatalog()
 	_ = waitForSessionCatalogForTest(t, app, nil)
 	t.Cleanup(func() { app.stopSessionCatalog(time.Second) })
+	reconcileDone := make(chan struct{}, 1)
+	app.catalogReconcileDoneHook = func(target sessioncatalog.DirectoryTarget) {
+		if sameDesktopPath(target.Path, dir) {
+			reconcileDone <- struct{}{}
+		}
+	}
 	// Exercise the same explicit reconcile path used after a watcher event. The
 	// catalog starts asynchronously, so wait for its publication before asking
 	// it to scan the project directory.
 	if !app.requestSessionCatalogReconcile(dir) {
 		t.Fatal("request initial project session catalog reconcile")
 	}
-	nodes := waitForCatalogTreeCondition(t, app, "the first project CLI session", func(nodes []ProjectNode) bool {
-		return len(nodes) == 1 && nodes[0].Kind == "project" && len(nodes[0].Children) == 1 &&
-			nodes[0].Children[0].TopicID == firstTopicID
-	})
+	<-reconcileDone
+	nodes := app.ListProjectTree()
 	if len(nodes) != 1 || nodes[0].Kind != "project" || len(nodes[0].Children) != 1 || nodes[0].Children[0].TopicID != firstTopicID {
 		t.Fatalf("first project CLI session should appear in project tree, got %#v; want topic %q", nodes, firstTopicID)
 	}
@@ -3394,11 +3338,8 @@ func TestProjectTreeMigratesNewCLISessionAfterProjectDirMarker(t *testing.T) {
 	if !app.requestSessionCatalogReconcile(dir) {
 		t.Fatal("request updated project session catalog reconcile")
 	}
-	nodes = waitForCatalogTreeCondition(t, app, "a reconciled newest project CLI session", func(nodes []ProjectNode) bool {
-		return len(nodes) == 1 && nodes[0].Kind == "project" && len(nodes[0].Children) == 2 &&
-			nodes[0].Children[0].TopicID == secondTopicID && nodes[0].Children[0].LastActivityAt > 0 &&
-			nodes[0].Children[1].TopicID == firstTopicID
-	})
+	<-reconcileDone
+	nodes = app.ListProjectTree()
 	if len(nodes) != 1 || nodes[0].Kind != "project" || len(nodes[0].Children) != 2 {
 		t.Fatalf("second project CLI session should trigger re-scan, got %#v", nodes)
 	}

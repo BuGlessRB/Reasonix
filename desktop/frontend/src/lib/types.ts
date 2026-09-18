@@ -1,4 +1,6 @@
+export type { ProjectNode } from "./projectNodeTypes";
 import type { TranscriptTurnMetadata } from "./transcriptProtocol";
+import type { ConnectionAuthentication } from "./authenticationTypes";
 import type { HistorySwitchPhases } from "./sessionDiagnostics";
 import type { ProviderCatalog } from "./providerCatalogTypes";
 export type { SettingsView } from "./settingsViewTypes";
@@ -12,7 +14,7 @@ import type { HistoryServerSearch } from "./searchSources";
 import type { Todo } from "./tools";
 import type { ContextBudgetInfo, ContextMaintenanceInfo, WireContextMaintenance } from "./contextMaintenanceTypes";
 import type { WireApproval } from "./approvalTypes";
-import type { RemoteProjectNodeFields, RemoteSessionMetaFields, RemoteTabMetaFields } from "./remoteTypes";
+import type { RemoteSessionMetaFields, RemoteTabMetaFields } from "./remoteTypes";
 import type { PinnedFileInfo } from "./pinnedContextBridge";
 import type { RecoveryLineageView } from "./sessionRecoveryTypes";
 import type { SessionRef, SessionRuntimeIssue } from "./sessionRef";
@@ -611,6 +613,8 @@ export interface TabMeta extends RemoteTabMetaFields {
   versionState?: "active" | "pending" | "resolved" | "trashed" | string;
   parentVersionId?: string;
   startupErr?: string;
+  authentication?: ConnectionAuthentication;
+  modelSettingsPending?: boolean;
   active: boolean;
   cwd: string;
 }
@@ -638,39 +642,7 @@ export interface TerminalWorkspaceView {
   shells: TerminalShellView[];
 }
 
-export interface ProjectNode extends RemoteProjectNodeFields {
-  key: string;
-  kind: "project" | "topic" | "session" | "global_folder" | "global_topic" | "global_session";
-  label: string;
-  root?: string;
-  topicId?: string;
-  recoveryPath?: string;
-  sessionPath?: string;
-  preview?: string;
-  projectColor?: string;
-  turns?: number;
-  turnsState?: "unknown" | "valid" | "corrupt" | string;
-  health?: "ok" | "missing" | "corrupt" | "degraded" | string;
-  createdAt?: number;
-  lastActivityAt?: number;
-  open?: boolean;
-  running?: boolean;
-  status?: ProjectTopicStatus;
-  pinned?: boolean;
-  sortOrder?: number;
-  recovered?: boolean;
-  recoveryReason?: string;
-  recoveryDigest?: string;
-  recoveryParentId?: string;
-  recoveryState?: "normal" | "repairing" | "adopted" | "preferred" | "diverged" | "recovery_only" | string;
-  recoveryBranchCount?: number;
-  recoveryUnresolvedCount?: number;
-  recoveryCleanupEligibleCount?: number;
-  recoveryCopyCount?: number; // Deprecated: ordinary trees hide physical copies.
-  isolatedWorktree?: boolean;
-  runtimeOnly?: boolean;
-  children?: ProjectNode[];
-}
+
 
 export type { RecoveryLineageMember, RecoveryLineageView } from "./sessionRecoveryTypes";
 
@@ -920,6 +892,7 @@ export interface HistoryPage {
 // ── Two-phase topic activation (desktop/topic_activation.go) ────────────────
 
 export interface TopicActivationRequest {
+  selector?: import("../generated/desktopContract.generated").SessionSelector;
   scope: string;
   workspaceRoot: string;
   topicId: string;
@@ -1207,6 +1180,7 @@ export interface CommandInfo {
   group?: "actions" | "management" | "subagents" | "skills" | "integrations";
   plugin?: string;
   color?: string;
+  draftBehavior?: "submit" | "setting" | "direct" | "unavailable";
 }
 
 export interface DirEntry {
@@ -1758,6 +1732,14 @@ export interface CapabilityDiagnosticsReport {
   issues: CapabilityIssue[];
 }
 
+export interface CredentialDiagnosticReport {
+  home: string;
+  credentialPath: string;
+  pendingTransactions: number;
+  checks: Array<{ id: string; status: "passed" | "failed" | "unknown" | "not_checked" | string; path?: string; message?: string }>;
+  actions: string[];
+}
+
 export interface CapabilityAssetReport {
   roots: Array<{ path: string; scope?: string; status: string }>;
   entries: Array<{
@@ -2297,6 +2279,7 @@ export interface DesktopStartupSettingsView {
   statusBarStyle: string; // "icon" | "text"
   statusBarItems: string[]; // ordered visible status bar item ids
   checkUpdates: boolean; // check for new versions on startup
+  updaterEnabled?: boolean; // build capability; absent/unknown is disabled
   updateChannel: string; // compatibility field; always "stable"
   conversationWidth?: string; // "standard" | "full"; absent from older desktop payloads
   configWarnings?: string[]; configWarningsRevision?: number; // load recovery notices and async delivery barrier

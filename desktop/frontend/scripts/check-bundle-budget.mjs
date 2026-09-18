@@ -23,7 +23,7 @@ function formatKiB(bytes) {
 
 function assertBudget(label, actual, budget) {
   if (actual > budget) {
-    throw new Error(`${label} is ${formatKiB(actual)}; budget is ${formatKiB(budget)}`);
+    throw new Error(`${label} is ${formatKiB(actual)} (${actual} B); budget is ${formatKiB(budget)} (${Math.floor(budget)} B)`);
   }
   process.stdout.write(`  PASS  ${label}: ${formatKiB(actual)} / ${formatKiB(budget)}\n`);
 }
@@ -464,6 +464,11 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // startup bridge measures 2439.6 KiB; retain 0.3 KiB bounded toolchain headroom.
 // History preparation and cancellation across startup and paging add 884 B
 // (0.035%) to the 2498286 B base. Measured 2499170 B; retain 0.1 KiB headroom.
-const rawInitialBudgetKiB = 2_440.7;
+// Independent-session identity, organization CAS and unread/lifecycle guards
+// measure 2443.0 KiB against the same-toolchain main-v2 base of 2440.7 KiB
+// (+2.3 KiB, 0.095%). Retain one tenth; all other limits stay unchanged.
+// Full 40-character identity measures 2501892 B in Electron and 2501946 B
+// in the browser build. Budget both; CI now stamps packaging's identity width.
+const rawInitialBudgetKiB = 2_443.4;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

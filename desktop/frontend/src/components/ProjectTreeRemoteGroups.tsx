@@ -112,12 +112,16 @@ export function useRemoteSessionActions(
   reportError: (error: unknown) => void,
 ) {
   const index = useMemo(() => {
-    const next = new Map<string, { hostId: string; workspace: string; name: string; path?: string; sessionId?: string }>();
+    const next = new Map<string, { hostId: string; workspace: string; name: string; path?: string; sessionId?: string; writable: boolean }>();
     for (const [groupKey, rows] of Object.entries(sessions)) {
       const [hostId, workspace] = groupKey.split("\u0000");
       for (const row of rows) {
+        // A canonical row is identified exactly by its sessionId; only legacy
+        // rows fall back to name identity, where duplicate names stay
+        // ambiguous and mutations must refuse rather than hit the wrong row.
+        const writable = Boolean(row.sessionId?.trim()) || rows.filter((candidate) => candidate.name === row.name).length === 1;
         next.set(`${hostId}\u0000${workspace}\u0000${remoteSessionIdentity(row)}`, {
-          hostId, workspace, name: row.name, path: row.path, sessionId: row.sessionId,
+          hostId, workspace, name: row.name, path: row.path, sessionId: row.sessionId, writable,
         });
       }
     }
@@ -130,6 +134,7 @@ export function useRemoteSessionActions(
   ) => {
     const remote = index.get(topicId);
     if (!remote) return false;
+    if (!remote.writable) throw new Error("This remote service cannot identify that session precisely. Upgrade the remote Reasonix service before changing it.");
     // The synthesized current blank session intentionally has an empty name.
     // Its rename/pin/delete bindings still own that row and must decide whether
     // the requested mutation is supported; never report success without

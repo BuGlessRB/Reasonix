@@ -32,6 +32,7 @@ type turnLoop struct {
 	phase           session.RuntimePhase
 	cancel          context.CancelFunc
 	done            chan struct{}
+	recoveryFanout  bool // watchdog terminal publication still owns the stores
 	turnID          string
 	token           uint64
 	lastToken       uint64
@@ -250,7 +251,7 @@ func (c *Controller) startTurnLocked(parent context.Context, next queuedTurn) (c
 	if c.turns.runtime != nil && !c.turns.runtime.BeginExecution(c.turns.generation, "turn") {
 		return nil, nil, false
 	}
-	ctx, cancel = context.WithCancel(extension.ContextWithRuntimeOwner(parent, c.runtimeOwner))
+	ctx, cancel = context.WithCancel(extension.ContextWithRuntimeOwner(c.withAuthentication(parent), c.runtimeOwner))
 	c.turns.cancel = cancel
 	c.turns.done = make(chan struct{})
 	c.turns.finishingBound.beginIdle()
@@ -356,13 +357,10 @@ func (c *Controller) cancellationGrace() time.Duration {
 }
 
 func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnCompletion) {
+	c.authentication.recordFailure(err, c.ModelRef())
 	c.memory.clearAutoRemember()
 	c.mu.Lock()
 	cancelRequested := c.turns.cancelRequested
-	if c.turns.done != nil {
-		close(c.turns.done)
-		c.turns.done = nil
-	}
 	if c.turns.phase == session.RuntimeRecoveryRequired {
 		c.turns.cancel = nil
 		closing := c.closed
@@ -374,6 +372,13 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 			c.emitTurnDoneEvent(err, cancelRequested, completion)
 		}
 		c.mu.Lock()
+		// Keep the owned turn live through terminal fanout. Close must not
+		// release stores while that fanout can still publish durable events.
+		if c.turns.done != nil {
+			close(c.turns.done)
+			c.turns.done = nil
+		}
+		closing = c.closed && !c.turns.recoveryFanout
 		c.turns.finishingBound.endIdle()
 		c.mu.Unlock()
 		if closing {
@@ -381,6 +386,10 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 		}
 		c.refreshRuntimeState(event.Event{})
 		return
+	}
+	if c.turns.done != nil {
+		close(c.turns.done)
+		c.turns.done = nil
 	}
 	c.turns.phase = session.RuntimeFinalizing
 	c.turns.finishingBound.begin(true)
@@ -418,6 +427,24 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 			c.turns.finishingBound.endIdle()
 			c.mu.Unlock()
 			c.finalizeControllerClose()
+			c.refreshRuntimeState(event.Event{})
+			return
+		}
+		if authErr := c.authentication.admissionError(); authErr != nil {
+			for _, pending := range c.turns.pending {
+				if pending.goalRound != nil {
+					pending.goalRound.setResult(authErr, false)
+				}
+			}
+			c.turns.pending = nil
+			c.turns.wake = false
+			c.turns.lastToken = c.turns.token
+			c.turns.phase = session.RuntimeIdle
+			c.turns.turnID = ""
+			c.noteExecutionLocked(session.RuntimeIdle, "")
+			c.turns.finishingBound.endIdle()
+			c.mu.Unlock()
+			c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Code: "authentication_not_ready", Text: authErr.Error()})
 			c.refreshRuntimeState(event.Event{})
 			return
 		}
@@ -517,6 +544,7 @@ func (c *Controller) startCancellationWatchdog(done chan struct{}) {
 		stillRunning := c.turns.done == done && (c.turns.phase == session.RuntimeRunning || c.turns.phase == session.RuntimeCancelling)
 		turnID := c.turns.turnID
 		if stillRunning {
+			c.turns.recoveryFanout = true
 			c.enterRecoveryLocked("cancellation_grace_expired")
 		}
 		c.mu.Unlock()
@@ -543,7 +571,8 @@ func (c *Controller) startCancellationWatchdog(done chan struct{}) {
 			Recovery:  recovery,
 		})
 		c.mu.Lock()
-		closing := c.closed
+		c.turns.recoveryFanout = false
+		closing := c.closed && c.turns.done == nil && !c.finalizingLocked()
 		c.mu.Unlock()
 		if closing {
 			c.finalizeControllerClose()

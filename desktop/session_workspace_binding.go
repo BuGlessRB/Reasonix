@@ -12,6 +12,17 @@ import (
 
 var errSessionWorkspaceConflict = errors.New("session workspace identity is inconsistent; the session files were left unchanged")
 
+func controllerSessionDirectoryMatches(desiredDir, ctrlDir, path string) bool {
+	if desiredDir == "" || sameDesktopPath(ctrlDir, desiredDir) {
+		return true
+	}
+	if path == "" {
+		return false
+	}
+	validPath, _, err := validateSessionPath(ctrlDir, path)
+	return err == nil && sessionRuntimeKey(validPath) == sessionRuntimeKey(path)
+}
+
 // Resolve navigation from durable membership and the immutable header, never
 // from the current surface. Both authorities must agree before execution.
 func (a *App) canonicalSessionWorkspace(ctx context.Context, ref session.SessionRef) (workspacestate.Workspace, error) {
@@ -25,6 +36,9 @@ func (a *App) canonicalSessionWorkspace(ctx context.Context, ref session.Session
 	state, err := a.workspaceRegistry().Load(ctx)
 	if err != nil {
 		return workspacestate.Workspace{}, err
+	}
+	if state.SessionStates[ref.SessionID].Lifecycle == workspacestate.Deleted {
+		return workspacestate.Workspace{}, session.ErrSessionNotFound
 	}
 	var owner workspacestate.Workspace
 	for _, workspace := range state.Workspaces {
@@ -66,7 +80,26 @@ func applyCanonicalWorkspaceLocked(tab *WorkspaceTab, workspace workspacestate.W
 	tab.SessionWorkspace.ID = workspace.ID
 }
 
+func canonicalSessionTopicIdentity(state workspacestate.State, sessionID string) (string, string) {
+	presentation := state.Presentation[sessionID]
+	topicID := strings.TrimSpace(presentation.TopicID)
+	if topicID == "" {
+		topicID = "canonical-" + sessionID
+	}
+	return topicID, presentation.Title
+}
+
 func (a *App) commitCanonicalSessionBinding(tab *WorkspaceTab, ctrl control.SessionAPI, ref session.SessionRef, workspace workspacestate.Workspace, navigation uint64) error {
+	state, err := a.workspaceRegistry().Load(a.bootContext())
+	if err != nil {
+		return err
+	}
+	topicID, topicTitle := canonicalSessionTopicIdentity(state, ref.SessionID)
+	// Presentation supplies migration defaults; the session log owns titles
+	// after a manual or AI rename, including an explicitly cleared title.
+	if info, err := a.desktopSessionService("").Query().Stat(a.bootContext(), ref); err == nil && info.MetadataStatus == session.MetadataReady && (info.TitleSequence > 0 || info.Title != "") {
+		topicTitle = info.Title
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if tab.removed || a.tabs[tab.ID] != tab || tab.Ctrl != ctrl || (navigation != 0 && a.desktopSessions.navigationSeq.Load() != navigation) {
@@ -74,6 +107,14 @@ func (a *App) commitCanonicalSessionBinding(tab *WorkspaceTab, ctrl control.Sess
 	}
 	applyCanonicalWorkspaceLocked(tab, workspace)
 	tab.SessionID, tab.SessionPath = ref.SessionID, ""
+	tab.TopicID, tab.TopicTitle = topicID, topicTitle
+	tab.topicTitleSource = ""
+	if topicTitle != "" {
+		tab.topicTitleSource = topicTitleSourceManual
+		if isDefaultTopicTitle(topicTitle) {
+			tab.topicTitleSource = topicTitleSourceAuto
+		}
+	}
 	a.bindSessionRuntimeKeyLocked(tab, tab.currentSessionIdentity())
 	a.saveTabsLocked()
 	return nil

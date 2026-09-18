@@ -64,22 +64,20 @@ func TestWindowsReleaseSignsPayloadBeforeRepackaging(t *testing.T) {
 		"name: Build and package",
 		"name: Checkout protected release verifier",
 		"name: Smoke-test packaged Electron startup",
-		"name: Upload unsigned Windows payload for SignPath",
-		"name: Submit Windows payload for Authenticode signing",
-		"name: Approve and download signed Windows payload",
-		"name: Bind signed Windows payload to release manifest",
-		"name: Rebuild Windows packages from signed payload",
-		"name: Upload unsigned installer for SignPath",
-		"name: Submit installer for Authenticode signing",
-		"name: Approve and download signed Windows installer",
-		"name: Replace installer with signed build",
+		"name: Upload Windows signing inputs",
+		"name: Restore native-tested Windows payload",
+		"name: Connect to Certum",
+		"name: Sign complete Windows payload",
+		"name: Bind signed Windows payload and rebuild packages",
+		"name: Sign rebuilt Windows installer",
 		"name: Verify Windows Authenticode release contract",
 		"name: Sign artifacts (minisign)",
 	}
 	last := -1
 	for _, step := range orderedSteps {
-		index := strings.Index(workflow, step)
-		if index < 0 {
+		relativeIndex := strings.Index(workflow[last+1:], step)
+		index := last + 1 + relativeIndex
+		if relativeIndex < 0 {
 			t.Fatalf("desktop release workflow is missing %q", step)
 		}
 		if index <= last {
@@ -88,22 +86,14 @@ func TestWindowsReleaseSignsPayloadBeforeRepackaging(t *testing.T) {
 		last = index
 	}
 	for _, want := range []string{
-		`artifact-configuration-slug: windows-payload`,
-		`artifact-configuration-slug: windows-installer-v2`,
-		`path: desktop/build/windows/signing-payload`,
-		`path: desktop/build/windows/installer-signing-bundle`,
+		`uses: ./release-control/.github/actions/setup-certum`,
+		`-ExpectedThumbprint $env:CERTUM_KEY_ID -RequireTrusted`,
 		`github.repository == 'esengine/DeepSeek-Reasonix'`,
-		`SIGNPATH_API_TOKEN is required for public Windows Preview and Stable releases`,
+		`Certum credentials are required for public Windows Preview and Stable releases`,
 		`SIGNPATH_RELEASE_SIGNING_ATTESTATION does not match the current protected signing contract`,
-		`signing-policy-slug: release-signing`,
 		`(needs.build.result == 'success' || (needs.build.result == 'skipped' && inputs.preflight_artifact_prefix != '' && inputs.orchestrated && inputs.signing_preflight_verified))`,
-		`needs.signing-contract.result == 'success' && needs.cache-guard.result == 'success' && !inputs.production_signing_smoke && !inputs.signing_preflight`,
+		`needs.windows-sign.result == 'success'`,
 		`go run ./cmd/signpath-contract fingerprint`,
-		`wait-for-completion: false`,
-		`steps.submit-windows-payload.outputs.signing-request-id`,
-		`steps.submit-windows-installer.outputs.signing-request-id`,
-		`scripts/complete-signpath-request.ps1`,
-		`-WaitForExternalApproval:$waitForExternalApproval`,
 		`go run ./cmd/sign windows-payload ../signed-payload "${{ needs.resolve.outputs.version }}"`,
 		`go run ./cmd/sign sign ../signed-payload/reasonix-payload.json`,
 		`go run ./cmd/sign verify ../signed-payload/reasonix-payload.json`,
@@ -173,11 +163,12 @@ func TestWindowsReleaseSignsPayloadBeforeRepackaging(t *testing.T) {
 		"$signature.SignerCertificate",
 		"$signature.Status -ne \"Valid\"",
 		"Expand-Archive",
-		`Get-ChildItem -LiteralPath $extractRoot -Recurse -File -Filter "*.exe"`,
+		`Get-ChildItem -LiteralPath $extractRoot -Recurse -File`,
 		`$activeDir.Replace("\", "/") -ne "versions/$activeVersion"`,
 		`Portable = (Join-Path $activeDir "reasonix-desktop.exe")`,
 		`Portable = "Reasonix.exe"; Payload = "reasonix-launcher.exe"`,
-		"6 release unit + $appExeCount Electron app tree",
+		`Compare-Object $expectedPE $actualPE`,
+		`[ValidateSet("canonical", "legacy-dual")]`,
 		"Get-FileHash -Algorithm SHA256",
 	} {
 		if !strings.Contains(verifier, want) {

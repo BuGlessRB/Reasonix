@@ -16,19 +16,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
-	goruntime "runtime"
-	"slices"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
-	"unicode/utf8"
-
 	"reasonix/desktop/internal/browserops"
 	"reasonix/desktop/internal/instanceidentity"
+	"reasonix/desktop/internal/workspacestate"
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
 	"reasonix/internal/boot"
@@ -61,6 +51,16 @@ import (
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
 	"reasonix/internal/transcript"
+	"regexp"
+	goruntime "runtime"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+	"unicode/utf8"
 )
 
 // sessionTempFromController returns the logical-session private temporary
@@ -117,6 +117,14 @@ type App struct {
 	// session-sidecar publication in the same order for manual and automatic
 	// renames. It is never held by generic topic-state reads or other metadata.
 	topicTitleMutationMu sync.Mutex
+	// aiSessionTitleMu deduplicates explicit AI rename requests by durable
+	// session identity. It never serializes different sessions.
+	aiSessionTitleMu       sync.Mutex
+	aiSessionTitleInFlight map[string]aiSessionTitleOperation
+	// auxiliaryProviderGeneration invalidates bounded provider-only work when
+	// model credentials/configuration or extension packages change. Cancellation
+	// is an optimization; title CAS remains the final acceptance authority.
+	auxiliaryProviderGeneration atomic.Uint64
 
 	// sessionCatalog is a disposable, asynchronously opened projection of
 	// authoritative session sidecars. Project-shell APIs must tolerate nil here:
@@ -196,7 +204,7 @@ type App struct {
 	// Desktop host. desktopSessions owns its persistence and navigation state.
 	sessionServicesMu sync.Mutex
 	sessionServices   map[string]*session.Service
-	desktopSessions   desktopSessionState
+	desktopPersistenceState
 
 	// tabsRestored is closed when restoreOrBuildTabs has finished populating
 	// a.tabs from desktop-tabs.json (or built the first-launch tab). Startup
@@ -253,9 +261,7 @@ type App struct {
 	// them mutually exclusive. Read holders must never acquire runtimeRebuildMu,
 	// or a queued writer would deadlock the pair.
 	runtimeAdmissionMu sync.RWMutex
-	// runtimeMutationBeforeLockHook is test-only. Set it before starting concurrent
-	// calls and never mutate it afterward.
-	runtimeMutationBeforeLockHook func(string)
+	appLifecycleTestHooks
 	// modelSwitchTimingHook is test-only. Production diagnostics use the same
 	// sanitized timing record through debug logging.
 	modelSwitchTimingHook func(modelSwitchTiming)
@@ -455,19 +461,20 @@ func (a *App) jsProfilingMiddleware() func(http.Handler) http.Handler {
 // last session's desktop-tabs.json.
 func NewApp() *App {
 	a := &App{
-		tabs:                 map[string]*WorkspaceTab{},
-		runtimeByID:          map[string]*desktopSessionRuntime{},
-		runtimeBySessionKey:  map[string]*desktopSessionRuntime{},
-		sessionServices:      map[string]*session.Service{},
-		desktopSessions:      newDesktopSessionState(),
-		catalogReconcileJobs: map[string]*desktopCatalogReconcileJob{},
-		detachedSessions:     map[string]*WorkspaceTab{},
-		mediaTokens:          newMediaTokenStore(),
-		presentPreview:       newWorkspacePreviewOrigin(),
-		botInstalls:          map[string]*botInstallSession{},
-		botRuntime:           newDesktopBotRuntime(),
-		remoteWindows:        newRemoteWindowRegistry(),
-		topicState:           desktopTopicState,
+		tabs:                    map[string]*WorkspaceTab{},
+		runtimeByID:             map[string]*desktopSessionRuntime{},
+		runtimeBySessionKey:     map[string]*desktopSessionRuntime{},
+		sessionServices:         map[string]*session.Service{},
+		aiSessionTitleInFlight:  map[string]aiSessionTitleOperation{},
+		desktopPersistenceState: newDesktopPersistenceState(),
+		catalogReconcileJobs:    map[string]*desktopCatalogReconcileJob{},
+		detachedSessions:        map[string]*WorkspaceTab{},
+		mediaTokens:             newMediaTokenStore(),
+		presentPreview:          newWorkspacePreviewOrigin(),
+		botInstalls:             map[string]*botInstallSession{},
+		botRuntime:              newDesktopBotRuntime(),
+		remoteWindows:           newRemoteWindowRegistry(),
+		topicState:              desktopTopicState,
 		worktreeReservations: worktreeRuntimeReservations{
 			cleanup: map[string]struct{}{},
 			merge:   map[string]struct{}{},
@@ -501,6 +508,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.shuttingDown.Store(false)
 	a.initializeDesktopSessionRoot()
+	a.registerLegacyCleanupUpgradeBatch()
 	// Only the process that claimed the pre-shell diagnostics lock consumes
 	// lifecycle evidence.
 	initializeLifecycleDiagnostics(a)
@@ -524,6 +532,7 @@ func (a *App) startup(ctx context.Context) {
 	a.tabsRestored = make(chan struct{})
 	a.mu.Unlock()
 	go a.restoreOrBuildTabs()
+	a.startDesktopPersistenceReconciliation()
 	a.registerHistoryIndexEvents()
 	a.startSessionCatalog()
 	a.goSafe("refreshBotRuntime", a.refreshBotRuntime)
@@ -774,6 +783,7 @@ func (a *App) restoreOrBuildTabs() {
 			}
 			tab.SessionPath = strings.TrimSpace(entry.SessionPath)
 			tab.SessionID = strings.TrimSpace(entry.SessionID)
+			tab.PendingCreateOperationID = strings.TrimSpace(entry.CreateOperationID)
 			tab.ReadOnly = entry.ReadOnly
 			restoreTabPinnedContext(tab, entry.PinnedFiles)
 			tab.Takeover.Spectator = entry.TakeoverSpectator
@@ -803,16 +813,9 @@ func (a *App) restoreOrBuildTabs() {
 		return
 	}
 
-	// First launch: create a default Global tab.
-	tab := a.createTabEntry("global", globalTabWorkspaceRoot(), "")
-	tab.sink = &tabEventSink{tabID: tab.ID, app: a, ctx: ctx}
-	tab.TopicTitle = "Global"
-	a.mu.Lock()
-	a.tabs[tab.ID] = tab
-	a.tabOrder = append(a.tabOrder, tab.ID)
-	a.activeTabID = tab.ID
-	a.mu.Unlock()
-	a.startTabControllerBuild(tab)
+	// First launch intentionally has no runtime. The renderer opens a persisted
+	// Global draft after this restore gate closes; the first execution creates
+	// the canonical Session and Controller.
 }
 
 func (a *App) createTabEntry(scope, workspaceRoot, topicID string) *WorkspaceTab {
@@ -1007,7 +1010,12 @@ func (a *App) submitUserTurnToTabWithSink(tabID, input string, forwarder event.S
 	if forwarder != nil {
 		generation = tab.sink.SetBotSink(forwarder)
 	}
-	a.ensureTabTopicIndexedForUserTurn(tab)
+	if err := a.ensureTabTopicIndexedForUserTurn(tab); err != nil {
+		if forwarder != nil {
+			tab.sink.clearBotSink(generation)
+		}
+		return false
+	}
 	ctrl.SubmitUserTurn(input, input)
 	started := admission.finish(ctrl)
 	if !started && forwarder != nil {
@@ -1023,7 +1031,9 @@ func (a *App) RunShellForTab(tabID, command string) error {
 	}
 	defer admission.abort()
 	tab := admission.tab
-	a.ensureTabTopicIndexedForUserTurn(tab)
+	if err := a.ensureTabTopicIndexedForUserTurn(tab); err != nil {
+		return err
+	}
 	ctrl.RunShell(command)
 	admission.finish(ctrl)
 	return nil
@@ -1112,7 +1122,9 @@ func (a *App) submitInitialGoalToLocalTab(
 
 	ctrl.SetPlanMode(false)
 	drained := applyTabToolApprovalModeToController(ctrl, toolApprovalMode)
-	a.ensureTabTopicIndexedForUserTurn(tab)
+	if err := a.ensureTabTopicIndexedForUserTurn(tab); err != nil {
+		return []string{}, err
+	}
 	if err := submitIdentified(ctrl, req, func() {
 		if len(invocations) > 0 {
 			ctrl.SubmitInvocationDisplay(display, input, controlInvocationRequests(invocations))
@@ -1404,12 +1416,7 @@ func (a *App) ensureTabControllerWorkspace(tab *WorkspaceTab) error {
 	}
 	desiredDir := tabSessionDir(tab)
 	rootMatches := desiredRoot == "" || sameDesktopPath(ctrlRoot, desiredRoot)
-	dirMatches := desiredDir == "" || sameDesktopPath(ctrlDir, desiredDir)
-	if !dirMatches && path != "" {
-		if validPath, _, err := validateSessionPath(ctrlDir, path); err == nil && sessionRuntimeKey(validPath) == sessionRuntimeKey(path) {
-			dirMatches = true
-		}
-	}
+	dirMatches := controllerSessionDirectoryMatches(desiredDir, ctrlDir, path)
 	if strings.TrimSpace(ctrlRoot) == "" && dirMatches {
 		rootMatches = true
 	}
@@ -1910,14 +1917,19 @@ func (a *App) applyNewSessionDefaultModel(tab *WorkspaceTab) error {
 	return a.alignReusableBlankTabModel(tab, defaultModel)
 }
 
-func (a *App) assignFreshSessionTopic(tab *WorkspaceTab) {
+func (a *App) assignFreshSessionTopic(tab *WorkspaceTab) error {
 	if tab == nil {
-		return
+		return nil
 	}
 	topicID := newTopicID()
 	a.mu.Lock()
 	scope := tab.Scope
 	workspaceRoot := tab.WorkspaceRoot
+	sessionID := tab.SessionID
+	if tab.SessionWorkspace.ID == "" {
+		// Legacy controllers still persist their topic through branch metadata.
+		sessionID = ""
+	}
 	tab.TopicID = topicID
 	tab.TopicTitle = defaultTopicTitle
 	tab.topicTitleSource = topicTitleSourceAuto
@@ -1925,6 +1937,9 @@ func (a *App) assignFreshSessionTopic(tab *WorkspaceTab) {
 		a.saveTabsLocked()
 	}
 	a.mu.Unlock()
+	if err := a.workspaceRegistry().EnsureSessionTopic(a.bootContext(), sessionID, topicID, defaultTopicTitle); err != nil {
+		return err
+	}
 	if strings.TrimSpace(scope) == "global" {
 		workspaceRoot = ""
 	} else {
@@ -1935,17 +1950,18 @@ func (a *App) assignFreshSessionTopic(tab *WorkspaceTab) {
 	// session metadata repair the topic index later instead of surfacing a false
 	// "new session failed" error to the frontend.
 	_ = ensureTopicIndexedWithCreatedAt(scope, workspaceRoot, topicID, defaultTopicTitle, topicTitleSourceAuto, time.Now().UnixMilli())
+	return nil
 }
 
-func (a *App) ensureTabTopicIndexedForUserTurn(tab *WorkspaceTab) {
+func (a *App) ensureTabTopicIndexedForUserTurn(tab *WorkspaceTab) error {
 	if tab == nil {
-		return
+		return nil
 	}
 	topicID := newTopicID()
 	a.mu.Lock()
 	if strings.TrimSpace(tab.TopicID) != "" {
 		a.mu.Unlock()
-		return
+		return a.persistCanonicalTopicForTab(tab)
 	}
 	scope := tab.Scope
 	workspaceRoot := tab.WorkspaceRoot
@@ -1956,6 +1972,9 @@ func (a *App) ensureTabTopicIndexedForUserTurn(tab *WorkspaceTab) {
 		a.saveTabsLocked()
 	}
 	a.mu.Unlock()
+	if err := a.persistCanonicalTopicForTab(tab); err != nil {
+		return err
+	}
 	if strings.TrimSpace(scope) == "global" {
 		scope = "global"
 		workspaceRoot = ""
@@ -1968,6 +1987,17 @@ func (a *App) ensureTabTopicIndexedForUserTurn(tab *WorkspaceTab) {
 	path := a.currentSessionPathFor(tab)
 	a.persistTabSessionPath(tab, path)
 	a.emitProjectTreeChangedForSessionDirs(sessionDirectoryForPath(path))
+	return nil
+}
+
+func (a *App) persistCanonicalTopicForTab(tab *WorkspaceTab) error {
+	a.mu.RLock()
+	sessionID, workspaceID, topicID, title := tab.SessionID, tab.SessionWorkspace.ID, tab.TopicID, tab.TopicTitle
+	a.mu.RUnlock()
+	if workspaceID == "" {
+		return nil
+	}
+	return a.workspaceRegistry().EnsureSessionTopic(a.bootContext(), sessionID, topicID, title)
 }
 
 func messagesHaveConversationContent(messages []provider.Message) bool {
@@ -2107,11 +2137,7 @@ func (a *App) clearLegacySessionRuntimeLocked(tab *WorkspaceTab, oldCtrl control
 		// path/pid/writer id out of it.
 		return SessionClearResult{}, userFacingSessionLeaseError("", err)
 	}
-	if fresh, ok := newCtrl.(interface{ SetFreshSessionPath(string) }); ok {
-		fresh.SetFreshSessionPath(path)
-	} else {
-		newCtrl.SetSessionPath(path)
-	}
+	setFreshControllerPath(newCtrl, path)
 	if err := initClearedPins(path, newCtrl, oldCtrl, tab); err != nil {
 		return SessionClearResult{}, err
 	}
@@ -2627,70 +2653,14 @@ func (a *App) activeSessionDir() string {
 	return tabSessionDir(tab)
 }
 
-// ListSessions returns the saved sessions newest-first for the history panel,
-// marking the one the current conversation is writing to and attaching any
-// user-chosen titles.
-func (a *App) ListSessions() []SessionMeta {
-	dir := a.activeSessionDir()
-	active := a.activeSessionPath(dir)
-	if tab := a.activeTab(); tab != nil {
-		active = tab.currentSessionIdentity()
-	}
-	return a.listSessionsFromDir(dir, active)
-}
-
-// ListSessionsForTab returns sessions from the directory owned by tabID. Task
-// Monitor uses this stable target after asynchronous control lookups so a tab
-// switch cannot redirect the eventual session lookup to another workspace.
-func (a *App) ListSessionsForTab(tabID string) []SessionMeta {
-	target, err := a.taskMonitorTargetForTab(tabID)
-	if err != nil {
-		return []SessionMeta{}
-	}
-	active := target.sessionPath
-	if tab := a.tabByID(tabID); tab != nil {
-		active = tab.currentSessionIdentity()
-	}
-	return a.listSessionsFromDir(target.sessionDir, active)
-}
-
-func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
-	v3 := a.listCanonicalSessionsFromDir(dir, active)
-	catalog := a.sessionCatalog.Load()
-	if catalog == nil {
-		return v3
-	}
-	target := sessioncatalog.DirectoryTarget{Path: dir, Scope: "global"}
-	for _, candidate := range a.sessionCatalogTargets() {
-		if sameProjectRoot(candidate.Path, dir) {
-			target = candidate
-			break
-		}
-	}
-	records, err := listCatalogSessionsForDirectory(a.bootContext(), catalog, target, dir)
-	if err != nil {
-		return v3
-	}
-	open := a.openSessionPaths(dir)
-	channelRoutes := channelSessionRoutesForDir(dir)
-	out := make([]SessionMeta, 0, len(records)+len(v3))
-	out = append(out, v3...)
-	for _, record := range records {
-		_, isOpen := open[record.Path]
-		meta := sessionMetaFromCatalog(record, record.Path == active, isOpen)
-		if route, ok := channelRoutes[sessionRuntimeKey(record.Path)]; ok {
-			applyChannelSessionRoute(&meta, route)
-		}
-		out = append(out, meta)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].LastActivityAt > out[j].LastActivityAt })
-	return out
-}
-
 // ListTrashedSessions returns sessions that were moved to the local trash,
 // newest-deleted first. These can be previewed, restored, or permanently purged.
 func (a *App) ListTrashedSessions() []SessionMeta {
 	out := []SessionMeta{}
+	state, stateErr := a.workspaceRegistry().Load(a.bootContext())
+	if stateErr != nil {
+		return out
+	}
 	for _, dir := range a.knownSessionDirs() {
 		paths, err := listTrashedSessionFiles(dir)
 		if err != nil {
@@ -2698,6 +2668,12 @@ func (a *App) ListTrashedSessions() []SessionMeta {
 		}
 		titles := loadSessionTitles(dir)
 		for _, path := range paths {
+			if !explicitlyDeletedLegacyEntry(path) {
+				continue
+			}
+			if _, adopted := state.SourceMappings[desktopSourceKey(path, "")]; adopted {
+				continue
+			}
 			infos, err := agent.ListSessions(filepath.Dir(path))
 			if err != nil || len(infos) == 0 {
 				continue
@@ -2833,16 +2809,6 @@ func channelDisplayName(provider, domain string) string {
 	default:
 		return provider
 	}
-}
-
-// DeleteSession moves a saved session to the local trash. If the session still
-// has an in-process runtime, the runtime is cancelled and removed first so
-// autosave cannot recreate or append to the deleted file later.
-func (a *App) DeleteSession(path string) error {
-	if _, ok := parseSessionRoute(path); ok {
-		return a.deleteCanonicalSession(path)
-	}
-	return friendlySessionFileError(a.deleteSession(path))
 }
 
 // DeleteRecoveryCopy is the guarded bulk-cleanup path. The frontend's copy
@@ -2996,6 +2962,12 @@ func removedRuntimeFromTab(tab *WorkspaceTab, dir, sessionPath string) removedSe
 func tabMatchesSession(tab *WorkspaceTab, dir, sessionPath string) bool {
 	if tab == nil {
 		return false
+	}
+	// Canonical migration can clear the legacy path while the runtime still
+	// owns its compatibility lease. Include that owner when removing bindings
+	// or checking whether a legacy file is open.
+	if key := tab.sessionLeaseRuntimeKey(); key != "" && key == sessionRuntimeKey(sessionPath) {
+		return true
 	}
 	currentPath, _, err := validateSessionPath(dir, tab.currentSessionPath())
 	if err == nil && currentPath == sessionPath {
@@ -3264,7 +3236,7 @@ func (a *App) activeSessionPath(dir string) string {
 
 // RestoreSession moves a trashed session back into the saved-session list.
 func (a *App) RestoreSession(path string) error {
-	return friendlySessionFileError(a.restoreSession(path))
+	return friendlySessionFileError(a.restoreLegacyRecoveryPath(path))
 }
 
 func (a *App) restoreSession(path string) error {
@@ -3335,12 +3307,6 @@ func (a *App) sessionOpen(dir, sessionPath string) bool {
 	return false
 }
 
-// PurgeTrashedSession permanently removes a trashed session and its title/display
-// sidecars.
-func (a *App) PurgeTrashedSession(path string) error {
-	return friendlySessionFileError(a.purgeTrashedSession(path, false))
-}
-
 // PurgeRecoveryCopy is the guarded permanent-cleanup path. A trashed branch is
 // rechecked against its live parent; missing, stale, or divergent data is kept.
 func (a *App) PurgeRecoveryCopy(path string) error {
@@ -3351,6 +3317,16 @@ func (a *App) purgeTrashedSession(path string, requireRedundantRecovery bool) er
 	dir, err := a.trashedSessionDir(path)
 	if err != nil {
 		return err
+	}
+	state, err := a.workspaceRegistry().Load(a.bootContext())
+	if err != nil {
+		return err
+	}
+	if _, adopted := state.SourceMappings[desktopSourceKey(path, "")]; adopted {
+		return errors.New("the historical source is preserved for its restored session")
+	}
+	if !explicitlyDeletedLegacyEntry(path) {
+		return errors.New("historical recovery entries cannot be permanently cleared")
 	}
 	a.sessionRemovalMu.Lock()
 	defer a.sessionRemovalMu.Unlock()
@@ -3381,26 +3357,27 @@ func (a *App) purgeTrashedSession(path string, requireRedundantRecovery bool) er
 // the branch meta sidecar, with the legacy .titles.json map kept as a
 // compatibility write-through for older desktop data paths.
 func (a *App) RenameSession(path, title string) error {
-	if _, ok := parseSessionRoute(path); ok {
-		service := a.desktopSessionService(a.activeSessionDir())
-		ref, valid := sessionRefForRoute(service, path)
-		if !valid {
+	if target, err := a.resolveSessionTarget(sessionTargetSelector{SessionPath: strings.TrimSpace(path)}); err == nil {
+		a.cancelAISessionTitle(target.key())
+	}
+	a.topicTitleMutationMu.Lock()
+	defer a.topicTitleMutationMu.Unlock()
+	if id, ok := parseSessionRoute(path); ok {
+		service := a.desktopSessionService("")
+		ref := session.SessionRef{HostID: localDesktopHostID, SessionID: id}
+		if err := validateLocalSessionRef(ref); err != nil {
 			return errors.New("session version is unavailable")
 		}
 		if err := service.SetTitle(a.bootContext(), ref, title); err != nil {
 			return friendlySessionFileError(err)
 		}
 		a.invalidatePromptHistoryCache()
-		a.emitProjectTreeChangedForSessionDirs(a.activeSessionDir())
+		a.emitProjectTreeChanged()
 		return nil
 	}
-	dir := a.activeSessionDir()
-	if _, _, err := validateSessionPath(dir, path); err != nil {
-		resolvedDir, _, resolveErr := a.sessionDirForPath(path)
-		if resolveErr != nil {
-			return errors.New("session version is unavailable")
-		}
-		dir = resolvedDir
+	dir, _, err := a.sessionDirForPath(path)
+	if err != nil {
+		return errors.New("session version is unavailable")
 	}
 	return friendlySessionFileError(a.renameSessionInDir(dir, path, title))
 }
@@ -3421,7 +3398,7 @@ func (a *App) renameSessionInDirIfTitleUnchanged(dir, path, expectedTitle, title
 	if err != nil {
 		return err
 	}
-	if err := agent.RenameSessionIfTitleUnchanged(sessionPath, expectedTitle, title); err != nil {
+	if err := agent.RenameSessionIfTitleRevision(sessionPath, expectedTitle, title); err != nil {
 		return err
 	}
 	return a.onSessionTitleChanged(dir, sessionPath, title)
@@ -4847,6 +4824,9 @@ func (a *App) RemoveWorkspace(dir string) error {
 				slog.Warn("desktop: snapshot before removing workspace failed", "tab", id, "workspace", dir, "err", err)
 				return fmt.Errorf("save current session before removing workspace: %w", err)
 			}
+		}
+		if err := a.workspaceRegistry().SetWorkspaceVisible(a.bootContext(), desktopWorkspaceID("project", dir), false); err != nil && !errors.Is(err, workspacestate.ErrWorkspaceNotFound) {
+			return err
 		}
 
 		a.mu.Lock()
@@ -6689,38 +6669,21 @@ func (a *App) RevokePermissionGrantForTab(tabID, scope, target string, expectedR
 
 // CommandInfo describes one available slash command for the composer's "/" menu.
 type CommandInfo struct {
-	Name        string `json:"name"` // without the leading slash
-	Description string `json:"description"`
-	Hint        string `json:"hint,omitempty"`  // argument hint, if any
-	Kind        string `json:"kind"`            // "builtin" | "custom" | "mcp" | "skill" | "subagent"
-	Group       string `json:"group,omitempty"` // menu group; older frontends can ignore it
-	Plugin      string `json:"plugin,omitempty"`
-	Color       string `json:"color,omitempty"`
+	Name          string `json:"name"` // without the leading slash
+	Description   string `json:"description"`
+	Hint          string `json:"hint,omitempty"`  // argument hint, if any
+	Kind          string `json:"kind"`            // "builtin" | "custom" | "mcp" | "skill" | "subagent"
+	Group         string `json:"group,omitempty"` // menu group; older frontends can ignore it
+	Plugin        string `json:"plugin,omitempty"`
+	Color         string `json:"color,omitempty"`
+	DraftBehavior string `json:"draftBehavior,omitempty"` // submit | setting | direct | unavailable
 }
 
 // Commands lists the slash commands available this session — built-in actions,
 // custom commands (.reasonix/commands), and MCP prompts — for the composer's "/"
 // autocomplete menu.
 func (a *App) Commands() []CommandInfo {
-	out := []CommandInfo{
-		{Name: "new", Description: i18n.M.CmdNew, Kind: "builtin", Group: "actions"},
-		{Name: "clear", Description: i18n.M.CmdClear, Kind: "builtin", Group: "actions"},
-		{Name: "compact", Description: i18n.M.CmdCompact, Kind: "builtin", Group: "actions"},
-		{Name: "model", Description: i18n.M.CmdModel, Kind: "builtin", Group: "actions"},
-		{Name: "provider", Description: i18n.M.CmdProvider, Kind: "builtin", Group: "management"},
-		{Name: "effort", Description: i18n.M.CmdEffort, Kind: "builtin", Group: "actions"},
-		{Name: "memory", Description: i18n.M.CmdMemory, Kind: "builtin", Group: "management"},
-		{Name: "migrate", Description: i18n.M.CmdMigrate, Kind: "builtin", Group: "management"},
-		{Name: "goal", Description: i18n.M.CmdGoal, Kind: "builtin", Group: "actions"},
-		{Name: "remember", Description: i18n.M.CmdRemember, Kind: "builtin", Group: "management"},
-		{Name: "mcp", Description: i18n.M.CmdMcp, Kind: "builtin", Group: "integrations"},
-		{Name: "hooks", Description: i18n.M.CmdHooks, Kind: "builtin", Group: "management"},
-		{Name: "plugins", Description: i18n.M.CmdPlugins, Kind: "builtin", Group: "integrations"},
-		{Name: "theme", Description: i18n.M.CmdTheme, Kind: "builtin", Group: "management"},
-		{Name: "skill", Description: i18n.M.CmdSkill, Kind: "builtin", Group: "skills"},
-		{Name: "reload-cmd", Description: i18n.M.CmdReloadCmd, Kind: "builtin", Group: "management"},
-		{Name: "reload", Description: i18n.M.CmdReload, Kind: "builtin", Group: "management"},
-	}
+	out := builtinCommandInfos()
 	a.mu.RLock()
 	ctrl := a.activeCtrlLocked()
 	a.mu.RUnlock()
@@ -6757,6 +6720,28 @@ func (a *App) Commands() []CommandInfo {
 		}
 	}
 	return resolveDocsCommand(out)
+}
+
+func builtinCommandInfos() []CommandInfo {
+	return []CommandInfo{
+		{Name: "new", Description: i18n.M.CmdNew, Kind: "builtin", Group: "actions", DraftBehavior: "unavailable"},
+		{Name: "clear", Description: i18n.M.CmdClear, Kind: "builtin", Group: "actions", DraftBehavior: "unavailable"},
+		{Name: "compact", Description: i18n.M.CmdCompact, Kind: "builtin", Group: "actions", DraftBehavior: "unavailable"},
+		{Name: "model", Description: i18n.M.CmdModel, Kind: "builtin", Group: "actions", DraftBehavior: "setting"},
+		{Name: "provider", Description: i18n.M.CmdProvider, Kind: "builtin", Group: "management", DraftBehavior: "unavailable"},
+		{Name: "effort", Description: i18n.M.CmdEffort, Kind: "builtin", Group: "actions", DraftBehavior: "setting"},
+		{Name: "memory", Description: i18n.M.CmdMemory, Kind: "builtin", Group: "management", DraftBehavior: "unavailable"},
+		{Name: "migrate", Description: i18n.M.CmdMigrate, Kind: "builtin", Group: "management", DraftBehavior: "unavailable"},
+		{Name: "goal", Description: i18n.M.CmdGoal, Kind: "builtin", Group: "actions"},
+		{Name: "remember", Description: i18n.M.CmdRemember, Kind: "builtin", Group: "management", DraftBehavior: "unavailable"},
+		{Name: "mcp", Description: i18n.M.CmdMcp, Kind: "builtin", Group: "integrations", DraftBehavior: "unavailable"},
+		{Name: "hooks", Description: i18n.M.CmdHooks, Kind: "builtin", Group: "management", DraftBehavior: "unavailable"},
+		{Name: "plugins", Description: i18n.M.CmdPlugins, Kind: "builtin", Group: "integrations", DraftBehavior: "unavailable"},
+		{Name: "theme", Description: i18n.M.CmdTheme, Kind: "builtin", Group: "management", DraftBehavior: "direct"},
+		{Name: "skill", Description: i18n.M.CmdSkill, Kind: "builtin", Group: "skills", DraftBehavior: "unavailable"},
+		{Name: "reload-cmd", Description: i18n.M.CmdReloadCmd, Kind: "builtin", Group: "management", DraftBehavior: "unavailable"},
+		{Name: "reload", Description: i18n.M.CmdReload, Kind: "builtin", Group: "management", DraftBehavior: "unavailable"},
+	}
 }
 
 func docsBuiltinCommand(name string) CommandInfo {
@@ -10058,14 +10043,18 @@ func (a *App) ListDirForTab(tabID, rel string) []DirEntry {
 	if !ok {
 		return []DirEntry{}
 	}
+	base, err := workspaceBaseFromRoot(root)
+	if err != nil {
+		return []DirEntry{}
+	}
+	return listDirForWorkspaceTarget(base, ctrl, rel)
+}
+
+func listDirForWorkspaceTarget(base string, ctrl control.SessionAPI, rel string) []DirEntry {
 	if browser := externalFolderRefBrowserFromController(ctrl); browser != nil {
 		if entries, handled := browser.ListExternalFolderRefDir(rel); handled {
 			return externalFolderDirEntries(entries)
 		}
-	}
-	base, err := workspaceBaseFromRoot(root)
-	if err != nil {
-		return []DirEntry{}
 	}
 	dir := base
 	if rel != "" {
@@ -10115,6 +10104,10 @@ func (a *App) SearchFileRefsForTab(tabID, query string) []DirEntry {
 	if err != nil {
 		return []DirEntry{}
 	}
+	return searchFileRefsForWorkspaceTarget(base, ctrl, query)
+}
+
+func searchFileRefsForWorkspaceTarget(base string, ctrl control.SessionAPI, query string) []DirEntry {
 	results := fileref.Search(base, query, fileRefSearchLimit)
 	out := make([]DirEntry, 0, len(results))
 	for _, r := range results {
@@ -11643,6 +11636,9 @@ func (a *App) taskMonitorTargetForTab(tabID string) (taskMonitorTabTarget, error
 	if sessionPath != "" {
 		target.sessionID = agent.BranchID(sessionPath)
 	}
+	if id := controllerTaskSessionID(ctrl); id != "" {
+		target.sessionID = id
+	}
 	return target, nil
 }
 
@@ -11658,7 +11654,7 @@ func (a *App) CurrentTaskSessionID() string {
 	if ctrl == nil {
 		return ""
 	}
-	return agent.BranchID(ctrl.SessionPath())
+	return controllerTaskSessionID(ctrl)
 }
 
 // ListTasksForSession limits the project task view to one desktop session.
@@ -11679,8 +11675,11 @@ func (a *App) ListTasksForTab(tabID string) ([]taskmonitor.TaskSnapshot, error) 
 	if err != nil {
 		return nil, err
 	}
+	if target.sessionID == "" {
+		return []taskmonitor.TaskSnapshot{}, nil
+	}
 	tasks, err := a.taskStore().ListTasks(a.ctx, target.projectDir)
-	if err != nil || target.sessionID == "" {
+	if err != nil {
 		return tasks, err
 	}
 	return filterTasksBySession(tasks, target.sessionID), nil
@@ -11768,11 +11767,24 @@ type desktopTaskJobKiller struct {
 }
 
 func (k desktopTaskJobKiller) Kill(sessionID, taskID string) bool {
+	return k.kill(sessionID, taskID, "", false)
+}
+
+func (k desktopTaskJobKiller) KillOwned(sessionID, taskID, ownerID string) bool {
+	if ownerID == "" {
+		return false
+	}
+	return k.kill(sessionID, taskID, ownerID, true)
+}
+
+func (k desktopTaskJobKiller) kill(sessionID, taskID, ownerID string, requireOwner bool) bool {
 	// Legacy task records without a session ID cannot be routed safely because
 	// jobs.Manager IDs restart at task-1 for each controller.
 	if k.app == nil || sessionID == "" || strings.TrimSpace(k.projectDir) == "" {
 		return false
 	}
+	unlockRuntime := k.app.lockRuntimeMutation("stop task")
+	defer unlockRuntime()
 
 	k.app.mu.RLock()
 	tabs := k.app.runtimeTabsLocked()
@@ -11785,8 +11797,14 @@ func (k desktopTaskJobKiller) Kill(sessionID, taskID string) bool {
 	k.app.mu.RUnlock()
 
 	for _, ctrl := range controllers {
-		if agent.BranchID(ctrl.SessionPath()) != sessionID {
+		if controllerTaskSessionID(ctrl) != sessionID {
 			continue
+		}
+		if requireOwner {
+			owner, ok := ctrl.(interface{ TaskRuntimeOwnerID() string })
+			if !ok || owner.TaskRuntimeOwnerID() != ownerID {
+				continue
+			}
 		}
 		if killer, ok := ctrl.(interface{ CancelJob(string) bool }); ok && killer.CancelJob(taskID) {
 			return true
