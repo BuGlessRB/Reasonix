@@ -4,12 +4,13 @@ import { buildHelloParams, describeHandshakeFailure, HANDSHAKE_CODES, HandshakeE
 import { RpcError } from "./rpc.js";
 
 const goodResult = {
-    protocolVersion: 3,
+  protocolVersion: 3,
   contractDigest: "sha256:abc",
   service: { version: "v1.30.0", channel: "stable", commit: "abc123", pid: 4242 },
   runtimeGeneration: "g-01J",
   resources: { origin: "http://127.0.0.1:51234", token: "secret" },
   window: { width: 1280, height: 820, minWidth: 760, minHeight: 480, frameless: false, zoomFactor: 1 },
+  instance: { identityVersion: 2, identityDigest: "sha256:def", legacyId: "com.reasonix.desktop.0123456789abcdef" },
 };
 
 test("hello params carry the documented shape", () => {
@@ -39,6 +40,8 @@ test("a valid hello result is accepted and normalised", () => {
   const result = validateHelloResult(goodResult);
   assert.equal(result.runtimeGeneration, "g-01J");
   assert.equal(result.window.zoomFactor, 1);
+  assert.equal(result.instance?.identityVersion, 2);
+  assert.equal(validateHelloResult({ ...goodResult, instance: undefined }).instance, undefined, "old services remain readable");
   const noZoom = validateHelloResult({ ...goodResult, window: { ...goodResult.window, zoomFactor: 0 } });
   assert.equal(noZoom.window.zoomFactor, 1, "a non-positive zoom factor falls back to 1");
 });
@@ -50,6 +53,7 @@ test("invalid hello results are rejected with a precise message", () => {
   assert.throws(() => validateHelloResult({ ...goodResult, window: undefined }), /result\.window must be an object/);
   assert.throws(() => validateHelloResult({ ...goodResult, window: { ...goodResult.window, width: 0 } }), /positive/);
   assert.throws(() => validateHelloResult({ ...goodResult, runtimeGeneration: "" }), /runtimeGeneration/);
+  assert.throws(() => validateHelloResult({ ...goodResult, instance: { ...goodResult.instance, identityVersion: 0 } }), /identityVersion/);
   assert.throws(() => validateHelloResult("nope"), /result must be an object/);
 });
 
