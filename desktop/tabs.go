@@ -6990,6 +6990,7 @@ type tabRuntimeSnapshot struct {
 	workspaceRoot                 string
 	sessionPath                   string
 	sessionID                     string
+	sessionGeneration             uint64
 	topicID                       string
 	topicTitle                    string
 	sharedHostKey                 string
@@ -7014,26 +7015,27 @@ func snapshotTabRuntimeLocked(tab *WorkspaceTab) tabRuntimeSnapshot {
 		return tabRuntimeSnapshot{}
 	}
 	return tabRuntimeSnapshot{
-		ctrl:             tab.Ctrl,
-		sink:             tab.sink,
-		label:            tab.Label,
-		ready:            tab.Ready,
-		readOnly:         tab.ReadOnly,
-		startupErr:       tab.StartupErr,
-		scope:            tab.Scope,
-		workspaceRoot:    tab.WorkspaceRoot,
-		sessionPath:      tab.SessionPath,
-		sessionID:        tab.SessionID,
-		topicID:          tab.TopicID,
-		topicTitle:       tab.TopicTitle,
-		sharedHostKey:    tab.SharedHostKey,
-		model:            tab.model,
-		effort:           cloneStringPtr(tab.effort),
-		tokenMode:        currentTabTokenMode(tab),
-		qualityFloor:     tab.qualityFloor,
-		mode:             tab.mode,
-		goal:             tab.goal,
-		toolApprovalMode: tab.toolApprovalMode,
+		ctrl:              tab.Ctrl,
+		sink:              tab.sink,
+		label:             tab.Label,
+		ready:             tab.Ready,
+		readOnly:          tab.ReadOnly,
+		startupErr:        tab.StartupErr,
+		scope:             tab.Scope,
+		workspaceRoot:     tab.WorkspaceRoot,
+		sessionPath:       tab.SessionPath,
+		sessionID:         tab.SessionID,
+		sessionGeneration: tab.SessionGeneration,
+		topicID:           tab.TopicID,
+		topicTitle:        tab.TopicTitle,
+		sharedHostKey:     tab.SharedHostKey,
+		model:             tab.model,
+		effort:            cloneStringPtr(tab.effort),
+		tokenMode:         currentTabTokenMode(tab),
+		qualityFloor:      tab.qualityFloor,
+		mode:              tab.mode,
+		goal:              tab.goal,
+		toolApprovalMode:  tab.toolApprovalMode,
 	}
 }
 

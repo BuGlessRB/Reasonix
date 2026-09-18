@@ -298,20 +298,32 @@ function InteractiveApprovalModal({
   const closingRef = useRef(false);
   const fileMenu = useFileReferenceMenu(revisionText, cwd, tabId, workspaceScopeKey);
 
-  const answerWithExit = (fn: () => void) => {
+  const answerWithExit = (fn: () => void | Promise<void>) => {
     if (closingRef.current || submitting) return;
     closingRef.current = true;
     setSubmitting(true);
+    let result: void | Promise<void>;
+    try {
+      // The decision belongs to this mounted request. Start it before the
+      // cosmetic animation so a later tab switch cannot retarget the action.
+      result = fn();
+    } catch {
+      closingRef.current = false;
+      setSubmitting(false);
+      return;
+    }
+    void Promise.resolve(result).catch(() => {
+      closingRef.current = false;
+      setSubmitting(false);
+    });
     const el = shelfRef.current;
     if (el) {
       animateElementExit(el, {
         opacity: 0,
         y: 8,
         duration: DUR_FAST,
-        onComplete: fn,
+        onComplete: () => undefined,
       });
-    } else {
-      fn();
     }
   };
 
@@ -320,10 +332,9 @@ function InteractiveApprovalModal({
       const resolve = onResolveRecovery ?? ((a: "continue" | "continue_task" | "revise") => onAnswer(a !== "revise", false, false));
       if (action === "revise") {
         const text = feedback?.trim().slice(0, RECOVERY_FEEDBACK_MAX) ?? "";
-        resolve("revise", text || undefined);
-        return;
+        return resolve("revise", text || undefined);
       }
-      resolve(action);
+      return resolve(action);
     },
     [onResolveRecovery, onAnswer],
   );

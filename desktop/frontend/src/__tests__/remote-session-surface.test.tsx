@@ -68,6 +68,8 @@ let blockApproval = false;
 let releaseApproval: (() => void) | undefined;
 let blockAnswer = false, failAnswer = false;
 let releaseAnswer: (() => void) | undefined;
+let blockExtensionForm = false;
+let releaseExtensionForm: (() => void) | undefined;
 let resolveRaceSnapshot: ((value: { history: unknown[]; status: unknown }) => void) | undefined;
 const resolveStateRaceSnapshots: Array<(value: { history: unknown[]; status: unknown }) => void> = [];
 let rotationSnapshotCalls = 0;
@@ -192,6 +194,35 @@ const desktopStub = installDesktopHostStub(({ main: { App: {
   async CancelRemoteTabJobs(tabId: string, jobIds: string[]) {
     tape.push(`cancel-jobs:${tabId}:${jobIds.join(",")}`);
   },
+  async ResolveRemoteTabPromptExact(
+    target: Parameters<AppBindings["ResolveRemoteTabPromptExact"]>[0],
+    answer: Parameters<AppBindings["ResolveRemoteTabPromptExact"]>[1],
+  ) {
+    if (target.kind === "plan") {
+      tape.push(`plan-decision:${target.tabId}:${target.promptId}:${answer.action ?? ""}:${answer.feedback ?? ""}`);
+    } else if (target.kind === "ask") {
+      tape.push(`answer:${target.tabId}:${target.promptId}:${JSON.stringify(answer.questions ?? [])}`);
+      if (failAnswer) throw new Error("remote answer failed");
+      if (blockAnswer) await new Promise<void>((resolve) => { releaseAnswer = resolve; });
+    } else if (target.kind === "approval" || target.kind === "recovery") {
+      const decision = answer.allow ? answer.persist ? "persist" : answer.session ? "session" : "allow" : "deny";
+      tape.push(`approve:${target.tabId}:${target.promptId}:${decision}`);
+      if (failApproval) throw new Error("tunnel write failed");
+      if (blockApproval) await new Promise<void>((resolve) => { releaseApproval = resolve; });
+    } else {
+      tape.push(`mcp-answer:${target.tabId}:${target.promptId}:${answer.action ?? ""}`);
+    }
+    desktopStub.emit(`remote-tab:${target.tabId}:event`, {
+      kind: "prompt_answered", itemId: target.promptId, turnId: target.turnId,
+    });
+  },
+  async SubmitRemoteTabExtensionFormExact(
+    target: Parameters<AppBindings["SubmitRemoteTabExtensionFormExact"]>[0],
+    values: Parameters<AppBindings["SubmitRemoteTabExtensionFormExact"]>[1],
+  ) {
+    tape.push(`extension-form:${target.tabId}:${target.pluginId}:${target.surfaceId}:${JSON.stringify(values)}`);
+    if (blockExtensionForm) await new Promise<void>((resolve) => { releaseExtensionForm = resolve; });
+  },
   async ApproveRemoteTab(tabId: string, callId: string, decision: string) {
     tape.push(`approve:${tabId}:${callId}:${decision}`);
 		if (failApproval) throw new Error("tunnel write failed");
@@ -249,6 +280,10 @@ const remoteTab: TabMeta = {
   mode: "normal",
   active: true,
   cwd: "~/app",
+  sessionId: "remote-session-1",
+  sessionGeneration: 1,
+  interactionTargetSupported: true,
+  extensionFormInstanceSupported: true,
   remote: { hostId: "gpu-box", workspace: "~/app" },
 };
 
@@ -305,7 +340,7 @@ await act(async () => {
 });
 
 await act(async () => {
-  __emitMockRemoteTab("tab-remote-1", "event", { kind: "approval_request", approval: { id: "call-9", tool: "bash", subject: "rm -rf /tmp/junk" } });
+  __emitMockRemoteTab("tab-remote-1", "event", { kind: "approval_request", turnId: "turn-main", runtimeEpoch: "runtime-main", approval: { id: "call-9", tool: "bash", subject: "rm -rf /tmp/junk" } });
   await flush();
 });
 {
@@ -329,7 +364,7 @@ await act(async () => {
 
 await act(async () => {
 	__emitMockRemoteTab("tab-remote-1", "event", {
-		kind: "approval_request",
+		kind: "approval_request", turnId: "turn-main", runtimeEpoch: "runtime-main",
 		approval: { id: "plan-remote", tool: "exit_plan_mode", subject: "Plan ready" },
 	});
 	await flush();
@@ -361,7 +396,7 @@ await act(async () => {
 
 await act(async () => {
 	failApproval = true;
-	__emitMockRemoteTab("tab-remote-1", "event", { kind: "approval_request", approval: { id: "call-fail", tool: "bash", subject: "keep this prompt" } });
+	__emitMockRemoteTab("tab-remote-1", "event", { kind: "approval_request", turnId: "turn-main", runtimeEpoch: "runtime-main", approval: { id: "call-fail", tool: "bash", subject: "keep this prompt" } });
 	await flush();
 });
 {
@@ -382,7 +417,7 @@ await act(async () => {
 }
 
 await act(async () => {
-  __emitMockRemoteTab("tab-remote-1", "event", { kind: "ask_request", ask: { id: "ask-7", questions: [{ id: "q1", prompt: "Deploy now?", options: [{ label: "yes" }, { label: "no" }] }] } });
+  __emitMockRemoteTab("tab-remote-1", "event", { kind: "ask_request", turnId: "turn-main", runtimeEpoch: "runtime-main", ask: { id: "ask-7", questions: [{ id: "q1", prompt: "Deploy now?", options: [{ label: "yes" }, { label: "no" }] }] } });
   await flush();
 });
 {
@@ -402,7 +437,7 @@ await act(async () => {
 }
 
 await act(async () => {
-  __emitMockRemoteTab("tab-remote-1", "event", { kind: "ask_request", ask: { id: "ask-custom", questions: [{ id: "q-custom", prompt: "Where?", options: [{ label: "staging" }] }] } });
+  __emitMockRemoteTab("tab-remote-1", "event", { kind: "ask_request", turnId: "turn-main", runtimeEpoch: "runtime-main", ask: { id: "ask-custom", questions: [{ id: "q-custom", prompt: "Where?", options: [{ label: "staging" }] }] } });
   await flush();
 });
 await act(async () => {
@@ -421,14 +456,14 @@ await act(async () => {
   [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.trim() === "Submit")?.click();
   await flush();
 });
-ok(tape.includes('answer:tab-remote-1:ask-custom:[{"QuestionID":"q-custom","Selected":["canary"]}]'),
-  "custom AskCard text serializes as the remote question selection");
+ok(tape.includes('answer:tab-remote-1:ask-custom:[{"questionId":"q-custom","selected":["canary"]}]'),
+  "custom AskCard text serializes as the exact remote question selection");
 
 await act(async () => {
   __emitMockRemoteTab("tab-remote-1", "event", {
     kind: "extension_surface",
     extension: {
-      pluginId: "remote-plugin", surfaceId: "setup", kind: "form",
+      pluginId: "remote-plugin", surfaceId: "setup", generation: 1, formInstanceId: "setup-instance", kind: "form",
       form: { title: "Remote setup", fields: [{ key: "region", label: "Region", kind: "input", required: true, default: "us-west" }] },
     },
   });
@@ -445,6 +480,49 @@ await act(async () => {
     "remote extension form submits through the Serve proxy");
   ok(!document.querySelector(".extension-form"), "remote extension form clears after an accepted submission");
 }
+
+blockExtensionForm = true;
+await act(async () => {
+  __emitMockRemoteTab("tab-remote-1", "event", {
+    kind: "extension_surface",
+    extension: {
+      pluginId: "remote-plugin", surfaceId: "reused", generation: 7, formInstanceId: "old-instance", kind: "form",
+      form: { title: "Old publication", fields: [{ key: "value", label: "Value", kind: "input", default: "old" }] },
+    },
+  });
+  await flush();
+});
+await act(async () => {
+  document.querySelector(".extension-form")?.closest(".prompt-shelf")?.querySelector<HTMLButtonElement>(".decision-confirm-bar__confirm")?.click();
+  await Promise.resolve();
+});
+ok(document.querySelector(".extension-form")?.closest(".prompt-shelf")?.querySelector<HTMLButtonElement>(".decision-confirm-bar__confirm")?.disabled === true,
+  "remote form busy state belongs to the submitting publication");
+await act(async () => {
+  __emitMockRemoteTab("tab-remote-1", "event", {
+    kind: "extension_surface",
+    extension: {
+      pluginId: "remote-plugin", surfaceId: "reused", generation: 7, formInstanceId: "replacement-instance", kind: "form",
+      form: { title: "Replacement publication", fields: [{ key: "value", label: "Value", kind: "input", default: "new" }] },
+    },
+  });
+  await flush();
+});
+ok(document.body.textContent?.includes("Replacement publication") === true
+  && document.querySelector(".extension-form")?.closest(".prompt-shelf")?.querySelector<HTMLButtonElement>(".decision-confirm-bar__confirm")?.disabled === false,
+  "a replacement remote form does not inherit the old instance busy state");
+blockExtensionForm = false;
+await act(async () => {
+  releaseExtensionForm?.();
+  await flush();
+});
+ok(document.body.textContent?.includes("Replacement publication") === true,
+  "late completion from the old form instance cannot clear its replacement");
+await act(async () => {
+  document.querySelector(".extension-form")?.closest(".prompt-shelf")?.querySelector<HTMLButtonElement>(".decision-confirm-bar__confirm")?.click();
+  await flush();
+});
+ok(!document.querySelector(".extension-form"), "replacement remote form clears only after its own submission");
 
 await act(async () => {
   __emitMockRemoteTab("tab-remote-1", "event", { kind: "text", text: "retain this partial answer across disconnect" });
@@ -487,6 +565,52 @@ await act(async () => { __emitMockRemoteTab("tab-remote-1", "state", { state: "d
 }
 
 await act(async () => root.unmount());
+
+// Older Serve versions remain readable, but decision writes stay fenced when
+// they cannot carry the complete request or form publication identity.
+const legacyCapabilityContainer = document.createElement("div");
+document.body.appendChild(legacyCapabilityContainer);
+const legacyCapabilityRoot = createRoot(legacyCapabilityContainer);
+const legacyCapabilityTab: TabMeta = {
+  ...remoteTab,
+  id: "tab-legacy-capabilities",
+  sessionId: "legacy-session",
+  sessionGeneration: 1,
+  interactionTargetSupported: false,
+  extensionFormInstanceSupported: false,
+};
+await act(async () => {
+  legacyCapabilityRoot.render(<LocaleProvider><RemoteSurfaceHarness tab={legacyCapabilityTab} /></LocaleProvider>);
+  await flush();
+});
+await act(async () => {
+  __emitMockRemoteTab(legacyCapabilityTab.id, "event", {
+    kind: "approval_request",
+    approval: { id: "legacy-approval", tool: "bash", subject: "must remain fenced" },
+  });
+  __emitMockRemoteTab(legacyCapabilityTab.id, "event", {
+    kind: "extension_surface",
+    extension: {
+      pluginId: "legacy-plugin", surfaceId: "legacy-form", generation: 1, formInstanceId: "legacy-instance", kind: "form",
+      form: { title: "Legacy form", fields: [{ key: "value", label: "Value", kind: "input", default: "blocked" }] },
+    },
+  });
+  await flush();
+});
+const legacyApprovalButton = legacyCapabilityContainer.querySelector<HTMLButtonElement>(".remote-surface__approval .prompt-action");
+const legacyFormButton = legacyCapabilityContainer.querySelector(".extension-form")?.closest(".prompt-shelf")?.querySelector<HTMLButtonElement>(".decision-confirm-bar__confirm");
+ok(legacyCapabilityContainer.textContent?.includes("must be upgraded") === true, "old Serve shows an upgrade notice only for unsafe interactive cards");
+ok(legacyApprovalButton?.closest("fieldset")?.disabled === true && legacyFormButton?.disabled === true, "old Serve keeps exact prompt and form actions disabled");
+const legacyWritesBefore = tape.filter((entry) => entry.includes(legacyCapabilityTab.id) && (entry.startsWith("approve:") || entry.startsWith("extension-form:"))).length;
+await act(async () => {
+  legacyApprovalButton?.click();
+  legacyFormButton?.click();
+  await flush();
+});
+ok(tape.filter((entry) => entry.includes(legacyCapabilityTab.id) && (entry.startsWith("approve:") || entry.startsWith("extension-form:"))).length === legacyWritesBefore,
+  "old Serve card clicks never fall back to legacy mutation endpoints");
+await act(async () => legacyCapabilityRoot.unmount());
+legacyCapabilityContainer.remove();
 
 let restoredShellProbe: RemoteSessionApi | undefined;
 function RestoredShellProbe() { restoredShellProbe = useRemoteSession("tab-restored-shell", "disconnected"); return null; }

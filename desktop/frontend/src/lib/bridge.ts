@@ -10,6 +10,7 @@ import type {
   DesktopCommandName,
   HistoryWindowPage,
   HistoryWindowRequest,
+  InteractionTargetView,
   LegacyEmptySessionCleanupStatus,
   MarkdownSVGView,
   MessageFieldPage,
@@ -31,6 +32,8 @@ import type {
   SessionRef,
   SessionSelector,
   ComposerTarget,
+  ExtensionFormTarget,
+  PromptAnswerView,
   WorkspaceSessionPage,
   WorkspaceSnapshot,
 } from "../generated/desktopContract.generated";
@@ -410,6 +413,7 @@ export interface AppBindings extends SessionExportBindings, SessionLifecycleBind
     action?: string; feedback?: string; content?: Record<string, unknown> | null;
     generation?: number; permissionRevision?: number;
   }): Promise<void>;
+  ResolvePromptForSession?(target: InteractionTargetView, answer: PromptAnswerView): Promise<void>;
   PendingPromptIdentitiesForTab?(tabID: string): Promise<Array<{ promptId: string; turnId: string; runtimeEpoch?: string; kind: string }>>;
   ReplayPendingPromptIdentitiesForTab?(tabID: string): Promise<Array<{ promptId: string; turnId: string; runtimeEpoch?: string; kind: string }>>;
   ReplayPendingPrompts(): Promise<void>;
@@ -554,6 +558,9 @@ export interface AppBindings extends SessionExportBindings, SessionLifecycleBind
   ExtensionActions(tabID: string): Promise<ExtensionActionView[]>;
   InvokeExtensionAction(tabID: string, name: string, args: Record<string, string>): Promise<string>;
   SubmitExtensionForm(tabID: string, pluginID: string, surfaceID: string, values: Record<string, unknown>): Promise<void>;
+  SubmitExtensionFormExact(target: ExtensionFormTarget, values: Record<string, unknown>): Promise<void>;
+  ResolveRemoteTabPromptExact(target: InteractionTargetView, answer: PromptAnswerView): Promise<void>;
+  SubmitRemoteTabExtensionFormExact(target: ExtensionFormTarget, values: Record<string, unknown>): Promise<void>;
   AddMCPServer(input: MCPServerInput): Promise<number>;
   InstallMCPServer(input: MCPServerInput): Promise<MCPInstallResult>;
   UpdateMCPServer(name: string, input: MCPServerInput): Promise<void>;
@@ -3242,6 +3249,9 @@ function makeMockApp(): AppBindings {
             if (kind === "mcp") return this.AnswerMCPInteractionForTab(tabID, promptID, (answer.action ?? "cancel") as "accept" | "decline" | "cancel", answer.content ?? null);
             throw new Error(`unsupported prompt kind: ${kind}`);
           });
+        },
+        async ResolvePromptForSession(target, answer) {
+          await this.ResolvePromptForTab?.(target.tabId, target.promptId, target.turnId, target.runtimeEpoch, target.kind, answer);
         },
         async ReplayPendingPrompts() {},
         async ReplayPendingPromptsForTab(_tabID) {},
@@ -6008,6 +6018,9 @@ function makeMockApp(): AppBindings {
       return "";
     },
     async SubmitExtensionForm() {},
+    async SubmitExtensionFormExact() {},
+    async ResolveRemoteTabPromptExact() {},
+    async SubmitRemoteTabExtensionFormExact() {},
     ...remoteProjects.bindings,
     async CleanRemoteLegacyWorkbenchData() {},
   };

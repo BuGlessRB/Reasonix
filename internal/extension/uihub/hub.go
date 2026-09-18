@@ -95,18 +95,31 @@ type ActionView struct {
 // its controller; BindGeneration re-binds it across a reload. The mutex makes
 // every method safe for concurrent sidecar traffic.
 type Hub struct {
-	mu         sync.Mutex
+	mu          sync.Mutex
+	sessionID   string
+	generation  uint64
+	owner       *extension.RuntimeOwner
+	emit        func(event.Event)
+	requestFn   RequestFunc
+	warn        func(string)
+	resolve     ClientResolver
+	known       map[string]bool
+	crashed     map[string]bool
+	actions     map[string]map[string]protocol.UIActionDecl
+	formSeq     uint64
+	activeForms map[string]activeForm
+}
+
+type activeForm struct {
+	pluginID   string
+	surfaceID  string
 	sessionID  string
 	generation uint64
-	owner      *extension.RuntimeOwner
-	emit       func(event.Event)
-	requestFn  RequestFunc
-	warn       func(string)
-	resolve    ClientResolver
-	known      map[string]bool
-	crashed    map[string]bool
-	actions    map[string]map[string]protocol.UIActionDecl
+	instanceID string
+	submitting bool
 }
+
+func formKey(pluginID, surfaceID string) string { return pluginID + "\x00" + surfaceID }
 
 // New builds a Hub bound to one session ID and generation.
 func New(opts Options) *Hub {
@@ -115,16 +128,17 @@ func New(opts Options) *Hub {
 		owner = extension.RuntimeOwnerOrDefault(nil)
 	}
 	return &Hub{
-		sessionID:  strings.TrimSpace(opts.SessionID),
-		generation: opts.Generation,
-		owner:      owner,
-		emit:       opts.Emit,
-		requestFn:  opts.Request,
-		warn:       opts.Warn,
-		resolve:    opts.Resolve,
-		known:      map[string]bool{},
-		crashed:    map[string]bool{},
-		actions:    map[string]map[string]protocol.UIActionDecl{},
+		sessionID:   strings.TrimSpace(opts.SessionID),
+		generation:  opts.Generation,
+		owner:       owner,
+		emit:        opts.Emit,
+		requestFn:   opts.Request,
+		warn:        opts.Warn,
+		resolve:     opts.Resolve,
+		known:       map[string]bool{},
+		crashed:     map[string]bool{},
+		actions:     map[string]map[string]protocol.UIActionDecl{},
+		activeForms: map[string]activeForm{},
 	}
 }
 
@@ -150,6 +164,7 @@ func (h *Hub) BindGeneration(sessionID string, gen uint64) {
 	defer h.mu.Unlock()
 	h.sessionID = strings.TrimSpace(sessionID)
 	h.generation = gen
+	h.activeForms = map[string]activeForm{}
 }
 
 // SetResolver installs the client resolver once the sidecar manager exists.
@@ -178,6 +193,11 @@ func (h *Hub) ClientCrashed(pluginID string) {
 	defer h.mu.Unlock()
 	if h.known[pluginID] {
 		h.crashed[pluginID] = true
+	}
+	for key, form := range h.activeForms {
+		if form.pluginID == pluginID {
+			delete(h.activeForms, key)
+		}
 	}
 }
 
@@ -213,6 +233,10 @@ func (b binding) Request(ctx context.Context, p protocol.UIRequestParams) (proto
 func (h *Hub) gate(pluginID, sessionID string, generation uint64) (stale bool, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	return h.gateLocked(pluginID, sessionID, generation)
+}
+
+func (h *Hub) gateLocked(pluginID, sessionID string, generation uint64) (stale bool, err error) {
 	if !h.known[pluginID] {
 		return false, unknownClientError(pluginID)
 	}
@@ -253,6 +277,25 @@ func (h *Hub) publish(pluginID string, _ context.Context, p protocol.UIPublishPa
 	if err != nil {
 		return protocol.UIPublishResult{}, err
 	}
+	h.mu.Lock()
+	stale, err = h.gateLocked(pluginID, p.SessionID, p.Generation)
+	if err != nil || stale {
+		h.mu.Unlock()
+		if err != nil {
+			return protocol.UIPublishResult{}, err
+		}
+		return protocol.UIPublishResult{Accepted: false}, nil
+	}
+	key := formKey(pluginID, p.SurfaceID)
+	if p.Kind == protocol.UISurfaceForm {
+		h.formSeq++
+		payload.FormInstanceID = fmt.Sprintf("form-%d", h.formSeq)
+		h.activeForms[key] = activeForm{pluginID: pluginID, surfaceID: p.SurfaceID, sessionID: p.SessionID,
+			generation: p.Generation, instanceID: payload.FormInstanceID}
+	} else {
+		delete(h.activeForms, key)
+	}
+	h.mu.Unlock()
 	kind := event.ExtensionSurface
 	if p.Kind == protocol.UISurfaceStatus {
 		kind = event.ExtensionStatus
@@ -412,6 +455,54 @@ func (h *Hub) Submit(ctx context.Context, pluginID, surfaceID, sessionID string,
 		Generation: generation,
 		Values:     values,
 	})
+}
+
+// SubmitExact pins the form instance and sidecar client while holding the hub
+// lock. The sidecar call runs after unlock, so a replacement form cannot be
+// mistaken for the request that produced this submission.
+func (h *Hub) SubmitExact(ctx context.Context, pluginID, surfaceID, sessionID string, generation uint64, instanceID string, values map[string]any) (protocol.UISubmitResult, error) {
+	if strings.TrimSpace(surfaceID) == "" || strings.TrimSpace(instanceID) == "" {
+		return protocol.UISubmitResult{}, &protocol.ProtocolError{Reason: protocol.ErrInvalidParams, Message: "exact form identity is required"}
+	}
+	h.mu.Lock()
+	form, ok := h.activeForms[formKey(pluginID, surfaceID)]
+	if !ok || form.sessionID != sessionID || form.generation != generation || form.instanceID != instanceID {
+		h.mu.Unlock()
+		return protocol.UISubmitResult{}, &protocol.ProtocolError{Reason: protocol.ErrInvalidParams, Message: "extension form is stale"}
+	}
+	if form.submitting {
+		h.mu.Unlock()
+		return protocol.UISubmitResult{}, &protocol.ProtocolError{Reason: protocol.ErrInvalidParams, Message: "extension form submission is already in progress"}
+	}
+	if !h.known[pluginID] {
+		h.mu.Unlock()
+		return protocol.UISubmitResult{}, unknownClientError(pluginID)
+	}
+	if h.crashed[pluginID] || h.resolve == nil {
+		h.mu.Unlock()
+		return protocol.UISubmitResult{}, &protocol.ProtocolError{Reason: protocol.ErrProviderInterrupted, Message: "extension sidecar is unavailable"}
+	}
+	client := h.resolve(pluginID)
+	if client == nil {
+		h.mu.Unlock()
+		return protocol.UISubmitResult{}, &protocol.ProtocolError{Reason: protocol.ErrProviderInterrupted, Message: "extension " + pluginID + " has no live sidecar"}
+	}
+	form.submitting = true
+	h.activeForms[formKey(pluginID, surfaceID)] = form
+	h.mu.Unlock()
+	result, err := client.UISubmit(ctx, protocol.UISubmitParams{SurfaceID: surfaceID, SessionID: sessionID, Generation: generation, Values: values})
+	h.mu.Lock()
+	current, currentOK := h.activeForms[formKey(pluginID, surfaceID)]
+	if currentOK && current.instanceID == instanceID {
+		if err != nil || result.Accepted {
+			delete(h.activeForms, formKey(pluginID, surfaceID))
+		} else {
+			current.submitting = false
+			h.activeForms[formKey(pluginID, surfaceID)] = current
+		}
+	}
+	h.mu.Unlock()
+	return result, err
 }
 
 // actionTarget resolves the live client for one plugin after enforcing the

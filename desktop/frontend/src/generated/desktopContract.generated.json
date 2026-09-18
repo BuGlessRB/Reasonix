@@ -11990,6 +11990,34 @@
     {
       "cancellation": "before-dispatch",
       "domain": "desktop/decision_runtime_api.go",
+      "name": "ResolvePromptForSession",
+      "owner": "App.ResolvePromptForSession",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.InteractionTargetView"
+        },
+        {
+          "kind": "object",
+          "ref": "main.PromptAnswerView"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "target",
+          "answer"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.ResolvePromptForSession"
+      },
+      "sources": [
+        "desktop/decision_runtime_api.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/decision_runtime_api.go",
       "name": "ResolvePromptForTab",
       "owner": "App.ResolvePromptForTab",
       "params": [
@@ -12231,6 +12259,34 @@
         ],
         "kind": "owner-inputs",
         "resolver": "App.ResolveRemoteTabPlanDecision"
+      },
+      "sources": [
+        "desktop/remote_tab.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/remote_tab.go",
+      "name": "ResolveRemoteTabPromptExact",
+      "owner": "App.ResolveRemoteTabPromptExact",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.InteractionTargetView"
+        },
+        {
+          "kind": "object",
+          "ref": "main.PromptAnswerView"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "target",
+          "answer"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.ResolveRemoteTabPromptExact"
       },
       "sources": [
         "desktop/remote_tab.go"
@@ -17910,6 +17966,39 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/extensions_app.go",
+      "name": "SubmitExtensionFormExact",
+      "owner": "App.SubmitExtensionFormExact",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.ExtensionFormTarget"
+        },
+        {
+          "elem": {
+            "kind": "any"
+          },
+          "key": {
+            "kind": "string"
+          },
+          "kind": "map"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "target",
+          "values"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SubmitExtensionFormExact"
+      },
+      "sources": [
+        "desktop/extensions_app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/app.go",
       "name": "SubmitInitialGoalToTab",
       "owner": "App.SubmitInitialGoalToTab",
@@ -18165,6 +18254,39 @@
         ],
         "kind": "owner-inputs",
         "resolver": "App.SubmitRemoteTabExtensionForm"
+      },
+      "sources": [
+        "desktop/remote_tab.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/remote_tab.go",
+      "name": "SubmitRemoteTabExtensionFormExact",
+      "owner": "App.SubmitRemoteTabExtensionFormExact",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.ExtensionFormTarget"
+        },
+        {
+          "elem": {
+            "kind": "any"
+          },
+          "key": {
+            "kind": "string"
+          },
+          "kind": "map"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "target",
+          "values"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SubmitRemoteTabExtensionFormExact"
       },
       "sources": [
         "desktop/remote_tab.go"
@@ -21829,6 +21951,12 @@
           }
         },
         {
+          "name": "projectionEpoch",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "runtimeEpoch",
           "type": {
             "kind": "string"
@@ -23307,6 +23435,13 @@
           "optional": true,
           "type": {
             "kind": "integer"
+          }
+        },
+        {
+          "name": "formInstanceId",
+          "optional": true,
+          "type": {
+            "kind": "string"
           }
         },
         {
@@ -27532,6 +27667,58 @@
         }
       ]
     },
+    "main.ExtensionFormTarget": {
+      "fields": [
+        {
+          "name": "tabId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "hostId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "sessionId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "sessionGeneration",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "pluginId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "surfaceId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "pluginGeneration",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "formInstanceId",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
     "main.ExternalOpenerView": {
       "fields": [
         {
@@ -29386,6 +29573,58 @@
         }
       ]
     },
+    "main.InteractionTargetView": {
+      "fields": [
+        {
+          "name": "tabId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "hostId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "sessionId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "sessionGeneration",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "promptId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "turnId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "runtimeEpoch",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "kind",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
     "main.InvocationRequest": {
       "fields": [
         {
@@ -30763,6 +31002,23 @@
           "optional": true,
           "type": {
             "kind": "string"
+          }
+        },
+        {
+          "name": "sessionGeneration",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "runtimeStateSnapshot",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "event.RuntimeStateSnapshot"
+            },
+            "kind": "nullable"
           }
         },
         {
@@ -38292,6 +38548,18 @@
         },
         {
           "name": "forkTargetsSupported",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "interactionTargetSupported",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "extensionFormInstanceSupported",
           "type": {
             "kind": "boolean"
           }

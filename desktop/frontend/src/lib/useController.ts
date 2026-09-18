@@ -4,6 +4,7 @@
 import { resetTurnTiming, confirmPendingUser, installTranscriptRecords, startLocalSubmission, submissionBindingCurrent } from "./submissionReducer";
 import { runtimeStatusSnapshotIsStale } from "./runtimeStatusFreshness";
 import { useRuntimeSession } from "./useRuntimeState";
+import { acceptSessionRuntimeSnapshot, type RuntimeState } from "./runtimeStateStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { asArray } from "./array";
 import { createControllerModelCommands } from "./controllerModelCommands";
@@ -20,7 +21,7 @@ import { formatInboxCancelError } from "./inboxError";
 import type { MessageActionScope, MessageActionState } from "./messageActions";
 import { mergeRateBand, type AggregatedRateBand } from "./costRateBand";
 import { requestSessionCancel, type CancelOutcome } from "./inboxCancel";
-import { answerPromptForActiveTurn, normalizeTurnSubmit, resolveActiveTurnId, resolvePromptForTab } from "./inboxSubmit";
+import { normalizeTurnSubmit, resolveActiveTurnId } from "./inboxSubmit";
 import { findTabAfterSubmitFailure, reduceManagementConfirmation, reduceSubmitFailure } from "./turnSubmissionFailure";
 import {
   checkpointLocalSubmission,
@@ -83,6 +84,7 @@ import { reduceHistoryWindowState } from "./historyWindowState";
 import { withRemoteProviderUnreachable, withRemoteTurnInterrupted } from "./remoteTurnState";
 import type { NavigationResult, SurfaceDataCommit, SurfaceDataOutcome } from "./navigationSurfaceTransition";
 import { sameTodoList } from "./todoVisibility";
+import { interactionInstanceKey, sameInteractionIdentity, type InteractionKind, type InteractionTarget } from "./interactionTarget";
 import { resolveSnapshotTurnStartedAt, resolveTurnStartedAt, snapshotPredatesTurnLifecycle } from "./turnTiming";
 import { useRemoteTabSwitch } from "./useRemoteTabSwitch";
 import { useNavigationIntentFence } from "./useNavigationIntentFence";
@@ -129,6 +131,10 @@ import type {
   WireUsage,
   WireShellExecution,
 } from "./types";
+
+function resolvePromptForSession(target: InteractionTarget, answer: Record<string, unknown>): Promise<void> {
+  return import("./exactPromptSubmit").then(({ resolvePromptForSession: submit }) => submit(app, target, answer));
+}
 
 export { foregroundRunningFromRuntimeMeta } from "./runtimeMeta";
 export { historyMessagesToItems, historyToolError, isReadOnlyTool } from "./historyItems";
@@ -389,7 +395,10 @@ export interface ExtensionStatusEntry {
 export interface ExtensionFormState {
   pluginId: string;
   surfaceId: string;
+  sessionId?: string;
   generation?: number;
+  formInstanceId: string;
+  formInstanceExact: boolean;
   form: WireExtensionForm;
 }
 export interface ExtensionNotificationEntry {
@@ -411,6 +420,70 @@ export function extensionSurfaceKey(surface: Pick<WireExtensionSurface, "pluginI
 export function acceptsExtensionGeneration(stored: number | undefined, incoming: number | undefined): boolean {
   return incoming === undefined || stored === undefined || incoming >= stored;
 }
+
+function promptForInteraction(state: State, target: InteractionTarget): WireApproval | WireAsk | WireMCPInteraction | undefined {
+  if (target.kind === "ask") return state.ask;
+  if (target.kind === "mcp") return state.mcpInteraction;
+  return state.approval;
+}
+
+function stateOwnsInteraction(state: State, target: InteractionTarget): boolean {
+  if (!target.sessionId || !target.sessionGeneration || !state.meta?.session?.sessionId || !state.meta.sessionGeneration) return false;
+  if (state.meta.session.sessionId !== target.sessionId || state.meta.sessionGeneration !== target.sessionGeneration) return false;
+  if (target.hostId && state.meta.session.hostId !== target.hostId) return false;
+  const currentSessionKey = sessionIdentityStableKey(state.meta);
+  if (currentSessionKey && target.sessionKey && currentSessionKey !== target.sessionKey) return false;
+  const prompt = promptForInteraction(state, target);
+  if (!sameInteractionIdentity(prompt, target)) return false;
+  if (target.requestGeneration !== undefined && prompt && "generation" in prompt && prompt.generation !== target.requestGeneration) return false;
+  if (target.permissionRevision !== undefined && prompt && "permissionRevision" in prompt && prompt.permissionRevision !== target.permissionRevision) return false;
+  return true;
+}
+
+function promptInstanceKeyForState(
+  state: State,
+  prompt: WireApproval | WireAsk | WireMCPInteraction,
+  kind: InteractionKind,
+): string {
+  const base = {
+    tabId: "",
+    sessionKey: sessionIdentityStableKey(state.meta),
+    hostId: state.meta?.session?.hostId,
+    sessionId: state.meta?.session?.sessionId,
+    sessionGeneration: state.meta?.sessionGeneration,
+    promptId: prompt.id,
+    turnId: prompt.turnId,
+    runtimeEpoch: prompt.runtimeEpoch,
+    kind,
+    requestGeneration: "generation" in prompt ? prompt.generation : undefined,
+    permissionRevision: "permissionRevision" in prompt ? prompt.permissionRevision : undefined,
+  };
+  return interactionInstanceKey(base);
+}
+
+function interactionTargetFromState(
+  tabId: string,
+  state: State | undefined,
+  kind: InteractionKind,
+  promptId: string,
+): InteractionTarget {
+  const prompt = state ? promptForInteraction(state, { kind } as InteractionTarget) : undefined;
+  const base = {
+    tabId,
+    sessionKey: sessionIdentityStableKey(state?.meta) || tabId,
+    hostId: state?.meta?.session?.hostId,
+    sessionId: state?.meta?.session?.sessionId,
+    sessionGeneration: state?.meta?.sessionGeneration,
+    promptId,
+    turnId: prompt?.turnId ?? state?.activeTurnId,
+    runtimeEpoch: prompt?.runtimeEpoch ?? state?.meta?.runtime?.epoch,
+    kind,
+    requestGeneration: prompt && "generation" in prompt ? prompt.generation : undefined,
+    permissionRevision: prompt && "permissionRevision" in prompt ? prompt.permissionRevision : undefined,
+  };
+  return { ...base, instanceKey: interactionInstanceKey(base) };
+}
+
 // Mid-turn steer messages are recorded as info notices carrying this prefix —
 // both live (the "steer" event below) and in replayed history (desktop/app.go
 // prefixes persisted steers the same way). The prefix is the only durable
@@ -421,10 +494,10 @@ function isStalePromptError(error: unknown): boolean {
   return /active turn|runtime changed|stale/i.test(errorMessage(error));
 }
 
-function handlePromptFailure(dispatchTo: (tabId: string, action: Action) => void, tabId: string, id: string, epoch: number, error: unknown, kind?: "approval" | "ask" | "mcp") {
-  if (isStalePromptError(error) && kind) dispatchTo(tabId, { type: "expire_prompt", id, epoch, kind });
-  else if (kind) dispatchTo(tabId, { type: "submit_prompt_failed", id, epoch });
-  replayPendingPromptsForActiveTab(tabId);
+function handlePromptFailure(dispatchTo: (tabId: string, action: Action) => void, target: InteractionTarget, epoch: number, error: unknown) {
+  if (isStalePromptError(error)) dispatchTo(target.tabId, { type: "expire_prompt", target, epoch });
+  else dispatchTo(target.tabId, { type: "submit_prompt_failed", target, epoch });
+  replayPendingPromptsForActiveTab(target.tabId);
 }
 
 export function isSteerNoticeText(text: string): boolean {
@@ -551,6 +624,7 @@ export interface State extends ReadStatusHost, ForkTurnState {
   // to reject (#6432 round 2: idle-applied-before-replay, and
   // running=true/pendingPrompt=false snapshots that never clear approval/ask).
   resolvedPromptId?: string;
+  resolvedPromptKey?: string;
   // Monotonic per-tab prompt-id namespace generation. Approval/ask ids restart
   // from "1" whenever the backend controller is rebuilt, so any id captured
   // before the bump (an in-flight prompt answer or mode-switch RPC) must not
@@ -594,6 +668,8 @@ export interface State extends ReadStatusHost, ForkTurnState {
   // Last accepted generation per extension surface key; guards against
   // re-ordered publications (acceptsExtensionGeneration).
   extensionGenerations: Record<string, number>;
+  /** Last binding-validated runtime snapshot accepted from Meta or runtime sync. */
+  runtimeStateSnapshot?: RuntimeState;
   // Speculative sampling-attempt journal for Codex-style stream replay.
   // Host-local only; never hydrated from history.
   streamAttemptJournal?: StreamAttemptJournal;
@@ -838,6 +914,7 @@ export type Action =
   | { type: "cancel_requested" }
   | { type: "meta"; meta: Meta }
   | { type: "optimistic_meta"; meta: Meta }
+  | { type: "runtime_snapshot"; snapshot: RuntimeState }
   | { type: "context"; context: ContextInfo }
   | { type: "balance"; balance: BalanceInfo }
   | { type: "effort"; effort: EffortInfo }
@@ -867,14 +944,14 @@ export type Action =
   | { type: "history_newer_start" }
   | { type: "history_newer_error"; error?: string }
   | { type: "local_notice"; level: "info" | "warn"; text: string; preserveRuntime?: boolean }
-  | { type: "clearApproval" }
+  | { type: "clearApproval"; target?: InteractionTarget }
   | { type: "clearAsk" }
-  | { type: "expire_prompt"; id: string; epoch: number; kind: "approval" | "ask" | "mcp" }
-  | { type: "clearExtensionForm" }
+  | { type: "expire_prompt"; target: InteractionTarget; epoch: number }
+  | { type: "clearExtensionForm"; identity?: Pick<ExtensionFormState, "pluginId" | "surfaceId" | "formInstanceId"> }
   | { type: "extension_notifications_drained" }
   | { type: "approval_drained"; ids: string[]; epoch: number }
-  | { type: "ask_submit_succeeded"; id: string; epoch: number }
-  | { type: "submit_prompt_failed"; id: string; epoch: number }
+  | { type: "ask_submit_succeeded"; target: InteractionTarget; epoch: number }
+  | { type: "submit_prompt_failed"; target: InteractionTarget; epoch: number }
   | { type: "controller_rebuilt" }
   | { type: "reset" }
   | { type: "context_panel_refresh" };
@@ -1099,7 +1176,15 @@ function applyExtensionForm(s: State, surface: WireExtensionSurface): State {
   if (!form) return s;
   return {
     ...s,
-    extensionForm: { pluginId: surface.pluginId, surfaceId: surface.surfaceId, generation: surface.generation, form },
+    extensionForm: {
+      pluginId: surface.pluginId,
+      surfaceId: surface.surfaceId,
+      sessionId: surface.sessionId,
+      generation: surface.generation,
+      formInstanceId: surface.formInstanceId ?? JSON.stringify([surface.pluginId, surface.surfaceId, surface.generation ?? 0]),
+      formInstanceExact: Boolean(surface.formInstanceId),
+      form,
+    },
   };
 }
 
@@ -1715,14 +1800,17 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
       return { ...s, seq: s.seq + 1, items: [...s.items, { kind: "notice", id: `s${s.seq}`, level: "info", text: `${STEER_NOTICE_PREFIX}${e.text ?? ""}`, inboxItemId: e.itemId }] };
     case "approval_request": {
       if (s.cancelRequested) return s;
+      const approval = e.approval ? { ...e.approval, turnId: e.turnId ?? e.approval.turnId, runtimeEpoch: e.runtimeEpoch ?? e.approval.runtimeEpoch } : undefined;
+      const approvalKind: InteractionKind = approval?.kind === "recovery" || approval?.recovery
+        ? "recovery" : approval?.tool === "exit_plan_mode" ? "plan" : "approval";
       // A delayed re-delivery of a prompt the user already answered locally
       // (clearApproval) must not resurrect it — no downstream snapshot is
       // guaranteed to ever reject it again (#6432 round 2).
-      if (e.approval?.id !== undefined && e.approval.id === s.resolvedPromptId) return s;
+      if (approval && (promptInstanceKeyForState(s, approval, approvalKind) === s.resolvedPromptKey || (!s.resolvedPromptKey && approval.id === s.resolvedPromptId))) return s;
       return beginPromptWait({
         ...s,
         activeTurnId: e.turnId ?? s.activeTurnId,
-        approval: e.approval ? { ...e.approval, turnId: e.turnId ?? e.approval.turnId, runtimeEpoch: e.runtimeEpoch ?? e.approval.runtimeEpoch } : e.approval,
+        approval,
         // A replay of the SAME prompt (post-answer delayed delivery, or the
         // #6429 re-arm after activation) keeps the original arrival time; only
         // a genuinely new prompt id re-anchors it (#6432 reverse race).
@@ -1736,11 +1824,12 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
     }
     case "ask_request": {
       if (s.cancelRequested) return s;
-      if (e.ask?.id !== undefined && e.ask.id === s.resolvedPromptId) return s;
+      const ask = e.ask ? { ...e.ask, turnId: e.turnId ?? e.ask.turnId, runtimeEpoch: e.runtimeEpoch ?? e.ask.runtimeEpoch } : undefined;
+      if (ask && (promptInstanceKeyForState(s, ask, "ask") === s.resolvedPromptKey || (!s.resolvedPromptKey && ask.id === s.resolvedPromptId))) return s;
       return beginPromptWait({
         ...s,
         activeTurnId: e.turnId ?? s.activeTurnId,
-        ask: e.ask ? { ...e.ask, turnId: e.turnId ?? e.ask.turnId, runtimeEpoch: e.runtimeEpoch ?? e.ask.runtimeEpoch } : e.ask,
+        ask,
         promptArrivedAt: e.ask?.id === s.promptArrivedId ? s.promptArrivedAt : promptEventClock(),
         promptArrivedId: e.ask?.id,
         pendingPrompt: true,
@@ -1751,11 +1840,12 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
     }
     case "mcp_interaction": {
       if (s.cancelRequested) return s;
-      if (e.mcpInteraction?.id !== undefined && e.mcpInteraction.id === s.resolvedPromptId) return s;
+      const interaction = e.mcpInteraction ? { ...e.mcpInteraction, turnId: e.turnId ?? e.mcpInteraction.turnId, runtimeEpoch: e.runtimeEpoch ?? e.mcpInteraction.runtimeEpoch } : undefined;
+      if (interaction && (promptInstanceKeyForState(s, interaction, "mcp") === s.resolvedPromptKey || (!s.resolvedPromptKey && interaction.id === s.resolvedPromptId))) return s;
       return beginPromptWait({
         ...s,
         activeTurnId: e.turnId ?? s.activeTurnId,
-        mcpInteraction: e.mcpInteraction ? { ...e.mcpInteraction, turnId: e.turnId ?? e.mcpInteraction.turnId, runtimeEpoch: e.runtimeEpoch ?? e.mcpInteraction.runtimeEpoch } : e.mcpInteraction,
+        mcpInteraction: interaction,
         promptArrivedAt: e.mcpInteraction?.id === s.promptArrivedId ? s.promptArrivedAt : promptEventClock(),
         promptArrivedId: e.mcpInteraction?.id,
         pendingPrompt: true,
@@ -2083,9 +2173,25 @@ function reduceState(s: State, a: Action): State {
     }
     case "meta": {
       const meta = a.meta.sessionPath === undefined && s.meta?.sessionPath !== undefined ? { ...a.meta, sessionPath: s.meta.sessionPath } : a.meta;
-      return sameMeta(s.meta, meta) ? s : { ...s, meta };
+      const runtimeStateSnapshot = meta.runtimeStateSnapshot
+        ? acceptSessionRuntimeSnapshot(s.runtimeStateSnapshot, meta.runtimeStateSnapshot, true)
+        : s.runtimeStateSnapshot;
+      const acceptedMeta = runtimeStateSnapshot?.todos !== undefined
+        ? { ...meta, canonicalTodos: runtimeStateSnapshot.todos }
+        : meta;
+      return sameMeta(s.meta, acceptedMeta) && runtimeStateSnapshot === s.runtimeStateSnapshot
+        ? s
+        : { ...s, meta: acceptedMeta, runtimeStateSnapshot };
     }
     case "optimistic_meta": return sameMeta(s.meta, a.meta) ? s : { ...s, meta: a.meta, hydrateError: undefined };
+    case "runtime_snapshot": {
+      const runtimeStateSnapshot = acceptSessionRuntimeSnapshot(s.runtimeStateSnapshot, a.snapshot);
+      if (runtimeStateSnapshot === s.runtimeStateSnapshot) return s;
+      const meta = runtimeStateSnapshot.todos !== undefined && s.meta
+        ? { ...s.meta, runtimeStateSnapshot, canonicalTodos: runtimeStateSnapshot.todos }
+        : s.meta;
+      return { ...s, meta, runtimeStateSnapshot };
+    }
     case "context": {
       const sessionTokens = typeof a.context.sessionTokens === "number"
         ? Math.max(0, a.context.sessionTokens)
@@ -2213,7 +2319,14 @@ function reduceState(s: State, a: Action): State {
     }
     case "local_notice": return { ...s, running: a.preserveRuntime || s.transcriptProtocol === 2 ? s.running : false, turnActive: a.preserveRuntime || s.transcriptProtocol === 2 ? s.turnActive : false, seq: s.seq + 1, items: [...s.items, { kind: "notice", id: `n${s.seq}`, local: true, level: a.level, text: a.text }] };
     case "clearApproval": {
-      const next = { ...s, approval: undefined, pendingPrompt: Boolean(s.ask || s.mcpInteraction), resolvedPromptId: s.approval?.id ?? s.resolvedPromptId };
+      if (a.target && !stateOwnsInteraction(s, a.target)) return s;
+      const next = {
+        ...s,
+        approval: undefined,
+        pendingPrompt: Boolean(s.ask || s.mcpInteraction),
+        resolvedPromptId: s.approval?.id ?? s.resolvedPromptId,
+        resolvedPromptKey: a.target?.instanceKey ?? s.resolvedPromptKey,
+      };
       return endPromptWaitIfIdle(next);
     }
     case "clearAsk": {
@@ -2228,18 +2341,21 @@ function reduceState(s: State, a: Action): State {
     }
     case "expire_prompt": {
       if (s.promptEpoch !== a.epoch) return s;
-      if (a.kind === "approval") {
-        if (s.approval?.id !== a.id) return s;
-        return endPromptWaitIfIdle({ ...s, approval: undefined, pendingPrompt: Boolean(s.ask || s.mcpInteraction), resolvedPromptId: a.id });
+      if (!stateOwnsInteraction(s, a.target)) return s;
+      if (a.target.kind === "approval" || a.target.kind === "plan" || a.target.kind === "recovery") {
+        return endPromptWaitIfIdle({ ...s, approval: undefined, pendingPrompt: Boolean(s.ask || s.mcpInteraction), resolvedPromptId: a.target.promptId, resolvedPromptKey: a.target.instanceKey });
       }
-      if (a.kind === "ask") {
-        if (s.ask?.id !== a.id) return s;
-        return endPromptWaitIfIdle({ ...s, ask: undefined, pendingPrompt: Boolean(s.approval || s.mcpInteraction), resolvedPromptId: a.id });
+      if (a.target.kind === "ask") {
+        return endPromptWaitIfIdle({ ...s, ask: undefined, pendingPrompt: Boolean(s.approval || s.mcpInteraction), resolvedPromptId: a.target.promptId, resolvedPromptKey: a.target.instanceKey });
       }
-      if (s.mcpInteraction?.id !== a.id) return s;
-      return endPromptWaitIfIdle({ ...s, mcpInteraction: undefined, pendingPrompt: Boolean(s.approval || s.ask), resolvedPromptId: a.id });
+      return endPromptWaitIfIdle({ ...s, mcpInteraction: undefined, pendingPrompt: Boolean(s.approval || s.ask), resolvedPromptId: a.target.promptId, resolvedPromptKey: a.target.instanceKey });
     }
-    case "clearExtensionForm": return s.extensionForm ? { ...s, extensionForm: undefined } : s;
+    case "clearExtensionForm": {
+      if (!s.extensionForm) return s;
+      if (a.identity && (s.extensionForm.pluginId !== a.identity.pluginId || s.extensionForm.surfaceId !== a.identity.surfaceId ||
+        s.extensionForm.formInstanceId !== a.identity.formInstanceId)) return s;
+      return { ...s, extensionForm: undefined };
+    }
     case "extension_notifications_drained": return s.extensionNotifications.length > 0 ? { ...s, extensionNotifications: [] } : s;
     // A tool-approval posture switch auto-allowed exactly these prompt ids on
     // the backend. Hide + tombstone the visible approval only when it is one
@@ -2253,8 +2369,8 @@ function reduceState(s: State, a: Action): State {
       return endPromptWaitIfIdle(next);
     }
     case "ask_submit_succeeded": {
-      if (s.promptEpoch !== a.epoch || s.ask?.id !== a.id) return s;
-      const next = { ...s, ask: undefined, pendingPrompt: Boolean(s.approval || s.mcpInteraction), resolvedPromptId: a.id };
+      if (s.promptEpoch !== a.epoch || !stateOwnsInteraction(s, a.target)) return s;
+      const next = { ...s, ask: undefined, pendingPrompt: Boolean(s.approval || s.mcpInteraction), resolvedPromptId: a.target.promptId, resolvedPromptKey: a.target.instanceKey };
       return endPromptWaitIfIdle(next);
     }
     // The optimistic clearApproval/clearAsk tombstone was wrong: the backend
@@ -2266,7 +2382,9 @@ function reduceState(s: State, a: Action): State {
     // prompt, and a late failure from the old controller must not erase the
     // new controller's tombstone.
     case "submit_prompt_failed":
-      return s.resolvedPromptId === a.id && s.promptEpoch === a.epoch ? { ...s, resolvedPromptId: undefined } : s;
+      return s.resolvedPromptKey === a.target.instanceKey && s.promptEpoch === a.epoch
+        ? { ...s, resolvedPromptId: undefined, resolvedPromptKey: undefined }
+        : s;
     // A controller rebuild (model/effort/token-mode switch) replaces the
     // backend controller in place and its approval/ask ids restart from "1"
     // (per-controller counters, see sound.ts). Any id-anchored bookkeeping
@@ -2287,6 +2405,7 @@ function reduceState(s: State, a: Action): State {
         promptEpoch: s.promptEpoch + 1,
         pendingSubmissionId: undefined,
         resolvedPromptId: undefined,
+        resolvedPromptKey: undefined,
         promptArrivedId: undefined,
         promptArrivedAt: undefined,
         extensionStatuses: {},
@@ -2367,7 +2486,6 @@ export function useController() {
   // can schedule an authoritative refetch after it rejects a stale snapshot.
   const scheduleStalePromptReconcileRef = useRef<(tabId: string) => void>(() => {});
   const [activeTabId, setActiveTabId] = useState<string | undefined>();
-  const runtimeState = useRuntimeSession(activeTabId);
   const activeTabIdRef = useRef<string | undefined>(undefined);
   // Invalidates async navigation completions even for ABA switches where the
   // visible tab ID eventually returns to the original value.
@@ -2451,6 +2569,7 @@ export function useController() {
 
   // The active tab's current state, with a stable identity for cancel().
   const activeState = activeTabId ? getOrCreateState(statesRef.current, activeTabId) : initialState;
+  const runtimeState = useRuntimeSession(activeTabId, activeState.meta);
   const stateRef = useRef(activeState);
   const backendActiveTabIdRef = useRef<string | undefined>(undefined);
   const backendActivationPromises = useRef(new Map<string, Promise<boolean>>());
@@ -2496,6 +2615,10 @@ export function useController() {
       if (!streamDeltaOnly) bump();
     }
   }, [bump, notifyLiveListeners]);
+  useEffect(() => {
+    if (!activeTabId || !runtimeState.known || !runtimeState.state) return;
+    dispatchTo(activeTabId, { type: "runtime_snapshot", snapshot: runtimeState.state });
+  }, [activeTabId, dispatchTo, runtimeState.known, runtimeState.state]);
   const clearBalanceForTab = useCallback((tabId: string): void => {
     invalidateSharedQuery("BalanceForTab", [tabId]);
     invalidateSharedQuery("MetaForTab", [tabId]);
@@ -3725,9 +3848,9 @@ export function useController() {
   // Extension form dismissed/submitted locally: hide the surface. The backend
   // round-trip (SubmitExtensionForm) lives in App.tsx, which owns the toast
   // context used for error reporting.
-  const dismissExtensionForm = useCallback(() => {
-    if (!activeTabId) return;
-    dispatchTo(activeTabId, { type: "clearExtensionForm" });
+  const dismissExtensionForm = useCallback((tabId = activeTabId, identity?: Pick<ExtensionFormState, "pluginId" | "surfaceId" | "formInstanceId">) => {
+    if (!tabId) return;
+    dispatchTo(tabId, { type: "clearExtensionForm", identity });
   }, [activeTabId, dispatchTo]);
 
   // The App drained the queued extension notifications into the toast system.
@@ -3776,65 +3899,60 @@ export function useController() {
     return cancelForTab(tabId, inboxItemIDs);
   }, [activeTabId, cancelForTab]);
 
-  const isPromptCurrentForTab = useCallback((tabId: string, kind: "approval" | "ask" | "mcpInteraction", id: string) => (
-    statesRef.current.get(tabId)?.[kind]?.id === id
-  ), []);
-  const approveForTab = useCallback((tabId: string, id: string, allow: boolean, session: boolean, persist: boolean) => {
-    if (!tabId) return;
-    const promptState = statesRef.current.get(tabId);
-    // Pin the failure callback to the prompt-id epoch the RPC was issued in:
-    // if a controller rebuild lands while the call is in flight, a late
-    // failure must not undo bookkeeping the NEW controller wrote for the same
-    // numeric id (#6432 round 4).
-    const epoch = statesRef.current.get(tabId)?.promptEpoch ?? 0;
-    dispatchTo(tabId, { type: "clearApproval" });
-    resolvePromptForTab(app, tabId, id, "approval", {
+  const isPromptCurrentForTab = useCallback((target: InteractionTarget) => {
+    const state = statesRef.current.get(target.tabId);
+    return Boolean(state && stateOwnsInteraction(state, target));
+  }, []);
+  const approveForTab = useCallback((target: InteractionTarget, allow: boolean, session: boolean, persist: boolean) => {
+    if (!target.tabId) return;
+    const promptState = statesRef.current.get(target.tabId);
+    const epoch = promptState?.promptEpoch ?? 0;
+    dispatchTo(target.tabId, { type: "clearApproval", target });
+    resolvePromptForSession(target, {
       allow,
       session,
       persist,
-      generation: promptState?.approval?.generation,
-      permissionRevision: promptState?.approval?.permissionRevision,
-    }, promptState?.approval?.turnId ?? promptState?.activeTurnId, promptState?.approval?.runtimeEpoch ?? runtimeEpochByTabRef.current.get(tabId)).catch((error) => handlePromptFailure(dispatchTo, tabId, id, epoch, error, "approval"));
+      generation: target.requestGeneration,
+      permissionRevision: target.permissionRevision,
+    }).catch((error) => handlePromptFailure(dispatchTo, target, epoch, error));
   }, [dispatchTo]);
 
   const approve = useCallback((id: string, allow: boolean, session: boolean, persist: boolean) => {
-    if (activeTabId) approveForTab(activeTabId, id, allow, session, persist);
+    if (activeTabId) approveForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "approval", id), allow, session, persist);
   }, [activeTabId, approveForTab]);
 
-  const resolvePlanDecisionForTab = useCallback((tabId: string, id: string, action: "start_execution" | "revise_plan" | "exit_plan") => {
-    if (!tabId) return;
-    const promptState = statesRef.current.get(tabId);
-    const epoch = statesRef.current.get(tabId)?.promptEpoch ?? 0;
-    dispatchTo(tabId, { type: "clearApproval" });
-    resolvePromptForTab(app, tabId, id, "plan", { action }, promptState?.approval?.turnId ?? promptState?.activeTurnId, promptState?.approval?.runtimeEpoch ?? runtimeEpochByTabRef.current.get(tabId)).catch((error) => handlePromptFailure(dispatchTo, tabId, id, epoch, error, "approval"));
+  const resolvePlanDecisionForTab = useCallback((target: InteractionTarget, action: "start_execution" | "revise_plan" | "exit_plan") => {
+    if (!target.tabId) return;
+    const epoch = statesRef.current.get(target.tabId)?.promptEpoch ?? 0;
+    dispatchTo(target.tabId, { type: "clearApproval", target });
+    resolvePromptForSession(target, { action }).catch((error) => handlePromptFailure(dispatchTo, target, epoch, error));
   }, [dispatchTo]);
 
   const resolvePlanDecision = useCallback((id: string, action: "start_execution" | "revise_plan" | "exit_plan") => {
-    if (activeTabId) resolvePlanDecisionForTab(activeTabId, id, action);
+    if (activeTabId) resolvePlanDecisionForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "plan", id), action);
   }, [activeTabId, resolvePlanDecisionForTab]);
 
-  const resolveRecoveryForTab = useCallback((tabId: string, id: string, action: "continue" | "continue_task" | "revise" | "stop", feedback = "") => {
-    if (!tabId) return;
-    const promptState = statesRef.current.get(tabId);
-    const epoch = statesRef.current.get(tabId)?.promptEpoch ?? 0;
-    dispatchTo(tabId, { type: "clearApproval" });
-    resolvePromptForTab(app, tabId, id, "recovery", { action, feedback }, promptState?.approval?.turnId ?? promptState?.activeTurnId, promptState?.approval?.runtimeEpoch ?? runtimeEpochByTabRef.current.get(tabId)).catch((error) => handlePromptFailure(dispatchTo, tabId, id, epoch, error, "approval"));
+  const resolveRecoveryForTab = useCallback((target: InteractionTarget, action: "continue" | "continue_task" | "revise" | "stop", feedback = "") => {
+    if (!target.tabId) return;
+    const epoch = statesRef.current.get(target.tabId)?.promptEpoch ?? 0;
+    dispatchTo(target.tabId, { type: "clearApproval", target });
+    resolvePromptForSession(target, { action, feedback }).catch((error) => handlePromptFailure(dispatchTo, target, epoch, error));
   }, [dispatchTo]);
 
   const resolveRecovery = useCallback((id: string, action: "continue" | "continue_task" | "revise" | "stop", feedback = "") => {
-    if (activeTabId) resolveRecoveryForTab(activeTabId, id, action, feedback);
+    if (activeTabId) resolveRecoveryForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "recovery", id), action, feedback);
   }, [activeTabId, resolveRecoveryForTab]);
 
-  const answerQuestionForTab = useCallback((tabId: string, id: string, answers: QuestionAnswer[]): Promise<void> => {
-    if (!tabId) return Promise.reject(new Error("source tab is unavailable"));
-    const state = statesRef.current.get(tabId);
+  const answerQuestionForTab = useCallback((target: InteractionTarget, answers: QuestionAnswer[]): Promise<void> => {
+    if (!target.tabId) return Promise.reject(new Error("source tab is unavailable"));
+    const state = statesRef.current.get(target.tabId);
     const epoch = state?.promptEpoch ?? 0;
-    return answerPromptForActiveTurn(app, tabId, id, answers, state?.ask?.turnId ?? state?.activeTurnId, state?.ask?.runtimeEpoch ?? runtimeEpochByTabRef.current.get(tabId)).then(
-      () => dispatchTo(tabId, { type: "ask_submit_succeeded", id, epoch }),
+    return resolvePromptForSession(target, { questions: answers }).then(
+      () => dispatchTo(target.tabId, { type: "ask_submit_succeeded", target, epoch }),
       (error) => {
-        if (isStalePromptError(error)) dispatchTo(tabId, { type: "expire_prompt", id, epoch, kind: "ask" });
-        else dispatchTo(tabId, { type: "local_notice", level: "warn", text: t("notice.askSubmitFailed", { error: errorMessage(error) }), preserveRuntime: true });
-        void reconcileRuntimeAfterRejectedMutation(tabId);
+        if (isStalePromptError(error)) dispatchTo(target.tabId, { type: "expire_prompt", target, epoch });
+        else dispatchTo(target.tabId, { type: "local_notice", level: "warn", text: t("notice.askSubmitFailed", { error: errorMessage(error) }), preserveRuntime: true });
+        void reconcileRuntimeAfterRejectedMutation(target.tabId);
         throw error;
       },
     );
@@ -3842,23 +3960,23 @@ export function useController() {
 
   const answerQuestion = useCallback((id: string, answers: QuestionAnswer[]): Promise<void> => {
     if (!activeTabId) return Promise.reject(new Error("active tab is unavailable"));
-    return answerQuestionForTab(activeTabId, id, answers);
+    return answerQuestionForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "ask", id), answers);
   }, [activeTabId, answerQuestionForTab]);
 
   const answerMCPInteractionForTab = useCallback(
-    (tabId: string, id: string, action: "accept" | "decline" | "cancel", content?: Record<string, unknown>) => {
-      if (!tabId) return;
-      const promptState = statesRef.current.get(tabId);
+    (target: InteractionTarget, action: "accept" | "decline" | "cancel", content?: Record<string, unknown>) => {
+      if (!target.tabId) return;
+      const promptState = statesRef.current.get(target.tabId);
       const epoch = promptState?.promptEpoch ?? 0;
-      dispatchTo(tabId, { type: "expire_prompt", id, epoch, kind: "mcp" });
-      resolvePromptForTab(app, tabId, id, "mcp", { action, content: content ?? null }, promptState?.mcpInteraction?.turnId ?? promptState?.activeTurnId, promptState?.mcpInteraction?.runtimeEpoch ?? runtimeEpochByTabRef.current.get(tabId)).catch((error) => handlePromptFailure(dispatchTo, tabId, id, epoch, error, "mcp"));
+      dispatchTo(target.tabId, { type: "expire_prompt", target, epoch });
+      resolvePromptForSession(target, { action, content: content ?? null }).catch((error) => handlePromptFailure(dispatchTo, target, epoch, error));
     },
     [dispatchTo],
   );
 
   const answerMCPInteraction = useCallback(
     (id: string, action: "accept" | "decline" | "cancel", content?: Record<string, unknown>) => {
-      if (activeTabId) answerMCPInteractionForTab(activeTabId, id, action, content);
+      if (activeTabId) answerMCPInteractionForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "mcp", id), action, content);
     },
     [activeTabId, answerMCPInteractionForTab],
   );
@@ -4847,15 +4965,11 @@ export function useController() {
 
   const projectedState = useMemo(() => {
     if (!runtimeState.known) return activeState;
-    const runtimeTodos = runtimeState.state?.todos;
     return {
       ...activeState,
       running: activeState.transcriptProtocol === 2 ? activeState.running : runtimeState.running ?? activeState.running,
-      meta: runtimeTodos !== undefined && activeState.meta
-        ? { ...activeState.meta, canonicalTodos: runtimeTodos }
-        : activeState.meta,
     };
-  }, [activeState, runtimeState.known, runtimeState.running, runtimeState.state?.todos]);
+  }, [activeState, runtimeState.known, runtimeState.running]);
   return {
     state: projectedState,
     liveStore,

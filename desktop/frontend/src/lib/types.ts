@@ -386,6 +386,7 @@ export interface WireExtensionSurface {
   surfaceId: string;
   sessionId?: string;
   generation?: number;
+  formInstanceId?: string;
   kind: string; // "status" | "card" | "form" | "notification"
   status?: WireExtensionStatus;
   card?: WireExtensionCard;
@@ -996,6 +997,7 @@ export interface Meta extends RemoteSessionMetaFields {
   sessionRevision?: number;
   sessionDigest?: string;
   sessionGeneration?: number;
+  runtimeStateSnapshot?: import("./runtimeStateStore").RuntimeState;
   cwd: string;
   workspaceRoot?: string;
   workspaceName?: string;
