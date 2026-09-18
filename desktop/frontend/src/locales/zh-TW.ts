@@ -2063,6 +2063,8 @@ export const zhTW: Record<DictKey, string> = {
   "settings.modelDialog.resetReasoningEffort": "恢復自動思考強度",
   "settings.modelDialog.automatic": "自動",
   "settings.modelDialog.reasoningEffortHint": "自動繼承服務商預設值。更高檔位可能消耗更多時間和 token。",
+  "settings.modelDialog.reasoningUnknown": "尚未識別此模型的思考檔位。可使用自動，或配置此連線的思考協定與可用檔位。",
+  "settings.modelDialog.reasoningUnsupported": "此模型配置未提供可調節的思考檔位。",
   "settings.modelDialog.overrideHint": "僅覆寫能力宣告，不會改變模型實際能力。",
   "settings.modelDialog.capabilities": "模型能力",
   "settings.modelDialog.input": "輸入",

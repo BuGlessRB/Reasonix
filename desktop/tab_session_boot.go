@@ -42,6 +42,7 @@ func (a *App) sessionOpenBootOptions(
 		SessionDir:               sessionDirForSnapshot(snap),
 		SessionService:           service,
 		EffortOverride:           cloneStringPtr(snap.effort),
+		EffortModel:              snap.model,
 		SharedHost:               sharedHost,
 		BrowserExecutor:          a.browserExecutorForTab(tab),
 		MCPHostProfile:           plugin.HostProfileDesktopApps,

@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 10;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:204e36b5831e61c3b4204040b3f02ef5f6a0362760b50b92640755d572fc9dd0";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:60be2ba6cd33667c18be752b94c5e91c70ae9c50cd249f01fe54a1c19f8bf1ea";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -1023,6 +1023,17 @@ export interface ProviderProtocolEndpoint {
   checkedOn: string;
   authHeader?: boolean;
   responsesMode?: string;
+}
+
+export interface ResolvedReasoningView {
+  state?: string;
+  apiFormat: string;
+  protocol: string;
+  selected: string;
+  effective?: string;
+  default?: string;
+  options: ReasoningOption[];
+  error?: string;
 }
 
 export interface AuthenticationState {
@@ -3159,6 +3170,7 @@ export interface ProviderModelCapabilityUpdate {
 }
 
 export interface ProviderModelCapabilityView {
+  reasoning?: ResolvedReasoningView | null;
   model: string;
   inputModalities: string[];
   state: string;
