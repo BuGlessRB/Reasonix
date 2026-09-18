@@ -87,8 +87,13 @@ For any interrupted publication, run:
 ./scripts/release-stable.sh CANDIDATE_ID recover
 ```
 
-Recovery uses the same global publication lock and one approval. Each publisher
-re-reads its external state:
+Recovery uses the same global publication lock and one approval.
+
+If activation has not started, recovery creates all three absent tags in one
+atomic push. If all tags already identify the candidate, it reuses them.
+Partial tag sets and conflicting identities always stop recovery.
+
+Each publisher re-reads its external state:
 
 - matching immutable content is reused;
 - missing content is uploaded;

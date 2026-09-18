@@ -1570,6 +1570,7 @@ jobs:
           bash scripts/validate-release-control-plane.test.sh
           bash scripts/verify-release-push-ci.test.sh
           bash scripts/release-stable.test.sh
+          bash scripts/release-candidate-tags.test.sh
           bash scripts/release-workflows.test.sh
           node scripts/check-single-release-public-contract.mjs
 

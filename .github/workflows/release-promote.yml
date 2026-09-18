@@ -110,16 +110,7 @@ jobs:
           git merge-base --is-ancestor "$SOURCE_SHA" origin/main-v2
           git show "$SOURCE_SHA:release-notes/releases.json" > /tmp/catalog.json
           test "$(sha256sum /tmp/catalog.json | awk '{print $1}')" = "$(jq -r .notes.catalogSha256 record/record.json)"
-          tags=("v$VERSION" "npm-v$VERSION" "desktop-v$VERSION")
-          if [ "$OPERATION" = publish ]; then
-            for tag in "${tags[@]}"; do
-              ! git show-ref --verify --quiet "refs/tags/$tag" || { echo "::error::release tag already exists: $tag"; exit 1; }
-            done
-          else
-            for tag in "${tags[@]}"; do
-              test "$(git rev-parse "$tag^{commit}")" = "$SOURCE_SHA" || { echo "::error::$tag does not match sealed candidate"; exit 1; }
-            done
-          fi
+          bash scripts/release-candidate-tags.sh check "$OPERATION" "$VERSION" "$SOURCE_SHA"
           {
             echo "### Sealed release approval"
             echo
@@ -217,19 +208,13 @@ jobs:
           OPERATION: ${{ inputs.operation }}
           VERSION: ${{ needs.preflight.outputs.version }}
           SOURCE_SHA: ${{ needs.preflight.outputs.source_sha }}
+          CANDIDATE_ID: ${{ needs.preflight.outputs.candidate_id }}
+          RELEASE_REVOKED_CANDIDATES: ${{ vars.RELEASE_REVOKED_CANDIDATES }}
         run: |
           set -euo pipefail
-          tags=("v$VERSION" "npm-v$VERSION" "desktop-v$VERSION")
+          node scripts/resolve-release-candidate.mjs active "$CANDIDATE_ID"
           git fetch origin main-v2 --tags
-          if [ "$OPERATION" = publish ]; then
-            git push --atomic origin \
-              "$SOURCE_SHA:refs/tags/${tags[0]}" \
-              "$SOURCE_SHA:refs/tags/${tags[1]}" \
-              "$SOURCE_SHA:refs/tags/${tags[2]}"
-          fi
-          for tag in "${tags[@]}"; do
-            test "$(git ls-remote --tags --refs origin "refs/tags/$tag" | awk 'NR == 1 {print $1}')" = "$SOURCE_SHA"
-          done
+          bash scripts/release-candidate-tags.sh activate "$OPERATION" "$VERSION" "$SOURCE_SHA"
 
   cli:
     name: publish CLI and Homebrew from candidate

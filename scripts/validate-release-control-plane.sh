@@ -15,6 +15,7 @@ required=(
 	scripts/install-nsis.ps1
 	scripts/package-windows-desktop.sh
 	scripts/release-candidate.mjs
+	scripts/release-candidate-tags.sh
 	scripts/resolve-release-candidate.mjs
 	scripts/sign-certum.ps1
 	scripts/test-windows-installer-startup.ps1
@@ -46,6 +47,7 @@ node --check "$root/scripts/resolve-release-candidate.mjs"
 node --check "$root/scripts/build-release-cli-candidate.mjs"
 node --check "$root/npm/publish-candidate.mjs"
 bash -n "$root/scripts/finalize-windows-signed-candidate.sh"
+bash -n "$root/scripts/release-candidate-tags.sh"
 bash -n "$root/scripts/package-windows-desktop.sh"
 
 echo "release control preflight: PASS"
