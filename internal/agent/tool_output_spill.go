@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/store"
+	"reasonix/internal/textutil"
 	"reasonix/internal/tool"
 )
 
@@ -202,7 +203,7 @@ func spillPointer(path, body, toolName string) string {
 // preview — the model is told the shape, not shown a guess at the substance.
 func spillInstructions(path, body, toolName string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[%s output kept out of context: %d lines, %s]\n", displayToolName(toolName), strings.Count(body, "\n")+1, humanBytes(len(body)))
+	fmt.Fprintf(&b, "[%s output kept out of context: %d lines, %s]\n", displayToolName(toolName), strings.Count(body, "\n")+1, textutil.HumanBytes(int64(len(body))))
 	fmt.Fprintf(&b, "Full output: %s\n", path)
 	b.WriteString("Read a window of it with read_file (offset/limit), or search it with grep. It is not in this conversation.\n")
 	return b.String()
@@ -233,17 +234,6 @@ func displayToolName(name string) string {
 		return n
 	}
 	return "tool"
-}
-
-func humanBytes(n int) string {
-	switch {
-	case n >= 1<<20:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%.0f KB", float64(n)/(1<<10))
-	default:
-		return fmt.Sprintf("%d B", n)
-	}
 }
 
 // boundToolOutput is the single gate every tool result passes before it becomes
