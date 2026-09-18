@@ -461,6 +461,9 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // A full 40-character identity measures 2064513 B in the browser build and
 // 2064459 B in Electron, versus 2064077 B on current main-v2 (+436 B, 0.021%).
 // Retain the smallest one-decimal ceiling; all other limits stay unchanged.
-const rawInitialBudgetKiB = 2_016.2;
+// Reasoning capability recovery copy moves the same-toolchain local build from
+// 2064327 B to 2064614 B (+287 B, 0.014%). The stable build with a full source
+// identity measures 2064746 B; retain the next one-decimal ceiling.
+const rawInitialBudgetKiB = 2_016.4;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
