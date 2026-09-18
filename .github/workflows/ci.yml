@@ -794,6 +794,7 @@ jobs:
           name: desktop-frontend-stable-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             desktop/frontend/dist
+            desktop/frontend/sourcemaps/${{ github.sha }}
             desktop/frontend/.reasonix-frontend-artifact.json
           include-hidden-files: true
           if-no-files-found: error
@@ -822,6 +823,7 @@ jobs:
           name: desktop-frontend-canary-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             desktop/frontend/dist
+            desktop/frontend/sourcemaps/${{ github.sha }}
             desktop/frontend/.reasonix-frontend-artifact.json
           include-hidden-files: true
           if-no-files-found: error
