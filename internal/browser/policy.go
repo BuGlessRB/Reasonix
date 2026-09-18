@@ -79,3 +79,23 @@ func OriginOf(raw string) string {
 	}
 	return ""
 }
+
+// ServesWorkspace reports whether a page at raw is this workspace's own: a file
+// inside it, or something this machine serves on loopback, which is where a dev
+// server for the code being edited runs. A page anywhere else exercises code
+// nobody here wrote.
+func (s *Session) ServesWorkspace(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "file":
+		path, err := url.PathUnescape(u.Path)
+		return err == nil && fileWithin(path, s.cfg.Roots)
+	case "http", "https":
+		host := u.Hostname()
+		return host == "127.0.0.1" || host == "::1" || strings.EqualFold(host, "localhost")
+	}
+	return false
+}

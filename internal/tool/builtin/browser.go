@@ -17,6 +17,10 @@ func init() {
 	tool.RegisterBuiltin(browserAct{})
 }
 
+// browserExecutionKind marks an execution record a browser call produced, so a
+// reader never takes its fields for a shell's.
+const browserExecutionKind = "browser"
+
 const (
 	browserSnapshotLines = 250
 	browserMaxLines      = 1000
@@ -245,6 +249,33 @@ func (b browserAct) PermissionArgs(ctx context.Context, args json.RawMessage) js
 
 func (browserAct) ReadOnly() bool                                   { return false }
 func (browserAct) Sequential(context.Context, json.RawMessage) bool { return true }
+
+// ExecuteDetailed is Execute plus the host's reading of what the call was: acting
+// on a page this workspace serves, with every step run and nothing thrown, is a
+// check of the code that page is running — the one a browser task actually has.
+// A page from anywhere else exercises nobody's code here and stays unclassified.
+func (b browserAct) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.DetailedResult, error) {
+	out, err := b.Execute(ctx, args)
+	ex := &tool.ShellExecution{Kind: browserExecutionKind, Verification: tool.ShellVerificationNotVerification}
+	if tab, ok := b.actedOnWorkspacePage(args); ok && err == nil {
+		ex.Subject = tab
+		ex.State, ex.Verification = tool.ShellStateCompleted, tool.ShellVerificationPassed
+	}
+	return tool.DetailedResult{Output: out, Execution: ex}, err
+}
+
+// actedOnWorkspacePage answers whether the tab the steps ran on is served by
+// this workspace, and names it. The URL is the host's, never the model's.
+func (b browserAct) actedOnWorkspacePage(args json.RawMessage) (string, bool) {
+	if b.session == nil {
+		return "", false
+	}
+	url := b.session.PageURL(tabArg(args))
+	if url == "" || !b.session.ServesWorkspace(url) {
+		return "", false
+	}
+	return url, true
+}
 
 func (b browserAct) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {

@@ -173,6 +173,18 @@ func (s *Session) Origin(tabID string) string {
 	return OriginOf(raw)
 }
 
+// PageURL is the address a tab is on, or "" when there is no such tab. The
+// host's answer, not the model's: a step may have navigated away from what it
+// asked for.
+func (s *Session) PageURL(tabID string) string {
+	t, err := s.tab(tabID)
+	if err != nil {
+		return ""
+	}
+	raw, _ := t.location()
+	return raw
+}
+
 // Tabs lists this session's tabs in the order they opened.
 func (s *Session) Tabs() []TabInfo {
 	s.mu.Lock()

@@ -310,3 +310,26 @@ func TestSecretMarkup(t *testing.T) {
 		}
 	}
 }
+
+func TestWhichPagesAreTheWorkspacesOwn(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("<title>x</title>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := NewSession(Config{Roots: []string{root}})
+	cases := map[string]bool{
+		"http://127.0.0.1:8123/index.html": true,
+		"http://localhost:5173/":           true,
+		"https://[::1]:8443/app":           true,
+		"file://" + root + "/index.html":   true,
+		"file:///etc/passwd":               false,
+		"https://example.com/":             false,
+		"about:blank":                      false,
+		"":                                 false,
+	}
+	for raw, want := range cases {
+		if got := s.ServesWorkspace(raw); got != want {
+			t.Errorf("ServesWorkspace(%q) = %v, want %v", raw, got, want)
+		}
+	}
+}

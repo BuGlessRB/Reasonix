@@ -197,3 +197,26 @@ func TestReorderingOrCanonicalEquivalentDeclarationsKeepIdentity(t *testing.T) {
 		t.Fatalf("baseline = %q, want the same identities from a different spelling", got)
 	}
 }
+
+// A page this workspace serves, acted on after the write, is the check a
+// browser task has: the host asked for a shell command afterwards and sent the
+// turn back for one, three times in a real session.
+func TestAPassingBrowserCheckSettlesTheWriteItFollowed(t *testing.T) {
+	l := NewLedger()
+	l.Record(Receipt{ToolName: "edit_file", Success: true, Write: true, Mutation: true, MutationEvidence: MutationProven, Paths: []string{"app.js"}})
+	owed := func() bool {
+		for _, o := range l.Obligations(CheckContract{}) {
+			if o.Kind == ObligationStaleVerification {
+				return true
+			}
+		}
+		return false
+	}
+	if !owed() {
+		t.Fatal("a write with no check after it owes a verification")
+	}
+	l.Record(Receipt{ToolName: "browser_act", Success: true, Verification: VerificationPassed})
+	if owed() {
+		t.Fatal("a passing browser check left the write owing a verification")
+	}
+}
