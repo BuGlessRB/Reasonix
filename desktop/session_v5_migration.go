@@ -56,6 +56,7 @@ func (a *App) startDesktopSessionMigration(ctx context.Context) {
 	// replay must not abort a new create whose body has not been published yet.
 	startupState, err := a.workspaceRegistry().Load(ctx)
 	if err != nil {
+		a.desktopMigrationFailed.Store(true)
 		slogWarnDesktopMigration(err)
 		close(a.desktopMigrationDone)
 		return
@@ -63,13 +64,16 @@ func (a *App) startDesktopSessionMigration(ctx context.Context) {
 	go func() {
 		defer close(a.desktopMigrationDone)
 		if err := a.backupDesktopUpgradeMetadata(ctx); err != nil {
+			a.desktopMigrationFailed.Store(true)
 			slogWarnDesktopMigration(err)
 			return
 		}
 		if err := a.recoverDesktopPendingCreateSnapshot(ctx, startupState.PendingCreates); err != nil {
+			a.desktopMigrationFailed.Store(true)
 			slogWarnDesktopMigration(err)
 		}
 		if err := a.migrateDesktopSessionsV5(ctx); err != nil {
+			a.desktopMigrationFailed.Store(true)
 			slogWarnDesktopMigration(err)
 			// A handled migration failure no longer terminates the process, so
 			// run a second drain after its diagnostic has entered the queue.
@@ -77,6 +81,7 @@ func (a *App) startDesktopSessionMigration(ctx context.Context) {
 		}
 		for _, run := range []func(context.Context) error{a.recoverDesktopSessionOperations, a.discoverHistoricalTrash, a.reconcileUnregisteredSessions} {
 			if err := run(ctx); err != nil {
+				a.desktopMigrationFailed.Store(true)
 				slogWarnDesktopMigration(err)
 			}
 		}

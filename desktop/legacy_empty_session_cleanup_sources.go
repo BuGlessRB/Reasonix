@@ -233,6 +233,9 @@ func (a *App) classifyLegacyCleanupRegistry(ctx context.Context, ref session.Ses
 			return state, legacyCleanupDecision{"protected", "create_or_derivation", session.SessionInfo{}, session.Snapshot{}}, false
 		}
 	}
+	if decision, owned := classifyLegacyCleanupPersistentOwner(state, ref, frozen); owned {
+		return state, decision, false
+	}
 	if decision, valid := classifyLegacyCleanupSourceMappings(state, ref, frozen); !valid {
 		return state, decision, false
 	}

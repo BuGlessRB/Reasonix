@@ -92,16 +92,17 @@ type WorkspaceTab struct {
 	SessionID                string              // immutable v3 identity; empty for legacy/read-only tabs
 	PendingCreateOperationID string              // durable create reservation used before the first turn
 	draftAdmission           *draftAdmissionProfile
-	SessionGeneration        uint64                   // bumps on session rotation (clear/new); frontend hydrate identity
-	ReadOnly                 bool                     // true for external channel transcripts opened for browsing
-	Takeover                 struct{ Spectator bool } // handoff state grouped by its cross-runtime lifetime
-	Ctrl                     control.SessionAPI       // nil while booting / on error
-	Label                    string                   // model label (for the tab badge)
-	Ready                    bool                     // true once boot.Build completes
-	StartupErr               string                   // build error, surfaced to the frontend
-	StartupErrLeaseHeld      bool                     // true when StartupErr can be retried after a session lease releases
-	modelApplication         tabModelApplicationState // guarded by App.mu; never persisted
-	runtimeID                string                   // process-local SessionRuntime registry identity
+	persistenceExtra         map[string]json.RawMessage // unknown desktop-tabs.json fields retained across rewrites
+	SessionGeneration        uint64                     // bumps on session rotation (clear/new); frontend hydrate identity
+	ReadOnly                 bool                       // true for external channel transcripts opened for browsing
+	Takeover                 struct{ Spectator bool }   // handoff state grouped by its cross-runtime lifetime
+	Ctrl                     control.SessionAPI         // nil while booting / on error
+	Label                    string                     // model label (for the tab badge)
+	Ready                    bool                       // true once boot.Build completes
+	StartupErr               string                     // build error, surfaced to the frontend
+	StartupErrLeaseHeld      bool                       // true when StartupErr can be retried after a session lease releases
+	modelApplication         tabModelApplicationState   // guarded by App.mu; never persisted
+	runtimeID                string                     // process-local SessionRuntime registry identity
 	sessionLease             *agent.SessionLease
 	sessionLeaseMu           sync.Mutex
 	sessionLeaseKey          atomic.Pointer[string] // lock-free mirror; updated with sessionLease under sessionLeaseMu
@@ -4758,43 +4759,6 @@ func (a *App) saveTabsCollectLocked() (string, []desktopTabEntry, string, uint64
 	}
 	a.tabsSaveVersion++
 	return dir, entries, persistedActiveTabID(entries, a.activeTabID), a.tabsSaveVersion
-}
-
-// saveTabsWrite writes the tab-snapshot to disk. It does not require a.mu, but
-// writes must be serialized because every save uses the same destination and
-// fixed .tmp path.
-func (a *App) saveTabsWrite(dir string, entries []desktopTabEntry, activeID string, version uint64) {
-	a.tabsSaveMu.Lock()
-	defer a.tabsSaveMu.Unlock()
-	if version < a.tabsLastWrittenVersion {
-		return
-	}
-
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return
-	}
-	localIDs := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		localIDs = append(localIDs, entry.ID)
-	}
-	remoteEntries, remoteOrder, tabOrder, remoteActive := a.remoteTabsFileEntries(localIDs)
-	if remoteActive != "" {
-		activeID = remoteActive
-	}
-	f := desktopTabsFile{Tabs: entries, ActiveTab: activeID, RemoteTabs: remoteEntries, RemoteTabOrder: remoteOrder, TabOrder: tabOrder}
-	b, err := json.MarshalIndent(f, "", "  ")
-	if err != nil {
-		return
-	}
-	path := filepath.Join(dir, tabsFileName)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return
-	}
-	if err := fileutil.ReplaceFile(tmp, path); err != nil {
-		return
-	}
-	a.tabsLastWrittenVersion = version
 }
 
 func (a *App) orderedTabIDsLocked() []string {
