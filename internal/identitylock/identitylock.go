@@ -23,6 +23,8 @@ const (
 
 var ErrHeld = filelock.ErrHeld
 
+var identityLockAfterResolve = func() {}
+
 func Acquire(ctx context.Context, path string) (func(), error) {
 	return AcquireMode(ctx, path, ModeExclusive)
 }
@@ -32,7 +34,9 @@ func AcquireMode(ctx context.Context, path string, mode Mode) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	return filelock.AcquireModeWithKey(ctx, accessPath, key, mode)
+	identityLockAfterResolve()
+	release, err := filelock.AcquireModeWithKey(ctx, accessPath, key, mode)
+	return revalidate(accessPath, key, release, err)
 }
 
 func AcquireWithExternalTimeout(ctx context.Context, path string, timeout time.Duration) (func(), error) {
@@ -40,7 +44,9 @@ func AcquireWithExternalTimeout(ctx context.Context, path string, timeout time.D
 	if err != nil {
 		return nil, err
 	}
-	return filelock.AcquireWithExternalTimeoutAndKey(ctx, accessPath, key, timeout)
+	identityLockAfterResolve()
+	release, err := filelock.AcquireWithExternalTimeoutAndKey(ctx, accessPath, key, timeout)
+	return revalidate(accessPath, key, release, err)
 }
 
 func TryAcquire(path string) (func(), error) {
@@ -52,7 +58,25 @@ func TryAcquireMode(path string, mode Mode) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	return filelock.TryAcquireModeWithKey(accessPath, key, mode)
+	identityLockAfterResolve()
+	release, err := filelock.TryAcquireModeWithKey(accessPath, key, mode)
+	return revalidate(accessPath, key, release, err)
+}
+
+func revalidate(accessPath, expectedKey string, release func(), acquireErr error) (func(), error) {
+	if acquireErr != nil {
+		return nil, acquireErr
+	}
+	_, actualKey, err := resolve(accessPath)
+	if err != nil {
+		release()
+		return nil, fmt.Errorf("revalidate file lock identity: %w", err)
+	}
+	if actualKey != expectedKey {
+		release()
+		return nil, fmt.Errorf("file lock identity changed while acquiring")
+	}
+	return release, nil
 }
 
 func resolve(path string) (string, string, error) {
