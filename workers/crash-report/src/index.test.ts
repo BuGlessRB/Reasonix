@@ -1,24 +1,26 @@
 ﻿import { describe, expect, it } from "vitest";
 import {
-  groupFingerprintFromPath,
-  isDevelopmentReport,
-  reportSubjectIdentity,
   effectiveGroupSeverity,
   isDevelopmentGroup,
-  isKnownNonCrashDiagnostic,
-  namespaceReportFingerprint,
   normalizeForFingerprint,
   Ping,
   Metrics,
   CLI_TELEMETRY_SCHEMA_SQL,
   ensureCLITelemetrySchema,
-  severityForReport,
-  maxSeverity,
   nativeWebRuntimeFingerprintBasis,
-  compareReleaseVersions,
-  regressionDecisionForReport,
   telemetryTableNames,
 } from "./index";
+import {
+  compareReleaseVersions,
+  groupFingerprintFromPath,
+  isDevelopmentReport,
+  isKnownNonCrashDiagnostic,
+  maxSeverity,
+  namespaceReportFingerprint,
+  regressionDecisionForReport,
+  reportSubjectIdentity,
+  severityForReport,
+} from "./report_classification";
 import type { Env } from "./env";
 import { renderStats } from "./stats";
 import clientSurfaceMigrationSQL from "../migrate-client-surface.sql?raw";

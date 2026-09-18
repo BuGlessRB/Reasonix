@@ -4,9 +4,8 @@ import { DatabaseSync } from "node:sqlite";
 import worker, {
   CLI_TELEMETRY_SCHEMA_SQL,
   Report,
-  isDevelopmentReport,
-  newestReleaseVersion,
 } from "./index";
+import { isDevelopmentReport, newestReleaseVersion } from "./report_classification";
 import {
   crashGroups,
   diagnosticFacets,

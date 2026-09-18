@@ -32,7 +32,6 @@ import {
   handleReleaseGatewayRequest,
 } from "./desktop_release";
 import {
-  DEVELOPMENT_FINGERPRINT_PREFIX,
   crashGroups,
   currentWindowSince,
   developmentGroupSQL,
@@ -47,6 +46,12 @@ import {
 import { statsQueryObserver } from "./stats_timing";
 import { loadD1GroupReports, loadGroupDiagnostics } from "./group_queries";
 import { Report, WebRuntimeDiagnostic, type ReportPayload } from "./report_schema";
+import {
+  crashTitle, groupFingerprintFromPath, isDevelopmentReport, namespaceReportFingerprint, newestReleaseVersion,
+  regressionDecisionForReport,
+  reportSubjectIdentity,
+  severityForReport,
+} from "./report_classification";
 import { statsFilters, type StatsFilters } from "./stats_filters";
 import {
   acquireFirebaseGroupLease,
@@ -92,7 +97,6 @@ export { Report } from "./report_schema";
 export { diagnosticWindowWhere, effectiveGroupSeverity, isDevelopmentGroup } from "./diagnostics_v2";
 const MAX_BODY_BYTES = 96 * 1024;
 const LATEST_SAMPLES_PER_GROUP = 5;
-const GROUP_PATH_RE = /^\/stats\/group\/((?:dev:)?[0-9a-f]{64})$/;
 
 const ClientSurface = z.enum(["desktop", "cli"]);
 type ClientSurfaceName = z.infer<typeof ClientSurface>;
@@ -456,98 +460,6 @@ function hasStructuredCrashFields(r: ReportPayload): boolean {
       r.breadcrumbs?.length ||
       r.occurredAt,
   );
-}
-
-// One-line human summary for the dashboard list. Frontend reports are formatted
-// "[label]\n\n<detail>", so a bare label alone is folded together with its detail.
-export function crashTitle(message: string): string {
-  const lines = message
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-  let head = lines[0] ?? "";
-  if (/^\[[^\]]+\]$/.test(head) && lines[1]) head = `${head} ${lines[1]}`;
-  return head.slice(0, 200);
-}
-
-type SeverityInput = {
-  kind: string;
-  version?: string;
-  source: string;
-  label: string;
-  errorType: string;
-  errorMessage: string;
-  topFrame: string;
-  channel?: string;
-  recovery?: string;
-};
-
-const RESIZE_OBSERVER_NOTICE_RE = /^ResizeObserver loop (?:limit exceeded|completed with undelivered notifications\.?)$/;
-
-export function isDevelopmentReport(input: SeverityInput): boolean {
-  const channel = input.channel?.trim().toLowerCase();
-  return channel === "dev" || channel === "test" || input.version?.trim().toLowerCase().startsWith("dev") === true;
-}
-
-export function reportSubjectIdentity(report: Pick<ReportPayload, "version" | "channel" | "diagnostics">): {
-  version: string;
-  channel: string;
-} {
-  return {
-    version: report.diagnostics?.subjectVersion || report.version,
-    channel: report.diagnostics?.subjectChannel || report.channel || "",
-  };
-}
-
-export function namespaceReportFingerprint(hash: string, development: boolean): string {
-  return development ? `${DEVELOPMENT_FINGERPRINT_PREFIX}${hash}` : hash;
-}
-
-export function groupFingerprintFromPath(path: string): string | null {
-  return path.match(GROUP_PATH_RE)?.[1] ?? null;
-}
-
-export function isKnownNonCrashDiagnostic(input: SeverityInput): boolean {
-  const message = input.errorMessage.trim();
-  return (
-    RESIZE_OBSERVER_NOTICE_RE.test(message) ||
-    /Minified React error #520\b/.test(message) ||
-    message.includes("additional File object is not a file on the disk")
-  );
-}
-
-export function isOpaqueScriptErrorReport(input: SeverityInput): boolean {
-  return (
-    input.kind === "crash" &&
-    input.source === "frontend.global" &&
-    input.label === "window.error" &&
-    input.errorType === "string" &&
-    input.errorMessage.trim() === "Script error." &&
-    input.topFrame.trim() === ""
-  );
-}
-
-function severityForKind(kind: string): string {
-  if (kind === "crash") return "high";
-  if (kind === "performance") return "medium";
-  if (kind === "bot") return "medium";
-  if (kind === "exception") return "medium";
-  return "low";
-}
-
-export function severityForReport(input: SeverityInput): string {
-  if (isDevelopmentReport(input) || isOpaqueScriptErrorReport(input) || isKnownNonCrashDiagnostic(input)) return "low";
-  if ((input.source === "web.runtime.native" || input.source === "webview2.process.native") && input.recovery === "reload_succeeded") return "low";
-  if ((input.source === "web.runtime.native" || input.source === "webview2.process.native") && input.kind === "exception") return "high";
-  return severityForKind(input.kind);
-}
-
-export function severityRank(severity: string): number {
-  return ({ low: 1, medium: 2, high: 3, critical: 4 })[severity] ?? 0;
-}
-
-export function maxSeverity(current: string, incoming: string): string {
-  return severityRank(incoming) > severityRank(current) ? incoming : current;
 }
 
 async function sha256Hex(s: string): Promise<string> {
@@ -979,69 +891,6 @@ async function formObject(request: Request): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const [k, v] of form) out[k] = typeof v === "string" ? v : "";
   return out;
-}
-
-type ParsedVersion = {
-  version: string;
-  major: number;
-  minor: number;
-  patch: number;
-};
-
-function parseReleaseVersion(version: string): ParsedVersion | null {
-  // The dashboard's "latest" lane is for shipped stable builds. Development,
-  // prerelease, and build-metadata values remain visible in version facets but
-  // must not become the release baseline used for regression triage.
-  const m = version.trim().match(/^v?(\d+)\.(\d+)\.(\d+)$/);
-  if (!m) return null;
-  return {
-    version,
-    major: Number(m[1]),
-    minor: Number(m[2]),
-    patch: Number(m[3]),
-  };
-}
-
-export function compareReleaseVersions(subject: string, fixedIn: string): number | null {
-  const a = parseReleaseVersion(subject);
-  const b = parseReleaseVersion(fixedIn);
-  if (!a || !b) return null;
-  return a.major - b.major || a.minor - b.minor || a.patch - b.patch;
-}
-
-export type RegressionDecision = "none" | "historical" | "suspected" | "confirmed";
-
-export function regressionDecisionForReport(input: {
-  status?: string;
-  fixedIn?: string;
-  resolutionPlatform?: string;
-  resolutionRuntime?: string;
-  subjectVersion: string;
-  os: string;
-  runtime: string;
-}): RegressionDecision {
-  if (input.status !== "resolved") return "none";
-  if (input.resolutionPlatform && input.resolutionPlatform !== input.os) return "none";
-  if (input.resolutionRuntime && input.resolutionRuntime !== input.runtime) return "none";
-
-  const comparison = compareReleaseVersions(input.subjectVersion, input.fixedIn ?? "");
-  if (comparison === null) return "suspected";
-  return comparison < 0 ? "historical" : "confirmed";
-}
-
-export function newestReleaseVersion(versions: string[]): string {
-  const parsed = versions
-    .filter((v) => v && v.toLowerCase() !== "dev")
-    .map(parseReleaseVersion)
-    .filter((v): v is ParsedVersion => v !== null);
-  parsed.sort(
-    (a, b) =>
-      b.major - a.major ||
-      b.minor - a.minor ||
-      b.patch - a.patch ||
-      b.version.localeCompare(a.version),
-  );
-  return parsed[0]?.version ?? "";
 }
 
 async function latestObservedVersion(env: Env, surface: ClientSurfaceName): Promise<string> {

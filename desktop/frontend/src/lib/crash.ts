@@ -208,12 +208,7 @@ export function normalizeCrashError(err: unknown): NormalizedError {
     return { errorType: "string", errorMessage: err };
   }
   if (err && typeof err === "object") {
-    const obj = err as {
-      name?: unknown;
-      message?: unknown;
-      stack?: unknown;
-      constructor?: { name?: string };
-    };
+    const obj = err as { name?: unknown; message?: unknown; stack?: unknown; constructor?: { name?: string } };
     const errorType = typeof obj.name === "string" && obj.name ? obj.name : obj.constructor?.name || "object";
     const errorMessage =
       typeof obj.message === "string" && obj.message ? obj.message : clip(safeStringify(err), 1000);
@@ -261,11 +256,7 @@ function formatText(label: string, normalized: NormalizedError, extra?: string):
     .join("\n\n");
 }
 
-export function crashErrorFamily(errorMessage: string): string | undefined {
-  return /maximum update depth exceeded|too many re-renders/i.test(errorMessage)
-    ? "react.maximum_update_depth"
-    : undefined;
-}
+export function crashErrorFamily(errorMessage: string): string | undefined { return /maximum update depth exceeded|too many re-renders/i.test(errorMessage) ? "react.maximum_update_depth" : undefined; }
 
 function readHeapSnapshot(): PerformanceSnapshot["jsHeap"] | undefined {
   if (typeof performance === "undefined") return undefined;
