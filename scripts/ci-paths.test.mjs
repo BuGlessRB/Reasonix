@@ -126,7 +126,7 @@ test("invalid diff identities fail instead of producing a skip", () => {
 test("CLI entry runs from paths with URL-significant characters", t => {
   const root = mkdtempSync(path.join(os.tmpdir(), "reasonix-ci-entry-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const expectedNames = ["code", "desktop", "desktop_go", "frontend", "browser", "memory", "memory_full", "electron", "native", "packaging", "site", "sdk", "notes_only"];
+  const expectedNames = ["code", "desktop", "desktop_go", "frontend", "browser", "memory", "memory_full", "electron", "native", "packaging", "site", "sdk", "release_control", "notes_only"];
   for (const directory of ["ordinary", "with space", "中文", "hash#directory", "literal%20directory"]) {
     const target = path.join(root, directory, "ci-paths.mjs");
     mkdirSync(path.dirname(target), { recursive: true });
@@ -148,7 +148,7 @@ test("CLI writes GitHub output and module import stays side-effect free", t => {
   const stdout = execFileSync(process.execPath, [target, "--full", "--github-output", outputPath], { encoding: "utf8" });
   assert.equal(stdout, "");
   const output = readFileSync(outputPath, "utf8");
-  assert.equal(output.trim().split("\n").length, 13);
+  assert.equal(output.trim().split("\n").length, 14);
   assert.match(output, /^desktop=true$/m);
   assert.match(output, /^notes_only=false$/m);
 
@@ -179,4 +179,22 @@ test("CI routing changes exercise their owning workflow surfaces", () => {
   const memoryOnly = classifyPaths([".github/workflows/app-memory.yml"]).flags;
   assert.equal(memoryOnly.packaging, false);
   assert.equal(memoryOnly.sdk, false);
+});
+
+test("release control changes run focused contracts without selecting product suites", () => {
+  for (const path of [
+    ".github/workflows/release-candidate.yml",
+    ".github/workflows/release-candidate-verify.yml",
+    ".github/workflows/release-promote.yml",
+    ".github/workflows/pages.yml",
+    "scripts/release-candidate.mjs",
+    "scripts/verify-release-artifact-archive.mjs",
+    "scripts/desktop-release-artifacts.test.mjs",
+    "npm/publish-candidate.mjs",
+  ]) {
+    const flags = classifyPaths([path]).flags;
+    assert.equal(flags.release_control, true, path);
+    assert.equal(flags.code, false, path);
+    assert.equal(flags.desktop, false, path);
+  }
 });

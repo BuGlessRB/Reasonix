@@ -56,7 +56,7 @@ export interface RemoteSessionApi {
   approve: (callId: string, decision: string) => Promise<void>;
   resolvePlanDecision: (callId: string, action: "start_execution" | "revise_plan" | "exit_plan", feedback?: string) => Promise<void>;
   answer: (callId: string, answers: RemoteAskAnswer[]) => Promise<void>;
-  clearExtensionForm: (pluginId: string, surfaceId: string) => void;
+  clearExtensionForm: (pluginId: string, surfaceId: string, formInstanceId?: string) => void;
   rewind: (turn: number, scope: string) => Promise<void>;
   /** Creates the child session for one turn; returns its id, or undefined with the reason in promptError. */
   forkTurn: (target: ForkTargetView) => Promise<{ sessionId: string; operationId: string } | undefined>;
@@ -414,8 +414,9 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     }
   }, [tabId]);
 
-  const clearExtensionForm = useCallback((pluginId: string, surfaceId: string) => {
-    setTranscript((s) => s.extensionForm?.pluginId === pluginId && s.extensionForm.surfaceId === surfaceId
+  const clearExtensionForm = useCallback((pluginId: string, surfaceId: string, formInstanceId?: string) => {
+    setTranscript((s) => s.extensionForm?.pluginId === pluginId && s.extensionForm.surfaceId === surfaceId &&
+      (!formInstanceId || s.extensionForm.formInstanceId === formInstanceId)
       ? reducer(s, { type: "clearExtensionForm" }) : s);
   }, []);
 

@@ -63,6 +63,18 @@ describe("diagnostics v2 compatibility and privacy", () => {
     expect(Report.safeParse(oldReport).success).toBe(true);
     expect(Report.safeParse({
       ...oldReport,
+      kind: "exception",
+      schemaVersion: 3,
+      source: "desktop.session_migration",
+      label: "transcript.initialization",
+      errorType: "TranscriptInitializationError",
+      errorMessage: "Transcript initialization failed during legacy session migration.",
+      topFrame: "internal/transcript.NewProjection",
+      fingerprintHint: "desktop.session_migration.transcript_initialization.duplicate_record_identity",
+      message: "[transcript initialization]\n\nstage: legacy_import\nclassification: duplicate_record_identity",
+    }).success).toBe(true);
+    expect(Report.safeParse({
+      ...oldReport,
       installId: "b".repeat(32),
       channel: "stable",
       device: { osVersion: "Windows 10", osBuild: 17763, osRevision: 6293 },

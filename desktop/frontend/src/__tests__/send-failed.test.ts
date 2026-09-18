@@ -8,6 +8,7 @@ import { continueDelivery } from "../lib/deliveryContinue";
 import type { WireEvent } from "../lib/types";
 import { submitPlanDecision, type SessionActionPorts } from "../app-runtime/sessionActionOwner";
 import { createSessionSurfaceFence } from "../app-runtime/sessionTarget";
+import { sessionIdentityStableKey } from "../lib/sessionIdentity";
 
 let passed = 0;
 let failed = 0;
@@ -91,7 +92,10 @@ eq(notice.kind === "notice" && notice.level, "warn", "the notice is a warning");
 eq(failedState.running, false, "send_failed stops the running indicator");
 eq(failedState.pendingUser, undefined, "send_failed clears the pending marker");
 
-const waitingAsk = reducer({ ...initialState }, {
+const promptMeta = { label: "", ready: true, eventChannel: "agent:event", cwd: "", session: { hostId: "local", sessionId: "session-a" }, sessionGeneration: 1 };
+const askTarget = (promptId: string, turnId: string) => ({ tabId: "tab-a", sessionKey: sessionIdentityStableKey(promptMeta), hostId: "local", sessionId: "session-a", sessionGeneration: 1,
+  promptId, turnId, kind: "ask" as const, instanceKey: `${turnId}:${promptId}` });
+const waitingAsk = reducer({ ...initialState, meta: promptMeta }, {
   type: "event",
   e: {
     kind: "ask_request",
@@ -133,20 +137,20 @@ const reconciledIdle = reducer(rejectedCollision, {
 eq(reconciledIdle.running, false, "authoritative idle snapshot releases the rejected submit gate");
 eq(reconciledIdle.ask, undefined, "authoritative idle snapshot clears a stale Ask");
 
-const answeredAsk = reducer(waitingAsk, { type: "ask_submit_succeeded", id: "ask-existing", epoch: waitingAsk.promptEpoch });
+const answeredAsk = reducer(waitingAsk, { type: "ask_submit_succeeded", target: askTarget("ask-existing", "turn-existing"), epoch: waitingAsk.promptEpoch });
 eq(answeredAsk.ask, undefined, "successful Ask submission clears the matching prompt");
 eq(answeredAsk.resolvedPromptId, "ask-existing", "successful Ask submission tombstones the matching prompt id");
 const nextAsk = reducer(waitingAsk, {
   type: "event",
   e: { kind: "ask_request", turnId: "turn-existing", ask: { id: "ask-next", questions: [] } } as WireEvent,
 });
-const lateAskSuccess = reducer(nextAsk, { type: "ask_submit_succeeded", id: "ask-existing", epoch: nextAsk.promptEpoch });
+const lateAskSuccess = reducer(nextAsk, { type: "ask_submit_succeeded", target: askTarget("ask-existing", "turn-existing"), epoch: nextAsk.promptEpoch });
 eq(lateAskSuccess.ask?.id, "ask-next", "late Ask success cannot clear a newer prompt");
 const rebuiltAsk = reducer(reducer(waitingAsk, { type: "controller_rebuilt" }), {
   type: "event",
   e: { kind: "ask_request", turnId: "turn-new", ask: { id: "ask-existing", questions: [] } } as WireEvent,
 });
-const oldEpochSuccess = reducer(rebuiltAsk, { type: "ask_submit_succeeded", id: "ask-existing", epoch: waitingAsk.promptEpoch });
+const oldEpochSuccess = reducer(rebuiltAsk, { type: "ask_submit_succeeded", target: askTarget("ask-existing", "turn-existing"), epoch: waitingAsk.promptEpoch });
 eq(oldEpochSuccess.ask?.id, "ask-existing", "old prompt epoch cannot clear an id reused by a rebuilt controller");
 
 const readinessStarted = reducer(sent, { type: "event", e: { kind: "turn_started" } as WireEvent });
@@ -276,7 +280,7 @@ eq(controllerSource.includes('e.kind === "mcp_surface_ready"'), true, "reducer h
   const calls: string[] = [];
   const ports: SessionActionPorts = {
     approveForTab: () => undefined,
-    resolvePlanForTab: (tabId, id, action) => calls.push(`resolve:${tabId}:${id}:${action}`),
+    resolvePlanForTab: (target, action) => { calls.push(`resolve:${target.tabId}:${target.promptId}:${action}`); },
     resolveRecoveryForTab: () => undefined,
     answerQuestionForTab: async () => undefined,
     answerMCPForTab: () => undefined,
@@ -287,7 +291,8 @@ eq(controllerSource.includes('e.kind === "mcp_surface_ready"'), true, "reducer h
     notePlanMode: (tabId, enabled) => calls.push(`plan:${tabId}:${enabled}`),
     drainRemoteApprovals: () => undefined,
   };
-  const target = { tabId: "tab-source", sessionKey: "session-source:1", promptId: "approval-7" };
+  const target = { tabId: "tab-source", sessionKey: "session-source:1", hostId: "local", sessionId: "session-source", sessionGeneration: 1,
+    promptId: "approval-7", kind: "plan" as const, instanceKey: "plan-source:approval-7" };
   await submitPlanDecision(target, {
     action: "start_execution", leavePlanMode: true, remote: false, goal: "", toolApprovalMode: "ask",
   }, ports, { checkpoint() {}, ownsUI: () => true });
