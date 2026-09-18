@@ -52,6 +52,10 @@ function operatingModel() {
           { action: "focus", ref: ref("textField", "Probe field") },
           { action: "type", text: " 李雷" },
         ] } };
+      case 3:
+        return { name: "computer_read", arguments: { what: "screenshot", app: BUNDLE } };
+      case 4:
+        return { name: "computer_act", arguments: { app: BUNDLE, steps: [{ action: "pointer_click", x: 100, y: 180 }] } };
       default:
         return null;
     }
@@ -59,6 +63,27 @@ function operatingModel() {
 }
 
 const frontmost = () => execFileSync("lsappinfo", ["front"]).toString().trim();
+
+// answering keeps saying what a person would to whatever the kernel asks, in
+// order, and records how many it was asked. A turn is blocked while one waits,
+// so it runs alongside the turn rather than after it.
+function answering(client, base, answers) {
+  const asked = [];
+  let stopped = false;
+  const loop = (async () => {
+    while (!stopped) {
+      const status = await client.json("GET", `${base}/status`).catch(() => null);
+      for (const decision of (status && status.decisions) || []) {
+        if (asked.includes(decision.id)) continue;
+        asked.push(decision.id);
+        const answer = answers[asked.length - 1] || { allow: false };
+        await client.request("POST", `${base}/approve`, { id: decision.id, allow: answer.allow, session: !!answer.session, persist: false });
+      }
+      await wait(100);
+    }
+  })();
+  return { asked, stop: async () => { stopped = true; await loop; } };
+}
 
 async function main() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rx-computer-live-"));
@@ -71,7 +96,9 @@ async function main() {
     const home = path.join(dir, "home");
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "rx-computer-ws-"));
     process.env.REASONIX_HOME = home;
-    seedHome(home, model.url, workspace);
+    // Not yolo: yolo answers every prompt, and what this run reads is which
+    // prompts a person is given.
+    seedHome(home, model.url, workspace, { toolApproval: "auto" });
     const { current } = require("../src/main.js");
 
     await settledWindow();
@@ -83,11 +110,21 @@ async function main() {
     await wait(500);
     const pointer = screen.getCursorScreenPoint();
     const front = frontmost();
-    await client.request("POST", `${runtimes[0].base}/submit`, { input: "put from-studio 李雷 into the probe" });
-    await until("the scripted turn", async () => requests.length >= 4, 60000);
+    // The application is granted for the session; the pointer is refused.
+    // The application is granted for the session, twice: listing what is
+    // running, then this application. Operating it rides that grant. The
+    // pointer does not, and that third question is the one refused.
+    const person = answering(client, runtimes[0].base, [
+      { allow: true, session: true },
+      { allow: true, session: true },
+      { allow: false },
+    ]);
+    await client.request("POST", `${runtimes[0].base}/submit`, { input: "put from-studio 李雷 into the probe, then click the drawn view" });
+    await until("the scripted turn", async () => requests.length >= 6, 90000);
+    await person.stop();
 
-    const results = (requests[3].messages || []).filter((m) => m.role === "tool").map((m) => String(m.content || ""));
-    check("the kernel was given computer use", results.length === 3, results.length);
+    const results = (requests[5].messages || []).filter((m) => m.role === "tool").map((m) => String(m.content || ""));
+    check("the kernel was given computer use", results.length === 5, results.length);
     check("the model saw the probe among the applications", (results[0] || "").includes(`${BUNDLE} — `), (results[0] || "").slice(0, 400));
     check("the snapshot carried refs", /textField "Probe field" \[a\d+\]/.test(results[1] || ""), (results[1] || "").slice(0, 400));
     check("every step ran", (results[2] || "").includes("Completed 4 of 4 step(s)."), (results[2] || "").slice(0, 600));
@@ -95,6 +132,9 @@ async function main() {
     const received = logged(target.log);
     check("the button was pressed", received.includes("button pressed"), received);
     check("the text arrived", received.includes("text from-studio 李雷"), received);
+    check("the pointer is asked for although the application is already granted", person.asked.length === 3, person.asked);
+    check("a refused pointer never reached the application", !received.includes("mouseDown"), received);
+    check("the model was told the pointer was refused", /declin|refus|denied/i.test(results[4] || ""), (results[4] || "").slice(0, 300));
     const after = screen.getCursorScreenPoint();
     check("the person's pointer did not move", after.x === pointer.x && after.y === pointer.y, { pointer, after });
     check("the frontmost application did not change", frontmost() === front, { front, now: frontmost() });

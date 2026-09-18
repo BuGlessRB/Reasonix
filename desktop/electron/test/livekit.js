@@ -54,14 +54,17 @@ function scriptedModel(next) {
   return { handler, requests };
 }
 
-function seedHome(home, modelURL, workspace) {
+// seedHome writes the configuration a live run starts from. toolApproval is
+// what the person's posture would be: yolo answers every prompt, so a test of
+// what a person is asked names another one.
+function seedHome(home, modelURL, workspace, { toolApproval = "yolo" } = {}) {
   fs.mkdirSync(home, { recursive: true });
   fs.writeFileSync(path.join(home, "config.toml"), [
     'default_model = "fake/fake-model"',
     "",
     "[desktop]",
     "welcomed = true",
-    'default_tool_approval_mode = "yolo"',
+    `default_tool_approval_mode = "${toolApproval}"`,
     "",
     "[[providers]]",
     'name        = "fake"',
