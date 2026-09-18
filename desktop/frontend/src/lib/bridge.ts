@@ -59,6 +59,7 @@ import { sessionTitleTarget } from "./sessionTitleOperation";
 import { mockHistoryContentField, mockHistorySlice, mockTopicHistory as topicHistoryFixture } from "./bridgeHistoryFixtures";
 import { createMockModelScopePreset, type MockProviderPresetTemplate } from "./mockModelScopePreset";
 import { createMockRemoteProjects } from "./mockRemoteProjects";
+import { createBrowserMockInteractionIdentity, mockSessionMeta, withMockSessionIdentity } from "./browserMockInteractionIdentity";
 import { mockRemoteHostView } from "./mockRemoteHosts";
 import type { RemoteProjectBindings } from "./remoteProjectBridge";
 import type { ForkTargetsBindings } from "./forkTargets";
@@ -2110,7 +2111,7 @@ function makeMockApp(): AppBindings {
           pendingApprovalPreviewPrompt = { id: "mock-sys-confirm", tool: "bash" };
           emit({ kind: "reasoning", text: "我已经准备好执行同步脚本，但这个操作会影响本地 workspace，需要用户确认。" });
           await delay(160);
-          emit({
+          emitMockPrompt({
             kind: "approval_request",
             approval: {
               id: "mock-sys-confirm",
@@ -2149,14 +2150,8 @@ function makeMockApp(): AppBindings {
     if (!tabId) return;
     mockTabs = mockTabs.map((tab) => (tab.id === tabId ? { ...tab, running } : tab));
   };
-  const emitMockTurnStarted = (submissionId?: string) => {
-    setMockTabRunning(currentMockTurnTabId(), true);
-    emit({ kind: "turn_started", submissionId });
-  };
-  const emitMockTurnDone = (submissionId?: string) => {
-    setMockTabRunning(currentMockTurnTabId(), false);
-    emit({ kind: "turn_done", submissionId });
-  };
+  const mockInteractions = createBrowserMockInteractionIdentity({ emit, currentTabId: currentMockTurnTabId, setRunning: setMockTabRunning });
+  const { emitPrompt: emitMockPrompt, turnStarted: emitMockTurnStarted, turnDone: emitMockTurnDone } = mockInteractions;
   // Fresh user decisions never auto-allow on a posture switch (mirrors the
   // backend's requiresFreshApprovalTool set).
   const mockFreshApprovalTools = new Set(["exit_plan_mode", "sandbox_escape", "memory_remember", "memory_forget", "managed_config_write"]);
@@ -2323,7 +2318,7 @@ function makeMockApp(): AppBindings {
       pendingApprovalPreviewPrompt = { id: "mock-sandbox-escape-preview", tool: "sandbox_escape" };
       emitMockTurnStarted();
       emit({ kind: "reasoning", text: t("mock.sandboxEscapeReasoning") });
-      emit({
+      emitMockPrompt({
         kind: "approval_request",
         approval: {
           id: "mock-sandbox-escape-preview",
@@ -2659,13 +2654,13 @@ function makeMockApp(): AppBindings {
         emitMockTurnDone(submissionID);
         return;
       }
-      if (decisionSurfaceMock === "mcp_interaction") return (await import("./mockMCPInteraction")).showMockMCPInteraction(delay, () => cancelled, emit);
+      if (decisionSurfaceMock === "mcp_interaction") return (await import("./mockMCPInteraction")).showMockMCPInteraction(delay, () => cancelled, emitMockPrompt);
       if (decisionSurfaceMock === "tool_approval") {
         pendingApprovalPreview = true;
         pendingApprovalPreviewPrompt = { id: "mock-approval-preview", tool: "bash" };
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "approval_request",
           approval: {
             id: "mock-approval-preview",
@@ -2680,7 +2675,7 @@ function makeMockApp(): AppBindings {
         pendingApprovalPreviewPrompt = { id: "mock-recovery-preview", tool: "write_file" };
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "approval_request",
           approval: {
             id: "mock-recovery-preview",
@@ -2724,7 +2719,7 @@ function makeMockApp(): AppBindings {
         pendingApprovalPreviewPrompt = { id: "mock-sandbox-escape-preview", tool: "sandbox_escape" };
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "approval_request",
           approval: {
             id: "mock-sandbox-escape-preview",
@@ -2740,7 +2735,7 @@ function makeMockApp(): AppBindings {
         pendingApprovalPreviewPrompt = { id: "mock-plan-approval-preview", tool: "exit_plan_mode" };
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "approval_request",
           approval: {
             id: "mock-plan-approval-preview",
@@ -2766,7 +2761,7 @@ function makeMockApp(): AppBindings {
         const allowOnceDescription = t("approval.allowOnceDesc");
         const denyDescription = t("approval.denyDesc");
 
-        emit({
+        emitMockPrompt({
           kind: "ask_request",
           ask: {
             id: "mock-long-options",
@@ -2827,7 +2822,7 @@ function makeMockApp(): AppBindings {
         pendingAskPreview = true;
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "ask_request",
           ask: {
             id: `mock-ask-preview-${Date.now()}`,
@@ -3702,7 +3697,7 @@ function makeMockApp(): AppBindings {
           return null;
         },
         async Meta() {
-          const active = mockTabs.find((tab) => tab.active) ?? mockTabs[0];
+          const active = withMockSessionIdentity(mockTabs.find((tab) => tab.active) ?? mockTabs[0]);
           const toolApprovalMode = normalizeToolApprovalMode(active?.toolApprovalMode, active ? normalizeMode(active.mode) : "normal", settings.autoApproveTools);
           const autoApproveTools = toolApprovalMode === "danger-full-access";
           const collaborationMode = normalizeCollaborationMode(active?.collaborationMode, active?.goal, active ? normalizeMode(active.mode) : "normal");
@@ -3715,6 +3710,7 @@ function makeMockApp(): AppBindings {
             workspaceRoot: active?.workspaceRoot || workspacePath,
             workspaceName: active?.workspaceName,
             workspacePath,
+            ...mockSessionMeta(active),
             sandboxPath: settings.sandbox.workspaceRoot,
             gitBranch: active?.gitBranch || (active?.scope === "project" ? "main" : ""),
             imageInputEnabled: true,
@@ -3727,7 +3723,7 @@ function makeMockApp(): AppBindings {
           };
         },
         async MetaForTab(tabID) {
-          const tab = mockTabs.find((item) => item.id === tabID) ?? mockTabs.find((item) => item.active) ?? mockTabs[0];
+          const tab = withMockSessionIdentity(mockTabs.find((item) => item.id === tabID) ?? mockTabs.find((item) => item.active) ?? mockTabs[0]);
           const toolApprovalMode = normalizeToolApprovalMode(tab?.toolApprovalMode, tab ? normalizeMode(tab.mode) : "normal", settings.autoApproveTools);
           const autoApproveTools = toolApprovalMode === "danger-full-access";
           const collaborationMode = normalizeCollaborationMode(tab?.collaborationMode, tab?.goal, tab ? normalizeMode(tab.mode) : "normal");
@@ -3740,6 +3736,7 @@ function makeMockApp(): AppBindings {
             workspaceRoot: tab?.workspaceRoot || workspacePath,
             workspaceName: tab?.workspaceName,
             workspacePath,
+            ...mockSessionMeta(tab),
             sandboxPath: settings.sandbox.workspaceRoot,
             gitBranch: tab?.gitBranch || (tab?.scope === "project" ? "main" : ""),
             autoApproveTools,
