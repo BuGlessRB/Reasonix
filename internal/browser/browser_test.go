@@ -333,3 +333,36 @@ func TestWhichPagesAreTheWorkspacesOwn(t *testing.T) {
 		}
 	}
 }
+
+// The window this browser runs in injects its own bundle into every page and
+// warns there about the page's security headers. The model read that as the
+// page speaking, on every page it opened.
+func TestAMessageOnlyTheHostsOwnScriptProducedIsNotThePages(t *testing.T) {
+	frames := func(urls ...string) stack {
+		var s stack
+		for _, u := range urls {
+			s.Frames = append(s.Frames, struct {
+				URL string `json:"url"`
+			}{URL: u})
+		}
+		return s
+	}
+	cases := []struct {
+		name string
+		in   stack
+		want bool
+	}{
+		{"electron's own bundle", frames("node:electron/js2c/sandbox_bundle"), true},
+		{"several frames of it", frames("node:electron/js2c/sandbox_bundle", "node:electron/js2c/renderer_init"), true},
+		{"an extension", frames("chrome-extension://abc/content.js"), true},
+		{"the page's own script", frames("http://127.0.0.1:8123/app.js"), false},
+		{"a page frame under an injected one", frames("node:electron/js2c/sandbox_bundle", "https://example.com/a.js"), false},
+		{"code with no script url", frames(""), false},
+		{"no stack at all", stack{}, false},
+	}
+	for _, tc := range cases {
+		if got := tc.in.hostInjected(); got != tc.want {
+			t.Errorf("%s: hostInjected() = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

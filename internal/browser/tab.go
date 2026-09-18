@@ -281,9 +281,10 @@ func (t *tab) onEvent(ev event) {
 				Exception struct {
 					Description string `json:"description"`
 				} `json:"exception"`
+				Stack stack `json:"stackTrace"`
 			} `json:"exceptionDetails"`
 		}
-		if json.Unmarshal(ev.Params, &p) != nil {
+		if json.Unmarshal(ev.Params, &p) != nil || p.ExceptionDetails.Stack.hostInjected() {
 			return
 		}
 		text := p.ExceptionDetails.Exception.Description
@@ -295,6 +296,34 @@ func (t *tab) onEvent(ev event) {
 		t.onNetwork(ev)
 	}
 }
+
+// stack is as much of a console message's origin as this needs: which script
+// each frame ran from.
+type stack struct {
+	Frames []struct {
+		URL string `json:"url"`
+	} `json:"callFrames"`
+}
+
+// hostInjected reports a message no script of the page produced. The window
+// this browser runs in injects its own bundle into every page and warns there
+// about the page's security headers; the model reads that as the page speaking.
+// A frame from an extension or from devtools is the same kind of visitor. A
+// message with no stack at all stays: unattributed is not the host's.
+func (s stack) hostInjected() bool {
+	if len(s.Frames) == 0 {
+		return false
+	}
+	for _, f := range s.Frames {
+		scheme, _, ok := strings.Cut(f.URL, ":")
+		if !ok || !injectedSchemes[strings.ToLower(scheme)] {
+			return false
+		}
+	}
+	return true
+}
+
+var injectedSchemes = map[string]bool{"node": true, "chrome-extension": true, "devtools": true, "chrome": true}
 
 // onNetwork records requests that failed or answered with an error status.
 func (t *tab) onNetwork(ev event) {
@@ -359,8 +388,9 @@ func (t *tab) onConsole(params json.RawMessage) {
 			Value       json.RawMessage `json:"value"`
 			Description string          `json:"description"`
 		} `json:"args"`
+		Stack stack `json:"stackTrace"`
 	}
-	if json.Unmarshal(params, &p) != nil {
+	if json.Unmarshal(params, &p) != nil || p.Stack.hostInjected() {
 		return
 	}
 	parts := make([]string, 0, len(p.Args))
