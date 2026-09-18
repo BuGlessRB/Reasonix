@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 10;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:9765e815beff9cb0d5f7496d1ce9ea5c1d3bf27efad735d192be87e40dc65a15";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:b016c92ceed0c42064d846008d2186e5d448809766840b292ec8fc1d72d23e83";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -37,6 +37,7 @@ export const DESKTOP_COMMANDS = [
   "AnswerQuestion",
   "AnswerQuestionForTab",
   "AnswerRemoteTab",
+  "AppendSessionExportPage",
   "ApplyModelSettings",
   "ApplySessionLifecycle",
   "ApplyUpdateRequest",
@@ -57,6 +58,7 @@ export const DESKTOP_COMMANDS = [
   "Balance",
   "BalanceForTab",
   "BeginDraftSubmission",
+  "BeginSessionExportForTarget",
   "BotRuntimeStatus",
   "Cancel",
   "CancelDraftSubmission",
@@ -65,6 +67,7 @@ export const DESKTOP_COMMANDS = [
   "CancelJobsForTab",
   "CancelRemoteTab",
   "CancelRemoteTabJobs",
+  "CancelSessionExport",
   "CancelSessionForTab",
   "CancelShellInstall",
   "CancelTab",
@@ -166,6 +169,7 @@ export const DESKTOP_COMMANDS = [
   "FetchProviderModelCatalogDraft",
   "FetchProviderModels",
   "FinalizeWorktreeMerge",
+  "FinishSessionExport",
   "Forget",
   "ForgetForTab",
   "ForgetRemoteTab",
@@ -361,6 +365,7 @@ export const DESKTOP_COMMANDS = [
   "ReadReferenceFileForTab",
   "ReadReferenceFileSourceForTab",
   "ReadRemoteFile",
+  "ReadSessionExportChunk",
   "ReadSessionHistory",
   "RebuildHistoryIndex",
   "RebuildSessionCatalog",
@@ -448,6 +453,7 @@ export const DESKTOP_COMMANDS = [
   "ResolvePlanDecisionTab",
   "ResolvePlanDecisionTabForTurn",
   "ResolvePresentedPathForTab",
+  "ResolvePromptForSession",
   "ResolvePromptForTab",
   "ResolveRecovery",
   "ResolveRecoveryTab",
@@ -455,6 +461,7 @@ export const DESKTOP_COMMANDS = [
   "ResolveReferencePathForTab",
   "ResolveRemotePresentedPathForTab",
   "ResolveRemoteTabPlanDecision",
+  "ResolveRemoteTabPromptExact",
   "ResolveRemoteWorkspacePathForTab",
   "ResolveToolRecoveryForTab",
   "ResolveWorkspacePathForTab",
@@ -665,12 +672,14 @@ export const DESKTOP_COMMANDS = [
   "SubmitEditedDisplayToTab",
   "SubmitEditedDisplayToTabWithID",
   "SubmitExtensionForm",
+  "SubmitExtensionFormExact",
   "SubmitInitialGoalToTab",
   "SubmitInitialGoalToTabWithID",
   "SubmitInvocationsToTab",
   "SubmitInvocationsToTabWithID",
   "SubmitRemoteTab",
   "SubmitRemoteTabExtensionForm",
+  "SubmitRemoteTabExtensionFormExact",
   "SubmitRemoteTabWithSubmission",
   "SubmitToTab",
   "SubmitToTabWithID",
@@ -1020,6 +1029,17 @@ export interface ProviderProtocolEndpoint {
   responsesMode?: string;
 }
 
+export interface ResolvedReasoningView {
+  state?: string;
+  apiFormat: string;
+  protocol: string;
+  selected: string;
+  effective?: string;
+  default?: string;
+  options: ReasoningOption[];
+  error?: string;
+}
+
 export interface AuthenticationState {
   status: string;
   providerName?: string;
@@ -1160,6 +1180,7 @@ export interface RuntimeStateSnapshot {
   hostId?: string;
   sessionId?: string;
   sessionCodec?: string;
+  projectionEpoch: string;
   runtimeEpoch: string;
   activityRevision: number;
   revision: number;
@@ -1407,6 +1428,7 @@ export interface ExtensionSurface {
   surfaceId: string;
   sessionId?: string;
   generation?: number;
+  formInstanceId?: string;
   kind: string;
   status?: ExtensionStatus | null;
   card?: ExtensionCard | null;
@@ -2172,6 +2194,17 @@ export interface ExtensionActionView {
   description?: string;
 }
 
+export interface ExtensionFormTarget {
+  tabId: string;
+  hostId: string;
+  sessionId: string;
+  sessionGeneration: number;
+  pluginId: string;
+  surfaceId: string;
+  pluginGeneration: number;
+  formInstanceId: string;
+}
+
 export interface ExternalOpenerView {
   id: string;
   name: string;
@@ -2548,6 +2581,17 @@ export interface InstructionDiagnostic {
   message: string;
 }
 
+export interface InteractionTargetView {
+  tabId: string;
+  hostId: string;
+  sessionId: string;
+  sessionGeneration: number;
+  promptId: string;
+  turnId: string;
+  runtimeEpoch: string;
+  kind: string;
+}
+
 export interface InvocationRequest {
   name: string;
   kind: string;
@@ -2817,6 +2861,8 @@ export interface Meta {
   session?: SessionRef | null;
   sessionRevision?: number;
   sessionDigest?: string;
+  sessionGeneration: number;
+  runtimeStateSnapshot?: RuntimeStateSnapshot | null;
   cwd: string;
   workspaceRoot?: string;
   workspaceName?: string;
@@ -3154,6 +3200,7 @@ export interface ProviderModelCapabilityUpdate {
 }
 
 export interface ProviderModelCapabilityView {
+  reasoning?: ResolvedReasoningView | null;
   model: string;
   inputModalities: string[];
   state: string;
@@ -3828,6 +3875,33 @@ export interface SessionDraftView {
   updatedAt: number;
 }
 
+export interface SessionExportChunk {
+  data: string;
+  nextOffset: number;
+  done: boolean;
+}
+
+export interface SessionExportHandle {
+  exportId: string;
+  snapshot: ExportSnapshot;
+  format: string;
+}
+
+export interface SessionExportPage {
+  index: number;
+  offset: number;
+  data: string;
+  done: boolean;
+  width: number;
+  height: number;
+}
+
+export interface SessionExportResult {
+  paths: string[];
+  records: number;
+  pages: number;
+}
+
 export interface SessionHistoryContentChunk {
   data: string;
   nextOffset: number;
@@ -4180,6 +4254,8 @@ export interface TabMeta {
   remote?: RemoteTabRef | null;
   remoteState?: string;
   forkTargetsSupported: boolean;
+  interactionTargetSupported: boolean;
+  extensionFormInstanceSupported: boolean;
   topicId: string;
   topicTitle: string;
   sessionPath?: string;
@@ -4811,6 +4887,17 @@ export interface ToolExecution {
   durationMs?: number;
 }
 
+export interface ExportSnapshot {
+  readIncomplete?: boolean;
+  session: SessionRef;
+  storageGeneration: string;
+  snapshotSequence: number;
+  acceptedThrough: number;
+  durableThrough: number;
+  capturedAt: string;
+  title: string;
+}
+
 export interface HistoryWindowPage {
   messages: PersistentMessage[];
   status: string;
@@ -4872,6 +4959,7 @@ export interface MessageLocation {
 }
 
 export interface PersistentMessage {
+  toolObservations?: Record<string, ToolObservation>;
   submissionId?: string;
   samplingCount?: number | null;
   toolCount?: number | null;
@@ -4933,6 +5021,13 @@ export interface SessionOpenView {
 export interface SessionRef {
   hostId: string;
   sessionId: string;
+}
+
+export interface ToolObservation {
+  state: string;
+  messageId?: string;
+  version?: number;
+  contentRef?: Ref | null;
 }
 
 export interface Ref {
@@ -5385,6 +5480,7 @@ export interface GeneratedDesktopCommands {
   AnswerQuestion(arg0: string, arg1: QuestionAnswer[]): Promise<void>;
   AnswerQuestionForTab(arg0: string, arg1: string, arg2: QuestionAnswer[]): Promise<void>;
   AnswerRemoteTab(arg0: string, arg1: string, arg2: RemoteAskAnswer[]): Promise<void>;
+  AppendSessionExportPage(arg0: string, arg1: SessionExportPage): Promise<void>;
   ApplyModelSettings(arg0: ModelSettingsChange): Promise<ModelSettingsResult>;
   ApplySessionLifecycle(arg0: SessionLifecycleRequest): Promise<SessionLifecycleResult>;
   ApplyUpdateRequest(arg0: string, arg1: string, arg2: string): Promise<void>;
@@ -5405,6 +5501,7 @@ export interface GeneratedDesktopCommands {
   Balance(): Promise<BalanceInfo>;
   BalanceForTab(arg0: string): Promise<BalanceInfo>;
   BeginDraftSubmission(arg0: SessionDraftSubmissionRequest): Promise<SessionDraftSubmissionView>;
+  BeginSessionExportForTarget(arg0: SessionSelector, arg1: string, arg2: string, arg3: string, arg4: string): Promise<SessionExportHandle>;
   BotRuntimeStatus(): Promise<BotRuntimeStatusView>;
   Cancel(): Promise<void>;
   CancelDraftSubmission(arg0: string): Promise<SessionDraftSubmissionView>;
@@ -5413,6 +5510,7 @@ export interface GeneratedDesktopCommands {
   CancelJobsForTab(arg0: string, arg1: string[]): Promise<JobCancelBatchView>;
   CancelRemoteTab(arg0: string): Promise<void>;
   CancelRemoteTabJobs(arg0: string, arg1: string[]): Promise<void>;
+  CancelSessionExport(arg0: string): Promise<void>;
   CancelSessionForTab(arg0: string): Promise<CancelReceipt>;
   CancelShellInstall(): Promise<void>;
   CancelTab(arg0: string): Promise<void>;
@@ -5514,6 +5612,7 @@ export interface GeneratedDesktopCommands {
   FetchProviderModelCatalogDraft(arg0: ProviderView, arg1: string): Promise<ProviderModelCapabilityView[]>;
   FetchProviderModels(arg0: ProviderView): Promise<string[]>;
   FinalizeWorktreeMerge(arg0: CleanupRequest): Promise<CleanupResult>;
+  FinishSessionExport(arg0: string): Promise<SessionExportResult>;
   Forget(arg0: string): Promise<void>;
   ForgetForTab(arg0: string, arg1: string): Promise<void>;
   ForgetRemoteTab(arg0: string, arg1: string): Promise<void>;
@@ -5709,6 +5808,7 @@ export interface GeneratedDesktopCommands {
   ReadReferenceFileForTab(arg0: string, arg1: string): Promise<FilePreview>;
   ReadReferenceFileSourceForTab(arg0: string, arg1: string): Promise<FilePreview>;
   ReadRemoteFile(arg0: string, arg1: string): Promise<RemoteFilePreview>;
+  ReadSessionExportChunk(arg0: string, arg1: number): Promise<SessionExportChunk>;
   ReadSessionHistory(arg0: SessionRef, arg1: string, arg2: number): Promise<HistoryPage>;
   RebuildHistoryIndex(): Promise<void>;
   RebuildSessionCatalog(): Promise<void>;
@@ -5796,6 +5896,7 @@ export interface GeneratedDesktopCommands {
   ResolvePlanDecisionTab(arg0: string, arg1: string, arg2: string): Promise<void>;
   ResolvePlanDecisionTabForTurn(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string): Promise<void>;
   ResolvePresentedPathForTab(arg0: string, arg1: string, arg2: string): Promise<string>;
+  ResolvePromptForSession(arg0: InteractionTargetView, arg1: PromptAnswerView): Promise<void>;
   ResolvePromptForTab(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: PromptAnswerView): Promise<void>;
   ResolveRecovery(arg0: string, arg1: string, arg2: string): Promise<void>;
   ResolveRecoveryTab(arg0: string, arg1: string, arg2: string, arg3: string): Promise<void>;
@@ -5803,6 +5904,7 @@ export interface GeneratedDesktopCommands {
   ResolveReferencePathForTab(arg0: string, arg1: string): Promise<string>;
   ResolveRemotePresentedPathForTab(arg0: string, arg1: string, arg2: string, arg3: string): Promise<string>;
   ResolveRemoteTabPlanDecision(arg0: string, arg1: string, arg2: string, arg3: string): Promise<void>;
+  ResolveRemoteTabPromptExact(arg0: InteractionTargetView, arg1: PromptAnswerView): Promise<void>;
   ResolveRemoteWorkspacePathForTab(arg0: string, arg1: string, arg2: string, arg3: string): Promise<string>;
   ResolveToolRecoveryForTab(arg0: string, arg1: ToolRecoveryRequest): Promise<ToolRecoverySnapshot>;
   ResolveWorkspacePathForTab(arg0: string, arg1: string): Promise<string>;
@@ -6013,12 +6115,14 @@ export interface GeneratedDesktopCommands {
   SubmitEditedDisplayToTab(arg0: string, arg1: string, arg2: string, arg3: string): Promise<void>;
   SubmitEditedDisplayToTabWithID(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string): Promise<void>;
   SubmitExtensionForm(arg0: string, arg1: string, arg2: string, arg3: Record<string, unknown>): Promise<void>;
+  SubmitExtensionFormExact(arg0: ExtensionFormTarget, arg1: Record<string, unknown>): Promise<void>;
   SubmitInitialGoalToTab(arg0: string, arg1: string, arg2: string, arg3: string, arg4: InvocationRequest[], arg5: string, arg6: string): Promise<string[]>;
   SubmitInitialGoalToTabWithID(arg0: string, arg1: string, arg2: string, arg3: string, arg4: InvocationRequest[], arg5: string, arg6: string, arg7: string): Promise<string[]>;
   SubmitInvocationsToTab(arg0: string, arg1: string, arg2: string, arg3: InvocationRequest[]): Promise<void>;
   SubmitInvocationsToTabWithID(arg0: string, arg1: string, arg2: string, arg3: InvocationRequest[], arg4: string): Promise<void>;
   SubmitRemoteTab(arg0: string, arg1: string): Promise<void>;
   SubmitRemoteTabExtensionForm(arg0: string, arg1: string, arg2: string, arg3: Record<string, unknown>): Promise<void>;
+  SubmitRemoteTabExtensionFormExact(arg0: ExtensionFormTarget, arg1: Record<string, unknown>): Promise<void>;
   SubmitRemoteTabWithSubmission(arg0: string, arg1: string, arg2: string): Promise<void>;
   SubmitToTab(arg0: string, arg1: string): Promise<void>;
   SubmitToTabWithID(arg0: string, arg1: string, arg2: string): Promise<void>;

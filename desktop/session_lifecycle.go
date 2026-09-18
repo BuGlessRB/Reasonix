@@ -80,14 +80,8 @@ func (a *App) archiveSessionRefsWithOperationConditional(refs []session.SessionR
 	}()
 	for _, id := range ids {
 		ref := unique[id]
-		if workspaceID := staged[id]; workspaceID != "" {
-			if err := a.validateDesktopWorkspaceMembership(ctx, workspaceID, ref); err != nil {
-				return fallbackRuntimeTarget{}, err
-			}
-		} else {
-			if _, err := a.canonicalSessionWorkspace(ctx, ref); err != nil {
-				return fallbackRuntimeTarget{}, err
-			}
+		if err := a.validateConditionalArchiveWorkspace(ctx, state, ref, staged[id], verify != nil); err != nil {
+			return fallbackRuntimeTarget{}, err
 		}
 		if runtime, live := service.Runtime(ref); live {
 			phase := runtime.StateSnapshot().Phase
@@ -130,6 +124,35 @@ func (a *App) archiveSessionRefsWithOperationConditional(refs []session.SessionR
 	return fallback, nil
 }
 
+func (a *App) validateConditionalArchiveWorkspace(ctx context.Context, state workspacestate.State, ref session.SessionRef, stagedWorkspaceID string, maintenance bool) error {
+	if stagedWorkspaceID != "" {
+		return a.validateDesktopWorkspaceMembership(ctx, stagedWorkspaceID, ref)
+	}
+	if !maintenance {
+		_, err := a.canonicalSessionWorkspace(ctx, ref)
+		return err
+	}
+	// A final content/lifecycle CAS lets maintenance archive proven-empty
+	// sessions even when immutable and registry workspace ownership disagree.
+	if !conditionalArchiveRegistryHasSingleActiveOwner(state, ref.SessionID) {
+		return workspacestate.ErrMutationConflict
+	}
+	return nil
+}
+
+func conditionalArchiveRegistryHasSingleActiveOwner(state workspacestate.State, sessionID string) bool {
+	if state.SessionStates[sessionID].Lifecycle != workspacestate.Active {
+		return false
+	}
+	owners := 0
+	for _, workspace := range state.Workspaces {
+		if slices.Contains(workspace.SessionIDs, sessionID) {
+			owners++
+		}
+	}
+	return owners == 1
+}
+
 func (a *App) beginConditionalArchiveOperation(ctx context.Context, state workspacestate.State, op workspacestate.Operation, verify func(context.Context, workspacestate.State) error) error {
 	if verify != nil {
 		if err := verify(ctx, state); err != nil {
@@ -162,9 +185,16 @@ func (a *App) finishArchivedRuntimeBindings(removed []removedSessionRuntime) fal
 		a.activeTabID = a.tabOrder[0]
 	}
 	fallback.needs = len(removed) > 0 && len(a.tabs) == 0
-	dir, entries, activeID, version := a.saveTabsCollectLocked()
+	var dir, activeID string
+	var entries []desktopTabEntry
+	var version uint64
+	if len(removed) > 0 {
+		dir, entries, activeID, version = a.saveTabsCollectLocked()
+	}
 	a.mu.Unlock()
-	a.saveTabsWrite(dir, entries, activeID, version)
+	if len(removed) > 0 {
+		a.saveTabsWrite(dir, entries, activeID, version)
+	}
 	a.finalizeRemovedTopicRuntimes(removed)
 	a.closeRemainingRemovedSessionRuntimesAdmissionHeld(removed, map[control.SessionAPI]bool{})
 	return fallback

@@ -1,3 +1,5 @@
+import type { HistoryToolCall } from "./historyToolTypes";
+export type { HistoryToolCall } from "./historyToolTypes";
 export type { ProjectNode } from "./projectNodeTypes";
 import type { TranscriptTurnMetadata } from "./transcriptProtocol";
 import type { ConnectionAuthentication } from "./authenticationTypes";
@@ -384,6 +386,7 @@ export interface WireExtensionSurface {
   surfaceId: string;
   sessionId?: string;
   generation?: number;
+  formInstanceId?: string;
   kind: string; // "status" | "card" | "form" | "notification"
   status?: WireExtensionStatus;
   card?: WireExtensionCard;
@@ -856,26 +859,6 @@ export interface HistoryMessage extends TranscriptTurnMetadata {
   serverSearch?: HistoryServerSearch[];
 }
 
-export interface HistoryToolCall {
-	partial?: boolean;
-	pending?: boolean;
-	parentId?: string;
-	argChars?: number;
-	startedAt?: number;
-  id: string;
-  name: string;
-  arguments: string;
-  resolvedName?: string;
-  capabilityId?: string;
-  resolvedReadOnly?: boolean;
-  subject?: string;
-  summary?: string;
-  diff?: string;
-  added?: number;
-  removed?: number;
-  argumentsArchived?: boolean;
-}
-
 export interface HistoryPage {
   messages: HistoryMessage[];
   startTurn: number;
@@ -1014,6 +997,7 @@ export interface Meta extends RemoteSessionMetaFields {
   sessionRevision?: number;
   sessionDigest?: string;
   sessionGeneration?: number;
+  runtimeStateSnapshot?: import("./runtimeStateStore").RuntimeState;
   cwd: string;
   workspaceRoot?: string;
   workspaceName?: string;
@@ -1819,16 +1803,8 @@ export interface ProviderModelCatalogUpdate {
   modelCapabilities?: ProviderModelCapabilityUpdate[];
 }
 
-export interface ProviderModelCapabilityView {
-	automaticState?: string;
-	automaticSource?: string;
-	imageInputEnableAllowed?: boolean;
-	imageInputBlockReason?: string;
-  model: string;
-  inputModalities: string[];
-  state: "supported" | "unsupported" | "unknown" | string;
-  source: string;
-}
+import type { ProviderModelCapabilityView } from "./providerModelCapability";
+export type { ProviderModelCapabilityView } from "./providerModelCapability";
 
 export interface ProviderModelCapabilityUpdate {
   model: string;

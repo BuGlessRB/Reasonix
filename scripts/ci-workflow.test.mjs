@@ -24,7 +24,18 @@ function shellStep(body, name) {
 }
 const ci = workflow("ci");
 const release = workflow("release-desktop");
+const promote = workflow("release-promote");
 const appMemory = workflow("app-memory");
+
+test("Windows PR verifies credential aliases before full push CI", () => {
+  assert.match(ci, /name: test \(Windows credential ACL identity\)[\s\S]*?runner\.os == 'Windows' && github\.event_name == 'pull_request'[\s\S]*?go test -timeout=2m -run '\^TestCredentialAccessRepairsLegacyCredentialDeny\|\^TestRepairLegacyCredentialDenyMatchesFileAcrossPathAliases\$' \.\/internal\/config \.\/internal\/winsandbox/);
+});
+
+test("release candidate verification cannot mutate repository contents before approval", () => {
+  assert.match(job(promote, "preflight"), /permissions:\n      actions: read\n      attestations: read\n      contents: read/);
+  assert.match(job(promote, "authorize"), /environment: release[\s\S]*permissions:\n      contents: read/);
+  assert.match(job(promote, "activate"), /permissions:\n      contents: write/);
+});
 
 test("cancelled CI stops expensive workers but keeps result aggregation", () => {
   for (const name of ["test", "windows-control", "windows-isolated", "race", "sdk", "desktop-prepare",
@@ -117,7 +128,7 @@ test("Certum signing survives skipped ancestor gates but requires successful inp
   // which otherwise propagates a skipped standalone/orchestrator ancestor.
   assert.match(body, /if:.*always\(\)/);
   const context = {
-    needs: { resolve: { result: "success" }, build: { result: "success" }, "signing-contract": { result: "success" } },
+    needs: { resolve: { result: "success" }, "windows-build": { result: "success" }, "signing-contract": { result: "success" } },
     github: { repository: "esengine/DeepSeek-Reasonix" },
     inputs: { desktop_manual_only: false },
   };
@@ -233,16 +244,18 @@ test("required lint aggregates code lint and the deduplicated frontend suite", (
   const body = job(ci, "lint");
   const script = shellStep(body, "Verify lint and frontend validation jobs");
   const success = { CHANGES_RESULT: "success", LINT_CODE_RESULT: "success", LINT_CODE_REQUIRED: "true",
+    RELEASE_CONTROL_RESULT: "success", RELEASE_CONTROL_REQUIRED: "true",
     PREPARE_RESULT: "success", FRONTEND_RESULT: "success", FRONTEND_REQUIRED: "true" };
   const run = env => spawnSync("bash", ["-e", "-c", script], { env: { ...process.env, ...env } }).status;
   assert.equal(run(success), 0);
-  for (const key of ["CHANGES_RESULT", "LINT_CODE_RESULT", "PREPARE_RESULT", "FRONTEND_RESULT"])
+  for (const key of ["CHANGES_RESULT", "LINT_CODE_RESULT", "RELEASE_CONTROL_RESULT", "PREPARE_RESULT", "FRONTEND_RESULT"])
     for (const value of ["failure", "cancelled", "skipped", ""]) assert.notEqual(run({ ...success, [key]: value }), 0, `${key}=${value}`);
   assert.equal(run({ ...success, LINT_CODE_REQUIRED: "false", LINT_CODE_RESULT: "skipped",
+    RELEASE_CONTROL_REQUIRED: "false", RELEASE_CONTROL_RESULT: "skipped",
     FRONTEND_REQUIRED: "false", PREPARE_RESULT: "skipped", FRONTEND_RESULT: "skipped" }), 0);
   assert.equal(run({ ...success, FRONTEND_REQUIRED: "false", PREPARE_RESULT: "success", FRONTEND_RESULT: "skipped" }), 0);
   assert.doesNotMatch(job(ci, "lint-code"), /test:motion/);
-  assert.match(body, /needs: \[changes, lint-code, desktop-prepare, desktop-frontend\]/);
+  assert.match(body, /needs: \[changes, lint-code, release-control, desktop-prepare, desktop-frontend\]/);
 });
 
 test("required root aggregate covers the jobs the per-OS test legs do not", () => {
@@ -301,11 +314,11 @@ test("every ci job is reachable from a required aggregate", () => {
 test("reuse skips only build work and still gates every publisher on validation", () => {
   const context = {
     inputs: { preflight_artifact_prefix: "desktop-123-1-preflight", orchestrated: true, signing_preflight_verified: true, signing_preflight: false, production_signing_smoke: false },
-    needs: { resolve: { result: "success" }, "cache-guard": { result: "success" }, "signing-contract": { result: "success" }, "mac-universal-intel": { result: "skipped" }, "windows-sign": { result: "skipped" }, "windows-runtime-acceptance": { result: "skipped" }, build: { result: "skipped" } },
+    needs: { resolve: { result: "success" }, "signing-contract": { result: "success" }, "mac-universal-intel": { result: "skipped" }, "windows-build": { result: "skipped" }, "windows-sign": { result: "skipped" }, "windows-runtime-acceptance": { result: "skipped" }, build: { result: "skipped" } },
   };
   assert.equal(condition(job(release, "build"), context), false);
   assert.equal(condition(job(release, "publish"), context), true);
-  for (const key of ["resolve", "cache-guard", "signing-contract", "mac-universal-intel", "windows-sign", "build"]) {
+  for (const key of ["resolve", "signing-contract", "mac-universal-intel", "windows-build", "windows-sign", "build"]) {
     for (const result of ["failure", "cancelled"]) {
       const changed = structuredClone(context);
       changed.needs[key].result = result;
@@ -323,6 +336,7 @@ test("reuse skips only build work and still gates every publisher on validation"
   assert.equal(condition(job(release, "build"), fresh), true);
   assert.equal(condition(job(release, "publish"), fresh), false);
   fresh.needs.build.result = "success";
+  fresh.needs["windows-build"].result = "success";
   fresh.needs["mac-universal-intel"].result = "success";
   assert.equal(condition(job(release, "publish"), fresh), false, "unsigned Windows bundles cannot publish");
   fresh.needs["windows-sign"].result = "success";
@@ -335,25 +349,24 @@ test("Certum signing preserves native builds and gates publication and attestati
   const packageJob = job(ci, "desktop-windows-package");
   assert.match(packageJob, /test-windows-installer-startup\.ps1/);
   assert.match(packageJob, /ExpectedVersion v0\.0\.0-ci/);
+  const windowsBuild = job(release, "windows-build");
   const signer = job(release, "windows-sign");
-  const releaseBuild = job(release, "build");
-  assert.match(releaseBuild, /Install and smoke-test Windows installer identity/);
-  assert.match(releaseBuild, /runner: windows-11-arm, platform: windows\/arm64/);
-  assert.match(releaseBuild, /scripts\/test-windows-installer-startup\.ps1/);
-  assert.match(releaseBuild, /scripts\/test-windows-startup-recovery\.ps1/);
-  assert.match(releaseBuild, /scripts\/windows-acceptance-environment\.ps1/);
-  assert.match(releaseBuild, /\.\/release-control\/scripts\/test-windows-installer-startup\.ps1/);
-  const acceptance = releaseBuild.indexOf('name: Install and smoke-test Windows installer identity');
-  assert.ok(acceptance > releaseBuild.lastIndexOf('scripts/package-windows-desktop.sh'), 'test the final manual installer after rebuilding');
-  assert.ok(acceptance < releaseBuild.indexOf('name: Sign artifacts (minisign)'), 'acceptance precedes artifact signing and publication');
+  assert.match(windowsBuild, /runner: windows-latest, platform: windows\/amd64/);
+  assert.match(windowsBuild, /runner: windows-11-arm, platform: windows\/arm64/);
+  assert.match(windowsBuild, /Smoke-test packaged Electron startup/);
+  assert.match(windowsBuild, /Upload Windows signing inputs/);
   assert.match(job(ci, 'test'), /test-windows-installer-startup\.test\.ps1/);
+  assert.match(signer, /needs: \[resolve, windows-build, signing-contract\]/);
   assert.match(signer, /runs-on: windows-2022/);
-  assert.match(signer, /arch: \[amd64, arm64\]/);
-  assert.match(signer, /max-parallel: 1/);
   assert.match(signer, /ref: \$\{\{ github.workflow_sha \}\}/);
-  assert.ok(signer.indexOf("-PayloadDirectory signed-payload") < signer.indexOf("scripts/package-windows-desktop.sh"));
-  assert.ok(signer.indexOf("scripts/package-windows-desktop.sh") < signer.indexOf("-FilePath"));
-  assert.ok(signer.indexOf("-ExpectedThumbprint") < signer.indexOf("Sign artifacts (minisign)"));
+  assert.equal(signer.match(/setup-certum/g)?.length, 1, "both architectures share one Certum session");
+  assert.match(signer, /Finalize amd64 in the shared Certum session/);
+  assert.match(signer, /Finalize arm64 in the shared Certum session/);
+  assert.equal(signer.match(/finalize-windows-signed-candidate\.sh/g)?.length, 2);
+  assert.ok(signer.indexOf("Finalize amd64 in the shared Certum session")
+    < signer.indexOf("name: ${{ needs.resolve.outputs.artifact_prefix }}-windows-amd64"));
+  assert.ok(signer.indexOf("Finalize arm64 in the shared Certum session")
+    < signer.indexOf("name: ${{ needs.resolve.outputs.artifact_prefix }}-windows-arm64"));
   assert.ok(!release.includes("secrets.SIGNPATH_API_TOKEN"));
   const runtimeAcceptance = job(release, "windows-runtime-acceptance");
   assert.match(runtimeAcceptance, /runner: windows-latest, arch: amd64/);
@@ -366,9 +379,9 @@ test("Certum signing preserves native builds and gates publication and attestati
   assert.match(attestation, /verified-contract\.json/);
   assert.match(attestation, /gh variable set/);
   const context = { github: { repository: "esengine/DeepSeek-Reasonix" }, inputs: { signing_preflight: true, orchestrated: false },
-    needs: { "signing-contract": { result: "success" }, build: { result: "success" }, "windows-sign": { result: "success" }, "windows-runtime-acceptance": { result: "success" } } };
+    needs: { "signing-contract": { result: "success" }, build: { result: "success" }, "windows-build": { result: "success" }, "windows-sign": { result: "success" }, "windows-runtime-acceptance": { result: "success" } } };
   assert.equal(condition(attestation, context), true);
-  for (const key of ["windows-sign", "windows-runtime-acceptance"]) {
+  for (const key of ["windows-build", "windows-sign", "windows-runtime-acceptance"]) {
     for (const result of ["failure", "cancelled", "skipped"]) {
       assert.equal(condition(attestation, { ...context, needs: { ...context.needs, [key]: { result } } }), false);
     }
@@ -457,7 +470,7 @@ test("Desktop race uses every verified partition and one shared cache writer", (
 });
 
 test("installer evidence excludes running payloads and cache files on every publisher", () => {
-  for (const body of [job(ci, "desktop-windows-package"), job(release, "build"), job(release, "windows-runtime-acceptance")]) {
+  for (const body of [job(ci, "desktop-windows-package"), job(release, "windows-runtime-acceptance")]) {
     const upload = body.match(/name: Upload (?:signed )?Windows installer acceptance evidence\n([\s\S]*?)(?=\n      - |$)/)?.[1];
     assert.ok(upload);
     for (const extension of ["json", "png", "log"])

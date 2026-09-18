@@ -364,6 +364,9 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
   // be reached is gone either way.
   const extensionSurface = useExtensionSurface({
     activeTabId,
+    hostId: state.meta?.session?.hostId,
+    sessionId: state.meta?.sessionId,
+    sessionGeneration: state.meta?.sessionGeneration,
     form: state.extensionForm,
     notifications: state.extensionNotifications,
     dismissForm: dismissExtensionForm,
@@ -460,8 +463,12 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
   });
   const promptCommands = useSessionPromptCommands({
     target: { tabId: activeTabId ?? "", sessionKey: activeSessionIdentity },
-    approval: state.approval ? { id: state.approval.id, tool: state.approval.tool } : undefined,
-    questionId: state.ask?.id, remote: Boolean(activeTab?.remote), goal, toolApprovalMode,
+    session: state.meta?.session,
+    sessionGeneration: state.meta?.sessionGeneration,
+    approval: state.approval,
+    question: state.ask,
+    mcpInteraction: state.mcpInteraction,
+    remote: Boolean(activeTab?.remote), goal, toolApprovalMode,
     operations: sessionOperations,
     ports: {
       approveForTab, isPromptCurrentForTab, resolvePlanForTab: resolvePlanDecisionForTab,
@@ -527,6 +534,7 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
   const sessionHasContent = exportItems.length > 0 || Boolean(exportLive?.text || exportLive?.reasoning);
 
   const sessionExportCommands = useSessionExportCommands({
+    selector: activeTab?.session?.sessionId ? { ref: activeTab.session } : activeTab?.sessionPath ? { sessionPath: activeTab.sessionPath } : { topicId: activeTab?.topicId },
     tabId: activeTabId,
     remote: remoteSurfaceActive,
     sessionTitle,

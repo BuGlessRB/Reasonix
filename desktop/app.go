@@ -31,7 +31,6 @@ import (
 	"reasonix/internal/extension/providerext"
 	"reasonix/internal/fileref"
 	fileenc "reasonix/internal/fileutil/encoding"
-	goaldomain "reasonix/internal/goal"
 	"reasonix/internal/i18n"
 	"reasonix/internal/mcpdiag"
 	"reasonix/internal/mcpregistry"
@@ -109,10 +108,12 @@ type PromptHistoryResult struct {
 // flow the other way: each tab's controller emits to a tabEventSink that
 // forwards events tagged with tabId to the webview via runtime.EventsEmit.
 type App struct {
-	ctx          context.Context
-	host         nativeHost
-	workspaceHub *workspaceChangeHub
-	topicState   *topicStateManager
+	sessionExportMu sync.Mutex
+	sessionExports  map[string]*sessionExportJob
+	ctx             context.Context
+	host            nativeHost
+	workspaceHub    *workspaceChangeHub
+	topicState      *topicStateManager
 	// topicTitleMutationMu keeps the authoritative title commit and its Tab /
 	// session-sidecar publication in the same order for manual and automatic
 	// renames. It is never held by generic topic-state reads or other metadata.
@@ -129,14 +130,14 @@ type App struct {
 	// sessionCatalog is a disposable, asynchronously opened projection of
 	// authoritative session sidecars. Project-shell APIs must tolerate nil here:
 	// opening, migration, repair, and corruption recovery never gate the UI.
-	sessionCatalog     atomic.Pointer[sessioncatalog.Catalog]
-	catalogLifecycleMu sync.Mutex
-	catalogCancel      context.CancelFunc
-	catalogDone        chan struct{}
-	catalogRebuildMu   sync.Mutex
-	catalogRebuild     *sessionCatalogRebuildFlight
-	catalogRebuilding  atomic.Bool
-	shuttingDown       atomic.Bool
+	sessionCatalog                           atomic.Pointer[sessioncatalog.Catalog]
+	catalogLifecycleMu                       sync.Mutex
+	catalogCancel                            context.CancelFunc
+	catalogDone, catalogInitialReconcileDone chan struct{}
+	catalogRebuildMu                         sync.Mutex
+	catalogRebuild                           *sessionCatalogRebuildFlight
+	catalogRebuilding                        atomic.Bool
+	shuttingDown                             atomic.Bool
 	// catalogReconcileJobs coalesces both the legacy pre-scan and catalog scan.
 	// Catalog deduplicates its worker; this also prevents callers from
 	// stampeding the otherwise-unbounded pre-scan goroutines.
@@ -325,8 +326,9 @@ type App struct {
 
 	// tabsSaveMu serializes writes to desktop-tabs.json and its fixed .tmp path.
 	tabsSaveMu             sync.Mutex
-	tabsSaveVersion        uint64 // protected by mu; assigned when collecting a snapshot
-	tabsLastWrittenVersion uint64 // protected by tabsSaveMu
+	tabsSaveVersion        uint64                     // protected by mu; assigned when collecting a snapshot
+	tabsLastWrittenVersion uint64                     // protected by tabsSaveMu
+	tabsFileExtra          map[string]json.RawMessage // protected by tabsSaveMu; unknown top-level persistence fields
 
 	forceQuit           atomic.Bool
 	backgroundMaximised atomic.Bool
@@ -722,7 +724,7 @@ func (a *App) restoreOrBuildTabs() {
 	if err := reconcileTopicArchiveMetadataPending(a.deleteTopic); err != nil {
 		slog.Warn("desktop: topic archive metadata reconciliation remains pending")
 	}
-	f := loadTabsFile()
+	f, tabsVersion := a.loadTabsForRestore()
 	_, _ = recoverLegacyProjectSidebarRoots(f)
 	_, _ = config.ApplyUserConfigUpgradesOnStartup(config.UserConfigPath())
 	_, _ = config.MigrateMCPToUserConfigOnUpgrade(desktopMCPMigrationRoots(f))
@@ -738,6 +740,10 @@ func (a *App) restoreOrBuildTabs() {
 			lang = cfg.Language
 		}
 		a.setDesktopLocale(i18n.DetectLanguage(lang))
+	}
+	f, _, restoreCurrent := a.reconcileTabsBeforeRestore(ctx, f, tabsVersion)
+	if !restoreCurrent {
+		return
 	}
 	// Every surviving layout style is single-surface, and a config that failed
 	// to load already took this path when the predicate could still be false.
@@ -784,6 +790,7 @@ func (a *App) restoreOrBuildTabs() {
 			tab.SessionPath = strings.TrimSpace(entry.SessionPath)
 			tab.SessionID = strings.TrimSpace(entry.SessionID)
 			tab.PendingCreateOperationID = strings.TrimSpace(entry.CreateOperationID)
+			tab.persistenceExtra = cloneDesktopJSONFields(entry.extra)
 			tab.ReadOnly = entry.ReadOnly
 			restoreTabPinnedContext(tab, entry.PinnedFiles)
 			tab.Takeover.Spectator = entry.TakeoverSpectator
@@ -880,6 +887,7 @@ func (a *App) shutdown(context.Context) {
 	// Freeze publication, then cancel off-barrier history, catalog, and plugin
 	// work so normal quit never waits for background I/O.
 	a.shuttingDown.Store(true)
+	a.cancelSessionExports()
 	a.cancelAllTabBuilds()
 	a.stopSessionCatalog(250 * time.Millisecond)
 	completeDesktopShutdown(a.lifecycle.tracker, a.shutdownBody)
@@ -2078,6 +2086,7 @@ func (a *App) clearLegacySessionRuntimeLocked(tab *WorkspaceTab, oldCtrl control
 		WorkspaceRoot:        snap.workspaceRoot,
 		SessionDir:           sessionDirForSnapshot(snap),
 		EffortOverride:       cloneStringPtr(snap.effort),
+		EffortModel:          snap.model,
 		SharedHost:           sharedHost, BrowserExecutor: a.browserExecutorForTab(tab),
 		MCPHostProfile:           plugin.HostProfileDesktopApps,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
@@ -4075,6 +4084,7 @@ func (a *App) buildSessionRebindCandidate(
 		WorkspaceRoot:        root,
 		SessionDir:           sessionDir,
 		EffortOverride:       cloneStringPtr(source.effort),
+		EffortModel:          source.model,
 		SharedHost:           sharedHost, BrowserExecutor: a.browserExecutorForTab(tab),
 		MCPHostProfile:           plugin.HostProfileDesktopApps,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
@@ -6404,96 +6414,7 @@ func (a *App) loadConfigForVision(root string) (*config.Config, error) {
 }
 
 func (a *App) MetaForTab(tabID string) Meta {
-	a.mu.RLock()
-	tab := a.tabByIDLocked(tabID)
-	snap := snapshotTabRuntimeLocked(tab)
-	runtimeView := a.sessionRuntimeViewLocked(tab)
-	a.mu.RUnlock()
-	if tab == nil {
-		meta := Meta{EventChannel: eventChannel}
-		if ref, ok := a.remoteTabRefFor(tabID); ok {
-			meta.Remote = &ref
-		}
-		return meta
-	}
-	cwd := snap.workspaceRoot
-	if cwd == "" {
-		cwd, _ = os.Getwd()
-	}
-	// Git branch and image-input capability come from the per-tab cache
-	// refreshed in the background (refreshTabMetaExtras); computing them here
-	// put a config load + model resolution on every meta request. A miss or
-	// stale entry schedules a refresh and serves the last known values (empty
-	// on the very first call; the "tab:meta" event delivers the refresh).
-	extras, refreshExtras := tabMetaExtrasFor(tab, cwd, snap.model)
-	// Native image routing is already frozen in the Controller. Reading this
-	// cheap snapshot also makes rebuilds visible immediately, without mixing
-	// newly saved config with a provider from the preceding runtime generation.
-	if capability, ok := snap.ctrl.(interface{ ImageInputSnapshot() (bool, bool, bool) }); ok {
-		if enabled, fallback, available := capability.ImageInputSnapshot(); available {
-			extras.imageInputEnabled, extras.visionFallbackEnabled = enabled, fallback
-		}
-	}
-	if refreshExtras {
-		a.scheduleTabMetaExtrasRefresh(tab.ID)
-	}
-	autoApproveTools := snap.ctrl != nil && snap.ctrl.AutoApproveTools()
-	collaborationMode := snap.collaborationMode()
-	toolApprovalMode := snap.currentToolApprovalMode()
-	// Deprecated dual-write wire values: pinned so one-version-old frontends
-	// keep parsing meta; nothing branches on them anymore.
-	tokenMode := boot.TokenModeFull
-	agentPreset := boot.AgentPresetBalanced
-	goal := snap.currentGoal()
-	goalStatus := snap.currentGoalStatus()
-	var goalView *goaldomain.View
-	if reader, ok := snap.ctrl.(control.RuntimeStateReader); ok {
-		goalView = reader.RuntimeStateSnapshot().Goal
-	}
-	sessionPath := strings.TrimSpace(snap.sessionPath)
-	sessionID := strings.TrimSpace(snap.sessionID)
-	var sessionRef *session.SessionRef
-	if sessionID != "" {
-		ref := session.SessionRef{HostID: localDesktopHostID, SessionID: sessionID}
-		sessionRef = &ref
-	}
-	var sessionRevision int64
-	var sessionDigest string
-	if branchMeta, ok, err := agent.LoadBranchMeta(sessionPath); err == nil && ok {
-		sessionRevision = branchMeta.Revision
-		sessionDigest = branchMeta.ContentDigest
-	}
-	return Meta{
-		Label:                 snap.label,
-		Ready:                 runtimeView.Phase == sessionRuntimeReady && snap.ctrl != nil,
-		Runtime:               runtimeView,
-		StartupErr:            snap.startupErr,
-		EventChannel:          eventChannel,
-		SessionPath:           sessionPath,
-		SessionID:             sessionID,
-		Session:               sessionRef,
-		SessionRevision:       sessionRevision,
-		SessionDigest:         sessionDigest,
-		Cwd:                   cwd,
-		WorkspaceRoot:         cwd,
-		WorkspaceName:         tabWorkspaceNameForScope(snap.scope, cwd),
-		WorkspacePath:         cwd,
-		GitBranch:             extras.gitBranch,
-		ImageInputEnabled:     extras.imageInputEnabled,
-		VisionFallbackEnabled: extras.visionFallbackEnabled,
-		AutoApproveTools:      autoApproveTools,
-		Bypass:                autoApproveTools,
-		CollaborationMode:     collaborationMode,
-		TokenMode:             tokenMode,
-		AgentPreset:           agentPreset,
-		ToolApprovalMode:      toolApprovalMode,
-		Goal:                  goal,
-		GoalStatus:            goalStatus,
-		GoalView:              goalView,
-		GoalRuntime:           goalRuntimeViewFromController(snap.ctrl),
-		CanonicalTodos:        ctrlTodos(snap.ctrl),
-		PinnedFiles:           buildPinnedContext(snap.workspaceRoot, tab.GetPinnedFiles()).Infos,
-	}
+	return a.metaForTab(tabID)
 }
 
 // ctrlTodos returns the canonical task list from a session controller, or nil
@@ -9400,15 +9321,7 @@ func (a *App) SetModelForTab(tabID, name string) (retErr error) {
 		}
 		name = entry.Name + "/" + entry.Model
 	}
-	effortOverride := cloneStringPtr(snap.effort)
-	if effortOverride != nil && !pluginRef {
-		normalized, err := config.NormalizeEffort(entry, config.EffortDisplay(&config.ProviderEntry{Effort: *effortOverride}))
-		if err != nil {
-			effortOverride = nil
-		} else {
-			effortOverride = &normalized
-		}
-	}
+	effortOverride := config.RebindSessionEffort(cfg, snap.model, name, snap.effort)
 	timing.Config = time.Since(stageStarted)
 
 	stageStarted = time.Now()
@@ -10618,11 +10531,11 @@ func (a *App) runEffortCommandForTab(tabID, input string) {
 		return
 	}
 	cap := config.EffortCapabilityForEntry(entry)
-	if !cap.Supported {
+	args := strings.Fields(input)
+	if !cap.Supported && !(len(args) == 2 && args[1] == "auto") {
 		a.noticeForTab(tabID, fmt.Sprintf("effort is not configurable for %s", entry.Name))
 		return
 	}
-	args := strings.Fields(input)
 	if len(args) < 2 {
 		a.noticeForTab(tabID, fmt.Sprintf("effort for %s: %s (default: %s; options: %s)", entry.Name, config.EffortDisplay(entry), cap.Default, strings.Join(cap.Levels, "|")))
 		return
@@ -10818,15 +10731,6 @@ type committedExportFile struct {
 }
 
 const exportTempCreateAttempts = 100
-
-func numberedExportPath(path string, partIndex, partCount int) string {
-	if partCount <= 1 {
-		return path
-	}
-	ext := filepath.Ext(path)
-	stem := strings.TrimSuffix(path, ext)
-	return fmt.Sprintf("%s-%d-of-%d%s", stem, partIndex+1, partCount, ext)
-}
 
 func saveExclusiveExportPayloads(targets []string, payloadCount int, payloadAt func(int) ([]byte, error)) error {
 	if len(targets) == 0 || len(targets) != payloadCount || payloadAt == nil {

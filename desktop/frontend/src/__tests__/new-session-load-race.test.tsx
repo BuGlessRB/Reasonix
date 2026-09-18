@@ -11,9 +11,9 @@ import type { BalanceInfo, CheckpointMeta, ContextInfo, EffortInfo, HistoryMessa
 import { installDesktopHostStub } from "./desktopHostStub";
 import { meta, tabMeta } from "./helpers/sessionSwitchFixtures";
 import { resetSessionDiagnostics, sessionPipelineDiagnostics } from "../lib/sessionDiagnostics";
+import { runTodoSessionSwitchScenario } from "../test-support/todoSessionSwitchScenario";
 
-let passed = 0;
-let failed = 0;
+let passed = 0, failed = 0;
 
 function ok(value: boolean, label: string) {
   if (value) {
@@ -33,9 +33,7 @@ function eq(actual: unknown, expected: unknown, label: string) {
   }
 }
 
-function flushPromises(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
+function flushPromises(): Promise<void> { return new Promise((resolve) => setTimeout(resolve, 0)); }
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -748,6 +746,8 @@ await act(async () => {
 });
 eq(controller?.state.items[0]?.text, "/sessions/fast.jsonl", "a superseded switch cannot paint over the newer transcript");
 eq(sessionPipelineDiagnostics().resumeSwitch?.totalMs, 4, "superseded response cannot overwrite current switch diagnostics");
+
+await runTodoSessionSwitchScenario({ controller: () => controller, desktopStub, currentSessionPath: () => switchMetaPath, meta, equal: eq });
 
 await act(async () => {
   switchRoot.unmount();

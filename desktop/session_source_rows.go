@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"reasonix/desktop/internal/workspacestate"
 	"reasonix/internal/agent"
 	"reasonix/internal/store"
 	"strings"
@@ -16,6 +17,34 @@ type sourceHeadObservation struct {
 }
 
 var sourceHeadRows sync.Map
+
+// A single-head DAG is displayed by path, while upgrades record its head ID.
+// Use the same path alias in every projection so retained originals cannot
+// reappear after their canonical session is archived. Multi-head rows keep
+// independent identities; adopting one must never hide its siblings.
+func sourceMappingHasPathAlias(mapping workspacestate.SourceMapping) bool {
+	if mapping.HeadID == "" {
+		return true
+	}
+	heads, err := sessionSourceHeads(mapping.Path)
+	if err != nil {
+		return false
+	}
+	visible := 0
+	selected := false
+	for _, head := range heads {
+		if head.Retired {
+			continue
+		}
+		if head.Kind != agent.HeadKindConcurrent {
+			visible++
+		}
+		if head.Selected && head.ID == mapping.HeadID {
+			selected = true
+		}
+	}
+	return selected && visible <= 1
+}
 
 // Cache the bounded DAG read against both files that define its heads. No
 // transcript is rewritten and ordinary flat history needs no head expansion.

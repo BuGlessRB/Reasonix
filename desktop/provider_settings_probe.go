@@ -108,7 +108,9 @@ func (a *App) FetchProviderModelCatalogDraft(p ProviderView, key string) ([]Prov
 		entry := e
 		entry.Model = model.ID
 		resolved := capabilities.Resolve(&entry)
-		result = append(result, modelCapabilityView(resolved))
+		view := modelCapabilityView(resolved)
+		view.Reasoning = config.ResolveReasoningView(&entry)
+		result = append(result, view)
 	}
 	return result, nil
 }

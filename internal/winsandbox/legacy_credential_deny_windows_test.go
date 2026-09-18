@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/windows"
@@ -66,6 +67,44 @@ func writeStaleCredentialMarker(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return marker
+}
+
+func TestRepairLegacyCredentialDenyMatchesFileAcrossPathAliases(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMP", tmp)
+	t.Setenv("TEMP", tmp)
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pathUTF16, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortBuffer := make([]uint16, 32768)
+	n, err := windows.GetShortPathName(pathUTF16, &shortBuffer[0], uint32(len(shortBuffer)))
+	if err != nil || n == 0 || n >= uint32(len(shortBuffer)) {
+		t.Skipf("8.3 path aliases unavailable: %v", err)
+	}
+	alias := windows.UTF16ToString(shortBuffer[:n])
+	if strings.EqualFold(filepath.Clean(alias), filepath.Clean(path)) {
+		t.Skip("fixture path has no distinct 8.3 alias")
+	}
+	userSID, err := currentProcessUserSIDString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := denyAppContainerSIDsWithInheritance(path, []string{userSID}, "RX", false); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { removeDeniedAppContainerSIDs(path, []string{userSID}) })
+	writeStaleCredentialMarker(t, alias)
+	if err := RepairLegacyCredentialDeny(path); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "KEY=value\n" {
+		t.Fatalf("credential after aliased repair = %q, %v", data, err)
+	}
 }
 
 func TestRepairLegacyCredentialDenyPreservesUnattributedAndLiveACL(t *testing.T) {

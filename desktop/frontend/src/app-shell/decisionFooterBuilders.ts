@@ -113,7 +113,7 @@ export function buildDecisionFooterSurface(input: DecisionFooterSurfaceInput): D
   if ((surface === "tool_approval" || surface === "plan_approval") && view.approval) {
     return {
       kind: "approval",
-      identity: `${activeTabId ?? ""}:${view.approval.id}`,
+      identity: prompts.approvalTarget?.instanceKey ?? `${activeTabId ?? ""}:${view.approval.id}`,
       props: {
         approval: view.approval,
         cwd: view.cwd,
@@ -133,9 +133,10 @@ export function buildDecisionFooterSurface(input: DecisionFooterSurfaceInput): D
   if (surface === "ask" && view.ask) {
     return {
       kind: "ask",
-      identity: `${activeTabId ?? ""}:${view.ask.id}`,
+      identity: prompts.questionTarget?.instanceKey ?? `${activeTabId ?? ""}:${view.ask.id}`,
       props: {
         ask: view.ask,
+        draftScope: prompts.questionTarget?.instanceKey ?? `${activeTabId ?? ""}:${view.ask.id}`,
         onAnswer: prompts.handleQuestionAnswer,
         onDismiss: prompts.handleQuestionDismiss,
         onStop: input.onStop,
@@ -145,9 +146,10 @@ export function buildDecisionFooterSurface(input: DecisionFooterSurfaceInput): D
   if (surface === "mcp_interaction" && view.mcpInteraction) {
     return {
       kind: "mcp",
-      identity: `${activeTabId ?? ""}:${view.mcpInteraction.id}`,
+      identity: prompts.mcpTarget?.instanceKey ?? `${activeTabId ?? ""}:${view.mcpInteraction.id}`,
       props: {
         interaction: view.mcpInteraction,
+        instanceKey: prompts.mcpTarget?.instanceKey ?? `${activeTabId ?? ""}:${view.mcpInteraction.id}`,
         busy: false,
         onAnswer: prompts.handleMCPAnswer,
         onOpenLink: input.onOpenLink,
@@ -157,7 +159,7 @@ export function buildDecisionFooterSurface(input: DecisionFooterSurfaceInput): D
   if (surface === "extension_form" && view.extensionForm) {
     return {
       kind: "extension",
-      identity: `${activeTabId ?? ""}:${view.extensionForm.pluginId}:${view.extensionForm.surfaceId}`,
+      identity: `${activeTabId ?? ""}:${view.extensionForm.pluginId}:${view.extensionForm.surfaceId}:${view.extensionForm.formInstanceId}`,
       props: {
         surface: view.extensionForm,
         busy: extension.extensionFormBusy,
