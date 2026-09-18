@@ -620,8 +620,10 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.post("/approve", {
       id,
       allow: verdict !== "deny",
-      session: verdict === "always",
-      persist: false,
+      // A rule written down also covers the rest of this session, so the answer
+      // holds before the file does.
+      session: verdict === "session" || verdict === "always",
+      persist: verdict === "always",
     });
   }
   answer(id: string, answers: { questionId: string; selected: string[] }[]) {

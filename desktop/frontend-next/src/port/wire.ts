@@ -214,6 +214,9 @@ export interface Approval {
   reason?: string;
   reasonCode?: string;
   fresh?: boolean;
+  // Which answers beyond "once" this host will honour for this call.
+  allowsSession?: boolean;
+  allowsPersist?: boolean;
   kind?: "tool" | "plan" | "recovery";
 }
 

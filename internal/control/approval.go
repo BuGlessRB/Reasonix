@@ -52,6 +52,10 @@ type approvalManager struct {
 	// remain authoritative, matching Auto rather than YOLO semantics.
 	planAutoApprove bool
 
+	// persists reports whether an answer can be written down as a rule at all:
+	// without a place to write it, offering it would promise a file nobody has.
+	persists bool
+
 	// promptMu serializes outstanding prompts so at most one user decision is in
 	// flight. Held across the blocking wait, so it must never be taken by the
 	// resolve paths (Approve/AnswerQuestion). sink.Emit also runs under it (Ask,
@@ -64,9 +68,10 @@ type approvalManager struct {
 	promptEmitMu sync.Mutex
 }
 
-func newApprovalManager(policy permission.Policy, mode string, timeout time.Duration) approvalManager {
+func newApprovalManager(policy permission.Policy, mode string, timeout time.Duration, persists bool) approvalManager {
 	return approvalManager{
 		policy:           policy,
+		persists:         persists,
 		approvals:        map[string]pendingApproval{},
 		asks:             map[string]pendingAsk{},
 		granted:          map[string]bool{},
@@ -551,9 +556,11 @@ func (a *approvalManager) snapshotPrompts() ([]event.Approval, []event.Ask) {
 	defer a.mu.Unlock()
 	approvals := make([]event.Approval, 0, len(a.approvals))
 	for id, p := range a.approvals {
+		session, persist := ApprovalGrants(p.tool, p.fresh)
 		approvals = append(approvals, event.Approval{
 			ID: id, Tool: p.tool, Subject: p.subject, Reason: p.reason, ReasonCode: ExplicitApprovalCode(p.tool, p.subject),
 			RawInput: append(json.RawMessage(nil), p.rawInput...), Fresh: p.fresh,
+			AllowsSession: session, AllowsPersist: persist && a.persists,
 			Kind: p.kind, Recovery: p.recovery,
 		})
 	}
@@ -683,6 +690,18 @@ func RequiresFreshHumanApprovalTool(tool string) bool {
 
 func requiresFreshApprovalTool(tool string) bool {
 	return RequiresFreshHumanApprovalTool(tool)
+}
+
+// ApprovalGrants says which answers beyond "once" the host will honour for this
+// call: whether a session grant covers the calls after it, and whether the
+// answer may be written down as a rule. A window that offers an answer the host
+// drops promises what it cannot keep — the label said "do not ask again" while
+// the grant died with the session.
+func ApprovalGrants(tool string, fresh bool) (session, persist bool) {
+	if fresh || RequiresFreshHumanApprovalTool(tool) {
+		return allowsFreshSessionGrantTool(tool), false
+	}
+	return true, true
 }
 
 func allowsFreshSessionGrantTool(tool string) bool {

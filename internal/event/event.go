@@ -332,6 +332,11 @@ type Approval struct {
 	// together with locations/reason instead of parsing a human title.
 	RawInput json.RawMessage
 	Fresh    bool // current human decision required; do not offer remembered grants
+	// Which answers beyond "once" this host will honour: a grant for the rest of
+	// the session, and writing the answer down as a rule. A frontend that offers
+	// one the host drops promises what it cannot keep.
+	AllowsSession bool
+	AllowsPersist bool
 	// Kind classifies the approval surface: "tool" (default), "plan", or
 	// "recovery". Empty means ordinary tool permission for backward compat.
 	Kind string

@@ -129,7 +129,10 @@ export type ApprovalMode = "ask" | "auto" | "dontAsk" | "yolo";
 // it names is a question not worth asking. Old sessions still send it.
 export type Preset = "light" | "balanced" | "delivery";
 
-export type ApprovalVerdict = "once" | "always" | "deny";
+// What an answer authorises. "session" covers the calls after it until this
+// session ends; "always" also writes it down as a rule. Which of them the host
+// will honour rides on the request — see Approval.allowsSession/allowsPersist.
+export type ApprovalVerdict = "once" | "session" | "always" | "deny";
 
 // Shape of GET /status as internal/serve writes it. Anything the UI wants that
 // is not here has to be added on the Go side, not invented in the client.

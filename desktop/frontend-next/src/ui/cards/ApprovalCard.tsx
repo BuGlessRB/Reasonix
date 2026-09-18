@@ -75,12 +75,21 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
                   disabled={!!submitting} onClick={() => void decide("once")}>
                   {submitting === "once" ? t("正在提交…") : t("允许这一次")}
                 </button>
-                {/* 永久扩权，所以它比「这一次」安静一档：三颗同样大小挨在一起时，
-                    读者分不出哪颗只管这一次、哪颗管以后所有次。 */}
-                <button className="btn" data-weak="" data-action="decision.tool" data-target={item.a.id} data-value="always"
-                  disabled={!!submitting} onClick={() => void decide("always")}>
-                  {t("此类操作不再询问")}
-                </button>
+                {/* 后两颗比「这一次」安静一档：三颗同样大小挨在一起时，读者分不出
+                    哪颗只管这一次、哪颗管到会话结束、哪颗写进配置。内核会说这次
+                    认哪几种授权，不认的就不画 —— 画出来就是承诺它做不到的事。 */}
+                {item.a.allowsSession && (
+                  <button className="btn" data-weak="" data-action="decision.tool" data-target={item.a.id} data-value="session"
+                    disabled={!!submitting} onClick={() => void decide("session")}>
+                    {t("本会话都允许")}
+                  </button>
+                )}
+                {item.a.allowsPersist && (
+                  <button className="btn" data-weak="" data-action="decision.tool" data-target={item.a.id} data-value="always"
+                    disabled={!!submitting} onClick={() => void decide("always")}>
+                    {t("此类操作不再询问")}
+                  </button>
+                )}
                 <button className="btn" data-deny="" data-action="decision.tool" data-target={item.a.id} data-value="deny"
                   disabled={!!submitting} onClick={() => void decide("deny")}>
                   {t("拒绝")}
@@ -89,12 +98,12 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
             )}
             {sealed && (
               <div className="apv-done">
-                {item.verdict === "always" ? (
+                {item.verdict === "session" ? (
                   <><b>{t("本会话不再询问此类操作。")}</b>{t("内核已记入会话授权，不写入磁盘。")}</>
+                ) : item.verdict === "always" ? (
+                  <><b>{t("已保存为规则。")}</b>{t("已写入配置，后续会话也不再询问此类操作。")}</>
                 ) : item.verdict === "deny" ? (
                   <><b>{t("已拒绝。")}</b>{t("agent 已收到拒绝，将改用其他方式或终止。")}</>
-                ) : item.verdict === "persist" ? (
-                  <><b>{t("已保存为规则。")}</b>{t("已写入配置，后续会话也不再询问此类操作。")}</>
                 ) : item.verdict === "unknown" ? (
                   <><b>{t("已在其他窗口处理。")}</b>{t("请以最新运行状态为准。")}</>
                 ) : (

@@ -17,7 +17,7 @@ import (
 func barrierController(t *testing.T) *Controller {
 	t.Helper()
 	c := &Controller{controllerDeps: controllerDeps{
-		approval: newApprovalManager(permission.Policy{}, "", 0),
+		approval: newApprovalManager(permission.Policy{}, "", 0, true),
 		sink:     event.Discard,
 	}}
 	c.sessionPath = filepath.Join(testenv.TempDir(t), "s.jsonl")
@@ -92,7 +92,7 @@ func TestInterruptedBarrierIsDerivedAndStable(t *testing.T) {
 		t.Fatal(err)
 	}
 	next := &Controller{controllerDeps: controllerDeps{
-		approval: newApprovalManager(permission.Policy{}, "", 0),
+		approval: newApprovalManager(permission.Policy{}, "", 0, true),
 		sink:     event.Discard,
 	}}
 	next.sessionPath = c.SessionPath()
@@ -120,7 +120,7 @@ func TestSettledBarriersProjectNothing(t *testing.T) {
 		}
 		c.closeBarrier("3", status)
 		next := &Controller{controllerDeps: controllerDeps{
-			approval: newApprovalManager(permission.Policy{}, "", 0), sink: event.Discard,
+			approval: newApprovalManager(permission.Policy{}, "", 0, true), sink: event.Discard,
 		}}
 		next.sessionPath = c.SessionPath()
 		if got := next.InterruptedAdjudications(); len(got) != 0 {
@@ -142,7 +142,7 @@ func TestInterruptionNeverEntersTheComposedTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	next := &Controller{controllerDeps: controllerDeps{
-		approval: newApprovalManager(permission.Policy{}, "", 0), sink: event.Discard,
+		approval: newApprovalManager(permission.Policy{}, "", 0, true), sink: event.Discard,
 	}}
 	next.sessionPath = c.SessionPath()
 	if got := next.RequestContext(); len(got) != 1 {
@@ -161,7 +161,7 @@ func TestInterruptionContextOffersNoHandle(t *testing.T) {
 		t.Fatal(err)
 	}
 	next := &Controller{controllerDeps: controllerDeps{
-		approval: newApprovalManager(permission.Policy{}, "", 0), sink: event.Discard,
+		approval: newApprovalManager(permission.Policy{}, "", 0, true), sink: event.Discard,
 	}}
 	next.sessionPath = c.SessionPath()
 	block := next.RequestContext()[0]
@@ -280,7 +280,7 @@ func TestSupersessionIsScopedToTheTurnThatInheritedIt(t *testing.T) {
 	// A fresh process reading the same disk answers the same way while that
 	// turn has not committed: the retry after a crash gets the same context.
 	next := &Controller{controllerDeps: controllerDeps{
-		approval: newApprovalManager(permission.Policy{}, "", 0), sink: event.Discard,
+		approval: newApprovalManager(permission.Policy{}, "", 0, true), sink: event.Discard,
 	}}
 	next.sessionPath = c.SessionPath()
 	if got := next.RequestContext(); len(got) != 1 {

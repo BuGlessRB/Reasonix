@@ -289,6 +289,7 @@ export const EN_SETTINGS: Record<string, string> = {
   "机器、工作区与会话": "Machines, workspaces and sessions",
   "{n} 个项目": "{n} projects",
   "允许这一次": "Allow once",
+  "本会话都允许": "Allow for this session",
   "此类操作不再询问": "Stop asking for this kind",
   "内核已记入会话授权，不写入磁盘。": "The kernel records it for this session only; nothing is written to disk.",
   "agent 已收到拒绝，将改用其他方式或终止。": "The agent takes the refusal and either finds another way or stops.",
