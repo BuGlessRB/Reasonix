@@ -68,7 +68,10 @@ func (a *App) bootTabControllerWithModelFallback(
 	buildCtx, registration := beginSharedHostMCPRegistration(baseCtx, sharedHost)
 	controller, err := a.buildTabControllerBootFenced(buildCtx, extensionGeneration, options)
 	result := tabControllerBootResult{controller: controller, ctx: buildCtx, registration: registration, model: options.Model, err: err}
-	if !errors.Is(err, boot.ErrUnknownModel) || strings.TrimSpace(sessionID) == "" {
+	a.mu.RLock()
+	draftCreate := tab != nil && strings.TrimSpace(tab.PendingCreateOperationID) != ""
+	a.mu.RUnlock()
+	if !errors.Is(err, boot.ErrUnknownModel) || strings.TrimSpace(sessionID) == "" || draftCreate {
 		return result
 	}
 	fallbackModel, _, ok := cfg.ResolveDesktopNewSessionModel()
@@ -109,6 +112,15 @@ func (a *App) bindTabCanonicalSession(
 			return ref, "", errors.New("v3 session service is unavailable")
 		}
 		ref, err = identity.OpenSession(ctx, session.SessionRef{HostID: service.HostID(), SessionID: strings.TrimSpace(sessionID)})
+		if errors.Is(err, session.ErrSessionNotFound) {
+			operationID := ""
+			if tab := a.tabForSessionBoot(scope, workspaceRoot, sessionID); tab != nil {
+				operationID = tab.PendingCreateOperationID
+			}
+			if operationID != "" {
+				ref, workspaceID, err = a.bindFreshDesktopSessionWithIDs(ctx, scope, workspaceRoot, identity, sessionID, operationID)
+			}
+		}
 	case strings.TrimSpace(legacyPath) != "":
 		ref, err = a.openOrImportDesktopLegacySession(ctx, identity, legacyPath, session.CreateOptions{
 			CWD: desktopWorkspaceRoot(scope, workspaceRoot), Origin: session.SessionOriginLegacyImport,
@@ -126,6 +138,18 @@ func (a *App) bindTabCanonicalSession(
 		err = identity.SessionService().SetModel(ctx, ref, model, cfg.ModelSelectionIdentity(model))
 	}
 	return ref, workspaceID, err
+}
+
+func (a *App) tabForSessionBoot(scope, workspaceRoot, sessionID string) *WorkspaceTab {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	for _, tab := range a.runtimeTabsLocked() {
+		if tab != nil && tab.Scope == scope && tab.SessionID == sessionID &&
+			(scope != "project" || sameProjectRoot(tab.WorkspaceRoot, workspaceRoot)) {
+			return tab
+		}
+	}
+	return nil
 }
 
 var errUnadoptedLegacySourceMissing = errors.New("unadopted legacy source is missing")
