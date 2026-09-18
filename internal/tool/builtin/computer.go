@@ -194,6 +194,9 @@ func renderApps(apps []computer.App) string {
 func renderComputerSnapshot(snap computer.Snapshot) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s (%s)\n", snap.App.Name, snap.App.Bundle)
+	if snap.Note != "" {
+		b.WriteString(snap.Note + "\n")
+	}
 	lines := snap.Lines
 	if len(lines) > computerSnapshotLines {
 		lines = lines[:computerSnapshotLines]

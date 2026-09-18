@@ -112,11 +112,14 @@ func (s *Session) App(ctx context.Context, bundle string) (App, error) {
 	return App{}, fail(CodeNoApp, "no running application has the bundle id %q; list apps first", bundle)
 }
 
-// Snapshot is an application's accessibility tree, one element per line.
+// Snapshot is an application's accessibility tree, one element per line. Note
+// is the host's account of what the tree is missing, such as an application
+// that exposes no window at all.
 type Snapshot struct {
 	App       App
 	Lines     []string
 	Truncated bool
+	Note      string
 }
 
 func (s *Session) Snapshot(ctx context.Context, bundle string) (Snapshot, error) {
@@ -127,11 +130,12 @@ func (s *Session) Snapshot(ctx context.Context, bundle string) (Snapshot, error)
 	var r struct {
 		Lines     []string `json:"lines"`
 		Truncated bool     `json:"truncated"`
+		Note      string   `json:"note"`
 	}
 	if err := s.call(ctx, "snapshot", map[string]any{"pid": app.PID}, &r); err != nil {
 		return Snapshot{}, err
 	}
-	return Snapshot{App: app, Lines: r.Lines, Truncated: r.Truncated}, nil
+	return Snapshot{App: app, Lines: r.Lines, Truncated: r.Truncated, Note: r.Note}, nil
 }
 
 // Screenshot captures an application's front window, sized for a vision model.

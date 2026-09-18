@@ -37,12 +37,13 @@ enum Keyboard {
         try Permissions.requireAccessibility()
         let parts = chord.split(separator: "+").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
         guard let last = parts.last, let code = named[last] else {
-            throw Failure(code: "computer.bad_request", message: "\(chord) is not a key this can press")
+            throw Failure(code: "computer.bad_step",
+                          message: "\(chord) is not a key this can press. It presses named keys — \(named.keys.sorted().joined(separator: ", ")) — with the modifiers shift, control, alt and meta. Ordinary characters, digits included, go through the type action")
         }
         var flags = CGEventFlags()
         for part in parts.dropLast() {
             guard let flag = modifiers[part] else {
-                throw Failure(code: "computer.bad_request", message: "\(part) is not a modifier")
+                throw Failure(code: "computer.bad_step", message: "\(part) is not a modifier; use shift, control, alt or meta")
             }
             flags.insert(flag)
         }

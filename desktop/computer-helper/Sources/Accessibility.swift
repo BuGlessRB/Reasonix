@@ -94,6 +94,16 @@ enum Accessibility {
             windows.removeAll { CFEqual($0, focusedWindow) }
             windows.insert(focusedWindow, at: 0)
         }
+        // An application can hand its own element back in place of every window
+        // it has; what lies under it is the menu bar and itself again. The menus
+        // are still worth reading, and the reader has to be told the rest of the
+        // application is not in here.
+        windows.removeAll { CFEqual($0, root) }
+        var note = ""
+        if windows.isEmpty {
+            note = "This application exposes no window through accessibility right now, so nothing inside its window can be read, clicked by ref or hit by point — only its menus below. Typing and keys still reach it, a screenshot still shows it, and relaunching it usually brings the window back."
+            windows = [root]
+        }
         var lines: [String] = []
         var count = 0
         // An application's tree is not always one: a window of Calculator lists
@@ -134,6 +144,7 @@ enum Accessibility {
             "bundle": running.bundleIdentifier ?? "",
             "lines": lines,
             "truncated": count >= maxNodes,
+            "note": note,
         ]
     }
 
