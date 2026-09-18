@@ -8,13 +8,20 @@ import (
 
 // activeOrSingleLocalTab resolves the workspace tab a local command should
 // target: the active tab when there is one, otherwise the dormant tab a
-// remote-only layout restores. Callers resolve instead of reporting that the
-// workspace is not ready.
+// remote-only layout restores. The controller is read with the tab so a
+// runtime built in between cannot look like a replaced one.
 func (a *App) activeOrSingleLocalTab() (*WorkspaceTab, control.SessionAPI) {
-	if tab, ctrl := a.tabAndCtrlByID(""); tab != nil {
-		return tab, ctrl
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if tab := a.tabByIDLocked(""); tab != nil {
+		return tab, tab.Ctrl
 	}
-	return a.singleLocalTab(), nil
+	for _, id := range a.orderedTabIDsLocked() {
+		if tab := a.tabs[id]; tab != nil {
+			return tab, tab.Ctrl
+		}
+	}
+	return nil, nil
 }
 
 // singleLocalTab resolves the workspace tab local commands should target when no
@@ -22,14 +29,8 @@ func (a *App) activeOrSingleLocalTab() (*WorkspaceTab, control.SessionAPI) {
 // for exactly this purpose, so callers resolve instead of reporting that the
 // workspace is not ready.
 func (a *App) singleLocalTab() *WorkspaceTab {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	for _, id := range a.orderedTabIDsLocked() {
-		if tab := a.tabs[id]; tab != nil {
-			return tab
-		}
-	}
-	return nil
+	tab, _ := a.activeOrSingleLocalTab()
+	return tab
 }
 
 // SetActiveTab switches the frontend's active tab. Restored remote shells

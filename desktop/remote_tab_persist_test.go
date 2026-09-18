@@ -782,3 +782,17 @@ func TestOpenSessionUsesDormantLocalTabWithoutAnActiveTab(t *testing.T) {
 		t.Fatalf("dormant tab after open = %+v (ctrl nil=%v sessionID=%q)", got, boundCtrl == nil, boundSessionID)
 	}
 }
+
+// TestResumeAdoptsTabRuntimeWhenControllerIsNil: a caller that resolved a tab
+// before its runtime existed (a dormant tab restored for a remote-only layout)
+// must not fail the open when a concurrent activation already built one.
+func TestResumeAdoptsTabRuntimeWhenControllerIsNil(t *testing.T) {
+	app, tab, ctrl, _ := auditMigratedTab(t)
+	ref, ok := ctrl.SessionRef()
+	if !ok {
+		t.Fatal("fixture controller has no session ref")
+	}
+	if _, err := app.resumeCanonicalSessionForTranscript(tab, nil, sessionRoute(ref.SessionID), defaultHistoryPageTurns, false); err != nil {
+		t.Fatalf("resume with a nil controller: %v", err)
+	}
+}
