@@ -1,6 +1,7 @@
 package identitylock
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ func TestAcquireRejectsLinkRedirectAfterIdentityResolution(t *testing.T) {
 	}
 	defer func() { identityLockAfterResolve = originalHook }()
 
-	release, err := Acquire(nil, filepath.Join(alias, "state.lock"))
+	release, err := Acquire(context.Background(), filepath.Join(alias, "state.lock"))
 	if release != nil {
 		release()
 	}

@@ -573,15 +573,6 @@ func newSessionLeaseInfo(path string) SessionLeaseInfo {
 	}
 }
 
-// publishSessionLeaseOwner writes the holder identity into the .lease.lock
-// file itself through the held lock handle. New writes never create a
-// .lease.json sidecar; readers fall back to it only for sessions last held
-// by an older build.
-func publishSessionLeaseOwner(leaseLock *sessionLockFile, path string) error {
-	info := newSessionLeaseInfo(canonicalSessionSavePath(path))
-	return writeSessionLeaseInfo(leaseLock, info)
-}
-
 func (l *SessionLease) publishOwner() error {
 	info := newSessionLeaseInfo(l.accessPath)
 	return l.writeOwnerInfo(info)
