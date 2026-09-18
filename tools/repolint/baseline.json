@@ -5,16 +5,16 @@
     "claude-dialect": 1,
     "codeowners": 0,
     "commented-code": 0,
-    "complexity": 1388,
+    "complexity": 1385,
     "doc-language": 0,
     "doc-owner": 43,
     "doc-prose": 2345,
     "error-text": 9,
-    "essay": 3155,
-    "file-size": 30182,
+    "essay": 3154,
+    "file-size": 29938,
     "flat-view": 0,
     "frontend-parity": 130,
-    "function-size": 5958,
+    "function-size": 5948,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -478,7 +478,7 @@
       "orphan": 1
     },
     "internal/boot/boot.go": {
-      "complexity": 131,
+      "complexity": 130,
       "essay": 77,
       "file-size": 956,
       "function-size": 1035
@@ -576,8 +576,8 @@
     "internal/cli/cli.go": {
       "complexity": 64,
       "essay": 57,
-      "file-size": 1574,
-      "function-size": 423
+      "file-size": 1572,
+      "function-size": 421
     },
     "internal/cli/cli_test.go": {
       "essay": 9
@@ -659,7 +659,7 @@
     },
     "internal/cli/serve_frontend.go": {
       "complexity": 6,
-      "function-size": 81
+      "function-size": 77
     },
     "internal/cli/session_lease.go": {
       "essay": 4
@@ -713,8 +713,8 @@
       "essay": 2
     },
     "internal/config/config.go": {
-      "essay": 48,
-      "file-size": 1228
+      "essay": 47,
+      "file-size": 1206
     },
     "internal/config/credentials.go": {
       "essay": 1,
@@ -782,10 +782,10 @@
       "file-size": 219
     },
     "internal/config/render.go": {
-      "complexity": 197,
+      "complexity": 195,
       "essay": 2,
-      "file-size": 619,
-      "function-size": 700
+      "file-size": 571,
+      "function-size": 696
     },
     "internal/config/vision.go": {
       "essay": 1,
@@ -824,7 +824,7 @@
     },
     "internal/control/controller.go": {
       "essay": 32,
-      "file-size": 630,
+      "file-size": 625,
       "frontend-parity": 16
     },
     "internal/control/controller_test.go": {
@@ -1348,8 +1348,8 @@
       "essay": 7
     },
     "internal/provider/provider.go": {
-      "essay": 50,
-      "file-size": 248
+      "essay": 39,
+      "file-size": 93
     },
     "internal/provider/responses/responses.go": {
       "essay": 11,
@@ -1375,6 +1375,9 @@
     },
     "internal/provider/schema_validate.go": {
       "essay": 2
+    },
+    "internal/provider/usage.go": {
+      "essay": 11
     },
     "internal/recovery/decision.go": {
       "essay": 9
@@ -1509,7 +1512,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 416
+      "file-size": 404
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3

@@ -38,7 +38,7 @@ func (a *Agent) withTodoIdentityTail(visible []provider.Message) []provider.Mess
 	if len(evidence.TodoStepIDs(todos)) == 0 || todoStateVisible(visible, todos) {
 		return visible
 	}
-	return append(visible, provider.Message{Role: provider.RoleUser, Content: todoIdentityNote(todos)})
+	return append(visible, provider.Message{Role: provider.RoleUser, Content: todoIdentityNote(todos), Derived: true})
 }
 
 // todoStateVisible reports whether the view already carries the host's current
