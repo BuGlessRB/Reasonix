@@ -159,11 +159,30 @@ func TestLiveContextMenuScrollAndWait(t *testing.T) {
 	}
 	waitLog(t, log, "menu opened")
 
-	deep := lineRef(t, snap.Lines, `"Deep row"`)
-	if _, err := s.Act(ctx, targetBundle, []Step{{Action: "scroll", Ref: deep}}); err != nil {
-		t.Fatalf("scroll to a ref: %v", err)
+	// Where the scroll area sits is what says the element was brought into
+	// view: the application that offers pages rather than a reveal never hears
+	// about the element at all.
+	position := func() string {
+		now, err := s.Snapshot(ctx, targetBundle)
+		if err != nil {
+			t.Fatalf("Snapshot: %v", err)
+		}
+		for _, line := range now.Lines {
+			if strings.Contains(line, "scrollBar") {
+				return line
+			}
+		}
+		return ""
 	}
-	waitLog(t, log, "scrolled into view")
+	before := position()
+	deep := lineRef(t, snap.Lines, `"Deep row"`)
+	res, err = s.Act(ctx, targetBundle, []Step{{Action: "scroll", Ref: deep}})
+	if err != nil || len(res.Notes) == 0 || !strings.Contains(res.Notes[0], "into view") {
+		t.Fatalf("scroll to a ref: %v %v", err, res.Notes)
+	}
+	if after := position(); after == before {
+		t.Fatalf("the scroll area did not move: %q", after)
+	}
 
 	if _, err := s.Act(ctx, targetBundle, []Step{{Action: "scroll", Amount: -3}}); err != nil {
 		t.Fatalf("scroll by lines: %v", err)

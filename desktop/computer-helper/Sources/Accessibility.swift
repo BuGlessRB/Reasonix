@@ -55,6 +55,8 @@ let scrollToVisibleAction = "AXScrollToVisible"
 
 enum Accessibility {
     static let maxNodes = 1500
+    // How far the scroll bar is nudged to measure what the element does with it.
+    static let scrollProbe = 0.1
     static let maxDepth = 40
     // Containers that say nothing when unnamed: their children stand in for them.
     static let transparent: Set<String> = ["AXGroup", "AXScrollArea", "AXSplitGroup", "AXLayoutArea", "AXUnknown"]
@@ -220,6 +222,9 @@ enum Accessibility {
                 try perform(element, scrollToVisibleAction, what: ref)
                 return ["how": "revealed"]
             }
+            if try revealBy(element, ref: ref) {
+                return ["how": "revealed"]
+            }
         }
         guard amount != 0 else {
             throw Failure(code: "computer.bad_step", message: "a scroll needs a ref that can be revealed, or lines to turn the wheel by")
@@ -230,6 +235,66 @@ enum Accessibility {
         }
         event.postToPid(pid)
         return ["how": "wheel"]
+    }
+
+    // revealBy brings an element into view in applications that offer no way for
+    // it to reveal itself. Their scroll areas advertise page actions that then
+    // refuse to run (measured: AXScrollDownByPage answers -25205 on AppKit),
+    // while the scroll bar's own value does move the view — so the geometry is
+    // solved on that: move the bar a little, see how far the element went with
+    // it, and put the bar where the element lands inside the area.
+    static func revealBy(_ element: AXUIElement, ref: String) throws -> Bool {
+        guard let area = enclosingScroller(element), let bar = verticalBar(area),
+              let want = frame(element), let have = frame(area) else { return false }
+        if have.intersects(want) { return true }
+        guard var at = attr(bar, kAXValueAttribute) as? Double else { return false }
+        let probe = at > 0.5 ? at - scrollProbe : at + scrollProbe
+        guard set(bar, probe), let moved = frame(element) else { return false }
+        let travel = moved.midY - want.midY
+        if abs(travel) < 1 {
+            _ = set(bar, at)
+            return false
+        }
+        // How far one unit of the bar carries the element, and the value that
+        // leaves it in the middle of what the area shows.
+        let perUnit = travel / (probe - at)
+        at = min(max(probe + (have.midY - moved.midY) / perUnit, 0), 1)
+        guard set(bar, at), let landed = frame(element) else { return false }
+        return have.intersects(landed)
+    }
+
+    static func verticalBar(_ area: AXUIElement) -> AXUIElement? {
+        for child in (attr(area, kAXChildrenAttribute) as? [AXUIElement]) ?? [] {
+            guard string(child, kAXRoleAttribute) == "AXScrollBar" else { continue }
+            if (attr(child, kAXOrientationAttribute) as? String) != "AXHorizontalOrientation" {
+                return child
+            }
+        }
+        return nil
+    }
+
+    static func set(_ element: AXUIElement, _ value: Double) -> Bool {
+        AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, value as CFTypeRef) == .success
+    }
+
+    // enclosingScroller is the nearest ancestor that scrolls, which is what a
+    // scroll bar belongs to.
+    static func enclosingScroller(_ element: AXUIElement) -> AXUIElement? {
+        var at = element
+        for _ in 0..<maxDepth {
+            guard let parent = attr(at, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() else { return nil }
+            at = parent as! AXUIElement
+            if string(at, kAXRoleAttribute) == "AXScrollArea" { return at }
+        }
+        return nil
+    }
+
+    static func frame(_ element: AXUIElement) -> CGRect? {
+        guard let posValue = attr(element, kAXPositionAttribute), let sizeValue = attr(element, kAXSizeAttribute) else { return nil }
+        var origin = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(posValue as! AXValue, .cgPoint, &origin), AXValueGetValue(sizeValue as! AXValue, .cgSize, &size) else { return nil }
+        return CGRect(origin: origin, size: size)
     }
 
     // click is a press at a point: the element there is asked for its action, so

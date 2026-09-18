@@ -25,7 +25,20 @@ final class MenuView: NSView {
         menu.addItem(NSMenuItem(title: "Probe menu item", action: nil, keyEquivalent: ""))
         return menu
     }
+
+    // What advertises AXShowMenu, which is how an element offers the menu a
+    // right click would open.
+    override func accessibilityPerformShowMenu() -> Bool {
+        log("menu opened")
+        return true
+    }
 }
+// A document that starts at its top, so a row near its bottom begins out of
+// sight — which is what "bring it into view" has to answer for.
+final class TopDownDoc: NSView {
+    override var isFlipped: Bool { true }
+}
+
 final class DeepLabel: NSTextField {
     override func scrollToVisible(_ rect: NSRect) -> Bool {
         log("scrolled into view")
@@ -52,8 +65,8 @@ final class Delegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         let scroll = NSScrollView(frame: NSRect(x: 310, y: 20, width: 90, height: 100))
         let deep = DeepLabel(labelWithString: "deep row")
         deep.setAccessibilityLabel("Deep row")
-        deep.frame = NSRect(x: 0, y: 0, width: 80, height: 20)
-        let doc = NSView(frame: NSRect(x: 0, y: 0, width: 80, height: 600))
+        deep.frame = NSRect(x: 0, y: 560, width: 80, height: 20)
+        let doc = TopDownDoc(frame: NSRect(x: 0, y: 0, width: 80, height: 600))
         doc.addSubview(deep)
         scroll.documentView = doc
         scroll.hasVerticalScroller = true
