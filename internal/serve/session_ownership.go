@@ -17,6 +17,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/eventwire"
+	"reasonix/internal/pathidentity"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
 )
@@ -237,7 +238,9 @@ func (s *Server) snapshotForeground(cur control.SessionAPI) {
 // resolveSessionPath validates a client-supplied session path against the
 // foreground session dir the same way POST /resume does: absolute, a real
 // transcript file, inside the session dir, and not pending cleanup. The
-// returned path is symlink-resolved.
+// returned path is symlink-resolved. Containment is checked with identity keys
+// so a comparison key from a case-insensitive volume is never mistaken for a
+// different on-disk directory spelling.
 func (s *Server) resolveSessionPath(raw string) (string, error) {
 	dir := s.ctl().SessionDir()
 	if dir == "" {
@@ -247,7 +250,7 @@ func (s *Server) resolveSessionPath(raw string) (string, error) {
 	if err != nil {
 		return "", errors.New("invalid session dir")
 	}
-	realDir, err := filepath.EvalSymlinks(absDir)
+	dirIdentity, err := pathidentity.Resolve(absDir, pathidentity.Options{FollowLeaf: true})
 	if err != nil {
 		return "", errors.New("invalid session dir")
 	}
@@ -255,13 +258,15 @@ func (s *Server) resolveSessionPath(raw string) (string, error) {
 	if err != nil || !store.IsSessionTranscriptName(filepath.Base(absPath)) {
 		return "", errors.New("invalid session path")
 	}
-	realPath, err := filepath.EvalSymlinks(absPath)
+	pathIdentity, err := pathidentity.Resolve(absPath, pathidentity.Options{FollowLeaf: true})
 	if err != nil {
 		return "", errors.New("invalid session path")
 	}
-	if realPath == realDir || !strings.HasPrefix(realPath, realDir+string(os.PathSeparator)) {
+	rel, err := filepath.Rel(dirIdentity.Key, pathIdentity.Key)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		return "", errors.New("path outside session dir")
 	}
+	realPath := pathIdentity.PhysicalPath
 	if agent.IsCleanupPending(realPath) {
 		return "", errors.New("session is pending cleanup")
 	}

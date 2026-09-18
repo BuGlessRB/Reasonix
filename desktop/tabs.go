@@ -22,6 +22,7 @@ import (
 	"reasonix/internal/extension/providerext"
 	"reasonix/internal/fileutil"
 	"reasonix/internal/notify"
+	"reasonix/internal/pathidentity"
 	"reasonix/internal/provider"
 	"reasonix/internal/session"
 	"reasonix/internal/sessiontitle"
@@ -6117,15 +6118,16 @@ func cleanDesktopPath(path string) string {
 }
 
 func sameDesktopPath(a, b string) bool {
-	a = cleanDesktopPath(a)
-	b = cleanDesktopPath(b)
+	same, err := sameDesktopPathStrict(a, b)
+	return err == nil && same
+}
+
+func sameDesktopPathStrict(a, b string) (bool, error) {
+	a, b = cleanDesktopPath(a), cleanDesktopPath(b)
 	if a == "" || b == "" {
-		return false
+		return false, &pathidentity.Error{Kind: pathidentity.ErrorInvalid, Stage: "input", Err: errors.New("desktop path is empty")}
 	}
-	if os.PathSeparator == '\\' {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
+	return pathidentity.Same(a, b, pathidentity.Options{FollowLeaf: true})
 }
 
 // projectRootKey is the map-key form of a project root: cleaned, absolute,
@@ -6133,10 +6135,14 @@ func sameDesktopPath(a, b string) bool {
 // uses for session paths, so equivalent spellings never split lookups.
 func projectRootKey(root string) string {
 	root = cleanDesktopPath(root)
-	if os.PathSeparator == '\\' {
-		return strings.ToLower(root)
+	if root == "" {
+		return ""
 	}
-	return root
+	identity, err := pathidentity.Resolve(root, pathidentity.Options{FollowLeaf: true})
+	if err != nil {
+		return ""
+	}
+	return identity.Key
 }
 
 func restoreSessionTopicIndex(dir, sessionPath string) error {
