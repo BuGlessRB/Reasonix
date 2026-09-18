@@ -20,45 +20,14 @@ import {
 import { WriteAccessApprovalDetails, writeAccessDecisionActions, type DecisionAction } from "./WriteAccessApproval";
 import { RetiredRecoveryApproval } from "./RetiredRecoveryApproval";
 import type { ApprovalModalProps } from "./approvalTypes";
+import { approvalToolLabel } from "./approvalToolLabel";
+export { approvalToolLabel } from "./approvalToolLabel";
 
 function requiresFreshHumanApproval(tool: string): boolean {
   return tool === "remember" || tool === "forget" || tool === "exit_plan_mode" || tool === "sandbox_escape" || tool === "config_write";
 }
 
 const APPROVAL_MODE_RANK = { "read-only": 0, "workspace-write": 1, "danger-full-access": 2 } as const;
-
-export function approvalToolLabel(tool: string, t: Translator): string {
-  switch (tool) {
-    case "bash":
-      return t("approval.toolLabelBash");
-    case "edit_file":
-      return t("approval.toolLabelEditFile");
-    case "write_file":
-      return t("approval.toolLabelWriteFile");
-    case "multi_edit":
-      return t("approval.toolLabelMultiEdit");
-    case "move_file":
-      return t("approval.toolLabelMoveFile");
-    case "web_fetch":
-      return t("approval.toolLabelWebFetch");
-    case "run_skill":
-      return t("approval.toolLabelRunSkill");
-    case "remember":
-      return t("approval.toolLabelRemember");
-    case "forget":
-      return t("approval.toolLabelForget");
-    case "sandbox_escape":
-      return t("approval.toolLabelSandboxEscape");
-    case "config_write":
-      return t("approval.toolLabelConfigWrite");
-    case "plan_mode_read_only_command":
-      return t("approval.toolLabelPlanModeReadOnly");
-    case "exit_plan_mode":
-      return t("approval.toolLabelExitPlan");
-    default:
-      return tool;
-  }
-}
 
 const sandboxEscapeEnglishSubjectFallback = "run shell command unconfined once";
 const sandboxEscapeEnglishSubjectPrefix = "run unconfined once: ";
@@ -304,8 +273,6 @@ function InteractiveApprovalModal({
     setSubmitting(true);
     let result: void | Promise<void>;
     try {
-      // The decision belongs to this mounted request. Start it before the
-      // cosmetic animation so a later tab switch cannot retarget the action.
       result = fn();
     } catch {
       closingRef.current = false;
@@ -317,14 +284,7 @@ function InteractiveApprovalModal({
       setSubmitting(false);
     });
     const el = shelfRef.current;
-    if (el) {
-      animateElementExit(el, {
-        opacity: 0,
-        y: 8,
-        duration: DUR_FAST,
-        onComplete: () => undefined,
-      });
-    }
+    if (el) animateElementExit(el, { opacity: 0, y: 8, duration: DUR_FAST, onComplete: () => undefined });
   };
 
   const resolveRecovery = useCallback(

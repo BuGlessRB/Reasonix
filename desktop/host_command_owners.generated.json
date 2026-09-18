@@ -6539,10 +6539,10 @@
     }
   },
   "ResolveRemoteTabPromptExact": {
-    "domain": "desktop/remote_tab.go",
+    "domain": "desktop/remote_tab_exact_interactions.go",
     "owner": "App.ResolveRemoteTabPromptExact",
     "sources": [
-      "desktop/remote_tab.go"
+      "desktop/remote_tab_exact_interactions.go"
     ],
     "scope": {
       "kind": "owner-inputs",
@@ -9778,10 +9778,10 @@
     }
   },
   "SubmitRemoteTabExtensionFormExact": {
-    "domain": "desktop/remote_tab.go",
+    "domain": "desktop/remote_tab_exact_interactions.go",
     "owner": "App.SubmitRemoteTabExtensionFormExact",
     "sources": [
-      "desktop/remote_tab.go"
+      "desktop/remote_tab_exact_interactions.go"
     ],
     "scope": {
       "kind": "owner-inputs",

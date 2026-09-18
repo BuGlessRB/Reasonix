@@ -84,7 +84,10 @@ import { reduceHistoryWindowState } from "./historyWindowState";
 import { withRemoteProviderUnreachable, withRemoteTurnInterrupted } from "./remoteTurnState";
 import type { NavigationResult, SurfaceDataCommit, SurfaceDataOutcome } from "./navigationSurfaceTransition";
 import { sameTodoList } from "./todoVisibility";
-import { interactionInstanceKey, sameInteractionIdentity, type InteractionKind, type InteractionTarget } from "./interactionTarget";
+import type { InteractionKind, InteractionTarget } from "./interactionTarget";
+import { interactionTargetFromState, promptInstanceKeyForState, stateOwnsInteraction } from "./interactionOwnership";
+import { acceptsExtensionGeneration, applyExtensionForm, extensionSurfaceKey, type ExtensionFormState, type ExtensionNotificationEntry, type ExtensionStatusEntry } from "./extensionFormState";
+export { acceptsExtensionGeneration, type ExtensionFormState, type ExtensionStatusEntry } from "./extensionFormState";
 import { resolveSnapshotTurnStartedAt, resolveTurnStartedAt, snapshotPredatesTurnLifecycle } from "./turnTiming";
 import { useRemoteTabSwitch } from "./useRemoteTabSwitch";
 import { useNavigationIntentFence } from "./useNavigationIntentFence";
@@ -123,7 +126,6 @@ import type {
   WireDecisionReceipt,
   WireEvent,
   WireExtensionCard,
-  WireExtensionForm,
   WireExtensionStatus,
   WireExtensionSurface,
   WireTool,
@@ -383,106 +385,6 @@ export type ExtensionItem = Extract<Item, { kind: "extension" }>;
 // "<pluginId>:<surfaceId>"; the form is the single pending form surface (a new
 // form replaces the old, matching the backend's one-blocking-prompt model);
 // notifications queue until the App drains them into the toast system.
-export interface ExtensionStatusEntry {
-  pluginId: string;
-  surfaceId: string;
-  label: string;
-  detail?: string;
-  severity?: string;
-  progress?: number;
-  generation?: number;
-}
-export interface ExtensionFormState {
-  pluginId: string;
-  surfaceId: string;
-  sessionId?: string;
-  generation?: number;
-  formInstanceId: string;
-  formInstanceExact: boolean;
-  form: WireExtensionForm;
-}
-export interface ExtensionNotificationEntry {
-  id: string;
-  pluginId: string;
-  title: string;
-  body?: string;
-  severity?: string;
-}
-// extensionSurfaceKey is the identity a sidecar re-publishes under to replace
-// one of its surfaces.
-export function extensionSurfaceKey(surface: Pick<WireExtensionSurface, "pluginId" | "surfaceId">): string {
-  return `${surface.pluginId}:${surface.surfaceId}`;
-}
-// acceptsExtensionGeneration drops a re-ordered surface publication: within
-// one runtime, a sidecar's generation is monotonic, so anything older than the
-// last accepted generation for the same surface is stale. Events without a
-// generation always pass (they carry no ordering claim).
-export function acceptsExtensionGeneration(stored: number | undefined, incoming: number | undefined): boolean {
-  return incoming === undefined || stored === undefined || incoming >= stored;
-}
-
-function promptForInteraction(state: State, target: InteractionTarget): WireApproval | WireAsk | WireMCPInteraction | undefined {
-  if (target.kind === "ask") return state.ask;
-  if (target.kind === "mcp") return state.mcpInteraction;
-  return state.approval;
-}
-
-function stateOwnsInteraction(state: State, target: InteractionTarget): boolean {
-  if (!target.sessionId || !target.sessionGeneration || !state.meta?.session?.sessionId || !state.meta.sessionGeneration) return false;
-  if (state.meta.session.sessionId !== target.sessionId || state.meta.sessionGeneration !== target.sessionGeneration) return false;
-  if (target.hostId && state.meta.session.hostId !== target.hostId) return false;
-  const currentSessionKey = sessionIdentityStableKey(state.meta);
-  if (currentSessionKey && target.sessionKey && currentSessionKey !== target.sessionKey) return false;
-  const prompt = promptForInteraction(state, target);
-  if (!sameInteractionIdentity(prompt, target)) return false;
-  if (target.requestGeneration !== undefined && prompt && "generation" in prompt && prompt.generation !== target.requestGeneration) return false;
-  if (target.permissionRevision !== undefined && prompt && "permissionRevision" in prompt && prompt.permissionRevision !== target.permissionRevision) return false;
-  return true;
-}
-
-function promptInstanceKeyForState(
-  state: State,
-  prompt: WireApproval | WireAsk | WireMCPInteraction,
-  kind: InteractionKind,
-): string {
-  const base = {
-    tabId: "",
-    sessionKey: sessionIdentityStableKey(state.meta),
-    hostId: state.meta?.session?.hostId,
-    sessionId: state.meta?.session?.sessionId,
-    sessionGeneration: state.meta?.sessionGeneration,
-    promptId: prompt.id,
-    turnId: prompt.turnId,
-    runtimeEpoch: prompt.runtimeEpoch,
-    kind,
-    requestGeneration: "generation" in prompt ? prompt.generation : undefined,
-    permissionRevision: "permissionRevision" in prompt ? prompt.permissionRevision : undefined,
-  };
-  return interactionInstanceKey(base);
-}
-
-function interactionTargetFromState(
-  tabId: string,
-  state: State | undefined,
-  kind: InteractionKind,
-  promptId: string,
-): InteractionTarget {
-  const prompt = state ? promptForInteraction(state, { kind } as InteractionTarget) : undefined;
-  const base = {
-    tabId,
-    sessionKey: sessionIdentityStableKey(state?.meta) || tabId,
-    hostId: state?.meta?.session?.hostId,
-    sessionId: state?.meta?.session?.sessionId,
-    sessionGeneration: state?.meta?.sessionGeneration,
-    promptId,
-    turnId: prompt?.turnId ?? state?.activeTurnId,
-    runtimeEpoch: prompt?.runtimeEpoch ?? state?.meta?.runtime?.epoch,
-    kind,
-    requestGeneration: prompt && "generation" in prompt ? prompt.generation : undefined,
-    permissionRevision: prompt && "permissionRevision" in prompt ? prompt.permissionRevision : undefined,
-  };
-  return { ...base, instanceKey: interactionInstanceKey(base) };
-}
 
 // Mid-turn steer messages are recorded as info notices carrying this prefix —
 // both live (the "steer" event below) and in replayed history (desktop/app.go
@@ -1168,23 +1070,6 @@ function applyExtensionCard(s: State, surface: WireExtensionSurface): State {
       ...s.items,
       { kind: "extension", id: `x${s.seq}`, surfaceKey: key, pluginId: surface.pluginId, surfaceId: surface.surfaceId, generation: surface.generation, card },
     ],
-  };
-}
-
-function applyExtensionForm(s: State, surface: WireExtensionSurface): State {
-  const form = surface.form;
-  if (!form) return s;
-  return {
-    ...s,
-    extensionForm: {
-      pluginId: surface.pluginId,
-      surfaceId: surface.surfaceId,
-      sessionId: surface.sessionId,
-      generation: surface.generation,
-      formInstanceId: surface.formInstanceId ?? JSON.stringify([surface.pluginId, surface.surfaceId, surface.generation ?? 0]),
-      formInstanceExact: Boolean(surface.formInstanceId),
-      form,
-    },
   };
 }
 

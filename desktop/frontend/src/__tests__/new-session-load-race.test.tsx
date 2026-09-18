@@ -11,10 +11,9 @@ import type { BalanceInfo, CheckpointMeta, ContextInfo, EffortInfo, HistoryMessa
 import { installDesktopHostStub } from "./desktopHostStub";
 import { meta, tabMeta } from "./helpers/sessionSwitchFixtures";
 import { resetSessionDiagnostics, sessionPipelineDiagnostics } from "../lib/sessionDiagnostics";
-import { runtimeStateStore, type RuntimeState } from "../lib/runtimeStateStore";
+import { runTodoSessionSwitchScenario } from "../test-support/todoSessionSwitchScenario";
 
-let passed = 0;
-let failed = 0;
+let passed = 0, failed = 0;
 
 function ok(value: boolean, label: string) {
   if (value) {
@@ -34,9 +33,7 @@ function eq(actual: unknown, expected: unknown, label: string) {
   }
 }
 
-function flushPromises(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
+function flushPromises(): Promise<void> { return new Promise((resolve) => setTimeout(resolve, 0)); }
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -750,45 +747,7 @@ await act(async () => {
 eq(controller?.state.items[0]?.text, "/sessions/fast.jsonl", "a superseded switch cannot paint over the newer transcript");
 eq(sessionPipelineDiagnostics().resumeSwitch?.totalMs, 4, "superseded response cannot overwrite current switch diagnostics");
 
-// The application runtime feed can lag behind a completed navigation RPC.
-// A reused tab must not project the source session's todos onto the target.
-const pausedTodos = [{ content: "Finish session A", status: "in_progress" }];
-const todoSessionA = "/sessions/todo-a.jsonl";
-const todoSessionB = "/sessions/todo-b.jsonl";
-desktopStub.commands.MetaForTab = async () => meta({
-  sessionPath: switchMetaPath,
-  sessionGeneration: 1,
-  canonicalTodos: switchMetaPath === todoSessionA ? pausedTodos : [],
-});
-let runtimeRevision = 0;
-function publishTodoRuntime(sessionPath: string, todos: typeof pausedTodos) {
-  const state: RuntimeState = {
-    schemaVersion: 1, runtimeEpoch: "todo-runtime", activityRevision: 1, revision: ++runtimeRevision,
-    phase: "idle", running: false, turnId: "paused-turn", turnStatus: "interrupted", turnEventSeq: 1,
-    pendingPrompt: false, cancelRequested: false, cancellable: false, backgroundJobs: 0, activity: "",
-    todos,
-  };
-  runtimeStateStore.commit({ epoch: "todo-app", revision: runtimeRevision, topics: [], sessions: [{
-    tabId: "tab-switch", scope: "project", workspaceRoot: "/repo", topicId: "topic-a",
-    sessionPath, sessionGeneration: 1, open: true, remote: false, freshness: "synced", state,
-  }] });
-}
-await act(async () => {
-  await controller?.resumeSession(todoSessionA, "tab-switch").surfaceReady;
-  publishTodoRuntime(todoSessionA, pausedTodos);
-});
-eq(controller?.state.meta?.canonicalTodos?.[0]?.content, "Finish session A", "paused A owns its unfinished todo");
-await act(async () => { await controller?.resumeSession(todoSessionB, "tab-switch").surfaceReady; });
-eq(controller?.state.meta?.canonicalTodos?.length, 0, "B stays empty while A's runtime snapshot is still current in the feed");
-await act(async () => { publishTodoRuntime(todoSessionB, []); });
-await act(async () => { await controller?.resumeSession(todoSessionA, "tab-switch").surfaceReady; });
-eq(controller?.state.meta?.canonicalTodos?.[0]?.content, "Finish session A", "returning to A cannot be cleared by B's delayed empty snapshot");
-await act(async () => { publishTodoRuntime(todoSessionB, []); });
-eq(controller?.state.meta?.canonicalTodos?.[0]?.content, "Finish session A", "late B publication after the return to A cannot erase A's todo");
-await act(async () => { publishTodoRuntime(todoSessionA, [{ content: "Finish session A", status: "completed" }]); });
-eq(controller?.state.meta?.canonicalTodos?.[0]?.status, "completed", "a matching runtime snapshot still publishes live todo progress");
-await act(async () => { publishTodoRuntime(todoSessionA, []); });
-eq(controller?.state.meta?.canonicalTodos?.length, 0, "an authoritative empty list for the same session still clears todos");
+await runTodoSessionSwitchScenario({ controller: () => controller, desktopStub, currentSessionPath: () => switchMetaPath, meta, equal: eq });
 
 await act(async () => {
   switchRoot.unmount();

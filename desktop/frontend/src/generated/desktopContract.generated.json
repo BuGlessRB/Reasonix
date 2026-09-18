@@ -12266,7 +12266,7 @@
     },
     {
       "cancellation": "before-dispatch",
-      "domain": "desktop/remote_tab.go",
+      "domain": "desktop/remote_tab_exact_interactions.go",
       "name": "ResolveRemoteTabPromptExact",
       "owner": "App.ResolveRemoteTabPromptExact",
       "params": [
@@ -12289,7 +12289,7 @@
         "resolver": "App.ResolveRemoteTabPromptExact"
       },
       "sources": [
-        "desktop/remote_tab.go"
+        "desktop/remote_tab_exact_interactions.go"
       ]
     },
     {
@@ -18261,7 +18261,7 @@
     },
     {
       "cancellation": "before-dispatch",
-      "domain": "desktop/remote_tab.go",
+      "domain": "desktop/remote_tab_exact_interactions.go",
       "name": "SubmitRemoteTabExtensionFormExact",
       "owner": "App.SubmitRemoteTabExtensionFormExact",
       "params": [
@@ -18289,7 +18289,7 @@
         "resolver": "App.SubmitRemoteTabExtensionFormExact"
       },
       "sources": [
-        "desktop/remote_tab.go"
+        "desktop/remote_tab_exact_interactions.go"
       ]
     },
     {

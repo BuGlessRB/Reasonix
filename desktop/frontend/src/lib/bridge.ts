@@ -10,7 +10,6 @@ import type {
   DesktopCommandName,
   HistoryWindowPage,
   HistoryWindowRequest,
-  InteractionTargetView,
   LegacyEmptySessionCleanupStatus,
   MarkdownSVGView,
   MessageFieldPage,
@@ -32,11 +31,10 @@ import type {
   SessionRef,
   SessionSelector,
   ComposerTarget,
-  ExtensionFormTarget,
-  PromptAnswerView,
   WorkspaceSessionPage,
   WorkspaceSnapshot,
 } from "../generated/desktopContract.generated";
+import type { ExactInteractionBindings } from "./exactInteractionBindings";
 import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
 import { addBreadcrumb } from "./breadcrumbs";
@@ -236,7 +234,6 @@ interface NativeConfirmRequest {
   cancelLabel: string;
   destructive: boolean;
 }
-
 interface DesktopWindowState {
   width: number;
   height: number;
@@ -246,7 +243,7 @@ interface DesktopWindowState {
 }
 // AppBindings is the hand-written React-to-Go contract. _CheckGeneratedBindings
 // catches generated methods missing here; update this interface and typecheck.
-export interface AppBindings extends SessionExportBindings, SessionLifecycleBindings, ForkTargetsBindings, ToolRecoveryBindings, ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings, TranscriptProtocolBindings, SessionReaderBindings {
+export interface AppBindings extends SessionExportBindings, SessionLifecycleBindings, ForkTargetsBindings, ToolRecoveryBindings, ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings, TranscriptProtocolBindings, SessionReaderBindings, ExactInteractionBindings {
   GetLegacyEmptySessionCleanupStatus(): Promise<LegacyEmptySessionCleanupStatus>;
   RetryLegacyEmptySessionCleanup(): Promise<LegacyEmptySessionCleanupStatus>;
   OpenSessionDraft(workspaceId: string): Promise<SessionDraftView>;
@@ -413,7 +410,6 @@ export interface AppBindings extends SessionExportBindings, SessionLifecycleBind
     action?: string; feedback?: string; content?: Record<string, unknown> | null;
     generation?: number; permissionRevision?: number;
   }): Promise<void>;
-  ResolvePromptForSession?(target: InteractionTargetView, answer: PromptAnswerView): Promise<void>;
   PendingPromptIdentitiesForTab?(tabID: string): Promise<Array<{ promptId: string; turnId: string; runtimeEpoch?: string; kind: string }>>;
   ReplayPendingPromptIdentitiesForTab?(tabID: string): Promise<Array<{ promptId: string; turnId: string; runtimeEpoch?: string; kind: string }>>;
   ReplayPendingPrompts(): Promise<void>;
@@ -558,9 +554,6 @@ export interface AppBindings extends SessionExportBindings, SessionLifecycleBind
   ExtensionActions(tabID: string): Promise<ExtensionActionView[]>;
   InvokeExtensionAction(tabID: string, name: string, args: Record<string, string>): Promise<string>;
   SubmitExtensionForm(tabID: string, pluginID: string, surfaceID: string, values: Record<string, unknown>): Promise<void>;
-  SubmitExtensionFormExact(target: ExtensionFormTarget, values: Record<string, unknown>): Promise<void>;
-  ResolveRemoteTabPromptExact(target: InteractionTargetView, answer: PromptAnswerView): Promise<void>;
-  SubmitRemoteTabExtensionFormExact(target: ExtensionFormTarget, values: Record<string, unknown>): Promise<void>;
   AddMCPServer(input: MCPServerInput): Promise<number>;
   InstallMCPServer(input: MCPServerInput): Promise<MCPInstallResult>;
   UpdateMCPServer(name: string, input: MCPServerInput): Promise<void>;
@@ -704,7 +697,6 @@ export interface AppBindings extends SessionExportBindings, SessionLifecycleBind
   SetAutoPlan(mode: string): Promise<void>;
   SetDefaultToolApprovalMode(mode: string): Promise<void>;
   SetDefaultAutoRecoveryCheckpoint(enabled: boolean): Promise<void>;
-
   RenameProviderConnections(names: string[], displayName: string): Promise<void>;
   SaveProvider(p: ProviderView): Promise<void>;
   SetProviderWebSearch(names: string[], enabled: boolean): Promise<void>;
@@ -901,7 +893,6 @@ export interface AppBindings extends SessionExportBindings, SessionLifecycleBind
 // sites by tsc when components invoke app.<method>(...).
 type AssertNever<T extends never> = T;
 export type _CheckGenToApp = AssertNever<Exclude<DesktopCommandName, keyof AppBindings>>;
-
 // Must match desktop/app.go's eventChannel constant.
 const EVENT_CHANNEL = "agent:event";
 
@@ -3250,9 +3241,7 @@ function makeMockApp(): AppBindings {
             throw new Error(`unsupported prompt kind: ${kind}`);
           });
         },
-        async ResolvePromptForSession(target, answer) {
-          await this.ResolvePromptForTab?.(target.tabId, target.promptId, target.turnId, target.runtimeEpoch, target.kind, answer);
-        },
+        async ResolvePromptForSession(target, answer) { await this.ResolvePromptForTab?.(target.tabId, target.promptId, target.turnId, target.runtimeEpoch, target.kind, answer); },
         async ReplayPendingPrompts() {},
         async ReplayPendingPromptsForTab(_tabID) {},
         async ConfirmAction(req) {
@@ -6018,9 +6007,7 @@ function makeMockApp(): AppBindings {
       return "";
     },
     async SubmitExtensionForm() {},
-    async SubmitExtensionFormExact() {},
-    async ResolveRemoteTabPromptExact() {},
-    async SubmitRemoteTabExtensionFormExact() {},
+    async SubmitExtensionFormExact() {}, async ResolveRemoteTabPromptExact() {}, async SubmitRemoteTabExtensionFormExact() {},
     ...remoteProjects.bindings,
     async CleanRemoteLegacyWorkbenchData() {},
   };
