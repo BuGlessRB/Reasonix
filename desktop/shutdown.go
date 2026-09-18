@@ -327,7 +327,6 @@ func (a *App) shutdownBody(c *desktopShutdownCoordinator, items []desktopShutdow
 	c.runStep("window-state", a.saveWindowStateSync)
 
 	for _, item := range items {
-		item := item
 		c.runStep("session:"+item.tab.ID, func() {
 			item.ctrl.Close()
 			if !a.returnTakeoverLeaseForShutdown(item.tab) {
