@@ -130,14 +130,14 @@ type App struct {
 	// sessionCatalog is a disposable, asynchronously opened projection of
 	// authoritative session sidecars. Project-shell APIs must tolerate nil here:
 	// opening, migration, repair, and corruption recovery never gate the UI.
-	sessionCatalog     atomic.Pointer[sessioncatalog.Catalog]
-	catalogLifecycleMu sync.Mutex
-	catalogCancel      context.CancelFunc
-	catalogDone        chan struct{}
-	catalogRebuildMu   sync.Mutex
-	catalogRebuild     *sessionCatalogRebuildFlight
-	catalogRebuilding  atomic.Bool
-	shuttingDown       atomic.Bool
+	sessionCatalog                           atomic.Pointer[sessioncatalog.Catalog]
+	catalogLifecycleMu                       sync.Mutex
+	catalogCancel                            context.CancelFunc
+	catalogDone, catalogInitialReconcileDone chan struct{}
+	catalogRebuildMu                         sync.Mutex
+	catalogRebuild                           *sessionCatalogRebuildFlight
+	catalogRebuilding                        atomic.Bool
+	shuttingDown                             atomic.Bool
 	// catalogReconcileJobs coalesces both the legacy pre-scan and catalog scan.
 	// Catalog deduplicates its worker; this also prevents callers from
 	// stampeding the otherwise-unbounded pre-scan goroutines.
@@ -326,8 +326,9 @@ type App struct {
 
 	// tabsSaveMu serializes writes to desktop-tabs.json and its fixed .tmp path.
 	tabsSaveMu             sync.Mutex
-	tabsSaveVersion        uint64 // protected by mu; assigned when collecting a snapshot
-	tabsLastWrittenVersion uint64 // protected by tabsSaveMu
+	tabsSaveVersion        uint64                     // protected by mu; assigned when collecting a snapshot
+	tabsLastWrittenVersion uint64                     // protected by tabsSaveMu
+	tabsFileExtra          map[string]json.RawMessage // protected by tabsSaveMu; unknown top-level persistence fields
 
 	forceQuit           atomic.Bool
 	backgroundMaximised atomic.Bool
@@ -723,7 +724,7 @@ func (a *App) restoreOrBuildTabs() {
 	if err := reconcileTopicArchiveMetadataPending(a.deleteTopic); err != nil {
 		slog.Warn("desktop: topic archive metadata reconciliation remains pending")
 	}
-	f := loadTabsFile()
+	f, tabsVersion := a.loadTabsForRestore()
 	_, _ = recoverLegacyProjectSidebarRoots(f)
 	_, _ = config.ApplyUserConfigUpgradesOnStartup(config.UserConfigPath())
 	_, _ = config.MigrateMCPToUserConfigOnUpgrade(desktopMCPMigrationRoots(f))
@@ -739,6 +740,10 @@ func (a *App) restoreOrBuildTabs() {
 			lang = cfg.Language
 		}
 		a.setDesktopLocale(i18n.DetectLanguage(lang))
+	}
+	f, _, restoreCurrent := a.reconcileTabsBeforeRestore(ctx, f, tabsVersion)
+	if !restoreCurrent {
+		return
 	}
 	// Every surviving layout style is single-surface, and a config that failed
 	// to load already took this path when the predicate could still be false.
@@ -785,6 +790,7 @@ func (a *App) restoreOrBuildTabs() {
 			tab.SessionPath = strings.TrimSpace(entry.SessionPath)
 			tab.SessionID = strings.TrimSpace(entry.SessionID)
 			tab.PendingCreateOperationID = strings.TrimSpace(entry.CreateOperationID)
+			tab.persistenceExtra = cloneDesktopJSONFields(entry.extra)
 			tab.ReadOnly = entry.ReadOnly
 			restoreTabPinnedContext(tab, entry.PinnedFiles)
 			tab.Takeover.Spectator = entry.TakeoverSpectator

@@ -26,7 +26,9 @@ func TestCredentialAccessRepairsLegacyCredentialDeny(t *testing.T) {
 }
 
 func TestCredentialAccessRepairsLegacyDenyThroughLinkedHome(t *testing.T) {
-	t.Setenv("TEMP", t.TempDir())
+	tmp := t.TempDir()
+	t.Setenv("TMP", tmp)
+	t.Setenv("TEMP", tmp)
 	realHome := t.TempDir()
 	linkedHome := filepath.Join(t.TempDir(), "reasonix-home")
 	if err := os.Symlink(realHome, linkedHome); err != nil {
@@ -72,7 +74,9 @@ func TestCredentialAccessRepairsLegacyDenyThroughLinkedHome(t *testing.T) {
 
 func testCredentialAccessRepairsLegacyDeny(t *testing.T, operation string) {
 	t.Helper()
-	t.Setenv("TEMP", t.TempDir())
+	tmp := t.TempDir()
+	t.Setenv("TMP", tmp)
+	t.Setenv("TEMP", tmp)
 	home := t.TempDir()
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("ACL_REPAIR_INTEGRATION_KEY", "")
