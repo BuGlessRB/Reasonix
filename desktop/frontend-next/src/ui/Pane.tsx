@@ -14,9 +14,7 @@ import { pairCheckpoints } from "../state/checkpoints";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { ExecutionStore } from "../state/execution";
 import { Transcript } from "./Transcript";
-import { Trajectory } from "./Trajectory";
-import { Graph } from "./Graph";
-import { Timeline } from "./Timeline";
+import { PaneDetail } from "./PaneDetail";
 import { Composer } from "./Composer";
 import { Find } from "./Find";
 import { useFind } from "./usefind";
@@ -32,6 +30,10 @@ import { ABSENT, accountOf, type Wallet } from "./wallet";
 import { swapping } from "./swap";
 import { PaneNav, type PaneView } from "./PaneNav";
 import { BrowserPanel, useBrowserTabs } from "./BrowserPanel";
+
+// Where this window remembers whether the agent's pages sit beside the
+// conversation. Per window, like the panel widths beside it.
+const BROWSER_DOCK = "rx-browser-dock";
 import { useRate } from "./num";
 
 // PaneReport is what the window's own chrome needs from whichever pane has
@@ -106,6 +108,11 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [queue, setQueue] = useState<QueueSnapshot | null>(null);
   const [slots, setSlots] = useState<Record<string, string>>({});
   const pages = useBrowserTabs(port, s.browserTabsMoved);
+  // Watching the agent browse and reading what it says are one activity, so the
+  // pages sit beside the conversation rather than in place of it. Off is a
+  // choice this window remembers; the browser tab still opens them full width.
+  const [dock, setDock] = useState(() => localStorage.getItem(BROWSER_DOCK) !== "off");
+  const docked = dock && pages.length > 0 && tab !== "browser";
   const flow = useRef<HTMLDivElement>(null);
   const startedAt = useRef(0);
   // Elapsed is a clock reading and belongs on the tick. Throughput is not: it
@@ -615,10 +622,17 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         nodes={exec.graph.nodes.length}
         pages={pages.length}
         rows={traj.rows.length}
+        dock={dock}
+        onDock={() => setDock((on) => {
+          localStorage.setItem(BROWSER_DOCK, on ? "off" : "on");
+          return !on;
+        })}
       />
 
       <Find find={find} />
 
+      <div className="pbody" data-dock={docked ? "" : undefined}>
+      <div className="pviews">
       <Transcript
         items={s.items}
         find={find.at}
@@ -653,28 +667,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onKeepHere={onKeepHere}
       />
 
-      {/* Mounted only while it is the tab on screen. Hiding it with an
-          attribute left every row of it being rebuilt on each streamed
-          delta — a second transcript's worth of work, drawn for nobody. */}
-      <div className="scroll" data-pane="line" hidden={tab !== "line"}>
-        {tab === "line" && <Timeline graph={exec.graph} items={s.items} onOpen={toCall} />}
-      </div>
-
-      <div className="scroll" data-pane="traj" hidden={tab !== "traj"}>
-        {tab === "traj" && <Trajectory rows={traj.rows} availability={traj.availability} onSave={(n, c) => port.saveText(n, c)} />}
-      </div>
-
-      <div className="scroll" data-pane="graph" hidden={tab !== "graph"}>
-        {tab === "graph" && (
-          <Graph
-            run={exec}
-            items={s.items}
-            onOpen={toCall}
-          />
-        )}
-      </div>
-
-      <div className="scroll" data-pane="browser" hidden={tab !== "browser"}>{tab === "browser" && <BrowserPanel tabs={pages} shown={visible} />}</div>
+      <PaneDetail view={tab} run={exec} items={s.items} traj={traj} onOpen={toCall} onSave={port.saveText} />
       <div className="scroll" data-pane="task" hidden={tab !== "task"}>
         {tab === "task" && (
           <Task
@@ -693,6 +686,13 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             }}
             onSummary={() => submit(t("汇总当前进度与潜在风险，并列出接下来三步"))}
           />
+        )}
+      </div>
+      </div>
+        {(docked || tab === "browser") && (
+          <div className="scroll" data-pane="browser">
+            <BrowserPanel tabs={pages} shown={visible} />
+          </div>
         )}
       </div>
 

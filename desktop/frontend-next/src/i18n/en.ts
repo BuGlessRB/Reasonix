@@ -124,6 +124,7 @@ export const EN: Record<string, string> = {
   "跳过 {n} 行": "{n} lines skipped",
   "主机": "Host",
   "请求执行权限": "Permission to run",
+  "并排显示浏览器": "Show the browser beside the conversation",
   "这条命令里嵌套或间接地执行了别的命令。自动放行和宽泛的允许规则都无法确认真正会跑的是什么；要么批准这一条，要么切到全部放行。":
     "This command runs another command through nesting or indirection. Auto and broad allow rules cannot tell what would actually run; approve this one, or switch to full access.",
   "这一步会把密码、一次性验证码或银行卡信息输入网站。自动放行、该站点已有的授权和宽泛规则都不能代你回答；要么批准，要么切到全部放行。":

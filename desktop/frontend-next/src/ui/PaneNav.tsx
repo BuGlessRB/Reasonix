@@ -25,7 +25,7 @@ const isDetail = (view: PaneView): view is Detail => (DETAIL as readonly string[
  *  purposes; it does not own them, and it never holds a selection of its own —
  *  a second piece of state saying which detail is open is a second answer to a
  *  question the pane has already answered. */
-export function PaneNav({ view, onPick, done, steps, nodes, rows, pages }: {
+export function PaneNav({ view, onPick, done, steps, nodes, rows, pages, dock, onDock }: {
   view: PaneView;
   onPick: (to: PaneView) => void;
   done: number;
@@ -36,6 +36,9 @@ export function PaneNav({ view, onPick, done, steps, nodes, rows, pages }: {
   rows: number;
   // The agent's open browser pages. The tab exists only while there is one.
   pages: number;
+  // Whether those pages sit beside the conversation, and the switch for it.
+  dock: boolean;
+  onDock: () => void;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const detail = isDetail(view) ? view : null;
@@ -82,6 +85,17 @@ export function PaneNav({ view, onPick, done, steps, nodes, rows, pages }: {
           >
             {name.browser}
             <span className="n">{pages}</span>
+          </button>
+        )}
+        {/* Beside, not instead: watching the agent browse and reading what it
+            says are one activity. Drawn only where there is a page for it. */}
+        {pages > 0 && (
+          <button
+            className="tab dock" data-action="pane.dock" data-value={dock ? "off" : "on"}
+            aria-pressed={dock} title={t("并排显示浏览器")} aria-label={t("并排显示浏览器")}
+            onClick={onDock}
+          >
+            ⿲
           </button>
         )}
       </div>

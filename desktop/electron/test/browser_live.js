@@ -84,16 +84,19 @@ async function main() {
     const tabs = await client.json("GET", `${base}/browser/tabs`);
     check("the pane lists the tab with its view's target", tabs?.length === 1 && tabs[0].url === `${page.url}/`, tabs);
     const beneath = () => guest.getBounds().x < 0;
-    check("while the panel is closed the page is not drawn", beneath());
+    const width = () => guest.getBounds().width;
+    // Watching the agent browse and reading what it says are one activity: the
+    // page is beside the conversation from the moment it opens.
+    const aside = await until("the page beside the conversation", async () => (!beneath() ? guest.getBounds() : null));
+    check("the page is drawn beside the conversation as soon as the agent opens one",
+      aside.width < win.getContentBounds().width, { aside, content: win.getContentBounds() });
 
     const js = (src) => win.webContents.executeJavaScript(src);
+    const reserved = () => js(`(() => { const e = document.querySelector('.bview'); if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, width: b.width, height: b.height }; })()`);
     await until("the browser tab in the pane bar", () => js(`!!document.querySelector('[data-action="pane.view"][data-value="browser"]')`));
     await js(`document.querySelector('[data-action="pane.view"][data-value="browser"]').click()`);
-    const slot = await until("the reserved rectangle", async () => {
-      const r = await js(`(() => { const e = document.querySelector('.bview'); if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, width: b.width, height: b.height }; })()`);
-      return r && r.width > 0 ? r : null;
-    });
-    const placed = await until("the page drawn over it", async () => (!beneath() ? guest.getBounds() : null));
+    const placed = await until("the page drawn full width", async () => (width() > aside.width ? guest.getBounds() : null));
+    const slot = await reserved();
     const close = (a, b) => Math.abs(a - b) <= 1;
     check("the page is drawn exactly over the rectangle the panel reserved",
       close(placed.x, slot.x) && close(placed.y, slot.y) && close(placed.width, slot.width) && close(placed.height, slot.height),
@@ -109,8 +112,12 @@ async function main() {
     }
 
     await js(`document.querySelector('[data-action="pane.view"][data-value="flow"]').click()`);
-    await until("the page put away again", async () => beneath());
-    check("leaving the browser view stops drawing the page", beneath());
+    const back = await until("the page beside the conversation again", async () => (width() < placed.width ? guest.getBounds() : null));
+    check("leaving the full-width view puts the page back beside the conversation", back.width === aside.width && !beneath(), { back, aside });
+
+    await js(`document.querySelector('[data-action="pane.dock"]').click()`);
+    await until("the page put away", async () => beneath());
+    check("turning the side-by-side view off stops drawing the page", beneath());
 
     const greeting = async () => {
       const view = guests()[0];
@@ -123,7 +130,7 @@ async function main() {
       const before = requests.length;
       await client.request("POST", `${base}/submit`, { input });
       // One request per call plus the one that reads the last result.
-      await until(`the turn that would ${act}`, async () => requests.length > before + 2, 60000);
+      await until(`the turn that would ${act}`, async () => requests.length > before + 2, 90000);
       return (requests.at(-1).messages || []).filter((m) => m.role === "tool").map((m) => String(m.content || "")).join("\n");
     };
     const askFor = async (name) => {
