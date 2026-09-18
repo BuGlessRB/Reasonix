@@ -37,7 +37,15 @@ const TOOLS: [string, string][] = [
   ["glob", "查找文件"],
 ];
 
-const TOOL_LABEL = new Map(TOOLS);
+// A grant a person gave an approval card lands here too, under the group the
+// gate files it in. They are not offered above, because a rule typed for one of
+// these is only honoured when it names its subject exactly.
+const GRANTED: [string, string][] = [
+  ["Computer", "操作应用（逐个应用授权）"],
+  ["Browser", "浏览器（逐个来源授权）"],
+];
+
+const TOOL_LABEL = new Map([...TOOLS, ...GRANTED]);
 
 interface Recipe {
   id: string;
@@ -86,6 +94,8 @@ const MATCHING: Record<string, string> = {
   grep: "比对的是搜索式，而非路径",
   glob: "比对的是搜索式，而非路径",
   web_fetch: "比对的是网址",
+  Computer: "比对应用 id，放行必须写全；通配符只拦不放",
+  Browser: "比对页面来源（协议://主机:端口）",
 };
 const pathMatching = "按路径匹配，* 能跨过 /";
 
