@@ -39,6 +39,7 @@ function browsingModel(pageURL) {
     if (script.act === "greet") return greet(["李雷", "韩梅梅", "小明"][script.turn - 1]);
     // The tab is named: by now the page has opened others, and what this reads
     // has to be the one the checks hold a view of.
+    if (script.act === "shot") return { name: "browser_read", arguments: { tab: "t1", what: "screenshot" } };
     if (script.act === "network") {
       return script.calls === 2
         ? { name: "browser_act", arguments: { tab: "t1", steps: [{ action: "resize", width: 390, height: 844 }] } }
@@ -175,6 +176,13 @@ async function main() {
 
     // The viewport and the request list are the browser's own state, relayed
     // over this window's debugger rather than a browser's own port.
+    // The picture a call took is the one thing a person watching cannot get any
+    // other way, and it reached the model and stopped there until now.
+    await turn("shot", "take a picture of the page");
+    const drawn = await until("the screenshot in the transcript", async () =>
+      win.webContents.executeJavaScript('document.querySelectorAll(".tshot img").length'), 20000).catch(() => 0);
+    check("the window draws what the agent was shown", drawn >= 1, drawn);
+
     const observed = await turn("network", "lay the page out at phone width, then say what it requested");
     const laidOut = await guest.webContents.executeJavaScript("[innerWidth, innerHeight]");
     check("the page is laid out in the viewport the agent asked for", laidOut[0] === 390 && laidOut[1] === 844, laidOut);
