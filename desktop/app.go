@@ -131,14 +131,16 @@ type App struct {
 	// sessionCatalog is a disposable, asynchronously opened projection of
 	// authoritative session sidecars. Project-shell APIs must tolerate nil here:
 	// opening, migration, repair, and corruption recovery never gate the UI.
-	sessionCatalog     atomic.Pointer[sessioncatalog.Catalog]
-	catalogLifecycleMu sync.Mutex
-	catalogCancel      context.CancelFunc
-	catalogDone        chan struct{}
-	catalogRebuildMu   sync.Mutex
-	catalogRebuild     *sessionCatalogRebuildFlight
-	catalogRebuilding  atomic.Bool
-	shuttingDown       atomic.Bool
+	sessionCatalog      atomic.Pointer[sessioncatalog.Catalog]
+	catalogLifecycleMu  sync.Mutex
+	catalogCancel       context.CancelFunc
+	catalogDone         chan struct{}
+	catalogRebuildMu    sync.Mutex
+	catalogRebuild      *sessionCatalogRebuildFlight
+	catalogRebuilding   atomic.Bool
+	shuttingDown        atomic.Bool
+	shutdownMu          sync.Mutex
+	shutdownCoordinator *desktopShutdownCoordinator
 	// catalogReconcileJobs coalesces both the legacy pre-scan and catalog scan.
 	// Catalog deduplicates its worker; this also prevents callers from
 	// stampeding the otherwise-unbounded pre-scan goroutines.
@@ -890,14 +892,11 @@ func (a *App) snapshotAllTabs() {
 }
 
 // shutdown snapshots all tabs, saves the final window geometry, and closes tabs.
-func (a *App) shutdown(context.Context) {
-	// Freeze publication, then cancel off-barrier history, catalog, and plugin
-	// work so normal quit never waits for background I/O.
-	a.shuttingDown.Store(true)
-	a.cancelSessionExports()
-	a.cancelAllTabBuilds()
-	a.stopSessionCatalog(250 * time.Millisecond)
-	completeDesktopShutdown(a.lifecycle.tracker, a.shutdownBody)
+func (a *App) shutdown(ctx context.Context) {
+	_, _ = a.requestShutdown(ctx, shutdownRequest{
+		RequestID: newDesktopLifecycleRunID(),
+		Reason:    shutdownReasonUserQuit,
+	})
 }
 
 // domReady is called (via the shell's DOMReady hook) after the renderer

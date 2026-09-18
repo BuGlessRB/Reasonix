@@ -71,6 +71,7 @@ export type CrashPayload = {
   // It is deliberately restricted to build/view/breadcrumb categories and never
   // contains breadcrumb messages, tab IDs, paths, or user content.
   fingerprintHint?: string;
+  errorFamily?: string;
   buildCommit: string;
   channel: string;
   language: string;
@@ -90,7 +91,6 @@ type LongTaskSample = {
   durationMs: number;
   attribution?: string;
 };
-
 
 type BrowserPerformanceMemory = {
   usedJSHeapSize?: number;
@@ -132,7 +132,6 @@ function cancelCapture(requestId = activeCaptureId): void {
   if (!requestId || activeCaptureId !== requestId) return;
   void desktopHost().native.cancelRendererProfile?.(requestId).catch(() => {});
 }
-
 
 const PERF_REPORTED_STORAGE_KEY = "reasonix:perf-reported";
 
@@ -209,7 +208,12 @@ export function normalizeCrashError(err: unknown): NormalizedError {
     return { errorType: "string", errorMessage: err };
   }
   if (err && typeof err === "object") {
-    const obj = err as { name?: unknown; message?: unknown; stack?: unknown; constructor?: { name?: string } };
+    const obj = err as {
+      name?: unknown;
+      message?: unknown;
+      stack?: unknown;
+      constructor?: { name?: string };
+    };
     const errorType = typeof obj.name === "string" && obj.name ? obj.name : obj.constructor?.name || "object";
     const errorMessage =
       typeof obj.message === "string" && obj.message ? obj.message : clip(safeStringify(err), 1000);
@@ -255,6 +259,12 @@ function formatText(label: string, normalized: NormalizedError, extra?: string):
   return [`[${label}]`, detail, extra?.trim(), crumbs && `--- breadcrumbs ---\n${crumbs}`, `build ${buildCommit}`]
     .filter(Boolean)
     .join("\n\n");
+}
+
+export function crashErrorFamily(errorMessage: string): string | undefined {
+  return /maximum update depth exceeded|too many re-renders/i.test(errorMessage)
+    ? "react.maximum_update_depth"
+    : undefined;
 }
 
 function readHeapSnapshot(): PerformanceSnapshot["jsHeap"] | undefined {
@@ -334,7 +344,6 @@ function performanceSnapshot(reason: string, currentLagMs = 0): PerformanceSnaps
   };
 }
 
-
 export function performanceLabelForReason(reason: string): string {
   const normalized = reason.trim().toLowerCase();
   if (normalized.startsWith("event loop lag")) return "performance.lag";
@@ -408,7 +417,6 @@ export function formatLongTaskAttribution(entryName?: string, attribution?: Task
   return parts.join(" ");
 }
 
-
 export function shouldRecordEventLoopLagSample(
   visibilityHidden: boolean,
   msSinceVisible: number,
@@ -466,6 +474,7 @@ export function buildCrashPayload(label: string, err: unknown, extra?: string): 
     message: formatText(label, normalized, extra),
     errorType: normalized.errorType,
     errorMessage: normalized.errorMessage,
+    errorFamily: crashErrorFamily(normalized.errorMessage),
     stack: normalized.stack,
     componentStack: extra?.trim() || undefined,
     topFrame: topFrameFromStack(normalized.stack || extra),

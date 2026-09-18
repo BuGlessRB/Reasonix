@@ -19672,7 +19672,7 @@
     "topic:activation",
     "updater:progress"
   ],
-  "protocolVersion": 10,
+  "protocolVersion": 11,
   "types": {
     "agent.ToolRecoveryStatistics": {
       "fields": [

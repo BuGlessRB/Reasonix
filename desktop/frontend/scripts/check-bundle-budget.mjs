@@ -464,6 +464,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Reasoning capability recovery copy moves the same-toolchain local build from
 // 2064327 B to 2064614 B (+287 B, 0.014%). The stable build with a full source
 // identity measures 2064746 B; retain the next one-decimal ceiling.
-const rawInitialBudgetKiB = 2_016.4;
+// The React error-family field adds 177 B to the same production build. The
+// measured 2064923 B payload keeps the existing gzip, CSS, and chunk limits.
+const rawInitialBudgetKiB = 2_016.6;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

@@ -2,6 +2,7 @@
 import {
   groupFingerprintFromPath,
   isDevelopmentReport,
+  reportSubjectIdentity,
   effectiveGroupSeverity,
   isDevelopmentGroup,
   isKnownNonCrashDiagnostic,
@@ -14,6 +15,8 @@ import {
   severityForReport,
   maxSeverity,
   nativeWebRuntimeFingerprintBasis,
+  compareReleaseVersions,
+  regressionDecisionForReport,
   telemetryTableNames,
 } from "./index";
 import type { Env } from "./env";
@@ -205,6 +208,29 @@ describe("telemetry deployment order compatibility", () => {
 });
 
 describe("diagnostic classification", () => {
+  it("only confirms a regression at or after the resolved release", () => {
+    expect(compareReleaseVersions("v1.38.3", "v1.38.4")).toBeLessThan(0);
+    expect(compareReleaseVersions("v1.38.4", "v1.38.4")).toBe(0);
+    expect(compareReleaseVersions("v1.39.0", "v1.38.4")).toBeGreaterThan(0);
+    expect(compareReleaseVersions("dev", "v1.38.4")).toBeNull();
+  });
+
+  it("classifies resolved-group reports by fixed version and applicability", () => {
+    const resolved = {
+      status: "resolved",
+      fixedIn: "v1.38.4",
+      resolutionPlatform: "windows",
+      resolutionRuntime: "webview2",
+      os: "windows",
+      runtime: "webview2",
+    };
+
+    expect(regressionDecisionForReport({ ...resolved, subjectVersion: "v1.38.3" })).toBe("historical");
+    expect(regressionDecisionForReport({ ...resolved, subjectVersion: "v1.38.4" })).toBe("confirmed");
+    expect(regressionDecisionForReport({ ...resolved, subjectVersion: "dev" })).toBe("suspected");
+    expect(regressionDecisionForReport({ ...resolved, subjectVersion: "v1.39.0", os: "linux" })).toBe("none");
+    expect(regressionDecisionForReport({ ...resolved, subjectVersion: "v1.39.0", runtime: "webkitgtk" })).toBe("none");
+  });
 
   it("keeps native runtime fingerprints independent from recovery outcomes", () => {
     const failure = { engine: "webview2", kind: "render_process_exited", reason: "crashed", exitCode: 1 };
@@ -234,6 +260,19 @@ describe("diagnostic classification", () => {
     expect(isDevelopmentReport({ ...base, version: "dev-32bit" })).toBe(true);
     expect(isDevelopmentReport({ ...base, version: "v1.40.0", channel: "dev" })).toBe(true);
     expect(severityForReport({ ...base, version: "dev" })).toBe("low");
+  });
+
+  it("classifies relayed reports by the failing process identity", () => {
+    const identity = reportSubjectIdentity({
+      version: "v1.40.0",
+      channel: "stable",
+      diagnostics: {
+        subjectVersion: "dev-32bit",
+        subjectChannel: "test",
+      },
+    });
+    expect(identity).toEqual({ version: "dev-32bit", channel: "test" });
+    expect(isDevelopmentReport({ ...base, ...identity })).toBe(true);
   });
 
   it("downranks browser notices and recovered React renders", () => {
@@ -524,6 +563,8 @@ describe("diagnostics dashboard lanes", () => {
     expect(html).toContain("窗口事件");
     expect(html).toContain("身份覆盖率");
     expect(html).toContain("累计");
+    expect(html).toContain("最新正式版 v1.36.0");
+    expect(html).toContain("version=v1.36.0");
     expect(html).toContain('aria-label="A long lifecycle failure summary that should remain available to assistive technology"');
     expect(html).toContain("status-open");
     expect(html).toContain("status-resolved");

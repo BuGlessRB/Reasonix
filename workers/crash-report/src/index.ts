@@ -489,6 +489,16 @@ export function isDevelopmentReport(input: SeverityInput): boolean {
   return channel === "dev" || channel === "test" || input.version?.trim().toLowerCase().startsWith("dev") === true;
 }
 
+export function reportSubjectIdentity(report: Pick<ReportPayload, "version" | "channel" | "diagnostics">): {
+  version: string;
+  channel: string;
+} {
+  return {
+    version: report.diagnostics?.subjectVersion || report.version,
+    channel: report.diagnostics?.subjectChannel || report.channel || "",
+  };
+}
+
 export function namespaceReportFingerprint(hash: string, development: boolean): string {
   return development ? `${DEVELOPMENT_FINGERPRINT_PREFIX}${hash}` : hash;
 }
@@ -614,13 +624,13 @@ async function prepareCrashEvent(r: ReportPayload, keepD1Sample: boolean): Promi
       : normalizeForFingerprint(report.kind, message);
   const severityInput = {
     kind: report.kind,
-    version: report.version,
+    version: reportSubjectIdentity(report).version,
     source: report.source ?? "legacy",
     label: report.label ?? "",
     errorType: report.errorType ?? "",
     errorMessage,
     topFrame,
-    channel: report.channel ?? "",
+    channel: reportSubjectIdentity(report).channel,
     recovery: webRuntime?.recovery,
   };
   const development = isDevelopmentReport(severityInput);
@@ -634,8 +644,12 @@ async function prepareCrashEvent(r: ReportPayload, keepD1Sample: boolean): Promi
 }
 
 async function projectCrashEvent(env: Env, event: StoredCrashEvent): Promise<void> {
+  const existingEvent = await env.DB.prepare("SELECT event_id FROM report_events WHERE event_id = ?1")
+    .bind(event.eventId)
+    .first<{ event_id: string }>();
+  if (existingEvent) return;
   const firebaseDelivery = crashStorageMode(env) !== "d1";
-  if (firebaseDelivery && await firebaseProjectionExists(env, event.eventId)) {
+  if (firebaseDelivery && (await firebaseProjectionExists(env, event.eventId))) {
     await env.DB.prepare(
       "UPDATE firebase_crash_outbox SET state = 'projected', updated_at = ?2 WHERE event_id = ?1",
     ).bind(event.eventId, new Date().toISOString()).run();
@@ -650,30 +664,53 @@ async function projectCrashEvent(env: Env, event: StoredCrashEvent): Promise<voi
   const source = r.source ?? "legacy";
   const label = r.label ?? "";
   const errorType = r.errorType ?? "";
-  const buildCommit = r.buildCommit ?? "";
+  const observerBuildCommit = r.buildCommit ?? "";
   const channel = r.channel ?? "";
+  const subjectIdentity = reportSubjectIdentity(r);
+  const subjectVersion = subjectIdentity.version;
+  const subjectChannel = subjectIdentity.channel;
+  const buildCommit = r.diagnostics?.subjectBuildCommit || observerBuildCommit;
   const severity = severityForReport({
     kind: r.kind,
-    version: r.version,
+    version: subjectVersion,
     source,
     label,
     errorType,
     errorMessage,
     topFrame,
-    channel,
+    channel: subjectChannel,
     recovery: webRuntime?.recovery,
   });
-  const prior = await env.DB.prepare("SELECT status FROM groups WHERE fingerprint = ?1")
+  const prior = await env.DB.prepare(
+    "SELECT status, resolved_in, resolution_platform, resolution_runtime FROM groups WHERE fingerprint = ?1",
+  )
     .bind(event.fingerprint)
-    .first<{ status: string }>();
-  const regressedAt = prior?.status === "resolved" ? event.receivedAt : "";
+    .first<{
+      status: string;
+      resolved_in: string;
+      resolution_platform: string;
+      resolution_runtime: string;
+    }>();
+  const runtime = webRuntime?.engine ?? "";
+  const regressionDecision = regressionDecisionForReport({
+    status: prior?.status,
+    fixedIn: prior?.resolved_in,
+    resolutionPlatform: prior?.resolution_platform,
+    resolutionRuntime: prior?.resolution_runtime,
+    subjectVersion,
+    os: r.os,
+    runtime,
+  });
+  const regressedAt = regressionDecision === "confirmed" ? event.receivedAt : "";
   const groupWrite = env.DB.prepare(
     `INSERT INTO groups (
        fingerprint, kind, count, first_seen, last_seen, first_version, last_version,
        status, title, source, label, error_type, top_frame, severity,
-       last_os, last_arch, last_build_commit, last_channel, last_sample_at, regressed_at
+       last_os, last_arch, last_build_commit, last_channel, last_sample_at,
+       regressed_at, regression_review, last_category
      )
-     VALUES (?1, ?2, 1, ?3, ?3, ?4, ?4, 'open', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?3, ?15)
+     VALUES (?1, ?2, 1, ?3, ?3, ?4, ?4, 'open', ?5, ?6, ?7, ?8, ?9, ?10,
+       ?11, ?12, ?13, ?14, ?3, ?15, '', ?17)
      ON CONFLICT (fingerprint) DO UPDATE SET
        kind = CASE
          WHEN severity = 'critical' THEN kind
@@ -689,30 +726,85 @@ async function projectCrashEvent(env: Env, event: StoredCrashEvent): Promise<voi
            THEN ?10 ELSE severity END,
        last_os = ?11, last_arch = ?12, last_build_commit = ?13, last_channel = ?14,
        last_sample_at = ?3,
-       status = CASE WHEN status = 'resolved' THEN 'open' ELSE status END,
-       regressed_at = CASE WHEN status = 'resolved' THEN ?3 ELSE regressed_at END`,
+       status = CASE WHEN status = 'resolved' AND ?16 = 'confirmed' THEN 'open' ELSE status END,
+       regressed_at = CASE WHEN status = 'resolved' AND ?16 = 'confirmed' THEN ?3 ELSE regressed_at END,
+       regression_review = CASE
+         WHEN status = 'resolved' AND ?16 = 'suspected' THEN 'suspected'
+         WHEN ?16 = 'confirmed' THEN ''
+         ELSE regression_review END,
+       last_category = ?17`,
   ).bind(
-    event.fingerprint, r.kind, event.receivedAt, r.version, crashTitle(message), source,
-    label, errorType, topFrame, severity, r.os, r.arch, buildCommit, channel, regressedAt,
+    event.fingerprint, r.kind, event.receivedAt, subjectVersion, crashTitle(message), source,
+    label, errorType, topFrame, severity, r.os, r.arch, buildCommit, subjectChannel,
+    regressedAt, regressionDecision, r.diagnostics?.category ?? "",
   );
-  const statements: D1PreparedStatement[] = [groupWrite];
+  const statements: D1PreparedStatement[] = [
+    env.DB.prepare(
+      "INSERT INTO report_events (event_id, incident_id, fingerprint, received_at, projected_at) VALUES (?1, ?2, ?3, ?4, ?4)",
+    ).bind(event.eventId, r.diagnostics?.incidentId ?? "", event.fingerprint, event.receivedAt),
+    env.DB.prepare(
+      `INSERT INTO audit_log (at, actor_id, actor_email, action, target, detail)
+       SELECT ?1, NULL, 'system@reasonix.local', 'automatic_regression', ?2, ?3
+       FROM groups
+       WHERE fingerprint = ?4 AND status = 'resolved' AND ?5 = 'confirmed'`,
+    ).bind(
+      event.receivedAt,
+      event.fingerprint.slice(0, 8),
+      JSON.stringify({
+        subjectVersion,
+        fixedIn: prior?.resolved_in ?? "",
+        platform: r.os,
+        runtime,
+      }),
+      event.fingerprint,
+      regressionDecision,
+    ),
+    groupWrite,
+  ];
   if (event.keepD1Sample) {
     statements.push(env.DB.prepare(
       `INSERT INTO reports (
          fingerprint, kind, version, os, arch, message, device, created_at,
-         source, label, error_type, error_message, top_frame, build_commit, channel,
-         language, view, breadcrumbs, component_stack, stack, occurred_at, webview2, web_runtime
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)`,
+         source, label, error_type, error_message, error_family, top_frame, build_commit, channel,
+         language, view, breadcrumbs, component_stack, stack, occurred_at, webview2, web_runtime,
+         event_id, incident_id, diagnostics
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
+         ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)`,
     ).bind(
-      event.fingerprint, r.kind, r.version, r.os, r.arch, message,
-      JSON.stringify(r.device ?? {}), event.receivedAt, source, label, errorType, errorMessage,
-      topFrame, buildCommit, channel, r.language ?? "", r.view ?? "",
+      event.fingerprint, r.kind, subjectVersion, r.os, r.arch, message,
+      JSON.stringify(r.device ?? {}), event.receivedAt, source, label, errorType, errorMessage, r.errorFamily ?? "",
+      topFrame, buildCommit, subjectChannel, r.language ?? "", r.view ?? "",
       JSON.stringify(r.breadcrumbs ?? []), r.componentStack ?? "", r.stack ?? "",
       r.occurredAt ?? "", webview2 ? JSON.stringify(webview2) : "",
-      webRuntime ? JSON.stringify(webRuntime) : "",
+      webRuntime ? JSON.stringify(webRuntime) : "", event.eventId,
+      r.diagnostics?.incidentId ?? "", r.diagnostics ? JSON.stringify(r.diagnostics) : "",
     ));
   }
   statements.push(...reportAggregateStatements(env.DB, r, event.fingerprint, channel, webRuntime));
+  statements.push(
+    env.DB.prepare(
+      `INSERT INTO report_attribution_daily (
+       date, fingerprint, subject_version, observer_version, subject_channel, observer_channel, category, evidence, events
+     ) VALUES (date('now'), ?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)
+     ON CONFLICT (date, fingerprint, subject_version, observer_version, subject_channel, observer_channel, category, evidence)
+     DO UPDATE SET events = events + 1`,
+    ).bind(
+      event.fingerprint,
+      subjectVersion,
+      r.diagnostics?.observerVersion || r.version,
+      subjectChannel,
+      channel,
+      r.diagnostics?.category ?? "",
+      r.diagnostics?.evidence ?? "",
+    ),
+  );
+  if (r.diagnostics?.incidentId) {
+    statements.push(
+      env.DB.prepare(
+        "INSERT OR IGNORE INTO report_incidents (date, fingerprint, incident_id, subject_version) VALUES (date('now'), ?1, ?2, ?3)",
+      ).bind(event.fingerprint, r.diagnostics.incidentId, subjectVersion),
+    );
+  }
   if (event.keepD1Sample) {
     statements.push(env.DB.prepare(
       `DELETE FROM reports WHERE fingerprint = ?1 AND id NOT IN (
@@ -876,6 +968,9 @@ const GroupAction = z.object({
   status: z.enum(["open", "resolved", "ignored"]).optional(),
   note: z.string().max(500).optional(),
   resolvedIn: z.string().max(64).optional(),
+  resolutionPlatform: z.string().max(32).optional(),
+  resolutionRuntime: z.string().max(32).optional(),
+  resolutionBasis: z.string().max(500).optional(),
   severity: z.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
@@ -905,6 +1000,33 @@ function parseReleaseVersion(version: string): ParsedVersion | null {
     minor: Number(m[2]),
     patch: Number(m[3]),
   };
+}
+
+export function compareReleaseVersions(subject: string, fixedIn: string): number | null {
+  const a = parseReleaseVersion(subject);
+  const b = parseReleaseVersion(fixedIn);
+  if (!a || !b) return null;
+  return a.major - b.major || a.minor - b.minor || a.patch - b.patch;
+}
+
+export type RegressionDecision = "none" | "historical" | "suspected" | "confirmed";
+
+export function regressionDecisionForReport(input: {
+  status?: string;
+  fixedIn?: string;
+  resolutionPlatform?: string;
+  resolutionRuntime?: string;
+  subjectVersion: string;
+  os: string;
+  runtime: string;
+}): RegressionDecision {
+  if (input.status !== "resolved") return "none";
+  if (input.resolutionPlatform && input.resolutionPlatform !== input.os) return "none";
+  if (input.resolutionRuntime && input.resolutionRuntime !== input.runtime) return "none";
+
+  const comparison = compareReleaseVersions(input.subjectVersion, input.fixedIn ?? "");
+  if (comparison === null) return "suspected";
+  return comparison < 0 ? "historical" : "confirmed";
 }
 
 export function newestReleaseVersion(versions: string[]): string {
@@ -1064,6 +1186,7 @@ async function handleStats(request: Request, env: Env, user: User, activeModule:
     failureKinds: [], failureReasons: [], exitCodes: [], recoveries: [], gpuStates: [],
   };
   let installationLinkedSince = "";
+  let structuredAttributionSince = "";
   let overview: OverviewCounts = {
     latestAdoptionPct: null,
     openReports: 0,
@@ -1092,11 +1215,12 @@ async function handleStats(request: Request, env: Env, user: User, activeModule:
     overview = overviewR;
   } else if (activeModule === "diagnostics") {
     latestVersion = await latestObservedVersion(env, "desktop");
-    const [crashesR, sourcesR, facets, linkedSince] = await Promise.all([
+    const [crashesR, sourcesR, facets, linkedSince, attributionSince] = await Promise.all([
       crashGroups(env, filters, latestVersion, statsQueryObserver("/stats/diagnostics")),
       bars(`SELECT source AS label, COUNT(*) AS users FROM groups WHERE ${diagnosticWindowWhere(days)} GROUP BY source ORDER BY users DESC`),
       loadDiagnosticFacets(env, days, statsQueryObserver("/stats/diagnostics")),
       env.DB.prepare("SELECT value FROM diagnostics_meta WHERE key = 'installation_linked_since'").first<{ value: string }>(),
+      env.DB.prepare("SELECT value FROM diagnostics_meta WHERE key = 'structured_attribution_since'").first<{ value: string }>(),
     ]);
     crashes = crashesR.results;
     sources = sourcesR;
@@ -1104,6 +1228,7 @@ async function handleStats(request: Request, env: Env, user: User, activeModule:
     platforms = facets.platforms;
     diagnosticFacets = facets;
     installationLinkedSince = linkedSince?.value ?? "";
+    structuredAttributionSince = attributionSince?.value ?? "";
     if (crashStorageMode(env) !== "d1") firebaseStorage = await firebaseStorageSummary(env);
   } else if (activeModule === "preferences") {
     metrics = await metricRows(env, days, surface);
@@ -1119,7 +1244,8 @@ async function handleStats(request: Request, env: Env, user: User, activeModule:
   return html(
     renderStats(
       { daily, versions, platforms, crashes, metrics, previousMetrics, sources, diagnosticFacets,
-        installationLinkedSince, overview, latestVersion, filters, firebaseStorage },
+        installationLinkedSince,
+        structuredAttributionSince, overview, latestVersion, filters, firebaseStorage },
       user,
       activeModule,
     ),
@@ -1208,6 +1334,9 @@ async function handleGroupAction(request: Request, env: Env, admin: User, finger
           env.DB.prepare("DELETE FROM report_daily WHERE fingerprint = ?1").bind(fingerprint),
           env.DB.prepare("DELETE FROM report_installations WHERE fingerprint = ?1").bind(fingerprint),
           env.DB.prepare("DELETE FROM report_event_dimensions WHERE fingerprint = ?1").bind(fingerprint),
+          env.DB.prepare("DELETE FROM report_events WHERE fingerprint = ?1").bind(fingerprint),
+          env.DB.prepare("DELETE FROM report_attribution_daily WHERE fingerprint = ?1").bind(fingerprint),
+          env.DB.prepare("DELETE FROM report_incidents WHERE fingerprint = ?1").bind(fingerprint),
           env.DB.prepare("DELETE FROM firebase_crash_outbox WHERE fingerprint = ?1").bind(fingerprint),
           env.DB.prepare("DELETE FROM groups WHERE fingerprint = ?1").bind(fingerprint),
         ]);
@@ -1234,10 +1363,22 @@ async function handleGroupAction(request: Request, env: Env, admin: User, finger
     return redirect(`/stats/group/${fingerprint}`);
   }
   if (a.action === "resolution") {
-    await env.DB.prepare("UPDATE groups SET resolved_in = ?1 WHERE fingerprint = ?2")
-      .bind(a.resolvedIn ?? "", fingerprint)
+    await env.DB.prepare(
+      "UPDATE groups SET resolved_in = ?1, resolution_platform = ?3, resolution_runtime = ?4, resolution_basis = ?5 WHERE fingerprint = ?2",
+    )
+      .bind(a.resolvedIn ?? "", fingerprint, a.resolutionPlatform ?? "", a.resolutionRuntime ?? "", a.resolutionBasis ?? "")
       .run();
-    await logAction(env, admin, "set_resolved_in", fingerprint.slice(0, 8), a.resolvedIn ?? "");
+    await logAction(
+      env,
+      admin,
+      "set_resolution", fingerprint.slice(0, 8),
+      JSON.stringify({
+        version: a.resolvedIn ?? "",
+        platform: a.resolutionPlatform ?? "",
+        runtime: a.resolutionRuntime ?? "",
+        basis: a.resolutionBasis ?? "",
+      }),
+    );
     return redirect(`/stats/group/${fingerprint}`);
   }
   if (a.action === "severity") {
@@ -1402,6 +1543,9 @@ const RETENTION = [
   { table: "report_daily", keepDays: 30 },
   { table: "report_installations", keepDays: 30 },
   { table: "report_event_dimensions", keepDays: 30 },
+  { table: "report_events", keepDays: 90, dateColumn: "received_at" },
+  { table: "report_attribution_daily", keepDays: 30 },
+  { table: "report_incidents", keepDays: 30 },
   { table: "pings", keepDays: 30 },
   { table: "metrics", keepDays: 60 },
   { table: "cli_pings", keepDays: 30 },
@@ -1507,7 +1651,12 @@ async function runIngestSentinel(env: Env): Promise<void> {
     const openCount = Number(row?.open_count ?? 0);
     const previous = await env.DB.prepare(
       "SELECT day, ping_count, open_count, checked_at FROM ingest_sentinel_state WHERE id = 1",
-    ).first<{ day: string; ping_count: number; open_count: number; checked_at: string }>();
+    ).first<{
+      day: string;
+      ping_count: number;
+      open_count: number;
+      checked_at: string;
+    }>();
     if (!pingCount) {
       problems.push("no launch pings recorded today (UTC)");
     } else if (
@@ -1542,16 +1691,17 @@ async function purgeExpiredStatsRows(env: Env): Promise<void> {
   } catch (err) {
     console.error("retention: CLI telemetry schema unavailable", err);
   }
-  for (const { table, keepDays } of RETENTION) {
+  for (const { table, keepDays, ...options } of RETENTION) {
     // Keep exactly the newest `keepDays` dates: today plus keepDays-1 back,
     // matching the `date >= date('now', '-{keepDays-1} day')` reads.
     const cutoff = `-${keepDays - 1} day`;
+    const dateColumn = "dateColumn" in options ? options.dateColumn : "date";
     let purged = 0;
     try {
       for (let i = 0; i < RETENTION_MAX_CHUNKS; i++) {
         const res = await env.DB.prepare(
           `DELETE FROM ${table} WHERE rowid IN (
-             SELECT rowid FROM ${table} WHERE date < date('now', ?1) LIMIT ${RETENTION_CHUNK_ROWS}
+             SELECT rowid FROM ${table} WHERE date(${dateColumn}) < date('now', ?1) LIMIT ${RETENTION_CHUNK_ROWS}
            )`,
         )
           .bind(cutoff)

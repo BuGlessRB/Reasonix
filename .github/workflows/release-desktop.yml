@@ -545,7 +545,7 @@ jobs:
             desktop/build/sourcemaps/${{ matrix.name }}
             desktop/frontend/sourcemaps
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
 
       - name: Bind manual Windows payload and rebuild packages
         if: runner.os == 'Windows' && inputs.desktop_manual_only
