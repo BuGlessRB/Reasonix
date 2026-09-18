@@ -32,10 +32,12 @@ func todoStateLine(index int, t evidence.TodoItem) string {
 
 // withTodoIdentityTail appends the host's task state when the request cannot
 // already read it. Owed is recomputed per request from canonical state, never
-// from a record of what an earlier request carried.
+// from a record of what an earlier request carried. A list with every item
+// complete owes nothing: the tail exists so a sign-off can cite an id, and that
+// plan has none left — carried into the next task it reads as work outstanding.
 func (a *Agent) withTodoIdentityTail(visible []provider.Message) []provider.Message {
 	todos := a.CanonicalTodoState()
-	if len(evidence.TodoStepIDs(todos)) == 0 || todoStateVisible(visible, todos) {
+	if len(evidence.TodoStepIDs(todos)) == 0 || len(evidence.IncompleteTodos(todos)) == 0 || todoStateVisible(visible, todos) {
 		return visible
 	}
 	return append(visible, provider.Message{Role: provider.RoleUser, Content: todoIdentityNote(todos), Derived: true})

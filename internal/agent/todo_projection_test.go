@@ -190,3 +190,28 @@ func TestRealFoldLeavesTheStepIDsReadable(t *testing.T) {
 		t.Fatal("the frozen body carries host step state; it is history, not host state")
 	}
 }
+
+// The tail exists so a sign-off can cite an id. A plan whose every item is
+// complete has none left, and the host has already told the turn not to open
+// new work under it — carried into the next task it reads as work outstanding,
+// which is what a real session spent a round reasoning about.
+func TestAFinishedTaskListIsNotProjectedIntoTheNextTask(t *testing.T) {
+	a := &Agent{}
+	a.setTodoState([]evidence.TodoItem{
+		{StepID: "s1", Content: "look", Status: "completed"},
+		{StepID: "s2", Content: "answer", Status: "completed"},
+	})
+	asked := []provider.Message{{Role: provider.RoleUser, Content: "now something else"}}
+	if got := a.withTodoIdentityTail(asked); len(got) != len(asked) {
+		t.Fatalf("a finished list was projected onto the next task: %+v", got[len(got)-1].Content)
+	}
+
+	a.setTodoState([]evidence.TodoItem{
+		{StepID: "s1", Content: "look", Status: "completed"},
+		{StepID: "s2", Content: "answer", Status: "in_progress"},
+	})
+	got := a.withTodoIdentityTail(asked)
+	if len(got) != len(asked)+1 || !strings.Contains(got[len(got)-1].Content, "[s2]") {
+		t.Fatalf("a list with work left must still carry its identities: %+v", got)
+	}
+}
