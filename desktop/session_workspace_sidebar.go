@@ -56,7 +56,7 @@ func (a *App) unifiedProjectTopics(req ProjectTopicPageRequest) (ProjectTopicPag
 	for _, m := range state.SourceMappings {
 		if m.WorkspaceID == workspaceID {
 			adopted["source\x00local\x00"+m.SourceKey] = true
-			if m.HeadID == "" {
+			if sourceMappingHasPathAlias(m) {
 				adopted[sessionRuntimeKey(m.Path)] = true
 			}
 		}
