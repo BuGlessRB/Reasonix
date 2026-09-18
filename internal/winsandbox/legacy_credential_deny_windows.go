@@ -32,6 +32,7 @@ func RepairLegacyCredentialDeny(path string) error {
 		}
 		return err
 	}
+	canonicalPath := canonicalWindowsPath(path)
 
 	lock, err := lockWindowsRoots([]string{path}, nil, "legacy credential ACL repair", 2*time.Second)
 	if err != nil {
@@ -53,7 +54,7 @@ func RepairLegacyCredentialDeny(path string) error {
 	if other != 0 || legacy != 1 {
 		return fmt.Errorf("refusing to alter non-legacy current-user deny ACL on %q", path)
 	}
-	markers := staleCredentialDenyMarkers(path)
+	markers := staleCredentialDenyMarkers(path, canonicalPath)
 	if len(markers) == 0 {
 		return fmt.Errorf("refusing to alter credential deny ACL without a stale sandbox record on %q", path)
 	}
@@ -75,7 +76,7 @@ func RepairLegacyCredentialDeny(path string) error {
 	return fmt.Errorf("legacy credential deny ACL remains on %q", path)
 }
 
-func staleCredentialDenyMarkers(path string) []string {
+func staleCredentialDenyMarkers(path, canonicalPath string) []string {
 	entries, err := os.ReadDir(windowsDenyMarkerDir())
 	if err != nil {
 		return nil
@@ -88,7 +89,11 @@ func staleCredentialDenyMarkers(path string) []string {
 		}
 		marker := filepath.Join(windowsDenyMarkerDir(), entry.Name())
 		for _, residue := range readResidueMarker(marker) {
-			if residue.kind != residueDeny || !strings.EqualFold(filepath.Clean(residue.path), filepath.Clean(path)) {
+			if residue.kind != residueDeny {
+				continue
+			}
+			if !strings.EqualFold(filepath.Clean(residue.path), filepath.Clean(path)) &&
+				!strings.EqualFold(canonicalWindowsPath(residue.path), canonicalPath) {
 				continue
 			}
 			if !credentialMarkerOwnerExited(marker, pid) {
@@ -99,6 +104,23 @@ func staleCredentialDenyMarkers(path string) []string {
 		}
 	}
 	return found
+}
+
+// canonicalWindowsPath expands 8.3 aliases without opening the protected file.
+// Keep the original spelling on failure so exact-path matching still works on
+// volumes where long-name expansion is unavailable.
+func canonicalWindowsPath(path string) string {
+	cleaned := filepath.Clean(path)
+	input, err := windows.UTF16PtrFromString(cleaned)
+	if err != nil {
+		return cleaned
+	}
+	buffer := make([]uint16, 32768)
+	n, err := windows.GetLongPathName(input, &buffer[0], uint32(len(buffer)))
+	if err != nil || n == 0 || n >= uint32(len(buffer)) {
+		return cleaned
+	}
+	return filepath.Clean(windows.UTF16ToString(buffer[:n]))
 }
 
 func credentialMarkerOwnerExited(marker, pidText string) bool {

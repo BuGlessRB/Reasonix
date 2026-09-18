@@ -26,6 +26,10 @@ const ci = workflow("ci");
 const release = workflow("release-desktop");
 const appMemory = workflow("app-memory");
 
+test("Windows PR verifies credential aliases before full push CI", () => {
+  assert.match(ci, /name: test \(Windows credential ACL identity\)[\s\S]*?runner\.os == 'Windows' && github\.event_name == 'pull_request'[\s\S]*?go test -timeout=2m -run '\^TestCredentialAccessRepairsLegacyCredentialDeny\|\^TestRepairLegacyCredentialDenyMatchesFileAcrossPathAliases\$' \.\/internal\/config \.\/internal\/winsandbox/);
+});
+
 test("cancelled CI stops expensive workers but keeps result aggregation", () => {
   for (const name of ["test", "windows-control", "windows-isolated", "race", "sdk", "desktop-prepare",
     "desktop-frontend", "desktop-browser-group", "desktop-go", "desktop-go-race", "desktop-macos",
