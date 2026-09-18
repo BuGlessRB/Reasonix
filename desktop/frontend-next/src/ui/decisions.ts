@@ -32,6 +32,10 @@ export function runState(f: { blocked: boolean; running: boolean; hasItems: bool
   if (f.blocked) return "halt";
   if (f.running) return "running";
   if (!f.hasItems) return "idle";
+  // A restored transcript says nothing about how its last turn ended, and
+  // nothing is running or waiting on the reader: amber there told every
+  // reopened session it was waiting on someone, with nothing to answer.
+  if (f.terminal?.kind === "unread") return "idle";
   return f.terminal?.kind === "completed" ? "done" : "halt";
 }
 

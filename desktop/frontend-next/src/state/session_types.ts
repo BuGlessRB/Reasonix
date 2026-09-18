@@ -138,6 +138,9 @@ export type TurnTerminal =
   | { kind: "failed"; err: string }
   | { kind: "cancelled" }
   | { kind: "incomplete"; outcome: string }
+  // A transcript read back from the record: the frame that said how the last
+  // turn ended is not in it, and neither a delivery nor a stop can be claimed.
+  | { kind: "unread" }
   | null;
 
 export interface SessionState {

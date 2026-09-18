@@ -79,3 +79,13 @@ describe("runState", () => {
     expect(runState({ blocked: false, running: false, hasItems: true, terminal: null })).toBe("halt");
   });
 });
+
+// A session opened again reads its transcript back; the frame that said how the
+// last turn ended is not in it. Amber there told every reopened session it was
+// waiting on the reader, with nothing to answer.
+it("says nothing is happening when a restored transcript never said how it ended", () => {
+  expect(runState({ blocked: false, running: false, hasItems: true, terminal: { kind: "unread" } })).toBe("idle");
+  expect(runState({ blocked: true, running: false, hasItems: true, terminal: { kind: "unread" } })).toBe("halt");
+  // A live turn that vanished mid-flight is still the turn stopping short.
+  expect(runState({ blocked: false, running: false, hasItems: true, terminal: null })).toBe("halt");
+});

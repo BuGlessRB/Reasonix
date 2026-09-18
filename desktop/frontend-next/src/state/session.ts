@@ -280,7 +280,10 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
   // run stopped, waiting on an answer only this window can give. Overwriting it
   // left the session reading 等你决定 with nothing on screen to decide.
   if (ev.kind === "__restore") {
-    return { ...s, executions: ev.executions, items: [...ev.items, ...s.items.filter(promptOpen)], plan: ev.plan ? livePlan(ev.plan) : s.plan };
+    // How the restored turns ended is not in the record; a live turn that
+    // vanished mid-flight leaves null, which is a different answer.
+    const terminal: TurnTerminal = ev.items.length ? { kind: "unread" } : s.terminal;
+    return { ...s, executions: ev.executions, terminal, items: [...ev.items, ...s.items.filter(promptOpen)], plan: ev.plan ? livePlan(ev.plan) : s.plan };
   }
   // The kernel's canonical task list, asked for rather than re-derived: the
   // advances are not todo_write calls, and the refused writes are.
