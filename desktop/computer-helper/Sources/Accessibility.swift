@@ -36,6 +36,19 @@ final class RefTable {
     }
 }
 
+// Seen is one element's identity for a single walk: the accessibility API hands
+// back a new reference for the same element, so equality is the API's, not the
+// pointer's.
+struct Seen: Hashable {
+    let element: AXUIElement
+
+    init(_ element: AXUIElement) { self.element = element }
+
+    static func == (a: Seen, b: Seen) -> Bool { CFEqual(a.element, b.element) }
+
+    func hash(into hasher: inout Hasher) { hasher.combine(CFHash(element)) }
+}
+
 enum Accessibility {
     static let maxNodes = 1500
     static let maxDepth = 40
@@ -83,8 +96,13 @@ enum Accessibility {
         }
         var lines: [String] = []
         var count = 0
+        // An application's tree is not always one: a window of Calculator lists
+        // the application among its children, and walking that lists the window
+        // again. Every element is walked once per snapshot.
+        var seen = Set<Seen>()
         func walk(_ element: AXUIElement, _ depth: Int) {
             if count >= maxNodes || depth > maxDepth { return }
+            if !seen.insert(Seen(element)).inserted { return }
             count += 1
             let role = string(element, kAXRoleAttribute)
             var label = string(element, kAXTitleAttribute)

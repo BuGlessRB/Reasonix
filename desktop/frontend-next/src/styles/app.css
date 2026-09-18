@@ -820,6 +820,10 @@
 
   .pbody { flex: 1; min-height: 0; display: flex; flex-direction: column }
   .pviews { flex: 1; min-height: 0; display: flex; flex-direction: column }
+  .pbody > .scroll[data-pane="browser"] { flex: 1; min-height: 0 }
+  /* The pages full width: the column holding the conversation is empty then,
+     and an empty flex child still takes the room the page needs. */
+  .pbody[data-full] > .pviews { display: none }
   .pbody[data-dock] { flex-direction: row }
   .pbody[data-dock] > .pviews { flex: 1 1 auto; min-width: 0 }
   .pbody[data-dock] > .scroll[data-pane="browser"] {

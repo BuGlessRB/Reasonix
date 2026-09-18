@@ -98,6 +98,10 @@ async function main() {
     const placed = await until("the page drawn full width", async () => (width() > aside.width ? guest.getBounds() : null));
     const slot = await reserved();
     const close = (a, b) => Math.abs(a - b) <= 1;
+    // The rectangle itself has to be the pane: with the conversation's column
+    // still holding its place, the page was squeezed into the bottom of it.
+    check("the full-width view gives the page the whole pane",
+      slot.height > win.getContentBounds().height * 0.6, { slot, content: win.getContentBounds() });
     check("the page is drawn exactly over the rectangle the panel reserved",
       close(placed.x, slot.x) && close(placed.y, slot.y) && close(placed.width, slot.width) && close(placed.height, slot.height),
       { placed, slot });

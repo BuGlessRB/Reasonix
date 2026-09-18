@@ -631,7 +631,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
 
       <Find find={find} />
 
-      <div className="pbody" data-dock={docked ? "" : undefined}>
+      <div className="pbody" data-dock={docked ? "" : undefined} data-full={tab === "browser" ? "" : undefined}>
       <div className="pviews">
       <Transcript
         items={s.items}
