@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,17 +17,24 @@ import (
 
 const targetBundle = "io.reasonix.test.computer-target"
 
-// liveSession drives the real helper named by REASONIX_LIVE_COMPUTER. It needs
-// macOS, swiftc, and accessibility and screen recording granted to whatever
-// runs the test, so ordinary runs skip.
+// liveSession drives the real helper named by REASONIX_LIVE_COMPUTER, which
+// needs macOS and the two permissions, so ordinary runs skip. One session for
+// the run, which is how a host holds one: while one helper process has
+// captured, a capture in another never returns.
 func liveSession(t *testing.T) *Session {
 	t.Helper()
 	path := os.Getenv("REASONIX_LIVE_COMPUTER")
 	if path == "" || runtime.GOOS != "darwin" {
 		t.Skip("set REASONIX_LIVE_COMPUTER to a built computer-use helper to run live tests")
 	}
-	return NewSession(NewHelper(path))
+	liveOnce.Do(func() { live = NewSession(NewHelper(path)) })
+	return live
 }
+
+var (
+	liveOnce sync.Once
+	live     *Session
+)
 
 // launchTarget builds the test application into a bundle and opens it, so it
 // runs with an identity like any other application.
@@ -55,7 +63,20 @@ func launchTarget(t *testing.T) string {
 	if out, err := exec.Command("open", "-g", "-n", filepath.Join(dir, "Target.app"), "--args", log).CombinedOutput(); err != nil {
 		t.Fatalf("open target: %v\n%s", err, out)
 	}
-	t.Cleanup(func() { _ = exec.Command("pkill", "-f", filepath.Join(macos, "target")).Run() })
+	// Two instances of one bundle are two answers to "which application is
+	// this", and the one that is on its way out captures nothing: the next test
+	// waits out the screenshot timeout instead of failing for a reason.
+	t.Cleanup(func() {
+		_ = exec.Command("pkill", "-f", filepath.Join(macos, "target")).Run()
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			if exec.Command("pgrep", "-f", filepath.Join(macos, "target")).Run() != nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Error("the target application was still running when the test ended")
+	})
 	waitLog(t, log, "ready")
 	return log
 }

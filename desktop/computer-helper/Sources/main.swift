@@ -30,8 +30,6 @@ func handle(_ method: String, _ params: JSON) throws -> JSON {
         return ["apps": Apps.list()]
     case "snapshot":
         return try Accessibility.snapshot(pid: try pidParam(params), refs: refs)
-    case "screenshot":
-        return try Capture.window(pid: try pidParam(params))
     case "press":
         return try Accessibility.press(pid: try pidParam(params), ref: try stringParam(params, "ref"), refs: refs, cursor: cursor)
     case "click":
@@ -90,10 +88,24 @@ func numberParam(_ params: JSON, _ key: String) throws -> Double {
     return n.doubleValue
 }
 
+// A capture answers from whichever thread it finished on, so the one stream
+// every answer goes down is written under a lock of its own.
+let stdoutLock = NSLock()
+
 func reply(_ body: JSON) {
     guard let data = try? JSONSerialization.data(withJSONObject: body), var line = String(data: data, encoding: .utf8) else { return }
     line += "\n"
+    stdoutLock.lock()
     FileHandle.standardOutput.write(line.data(using: .utf8)!)
+    stdoutLock.unlock()
+}
+
+func fail(_ id: Any, _ error: Error) {
+    if let failure = error as? Failure {
+        reply(["id": id, "error": ["code": failure.code, "message": failure.message]])
+    } else {
+        reply(["id": id, "error": ["code": "computer.failed", "message": "\(error)"]])
+    }
 }
 
 // Requests are read off the main thread and answered on it: the overlay and the
@@ -107,11 +119,21 @@ Thread.detachNewThread {
         let params = request["params"] as? JSON ?? [:]
         DispatchQueue.main.async {
             do {
+                // A capture is the one operation this process waits on rather
+                // than performs, and the main thread is what the rest of them
+                // need: it answers when it is done, out of this order.
+                if method == "screenshot" {
+                    try Capture.window(pid: try pidParam(params)) { outcome in
+                        switch outcome {
+                        case .success(let body): reply(["id": id, "result": body])
+                        case .failure(let failure): fail(id, failure)
+                        }
+                    }
+                    return
+                }
                 reply(["id": id, "result": try handle(method, params)])
-            } catch let failure as Failure {
-                reply(["id": id, "error": ["code": failure.code, "message": failure.message]])
             } catch {
-                reply(["id": id, "error": ["code": "computer.failed", "message": "\(error)"]])
+                fail(id, error)
             }
         }
     }
