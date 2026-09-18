@@ -112,7 +112,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	deepSeekProtocolMigErr = deepSeekProtocolMigrationNoticeError(handleConfigLoadWarnings(opts, cfg), deepSeekProtocolMigErr)
+	deepSeekProtocolMigErr = deepSeekProtocolMigrationNoticeError(handleConfigLoadWarnings(opts, cfg, stderr), deepSeekProtocolMigErr)
 	// Arm the credential-protection layers from the user-global [secrets]
 	// section before any tool, hook, or plugin subprocess can spawn. Package
 	// globals are correct here because [secrets] is user-global (project
