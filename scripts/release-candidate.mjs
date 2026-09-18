@@ -23,6 +23,11 @@ export const npmPackages = [
   "reasonix-cli-win32-arm64", "reasonix-cli-win32-x64",
 ];
 
+export function artifactNamespace(purpose = "release") {
+  if (!["release", "rehearsal"].includes(purpose)) throw new Error("invalid candidate purpose");
+  return purpose === "rehearsal" ? "release-candidate-rehearsal" : "release-candidate";
+}
+
 function sha256(data) {
   return createHash("sha256").update(data).digest("hex");
 }
@@ -49,6 +54,7 @@ function walk(root, directory = root) {
 }
 
 function requireIdentity(metadata) {
+  const namespace = artifactNamespace(metadata.purpose);
   if (!VERSION_RE.test(metadata.version ?? "")) throw new Error("invalid candidate version");
   for (const key of ["sourceSHA", "buildControlSHA", "acceptanceControlSHA", "notesSourceSHA"]) {
     if (!SHA_RE.test(metadata[key] ?? "")) throw new Error(`invalid ${key}`);
@@ -59,10 +65,10 @@ function requireIdentity(metadata) {
   if (!/^[1-9][0-9]*$/.test(String(metadata.runAttempt ?? ""))) throw new Error("invalid runAttempt");
   if (!/^[1-9][0-9]*$/.test(String(metadata.payloadArtifactId ?? ""))) throw new Error("invalid payloadArtifactId");
   if (!/^[1-9][0-9]*$/.test(String(metadata.evidenceArtifactId ?? ""))) throw new Error("invalid evidenceArtifactId");
-  if (metadata.payloadArtifactName !== `release-candidate-payload-${metadata.candidateId ?? candidateId(metadata.version, metadata.sourceSHA, metadata.catalogSha256)}`) {
+  if (metadata.payloadArtifactName !== `${namespace}-payload-${metadata.candidateId ?? candidateId(metadata.version, metadata.sourceSHA, metadata.catalogSha256)}`) {
     throw new Error("invalid payloadArtifactName");
   }
-  if (metadata.evidenceArtifactName !== `release-candidate-evidence-${metadata.candidateId ?? candidateId(metadata.version, metadata.sourceSHA, metadata.catalogSha256)}`) {
+  if (metadata.evidenceArtifactName !== `${namespace}-evidence-${metadata.candidateId ?? candidateId(metadata.version, metadata.sourceSHA, metadata.catalogSha256)}`) {
     throw new Error("invalid evidenceArtifactName");
   }
   if (metadata.repository !== "esengine/DeepSeek-Reasonix") throw new Error("untrusted candidate repository");
@@ -158,6 +164,7 @@ export function sealCandidate(payloadRoot, metadata) {
   const acceptance = metadata.acceptance.map(item => requireAcceptanceReceipt(payloadRoot, files, metadata, item));
   return {
     schema: 1,
+    purpose: metadata.purpose ?? "release",
     candidateId: id,
     policyVersion: 1,
     version: metadata.version,
@@ -186,9 +193,12 @@ export function sealCandidate(payloadRoot, metadata) {
   };
 }
 
-export function verifyCandidate(payloadRoot, record, now = new Date()) {
+export function verifyCandidate(payloadRoot, record, now = new Date(), purpose = "release") {
+  artifactNamespace(purpose);
+  if ((record.purpose ?? "release") !== purpose) throw new Error("candidate purpose mismatch; rehearsal cannot be published");
   if (record.schema !== 1 || record.policyVersion !== 1) throw new Error("unsupported candidate schema");
   requireIdentity({
+    purpose: record.purpose,
     version: record.version,
     sourceSHA: record.sourceSHA,
     buildControlSHA: record.control?.buildSHA,
@@ -241,6 +251,7 @@ export function verifyCandidate(payloadRoot, record, now = new Date()) {
 function parseMetadata(env) {
   const acceptance = JSON.parse(env.RELEASE_ACCEPTANCE_JSON ?? "[]");
   return {
+    purpose: env.RELEASE_CANDIDATE_PURPOSE ?? "release",
     version: env.RELEASE_VERSION,
     sourceSHA: env.RELEASE_SOURCE_SHA,
     buildControlSHA: env.RELEASE_BUILD_CONTROL_SHA,
@@ -269,12 +280,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   if (command === "seal") {
     mkdirSync(path.dirname(recordPath), { recursive: true });
     writeFileSync(recordPath, `${JSON.stringify(sealCandidate(payload, parseMetadata(process.env)), null, 2)}\n`);
-  } else if (command === "verify") {
-    verifyCandidate(payload, JSON.parse(readFileSync(recordPath, "utf8")));
+  } else if (command === "verify" || command === "verify-rehearsal") {
+    verifyCandidate(payload, JSON.parse(readFileSync(recordPath, "utf8")), new Date(), command === "verify-rehearsal" ? "rehearsal" : "release");
     process.stdout.write(`${JSON.stringify(JSON.parse(readFileSync(recordPath, "utf8")))}\n`);
   } else if (command === "id") {
     process.stdout.write(`${candidateId(payload, recordPath, catalogSha256)}\n`);
   } else {
-    throw new Error("usage: release-candidate.mjs seal|verify PAYLOAD RECORD | id VERSION SOURCE_SHA CATALOG_SHA256");
+    throw new Error("usage: release-candidate.mjs seal|verify|verify-rehearsal PAYLOAD RECORD | id VERSION SOURCE_SHA CATALOG_SHA256");
   }
 }

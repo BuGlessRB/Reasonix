@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { candidateId, desktopPlatforms, npmPackages, sealCandidate, verifyCandidate } from "./release-candidate.mjs";
+import { artifactNamespace, candidateId, desktopPlatforms, npmPackages, sealCandidate, verifyCandidate } from "./release-candidate.mjs";
 
 function fixture(t) {
   const root = mkdtempSync(path.join(tmpdir(), "reasonix-candidate-"));
@@ -71,6 +71,21 @@ test("seals and verifies a complete immutable candidate", t => {
   const record = sealCandidate(root, metadata);
   assert.equal(record.candidateId, candidateId("1.2.3", "a".repeat(40), "d".repeat(64)));
   assert.doesNotThrow(() => verifyCandidate(root, record, new Date("2026-01-02T00:00:00Z")));
+});
+
+test("rehearsal bytes remain isolated from the publication identity", t => {
+  const root = fixture(t);
+  const id = candidateId(metadata.version, metadata.sourceSHA, metadata.catalogSha256);
+  const record = sealCandidate(root, {
+    ...metadata, purpose: "rehearsal",
+    payloadArtifactName: `${artifactNamespace("rehearsal")}-payload-${id}`,
+    evidenceArtifactName: `${artifactNamespace("rehearsal")}-evidence-${id}`,
+  });
+  assert.equal(record.purpose, "rehearsal");
+  assert.doesNotThrow(() => verifyCandidate(root, record, new Date("2026-01-02T00:00:00Z"), "rehearsal"));
+  assert.throws(() => verifyCandidate(root, record, new Date("2026-01-02T00:00:00Z")), /purpose mismatch/);
+  assert.throws(() => sealCandidate(root, { ...metadata, purpose: "rehearsal" }), /payloadArtifactName/);
+  assert.throws(() => sealCandidate(root, { ...metadata, purpose: "unknown" }), /purpose/);
 });
 
 for (const mutation of ["payload", "expired", "revoked", "wrong-source", "missing-acceptance"]) {

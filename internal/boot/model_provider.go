@@ -32,9 +32,7 @@ func newProviderWithSearchMode(e *config.ProviderEntry, proxy netclient.ProxySpe
 	// Runtime callers may share the resolved config entry across role/provider
 	// factories. Repair a private copy so construction cannot race or mutate the
 	// caller while still honoring exact catalog routes.
-	repaired := *e
-	config.RepairProviderEndpointContract(&repaired)
-	e = &repaired
+	e = config.ResolveReasoningEntry(e)
 	if err := config.ValidateProviderEndpoint(e); err != nil {
 		return nil, err
 	}

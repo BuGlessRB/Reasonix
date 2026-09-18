@@ -57,9 +57,12 @@ test ! -e "$repo_root/.github/workflows/release-stable-trigger.yml"
 candidate="$repo_root/.github/workflows/release-candidate.yml"
 promote="$repo_root/.github/workflows/release-promote.yml"
 verify="$repo_root/.github/workflows/release-verify.yml"
-for workflow in "$candidate" "$promote" "$verify"; do test -s "$workflow"; done
+rehearsal_verify="$repo_root/.github/workflows/release-candidate-verify.yml"
+for workflow in "$candidate" "$promote" "$verify" "$rehearsal_verify"; do test -s "$workflow"; done
 candidate_dispatch="$(sed -n '/workflow_dispatch:/,/^  push:/p' "$candidate")"
-[ "$(grep -Ec '^      [a-z_]+:$' <<<"$candidate_dispatch")" = "1" ]
+[ "$(grep -Ec '^      [a-z_]+:$' <<<"$candidate_dispatch")" = "2" ]
+grep -Fq 'required: true' <<<"$(sed -n '/^      version:/,/^      rehearsal:/p' <<<"$candidate_dispatch")"
+grep -Fq 'required: false' <<<"$(sed -n '/^      rehearsal:/,$p' <<<"$candidate_dispatch")"
 ! grep -Fq 'inputs.source_sha' "$candidate"
 ! grep -Fq 'pull_request_target' "$candidate"
 grep -Fq 'branches: [main-v2]' "$candidate"
@@ -72,8 +75,12 @@ source_ci_line="$(grep -n -m1 'run: bash scripts/verify-release-push-ci.sh' "$ca
 ! grep -Fq 'source_sha="$(git rev-parse origin/main-v2)"' "$candidate"
 grep -Fq 'retention-days: 30' "$candidate"
 grep -Fq 'retention-days: 90' "$candidate"
-grep -Fq 'name: release-candidate-evidence-${{ needs.resolve.outputs.candidate_id }}' "$candidate"
+grep -Fq 'name: ${{ needs.resolve.outputs.artifact_namespace }}-evidence-${{ needs.resolve.outputs.candidate_id }}' "$candidate"
 grep -Fq 'RELEASE_EVIDENCE_ARTIFACT_ID: ${{ steps.evidence.outputs.artifact-id }}' "$candidate"
+grep -Fq 'node scripts/resolve-release-candidate.mjs resolve-rehearsal' "$rehearsal_verify"
+grep -Fq 'node scripts/release-candidate.mjs verify-rehearsal' "$rehearsal_verify"
+grep -Fq 'node scripts/verify-release-artifact-archive.mjs' "$rehearsal_verify"
+! grep -Eq 'environment: release|release-candidate-tags\.sh activate|publish-(desktop|homebrew)|npm publish' "$rehearsal_verify"
 grep -Fq 'gh attestation verify' "$promote"
 grep -Fq 'bash scripts/release-candidate-tags.sh check' "$promote"
 grep -Fq 'bash scripts/release-candidate-tags.sh activate' "$promote"
@@ -139,8 +146,8 @@ if grep -Eq '^  cache-guard:|needs\.cache-guard' "$repo_root/.github/workflows/r
 	exit 1
 fi
 grep -Eq 'options: \[stable\]' "$repo_root/.github/workflows/release.yml"
-grep -A6 -E '^      channel:' "$repo_root/.github/workflows/release.yml" |
-	grep -Eq 'default: stable'
+cli_channel="$(grep -A6 -E '^      channel:' "$repo_root/.github/workflows/release.yml")"
+grep -Eq 'default: stable' <<<"$cli_channel"
 grep -Eq '^    environment: release$' "$repo_root/.github/workflows/release.yml"
 grep -Eq 'GORELEASER_CURRENT_TAG:.*needs\.resolve\.outputs\.tag' \
 	"$repo_root/.github/workflows/release.yml"
@@ -192,8 +199,8 @@ grep -Fq 'bash scripts/resolve-desktop-candidate.sh' "$repo_root/.github/workflo
 grep -Fq 'name: Smoke-test packaged Electron startup' "$repo_root/.github/workflows/release-desktop.yml"
 grep -Eq '^  windows-build:$' "$repo_root/.github/workflows/release-desktop.yml"
 grep -Eq '^  windows-sign:$' "$repo_root/.github/workflows/release-desktop.yml"
-sed -n '/^  windows-sign:/,/^  windows-runtime-acceptance:/p' \
-	"$repo_root/.github/workflows/release-desktop.yml" | grep -Fq 'needs: [resolve, windows-build, signing-contract]'
+windows_sign="$(sed -n '/^  windows-sign:/,/^  windows-runtime-acceptance:/p' "$repo_root/.github/workflows/release-desktop.yml")"
+grep -Fq 'needs: [resolve, windows-build, signing-contract]' <<<"$windows_sign"
 grep -Fq 'desktop/build/electron/${{ matrix.name }}/app' "$repo_root/.github/workflows/release-desktop.yml"
 grep -Fq 'node desktop/packaging/smoke.mjs' "$repo_root/.github/workflows/release-desktop.yml"
 grep -Fq -- '--service desktop/build/bin/reasonix-desktop.exe' "$repo_root/.github/workflows/release-desktop.yml"
@@ -304,7 +311,7 @@ done
 # standalone run; the immutable product checkout must not select the old helper.
 npm_control_step="$(sed -n '/      - name: Load approved npm publication control plane/,/      - uses: actions\/setup-go@v7/p' "$repo_root/.github/workflows/release-npm.yml")"
 [ -n "$npm_control_step" ]
-if printf '%s\n' "$npm_control_step" | grep -q 'if:'; then
+if grep -q 'if:' <<<"$npm_control_step"; then
 	echo "npm publication control plane must load for orchestrated recovery too" >&2
 	exit 1
 fi
@@ -1315,6 +1322,21 @@ git clone -q "$test_root/remote.git" "$test_root/repo"
 	grep -Eq '^desktop_tag=desktop-v1\.3\.0-preview\.42$' "$test_root/preview.out"
 	grep -Eq '^npm_version=1\.3\.0-canary\.42$' "$test_root/preview.out"
 	approved_sha="$(git rev-parse HEAD)"
+	GITHUB_OUTPUT="$test_root/desktop-rehearsal.out" \
+		RELEASE_CHANNEL=stable RELEASE_TAG=desktop-v1.2.3 \
+		IN_ORCHESTRATED=true IN_ORCHESTRATOR=candidate APPROVED_SHA="$approved_sha" \
+		CANDIDATE_PREPARATION=true CANDIDATE_REHEARSAL=true \
+		"$desktop_candidate_resolver"
+	grep -Eq '^sha='"$approved_sha"'$' "$test_root/desktop-rehearsal.out"
+	if GITHUB_OUTPUT="$test_root/desktop-unsafe-rehearsal.out" \
+		RELEASE_CHANNEL=stable RELEASE_TAG=desktop-v1.2.3 \
+		IN_ORCHESTRATED=true IN_ORCHESTRATOR=promote APPROVED_SHA="$approved_sha" \
+		CANDIDATE_REHEARSAL=true \
+		"$desktop_candidate_resolver" >"$test_root/desktop-unsafe-rehearsal.log" 2>&1; then
+		echo "rehearsal without candidate preparation unexpectedly passed" >&2
+		exit 1
+	fi
+	grep -Fq 'rehearsal requires non-publishing candidate preparation' "$test_root/desktop-unsafe-rehearsal.log"
 	GITHUB_OUTPUT="$test_root/desktop-stable-candidate.out" \
 		RELEASE_CHANNEL=stable RELEASE_TAG=desktop-v1.2.3 \
 		IN_ORCHESTRATED=false CALLER_EVENT_NAME=workflow_dispatch \
@@ -1700,7 +1722,8 @@ grep -Fq "printf 'DEEPSEEK_API_KEY=%s\\n' \"\$DEEPSEEK_API_KEY\" > \"\$REASONIX_
 grep -Fq -- '-task "compaction,fix-add-bug,fizzbuzz,palindrome,subagent-delegation"' "$e2e_workflow"
 grep -Fq 'const unsuccessful = results.filter((result) => !result.Passed || result.Skipped);' "$e2e_workflow"
 grep -Fq "if: always() && hashFiles('report.md') != ''" "$e2e_workflow"
-if grep -A2 -F 'missing DEEPSEEK_API_KEY secret' "$e2e_workflow" | grep -Fq 'exit 0'; then
+e2e_missing_key="$(grep -A2 -F 'missing DEEPSEEK_API_KEY secret' "$e2e_workflow")"
+if grep -Fq 'exit 0' <<<"$e2e_missing_key"; then
 	echo "e2e bot still treats a missing provider secret as success" >&2
 	exit 1
 fi

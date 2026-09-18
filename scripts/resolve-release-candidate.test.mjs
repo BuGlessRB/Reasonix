@@ -20,6 +20,23 @@ test("accepts a successful protected producer and exact record", () => {
   assert.equal(inspected.evidenceArtifactId, "34");
 });
 
+test("rehearsal records cannot be selected or inspected for publication", () => {
+  const rehearsalArtifact = { ...artifact, name: `release-candidate-rehearsal-record-${id}` };
+  const rehearsalRecord = {
+    ...record, purpose: "rehearsal",
+    source: {
+      ...record.source,
+      payloadArtifactName: `release-candidate-rehearsal-payload-${id}`,
+      evidenceArtifactName: `release-candidate-rehearsal-evidence-${id}`,
+    },
+  };
+  assert.equal(selectRecordArtifact([rehearsalArtifact], id, false), null);
+  assert.equal(selectRecordArtifact([rehearsalArtifact], id, true, "rehearsal"), rehearsalArtifact);
+  assert.throws(() => inspectRecord(rehearsalRecord, id, rehearsalArtifact, run), /purpose mismatch/);
+  assert.throws(() => inspectRecord(rehearsalRecord, id, artifact, run, new Date(), "rehearsal"), /artifact identity/);
+  assert.equal(inspectRecord(rehearsalRecord, id, rehearsalArtifact, run, new Date(), "rehearsal").payloadArtifactId, "33");
+});
+
 test("accepts automatic preparation after the reviewed Notes PR merges", () => {
   assert.doesNotThrow(() => validateCandidateRun({ ...run, event: "push" }, artifact, "esengine/DeepSeek-Reasonix"));
 });

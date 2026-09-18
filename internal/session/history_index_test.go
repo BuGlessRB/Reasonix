@@ -117,11 +117,13 @@ func waitHistoryPreparation(t *testing.T, query *Query, ref SessionRef) error {
 	preparation := query.historyBuilds[ref.SessionID]
 	query.historyMu.Unlock()
 	if preparation == nil {
-		// A synchronous reader may also own the projection lock.
-		lock := query.projectionLock("history", ref.SessionID)
-		lock.Lock()
-		lock.Unlock()
-		return t.Context().Err()
+		// A synchronous reader can own the lock without a rebuild record.
+		// Join a preparation that waits for that reader and verifies readiness.
+		filesystem, ok := query.persistence.(*FilesystemPersistence)
+		if !ok {
+			t.Fatal("history preparation requires filesystem persistence")
+		}
+		preparation = query.prepareHistoryLocator(filesystem, ref.SessionID, historyIndexPath(filesystem.Root, ref.SessionID))
 	}
 	select {
 	case <-preparation.done:

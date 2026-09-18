@@ -3,14 +3,15 @@
 # of main-v2 or to be the commit that introduced its reviewed release notes.
 set -euo pipefail
 
-if [ "$#" -ne 2 ] || [[ ! "$1" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || [[ ! "$2" =~ ^[0-9a-f]{40}$ ]]; then
-	echo "usage: validate-release-candidate-source.sh MAJOR.MINOR.PATCH FULL_COMMIT_SHA" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ] || [[ ! "$1" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || [[ ! "$2" =~ ^[0-9a-f]{40}$ ]] || [[ ! "${3:-release}" =~ ^(release|rehearsal)$ ]]; then
+	echo "usage: validate-release-candidate-source.sh MAJOR.MINOR.PATCH FULL_COMMIT_SHA [release|rehearsal]" >&2
 	exit 2
 fi
 
 version="$1"
 candidate="$2"
 remote="${RELEASE_REMOTE:-origin}"
+purpose="${3:-release}"
 
 git fetch --quiet "$remote" main-v2 --tags
 main_sha="$(git rev-parse "$remote/main-v2^{commit}")"
@@ -24,7 +25,7 @@ git merge-base --is-ancestor "$candidate" "$main_sha" || {
 }
 
 for tag in "v$version" "npm-v$version" "desktop-v$version"; do
-	if git show-ref --verify --quiet "refs/tags/$tag"; then
+	if [ "$purpose" = release ] && git show-ref --verify --quiet "refs/tags/$tag"; then
 		echo "candidate preparation refuses existing release tag: $tag" >&2
 		exit 1
 	fi

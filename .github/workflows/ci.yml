@@ -1549,6 +1549,7 @@ jobs:
             .github/workflows/release-stable.yml \
             .github/workflows/prepare-release-notes.yml \
             .github/workflows/release-candidate.yml \
+            .github/workflows/release-candidate-verify.yml \
             .github/workflows/release-promote.yml \
             .github/workflows/release-verify.yml \
             .github/workflows/release.yml \
@@ -1561,6 +1562,7 @@ jobs:
             .github/workflows/docs-impact.yml \
             .github/workflows/ci.yml
           node --test scripts/release-candidate.test.mjs scripts/resolve-release-candidate.test.mjs \
+            scripts/verify-release-artifact-archive.test.mjs \
             scripts/build-release-cli-candidate.test.mjs scripts/publish-homebrew-cask.test.mjs \
             scripts/desktop-release-artifacts.test.mjs scripts/release-publication-ledger.test.mjs \
             scripts/ci-paths.test.mjs scripts/ci-workflow.test.mjs scripts/macos-go-tests.test.mjs \

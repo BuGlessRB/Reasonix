@@ -35,11 +35,22 @@ git -C "$work" push -q origin main-v2
 
 git -C "$work" tag v1.2.3 "$candidate"
 git -C "$work" push -q origin v1.2.3
+(
+	cd "$work"
+	RELEASE_REMOTE=origin "$repo_root/scripts/validate-release-candidate-source.sh" 1.2.3 "$candidate" rehearsal
+)
 if (
 	cd "$work"
 	RELEASE_REMOTE=origin "$repo_root/scripts/validate-release-candidate-source.sh" 1.2.3 "$candidate"
 ); then
 	echo "existing release identity unexpectedly passed candidate preparation" >&2
+	exit 1
+fi
+if (
+	cd "$work"
+	RELEASE_REMOTE=origin "$repo_root/scripts/validate-release-candidate-source.sh" 1.2.3 "$candidate" unsafe
+); then
+	echo "unknown candidate purpose unexpectedly passed" >&2
 	exit 1
 fi
 

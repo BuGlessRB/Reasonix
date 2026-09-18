@@ -184,9 +184,11 @@ test("CI routing changes exercise their owning workflow surfaces", () => {
 test("release control changes run focused contracts without selecting product suites", () => {
   for (const path of [
     ".github/workflows/release-candidate.yml",
+    ".github/workflows/release-candidate-verify.yml",
     ".github/workflows/release-promote.yml",
     ".github/workflows/pages.yml",
     "scripts/release-candidate.mjs",
+    "scripts/verify-release-artifact-archive.mjs",
     "scripts/desktop-release-artifacts.test.mjs",
     "npm/publish-candidate.mjs",
   ]) {

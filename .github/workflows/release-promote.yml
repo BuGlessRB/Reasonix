@@ -66,6 +66,7 @@ jobs:
           gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID" > /tmp/record-artifact.json
           gh api "repos/${{ github.repository }}/actions/runs/$PRODUCER_RUN_ID" > /tmp/producer-run.json
           gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > /tmp/record.zip
+          node scripts/verify-release-artifact-archive.mjs /tmp/record-artifact.json /tmp/record.zip
           unzip -q /tmp/record.zip -d record
           test -s record/record.json
       - name: Verify record provenance and resolve exact payload
@@ -90,6 +91,7 @@ jobs:
           test "$(jq -r .workflow_run.id /tmp/payload-artifact.json)" = "${{ steps.record.outputs.producer_run_id }}"
           mkdir -p payload
           gh api "repos/${{ github.repository }}/actions/artifacts/$PAYLOAD_ID/zip" > /tmp/payload.zip
+          node scripts/verify-release-artifact-archive.mjs /tmp/payload-artifact.json /tmp/payload.zip
           unzip -q /tmp/payload.zip -d payload
       - name: Verify payload provenance, bytes, source, and operation
         env:

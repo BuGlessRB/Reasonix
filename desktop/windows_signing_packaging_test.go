@@ -269,18 +269,23 @@ func TestProductionSigningRunsOnlyFromProtectedControlPlane(t *testing.T) {
 	candidate := readTestFile(t, "../.github/workflows/release-candidate.yml")
 	promote := readTestFile(t, "../.github/workflows/release-promote.yml")
 	desktop := readTestFile(t, "../.github/workflows/release-desktop.yml")
-	if strings.Contains(stable, "\n  push:\n") || strings.Contains(candidate, "\n  push:\n") ||
+	if strings.Contains(stable, "\n  push:\n") ||
 		strings.Contains(promote, "\n  push:\n") || strings.Contains(desktop, "\n  push:\n") {
 		t.Fatal("production workflows must not run directly with a tag-shaped SignPath origin")
 	}
+	if strings.Contains(candidate, "\n    tags:") || strings.Contains(candidate, "\n  pull_request") ||
+		!strings.Contains(candidate, "\n  push:\n    branches: [main-v2]\n    paths:\n      - release-notes/releases.json") {
+		t.Fatal("automatic preparation must use the protected Notes push, never tags or PR heads")
+	}
+	activation := readTestFile(t, "../scripts/release-candidate-tags.sh")
 	for _, want := range []string{
 		`actions/attest-build-provenance@v3`,
 		`candidate_preparation: true`,
-		`git push --atomic origin`,
+		`git push --atomic "$remote"`,
 		`environment: release`,
 		`candidate_verified: true`,
 	} {
-		if !strings.Contains(candidate+"\n"+promote, want) {
+		if !strings.Contains(candidate+"\n"+promote+"\n"+activation, want) {
 			t.Errorf("sealed release control plane is missing %q", want)
 		}
 	}

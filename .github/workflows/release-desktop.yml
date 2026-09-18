@@ -92,6 +92,11 @@ on:
         required: false
         default: false
         type: boolean
+      candidate_rehearsal:
+        description: "Isolated non-publishing candidate rehearsal"
+        required: false
+        default: false
+        type: boolean
       signing_preflight_verified:
         description: "The approved stable caller completed signing_preflight in this run"
         required: false
@@ -201,6 +206,7 @@ jobs:
           CALLER_SHA: ${{ github.sha }}
           CALLER_WORKFLOW_SHA: ${{ github.workflow_sha }}
           CANDIDATE_PREPARATION: ${{ inputs.candidate_preparation }}
+          CANDIDATE_REHEARSAL: ${{ inputs.candidate_rehearsal }}
         run: bash scripts/resolve-desktop-candidate.sh
 
   orchestration-guard:

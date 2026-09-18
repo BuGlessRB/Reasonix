@@ -7,6 +7,7 @@
 /.signpath/ @SivanCola @esengine
 /.github/workflows/release-stable.yml @SivanCola @esengine
 /.github/workflows/release-candidate.yml @SivanCola @esengine
+/.github/workflows/release-candidate-verify.yml @SivanCola @esengine
 /.github/workflows/release-promote.yml @SivanCola @esengine
 /.github/workflows/release-verify.yml @SivanCola @esengine
 /.github/workflows/release-desktop.yml @SivanCola @esengine
@@ -16,6 +17,7 @@
 /scripts/verify-windows-authenticode.ps1 @SivanCola @esengine
 /scripts/finalize-windows-signed-candidate.sh @SivanCola @esengine
 /scripts/release-candidate.mjs @SivanCola @esengine
+/scripts/verify-release-artifact-archive.mjs @SivanCola @esengine
 /scripts/release-candidate-tags.sh @SivanCola @esengine
 /scripts/verify-release-authorization.sh @SivanCola @esengine
 /scripts/resolve-release-candidate.mjs @SivanCola @esengine

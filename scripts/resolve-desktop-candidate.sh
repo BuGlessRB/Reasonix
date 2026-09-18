@@ -10,6 +10,7 @@ tag="${RELEASE_TAG:?RELEASE_TAG is required}"
 orchestrated="${IN_ORCHESTRATED:-false}"
 orchestrator="${IN_ORCHESTRATOR:-}"
 candidate_preparation="${CANDIDATE_PREPARATION:-false}"
+candidate_rehearsal="${CANDIDATE_REHEARSAL:-false}"
 approved_sha="${APPROVED_SHA:-}"
 caller_event="${CALLER_EVENT_NAME:-}"
 caller_ref="${CALLER_REF:-}"
@@ -51,6 +52,13 @@ if [ "$candidate_preparation" = true ] && { [ "$orchestrated" != true ] || [ "$o
 	echo "::error::candidate preparation requires the protected candidate orchestrator" >&2
 	exit 1
 fi
+case "$candidate_rehearsal" in
+true)
+	[ "$candidate_preparation" = true ] || { echo "::error::rehearsal requires non-publishing candidate preparation" >&2; exit 1; }
+	;;
+false) ;;
+*) echo "::error::CANDIDATE_REHEARSAL must be true or false" >&2; exit 2 ;;
+esac
 case "$require_current_main" in
 true | false) ;;
 *)
@@ -126,7 +134,7 @@ fi
 
 if [ "$channel" = "stable" ]; then
 	if [ "$candidate_preparation" = true ]; then
-		if git show-ref --verify --quiet "refs/tags/$tag"; then
+		if [ "$candidate_rehearsal" != true ] && git show-ref --verify --quiet "refs/tags/$tag"; then
 			echo "::error::candidate preparation refuses an existing release tag: $tag" >&2
 			exit 1
 		fi

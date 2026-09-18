@@ -8,13 +8,18 @@ on:
         description: "Official version without a tag prefix"
         required: true
         type: string
+      rehearsal:
+        description: "Build and accept isolated files that cannot be published"
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [main-v2]
     paths:
       - release-notes/releases.json
 
 concurrency:
-  group: release-candidate-${{ inputs.version || github.sha }}
+  group: release-candidate-${{ inputs.rehearsal && 'rehearsal' || 'release' }}-${{ inputs.version || github.sha }}
   cancel-in-progress: false
 
 permissions:
@@ -30,6 +35,8 @@ jobs:
       candidate_id: ${{ steps.candidate.outputs.candidate_id }}
       catalog_sha256: ${{ steps.candidate.outputs.catalog_sha256 }}
       reuse: ${{ steps.existing.outputs.reuse }}
+      artifact_namespace: ${{ steps.candidate.outputs.artifact_namespace }}
+      purpose: ${{ steps.candidate.outputs.purpose }}
     permissions:
       actions: read
       attestations: read
@@ -48,6 +55,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_VERSION: ${{ inputs.version }}
           PUSH_SHA: ${{ github.sha }}
+          REHEARSAL: ${{ inputs.rehearsal || false }}
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
           RELEASE_REVOKED_CANDIDATES: ${{ vars.RELEASE_REVOKED_CANDIDATES }}
@@ -61,7 +69,13 @@ jobs:
             version="$INPUT_VERSION"
             source_sha="$PUSH_SHA"
           fi
-          bash scripts/validate-release-candidate-source.sh "$version" "$source_sha"
+          purpose=release
+          artifact_namespace=release-candidate
+          if [ "$REHEARSAL" = true ]; then
+            purpose=rehearsal
+            artifact_namespace=release-candidate-rehearsal
+          fi
+          bash scripts/validate-release-candidate-source.sh "$version" "$source_sha" "$purpose"
           git show "$source_sha:release-notes/releases.json" > /tmp/release-catalog.json
           catalog_sha256="$(sha256sum /tmp/release-catalog.json | awk '{print $1}')"
           candidate_id="$(node scripts/release-candidate.mjs id "$version" "$source_sha" "$catalog_sha256")"
@@ -71,6 +85,8 @@ jobs:
             echo "source_sha=$source_sha"
             echo "catalog_sha256=$catalog_sha256"
             echo "candidate_id=$candidate_id"
+            echo "purpose=$purpose"
+            echo "artifact_namespace=$artifact_namespace"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### Candidate input"
@@ -78,6 +94,7 @@ jobs:
             echo "- ID: \`$candidate_id\`"
             echo "- Product: \`$source_sha\`"
             echo "- Control: \`$GITHUB_SHA\`"
+            echo "- Purpose: \`$purpose\`"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Verify release control helpers and signing configuration
         env:
@@ -93,6 +110,7 @@ jobs:
             done
           fi
       - name: Reuse an existing sealed candidate
+        if: inputs.rehearsal != true
         id: existing
         env:
           GH_TOKEN: ${{ github.token }}
@@ -113,6 +131,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$record_id" > "$RUNNER_TEMP/existing-record-artifact.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$RUNNER_TEMP/existing-run.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$record_id/zip" > "$RUNNER_TEMP/existing-record.zip"
+          node scripts/verify-release-artifact-archive.mjs "$RUNNER_TEMP/existing-record-artifact.json" "$RUNNER_TEMP/existing-record.zip"
           unzip -q "$RUNNER_TEMP/existing-record.zip" -d "$RUNNER_TEMP/existing-record"
           jq -e '
             .validity.revoked == false and
@@ -227,6 +246,7 @@ jobs:
       orchestrator: candidate
       signing_preflight: true
       candidate_preparation: true
+      candidate_rehearsal: ${{ inputs.rehearsal || false }}
     secrets: inherit
 
   seal:
@@ -301,7 +321,7 @@ jobs:
         id: payload
         uses: actions/upload-artifact@v7
         with:
-          name: release-candidate-payload-${{ needs.resolve.outputs.candidate_id }}
+          name: ${{ needs.resolve.outputs.artifact_namespace }}-payload-${{ needs.resolve.outputs.candidate_id }}
           path: payload
           if-no-files-found: error
           overwrite: true
@@ -310,7 +330,7 @@ jobs:
         id: evidence
         uses: actions/upload-artifact@v7
         with:
-          name: release-candidate-evidence-${{ needs.resolve.outputs.candidate_id }}
+          name: ${{ needs.resolve.outputs.artifact_namespace }}-evidence-${{ needs.resolve.outputs.candidate_id }}
           path: payload/evidence
           if-no-files-found: error
           overwrite: true
@@ -325,6 +345,7 @@ jobs:
       - name: Seal candidate record
         env:
           RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+          RELEASE_CANDIDATE_PURPOSE: ${{ needs.resolve.outputs.purpose }}
           RELEASE_SOURCE_SHA: ${{ github.sha }}
           RELEASE_BUILD_CONTROL_SHA: ${{ github.sha }}
           RELEASE_ACCEPTANCE_CONTROL_SHA: ${{ github.sha }}
@@ -333,9 +354,9 @@ jobs:
           RELEASE_DESKTOP_PREFIX: ${{ needs.desktop.outputs.artifact_prefix }}
           RELEASE_DESKTOP_FINGERPRINT: ${{ needs.desktop.outputs.signing_fingerprint }}
           RELEASE_PAYLOAD_ARTIFACT_ID: ${{ steps.payload.outputs.artifact-id }}
-          RELEASE_PAYLOAD_ARTIFACT_NAME: release-candidate-payload-${{ needs.resolve.outputs.candidate_id }}
+          RELEASE_PAYLOAD_ARTIFACT_NAME: ${{ needs.resolve.outputs.artifact_namespace }}-payload-${{ needs.resolve.outputs.candidate_id }}
           RELEASE_EVIDENCE_ARTIFACT_ID: ${{ steps.evidence.outputs.artifact-id }}
-          RELEASE_EVIDENCE_ARTIFACT_NAME: release-candidate-evidence-${{ needs.resolve.outputs.candidate_id }}
+          RELEASE_EVIDENCE_ARTIFACT_NAME: ${{ needs.resolve.outputs.artifact_namespace }}-evidence-${{ needs.resolve.outputs.candidate_id }}
           RELEASE_WORKFLOW: .github/workflows/release-candidate.yml
           RELEASE_ACCEPTANCE_JSON: >-
             [{"kind":"windows-amd64","status":"passed","evidencePath":"evidence/windows-amd64.json"},{"kind":"windows-arm64","status":"passed","evidencePath":"evidence/windows-arm64.json"},{"kind":"macos-universal-intel","status":"passed","evidencePath":"evidence/macos-universal-intel.json"}]
@@ -345,18 +366,24 @@ jobs:
           RELEASE_EXPIRES_AT="$(date -u -d '+30 days' +%Y-%m-%dT%H:%M:%SZ)"
           export RELEASE_RENDERED_NOTES_SHA256 RELEASE_CREATED_AT RELEASE_EXPIRES_AT
           node scripts/release-candidate.mjs seal payload record/record.json
-          node scripts/release-candidate.mjs verify payload record/record.json
+          if [ "$RELEASE_CANDIDATE_PURPOSE" = rehearsal ]; then
+            node scripts/release-candidate.mjs verify-rehearsal payload record/record.json
+          else
+            node scripts/release-candidate.mjs verify payload record/record.json
+          fi
       - uses: actions/attest-build-provenance@v3
         with:
           subject-path: record/record.json
       - uses: actions/upload-artifact@v7
         with:
-          name: release-candidate-record-${{ needs.resolve.outputs.candidate_id }}
+          name: ${{ needs.resolve.outputs.artifact_namespace }}-record-${{ needs.resolve.outputs.candidate_id }}
           path: record/record.json
           if-no-files-found: error
           overwrite: true
           retention-days: 90
       - name: Report publish command
+        env:
+          PURPOSE: ${{ needs.resolve.outputs.purpose }}
         run: |
           {
             echo "### Candidate ready"
@@ -364,7 +391,11 @@ jobs:
             echo "\`${{ needs.resolve.outputs.candidate_id }}\`"
             echo
             echo '```sh'
-            echo "./scripts/release-stable.sh '${{ needs.resolve.outputs.candidate_id }}'"
+            if [ "$PURPOSE" = rehearsal ]; then
+              echo "gh workflow run release-candidate-verify.yml --ref main-v2 -f candidate_id='${{ needs.resolve.outputs.candidate_id }}'"
+            else
+              echo "./scripts/release-stable.sh '${{ needs.resolve.outputs.candidate_id }}'"
+            fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
