@@ -45,7 +45,7 @@ type computerRead struct{ session *computer.Session }
 func (computerRead) Name() string { return "computer_read" }
 
 func (computerRead) Description() string {
-	return "See another application on this computer, named by bundle id. what=apps lists applications with windows; snapshot returns its accessibility tree with [aN] refs for computer_act; screenshot captures its front window (computer_act x/y use its pixels)."
+	return "See another application on this computer, named by bundle id. what=apps lists applications with windows; snapshot returns its accessibility tree with [aN] refs for computer_act; screenshot captures its front window (computer_act x/y use its pixels, and the person is shown it too)."
 }
 
 func (computerRead) Schema() json.RawMessage {

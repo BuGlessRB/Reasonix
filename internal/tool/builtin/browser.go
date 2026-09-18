@@ -147,7 +147,7 @@ func (browserRead) Name() string { return "browser_read" }
 
 func (browserRead) Description() string {
 	return "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), find (lines carrying text, with their refs), " +
-		"screenshot (browser_act x/y use its pixels), logs (errors since you last read them), network (what it requested and what came back; text narrows by URL), tabs."
+		"screenshot (browser_act x/y use its pixels, and the person is shown it too), logs (errors since you last read them), network (what it requested and what came back; text narrows by URL), tabs."
 }
 
 func (browserRead) Schema() json.RawMessage {
