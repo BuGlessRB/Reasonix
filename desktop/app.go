@@ -31,7 +31,6 @@ import (
 	"reasonix/internal/extension/providerext"
 	"reasonix/internal/fileref"
 	fileenc "reasonix/internal/fileutil/encoding"
-	goaldomain "reasonix/internal/goal"
 	"reasonix/internal/i18n"
 	"reasonix/internal/mcpdiag"
 	"reasonix/internal/mcpregistry"
@@ -6427,96 +6426,7 @@ func (a *App) loadConfigForVision(root string) (*config.Config, error) {
 }
 
 func (a *App) MetaForTab(tabID string) Meta {
-	a.mu.RLock()
-	tab := a.tabByIDLocked(tabID)
-	snap := snapshotTabRuntimeLocked(tab)
-	runtimeView := a.sessionRuntimeViewLocked(tab)
-	a.mu.RUnlock()
-	if tab == nil {
-		meta := Meta{EventChannel: eventChannel}
-		if ref, ok := a.remoteTabRefFor(tabID); ok {
-			meta.Remote = &ref
-		}
-		return meta
-	}
-	cwd := snap.workspaceRoot
-	if cwd == "" {
-		cwd, _ = os.Getwd()
-	}
-	// Git branch and image-input capability come from the per-tab cache
-	// refreshed in the background (refreshTabMetaExtras); computing them here
-	// put a config load + model resolution on every meta request. A miss or
-	// stale entry schedules a refresh and serves the last known values (empty
-	// on the very first call; the "tab:meta" event delivers the refresh).
-	extras, refreshExtras := tabMetaExtrasFor(tab, cwd, snap.model)
-	// Native image routing is already frozen in the Controller. Reading this
-	// cheap snapshot also makes rebuilds visible immediately, without mixing
-	// newly saved config with a provider from the preceding runtime generation.
-	if capability, ok := snap.ctrl.(interface{ ImageInputSnapshot() (bool, bool, bool) }); ok {
-		if enabled, fallback, available := capability.ImageInputSnapshot(); available {
-			extras.imageInputEnabled, extras.visionFallbackEnabled = enabled, fallback
-		}
-	}
-	if refreshExtras {
-		a.scheduleTabMetaExtrasRefresh(tab.ID)
-	}
-	autoApproveTools := snap.ctrl != nil && snap.ctrl.AutoApproveTools()
-	collaborationMode := snap.collaborationMode()
-	toolApprovalMode := snap.currentToolApprovalMode()
-	// Deprecated dual-write wire values: pinned so one-version-old frontends
-	// keep parsing meta; nothing branches on them anymore.
-	tokenMode := boot.TokenModeFull
-	agentPreset := boot.AgentPresetBalanced
-	goal := snap.currentGoal()
-	goalStatus := snap.currentGoalStatus()
-	var goalView *goaldomain.View
-	if reader, ok := snap.ctrl.(control.RuntimeStateReader); ok {
-		goalView = reader.RuntimeStateSnapshot().Goal
-	}
-	sessionPath := strings.TrimSpace(snap.sessionPath)
-	sessionID := strings.TrimSpace(snap.sessionID)
-	var sessionRef *session.SessionRef
-	if sessionID != "" {
-		ref := session.SessionRef{HostID: localDesktopHostID, SessionID: sessionID}
-		sessionRef = &ref
-	}
-	var sessionRevision int64
-	var sessionDigest string
-	if branchMeta, ok, err := agent.LoadBranchMeta(sessionPath); err == nil && ok {
-		sessionRevision = branchMeta.Revision
-		sessionDigest = branchMeta.ContentDigest
-	}
-	return Meta{
-		Label:                 snap.label,
-		Ready:                 runtimeView.Phase == sessionRuntimeReady && snap.ctrl != nil,
-		Runtime:               runtimeView,
-		StartupErr:            snap.startupErr,
-		EventChannel:          eventChannel,
-		SessionPath:           sessionPath,
-		SessionID:             sessionID,
-		Session:               sessionRef,
-		SessionRevision:       sessionRevision,
-		SessionDigest:         sessionDigest,
-		Cwd:                   cwd,
-		WorkspaceRoot:         cwd,
-		WorkspaceName:         tabWorkspaceNameForScope(snap.scope, cwd),
-		WorkspacePath:         cwd,
-		GitBranch:             extras.gitBranch,
-		ImageInputEnabled:     extras.imageInputEnabled,
-		VisionFallbackEnabled: extras.visionFallbackEnabled,
-		AutoApproveTools:      autoApproveTools,
-		Bypass:                autoApproveTools,
-		CollaborationMode:     collaborationMode,
-		TokenMode:             tokenMode,
-		AgentPreset:           agentPreset,
-		ToolApprovalMode:      toolApprovalMode,
-		Goal:                  goal,
-		GoalStatus:            goalStatus,
-		GoalView:              goalView,
-		GoalRuntime:           goalRuntimeViewFromController(snap.ctrl),
-		CanonicalTodos:        ctrlTodos(snap.ctrl),
-		PinnedFiles:           buildPinnedContext(snap.workspaceRoot, tab.GetPinnedFiles()).Infos,
-	}
+	return a.metaForTab(tabID)
 }
 
 // ctrlTodos returns the canonical task list from a session controller, or nil

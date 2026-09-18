@@ -34,6 +34,7 @@ import type {
   WorkspaceSessionPage,
   WorkspaceSnapshot,
 } from "../generated/desktopContract.generated";
+import type { ExactInteractionBindings } from "./exactInteractionBindings";
 import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
 import { addBreadcrumb } from "./breadcrumbs";
@@ -58,6 +59,7 @@ import { sessionTitleTarget } from "./sessionTitleOperation";
 import { mockHistoryContentField, mockHistorySlice, mockTopicHistory as topicHistoryFixture } from "./bridgeHistoryFixtures";
 import { createMockModelScopePreset, type MockProviderPresetTemplate } from "./mockModelScopePreset";
 import { createMockRemoteProjects } from "./mockRemoteProjects";
+import { createBrowserMockInteractionIdentity, mockSessionMeta, withMockSessionIdentity } from "./browserMockInteractionIdentity";
 import { mockRemoteHostView } from "./mockRemoteHosts";
 import type { RemoteProjectBindings } from "./remoteProjectBridge";
 import type { ForkTargetsBindings } from "./forkTargets";
@@ -233,7 +235,6 @@ interface NativeConfirmRequest {
   cancelLabel: string;
   destructive: boolean;
 }
-
 interface DesktopWindowState {
   width: number;
   height: number;
@@ -243,7 +244,7 @@ interface DesktopWindowState {
 }
 // AppBindings is the hand-written React-to-Go contract. _CheckGeneratedBindings
 // catches generated methods missing here; update this interface and typecheck.
-export interface AppBindings extends SessionExportBindings, SessionLifecycleBindings, ForkTargetsBindings, ToolRecoveryBindings, ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings, TranscriptProtocolBindings, SessionReaderBindings {
+export interface AppBindings extends SessionExportBindings, SessionLifecycleBindings, ForkTargetsBindings, ToolRecoveryBindings, ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings, TranscriptProtocolBindings, SessionReaderBindings, ExactInteractionBindings {
   GetLegacyEmptySessionCleanupStatus(): Promise<LegacyEmptySessionCleanupStatus>;
   RetryLegacyEmptySessionCleanup(): Promise<LegacyEmptySessionCleanupStatus>;
   OpenSessionDraft(workspaceId: string): Promise<SessionDraftView>;
@@ -697,7 +698,6 @@ export interface AppBindings extends SessionExportBindings, SessionLifecycleBind
   SetAutoPlan(mode: string): Promise<void>;
   SetDefaultToolApprovalMode(mode: string): Promise<void>;
   SetDefaultAutoRecoveryCheckpoint(enabled: boolean): Promise<void>;
-
   RenameProviderConnections(names: string[], displayName: string): Promise<void>;
   SaveProvider(p: ProviderView): Promise<void>;
   SetProviderWebSearch(names: string[], enabled: boolean): Promise<void>;
@@ -894,7 +894,6 @@ export interface AppBindings extends SessionExportBindings, SessionLifecycleBind
 // sites by tsc when components invoke app.<method>(...).
 type AssertNever<T extends never> = T;
 export type _CheckGenToApp = AssertNever<Exclude<DesktopCommandName, keyof AppBindings>>;
-
 // Must match desktop/app.go's eventChannel constant.
 const EVENT_CHANNEL = "agent:event";
 
@@ -2112,7 +2111,7 @@ function makeMockApp(): AppBindings {
           pendingApprovalPreviewPrompt = { id: "mock-sys-confirm", tool: "bash" };
           emit({ kind: "reasoning", text: "我已经准备好执行同步脚本，但这个操作会影响本地 workspace，需要用户确认。" });
           await delay(160);
-          emit({
+          emitMockPrompt({
             kind: "approval_request",
             approval: {
               id: "mock-sys-confirm",
@@ -2151,14 +2150,8 @@ function makeMockApp(): AppBindings {
     if (!tabId) return;
     mockTabs = mockTabs.map((tab) => (tab.id === tabId ? { ...tab, running } : tab));
   };
-  const emitMockTurnStarted = (submissionId?: string) => {
-    setMockTabRunning(currentMockTurnTabId(), true);
-    emit({ kind: "turn_started", submissionId });
-  };
-  const emitMockTurnDone = (submissionId?: string) => {
-    setMockTabRunning(currentMockTurnTabId(), false);
-    emit({ kind: "turn_done", submissionId });
-  };
+  const mockInteractions = createBrowserMockInteractionIdentity({ emit, currentTabId: currentMockTurnTabId, setRunning: setMockTabRunning });
+  const { emitPrompt: emitMockPrompt, turnStarted: emitMockTurnStarted, turnDone: emitMockTurnDone } = mockInteractions;
   // Fresh user decisions never auto-allow on a posture switch (mirrors the
   // backend's requiresFreshApprovalTool set).
   const mockFreshApprovalTools = new Set(["exit_plan_mode", "sandbox_escape", "memory_remember", "memory_forget", "managed_config_write"]);
@@ -2325,7 +2318,7 @@ function makeMockApp(): AppBindings {
       pendingApprovalPreviewPrompt = { id: "mock-sandbox-escape-preview", tool: "sandbox_escape" };
       emitMockTurnStarted();
       emit({ kind: "reasoning", text: t("mock.sandboxEscapeReasoning") });
-      emit({
+      emitMockPrompt({
         kind: "approval_request",
         approval: {
           id: "mock-sandbox-escape-preview",
@@ -2661,13 +2654,13 @@ function makeMockApp(): AppBindings {
         emitMockTurnDone(submissionID);
         return;
       }
-      if (decisionSurfaceMock === "mcp_interaction") return (await import("./mockMCPInteraction")).showMockMCPInteraction(delay, () => cancelled, emit);
+      if (decisionSurfaceMock === "mcp_interaction") return (await import("./mockMCPInteraction")).showMockMCPInteraction(delay, () => cancelled, emitMockPrompt);
       if (decisionSurfaceMock === "tool_approval") {
         pendingApprovalPreview = true;
         pendingApprovalPreviewPrompt = { id: "mock-approval-preview", tool: "bash" };
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "approval_request",
           approval: {
             id: "mock-approval-preview",
@@ -2682,7 +2675,7 @@ function makeMockApp(): AppBindings {
         pendingApprovalPreviewPrompt = { id: "mock-recovery-preview", tool: "write_file" };
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "approval_request",
           approval: {
             id: "mock-recovery-preview",
@@ -2726,7 +2719,7 @@ function makeMockApp(): AppBindings {
         pendingApprovalPreviewPrompt = { id: "mock-sandbox-escape-preview", tool: "sandbox_escape" };
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "approval_request",
           approval: {
             id: "mock-sandbox-escape-preview",
@@ -2742,7 +2735,7 @@ function makeMockApp(): AppBindings {
         pendingApprovalPreviewPrompt = { id: "mock-plan-approval-preview", tool: "exit_plan_mode" };
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "approval_request",
           approval: {
             id: "mock-plan-approval-preview",
@@ -2768,7 +2761,7 @@ function makeMockApp(): AppBindings {
         const allowOnceDescription = t("approval.allowOnceDesc");
         const denyDescription = t("approval.denyDesc");
 
-        emit({
+        emitMockPrompt({
           kind: "ask_request",
           ask: {
             id: "mock-long-options",
@@ -2829,7 +2822,7 @@ function makeMockApp(): AppBindings {
         pendingAskPreview = true;
         await delay(250);
         if (cancelled) return;
-        emit({
+        emitMockPrompt({
           kind: "ask_request",
           ask: {
             id: `mock-ask-preview-${Date.now()}`,
@@ -3243,6 +3236,7 @@ function makeMockApp(): AppBindings {
             throw new Error(`unsupported prompt kind: ${kind}`);
           });
         },
+        async ResolvePromptForSession(target, answer) { await this.ResolvePromptForTab?.(target.tabId, target.promptId, target.turnId, target.runtimeEpoch, target.kind, answer); },
         async ReplayPendingPrompts() {},
         async ReplayPendingPromptsForTab(_tabID) {},
         async ConfirmAction(req) {
@@ -3703,7 +3697,7 @@ function makeMockApp(): AppBindings {
           return null;
         },
         async Meta() {
-          const active = mockTabs.find((tab) => tab.active) ?? mockTabs[0];
+          const active = withMockSessionIdentity(mockTabs.find((tab) => tab.active) ?? mockTabs[0]);
           const toolApprovalMode = normalizeToolApprovalMode(active?.toolApprovalMode, active ? normalizeMode(active.mode) : "normal", settings.autoApproveTools);
           const autoApproveTools = toolApprovalMode === "danger-full-access";
           const collaborationMode = normalizeCollaborationMode(active?.collaborationMode, active?.goal, active ? normalizeMode(active.mode) : "normal");
@@ -3716,6 +3710,7 @@ function makeMockApp(): AppBindings {
             workspaceRoot: active?.workspaceRoot || workspacePath,
             workspaceName: active?.workspaceName,
             workspacePath,
+            ...mockSessionMeta(active),
             sandboxPath: settings.sandbox.workspaceRoot,
             gitBranch: active?.gitBranch || (active?.scope === "project" ? "main" : ""),
             imageInputEnabled: true,
@@ -3728,7 +3723,7 @@ function makeMockApp(): AppBindings {
           };
         },
         async MetaForTab(tabID) {
-          const tab = mockTabs.find((item) => item.id === tabID) ?? mockTabs.find((item) => item.active) ?? mockTabs[0];
+          const tab = withMockSessionIdentity(mockTabs.find((item) => item.id === tabID) ?? mockTabs.find((item) => item.active) ?? mockTabs[0]);
           const toolApprovalMode = normalizeToolApprovalMode(tab?.toolApprovalMode, tab ? normalizeMode(tab.mode) : "normal", settings.autoApproveTools);
           const autoApproveTools = toolApprovalMode === "danger-full-access";
           const collaborationMode = normalizeCollaborationMode(tab?.collaborationMode, tab?.goal, tab ? normalizeMode(tab.mode) : "normal");
@@ -3741,6 +3736,7 @@ function makeMockApp(): AppBindings {
             workspaceRoot: tab?.workspaceRoot || workspacePath,
             workspaceName: tab?.workspaceName,
             workspacePath,
+            ...mockSessionMeta(tab),
             sandboxPath: settings.sandbox.workspaceRoot,
             gitBranch: tab?.gitBranch || (tab?.scope === "project" ? "main" : ""),
             autoApproveTools,
@@ -6008,6 +6004,7 @@ function makeMockApp(): AppBindings {
       return "";
     },
     async SubmitExtensionForm() {},
+    async SubmitExtensionFormExact() {}, async ResolveRemoteTabPromptExact() {}, async SubmitRemoteTabExtensionFormExact() {},
     ...remoteProjects.bindings,
     async CleanRemoteLegacyWorkbenchData() {},
   };
