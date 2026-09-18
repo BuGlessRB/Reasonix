@@ -202,7 +202,7 @@ jobs:
       - name: test (Windows credential ACL identity)
         if: env.RUN_STEPS == 'true' && runner.os == 'Windows' && github.event_name == 'pull_request'
         timeout-minutes: 3
-        run: go test -timeout=2m -run '^TestCredentialAccessRepairsLegacyCredentialDeny' ./internal/config
+        run: go test -timeout=2m -run '^TestCredentialAccessRepairsLegacyCredentialDeny|^TestRepairLegacyCredentialDenyMatchesFileAcrossPathAliases$' ./internal/config ./internal/winsandbox
 
       # The general Windows PR smoke list intentionally omits internal/tool.
       # Keep the session-temp portability contract covered without widening the
