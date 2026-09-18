@@ -22,11 +22,16 @@ enum Clipboard {
         let saved = snapshot(board)
         let written = board.clearContents()
         board.setString(text, forType: .string)
-        defer { restore(board, saved, writtenAt: written) }
         _ = try Keyboard.press(pid: pid, chord: "cmd+v", times: 1)
-        // The application reads the clipboard when it handles the keystroke, so
-        // giving it back any sooner hands it the old contents to paste.
+        // The application reads the clipboard when it gets round to handling the
+        // keystroke, and giving it back before then is what hands it the
+        // person's own clipboard to paste instead. So the wait is long, and it
+        // is not the step's to pay: a busy application still has it a second
+        // after this call has answered.
         Thread.sleep(forTimeInterval: 0.25)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) {
+            Clipboard.restore(board, saved, writtenAt: written)
+        }
         return ["pasted": text.count]
     }
 
@@ -42,7 +47,7 @@ enum Clipboard {
         }
     }
 
-    private static func restore(_ board: NSPasteboard, _ saved: [[NSPasteboard.PasteboardType: Data]], writtenAt: Int) {
+    fileprivate static func restore(_ board: NSPasteboard, _ saved: [[NSPasteboard.PasteboardType: Data]], writtenAt: Int) {
         guard board.changeCount == writtenAt else { return }
         board.clearContents()
         guard !saved.isEmpty else { return }

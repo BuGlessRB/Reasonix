@@ -269,12 +269,20 @@ func TestLivePasteLeavesTheClipboardAsItFoundIt(t *testing.T) {
 	}
 	waitLog(t, log, "text "+pasted)
 
-	back, err := exec.Command("pbpaste").Output()
-	if err != nil {
-		t.Fatalf("pbpaste: %v", err)
-	}
-	if string(back) != held {
-		t.Fatalf("the clipboard was left holding %q, not what the person had (%q)", back, held)
+	// It comes back after the application has had its chance at it, not before.
+	deadline := time.Now().Add(6 * time.Second)
+	for {
+		back, err := exec.Command("pbpaste").Output()
+		if err != nil {
+			t.Fatalf("pbpaste: %v", err)
+		}
+		if string(back) == held {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the clipboard was left holding %q, not what the person had (%q)", back, held)
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 }
 

@@ -66,7 +66,11 @@ func (m *chatTUI) showSandboxStatus() {
 func (m *chatTUI) runRevokeCommand(arg string) {
 	granted := m.ctrl.PermissionRules().Granted
 	if arg == "" {
-		m.notice(i18n.M.SlashRevokeNone)
+		if len(granted) == 0 {
+			m.notice(i18n.M.SlashRevokeNone)
+			return
+		}
+		m.notice(strings.Join(granted, "\n") + "\n" + i18n.M.SlashRevokeHint)
 		return
 	}
 	rule := ""

@@ -47,6 +47,14 @@ func TestTheBoundaryListsSessionGrantsAndTakesThemBack(t *testing.T) {
 		t.Fatalf("the boundary did not name what this session allows: %q", said())
 	}
 
+	// `revoke` with nothing to revoke names what there is instead of saying
+	// there is nothing.
+	commit = nil
+	m.showBoundary("/sandbox revoke")
+	if !strings.Contains(said(), "Computer=com.example.Notes") || len(ctrl.revoked) != 0 {
+		t.Fatalf("a bare revoke said %q and asked the kernel %v", said(), ctrl.revoked)
+	}
+
 	m.showBoundary("/sandbox revoke Computer=com.example.Notes")
 	if len(ctrl.revoked) != 1 || ctrl.revoked[0] != "Computer=com.example.Notes" {
 		t.Fatalf("revoking one asked for %v", ctrl.revoked)
