@@ -1,6 +1,6 @@
 //go:build windows
 
-package sessioncatalog
+package pathidentity
 
 import (
 	"path/filepath"
@@ -8,14 +8,17 @@ import (
 	"testing"
 )
 
-func TestWindowsCatalogPathIdentityFoldsPerDirectory(t *testing.T) {
+func TestWindowsIdentityKeyFoldsPerDirectory(t *testing.T) {
 	caseSensitiveParent := filepath.Clean(`C:\Root`)
 	identity := func(path string) string {
-		return windowsCatalogPathIdentityBy(path, func(directory string) (bool, bool) {
-			return !strings.EqualFold(filepath.Clean(directory), caseSensitiveParent), true
+		key, err := windowsIdentityKeyBy(path, func(directory string) (bool, bool, error) {
+			return !strings.EqualFold(filepath.Clean(directory), caseSensitiveParent), true, nil
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return key
 	}
-
 	upper := identity(`C:\ROOT\Foo\LEAF.jsonl`)
 	lower := identity(`c:\root\foo\leaf.jsonl`)
 	if upper == lower {
