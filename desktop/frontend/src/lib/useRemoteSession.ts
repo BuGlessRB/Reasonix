@@ -241,6 +241,12 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
           current: () => !cancelled && ticket === generation && !hydratedRef.current,
         });
         if (!projection || cancelled || ticket !== generation || hydratedRef.current || primedRef.current) return;
+        // Only a blank transcript may be primed. Once the follower (or a
+        // previous hydrate) published items or a live tail, that cut owns the
+        // surface: history_replace has no revision guard, so a stale or empty
+        // window landing after it would wipe the conversation.
+        const mounted = transcriptRef.current;
+        if (mounted.items.length > 0 || mounted.live?.text || mounted.live?.reasoning) return;
         primedRef.current = true;
         setTranscript(current => reducer(current, historyReplaceAction(projection)));
       } catch {
