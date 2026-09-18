@@ -125,7 +125,7 @@ func sourceAliases(state workspacestate.State, workspaceID, sessionID string) []
 			continue
 		}
 		aliases = append(aliases, "source\x00local\x00"+m.SourceKey)
-		if m.HeadID == "" {
+		if sourceMappingHasPathAlias(m) {
 			aliases = append(aliases, "path\x00"+m.Path)
 		}
 	}
