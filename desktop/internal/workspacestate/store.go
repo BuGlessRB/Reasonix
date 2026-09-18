@@ -3,8 +3,6 @@ package workspacestate
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,9 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"reasonix/internal/filelock"
 	"reasonix/internal/fileutil"
-	"reasonix/internal/pathidentity"
+	filelock "reasonix/internal/identitylock"
 )
 
 const (
@@ -107,109 +104,6 @@ func (s *Store) Load(ctx context.Context) (State, error) {
 		return State{}, err
 	}
 	return cloneState(state)
-}
-
-func (s *Store) EnsureWorkspace(ctx context.Context, workspace Workspace) error {
-	_, err := s.EnsureWorkspaceResolved(ctx, workspace)
-	return err
-}
-
-// EnsureWorkspaceResolved registers workspace or returns the authoritative ID
-// of an existing workspace with the same physical directory identity.
-func (s *Store) EnsureWorkspaceResolved(ctx context.Context, workspace Workspace) (string, error) {
-	workspace.ID = strings.TrimSpace(workspace.ID)
-	if workspace.ID == "" {
-		return "", errors.New("workspace id is required")
-	}
-	resolvedID := workspace.ID
-	err := s.mutate(ctx, func(state *State) error {
-		var candidate pathidentity.Identity
-		var resolveErr error
-		if strings.TrimSpace(workspace.Root) != "" {
-			candidate, resolveErr = pathidentity.Resolve(workspace.Root, pathidentity.Options{FollowLeaf: true})
-			if resolveErr != nil {
-				return fmt.Errorf("resolve workspace root: %w", resolveErr)
-			}
-		}
-		revalidateCandidate := func() error {
-			if candidate.Key == "" {
-				return nil
-			}
-			latest, latestErr := pathidentity.Resolve(workspace.Root, pathidentity.Options{FollowLeaf: true})
-			if latestErr != nil {
-				return fmt.Errorf("revalidate workspace root: %w", latestErr)
-			}
-			if latest.Key != candidate.Key {
-				return fmt.Errorf("%w: workspace root identity changed during registration", ErrMutationConflict)
-			}
-			return nil
-		}
-		matches := make([]string, 0, 1)
-		if candidate.Key != "" {
-			for id, existing := range state.Workspaces {
-				if strings.TrimSpace(existing.Root) == "" {
-					continue
-				}
-				identity, resolveErr := pathidentity.Resolve(existing.Root, pathidentity.Options{FollowLeaf: true})
-				if resolveErr != nil {
-					return fmt.Errorf("resolve persisted workspace %q: %w", id, resolveErr)
-				}
-				if identity.Key == candidate.Key {
-					matches = append(matches, id)
-				}
-			}
-			slices.Sort(matches)
-			if len(matches) > 1 {
-				return fmt.Errorf("%w: %s", ErrAmbiguousIdentity, strings.Join(matches, ", "))
-			}
-			if len(matches) == 1 {
-				if err := revalidateCandidate(); err != nil {
-					return err
-				}
-				resolvedID = matches[0]
-				return nil
-			}
-		}
-		now := time.Now().UTC()
-		current, exists := state.Workspaces[workspace.ID]
-		if exists {
-			if current.Root == workspace.Root || (current.Root == "" && workspace.Root == "") {
-				return revalidateCandidate()
-			}
-			if workspace.ID == GlobalWorkspaceID || candidate.Key == "" {
-				return ErrMutationConflict
-			}
-			resolvedID = versionedWorkspaceID(candidate.Key)
-			if fallback, fallbackExists := state.Workspaces[resolvedID]; fallbackExists {
-				identity, resolveErr := pathidentity.Resolve(fallback.Root, pathidentity.Options{FollowLeaf: true})
-				if resolveErr != nil {
-					return fmt.Errorf("resolve collided workspace %q: %w", resolvedID, resolveErr)
-				}
-				if identity.Key != candidate.Key {
-					return ErrMutationConflict
-				}
-				if err := revalidateCandidate(); err != nil {
-					return err
-				}
-				return nil
-			}
-		}
-		if err := revalidateCandidate(); err != nil {
-			return err
-		}
-		workspace.ID = resolvedID
-		workspace.SessionIDs = []string{}
-		workspace.CreatedAt, workspace.UpdatedAt = now, now
-		state.Workspaces[workspace.ID] = workspace
-		state.WorkspaceIDs = append(state.WorkspaceIDs, workspace.ID)
-		return nil
-	})
-	return resolvedID, err
-}
-
-func versionedWorkspaceID(identityKey string) string {
-	sum := sha256.Sum256([]byte("reasonix-workspace-pathidentity-v2\x00" + identityKey))
-	return "project-v2-" + hex.EncodeToString(sum[:12])
 }
 
 func (s *Store) RenameWorkspace(ctx context.Context, workspaceID, title string) error {

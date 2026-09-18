@@ -28,3 +28,14 @@ func TestWindowsIdentityKeyFoldsPerDirectory(t *testing.T) {
 		t.Fatalf("segment-aware identity = %q, want %q", got, want)
 	}
 }
+
+func TestDirectoryCaseInsensitiveQueriesNativeDirectory(t *testing.T) {
+	insensitive, exists, err := directoryCaseInsensitive(t.TempDir())
+	if err != nil {
+		t.Fatalf("query directory case sensitivity: %v", err)
+	}
+	if !exists {
+		t.Fatal("temporary directory should exist")
+	}
+	_ = insensitive
+}

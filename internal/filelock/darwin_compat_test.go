@@ -3,6 +3,7 @@
 package filelock
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,15 +19,15 @@ func TestCanonicalLockPathKeepsLegacyDarwinCase(t *testing.T) {
 		t.Fatalf("canonical lock path = %q, want exact legacy case", got)
 	}
 	alias := filepath.Join(filepath.Dir(got), "mixedcase.lock")
-	gotKey, err := localRegistryKey(got)
+	release, err := TryAcquireModeWithKey(got, strings.ToLower(got), ModeExclusive)
 	if err != nil {
 		t.Fatal(err)
 	}
-	aliasKey, err := localRegistryKey(alias)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if gotKey != aliasKey {
-		t.Fatalf("local registry did not fold case aliases: %q / %q", got, alias)
+	defer release()
+	if aliasRelease, err := TryAcquireModeWithKey(alias, strings.ToLower(alias), ModeExclusive); !errors.Is(err, ErrHeld) {
+		if aliasRelease != nil {
+			aliasRelease()
+		}
+		t.Fatalf("local registry did not share explicit alias identity: %q / %q: %v", got, alias, err)
 	}
 }

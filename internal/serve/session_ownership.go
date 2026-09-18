@@ -17,9 +17,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/eventwire"
-	"reasonix/internal/pathidentity"
 	"reasonix/internal/provider"
-	"reasonix/internal/store"
 )
 
 // Session ownership handoff: the single-writer protocol behind local takeover.
@@ -233,44 +231,6 @@ func (s *Server) snapshotForeground(cur control.SessionAPI) {
 	if err := cur.Snapshot(); err != nil {
 		slog.Warn("serve: snapshot before switch", "err", err)
 	}
-}
-
-// resolveSessionPath validates a client-supplied session path against the
-// foreground session dir the same way POST /resume does: absolute, a real
-// transcript file, inside the session dir, and not pending cleanup. The
-// returned path is symlink-resolved. Containment is checked with identity keys
-// so a comparison key from a case-insensitive volume is never mistaken for a
-// different on-disk directory spelling.
-func (s *Server) resolveSessionPath(raw string) (string, error) {
-	dir := s.ctl().SessionDir()
-	if dir == "" {
-		return "", errors.New("sessions disabled")
-	}
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		return "", errors.New("invalid session dir")
-	}
-	dirIdentity, err := pathidentity.Resolve(absDir, pathidentity.Options{FollowLeaf: true})
-	if err != nil {
-		return "", errors.New("invalid session dir")
-	}
-	absPath, err := filepath.Abs(strings.TrimSpace(raw))
-	if err != nil || !store.IsSessionTranscriptName(filepath.Base(absPath)) {
-		return "", errors.New("invalid session path")
-	}
-	pathIdentity, err := pathidentity.Resolve(absPath, pathidentity.Options{FollowLeaf: true})
-	if err != nil {
-		return "", errors.New("invalid session path")
-	}
-	rel, err := filepath.Rel(dirIdentity.Key, pathIdentity.Key)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		return "", errors.New("path outside session dir")
-	}
-	realPath := pathIdentity.PhysicalPath
-	if agent.IsCleanupPending(realPath) {
-		return "", errors.New("session is pending cleanup")
-	}
-	return realPath, nil
 }
 
 type ownershipView struct {

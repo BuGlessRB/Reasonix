@@ -22,7 +22,6 @@ import (
 	"reasonix/internal/extension/providerext"
 	"reasonix/internal/fileutil"
 	"reasonix/internal/notify"
-	"reasonix/internal/pathidentity"
 	"reasonix/internal/provider"
 	"reasonix/internal/session"
 	"reasonix/internal/sessiontitle"
@@ -6104,45 +6103,6 @@ func legacySessionScopeMatchesMigrationTarget(meta agent.BranchMeta, scope, work
 		return metaRoot == "" || sameProjectRoot(workspaceRoot, metaRoot)
 	}
 	return metaRoot == "" || sameProjectRoot(globalWorkspaceRoot(), metaRoot)
-}
-
-func cleanDesktopPath(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ""
-	}
-	if abs, err := filepath.Abs(path); err == nil {
-		path = abs
-	}
-	return filepath.Clean(path)
-}
-
-func sameDesktopPath(a, b string) bool {
-	same, err := sameDesktopPathStrict(a, b)
-	return err == nil && same
-}
-
-func sameDesktopPathStrict(a, b string) (bool, error) {
-	a, b = cleanDesktopPath(a), cleanDesktopPath(b)
-	if a == "" || b == "" {
-		return false, &pathidentity.Error{Kind: pathidentity.ErrorInvalid, Stage: "input", Err: errors.New("desktop path is empty")}
-	}
-	return pathidentity.Same(a, b, pathidentity.Options{FollowLeaf: true})
-}
-
-// projectRootKey is the map-key form of a project root: cleaned, absolute,
-// and case-folded on Windows — the same key form agent.CanonicalSessionPath
-// uses for session paths, so equivalent spellings never split lookups.
-func projectRootKey(root string) string {
-	root = cleanDesktopPath(root)
-	if root == "" {
-		return ""
-	}
-	identity, err := pathidentity.Resolve(root, pathidentity.Options{FollowLeaf: true})
-	if err != nil {
-		return ""
-	}
-	return identity.Key
 }
 
 func restoreSessionTopicIndex(dir, sessionPath string) error {

@@ -14,6 +14,7 @@ import (
 
 type rootLockDomain struct {
 	path string
+	key  string
 	mode filelock.Mode
 }
 
@@ -98,7 +99,7 @@ func acquireRootDomains(ctx context.Context, owner *Owner, domains []rootLockDom
 		var blocked *rootLockDomain
 		for i := range domains {
 			domain := &domains[i]
-			release, err := filelock.TryAcquireMode(domain.path, domain.mode)
+			release, err := filelock.TryAcquireModeWithKey(domain.path, domain.key, domain.mode)
 			if err == nil {
 				releases = append(releases, release)
 				continue
@@ -151,7 +152,11 @@ func rootLockDomains(lockDir string, roots []string) (*Owner, []rootLockDomain, 
 		if exclusive[normalizeIdentityPath(root)] {
 			mode = filelock.ModeExclusive
 		}
-		domains = append(domains, rootLockDomain{workspaceLockPath(lockDir, root), mode})
+		domain, err := makeRootLockDomain(workspaceLockPath(lockDir, root), mode)
+		if err != nil {
+			return nil, nil, err
+		}
+		domains = append(domains, domain)
 	}
 	paths := make([]string, 0, len(trees))
 	for path := range trees {
@@ -159,7 +164,19 @@ func rootLockDomains(lockDir string, roots []string) (*Owner, []rootLockDomain, 
 	}
 	sort.Strings(paths)
 	for _, path := range paths {
-		domains = append(domains, rootLockDomain{path, filelock.ModeExclusive})
+		domain, err := makeRootLockDomain(path, filelock.ModeExclusive)
+		if err != nil {
+			return nil, nil, err
+		}
+		domains = append(domains, domain)
 	}
 	return coordinator, domains, nil
+}
+
+func makeRootLockDomain(path string, mode filelock.Mode) (rootLockDomain, error) {
+	key, err := lockIdentityKey(path)
+	if err != nil {
+		return rootLockDomain{}, err
+	}
+	return rootLockDomain{path: path, key: key, mode: mode}, nil
 }

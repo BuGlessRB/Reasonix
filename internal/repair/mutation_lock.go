@@ -1,7 +1,6 @@
 package repair
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -9,13 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"reasonix/internal/config"
-	"reasonix/internal/filelock"
 	"reasonix/internal/pathidentity"
 )
 
@@ -64,10 +61,8 @@ func restoreRepairNodeIfAbsent(backup, target string) error {
 	return nil
 }
 
-// removeRepairNodeIfMatching first displaces a transaction-owned backup to a
-// unique sibling, then verifies the moved node against its original target
-// identity. A path replacement between verification and cleanup is restored or
-// retained, never unlinked as if it were transaction-owned.
+// removeRepairNodeIfMatching displaces and verifies a transaction backup.
+// Replaced paths are restored or retained, never unlinked as transaction-owned.
 func removeRepairNodeIfMatching(path, identityPath, expectedStateID string) error {
 	expectedStateID = strings.TrimSpace(expectedStateID)
 	if expectedStateID == "" {
@@ -254,132 +249,33 @@ func lockRepairMutationsTimeoutMode(timeout time.Duration, revalidateTargets boo
 		return nil, fmt.Errorf("lock repair mutations: create lock directory: %w", err)
 	}
 
-	type targetIdentity struct {
-		path   string
-		key    string
-		info   os.FileInfo
-		exists bool
-	}
-	targets := make([]targetIdentity, 0, len(paths))
-	primaryUnique := map[string]struct{}{}
-	lockKeySet := map[string]struct{}{}
-	for _, path := range paths {
-		path = strings.TrimSpace(path)
-		if path == "" {
-			continue
-		}
-		identity, err := pathidentity.Resolve(path, pathidentity.Options{FollowLeaf: false})
-		if err != nil {
-			return nil, fmt.Errorf("lock repair mutations: resolve target: %w", err)
-		}
-		if _, ok := primaryUnique[identity.Key]; ok {
-			continue
-		}
-		info, statErr := os.Lstat(identity.AccessPath)
-		exists := statErr == nil
-		if statErr != nil && !os.IsNotExist(statErr) {
-			return nil, fmt.Errorf("lock repair mutations: inspect target: %w", statErr)
-		}
-		primaryUnique[identity.Key] = struct{}{}
-		targets = append(targets, targetIdentity{path: identity.AccessPath, key: identity.Key, info: info, exists: exists})
-		lockKeySet[identity.Key] = struct{}{}
-		if legacy := legacyCanonicalRepairPath(path); legacy != "" {
-			lockKeySet[legacy] = struct{}{}
-		}
+	targets, primaryKeys, lockKeys, err := repairMutationTargets(paths)
+	if err != nil {
+		return nil, err
 	}
 	if len(targets) == 0 {
 		return func() {}, nil
 	}
-	primaryKeys := make([]string, 0, len(primaryUnique))
-	for key := range primaryUnique {
-		primaryKeys = append(primaryKeys, key)
-	}
-	sort.Strings(primaryKeys)
 	repairMutationBeforeLock(append([]string(nil), primaryKeys...))
-	lockPaths := make([]string, 0, len(lockKeySet))
-	for key := range lockKeySet {
-		digest := sha256.Sum256([]byte(key))
-		lockPaths = append(lockPaths, filepath.Join(lockDir, fmt.Sprintf("%x.lock", digest)))
+	domains, err := repairMutationLockDomains(lockDir, lockKeys)
+	if err != nil {
+		return nil, err
 	}
-	sort.Strings(lockPaths)
-
-	if timeout <= 0 {
-		timeout = repairMutationLockTimeout
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	var releases []func()
-	for {
-		releases = releases[:0]
-		contended := false
-		for _, lockPath := range lockPaths {
-			release, acquireErr := filelock.TryAcquire(lockPath)
-			if acquireErr == nil {
-				releases = append(releases, release)
-				continue
-			}
-			for _, held := range slices.Backward(releases) {
-				held()
-			}
-			releases = releases[:0]
-			if !errors.Is(acquireErr, filelock.ErrHeld) {
-				return nil, fmt.Errorf("lock repair mutations: %w", acquireErr)
-			}
-			contended = true
-			break
-		}
-		if !contended {
-			break
-		}
-		timer := time.NewTimer(20 * time.Millisecond)
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
-			return nil, fmt.Errorf("lock repair mutations: %w", ctx.Err())
-		}
+	releases, err := acquireRepairMutationLocks(timeout, domains)
+	if err != nil {
+		return nil, err
 	}
 	if revalidateTargets {
-		for _, target := range targets {
-			identity, resolveErr := pathidentity.Resolve(target.path, pathidentity.Options{FollowLeaf: false})
-			currentInfo, statErr := os.Lstat(target.path)
-			currentExists := statErr == nil
-			if statErr != nil && !os.IsNotExist(statErr) && resolveErr == nil {
-				resolveErr = statErr
-			}
-			identityChanged := resolveErr == nil && (identity.Key != target.key || repairEntryRedirected(target.info, target.exists, currentInfo, currentExists))
-			if resolveErr != nil || identityChanged {
-				for _, held := range slices.Backward(releases) {
-					held()
-				}
-				if resolveErr != nil {
-					return nil, fmt.Errorf("lock repair mutations: revalidate target: %w", resolveErr)
-				}
-				return nil, fmt.Errorf("lock repair mutations: target identity changed while waiting")
-			}
+		if err := revalidateRepairMutationTargets(targets); err != nil {
+			releaseRepairMutationLocks(releases)
+			return nil, err
 		}
 	}
 
 	var once sync.Once
 	return func() {
 		once.Do(func() {
-			for _, v := range slices.Backward(releases) {
-				v()
-			}
+			releaseRepairMutationLocks(releases)
 		})
 	}, nil
-}
-
-func repairEntryRedirected(before os.FileInfo, beforeExists bool, after os.FileInfo, afterExists bool) bool {
-	// Regular files are commonly published with rename(2) while holding this
-	// lock. A waiter still owns the same parent directory and leaf name after
-	// that replacement; the caller's content/hash precondition detects stale
-	// state. Directory entries, links, and special nodes retain native identity
-	// because replacing one can redirect the authorized operation elsewhere.
-	if (!beforeExists || before.Mode().IsRegular()) && (!afterExists || after.Mode().IsRegular()) {
-		return false
-	}
-	return beforeExists != afterExists || !os.SameFile(before, after)
 }

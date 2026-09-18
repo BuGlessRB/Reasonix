@@ -725,8 +725,20 @@ func normalizeIdentityPath(path string) string {
 	return identity.Key
 }
 
+func lockIdentityKey(path string) (string, error) {
+	identity, err := pathidentity.Resolve(path, pathidentity.Options{FollowLeaf: false})
+	if err != nil {
+		return "", err
+	}
+	return identity.Key, nil
+}
+
 func (o *Owner) acquireMode(ctx context.Context, path string, mode filelock.Mode, notified *bool) (func(), error) {
-	release, err := filelock.TryAcquireMode(path, mode)
+	localKey, err := lockIdentityKey(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve workspace lock identity: %w", err)
+	}
+	release, err := filelock.TryAcquireModeWithKey(path, localKey, mode)
 	if err == nil {
 		return release, nil
 	}
@@ -739,7 +751,7 @@ func (o *Owner) acquireMode(ctx context.Context, path string, mode filelock.Mode
 			o.onWait()
 		}
 	}
-	release, err = filelock.AcquireMode(ctx, path, mode)
+	release, err = filelock.AcquireModeWithKey(ctx, path, localKey, mode)
 	if err != nil {
 		return nil, fmt.Errorf("acquire workspace write lease: %w", err)
 	}

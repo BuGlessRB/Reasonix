@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/filelock"
+	filelock "reasonix/internal/identitylock"
 	"reasonix/internal/sessioncontent"
 )
 

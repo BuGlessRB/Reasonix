@@ -3,10 +3,10 @@
 package pathidentity
 
 import (
-	"encoding/binary"
 	"errors"
 	"path/filepath"
 	"strings"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -58,15 +58,29 @@ func directoryCaseInsensitive(path string) (insensitive, exists bool, err error)
 		return false, false, err
 	}
 	defer windows.CloseHandle(handle)
-	var info [4]byte
-	err = windows.GetFileInformationByHandleEx(handle, windows.FileCaseSensitiveInfo, &info[0], uint32(len(info)))
-	if errors.Is(err, windows.ERROR_INVALID_PARAMETER) || errors.Is(err, windows.ERROR_NOT_SUPPORTED) {
+	var iosb windows.IO_STATUS_BLOCK
+	var flags uint32
+	err = windows.NtQueryInformationFile(
+		handle,
+		&iosb,
+		(*byte)(unsafe.Pointer(&flags)),
+		uint32(unsafe.Sizeof(flags)),
+		windows.FileCaseSensitiveInformation,
+	)
+	if caseSensitivityQueryUnsupported(err) {
 		return true, true, nil
 	}
 	if err != nil {
 		return false, false, err
 	}
-	return binary.LittleEndian.Uint32(info[:])&windows.FILE_CS_FLAG_CASE_SENSITIVE_DIR == 0, true, nil
+	return flags&windows.FILE_CS_FLAG_CASE_SENSITIVE_DIR == 0, true, nil
+}
+
+func caseSensitivityQueryUnsupported(err error) bool {
+	status, ok := err.(windows.NTStatus)
+	return ok && (status == windows.STATUS_INVALID_INFO_CLASS ||
+		status == windows.STATUS_INVALID_PARAMETER ||
+		status == windows.STATUS_NOT_SUPPORTED)
 }
 
 func stripExtendedPrefix(path string) string {
