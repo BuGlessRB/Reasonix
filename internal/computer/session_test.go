@@ -91,7 +91,7 @@ func runFakeHelper(in io.Reader, out io.Writer) {
 			reply["result"] = lastClick
 		case "_asked":
 			reply["result"] = map[string]any{"asked": asked}
-		case "menu", "hold_key", "pointer_move", "pointer_click", "pointer_drag":
+		case "menu", "hold_key", "paste", "pointer_move", "pointer_click", "pointer_drag":
 			lastCall = map[string]any{"method": req.Method, "params": req.Params}
 		case "scroll":
 			lastCall = map[string]any{"method": req.Method, "params": req.Params}
@@ -426,5 +426,17 @@ func TestWaitingIsBoundedAndTheContextEndsIt(t *testing.T) {
 	defer cancel2()
 	if err := s.helper.Call(ctx2, "_silent", nil, nil); err == nil {
 		t.Fatal("a call the helper never answered returned no error")
+	}
+}
+
+func TestPastePutsTheWholeTextInAtOnce(t *testing.T) {
+	s := fakeSession(t)
+	ctx := context.Background()
+	res, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "paste", Text: "从剪贴板 pasted"}})
+	if err != nil || res.Notes[0] != "paste 11 characters" {
+		t.Fatalf("paste = %+v, %v", res, err)
+	}
+	if method, params := lastCall(t, s); method != "paste" || params["text"] != "从剪贴板 pasted" {
+		t.Fatalf("the helper was sent %s %v, want the text to paste", method, params)
 	}
 }

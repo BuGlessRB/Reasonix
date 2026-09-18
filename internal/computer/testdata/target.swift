@@ -78,6 +78,17 @@ final class Delegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         window.contentView?.addSubview(menuView)
         window.contentView?.addSubview(scroll)
         window.orderFrontRegardless()
+        // The Edit menu every application has: without it there is nothing for
+        // a paste keystroke to reach, and the fixture would not stand for one.
+        let bar = NSMenu()
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        edit.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        edit.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editItem.submenu = edit
+        bar.addItem(editItem)
+        NSApplication.shared.mainMenu = bar
         log("ready pid=\(ProcessInfo.processInfo.processIdentifier)")
     }
     @objc func pressed() { log("button pressed") }

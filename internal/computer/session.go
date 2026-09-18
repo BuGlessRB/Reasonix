@@ -285,6 +285,9 @@ func (s *Session) step(ctx context.Context, app App, step Step) (string, error) 
 		return fmt.Sprintf("type %d characters", len([]rune(step.Text))), s.call(ctx, "type", map[string]any{"pid": pid, "text": step.Text}, nil)
 	case "key":
 		return "press " + step.Key, s.call(ctx, "key", map[string]any{"pid": pid, "key": step.Key, "times": max(step.Times, 1)}, nil)
+	case "paste":
+		return fmt.Sprintf("paste %d characters", len([]rune(step.Text))),
+			s.call(ctx, "paste", map[string]any{"pid": pid, "text": step.Text}, nil)
 	case "hold_key":
 		return fmt.Sprintf("hold %s for %vs", step.Key, step.Seconds),
 			s.call(ctx, "hold_key", map[string]any{"pid": pid, "key": step.Key, "seconds": step.Seconds}, nil)
@@ -321,7 +324,7 @@ func (s *Session) step(ctx context.Context, app App, step Step) (string, error) 
 		}
 		return "wait " + d.String(), nil
 	}
-	return "", fail(CodeBadStep, "unknown action %q; use click, right_click, focus, set_value, type, key, hold_key, scroll, wait, or the pointer steps pointer_move, pointer_click and pointer_drag", step.Action)
+	return "", fail(CodeBadStep, "unknown action %q; use click, right_click, focus, set_value, type, paste, key, hold_key, scroll, wait, or the pointer steps pointer_move, pointer_click and pointer_drag", step.Action)
 }
 
 // pointerStep takes the person's pointer to the point a screenshot named. The

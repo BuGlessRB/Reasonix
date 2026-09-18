@@ -46,6 +46,8 @@ func handle(_ method: String, _ params: JSON) throws -> JSON {
         return try Keyboard.type(pid: try pidParam(params), text: try stringParam(params, "text"))
     case "key":
         return try Keyboard.press(pid: try pidParam(params), chord: try stringParam(params, "key"), times: (params["times"] as? Int) ?? 1)
+    case "paste":
+        return try Clipboard.paste(pid: try pidParam(params), text: try stringParam(params, "text"))
     case "pointer_move":
         return try Pointer.move(pid: try pidParam(params), to: try pointParam(params), cursor: cursor)
     case "pointer_click":

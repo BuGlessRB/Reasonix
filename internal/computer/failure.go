@@ -19,6 +19,7 @@ const (
 	CodeUnknownRef        Code = "computer.unknown_ref"
 	CodeStaleRef          Code = "computer.stale_ref"
 	CodeNoAction          Code = "computer.no_action"
+	CodeNeedsFront        Code = "computer.needs_front"
 	CodeNoElement         Code = "computer.no_element"
 	CodeNeedsScreenshot   Code = "computer.needs_screenshot"
 	CodeBadStep           Code = "computer.bad_step"

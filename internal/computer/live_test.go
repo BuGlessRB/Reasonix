@@ -28,6 +28,18 @@ func liveSession(t *testing.T) *Session {
 		t.Skip("set REASONIX_LIVE_COMPUTER to a built computer-use helper to run live tests")
 	}
 	liveOnce.Do(func() { live = NewSession(NewHelper(path)) })
+	// A locked screen hides every application's windows from accessibility, so
+	// what follows would fail as a missing element rather than as the machine
+	// being put away.
+	var status struct {
+		ScreenLocked bool `json:"screen_locked"`
+	}
+	if err := live.helper.Call(t.Context(), "status", nil, &status); err != nil {
+		t.Fatalf("the helper did not answer: %v", err)
+	}
+	if status.ScreenLocked {
+		t.Skip("the screen is locked; unlock it to run live computer tests")
+	}
 	return live
 }
 
@@ -210,6 +222,59 @@ func TestLiveContextMenuScrollAndWait(t *testing.T) {
 	}
 	if _, err := s.Act(ctx, targetBundle, []Step{{Action: "right_click"}}); CodeOf(err) != CodeBadStep {
 		t.Fatalf("a right_click with no ref = %v, want %s", err, CodeBadStep)
+	}
+}
+
+// Pasting is the clipboard borrowed: the application gets the text at once and
+// the person gets their clipboard back.
+func TestLivePasteLeavesTheClipboardAsItFoundIt(t *testing.T) {
+	s := liveSession(t)
+	log := launchTarget(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	held := "什么 the person had copied"
+	board := exec.Command("pbcopy")
+	board.Stdin = strings.NewReader(held)
+	if err := board.Run(); err != nil {
+		t.Fatalf("pbcopy: %v", err)
+	}
+
+	snap, err := s.Snapshot(ctx, targetBundle)
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	field := lineRef(t, snap.Lines, `textField "Probe field"`)
+	pasted := "粘贴 without typing"
+	paste := []Step{{Action: "focus", Ref: field}, {Action: "paste", Text: pasted}}
+	// Behind, the application never handles the keystroke, and this says so
+	// rather than reporting a paste that put nothing anywhere.
+	if _, err := s.Act(ctx, targetBundle, paste); CodeOf(err) != CodeNeedsFront {
+		t.Fatalf("pasting into an application that is behind = %v, want %s", err, CodeNeedsFront)
+	}
+
+	// Bringing it forward is a pointer step, which is answered for on its own.
+	if _, _, err := s.Screenshot(ctx, targetBundle); err != nil {
+		t.Fatalf("Screenshot: %v", err)
+	}
+	s.mu.Lock()
+	geometry := s.shots[targetBundle]
+	s.mu.Unlock()
+	x, y := 345/geometry.scale, (geometry.bounds.Height-162)/geometry.scale
+	if _, err := s.Act(ctx, targetBundle, []Step{{Action: "pointer_click", X: &x, Y: &y}}); err != nil {
+		t.Fatalf("bring it forward: %v", err)
+	}
+	if _, err := s.Act(ctx, targetBundle, paste); err != nil {
+		t.Fatalf("paste: %v", err)
+	}
+	waitLog(t, log, "text "+pasted)
+
+	back, err := exec.Command("pbpaste").Output()
+	if err != nil {
+		t.Fatalf("pbpaste: %v", err)
+	}
+	if string(back) != held {
+		t.Fatalf("the clipboard was left holding %q, not what the person had (%q)", back, held)
 	}
 }
 
