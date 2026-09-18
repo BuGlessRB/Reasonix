@@ -21045,6 +21045,66 @@
         }
       ]
     },
+    "config.ResolvedReasoningView": {
+      "fields": [
+        {
+          "name": "state",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "apiFormat",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "protocol",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "selected",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "effective",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "default",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "options",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "provider.ReasoningOption"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "error",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
     "control.AuthenticationState": {
       "fields": [
         {
@@ -32566,6 +32626,17 @@
     },
     "main.ProviderModelCapabilityView": {
       "fields": [
+        {
+          "name": "reasoning",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "config.ResolvedReasoningView"
+            },
+            "kind": "nullable"
+          }
+        },
         {
           "name": "model",
           "type": {

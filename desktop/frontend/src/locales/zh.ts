@@ -2805,6 +2805,8 @@ export const zh: Record<DictKey, string> = {
   "settings.modelDialog.resetReasoningEffort": "恢复自动思考强度",
   "settings.modelDialog.automatic": "自动",
   "settings.modelDialog.reasoningEffortHint": "自动继承服务商默认值。更高档位可能消耗更多时间和 token。",
+  "settings.modelDialog.reasoningUnknown": "尚未识别此模型的思考档位。可使用自动，或配置此连接的思考协议与可用档位。",
+  "settings.modelDialog.reasoningUnsupported": "此模型配置未提供可调节的思考档位。",
   "settings.modelDialog.overrideHint": "仅覆盖能力声明，不会改变模型实际能力。",
   "settings.modelDialog.capabilities": "模型能力",
   "settings.modelDialog.input": "输入",

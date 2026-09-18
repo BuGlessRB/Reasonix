@@ -223,8 +223,8 @@ func (a *App) defaultDraftSettings(scope, workspaceRoot string) SessionDraftSett
 		DisabledMCP: map[string]ServerView{}, MCPOrder: []string{}}
 	a.mu.RLock()
 	if active := a.activeTabLocked(); active != nil {
-		if active.effort != nil {
-			settings.Effort = *active.effort
+		if effort := config.RebindSessionEffort(nil, active.model, settings.Model, active.effort); effort != nil {
+			settings.Effort = *effort
 		}
 		settings.QualityFloor = tabQualityFloor(workspaceRoot, active.qualityFloorSafe())
 		settings.DisabledMCP = cloneServerViewMap(active.disabledMCP)

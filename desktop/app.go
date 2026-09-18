@@ -2093,6 +2093,7 @@ func (a *App) clearLegacySessionRuntimeLocked(tab *WorkspaceTab, oldCtrl control
 		WorkspaceRoot:        snap.workspaceRoot,
 		SessionDir:           sessionDirForSnapshot(snap),
 		EffortOverride:       cloneStringPtr(snap.effort),
+		EffortModel:          snap.model,
 		SharedHost:           sharedHost, BrowserExecutor: a.browserExecutorForTab(tab),
 		MCPHostProfile:           plugin.HostProfileDesktopApps,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
@@ -4090,6 +4091,7 @@ func (a *App) buildSessionRebindCandidate(
 		WorkspaceRoot:        root,
 		SessionDir:           sessionDir,
 		EffortOverride:       cloneStringPtr(source.effort),
+		EffortModel:          source.model,
 		SharedHost:           sharedHost, BrowserExecutor: a.browserExecutorForTab(tab),
 		MCPHostProfile:           plugin.HostProfileDesktopApps,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
@@ -9415,15 +9417,7 @@ func (a *App) SetModelForTab(tabID, name string) (retErr error) {
 		}
 		name = entry.Name + "/" + entry.Model
 	}
-	effortOverride := cloneStringPtr(snap.effort)
-	if effortOverride != nil && !pluginRef {
-		normalized, err := config.NormalizeEffort(entry, config.EffortDisplay(&config.ProviderEntry{Effort: *effortOverride}))
-		if err != nil {
-			effortOverride = nil
-		} else {
-			effortOverride = &normalized
-		}
-	}
+	effortOverride := config.RebindSessionEffort(cfg, snap.model, name, snap.effort)
 	timing.Config = time.Since(stageStarted)
 
 	stageStarted = time.Now()
@@ -10633,11 +10627,11 @@ func (a *App) runEffortCommandForTab(tabID, input string) {
 		return
 	}
 	cap := config.EffortCapabilityForEntry(entry)
-	if !cap.Supported {
+	args := strings.Fields(input)
+	if !cap.Supported && !(len(args) == 2 && args[1] == "auto") {
 		a.noticeForTab(tabID, fmt.Sprintf("effort is not configurable for %s", entry.Name))
 		return
 	}
-	args := strings.Fields(input)
 	if len(args) < 2 {
 		a.noticeForTab(tabID, fmt.Sprintf("effort for %s: %s (default: %s; options: %s)", entry.Name, config.EffortDisplay(entry), cap.Default, strings.Join(cap.Levels, "|")))
 		return

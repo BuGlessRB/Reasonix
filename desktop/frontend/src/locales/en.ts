@@ -2802,6 +2802,8 @@ export const en = {
   "settings.modelDialog.resetReasoningEffort": "Reset reasoning effort",
   "settings.modelDialog.automatic": "Automatic",
   "settings.modelDialog.reasoningEffortHint": "Automatic inherits the provider default. Higher levels may use more time and tokens.",
+  "settings.modelDialog.reasoningUnknown": "Reasoning levels have not been identified. Use Automatic, or configure this connection's reasoning protocol and available levels.",
+  "settings.modelDialog.reasoningUnsupported": "This model configuration does not offer adjustable reasoning levels.",
   "settings.modelDialog.overrideHint": "Overrides the capability declaration, not what the model can actually do.",
   "settings.modelDialog.capabilities": "Model capabilities",
   "settings.modelDialog.input": "Input",
