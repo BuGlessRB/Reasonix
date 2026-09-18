@@ -13,6 +13,7 @@ import { createTurnSubmissionId, initialState, reducer, type ControllerLiveStore
 import { isUnknownSubmissionError } from "./localSubmissionState";
 import { TranscriptSessionFollower } from "./transcriptSessionFollower";
 import { getTranscriptStore } from "./transcriptStore";
+import { historyReplaceAction } from "./sessionTranscriptMode";
 import { isAuthoritativeRemoteStatus, remoteCheckpoints, remoteComposerState, remoteGoalRuntime, remoteGoalView } from "./remoteStatus";
 import type { CollaborationMode, CommandInfo, EffortInfo, GoalLifecycleView, GoalRuntime, GoalStatus, QualityFloor, RemoteTabStateValue, TabMeta, ToolApprovalMode, WireEvent } from "./types";
 import type { RemoteAskAnswer } from "./remoteTypes";
@@ -150,6 +151,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   const hydratedRef = useRef(false);
   const hydratingRef = useRef(false);
   const bufferedEventsRef = useRef<WireEvent[]>([]);
+  const primedRef = useRef(false);
+  const primeInFlightRef = useRef(false);
   const hydrateRef = useRef<{ tabId: string; run: (force?: boolean) => Promise<void> } | null>(null);
   const refreshStatusRef = useRef<{ tabId: string; run: () => Promise<void> } | null>(null);
   const reconcileHistoryRef = useRef<(() => Promise<void>) | null>(null);
@@ -215,12 +218,38 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     hydratedRef.current = false;
     hydratingRef.current = false;
     bufferedEventsRef.current = [];
+    primedRef.current = false;
     setHydrated(false);
     let cancelled = false;
     let generation = 0;
     let follower: TranscriptSessionFollower | undefined;
     const dispatch = (action: import("./useController").Action) => {
       if (!cancelled) setTranscript(current => reducer(current, action));
+    };
+    // History-first: the persisted canonical window is readable before the
+    // serve activates the runtime, so publish a one-shot durable baseline as
+    // soon as the tab's identity resolves. This is deliberately not a second
+    // live transcript owner — once the runtime is ready, hydrate()'s follower
+    // installs the authoritative protocol-v2 cut and owns everything after it.
+    // Mirrors the local primeReadableHistoryForTab contract.
+    const primeEarlyHistory = async () => {
+      if (primedRef.current || hydratedRef.current || primeInFlightRef.current) return;
+      primeInFlightRef.current = true;
+      const ticket = generation;
+      try {
+        const projection = await getTranscriptStore().loadLatest(tabId, sessionPath ?? "", {
+          current: () => !cancelled && ticket === generation && !hydratedRef.current,
+        });
+        if (!projection || cancelled || ticket !== generation || hydratedRef.current || primedRef.current) return;
+        primedRef.current = true;
+        setTranscript(current => reducer(current, historyReplaceAction(projection)));
+      } catch {
+        // Before the attach handshake lands (or on a legacy serve) the window
+        // read is unavailable. A miss stays non-fatal: the ready-time
+        // hydration and its 409 fallback take over unchanged.
+      } finally {
+        primeInFlightRef.current = false;
+      }
     };
     const refreshStatus = async () => {
       const ticket = generation;
@@ -341,7 +370,11 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     // the pin there before any status poll runs); mirror them into the
     // spectator flag that drives the reconcile loop below.
     const offMeta = onRemoteTabUpdated(meta => {
-      if (!cancelled && meta?.id === tabId) setSpectator(Boolean(meta.takenOver));
+      if (cancelled || meta?.id !== tabId) return;
+      setSpectator(Boolean(meta.takenOver));
+      // The attach publication is the reliable "identity live, activation
+      // still in flight" signal — retry the early history read there.
+      void primeEarlyHistory();
     });
     // The legacy event channel carries ancillary invalidations only.
     const offEvent = onRemoteTabEvent(tabId, raw => {
@@ -352,6 +385,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       }
     });
     if (revivedFromShell) void app.SetActiveTab(tabId).catch(() => undefined);
+    void primeEarlyHistory();
     void hydrate();
     return () => {
       submitBindingRef.current = {};

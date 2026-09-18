@@ -179,5 +179,25 @@ func (a *App) installRemoteTabAttachPump(ctx context.Context, tabID string, tab 
 	a.remoteTabMu.Unlock()
 	tab.routeEventMu.Unlock()
 
+	// History-first hydration: the identity, client, and capabilities are
+	// live from here, before the foreground rotation starts — announce the
+	// tab so the frontend can read the persisted window during /resume.
+	a.publishRemoteTabAttachIdentity(tabID, tab, gen)
+
 	return pumpCtx, gen, attachPathRevision, nil
+}
+
+// publishRemoteTabAttachIdentity announces the tab once its route, client,
+// and capabilities are live but before the foreground rotation starts, so
+// history-first hydration can read the persisted window during /resume.
+func (a *App) publishRemoteTabAttachIdentity(tabID string, tab *remoteTab, gen uint64) {
+	a.remoteTabMu.Lock()
+	current := a.remoteTabs[tabID]
+	if current != tab || current.gen != gen {
+		a.remoteTabMu.Unlock()
+		return
+	}
+	meta := remoteTabMetaLocked(current)
+	a.remoteTabMu.Unlock()
+	a.emitRemoteEvent("remote-tab:updated", meta)
 }

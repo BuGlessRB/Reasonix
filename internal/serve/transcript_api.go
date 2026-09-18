@@ -138,17 +138,30 @@ func (s *Server) canonicalSessionQuery(w http.ResponseWriter, r *http.Request) (
 		http.Error(w, "canonical session history is unavailable", http.StatusNotImplemented)
 		return nil, session.SessionRef{}, false
 	}
-	ref, bound := identity.SessionRef()
 	service := identity.SessionService()
-	if !bound || service == nil || service.Query() == nil {
+	if service == nil || service.Query() == nil {
 		http.Error(w, "canonical session identity is unavailable", http.StatusConflict)
 		return nil, session.SessionRef{}, false
 	}
-	if requested := r.URL.Query().Get("sessionId"); requested != "" && requested != ref.SessionID {
+	ref, bound := identity.SessionRef()
+	requested := strings.TrimSpace(r.URL.Query().Get("sessionId"))
+	if requested == "" || (bound && requested == ref.SessionID) {
+		if !bound {
+			http.Error(w, "canonical session identity is unavailable", http.StatusConflict)
+			return nil, session.SessionRef{}, false
+		}
+		return service.Query(), ref, true
+	}
+	// A remote tab renders its persisted first page before POST /resume
+	// activates the session, and a spectator reads history the foreground no
+	// longer owns: both are cold reads the store answers without a runtime.
+	requested = strings.TrimPrefix(requested, remoteSessionIDQueryPrefix)
+	cold := session.SessionRef{HostID: service.HostID(), SessionID: requested}
+	if _, err := service.Query().Stat(r.Context(), cold); err != nil {
 		http.Error(w, "session history is not bound to this runtime", http.StatusConflict)
 		return nil, session.SessionRef{}, false
 	}
-	return service.Query(), ref, true
+	return service.Query(), cold, true
 }
 
 func (s *Server) sessionHistoryPage(w http.ResponseWriter, r *http.Request) {
