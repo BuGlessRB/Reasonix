@@ -174,7 +174,7 @@
     },
     {
       "name": "browser_act",
-      "description": "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; select sets a \u003cselect\u003e; dialog answers alert/confirm/prompt.",
+      "description": "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; select sets a \u003cselect\u003e; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers alert/confirm/prompt; back, forward and reload move this tab — reload is what a page needs after the file behind it changed.",
       "parameters": {
         "properties": {
           "steps": {
@@ -193,15 +193,25 @@
                     "press",
                     "select",
                     "scroll",
+                    "drag",
+                    "upload",
                     "wait",
                     "wait_for",
                     "dialog",
-                    "back"
+                    "back",
+                    "forward",
+                    "reload"
                   ],
                   "type": "string"
                 },
                 "delta_y": {
                   "type": "number"
+                },
+                "files": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 "key": {
                   "type": "string"
@@ -214,6 +224,15 @@
                 },
                 "text": {
                   "type": "string"
+                },
+                "to_ref": {
+                  "type": "string"
+                },
+                "to_x": {
+                  "type": "number"
+                },
+                "to_y": {
+                  "type": "number"
                 },
                 "values": {
                   "items": {
@@ -269,7 +288,7 @@
     },
     {
       "name": "browser_read",
-      "description": "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), screenshot (browser_act x/y use its pixels), logs (errors since you last read them), tabs.",
+      "description": "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), find (lines carrying text, with their refs), screenshot (browser_act x/y use its pixels), logs (errors since you last read them), tabs.",
       "parameters": {
         "properties": {
           "limit": {
@@ -284,9 +303,13 @@
           "tab": {
             "type": "string"
           },
+          "text": {
+            "type": "string"
+          },
           "what": {
             "enum": [
               "snapshot",
+              "find",
               "screenshot",
               "logs",
               "tabs"

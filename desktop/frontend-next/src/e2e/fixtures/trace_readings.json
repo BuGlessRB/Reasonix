@@ -57,7 +57,9 @@
     "approval": {
      "id": "b1",
      "tool": "write_file",
-     "subject": ""
+     "subject": "",
+     "allowsSession": true,
+     "allowsPersist": true
     }
    },
    {
@@ -249,7 +251,9 @@
     "approval": {
      "id": "b1",
      "tool": "write_file",
-     "subject": ""
+     "subject": "",
+     "allowsSession": true,
+     "allowsPersist": true
     }
    },
    {
