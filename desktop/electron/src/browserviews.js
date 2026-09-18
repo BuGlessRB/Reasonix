@@ -121,17 +121,24 @@ class BrowserViews {
   show(targetId, rect) {
     const entry = this.entries.get(targetId);
     if (!entry || !validRect(rect)) return this.hide();
-    for (const [id, other] of this.entries) {
-      if (id !== targetId) this.putAway(other.view);
-    }
-    this.shown = targetId;
-    this.win.contentView.addChildView(entry.view);
-    entry.view.setBounds({
+    const at = {
       x: Math.round(rect.x),
       y: Math.round(rect.y),
       width: Math.round(rect.width),
       height: Math.round(rect.height),
-    });
+    };
+    // The panel reports its rectangle whenever anything in the window changes,
+    // which during a turn is constantly, and nearly always the same rectangle:
+    // re-adding the view and setting the bounds it already has is work for
+    // every one of those.
+    if (this.shown === targetId && sameRect(entry.at, at)) return;
+    for (const [id, other] of this.entries) {
+      if (id !== targetId) this.putAway(other.view, other);
+    }
+    this.shown = targetId;
+    this.win.contentView.addChildView(entry.view);
+    entry.view.setBounds(at);
+    entry.at = at;
   }
 
   reattach() {
@@ -139,18 +146,19 @@ class BrowserViews {
       if (this.win.isDestroyed() || entry.view.webContents.isDestroyed()) continue;
       this.win.contentView.removeChildView(entry.view);
       this.win.contentView.addChildView(entry.view);
-      if (id !== this.shown) this.putAway(entry.view);
+      if (id !== this.shown) this.putAway(entry.view, entry);
     }
   }
 
   hide() {
     this.shown = "";
-    for (const entry of this.entries.values()) this.putAway(entry.view);
+    for (const entry of this.entries.values()) this.putAway(entry.view, entry);
   }
 
-  putAway(view) {
+  putAway(view, entry) {
     const { height } = this.win.getContentBounds();
     view.setBounds({ x: 1 - AGENT_VIEWPORT.width, y: height - 1, ...AGENT_VIEWPORT });
+    if (entry) entry.at = null;
   }
 
   control(targetId, action) {
@@ -184,6 +192,10 @@ class BrowserViews {
   closeAll() {
     for (const entry of [...this.entries.values()]) entry.view.webContents.close();
   }
+}
+
+function sameRect(a, b) {
+  return !!a && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
 function validRect(rect) {

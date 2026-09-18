@@ -33,10 +33,17 @@ function browsingModel(pageURL) {
     ] } });
     // The second turn runs with the window minimized: a fresh snapshot, then
     // the same input again.
-    if (script.calls >= 2) return null;
+    if (script.calls >= (script.act === "network" ? 3 : 2)) return null;
     script.calls++;
     if (script.calls === 1) return { name: "browser_open", arguments: { url: pageURL } };
     if (script.act === "greet") return greet(["李雷", "韩梅梅", "小明"][script.turn - 1]);
+    // The tab is named: by now the page has opened others, and what this reads
+    // has to be the one the checks hold a view of.
+    if (script.act === "network") {
+      return script.calls === 2
+        ? { name: "browser_act", arguments: { tab: "t1", steps: [{ action: "resize", width: 390, height: 844 }] } }
+        : { name: "browser_read", arguments: { tab: "t1", what: "network" } };
+    }
     const link = script.act === "popup" ? "Open elsewhere" : "Get report";
     const at = (last.match(new RegExp(`- link "${link}" \\[(e\\d+)\\]`)) || [])[1];
     return { name: "browser_act", arguments: { steps: [{ action: "click", ref: at }, { action: "wait", ms: 1200 }] } };
@@ -134,7 +141,8 @@ async function main() {
       const before = requests.length;
       await client.request("POST", `${base}/submit`, { input });
       // One request per call plus the one that reads the last result.
-      await until(`the turn that would ${act}`, async () => requests.length > before + 2, 90000);
+      const calls = act === "network" ? 3 : 2;
+      await until(`the turn that would ${act}`, async () => requests.length > before + calls, 90000);
       return (requests.at(-1).messages || []).filter((m) => m.role === "tool").map((m) => String(m.content || "")).join("\n");
     };
     const askFor = async (name) => {
@@ -164,6 +172,14 @@ async function main() {
     check("the popup is a second view in this window", guests().length === 2, guests().length);
     const downloaded = await turn("download", "get the report");
     check("a download is refused and reported", /report\.csv.*refused/s.test(downloaded), downloaded.slice(0, 300));
+
+    // The viewport and the request list are the browser's own state, relayed
+    // over this window's debugger rather than a browser's own port.
+    const observed = await turn("network", "lay the page out at phone width, then say what it requested");
+    const laidOut = await guest.webContents.executeJavaScript("[innerWidth, innerHeight]");
+    check("the page is laid out in the viewport the agent asked for", laidOut[0] === 390 && laidOut[1] === 844, laidOut);
+    check("the model was told what the page requested",
+      new RegExp(`GET ${page.url}/ \\[document\\] → 200 text/html`).test(observed), observed.slice(-400));
   } catch (err) {
     check("the run completed", false, err.message);
   }
