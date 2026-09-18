@@ -309,3 +309,27 @@ func TestACheckNeverSettlesAnUnprovenMutation(t *testing.T) {
 		})
 	}
 }
+
+// A failed check is keyed on its own identity, so any other check passing
+// leaves it standing. The turn is told which one it was, or it re-runs
+// something else and is asked again for a debt it cannot see.
+func TestAFailedCheckIsNamedBackToTheTurn(t *testing.T) {
+	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"app.js"}}
+	failed := evidence.Receipt{ToolName: "bash", Command: "grep -L lsit app.js", Verification: evidence.VerificationFailed}
+	passed := evidence.Receipt{ToolName: "bash", Success: true, Command: "grep -q list app.js", Verification: evidence.VerificationPassed}
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "bash"})
+	reg.Add(fakeTool{name: "conclude_blocked"})
+	a := &Agent{task: taskRuntime{ledger: readinessLedger(writer, failed, passed)}, svc: agentServices{tools: reg}}
+
+	gap, owed := a.verificationGap(0)
+	if !owed {
+		t.Fatal("a check standing failed owes the turn something")
+	}
+	if !strings.Contains(gap, `"grep -L lsit app.js"`) {
+		t.Fatalf("the failed check is not named: %q", gap)
+	}
+	if strings.Contains(gap, "grep -q list") {
+		t.Fatalf("a check that passed is reported as failing: %q", gap)
+	}
+}

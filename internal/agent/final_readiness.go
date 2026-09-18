@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"reasonix/internal/ablation"
@@ -439,10 +440,16 @@ func (a *Agent) verificationGap(writer int) (string, bool) {
 		return fmt.Sprintf("%s — %q ran, but its exit status is the last stage's, not the check's, "+
 			"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command)), true
 	}
-	// A check that ran and failed leaves two honest ways out, and a model told
-	// only to "run a verification command" can see neither: it already ran one.
+	// A model told only to "run a verification command" has already run one.
+	// Which one failed is the host's to say: the debt is keyed on that check's
+	// identity, so any other check passing leaves it standing.
 	if a.task.ledger.HasVerificationCommandAfter(writer) && toolPresent(a.svc.tools, "conclude_blocked") {
-		return "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why", true
+		named := ""
+		if failed := a.task.ledger.FailedVerificationsAfter(writer); len(failed) > 0 {
+			named = fmt.Sprintf(" (%s)", strings.Join(quoteEach(failed), ", "))
+		}
+		return fmt.Sprintf("the check you ran after the latest write did not pass%s: either make that check pass — the same one, so the host can see it — "+
+			"or, if it cannot pass as specified, call conclude_blocked with the evidence for why", named), true
 	}
 	// Commands ran and the table read none as a check. The host cannot tell a
 	// runner from a deploy, so it owes nothing and says nothing: it has no
@@ -453,6 +460,14 @@ func (a *Agent) verificationGap(writer int) (string, bool) {
 		}
 	}
 	return ask, true
+}
+
+func quoteEach(items []string) []string {
+	out := make([]string, len(items))
+	for i, item := range items {
+		out[i] = strconv.Quote(item)
+	}
+	return out
 }
 
 func finalReadinessCheckSource(check instruction.VerifyCheck) string {
