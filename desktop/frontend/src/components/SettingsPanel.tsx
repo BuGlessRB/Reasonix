@@ -6495,8 +6495,8 @@ export function ProviderEditor({
       {fetchFallback && <div role="alert" className="provider-fetch-status provider-fetch-status--warn">{fetchFallback}</div>}
       {modelDialog !== null && <Suspense fallback={null}><ProviderModelDialog
         baseURL={effectiveRequestUrl} candidates={modelCandidateNames} contextDefault={Number(ctx) || undefined}
-        effortOptions={(modelDialog && modelOverrides.find(item=>item.model === modelDialog)?.supportedEfforts?.length ? (modelOverrides.find(item=>item.model === modelDialog)?.supportedEfforts ?? []) : (supportedEfforts ?? [])).filter(Boolean)}
-        initial={modelDialog ? (() => { const override = modelOverrides.find(item=>item.model === modelDialog); return {model:modelDialog, contextWindow:modelContextWindows[modelDialog] ?? "", maxOutputTokens:override?.maxOutputTokens ?? 0, vision:override?.vision ?? null, supportedEfforts:override?.supportedEfforts ?? supportedEfforts, defaultEffort:override?.defaultEffort ?? ""}; })() : undefined}
+        effortOptions={Array.from(new Set([...(modelCapabilities.find(item=>item.model === modelDialog)?.reasoning?.options ?? []).map(option=>option.id), ...(modelOverrides.find(item=>item.model === modelDialog)?.supportedEfforts ?? supportedEfforts ?? [])])).filter(Boolean)}
+        initial={modelDialog ? (() => { const override = modelOverrides.find(item=>item.model === modelDialog); return {model:modelDialog, contextWindow:modelContextWindows[modelDialog] ?? "", maxOutputTokens:override?.maxOutputTokens ?? 0, vision:override?.vision ?? null, supportedEfforts:override?.supportedEfforts ?? [], defaultEffort:override?.defaultEffort ?? ""}; })() : undefined}
         capability={modelCapabilities.find(item=>item.model === modelDialog)} busy={busy || fetchingModels}
         onClose={()=>setModelDialog(null)} onApply={applyModelDetails} onDelete={deleteModel}/></Suspense>}
       <ProviderEditorModelPicker

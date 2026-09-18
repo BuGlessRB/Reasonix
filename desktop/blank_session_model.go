@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"reasonix/internal/config"
 )
 
 // alignReusableBlankTabModel makes a reused empty session obey the same
@@ -66,6 +68,7 @@ func (a *App) alignReusableBlankTabModel(tab *WorkspaceTab, model string) error 
 		return a.alignReusableBlankTabModel(tab, model)
 	}
 	a.supersedeTabBuildLocked(tab)
+	tab.effort = config.RebindSessionEffort(nil, tab.model, model, tab.effort)
 	tab.model = model
 	tab.Label = model
 	tab.Ready = false

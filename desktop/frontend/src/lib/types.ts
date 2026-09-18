@@ -1801,16 +1801,8 @@ export interface ProviderModelCatalogUpdate {
   modelCapabilities?: ProviderModelCapabilityUpdate[];
 }
 
-export interface ProviderModelCapabilityView {
-	automaticState?: string;
-	automaticSource?: string;
-	imageInputEnableAllowed?: boolean;
-	imageInputBlockReason?: string;
-  model: string;
-  inputModalities: string[];
-  state: "supported" | "unsupported" | "unknown" | string;
-  source: string;
-}
+import type { ProviderModelCapabilityView } from "./providerModelCapability";
+export type { ProviderModelCapabilityView } from "./providerModelCapability";
 
 export interface ProviderModelCapabilityUpdate {
   model: string;

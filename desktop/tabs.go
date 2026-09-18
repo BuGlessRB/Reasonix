@@ -3677,7 +3677,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 		a.mu.Unlock()
 		return
 	}
-	tab.model = model
+	tab.rebindEffortModel(cfg, model)
 	tab.Label = model
 	tab.SharedHostKey = rootKey
 	buildEffort := cloneStringPtr(tab.effort)

@@ -107,6 +107,9 @@ type Options struct {
 	// EffortOverride is a session-local reasoning effort override. Nil means use
 	// the resolved provider config; a non-nil empty string means provider default.
 	EffortOverride *string
+	// EffortModel binds an inherited override to its original model. Empty
+	// means this build received an explicit selection for Options.Model.
+	EffortModel string
 	// ConfigSnapshot is an optional, caller-owned immutable configuration for
 	// this assembly. Desktop passes the snapshot used to resolve the selection
 	// so a concurrent settings edit cannot change another role halfway through.
@@ -259,11 +262,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	memoryCompilerMigrated, memoryCompilerMigErr := config.MigrateLegacyMemoryCompilerForRoot(root)
 	multiThresholdMigrated, multiThresholdMigErr := config.MigrateLegacyMultiThresholdCompactionForRoot(root)
 	config.MigrateLegacyMCPTiersForRoot(root)
-	cfg, err := resolveBuildConfiguration(root, opts.Model, opts.ConfigSnapshot)
+	cfg, opts, err := resolveBuildSelection(root, opts)
 	if err != nil {
-		return nil, err
-	}
-	if err := opts.ModelSettings.Apply(cfg, root); err != nil {
 		return nil, err
 	}
 	deepSeekProtocolMigErr = deepSeekProtocolMigrationNoticeError(handleConfigLoadWarnings(opts, cfg), deepSeekProtocolMigErr)

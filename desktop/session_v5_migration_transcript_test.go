@@ -119,7 +119,7 @@ func TestLegacyMigrationTranscriptFailurePreservesSourceAndContinues(t *testing.
 				}
 				migrationLogs, runtimeLogs := 0, 0
 				var sessionKey string
-				for _, line := range bytes.Split(bytes.TrimSpace(logBody), []byte("\n")) {
+				for line := range bytes.SplitSeq(bytes.TrimSpace(logBody), []byte("\n")) {
 					var entry struct {
 						Message    string `json:"msg"`
 						SourceKey  string `json:"source_key"`
