@@ -51,7 +51,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
           RELEASE_REVOKED_CANDIDATES: ${{ vars.RELEASE_REVOKED_CANDIDATES }}
-          RELEASE_CI_WAIT_SECONDS: 1800
         run: |
           set -euo pipefail
           git fetch origin main-v2 --tags
@@ -60,10 +59,9 @@ jobs:
             source_sha="$PUSH_SHA"
           else
             version="$INPUT_VERSION"
-            source_sha="$(git rev-parse origin/main-v2)"
+            source_sha="$PUSH_SHA"
           fi
           bash scripts/validate-release-candidate-source.sh "$version" "$source_sha"
-          bash scripts/verify-release-push-ci.sh "$source_sha"
           git show "$source_sha:release-notes/releases.json" > /tmp/release-catalog.json
           catalog_sha256="$(sha256sum /tmp/release-catalog.json | awk '{print $1}')"
           candidate_id="$(node scripts/release-candidate.mjs id "$version" "$source_sha" "$catalog_sha256")"
@@ -154,6 +152,14 @@ jobs:
           test "$(jq -r .workflow_run.id "$RUNNER_TEMP/existing-payload.json")" = "$run_id"
           echo "reuse=true" >> "$GITHUB_OUTPUT"
           echo "A sealed candidate with an active exact payload already exists; native builds are skipped." >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify source CI after control preflight
+        if: steps.existing.outputs.reuse != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
+          RELEASE_CI_WAIT_SECONDS: 1800
+        run: bash scripts/verify-release-push-ci.sh "$RELEASE_SOURCE_SHA"
       - name: Checkout immutable product for notes validation
         if: steps.existing.outputs.reuse != 'true'
         uses: actions/checkout@v7

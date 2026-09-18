@@ -22,7 +22,9 @@ atomic push and must never be moved, deleted, or recreated. The Go SDK module
    Notes PR.
 2. Merge the Notes PR after its required checks and review complete. The merge
    automatically starts **Prepare release candidate**. A maintainer may also
-   dispatch that workflow with `version` and an optional `main-v2` ancestor.
+   dispatch that workflow on protected `main-v2` with `version`. Both entrypoints
+   freeze the protected event SHA before the runner starts; arbitrary SHA inputs
+   and PR-head execution are not accepted.
 3. Wait for the candidate workflow to build the shared CLI/npm binaries, build
    and sign all Desktop platforms, run native final-package acceptance, and
    seal the payload and evidence. Record the candidate ID printed in its

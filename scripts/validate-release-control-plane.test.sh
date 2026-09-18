@@ -20,11 +20,14 @@ done < <(awk '
 ' "$repo_root/scripts/validate-release-control-plane.sh")
 chmod +x "$fixture/scripts/finalize-windows-signed-candidate.sh" "$fixture/scripts/package-windows-desktop.sh"
 
-truncate -s 0 "$fixture/scripts/sign-certum.ps1"
-if "$repo_root/scripts/validate-release-control-plane.sh" "$fixture" >"$fixture/missing.log" 2>&1; then
-	echo "incomplete release control checkout unexpectedly passed" >&2
-	exit 1
-fi
-grep -Fq 'missing release control file: scripts/sign-certum.ps1' "$fixture/missing.log"
+for helper in scripts/sign-certum.ps1 scripts/windows-acceptance-environment.ps1 scripts/windows-upgrade-ui-evidence.ps1; do
+	truncate -s 0 "$fixture/$helper"
+	if "$repo_root/scripts/validate-release-control-plane.sh" "$fixture" >"$fixture/missing.log" 2>&1; then
+		echo "incomplete release control checkout unexpectedly passed" >&2
+		exit 1
+	fi
+	grep -Fq "missing release control file: $helper" "$fixture/missing.log"
+	cp "$repo_root/$helper" "$fixture/$helper"
+done
 
 echo "release control preflight tests: PASS"

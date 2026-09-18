@@ -17,7 +17,12 @@ required=(
 	scripts/release-candidate.mjs
 	scripts/resolve-release-candidate.mjs
 	scripts/sign-certum.ps1
+	scripts/test-windows-installer-startup.ps1
+	scripts/test-windows-startup-recovery.ps1
+	scripts/test-windows-upgrade-startup.ps1
 	scripts/verify-windows-authenticode.ps1
+	scripts/windows-acceptance-environment.ps1
+	scripts/windows-upgrade-ui-evidence.ps1
 )
 
 for file in "${required[@]}"; do

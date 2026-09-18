@@ -51,5 +51,5 @@ try {
   const artifacts = resolve(import.meta.dirname, "../artifacts/performance");
   mkdirSync(artifacts, { recursive: true });
   await page.screenshot({ path: join(artifacts, "diagnostic-report.png") });
-  console.log("PASS: no eager profiling; automatic bounded capture; ASAR Worker frames; live copy; debugger released; local heap snapshot");
+  console.log("PASS: no eager profiling; automatic bounded capture; ASAR analysis Worker; live copy; debugger released; local heap snapshot");
 } finally { await fixture.close(); }
