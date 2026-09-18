@@ -16,6 +16,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/filelock"
+	"reasonix/internal/pathidentity"
 )
 
 const repairMutationLockTimeout = 5 * time.Second
@@ -40,7 +41,7 @@ var repairPathCaseInsensitive = platformRepairPathCaseInsensitive
 
 func lockRepairTransaction() (func(), error) {
 	expectedPendingState := repairPlanReleaseNodeState(pendingRepairTransactionPath())
-	unlock, err := lockRepairMutations(repairTransactionPath())
+	unlock, err := lockRepairMutationProtocolFile(repairTransactionPath())
 	if err != nil {
 		return nil, fmt.Errorf("lock repair transaction: %w", err)
 	}
@@ -129,6 +130,17 @@ func moveRepairNodeToUniqueCleanup(path string) (string, error) {
 // different locks. The decision is made from the target's actual parent
 // directory: macOS and Windows can both host case-sensitive directories.
 func canonicalRepairPath(path string) string {
+	identity, err := pathidentity.Resolve(path, pathidentity.Options{FollowLeaf: false})
+	if err != nil {
+		return ""
+	}
+	return identity.Key
+}
+
+// legacyCanonicalRepairPath freezes the lock and persisted-target identity used
+// before path identity v2. New writers acquire both names during the supported
+// cross-version window.
+func legacyCanonicalRepairPath(path string) string {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return ""
@@ -218,10 +230,22 @@ func repairPlanTargetIdentity(path string) string {
 // configuration files, and paths are sorted so multi-target actions cannot
 // deadlock each other.
 func lockRepairMutations(paths ...string) (func(), error) {
-	return lockRepairMutationsTimeout(repairMutationLockTimeout, paths...)
+	return lockRepairMutationsTimeoutMode(repairMutationLockTimeout, true, paths...)
 }
 
 func lockRepairMutationsTimeout(timeout time.Duration, paths ...string) (func(), error) {
+	return lockRepairMutationsTimeoutMode(timeout, true, paths...)
+}
+
+// Protocol files are expected to be atomically replaced by the previous lock
+// holder. Their callers compare content state after acquisition, so only the
+// lock domain is shared here; ordinary repair targets still require native
+// file identity to remain unchanged while waiting.
+func lockRepairMutationProtocolFile(path string) (func(), error) {
+	return lockRepairMutationsTimeoutMode(repairMutationLockTimeout, false, path)
+}
+
+func lockRepairMutationsTimeoutMode(timeout time.Duration, revalidateTargets bool, paths ...string) (func(), error) {
 	lockDir := config.RepairMutationLockDir()
 	if lockDir == "" {
 		return nil, fmt.Errorf("lock repair mutations: OS user cache directory is unavailable")
@@ -230,46 +254,112 @@ func lockRepairMutationsTimeout(timeout time.Duration, paths ...string) (func(),
 		return nil, fmt.Errorf("lock repair mutations: create lock directory: %w", err)
 	}
 
-	unique := map[string]struct{}{}
-	keys := make([]string, 0, len(paths))
+	type targetIdentity struct {
+		path   string
+		key    string
+		info   os.FileInfo
+		exists bool
+	}
+	targets := make([]targetIdentity, 0, len(paths))
+	primaryUnique := map[string]struct{}{}
+	lockKeySet := map[string]struct{}{}
 	for _, path := range paths {
 		path = strings.TrimSpace(path)
 		if path == "" {
 			continue
 		}
-		key := canonicalRepairPath(path)
-		if key == "" {
-			return nil, fmt.Errorf("lock repair mutations: resolve target: empty path")
+		identity, err := pathidentity.Resolve(path, pathidentity.Options{FollowLeaf: false})
+		if err != nil {
+			return nil, fmt.Errorf("lock repair mutations: resolve target: %w", err)
 		}
-		if _, ok := unique[key]; ok {
+		if _, ok := primaryUnique[identity.Key]; ok {
 			continue
 		}
-		unique[key] = struct{}{}
-		keys = append(keys, key)
+		info, statErr := os.Lstat(identity.AccessPath)
+		exists := statErr == nil
+		if statErr != nil && !os.IsNotExist(statErr) {
+			return nil, fmt.Errorf("lock repair mutations: inspect target: %w", statErr)
+		}
+		primaryUnique[identity.Key] = struct{}{}
+		targets = append(targets, targetIdentity{path: identity.AccessPath, key: identity.Key, info: info, exists: exists})
+		lockKeySet[identity.Key] = struct{}{}
+		if legacy := legacyCanonicalRepairPath(path); legacy != "" {
+			lockKeySet[legacy] = struct{}{}
+		}
 	}
-	if len(keys) == 0 {
+	if len(targets) == 0 {
 		return func() {}, nil
 	}
-	sort.Strings(keys)
-	repairMutationBeforeLock(append([]string(nil), keys...))
+	primaryKeys := make([]string, 0, len(primaryUnique))
+	for key := range primaryUnique {
+		primaryKeys = append(primaryKeys, key)
+	}
+	sort.Strings(primaryKeys)
+	repairMutationBeforeLock(append([]string(nil), primaryKeys...))
+	lockPaths := make([]string, 0, len(lockKeySet))
+	for key := range lockKeySet {
+		digest := sha256.Sum256([]byte(key))
+		lockPaths = append(lockPaths, filepath.Join(lockDir, fmt.Sprintf("%x.lock", digest)))
+	}
+	sort.Strings(lockPaths)
 
 	if timeout <= 0 {
 		timeout = repairMutationLockTimeout
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	releases := make([]func(), 0, len(keys))
-	for _, key := range keys {
-		digest := sha256.Sum256([]byte(key))
-		lockPath := filepath.Join(lockDir, fmt.Sprintf("%x.lock", digest))
-		release, err := filelock.Acquire(ctx, lockPath)
-		if err != nil {
-			for _, v := range slices.Backward(releases) {
-				v()
+	var releases []func()
+	for {
+		releases = releases[:0]
+		contended := false
+		for _, lockPath := range lockPaths {
+			release, acquireErr := filelock.TryAcquire(lockPath)
+			if acquireErr == nil {
+				releases = append(releases, release)
+				continue
 			}
-			return nil, fmt.Errorf("lock repair mutations: %w", err)
+			for _, held := range slices.Backward(releases) {
+				held()
+			}
+			releases = releases[:0]
+			if !errors.Is(acquireErr, filelock.ErrHeld) {
+				return nil, fmt.Errorf("lock repair mutations: %w", acquireErr)
+			}
+			contended = true
+			break
 		}
-		releases = append(releases, release)
+		if !contended {
+			break
+		}
+		timer := time.NewTimer(20 * time.Millisecond)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, fmt.Errorf("lock repair mutations: %w", ctx.Err())
+		}
+	}
+	if revalidateTargets {
+		for _, target := range targets {
+			identity, resolveErr := pathidentity.Resolve(target.path, pathidentity.Options{FollowLeaf: false})
+			currentInfo, statErr := os.Lstat(target.path)
+			currentExists := statErr == nil
+			if statErr != nil && !os.IsNotExist(statErr) && resolveErr == nil {
+				resolveErr = statErr
+			}
+			identityChanged := resolveErr == nil && (identity.Key != target.key || repairEntryRedirected(target.info, target.exists, currentInfo, currentExists))
+			if resolveErr != nil || identityChanged {
+				for _, held := range slices.Backward(releases) {
+					held()
+				}
+				if resolveErr != nil {
+					return nil, fmt.Errorf("lock repair mutations: revalidate target: %w", resolveErr)
+				}
+				return nil, fmt.Errorf("lock repair mutations: target identity changed while waiting")
+			}
+		}
 	}
 
 	var once sync.Once
@@ -280,4 +370,16 @@ func lockRepairMutationsTimeout(timeout time.Duration, paths ...string) (func(),
 			}
 		})
 	}, nil
+}
+
+func repairEntryRedirected(before os.FileInfo, beforeExists bool, after os.FileInfo, afterExists bool) bool {
+	// Regular files are commonly published with rename(2) while holding this
+	// lock. A waiter still owns the same parent directory and leaf name after
+	// that replacement; the caller's content/hash precondition detects stale
+	// state. Directory entries, links, and special nodes retain native identity
+	// because replacing one can redirect the authorized operation elsewhere.
+	if (!beforeExists || before.Mode().IsRegular()) && (!afterExists || after.Mode().IsRegular()) {
+		return false
+	}
+	return beforeExists != afterExists || !os.SameFile(before, after)
 }

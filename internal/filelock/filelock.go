@@ -6,11 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"reasonix/internal/pathidentity"
 )
 
 const retryInterval = 20 * time.Millisecond
@@ -68,7 +69,10 @@ func acquire(ctx context.Context, path string, externalTimeout time.Duration, mo
 	if err != nil {
 		return nil, err
 	}
-	key := localRegistryKey(lockPath)
+	key, err := localRegistryKey(lockPath)
+	if err != nil {
+		return nil, err
+	}
 	releaseLocal, err := acquireLocal(ctx, key, mode)
 	if err != nil {
 		return nil, err
@@ -123,7 +127,10 @@ func TryAcquireMode(path string, mode Mode) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	key := localRegistryKey(lockPath)
+	key, err := localRegistryKey(lockPath)
+	if err != nil {
+		return nil, err
+	}
 	releaseLocal, ok := tryAcquireLocal(key, mode)
 	if !ok {
 		return nil, ErrHeld
@@ -286,16 +293,13 @@ func canonicalLockPath(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve file lock path: %w", err)
 	}
-	abs = filepath.Clean(abs)
-	if runtime.GOOS == "windows" {
-		abs = strings.ToLower(filepath.ToSlash(abs))
-	}
-	return abs, nil
+	return filepath.Clean(abs), nil
 }
 
-func localRegistryKey(path string) string {
-	if runtime.GOOS == "darwin" {
-		return strings.ToLower(filepath.ToSlash(path))
+func localRegistryKey(path string) (string, error) {
+	identity, err := pathidentity.Resolve(path, pathidentity.Options{FollowLeaf: false})
+	if err != nil {
+		return "", fmt.Errorf("resolve file lock identity: %w", err)
 	}
-	return path
+	return identity.Key, nil
 }

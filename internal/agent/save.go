@@ -1343,7 +1343,11 @@ func UpdateBranchMeta(path string, touchUpdated bool, update func(*BranchMeta) e
 }
 
 func canonicalSessionSavePath(path string) string {
-	return pathidentity.Canonical(path)
+	identity, err := resolveSessionPathIdentity(path)
+	if err != nil {
+		return ""
+	}
+	return identity.PhysicalPath
 }
 
 // CanonicalSessionPath is the identity key of a session path: cleaned,
@@ -1357,7 +1361,23 @@ func CanonicalSessionPath(path string) string {
 	if strings.TrimSpace(path) == "" {
 		return ""
 	}
-	return canonicalSessionSavePath(path)
+	identity, err := resolveSessionPathIdentity(path)
+	if err != nil {
+		return ""
+	}
+	return identity.Key
+}
+
+func resolveSessionPathIdentity(path string) (pathidentity.Identity, error) {
+	baseDir := ""
+	if !filepath.IsAbs(strings.TrimSpace(path)) {
+		var err error
+		baseDir, err = os.Getwd()
+		if err != nil {
+			return pathidentity.Identity{}, err
+		}
+	}
+	return pathidentity.Resolve(path, pathidentity.Options{BaseDir: baseDir, FollowLeaf: true})
 }
 
 // LoadSession reads a saved session into a fresh Session value. New sessions
@@ -1763,7 +1783,7 @@ func removeStaleSessionLeaseInfoSidecar(basePath, sidecarPath string) error {
 }
 
 func sessionLeaseHeldLocally(path string) bool {
-	_, ok := sessionLeaseOwners.Load(canonicalSessionSavePath(path))
+	_, ok := sessionLeaseOwners.Load(CanonicalSessionPath(path))
 	return ok
 }
 
