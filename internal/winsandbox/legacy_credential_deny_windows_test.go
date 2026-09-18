@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/windows"
@@ -71,12 +72,21 @@ func writeStaleCredentialMarker(t *testing.T, path string) string {
 func TestRepairLegacyCredentialDenyMatchesFileAcrossPathAliases(t *testing.T) {
 	t.Setenv("TMP", t.TempDir())
 	path := filepath.Join(t.TempDir(), ".env")
-	alias := filepath.Join(filepath.Dir(path), "credential-alias")
 	if err := os.WriteFile(path, []byte("KEY=value\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Link(path, alias); err != nil {
-		t.Fatalf("create credential hardlink: %v", err)
+	pathUTF16, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortBuffer := make([]uint16, 32768)
+	n, err := windows.GetShortPathName(pathUTF16, &shortBuffer[0], uint32(len(shortBuffer)))
+	if err != nil || n == 0 || n >= uint32(len(shortBuffer)) {
+		t.Skipf("8.3 path aliases unavailable: %v", err)
+	}
+	alias := windows.UTF16ToString(shortBuffer[:n])
+	if strings.EqualFold(filepath.Clean(alias), filepath.Clean(path)) {
+		t.Skip("fixture path has no distinct 8.3 alias")
 	}
 	userSID, err := currentProcessUserSIDString()
 	if err != nil {
