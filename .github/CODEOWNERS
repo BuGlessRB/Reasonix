@@ -16,6 +16,8 @@
 /scripts/verify-windows-authenticode.ps1 @SivanCola @esengine
 /scripts/finalize-windows-signed-candidate.sh @SivanCola @esengine
 /scripts/release-candidate.mjs @SivanCola @esengine
+/scripts/release-candidate-tags.sh @SivanCola @esengine
+/scripts/verify-release-authorization.sh @SivanCola @esengine
 /scripts/resolve-release-candidate.mjs @SivanCola @esengine
 /scripts/validate-release-control-plane.sh @SivanCola @esengine
 /scripts/verify-stable-release-artifacts.sh @SivanCola @esengine

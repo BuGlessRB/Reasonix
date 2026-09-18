@@ -22,6 +22,7 @@ required=(
 	scripts/test-windows-startup-recovery.ps1
 	scripts/test-windows-upgrade-startup.ps1
 	scripts/verify-windows-authenticode.ps1
+	scripts/verify-release-authorization.sh
 	scripts/windows-acceptance-environment.ps1
 	scripts/windows-upgrade-ui-evidence.ps1
 )
