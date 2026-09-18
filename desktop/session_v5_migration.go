@@ -71,6 +71,9 @@ func (a *App) startDesktopSessionMigration(ctx context.Context) {
 		}
 		if err := a.migrateDesktopSessionsV5(ctx); err != nil {
 			slogWarnDesktopMigration(err)
+			// A handled migration failure no longer terminates the process, so
+			// run a second drain after its diagnostic has entered the queue.
+			a.goSafe("flushPendingCrash", a.flushPendingCrash)
 		}
 		for _, run := range []func(context.Context) error{a.recoverDesktopSessionOperations, a.discoverHistoricalTrash, a.reconcileUnregisteredSessions} {
 			if err := run(ctx); err != nil {
@@ -509,6 +512,14 @@ func (a *App) migrateLegacyHead(ctx context.Context, path string, source desktop
 	}
 	if err != nil {
 		_ = updateDesktopMigrationLedger(key, "", "failed", "legacy_import")
+		var diagnostic *session.TranscriptInitializationError
+		if errors.As(err, &diagnostic) {
+			// The source key matches the local migration ledger. Never log the
+			// source path or the unrestricted error string from imported data.
+			slog.Warn("desktop session migration transcript initialization failed", "source_key", key,
+				"stage", "legacy_import", "diagnostic", diagnostic)
+			queueTranscriptInitializationFailure(diagnostic)
+		}
 		return err
 	}
 	if err := stage.Close(ctx, runtime.Ref()); err != nil {
