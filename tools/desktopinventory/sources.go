@@ -34,6 +34,7 @@ var ciJobs = map[string]struct {
 	"release-desktop.yml/signing-contract":           {classKeepBusiness, "payload list covers the Electron executables and native modules"},
 	"release-desktop.yml/cache-guard":                {classKeepBusiness, "unchanged"},
 	"release-desktop.yml/build":                      {classKeepBusiness, "desktop-build.sh packages the Electron app with the same NSIS/nfpm/signing steps"},
+	"release-desktop.yml/windows-build":              {classKeepBusiness, "builds and smoke-tests unsigned x64 and ARM64 packages on native Windows runners before signing"},
 	"release-desktop.yml/windows-sign":               {classKeepBusiness, "Certum signs native-tested x64 and ARM64 payloads and rebuilt installers on x64"},
 	"release-desktop.yml/windows-runtime-acceptance": {classKeepBusiness, "installs and starts the exact signed x64 and ARM64 installers on native runners"},
 	"release-desktop.yml/mac-universal-intel":        {classKeepBusiness, "validates the exact universal DMG from the build matrix on an Intel runner"},

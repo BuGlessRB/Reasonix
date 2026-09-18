@@ -39,6 +39,7 @@ jobs:
       packaging: ${{ steps.filter.outputs.packaging }}
       site: ${{ steps.filter.outputs.site }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      release_control: ${{ steps.filter.outputs.release_control }}
       notes_only: ${{ steps.filter.outputs.notes_only }}
     steps:
       - uses: actions/checkout@v7
@@ -1526,24 +1527,49 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: release workflow contracts
+  release-control:
+    needs: changes
+    if: ${{ !cancelled() && ((github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.release_control != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Validate release workflows and executable contracts
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 \
             -ignore 'label "windows-11-arm" is unknown' \
             -ignore 'label "macos-15-intel" is unknown' \
             .github/workflows/release-stable.yml \
             .github/workflows/prepare-release-notes.yml \
-            .github/workflows/release-stable-trigger.yml \
+            .github/workflows/release-candidate.yml \
+            .github/workflows/release-promote.yml \
+            .github/workflows/release-verify.yml \
             .github/workflows/release.yml \
             .github/workflows/release-npm.yml \
             .github/workflows/release-desktop.yml \
+            .github/workflows/pages.yml \
             .github/workflows/apple-notary-log.yml \
             .github/workflows/macos-signing-check.yml \
             .github/workflows/release-verify-issues.yml \
             .github/workflows/docs-impact.yml \
             .github/workflows/ci.yml
-          node --test scripts/desktop-windows-go-tests.test.mjs
-          node --test scripts/desktop-release-artifacts.test.mjs scripts/signpath-checkpoint.test.mjs scripts/ci-workflow.test.mjs scripts/notarize-desktop.test.mjs scripts/verify-windows-gui-subsystem.test.mjs scripts/windows-go-tests.test.mjs scripts/macos-go-tests.test.mjs
+          node --test scripts/release-candidate.test.mjs scripts/resolve-release-candidate.test.mjs \
+            scripts/build-release-cli-candidate.test.mjs scripts/publish-homebrew-cask.test.mjs \
+            scripts/desktop-release-artifacts.test.mjs scripts/release-publication-ledger.test.mjs \
+            scripts/ci-paths.test.mjs scripts/ci-workflow.test.mjs scripts/macos-go-tests.test.mjs \
+            scripts/desktop-windows-go-tests.test.mjs \
+            npm/publish.test.mjs
+          bash scripts/validate-release-candidate-source.test.sh
+          bash scripts/validate-release-control-plane.test.sh
+          bash scripts/verify-release-push-ci.test.sh
+          bash scripts/release-stable.test.sh
           bash scripts/release-workflows.test.sh
           node scripts/check-single-release-public-contract.mjs
 
@@ -1582,7 +1608,7 @@ jobs:
   # frontend unit coverage can run once in desktop-frontend without weakening
   # the branch gate.
   lint:
-    needs: [changes, lint-code, desktop-prepare, desktop-frontend]
+    needs: [changes, lint-code, release-control, desktop-prepare, desktop-frontend]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1591,14 +1617,18 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           LINT_CODE_RESULT: ${{ needs.lint-code.result }}
           LINT_CODE_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.code != 'false' || needs.changes.outputs.desktop != 'false' || needs.changes.outputs.sdk != 'false' }}
+          RELEASE_CONTROL_RESULT: ${{ needs.release-control.result }}
+          RELEASE_CONTROL_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.release_control != 'false' }}
           FRONTEND_RESULT: ${{ needs.desktop-frontend.result }}
           PREPARE_RESULT: ${{ needs.desktop-prepare.result }}
           FRONTEND_REQUIRED: ${{ (github.event_name != 'pull_request' && needs.changes.outputs.notes_only != 'true') || needs.changes.outputs.frontend != 'false' || needs.changes.outputs.electron != 'false' }}
         run: |
           test "$CHANGES_RESULT" = success
+          expected() { if [ "$1" = true ]; then echo success; else echo skipped; fi; }
           lint_expected=skipped
           if [ "$LINT_CODE_REQUIRED" = true ]; then lint_expected=success; fi
           test "$LINT_CODE_RESULT" = "$lint_expected"
+          test "$RELEASE_CONTROL_RESULT" = "$(expected "$RELEASE_CONTROL_REQUIRED")"
           if [ "$FRONTEND_REQUIRED" = true ]; then
             test "$PREPARE_RESULT" = success
             test "$FRONTEND_RESULT" = success

@@ -13,14 +13,15 @@ const ROOT_TOOLING = /^(?:Makefile|\.golangci[^/]*)$/;
 const FRONTEND = /^desktop\/frontend\//;
 const DESKTOP_MANIFEST = /^(?:desktop\/(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc)|desktop\/frontend\/(?:package\.json|pnpm-lock\.yaml|vite\.config\.[cm]?[jt]s|tsconfig[^/]*\.json))$/;
 const ELECTRON = /^(?:desktop\/electron\/|desktop\/(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$)/;
-const PACKAGING = /^(?:desktop\/(?:packaging\/|build\/)|scripts\/(?:desktop-build|package-windows-desktop|install-nsis|check-windows-uninstaller)\b)/;
+const PACKAGING = /^(?:desktop\/(?:packaging\/|build\/)|scripts\/(?:desktop-build|package-windows-desktop|install-nsis|check-windows-uninstaller|finalize-windows-signed-candidate)\b)/;
+const RELEASE_CONTROL = /^(?:\.github\/workflows\/(?:release[^/]*|prepare-release-notes|pages)\.yml|scripts\/(?:release|resolve-release-candidate|validate-release-candidate|build-release-cli-candidate|publish-homebrew-cask|desktop-release-artifacts|finalize-windows-signed-candidate|verify-stable-release-artifacts)[^/]*|npm\/publish(?:-candidate)?(?:\.test)?\.mjs)$/;
 const DESKTOP_GO = /^(?:desktop\/(?:[^/]+\.go|go\.(?:mod|sum)|cmd\/|internal\/)|internal\/|cmd\/|go\.(?:mod|sum)$)/;
 const SDK = /^(?:sdk\/|internal\/extension\/)/;
 const CI_CONTROL = /^(?:\.github\/workflows\/ci\.yml|scripts\/ci-paths(?:\.test)?\.mjs)$/;
 const MEMORY_CONTROL = /^(?:\.github\/workflows\/app-memory\.yml|scripts\/ci-paths(?:\.test)?\.mjs)$/;
 const MEMORY_FULL = /^(?:desktop\/frontend\/(?:bench\/app-(?:memory|browser|page-actions)[^/]*|src\/(?:App(?:Runtime)?\.tsx|app-runtime\/.*|app-shell\/.*|components\/Transcript(?:Cards)?\.tsx|lib\/(?:useController[^/]*|subscriptionScope|useNavigationSurface|navigationSurfaceTransition|keyedResource|fileResource|useWorkspaceChangesResource|mcpServerLifecycle|fileNavigationLifetime|bridge(?:BenchFixtures|HistoryFixtures)?)\.[^/]+))|\.github\/workflows\/app-memory\.yml|scripts\/ci-paths(?:\.test)?\.mjs)$/;
 
-const FLAG_NAMES = ["code", "desktop", "desktop_go", "frontend", "browser", "memory", "memory_full", "electron", "native", "packaging", "site", "sdk", "notes_only"];
+const FLAG_NAMES = ["code", "desktop", "desktop_go", "frontend", "browser", "memory", "memory_full", "electron", "native", "packaging", "site", "sdk", "release_control", "notes_only"];
 
 function normalized(path) {
   return path.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -54,6 +55,14 @@ export function classifyPaths(input, { full = false } = {}) {
       flags.site = true;
       setReason(reasons, "site", path, "site source");
     }
+    if (RELEASE_CONTROL.test(path)) {
+      flags.release_control = true;
+      setReason(reasons, "release_control", path, "release control plane");
+      if (path === ".github/workflows/pages.yml") {
+        flags.site = true;
+        setReason(reasons, "site", path, "site deployment control");
+      }
+    }
     if (SDK.test(path)) {
       flags.sdk = true;
       setReason(reasons, "sdk", path, "SDK or generated protocol source");
@@ -73,7 +82,7 @@ export function classifyPaths(input, { full = false } = {}) {
         setReason(reasons, flag, path, "memory workflow or shared routing contract");
       }
     }
-    if (!ROOT_UNRELATED.test(path) && !ROOT_DOC.test(path)) {
+    if (!RELEASE_CONTROL.test(path) && !ROOT_UNRELATED.test(path) && !ROOT_DOC.test(path)) {
       flags.code = true;
       setReason(reasons, "code", path, "root module input");
     }

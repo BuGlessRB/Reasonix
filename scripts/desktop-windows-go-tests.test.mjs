@@ -43,5 +43,7 @@ test("CI runs all groups separately and retains the aggregate and native probe",
   const aggregate = source.match(/\n  desktop-windows-go:\n([\s\S]*?)(?=\n  [a-z][a-z0-9-]*:|$)/)?.[1];
   assert.match(aggregate, /needs: \[changes, desktop-prepare, desktop-windows-go-group\]/);
   assert.match(aggregate, /test "\$GROUP_RESULT" = success/);
-  assert.match(source, /node --test scripts\/desktop-windows-go-tests.test.mjs/);
+  const releaseControl = source.match(/\n  release-control:\n([\s\S]*?)(?=\n  [a-z][a-z0-9-]*:|$)/)?.[1];
+  assert.ok(releaseControl, "release-control job must still exist");
+  assert.match(releaseControl, /node --test[\s\S]*?scripts\/desktop-windows-go-tests\.test\.mjs/);
 });
