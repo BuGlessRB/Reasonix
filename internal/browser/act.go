@@ -29,6 +29,7 @@ type Step struct {
 	Values []string `json:"values,omitempty"`
 	X      *float64 `json:"x,omitempty"`
 	Y      *float64 `json:"y,omitempty"`
+	DeltaX float64  `json:"delta_x,omitempty"`
 	DeltaY float64  `json:"delta_y,omitempty"`
 	// Where a drag ends: another element, or a point in the page.
 	ToRef string   `json:"to_ref,omitempty"`
@@ -148,8 +149,11 @@ func (s *Session) runStep(ctx context.Context, t *tab, step Step, secrets bool) 
 		if err != nil {
 			return "", err
 		}
-		if err := t.call(ctx, "Input.dispatchMouseEvent", map[string]any{"type": "mouseWheel", "x": x, "y": y, "deltaX": 0, "deltaY": step.DeltaY}, nil); err != nil {
+		if err := t.call(ctx, "Input.dispatchMouseEvent", map[string]any{"type": "mouseWheel", "x": x, "y": y, "deltaX": step.DeltaX, "deltaY": step.DeltaY}, nil); err != nil {
 			return "", engineFailure(err)
+		}
+		if step.DeltaX != 0 && step.DeltaY == 0 {
+			return fmt.Sprintf("scroll %v px sideways", step.DeltaX), nil
 		}
 		return fmt.Sprintf("scroll %v px", step.DeltaY), nil
 	case "wait":

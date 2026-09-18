@@ -239,12 +239,12 @@ func (browserAct) Name() string { return "browser_act" }
 func (browserAct) Description() string {
 	return "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. " +
 		"Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; " +
-		"select sets a <select>; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers alert/confirm/prompt; " +
+		"select sets a <select>; scroll takes delta_y, or delta_x across; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers alert/confirm/prompt; " +
 		"resize sets the viewport to width×height; back, forward and reload move this tab — reload is what a page needs after the file behind it changed."
 }
 
 func (browserAct) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"tab":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","double_click","hover","fill","type","press","select","scroll","drag","upload","wait","wait_for","dialog","resize","back","forward","reload"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"values":{"type":"array","items":{"type":"string"}},"x":{"type":"number"},"y":{"type":"number"},"delta_y":{"type":"number"},"to_ref":{"type":"string"},"to_x":{"type":"number"},"to_y":{"type":"number"},"files":{"type":"array","items":{"type":"string"}},"ms":{"type":"integer"},"width":{"type":"integer"},"height":{"type":"integer"},"accept":{"type":"boolean"}},"required":["action"]}}},"required":["steps"]}`)
+	return json.RawMessage(`{"type":"object","properties":{"tab":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","double_click","hover","fill","type","press","select","scroll","drag","upload","wait","wait_for","dialog","resize","back","forward","reload"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"values":{"type":"array","items":{"type":"string"}},"x":{"type":"number"},"y":{"type":"number"},"delta_x":{"type":"number"},"delta_y":{"type":"number"},"to_ref":{"type":"string"},"to_x":{"type":"number"},"to_y":{"type":"number"},"files":{"type":"array","items":{"type":"string"}},"ms":{"type":"integer"},"width":{"type":"integer"},"height":{"type":"integer"},"accept":{"type":"boolean"}},"required":["action"]}}},"required":["steps"]}`)
 }
 
 // PermissionArgs names the site the steps will operate, as a credential

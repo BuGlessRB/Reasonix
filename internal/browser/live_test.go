@@ -446,7 +446,7 @@ func TestLiveTheNetworkListAndTheViewport(t *testing.T) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`<title>Wide</title><script src="/app.js"></script>
-<p id="size"></p><script>
+<p id="size"></p><div style="width:1600px">wide</div><script>
 fetch("/api/ok").then(() => fetch("/api/missing"));
 const show = () => document.getElementById("size").textContent = "viewport " + innerWidth + "x" + innerHeight;
 addEventListener("resize", show); show();
@@ -523,5 +523,26 @@ addEventListener("resize", show); show();
 	}
 	if !strings.Contains(strings.Join(snap.Lines, "\n"), "viewport 390x844") {
 		t.Fatalf("the page was not laid out in the viewport it was given:\n%s", strings.Join(snap.Lines, "\n"))
+	}
+
+	// A page too wide for its viewport is read by scrolling across it.
+	across := func() float64 {
+		var r struct {
+			Result struct{ Value float64 } `json:"result"`
+		}
+		if err := s.tabs[0].call(ctx, "Runtime.evaluate", map[string]any{"expression": "scrollX", "returnByValue": true}, &r); err != nil {
+			t.Fatalf("scrollX: %v", err)
+		}
+		return r.Result.Value
+	}
+	if at := across(); at != 0 {
+		t.Fatalf("the page starts scrolled across at %v", at)
+	}
+	res, err := actPlain(ctx, s, "", []Step{{Action: "scroll", DeltaX: 200}, {Action: "wait", Ms: 300}})
+	if err != nil || !strings.Contains(res.Notes[0], "sideways") {
+		t.Fatalf("scroll across = %+v, %v", res.Notes, err)
+	}
+	if at := across(); at <= 0 {
+		t.Fatalf("the page did not scroll across: scrollX = %v", at)
 	}
 }
