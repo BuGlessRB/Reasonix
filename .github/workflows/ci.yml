@@ -369,7 +369,9 @@ jobs:
             }
           }
       - name: test
-        timeout-minutes: 10
+        # The worktree group normally approaches ten minutes on hosted runners.
+        # Keep the script's 8m Go timeout authoritative and leave time to report it.
+        timeout-minutes: 15
         env:
           REASONIX_RELEASE_CACHE_GUARD: "1"
           WINDOWS_SANDBOX_WAIT_MS: "20000"
@@ -794,6 +796,7 @@ jobs:
           name: desktop-frontend-stable-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             desktop/frontend/dist
+            desktop/frontend/sourcemaps/${{ github.sha }}
             desktop/frontend/.reasonix-frontend-artifact.json
           include-hidden-files: true
           if-no-files-found: error
@@ -822,6 +825,7 @@ jobs:
           name: desktop-frontend-canary-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             desktop/frontend/dist
+            desktop/frontend/sourcemaps/${{ github.sha }}
             desktop/frontend/.reasonix-frontend-artifact.json
           include-hidden-files: true
           if-no-files-found: error

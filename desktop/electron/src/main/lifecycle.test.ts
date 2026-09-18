@@ -18,7 +18,7 @@ function fakeApp(sequencer: () => QuitSequencer) {
   return { app, calls };
 }
 
-function build(options: { prevent?: boolean; beforeCloseError?: Error; flushError?: Error } = {}) {
+function build(options: { prevent?: boolean; beforeCloseError?: Error; flushError?: Error; } = {},) {
   const log: string[] = [];
   let sequencer!: QuitSequencer;
   const { app, calls } = fakeApp(() => sequencer);
@@ -49,12 +49,12 @@ function build(options: { prevent?: boolean; beforeCloseError?: Error; flushErro
 test("a plain quit asks Go, shuts the service down once, then exits", async () => {
   const { sequencer, app, calls, log } = build();
   app.quit();
-  assert.equal(sequencer.currentPhase, "asking");
+  assert.equal(sequencer.currentPhase, "preparing");
   await tick();
   await tick();
   assert.deepEqual(log, ["flush", "beforeClose:quit", "flush", "shutdown", "closeAllowed"]);
   assert.deepEqual(calls, ["quit", "quit", "quit", "exit"]);
-  assert.equal(sequencer.currentPhase, "done");
+  assert.equal(sequencer.currentPhase, "completed");
 });
 
 test("Go can veto the quit; the shell stays running", async () => {
@@ -87,7 +87,7 @@ test("host/app.quit approval skips beforeClose and goes straight to shutdown", a
 });
 
 test("a failed beforeClose does not trap the user in a shell that cannot quit", async () => {
-  const { app, calls, log } = build({ beforeCloseError: new Error("service dead") });
+  const { app, calls, log } = build({ beforeCloseError: new Error("service dead"), });
   app.quit();
   await tick();
   await tick();
@@ -96,7 +96,7 @@ test("a failed beforeClose does not trap the user in a shell that cannot quit", 
 });
 
 test("a failed renderer flush cancels quit before Go is asked", async () => {
-  const { sequencer, app, calls, log } = build({ flushError: new Error("draft conflict") });
+  const { sequencer, app, calls, log } = build({ flushError: new Error("draft conflict"), });
   app.quit();
   await tick();
   assert.deepEqual(log, ["flush"]);
@@ -106,7 +106,7 @@ test("a failed renderer flush cancels quit before Go is asked", async () => {
 });
 
 test("direct approval also withholds shutdown when renderer flush fails", async () => {
-  const { sequencer, calls, log } = build({ flushError: new Error("draft conflict") });
+  const { sequencer, calls, log } = build({ flushError: new Error("draft conflict"), });
   sequencer.approve();
   await tick();
   assert.deepEqual(log, ["flush"]);
@@ -132,15 +132,38 @@ test("relaunch waits for shutdown then starts the committed stable launcher", as
   assert.deepEqual(calls, ["quit", "relaunch:--after-update@/opt/reasonix/reasonix-launcher", "quit", "exit"]);
 });
 
+test("the first exit trigger keeps ownership of the shutdown reason", async () => {
+  const reasons: string[] = [];
+  let q!: QuitSequencer;
+  const { app } = fakeApp(() => q);
+  q = new QuitSequencer({
+    service: {
+      beforeClose: async () => false,
+      shutdown: async (reason) => { reasons.push(reason ?? ""); },
+    },
+    app,
+    flushRenderer: async () => {},
+    onCloseAllowed() {},
+    log: silent,
+  });
+
+  q.relaunch(["--after-update"]);
+  q.requestQuit("system_signal");
+  await tick();
+  await tick();
+
+  assert.deepEqual(reasons, ["update_restart"]);
+});
+
 test("cleanup failure cannot skip later cleanup or the final quit deadline", async () => {
   const events: string[] = [];
   let deadline: (() => void) | undefined;
   let q!: QuitSequencer;
   q = new QuitSequencer({
-    service: { beforeClose: async () => false, shutdown: async () => { events.push("stopped"); } },
-    app: { quit: () => { if (q.onBeforeQuit()) events.push("quit"); }, exit: () => events.push("forced"), relaunch() {} },
+    service: { beforeClose: async () => false, shutdown: async () => { events.push("stopped"); }, },
+    app: { quit: () => { if (q.onBeforeQuit()) events.push("quit"); }, exit: () => events.push("forced"), relaunch() {}, },
     onCloseAllowed: () => { throw new Error("window cleanup"); },
-    cleanup: [{ name: "tray", run: () => { events.push("tray"); } }],
+    cleanup: [{ name: "tray", run: () => { events.push("tray"); }, },],
     schedule: (run, ms) => { assert.equal(ms, 5000); deadline = run; }, log: silent,
   });
   q.approve(); await tick();
@@ -154,12 +177,50 @@ test("service termination failure withholds shell exit and permits an exit retry
   let resumes = 0;
   let q!: QuitSequencer;
   q = new QuitSequencer({
-    service: { beforeClose: async () => false, shutdown: async () => { if (++attempts === 1) throw new Error("child alive"); } },
-    app: { quit: () => { if (q.onBeforeQuit()) exits++; }, relaunch() {} },
+    service: { beforeClose: async () => false, shutdown: async () => { if (++attempts === 1) throw new Error("child alive"); }, },
+    app: { quit: () => { if (q.onBeforeQuit()) exits++; }, relaunch() {}, },
     resumeRenderer: async () => { resumes++; },
     onCloseAllowed() {}, log: silent,
   });
   q.approve(); await tick();
-  assert.equal(exits, 0); assert.equal(q.isQuitting, false); assert.equal(resumes, 1);
-  q.approve(); await tick(); assert.equal(exits, 1);
+  assert.equal(exits, 0); assert.equal(q.isQuitting, true); assert.equal(q.currentPhase, "failed");
+  assert.equal(resumes, 0);
+  q.approve();
+  await tick();
+  assert.equal(exits, 1);
+});
+
+test("shutdown failure prompt can retry without restoring renderer editing", async () => {
+  let attempts = 0;
+  let prompts = 0;
+  let exits = 0;
+  let
+  q!: QuitSequencer;
+  q = new QuitSequencer({
+    service: {
+      beforeClose: async () => false,
+      shutdown: async () => {
+        if (++attempts === 1) throw new Error("disk full");
+      },
+    },
+    app: {
+      quit: () => {
+        if (q.onBeforeQuit()) exits++;
+      },
+      relaunch() {},
+    },
+    onShutdownFailed: async (message) => {
+      prompts++;
+      assert.match(message, /disk full/);
+      return true;
+    },
+    onCloseAllowed() {},
+    log: silent,
+  });
+  q.approve(); await tick();
+  await tick();
+  await tick(); assert.equal(attempts, 2);
+  assert.equal(prompts, 1);
+  assert.equal(exits, 1);
+  assert.equal(q.currentPhase, "completed");
 });
