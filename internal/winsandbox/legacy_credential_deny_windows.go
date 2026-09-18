@@ -107,18 +107,17 @@ func staleCredentialDenyMarkers(path, canonicalPath string) []string {
 }
 
 // canonicalWindowsPath expands 8.3 aliases without opening the protected file.
-// Keep the original spelling on failure so exact-path matching still works on
-// volumes where long-name expansion is unavailable.
+// Keep the original spelling on failure so the exact-path comparison remains
+// available when a volume does not support long-name expansion.
 func canonicalWindowsPath(path string) string {
-	cleaned := filepath.Clean(path)
-	input, err := windows.UTF16PtrFromString(cleaned)
+	input, err := windows.UTF16PtrFromString(filepath.Clean(path))
 	if err != nil {
-		return cleaned
+		return filepath.Clean(path)
 	}
 	buffer := make([]uint16, 32768)
 	n, err := windows.GetLongPathName(input, &buffer[0], uint32(len(buffer)))
 	if err != nil || n == 0 || n >= uint32(len(buffer)) {
-		return cleaned
+		return filepath.Clean(path)
 	}
 	return filepath.Clean(windows.UTF16ToString(buffer[:n]))
 }
