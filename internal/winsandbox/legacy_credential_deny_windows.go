@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 	"unsafe"
 
@@ -76,6 +75,10 @@ func RepairLegacyCredentialDeny(path string) error {
 }
 
 func staleCredentialDenyMarkers(path string) []string {
+	credential, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
 	entries, err := os.ReadDir(windowsDenyMarkerDir())
 	if err != nil {
 		return nil
@@ -88,7 +91,11 @@ func staleCredentialDenyMarkers(path string) []string {
 		}
 		marker := filepath.Join(windowsDenyMarkerDir(), entry.Name())
 		for _, residue := range readResidueMarker(marker) {
-			if residue.kind != residueDeny || !strings.EqualFold(filepath.Clean(residue.path), filepath.Clean(path)) {
+			if residue.kind != residueDeny {
+				continue
+			}
+			markedFile, statErr := os.Stat(residue.path)
+			if statErr != nil || !os.SameFile(markedFile, credential) {
 				continue
 			}
 			if !credentialMarkerOwnerExited(marker, pid) {

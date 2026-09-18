@@ -68,6 +68,33 @@ func writeStaleCredentialMarker(t *testing.T, path string) string {
 	return marker
 }
 
+func TestRepairLegacyCredentialDenyMatchesFileAcrossPathAliases(t *testing.T) {
+	t.Setenv("TMP", t.TempDir())
+	path := filepath.Join(t.TempDir(), ".env")
+	alias := filepath.Join(filepath.Dir(path), "credential-alias")
+	if err := os.WriteFile(path, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(path, alias); err != nil {
+		t.Fatalf("create credential hardlink: %v", err)
+	}
+	userSID, err := currentProcessUserSIDString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := denyAppContainerSIDsWithInheritance(path, []string{userSID}, "RX", false); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { removeDeniedAppContainerSIDs(path, []string{userSID}) })
+	writeStaleCredentialMarker(t, alias)
+	if err := RepairLegacyCredentialDeny(path); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "KEY=value\n" {
+		t.Fatalf("credential after aliased repair = %q, %v", data, err)
+	}
+}
+
 func TestRepairLegacyCredentialDenyPreservesUnattributedAndLiveACL(t *testing.T) {
 	for _, source := range []string{"missing marker", "live marker", "wrong path"} {
 		t.Run(source, func(t *testing.T) {

@@ -27,6 +27,10 @@ const release = workflow("release-desktop");
 const promote = workflow("release-promote");
 const appMemory = workflow("app-memory");
 
+test("Windows PR verifies credential aliases before full push CI", () => {
+  assert.match(ci, /name: test \(Windows credential ACL identity\)[\s\S]*?runner\.os == 'Windows' && github\.event_name == 'pull_request'[\s\S]*?go test -timeout=2m -run '\^TestCredentialAccessRepairsLegacyCredentialDeny' \.\/internal\/config/);
+});
+
 test("release candidate verification cannot mutate repository contents before approval", () => {
   assert.match(job(promote, "preflight"), /permissions:\n      actions: read\n      attestations: read\n      contents: read/);
   assert.match(job(promote, "authorize"), /environment: release[\s\S]*permissions:\n      contents: read/);
