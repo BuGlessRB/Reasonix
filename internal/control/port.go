@@ -250,6 +250,7 @@ type RuntimeSettings interface {
 	SaveShellSettings(prefer, path string) error
 	PermissionRules() PermissionRules
 	SavePermissionRules(in PermissionLists) error
+	RevokeSessionGrant(rule string) int
 	SandboxSettings() SandboxSettings
 	SaveSandboxSettings(in SandboxSettings) error
 	CompactionSettings() CompactionSettings

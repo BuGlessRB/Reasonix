@@ -178,6 +178,10 @@ var Chinese = Messages{
 
 	ExtFormFieldsHint:         "字段将通过逐项提问收集",
 	ExtRunActionFmt:           "运行 %s",
+	SlashRevokeNone:           "本次会话除规则文件外没有额外授权。",
+	SlashRevokeHint:           "用 /sandbox revoke <规则> 收回一项，或 /sandbox revoke all 全部收回。",
+	SlashRevokeUnknown:        "本次会话没有 %q 这一项授权。",
+	SlashRevokeDone:           "已收回 %d 项，还剩 %d 项。",
 	SlashCompactFailed:        "压缩失败",
 	SlashCompactDeclined:      "暂时不用整理",
 	SlashNewDone:              "已开启新会话 — 之前的对话已存档",

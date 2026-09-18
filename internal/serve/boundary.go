@@ -13,6 +13,7 @@ import (
 func (s *Server) registerBoundaryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /permissions", s.permissions)
 	mux.HandleFunc("POST /permissions", s.savePermissions)
+	mux.HandleFunc("POST /permissions/revoke", s.revokeSessionGrant)
 	mux.HandleFunc("GET /sandbox", s.sandboxSettings)
 	mux.HandleFunc("POST /sandbox", s.saveSandboxSettings)
 	// The file every one of these is written to, for when it is the thing that
@@ -47,6 +48,21 @@ func (s *Server) savePermissions(w http.ResponseWriter, r *http.Request) {
 		rebuildFailed(w, err)
 		return
 	}
+	writeJSON(w, s.ctl().PermissionRules())
+}
+
+// revokeSessionGrant takes back what a prompt allowed for this session. It is
+// not editing the file, so it is not behind the provider-edit grant: taking
+// permission away is always the reader's to do.
+func (s *Server) revokeSessionGrant(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Rule string `json:"rule"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
+		badBody(w)
+		return
+	}
+	s.ctl().RevokeSessionGrant(body.Rule)
 	writeJSON(w, s.ctl().PermissionRules())
 }
 

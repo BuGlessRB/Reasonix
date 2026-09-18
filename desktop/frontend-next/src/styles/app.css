@@ -3840,6 +3840,14 @@
   .rules .path { margin: 10px 0 0; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); word-break: break-all }
   .rules .find { margin-bottom: 14px }
 
+  .granted { margin-top: 18px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--sunk); overflow: hidden }
+  .granted .g-hd { display: flex; align-items: baseline; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border) }
+  .granted .g-hd .n { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
+  .granted .g-hd .how { flex: 1; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--muted) }
+  .granted .g-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px }
+  .granted .g-row + .g-row { border-top: 1px solid var(--hair) }
+  .granted .g-row code { flex: 1; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--text); overflow-wrap: anywhere }
+
   .rhead { display: flex; align-items: center; gap: 10px; margin-top: 22px }
   .rhead .n { flex: none; display: flex; align-items: baseline; gap: 8px; font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted) }
 

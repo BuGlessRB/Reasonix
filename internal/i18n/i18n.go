@@ -212,6 +212,10 @@ type Messages struct {
 	ExtRunActionFmt   string // card action hint, one %s = the /<plugin>:<action> slash name
 
 	// chat TUI slash commands.
+	SlashRevokeNone              string // "/revoke" found nothing allowed for this session
+	SlashRevokeHint              string // how to take one back, shown under the list
+	SlashRevokeUnknown           string // "/revoke X" where X is not one of them
+	SlashRevokeDone              string // "/revoke" took back what was named
 	SlashCompactFailed           string // "/compact" errored, prefixed before the underlying error
 	SlashCompactDeclined         string // "/compact" found nothing worth folding, prefixed before the host's reason
 	SlashNewDone                 string // "/new" succeeded

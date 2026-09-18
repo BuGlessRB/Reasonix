@@ -28,6 +28,11 @@ export const EN: Record<string, string> = {
   ...EN_GRAPH,
   ...EN_TRAJECTORY,
   // ── 转录：卡片与流 ───────────────────────────────────────────────
+  "本次会话另外允许了 {n} 项": "{n} more allowed for this session",
+  "只在这个会话里有效，没有写进文件": "This session only; not written to the file",
+  "全部收回": "Take all back",
+  "收回": "Take back",
+  "收回 {rule}": "Take back {rule}",
   "放大第 {n} 张": "Enlarge image {n}",
   "工具截图 {n}": "Tool screenshot {n}",
   "放大的工具截图": "The enlarged tool screenshot",

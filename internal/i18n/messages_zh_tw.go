@@ -172,6 +172,10 @@ var ChineseTraditional = Messages{
 
 	ExtFormFieldsHint:         "欄位將透過逐項提問收集",
 	ExtRunActionFmt:           "執行 %s",
+	SlashRevokeNone:           "本次會話除規則檔案外沒有額外授權。",
+	SlashRevokeHint:           "用 /sandbox revoke <規則> 收回一項，或 /sandbox revoke all 全部收回。",
+	SlashRevokeUnknown:        "本次會話沒有 %q 這一項授權。",
+	SlashRevokeDone:           "已收回 %d 項，還剩 %d 項。",
 	SlashCompactFailed:        "壓縮失敗",
 	SlashCompactDeclined:      "暫時不用整理",
 	SlashNewDone:              "已開啟新會話 — 之前的對話已存檔",

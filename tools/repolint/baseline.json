@@ -11,9 +11,9 @@
     "doc-prose": 2345,
     "error-text": 9,
     "essay": 3154,
-    "file-size": 29938,
+    "file-size": 29902,
     "flat-view": 0,
-    "frontend-parity": 130,
+    "frontend-parity": 129,
     "function-size": 5948,
     "layering": 0,
     "marker": 0,
@@ -564,7 +564,7 @@
     "internal/cli/chat_tui.go": {
       "complexity": 324,
       "essay": 109,
-      "file-size": 4665,
+      "file-size": 4629,
       "function-size": 1277
     },
     "internal/cli/chat_tui_paste.go": {
@@ -805,7 +805,7 @@
       "orphan": 2
     },
     "internal/control/boundary.go": {
-      "frontend-parity": 4
+      "frontend-parity": 3
     },
     "internal/control/branches.go": {
       "frontend-parity": 1

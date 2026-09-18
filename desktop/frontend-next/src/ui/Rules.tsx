@@ -190,6 +190,18 @@ export function Rules({ port, onChanged }: { port: AgentPort; onChanged: () => v
     }
   };
 
+  const revoke = async (rule: string) => {
+    setBusy(rule || "all");
+    setError("");
+    try {
+      setRules(await port.revokeSessionGrant(rule));
+    } catch (e) {
+      setError(reason(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
   const without = (l: PermissionLists, rule: string): PermissionLists => ({
     ...l,
     deny: l.deny.filter((r) => r !== rule),
@@ -275,6 +287,8 @@ export function Rules({ port, onChanged }: { port: AgentPort; onChanged: () => v
       </div>
 
       {adding && <AddRule busy={!!busy} onAdd={(rule, level) => { add(rule, level); setAdding(false); }} />}
+
+      <Granted rules={rules.granted ?? []} busy={busy} onRevoke={revoke} />
 
       <div className="rtable">
         {groups.map((g) => {
@@ -362,5 +376,30 @@ function AddRule({ busy, onAdd }: { busy: boolean; onAdd: (rule: string, level: 
         <span className="says">{explain(tool, pattern)}</span>
       </p>
     </div>
+  );
+}
+
+// What a prompt allowed for this session. It is in no file, so a person reading
+// the table above is reading less than the agent may currently do — and until
+// there was somewhere to take one back, "allow for this session" could only be
+// undone by ending the session, which costs the work as well as the grant.
+function Granted({ rules, busy, onRevoke }: { rules: string[]; busy: string; onRevoke: (rule: string) => void }) {
+  if (!rules.length) return null;
+  return (
+    <section className="granted">
+      <div className="g-hd">
+        <span className="n">{t("本次会话另外允许了 {n} 项", { n: rules.length })}</span>
+        <span className="how">{t("只在这个会话里有效，没有写进文件")}</span>
+        <button className="act" data-action="permissions.revoke-session" data-value="all" disabled={!!busy}
+          onClick={() => onRevoke("")}>{t("全部收回")}</button>
+      </div>
+      {rules.map((rule) => (
+        <div className="g-row" key={rule}>
+          <code>{rule}</code>
+          <button className="act" data-action="permissions.revoke-session" data-target={rule} disabled={!!busy}
+            aria-label={t("收回 {rule}", { rule })} onClick={() => onRevoke(rule)}>{t("收回")}</button>
+        </div>
+      ))}
+    </section>
   );
 }

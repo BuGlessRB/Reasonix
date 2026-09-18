@@ -69,6 +69,12 @@ export class MockBoundary extends MockShell {
     return { ...this.rules };
   }
 
+  async revokeSessionGrant(rule: string): Promise<PermissionRules> {
+    const granted = this.rules.granted ?? [];
+    this.rules = { ...this.rules, granted: rule ? granted.filter((g) => g !== rule) : [] };
+    return { ...this.rules };
+  }
+
   async sandbox(): Promise<SandboxSettings> {
     return { ...this.jail };
   }

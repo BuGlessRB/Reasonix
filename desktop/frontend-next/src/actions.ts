@@ -66,6 +66,11 @@ export const ACTIONS: UIAction[] = [
   // What a call showed the model, at the size a card allows and then at the
   // size a person can read. Opening and closing are one intent seen twice, but
   // they are two buttons in two places: the thumbnail and the enlargement.
+  // Taking back what a prompt allowed for this session. One id: the row and the
+  // header ask the same thing of the kernel, and which grant rides on
+  // data-target, with "all" as the value that names none of them.
+  { id: "permissions.revoke-session", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
+
   { id: "tool.image-open", kind: "view", target: "none", proof: "interaction" },
   { id: "tool.image-close", kind: "view", target: "none", proof: "interaction" },
 

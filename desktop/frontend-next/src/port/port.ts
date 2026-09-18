@@ -193,6 +193,8 @@ export interface AgentPort {
   // is validated by the parser the gate itself uses, so a typo comes back as an
   // error here rather than as a rule that silently never matches.
   savePermissions(lists: PermissionLists): Promise<PermissionRules>;
+  /** Take back what a prompt allowed for this session — one rule, or all of them when rule is "". */
+  revokeSessionGrant(rule: string): Promise<PermissionRules>;
   sandbox(): Promise<SandboxSettings>;
   saveSandbox(s: SandboxSettings): Promise<SandboxSettings>;
   // null in a browser tab: there is no window to keep running.

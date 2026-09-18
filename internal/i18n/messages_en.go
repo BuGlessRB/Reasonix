@@ -177,6 +177,10 @@ var English = Messages{
 
 	ExtFormFieldsHint:         "fields are collected through the usual prompts",
 	ExtRunActionFmt:           "run %s",
+	SlashRevokeNone:           "Nothing is allowed for this session beyond the rules file.",
+	SlashRevokeHint:           "Take one back with /sandbox revoke <rule>, or all with /sandbox revoke all.",
+	SlashRevokeUnknown:        "Nothing in this session allows %q.",
+	SlashRevokeDone:           "Took back %d of them; %d left.",
 	SlashCompactFailed:        "compaction failed",
 	SlashCompactDeclined:      "nothing to tidy",
 	SlashNewDone:              "new session started — previous transcript saved",

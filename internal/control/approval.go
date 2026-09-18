@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -732,4 +733,35 @@ func permissionRequestHookPayload(tool, subject string, args json.RawMessage) (s
 	default:
 		return subject, args, true
 	}
+}
+
+// sessionGrants is what this session was allowed on a prompt, sorted so a
+// reader sees the same order twice.
+func (a *approvalManager) sessionGrants() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make([]string, 0, len(a.granted))
+	for rule := range a.granted {
+		out = append(out, rule)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// revokeSessionGrant takes back one of them, or all of them when rule is empty.
+// It answers how many it took back, because a rule a rebuild already dropped is
+// not an error and is not a revocation either.
+func (a *approvalManager) revokeSessionGrant(rule string) int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if rule == "" {
+		n := len(a.granted)
+		clear(a.granted)
+		return n
+	}
+	if !a.granted[rule] {
+		return 0
+	}
+	delete(a.granted, rule)
+	return 1
 }
