@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { t } from "../../i18n";
+import { useEscape } from "../dismiss";
 import { nestLabel } from "../delegation";
 import type { ExtensionSurface, Tool } from "../../port/wire";
 import type { RewindPlan, RewindResult } from "../../port/port";
@@ -314,6 +315,7 @@ const KINDED = new Set(["net", "deleg", "write", "mcp", "mem"]);
 // screenshot was taken — this is the screenshot.
 function ToolShots({ images }: { images?: string[] }) {
   const [open, setOpen] = useState("");
+  useEscape(!!open, () => setOpen(""));
   if (!images?.length) return null;
   return (
     <>

@@ -30,6 +30,9 @@ describe("tool outcome cards", () => {
     expect(container.querySelector(".tshot-full")).toBeNull();
     act(() => thumb!.click());
     expect(container.querySelector<HTMLImageElement>(".tshot-full img")?.getAttribute("src")).toBe(shot);
+    // A picture that fills the window has to close without a mouse.
+    act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
+    expect(container.querySelector(".tshot-full")).toBeNull();
   });
 
   it("says nothing where a call showed nothing", () => {
