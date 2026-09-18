@@ -106,6 +106,9 @@ export interface Tool {
   resolvedName?: string;
   capabilityId?: string;
   output?: string;
+  // What the call showed the model, as data URLs. The output text only names
+  // them, so without these a person is told a picture was taken and not shown it.
+  images?: string[];
   err?: string;
   // The host's dotted identity for a refusal. err is only its wording.
   refusalCode?: string;

@@ -244,11 +244,15 @@ type Tool struct {
 	ResolvedName string
 	CapabilityID string
 	Output       string // ToolResult: the result text fed to the model
-	Err          string // ToolResult: non-empty when the call failed or was blocked
-	RefusalCode  string // ToolResult: dotted identity of a host refusal; Err is only its wording
-	ReadOnly     bool
-	Bound        OutputBound // ToolResult: how Output was fitted into context
-	DurationMs   int64       // ToolResult: wall-clock execution time in milliseconds
+	// Images are what the call showed the model, as data URLs. The result text
+	// only names them, so a window with nothing else to go on shows a person a
+	// placeholder where the agent had a picture.
+	Images      []string
+	Err         string // ToolResult: non-empty when the call failed or was blocked
+	RefusalCode string // ToolResult: dotted identity of a host refusal; Err is only its wording
+	ReadOnly    bool
+	Bound       OutputBound // ToolResult: how Output was fitted into context
+	DurationMs  int64       // ToolResult: wall-clock execution time in milliseconds
 	// StartedAt/EndedAt are unix-millisecond execution bounds (ToolResult).
 	// Zero when the call never ran (dependency-skipped, cancelled, synthetic).
 	StartedAt int64

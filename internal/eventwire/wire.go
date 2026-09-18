@@ -410,7 +410,7 @@ func toWireTool(t event.Tool) *Tool {
 	wt := &Tool{
 		ID: t.ID, Name: t.Name, Args: t.Args,
 		ResolvedName: t.ResolvedName, CapabilityID: t.CapabilityID,
-		Output: t.Output, Err: t.Err, RefusalCode: t.RefusalCode,
+		Output: t.Output, Images: t.Images, Err: t.Err, RefusalCode: t.RefusalCode,
 		ReadOnly: t.ReadOnly, Truncated: t.Bound.Lossy(),
 		DurationMs: t.DurationMs, ContextTokens: t.ContextTokens(),
 		Partial: t.Partial, StartedAt: t.StartedAt, EndedAt: t.EndedAt,
@@ -458,7 +458,9 @@ type Tool struct {
 	ResolvedName string `json:"resolvedName,omitempty"`
 	CapabilityID string `json:"capabilityId,omitempty"`
 	Output       string `json:"output,omitempty" externalizable:"true"`
-	Err          string `json:"err,omitempty" externalizable:"true"`
+	// Images the call showed the model, as data URLs.
+	Images []string `json:"images,omitempty"`
+	Err    string   `json:"err,omitempty" externalizable:"true"`
 	// RefusalCode is the host's dotted identity for a refusal. Err is only its
 	// wording, and a reader that has to tell one refusal from another cannot
 	// use a sentence.

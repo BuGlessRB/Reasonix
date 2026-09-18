@@ -162,6 +162,7 @@ export function ToolCard({
           {!tool.diff && !goal && tool.name !== "todo_write" && tool.output && !echoed && children.length === 0 && (
             <ToolOutput name={shown} text={tool.output} bound={tool.bound} id={tool.id} />
           )}
+          <ToolShots images={tool.images} />
             </>
           )}
           {/* The error stays outside the takeover: an extension may redraw what
@@ -307,3 +308,28 @@ const tagHint = (tool: Tool) => {
 
 // Only the categories the spec gives a colour to; the rest stay neutral.
 const KINDED = new Set(["net", "deleg", "write", "mcp", "mem"]);
+
+// What the call showed the model. The reader is watching the agent work on
+// their own screen or a page they cannot see, and the output text only says a
+// screenshot was taken — this is the screenshot.
+function ToolShots({ images }: { images?: string[] }) {
+  const [open, setOpen] = useState("");
+  if (!images?.length) return null;
+  return (
+    <>
+      <div className="tshots">
+        {images.map((src, i) => (
+          <button key={src.slice(0, 64) + i} className="tshot" data-action="tool.image-open" onClick={() => setOpen(src)}
+            aria-label={t("放大第 {n} 张", { n: i + 1 })}>
+            <img src={src} alt={t("工具截图 {n}", { n: i + 1 })} loading="lazy" />
+          </button>
+        ))}
+      </div>
+      {open && (
+        <div className="tshot-full" data-action="tool.image-close" onClick={() => setOpen("")} role="presentation">
+          <img src={open} alt={t("放大的工具截图")} />
+        </div>
+      )}
+    </>
+  );
+}

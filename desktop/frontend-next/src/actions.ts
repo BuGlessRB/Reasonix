@@ -63,6 +63,12 @@ export const ACTIONS: UIAction[] = [
   { id: "chrome.receipt", kind: "view", target: "none", proof: "interaction" },
   { id: "chrome.account", kind: "navigation", target: "none", proof: "interaction" },
 
+  // What a call showed the model, at the size a card allows and then at the
+  // size a person can read. Opening and closing are one intent seen twice, but
+  // they are two buttons in two places: the thumbnail and the enlargement.
+  { id: "tool.image-open", kind: "view", target: "none", proof: "interaction" },
+  { id: "tool.image-close", kind: "view", target: "none", proof: "interaction" },
+
   // ── The turn ─────────────────────────────────────────────────────────────
   // Send and stop remain two actions even when they sit together: during a
   // live turn the first steers and the second cancels the current turn.

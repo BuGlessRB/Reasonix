@@ -102,3 +102,28 @@ func TestFailedToolResultKeepsItsImages(t *testing.T) {
 	}
 	t.Fatal("no tool result for shot reached the provider")
 }
+
+// The window is where a person watches the agent work on a page or an
+// application they cannot see for themselves. The result text names the
+// picture; the card can only show it if the event carries it.
+func TestToolResultEventCarriesWhatTheCallShowed(t *testing.T) {
+	dataURL := "data:image/png;base64,QUFB"
+	reg := tool.NewRegistry()
+	reg.Add(&fakeImageTool{text: "front window\n[image: screenshot]", images: []string{dataURL}})
+	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+		{toolCallChunk("c1", "shot", `{}`), {Type: provider.ChunkDone}},
+		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
+	}}
+	sink := &recordSink{}
+	a := New(prov, reg, NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, sink)
+	if err := a.Run(context.Background(), "take a screenshot"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	results := sink.kinds(event.ToolResult)
+	if len(results) != 1 {
+		t.Fatalf("the window was sent %d tool results, want 1", len(results))
+	}
+	if got := results[0].Tool.Images; len(got) != 1 || got[0] != dataURL {
+		t.Fatalf("the tool result carried %d images (%v), want the one the call showed", len(got), got)
+	}
+}

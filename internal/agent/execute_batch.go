@@ -310,14 +310,14 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			Args:         c.Arguments,
 			ResolvedName: c.ResolvedName,
 			CapabilityID: c.CapabilityID,
-			Output:       o.output,
-			Err:          o.errMsg,
-			RefusalCode:  o.refusalCode,
-			ReadOnly:     readOnly,
-			Bound:        o.bound,
-			DurationMs:   durations[i],
-			Execution:    toEventShellExecution(o.execution, durations[i]),
-			Issuer:       event.IssuedByModel,
+			Output:       o.output, Images: o.images,
+			Err:         o.errMsg,
+			RefusalCode: o.refusalCode,
+			ReadOnly:    readOnly,
+			Bound:       o.bound,
+			DurationMs:  durations[i],
+			Execution:   toEventShellExecution(o.execution, durations[i]),
+			Issuer:      event.IssuedByModel,
 		}
 		if startedAt[i] > 0 {
 			tr.StartedAt = startedAt[i]

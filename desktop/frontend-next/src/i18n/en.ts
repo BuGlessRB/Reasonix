@@ -28,6 +28,9 @@ export const EN: Record<string, string> = {
   ...EN_GRAPH,
   ...EN_TRAJECTORY,
   // ── 转录：卡片与流 ───────────────────────────────────────────────
+  "放大第 {n} 张": "Enlarge image {n}",
+  "工具截图 {n}": "Tool screenshot {n}",
+  "放大的工具截图": "The enlarged tool screenshot",
   "描述任务，其余交给 Reasonix": "Describe the task; Reasonix takes it from there",
   "要求扩大可改范围": "Asking to widen what it may change",
   "这个子任务声明之外的文件": "A file outside this subtask's declared paths",
