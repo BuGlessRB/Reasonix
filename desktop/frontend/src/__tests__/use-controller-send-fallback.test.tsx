@@ -48,6 +48,10 @@ function tabMeta(overrides: Partial<TabMeta> = {}): TabMeta {
     tokenMode: "full",
     active: true,
     cwd: "/repo/send",
+    sessionId: "session-send",
+    session: { hostId: "local", sessionId: "session-send" },
+    sessionGeneration: 1,
+    runtime: { phase: "ready", epoch: "runtime-send" },
     ...overrides,
   };
 }
@@ -63,6 +67,10 @@ function metaFor(tab: TabMeta): Meta {
     workspaceName: tab.workspaceName,
     workspacePath: tab.workspacePath,
     gitBranch: tab.gitBranch,
+    sessionId: tab.sessionId,
+    session: tab.session,
+    sessionGeneration: tab.sessionGeneration,
+    runtime: tab.runtime,
     autoApproveTools: false,
     bypass: false,
     collaborationMode: tab.collaborationMode ?? "normal",
@@ -106,7 +114,8 @@ let rejectAnswer = false;
 let rejectAnswerMessage = "prompt write failed";
 let rejectListTabs = false;
 let listTabsCalls = 0;
-const exactAnswerCalls: Array<{ tabId: string; turnId: string; promptId: string; answers: unknown[] }> = [];
+let pendingPromptIdentityCalls = 0;
+const exactAnswerCalls: Array<{ tabId: string; turnId: string; promptId: string; answer: unknown }> = [];
 const legacyAnswerCalls: string[] = [];
 
 const desktopStub = installDesktopHostStub(({
@@ -129,6 +138,15 @@ const desktopStub = installDesktopHostStub(({
       HistoryCheckpointTurnsForTab: async () => [],
       ReplayPendingPrompts: async () => {},
       ReplayPendingPromptsForTab: async () => {},
+      PendingPromptIdentitiesForTab: async (tabId: string) => {
+        pendingPromptIdentityCalls += tabId === "tab-send" ? 1 : 0;
+        return backendTab.pendingPrompt && backendTab.turnId ? [{
+          promptId: backendTab.turnId === "turn-authoritative" ? "ask-fallback" : "ask-retry",
+          turnId: backendTab.turnId,
+          runtimeEpoch: backendTab.runtime?.epoch,
+          kind: "ask",
+        }] : [];
+      },
       SubmitToTab: async (tabId: string) => {
         submitCalls += tabId === "tab-send" ? 1 : 0;
       },
@@ -137,13 +155,9 @@ const desktopStub = installDesktopHostStub(({
         if (rejectSubmit) throw new Error("turn already running");
       },
       AnswerQuestionForTab: async (_tabId: string, promptId: string) => { legacyAnswerCalls.push(promptId); },
-      AnswerPromptForTab: async (tabId: string, turnId: string, promptId: string, answers: unknown[]) => {
-        exactAnswerCalls.push({ tabId, turnId, promptId, answers });
-        if (rejectAnswer) throw new Error(rejectAnswerMessage);
-      },
-      ResolvePromptForTab: async (tabId: string, promptId: string, turnId: string, _runtimeEpoch: string, _kind: string, answer: unknown) => {
-        exactAnswerCalls.push({ tabId, turnId, promptId, answers: answer });
-        if (rejectAnswer && rejectAnswerMessage.includes("not the active turn")) desktopStub.emit("agent:event", { kind: "prompt_answered", tabId, itemId: promptId });
+      ResolvePromptForSession: async (target, answer) => {
+        exactAnswerCalls.push({ tabId: target.tabId, turnId: target.turnId, promptId: target.promptId, answer });
+        if (rejectAnswer && rejectAnswerMessage.includes("not the active turn")) desktopStub.emit("agent:event", { kind: "prompt_answered", tabId: target.tabId, itemId: target.promptId });
         if (rejectAnswer) throw new Error(rejectAnswerMessage);
       },
     } as Partial<AppBindings> as AppBindings,
@@ -191,17 +205,20 @@ await act(async () => {
   desktopStub.emit("agent:event", {
     kind: "ask_request",
     tabId: "tab-send",
+    runtimeEpoch: "runtime-send",
     ask: { id: "ask-fallback", questions: [{ id: "q1", prompt: "Proceed?", options: [{ label: "yes" }] }] },
   } as WireEvent);
   await flushPromises();
 });
 eq(controller?.state.activeTurnId, undefined, "Ask fixture starts without a local turn id");
 const beforeAnswerListCalls = listTabsCalls;
+const beforePendingPromptIdentityCalls = pendingPromptIdentityCalls;
 await act(async () => {
   await controller?.answerQuestion("ask-fallback", [{ questionId: "q1", selected: ["yes"] }]);
   await flushPromises();
 });
-eq(listTabsCalls, beforeAnswerListCalls + 1, "Ask answer resolves one authoritative ListTabs fallback");
+eq(listTabsCalls, beforeAnswerListCalls, "Ask answer does not borrow the latest tab turn");
+eq(pendingPromptIdentityCalls, beforePendingPromptIdentityCalls + 1, "Ask answer resolves one exact pending-prompt identity");
 eq(exactAnswerCalls.at(-1)?.turnId, "turn-authoritative", "Ask answer uses the authoritative turn fence");
 eq(legacyAnswerCalls.length, 0, "Ask answer never falls back to the unfenced endpoint");
 eq(controller?.state.ask, undefined, "successful exact answer clears the matching Ask without replay");
@@ -211,6 +228,7 @@ await act(async () => {
     kind: "ask_request",
     tabId: "tab-send",
     turnId: "turn-authoritative",
+    runtimeEpoch: "runtime-send",
     ask: { id: "ask-retry", questions: [{ id: "q2", prompt: "Retry?", options: [{ label: "yes" }] }] },
   } as WireEvent);
   await flushPromises();
@@ -275,6 +293,7 @@ await act(async () => {
     kind: "ask_request",
     tabId: "tab-send",
     turnId: "turn-authoritative",
+    runtimeEpoch: "runtime-send",
     ask: { id: "ask-stale", questions: [{ id: "q3", prompt: "Stale?", options: [{ label: "yes" }] }] },
   } as WireEvent);
   await flushPromises();
