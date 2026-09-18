@@ -9,10 +9,7 @@ import (
 	"time"
 )
 
-const (
-	maxLogEntries   = 300
-	maxOpenRequests = 2000
-)
+const maxLogEntries = 300
 
 // LogEntry is one thing a page reported: console output, an uncaught
 // exception, or a request that failed.
@@ -46,7 +43,8 @@ type tab struct {
 	dialog    *Dialog
 	logs      []LogEntry
 	logSeq    int64
-	requests  map[string]string
+	requests  map[string]*Request
+	netlog    []*Request
 	popups    []string
 	navigated int64   // main-frame cross-document navigations so far
 	logRead   int64   // newest log seq a Logs call has returned
@@ -65,7 +63,7 @@ type seenSnapshot struct {
 func newTab(s *Session, eng *engine, id, targetID, sessionID string) *tab {
 	t := &tab{
 		s: s, eng: eng, id: id, targetID: targetID, sessionID: sessionID,
-		loaded: map[string]bool{}, changed: make(chan struct{}), requests: map[string]string{},
+		loaded: map[string]bool{}, changed: make(chan struct{}), requests: map[string]*Request{},
 	}
 	t.unsub = eng.conn.subscribe(sessionID, t.onEvent)
 	return t
@@ -325,12 +323,15 @@ func (s stack) hostInjected() bool {
 
 var injectedSchemes = map[string]bool{"node": true, "chrome-extension": true, "devtools": true, "chrome": true}
 
-// onNetwork records requests that failed or answered with an error status.
+// onNetwork records what a page asked the network for, and reports the answers
+// a person would want to hear about without being asked.
 func (t *tab) onNetwork(ev event) {
 	switch ev.Method {
 	case "Network.requestWillBeSent":
 		var p struct {
-			RequestID string `json:"requestId"`
+			RequestID string  `json:"requestId"`
+			Type      string  `json:"type"`
+			Timestamp float64 `json:"timestamp"`
 			Request   struct {
 				Method string `json:"method"`
 				URL    string `json:"url"`
@@ -339,43 +340,46 @@ func (t *tab) onNetwork(ev event) {
 		if json.Unmarshal(ev.Params, &p) != nil {
 			return
 		}
-		t.mu.Lock()
-		if len(t.requests) < maxOpenRequests {
-			t.requests[p.RequestID] = p.Request.Method + " " + p.Request.URL
-		}
-		t.mu.Unlock()
+		t.requestStarted(p.RequestID, p.Request.Method, p.Request.URL, strings.ToLower(p.Type), p.Timestamp)
 	case "Network.responseReceived":
 		var p struct {
 			RequestID string `json:"requestId"`
 			Response  struct {
-				URL    string `json:"url"`
-				Status int    `json:"status"`
+				URL      string `json:"url"`
+				Status   int    `json:"status"`
+				MimeType string `json:"mimeType"`
 			} `json:"response"`
 		}
-		if json.Unmarshal(ev.Params, &p) != nil || p.Response.Status < 400 {
+		if json.Unmarshal(ev.Params, &p) != nil {
 			return
 		}
-		t.log("network", "warning", fmt.Sprintf("%s → HTTP %d", t.requestName(p.RequestID, p.Response.URL), p.Response.Status))
+		t.requestResponded(p.RequestID, p.Response.Status, p.Response.MimeType)
+		if p.Response.Status >= 400 {
+			t.log("network", "warning", fmt.Sprintf("%s → HTTP %d", t.requestName(p.RequestID, p.Response.URL), p.Response.Status))
+		}
 	case "Network.loadingFailed":
 		var p struct {
-			RequestID string `json:"requestId"`
-			ErrorText string `json:"errorText"`
-			Canceled  bool   `json:"canceled"`
+			RequestID string  `json:"requestId"`
+			ErrorText string  `json:"errorText"`
+			Canceled  bool    `json:"canceled"`
+			Timestamp float64 `json:"timestamp"`
 		}
 		if json.Unmarshal(ev.Params, &p) != nil {
 			return
 		}
 		name := t.requestName(p.RequestID, "")
-		t.forgetRequest(p.RequestID)
+		t.requestEnded(p.RequestID, p.Timestamp, 0, p.ErrorText)
 		if !p.Canceled {
 			t.log("network", "error", fmt.Sprintf("%s failed: %s", name, p.ErrorText))
 		}
 	case "Network.loadingFinished":
 		var p struct {
-			RequestID string `json:"requestId"`
+			RequestID         string  `json:"requestId"`
+			Timestamp         float64 `json:"timestamp"`
+			EncodedDataLength float64 `json:"encodedDataLength"`
 		}
 		if json.Unmarshal(ev.Params, &p) == nil {
-			t.forgetRequest(p.RequestID)
+			t.requestEnded(p.RequestID, p.Timestamp, int64(p.EncodedDataLength), "")
 		}
 	}
 }
@@ -413,21 +417,6 @@ func (t *tab) onConsole(params json.RawMessage) {
 		level = "warning"
 	}
 	t.log("console", level, strings.Join(parts, " "))
-}
-
-func (t *tab) requestName(id, fallback string) string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if name, ok := t.requests[id]; ok {
-		return name
-	}
-	return fallback
-}
-
-func (t *tab) forgetRequest(id string) {
-	t.mu.Lock()
-	delete(t.requests, id)
-	t.mu.Unlock()
 }
 
 func (t *tab) log(kind, level, text string) {

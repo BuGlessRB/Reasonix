@@ -148,7 +148,7 @@
   },
   {
     "Name": "browser_act",
-    "Description": "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; select sets a \u003cselect\u003e; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers alert/confirm/prompt; back, forward and reload move this tab — reload is what a page needs after the file behind it changed.",
+    "Description": "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; select sets a \u003cselect\u003e; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers alert/confirm/prompt; resize sets the viewport to width×height; back, forward and reload move this tab — reload is what a page needs after the file behind it changed.",
     "ReadOnly": false,
     "Schema": {
       "properties": {
@@ -173,6 +173,7 @@
                   "wait",
                   "wait_for",
                   "dialog",
+                  "resize",
                   "back",
                   "forward",
                   "reload"
@@ -187,6 +188,9 @@
                   "type": "string"
                 },
                 "type": "array"
+              },
+              "height": {
+                "type": "integer"
               },
               "key": {
                 "type": "string"
@@ -214,6 +218,9 @@
                   "type": "string"
                 },
                 "type": "array"
+              },
+              "width": {
+                "type": "integer"
               },
               "x": {
                 "type": "number"
@@ -264,7 +271,7 @@
   },
   {
     "Name": "browser_read",
-    "Description": "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), find (lines carrying text, with their refs), screenshot (browser_act x/y use its pixels), logs (errors since you last read them), tabs.",
+    "Description": "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), find (lines carrying text, with their refs), screenshot (browser_act x/y use its pixels), logs (errors since you last read them), network (what it requested and what came back; text narrows by URL), tabs.",
     "ReadOnly": true,
     "Schema": {
       "properties": {
@@ -289,6 +296,7 @@
             "find",
             "screenshot",
             "logs",
+            "network",
             "tabs"
           ],
           "type": "string"

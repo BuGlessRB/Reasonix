@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"reasonix/internal/browser"
@@ -44,5 +45,45 @@ func TestUnboundBrowserToolsSayThereIsNoBrowser(t *testing.T) {
 	}
 	if BrowserBound(browserOpen{}) || !BrowserBound(browserAct{session: browser.NewSession(browser.Config{})}) {
 		t.Fatal("BrowserBound misreports")
+	}
+}
+
+func TestTheNetworkListReadsNewestFirstAndNarrowsByURL(t *testing.T) {
+	requests := []browser.Request{
+		{Method: "GET", URL: "https://example.com/", Kind: "document", Status: 200, Mime: "text/html", Bytes: 2048, Millis: 120},
+		{Method: "GET", URL: "https://cdn.example.com/app.js", Kind: "script", Status: 304, Millis: 8},
+		{Method: "POST", URL: "https://example.com/api/save", Kind: "xhr", Status: 500, Mime: "application/json", Bytes: 91},
+		{Method: "GET", URL: "https://example.com/gone", Kind: "fetch", Failed: "net::ERR_NAME_NOT_RESOLVED", Millis: 30},
+		{Method: "GET", URL: "https://example.com/slow", Kind: "fetch"},
+	}
+	all := renderRequests(requests, "", 0)
+	lines := strings.Split(all, "\n")
+	if len(lines) != 5 {
+		t.Fatalf("rendered %d lines, want one per request:\n%s", len(lines), all)
+	}
+	if !strings.HasPrefix(lines[0], "- GET https://example.com/slow") {
+		t.Errorf("the newest request is not first:\n%s", all)
+	}
+	for _, want := range []string{
+		"- GET https://example.com/ [document] → 200 text/html 2.0 KB 120ms",
+		"- POST https://example.com/api/save [xhr] → 500 application/json 91 B",
+		"- GET https://example.com/gone [fetch] → failed: net::ERR_NAME_NOT_RESOLVED 30ms",
+		"- GET https://example.com/slow [fetch] → in flight",
+	} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing %q in:\n%s", want, all)
+		}
+	}
+	if got := renderRequests(requests, "api/", 0); got != "- POST https://example.com/api/save [xhr] → 500 application/json 91 B" {
+		t.Errorf("narrowing by URL = %q", got)
+	}
+	if got := renderRequests(requests, "", 2); strings.Count(got, "\n") != 1 {
+		t.Errorf("a limit of 2 gave:\n%s", got)
+	}
+	if got := renderRequests(requests, "nowhere", 0); got != `No request carried "nowhere".` {
+		t.Errorf("a match with no answer = %q", got)
+	}
+	if got := renderRequests(nil, "", 0); got != "The page has requested nothing." {
+		t.Errorf("a page that asked for nothing = %q", got)
 	}
 }

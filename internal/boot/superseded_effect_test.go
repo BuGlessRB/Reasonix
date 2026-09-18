@@ -83,16 +83,16 @@ context_window = 32000
 		t.Fatalf("too few agent requests to observe a fold: %v", counts)
 	}
 
-	// Each fold is checked where it happened: last-request-against-peak asks
-	// whether the turns after the final fold out-number those before it, which
-	// moves with what the prefix costs rather than with this invariant.
+	// Each fold is checked where it happened, against one more than the request
+	// before it: the turn after a fold adds its own copy, so a strict decrease
+	// would demand two superseded copies rather than the one this pins.
 	dropped := 0
 	for _, at := range foldedBefore {
 		if at == 0 || at >= len(counts) {
 			continue
 		}
 		dropped++
-		if counts[at] >= counts[at-1] {
+		if counts[at] > counts[at-1] {
 			t.Fatalf("the fold before request %d kept every superseded copy (%d before, %d after): they ride every later fold forever.\ncounts=%v",
 				at, counts[at-1], counts[at], counts)
 		}

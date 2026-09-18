@@ -437,3 +437,73 @@ func TestLiveReloadHistoryDragAndUpload(t *testing.T) {
 	}
 	_ = snap
 }
+
+// What a page asked the network for, and the viewport it was laid out in, both
+// come from the browser rather than from us — so both are read from a real one.
+func TestLiveTheNetworkListAndTheViewport(t *testing.T) {
+	s := liveSession(t, true)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<title>Wide</title><script src="/app.js"></script>
+<p id="size"></p><script>
+fetch("/api/ok").then(() => fetch("/api/missing"));
+const show = () => document.getElementById("size").textContent = "viewport " + innerWidth + "x" + innerHeight;
+addEventListener("resize", show); show();
+</script>`))
+	})
+	mux.HandleFunc("/app.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		_, _ = w.Write([]byte("// a script the page asked for\n"))
+	})
+	mux.HandleFunc("/api/ok", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("/api/missing", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "gone", http.StatusNotFound)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if _, err := s.Open(ctx, srv.URL+"/", "", false); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, err := actPlain(ctx, s, "", []Step{{Action: "wait", Ms: 1200}}); err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+
+	requests, _, err := s.Requests("")
+	if err != nil {
+		t.Fatalf("Requests: %v", err)
+	}
+	found := map[string]Request{}
+	for _, r := range requests {
+		found[strings.TrimPrefix(r.URL, srv.URL)] = r
+	}
+	page, ok := found["/"]
+	if !ok || page.Status != 200 || page.Kind != "document" || page.Bytes == 0 {
+		t.Fatalf("the page's own request = %+v (of %d)", page, len(requests))
+	}
+	if js, ok := found["/app.js"]; !ok || js.Status != 200 || js.Kind != "script" {
+		t.Errorf("the script = %+v", js)
+	}
+	if api, ok := found["/api/ok"]; !ok || api.Status != 200 || !strings.Contains(api.Mime, "json") {
+		t.Errorf("the call that worked = %+v", api)
+	}
+	if gone, ok := found["/api/missing"]; !ok || gone.Status != 404 {
+		t.Errorf("the call that 404ed = %+v", gone)
+	}
+
+	if _, err := actPlain(ctx, s, "", []Step{{Action: "resize", Width: 390, Height: 844}, {Action: "wait", Ms: 400}}); err != nil {
+		t.Fatalf("resize: %v", err)
+	}
+	snap, err := s.Snapshot(ctx, "", "")
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	if !strings.Contains(strings.Join(snap.Lines, "\n"), "viewport 390x844") {
+		t.Fatalf("the page was not laid out in the viewport it was given:\n%s", strings.Join(snap.Lines, "\n"))
+	}
+}

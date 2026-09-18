@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/browser"
 	"reasonix/internal/permission"
+	"reasonix/internal/textutil"
 	"reasonix/internal/tool"
 )
 
@@ -23,6 +24,7 @@ const browserExecutionKind = "browser"
 
 const (
 	browserFindLines     = 40
+	browserRequestLines  = 40
 	browserSnapshotLines = 250
 	browserMaxLines      = 1000
 	browserChangeLines   = 80
@@ -145,11 +147,11 @@ func (browserRead) Name() string { return "browser_read" }
 
 func (browserRead) Description() string {
 	return "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), find (lines carrying text, with their refs), " +
-		"screenshot (browser_act x/y use its pixels), logs (errors since you last read them), tabs."
+		"screenshot (browser_act x/y use its pixels), logs (errors since you last read them), network (what it requested and what came back; text narrows by URL), tabs."
 }
 
 func (browserRead) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"what":{"type":"string","enum":["snapshot","find","screenshot","logs","tabs"]},"tab":{"type":"string"},"ref":{"type":"string"},"text":{"type":"string"},"offset":{"type":"integer"},"limit":{"type":"integer"}}}`)
+	return json.RawMessage(`{"type":"object","properties":{"what":{"type":"string","enum":["snapshot","find","screenshot","logs","network","tabs"]},"tab":{"type":"string"},"ref":{"type":"string"},"text":{"type":"string"},"offset":{"type":"integer"},"limit":{"type":"integer"}}}`)
 }
 
 // PermissionArgs names the site the tab being read shows.
@@ -218,10 +220,16 @@ func (b browserRead) ExecuteWithImages(ctx context.Context, args json.RawMessage
 			return "", nil, err
 		}
 		return renderFound(snap, p.Text, max(p.Limit, 0)), nil, nil
+	case "network":
+		requests, info, err := b.session.Requests(p.Tab)
+		if err != nil {
+			return "", nil, err
+		}
+		return tabLine(info) + "\n" + renderRequests(requests, p.Text, max(p.Limit, 0)), nil, nil
 	case "tabs":
 		return renderTabs(b.session.Tabs()), nil, nil
 	}
-	return "", nil, &browser.Failure{Code: browser.CodeBadStep, Detail: fmt.Sprintf("what=%q is not one of snapshot, find, screenshot, logs, tabs", p.What)}
+	return "", nil, &browser.Failure{Code: browser.CodeBadStep, Detail: fmt.Sprintf("what=%q is not one of snapshot, find, screenshot, logs, network, tabs", p.What)}
 }
 
 type browserAct struct{ session *browser.Session }
@@ -232,11 +240,11 @@ func (browserAct) Description() string {
 	return "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. " +
 		"Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; " +
 		"select sets a <select>; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers alert/confirm/prompt; " +
-		"back, forward and reload move this tab — reload is what a page needs after the file behind it changed."
+		"resize sets the viewport to width×height; back, forward and reload move this tab — reload is what a page needs after the file behind it changed."
 }
 
 func (browserAct) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"tab":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","double_click","hover","fill","type","press","select","scroll","drag","upload","wait","wait_for","dialog","back","forward","reload"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"values":{"type":"array","items":{"type":"string"}},"x":{"type":"number"},"y":{"type":"number"},"delta_y":{"type":"number"},"to_ref":{"type":"string"},"to_x":{"type":"number"},"to_y":{"type":"number"},"files":{"type":"array","items":{"type":"string"}},"ms":{"type":"integer"},"accept":{"type":"boolean"}},"required":["action"]}}},"required":["steps"]}`)
+	return json.RawMessage(`{"type":"object","properties":{"tab":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","double_click","hover","fill","type","press","select","scroll","drag","upload","wait","wait_for","dialog","resize","back","forward","reload"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"values":{"type":"array","items":{"type":"string"}},"x":{"type":"number"},"y":{"type":"number"},"delta_y":{"type":"number"},"to_ref":{"type":"string"},"to_x":{"type":"number"},"to_y":{"type":"number"},"files":{"type":"array","items":{"type":"string"}},"ms":{"type":"integer"},"width":{"type":"integer"},"height":{"type":"integer"},"accept":{"type":"boolean"}},"required":["action"]}}},"required":["steps"]}`)
 }
 
 // PermissionArgs names the site the steps will operate, as a credential
@@ -447,6 +455,57 @@ func renderTabs(tabs []browser.TabInfo) string {
 			mark = "*"
 		}
 		fmt.Fprintf(&b, "%s %s\n", mark, tabLine(t))
+	}
+	return b.String()
+}
+
+// renderRequests is what a page asked the network for: the newest first,
+// because a page that has been open a while has asked for a great deal and
+// what was just asked is what a question is usually about.
+func renderRequests(requests []browser.Request, match string, limit int) string {
+	if limit <= 0 {
+		limit = browserRequestLines
+	}
+	match = strings.ToLower(strings.TrimSpace(match))
+	var lines []string
+	for i := len(requests) - 1; i >= 0 && len(lines) < limit; i-- {
+		r := requests[i]
+		if match != "" && !strings.Contains(strings.ToLower(r.URL), match) {
+			continue
+		}
+		lines = append(lines, "- "+requestLine(r))
+	}
+	if len(lines) == 0 {
+		if match != "" {
+			return fmt.Sprintf("No request carried %q.", match)
+		}
+		return "The page has requested nothing."
+	}
+	return strings.Join(lines, "\n")
+}
+
+func requestLine(r browser.Request) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s %s", r.Method, r.URL)
+	if r.Kind != "" {
+		fmt.Fprintf(&b, " [%s]", r.Kind)
+	}
+	switch {
+	case r.Failed != "":
+		fmt.Fprintf(&b, " → failed: %s", r.Failed)
+	case r.Status == 0:
+		b.WriteString(" → in flight")
+	default:
+		fmt.Fprintf(&b, " → %d", r.Status)
+		if r.Mime != "" {
+			b.WriteString(" " + r.Mime)
+		}
+		if r.Bytes > 0 {
+			b.WriteString(" " + textutil.HumanBytes(r.Bytes))
+		}
+	}
+	if r.Millis > 0 {
+		fmt.Fprintf(&b, " %dms", r.Millis)
 	}
 	return b.String()
 }

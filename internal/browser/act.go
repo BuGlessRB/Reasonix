@@ -31,12 +31,15 @@ type Step struct {
 	Y      *float64 `json:"y,omitempty"`
 	DeltaY float64  `json:"delta_y,omitempty"`
 	// Where a drag ends: another element, or a point in the page.
-	ToRef  string   `json:"to_ref,omitempty"`
-	ToX    *float64 `json:"to_x,omitempty"`
-	ToY    *float64 `json:"to_y,omitempty"`
-	Files  []string `json:"files,omitempty"`
-	Ms     int      `json:"ms,omitempty"`
-	Accept *bool    `json:"accept,omitempty"`
+	ToRef string   `json:"to_ref,omitempty"`
+	ToX   *float64 `json:"to_x,omitempty"`
+	ToY   *float64 `json:"to_y,omitempty"`
+	Files []string `json:"files,omitempty"`
+	// The viewport a resize asks for, in CSS pixels.
+	Width  int   `json:"width,omitempty"`
+	Height int   `json:"height,omitempty"`
+	Ms     int   `json:"ms,omitempty"`
+	Accept *bool `json:"accept,omitempty"`
 }
 
 // ActResult is what a run of steps did before it finished or stopped.
@@ -171,6 +174,8 @@ func (s *Session) runStep(ctx context.Context, t *tab, step Step, secrets bool) 
 		return s.drag(ctx, t, step)
 	case "upload":
 		return s.upload(ctx, t, step)
+	case "resize":
+		return t.resize(ctx, step)
 	}
 	return "", fail(CodeBadStep, "unknown action %q", step.Action)
 }
@@ -674,4 +679,25 @@ func (s *Session) upload(ctx context.Context, t *tab, step Step) (string, error)
 		return "", engineFailure(err)
 	}
 	return fmt.Sprintf("give %s %d file(s)", step.Ref, len(paths)), nil
+}
+
+// The viewport a page may be asked to lay out in. The floor is the smallest
+// phone worth testing; the ceiling keeps a screenshot within what a vision
+// model is given.
+const (
+	minViewport = 200
+	maxViewport = 4000
+)
+
+// resize lays the page out in a viewport of its own, whatever size the window
+// is. It is how a page is seen at a phone's width without one.
+func (t *tab) resize(ctx context.Context, step Step) (string, error) {
+	if step.Width < minViewport || step.Height < minViewport || step.Width > maxViewport || step.Height > maxViewport {
+		return "", fail(CodeBadStep, "a resize needs width and height in CSS pixels, between %d and %d", minViewport, maxViewport)
+	}
+	args := map[string]any{"width": step.Width, "height": step.Height, "deviceScaleFactor": 0, "mobile": false}
+	if err := t.call(ctx, "Emulation.setDeviceMetricsOverride", args, nil); err != nil {
+		return "", engineFailure(err)
+	}
+	return fmt.Sprintf("resize to %d×%d", step.Width, step.Height), nil
 }

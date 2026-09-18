@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -364,5 +365,109 @@ func TestAMessageOnlyTheHostsOwnScriptProducedIsNotThePages(t *testing.T) {
 		if got := tc.in.hostInjected(); got != tc.want {
 			t.Errorf("%s: hostInjected() = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// netEvent feeds the tab one Network event the way the engine would.
+func netEvent(t *testing.T, tb *tab, method string, params any) {
+	t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tb.onNetwork(event{Method: method, Params: raw})
+}
+
+func TestTheNetworkListSaysWhatWasAskedForAndWhatCameBack(t *testing.T) {
+	_, tb := newFakeSession(t, &fakePage{})
+	sent := func(id, method, url, kind string, at float64) {
+		netEvent(t, tb, "Network.requestWillBeSent", map[string]any{
+			"requestId": id, "type": kind, "timestamp": at,
+			"request": map[string]any{"method": method, "url": url},
+		})
+	}
+	sent("1", "GET", "https://example.com/app.js", "Script", 10)
+	netEvent(t, tb, "Network.responseReceived", map[string]any{
+		"requestId": "1", "response": map[string]any{"status": 200, "mimeType": "text/javascript"},
+	})
+	netEvent(t, tb, "Network.loadingFinished", map[string]any{"requestId": "1", "timestamp": 10.25, "encodedDataLength": 4096})
+
+	sent("2", "POST", "https://example.com/api/save", "XHR", 11)
+	netEvent(t, tb, "Network.responseReceived", map[string]any{
+		"requestId": "2", "response": map[string]any{"status": 500, "mimeType": "application/json", "url": "https://example.com/api/save"},
+	})
+	sent("3", "GET", "https://example.com/gone", "Fetch", 12)
+	netEvent(t, tb, "Network.loadingFailed", map[string]any{"requestId": "3", "timestamp": 12.5, "errorText": "net::ERR_NAME_NOT_RESOLVED"})
+	sent("4", "GET", "https://example.com/slow", "Fetch", 13)
+
+	got := make([]*Request, 0, 4)
+	tb.mu.Lock()
+	got = append(got, tb.netlog...)
+	tb.mu.Unlock()
+	if len(got) != 4 {
+		t.Fatalf("the tab remembered %d requests, want 4", len(got))
+	}
+	if got[0].Status != 200 || got[0].Kind != "script" || got[0].Bytes != 4096 || got[0].Millis != 250 {
+		t.Errorf("a request that finished = %+v", *got[0])
+	}
+	// A response that arrives is enough to say what came back; the bytes and
+	// the time only settle when the browser says the loading finished.
+	if got[1].Status != 500 || got[1].Millis != 0 {
+		t.Errorf("a request answered but not finished = %+v", *got[1])
+	}
+	if got[2].Failed != "net::ERR_NAME_NOT_RESOLVED" || got[2].Millis != 500 {
+		t.Errorf("a request that failed = %+v", *got[2])
+	}
+	if got[3].Status != 0 || got[3].Failed != "" {
+		t.Errorf("a request still in flight = %+v", *got[3])
+	}
+	// The page said two things worth a person's attention, and nothing about
+	// the two that went as asked.
+	entries, _ := tb.logsAfter(0)
+	if len(entries) != 2 {
+		t.Fatalf("the page reported %d things, want the 500 and the failure: %+v", len(entries), entries)
+	}
+}
+
+func TestATabRemembersOnlyTheRecentRequests(t *testing.T) {
+	_, tb := newFakeSession(t, &fakePage{})
+	for i := range maxRequests + 50 {
+		netEvent(t, tb, "Network.requestWillBeSent", map[string]any{
+			"requestId": fmt.Sprint(i), "timestamp": float64(i),
+			"request": map[string]any{"method": "GET", "url": fmt.Sprintf("https://example.com/%d", i)},
+		})
+	}
+	tb.mu.Lock()
+	kept, indexed := len(tb.netlog), len(tb.requests)
+	oldest := tb.netlog[0].URL
+	tb.mu.Unlock()
+	if kept != maxRequests || indexed != maxRequests {
+		t.Fatalf("kept %d requests and %d index entries, want %d of each", kept, indexed, maxRequests)
+	}
+	if oldest != "https://example.com/50" {
+		t.Fatalf("the oldest kept request is %q, want the 50th", oldest)
+	}
+	// What was evicted is no longer named in the log either.
+	if name := tb.requestName("0", "unknown"); name != "unknown" {
+		t.Fatalf("an evicted request is still named %q", name)
+	}
+}
+
+func TestAViewportIsAskedForInPixelsWithinReason(t *testing.T) {
+	_, tb := newFakeSession(t, &fakePage{})
+	ctx := context.Background()
+	for _, step := range []Step{
+		{Width: 0, Height: 800},
+		{Width: 390, Height: 0},
+		{Width: 100, Height: 800},
+		{Width: 390, Height: 9000},
+	} {
+		if _, err := tb.resize(ctx, step); CodeOf(err) != CodeBadStep {
+			t.Errorf("resize %dx%d = %v, want %s", step.Width, step.Height, err, CodeBadStep)
+		}
+	}
+	note, err := tb.resize(ctx, Step{Width: 390, Height: 844})
+	if err != nil || note != "resize to 390×844" {
+		t.Fatalf("resize = %q, %v", note, err)
 	}
 }
