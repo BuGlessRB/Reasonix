@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/computer"
+	"reasonix/internal/permission"
 )
 
 func TestComputerToolsWithoutAHelperSayItIsUnavailable(t *testing.T) {
@@ -34,5 +35,19 @@ func TestApplicationListMarksTheOnesNeverOperated(t *testing.T) {
 	}
 	if !strings.Contains(out, "com.apple.Terminal — Terminal (never operated: a terminal)") {
 		t.Fatalf("a refused application is not marked: %q", out)
+	}
+}
+
+// The subject says which of the two a call is: operating the application
+// through its own actions, or taking the pointer the person is holding.
+func TestThePointerStepsNameThemselvesInTheApproval(t *testing.T) {
+	ctx := context.Background()
+	through := computerAct{}.PermissionArgs(ctx, json.RawMessage(`{"app":"com.apple.Notes","steps":[{"action":"click","ref":"a1"}]}`))
+	if got := permission.Subject(through); got != "com.apple.Notes" {
+		t.Errorf("accessibility steps named %q", got)
+	}
+	taking := computerAct{}.PermissionArgs(ctx, json.RawMessage(`{"app":"com.apple.Notes","steps":[{"action":"click","ref":"a1"},{"action":"pointer_drag","x":1,"y":2,"to_x":3,"to_y":4}]}`))
+	if got := permission.Subject(taking); got != permission.ComputerPointerPrefix+"com.apple.Notes" {
+		t.Errorf("a run that takes the pointer named %q", got)
 	}
 }

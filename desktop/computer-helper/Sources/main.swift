@@ -16,6 +16,10 @@ typealias JSON = [String: Any]
 let refs = RefTable()
 let cursor = VirtualCursor()
 
+func pointParam(_ params: JSON) throws -> CGPoint {
+    CGPoint(x: try numberParam(params, "x"), y: try numberParam(params, "y"))
+}
+
 func handle(_ method: String, _ params: JSON) throws -> JSON {
     switch method {
     case "status":
@@ -43,7 +47,20 @@ func handle(_ method: String, _ params: JSON) throws -> JSON {
     case "type":
         return try Keyboard.type(pid: try pidParam(params), text: try stringParam(params, "text"))
     case "key":
-        return try Keyboard.press(pid: try pidParam(params), chord: try stringParam(params, "key"))
+        return try Keyboard.press(pid: try pidParam(params), chord: try stringParam(params, "key"), times: (params["times"] as? Int) ?? 1)
+    case "pointer_move":
+        return try Pointer.move(pid: try pidParam(params), to: try pointParam(params), cursor: cursor)
+    case "pointer_click":
+        return try Pointer.click(pid: try pidParam(params), at: try pointParam(params), button: (params["button"] as? String) ?? "left", clicks: (params["clicks"] as? Int) ?? 1, cursor: cursor)
+    case "pointer_drag":
+        return try Pointer.drag(pid: try pidParam(params), from: try pointParam(params), to: CGPoint(x: try numberParam(params, "to_x"), y: try numberParam(params, "to_y")), cursor: cursor)
+    case "pointer_position":
+        return Pointer.position()
+    case "pointer_release":
+        cursor.hide()
+        return Pointer.release()
+    case "hold_key":
+        return try Keyboard.hold(pid: try pidParam(params), chord: try stringParam(params, "key"), seconds: (params["seconds"] as? Double) ?? 1)
     case "cursor_hide":
         cursor.hide()
         return [:]

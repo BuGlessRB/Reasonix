@@ -53,3 +53,34 @@ func TestComputerDecisionsAnswerOnlyToARuleNamingTheApplication(t *testing.T) {
 		}
 	}
 }
+
+// Taking the person's pointer is not the same thing as operating the
+// application, and the grant for one does not answer for the other.
+func TestTakingThePointerIsAnswearedApartFromTheApplication(t *testing.T) {
+	const notes = "com.apple.Notes"
+	pointer := ComputerPointerPrefix + notes
+	args, _ := json.Marshal(map[string]any{"app": pointer, "steps": []any{}})
+	if got := Subjects(args); len(got) != 2 || got[0] != pointer || got[1] != notes {
+		t.Fatalf("subjects = %v, want the pointer subject then its application", got)
+	}
+	cases := []struct {
+		name   string
+		policy Policy
+		want   Decision
+	}{
+		{"auto", New("allow", nil, nil, nil), Ask},
+		{"the application granted", New("ask", []string{"Computer=" + notes}, nil, nil), Ask},
+		{"a glob", New("allow", []string{"Computer(*)"}, nil, nil), Ask},
+		// Both are answered: taking the pointer over an application is also
+		// operating it, and each has to have been agreed to.
+		{"the pointer subject and its application", New("allow", []string{"Computer=" + pointer, "Computer=" + notes}, nil, nil), Allow},
+		{"only the pointer subject", New("allow", []string{"Computer=" + pointer}, nil, nil), Ask},
+		{"the application denied", New("allow", []string{"Computer=" + pointer}, nil, []string{"Computer(" + notes + ")"}), Deny},
+		{"deny mode", New("deny", nil, nil, nil), Deny},
+	}
+	for _, tc := range cases {
+		if got := tc.policy.Decide("computer_act", false, args); got != tc.want {
+			t.Errorf("%s: decision = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

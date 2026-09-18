@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -38,6 +39,8 @@ func fakeScreenshot() []byte {
 func runFakeHelper(in io.Reader, out io.Writer) {
 	enc := json.NewEncoder(out)
 	var lastClick map[string]any
+	var lastCall map[string]any
+	released := 0
 	asked := 0
 	sc := bufio.NewScanner(in)
 	for sc.Scan() {
@@ -47,6 +50,9 @@ func runFakeHelper(in io.Reader, out io.Writer) {
 			Params map[string]any `json:"params"`
 		}
 		if json.Unmarshal(sc.Bytes(), &req) != nil {
+			continue
+		}
+		if req.Method == "_silent" {
 			continue
 		}
 		reply := map[string]any{"id": req.ID, "result": map[string]any{}}
@@ -85,6 +91,24 @@ func runFakeHelper(in io.Reader, out io.Writer) {
 			reply["result"] = lastClick
 		case "_asked":
 			reply["result"] = map[string]any{"asked": asked}
+		case "menu", "hold_key", "pointer_move", "pointer_click", "pointer_drag":
+			lastCall = map[string]any{"method": req.Method, "params": req.Params}
+		case "scroll":
+			lastCall = map[string]any{"method": req.Method, "params": req.Params}
+			how := "wheel"
+			if ref, _ := req.Params["ref"].(string); ref == "a2" {
+				how = "revealed"
+			}
+			reply["result"] = map[string]any{"how": how}
+		case "pointer_position":
+			reply["result"] = map[string]any{"x": 600.0, "y": 300.0}
+		case "pointer_release":
+			released++
+			reply["result"] = map[string]any{"returned": true}
+		case "_last_call":
+			reply["result"] = lastCall
+		case "_released":
+			reply["result"] = map[string]any{"count": released}
 		case "_exit":
 			os.Exit(0)
 		}
@@ -201,5 +225,206 @@ func TestAHelperThatExitsFailsWhatWasPendingAndStartsAgain(t *testing.T) {
 			t.Fatalf("the helper did not start again: %v", err)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// fittedScale is how many screen points one pixel of the screenshot the model
+// was given covers, which is what every point in a step is read in.
+func fittedScale(t *testing.T, s *Session, ctx context.Context) float64 {
+	t.Helper()
+	shot, _, err := s.Screenshot(ctx, "com.example.Notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := base64.StdEncoding.DecodeString(strings.TrimPrefix(shot, "data:image/png;base64,"))
+	fitted, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return 2000 / float64(fitted.Width)
+}
+
+func lastCall(t *testing.T, s *Session) (string, map[string]any) {
+	t.Helper()
+	var got struct {
+		Method string         `json:"method"`
+		Params map[string]any `json:"params"`
+	}
+	if err := s.helper.Call(context.Background(), "_last_call", nil, &got); err != nil {
+		t.Fatal(err)
+	}
+	return got.Method, got.Params
+}
+
+func TestEveryPointerStepIsAimedInTheScreenshotsPixels(t *testing.T) {
+	s := fakeSession(t)
+	ctx := context.Background()
+	scale := fittedScale(t, s, ctx)
+	x, y, toX, toY := 100.0, 40.0, 300.0, 120.0
+	wantX, wantY := 100+x*scale, 50+y*scale
+
+	res, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "pointer_move", X: &x, Y: &y}})
+	if err != nil || res.Notes[0] != "move the pointer to (100,40)" {
+		t.Fatalf("pointer_move = %+v, %v", res, err)
+	}
+	method, params := lastCall(t, s)
+	if method != "pointer_move" || params["x"] != wantX || params["y"] != wantY {
+		t.Fatalf("the helper was sent %s %v, want pointer_move at (%v,%v)", method, params, wantX, wantY)
+	}
+
+	res, err = s.Act(ctx, "com.example.Notes", []Step{{Action: "pointer_click", X: &x, Y: &y, Button: "right", Times: 2}})
+	if err != nil || res.Notes[0] != "right click at (100,40)" {
+		t.Fatalf("pointer_click = %+v, %v", res, err)
+	}
+	if method, params = lastCall(t, s); method != "pointer_click" || params["button"] != "right" || params["clicks"] != 2.0 {
+		t.Fatalf("the helper was sent %s %v, want a right double click", method, params)
+	}
+	// A click that says neither button nor count is one left click.
+	if _, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "pointer_click", X: &x, Y: &y}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, params = lastCall(t, s); params["button"] != "left" || params["clicks"] != 1.0 {
+		t.Fatalf("a bare pointer_click sent %v, want one left click", params)
+	}
+
+	res, err = s.Act(ctx, "com.example.Notes", []Step{{Action: "pointer_drag", X: &x, Y: &y, ToX: &toX, ToY: &toY}})
+	if err != nil || res.Notes[0] != "drag the pointer from (100,40) to (300,120)" {
+		t.Fatalf("pointer_drag = %+v, %v", res, err)
+	}
+	method, params = lastCall(t, s)
+	if method != "pointer_drag" || params["to_x"] != 100+toX*scale || params["to_y"] != 50+toY*scale {
+		t.Fatalf("the helper was sent %s %v, want the end point in screen points", method, params)
+	}
+}
+
+// The pointer is the person's, so a step that cannot say where it is going, or
+// a drag that cannot say where it ends, is refused before the pointer moves.
+func TestAPointerStepThatCannotSayWhereIsRefused(t *testing.T) {
+	s := fakeSession(t)
+	ctx := context.Background()
+	x := 100.0
+	for _, step := range []Step{
+		{Action: "pointer_move"},
+		{Action: "pointer_drag", X: &x, Y: &x},
+		{Action: "pointer_drag", X: &x, Y: &x, ToX: &x},
+	} {
+		if _, err := s.Act(ctx, "com.example.Notes", []Step{step}); CodeOf(err) != CodeNeedsScreenshot && CodeOf(err) != CodeBadStep {
+			t.Fatalf("%+v = %v", step, err)
+		}
+	}
+	_ = fittedScale(t, s, ctx)
+	if _, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "pointer_drag", X: &x, Y: &x}}); CodeOf(err) != CodeBadStep {
+		t.Fatalf("a drag with no destination = %v, want %s", err, CodeBadStep)
+	}
+}
+
+// Taking the pointer borrows it: wherever the steps stop, it goes back.
+func TestThePointerIsHandedBackWhicheverWayTheStepsEnd(t *testing.T) {
+	s := fakeSession(t)
+	ctx := context.Background()
+	_ = fittedScale(t, s, ctx)
+	x, y := 100.0, 40.0
+	released := func() float64 {
+		var r struct{ Count float64 }
+		if err := s.helper.Call(ctx, "_released", nil, &r); err != nil {
+			t.Fatal(err)
+		}
+		return r.Count
+	}
+	if _, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "key", Key: "Enter"}}); err != nil {
+		t.Fatal(err)
+	}
+	if released() != 0 {
+		t.Fatal("steps that never took the pointer gave one back")
+	}
+	if _, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "pointer_move", X: &x, Y: &y}}); err != nil {
+		t.Fatal(err)
+	}
+	if released() != 1 {
+		t.Fatal("the pointer was not given back after it was taken")
+	}
+	// A run that fails part way took it just the same.
+	if _, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "pointer_move", X: &x, Y: &y}, {Action: "click", Ref: "a9"}}); CodeOf(err) != CodeStaleRef {
+		t.Fatalf("want %s, got %v", CodeStaleRef, err)
+	}
+	if released() != 2 {
+		t.Fatal("a run that failed part way kept the pointer")
+	}
+	if !PointerSteps([]Step{{Action: "key"}, {Action: "pointer_drag"}}) || PointerSteps([]Step{{Action: "click"}}) {
+		t.Fatal("pointer steps are not recognised as the class needing the person's pointer")
+	}
+}
+
+// Where the pointer is only means something in the frame the model was given.
+func TestThePointerSaysWhereItIsInTheFrameTheModelHas(t *testing.T) {
+	s := fakeSession(t)
+	ctx := context.Background()
+	res, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "pointer_position"}})
+	if err != nil || !strings.Contains(res.Notes[0], "take a screenshot") {
+		t.Fatalf("pointer_position with no screenshot = %+v, %v", res, err)
+	}
+	scale := fittedScale(t, s, ctx)
+	res, err = s.Act(ctx, "com.example.Notes", []Step{{Action: "pointer_position"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("the pointer is at (%.0f,%.0f) in the screenshot", (600-100)/scale, (300-50)/scale)
+	if res.Notes[0] != want {
+		t.Fatalf("pointer_position = %q, want %q", res.Notes[0], want)
+	}
+}
+
+func TestTheMenuBelongsToAnElementAndScrollingSaysWhichItWas(t *testing.T) {
+	s := fakeSession(t)
+	ctx := context.Background()
+	if _, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "right_click"}}); CodeOf(err) != CodeBadStep {
+		t.Fatalf("a right_click with no ref = %v, want %s", err, CodeBadStep)
+	}
+	res, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "right_click", Ref: "a4"}})
+	if err != nil || res.Notes[0] != "open the menu of a4" {
+		t.Fatalf("right_click = %+v, %v", res, err)
+	}
+	if method, params := lastCall(t, s); method != "menu" || params["ref"] != "a4" {
+		t.Fatalf("the helper was sent %s %v, want the menu of a4", method, params)
+	}
+	// Bringing an element into view and turning the wheel are one step and two
+	// outcomes, and the helper says which one it did.
+	res, err = s.Act(ctx, "com.example.Notes", []Step{{Action: "scroll", Ref: "a2"}, {Action: "scroll", Amount: -3}})
+	if err != nil || res.Notes[0] != "bring a2 into view" || res.Notes[1] != "scroll -3 lines" {
+		t.Fatalf("scroll = %+v, %v", res, err)
+	}
+}
+
+func TestHoldingAKeyAndRepeatingOneCarryTheirCount(t *testing.T) {
+	s := fakeSession(t)
+	ctx := context.Background()
+	res, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "hold_key", Key: "shift+a", Seconds: 1.5}})
+	if err != nil || res.Notes[0] != "hold shift+a for 1.5s" {
+		t.Fatalf("hold_key = %+v, %v", res, err)
+	}
+	if method, params := lastCall(t, s); method != "hold_key" || params["seconds"] != 1.5 {
+		t.Fatalf("the helper was sent %s %v, want the seconds it holds for", method, params)
+	}
+	if _, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "key", Key: "Tab", Times: 4}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWaitingIsBoundedAndTheContextEndsIt(t *testing.T) {
+	s := fakeSession(t)
+	res, err := s.Act(context.Background(), "com.example.Notes", []Step{{Action: "wait", Ms: 5}})
+	if err != nil || res.Notes[0] != "wait 5ms" {
+		t.Fatalf("wait = %+v, %v", res, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.Act(ctx, "com.example.Notes", []Step{{Action: "wait", Ms: 60000}}); err == nil {
+		t.Fatal("a wait outlived the context that was cancelled under it")
+	}
+	// The same cancellation reaches a call already sent to the helper.
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel2()
+	if err := s.helper.Call(ctx2, "_silent", nil, nil); err == nil {
+		t.Fatal("a call the helper never answered returned no error")
 	}
 }

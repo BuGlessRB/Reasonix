@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"reasonix/internal/computer"
+	"reasonix/internal/permission"
 	"reasonix/internal/tool"
 )
 
@@ -111,13 +112,15 @@ type computerAct struct{ session *computer.Session }
 func (computerAct) Name() string { return "computer_act" }
 
 func (computerAct) Description() string {
-	return "Operate another application through accessibility actions; the person's pointer and focus stay where they are. Steps run in order and stop at the first failure: " +
-		"click (ref, or x/y from a screenshot), right_click opens a ref's own context menu, focus and set_value take a ref, type enters text where focus is, key presses keys like Enter or Meta+s, " +
-		"scroll brings a ref into view or turns the wheel by amount lines, wait pauses ms. Returns the application's snapshot afterwards."
+	return "Operate another application. Steps run in order and stop at the first failure. Through its accessibility actions, which leave the person's pointer and focus alone: " +
+		"click (ref, or x/y from a screenshot), right_click opens a ref's context menu, focus and set_value take a ref, type enters text where focus is, key presses keys like Enter or Meta+s (times repeats), " +
+		"hold_key holds one for seconds, scroll brings a ref into view or turns the wheel by amount lines, wait pauses ms. " +
+		"pointer_move, pointer_click (button, times), pointer_drag (to_x/to_y) and pointer_position instead take the person's own pointer and bring the application forward, which is answered for separately; it is the way to reach what has no accessibility action at all, and the pointer goes back where it was. " +
+		"Returns the application's snapshot afterwards."
 }
 
 func (computerAct) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"app":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","right_click","focus","set_value","type","key","scroll","wait"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"},"amount":{"type":"number"},"ms":{"type":"integer"}},"required":["action"]}}},"required":["app","steps"]}`)
+	return json.RawMessage(`{"type":"object","properties":{"app":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","right_click","focus","set_value","type","key","hold_key","scroll","wait","pointer_move","pointer_click","pointer_drag","pointer_position"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"},"amount":{"type":"number"},"ms":{"type":"integer"},"to_x":{"type":"number"},"to_y":{"type":"number"},"button":{"type":"string","enum":["left","right","middle"]},"times":{"type":"integer"},"seconds":{"type":"number"}},"required":["action"]}}},"required":["app","steps"]}`)
 }
 
 func (computerAct) ReadOnly() bool                                   { return false }
@@ -126,10 +129,15 @@ func (computerAct) Sequential(context.Context, json.RawMessage) bool { return tr
 // PermissionArgs names the application operated.
 func (c computerAct) PermissionArgs(_ context.Context, args json.RawMessage) json.RawMessage {
 	var p struct {
-		App string `json:"app"`
+		App   string          `json:"app"`
+		Steps []computer.Step `json:"steps"`
 	}
 	_ = json.Unmarshal(args, &p)
-	return hostSubjectArgs(c.Schema(), args, "app", strings.TrimSpace(p.App))
+	app := strings.TrimSpace(p.App)
+	if app != "" && computer.PointerSteps(p.Steps) {
+		app = permission.ComputerPointerPrefix + app
+	}
+	return hostSubjectArgs(c.Schema(), args, "app", app)
 }
 
 func (c computerAct) Execute(ctx context.Context, args json.RawMessage) (string, error) {

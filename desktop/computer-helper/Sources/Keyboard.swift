@@ -33,7 +33,26 @@ enum Keyboard {
         return [:]
     }
 
-    static func press(pid: pid_t, chord: String) throws -> JSON {
+    // hold keeps a key down, which is what a game or a scrubbing control reads
+    // rather than a press.
+    static func hold(pid: pid_t, chord: String, seconds: Double) throws -> JSON {
+        let (code, flags) = try resolve(chord)
+        let source = CGEventSource(stateID: .privateState)
+        if let down = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(code), keyDown: true) {
+            down.flags = flags
+            down.postToPid(pid)
+        }
+        Thread.sleep(forTimeInterval: min(max(seconds, 0), 30))
+        if let up = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(code), keyDown: false) {
+            up.flags = flags
+            up.postToPid(pid)
+        }
+        return [:]
+    }
+
+    // resolve reads a chord like "meta+s" into the key and the modifiers held
+    // with it, and says what the vocabulary is when it cannot.
+    static func resolve(_ chord: String) throws -> (Int, CGEventFlags) {
         try Permissions.requireAccessibility()
         let parts = chord.split(separator: "+").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
         guard let last = parts.last, let code = named[last] else {
@@ -47,11 +66,18 @@ enum Keyboard {
             }
             flags.insert(flag)
         }
+        return (code, flags)
+    }
+
+    static func press(pid: pid_t, chord: String, times: Int) throws -> JSON {
+        let (code, flags) = try resolve(chord)
         let source = CGEventSource(stateID: .privateState)
-        for down in [true, false] {
-            guard let event = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(code), keyDown: down) else { continue }
-            event.flags = flags
-            event.postToPid(pid)
+        for _ in 0..<max(times, 1) {
+            for down in [true, false] {
+                guard let event = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(code), keyDown: down) else { continue }
+                event.flags = flags
+                event.postToPid(pid)
+            }
         }
         return [:]
     }

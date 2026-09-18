@@ -131,6 +131,8 @@ export const EN: Record<string, string> = {
     "This step types a password, a one-time code or card details into the site. Auto, the grant this site already has and broad rules do not answer for you; approve it, or switch to full access.",
   "这会读取或操作电脑上的另一个应用，拿到的是那个应用本身的权限。自动放行和宽泛规则都不能代你回答；要么为这个应用批准，要么切到全部放行。":
     "This reads or operates another application on the computer, with that application's own access. Auto and broad rules do not answer for you; approve it for this application, or switch to full access.",
+  "这一步会接管你正在用的鼠标指针——移动它、用它点击，并把那个应用切到前台，而不是让界面元素自己动作。自动放行、该应用已有的授权和宽泛规则都不能代你回答；要么批准，要么切到全部放行。用完指针会回到原处。":
+    "This step takes the pointer you are using — it moves your cursor, clicks with it and brings that application forward — rather than letting an element act for itself. Auto, the grant this application already has and broad rules do not answer for you; approve it, or switch to full access. The pointer goes back where it was.",
   "授权": "Grant",
   "下次维护": "Next maintenance",
   "模型容量": "Model capacity",

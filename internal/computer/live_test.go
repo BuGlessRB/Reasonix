@@ -191,3 +191,56 @@ func TestLiveContextMenuScrollAndWait(t *testing.T) {
 		t.Fatalf("a right_click with no ref = %v, want %s", err, CodeBadStep)
 	}
 }
+
+// What the accessibility path cannot reach: a view that draws itself and takes
+// no action. The pointer is the person's, so it is asked for apart from the
+// application and handed back where it was found.
+func TestLiveThePointerReachesWhatAccessibilityCannot(t *testing.T) {
+	s := liveSession(t)
+	log := launchTarget(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	shot, app, err := s.Screenshot(ctx, targetBundle)
+	if err != nil {
+		t.Fatalf("Screenshot: %v", err)
+	}
+	if shot == "" || app.Bundle != targetBundle {
+		t.Fatalf("screenshot = %.30q for %+v", shot, app)
+	}
+	s.mu.Lock()
+	geometry := s.shots[targetBundle]
+	s.mu.Unlock()
+	// The drawn view sits in the window's bottom-left corner, in the pixels of
+	// the screenshot the model was shown.
+	x, y := 100/geometry.scale, (geometry.bounds.Height-70)/geometry.scale
+
+	if _, err := s.Act(ctx, targetBundle, []Step{{Action: "click", X: &x, Y: &y}}); CodeOf(err) != CodeNoAction {
+		t.Fatalf("an accessibility click on a drawn view = %v, want %s", err, CodeNoAction)
+	}
+
+	// Where the person's pointer is, in the pixels of the screenshot the model
+	// was shown, before and after the agent borrows it.
+	home, err := s.Act(ctx, targetBundle, []Step{{Action: "pointer_position"}})
+	if err != nil {
+		t.Fatalf("pointer_position: %v", err)
+	}
+	res, err := s.Act(ctx, targetBundle, []Step{{Action: "pointer_click", X: &x, Y: &y}})
+	if err != nil {
+		t.Fatalf("pointer_click: %v (%v)", err, res.Notes)
+	}
+	waitLog(t, log, "mouseDown")
+	back, err := s.Act(ctx, targetBundle, []Step{{Action: "pointer_position"}})
+	if err != nil {
+		t.Fatalf("pointer_position: %v", err)
+	}
+	if back.Notes[0] != home.Notes[0] {
+		t.Fatalf("the pointer was left at %q, not where the person had it (%q)", back.Notes[0], home.Notes[0])
+	}
+
+	toX, toY := x+40, y-20
+	if _, err := s.Act(ctx, targetBundle, []Step{{Action: "pointer_drag", X: &x, Y: &y, ToX: &toX, ToY: &toY}}); err != nil {
+		t.Fatalf("pointer_drag: %v", err)
+	}
+	waitLog(t, log, "mouseDragged")
+}

@@ -14,6 +14,8 @@ final class Field: NSTextField {
 }
 final class ClickView: NSView {
     override func mouseDown(with event: NSEvent) { log("mouseDown \(Int(event.locationInWindow.x)),\(Int(event.locationInWindow.y))") }
+    override func mouseDragged(with event: NSEvent) { log("mouseDragged \(Int(event.locationInWindow.x)),\(Int(event.locationInWindow.y))") }
+    override func rightMouseDown(with event: NSEvent) { log("rightMouseDown") }
     override func draw(_ dirtyRect: NSRect) { NSColor.systemRed.setFill(); dirtyRect.fill() }
 }
 // A view with a menu of its own, so a context-menu action has something to open,

@@ -46,6 +46,9 @@ func Subjects(args json.RawMessage) []string {
 	if origin := stringArg(m, "origin"); BrowserSubjectRequiresExplicitApproval(origin) {
 		return browserSubjects(origin)
 	}
+	if app := stringArg(m, "app"); ComputerSubjectTakesPointer(app) {
+		return computerSubjects(app)
+	}
 	for _, k := range subjectKeys {
 		if s := stringArg(m, k); s != "" {
 			return []string{s}

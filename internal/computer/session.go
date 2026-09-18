@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -186,6 +187,31 @@ type Step struct {
 	// scroll: lines to turn the wheel by, negative downwards; wait: how long.
 	Amount float64 `json:"amount,omitempty"`
 	Ms     int     `json:"ms,omitempty"`
+	// Where a pointer drag ends, which button a pointer click uses, and how many
+	// times a click or a key repeats.
+	ToX    *float64 `json:"to_x,omitempty"`
+	ToY    *float64 `json:"to_y,omitempty"`
+	Button string   `json:"button,omitempty"`
+	Times  int      `json:"times,omitempty"`
+	// hold_key: how long the key stays down.
+	Seconds float64 `json:"seconds,omitempty"`
+}
+
+// PointerStep reports whether a step takes the person's pointer rather than
+// going through the application's own accessibility actions. The two are
+// authorised apart: one asks an element to act, the other moves the pointer the
+// person is holding.
+func PointerStep(action string) bool {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "pointer_move", "pointer_click", "pointer_drag", "pointer_position":
+		return true
+	}
+	return false
+}
+
+// PointerSteps reports whether any of these steps takes the pointer.
+func PointerSteps(steps []Step) bool {
+	return slices.ContainsFunc(steps, func(s Step) bool { return PointerStep(s.Action) })
 }
 
 // ActResult is what a run of steps did before it finished or stopped.
@@ -206,6 +232,15 @@ func (s *Session) Act(ctx context.Context, bundle string, steps []Step) (ActResu
 		return res, err
 	}
 	res.App = app
+	// The pointer goes back where the person left it when the steps are done,
+	// whether they finished or stopped.
+	if PointerSteps(steps) {
+		defer func() {
+			release, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			_ = s.helper.Call(release, "pointer_release", nil, nil)
+			cancel()
+		}()
+	}
 	started := time.Now()
 	for i, step := range steps {
 		if s.helper.stoppedSince(started) {
@@ -249,7 +284,18 @@ func (s *Session) step(ctx context.Context, app App, step Step) (string, error) 
 	case "type":
 		return fmt.Sprintf("type %d characters", len([]rune(step.Text))), s.call(ctx, "type", map[string]any{"pid": pid, "text": step.Text}, nil)
 	case "key":
-		return "press " + step.Key, s.call(ctx, "key", map[string]any{"pid": pid, "key": step.Key}, nil)
+		return "press " + step.Key, s.call(ctx, "key", map[string]any{"pid": pid, "key": step.Key, "times": max(step.Times, 1)}, nil)
+	case "hold_key":
+		return fmt.Sprintf("hold %s for %vs", step.Key, step.Seconds),
+			s.call(ctx, "hold_key", map[string]any{"pid": pid, "key": step.Key, "seconds": step.Seconds}, nil)
+	case "pointer_move", "pointer_click", "pointer_drag":
+		return s.pointerStep(ctx, app, step)
+	case "pointer_position":
+		var at struct{ X, Y float64 }
+		if err := s.call(ctx, "pointer_position", nil, &at); err != nil {
+			return "", err
+		}
+		return s.describePoint(app, at.X, at.Y), nil
 	case "right_click":
 		if step.Ref == "" {
 			return "", fail(CodeBadStep, "a right_click needs a ref; the menu belongs to the element")
@@ -275,7 +321,52 @@ func (s *Session) step(ctx context.Context, app App, step Step) (string, error) 
 		}
 		return "wait " + d.String(), nil
 	}
-	return "", fail(CodeBadStep, "unknown action %q; use click, right_click, focus, set_value, type, key, scroll or wait", step.Action)
+	return "", fail(CodeBadStep, "unknown action %q; use click, right_click, focus, set_value, type, key, hold_key, scroll, wait, or the pointer steps pointer_move, pointer_click and pointer_drag", step.Action)
+}
+
+// pointerStep takes the person's pointer to the point a screenshot named. The
+// helper refuses a point whose window belongs to another application, so an
+// approval for one application cannot reach into the next.
+func (s *Session) pointerStep(ctx context.Context, app App, step Step) (string, error) {
+	x, y, err := s.screenPoint(app, step)
+	if err != nil {
+		return "", err
+	}
+	args := map[string]any{"pid": app.PID, "x": x, "y": y}
+	switch strings.ToLower(strings.TrimSpace(step.Action)) {
+	case "pointer_move":
+		return fmt.Sprintf("move the pointer to (%v,%v)", *step.X, *step.Y), s.call(ctx, "pointer_move", args, nil)
+	case "pointer_drag":
+		to := Step{X: step.ToX, Y: step.ToY}
+		if to.X == nil || to.Y == nil {
+			return "", fail(CodeBadStep, "a pointer_drag needs where it ends: to_x and to_y")
+		}
+		toX, toY, err := s.screenPoint(app, to)
+		if err != nil {
+			return "", err
+		}
+		args["to_x"], args["to_y"] = toX, toY
+		return fmt.Sprintf("drag the pointer from (%v,%v) to (%v,%v)", *step.X, *step.Y, *to.X, *to.Y), s.call(ctx, "pointer_drag", args, nil)
+	}
+	button := step.Button
+	if button == "" {
+		button = "left"
+	}
+	args["button"], args["clicks"] = button, max(step.Times, 1)
+	return fmt.Sprintf("%s click at (%v,%v)", button, *step.X, *step.Y), s.call(ctx, "pointer_click", args, nil)
+}
+
+// describePoint says where a point on screen is in the pixels of the
+// application's latest screenshot, which is the only frame the model has. With
+// no screenshot taken there is no such frame, and the screen's own is said.
+func (s *Session) describePoint(app App, x, y float64) string {
+	s.mu.Lock()
+	shot, ok := s.shots[app.Bundle]
+	s.mu.Unlock()
+	if !ok || shot.scale == 0 {
+		return fmt.Sprintf("the pointer is at (%.0f,%.0f) on screen; take a screenshot to place it in this application", x, y)
+	}
+	return fmt.Sprintf("the pointer is at (%.0f,%.0f) in the screenshot", (x-shot.bounds.X)/shot.scale, (y-shot.bounds.Y)/shot.scale)
 }
 
 // screenPoint converts a point in the latest screenshot's pixels to global
