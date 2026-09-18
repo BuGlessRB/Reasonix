@@ -49,6 +49,10 @@ struct Seen: Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(CFHash(element)) }
 }
 
+// The action name for bringing an element into view. The SDK exports no
+// constant for it, unlike press and show-menu.
+let scrollToVisibleAction = "AXScrollToVisible"
+
 enum Accessibility {
     static let maxNodes = 1500
     static let maxDepth = 40
@@ -101,7 +105,9 @@ enum Accessibility {
         windows.removeAll { CFEqual($0, root) }
         var note = ""
         if windows.isEmpty {
-            note = "This application exposes no window through accessibility right now, so nothing inside its window can be read, clicked by ref or hit by point — only its menus below. Typing and keys still reach it, a screenshot still shows it, and relaunching it usually brings the window back."
+            note = Screen.locked()
+                ? "The screen is locked. While it is, macOS exposes no application's windows through accessibility, so nothing inside this window can be read, clicked by ref or hit by point — only the menus below. Typing, keys and screenshots still reach it; unlocking the screen brings the window back."
+                : "This application exposes no window through accessibility right now, so nothing inside its window can be read, clicked by ref or hit by point — only its menus below. Typing and keys still reach it, a screenshot still shows it, and relaunching it usually brings the window back."
             windows = [root]
         }
         var lines: [String] = []
@@ -188,6 +194,44 @@ enum Accessibility {
         return [:]
     }
 
+    // menu asks an element for its context menu, which is what a right click is
+    // for: the menu belongs to the element, so no pointer has to be borrowed to
+    // open it. Read the application again afterwards to see the menu.
+    static func menu(pid: pid_t, ref: String, refs: RefTable, cursor: VirtualCursor) throws -> JSON {
+        try Permissions.requireAccessibility()
+        let element = try refs.element(ref, pid: pid)
+        if let at = center(element) { cursor.move(to: at) }
+        guard actions(element).contains(kAXShowMenuAction) else {
+            throw Failure(code: "computer.no_action", message: "\(ref) has no context menu")
+        }
+        try perform(element, kAXShowMenuAction, what: ref)
+        return [:]
+    }
+
+    // reveal scrolls an element into view without a pointer. Where that is not
+    // offered, the wheel goes to the application itself, which scrolls whatever
+    // it considers in front — the same thing a wheel over its window would.
+    static func scroll(pid: pid_t, ref: String, amount: Double, refs: RefTable, cursor: VirtualCursor) throws -> JSON {
+        try Permissions.requireAccessibility()
+        if !ref.isEmpty {
+            let element = try refs.element(ref, pid: pid)
+            if let at = center(element) { cursor.move(to: at) }
+            if actions(element).contains(scrollToVisibleAction) {
+                try perform(element, scrollToVisibleAction, what: ref)
+                return ["how": "revealed"]
+            }
+        }
+        guard amount != 0 else {
+            throw Failure(code: "computer.bad_step", message: "a scroll needs a ref that can be revealed, or lines to turn the wheel by")
+        }
+        let source = CGEventSource(stateID: .privateState)
+        guard let event = CGEvent(scrollWheelEvent2Source: source, units: .line, wheelCount: 1, wheel1: Int32(amount), wheel2: 0, wheel3: 0) else {
+            throw Failure(code: "computer.failed", message: "the scroll could not be made")
+        }
+        event.postToPid(pid)
+        return ["how": "wheel"]
+    }
+
     // click is a press at a point: the element there is asked for its action, so
     // the person's own pointer never moves. An element that has none cannot be
     // clicked this way, and says so rather than being clicked some other way.
@@ -195,7 +239,7 @@ enum Accessibility {
         try Permissions.requireAccessibility()
         var hit: AXUIElement?
         guard AXUIElementCopyElementAtPosition(app(pid), Float(x), Float(y), &hit) == .success, let element = hit else {
-            throw Failure(code: "computer.no_element", message: "nothing of this application is at (\(Int(x)), \(Int(y)))")
+            throw Failure(code: "computer.no_element", message: "nothing of this application is at (\(Int(x)), \(Int(y)))\(Screen.locked() ? "; the screen is locked, and a locked screen exposes no window to click in" : "")")
         }
         // Only an element of the application that was approved takes the click,
         // whatever the hit test resolves the point to.
@@ -210,7 +254,7 @@ enum Accessibility {
         } else if ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(role) {
             AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         } else {
-            throw Failure(code: "computer.no_action", message: "the \(roleName(role)) at that point takes no accessibility action; it needs the real pointer")
+            throw Failure(code: "computer.no_action", message: "the \(roleName(role)) at that point takes no accessibility action\(Screen.locked() ? " — the screen is locked, which is why this application's window is not there to hit" : "; it needs the real pointer")")
         }
         return ["role": roleName(role)]
     }

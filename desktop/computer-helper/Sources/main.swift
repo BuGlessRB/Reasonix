@@ -32,6 +32,10 @@ func handle(_ method: String, _ params: JSON) throws -> JSON {
         return try Accessibility.press(pid: try pidParam(params), ref: try stringParam(params, "ref"), refs: refs, cursor: cursor)
     case "click":
         return try Accessibility.click(pid: try pidParam(params), x: try numberParam(params, "x"), y: try numberParam(params, "y"), cursor: cursor)
+    case "menu":
+        return try Accessibility.menu(pid: try pidParam(params), ref: try stringParam(params, "ref"), refs: refs, cursor: cursor)
+    case "scroll":
+        return try Accessibility.scroll(pid: try pidParam(params), ref: (params["ref"] as? String) ?? "", amount: (params["amount"] as? Double) ?? 0, refs: refs, cursor: cursor)
     case "focus":
         return try Accessibility.focus(pid: try pidParam(params), ref: try stringParam(params, "ref"), refs: refs, cursor: cursor)
     case "set_value":

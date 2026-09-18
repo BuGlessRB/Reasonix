@@ -4,7 +4,7 @@ import CoreGraphics
 
 enum Permissions {
     static func status() -> JSON {
-        ["accessibility": AXIsProcessTrusted(), "screen_recording": CGPreflightScreenCaptureAccess()]
+        ["accessibility": AXIsProcessTrusted(), "screen_recording": CGPreflightScreenCaptureAccess(), "screen_locked": Screen.locked()]
     }
 
     // Asks the system to show its own prompt, and opens the pane where the

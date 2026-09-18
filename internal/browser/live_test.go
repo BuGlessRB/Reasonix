@@ -2,9 +2,11 @@ package browser
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -333,4 +335,105 @@ func TestLiveAClickWaitsForTheSlowNavigationItStarted(t *testing.T) {
 	if err != nil || !strings.HasSuffix(res.Tab.URL, "/slow") || res.Tab.Title != "Slow" {
 		t.Fatalf("slow link: err=%v tab=%+v", err, res.Tab)
 	}
+}
+
+// The four a browser task reaches for that a snapshot cannot stand in for: the
+// page served again after its file changed, the way back and forward through
+// this tab's own history, a drag, and handing a file input a file.
+func TestLiveReloadHistoryDragAndUpload(t *testing.T) {
+	s := liveSession(t, true)
+	root := testenv.TempDir(t)
+	if err := os.WriteFile(filepath.Join(root, "note.txt"), []byte("from the workspace"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	served := "first"
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, `<title>Bench</title><h1 id="served">%s</h1>
+<a href="/next">Next page</a>
+<input id="file" type="file" aria-label="Pick a file">
+<div id="from" role="button" aria-label="Handle" style="width:80px;height:80px;background:#ccc">drag me</div>
+<div id="to" role="button" aria-label="Target" style="width:120px;height:120px;background:#eee">drop here</div>
+<p id="said"></p>
+<script>
+  document.getElementById('file').addEventListener('change', e => { document.getElementById('said').textContent = 'file: ' + e.target.files[0].name });
+  const to = document.getElementById('to');
+  let down = false;
+  document.getElementById('from').addEventListener('mousedown', () => { down = true });
+  to.addEventListener('mouseup', () => { if (down) document.getElementById('said').textContent = 'dropped'; down = false });
+</script>`, served)
+	})
+	mux.HandleFunc("/next", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<title>Next</title><h1>the next page</h1>`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	sess := NewSession(Config{Launch: LaunchSpec{Executable: s.cfg.Launch.Executable, ProfileDir: testenv.TempDir(t), Headless: true}, Roots: []string{root}})
+	t.Cleanup(sess.Close)
+	if _, err := sess.Open(ctx, srv.URL+"/", "", false); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	snap, err := sess.Snapshot(ctx, "", "")
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+
+	// The page is served again from the server, so a change behind it shows.
+	served = "second"
+	res, err := actPlain(ctx, sess, "", []Step{{Action: "reload"}, {Action: "wait_for", Text: "second"}})
+	if err != nil {
+		t.Fatalf("reload: %v (%v)", err, res.Notes)
+	}
+
+	// Back and forward walk this tab's own history.
+	after, err := sess.Snapshot(ctx, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := actPlain(ctx, sess, "", []Step{{Action: "click", Ref: findRef(t, after, `link "Next page"`)}}); err != nil {
+		t.Fatalf("link: %v", err)
+	}
+	res, err = actPlain(ctx, sess, "", []Step{{Action: "back"}})
+	if err != nil || strings.HasSuffix(res.Tab.URL, "/next") {
+		t.Fatalf("back: %v %+v", err, res.Tab)
+	}
+	res, err = actPlain(ctx, sess, "", []Step{{Action: "forward"}})
+	if err != nil || !strings.HasSuffix(res.Tab.URL, "/next") {
+		t.Fatalf("forward: %v %+v", err, res.Tab)
+	}
+	if _, err := actPlain(ctx, sess, "", []Step{{Action: "back"}}); err != nil {
+		t.Fatalf("back again: %v", err)
+	}
+
+	// A file input takes a file inside the workspace and nothing else.
+	now, err := sess.Snapshot(ctx, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := findRef(t, now, `button "Pick a file"`)
+	if _, err := actPlain(ctx, sess, "", []Step{
+		{Action: "upload", Ref: file, Files: []string{filepath.Join(root, "note.txt")}},
+		{Action: "wait_for", Text: "file: note.txt"},
+	}); err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	_, err = actPlain(ctx, sess, "", []Step{{Action: "upload", Ref: file, Files: []string{"/etc/hosts"}}})
+	if CodeOf(err) != CodeURLRefused {
+		t.Fatalf("a file outside the workspace = %v, want %s", err, CodeURLRefused)
+	}
+
+	// A drag travels rather than jumping, so a page that follows the pointer
+	// sees it.
+	if _, err := actPlain(ctx, sess, "", []Step{
+		{Action: "drag", Ref: findRef(t, now, `button "Handle"`), ToRef: findRef(t, now, `button "Target"`)},
+		{Action: "wait_for", Text: "dropped"},
+	}); err != nil {
+		t.Fatalf("drag: %v", err)
+	}
+	_ = snap
 }

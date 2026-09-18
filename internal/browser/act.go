@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -15,6 +17,10 @@ const (
 )
 
 // Step is one input. X and Y are in the pixels of the tab's latest screenshot.
+// dragSteps is how many moves a drag is split into: a page that follows the
+// pointer needs to see it travel, not jump.
+const dragSteps = 8
+
 type Step struct {
 	Action string   `json:"action"`
 	Ref    string   `json:"ref,omitempty"`
@@ -24,6 +30,11 @@ type Step struct {
 	X      *float64 `json:"x,omitempty"`
 	Y      *float64 `json:"y,omitempty"`
 	DeltaY float64  `json:"delta_y,omitempty"`
+	// Where a drag ends: another element, or a point in the page.
+	ToRef  string   `json:"to_ref,omitempty"`
+	ToX    *float64 `json:"to_x,omitempty"`
+	ToY    *float64 `json:"to_y,omitempty"`
+	Files  []string `json:"files,omitempty"`
 	Ms     int      `json:"ms,omitempty"`
 	Accept *bool    `json:"accept,omitempty"`
 }
@@ -151,7 +162,15 @@ func (s *Session) runStep(ctx context.Context, t *tab, step Step, secrets bool) 
 	case "dialog":
 		return t.answerDialog(ctx, step)
 	case "back":
-		return t.back(ctx)
+		return t.history(ctx, -1)
+	case "forward":
+		return t.history(ctx, 1)
+	case "reload":
+		return t.reload(ctx)
+	case "drag":
+		return s.drag(ctx, t, step)
+	case "upload":
+		return s.upload(ctx, t, step)
 	}
 	return "", fail(CodeBadStep, "unknown action %q", step.Action)
 }
@@ -356,6 +375,13 @@ func (t *tab) mouse(ctx context.Context, kind string, x, y float64, clicks int) 
 	return engineFailure(t.call(ctx, "Input.dispatchMouseEvent", params, nil))
 }
 
+// drag moves the pointer with the left button held.
+func (t *tab) drag(ctx context.Context, x, y float64) error {
+	return engineFailure(t.call(ctx, "Input.dispatchMouseEvent", map[string]any{
+		"type": "mouseMoved", "x": x, "y": y, "button": "left", "buttons": 1,
+	}, nil))
+}
+
 func (t *tab) click(ctx context.Context, x, y float64, clicks int) error {
 	if err := t.mouse(ctx, "mouseMoved", x, y, 0); err != nil {
 		return err
@@ -537,7 +563,8 @@ func (t *tab) answerDialog(ctx context.Context, step Step) (string, error) {
 	return fmt.Sprintf("%s the %s dialog", verb, d.Type), nil
 }
 
-func (t *tab) back(ctx context.Context) (string, error) {
+// history moves one entry back (-1) or forward (+1) in this tab's own history.
+func (t *tab) history(ctx context.Context, step int) (string, error) {
 	var h struct {
 		CurrentIndex int `json:"currentIndex"`
 		Entries      []struct {
@@ -547,14 +574,104 @@ func (t *tab) back(ctx context.Context) (string, error) {
 	if err := t.call(ctx, "Page.getNavigationHistory", nil, &h); err != nil {
 		return "", engineFailure(err)
 	}
-	if h.CurrentIndex <= 0 || h.CurrentIndex >= len(h.Entries) {
-		return "", fail(CodeNavigationFailed, "there is no earlier page in this tab")
+	want := h.CurrentIndex + step
+	if want < 0 || want >= len(h.Entries) {
+		side := "earlier"
+		if step > 0 {
+			side = "later"
+		}
+		return "", fail(CodeNavigationFailed, "there is no %s page in this tab", side)
 	}
 	before := t.navigationCount()
-	if err := t.call(ctx, "Page.navigateToHistoryEntry", map[string]any{"entryId": h.Entries[h.CurrentIndex-1].ID}, nil); err != nil {
+	if err := t.call(ctx, "Page.navigateToHistoryEntry", map[string]any{"entryId": h.Entries[want].ID}, nil); err != nil {
 		return "", engineFailure(err)
 	}
 	t.settle(ctx, before)
 	url, _ := t.location()
-	return "back to " + url, nil
+	verb := "back to "
+	if step > 0 {
+		verb = "forward to "
+	}
+	return verb + url, nil
+}
+
+// reload loads the page again from the server, which is what a change to the
+// file it was served from needs; a second open of the same address may answer
+// from the cache.
+func (t *tab) reload(ctx context.Context) (string, error) {
+	before := t.navigationCount()
+	if err := t.call(ctx, "Page.reload", map[string]any{"ignoreCache": true}, nil); err != nil {
+		return "", engineFailure(err)
+	}
+	t.settle(ctx, before)
+	if err := t.waitAnyLoad(ctx, navigationTimeout); err != nil {
+		return "", err
+	}
+	url, _ := t.location()
+	return "reload " + url, nil
+}
+
+// drag presses at one point and releases at another, moving in steps so a page
+// that follows the pointer sees the move rather than a jump.
+func (s *Session) drag(ctx context.Context, t *tab, step Step) (string, error) {
+	fromX, fromY, err := s.point(ctx, t, step)
+	if err != nil {
+		return "", err
+	}
+	to := Step{Action: step.Action, Ref: step.ToRef, X: step.ToX, Y: step.ToY}
+	if to.Ref == "" && (to.X == nil || to.Y == nil) {
+		return "", fail(CodeBadStep, "a drag needs where it ends: to_ref, or to_x and to_y")
+	}
+	toX, toY, err := s.point(ctx, t, to)
+	if err != nil {
+		return "", err
+	}
+	if err := t.mouse(ctx, "mouseMoved", fromX, fromY, 0); err != nil {
+		return "", err
+	}
+	if err := t.mouse(ctx, "mousePressed", fromX, fromY, 1); err != nil {
+		return "", err
+	}
+	for i := 1; i <= dragSteps; i++ {
+		at := float64(i) / dragSteps
+		if err := t.drag(ctx, fromX+(toX-fromX)*at, fromY+(toY-fromY)*at); err != nil {
+			return "", err
+		}
+	}
+	if err := t.mouse(ctx, "mouseReleased", toX, toY, 1); err != nil {
+		return "", err
+	}
+	t.settle(ctx, t.navigationCount())
+	return fmt.Sprintf("drag %s to %s", target(step), target(to)), nil
+}
+
+// upload hands a file input the files it would have been given by a person.
+// Only a file inside the workspace: the page decides what to do with what it
+// is given, and the agent may not hand it anything else.
+func (s *Session) upload(ctx context.Context, t *tab, step Step) (string, error) {
+	if len(step.Files) == 0 {
+		return "", fail(CodeBadStep, "an upload needs files")
+	}
+	node, err := s.node(ctx, t, step.Ref)
+	if err != nil {
+		return "", err
+	}
+	paths := make([]string, 0, len(step.Files))
+	for _, file := range step.Files {
+		abs, err := filepath.Abs(file)
+		if err != nil || !fileWithin(abs, s.cfg.Roots) {
+			return "", fail(CodeURLRefused, "%q is outside the workspace; a page may only be given a file inside it", file)
+		}
+		if _, err := os.Stat(abs); err != nil {
+			return "", fail(CodeBadStep, "%q is not a file on this machine", file)
+		}
+		paths = append(paths, abs)
+	}
+	if err := t.call(ctx, "DOM.setFileInputFiles", map[string]any{"backendNodeId": node, "files": paths}, nil); err != nil {
+		if isProtocolError(err) {
+			return "", &Failure{Code: CodeBadStep, Ref: step.Ref, Detail: fmt.Sprintf("%s does not take files; upload needs the page's file input", step.Ref)}
+		}
+		return "", engineFailure(err)
+	}
+	return fmt.Sprintf("give %s %d file(s)", step.Ref, len(paths)), nil
 }

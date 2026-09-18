@@ -111,11 +111,13 @@ type computerAct struct{ session *computer.Session }
 func (computerAct) Name() string { return "computer_act" }
 
 func (computerAct) Description() string {
-	return "Operate another application through accessibility actions; the person's pointer and focus stay where they are. Steps run in order and stop at the first failure: click (ref, or x/y from a screenshot), focus and set_value (ref), type (text at focus), key (e.g. Enter, Meta+s). Returns the application's snapshot afterwards."
+	return "Operate another application through accessibility actions; the person's pointer and focus stay where they are. Steps run in order and stop at the first failure: " +
+		"click (ref, or x/y from a screenshot), right_click opens a ref's own context menu, focus and set_value take a ref, type enters text where focus is, key presses keys like Enter or Meta+s, " +
+		"scroll brings a ref into view or turns the wheel by amount lines, wait pauses ms. Returns the application's snapshot afterwards."
 }
 
 func (computerAct) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"app":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","focus","set_value","type","key"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"}},"required":["action"]}}},"required":["app","steps"]}`)
+	return json.RawMessage(`{"type":"object","properties":{"app":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","right_click","focus","set_value","type","key","scroll","wait"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"},"amount":{"type":"number"},"ms":{"type":"integer"}},"required":["action"]}}},"required":["app","steps"]}`)
 }
 
 func (computerAct) ReadOnly() bool                                   { return false }

@@ -16,6 +16,23 @@ final class ClickView: NSView {
     override func mouseDown(with event: NSEvent) { log("mouseDown \(Int(event.locationInWindow.x)),\(Int(event.locationInWindow.y))") }
     override func draw(_ dirtyRect: NSRect) { NSColor.systemRed.setFill(); dirtyRect.fill() }
 }
+// A view with a menu of its own, so a context-menu action has something to open,
+// and one that says when it is scrolled into view.
+final class MenuView: NSView {
+    override func menu(for event: NSEvent) -> NSMenu? {
+        log("menu opened")
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Probe menu item", action: nil, keyEquivalent: ""))
+        return menu
+    }
+}
+final class DeepLabel: NSTextField {
+    override func scrollToVisible(_ rect: NSRect) -> Bool {
+        log("scrolled into view")
+        return super.scrollToVisible(rect)
+    }
+}
+
 final class Delegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     var window: NSWindow!
     func applicationDidFinishLaunching(_ n: Notification) {
@@ -28,9 +45,23 @@ final class Delegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         let button = NSButton(title: "Probe button", target: self, action: #selector(pressed))
         button.frame = NSRect(x: 290, y: 148, width: 110, height: 28)
         let click = ClickView(frame: NSRect(x: 20, y: 20, width: 160, height: 100))
+        let menuView = MenuView(frame: NSRect(x: 200, y: 20, width: 100, height: 60))
+        menuView.setAccessibilityLabel("Probe menu area")
+        menuView.setAccessibilityRole(.button)
+        menuView.setAccessibilityElement(true)
+        let scroll = NSScrollView(frame: NSRect(x: 310, y: 20, width: 90, height: 100))
+        let deep = DeepLabel(labelWithString: "deep row")
+        deep.setAccessibilityLabel("Deep row")
+        deep.frame = NSRect(x: 0, y: 0, width: 80, height: 20)
+        let doc = NSView(frame: NSRect(x: 0, y: 0, width: 80, height: 600))
+        doc.addSubview(deep)
+        scroll.documentView = doc
+        scroll.hasVerticalScroller = true
         window.contentView?.addSubview(field)
         window.contentView?.addSubview(button)
         window.contentView?.addSubview(click)
+        window.contentView?.addSubview(menuView)
+        window.contentView?.addSubview(scroll)
         window.orderFrontRegardless()
         log("ready pid=\(ProcessInfo.processInfo.processIdentifier)")
     }

@@ -14,6 +14,10 @@ import (
 	"reasonix/internal/visionimage"
 )
 
+// maxWait bounds a wait step: a pause longer than this is a task that should
+// come back rather than one call holding the turn.
+const maxWait = 30 * time.Second
+
 // refusedApps are never operated, whatever the person approves: input there
 // reaches past the boundaries the host keeps everywhere else. A security list,
 // kept as one.
@@ -179,6 +183,9 @@ type Step struct {
 	Key    string   `json:"key,omitempty"`
 	X      *float64 `json:"x,omitempty"`
 	Y      *float64 `json:"y,omitempty"`
+	// scroll: lines to turn the wheel by, negative downwards; wait: how long.
+	Amount float64 `json:"amount,omitempty"`
+	Ms     int     `json:"ms,omitempty"`
 }
 
 // ActResult is what a run of steps did before it finished or stopped.
@@ -243,8 +250,32 @@ func (s *Session) step(ctx context.Context, app App, step Step) (string, error) 
 		return fmt.Sprintf("type %d characters", len([]rune(step.Text))), s.call(ctx, "type", map[string]any{"pid": pid, "text": step.Text}, nil)
 	case "key":
 		return "press " + step.Key, s.call(ctx, "key", map[string]any{"pid": pid, "key": step.Key}, nil)
+	case "right_click":
+		if step.Ref == "" {
+			return "", fail(CodeBadStep, "a right_click needs a ref; the menu belongs to the element")
+		}
+		return "open the menu of " + step.Ref, s.call(ctx, "menu", map[string]any{"pid": pid, "ref": step.Ref}, nil)
+	case "scroll":
+		var r struct {
+			How string `json:"how"`
+		}
+		if err := s.call(ctx, "scroll", map[string]any{"pid": pid, "ref": step.Ref, "amount": step.Amount}, &r); err != nil {
+			return "", err
+		}
+		if r.How == "revealed" {
+			return "bring " + step.Ref + " into view", nil
+		}
+		return fmt.Sprintf("scroll %v lines", step.Amount), nil
+	case "wait":
+		d := min(time.Duration(step.Ms)*time.Millisecond, maxWait)
+		select {
+		case <-time.After(d):
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+		return "wait " + d.String(), nil
 	}
-	return "", fail(CodeBadStep, "unknown action %q; use click, focus, set_value, type or key", step.Action)
+	return "", fail(CodeBadStep, "unknown action %q; use click, right_click, focus, set_value, type, key, scroll or wait", step.Action)
 }
 
 // screenPoint converts a point in the latest screenshot's pixels to global

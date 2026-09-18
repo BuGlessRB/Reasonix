@@ -22,6 +22,7 @@ func init() {
 const browserExecutionKind = "browser"
 
 const (
+	browserFindLines     = 40
 	browserSnapshotLines = 250
 	browserMaxLines      = 1000
 	browserChangeLines   = 80
@@ -143,12 +144,12 @@ type browserRead struct{ session *browser.Session }
 func (browserRead) Name() string { return "browser_read" }
 
 func (browserRead) Description() string {
-	return "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), " +
+	return "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), find (lines carrying text, with their refs), " +
 		"screenshot (browser_act x/y use its pixels), logs (errors since you last read them), tabs."
 }
 
 func (browserRead) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"what":{"type":"string","enum":["snapshot","screenshot","logs","tabs"]},"tab":{"type":"string"},"ref":{"type":"string"},"offset":{"type":"integer"},"limit":{"type":"integer"}}}`)
+	return json.RawMessage(`{"type":"object","properties":{"what":{"type":"string","enum":["snapshot","find","screenshot","logs","tabs"]},"tab":{"type":"string"},"ref":{"type":"string"},"text":{"type":"string"},"offset":{"type":"integer"},"limit":{"type":"integer"}}}`)
 }
 
 // PermissionArgs names the site the tab being read shows.
@@ -172,6 +173,7 @@ func (b browserRead) ExecuteWithImages(ctx context.Context, args json.RawMessage
 		What   string `json:"what"`
 		Tab    string `json:"tab"`
 		Ref    string `json:"ref"`
+		Text   string `json:"text"`
 		Offset int    `json:"offset"`
 		Limit  int    `json:"limit"`
 	}
@@ -207,10 +209,19 @@ func (b browserRead) ExecuteWithImages(ctx context.Context, args json.RawMessage
 			return tabLine(info) + "\nNothing new reported.", nil, nil
 		}
 		return tabLine(info) + "\n" + renderLogs(entries), nil, nil
+	case "find":
+		if strings.TrimSpace(p.Text) == "" {
+			return "", nil, &browser.Failure{Code: browser.CodeBadStep, Detail: "find needs the text to look for"}
+		}
+		snap, err := b.session.Snapshot(ctx, p.Tab, p.Ref)
+		if err != nil {
+			return "", nil, err
+		}
+		return renderFound(snap, p.Text, max(p.Limit, 0)), nil, nil
 	case "tabs":
 		return renderTabs(b.session.Tabs()), nil, nil
 	}
-	return "", nil, &browser.Failure{Code: browser.CodeBadStep, Detail: fmt.Sprintf("what=%q is not one of snapshot, screenshot, logs, tabs", p.What)}
+	return "", nil, &browser.Failure{Code: browser.CodeBadStep, Detail: fmt.Sprintf("what=%q is not one of snapshot, find, screenshot, logs, tabs", p.What)}
 }
 
 type browserAct struct{ session *browser.Session }
@@ -220,11 +231,12 @@ func (browserAct) Name() string { return "browser_act" }
 func (browserAct) Description() string {
 	return "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. " +
 		"Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; " +
-		"select sets a <select>; dialog answers alert/confirm/prompt."
+		"select sets a <select>; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers alert/confirm/prompt; " +
+		"back, forward and reload move this tab — reload is what a page needs after the file behind it changed."
 }
 
 func (browserAct) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"tab":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","double_click","hover","fill","type","press","select","scroll","wait","wait_for","dialog","back"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"values":{"type":"array","items":{"type":"string"}},"x":{"type":"number"},"y":{"type":"number"},"delta_y":{"type":"number"},"ms":{"type":"integer"},"accept":{"type":"boolean"}},"required":["action"]}}},"required":["steps"]}`)
+	return json.RawMessage(`{"type":"object","properties":{"tab":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","double_click","hover","fill","type","press","select","scroll","drag","upload","wait","wait_for","dialog","back","forward","reload"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"values":{"type":"array","items":{"type":"string"}},"x":{"type":"number"},"y":{"type":"number"},"delta_y":{"type":"number"},"to_ref":{"type":"string"},"to_x":{"type":"number"},"to_y":{"type":"number"},"files":{"type":"array","items":{"type":"string"}},"ms":{"type":"integer"},"accept":{"type":"boolean"}},"required":["action"]}}},"required":["steps"]}`)
 }
 
 // PermissionArgs names the site the steps will operate, as a credential
@@ -329,6 +341,38 @@ func tabLine(info browser.TabInfo) string {
 		title = "(untitled)"
 	}
 	return fmt.Sprintf("Tab %s: %s — %s", info.ID, title, info.URL)
+}
+
+// renderFound answers where something is on a page too long to read: the lines
+// that carry the text, with the refs on them, and where each one sits so the
+// reader can page to it.
+func renderFound(snap browser.Snapshot, text string, limit int) string {
+	if limit <= 0 {
+		limit = browserFindLines
+	}
+	var b strings.Builder
+	b.WriteString(tabLine(snap.Tab) + "\n")
+	want := strings.ToLower(text)
+	found := 0
+	for i, line := range snap.Lines {
+		if !strings.Contains(strings.ToLower(line), want) {
+			continue
+		}
+		found++
+		if found > limit {
+			continue
+		}
+		fmt.Fprintf(&b, "%d: %s\n", i+1, strings.TrimRight(line, " "))
+	}
+	switch {
+	case found == 0:
+		fmt.Fprintf(&b, "No line of this page's %d carries %q.\n", len(snap.Lines), text)
+	case found > limit:
+		fmt.Fprintf(&b, "%d of %d matching lines; the numbers are this page's own, so snapshot offset=%d reads around the first.\n", limit, found, 0)
+	default:
+		fmt.Fprintf(&b, "%d line(s) of this page's %d.\n", found, len(snap.Lines))
+	}
+	return b.String()
 }
 
 func renderSnapshot(snap browser.Snapshot, offset, limit int) string {

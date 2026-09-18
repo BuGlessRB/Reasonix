@@ -135,3 +135,40 @@ func TestLiveOperatesAnApplicationWithoutItsPointer(t *testing.T) {
 		t.Fatalf("a terminal = %v, want %s", err, CodeAppRefused)
 	}
 }
+
+// The three a person does without thinking and an agent could not: open an
+// element's own context menu, bring something into view, and wait.
+func TestLiveContextMenuScrollAndWait(t *testing.T) {
+	s := liveSession(t)
+	log := launchTarget(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	snap, err := s.Snapshot(ctx, targetBundle)
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	t.Logf("snapshot:\n%s", strings.Join(snap.Lines, "\n"))
+	menu := lineRef(t, snap.Lines, `"Probe menu area"`)
+	res, err := s.Act(ctx, targetBundle, []Step{
+		{Action: "right_click", Ref: menu},
+		{Action: "wait", Ms: 400},
+	})
+	if err != nil {
+		t.Fatalf("right_click: %v (%v)", err, res.Notes)
+	}
+	waitLog(t, log, "menu opened")
+
+	deep := lineRef(t, snap.Lines, `"Deep row"`)
+	if _, err := s.Act(ctx, targetBundle, []Step{{Action: "scroll", Ref: deep}}); err != nil {
+		t.Fatalf("scroll to a ref: %v", err)
+	}
+	waitLog(t, log, "scrolled into view")
+
+	if _, err := s.Act(ctx, targetBundle, []Step{{Action: "scroll", Amount: -3}}); err != nil {
+		t.Fatalf("scroll by lines: %v", err)
+	}
+	if _, err := s.Act(ctx, targetBundle, []Step{{Action: "right_click"}}); CodeOf(err) != CodeBadStep {
+		t.Fatalf("a right_click with no ref = %v, want %s", err, CodeBadStep)
+	}
+}
