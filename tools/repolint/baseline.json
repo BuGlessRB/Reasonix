@@ -2,15 +2,15 @@
   "limits": {
     "banner": 13,
     "commented-code": 0,
-    "complexity": 1858,
-    "essay": 1929,
-    "file-size": 100058,
-    "function-size": 7958,
+    "complexity": 1878,
+    "essay": 1932,
+    "file-size": 100143,
+    "function-size": 8034,
     "layering": 1,
     "marker": 0,
     "narrative": 63,
     "struct-state": 109,
-    "test-file-size": 64436
+    "test-file-size": 64455
   },
   "files": {
     "cmd/e2ebench/main.go": {
@@ -664,10 +664,10 @@
       "essay": 6
     },
     "internal/cli/chat_tui.go": {
-      "complexity": 268,
-      "essay": 77,
-      "file-size": 4117,
-      "function-size": 1011
+      "complexity": 288,
+      "essay": 80,
+      "file-size": 4194,
+      "function-size": 1087
     },
     "internal/cli/chat_tui_paste.go": {
       "essay": 6,
@@ -810,7 +810,7 @@
     },
     "internal/config/config.go": {
       "essay": 21,
-      "file-size": 1553,
+      "file-size": 1561,
       "narrative": 2
     },
     "internal/config/credential_diagnostics.go": {
@@ -827,7 +827,7 @@
       "file-size": 1588
     },
     "internal/config/edit_test.go": {
-      "test-file-size": 2417
+      "test-file-size": 2436
     },
     "internal/config/effort_test.go": {
       "essay": 2
