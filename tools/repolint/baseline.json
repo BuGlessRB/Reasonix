@@ -2,10 +2,10 @@
   "limits": {
     "banner": 13,
     "commented-code": 0,
-    "complexity": 1875,
+    "complexity": 1876,
     "essay": 1911,
-    "file-size": 100051,
-    "function-size": 8013,
+    "file-size": 100062,
+    "function-size": 8018,
     "layering": 1,
     "marker": 0,
     "narrative": 63,
@@ -395,10 +395,10 @@
       "test-file-size": 245
     },
     "internal/agent/agent.go": {
-      "complexity": 26,
+      "complexity": 27,
       "essay": 22,
-      "file-size": 1332,
-      "function-size": 88
+      "file-size": 1343,
+      "function-size": 93
     },
     "internal/agent/branch.go": {
       "essay": 3,
