@@ -686,7 +686,8 @@ model = "x"
 	}
 	parentReq, subReq := reqs[0], reqs[1]
 	// Core shell tools stay top-level; task is dispatched via use_capability.
-	for _, want := range []string{"bash", "job_output", "job_kill", "use_capability"} {
+	shellName := platformShellToolName()
+	for _, want := range []string{shellName, "job_output", "job_kill", "use_capability"} {
 		if !requestHasTool(parentReq, want) {
 			t.Fatalf("parent request missing %q; tools=%v", want, toolSchemaNames(parentReq.Tools))
 		}
@@ -698,22 +699,22 @@ model = "x"
 	if !registered["task"] && !registered["review"] {
 		t.Fatalf("capability registry missing task/review for skill subagent dispatch")
 	}
-	if !requestToolSchemaContains(parentReq, "bash", "run_in_background") {
-		t.Fatalf("parent bash schema should include run_in_background")
+	if !requestToolSchemaContains(parentReq, shellName, "run_in_background") {
+		t.Fatalf("parent %s schema should include run_in_background", shellName)
 	}
 	for _, hidden := range []string{"task", "run_skill", "read_only_skill", "read_skill", "install_skill", "install_source", "explore", "research", "review", "security_review", "job_output", "job_kill", "wait", "bash_output", "kill_shell"} {
 		if requestHasTool(subReq, hidden) {
 			t.Fatalf("skill subagent request should hide %q; tools=%v", hidden, toolSchemaNames(subReq.Tools))
 		}
 	}
-	if !requestHasTool(subReq, "bash") {
-		t.Fatalf("skill subagent request should keep bash; tools=%v", toolSchemaNames(subReq.Tools))
+	if !requestHasTool(subReq, shellName) {
+		t.Fatalf("skill subagent request should keep %s; tools=%v", shellName, toolSchemaNames(subReq.Tools))
 	}
-	if requestToolSchemaContains(subReq, "bash", "run_in_background") {
-		t.Fatalf("skill subagent bash schema should not include run_in_background")
+	if requestToolSchemaContains(subReq, shellName, "run_in_background") {
+		t.Fatalf("skill subagent %s schema should not include run_in_background", shellName)
 	}
-	if !requestToolDescriptionContains(subReq, "bash", "Only permission-classified read-only commands are allowed") {
-		t.Fatalf("review subagent bash must advertise its permission-layer read-only policy; got %q", requestToolDescription(subReq, "bash"))
+	if !requestToolDescriptionContains(subReq, shellName, "Only permission-classified read-only commands are allowed") {
+		t.Fatalf("review subagent %s must advertise its permission-layer read-only policy; got %q", shellName, requestToolDescription(subReq, shellName))
 	}
 }
 
@@ -781,15 +782,16 @@ model = "x"
 		t.Fatalf("provider requests = %d, want 5 (parent, writer sub, parent, read-only sub, parent)", len(reqs))
 	}
 	writerReq, roReq := reqs[1], reqs[3]
+	shellName := platformShellToolName()
 
 	if !requestHasTool(writerReq, "write_file") {
 		t.Fatalf("writer skill subagent should keep write_file; tools=%v", toolSchemaNames(writerReq.Tools))
 	}
-	if !requestToolDescriptionContains(writerReq, "bash", "Background execution is unavailable inside subagents") {
-		t.Fatalf("writer skill subagent bash should be the foreground-only wrapper; got %q", requestToolDescription(writerReq, "bash"))
+	if !requestToolDescriptionContains(writerReq, shellName, "Background execution is unavailable inside subagents") {
+		t.Fatalf("writer skill subagent %s should be the foreground-only wrapper; got %q", shellName, requestToolDescription(writerReq, shellName))
 	}
-	if requestToolDescriptionContains(writerReq, "bash", "Only permission-classified read-only commands are allowed") {
-		t.Fatalf("writer skill subagent bash must not be the read-only wrapper; got %q", requestToolDescription(writerReq, "bash"))
+	if requestToolDescriptionContains(writerReq, shellName, "Only permission-classified read-only commands are allowed") {
+		t.Fatalf("writer skill subagent %s must not be the read-only wrapper; got %q", shellName, requestToolDescription(writerReq, shellName))
 	}
 
 	if requestHasTool(roReq, "write_file") {
@@ -798,8 +800,8 @@ model = "x"
 	if !requestHasTool(roReq, "read_file") {
 		t.Fatalf("read-only skill subagent should keep read_file; tools=%v", toolSchemaNames(roReq.Tools))
 	}
-	if !requestToolDescriptionContains(roReq, "bash", "Only permission-classified read-only commands are allowed") {
-		t.Fatalf("read-only skill subagent bash must be the permission-layer wrapper; got %q", requestToolDescription(roReq, "bash"))
+	if !requestToolDescriptionContains(roReq, shellName, "Only permission-classified read-only commands are allowed") {
+		t.Fatalf("read-only skill subagent %s must be the permission-layer wrapper; got %q", shellName, requestToolDescription(roReq, shellName))
 	}
 }
 
@@ -2175,7 +2177,7 @@ func contractEntryNames(entries []tool.ContractEntry) []string {
 func unifiedBootToolNames() []string {
 	return []string{
 		"ask",
-		"bash",
+		platformShellToolName(),
 		"compress",
 		"create_goal",
 		"edit_file",
@@ -2189,6 +2191,13 @@ func unifiedBootToolNames() []string {
 		"view_image",
 		"write_file",
 	}
+}
+
+func platformShellToolName() string {
+	if runtime.GOOS == "windows" {
+		return "pwsh"
+	}
+	return "bash"
 }
 
 func TestBuildTokenEconomyStartsWithLeanToolSurface(t *testing.T) {
@@ -2235,7 +2244,7 @@ command = "reasonix-missing-mockmcp"
 	if got := toolSchemaNames(req.Tools); !reflect.DeepEqual(got, wantTools) {
 		t.Fatalf("light first request tool order changed\ngot  %v\nwant %v", got, wantTools)
 	}
-	for _, want := range []string{"compress", "use_capability", "read_file", "edit_file", "write_file", "bash", "ask"} {
+	for _, want := range []string{"compress", "use_capability", "read_file", "edit_file", "write_file", platformShellToolName(), "ask"} {
 		if !requestHasTool(req, want) {
 			t.Fatalf("light first request missing tool %q; tools=%v", want, toolSchemaNames(req.Tools))
 		}
@@ -4362,7 +4371,7 @@ func TestBuildKeepsSourceConnectorAndSkillToolsDespiteSafeModeEnv(t *testing.T) 
 	if !names["use_capability"] {
 		t.Fatal("expected use_capability when REASONIX_SAFE_MODE is set")
 	}
-	for _, want := range []string{"bash", "read_file", "write_file"} {
+	for _, want := range []string{platformShellToolName(), "read_file", "write_file"} {
 		if !names[want] {
 			t.Fatalf("expected core tool %s when REASONIX_SAFE_MODE is set", want)
 		}
