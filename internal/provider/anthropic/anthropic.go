@@ -181,8 +181,17 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		sessionID:        sessionID,
 		defaultMaxTokens: maxOutputTokens,
 		http:             httpClient, // no overall timeout; lifecycle is ctx-driven
-		idleTimeout:      defaultStreamIdleTimeout,
+		idleTimeout:      streamIdleTimeout(cfg),
 	}, nil
+}
+
+// streamIdleTimeout returns the configured stream-idle watchdog window, or the
+// adapter default when the provider entry leaves it unset.
+func streamIdleTimeout(cfg provider.Config) time.Duration {
+	if d := provider.StreamIdleTimeout(cfg); d > 0 {
+		return d
+	}
+	return defaultStreamIdleTimeout
 }
 
 func newHTTPClient(cfg provider.Config) (*http.Client, error) {
