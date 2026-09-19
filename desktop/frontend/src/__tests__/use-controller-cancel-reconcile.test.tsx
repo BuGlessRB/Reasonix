@@ -354,9 +354,10 @@ eq(cancelOutcome?.discardedItemIds.join(","), "withdrawn-guidance", "cancel retu
 
 cancelInboxError = new Error("reasonix_error:inbox_invalid_state");
 await act(async () => {
-  await controller?.cancel(["queued-guidance"]);
+  cancelOutcome = await controller?.cancel(["queued-guidance"]);
   await flushPromises();
 });
+ok(Boolean(cancelOutcome?.error), "cancellation outcome preserves failure for the decision card");
 const inboxCancelNotice = controller?.state.items.find((item) =>
   item.kind === "notice" && item.text.includes("Cancel failed: This inbox instruction cannot be changed"),
 );
