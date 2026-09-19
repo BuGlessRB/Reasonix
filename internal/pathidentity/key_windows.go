@@ -77,8 +77,8 @@ func directoryCaseInsensitive(path string) (insensitive, exists bool, err error)
 }
 
 func caseSensitivityQueryUnsupported(err error) bool {
-	status, ok := err.(windows.NTStatus)
-	return ok && (status == windows.STATUS_INVALID_INFO_CLASS ||
+	var status windows.NTStatus
+	return errors.As(err, &status) && (status == windows.STATUS_INVALID_INFO_CLASS ||
 		status == windows.STATUS_INVALID_PARAMETER ||
 		status == windows.STATUS_NOT_SUPPORTED)
 }

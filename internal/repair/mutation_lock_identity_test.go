@@ -74,6 +74,33 @@ func TestRepairMutationLockAllowsPriorHolderRegularFileReplacement(t *testing.T)
 	unlock()
 }
 
+func TestRepairMutationRejectsRedirectEvenWithReusedNativeIdentity(t *testing.T) {
+	root := t.TempDir()
+	link := filepath.Join(root, "current")
+	if err := os.Symlink(filepath.Join(root, "first"), link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	targets, _, _, err := repairMutationTargets([]string{link})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "second"), link); err != nil {
+		t.Fatal(err)
+	}
+	// Force the identity comparison to pass, as when unlink/recreate reuses
+	// a filesystem inode; the saved destination must still reject the write.
+	targets[0].info, err = os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := revalidateRepairMutationTargets(targets); err == nil || !strings.Contains(err.Error(), "identity changed") {
+		t.Fatalf("redirect with reused identity accepted: %v", err)
+	}
+}
+
 func TestRepairMutationLockContendsWithLegacyLockBothDirections(t *testing.T) {
 	t.Setenv("REASONIX_HOME", t.TempDir())
 	target := filepath.Join(t.TempDir(), "state.json")

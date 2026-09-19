@@ -14,7 +14,7 @@ func TestDiscoveryRechecksConcurrentOwnership(t *testing.T) {
 		t.Run(phase, func(t *testing.T) {
 			store := NewStore(filepath.Join(t.TempDir(), "state.json"))
 			ctx := t.Context()
-			if err := store.EnsureWorkspace(ctx, Workspace{ID: "global", Root: "/global", Visible: true}); err != nil {
+			if err := store.EnsureWorkspace(ctx, Workspace{ID: "global", Root: t.TempDir(), Visible: true}); err != nil {
 				t.Fatal(err)
 			}
 			// A scanner has already observed an empty registry. A different
@@ -34,7 +34,7 @@ func TestDiscoveryRechecksConcurrentOwnership(t *testing.T) {
 			}
 			before, _ := store.Load(ctx)
 			entry := RecoveryEntry{ID: "canonical-new", SessionID: "new", Format: "canonical", Status: "pending", Reason: "workspace_conflict"}
-			for _, workspace := range []*Workspace{nil, {ID: "wrong", Root: "/wrong", Visible: true}} {
+			for _, workspace := range []*Workspace{nil, {ID: "wrong", Root: t.TempDir(), Visible: true}} {
 				if err := store.ReconcileDiscoveredSession(ctx, entry, workspace); err != nil {
 					t.Fatal(err)
 				}
@@ -51,7 +51,7 @@ func TestSessionTopicSurvivesReopenWithoutOverwritingPresentation(t *testing.T) 
 	path := filepath.Join(t.TempDir(), "state.json")
 	store := NewStore(path)
 	ctx := t.Context()
-	if err := store.EnsureWorkspace(ctx, Workspace{ID: "global", Root: "/global"}); err != nil {
+	if err := store.EnsureWorkspace(ctx, Workspace{ID: "global", Root: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.AttachSession(ctx, "", "global", "session", ""); err != nil {
@@ -301,7 +301,13 @@ func TestRestoreOperationCommitClearsLegacyPreparedPurge(t *testing.T) {
 
 func TestV2UpgradePreservesV1EvidenceAndUnknownFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "workspace-state-v1.json")
+	root := t.TempDir()
+	rootJSON, err := json.Marshal(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	original := []byte(`{"version":1,"generation":7,"workspaceIds":["global"],"workspaces":{"global":{"id":"global","root":"/global","title":"Mine","visible":false,"sessionIds":["old"],"future":{"nested":42}}},"archivedSessionIds":["old"],"pendingCreates":{"reserved":{"operationId":"op","workspaceId":"global","sessionId":"reserved","future":true}},"futureRoot":{"keep":true}}`)
+	original = []byte(strings.ReplaceAll(string(original), `"/global"`, string(rootJSON)))
 	if err := os.WriteFile(path, original, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +347,7 @@ func TestV2UpgradePreservesV1EvidenceAndUnknownFields(t *testing.T) {
 	if len(state.ArchivedSessionIDs) != 0 || !state.Workspaces["global"].Visible {
 		t.Fatal("restore did not publish visible membership")
 	}
-	if err := store.EnsureWorkspace(t.Context(), Workspace{ID: "global", Root: "/global", Title: "Overwrite", Visible: false}); err != nil {
+	if err := store.EnsureWorkspace(t.Context(), Workspace{ID: "global", Root: root, Title: "Overwrite", Visible: false}); err != nil {
 		t.Fatal(err)
 	}
 	state, _ = store.Load(t.Context())
@@ -371,7 +377,7 @@ func TestV2BackupFailureLeavesV1Untouched(t *testing.T) {
 
 func TestV2RecoveryCommitIsAtomicAndIdempotent(t *testing.T) {
 	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
-	if err := store.EnsureWorkspace(t.Context(), Workspace{ID: "global", Root: "/global"}); err != nil {
+	if err := store.EnsureWorkspace(t.Context(), Workspace{ID: "global", Root: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 	entry := RecoveryEntry{ID: "entry", SourceKey: "source", Status: "pending", Format: "legacy-trash"}

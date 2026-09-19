@@ -135,11 +135,21 @@ func resolvePhysicalPath(access string, followLeaf bool) (string, error) {
 }
 
 func resolveThroughExistingAncestor(path string) (string, error) {
+	return resolveThroughExistingAncestorWith(path, filepath.EvalSymlinks)
+}
+
+func resolveThroughExistingAncestorWith(path string, evalSymlinks func(string) (string, error)) (string, error) {
 	current := filepath.Clean(path)
 	missing := make([]string, 0, 4)
 	for {
-		resolved, err := filepath.EvalSymlinks(current)
+		// Inspect existence before resolving links. A missing entry may be
+		// created by another lock contender; that is not a dangling link.
+		_, err := os.Lstat(current)
 		if err == nil {
+			resolved, resolveErr := evalSymlinks(current)
+			if resolveErr != nil {
+				return "", classify("physical", current, resolveErr)
+			}
 			for _, part := range slices.Backward(missing) {
 				resolved = filepath.Join(resolved, part)
 			}
@@ -147,11 +157,6 @@ func resolveThroughExistingAncestor(path string) (string, error) {
 		}
 		if !os.IsNotExist(err) {
 			return "", classify("physical", current, err)
-		}
-		if _, lstatErr := os.Lstat(current); lstatErr == nil {
-			return "", &Error{Kind: ErrorUnavailable, Stage: "physical", Path: current, Err: err}
-		} else if !os.IsNotExist(lstatErr) {
-			return "", classify("physical", current, lstatErr)
 		}
 		parent := filepath.Dir(current)
 		if parent == current {
