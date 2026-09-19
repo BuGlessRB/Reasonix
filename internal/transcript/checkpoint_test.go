@@ -16,7 +16,7 @@ func TestRestoreCheckpointRepairsLegacyMissingRecordIdentities(t *testing.T) {
 		},
 	}
 	want := []string{"view:checkpoint:7:0", "view:checkpoint:7:1", "m:answer", "tool:call"}
-	for attempt := 0; attempt < 2; attempt++ {
+	for range 2 {
 		projection, err := RestoreCheckpoint(state, testIdentity)
 		if err != nil {
 			t.Fatal(err)
