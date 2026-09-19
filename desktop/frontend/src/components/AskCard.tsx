@@ -3,6 +3,7 @@ import { useT } from "../lib/i18n";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X } from "lucide-react";
 import type { QuestionAnswer, WireAsk, WireAskQuestion } from "../lib/types";
 import { createInteractionDraftStore } from "../lib/interactionDraftStore";
+import { usePromptStop } from "../lib/usePromptStop";
 import {
   DecisionConfirmBar,
   PromptAction,
@@ -41,7 +42,7 @@ type AskCardProps = {
   onAnswer: (id: string, answers: QuestionAnswer[]) => void | Promise<void>;
   onDismiss?: () => void | Promise<void>;
   draftScope: string;
-  onStop: () => void;
+  onStop: () => void | Promise<void>;
 };
 
 export function AskCard(props: AskCardProps) {
@@ -64,7 +65,10 @@ function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draft
   const [selectedIndex, setSelectedIndex] = useState(() => readAskDraft(draftKey)?.selectedIndex ?? 0);
   const [expandedDescriptionId, setExpandedDescriptionId] = useState<string | null>(null);
   const [descriptionTruncated, setDescriptionTruncated] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [answerPending, setSubmitting] = useState(false);
+  const { stopping, stopFailed, stopTask: stopAsk } = usePromptStop(() =>
+    Promise.resolve(onStop()).then(() => clearAskDraft(draftKey)));
+  const submitting = answerPending || stopping;
   // A newly delivered Ask always starts expanded, matching harness. Collapse
   // is presentation state and must not leak from an earlier request.
   const [collapsed, setCollapsed] = useState(false);
@@ -180,11 +184,6 @@ function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draft
   const goBack = () => {
     if (submitting) return;
     setActive((i) => Math.max(0, i - 1));
-  };
-
-  const stopAsk = () => {
-    clearAskDraft(draftKey);
-    onStop();
   };
 
   const skipCurrentQuestion = () => {
@@ -353,7 +352,7 @@ function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draft
           >
             {collapsed ? <ChevronUp size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}
           </PromptHeaderAction>
-          <PromptHeaderAction onClick={stopAsk} ariaLabel={t("decision.stopTask")}>
+          <PromptHeaderAction onClick={stopAsk} ariaLabel={t("decision.stopTask")} disabled={stopping}>
             <X size={16} aria-hidden="true" />
           </PromptHeaderAction>
         </>
@@ -426,6 +425,7 @@ function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draft
       }
       note={
         <>
+          {stopFailed && <p role="alert">{t("approval.submitFailed")}</p>}
           {selectedDescriptionId && descriptionTruncated && (
             <PromptDescriptionDisclosure
               descriptionId={`${selectedDescriptionId}-detail`}

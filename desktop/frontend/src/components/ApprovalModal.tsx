@@ -21,6 +21,7 @@ import { WriteAccessApprovalDetails, writeAccessDecisionActions, type DecisionAc
 import { RetiredRecoveryApproval } from "./RetiredRecoveryApproval";
 import type { ApprovalModalProps } from "./approvalTypes";
 import { approvalToolLabel } from "./approvalToolLabel";
+import { usePromptStop } from "../lib/usePromptStop";
 export { approvalToolLabel } from "./approvalToolLabel";
 
 function requiresFreshHumanApproval(tool: string): boolean {
@@ -255,9 +256,8 @@ function InteractiveApprovalModal({
   const [recoveryGuidanceText, setRecoveryGuidanceText] = useState("");
   const [grantSimilarForTask, setGrantSimilarForTask] = useState(false);
   const [answerPending, setSubmitting] = useState(false);
-  const [stopping, setStopping] = useState(false);
+  const { stopping, stopFailed, stopTask } = usePromptStop(onStop);
   const [submitFailed, setSubmitFailed] = useState(false);
-  const stopPendingRef = useRef(false);
   const submitting = answerPending || stopping;
   const instanceId = useId();
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -296,19 +296,6 @@ function InteractiveApprovalModal({
     const el = shelfRef.current;
     if (el) animateElementExit(el, { opacity: 0, y: 8, duration: DUR_FAST, onComplete: () => undefined });
   };
-
-  // Cancellation has its own lane: an unanswered RPC cannot revoke Stop.
-  const stopTask = useCallback(() => {
-    if (stopPendingRef.current) return;
-    stopPendingRef.current = true;
-    setStopping(true);
-    setSubmitFailed(false);
-    void Promise.resolve().then(onStop).catch(() => {
-      stopPendingRef.current = false;
-      setStopping(false);
-      setSubmitFailed(true);
-    });
-  }, [onStop]);
 
   const resolveRecovery = useCallback(
     (action: "continue" | "continue_task" | "revise", feedback?: string) => {
@@ -903,7 +890,7 @@ function InteractiveApprovalModal({
           )
         }
       >
-        {submitFailed && <p role="alert">{t("approval.submitFailed")}</p>}
+        {(submitFailed || stopFailed) && <p role="alert">{t("approval.submitFailed")}</p>}
         {(approvalModeRelaxed ||
           isRecoveryApproval ||
           (!isPlanApproval && !isRecoveryApproval && (subject || isWriteAccessApproval || (reasonOpen && reason))) ||

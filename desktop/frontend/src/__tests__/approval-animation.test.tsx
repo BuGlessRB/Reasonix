@@ -237,6 +237,30 @@ for (const viaKeyboard of [false, true]) {
   await cleanup(root, dom);
 }
 
+// Stop must capture its source during the click, before a committed-command
+// callback can observe navigation in a later microtask.
+{
+  const dom = installDom();
+  let active = "A";
+  const calls: string[] = [];
+  let reject!: (error: Error) => void;
+  const root = await renderToolApproval(() => {}, () => {
+    calls.push(active);
+    return new Promise<void>((_resolve, fail) => { reject = fail; });
+  });
+  const stop = () => document.querySelector('[aria-label="Stop task"]') as HTMLButtonElement;
+  await act(async () => { stop().click(); active = "B"; });
+  eq(calls[0], "A", "stop captures the clicked session before navigation");
+  await act(async () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  eq(calls.length, 1, "pending stop deduplicates keyboard cancellation");
+  await act(async () => { reject(new Error("stop failed")); });
+  ok(!stop().disabled, "failed stop releases the stop lock");
+  ok(Boolean(document.querySelector('[role="alert"]')), "failed stop is visible");
+  await cleanup(root, dom);
+}
+
 // Ask uses the same shelf and must retain the independent cancellation path.
 {
   const dom = installDom();
@@ -252,6 +276,28 @@ for (const viaKeyboard of [false, true]) {
   ok(!stop.disabled, "question stop stays enabled during answer submission");
   await act(async () => stop.click());
   eq(stops, 1, "question cancellation does not wait for its answer RPC");
+  await cleanup(root, dom);
+}
+
+// Stop during an Ask submission owns a separate lock: repeated clicks and
+// Escape must not dispatch duplicate cancellation requests.
+{
+  const dom = installDom();
+  let stops = 0;
+  const root = createRoot(document.getElementById("root")!);
+  await act(async () => root.render(<LocaleProvider><AskCard
+    ask={{ id: "ask", questions: [{ id: "q", prompt: "Choose", options: [{ label: "A" }] }] }}
+    draftScope="ask-stop-dedup" onAnswer={() => new Promise<void>(() => {})}
+    onStop={() => { stops++; return new Promise<void>(() => {}); }}
+  /></LocaleProvider>));
+  await confirmSelectedAction();
+  await act(async () => {
+    const stop = document.querySelector('[aria-label="Stop task"]') as HTMLButtonElement;
+    stop.click();
+    stop.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  eq(stops, 1, "question stop deduplicates clicks and Escape while pending");
   await cleanup(root, dom);
 }
 

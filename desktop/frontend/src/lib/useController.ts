@@ -3733,8 +3733,9 @@ export function useController() {
       if (result.warning) dispatchTo(tabId, { type: "local_notice", level: "warn", text: result.warning });
       return result;
     } catch (error) {
-      dispatchTo(tabId, { type: "local_notice", level: "warn", text: formatInboxCancelError(error, getLocale()) });
-      return { discardedItemIds: [] };
+      const message = formatInboxCancelError(error, getLocale());
+      dispatchTo(tabId, { type: "local_notice", level: "warn", text: message });
+      return { discardedItemIds: [], error: message };
     } finally {
       scheduleCancelReconcile(tabId, 0);
     }

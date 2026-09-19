@@ -194,7 +194,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
     extension: session.extensionSurface,
     tabs: session.tabBarCommands,
     clear: session.clearCommands,
-    onStop: () => void session.controlCommands.handleCancelActive(),
+    onStop: session.controlCommands.handleStopActive,
     cancelWorkspaceConflict: session.controlCommands.cancelWorkspaceConflict,
     onOpenLink: core.onOpenLink,
     onRevisionActiveChange: session.insertCommands.handleRevisionActiveChange,

@@ -193,7 +193,7 @@ export function RemoteSessionSurface({ tab, session, surfaceCommitToken, onSurfa
           draftScope={JSON.stringify([tab.remote.hostId, tab.sessionId ?? "", tab.sessionGeneration ?? 0, ask.runtimeEpoch ?? "", ask.turnId ?? "", ask.id])}
           onAnswer={(_id, answers) => runAction(() => resolvePrompt(ask, "ask", { questions: answers }), true)}
           onDismiss={() => runAction(() => resolvePrompt(ask, "ask", { questions: [] }), true)}
-          onStop={() => runAction(() => session.cancelTurn())}
+          onStop={() => runAction(() => session.cancelTurn(), true)}
         />
         </fieldset>
       ) : null}
