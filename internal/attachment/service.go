@@ -16,11 +16,15 @@ import (
 type Service struct {
 	store  *sessioncontent.Store
 	policy Policy
+	cache  *VariantCache
 	drafts *DraftStore
 }
 
-func NewService(store *sessioncontent.Store, _ ...any) *Service {
-	return &Service{store: store, policy: DefaultPolicy(), drafts: NewDraftStore()}
+func NewService(store *sessioncontent.Store, cache *VariantCache) *Service {
+	if cache == nil {
+		cache = NewVariantCache(DefaultCacheBytes, DefaultTransforms)
+	}
+	return &Service{store: store, policy: DefaultPolicy(), cache: cache, drafts: NewDraftStore()}
 }
 
 func (s *Service) WithPolicy(policy Policy) *Service {
@@ -44,6 +48,13 @@ func (s *Service) Drafts() *DraftStore {
 		return nil
 	}
 	return s.drafts
+}
+
+func (s *Service) Cache() *VariantCache {
+	if s == nil {
+		return nil
+	}
+	return s.cache
 }
 
 func (s *Service) PrepareBatch(ctx context.Context, sources []Source) (PreparedImages, error) {
@@ -92,6 +103,12 @@ func (s *Service) PrepareBatch(ctx context.Context, sources []Source) (PreparedI
 }
 
 func (s *Service) prepareSource(ctx context.Context, source Source, policy Policy) (PreparedImage, error) {
+	select {
+	case s.cache.transforms <- struct{}{}:
+		defer func() { <-s.cache.transforms }()
+	case <-ctx.Done():
+		return PreparedImage{}, canceledError(ctx.Err())
+	}
 	if err := ctx.Err(); err != nil {
 		return PreparedImage{}, canceledError(err)
 	}
