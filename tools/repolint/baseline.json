@@ -26,7 +26,7 @@
       "complexity": 56,
       "essay": 60,
       "file-size": 11111,
-      "function-size": 372,
+      "function-size": 368,
       "struct-state": 11
     },
     "desktop/app_test.go": {
