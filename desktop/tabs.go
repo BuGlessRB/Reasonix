@@ -6069,40 +6069,6 @@ func legacySessionScopeMatchesMigrationTarget(meta agent.BranchMeta, scope, work
 	return metaRoot == "" || sameProjectRoot(globalWorkspaceRoot(), metaRoot)
 }
 
-func cleanDesktopPath(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ""
-	}
-	if abs, err := filepath.Abs(path); err == nil {
-		path = abs
-	}
-	return filepath.Clean(path)
-}
-
-func sameDesktopPath(a, b string) bool {
-	a = cleanDesktopPath(a)
-	b = cleanDesktopPath(b)
-	if a == "" || b == "" {
-		return false
-	}
-	if os.PathSeparator == '\\' {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
-}
-
-// projectRootKey is the map-key form of a project root: cleaned, absolute,
-// and case-folded on Windows — the same key form agent.CanonicalSessionPath
-// uses for session paths, so equivalent spellings never split lookups.
-func projectRootKey(root string) string {
-	root = cleanDesktopPath(root)
-	if os.PathSeparator == '\\' {
-		return strings.ToLower(root)
-	}
-	return root
-}
-
 func restoreSessionTopicIndex(dir, sessionPath string) error {
 	sessionPath = strings.TrimSpace(sessionPath)
 	if sessionPath == "" {

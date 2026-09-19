@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"reasonix/internal/filelock"
 	"reasonix/internal/fileutil"
+	filelock "reasonix/internal/identitylock"
 )
 
 const (
@@ -27,6 +27,7 @@ var (
 	ErrWorkspaceNotFound  = errors.New("workspace is not registered")
 	ErrSessionNotFound    = errors.New("session is not registered")
 	ErrMutationConflict   = errors.New("workspace mutation conflicts with persisted state")
+	ErrAmbiguousIdentity  = errors.New("workspace path matches multiple persisted workspaces")
 )
 
 type Workspace struct {
@@ -103,28 +104,6 @@ func (s *Store) Load(ctx context.Context) (State, error) {
 		return State{}, err
 	}
 	return cloneState(state)
-}
-
-func (s *Store) EnsureWorkspace(ctx context.Context, workspace Workspace) error {
-	workspace.ID = strings.TrimSpace(workspace.ID)
-	if workspace.ID == "" {
-		return errors.New("workspace id is required")
-	}
-	return s.mutate(ctx, func(state *State) error {
-		now := time.Now().UTC()
-		current, exists := state.Workspaces[workspace.ID]
-		if exists {
-			if current.Root != workspace.Root {
-				return ErrMutationConflict
-			}
-			return nil
-		}
-		workspace.SessionIDs = []string{}
-		workspace.CreatedAt, workspace.UpdatedAt = now, now
-		state.Workspaces[workspace.ID] = workspace
-		state.WorkspaceIDs = append(state.WorkspaceIDs, workspace.ID)
-		return nil
-	})
 }
 
 func (s *Store) RenameWorkspace(ctx context.Context, workspaceID, title string) error {

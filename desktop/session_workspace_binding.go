@@ -52,7 +52,14 @@ func (a *App) canonicalSessionWorkspace(ctx context.Context, ref session.Session
 			owner = workspace
 		}
 	}
-	if owner.ID == "" || info.Origin == "" || strings.TrimSpace(info.CWD) == "" || !sameDesktopPath(info.CWD, owner.Root) {
+	if owner.ID == "" || info.Origin == "" || strings.TrimSpace(info.CWD) == "" {
+		return owner, errSessionWorkspaceConflict
+	}
+	same, identityErr := sameDesktopPathStrict(info.CWD, owner.Root)
+	if identityErr != nil {
+		return owner, identityErr
+	}
+	if !same {
 		return owner, errSessionWorkspaceConflict
 	}
 	return owner, nil
@@ -69,10 +76,11 @@ func canonicalWorkspaceChanged(snap tabRuntimeSnapshot, workspace workspacestate
 	return snap.scope != canonicalWorkspaceScope(workspace) || !sameDesktopPath(desktopWorkspaceRoot(snap.scope, snap.workspaceRoot), workspace.Root)
 }
 
-// The caller holds App.mu and publishes the session/controller in this same
-// critical section. Project-derived tab state cannot survive a project move.
-func applyCanonicalWorkspaceLocked(tab *WorkspaceTab, workspace workspacestate.Workspace) {
-	if canonicalWorkspaceChanged(snapshotTabRuntimeLocked(tab), workspace) {
+// The caller resolves workspaceChanged before taking App.mu, then publishes
+// the session/controller in the same critical section. Path identity resolution
+// may touch the filesystem and must never run while App.mu is held.
+func applyCanonicalWorkspaceLocked(tab *WorkspaceTab, workspace workspacestate.Workspace, workspaceChanged bool) {
+	if workspaceChanged {
 		tab.TopicID, tab.TopicTitle, tab.topicTitleSource = "", "", ""
 		tab.setPinnedFilesState(nil, nil)
 	}
@@ -100,12 +108,13 @@ func (a *App) commitCanonicalSessionBinding(tab *WorkspaceTab, ctrl control.Sess
 	if info, err := a.desktopSessionService("").Query().Stat(a.bootContext(), ref); err == nil && info.MetadataStatus == session.MetadataReady && (info.TitleSequence > 0 || info.Title != "") {
 		topicTitle = info.Title
 	}
+	workspaceChanged := canonicalWorkspaceChanged(a.tabRuntimeSnapshot(tab), workspace)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if tab.removed || a.tabs[tab.ID] != tab || tab.Ctrl != ctrl || (navigation != 0 && a.desktopSessions.navigationSeq.Load() != navigation) {
 		return errSessionNavigationSuperseded
 	}
-	applyCanonicalWorkspaceLocked(tab, workspace)
+	applyCanonicalWorkspaceLocked(tab, workspace, workspaceChanged)
 	tab.SessionID, tab.SessionPath = ref.SessionID, ""
 	tab.TopicID, tab.TopicTitle = topicID, topicTitle
 	tab.topicTitleSource = ""
@@ -136,12 +145,13 @@ func (a *App) reconcileCanonicalTabWorkspace(ctx context.Context, tab *Workspace
 	if err != nil {
 		return err
 	}
+	workspaceChanged := canonicalWorkspaceChanged(a.tabRuntimeSnapshot(tab), workspace)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.tabBuildSupersededLocked(tab, generation) || tab.SessionID != id || tab.Ctrl != nil {
 		return errSessionNavigationSuperseded
 	}
-	applyCanonicalWorkspaceLocked(tab, workspace)
+	applyCanonicalWorkspaceLocked(tab, workspace, workspaceChanged)
 	tab.SessionPath = ""
 	a.saveTabsLocked()
 	return nil

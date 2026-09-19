@@ -97,10 +97,10 @@ func (a *App) ensureDesktopWorkspace(ctx context.Context, scope, workspaceRoot s
 	if strings.TrimSpace(scope) == "project" {
 		title = workspaceName(workspaceRoot)
 	}
-	err := store.EnsureWorkspace(ctx, workspacestate.Workspace{
+	resolvedID, err := store.EnsureWorkspaceResolved(ctx, workspacestate.Workspace{
 		ID: id, Root: desktopWorkspaceRoot(scope, workspaceRoot), Title: title, Visible: true,
 	})
-	return id, err
+	return resolvedID, err
 }
 
 func (a *App) bindFreshDesktopSession(ctx context.Context, scope, workspaceRoot string, creator freshSessionCreator) (session.SessionRef, string, error) {
@@ -185,7 +185,11 @@ func (a *App) validateDesktopWorkspaceMembership(ctx context.Context, workspaceI
 	if info.Origin == "" || strings.TrimSpace(info.CWD) == "" {
 		return fmt.Errorf("desktop session %q has no immutable workspace header", ref.SessionID)
 	}
-	if !sameDesktopPath(info.CWD, workspace.Root) {
+	same, identityErr := sameDesktopPathStrict(info.CWD, workspace.Root)
+	if identityErr != nil {
+		return fmt.Errorf("resolve desktop session workspace identity: %w", identityErr)
+	}
+	if !same {
 		return errSessionWorkspaceConflict
 	}
 	return nil

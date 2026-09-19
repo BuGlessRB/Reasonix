@@ -210,7 +210,7 @@ func (a *App) replaceControllerForSessionOpenLocked(tab *WorkspaceTab, current c
 	if prepared.workspaceChanged && a.terminals != nil {
 		terminalSessions = a.terminals.detachForTab(tab.ID)
 	}
-	applyCanonicalWorkspaceLocked(tab, workspace)
+	applyCanonicalWorkspaceLocked(tab, workspace, prepared.workspaceChanged)
 	tab.SharedHostKey = snap.sharedHostKey
 	tab.Ctrl = candidate
 	tab.sink = snap.sink
