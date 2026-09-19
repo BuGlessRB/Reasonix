@@ -6403,6 +6403,21 @@
       ]
     }
   },
+  "ResolvePromptForSession": {
+    "domain": "desktop/decision_runtime_api.go",
+    "owner": "App.ResolvePromptForSession",
+    "sources": [
+      "desktop/decision_runtime_api.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ResolvePromptForSession",
+      "inputs": [
+        "target",
+        "answer"
+      ]
+    }
+  },
   "ResolvePromptForTab": {
     "domain": "desktop/decision_runtime_api.go",
     "owner": "App.ResolvePromptForTab",
@@ -6520,6 +6535,21 @@
         "callID",
         "action",
         "feedback"
+      ]
+    }
+  },
+  "ResolveRemoteTabPromptExact": {
+    "domain": "desktop/remote_tab_exact_interactions.go",
+    "owner": "App.ResolveRemoteTabPromptExact",
+    "sources": [
+      "desktop/remote_tab_exact_interactions.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ResolveRemoteTabPromptExact",
+      "inputs": [
+        "target",
+        "answer"
       ]
     }
   },
@@ -9624,6 +9654,21 @@
       ]
     }
   },
+  "SubmitExtensionFormExact": {
+    "domain": "desktop/extensions_app.go",
+    "owner": "App.SubmitExtensionFormExact",
+    "sources": [
+      "desktop/extensions_app.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SubmitExtensionFormExact",
+      "inputs": [
+        "target",
+        "values"
+      ]
+    }
+  },
   "SubmitInitialGoalToTab": {
     "domain": "desktop/app.go",
     "owner": "App.SubmitInitialGoalToTab",
@@ -9728,6 +9773,21 @@
         "tabID",
         "pluginID",
         "surfaceID",
+        "values"
+      ]
+    }
+  },
+  "SubmitRemoteTabExtensionFormExact": {
+    "domain": "desktop/remote_tab_exact_interactions.go",
+    "owner": "App.SubmitRemoteTabExtensionFormExact",
+    "sources": [
+      "desktop/remote_tab_exact_interactions.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SubmitRemoteTabExtensionFormExact",
+      "inputs": [
+        "target",
         "values"
       ]
     }

@@ -3,7 +3,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, syml
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { collect, pack, platforms, releaseIdentity } from "./desktop-release-artifacts.mjs";
+import { collect, pack, platforms, releaseIdentity, verifyBundle } from "./desktop-release-artifacts.mjs";
 
 const env = {
   RELEASE_SOURCE_SHA: "a".repeat(40), RELEASE_CONTROL_SHA: "b".repeat(40),
@@ -58,6 +58,19 @@ test("another run, future attempt and missing identity cannot be reused", () => 
   }
 });
 
+test("a sealed candidate may be collected in a later publisher run", t => {
+  const f = fixture(t);
+  const reused = releaseIdentity({
+    ...env,
+    GITHUB_RUN_ID: "999",
+    GITHUB_RUN_ATTEMPT: "1",
+    RELEASE_PRODUCER_RUN_ID: "123",
+    RELEASE_PRODUCER_RUN_ATTEMPT: "2",
+  });
+  collect(f.bundles, f.target, reused, "2");
+  assert.equal(readFileSync(path.join(f.target, `${platforms[0]}.zip`), "utf8"), `signed:${platforms[0]}`);
+});
+
 for (const field of ["sourceSHA", "controlSHA", "tag", "version", "channel", "signingFingerprint", "prefix"]) {
   test(`reject mismatched ${field} before staging publication`, t => {
     const f = fixture(t);
@@ -97,6 +110,14 @@ test("a failed platform can be replaced on retry while successful platforms reta
   assert.throws(() => collect(f.bundles, f.target, identity, "1"), /producer attempt/);
   collect(f.bundles, f.target, identity, "2");
   assert.equal(readFileSync(path.join(f.target, `${platforms[0]}.zip`), "utf8"), `signed:${platforms[0]}`);
+});
+
+test("a later attempt can verify and reuse one completed platform bundle", t => {
+  const f = fixture(t);
+  const bundle = path.join(f.bundles, `${identity.prefix}-windows-amd64`);
+  assert.equal(verifyBundle(bundle, "windows-amd64", identity, "2").manifest.buildAttempt, "1");
+  writeFileSync(path.join(bundle, "files", "windows-amd64.zip"), "tampered");
+  assert.throws(() => verifyBundle(bundle, "windows-amd64", identity, "2"), /digest mismatch/);
 });
 
 test("platform bundles cannot overwrite each other's filenames", t => {
