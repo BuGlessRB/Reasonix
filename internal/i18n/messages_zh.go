@@ -70,6 +70,7 @@ var Chinese = Messages{
 	},
 	NoSessionToResume:            "没有可恢复的会话 — 用 `reasonix` 开一个新的",
 	NoSessionToResumeStartingNew: "没有可恢复的会话 — 将开始一个新会话",
+	MigratedLegacySessionsFmt:    "已将 %d 个旧格式会话迁移到当前会话格式",
 	ResumeRequiresTTY:            "--resume 需要交互式终端；用 --continue 直接恢复最近一次",
 	PickSessionLabel:             "恢复哪个会话？",
 

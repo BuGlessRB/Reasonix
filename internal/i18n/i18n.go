@@ -86,6 +86,7 @@ type Messages struct {
 	ReceiptGapKinds              map[string]string
 	NoSessionToResume            string // shown when --continue / --resume finds nothing
 	NoSessionToResumeStartingNew string // shown when --continue finds nothing and a fresh session starts
+	MigratedLegacySessionsFmt    string // one-time startup report after migrating pre-v4 sessions
 	ResumeRequiresTTY            string // shown when --resume runs piped instead of on a terminal
 	PickSessionLabel             string // header on the --resume picker
 

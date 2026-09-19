@@ -69,6 +69,7 @@ var English = Messages{
 	},
 	NoSessionToResume:            "no saved session to resume — start a new one with `reasonix`",
 	NoSessionToResumeStartingNew: "no saved session to resume — starting a new session",
+	MigratedLegacySessionsFmt:    "migrated %d legacy session(s) into the current session format",
 	ResumeRequiresTTY:            "--resume needs an interactive terminal; pass --continue for the most recent session",
 	PickSessionLabel:             "Resume which session?",
 
