@@ -3,6 +3,8 @@ package sessioninbox
 import (
 	"errors"
 	"time"
+
+	"reasonix/internal/attachment"
 )
 
 // SchemaVersion is the on-disk format version. Unknown higher versions load
@@ -130,20 +132,23 @@ type PromptEnvelope struct {
 	SubmitText  string `json:"submitText"`
 	// Invocation is retained for schema-v1 compatibility. New writers use
 	// Invocations so multiple rich-composer entities preserve visual order.
-	Invocation  *StructuredInvocation  `json:"invocation,omitempty"`
-	Invocations []StructuredInvocation `json:"invocations,omitempty"`
-	Format      string                 `json:"format,omitempty"`
-	Attachments []string               `json:"attachments,omitempty"`
-	Refs        []RefSnapshot          `json:"refs,omitempty"`
+	Invocation           *StructuredInvocation  `json:"invocation,omitempty"`
+	Invocations          []StructuredInvocation `json:"invocations,omitempty"`
+	Format               string                 `json:"format,omitempty"`
+	Attachments          []string               `json:"attachments,omitempty"`
+	AttachmentIdentities []string               `json:"attachmentIdentities,omitempty"`
+	Refs                 []RefSnapshot          `json:"refs,omitempty"`
 	// FrozenRefBlock is the exact typed reference context rendered at enqueue.
 	// FrozenImages contains already-authorized data URLs for direct image input.
-	FrozenRefBlock  string            `json:"frozenRefBlock,omitempty"`
-	FrozenImages    []string          `json:"frozenImages,omitempty"`
-	ReferenceErrors []string          `json:"referenceErrors,omitempty"`
-	ExplicitRefs    []string          `json:"explicitRefs,omitempty"`
-	Idempotency     string            `json:"idempotencyKey,omitempty"`
-	Source          string            `json:"source,omitempty"`
-	Extra           map[string]string `json:"extra,omitempty"`
+	FrozenRefBlock  string                  `json:"frozenRefBlock,omitempty"`
+	FrozenImages    []string                `json:"frozenImages,omitempty"`
+	ImageInputs     []attachment.ImageInput `json:"imageInputs,omitempty"`
+	ImageSourceRefs map[string]string       `json:"imageSourceRefs,omitempty"`
+	ReferenceErrors []string                `json:"referenceErrors,omitempty"`
+	ExplicitRefs    []string                `json:"explicitRefs,omitempty"`
+	Idempotency     string                  `json:"idempotencyKey,omitempty"`
+	Source          string                  `json:"source,omitempty"`
+	Extra           map[string]string       `json:"extra,omitempty"`
 }
 
 // Capacity describes current usage against limits.
