@@ -72,7 +72,7 @@ func TestWindowsWorkspaceWriteBackgroundHTTPJobLifecycle(t *testing.T) {
 	}
 
 	ready := regexp.MustCompile(`READY\s+(\d+)`)
-	var output string
+	var output strings.Builder
 	deadline := time.Now().Add(15 * time.Second)
 	port := 0
 	for time.Now().Before(deadline) {
@@ -80,15 +80,15 @@ func TestWindowsWorkspaceWriteBackgroundHTTPJobLifecycle(t *testing.T) {
 		if !found {
 			t.Fatalf("job %q disappeared", jobID)
 		}
-		output += chunk
-		if match := ready.FindStringSubmatch(output); len(match) == 2 {
+		output.WriteString(chunk)
+		if match := ready.FindStringSubmatch(output.String()); len(match) == 2 {
 			port, _ = strconv.Atoi(match[1])
 			break
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
 	if port == 0 {
-		t.Fatalf("background service never became ready: %q", output)
+		t.Fatalf("background service never became ready: %q", output.String())
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/", port)
 	client := &http.Client{Timeout: 2 * time.Second}
