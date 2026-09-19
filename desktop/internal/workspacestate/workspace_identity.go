@@ -94,11 +94,10 @@ func (s *Store) EnsureWorkspaceResolved(ctx context.Context, workspace Workspace
 			}
 			return nil
 		}
-		matches := make([]string, 0, 1)
 		if candidate.Key != "" {
-			matches, resolveErr = matchingWorkspaceIDs(*state, candidate)
-			if resolveErr != nil {
-				return resolveErr
+			matches, matchErr := matchingWorkspaceIDs(*state, candidate)
+			if matchErr != nil {
+				return matchErr
 			}
 			if len(matches) == 1 {
 				if err := revalidateCandidate(); err != nil {
