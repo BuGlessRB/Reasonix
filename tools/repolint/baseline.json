@@ -5,7 +5,7 @@
     "complexity": 1875,
     "essay": 1911,
     "file-size": 100051,
-    "function-size": 8012,
+    "function-size": 8013,
     "layering": 1,
     "marker": 0,
     "narrative": 63,
@@ -544,9 +544,9 @@
     },
     "internal/boot/boot.go": {
       "complexity": 257,
-      "essay": 78,
-      "file-size": 2042,
-      "function-size": 1716,
+      "essay": 79,
+      "file-size": 2043,
+      "function-size": 1717,
       "narrative": 3
     },
     "internal/boot/boot_test.go": {
@@ -1227,8 +1227,8 @@
     },
     "internal/provider/openai/openai.go": {
       "complexity": 53,
-      "essay": 25,
-      "file-size": 491,
+      "essay": 24,
+      "file-size": 490,
       "function-size": 185,
       "struct-state": 11
     },
