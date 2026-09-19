@@ -50,6 +50,13 @@ func (c *Controller) EnqueueInboxContext(ctx context.Context, req InboxRequest) 
 	for _, item := range req.Attachments {
 		env.AttachmentIdentities = append(env.AttachmentIdentities, item.ClientAttachmentID)
 	}
+	if len(req.Attachments) > 0 {
+		env.FingerprintVersion = 1
+		env.RequestFingerprint = inboxAttachmentFingerprint(req, env)
+	}
+	if receipt, found, err := st.LookupEnvelopeReceipt(req.Idempotency, env); found || err != nil {
+		return receipt, err
+	}
 	if err := c.freezeInboxEnvelopeReferences(ctx, &env, submit, req.FreezeRefs, req.Attachments...); err != nil {
 		return sessioninbox.InboxReceipt{}, err
 	}
