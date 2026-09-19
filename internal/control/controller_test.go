@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -2788,10 +2789,14 @@ func TestSubmitClearDiscardsCurrentContextWithoutSavingTranscript(t *testing.T) 
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old context"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
-	cleared := make(chan struct{})
+	clearResult := make(chan string, 1)
 	sink := event.FuncSink(func(e event.Event) {
-		if e.Kind == event.Notice && e.Text == "context cleared" {
-			close(cleared)
+		if e.Kind != event.Notice || (e.Text != "context cleared" && !strings.HasPrefix(e.Text, "clear context failed: ")) {
+			return
+		}
+		select {
+		case clearResult <- e.Text:
+		default:
 		}
 	})
 	c := newOwnedTestController(t, Options{Executor: exec, SystemPrompt: "sys", SessionDir: dir, SessionPath: path, Label: "test", Sink: sink})
@@ -2808,9 +2813,14 @@ func TestSubmitClearDiscardsCurrentContextWithoutSavingTranscript(t *testing.T) 
 
 	c.submit("/clear", "", "")
 	select {
-	case <-cleared:
+	case result := <-clearResult:
+		if result != "context cleared" {
+			t.Fatal(result)
+		}
 	case <-time.After(30 * time.Second):
-		t.Fatal("/clear did not finish")
+		stack := make([]byte, 2<<20)
+		n := runtime.Stack(stack, true)
+		t.Fatalf("/clear did not finish\n%s", stack[:n])
 	}
 	if c.SessionPath() == path {
 		t.Fatal("/clear did not rotate to a fresh session path")
