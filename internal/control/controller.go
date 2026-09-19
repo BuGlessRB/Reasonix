@@ -1438,6 +1438,12 @@ func (c *Controller) SubmitUserTurn(input, display string) {
 }
 
 func (c *Controller) submit(input, display, editedOriginal string) {
+	if isSessionManagementSubmission(input) {
+		c.submissions.mu.Lock()
+		defer c.releaseSubmissionAdmission()
+		c.submitLocked(input, display, editedOriginal, turnAdmission{})
+		return
+	}
 	_, _ = c.submitIdentifiedWithSetup(SubmissionRequest{Input: input, Display: display, Original: editedOriginal}, nil, func(admission turnAdmission) {
 		c.submitLocked(input, display, editedOriginal, admission)
 	})
@@ -1468,6 +1474,12 @@ func (c *Controller) submitHTTP(input, display string) {
 }
 
 func (c *Controller) submitHTTPWithFormat(input, display, format string) {
+	if isSessionManagementSubmission(input) {
+		c.submissions.mu.Lock()
+		defer c.releaseSubmissionAdmission()
+		c.submitHTTPWithFormatLocked(input, display, format, turnAdmission{})
+		return
+	}
 	_, _ = c.submitIdentifiedWithSetup(SubmissionRequest{Input: input, Display: display, HTTP: true, Format: format}, nil, func(admission turnAdmission) {
 		c.submitHTTPWithFormatLocked(input, display, format, admission)
 	})
