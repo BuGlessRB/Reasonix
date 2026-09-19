@@ -184,6 +184,25 @@ for (const remote of [false, true]) test(`${remote ? "remote" : "local"} followe
   } finally { follower.stop(); getTranscriptStore().evictTab(tab); }
 });
 
+test("canonical tool history keeps its message identity when a tool call id is also present", async () => {
+  const tab = "canonical-tool-identity", path = `/session/${tab}`;
+  const response = initial(tab);
+  response.history!.messages = [{
+    messageId: "tool-message", position: 0, version: 1, role: "tool", eventSequence: 4, visibleTurn: 1,
+    preview: "result", inline: { id: "tool-message", role: "tool", tool_call_id: "older-call", name: "read_file", content: "result" },
+  }];
+  commands.TranscriptFollowForTab = (_tab: string, request: FollowRequest) => Promise.resolve(request.close
+    ? { protocolVersion: 2, subscription: tab, changes: [], resetRequired: false }
+    : response);
+  let state = initialState;
+  const follower = new TranscriptSessionFollower(tab, path, false, action => { state = reducer(state, action); });
+  try {
+    await follower.start();
+    assert.ok(getTranscriptStore().peek(tab, path)?.items.some(item => item.kind === "tool" && item.id === "older-call"));
+    assert.ok(state.items.some(item => item.kind === "tool" && item.id === "older-call"));
+  } finally { follower.stop(); getTranscriptStore().evictTab(tab); }
+});
+
 for (const remote of [false, true]) test(`${remote ? "remote" : "local"} malformed snapshot leaves the resident store unchanged`, async () => {
   const tab = `invalid-record-${remote}`, path = `/session/${tab}`;
   getTranscriptStore().installSlice(tab, path, {

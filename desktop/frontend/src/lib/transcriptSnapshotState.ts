@@ -13,15 +13,15 @@ export function snapshotRecords(snapshot: TranscriptSnapshot): TranscriptRecord[
     if (!Number.isSafeInteger(record.order) || record.order < 0 || record.order >= snapshot.totalRecords) {
       throw new Error("invalid transcript snapshot record identity");
     }
-    const derived = record.message.role === "tool" && record.message.toolCallId ? `tool:${record.message.toolCallId}`
-      : record.message.messageId ? `m:${record.message.messageId}` : undefined;
+    const derived = record.message.messageId ? `m:${record.message.messageId}`
+      : record.message.role === "tool" && record.message.toolCallId ? `tool:${record.message.toolCallId}` : undefined;
     const referencedID = record.refs.find(ref => ref.recordId)?.recordId;
     let id = record.id || record.message.recordId || derived || referencedID;
     if (!id) {
       if (record.refs.length > 0) throw new Error("transcript snapshot content identity missing");
       id = `view:legacy:${snapshot.snapshotId || `${snapshot.identity.runtimeEpoch}:${snapshot.projectionRevision}`}:${record.order}`;
     }
-    if ((record.message.recordId && record.message.recordId !== id) || (derived && derived !== id)) {
+    if (record.message.recordId && record.message.recordId !== id) {
       throw new Error("transcript snapshot record identity mismatch");
     }
     if (record.refs.some(ref => ref.recordId !== id)) throw new Error("transcript snapshot content identity mismatch");

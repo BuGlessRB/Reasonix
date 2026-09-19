@@ -117,16 +117,14 @@ export class TranscriptSessionFollowerRuntime {
   }
 
   private entry(message: Message | HistoryMessage, outerRecordId?: string): HistoryEntry {
-    const derived = message.role === "tool" && message.toolCallId ? `tool:${message.toolCallId}`
-      : message.messageId ? `m:${message.messageId}` : undefined;
-    if (message.recordId && derived && message.recordId !== derived) {
-      throw new Error("transcript message identity mismatch");
-    }
+    // Canonical history addresses every persisted message as m:<messageId>,
+    // including tool results. A snapshot may instead carry its projection
+    // identity (for example tool:<toolCallId>); that explicit identity is
+    // valid metadata, while messageId remains the merge key used by history.
+    const derived = message.messageId ? `m:${message.messageId}`
+      : message.role === "tool" && message.toolCallId ? `tool:${message.toolCallId}` : undefined;
     if (outerRecordId && message.recordId && outerRecordId !== message.recordId) {
       throw new Error("transcript snapshot record identity mismatch");
-    }
-    if (outerRecordId && derived && outerRecordId !== derived) {
-      throw new Error("transcript snapshot message identity mismatch");
     }
     const entryId = derived ?? message.recordId ?? outerRecordId;
     if (!entryId) throw new Error("invalid transcript snapshot record identity");
