@@ -3140,11 +3140,13 @@ func (c *Controller) ClearSession() error {
 	// in between would resurrect the just-removed transcript, and one that
 	// overlapped the swap could pair the old path with the fresh session.
 	c.snapshotMu.Lock()
+	c.detachInboxForDiscard(oldPath)
 	destroy := c.BeginDestroySession(oldPath)
 	if !destroy.Async {
 		if err := removeSessionArtifacts(oldPath); err != nil {
 			destroy.Finish()
 			c.snapshotMu.Unlock()
+			c.rebindInbox()
 			return err
 		}
 		destroy.Finish()
@@ -3160,6 +3162,7 @@ func (c *Controller) ClearSession() error {
 			destroy.Finish()
 		}
 		c.snapshotMu.Unlock()
+		c.rebindInbox()
 		return fmt.Errorf("bind cleared session: %w", err)
 	}
 	c.hooks.SessionEnd(context.Background(), "clear")
