@@ -235,14 +235,14 @@ func (c *Controller) resolveImageInputsForRoute(ctx context.Context, inputs []at
 
 func (c *Controller) wireImageFromRefForRoute(ctx context.Context, ref attachment.AttachmentRef, route ImageRequestRoute) (string, error) {
 	svc := c.attachmentService()
-	raw, err := svc.ReadVerified(ctx, ref)
+	variant, err := svc.PrepareVariant(ctx, ref, attachment.VariantPolicyV1)
 	if err != nil {
 		return "", err
 	}
-	if len(raw) <= inlineImageLimit {
-		return attachment.DataURL(ref.MIME(), raw), nil
+	if len(variant.Bytes) <= inlineImageLimit {
+		return attachment.DataURL(variant.MIME, variant.Bytes), nil
 	}
-	id, err := uploadImageForRoute(ctx, route, ref.DisplayName, raw)
+	id, err := uploadImageForRoute(ctx, route, ref.DisplayName, variant.Bytes)
 	if err == nil {
 		return id, nil
 	}
@@ -252,10 +252,10 @@ func (c *Controller) wireImageFromRefForRoute(ctx context.Context, ref attachmen
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return "", err
 	}
-	if len(raw) > provider.MaxInlineImageBytes {
+	if len(variant.Bytes) > provider.MaxInlineImageBytes {
 		return "", err
 	}
-	return attachment.DataURL(ref.MIME(), raw), nil
+	return attachment.DataURL(variant.MIME, variant.Bytes), nil
 }
 
 func uploadImageForRoute(ctx context.Context, route ImageRequestRoute, filename string, data []byte) (string, error) {

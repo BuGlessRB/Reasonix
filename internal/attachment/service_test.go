@@ -2,6 +2,7 @@ package attachment
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"reasonix/internal/sessioncontent"
@@ -157,6 +159,108 @@ func TestDraftsCannotBeGuessedByDigest(t *testing.T) {
 	}
 }
 
+func TestPrepareVariantIsDeterministicAndRebuildsAfterEviction(t *testing.T) {
+	svc := testService(t)
+	raw := opaquePNG(t, 2000, 100)
+	prepared, err := svc.PrepareBatch(t.Context(), []Source{{Bytes: raw}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs, err := svc.CommitBatch(t.Context(), prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := svc.PrepareVariant(t.Context(), refs[0], VariantPolicyV1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Width != VariantMaxDim || first.MIME != "image/png" {
+		t.Fatalf("variant = %+v", first)
+	}
+	second, err := svc.PrepareVariant(t.Context(), refs[0], VariantPolicyV1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first.Bytes, second.Bytes) || first.Digest != second.Digest {
+		t.Fatal("variant bytes were not stable")
+	}
+	svc.Cache().remove(variantKey{digest: refs[0].Content.Digest, version: VariantPolicyV1, width: first.Width, height: first.Height, format: "png"})
+	rebuilt, err := svc.PrepareVariant(t.Context(), refs[0], VariantPolicyV1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first.Bytes, rebuilt.Bytes) {
+		t.Fatal("rebuilt variant diverged")
+	}
+}
+
+func TestPrepareVariantCacheHitProbesAndReplacementRevalidatesOriginal(t *testing.T) {
+	svc := testService(t)
+	raw := opaquePNG(t, 2000, 100)
+	prepared, err := svc.PrepareBatch(t.Context(), []Source{{DisplayName: "original.png", Bytes: raw}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs, err := svc.CommitBatch(t.Context(), prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := refs[0]
+	if _, err = svc.PrepareVariant(t.Context(), ref, VariantPolicyV1); err != nil {
+		t.Fatal(err)
+	}
+	objectPath := filepath.Join(svc.Store().Root(), "objects", ref.Content.Digest[:2], ref.Content.Digest[2:4], ref.Content.Digest)
+	backup := objectPath + ".verified"
+	if err = os.Rename(objectPath, backup); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.PrepareVariant(t.Context(), ref, VariantPolicyV1); err == nil {
+		t.Fatal("cache hit bypassed the bounded original-object probe")
+	}
+	corrupt := bytes.Repeat([]byte{'x'}, len(raw))
+	if err = os.WriteFile(objectPath, corrupt, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.PrepareVariant(t.Context(), ref, VariantPolicyV1); err == nil {
+		t.Fatal("replacement object reused a variant without full validation")
+	}
+	if err = os.Remove(objectPath); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Rename(backup, objectPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.PrepareVariant(t.Context(), ref, VariantPolicyV1); err != nil {
+		t.Fatalf("restored original did not rebuild the variant: %v", err)
+	}
+}
+
+func TestVariantCancelIsolatesWaiters(t *testing.T) {
+	cache := NewVariantCache(DefaultCacheBytes, 1)
+	raw := opaquePNG(t, 1800, 1800)
+	ref := AttachmentRef{Version: RefVersion, Content: sessioncontent.Ref{Digest: strings.Repeat("a", 64), Bytes: int64(len(raw)), MediaType: "image/png"}, Width: 1800, Height: 1800}
+	ctx, cancel := context.WithCancel(t.Context())
+	var wg sync.WaitGroup
+	wg.Add(2)
+	var canceled, succeeded error
+	go func() {
+		defer wg.Done()
+		_, canceled = cache.Prepare(ctx, ref, raw, VariantPolicyV1)
+	}()
+	go func() {
+		defer wg.Done()
+		_, succeeded = cache.Prepare(t.Context(), ref, raw, VariantPolicyV1)
+	}()
+	cancel()
+	wg.Wait()
+	if canceled == nil || !Is(canceled, CodeCanceled) {
+		t.Fatalf("canceled waiter err = %v", canceled)
+	}
+	if succeeded != nil {
+		t.Fatalf("remaining waiter err = %v", succeeded)
+	}
+}
+
 func TestCollectJSONRefsFindsNestedAttachments(t *testing.T) {
 	ref := sessioncontent.Ref{Digest: strings.Repeat("ab", 32), Bytes: 12, IndexDigest: strings.Repeat("cd", 32)}
 	payload := jsonMarshal(map[string]any{
@@ -192,7 +296,7 @@ func TestViewImagePolicyRejectsOversize(t *testing.T) {
 
 func testService(t *testing.T) *Service {
 	t.Helper()
-	return NewService(sessioncontent.New(t.TempDir()))
+	return NewService(sessioncontent.New(t.TempDir()), NewVariantCache(8<<20, 2))
 }
 
 func opaquePNG(t *testing.T, w, h int) []byte {

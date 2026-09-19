@@ -157,6 +157,13 @@ func TestPreparedAttachmentSurvivesWorkspaceFileDeletion(t *testing.T) {
 	if len(raw) == 0 {
 		t.Fatal("persisted original was empty")
 	}
+	variant, err := c.attachmentService().PrepareVariant(t.Context(), *prepared.inputs[0].Attachment, attachment.VariantPolicyV1)
+	if err != nil {
+		t.Fatalf("variant rebuild after workspace deletion: %v", err)
+	}
+	if len(variant.Bytes) == 0 {
+		t.Fatal("rebuilt variant was empty")
+	}
 }
 
 func TestExplicitImagePreparationIsIndependentOfToolApprovalMode(t *testing.T) {

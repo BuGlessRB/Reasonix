@@ -10,6 +10,8 @@ import (
 	"reasonix/internal/sessioncontent"
 )
 
+var hostVariantCache = attachment.NewVariantCache(attachment.DefaultCacheBytes, attachment.DefaultTransforms)
+
 type controllerAttachmentState struct {
 	attachments          atomic.Pointer[attachment.Service]
 	attachmentOwnerMu    sync.Mutex
@@ -60,7 +62,7 @@ func (c *Controller) bindAttachmentService() {
 	if current != nil && current.Store().Root() == content.Root() {
 		return
 	}
-	c.attachments.Store(attachment.NewService(content))
+	c.attachments.Store(attachment.NewService(content, hostVariantCache))
 }
 
 func (c *Controller) sessionContentStore() *sessioncontent.Store {
