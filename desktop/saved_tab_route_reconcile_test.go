@@ -97,7 +97,13 @@ func TestReconcileSavedTabsPreservesRealPseudoRouteArtifact(t *testing.T) {
 
 func TestPseudoRouteArtifactProbePreservesUnreadableResult(t *testing.T) {
 	want := errors.New("permission denied")
-	present, err := savedTabPseudoRouteArtifactsPresentWith(filepath.Join(t.TempDir(), "session-id:probe"), func(string) (os.FileInfo, error) {
+	path := filepath.Join(t.TempDir(), "session-id:probe")
+	if runtime.GOOS == "windows" {
+		// A pseudo-route file name is unrepresentable on Windows and is skipped
+		// before Lstat. Use a valid transcript spelling to exercise error flow.
+		path = filepath.Join(t.TempDir(), "probe.jsonl")
+	}
+	present, err := savedTabPseudoRouteArtifactsPresentWith(path, func(string) (os.FileInfo, error) {
 		return nil, want
 	})
 	if present || !errors.Is(err, want) {
