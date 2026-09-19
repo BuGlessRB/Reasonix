@@ -104,10 +104,10 @@ type Spec struct {
 // Enforce reports whether the spec asks for confinement.
 func (s Spec) Enforce() bool { return s.Mode == "enforce" }
 
-// UnavailableMessage explains why an enforced bash sandbox cannot run and gives
+// UnavailableMessage explains why an enforced shell sandbox cannot run and gives
 // the platform-specific remediation.
 func UnavailableMessage() string {
-	return "bash sandbox requested but unavailable on this host; refusing to run unconfined. " + UnavailableRemediation()
+	return "shell sandbox requested but unavailable on this host; refusing to run unconfined. " + UnavailableRemediation()
 }
 
 // UnavailableRemediation is split out so status surfaces can append the same

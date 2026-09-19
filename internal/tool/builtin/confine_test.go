@@ -412,7 +412,7 @@ func TestBashEnforceRejectsWhenSandboxUnavailable(t *testing.T) {
 	if err == nil {
 		t.Fatal("bash should reject enforce mode when the OS sandbox is unavailable")
 	}
-	if !strings.Contains(err.Error(), "bash sandbox requested but unavailable") {
+	if !strings.Contains(err.Error(), "shell sandbox requested but unavailable") {
 		t.Fatalf("error = %q, want sandbox unavailable", err)
 	}
 	if out != "" {

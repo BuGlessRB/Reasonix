@@ -2175,9 +2175,8 @@ func contractEntryNames(entries []tool.ContractEntry) []string {
 // unifiedBootToolNames is the provider-visible surface shared by every Agent
 // role setting under identical configuration (core tools + host-control tools).
 func unifiedBootToolNames() []string {
-	return []string{
+	names := []string{
 		"ask",
-		platformShellToolName(),
 		"compress",
 		"create_goal",
 		"edit_file",
@@ -2191,6 +2190,10 @@ func unifiedBootToolNames() []string {
 		"view_image",
 		"write_file",
 	}
+	if runtime.GOOS == "windows" {
+		return append(names[:7], append([]string{"pwsh"}, names[7:]...)...)
+	}
+	return append(names[:1], append([]string{"bash"}, names[1:]...)...)
 }
 
 func platformShellToolName() string {

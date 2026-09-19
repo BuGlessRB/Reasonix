@@ -746,9 +746,6 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if bashSpec.Mode == "enforce" && !sandbox.Available() {
 		fmt.Fprintln(stderr, "warning: "+sandbox.UnavailableMessage())
 	}
-	if autoShellPrefer(cfg.Tools.Shell.Prefer) && shell.Kind == sandbox.ShellPowerShell {
-		fmt.Fprintln(stderr, "warning: bash not found on PATH; the shell tool will run commands under Windows PowerShell. Install Git for Windows or WSL to use bash, or set [tools.shell] prefer=\"powershell\" to silence this.")
-	}
 	searchSpec := builtin.ResolveSearch(cfg.Tools.Search.Engine, cfg.Tools.Search.RgPath, stderr)
 	bashTimeout := time.Duration(cfg.BashTimeoutSeconds()) * time.Second
 	enabledBuiltins := cfg.Tools.Enabled
@@ -2794,14 +2791,6 @@ func applyDefaultMCPStartupTimeout(specs []plugin.Spec, timeout time.Duration) [
 		}
 	}
 	return out
-}
-
-// autoShellPrefer reports whether [tools.shell] left the interpreter to
-// auto-detection, so the "fell back to PowerShell" hint is suppressed once the
-// user has explicitly chosen a shell.
-func autoShellPrefer(prefer string) bool {
-	p := strings.ToLower(strings.TrimSpace(prefer))
-	return p == "" || p == "auto"
 }
 
 // MCPStartupNotice formats the warning shown when configured MCP servers failed
