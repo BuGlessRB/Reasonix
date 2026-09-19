@@ -7232,90 +7232,100 @@ func (a *App) tabSessionMetaSnapshotForCurrentSession(tab *WorkspaceTab) (tabSes
 	return a.tabSessionMetaSnapshot(tab, "", true)
 }
 
-func (a *App) tabSessionMetaSnapshot(tab *WorkspaceTab, requestedPath string, useCurrent bool) (tabSessionMetaSnapshot, bool, error) {
+type tabSessionMetaSource struct {
+	snapshot              tabSessionMetaSnapshot
+	ctrl                  control.SessionAPI
+	generation            uint64
+	sessionID, storedPath string
+	readOnly              bool
+}
+
+func (a *App) captureTabSessionMetaSource(tab *WorkspaceTab) (tabSessionMetaSource, bool) {
 	if tab == nil {
-		return tabSessionMetaSnapshot{}, false, nil
+		return tabSessionMetaSource{}, false
 	}
 	a.mu.RLock()
+	defer a.mu.RUnlock()
 	if tab.ID != "" && a.tabs[tab.ID] != tab {
-		a.mu.RUnlock()
-		return tabSessionMetaSnapshot{}, false, nil
+		return tabSessionMetaSource{}, false
 	}
-	readOnly := tab.ReadOnly
-	ctrl := tab.Ctrl
-	generation := tab.SessionGeneration
-	sessionID := strings.TrimSpace(tab.SessionID)
-	storedPath := strings.TrimSpace(tab.SessionPath)
-	scope := tab.Scope
-	workspaceRoot := tab.WorkspaceRoot
-	topicID := tab.TopicID
-	topicTitle := tab.TopicTitle
-	tokenMode := currentTabTokenMode(tab)
-	qualityFloor := control.QualityFloorStandard
-	mode := normalizeTabMode(tab.mode)
-	toolApprovalMode := normalizeToolApprovalMode(tab.toolApprovalMode)
-	goal := strings.TrimSpace(tab.goal)
-	a.mu.RUnlock()
-	if readOnly {
-		return tabSessionMetaSnapshot{}, false, nil
-	}
-	if sessionID != "" {
-		if err := session.ValidateSessionID(sessionID); err != nil {
-			return tabSessionMetaSnapshot{}, false, &sessionLocatorError{reason: "invalid_canonical_session_id"}
-		}
-		if requestedPath != "" {
-			locator := classifySessionLocator(requestedPath)
-			if locator.kind == sessionLocatorInvalid || locator.kind == sessionLocatorCanonical && locator.ref.SessionID != sessionID {
-				return tabSessionMetaSnapshot{}, false, &sessionLocatorError{reason: "session_identity_conflict"}
-			}
-		}
-		// Canonical session metadata belongs to the Session Service, workspace
-		// registry, and desktop-tabs.json. Never dual-write a legacy sidecar.
-		return tabSessionMetaSnapshot{}, false, nil
-	}
+	return tabSessionMetaSource{
+		ctrl:       tab.Ctrl,
+		generation: tab.SessionGeneration,
+		sessionID:  strings.TrimSpace(tab.SessionID),
+		storedPath: strings.TrimSpace(tab.SessionPath),
+		readOnly:   tab.ReadOnly,
+		snapshot: tabSessionMetaSnapshot{
+			scope: tab.Scope, workspaceRoot: tab.WorkspaceRoot,
+			topicID: tab.TopicID, topicTitle: tab.TopicTitle,
+			tokenMode: currentTabTokenMode(tab), qualityFloor: control.QualityFloorStandard,
+			mode: normalizeTabMode(tab.mode), toolApprovalMode: normalizeToolApprovalMode(tab.toolApprovalMode),
+			goal: strings.TrimSpace(tab.goal),
+		},
+	}, true
+}
 
-	ctrlPath := ""
-	ctrlDir := ""
-	activeWork := false
-	if ctrl != nil {
-		ctrlPath = strings.TrimSpace(ctrl.SessionPath())
-		if dir, ok := safeControllerSessionDir(ctrl); ok {
+func canonicalTabSessionMetaDisposition(sessionID, requestedPath string) (bool, error) {
+	if sessionID == "" {
+		return false, nil
+	}
+	if err := session.ValidateSessionID(sessionID); err != nil {
+		return false, &sessionLocatorError{reason: "invalid_canonical_session_id"}
+	}
+	if requestedPath != "" {
+		locator := classifySessionLocator(requestedPath)
+		if locator.kind == sessionLocatorInvalid || locator.kind == sessionLocatorCanonical && locator.ref.SessionID != sessionID {
+			return false, &sessionLocatorError{reason: "session_identity_conflict"}
+		}
+	}
+	// Canonical session metadata belongs to the Session Service, workspace
+	// registry, and desktop-tabs.json. Never dual-write a legacy sidecar.
+	return true, nil
+}
+
+func updateTabSessionMetaFromController(source *tabSessionMetaSource) (ctrlPath, ctrlDir string, activeWork bool) {
+	if source.ctrl != nil {
+		ctrlPath = strings.TrimSpace(source.ctrl.SessionPath())
+		if dir, ok := safeControllerSessionDir(source.ctrl); ok {
 			ctrlDir = strings.TrimSpace(dir)
 		}
-		status := ctrl.RuntimeStatus()
+		status := source.ctrl.RuntimeStatus()
 		activeWork = status.Running || status.PendingPrompt || status.BackgroundJobs > 0
-		mode = tabModeFromAxes(ctrl.PlanMode(), ctrl.AutoApproveTools())
-		toolApprovalMode = normalizeToolApprovalMode(ctrl.ToolApprovalMode())
-		if ctrl.GoalStatus() == control.GoalStatusRunning {
-			goal = strings.TrimSpace(ctrl.Goal())
+		source.snapshot.mode = tabModeFromAxes(source.ctrl.PlanMode(), source.ctrl.AutoApproveTools())
+		source.snapshot.toolApprovalMode = normalizeToolApprovalMode(source.ctrl.ToolApprovalMode())
+		if source.ctrl.GoalStatus() == control.GoalStatusRunning {
+			source.snapshot.goal = strings.TrimSpace(source.ctrl.Goal())
 		} else {
-			goal = ""
+			source.snapshot.goal = ""
 		}
 	}
+	return ctrlPath, ctrlDir, activeWork
+}
 
+func tabSessionMetaLegacyPath(source tabSessionMetaSource, requestedPath string, useCurrent bool, ctrlPath, ctrlDir string, activeWork bool) (legacySessionPath, bool, error) {
 	currentPath := strings.TrimSpace(requestedPath)
 	if useCurrent {
 		currentPath = ctrlPath
 		if currentPath == "" {
-			currentPath = storedPath
+			currentPath = source.storedPath
 		}
 	}
 	if currentPath == "" {
-		return tabSessionMetaSnapshot{}, false, nil
+		return "", false, nil
 	}
 	locator := classifySessionLocator(currentPath)
 	switch locator.kind {
 	case sessionLocatorCanonical:
-		return tabSessionMetaSnapshot{}, false, nil
+		return "", false, nil
 	case sessionLocatorInvalid:
-		return tabSessionMetaSnapshot{}, false, &sessionLocatorError{reason: locator.reason}
+		return "", false, &sessionLocatorError{reason: locator.reason}
 	case sessionLocatorEmpty:
-		return tabSessionMetaSnapshot{}, false, nil
+		return "", false, nil
 	}
 
 	sessionDir := desktopSessionDir("")
-	if workspaceRoot != "" {
-		sessionDir = desktopSessionDir(workspaceRoot)
+	if source.snapshot.workspaceRoot != "" {
+		sessionDir = desktopSessionDir(source.snapshot.workspaceRoot)
 	} else if ctrlDir != "" {
 		sessionDir = ctrlDir
 	}
@@ -7325,36 +7335,45 @@ func (a *App) tabSessionMetaSnapshot(tab *WorkspaceTab, requestedPath string, us
 			runtimeDir = ctrlDir
 		}
 	}
-	if topicID == "" && !activeWork && storedPath != "" && classifySessionLocator(storedPath).kind == sessionLocatorLegacy && sessionPathHasNoContent(sessionDir, storedPath) {
-		return tabSessionMetaSnapshot{}, false, nil
+	if source.snapshot.topicID == "" && !activeWork && source.storedPath != "" && classifySessionLocator(source.storedPath).kind == sessionLocatorLegacy && sessionPathHasNoContent(sessionDir, source.storedPath) {
+		return "", false, nil
 	}
 	path, err := tabSessionMetaPathForSession(runtimeDir, sessionDir, currentPath)
 	if err != nil {
-		return tabSessionMetaSnapshot{}, false, err
+		return "", false, err
 	}
+	return path, true, nil
+}
 
-	// Controller reads above are intentionally off App.mu. Fence the result
-	// before it can select a file target for a tab that has since switched.
+func (a *App) tabSessionMetaSourceCurrent(tab *WorkspaceTab, source tabSessionMetaSource) bool {
 	a.mu.RLock()
+	defer a.mu.RUnlock()
 	current := tab.ID == "" || a.tabs[tab.ID] == tab
-	unchanged := current && tab.Ctrl == ctrl && tab.SessionGeneration == generation &&
-		strings.TrimSpace(tab.SessionID) == sessionID && strings.TrimSpace(tab.SessionPath) == storedPath
-	a.mu.RUnlock()
-	if !unchanged {
+	return current && tab.Ctrl == source.ctrl && tab.SessionGeneration == source.generation &&
+		strings.TrimSpace(tab.SessionID) == source.sessionID && strings.TrimSpace(tab.SessionPath) == source.storedPath
+}
+
+func (a *App) tabSessionMetaSnapshot(tab *WorkspaceTab, requestedPath string, useCurrent bool) (tabSessionMetaSnapshot, bool, error) {
+	source, ok := a.captureTabSessionMetaSource(tab)
+	if !ok || source.readOnly {
 		return tabSessionMetaSnapshot{}, false, nil
 	}
-	return tabSessionMetaSnapshot{
-		path:             path,
-		scope:            scope,
-		workspaceRoot:    workspaceRoot,
-		topicID:          topicID,
-		topicTitle:       topicTitle,
-		tokenMode:        tokenMode,
-		qualityFloor:     qualityFloor,
-		mode:             mode,
-		toolApprovalMode: toolApprovalMode,
-		goal:             goal,
-	}, true, nil
+	canonical, err := canonicalTabSessionMetaDisposition(source.sessionID, requestedPath)
+	if err != nil || canonical {
+		return tabSessionMetaSnapshot{}, false, err
+	}
+	ctrlPath, ctrlDir, activeWork := updateTabSessionMetaFromController(&source)
+	path, ok, err := tabSessionMetaLegacyPath(source, requestedPath, useCurrent, ctrlPath, ctrlDir, activeWork)
+	if err != nil || !ok {
+		return tabSessionMetaSnapshot{}, false, err
+	}
+	// Controller reads above are intentionally off App.mu. Fence the result
+	// before it can select a file target for a tab that has since switched.
+	if !a.tabSessionMetaSourceCurrent(tab, source) {
+		return tabSessionMetaSnapshot{}, false, nil
+	}
+	source.snapshot.path = path
+	return source.snapshot, true, nil
 }
 
 func saveTabSessionMetaSnapshot(snap tabSessionMetaSnapshot) error {
