@@ -192,7 +192,7 @@ export function ApprovalModal(props: ApprovalModalProps) {
   const isHistoricalRecovery = props.approval.kind === "recovery" || Boolean(props.approval.recovery);
   if (isHistoricalRecovery) return <RetiredRecoveryApproval approval={props.approval} />;
   const { approval } = props;
-  const identity = JSON.stringify([props.tabId, props.workspaceScopeKey, approval.id, approval.kind,
+  const identity = JSON.stringify([props.tabId, approval.id, approval.kind,
     approval.turnId, approval.runtimeEpoch, approval.generation, approval.permissionRevision]);
   return <InteractiveApprovalModal key={identity} {...props} />;
 }
