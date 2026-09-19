@@ -4,10 +4,13 @@ import { buildHelloParams, describeHandshakeFailure, HANDSHAKE_CODES, HandshakeE
 import { RpcError } from "./rpc.js";
 
 const goodResult = {
-  protocolVersion: 3,
+  protocolVersion: 11,
   contractDigest: "sha256:abc",
   service: { version: "v1.30.0", channel: "stable", commit: "abc123", pid: 4242 },
   runtimeGeneration: "g-01J",
+  runId: "run-1",
+  incidentId: "incident-1",
+  diagnosticsEnabled: true,
   resources: { origin: "http://127.0.0.1:51234", token: "secret" },
   window: { width: 1280, height: 820, minWidth: 760, minHeight: 480, frameless: false, zoomFactor: 1 },
   instance: { identityVersion: 2, identityDigest: "sha256:def", legacyId: "com.reasonix.desktop.0123456789abcdef" },
@@ -15,7 +18,7 @@ const goodResult = {
 
 test("hello params carry the documented shape", () => {
   const params = buildHelloParams({
-    protocolVersion: 3,
+    protocolVersion: 11,
     contractDigest: "sha256:abc",
     version: "v1.30.0",
     channel: "stable",
@@ -28,7 +31,7 @@ test("hello params carry the documented shape", () => {
     dev: false,
   });
   assert.deepEqual(params, {
-    protocolVersion: 3,
+    protocolVersion: 11,
     contractDigest: "sha256:abc",
     build: { version: "v1.30.0", channel: "stable", commit: "abc123" },
     host: { name: "electron", version: "44.2.0", chrome: "152.0.0", platform: "darwin", arch: "arm64" },
@@ -47,7 +50,10 @@ test("a valid hello result is accepted and normalised", () => {
 });
 
 test("invalid hello results are rejected with a precise message", () => {
-  assert.throws(() => validateHelloResult({ ...goodResult, protocolVersion: 2 }), (error: unknown) => error instanceof HandshakeError && /protocolVersion 2/.test(error.message));
+  assert.throws(
+    () => validateHelloResult({ ...goodResult, protocolVersion: 2 }),
+    (error: unknown) => error instanceof HandshakeError && /protocolVersion 2/.test(error.message),
+  );
   assert.equal(validateHelloResult({ ...goodResult, protocolVersion: 4 }, 4).protocolVersion, 4, "the embedded contract selects the expected protocol");
   assert.throws(() => validateHelloResult({ ...goodResult, resources: { origin: "" } }), /resources\.origin/);
   assert.throws(() => validateHelloResult({ ...goodResult, window: undefined }), /result\.window must be an object/);
@@ -59,7 +65,10 @@ test("invalid hello results are rejected with a precise message", () => {
 
 test("optional saved position survives handshake including zero and negative origins", () => {
   assert.equal(validateHelloResult(goodResult).window.position, undefined);
-  for (const position of [{ x: 0, y: 0 }, { x: -1800, y: -900 }]) {
+  for (const position of [
+    { x: 0, y: 0 },
+    { x: -1800, y: -900 },
+  ]) {
     assert.deepEqual(validateHelloResult({ ...goodResult, window: { ...goodResult.window, position } }).window.position, position);
   }
   for (const position of [{ x: 1 }, { x: NaN, y: 0 }, { x: 0, y: Infinity }]) {

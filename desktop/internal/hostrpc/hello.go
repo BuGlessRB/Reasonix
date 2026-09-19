@@ -63,13 +63,16 @@ type HelloInstance struct {
 
 // HelloResult is the service's desktop/hello response.
 type HelloResult struct {
-	ProtocolVersion   int             `json:"protocolVersion"`
-	ContractDigest    string          `json:"contractDigest"`
-	Service           ServiceInfo     `json:"service"`
-	RuntimeGeneration string          `json:"runtimeGeneration"`
-	Resources         Resources       `json:"resources"`
-	Window            *WindowGeometry `json:"window,omitempty"`
-	Instance          *InstanceInfo   `json:"instance,omitempty"`
+	ProtocolVersion    int             `json:"protocolVersion"`
+	ContractDigest     string          `json:"contractDigest"`
+	Service            ServiceInfo     `json:"service"`
+	RuntimeGeneration  string          `json:"runtimeGeneration"`
+	Resources          Resources       `json:"resources"`
+	Window             *WindowGeometry `json:"window,omitempty"`
+	Instance           *InstanceInfo   `json:"instance,omitempty"`
+	RunID              string          `json:"runId,omitempty"`
+	IncidentID         string          `json:"incidentId,omitempty"`
+	DiagnosticsEnabled bool            `json:"diagnosticsEnabled"`
 }
 
 // InstanceInfo extends the handshake without invalidating older shells.
@@ -77,6 +80,27 @@ type InstanceInfo struct {
 	IdentityVersion int    `json:"identityVersion"`
 	IdentityDigest  string `json:"identityDigest"`
 	LegacyID        string `json:"legacyId"`
+}
+
+type ShutdownParams struct {
+	RequestID string `json:"requestId"`
+	Reason    string `json:"reason"`
+}
+
+type ShutdownStatusParams struct {
+	RequestID string `json:"requestId"`
+}
+
+type ShutdownResult struct {
+	RequestID string `json:"requestId"`
+	Reason    string `json:"reason"`
+	Phase     string `json:"phase"`
+	Outcome   string `json:"outcome"`
+	Completed bool   `json:"completed"`
+	Retryable bool   `json:"retryable"`
+	ErrorCode string `json:"errorCode,omitempty"`
+	Error     string `json:"error,omitempty"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // ServiceInfo is the service build plus its process id.

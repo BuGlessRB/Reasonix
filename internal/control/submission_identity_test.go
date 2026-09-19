@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -10,6 +11,24 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/session"
 )
+
+func TestLegacySubmissionReportsSynchronousAdmission(t *testing.T) {
+	for name, req := range map[string]SubmissionRequest{
+		"http":           {HTTP: true, Input: "hello"},
+		"retired action": {Action: FinalReadinessRecoveryAction, Input: "continue"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := newOwnedTestController(t, Options{Runner: noOpTurnRunner{}, Sink: event.Discard})
+			if _, err := c.SubmitIdentified(req); err != nil {
+				t.Fatal(err)
+			}
+			c.Close()
+			if _, err := c.SubmitIdentified(req); !errors.Is(err, ErrSubmissionNotAccepted) {
+				t.Fatalf("submission after close error = %v, want ErrSubmissionNotAccepted", err)
+			}
+		})
+	}
+}
 
 func TestShellSubmissionIsDurableBeforeCommandDispatchAndDeduplicated(t *testing.T) {
 	var ctrl *Controller

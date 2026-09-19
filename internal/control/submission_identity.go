@@ -112,7 +112,7 @@ func (c *Controller) SubmitIdentified(req SubmissionRequest) (session.Submission
 		switch {
 		case req.Action == ProtocolRecoveryAction:
 			c.submitProtocolRecoveryLocked(req.RecoveryID, req.Input)
-		case req.Action == "delivery-recovery":
+		case req.Action == "delivery-recovery" || req.Action == FinalReadinessRecoveryAction:
 			c.submitFinalReadinessRecoveryLocked(req.Display, req.Input)
 		case req.Action == "shell":
 			// TurnStarted persists the pending receipt synchronously before
@@ -136,7 +136,12 @@ func (c *Controller) submitIdentified(req SubmissionRequest, submit func()) (ses
 	}
 	store := c.sessionEventStore()
 	if req.ID == "" {
+		before, _, _ := c.currentTurnToken()
 		submit()
+		after, _, _ := c.currentTurnToken()
+		if after == before {
+			return session.SubmissionReceipt{}, errors.Join(ErrSubmissionNotAccepted, errors.New("submission was not admitted"))
+		}
 		return session.SubmissionReceipt{}, nil
 	}
 	if store == nil {

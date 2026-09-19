@@ -42,6 +42,7 @@ test("CI invokes every isolated group and both residual entrypoints", () => {
   assert.ok(isolated);
   const matrix = isolated.match(/group: \[([^\]]+)\]/)[1].split(",").map(value => value.trim());
   assert.deepEqual([...matrix, "control"].toSorted(), isolatedGroups.toSorted());
+  assert.match(isolated, /- name: test\n(?:        #.*\n)*        timeout-minutes: 15\n/);
   assert.match(isolated, /run: node scripts\/windows-go-tests\.mjs \$\{\{ matrix.group \}\}/);
   assert.match(isolated, /fail-fast: false/);
   assert.match(isolated, /actions\/setup-node@v7/);
