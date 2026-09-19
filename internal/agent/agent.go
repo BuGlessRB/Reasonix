@@ -1160,7 +1160,7 @@ func (a *Agent) Run(ctx context.Context, input string) (runErr error) {
 	a.steerMu.Unlock()
 
 	// Commit background-job evidence leases only after this turn delivers.
-	// wait/bash_output merge a finished background writer's receipts into the
+	// job_output (and replay-only wait/bash_output aliases) merges a finished background writer's receipts into the
 	// ledger provisionally; if the turn reaches a final answer (runErr == nil)
 	// the delivery gates have verified and reviewed those mutations, so the
 	// job's evidence can be permanently drained. A failed or cancelled turn
@@ -2012,7 +2012,7 @@ func truncateToolOutputFor(s, toolName, toolCallID string) (string, string) {
 	}
 	strategy := snipStrategy{head: 40, tail: 40, headChars: 8000, tailChars: 8000}
 	switch {
-	case toolName == "bash" || toolName == "shell" || strings.Contains(toolName, "bash"):
+	case tool.IsShellToolName(toolName) || strings.Contains(toolName, "bash"):
 		strategy = snipStrategy{head: 40, tail: 40, headChars: 8000, tailChars: 8000}
 	case toolName == "read_file" || toolName == "web_fetch" || strings.Contains(toolName, "read"):
 		strategy = snipStrategy{head: 120, tail: 12, headChars: 12000, tailChars: 2000}

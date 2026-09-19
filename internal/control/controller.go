@@ -1783,12 +1783,16 @@ func (c *Controller) runShell(command string, admission turnAdmission) {
 		id := "shell-" + string(preview)
 		diagnosticPreview := shellCommandPreview(command)
 		desc := shellrun.DescriptorFromShell(sh)
+		toolName := "bash"
+		if sh.Kind == sandbox.ShellPowerShell {
+			toolName = "pwsh"
+		}
 
 		if err := event.EmitChecked(c.sink, event.Event{
 			Kind: event.ToolDispatch,
 			Tool: event.Tool{
 				ID:   id,
-				Name: "bash",
+				Name: toolName,
 				Args: fmt.Sprintf(`{"command":%q}`, command),
 				Execution: &event.ShellExecution{
 					Kind: desc.Kind, Shell: desc.Shell, ShellVersion: desc.ShellVersion,
@@ -1803,7 +1807,6 @@ func (c *Controller) runShell(command string, admission turnAdmission) {
 		start := time.Now()
 		res := shellrun.RunForeground(ctx, shellrun.Request{
 			Argv:           argv,
-			ProbeArgv:      shellrun.WindowsProbeArgv(sandbox.Spec{}, sh, ""),
 			Dir:            c.workspaceRoot,
 			Timeout:        shellTimeout,
 			WaitDelay:      shellWaitDelay,

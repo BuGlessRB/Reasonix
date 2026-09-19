@@ -1,3 +1,4 @@
+import { isShellToolName } from "./shellToolIdentity";
 import { historyToolStatus } from "./historyToolStatus";
 import { asArray } from "./array";
 import { canonicalMessage } from "./canonicalTranscriptBackend";
@@ -148,7 +149,7 @@ function convertRecordBody(
         resolvedName: toolCall.resolvedName, capabilityId: toolCall.capabilityId,
         status: historyToolStatus(result, toolCall, error), contentState: !result || archived ? "unloaded" : "ready", resultMissing: !result && !toolCall.resultObservation?.messageId || undefined, output, error, dataArchived: archived || undefined,
         subject: toolCall.subject, summary: summarizeFileDiff(fileDiff) || toolCall.summary, fileDiff,
-        isShell: toolCall.name === "bash" || (toolCall.id || "").startsWith("shell-"), execution: result?.execution,
+        isShell: isShellToolName(toolCall.name) || (toolCall.id || "").startsWith("shell-"), execution: result?.execution,
         presentedFiles: result?.presentedFiles,
       });
     }
@@ -161,7 +162,7 @@ function convertRecordBody(
     items.push({
       kind: "tool", id: itemIdForToolCall(message.toolCallId ?? "", id), name: message.toolName || "tool", args: "",
       readOnly: isReadOnlyTool(message.toolName || "tool"), status: error ? "error" : "done", output, error,
-      dataArchived: message.toolResultArchived || undefined, isShell: (message.toolName || "") === "bash" || (message.toolCallId || "").startsWith("shell-"),
+      dataArchived: message.toolResultArchived || undefined, isShell: isShellToolName(message.toolName || "") || (message.toolCallId || "").startsWith("shell-"),
       execution: message.execution, presentedFiles: message.presentedFiles,
     });
   }

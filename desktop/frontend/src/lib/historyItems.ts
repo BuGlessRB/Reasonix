@@ -1,3 +1,4 @@
+import { isShellToolName } from "./shellToolIdentity";
 import { historyToolStatus } from "./historyToolStatus";
 // historyItems converts durable HistoryMessage rows (and legacy HistoryPage
 // payloads) into transcript Items for the single-shot hydration path. The
@@ -176,7 +177,7 @@ export function historyMessagesToItems(messages: HistoryMessage[], idPrefix: str
           subject: tc.subject,
           summary: summarizeFileDiff(fileDiff) || tc.summary,
           fileDiff,
-          isShell: tc.name === "bash" || (tc.id || "").startsWith("shell-"),
+          isShell: isShellToolName(tc.name) || (tc.id || "").startsWith("shell-"),
           execution: result?.execution,
           presentedFiles: result?.presentedFiles,
         });
@@ -198,7 +199,7 @@ export function historyMessagesToItems(messages: HistoryMessage[], idPrefix: str
         output,
         error,
         dataArchived: m.toolResultArchived || undefined,
-        isShell: (m.toolName || "") === "bash" || (m.toolCallId || "").startsWith("shell-"),
+        isShell: isShellToolName(m.toolName || "") || (m.toolCallId || "").startsWith("shell-"),
         execution: m.execution,
         presentedFiles: m.presentedFiles,
       });

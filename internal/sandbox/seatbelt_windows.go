@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -118,19 +119,31 @@ func decodeWindowsSandboxPayload(s string) (windowsSandboxPayload, error) {
 // RunWindowsSandboxHelper is the hidden process entry point used by Command and
 // CommandArgs on native Windows.
 func RunWindowsSandboxHelper(args []string, stdin *os.File, stdout *os.File, stderr *os.File) int {
+	report, reportErr := openRunnerReport()
+	if reportErr != nil {
+		fmt.Fprintln(stderr, "windows sandbox report channel:", reportErr)
+		return 126
+	}
+	if report != nil {
+		defer report.Close()
+	}
+	reportFailure := func(phase string, err error) int {
+		if report != nil {
+			_ = writeRunnerReport(report, phase, err)
+		}
+		fmt.Fprintln(stderr, "windows sandbox:", err)
+		return 126
+	}
 	if len(args) < 3 || args[1] != "--" {
-		fmt.Fprintln(stderr, "usage: reasonix "+WindowsHelperCommand+" <payload> -- <command> [args...]")
-		return 2
+		return reportFailure(WindowsSandboxFailureLaunch, fmt.Errorf("usage: reasonix %s <payload> -- <command> [args...]", WindowsHelperCommand))
 	}
 	payload, err := decodeWindowsSandboxPayload(args[0])
 	if err != nil {
-		fmt.Fprintln(stderr, "invalid windows sandbox payload:", err)
-		return 2
+		return reportFailure(WindowsSandboxFailureDependency, fmt.Errorf("invalid windows sandbox payload: %w", err))
 	}
 	child := args[2:]
 	if len(child) == 0 || strings.TrimSpace(child[0]) == "" {
-		fmt.Fprintln(stderr, "windows sandbox command is required")
-		return 2
+		return reportFailure(WindowsSandboxFailureLaunch, fmt.Errorf("windows sandbox command is required"))
 	}
 	result, err := winsandbox.Run(convertWindowsSandboxSpec(payload.Spec, payload.Writable), child, winsandbox.RunOptions{
 		Stdin:  stdin,
@@ -138,10 +151,26 @@ func RunWindowsSandboxHelper(args []string, stdin *os.File, stdout *os.File, std
 		Stderr: stderr,
 	})
 	if err != nil {
-		fmt.Fprintln(stderr, WindowsSandboxFailureMarker(args[0]), "windows sandbox:", err)
+		if phase, preCommand := windowsSandboxFailurePhase(err); preCommand {
+			return reportFailure(phase, err)
+		} else {
+			// The process was resumed before this failure. Keep it in the normal
+			// execution lane so mutation risk remains may_be_partial.
+			fmt.Fprintln(stderr, "windows sandbox:", err)
+		}
 		return 126
 	}
 	return result.ExitCode
+}
+
+func windowsSandboxFailurePhase(err error) (string, bool) {
+	if phase, ok := winsandbox.FailurePhaseOf(err); ok {
+		return string(phase), true
+	}
+	if errors.Is(err, winsandbox.ErrUnsupported) {
+		return WindowsSandboxFailureDependency, true
+	}
+	return "", false
 }
 
 func convertWindowsSandboxSpec(spec Spec, writable bool) winsandbox.Spec {

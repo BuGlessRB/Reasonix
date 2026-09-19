@@ -735,15 +735,7 @@ func (a *App) restoreOrBuildTabs() {
 	// Load i18n from the first available config.
 	// Prefer DesktopLanguage (desktop UI setting) over Language (CLI setting),
 	// so the user's language choice in desktop settings takes effect.
-	startupCfg, cfgErr := config.Load()
-	if cfgErr == nil {
-		cfg := startupCfg
-		lang := cfg.DesktopLanguage()
-		if lang == "" {
-			lang = cfg.Language
-		}
-		a.setDesktopLocale(i18n.DetectLanguage(lang))
-	}
+	a.loadStartupLocale()
 	f, _, restoreCurrent := a.reconcileTabsBeforeRestore(ctx, f, tabsVersion)
 	if !restoreCurrent {
 		return
@@ -827,6 +819,18 @@ func (a *App) restoreOrBuildTabs() {
 	// First launch intentionally has no runtime. The renderer opens a persisted
 	// Global draft after this restore gate closes; the first execution creates
 	// the canonical Session and Controller.
+}
+
+func (a *App) loadStartupLocale() {
+	cfg, err := config.Load()
+	if err != nil {
+		return
+	}
+	lang := cfg.DesktopLanguage()
+	if lang == "" {
+		lang = cfg.Language
+	}
+	a.setDesktopLocale(i18n.DetectLanguage(lang))
 }
 
 func (a *App) createTabEntry(scope, workspaceRoot, topicID string) *WorkspaceTab {
@@ -5808,9 +5812,10 @@ func clipHistoryToolPreview(s string) string {
 func historyToolSubject(name, args string) string {
 	a := parseHistoryToolArgs(args)
 	var subject string
+	if historyShellToolName(name) {
+		return clipSingleLine(historyArgString(a, "command"), 240)
+	}
 	switch name {
-	case "bash":
-		subject = historyArgString(a, "command")
 	case "grep", "glob":
 		subject = firstNonEmpty(historyArgString(a, "pattern"), historyArgString(a, "path"))
 	case "web_fetch":
@@ -5840,6 +5845,12 @@ func historyToolSubject(name, args string) string {
 func historyToolSummary(name, args, output string) string {
 	if historyToolResultFailed(output) {
 		return ""
+	}
+	if historyShellToolName(name) {
+		if strings.TrimSpace(output) == "" {
+			return "no output"
+		}
+		return fmt.Sprintf("%d lines", historyLineCount(output))
 	}
 	a := parseHistoryToolArgs(args)
 	switch name {
@@ -5878,13 +5889,17 @@ func historyToolSummary(name, args, output string) string {
 		return fmt.Sprintf("%d entries", historyNonEmptyLineCount(output))
 	case "web_fetch":
 		return clipSingleLine(strings.SplitN(output, "\n", 2)[0], 80)
-	case "bash":
-		if strings.TrimSpace(output) == "" {
-			return "no output"
-		}
-		return fmt.Sprintf("%d lines", historyLineCount(output))
 	default:
 		return ""
+	}
+}
+
+func historyShellToolName(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "bash", "pwsh", "powershell", "shell":
+		return true
+	default:
+		return false
 	}
 }
 

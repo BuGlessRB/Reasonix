@@ -1,3 +1,4 @@
+import { isShellToolName } from "../lib/shellToolIdentity";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useT, type Translator } from "../lib/i18n";
@@ -80,7 +81,7 @@ function localizeApprovalReason(tool: string, reason: string | undefined, t: Tra
   }
   let localized = trimmed;
   if (
-    tool === "bash" &&
+    isShellToolName(tool) &&
     (trimmed.includes("nested or indirect shell execution") || trimmed.includes("requests access outside the active permission preset"))
   ) {
     localized = t("approval.dynamicBashReason");
