@@ -27,7 +27,6 @@ func RunnerFailureFromError(err error) (string, string, bool) {
 }
 
 const runnerReportLimit = 4096
-const runnerReportEnvironment = "REASONIX_INTERNAL_RUNNER_REPORT_HANDLE"
 
 type runnerReport struct {
 	Version int    `json:"version"`

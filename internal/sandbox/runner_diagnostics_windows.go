@@ -17,6 +17,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+const runnerReportEnvironment = "REASONIX_INTERNAL_RUNNER_REPORT_HANDLE"
+
 // PrepareRunnerDiagnostics gives only the helper an inherited report handle.
 // The temporary file has sharing disabled and is deleted on last close, so the
 // restricted child cannot reopen it even if the temp directory is writable.
