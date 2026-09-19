@@ -450,6 +450,19 @@ func savedTabPendingSessionIdentity(entry desktopTabEntry, evidence savedTabReco
 			return "", false, true
 		}
 	}
+	for _, operation := range evidence.registry.PendingOperations {
+		if strings.TrimSpace(operation.ID) != operationID {
+			continue
+		}
+		for _, sessionID := range operation.SessionIDs {
+			if !accept(sessionID) {
+				return "", false, true
+			}
+		}
+		if operation.Mapping != nil && !accept(operation.Mapping.SessionID) {
+			return "", false, true
+		}
+	}
 	return resolved, resolved != "", false
 }
 

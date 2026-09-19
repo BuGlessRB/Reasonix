@@ -7265,12 +7265,17 @@ func (a *App) captureTabSessionMetaSource(tab *WorkspaceTab) (tabSessionMetaSour
 	}, true
 }
 
-func canonicalTabSessionMetaDisposition(sessionID, requestedPath string) (bool, error) {
+func canonicalTabSessionMetaDisposition(sessionID, storedPath, requestedPath string) (bool, error) {
 	if sessionID == "" {
 		return false, nil
 	}
 	if err := session.ValidateSessionID(sessionID); err != nil {
 		return false, &sessionLocatorError{reason: "invalid_canonical_session_id"}
+	}
+	if locator := classifySessionLocator(storedPath); locator.kind != sessionLocatorEmpty {
+		if locator.kind != sessionLocatorCanonical || locator.ref.SessionID != sessionID {
+			return false, &sessionLocatorError{reason: "session_identity_conflict"}
+		}
 	}
 	if requestedPath != "" {
 		locator := classifySessionLocator(requestedPath)
@@ -7358,7 +7363,7 @@ func (a *App) tabSessionMetaSnapshot(tab *WorkspaceTab, requestedPath string, us
 	if !ok || source.readOnly {
 		return tabSessionMetaSnapshot{}, false, nil
 	}
-	canonical, err := canonicalTabSessionMetaDisposition(source.sessionID, requestedPath)
+	canonical, err := canonicalTabSessionMetaDisposition(source.sessionID, source.storedPath, requestedPath)
 	if err != nil || canonical {
 		return tabSessionMetaSnapshot{}, false, err
 	}

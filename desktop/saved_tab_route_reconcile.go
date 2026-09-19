@@ -74,6 +74,9 @@ func (a *App) normalizeSavedTabRoute(ctx context.Context, entry desktopTabEntry,
 	if id := strings.TrimSpace(entry.SessionID); id != "" && id != candidate.sessionID {
 		return failed("identity_conflict", false, false)
 	}
+	if evidence.registryErr != nil || evidence.draftErr != nil {
+		return failed("persistence_state_unavailable", false, false)
+	}
 
 	pendingID, pendingFound, pendingConflict := savedTabPendingSessionIdentity(desktopTabEntry{
 		CreateOperationID: entry.CreateOperationID,
