@@ -3733,8 +3733,9 @@ export function useController() {
       if (result.warning) dispatchTo(tabId, { type: "local_notice", level: "warn", text: result.warning });
       return result;
     } catch (error) {
-      dispatchTo(tabId, { type: "local_notice", level: "warn", text: formatInboxCancelError(error, getLocale()) });
-      return { discardedItemIds: [] };
+      const message = formatInboxCancelError(error, getLocale());
+      dispatchTo(tabId, { type: "local_notice", level: "warn", text: message });
+      return { discardedItemIds: [], error: message };
     } finally {
       scheduleCancelReconcile(tabId, 0);
     }
@@ -3768,39 +3769,48 @@ export function useController() {
     const promptState = statesRef.current.get(target.tabId);
     const epoch = promptState?.promptEpoch ?? 0;
     dispatchTo(target.tabId, { type: "clearApproval", target });
-    resolvePromptForSession(target, {
+    return resolvePromptForSession(target, {
       allow,
       session,
       persist,
       generation: target.requestGeneration,
       permissionRevision: target.permissionRevision,
-    }).catch((error) => handlePromptFailure(dispatchTo, target, epoch, error));
+    }).catch((error) => {
+      handlePromptFailure(dispatchTo, target, epoch, error);
+      throw error;
+    });
   }, [dispatchTo]);
 
   const approve = useCallback((id: string, allow: boolean, session: boolean, persist: boolean) => {
-    if (activeTabId) approveForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "approval", id), allow, session, persist);
+    if (activeTabId) return approveForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "approval", id), allow, session, persist);
   }, [activeTabId, approveForTab]);
 
   const resolvePlanDecisionForTab = useCallback((target: InteractionTarget, action: "start_execution" | "revise_plan" | "exit_plan") => {
     if (!target.tabId) return;
     const epoch = statesRef.current.get(target.tabId)?.promptEpoch ?? 0;
     dispatchTo(target.tabId, { type: "clearApproval", target });
-    resolvePromptForSession(target, { action }).catch((error) => handlePromptFailure(dispatchTo, target, epoch, error));
+    return resolvePromptForSession(target, { action }).catch((error) => {
+      handlePromptFailure(dispatchTo, target, epoch, error);
+      throw error;
+    });
   }, [dispatchTo]);
 
   const resolvePlanDecision = useCallback((id: string, action: "start_execution" | "revise_plan" | "exit_plan") => {
-    if (activeTabId) resolvePlanDecisionForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "plan", id), action);
+    if (activeTabId) return resolvePlanDecisionForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "plan", id), action);
   }, [activeTabId, resolvePlanDecisionForTab]);
 
   const resolveRecoveryForTab = useCallback((target: InteractionTarget, action: "continue" | "continue_task" | "revise" | "stop", feedback = "") => {
     if (!target.tabId) return;
     const epoch = statesRef.current.get(target.tabId)?.promptEpoch ?? 0;
     dispatchTo(target.tabId, { type: "clearApproval", target });
-    resolvePromptForSession(target, { action, feedback }).catch((error) => handlePromptFailure(dispatchTo, target, epoch, error));
+    return resolvePromptForSession(target, { action, feedback }).catch((error) => {
+      handlePromptFailure(dispatchTo, target, epoch, error);
+      throw error;
+    });
   }, [dispatchTo]);
 
   const resolveRecovery = useCallback((id: string, action: "continue" | "continue_task" | "revise" | "stop", feedback = "") => {
-    if (activeTabId) resolveRecoveryForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "recovery", id), action, feedback);
+    if (activeTabId) return resolveRecoveryForTab(interactionTargetFromState(activeTabId, statesRef.current.get(activeTabId), "recovery", id), action, feedback);
   }, [activeTabId, resolveRecoveryForTab]);
 
   const answerQuestionForTab = useCallback((target: InteractionTarget, answers: QuestionAnswer[]): Promise<void> => {

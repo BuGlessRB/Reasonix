@@ -100,7 +100,7 @@ export type DecisionFooterSurfaceInput = {
   extension: ExtensionSurfaceApi;
   tabs: TabBarApi;
   clear: ClearCommands;
-  onStop: () => void;
+  onStop: ApprovalProps["onStop"];
   cancelWorkspaceConflict: RuntimeDecisionProps["onCancel"];
   onOpenLink: McpProps["onOpenLink"];
   onRevisionActiveChange: ApprovalProps["onRevisionActiveChange"];
