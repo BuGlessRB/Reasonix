@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"reasonix/internal/session"
+	"reasonix/internal/store"
 )
 
 type sessionLocatorKind uint8
@@ -24,6 +26,13 @@ type sessionLocator struct {
 	ref        session.SessionRef
 	legacyPath legacySessionPath
 	reason     string
+}
+
+func isLegacySessionTranscriptName(name string) bool {
+	if runtime.GOOS == "windows" {
+		name = strings.ToLower(name)
+	}
+	return store.IsSessionTranscriptName(name)
 }
 
 func validatedLegacySessionPathForRead(raw string) (legacySessionPath, bool) {

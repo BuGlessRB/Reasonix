@@ -127,7 +127,12 @@ func TestRestoreBlocksInvalidRouteWithoutControllerOrSidecar(t *testing.T) {
 		t.Fatalf("blocked restore created runtime state: %d/%d", len(app.runtimeByID), len(app.runtimeBySessionKey))
 	}
 	for _, artifact := range []string{"session-id:bad/id.meta", "session-id:bad/id.lock", "session-id:bad/id.lease.lock"} {
-		if _, err := os.Lstat(artifact); !errors.Is(err, os.ErrNotExist) {
+		_, err := os.Lstat(artifact)
+		if runtime.GOOS == "windows" && err != nil {
+			// The route colon makes the spelling unrepresentable on Windows.
+			continue
+		}
+		if !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("blocked route created %q: %v", artifact, err)
 		}
 	}
