@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"reasonix/desktop/internal/workspacestate"
 	"reasonix/internal/agent"
 	"reasonix/internal/session"
+	"reasonix/internal/store"
 )
 
 type savedTabReconcileOutcome string
@@ -29,9 +31,11 @@ const (
 type savedTabReconcileDecision struct {
 	outcome            savedTabReconcileOutcome
 	reason             string
+	identityKind       string
 	waitedForMigration bool
 	hadPending         bool
 	hadRecoveryOwner   bool
+	repairedIdentity   bool
 }
 
 type savedTabReconcileEvidence struct {
@@ -58,7 +62,7 @@ func (a *App) reconcileTabsBeforeRestore(ctx context.Context, file desktopTabsFi
 		}
 		if err != nil {
 			slog.Warn("desktop_saved_tab_reconcile_persist_failed", "reason", "write_failed")
-			return original, version, a.tabsSnapshotCurrent(version)
+			return blockSavedTabUnsafeRestore(original, "identity_repair_write_failed"), version, a.tabsSnapshotCurrent(version)
 		}
 	}
 	return reconciled, version, a.tabsSnapshotCurrent(version)
@@ -80,6 +84,12 @@ func (a *App) reconcileSavedTabs(ctx context.Context, file desktopTabsFile) (des
 	anyNeedsMigration := false
 	repairedIdentity := false
 	for index := range file.Tabs {
+		if candidate := savedTabRouteCandidateForPath(file.Tabs[index].SessionPath); candidate.kind != "" {
+			decisions[index].identityKind = candidate.kind
+			needsMigration[index] = true
+			anyNeedsMigration = true
+			continue
+		}
 		if sessionID, found, conflict := savedTabPendingSessionIdentity(file.Tabs[index], fast); found && !conflict {
 			file.Tabs[index].SessionID = sessionID
 			repairedIdentity = true
@@ -98,15 +108,33 @@ func (a *App) reconcileSavedTabs(ctx context.Context, file desktopTabsFile) (des
 			if !needsMigration[index] {
 				continue
 			}
+			identityKind := decisions[index].identityKind
 			if !migrationFinished {
-				decisions[index] = savedTabReconcileDecision{outcome: preserveError, reason: "migration_interrupted", waitedForMigration: true}
+				decisions[index] = savedTabReconcileDecision{outcome: preserveError, reason: "migration_interrupted", identityKind: identityKind, waitedForMigration: true}
 				continue
+			}
+			if identityKind != "" {
+				normalized, repaired, override := a.normalizeSavedTabRoute(ctx, file.Tabs[index], afterMigration)
+				if override != nil {
+					override.identityKind = identityKind
+					override.waitedForMigration = true
+					decisions[index] = *override
+					continue
+				}
+				file.Tabs[index] = normalized
+				if repaired {
+					repairedIdentity = true
+				}
 			}
 			if sessionID, found, conflict := savedTabPendingSessionIdentity(file.Tabs[index], afterMigration); found && !conflict {
 				file.Tabs[index].SessionID = sessionID
 				repairedIdentity = true
 			}
 			decision, _ := a.classifySavedTab(file.Tabs[index], afterMigration, true)
+			if identityKind != "" {
+				decision.identityKind = identityKind
+			}
+			decision.repairedIdentity = strings.TrimSpace(file.Tabs[index].SessionID) != "" && strings.TrimSpace(file.Tabs[index].SessionPath) == "" && identityKind != ""
 			decision.waitedForMigration = true
 			decisions[index] = decision
 		}
@@ -119,23 +147,31 @@ func (a *App) reconcileSavedTabs(ctx context.Context, file desktopTabsFile) (des
 		if decision.outcome == dropStalePresentation || decision.outcome == archiveEmptyThenDrop {
 			removed[entry.ID] = true
 		} else {
+			if decision.identityKind != "" && (decision.outcome == preserveError || decision.outcome == preserveRecovery) {
+				entry.restoreBlocked = true
+				entry.restoreBlockReason = decision.reason
+			}
 			filtered = append(filtered, entry)
 		}
-		if decision.outcome != restoreTab || decision.waitedForMigration {
+		if decision.outcome != restoreTab || decision.waitedForMigration || decision.repairedIdentity {
+			identityKind := decision.identityKind
+			if identityKind == "" {
+				identityKind = savedTabIdentityKind(entry)
+			}
 			slog.Info("desktop_saved_tab_reconciled",
 				"outcome", decision.outcome,
 				"reason", decision.reason,
-				"identity_kind", savedTabIdentityKind(entry),
+				"identity_kind", identityKind,
 				"waited_for_migration", decision.waitedForMigration,
 				"had_pending_operation", decision.hadPending,
 				"had_recovery_owner", decision.hadRecoveryOwner,
 			)
 		}
 	}
+	file.Tabs = filtered
 	if len(removed) == 0 && !repairedIdentity {
 		return file, false
 	}
-	file.Tabs = filtered
 	repairReconciledTabSelection(&file, removed)
 	return file, true
 }
@@ -181,6 +217,9 @@ func (a *App) classifySavedTab(entry desktopTabEntry, evidence savedTabReconcile
 	if strings.TrimSpace(entry.SessionPath) != "" {
 		if !afterMigration {
 			return savedTabReconcileDecision{}, false
+		}
+		if _, ok, err := legacySessionPathForFileAccess(entry.SessionPath); err != nil || !ok {
+			return savedTabReconcileDecision{outcome: preserveError, reason: "invalid_legacy_path", identityKind: "invalid_legacy"}, true
 		}
 		return a.classifyLegacySavedTab(entry, evidence), true
 	}
@@ -543,4 +582,222 @@ func savedTabIdentityKind(entry desktopTabEntry) string {
 		return "legacy"
 	}
 	return "none"
+}
+
+type savedTabRouteCandidate struct {
+	sessionID string
+	kind      string
+}
+
+func savedTabRouteCandidateForPath(raw string) savedTabRouteCandidate {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return savedTabRouteCandidate{}
+	}
+	if strings.HasPrefix(value, remoteSessionIDRoutePrefix) {
+		locator := classifySessionLocator(value)
+		if locator.kind != sessionLocatorCanonical {
+			return savedTabRouteCandidate{kind: "invalid_route"}
+		}
+		return savedTabRouteCandidate{sessionID: locator.ref.SessionID, kind: "canonical_route"}
+	}
+	if !persistedPathLooksAbsolute(value) {
+		return savedTabRouteCandidate{}
+	}
+	normalized := strings.ReplaceAll(value, `\`, "/")
+	base := normalized[strings.LastIndex(normalized, "/")+1:]
+	if !strings.HasPrefix(base, remoteSessionIDRoutePrefix) {
+		return savedTabRouteCandidate{}
+	}
+	// A real legacy transcript or sidecar can legally contain a colon on
+	// POSIX. Those names remain paths and are never upgraded by this repair.
+	if strings.HasSuffix(strings.ToLower(base), ".jsonl") || strings.HasSuffix(strings.ToLower(base), ".meta") {
+		return savedTabRouteCandidate{}
+	}
+	locator := classifySessionLocator(base)
+	if locator.kind != sessionLocatorCanonical {
+		return savedTabRouteCandidate{kind: "invalid_route"}
+	}
+	return savedTabRouteCandidate{sessionID: locator.ref.SessionID, kind: "pseudo_route_path"}
+}
+
+func persistedPathLooksAbsolute(path string) bool {
+	if strings.HasPrefix(path, "/") || strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, "//") {
+		return true
+	}
+	return len(path) >= 3 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' && (path[2] == '\\' || path[2] == '/')
+}
+
+func (a *App) normalizeSavedTabRoute(ctx context.Context, entry desktopTabEntry, evidence savedTabReconcileEvidence) (desktopTabEntry, bool, *savedTabReconcileDecision) {
+	candidate := savedTabRouteCandidateForPath(entry.SessionPath)
+	failed := func(reason string, pending, recovery bool) (desktopTabEntry, bool, *savedTabReconcileDecision) {
+		return entry, false, &savedTabReconcileDecision{
+			outcome: preserveError, reason: reason, identityKind: candidate.kind,
+			hadPending: pending, hadRecoveryOwner: recovery,
+		}
+	}
+	if candidate.kind == "" {
+		return entry, false, nil
+	}
+	if candidate.kind == "invalid_route" || candidate.sessionID == "" {
+		return failed("invalid_route", false, false)
+	}
+	if id := strings.TrimSpace(entry.SessionID); id != "" && id != candidate.sessionID {
+		return failed("identity_conflict", false, false)
+	}
+
+	pendingID, pendingFound, pendingConflict := savedTabPendingSessionIdentity(desktopTabEntry{
+		CreateOperationID: entry.CreateOperationID,
+	}, evidence)
+	if pendingConflict || (pendingFound && pendingID != candidate.sessionID) {
+		return failed("pending_identity_conflict", true, false)
+	}
+	if candidate.kind == "canonical_route" {
+		entry.SessionID = candidate.sessionID
+		entry.SessionPath = ""
+		return entry, true, nil
+	}
+
+	present, artifactErr := savedTabPseudoRouteArtifactsPresent(entry.SessionPath)
+	if artifactErr != nil {
+		return failed("legacy_artifacts_unreadable", pendingFound, false)
+	}
+	if present {
+		return failed("legacy_artifacts_present", pendingFound, false)
+	}
+	confirmed, conflict, recoveryOwner := a.savedTabPseudoRouteIdentityConfirmed(ctx, entry, candidate.sessionID, evidence, pendingID, pendingFound)
+	if conflict {
+		return failed("identity_conflict", pendingFound, recoveryOwner)
+	}
+	if !confirmed {
+		return failed("identity_evidence_absent", pendingFound, recoveryOwner)
+	}
+	entry.SessionID = candidate.sessionID
+	entry.SessionPath = ""
+	return entry, true, nil
+}
+
+func savedTabPseudoRouteArtifactsPresent(path string) (bool, error) {
+	return savedTabPseudoRouteArtifactsPresentWith(path, os.Lstat)
+}
+
+func savedTabPseudoRouteArtifactsPresentWith(path string, lstat func(string) (os.FileInfo, error)) (bool, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false, nil
+	}
+	if runtime.GOOS == "windows" && savedTabRouteCandidateForPath(path).kind == "pseudo_route_path" {
+		// The route colon is illegal in a Windows file name, so this spelling
+		// cannot identify a real transcript or sidecar on the native filesystem.
+		return false, nil
+	}
+	// Foreign Windows paths on POSIX cannot name a local artifact. Native
+	// paths are probed without cleaning so the persisted spelling is preserved.
+	if runtime.GOOS != "windows" && !filepath.IsAbs(path) {
+		return false, nil
+	}
+	artifacts := append([]string{path}, store.SessionSidecarFiles(path)...)
+	artifacts = append(artifacts,
+		store.SessionLockFile(path), store.SessionLeaseLock(path), store.SessionLeaseInfo(path),
+		store.SessionCheckpointDir(path), store.SessionJobsDir(path), store.SessionInboxDir(path),
+		store.SessionCleanupPending(path),
+	)
+	seen := make(map[string]bool, len(artifacts))
+	for _, artifact := range artifacts {
+		if artifact == "" || seen[artifact] {
+			continue
+		}
+		seen[artifact] = true
+		if _, err := lstat(artifact); err == nil {
+			return true, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return false, err
+		}
+	}
+	return false, nil
+}
+
+func (a *App) savedTabPseudoRouteIdentityConfirmed(ctx context.Context, entry desktopTabEntry, sessionID string, evidence savedTabReconcileEvidence, pendingID string, pendingFound bool) (bool, bool, bool) {
+	confirmed := pendingFound && pendingID == sessionID
+	owners := savedTabDurableRouteOwnerIDs(entry, sessionID, evidence)
+	if len(owners) > 1 || (len(owners) == 1 && !owners[sessionID]) {
+		return false, true, len(owners) > 0
+	}
+	if owners[sessionID] {
+		confirmed = true
+	}
+
+	info, err := a.desktopSessionService("").Query().Stat(ctx, session.SessionRef{HostID: localDesktopHostID, SessionID: sessionID})
+	if err == nil {
+		workspace, consistent := savedTabCanonicalWorkspace(evidence.registry, info, sessionID)
+		if consistent && savedTabMatchesWorkspace(entry, workspace) {
+			confirmed = true
+		}
+	}
+	return confirmed, false, len(owners) > 0
+}
+
+func savedTabDurableRouteOwnerIDs(entry desktopTabEntry, candidateID string, evidence savedTabReconcileEvidence) map[string]bool {
+	owners := map[string]bool{}
+	operationID := strings.TrimSpace(entry.CreateOperationID)
+	rawPath := strings.TrimSpace(entry.SessionPath)
+	workspaceID := restoredWorkspaceID(entry)
+	for sessionID, pending := range evidence.registry.PendingCreates {
+		if (operationID != "" && pending.OperationID == operationID) || (sessionID == candidateID && pending.WorkspaceID == workspaceID) {
+			owners[strings.TrimSpace(sessionID)] = true
+		}
+	}
+	for _, operation := range evidence.draftOps {
+		if operationID != "" && operation.ID == operationID {
+			owners[strings.TrimSpace(operation.SessionID)] = true
+		}
+	}
+	for _, operation := range evidence.registry.PendingOperations {
+		if operationID != "" && strings.TrimSpace(operation.ID) == operationID {
+			for _, id := range operation.SessionIDs {
+				owners[strings.TrimSpace(id)] = true
+			}
+		}
+		if operation.Mapping != nil && strings.TrimSpace(operation.Mapping.Path) == rawPath {
+			owners[strings.TrimSpace(operation.Mapping.SessionID)] = true
+		}
+		if operation.WorkspaceID == workspaceID && slices.Contains(operation.SessionIDs, candidateID) {
+			owners[candidateID] = true
+		}
+	}
+	for _, mapping := range evidence.registry.SourceMappings {
+		if strings.TrimSpace(mapping.Path) == rawPath {
+			owners[strings.TrimSpace(mapping.SessionID)] = true
+		}
+		if mapping.WorkspaceID == workspaceID && mapping.SessionID == candidateID {
+			owners[candidateID] = true
+		}
+	}
+	for _, recovery := range evidence.registry.RecoveryEntries {
+		if strings.TrimSpace(recovery.Path) == rawPath {
+			owners[strings.TrimSpace(recovery.SessionID)] = true
+		}
+		if recovery.SessionID == candidateID && (recovery.WorkspaceID == workspaceID || recovery.Scope == entry.Scope && sameDesktopPath(recovery.WorkspaceRoot, entry.WorkspaceRoot)) {
+			owners[candidateID] = true
+		}
+	}
+	delete(owners, "")
+	return owners
+}
+
+func blockSavedTabUnsafeRestore(file desktopTabsFile, reason string) desktopTabsFile {
+	file.Tabs = append([]desktopTabEntry(nil), file.Tabs...)
+	for index := range file.Tabs {
+		path := strings.TrimSpace(file.Tabs[index].SessionPath)
+		unsafe := savedTabRouteCandidateForPath(path).kind != ""
+		if !unsafe && path != "" {
+			_, ok, err := legacySessionPathForFileAccess(path)
+			unsafe = err != nil || !ok
+		}
+		if unsafe {
+			file.Tabs[index].restoreBlocked = true
+			file.Tabs[index].restoreBlockReason = reason
+		}
+	}
+	return file
 }

@@ -794,11 +794,16 @@ func (a *App) restoreOrBuildTabs() {
 			tab.PendingCreateOperationID = strings.TrimSpace(entry.CreateOperationID)
 			tab.persistenceExtra = cloneDesktopJSONFields(entry.extra)
 			tab.ReadOnly = entry.ReadOnly
+			if entry.restoreBlocked {
+				tab.StartupErr = "Saved session identity could not be verified. Recovery data was preserved."
+			}
 			restoreTabPinnedContext(tab, entry.PinnedFiles)
 			tab.Takeover.Spectator = entry.TakeoverSpectator
 			tab.sink = &tabEventSink{tabID: tab.ID, app: a, ctx: ctx}
 			a.publishRestoredTab(tab, releaseAdmission)
-			toBuild = append(toBuild, tab)
+			if !entry.restoreBlocked {
+				toBuild = append(toBuild, tab)
+			}
 		}
 		a.mu.Lock()
 		if _, ok := a.tabs[f.ActiveTab]; ok {
