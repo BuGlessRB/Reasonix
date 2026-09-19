@@ -2365,7 +2365,6 @@ export const en = {
   "settings.shellCapabilitySh": "POSIX sh",
   "settings.gitCapability": "Git",
   "settings.runtimeDetails": "Runtime details",
-  "settings.runtimeDetailsStatus": "Review status",
   "settings.dependencyDetection": "Dependency detection",
   "settings.shellBashManualRepair": "Bash is not detected. Use the suggested system package-manager command or check your PATH.",
   "settings.gitManualRepair": "Git is not detected. Install it with the suggested system package-manager command or check your PATH.",

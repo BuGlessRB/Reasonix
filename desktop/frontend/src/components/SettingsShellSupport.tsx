@@ -154,7 +154,7 @@ export function ShellInterpreterFields({
       {field(t("settings.effectiveShell"),
         <div className="settings-readonly-field"><ShellRuntimeValue shell={currentShell} capabilities={capabilities} t={t} /></div>)}
       {sb.shellReloadRequired && field(t("settings.resolvedShell"),
-        <div className="settings-readonly-field settings-readonly-field--attention">
+        <div className="settings-readonly-field">
           <ShellRuntimeValue shell={resolvedShell} capabilities={capabilities} t={t} />
           <button type="button" className="btn btn--small set-shell-reload" disabled={busy} onClick={reloadSession}>
             <RefreshCw size={13} aria-hidden="true" />
@@ -196,7 +196,6 @@ export function ShellEnvironmentDetails({
     <details className="sandbox-environment-details" open={needsAttention || undefined}>
       <summary>
         <span>{t("settings.runtimeDetails")}</span>
-        {needsAttention && <span className="sandbox-environment-details__status">{t("settings.runtimeDetailsStatus")}</span>}
       </summary>
       <div className="sandbox-environment-details__body">
         {field(t("settings.shellDetection"),
@@ -231,7 +230,6 @@ export function ShellEnvironmentDetails({
             <RefreshCw size={13} aria-hidden="true" />
             <span>{t("settings.reloadSessionConfig")}</span>
           </button>
-          <span>{t("settings.effectiveWriteRootsHint")}</span>
         </div>
       </div>
     </details>

@@ -2367,7 +2367,6 @@ export const zh: Record<DictKey, string> = {
   "settings.shellCapabilitySh": "POSIX sh",
   "settings.gitCapability": "Git",
   "settings.runtimeDetails": "运行环境详情",
-  "settings.runtimeDetailsStatus": "查看状态",
   "settings.dependencyDetection": "依赖检测",
   "settings.shellBashManualRepair": "未检测到 Bash。请使用建议的系统包管理器命令，或检查 PATH。",
   "settings.gitManualRepair": "未检测到 Git。请使用建议的系统包管理器命令安装，或检查 PATH。",

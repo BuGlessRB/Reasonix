@@ -735,15 +735,7 @@ func (a *App) restoreOrBuildTabs() {
 	// Load i18n from the first available config.
 	// Prefer DesktopLanguage (desktop UI setting) over Language (CLI setting),
 	// so the user's language choice in desktop settings takes effect.
-	startupCfg, cfgErr := config.Load()
-	if cfgErr == nil {
-		cfg := startupCfg
-		lang := cfg.DesktopLanguage()
-		if lang == "" {
-			lang = cfg.Language
-		}
-		a.setDesktopLocale(i18n.DetectLanguage(lang))
-	}
+	a.loadStartupLocale()
 	f, _, restoreCurrent := a.reconcileTabsBeforeRestore(ctx, f, tabsVersion)
 	if !restoreCurrent {
 		return
@@ -836,6 +828,18 @@ func (a *App) restoreOrBuildTabs() {
 	// First launch intentionally has no runtime. The renderer opens a persisted
 	// Global draft after this restore gate closes; the first execution creates
 	// the canonical Session and Controller.
+}
+
+func (a *App) loadStartupLocale() {
+	cfg, err := config.Load()
+	if err != nil {
+		return
+	}
+	lang := cfg.DesktopLanguage()
+	if lang == "" {
+		lang = cfg.Language
+	}
+	a.setDesktopLocale(i18n.DetectLanguage(lang))
 }
 
 func (a *App) createTabEntry(scope, workspaceRoot, topicID string) *WorkspaceTab {

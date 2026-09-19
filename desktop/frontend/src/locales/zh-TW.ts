@@ -1762,7 +1762,6 @@ export const zhTW: Record<DictKey, string> = {
   "settings.shellCapabilitySh": "POSIX sh",
   "settings.gitCapability": "Git",
   "settings.runtimeDetails": "執行環境詳情",
-  "settings.runtimeDetailsStatus": "查看狀態",
   "settings.dependencyDetection": "相依項目偵測",
   "settings.shellBashManualRepair": "未偵測到 Bash。請使用建議的系統套件管理員命令，或檢查 PATH。",
   "settings.gitManualRepair": "未偵測到 Git。請使用建議的系統套件管理員命令安裝，或檢查 PATH。",
