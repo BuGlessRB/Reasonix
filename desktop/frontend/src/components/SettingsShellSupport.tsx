@@ -56,7 +56,7 @@ function ShellRuntimeValue({ shell, capabilities, t }: {
   return (
     <div className="shell-runtime">
       <span>{effectiveShellLabel(shell, t)}</span>
-      {capability?.path && <code title={capability.path}>{capability.path}</code>}
+      {capability?.path && <code>{capability.path}</code>}
     </div>
   );
 }
@@ -191,13 +191,11 @@ export function ShellEnvironmentDetails({
 
   return (
     <details className="runtime-details" open={needsAttention || undefined}>
-      <summary>
-        <span>{t("settings.runtimeDetails")}</span>
-      </summary>
+      <summary>{t("settings.runtimeDetails")}</summary>
       <div>
         {field(t("settings.shellDetection"),
           <div className="shell-support">
-            <div className="settings-readonly-field shell-support__detection" aria-label={t("settings.shellDetection")}>
+            <div className="settings-readonly-field shell-support__detection">
               {capabilities.map((capability) => <DetectionRow key={capability.id} cap={capability} t={t} />)}
             </div>
             {!windows && bashMissing && !nativeFallback && (
@@ -223,7 +221,7 @@ export function ShellEnvironmentDetails({
             </div>
           </div>, true)}
         <footer>
-          <button type="button" className="btn btn--small" disabled={busy} title={t("settings.reloadSessionConfigHint")} onClick={reloadSession}>
+          <button type="button" className="btn btn--small" disabled={busy} onClick={reloadSession}>
             <RefreshCw size={13} aria-hidden="true" />
             <span>{t("settings.reloadSessionConfig")}</span>
           </button>

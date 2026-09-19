@@ -2341,7 +2341,6 @@ export const en = {
   "settings.sandboxTitle": "Sandbox & workspace",
   "settings.sandboxBoundaryHint": "Permission presets enforce filesystem boundaries. Configure network access and additional trusted write roots here; macOS uses Seatbelt, Linux uses bubblewrap, and Windows uses the native restricted-token backend.",
   "settings.reloadSessionConfig": "Apply manual config changes",
-  "settings.reloadSessionConfigHint": "Changes made in Settings apply automatically; use this only after manually editing config.toml or reasonix.toml.",
   "settings.shellInterpreter": "Shell interpreter",
   "settings.powershellRuntime": "PowerShell runtime",
   "settings.shellAuto": "auto (bash first)",

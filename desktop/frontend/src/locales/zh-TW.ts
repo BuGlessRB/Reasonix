@@ -1744,7 +1744,6 @@ export const zhTW: Record<DictKey, string> = {
   "settings.sandboxTitle": "沙箱與工作區",
   "settings.sandboxBoundaryHint": "權限模式統一執行檔案系統邊界。這裡設定網路存取和額外可信寫入目錄；macOS 使用 Seatbelt，Linux 使用 bubblewrap，Windows 使用原生受限權杖後端。",
   "settings.reloadSessionConfig": "套用手動設定修改",
-  "settings.reloadSessionConfigHint": "設定頁內修改會自動生效；此按鈕用於套用手動編輯 config.toml / reasonix.toml 後的變更。",
   "settings.powershellRuntime": "PowerShell 執行環境",
   "settings.effectiveShell": "目前工作階段使用",
   "settings.effectiveShellBash": "bash",

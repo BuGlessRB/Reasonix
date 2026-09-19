@@ -2343,7 +2343,6 @@ export const zh: Record<DictKey, string> = {
   "settings.sandboxTitle": "沙箱与工作区",
   "settings.sandboxBoundaryHint": "权限模式统一执行文件系统边界。这里配置网络访问和额外可信写入目录；macOS 使用 Seatbelt，Linux 使用 bubblewrap，Windows 使用原生受限令牌后端。",
   "settings.reloadSessionConfig": "应用手动配置修改",
-  "settings.reloadSessionConfigHint": "设置页内修改会自动生效；此按钮用于应用手动编辑 config.toml / reasonix.toml 后的变更。",
   "settings.shellInterpreter": "Shell 解释器",
   "settings.powershellRuntime": "PowerShell 运行时",
   "settings.shellAuto": "自动（bash 优先）",
