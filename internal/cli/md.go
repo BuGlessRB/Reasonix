@@ -30,6 +30,9 @@ type mdRenderer struct {
 	copyMode       bool
 	copySpanPrefix string
 	nextCopySpanID int
+	// hideQuoteRail renders the fenced-code "│" gutter as spaces when the
+	// terminal owns the viewport chrome (native scrollback / native mouse).
+	hideQuoteRail bool
 }
 
 func newMarkdownRenderer(width int) *mdRenderer {
@@ -315,6 +318,9 @@ func (r *mdRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []byte, 
 		return
 	}
 	prefix := strings.Repeat(" ", indent) + dim("│ ")
+	if r.hideQuoteRail {
+		prefix = strings.Repeat(" ", indent+visibleWidth("│ "))
+	}
 	if r.copyMode {
 		prefix = copyOmitSpan(prefix)
 	}
