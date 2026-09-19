@@ -686,7 +686,7 @@ model = "x"
 	}
 	parentReq, subReq := reqs[0], reqs[1]
 	// Core shell tools stay top-level; task is dispatched via use_capability.
-	for _, want := range []string{"bash", "wait", "bash_output", "kill_shell", "use_capability"} {
+	for _, want := range []string{"bash", "job_output", "job_kill", "use_capability"} {
 		if !requestHasTool(parentReq, want) {
 			t.Fatalf("parent request missing %q; tools=%v", want, toolSchemaNames(parentReq.Tools))
 		}
@@ -701,7 +701,7 @@ model = "x"
 	if !requestToolSchemaContains(parentReq, "bash", "run_in_background") {
 		t.Fatalf("parent bash schema should include run_in_background")
 	}
-	for _, hidden := range []string{"task", "run_skill", "read_only_skill", "read_skill", "install_skill", "install_source", "explore", "research", "review", "security_review", "wait", "bash_output", "kill_shell"} {
+	for _, hidden := range []string{"task", "run_skill", "read_only_skill", "read_skill", "install_skill", "install_source", "explore", "research", "review", "security_review", "job_output", "job_kill", "wait", "bash_output", "kill_shell"} {
 		if requestHasTool(subReq, hidden) {
 			t.Fatalf("skill subagent request should hide %q; tools=%v", hidden, toolSchemaNames(subReq.Tools))
 		}
@@ -2176,18 +2176,17 @@ func unifiedBootToolNames() []string {
 	return []string{
 		"ask",
 		"bash",
-		"bash_output",
 		"compress",
 		"create_goal",
 		"edit_file",
 		"get_goal",
-		"kill_shell",
+		"job_kill",
+		"job_output",
 		"read_file",
 		"todo_write",
 		"update_goal",
 		"use_capability",
 		"view_image",
-		"wait",
 		"write_file",
 	}
 }

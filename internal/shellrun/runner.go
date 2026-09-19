@@ -1,5 +1,5 @@
 // Package shellrun provides a shared foreground shell runner used by the model
-// bash tool and the user !command path. It classifies exits, collects a bounded
+// shell tool and the user !command path. It classifies exits, collects a bounded
 // output tail, and keeps combined stdout/stderr model-visible output intact.
 package shellrun
 
@@ -15,10 +15,11 @@ import (
 	"time"
 
 	"reasonix/internal/proc"
+	"reasonix/internal/sandbox"
 	"reasonix/internal/tool"
 )
 
-// DefaultWaitDelay mirrors the bash tool's child-process wait grace.
+// DefaultWaitDelay mirrors the shell tool's child-process wait grace.
 const DefaultWaitDelay = 5 * time.Second
 
 const (
@@ -42,9 +43,7 @@ var errForegroundTimeout = errors.New("shell foreground timeout")
 // Request describes one foreground shell launch. Argv must already include the
 // interpreter and any sandbox wrapping; Command is only for diagnostics.
 type Request struct {
-	Argv []string
-	// ProbeArgv is an optional same-policy Windows shell preflight.
-	ProbeArgv         []string
+	Argv              []string
 	Dir               string
 	Env               []string
 	Timeout           time.Duration
@@ -82,9 +81,6 @@ type Result struct {
 // lock-safe collector, and classifies timeout / cancel / launch / execution
 // failures. Combined output is always returned so callers can feed the model.
 func RunForeground(ctx context.Context, req Request) Result {
-	if failure := CheckShellLaunch(ctx, req); failure != nil {
-		return *failure
-	}
 	if len(req.Argv) == 0 {
 		return Result{
 			State:        tool.ShellStateFailed,
@@ -107,6 +103,10 @@ func RunForeground(ctx context.Context, req Request) Result {
 	cmd.Dir = req.Dir
 	cmd.Env = req.Env
 	cmd.WaitDelay = waitDelay
+	finishReport, reportErr := sandbox.PrepareRunnerDiagnostics(cmd)
+	if reportErr != nil {
+		return Result{State: tool.ShellStateNotRun, FailurePhase: tool.ShellPhaseDependency, Err: reportErr}
+	}
 
 	collector := newOutputCollector(combinedOutputMaxBytes, tool.OutputTailMaxBytes)
 	var writers []io.Writer
@@ -142,6 +142,7 @@ func RunForeground(ctx context.Context, req Request) Result {
 		ShellPath:       req.ShellPath,
 		CommandPreview:  req.CommandPreview,
 	})
+	err = finishReport(err)
 
 	if progress != nil {
 		progress.Flush()
@@ -190,6 +191,17 @@ func classifyForegroundResult(runCtx context.Context, req Request, out Result, e
 		// successful runs from persisting up to 16 KiB of ordinary stdout into
 		// every session record and tool card.
 		out.OutputTail = ""
+		return out
+	}
+	if phase, detail, ok := sandbox.RunnerFailureFromError(err); ok {
+		out.Started = false
+		out.State = tool.ShellStateNotRun
+		out.FailurePhase = phase
+		out.ExitCode = exitCodeFromErr(err)
+		if detail == "" {
+			detail = "windows sandbox runner failed before the command started"
+		}
+		out.Err = fmt.Errorf("%s", detail)
 		return out
 	}
 	if code := exitCodeFromErr(err); code != nil {

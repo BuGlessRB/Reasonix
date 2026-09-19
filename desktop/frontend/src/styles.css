@@ -18060,6 +18060,24 @@ body > .mermaid-diagram--fullscreen {
   font-size: var(--font-control);
   font-weight: 650;
 }
+.settings-readonly-field--attention {
+  border-color: color-mix(in srgb, var(--warn) 42%, var(--border-soft));
+}
+.shell-runtime-value {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.shell-runtime-value code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+}
 .shell-support {
   display: flex;
   flex-direction: column;
@@ -18140,6 +18158,57 @@ body > .mermaid-diagram--fullscreen {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+.sandbox-environment-details {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 13px;
+}
+.sandbox-environment-details > summary {
+  display: flex;
+  min-height: 36px;
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--fg-dim);
+  font-size: var(--font-control-small);
+  font-weight: 650;
+}
+.sandbox-environment-details > summary::-webkit-details-marker {
+  display: none;
+}
+.sandbox-environment-details > summary::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: 18px;
+  transform: rotate(90deg);
+  transition: transform 140ms ease;
+}
+.sandbox-environment-details[open] > summary::after {
+  transform: rotate(-90deg);
+}
+.sandbox-environment-details__status {
+  margin-left: auto;
+  color: var(--warn);
+  font-size: var(--text-2xs);
+  font-weight: 650;
+}
+.sandbox-environment-details__body {
+  margin-top: 4px;
+}
+.sandbox-environment-details__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+.sandbox-environment-details__actions > span {
+  color: var(--fg-faint);
+  font-size: var(--text-2xs);
+  line-height: 1.4;
 }
 .provider-models-row {
   display: grid;

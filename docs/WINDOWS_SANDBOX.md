@@ -121,6 +121,30 @@ sandbox failure; Reasonix does not silently rerun the command without a sandbox.
 
 ## Validation
 
+Long-running Windows services must use `pwsh(run_in_background=true)`. The
+start call returns a `pwsh-*` job id without a foreground timeout; use
+`job_output` for incremental logs and status and `job_kill` to terminate the
+Job Object process tree. The ordinary `pwsh` path launches the sandbox
+runner and requested PowerShell command once; there is no nested readiness
+probe. Before-command helper failures use a private inherited handle to report
+`dependency`, `authorization`, or `launch`; a non-zero exit after PowerShell
+starts remains an `execution` failure. An `authorization` result under a
+restricted preset includes a short-lived `denial_id` for an explicitly
+approved retry with `danger-full-access`. Similar text printed by the command
+cannot change the phase, and Reasonix never retries outside the sandbox by
+itself. The report handle is cleared from the helper's environment and marked
+non-inheritable before launching the restricted child; the child handle allowlist
+contains only stdio. Its temporary backing file denies sharing and is deleted on
+last close. Reports never come from stdout/stderr, even if a command replays an
+old diagnostic and exits with the helper's failure code. Background runtime
+permission denials offer the same single-use approval retry as foreground calls,
+while retaining `execution` / `may_be_partial` metadata.
+
+启动前错误通过 helper 专用诊断句柄传递，不再解析 stdout/stderr 中的错误标记。
+受限子进程不继承该句柄；临时诊断文件禁止共享打开，在最后一个句柄关闭时删除。
+即使命令重放旧诊断并使用相同退出码，也不会被误判为“未启动”。后台运行期权限
+拒绝与前台共用单次授权重试机制，同时保留可能已部分执行的状态。
+
 Run the native suite and the 100-launch cold/warm benchmark on each supported
 Windows architecture:
 

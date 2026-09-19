@@ -1629,8 +1629,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	})
 	var capProxy *agent.UseCapabilityTool
 	// Catalog closes over capRuntime so proxy-connected tools stay routable.
-	// Use AllContractEntries so tool: capabilities include non-provider-visible
-	// tools that use_capability can still dispatch.
+	// Include non-provider-visible tools that use_capability can dispatch while
+	// omitting replay-only compatibility aliases from discovery.
 	catalogFn := func() capability.Catalog {
 		conn := map[string]bool{}
 		failedNow := map[string]string{}
@@ -1644,7 +1644,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 		skillSnapshot, skillSnapshotErr := skillStore.Snapshot(ctx)
 		catOpts := capability.CatalogOptions{
-			Tools:             reg.AllContractEntries(),
+			Tools:             reg.CapabilityContractEntries(),
 			Skills:            skillSnapshot.Candidates,
 			Plugins:           cfg.Plugins,
 			Connected:         conn,
@@ -1679,7 +1679,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			}
 		}
 		catOpts := capability.CatalogOptions{
-			Tools:       reg.AllContractEntries(),
+			Tools:       reg.CapabilityContractEntries(),
 			Skills:      skillStore.List(),
 			Plugins:     cfg.Plugins,
 			Connected:   connected,
@@ -2543,6 +2543,7 @@ func addBuiltins(reg *tool.Registry, enabled, writeRoots []string, writeRootSet 
 		}
 	} else {
 		for _, name := range enabled {
+			name = canonicalBuiltinName(name)
 			if t, ok := tool.LookupBuiltin(name); ok {
 				reg.Add(t)
 			} else {
@@ -2550,8 +2551,7 @@ func addBuiltins(reg *tool.Registry, enabled, writeRoots []string, writeRootSet 
 			}
 		}
 	}
-	// Replace the unconfined defaults with confined instances (registry order is
-	// preserved on replace): file-writers bound to the workspace, read tools
+	// Replace unconfined defaults with confined instances, preserving registry order: file-writers bound to the workspace, read tools
 	// bound to forbid-read roots, bash to the OS sandbox, web_fetch to the proxy.
 	// Only replace tools actually enabled/present.
 	bashTool := builtin.ConfineBash(bashSpec, sessionGuard, bashTimeout)
@@ -2567,7 +2567,6 @@ func addBuiltins(reg *tool.Registry, enabled, writeRoots []string, writeRootSet 
 		writers[i] = builtin.BindFileWriteReceipt(writer, fileWriteReceipt)
 	}
 	confined := append(writers,
-		bashTool,
 		searchTool,
 		builtin.ConfineWebFetch(proxySpec))
 	confined = append(confined, builtin.ConfineReaders(forbidReadRoots)...)
@@ -2579,6 +2578,7 @@ func addBuiltins(reg *tool.Registry, enabled, writeRoots []string, writeRootSet 
 			reg.Add(t)
 		}
 	}
+	registerShellBuiltin(reg, bashTool, writeRootSet)
 }
 
 // partitionByTier splits configured plugin entries into eager (block boot until

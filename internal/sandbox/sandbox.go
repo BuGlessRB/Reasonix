@@ -14,8 +14,6 @@
 package sandbox
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -38,19 +36,11 @@ func RepairLegacyCredentialDeny(path string) error {
 	return repairLegacyCredentialDeny(path)
 }
 
-const windowsSandboxFailureMarkerPrefix = "__reasonix_windows_sandbox_failure__:"
-
-func WindowsSandboxFailureMarker(payload string) string {
-	sum := sha256.Sum256([]byte(payload))
-	return windowsSandboxFailureMarkerPrefix + hex.EncodeToString(sum[:])
-}
-
-func WindowsSandboxFailureMarkerFromCommand(argv []string) (string, bool) {
-	if len(argv) < 4 || argv[1] != WindowsHelperCommand || argv[2] == "" || argv[3] != "--" {
-		return "", false
-	}
-	return WindowsSandboxFailureMarker(argv[2]), true
-}
+const (
+	WindowsSandboxFailureAuthorization = "authorization"
+	WindowsSandboxFailureDependency    = "dependency"
+	WindowsSandboxFailureLaunch        = "launch"
+)
 
 // Spec describes how to confine one command. The zero value (Mode == "") does
 // not enforce, so an unconfigured caller runs commands unchanged.

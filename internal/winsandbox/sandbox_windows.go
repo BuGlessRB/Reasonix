@@ -65,7 +65,7 @@ func Run(spec Spec, argv []string, opts RunOptions) (Result, error) {
 		return Result{}, fmt.Errorf("windows sandbox command is required")
 	}
 	if !Available() {
-		return Result{}, ErrUnsupported
+		return Result{}, failureAt(FailureDependency, ErrUnsupported)
 	}
 	code, err := runWindowsSandboxed(spec, argv, opts)
 	if err != nil {
@@ -92,7 +92,7 @@ func runWindowsSandboxed(spec Spec, argv []string, opts RunOptions) (int, error)
 	// deny residue left by a crashed run before we mutate ACLs.
 	lock, err := lockWindowsRoots(windowsMutatedRootsForRun(spec, argv[0]), lockWaitNotice(opts), lockHolderLabel(argv), spec.LockWait)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 	defer lock.release()
 	sweepWindowsDenyResidue()
@@ -103,46 +103,46 @@ func runWindowsSandboxed(spec Spec, argv []string, opts RunOptions) (int, error)
 	defer residueRun.clear()
 	ac, err := prepareAppContainer(spec)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 	defer ac.close()
 	tempRoot, cleanupTemp, err := windowsSandboxTempRoot(spec)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 	defer cleanupTemp()
 	cleanupFS, err := grantAppContainerFilesystem(residueRun, ac.sid, spec, tempRoot)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 	defer cleanupFS()
 	cleanupExe, err := grantAppContainerExecutable(residueRun, ac.sid, argv[0])
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 	defer cleanupExe()
 
 	job, err := sandboxJobObject()
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureDependency, err)
 	}
 	defer windows.CloseHandle(job)
 
 	childEnv := windowsSandboxEnv(spec, tempRoot, opts.Env)
 	pi, err := startAppContainerProcess(ac, argv, childEnv, opts)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureLaunch, err)
 	}
 	defer windows.CloseHandle(pi.Process)
 	defer windows.CloseHandle(pi.Thread)
 
 	if err := windows.AssignProcessToJobObject(job, pi.Process); err != nil {
 		_ = windows.TerminateProcess(pi.Process, 1)
-		return 0, err
+		return 0, failureAt(FailureLaunch, err)
 	}
 	if _, err := windows.ResumeThread(pi.Thread); err != nil {
 		_ = windows.TerminateJobObject(job, 1)
-		return 0, fmt.Errorf("resume sandboxed process: %w", err)
+		return 0, failureAt(FailureLaunch, fmt.Errorf("resume sandboxed process: %w", err))
 	}
 	event, err := windows.WaitForSingleObject(pi.Process, windowsSandboxWaitLimitMilliseconds())
 	if err != nil {
@@ -166,17 +166,17 @@ func runWindowsSandboxed(spec Spec, argv []string, opts RunOptions) (int, error)
 
 func runWindowsRestrictedSandboxed(spec Spec, argv []string, opts RunOptions) (int, error) {
 	if !spec.Network {
-		return 0, fmt.Errorf("network=false is not available for Windows WRITE_RESTRICTED commands")
+		return 0, failureAt(FailureDependency, fmt.Errorf("network=false is not available for Windows WRITE_RESTRICTED commands"))
 	}
 	tempRoot, cleanupTemp, err := windowsSandboxTempRoot(spec)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 	defer cleanupTemp()
 
 	capabilities, err := prepareRestrictedCapabilities(spec, tempRoot, lockWaitNotice(opts), lockHolderLabel(argv))
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 
 	// forbid_read remains a temporary deny on the caller SID, so runs that use
@@ -185,7 +185,7 @@ func runWindowsRestrictedSandboxed(spec Spec, argv []string, opts RunOptions) (i
 	// locks in prepareRestrictedCapabilities instead of serializing commands.
 	lock, err := lockWindowsRoots(existingWindowsForbidReadRoots(spec), lockWaitNotice(opts), lockHolderLabel(argv), spec.LockWait)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 	defer lock.release()
 	sweepWindowsDenyResidue()
@@ -193,37 +193,37 @@ func runWindowsRestrictedSandboxed(spec Spec, argv []string, opts RunOptions) (i
 	defer residueRun.clear()
 	cleanupForbidRead, err := applyRestrictedForbidRead(residueRun, spec.ForbidReadRoots)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 	defer cleanupForbidRead()
 
 	token, err := createWriteRestrictedPrimaryToken(spec.ReadOnly, capabilities)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureAuthorization, err)
 	}
 	defer token.Close()
 
 	job, err := sandboxJobObject()
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureDependency, err)
 	}
 	defer windows.CloseHandle(job)
 
 	childEnv := windowsSandboxEnv(spec, tempRoot, opts.Env)
 	pi, err := startRestrictedTokenProcess(token, argv, childEnv, opts)
 	if err != nil {
-		return 0, err
+		return 0, failureAt(FailureLaunch, err)
 	}
 	defer windows.CloseHandle(pi.Process)
 	defer windows.CloseHandle(pi.Thread)
 
 	if err := windows.AssignProcessToJobObject(job, pi.Process); err != nil {
 		_ = windows.TerminateProcess(pi.Process, 1)
-		return 0, err
+		return 0, failureAt(FailureLaunch, err)
 	}
 	if _, err := windows.ResumeThread(pi.Thread); err != nil {
 		_ = windows.TerminateJobObject(job, 1)
-		return 0, fmt.Errorf("resume sandboxed process: %w", err)
+		return 0, failureAt(FailureLaunch, fmt.Errorf("resume sandboxed process: %w", err))
 	}
 	event, err := windows.WaitForSingleObject(pi.Process, windowsSandboxWaitLimitMilliseconds())
 	if err != nil {
