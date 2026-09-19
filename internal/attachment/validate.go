@@ -134,6 +134,7 @@ func imageMIME(format string) string {
 	}
 }
 
+//nolint:unused // The final variant layer reuses these validation semantics.
 func hasAlpha(img image.Image) bool {
 	switch img.(type) {
 	case *image.NRGBA, *image.NRGBA64, *image.RGBA, *image.RGBA64, *image.Alpha, *image.Alpha16:

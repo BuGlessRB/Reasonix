@@ -15,10 +15,12 @@ func collectInboxContentRefsChecked(sessionDir string) ([]sessioncontent.Ref, er
 	return sessioninbox.FrozenContentRefs(store.SessionInboxDir(sessionDir))
 }
 
+//nolint:unused // The history export layer deduplicates its content closure with this key.
 func contentRefKey(ref sessioncontent.Ref) string {
 	return ref.Digest + ":" + itoa64(ref.Bytes) + ":" + ref.IndexDigest
 }
 
+//nolint:unused // Kept allocation-free for contentRefKey in the history export layer.
 func itoa64(n int64) string {
 	if n == 0 {
 		return "0"
