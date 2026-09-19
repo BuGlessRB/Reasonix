@@ -11,7 +11,8 @@ import type { ForkBlockReason } from "../lib/forkTargets";
 import type { SessionAvailability } from "../lib/sessionAvailability";
 import { orderedLocalSubmissions } from "../lib/localSubmissionState";
 import { RotateCcw } from "lucide-react";
-import { draftSurfaceNeedsAttention, type SessionDraftSurface } from "../app-runtime/useSessionDraftSurface";
+import type { SessionDraftSurface } from "../app-runtime/useSessionDraftSurface";
+import { draftSurfaceNeedsAttention } from "./draftPresentation";
 
 const RemoteSessionSurface = lazy(() => import("../components/RemoteSessionSurface").then((module) => ({ default: module.RemoteSessionSurface })));
 const SidebarImConnectionDetail = lazy(() => import("./SidebarImConnectionDetail").then((module) => ({ default: module.SidebarImConnectionDetail })));

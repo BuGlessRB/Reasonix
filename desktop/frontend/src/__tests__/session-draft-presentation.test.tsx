@@ -7,6 +7,7 @@ import { JSDOM } from "jsdom";
 import type { SessionDraftSurface } from "../app-runtime/useSessionDraftSurface";
 import { initialState } from "../lib/useController";
 import { LocaleProvider, type Translator } from "../lib/i18n";
+import { creationHeroVisible } from "../app-shell/draftPresentation";
 
 register(new URL("../../scripts/svg-loader.mjs", import.meta.url));
 const { ChatPaneRegion } = await import("../app-shell/ChatPaneRegion");
@@ -45,6 +46,18 @@ const surface: SessionDraftSurface = {
 };
 
 const noop = () => {};
+for (const emptyHero of [true, false]) {
+  assert.equal(creationHeroVisible(null, emptyHero), emptyHero, "formal sessions keep their own layout");
+  assert.equal(creationHeroVisible(surface, emptyHero), true, "healthy drafts own the welcome layout");
+  for (const failure of [
+    { saveState: "conflict" as const },
+    { saveState: "error" as const },
+    { taskError: "Attachment failed" },
+  ]) {
+    assert.equal(creationHeroVisible({ ...surface, ...failure }, emptyHero), false,
+      "draft recovery is never collapsed by a hidden empty formal session");
+  }
+}
 const commands = { onPrompt: noop, onFork: noop, onLoadOlderHistory: async () => false, onLoadNewerHistory: async () => false, onSurfacePaintReady: noop };
 const transcript = {
   state: { ...initialState, meta: { ready: true, eventChannel: "fixture" } },

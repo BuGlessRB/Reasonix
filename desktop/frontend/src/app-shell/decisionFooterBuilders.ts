@@ -15,7 +15,8 @@ import type { useComposerModeActions } from "../lib/useComposerModeActions";
 import type { useComposerGoalCommands } from "../app-runtime/useComposerGoalCommands";
 import type { useRemoteComposerRuntimeActions } from "../lib/useRemoteComposerIntegration";
 import type { useControllerProfileCommands } from "../lib/useControllerProfileCommands";
-import { draftSubmissionLocksEditing, draftSurfaceNeedsAttention, type useSessionDraftSurface } from "../app-runtime/useSessionDraftSurface";
+import { draftSubmissionLocksEditing, type useSessionDraftSurface } from "../app-runtime/useSessionDraftSurface";
+import { draftSurfaceNeedsAttention } from "./draftPresentation";
 import type {
   ApprovalProps,
   AskProps,
@@ -414,6 +415,13 @@ export function buildComposerSurface(input: ComposerSurfaceInput): DecisionFoote
         ...surface.props.workspaceContext,
         scope: draft.draft.scope === "project" ? "project" : "global",
         workspaceRoot: draft.draft.workspaceRoot,
+        workspaceName: draft.draft.scope === "project"
+          ? draft.draft.workspaceRoot?.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).pop()
+          : undefined,
+        // Drafts have no formal tab. Git RPCs require that tab's identity and
+        // must never target the session that happened to be open beforehand.
+        tabId: undefined,
+        gitBranch: undefined,
         scopeKey: `draft:${draft.draft.workspaceId}`,
         remote: false,
       } : undefined,

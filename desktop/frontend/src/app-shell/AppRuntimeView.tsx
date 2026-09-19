@@ -15,7 +15,8 @@ import type { useNavigationSurface } from "../lib/useNavigationSurface";
 import type { useAppShellStores } from "../app-runtime/useAppShellStores";
 import type { useAppSessionComposition } from "../app-runtime/useAppSessionComposition";
 import type { useAppNavigationComposition } from "../app-runtime/useAppNavigationComposition";
-import { draftSurfaceNeedsAttention, type useSessionDraftSurface } from "../app-runtime/useSessionDraftSurface";
+import type { useSessionDraftSurface } from "../app-runtime/useSessionDraftSurface";
+import { creationHeroVisible } from "./draftPresentation";
 import type { HistoryViewState } from "../app-runtime/historyViewProjection";
 import { ShellHotkeys, TextSizeHotkeys } from "./HotkeyRegistrations";
 import { WindowChromeLifecycle } from "../app-runtime/WindowChromeLifecycle";
@@ -114,7 +115,6 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
   const { state, activeTab, activeTabId, t, locale } = core;
   const { windowsFramelessChrome, mainWindowMaximised } = shell;
   const draftActive = Boolean(draft.surface);
-  const draftNeedsAttention = draft.surface ? draftSurfaceNeedsAttention(draft.surface) : false;
   const {
     conversationView, visibleRuntimeState, sidebarImDetailConnection,
     surfaceWorkspacePanelRenderable, surfaceWorkspacePanelGridOpen, surfaceWorkspacePanelOverlay, terminalSurfaceOpen,
@@ -125,17 +125,11 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
   const runtimeTransitioning = core.surface.transitioning;
   const presentationTransitioning = runtimeTransitioning && core.remoteSurfaceActive;
   const browserPreviewChrome = navigation.browserPreviewChrome;
-  // A draft owns its workspace independently from whichever formal tab was
-  // visible before it opened. Build the composer context from that owner so a
-  // restored draft never shows the previous project's name or loses the bar.
-  const draftWorkspace = draft.surface?.draft.scope === "project"
-    ? (draft.surface.draft.workspaceRoot ?? "").trim()
-    : "";
   const workspaceContextProject = Boolean(
-    activeTab?.remote || (activeTab?.scope === "project" && activeTab.workspaceRoot) || draftWorkspace,
+    activeTab?.remote || (activeTab?.scope === "project" && activeTab.workspaceRoot),
   );
   const workspaceContextRoot = workspaceContextProject
-    ? draftWorkspace || (activeTab?.workspaceRoot ?? state.meta?.workspaceRoot ?? state.meta?.cwd ?? "")
+    ? (activeTab?.workspaceRoot ?? state.meta?.workspaceRoot ?? state.meta?.cwd ?? "")
     : "";
 
   const workbenchChromeHidden = true;
@@ -322,7 +316,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
             />}
           </TopicbarRegion>
 
-        <section className={`chat-pane${session.transcript.emptyHero || (draftActive && !draftNeedsAttention) ? " chat-pane--creation-empty" : ""}`}>
+        <section className={`chat-pane${creationHeroVisible(draft.surface, session.transcript.emptyHero) ? " chat-pane--creation-empty" : ""}`}>
           {!draft.surface && <SessionStatusBanners {...buildSessionStatusBannerProps({
             t,
             activeTab,
@@ -458,9 +452,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
                 scope: workspaceContextProject ? "project" : "global",
                 workspaceRoot: workspaceContextRoot,
                 workspaceName: workspaceContextProject
-                  ? draftWorkspace
-                    ? workspaceContextRoot.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).pop()
-                    : activeTab?.workspaceName ?? state.meta?.workspaceName
+                  ? activeTab?.workspaceName ?? state.meta?.workspaceName
                   : undefined,
                 gitBranch: workspaceContextProject && !activeTab?.remote ? state.meta?.gitBranch : undefined,
                 tabId: activeTabId,
