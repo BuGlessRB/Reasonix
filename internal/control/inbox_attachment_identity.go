@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/sessioninbox"
 )
 
+//nolint:unused // The reliability layer persists this stable attachment fingerprint.
 func inboxAttachmentFingerprint(req InboxRequest, env sessioninbox.PromptEnvelope) string {
 	intent := req.Intent
 	if intent != sessioninbox.IntentSteer {
