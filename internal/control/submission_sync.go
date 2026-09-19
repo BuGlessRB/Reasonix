@@ -133,3 +133,13 @@ func isNonTurnHTTPInput(input string) bool {
 	}
 	return false
 }
+
+// isSessionManagementSubmission reports commands that mutate or inspect the
+// current session without admitting a model turn. They retain the original
+// submission gate but must not enter attachment preparation: /new and /clear
+// rotate the owner that attachment preparation is bound to.
+func isSessionManagementSubmission(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	return trimmed == "/new" || trimmed == "/clear" || trimmed == "/context" ||
+		trimmed == "/compact" || strings.HasPrefix(trimmed, "/compact ")
+}
