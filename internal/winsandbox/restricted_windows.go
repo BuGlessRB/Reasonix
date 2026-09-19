@@ -252,11 +252,9 @@ func validateCapabilityBoundaries(writeRoots []string, tempRoot string, protecte
 			return fmt.Errorf("session temp %q overlaps protected state root %q", tempRoot, abs)
 		}
 		for _, root := range writeRoots {
-			// A capability is placed on the exact writable directory, not on its
-			// ancestors. It is therefore safe for the desktop's explicit
-			// global-workspace to live below the Reasonix state root. The reverse
-			// relationship is unsafe: granting a workspace that contains the
-			// protected root would make the protected data inherit the write ACE.
+			// Capabilities apply to exact directories, so global-workspace may live
+			// below protected state. A workspace containing protected state would
+			// make that state inherit the write ACE and remains forbidden.
 			if windowsPathWithin(abs, root) {
 				if isWindowsGlobalWorkspaceException(abs, root) {
 					continue
@@ -426,13 +424,9 @@ func createWriteRestrictedPrimaryToken(readOnly bool, capabilities []restrictedC
 		return 0, fmt.Errorf("CreateRestrictedToken returned a null token")
 	}
 
-	// libuv implements captured child stdio with named pipes and requests
-	// WRITE_DAC when it reopens the client end. WRITE_RESTRICTED performs a
-	// second access check against restricting SIDs, so the default DACL for
-	// process-created objects must grant the per-logon SID as well as the
-	// session-temp capability. The logon SID is already in the restricting
-	// list and is not added to filesystem ACLs, so existing paths outside the
-	// configured write roots do not gain any authority.
+	// libuv captured stdio reopens named pipes with WRITE_DAC. Grant the logon
+	// SID for WRITE_RESTRICTED's second check; because it is not added to path
+	// ACLs, existing files outside configured write roots gain no authority.
 	defaultSIDs := []*windows.SID{logonSID}
 	if !readOnly {
 		defaultSID := capabilities[0].sid
