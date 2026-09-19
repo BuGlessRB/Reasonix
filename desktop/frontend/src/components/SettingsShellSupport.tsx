@@ -35,13 +35,10 @@ function capabilityLabel(id: string, t: ReturnType<typeof useT>): string {
   }
 }
 
-function capabilityForShell(capabilities: ShellCapabilityView[], shell: string): ShellCapabilityView | undefined {
-  return capabilities.find((capability) => capability.id === shell);
-}
-
 function visibleCapabilities(capabilities: ShellCapabilityView[], windows: boolean): ShellCapabilityView[] {
-  const visible = windows ? new Set(["pwsh", "powershell"]) : new Set(["bash", "zsh", "sh"]);
-  return capabilities.filter((capability) => visible.has(capability.id));
+  return capabilities.filter(({ id }) => windows
+    ? id === "pwsh" || id === "powershell"
+    : id === "bash" || id === "zsh" || id === "sh");
 }
 
 function selectedPreference(preference: string, windows: boolean): string {
@@ -55,9 +52,9 @@ function ShellRuntimeValue({ shell, capabilities, t }: {
   capabilities: ShellCapabilityView[];
   t: ReturnType<typeof useT>;
 }) {
-  const capability = capabilityForShell(capabilities, shell);
+  const capability = capabilities.find(({ id }) => id === shell);
   return (
-    <div className="shell-runtime-value">
+    <div className="shell-runtime">
       <span>{effectiveShellLabel(shell, t)}</span>
       {capability?.path && <code title={capability.path}>{capability.path}</code>}
     </div>
@@ -193,11 +190,11 @@ export function ShellEnvironmentDetails({
   const needsAttention = Boolean(sb.shellReloadRequired || runtimeMissing || nativeFallback || powershellFallback);
 
   return (
-    <details className="sandbox-environment-details" open={needsAttention || undefined}>
+    <details className="runtime-details" open={needsAttention || undefined}>
       <summary>
         <span>{t("settings.runtimeDetails")}</span>
       </summary>
-      <div className="sandbox-environment-details__body">
+      <div>
         {field(t("settings.shellDetection"),
           <div className="shell-support">
             <div className="settings-readonly-field shell-support__detection" aria-label={t("settings.shellDetection")}>
@@ -225,12 +222,12 @@ export function ShellEnvironmentDetails({
               ))}
             </div>
           </div>, true)}
-        <div className="sandbox-environment-details__actions">
+        <footer>
           <button type="button" className="btn btn--small" disabled={busy} title={t("settings.reloadSessionConfigHint")} onClick={reloadSession}>
             <RefreshCw size={13} aria-hidden="true" />
             <span>{t("settings.reloadSessionConfig")}</span>
           </button>
-        </div>
+        </footer>
       </div>
     </details>
   );

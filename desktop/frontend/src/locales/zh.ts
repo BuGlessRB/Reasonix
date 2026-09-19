@@ -2346,7 +2346,7 @@ export const zh: Record<DictKey, string> = {
   "settings.shellInterpreter": "Shell 解释器",
   "settings.powershellRuntime": "PowerShell 运行时",
   "settings.shellAuto": "自动（bash 优先）",
-  "settings.shellAutoWindows": "自动（优先 PowerShell 7，回退到 Windows PowerShell）",
+  "settings.shellAutoWindows": "自动（优先 PowerShell 7）",
   "settings.shellBash": "bash",
   "settings.shellPowershell": "PowerShell（Windows PowerShell）",
   "settings.shellPwsh": "pwsh（PowerShell 7+）",

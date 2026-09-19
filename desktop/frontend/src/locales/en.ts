@@ -2344,7 +2344,7 @@ export const en = {
   "settings.shellInterpreter": "Shell interpreter",
   "settings.powershellRuntime": "PowerShell runtime",
   "settings.shellAuto": "auto (bash first)",
-  "settings.shellAutoWindows": "auto (PowerShell 7 first; Windows PowerShell fallback)",
+  "settings.shellAutoWindows": "auto (PowerShell 7 first)",
   "settings.shellBash": "bash",
   "settings.shellPowershell": "PowerShell (Windows PowerShell)",
   "settings.shellPwsh": "pwsh (PowerShell 7+)",

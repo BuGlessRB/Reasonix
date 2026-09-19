@@ -18060,10 +18060,10 @@ body > .mermaid-diagram--fullscreen {
   font-size: var(--font-control);
   font-weight: 650;
 }
-.shell-runtime-value {
+.shell-runtime {
   min-width: 0;
 }
-.shell-runtime-value code {
+.shell-runtime code {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -18154,18 +18154,18 @@ body > .mermaid-diagram--fullscreen {
   gap: 8px;
   align-items: center;
 }
-.sandbox-environment-details {
+.runtime-details {
   border-top: 1px solid var(--border-soft);
   padding-top: 13px;
 }
-.sandbox-environment-details > summary {
+.runtime-details > summary {
   cursor: pointer;
   font-weight: 650;
 }
-.sandbox-environment-details__body {
+.runtime-details > div {
   margin-top: 4px;
 }
-.sandbox-environment-details__actions {
+.runtime-details > div > footer {
   display: flex;
   padding-top: 12px;
 }
