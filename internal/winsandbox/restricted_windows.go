@@ -424,21 +424,17 @@ func createWriteRestrictedPrimaryToken(readOnly bool, capabilities []restrictedC
 		return 0, fmt.Errorf("CreateRestrictedToken returned a null token")
 	}
 
-	// libuv captured stdio reopens named pipes with WRITE_DAC. Grant the logon
-	// SID for WRITE_RESTRICTED's second check; because it is not added to path
-	// ACLs, existing files outside configured write roots gain no authority.
-	defaultSIDs := []*windows.SID{logonSID}
+	defaultSID := worldSID
 	if !readOnly {
-		defaultSID := capabilities[0].sid
+		defaultSID = capabilities[0].sid
 		for _, capability := range capabilities {
 			if capability.purpose == capabilitySessionTemp {
 				defaultSID = capability.sid
 				break
 			}
 		}
-		defaultSIDs = append(defaultSIDs, defaultSID)
 	}
-	if err := setRestrictedTokenDefaultDACL(token, defaultSIDs...); err != nil {
+	if err := setRestrictedTokenDefaultDACL(token, defaultSID); err != nil {
 		token.Close()
 		return 0, err
 	}
@@ -467,10 +463,7 @@ type tokenDefaultDACL struct {
 	DefaultDACL *windows.ACL
 }
 
-func setRestrictedTokenDefaultDACL(token windows.Token, sids ...*windows.SID) error {
-	if len(sids) == 0 {
-		return fmt.Errorf("restricted token default DACL requires an allowed SID")
-	}
+func setRestrictedTokenDefaultDACL(token windows.Token, sid *windows.SID) error {
 	var needed uint32
 	err := windows.GetTokenInformation(token, windows.TokenDefaultDacl, nil, 0, &needed)
 	if err != nil && !errors.Is(err, windows.ERROR_INSUFFICIENT_BUFFER) {
@@ -489,25 +482,19 @@ func setRestrictedTokenDefaultDACL(token windows.Token, sids ...*windows.SID) er
 	}
 
 	var pin runtime.Pinner
+	pin.Pin(sid)
 	defer pin.Unpin()
-	entries := make([]windows.EXPLICIT_ACCESS, 0, len(sids))
-	for _, sid := range sids {
-		if sid == nil {
-			return fmt.Errorf("restricted token default DACL contains a nil SID")
-		}
-		pin.Pin(sid)
-		entries = append(entries, windows.EXPLICIT_ACCESS{
-			AccessPermissions: windows.ACCESS_MASK(fileAllAccess),
-			AccessMode:        windows.GRANT_ACCESS,
-			Inheritance:       windows.NO_INHERITANCE,
-			Trustee: windows.TRUSTEE{
-				TrusteeForm:  windows.TRUSTEE_IS_SID,
-				TrusteeType:  windows.TRUSTEE_IS_UNKNOWN,
-				TrusteeValue: windows.TrusteeValueFromSID(sid),
-			},
-		})
+	entry := windows.EXPLICIT_ACCESS{
+		AccessPermissions: windows.ACCESS_MASK(fileAllAccess),
+		AccessMode:        windows.GRANT_ACCESS,
+		Inheritance:       windows.NO_INHERITANCE,
+		Trustee: windows.TRUSTEE{
+			TrusteeForm:  windows.TRUSTEE_IS_SID,
+			TrusteeType:  windows.TRUSTEE_IS_UNKNOWN,
+			TrusteeValue: windows.TrusteeValueFromSID(sid),
+		},
 	}
-	acl, err := windows.ACLFromEntries(entries, current)
+	acl, err := windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{entry}, current)
 	if err != nil {
 		return fmt.Errorf("merge restricted token default DACL: %w", err)
 	}

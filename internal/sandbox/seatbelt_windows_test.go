@@ -214,7 +214,7 @@ func TestRunWindowsSandboxHelperRunsExternalSandbox(t *testing.T) {
 	}
 }
 
-func TestWindowsRestrictedTokenAllowsNodeDefaultPipes(t *testing.T) {
+func TestWindowsRestrictedTokenDocumentsNodeStdioBoundary(t *testing.T) {
 	RegisterHelperDispatch()
 	if !Available() {
 		t.Skip("windows sandbox APIs unavailable")
@@ -224,7 +224,7 @@ func TestWindowsRestrictedTokenAllowsNodeDefaultPipes(t *testing.T) {
 		t.Skip("node unavailable")
 	}
 	workspace := t.TempDir()
-	pipeOutput := filepath.Join(workspace, "pipe-output.txt")
+	boundaryOutput := filepath.Join(workspace, "stdio-boundary.txt")
 	payload, err := encodeWindowsSandboxPayload(windowsSandboxPayload{
 		Spec:     Spec{Mode: "enforce", WriteRoots: []string{workspace}, Network: true},
 		Writable: true,
@@ -232,13 +232,16 @@ func TestWindowsRestrictedTokenAllowsNodeDefaultPipes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	js := `const fs=require("fs");const {spawnSync}=require("child_process");const r=spawnSync(process.execPath,["-e","process.stdout.write('pipe-ok')"],{encoding:"utf8"});if(r.error)throw r.error;if(r.status!==0)process.exit(r.status||1);fs.writeFileSync(` + strconv.Quote(pipeOutput) + `,r.stdout);`
+	js := `const fs=require("fs");const {spawnSync}=require("child_process");` +
+		`for(const stdio of ["inherit","ignore"]){const r=spawnSync(process.execPath,["-e","process.exit(0)"],{stdio});if(r.error||r.status!==0)process.exit(2);}` +
+		`const piped=spawnSync(process.execPath,["-e","process.exit(0)"],{stdio:"pipe"});` +
+		`if(!piped.error||piped.error.code!=="EPERM")process.exit(3);fs.writeFileSync(` + strconv.Quote(boundaryOutput) + `,"inherit=ok ignore=ok pipe=EPERM");`
 	if code := RunWindowsSandboxHelper([]string{payload, "--", node, "-e", js}, os.Stdin, os.Stdout, os.Stderr); code != 0 {
 		t.Fatalf("helper exit=%d", code)
 	}
-	got, err := os.ReadFile(pipeOutput)
-	if err != nil || !strings.Contains(string(got), "pipe-ok") {
-		t.Fatalf("default child_process pipe output missing: %q err=%v", got, err)
+	got, err := os.ReadFile(boundaryOutput)
+	if err != nil || !strings.Contains(string(got), "pipe=EPERM") {
+		t.Fatalf("child_process stdio boundary missing: %q err=%v", got, err)
 	}
 }
 

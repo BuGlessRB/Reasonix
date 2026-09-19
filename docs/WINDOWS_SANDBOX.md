@@ -52,6 +52,14 @@ resumed. Closing or timing out the run terminates the process tree.
 PowerShell and Node initialization rely on normal console inheritance. The
 Reasonix helper process remains hidden by the desktop process launcher.
 
+Like Harness, this lane supports child processes that inherit or ignore stdio
+and PowerShell pipelines. Node/libuv captured stdio uses named pipes whose
+fixed Windows default descriptor does not include a restricting SID, so
+`stdio: "pipe"` fails with `EPERM`. Reasonix reports this runtime denial with a
+single-use `denial_id`; after explicit approval, the exact command can be
+retried with `danger-full-access`. It never weakens the file write boundary to
+make named-pipe capture succeed.
+
 ## Direct-tool and protected-read lane
 
 The existing AppContainer path remains for direct read-only tools and is the

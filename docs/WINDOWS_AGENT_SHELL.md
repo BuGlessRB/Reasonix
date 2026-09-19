@@ -20,9 +20,20 @@ Read its incremental log or wait for a terminal state with
 `job_output({"job_id":"pwsh-1","wait":false})`, and stop the whole process
 tree with `job_kill({"job_id":"pwsh-1","reason":"service no longer needed"})`.
 
+OpenMAIC and its children should inherit or ignore stdio; PowerShell pipelines
+also work normally. Node/libuv `stdio: "pipe"` capture returns `EPERM` under
+Windows `WRITE_RESTRICTED`. `job_output` includes a single-use `denial_id` for
+an explicitly approved exact retry with `danger-full-access`; Reasonix never
+bypasses the sandbox automatically.
+
 如果本地 OpenMAIC 的启动命令是 `npm run start`，可以按上面的方式后台启动；
 请按实际部署替换目录和启动命令。返回 `pwsh-*` 后，使用 `job_output` 读取增量
 日志或等待终态，使用 `job_kill` 停止完整进程树。
+
+OpenMAIC 及其子进程应继承或忽略 stdio；PowerShell 管道也可正常使用。如果依赖
+Node/libuv 的 `stdio: "pipe"` 捕获子进程输出，Windows `WRITE_RESTRICTED` 会返回
+`EPERM`。`job_output` 会附带单次使用的 `denial_id`，供用户明确批准后以
+`danger-full-access` 精确重试；Reasonix 不会自动绕过沙箱。
 
 Reasonix no longer runs a nested shell/child-process preflight before each Windows command. The restricted-token runner executes the requested command directly. A private inherited report handle carries pre-command `dependency`, `authorization`, and `launch` failures; command stdout/stderr cannot claim that execution never started. The handle is not inherited by the restricted child, and its temporary backing file cannot be reopened by name and is deleted on close. Foreground and background runtime permission denials offer the same exact-command, single-use `denial_id` retry after explicit approval; runtime failures remain `execution` with possible partial effects. Reasonix never retries outside the selected sandbox by itself.
 

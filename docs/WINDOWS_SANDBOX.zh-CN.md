@@ -45,6 +45,13 @@ CNG、管道及桌面初始化正常工作。默认 DACL 优先使用会话临�
 此通道有意不使用 `CREATE_NO_WINDOW`，因为受限 PowerShell 和 Node 的初始化
 依赖正常控制台继承。Reasonix 的 Helper 本身仍由桌面进程启动器隐藏。
 
+与 Harness 一致，此通道支持继承或忽略 stdio 的子进程，也支持 PowerShell
+管道。Node/libuv 的捕获 stdio 使用命名管道，而 Windows 为该管道生成的固定默认
+安全描述符不包含限制 SID，因此 `stdio: "pipe"` 会返回 `EPERM`。Reasonix 会为
+这个运行期拒绝返回单次使用的 `denial_id`；用户明确批准后，可用
+`danger-full-access` 精确重试同一命令。Reasonix 不会为了命名管道捕获而放宽文件
+写入边界。
+
 ## 直接工具、禁读和并发
 
 直接只读工具继续使用 AppContainer；Windows 上只有这条通道可以移除网络
