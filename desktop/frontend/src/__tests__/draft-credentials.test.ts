@@ -1,6 +1,7 @@
 // Run: tsx src/__tests__/draft-credentials.test.ts
 
 import { draftIDsFromSubmit } from "../lib/draftCredentials";
+import { readSessionAttachmentDataURL } from "../lib/sessionAttachmentRead";
 
 let passed = 0;
 let failed = 0;
@@ -22,6 +23,15 @@ eq(
   "extracts unique lowercase draft credentials",
 );
 eq(draftIDsFromSubmit("no drafts here"), [], "returns no ids without draft credentials");
+
+console.log("\nsession attachment read");
+const png = Uint8Array.from([1, 2, 3, 4]);
+const encoded = Buffer.from(png).toString("base64");
+const url = await readSessionAttachmentDataURL("tab-1", "ab".repeat(32), "image/png", async (_tab, _digest, offset) => {
+  if (offset !== 0) throw new Error(`unexpected offset ${offset}`);
+  return { data: encoded, nextOffset: png.length, done: true };
+});
+eq(url, `data:image/png;base64,${encoded}`, "assembles a bounded attachment preview");
 
 console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
 if (failed > 0) process.exit(1);
