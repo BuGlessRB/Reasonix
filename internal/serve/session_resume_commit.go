@@ -43,10 +43,9 @@ func (s *Server) commitLoadedResume(w http.ResponseWriter, cur control.SessionAP
 			return false
 		}
 		w.Header().Set(sessionIDHeader, ref.SessionID)
-		// The legacy transcript is now an import artifact and the identity is
-		// the live route; re-point the frame tag or every subsequent turn
-		// would still be stamped with the frozen legacy path and dropped by
-		// identity-routed subscribers.
+		// The identity is the live route now. Leaving the frame tag on the
+		// frozen legacy path would stamp every later turn with it, and
+		// identity-routed subscribers drop those.
 		s.setControllerPath(ctrl, "")
 		if s.leases != nil {
 			// Migration has frozen and published the source. It is now a

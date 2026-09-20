@@ -244,10 +244,9 @@ func (s *Server) buildTagged(ctx context.Context, ref string, inheritTemp bool) 
 		opts.WorkspaceRoot = cur.WorkspaceRoot()
 		if inheritTemp {
 			opts.SessionTemp = cur.SessionTemp()
-			// Model/effort switches rebuild the Agent, not the logical session.
-			// Passing only SessionService creates a lazy controller with no bound
-			// runtime; its first submit then allocates a new ID while the desktop
-			// still fences the old one, producing HTTP 409.
+			// Model/effort switches rebuild the Agent, not the logical session:
+			// without the bound runtime the rebuilt controller's first submit
+			// allocates a new ID while the desktop fences the old one (HTTP 409).
 			if service, runtime, bound := cur.SessionBinding(); bound {
 				opts.SessionService = service
 				opts.SessionRuntime = runtime

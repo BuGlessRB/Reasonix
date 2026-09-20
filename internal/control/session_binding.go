@@ -69,10 +69,10 @@ func (c *Controller) ReleaseSessionForHandoff() error {
 	if err := c.ReleaseSessionRuntimeBinding(); err != nil {
 		return err
 	}
-	// See snapshotMu: the swap must not interleave with an in-flight save. The
-	// emptied transcript is what makes a later Snapshot a no-op instead of an
-	// "unbound runtime" error, and what keeps the handed-off conversation from
-	// being re-seeded into the identity the next turn allocates.
+	// Under snapshotMu so the swap cannot interleave with an in-flight save.
+	// The emptied transcript keeps a later Snapshot a no-op instead of an
+	// "unbound runtime" error, and keeps the handed-off conversation out of
+	// the identity the next turn allocates.
 	c.snapshotMu.Lock()
 	if c.executor != nil {
 		c.executor.SetSession(agent.NewSession(c.basePrompt()))
@@ -244,11 +244,9 @@ func (c *Controller) OpenSession(ctx context.Context, ref session.SessionRef) (s
 		return session.SessionRef{}, errors.New("v3 session service is unavailable")
 	}
 	if current != nil && current.Ref() == ref {
-		// The controller keeps rendering a runtime it no longer owns after a
-		// reclaim released the writer: the service closed that store, so its
-		// recovery database answers "not open" to the next turn append. Only
-		// the service's still-active instance may take the fast path; a closed
-		// one must fall through and be re-opened.
+		// After a reclaim the controller still renders a runtime whose store
+		// the service closed, so the next turn append would hit a closed
+		// recovery database. Only a still-active instance may skip the re-open.
 		if active, ok := service.Runtime(ref); ok && active == current {
 			return ref, nil
 		}
@@ -576,10 +574,9 @@ func (c *Controller) rotateExclusiveSession(clear bool) error {
 		reason = "clear"
 	}
 	if runtime == nil {
-		// A handoff released the identity without allocating a replacement, so
-		// there is no old session to flush, end or delete: allocation is the
-		// whole rotation, the same step the next turn would take lazily. No
-		// rotation plan runs because there is no source identity to plan from.
+		// A handoff released the identity without a replacement: with no source
+		// to flush, end or plan from, allocation is the whole rotation — the
+		// step the next turn would otherwise take lazily.
 		ref, err := c.bindFreshSessionWithCommit(context.Background(), session.CreateOptions{}, nil)
 		if err != nil {
 			return err
