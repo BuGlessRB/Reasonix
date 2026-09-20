@@ -163,10 +163,9 @@ func TestRunResumeKeepsCompletedIndexStableAcrossRecoveryGC(t *testing.T) {
 	m := newTestChatTUI()
 	m.width = 80
 	m.ctrl = ctrl
-	// The user reads the index from a list rendered while the controller is
-	// alive, so compute it the same way. The never-snapshotted active session
-	// leaves an engine mirror in the catalog whose visibility flips once its
-	// metadata is rebuilt; let it settle so both listings see the same rows.
+	// The user reads the index off a list rendered while the controller is
+	// alive, so compute it the same way once the never-snapshotted session's
+	// catalog metadata settles and both listings agree on the rows.
 	waitForCatalogMetadata(t, dir, agent.BranchID(activePath))
 	sessions := mergedResumeSessions(dir)
 	targetIndex := 0

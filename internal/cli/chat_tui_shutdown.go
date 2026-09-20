@@ -46,12 +46,9 @@ func (c *tuiShutdownCompletion) claimFallback() bool {
 // process keeps the active session's compatibility lock for the bounded wait.
 func (m chatTUI) shutdownAndQuit(msg tuiShutdownMsg) (tea.Model, tea.Cmd) {
 	if !msg.userInitiated && m.takeover != nil && m.takeover.Reclaiming() {
-		// A reclaim transaction is in flight: the manager goroutine owns the
-		// session's final snapshot and its return to the remote side, so the
-		// TUI must not race it with a second shutdown snapshot. The request is
-		// deferred, not dropped: completeSessionReclaim honors it as soon as
-		// the handoff has landed, so SIGHUP/SIGTERM during a reclaim still
-		// exit instead of leaving an orphaned process behind.
+		// The manager goroutine owns the in-flight reclaim's final snapshot and
+		// its return, so the TUI must not race it with a second snapshot. The
+		// request is deferred, not dropped: completeSessionReclaim honors it.
 		if msg.completion != nil {
 			msg.completion.complete()
 		}

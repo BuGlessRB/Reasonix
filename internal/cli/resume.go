@@ -61,9 +61,8 @@ func otherProjectResumeEntries(excludeDir string) []resumeEntry {
 			continue
 		}
 		// Cross-project rows are legacy transcripts only: a canonical identity
-		// belongs to its own project's session service and cannot be opened
-		// from this controller. Migrated sources are hidden so the row points
-		// at a conversation that is still live as a transcript.
+		// belongs to another project's session service. Migrated sources stay
+		// hidden so a row always points at a still-live transcript.
 		rows := foreignProjectResumeRows(t.path)
 		if len(rows) == 0 {
 			continue
@@ -185,10 +184,9 @@ func (m *chatTUI) runResumeCommand(input string) {
 		m.openResumePicker()
 		return
 	}
-	// Do not run recovery GC between displaying/completing a numeric index and
-	// resolving it here. Removing an earlier row would silently retarget the
-	// user's already-selected number. Bare /resume performs cleanup before it
-	// builds the picker, and startup performs the ordinary background sweep.
+	// Never run recovery GC between displaying a numeric index and resolving it
+	// here: dropping an earlier row would silently retarget the number the user
+	// already picked. Bare /resume and startup do that cleanup instead.
 	entries := resumeEntries(m.ctrl.SessionDir())
 	if len(entries) == 0 {
 		m.notice(i18n.M.NoSessionToResume)
@@ -276,11 +274,9 @@ func (m *chatTUI) commitCanonicalSessionSwitch(ref session.SessionRef) error {
 		return errors.New("session service unavailable")
 	}
 	ctx := context.Background()
-	// A probe grant secures the target writer before anything changes hands,
-	// so a held target (ErrWriterOwned) leaves the current session, its lease,
-	// and its mirror untouched, and no frame emitted while publishing the new
-	// runtime can land in the old mirror's queue. A retired stored codec has no
-	// writer to secure; OpenSession upgrades it into a fresh identity.
+	// The probe grant secures the target writer before anything changes hands,
+	// so a held target (ErrWriterOwned) leaves this session, its lease and its
+	// mirror untouched. A retired codec has no writer; OpenSession upgrades it.
 	probe, err := service.Open(ctx, ref)
 	if err != nil && !errors.Is(err, session.ErrUnsupportedVersion) {
 		return err

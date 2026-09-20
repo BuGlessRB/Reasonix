@@ -49,10 +49,9 @@ func (m *chatTUI) handleSessionReclaimed() {
 	// switchable; its rows and default selection are stale now.
 	m.resumePick = nil
 	m.resetComposerInput()
-	// Keep the reclaimed conversation rendered and the process alive: the
-	// notice explains the read-only state and the input gate accepts only the
-	// switch/takeover/exit commands, so the user chooses the next step instead
-	// of being thrown into the session chooser.
+	// Keep the conversation rendered and the process alive: the notice explains
+	// the read-only state and the input gate accepts only switch/takeover/exit,
+	// so the user picks the next step instead of landing in the chooser.
 	m.notice(sessionReclaimedNotice)
 }
 
