@@ -21,6 +21,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
 	"reasonix/internal/session"
 )
@@ -219,7 +220,17 @@ func TestCanonicalTakeoverCommandReportsRefusedGrant(t *testing.T) {
 	}))
 	defer srv.Close()
 	withFakeCanonicalDiscovery(t, srv.URL)
-	m, ctrl, _, _ := newCanonicalTakeoverTUI(t)
+	m, ctrl, _, held := newCanonicalTakeoverTUI(t)
+	// Model the refusal that matters: another runtime really owns the writer,
+	// so the refused grant is the only way in.
+	holder, err := session.NewService("local", session.NewFilesystemPersistence(session.RootForLegacyDir(ctrl.SessionDir())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = holder.CloseAll(context.Background()) })
+	if _, err := holder.Open(t.Context(), held); err != nil {
+		t.Fatal(err)
+	}
 
 	m.runCanonicalTakeoverCommand(route)
 
@@ -704,5 +715,93 @@ func TestCanonicalTakeoverRediscoversAfterTransportFailure(t *testing.T) {
 	}
 	if fake.handoffCount() != 1 {
 		t.Fatalf("handoff requests to the live serve = %d, want 1", fake.handoffCount())
+	}
+}
+
+// TestCanonicalTakeoverOfFreeSessionResumes covers the promise the reclaim
+// notice makes after the desktop closed the session it took back: no runtime
+// holds the identity any more, so there is nothing to hand over and
+// /takeover resumes it instead of failing with "no resident serve holds this
+// session". Both shapes of "closed" are covered: the serve exited, and a
+// resident serve that no longer holds the session and refuses.
+func TestCanonicalTakeoverOfFreeSessionResumes(t *testing.T) {
+	t.Run("the serve exited", func(t *testing.T) {
+		previous := discoverCLIServesForTakeover
+		discoverCLIServesForTakeover = func() []cliServeRecord { return nil }
+		t.Cleanup(func() { discoverCLIServesForTakeover = previous })
+		m, ctrl, _, held := newCanonicalTakeoverTUI(t)
+
+		m.runCanonicalTakeoverCommand(cliCanonicalRoute("held"))
+
+		if ref, bound := ctrl.SessionRef(); !bound || ref != held {
+			t.Fatalf("controller after /takeover of a free session = %+v bound=%v, want %+v", ref, bound, held)
+		}
+		if binding, _, _, _ := m.takeover.snapshot(); binding != nil {
+			t.Fatalf("resuming a free session activated a mirror: %+v", binding)
+		}
+	})
+	t.Run("a resident serve no longer holds it", func(t *testing.T) {
+		route := cliCanonicalRoute("held")
+		fake := newFakeCanonicalServe(t, route)
+		withFakeCanonicalDiscovery(t, fake.base)
+		m, ctrl, _, held := newCanonicalTakeoverTUI(t)
+		m.runCanonicalTakeoverCommand(route)
+		yielded := make(chan struct{}, 1)
+		m.takeover.SetYieldCallback(func() { yielded <- struct{}{} })
+		fake.reclaim.Store(true)
+		m.takeover.Emit(event.Event{Kind: event.Text, Text: "answer"})
+		select {
+		case <-yielded:
+		case <-time.After(5 * time.Second):
+			t.Fatal("reclaim did not yield the identity")
+		}
+		next, _ := m.Update(tuiSessionReclaimedMsg{})
+		updated := next.(chatTUI)
+		m = &updated
+		// The desktop closed the tab: the serve stays resident but refuses,
+		// and nobody holds the writer.
+		refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/auth/token" {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			http.Error(w, "session is not held by this serve process", http.StatusConflict)
+		}))
+		defer refusing.Close()
+		withFakeCanonicalDiscovery(t, refusing.URL)
+
+		m.runTakeoverCommand("/takeover")
+
+		if ref, bound := ctrl.SessionRef(); !bound || ref != held {
+			t.Fatalf("controller after /takeover = %+v bound=%v, want %+v resumed", ref, bound, held)
+		}
+		if m.sessionReclaimed || m.takeover.Returned() {
+			t.Fatal("/takeover of the freed session left the CLI in reclaimed mode")
+		}
+		if binding, _, _, _ := m.takeover.snapshot(); binding != nil {
+			t.Fatalf("resuming a free session activated a mirror: %+v", binding)
+		}
+	})
+}
+
+// TestCanonicalTakeoverOfActiveSessionIsRejected keeps /takeover from
+// "resuming" the identity this controller already writes.
+func TestCanonicalTakeoverOfActiveSessionIsRejected(t *testing.T) {
+	previous := discoverCLIServesForTakeover
+	discoverCLIServesForTakeover = func() []cliServeRecord { return nil }
+	t.Cleanup(func() { discoverCLIServesForTakeover = previous })
+	m, ctrl, _, _ := newCanonicalTakeoverTUI(t)
+
+	m.runCanonicalTakeoverCommand(cliCanonicalRoute("fresh-cli"))
+
+	if ref, bound := ctrl.SessionRef(); !bound || ref.SessionID != "fresh-cli" {
+		t.Fatalf("controller = %+v bound=%v, want the active session untouched", ref, bound)
+	}
+	out := strings.Join(m.transcript, "\n")
+	if !strings.Contains(out, i18n.M.ResumeAlreadyActive) {
+		t.Fatalf("transcript missing the already-active notice:\n%s", out)
+	}
+	if strings.Contains(out, i18n.M.ResumedTitle) {
+		t.Fatalf("/takeover of the active session replayed the transcript:\n%s", out)
 	}
 }

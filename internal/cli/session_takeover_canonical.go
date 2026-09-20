@@ -148,7 +148,10 @@ func cliCanonicalRouteRef(sessionDir, route string) (session.SessionRef, error) 
 // runCanonicalTakeoverCommand handles "/takeover" for a final-format identity:
 // every resident serve is asked to hand the writer over; on grant the
 // controller attaches through OpenSession and the mirror manager forwards
-// frames so the remote tab keeps rendering read-only.
+// frames so the remote tab keeps rendering read-only. When no runtime holds
+// the identity any more there is nothing to hand over and it is resumed
+// directly, which is what the reclaim notice promises after the desktop has
+// closed the session it took back.
 func (m *chatTUI) runCanonicalTakeoverCommand(route string) {
 	if m.ctrl.Running() {
 		m.notice(i18n.M.ResumeBusy)
@@ -159,7 +162,11 @@ func (m *chatTUI) runCanonicalTakeoverCommand(route string) {
 		m.notice("takeover: " + err.Error())
 		return
 	}
-	detached := m.sessionReclaimed || m.takeover != nil && m.takeover.Returned()
+	if resumeEntryIsActive(m.ctrl, resumeEntry{target: cliResumeTarget{ref: ref}}) {
+		m.notice(i18n.M.ResumeAlreadyActive)
+		return
+	}
+	detached := m.sessionDetached()
 	if !detached {
 		if err := m.ctrl.Snapshot(); err != nil {
 			m.notice("takeover: snapshot current session: " + err.Error())
@@ -167,12 +174,9 @@ func (m *chatTUI) runCanonicalTakeoverCommand(route string) {
 		}
 		m.followSessionLease()
 	}
-	binding, err := cliTakeoverIdentityHeldSession(route, m.takeover)
-	if err != nil {
-		if !detached {
-			m.restoreSessionLease()
-		}
-		m.notice("takeover: " + err.Error())
+	binding, takeoverErr := cliTakeoverIdentityHeldSession(route, m.takeover)
+	if takeoverErr != nil {
+		m.resumeUnheldCanonicalSession(ref, takeoverErr, detached)
 		return
 	}
 	if err := m.commitCanonicalSessionSwitch(ref); err != nil {
@@ -191,6 +195,29 @@ func (m *chatTUI) runCanonicalTakeoverCommand(route string) {
 	m.resumeAfterReclaim()
 	m.replayActiveBranch(i18n.M.ResumedTitle)
 	m.notice("session taken over; the remote side is now read-only and can take it back")
+}
+
+// resumeUnheldCanonicalSession runs after no serve granted the identity. The
+// writer lock is the authority on whether the refusal mattered: a session
+// nobody holds (the desktop closed it after reclaiming, or the holder exited)
+// is simply resumed, while a still-held one reports why the handoff failed
+// rather than the generic ownership error.
+func (m *chatTUI) resumeUnheldCanonicalSession(ref session.SessionRef, takeoverErr error, detached bool) {
+	if err := m.commitCanonicalSessionSwitch(ref); err != nil {
+		if !detached {
+			m.restoreSessionLease()
+		}
+		if errors.Is(err, session.ErrWriterOwned) {
+			m.notice("takeover: " + takeoverErr.Error())
+			return
+		}
+		m.notice("takeover: " + err.Error())
+		return
+	}
+	m.pendingTakeoverPath = ""
+	m.resumeAfterReclaim()
+	m.replayActiveBranch(i18n.M.ResumedTitle)
+	m.notice("session resumed; no other runtime holds it")
 }
 
 // cliStartupCanonicalTakeover is the startup counterpart: after a confirmed

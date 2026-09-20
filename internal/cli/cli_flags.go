@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -158,30 +159,48 @@ func resolveSessionQuery(dir, query string) (cliResumeTarget, error) {
 		}
 		return cliResumeTarget{}, fmt.Errorf("no session matches %q", query)
 	}
-	lower := strings.ToLower(query)
-	var exact []string
-	var partial []string
+	// Final-format sessions are the same universe the picker offers: engine
+	// mirrors folded and migrated sources hidden, so a transcript and the
+	// identity it was imported under never compete as two matches.
+	scan := scanWorkspaceResume(context.Background(), dir)
+	var exact []cliResumeTarget
 	for _, session := range sessions {
 		id := agent.BranchID(session.Path)
 		base := filepath.Base(session.Path)
 		if query == id || query == base || query == session.Path {
-			exact = append(exact, session.Path)
-			continue
+			exact = append(exact, cliResumeTarget{path: session.Path})
 		}
-		haystack := strings.ToLower(strings.Join([]string{id, base, session.CustomTitle, session.TopicTitle, session.Preview}, "\n"))
-		if strings.Contains(haystack, lower) {
-			partial = append(partial, session.Path)
+	}
+	for _, entry := range scan.canonical {
+		if id := entry.target.ref.SessionID; query == id || query == cliCanonicalRoute(id) {
+			exact = append(exact, entry.target)
 		}
 	}
 	matches := exact
 	if len(matches) == 0 {
-		matches = partial
+		lower := strings.ToLower(query)
+		for _, session := range scan.legacy {
+			haystack := strings.ToLower(strings.Join([]string{
+				agent.BranchID(session.Path), filepath.Base(session.Path), session.CustomTitle, session.TopicTitle, session.Preview,
+			}, "\n"))
+			if strings.Contains(haystack, lower) {
+				matches = append(matches, cliResumeTarget{path: session.Path})
+			}
+		}
+		for _, entry := range scan.canonical {
+			haystack := strings.ToLower(strings.Join([]string{
+				entry.target.ref.SessionID, entry.session.CustomTitle, entry.session.Preview,
+			}, "\n"))
+			if strings.Contains(haystack, lower) {
+				matches = append(matches, entry.target)
+			}
+		}
 	}
 	switch len(matches) {
 	case 0:
 		return cliResumeTarget{}, fmt.Errorf("no session matches %q", query)
 	case 1:
-		return cliResumeTarget{path: matches[0]}, nil
+		return matches[0], nil
 	default:
 		return cliResumeTarget{}, fmt.Errorf("session query %q is ambiguous (%d matches)", query, len(matches))
 	}
