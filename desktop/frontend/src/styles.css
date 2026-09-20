@@ -37475,7 +37475,7 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
 }
 
 
-.workbench-dock__tab-add {
+.workbench-dock__tab-button {
   --reasonix-draggable: no-drag;
   display: inline-flex;
   align-items: center;
@@ -37490,13 +37490,13 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   cursor: pointer;
   padding: 0;
   /* Hug the tab strip: the tools row's 8px gap is cancelled down to a 4px
-     breathing room. Never shrinks, so when the strip compresses the button
+     breathing room. Never shrinks, so when the strip compresses each action
      stays visible and ends up pinned to the right edge. */
   margin-left: -4px;
 }
 
 
-.workbench-dock__tab-add:hover {
+.workbench-dock__tab-button:hover {
   /* Match the right-dock tab hover fill. */
   background: color-mix(in srgb, var(--fg) 5%, var(--chat-bg));
   color: var(--fg-dim);
@@ -37600,11 +37600,10 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
 }
 
 
-/* The + add button is a sibling of the strip, so the base 24px rule doesn't
-   follow this skin's taller tabs; sync its hit area / hover fill height so
-   it reads as one more tab. Width stays equal to height so the button
-   remains a rounded square. */
-.workbench-dock__tab-add {
+/* The tab actions are siblings of the strip, so the base 24px rule doesn't
+   follow this skin's taller tabs; sync their hit area / hover fill height.
+   Width stays equal to height so each action remains a rounded square. */
+.workbench-dock__tab-button {
   width: 28px;
   height: 28px;
 }
@@ -37677,10 +37676,9 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
 }
 
 
-:root[data-theme-style] .workbench-dock__tab-add {
-  /* Sync with the theme-style tab height (27px) so the + button's hit area
-     and hover fill line up with the tabs it sits beside; equal width keeps
-     it a rounded square. */
+:root[data-theme-style] .workbench-dock__tab-button {
+  /* Sync with the theme-style tab height (27px) so the actions' hit areas
+     and hover fills line up with the tabs; equal width keeps them square. */
   width: 27px;
   height: 27px;
 }

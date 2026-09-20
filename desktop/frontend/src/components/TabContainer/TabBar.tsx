@@ -164,13 +164,13 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose, onMoveTab, onAd
       <button
         ref={addButtonRef}
         type="button"
-        className="workbench-dock__tab-add"
+        className="workbench-dock__tab-button workbench-dock__tab-add"
         aria-label={t("rightDock.addTab")}
         onClick={onAdd}
       >
         <Plus size={14} />
       </button>
-      {onClosePanel && <button type="button" className="workbench-dock__tab-add workbench-dock__collapse"
+      {onClosePanel && <button type="button" className="workbench-dock__tab-button workbench-dock__collapse"
         aria-label={t("workspace.close")} onClick={onClosePanel}><X size={14} /></button>}
       {draggingTabId !== null && (() => {
         const draggedTab = tabs.find((tab) => tab.id === draggingTabId);
