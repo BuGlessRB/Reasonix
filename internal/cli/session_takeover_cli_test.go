@@ -740,3 +740,32 @@ func TestCLITakeoverManagerRetainsPendingReturnUntilReservationSucceeds(t *testi
 		t.Fatalf("target reservation = %+v", info)
 	}
 }
+
+// TestCLISessionTakeoverCandidateRequiresAResidentServe keeps the /takeover
+// offer honest: the command takes a session from a resident serve, so a lease
+// held by another CLI on a machine running no serve must not be advertised as
+// takeable. The holder's PID still need not match a discovered serve, because
+// state-file PIDs drift across serve restarts.
+func TestCLISessionTakeoverCandidateRequiresAResidentServe(t *testing.T) {
+	held := &agent.SessionLeaseError{Path: "/tmp/held.jsonl", Info: &agent.SessionLeaseInfo{PID: 4242, WriterID: "other-cli"}}
+	previous := discoverCLIServesForTakeover
+	t.Cleanup(func() { discoverCLIServesForTakeover = previous })
+
+	discoverCLIServesForTakeover = func() []cliServeRecord { return nil }
+	if cliSessionTakeoverCandidate(held) {
+		t.Fatal("/takeover was offered for a holder with no resident serve to take it from")
+	}
+
+	discoverCLIServesForTakeover = func() []cliServeRecord {
+		return []cliServeRecord{{pid: 99, base: "http://127.0.0.1:1", token: "tok"}}
+	}
+	if !cliSessionTakeoverCandidate(held) {
+		t.Fatal("/takeover was withheld although a resident serve could hand the session over")
+	}
+	if cliSessionTakeoverCandidate(errors.New("unrelated failure")) {
+		t.Fatal("/takeover was offered for an error carrying no lease holder")
+	}
+	if cliSessionTakeoverCandidate(&agent.SessionLeaseError{Path: "/tmp/held.jsonl"}) {
+		t.Fatal("/takeover was offered for a lease error with no holder info")
+	}
+}

@@ -255,14 +255,21 @@ func cliTakeoverFromServe(sessionPath string, record *cliServeRecord, leases *co
 	return binding, nil
 }
 
-// cliSessionTakeoverCandidate reports whether leaseErr carries enough lease
-// info to identify the holder — the case where a takeover offer makes sense.
-// The holder does not have to be a discovered serve: the serve's state file
-// PID can drift (restart, desktop reconnect), and the takeover execution
-// falls back to trying every local serve when the PID does not match.
+// cliSessionTakeoverCandidate reports whether leaseErr describes a session
+// /takeover can actually take: the lease info must identify a holder, and at
+// least one resident serve must exist on this machine to hand the session
+// over. The holder does not have to be a discovered serve — a serve's state
+// file PID drifts across restarts and desktop reconnects, and the takeover
+// execution falls back to trying every local serve — but with no serve at all
+// the holder is another CLI or an unrelated runtime that has no handoff
+// endpoint, and offering /takeover would only promise a command that must
+// fail. The refusal then names the holder and the close hint instead.
 func cliSessionTakeoverCandidate(leaseErr error) bool {
 	var leaseError *agent.SessionLeaseError
-	return errors.As(leaseErr, &leaseError) && leaseError != nil && leaseError.Info != nil
+	if !errors.As(leaseErr, &leaseError) || leaseError == nil || leaseError.Info == nil {
+		return false
+	}
+	return len(discoverCLIServesForTakeover()) > 0
 }
 
 // promptSessionTakeover asks on the terminal (pre-TUI startup) whether to take
