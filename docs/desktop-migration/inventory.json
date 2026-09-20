@@ -1277,7 +1277,7 @@
       "kind": "command",
       "name": "EnsureRemoteProjectSessions",
       "detail": "(hostID string, workspace string) ([]RemoteSessionView, error)",
-      "location": "desktop/remote_listing.go:422",
+      "location": "desktop/remote_listing.go:421",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -3253,7 +3253,7 @@
       "kind": "command",
       "name": "RemoteProjectSessions",
       "detail": "(hostID string, workspace string) ([]RemoteSessionView, error)",
-      "location": "desktop/remote_listing.go:409",
+      "location": "desktop/remote_listing.go:408",
       "class": "keep-business",
       "owner": "hostrpc desktop/invoke"
     },
@@ -6110,7 +6110,7 @@
     {
       "kind": "event",
       "name": "remote-tab:updated",
-      "location": "desktop/remote_listing.go:596",
+      "location": "desktop/remote_listing.go:595",
       "class": "keep-business",
       "owner": "desktop/event frame (seq + generation), same payload"
     },
