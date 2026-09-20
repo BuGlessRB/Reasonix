@@ -492,8 +492,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Manual compaction lifecycle visibility and recovery add one keyed operation
 // projection, monotonic history/runtime reconciliation, and lazy persisted-row
 // decoding. Integrated with native window ownership, the measured payload is
-// 2084732 B (+9494 B, 0.46% over that base). Preserve the measured 186 B Linux
-// producer difference (2084918 B) and use the next one-decimal ceiling; gzip,
+// 2084776 B (+9538 B, 0.46% over that base). Preserve the measured 186 B Linux
+// producer difference (2084962 B) and use the next one-decimal ceiling; gzip,
 // per-chunk, CSS, and locale gates remain unchanged.
 const rawInitialBudgetKiB = 2_036.1;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
