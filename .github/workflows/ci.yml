@@ -344,6 +344,13 @@ jobs:
         with:
           node-version: "22"
 
+      # A hardware exception on a host whose CPU saves a large XSTATE (Intel
+      # AMX) can corrupt the Go heap (golang/go#81238). Record the processor on
+      # the same isolated runner so any remaining native crash is attributable.
+      - name: runner CPU
+        shell: pwsh
+        run: Get-CimInstance Win32_Processor | Select-Object -ExpandProperty Name
+
       # Defender real-time scanning on GitHub Windows runners intermittently
       # crashes Go test binaries mid-syscall (DEP fault at PC=0 in the Windows
       # syscall trampoline, e.g. golang/go#67139) and briefly keeps freshly
@@ -410,7 +417,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           REASONIX_RELEASE_CACHE_GUARD: "1"
-        run: go test -race ./internal/agent/... ./internal/plugin/... ./internal/jobs/... ./internal/proc/... ./internal/sandbox/... ./internal/filelock/... ./internal/eventwire/... ./internal/remote/... ./internal/extension/... ./internal/boot/... ./internal/control/... ./internal/tool/...
+        run: go test -race ./internal/agent/... ./internal/plugin/... ./internal/jobs/... ./internal/proc/... ./internal/sandbox/... ./internal/filelock/... ./internal/eventwire/... ./internal/remote/... ./internal/extension/... ./internal/boot/... ./internal/control/... ./internal/tool/... ./internal/bot/...
 
       - name: test -race (full)
         if: github.event_name != 'pull_request'
