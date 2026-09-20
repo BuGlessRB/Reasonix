@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/provider"
 	"reasonix/internal/session"
 )
 
@@ -27,7 +28,6 @@ func retireExclusiveForeground(t *testing.T, ctrl *control.Controller, service *
 		_ = service.CloseAll(context.Background())
 	}
 }
-
 
 // newIdentityLifecycleServe wraps the lifecycle test server with the frame
 // tag an exclusive controller's production host would register, so identity
@@ -124,15 +124,15 @@ func TestIdentityHandoffReleasesWriterAndOwnershipTracks(t *testing.T) {
 		grant.TargetWriterID != "taker-writer" || grant.SessionPath != route {
 		t.Fatalf("handoff grant = %+v", grant)
 	}
-	if ref, bound := ctrl.SessionRef(); bound && ref == current {
-		t.Fatal("foreground still bound to the handed-off identity after handoff")
+	if ref, bound := ctrl.SessionRef(); bound {
+		t.Fatalf("foreground still bound to %q after handoff; release must not allocate a replacement identity", ref.SessionID)
 	}
-	// The frame tag must follow the rotated foreground: a tag still pointing at
-	// the handed-off identity misroutes every subsequent live frame.
+	// The frame tag must follow the released foreground: a tag still pointing
+	// at the handed-off identity misroutes every subsequent live frame.
 	if tag := lifecycle.tagFor(ctrl); tag == nil {
-		t.Fatal("frame tag missing after handoff rotation")
-	} else if fresh, bound := ctrl.SessionRef(); !bound || tag.path != "" || (fresh.SessionID != "" && tag.sessionID != fresh.SessionID) {
-		t.Fatalf("frame tag after handoff = %+v, want identity %q", tag, fresh.SessionID)
+		t.Fatal("frame tag missing after handoff release")
+	} else if tag.path != "" || tag.sessionID != "" {
+		t.Fatalf("frame tag after handoff = %+v, want no route until the next identity is allocated", tag)
 	}
 	if session.ProbeWriterHeld(filepath.Join(root, current.SessionID)) {
 		t.Fatal("writer lock still held after handoff grant")
@@ -431,4 +431,63 @@ func TestIdentityStatusAnswersFreeWriterWithRouteMatch(t *testing.T) {
 		t.Fatalf("free-writer identity status still reports takenOver: %v", status)
 	}
 	retireExclusiveForeground(t, ctrl, service)
+}
+
+// countSessions returns the /sessions row count so identity lifecycle tests
+// can pin what a transition persists.
+func countSessions(t *testing.T, url string) int {
+	t.Helper()
+	resp, raw := serveBody(t, http.MethodGet, url+"/sessions", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("sessions status = %d body %s", resp.StatusCode, raw)
+	}
+	var rows []sessionListEntry
+	if err := json.Unmarshal([]byte(raw), &rows); err != nil {
+		t.Fatal(err)
+	}
+	return len(rows)
+}
+
+// A handoff releases authority; it is not a conversation. The legacy keeper
+// only unbinds, and the identity path must match: no replacement identity is
+// created until the user actually starts one, so handoff/reclaim cycles do not
+// litter /sessions with empty rows. /new on the released foreground still
+// allocates on demand.
+func TestIdentityHandoffDoesNotPersistReplacementSession(t *testing.T) {
+	_, ctrl, service, current := newExclusiveSessionServe(t)
+	lifecycle := newIdentityLifecycleServe(t, ctrl, current)
+	ts := httptest.NewServer(lifecycle.Handler())
+	defer ts.Close()
+	defer retireExclusiveForeground(t, ctrl, service)
+	route := "session-id:" + current.SessionID
+
+	before := countSessions(t, ts.URL)
+	resp, raw := serveBody(t, http.MethodPost, ts.URL+"/handoff", `{"sessionPath":"`+route+`","targetWriterId":"taker-writer","force":true,"mode":"wait","timeoutMs":2000}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("handoff status = %d body %s", resp.StatusCode, raw)
+	}
+	if after := countSessions(t, ts.URL); after != before {
+		t.Fatalf("/sessions rows after handoff = %d, want %d (handoff persisted a replacement session)", after, before)
+	}
+	if _, bound := ctrl.SessionRef(); bound {
+		t.Fatal("foreground is bound after handoff; nothing should be allocated until the next turn")
+	}
+	for _, msg := range ctrl.History() {
+		if msg.Role != provider.RoleSystem {
+			t.Fatalf("released foreground still carries the handed-off conversation: %+v", msg)
+		}
+	}
+	// The released foreground stays usable: /new allocates exactly one fresh
+	// identity on demand.
+	resp, raw = serveBody(t, http.MethodPost, ts.URL+"/new", "")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("/new after handoff status = %d body %s", resp.StatusCode, raw)
+	}
+	fresh, bound := ctrl.SessionRef()
+	if !bound || fresh == current {
+		t.Fatalf("/new after handoff bound %+v (bound %v), want a fresh identity", fresh, bound)
+	}
+	if got := countSessions(t, ts.URL); got != before+1 {
+		t.Fatalf("/sessions rows after /new = %d, want %d", got, before+1)
+	}
 }

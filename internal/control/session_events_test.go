@@ -749,3 +749,61 @@ func TestOpenSessionReopensRuntimeClosedByReclaim(t *testing.T) {
 		t.Fatalf("re-opened runtime store is unusable: %v", err)
 	}
 }
+
+// A handoff hands the identity to another runtime without allocating a
+// replacement: the controller flushes, drops its binding and empties the
+// in-memory transcript, so it is back in the never-bound exclusive state. From
+// there NewSession must allocate on demand instead of failing on the missing
+// runtime, and a Snapshot must be a no-op rather than an "unbound runtime"
+// error.
+func TestReleaseSessionForHandoffLeavesControllerAllocatable(t *testing.T) {
+	service, err := session.NewService("desktop", session.NewFilesystemPersistence(filepath.Join(t.TempDir(), "sessions-v4")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.CloseAll(context.Background()) })
+	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
+	controller := newOwnedTestController(t, Options{Executor: exec, Sink: event.Discard, SessionService: service, ExclusiveSession: true})
+	handedOff, err := controller.BindFreshSession(t.Context(), "handed-off")
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.AdoptHistory([]provider.Message{{ID: "u1", Role: provider.RoleUser, Content: "keep me durable"}}, "")
+	if msgs := controller.History(); len(msgs) == 0 {
+		t.Fatal("fixture did not seed the bound session")
+	}
+
+	if err := controller.ReleaseSessionForHandoff(); err != nil {
+		t.Fatalf("release for handoff: %v", err)
+	}
+	if _, bound := controller.SessionRef(); bound {
+		t.Fatal("controller still bound after release")
+	}
+	for _, msg := range controller.History() {
+		if msg.Role != provider.RoleSystem {
+			t.Fatalf("released controller still carries the handed-off conversation: %+v", msg)
+		}
+	}
+	if err := controller.Snapshot(); err != nil {
+		t.Fatalf("snapshot of a released controller must be a no-op, got %v", err)
+	}
+	// The host closes the runtime; the flushed turn must already be durable.
+	if err := service.Close(t.Context(), handedOff); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := service.Query().History(t.Context(), handedOff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) == 0 || msgs[len(msgs)-1].Content != "keep me durable" {
+		t.Fatalf("handed-off session lost its flushed tail: %+v", msgs)
+	}
+
+	if err := controller.NewSession(); err != nil {
+		t.Fatalf("NewSession on a released controller: %v", err)
+	}
+	fresh, bound := controller.SessionRef()
+	if !bound || fresh == handedOff {
+		t.Fatalf("NewSession bound %+v (bound %v), want a fresh identity", fresh, bound)
+	}
+}

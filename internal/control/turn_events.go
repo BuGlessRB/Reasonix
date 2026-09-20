@@ -33,11 +33,11 @@ type turnEventDurableSink struct{ owner *turnEventSink }
 
 // turnEventState has an independent lock so ledger I/O never holds c.mu.
 type turnEventState struct {
-	mu                         sync.RWMutex
-	ledger                     *turnevent.Ledger
-	err                        error
-	v3                         *session.Session
-	v3Path                     string
+	mu     sync.RWMutex
+	ledger *turnevent.Ledger
+	err    error
+	v3     *session.Session
+	v3Path string
 	// v3Runtime pins the session instance the cached store belongs to. A
 	// reclaim closes the old runtime and a later takeover re-opens the same
 	// identity, so the path key alone would keep serving the closed store.

@@ -464,9 +464,10 @@ func (s *Server) handoff(w http.ResponseWriter, r *http.Request) {
 
 // handoffIdentity releases a final-format identity the serve's foreground
 // currently writes. The single-writer credential is the session directory's
-// writer lock, so the release is: quiesce the foreground turn, flush, rotate
-// the foreground onto a fresh identity, and synchronously close the handed-off
-// runtime — its writer lock drops before the grant is answered.
+// writer lock, so the release is: quiesce the foreground turn, flush, drop the
+// foreground's binding without allocating a replacement identity, and
+// synchronously close the handed-off runtime — its writer lock drops before the
+// grant is answered.
 func (s *Server) handoffIdentity(w http.ResponseWriter, r *http.Request, route, targetWriterID string, body handoffRequest) {
 	ref, _, err := s.resolveSessionIdentity(route)
 	if err != nil {
@@ -562,33 +563,34 @@ func (s *Server) handoffIdentityLocked(ctx context.Context, route string, ref se
 	if !bound || current != ref {
 		return mirroredSession{}, errSessionNotHeld
 	}
-	if err := concrete.Snapshot(); err != nil {
-		return mirroredSession{}, fmt.Errorf("handoff: snapshot session: %w", err)
-	}
 	m, err := newMirroredSession(route, agent.SessionWriterID(), targetWriterID, mirrorPhasePending)
 	if err != nil {
 		return mirroredSession{}, fmt.Errorf("handoff: create generation: %w", err)
 	}
-	// Rotate the foreground onto a fresh identity first: publication releases
-	// the controller's client binding, which is the precondition for closing
-	// the handed-off runtime below.
-	if _, err := concrete.BindFreshSession(ctx, ""); err != nil {
-		return mirroredSession{}, fmt.Errorf("handoff: rotate foreground: %w", err)
-	}
-	// Re-point the frame tag at the rotated foreground: a stale tag stamps
-	// live frames with the handed-off identity and the desktop pump drops
-	// them as background.
-	s.setControllerPath(concrete, "")
 	service := concrete.SessionService()
 	if service == nil {
-		return mirroredSession{}, errors.New("handoff: session service unavailable after rotation")
+		return mirroredSession{}, errors.New("handoff: session service unavailable")
+	}
+	// Release authority the way the legacy lease keeper does: flush and unbind,
+	// but allocate nothing. The foreground is left in the never-bound exclusive
+	// state, so the next turn or /new allocates lazily and a handoff no longer
+	// leaves an empty canonical row behind in /sessions.
+	if err := concrete.ReleaseSessionForHandoff(); err != nil {
+		s.reattachAfterFailedHandoff(ctx, concrete, ref)
+		return mirroredSession{}, fmt.Errorf("handoff: release session binding: %w", err)
 	}
 	// Deterministic writer release: Close drops the writer lock now instead of
 	// waiting out the idle-retirement TTL, so the taker's open cannot race a
-	// lingering lease.
+	// lingering lease. A refused close leaves the runtime live, so the
+	// foreground is re-attached to it rather than left unbound with the writer
+	// still held here.
 	if err := service.Close(ctx, ref); err != nil {
+		s.reattachAfterFailedHandoff(ctx, concrete, ref)
 		return mirroredSession{}, fmt.Errorf("handoff: release session writer: %w", err)
 	}
+	// Re-point the frame tag: a stale tag stamps live frames with the
+	// handed-off identity and the desktop pump drops them as background.
+	s.setControllerPath(concrete, "")
 	s.markMirrored(m)
 	slog.Info("serve: final-format session handed off to local runtime", "session", route)
 	s.bc.Emit(event.Event{
@@ -600,6 +602,20 @@ func (s *Server) handoffIdentityLocked(ctx context.Context, route string, ref se
 		SessionPath: route,
 	})
 	return m, nil
+}
+
+// reattachAfterFailedHandoff restores the foreground's binding to an identity
+// whose release did not complete. The runtime is still the service's live
+// instance (a refused close never retires it), so OpenSession re-binds and
+// re-projects it; only when even that fails is the controller left unbound,
+// which the next turn resolves by allocating lazily.
+func (s *Server) reattachAfterFailedHandoff(ctx context.Context, concrete *control.Controller, ref session.SessionRef) {
+	if cur, bound := concrete.SessionRef(); bound && cur == ref {
+		return
+	}
+	if _, err := concrete.OpenSession(ctx, ref); err != nil {
+		slog.Error("serve: re-attach identity after failed handoff", "session", ref.SessionID, "err", err)
+	}
 }
 
 func parseHandoffMode(raw string) handoffMode {
