@@ -153,6 +153,21 @@ func TestRunResumeKeepsCompletedIndexStableAcrossRecoveryGC(t *testing.T) {
 	if err != nil || len(candidates) != 1 || candidates[0] != recovery.Path {
 		t.Fatalf("recovery GC precondition = %v err=%v, want %q", candidates, err, recovery.Path)
 	}
+
+	active := agent.NewSession("sys")
+	active.Add(provider.Message{Role: provider.RoleUser, Content: "active prompt"})
+	exec := agent.New(nil, nil, active, agent.Options{}, event.Discard)
+	ctrl := newOwnedTestController(t, control.Options{Executor: exec, SessionDir: dir, Label: "test"})
+	activePath := filepath.Join(dir, "active-unpersisted.jsonl")
+	ctrl.SetSessionPath(activePath)
+	m := newTestChatTUI()
+	m.width = 80
+	m.ctrl = ctrl
+	// The user reads the index from a list rendered while the controller is
+	// alive, so compute it the same way. The never-snapshotted active session
+	// leaves an engine mirror in the catalog whose visibility flips once its
+	// metadata is rebuilt; let it settle so both listings see the same rows.
+	waitForCatalogMetadata(t, dir, agent.BranchID(activePath))
 	sessions := mergedResumeSessions(dir)
 	targetIndex := 0
 	for i, session := range sessions {
@@ -163,15 +178,6 @@ func TestRunResumeKeepsCompletedIndexStableAcrossRecoveryGC(t *testing.T) {
 	if targetIndex != len(sessions) || targetIndex < 2 {
 		t.Fatalf("target index = %d in %+v, want a trailing row shifted by GC", targetIndex, sessions)
 	}
-
-	active := agent.NewSession("sys")
-	active.Add(provider.Message{Role: provider.RoleUser, Content: "active prompt"})
-	exec := agent.New(nil, nil, active, agent.Options{}, event.Discard)
-	ctrl := newOwnedTestController(t, control.Options{Executor: exec, SessionDir: dir, Label: "test"})
-	ctrl.SetSessionPath(filepath.Join(dir, "active-unpersisted.jsonl"))
-	m := newTestChatTUI()
-	m.width = 80
-	m.ctrl = ctrl
 
 	m.runResumeCommand("/resume " + strconv.Itoa(targetIndex))
 
