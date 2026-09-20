@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"reasonix/desktop/internal/workspacestate"
@@ -30,7 +31,7 @@ func (a *App) requestHistoricalCatalog() {
 	c.mu.Unlock()
 	go func() {
 		defer c.workers.Done()
-		_, _ = a.ListHistoricalSessions()
+		_, _ = a.listHistoricalSessions(c.ctx)
 		c.mu.Lock()
 		c.discoveryPending = false
 		stopped := c.stopped
@@ -112,4 +113,32 @@ func applyHistoricalPresentations(nodes []ProjectNode, saved historicalImportQue
 			nodes[i].Pinned = *presentation.Pinned
 		}
 	}
+}
+
+// A shell-only read must not create workspaces or migrate organization state.
+// Sources without canonical members still need their persisted pin overlays.
+func (a *App) historicalPinnedShells(req ProjectTopicPageRequest, state workspacestate.State) ([]ProjectNode, error) {
+	adopted := map[string]bool{}
+	for _, mapping := range state.SourceMappings {
+		adopted["source\x00local\x00"+mapping.SourceKey] = true
+		if sourceMappingHasPathAlias(mapping) {
+			adopted[sessionRuntimeKey(mapping.Path)] = true
+		}
+	}
+	page, err := a.unadoptedLegacyTopics(req, adopted, nil)
+	if err != nil {
+		return nil, err
+	}
+	nodes := append(page.Items, a.historicalCanonicalTopics(req.Scope, req.WorkspaceRoot, state)...)
+	if saved, err := readHistoricalSidecar(); err == nil {
+		applyHistoricalPresentations(nodes, saved)
+	}
+	pins := []ProjectNode{}
+	for _, node := range nodes {
+		if node.Pinned {
+			pins = append(pins, node)
+		}
+	}
+	sort.SliceStable(pins, func(i, j int) bool { return projectTopicLess(pins[i], pins[j], req.SortMode, false) })
+	return pins, nil
 }

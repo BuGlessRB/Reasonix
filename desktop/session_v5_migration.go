@@ -61,12 +61,22 @@ func (a *App) startDesktopSessionMigration(ctx context.Context) {
 		close(a.desktopMigrationDone)
 		return
 	}
+	c := &a.historicalImports
+	c.mu.Lock()
+	c.initialize(ctx)
+	if c.stopped || a.shuttingDown.Load() {
+		c.mu.Unlock()
+		close(a.desktopMigrationDone)
+		return
+	}
+	ctx = c.ctx
+	c.catalogEnabled = true
+	c.workers.Add(1)
+	c.mu.Unlock()
 	go func() {
+		defer c.workers.Done()
 		defer close(a.desktopMigrationDone)
-		a.historicalImports.mu.Lock()
-		a.historicalImports.catalogEnabled = true
-		a.historicalImports.mu.Unlock()
-		_, _ = a.ListHistoricalSessions()
+		_, _ = a.listHistoricalSessions(ctx)
 		if err := a.recoverDesktopPendingCreateSnapshot(ctx, startupState.PendingCreates); err != nil {
 			a.desktopMigrationFailed.Store(true)
 			slogWarnDesktopMigration(err)

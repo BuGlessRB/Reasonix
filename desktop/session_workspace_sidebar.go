@@ -233,6 +233,16 @@ func (a *App) mergeCanonicalWorkspaceShells(projects []ProjectNode) []ProjectNod
 			scope, root = "global", ""
 		}
 		req := ProjectTopicPageRequest{Scope: scope, WorkspaceRoot: root, Limit: 200}
+		workspace := state.Workspaces[desktopWorkspaceOwnerID(state, scope, root)]
+		if len(workspace.SessionIDs) == 0 {
+			pins, err := a.historicalPinnedShells(req, state)
+			if err != nil {
+				project.Health = "metadata_failed"
+			} else {
+				project.Children = pins
+			}
+			continue
+		}
 		pins := []ProjectNode{}
 		for {
 			page, err := a.unifiedProjectTopics(req)

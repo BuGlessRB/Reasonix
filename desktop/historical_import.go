@@ -101,10 +101,13 @@ func (a *App) historicalPreparationStatus(sourceKey string) string {
 
 // Listing reads directory entries and registry metadata only.
 func (a *App) ListHistoricalSessions() (HistoricalImportStatus, error) {
+	return a.listHistoricalSessions(a.bootContext())
+}
+
+func (a *App) listHistoricalSessions(ctx context.Context) (HistoricalImportStatus, error) {
 	c := &a.historicalImports
 	c.discoveryMu.Lock()
 	defer c.discoveryMu.Unlock()
-	ctx := a.bootContext()
 	state, err := a.workspaceRegistry().Load(ctx)
 	if err != nil {
 		return HistoricalImportStatus{Items: []HistoricalSessionView{}}, err

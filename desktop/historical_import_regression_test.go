@@ -88,6 +88,10 @@ func TestHistoricalRegressionColdV4VisibleInNormalLists(t *testing.T) {
 	if err := app.SetSessionPinned(selector, true); err != nil {
 		t.Fatal(err)
 	}
+	shells := app.mergeCanonicalWorkspaceShells([]ProjectNode{{Kind: "global_folder", Key: "global_folder"}})
+	if len(shells) != 1 || len(shells[0].Children) != 1 || !shells[0].Children[0].Pinned {
+		t.Fatalf("source-only workspace lost its pinned shell: %+v", shells)
+	}
 	filtered, err := app.ListProjectTopics(ProjectTopicPageRequest{Scope: "global", Query: "Renamed historical", Limit: 1})
 	if err != nil || len(filtered.Items) != 1 || !filtered.Items[0].Pinned {
 		t.Fatalf("display overrides missing from search: %+v %v", filtered, err)
@@ -219,6 +223,30 @@ func TestHistoricalRegressionShutdownPreservesPendingBatch(t *testing.T) {
 	status = awaitHistoricalBatch(t, restarted)
 	if status.Completed != 2 || status.Remaining != 0 {
 		t.Fatalf("manual continuation failed: %+v", status)
+	}
+}
+
+func TestHistoricalRegressionShutdownDrainsStartupDiscovery(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	app := newHistoricalLifecycleApp(t)
+	c := &app.historicalImports
+	c.discoveryMu.Lock()
+	app.startDesktopSessionMigration(t.Context())
+	stopped := make(chan struct{})
+	go func() { app.stopHistoricalImports(); close(stopped) }()
+	<-c.ctx.Done()
+	select {
+	case <-stopped:
+		c.discoveryMu.Unlock()
+		t.Fatal("shutdown did not drain startup discovery")
+	default:
+	}
+	c.discoveryMu.Unlock()
+	<-stopped
+	select {
+	case <-app.desktopMigrationDone:
+	default:
+		t.Fatal("startup recovery outlived the coordinator")
 	}
 }
 
