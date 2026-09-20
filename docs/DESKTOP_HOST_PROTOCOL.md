@@ -99,8 +99,8 @@ the shell discards anything tagged with an old one.
 `runId` identifies this service run. `incidentId` links service and shell
 lifecycle evidence for the same failure chain. Both are random diagnostic
 identifiers; they do not contain a PID, local path, or user content. When
-diagnostics are disabled, `diagnosticsEnabled` is false and both identifiers
-may be omitted.
+diagnostics are disabled (including a `dev` service build), `diagnosticsEnabled`
+is false and both identifiers are empty strings; the keys are always present.
 
 ## Lifecycle requests (shell → service)
 

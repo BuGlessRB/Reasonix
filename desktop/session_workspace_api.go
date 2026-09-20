@@ -391,13 +391,10 @@ func (a *App) archiveCanonicalSessionWithOperation(ref session.SessionRef, opera
 	if !ok {
 		return SessionTarget{}, errTopicArchiveBusy
 	}
-	fallback, err := a.archiveSessionRefsWithOperation([]session.SessionRef{ref}, operationID)
+	err := a.archiveSessionRefsWithOperation([]session.SessionRef{ref}, operationID)
 	release()
 	if err != nil {
 		return SessionTarget{}, err
-	}
-	if fallback.needs {
-		_ = a.openFallbackRuntime(fallback)
 	}
 	a.emitProjectTreeChanged()
 	target, err := a.resolveCanonicalSessionTargetState(ref, "", true)
@@ -712,11 +709,18 @@ func (a *App) openSessionWithNavigation(ref session.SessionRef, navigationSequen
 	if a.desktopSessions.navigationSeq.Load() != navigationSequence {
 		return HistoryPage{}, errSessionNavigationSuperseded
 	}
-	tab, ctrl := a.tabAndCtrlByID("")
-	if tab == nil {
-		return HistoryPage{}, errors.New("workspace is not ready")
+	workspace, err := a.canonicalSessionWorkspace(a.bootContext(), ref)
+	if err != nil {
+		return HistoryPage{}, err
+	}
+	tab, ctrl, created, err := a.surfaceForCanonicalSession(ref, workspace)
+	if err != nil {
+		return HistoryPage{}, err
 	}
 	if _, err := a.resumeCanonicalSessionForTranscript(tab, ctrl, sessionRoute(ref.SessionID), defaultHistoryPageTurns, false, navigationSequence); err != nil {
+		if created {
+			a.discardUnboundSurface(tab)
+		}
 		return HistoryPage{}, err
 	}
 	// runtime:rebuilt intentionally has no reload semantics. SessionRef opening

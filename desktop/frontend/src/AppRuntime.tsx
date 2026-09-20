@@ -22,6 +22,7 @@ import { useAppShellStores } from "./app-runtime/useAppShellStores";
 import { useAppSessionComposition } from "./app-runtime/useAppSessionComposition";
 import { useAppNavigationComposition } from "./app-runtime/useAppNavigationComposition";
 import { useSessionDraftSurface } from "./app-runtime/useSessionDraftSurface";
+import { draftLandingTargetForTab, type DraftLandingTarget } from "./app-runtime/draftLandingTarget";
 import { useRetiredProjectTreeUiMigration } from "./app-runtime/useLocalUiLifecycles";
 import logoSymbol from "./assets/logo-symbol.svg";
 
@@ -127,6 +128,13 @@ export function AppRuntime() {
     isNavigationIntentCurrent: runtime.navigation.isNavigationIntentCurrent,
   });
   useEffect(() => { void drafts.initializeEmptySurface(); }, [drafts.initializeEmptySurface]);
+  // Archiving or closing the last formal surface leaves no tab behind (the
+  // backend opens no replacement blank session), so the draft of the workspace
+  // the user was working in becomes the landing surface.
+  const lastFormalTargetRef = useRef<DraftLandingTarget | null>(null);
+  useEffect(() => {
+    if (activeTab) lastFormalTargetRef.current = draftLandingTargetForTab(activeTab);
+  }, [activeTab]);
   const hadFormalSurfaceRef = useRef(false);
   useEffect(() => {
     if (tabMetas.length > 0) {
@@ -135,7 +143,8 @@ export function AppRuntime() {
     }
     if (!hadFormalSurfaceRef.current) return;
     hadFormalSurfaceRef.current = false;
-    void drafts.open("global", "");
+    const target = lastFormalTargetRef.current ?? draftLandingTargetForTab();
+    void drafts.open(target.scope, target.workspaceRoot);
   }, [drafts.open, tabMetas.length]);
 
   const session = useAppSessionComposition({

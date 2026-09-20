@@ -436,7 +436,7 @@ func (a *App) processLegacyCleanupSession(item legacycleanup.Candidate) {
 		}
 		return nil
 	}
-	_, err := a.archiveSessionRefsWithOperationConditional([]session.SessionRef{ref}, item.OperationID, verify)
+	err := a.archiveSessionRefsWithOperationConditional([]session.SessionRef{ref}, item.OperationID, verify)
 	if err != nil {
 		classification, reason := "unknown", "archive_failed"
 		if errors.Is(err, errTopicHasActiveWork) || errors.Is(err, errTopicArchiveBusy) {
