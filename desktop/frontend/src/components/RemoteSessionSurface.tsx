@@ -134,7 +134,7 @@ export function RemoteSessionSurface({ tab, session, surfaceCommitToken, onSurfa
         hydrating={!session.hydrated && !hasContent}
         surfaceCommitToken={surfaceCommitToken}
         onSurfacePaintReady={onSurfacePaintReady}
-        running={session.transcript.running}
+        running={session.transcript.running && !session.transcript.runtimeStateSnapshot?.maintenance}
         hasOlderHistory={session.transcript.historyHasOlder}
         hasNewerHistory={session.transcript.historyHasNewer}
         loadingNewerHistory={session.transcript.historyNewerLoading}

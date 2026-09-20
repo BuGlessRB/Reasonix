@@ -143,6 +143,10 @@ const (
 	// UserMessage binds an admitted user bubble to its persisted message ID.
 	// Text is display text; provider-only framing must never be emitted here.
 	UserMessage
+	// SessionOperation is a controller-owned, provider-excluded maintenance
+	// lifecycle. One stable operation id is upserted from running through its
+	// terminal state without inventing a user turn.
+	SessionOperation
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount
@@ -368,6 +372,25 @@ type Compaction struct {
 	Archive  string // Done: path the dropped originals were archived to ("" if none)
 }
 
+// SessionOperationInfo describes one manual maintenance operation. It is
+// display/runtime metadata only and never enters the canonical conversation.
+type SessionOperationInfo struct {
+	OperationID       string `json:"operationId"`
+	OperationRevision uint64 `json:"operationRevision,omitempty"`
+	RuntimeEpoch      string `json:"runtimeEpoch,omitempty"`
+	Kind              string `json:"kind"`
+	Activity          string `json:"activity"`
+	Status            string `json:"status"`
+	ErrorCode         string `json:"errorCode,omitempty"`
+	Detail            string `json:"detail,omitempty"`
+	Applied           bool   `json:"applied,omitempty"`
+	InputTokens       int    `json:"inputTokens,omitempty"`
+	ResultTokens      int    `json:"resultTokens,omitempty"`
+	Messages          int    `json:"messages,omitempty"`
+	Summary           string `json:"summary,omitempty"`
+	Archive           string `json:"archive,omitempty"`
+}
+
 // ContextMaintenance is the typed wire-safe receipt for snip/prune/noop/
 // blocked operations. Transcript bytes are represented by hashes and counts.
 type ContextMaintenance struct {
@@ -473,11 +496,12 @@ type Event struct {
 	Readiness          *FinalReadiness          // TurnDone: structured final-readiness recovery state
 	ProtocolRecovery   *provider.ProtocolRecoveryAction
 	Diagnostic         *provider.FailureDiagnostic
-	RecoveryCheckpoint bool                // local durable recovery checkpoint, not a notice
-	Receipt            *CompletionReceipt  // TurnDone: what the host verified, and what it could not
-	CheckpointTurn     *int                // TurnDone: authoritative checkpoint for this turn's visible user message
-	Compaction         Compaction          // Compaction
-	Maintenance        *ContextMaintenance // ContextMaintenanceEvent
+	RecoveryCheckpoint bool                  // local durable recovery checkpoint, not a notice
+	Receipt            *CompletionReceipt    // TurnDone: what the host verified, and what it could not
+	CheckpointTurn     *int                  // TurnDone: authoritative checkpoint for this turn's visible user message
+	Compaction         Compaction            // Compaction
+	Maintenance        *ContextMaintenance   // ContextMaintenanceEvent
+	SessionOperation   *SessionOperationInfo // SessionOperation
 	Guardian           GuardianResult
 	DecisionReceipt    *provider.DecisionReceipt // Notice: durable user decision receipt
 	WriteIntent        bool                      // local write-ahead checkpoint, not a user notice

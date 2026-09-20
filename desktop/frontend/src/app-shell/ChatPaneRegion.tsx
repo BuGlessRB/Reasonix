@@ -171,7 +171,7 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
                 onFork={commands.onFork}
                 forkTargets={state.forkTargets}
                 forkBlocked={forkBlocked}
-                running={state.running || rewind.committing}
+                running={(state.running && !state.runtimeStateSnapshot?.maintenance) || rewind.committing}
                 turnStartAt={state.turnStartAt}
                 hydrating={transcript.transcriptHydrating || (transitioning && !transcript.navigationDataReady)}
                 hasOlderHistory={!transitioning && state.historyHasOlder && !rewind.stateActive}

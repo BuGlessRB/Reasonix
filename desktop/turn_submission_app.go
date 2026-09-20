@@ -349,6 +349,17 @@ func (a *App) submitToTabResult(tabID, input string, fromBridge, classifyManagem
 			managementRoute = classifier.ClassifySubmitRoute(input) == control.SubmitManagementHandled
 		}
 		if managementRoute {
+			if trimmed == "/compact" || strings.HasPrefix(trimmed, "/compact ") {
+				if concrete, ok := ctrl.(*control.Controller); ok {
+					if maintenance := concrete.RuntimeStateSnapshot().Maintenance; maintenance != nil {
+						err := control.ErrMaintenanceBusy
+						if maintenance.Activity == "recovery_required" {
+							err = control.ErrMaintenanceRecovery
+						}
+						return control.SubmitResult{Disposition: control.SubmitManagementHandled, OperationID: maintenance.OperationID}, err
+					}
+				}
+			}
 			// Management commands still take the tab admission lock so they cannot
 			// race an active turn or a controller replacement.
 			admission, admittedCtrl, err := a.beginTabTurn(tabID, !fromBridge, submissionID...)

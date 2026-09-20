@@ -58,6 +58,7 @@ export type EventKind =
   | "turn_phase"
   | "completion_summary"
   | "read_status"
+  | "session_operation"
   | "provider_unreachable";
 export type StreamAttemptAction = "begin" | "discard" | "commit";
 export type TurnStatus = "queued" | "in_progress" | "waiting_user" | "cancelling" | "completed" | "interrupted" | "failed" | "protocol_failed" | "recovery_required";
@@ -96,6 +97,22 @@ export interface WireCompaction {
   messages?: number; // done: how many messages were folded into the summary
   summary?: string; // done: the briefing (empty on an aborted pass)
   archive?: string; // done: archive path, if any
+}
+export interface WireSessionOperation {
+  operationId: string;
+  kind: string;
+  activity: string;
+  status: string;
+  operationRevision?: number;
+  runtimeEpoch?: string;
+  errorCode?: string;
+  detail?: string;
+  applied?: boolean;
+  inputTokens?: number;
+  resultTokens?: number;
+  messages?: number;
+  summary?: string;
+  archive?: string;
 }
 export interface WireProfile {
   model?: string;
@@ -449,6 +466,7 @@ export interface WireEvent extends RecoveryEventFields {
   ask?: WireAsk;
   mcpInteraction?: WireMCPInteraction;
   compaction?: WireCompaction;
+  sessionOperation?: WireSessionOperation;
   maintenance?: WireContextMaintenance;
   guardian?: WireGuardian;
   decisionReceipt?: WireDecisionReceipt;
@@ -852,6 +870,16 @@ export interface HistoryMessage extends TranscriptTurnMetadata {
   messages?: number;
   summary?: string;
   archive?: string;
+  operationId?: string;
+  operationKind?: string;
+  operationStatus?: string;
+  operationActivity?: string;
+  operationRevision?: number;
+  runtimeEpoch?: string;
+  errorCode?: string;
+  applied?: boolean;
+  inputTokens?: number;
+  resultTokens?: number;
   decisionReceipt?: WireDecisionReceipt;
   readiness?: WireFinalReadiness;
   protocolRecovery?: { id: string };

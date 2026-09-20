@@ -1,6 +1,10 @@
 package agent
 
-import "reasonix/internal/provider"
+import (
+	"strings"
+
+	"reasonix/internal/provider"
+)
 
 // ContextMaintenanceSnapshot is a read-only view of the current provider-bound
 // context. It separates present composition from cumulative summary-call cost.
@@ -110,6 +114,23 @@ func (a *Agent) ContextMaintenanceSnapshot() ContextMaintenanceSnapshot {
 		}
 	}
 	return snapshot
+}
+
+// LastCompactionSummary returns display metadata from the latest installed
+// projection. Provider request construction never reads this helper.
+func (a *Agent) LastCompactionSummary() string {
+	if a == nil || a.sess.conversation == nil {
+		return ""
+	}
+	a.sess.compactionMu.Lock()
+	state := a.sess.compactionState
+	a.sess.compactionMu.Unlock()
+	for i := len(state.Projection.Messages) - 1; i >= 0; i-- {
+		if isCompactionSummary(state.Projection.Messages[i]) {
+			return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(state.Projection.Messages[i].Content, summaryTagOpen), summaryTagClose))
+		}
+	}
+	return ""
 }
 
 func stateCheckpointState(runtimeState string, state CompactionState) string {

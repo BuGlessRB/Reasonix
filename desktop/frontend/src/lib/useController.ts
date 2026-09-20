@@ -62,6 +62,7 @@ import { setTranscriptBindingIdentity } from "./canonicalTranscriptBackend";
 import { getTranscriptStore } from "./transcriptStore";
 import { TranscriptSessionFollower } from "./transcriptSessionFollower";
 import { historyReplaceAction, historyRevisionIsOlder } from "./sessionTranscriptMode";
+import { interruptOrphanedSessionOperationItems, reconcileSessionOperationItems, sessionOperationItem, upsertSessionOperationItem } from "./sessionMaintenanceOperation";
 import { matchingSnapshotItem, transcriptPageState, transcriptSnapshotState } from "./transcriptSnapshotState";
 import type { TranscriptSnapshot } from "./transcriptProtocol";
 import { recordFrontendDiagnostic } from "./frontendDiagnosticBridge";
@@ -338,6 +339,20 @@ export type Item = { turnId?: string } & (
       messages: number;
       summary: string;
       archive: string;
+      operationId?: string;
+      operationKind?: string;
+      status?: string;
+      activity?: string;
+      operationRevision?: number;
+      observedRuntimeRevision?: number;
+      interruptionInferred?: boolean;
+      runtimeEpoch?: string;
+      historyEntryId?: string;
+      errorCode?: string;
+      detail?: string;
+      applied?: boolean;
+      inputTokens?: number;
+      resultTokens?: number;
     }
   | {
       kind: "tool";
@@ -1669,10 +1684,24 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
     }
     case "phase":
       return { ...s, seq: s.seq + 1, items: [...s.items, { kind: "phase", id: `p${s.seq}`, text: e.text ?? "" }] };
+    case "session_operation": {
+      const op = e.sessionOperation;
+      if (!op?.operationId) return s;
+      const updated = upsertSessionOperationItem(s.items, { ...sessionOperationItem(op), observedRuntimeRevision: s.runtimeStateSnapshot?.revision ?? 0 });
+      return { ...s, seq: s.seq + (updated.inserted ? 1 : 0), items: updated.items };
+    }
     case "compaction_started":
+      if (s.items.some((it) => it.kind === "compaction" && it.operationId && it.pending)) return s;
       return { ...s, seq: s.seq + 1, items: [...s.items, { kind: "compaction", id: `c${s.seq}`, pending: true, trigger: e.compaction?.trigger ?? "", messages: 0, summary: "", archive: "" }] };
     case "compaction_done": {
       const c = e.compaction;
+      const operationAt = [...s.items].reverse().findIndex((it) => it.kind === "compaction" && it.operationId && it.pending);
+      if (operationAt >= 0) {
+        const at = s.items.length - 1 - operationAt;
+        const items = s.items.map((it, i) => i === at && it.kind === "compaction" ? { ...it,
+          messages: c?.messages ?? it.messages, summary: c?.summary ?? it.summary, archive: c?.archive ?? it.archive } : it);
+        return { ...s, items };
+      }
       const idx = [...s.items].reverse().findIndex((it) => it.kind === "compaction" && it.pending);
       const at = idx < 0 ? -1 : s.items.length - 1 - idx;
       if (!c?.summary) {
@@ -1887,7 +1916,22 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
 }
 
 export function reducer(s: State, a: Action): State {
-  const next = reduceState(s, a);
+  let next = reduceState(s, a);
+  const historyOrRuntimeSynchronized = a.type === "runtime_snapshot" || a.type === "meta"
+    || a.type === "history" || a.type === "history_page" || a.type === "history_replace"
+    || a.type === "history_rebase" || a.type === "history_prepend" || a.type === "history_append"
+    || a.type === "history_items_patch" || a.type === "transcript_snapshot"
+    || a.type === "transcript_v2_snapshot" || a.type === "transcript_page" || a.type === "transcript_records";
+  if (historyOrRuntimeSynchronized && next.runtimeStateSnapshot) {
+    const maintenance = next.runtimeStateSnapshot.maintenance;
+    const items = interruptOrphanedSessionOperationItems(
+      next.items,
+      maintenance?.operationId,
+      maintenance?.runtimeEpoch || next.runtimeStateSnapshot.runtimeEpoch,
+      next.runtimeStateSnapshot.revision,
+    );
+    if (items !== next.items) next = { ...next, items };
+  }
   return next.items !== s.items ? settleLocalSubmissions(next, next.items) : next;
 }
 
@@ -2078,7 +2122,26 @@ function reduceState(s: State, a: Action): State {
       const meta = runtimeStateSnapshot.todos !== undefined && s.meta
         ? { ...s.meta, runtimeStateSnapshot, canonicalTodos: runtimeStateSnapshot.todos }
         : s.meta;
-      return { ...s, meta, runtimeStateSnapshot };
+      const maintenance = runtimeStateSnapshot.maintenance;
+      if (!maintenance) return { ...s, meta, runtimeStateSnapshot };
+      const status = maintenance.activity === "cancelling" ? "cancelling"
+        : maintenance.activity === "finalizing" ? "finalizing"
+        : maintenance.activity === "recovery_required" ? "recovery_required" : "running";
+      const updated = upsertSessionOperationItem(s.items, { ...sessionOperationItem({
+        operationId: maintenance.operationId,
+        kind: maintenance.kind,
+        activity: maintenance.activity,
+        status: maintenance.status || status,
+        operationRevision: maintenance.operationRevision,
+        runtimeEpoch: maintenance.runtimeEpoch || runtimeStateSnapshot.runtimeEpoch,
+        errorCode: maintenance.errorCode,
+        detail: maintenance.detail,
+        applied: maintenance.applied,
+        inputTokens: maintenance.inputTokens,
+        resultTokens: maintenance.resultTokens,
+        messages: maintenance.messages,
+      }), observedRuntimeRevision: runtimeStateSnapshot.revision });
+      return { ...s, meta, runtimeStateSnapshot, items: updated.items, seq: s.seq + (updated.inserted ? 1 : 0) };
     }
     case "context": {
       const sessionTokens = typeof a.context.sessionTokens === "number"
@@ -2140,13 +2203,14 @@ function reduceState(s: State, a: Action): State {
     case "message_action_done": return { ...s, messageAction: undefined };
     case "history": {
       const { items, seq } = historyMessagesToItems(a.messages, "h", s.seq);
+      const reconciled = reconcileSessionOperationItems(items, s.items);
       // Remote cards have no local ToolResultForTab fallback; retain expansion data.
-      return { ...s, items: a.remote ? items : compactArchivedToolItems(items), historyPrefixCount: items.length, pendingSubmissionId: undefined, seq, hydrateHistoryLoaded: true, hydratePlaceholderItems: undefined, historyStartTurn: 0, historyEndTurn: 0, historyTotalTurns: 0, historyHasOlder: false, historyHasNewer: false, historyOlderLoading: false, historyOlderError: undefined, historyNewerLoading: false, historyNewerError: undefined, historyRevision: undefined, historyDigest: undefined, historyMutation: { seq: s.historyMutation.seq + 1, kind: "replace" } };
+      return { ...s, items: a.remote ? reconciled : compactArchivedToolItems(reconciled), historyPrefixCount: reconciled.length, pendingSubmissionId: undefined, seq, hydrateHistoryLoaded: true, hydratePlaceholderItems: undefined, historyStartTurn: 0, historyEndTurn: 0, historyTotalTurns: 0, historyHasOlder: false, historyHasNewer: false, historyOlderLoading: false, historyOlderError: undefined, historyNewerLoading: false, historyNewerError: undefined, historyRevision: undefined, historyDigest: undefined, historyMutation: { seq: s.historyMutation.seq + 1, kind: "replace" } };
     }
     case "history_page": {
       if (historyRevisionIsOlder(s.historyRevision, a.page.revision)) return s;
       const { items, seq, firstTurn } = historyPageItems(a.page);
-      const nextItems = a.mode === "prepend" ? [...items, ...s.items] : items;
+      const nextItems = reconcileSessionOperationItems(a.mode === "prepend" ? [...items, ...s.items] : items, s.items);
       return {
         ...s,
         items: compactArchivedToolItems(nextItems),

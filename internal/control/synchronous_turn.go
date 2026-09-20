@@ -36,6 +36,14 @@ func (c *Controller) runSynchronousTurn(
 	// Finishing is part of the gate: TurnDone is still fanning out. Closed
 	// seals a torn-down controller. Blocking callers get an error rather than
 	// parking because they already own and enforce the request boundary.
+	if c.maintenance != nil {
+		err := ErrMaintenanceBusy
+		if c.maintenance.activity == "recovery_required" {
+			err = ErrMaintenanceRecovery
+		}
+		c.mu.Unlock()
+		return err
+	}
 	if c.bodyActiveLocked() || c.finalizingLocked() || c.rotating || c.closed || c.recoveryRequiredLocked() {
 		c.mu.Unlock()
 		return ErrTurnRunning

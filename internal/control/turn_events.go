@@ -140,7 +140,7 @@ func turnEventSynchronousBarrier(kind event.Kind) bool {
 	switch kind {
 	case event.ToolDispatch, event.ToolStarted, event.ToolResult, event.AskRequest, event.ApprovalRequest,
 		event.MCPInteractionRequest, event.PromptAnswered, event.TurnStatusChanged,
-		event.TurnStarted, event.TurnDone:
+		event.TurnStarted, event.TurnDone, event.SessionOperation:
 		return true
 	default:
 		return false
@@ -208,6 +208,12 @@ func (s *turnEventSink) publishInner(e event.Event) {
 func (s *turnEventSink) persistAndPublish(e event.Event) error {
 	if s == nil || s.c == nil {
 		return nil
+	}
+	if e.Kind == event.SessionOperation {
+		if err := s.c.persistMaintenanceOperation(e); err != nil {
+			return err
+		}
+		return s.publishOutsideTurn(s.c.turnEventLedger(), e)
 	}
 	if e.RecoveryCheckpoint {
 		return s.c.CheckpointSession(context.Background(), agent.CheckpointBeforeTopTool)

@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:bd3ca289b0444e33be634816036c2a8debcdb8ae5f87262a82eff6a1796bb448";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:0613a7b67ea9709e4b443dfc73ec6d025479712343b42ae5394137ec60e162ae";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -1221,6 +1221,21 @@ export interface event_FinalReadiness {
   missing?: string[];
 }
 
+export interface MaintenanceState {
+  operationId: string;
+  operationRevision?: number;
+  runtimeEpoch?: string;
+  kind: string;
+  activity: string;
+  status?: string;
+  errorCode?: string;
+  detail?: string;
+  applied?: boolean;
+  inputTokens?: number;
+  resultTokens?: number;
+  messages?: number;
+}
+
 export interface PendingInteraction {
   requestId: string;
   toolCallId?: string;
@@ -1274,6 +1289,24 @@ export interface RuntimeStateSnapshot {
   recovery?: RecoveryStatus | null;
   goal?: View | null;
   goalError?: string;
+  maintenance?: MaintenanceState | null;
+}
+
+export interface SessionOperationInfo {
+  operationId: string;
+  operationRevision?: number;
+  runtimeEpoch?: string;
+  kind: string;
+  activity: string;
+  status: string;
+  errorCode?: string;
+  detail?: string;
+  applied?: boolean;
+  inputTokens?: number;
+  resultTokens?: number;
+  messages?: number;
+  summary?: string;
+  archive?: string;
 }
 
 export interface Todo {
@@ -1421,6 +1454,7 @@ export interface Event {
   mcpInteraction?: MCPInteraction | null;
   compaction?: Compaction | null;
   maintenance?: ContextMaintenance | null;
+  sessionOperation?: SessionOperationInfo | null;
   guardian?: Guardian | null;
   decisionReceipt?: eventwire_DecisionReceipt | null;
   extension?: ExtensionSurface | null;
@@ -4680,6 +4714,7 @@ export interface TurnStartView {
   turnId: string;
   status: string;
   disposition: string;
+  operationId?: string;
   runtimeEpoch?: string;
   submissionId?: string;
 }
@@ -5380,6 +5415,16 @@ export interface Message {
   messages?: number;
   summary?: string;
   archive?: string;
+  operationId?: string;
+  operationRevision?: number;
+  runtimeEpoch?: string;
+  operationKind?: string;
+  operationStatus?: string;
+  operationActivity?: string;
+  errorCode?: string;
+  applied?: boolean;
+  inputTokens?: number;
+  resultTokens?: number;
   decisionReceipt?: provider_DecisionReceipt | null;
   readiness?: event_FinalReadiness | null;
   readPause?: ReadPause | null;

@@ -150,6 +150,11 @@ func ToWire(e event.Event) Event {
 				Reason: m.Reason,
 			}
 		}
+	case event.SessionOperation:
+		if op := e.SessionOperation; op != nil {
+			copy := *op
+			w.SessionOperation = &copy
+		}
 	case event.GuardianAssessment:
 		w.Guardian = ToWireGuardian(e.Guardian)
 	case event.ExtensionSurface, event.ExtensionStatus:
@@ -586,6 +591,7 @@ var kindNames = map[event.Kind]string{
 	event.PromptAnswered:          "prompt_answered",
 	event.SessionChanged:          "session_changed",
 	event.ReadStatus:              "read_status",
+	event.SessionOperation:        "session_operation",
 }
 
 // ContextMaintenance is the JSON form of event.ContextMaintenance.

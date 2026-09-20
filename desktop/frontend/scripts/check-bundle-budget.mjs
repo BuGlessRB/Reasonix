@@ -485,6 +485,11 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // 2074127 B locally. Preserve the measured 186 B Linux producer difference
 // above (2074313 B combined), with 0.11 KiB headroom. Historical preparation
 // remains lazy; compressed, chunk, CSS, and locale limits stay unchanged.
-const rawInitialBudgetKiB = 2_025.8;
+// Manual compaction lifecycle visibility and recovery add one keyed operation
+// projection, monotonic history/runtime reconciliation, and lazy persisted-row
+// decoding. The final two-order runtime/history recovery handshake and explicit
+// pending-confirmation state measure 2083511 B; retain 0.12 KiB of
+// toolchain headroom while leaving gzip and per-chunk gates unchanged.
+const rawInitialBudgetKiB = 2_034.8;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

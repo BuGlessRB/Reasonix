@@ -5410,6 +5410,22 @@ func (state *historyMessageConvertState) convertHistoryMessage(
 	toolResults map[string]provider.Message,
 ) []HistoryMessage {
 	var out []HistoryMessage
+	if m.Role == provider.Role("compaction") {
+		var op event.SessionOperationInfo
+		if json.Unmarshal([]byte(m.Content), &op) == nil && op.OperationID != "" {
+			pending := op.Status == "running" || op.Status == "cancelling" || op.Status == "finalizing"
+			status := op.Status
+			return append(out, HistoryMessage{
+				RecordID: m.ID, Role: "compaction", Pending: pending, Trigger: "manual",
+				Messages: op.Messages, Summary: op.Summary, Archive: op.Archive,
+				OperationID: op.OperationID, OperationRevision: op.OperationRevision, RuntimeEpoch: op.RuntimeEpoch, OperationKind: op.Kind,
+				OperationStatus: status, OperationActivity: op.Activity,
+				ErrorCode: op.ErrorCode, Detail: op.Detail, Applied: op.Applied,
+				InputTokens: op.InputTokens, ResultTokens: op.ResultTokens,
+			})
+		}
+		return out
+	}
 	if m.DecisionReceipt != nil {
 		return append(out, HistoryMessage{
 			Role:            "notice",
@@ -5961,37 +5977,38 @@ func previewSessionPage(sessionDir, path string, beforeTurn, limit int) (History
 }
 
 type previewEventRecord struct {
-	Kind             string                    `json:"kind"`
-	Type             string                    `json:"type"`
-	Role             string                    `json:"role"`
-	Origin           provider.MessageOrigin    `json:"origin"`
-	TS               json.RawMessage           `json:"ts"`
-	Time             json.RawMessage           `json:"time"`
-	Timestamp        json.RawMessage           `json:"timestamp"`
-	CreatedAt        json.RawMessage           `json:"createdAt"`
-	CreatedAtSnake   json.RawMessage           `json:"created_at"`
-	UpdatedAt        json.RawMessage           `json:"updatedAt"`
-	UpdatedAtSnake   json.RawMessage           `json:"updated_at"`
-	Text             string                    `json:"text"`
-	Detail           string                    `json:"detail"`
-	Code             string                    `json:"code"`
-	Content          string                    `json:"content"`
-	RawContent       string                    `json:"raw_content"`
-	Reasoning        string                    `json:"reasoning"`
-	ReasoningContent string                    `json:"reasoningContent"`
-	MemoryCitations  []provider.MemoryCitation `json:"memoryCitations"`
-	Level            string                    `json:"level"`
-	ToolCalls        []previewToolCall         `json:"toolCalls"`
-	CallID           string                    `json:"callId"`
-	ToolCallID       string                    `json:"toolCallId"`
-	ToolName         string                    `json:"toolName"`
-	Name             string                    `json:"name"`
-	Output           string                    `json:"output"`
-	Compaction       *previewCompaction        `json:"compaction"`
-	Trigger          string                    `json:"trigger"`
-	Messages         int                       `json:"messages"`
-	Summary          string                    `json:"summary"`
-	Archive          string                    `json:"archive"`
+	Kind             string                      `json:"kind"`
+	Type             string                      `json:"type"`
+	Role             string                      `json:"role"`
+	Origin           provider.MessageOrigin      `json:"origin"`
+	TS               json.RawMessage             `json:"ts"`
+	Time             json.RawMessage             `json:"time"`
+	Timestamp        json.RawMessage             `json:"timestamp"`
+	CreatedAt        json.RawMessage             `json:"createdAt"`
+	CreatedAtSnake   json.RawMessage             `json:"created_at"`
+	UpdatedAt        json.RawMessage             `json:"updatedAt"`
+	UpdatedAtSnake   json.RawMessage             `json:"updated_at"`
+	Text             string                      `json:"text"`
+	Detail           string                      `json:"detail"`
+	Code             string                      `json:"code"`
+	Content          string                      `json:"content"`
+	RawContent       string                      `json:"raw_content"`
+	Reasoning        string                      `json:"reasoning"`
+	ReasoningContent string                      `json:"reasoningContent"`
+	MemoryCitations  []provider.MemoryCitation   `json:"memoryCitations"`
+	Level            string                      `json:"level"`
+	ToolCalls        []previewToolCall           `json:"toolCalls"`
+	CallID           string                      `json:"callId"`
+	ToolCallID       string                      `json:"toolCallId"`
+	ToolName         string                      `json:"toolName"`
+	Name             string                      `json:"name"`
+	Output           string                      `json:"output"`
+	Compaction       *previewCompaction          `json:"compaction"`
+	Trigger          string                      `json:"trigger"`
+	Messages         int                         `json:"messages"`
+	Summary          string                      `json:"summary"`
+	Archive          string                      `json:"archive"`
+	SessionOperation *event.SessionOperationInfo `json:"sessionOperation"`
 }
 
 type previewToolCall struct {
@@ -6100,6 +6117,28 @@ func previewEventSessionMessages(path string) ([]HistoryMessage, bool, error) {
 				Summary:  c.Summary,
 				Archive:  c.Archive,
 			})
+		case "session_operation":
+			if op := rec.SessionOperation; op != nil && op.OperationID != "" {
+				pending := op.Status == "running" || op.Status == "cancelling" || op.Status == "finalizing"
+				status := op.Status
+				row := HistoryMessage{Role: "compaction", Pending: pending, Trigger: "manual",
+					OperationID: op.OperationID, OperationRevision: op.OperationRevision, RuntimeEpoch: op.RuntimeEpoch,
+					OperationKind: op.Kind, OperationStatus: status,
+					OperationActivity: op.Activity, ErrorCode: op.ErrorCode, Detail: op.Detail,
+					Applied: op.Applied, InputTokens: op.InputTokens, ResultTokens: op.ResultTokens,
+					Messages: op.Messages, Summary: op.Summary, Archive: op.Archive}
+				replaced := false
+				for i := len(out) - 1; i >= 0; i-- {
+					if out[i].OperationID == op.OperationID {
+						out[i] = row
+						replaced = true
+						break
+					}
+				}
+				if !replaced {
+					out = append(out, row)
+				}
+			}
 		}
 	}
 	return out, sawEvent, nil
