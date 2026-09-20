@@ -11,6 +11,7 @@ import { asArray } from "./array";
 import { createControllerModelCommands } from "./controllerModelCommands";
 import { compactArchivedToolItems } from "./archivedToolItems";
 import { addBreadcrumb } from "./breadcrumbs";
+import { desktopHost } from "./desktopHost";
 import { app, onEvent, onReady, onRuntimeRebuilt, onTabMeta, onTopicActivation } from "./bridge";
 import { startControllerEventRecovery } from "./controllerEventRecovery";
 import { metaFromTab } from "./controllerTabMeta";
@@ -2432,6 +2433,14 @@ export function useController() {
   const composerProfileInFlightByTabRef = useRef(new Map<string, { key: string; promise: Promise<boolean> }>());
   const composerProfileQueueByTabRef = useRef(new Map<string, Promise<void>>());
   const composerProfileLifecycleByTabRef = useRef(new Map<string, number>());
+  useEffect(() => desktopHost().native.onServiceState((service) => {
+    addBreadcrumb("service", `phase=${service.phase} generation=${service.generation || "unknown"}`);
+    if (service.phase !== "stopping" && service.phase !== "exited") return;
+    // Each follower owns its service-stop fence, including remote followers.
+    // Retire only the controller's references here so late hydration cannot
+    // mistake a stopped follower for an active subscription.
+    followers.current.clear();
+  }), []);
   const cancelReconcileTimers = useRef(new Map<string, number>());
   const stalePromptReconcileTimers = useRef(new Map<string, number>());
   // Indirection so dispatchRuntimeStatusForTab (defined above reconcileTabRuntime)
