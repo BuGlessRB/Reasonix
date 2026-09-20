@@ -305,12 +305,14 @@ func (a *App) commitRemoteTabOpenRegistration(registration *remoteTabOpenRegistr
 		if existing.session.newSession {
 			commitRemoteTabAttachRoute(existing, "", true)
 		} else if route := remoteSessionIdentityRoute(existing.session.path, existing.session.sessionID); route != "" {
+			// A ready tab commits the route ahead of its async /resume; gate
+			// commands until that resume settles. Re-selecting the confirmed
+			// current session is not a switch and must not enter the gate.
+			switching := existing.state == "ready" && existing.routing.currentPath != route
 			commitRemoteTabAttachRoute(existing, route, false)
-			// The committed route names the target session before the async
-			// /resume reaches Serve; gate commands until that resume commits
-			// or rolls back, so sends cannot fence against a session Serve
-			// is not running yet.
-			existing.routing.rehydratingPath = route
+			if switching {
+				existing.routing.rehydratingPath = route
+			}
 		}
 		if existing.state == "ready" {
 			registration.selection.identityCommitted = true

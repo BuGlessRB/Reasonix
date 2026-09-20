@@ -38,6 +38,7 @@ func (a *App) retireRemoteTabGeneration(tabID string, gen uint64) {
 	tab.client = nil
 	tab.base = ""
 	tab.token = ""
+	closeRemoteTabProvisionalRouteLocked(tab)
 	a.remoteTabMu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -69,6 +70,7 @@ func (a *App) reconnectRemoteTabGeneration(tabID string, gen uint64) bool {
 	tab.token = ""
 	tab.state = "reconnecting"
 	tab.err = ""
+	closeRemoteTabProvisionalRouteLocked(tab)
 	a.remoteTabMu.Unlock()
 	if cancel != nil {
 		cancel()

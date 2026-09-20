@@ -275,6 +275,7 @@ func (a *App) suspendRemoteTabPumps(hostID, state, errText string) {
 		cancel := tab.cancel
 		tab.cancel = nil
 		tab.state, tab.err = state, errText
+		closeRemoteTabProvisionalRouteLocked(tab)
 		a.remoteTabMu.Unlock()
 		if cancel != nil {
 			cancel()
@@ -302,6 +303,7 @@ func (a *App) parkRemoteTabsForServer(hostID, workspace, state, errText string) 
 		tab.cancel, tab.client = nil, nil
 		tab.base, tab.token = "", ""
 		tab.state, tab.err = state, errText
+		closeRemoteTabProvisionalRouteLocked(tab)
 		affected = append(affected, tab.id)
 		a.remoteTabMu.Unlock()
 		if cancel != nil {

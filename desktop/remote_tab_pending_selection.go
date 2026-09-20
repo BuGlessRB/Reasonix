@@ -109,7 +109,13 @@ func (a *App) applyPendingRemoteTabOpenSelection(tabID string) {
 			current.topicTitle = selection.title
 		}
 		if route := remoteSessionIdentityRoute(selection.path, selection.sessionID); route != "" {
+			// Same provisional gate as a ready-tab registration: the route is
+			// committed before Serve confirms it through the async /resume.
+			switching := current.routing.currentPath != route
 			commitRemoteTabAttachRoute(current, route, false)
+			if switching {
+				current.routing.rehydratingPath = route
+			}
 		}
 	}
 	selection.deferred = false

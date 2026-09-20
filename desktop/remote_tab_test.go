@@ -40,6 +40,8 @@ type fakeServe struct {
 	historyBody                    string
 	historyStarted, historyRelease chan struct{}
 	failSessions                   bool // /sessions replies 500 when set
+	sessionsFailCount              int  // /sessions replies 500 this many times, then recovers
+	resumeDropCount                int  // /resume commits the switch but drops the connection unanswered this many times
 	sessionsStarted                chan struct{}
 	sessionsRelease                chan struct{}
 	eventsConns                    int // /events connections opened
@@ -181,6 +183,7 @@ func newFakeServe(t *testing.T, token string, sessions []serveSessionEntry) *fak
 		fs.failEnter = ""
 		enterDelay := fs.enterDelay
 		resumeStarted, resumeRelease := fs.resumeStarted, fs.resumeRelease
+		drop := fs.takeFault(&fs.resumeDropCount)
 		if fail != "" {
 			fs.mu.Unlock()
 			http.Error(w, fail, http.StatusConflict)
@@ -191,6 +194,11 @@ func newFakeServe(t *testing.T, token string, sessions []serveSessionEntry) *fak
 			fs.sessions[i].Current = fs.sessions[i].Path == body.Path
 		}
 		fs.mu.Unlock()
+		if drop {
+			// Serve committed the switch; only the response is lost.
+			dropHTTPConnection(w)
+			return
+		}
 		if resumeStarted != nil {
 			select {
 			case resumeStarted <- body.Path:
@@ -212,7 +220,7 @@ func newFakeServe(t *testing.T, token string, sessions []serveSessionEntry) *fak
 	mux.HandleFunc("GET /sessions", func(w http.ResponseWriter, r *http.Request) {
 		fs.record(r.Method, "/sessions", "")
 		fs.mu.Lock()
-		fail := fs.failSessions
+		fail := fs.failSessions || fs.takeFault(&fs.sessionsFailCount)
 		started, release := fs.sessionsStarted, fs.sessionsRelease
 		sessions := append([]serveSessionEntry(nil), fs.sessions...)
 		fs.mu.Unlock()
@@ -240,11 +248,8 @@ func newFakeServe(t *testing.T, token string, sessions []serveSessionEntry) *fak
 		fs.eventsConns++
 		fs.eventsQuery = r.URL.RawQuery
 		eventsStatus := fs.eventsStatus
-		if fs.eventsFailCount > 0 {
-			fs.eventsFailCount--
-			if eventsStatus == 0 {
-				eventsStatus = http.StatusServiceUnavailable
-			}
+		if fs.takeFault(&fs.eventsFailCount) && eventsStatus == 0 {
+			eventsStatus = http.StatusServiceUnavailable
 		}
 		closeEarly := fs.eventsCloseEarly
 		frames := append([]string(nil), fs.eventFrames...)

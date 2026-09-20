@@ -9,7 +9,10 @@ import (
 )
 
 type remoteTabSessionRouting struct {
-	currentPath       string
+	currentPath string
+	// rehydratingPath is the provisional route epoch (Serve has not confirmed
+	// currentPath yet). It opens when an identity is committed ahead of its
+	// /resume and closes on that resume's outcome or the generation's retirement.
 	rehydratingPath   string
 	rehydratingFrames []json.RawMessage
 	running           map[string]bool

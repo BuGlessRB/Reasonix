@@ -86,6 +86,17 @@ func (a *App) rollbackRemoteTabProvisionalResume(tabID string, tab *remoteTab, c
 	return true
 }
 
+// closeRemoteTabProvisionalRouteLocked ends the provisional route epoch when
+// its pump generation is retired. Every commit and rollback path fences on
+// that generation, so the buffered frames can never be drained and the gate
+// would otherwise refuse commands until the next identity change. The route
+// itself stays: the reattach reconciles it against Serve's foreground. Caller
+// holds remoteTabMu.
+func closeRemoteTabProvisionalRouteLocked(tab *remoteTab) {
+	tab.routing.rehydratingPath = ""
+	tab.routing.rehydratingFrames = nil
+}
+
 func restoreRemoteTabProvisionalRouteLocked(current *remoteTab, route remoteTabProvisionalResume) {
 	current.routing.currentPath = route.previousPath
 	current.routing.pathRevision++
