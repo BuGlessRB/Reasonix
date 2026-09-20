@@ -4,7 +4,7 @@ import { beneath, internalRoots, listPackages, runGoTest } from "./go-test-group
 
 // Start the long filesystem suites immediately on independent runners instead
 // of leaving them behind hundreds of short packages in the residual queue.
-export const isolatedGroups = ["agent", "boot", "control", "serve", "session", "worktree"];
+export const isolatedGroups = ["acp", "agent", "boot", "bot", "control", "serve", "session", "worktree"];
 const smokeRoots = internalRoots(
   "appidentity", "checkpoint", "cli", "desktoplauncher", "extension/sidecar",
   "filelock", "fileops", "fileutil", "hook", "instruction", "mcplaunch", "notify",
