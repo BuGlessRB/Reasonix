@@ -202,6 +202,30 @@ in the `X-Reasonix-Serve-Capabilities` header of the `/auth/token` handshake.
 
 ## Acceptance
 
+### Right panel sizing
+
+Without an existing width preference, the first opening targets 45% of the
+window width. Normal split layout uses a 300px minimum and a 70% window cap,
+protects 400px for chat, and falls back to an overlay when there is insufficient
+room. Pointer and keyboard resizing retain the existing local preference
+format across closing, reopening, and restarting. Responsive compression never
+writes back to that preference.
+
+Below 1024px the navigation sidebar collapses automatically, with a temporary
+manual expansion override cleared on crossing the breakpoint. Wide-window
+preferences are preserved. Below 768px the right panel fills the app content
+area while keeping window chrome and a panel-close action reachable. Closing
+returns to chat; widening restores the split. Files, Overview, and Browser use
+the same rules. HTML reflow still depends on the document's CSS; the panel does
+not scale or rewrite fixed-width pages.
+
+Run `pnpm exec tsx src/__tests__/responsive-dock.test.ts` and
+`pnpm test:dock-responsive-browser`. The browser regression uses actual app
+components with mock sessions to verify geometry, dragging, reopening, and
+reload restoration. Add `--electron` to `node bench/responsive-dock.mjs` to run
+the same checks against actual native window resizing with an isolated profile.
+These geometry checks do not validate agent-driven HTML page execution.
+
 Iframes, dynamic DOM, controlled inputs, popups, upload and download,
 navigation history, temporary partitions, shared and isolated logins;
 take-over before approval, after approval before dispatch, lost receipt after
