@@ -64,7 +64,7 @@ func otherProjectResumeEntries(excludeDir string) []resumeEntry {
 		// belongs to its own project's session service and cannot be opened
 		// from this controller. Migrated sources are hidden so the row points
 		// at a conversation that is still live as a transcript.
-		rows := legacyResumeRows(t.path)
+		rows := foreignProjectResumeRows(t.path)
 		if len(rows) == 0 {
 			continue
 		}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/config"
 	"reasonix/internal/provider"
 	"reasonix/internal/session"
 )
@@ -352,5 +353,58 @@ func TestCanonicalResumeEntriesBoundTheCatalogWalk(t *testing.T) {
 	}
 	if len(entries) != canonicalResumeScanCap {
 		t.Fatalf("listed %d rows, want the display cap of %d", len(entries), canonicalResumeScanCap)
+	}
+}
+
+// TestOtherProjectResumeRowsUseMigrationMapWithoutForeignService proves the
+// cross-project rows come from the foreign workspace's migration map alone: a
+// migrated source is hidden, the live transcript is offered, and no session
+// service is opened (and cached for the process lifetime) for that root.
+func TestOtherProjectResumeRowsUseMigrationMapWithoutForeignService(t *testing.T) {
+	currentDir := t.TempDir()
+	otherRoot := t.TempDir()
+	otherDir := config.ProjectSessionDir(otherRoot)
+	if otherDir == "" {
+		t.Skip("project session dir unavailable")
+	}
+	if err := os.MkdirAll(otherDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	projectsFile := filepath.Join(config.ReasonixHomeDir(), "desktop-projects.json")
+	previous, readErr := os.ReadFile(projectsFile)
+	t.Cleanup(func() {
+		if readErr != nil {
+			os.Remove(projectsFile)
+			return
+		}
+		_ = os.WriteFile(projectsFile, previous, 0o644)
+	})
+	if err := os.WriteFile(projectsFile, []byte(`{"projects":[{"root":`+strconv.Quote(filepath.ToSlash(otherRoot))+`}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	migrated := saveQueryTestSession(t, otherDir, "migrated-source.jsonl", "migrated work")
+	fresh := saveQueryTestSession(t, otherDir, "fresh-legacy.jsonl", "fresh work")
+	v4root := session.RootForLegacyDir(otherDir)
+	if err := os.MkdirAll(filepath.Join(v4root, "target0001"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeTestMigrationMap(t, v4root, migrated, "target0001")
+
+	entries := otherProjectResumeEntries(currentDir)
+
+	var foreign []resumeEntry
+	for _, entry := range entries {
+		if entry.project == filepath.Base(otherRoot) {
+			foreign = append(foreign, entry)
+		}
+	}
+	if len(foreign) != 1 || foreign[0].session.Path != fresh || foreign[0].target.canonical() {
+		t.Fatalf("foreign project rows = %+v, want exactly the live transcript %q", foreign, fresh)
+	}
+	cliSessionServices.Lock()
+	_, opened := cliSessionServices.byRoot[v4root]
+	cliSessionServices.Unlock()
+	if opened {
+		t.Fatalf("listing another project opened a session service for %s", v4root)
 	}
 }

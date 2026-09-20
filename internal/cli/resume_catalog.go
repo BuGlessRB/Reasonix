@@ -114,6 +114,26 @@ func canonicalResumeDisplayInfo(info session.SessionInfo) agent.SessionInfo {
 	}
 }
 
+// readMigrationMapping loads the workspace's legacy-to-final migration map.
+// It is a plain file read: no session service is opened for the root, so
+// listing a foreign project from the picker never creates a writer registry
+// or schedules metadata rebuilds there.
+func readMigrationMapping(sessionDir string) (string, session.MigrationMapping, bool) {
+	root := session.RootForLegacyDir(sessionDir)
+	if root == "" {
+		return "", session.MigrationMapping{}, false
+	}
+	data, err := os.ReadFile(filepath.Join(root, "migration-map.json"))
+	if err != nil {
+		return root, session.MigrationMapping{}, false
+	}
+	var mapping session.MigrationMapping
+	if json.Unmarshal(data, &mapping) != nil || mapping.SchemaVersion != session.SchemaVersion {
+		return root, session.MigrationMapping{}, false
+	}
+	return root, mapping, true
+}
+
 // migratedLegacyIndex returns the legacy transcript paths that already have
 // one final-format successor among the listed canonical entries, plus the
 // reverse source-for-target map. Sources with exactly one successor are hidden
@@ -122,16 +142,8 @@ func canonicalResumeDisplayInfo(info session.SessionInfo) agent.SessionInfo {
 // conversation. Multiple successors stay visible for the same reason the
 // Serve keeps them.
 func migratedLegacyIndex(sessionDir string, canonical []resumeEntry) (map[string]struct{}, map[string]string) {
-	root := session.RootForLegacyDir(sessionDir)
-	if root == "" {
-		return nil, nil
-	}
-	data, err := os.ReadFile(filepath.Join(root, "migration-map.json"))
-	if err != nil {
-		return nil, nil
-	}
-	var mapping session.MigrationMapping
-	if json.Unmarshal(data, &mapping) != nil || mapping.SchemaVersion != session.SchemaVersion {
+	_, mapping, ok := readMigrationMapping(sessionDir)
+	if !ok {
 		return nil, nil
 	}
 	listed := make(map[string]struct{}, len(canonical))
@@ -140,14 +152,22 @@ func migratedLegacyIndex(sessionDir string, canonical []resumeEntry) (map[string
 			listed[entry.target.ref.SessionID] = struct{}{}
 		}
 	}
+	return migratedLegacyIndexWith(mapping, func(targetID string) bool {
+		_, ok := listed[targetID]
+		return ok
+	})
+}
+
+// migratedLegacyIndexWith folds the mapping into the hidden-source and
+// source-for-target indexes, counting only successors the live predicate
+// accepts: the current workspace requires a visible catalog row, a foreign
+// workspace an existing session directory.
+func migratedLegacyIndexWith(mapping session.MigrationMapping, live func(targetID string) bool) (map[string]struct{}, map[string]string) {
 	targets := make(map[string][]string)
 	for _, entry := range mapping.Entries {
 		source := agent.CanonicalSessionPath(entry.SourcePath)
 		target := strings.TrimSpace(entry.TargetID)
-		if source == "" || target == "" {
-			continue
-		}
-		if _, ok := listed[target]; !ok {
+		if source == "" || target == "" || !live(target) {
 			continue
 		}
 		seen := false
@@ -234,15 +254,39 @@ func scanWorkspaceResume(ctx context.Context, sessionDir string) workspaceResume
 	return scan
 }
 
-// legacyResumeRows returns the workspace's legacy transcript rows with
-// migrated sources removed, in ListSessions' newest-first order. Resuming a
-// frozen source reuses its canonical target, so listing it beside that target
-// only offers the same conversation twice under two identities.
-func legacyResumeRows(sessionDir string) []agent.SessionInfo {
+// foreignProjectResumeRows returns another workspace's legacy transcript rows
+// with migrated sources removed, in ListSessions' newest-first order. Only the
+// migration map is consulted: a successor counts when its session directory
+// exists, which stands in for the current workspace's "visible catalog row"
+// rule without opening the foreign root's session service from this TUI. A
+// canonical identity cannot be opened from this controller anyway, so the
+// foreign rows stay legacy-only.
+func foreignProjectResumeRows(sessionDir string) []agent.SessionInfo {
 	if sessionDir == "" {
 		return nil
 	}
-	return scanWorkspaceResume(context.Background(), sessionDir).legacy
+	sessions, err := agent.ListSessions(sessionDir)
+	if err != nil || len(sessions) == 0 {
+		return nil
+	}
+	var hidden map[string]struct{}
+	if root, mapping, ok := readMigrationMapping(sessionDir); ok {
+		hidden, _ = migratedLegacyIndexWith(mapping, func(targetID string) bool {
+			if !filepath.IsLocal(targetID) || filepath.Base(targetID) != targetID {
+				return false
+			}
+			info, statErr := os.Stat(filepath.Join(root, targetID))
+			return statErr == nil && info.IsDir()
+		})
+	}
+	rows := make([]agent.SessionInfo, 0, len(sessions))
+	for _, info := range sessions {
+		if _, migrated := hidden[agent.CanonicalSessionPath(info.Path)]; migrated {
+			continue
+		}
+		rows = append(rows, info)
+	}
+	return rows
 }
 
 // mergedResumeEntries unifies the legacy picker rows with the final-format
