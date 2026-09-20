@@ -42,7 +42,6 @@ import (
 	"reasonix/internal/provider/openai"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/serve"
-	"reasonix/internal/session"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/telemetry"
 
@@ -574,39 +573,11 @@ func runAgent(args []string, version string) int {
 		}
 	}
 
-	// Resolve the resume target up front so --copy and the session lease can be
-	// handled before any heavy assembly. --resume takes precedence over
-	// --continue, matching the Resume call below. Accept file paths, branch
-	// IDs, preview text, opaque machine session IDs (#7429), and final-format
-	// session identities.
-	resumeTarget := cliResumeTarget{}
-	if strings.TrimSpace(*resume) != "" {
-		resolved, err := resolveSessionQuery(resolveCLISessionDir(), strings.TrimSpace(*resume))
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-			return 1
-		}
-		resumeTarget = resolved
-	}
-	if resumeTarget.empty() && *cont {
-		sessionDir := resolveCLISessionDir()
-		reclaimCLIRecoveryBranches(sessionDir)
-		target, ok := newestResumeTarget(sessionDir)
-		if !ok {
-			fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResume)
-			return 1
-		}
-		resumeTarget = target
+	resumeTarget, rc := headlessResumeTarget(*resume, *cont, *copySession)
+	if rc != 0 {
+		return rc
 	}
 	resumePath := resumeTarget.path
-	if *copySession && resumeTarget.empty() {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--copy requires --resume or --continue")
-		return 2
-	}
-	if *copySession && resumeTarget.canonical() {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--copy does not support final-format sessions yet")
-		return 2
-	}
 	if *copySession {
 		copied, err := copyResumableSession(*model, resumePath, cfg)
 		if err != nil {
@@ -729,14 +700,9 @@ func runAgent(args []string, version string) int {
 	// MCP/API callers that manage their own per-project session). Takes
 	// precedence over --continue.
 	// --continue: resume the most recent saved session.
-	if err := commitResumedSession(takeoverBinding, takeoverManager, ctrl, resumeSession, resumeTarget); err != nil {
-		if resumeTarget.canonical() && errors.Is(err, session.ErrWriterOwned) && *takeover {
-			if tErr := cliStartupCanonicalTakeover(ctrl, takeoverManager, resumeTarget); tErr != nil {
-				return cliTakeoverFailure(takeoverBinding, leases, takeoverManager, tErr)
-			}
-		} else {
-			return cliTakeoverFailure(takeoverBinding, leases, takeoverManager, err)
-		}
+	if err := commitStartupResume(takeoverBinding, takeoverManager, ctrl, resumeSession, resumeTarget,
+		flagTakeoverApproval(*takeover)); err != nil {
+		return cliTakeoverFailure(takeoverBinding, leases, takeoverManager, err)
 	}
 	ctrl.EnsureSessionPath()
 	// Fresh sessions take the lease too (defensive: the path is brand new); a
@@ -1048,47 +1014,12 @@ func chatREPL(args []string, version string) int {
 
 	// Decide whether we're starting fresh or resuming. --resume opens an
 	// interactive picker; --continue / -c jumps straight into the newest.
-	var resumeTarget cliResumeTarget
-	resumeValue := strings.TrimSpace(*resume)
-	switch strings.ToLower(resumeValue) {
-	case "true":
-		resumeValue = resumePickerSentinel
-	case "false":
-		resumeValue = ""
-	}
-	switch {
-	case resumeValue == resumePickerSentinel:
-		target, rc := pickSessionToResume()
-		if rc != 0 {
-			return rc
-		}
-		resumeTarget = target
-	case resumeValue != "":
-		target, err := resolveSessionQuery(resolveCLISessionDir(), resumeValue)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-			return 1
-		}
-		resumeTarget = target
-	case *cont:
-		sessionDir := resolveCLISessionDir()
-		reclaimCLIRecoveryBranches(sessionDir)
-		target, ok := newestResumeTarget(sessionDir)
-		if !ok {
-			fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResume)
-			return 1
-		}
-		resumeTarget = target
+	resumeValue := normalizedResumeFlag(*resume)
+	resumeTarget, rc := interactiveResumeTarget(resumeValue, *cont, *copySession)
+	if rc != 0 {
+		return rc
 	}
 	resumePath := resumeTarget.path
-	if *copySession && resumeTarget.empty() {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--copy requires --resume or --continue")
-		return 2
-	}
-	if *copySession && resumeTarget.canonical() {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--copy does not support final-format sessions yet")
-		return 2
-	}
 	if *copySession {
 		copied, err := copyResumableSession(*model, resumePath, cfg)
 		if err != nil {
@@ -1196,15 +1127,9 @@ func chatREPL(args []string, version string) int {
 	// Decide where this conversation's auto-save lands. A resume reuses the
 	// file so closing/reopening keeps appending to the same history; a fresh
 	// session lands in a new file stamped with the model name.
-	if err := commitResumedSession(takeoverBinding, takeoverManager, ctrl, startupResumeSession, resumeTarget); err != nil {
-		if resumeTarget.canonical() && errors.Is(err, session.ErrWriterOwned) &&
-			isInteractive() && promptSessionTakeover(err) {
-			if tErr := cliStartupCanonicalTakeover(ctrl, takeoverManager, resumeTarget); tErr != nil {
-				return cliTakeoverFailure(takeoverBinding, leases, takeoverManager, tErr)
-			}
-		} else {
-			return cliTakeoverFailure(takeoverBinding, leases, takeoverManager, err)
-		}
+	if err := commitStartupResume(takeoverBinding, takeoverManager, ctrl, startupResumeSession, resumeTarget,
+		promptTakeoverApproval); err != nil {
+		return cliTakeoverFailure(takeoverBinding, leases, takeoverManager, err)
 	}
 	ctrl.EnsureSessionPath()
 	// Fresh sessions take the lease too (defensive: the path is brand new); a
