@@ -277,9 +277,10 @@ func (a *App) sampleRemoteRuntimeSessions() []RuntimeSessionState {
 				continue
 			}
 			freshness := "synced"
-			// Foreground ownership changes do not invalidate another session,
-			// but a failed observation of this background route still does.
-			if tab.runtimeUnknown[path] != 0 {
+			// A foreground takeover says nothing about another session, but a
+			// tab without a live stream or with a failed sync only holds the
+			// snapshot frozen at its last observation.
+			if tab.state != "ready" || tab.runtime.syncFailed || tab.runtimeUnknown[path] != 0 {
 				freshness = "unknown"
 			}
 			sessions = append(sessions, RuntimeSessionState{TabID: tab.id, Scope: "remote", HostID: tab.ref.HostID, WorkspaceRoot: tab.ref.Workspace,
