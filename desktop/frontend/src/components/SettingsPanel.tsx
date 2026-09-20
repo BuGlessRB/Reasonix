@@ -6939,12 +6939,12 @@ function SandboxSection({ s, busy, apply, windows }: SectionProps & { windows: b
   return (
     <SettingsSection
       title={t("settings.sandboxTitle")}
-      description={t("settings.sandboxBoundaryHint")}
+      description={t(windows ? "settings.sandboxBoundaryHintWindows" : "settings.sandboxBoundaryHint")}
     >
       <ShellInterpreterFields sb={sb} windows={windows} busy={busy} setShell={(prefer) => void apply(() => app.SetShellPreference(prefer))} reloadSession={() => void reloadSession()} />
-      <SettingsField label={t("settings.allowNetwork")}>
+      <SettingsField label={t("settings.allowNetwork")} hint={windows ? t("settings.allowNetworkWindowsHint") : undefined}>
         <label className="set-check set-check--inline">
-          <input type="checkbox" checked={sb.network} disabled={busy} onChange={(e) => void set({ network: e.target.checked })} />
+          <input type="checkbox" checked={sb.network} disabled={busy || windows} onChange={(e) => void set({ network: e.target.checked })} />
           {t("settings.allowNetwork")}
         </label>
       </SettingsField>

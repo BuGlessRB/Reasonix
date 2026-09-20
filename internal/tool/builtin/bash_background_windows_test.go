@@ -21,10 +21,6 @@ import (
 )
 
 func TestWindowsWorkspaceWriteBackgroundHTTPJobLifecycle(t *testing.T) {
-	sandbox.RegisterHelperDispatch()
-	if !sandbox.Available() {
-		t.Skip("windows sandbox APIs unavailable")
-	}
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node unavailable")

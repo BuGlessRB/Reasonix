@@ -2719,16 +2719,10 @@ func applyMCPIsolation(spec *plugin.Spec, workspaceRoot string, opts PluginSpecO
 		return
 	}
 	writerRoots := appendUniquePaths([]string{stateDir}, opts.WriterRoots...)
-	readerRoots := []string{workspaceRoot}
-	if home, err := os.UserHomeDir(); err == nil {
-		readerRoots = appendUniquePaths(readerRoots, home)
-	}
 	spec.Sandbox = sandbox.Spec{
 		Mode: "enforce", WriteRoots: writerRoots,
-		ReadRoots:              readerRoots,
-		AppContainerWriteRoots: append([]string(nil), writerRoots...),
-		ForbidReadRoots:        append([]string(nil), opts.ForbidReadRoots...),
-		Network:                opts.Network, MinimalWrites: true,
+		ForbidReadRoots: append([]string(nil), opts.ForbidReadRoots...),
+		Network:         opts.Network, MinimalWrites: true,
 	}
 }
 

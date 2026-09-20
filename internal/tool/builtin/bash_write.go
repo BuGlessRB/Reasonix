@@ -125,6 +125,12 @@ func (b bash) specForCall(ctx context.Context) sandbox.Spec {
 		spec.Mode = "off"
 		spec.ReadOnly = false
 	}
+	// Windows has no OS-level shell sandbox: demanding one made every
+	// restricted-preset shell call fail closed (#10292). Presets stay tool-layer
+	// boundaries there and bash runs as the OS user after the approval gate.
+	if !sandbox.OSSandboxSupported() {
+		spec.Mode = "off"
+	}
 	if preset == permissionpreset.WorkspaceWrite {
 		if b.rootSet != nil {
 			spec.WriteRoots = b.rootSet.EffectiveSandboxRoots(ctx)
@@ -182,25 +188,4 @@ func appendSandboxWriteHint(out string, err error, p bashParams, spec sandbox.Sp
 		hint += " If the command cannot be expressed with additional_write_dirs, request danger-full-access for this exact retry with denial_id " + denialID + "."
 	}
 	return appendSessionDataHint(out, hint)
-}
-
-func appendRunnerAuthorizationHint(out, command, preset string) string {
-	if strings.TrimSpace(preset) == string(permissionpreset.DangerFullAccess) {
-		return out
-	}
-	hint := "The Windows sandbox runner could not configure restricted authorization before the command started."
-	if denialID := sandbox.IssueDenial(command, preset); denialID != "" {
-		hint += " After explicit authorization, retry this exact command with sandbox_permissions danger-full-access and denial_id " + denialID + "."
-	}
-	return appendSessionDataHint(out, hint)
-}
-
-func appendRunnerAuthorizationError(err error, execution *tool.ShellExecution, command, preset string) error {
-	if err == nil || execution == nil || execution.FailurePhase != tool.ShellPhaseAuthorization || strings.TrimSpace(preset) == string(permissionpreset.DangerFullAccess) {
-		return err
-	}
-	if denialID := sandbox.IssueDenial(command, preset); denialID != "" {
-		return fmt.Errorf("%w; after explicit authorization, retry this exact command with sandbox_permissions danger-full-access and denial_id %s", err, denialID)
-	}
-	return err
 }

@@ -27,7 +27,6 @@ var (
 	ErrWorkspaceNotFound  = errors.New("workspace is not registered")
 	ErrSessionNotFound    = errors.New("session is not registered")
 	ErrMutationConflict   = errors.New("workspace mutation conflicts with persisted state")
-	ErrAmbiguousIdentity  = errors.New("workspace path matches multiple persisted workspaces")
 )
 
 type Workspace struct {

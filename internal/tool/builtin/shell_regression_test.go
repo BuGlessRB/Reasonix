@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"os/exec"
 	"runtime"
 	"strings"
 	"testing"
@@ -91,19 +90,5 @@ func TestBackgroundDiagnosticCaptureKeepsFailureTail(t *testing.T) {
 	_, _ = io.WriteString(w, "Error: spawn EPERM: operation not permitted\n")
 	if !strings.Contains(w.String(), "spawn EPERM") || len(w.String()) > 64<<10 {
 		t.Fatalf("bounded diagnostic lost failure tail: bytes=%d", len(w.String()))
-	}
-}
-
-func TestBackgroundReplayedRunnerMarkerRemainsExecutionFailure(t *testing.T) {
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/c", "exit 126")
-	} else {
-		cmd = exec.Command("sh", "-c", "exit 126")
-	}
-	err := cmd.Run()
-	ex, _ := classifyBackgroundShellExecution(t.Context(), sandbox.Shell{Kind: sandbox.ShellPowerShell, Path: "pwsh"}, []string{"reasonix", sandbox.WindowsHelperCommand, "payload", "--", "pwsh"}, "__reasonix_windows_sandbox_failure__:payload:authorization", err, time.Now())
-	if ex.FailurePhase != tool.ShellPhaseExecution || ex.MutationRisk != tool.ShellMutationMayBePartial {
-		t.Fatalf("replayed output changed classification: %+v", ex)
 	}
 }

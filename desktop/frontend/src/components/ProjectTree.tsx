@@ -10,7 +10,7 @@ import { onProjectTreeChangedV2 } from "../lib/sessionCatalogBridge";
 import { sessionCatalogNotice } from "../lib/sessionCatalogPresentation";
 import { sessionTitleErrorKey, sessionTitleTarget } from "../lib/sessionTitleOperation";
 import { useSessionTitleOperation } from "../lib/useSessionTitleOperation";
-import { isRuntimeSessionNode, isTopicNode, loadWorkbenchSortMode, mergeIncompleteProjectTopicPage, mergeProjectTopicPage, projectTreeDedupedExactTime, projectTreeEventAffectsFolder, projectTreeFolderDisclosure, projectTreeRevisionIsFresh, projectTreeShellChildren, projectTreeShellSignature, projectTreeShouldApplyShellSnapshot, projectTreeShouldRenderTopicActions, projectTreeShouldSuppressOpenForRename, projectTreeTopicArchiveBlocked, projectTreeTopicHasUnreadActivity, projectTreeTopicMenuOffersPin, projectTreeTopicMetaLine, projectTreeTopicOpenRequest, projectTreeTopicPageIsFresh, projectTreeWithoutSession, projectTreeWithoutTopic, projectTreeWithSessionTitle, projectTreeWithTopicTitle, topicActivityDateLabel, topicActivityLabel, topicIsActive, topicStatus, topicStatusLabel, topicUnknownTimeLabel, WORKBENCH_SORT_KEY, type ProjectTreePendingTopicOpen, type WorkbenchSortMode } from "../lib/projectTreeTopic";
+import { isRuntimeSessionNode, isTopicNode, loadWorkbenchSortMode, mergeIncompleteProjectTopicPage, mergeProjectTopicPage, projectTreeDedupedExactTime, projectTreeEventAffectsFolder, projectTreeFolderDisclosure, projectTreeRevisionIsFresh, projectTreeShellChildren, projectTreeShellSignature, projectTreeShouldApplyShellSnapshot, projectTreeShouldRenderTopicActions, projectTreeShouldSuppressOpenForRename, projectTreeTopicArchiveBlocked, projectTreeTopicHasUnreadActivity, projectTreeTopicMenuOffersPin, projectTreeTopicMetaLine, projectTreeTopicOpenRequest, projectTreeTopicPageIsFresh, projectTreeWithoutSession, projectTreeWithoutTopic, projectTreeWithSessionTitle, projectTreeWithTopicTitle, topicActivityDateLabel, topicActivityLabel, topicIsActive, topicStatus, topicStatusLabel, topicUnknownTimeLabel, WORKBENCH_SORT_KEY, workspaceDraftBadge, type ProjectTreePendingTopicOpen, type WorkbenchSortMode } from "../lib/projectTreeTopic";
 export * from "../lib/projectTreeTopic";
 import { arrangeWorkbenchTree, splitPinnedProjectTree, type PinnedTreeSections } from "../lib/projectTreePresentation";
 export * from "../lib/projectTreePresentation";
@@ -1495,7 +1495,7 @@ export function ProjectTree({
     const projectPath = node.root ?? "";
     const colorTargetRoot = scope === "global" ? "" : projectPath;
     const projectLabel = node.label || (scope === "global" ? "Global" : "Untitled");
-    const workspaceDraft = draftSummaries.find((draft) => draft.scope === scope && (scope === "global" || draft.workspaceRoot === projectRoot));
+    const workspaceDraft = workspaceDraftBadge(draftSummaries, scope, projectRoot);
     const projectPinned = Boolean(node.pinned);
     const projectActive = node.remote ? Boolean(activeRemote && remoteProjectKey(activeRemote) === remoteProjectKey(node.remote)) : activeScope === scope && (scope === "global" || activeWorkspaceRoot === node.root);
     const projectMenuOpen = menuProject?.key === key;

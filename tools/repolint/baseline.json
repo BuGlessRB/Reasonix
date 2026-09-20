@@ -349,9 +349,6 @@
     "desktop/updater_windows.go": {
       "essay": 1
     },
-    "desktop/windows_sandbox_helper_test.go": {
-      "essay": 1
-    },
     "desktop/workspace.go": {
       "essay": 3
     },
@@ -1340,9 +1337,6 @@
     "internal/sandbox/seatbelt_windows.go": {
       "essay": 1
     },
-    "internal/sandbox/seatbelt_windows_test.go": {
-      "essay": 2
-    },
     "internal/secrets/redact.go": {
       "complexity": 9
     },
@@ -1496,26 +1490,6 @@
       "complexity": 4,
       "file-size": 381,
       "function-size": 1
-    },
-    "internal/winsandbox/coordination_windows.go": {
-      "essay": 31
-    },
-    "internal/winsandbox/coordination_windows_test.go": {
-      "essay": 13,
-      "test-file-size": 41
-    },
-    "internal/winsandbox/restricted_windows.go": {
-      "essay": 2
-    },
-    "internal/winsandbox/sandbox.go": {
-      "essay": 2
-    },
-    "internal/winsandbox/sandbox_windows.go": {
-      "essay": 17,
-      "file-size": 550
-    },
-    "internal/winsandbox/sandbox_windows_test.go": {
-      "test-file-size": 290
     },
     "sdk/go/examples/fullsidecar/main.go": {
       "essay": 25

@@ -468,16 +468,18 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // measured 2064923 B payload keeps the existing gzip, CSS, and chunk limits.
 // Approval outcome recovery measures 2065149 B on current main-v2, versus the
 // 2015.6 KiB base. Retain 0.15 KiB headroom; all other limits stay unchanged.
-// Session-id migration and cross-client takeover measure 2071101 B on the
-// merged branch, 5952 B (0.288%) over that main-v2 payload. The startup-path
-// growth is attributable to this branch's remote session identity work: the
-// remote telemetry and status modules become static imports of
-// useRemoteSession (they leave their lazily loaded surface chunk), plus the
-// canonical session-id plumbing, the spectator reconcile loop and its
-// ownership classification, the pre-activation history prime, the rebased
-// optimistic-submission settlement, and the project tree's canonical row
-// identity. Retain 0.14 KiB headroom at the next one-decimal ceiling; gzip,
-// CSS, and chunk limits are unchanged and keep passing.
-const rawInitialBudgetKiB = 2_022.7;
+// Live-default draft fencing and frozen-model recovery measure 2066040 B
+// (2017.617 KiB). Retain 0.183 KiB; gzip, chunk, CSS, and locale gates stay fixed.
+// Session-id migration and cross-client takeover measure 2073794 B merged onto
+// that main-v2 payload, 7754 B (0.375%) over it. The startup-path growth is
+// attributable to this branch's remote session identity work: the remote
+// telemetry and status modules become static imports of useRemoteSession (they
+// leave their lazily loaded surface chunk), plus the canonical session-id
+// plumbing, the spectator reconcile loop and its ownership classification, the
+// pre-activation history prime, the rebased optimistic-submission settlement,
+// and the project tree's canonical row identity. Retain 0.11 KiB headroom at
+// the next one-decimal ceiling; gzip, CSS, and chunk limits are unchanged and
+// keep passing.
+const rawInitialBudgetKiB = 2_025.3;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

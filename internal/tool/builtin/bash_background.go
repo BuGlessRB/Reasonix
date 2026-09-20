@@ -56,7 +56,6 @@ func (b bash) startBackground(ctx context.Context, p bashParams, sh sandbox.Shel
 		}
 		runErr = normalizeBashRunError(jobCtx, runErr, p.PreserveBackgroundProcesses)
 		execution, classifiedErr := classifyBackgroundShellExecution(jobCtx, sh, argv, capture.String(), runErr, started)
-		classifiedErr = appendRunnerAuthorizationError(classifiedErr, execution, p.Command, permissionPreset)
 		if classifiedErr != nil && execution.FailurePhase == tool.ShellPhaseExecution && wrapped {
 			writeBackgroundSandboxHint(out, capture.String(), classifiedErr, p, jobSpec, permissionPreset)
 		}
@@ -119,18 +118,6 @@ func classifyBackgroundShellExecution(ctx context.Context, sh sandbox.Shell, arg
 		ex.ExitCode = tool.IntPtr(0)
 		ex.MutationRisk = tool.ShellMutationMayHaveCompleted
 		return ex, nil
-	}
-	if phase, detail, ok := sandbox.RunnerFailureFromError(runErr); ok {
-		ex.State = tool.ShellStateNotRun
-		ex.FailurePhase = phase
-		ex.MutationRisk = tool.ShellMutationNotStarted
-		if exitErr := (*exec.ExitError)(nil); errors.As(runErr, &exitErr) {
-			ex.ExitCode = tool.IntPtr(exitErr.ExitCode())
-		}
-		if detail == "" {
-			detail = "windows sandbox runner failed before the command started"
-		}
-		return ex, fmt.Errorf("%s", detail)
 	}
 	if exitErr := (*exec.ExitError)(nil); errors.As(runErr, &exitErr) {
 		ex.State = tool.ShellStateFailed

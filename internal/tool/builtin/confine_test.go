@@ -115,9 +115,6 @@ func TestRebindBashWriteRootsUsesMinimalWriteSurface(t *testing.T) {
 	if len(rebound.sb.WriteRoots) != 1 || rebound.sb.WriteRoots[0] != want[0] {
 		t.Fatalf("write roots = %v, want %v", rebound.sb.WriteRoots, want)
 	}
-	if len(rebound.sb.AppContainerWriteRoots) != 1 || rebound.sb.AppContainerWriteRoots[0] != want[0] {
-		t.Fatalf("app-container write roots = %v, want %v", rebound.sb.AppContainerWriteRoots, want)
-	}
 }
 
 func TestReboundBashCannotWriteOutsideClaim(t *testing.T) {
