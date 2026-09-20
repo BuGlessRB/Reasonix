@@ -662,7 +662,7 @@ func TestClearPluginAuthenticationInSourceUsesMCPJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, changed, source, err := ClearPluginAuthenticationInSource("dida")
+	updated, changed, source, err := ClearPluginAuthenticationInSourceForRoot(".", "dida")
 	if err != nil {
 		t.Fatalf("ClearPluginAuthenticationInSource: %v", err)
 	}
@@ -735,7 +735,7 @@ Authorization = "Bearer ${TOML_TOKEN}"
 		t.Fatal(err)
 	}
 
-	updated, changed, source, err := ClearPluginAuthenticationInSource("dida")
+	updated, changed, source, err := ClearPluginAuthenticationInSourceForRoot(".", "dida")
 	if err != nil {
 		t.Fatalf("ClearPluginAuthenticationInSource: %v", err)
 	}

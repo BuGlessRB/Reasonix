@@ -8,12 +8,13 @@ import { Sym, glyphFor } from "../Sym";
 import { GOAL_STATUS, argOf, goalUpdate, shortArgs } from "../args";
 import { Cost } from "../Cost";
 import { seconds, tokens } from "../../i18n/format";
-import { parsePlan } from "../../state/session";
+import { currentStep, parsePlan, stepDone } from "../../state/session";
 import { DiffView } from "./DiffView";
 import { Term, ToolOutput } from "./ToolOutput";
 import { ExtensionView } from "./ExtensionView";
 import { toolFailed, toolFailureLabel } from "./outcome";
 import { StudioIcon } from "../StudioIcon";
+import { useEscape } from "../dismiss";
 
 // The spec pops a symbol as it settles — colour arriving is the finish signal.
 // Only the transition may fire it: a restored transcript is all settled cards,
@@ -203,6 +204,7 @@ export function ToolCard({
           {!tool.diff && !goal && tool.name !== "todo_write" && tool.output && !echoed && children.length === 0 && (
             <ToolOutput name={shown} text={tool.output} bound={tool.bound} id={tool.id} />
           )}
+          <ToolShots images={tool.images} />
         </>
       )}
       {/* The error stays outside the takeover: an extension may redraw what
@@ -264,6 +266,29 @@ export function ToolCard({
   );
 }
 
+function ToolShots({ images }: { images?: string[] }) {
+  const [open, setOpen] = useState("");
+  useEscape(!!open, () => setOpen(""));
+  if (!images?.length) return null;
+  return (
+    <>
+      <div className="tshots">
+        {images.map((src, i) => (
+          <button key={src.slice(0, 64) + i} className="tshot" data-action="tool.image-open" onClick={() => setOpen(src)}
+            aria-label={t("放大第 {n} 张", { n: i + 1 })}>
+            <img src={src} alt={t("工具截图 {n}", { n: i + 1 })} loading="lazy" />
+          </button>
+        ))}
+      </div>
+      {open && (
+        <div className="tshot-full" data-action="tool.image-close" onClick={() => setOpen("")} role="presentation">
+          <img src={open} alt={t("放大的工具截图")} />
+        </div>
+      )}
+    </>
+  );
+}
+
 function changeCounts(tool: Tool): { added: number; removed: number } | null {
   if (!tool.diff && tool.added === undefined && tool.removed === undefined) return null;
   const lines = tool.diff?.split("\n") ?? [];
@@ -308,12 +333,12 @@ function NestedCall({ tool }: { tool: Tool }) {
 function Steps({ tool }: { tool: Tool }) {
   const steps = parsePlan(tool);
   if (!steps?.length) return <span className="fold">{t("计划已移入右栏")}</span>;
-  const now = steps.findIndex((s) => !s.done);
+  const now = currentStep(steps);
   return (
     <div className="steps">
       {steps.map((st, i) => (
-        <div className="s" key={i} data-done={st.done ? "" : undefined} data-now={i === now ? "" : undefined}>
-          <span className="b">{st.done ? "✓" : i + 1}</span>
+        <div className="s" key={i} data-done={stepDone(st) ? "" : undefined} data-now={i === now ? "" : undefined}>
+          <span className="b">{stepDone(st) ? "✓" : i + 1}</span>
           <span className="t">
             <span className="ln">{st.text}</span>
           </span>

@@ -12,7 +12,7 @@ import (
 
 func TestWebSlashRequestsFrontendHandoff(t *testing.T) {
 	m := newTestChatTUI()
-	m.modelRef = "deepseek/deepseek-v4-flash"
+	m.modelRef = "deepseek/deepseek-flash"
 	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t)})
 	ctrl.EnsureSessionPath()
 	t.Cleanup(ctrl.Close)

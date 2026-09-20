@@ -15,36 +15,40 @@ import (
 // managementNotice dispatch, plus the two serve intercepts. The chat TUI's
 // catalogue is larger because it implements commands of its own — listing
 // those here would offer a window a command nothing answers.
-func SubmitSlashCommands() []SlashItem {
+func SubmitSlashCommands(m i18n.Messages) []SlashItem {
 	return []SlashItem{
-		{Label: "/compact", Insert: "/compact ", Hint: i18n.M.CmdCompact},
-		{Label: "/context", Insert: "/context", Hint: i18n.M.CmdContext},
-		{Label: "/new", Insert: "/new", Hint: i18n.M.CmdNew},
-		{Label: "/clear", Insert: "/clear", Hint: i18n.M.CmdClear},
-		{Label: "/rewind", Insert: "/rewind", Hint: i18n.M.CmdRewind},
-		{Label: "/tree", Insert: "/tree", Hint: i18n.M.CmdTree},
-		{Label: "/branch", Insert: "/branch ", Hint: i18n.M.CmdBranch},
-		{Label: "/switch", Insert: "/switch ", Hint: i18n.M.CmdSwitchBranch},
-		{Label: "/model", Insert: "/model ", Hint: i18n.M.CmdModel, Descend: true},
-		{Label: "/provider", Insert: "/provider ", Hint: i18n.M.CmdProvider, Descend: true},
-		{Label: "/effort", Insert: "/effort ", Hint: i18n.M.CmdEffort, Descend: true},
-		{Label: "/goal", Insert: "/goal ", Hint: i18n.M.CmdGoal, Descend: true},
-		{Label: "/memory", Insert: "/memory ", Hint: i18n.M.CmdMemory, Descend: true},
-		{Label: "/remember", Insert: "/remember ", Hint: i18n.M.CmdRemember},
-		{Label: "/skills", Insert: "/skills ", Hint: i18n.M.CmdSkill, Descend: true},
-		{Label: "/plugins", Insert: "/plugins ", Hint: i18n.M.CmdPlugins, Descend: true},
-		{Label: "/hooks", Insert: "/hooks ", Hint: i18n.M.CmdHooks, Descend: true},
-		{Label: "/mcp", Insert: "/mcp ", Hint: i18n.M.CmdMcp, Descend: true},
-		{Label: "/docs", Insert: "/docs ", Hint: i18n.M.CmdDocs},
-		{Label: "/migrate", Insert: "/migrate", Hint: i18n.M.CmdMigrate},
-		{Label: "/reload-cmd", Insert: "/reload-cmd", Hint: i18n.M.CmdReloadCmd},
+		{Label: "/compact", Insert: "/compact ", Hint: m.CmdCompact},
+		{Label: "/context", Insert: "/context", Hint: m.CmdContext},
+		{Label: "/new", Insert: "/new", Hint: m.CmdNew},
+		{Label: "/clear", Insert: "/clear", Hint: m.CmdClear},
+		{Label: "/rewind", Insert: "/rewind", Hint: m.CmdRewind},
+		{Label: "/tree", Insert: "/tree", Hint: m.CmdTree},
+		{Label: "/branch", Insert: "/branch ", Hint: m.CmdBranch},
+		{Label: "/switch", Insert: "/switch ", Hint: m.CmdSwitchBranch},
+		{Label: "/model", Insert: "/model ", Hint: m.CmdModel, Descend: true},
+		{Label: "/provider", Insert: "/provider ", Hint: m.CmdProvider, Descend: true},
+		{Label: "/effort", Insert: "/effort ", Hint: m.CmdEffort, Descend: true},
+		{Label: "/goal", Insert: "/goal ", Hint: m.CmdGoal, Descend: true},
+		{Label: "/memory", Insert: "/memory ", Hint: m.CmdMemory, Descend: true},
+		{Label: "/remember", Insert: "/remember ", Hint: m.CmdRemember},
+		{Label: "/skills", Insert: "/skills ", Hint: m.CmdSkill, Descend: true},
+		{Label: "/plugins", Insert: "/plugins ", Hint: m.CmdPlugins, Descend: true},
+		{Label: "/hooks", Insert: "/hooks ", Hint: m.CmdHooks, Descend: true},
+		{Label: "/mcp", Insert: "/mcp ", Hint: m.CmdMcp, Descend: true},
+		{Label: "/docs", Insert: "/docs ", Hint: m.CmdDocs},
+		{Label: "/migrate", Insert: "/migrate", Hint: m.CmdMigrate},
+		{Label: "/reload-cmd", Insert: "/reload-cmd", Hint: m.CmdReloadCmd},
 	}
 }
 
 // CompletionData assembles what the composer's menu needs from the live
 // session. Frontends read it from the controller rather than gathering it
 // themselves, so the same session answers every one of them identically.
-func (c *Controller) CompletionData() CompletionData {
+func (c *Controller) CompletionData(lang string) CompletionData {
+	m := i18n.M
+	if lang != "" {
+		m = i18n.Catalog(lang)
+	}
 	commands := c.Commands()
 	skills := c.SlashSkills()
 	d := CompletionData{
@@ -58,7 +62,7 @@ func (c *Controller) CompletionData() CompletionData {
 			ProviderNames:   configuredProviderNames(),
 			PluginNames:     installedPluginNames(),
 		},
-		Names:         c.completionNames(commands, skills),
+		Names:         c.completionNames(commands, skills, m),
 		WorkspaceRoot: c.WorkspaceRoot(),
 	}
 	d.CurrentProvider, _, _ = strings.Cut(d.CurrentModel, "/")
@@ -73,10 +77,11 @@ func (c *Controller) CompletionData() CompletionData {
 // completionNames orders the catalogue the way Submit resolves it: a custom
 // command beats a skill of the same name, and both beat nothing — so the menu's
 // answer and the kernel's are the same answer.
-func (c *Controller) completionNames(commands []command.Command, skills []skill.Skill) []SlashItem {
+func (c *Controller) completionNames(commands []command.Command, skills []skill.Skill, m i18n.Messages) []SlashItem {
 	docs := "/" + ResolvedBuiltinSlashName(DocsSlashName, commands, skills)
-	items := make([]SlashItem, 0, len(commands)+len(skills)+len(SubmitSlashCommands()))
-	for _, b := range SubmitSlashCommands() {
+	builtin := SubmitSlashCommands(m)
+	items := make([]SlashItem, 0, len(commands)+len(skills)+len(builtin))
+	for _, b := range builtin {
 		if b.Label == "/docs" {
 			b.Insert = docs + strings.TrimPrefix(b.Insert, b.Label)
 			b.Label = docs

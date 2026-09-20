@@ -8,14 +8,11 @@ import { HttpError } from "../port/port";
 import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, Queue as QueueSnapshot, RewindScope, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import type { TrajectoryRead } from "../port/wire";
-import { fromHistory, initialState, localId, quoteAmount, reduce } from "../state/session";
+import { fromHistory, initialState, localId, quoteAmount, reduce, stepDone } from "../state/session";
 import { pairCheckpoints } from "../state/checkpoints";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { ExecutionStore } from "../state/execution";
 import { Transcript } from "./Transcript";
-import { Trajectory } from "./Trajectory";
-import { Graph } from "./Graph";
-import { Timeline } from "./Timeline";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
 import { SlottedView } from "./SlottedView";
@@ -31,6 +28,13 @@ import { useRate } from "./num";
 import { StudioIcon } from "./StudioIcon";
 import { useDismiss } from "./dismiss";
 import { ContextSummaryCard } from "./ContextSummaryCard";
+import { Find } from "./Find";
+import { useFind } from "./usefind";
+import { PaneDetail } from "./PaneDetail";
+import { BrowserPanel, useBrowserTabs } from "./BrowserPanel";
+import { refreshTodos } from "../state/restore";
+
+const BROWSER_DOCK = "rx-browser-dock";
 
 // PaneReport is what the window's own chrome needs from whichever pane has
 // focus: everything else about a session stays inside the pane that owns it.
@@ -74,6 +78,7 @@ interface Props {
   // its session. /status is polled only while a turn runs, so without this the
   // pane keeps reporting the posture it had when it opened.
   pulse: number;
+  findPulse: number;
   onSettings: (section?: string) => void;
   // 这个窗口还没有人选过的项目文件夹。空转录是唯一说得出这句话的地方 —— 那里
   // 本来就在替一段还没开始的对话说明它该怎么开始。
@@ -82,7 +87,7 @@ interface Props {
   onKeepHere: () => void;
 }
 
-function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, onSettings, needsProject, onOpenProject, onKeepHere }: Props) {
+function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
   // The run graph is read, never accumulated: the kernel answers with what its
@@ -106,6 +111,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [queue, setQueue] = useState<QueueSnapshot | null>(null);
   const [slots, setSlots] = useState<Record<string, string>>({});
+  const pages = useBrowserTabs(port, s.browserTabsMoved);
+  const [dock, setDock] = useState(() => localStorage.getItem(BROWSER_DOCK) !== "off");
+  const docked = dock && pages.length > 0 && tab !== "browser";
   const [meterOpen, setMeterOpen] = useState(false);
   const meterRef = useRef<HTMLDivElement>(null);
   const closeMeter = useCallback(() => setMeterOpen(false), []);
@@ -158,6 +166,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           // is the only precise signal for it — the turn boundary below is the
           // fallback for changes that arrive without an event.
           if (ev.kind === "mcp_surface_ready" || ev.kind === "extension_status") reloadMcp();
+          if (ev.kind === "todo_progress") void refreshTodos(port, dispatch);
           // A prompt opening or closing changes who the turn is waiting on, and
           // the kernel answers that in /status rather than in the frame. Same
           // shape the queue uses: the event says something moved, the read says
@@ -228,8 +237,11 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   }, [port]);
 
   useEffect(() => {
-    if (!s.running) refreshWallet();
-  }, [s.running, refreshWallet]);
+    if (!s.running) {
+      refreshWallet();
+      void refreshTodos(port, dispatch);
+    }
+  }, [s.running, refreshWallet, port]);
 
   useEffect(() => {
     if (pulse) refreshStatus();
@@ -358,17 +370,17 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // /status is the only source for background jobs and for settings the run does
   // not echo, so a live turn has to re-read it rather than infer from events.
   useEffect(() => {
-    if (!s.running) {
-      startedAt.current = 0;
-      return;
-    }
-    if (!startedAt.current) startedAt.current = Date.now();
-    const t = setInterval(() => {
+    if (!s.running) startedAt.current = 0;
+    else if (!startedAt.current) startedAt.current = Date.now();
+    if (!s.running || !visible) return;
+    const tick = () => {
       setElapsed((Date.now() - startedAt.current) / 1000);
       refreshStatus();
-    }, 250);
+    };
+    tick();
+    const t = setInterval(tick, 250);
     return () => clearInterval(t);
-  }, [s.running, refreshStatus]);
+  }, [s.running, visible, refreshStatus]);
 
   useEffect(() => {
     void port.surfaceSlots().then(setSlots).catch(() => setSlots({}));
@@ -586,13 +598,15 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // motion language of its own: it says which view, and this says how a pane
   // changes from one to another.
   const showView = useCallback((to: PaneView) => swapping(() => setTab(to), "tab"), []);
+  const find = useFind(s.items, findPulse, active, useCallback(() => showView("flow"), [showView]));
 
   // The timeline's tab is drawn only while the run has a graph, so a session
   // that delegated nothing is not offered an empty page. Leaving someone parked
   // on a tab that just lost its button is the other half of that.
   useEffect(() => {
     if (tab === "line" && exec.graph.nodes.length === 0) setTab("flow");
-  }, [tab, exec.graph.nodes.length]);
+    if (tab === "browser" && pages.length === 0) setTab("flow");
+  }, [tab, exec.graph.nodes.length, pages.length]);
 
   // Where the bottom is moves as blocks mount under it, so this only asks the
   // transcript to follow again and lets it scroll itself into place.
@@ -641,11 +655,22 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       <PaneNav
         view={tab}
         onPick={showView}
-        done={s.plan.filter((x) => x.done).length}
+        done={s.plan.filter(stepDone).length}
         steps={s.plan.length}
         nodes={exec.graph.nodes.length}
         rows={traj.rows.length}
+        pages={pages.length}
+        dock={dock}
+        onDock={() => setDock((on) => {
+          localStorage.setItem(BROWSER_DOCK, on ? "off" : "on");
+          return !on;
+        })}
       />
+
+      <Find find={find} />
+
+      <div className="pbody" data-dock={docked ? "" : undefined} data-full={tab === "browser" ? "" : undefined}>
+      <div className="pviews">
 
       <Transcript
         items={s.items}
@@ -659,6 +684,8 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onPinned={setPinned}
         jump={jump}
         focus={focus}
+        find={find.at}
+        query={find.query}
         onSuggest={submit}
         onApprove={onApprove}
         onPlan={onPlan}
@@ -678,26 +705,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onKeepHere={onKeepHere}
       />
 
-      {/* Mounted only while it is the tab on screen. Hiding it with an
-          attribute left every row of it being rebuilt on each streamed
-          delta — a second transcript's worth of work, drawn for nobody. */}
-      <div className="scroll" data-pane="line" hidden={tab !== "line"}>
-        {tab === "line" && <Timeline graph={exec.graph} items={s.items} onOpen={toCall} />}
-      </div>
-
-      <div className="scroll" data-pane="traj" hidden={tab !== "traj"}>
-        {tab === "traj" && <Trajectory rows={traj.rows} availability={traj.availability} onSave={(n, c) => port.saveText(n, c)} />}
-      </div>
-
-      <div className="scroll" data-pane="graph" hidden={tab !== "graph"}>
-        {tab === "graph" && (
-          <Graph
-            run={exec}
-            items={s.items}
-            onOpen={toCall}
-          />
-        )}
-      </div>
+      <PaneDetail view={tab} run={exec} items={s.items} traj={traj} onOpen={toCall} onSave={port.saveText} />
 
       <div className="scroll" data-pane="task" hidden={tab !== "task"}>
         {tab === "task" && (
@@ -717,6 +725,13 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             }}
             onSummary={() => submit(t("汇总当前进度与潜在风险，并列出接下来三步"))}
           />
+        )}
+      </div>
+      </div>
+        {(docked || tab === "browser") && (
+          <div className="scroll" data-pane="browser">
+            <BrowserPanel tabs={pages} shown={visible} />
+          </div>
         )}
       </div>
 

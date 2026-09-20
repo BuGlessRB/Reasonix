@@ -12,8 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -95,10 +96,6 @@ func survivors(dir string) []string {
 }
 
 func sorted(set map[string]bool) []string {
-	out := make([]string, 0, len(set))
-	for name := range set {
-		out = append(out, name)
-	}
-	sort.Strings(out)
+	out := slices.Sorted(maps.Keys(set))
 	return out
 }

@@ -13,8 +13,12 @@ const { spawnSync } = require("node:child_process");
 // lipo'd together, and byte-identical thin slices are refused outright. A
 // single-architecture kernel copied into both legs is that third case.
 const OUT = path.join(__dirname, "..", "bin");
-const PKG = "../../cmd/reasonix-studio-host";
-const CWD = path.join(__dirname, "..");
+// The host is a main-module package, so it is built from the main module: run
+// from here and Go resolves it against desktop/go.mod, whose go.sum carries
+// only what the desktop module's own code imports.
+const ROOT = path.join(__dirname, "..", "..", "..");
+const PKG = "./cmd/reasonix-studio-host";
+const CWD = ROOT;
 
 // The symbol table and DWARF are 28% of this binary and nothing in a shipped
 // build reads them: a Go panic's traceback comes from the pclntab, which -w
@@ -38,7 +42,7 @@ function go(args, env) {
 
 if (process.platform !== "darwin") {
   // go build names the binary after the package and adds .exe where it belongs.
-  go(["build", "-ldflags", LDFLAGS, "-o", "bin/", PKG]);
+  go(["build", "-ldflags", LDFLAGS, "-o", OUT + path.sep, PKG]);
   console.log("built reasonix-studio-host");
   process.exit(0);
 }
@@ -61,3 +65,29 @@ for (const slice of slices) {
   fs.rmSync(slice, { force: true });
 }
 console.log("built reasonix-studio-host (universal)");
+
+// The helper that operates other applications, universal for the same reason.
+// It targets macOS 12, the oldest this app runs on; what needs a later system
+// checks at run time and answers computer.unsupported.
+const HELPER = path.join(ROOT, "desktop", "computer-helper", "Sources");
+const sources = fs.readdirSync(HELPER).filter((f) => f.endsWith(".swift")).map((f) => path.join(HELPER, f));
+const helperSlices = [["x86_64", "amd64"], ["arm64", "arm64"]].map(([target, arch]) => {
+  const out = path.join(OUT, `reasonix-computer-helper-${arch}`);
+  const built = spawnSync("swiftc", ["-O", "-target", `${target}-apple-macos12`, ...sources, "-o", out], { stdio: "inherit" });
+  if (built.status !== 0) {
+    console.error(`swiftc for ${target} failed`);
+    process.exit(built.status ?? 1);
+  }
+  return out;
+});
+const helper = path.join(OUT, "reasonix-computer-helper");
+fs.rmSync(helper, { force: true });
+const helperMerged = spawnSync("lipo", ["-create", "-output", helper, ...helperSlices], { stdio: "inherit" });
+if (helperMerged.status !== 0) {
+  console.error("lipo failed for the computer-use helper");
+  process.exit(helperMerged.status ?? 1);
+}
+for (const slice of helperSlices) {
+  fs.rmSync(slice, { force: true });
+}
+console.log("built reasonix-computer-helper (universal)");

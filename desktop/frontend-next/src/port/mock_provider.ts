@@ -13,13 +13,21 @@ import { MockBoundary } from "./mock_boundary";
 // MockPort satisfies AgentPort in one declaration, and each face keeps its own
 // file.
 export class MockProvider extends MockBoundary {
+  // Whether this machine has been given a provider. The fixture opens without
+  // one so the connect card can be designed, and every port the same window
+  // builds reads the same answer: a key belongs to the machine, not to the
+  // pane that asked for it. MockHub hands its ports one of these, so a second
+  // window — or a second test — starts over.
+  machine = { configured: false };
+
+
   // Three shapes the account grouping has to keep apart: one vendor reached
   // under two protocols, a custom relay serving other vendors' models, and two
   // tenants of that same relay holding different keys.
   private sources: ProviderEntry[] = [
     {
       name: "deepseek", kind: "openai", baseUrl: "https://api.deepseek.com",
-      models: ["deepseek-v4-pro", "deepseek-v4-flash"], default: "deepseek-v4-pro",
+      models: ["deepseek-v4-pro", "deepseek-flash"], default: "deepseek-v4-pro",
       hasKey: true, inUse: true, preset: false, keyEnv: "DEEPSEEK_API_KEY", canSetVision: false,
     },
     {
@@ -34,6 +42,14 @@ export class MockProvider extends MockBoundary {
       models: ["gpt-4o", "claude-sonnet-4"], default: "gpt-4o",
       hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_API_KEY",
       visionModels: ["gpt-4o"], canSetVision: true,
+    },
+    // The Responses wire is the one that can carry a turn by reference, so it
+    // is the only entry here offering the choice.
+    {
+      name: "myrelay-responses", kind: "responses", baseUrl: "https://relay.example.com/v1",
+      models: ["gpt-4o"], default: "gpt-4o",
+      hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_API_KEY",
+      canSetContinuation: true, continuation: "",
     },
     {
       name: "myrelay-work", kind: "openai", baseUrl: "https://relay.example.com/v1",
@@ -61,7 +77,7 @@ export class MockProvider extends MockBoundary {
   async probeProvider(): Promise<ProviderProbe> {
     return {
       kind: "openai", kinds: ["openai", "responses"], authHeader: true,
-      models: ["deepseek-v4-pro", "deepseek-v4-flash"], default: "deepseek-v4-pro",
+      models: ["deepseek-v4-pro", "deepseek-flash"], default: "deepseek-v4-pro",
       efforts: ["high", "max"], effort: "high", vision: [],
       ambiguous: true, noProxy: false,
     };
@@ -74,8 +90,8 @@ export class MockProvider extends MockBoundary {
     if (name === "mimo") return { ok: false, error: "401 unauthorized: key 过期了" };
     const models = name.startsWith("myrelay")
       ? relayCatalog()
-      : ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"];
-    const vision = models.filter((m) => m === "gpt-4o" || m === "deepseek-v4-flash-vision-exp");
+      : ["deepseek-v4-pro", "deepseek-flash", "deepseek-flash-vision-exp"];
+    const vision = models.filter((m) => m === "gpt-4o" || m === "deepseek-flash-vision-exp");
     return { ok: true, kind: "openai", models, vision, ambiguous: true };
   }
 
@@ -87,10 +103,16 @@ export class MockProvider extends MockBoundary {
     return { model: request.model, status: "available" };
   }
 
-  async saveProvider(): Promise<void> {}
+  async saveProvider(): Promise<void> {
+    this.machine.configured = true;
+  }
 
   async setProviderWebSearch(name: string, on: boolean): Promise<void> {
     this.sources = this.sources.map((p) => (p.name === name ? { ...p, webSearch: on } : p));
+  }
+
+  async setProviderContinuation(name: string, mode: string): Promise<void> {
+    this.sources = this.sources.map((p) => (p.name === name ? { ...p, continuation: mode } : p));
   }
 
   async setProviderThinking(name: string, on: boolean): Promise<void> {
@@ -123,7 +145,7 @@ function relayCatalog(): string[] {
   const families = [
     "qwen3-max", "qwen3-omni-flash", "qwen3-vl-plus", "qwen3-next-80b-a3b",
     "MiniMax-M2", "MiniMax/speech-02", "ZHIPU/GLM-5", "kimi-k2",
-    "deepseek-v4-pro", "deepseek-v4-flash", "gpt-4o", "claude-sonnet-4",
+    "deepseek-v4-pro", "deepseek-flash", "gpt-4o", "claude-sonnet-4",
     "gemini-3-pro", "llama-4-maverick", "mistral-large", "grok-4",
   ];
   const out: string[] = [];

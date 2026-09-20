@@ -9,6 +9,11 @@ import (
 	"reasonix/internal/testenv"
 )
 
+func sharesRepo(a, b string) bool {
+	repo := RepoDir(a)
+	return repo != "" && repo == RepoDir(b)
+}
+
 func TestKeyPathWhenNotARepository(t *testing.T) {
 	dir := testenv.TempDir(t)
 	key := Key(dir)
@@ -52,8 +57,8 @@ func TestKeyLinkedWorktreeSharesTheRepositoryKey(t *testing.T) {
 	if got, want := Key(tree), Key(repo); got != want {
 		t.Fatalf("worktree key = %q, main tree key = %q, want equal", got, want)
 	}
-	if !SharesRepo(tree, repo) {
-		t.Fatal("SharesRepo(worktree, repo) = false, want true")
+	if !sharesRepo(tree, repo) {
+		t.Fatal("sharesRepo(worktree, repo) = false, want true")
 	}
 }
 
@@ -108,7 +113,7 @@ func TestKeyEmptyRoot(t *testing.T) {
 
 func TestSharesRepoIsFalseOutsideRepositories(t *testing.T) {
 	a, b := testenv.TempDir(t), testenv.TempDir(t)
-	if SharesRepo(a, b) {
+	if sharesRepo(a, b) {
 		t.Fatal("SharesRepo on two plain folders = true, want false")
 	}
 }

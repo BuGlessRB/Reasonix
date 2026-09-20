@@ -3,7 +3,7 @@ package history
 import (
 	"context"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -39,10 +39,6 @@ func RegisterCatalogObserver(observer func(historycatalog.Status, []string, stri
 	processHistoryCatalog.observers = append(processHistoryCatalog.observers, observer)
 	processHistoryCatalog.mu.Unlock()
 }
-
-// SharedCatalog returns the process projection when opening has completed.
-// Nil means callers should return an explicit partial/opening response.
-func SharedCatalog() *historycatalog.Catalog { return processHistoryCatalog.get() }
 
 func FlushSharedCatalog(ctx context.Context) error {
 	if catalog := processHistoryCatalog.get(); catalog != nil {
@@ -285,7 +281,7 @@ func (s *IndexedSearcher) Search(ctx context.Context, req SearchRequest) ([]Hit,
 	for kind := range kinds {
 		kindNames = append(kindNames, string(kind))
 	}
-	sort.Strings(kindNames)
+	slices.Sort(kindNames)
 	result, err := catalog.Search(ctx, historycatalog.SearchRequest{
 		// Exact roots are the agent authority boundary. Catalog scope describes
 		// desktop grouping and must not change the history tool's project meaning.

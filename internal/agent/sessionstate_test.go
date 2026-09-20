@@ -40,6 +40,9 @@ var sessionCarryOver = map[string]bool{
 	// prefix against the replaced conversation's shape. Left as found here.
 	"lastPrefixShape":     true,
 	"haveLastPrefixShape": true,
+	// The surface a later request estimates against. Carried for the same
+	// reason as the shape above: the next request rebinds it before reading.
+	"lastProviderSchemas": true,
 }
 
 func sessionRuntimeFields(t *testing.T) map[string]bool {

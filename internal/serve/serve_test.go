@@ -1043,13 +1043,16 @@ func TestServeContextEndpoint(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("context status = %d", resp.StatusCode)
 	}
-	var body map[string]int
+	// Decoded into the view itself rather than a map of ints: the pair naming
+	// which bound fires carries a string, and a map typed for the gauge alone
+	// fails on the field that explains it.
+	var body contextView
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode context: %v", err)
 	}
 	// Before any turn, used should be 0.
-	if body["used"] != 0 {
-		t.Errorf("used = %d, want 0", body["used"])
+	if body.Used != 0 {
+		t.Errorf("used = %d, want 0", body.Used)
 	}
 }
 

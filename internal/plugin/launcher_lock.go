@@ -12,7 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/mcplaunch"
@@ -311,7 +311,7 @@ func resolvePyPIPackage(ctx context.Context, locator string) (string, string, er
 			digests = append(digests, value)
 		}
 	}
-	sort.Strings(digests)
+	slices.Sort(digests)
 	if version == "" || len(digests) == 0 {
 		return "", "", fmt.Errorf("PyPI did not return an exact version and file digests for %q", locator)
 	}

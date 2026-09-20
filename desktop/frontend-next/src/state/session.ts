@@ -3,20 +3,22 @@ import { noteTool, type Executions } from "./executions";
 import { estimateTokens, sample } from "../port/tokens";
 import type { HistoryMessage } from "../port/port";
 import { plural, t } from "../i18n";
-import type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TurnTerminal, Waiting } from "./session_types";
+import { currentStep, stepDone, stepLabel } from "./session_types";
+import type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TodoStatus, TurnTerminal, Waiting } from "./session_types";
 import { foldUsage, quoteAmount } from "./usage";
-import { showsReceipt } from "./prefs";
+import { setShowsReceipt, showsReceipt } from "./prefs";
 
 // The types live next door; this stays their way in, so no reader of a
 // session has to know they were split off.
-export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TurnTerminal, Waiting };
+export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TodoStatus, TurnTerminal, Waiting };
+export { currentStep, stepDone, stepLabel };
 import { promptOpen, prompted, sealByReceipt } from "./prompts";
 import { nameTurnStart } from "./turn_start";
 import { appendText, foldMessage, sealSay } from "./say";
 import { nextId } from "./ids";
 import { dropTool, foldLastRead, foldTool, mergeReads } from "./fold";
 export { quoteAmount };
-export { showsReceipt };
+export { setShowsReceipt, showsReceipt };
 
 // doing is what the status chip prints. These two values are also read back by
 // the reducer, so they get a name: a comparison against a sentence is one copy
@@ -44,6 +46,7 @@ export const initialState: SessionState = {
   steerQueue: [],
   awaitingTurnStart: [],
   queueMoved: 0,
+  browserTabsMoved: 0,
   panels: [],
   views: [],
   takeovers: {},
@@ -133,6 +136,7 @@ const holdsWait = new Set<string>([
   "mcp_surface_ready",
   "workspace_changed",
   "inbox_changed",
+  "browser_tabs_changed",
   "context_maintenance",
   "extension_surface",
   "extension_status",
@@ -179,7 +183,8 @@ function entering(prev: SessionState, next: SessionState, ev: SessionEvent): Par
 // message, a decision you just made, an error with no event behind it.
 export type SessionEvent =
   | WireEvent
-  | { kind: "__restore"; items: Item[]; plan: PlanStep[]; executions: Executions }
+  | { kind: "__restore"; items: Item[]; plan?: PlanStep[]; executions: Executions }
+  | { kind: "__todos"; plan: PlanStep[] }
   | { kind: "__totals"; hit: number; miss: number; cost?: number; coverage?: CostCoverage; incompleteReason?: string }
   | { kind: "__error"; text: string }
   | { kind: "__user"; text: string; pending: boolean; id?: string }
@@ -202,6 +207,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
   }
   if (ev.kind === "__runtime_seen") return { ...s, runtime: s.runtime.filter((n) => n.id !== ev.id) };
   if (ev.kind === "inbox_changed") return { ...s, queueMoved: s.queueMoved + 1 };
+  if (ev.kind === "browser_tabs_changed") return { ...s, browserTabsMoved: s.browserTabsMoved + 1 };
   // Both event.Message emitters carry assistant text, so nothing on the wire
   // echoes what you typed — only /history has it, and only after a reload. The
   // client owns its own turn. Mid-turn input stays pending until the steer
@@ -274,7 +280,15 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
   // run stopped, waiting on an answer only this window can give. Overwriting it
   // left the session reading 等你决定 with nothing on screen to decide.
   if (ev.kind === "__restore") {
-    return { ...s, executions: ev.executions, items: [...ev.items, ...s.items.filter(promptOpen)], plan: ev.plan };
+    // How the restored turns ended is not in the record; a live turn that
+    // vanished mid-flight leaves null, which is a different answer.
+    const terminal: TurnTerminal = ev.items.length ? { kind: "unread" } : s.terminal;
+    return { ...s, executions: ev.executions, terminal, items: [...ev.items, ...s.items.filter(promptOpen)], plan: ev.plan ? livePlan(ev.plan) : s.plan };
+  }
+  // The kernel's canonical task list, asked for rather than re-derived: the
+  // advances are not todo_write calls, and the refused writes are.
+  if (ev.kind === "__todos") {
+    return { ...s, plan: livePlan(ev.plan) };
   }
   // The session's own running totals, read back from the kernel rather than
   // restarted here: a count that begins at zero makes the next request the whole
@@ -359,7 +373,8 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       // watching. Without the parentId guard the rail flips to the subagent's
       // steps mid-turn: the user's own completed items lose their strike and
       // line one turns into somebody else's first step.
-      const own = ev.tool.name === "todo_write" && !ev.tool.parentId;
+      // A refused todo_write changed no host state, so its payload is not a plan.
+      const own = ev.tool.name === "todo_write" && !ev.tool.parentId && !ev.tool.err;
       const plan = (own && parsePlan(ev.tool)) || s.plan;
       return { ...s, plan, executions, items: mergeReads(foldTool(s.items, ev.tool, false)) };
     }
@@ -556,7 +571,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
         terminal: turnTerminal(ev),
         doing: ev.err ? "已中断" : "已完成",
         waiting: {},
-        plan: s.plan.length > 0 && s.plan.every((p) => p.done) ? [] : s.plan,
+        plan: livePlan(s.plan),
         items: withReceipt(sealTurn(sealSay(s.items, true), ev.err), ev.receipt),
       };
 
@@ -601,6 +616,13 @@ const CONTROL =
   /<(reasoning-language|response-language|execution-policy|memory-update|background-jobs|active-goal|autoresearch-runtime|hook-context|available-skills|project-instructions|capability-route|interrupted-turn-recovery|workspace)[\s\S]*?<\/\1>\s*/g;
 const stripControl = (s: string) => s.replace(CONTROL, "").trim();
 
+// A plan that ran to the end is spent: struck through in the rail it reads as
+// if the next turn already has one. One definition, because the kernel keeps a
+// finished list and both ingest paths have to draw it the same.
+export function livePlan(steps: PlanStep[]): PlanStep[] {
+  return steps.length > 0 && steps.every(stepDone) ? [] : steps;
+}
+
 // todo_write carries the plan as its payload; the panel needs it as state, not
 // as one more line that scrolls away.
 // The todos live in args; output is only a receipt ("Todos updated: 3 total").
@@ -610,13 +632,17 @@ export function parsePlan(tool: Tool): PlanStep[] | null {
     const v = JSON.parse(tool.args ?? "");
     const list = Array.isArray(v?.todos) ? v.todos : Array.isArray(v) ? v : null;
     if (!list) return null;
-    return list.map((x: { content?: string; status?: string }) => ({
-      text: String(x.content ?? ""),
-      done: x.status === "completed",
-    }));
+    return list.map(todoStep);
   } catch {
     return null;
   }
+}
+
+/** One row of the kernel's list, on either path it arrives by: a todo_write's
+ *  arguments, or GET /todos. Status is carried, never flattened. */
+export function todoStep(x: { content?: string; status?: string; activeForm?: string; level?: number }): PlanStep {
+  const status: TodoStatus = x.status === "completed" || x.status === "in_progress" ? x.status : "pending";
+  return { text: String(x.content ?? ""), status, activeForm: x.activeForm, level: x.level };
 }
 
 // The listing the kernel writes for the model: "- **title**" and, indented under
@@ -661,15 +687,17 @@ function splitProviderSearch(content: string): { text: string; search?: boolean 
 
 // A reload has no event stream to replay, so the transcript is rebuilt from the
 // provider conversation. Control-plane turns (system, and the language preamble
-// the kernel prepends to each user message) are not part of what was said.
-export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: PlanStep[]; executions: Executions } {
+// the kernel prepends to each user message) are not part of what was said. The
+// task list is not rebuilt here and is not derivable here: complete_step
+// advances it without writing one, and a refused todo_write writes one the
+// kernel does not hold.
+export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions: Executions } {
   const out: Item[] = [];
   const calls = new Map<string, number>();
   // What /history can say about a call: that it ran, and under what name. It
   // carries no error field, so a rebuilt execution has no outcome — which is
   // the honest answer, not the answer "succeeded".
   const executions: Executions = {};
-  let plan: PlanStep[] = [];
   for (const m of msgs) {
     if (m.role === "system") continue;
     if (m.role === "user") {
@@ -716,10 +744,6 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
         }
       }
       for (const c of m.toolCalls ?? []) {
-        if (c.name === "todo_write") {
-          const p = parsePlan({ name: c.name, args: c.arguments, readOnly: true });
-          if (p) plan = p;
-        }
         if (c.id) {
           calls.set(c.id, out.length);
           executions[c.id] = { name: c.name };
@@ -727,7 +751,14 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
         out.push({
           t: "tool",
           id: nextId(),
-          tool: { id: c.id, name: c.name, args: c.arguments, readOnly: true },
+          tool: {
+            id: c.id,
+            name: c.name,
+            args: c.arguments,
+            readOnly: true,
+            resolvedName: c.resolvedName,
+            capabilityId: c.capabilityId,
+          },
           running: false,
           children: [],
         });
@@ -740,7 +771,14 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
       const at = m.toolCallId === undefined ? undefined : calls.get(m.toolCallId);
       if (at !== undefined) {
         const prev = out[at] as Extract<Item, { t: "tool" }>;
-        out[at] = { ...prev, tool: { ...prev.tool, output: m.content } };
+        out[at] = {
+          ...prev,
+          tool: {
+            ...prev.tool,
+            output: m.content,
+            ...(m.toolFailed ? { err: m.content, refusalCode: m.toolRefusalCode } : {}),
+          },
+        };
       }
     }
   }
@@ -751,5 +789,5 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
     merged.push(it);
     foldLastRead(merged);
   }
-  return { items: merged, plan, executions };
+  return { items: merged, executions };
 }

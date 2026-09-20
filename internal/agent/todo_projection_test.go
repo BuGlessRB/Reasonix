@@ -32,28 +32,16 @@ func TestTodoCitationPrefersTheStableID(t *testing.T) {
 	}
 }
 
-func todoWriteMessage(ids ...string) provider.Message {
-	items := make([]string, 0, len(ids))
-	for _, id := range ids {
-		items = append(items, `{"step_id":"`+id+`"}`)
-	}
-	args := `{"todos":[` + strings.Join(items, ",") + `]}`
-	return provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
-		{Name: "todo_write", Arguments: args},
-	}}
-}
-
 // Owed is a fact about the request being built, not a memory of an earlier one.
-// A view that still shows the ids is owed nothing; the same host state against
-// a view that lost them is owed the note, however many requests ago the model
-// last read them.
+// A view carrying what the host holds is owed nothing; the same host state
+// against a view without it is owed the note.
 func TestTodoIdentityTailIsOwedByTheViewNotByHistory(t *testing.T) {
 	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
 	a.ReplaceTodoState(planTodos())
 
-	readable := []provider.Message{todoWriteMessage("plan_step_01", "plan_step_02", "plan_step_03")}
+	readable := []provider.Message{{Role: provider.RoleUser, Content: todoIdentityNote(a.CanonicalTodoState())}}
 	if got := a.withTodoIdentityTail(readable); len(got) != 1 {
-		t.Fatalf("appended %d messages to a view that already shows the ids", len(got)-1)
+		t.Fatalf("appended %d messages to a view that already carries the host's reading", len(got)-1)
 	}
 
 	folded := []provider.Message{{Role: provider.RoleUser, Content: "summary of earlier work"}}
@@ -94,6 +82,34 @@ func TestTodoIdentityTailFollowsTheHostAcrossARewrite(t *testing.T) {
 	}
 	if strings.Contains(got[1].Content, "[plan_step_03]") {
 		t.Fatalf("note = %q, want no id the host has dropped", got[1].Content)
+	}
+}
+
+// Ids persist in the model's own todo_write after the status under them moves.
+// complete_step signs only the item the host calls in_progress, so a view
+// showing a signed-off step as current costs a refused round at full context.
+func TestTodoIdentityTailFollowsTheStatusNotOnlyTheID(t *testing.T) {
+	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	sent := provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{
+		Name: "todo_write",
+		Arguments: `{"todos":[` +
+			`{"step_id":"plan_step_01","content":"Wire the parser","status":"in_progress"},` +
+			`{"step_id":"plan_step_02","content":"Add the tests","status":"pending"},` +
+			`{"step_id":"plan_step_03","content":"Ship it","status":"pending"}]}`,
+	}}}
+	// Host state after complete_step signed the first item off. Every id remains
+	// readable in the message above.
+	a.ReplaceTodoState(planTodos())
+
+	got := a.withTodoIdentityTail([]provider.Message{sent})
+	if len(got) != 2 {
+		t.Fatalf("appended %d messages; the view shows a completed step as current", len(got)-1)
+	}
+	if !strings.Contains(got[1].Content, "[plan_step_02] Add the tests (in_progress)") {
+		t.Fatalf("note = %q, want the item the host calls current", got[1].Content)
+	}
+	if !strings.Contains(got[1].Content, "[plan_step_01] Wire the parser (completed)") {
+		t.Fatalf("note = %q, want the signed-off item to read as signed off", got[1].Content)
 	}
 }
 
@@ -166,11 +182,36 @@ func TestRealFoldLeavesTheStepIDsReadable(t *testing.T) {
 	}
 	visible := a.modelVisibleMessages()
 	for _, id := range []string{"plan_step_01", "plan_step_02", "plan_step_03"} {
-		if !messagesMentionID(visible, id) {
+		if !messagesMention(visible, id) {
 			t.Fatalf("the request after the fold cannot cite %s", id)
 		}
 	}
-	if messagesMentionID(projected, "plan_step_02") && !messagesMentionID(a.modelVisibleHistory(), "plan_step_02") {
+	if messagesMention(projected, "plan_step_02") && !messagesMention(a.modelVisibleHistory(), "plan_step_02") {
 		t.Fatal("the frozen body carries host step state; it is history, not host state")
+	}
+}
+
+// The tail exists so a sign-off can cite an id. A plan whose every item is
+// complete has none left, and the host has already told the turn not to open
+// new work under it — carried into the next task it reads as work outstanding,
+// which is what a real session spent a round reasoning about.
+func TestAFinishedTaskListIsNotProjectedIntoTheNextTask(t *testing.T) {
+	a := &Agent{}
+	a.setTodoState([]evidence.TodoItem{
+		{StepID: "s1", Content: "look", Status: "completed"},
+		{StepID: "s2", Content: "answer", Status: "completed"},
+	})
+	asked := []provider.Message{{Role: provider.RoleUser, Content: "now something else"}}
+	if got := a.withTodoIdentityTail(asked); len(got) != len(asked) {
+		t.Fatalf("a finished list was projected onto the next task: %+v", got[len(got)-1].Content)
+	}
+
+	a.setTodoState([]evidence.TodoItem{
+		{StepID: "s1", Content: "look", Status: "completed"},
+		{StepID: "s2", Content: "answer", Status: "in_progress"},
+	})
+	got := a.withTodoIdentityTail(asked)
+	if len(got) != len(asked)+1 || !strings.Contains(got[len(got)-1].Content, "[s2]") {
+		t.Fatalf("a list with work left must still carry its identities: %+v", got)
 	}
 }

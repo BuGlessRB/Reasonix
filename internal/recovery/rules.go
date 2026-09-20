@@ -94,13 +94,6 @@ func IsSafeVerificationRetry(failure *FailureEvent, proposal Proposal) bool {
 		CallFingerprint(failure.Tool, failure.Subject, "", failure.Args)
 }
 
-// IsHighRiskMutation preserves the legacy execution-risk classifier for event
-// compatibility and focused policy tests. Auto no longer turns this result into
-// a human confirmation; permission, sandbox, and tool policy own that boundary.
-func IsHighRiskMutation(proposal Proposal) bool {
-	return riskBoundaryForProposal(proposal).highRisk
-}
-
 // TaskGrantKey returns the legacy semantic key used by persisted recovery cards.
 // New Auto decisions do not create execution-risk grants. Keys remain narrower
 // than a command name but broader than raw command bytes:

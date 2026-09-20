@@ -1,20 +1,33 @@
 package config
 
-import "strings"
+import (
+	"strings"
 
-// The vendor added an image-taking model to an endpoint we already ship. A
-// stored model list cannot learn that by itself, so an installed user would see
-// nothing change on upgrade and would have to know the name to type it in.
+	"reasonix/internal/billing"
+)
 
-// DeepSeekVisionModel is the official DeepSeek model that reads images. Named
-// here because three decisions need the same string: what to backfill, what a
-// fresh install ships, and which model the image notice may point at.
-const DeepSeekVisionModel = "deepseek-v4-flash-vision-exp"
+// The vendor folded its Flash names into one model that reads images, so a
+// stored config keeps offering a name whose model is gone, beside a vision
+// connection that has become a duplicate of the flash one.
 
-// legacyDeepSeekV4Models is the list shipped before that model existed. A entry
-// still carrying exactly it has not been curated, which is the only case this
-// may touch — the same test migrateKimiK3VisionModels makes.
-var legacyDeepSeekV4Models = []string{"deepseek-v4-flash", "deepseek-v4-pro"}
+// DeepSeekFlashModel is the model behind every Flash name the endpoint accepts.
+// It reads images, which is why nothing here ships a second entry for that: what
+// a fresh install gets, what a retired name migrates to, and the model an image
+// notice may point at are all this one string.
+const DeepSeekFlashModel = "deepseek-flash"
+
+// deepSeekProModel kept its own name, rates and text-only reach past that fold.
+const deepSeekProModel = "deepseek-v4-pro"
+
+// retiredDeepSeekFlashModels still answer, and answer as DeepSeekFlashModel at
+// its price — measured 2026-09-13, including the image read the first of them
+// never had. Migrated rather than kept: the reply echoes the name it was asked
+// by, so a list carrying one of these reports a model nobody serves.
+var retiredDeepSeekFlashModels = billing.RetiredDeepSeekFlashModels()
+
+// retiredDeepSeekVisionProvider was the connection shipped when reading images
+// needed a model of its own. It folds into the flash entry, which now does that.
+const retiredDeepSeekVisionProvider = "deepseek-vision"
 
 // deepSeekDefaultProviders is what a fresh install ships. Anthropic-compatible
 // Messages, so provider-executed web search is on by default; existing explicit
@@ -23,36 +36,21 @@ func deepSeekDefaultProviders() []ProviderEntry {
 	return []ProviderEntry{
 		{
 			Name: "deepseek-flash", Kind: "anthropic", BaseURL: deepSeekAnthropicBaseURL,
-			Model: "deepseek-v4-flash", APIKeyEnv: "DEEPSEEK_API_KEY",
-			BalanceURL: "https://api.deepseek.com/user/balance", Thinking: "enabled",
+			Model: DeepSeekFlashModel, APIKeyEnv: "DEEPSEEK_API_KEY",
+			VisionModels: []string{DeepSeekFlashModel},
+			BalanceURL:   "https://api.deepseek.com/user/balance", Thinking: "enabled",
 			WebSearch: new(true), SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "low",
-			ContextWindow: 1_000_000, Price: deepSeekV4FlashPriceUSD(),
+			ContextWindow: 1_000_000, Price: deepSeekOfficialRate(DeepSeekFlashModel, "USD"),
 			BillingCurrency: "USD", BillingMode: "payg",
 		},
 		{
 			Name: "deepseek-pro", Kind: "anthropic", BaseURL: deepSeekAnthropicBaseURL,
-			Model: "deepseek-v4-pro", APIKeyEnv: "DEEPSEEK_API_KEY",
+			Model: deepSeekProModel, APIKeyEnv: "DEEPSEEK_API_KEY",
 			BalanceURL: "https://api.deepseek.com/user/balance", Thinking: "enabled",
 			WebSearch: new(true), SupportedEfforts: []string{"disabled", "high", "max"}, DefaultEffort: "high",
-			ContextWindow: 1_000_000, Price: deepSeekV4ProPriceUSD(),
+			ContextWindow: 1_000_000, Price: deepSeekOfficialRate(deepSeekProModel, "USD"),
 			BillingCurrency: "USD", BillingMode: "payg",
 		},
-		deepSeekVisionProvider(),
-	}
-}
-
-// deepSeekVisionProvider is the connection a fresh install ships for it. Ticked,
-// because this is the one model on the host that reads images and an unticked
-// one drops them; no web-search claim, because nothing has established it.
-func deepSeekVisionProvider() ProviderEntry {
-	return ProviderEntry{
-		Name: "deepseek-vision", Kind: "anthropic", BaseURL: deepSeekAnthropicBaseURL,
-		Model: DeepSeekVisionModel, APIKeyEnv: "DEEPSEEK_API_KEY",
-		VisionModels: []string{DeepSeekVisionModel},
-		BalanceURL:   "https://api.deepseek.com/user/balance", Thinking: "enabled",
-		SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "high",
-		ContextWindow: 1_000_000, Price: deepSeekV4FlashPriceUSD(),
-		BillingCurrency: "USD", BillingMode: "payg",
 	}
 }
 
@@ -69,55 +67,53 @@ func normalizeOfficialDeepSeekModels(c *Config) bool {
 		if officialProviderHost(p.BaseURL) != "api.deepseek.com" {
 			continue
 		}
-		changed = applyDeepSeekVisionCatalog(p) || changed
+		changed = migrateRetiredDeepSeekFlashModels(p) || changed
 		switch strings.TrimSpace(p.Name) {
 		case "deepseek":
-			required := []string{"deepseek-v4-flash", "deepseek-v4-pro"}
+			required := []string{DeepSeekFlashModel, deepSeekProModel}
 			if strings.EqualFold(strings.TrimSpace(p.Kind), "responses") {
 				required = required[:1]
 			}
-			ensureProviderModels(p, required, "deepseek-v4-flash")
-		case "deepseek-flash":
-			ensureProviderModels(p, []string{"deepseek-v4-flash"}, "deepseek-v4-flash")
+			ensureProviderModels(p, required, DeepSeekFlashModel)
+		case "deepseek-flash", retiredDeepSeekVisionProvider:
+			ensureProviderModels(p, []string{DeepSeekFlashModel}, DeepSeekFlashModel)
 		case "deepseek-pro":
-			ensureProviderModels(p, []string{"deepseek-v4-pro"}, "deepseek-v4-pro")
+			ensureProviderModels(p, []string{deepSeekProModel}, deepSeekProModel)
 		}
+		changed = tickDeepSeekFlashVision(p) || changed
 		backfillDeepSeekAnthropicCapabilities(p)
 	}
+	// Each call must run: ORing them the other way round short-circuits the
+	// fold as soon as an entry above has already reported a change.
+	changed = migrateRetiredDeepSeekModelRefs(c) || changed
+	changed = foldRetiredDeepSeekVisionProvider(c) || changed
 	return changed
 }
 
-// applyDeepSeekVisionCatalog offers the image-taking model to an official
-// DeepSeek entry that still carries the shipped list. It reports whether it
-// changed anything, so a load-for-edit persists it and a plain load does not.
-func applyDeepSeekVisionCatalog(p *ProviderEntry) bool {
+// migrateRetiredDeepSeekFlashModels points one official entry at the model the
+// endpoint serves for it. Every per-model map is re-keyed too: a price or an
+// effort list left under a retired name stops answering for the model that
+// replaced it, which is how an edited rate silently reverts to the default.
+func migrateRetiredDeepSeekFlashModels(p *ProviderEntry) bool {
 	if p == nil || officialProviderHost(p.BaseURL) != "api.deepseek.com" {
 		return false
 	}
 	changed := false
-	// Studio may learn the model from a live probe or the user may type its
-	// documented ID into a curated list. In either case the official catalog is
-	// enough to mark a listed model without requiring a second manual checkbox.
-	if p.HasModel(DeepSeekVisionModel) && len(p.VisionModels) == 0 {
-		p.VisionModels = []string{DeepSeekVisionModel}
-		changed = true
+	for _, retired := range retiredDeepSeekFlashModels {
+		changed = renameProviderModel(p, retired, DeepSeekFlashModel) || changed
 	}
-	if !stringSlicesEqual(p.ModelList(), legacyDeepSeekV4Models) {
-		return changed
-	}
-	p.Models = append(append([]string(nil), legacyDeepSeekV4Models...), DeepSeekVisionModel)
-	// Listed but unticked is the worst of both: the model is the one thing on
-	// this endpoint that reads images, and picking it would silently drop them.
-	p.VisionModels = migrateDeepSeekVisionModels(p.VisionModels)
-	return true
+	return changed
 }
 
-// migrateDeepSeekVisionModels ticks the new model unless the user has said
-// something about vision here. An empty list is what the renderer writes for
-// "nothing to say", so it counts as unsaid; a non-empty one is a choice.
-func migrateDeepSeekVisionModels(current []string) []string {
-	if len(current) > 0 {
-		return current
+// tickDeepSeekFlashVision marks the flash model as image-taking unless the user
+// has said something about vision on this entry. Listed but unticked is the
+// worst of both: pro takes an image and answers as if it saw nothing rather
+// than refusing it, so an unticked flash would drop images just as quietly.
+func tickDeepSeekFlashVision(p *ProviderEntry) bool {
+	if p == nil || officialProviderHost(p.BaseURL) != "api.deepseek.com" ||
+		len(p.VisionModels) > 0 || !p.HasModel(DeepSeekFlashModel) {
+		return false
 	}
-	return []string{DeepSeekVisionModel}
+	p.VisionModels = []string{DeepSeekFlashModel}
+	return true
 }

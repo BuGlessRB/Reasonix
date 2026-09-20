@@ -9,11 +9,11 @@
   &nbsp;·&nbsp;
   <a href="./docs/GUIDE.zh-CN.md">指南</a>
   &nbsp;·&nbsp;
-  <a href="./docs/ACP.zh-CN.md">ACP</a>
+  <a href="./docs/ACP.md">ACP</a>
   &nbsp;·&nbsp;
-  <a href="./docs/EXTENSIONS.zh-CN.md">扩展开发</a>
+  <a href="./docs/EXTENSIONS.md">扩展开发</a>
   &nbsp;·&nbsp;
-  <a href="./docs/SPEC.zh-CN.md">规格</a>
+  <a href="./docs/SPEC.md">规格</a>
   &nbsp;·&nbsp;
   <a href="https://esengine.github.io/DeepSeek-Reasonix/">官方网站</a>
   &nbsp;·&nbsp;
@@ -135,26 +135,25 @@ reasonix run "把 main.go 里的 TODO 实现掉"
 
 CLI 进阶用法和详细配置见 **[CLI 命令参考](./docs/CLI.zh-CN.md)**、
 **[指南](./docs/GUIDE.zh-CN.md)** 和
-**[配置路径](./docs/CONFIG_PATHS.zh-CN.md)**。
+**[配置路径](./docs/CONFIG_PATHS.md)**。
 
 ## 文档
 
 - **开始使用：** [指南](./docs/GUIDE.zh-CN.md) ·
-  [CLI 命令参考](./docs/CLI.zh-CN.md) · [配置路径](./docs/CONFIG_PATHS.zh-CN.md) ·
-  [ACP 编辑器接入](./docs/ACP.zh-CN.md)
-- **功能与排障：** [子智能体 Profile](./docs/SUBAGENT_PROFILES.zh-CN.md) ·
-  [Context Engine v2](./docs/SESSION_MEMORY_RETRIEVAL.zh-CN.md) ·
-  [能力诊断](./docs/CAPABILITY_DIAGNOSTICS.zh-CN.md) ·
-  [恢复与安全模式](./docs/RECOVERY.zh-CN.md) ·
-  [机器人使用指南](./docs/BOT_GUIDE.zh-CN.md) ·
-  [Checkpoints 与 rewind](./docs/CHECKPOINTS.zh-CN.md)
-- **工程与迁移：** [规格](./docs/SPEC.zh-CN.md) ·
-  [任务合约与暂停策略](./docs/TASK_CONTRACT.zh-CN.md) ·
-  [工具合约](./docs/TOOL_CONTRACT.zh-CN.md) ·
-  [从 0.x 迁移](./docs/MIGRATING.zh-CN.md)
-- **扩展开发：** [扩展概览](./docs/EXTENSIONS.zh-CN.md) ·
-  [插件包与 Manifest v1](./docs/PLUGIN_PACKAGES.zh-CN.md) ·
-  [Extension Protocol](./docs/EXTENSION_PROTOCOL.zh-CN.md) ·
+  [CLI 命令参考](./docs/CLI.zh-CN.md) · [配置路径](./docs/CONFIG_PATHS.md) ·
+  [ACP 编辑器接入](./docs/ACP.md)
+- **功能与排障：** [子智能体 Profile](./docs/SUBAGENT_PROFILES.md) ·
+  [Context Engine v2](./docs/SESSION_MEMORY_RETRIEVAL.md) ·
+  [能力诊断](./docs/CAPABILITY_DIAGNOSTICS.md) ·
+  [恢复与安全模式](./docs/RECOVERY.md) ·
+  [Checkpoints 与 rewind](./docs/CHECKPOINTS.md)
+- **工程与迁移：** [规格](./docs/SPEC.md) ·
+  [任务合约与暂停策略](./docs/TASK_CONTRACT.md) ·
+  [工具合约](./docs/TOOL_CONTRACT.md) ·
+  [从 0.x 迁移](./docs/MIGRATING.md)
+- **扩展开发：** [扩展概览](./docs/EXTENSIONS.md) ·
+  [插件包与 Manifest v1](./docs/PLUGIN_PACKAGES.md) ·
+  [Extension Protocol](./docs/EXTENSION_PROTOCOL.md) ·
   [Go SDK 与 starter](./sdk/go/README.md)
 
 ## Star 趋势

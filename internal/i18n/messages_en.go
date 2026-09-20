@@ -177,6 +177,10 @@ var English = Messages{
 
 	ExtFormFieldsHint:         "fields are collected through the usual prompts",
 	ExtRunActionFmt:           "run %s",
+	SlashRevokeNone:           "Nothing is allowed for this session beyond the rules file.",
+	SlashRevokeHint:           "Take one back with /sandbox revoke <rule>, or all with /sandbox revoke all.",
+	SlashRevokeUnknown:        "Nothing in this session allows %q.",
+	SlashRevokeDone:           "Took back %d of them; %d left.",
 	SlashCompactFailed:        "compaction failed",
 	SlashCompactDeclined:      "nothing to tidy",
 	SlashNewDone:              "new session started — previous transcript saved",
@@ -345,6 +349,7 @@ var English = Messages{
 	GoalNotRunning:               "no running goal to pause",
 	GoalNotPaused:                "no paused or blocked goal to resume",
 	GoalPaused:                   "goal paused — /goal resume continues it",
+	AwaitingUserFmt:              "waiting for you: %s",
 	ImagesNotReadable:            "this model cannot read images — %d attached, handed to a delegated read instead",
 	ImagesNeedVisionRole:         "this model cannot read images — %d attached and going nowhere. %s can read them: assign it to the vision role in Settings › Models › Roles.",
 	ImagesDropped:                "this model cannot read images — %d attached and dropped before the request. No configured model reads images.",
@@ -601,7 +606,6 @@ Usage:
   reasonix hook list|status --json [--dir PATH]         inspect redacted hook state
   reasonix task list|show|status|events|stop|cancel|monitor|tmux --json [--dir PATH]
                                                          inspect or control redacted tasks
-  reasonix bot start|doctor|weixin-login                multi-channel IM bot gateway
   reasonix upgrade [--check] [--force]                   update to the latest official release (also: reasonix update)
   reasonix completion bash|zsh|fish                     print a shell completion script to stdout
   reasonix version [--verbose|--json]                   print version (single line) or build metadata

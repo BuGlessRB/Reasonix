@@ -74,7 +74,7 @@ export function AskCard({ item, onAnswer }: Props) {
       <div className="c">
         <div className="hl">
           <span className="nm">{askHeading(qs)}</span>
-          <span className="arg">{qs.length} 个问题</span>
+          <span className="arg">{t("{n} 个问题", { n: qs.length })}</span>
         </div>
         <div className="out">
           <div className="ask" data-sealed={sealed ? "" : undefined} aria-busy={submitting}>
@@ -89,7 +89,7 @@ export function AskCard({ item, onAnswer }: Props) {
                     data-answered={answered(i) ? "" : undefined}
                     onClick={() => setTab(i)}
                   >
-                    {q.header || `问题 ${i + 1}`}
+                    {q.header || t("问题 {n}", { n: i + 1 })}
                     <i className="dot" />
                   </button>
                 ))}

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { t } from "../i18n";
+import { StudioIcon } from "./StudioIcon";
 import { reason } from "../i18n/kernel";
 import type { AgentPort, ApprovalMode, SessionStatus } from "../port/port";
 import { useDismiss } from "./dismiss";
@@ -58,7 +59,7 @@ export function Policy({ port, status, onChanged, onBoundary }: Props) {
           <svg viewBox="0 0 16 16"><path d="M8 2.2 13 4v3.5c0 3-1.8 5.1-5 6.3-3.2-1.2-5-3.3-5-6.3V4l5-1.8Z" /></svg>
         </span>
         <span className={apv === "yolo" ? "lb polrisk" : "lb"}>
-          {apv === "yolo" && <i className="polwarn" aria-hidden>⚠</i>}
+          {apv === "yolo" && <i className="polwarn" aria-hidden><StudioIcon name="warning" /></i>}
           {label}
         </span>
         <span className="studio-control-chevron" aria-hidden="true">⌄</span>

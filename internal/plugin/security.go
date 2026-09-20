@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/mcplaunch"
@@ -164,7 +164,7 @@ func normalizeIdentityURL(raw string) string {
 					values[i] = identityURLRedacted
 				}
 			} else {
-				sort.Strings(values)
+				slices.Sort(values)
 			}
 			query[key] = values
 		}
@@ -206,7 +206,7 @@ func sortedMapKeys[V any](values map[string]V) []string {
 			out = append(out, key)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

@@ -10,11 +10,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"reasonix/internal/fileutil"
 	"reasonix/internal/proc"
 	"reasonix/internal/secrets"
 	"reasonix/internal/shellparse"
@@ -87,14 +89,6 @@ func DefaultProbes() []string {
 		"rg --version",
 		"docker --version",
 	}
-}
-
-func RunProbes(ctx context.Context, commands []string) []ProbeResult {
-	return RunProbesWithOverrides(ctx, commands, nil)
-}
-
-func RunProbesWithOverrides(ctx context.Context, commands []string, overrides map[string]string) []ProbeResult {
-	return RunProbesWithOptions(ctx, commands, ProbeOptions{Overrides: overrides})
 }
 
 func RunProbesWithOptions(ctx context.Context, commands []string, opts ProbeOptions) []ProbeResult {
@@ -448,7 +442,7 @@ func sortedMapKeys(m map[string]string) []string {
 			keys = append(keys, k)
 		}
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }
 
@@ -502,7 +496,7 @@ func blockedExecutable(path string, denyRoots []string) bool {
 		abs = filepath.Clean(path)
 	}
 	for _, root := range normalizedDenyRoots(denyRoots) {
-		if pathWithin(abs, root) {
+		if fileutil.AtOrUnder(abs, root) {
 			return true
 		}
 	}
@@ -528,19 +522,6 @@ func normalizedDenyRoots(roots []string) []string {
 			out = append(out, abs)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
-}
-
-func pathWithin(path, root string) bool {
-	path = filepath.Clean(path)
-	root = filepath.Clean(root)
-	if path == root {
-		return true
-	}
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return false
-	}
-	return rel != "." && rel != "" && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".."
 }

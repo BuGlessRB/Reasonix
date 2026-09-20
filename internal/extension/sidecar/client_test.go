@@ -391,7 +391,7 @@ func TestUIHandlerDefaultsToUnavailable(t *testing.T) {
 	}
 }
 
-// TestUIActionAndSubmitRoundTrip drives the host-initiated UI calls (stage 8)
+// TestUIActionAndSubmitRoundTrip drives the host-initiated UI calls
 // over the real wire: the fake sidecar echoes the action id and accepts the
 // form submission.
 func TestUIActionAndSubmitRoundTrip(t *testing.T) {

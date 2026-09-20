@@ -64,9 +64,12 @@ mean `<Reasonix home>/config.toml`.
 
 `<Reasonix home>/config.toml` stores non-secret configuration shared by the CLI
 and desktop app. It may contain the same provider, plugin, UI, desktop, tool,
-skill, sandbox, bot, and agent settings that Reasonix renders into user config.
+skill, sandbox, and agent settings that Reasonix renders into user config.
 Provider entries store the name of the credential variable in `api_key_env`, not
 the secret value.
+
+A `[bot]` table written by a 1.x install is kept as written when the file is
+saved; this line does not run the IM bot gateway.
 
 Saved provider and bot credential variables are removed from every
 model-controlled child-process environment. The global credential `.env` is
@@ -79,7 +82,7 @@ Example:
 
 ```toml
 config_version = 1
-default_model = "deepseek/deepseek-v4-flash"
+default_model = "deepseek/deepseek-flash"
 language = "zh"
 credentials_store = "auto"   # legacy compatibility; provider keys are in .env
 
@@ -95,8 +98,8 @@ provider_access = ["deepseek"]
 name        = "deepseek"
 kind        = "anthropic"
 base_url    = "https://api.deepseek.com/anthropic"
-models      = ["deepseek-v4-flash", "deepseek-v4-pro"]
-default     = "deepseek-v4-flash"
+models      = ["deepseek-flash", "deepseek-v4-pro"]
+default     = "deepseek-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 web_search  = true
 

@@ -22,7 +22,7 @@ name = "deepseek-flash"
 kind = "openai"
 base_url = "https://api.deepseek.com"
 model = "deepseek-v4-flash"
-price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
+price = { cache_hit = 0.003, input = 0.15, output = 0.6, currency = "$" }
 `
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
 	if got := cfg.DisplayCurrencyPref(); got != "CNY" {
 		t.Fatalf("display pref = %q", got)
 	}
-	flash, ok := cfg.ResolveModel("deepseek-flash/deepseek-v4-flash")
+	flash, ok := cfg.ResolveModel("deepseek-flash/" + DeepSeekFlashModel)
 	if !ok {
 		t.Fatal("missing flash")
 	}

@@ -1,41 +1,21 @@
 import { PLAN_ACTIONS, type PlanAction } from "./session";
-import type { AccountState, AgentPort, Appearance, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
-import type { WailsBind } from "./wails";
 import type { StoragePlan, StorageState } from "./storage";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import { host } from "./host";
+import { current } from "../i18n";
 
 // The running project is the default, so its requests stay the bare path they
 // have always been and only a cross-project read carries the folder.
-// Must match wailsEventName / replayPath in desktop/next.
-const WAILS_EVENT = "rx:event";
 // Install progress rides its own channel: it is the shell reporting on itself,
 // not something the kernel emitted into the conversation.
 // Fast enough that a download bar moves, slow enough that an open panel is not
 // a load. The read is one small JSON body and answers from memory.
 const UPDATE_POLL_MS = 500;
-const WAILS_REPLAY = "/rx-replay";
-
-interface WailsBus {
-  EventsOn(name: string, cb: (data: string) => void): () => void;
-}
-
-
-// Wails' own drop API: the only channel that reports where a dropped file
-// lives. Absent in a browser tab, where a page never learns a path.
-interface WailsFileDropBus {
-  OnFileDrop(cb: (x: number, y: number, paths: string[]) => void, useDropTarget: boolean): void;
-}
-
-// Wails publishes bound methods at window.go.<package>.<Struct>.<Method>; the
-// shell's package is main and the struct is App. Absent in a browser tab.
 
 export class SsePort extends SseTheme implements AgentPort {
-  private readonly dropSubs = new Set<(paths: string[]) => void>();
-  private dropWired = false;
-
   status() {
     return this.get<SessionStatus>("/status");
   }
@@ -66,16 +46,13 @@ export class SsePort extends SseTheme implements AgentPort {
   }
 
   complete(line: string, cursor: number) {
-    const q = new URLSearchParams({ line, cursor: String(cursor) });
+    // The kernel renders the built-in verbs, and the language it would pick is
+    // the process's. Only this window knows what it is drawing in.
+    const q = new URLSearchParams({ line, cursor: String(cursor), lang: current() });
     return this.get<Completion>("/complete?" + q);
   }
 
   async exportPlugin(name: string): Promise<PluginExport> {
-    const save = (window as WailsBind).go?.main?.App?.SavePluginExport;
-    if (save) {
-      const out = await save(name);
-      return { required: out.required ?? [], savedTo: out.path || undefined };
-    }
     const res = await fetch(this.base + "/plugins/" + encodeURIComponent(name) + "/export", {
       credentials: "same-origin",
     });
@@ -252,6 +229,21 @@ export class SsePort extends SseTheme implements AgentPort {
     if (!res.ok) await SsePort.fail("/update/install", res);
   }
 
+  // Failure is silent on purpose. Nothing the user asked for is happening here,
+  // there is nothing for them to do about it, and the two ordinary answers are
+  // both non-events: a kernel with no update capability has no route, and a
+  // launch that booted from no update has nothing to retire.
+  async acknowledgeLaunchHealth(): Promise<void> {
+    try {
+      // The CSRF guard refuses a POST that is not application/json, and refuses
+      // it the way a missing route answers — so leaving the header off made this
+      // a call that could never land and, being silent, never said so.
+      await fetch("/update/health", { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin" });
+    } catch {
+      // Offline, or the kernel went away. The next launch asks again.
+    }
+  }
+
   // Pulled, not subscribed. Progress is a projection: a missed frame costs
   // nothing the next read does not restore, and the last thing an install does
   // is end the process that would have been streaming it. A subscription would
@@ -272,29 +264,6 @@ export class SsePort extends SseTheme implements AgentPort {
     return () => {
       stopped = true;
       clearInterval(timer);
-    };
-  }
-
-  // Wails registers its drop listeners once and ignores a second call, so the
-  // one subscription is fanned out here. useDropTarget=false because the filter
-  // it offers is the wrong one: it hit-tests the drop coordinates against the
-  // CSS opt-in, and those coordinates are native pixels, which stop agreeing
-  // with CSS pixels the moment the interface is zoomed. The page routes the
-  // drop against the DOM instead, where the element under the pointer is a
-  // fact rather than an arithmetic result.
-  // A connect is blocked while one of these is on screen, so there is no
-  // polling to fall back on: no bus means no window, and no window means the
-  // kernel refused the question rather than asking it.
-  onDroppedPaths(cb: (paths: string[]) => void): () => void {
-    const rt = (window as unknown as { runtime?: WailsFileDropBus }).runtime;
-    if (!rt?.OnFileDrop) return () => {};
-    if (!this.dropWired) {
-      this.dropWired = true;
-      rt.OnFileDrop((_x, _y, paths) => this.dropSubs.forEach((f) => f(paths ?? [])), false);
-    }
-    this.dropSubs.add(cb);
-    return () => {
-      this.dropSubs.delete(cb);
     };
   }
 
@@ -413,6 +382,10 @@ export class SsePort extends SseTheme implements AgentPort {
 
   history() {
     return this.get<HistoryMessage[]>("/history");
+  }
+
+  todos() {
+    return this.get<HostTodo[]>("/todos");
   }
 
   checkpoints() {
@@ -574,25 +547,12 @@ export class SsePort extends SseTheme implements AgentPort {
         // A malformed frame must not tear down the stream.
       }
     };
-    // Wails' asset server buffers a response until its handler returns, so the
-    // SSE stream never reaches the page inside the shell. There it pushes the
-    // same frames over its own bus; the payload is identical.
-    const bus = (window as unknown as { runtime?: WailsBus }).runtime;
-    let detach: () => void;
-    if (bus?.EventsOn) {
-      const off = bus.EventsOn(this.rt ? `${WAILS_EVENT}:${this.rt}` : WAILS_EVENT, feed);
-      // Subscribing to the bus is not the handshake /events is: ask the shell
-      // to replay whatever prompt is already waiting for an answer.
-      void fetch(this.base + WAILS_REPLAY, { method: "POST" }).catch(() => {});
-      detach = off;
-    } else {
-      // EventSource resumes on its own: it reconnects carrying the last id it
-      // saw, and the server replays from there. Recovery here is for the frames
-      // shed without the connection ever dropping.
-      const es = new EventSource(this.base + "/events", { withCredentials: true });
-      es.onmessage = (m) => feed(m.data);
-      detach = () => es.close();
-    }
+    // EventSource resumes on its own: it reconnects carrying the last id it
+    // saw, and the server replays from there. Recovery here is for the frames
+    // shed without the connection ever dropping.
+    const es = new EventSource(this.base + "/events", { withCredentials: true });
+    es.onmessage = (m) => feed(m.data);
+    const detach = () => es.close();
     if (bootstrap) void bootstrapFrom(bootstrap);
     return () => {
       live = false;
@@ -618,6 +578,9 @@ export class SsePort extends SseTheme implements AgentPort {
     // encodes to. Normalising here is what keeps every reader from having to
     // know it — and one that forgets only fails when the queue runs dry.
     return { ...q, items: q.items ?? [] };
+  }
+  async browserTabs() {
+    return (await this.get<BrowserTab[] | null>("/browser/tabs")) ?? [];
   }
   async readQueued(itemId: string) {
     const r = await this.get<{ envelope?: { displayText?: string } }>("/inbox/items/" + encodeURIComponent(itemId));
@@ -657,8 +620,10 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.post("/approve", {
       id,
       allow: verdict !== "deny",
-      session: verdict === "always",
-      persist: false,
+      // A rule written down also covers the rest of this session, so the answer
+      // holds before the file does.
+      session: verdict === "session" || verdict === "always",
+      persist: verdict === "always",
     });
   }
   answer(id: string, answers: { questionId: string; selected: string[] }[]) {

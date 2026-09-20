@@ -76,7 +76,9 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	}
 	prov, err := s.resolver.Resolve(req.Selection)
 	if err != nil {
-		writeWireError(w, http.StatusNotFound, err)
+		we := encodeError(err)
+		we.Ref = strings.TrimSpace(req.Selection.Ref)
+		writeWire(w, http.StatusNotFound, we)
 		return
 	}
 	ctx, cancel := context.WithCancel(r.Context())
@@ -113,7 +115,11 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 // separates "it did not start" from "it started and then failed"; the body
 // carries the identity, so a 502 here still arrives as *provider.APIError.
 func writeWireError(w http.ResponseWriter, status int, err error) {
+	writeWire(w, status, encodeError(err))
+}
+
+func writeWire(w http.ResponseWriter, status int, we *wireError) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(encodeError(err))
+	_ = json.NewEncoder(w).Encode(we)
 }

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -205,7 +205,7 @@ func (g globTool) globRecursive(ctx context.Context, pattern, displayPattern str
 		}
 		return tool.NoMatches, nil
 	}
-	sort.Strings(matches)
+	slices.Sort(matches)
 	matches = displayGlobMatches(matches, rp)
 	result := strings.Join(matches, "\n")
 	switch {

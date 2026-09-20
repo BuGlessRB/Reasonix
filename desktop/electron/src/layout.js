@@ -15,10 +15,19 @@ function hostBinary({ packaged, resourcesPath, dirname, platform, env = {} }) {
   return path.join(packaged ? resourcesPath : path.join(dirname, ".."), "bin", name);
 }
 
+// The helper that operates other applications exists only on macOS. Its
+// permissions are the application's that started it, so it runs as this
+// shell's grandchild rather than being found anywhere else.
+function computerHelper({ packaged, resourcesPath, dirname, platform, env = {} }) {
+  if (env.REASONIX_COMPUTER_HELPER) return env.REASONIX_COMPUTER_HELPER;
+  if (platform !== "darwin") return "";
+  return path.join(packaged ? resourcesPath : path.join(dirname, ".."), "bin", "reasonix-computer-helper");
+}
+
 function pageDir({ packaged, resourcesPath, dirname, env = {} }) {
   if (env.REASONIX_STUDIO_PAGE) return env.REASONIX_STUDIO_PAGE;
   const root = packaged ? resourcesPath : path.join(dirname, "..", "..");
   return path.join(root, "frontend-next", "dist");
 }
 
-module.exports = { hostBinary, pageDir };
+module.exports = { hostBinary, computerHelper, pageDir };

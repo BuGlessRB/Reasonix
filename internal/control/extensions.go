@@ -6,14 +6,16 @@ import (
 	"log/slog"
 	"sync"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/eventwire"
 	"reasonix/internal/evidence"
 	"reasonix/internal/extension"
 	"reasonix/internal/extension/dispatch"
+	"reasonix/internal/provider"
 )
 
-// Extension dispatch wiring (stage 6b1). Nil dispatcher is a no-op.
+// Extension dispatch wiring. Nil dispatcher is a no-op.
 // SessionPayload carries only path + phase; the host owns file decisions.
 
 // extensionSessionEvent broadcasts one session.* point fire-and-forget.
@@ -229,4 +231,85 @@ func (s *frontendEventSink) RecordProtocolRecovery(a event.ProtocolRecoveryAudit
 
 func (s *frontendEventSink) RecordTurnCompletion() {
 	event.RecordTurnCompletion(s.inner)
+}
+
+// SetExtensions installs the extension dispatcher after construction. Boot
+// uses it because sidecars — and therefore the dispatcher — only exist after
+// snapshot assembly, which runs after New. First non-nil install wins for the
+// cold-start path; use ReplaceExtensions for generation-safe rebuild swaps.
+// Nil is a no-op. The executor agent receives the same dispatcher.
+func (c *Controller) SetExtensions(d *dispatch.Dispatcher) {
+	if d == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.extensions != nil {
+		return
+	}
+	c.installExtensionsLocked(d)
+}
+
+// ReplaceExtensions atomically swaps the dispatcher for a reused controller
+// after a narrow rebuild. Updates sink strategy owner and executor together.
+func (c *Controller) ReplaceExtensions(d *dispatch.Dispatcher) {
+	if c == nil || d == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.installExtensionsLocked(d)
+}
+
+func (c *Controller) installExtensionsLocked(d *dispatch.Dispatcher) {
+	c.extensions = d
+	// Keep the inbox observer as the outermost sink so Steer/unapplied events
+	// always update durable state, while still installing/updating the
+	// frontendEventSink wrapper underneath for extension rulings.
+	switch sink := c.sink.(type) {
+	case *inboxEventSink:
+		if existing, ok := sink.Inner.(*frontendEventSink); ok {
+			existing.setDispatcher(d)
+		} else {
+			sink.Inner = newFrontendEventSink(sink.Inner, d)
+		}
+	case *frontendEventSink:
+		sink.setDispatcher(d)
+		// Ensure inbox observer stays outer.
+		c.sink = &inboxEventSink{AuditForwarder: event.AuditForwarder{Inner: sink}, c: c}
+	default:
+		c.sink = &inboxEventSink{AuditForwarder: event.AuditForwarder{Inner: newFrontendEventSink(c.sink, d)}, c: c}
+	}
+	if c.executor != nil {
+		c.executor.SetExtensions(d)
+		c.executor.SetSink(c.sink)
+	}
+}
+
+// SetProviderResolver replaces the session's merged provider catalog (narrow
+// rebuild after sidecar Manager roll). Nil clears extension-hosted providers.
+func (c *Controller) SetProviderResolver(r provider.Resolver) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.providerResolver = r
+	c.mu.Unlock()
+}
+
+// ApplyExtensionSystemPrompt swaps the executor to a fresh session carrying
+// the extension strategy's final system prompt and makes it the controller's
+// rotation prompt, so /new and /clear keep the strategy-composed prompt too.
+// Boot calls it when a system_prompt.build replacement changed the prompt
+// after the controller (and its session) was built with the host-composed
+// one. It must run before any turn or history resume: the fresh session holds
+// only the system message, so a later resume cleanly layers history on top.
+func (c *Controller) ApplyExtensionSystemPrompt(prompt string) {
+	if c == nil || c.executor == nil {
+		return
+	}
+	c.mu.Lock()
+	c.systemPrompt = prompt
+	c.mu.Unlock()
+	c.executor.SetSession(agent.NewSession(prompt))
 }

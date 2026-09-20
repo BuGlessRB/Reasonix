@@ -6,9 +6,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -121,7 +122,7 @@ func freezeDirectory(root *os.Root, rel string) ([]byte, error) {
 	if err := walkFrozenDirectory(root, rel, rel, &entries); err != nil {
 		return nil, err
 	}
-	sort.Strings(entries)
+	slices.Sort(entries)
 	if len(entries) > maxFrozenDirEntries {
 		entries = append(entries[:maxFrozenDirEntries], "…[truncated; directory has more entries]…")
 	}
@@ -216,11 +217,7 @@ func ApplyFrozenRefs(submit string, bodies map[string]string) string {
 	if len(bodies) == 0 {
 		return submit
 	}
-	paths := make([]string, 0, len(bodies))
-	for path := range bodies {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
+	paths := slices.Sorted(maps.Keys(bodies))
 	var b strings.Builder
 	b.WriteString(submit)
 	b.WriteString("\n\n<!-- frozen inbox references (enqueue-time snapshot) -->\n")

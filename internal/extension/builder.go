@@ -7,14 +7,14 @@ import (
 	"maps"
 	"strings"
 
+	"reasonix/internal/extensioncontract"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
 
 // Activator binds live resources (MCP sidecars, watchers) to a freshly
-// frozen snapshot. Stage 2 wires none; the seam exists so later stages plug
-// in without touching the build pipeline. A nil *RuntimeSet result is
-// treated as an empty set bound to the snapshot's generation.
+// frozen snapshot. A nil *RuntimeSet result is treated as an empty set bound
+// to the snapshot's generation.
 type Activator func(ctx context.Context, snap *RuntimeSnapshot) (*RuntimeSet, error)
 
 // Builder assembles a RuntimeSnapshot from registered contributors through a
@@ -154,10 +154,10 @@ func (b *Builder) discover(ctx context.Context) ([]Contribution, error) {
 	return out, nil
 }
 
-// parseContributions normalizes raw contributions. Stage 2 has no manifest
-// decoding to do — adapters hand over typed payloads — so parsing is limited
-// to ID hygiene; the stage exists so later manifest formats slot into the
-// pipeline without reordering it.
+// parseContributions normalizes raw contributions. Contributors hand over
+// typed payloads rather than manifests, so this is limited to ID hygiene; the
+// step exists so a manifest format can slot in without reordering the
+// pipeline.
 func parseContributions(in []Contribution) []Contribution {
 	out := make([]Contribution, len(in))
 	for i, ct := range in {
@@ -190,7 +190,7 @@ func validateContributions(cs []Contribution) error {
 		case KindTool:
 			errs = append(errs, validateToolContribution(ct)...)
 		case KindProvider:
-			if _, _, ok := splitProviderRef(ct.ID); !ok {
+			if _, _, ok := extensioncontract.SplitProviderRef(ct.ID); !ok {
 				errs = append(errs, &ValidationError{Kind: ct.Kind, ID: ct.ID, Reason: "provider ID must be a <name>/<model> ref"})
 			}
 		case KindInterceptor:

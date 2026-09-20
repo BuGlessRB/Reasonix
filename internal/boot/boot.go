@@ -61,7 +61,7 @@ import (
 // ErrUnknownModel is returned by Build when the configured model can't be
 // resolved to a provider — e.g. a default_model left over from a renamed or
 // removed provider. Callers can detect it (errors.Is) to re-run setup.
-var ErrUnknownModel = errors.New("unknown model")
+var ErrUnknownModel = provider.ErrUnknownModel
 
 func agentKeepPolicy(keep []string) agent.KeepPolicy {
 	if keep == nil {
@@ -112,7 +112,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	deepSeekProtocolMigErr = deepSeekProtocolMigrationNoticeError(handleConfigLoadWarnings(opts, cfg), deepSeekProtocolMigErr)
+	deepSeekProtocolMigErr = deepSeekProtocolMigrationNoticeError(handleConfigLoadWarnings(opts, cfg, stderr), deepSeekProtocolMigErr)
 	// Arm the credential-protection layers from the user-global [secrets]
 	// section before any tool, hook, or plugin subprocess can spawn. Package
 	// globals are correct here because [secrets] is user-global (project
@@ -159,7 +159,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		slog.Warn("boot: extension runtime: "+redacted, "root", root)
 		report(sink, event.Event{Level: event.LevelWarn, Text: redacted})
 	}
-	// Stage 8a: the host extension UI hub serves every sidecar's host/ui/* calls
+	// The host extension UI hub serves every sidecar's host/ui/* calls
 	// for this generation — publications become frontend events through the
 	// controller sink, blocking prompts ride the controller's Ask channel. The
 	// controller only exists after control.New below, so both seams indirect
@@ -217,7 +217,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 
 	// The build's provider resolution base: the caller-owned broker when
 	// injected, the local config-backed resolver otherwise. When a started
-	// sidecar declares providers, fold them in NOW (stage 7) with the
+	// sidecar declares providers, fold them in NOW with the
 	// provider:<ref> slot claims from the same manifest data the kernel's
 	// ReplaceClaims pass uses, so first-boot model resolution sees them. A
 	// conflict with the base catalog that lacks the plugin's claim is fatal,
@@ -258,9 +258,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// explicit opts.Model; explicit choices still fail loudly.
 	modelName := opts.Model
 	if modelName == "" {
-		if resolved, _, ok := cfg.ResolveNewSessionChatModel(); ok {
-			modelName = resolved
-		}
+		modelName = newSessionModel(opts.ProviderResolver, cfg)
 	}
 	config.NormalizeLegacyMimoCustomProvidersForRefs(cfg, modelName)
 	agentPreset := strings.TrimSpace(opts.AgentPreset)
@@ -325,7 +323,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		level := event.LevelInfo
 		text := "Deprecated agent step limits were removed."
 		detail := "[agent].max_steps and planner_max_steps are no longer used; Reasonix now manages interactive progress automatically. " +
-			"Use the CLI --max-steps flag for a one-off run or [bot].max_steps for unattended bot sessions."
+			"Use the CLI --max-steps flag for a one-off run."
 		if stepLimitMigErr != nil {
 			level = event.LevelWarn
 			text = "Deprecated agent step limits were ignored."
@@ -365,7 +363,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if multiThresholdMigrated || multiThresholdMigErr != nil {
 		level := event.LevelInfo
 		text := "上下文维护已简化为单一自动压缩阈值。"
-		detail := "Context maintenance now uses a single automatic compact_ratio (default 0.85). soft_compact_ratio, tool_result_snip_ratio, compact_force_ratio, cold_resume_prune, and context_editing were removed from config."
+		detail := "Context maintenance now folds at whichever comes first: compact_ratio of the window (default 0.85), or context_soft_limit_tokens of visible input (default 160000). soft_compact_ratio, tool_result_snip_ratio, compact_force_ratio, cold_resume_prune, and context_editing were removed from config."
 		if multiThresholdMigErr != nil {
 			level = event.LevelWarn
 			text = "Deprecated multi-threshold compaction keys were ignored."
@@ -605,6 +603,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		prev := cleanup
 		cleanup = func() { prev(); lspMgr.Close() }
 	}
+	browserSession := bindMachineTools(reg, cfg.Browser, root, opts.BrowserSession)
 
 	timer.mark("mcp")
 	maxSteps := max(opts.MaxSteps, 0)
@@ -1030,7 +1029,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		RuntimeOwner:      owner,
 		// Share the Manager already bound into bash/grep so tools and the
 		// Controller observe the same temporary generation across rebuilds.
-		SessionTemp: sessionTemp,
+		SessionTemp:    sessionTemp,
+		BrowserSession: browserSession,
 	}
 	// Guardian: when guardian_model is configured, spawn an LLM safety reviewer
 	// that can auto-allow safe Ask decisions and annotate risky ones before
@@ -1083,7 +1083,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 		// HeadlessApprovalMode is an explicit declaration that this frontend has
 		// no decision channel (`reasonix run`). ApprovalTimeout is not a proxy for
-		// that capability: bots have a bounded timeout and can still answer cards.
+		// that capability: a frontend can bound the wait and still answer prompts.
 		ctrlOpts.RecoveryHeadless = recoveryHeadlessMode(opts)
 	}
 	// Goal evaluator: the same zero-config model fallback as the recovery
@@ -1108,7 +1108,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			}
 		}
 	}
-	ctrl := control.New(ctrlOpts)
+	ctrl := withWindowPosture(control.New(ctrlOpts), cfg, opts.StatsSource)
 	// Publish the controller to the extension UI hub's indirection: from here
 	// on, host/ui/* publishes ride ctrl.EmitExtensionEvent and blocking prompts
 	// ride ctrl.Ask, exactly as if the hub had been built after control.New.
@@ -1222,7 +1222,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if providerResolver != nil {
 		ctrl.SetProviderResolver(providerResolver)
 	}
-	// Stage 6b2 system-prompt handoff: the 6b1 strategy pass may have replaced
+	// System-prompt handoff: the strategy pass may have replaced
 	// the prompt while the snapshot was freezing, but the executor session was
 	// built earlier with the host-composed prompt. Swap in a fresh session
 	// carrying the final prompt now — before any turn or history resume, so
@@ -1600,13 +1600,6 @@ func subagentEffectiveIdentity(cfg *config.Config, resolver provider.Resolver, b
 		modelID = ref
 	}
 	return modelID, strings.TrimSpace(config.EffectiveEffort(&entry))
-}
-
-// NewProvider builds a provider.Provider from a configured entry. Exported so
-// custom assemblers (e.g. the ACP per-session factory) can reuse it without
-// going through the full Build.
-func NewProvider(e *config.ProviderEntry) (provider.Provider, error) {
-	return NewProviderWithProxy(e, netclient.ProxySpec{Mode: netclient.ModeAuto})
 }
 
 // NewProviderWithProxy builds a provider.Provider with the configured ordinary

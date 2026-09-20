@@ -1,5 +1,7 @@
-import { memo, useEffect, useState } from "react";
+import { isValidElement, memo, useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import { t } from "../i18n";
+import { CopyButton } from "./CopyButton";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { remarkTrimAutolink } from "./autolink";
@@ -32,7 +34,10 @@ const BASE_REHYPE = [rehypeRaw, [rehypeSanitize, schema]];
 // produce a formula, so it is fetched the first time one appears. No lookbehind
 // — older WebKit treats it as a syntax error and takes the whole page down.
 const MATH = /\$\$[\s\S]+?\$\$|\$[^\n$]+\$/;
-const GEMOJI = /:[a-zA-Z0-9_+-]+:/;
+const EMOJI = /:[a-zA-Z0-9_+-]+:/;
+// Only a fence that named its language. rehype-highlight's own detection stays
+// off: guessing a grammar paints prose as code.
+const FENCED = /^```[a-zA-Z]/m;
 
 // Models reach for LaTeX's own delimiters as readily as for dollars, and
 // remark-math reads only dollars. Rewriting them keeps one parser instead of
@@ -53,45 +58,41 @@ function normalizeMath(md: string) {
 }
 
 type Plugin = unknown;
-let katex: Plugin | null = null;
-let katexLoading: Promise<void> | null = null;
-let gemoji: Plugin | null = null;
-let gemojiLoading: Promise<void> | null = null;
+type Slot = { plugin: Plugin | null; loading: Promise<void> | null; load: () => Promise<Plugin> };
 
-function useKatex(needed: boolean): Plugin | null {
-  const [plugin, setPlugin] = useState<Plugin | null>(katex);
-  useEffect(() => {
-    if (!needed || katex) return;
-    let alive = true;
-    katexLoading ??= Promise.all([import("rehype-katex"), import("katex/dist/katex.min.css")]).then(
-      ([mod]) => {
-        // Red source text beats an exception: the message stays readable and
-        // the render cannot take the window down with it.
-        katex = [mod.default, { throwOnError: false }];
-      },
-    );
-    // A failed chunk leaves the math as source text, which still reads.
-    void katexLoading.then(() => alive && setPlugin(() => katex)).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [needed]);
-  return plugin;
-}
+const KATEX: Slot = {
+  plugin: null,
+  loading: null,
+  // Red source text beats an exception: the message stays readable and the
+  // render cannot take the window down with it.
+  load: () =>
+    Promise.all([import("rehype-katex"), import("katex/dist/katex.min.css")]).then(
+      ([mod]) => [mod.default, { throwOnError: false }] as Plugin,
+    ),
+};
+/** Classes, not inline colours: a highlighter writing its own hex values would
+ *  leave the token system and stop following the theme. */
+const HLJS: Slot = { plugin: null, loading: null, load: () => import("rehype-highlight").then((m) => m.default) };
+const EMOJIS: Slot = { plugin: null, loading: null, load: () => import("remark-gemoji").then((m) => m.default) };
 
-function useGemoji(needed: boolean): Plugin | null {
-  const [plugin, setPlugin] = useState<Plugin | null>(gemoji);
+/** Fetched the first time the text calls for one. Every read of a slot goes
+ *  through a thunk because a plugin is a function: useState takes one as a lazy
+ *  initializer, and what it would store is the attacher's transformer — which
+ *  unified then calls as an attacher, handing it no tree at all. */
+function usePlugin(needed: boolean, slot: Slot): Plugin | null {
+  const [plugin, setPlugin] = useState<Plugin | null>(() => slot.plugin);
   useEffect(() => {
-    if (!needed || gemoji) return;
+    if (!needed || slot.plugin) return;
     let alive = true;
-    gemojiLoading ??= import("remark-gemoji").then((mod) => {
-      gemoji = mod.default;
+    // A failed chunk leaves the source text, which still reads.
+    slot.loading ??= slot.load().then((p) => {
+      slot.plugin = p;
     });
-    void gemojiLoading.then(() => alive && setPlugin(() => gemoji)).catch(() => {});
+    void slot.loading.then(() => alive && setPlugin(() => slot.plugin)).catch(() => {});
     return () => {
       alive = false;
     };
-  }, [needed]);
+  }, [needed, slot]);
   return plugin;
 }
 
@@ -133,13 +134,33 @@ function cutsOf(md: string): number[] {
   return cuts;
 }
 
-const Block = memo(function Block({ src, math, emoji, tail }: { src: string; math: Plugin | null; emoji: Plugin | null; tail?: boolean }) {
+// The fence's own info string, as rehype leaves it on the <code>. Absent for an
+// indented block, which is why the tag is conditional rather than defaulted to
+// a guess at the language.
+function langOf(node: ReactNode): string {
+  if (!isValidElement(node)) return "";
+  const cn = (node.props as { className?: string }).className ?? "";
+  return /language-([\w.+#-]+)/.exec(cn)?.[1] ?? "";
+}
+
+// What gets copied is the source, so it is read back off the rendered tree
+// rather than off the block's markdown — by here the fence markers and the
+// info string are gone, and a balanced tail fence was never typed at all.
+function textOf(node: ReactNode): string {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (isValidElement(node)) return textOf((node.props as { children?: ReactNode }).children);
+  return "";
+}
+
+const Block = memo(function Block({ src, math, emoji, code, tail }: { src: string; math: Plugin | null; emoji: Plugin | null; code: Plugin | null; tail?: boolean }) {
   // Inside the memo, so a settled block normalises once instead of per chunk.
   const body = normalizeMath(tail ? balanceFences(src) : src);
   return (
     <ReactMarkdown
       remarkPlugins={(emoji ? [...BASE_REMARK, emoji] : BASE_REMARK) as never}
-      rehypePlugins={(math ? [...BASE_REHYPE, math] : BASE_REHYPE) as never}
+      rehypePlugins={([...BASE_REHYPE, math, code].filter(Boolean)) as never}
       components={{
         // Every link here comes from model output; a webview navigating away
         // would replace the app with the page.
@@ -148,7 +169,12 @@ const Block = memo(function Block({ src, math, emoji, tail }: { src: string; mat
             {children}
           </a>
         ),
-        pre: ({ children }) => <pre className="term">{children}</pre>,
+        pre: ({ children }) => (
+          <div className="code-wrap" data-lang={langOf(children) || undefined}>
+            <pre className="term">{children}</pre>
+            <CopyButton text={textOf(children)} className="code-copy" label={t("复制这段代码")} />
+          </div>
+        ),
         table: ({ children }) => (
           <div className="md-tw">
             <table>{children}</table>
@@ -163,8 +189,9 @@ const Block = memo(function Block({ src, math, emoji, tail }: { src: string; mat
 
 export function Markdown({ text, streaming }: { text: string; streaming?: boolean }) {
   const shown = useRevealed(text, streaming);
-  const math = useKatex(MATH.test(text));
-  const emoji = useGemoji(GEMOJI.test(text));
+  const math = usePlugin(MATH.test(text), KATEX);
+  const emoji = usePlugin(EMOJI.test(text), EMOJIS);
+  const code = usePlugin(FENCED.test(text), HLJS);
   // Only a streamed message is split. Once it settles it parses whole again, so
   // nothing left in the transcript stands as a pile of separate documents.
   const cuts = streaming ? cutsOf(shown) : [];
@@ -175,11 +202,13 @@ export function Markdown({ text, streaming }: { text: string; streaming?: boolea
     at = c;
   }
   return (
-    <div className="md">
+    // Same rule the answer's own copy follows: while it is still arriving,
+    // handing a listing over would hand over something that was never said.
+    <div className="md" data-live={streaming ? "" : undefined}>
       {parts.map((p, i) => (
-        <Block key={i} src={p} math={math} emoji={emoji} />
+        <Block key={i} src={p} math={math} emoji={emoji} code={code} />
       ))}
-      <Block src={shown.slice(at)} math={math} emoji={emoji} tail />
+      <Block src={shown.slice(at)} math={math} emoji={emoji} code={code} tail />
       {streaming && <span className="caret" />}
     </div>
   );

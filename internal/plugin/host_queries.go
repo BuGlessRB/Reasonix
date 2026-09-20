@@ -1,7 +1,8 @@
 package plugin
 
 import (
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -53,11 +54,7 @@ func (h *Host) ConnectingServers() []string {
 		}
 		names[name] = struct{}{}
 	}
-	out := make([]string, 0, len(names))
-	for name := range names {
-		out = append(out, name)
-	}
-	sort.Strings(out)
+	out := slices.Sorted(maps.Keys(names))
 	return out
 }
 

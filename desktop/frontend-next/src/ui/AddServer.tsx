@@ -180,9 +180,9 @@ function Outcome({ r }: { r: McpInstallResult }) {
       <i className="pip" />
       <span className="nm">{r.name}</span>
       <span className="dt">
-        {done && `已就位 · ${r.toolCount} 个工具，下一轮就能用`}
-        {auth && "配置留下了，去授权后在列表里点重连"}
-        {!done && !auth && (r.message || "没装上，什么都没留下")}
+        {done && t("已就位 · {n} 个工具，下一轮就能用", { n: r.toolCount })}
+        {auth && t("配置留下了，去授权后在列表里点重连")}
+        {!done && !auth && (r.message || t("没装上，什么都没留下"))}
       </span>
     </div>
   );

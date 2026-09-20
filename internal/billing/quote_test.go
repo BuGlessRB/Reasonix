@@ -6,9 +6,9 @@ import (
 )
 
 func testInput(currency, provider, model string) QuoteInput {
-	rates := RateCard{CacheHit: 0.05, Input: 1.5, Output: 4.5, Currency: currency}
+	rates := RateCard{CacheHit: 0.02, Input: 1, Output: 4, Currency: currency}
 	if currency == "USD" {
-		rates = RateCard{CacheHit: 0.007, Input: 0.22, Output: 0.66, Currency: currency}
+		rates = RateCard{CacheHit: 0.003, Input: 0.15, Output: 0.6, Currency: currency}
 	}
 	return QuoteInput{
 		Usage:           UsageTokens{PromptTokens: 1000, CompletionTokens: 2000},

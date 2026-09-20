@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Cheap path gate for pull requests. PRs confined to docs/site/release-notes
+  # Cheap path gate for pull requests. PRs confined to docs/release-notes
   # (or top-level Markdown) skip the heavy Go jobs, and PRs that cannot affect
   # the desktop module skip the desktop jobs. Job-level `if` reports skipped,
   # which satisfies the required status checks (lint, race, test) — a
@@ -32,7 +32,6 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       desktop: ${{ steps.filter.outputs.desktop }}
-      site: ${{ steps.filter.outputs.site }}
       sdk: ${{ steps.filter.outputs.sdk }}
     steps:
       - uses: actions/checkout@v7
@@ -40,7 +39,7 @@ jobs:
           fetch-depth: 0
       - id: filter
         run: |
-          code=true; desktop=true; site=true; sdk=true
+          code=true; desktop=true; sdk=true
           base=""
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
@@ -50,21 +49,20 @@ jobs:
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
             files=$(git diff --name-only "$base" HEAD)
             if [ -n "$files" ]; then
-              code=false; desktop=false; site=false; sdk=false
+              code=false; desktop=false; sdk=false
               # Root-module CI: desktop/ is a separate module, so only the
               # clearly unrelated paths below can skip it.
-              if echo "$files" | grep -qvE '^(docs/|site/|release-notes/|desktop/|workers/|[^/]+\.md$)'; then code=true; fi
+              if echo "$files" | grep -qvE '^(docs/|release-notes/|desktop/|workers/|[^/]+\.md$)'; then code=true; fi
               # desktop/ imports the root kernel via `replace reasonix => ../`,
               # so only this clearly-unrelated set is safe to skip.
-              if echo "$files" | grep -qvE '^(docs/|site/|release-notes/|workers/|benchmarks/|npm/|[^/]+\.md$)'; then desktop=true; fi
-              if echo "$files" | grep -q '^site/'; then site=true; fi
+              if echo "$files" | grep -qvE '^(docs/|release-notes/|workers/|benchmarks/|npm/|[^/]+\.md$)'; then desktop=true; fi
               # sdk/go is a nested module invisible to root `go test ./...`;
               # its DTOs are generated from internal/extension/protocol, so
               # both paths must trigger the sdk job.
               if echo "$files" | grep -qE '^(sdk/|internal/extension/)'; then sdk=true; fi
             fi
           fi
-          { echo "code=$code"; echo "desktop=$desktop"; echo "site=$site"; echo "sdk=$sdk"; } >> "$GITHUB_OUTPUT"
+          { echo "code=$code"; echo "desktop=$desktop"; echo "sdk=$sdk"; } >> "$GITHUB_OUTPUT"
 
   # The ruleset requires the per-OS check names (test (ubuntu-latest) etc.).
   # A matrix job skipped at job level reports no per-leg checks at all, so
@@ -135,6 +133,14 @@ jobs:
         if: env.RUN_STEPS == 'true' && runner.os != 'Windows'
         run: python3 -m unittest discover -s tools/trajectory -t tools/trajectory
 
+      # A hardware exception on a Windows host whose CPU saves a large XSTATE
+      # (Intel AMX) can corrupt the Go heap (golang/go#81238). The runner pool
+      # mixes hosts, so a runtime crash is only attributable with the CPU on record.
+      - name: runner CPU
+        if: env.RUN_STEPS == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: Get-CimInstance Win32_Processor | Select-Object -ExpandProperty Name
+
       - name: test
         if: env.RUN_STEPS == 'true' && runner.os != 'Windows'
         env:
@@ -184,12 +190,14 @@ jobs:
 
       # Full push suite still uses the same 8m package budget as Windows smoke:
       # agent/boot/control already hit 180s package timeouts under runner load,
-      # so 3m fails on slow machines without a code regression. Keep the step
-      # above normal full-suite wall time (~8-12m) so a hang still dies on the
-      # job budget rather than a false package timeout.
+      # so 3m fails on slow machines without a code regression. The step budget
+      # is what runner variance costs rather than what the suite takes: green
+      # runs on this branch spread 520s-976s while three pushes timed out at
+      # 1287-1305s, so 20m sat inside the distribution and reported a slow
+      # runner as failed tests. A hang still dies here rather than on a package.
       - name: test (full)
         if: env.RUN_STEPS == 'true' && runner.os == 'Windows' && github.event_name != 'pull_request'
-        timeout-minutes: 20
+        timeout-minutes: 30
         env:
           # Run the prompt-cache prefix-stability guard (TestCacheHit*) in CI: a
           # regression there silently tanks the cache hit rate the project is
@@ -335,15 +343,8 @@ jobs:
             exit 1
           fi
 
-      # WebKitGTK 4.1 is what studio-build.sh links against: 4.0
-      # (libwebkit2gtk-4.0.so.37) is gone on Ubuntu 24.04+ and Fedora 40+.
-      - name: Install Linux build deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc libgtk-3-dev libwebkit2gtk-4.1-dev
-
       - name: vet
-        run: go vet -tags webkit2_41 ./...
+        run: go vet ./...
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -353,16 +354,15 @@ jobs:
           args: --timeout=5m
 
       - name: build
-        run: go build -tags webkit2_41 ./...
+        run: go build ./...
 
       - name: test
-        run: go test -tags webkit2_41 ./...
+        run: go test ./...
 
-      # The shell's tab/rebuild fences and extension UI are shared state.
-      # Race-sweep the module so regressions are CI-blocked, not just
-      # author-verified locally.
+      # The update helper replaces a running application under pkexec, so its
+      # own concurrency is CI-blocked rather than author-verified locally.
       - name: test -race
-        run: go test -race -tags webkit2_41 ./...
+        run: go test -race ./...
 
   # desktop/ is a separate module, so the root macOS matrix above does not
   # compile it against a real macOS toolchain.
@@ -385,9 +385,6 @@ jobs:
       - name: test
         run: go test -race ./...
 
-      # desktop's *_darwin.go is the one build-tag set the lint job cannot
-      # reach: the dock-icon glue is cgo, so it only type-checks with a real
-      # macOS toolchain.
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -414,13 +411,9 @@ jobs:
           cache: true
           cache-dependency-path: desktop/go.sum
 
-      # The vendored WebView2 fork carries the mixed-DPI and proxy-isolation
-      # patches, and its own tests only compile on Windows.
-      - name: test (Windows shell, update helper, and the WebView2 fork)
+      - name: test (update helper and uninstaller)
         timeout-minutes: 15
-        run: |
-          go test ./...
-          (cd third_party/go-webview2 && go test ./pkg/edge)
+        run: go test ./...
 
   # repolint scans desktop/ and sdk/ too, so this job also runs for diffs the
   # `code` filter would otherwise skip.
@@ -474,32 +467,8 @@ jobs:
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 \
             -ignore 'label "windows-11-arm" is unknown' \
-            .github/workflows/prepare-release-notes.yml \
             .github/workflows/release-studio.yml \
-            .github/workflows/release-verify-issues.yml \
             .github/workflows/ci.yml
-          node scripts/check-single-release-public-contract.mjs
-
-  # The site/ auth client has security-sensitive redirect-validation logic
-  # (safeNext) covered by node:test unit tests. Those tests use only Node
-  # builtins, so no `npm install` is needed — run them directly on every PR so
-  # a regression in redirect validation fails the build instead of shipping.
-  site:
-    needs: changes
-    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.site != 'false')
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: site
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-
-      - name: test
-        run: npm test
 
   govulncheck:
     needs: changes

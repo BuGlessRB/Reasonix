@@ -21,7 +21,6 @@ func renderDesktopSection(b *strings.Builder, c *Config) {
 	if currency := c.DesktopCurrency(); currency != "" {
 		fmt.Fprintf(b, "currency = %q   # legacy display currency; prefer [billing].display_currency\n", currency)
 	}
-	fmt.Fprintf(b, "layout_style = %q   # desktop layout: classic|workbench|creation\n", c.DesktopLayoutStyle())
 	fmt.Fprintf(b, "theme = %q   # desktop only: auto|dark|light\n", c.DesktopTheme())
 	fmt.Fprintf(b, "terminal_theme = %q   # integrated terminal: auto|dark|light; auto follows the desktop app\n", c.DesktopTerminalTheme())
 	if style := c.DesktopThemeStyle(); style != "" {

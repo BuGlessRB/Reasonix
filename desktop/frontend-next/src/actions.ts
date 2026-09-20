@@ -63,12 +63,12 @@ export const ACTIONS: UIAction[] = [
   { id: "browser.close", kind: "view", target: "none", proof: "interaction" },
   { id: "browser.back", kind: "navigation", target: "none", proof: "interaction" },
   { id: "browser.reload", kind: "repeatable", target: "none", proof: "interaction" },
-  { id: "browser.navigate", kind: "navigation", target: "none", proof: "interaction" },
   { id: "browser.address", kind: "view", target: "none", proof: "static" },
   { id: "browser.external", kind: "shell-native", target: "none", proof: "interaction" },
   { id: "tool.copy-output", kind: "shell-native", target: "none", proof: "interaction" },
   // The way out of a window whose assets an update replaced underneath it.
   { id: "chrome.reload", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "chrome.receipt", kind: "view", target: "none", proof: "interaction" },
   { id: "chrome.account", kind: "navigation", target: "none", proof: "interaction" },
   { id: "metrics.details", kind: "view", target: "optional", proof: "interaction" },
   { id: "session.menu", kind: "view", target: "entity", proof: "interaction" },
@@ -77,6 +77,17 @@ export const ACTIONS: UIAction[] = [
   { id: "session.archive", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   { id: "session.export", kind: "shell-native", target: "entity", proof: "browser" },
   { id: "session.delete", kind: "destructive", target: "entity", proof: "authority-effect" },
+
+  // What a call showed the model, at the size a card allows and then at the
+  // size a person can read. Opening and closing are one intent seen twice, but
+  // they are two buttons in two places: the thumbnail and the enlargement.
+  // Taking back what a prompt allowed for this session. One id: the row and the
+  // header ask the same thing of the kernel, and which grant rides on
+  // data-target, with "all" as the value that names none of them.
+  { id: "permissions.revoke-session", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
+
+  { id: "tool.image-open", kind: "view", target: "none", proof: "interaction" },
+  { id: "tool.image-close", kind: "view", target: "none", proof: "interaction" },
 
   // ── The turn ─────────────────────────────────────────────────────────────
   // Send and stop remain two actions even when they sit together: during a
@@ -145,12 +156,25 @@ export const ACTIONS: UIAction[] = [
   // Taking back the innermost open thing: a popover, an inline form. One
   // intent, reached by pressing away and by Escape.
   { id: "layer.dismiss", kind: "navigation", target: "none", proof: "interaction" },
+  // Walking the sidebar tree. The arrows only move focus; what Enter reaches is
+  // the row's own action, so this one never writes anything itself.
+  { id: "tree.navigate", kind: "view", target: "none", proof: "interaction" },
   { id: "settings.close", kind: "navigation", target: "none", proof: "interaction" },
   { id: "pane.activate", kind: "navigation", target: "none", proof: "interaction" },
   // How this session is being read. One id across a bar button and a menu row,
   // because reaching a view from the bar and from the detail menu is one intent
   // in two places, not two things a person can do.
   { id: "pane.view", kind: "view", target: "none", proof: "interaction" },
+  { id: "pane.dock", kind: "view", target: "none", proof: "interaction" },
+  // The agent's browser as a person watches it: which of its pages is drawn,
+  // and the controls a person has over the page on screen. They reach the
+  // window's view of the page, never the kernel.
+  { id: "browser.tab", kind: "view", target: "entity", proof: "interaction" },
+  { id: "browser.control", kind: "shell-native", target: "entity", proof: "interaction" },
+  { id: "browser.navigate", kind: "shell-native", target: "entity", proof: "interaction" },
+  { id: "transcript.find", kind: "view", target: "none", proof: "interaction" },
+  { id: "turn.edit", kind: "view", target: "entity", proof: "interaction" },
+  { id: "turn.resend", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   { id: "transcript.scroll", kind: "navigation", target: "none", proof: "browser" },
   { id: "session.new", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   // The bytes reach the host as the file is chosen, before anything is sent:
@@ -241,6 +265,7 @@ export const ACTIONS: UIAction[] = [
   { id: "appearance.language", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "appearance.zoom", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "appearance.reading-size", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "appearance.measure", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "appearance.background", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "appearance.font", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   // Kept where the window keeps them: these are this browser's, and no kernel
@@ -274,6 +299,7 @@ export const ACTIONS: UIAction[] = [
   { id: "provider.protocol", kind: "kernel-mutation", target: "entity", proof: "interaction" },
   { id: "provider.web-search", kind: "kernel-mutation", target: "entity", proof: "interaction" },
   { id: "provider.thinking", kind: "kernel-mutation", target: "entity", proof: "interaction" },
+  { id: "provider.continuation", kind: "kernel-mutation", target: "entity", proof: "interaction" },
 
   // ── The two side panels. Reached from the keyboard here, and from each
   //    gutter's own grip, which this pass has not annotated yet.

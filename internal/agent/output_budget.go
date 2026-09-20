@@ -39,6 +39,7 @@ type requestCalibrationShape struct {
 	compactChars int64
 	cjkRunes     int64
 	cjkBytes     int64
+	imageTokens  int64 // estimated, never learned from
 }
 
 // resetOutputBudgetState drops what belongs to the transcript being replaced.
@@ -51,8 +52,11 @@ func (o *outputBudgetState) reset() {
 	o.activeReqShape.Store(nil)
 }
 
+// A request that carried images was billed for pixels at a rate the host never
+// sees, and a ratio learned from it would price every later character as part
+// of a picture.
 func (a *Agent) setPromptTokenCalibration(promptTokens int, shape requestCalibrationShape) {
-	if a == nil || promptTokens <= 0 || shape.requestChars <= 0 {
+	if a == nil || promptTokens <= 0 || shape.requestChars <= 0 || shape.imageTokens > 0 {
 		return
 	}
 	a.sess.output.promptCalibration.Store(&promptTokenCalibration{
@@ -132,6 +136,7 @@ func requestCalibrationShapeWithPolicy(req provider.Request, policy provider.Sha
 	for _, msg := range req.Messages {
 		shape = shape.plus(messageCalibrationShape(msg, policy))
 	}
+	shape.imageTokens = requestImageTokens(req.Messages)
 	for _, schema := range req.Tools {
 		shape.requestChars += 8
 		shape.addText(schema.Name)
@@ -158,6 +163,7 @@ func (s requestCalibrationShape) plus(o requestCalibrationShape) requestCalibrat
 		compactChars: s.compactChars + o.compactChars,
 		cjkRunes:     s.cjkRunes + o.cjkRunes,
 		cjkBytes:     s.cjkBytes + o.cjkBytes,
+		imageTokens:  s.imageTokens + o.imageTokens,
 	}
 }
 
@@ -167,6 +173,7 @@ func (s requestCalibrationShape) minus(o requestCalibrationShape) requestCalibra
 		compactChars: s.compactChars - o.compactChars,
 		cjkRunes:     s.cjkRunes - o.cjkRunes,
 		cjkBytes:     s.cjkBytes - o.cjkBytes,
+		imageTokens:  s.imageTokens - o.imageTokens,
 	}
 }
 
@@ -256,9 +263,9 @@ func (a *Agent) estimatedShapeTokens(shape requestCalibrationShape) int {
 		return 0
 	}
 	if calibrated, ok := a.calibratedPromptTokens(shape); ok {
-		return calibrated
+		return calibrated + int(shape.imageTokens)
 	}
-	return int(float64(shape.requestChars) * fallbackTokPerChar)
+	return int(float64(shape.requestChars)*fallbackTokPerChar) + int(shape.imageTokens)
 }
 
 func isCJKRune(r rune) bool {

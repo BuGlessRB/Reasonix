@@ -253,6 +253,12 @@ func (p Policy) DecideSubject(toolName string, readOnly bool, subject string) De
 			return p.Mode
 		}
 	}
+	if d, ok := p.decideBrowserCredential(toolName, subject); ok {
+		return d
+	}
+	if d, ok := p.decideComputer(toolName, subject); ok {
+		return d
+	}
 	switch {
 	case matchAny(p.Deny, toolName, subject):
 		return Deny
@@ -510,7 +516,8 @@ func matchAnyAllow(rules []Rule, toolName, subject string) bool {
 	if matchAnyExact(rules, toolName, subject) {
 		return true
 	}
-	if canonicalRuleTool(toolName) == "bash" && bashSubjectRequiresExactRule(subject) {
+	if canonicalRuleTool(toolName) == "bash" && bashSubjectRequiresExactRule(subject) ||
+		IsBrowserTool(toolName) && BrowserSubjectRequiresExplicitApproval(subject) {
 		return false
 	}
 	return matchAny(rules, toolName, subject)
@@ -640,7 +647,7 @@ func (g *Gate) Check(ctx context.Context, toolName string, args json.RawMessage,
 		return false, reason, nil
 	case Ask:
 		if g.Approver == nil {
-			return true, "", nil // non-interactive: preserve autonomy
+			return unattendedAsk(toolName, args)
 		}
 		subject := Subject(args)
 		allow, remember, approverReason, err := g.approve(ctx, toolName, subject, args, ruleReason)
@@ -715,17 +722,10 @@ func RememberRuleForScope(toolName, subject string) string {
 		}
 		return "Bash=" + subject
 	}
-	if IsFileMutationTool(toolName) {
-		return "Edit"
+	if rule, ok := groupGrantRule(toolName, subject); ok {
+		return rule
 	}
 	return toolName
-}
-
-// SessionGrantKey returns the in-memory rule for "allow this session". Bash
-// prefers a command prefix when one is available, falling back to the exact
-// command when unsafe. File mutation tools share a single Edit grant.
-func SessionGrantKey(toolName, subject string) string {
-	return SessionGrantRuleForScope(toolName, subject)
 }
 
 // SessionGrantRuleForScope returns the in-memory rule for a session grant.
@@ -739,10 +739,10 @@ func SessionGrantRuleForScope(toolName, subject string) string {
 		}
 		return "Bash=" + subject
 	}
-	if IsFileMutationTool(toolName) {
-		return "Edit"
+	if rule, ok := groupGrantRule(toolName, subject); ok {
+		return rule
 	}
-	return toolName
+	return sessionGrantRule(toolName, subject)
 }
 
 // BashCommandPrefix returns a conservative prefix rule for "similar command"
@@ -780,26 +780,15 @@ func isPackageManagerRun(base string) bool {
 	}
 }
 
-// IsFileMutationTool reports whether a built-in tool mutates workspace files.
-func IsFileMutationTool(toolName string) bool {
-	switch toolName {
-	case "write_file", "edit_file", "multi_edit", "move_file", "notebook_edit", "delete_range", "delete_symbol":
-		return true
-	default:
-		return false
-	}
-}
-
 func ruleToolMatches(ruleTool, toolName string) bool {
 	ruleTool = canonicalRuleTool(ruleTool)
-	return ruleTool == toolName || (ruleTool == "file_mutation" && IsFileMutationTool(toolName))
+	return ruleTool == toolName || inGroup(ruleTool, toolName)
 }
 
 func ruleToolCompatible(existingTool, candidateTool string) bool {
 	existingTool = canonicalRuleTool(existingTool)
 	candidateTool = canonicalRuleTool(candidateTool)
-	return existingTool == candidateTool ||
-		(existingTool == "file_mutation" && (candidateTool == "file_mutation" || IsFileMutationTool(candidateTool)))
+	return existingTool == candidateTool || inGroup(existingTool, candidateTool)
 }
 
 func canonicalRuleTool(toolName string) string {
@@ -807,7 +796,11 @@ func canonicalRuleTool(toolName string) string {
 	case "Bash", "bash":
 		return "bash"
 	case "Edit", "edit", "file_mutation":
-		return "file_mutation"
+		return fileMutationGroup
+	case "Browser", "browser":
+		return browserGroup
+	case "Computer", "computer":
+		return computerGroup
 	default:
 		return toolName
 	}

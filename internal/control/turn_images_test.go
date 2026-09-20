@@ -53,13 +53,29 @@ func TestConfiguredVisionModelIsNamedInTheNote(t *testing.T) {
 	}
 }
 
-// A vision model gets the images themselves, so the note would be noise — and
-// worse, it would tell the model it cannot see what it can.
-func TestReadableImagesGetNoNote(t *testing.T) {
+// The reference block defers to the attached-images note in every case, so a
+// model that reads images needs the note too. Without it the deferral reads as
+// the picture never having arrived, and a model reasoning at length says so.
+func TestReadableImagesAreAnnouncedAsPresent(t *testing.T) {
 	c := New(Options{Sink: event.Discard})
 	imgs := []string{"data:image/png;base64,AAA"}
-	if got := c.imageRoutingPrefix(&turnImages{userImages: imgs, candidates: imgs}) + "look"; got != "look" {
-		t.Fatalf("got %q, want the input untouched when the model reads images", got)
+	got := c.imageRoutingPrefix(&turnImages{userImages: imgs, candidates: imgs, modelReads: true}) + "look"
+	if !strings.Contains(got, "<"+ImageRoutingTag+">") || !strings.Contains(got, "1 image(s)") || !strings.Contains(got, "in this message as images") {
+		t.Fatalf("note = %q, want the images announced as present in the message", got)
+	}
+	if strings.Contains(got, "cannot read images") {
+		t.Fatalf("a model that reads images was told it cannot: %q", got)
+	}
+}
+
+// A Goal continuation carries no pixels of its own: a vision parent already has
+// them in its history. It is still a model that reads images, and must not be
+// told otherwise just because this message is empty of them.
+func TestAContinuationOfAVisionModelIsNotToldItCannotRead(t *testing.T) {
+	c := New(Options{Sink: event.Discard})
+	got := c.imageRoutingPrefix(&turnImages{candidates: []string{"data:image/png;base64,AAA"}, modelReads: true}) + "continue"
+	if got != "continue" {
+		t.Fatalf("got %q, want no note for a continuation whose model reads the images already in history", got)
 	}
 }
 

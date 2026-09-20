@@ -3,23 +3,23 @@ import { current } from "../i18n";
 import { refresh as refreshWidth } from "./viewport";
 
 /** 正文起点。汉字同字号下笔画更密，中文高一档。求值留到调用时：模块加载早于
- *  i18n 定语言。 */
-export const readDefault = (): number => (current() === "zh" ? 14.5 : 13.5);
+ *  i18n 定语言。这一档和 --doc 一起定行长：两个数只有一起看才有意义。 */
+export const readDefault = (): number => (current() === "zh" ? 16 : 15);
 
 /** 字号档位。中间那档就是 readDefault()，两边一起改。 */
 export const readSteps = (): [number, string][] =>
   current() === "zh"
     ? [
-        [12.5, "小"],
-        [14.5, "标准"],
-        [16, "大"],
-        [18, "更大"],
+        [14.5, "小"],
+        [16, "标准"],
+        [18, "大"],
+        [20, "更大"],
       ]
     : [
-        [12, "小"],
-        [13.5, "标准"],
-        [15, "大"],
-        [17, "更大"],
+        [13.5, "小"],
+        [15, "标准"],
+        [17, "大"],
+        [19, "更大"],
       ];
 
 // The user's own settings, applied after a pack so they win: a pack is a
@@ -57,6 +57,13 @@ export function apply(look: Appearance | null, busy = false) {
   // Reading size moves the transcript's prose alone, so the frame around it
   // stays where the layout put it.
   style.setProperty("--read", `${look?.readSize || readDefault()}px`);
+
+  // How far that prose runs is the other half of the same question, and the
+  // only one with two honest answers: a line short enough to read without
+  // losing your place, or a window used to the edge. Cards, commands and
+  // output answer to neither — they always have the width.
+  if (look?.width === "full") root.dataset.measure = "full";
+  else delete root.dataset.measure;
 
   if (look?.fontUi) style.setProperty("--ui", `${look.fontUi}, ${FALLBACK_UI}`);
   else style.removeProperty("--ui");

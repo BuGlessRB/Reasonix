@@ -4,62 +4,58 @@ import (
 	"fmt"
 	"strings"
 
+	"reasonix/internal/billing"
 	"reasonix/internal/provider"
 )
 
-// DeepSeek bills two rates a day. These templates carry the off-peak one — the
-// base card in billing's catalog — and the peak hours are applied when a turn
-// is quoted, because only the clock knows which one a call was billed at.
-func deepSeekV4FlashPriceCNY() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.05, Input: 1.5, Output: 4.5, Currency: "¥"}
+// DeepSeek's rates live in billing's history, which publishes the current
+// generation and keeps the superseded ones. Reading them from there rather than
+// restating them means a price change is one append in one place.
+func deepSeekOfficialRate(model, currency string) *provider.Pricing {
+	return officialVendorPrice("deepseek", currency, model)
 }
 
-func deepSeekV4ProPriceCNY() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.15, Input: 4.5, Output: 13.5, Currency: "¥"}
-}
-
-func deepSeekV4PricesCNY() map[string]*provider.Pricing {
-	return map[string]*provider.Pricing{
-		"deepseek-v4-flash": deepSeekV4FlashPriceCNY(),
-		"deepseek-v4-pro":   deepSeekV4ProPriceCNY(),
-		// Vision bills at the flash rates; an image is charged as the tokens
-		// it scales to, so it lands in the prompt total already counted.
-		DeepSeekVisionModel: deepSeekV4FlashPriceCNY(),
+func pricingFromRateCard(card *billing.RateCard) *provider.Pricing {
+	if card == nil {
+		return nil
+	}
+	return &provider.Pricing{
+		CacheHit: card.CacheHit, Input: card.Input, Output: card.Output,
+		Currency: billing.CurrencySymbol(card.Currency),
 	}
 }
 
-func deepSeekV4FlashPriceUSD() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.007, Input: 0.22, Output: 0.66, Currency: "$"}
+func deepSeekOfficialPricesCNY() map[string]*provider.Pricing {
+	return deepSeekOfficialRates("CNY")
 }
 
-func deepSeekV4ProPriceUSD() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.022, Input: 0.66, Output: 1.98, Currency: "$"}
+func deepSeekOfficialPricesUSD() map[string]*provider.Pricing {
+	return deepSeekOfficialRates("USD")
 }
 
-func deepSeekV4PricesUSD() map[string]*provider.Pricing {
-	return map[string]*provider.Pricing{
-		"deepseek-v4-flash": deepSeekV4FlashPriceUSD(),
-		"deepseek-v4-pro":   deepSeekV4ProPriceUSD(),
-		DeepSeekVisionModel: deepSeekV4FlashPriceUSD(),
-	}
+// deepSeekOfficialRates is what a connection to the official endpoint is offered.
+// The retired names are priced too but not listed: a new entry seeded with one
+// would be offering a model nobody should pick.
+func deepSeekOfficialRates(currency string) map[string]*provider.Pricing {
+	return officialVendorPrices("deepseek", currency, []string{DeepSeekFlashModel, deepSeekProModel})
 }
 
-// DeepSeekV4PricesForCurrency returns the official regional price table.
+// DeepSeekOfficialPricesForCurrency returns the official regional price table.
 // Persisted custom prices still win; this is only used for built-in templates
 // and known-default refreshes.
-func DeepSeekV4PricesForCurrency(currency string) map[string]*provider.Pricing {
+func DeepSeekOfficialPricesForCurrency(currency string) map[string]*provider.Pricing {
 	if normalizeDeepSeekPricingCurrency(currency) == "CNY" {
-		return deepSeekV4PricesCNY()
+		return deepSeekOfficialPricesCNY()
 	}
-	return deepSeekV4PricesUSD()
+	return deepSeekOfficialPricesUSD()
 }
 
-func deepSeekV4PricesForConfig(c *Config) map[string]*provider.Pricing {
-	return DeepSeekV4PricesForCurrency(c.DeepSeekOfficialPricingCurrency())
+func deepSeekOfficialPricesForConfig(c *Config) map[string]*provider.Pricing {
+	return DeepSeekOfficialPricesForCurrency(c.DeepSeekOfficialPricingCurrency())
 }
 
-func deepSeekV4PriceForModel(currency, model string) *provider.Pricing {
-	return clonePricing(DeepSeekV4PricesForCurrency(currency)[strings.TrimSpace(model)])
+func deepSeekOfficialPriceForModel(currency, model string) *provider.Pricing {
+	return clonePricing(DeepSeekOfficialPricesForCurrency(currency)[billing.RateModelFor("deepseek", model)])
 }
 
 // DeepSeekOfficialPricingLanguage is retained for older settings/template call
@@ -83,42 +79,49 @@ func normalizeDeepSeekPricingCurrency(currency string) string {
 	}
 }
 
-// ApplyDeepSeekOfficialDefaultPricing refreshes built-in/official DeepSeek
+// ApplyOfficialDefaultPricing refreshes built-in/official vendor
 // prices that still match known official defaults for each provider's frozen
 // billing_currency. Custom user prices and display-currency switches never
 // rewrite list prices.
-func (c *Config) ApplyDeepSeekOfficialDefaultPricing() {
-	applyDeepSeekOfficialDefaultPricing(c)
+func (c *Config) ApplyOfficialDefaultPricing() {
+	applyOfficialDefaultPricing(c)
 }
 
-func applyDeepSeekOfficialDefaultPricing(c *Config) {
-	applyDeepSeekOfficialDefaultPricingWithOverride(c, false)
+func applyOfficialDefaultPricing(c *Config) {
+	applyOfficialDefaultPricingWithOverride(c, false)
 }
 
-func applyDeepSeekOfficialDefaultPricingWithOverride(c *Config, overridePersisted bool) {
+func applyOfficialDefaultPricingWithOverride(c *Config, overridePersisted bool) {
 	if c == nil {
 		return
 	}
 	for i := range c.Providers {
 		p := &c.Providers[i]
-		if officialProviderKind(p) != "deepseek" {
+		vendor := officialProviderKind(p)
+		if vendor == "" {
 			continue
 		}
 		currency := p.ProviderBillingCurrency()
 		if currency == "" {
-			currency = "USD"
+			currency = billing.DefaultCurrency(vendor)
 		}
 		// Only refresh when the row still matches a known official default in
 		// the provider's own billing currency. Display currency must not win.
-		if isKnownDeepSeekOfficialPricing(p.Model, p.Price) && (overridePersisted || p.persistedOfficialCurrency == "" || p.persistedOfficialCurrency == currency) {
-			if samePricing(p.Price, deepSeekV4PriceForModel(currency, p.Model)) || overridePersisted {
-				p.Price = deepSeekV4PriceForModel(currency, p.Model)
+		if isKnownOfficialPricing(vendor, p.Model, p.Price) && (overridePersisted || p.persistedOfficialCurrency == "" || p.persistedOfficialCurrency == currency) {
+			switch refreshed := supersededOfficialRefresh(vendor, p.Model, p.Price); {
+			case samePricing(p.Price, officialVendorPrice(vendor, currency, p.Model)) || overridePersisted:
+				p.Price = officialVendorPrice(vendor, currency, p.Model)
+			case refreshed != nil:
+				p.Price = refreshed
 			}
 		}
 		for model, price := range p.Prices {
-			if isKnownDeepSeekOfficialPricing(model, price) && (overridePersisted || p.persistedOfficialCurrency == "" || p.persistedOfficialCurrency == currency) {
-				if samePricing(price, deepSeekV4PriceForModel(currency, model)) || overridePersisted {
-					p.Prices[model] = deepSeekV4PriceForModel(currency, model)
+			if isKnownOfficialPricing(vendor, model, price) && (overridePersisted || p.persistedOfficialCurrency == "" || p.persistedOfficialCurrency == currency) {
+				switch refreshed := supersededOfficialRefresh(vendor, model, price); {
+				case samePricing(price, officialVendorPrice(vendor, currency, model)) || overridePersisted:
+					p.Prices[model] = officialVendorPrice(vendor, currency, model)
+				case refreshed != nil:
+					p.Prices[model] = refreshed
 				}
 			}
 		}
@@ -161,7 +164,7 @@ func completeDeepSeekOfficialPricingCurrency(p *ProviderEntry) string {
 		return ""
 	}
 	models := p.ModelList()
-	if len(models) == 1 && isKnownDeepSeekOfficialPricing(models[0], p.Price) {
+	if len(models) == 1 && isKnownOfficialPricing("deepseek", models[0], p.Price) {
 		return normalizeDeepSeekPricingCurrency(p.Price.Currency)
 	}
 	if len(models) == 0 || p.Price != nil {
@@ -170,7 +173,7 @@ func completeDeepSeekOfficialPricingCurrency(p *ProviderEntry) string {
 	currency := ""
 	for _, model := range models {
 		price := p.Prices[strings.TrimSpace(model)]
-		if !isKnownDeepSeekOfficialPricing(model, price) {
+		if !isKnownOfficialPricing("deepseek", model, price) {
 			return ""
 		}
 		nextCurrency := normalizeDeepSeekPricingCurrency(price.Currency)
@@ -186,46 +189,30 @@ func completeDeepSeekOfficialPricingCurrency(p *ProviderEntry) string {
 	return currency
 }
 
-func mimoV25ProPrice() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.025, Input: 3, Output: 6, Currency: "¥"}
+// officialVendorPrices is a vendor's current rate for each model it prices.
+// One reader for every vendor: the rates live in billing's history, and a table
+// restated here is one that drifts from it the first time either side moves.
+func officialVendorPrices(vendor, currency string, models []string) map[string]*provider.Pricing {
+	prices := make(map[string]*provider.Pricing, len(models))
+	for _, model := range models {
+		model = strings.TrimSpace(model)
+		if rate := officialVendorPrice(vendor, currency, model); rate != nil {
+			prices[model] = rate
+		}
+	}
+	return prices
 }
 
-func mimoV25Price() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2, Currency: "¥"}
-}
-
-func mimoV2FlashPrice() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.07, Input: 0.70, Output: 2.10, Currency: "¥"}
+func officialVendorPrice(vendor, currency, model string) *provider.Pricing {
+	return pricingFromRateCard(billing.CurrentRate(vendor, model, currency))
 }
 
 func mimoDomesticPrices(models []string) map[string]*provider.Pricing {
-	prices := map[string]*provider.Pricing{}
-	for _, model := range models {
-		switch strings.TrimSpace(model) {
-		case "mimo-v2.5-pro", "mimo-v2-pro":
-			prices[model] = mimoV25ProPrice()
-		case "mimo-v2.5", "mimo-v2-omni":
-			prices[model] = mimoV25Price()
-		case "mimo-v2-flash":
-			prices[model] = mimoV2FlashPrice()
-		}
-	}
-	return prices
-}
-
-func longCat20Price() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.04, Input: 2, Output: 8, Currency: "¥"}
+	return officialVendorPrices("mimo", "CNY", models)
 }
 
 func longCat20Prices(models []string) map[string]*provider.Pricing {
-	prices := map[string]*provider.Pricing{}
-	for _, model := range models {
-		switch strings.TrimSpace(model) {
-		case "LongCat-2.0":
-			prices[model] = longCat20Price()
-		}
-	}
-	return prices
+	return officialVendorPrices("longcat", "CNY", models)
 }
 
 const (
@@ -297,11 +284,6 @@ func ApplyUserConfigUpgradesOnStartup(path string) (bool, error) {
 	return true, nil
 }
 
-// ResetOfficialProviderPricingOnUpgrade is retained for older call sites.
-func ResetOfficialProviderPricingOnUpgrade(path string) (bool, error) {
-	return ApplyUserConfigUpgradesOnStartup(path)
-}
-
 func shouldMarkWindowsBashSandboxDefaultUpgrade(fromVersion int) bool {
 	return runtimeGOOS == "windows" && fromVersion < windowsBashSandboxDefaultConfigVersion
 }
@@ -324,7 +306,7 @@ func resetOfficialProviderPricingDefaults(c *Config) {
 		p := &c.Providers[i]
 		switch {
 		case officialProviderKind(p) == "deepseek":
-			resetDeepSeekOfficialPricing(p, deepSeekV4PricesForConfig(c))
+			resetDeepSeekOfficialPricing(p, deepSeekOfficialPricesForConfig(c))
 		}
 	}
 }
@@ -351,23 +333,38 @@ func resetDeepSeekOfficialPricing(p *ProviderEntry, defaults map[string]*provide
 	}
 }
 
-func isKnownDeepSeekOfficialPricing(model string, price *provider.Pricing) bool {
+func isKnownOfficialPricing(vendor, model string, price *provider.Pricing) bool {
 	model = strings.TrimSpace(model)
 	if model == "" || price == nil {
 		return false
 	}
-	for _, prices := range []map[string]*provider.Pricing{deepSeekV4PricesCNY(), deepSeekV4PricesUSD()} {
-		if samePricing(price, prices[model]) {
-			return true
-		}
+	if samePricing(price, officialVendorPrice(vendor, price.Currency, model)) {
+		return true
 	}
-	return false
+	return supersededOfficialRefresh(vendor, model, price) != nil
 }
 
-// IsKnownDeepSeekOfficialPricing reports whether price is one of Reasonix's
-// built-in DeepSeek regional defaults for model.
-func IsKnownDeepSeekOfficialPricing(model string, price *provider.Pricing) bool {
-	return isKnownDeepSeekOfficialPricing(model, price)
+// supersededOfficialRefresh is the current rate for a stored price this project
+// shipped before, in that price's own currency. The currency comes from the
+// price rather than from the entry: an entry that never declared one falls back
+// to the vendor's default, and a rate quoted in the other one would go
+// unrecognised and never be updated.
+func supersededOfficialRefresh(vendor, model string, price *provider.Pricing) *provider.Pricing {
+	if price == nil {
+		return nil
+	}
+	for _, card := range billing.SupersededRates(vendor, model, price.Currency) {
+		if samePricing(price, pricingFromRateCard(&card)) {
+			return officialVendorPrice(vendor, price.Currency, model)
+		}
+	}
+	return nil
+}
+
+// IsKnownOfficialPricing reports whether price is one of Reasonix's built-in
+// defaults for a vendor's model — the current rate or one it has superseded.
+func IsKnownOfficialPricing(vendor, model string, price *provider.Pricing) bool {
+	return isKnownOfficialPricing(vendor, model, price)
 }
 
 func samePricing(a, b *provider.Pricing) bool {
@@ -375,4 +372,36 @@ func samePricing(a, b *provider.Pricing) bool {
 		return false
 	}
 	return a.CacheHit == b.CacheHit && a.Input == b.Input && a.Output == b.Output && a.Currency == b.Currency
+}
+
+func backfillDeepSeekOfficialPrices(c *Config) {
+	if c == nil {
+		return
+	}
+	for i := range c.Providers {
+		p := &c.Providers[i]
+		if officialProviderKind(p) != "deepseek" {
+			continue
+		}
+		backfillDeepSeekOfficialEndpointDefaults(p)
+		currency := p.ProviderBillingCurrency()
+		if currency == "" {
+			currency = p.persistedOfficialCurrency
+		}
+		if currency == "" {
+			currency = "USD"
+		}
+		if p.Price != nil {
+			continue
+		}
+		if p.Prices == nil {
+			p.Prices = map[string]*provider.Pricing{}
+		}
+		// From the entry's list, not the table's: a retired name is priced too.
+		for _, model := range p.ModelList() {
+			if price := deepSeekOfficialPriceForModel(currency, model); price != nil && p.Prices[model] == nil {
+				p.Prices[model] = price
+			}
+		}
+	}
 }

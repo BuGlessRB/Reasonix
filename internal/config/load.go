@@ -222,17 +222,14 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	normalizeRetiredAutoPlan(cfg)
 	normalizeLegacyMCPTiers(cfg)
 	normalizeLegacyStepFunBaseURLs(cfg)
-	normalizeLegacyLongCatContextWindows(cfg)
-	normalizeLegacyQwenContextWindows(cfg)
-	normalizeLegacyKimiK3Catalog(cfg)
-	normalizeLegacyOpenCodeGoKimiK3Catalog(cfg)
+	upgradeShippedPresets(cfg)
 	normalizeLegacyMimoCustomProviders(cfg)
 	normalizeLegacyProviderFields(cfg)
 	normalizeDesktopOfficialProviderAccess(cfg)
 	normalizeOfficialDeepSeekModels(cfg)
 	migrateBillingDisplayCurrency(cfg)
 	freezeProviderBillingCurrencies(cfg)
-	applyDeepSeekOfficialDefaultPricing(cfg)
+	applyOfficialDefaultPricing(cfg)
 	backfillDeepSeekOfficialPrices(cfg)
 	normalizeEffortConfig(cfg)
 	backfillDeepSeekPro(cfg)
@@ -254,21 +251,12 @@ func LoadBuiltinDefaultsForRoot(root string) *Config {
 	cfg := Default()
 	cfg.Plugins = nil
 	cfg.Skills = SkillsConfig{}
-	cfg.Bot.Enabled = false
-	cfg.Bot.Connections = nil
-	cfg.Bot.Routes = nil
 	cfg.Statusline.Command = ""
 	cfg.LSP.Enabled = false
 	cfg.setExpansionEnv(nil)
 	cfg.CredentialsStore = processRoots().credentialsStoreMode()
 	processRoots().resolveProviderCredentialsForRoot(root, cfg)
 	return cfg
-}
-
-// LoadRecoveryDefaultsForRoot is retained as an alias of LoadBuiltinDefaultsForRoot
-// for older recovery call sites.
-func LoadRecoveryDefaultsForRoot(root string) *Config {
-	return LoadBuiltinDefaultsForRoot(root)
 }
 
 func (c *Config) setExpansionEnv(env map[string]string) {
@@ -341,12 +329,12 @@ func ConfigFileDefinesCompactRatio(path string) bool {
 }
 
 // backfillDeepSeekPro restores deepseek-pro for configs the pre-fix setup wizard
-// wrote with only deepseek-v4-flash: a keyless /models probe used to drop the Pro
+// wrote with only the flash model: a keyless /models probe used to drop the Pro
 // SKU, leaving users unable to switch to it. In-memory only — the user's file is
 // untouched. Narrowly scoped to the official DeepSeek endpoint (which is known to
 // serve pro) so a custom flash-only deployment isn't given an entry that 404s.
 func backfillDeepSeekPro(c *Config) {
-	const flashModel, proModel = "deepseek-v4-flash", "deepseek-v4-pro"
+	const proModel = deepSeekProModel
 	var flash *ProviderEntry
 	for i := range c.Providers {
 		p := &c.Providers[i]
@@ -354,10 +342,10 @@ func backfillDeepSeekPro(c *Config) {
 			return
 		}
 		for _, m := range p.ModelList() {
-			switch m {
-			case proModel:
+			switch {
+			case m == proModel:
 				return // pro already reachable
-			case flashModel:
+			case isShippedDeepSeekFlashModel(m):
 				if officialProviderKind(p) == "deepseek" {
 					flash = p
 				}
@@ -385,41 +373,9 @@ func backfillDeepSeekPro(c *Config) {
 			}
 			bp.BillingCurrency = currency
 			bp.persistedOfficialCurrency = currency
-			bp.Price = deepSeekV4PriceForModel(currency, proModel)
+			bp.Price = deepSeekOfficialPriceForModel(currency, proModel)
 			c.Providers = append(c.Providers, bp)
 			return
-		}
-	}
-}
-
-func backfillDeepSeekOfficialPrices(c *Config) {
-	if c == nil {
-		return
-	}
-	for i := range c.Providers {
-		p := &c.Providers[i]
-		if officialProviderKind(p) != "deepseek" {
-			continue
-		}
-		backfillDeepSeekOfficialEndpointDefaults(p)
-		currency := p.ProviderBillingCurrency()
-		if currency == "" {
-			currency = p.persistedOfficialCurrency
-		}
-		if currency == "" {
-			currency = "USD"
-		}
-		defaults := DeepSeekV4PricesForCurrency(currency)
-		if p.Price != nil {
-			continue
-		}
-		if p.Prices == nil {
-			p.Prices = map[string]*provider.Pricing{}
-		}
-		for model, price := range defaults {
-			if p.HasModel(model) && p.Prices[model] == nil {
-				p.Prices[model] = clonePricing(price)
-			}
 		}
 	}
 }
@@ -775,17 +731,14 @@ func normalizeConfigForEdit(cfg *Config) bool {
 	changed = normalizeRetiredMultiThresholdCompaction(cfg) || changed
 	normalizeLegacyMCPTiers(cfg)
 	changed = normalizeLegacyStepFunBaseURLs(cfg) || changed
-	changed = normalizeLegacyLongCatContextWindows(cfg) || changed
-	changed = normalizeLegacyQwenContextWindows(cfg) || changed
-	changed = normalizeLegacyKimiK3Catalog(cfg) || changed
-	changed = normalizeLegacyOpenCodeGoKimiK3Catalog(cfg) || changed
+	changed = upgradeShippedPresets(cfg) || changed
 	changed = normalizeLegacyMimoCustomProviders(cfg) || changed
-	normalizeLegacyProviderFields(cfg)
+	changed = normalizeLegacyProviderFields(cfg) || changed
 	normalizeDesktopOfficialProviderAccess(cfg)
 	changed = normalizeOfficialDeepSeekModels(cfg) || changed
 	migrateBillingDisplayCurrency(cfg)
 	freezeProviderBillingCurrencies(cfg)
-	applyDeepSeekOfficialDefaultPricing(cfg)
+	applyOfficialDefaultPricing(cfg)
 	backfillDeepSeekOfficialPrices(cfg)
 	normalizeEffortConfig(cfg)
 	return changed
@@ -1109,218 +1062,6 @@ func normalizedBaseURLForMigration(raw string) string {
 	return strings.TrimRight(strings.TrimSpace(raw), "/")
 }
 
-func normalizeLegacyLongCatContextWindows(c *Config) bool {
-	if c == nil {
-		return false
-	}
-	changed := false
-	for i := range c.Providers {
-		p := &c.Providers[i]
-		if p.ContextWindow != legacyLongCat20ContextWindow {
-			continue
-		}
-		var kind, baseURL string
-		switch strings.TrimSpace(p.PresetID) {
-		case "longcat-openai":
-			kind, baseURL = "openai", longCatOpenAIBaseURL
-		case "longcat-anthropic":
-			kind, baseURL = "anthropic", longCatAnthropicBaseURL
-		default:
-			continue
-		}
-		if !strings.EqualFold(strings.TrimSpace(p.Kind), kind) ||
-			normalizedBaseURLForMigration(p.BaseURL) != baseURL ||
-			!stringSlicesEqual(p.Models, longCat20Models) ||
-			p.Model != "" ||
-			p.Default != longCat20Models[0] {
-			continue
-		}
-		p.ContextWindow = longCat20ContextWindow
-		changed = true
-	}
-	return changed
-}
-
-// normalizeLegacyQwenContextWindows upgrades only installed official Qwen
-// presets that still carry the old zero context window and untouched model
-// catalog. Custom endpoints, catalogs, provider-wide windows, and existing
-// per-model override values remain user-owned.
-func normalizeLegacyQwenContextWindows(c *Config) bool {
-	if c == nil {
-		return false
-	}
-	changed := false
-	for i := range c.Providers {
-		p := &c.Providers[i]
-		if p.ContextWindow != 0 {
-			continue
-		}
-		presetID := qwenPresetIDForMigration(*p)
-		if presetID == "" {
-			continue
-		}
-		preset, ok := CuratedProviderPreset(presetID)
-		if !ok || len(preset.Entries) != 1 {
-			continue
-		}
-		canonical := preset.Entries[0]
-		if !strings.EqualFold(strings.TrimSpace(p.Kind), strings.TrimSpace(canonical.Kind)) ||
-			normalizedBaseURLForMigration(p.BaseURL) != normalizedBaseURLForMigration(canonical.BaseURL) ||
-			!stringSlicesEqual(p.Models, canonical.Models) ||
-			strings.TrimSpace(p.Model) != "" {
-			continue
-		}
-		p.ContextWindow = canonical.ContextWindow
-		mergeMissingQwenContextOverrides(p, canonical.ModelOverrides)
-		changed = true
-	}
-	return changed
-}
-
-func qwenPresetIDForMigration(p ProviderEntry) string {
-	presetID := strings.TrimSpace(p.PresetID)
-	if presetID == "" {
-		presetID = strings.TrimSpace(p.Name)
-	}
-	switch presetID {
-	case "qwen-cn",
-		"qwen-global",
-		"qwen-coding-plan-cn",
-		"qwen-coding-plan-cn-anthropic",
-		"qwen-coding-plan-global",
-		"qwen-coding-plan-global-anthropic":
-		return presetID
-	default:
-		return ""
-	}
-}
-
-func mergeMissingQwenContextOverrides(p *ProviderEntry, defaults map[string]ProviderModelOverride) {
-	if p == nil || len(defaults) == 0 {
-		return
-	}
-	if p.ModelOverrides == nil {
-		p.ModelOverrides = make(map[string]ProviderModelOverride, len(defaults))
-	}
-	for defaultKey, defaultOverride := range defaults {
-		overrideKey := defaultKey
-		for key := range p.ModelOverrides {
-			if strings.EqualFold(strings.TrimSpace(key), defaultKey) {
-				overrideKey = key
-				break
-			}
-		}
-		override := p.ModelOverrides[overrideKey]
-		if override.ContextWindow == 0 {
-			override.ContextWindow = defaultOverride.ContextWindow
-			p.ModelOverrides[overrideKey] = override
-		}
-	}
-}
-
-// normalizeLegacyKimiK3Catalog upgrades only untouched Kimi direct-API model
-// catalogs on the official regional endpoints. Custom model lists, endpoints,
-// defaults, credentials, and provider-wide settings remain user-owned.
-func normalizeLegacyKimiK3Catalog(c *Config) bool {
-	if c == nil {
-		return false
-	}
-	changed := false
-	for i := range c.Providers {
-		p := &c.Providers[i]
-		presetID := strings.TrimSpace(p.PresetID)
-		name := strings.TrimSpace(p.Name)
-		var baseURL string
-		switch {
-		case presetID == "kimi-cn" || (presetID == "" && name == "kimi-cn"):
-			baseURL = "https://api.moonshot.cn/v1"
-		case presetID == "kimi-global" || (presetID == "" && name == "kimi-global"):
-			baseURL = "https://api.moonshot.ai/v1"
-		default:
-			continue
-		}
-		if !strings.EqualFold(strings.TrimSpace(p.Kind), "openai") ||
-			normalizedBaseURLForMigration(p.BaseURL) != baseURL ||
-			!stringSlicesEqual(p.Models, legacyKimiAPIModels) ||
-			strings.TrimSpace(p.Model) != "" {
-			continue
-		}
-		p.Models = append([]string(nil), kimiAPIModels...)
-		p.VisionModels = migrateKimiK3VisionModels(p.VisionModels, legacyKimiAPIModels)
-		mergeMissingKimiK3Override(p, kimiK3DirectOverride())
-		changed = true
-	}
-	return changed
-}
-
-// migrateKimiK3VisionModels preserves explicit provider-level vision choices.
-// A nil list or an exact copy of the old preset list indicates that the user
-// has not customized vision support and should receive Kimi K3's capability.
-func migrateKimiK3VisionModels(current, legacy []string) []string {
-	if current != nil && (legacy == nil || !stringSlicesEqual(current, legacy)) {
-		return current
-	}
-	return mergeModelLists([]string{"kimi-k3"}, current)
-}
-
-func mergeMissingKimiK3Override(p *ProviderEntry, defaults ProviderModelOverride) {
-	if p.ModelOverrides == nil {
-		p.ModelOverrides = map[string]ProviderModelOverride{}
-	}
-	overrideKey := "kimi-k3"
-	for key := range p.ModelOverrides {
-		if strings.EqualFold(strings.TrimSpace(key), overrideKey) {
-			overrideKey = key
-			break
-		}
-	}
-	kimiK3 := p.ModelOverrides[overrideKey]
-	if strings.TrimSpace(kimiK3.ReasoningProtocol) == "" {
-		kimiK3.ReasoningProtocol = defaults.ReasoningProtocol
-	}
-	if kimiK3.SupportedEfforts == nil {
-		kimiK3.SupportedEfforts = append([]string(nil), defaults.SupportedEfforts...)
-	}
-	if strings.TrimSpace(kimiK3.DefaultEffort) == "" && containsString(normalizedEffortLevels(kimiK3.SupportedEfforts), defaults.DefaultEffort) {
-		kimiK3.DefaultEffort = defaults.DefaultEffort
-	}
-	if kimiK3.ContextWindow <= 0 {
-		kimiK3.ContextWindow = defaults.ContextWindow
-	}
-	p.ModelOverrides[overrideKey] = kimiK3
-}
-
-// normalizeLegacyOpenCodeGoKimiK3Catalog upgrades only the untouched model
-// catalog from the original editable OpenCode Go preset. A user-curated model
-// list or custom endpoint is left alone, while other provider edits (headers,
-// key env, provider-wide context) survive the additive K3 capability update.
-func normalizeLegacyOpenCodeGoKimiK3Catalog(c *Config) bool {
-	if c == nil {
-		return false
-	}
-	for i := range c.Providers {
-		p := &c.Providers[i]
-		presetID := strings.TrimSpace(p.PresetID)
-		if (presetID != "opencode-go" && (presetID != "" || strings.TrimSpace(p.Name) != "opencode-go")) ||
-			!strings.EqualFold(strings.TrimSpace(p.Kind), "openai") ||
-			normalizedBaseURLForMigration(p.BaseURL) != "https://opencode.ai/zen/go/v1" ||
-			!stringSlicesEqual(p.Models, legacyOpenCodeGoModels) ||
-			strings.TrimSpace(p.Model) != "" {
-			continue
-		}
-		p.Models = append([]string(nil), opencodeGoModels...)
-		p.VisionModels = migrateKimiK3VisionModels(p.VisionModels, nil)
-		mergeMissingKimiK3Override(p, ProviderModelOverride{
-			ReasoningProtocol: ReasoningProtocolOpenAI,
-			SupportedEfforts:  []string{"high", "max"},
-			DefaultEffort:     "max",
-			ContextWindow:     1_048_576,
-		})
-		return true
-	}
-	return false
-}
-
 func normalizeLegacyMimoProviderCatalogs(c *Config) bool {
 	if c == nil {
 		return false
@@ -1407,8 +1148,8 @@ func backfillDeepSeekAnthropicCapabilities(p *ProviderEntry) {
 		p.Thinking = "enabled"
 	}
 	capabilities := map[string]ProviderModelOverride{
-		"deepseek-v4-flash": {SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "high"},
-		"deepseek-v4-pro":   {SupportedEfforts: []string{"disabled", "high", "max"}, DefaultEffort: "high"},
+		DeepSeekFlashModel: {SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "high"},
+		deepSeekProModel:   {SupportedEfforts: []string{"disabled", "high", "max"}, DefaultEffort: "high"},
 	}
 	if model := strings.TrimSpace(p.Model); model != "" && len(p.Models) == 0 {
 		defaults, ok := capabilities[model]
@@ -1473,9 +1214,9 @@ func ensureProviderModels(p *ProviderEntry, required []string, fallbackDefault s
 func legacyOfficialProviderModel(name string) string {
 	switch strings.TrimSpace(name) {
 	case "deepseek-flash":
-		return "deepseek-v4-flash"
+		return DeepSeekFlashModel
 	case "deepseek-pro":
-		return "deepseek-v4-pro"
+		return deepSeekProModel
 	case "mimo", "xiaomi-mimo", "xiaomi_mimo", "mimo-api", "mimo-token-plan", "mimo-pro":
 		return "mimo-v2.5-pro"
 	case "mimo-flash":
@@ -1527,12 +1268,9 @@ func legacyMimoConfigRefs(c *Config) []string {
 	if c == nil {
 		return nil
 	}
-	refs := append([]string{c.DefaultModel, c.Bot.Model}, c.roleModelRefs()...)
+	refs := append([]string{c.DefaultModel}, c.roleModelRefs()...)
 	for _, ref := range c.Agent.SubagentModels {
 		refs = append(refs, ref)
-	}
-	for _, conn := range c.Bot.Connections {
-		refs = append(refs, conn.Model)
 	}
 	refs = append(refs, c.Desktop.ProviderAccess...)
 	return refs
@@ -1610,9 +1348,9 @@ func legacyMimoCustomProvider(name string) ProviderEntry {
 			NoProxy:       true,
 		}
 	case "mimo-flash":
-		return ProviderEntry{Name: "mimo-flash", Kind: "openai", BaseURL: "https://token-plan-cn.xiaomimimo.com/v1", Model: "mimo-v2.5", APIKeyEnv: "MIMO_API_KEY", ContextWindow: 1_000_000, Price: mimoV25Price(), NoProxy: true}
+		return ProviderEntry{Name: "mimo-flash", Kind: "openai", BaseURL: "https://token-plan-cn.xiaomimimo.com/v1", Model: "mimo-v2.5", APIKeyEnv: "MIMO_API_KEY", ContextWindow: 1_000_000, Price: officialVendorPrice("mimo", "CNY", "mimo-v2.5"), NoProxy: true}
 	default:
-		return ProviderEntry{Name: "mimo-pro", Kind: "openai", BaseURL: "https://token-plan-cn.xiaomimimo.com/v1", Model: "mimo-v2.5-pro", APIKeyEnv: "MIMO_API_KEY", ContextWindow: 1_000_000, Price: mimoV25ProPrice(), NoProxy: true}
+		return ProviderEntry{Name: "mimo-pro", Kind: "openai", BaseURL: "https://token-plan-cn.xiaomimimo.com/v1", Model: "mimo-v2.5-pro", APIKeyEnv: "MIMO_API_KEY", ContextWindow: 1_000_000, Price: officialVendorPrice("mimo", "CNY", "mimo-v2.5-pro"), NoProxy: true}
 	}
 }
 
@@ -1689,10 +1427,6 @@ func NormalizeLegacyDesktopProviderAccess(c *Config) {
 	}
 	for _, ref := range c.Agent.SubagentModels {
 		addRef(ref)
-	}
-	addRef(c.Bot.Model)
-	for _, conn := range c.Bot.Connections {
-		addRef(conn.Model)
 	}
 	for i := range c.Providers {
 		p := &c.Providers[i]
@@ -1781,17 +1515,18 @@ func ensureDeepSeekOfficialProvider(c *Config) {
 		Name:          "deepseek",
 		Kind:          "anthropic",
 		BaseURL:       deepSeekAnthropicBaseURL,
-		Models:        []string{"deepseek-v4-flash", "deepseek-v4-pro"},
-		Default:       "deepseek-v4-flash",
+		Models:        []string{DeepSeekFlashModel, deepSeekProModel},
+		Default:       DeepSeekFlashModel,
+		VisionModels:  []string{DeepSeekFlashModel},
 		APIKeyEnv:     "DEEPSEEK_API_KEY",
 		BalanceURL:    "https://api.deepseek.com/user/balance",
 		Thinking:      "enabled",
 		WebSearch:     new(true),
 		ContextWindow: 1_000_000,
-		Prices:        deepSeekV4PricesForConfig(c),
+		Prices:        deepSeekOfficialPricesForConfig(c),
 		ModelOverrides: map[string]ProviderModelOverride{
-			"deepseek-v4-flash": {SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "high"},
-			"deepseek-v4-pro":   {SupportedEfforts: []string{"disabled", "high", "max"}, DefaultEffort: "high"},
+			DeepSeekFlashModel: {SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "high"},
+			deepSeekProModel:   {SupportedEfforts: []string{"disabled", "high", "max"}, DefaultEffort: "high"},
 		},
 	}
 	legacyProviders := officialLegacyDeepSeekProviders(c)
@@ -1802,7 +1537,7 @@ func ensureDeepSeekOfficialProvider(c *Config) {
 			currency = legacyProviders[0].persistedOfficialCurrency
 			entry.persistedOfficialCurrency = currency
 		}
-		entry.Prices = DeepSeekV4PricesForCurrency(currency)
+		entry.Prices = DeepSeekOfficialPricesForCurrency(currency)
 		for _, old := range legacyProviders {
 			entry.Models = mergeModelLists(entry.Models, old.ModelList())
 			mergeLegacyDeepSeekModelConfiguration(&entry, old)
@@ -2121,7 +1856,7 @@ func preferredLegacyDeepSeekDefault(entries []*ProviderEntry, models []string, f
 			return candidate
 		}
 	}
-	return firstKnownModel(fallback, models, "deepseek-v4-flash")
+	return firstKnownModel(fallback, models, DeepSeekFlashModel)
 }
 
 func mergeLegacyDeepSeekModelConfiguration(entry, old *ProviderEntry) {
@@ -2253,7 +1988,7 @@ func retargetDesktopOfficialRef(ref string, access map[string]bool) string {
 			return ref
 		}
 		if !hasModel || strings.TrimSpace(model) == "" {
-			model = "deepseek-v4-flash"
+			model = DeepSeekFlashModel
 		}
 		return "deepseek/" + model
 	case "deepseek-pro":
@@ -2261,7 +1996,7 @@ func retargetDesktopOfficialRef(ref string, access map[string]bool) string {
 			return ref
 		}
 		if !hasModel || strings.TrimSpace(model) == "" {
-			model = "deepseek-v4-pro"
+			model = deepSeekProModel
 		}
 		return "deepseek/" + model
 	default:

@@ -22,7 +22,7 @@ import (
 	"reasonix/internal/provider"
 )
 
-// First-boot coverage for extension-hosted providers (stage 7 follow-up):
+// First-boot coverage for extension-hosted providers:
 // sidecars start in preflight BEFORE model resolution, so a plugin-namespaced
 // default_model resolves and streams on the very first build, and switching
 // to/from it rides the ordinary Rebuild path.

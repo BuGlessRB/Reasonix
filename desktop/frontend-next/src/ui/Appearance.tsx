@@ -6,6 +6,7 @@ import { STORAGE as LANG_KEY, t } from "../i18n";
 import { pct } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { Switch } from "./Switch";
+import { setShowsReceipt, showsReceipt } from "../state/session";
 
 // "" follows the machine; the rest are explicit, the same shape the light/dark
 // control uses.
@@ -63,6 +64,14 @@ const WEIGHTS: [string, string, string][] = [
   ["heavy", "加粗", "小字号下更扎实，屏幕距离较远或有反光时更易读"],
 ];
 
+// Two answers, because there are two: a line short enough that the eye finds
+// the next one without hunting, or a window used to its edge. A step between
+// them would be a number nobody could tell apart from its neighbour.
+const MEASURES: [string, string, string][] = [
+  ["standard", "适宜阅读", "每行长度控制在一眼能回到行首的范围"],
+  ["full", "铺满窗口", "正文跟随窗口宽度，宽屏上不留两侧空白"],
+];
+
 const CONTRASTS: [string, string, string][] = [
   ["", "跟随系统", "系统已开启「增强对比度」时使用最强档"],
   ["soft", "柔和", "正文不易刺眼，长时间阅读更省力"],
@@ -113,6 +122,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
   // null in a browser tab, where there is no window to keep running and no
   // icon to bring one back. The whole section goes with it.
   const [tray, setTray] = useState<TrayPrefs | null>(null);
+  const [receipt, setReceipt] = useState(showsReceipt);
 
   useEffect(() => {
     let live = true;
@@ -146,13 +156,14 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
   // the list and asks App to re-read which pack is active.
   const pick = useCallback(
     (id: string) => {
+      setFailed("");
       port
         .activateTheme(id)
         .then(() => {
           load();
           reloadThemes();
         })
-        .catch(() => {});
+        .catch((e) => setFailed(reason(e)));
     },
     [port, load, reloadThemes],
   );
@@ -189,7 +200,11 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
   );
 
   const dropPaper = useCallback(() => {
-    void port.clearWallpaper().then(() => onLook({ ...look, wallpaper: undefined })).catch(() => {});
+    setFailed("");
+    void port
+      .clearWallpaper()
+      .then(() => onLook({ ...look, wallpaper: undefined }))
+      .catch((e) => setFailed(reason(e)));
   }, [port, look, onLook]);
 
   const [view, setView] = useState<HTMLDivElement | null>(null);
@@ -222,6 +237,14 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
 
   return (
     <>
+      {/* Every refused write on this screen lands in one state and is said in
+          one place: a palette that would not activate is not news for the
+          wallpaper block, which is where this used to be written. */}
+      {failed && (
+        <div className="find" data-lvl="err" role="alert">
+          <span className="t">{failed}</span>
+        </div>
+      )}
       <section className="grp" id="set-mode" data-setting="mode">
         <div className="grp-hd">
           <h3>{t("明暗")}</h3>
@@ -257,7 +280,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               log — so it is here, next to the thing that looks wrong. */}
           {packs.filter((p) => p.warnings?.length).map((p) => (
             <div className="find" data-lvl="warn" key={p.id}>
-              <span className="t">{p.name} 有几项没生效</span>
+              <span className="t">{t("{name} 有几项没生效", { name: p.name })}</span>
               {p.warnings?.map((w) => (
                 <span className="why" key={w}>
                   {w}
@@ -312,7 +335,21 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               ))}
             </div>
           </div>
+          {/* Beside the size because they are one question asked twice: how big
+              the letters are, and how far they run before the eye comes back. */}
+          <div className="prow">
+            <span className="tx">{t("行宽")}</span>
+            <div className="seg" data-text role="group" aria-label={t("正文行宽")}>
+              {MEASURES.map(([id, name, why]) => (
+                <button key={id} data-action="appearance.measure" data-value={id}
+                  aria-pressed={(look.width || "standard") === id} title={t(why)} onClick={() => set({ width: id })}>
+                  {t(name)}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+        <p className="hint">{t("行宽只管正文：代码、命令与工具输出始终占满可用宽度。")}</p>
         <ApplyNote id="size" />
       </section>
 
@@ -346,11 +383,6 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
             </span>
             {t(look.wallpaper ? "换一张…" : "选择图片…")}
           </button>
-          {failed && (
-            <div className="find" data-lvl="err">
-              <span className="t">{failed}</span>
-            </div>
-          )}
           {/* Composited the way the window is: the picture, then page colour
               over it. The scrim fades out with the strength, or a picture
               turned down to nothing would still be sitting under a dark wash. */}
@@ -479,6 +511,21 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
             {t("关闭窗口后需通过托盘图标重新打开主界面，下方选项依赖该图标。")}
           </p>
           <div className="grp-items">
+            <div className="lrow">
+              <span className="tx">
+                <span className="lb">{t("回合结束时给出回执")}</span>
+                <span className="ds">{t("列出这一轮改了什么、验了什么、哪些没有验；无话可说时不出现。下一轮起生效")}</span>
+              </span>
+              <Switch
+                data-action="chrome.receipt"
+                on={receipt}
+                label={t("回合结束时给出回执")}
+                onClick={() => {
+                  setShowsReceipt(!receipt);
+                  setReceipt(!receipt);
+                }}
+              />
+            </div>
             <div className="lrow">
               <span className="tx">
                 <span className="lb">{t("在托盘显示图标")}</span>

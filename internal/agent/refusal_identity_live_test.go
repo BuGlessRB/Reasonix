@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -259,7 +259,7 @@ func TestRefusalIdentityLive(t *testing.T) {
 		}
 	}
 	prov, ref := liveRefusalProvider(t)
-	rng := rand.New(rand.NewSource(seed))
+	rng := rand.New(rand.NewPCG(uint64(seed), uint64(seed)))
 
 	arms := refusalArms()
 	var findings []refusalFinding

@@ -18,7 +18,7 @@ func TestNthRequiredFailureClosesEarlierSuccesses(t *testing.T) {
 		rt.Required = true
 		rt.Env[fakeEnvInitResult] = `{"protocolVersion":"1","name":"bad","version":"1","stateSchemaVersion":0}`
 	})
-	mgr, _, err := StartPackages(context.Background(), home, testSessionContext(), nil)
+	mgr, _, err := startPackagesForTest(context.Background(), home, testSessionContext(), nil)
 	if err == nil {
 		t.Fatal("expected required failure")
 	}

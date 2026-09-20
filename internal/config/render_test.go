@@ -163,7 +163,7 @@ func TestLoadForRootUsesWindowsHomeFallbackWhenConfigDirUnavailable(t *testing.T
 
 func TestRenderTOMLHeaderShowsResolvedConfigPath(t *testing.T) {
 	isolateUserConfigHome(t)
-	out := RenderTOML(Default())
+	out := RenderTOMLForScope(Default(), RenderScopeFull)
 	want := "> " + processRoots().userConfigDisplayPath() + " > built-in defaults."
 	if !strings.Contains(out, want) {
 		t.Fatalf("rendered header missing resolved config path %q", want)
@@ -230,7 +230,6 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	orig.UI.ShortcutLayout = "desktop"
 	orig.UI.CursorShape = "bar"
 	orig.Desktop.Language = "en"
-	orig.Desktop.LayoutStyle = "workbench"
 	orig.Desktop.Theme = "dark"
 	orig.Desktop.ThemeStyle = "graphite"
 	orig.Desktop.TerminalTheme = "light"
@@ -283,43 +282,6 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	orig.Skills.DisabledSkills = []string{"review", "explore"}
 	orig.Skills.DisableImplicitInvocation = true
 	orig.Skills.MaxDepth = 2
-	orig.Bot.ToolApprovalMode = "auto"
-	orig.Bot.Control = BotControlConfig{Enabled: true, Addr: "127.0.0.1:39001", TokenEnv: "BOT_CONTROL_TOKEN"}
-	orig.Bot.Feishu.OutboundMediaRoots = []string{"/tmp/reasonix-media", "/srv/shots"}
-	orig.Bot.Routes = []BotRouteConfig{{
-		ConnectionID:     "feishu-lark",
-		ChatType:         "group",
-		ChatID:           "oc_group",
-		Model:            "deepseek-pro",
-		ToolApprovalMode: "ask",
-		WorkspaceRoot:    "/tmp/reasonix-route",
-	}}
-	orig.Bot.DesktopWatchers = []BotDesktopWatcherConfig{{
-		Platform:     "feishu",
-		ConnectionID: "feishu-lark",
-		Domain:       "lark",
-		ChatType:     "dm",
-		ChatID:       "oc_watcher",
-	}}
-	orig.Bot.Connections = []BotConnectionConfig{{
-		ID:               "feishu-lark",
-		Provider:         "feishu",
-		Domain:           "lark",
-		Label:            "Lark",
-		Enabled:          true,
-		Status:           "connected",
-		Model:            "deepseek-pro",
-		ToolApprovalMode: "yolo",
-		WorkspaceRoot:    "/tmp/reasonix-bot",
-		Credential:       BotConnectionCredential{AppID: "cli_lark", AppSecretEnv: "LARK_BOT_APP_SECRET"},
-		SessionMappings: []BotConnectionSessionMapping{{
-			RemoteID:      "ou_123",
-			SessionID:     "topic:topic_bot",
-			Scope:         "project",
-			WorkspaceRoot: "/tmp/reasonix-bot",
-			UpdatedAt:     "2026-06-11T00:00:00Z",
-		}},
-	}}
 	orig.LSP = LSPConfig{
 		Enabled: true,
 		Servers: map[string]LSPServer{
@@ -348,7 +310,7 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	ds, _ := orig.Provider("deepseek-flash")
 	ds.Effort = "max"
 
-	rendered := RenderTOML(orig)
+	rendered := RenderTOMLForScope(orig, RenderScopeFull)
 
 	var got Config
 	if _, err := toml.Decode(rendered, &got); err != nil {
@@ -381,9 +343,6 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	}
 	if got.Desktop.Language != "en" {
 		t.Errorf("desktop.language = %q, want en", got.Desktop.Language)
-	}
-	if got.Desktop.LayoutStyle != "workbench" {
-		t.Errorf("desktop.layout_style = %q, want workbench", got.Desktop.LayoutStyle)
 	}
 	if got.Desktop.Theme != "dark" {
 		t.Errorf("desktop.theme = %q, want dark", got.Desktop.Theme)
@@ -426,27 +385,6 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	}
 	if got.Agent.PlannerMaxSteps != orig.Agent.PlannerMaxSteps {
 		t.Errorf("planner_max_steps = %d, want %d", got.Agent.PlannerMaxSteps, orig.Agent.PlannerMaxSteps)
-	}
-	if len(got.Bot.Connections) != 1 || got.Bot.Connections[0].Model != "deepseek-pro" || got.Bot.Connections[0].WorkspaceRoot != "/tmp/reasonix-bot" {
-		t.Errorf("bot connection not preserved: %+v", got.Bot.Connections)
-	}
-	if got.Bot.ToolApprovalMode != "auto" || got.Bot.Connections[0].ToolApprovalMode != "yolo" {
-		t.Errorf("bot tool approval mode not preserved: bot=%q connection=%q", got.Bot.ToolApprovalMode, got.Bot.Connections[0].ToolApprovalMode)
-	}
-	if !got.Bot.Control.Enabled || got.Bot.Control.Addr != "127.0.0.1:39001" || got.Bot.Control.TokenEnv != "BOT_CONTROL_TOKEN" {
-		t.Errorf("bot control not preserved: %+v", got.Bot.Control)
-	}
-	if len(got.Bot.Feishu.OutboundMediaRoots) != 2 || got.Bot.Feishu.OutboundMediaRoots[0] != "/tmp/reasonix-media" {
-		t.Errorf("feishu outbound_media_roots not preserved: %+v", got.Bot.Feishu.OutboundMediaRoots)
-	}
-	if len(got.Bot.Routes) != 1 || got.Bot.Routes[0].WorkspaceRoot != "/tmp/reasonix-route" || got.Bot.Routes[0].ChatID != "oc_group" {
-		t.Errorf("bot routes not preserved: %+v", got.Bot.Routes)
-	}
-	if len(got.Bot.DesktopWatchers) != 1 || got.Bot.DesktopWatchers[0].ChatID != "oc_watcher" || got.Bot.DesktopWatchers[0].Platform != "feishu" || got.Bot.DesktopWatchers[0].Domain != "lark" {
-		t.Errorf("bot desktop watchers not preserved: %+v", got.Bot.DesktopWatchers)
-	}
-	if len(got.Bot.Connections[0].SessionMappings) != 1 || got.Bot.Connections[0].SessionMappings[0].Scope != "project" || got.Bot.Connections[0].SessionMappings[0].WorkspaceRoot != "/tmp/reasonix-bot" {
-		t.Errorf("bot session mapping scope not preserved: %+v", got.Bot.Connections[0].SessionMappings)
 	}
 	if got.Agent.Temperature != orig.Agent.Temperature {
 		t.Errorf("temperature = %v, want %v", got.Agent.Temperature, orig.Agent.Temperature)
@@ -581,7 +519,7 @@ func TestRenderTOMLDocumentsPlanModeReadOnlyCommands(t *testing.T) {
 	cfg := Default()
 	cfg.Agent.PlanModeReadOnlyCommands = []string{"gh issue view"}
 
-	rendered := RenderTOML(cfg)
+	rendered := RenderTOMLForScope(cfg, RenderScopeFull)
 	var got Config
 	if _, err := toml.Decode(rendered, &got); err != nil {
 		t.Fatalf("rendered TOML does not parse: %v\n%s", err, rendered)
@@ -612,7 +550,7 @@ approval_mode = "prompt"
 		t.Fatalf("legacy config should still decode: %v", err)
 	}
 
-	rendered := RenderTOML(&cfg)
+	rendered := RenderTOMLForScope(&cfg, RenderScopeFull)
 	for _, retired := range []string{"trusted_read_only_tools", "default_tools_approval_mode", "approvals_reviewer", "\napproval_mode ="} {
 		if strings.Contains(rendered, retired) {
 			t.Fatalf("rendered config retained retired MCP field %q:\n%s", retired, rendered)
@@ -640,7 +578,7 @@ func TestRenderTOMLPreservesMCPTimeouts(t *testing.T) {
 		},
 	}}
 
-	rendered := RenderTOML(cfg)
+	rendered := RenderTOMLForScope(cfg, RenderScopeFull)
 	for _, want := range []string{
 		"mcp_call_timeout_seconds = 450",
 		"mcp_startup_timeout_seconds = 45",
@@ -672,24 +610,6 @@ func TestRenderTOMLPreservesMCPTimeouts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Plugins[0].ToolTimeoutSeconds, cfg.Plugins[0].ToolTimeoutSeconds) {
 		t.Fatalf("ToolTimeoutSeconds round trip = %v, want %v", got.Plugins[0].ToolTimeoutSeconds, cfg.Plugins[0].ToolTimeoutSeconds)
-	}
-}
-
-func TestRenderTOMLCreationLayoutStyle(t *testing.T) {
-	c := Default()
-	if err := c.SetDesktopLayoutStyle("creation"); err != nil {
-		t.Fatalf("SetDesktopLayoutStyle: %v", err)
-	}
-	rendered := RenderTOML(c)
-	var got Config
-	if _, err := toml.Decode(rendered, &got); err != nil {
-		t.Fatalf("rendered TOML does not parse: %v\n---\n%s", err, rendered)
-	}
-	if got.Desktop.LayoutStyle != "creation" {
-		t.Errorf("desktop.layout_style = %q, want creation", got.Desktop.LayoutStyle)
-	}
-	if got.DesktopLayoutStyle() != "creation" {
-		t.Errorf("DesktopLayoutStyle() = %q, want creation", got.DesktopLayoutStyle())
 	}
 }
 
@@ -783,7 +703,7 @@ func BenchmarkRenderTOMLWithLSPServers(b *testing.B) {
 
 	b.ReportAllocs()
 	for range b.N {
-		rendered := RenderTOML(cfg)
+		rendered := RenderTOMLForScope(cfg, RenderScopeFull)
 		if len(rendered) == 0 {
 			b.Fatal("empty render")
 		}
@@ -1033,18 +953,18 @@ func TestRenderTOMLRoundTripsPerModelPrices(t *testing.T) {
 		Models:    []string{"deepseek-v4-flash", "deepseek-v4-pro"},
 		Default:   "deepseek-v4-flash",
 		APIKeyEnv: "DEEPSEEK_API_KEY",
-		Prices:    DeepSeekV4PricesForCurrency("CNY"),
+		Prices:    DeepSeekOfficialPricesForCurrency("CNY"),
 	}}
 
 	var got Config
-	if _, err := toml.Decode(RenderTOML(orig), &got); err != nil {
+	if _, err := toml.Decode(RenderTOMLForScope(orig, RenderScopeFull), &got); err != nil {
 		t.Fatalf("rendered TOML does not parse: %v", err)
 	}
 	p, ok := got.Provider("deepseek")
 	if !ok {
 		t.Fatal("deepseek provider missing after round trip")
 	}
-	if p.Prices["deepseek-v4-flash"].Input != 1.5 || p.Prices["deepseek-v4-pro"].Output != 13.5 {
+	if p.Prices[DeepSeekFlashModel].Input != 1 || p.Prices[deepSeekProModel].Output != 13.5 {
 		t.Fatalf("prices after round trip = %+v", p.Prices)
 	}
 }
@@ -1073,7 +993,7 @@ func TestRenderTOMLRoundTripsVisionModels(t *testing.T) {
 		},
 	}
 
-	rendered := RenderTOML(orig)
+	rendered := RenderTOMLForScope(orig, RenderScopeFull)
 	if !strings.Contains(rendered, `vision_models = ["qwen-vl-plus"]`) {
 		t.Fatalf("rendered TOML missing vision_models:\n%s", rendered)
 	}
@@ -1141,7 +1061,7 @@ func TestRenderTOMLRoundTripsProviderHeadersAndModelOverrides(t *testing.T) {
 		},
 	}}
 
-	rendered := RenderTOML(orig)
+	rendered := RenderTOMLForScope(orig, RenderScopeFull)
 	if !strings.Contains(rendered, `headers     = { HTTP-Referer = "https://app.example", X-Title = "Reasonix" }`) {
 		t.Fatalf("rendered TOML missing headers:\n%s", rendered)
 	}
@@ -1305,7 +1225,7 @@ func TestRenderTOMLConversationWidthRoundTrip(t *testing.T) {
 
 func TestRenderTOMLDefaultStepsOmitted(t *testing.T) {
 	isolateUserConfigHome(t)
-	out := RenderTOML(Default())
+	out := RenderTOMLForScope(Default(), RenderScopeFull)
 	agentLines := extractSectionLines(out, "[agent]")
 	for _, line := range agentLines {
 		if strings.Contains(line, "max_steps") || strings.Contains(line, "planner_max_steps") {
@@ -1355,7 +1275,7 @@ func TestRenderTOMLOmitsDeprecatedAgentStepLimits(t *testing.T) {
 	c := Default()
 	c.Agent.MaxSteps = 5
 	c.Agent.PlannerMaxSteps = 7
-	out := RenderTOML(c)
+	out := RenderTOMLForScope(c, RenderScopeFull)
 	for _, line := range extractSectionLines(out, "[agent]") {
 		if strings.Contains(line, "max_steps") || strings.Contains(line, "planner_max_steps") {
 			t.Fatalf("deprecated step limit should never be rendered, got: %s", line)
@@ -1613,5 +1533,23 @@ func TestEveryDesktopKeyThatCanBeSetSurvivesASave(t *testing.T) {
 	}
 	if reloaded.DesktopTray() != "off" || reloaded.DesktopClosesToBackground() {
 		t.Fatalf("round trip = tray %q, background %v", reloaded.DesktopTray(), reloaded.DesktopClosesToBackground())
+	}
+}
+
+func TestBrowserSettingsSurviveASave(t *testing.T) {
+	for _, scope := range []RenderScope{RenderScopeUser, RenderScopeProject} {
+		c := Default()
+		c.Browser = BrowserConfig{Enabled: false, Executable: "/opt/chromium/chrome", Headless: true}
+		rendered := RenderTOMLForScope(c, scope)
+		reloaded := Default()
+		if _, err := decodeTOMLBytes([]byte(rendered), reloaded); err != nil {
+			t.Fatalf("scope %v: the config it just wrote does not parse: %v", scope, err)
+		}
+		if reloaded.Browser != c.Browser {
+			t.Fatalf("scope %v: round trip = %+v, want %+v\n%s", scope, reloaded.Browser, c.Browser, rendered)
+		}
+	}
+	if d := Default(); !d.Browser.Enabled || d.Browser.Headless || d.Browser.Executable != "" {
+		t.Fatalf("default browser config = %+v", d.Browser)
 	}
 }

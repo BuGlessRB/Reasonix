@@ -256,22 +256,7 @@ func (c *Controller) externalFolderRefTarget(token string) (rootToken, rel, abs 
 	if !strings.HasPrefix(key, externalFolderRefPrefix+"/") {
 		return "", "", "", false
 	}
-	c.externalFolderRefsMu.RLock()
-	defer c.externalFolderRefsMu.RUnlock()
-	if abs, ok := c.externalFolderRefs[key]; ok {
-		return key, ".", abs, true
-	}
-	for registered, abs := range c.externalFolderRefs {
-		if !strings.HasPrefix(key, registered+"/") {
-			continue
-		}
-		sub, ok := cleanExternalFolderSubpath(strings.TrimPrefix(key, registered+"/"))
-		if !ok {
-			return "", "", "", false
-		}
-		return registered, sub, abs, true
-	}
-	return "", "", "", false
+	return c.externalFolders.resolve(key)
 }
 
 func cleanExternalFolderSubpath(sub string) (string, bool) {
@@ -374,12 +359,7 @@ func (c *Controller) SearchExternalFolderRefs(query string, limit int) []Externa
 	if limit <= 0 || len(query) < 2 || strings.ContainsAny(query, `/\`) {
 		return nil
 	}
-	c.externalFolderRefsMu.RLock()
-	roots := make([]externalRootRef, 0, len(c.externalFolderRefs))
-	for token, abs := range c.externalFolderRefs {
-		roots = append(roots, externalRootRef{token: token, abs: abs})
-	}
-	c.externalFolderRefsMu.RUnlock()
+	roots := c.externalFolders.roots()
 	sort.Slice(roots, func(i, j int) bool {
 		return externalFolderDisplayPath(roots[i].abs, ".") < externalFolderDisplayPath(roots[j].abs, ".")
 	})
@@ -752,7 +732,7 @@ func (c *Controller) resolveRefs(ctx context.Context, line string, scopedOnly bo
 			}
 			appendRefBlock(&b, tag, `path="`+displayPath+`"`, text)
 		case refImage:
-			appendRefBlock(&b, "image", `path="`+r.path+`"`, "[image attachment at @"+r.path+"; image bytes are never inlined into prompt text. Whether this model receives the image, and what to do when it cannot, is stated once in the turn's attached-images note.]")
+			appendRefBlock(&b, "image", `path="`+r.path+`"`, "[image attachment at @"+r.path+". Whether this model sees it, and what to do when it cannot, is stated once in the turn's attached-images note.]")
 		}
 	}
 	return b.String(), errs
@@ -978,7 +958,7 @@ func readFileRefUnscoped(path string) (content string, isDir bool, err error) {
 
 func imageFileRefNote(displayPath, mime string, size int64, attached bool) string {
 	if attached {
-		return fmt.Sprintf("[image file %s, mime=%s, %d bytes — image bytes are never inlined into prompt text. Whether this model receives the image, and what to do when it cannot, is stated once in the turn's attached-images note.]", displayPath, mime, size)
+		return fmt.Sprintf("[image file %s, mime=%s, %d bytes. Whether this model sees it, and what to do when it cannot, is stated once in the turn's attached-images note.]", displayPath, mime, size)
 	}
 	return fmt.Sprintf("[image file %s, mime=%s, %d bytes — not readable from here: no workspace root is available. Re-attach it, or reference it from inside the workspace.]", displayPath, mime, size)
 }

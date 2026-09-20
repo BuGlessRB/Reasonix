@@ -18,7 +18,7 @@ async function write(text: string) {
   if (!ok) throw new Error("copy rejected");
 }
 
-export function CopyButton({ text, iconOnly = false }: { text: string; iconOnly?: boolean }) {
+export function CopyButton({ text, iconOnly = false, className, label: what }: { text: string; iconOnly?: boolean; className?: string; label?: string }) {
   const [state, setState] = useState<"idle" | "done" | "failed">("idle");
   const timer = useRef<number | null>(null);
 
@@ -38,12 +38,12 @@ export function CopyButton({ text, iconOnly = false }: { text: string; iconOnly?
 
   return (
     <button
-      className="copy"
+      className={className ? `copy ${className}` : "copy"}
       type="button"
       data-icon={iconOnly ? "" : undefined}
       data-state={state}
       onClick={copy}
-      aria-label={t("复制这段回答")}
+      aria-label={what ?? t("复制这段回答")}
       title={label}
     >
       {iconOnly && <StudioIcon name={state === "done" ? "check" : "copy"} />}

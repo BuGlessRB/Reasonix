@@ -111,7 +111,7 @@ pick().then(
     // Before the first render, and not from whichever view happens to want a
     // drop: a window with no drop target mounted still has to refuse a file, or
     // the webview navigates to it and the app is replaced by what was dropped.
-    installFileDrop(hub);
+    installFileDrop();
     root.render(
       <StrictMode>
         <App hub={hub} />

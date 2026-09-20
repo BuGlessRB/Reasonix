@@ -71,6 +71,10 @@ type Owner struct {
 	waiting       bool
 	acquireDone   chan struct{}
 	releaseSystem func()
+	onRelease     StatsNotice
+	stats         Stats
+	acquiredAt    time.Time
+	lastAsk       time.Time
 }
 
 // State is a sanitized process-local snapshot used by Desktop to explain a
@@ -218,6 +222,7 @@ func (o *Owner) AcquireWrite(ctx context.Context) error {
 	}
 	for {
 		o.mu.Lock()
+		o.askedLocked(time.Now())
 		if o.acquired {
 			o.mu.Unlock()
 			return nil
@@ -243,6 +248,7 @@ func (o *Owner) AcquireWrite(ctx context.Context) error {
 		o.waiting = false
 		if err == nil {
 			o.acquired = true
+			o.acquiredAt = time.Now()
 			o.releaseSystem = release
 		}
 		close(done)
@@ -262,7 +268,14 @@ func (o *Owner) releaseIfIdleLocked() func() {
 	release := o.releaseSystem
 	o.acquired = false
 	o.releaseSystem = nil
-	return release
+	closed, report := o.closeStatsLocked(time.Now())
+	notice := o.onRelease
+	return func() {
+		release()
+		if report {
+			notice(closed)
+		}
+	}
 }
 
 func (o *Owner) notify(w Wait) {
@@ -302,8 +315,15 @@ func (w *waitClock) report() {
 }
 
 func (w *waitClock) close(outcome WaitOutcome) {
+	if w.started.IsZero() {
+		return
+	}
+	waited := time.Since(w.started)
+	w.owner.mu.Lock()
+	w.owner.contendedLocked(waited, w.began)
+	w.owner.mu.Unlock()
 	if w.began {
-		w.owner.notify(Wait{Outcome: outcome, Elapsed: time.Since(w.started)})
+		w.owner.notify(Wait{Outcome: outcome, Elapsed: waited})
 	}
 }
 

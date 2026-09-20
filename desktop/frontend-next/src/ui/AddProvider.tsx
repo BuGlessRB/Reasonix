@@ -157,7 +157,7 @@ export function AddProvider({
         </label>
         {sibling && (
           <p className="acct-note">
-            这个地址上已经有「{vendorLabel(hostOf(sibling.baseUrl))}」了。留空 key
+            {t("这个地址上已经有「{name}」了。留空 key", { name: vendorLabel(hostOf(sibling.baseUrl)) })}
             {t("这会为该来源添加另一种接入方式，两者合并为同一个来源，通过「接入方式」切换；若填写新的 key，则视为本机的另一个账号，用量分别计算。")}
           </p>
         )}

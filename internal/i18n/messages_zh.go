@@ -178,6 +178,10 @@ var Chinese = Messages{
 
 	ExtFormFieldsHint:         "字段将通过逐项提问收集",
 	ExtRunActionFmt:           "运行 %s",
+	SlashRevokeNone:           "本次会话除规则文件外没有额外授权。",
+	SlashRevokeHint:           "用 /sandbox revoke <规则> 收回一项，或 /sandbox revoke all 全部收回。",
+	SlashRevokeUnknown:        "本次会话没有 %q 这一项授权。",
+	SlashRevokeDone:           "已收回 %d 项，还剩 %d 项。",
 	SlashCompactFailed:        "压缩失败",
 	SlashCompactDeclined:      "暂时不用整理",
 	SlashNewDone:              "已开启新会话 — 之前的对话已存档",
@@ -346,6 +350,7 @@ var Chinese = Messages{
 	GoalNotRunning:               "没有运行中的目标可暂停",
 	GoalNotPaused:                "没有已暂停或被阻塞的目标可恢复",
 	GoalPaused:                   "目标已暂停 — /goal resume 可继续",
+	AwaitingUserFmt:              "等待你的输入：%s",
 	ImagesNotReadable:            "当前模型不读图 — 已附 %d 张，改由委派的子代理去看",
 	ImagesNeedVisionRole:         "当前模型不读图 — 已附 %d 张，现在没人读得了。%s 能读图：到 设置 › 模型 › 分工 里把「看图」指给它。",
 	ImagesDropped:                "当前模型不读图 — 已附 %d 张，会在发出去之前被丢掉。配置里没有任何模型能读图。",
@@ -602,7 +607,6 @@ var Chinese = Messages{
   reasonix hook list|status --json [--dir PATH]         查看脱敏 Hook 状态
   reasonix task list|show|status|events|stop|cancel|monitor|tmux --json [--dir PATH]
                                                          查看或控制脱敏 Task
-  reasonix bot start|doctor|weixin-login                多渠道 IM bot 网关
   reasonix upgrade [--check] [--force]                   更新到最新正式版（别名：reasonix update）
   reasonix completion bash|zsh|fish                     打印 shell 补全脚本到 stdout
   reasonix version [--verbose|--json]                   打印版本（单行）或构建元信息

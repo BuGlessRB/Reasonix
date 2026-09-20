@@ -5,6 +5,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
+	"reasonix/internal/browser"
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/command"
 	"reasonix/internal/config"
@@ -19,10 +20,10 @@ import (
 )
 
 // This file defines the driving port: the typed, segregated interface surface
-// that frontends (cli, bot, acp, serve) consume instead of coupling to the
+// that frontends (cli, acp, serve) consume instead of coupling to the
 // concrete *Controller and its whole method surface. Each depends on the
-// sub-ports it actually drives, so the bot never sees checkpoint or memory
-// methods; port_segregation_test keeps that true.
+// sub-ports it actually drives, so an editor integration never sees checkpoint
+// or memory methods; port_segregation_test keeps that true.
 //
 // The sub-ports are also the intended decomposition boundary for Controller
 // itself: the port comes first and gives the later collaborator splits a spec to
@@ -249,6 +250,7 @@ type RuntimeSettings interface {
 	SaveShellSettings(prefer, path string) error
 	PermissionRules() PermissionRules
 	SavePermissionRules(in PermissionLists) error
+	RevokeSessionGrant(rule string) int
 	SandboxSettings() SandboxSettings
 	SaveSandboxSettings(in SandboxSettings) error
 	CompactionSettings() CompactionSettings
@@ -293,6 +295,7 @@ type Status interface {
 	Balance(ctx context.Context) billing.Reading
 	Jobs() []jobs.View
 	Todos() []evidence.TodoItem
+	BrowserTabs() []browser.TabInfo
 }
 
 // SessionPersistence covers snapshotting a session and tearing down its on-disk
@@ -319,7 +322,7 @@ type Input interface {
 	ComposeSynthetic(text string) string
 	ResolveRefs(ctx context.Context, line string) (block string, errs []string)
 	HasRefs(line string) bool
-	CompletionData() CompletionData
+	CompletionData(lang string) CompletionData
 	ImageInputEnabled() bool
 	DroppedRef(path string) (token, displayPath string, err error)
 }
@@ -333,7 +336,7 @@ type Settings interface {
 
 // SessionAPI is the full driving port — the composition of every sub-port, for
 // a frontend that drives all of it: the TUI does, and the HTTP server all but
-// one. Leaner frontends name GatewayAPI or EditorAPI instead.
+// one. A leaner frontend names EditorAPI instead.
 type SessionAPI interface {
 	Lifecycle
 	TurnControl
@@ -350,18 +353,8 @@ type SessionAPI interface {
 	Inbox
 }
 
-// GatewayAPI is what a chat gateway drives: messages in, queued, run as turns,
-// approvals answered. What it does not name is the point — no transcript, no
-// memory pane, no checkpoint UI, so it cannot reach for them by accident.
-type GatewayAPI interface {
-	Lifecycle
-	TurnControl
-	Approvals
-	Inbox
-}
-
-// EditorAPI is what an editor integration drives over ACP: a gateway's four,
-// plus the slash dispatch, MCP surface and sidecar extensions it puts on
+// EditorAPI is what an editor integration drives over ACP: turns, approvals and
+// the inbox, plus the slash dispatch, MCP surface and sidecar extensions it puts on
 // screen, and the goals and persistence it shows. What it does not name is the
 // point — an editor authors no skill, edits no hook, and saves no sandbox rule.
 type EditorAPI interface {
@@ -380,7 +373,6 @@ type EditorAPI interface {
 // the full port, so frontend migrations to the interfaces are mechanical and can
 // never silently drift from the implementation.
 var (
-	_ GatewayAPI         = (*Controller)(nil)
 	_ EditorAPI          = (*Controller)(nil)
 	_ Lifecycle          = (*Controller)(nil)
 	_ TurnControl        = (*Controller)(nil)

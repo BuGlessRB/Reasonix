@@ -111,7 +111,12 @@ func main() {
 	// replace it.
 	studioApp := flag.String("studio-app", "", "the application executable this host runs inside")
 	studioAppPID := flag.Int("studio-app-pid", 0, "the process id of that application")
+	computerHelper := flag.String("computer-helper", "", "the native helper that operates this machine's applications")
+	stripGrants := flag.Bool("strip-package-grants", false, "remove app-package grants from the directory -studio-app runs from, print what changed, and exit")
 	flag.Parse()
+	if *stripGrants {
+		os.Exit(stripPackageGrants(os.Stdout, os.Stderr, *studioApp))
+	}
 	// Which launches are the same Studio is Reasonix's question, not a shell's:
 	// the answer is the canonicalized data home, and a shell asks for it rather
 	// than working it out from an environment it does not resolve.
@@ -119,6 +124,7 @@ func main() {
 		fmt.Fprintln(os.Stdout, instanceid.Current())
 		return
 	}
+	boot.SetComputerHelper(*computerHelper)
 	shell := shellIdentity{version: *studioVersion, exe: *studioApp, pid: *studioAppPID}
 	os.Exit(run(parentLease(os.Stdin), os.Stdout, os.Stderr, *page, shell))
 }
@@ -242,7 +248,10 @@ func announce(w io.Writer, b *bound) error {
 // or end at once, and neither says anything about a parent.
 func parentLease(f *os.File) io.Reader {
 	st, err := f.Stat()
-	if err != nil || st.Mode()&os.ModeNamedPipe == 0 {
+	// A socket counts: Node spawns this host, and libuv gives a child's stdio a
+	// socketpair rather than a FIFO — asking only for a named pipe read that as
+	// "nobody holds me open", so no launch had a watchdog.
+	if err != nil || st.Mode()&(os.ModeNamedPipe|os.ModeSocket) == 0 {
 		return nil
 	}
 	return f
@@ -293,6 +302,10 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 	// A first connect can stop for a host key nobody has seen or a locked key.
 	// Both are questions, and the broker is where they live until answered.
 	asks := serve.NewAskBroker(nil)
+	// The window draws the agent's browser: every pane's browser is a view in
+	// it while the shell holds the relay open, and a launched browser otherwise.
+	browserHost := serve.NewBrowserHost()
+	boot.SetBrowserHost(browserHost.Dial)
 	hubCfg := hostServeConfig(cfg.Serve)
 	hub := serve.NewHub(serve.HubOptions{
 		Serve:        hubCfg,
@@ -301,6 +314,7 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 		Grant:        grantHostCapabilities,
 		DecorateSink: decorate,
 		Tray:         &studioTray{tracker: tracker},
+		BrowserHost:  browserHost,
 		Asks:         asks,
 		Remote:       remotehost.New(ctx, version, asks),
 		OnClose:      func(rt *serve.Runtime) { tracker.Drop(paneKey(rt.Events)) },

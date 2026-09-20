@@ -37,14 +37,6 @@ func (a Application) resolve() (string, error) {
 	return a.Bundle, nil
 }
 
-// LocalApplication states this process as the application, which holds only for
-// a shell that is its own executable. It is where that assumption is written
-// down; a shell whose process is a framework beside the application calls
-// ApplicationAt with what it knows instead.
-func LocalApplication(layout Layout) (Application, error) {
-	return ApplicationAt(layout.Executable, os.Getpid())
-}
-
 // ApplicationAt states an application neither half of which this process can
 // answer for: the executable belongs to the shell around it, and the process
 // holding the bundle open is that shell's rather than this one's.

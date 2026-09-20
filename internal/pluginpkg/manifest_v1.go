@@ -1,6 +1,8 @@
 package pluginpkg
 
 import (
+	"reasonix/internal/extensioncontract"
+
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -11,7 +13,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -184,11 +185,7 @@ func parseV1MCPServerMap(raw map[string]json.RawMessage, path string) (map[strin
 }
 
 func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	return keys
 }
 
@@ -215,7 +212,7 @@ func unionPathLists(legacy, contrib []string) []string {
 			}
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -340,7 +337,7 @@ var runtimeCapabilities = []string{"interceptors", "strategies", "providers", "u
 // validateRuntimeSlot mirrors extension.ParseSlot: bare names must be
 // declared slots; tool:/provider: forms must carry a well-formed target.
 // Provider targets are <name>/<model>, or plugin/<pluginID>/<name>/<model>
-// for extension-hosted providers (stage 7).
+// for extension-hosted providers.
 func validateRuntimeSlot(s string) error {
 	if runtimeNamedSlots[s] {
 		return nil
@@ -360,24 +357,8 @@ func validateRuntimeSlot(s string) error {
 	return fmt.Errorf("runtime.replaces: unknown slot %q", s)
 }
 
-// validRuntimeProviderRef mirrors the kernel's provider-slot target rule
-// (extension.validProviderSlotTarget): an ordinary <name>/<model> ref, or an
-// extension-hosted plugin/<pluginID>/<name>/<model> ref.
 func validRuntimeProviderRef(ref string) bool {
-	name, model, found := strings.Cut(ref, "/")
-	if found && name != "" && model != "" && !strings.Contains(model, "/") {
-		return true
-	}
-	rest, ok := strings.CutPrefix(ref, "plugin/")
-	if !ok {
-		return false
-	}
-	pluginID, nameModel, ok := strings.Cut(rest, "/")
-	if !ok || pluginID == "" || strings.ContainsAny(pluginID, " \t\n") {
-		return false
-	}
-	name, model, found = strings.Cut(nameModel, "/")
-	return found && name != "" && model != "" && !strings.Contains(model, "/")
+	return extensioncontract.ValidProviderTarget(ref)
 }
 
 // parseV1Runtime strict-decodes and validates the runtime block. Every
@@ -577,7 +558,7 @@ func globThemePattern(root, pattern string) ([]string, error) {
 		}
 		matches = next
 	}
-	sort.Strings(matches)
+	slices.Sort(matches)
 	return matches, nil
 }
 

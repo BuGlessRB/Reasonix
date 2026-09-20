@@ -1,9 +1,10 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -188,11 +189,7 @@ func detectDotEnvDuplicateKeys(path string) []string {
 			seen[key] = true
 		}
 	}
-	out := make([]string, 0, len(dups))
-	for key := range dups {
-		out = append(out, key)
-	}
-	sort.Strings(out)
+	out := slices.Sorted(maps.Keys(dups))
 	return out
 }
 

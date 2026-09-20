@@ -412,10 +412,10 @@ reasonix doctor catalogs [--json]
 reasonix catalogs reindex history [--dir PATH ...] [--json]
 ```
 
-详见 [历史搜索 Catalog](./HISTORY_SEARCH_CATALOG.zh-CN.md)。
+详见 [历史搜索 Catalog](./HISTORY_SEARCH_CATALOG.md)。
 用量统计使用独立的可丢弃 rollup 投影：
 reasonix catalogs reindex usage [--json]
-详见 [用量 Catalog](./USAGE_CATALOG.zh-CN.md)。
+详见 [用量 Catalog](./USAGE_CATALOG.md)。
 
 ### 记忆诊断与恢复
 
@@ -435,7 +435,7 @@ reasonix catalogs reindex usage [--json]
 这些命令始终作用于当前 session controller。当会话位于远端主机上（`reasonix remote
 connect` 或桌面的远程网页窗口）时，它们使用远程 memory catalog，绝不回退读取桌面本机
 记忆。权限、自动召回、写入确认和迁移行为见
-[Context Engine v2](./SESSION_MEMORY_RETRIEVAL.zh-CN.md)。
+[Context Engine v2](./SESSION_MEMORY_RETRIEVAL.md)。
 
 
 用量统计使用独立的可丢弃 rollup 投影：
@@ -447,7 +447,7 @@ reasonix catalogs reindex usage [--json]
 
 ```
 
-详见 [用量 Catalog](./USAGE_CATALOG.zh-CN.md)。
+详见 [用量 Catalog](./USAGE_CATALOG.md)。
 
 ### 记忆诊断与恢复
 

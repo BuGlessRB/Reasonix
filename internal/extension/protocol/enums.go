@@ -1,6 +1,6 @@
 package protocol
 
-import "sort"
+import "slices"
 
 type Direction string
 
@@ -74,7 +74,7 @@ func InterceptEvents() []string {
 		string(EventToolAfter), string(EventPermissionDecision), string(EventCompactionPrepare),
 		string(EventCompactionComplete), string(EventFrontendEvent),
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

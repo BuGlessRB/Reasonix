@@ -7,6 +7,18 @@ import (
 	"testing"
 )
 
+func decodeHostRequestParams(method Method, raw json.RawMessage) (any, error) {
+	return decodeForDirection(method, raw, DirectionHostToExtensionRequest, true)
+}
+
+func decodeExtensionRequestResult(method Method, raw json.RawMessage) (any, error) {
+	return decodeForDirection(method, raw, DirectionExtensionToHostRequest, false)
+}
+
+func decodeHostNotificationParams(method Method, raw json.RawMessage) (any, error) {
+	return decodeForDirection(method, raw, DirectionHostToExtensionNotification, true)
+}
+
 // methodFixtures holds one fully populated representative value for every
 // registered params and result DTO. Round-tripping through the strict
 // direction decoders proves the JSON shape is lossless.
@@ -189,7 +201,7 @@ func roundTripThroughDecoder(t *testing.T, spec MethodSpec, value any, params bo
 	switch spec.Direction {
 	case DirectionHostToExtensionRequest:
 		if params {
-			decoded, err = DecodeHostRequestParams(spec.Name, raw)
+			decoded, err = decodeHostRequestParams(spec.Name, raw)
 		} else {
 			decoded, err = DecodeHostRequestResult(spec.Name, raw)
 		}
@@ -197,10 +209,10 @@ func roundTripThroughDecoder(t *testing.T, spec MethodSpec, value any, params bo
 		if params {
 			decoded, err = DecodeExtensionRequestParams(spec.Name, raw)
 		} else {
-			decoded, err = DecodeExtensionRequestResult(spec.Name, raw)
+			decoded, err = decodeExtensionRequestResult(spec.Name, raw)
 		}
 	case DirectionHostToExtensionNotification:
-		decoded, err = DecodeHostNotificationParams(spec.Name, raw)
+		decoded, err = decodeHostNotificationParams(spec.Name, raw)
 	case DirectionExtensionToHostNotification:
 		decoded, err = DecodeExtensionNotificationParams(spec.Name, raw)
 	}
@@ -253,13 +265,13 @@ func TestStrictDecodersRejectBadShapes(t *testing.T) {
 		decode func() (any, error)
 	}{
 		{"unknown field", func() (any, error) {
-			return DecodeHostRequestParams(MethodExtensionShutdown, []byte(`{"timeoutMillis":1,"bogus":1}`))
+			return decodeHostRequestParams(MethodExtensionShutdown, []byte(`{"timeoutMillis":1,"bogus":1}`))
 		}},
 		{"missing required", func() (any, error) {
-			return DecodeHostRequestParams(MethodExtensionShutdown, []byte(`{}`))
+			return decodeHostRequestParams(MethodExtensionShutdown, []byte(`{}`))
 		}},
 		{"null for non-nullable", func() (any, error) {
-			return DecodeHostRequestParams(MethodExtensionShutdown, []byte(`{"timeoutMillis":null}`))
+			return decodeHostRequestParams(MethodExtensionShutdown, []byte(`{"timeoutMillis":null}`))
 		}},
 		{"bad enum", func() (any, error) {
 			return DecodeHostRequestResult(MethodExtensionIntercept, []byte(`{"decision":"bogus"}`))
@@ -278,7 +290,7 @@ func TestStrictDecodersRejectBadShapes(t *testing.T) {
 			return DecodeExtensionRequestParams(MethodHostContentRead, []byte(`{"contentRef":" ","offset":0}`))
 		}},
 		{"sha256 violation", func() (any, error) {
-			return DecodeExtensionRequestResult(MethodHostContentRead, []byte(
+			return decodeExtensionRequestResult(MethodHostContentRead, []byte(
 				`{"contentRef":"c","offset":0,"dataBase64":"","totalBytes":0,"sha256":"zz","encoding":"utf8"}`))
 		}},
 		{"error chunk without error", func() (any, error) {
@@ -290,15 +302,15 @@ func TestStrictDecodersRejectBadShapes(t *testing.T) {
 				[]byte(`{"streamId":"s","seq":1,"chunk":{"type":"usage"}}`))
 		}},
 		{"nil request arrays", func() (any, error) {
-			return DecodeHostRequestParams(MethodExtensionProviderStreamOpen,
+			return decodeHostRequestParams(MethodExtensionProviderStreamOpen,
 				[]byte(`{"streamId":"s","providerRef":"p","request":{"maxTokens":0},"seqBase":0}`))
 		}},
 		{"tool parameters not object", func() (any, error) {
-			return DecodeHostRequestParams(MethodExtensionProviderStreamOpen,
+			return decodeHostRequestParams(MethodExtensionProviderStreamOpen,
 				[]byte(`{"streamId":"s","providerRef":"p","request":{"messages":[],"tools":[{"name":"t","parameters":[1]}],"maxTokens":0},"seqBase":0}`))
 		}},
 		{"trailing json", func() (any, error) {
-			return DecodeHostRequestParams(MethodExtensionShutdown, []byte(`{"timeoutMillis":1} {}`))
+			return decodeHostRequestParams(MethodExtensionShutdown, []byte(`{"timeoutMillis":1} {}`))
 		}},
 	}
 	for _, tt := range tests {
@@ -313,7 +325,7 @@ func TestStrictDecodersRejectBadShapes(t *testing.T) {
 func TestExternalizableFieldsAcceptNullPlaceholder(t *testing.T) {
 	// A null payload is the content-ref placeholder shape; only
 	// externalizable-tagged fields may carry it.
-	if _, err := DecodeHostNotificationParams(MethodExtensionEvent, []byte(`{"event":"session.start","payload":null}`)); err != nil {
+	if _, err := decodeHostNotificationParams(MethodExtensionEvent, []byte(`{"event":"session.start","payload":null}`)); err != nil {
 		t.Fatalf("externalizable payload null rejected: %v", err)
 	}
 	if _, err := DecodeExtensionRequestParams(MethodHostUIPublish,

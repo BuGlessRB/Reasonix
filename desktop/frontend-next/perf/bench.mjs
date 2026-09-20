@@ -82,7 +82,7 @@ async function stream(page, k) {
       long,
       longMs,
       nodes: document.querySelectorAll("*").length,
-      items: document.querySelectorAll("#flowScroll .call, #flowScroll .find").length,
+      items: document.querySelectorAll('[data-pane="flow"] .call, [data-pane="flow"] .find').length,
       trajRows: document.querySelectorAll("table.traj tbody tr").length,
     };
   }, k);

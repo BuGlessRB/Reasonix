@@ -1,11 +1,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { t } from "../i18n";
-import type { PlanStep } from "../state/session";
+import { currentStep, stepDone, stepLabel, type PlanStep } from "../state/session";
 
 // Keyed by text, not index: todo_write rewrites the whole list every call, and
 // under index keys row one morphs into a different sentence instead of the old
 // row leaving and a new one arriving. Duplicates get a suffix so React still
 // sees one key per row.
+// Depth is a number, so it is spent as one rather than as a class per level.
+const indent = (s: PlanStep) => (s.level ? Math.min(s.level, 4) * 12 : undefined);
+
 function keys(steps: PlanStep[]): string[] {
   const seen = new Map<string, number>();
   return steps.map((s) => {
@@ -15,11 +18,11 @@ function keys(steps: PlanStep[]): string[] {
   });
 }
 
-export function Plan({ steps }: { steps: PlanStep[] }) {
+export function Plan({ steps, shownElsewhere }: { steps: PlanStep[]; shownElsewhere?: boolean }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [cursor, setCursor] = useState<{ y: number; h: number } | null>(null);
-  const now = steps.findIndex((s) => !s.done);
-  const done = steps.filter((s) => s.done).length;
+  const now = currentStep(steps);
+  const done = steps.filter(stepDone).length;
 
   // The cursor is measured from the live row, so it survives text wrapping and
   // font changes that a fixed row height would get wrong.
@@ -32,6 +35,11 @@ export function Plan({ steps }: { steps: PlanStep[] }) {
   // to skip on every glance. The task tab is where "there is no plan yet" is
   // an answer worth a line.
   if (steps.length === 0) return null;
+  // That same tab draws this list at full width while the rail is still up, so
+  // the plan stands twice on one screen in two different hands — numbered with
+  // a cursor here, dotted with a label there. The wide one is the reading, and
+  // the rail has other things to say with the room.
+  if (shownElsewhere) return null;
 
   const id = keys(steps);
   return (
@@ -54,16 +62,16 @@ export function Plan({ steps }: { steps: PlanStep[] }) {
             <div
               className="s"
               key={id[i]}
-              data-done={st.done ? "" : undefined}
+              data-done={stepDone(st) ? "" : undefined}
               data-now={i === now ? "" : undefined}
-              style={{ animationDelay: `${Math.min(i, 6) * 34}ms` }}
+              style={{ animationDelay: `${Math.min(i, 6) * 34}ms`, marginInlineStart: indent(st) }}
             >
-              <span className="b">{st.done ? "✓" : i + 1}</span>
+              <span className="b">{stepDone(st) ? "✓" : i + 1}</span>
               {/* The strike is painted as a background so it can be drawn rather
                   than appear, and an inline box is what makes it repeat per line
                   — on the flex item itself a wrapped step gets one line struck. */}
               <span className="t">
-                <span className="ln">{st.text}</span>
+                <span className="ln">{stepLabel(st)}</span>
               </span>
             </div>
           ))}

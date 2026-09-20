@@ -13,7 +13,6 @@ import (
 	"hash"
 	"io/fs"
 	"path"
-	"regexp"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -29,7 +28,6 @@ import (
 	productcontent "reasonix/docs"
 	"reasonix/internal/retrieval"
 	"reasonix/internal/tool"
-	releasenotes "reasonix/release-notes"
 )
 
 const (
@@ -41,14 +39,12 @@ const (
 )
 
 type document struct {
-	path           string
-	source         string
-	title          string
-	locale         string
-	audience       string
-	releaseNote    bool
-	releaseVersion string
-	sections       []*section
+	path     string
+	source   string
+	title    string
+	locale   string
+	audience string
+	sections []*section
 }
 
 type section struct {
@@ -65,40 +61,32 @@ type section struct {
 }
 
 func (d *document) displayPath() string {
-	if d.releaseNote {
-		return d.path
-	}
 	return "docs/" + d.path
 }
 
 func (d *document) sourceRange(startLine, endLine int) string {
-	if d.releaseNote {
-		return fmt.Sprintf("%s rendered-lines=%d-%d", d.source, startLine, endLine)
-	}
 	return fmt.Sprintf("%s:%d-%d", d.source, startLine, endLine)
 }
 
 type catalog struct {
-	digest       string
-	docs         []*document
-	byPath       map[string]*document
-	byID         map[string]*section
-	sections     []*section
-	df           map[string]int
-	avgLen       float64
-	releaseNotes int
+	digest   string
+	docs     []*document
+	byPath   map[string]*document
+	byID     map[string]*section
+	sections []*section
+	df       map[string]int
+	avgLen   float64
 }
 
 // Manifest identifies the exact documentation corpus bundled into one build.
 // Version and Revision describe the product binary; Digest binds the sorted
-// Markdown sources plus the structured release catalog consumed by retrieval.
+// Markdown sources consumed by retrieval.
 type Manifest struct {
-	Version      string `json:"version"`
-	Revision     string `json:"revision"`
-	Digest       string `json:"digest"`
-	Documents    int    `json:"documents"`
-	Sections     int    `json:"sections"`
-	ReleaseNotes int    `json:"release_notes"`
+	Version   string `json:"version"`
+	Revision  string `json:"revision"`
+	Digest    string `json:"digest"`
+	Documents int    `json:"documents"`
+	Sections  int    `json:"sections"`
 }
 
 type searchHit struct {
@@ -112,8 +100,6 @@ type docsTool struct {
 }
 
 var (
-	queryVersionRe = regexp.MustCompile(`(?i)\bv?([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9a-z.-]+)?)\b`)
-
 	defaultOnce    sync.Once
 	defaultCatalog *catalog
 	defaultLoadErr error
@@ -132,7 +118,7 @@ func NewTool() tool.Tool {
 
 func loadDefaultCatalog() (*catalog, error) {
 	defaultOnce.Do(func() {
-		defaultCatalog, defaultLoadErr = loadCatalogWithReleaseNotes(productcontent.Content, releasenotes.Content)
+		defaultCatalog, defaultLoadErr = loadCatalog(productcontent.Content)
 	})
 	return defaultCatalog, defaultLoadErr
 }
@@ -145,12 +131,6 @@ func EmbeddedManifest() (Manifest, error) {
 		return Manifest{}, err
 	}
 	return c.manifest(), nil
-}
-
-// CommandOverview returns the local /docs help text and the identity of the
-// exact corpus compiled into this binary. It never calls a model or the network.
-func CommandOverview(language string) (string, error) {
-	return CommandOverviewFor(language, "/docs")
 }
 
 // CommandOverviewFor is CommandOverview with the invocation name selected by
@@ -166,14 +146,14 @@ func CommandOverviewFor(language, commandName string) (string, error) {
 	}
 	m := c.manifest()
 	identity := fmt.Sprintf("version=%s revision=%s digest=%s", m.Version, m.Revision, m.Digest)
-	stats := fmt.Sprintf("documents=%d sections=%d releases=%d", m.Documents, m.Sections, m.ReleaseNotes)
+	stats := fmt.Sprintf("documents=%d sections=%d", m.Documents, m.Sections)
 	switch strings.ToLower(strings.TrimSpace(language)) {
 	case "zh", "zh-cn":
-		return fmt.Sprintf("内置 Reasonix 文档\n%s\n%s\n\n用法：%s <问题>\n示例：%s 1.19.5 更新日志\n\n搜索在本地完成，命中的版本匹配资料会交给当前配置的 AI 组织答案。", identity, stats, commandName, commandName), nil
+		return fmt.Sprintf("内置 Reasonix 文档\n%s\n%s\n\n用法：%s <问题>\n示例：%s 如何配置 MCP 服务器\n\n搜索在本地完成，命中的文档片段会交给当前配置的 AI 组织答案。", identity, stats, commandName, commandName), nil
 	case "zh-tw":
-		return fmt.Sprintf("內建 Reasonix 文件\n%s\n%s\n\n用法：%s <問題>\n範例：%s 1.19.5 更新日誌\n\n搜尋在本機完成，命中的版本匹配資料會交給目前設定的 AI 組織答案。", identity, stats, commandName, commandName), nil
+		return fmt.Sprintf("內建 Reasonix 文件\n%s\n%s\n\n用法：%s <問題>\n範例：%s 如何設定 MCP 伺服器\n\n搜尋在本機完成，命中的文件片段會交給目前設定的 AI 組織答案。", identity, stats, commandName, commandName), nil
 	default:
-		return fmt.Sprintf("Embedded Reasonix documentation\n%s\n%s\n\nUsage: %s <question>\nExample: %s 1.19.5 changelog\n\nSearch runs locally, then the version-matched evidence is passed to the configured AI to compose the answer.", identity, stats, commandName, commandName), nil
+		return fmt.Sprintf("Embedded Reasonix documentation\n%s\n%s\n\nUsage: %s <question>\nExample: %s how to configure an MCP server\n\nSearch runs locally, then the matched sections are passed to the configured AI to compose the answer.", identity, stats, commandName, commandName), nil
 	}
 }
 
@@ -188,10 +168,10 @@ func SearchEmbedded(ctx context.Context, query string) (string, error) {
 	return (&docsTool{catalog: c}).search(ctx, query, "auto", "all", defaultLimit)
 }
 
-// SourceManifest computes the corpus identity from the source Markdown and
-// structured release catalog used by a build.
-func SourceManifest(docsFS, releaseNotesFS fs.FS) (Manifest, error) {
-	c, err := loadCatalogWithReleaseNotes(docsFS, releaseNotesFS)
+// SourceManifest computes the corpus identity from the source Markdown used by
+// a build.
+func SourceManifest(docsFS fs.FS) (Manifest, error) {
+	c, err := loadCatalog(docsFS)
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -201,12 +181,11 @@ func SourceManifest(docsFS, releaseNotesFS fs.FS) (Manifest, error) {
 func (c *catalog) manifest() Manifest {
 	version, revision := buildIdentity()
 	return Manifest{
-		Version:      version,
-		Revision:     revision,
-		Digest:       "sha256:" + c.digest,
-		Documents:    len(c.docs),
-		Sections:     len(c.sections),
-		ReleaseNotes: c.releaseNotes,
+		Version:   version,
+		Revision:  revision,
+		Digest:    "sha256:" + c.digest,
+		Documents: len(c.docs),
+		Sections:  len(c.sections),
 	}
 }
 
@@ -343,7 +322,6 @@ func (t *docsTool) search(ctx context.Context, query, language, audience string,
 		preferredLanguage = detectQueryLanguage(query)
 	}
 	queryLower := strings.ToLower(query)
-	queryVersions := queryVersionRe.FindAllStringSubmatch(queryLower, -1)
 	hits := make([]searchHit, 0, len(t.catalog.sections))
 	for _, section := range t.catalog.sections {
 		if err := ctx.Err(); err != nil {
@@ -356,20 +334,8 @@ func (t *docsTool) search(ctx context.Context, query, language, audience string,
 			continue
 		}
 		score := retrieval.BM25Score(section.counts, section.length, queryTerms, t.catalog.df, len(t.catalog.sections), t.catalog.avgLen)
-		exactReleaseVersion := false
-		for _, match := range queryVersions {
-			if len(match) > 1 && strings.EqualFold(section.document.releaseVersion, match[1]) {
-				exactReleaseVersion = true
-				break
-			}
-		}
-		if score <= 0 && !exactReleaseVersion {
+		if score <= 0 {
 			continue
-		}
-		if exactReleaseVersion {
-			// Release-note virtual paths carry the exact requested version. Keep
-			// that stronger than generic terms such as "changelog" or "更新日志".
-			score += 100
 		}
 		for _, term := range queryTerms {
 			if section.headingHits[term] > 0 {
@@ -450,11 +416,7 @@ func (t *docsTool) list(language, audience string) string {
 	return b.String()
 }
 
-func loadCatalog(fsys fs.FS) (*catalog, error) {
-	return loadCatalogWithReleaseNotes(fsys, nil)
-}
-
-func loadCatalogWithReleaseNotes(docsFS, releaseNotesFS fs.FS) (*catalog, error) {
+func loadCatalog(docsFS fs.FS) (*catalog, error) {
 	entries, err := fs.ReadDir(docsFS, ".")
 	if err != nil {
 		return nil, err
@@ -484,35 +446,6 @@ func loadCatalogWithReleaseNotes(docsFS, releaseNotesFS fs.FS) (*catalog, error)
 		if err := c.addDocument(doc); err != nil {
 			return nil, err
 		}
-	}
-	if releaseNotesFS != nil {
-		data, err := fs.ReadFile(releaseNotesFS, "releases.json")
-		if err != nil {
-			return nil, fmt.Errorf("read release-notes/releases.json: %w", err)
-		}
-		if !utf8.Valid(data) {
-			return nil, fmt.Errorf("read release-notes/releases.json: JSON is not valid UTF-8")
-		}
-		writeDigestRecord(hash, "release-notes/releases.json", data)
-		rendered, releaseCount, err := renderReleaseDocuments(data)
-		if err != nil {
-			return nil, err
-		}
-		for _, virtual := range rendered {
-			doc := parseDocumentWithParser(virtual.path, virtual.content, markdownParser)
-			doc.source = virtual.source
-			doc.locale = virtual.locale
-			doc.audience = "user"
-			doc.releaseNote = true
-			doc.releaseVersion = virtual.version
-			if len(doc.sections) == 0 {
-				return nil, fmt.Errorf("rendered release note %s contains no sections", virtual.path)
-			}
-			if err := c.addDocument(doc); err != nil {
-				return nil, err
-			}
-		}
-		c.releaseNotes = releaseCount
 	}
 	if len(c.docs) == 0 || len(c.sections) == 0 {
 		return nil, fmt.Errorf("embedded documentation corpus is empty")
@@ -564,7 +497,7 @@ func parseDocument(name, content string) *document {
 }
 
 func parseDocumentWithParser(name, content string, markdownParser parser.Parser) *document {
-	source := []byte(content)
+	source := blankMetadataHeader([]byte(content))
 	doc := &document{
 		path:     path.Clean(name),
 		title:    strings.TrimSuffix(strings.TrimSuffix(name, ".md"), ".zh-CN"),
@@ -768,9 +701,9 @@ func detectDocumentLanguage(name, content string) string {
 func documentAudience(name string) string {
 	stem := strings.TrimSuffix(strings.TrimSuffix(name, ".md"), ".zh-CN")
 	switch strings.ToUpper(stem) {
-	case "RELEASING", "SIGNPATH_WINDOWS_ADMIN_SOP", "PRODUCTION_CHECKLIST", "THEME_ASSETS":
+	case "THEME_ASSETS", "STUDIO_RELEASE", "DOCS_STANDARD":
 		return "maintainer"
-	case "CHECKPOINTS", "GOAL_ENFORCEMENT", "SESSION_REFERENCE_ARCHITECTURE", "SPEC", "TASK_CONTRACT", "TOOL_CONTRACT":
+	case "CHECKPOINTS", "SPEC", "TASK_CONTRACT", "TOOL_CONTRACT":
 		return "developer"
 	default:
 		return "user"

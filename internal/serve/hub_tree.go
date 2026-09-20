@@ -324,6 +324,10 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var held *agent.SessionLeaseError
 		if errors.As(err, &held) {
+			if who := sessionHolder(held); who != nil {
+				busy(w, "session.in_use_by", "another process holds this conversation open", who)
+				return
+			}
 			busy(w, "session.in_use", "this conversation is still being written to", nil)
 			return
 		}
@@ -341,6 +345,16 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("serve: session removed, lock files survived", "path", path, "err", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// sessionHolder names the process holding a conversation, and only when it is
+// not this one. A lease this process holds means a write is in flight here,
+// which is a different cause and carries a different code.
+func sessionHolder(held *agent.SessionLeaseError) map[string]any {
+	if held == nil || held.Info == nil || held.Info.PID == 0 || held.Info.PID == os.Getpid() {
+		return nil
+	}
+	return map[string]any{"pid": held.Info.PID, "host": held.Info.Hostname}
 }
 
 // renameSession sets the name a session shows under. Unlike removal this is

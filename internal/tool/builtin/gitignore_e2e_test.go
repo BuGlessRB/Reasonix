@@ -3,7 +3,7 @@ package builtin
 import (
 	"context"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -110,6 +110,6 @@ func sortedKeys(m map[string]bool) []string {
 	for k := range m {
 		ks = append(ks, k)
 	}
-	sort.Strings(ks)
+	slices.Sort(ks)
 	return ks
 }

@@ -86,6 +86,9 @@ type Server struct {
 	// stance is the hub's Ask/Auto/YOLO posture, shared by every pane it drives.
 	// Nil for a server outside a hub, which speaks only for itself.
 	stance *approvalStance
+	// resolver is what every rebuild of this pane resolves models through, set
+	// by the hub. Nil leaves boot reading this machine's own config.
+	resolver provider.Resolver
 }
 
 // New builds a Server. bc must be what the controller's events reach; a host
@@ -652,76 +655,6 @@ func (s *Server) newSession(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type historyToolCall struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
-}
-
-type historyMessage struct {
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Reasoning string `json:"reasoning,omitempty"`
-	// Images is how many attachments the turn carried, not the attachments
-	// themselves: a turn that was only an image has no text to rebuild from,
-	// and a reader that sees zero of both drops it as host chrome.
-	Images int `json:"images,omitempty"`
-	// The session index this message occupies, which is what a checkpoint's
-	// boundary names. A reader rebuilding a transcript joins on it rather than
-	// on where a row happened to land after host chrome was dropped.
-	MsgIndex int `json:"msgIndex"`
-	// HostAuthored marks a user-role message the host wrote. It is the writer's
-	// own declaration, so a reader never has to decide from the wording whether
-	// a line was typed by the person or injected on their behalf.
-	HostAuthored bool              `json:"hostAuthored,omitempty"`
-	ToolCalls    []historyToolCall `json:"toolCalls,omitempty"`
-	ToolCallID   string            `json:"toolCallId,omitempty"`
-	ToolName     string            `json:"toolName,omitempty"`
-}
-
-func historyMessages(msgs []provider.Message) []historyMessage {
-	out := make([]historyMessage, 0, len(msgs))
-	for i, m := range msgs {
-		// Steer messages are surfaced as a notice, not a user message.
-		if m.Role == provider.RoleUser {
-			if steerText, isSteer := agent.SteerText(m.Content); isSteer {
-				out = append(out, historyMessage{Role: "notice", Content: "↪ " + steerText, MsgIndex: i})
-				continue
-			}
-		}
-		hm := historyMessage{Role: string(m.Role), Content: m.Content, MsgIndex: i, HostAuthored: m.HostAuthored}
-		if m.Role == provider.RoleUser {
-			// Content is what the model saw, and one @-reference expands into a
-			// whole file. A reopened session has to show what was typed.
-			hm.Content = agent.UserMessageText(m)
-			hm.Images = len(m.Images)
-		}
-		if m.Role == provider.RoleAssistant {
-			hm.Reasoning = m.ReasoningContent
-			if len(m.ToolCalls) > 0 {
-				hm.ToolCalls = make([]historyToolCall, len(m.ToolCalls))
-				for i, tc := range m.ToolCalls {
-					hm.ToolCalls[i] = historyToolCall{ID: tc.ID, Name: tc.Name, Arguments: tc.Arguments}
-				}
-			}
-		}
-		if m.Role == provider.RoleTool {
-			hm.ToolCallID = m.ToolCallID
-			hm.ToolName = m.Name
-		}
-		out = append(out, hm)
-	}
-	return out
-}
-
-// history returns the session's message log so a reconnecting client can
-// repopulate its transcript, including historical tool cards. Supports ETag caching:
-// if the client sends If-None-Match with the current ETag, the server returns
-// 304 Not Modified with no body, saving bandwidth on reconnects.
-func (s *Server) history(w http.ResponseWriter, r *http.Request) {
-	writeJSONCached(w, r, historyMessages(s.ctl().History()))
-}
-
 // context returns the prompt-vs-window gauge numbers. Supports ETag caching
 // so reconnecting clients avoid re-fetching unchanged context data.
 // context answers how full the window is and what is filling it. The breakdown
@@ -929,6 +862,10 @@ func (s *Server) branches(w http.ResponseWriter, _ *http.Request) {
 
 // models lists configured chat models for the browser model picker.
 func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
+	if s.resolver != nil {
+		s.resolverModels(w)
+		return
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -992,36 +929,17 @@ func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
 			out = append(out, entry)
 		}
 	}
-	// ProviderCatalog is the controller-generation's authoritative merged view.
-	// Add descriptors not already represented by configured providers; this is
-	// where plugin/<plugin>/<provider>/<model> refs enter the Serve picker.
+	// ProviderCatalog is the controller-generation's authoritative merged view;
+	// its config-backed base was listed above, so only plugin refs enter here.
 	for _, d := range ctrl.ProviderCatalog() {
 		ref := strings.TrimSpace(d.Ref)
-		if ref == "" {
-			continue
-		}
-		if _, ok := seen[ref]; ok {
+		if _, ok := seen[ref]; ok || !isExtensionModelRef(ref) {
 			continue
 		}
 		seen[ref] = struct{}{}
-		parts := strings.Split(ref, "/")
-		if len(parts) < 4 || parts[0] != "plugin" {
-			// ProviderCatalog also contains the config-backed base. Configured
-			// base refs were handled above; do not resurrect unconfigured ones.
-			continue
+		if entry, ok := catalogModelEntry(d, current); ok {
+			out = append(out, entry)
 		}
-		providerName := strings.Join(parts[:3], "/")
-		model := strings.TrimSpace(d.Model)
-		if model == "" {
-			model = parts[len(parts)-1]
-		}
-		out = append(out, modelEntry{
-			Ref:      ref,
-			Provider: providerName,
-			Model:    model,
-			Kind:     "extension",
-			Active:   ref == current,
-		})
 	}
 	out = collapseModelRoutes(out, routes)
 	if out == nil {
@@ -1283,21 +1201,4 @@ func previewTitle(first string) string {
 		return string(r[:47]) + "..."
 	}
 	return first
-}
-
-// todos returns the canonical task list (latest todo_write state merged with
-// complete_step advances) so the frontend can render a live task panel.
-func (s *Server) todos(w http.ResponseWriter, _ *http.Request) {
-	type todoItem struct {
-		Content    string `json:"content"`
-		Status     string `json:"status"`
-		ActiveForm string `json:"activeForm,omitempty"`
-		Level      int    `json:"level,omitempty"`
-	}
-	raw := s.ctl().Todos()
-	out := make([]todoItem, len(raw))
-	for i, t := range raw {
-		out[i] = todoItem{Content: t.Content, Status: t.Status, ActiveForm: t.ActiveForm, Level: t.Level}
-	}
-	writeJSON(w, out)
 }

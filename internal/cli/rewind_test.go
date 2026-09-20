@@ -53,13 +53,13 @@ func TestRenderRewindSmoke(t *testing.T) {
 		{Turn: 0, Prompt: "add the parser", Paths: []string{"a.go"}},
 		{Turn: 1, Prompt: "fix the bug", Paths: []string{"b.go", "c.go"}},
 	}
-	// Stage 0: turn list.
+	// The turn list.
 	m := chatTUI{width: 80, rewind: &rewindPicker{metas: metas, sel: 1}}
 	out := m.renderRewind()
 	if out == "" || !strings.Contains(out, "Rewind") || !strings.Contains(out, "fix the bug") {
 		t.Fatalf("stage-0 render missing content:\n%s", out)
 	}
-	// Stage 1: scope menu.
+	// The scope menu.
 	m.rewind.stage = 1
 	out = m.renderRewind()
 	for _, want := range []string{"Restore to turn 2", "Code + conversation", "Conversation only", "Code only"} {

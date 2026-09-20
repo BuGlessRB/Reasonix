@@ -11,7 +11,6 @@ export const EN_COMPOSER: Record<string, string> = {
   "任务输入": "Task input",
   "命令与技能": "Commands and skills",
   "引用文件": "Reference files",
-  "Enter 发送 · Shift+Enter 换行": "Enter to send · Shift+Enter for a new line",
   "Enter 插话 · Shift+Enter 换行": "Enter to steer · Shift+Enter for a new line",
   "{n} 字 · {lines} 行": "{n} characters · {lines} lines",
   "知道了": "Got it",
@@ -42,13 +41,13 @@ export const EN_COMPOSER: Record<string, string> = {
   "正在添加附件…": "Adding attachments…",
   "添加失败 · 重试": "Could not add · Retry",
   "有附件添加失败，请重试或移除": "An attachment failed; retry or remove it",
-  "移除 {name}": "Remove {name}",
   "当前模型不支持读图 · 图片将按看图模型设置处理":
     "This model does not read images · images follow the configured vision model",
   "该模型是否支持读图未声明 · 暂按不支持处理；在「连接」中勾选后即可直接发送":
     "Nobody has said whether this model reads images · treated as no for now; tick it under Connection to send them straight through",
   "每次执行操作前请求确认。": "Asks before every action.",
   "自动": "Auto",
+  "Enter 发送 · Shift+Enter 换行": "Enter to send · Shift+Enter for a new line",
   "低风险操作自动放行，写入操作仍需确认。": "Low-risk steps proceed; writes still ask.",
   "不询问": "Do not ask",
   "不显示审批请求；需要批准的操作一律不执行。": "No approval prompts; anything needing approval is not done.",
@@ -61,4 +60,8 @@ export const EN_COMPOSER: Record<string, string> = {
   "登录": "Sign in",
   "登录（社区与崩溃跟进，不影响使用）": "Sign in (community and crash follow-up; not required to use it)",
   "账号：{name}": "Account: {name}",
+  "目录": "folder",
+  "资源": "resource",
+  "Tab 补全或进入目录 · ↑↓ 后回车确认 · Esc 关闭": "Tab completes or enters a folder · ↑↓ then Enter confirms · Esc closes",
+  "↑↓ 选择 · Tab 或回车补全 · Esc 关闭": "↑↓ selects · Tab or Enter completes · Esc closes",
 };

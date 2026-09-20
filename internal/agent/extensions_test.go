@@ -17,7 +17,7 @@ import (
 	"reasonix/internal/tool"
 )
 
-// Stage 6b2 agent-loop wiring tests. The dispatcher under test is real; only
+// Agent-loop wiring tests. The dispatcher under test is real; only
 // its sidecar client is faked, so every assertion exercises the actual
 // dispatch ruling logic (chain walk, strict replacement decode, error
 // policy). Each intercept point is covered for: continue (no-op), block,

@@ -16,6 +16,9 @@ export interface PermissionLists {
 // an edit here cannot move.
 export interface PermissionRules extends PermissionLists {
   path: string;
+  // What was allowed on a prompt for this session alone. Nothing wrote it down,
+  // so the file on screen is less than the agent may currently do.
+  granted?: string[];
   shadowedBy?: string;
   effective?: PermissionLists;
 }

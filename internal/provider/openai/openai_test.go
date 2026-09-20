@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -112,6 +113,43 @@ func TestStreamInsufficientBalance(t *testing.T) {
 	}
 	if reqs != 1 {
 		t.Errorf("402 should not retry, server saw %d requests", reqs)
+	}
+}
+
+// A gateway that does not know stream_options rejects the whole request for a
+// field that only reports token counts. The session must survive that, and the
+// endpoint must be asked once rather than every turn.
+func TestStreamDropsStreamOptionsAGatewayRefusesAndRemembers(t *testing.T) {
+	var sawWithOptions, sawWithout int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), `"stream_options"`) {
+			sawWithOptions++
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"unrecognized field stream_options"}}`))
+			return
+		}
+		sawWithout++
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	p, _ := New(provider.Config{Name: "relay", BaseURL: srv.URL, Model: "m", APIKey: "k"})
+	req := provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}}
+	for turn := 1; turn <= 2; turn++ {
+		stream, err := p.Stream(context.Background(), req)
+		if err != nil {
+			t.Fatalf("turn %d: %v", turn, err)
+		}
+		for range stream {
+		}
+	}
+	if sawWithOptions != 1 {
+		t.Errorf("requests carrying stream_options = %d, want the one that established the refusal", sawWithOptions)
+	}
+	if sawWithout != 2 {
+		t.Errorf("requests without stream_options = %d, want the retry and the next turn", sawWithout)
 	}
 }
 

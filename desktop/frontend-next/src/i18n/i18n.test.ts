@@ -20,6 +20,11 @@ const SOURCES = import.meta.glob(["../**/*.{ts,tsx}", "!../i18n/**", "!../**/*.t
 // of them reached the screen untranslated.
 const HAN = /[一-鿿]/;
 
+// The catalogue's own sources, read as text: after they are imported the
+// duplicates are already gone.
+const DICTS = import.meta.glob("./en*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+
+
 function keysIn(src: string): string[] {
   const keys: string[] = [];
   const call = /\b(?:t|tx|plural)\(/g;
@@ -72,7 +77,13 @@ describe("English catalogue", () => {
     // Chinese before the next "<" in the file reads to this pattern as markup
     // — which is a false positive on ordinary code, and a guard that cries on
     // valid source is one people learn to edit around.
-    const JSX_TEXT = /(?<!=)>([^<>{}]*[一-鿿][^<>{}]*)</g;
+    //
+    // Not before "=" either, for the same reason from the other side: the ">"
+    // closing a generic is followed by the assignment it annotates, so
+    // `Record<string, string> = { ... 中文 ... }` read as a tag whose text runs
+    // to the next "<" anywhere in the file. A table of wording that each call
+    // site passes through t() is exactly where that shape appears.
+    const JSX_TEXT = /(?<!=)>(?!\s*=)([^<>{}]*[一-鿿][^<>{}]*)</g;
     const ATTR = /\b(title|placeholder|aria-label|label|alt)="([^"]*[一-鿿][^"]*)"/g;
     const raw: string[] = [];
     for (const [file, body] of Object.entries(SOURCES)) {
@@ -96,6 +107,36 @@ describe("English catalogue", () => {
       .filter(([, zh]) => !(zh in EN))
       .map(([code, zh]) => `${code} — ${JSON.stringify(zh)}`);
     expect(missing, "refusal wording with no English").toEqual([]);
+  });
+
+  // One key, one definition. The catalogue is ten modules spread into one
+  // object, so a key written twice keeps whichever spread came last and the
+  // other reading is unreachable: 记录 was "Save" beside the metrics and
+  // "Transcript" beside the graph, and the window's save button read
+  // Transcript. Neither the type system nor the runtime can see the loser —
+  // they are separate object literals — so it is read out of the sources.
+  it("defines every key in one catalogue file", () => {
+    // A key is whatever sits at the head of a line and is followed by a colon,
+    // quoted or not: prettier drops the quotes around a key that is a valid
+    // identifier, and Chinese is one, so half these entries are written bare
+    // and a long one wraps before its value.
+    const ENTRY = /(?:^|\n)[ \t]*(?:"((?:[^"\\]|\\.)*)"|([^\s"',:{}]+))[ \t]*:/g;
+    const at = new Map<string, string>();
+    const twice: string[] = [];
+    for (const [file, body] of Object.entries(DICTS)) {
+      const code = body.replace(/^\s*\/\/.*$/gm, "");
+      for (const m of code.matchAll(ENTRY)) {
+        const key = m[1] ?? m[2];
+        const where = `${file}:${code.slice(0, m.index).split("\n").length}`;
+        const prev = at.get(key);
+        if (prev) twice.push(`${JSON.stringify(key)} — ${prev} and ${where}`);
+        else at.set(key, where);
+      }
+    }
+    expect(twice, "keys defined in more than one catalogue file").toEqual([]);
+    // And that reading covered the whole catalogue: an entry this pattern
+    // cannot see is one it cannot find a second definition of either.
+    expect(at.size, "entries the source scan accounted for").toBe(Object.keys(EN).length);
   });
 
   it("reads the sources it is meant to be guarding", () => {

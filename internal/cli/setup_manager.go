@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -136,12 +136,12 @@ func (s *providerSetupSession) setLanguage(language string) {
 	s.cfg.Language = language
 }
 
-func (s *providerSetupSession) applyDeepSeekOfficialDefaultPricing() {
+func (s *providerSetupSession) applyOfficialDefaultPricing() {
 	before := make(map[string]config.ProviderEntry, len(s.cfg.Providers))
 	for _, provider := range s.cfg.Providers {
 		before[provider.Name] = provider
 	}
-	s.cfg.ApplyDeepSeekOfficialDefaultPricing()
+	s.cfg.ApplyOfficialDefaultPricing()
 	for i := range s.cfg.Providers {
 		after := s.cfg.Providers[i]
 		previous, existed := before[after.Name]
@@ -409,7 +409,7 @@ func (s *providerSetupSession) credentialLines() []string {
 	for key := range s.pendingCredentials {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	lines := make([]string, 0, len(keys))
 	for _, key := range keys {
 		lines = append(lines, key+"="+s.pendingCredentials[key])
@@ -440,7 +440,7 @@ func (s *providerSetupSession) summary() []string {
 		for name := range s.removed {
 			names = append(names, name)
 		}
-		sort.Strings(names)
+		slices.Sort(names)
 		out = append(out, fmt.Sprintf(i18n.M.SetupSummaryRemovedFmt, strings.Join(names, ", ")))
 	}
 	if s.cfg.DefaultModel != s.originalDefault {

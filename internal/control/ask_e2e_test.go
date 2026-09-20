@@ -143,10 +143,11 @@ func TestNoApprovalPostureAnswersAQuestionForTheUser(t *testing.T) {
 			c.EnableInteractiveApproval()
 			c.SetToolApprovalMode(mode)
 
-			answered := make(chan struct{})
+			// Closed before answering, so the turn cannot finish ahead of it.
+			userAsked := make(chan struct{})
 			go func() {
-				defer close(answered)
 				a := <-asked
+				close(userAsked)
 				c.AnswerQuestion(a.ID, []event.AskAnswer{{QuestionID: a.Questions[0].ID, Selected: []string{"B"}}})
 			}()
 
@@ -154,7 +155,7 @@ func TestNoApprovalPostureAnswersAQuestionForTheUser(t *testing.T) {
 				t.Fatalf("runOneTurn: %v", err)
 			}
 			select {
-			case <-answered:
+			case <-userAsked:
 			default:
 				t.Fatalf("%s answered the question itself; the user was never asked", mode)
 			}

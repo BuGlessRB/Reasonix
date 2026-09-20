@@ -132,20 +132,16 @@ make build      # -> bin/reasonix(.exe)
 make cross      # -> dist/ (darwin|linux|windows × amd64|arm64)
 ```
 
-#### Desktop
+#### Studio
 
-The desktop build additionally requires:
-
-- **Node 24+ and pnpm 10** (`npm install -g pnpm@10`) for the frontend
-- **Wails CLI** matching the shared `.wails-version` pin
+Studio additionally requires **Node 24+ and pnpm 10**
+(`npm install -g pnpm@10`) for the frontend.
 
 ```sh
-make wails-install
-cd desktop
-wails build
+make studio
 ```
 
-See the [desktop build guide](desktop/README.md#prerequisites) for platform
+See the [Studio build guide](desktop/README.md#prerequisites) for platform
 webview dependencies and Linux build tags.
 
 ## Quick start
@@ -181,7 +177,7 @@ For advanced CLI usage and configuration, see the **[CLI reference](./docs/CLI.m
 - **Features & troubleshooting:** [Subagent profiles](./docs/SUBAGENT_PROFILES.md) ·
   [Context Engine v2](./docs/SESSION_MEMORY_RETRIEVAL.md) ·
   [Capability diagnostics](./docs/CAPABILITY_DIAGNOSTICS.md) ·
-  [Recovery and updates](./docs/RECOVERY.md) · [Bot guide](./docs/BOT_GUIDE.md) ·
+  [Recovery and updates](./docs/RECOVERY.md) ·
   [Checkpoints & rewind](./docs/CHECKPOINTS.md)
 - **Engineering & migration:** [Spec](./docs/SPEC.md) ·
   [Task contracts & pause policy](./docs/TASK_CONTRACT.md) ·

@@ -97,10 +97,27 @@ export interface Waiting {
   retry?: { attempt: number; max: number; scope?: "headers" | "stream"; since: number };
 }
 
+/** complete_step moves an item to completed and promotes the next one itself,
+ *  so which step is underway is the kernel's answer. A list it has not started
+ *  has no current step, which is not the first one being in hand. */
+export type TodoStatus = "pending" | "in_progress" | "completed";
+
 export interface PlanStep {
   text: string;
-  done: boolean;
+  status: TodoStatus;
+  /** The "-ing" wording the kernel keeps for while this is the step in hand. */
+  activeForm?: string;
+  /** Depth in the kernel's list. Sub-steps read as peers without it. */
+  level?: number;
 }
+
+export const stepDone = (s: PlanStep) => s.status === "completed";
+
+/** Which step the kernel says is underway, or -1. Never "the first one not
+ *  ticked": the host can leave earlier items pending and start a later one. */
+export const currentStep = (steps: PlanStep[]) => steps.findIndex((s) => s.status === "in_progress");
+
+export const stepLabel = (s: PlanStep) => (s.status === "in_progress" && s.activeForm?.trim() ? s.activeForm : s.text);
 
 export interface RuntimeNotice {
   id: string;
@@ -121,6 +138,9 @@ export type TurnTerminal =
   | { kind: "failed"; err: string }
   | { kind: "cancelled" }
   | { kind: "incomplete"; outcome: string }
+  // A transcript read back from the record: the frame that said how the last
+  // turn ended is not in it, and neither a delivery nor a stop can be claimed.
+  | { kind: "unread" }
   | null;
 
 export interface SessionState {
@@ -174,6 +194,8 @@ export interface SessionState {
   // and this is what asks it again. Counting, not the kernel's own revision:
   // the point is that it changed, and a counter cannot arrive out of order.
   queueMoved: number;
+  // How many times the agent's browser tabs moved; the tabs are read back.
+  browserTabsMoved: number;
   // Standing extension surfaces, keyed by plugin and surface id. They describe
   // a state that is still true, so they hold a place in the side rail instead
   // of scrolling away in the transcript.

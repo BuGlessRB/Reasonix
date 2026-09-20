@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/permission"
 	"reasonix/internal/planmode"
 	"reasonix/internal/provider"
+	"reasonix/internal/shellrun"
 	"reasonix/internal/tool"
 )
 
@@ -470,6 +471,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 	// (mcp_connect__*) skip ordinary Ask/Auto/dontAsk gates. Only explicit deny
 	// and live authorization apply — first connect of an installed server must
 	// not re-prompt under headless or partial-auto policies.
+	gateArgs := tool.PermissionArgs(ctx, plan.execTool, plan.permArgs)
 	if isInstalledMCPTool(plan.execTool) || isMCPLifecycleConnectTarget(plan.execTool) {
 		if !mcpServerAuthorized(plan.execTool) {
 			return toolOutcome{
@@ -478,7 +480,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 				errMsg:  "blocked: MCP server identity is not authorized",
 			}, true
 		}
-		if denyGate, ok := a.svc.gate.(ExplicitDenyGate); ok && denyGate.ExplicitlyDenies(plan.permName, plan.permArgs) {
+		if denyGate, ok := a.svc.gate.(ExplicitDenyGate); ok && denyGate.ExplicitlyDenies(plan.permName, gateArgs) {
 			return toolOutcome{
 				output:  "blocked: denied by permission policy — this tool/command is on the deny list. Do not retry it; choose another approach or stop and explain.",
 				blocked: true,
@@ -486,7 +488,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 			}, true
 		}
 	} else if a.svc.gate != nil {
-		allow, reason, err := a.svc.gate.Check(ctx, plan.permName, plan.permArgs, plan.readOnly)
+		allow, reason, err := a.svc.gate.Check(ctx, plan.permName, gateArgs, plan.readOnly)
 		if err != nil {
 			return toolOutcome{
 				output:    fmt.Sprintf("blocked: %s (%v)", reason, err),
@@ -675,6 +677,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		} else if execution != nil && execution.Verification == "" {
 			execution.Verification = tool.ShellVerificationNotVerification
 		}
+		annotateShellSubject(execution, runArgs)
 		// Sole opaque inline interpreters are allowed outside Delivery but cannot
 		// prove mutation completeness.
 		if execution != nil && evidence.BashCommandMayBeOpaqueMutation(runArgs) &&
@@ -720,8 +723,9 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		}
 		rawErr := fmt.Sprintf("error: %v\n%s", err, detail)
 		body, bound, truncMsg := a.boundToolOutput(rawErr, call.Name, call.ID, call.Arguments, true)
+		// A failed call's screenshot is often the only record of why it failed.
 		out := toolOutcome{
-			output: body, errMsg: firstLine(err.Error()), bound: bound, truncMsg: truncMsg,
+			output: body, images: images, errMsg: firstLine(err.Error()), bound: bound, truncMsg: truncMsg,
 			execution: execution,
 		}
 		if truncMsg != "" {
@@ -745,4 +749,19 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		out.rawOutput = result
 	}
 	return out
+}
+
+// annotateShellSubject records the part of the command that names what it runs,
+// when an assignment prefix stands in front of it.
+func annotateShellSubject(execution *tool.ShellExecution, args json.RawMessage) {
+	if execution == nil || execution.Subject != "" {
+		return
+	}
+	cmd := bashCommandFromArgs(args)
+	if cmd == "" {
+		return
+	}
+	if subject, cut := shellrun.OperativeCommand(cmd); cut {
+		execution.Subject = subject
+	}
 }

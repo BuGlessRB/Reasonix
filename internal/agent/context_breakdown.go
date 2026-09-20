@@ -19,6 +19,13 @@ type ContextBreakdown struct {
 	// session actually folds: against a 1M window the default soft limit fires
 	// at 160k, so a gauge drawn against the window reads 16% when it happens.
 	CompactAt int `json:"compactAt"`
+	// Which bound that is, decided here rather than re-derived from the pair:
+	// a reader told only the number cannot say why a 1M session folds at 160k,
+	// and one comparing the two itself owns a second copy of the rule.
+	Boundary string `json:"boundary"`
+	// The window share, which is the bound the user configured and the one
+	// they will look for when the other fires instead.
+	CapacityAt int `json:"capacityAt"`
 }
 
 // ContextBreakdown measures the visible request one message class at a time.
@@ -28,10 +35,12 @@ func (a *Agent) ContextBreakdown() ContextBreakdown {
 	}
 	visible := a.modelVisibleMessages()
 	out := ContextBreakdown{
-		Total:     a.ContextUsedTokens(),
-		Window:    a.ContextWindow(),
-		CompactAt: a.compactTrigger(),
-		Tools:     a.classTokens(nil, true),
+		Total:      a.ContextUsedTokens(),
+		Window:     a.ContextWindow(),
+		CompactAt:  a.compactTrigger(),
+		Boundary:   a.compactBoundary(),
+		CapacityAt: a.capacityCompactTrigger(),
+		Tools:      a.classTokens(nil, true),
 	}
 	for _, class := range []struct {
 		role provider.Role
@@ -59,8 +68,8 @@ func (a *Agent) classTokens(msgs []provider.Message, schemas bool) int {
 		}
 		req.Messages = projected
 	}
-	if schemas && a.svc.tools != nil {
-		req.Tools = a.svc.tools.Schemas()
+	if schemas {
+		req.Tools = a.estimationSurface()
 	}
 	if len(req.Messages) == 0 && len(req.Tools) == 0 {
 		return 0
@@ -76,4 +85,20 @@ func messagesWithRole(msgs []provider.Message, role provider.Role) []provider.Me
 		}
 	}
 	return out
+}
+
+// estimationSurface is the tool surface an estimate is measured against: what
+// the last request actually carried, or the whole provider-visible set before
+// one has gone out — which overstates rather than understates.
+func (a *Agent) estimationSurface() []provider.ToolSchema {
+	if a == nil {
+		return nil
+	}
+	if sent := a.sess.lastProviderSchemas; len(sent) > 0 {
+		return sent
+	}
+	if a.svc.tools == nil {
+		return nil
+	}
+	return a.svc.tools.Schemas()
 }

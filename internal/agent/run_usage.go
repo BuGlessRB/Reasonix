@@ -112,13 +112,7 @@ func estimateSamplingRequestInputTokens(req provider.Request) int {
 	// Uncalibrated on purpose: this runs where no usage record exists, and the
 	// billing line it fills is the one the provider never sent.
 	shape := requestCalibrationShapeOf(req)
-	images := int64(0)
-	for _, msg := range provider.ModelMessages(req.Messages) {
-		for _, image := range msg.Images {
-			images += int64(len(image))
-		}
-	}
-	return max(int(float64(shape.requestChars+images)*fallbackTokPerChar), 1)
+	return max(int(float64(shape.requestChars)*fallbackTokPerChar)+int(shape.imageTokens), 1)
 }
 
 // mergeSamplingUsage accumulates billable counters across body attempts.

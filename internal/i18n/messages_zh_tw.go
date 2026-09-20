@@ -172,6 +172,10 @@ var ChineseTraditional = Messages{
 
 	ExtFormFieldsHint:         "欄位將透過逐項提問收集",
 	ExtRunActionFmt:           "執行 %s",
+	SlashRevokeNone:           "本次會話除規則檔案外沒有額外授權。",
+	SlashRevokeHint:           "用 /sandbox revoke <規則> 收回一項，或 /sandbox revoke all 全部收回。",
+	SlashRevokeUnknown:        "本次會話沒有 %q 這一項授權。",
+	SlashRevokeDone:           "已收回 %d 項，還剩 %d 項。",
 	SlashCompactFailed:        "壓縮失敗",
 	SlashCompactDeclined:      "暫時不用整理",
 	SlashNewDone:              "已開啟新會話 — 之前的對話已存檔",
@@ -538,7 +542,6 @@ var ChineseTraditional = Messages{
   reasonix hook list|status --json [--dir PATH]         檢視脫敏 Hook 狀態
   reasonix task list|show|status|events|stop|cancel|monitor|tmux --json [--dir PATH]
                                                          檢視或控制脫敏 Task
-  reasonix bot start|doctor|weixin-login                多管道 IM bot 閘道
   reasonix upgrade [--check] [--force]                   更新到最新正式版（別名：reasonix update）
   reasonix completion bash|zsh|fish                     列印 shell 補全腳本到 stdout
   reasonix version [--verbose|--json]                   列印版本（單行）或建置元資訊
@@ -583,6 +586,7 @@ var ChineseTraditional = Messages{
 	GoalNotRunning:             "沒有執行中的目標可暫停",
 	GoalNotPaused:              "沒有已暫停或被阻擋的目標可恢復",
 	GoalPaused:                 "目標已暫停 — /goal resume 可繼續",
+	AwaitingUserFmt:            "等待你的輸入：%s",
 	ImagesNotReadable:          "當前模型不讀圖 — 已附 %d 張，改由委派的子代理去看",
 	ImagesNeedVisionRole:       "當前模型不讀圖 — 已附 %d 張，現在沒人讀得了。%s 能讀圖：到 設定 › 模型 › 分工 裡把「看圖」指給它。",
 	ImagesDropped:              "當前模型不讀圖 — 已附 %d 張，會在送出去之前被丟掉。設定裡沒有任何模型能讀圖。",

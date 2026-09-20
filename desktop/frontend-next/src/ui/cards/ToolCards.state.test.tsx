@@ -17,6 +17,29 @@ describe("tool outcome cards", () => {
     expect(container.querySelector('[data-call="bad"][data-bad]')).toBeTruthy();
   });
 
+  // The reader is watching the agent operate a page or an application they
+  // cannot see. "[image: screenshot]" is the tool telling the model a picture
+  // exists; it is not the person being shown one.
+  it("shows what the call showed the model, and enlarges one on request", () => {
+    const shot = "data:image/jpeg;base64,AAAA";
+    const { container } = render(
+      <ToolCard tool={{ id: "shot", name: "computer_read", output: "Notes: front window\n[image: screenshot]", images: [shot], readOnly: false }} running={false} />,
+    );
+    const thumb = container.querySelector<HTMLButtonElement>('[data-action="tool.image-open"]');
+    expect(thumb?.querySelector("img")?.getAttribute("src")).toBe(shot);
+    expect(container.querySelector(".tshot-full")).toBeNull();
+    act(() => thumb!.click());
+    expect(container.querySelector<HTMLImageElement>(".tshot-full img")?.getAttribute("src")).toBe(shot);
+    // A picture that fills the window has to close without a mouse.
+    act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
+    expect(container.querySelector(".tshot-full")).toBeNull();
+  });
+
+  it("says nothing where a call showed nothing", () => {
+    const { container } = render(<ToolCard tool={{ id: "plain", name: "bash", output: "done", readOnly: false }} running={false} />);
+    expect(container.querySelector(".tshots")).toBeNull();
+  });
+
   it("marks an err-only tool result as failed in its heading", () => {
     render(<ToolCard tool={{ id: "bad", name: "bash", err: "boom", readOnly: false }} running={false} />);
     expect(screen.getByText("失败")).toBeTruthy();

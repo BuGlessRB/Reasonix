@@ -191,7 +191,7 @@ func assertOfficialDeepSeekDefaults(t *testing.T, tag string, p *ProviderEntry) 
 	if p.BalanceURL != "https://api.deepseek.com/user/balance" {
 		t.Errorf("%s: official DeepSeek provider has balance_url %q, want the vendor wallet endpoint; empty removes the balance readout", tag, p.BalanceURL)
 	}
-	if p.Prices["deepseek-v4-flash"] == nil {
+	if p.Prices[DeepSeekFlashModel] == nil {
 		t.Errorf("%s: official DeepSeek provider lost its per-model price backfill: prices=%v", tag, p.Prices)
 	}
 }
@@ -311,7 +311,7 @@ context_window = 65536
 	// The fold carries a declared per-model value into the canonical entry's
 	// overrides, so the question is what resolution hands the agent — the
 	// provider-wide field is no longer where that answer lives.
-	p, ok := cfg.ResolveModel("deepseek-flash/deepseek-v4-flash")
+	p, ok := cfg.ResolveModel("deepseek-flash/" + DeepSeekFlashModel)
 	if !ok {
 		t.Fatal("official DeepSeek provider missing after load")
 	}

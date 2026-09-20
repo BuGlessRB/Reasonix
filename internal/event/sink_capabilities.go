@@ -1,8 +1,9 @@
 package event
 
 import (
+	"maps"
 	"reflect"
-	"sort"
+	"slices"
 )
 
 // capabilityContracts is the single authority on the optional capabilities a
@@ -26,11 +27,7 @@ var capabilityContracts = map[string]reflect.Type{
 
 // CapabilityNames lists every optional capability in stable order.
 func CapabilityNames() []string {
-	out := make([]string, 0, len(capabilityContracts))
-	for name := range capabilityContracts {
-		out = append(out, name)
-	}
-	sort.Strings(out)
+	out := slices.Sorted(maps.Keys(capabilityContracts))
 	return out
 }
 

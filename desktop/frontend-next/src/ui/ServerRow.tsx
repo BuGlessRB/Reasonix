@@ -2,6 +2,7 @@ import { useState } from "react";
 import { t } from "../i18n";
 import type { AgentPort, McpEntry } from "../port/port";
 import { Exception } from "./CapabilityScope";
+import { Clip } from "./Clip";
 import { Switch } from "./Switch";
 import { reason } from "../i18n/kernel";
 
@@ -108,9 +109,9 @@ export function ServerRow({
   const head = (
     <>
       <i className="pip" />
-      <span className="nm">{m.name}</span>
-      {tools.length ? <span className="fold">{t("{n} 个工具", { n: m.tools })}</span> : null}
-      <span className="meta">{meta}</span>
+      <Clip className="nm">{m.name}</Clip>
+      {tools.length ? <Clip className="fold">{t("{n} 个工具", { n: m.tools })}</Clip> : null}
+      <Clip className="meta">{meta}</Clip>
       {m.localOverride && <Exception onClear={() => void run("clear", () => port.clearMcpOverride(m.name, root || undefined))} busy={busy === "clear"} />}
       {actions}
     </>
@@ -152,7 +153,7 @@ export function ServerRow({
           // 你的东西。schema 被拒的那些照列，但写明为什么调不了。
           <div className="trow" key={tool.name} data-bad={tool.error ? "" : undefined}>
             <span className="nm">{tool.name}</span>
-            <span className="ds">{tool.error || tool.description || t("未提供说明")}</span>
+            <Clip className="ds">{tool.error || tool.description || t("未提供说明")}</Clip>
             <span className="face">
               {tool.destructive ? <i className="dg">{t("会修改数据")}</i> : tool.readOnly ? <i className="ro">{t("只读")}</i> : null}
             </span>

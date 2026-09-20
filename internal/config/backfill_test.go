@@ -40,7 +40,7 @@ func TestBackfillDeepSeekProUsesConfiguredLanguage(t *testing.T) {
 	// Language no longer selects list-price tables; backfill uses USD official
 	// defaults unless the sibling provider freezes a billing_currency.
 	c := &Config{Language: "zh", Providers: []ProviderEntry{
-		{Name: "deepseek-flash", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", APIKeyEnv: "DEEPSEEK_API_KEY", BillingCurrency: "CNY", Price: deepSeekV4FlashPriceCNY()},
+		{Name: "deepseek-flash", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", APIKeyEnv: "DEEPSEEK_API_KEY", BillingCurrency: "CNY", Price: deepSeekOfficialRate(DeepSeekFlashModel, "CNY")},
 	}}
 	backfillDeepSeekPro(c)
 	pro := hasModel(c, "deepseek-v4-pro")
@@ -102,8 +102,8 @@ func TestNormalizeLegacyProviderModelsRepairsOfficialProvider(t *testing.T) {
 		APIKeyEnv: "DEEPSEEK_API_KEY",
 	}}}
 	normalizeLegacyProviderModels(c)
-	if got := c.Providers[0].Model; got != "deepseek-v4-flash" {
-		t.Fatalf("deepseek-flash model = %q, want deepseek-v4-flash", got)
+	if got := c.Providers[0].Model; got != DeepSeekFlashModel {
+		t.Fatalf("deepseek-flash model = %q, want %q", got, DeepSeekFlashModel)
 	}
 }
 
@@ -208,7 +208,7 @@ func TestLoadAndSavePreserveStepFunRegionalBaseURLs(t *testing.T) {
 	}
 }
 
-func TestNormalizeLegacyLongCatContextWindowsMigratesOnlyUntouchedOfficialPresets(t *testing.T) {
+func TestShippedPresetUpgradeLongCatContextWindowsMigratesOnlyUntouchedOfficialPresets(t *testing.T) {
 	c := &Config{Providers: []ProviderEntry{
 		{
 			Name:          "longcat-openai",
@@ -273,7 +273,7 @@ func TestNormalizeLegacyLongCatContextWindowsMigratesOnlyUntouchedOfficialPreset
 		},
 	}}
 
-	if !normalizeLegacyLongCatContextWindows(c) {
+	if !upgradeShippedPresets(c) {
 		t.Fatal("legacy LongCat context-window migration did not report a change")
 	}
 	if got := c.Providers[0].ContextWindow; got != longCat20ContextWindow {
@@ -323,7 +323,7 @@ func TestLoadForEditAppliesLegacyLongCatContextWindowMigration(t *testing.T) {
 	}
 }
 
-func TestNormalizeLegacyQwenContextWindowsMigratesOnlyOfficialPresets(t *testing.T) {
+func TestShippedPresetUpgradeQwenContextWindowsMigratesOnlyOfficialPresets(t *testing.T) {
 	qwenIDs := []string{
 		"qwen-cn",
 		"qwen-global",
@@ -371,7 +371,7 @@ func TestNormalizeLegacyQwenContextWindowsMigratesOnlyOfficialPresets(t *testing
 	}
 	c.Providers = append(c.Providers, customWindow, customEndpoint, customCatalog, customOverride)
 
-	if !normalizeLegacyQwenContextWindows(c) {
+	if !upgradeShippedPresets(c) {
 		t.Fatal("legacy Qwen context-window migration did not report a change")
 	}
 	wantOverrides := qwenModelContextOverrides()
@@ -442,8 +442,8 @@ func TestLoadForEditAppliesLegacyQwenContextWindowMigration(t *testing.T) {
 	if persisted, _ := disk.Provider("qwen-cn"); persisted == nil || persisted.ContextWindow != 0 {
 		t.Fatalf("read-only load rewrote qwen-cn = %+v, want legacy config preserved on disk", persisted)
 	}
-	if err := EditConfigFileWithoutCredentials(path, func(*Config) error { return nil }); err != nil {
-		t.Fatalf("EditConfigFileWithoutCredentials: %v", err)
+	if err := editConfigFile(path, false, func(*Config) error { return nil }); err != nil {
+		t.Fatalf("editConfigFile: %v", err)
 	}
 	disk = Config{}
 	if _, err := toml.DecodeFile(path, &disk); err != nil {
@@ -455,7 +455,7 @@ func TestLoadForEditAppliesLegacyQwenContextWindowMigration(t *testing.T) {
 	}
 }
 
-func TestNormalizeLegacyOpenCodeGoKimiK3CatalogMigratesOnlyUntouchedPreset(t *testing.T) {
+func TestShippedPresetUpgradeOpenCodeGoCatalogMigratesOnlyUntouchedPreset(t *testing.T) {
 	legacyEntry := ProviderEntry{
 		Name:          "opencode-go",
 		Kind:          "openai",
@@ -487,7 +487,7 @@ func TestNormalizeLegacyOpenCodeGoKimiK3CatalogMigratesOnlyUntouchedPreset(t *te
 	noPresetIdentity.ModelOverrides = cloneModelOverrideMap(legacyEntry.ModelOverrides)
 	c := &Config{Providers: []ProviderEntry{legacyEntry, customModels, customEndpoint, noPresetIdentity}}
 
-	if !normalizeLegacyOpenCodeGoKimiK3Catalog(c) {
+	if !upgradeShippedPresets(c) {
 		t.Fatal("legacy OpenCode Go catalog migration did not report a change")
 	}
 	got := &c.Providers[0]
@@ -517,7 +517,7 @@ func TestNormalizeLegacyOpenCodeGoKimiK3CatalogMigratesOnlyUntouchedPreset(t *te
 	preIdentity.PresetID = ""
 	preIdentity.ModelOverrides = cloneModelOverrideMap(legacyEntry.ModelOverrides)
 	preIdentityConfig := &Config{Providers: []ProviderEntry{preIdentity}}
-	if !normalizeLegacyOpenCodeGoKimiK3Catalog(preIdentityConfig) || !preIdentityConfig.Providers[0].HasModel("kimi-k3") {
+	if !upgradeShippedPresets(preIdentityConfig) || !preIdentityConfig.Providers[0].HasModel("kimi-k3") {
 		t.Fatal("pre-preset-identity OpenCode Go install was not migrated")
 	}
 
@@ -534,7 +534,7 @@ func TestNormalizeLegacyOpenCodeGoKimiK3CatalogMigratesOnlyUntouchedPreset(t *te
 	}
 	customK3.ModelOverrides["KIMI-K3"] = wantK3
 	customK3Config := &Config{Providers: []ProviderEntry{customK3}}
-	if !normalizeLegacyOpenCodeGoKimiK3Catalog(customK3Config) {
+	if !upgradeShippedPresets(customK3Config) {
 		t.Fatal("legacy OpenCode Go catalog with custom Kimi K3 override was not migrated")
 	}
 	gotK3, ok := customK3Config.Providers[0].ModelOverrides["KIMI-K3"]
@@ -546,7 +546,7 @@ func TestNormalizeLegacyOpenCodeGoKimiK3CatalogMigratesOnlyUntouchedPreset(t *te
 	}
 }
 
-func TestNormalizeLegacyKimiK3CatalogMigratesOnlyOfficialUntouchedPresets(t *testing.T) {
+func TestShippedPresetUpgradeKimiK3CatalogMigratesOnlyOfficialUntouchedPresets(t *testing.T) {
 	legacyEntry := func(id, baseURL string) ProviderEntry {
 		return ProviderEntry{
 			Name:              id,
@@ -573,7 +573,7 @@ func TestNormalizeLegacyKimiK3CatalogMigratesOnlyOfficialUntouchedPresets(t *tes
 	selectedModel.Model = "kimi-k2.7-code"
 	c := &Config{Providers: []ProviderEntry{cn, global, customModels, customEndpoint, selectedModel}}
 
-	if !normalizeLegacyKimiK3Catalog(c) {
+	if !upgradeShippedPresets(c) {
 		t.Fatal("legacy Kimi direct catalogs did not report a change")
 	}
 	for i := range 2 {
@@ -608,7 +608,7 @@ func TestNormalizeLegacyKimiK3CatalogMigratesOnlyOfficialUntouchedPresets(t *tes
 	}
 	customK3.ModelOverrides = map[string]ProviderModelOverride{"KIMI-K3": wantK3}
 	customConfig := &Config{Providers: []ProviderEntry{customK3}}
-	if !normalizeLegacyKimiK3Catalog(customConfig) {
+	if !upgradeShippedPresets(customConfig) {
 		t.Fatal("legacy Kimi catalog with custom K3 override was not migrated")
 	}
 	gotK3, ok := customConfig.Providers[0].ModelOverrides["KIMI-K3"]
@@ -620,7 +620,7 @@ func TestNormalizeLegacyKimiK3CatalogMigratesOnlyOfficialUntouchedPresets(t *tes
 	}
 }
 
-func TestNormalizeLegacyKimiK3CatalogPreservesVisionChoices(t *testing.T) {
+func TestShippedPresetUpgradeKimiK3CatalogPreservesVisionChoices(t *testing.T) {
 	base := ProviderEntry{
 		Name:         "kimi-cn",
 		Kind:         "openai",
@@ -635,7 +635,7 @@ func TestNormalizeLegacyKimiK3CatalogPreservesVisionChoices(t *testing.T) {
 	custom.VisionModels = []string{"kimi-k2.5"}
 	c := &Config{Providers: []ProviderEntry{base, custom}}
 
-	if !normalizeLegacyKimiK3Catalog(c) {
+	if !upgradeShippedPresets(c) {
 		t.Fatal("legacy Kimi catalog migration did not report a change")
 	}
 	if got := c.Providers[0].VisionModels; got == nil || len(got) != 0 {
@@ -735,7 +735,7 @@ func TestLoadForEditKeepsLegacyOpenCodeGoKimiK3CatalogMigrationInMemoryUntilSave
 	}
 }
 
-func TestNormalizeLegacyOpenCodeGoKimiK3CatalogPreservesVisionChoices(t *testing.T) {
+func TestShippedPresetUpgradeOpenCodeGoCatalogPreservesVisionChoices(t *testing.T) {
 	base := ProviderEntry{
 		Name:     "opencode-go",
 		Kind:     "openai",
@@ -758,7 +758,7 @@ func TestNormalizeLegacyOpenCodeGoKimiK3CatalogPreservesVisionChoices(t *testing
 			entry := base
 			entry.VisionModels = tt.vision
 			c := &Config{Providers: []ProviderEntry{entry}}
-			if !normalizeLegacyOpenCodeGoKimiK3Catalog(c) {
+			if !upgradeShippedPresets(c) {
 				t.Fatal("legacy OpenCode Go catalog migration did not report a change")
 			}
 			if got := c.Providers[0].VisionModels; !reflect.DeepEqual(got, tt.want) {
@@ -1035,10 +1035,10 @@ func TestNormalizeOfficialDeepSeekModelsRepairsCanonicalProvider(t *testing.T) {
 	if !ok {
 		t.Fatal("deepseek provider missing")
 	}
-	if !p.HasModel("deepseek-v4-flash") || !p.HasModel("deepseek-v4-pro") || !p.HasModel("glm-5") {
+	if !p.HasModel(DeepSeekFlashModel) || !p.HasModel(deepSeekProModel) || !p.HasModel("glm-5") {
 		t.Fatalf("deepseek models = %+v, want official models plus existing model", p.ModelList())
 	}
-	if c.DefaultModel != "deepseek/deepseek-v4-flash" {
+	if c.DefaultModel != "deepseek/"+DeepSeekFlashModel {
 		t.Fatalf("default_model = %q, want retargeted official ref", c.DefaultModel)
 	}
 	if _, ok := c.ResolveModel(c.DefaultModel); !ok {
@@ -1102,25 +1102,10 @@ func TestNormalizeLegacyMimoCustomProvidersRecognizesBareModelRefs(t *testing.T)
 	}
 }
 
-func TestNormalizeLegacyMimoCustomProvidersScansBotRefs(t *testing.T) {
-	c := Default()
-	c.Bot.Model = "mimo-pro"
-	c.Bot.Connections = []BotConnectionConfig{{Model: "mimo-flash"}}
-	if !normalizeLegacyMimoCustomProviders(c) {
-		t.Fatal("legacy bot MiMo migration did not report a change")
-	}
-	if _, ok := c.Provider("mimo-pro"); !ok {
-		t.Fatal("mimo-pro provider missing")
-	}
-	if _, ok := c.Provider("mimo-flash"); !ok {
-		t.Fatal("mimo-flash provider missing")
-	}
-}
-
 func TestNormalizeLegacyDesktopProviderAccessIncludesUnconfiguredMimoRefs(t *testing.T) {
 	c := Default()
 	c.DefaultModel = "mimo-pro"
-	c.Bot.Connections = []BotConnectionConfig{{Model: "mimo-flash"}}
+	c.Agent.SubagentModels = map[string]string{"explore": "mimo-flash"}
 	normalizeLegacyMimoCustomProviders(c)
 	NormalizeLegacyDesktopProviderAccess(c)
 	access := desktopProviderAccessMap(c.Desktop.ProviderAccess)
@@ -1142,7 +1127,7 @@ func TestBackfillDeepSeekOfficialPrices(t *testing.T) {
 	if !ok {
 		t.Fatal("deepseek provider missing")
 	}
-	if p.Prices["deepseek-v4-flash"].Output != 0.66 || p.Prices["deepseek-v4-flash"].Currency != "$" || p.Prices["deepseek-v4-pro"].Output != 1.98 || p.Prices["deepseek-v4-pro"].Currency != "$" {
+	if p.Prices["deepseek-v4-flash"].Output != 0.6 || p.Prices["deepseek-v4-flash"].Currency != "$" || p.Prices["deepseek-v4-pro"].Output != 1.98 || p.Prices["deepseek-v4-pro"].Currency != "$" {
 		t.Fatalf("deepseek prices = %+v, want default USD flash/pro prices", p.Prices)
 	}
 }
@@ -1161,7 +1146,7 @@ func TestBackfillDeepSeekOfficialPricesUsesConfiguredLanguage(t *testing.T) {
 	if !ok {
 		t.Fatal("deepseek provider missing")
 	}
-	if p.Prices["deepseek-v4-flash"].Output != 0.66 || p.Prices["deepseek-v4-flash"].Currency != "$" || p.Prices["deepseek-v4-pro"].Output != 1.98 || p.Prices["deepseek-v4-pro"].Currency != "$" {
+	if p.Prices["deepseek-v4-flash"].Output != 0.6 || p.Prices["deepseek-v4-flash"].Currency != "$" || p.Prices["deepseek-v4-pro"].Output != 1.98 || p.Prices["deepseek-v4-pro"].Currency != "$" {
 		t.Fatalf("deepseek prices = %+v, want USD official flash/pro prices", p.Prices)
 	}
 }
@@ -1203,16 +1188,16 @@ func TestBackfillDeepSeekOfficialPricesKeepsProviderWidePrice(t *testing.T) {
 	}
 }
 
-func TestApplyDeepSeekOfficialDefaultPricingUsesConfiguredLanguage(t *testing.T) {
+func TestApplyOfficialDefaultPricingUsesConfiguredLanguage(t *testing.T) {
 	// Language must not rewrite frozen billing_currency list prices.
 	c := Default()
 	c.Language = "zh"
-	applyDeepSeekOfficialDefaultPricing(c)
+	applyOfficialDefaultPricing(c)
 	flash, ok := c.Provider("deepseek-flash")
 	if !ok {
 		t.Fatal("deepseek-flash provider missing")
 	}
-	if flash.Price == nil || flash.Price.Output != 0.66 || flash.Price.Currency != "$" {
+	if flash.Price == nil || flash.Price.Output != 0.6 || flash.Price.Currency != "$" {
 		t.Fatalf("flash price = %+v, want frozen USD default table", flash.Price)
 	}
 	pro, ok := c.Provider("deepseek-pro")
@@ -1224,7 +1209,7 @@ func TestApplyDeepSeekOfficialDefaultPricingUsesConfiguredLanguage(t *testing.T)
 	}
 }
 
-func TestApplyDeepSeekOfficialDefaultPricingKeepsCustomPrice(t *testing.T) {
+func TestApplyOfficialDefaultPricingKeepsCustomPrice(t *testing.T) {
 	c := &Config{Language: "zh", Providers: []ProviderEntry{{
 		Name:    "deepseek-flash",
 		Kind:    "openai",
@@ -1232,7 +1217,7 @@ func TestApplyDeepSeekOfficialDefaultPricingKeepsCustomPrice(t *testing.T) {
 		Model:   "deepseek-v4-flash",
 		Price:   &provider.Pricing{CacheHit: 9, Input: 9, Output: 9, Currency: "$"},
 	}}}
-	applyDeepSeekOfficialDefaultPricing(c)
+	applyOfficialDefaultPricing(c)
 	p, ok := c.Provider("deepseek-flash")
 	if !ok {
 		t.Fatal("deepseek-flash provider missing")
@@ -1251,18 +1236,18 @@ name = "deepseek-flash"
 kind = "openai"
 base_url = "https://api.deepseek.com"
 model = "deepseek-v4-flash"
-price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
+price = { cache_hit = 0.003, input = 0.15, output = 0.6, currency = "$" }
 `
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	c := LoadForEdit(path)
-	flash, ok := c.ResolveModel("deepseek-flash/deepseek-v4-flash")
+	flash, ok := c.ResolveModel("deepseek-flash/" + DeepSeekFlashModel)
 	if !ok {
 		t.Fatal("official flash model missing")
 	}
-	if flash.Price == nil || flash.Price.Output != 0.66 || flash.Price.Currency != "$" {
+	if flash.Price == nil || flash.Price.Output != 0.6 || flash.Price.Currency != "$" {
 		t.Fatalf("flash price = %+v, want persisted USD preset", flash.Price)
 	}
 
@@ -1270,7 +1255,7 @@ price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
 		t.Fatalf("SetDesktopCurrency CNY: %v", err)
 	}
 	// Display currency switch must freeze list prices (USD official table stays).
-	if after, _ := c.ResolveModel("deepseek-flash/deepseek-v4-flash"); after.Price == nil || after.Price.Output != 0.66 || after.Price.Currency != "$" {
+	if after, _ := c.ResolveModel("deepseek-flash/" + DeepSeekFlashModel); after.Price == nil || after.Price.Output != 0.6 || after.Price.Currency != "$" {
 		t.Fatalf("flash price = %+v, want frozen USD official table", after.Price)
 	}
 	if got := c.DisplayCurrencyPref(); got != "CNY" {
@@ -1289,7 +1274,7 @@ name = "deepseek-flash"
 kind = "openai"
 base_url = "https://api.deepseek.com"
 model = "deepseek-v4-flash"
-price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
+price = { cache_hit = 0.003, input = 0.15, output = 0.6, currency = "$" }
 `
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -1299,11 +1284,11 @@ price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
 	if err != nil {
 		t.Fatalf("LoadForRoot: %v", err)
 	}
-	flash, ok := c.ResolveModel("deepseek-flash/deepseek-v4-flash")
+	flash, ok := c.ResolveModel("deepseek-flash/" + DeepSeekFlashModel)
 	if !ok {
 		t.Fatal("official flash model missing")
 	}
-	if flash.Price == nil || flash.Price.Output != 0.66 || flash.Price.Currency != "$" {
+	if flash.Price == nil || flash.Price.Output != 0.6 || flash.Price.Currency != "$" {
 		t.Fatalf("flash price = %+v, want persisted USD preset", flash.Price)
 	}
 }
@@ -1315,18 +1300,18 @@ name = "deepseek-flash"
 kind = "openai"
 base_url = "https://api.deepseek.com"
 model = "deepseek-v4-flash"
-price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
+price = { cache_hit = 0.003, input = 0.15, output = 0.6, currency = "$" }
 `
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	c := LoadForEdit(path)
-	flash, ok := c.ResolveModel("deepseek-flash/deepseek-v4-flash")
+	flash, ok := c.ResolveModel("deepseek-flash/" + DeepSeekFlashModel)
 	if !ok {
 		t.Fatal("official flash model missing")
 	}
-	if flash.Price == nil || flash.Price.Output != 0.66 || flash.Price.Currency != "$" {
+	if flash.Price == nil || flash.Price.Output != 0.6 || flash.Price.Currency != "$" {
 		t.Fatalf("flash price = %+v, want persisted USD preset", flash.Price)
 	}
 }
@@ -1345,7 +1330,7 @@ models = ["deepseek-v4-flash", "deepseek-v4-pro"]
 default = "deepseek-v4-flash"
 
 [providers.prices]
-deepseek-v4-flash = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
+deepseek-v4-flash = { cache_hit = 0.003, input = 0.15, output = 0.6, currency = "$" }
 `
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -1422,15 +1407,15 @@ func TestLoadForRootKeepsPricingRegionUserGlobal(t *testing.T) {
 	}
 }
 
-func TestApplyDeepSeekOfficialDefaultPricingExplicitCurrencyWins(t *testing.T) {
+func TestApplyOfficialDefaultPricingExplicitCurrencyWins(t *testing.T) {
 	c := Default()
 	c.Desktop.Language = "zh"
 	c.Desktop.Currency = "USD"
 	// Display currency no longer selects list-price tables; billing_currency does.
 	flash, _ := c.Provider("deepseek-flash")
 	flash.BillingCurrency = "USD"
-	applyDeepSeekOfficialDefaultPricing(c)
-	if flash.Price == nil || flash.Price.Output != 0.66 || flash.Price.Currency != "$" {
+	applyOfficialDefaultPricing(c)
+	if flash.Price == nil || flash.Price.Output != 0.6 || flash.Price.Currency != "$" {
 		t.Fatalf("flash price = %+v, want USD billing_currency table", flash.Price)
 	}
 
@@ -1439,9 +1424,9 @@ func TestApplyDeepSeekOfficialDefaultPricingExplicitCurrencyWins(t *testing.T) {
 	flash.BillingCurrency = "CNY"
 	// Only refresh when price still matches an official default in the *new*
 	// billing currency — force official CNY rates for this assertion.
-	flash.Price = deepSeekV4FlashPriceCNY()
-	applyDeepSeekOfficialDefaultPricing(c)
-	if flash.Price == nil || flash.Price.Output != 4.5 || flash.Price.Currency != "¥" {
+	flash.Price = deepSeekOfficialRate(DeepSeekFlashModel, "CNY")
+	applyOfficialDefaultPricing(c)
+	if flash.Price == nil || flash.Price.Output != 4 || flash.Price.Currency != "¥" {
 		t.Fatalf("flash price = %+v, want CNY billing_currency table", flash.Price)
 	}
 }
@@ -1476,9 +1461,9 @@ func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
 		t.Fatalf("SaveTo: %v", err)
 	}
 
-	changed, err := ResetOfficialProviderPricingOnUpgrade(path)
+	changed, err := ApplyUserConfigUpgradesOnStartup(path)
 	if err != nil {
-		t.Fatalf("ResetOfficialProviderPricingOnUpgrade: %v", err)
+		t.Fatalf("ApplyUserConfigUpgradesOnStartup: %v", err)
 	}
 	if !changed {
 		t.Fatal("upgrade reset did not run for config_version 2")
@@ -1497,7 +1482,7 @@ func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
 	if deepseek.Price != nil {
 		t.Fatalf("deepseek provider-wide price = %+v, want nil after reset", deepseek.Price)
 	}
-	if p := deepseek.Prices["deepseek-v4-flash"]; p == nil || p.Currency != "$" || p.Output != 0.66 {
+	if p := deepseek.Prices[DeepSeekFlashModel]; p == nil || p.Currency != "$" || p.Output != 0.6 {
 		t.Fatalf("deepseek flash price = %+v, want USD default", p)
 	}
 	if p := deepseek.Prices["deepseek-v4-pro"]; p == nil || p.Currency != "$" || p.Output != 1.98 {
@@ -1511,13 +1496,13 @@ func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
 		t.Fatalf("mimo provider-wide price = %+v, want custom price preserved", mimo.Price)
 	}
 
-	deepseek.Prices["deepseek-v4-flash"] = &provider.Pricing{CacheHit: 4, Input: 4, Output: 4, Currency: "$"}
+	deepseek.Prices[DeepSeekFlashModel] = &provider.Pricing{CacheHit: 4, Input: 4, Output: 4, Currency: "$"}
 	if err := got.SaveTo(path); err != nil {
 		t.Fatalf("SaveTo after custom edit: %v", err)
 	}
-	changed, err = ResetOfficialProviderPricingOnUpgrade(path)
+	changed, err = ApplyUserConfigUpgradesOnStartup(path)
 	if err != nil {
-		t.Fatalf("second ResetOfficialProviderPricingOnUpgrade: %v", err)
+		t.Fatalf("second ApplyUserConfigUpgradesOnStartup: %v", err)
 	}
 	if changed {
 		t.Fatal("upgrade reset ran again after config_version was updated")
@@ -1527,7 +1512,7 @@ func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
 		t.Fatalf("decode custom config: %v", err)
 	}
 	deepseek, _ = got.Provider("deepseek")
-	if p := deepseek.Prices["deepseek-v4-flash"]; p == nil || p.Output != 4 || p.Currency != "$" {
+	if p := deepseek.Prices[DeepSeekFlashModel]; p == nil || p.Output != 4 || p.Currency != "$" {
 		t.Fatalf("post-upgrade custom flash price = %+v, want preserved", p)
 	}
 }
@@ -1567,7 +1552,7 @@ func TestApplyUserConfigUpgradesOnStartupVersion3NonWindowsAdvancesToV5(t *testi
 		t.Fatalf("config_version = %d, want %d", got.ConfigVersion, Default().ConfigVersion)
 	}
 	deepseek, _ := got.Provider("deepseek")
-	if p := deepseek.Prices["deepseek-v4-flash"]; p == nil || p.Output != 4 || p.Currency != "$" {
+	if p := deepseek.Prices[DeepSeekFlashModel]; p == nil || p.Output != 4 || p.Currency != "$" {
 		t.Fatalf("custom flash price = %+v, want preserved", p)
 	}
 }
@@ -1700,7 +1685,7 @@ func TestResolveModelUsesPerModelPricing(t *testing.T) {
 		Default: "deepseek-v4-flash",
 		Price:   &provider.Pricing{CacheHit: 9, Input: 9, Output: 9, Currency: "$"},
 		Prices: map[string]*provider.Pricing{
-			"deepseek-v4-flash": &provider.Pricing{CacheHit: 0.05, Input: 1.5, Output: 4.5, Currency: "¥"},
+			"deepseek-v4-flash": &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 4, Currency: "¥"},
 			"deepseek-v4-pro":   &provider.Pricing{CacheHit: 0.15, Input: 4.5, Output: 13.5, Currency: "¥"},
 		},
 	}}}
@@ -1715,7 +1700,7 @@ func TestResolveModelUsesPerModelPricing(t *testing.T) {
 	if !ok {
 		t.Fatal("deepseek default did not resolve")
 	}
-	if flash.Price == nil || flash.Price.Output != 4.5 {
+	if flash.Price == nil || flash.Price.Output != 4 {
 		t.Fatalf("flash price = %+v, want model-specific flash price", flash.Price)
 	}
 }

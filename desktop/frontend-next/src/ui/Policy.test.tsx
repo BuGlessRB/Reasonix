@@ -29,7 +29,7 @@ describe("execution permission control", () => {
   it("keeps the dangerous state visible on the closed trigger", () => {
     const { container } = draw("yolo");
     expect(container.querySelector(".polrisk")?.textContent).toContain("全部放行");
-    expect(container.querySelector(".polwarn")?.textContent).toBe("⚠");
+    expect(container.querySelector(".polwarn svg")).not.toBeNull();
   });
 
   it("contains permission choices only", async () => {

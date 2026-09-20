@@ -12,7 +12,6 @@ import (
 
 	productcontent "reasonix/docs"
 	"reasonix/internal/provider"
-	releasenotes "reasonix/release-notes"
 )
 
 func TestEmbeddedCatalogLoadsDeterministically(t *testing.T) {
@@ -24,8 +23,8 @@ func TestEmbeddedCatalogLoadsDeterministically(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadCatalog second time: %v", err)
 	}
-	if len(first.docs) < 40 {
-		t.Fatalf("embedded docs = %d, want at least 40", len(first.docs))
+	if len(first.docs) < 30 {
+		t.Fatalf("embedded docs = %d, want at least 30", len(first.docs))
 	}
 	if len(first.sections) < len(first.docs) {
 		t.Fatalf("embedded sections = %d, docs = %d", len(first.sections), len(first.docs))
@@ -46,7 +45,7 @@ func TestEmbeddedAndSourceManifestsMatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EmbeddedManifest: %v", err)
 	}
-	source, err := SourceManifest(productcontent.Content, releasenotes.Content)
+	source, err := SourceManifest(productcontent.Content)
 	if err != nil {
 		t.Fatalf("SourceManifest: %v", err)
 	}
@@ -56,17 +55,14 @@ func TestEmbeddedAndSourceManifestsMatch(t *testing.T) {
 	if !strings.HasPrefix(embedded.Digest, "sha256:") || embedded.Version == "" || embedded.Revision == "" {
 		t.Fatalf("manifest is missing build identity: %#v", embedded)
 	}
-	if embedded.ReleaseNotes < 10 {
-		t.Fatalf("embedded release notes = %d, want release history", embedded.ReleaseNotes)
-	}
 }
 
 func TestDocsCommandOverviewAndSearchUseEmbeddedCorpus(t *testing.T) {
-	overview, err := CommandOverview("zh-CN")
+	overview, err := CommandOverviewFor("zh-CN", "/docs")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"内置 Reasonix 文档", "version=", "revision=", "digest=sha256:", "/docs 1.19.5 更新日志"} {
+	for _, want := range []string{"内置 Reasonix 文档", "version=", "revision=", "digest=sha256:", "/docs 如何配置 MCP 服务器"} {
 		if !strings.Contains(overview, want) {
 			t.Fatalf("command overview missing %q:\n%s", want, overview)
 		}
@@ -79,14 +75,12 @@ func TestDocsCommandOverviewAndSearchUseEmbeddedCorpus(t *testing.T) {
 		t.Fatalf("qualified command overview used the wrong invocation:\n%s", qualified)
 	}
 
-	results, err := SearchEmbedded(context.Background(), "1.19.5 更新日志")
+	results, err := SearchEmbedded(context.Background(), "REASONIX_HOME configuration paths")
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstStart := strings.Index(results, "\n1. ")
-	firstEnd := strings.Index(results, "\n2. ")
-	if firstStart < 0 || firstEnd <= firstStart || !strings.Contains(results[firstStart:firstEnd], "path=changelog/v1.19.5.zh-CN.md") || !strings.Contains(results, "digest=sha256:") {
-		t.Fatalf("command search did not use the embedded release catalog:\n%s", results)
+	if !strings.Contains(results, "path=docs/CONFIG_PATHS.md") || !strings.Contains(results, "digest=sha256:") {
+		t.Fatalf("command search did not use the embedded corpus:\n%s", results)
 	}
 }
 
@@ -97,11 +91,8 @@ func TestExtensionDeveloperGuidesAreEmbeddedAndSearchable(t *testing.T) {
 	}
 	for _, path := range []string{
 		"EXTENSIONS.md",
-		"EXTENSIONS.zh-CN.md",
 		"EXTENSION_PROTOCOL.md",
-		"EXTENSION_PROTOCOL.zh-CN.md",
 		"PLUGIN_PACKAGES.md",
-		"PLUGIN_PACKAGES.zh-CN.md",
 	} {
 		if _, ok := c.byPath[path]; !ok {
 			t.Fatalf("extension developer guide %q is missing from the embedded catalog", path)
@@ -116,22 +107,14 @@ func TestExtensionDeveloperGuidesAreEmbeddedAndSearchable(t *testing.T) {
 	if !strings.Contains(english, "path=docs/EXTENSIONS.md") || !strings.Contains(english, "path=docs/PLUGIN_PACKAGES.md") {
 		t.Fatalf("English extension search did not expose the overview and manifest reference:\n%s", english)
 	}
-
-	chinese, err := tool.search(context.Background(), "Sidecar 插件 Manifest v2 扩展开发", "zh-CN", "all", 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(chinese, "path=docs/EXTENSIONS.zh-CN.md") || !strings.Contains(chinese, "path=docs/PLUGIN_PACKAGES.zh-CN.md") {
-		t.Fatalf("Chinese extension search did not expose the overview and manifest reference:\n%s", chinese)
-	}
 }
 
 func TestSourceManifestChangesWithMarkdownBytes(t *testing.T) {
-	first, err := SourceManifest(fstest.MapFS{"GUIDE.md": {Data: []byte("# Guide\n\nFirst.\n")}}, nil)
+	first, err := SourceManifest(fstest.MapFS{"GUIDE.md": {Data: []byte("# Guide\n\nFirst.\n")}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := SourceManifest(fstest.MapFS{"GUIDE.md": {Data: []byte("# Guide\n\nSecond.\n")}}, nil)
+	second, err := SourceManifest(fstest.MapFS{"GUIDE.md": {Data: []byte("# Guide\n\nSecond.\n")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,14 +150,14 @@ func TestSourceManifestDigestUsesUnambiguousFileFraming(t *testing.T) {
 	first, err := SourceManifest(fstest.MapFS{
 		"A.md": {Data: firstA},
 		"B.md": {Data: firstB},
-	}, nil)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	second, err := SourceManifest(fstest.MapFS{
 		"A.md": {Data: secondA},
 		"B.md": {Data: secondB},
-	}, nil)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,107 +204,6 @@ func TestSearchRejectsOversizedQueriesBeforeRetrieval(t *testing.T) {
 	}
 }
 
-func TestReleaseNotesAreSearchableInBothLanguages(t *testing.T) {
-	c, err := loadCatalogWithReleaseNotes(productcontent.Content, releasenotes.Content)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tl := &docsTool{catalog: c}
-
-	english, err := tl.search(context.Background(), "v1.19.5 usage statistics dashboard", "en", "user", 5)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(english, "path=changelog/v1.19.5.md") || !strings.Contains(english, "source=release-notes/releases.json#v1.19.5") {
-		t.Fatalf("English release search missing versioned changelog:\n%s", english)
-	}
-
-	chinese, err := tl.search(context.Background(), "v1.19.5 用量统计面板", "zh-CN", "user", 5)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(chinese, "path=changelog/v1.19.5.zh-CN.md") {
-		t.Fatalf("Chinese release search missing versioned changelog:\n%s", chinese)
-	}
-
-	sections, err := tl.read("", "changelog/v1.19.5.zh-CN.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(sections, "source: release-notes/releases.json#v1.19.5") {
-		t.Fatalf("release section listing missing JSON provenance:\n%s", sections)
-	}
-	section, err := tl.read("changelog/v1.19.5.zh-CN.md::s002", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(section, "source: release-notes/releases.json#v1.19.5 rendered-lines=") {
-		t.Fatalf("release section missing rendered provenance:\n%s", section)
-	}
-}
-
-func TestReleaseSearchDoesNotTreatPreviewAsExactStableVersion(t *testing.T) {
-	docsFS := fstest.MapFS{
-		"GUIDE.md": {Data: []byte("# Guide\n\nEmbedded documentation.\n")},
-	}
-	releaseNotesFS := fstest.MapFS{
-		"releases.json": {Data: []byte(`{
-			"releases": [
-				{"version":"1.19.0","title":{"en":"Stable","zh":"稳定版"},"summary":{"en":"Stable changelog","zh":"稳定版更新日志"}},
-				{"version":"1.19.0-preview.1","title":{"en":"Preview","zh":"预览版"},"summary":{"en":"Preview-only changelog","zh":"仅预览版更新日志"}}
-			]
-		}`)},
-	}
-	c, err := loadCatalogWithReleaseNotes(docsFS, releaseNotesFS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tl := &docsTool{catalog: c}
-
-	stable, err := tl.search(context.Background(), "1.19.0 changelog", "en", "user", 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(stable, "path=changelog/v1.19.0.md") {
-		t.Fatalf("stable release search missing exact changelog:\n%s", stable)
-	}
-	if strings.Contains(stable, "path=changelog/v1.19.0-preview.1.md") {
-		t.Fatalf("stable release search treated preview as an exact version match:\n%s", stable)
-	}
-
-	preview, err := tl.search(context.Background(), "1.19.0-preview.1 changelog", "en", "user", 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(preview, "path=changelog/v1.19.0-preview.1.md") {
-		t.Fatalf("preview release search missing exact changelog:\n%s", preview)
-	}
-}
-
-func TestSourceManifestChangesWithReleaseCatalogBytes(t *testing.T) {
-	docsFS := fstest.MapFS{"GUIDE.md": {Data: []byte("# Guide\n\nBody.\n")}}
-	firstNotes := fstest.MapFS{"releases.json": {Data: []byte(`{"releases":[{"version":"1.0.0","title":{"en":"First","zh":"第一"},"summary":{"en":"Body","zh":"正文"}}]}`)}}
-	secondNotes := fstest.MapFS{"releases.json": {Data: []byte(`{"releases":[{"version":"1.0.0","title":{"en":"Second","zh":"第二"},"summary":{"en":"Body","zh":"正文"}}]}`)}}
-	first, err := SourceManifest(docsFS, firstNotes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := SourceManifest(docsFS, secondNotes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.Digest == second.Digest || first.ReleaseNotes != 1 || second.ReleaseNotes != 1 {
-		t.Fatalf("release catalog was not bound into manifests: first=%#v second=%#v", first, second)
-	}
-}
-
-func TestReleaseCatalogRejectsUnsafeVirtualPathVersion(t *testing.T) {
-	_, _, err := renderReleaseDocuments([]byte(`{"releases":[{"version":"../secret","title":{"en":"Bad","zh":"错误"},"summary":{"en":"Body","zh":"正文"}}]}`))
-	if err == nil || !strings.Contains(err.Error(), "invalid version") {
-		t.Fatalf("unsafe release version error = %v", err)
-	}
-}
-
 func TestSearchPrefersRelevantChineseAndEnglishSections(t *testing.T) {
 	c, err := loadCatalog(productcontent.Content)
 	if err != nil {
@@ -333,8 +215,8 @@ func TestSearchPrefersRelevantChineseAndEnglishSections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Chinese search: %v", err)
 	}
-	if !strings.Contains(zh, "docs/TOOL_APPROVAL_MODES.zh-CN.md") {
-		t.Fatalf("Chinese search did not find the permission guide:\n%s", zh)
+	if !strings.Contains(zh, "path=docs/CLI.zh-CN.md") || !strings.Contains(zh, "权限") {
+		t.Fatalf("Chinese search did not find the permission reference:\n%s", zh)
 	}
 
 	en, err := tl.search(context.Background(), "REASONIX_HOME configuration paths", "auto", "all", 5)
@@ -389,6 +271,27 @@ func TestParserIgnoresHeadingsInsideFencedCode(t *testing.T) {
 	}
 	if !strings.Contains(doc.sections[1].content, "### Not a section") || !strings.Contains(doc.sections[1].content, "### Indented code") {
 		t.Fatalf("code-block heading content was lost: %q", doc.sections[1].content)
+	}
+}
+
+// The ownership header is metadata for maintainers. Markdown alone would read
+// its closing --- as a setext underline and serve the owners as a section.
+func TestOwnershipHeaderIsNotASection(t *testing.T) {
+	content := "---\nowner: @a\nbackup: @b\nstatus: active\nreviewed: 2026-09-17\n---\n\n# Runbook\n\n## Steps\n\nDo it.\n"
+	doc := parseDocument("RUNBOOK.md", content)
+	if len(doc.sections) != 2 {
+		t.Fatalf("sections = %d (%+v), want the title and Steps only", len(doc.sections), doc.sections)
+	}
+	for _, sec := range doc.sections {
+		if strings.Contains(sec.heading, "owner") || strings.Contains(sec.content, "@a") {
+			t.Fatalf("header leaked into section %q: %q", sec.heading, sec.content)
+		}
+	}
+	if doc.title != "Runbook" || doc.sections[1].startLine != 10 {
+		t.Fatalf("title=%q steps line=%d, want Runbook at the file's own line 10", doc.title, doc.sections[1].startLine)
+	}
+	if got := parseDocument("NOTE.md", "---\nnot closed\n# Title\n"); len(got.sections) == 0 {
+		t.Fatal("an unterminated delimiter is ordinary Markdown and must still parse")
 	}
 }
 

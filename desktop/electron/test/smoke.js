@@ -3,8 +3,40 @@
 // src/main.js opened, loaded from the kernel it spawned. Run with `pnpm smoke`.
 const os = require("node:os");
 const path = require("node:path");
+const fs = require("node:fs");
 const { app, BrowserWindow, Menu } = require("electron");
+
+// The window these judgements are about is the workbench. A data home with no
+// model configured in it opens on the onboarding card instead, where none of
+// that window exists — and the drag-region check then fails saying "no .chrome",
+// which reads as a defect and is the sweep never reaching its subject. So the
+// home is brought to the state the judgements assume, before the shell reads
+// it. A home that already carries a configuration is left exactly as it is.
+seedHome(process.env.REASONIX_HOME);
 const { current } = require("../src/main.js");
+
+function seedHome(home) {
+  if (!home || fs.existsSync(path.join(home, "config.toml"))) return;
+  fs.mkdirSync(home, { recursive: true });
+  // Unreachable on purpose: this window is never asked to run a turn, and a
+  // port nothing listens on cannot answer one by accident.
+  fs.writeFileSync(path.join(home, "config.toml"), [
+    'default_model = "smoke/smoke-model"',
+    "",
+    "[desktop]",
+    "welcomed = true",
+    "",
+    "[[providers]]",
+    'name        = "smoke"',
+    'kind        = "openai"',
+    'base_url    = "http://127.0.0.1:9/v1"',
+    'models      = ["smoke-model"]',
+    'default     = "smoke-model"',
+    'api_key_env = "SMOKE_API_KEY"',
+    "",
+  ].join("\n"));
+  fs.writeFileSync(path.join(home, ".env"), "SMOKE_API_KEY=smoke\n");
+}
 
 const WINDOW_TIMEOUT_MS = 40000;
 const failures = [];
@@ -48,7 +80,7 @@ async function run() {
     placed: typeof window.reasonixHost?.pathForFile(new File(['x'], 'x.txt')),
   }))()`);
 
-  const verbs = ["closeWindow", "isWindowMaximised", "minimiseWindow", "openExternal", "pathForFile", "pickFolder", "platform", "saveBytes", "saveText", "shell", "titleBar", "toggleMaximiseWindow"];
+  const verbs = ["closeWindow", "controlBrowserView", "hideBrowserView", "isWindowMaximised", "minimiseWindow", "navigateBrowserView", "openExternal", "pathForFile", "pickFolder", "platform", "saveBytes", "saveText", "shell", "showBrowserView", "titleBar", "toggleMaximiseWindow"];
   check("the bridge exposes verbs and nothing else", JSON.stringify(seen.bridge) === JSON.stringify(verbs), seen.bridge);
   check("the credential never reaches the page", !seen.cookie.includes("reasonix_token"), seen.cookie);
   check("the renderer has no node of its own", seen.globals.every((t) => t === "undefined"), seen.globals);
@@ -77,7 +109,7 @@ async function run() {
   // fail on it and would be worse than none.
   const dragging = await js(`(() => {
     const bar = document.querySelector('.chrome');
-    if (!bar) return ['no .chrome'];
+    if (!bar) return ['the window is not the workbench — no .chrome to weigh'];
     const out = [];
     const INTERACTIVE = 'button, a[href], input, select, textarea, summary, ' +
       '[role=button], [role=tab], [role=option], [role=menuitem], [role=menuitemcheckbox], ' +

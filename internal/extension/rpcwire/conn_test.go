@@ -49,12 +49,12 @@ func TestHandlerResponseAfterWriteRunsAfterSuccessfulFrame(t *testing.T) {
 	}, 1)
 	conn := NewConn(strings.NewReader(request), &out, Options{StrictJSONRPC: true})
 	conn.Handle("detach", func(context.Context, json.RawMessage) (any, error) {
-		return RespondThen(map[string]bool{"detached": true}, func(err error) {
+		return HandlerResponse{Result: map[string]bool{"detached": true}, AfterWrite: func(err error) {
 			callback <- struct {
 				err      error
 				response string
 			}{err: err, response: out.String()}
-		}), nil
+		}}, nil
 	})
 	if err := conn.Serve(context.Background()); err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestHandlerResponseAfterWriteReceivesTransportFailure(t *testing.T) {
 		Options{StrictJSONRPC: true},
 	)
 	conn.Handle("detach", func(context.Context, json.RawMessage) (any, error) {
-		return RespondThen(map[string]bool{"detached": true}, func(err error) { callback <- err }), nil
+		return HandlerResponse{Result: map[string]bool{"detached": true}, AfterWrite: func(err error) { callback <- err }}, nil
 	})
 	if err := conn.Serve(context.Background()); !errors.Is(err, wantErr) {
 		t.Fatalf("Serve error = %v, want %v", err, wantErr)
@@ -94,9 +94,9 @@ func TestRequestKeepsDeliveredResponseWhenPeerClosesAfterWrite(t *testing.T) {
 		client := NewConn(serverToClientR, clientToServerW, Options{Name: "response-close-client"})
 		server := NewConn(clientToServerR, serverToClientW, Options{Name: "response-close-server"})
 		server.Handle("detach", func(context.Context, json.RawMessage) (any, error) {
-			return RespondThen(map[string]bool{"detached": true}, func(error) {
+			return HandlerResponse{Result: map[string]bool{"detached": true}, AfterWrite: func(error) {
 				_ = serverToClientW.Close()
-			}), nil
+			}}, nil
 		})
 		ctx, cancel := context.WithCancel(context.Background())
 		clientDone := make(chan struct{})

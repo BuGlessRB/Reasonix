@@ -166,6 +166,48 @@ if (survey.orphans.length) {
 }
 check("接受指针的元素均为控件", survey.orphans.length === 0, survey.orphans.length ? `${survey.orphans.length} 种不是控件` : "");
 
+// Where the shell hides its own title bar, this row is the drag handle. The
+// two spellings that say so do not agree about inheritance: --wails-draggable
+// is a custom property and reaches every descendant, -webkit-app-region is a
+// regular one and reaches none of them. So a row that declares drag and stops
+// there is draggable only where nothing is painted, and the breadcrumb alone
+// covers a thousand pixels of it.
+//
+// Asked as a hole, not as a list of controls: a control opts out and its own
+// rectangle then covers whatever it draws inside itself, so nothing on the bar
+// may be neither draggable nor part of a control.
+const holes = await page.evaluate(() => {
+  document.documentElement.dataset.titlebar = "app";
+  const chrome = document.querySelector(".chrome");
+  if (!chrome) return null;
+  const region = (el) => getComputedStyle(el).getPropertyValue("-webkit-app-region");
+  const inControl = (el) => {
+    for (let p = el.parentElement; p && p !== chrome; p = p.parentElement) {
+      if (region(p) === "no-drag") return true;
+    }
+    return false;
+  };
+  const out = new Map();
+  for (const el of chrome.querySelectorAll("*")) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) continue;
+    if (region(el) !== "none" || inControl(el)) continue;
+    const cls = typeof el.className === "string" ? el.className.split(/\s+/)[0] : "";
+    const key = `${el.tagName.toLowerCase()}${cls ? "." + cls : ""} ${Math.round(r.width)}px`;
+    out.set(key, (out.get(key) ?? 0) + 1);
+  }
+  return [...out];
+});
+if (holes === null) {
+  check("标题栏上没有既不可拖也不属于控件的部分", false, "这一屏没有 .chrome，守卫无事可守");
+} else {
+  if (holes.length) {
+    console.log(`\n标题栏上既不可拖、也不属于任何控件的部分 ${holes.length} 种：`);
+    for (const [k, n] of holes) console.log(`  ${String(n).padStart(3)}  ${k}`);
+  }
+  check("标题栏上没有既不可拖也不属于控件的部分", holes.length === 0, holes.length ? `${holes.length} 种` : "");
+}
+
 await browser.close();
 console.log(fails.length ? `\n${fails.length} 项未通过` : "\n全部通过");
 process.exit(fails.length ? 1 : 0);

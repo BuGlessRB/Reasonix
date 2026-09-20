@@ -15,6 +15,10 @@ import (
 	"reasonix/internal/testenv"
 )
 
+func runProbesWithOverrides(ctx context.Context, commands []string, overrides map[string]string) []ProbeResult {
+	return RunProbesWithOptions(ctx, commands, ProbeOptions{Overrides: overrides})
+}
+
 func TestFormatSectionSortsAndRedacts(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -44,7 +48,7 @@ func TestFormatSectionSortsAndRedacts(t *testing.T) {
 }
 
 func TestRunProbesReportsMissingCommand(t *testing.T) {
-	results := RunProbes(context.Background(), []string{"__reasonix_missing_probe__ --version"})
+	results := runProbesWithOverrides(context.Background(), []string{"__reasonix_missing_probe__ --version"}, nil)
 	if len(results) != 1 {
 		t.Fatalf("results len = %d, want 1", len(results))
 	}
@@ -61,7 +65,7 @@ func TestRunProbesUsesOverridePathAndFirstLine(t *testing.T) {
 	toolPath := filepath.Join(dir, "mytool")
 	toolPath = writeProbeTool(t, toolPath, "custom version\nignored")
 
-	results := RunProbesWithOverrides(context.Background(), []string{"mytool --version"}, map[string]string{"mytool": toolPath})
+	results := runProbesWithOverrides(context.Background(), []string{"mytool --version"}, map[string]string{"mytool": toolPath})
 	if len(results) != 1 {
 		t.Fatalf("results len = %d, want 1", len(results))
 	}
@@ -79,7 +83,7 @@ func TestRunProbesParsesQuotedStaticArgs(t *testing.T) {
 	toolPath := filepath.Join(dir, "quotedtool")
 	toolPath = writeProbeTool(t, toolPath, "quoted version")
 
-	results := RunProbesWithOverrides(context.Background(), []string{`quotedtool "--version with spaces"`}, map[string]string{"quotedtool": toolPath})
+	results := runProbesWithOverrides(context.Background(), []string{`quotedtool "--version with spaces"`}, map[string]string{"quotedtool": toolPath})
 	if len(results) != 1 {
 		t.Fatalf("results len = %d, want 1", len(results))
 	}
@@ -94,7 +98,7 @@ func TestRunProbesAllowsStaticEnvAssignment(t *testing.T) {
 	toolPath := filepath.Join(dir, "envtool")
 	toolPath = writeEnvProbeTool(t, toolPath)
 
-	results := RunProbesWithOverrides(context.Background(), []string{`REASONIX_PROBE_ENV=ok envtool --version`}, map[string]string{"envtool": toolPath})
+	results := runProbesWithOverrides(context.Background(), []string{`REASONIX_PROBE_ENV=ok envtool --version`}, map[string]string{"envtool": toolPath})
 	if len(results) != 1 {
 		t.Fatalf("results len = %d, want 1", len(results))
 	}
@@ -109,7 +113,7 @@ func TestRunProbesAllowsStaticStderrMerge(t *testing.T) {
 	toolPath := filepath.Join(dir, "stderrtool")
 	toolPath = writeStderrProbeTool(t, toolPath, "stderr version")
 
-	results := RunProbesWithOverrides(context.Background(), []string{`stderrtool --version 2>&1`}, map[string]string{"stderrtool": toolPath})
+	results := runProbesWithOverrides(context.Background(), []string{`stderrtool --version 2>&1`}, map[string]string{"stderrtool": toolPath})
 	if len(results) != 1 {
 		t.Fatalf("results len = %d, want 1", len(results))
 	}
@@ -166,7 +170,7 @@ func TestRunProbesReportsTimeout(t *testing.T) {
 		t.Fatalf("write tool: %v", err)
 	}
 
-	results := RunProbesWithOverrides(context.Background(), []string{"slowtool --version"}, map[string]string{"slowtool": toolPath})
+	results := runProbesWithOverrides(context.Background(), []string{"slowtool --version"}, map[string]string{"slowtool": toolPath})
 	if len(results) != 1 {
 		t.Fatalf("results len = %d, want 1", len(results))
 	}
@@ -198,14 +202,14 @@ func TestRunProbesCachesByFingerprint(t *testing.T) {
 	toolPath := filepath.Join(dir, "cachedtool")
 	toolPath = writeProbeTool(t, toolPath, "version one")
 
-	results := RunProbesWithOverrides(context.Background(), []string{"cachedtool --version"}, map[string]string{"cachedtool": toolPath})
+	results := runProbesWithOverrides(context.Background(), []string{"cachedtool --version"}, map[string]string{"cachedtool": toolPath})
 	if got := results[0].Output; got != "version one" {
 		t.Fatalf("first Output = %q, want version one", got)
 	}
 	results[0].Output = "mutated"
 	toolPath = writeProbeTool(t, toolPath, "version two")
 
-	results = RunProbesWithOverrides(context.Background(), []string{"cachedtool --version"}, map[string]string{"cachedtool": toolPath})
+	results = runProbesWithOverrides(context.Background(), []string{"cachedtool --version"}, map[string]string{"cachedtool": toolPath})
 	if got := results[0].Output; got != "version one" {
 		t.Fatalf("cached Output = %q, want version one", got)
 	}
@@ -218,14 +222,14 @@ func TestRunProbesCacheExpires(t *testing.T) {
 	toolPath := filepath.Join(dir, "expiringtool")
 	toolPath = writeProbeTool(t, toolPath, "version one")
 
-	results := RunProbesWithOverrides(context.Background(), []string{"expiringtool --version"}, map[string]string{"expiringtool": toolPath})
+	results := runProbesWithOverrides(context.Background(), []string{"expiringtool --version"}, map[string]string{"expiringtool": toolPath})
 	if got := results[0].Output; got != "version one" {
 		t.Fatalf("first Output = %q, want version one", got)
 	}
 	toolPath = writeProbeTool(t, toolPath, "version two")
 	setProbeNowForTest(now.Add(probeCacheTTL + time.Second))
 
-	results = RunProbesWithOverrides(context.Background(), []string{"expiringtool --version"}, map[string]string{"expiringtool": toolPath})
+	results = runProbesWithOverrides(context.Background(), []string{"expiringtool --version"}, map[string]string{"expiringtool": toolPath})
 	if got := results[0].Output; got != "version two" {
 		t.Fatalf("expired Output = %q, want version two", got)
 	}
@@ -239,11 +243,11 @@ func TestRunProbesCacheSeparatesOverrides(t *testing.T) {
 	toolOne = writeProbeTool(t, toolOne, "version one")
 	toolTwo = writeProbeTool(t, toolTwo, "version two")
 
-	results := RunProbesWithOverrides(context.Background(), []string{"overridetool --version"}, map[string]string{"overridetool": toolOne})
+	results := runProbesWithOverrides(context.Background(), []string{"overridetool --version"}, map[string]string{"overridetool": toolOne})
 	if got := results[0].Output; got != "version one" {
 		t.Fatalf("first override Output = %q, want version one", got)
 	}
-	results = RunProbesWithOverrides(context.Background(), []string{"overridetool --version"}, map[string]string{"overridetool": toolTwo})
+	results = runProbesWithOverrides(context.Background(), []string{"overridetool --version"}, map[string]string{"overridetool": toolTwo})
 	if got := results[0].Output; got != "version two" {
 		t.Fatalf("second override Output = %q, want version two", got)
 	}
@@ -372,7 +376,7 @@ func TestRunProbesFilterSubprocessEnv(t *testing.T) {
 	secrets.SetFilterSubprocessEnv(true)
 	t.Cleanup(func() { secrets.SetFilterSubprocessEnv(false) })
 
-	results := RunProbesWithOverrides(context.Background(), []string{"envtool --version"}, map[string]string{"envtool": toolPath})
+	results := runProbesWithOverrides(context.Background(), []string{"envtool --version"}, map[string]string{"envtool": toolPath})
 	if len(results) != 1 || !results[0].Found {
 		t.Fatalf("probe result = %+v", results)
 	}

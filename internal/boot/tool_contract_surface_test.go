@@ -2,7 +2,6 @@ package boot
 
 import (
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -11,23 +10,62 @@ import (
 
 // unifiedBootToolNames is the provider-visible surface shared by every Agent
 // role setting under identical configuration (core tools + host-control tools).
-func unifiedBootToolNames() []string {
+// stableBootToolNames is the segment every turn carries, in the order it is
+// sent. It may not move with the turn's context: it is the cache prefix each
+// request shares with the last.
+func stableBootToolNames() []string {
 	return []string{
 		"ask",
+		"await_user",
 		"bash",
-		"bash_output",
-		"complete_step",
+		"browser_act",
+		"browser_open",
+		"browser_read",
 		"compress",
 		"context_budget",
 		"edit_file",
-		"kill_shell",
 		"read_file",
 		"recall",
 		"todo_write",
-		"update_goal",
 		"use_capability",
-		"wait",
 		"write_file",
+	}
+}
+
+// contextualBootToolNames may come and go with what the turn carries, and only
+// ever after the stable segment, so an absence is a byte prefix of a presence.
+func contextualBootToolNames() []string {
+	return []string{"bash_output", "complete_step", "kill_shell", "update_goal", "wait"}
+}
+
+// assertSegmentedSurface holds the shape both cache and contract depend on: the
+// stable segment identical and first, the rest drawn from the contextual set in
+// its own order, and nothing else.
+func assertSegmentedSurface(t *testing.T, label string, got []string) {
+	t.Helper()
+	stable := stableBootToolNames()
+	if len(got) < len(stable) {
+		t.Fatalf("%s surface is shorter than the stable segment\ngot  %v\nstable %v", label, got, stable)
+	}
+	for i, want := range stable {
+		if got[i] != want {
+			t.Fatalf("%s stable segment moved at %d\ngot  %v\nwant %v first", label, i, got, stable)
+		}
+	}
+	allowed := map[string]int{}
+	for i, name := range contextualBootToolNames() {
+		allowed[name] = i
+	}
+	last := -1
+	for _, name := range got[len(stable):] {
+		at, ok := allowed[name]
+		if !ok {
+			t.Fatalf("%s carries %q after the stable segment, which is neither stable nor contextual\ngot %v", label, name, got)
+		}
+		if at <= last {
+			t.Fatalf("%s contextual segment is out of order at %q\ngot %v", label, name, got)
+		}
+		last = at
 	}
 }
 
@@ -56,18 +94,17 @@ model = "x"
 `)
 
 			req, entries := captureTokenProfileSurface(t, tc.tokenMode)
-			wantNames := unifiedBootToolNames()
-			if got := toolSchemaNames(req.Tools); !reflect.DeepEqual(got, wantNames) {
-				t.Fatalf("%s provider-visible tool surface changed\ngot  %v\nwant %v", tc.name, got, wantNames)
-			}
-			if len(entries) != len(req.Tools) {
-				t.Fatalf("contract entries = %d, provider tools = %d\ncontract=%v\nprovider=%v", len(entries), len(req.Tools), contractEntryNames(entries), toolSchemaNames(req.Tools))
-			}
+			assertSegmentedSurface(t, tc.name, toolSchemaNames(req.Tools))
+			byName := make(map[string]int, len(entries))
 			for i, e := range entries {
-				s := req.Tools[i]
-				if e.Name != s.Name {
-					t.Fatalf("tool[%d] name = %q, want %q\ncontract=%v\nprovider=%v", i, e.Name, s.Name, contractEntryNames(entries), toolSchemaNames(req.Tools))
+				byName[e.Name] = i
+			}
+			for _, s := range req.Tools {
+				at, ok := byName[s.Name]
+				if !ok {
+					t.Fatalf("provider carries %q with no contract entry\ncontract=%v\nprovider=%v", s.Name, contractEntryNames(entries), toolSchemaNames(req.Tools))
 				}
+				e := entries[at]
 				if e.Description != strings.TrimSpace(s.Description) {
 					t.Fatalf("%s description drift\ncontract=%q\nprovider=%q", e.Name, e.Description, s.Description)
 				}

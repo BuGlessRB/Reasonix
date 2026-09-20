@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -160,8 +160,8 @@ func validateContract(root string, contract releaseSigningContract) error {
 func requireExactSet(name string, got, want []string) error {
 	gotCopy := append([]string(nil), got...)
 	wantCopy := append([]string(nil), want...)
-	sort.Strings(gotCopy)
-	sort.Strings(wantCopy)
+	slices.Sort(gotCopy)
+	slices.Sort(wantCopy)
 	if len(gotCopy) != len(wantCopy) {
 		return fmt.Errorf("%s is %v, want %v", name, got, want)
 	}
@@ -265,7 +265,7 @@ func discoverTopLevelSigningWorkflows(root string) ([]string, error) {
 			result = append(result, name)
 		}
 	}
-	sort.Strings(result)
+	slices.Sort(result)
 	return result, nil
 }
 
@@ -309,7 +309,7 @@ func parseWorkflow(data []byte) (workflowInfo, error) {
 			}
 		}
 	}
-	sort.Strings(info.calls)
+	slices.Sort(info.calls)
 	return info, nil
 }
 
@@ -370,7 +370,7 @@ func mappingScalar(node *yaml.Node, key string) string {
 
 func contractFingerprint(root string, contract releaseSigningContract) ([sha256.Size]byte, error) {
 	names := append([]string{contractPath}, contract.FingerprintFiles...)
-	sort.Strings(names)
+	slices.Sort(names)
 	hash := sha256.New()
 	_, _ = io.WriteString(hash, "reasonix-signpath-release-contract-v1\x00")
 	for _, name := range names {

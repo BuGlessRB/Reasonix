@@ -45,7 +45,8 @@ type Config struct {
 	Memory           MemoryConfig        `toml:"memory"`
 	Statusline       StatuslineConfig    `toml:"statusline"`
 	LSP              LSPConfig           `toml:"lsp"`
-	Bot              BotConfig           `toml:"bot"`
+	Browser          BrowserConfig       `toml:"browser"`
+	Bot              map[string]any      `toml:"bot"` // opaque; see passthrough.go
 	Serve            ServeConfig         `toml:"serve"`
 	Secrets          SecretsConfig       `toml:"secrets"`
 	Remote           RemoteConfig        `toml:"remote"`
@@ -340,19 +341,6 @@ func normalizeThemeStyle(style string) string {
 	}
 }
 
-func normalizeDesktopLayoutStyle(style string) string {
-	switch strings.ToLower(strings.TrimSpace(style)) {
-	case "classic":
-		return "classic"
-	case "workbench", "workspace":
-		return "workbench"
-	case "creation":
-		return "creation"
-	default:
-		return "workbench"
-	}
-}
-
 func normalizeCloseBehavior(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "quit", "exit":
@@ -426,15 +414,6 @@ func (c *Config) DesktopTerminalTheme() string {
 	default:
 		return "auto"
 	}
-}
-
-// DesktopLayoutStyle normalizes the desktop layout style. New installs default
-// to workbench; explicit classic remains respected.
-func (c *Config) DesktopLayoutStyle() string {
-	if strings.EqualFold(strings.TrimSpace(c.Desktop.ThemeStyle), "workbench") && strings.TrimSpace(c.Desktop.LayoutStyle) == "" {
-		return "workbench"
-	}
-	return normalizeDesktopLayoutStyle(c.Desktop.LayoutStyle)
 }
 
 // DesktopCloseBehavior normalizes the desktop close-window preference. It falls
@@ -683,208 +662,11 @@ func (c *Config) DesktopMetrics() bool {
 	return *c.Desktop.Metrics
 }
 
-// LSPConfig governs the optional Language Server Protocol tools (lsp_definition,
-// lsp_references, lsp_hover, lsp_diagnostics). Enabled defaults to true; the
-// servers themselves are never bundled — each resolves on PATH and the tool
-// returns an install hint when it is missing, so the capability is dormant until
-// the user installs a server. Servers overrides or extends the built-in language
-// → server map, keyed by language id (e.g. "go", "rust", "python").
-type LSPConfig struct {
-	Enabled bool                 `toml:"enabled"`
-	Servers map[string]LSPServer `toml:"servers"`
-}
-
-// LSPServer overrides a built-in language's server or, when keyed by a new
-// language, adds one. An empty field falls back to the built-in default for that
-// language; Extensions is required when adding a language the built-ins don't
-// cover (e.g. ".ex" for Elixir) so files route to it.
-type LSPServer struct {
-	Command     string            `toml:"command"`
-	Args        []string          `toml:"args"`
-	Env         map[string]string `toml:"env"`
-	LanguageID  string            `toml:"language_id"`
-	Extensions  []string          `toml:"extensions"`
-	InstallHint string            `toml:"install_hint"`
-}
-
 // StatuslineConfig configures a custom status line. Command, when set, is run at
 // startup and after each turn; its first line of stdout replaces the built-in
 // status data row. A JSON payload (model, context tokens, cwd) is fed on stdin.
 type StatuslineConfig struct {
 	Command string `toml:"command"`
-}
-
-// BotConfig 控制多渠道 IM bot 消息网关。
-type BotConfig struct {
-	Enabled            bool                  `toml:"enabled"`
-	Model              string                `toml:"model"` // 用于 bot 的模型名，空则用 default_model
-	ToolApprovalMode   string                `toml:"tool_approval_mode"`
-	MaxSteps           int                   `toml:"max_steps"`
-	DebounceMs         int                   `toml:"debounce_ms"` // 消息合并窗口，毫秒
-	QueueMode          string                `toml:"queue_mode"`  // steer|followup|collect|interrupt
-	QueueCap           int                   `toml:"queue_cap"`
-	QueueDrop          string                `toml:"queue_drop"` // summarize|old|new
-	IgnoreSelfMessages bool                  `toml:"ignore_self_messages"`
-	SelfUserIDs        BotSelfUserIDs        `toml:"self_user_ids"`
-	Control            BotControlConfig      `toml:"control"`
-	Pairing            BotPairingConfig      `toml:"pairing"`
-	Allowlist          BotAllowlist          `toml:"allowlist"`
-	QQ                 QQBotConfig           `toml:"qq"`
-	Feishu             FeishuBotConfig       `toml:"feishu"`
-	Weixin             WeixinBotConfig       `toml:"weixin"`
-	Routes             []BotRouteConfig      `toml:"routes"`
-	Connections        []BotConnectionConfig `toml:"connections"`
-	// DesktopWatchers persists /desktop watch subscriptions so god-view
-	// notifications survive a desktop restart. Managed by the desktop bot
-	// bridge, not the settings UI.
-	DesktopWatchers []BotDesktopWatcherConfig `toml:"desktop_watchers"`
-}
-
-// BotDesktopWatcherConfig is one bot chat subscribed to desktop events
-// (/desktop watch on).
-type BotDesktopWatcherConfig struct {
-	Platform     string `toml:"platform"`
-	ConnectionID string `toml:"connection_id"`
-	Domain       string `toml:"domain"`
-	ChatType     string `toml:"chat_type"`
-	ChatID       string `toml:"chat_id"`
-}
-
-type BotSelfUserIDs struct {
-	QQ     []string `toml:"qq"`
-	Feishu []string `toml:"feishu"`
-	Weixin []string `toml:"weixin"`
-}
-
-type BotControlConfig struct {
-	Enabled  bool   `toml:"enabled"`
-	Addr     string `toml:"addr"`
-	TokenEnv string `toml:"token_env"`
-}
-
-type BotRouteConfig struct {
-	ConnectionID     string `toml:"connection_id"`
-	Platform         string `toml:"platform"`
-	ChatType         string `toml:"chat_type"`
-	ChatID           string `toml:"chat_id"`
-	UserID           string `toml:"user_id"`
-	ThreadID         string `toml:"thread_id"`
-	Model            string `toml:"model"`
-	ToolApprovalMode string `toml:"tool_approval_mode"`
-	WorkspaceRoot    string `toml:"workspace_root"`
-}
-
-// BotAllowlist 控制哪些用户可以使用 bot。
-type BotAllowlist struct {
-	Enabled         bool     `toml:"enabled"`
-	AllowAll        bool     `toml:"allow_all"`
-	QQUsers         []string `toml:"qq_users"`
-	FeishuUsers     []string `toml:"feishu_users"`
-	WeixinUsers     []string `toml:"weixin_users"`
-	QQApprovers     []string `toml:"qq_approvers"`
-	FeishuApprovers []string `toml:"feishu_approvers"`
-	WeixinApprovers []string `toml:"weixin_approvers"`
-	QQAdmins        []string `toml:"qq_admins"`
-	FeishuAdmins    []string `toml:"feishu_admins"`
-	WeixinAdmins    []string `toml:"weixin_admins"`
-	QQGroups        []string `toml:"qq_groups"`
-	FeishuGroups    []string `toml:"feishu_groups"`
-	WeixinGroups    []string `toml:"weixin_groups"`
-}
-
-type BotPairingConfig struct {
-	Enabled               bool `toml:"enabled"`
-	RequestTTLMinutes     int  `toml:"request_ttl_minutes"`
-	MaxPendingPerPlatform int  `toml:"max_pending_per_platform"`
-}
-
-// BotAccessConfig controls who may use one concrete bot connection.
-type BotAccessConfig struct {
-	Enabled        bool     `toml:"enabled"`
-	AllowAll       bool     `toml:"allow_all"`
-	PairingEnabled bool     `toml:"pairing_enabled"`
-	Users          []string `toml:"users"`
-	Groups         []string `toml:"groups"`
-	Approvers      []string `toml:"approvers"`
-	Admins         []string `toml:"admins"`
-}
-
-// QQBotConfig QQ 官方 Bot API v2 配置。
-type QQBotConfig struct {
-	Enabled          bool            `toml:"enabled"`
-	AppID            string          `toml:"app_id"`
-	AppSecretEnv     string          `toml:"app_secret_env"` // 环境变量名，如 QQ_BOT_APP_SECRET
-	Sandbox          bool            `toml:"sandbox"`        // true 使用 QQ 沙箱 API / gateway
-	Model            string          `toml:"model"`
-	ToolApprovalMode string          `toml:"tool_approval_mode"`
-	WorkspaceRoot    string          `toml:"workspace_root"`
-	Access           BotAccessConfig `toml:"access"`
-}
-
-// FeishuBotConfig 飞书自建应用 Bot 配置。
-type FeishuBotConfig struct {
-	Enabled           bool   `toml:"enabled"`
-	Domain            string `toml:"domain"` // feishu（默认）| lark
-	AppID             string `toml:"app_id"`
-	AppSecretEnv      string `toml:"app_secret_env"`     // 如 FEISHU_BOT_APP_SECRET
-	VerificationToken string `toml:"verification_token"` // 事件订阅验证 token
-	Mode              string `toml:"mode"`               // webhook（默认）| websocket
-	WebhookPort       int    `toml:"webhook_port"`       // webhook 模式端口
-	RequireMention    bool   `toml:"require_mention"`
-	// OutboundMediaRoots contains absolute local directories the loopback /send
-	// control API may attach files from. Media refs must be bare filenames and
-	// must exist in exactly one configured root. Empty (the default) disables
-	// outbound file sending.
-	OutboundMediaRoots []string `toml:"outbound_media_roots"`
-}
-
-// WeixinBotConfig 微信 iLink Bot 配置。
-type WeixinBotConfig struct {
-	Enabled   bool   `toml:"enabled"`
-	AccountID string `toml:"account_id"`
-	TokenEnv  string `toml:"token_env"` // 环境变量名，如 WEIXIN_BOT_TOKEN
-	APIBase   string `toml:"api_base"`  // iLink API base URL
-}
-
-// BotConnectionConfig is the desktop-friendly connection record for IM bot
-// channels. It keeps install/runtime state separate from legacy per-provider
-// knobs so the UI can expose a simple "connect first" flow while old configs
-// keep working.
-type BotConnectionConfig struct {
-	ID               string                        `toml:"id"`
-	Provider         string                        `toml:"provider"` // qq|feishu|weixin
-	Domain           string                        `toml:"domain"`   // feishu|lark|weixin|qq
-	Label            string                        `toml:"label"`
-	Enabled          bool                          `toml:"enabled"`
-	Status           string                        `toml:"status"` // disconnected|pending|connected|error
-	Model            string                        `toml:"model"`
-	ToolApprovalMode string                        `toml:"tool_approval_mode"`
-	WorkspaceRoot    string                        `toml:"workspace_root"`
-	Access           BotAccessConfig               `toml:"access"`
-	Credential       BotConnectionCredential       `toml:"credential"`
-	SessionMappings  []BotConnectionSessionMapping `toml:"session_mappings"`
-	LastError        string                        `toml:"last_error"`
-	CreatedAt        string                        `toml:"created_at"`
-	UpdatedAt        string                        `toml:"updated_at"`
-}
-
-type BotConnectionCredential struct {
-	AppID        string `toml:"app_id"`
-	AppSecretEnv string `toml:"app_secret_env"`
-	AccountID    string `toml:"account_id"`
-	TokenEnv     string `toml:"token_env"`
-}
-
-type BotConnectionSessionMapping struct {
-	RemoteID      string `toml:"remote_id"`
-	SessionID     string `toml:"session_id"`
-	SessionSource string `toml:"session_source"`
-	ChatType      string `toml:"chat_type"`
-	UserID        string `toml:"user_id"`
-	ThreadID      string `toml:"thread_id"`
-	Scope         string `toml:"scope"`
-	WorkspaceRoot string `toml:"workspace_root"`
-	UpdatedAt     string `toml:"updated_at"`
 }
 
 // ServeConfig controls the HTTP serve frontend security settings.
@@ -1104,14 +886,13 @@ func (c *Config) IsSkillDisabled(name string) bool {
 	return false
 }
 
-// SandboxConfig bounds the blast radius of tool calls (Phase 0: file-writer
-// confinement). WorkspaceRoot is the directory the built-in file writers
-// (write_file / edit_file / multi_edit / move_file) may modify; empty means the
-// current working directory, so writes stay inside the project by default.
-// AllowWrite lists extra directories writers may also touch (e.g. a sibling repo
-// or a temp dir). ForbidRead lists files or directories the agent may not read or list
-// (e.g. ~/.ssh for secrets). Both support ${VAR} / ${VAR:-default} expansion. Reads are
-// unrestricted; confining `bash` is Phase 1 (OS-level sandbox).
+// SandboxConfig bounds the blast radius of tool calls. WorkspaceRoot is the
+// directory the built-in file writers (write_file / edit_file / multi_edit /
+// move_file) may modify; empty means the current working directory, so writes
+// stay inside the project by default. AllowWrite lists extra directories
+// writers may also touch (e.g. a sibling repo or a temp dir). ForbidRead lists
+// files or directories the agent may not read or list (e.g. ~/.ssh for
+// secrets). Both support ${VAR} / ${VAR:-default} expansion.
 type SandboxConfig struct {
 	WorkspaceRoot string   `toml:"workspace_root"`
 	AllowWrite    []string `toml:"allow_write"`
@@ -1242,7 +1023,7 @@ type AgentConfig struct {
 	SystemPromptFile string `toml:"system_prompt_file"`
 	// Deprecated compatibility fields. Old TOML and desktop clients may still
 	// send them, but config loading normalizes both to zero and rendering omits
-	// them. One-off CLI and unattended bot limits remain separate controls.
+	// them. The one-off CLI limit remains a separate control.
 	MaxSteps            int     `toml:"max_steps"`
 	PlannerMaxSteps     int     `toml:"planner_max_steps"`
 	Temperature         float64 `toml:"temperature"`
@@ -1807,23 +1588,9 @@ func Default() *Config {
 		Sandbox: SandboxConfig{Network: true, HostAuthorities: []string{"ssh_agent"}},
 		// LSP tools on by default, but dormant until a language server is on PATH;
 		// a missing server yields an install hint rather than an error.
-		LSP:     LSPConfig{Enabled: true},
-		Network: NetworkConfig{ProxyMode: netclient.ModeAuto},
-		Bot: BotConfig{
-			ToolApprovalMode:   "ask",
-			MaxSteps:           0,
-			DebounceMs:         1500,
-			QueueMode:          "steer",
-			QueueCap:           20,
-			QueueDrop:          "summarize",
-			IgnoreSelfMessages: true,
-			Control:            BotControlConfig{Addr: "127.0.0.1:37913", TokenEnv: "REASONIX_BOT_CONTROL_TOKEN"},
-			Pairing:            BotPairingConfig{Enabled: true, RequestTTLMinutes: 60, MaxPendingPerPlatform: 3},
-			Allowlist:          BotAllowlist{Enabled: true},
-			QQ:                 QQBotConfig{AppSecretEnv: "QQ_BOT_APP_SECRET"},
-			Feishu:             FeishuBotConfig{Domain: "feishu", AppSecretEnv: "FEISHU_BOT_APP_SECRET", Mode: "webhook", WebhookPort: 8080, RequireMention: true},
-			Weixin:             WeixinBotConfig{AccountID: "default", TokenEnv: "WEIXIN_BOT_TOKEN", APIBase: "https://ilinkai.weixin.qq.com"},
-		},
+		LSP:       LSPConfig{Enabled: true},
+		Browser:   BrowserConfig{Enabled: true},
+		Network:   NetworkConfig{ProxyMode: netclient.ModeAuto},
 		Providers: deepSeekDefaultProviders(),
 	}
 }

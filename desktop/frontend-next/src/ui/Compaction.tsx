@@ -3,19 +3,9 @@ import { useEscape } from "./dismiss";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import type { AgentPort, CompactionSettings } from "../port/port";
+import { foldModeOf, foldModeValue, type FoldMode as Mode } from "./foldbound";
 
 const tokens = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
-
-// Which of the three answers a stored value is. The field holds one number and
-// the number is not the intent: 0 and 160000 fold at the same place today and
-// mean different things the moment the default moves, and a negative value is
-// not a smaller threshold at all — it retires the economic bound and leaves the
-// window share still firing. Nobody should have to type a minus sign to say
-// "protect capacity only", and nobody reading one should have to guess that it
-// still folds.
-type Mode = "default" | "custom" | "capacity";
-
-const modeOf = (stored: number): Mode => (stored < 0 ? "capacity" : stored > 0 ? "custom" : "default");
 
 // Two bounds decide when a session folds and only the lower one fires, so the
 // number in force is shown beside the choice rather than left to be worked out:
@@ -84,7 +74,7 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
     void save(value);
   };
 
-  const mode = choice ?? modeOf(box.soft_limit_tokens);
+  const mode = choice ?? foldModeOf(box.soft_limit_tokens);
   const commitCustom = () => {
     const text = draft.trim();
     if (text === "") return;
@@ -100,8 +90,8 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
   const pick = (next: Mode) => {
     setError("");
     setChoice(next);
-    if (next === "default") return send(0);
-    if (next === "capacity") return send(-1);
+    const value = foldModeValue[next];
+    if (value !== undefined) return send(value);
     // Custom is not a value on its own — it opens the field on whatever is
     // already there, and the write happens when a number is committed.
   };
@@ -175,7 +165,7 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
             <span className="tx">
               <span className="lb">{t("经济维护阈值")}</span>
               <span className="ds">
-                {t("可见输入达到该大小即整理，与模型声明的窗口无关。默认 {n}。", { n: tokens(box.default_soft_limit) })}
+                {t("可见输入达到该大小即整理，与模型声明的窗口无关 —— 输入越大，每轮越慢。默认 {n}。", { n: tokens(box.default_soft_limit) })}
               </span>
             </span>
             <div className="seg" data-text role="group" aria-label={t("经济维护阈值")}>

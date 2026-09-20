@@ -16,9 +16,8 @@ run-name: Release Studio ${{ inputs.tag || github.ref_name }}
 # reputation heuristics quarantine. Signing engages only when SIGNPATH_API_TOKEN
 # is set, so forks and token-less runs still build unsigned.
 #
-# The shell is Electron; the Wails one is frozen and no longer shipped. Windows
-# and macOS both package in two steps because both need something done to the
-# bundle in between — a signature there, notarization here.
+# Windows and macOS both package in two steps because both need something done
+# to the bundle in between — a signature there, notarization here.
 on:
   push:
     tags: ['studio-v*']

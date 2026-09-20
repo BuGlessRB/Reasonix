@@ -45,6 +45,6 @@ func (p *Pool) Probe(ctx context.Context, host string) (bootstrap.Report, error)
 		LocalGOARCH:    runtime.GOARCH,
 		ProductVersion: p.opts.Version,
 		FetchBinary:    p.opts.FetchBinary,
-		MinVersion:     bootstrap.MinPaneVersion,
+		MinVersion:     bootstrap.PaneFloor(p.brokers(l)),
 	})
 }

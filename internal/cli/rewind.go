@@ -13,16 +13,16 @@ import (
 	"reasonix/internal/i18n"
 )
 
-// rewindPicker is the in-chat overlay for Esc-Esc / "/rewind". Stage 0 lists the
-// session's turns (one checkpoint each); stage 1 picks what to restore for the
-// chosen turn; stage 2 explicitly confirms file restore when checkpoint coverage
-// is partial. It mirrors the chooser overlay: keys route through handleRewindKey
+// rewindPicker is the in-chat overlay for Esc-Esc / "/rewind". It lists the
+// session's turns (one checkpoint each), then picks what to restore for the
+// chosen turn, then explicitly confirms a file restore whose checkpoint
+// coverage is partial. It mirrors the chooser overlay: keys route through handleRewindKey
 // and it renders via renderRewind while m.rewind is set.
 type rewindPicker struct {
 	metas       []checkpoint.Meta
 	sel         int // selected turn (index into metas)
 	stage       int // 0 = pick turn, 1 = pick scope, 2 = confirm partial coverage
-	scope       int // index into rewindActions (stage 1)
+	scope       int // index into rewindActions, read while picking scope
 	pendingPlan checkpoint.RewindPlan
 }
 

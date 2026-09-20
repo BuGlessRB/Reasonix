@@ -1099,7 +1099,7 @@ func TestCancelPendingUpdateRemovesReleaseUnitBackups(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := CancelPendingUpdate("v2"); err != nil {
+	if err := cancelPendingUpdateInvocation("v2", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if HasPendingUpdate() {
@@ -1484,7 +1484,7 @@ func TestGenericUpdateTransitionsBindPendingBeforeWaitingForLock(t *testing.T) {
 		}
 		t.Cleanup(func() { acquirePendingUpdateLock = originalAcquire })
 
-		if err := CancelPendingUpdate("v2"); err == nil ||
+		if err := cancelPendingUpdateInvocation("v2", "", ""); err == nil ||
 			!strings.Contains(err.Error(), "pending transaction changed") {
 			t.Fatalf("generic cancel after pending-lock replacement = %v", err)
 		}

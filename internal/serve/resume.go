@@ -46,22 +46,24 @@ func (s *Server) resumeInto(path string) (int, error) {
 	}
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		return http.StatusBadRequest, errors.New("invalid session dir")
+		return http.StatusBadRequest, refusal(http.StatusBadRequest, codeSessionBadPath, errors.New("invalid session dir"), nil)
 	}
 	realDir, err := filepath.EvalSymlinks(absDir)
 	if err != nil {
-		return http.StatusBadRequest, errors.New("invalid session dir")
+		return http.StatusBadRequest, refusal(http.StatusBadRequest, codeSessionBadPath, errors.New("invalid session dir"), nil)
 	}
 	absPath, err := filepath.Abs(strings.TrimSpace(path))
 	if err != nil || !store.IsSessionTranscriptName(filepath.Base(absPath)) {
-		return http.StatusBadRequest, errors.New("invalid session path")
+		return http.StatusBadRequest, refusal(http.StatusBadRequest, codeSessionBadPath, errors.New("invalid session path"), nil)
 	}
+	// A transcript that is gone lands here: the delete took the file, and the
+	// list the click came from was drawn before it did.
 	realPath, err := filepath.EvalSymlinks(absPath)
 	if err != nil {
-		return http.StatusBadRequest, errors.New("invalid session path")
+		return http.StatusBadRequest, refusal(http.StatusBadRequest, codeSessionBadPath, errors.New("invalid session path"), nil)
 	}
 	if realPath == realDir || !strings.HasPrefix(realPath, realDir+string(os.PathSeparator)) {
-		return http.StatusForbidden, errors.New("path outside session dir")
+		return http.StatusForbidden, refusal(http.StatusForbidden, codeSessionOutside, errors.New("path outside session dir"), nil)
 	}
 	if agent.IsCleanupPending(realPath) {
 		return http.StatusBadRequest, refusal(http.StatusBadRequest, "session.pending_cleanup", errors.New("session is pending cleanup"), nil)
@@ -75,13 +77,11 @@ func (s *Server) resumeInto(path string) (int, error) {
 	if err := s.ctl().Snapshot(); err != nil {
 		slog.Warn("serve: snapshot before resume", "err", err)
 	}
-	// Refuse to bind a session another runtime is writing (a desktop window,
-	// another CLI); on success the lease now guards the resume target.
+	// Take the write lease when it is free. A session another runtime writes
+	// opens read-only rather than being refused: the lease stops two windows
+	// writing one transcript over each other, and reading is not that.
 	if s.leases != nil {
-		if err := s.leases.Rebind(realPath); err != nil {
-			if errors.Is(err, agent.ErrSessionLeaseHeld) {
-				return http.StatusConflict, refusal(http.StatusConflict, "session.in_use", errors.New(sessionInUseError(err)), nil)
-			}
+		if _, err := s.leases.Attach(realPath); err != nil {
 			return http.StatusInternalServerError, fmt.Errorf("session lease: %w", err)
 		}
 	}

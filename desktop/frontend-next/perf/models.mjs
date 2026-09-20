@@ -81,7 +81,7 @@ const read = () =>
   });
 
 const type = async (s) => {
-  const box = page.locator(`${PANEL} .mfind input`);
+  const box = page.locator(`${PANEL} .msearch input`);
   await box.click();
   await box.fill("");
   if (s) await box.type(s, { delay: 10 });

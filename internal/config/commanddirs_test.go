@@ -11,7 +11,7 @@ import (
 // canonical .reasonix project dir is highest priority (last, since command.Load
 // lets a later dir win on a name clash).
 func TestCommandDirsIncludeConventions(t *testing.T) {
-	dirs := CommandDirs()
+	dirs := CommandDirsForRoot(".")
 	joined := strings.Join(dirs, "\n")
 	for _, want := range []string{
 		filepath.Join(".claude", "commands"),

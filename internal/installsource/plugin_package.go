@@ -258,7 +258,7 @@ func (t *installSourceTool) planClaudeMarketplace(ctx context.Context, req reque
 		return nil, warnings, fmt.Errorf("%s contains no supported plugins", claudeMarketplaceManifest)
 	}
 	sort.Slice(actions, func(i, j int) bool { return actions[i].Name < actions[j].Name })
-	sort.Strings(warnings)
+	slices.Sort(warnings)
 	warnings = slices.Compact(warnings)
 	keepActionResources = true
 	return actions, warnings, nil
@@ -390,8 +390,8 @@ func (t *installSourceTool) pluginPackageAction(req request, pkg pluginpkg.Packa
 		a.RiskLevel = RiskHigh
 		a.RiskReasons = append(a.RiskReasons, "FULL TRUST: declares a runtime process ("+pluginpkg.RuntimeCommandLine(pkg.Manifest.Runtime)+") that runs inside Reasonix — it can read the full session and environment, bypass permissions, and operate this machine directly")
 	}
-	sort.Strings(a.Skills)
-	sort.Strings(a.Agents)
+	slices.Sort(a.Skills)
+	slices.Sort(a.Agents)
 	return a, nil
 }
 
@@ -713,7 +713,7 @@ func (t *installSourceTool) applyRemovePluginPackage(_ request, act *action) err
 			for name := range pkg.Manifest.MCPServers {
 				names = append(names, name)
 			}
-			sort.Strings(names)
+			slices.Sort(names)
 			for _, name := range names {
 				t.onDisconnect(name)
 			}

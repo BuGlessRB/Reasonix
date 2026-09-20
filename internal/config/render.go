@@ -2,8 +2,9 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,13 +19,6 @@ const (
 	RenderScopeUser    RenderScope = "user"
 	RenderScopeProject RenderScope = "project"
 )
-
-// RenderTOML renders the config as annotated TOML in the `reasonix setup` house style:
-// comments preserved, system_prompt as a multi-line string, helpful hints. The
-// output round-trips back through Load (see render_test.go).
-func RenderTOML(c *Config) string {
-	return RenderTOMLForScope(c, RenderScopeFull)
-}
 
 // RenderTOMLForScope renders an annotated TOML file for a specific persistence
 // target. User configs can carry desktop and account-level preferences; project
@@ -186,7 +180,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# reasoning_language = \"zh\"   # visible reasoning language: auto|zh|en\n")
 	}
-	fmt.Fprintf(&b, "compact_ratio       = %s   # sole auto trigger, any fraction of the window; presets 0.70/0.80/0.85 (default 0.85)\n", formatFloat(c.Agent.CompactRatio))
+	fmt.Fprintf(&b, "compact_ratio       = %s   # fold at this share of the window; whichever of this and context_soft_limit_tokens is lower is what fires (default 0.85)\n", formatFloat(c.Agent.CompactRatio))
 	if c.Agent.Keep != nil {
 		fmt.Fprintf(&b, "keep                = %s   # compaction keep policy: errors, user_marked\n", renderStringArray(c.Agent.Keep))
 	} else {
@@ -207,7 +201,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# checkpoint_ceiling_ratio = 0.50   # how small a fold's result must be to be accepted\n")
 	}
-	fmt.Fprintf(&b, "context_soft_limit_tokens = %d   # fold at this visible input size whatever the window says; 0 = 160000, negative = off\n", c.Agent.ContextSoftLimitTokens)
+	fmt.Fprintf(&b, "context_soft_limit_tokens = %d   # absolute fold size, whatever the window says — against a large window this fires before compact_ratio; 0 = 160000, negative = off\n", c.Agent.ContextSoftLimitTokens)
 	if c.Agent.RecentKeep > 0 {
 		fmt.Fprintf(&b, "recent_keep         = %d   # minimum recent messages kept verbatim\n", c.Agent.RecentKeep)
 	} else {
@@ -363,14 +357,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	if len(c.Tools.Enabled) == 0 {
 		b.WriteString("enabled = []   # empty = all built-in tools\n")
 	} else {
-		b.WriteString("enabled = [")
-		for i, t := range c.Tools.Enabled {
-			if i > 0 {
-				b.WriteString(", ")
-			}
-			fmt.Fprintf(&b, "%q", t)
-		}
-		b.WriteString("]\n")
+		fmt.Fprintf(&b, "enabled = %s\n", renderStringArray(c.Tools.Enabled))
 	}
 	fmt.Fprintf(&b, "bash_timeout_seconds = %d   # foreground safety cap; set 0 for no tool-local cap\n", c.BashTimeoutSeconds())
 	fmt.Fprintf(&b, "mcp_startup_timeout_seconds = %d   # background initialize + tools/list safety cap; per-plugin overrides may raise it\n", c.MCPStartupTimeoutSeconds())
@@ -392,6 +379,8 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	}
 
 	renderLSPConfig(&b, c.LSP)
+
+	renderBrowserConfig(&b, c.Browser)
 
 	renderSkillsConfig(&b, c)
 
@@ -453,165 +442,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	}
 	b.WriteString("\n")
 
-	if shouldRenderBot(c, defaults, scope) {
-		b.WriteString("# Bot gateway: multi-channel IM bot for QQ, Feishu/Lark, and WeChat.\n")
-		b.WriteString("[bot]\n")
-		fmt.Fprintf(&b, "enabled = %v\n", c.Bot.Enabled)
-		if c.Bot.Model != "" {
-			fmt.Fprintf(&b, "model = %q\n", c.Bot.Model)
-		} else {
-			b.WriteString("# model = \"\"   # empty = default_model\n")
-		}
-		if c.Bot.ToolApprovalMode != "" {
-			fmt.Fprintf(&b, "tool_approval_mode = %q   # ask|auto|yolo; yolo skips tool approvals only\n", c.Bot.ToolApprovalMode)
-		} else {
-			b.WriteString("# tool_approval_mode = \"ask\"   # ask|auto|yolo; ask and plan decisions still wait\n")
-		}
-		fmt.Fprintf(&b, "max_steps = %d\n", c.Bot.MaxSteps)
-		fmt.Fprintf(&b, "debounce_ms = %d\n", c.Bot.DebounceMs)
-		if c.Bot.QueueMode != "" {
-			fmt.Fprintf(&b, "queue_mode = %q   # steer|followup|collect|interrupt\n", c.Bot.QueueMode)
-		} else {
-			b.WriteString("# queue_mode = \"steer\"   # steer|followup|collect|interrupt\n")
-		}
-		if c.Bot.QueueCap > 0 {
-			fmt.Fprintf(&b, "queue_cap = %d\n", c.Bot.QueueCap)
-		} else {
-			b.WriteString("# queue_cap = 20\n")
-		}
-		if c.Bot.QueueDrop != "" {
-			fmt.Fprintf(&b, "queue_drop = %q   # summarize|old|new\n", c.Bot.QueueDrop)
-		} else {
-			b.WriteString("# queue_drop = \"summarize\"   # summarize|old|new\n")
-		}
-		fmt.Fprintf(&b, "ignore_self_messages = %v   # ignore bot echo by returned message_id and configured self user ids\n", c.Bot.IgnoreSelfMessages)
-		b.WriteString("\n[bot.self_user_ids]\n")
-		fmt.Fprintf(&b, "qq = %s\n", renderStringArray(c.Bot.SelfUserIDs.QQ))
-		fmt.Fprintf(&b, "feishu = %s\n", renderStringArray(c.Bot.SelfUserIDs.Feishu))
-		fmt.Fprintf(&b, "weixin = %s\n", renderStringArray(c.Bot.SelfUserIDs.Weixin))
-		b.WriteString("\n[bot.control]\n")
-		fmt.Fprintf(&b, "enabled = %v   # local loopback HTTP API for status/send; requires Bearer token\n", c.Bot.Control.Enabled)
-		if strings.TrimSpace(c.Bot.Control.Addr) != "" {
-			fmt.Fprintf(&b, "addr = %q\n", c.Bot.Control.Addr)
-		} else {
-			b.WriteString("# addr = \"127.0.0.1:37913\"\n")
-		}
-		if strings.TrimSpace(c.Bot.Control.TokenEnv) != "" {
-			fmt.Fprintf(&b, "token_env = %q\n", c.Bot.Control.TokenEnv)
-		} else {
-			b.WriteString("# token_env = \"REASONIX_BOT_CONTROL_TOKEN\"\n")
-		}
-		if len(c.Bot.Routes) > 0 {
-			for _, route := range c.Bot.Routes {
-				b.WriteString("\n[[bot.routes]]\n")
-				renderBotRoute(&b, route)
-			}
-		}
-		if len(c.Bot.DesktopWatchers) > 0 {
-			for _, watcher := range c.Bot.DesktopWatchers {
-				b.WriteString("\n[[bot.desktop_watchers]]\n")
-				renderBotDesktopWatcher(&b, watcher)
-			}
-		}
-		b.WriteString("\n[bot.pairing]\n")
-		fmt.Fprintf(&b, "enabled = %v\n", c.Bot.Pairing.Enabled)
-		if c.Bot.Pairing.RequestTTLMinutes > 0 {
-			fmt.Fprintf(&b, "request_ttl_minutes = %d\n", c.Bot.Pairing.RequestTTLMinutes)
-		} else {
-			b.WriteString("# request_ttl_minutes = 60\n")
-		}
-		if c.Bot.Pairing.MaxPendingPerPlatform > 0 {
-			fmt.Fprintf(&b, "max_pending_per_platform = %d\n", c.Bot.Pairing.MaxPendingPerPlatform)
-		} else {
-			b.WriteString("# max_pending_per_platform = 3\n")
-		}
-		b.WriteString("\n[bot.allowlist]\n")
-		fmt.Fprintf(&b, "enabled = %v\n", c.Bot.Allowlist.Enabled)
-		fmt.Fprintf(&b, "allow_all = %v\n", c.Bot.Allowlist.AllowAll)
-		fmt.Fprintf(&b, "qq_users = %s\n", renderStringArray(c.Bot.Allowlist.QQUsers))
-		fmt.Fprintf(&b, "feishu_users = %s\n", renderStringArray(c.Bot.Allowlist.FeishuUsers))
-		fmt.Fprintf(&b, "weixin_users = %s\n", renderStringArray(c.Bot.Allowlist.WeixinUsers))
-		fmt.Fprintf(&b, "qq_approvers = %s\n", renderStringArray(c.Bot.Allowlist.QQApprovers))
-		fmt.Fprintf(&b, "feishu_approvers = %s\n", renderStringArray(c.Bot.Allowlist.FeishuApprovers))
-		fmt.Fprintf(&b, "weixin_approvers = %s\n", renderStringArray(c.Bot.Allowlist.WeixinApprovers))
-		fmt.Fprintf(&b, "qq_admins = %s\n", renderStringArray(c.Bot.Allowlist.QQAdmins))
-		fmt.Fprintf(&b, "feishu_admins = %s\n", renderStringArray(c.Bot.Allowlist.FeishuAdmins))
-		fmt.Fprintf(&b, "weixin_admins = %s\n", renderStringArray(c.Bot.Allowlist.WeixinAdmins))
-		fmt.Fprintf(&b, "qq_groups = %s\n", renderStringArray(c.Bot.Allowlist.QQGroups))
-		fmt.Fprintf(&b, "feishu_groups = %s\n", renderStringArray(c.Bot.Allowlist.FeishuGroups))
-		fmt.Fprintf(&b, "weixin_groups = %s\n", renderStringArray(c.Bot.Allowlist.WeixinGroups))
-		b.WriteString("\n[bot.qq]\n")
-		fmt.Fprintf(&b, "enabled = %v\n", c.Bot.QQ.Enabled)
-		fmt.Fprintf(&b, "app_id = %q\n", c.Bot.QQ.AppID)
-		fmt.Fprintf(&b, "app_secret_env = %q\n", c.Bot.QQ.AppSecretEnv)
-		fmt.Fprintf(&b, "sandbox = %v\n", c.Bot.QQ.Sandbox)
-		if strings.TrimSpace(c.Bot.QQ.Model) != "" {
-			fmt.Fprintf(&b, "model = %q\n", strings.TrimSpace(c.Bot.QQ.Model))
-		}
-		if strings.TrimSpace(c.Bot.QQ.ToolApprovalMode) != "" {
-			fmt.Fprintf(&b, "tool_approval_mode = %q\n", strings.TrimSpace(c.Bot.QQ.ToolApprovalMode))
-		}
-		if strings.TrimSpace(c.Bot.QQ.WorkspaceRoot) != "" {
-			fmt.Fprintf(&b, "workspace_root = %q\n", strings.TrimSpace(c.Bot.QQ.WorkspaceRoot))
-		}
-		if parts := renderBotAccess(c.Bot.QQ.Access); parts != "" {
-			fmt.Fprintf(&b, "access = %s\n", parts)
-		}
-		b.WriteString("\n[bot.feishu]\n")
-		fmt.Fprintf(&b, "enabled = %v\n", c.Bot.Feishu.Enabled)
-		fmt.Fprintf(&b, "app_id = %q\n", c.Bot.Feishu.AppID)
-		fmt.Fprintf(&b, "domain = %q\n", c.Bot.Feishu.Domain)
-		fmt.Fprintf(&b, "app_secret_env = %q\n", c.Bot.Feishu.AppSecretEnv)
-		fmt.Fprintf(&b, "verification_token = %q\n", c.Bot.Feishu.VerificationToken)
-		fmt.Fprintf(&b, "mode = %q\n", c.Bot.Feishu.Mode)
-		fmt.Fprintf(&b, "webhook_port = %d\n", c.Bot.Feishu.WebhookPort)
-		fmt.Fprintf(&b, "require_mention = %v\n", c.Bot.Feishu.RequireMention)
-		if len(c.Bot.Feishu.OutboundMediaRoots) > 0 {
-			fmt.Fprintf(&b, "outbound_media_roots = %s\n", renderStringArray(c.Bot.Feishu.OutboundMediaRoots))
-		}
-		b.WriteString("\n[bot.weixin]\n")
-		fmt.Fprintf(&b, "enabled = %v\n", c.Bot.Weixin.Enabled)
-		fmt.Fprintf(&b, "account_id = %q\n", c.Bot.Weixin.AccountID)
-		fmt.Fprintf(&b, "token_env = %q\n", c.Bot.Weixin.TokenEnv)
-		fmt.Fprintf(&b, "api_base = %q\n", c.Bot.Weixin.APIBase)
-		for _, conn := range c.Bot.Connections {
-			b.WriteString("\n[[bot.connections]]\n")
-			fmt.Fprintf(&b, "id = %q\n", conn.ID)
-			fmt.Fprintf(&b, "provider = %q\n", conn.Provider)
-			fmt.Fprintf(&b, "domain = %q\n", conn.Domain)
-			fmt.Fprintf(&b, "label = %q\n", conn.Label)
-			fmt.Fprintf(&b, "enabled = %v\n", conn.Enabled)
-			fmt.Fprintf(&b, "status = %q\n", conn.Status)
-			if conn.Model != "" {
-				fmt.Fprintf(&b, "model = %q\n", conn.Model)
-			}
-			if conn.ToolApprovalMode != "" {
-				fmt.Fprintf(&b, "tool_approval_mode = %q\n", conn.ToolApprovalMode)
-			}
-			if conn.WorkspaceRoot != "" {
-				fmt.Fprintf(&b, "workspace_root = %q\n", conn.WorkspaceRoot)
-			}
-			if parts := renderBotAccess(conn.Access); parts != "" {
-				fmt.Fprintf(&b, "access = %s\n", parts)
-			}
-			if conn.LastError != "" {
-				fmt.Fprintf(&b, "last_error = %q\n", conn.LastError)
-			}
-			if conn.CreatedAt != "" {
-				fmt.Fprintf(&b, "created_at = %q\n", conn.CreatedAt)
-			}
-			if conn.UpdatedAt != "" {
-				fmt.Fprintf(&b, "updated_at = %q\n", conn.UpdatedAt)
-			}
-			if parts := renderBotCredential(conn.Credential); parts != "" {
-				fmt.Fprintf(&b, "credential = %s\n", parts)
-			}
-			if len(conn.SessionMappings) > 0 {
-				fmt.Fprintf(&b, "session_mappings = %s\n", renderBotSessionMappings(conn.SessionMappings))
-			}
-		}
-		b.WriteString("\n")
-	}
+	renderPassthroughTable(&b, "bot", c.Bot)
 
 	renderStorage(&b, c, scope)
 
@@ -1037,6 +868,7 @@ func RenderTOMLProjectDelta(c *Config) string {
 	if !reflect.DeepEqual(c.LSP, d.LSP) {
 		renderLSPConfig(&b, c.LSP)
 	}
+	renderChangedBrowserConfig(&b, c.Browser, d.Browser)
 
 	// [skills]
 	if !reflect.DeepEqual(c.Skills, d.Skills) || len(c.explicitProjectSkillKeys) > 0 {
@@ -1182,7 +1014,7 @@ func renderPricingMap(prices map[string]*provider.Pricing) string {
 	if len(keys) == 0 {
 		return "{}"
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, model := range keys {
@@ -1240,7 +1072,7 @@ func renderEnvironmentConfig(b *strings.Builder, cfg EnvironmentConfig) {
 	for name := range cfg.Tools {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	for _, name := range names {
 		fmt.Fprintf(b, "%s = %q\n", renderTOMLKeyPart(name), cfg.Tools[name])
 	}
@@ -1270,13 +1102,6 @@ func projectScopedConfigForRender(c *Config) *Config {
 	return &cp
 }
 
-func shouldRenderBot(c, defaults *Config, scope RenderScope) bool {
-	if scope != RenderScopeProject {
-		return true
-	}
-	return !reflect.DeepEqual(c.Bot, defaults.Bot)
-}
-
 func shouldRenderSystemPrompt(c, defaults *Config, scope RenderScope) bool {
 	if scope == RenderScopeFull {
 		return true
@@ -1284,50 +1109,6 @@ func shouldRenderSystemPrompt(c, defaults *Config, scope RenderScope) bool {
 	return strings.TrimSpace(c.Agent.SystemPrompt) != "" && c.Agent.SystemPrompt != defaults.Agent.SystemPrompt
 }
 
-func renderLSPConfig(b *strings.Builder, cfg LSPConfig) {
-	b.WriteString("[lsp]\n")
-	fmt.Fprintf(b, "enabled = %v   # language server tools; servers launch lazily when used\n", cfg.Enabled)
-	if len(cfg.Servers) == 0 {
-		b.WriteString("# [lsp.servers.go]\n")
-		b.WriteString("# command = \"gopls\"\n")
-		b.WriteString("# args = []\n")
-		b.WriteString("# extensions = [\".go\"]\n\n")
-		return
-	}
-	b.WriteString("\n")
-
-	langs := make([]string, 0, len(cfg.Servers))
-	for lang := range cfg.Servers {
-		langs = append(langs, lang)
-	}
-	sort.Strings(langs)
-	for _, lang := range langs {
-		srv := cfg.Servers[lang]
-		fmt.Fprintf(b, "[%s]\n", renderTOMLTablePath("lsp", "servers", lang))
-		if srv.Command != "" {
-			fmt.Fprintf(b, "command = %q\n", srv.Command)
-		}
-		if len(srv.Args) > 0 {
-			fmt.Fprintf(b, "args = %s\n", renderStringArray(srv.Args))
-		}
-		if len(srv.Env) > 0 {
-			fmt.Fprintf(b, "env = %s\n", renderStringMap(srv.Env))
-		}
-		if srv.LanguageID != "" {
-			fmt.Fprintf(b, "language_id = %q\n", srv.LanguageID)
-		}
-		if len(srv.Extensions) > 0 {
-			fmt.Fprintf(b, "extensions = %s\n", renderStringArray(srv.Extensions))
-		}
-		if srv.InstallHint != "" {
-			fmt.Fprintf(b, "install_hint = %q\n", srv.InstallHint)
-		}
-		b.WriteString("\n")
-	}
-}
-
-// renderStorage writes the relocated roots, from the struct so a move survives
-// a full rewrite. User/global only: a cloned repo must not redirect this machine.
 func renderStorage(b *strings.Builder, c *Config, scope RenderScope) {
 	if scope == RenderScopeProject || len(c.Storage) == 0 {
 		return
@@ -1388,11 +1169,7 @@ func renderStringArray(ss []string) string {
 // renderStringMap renders a map[string]string as a TOML inline table with keys
 // in sorted order so output is deterministic (round-trips cleanly).
 func renderStringMap(m map[string]string) string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, k := range keys {
@@ -1415,7 +1192,7 @@ func renderAnyMap(m map[string]any) string {
 			keys = append(keys, k)
 		}
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, k := range keys {
@@ -1493,7 +1270,7 @@ func renderModelOverrides(m map[string]ProviderModelOverride) string {
 		}
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, k := range keys {
@@ -1551,7 +1328,7 @@ func renderIntMap(m map[string]int) string {
 			keys = append(keys, k)
 		}
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var b strings.Builder
 	b.WriteString("{ ")
 	for i, k := range keys {
@@ -1562,136 +1339,6 @@ func renderIntMap(m map[string]int) string {
 	}
 	b.WriteString(" }")
 	return b.String()
-}
-
-func renderBotCredential(cred BotConnectionCredential) string {
-	parts := make(map[string]string)
-	if cred.AppID != "" {
-		parts["app_id"] = cred.AppID
-	}
-	if cred.AppSecretEnv != "" {
-		parts["app_secret_env"] = cred.AppSecretEnv
-	}
-	if cred.AccountID != "" {
-		parts["account_id"] = cred.AccountID
-	}
-	if cred.TokenEnv != "" {
-		parts["token_env"] = cred.TokenEnv
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return renderStringMap(parts)
-}
-
-func renderBotAccess(access BotAccessConfig) string {
-	hasList := len(access.Users) > 0 || len(access.Groups) > 0 || len(access.Approvers) > 0 || len(access.Admins) > 0
-	if !access.Enabled && !access.AllowAll && !access.PairingEnabled && !hasList {
-		return ""
-	}
-	var parts []string
-	parts = append(parts, fmt.Sprintf("enabled = %v", access.Enabled))
-	parts = append(parts, fmt.Sprintf("allow_all = %v", access.AllowAll))
-	parts = append(parts, fmt.Sprintf("pairing_enabled = %v", access.PairingEnabled))
-	if len(access.Users) > 0 {
-		parts = append(parts, "users = "+renderStringArray(access.Users))
-	}
-	if len(access.Groups) > 0 {
-		parts = append(parts, "groups = "+renderStringArray(access.Groups))
-	}
-	if len(access.Approvers) > 0 {
-		parts = append(parts, "approvers = "+renderStringArray(access.Approvers))
-	}
-	if len(access.Admins) > 0 {
-		parts = append(parts, "admins = "+renderStringArray(access.Admins))
-	}
-	return "{ " + strings.Join(parts, ", ") + " }"
-}
-
-func renderBotSessionMappings(mappings []BotConnectionSessionMapping) string {
-	var b strings.Builder
-	b.WriteByte('[')
-	for i, mapping := range mappings {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		parts := map[string]string{
-			"remote_id":  mapping.RemoteID,
-			"session_id": mapping.SessionID,
-		}
-		if mapping.SessionSource != "" {
-			parts["session_source"] = mapping.SessionSource
-		}
-		if mapping.ChatType != "" {
-			parts["chat_type"] = mapping.ChatType
-		}
-		if mapping.UserID != "" {
-			parts["user_id"] = mapping.UserID
-		}
-		if mapping.ThreadID != "" {
-			parts["thread_id"] = mapping.ThreadID
-		}
-		if mapping.Scope != "" {
-			parts["scope"] = mapping.Scope
-		}
-		if mapping.WorkspaceRoot != "" {
-			parts["workspace_root"] = mapping.WorkspaceRoot
-		}
-		if mapping.UpdatedAt != "" {
-			parts["updated_at"] = mapping.UpdatedAt
-		}
-		b.WriteString(renderStringMap(parts))
-	}
-	b.WriteByte(']')
-	return b.String()
-}
-
-func renderBotRoute(b *strings.Builder, route BotRouteConfig) {
-	if strings.TrimSpace(route.ConnectionID) != "" {
-		fmt.Fprintf(b, "connection_id = %q\n", strings.TrimSpace(route.ConnectionID))
-	}
-	if strings.TrimSpace(route.Platform) != "" {
-		fmt.Fprintf(b, "platform = %q\n", strings.TrimSpace(route.Platform))
-	}
-	if strings.TrimSpace(route.ChatType) != "" {
-		fmt.Fprintf(b, "chat_type = %q\n", strings.TrimSpace(route.ChatType))
-	}
-	if strings.TrimSpace(route.ChatID) != "" {
-		fmt.Fprintf(b, "chat_id = %q\n", strings.TrimSpace(route.ChatID))
-	}
-	if strings.TrimSpace(route.UserID) != "" {
-		fmt.Fprintf(b, "user_id = %q\n", strings.TrimSpace(route.UserID))
-	}
-	if strings.TrimSpace(route.ThreadID) != "" {
-		fmt.Fprintf(b, "thread_id = %q\n", strings.TrimSpace(route.ThreadID))
-	}
-	if strings.TrimSpace(route.Model) != "" {
-		fmt.Fprintf(b, "model = %q\n", strings.TrimSpace(route.Model))
-	}
-	if strings.TrimSpace(route.ToolApprovalMode) != "" {
-		fmt.Fprintf(b, "tool_approval_mode = %q\n", strings.TrimSpace(route.ToolApprovalMode))
-	}
-	if strings.TrimSpace(route.WorkspaceRoot) != "" {
-		fmt.Fprintf(b, "workspace_root = %q\n", strings.TrimSpace(route.WorkspaceRoot))
-	}
-}
-
-func renderBotDesktopWatcher(b *strings.Builder, watcher BotDesktopWatcherConfig) {
-	if strings.TrimSpace(watcher.Platform) != "" {
-		fmt.Fprintf(b, "platform = %q\n", strings.TrimSpace(watcher.Platform))
-	}
-	if strings.TrimSpace(watcher.ConnectionID) != "" {
-		fmt.Fprintf(b, "connection_id = %q\n", strings.TrimSpace(watcher.ConnectionID))
-	}
-	if strings.TrimSpace(watcher.Domain) != "" {
-		fmt.Fprintf(b, "domain = %q\n", strings.TrimSpace(watcher.Domain))
-	}
-	if strings.TrimSpace(watcher.ChatType) != "" {
-		fmt.Fprintf(b, "chat_type = %q\n", strings.TrimSpace(watcher.ChatType))
-	}
-	if strings.TrimSpace(watcher.ChatID) != "" {
-		fmt.Fprintf(b, "chat_id = %q\n", strings.TrimSpace(watcher.ChatID))
-	}
 }
 
 // renderRuleList emits a permission rule list. A populated list renders as an

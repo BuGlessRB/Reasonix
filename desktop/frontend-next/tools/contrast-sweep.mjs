@@ -13,9 +13,12 @@
 //
 // Two things it deliberately does NOT do quietly: a probe that fails to
 // evaluate throws rather than returning an empty list, because an empty list
-// reads exactly like a clean sweep. And getComputedStyle returns
-// `color(srgb r g b / a)` for color-mix results — 0-1 channels, not 0-255 —
-// which parsed as 8-bit turns a pale tint into a mid grey.
+// reads exactly like a clean sweep. And colours are resolved by painting them
+// — getComputedStyle hands back whichever notation the value was authored in,
+// `color(srgb r g b / a)` on 0-1 channels or `oklch(0.85 0.012 255)` with a
+// lightness under 1 and a hue past 255, and reading either as 8-bit RGB
+// invents a colour nothing on screen has.
+const { STEPS, SETTINGS_OPEN, SETTINGS_COUNT, settingsTab, chooseTheme } = await import("./steps.mjs");
 const list = await (await fetch("http://127.0.0.1:9333/json/list")).json();
 const t = list.find((x) => x.type === "page");
 const ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -32,13 +35,17 @@ const probe = `(() => {
     const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
-  const parse = (s) => {
-    const nums = (s.match(/[\\d.]+/g) || []).map(Number);
-    if (/^color\\(/.test(s)) {
-      const [r, g, b, a] = nums;
-      return a === undefined ? [r * 255, g * 255, b * 255] : [r * 255, g * 255, b * 255, a];
-    }
-    return nums.slice(0, 4);
+  const _cx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d", { willReadFrequently: true });
+  // Painted rather than parsed: the canvas takes every CSS colour notation and
+  // answers in 8-bit. The reset matters — an unparseable value leaves fillStyle
+  // at whatever it held last, which would report the previous element's colour.
+  const parse = (x) => {
+    _cx.clearRect(0, 0, 1, 1);
+    _cx.fillStyle = "#000";
+    _cx.fillStyle = x;
+    _cx.fillRect(0, 0, 1, 1);
+    const d = _cx.getImageData(0, 0, 1, 1).data;
+    return [d[0], d[1], d[2], d[3] / 255];
   };
   const over = (fg, bg) => {
     const a = fg.length > 3 ? fg[3] : 1;
@@ -65,6 +72,10 @@ const probe = `(() => {
     if (!own) continue;
     const s = getComputedStyle(el);
     if (s.visibility === "hidden" || s.display === "none" || +s.opacity === 0) continue;
+    // WCAG exempts text in an inactive user interface component, and a control
+    // greys out precisely to say it is not one you can use. Reporting one puts
+    // a number nobody can act on above the ones somebody can.
+    if (el.closest("[disabled], [aria-disabled=true]")) continue;
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) continue;
     const size = parseFloat(s.fontSize), weight = +s.fontWeight || 400;
@@ -90,25 +101,40 @@ const probe = `(() => {
 for (const theme of ["light", "dark"]) {
   await send("Page.navigate", { url: process.argv[2] });
   await new Promise((r) => setTimeout(r, 2600));
-  await ev(`document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)})`);
-  await new Promise((r) => setTimeout(r, 600));
+  await ev(chooseTheme(theme));
+  await send("Page.navigate", { url: process.argv[2] });
+  await new Promise((r) => setTimeout(r, 3200));
   const all = new Map();
   const take = async (label) => {
     const got = await ev(probe);
     if (!Array.isArray(got)) throw new Error("probe did not evaluate — a silent [] would read as a clean sweep");
     for (const r of got) all.set(r.fg + "|" + r.bg, { ...r, where: label });
   };
-  await take("main");
-  await ev(`document.querySelector('.thbtn[aria-label="Settings"], .thbtn[aria-label="设置"]')?.click()`);
+  // The same walk audit-sweep takes: a panel this never opens is a panel it
+  // reports as clean. Reverting a bad ink and seeing nothing is how that reads.
+  for (const [label, act] of STEPS) {
+    if (act) {
+      if (!(await ev(act))) continue;
+      await new Promise((r) => setTimeout(r, /^turn-/.test(label) ? 4500 : 1100));
+    }
+    await take(label);
+  }
+  await ev(`document.body.click()`);
+  await new Promise((r) => setTimeout(r, 400));
+  await ev(SETTINGS_OPEN);
   await new Promise((r) => setTimeout(r, 1400));
-  const count = await ev(`document.querySelectorAll('.prefs-nav button').length`);
+  const count = await ev(SETTINGS_COUNT);
+  if (!count) throw new Error("settings did not open; the sweep would prove nothing");
   for (let i = 0; i < count; i++) {
-    const name = await ev(`(() => { const b = document.querySelectorAll('.prefs-nav button')[${i}]; b.click(); return b.id || String(${i}); })()`);
+    const name = await ev(settingsTab(i));
     await new Promise((r) => setTimeout(r, 850));
     await take(name);
   }
   const rows = [...all.values()].sort((a, b) => a.ratio - b.ratio);
-  console.log(`\n=== ${theme} — ${count} sections — below AA: ${rows.length} ===`);
+  // What rendered, not what was asked for: two passes over the same theme
+  // also report zero.
+  const painted = await ev(`document.documentElement.dataset.theme ?? "(none)"`);
+  console.log(`\n=== ${theme} (painted ${painted}) — ${count} sections — below AA: ${rows.length} ===`);
   for (const r of rows) console.log(`  ${String(r.ratio).padStart(5)} (need ${r.floor})  ${r.fg} on ${r.bg}   ${r.cls.padEnd(20)} @${r.where}`);
 }
 ws.close();

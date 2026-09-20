@@ -19,7 +19,7 @@ export function NoticeCard({ item }: { item: Extract<Item, { t: "notice" }> }) {
   // same notice in the reader's language, that is the one to show.
   const wording = item.code ? NOTICE_TEXT[item.code] : undefined;
   return (
-    <div className="call">
+    <div className="call" data-k="host">
       <div className="g">
         <Sym glyph="·" />
         <span className="line" />

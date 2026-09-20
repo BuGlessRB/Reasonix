@@ -5,15 +5,15 @@ import (
 	"reasonix/internal/tool"
 )
 
-// addTurnExitTools registers the two ways a turn ends on the model's terms
-// rather than the host's. Both stay registered in every turn: a tool that comes
-// and goes changes the cached prompt prefix, and neither condition — a decision
-// only the user can make, a task that cannot be done as specified — is one the
-// host can recognize before the model does.
+// addTurnExitTools registers the three ways a turn ends on the model's terms: a
+// decision only the user can make, an open list gated on the user, a task that
+// cannot be done as specified. All stay registered every turn — the schema is
+// cache-stable, and none of the three is a condition the host detects first.
 func addTurnExitTools(reg *tool.Registry) {
-	// ask reaches the user through the Asker on the call context, which
-	// interactive frontends wire to the controller (EnableInteractiveApproval);
-	// a headless run has none, so ask resolves to "decide for yourself".
+	// Both reach the user through the call context's Asker, which interactive
+	// frontends wire up (EnableInteractiveApproval). A headless run has none:
+	// ask answers "decide for yourself", await_user refuses.
 	reg.Add(agent.NewAskTool())
+	reg.Add(agent.NewAwaitUserTool())
 	reg.Add(agent.NewConcludeBlockedTool())
 }

@@ -19,10 +19,9 @@ import (
 // TestLockUserConfigEditsSerializesRMW drives concurrent load-modify-save
 // cycles through the edit lock and checks no writer's change is dropped.
 // Without the lock, two editors load the same base config, each append their
-// own connection, and the second save silently erases the first one's entry —
-// the bot auto-session persistence vs. settings-save race this lock exists for.
+// own host, and the second save silently erases the first one's entry.
 func TestLockUserConfigEditsSerializesRMW(t *testing.T) {
-	// Point the user config at a temp home: SaveTo renders bot connections only
+	// Point the user config at a temp home: SaveTo renders remote hosts only
 	// for user-scope paths (project configs save incrementally without them).
 	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
@@ -40,10 +39,9 @@ func TestLockUserConfigEditsSerializesRMW(t *testing.T) {
 			unlock := LockUserConfigEdits()
 			defer unlock()
 			cfg := LoadForEdit(path)
-			cfg.Bot.Connections = append(cfg.Bot.Connections, BotConnectionConfig{
-				ID:       fmt.Sprintf("conn-%d", n),
-				Provider: "qq",
-				Enabled:  true,
+			cfg.Remote.Hosts = append(cfg.Remote.Hosts, RemoteHostEntry{
+				Name: fmt.Sprintf("host-%d", n),
+				Host: fmt.Sprintf("host-%d.example", n),
 			})
 			if err := cfg.SaveTo(path); err != nil {
 				t.Errorf("save: %v", err)
@@ -53,21 +51,20 @@ func TestLockUserConfigEditsSerializesRMW(t *testing.T) {
 	wg.Wait()
 
 	cfg := LoadForEdit(path)
-	if got := len(cfg.Bot.Connections); got != writers {
-		t.Fatalf("connections = %d, want %d (concurrent read-modify-write dropped updates)", got, writers)
+	if got := len(cfg.Remote.Hosts); got != writers {
+		t.Fatalf("hosts = %d, want %d (concurrent read-modify-write dropped updates)", got, writers)
 	}
 }
 
-// TestConcurrentBotAndSettingsWritersKeepBothFields reproduces the reviewed
-// P1 scenario: a bot auto-session mapping writer and a settings writer race
-// on the user config. Both hold LockUserConfigEdits around their
+// TestConcurrentHostAndSettingsWritersKeepBothFields races a remote-host writer
+// and a settings writer on the user config. Both hold LockUserConfigEdits around their
 // load-modify-save cycle, so neither may ever overwrite the other's field
 // with a stale copy. Each writer also checks, under the lock, that its own
 // previous round survived — any single lost update fails the test, not just
 // one on the final round. Fault check: removing either writer's lock/unlock
 // pair makes this test fail (at least intermittently) with "previous ...
 // update lost".
-func TestConcurrentBotAndSettingsWritersKeepBothFields(t *testing.T) {
+func TestConcurrentHostAndSettingsWritersKeepBothFields(t *testing.T) {
 	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := UserConfigPath()
@@ -80,8 +77,7 @@ func TestConcurrentBotAndSettingsWritersKeepBothFields(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Bot mapping writer: rewrites Bot.Connections like the botruntime
-	// auto-session persistence path.
+	// Host writer: rewrites Remote.Hosts like a remote-settings save.
 	go func() {
 		defer wg.Done()
 		<-start
@@ -89,22 +85,21 @@ func TestConcurrentBotAndSettingsWritersKeepBothFields(t *testing.T) {
 			unlock := LockUserConfigEdits()
 			cfg := LoadForEdit(path)
 			if i > 1 {
-				wantID := fmt.Sprintf("conn-%d", i-1)
-				if len(cfg.Bot.Connections) != 1 || cfg.Bot.Connections[0].ID != wantID {
+				wantName := fmt.Sprintf("host-%d", i-1)
+				if len(cfg.Remote.Hosts) != 1 || cfg.Remote.Hosts[0].Name != wantName {
 					unlock()
-					t.Errorf("round %d: previous bot update lost: got %+v, want single connection %q", i, cfg.Bot.Connections, wantID)
+					t.Errorf("round %d: previous host update lost: got %+v, want single host %q", i, cfg.Remote.Hosts, wantName)
 					return
 				}
 			}
-			cfg.Bot.Connections = []BotConnectionConfig{{
-				ID:       fmt.Sprintf("conn-%d", i),
-				Provider: "feishu",
-				Enabled:  true,
+			cfg.Remote.Hosts = []RemoteHostEntry{{
+				Name: fmt.Sprintf("host-%d", i),
+				Host: "remote.example",
 			}}
 			err := cfg.SaveTo(path)
 			unlock()
 			if err != nil {
-				t.Errorf("bot writer save: %v", err)
+				t.Errorf("host writer save: %v", err)
 				return
 			}
 		}
@@ -139,9 +134,9 @@ func TestConcurrentBotAndSettingsWritersKeepBothFields(t *testing.T) {
 	}
 
 	final := LoadForEdit(path)
-	wantID := fmt.Sprintf("conn-%d", rounds)
-	if len(final.Bot.Connections) != 1 || final.Bot.Connections[0].ID != wantID {
-		t.Fatalf("bot writer's last update lost: got %+v, want single connection %q", final.Bot.Connections, wantID)
+	wantName := fmt.Sprintf("host-%d", rounds)
+	if len(final.Remote.Hosts) != 1 || final.Remote.Hosts[0].Name != wantName {
+		t.Fatalf("host writer's last update lost: got %+v, want single host %q", final.Remote.Hosts, wantName)
 	}
 	if final.Agent.Temperature != rounds {
 		t.Fatalf("settings writer's last update lost: Temperature = %v, want %d", final.Agent.Temperature, rounds)
@@ -231,7 +226,7 @@ func assertUserConfigLockSerializesAcrossProcesses(t *testing.T, firstHome, seco
 		t.Fatalf("timed out waiting for %s", path)
 	}
 
-	first, firstOutput := startHelper("bot", firstHome, firstTmp, aStarted, aAcquired, aRelease)
+	first, firstOutput := startHelper("host", firstHome, firstTmp, aStarted, aAcquired, aRelease)
 	waitForFile(aAcquired)
 	second, secondOutput := startHelper("cli", secondHome, secondTmp, bStarted, bAcquired, "")
 	waitForFile(bStarted)
@@ -259,8 +254,8 @@ func assertUserConfigLockSerializesAcrossProcesses(t *testing.T, firstHome, seco
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(final.Bot.Connections) != 1 || final.Bot.Connections[0].ID != "cross-process" {
-		t.Fatalf("bot update was lost: %+v", final.Bot.Connections)
+	if len(final.Remote.Hosts) != 1 || final.Remote.Hosts[0].Name != "cross-process" {
+		t.Fatalf("host update was lost: %+v", final.Remote.Hosts)
 	}
 	if got := final.CLIUpdateChannel(); got != "stable" {
 		t.Fatalf("CLI channel migration was lost: %q", got)
@@ -359,11 +354,10 @@ func TestLockUserConfigEditsHelperProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	switch os.Getenv("REASONIX_CONFIG_LOCK_MODE") {
-	case "bot":
-		cfg.Bot.Connections = []BotConnectionConfig{{
-			ID:       "cross-process",
-			Provider: "qq",
-			Enabled:  true,
+	case "host":
+		cfg.Remote.Hosts = []RemoteHostEntry{{
+			Name: "cross-process",
+			Host: "remote.example",
 		}}
 	case "cli":
 		if err := cfg.SetCLIUpdateChannel("preview"); err != nil {

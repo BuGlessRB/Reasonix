@@ -1163,12 +1163,12 @@ func TestSubmitDocsShowsLocalOverviewAndGroundsModelTurn(t *testing.T) {
 		t.Fatalf("bare /docs should not start a model turn, inputs=%q", runner.inputs)
 	}
 
-	c.Submit("/docs 1.19.5 更新日志")
+	c.Submit("/docs REASONIX_HOME configuration paths")
 	waitForTurnDone(t, events)
 	if len(runner.inputs) != 1 {
 		t.Fatalf("/docs query model turns = %d, inputs=%q", len(runner.inputs), runner.inputs)
 	}
-	for _, want := range []string{"1.19.5 更新日志", "changelog/v1.19.5.zh-CN.md", "embedded_docs_search_results"} {
+	for _, want := range []string{"REASONIX_HOME configuration paths", "docs/CONFIG_PATHS.md", "embedded_docs_search_results"} {
 		if !strings.Contains(runner.inputs[0], want) {
 			t.Fatalf("grounded /docs prompt missing %q:\n%s", want, runner.inputs[0])
 		}
@@ -1220,12 +1220,12 @@ func TestSubmitQualifiedReasonixDocsPreservesExistingCommandAndUsesNextFallback(
 	}
 	waitIdle(t, c)
 
-	c.Submit("/reasonix:builtin:docs 1.19.5 update notes")
+	c.Submit("/reasonix:builtin:docs REASONIX_HOME configuration paths")
 	waitForTurnDone(t, events)
 	if len(runner.inputs) != 2 {
 		t.Fatalf("generated docs fallback model turns = %d, inputs=%q", len(runner.inputs), runner.inputs)
 	}
-	for _, want := range []string{"1.19.5 update notes", "changelog/v1.19.5.md", "embedded_docs_search_results"} {
+	for _, want := range []string{"REASONIX_HOME configuration paths", "docs/CONFIG_PATHS.md", "embedded_docs_search_results"} {
 		if !strings.Contains(runner.inputs[1], want) {
 			t.Fatalf("qualified docs prompt missing %q:\n%s", want, runner.inputs[1])
 		}

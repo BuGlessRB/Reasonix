@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "official-cloudsea-gilt",
-  "name": "云海鎏金",
+  "name": "Cloudsea Gilt",
   "author": "Reasonix Contributors",
-  "description": "云海之上的一线鎏金：冷蓝的石面与暖金的强调色，明处是晴日云顶，暗处是夜航舷窗。",
+  "description": "A line of gilt above the cloud sea: cool blue stone with warm gold accents, sunlit cloudtops by day and a night flight's window by dark.",
   "license": "MIT",
   "baseStyle": "cloudsea",
   "tokens": {
@@ -16,7 +16,7 @@
       "borderSoft": "#D7DFEA",
       "fg": "#151B24",
       "fgDim": "#4E5766",
-      "fgFaint": "#8B94A1",
+      "fgFaint": "#616976",
       "accent": "#9C6D0C",
       "accentFg": "#FFFFFF"
     },
@@ -29,7 +29,7 @@
       "borderSoft": "#252E3C",
       "fg": "#E8EEF6",
       "fgDim": "#9BA6B6",
-      "fgFaint": "#5E6875",
+      "fgFaint": "#808B98",
       "accent": "#E5BA72",
       "accentFg": "#241A08"
     }

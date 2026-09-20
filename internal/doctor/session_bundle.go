@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -172,7 +172,7 @@ func WriteSessionBundle(opts SessionBundleOptions) (SessionBundleResult, error) 
 			result.Included = append(result.Included, file)
 		}
 	}
-	sort.Strings(manifest.Missing)
+	slices.Sort(manifest.Missing)
 	result.Missing = append(result.Missing, manifest.Missing...)
 	manifestData, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
@@ -208,7 +208,7 @@ func resolveSessionBundlePath(ref string) (string, error) {
 	if len(matches) == 0 {
 		return "", fmt.Errorf("session %q not found under Reasonix session directories", branch)
 	}
-	sort.Strings(matches)
+	slices.Sort(matches)
 	if len(matches) > 1 {
 		redacted := make([]string, len(matches))
 		for i, match := range matches {
@@ -345,7 +345,7 @@ func sessionBundleSearchDirs() []string {
 			return nil
 		})
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

@@ -11,6 +11,8 @@
 //   overflowX the document itself scrolling sideways
 //   unnamed   a control no assistive technology can announce
 //   dupId     two elements answering to one id
+//   hanCaps   Han text under Latin small-caps typography — letterspacing pulls
+//             the characters apart and uppercase means nothing to them
 //
 // Run it with a kernel and the dev server up, and a headless Chrome on 9333:
 //
@@ -31,6 +33,7 @@
 const url = process.argv[2], theme = process.argv[3] || "dark";
 const W = Number(process.argv[4] || 1440), H = Number(process.argv[5] || 950);
 const { readFileSync } = await import("node:fs");
+const { STEPS, SETTINGS_OPEN, SETTINGS_COUNT, settingsTab } = await import("./steps.mjs");
 const list = await (await fetch("http://127.0.0.1:9333/json/list")).json();
 const t = list.find((x) => x.type === "page");
 const ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -60,7 +63,11 @@ await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceSc
 await send("Page.navigate", { url }); await wait(2500);
 await ev(`localStorage.setItem("rx-lang","en");localStorage.setItem("rx-theme",${JSON.stringify(theme)})`);
 await send("Page.navigate", { url }); await wait(4500);
-if (process.env.ONB) { await ev(readFileSync(process.env.ONB, "utf8")); await wait(3500); }
+// What the entry script reached is reported, never dropped: a card it failed to
+// answer leaves every step behind it unreachable, and that reads in the output
+// as a dozen skipped steps rather than as the one thing that went wrong.
+let onb = null;
+if (process.env.ONB) { onb = await ev(readFileSync(process.env.ONB, "utf8")); await wait(3500); }
 
 const P = `(() => {
   const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
@@ -68,9 +75,14 @@ const P = `(() => {
   const path = (el) => { const p = []; let c = el;
     while (c && c !== document.body && p.length < 3) { p.push(c.tagName.toLowerCase() + (typeof c.className === "string" && c.className.trim() ? "." + c.className.trim().split(/\\s+/).slice(0,2).join(".") : "")); c = c.parentElement; }
     return p.reverse().join(">"); };
+  // A box past the viewport edge inside a scroller is reachable by scrolling to
+  // it, which is what .prefs-nav does at the narrowest window — an edge is only
+  // an edge when nothing between here and it scrolls.
+  const scrolled = (el) => { let c = el.parentElement; while (c && c !== document.body) {
+    const s = getComputedStyle(c); if (/auto|scroll/.test(s.overflowX) && c.scrollWidth > c.clientWidth + 1) return true; c = c.parentElement; } return false; };
   const behind = (el) => { let c = el; while (c && c !== document.body) { if (parseFloat(getComputedStyle(c).opacity) < .9) return true; c = c.parentElement; } return false; };
   const nm = (el) => (el.textContent||"").trim() || el.getAttribute("aria-label") || el.getAttribute("title") || (el.getAttribute("aria-labelledby") ? (document.getElementById(el.getAttribute("aria-labelledby"))?.textContent||"").trim() : "") || el.getAttribute("placeholder") || "";
-  const out = { truncated: [], clippedY: [], offscreen: [], overflowX: [], unnamed: [], dupId: [], imgNoAlt: [], spill: [], contrast: [] };
+  const out = { truncated: [], clippedY: [], offscreen: [], overflowX: [], unnamed: [], dupId: [], imgNoAlt: [], spill: [], contrast: [], hanCaps: [] };
   // What the pixels resolve to, not what the token table promises: a colour is
   // checked against the surface it was designed for, then used on another one.
   const lum = (c) => { const [r,g,b] = c.map((v) => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }); return 0.2126*r+0.7152*g+0.0722*b; };
@@ -90,6 +102,14 @@ const P = `(() => {
   for (const el of document.querySelectorAll("*")) {
     if (el.children.length || !(el.textContent||"").trim() || !vis(el)) continue;
     const s2 = getComputedStyle(el);
+    // Text painted through a gradient has no single colour to weigh: its own
+    // is transparent by construction, which reads here as ink identical to the
+    // surface. Say nothing rather than report 1.00 against a heading nobody
+    // can see the problem in.
+    if (/text/.test(s2.webkitBackgroundClip || s2.backgroundClip || "")) continue;
+    // WCAG exempts an inactive component: a disabled control is greyed to say
+    // it cannot be used, and holding it to body-text contrast buries the rest.
+    if (el.closest("[disabled], [aria-disabled=true]")) continue;
     const px = parseFloat(s2.fontSize), bold = parseInt(s2.fontWeight,10) >= 700;
     const large = px >= 24 || (px >= 18.66 && bold);
     const need = large ? 3 : 4.5;
@@ -116,55 +136,52 @@ const P = `(() => {
       if (el.scrollHeight > el.clientHeight + 1 && /hidden|clip/.test(s.overflowY) && s.webkitLineClamp === "none") out.clippedY.push(path(el) + " | " + txt.slice(0, 44));
     }
     const r = el.getBoundingClientRect();
-    if (s.position !== "fixed" && r.width > 4 && !behind(el)) {
+    if (s.position !== "fixed" && r.width > 4 && !behind(el) && !scrolled(el)) {
       if (r.right > window.innerWidth + 1) out.offscreen.push(path(el) + " right=" + Math.round(r.right));
       if (r.left < -1) out.offscreen.push(path(el) + " left=" + Math.round(r.left));
     }
   }
   if (document.documentElement.scrollWidth > window.innerWidth + 1) out.overflowX.push("scrollWidth=" + document.documentElement.scrollWidth);
   for (const el of document.querySelectorAll('button,a[href],[role="button"],[role="tab"],input:not([type=hidden]),select,textarea'))
-    if (vis(el) && !nm(el)) out.unnamed.push(path(el));
+    // aria-hidden takes an element out of the accessibility tree on purpose: the
+    // row is the control and the twist beside it is decoration.
+    if (vis(el) && !el.closest('[aria-hidden="true"],[inert]') && !nm(el)) out.unnamed.push(path(el));
   const seen = new Map();
   for (const el of document.querySelectorAll("[id]")) seen.set(el.id, (seen.get(el.id)||0)+1);
   for (const [i, n] of seen) if (n > 1) out.dupId.push(i + " x" + n);
   for (const el of document.querySelectorAll("img")) if (vis(el) && el.getAttribute("alt") === null) out.imgNoAlt.push(path(el));
+  // Small-caps typography is Latin lettering. Tracking separates words there and
+  // pulls Han characters apart instead; uppercase has nothing to act on. The
+  // judgement reads the resolved style, so it holds whatever rule set it.
+  for (const el of document.querySelectorAll("*")) {
+    if (!vis(el)) continue;
+    const own = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim()).map((n) => n.textContent.trim()).join("");
+    if (!own || !/[\u4e00-\u9fff]/.test(own)) continue;
+    const s = getComputedStyle(el), ls = parseFloat(s.letterSpacing);
+    if ((!isNaN(ls) && Math.abs(ls) > 0.4) || s.textTransform === "uppercase")
+      out.hanCaps.push(path(el) + " ls=" + s.letterSpacing + " " + s.textTransform + " | " + own.slice(0, 24));
+  }
   return out;
 })()`;
 
-const STEPS = [
-  ["main", null],
-  ["session-12turns", `(()=>{const rows=[...document.querySelectorAll('.sessrow,.sess,[class*=sess]')].filter(e=>/turns/.test(e.textContent||''));const r=rows.sort((a,b)=>(+(b.textContent.match(/(\\d+) turns/)?.[1]||0))-(+(a.textContent.match(/(\\d+) turns/)?.[1]||0)))[0];const b=r&&(r.querySelector('.sesstitle')?.closest('button,[role=button]')||r.querySelector('button')||r);b&&b.click();return !!b})()`],
-  ["tab-trajectory", `(()=>{const b=[...document.querySelectorAll('.tab')].find(x=>/Trajectory/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["tab-activity", `(()=>{const b=[...document.querySelectorAll('.tab')].find(x=>/Activity/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["picker-model", `(()=>{const b=[...document.querySelectorAll('.picker button.mode')].find(x=>!/Effort|Approvals/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["picker-effort", `(()=>{document.body.click();const b=[...document.querySelectorAll('button.mode')].find(x=>/Effort/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["picker-approvals", `(()=>{document.body.click();const b=[...document.querySelectorAll('button.mode')].find(x=>/Approvals/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["plan-on", `(()=>{document.body.click();const b=[...document.querySelectorAll('button.mode.tog')].find(x=>/Plan/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["slash-palette", `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;ta.focus();const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,'/');ta.dispatchEvent(new Event('input',{bubbles:true}));return true})()`],
-  ["at-files", `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;ta.focus();const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,'@');ta.dispatchEvent(new Event('input',{bubbles:true}));return true})()`],
-  ["clear-composer", `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,'');ta.dispatchEvent(new Event('input',{bubbles:true}));document.body.click();return true})()`],
-  ["send-turn", `(()=>{const ta=document.querySelector('.compose textarea');if(!ta)return false;ta.focus();const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta),'value').set;s.call(ta,'Run the tests and fix what fails');ta.dispatchEvent(new Event('input',{bubbles:true}));const b=[...document.querySelectorAll('button')].find(x=>/Send/i.test(x.textContent||''));b&&b.click();return !!b})()`],
-  ["turn-mid", `(()=>true)()`],
-  ["turn-late", `(()=>true)()`],
-  ["turn-end", `(()=>true)()`],
-  ["account", `(()=>{const b=document.querySelector('.acct-btn');b&&b.click();return !!b})()`],
-];
+
 const res = [], skipped = [];
 for (const [label, act] of STEPS) {
   if (act) { const ok = await ev(act); if (!ok) { skipped.push(label); continue; } await wait(/^turn-/.test(label) ? 4500 : 1100); }
   res.push({ label, ...(await ev(P)) });
 }
 await ev(`document.body.click()`); await wait(400);
-await ev(`document.querySelector('.thbtn[aria-label="Settings"]')?.click()`); await wait(1400);
-const n = await ev(`document.querySelectorAll('.prefs-nav button').length`);
+await ev(SETTINGS_OPEN); await wait(1400);
+const n = await ev(SETTINGS_COUNT);
 if (!n) skipped.push("settings"); else for (let i = 0; i < n; i++) {
-  const nm2 = await ev(`(()=>{const b=document.querySelectorAll('.prefs-nav button')[${i}];b.click();return b.id||b.textContent.trim().slice(0,12)})()`);
+  const nm2 = await ev(settingsTab(i));
   await wait(800); res.push({ label: nm2, ...(await ev(P)) });
 }
-const KEYS = ["contrast", "truncated", "clippedY", "offscreen", "overflowX", "spill", "unnamed", "dupId", "imgNoAlt"];
+const KEYS = ["contrast", "truncated", "clippedY", "offscreen", "overflowX", "spill", "unnamed", "dupId", "imgNoAlt", "hanCaps"];
 const agg = Object.fromEntries(KEYS.map((k) => [k, new Map()]));
 for (const r of res) for (const k of KEYS) for (const v of (r[k]||[])) if (!agg[k].has(v)) agg[k].set(v, r.label);
 console.log(`\n##### ${url} theme=${theme} ${W}x${H} steps=${res.length} skipped=[${skipped.join(",")}]`);
+if (onb) console.log("  entry:", JSON.stringify(onb));
 for (const k of KEYS) { const m = agg[k]; if (!m.size) continue;
   console.log(`  ${k}: ${m.size}`); [...m.entries()].slice(0, 22).forEach(([v, w]) => console.log(`    [${w}] ${v}`)); }
 console.log(`  runtime: exc=${rt.exc.length} err=${rt.err.length} warn=${rt.warn.length} net4xx=${new Set(rt.net).size}`);

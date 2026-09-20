@@ -35,6 +35,10 @@ var uploadSignals = map[string]bool{
 	"cli_turn_latency": true, "cli_exit": true,
 	"turn_prompt_tokens": true, "turn_output_tokens": true, "turn_cached_tokens": true,
 	"cache_miss_reason": true,
+	// What serialising writers across sessions costs. Three closed enums: a
+	// hold was contended or not, how long it waited, and how much of it was
+	// spent holding and not writing.
+	"lease_hold": true, "lease_wait": true, "lease_idle": true,
 	// Recorded by RecordProtocolRecovery since it shipped and dropped here ever
 	// since: the bucket is a ProtocolRecoveryKind, a closed enum, never content.
 	"tool_call_reasoning_recovery": true,

@@ -180,9 +180,9 @@ func (a *Agent) compressVisibleRange(
 	// The size is already known here, and the fold's own model call can take
 	// most of a minute. Announcing only the trigger leaves a card that says
 	// "compacting" and nothing else for that whole time, which reads as a hang.
-	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: event.Compaction{
+	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: a.compactionFrame(event.Compaction{
 		Trigger: trigger, Messages: len(plan.fold), SourceTokens: plan.result.SourceTokens,
-	}})
+	})})
 	prepared, reason, err := a.prepareVisibleCompression(ctx, trigger, plan.fold, instructions)
 	if err != nil {
 		a.emitCompactionAborted(trigger)
@@ -247,9 +247,9 @@ func (a *Agent) compressVisibleRange(
 		return tool.CompressResult{}, err
 	}
 	a.emitCompactionTelemetry(tele)
-	a.svc.sink.Emit(event.Event{Kind: event.CompactionDone, Compaction: event.Compaction{
+	a.svc.sink.Emit(event.Event{Kind: event.CompactionDone, Compaction: a.compactionFrame(event.Compaction{
 		Trigger: trigger, Messages: len(plan.fold), Summary: summary,
-	}})
+	})})
 	result.Status = "ok"
 	result.Reason = ""
 	return result, nil
@@ -449,9 +449,9 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	}
 
 	sourceTokens := a.estimatedPromptTokens(msgs)
-	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: event.Compaction{
+	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: a.compactionFrame(event.Compaction{
 		Trigger: trigger, Messages: len(fold), SourceTokens: sourceTokens,
-	}})
+	})})
 	if a.svc.hooks != nil {
 		if hookInstr := a.svc.hooks.PreCompact(ctx, trigger); hookInstr != "" {
 			if instructions != "" {
@@ -509,12 +509,12 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		a.emitCompactionAborted(trigger)
 		return CompactionNoop, "", err
 	}
-	a.svc.sink.Emit(event.Event{Kind: event.CompactionDone, Compaction: event.Compaction{
+	a.svc.sink.Emit(event.Event{Kind: event.CompactionDone, Compaction: a.compactionFrame(event.Compaction{
 		Trigger: trigger, Messages: len(fold), Summary: summary,
 		SourceTokens: sourceTokens, ProjectionTokens: projTokens,
 		CoverageRequired: tele.CoverageRequired, CoverageMissing: tele.CoverageMissing,
 		CoverageBackstopped: tele.CoverageBackstopped,
-	}})
+	})})
 	// Only once the checkpoint is committed: a rejected candidate folded nothing.
 	a.sess.compaction.lastUserTurns = retention
 	a.noticeDroppedUserTurns(retention)

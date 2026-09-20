@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"reasonix/internal/config"
 	"reasonix/internal/control"
 )
 
@@ -32,7 +33,16 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		}
 		cursor = byteOffset(line, n)
 	}
-	data := s.ctl().CompletionData()
+	// The kernel words the built-in verbs and a window reads them, in a
+	// language that is not this process's. The window is the authority on what
+	// it draws; the config answers only for a client that says nothing.
+	lang := q.Get("lang")
+	if lang == "" {
+		if cfg, err := config.Load(); err == nil {
+			lang = cfg.DesktopLanguage()
+		}
+	}
+	data := s.ctl().CompletionData(lang)
 	// A client of this server completes inside the workspace and nowhere else,
 	// which is the same boundary SubmitHTTP resolves its references within.
 	data.Scoped = true

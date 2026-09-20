@@ -169,9 +169,6 @@ func TestDesktopPreferencesAreSeparateFromCLI(t *testing.T) {
 	if err := c.SetDesktopTerminalTheme("light"); err != nil {
 		t.Fatalf("SetDesktopTerminalTheme: %v", err)
 	}
-	if err := c.SetDesktopLayoutStyle("workbench"); err != nil {
-		t.Fatalf("SetDesktopLayoutStyle: %v", err)
-	}
 	if err := c.SetDesktopStatusBarStyle("text"); err != nil {
 		t.Fatalf("SetDesktopStatusBarStyle: %v", err)
 	}
@@ -199,9 +196,6 @@ func TestDesktopPreferencesAreSeparateFromCLI(t *testing.T) {
 	}
 	if got := c.DesktopTerminalTheme(); got != "light" {
 		t.Fatalf("desktop terminal theme = %q, want light", got)
-	}
-	if got := c.DesktopLayoutStyle(); got != "workbench" {
-		t.Fatalf("desktop layout style = %q, want workbench", got)
 	}
 	if got := c.DesktopStatusBarStyle(); got != "text" {
 		t.Fatalf("desktop status bar style = %q, want text", got)
@@ -257,42 +251,6 @@ func TestDesktopCurrencyNormalizesAndRefreshesOfficialPricing(t *testing.T) {
 	}
 	if err := c.SetDesktopCurrency("EUR"); err == nil {
 		t.Fatal("SetDesktopCurrency accepted unsupported EUR")
-	}
-}
-
-func TestDesktopLayoutStyleNormalizes(t *testing.T) {
-	if got := Default().DesktopLayoutStyle(); got != "workbench" {
-		t.Fatalf("default desktop layout style = %q, want workbench", got)
-	}
-	for _, tt := range []struct {
-		in      string
-		want    string
-		wantErr bool
-	}{
-		{"", "classic", false},
-		{"classic", "classic", false},
-		{" workbench ", "workbench", false},
-		{"workspace", "workbench", false},
-		{"creation", "creation", false},
-		{" Creation ", "creation", false},
-		{"later", "workbench", true},
-	} {
-		c := Default()
-		if err := c.SetDesktopLayoutStyle(tt.in); (err != nil) != tt.wantErr {
-			t.Fatalf("SetDesktopLayoutStyle(%q) err = %v, wantErr %v", tt.in, err, tt.wantErr)
-		}
-		if got := c.DesktopLayoutStyle(); got != tt.want {
-			t.Fatalf("DesktopLayoutStyle(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-
-	c := Default()
-	c.Desktop.ThemeStyle = "workbench"
-	if got := c.DesktopLayoutStyle(); got != "workbench" {
-		t.Fatalf("legacy desktop theme_style=workbench layout = %q, want workbench", got)
-	}
-	if got := c.DesktopThemeStyle(); got != "" {
-		t.Fatalf("legacy desktop theme_style=workbench theme style = %q, want empty", got)
 	}
 }
 
@@ -1583,8 +1541,8 @@ temperature = 0.8
 	if cfg.DefaultModel != "deepseek-pro" {
 		t.Fatalf("default_model = %q, want project config to keep overriding unrelated fields", cfg.DefaultModel)
 	}
-	if cfg.Bot.MaxSteps != 21 {
-		t.Fatalf("bot.max_steps = %d, want independent bot limit preserved", cfg.Bot.MaxSteps)
+	if got := cfg.Bot["max_steps"]; got != int64(21) {
+		t.Fatalf("bot.max_steps = %v, want the [bot] table preserved", got)
 	}
 	for _, path := range []string{userPath, filepath.Join(root, "reasonix.toml")} {
 		raw, err := os.ReadFile(path)
@@ -3246,5 +3204,16 @@ func TestBrokenProjectConfigSymlinkFailsLoadAndSave(t *testing.T) {
 	}
 	if info.Mode()&os.ModeSymlink == 0 {
 		t.Fatal("failed operations replaced the broken project config symlink")
+	}
+}
+
+// "workbench" was a layout name that briefly lived in theme_style. The layout
+// setting is retired; what still has to hold is that the value was never a
+// theme, so a config carrying it renders in the default appearance.
+func TestDesktopThemeStyleRejectsTheRetiredLayoutName(t *testing.T) {
+	c := Default()
+	c.Desktop.ThemeStyle = "workbench"
+	if got := c.DesktopThemeStyle(); got != "" {
+		t.Fatalf("theme style = %q, want empty", got)
 	}
 }

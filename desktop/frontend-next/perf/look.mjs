@@ -51,15 +51,15 @@ const clickIn = (group, label) =>
 
 const readPx = () =>
   page.evaluate(() => {
-    const el = document.querySelector("#flowScroll .out .txt");
+    const el = document.querySelector('[data-pane="flow"] .out .txt');
     return el ? parseFloat(getComputedStyle(el).fontSize) : 0;
   });
 const rootVar = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
 
 const base = await readPx();
-// 默认字号按界面语言分档（readDefault(): 中文 14.5、西文 13.5）—— 写死一个常数
+// 默认字号按界面语言分档（readDefault(): 中文 16、西文 15）—— 写死一个常数
 // 的时候，这条在中文界面上一直是红的，而红的是断言不是产品。
-const wantRead = (await page.evaluate(() => document.documentElement.lang)).startsWith("zh") ? 14.5 : 13.5;
+const wantRead = (await page.evaluate(() => document.documentElement.lang)).startsWith("zh") ? 16 : 15;
 check("默认正文字号", Math.abs(base - wantRead) < 0.6, `${base}px（该是 ${wantRead}px）`);
 
 // 打开设置 → 外观
@@ -97,7 +97,16 @@ await page.waitForTimeout(400);
 const zoom = await page.evaluate(() => document.documentElement.style.zoom);
 await page.screenshot({ path: `${SHOTS}/look-2-放大后.png` });
 
-// 3) 字体：写一个名字进去
+// 3) 字体：写一个名字进去。字体两槽在「高级」折叠区里，合起来的时候
+// details 的内容浏览器不渲染 —— 上面那些判据是拿 DOM 的 .click() 点的，不过
+// 可见性这一关，所以它们一路绿着，而第一个真正的用户动作（往框里打字）撞上
+// 它。展开一次，后面两槽共用。
+await page.evaluate(() => {
+  const box = document.querySelector("details.advset");
+  if (box && !box.open) box.open = true;
+});
+await page.waitForTimeout(300);
+check("字体设置所在的高级区能展开", await page.locator(".fontrow .fontown").first().isVisible());
 await page.locator(".fontrow .fontown").first().fill("Georgia");
 await page.waitForTimeout(600);
 const ui = await rootVar("--ui");

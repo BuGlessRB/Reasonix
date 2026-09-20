@@ -22,7 +22,7 @@ const ROUTES = [
   "/changes", "/attachments", "/drop", "/checkpoints", "/branches", "/compact", "/compaction", "/rewind",
   "/extensions", "/themes", "/plugins", "/surfaces",
   "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",
-  "/permissions", "/sandbox", "/context", "/storage", "/tray", "/asks", "/update",
+  "/permissions", "/sandbox", "/context", "/storage", "/tray", "/browser", "/browser-host", "/asks", "/update",
   "/slash", "/workspaces", "/welcome", "/usage", "/config", "/studio",
 ];
 
@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
       port: 5273,
       // The dev server is cross-origin to serve, which its CSRF guard rejects.
       // Rewriting Origin makes the hop look same-origin, matching production
-      // and the Wails shell where the UI really is served from the kernel.
+      // where the UI really is served from the kernel.
       proxy: serve
         ? Object.fromEntries(
             ROUTES.map((r) => [

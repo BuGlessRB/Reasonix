@@ -42,7 +42,7 @@ for (const { width, height } of [{ width: 1440, height: 900 }, { width: 640, hei
   const layout = await page.evaluate(() => {
     const box = (selector) => document.querySelector(selector)?.getBoundingClientRect();
     const prose = document.querySelector('.call[data-k="say"] .out .txt');
-    const flow = document.querySelector("#flowScroll");
+    const flow = document.querySelector('[data-pane="flow"]');
     const ask = document.querySelector(".ask");
     const tabs = document.querySelector(".ask-tabs");
     const foot = document.querySelector(".ask-foot");

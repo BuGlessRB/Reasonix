@@ -5,11 +5,10 @@ everything you need to get started.
 
 ## Prerequisites
 
-- **Go 1.25+** — the project targets the latest stable Go release
+- **Go 1.26+** — the version `go.mod` requires
 - **Git** — for version control
-- **Node.js** (optional) — only if you work on the desktop app (`desktop/`)
-- **Wails CLI** (desktop only) — run `make wails-install` so the CLI matches
-  `desktop/go.mod`
+- **Node.js 24+ and pnpm 10** (optional) — only if you work on Studio
+  (`desktop/`)
 
 ## Getting started
 
@@ -40,7 +39,7 @@ go test ./...              # runs the full test suite
 | `internal/sandbox` | OS-level sandboxing |
 | `internal/serve` | HTTP/SSE server frontend |
 | `internal/checkpoint` | Snapshot-based rewind |
-| `desktop/` | Wails-based desktop app (separate Go module) |
+| `desktop/` | Studio: the Electron shell, the SPA it serves (separate Go module) |
 | `docs/` | Engineering spec, migration guide |
 
 ### Dependency direction
@@ -80,11 +79,10 @@ REASONIX_HOME=/tmp/reasonix-dev go run ./cmd/reasonix
 #   REASONIX_HOME=/tmp/reasonix-dev ./bin/reasonix
 ```
 
-**Desktop**
+**Studio**
 
 ```bash
-cd desktop && wails build
-REASONIX_HOME=/tmp/reasonix-dev-isolated build/bin/reasonix-desktop
+REASONIX_HOME=/tmp/reasonix-dev-isolated make studio
 ```
 
 On Windows, use `$env:REASONIX_HOME` in PowerShell or `set REASONIX_HOME=` in

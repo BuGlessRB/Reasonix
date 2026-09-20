@@ -10,6 +10,7 @@ const { parse, readActs } = require("../src/host.js");
 const { contextTemplate } = require("../src/editmenu.js");
 const { externalTarget } = require("../src/links.js");
 const { offerCleanup, ownBundle } = require("../src/legacy.js");
+const { stripPackageGrants, readReport, unpaintedWindowCause } = require("../src/packagegrants.js");
 
 const TOKEN = "a".repeat(64);
 const line = (over) => JSON.stringify({ version: 1, origin: "http://127.0.0.1:8080", token: TOKEN, ...over });
@@ -122,7 +123,7 @@ test("an unreachable kernel is an answer, not a crash", async () => {
   assert.equal(await dead.trayState(), null);
 });
 
-const { hostBinary, pageDir } = require("../src/layout.js");
+const { hostBinary, computerHelper, pageDir } = require("../src/layout.js");
 
 // Packaged, both live in resources/ beside app.asar. Reading them from inside
 // it is the failure this pins: a child process cannot be spawned out of an
@@ -138,6 +139,14 @@ test("the kernel and the page are found in both layouts", () => {
   for (const p of [hostBinary(packed), pageDir(packed)]) {
     assert.doesNotMatch(p, /app\.asar/, "resolved into the archive");
   }
+});
+
+test("the computer-use helper is found beside the kernel on macOS, and nowhere else", () => {
+  const mac = { packaged: true, resourcesPath: "/res", dirname: "/d/src", platform: "darwin" };
+  assert.equal(computerHelper(mac), path.join("/res", "bin", "reasonix-computer-helper"));
+  assert.equal(computerHelper({ ...mac, packaged: false, dirname: path.join("/repo", "electron", "src") }), path.join("/repo", "electron", "bin", "reasonix-computer-helper"));
+  assert.equal(computerHelper({ ...mac, platform: "win32" }), "");
+  assert.equal(computerHelper({ ...mac, platform: "linux", env: { REASONIX_COMPUTER_HELPER: "/custom/helper" } }), "/custom/helper");
 });
 
 test("Windows gets the suffix spawn needs, and an override wins over both", () => {
@@ -351,4 +360,158 @@ test("consent trashes exactly what was answered for", async (t) => {
   });
   assert.deepEqual(trashed, [legacy]);
   assert.deepEqual(removed, [legacy]);
+});
+
+test("package grants are only stripped from a packaged Windows install", () => {
+  const never = () => assert.fail("the kernel was run");
+  const exe = "C:\\Studio\\Reasonix Studio.exe";
+  assert.equal(stripPackageGrants("host", { platform: "darwin", packaged: true, execPath: exe }, never), null);
+  assert.equal(stripPackageGrants("host", { platform: "linux", packaged: true, execPath: exe }, never), null);
+  assert.equal(stripPackageGrants("host", { platform: "win32", packaged: false, execPath: exe }, never), null);
+
+  let called;
+  const run = (binary, args) => {
+    called = { binary, args };
+    return JSON.stringify({ stripped: ["C:\\Studio"], refused: [{ path: "C:\\Studio\\ffmpeg.dll" }] }) + "\n";
+  };
+  const report = stripPackageGrants("host", { platform: "win32", packaged: true, execPath: exe }, run);
+  // The kernel is told which application, never which directory: it derives the
+  // tree from the executable it is shown.
+  assert.deepEqual(called, { binary: "host", args: ["-strip-package-grants", "-studio-app", exe] });
+  assert.deepEqual(report, { stripped: ["C:\\Studio"], refused: ["C:\\Studio\\ffmpeg.dll"] });
+});
+
+test("a grant report that does not parse is no report at all", () => {
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    const opts = { platform: "win32", packaged: true, execPath: "C:\\S.exe" };
+    assert.equal(stripPackageGrants("host", opts, () => { throw new Error("exit 2"); }), null);
+    assert.equal(stripPackageGrants("host", opts, () => "not json"), null);
+  } finally {
+    console.error = quiet;
+  }
+  assert.throws(() => readReport(JSON.stringify({ stripped: null, refused: [] })));
+  assert.throws(() => readReport(JSON.stringify({ stripped: [] })));
+});
+
+test("an unpainted window is attributed only to grants the kernel could not remove", () => {
+  assert.equal(unpaintedWindowCause(null, "en-US"), null);
+  assert.equal(unpaintedWindowCause({ stripped: ["C:\\Studio"], refused: [] }, "en-US"), null);
+
+  const refused = Array.from({ length: 7 }, (_, i) => `C:\\Studio\\${i}.dll`);
+  const en = unpaintedWindowCause({ stripped: [], refused }, "en-US");
+  assert.ok(en.detail.includes("C:\\Studio\\4.dll") && !en.detail.includes("C:\\Studio\\5.dll"));
+  assert.ok(en.detail.includes("2 more"));
+  const zh = unpaintedWindowCause({ stripped: [], refused: refused.slice(0, 1) }, "zh-CN");
+  assert.ok(zh.title.includes("无法打开窗口") && zh.detail.includes("C:\\Studio\\0.dll"));
+});
+
+const { BrowserProtocol, PAGE_SESSION } = require("../src/browserprotocol.js");
+const { guestNavigationAllowed, typedAddress } = require("../src/browserguard.js");
+const { sseData } = require("../src/browserrelay.js");
+
+function fakeBrowser() {
+  const posted = [];
+  const views = [];
+  const protocol = new BrowserProtocol({
+    post: (frame) => posted.push(frame),
+    createView: (spec) => {
+      const view = {
+        targetId: `view-${views.length + 1}`,
+        spec,
+        sent: [],
+        closed: false,
+        send: async (method, params) => {
+          view.sent.push([method, params]);
+          if (method === "Page.fail") throw new Error("nope");
+          return { echoed: method };
+        },
+        close: () => {
+          view.closed = true;
+          spec.onClosed();
+        },
+        mainFrame: () => "F1",
+      };
+      views.push(view);
+      return view;
+    },
+  });
+  const say = (conn, message) => protocol.receive({ conn, message });
+  const replies = (conn) => posted.filter((f) => f.conn === conn).map((f) => f.message);
+  return { protocol, posted, views, say, replies };
+}
+
+test("the window answers for targets and hands a page's commands to that page", async () => {
+  const b = fakeBrowser();
+  b.protocol.receive({ conn: "1", open: "reasonix-browser-abc" });
+  b.say("1", { id: 1, method: "Browser.getVersion" });
+  b.say("1", { id: 2, method: "Target.createTarget", params: { url: "about:blank" } });
+  assert.equal(b.views[0].spec.partition, "reasonix-browser-abc");
+  b.say("1", { id: 3, method: "Target.attachToTarget", params: { targetId: "view-1", flatten: true } });
+  b.say("1", { id: 4, method: "Page.navigate", params: { url: "https://example.com/" }, sessionId: PAGE_SESSION + "view-1" });
+  b.say("1", { id: 5, method: "Page.fail", sessionId: PAGE_SESSION + "view-1" });
+  b.say("1", { id: 6, method: "Tracing.start" });
+  await new Promise((r) => setImmediate(r));
+  const byId = Object.fromEntries(b.replies("1").filter((m) => m.id).map((m) => [m.id, m]));
+  assert.equal(byId[2].result.targetId, "view-1");
+  assert.equal(byId[3].result.sessionId, PAGE_SESSION + "view-1");
+  assert.deepEqual(byId[4].result, { echoed: "Page.navigate" });
+  assert.equal(byId[5].error.message, "nope");
+  assert.equal(byId[6].error.code, -32601);
+
+  b.views[0].spec.onEvent("Page.loadEventFired", {});
+  assert.deepEqual(b.replies("1").at(-1), { method: "Page.loadEventFired", params: {}, sessionId: PAGE_SESSION + "view-1" });
+});
+
+test("a popup becomes a target the kernel is told about, and closing ends every page", () => {
+  const b = fakeBrowser();
+  b.protocol.receive({ conn: "1", open: "p" });
+  b.say("1", { id: 1, method: "Target.createTarget", params: { url: "about:blank" } });
+  b.views[0].spec.onPopup("https://example.com/next");
+  const created = b.replies("1").find((m) => m.method === "Target.targetCreated");
+  assert.deepEqual(created.params.targetInfo, { targetId: "view-2", type: "page", openerId: "view-1", url: "https://example.com/next" });
+
+  b.views[0].spec.onDownload({ url: "https://example.com/a.csv", suggestedFilename: "a.csv" });
+  assert.equal(b.replies("1").at(-1).method, "Browser.downloadWillBegin");
+
+  b.protocol.receive({ conn: "1", close: true });
+  assert.ok(b.views.every((v) => v.closed), "a closed connection left pages open");
+  const destroyed = b.replies("1").filter((m) => m.method === "Target.targetDestroyed").map((m) => m.params.targetId);
+  assert.deepEqual(destroyed.sort(), ["view-1", "view-2"]);
+  b.say("1", { id: 9, method: "Target.createTarget" });
+  assert.equal(b.views.length, 2, "a closed connection still opened a page");
+});
+
+test("frames for connections nobody opened, or after the stream dropped, are ignored", () => {
+  const b = fakeBrowser();
+  b.say("ghost", { id: 1, method: "Target.createTarget" });
+  assert.equal(b.views.length, 0);
+  b.protocol.receive({ conn: "1", open: "p" });
+  b.say("1", { id: 1, method: "Target.createTarget" });
+  b.protocol.drop();
+  assert.ok(b.views[0].closed);
+  b.say("1", { id: 2, method: "Target.createTarget" });
+  assert.equal(b.views.length, 1);
+});
+
+test("a page may go to the web and never to the kernel's own origin", () => {
+  const kernel = "http://127.0.0.1:4455";
+  assert.equal(guestNavigationAllowed("https://example.com/a", kernel), true);
+  assert.equal(guestNavigationAllowed("http://127.0.0.1:5173/", kernel), true);
+  assert.equal(guestNavigationAllowed("about:blank", kernel), true);
+  for (const refused of ["http://127.0.0.1:4455/_studio/", "http://127.0.0.1:4455/rt/1/approve", "file:///etc/hosts", "javascript:alert(1)", "chrome://settings", "devtools://x", "not a url"]) {
+    assert.equal(guestNavigationAllowed(refused, kernel), false, refused);
+  }
+  assert.equal(typedAddress("example.com/docs"), "https://example.com/docs");
+  assert.equal(typedAddress("http://localhost:3000"), "http://localhost:3000");
+  assert.equal(typedAddress("  "), "");
+});
+
+test("the relay reads whole SSE data frames and keeps what is unfinished", () => {
+  const first = sseData(': connected\n\ndata: {"conn":"1"}\n\ndata: {"co');
+  assert.deepEqual(first.data, ['{"conn":"1"}']);
+  const second = sseData(first.rest + 'nn":"2"}\n\n: ping\n\n');
+  assert.deepEqual(second.data, ['{"conn":"2"}']);
+  assert.equal(second.rest, "");
 });

@@ -815,7 +815,7 @@ func (g *Gate) askHuman(ctx context.Context, taskID, fp string, gen uint64, prop
 	}
 
 	// Create the waiter channel before EmitPrompt. Resolve may race in as soon
-	// as the approval id is known (desktop/bot), so re-key the waiter under the
+	// as the approval id is known (desktop), so re-key the waiter under the
 	// real id immediately after EmitPrompt returns.
 	reply := make(chan resolvePayload, 1)
 	g.mu.Lock()

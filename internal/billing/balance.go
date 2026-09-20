@@ -11,8 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -50,11 +51,7 @@ func (b *Balance) Currencies() []string {
 			seen[cur] = struct{}{}
 		}
 	}
-	result := make([]string, 0, len(seen))
-	for cur := range seen {
-		result = append(result, cur)
-	}
-	sort.Strings(result)
+	result := slices.Sorted(maps.Keys(seen))
 	return result
 }
 

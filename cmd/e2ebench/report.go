@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 )
@@ -327,7 +326,7 @@ func failureBreakdown(classes map[string]int) string {
 	if len(names) == 0 {
 		return ""
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	parts := make([]string, 0, len(names))
 	for _, name := range names {
 		parts = append(parts, fmt.Sprintf("%s ×%d", name, classes[name]))
@@ -346,7 +345,7 @@ func reasonBreakdown(reasons map[string]int) string {
 	if len(names) == 0 {
 		return ""
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	parts := make([]string, 0, len(names))
 	for _, name := range names {
 		parts = append(parts, fmt.Sprintf("%s ×%d", name, reasons[name]))

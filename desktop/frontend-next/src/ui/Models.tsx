@@ -123,7 +123,7 @@ export function Models({ models, current, busy, protocol, onPick }: Props) {
   return (
     <>
       {total > 8 && (
-        <div className="mfind">
+        <div className="msearch">
           <input
             type="search"
             value={q}

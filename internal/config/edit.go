@@ -193,7 +193,7 @@ func (c *Config) SetLanguage(lang string) error {
 	default:
 		return fmt.Errorf("language %q: must be auto|en|zh", lang)
 	}
-	c.ApplyDeepSeekOfficialDefaultPricing()
+	c.ApplyOfficialDefaultPricing()
 	return nil
 }
 
@@ -226,7 +226,7 @@ func (c *Config) SetDesktopLanguage(lang string) error {
 	default:
 		return fmt.Errorf("desktop language %q: must be auto|en|zh", lang)
 	}
-	c.ApplyDeepSeekOfficialDefaultPricing()
+	c.ApplyOfficialDefaultPricing()
 	return nil
 }
 
@@ -267,22 +267,6 @@ func (c *Config) SetDesktopTerminalTheme(theme string) error {
 		c.Desktop.TerminalTheme = "light"
 	default:
 		return fmt.Errorf("desktop terminal theme %q: must be auto|dark|light", theme)
-	}
-	return nil
-}
-
-// SetDesktopLayoutStyle sets the desktop layout style. UI-only; it must not
-// affect CLI output or provider-visible request data.
-func (c *Config) SetDesktopLayoutStyle(style string) error {
-	switch strings.ToLower(strings.TrimSpace(style)) {
-	case "", "classic":
-		c.Desktop.LayoutStyle = "classic"
-	case "workbench", "workspace":
-		c.Desktop.LayoutStyle = "workbench"
-	case "creation":
-		c.Desktop.LayoutStyle = "creation"
-	default:
-		return fmt.Errorf("desktop layout style %q: must be classic|workbench|creation", style)
 	}
 	return nil
 }
@@ -372,13 +356,6 @@ func (c *Config) SetDesktopStatusBarItems(items []string) error {
 // startup. Manual checks remain available in Settings regardless of this value.
 func (c *Config) SetDesktopCheckUpdates(enabled bool) error {
 	c.Desktop.CheckUpdates = &enabled
-	return nil
-}
-
-// SetDesktopUpdateChannel is retained for pre-single-channel Wails clients.
-// Clearing the legacy field keeps the next canonical write channel-free.
-func (c *Config) SetDesktopUpdateChannel(_ string) error {
-	c.Desktop.UpdateChannel = ""
 	return nil
 }
 
@@ -864,16 +841,6 @@ func (c *Config) ClearPluginAuthentication(name string) (PluginEntry, bool, erro
 		return c.Plugins[i], changed, nil
 	}
 	return PluginEntry{}, false, fmt.Errorf("clear plugin authentication: no plugin %q", name)
-}
-
-// ClearPluginAuthenticationInSource clears auth material in the file that actually
-// owns the MCP server. Load() merges user/project TOML and project .mcp.json into
-// one Config, so callers must not mutate that merged view and Save() it back: a
-// .mcp.json-only server would otherwise be serialized into reasonix.toml or the
-// user config. Source priority mirrors Load(): project TOML, user TOML, then the
-// project .mcp.json entry if TOML did not define that server.
-func ClearPluginAuthenticationInSource(name string) (PluginEntry, bool, string, error) {
-	return ClearPluginAuthenticationInSourceForRoot(".", name)
 }
 
 // ClearPluginAuthenticationInSourceForRoot clears auth material in the source

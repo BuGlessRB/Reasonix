@@ -62,6 +62,11 @@ func stabilize(in []eventwire.Event) []eventwire.Event {
 			a.ID = name(barriers, "b", a.ID)
 			e.Ask = &a
 		}
+		if e.DecisionReceipt != nil {
+			r := *e.DecisionReceipt
+			r.ID = name(barriers, "b", r.ID)
+			e.DecisionReceipt = &r
+		}
 		if e.Tool != nil {
 			t := *e.Tool
 			t.AttemptID = name(rounds, "r", t.AttemptID)
@@ -69,6 +74,11 @@ func stabilize(in []eventwire.Event) []eventwire.Event {
 			t.DurationMs, t.ContextTokens, t.StartedAt, t.EndedAt, t.ArgChars = 0, 0, 0, 0, 0
 			t.Added, t.Removed = 0, 0
 			e.Tool = &t
+		}
+		if e.WorkspaceLease != nil {
+			l := *e.WorkspaceLease
+			l.WaitedMs, l.HeldMs, l.IdleMs = 0, 0, 0 // measured durations, not turn structure
+			e.WorkspaceLease = &l
 		}
 		if e.Usage != nil {
 			continue // billing numbers, not turn structure

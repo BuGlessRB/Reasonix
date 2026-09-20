@@ -28,12 +28,15 @@ await page.waitForSelector(".compose");
 
 await page.getByRole("tab", { name: "任务", exact: true }).click();
 await page.waitForTimeout(320);
-const card = page.locator(".tk-acts");
-const before = await card.evaluate((el) => ({ border: getComputedStyle(el).borderColor, shadow: getComputedStyle(el).boxShadow }));
-await card.hover();
+// 快捷操作已经从「卡中套卡」改成一行一条，反馈也跟着换了通道：容器不再有自己
+// 的边和影，悬停落在那一行上 —— 底色浮起来，行首让开 8px，箭头前移。问的还是
+// 同一件事（悬停要有反馈，且是克制的那种），只是问在它现在画的地方。
+const row = page.locator(".tk-acts button").first();
+const before = await row.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, pad: getComputedStyle(el).paddingLeft }));
+await row.hover();
 await page.waitForTimeout(260);
-const after = await card.evaluate((el) => ({ border: getComputedStyle(el).borderColor, shadow: getComputedStyle(el).boxShadow }));
-check("任务卡悬停有克制的层次反馈", before.border !== after.border && before.shadow !== after.shadow);
+const after = await row.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, pad: getComputedStyle(el).paddingLeft }));
+check("任务快捷操作悬停有克制的层次反馈", before.bg !== after.bg && before.pad !== after.pad, `${before.bg} / ${before.pad} → ${after.bg} / ${after.pad}`);
 
 await page.getByRole("tab", { name: "对话", exact: true }).click();
 const located = await page.evaluate(() => {
@@ -104,7 +107,7 @@ const thumb = page.locator(".srail-view");
 await thumb.focus();
 await page.keyboard.press("End");
 await page.waitForTimeout(80);
-check("消息定位轨可用键盘滚动", await page.evaluate(() => document.querySelector("#flowScroll").scrollTop > 0));
+check("消息定位轨可用键盘滚动", await page.evaluate(() => document.querySelector('[data-pane="flow"]').scrollTop > 0));
 
 const reduced = await browser.newPage({
   viewport: { width: 1440, height: 900 },

@@ -6,6 +6,7 @@ import { useRailQuery } from "./railsearch";
 import { StudioIcon } from "./StudioIcon";
 import { download } from "../port/download";
 import { host } from "../port/host";
+import { useTreeKeys } from "./tree";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -26,10 +27,10 @@ interface Props {
   // changes constantly and this is only ever asked at confirmation time.
   liveIds: (ids: string[]) => string[];
   scope?: "all" | "live" | "pinned" | "archived";
-  pinned: Set<string>;
-  onPin: (path: string) => void;
-  onPause: (runtimeId: string) => void;
-  onArchive: (path: string, archived: boolean, runtimeId?: string) => Promise<void>;
+  pinned?: Set<string>;
+  onPin?: (path: string) => void;
+  onPause?: (runtimeId: string) => void;
+  onArchive?: (path: string, archived: boolean, runtimeId?: string) => Promise<void>;
   onRename: (path: string, title: string) => void;
   onError: (e: unknown) => void;
   // 打开项目这个动作归 App —— 首启那条横幅按的是同一个它。
@@ -46,13 +47,14 @@ interface Props {
 // nodes in the sidebar — more than the transcript at 20000 turns.
 const SHOWN = 30;
 
-function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, scope = "all", pinned, onPin, onPause, onArchive, onRename, onError, adder, children }: Props) {
+function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, scope = "all", pinned = new Set(), onPin = () => {}, onPause = () => {}, onArchive = async () => {}, onRename, onError, adder, children }: Props) {
   const [busy, setBusy] = useState("");
   // Folding a machine is the reader's own preference, held the way a host row
   // holds it.
   const [hereShut, setHereShut] = useState(false);
   const [confirm, setConfirm] = useState("");
   const needle = useRailQuery();
+  const treeKeys = useTreeKeys();
   // Renaming is a pencil, not a double-click: a single click already opens the
   // session, so a double one would open it twice on the way to the edit.
   const [editing, setEditing] = useState("");
@@ -72,10 +74,6 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   const [whole, setWhole] = useState<Set<string>>(new Set());
   // Conversations whose conflict copies the reader asked to see.
   const [spread, setSpread] = useState<Set<string>>(new Set());
-  // The kernel refuses past its own ceiling either way; this only decides when
-  // the button greys out instead of failing on click.
-  const maxPanes = hub.maxPanes();
-  const full = runtimes.length >= maxPanes;
   // Two folders can share a name — a worktree copy carries the project's own.
   // Only then is the extra word worth the room it takes.
   const twice = new Set(tree.map((w) => w.name).filter((n, i, all) => all.indexOf(n) !== i));
@@ -224,7 +222,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
       )}
 
       <div className="scroll">
-        <div role="tree" aria-label={t("机器、工作区与会话")}>
+        <div role="tree" aria-label={t("机器、工作区与会话")} data-action-keydown="tree.navigate" ref={treeKeys.ref} onKeyDown={treeKeys.onKeyDown}>
           {/* This machine is the first row of the list rather than another kind of
               thing, and its add button sits where a host's does: open a folder
               on this machine. */}
@@ -270,7 +268,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
               <div className="wsnode" key={ws.root} data-current={panesOf(ws.root).includes(active) ? "" : undefined} data-missing={ws.missing ? "" : undefined}>
                 {confirm === ws.root ? (
                   <Confirm
-                    what={`从列表移除「${ws.name}」？`}
+                    what={t("从列表移除「{name}」？", { name: ws.name })}
                     hint={removeHint(doomed.length, busyPanes)}
                     go={t("移除")}
                     danger={busyPanes > 0}
@@ -307,8 +305,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         data-action="session.new"
                         className="wsadd"
                         data-busy={busy === "new:" + ws.root ? "" : undefined}
-                        disabled={full || ws.missing}
-                        title={full ? t("最多同时打开 {n} 个面板，请先关闭一个", { n: maxPanes }) : t("在 {name} 下新建会话", { name: ws.name })}
+                        disabled={ws.missing}
+                        title={t("在 {name} 下新建会话", { name: ws.name })}
                         aria-label={t("在 {name} 下新建会话", { name: ws.name })}
                         onClick={(ev) => {
                           ev.stopPropagation();
@@ -344,9 +342,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                       return (
                         <Confirm
                           key={session.path}
-                          what={`删除「${session.title || session.name}」？`}
+                          what={t("删除「{name}」？", { name: session.title || session.name })}
                           hint={t(session.runtimeId ? "它的面板会先关掉" : "连同其记录一并删除")}
-                          go="删除"
+                          go={t("删除")}
                           danger
                           onGo={() => void dropSession(session)}
                           onCancel={() => setConfirm("")}

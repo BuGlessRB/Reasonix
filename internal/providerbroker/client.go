@@ -209,6 +209,20 @@ func emit(ctx context.Context, out chan<- provider.Chunk, c provider.Chunk) bool
 	}
 }
 
+// UnknownModelError is a ref the broker's machine has no model for. It says
+// where the lookup ran, because the host reporting it keeps a config of its
+// own that may well carry the ref — and that config is not where it resolves.
+type UnknownModelError struct {
+	Ref string
+}
+
+func (e *UnknownModelError) Error() string {
+	return fmt.Sprintf("model %q is not configured on the machine this host resolves models through; "+
+		"choose one of that machine's models, or set this host's provider to %q to use its own", e.Ref, "remote")
+}
+
+func (e *UnknownModelError) Unwrap() error { return provider.ErrUnknownModel }
+
 func decodeWireError(resp *http.Response) error {
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if err != nil || len(bytes.TrimSpace(data)) == 0 {

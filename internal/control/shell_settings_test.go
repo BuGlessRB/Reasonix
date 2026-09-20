@@ -10,7 +10,7 @@ import (
 )
 
 const shellSeedConfig = `config_version = 6
-default_model = "deepseek-flash/deepseek-v4-flash"
+default_model = "deepseek-flash/deepseek-flash"
 
 [[providers]]
 name        = "deepseek-flash"
@@ -48,7 +48,7 @@ func TestSaveShellSettingsPersists(t *testing.T) {
 		written, _ := os.ReadFile(path)
 		t.Fatalf("provider block lost by the shell write; file now:\n%s", written)
 	}
-	if saved.DefaultModel != "deepseek-flash/deepseek-v4-flash" {
+	if saved.DefaultModel != "deepseek-flash/deepseek-flash" {
 		t.Fatalf("default_model = %q, want it preserved", saved.DefaultModel)
 	}
 }

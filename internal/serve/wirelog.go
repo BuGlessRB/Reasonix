@@ -41,6 +41,10 @@ var wireLogKinds = map[string]bool{
 	// else in the log: the task list rides the tool frames, but the verdict on
 	// what a write did to it does not.
 	"todo_progress": true,
+	// What serialising writers across sessions actually cost this one. Nothing
+	// else in the log carries it: the notice only fires past the grace, and it
+	// carries a sentence rather than a number.
+	"workspace_lease": true,
 }
 
 // wireLogSkipped names the kinds deliberately left out, so every kind is
@@ -58,6 +62,8 @@ var wireLogSkipped = map[string]bool{
 	// Content-free invalidation: a reopened window reads /adjudications, and
 	// replaying the notice would tell it to re-read something it just read.
 	"adjudications_changed": true,
+	// The agent's tabs are read from the session that owns them.
+	"browser_tabs_changed": true,
 }
 
 // codeTrajectoryUnreadable refuses a read that could not establish coverage.

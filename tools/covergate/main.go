@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -127,7 +128,7 @@ func packagesFor(globs []string) []string {
 		seen[dir] = true
 		pkgs = append(pkgs, "./"+dir+"/...")
 	}
-	sort.Strings(pkgs)
+	slices.Sort(pkgs)
 	return pkgs
 }
 
@@ -275,6 +276,6 @@ func sortedKeys(m map[string]float64) []string {
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }

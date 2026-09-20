@@ -1,10 +1,13 @@
 package control
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	"reasonix/internal/event"
 	"reasonix/internal/sessioninbox"
 )
 
@@ -197,4 +200,93 @@ func (c *Controller) steerItemAs(origin sessioninbox.PromptOrigin, id string, lo
 		return c.executor.SteerHostItem(id, loader)
 	}
 	return c.executor.SteerItem(id, loader)
+}
+
+// TrySteer queues mid-turn guidance only when the active agent turn accepts it.
+func (c *Controller) TrySteer(text string) bool {
+	c.mu.Lock()
+	exec := c.executor
+	running := c.gate.running
+	c.mu.Unlock()
+	return running && exec != nil && exec.Steer(text)
+}
+
+// Steer is the compatibility path for callers that cannot observe admission.
+// Interactive hosts should call TrySteer so a rejected steer remains in their
+// draft/queue and can be retried as a regular follow-up.
+func (c *Controller) Steer(text string) {
+	if c.TrySteer(text) {
+		return
+	}
+	// No active turn accepted the steer: the frontend's runningRef was stale,
+	// the turn exited between our running check and the enqueue, or no
+	// executor is bound yet. Deliver it as a regular turn instead.
+	c.submitSteerFallback(text)
+}
+
+// submitSteerFallback records steer text that no active turn accepted as
+// unapplied guidance, not as a new task. This compatibility path deliberately
+// never opens a provider turn: replaying stale historical guidance as the
+// user's current request caused unintended code changes (#7045).
+func (c *Controller) submitSteerFallback(text string) admissionResult {
+	return c.runGuardedOrPark(func(context.Context) error {
+		if c.executor != nil {
+			c.executor.RecordUnappliedSteer(text)
+		}
+		return nil
+	})
+}
+
+// SteerConsumed returns true when the steer queue is empty after the last consume.
+func (c *Controller) SteerConsumed() bool {
+	c.mu.Lock()
+	exec := c.executor
+	c.mu.Unlock()
+	if exec != nil {
+		return exec.SteerConsumed()
+	}
+	return true
+}
+
+// lockPromptFor acquires the prompt lock, emitting one notice if the wait is
+// long enough to look like a hang. It reports false only when ctx ended first;
+// the lock is held on true.
+func (c *Controller) lockPromptFor(ctx context.Context, kind string) bool {
+	acquired := make(chan struct{})
+	go func() {
+		c.approval.promptMu.Lock()
+		close(acquired)
+	}()
+	select {
+	case <-acquired:
+		return true
+	case <-ctx.Done():
+	case <-time.After(promptQueueNoticeDelay):
+	}
+	if ctx.Err() == nil {
+		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodePromptQueued,
+			Text:   "A " + kind + " is waiting for you to answer the prompt ahead of it.",
+			Detail: "the assistant asked something while an earlier approval or question was still open; it appears once that one is answered"})
+	}
+	select {
+	case <-acquired:
+		return true
+	case <-ctx.Done():
+		// The lock may still be handed to the goroutine above; release it so the
+		// next prompt is not blocked by this abandoned wait.
+		go func() {
+			<-acquired
+			c.approval.promptMu.Unlock()
+		}()
+		return false
+	}
+}
+
+func askAnswersHaveSelection(answers []event.AskAnswer) bool {
+	for _, answer := range answers {
+		if len(answer.Selected) > 0 {
+			return true
+		}
+	}
+	return false
 }

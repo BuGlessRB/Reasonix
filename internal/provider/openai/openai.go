@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -299,7 +299,7 @@ type client struct {
 	effort             string        // reasoning_effort for OpenAI; thinking.type for MiniMax; "" = auto/provider default
 	requestEfforts     []string      // depth levels a per-request EffortOverride may take; empty = overrides ignored
 	idleTimeout        time.Duration // SSE stall watchdog window; defaultStreamIdleTimeout unless a test overrides
-	authed             atomic.Bool   // a request has succeeded — gate transient-401 retry
+	learned            endpointFacts
 }
 
 func (c *client) Name() string { return c.name }
@@ -359,7 +359,7 @@ func (c *client) sendOpts(hint provider.RequestHint) provider.SendOptions {
 		KeyEnv:         c.keyEnv,
 		KeySource:      c.keySource,
 		KeyPresent:     c.apiKey() != "",
-		RetryAuth:      c.authed.Load(),
+		RetryAuth:      c.learned.authed.Load(),
 		BadRequestHint: hint,
 	}
 }
@@ -462,7 +462,7 @@ var bufPool = sync.Pool{
 }
 
 func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
-	stream, err := c.openStream(ctx, c.chatURL, c.buildRequest(req), req.Tools)
+	stream, err := c.openChatStream(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -502,7 +502,7 @@ func (c *client) openStream(ctx context.Context, targetURL string, wireReq chatR
 	if err != nil {
 		return nil, provider.AnnotateToolSchemaError(err, tools)
 	}
-	c.authed.Store(true)
+	c.learned.authed.Store(true)
 
 	out := make(chan provider.Chunk)
 	// Body-phase stream cuts surface as StreamInterruptedError so the Agent
@@ -767,7 +767,7 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 		Messages:        msgs,
 		Tools:           tools,
 		Stream:          true,
-		StreamOptions:   &streamOptions{IncludeUsage: true},
+		StreamOptions:   c.streamOptions(),
 		Temperature:     req.Temperature,
 		MaxTokens:       maxOutputTokens,
 		ReasoningEffort: kimiK3ReasoningEffort(c.kimiK3, c.requestEffort(req)),
@@ -1063,7 +1063,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		}
 	}
 
-	sort.Ints(order)
+	slices.Sort(order)
 	for _, idx := range order {
 		tc := acc[idx]
 		if tc.ID == "" {

@@ -40,18 +40,21 @@ func TestDeepSeekVisionIsAnsweredPerModel(t *testing.T) {
 		}
 	}
 
-	seeing := entry("deepseek-v4-flash-vision-exp")
-	if !CanConfigureVision(seeing) {
-		t.Fatal("the declared image-taking model must be configurable")
-	}
-	if !EffectiveVision(seeing) {
-		t.Fatal("ticking it in the panel must settle it, as it does anywhere else")
+	for _, model := range []string{DeepSeekFlashModel, "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"} {
+		seeing := entry(model)
+		if !CanConfigureVision(seeing) {
+			t.Fatalf("%s reads images; it must be configurable", model)
+		}
+		if !EffectiveVision(seeing) {
+			t.Fatalf("ticking %s in the panel must settle it, as it does anywhere else", model)
+		}
 	}
 
-	for _, model := range []string{"deepseek-v4-flash", "deepseek-v4-pro"} {
-		if CanConfigureVision(entry(model)) {
-			t.Fatalf("%s takes text only; ticking it must stay a dead switch", model)
-		}
+	// Pro answers an image with 200 and no sight of it rather than refusing, so
+	// the dead switch is the only thing standing between a user and a picture
+	// that was charged for, sent, and never seen.
+	if CanConfigureVision(entry(deepSeekProModel)) {
+		t.Fatalf("%s takes text only; ticking it must stay a dead switch", deepSeekProModel)
 	}
 
 	// The vendor's list is the declaration. A model id containing "vision" is a

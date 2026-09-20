@@ -60,7 +60,7 @@ for (const n of SCALES) {
   const mem = await cdp.send("Runtime.evaluate", { expression: "performance.memory ? performance.memory.usedJSHeapSize : 0", returnByValue: true });
   rows.push({
     轮次: n,
-    卡片: await page.locator("#flowScroll .call").count(),
+    卡片: await page.locator('[data-pane="flow"] .call').count(),
     DOM节点: Math.round(after.Nodes ?? 0),
     "JS堆/MB": (mem.result.value / 1048576).toFixed(0),
     "开到这么长/s": (grow / 1000).toFixed(1),

@@ -192,8 +192,8 @@ func TestHighRiskClassifierKeepsOrdinaryAndMCPPermissionPathsSeparate(t *testing
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsHighRiskMutation(tt.p); got != tt.want {
-				t.Fatalf("IsHighRiskMutation = %v, want %v", got, tt.want)
+			if got := riskBoundaryForProposal(tt.p).highRisk; got != tt.want {
+				t.Fatalf("highRisk = %v, want %v", got, tt.want)
 			}
 		})
 	}

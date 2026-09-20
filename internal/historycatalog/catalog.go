@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -382,7 +382,7 @@ func (c *Catalog) reconcileRoot(ctx context.Context, root Root) error {
 		}
 		paths = append(paths, path)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 	signature := historyRootSignature(paths)
 	var previousSig, previousState string
 	_ = c.db.QueryRowContext(ctx, `SELECT signature,state FROM history_roots WHERE path=?`, root.Path).Scan(&previousSig, &previousState)

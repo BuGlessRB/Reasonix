@@ -50,7 +50,7 @@ export function WindowControls() {
         className="wc"
         data-action="window.maximize"
         onClick={() => host().toggleMaximiseWindow()}
-        aria-label={t(max ? "还原" : "最大化")}
+        aria-label={t(max ? "向下还原" : "最大化")}
       >
         <svg viewBox="0 0 12 12" aria-hidden="true">
           {max ? (

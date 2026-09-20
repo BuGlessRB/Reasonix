@@ -2,16 +2,18 @@ package repair
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -224,7 +226,7 @@ func repairPlanDerivedStateSnapshot(target string) (string, map[string]string) {
 		for name := range paths {
 			names = append(names, name)
 		}
-		sort.Strings(names)
+		slices.Sort(names)
 	}
 	states := make([]struct {
 		Name  string `json:"name"`
@@ -688,11 +690,8 @@ func repairPlanTreeEntries(root string) ([]repairPlanTreeEntry, error) {
 		entries = append(entries, entry)
 		return nil
 	})
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Rel == entries[j].Rel {
-			return entries[i].Kind < entries[j].Kind
-		}
-		return entries[i].Rel < entries[j].Rel
+	slices.SortFunc(entries, func(a, b repairPlanTreeEntry) int {
+		return cmp.Or(cmp.Compare(a.Rel, b.Rel), cmp.Compare(a.Kind, b.Kind))
 	})
 	return entries, walkErr
 }
@@ -810,11 +809,7 @@ func verifyRepairPlanFileStates(expectedStates map[string]string) error {
 	if len(expectedStates) == 0 {
 		return nil
 	}
-	paths := make([]string, 0, len(expectedStates))
-	for path := range expectedStates {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
+	paths := slices.Sorted(maps.Keys(expectedStates))
 	for _, path := range paths {
 		if err := verifyRepairPlanFileState(path, expectedStates); err != nil {
 			return err

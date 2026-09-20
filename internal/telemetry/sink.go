@@ -195,6 +195,11 @@ func (s *sink) observe(e event.Event) {
 			add(s.counts, "empty_final", "yes", 1)
 			s.emptyFinalSeen = true
 		}
+	case event.WorkspaceLeaseEvent:
+		// Flushed on its own rather than into the turn's batch: the lease is
+		// released when the last run of a session ends, which is not reliably
+		// before the TurnDone that empties the batch.
+		s.reporter.append(leaseCounts(e.WorkspaceLease))
 	case event.CompactionStarted:
 		add(s.counts, "compaction", enumBucket(e.Compaction.Trigger, "auto", "manual"), 1)
 	case event.TurnDone:
@@ -214,6 +219,41 @@ func (s *sink) observe(e event.Event) {
 		s.reporter.append(s.counts)
 		s.counts = map[string]int{}
 		s.turnCounts = turnCounts{}
+	}
+}
+
+// leaseCounts buckets one closed account of the workspace write lease. Three
+// closed enums and nothing else: the account is five integers, so there is no
+// path, command or identity here to leave out.
+func leaseCounts(l *event.WorkspaceLease) map[string]int {
+	if l == nil {
+		return nil
+	}
+	counts := map[string]int{}
+	if l.Contended > 0 {
+		add(counts, "lease_hold", "contended", 1)
+		add(counts, "lease_wait", latencyBucket(time.Duration(l.WaitedMs)*time.Millisecond), 1)
+	} else {
+		add(counts, "lease_hold", "uncontended", 1)
+	}
+	// The share of a hold spent holding and not writing, which is what an
+	// earlier release would give back. A hold with no length has no share.
+	if l.HeldMs > 0 {
+		add(counts, "lease_idle", shareBucket(float64(l.IdleMs)/float64(l.HeldMs)), 1)
+	}
+	return counts
+}
+
+func shareBucket(share float64) string {
+	switch {
+	case share < 0.25:
+		return "lt_25"
+	case share < 0.5:
+		return "pc_25_50"
+	case share < 0.75:
+		return "pc_50_75"
+	default:
+		return "pc_75_100"
 	}
 }
 

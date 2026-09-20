@@ -186,9 +186,9 @@ func TestRecommendOldFailuresFadeOut(t *testing.T) {
 	}
 }
 
-// TestStatsPathLayout pins the on-disk location so Phase 4's integration code
-// can rely on it. We assert the path sits under config.CacheDir()/mcp and that
-// the slug strips raw separators — exact slug rule lives in cache.go.
+// TestStatsPathLayout pins the on-disk location so anything reading these
+// stats can rely on it: the path sits under config.CacheDir()/mcp and the slug
+// strips raw separators — the exact slug rule lives in cache.go.
 func TestStatsPathLayout(t *testing.T) {
 	root := withTempCache(t)
 

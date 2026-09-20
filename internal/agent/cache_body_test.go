@@ -83,3 +83,26 @@ func TestNothingCarriedIsNotAChange(t *testing.T) {
 		t.Fatalf("first round reported carried=%d changed=%v hash=%q", d.CarriedMessages, d.BodyChanged, d.BodyHash)
 	}
 }
+
+// The host re-derives its tail onto every request — the task list's identities,
+// the blocks it owes this turn — so those bytes were never what the next
+// request carries. Counting them reported a rewrite on every turn that had a
+// task list, which is most of them.
+func TestTheHostsDerivedTailIsNotPartOfTheCarriedBody(t *testing.T) {
+	tail := provider.Message{Role: provider.RoleUser, Content: "Host task state. 1 look [s1]", Derived: true}
+	prev := shapeWith(append(msgs("a", "b"), tail))
+	cur := shapeWith(append(msgs("a", "b", "c"), provider.Message{Role: provider.RoleUser, Content: "Host task state. 1 look [s1] done", Derived: true}))
+
+	d := CompareShape(prev, cur, nil, nil)
+	if d.BodyChanged {
+		t.Fatalf("a re-derived tail reported the carried body as changed: %v", d.PrefixChangeReasons)
+	}
+	if d.CarriedMessages != 2 {
+		t.Fatalf("CarriedMessages = %d, want the 2 messages both requests actually carried", d.CarriedMessages)
+	}
+	// What the tail hides behind must still be observed.
+	rewritten := CompareShape(prev, shapeWith(append(msgs("a", "folded"), tail)), nil, nil)
+	if !rewritten.BodyChanged {
+		t.Fatal("a rewrite under the tail went unobserved")
+	}
+}

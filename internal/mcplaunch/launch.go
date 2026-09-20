@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -397,7 +398,7 @@ func cleanStrings(values []string, fold bool) []string {
 		}
 		out = append(out, value)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return compactStrings(out)
 }
 

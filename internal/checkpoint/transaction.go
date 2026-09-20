@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -527,11 +528,7 @@ func (s *Store) prepareTransaction(plan RewindPlan, applier ConversationApplier)
 	if plan.Scope == RewindCode || plan.Scope == RewindBoth {
 		earliest := s.earliestRevisions(plan.Turn)
 		// Stable order for deterministic inject tests.
-		paths := make([]string, 0, len(earliest))
-		for p := range earliest {
-			paths = append(paths, p)
-		}
-		sort.Strings(paths)
+		paths := slices.Sorted(maps.Keys(earliest))
 		for targetIndex, p := range paths {
 			rev := earliest[p]
 			abs, err := safePath(s.root, p)
@@ -1383,7 +1380,7 @@ func (s *Store) filesFromTurnLocked(fromTurn int) []string {
 			out = append(out, pathKey)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -1501,11 +1498,7 @@ func (s *Store) restoreCheckpointBackup(backup []byte) error {
 		}
 	}
 	// Rebuild done/cur: highest turn as cur if it was cur; else all in done.
-	turns := make([]int, 0, len(byTurn))
-	for t := range byTurn {
-		turns = append(turns, t)
-	}
-	sort.Ints(turns)
+	turns := slices.Sorted(maps.Keys(byTurn))
 	s.done = nil
 	s.cur = nil
 	for _, t := range turns {

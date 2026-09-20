@@ -7,6 +7,16 @@ import type { WalletLine, WalletReading } from "../../port/port";
 import { since, type Wallet } from "../wallet";
 import { Grp, Row } from "./kit";
 
+// The kernel states why a total is not final. Repeating one sentence for all of
+// them tells a user who has simply not sent anything yet to go and fix a price
+// table that is fine — three of these four are not about pricing at all.
+const REASON: Record<string, string> = {
+  no_usage: "尚未产生用量",
+  no_price: "价目未上报",
+  mixed_original_currencies: "多币种未合并",
+  display_unavailable: "显示币种不可用",
+};
+
 const SRC: Record<string, string> = {
   executor: "主循环",
   subagent: "子代理",
@@ -29,7 +39,7 @@ export function Cost({ metrics, wallet, account, onRefreshWallet }: Props) {
   const avg = metrics.rounds.length ? Math.round(metrics.rounds.reduce((a, b) => a + b, 0) / metrics.rounds.length) : 0;
   return (
     <Grp id="cost" name={t("成本")} aside={t("本会话")}>
-      <div className="mrow">
+      <div className="mtop">
         <span className="amt">{money(metrics.cost, metrics.currency)}</span>
         {/* 一个按公布价计出来的数和一个拿兑底表估的数是两种断言。 */}
         {sources.length > 0 && (
@@ -38,10 +48,12 @@ export function Cost({ metrics, wallet, account, onRefreshWallet }: Props) {
           </span>
         )}
         {metrics.turn > 0 && <span className="delta">{t("本回合")}+{money(metrics.turn, metrics.currency)}</span>}
-        {sources.length === 0 && <span className="msub">{t("价目未上报")}</span>}
+        {sources.length === 0 && (
+          <span className="msub">{t(REASON[metrics.incompleteReason] ?? "价目未上报")}</span>
+        )}
       </div>
       {metrics.alt && (
-        <div className="mrow" data-alt="">
+        <div className="mtop" data-alt="">
           <span className="amt">{money(metrics.alt.amount, metrics.alt.currency)}</span>
           <span className="msub">{t("原币种")}</span>
         </div>

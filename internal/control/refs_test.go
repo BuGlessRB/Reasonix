@@ -246,8 +246,11 @@ func TestResolveRefsAttachmentKinds(t *testing.T) {
 	if !strings.Contains(block, `<image path="`+pngRef+`">`) {
 		t.Fatalf("expected png attachment to resolve as image block, got: %s", block)
 	}
-	if !strings.Contains(block, "image bytes are never inlined") || !strings.Contains(block, "attached-images") {
-		t.Fatalf("expected image note to state the bytes are not inline and defer the route to the one note that decides, got: %s", block)
+	if !strings.Contains(block, "attached-images") {
+		t.Fatalf("expected image block to defer to the one note that decides, got: %s", block)
+	}
+	if strings.Contains(block, "never inlined") {
+		t.Fatalf("the image block must not describe transport: a model reads it as the image not arriving, got: %s", block)
 	}
 }
 
@@ -700,7 +703,7 @@ func TestDroppedRefResolvesScopedDirOutsideTheWorkspace(t *testing.T) {
 	expectedDisplayPath := filepath.ToSlash(expectedExternal)
 
 	registrar := &recordingExternalFolderToolRefs{}
-	c := &Controller{externalFolderToolRefs: registrar, controllerDeps: controllerDeps{workspaceRoot: workspace}}
+	c := &Controller{externalFolders: externalFolders{toolRefs: registrar}, controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	token, displayPath, err := c.DroppedRef(external)
 	if err != nil {
 		t.Fatalf("DroppedRef: %v", err)
@@ -955,7 +958,7 @@ func TestDroppedRefInsideTheWorkspaceStaysAWorkspacePath(t *testing.T) {
 	}
 
 	registrar := &recordingExternalFolderToolRefs{}
-	c := &Controller{externalFolderToolRefs: registrar, controllerDeps: controllerDeps{workspaceRoot: workspace}}
+	c := &Controller{externalFolders: externalFolders{toolRefs: registrar}, controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	token, displayPath, err := c.DroppedRef(file)
 	if err != nil {
 		t.Fatalf("DroppedRef: %v", err)
@@ -999,7 +1002,7 @@ func TestDroppedRefOutsideTheWorkspaceResolvesTheFileItself(t *testing.T) {
 	}
 
 	registrar := &recordingExternalFolderToolRefs{}
-	c := &Controller{externalFolderToolRefs: registrar, controllerDeps: controllerDeps{workspaceRoot: workspace}}
+	c := &Controller{externalFolders: externalFolders{toolRefs: registrar}, controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	token, displayPath, err := c.DroppedRef(file)
 	if err != nil {
 		t.Fatalf("DroppedRef: %v", err)

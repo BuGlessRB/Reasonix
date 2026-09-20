@@ -1,70 +1,60 @@
-# Reasonix Studio (Wails shell)
+# Reasonix Studio
 
-A native desktop window around the Reasonix Go kernel. The window hosts a React
-SPA; every request the SPA makes is routed in-process to the kernel's own HTTP
-server (`internal/serve`) instead of to a set of bound Go methods, so the
-desktop, `reasonix serve`, and the remote UI all answer the same routes.
+A desktop window around the Reasonix Go kernel. The window hosts a React SPA,
+and every request the SPA makes reaches the kernel's own HTTP server
+(`internal/serve`) over loopback, so Studio, `reasonix serve` and the remote UI
+all answer the same routes.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  webview (React + TS, Vite)  —  desktop/frontend-next         │
-│    fetch("/api/…") · EventSource("/api/events")               │
+│  renderer (React + TS, Vite)  —  desktop/frontend-next        │
+│    fetch("/…") · EventSource("/events")                       │
 └───────────────▲────────────────────────────┬─────────────────┘
-                │                            │
+                │ HTTP + SSE over 127.0.0.1  │
 ┌───────────────┴────────────────────────────▼─────────────────┐
-│  desktop/next  main.go                                        │
-│    isAPIPath / isHubPath ──▶ serve.Server (kernel HTTP mux)   │
-│    everything else       ──▶ frontendAssets() (the SPA)       │
+│  desktop/electron  main process                               │
+│    windows, menus, dialogs, tray, the platform opener         │
+│    owns OS capability and no business state                   │
 └───────────────▲────────────────────────────┬─────────────────┘
-                │                            │
+                │ spawns, holds the lease    │
 ┌───────────────┴────────────────────────────▼─────────────────┐
-│  internal/boot.Build → internal/control.Controller (kernel)   │
-│  (same assembly the CLI uses: providers, tools, gate, …)      │
+│  cmd/reasonix-studio-host  (main module, CGO-free)            │
+│    internal/boot.Build → internal/control.Controller          │
+│    (same assembly the CLI uses: providers, tools, gate, …)    │
 └───────────────────────────────────────────────────────────────┘
 ```
 
-Because the SPA speaks HTTP rather than `window.go.*`, `desktop/next` stays
-thin: it owns the window, the platform glue (dock icon, file drop, window fit),
-and updates. Anything a frontend needs is a kernel route, and
-`next/route_parity_test.go` fails if the shell routes one of them to the assets.
+The renderer never learns which shell it is in: anything a page cannot do it
+asks `HostPort` (`frontend-next/src/port/host.ts`) for, and the main process
+answers over IPC that carries OS capability only. The boundaries this runs on
+are written down in [`docs/STUDIO_SHELL_BOUNDARIES.md`](../docs/STUDIO_SHELL_BOUNDARIES.md).
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `next/` | the Wails shell: window, routing, updates, platform glue |
+| `electron/` | the shell: main process, preload bridge, packaging |
 | `frontend-next/` | the SPA it serves |
 | `internal/update/` | manifest, download, verify, apply — shared by the shell and the helper |
 | `cmd/update-helper/` | the elevated half of an update (dpkg on Linux, versioned install on Windows) |
-| `cmd/studio-manifest/`, `cmd/sign/`, `cmd/windows-resource/` | release-side tools |
-| `third_party/go-webview2/` | vendored fork; see below |
+| `cmd/studio-manifest/`, `cmd/sign/` | release-side tools |
+| `internal/winuninstall/` | taking a previous Windows install over |
+
+The host binary itself lives in the main module at `cmd/reasonix-studio-host`,
+because the updater it carries has to stay in the kernel's language.
 
 ## Why a nested module
 
 `desktop/` is its own Go module (`module reasonix/desktop`, `replace reasonix =>
-../`). That keeps the CGO + WebKit build entirely separate from the CLI's
-`CGO_ENABLED=0` single-static-binary guarantee: the parent module's `go build /
-vet / test ./...` skip this directory, while the import path stays under
-`reasonix/` so it can still import the `reasonix/internal/*` kernel.
-
-## The vendored WebView2 fork
-
-`replace github.com/wailsapp/go-webview2 => ./third_party/go-webview2` carries
-patches upstream does not have: mixed-DPI monitor-scale detection (#5862),
-`--no-proxy-server` so the loopback UI ignores stale system proxies, and native
-renderer-failure recovery. `next/webview2_patch_test.go` reads the fork's AST
-and fails if a Wails bump silently drops any of them.
+../`). The parent module's `go build / vet / test ./...` skip this directory
+while the import path stays under `reasonix/`, so it can still import the
+`reasonix/internal/*` kernel. The module is CGO-free, so no platform carries
+build dependencies of its own.
 
 ## Prerequisites
 
 - Go (matches the parent module).
 - Node 24+ and **pnpm 10** (`npm install -g pnpm@10`).
-- Platform webview libs: macOS ships WebKit; Windows needs the Edge **WebView2**
-  runtime; Linux needs `libgtk-3-dev` and `libwebkit2gtk-4.1-dev` (4.0 is gone
-  from Ubuntu 24.04+ and Fedora 40+, so Linux builds always carry the
-  `webkit2_41` tag).
-
-No Wails CLI is required — `scripts/studio-build.sh` drives `go build` directly.
 
 ## Running it
 
@@ -72,10 +62,8 @@ No Wails CLI is required — `scripts/studio-build.sh` drives `go build` directl
 make studio          # build the SPA + kernel and launch the Electron shell
 ```
 
-One launch path on every platform. Electron's own dev build is already an .app,
-so macOS treats it as a real GUI app and native panels — "Add a folder…" — open
-normally; the Wails shell needs a bundle of its own for that, which is what
-`desktop/next/run-studio.sh` still builds while it is still here.
+One launch path on every platform. The dev build is already an .app, so macOS
+treats it as a real GUI app and native panels — "Add a folder…" — open normally.
 
 For frontend iteration, run the kernel and point Vite at it:
 
@@ -87,13 +75,10 @@ cd desktop/frontend-next && pnpm install && pnpm dev   # :5273, proxies API path
 ## Building and testing
 
 ```sh
-bash scripts/studio-build.sh --shell-only         # compile the shell for this host
-bash scripts/studio-build.sh darwin/arm64 v0.1.0  # full artifact into dist/
-
 make studio-test                                  # go test ./... for this module
-cd frontend-next && pnpm typecheck && pnpm build
+cd frontend-next && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Linux additionally builds a `.deb`; it is what makes Studio self-updating there,
-because the shared apply path stages single files and Studio ships a binary plus
-an SPA tree. See `docs/STUDIO_RELEASE.md`.
+Packaging runs through electron-builder; `release-studio.yml` drives it on all
+three platforms. Linux ships a `.deb` because that is what makes Studio
+self-updating there. See `docs/STUDIO_RELEASE.md`.

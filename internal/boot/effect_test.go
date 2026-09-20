@@ -19,9 +19,11 @@ import (
 	"reasonix/internal/ablation"
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
+	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/memory"
 	"reasonix/internal/provider"
+	"reasonix/internal/surface"
 )
 
 type effectRecordingProvider struct {
@@ -120,7 +122,7 @@ func TestEffectRoleSettingsShareProviderToolSurface(t *testing.T) {
 	if !reflect.DeepEqual(toolSchemaNames(delivery[0].Tools), balNames) {
 		t.Fatalf("delivery surface diverged from balanced\ndelivery=%v\nbalanced=%v", toolSchemaNames(delivery[0].Tools), balNames)
 	}
-	if len(balNames) > 16 {
+	if len(balNames) > 16+len(BrowserToolNames()) {
 		t.Fatalf("unified surface sent %d tools; expected a small fixed core set", len(balNames))
 	}
 	names := toolNames(balanced[0])
@@ -618,3 +620,47 @@ base_url = "https://example.invalid"
 model = "x"
 api_key_env = "REASONIX_TEST_KEY_UNSET"
 `
+
+// Asserted through the real assembly, on both sides of the answer: a window
+// takes what its config names, and a terminal frontend — which states its
+// posture on its own command line — is not quietly given one.
+func TestEffectDesktopOpensInTheConfiguredApprovalMode(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		source surface.Surface
+		want   string
+	}{
+		{"a window takes the configured posture", surface.Desktop, control.ToolApprovalYolo},
+		{"a terminal frontend is left at the default", surface.CLI, control.ToolApprovalAsk},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := robustTempDir(t)
+			home := robustTempDir(t)
+			t.Setenv("HOME", home)
+			t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+			t.Setenv("REASONIX_HOME", filepath.Join(home, ".reasonix"))
+			t.Chdir(dir)
+			writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[desktop]
+default_tool_approval_mode = "yolo"
+
+[[providers]]
+name = "test-model"
+kind = "openai"
+base_url = "https://example.invalid"
+model = "x"
+api_key_env = "REASONIX_TEST_KEY_UNSET"
+`)
+			ctrl, err := Build(context.Background(), Options{StatsSource: tc.source})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer ctrl.Close()
+			if got := ctrl.ToolApprovalMode(); got != tc.want {
+				t.Errorf("ToolApprovalMode() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

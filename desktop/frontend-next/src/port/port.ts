@@ -14,7 +14,7 @@ export type { MemoryEdit } from "./memory";
 export type { Money, UsageDay, UsageModel, UsageProvider, UsageReport } from "./usage";
 import type { CompactionSettings, Completion, CompletionItem, ModelEntry, ModelPrice, RoleAssignments } from "./model";
 import type { NetworkProbe, NetworkSettings } from "./network";
-import type { ApprovalMode, ApprovalVerdict, Checkpoint, HistoryMessage, JobEntry, Preset, RewindPlan, RewindResult, RewindScope, SessionEntry, SessionStatus, WalletLine, WalletReading, PlanAction } from "./session";
+import type { ApprovalMode, ApprovalVerdict, BrowserTab, Checkpoint, HistoryMessage, HostTodo, JobEntry, Preset, RewindPlan, RewindResult, RewindScope, SessionEntry, SessionStatus, WalletLine, WalletReading, PlanAction } from "./session";
 import type { ContextBreakdown, ShellOption, ShellSettings } from "./shell";
 import type { SkillCatalog, SkillEntry } from "./skill";
 import type { UpdateProgress, VersionEntry, VersionHub } from "./version";
@@ -24,7 +24,7 @@ import type { ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, Wor
 // wire and the layers below already do. This is where a reader still finds
 // them all.
 export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, CapabilityScope,
-  Checkpoint, CompactionSettings, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage,
+  Checkpoint, CompactionSettings, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage, HostTodo, BrowserTab,
   HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource, JobEntry, McpCatalog, McpDraft,
   McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpRisk, McpTool, MemoryCatalog,
   MemoryEntry, ModelEntry, ModelPrice, NetworkProbe, NetworkSettings, Preset, RewindPlan,
@@ -193,6 +193,8 @@ export interface AgentPort {
   // is validated by the parser the gate itself uses, so a typo comes back as an
   // error here rather than as a rule that silently never matches.
   savePermissions(lists: PermissionLists): Promise<PermissionRules>;
+  /** Take back what a prompt allowed for this session — one rule, or all of them when rule is "". */
+  revokeSessionGrant(rule: string): Promise<PermissionRules>;
   sandbox(): Promise<SandboxSettings>;
   saveSandbox(s: SandboxSettings): Promise<SandboxSettings>;
   // null in a browser tab: there is no window to keep running.
@@ -249,6 +251,7 @@ export interface AgentPort {
   editProvider(edit: ProviderEdit): Promise<void>;
   setProviderWebSearch(name: string, on: boolean): Promise<void>;
   setProviderThinking(name: string, on: boolean): Promise<void>;
+  setProviderContinuation(name: string, mode: string): Promise<void>;
 
   // Whether the opening sequence still owes this machine a showing, and the
   // acknowledgement that closes it out.
@@ -265,6 +268,11 @@ export interface AgentPort {
   // Returns an unsubscribe. A browser tab has no shell to report progress, so
   // it never fires there.
   onUpdateProgress(cb: (p: UpdateProgress) => void): () => void;
+  // Says this launch works, which is what retires the update it booted from:
+  // the swap is done by a process that cannot judge the result, so the rollback
+  // material is kept until the application that came up says so. A launch that
+  // booted from no update has nothing to retire and succeeds anyway.
+  acknowledgeLaunchHealth(): Promise<void>;
   account(): Promise<AccountState>;
   accountLogin(): Promise<DeviceGrant>;
   accountPoll(deviceCode: string): Promise<{ status: "pending" | "complete"; slowDown?: boolean }>;
@@ -294,6 +302,9 @@ export interface AgentPort {
    *  could not be read. That one refuses, with a code saying which failure. */
   balance(): Promise<WalletReading | null>;
   history(): Promise<HistoryMessage[]>;
+  // The kernel's canonical task list. The plan panel answers to it and does not
+  // restate it.
+  todos(): Promise<HostTodo[]>;
   // One entry per user turn, oldest first. files is how many the writer tools
   // touched that turn — zero is normal and means there is nothing to restore.
   checkpoints(): Promise<Checkpoint[]>;
@@ -358,6 +369,8 @@ export interface AgentPort {
   // event says it moved and nothing more, so that one answer serves every
   // client instead of each rebuilding the queue from the frames it saw.
   queue(): Promise<Queue>;
+  // The agent's open tabs, read on every browser_tabs_changed frame.
+  browserTabs(): Promise<BrowserTab[]>;
   // The entry's full text. preview is cut to a manifest-sized line, so editing
   // against it would silently shorten what the user actually said.
   readQueued(itemId: string): Promise<string>;

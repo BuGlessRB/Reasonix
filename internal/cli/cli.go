@@ -19,7 +19,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -168,9 +167,6 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 	case "review":
 		configureCLIThemeFromConfig()
 		return reviewCommand(rest)
-	case "bot":
-		configureCLIThemeFromConfig()
-		return botCommand(rest, version)
 	case "upgrade", "update":
 		configureCLIThemeFromConfig()
 		return upgradeCommand(rest, version)
@@ -211,7 +207,7 @@ func isDefaultInteractiveFlag(arg string) bool {
 
 func shouldMigrateLegacyConfigForCLI(cmd string) bool {
 	switch cmd {
-	case "", "run", "chat", "code", "serve", "web", "setup", "config", "init", "acp", "mcp", "remote", "plugin", "subagent", "doctor", "bot", "upgrade", "update", "login", "whoami", "logout":
+	case "", "run", "chat", "code", "serve", "web", "setup", "config", "init", "acp", "mcp", "remote", "plugin", "subagent", "doctor", "upgrade", "update", "login", "whoami", "logout":
 		return true
 	default:
 		return false
@@ -976,9 +972,7 @@ func chatREPL(args []string, version string) int {
 		if spec.EffortOverride != nil {
 			effectiveOverrides.Effort = spec.EffortOverride
 		}
-		// Keep the logical-session private temporary directory across model /
-		// profile switches (Issue #7575).
-		effectiveOverrides.SessionTemp = sessionTempFromCLIController(oldCtrl)
+		carrySessionResources(&effectiveOverrides, oldCtrl)
 		c, err := setupQuietProfile(ctx, spec.ModelRef, *maxSteps, false, sink, spec.RuntimeProfile, effectiveOverrides)
 		if err != nil {
 			return nil, err
@@ -1268,7 +1262,7 @@ func interactiveSetup(configPath, envPath string) int {
 		return 1
 	}
 	session.setLanguage(lang)
-	session.applyDeepSeekOfficialDefaultPricing()
+	session.applyOfficialDefaultPricing()
 	session.resetProviderSummaryBaseline()
 	i18n.DetectLanguage(lang)
 
@@ -1758,7 +1752,7 @@ func withBuiltinFamiliesForLanguage(providers []config.ProviderEntry, pricingLan
 	}
 	defaults := config.Default()
 	defaults.Language = pricingLanguage
-	defaults.ApplyDeepSeekOfficialDefaultPricing()
+	defaults.ApplyOfficialDefaultPricing()
 	for _, bp := range defaults.Providers {
 		if !haveName[bp.Name] {
 			providers = append(providers, bp)
@@ -1786,7 +1780,7 @@ func providersWithMissingKeys(cfg *config.Config) []config.ProviderEntry {
 		for key := range cfg.Agent.SubagentModels {
 			keys = append(keys, key)
 		}
-		sort.Strings(keys)
+		slices.Sort(keys)
 		for _, key := range keys {
 			refs = append(refs, cfg.Agent.SubagentModels[key])
 		}

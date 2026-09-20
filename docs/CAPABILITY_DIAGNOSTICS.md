@@ -1,7 +1,5 @@
 # Capability diagnostics
 
-<a href="./CAPABILITY_DIAGNOSTICS.zh-CN.md">简体中文</a>
-&nbsp;·&nbsp;
 <a href="./GUIDE.md">Guide</a>
 &nbsp;·&nbsp;
 <a href="./PLUGIN_PACKAGES.md">Plugin packages</a>

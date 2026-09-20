@@ -358,15 +358,6 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 			return 1
 		}
 	}
-	*model = modelForResumePath(*model, *resume, cfg)
-	// Serve always resolves an implicit model from the user-global config,
-	// ignoring project-level default_model overrides. Explicit flags and
-	// resumable session models remain strict and are preserved verbatim.
-	*model = resolveServeModel(*model)
-	// Keep the browser reachable when the selected provider has no saved key.
-	// The loopback-only provider setup surface stores the missing credential and
-	// rebuilds this controller in place before the normal web UI is exposed.
-	paneSink := reporter.Wrap(bc)
 	// A bootstrapped serve resolves providers over the tunnel back to the
 	// machine that started it, so this host needs no key and no egress of its
 	// own. Unset leaves boot on its ordinary config-backed path.
@@ -375,6 +366,11 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 2
 	}
+	*model = serveStartModel(*model, *resume, cfg, providerResolver != nil)
+	// Keep the browser reachable when the selected provider has no saved key.
+	// The loopback-only provider setup surface stores the missing credential and
+	// rebuilds this controller in place before the normal web UI is exposed.
+	paneSink := reporter.Wrap(bc)
 	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, false, paneSink, profile, cliBuildOverrides{
 		Version: opts.version, OnSessionRecovered: cliSessionRecoveredHandler(leases),
 		ProviderResolver: providerResolver,

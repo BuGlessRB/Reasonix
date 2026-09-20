@@ -45,6 +45,10 @@ import (
 	_ "reasonix/internal/provider/openai"
 )
 
+func newProviderForTest(e *config.ProviderEntry) (provider.Provider, error) {
+	return NewProviderWithProxy(e, netclient.ProxySpec{Mode: netclient.ModeAuto})
+}
+
 func TestAgentKeepPolicyFromConfig(t *testing.T) {
 	if got := agentKeepPolicy(nil); got != agent.KeepErrors|agent.KeepUserMarked {
 		t.Fatalf("nil keep policy = %v, want KeepErrors|KeepUserMarked", got)
@@ -1529,7 +1533,7 @@ func TestNewProviderAppliesConfiguredDefaultEffort(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:             "custom",
 		Kind:             "openai",
 		BaseURL:          srv.URL,
@@ -1567,7 +1571,7 @@ func TestNewProviderPreservesExplicitlySupportedKimiK3Efforts(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:              "opencode-go",
 		Kind:              "openai",
 		BaseURL:           srv.URL,
@@ -1606,7 +1610,7 @@ func TestNewProviderAppliesOfficialKimiK3RequestContract(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:              "kimi-cn",
 		Kind:              "openai",
 		BaseURL:           "https://api.moonshot.cn/v1",
@@ -1653,7 +1657,7 @@ func TestNewProviderPropagatesConfiguredMaxOutputTokens(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name: "openai", Kind: "openai", BaseURL: "https://api.openai.com/v1",
 		ChatURL: "https://legacy.invalid/chat/completions/", RequestURL: srv.URL, Model: "o3", MaxOutputTokens: 4096,
 	})
@@ -1690,7 +1694,7 @@ func TestNewProviderAppliesModelReasoningProtocol(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:    "deepseek-proxy",
 		Kind:    "openai",
 		BaseURL: srv.URL,
@@ -1728,11 +1732,11 @@ func TestNewProviderBuildsDeepSeekAnthropicPreset(t *testing.T) {
 	if err := cfg.UpsertProvider(preset.Entries[0]); err != nil {
 		t.Fatalf("UpsertProvider: %v", err)
 	}
-	entry, ok := cfg.ResolveModel("deepseek-anthropic/deepseek-v4-flash")
+	entry, ok := cfg.ResolveModel("deepseek-anthropic/deepseek-flash")
 	if !ok {
 		t.Fatal("ResolveModel failed")
 	}
-	p, err := NewProvider(entry)
+	p, err := newProviderForTest(entry)
 	if err != nil {
 		t.Fatalf("NewProvider: %v", err)
 	}
@@ -1752,7 +1756,7 @@ func TestNewProviderRejectsExplicitOfficialDeepSeekVisionModel(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name:         "deepseek",
 		Kind:         "openai",
 		BaseURL:      "https://api.deepseek.com",
@@ -2384,10 +2388,7 @@ command = "reasonix-missing-mockmcp"
 		t.Fatalf("requests = %d, want 1", len(reqs))
 	}
 	req := reqs[0]
-	wantTools := unifiedBootToolNames()
-	if got := toolSchemaNames(req.Tools); !reflect.DeepEqual(got, wantTools) {
-		t.Fatalf("light first request tool order changed\ngot  %v\nwant %v", got, wantTools)
-	}
+	assertSegmentedSurface(t, "light first request", toolSchemaNames(req.Tools))
 	for _, want := range []string{"compress", "use_capability", "read_file", "edit_file", "write_file", "bash", "ask"} {
 		if !requestHasTool(req, want) {
 			t.Fatalf("light first request missing tool %q; tools=%v", want, toolSchemaNames(req.Tools))
@@ -3422,7 +3423,7 @@ func TestBuildMigratesLegacyDeepSeekProtocolWithOneNotice(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(userPath), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(userPath, []byte(`default_model = "deepseek-flash/deepseek-v4-flash"
+	if err := os.WriteFile(userPath, []byte(`default_model = "deepseek-flash/deepseek-flash"
 
 [[providers]]
 name = "deepseek-flash"
@@ -3521,7 +3522,7 @@ api_key_env = "REASONIX_TEST_KEY_UNSET"
 	for _, notice := range notices {
 		if notice.Text == "Deprecated agent step limits were removed." {
 			migrationNotices++
-			if notice.Level != event.LevelInfo || !strings.Contains(notice.Detail, "--max-steps") || !strings.Contains(notice.Detail, "[bot].max_steps") {
+			if notice.Level != event.LevelInfo || !strings.Contains(notice.Detail, "--max-steps") {
 				t.Fatalf("migration notice = %+v", notice)
 			}
 		}

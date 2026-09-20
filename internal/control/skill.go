@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"reasonix/internal/config"
 	"reasonix/internal/skill"
 )
 
@@ -155,4 +156,100 @@ func (c *Controller) DeleteSkill(name string, scope skill.Scope) error {
 		return fmt.Errorf("no writable skill store in this session")
 	}
 	return w.Delete(name, scope)
+}
+
+// Skills scans the live Store, so a skill installed this session is listed.
+func (c *Controller) Skills() []skill.Skill {
+	return c.skills.list()
+}
+
+// ImplicitSkillInvocationEnabled reports whether skills are exposed to the
+// model for automatic discovery and invocation. Explicit /skill handling is
+// independent of this model-facing capability.
+func (c *Controller) ImplicitSkillInvocationEnabled() bool {
+	return c != nil && !c.skills.noImplicitInvocation
+}
+
+// SlashSkills returns the user-visible skill directory. Plugin skills use
+// package-qualified names while Skills keeps bare model/run_skill identifiers.
+func (c *Controller) SlashSkills() []skill.Skill {
+	return c.skills.slashList()
+}
+
+// AllSkills returns every discoverable skill, including disabled ones, for
+// management surfaces that need to re-enable a hidden skill.
+func (c *Controller) AllSkills() []skill.Skill {
+	return c.skills.listAll()
+}
+
+// DisabledSkills returns all discoverable skills that are off in this project.
+func (c *Controller) DisabledSkills() []skill.Skill {
+	resolve := c.skillActivation()
+	var out []skill.Skill
+	for _, sk := range c.AllSkills() {
+		if !resolve(sk.Name) {
+			out = append(out, sk)
+		}
+	}
+	return out
+}
+
+// SkillEnabled reports whether a skill is on in this project.
+func (c *Controller) SkillEnabled(name string) bool {
+	return c.skillActivation()(name)
+}
+
+// skillActivation resolves several names against one config and one store read.
+// skills.disabled_skills stays readable as the declared default, so a
+// hand-written config keeps working even though the switch no longer writes it.
+func (c *Controller) skillActivation() func(string) bool {
+	declared := func(string) bool { return true }
+	if cfg, err := config.Load(); err == nil {
+		declared = func(name string) bool { return !cfg.IsSkillDisabled(name) }
+	}
+	resolver, err := config.DefaultActivationStore().SkillResolverFor(c.workspaceRoot)
+	if err != nil {
+		return declared
+	}
+	return func(name string) bool { return resolver.Enabled(name, declared(name)) }
+}
+
+// SkillOverrideScope reports where the decision governing name lives, so the
+// settings surface can show whether this project set it for itself.
+func (c *Controller) SkillOverrideScope(name string) (config.ActivationScope, bool) {
+	scope, found, err := config.DefaultActivationStore().SkillOverrideScope(name, c.workspaceRoot)
+	if err != nil {
+		return config.ActivationGlobal, false
+	}
+	return scope, found
+}
+
+// SetSkillEnabled persists a skill's switch at scope. The caller should rebuild
+// the controller for the prompt/tool registry to reflect it immediately.
+// Flipping a skill the project inherits writes a project row: the user answered
+// for this folder, and two projects may hold different skills of one name.
+func (c *Controller) SetSkillEnabled(name string, scope config.ActivationScope, enabled bool) error {
+	canonical, err := c.canonicalSkillName(name)
+	if err != nil {
+		return err
+	}
+	return config.DefaultActivationStore().SetSkillEnabled(canonical, c.workspaceRoot, scope, enabled)
+}
+
+// ClearSkillOverride drops this project's exception for name.
+func (c *Controller) ClearSkillOverride(name string, scope config.ActivationScope) error {
+	canonical, err := c.canonicalSkillName(name)
+	if err != nil {
+		return err
+	}
+	return config.DefaultActivationStore().ClearSkill(canonical, c.workspaceRoot, scope)
+}
+
+func (c *Controller) canonicalSkillName(name string) (string, error) {
+	for _, sk := range c.AllSkills() {
+		if config.SkillNameKey(sk.Name) == config.SkillNameKey(name) {
+			return sk.Name, nil
+		}
+	}
+	return "", &skill.NotFoundError{Name: name}
 }

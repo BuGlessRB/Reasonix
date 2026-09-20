@@ -31,6 +31,10 @@ type PermissionRules struct {
 	Path       string           `json:"path"`
 	ShadowedBy string           `json:"shadowedBy,omitempty"`
 	Effective  *PermissionLists `json:"effective,omitempty"`
+	// Granted is what was allowed for this session alone, on a prompt rather
+	// than in the file. Nothing wrote it down, so a reader with only the file
+	// in front of them is looking at less than the agent may currently do.
+	Granted []string `json:"granted,omitempty"`
 }
 
 // SandboxSettings is where an approved write may land, and whether bash runs
@@ -68,6 +72,7 @@ func (c *Controller) PermissionRules() PermissionRules {
 		PermissionLists: listsFrom(config.LoadForEdit(path)),
 		Path:            path,
 		ShadowedBy:      shadowingConfig(path, c.WorkspaceRoot()),
+		Granted:         c.approval.sessionGrants(),
 	}
 	if out.ShadowedBy == "" {
 		return out
@@ -78,6 +83,14 @@ func (c *Controller) PermissionRules() PermissionRules {
 		}
 	}
 	return out
+}
+
+// RevokeSessionGrant takes back what a prompt allowed for this session, one
+// rule or all of them, and reports how many it took. What a person allowed once
+// they can stop allowing without ending the session — otherwise the only way
+// back is to close it, which costs them the work as well as the grant.
+func (c *Controller) RevokeSessionGrant(rule string) int {
+	return c.approval.revokeSessionGrant(rule)
 }
 
 // SavePermissionRules replaces the three lists wholesale after validating every

@@ -29,6 +29,7 @@ type Event struct {
 	Compaction      *Compaction         `json:"compaction,omitempty"`
 	Maintenance     *ContextMaintenance `json:"maintenance,omitempty"`
 	TodoProgress    *TodoProgress       `json:"todoProgress,omitempty"`
+	WorkspaceLease  *WorkspaceLease     `json:"workspaceLease,omitempty"`
 	Guardian        *Guardian           `json:"guardian,omitempty"`
 	DecisionReceipt *DecisionReceipt    `json:"decisionReceipt,omitempty"`
 	Extension       *ExtensionSurface   `json:"extension,omitempty"`
@@ -127,11 +128,7 @@ func ToWire(e event.Event) Event {
 			w.DecisionReceipt = ToWireDecisionReceipt(e.DecisionReceipt)
 		}
 		w.Audience = string(e.Audience)
-		if e.Level == event.LevelWarn {
-			w.Level = "warn"
-		} else {
-			w.Level = "info"
-		}
+		w.Level = wireLevel(e.Level)
 	case event.ToolDispatch, event.ToolResult, event.ToolProgress:
 		w.Tool = toWireTool(e.Tool)
 	case event.GraphDelta:
@@ -143,7 +140,8 @@ func ToWire(e event.Event) Event {
 	case event.ApprovalRequest:
 		w.Approval = &Approval{
 			ID: e.Approval.ID, Tool: e.Approval.Tool, Subject: e.Approval.Subject,
-			Reason: e.Approval.Reason, Fresh: e.Approval.Fresh, Kind: e.Approval.Kind,
+			Reason: e.Approval.Reason, ReasonCode: e.Approval.ReasonCode, Fresh: e.Approval.Fresh, Kind: e.Approval.Kind,
+			AllowsSession: e.Approval.AllowsSession, AllowsPersist: e.Approval.AllowsPersist,
 		}
 		if e.Approval.Recovery != nil {
 			r := e.Approval.Recovery
@@ -181,6 +179,8 @@ func ToWire(e event.Event) Event {
 		}
 	case event.TodoProgressEvent:
 		w.TodoProgress = toWireTodoProgress(e.TodoProgress)
+	case event.WorkspaceLeaseEvent:
+		w.WorkspaceLease = toWireWorkspaceLease(e.WorkspaceLease)
 	case event.GuardianAssessment:
 		w.Guardian = ToWireGuardian(e.Guardian)
 	case event.ExtensionSurface, event.ExtensionStatus:
@@ -341,6 +341,11 @@ type Compaction struct {
 	CoverageMissing  int `json:"coverageMissing,omitempty"`
 	// The host completed a digest the summarizer left incomplete.
 	CoverageBackstopped bool `json:"coverageBackstopped,omitempty"`
+	// Which of the two thresholds sent this fold, and its size. A card without
+	// them can only say one was reached, which is what a fold at 16% of a
+	// declared window reads as when nothing names the boundary that fired.
+	Boundary      string `json:"boundary,omitempty"`
+	TriggerTokens int    `json:"triggerTokens,omitempty"`
 }
 
 func toWireCompaction(c event.Compaction) *Compaction {
@@ -350,6 +355,7 @@ func toWireCompaction(c event.Compaction) *Compaction {
 		SourceTokens: c.SourceTokens, ProjectionTokens: c.ProjectionTokens,
 		CoverageRequired: c.CoverageRequired, CoverageMissing: c.CoverageMissing,
 		CoverageBackstopped: c.CoverageBackstopped,
+		Boundary:            c.Boundary, TriggerTokens: c.TriggerTokens,
 	}
 }
 
@@ -404,7 +410,7 @@ func toWireTool(t event.Tool) *Tool {
 	wt := &Tool{
 		ID: t.ID, Name: t.Name, Args: t.Args,
 		ResolvedName: t.ResolvedName, CapabilityID: t.CapabilityID,
-		Output: t.Output, Err: t.Err,
+		Output: t.Output, Images: t.Images, Err: t.Err, RefusalCode: t.RefusalCode,
 		ReadOnly: t.ReadOnly, Truncated: t.Bound.Lossy(),
 		DurationMs: t.DurationMs, ContextTokens: t.ContextTokens(),
 		Partial: t.Partial, StartedAt: t.StartedAt, EndedAt: t.EndedAt,
@@ -452,8 +458,14 @@ type Tool struct {
 	ResolvedName string `json:"resolvedName,omitempty"`
 	CapabilityID string `json:"capabilityId,omitempty"`
 	Output       string `json:"output,omitempty" externalizable:"true"`
-	Err          string `json:"err,omitempty" externalizable:"true"`
-	ReadOnly     bool   `json:"readOnly"`
+	// Images the call showed the model, as data URLs.
+	Images []string `json:"images,omitempty"`
+	Err    string   `json:"err,omitempty" externalizable:"true"`
+	// RefusalCode is the host's dotted identity for a refusal. Err is only its
+	// wording, and a reader that has to tell one refusal from another cannot
+	// use a sentence.
+	RefusalCode string `json:"refusalCode,omitempty"`
+	ReadOnly    bool   `json:"readOnly"`
 	// Truncated is the compatibility projection of Bound for journals written
 	// before it existed; Bound is what a current frontend reads.
 	Truncated  bool   `json:"truncated,omitempty"`
@@ -491,6 +503,7 @@ type ShellExecution struct {
 	FailurePhase   string `json:"failurePhase,omitempty"`
 	ExitCode       *int   `json:"exitCode,omitempty"`
 	OutputTail     string `json:"outputTail,omitempty"`
+	Subject        string `json:"subject,omitempty"`
 	MutationRisk   string `json:"mutationRisk,omitempty"`
 	Verification   string `json:"verification,omitempty"`
 	DurationMs     int64  `json:"durationMs,omitempty"`
@@ -504,7 +517,7 @@ func toWireShellExecution(in *event.ShellExecution) *ShellExecution {
 		Kind: in.Kind, Shell: in.Shell, ShellVersion: in.ShellVersion,
 		Platform: in.Platform, SupportsAndAnd: in.SupportsAndAnd,
 		State: in.State, FailurePhase: in.FailurePhase,
-		OutputTail: in.OutputTail, MutationRisk: in.MutationRisk,
+		OutputTail: in.OutputTail, Subject: in.Subject, MutationRisk: in.MutationRisk,
 		Verification: in.Verification, DurationMs: in.DurationMs,
 	}
 	if in.ExitCode != nil {
@@ -571,13 +584,17 @@ type CacheDiagnostics struct {
 
 // Approval is the JSON form of an event.Approval.
 type Approval struct {
-	ID       string            `json:"id"`
-	Tool     string            `json:"tool"`
-	Subject  string            `json:"subject" externalizable:"true"`
-	Reason   string            `json:"reason,omitempty" externalizable:"true"`
-	Fresh    bool              `json:"fresh,omitempty"`
-	Kind     string            `json:"kind,omitempty"` // tool | plan | recovery
-	Recovery *RecoveryApproval `json:"recovery,omitempty"`
+	ID         string `json:"id"`
+	Tool       string `json:"tool"`
+	Subject    string `json:"subject" externalizable:"true"`
+	Reason     string `json:"reason,omitempty" externalizable:"true"`
+	ReasonCode string `json:"reasonCode,omitempty"`
+	Fresh      bool   `json:"fresh,omitempty"`
+	// Which answers beyond "once" the host will honour for this call.
+	AllowsSession bool              `json:"allowsSession,omitempty"`
+	AllowsPersist bool              `json:"allowsPersist,omitempty"`
+	Kind          string            `json:"kind,omitempty"` // tool | plan | recovery
+	Recovery      *RecoveryApproval `json:"recovery,omitempty"`
 }
 
 // RecoveryApproval is the JSON form of an event.RecoveryApproval.
@@ -720,10 +737,12 @@ var kindNames = map[event.Kind]string{
 	event.StreamAttempt:           "stream_attempt",
 	event.ContextMaintenanceEvent: "context_maintenance",
 	event.TodoProgressEvent:       "todo_progress",
+	event.WorkspaceLeaseEvent:     "workspace_lease",
 	event.WorkspaceChanged:        "workspace_changed",
 	event.TurnPhase:               "turn_phase",
 	event.CompletionSummary:       "completion_summary",
 	event.AdjudicationsChanged:    "adjudications_changed",
+	event.BrowserTabsChanged:      "browser_tabs_changed",
 	event.InboxChanged:            "inbox_changed",
 	event.GraphDelta:              "graph_delta",
 }

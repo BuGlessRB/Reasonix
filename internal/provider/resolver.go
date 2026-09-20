@@ -1,9 +1,15 @@
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
+
+// ErrUnknownModel is a ref no catalog the resolver reads carries. It is one
+// identity on both sides of a broker, so a caller tells it apart the same way
+// whether the resolver answered here or on the machine holding the keys.
+var ErrUnknownModel = errors.New("unknown model")
 
 // Descriptor is the non-sensitive provider/model metadata shared across
 // process boundaries. It intentionally contains no endpoint, credential,
@@ -25,6 +31,21 @@ type Descriptor struct {
 	ToolCallReasoning              bool     `json:"toolCallReasoning,omitempty"`
 	ReasoningRoundTrip             bool     `json:"reasoningRoundTrip,omitempty"`
 	WarnOnMissingToolCallReasoning bool     `json:"warnOnMissingToolCallReasoning,omitempty"`
+	// Default marks the model a new session starts on when nobody names one.
+	// The catalog's owner decides it, because only the owner knows which of
+	// its models can answer.
+	Default bool `json:"default,omitempty"`
+}
+
+// DefaultRef is the ref the catalog marks as its default, or "" when it marks
+// none.
+func DefaultRef(catalog []Descriptor) string {
+	for _, d := range catalog {
+		if d.Default {
+			return strings.TrimSpace(d.Ref)
+		}
+	}
+	return ""
 }
 
 // Selection identifies a catalog provider and an optional session-local

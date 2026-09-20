@@ -73,16 +73,19 @@ func normalizeToolSchemas(schemas []provider.ToolSchema) []provider.ToolSchema {
 }
 
 // BodyChain hashes msgs cumulatively, one entry per message, so two requests
-// compare at the length of the shorter: a rewrite anywhere in the carried
-// region moves every entry after it. The prefix hashes cannot see the
-// conversation, so without this a miss on an unchanged prefix has no
-// attribution — the host cannot say whether it rewrote what it carried.
+// compare at the length of the shorter and a rewrite in the carried region
+// moves every entry after it. Without it a miss on an unchanged prefix has no
+// attribution. It stops at the host's derived tail: those bytes are
+// re-projected per request and are not what the next one carries.
 func BodyChain(msgs []provider.Message) []string {
-	chain := make([]string, len(msgs))
+	var chain []string
 	acc := ""
-	for i, m := range msgs {
+	for _, m := range msgs {
+		if m.Derived {
+			break
+		}
 		acc = shortHash([2]string{acc, string(mustMarshal(m))})
-		chain[i] = acc
+		chain = append(chain, acc)
 	}
 	return chain
 }

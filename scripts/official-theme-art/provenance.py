@@ -1,4 +1,4 @@
-"""Emit docs/THEME_ASSETS.md + .zh-CN.md — provenance & licence ledger for the
+"""Emit docs/THEME_ASSETS.md — provenance & licence ledger for the
 official theme assets. Reads hashes from out/report.json (produced by build.py).
 """
 from __future__ import annotations
@@ -68,30 +68,9 @@ def main():
         en.append(f"| {name} (`{tid}`) | `{prompt}` | `{bg}` | `{pv}` |")
     en.append("")
 
-    zh = []
-    zh.append("# 官方主题素材来源与许可记录\n")
-    zh.append("八款 Reasonix 官方主题的全部图片均为**原创**，由 `scripts/official-theme-art/` 中的脚本")
-    zh.append("从零程序化生成（numpy + Pillow，固定随机种子，可完全复现）。视觉*方向*参考了 MIT 许可的")
-    zh.append("[Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin) 概念图库，但是：\n")
-    zh.append("- **未复制参考项目或任何第三方素材的任何像素**、布局、界面元素、文字、标志或水印；")
-    zh.append("  所有背景均为代码重新生成的独立素材。")
-    zh.append("- 图中人物均为生成器绘制的**原创虚构成年人**：插画女性（玫瑰晨光）、吉祥程序员（鸿运工坊）、")
-    zh.append("  读者（鼠尾草清风）、动漫人物（灵感手账）、剪影女性（紫曜星夜）、数字表演者（青岚舞台）、")
-    zh.append("  绅士（黑金序曲）。赤曜新城不含人物。")
-    zh.append("- 背景中不含窗口、侧栏、卡片、按钮、输入框或可读文字，并已去除 EXIF 等元数据。\n")
-    zh.append("素材随 Reasonix 仓库以 MIT 许可发布，© Reasonix Contributors。人工审核：Reasonix Contributors（发布 PR 审核）。\n")
-    zh.append(f"生成日期：{today}\n")
-    zh.append("| 主题 | 生成器（最终提示词等价物） | background.webp SHA-256 | preview.webp SHA-256 |")
-    zh.append("| --- | --- | --- | --- |")
-    for tid, name, prompt, bg, pv in rows:
-        zh.append(f"| {name}（`{tid}`） | `{prompt}` | `{bg}` | `{pv}` |")
-    zh.append("")
-
     with open(os.path.join(DOCS, "THEME_ASSETS.md"), "w") as f:
         f.write("\n".join(en))
-    with open(os.path.join(DOCS, "THEME_ASSETS.zh-CN.md"), "w") as f:
-        f.write("\n".join(zh))
-    print("wrote docs/THEME_ASSETS.md + .zh-CN.md")
+    print("wrote docs/THEME_ASSETS.md")
 
 
 if __name__ == "__main__":

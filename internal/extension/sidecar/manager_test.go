@@ -18,6 +18,10 @@ import (
 	"reasonix/internal/testenv"
 )
 
+func startPackagesForTest(ctx context.Context, home string, sessionCtx protocol.SessionContext, ui UIHandler) (*Manager, []string, error) {
+	return StartPackagesWithPlan(ctx, home, sessionCtx, ui, nil, nil)
+}
+
 // installFakePlugin writes a v1 manifest for a fake sidecar package and
 // registers it (enabled) in the pluginpkg installed state of home.
 func installFakePlugin(t *testing.T, home, name string, configure func(rt *pluginpkg.RuntimeSpec)) {
@@ -63,7 +67,7 @@ func TestManagerStartsEnabledRuntimePackages(t *testing.T) {
 			`"uiActions":[{"actionId":"act1"}],"stateSchemaVersion":0}`
 	})
 
-	manager, warnings, err := StartPackages(context.Background(), home, testSessionContext(), nil)
+	manager, warnings, err := startPackagesForTest(context.Background(), home, testSessionContext(), nil)
 	if err != nil {
 		t.Fatalf("StartPackages: %v", err)
 	}
@@ -127,7 +131,7 @@ func TestManagerRequiredFailureFailsEverything(t *testing.T) {
 		// v1 protocol is rejected by the v2 host.
 		rt.Env[fakeEnvInitResult] = `{"protocolVersion":"1","name":"bad","version":"1","stateSchemaVersion":0}`
 	})
-	manager, _, err := StartPackages(context.Background(), home, testSessionContext(), nil)
+	manager, _, err := startPackagesForTest(context.Background(), home, testSessionContext(), nil)
 	if err == nil {
 		t.Fatal("StartPackages succeeded with a broken required runtime")
 	}
@@ -149,7 +153,7 @@ func TestManagerOptionalFailureWarnsAndContinues(t *testing.T) {
 		rt.Env[fakeEnvInitResult] = `{"protocolVersion":"1","name":"bad","version":"1","stateSchemaVersion":0}`
 	})
 	installFakePlugin(t, home, "good-optional", nil)
-	manager, warnings, err := StartPackages(context.Background(), home, testSessionContext(), nil)
+	manager, warnings, err := startPackagesForTest(context.Background(), home, testSessionContext(), nil)
 	if err != nil {
 		t.Fatalf("StartPackages: %v", err)
 	}
@@ -260,7 +264,7 @@ func TestManagerDisabledPackageNeverLaunches(t *testing.T) {
 	if err := pluginpkg.SetEnabled(home, "disabled-one", false); err != nil {
 		t.Fatalf("SetEnabled: %v", err)
 	}
-	manager, warnings, err := StartPackages(context.Background(), home, testSessionContext(), nil)
+	manager, warnings, err := startPackagesForTest(context.Background(), home, testSessionContext(), nil)
 	if err != nil {
 		t.Fatalf("StartPackages: %v", err)
 	}
@@ -279,7 +283,7 @@ func TestManagerCloseShutsEverythingDown(t *testing.T) {
 	installFakePlugin(t, home, "two", func(rt *pluginpkg.RuntimeSpec) {
 		rt.Env[fakeEnvMode] = "ignore_shutdown" // force the kill path
 	})
-	manager, _, err := StartPackages(context.Background(), home, testSessionContext(), nil)
+	manager, _, err := startPackagesForTest(context.Background(), home, testSessionContext(), nil)
 	if err != nil {
 		t.Fatalf("StartPackages: %v", err)
 	}
@@ -370,7 +374,7 @@ func TestStartPackagesBindsUIHandlerPerPlugin(t *testing.T) {
 		rt.Env[fakeEnvMode] = "crash_after_init"
 	})
 	binder := newRecordingBinder()
-	manager, _, err := StartPackages(context.Background(), home, testSessionContext(), binder)
+	manager, _, err := startPackagesForTest(context.Background(), home, testSessionContext(), binder)
 	if err != nil {
 		t.Fatalf("StartPackages: %v", err)
 	}

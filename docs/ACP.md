@@ -2,8 +2,6 @@
 
 <a href="../README.md">README</a>
 &nbsp;·&nbsp;
-<a href="./ACP.zh-CN.md">简体中文</a>
-&nbsp;·&nbsp;
 <a href="./GUIDE.md">Guide</a>
 &nbsp;·&nbsp;
 <a href="https://agentclientprotocol.com/">ACP specification</a>
@@ -278,7 +276,7 @@ any other slash command.
 | Existing ACP v1 methods | Their names and response shapes are unchanged. | Compatible |
 | Capability `_meta` | Unknown metadata may be ignored. | Compatible |
 | Persisted transcripts | Transcript schema is unchanged; the inbox is a versioned sidecar. | Compatible |
-| CLI, Desktop, and Bot steering | Rejected steers remain durable follow-ups. | Compatible |
+| CLI and Desktop steering | Rejected steers remain durable follow-ups. | Compatible |
 
 Steering appends a user-requested message to normal conversation history. It
 does not change the system prompt, tool schemas, tool order, or other stable

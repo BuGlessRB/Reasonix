@@ -2,9 +2,10 @@ package repair
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -48,7 +49,7 @@ func rebuildDerivedStateBoundUnlocked(
 		for name := range paths {
 			names = append(names, name)
 		}
-		sort.Strings(names)
+		slices.Sort(names)
 	} else if _, ok := paths[target]; ok {
 		names = []string{target}
 	} else {
@@ -125,11 +126,7 @@ func derivedStateTargetPaths(target string) ([]string, error) {
 	target = strings.ToLower(strings.TrimSpace(target))
 	paths := derivedStatePaths()
 	if target == "all" {
-		names := make([]string, 0, len(paths))
-		for name := range paths {
-			names = append(names, name)
-		}
-		sort.Strings(names)
+		names := slices.Sorted(maps.Keys(paths))
 		out := make([]string, 0, len(names))
 		for _, name := range names {
 			if path := paths[name]; path != "" {

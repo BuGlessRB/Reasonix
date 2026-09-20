@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -172,7 +172,7 @@ func TestGrowingConflictsFromOneWriterStayInOneLane(t *testing.T) {
 		for p := range branches {
 			names = append(names, filepath.Base(p))
 		}
-		sort.Strings(names)
+		slices.Sort(names)
 		t.Errorf("8 conflicts from one writer on one lineage produced %d recovery files, want 1:\n  %s",
 			len(branches), strings.Join(names, "\n  "))
 	}

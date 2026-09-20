@@ -964,7 +964,7 @@ func (a *Agent) reserveParentWrite(runTool tool.Tool, args json.RawMessage, read
 	if err != nil {
 		return noop, err
 	}
-	return a.svc.writeScheduler.ReserveParentWrite(claim)
+	return a.svc.writeScheduler.ReserveWrite(claim)
 }
 
 // Run appends the user input and drives the tool loop until the model returns a
@@ -1643,10 +1643,10 @@ func toEventShellExecution(in *tool.ShellExecution, durationMs int64) *event.She
 		SupportsAndAnd: in.SupportsAndAnd,
 		State:          in.State,
 		FailurePhase:   in.FailurePhase,
-		OutputTail:     in.OutputTail,
-		MutationRisk:   in.MutationRisk,
-		Verification:   in.Verification,
-		DurationMs:     in.DurationMs,
+		OutputTail:     in.OutputTail, Subject: in.Subject,
+		MutationRisk: in.MutationRisk,
+		Verification: in.Verification,
+		DurationMs:   in.DurationMs,
 	}
 	if out.DurationMs == 0 && durationMs > 0 {
 		out.DurationMs = durationMs

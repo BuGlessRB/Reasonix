@@ -7,6 +7,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -339,11 +340,7 @@ func RegisterBuiltin(t Tool) {
 
 // Builtins returns all registered built-in tools, sorted by name.
 func Builtins() []Tool {
-	names := make([]string, 0, len(builtins))
-	for n := range builtins {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(builtins))
 	out := make([]Tool, 0, len(names))
 	for _, n := range names {
 		out = append(out, builtins[n])
@@ -591,7 +588,7 @@ func (r *Registry) ResolveCall(name string) (resolved Tool, canonical string, ca
 		for canonicalName := range matches {
 			candidates = append(candidates, canonicalName)
 		}
-		sort.Strings(candidates)
+		slices.Sort(candidates)
 	}
 	return nil, "", candidates
 }
@@ -689,6 +686,39 @@ func (r *Registry) Names() []string {
 
 // Schemas exports tool definitions in stable name order for the provider.
 // When a provider-visible allowlist is set, only those tools appear.
+// ProviderSchemas is the surface one turn carries: stable tools first,
+// contextual after, each sorted — an absence is a byte prefix of a presence,
+// so the cache keeps every token before the boundary.
+func (r *Registry) ProviderSchemas(ctx context.Context) []provider.ToolSchema {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	r.mu.RLock()
+	var stable, dynamic []string
+	for _, name := range r.order {
+		t := r.tools[name]
+		if t == nil || !r.isProviderVisibleLocked(name) {
+			continue
+		}
+		if contextual, ok := t.(ContextualTool); ok {
+			if contextual.ProviderVisible(ctx) {
+				dynamic = append(dynamic, name)
+			}
+			continue
+		}
+		stable = append(stable, name)
+	}
+	slices.Sort(stable)
+	slices.Sort(dynamic)
+	out := make([]provider.ToolSchema, 0, len(stable)+len(dynamic))
+	for _, name := range append(stable, dynamic...) {
+		t := r.tools[name]
+		out = append(out, provider.ToolSchema{Name: t.Name(), Description: t.Description(), Parameters: r.canon[name]})
+	}
+	r.mu.RUnlock()
+	return out
+}
+
 func (r *Registry) Schemas() []provider.ToolSchema {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -699,7 +729,7 @@ func (r *Registry) Schemas() []provider.ToolSchema {
 			names = append(names, name)
 		}
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	out := make([]provider.ToolSchema, 0, len(names))
 	for _, name := range names {
@@ -748,7 +778,7 @@ func (r *Registry) SchemasForContext(ctx context.Context) []provider.ToolSchema 
 		}
 	}
 	r.mu.RUnlock()
-	sort.Strings(names)
+	slices.Sort(names)
 	out := make([]provider.ToolSchema, 0, len(names))
 	for _, name := range names {
 		entry, ok := entries[name]

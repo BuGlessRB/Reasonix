@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -844,7 +844,7 @@ func TestSubagentStoreCleanupStaleRunningKeepsParentLeaseAfterCorruptReread(t *t
 		refs = append(refs, run.Ref)
 		run.Release()
 	}
-	sort.Strings(refs)
+	slices.Sort(refs)
 
 	var probeErr error
 	store.cleanupBeforeReread = func(parentSession, ref string) {

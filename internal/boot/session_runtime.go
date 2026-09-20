@@ -35,6 +35,7 @@ func startSessionRuntime(opts Options, cfg *config.Config, root string, sink eve
 	if err != nil {
 		return sessionRuntime{}, fmt.Errorf("initialize workspace write lease: %w", err)
 	}
+	lease.OnRelease(func(st workspacelease.Stats) { sink.Emit(workspaceLeaseAccount(st)) })
 	manager := jobs.NewManager(sink, jobOptions...)
 
 	dir := opts.SessionDir
@@ -49,6 +50,21 @@ func startSessionRuntime(opts Options, cfg *config.Config, root string, sink eve
 		report(sink, event.Event{Level: event.LevelWarn, Text: "cleanup-pending reconciliation failed: " + err.Error()})
 	}
 	return sessionRuntime{lease: lease, jobs: manager, dir: dir}, nil
+}
+
+// workspaceLeaseAccount carries what serialising writers cost this session.
+// The notice above reports a wait a person sat through; this reports every
+// wait, including the ones under the grace, and how much of the hold was spent
+// writing nothing.
+func workspaceLeaseAccount(st workspacelease.Stats) event.Event {
+	ms := func(d time.Duration) int64 { return d.Milliseconds() }
+	return event.Event{
+		Kind: event.WorkspaceLeaseEvent,
+		WorkspaceLease: &event.WorkspaceLease{
+			Contended: st.Contended, Reported: st.Reported,
+			WaitedMs: ms(st.Waited), HeldMs: ms(st.Held), IdleMs: ms(st.Idle),
+		},
+	}
 }
 
 // workspaceLeaseNotice turns one reported wait into what a frontend can

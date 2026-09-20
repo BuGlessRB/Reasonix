@@ -58,7 +58,7 @@ func TestCommandIsReadOnly(t *testing.T) {
 	}
 }
 
-func TestCommandIsWorkspaceNonMutatingKeepsNetworkProbeOutOfPermissionReaders(t *testing.T) {
+func TestWorkspaceNonMutatingKeepsNetworkProbeOutOfPermissionReaders(t *testing.T) {
 	tests := []struct {
 		command string
 		want    bool
@@ -70,9 +70,9 @@ func TestCommandIsWorkspaceNonMutatingKeepsNetworkProbeOutOfPermissionReaders(t 
 	}
 	for _, tt := range tests {
 		t.Run(tt.command, func(t *testing.T) {
-			_, _, got := CommandIsWorkspaceNonMutating(tt.command)
+			_, _, _, got := ClassifyWorkspaceNonMutatingCommand(tt.command)
 			if got != tt.want {
-				t.Fatalf("CommandIsWorkspaceNonMutating(%q) = %t, want %t", tt.command, got, tt.want)
+				t.Fatalf("ClassifyWorkspaceNonMutatingCommand(%q) = %t, want %t", tt.command, got, tt.want)
 			}
 		})
 	}

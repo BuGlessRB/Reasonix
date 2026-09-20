@@ -1,6 +1,8 @@
 package extension
 
 import (
+	"reasonix/internal/extensioncontract"
+
 	"maps"
 	"slices"
 	"strings"
@@ -221,7 +223,7 @@ func classifySubgraph(plan *RuntimePlan, from, to *DependencyGraph) SubgraphKind
 			}
 		}
 		// Plugin components with empty provides still count as sidecar.
-		if strings.HasPrefix(string(id), "plugin/") && !componentClassified {
+		if strings.HasPrefix(string(id), extensioncontract.PluginRefPrefix) && !componentClassified {
 			hasOther = true
 		}
 	}

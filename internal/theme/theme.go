@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -234,7 +235,7 @@ func decode(raw []byte, dirID string) (Pack, error) {
 	}
 	// Map iteration order would otherwise make the same pack report its
 	// problems in a different order on every read.
-	sort.Strings(warnings)
+	slices.Sort(warnings)
 	pack := Pack{ID: id, Name: name, Author: strings.TrimSpace(m.Author), Description: strings.TrimSpace(m.Description), Tokens: tokens, Warnings: warnings}
 	pack.Background = backgroundOf(m.Background, hasAsset(id, assetBackground))
 	pack.Sky = skyOf(m.Sky)

@@ -218,8 +218,8 @@ func TestActivationFailureDoesNotPublish(t *testing.T) {
 func TestResumePolicyInDoctor(t *testing.T) {
 	extension.RecordMessageSent(42, "m1", "test")
 	report := CollectRuntimeDoctor(nil)
-	// Force assess on gen 42 via DecideResume
-	d := extension.DecideResumeDefault(42)
+
+	d := extension.DecideResume(extension.RuntimeOwnerOrDefault(nil).Receipts, 42)
 	if d.CleanRollback {
 		t.Fatal("message send must block clean rollback")
 	}

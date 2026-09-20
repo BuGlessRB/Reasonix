@@ -1,6 +1,6 @@
 import type { PlanAction } from "./session";
 import { HttpError } from "./port";
-import type { AccountState, AgentPort, ChangeDiff, CompactionSettings, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
+import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT, mockMsgIndex, mockTurnStart } from "./fixture";
@@ -53,21 +53,20 @@ export class MockPort extends MockTheme implements AgentPort {
     cacheMiss: 0,
   };
 
-  private setupDone = false;
   private session: SessionEntry | null = null;
 
   async providerSetup(): Promise<ProviderSetup | null> {
-    return this.setupDone ? null : { required: true, provider: "deepseek", model: "deepseek-v4-pro", keyEnv: "DEEPSEEK_API_KEY" };
+    return this.machine.configured ? null : { required: true, provider: "deepseek", model: "deepseek-v4-pro", keyEnv: "DEEPSEEK_API_KEY" };
   }
 
   async saveProviderKey(_apiKey: string) {
-    this.setupDone = true;
+    this.machine.configured = true;
   }
 
   // The subagent runs somewhere cheaper; everything else rides the main model.
   private assigned: RoleAssignments = {
     planner: "",
-    subagent: "deepseek/deepseek-v4-flash",
+    subagent: "deepseek/deepseek-flash",
     guardian: "",
     vision: "",
   };
@@ -96,7 +95,7 @@ export class MockPort extends MockTheme implements AgentPort {
         efforts, effort: "high", contextWindow: 131072,
       },
       {
-        ref: "deepseek/deepseek-v4-flash", provider: "deepseek", model: "deepseek-v4-flash",
+        ref: "deepseek/deepseek-flash", provider: "deepseek", model: "deepseek-flash",
         kind: "openai", vendor: "api.deepseek.com", keyEnv: "DEEPSEEK_API_KEY", efforts, effort: "high",
         contextWindow: 131072, price: { input: 0.5, output: 2, currency: "CNY" },
       },
@@ -137,7 +136,7 @@ export class MockPort extends MockTheme implements AgentPort {
       const amount = priced[day];
       return {
         day: at, total,
-        byModel: (total ? { "deepseek/deepseek-v4-flash": total } : {}) as Record<string, number>,
+        byModel: (total ? { "deepseek/deepseek-flash": total } : {}) as Record<string, number>,
         byProvider: (total ? { deepseek: total } : {}) as Record<string, number>,
         requests: Math.round(total / 20_000), turns: Math.round(total / 150_000),
         cacheHit: Math.round(total * 0.92), cacheMiss: Math.round(total * 0.08),
@@ -153,11 +152,11 @@ export class MockPort extends MockTheme implements AgentPort {
       cache_miss: daily.reduce((a, d) => a + d.cacheMiss, 0),
       cost: [{ amount: "10.4882", currency: "CNY" }],
       active_days: daily.filter((d) => d.total > 0).length,
-      top_model: "deepseek/deepseek-v4-flash", top_provider: "deepseek",
+      top_model: "deepseek/deepseek-flash", top_provider: "deepseek",
       daily,
       models: [
-        { model: "deepseek/deepseek-v4-flash", provider: "deepseek", tokens: Math.round(tokens * 0.597), percent: 59.7 },
-        { model: "deepseek-flash/deepseek-v4-flash", provider: "deepseek-flash", tokens: Math.round(tokens * 0.401), percent: 40.1 },
+        { model: "deepseek/deepseek-flash", provider: "deepseek", tokens: Math.round(tokens * 0.597), percent: 59.7 },
+        { model: "deepseek-flash/deepseek-flash", provider: "deepseek-flash", tokens: Math.round(tokens * 0.401), percent: 40.1 },
         { model: "deepseek/deepseek-v4-pro", provider: "deepseek", tokens: Math.round(tokens * 0.002), percent: 0.2 },
       ],
       providers: [
@@ -241,17 +240,12 @@ export class MockPort extends MockTheme implements AgentPort {
   async markWelcomed(): Promise<void> { this.welcomed = true; }
 
   async pinVersion(): Promise<void> {}
-
+  async acknowledgeLaunchHealth(): Promise<void> {} // booted from no update
   async goToVersion(): Promise<void> {
     throw new Error("演示模式不会真的安装版本");
   }
 
   onUpdateProgress(): () => void {
-    return () => {};
-  }
-
-  // Both of these are the shell reporting on itself; the fixture has no shell.
-  onDroppedPaths(): () => void {
     return () => {};
   }
 
@@ -455,6 +449,11 @@ export class MockPort extends MockTheme implements AgentPort {
     return [];
   }
 
+  // Mock mode holds no task list; an absent one must render as absent.
+  async todos(): Promise<HostTodo[]> {
+    return [];
+  }
+
   // Mock mode has to be able to show the rewind entry, so every prompt it has
   // seen becomes a checkpoint the way the kernel opens one per user turn.
   async checkpoints(): Promise<Checkpoint[]> {
@@ -622,6 +621,10 @@ export class MockPort extends MockTheme implements AgentPort {
     return { itemId, disposition: "queued_followup" };
   }
 
+  async browserTabs(): Promise<BrowserTab[]> {
+    return [];
+  }
+
   async queue(): Promise<Queue> {
     return {
       revision: this.queueRevision,
@@ -770,15 +773,6 @@ export class MockPort extends MockTheme implements AgentPort {
   async setModel(ref: string) {
     this.state.modelRef = ref;
     this.state.label = ref.split("/").pop() ?? ref;
-  }
-  async compaction(): Promise<CompactionSettings> {
-    return { soft_limit_tokens: 0, default_soft_limit: 160000, ratio: 0.85, context_window: 128000, trigger: 108800, path: "~/.reasonix/config.toml" };
-  }
-  async saveCompaction(softLimitTokens: number): Promise<CompactionSettings> {
-    const s = await this.compaction();
-    // Only the lower bound fires; a trigger left put is a pair the kernel cannot produce.
-    const cap = Math.round(s.context_window * s.ratio);
-    return { ...s, soft_limit_tokens: softLimitTokens, trigger: Math.min(softLimitTokens < 0 ? cap : softLimitTokens || s.default_soft_limit, cap) };
   }
   async setEffort(effort: string) {
     this.state.effort = effort;

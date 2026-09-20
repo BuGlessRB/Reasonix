@@ -2,7 +2,6 @@ package permission
 
 import (
 	"encoding/json"
-	"strings"
 )
 
 // InstallSourceIsPlanOnly reports an install_source call that only produces a
@@ -29,11 +28,15 @@ func InstallSourceIsPlanOnly(args json.RawMessage) bool {
 // installsource's TestHighRiskPlanAsksEvenUnderBlanketAllow holds the two together.
 const selfExtendHumanRisk = "high:"
 
+// installSourceTool is the rule-name form self-extension is decided under.
+const installSourceTool = "install_source"
+
 // subjectRequiresHuman reports a call that comes back to the user even when the
 // fallback mode allows everything. "Allow every write" is a statement about
 // this workspace's files, never permission for the agent to give itself a
 // resident process, a lifecycle hook, or an external server. An explicit allow
 // rule for that plan's ticket still wins — that is how the line gets moved.
 func subjectRequiresHuman(toolName, subject string) bool {
-	return canonicalRuleTool(toolName) == "install_source" && strings.HasPrefix(subject, selfExtendHumanRisk)
+	asks, ok := subjectSensitiveTools[canonicalRuleTool(toolName)]
+	return ok && asks(subject)
 }

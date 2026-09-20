@@ -286,16 +286,16 @@ func TestRememberRuleWithoutSubject(t *testing.T) {
 }
 
 func TestSessionGrantKeyScopesBashByCommand(t *testing.T) {
-	a := SessionGrantKey("bash", "go build")
-	b := SessionGrantKey("bash", "go test ./...")
+	a := SessionGrantRuleForScope("bash", "go build")
+	b := SessionGrantRuleForScope("bash", "go test ./...")
 	if a == b {
 		t.Fatalf("bash session grant keys should differ by command: %q", a)
 	}
 }
 
 func TestSessionGrantKeyGroupsFileMutationTools(t *testing.T) {
-	a := SessionGrantKey("edit_file", "src/a.go")
-	b := SessionGrantKey("write_file", "src/b.go")
+	a := SessionGrantRuleForScope("edit_file", "src/a.go")
+	b := SessionGrantRuleForScope("write_file", "src/b.go")
 	if a != b {
 		t.Fatalf("file mutation session grant keys should match, got %q and %q", a, b)
 	}

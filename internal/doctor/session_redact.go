@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -131,7 +132,7 @@ func redactSessionDirs(in []string) []string {
 		seen[dir] = true
 		out = append(out, dir)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

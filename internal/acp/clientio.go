@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -166,7 +166,7 @@ func envMapToVariables(env map[string]string) []EnvVariable {
 		}
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	out := make([]EnvVariable, 0, len(keys))
 	for _, k := range keys {
 		out = append(out, EnvVariable{Name: k, Value: env[k]})

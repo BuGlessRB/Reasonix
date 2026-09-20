@@ -47,7 +47,7 @@ func buildRuntimeGraph(home string, hostProvides []extensioncontract.Capability)
 	}
 	for _, item := range packages {
 		pkg := item.Package
-		id := extension.ComponentID("plugin/" + pkg.Manifest.Name)
+		id := sidecar.PluginComponentID(pkg.Manifest.Name)
 		var intercepts []extension.InterceptorPoint
 		var replaces []extension.Slot
 		priority := 0

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 )
 
 // Ratchet snapshot, in weighted units: no file may exceed its budget and no
@@ -138,7 +138,7 @@ func widenings(old, next *Baseline) []string {
 			}
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

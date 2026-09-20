@@ -78,12 +78,6 @@ type Manager struct {
 	planAdopted map[string]*Client
 }
 
-// StartPackages starts every installed runtime package (cold start). Prefer
-// StartPackagesWithPlan when a RuntimePlan can adopt unchanged packages.
-func StartPackages(ctx context.Context, home string, sessionCtx protocol.SessionContext, ui UIHandler) (*Manager, []string, error) {
-	return StartPackagesWithPlan(ctx, home, sessionCtx, ui, nil, nil)
-}
-
 // startLoadedPackages starts a previously discovered, deterministically ordered
 // package set. Handler binding stays serial; process startup and handshakes use
 // a bounded worker pool and the caller's shared generation context. Results are

@@ -23,7 +23,7 @@ func TestNewProviderAppliesExplicitKimiK3RequestContractToCustomGateway(t *testi
 	}))
 	defer srv.Close()
 
-	p, err := NewProvider(&config.ProviderEntry{
+	p, err := newProviderForTest(&config.ProviderEntry{
 		Name: "custom-kimi-gateway", Kind: "openai", BaseURL: srv.URL, Model: "kimi-k3",
 		ReasoningProtocol: config.ReasoningProtocolKimiK3,
 		SupportedEfforts:  []string{"medium", "ultra"}, DefaultEffort: "ultra",

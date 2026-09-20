@@ -16,12 +16,9 @@ type frontendPort struct {
 	port string // the interface in internal/control it drives
 }
 
-// desktop/next is absent because it holds the controller only long enough to
-// hand it to serve.Hub: it drives the kernel over HTTP, where wire-parity is
-// the guard. botruntime never reaches the controller at all.
+// A shell that drives the kernel over HTTP is absent: wire-parity covers it.
 var frontendPorts = []frontendPort{
 	{pkg: "internal/acp", port: "EditorAPI"},
-	{pkg: "internal/bot", port: "GatewayAPI"},
 	{pkg: "internal/cli", port: "SessionAPI"},
 	{pkg: "internal/serve", port: "SessionAPI"},
 }

@@ -496,8 +496,8 @@ func filterIndices(items []menuItem, query string) []int {
 	return out
 }
 
-// FrameLines is exported for testing. It returns the total number of terminal
-// lines that selectOne/selectMany will print for the given state.
-func FrameLines(filteredLen, termRows int, searching bool) int {
+// frameLines returns the total number of terminal lines that
+// selectOne/selectMany will print for the given state.
+func frameLines(filteredLen, termRows int, searching bool) int {
 	return fixedLines(searching) + maxViewport(filteredLen, termRows, searching)
 }

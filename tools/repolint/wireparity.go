@@ -20,6 +20,7 @@ const (
 	tsVersionFile  = "desktop/frontend-next/src/port/version.ts"
 	tsModelFile    = "desktop/frontend-next/src/port/model.ts"
 	tsMcpFile      = "desktop/frontend-next/src/port/mcp.ts"
+	tsShellFile    = "desktop/frontend-next/src/port/shell.ts"
 )
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
@@ -46,6 +47,16 @@ var mirroredWireTypes = []wireMirror{
 	// model's work from the host's own bookkeeping, and a page that cannot read
 	// it folds them together.
 	{"internal/eventwire/wire.go", "Tool", tsWireFile, "Tool"},
+	// The canonical task list, which the panel reads rather than derives. A
+	// status the page cannot read is a signed-off step drawn as the current one.
+	{"internal/serve/todos.go", "todoItem", tsSessionFile, "HostTodo"},
+	// The agent's tabs. The target id is what the window draws a view by, so a
+	// tab the page cannot read one for is a tab it cannot show.
+	{"internal/browser/session.go", "TabInfo", tsSessionFile, "BrowserTab"},
+	// A rebuilt transcript's tool calls. The proxy's resolved identity was on
+	// the kernel side and not on this one, so a reopened session drew
+	// use_capability where the live one drew what it reached.
+	{"internal/serve/history.go", "historyToolCall", tsSessionFile, "HistoryToolCall"},
 	{"internal/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
 	// The MCP row: a status the host answered with and the page cannot read is a
 	// row that goes back to reading the server's own prose for it.
@@ -60,6 +71,13 @@ var mirroredWireTypes = []wireMirror{
 	// attempt to bound its context — which is what its trajectory export said
 	// about the run that motivated the second boundary.
 	{"internal/eventwire/wire.go", "ContextMaintenance", tsWireFile, "ContextMaintenance"},
+	// The gauge and the two ceilings behind it. A panel that cannot read which
+	// bound fires draws a fold point at 16% of the declared window with nothing
+	// on the screen that explains it, which is what it read as.
+	{"internal/serve/context_window.go", "contextView", tsShellFile, "ContextBreakdown"},
+	// What sent one fold. Without the boundary and its size the card falls back
+	// to "a threshold was reached", and the reader supplies their own reason.
+	{"internal/eventwire/wire.go", "Compaction", tsWireFile, "Compaction"},
 	// Plan rewriting and plan advancement are told apart by three counters; a
 	// desktop that can read only some of them reads churn as work.
 	{"internal/eventwire/wire.go", "TodoProgress", tsWireFile, "TodoProgress"},
@@ -82,6 +100,9 @@ var mirroredWireTypes = []wireMirror{
 	// sentence per phase; a phase it cannot read renders as nothing, which on
 	// the long pause after the last byte is indistinguishable from a hang.
 	{"internal/update/progress.go", "Progress", tsVersionFile, "UpdateProgress"},
+	{"internal/checkpoint/types.go", "RewindResult", tsSessionFile, "RewindResult"},
+	{"internal/eventwire/wire.go", "ShellExecution", tsWireFile, "Execution"},
+	{"internal/eventwire/workspace_lease.go", "WorkspaceLease", tsWireFile, "WorkspaceLease"},
 }
 
 type wireMirror struct {

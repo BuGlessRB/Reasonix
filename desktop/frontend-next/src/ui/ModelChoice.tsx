@@ -78,7 +78,7 @@ export function ModelChoice({
 
   return (
     <>
-      <div className="mfind">
+      <div className="msearch">
         <input
           type="search"
           value={q}
@@ -184,6 +184,7 @@ function unavailableReason(reason?: ProviderModelCheckReason): string {
   switch (reason) {
     case "not_found": return "模型不存在或账号未开放";
     case "rejected": return "端点不接受这个模型";
+    case "tools": return "能对话但不接受工具调用，用不了";
     default: return "当前不可用";
   }
 }

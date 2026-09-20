@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -380,7 +379,7 @@ func jsonField(field reflect.StructField) (name string, omitEmpty, skip bool) {
 func ExternalizablePointers(typ reflect.Type) []string {
 	var out []string
 	collectExternalizablePointers(typ, "", &out)
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

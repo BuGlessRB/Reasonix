@@ -3,7 +3,8 @@ package theme
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -46,11 +47,7 @@ var Tokens = map[string]TokenKind{
 
 // TokenNames returns the vocabulary sorted, for callers that report it.
 func TokenNames() []string {
-	out := make([]string, 0, len(Tokens))
-	for name := range Tokens {
-		out = append(out, name)
-	}
-	sort.Strings(out)
+	out := slices.Sorted(maps.Keys(Tokens))
 	return out
 }
 

@@ -88,20 +88,18 @@ func CanUpgradeDeepSeekProviderProtocol(p *ProviderEntry) bool {
 	models := p.ModelList()
 	switch strings.TrimSpace(p.Name) {
 	case "deepseek-flash":
-		return len(models) == 1 && strings.TrimSpace(models[0]) == "deepseek-v4-flash"
+		return len(models) == 1 && isShippedDeepSeekFlashModel(models[0])
 	case "deepseek-pro":
-		return len(models) == 1 && strings.TrimSpace(models[0]) == "deepseek-v4-pro"
+		return len(models) == 1 && strings.TrimSpace(models[0]) == deepSeekProModel
 	case "deepseek":
 		if len(models) == 0 {
 			return false
 		}
 		for _, model := range models {
-			switch strings.TrimSpace(model) {
-			// The vision model counts as shipped, not as curation: the catalog
-			// backfill puts it here, so treating it as a user edit would freeze
-			// everyone it reached out of this upgrade.
-			case "deepseek-v4-flash", "deepseek-v4-pro", DeepSeekVisionModel:
-			default:
+			// A retired flash name counts as shipped, not as curation: it is
+			// what the catalog put there, so reading it as a user edit would
+			// freeze everyone it reached out of this upgrade.
+			if !isShippedDeepSeekFlashModel(model) && strings.TrimSpace(model) != deepSeekProModel {
 				return false
 			}
 		}
@@ -109,6 +107,13 @@ func CanUpgradeDeepSeekProviderProtocol(p *ProviderEntry) bool {
 	default:
 		return false
 	}
+}
+
+// isShippedDeepSeekFlashModel accepts the current flash name and the retired
+// ones, because this runs on configs from either side of that migration.
+func isShippedDeepSeekFlashModel(model string) bool {
+	model = strings.TrimSpace(model)
+	return model == DeepSeekFlashModel || slices.Contains(retiredDeepSeekFlashModels, model)
 }
 
 func editLegacyDeepSeekProtocolFile(path, target string, automatic bool) (bool, error) {
@@ -244,7 +249,7 @@ func isUnmodifiedLegacyDeepSeekProvider(p ProviderEntry, raw map[string]any) boo
 	if p.ContextWindow != 0 && p.ContextWindow != 1_000_000 {
 		return false
 	}
-	return p.Price == nil || IsKnownDeepSeekOfficialPricing(p.Model, p.Price)
+	return p.Price == nil || IsKnownOfficialPricing("deepseek", p.Model, p.Price)
 }
 
 func deepSeekUpgradeTargetMatches(target, providerName string) bool {

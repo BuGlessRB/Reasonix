@@ -63,7 +63,7 @@ func (o *turnOrchestrator) runComposedSyntheticTurn(ctx context.Context, text st
 	ctx = c.continueAnnouncedTurn(ctx)
 	ctx = agent.WithRawUserInput(ctx, text)
 	ctx = c.withPlannerTurnMetadata(ctx, text, true)
-	return c.runner.Run(ctx, c.ComposeSynthetic(text))
+	return c.runWithRunner(ctx, c.ComposeSynthetic(text))
 }
 
 // runSubagentSkillGoalLoop executes a slash-invoked runAs=subagent skill as a
@@ -459,7 +459,9 @@ func (o *turnOrchestrator) runTurnLoop(ctx context.Context, turn orchestratedTur
 func (o *turnOrchestrator) runTurnLoopWithPreparedTurn(ctx context.Context, turn orchestratedTurn) error {
 	expectedContinuationEpoch := o.c.goals.continuationToken()
 	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, turn.images.candidates))
+	o.c.liftUserGatedGoal(turn.synthetic)
 	err := o.runOrchestratedTurn(ctx, turn)
+	o.c.noticeUserGate()
 	if err != nil {
 		if ctx.Err() != nil {
 			o.c.goalUsageTee.setActiveRecorder(nil)
@@ -591,6 +593,9 @@ func (o *turnOrchestrator) advanceGoalAfterTurn(ctx context.Context, expectedCon
 	} else if c.executor != nil {
 		readiness = c.executor.ReadinessResult()
 	}
+	if gate := c.turnUserGate(); pauseCause == "" && gate != "" {
+		pauseCause, pauseReason = stopCauseUserGate, gate
+	}
 	// The validated update_goal report for this turn, if any.
 	var report *goalTurnReport
 	if recorder != nil {
@@ -601,7 +606,7 @@ func (o *turnOrchestrator) advanceGoalAfterTurn(ctx context.Context, expectedCon
 	// readiness has no definite missing list. Failures fail closed in the FSM.
 	var evaluator *goalEvaluatorVerdict
 	var evaluatorFailed string
-	if !runPaused && report == nil && len(readiness.Missing) == 0 {
+	if pauseCause == "" && report == nil && len(readiness.Missing) == 0 {
 		if c.evaluator == nil {
 			evaluatorFailed = "goal evaluator unavailable"
 		} else if verdict, err := c.evaluator.Evaluate(ctx, c.goalEvaluatorEvidence()); err != nil {

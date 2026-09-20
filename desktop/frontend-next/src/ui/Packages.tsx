@@ -99,7 +99,7 @@ function Package({
       >
         {t(busy === "export" ? "打包中…" : "导出")}
       </button>
-      <button className="act ghost" aria-label={`移除 ${p.name}`} disabled={!!busy} onClick={() => setConfirming(true)}>
+      <button className="act ghost" aria-label={t("移除 {name}", { name: p.name })} disabled={!!busy} onClick={() => setConfirming(true)}>
         {t("移除")}
       </button>
       <Switch
@@ -130,7 +130,7 @@ function Package({
           void run("remove", async () => {
             const out = await port.removePlugin(p.name);
             setConfirming(false);
-            if (!out.ok) setFailed(out.error || out.next || "没能删掉");
+            if (!out.ok) setFailed(out.error || out.next || t("没能删掉"));
           })
         }
       >
@@ -154,7 +154,7 @@ function Package({
     <>
       {why && <div className="why">{why}</div>}
       {p.status === "disabled_incompatible" && (
-        <div className="why">{p.statusReason || "这个包和当前版本不兼容，已经被停用。"}</div>
+        <div className="why">{p.statusReason || t("这个包和当前版本不兼容，已经被停用。")}</div>
       )}
       {p.warnings?.map((w) => (
         <div className="why" key={w}>
@@ -165,8 +165,8 @@ function Package({
         <div className="why">
           {exported.savedTo ? t("已保存至 {path}。", { path: exported.savedTo }) : t("导出完成。")}
           {exported.required.length
-            ? `里面的密钥值已经去掉，装它的人要自己提供：${exported.required.join("、")}`
-            : "该包不需要填写任何密钥。"}
+            ? t("里面的密钥值已经去掉，装它的人要自己提供：{names}", { names: exported.required.join("、") })
+            : t("该包不需要填写任何密钥。")}
         </div>
       )}
     </>
@@ -210,7 +210,7 @@ function Package({
           <div className="row" key={s.capability + s.reason}>
             <span className="d">·</span>
             <span>{s.capability}</span>
-            <span className="sc">用不了：{s.reason}</span>
+            <span className="sc">{t("用不了：{why}", { why: s.reason })}</span>
           </div>
         ))}
       </div>

@@ -138,20 +138,6 @@ func TestGrepDecodesGB18030Gitignore(t *testing.T) {
 	}
 }
 
-func TestScanGitConfigExcludesDecodesGB18030Path(t *testing.T) {
-	dir := testenv.TempDir(t)
-	path := filepath.Join(dir, ".gitconfig")
-	want := filepath.Join(dir, "中文忽略规则.txt")
-	body := "[core]\n\texcludesFile = " + want + "\n"
-	if err := os.WriteFile(path, fileencoding.Encode(body, fileencoding.GB18030), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := scanGitConfigExcludes(path); got != want {
-		t.Fatalf("scanGitConfigExcludes = %q, want %q", got, want)
-	}
-}
-
 func TestGrepExplicitIgnoredRootStillSearched(t *testing.T) {
 	dir := gitignoreRepo(t)
 	// Pointing grep straight at a gitignored directory still searches it — the
@@ -172,27 +158,5 @@ func TestGrepNoRepoIgnoresNothing(t *testing.T) {
 	out := runTool(t, grepTool{}, map[string]any{"pattern": "NEEDLE", "path": dir})
 	if !strings.Contains(out, "ignored.txt") {
 		t.Fatalf("outside a git repo, .gitignore must not be applied: %q", out)
-	}
-}
-
-func TestFindRepoRoot(t *testing.T) {
-	dir := testenv.TempDir(t)
-	if err := os.Mkdir(filepath.Join(dir, ".git"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	sub := filepath.Join(dir, "a", "b")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	got, err := filepath.EvalSymlinks(findRepoRoot(sub))
-	if err != nil {
-		t.Fatal(err)
-	}
-	want, _ := filepath.EvalSymlinks(dir)
-	if got != want {
-		t.Fatalf("findRepoRoot(%q) = %q, want %q", sub, got, want)
-	}
-	if rr := findRepoRoot(testenv.TempDir(t)); rr != "" {
-		t.Fatalf("a dir with no .git ancestor should return \"\", got %q", rr)
 	}
 }

@@ -142,7 +142,7 @@ const brokerForwardName = "provider-broker"
 // reports the address a kernel there should call. Empty when this pool has no
 // broker to publish, which is what leaves that host on its own credentials.
 func (p *Pool) broker(l *link) (string, error) {
-	if !p.opts.Broker.configured() || l.provider == config.RemoteProviderRemote {
+	if !p.brokers(l) {
 		return "", nil
 	}
 	l.brokerOnce.Do(func() {
@@ -157,6 +157,11 @@ func (p *Pool) broker(l *link) (string, error) {
 		}
 	})
 	return l.brokerAddr, l.brokerErr
+}
+
+// brokers reports whether a connect to l publishes this machine's broker.
+func (p *Pool) brokers(l *link) bool {
+	return p.opts.Broker.configured() && l.provider != config.RemoteProviderRemote
 }
 
 // HostState is what a frontend shows for one machine: where its link stands,
@@ -396,7 +401,7 @@ func (p *Pool) serve(ctx context.Context, l *link, s *space, workspace string, c
 		ProductVersion:  p.opts.Version,
 		FetchBinary:     p.opts.FetchBinary,
 		ResolveDownload: p.opts.ResolveDownload,
-		MinVersion:      bootstrap.MinPaneVersion,
+		MinVersion:      bootstrap.PaneFloor(brokerAddr != ""),
 		Progress: func(step, detail string) {
 			p.record(l, func(st *HostState) { st.Step, st.Detail = step, detail })
 			if call.Progress != nil {

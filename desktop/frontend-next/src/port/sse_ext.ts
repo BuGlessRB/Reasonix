@@ -1,7 +1,6 @@
 import { SseLook } from "./sse_look";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, ScopeLayer, SkillCatalog } from "./port";
 import { rootQuery } from "./sse_http";
-import type { WailsBind } from "./wails";
 import { download } from "./download";
 import { host } from "./host";
 
@@ -36,16 +35,9 @@ export class SseExtensions extends SseLook {
     return this.del0<PluginPlan>("/plugins/" + encodeURIComponent(name));
   }
 
-  // A webview starts no downloads of its own, so the shell writes the file
-  // through its own save dialog when there is one. In a browser tab the archive
-  // is an ordinary download, and the header is read first because the body is
-  // bytes and has nowhere to say what was stripped out of it.
+  // The header is read before the body because the body is bytes and has
+  // nowhere to say what was stripped out of it.
   async exportPlugin(name: string): Promise<PluginExport> {
-    const save = (window as WailsBind).go?.main?.App?.SavePluginExport;
-    if (save) {
-      const out = await save(name);
-      return { required: out.required ?? [], savedTo: out.path || undefined };
-    }
     const res = await fetch(this.base + "/plugins/" + encodeURIComponent(name) + "/export", {
       credentials: "same-origin",
     });

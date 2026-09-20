@@ -4,10 +4,21 @@ import { t } from "../../i18n";
 import { tokens } from "../../i18n/format";
 import { tx } from "../../i18n/rich";
 
-const TRIGGER: Record<string, string> = {
-  auto: "上下文达到阈值，自动触发",
-  manual: "手动触发",
-};
+// What sent this fold. The host knows which of the two thresholds was reached
+// and how big it is; a card that says only "a threshold" leaves a fold at 16%
+// of a declared window looking like the host acting on its own.
+//
+// The literals live inside t() rather than in a table, which a module body
+// would freeze in the source language and a catalogue scanner would never see.
+function why(c: Compaction): string {
+  if (c.trigger === "manual") return t("手动触发");
+  if (c.trigger !== "auto") return c.trigger ?? "";
+  if (!c.triggerTokens) return t("上下文达到阈值，自动触发");
+  const n = tokens(c.triggerTokens);
+  if (c.boundary === "economic") return t("自动触发 · 输入到达固定维护线 {n}", { n });
+  if (c.boundary === "capacity") return t("自动触发 · 输入到达窗口容量线 {n}", { n });
+  return t("自动触发 · 输入到达 {n}", { n });
+}
 
 // A digest reads as complete whatever it dropped, so the count of the fold's
 // changes it actually carried is the one thing this card can say that the
@@ -56,7 +67,7 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
   const after = c.projectionTokens ?? 0;
   const shrank = before > 0 && after > 0 && after < before;
   return (
-    <div className="call">
+    <div className="call" data-k="host">
       <div className="g">
         <Sym glyph="⊘" />
         <span className="line" />
@@ -65,7 +76,7 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
         <div className="hl">
           <span className={done ? "nm" : "nm shim"}>{t(done ? "压缩完成" : "正在压缩…")}</span>
           <span className="tag">compaction</span>
-          {c.trigger && <span className="arg">{TRIGGER[c.trigger] ?? c.trigger}</span>}
+          {c.trigger && <span className="arg">{why(c)}</span>}
         </div>
         {/* While it runs, the digest's own last line is the progress bar: a
             fold can take a minute, and a placeholder that says nothing for a

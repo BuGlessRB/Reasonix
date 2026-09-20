@@ -491,6 +491,9 @@ func coalesceProjectionUserRuns(msgs []provider.Message) []provider.Message {
 		} else {
 			prev.Content = strings.TrimRight(prev.Content, "\n") + "\n\n" + msg.Content
 		}
+		// A run that swallowed a derived tail is derived from there on: its bytes
+		// are this request's, not what the next one carries.
+		prev.Derived = prev.Derived || msg.Derived
 		prev.Images = append(prev.Images, msg.Images...)
 		prev.ToolCalls = append(prev.ToolCalls, msg.ToolCalls...)
 		prev.ResponsesItems = append(prev.ResponsesItems, msg.ResponsesItems...)

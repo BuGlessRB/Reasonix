@@ -38,6 +38,25 @@ describe("a size comes from the scale", () => {
     expect(sizes().length).toBeGreaterThan(300);
   });
 
+  // The exemption above is what let the reading column keep a flat ladder: the
+  // four heading levels an answer is written with were +1.5 / +.5 / 0 / -.5
+  // pixels around the body, which is the same "slightly different, everywhere"
+  // the scale was introduced to end — in the one column that is actually read
+  // a paragraph at a time. A step is a ratio here, because the body size is a
+  // setting and the levels have to hold at every value of it.
+  it("sets the reading column's headings a step apart", () => {
+    const step = (tag: string) => {
+      const m = css.match(new RegExp(`\\.md ${tag} \\{ font-size: (?:calc\\(var\\(--read\\) \\* ([\\d.]+)\\)|var\\(--read\\))`));
+      expect(m, `.md ${tag} declares its size against --read`).toBeTruthy();
+      return m![1] ? Number(m![1]) : 1;
+    };
+    const ladder = [step("h1"), step("h2"), step("h3"), step("h4")];
+    expect(ladder[0], "the top level outweighs the body it sits over").toBeGreaterThanOrEqual(1.25);
+    for (let i = 1; i < ladder.length; i++) {
+      expect(ladder[i - 1] / ladder[i], `h${i} over h${i + 1}`).toBeGreaterThanOrEqual(1.05);
+    }
+  });
+
   it("keeps the floor at the step the scale defines", () => {
     // Han strokes lose their counters before Latin does, and AA's large-text
     // exemption starts at 18.66px — nothing in the interface has ever been

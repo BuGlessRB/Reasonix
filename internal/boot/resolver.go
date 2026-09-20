@@ -22,36 +22,83 @@ func NewLocalProviderResolver(cfg *config.Config, proxy netclient.ProxySpec) *Lo
 	return &LocalProviderResolver{cfg: cfg, proxy: proxy}
 }
 
+// Catalog lists every chat model the config declares, one ref per model, and
+// marks the one a new session starts on. A broker's remote reads nothing else
+// about this machine's models, so a provider listed once by name would leave
+// it unable to recognise any ref but that provider's first.
 func (r *LocalProviderResolver) Catalog() []provider.Descriptor {
 	if r == nil || r.cfg == nil {
 		return nil
 	}
-	out := make([]provider.Descriptor, 0, len(r.cfg.Providers))
+	defaultRef := ""
+	if def, _, ok := r.cfg.ResolveNewSessionChatModel(); ok {
+		if e, found := r.cfg.ResolveModel(def); found {
+			defaultRef = modelRefFromEntry(e)
+		}
+	}
+	var out []provider.Descriptor
+	seen := map[string]bool{}
 	for i := range r.cfg.Providers {
-		e := &r.cfg.Providers[i]
-		ref := modelRefFromEntry(e)
-		d := provider.Descriptor{
-			Ref: ref, DisplayName: e.Name, Model: e.Model,
-			ContextWindow: e.ContextWindow, Vision: config.EffectiveVision(e),
-			Tools: true, DefaultEffort: config.EffectiveEffort(e),
+		p := &r.cfg.Providers[i]
+		models := p.ChatModelList()
+		if len(models) == 0 {
+			models = p.ModelList()
 		}
-		if price := e.PriceForModel(e.Model); price != nil {
-			d.PricingCurrency = price.Currency
-			d.CacheHitPerMillion = price.CacheHit
-			d.InputPerMillion = price.Input
-			d.OutputPerMillion = price.Output
+		for _, model := range models {
+			e, ok := r.cfg.ResolveModel(p.Name + "/" + model)
+			if !ok {
+				continue
+			}
+			ref := modelRefFromEntry(e)
+			if seen[ref] {
+				continue
+			}
+			seen[ref] = true
+			d := descriptorFor(e, ref)
+			d.Default = ref == defaultRef
+			out = append(out, d)
 		}
-		if len(e.SupportedEfforts) > 0 {
-			d.Efforts = append([]string(nil), e.SupportedEfforts...)
-			d.Reasoning = true
-		}
-		if config.ReasoningProtocolForEntry(e) == config.ReasoningProtocolDeepSeek {
-			d.ToolCallReasoning = true
-			d.Reasoning = true
-		}
-		out = append(out, d)
 	}
 	return out
+}
+
+func descriptorFor(e *config.ProviderEntry, ref string) provider.Descriptor {
+	d := provider.Descriptor{
+		Ref: ref, DisplayName: e.Name, Model: e.Model,
+		ContextWindow: e.ContextWindow, Vision: config.EffectiveVision(e),
+		Tools: true, DefaultEffort: config.EffectiveEffort(e),
+	}
+	if price := e.PriceForModel(e.Model); price != nil {
+		d.PricingCurrency = price.Currency
+		d.CacheHitPerMillion = price.CacheHit
+		d.InputPerMillion = price.Input
+		d.OutputPerMillion = price.Output
+	}
+	if len(e.SupportedEfforts) > 0 {
+		d.Efforts = append([]string(nil), e.SupportedEfforts...)
+		d.Reasoning = true
+	}
+	if config.ReasoningProtocolForEntry(e) == config.ReasoningProtocolDeepSeek {
+		d.ToolCallReasoning = true
+		d.Reasoning = true
+	}
+	return d
+}
+
+// newSessionModel names the model a build starts on when its caller named none.
+// A caller-owned resolver answers first: its models are the only ones this
+// session reaches, and a default read from this machine's config can name one
+// it cannot run. A resolver that marks none leaves the config to answer.
+func newSessionModel(resolver provider.Resolver, cfg *config.Config) string {
+	if resolver != nil {
+		if ref := provider.DefaultRef(resolver.Catalog()); ref != "" {
+			return ref
+		}
+	}
+	if resolved, _, ok := cfg.ResolveNewSessionChatModel(); ok {
+		return resolved
+	}
+	return ""
 }
 
 func (r *LocalProviderResolver) Resolve(selection provider.Selection) (provider.Provider, error) {
@@ -86,8 +133,21 @@ func (LiveProviderResolver) current() *LocalProviderResolver {
 	return NewLocalProviderResolver(cfg, cfg.NetworkProxySpec())
 }
 
+// Catalog offers what this machine can answer with now. A provider without a
+// stored key is still declared, but every request the far side sent it would
+// fail here, so it stays out of the list that side picks from.
 func (r LiveProviderResolver) Catalog() []provider.Descriptor {
-	return r.current().Catalog()
+	cur := r.current()
+	if cur == nil {
+		return nil
+	}
+	var out []provider.Descriptor
+	for _, d := range cur.Catalog() {
+		if e, ok := cur.cfg.ResolveModel(d.Ref); ok && e.Configured() {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 func (r LiveProviderResolver) Resolve(selection provider.Selection) (provider.Provider, error) {
@@ -106,7 +166,7 @@ func resolveProvider(resolver provider.Resolver, cfg *config.Config, proxy netcl
 }
 
 // mergeSidecarProviders wraps the build's resolver with the extension-hosted
-// provider adapter (stage 7) whenever a started sidecar declared providers.
+// provider adapter whenever a started sidecar declared providers.
 // It does not install stream routers — call installSidecarStreamRouters after
 // commit so failed narrow rebuilds never leave adopted clients on a discarded
 // generation resolver.

@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"reasonix/internal/evidence"
+	"reasonix/internal/provider"
 )
 
 // sessionRuntime is the host state one conversation owns. Its lifetime sits
@@ -59,6 +60,9 @@ type sessionRuntime struct {
 	// across a conversation swap; see sessionCarryOver.
 	lastPrefixShape     PrefixShape
 	haveLastPrefixShape bool
+	// lastProviderSchemas is the tool surface the last request carried, so an
+	// estimate reports what was sent rather than what the registry holds.
+	lastProviderSchemas []provider.ToolSchema
 }
 
 // reset rebinds the runtime to a new conversation. Every field is named here or

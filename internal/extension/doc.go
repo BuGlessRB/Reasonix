@@ -12,16 +12,18 @@
 // The kernel exists so that shadowing, conflicts, and ordering stop being
 // emergent side effects of whichever discovery path ran last. Discovery still
 // lives in the existing packages (internal/skill, internal/command,
-// internal/hook, internal/tool, internal/plugin, internal/provider); the
-// adapters in adapters.go only wrap that discovery in the Contributor
-// interface. Winner rules are resolved here, once, identically for every
-// caller: a higher-tier scope shadows a lower one for the same canonical ID,
-// same-tier duplicates from different sources are hard conflicts instead of
-// silent overrides, and hooks/interceptors stay additive. Callers assembling
-// pre-kernel legacy resources (boot) can opt into ConflictCollect, which
-// records such conflicts on the snapshot's Diagnostics and keeps the
-// deterministic winner instead of failing the build; native extensions keep
-// the default ConflictFail.
+// internal/hook, internal/tool, internal/plugin, internal/provider), which
+// run it and hand the kernel the resolved records; adapters.go maps one such
+// record onto one Contribution. KindPrompt and KindTheme are declared in the
+// catalog but have no contributor: a plugin package's prompts and themes are
+// parsed by pluginpkg and reach no snapshot. Winner rules are resolved here,
+// once, identically for every caller: a higher-tier scope shadows a lower one
+// for the same canonical ID, same-tier duplicates from different sources are
+// hard conflicts instead of silent overrides, and hooks/interceptors stay
+// additive. Callers assembling pre-kernel legacy resources (boot) can opt
+// into ConflictCollect, which records such conflicts on the snapshot's
+// Diagnostics and keeps the deterministic winner instead of failing the
+// build; native extensions keep the default ConflictFail.
 //
 // A RuntimeSnapshot is immutable after Freeze: every accessor returns
 // defensive copies, so a snapshot can be shared across turns, subagents, and

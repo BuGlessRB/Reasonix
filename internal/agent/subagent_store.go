@@ -8,9 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -340,11 +341,7 @@ func (s *SubagentStore) CleanupStaleRunning() (int, error) {
 		parent.refs = append(parent.refs, ref)
 	}
 
-	parentIDs := make([]string, 0, len(parents))
-	for parentID := range parents {
-		parentIDs = append(parentIDs, parentID)
-	}
-	sort.Strings(parentIDs)
+	parentIDs := slices.Sorted(maps.Keys(parents))
 
 	now := time.Now().UTC()
 	cleaned := 0

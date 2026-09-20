@@ -13,9 +13,44 @@ export interface HistoryMessage {
   hostAuthored?: boolean;
   reasoning?: string;
   images?: number; // attachments on a user turn; an image-only one has no text
-  toolCalls?: { id: string; name: string; arguments?: string }[];
+  toolCalls?: HistoryToolCall[];
   toolCallId?: string;
   toolName?: string;
+  // The host's own account of a result that did not succeed. Without it a
+  // rebuilt card has only the words, which a tool's own output can imitate.
+  toolFailed?: boolean;
+  toolRefusalCode?: string;
+}
+
+// One call inside a history message. resolvedName/capabilityId say what a
+// stable proxy reached: name stays the provider-visible call, so a card built
+// without them reads use_capability where the live one read the capability.
+export interface HistoryToolCall {
+  id: string;
+  name: string;
+  arguments?: string;
+  resolvedName?: string;
+  capabilityId?: string;
+}
+
+// GET /todos as internal/serve writes it: the canonical task list, the latest
+// todo_write merged with every complete_step advance. Deriving it from the
+// transcript instead loses the advances and keeps the refused writes.
+// A tab the agent's browser has open. target is the browser's own id for the
+// page, which the window draws its view by; id is what the agent calls it.
+export interface BrowserTab {
+  id: string;
+  target: string;
+  url: string;
+  title: string;
+  active: boolean;
+}
+
+export interface HostTodo {
+  content: string;
+  status: string;
+  activeForm?: string;
+  level?: number;
 }
 
 // GET /checkpoints as internal/serve writes it: the snapshot the kernel took
@@ -40,12 +75,27 @@ export type RewindScope = "code" | "conversation" | "both";
 // turn also changed things outside the snapshot, typically via bash.
 // What POST /rewind/commit answers. transactionId is what undo needs, and
 // undoAvailable says whether the kernel can still reverse it.
+export interface RewindFileStage {
+  path: string;
+  phase: string;
+  action?: string;
+  error?: string;
+  compensated?: boolean;
+  compensateError?: string;
+}
+
 export interface RewindResult {
   ok?: boolean;
   transactionId?: string;
   undoAvailable?: boolean;
   deleted?: string[];
   written?: string[];
+  files?: RewindFileStage[];
+  conversationOk?: boolean;
+  error?: string;
+  conflicts?: RewindConflict[];
+  coverage?: string;
+  coverageGaps?: { reason: string; detail: string; tool?: string }[];
 }
 
 export interface RewindPlan {
@@ -79,7 +129,10 @@ export type ApprovalMode = "ask" | "auto" | "dontAsk" | "yolo";
 // it names is a question not worth asking. Old sessions still send it.
 export type Preset = "light" | "balanced" | "delivery";
 
-export type ApprovalVerdict = "once" | "always" | "deny";
+// What an answer authorises. "session" covers the calls after it until this
+// session ends; "always" also writes it down as a rule. Which of them the host
+// will honour rides on the request — see Approval.allowsSession/allowsPersist.
+export type ApprovalVerdict = "once" | "session" | "always" | "deny";
 
 // Shape of GET /status as internal/serve writes it. Anything the UI wants that
 // is not here has to be added on the Go side, not invented in the client.
@@ -194,7 +247,7 @@ export interface JobEntry {
 
 // The UI depends on this and nothing else. SsePort talks to internal/serve;
 // MockPort replays a fixture. Neither is allowed to leak transport details
-// upward, which is what keeps the same UI usable in a browser and in Wails.
+// upward, which is what keeps the same UI usable in a browser and in a shell.
 export interface SessionEntry {
   name: string;
   path: string;

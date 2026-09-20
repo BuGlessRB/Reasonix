@@ -60,7 +60,7 @@ func TestNewProviderScopesAnthropicDepthFieldsToDeclaredEndpoints(t *testing.T) 
 				Name: "relay", Kind: "anthropic", BaseURL: srv.URL, Model: "claude-opus-4-8",
 				Thinking: "adaptive", Effort: "max", ReasoningProtocol: tc.protocol,
 			}
-			p, err := NewProvider(entry)
+			p, err := newProviderForTest(entry)
 			if err != nil {
 				t.Fatalf("NewProvider: %v", err)
 			}

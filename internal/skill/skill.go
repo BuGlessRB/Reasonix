@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -327,11 +328,7 @@ func bindAllowedTools(refs []string, bindings []tool.MCPBinding) []string {
 			// "*" keeps all of its prior tools. Add only canonical MCP names the
 			// upstream/Claude pattern itself cannot match in Reasonix.
 			appendOne(ref)
-			names := make([]string, 0, len(matches))
-			for name := range matches {
-				names = append(names, name)
-			}
-			sort.Strings(names)
+			names := slices.Sorted(maps.Keys(matches))
 			for _, name := range names {
 				if matched, err := path.Match(ref, name); err != nil || !matched {
 					appendOne(name)
@@ -468,7 +465,7 @@ func normalizePluginPaths(paths map[string][]string) map[string][]string {
 			}
 			out[key] = append(out[key], plugin)
 		}
-		sort.Strings(out[key])
+		slices.Sort(out[key])
 	}
 	return out
 }
@@ -1138,7 +1135,7 @@ func loadBodyWithReferences(skillPath, body string) string {
 	if len(names) == 0 {
 		return body
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	var b strings.Builder
 	b.WriteString(body)
 	for _, n := range names {
@@ -1182,7 +1179,7 @@ func loadBodyWithScripts(skillPath, body string) string {
 	if len(names) == 0 {
 		return body
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	var b strings.Builder
 	b.WriteString(body)
 	b.WriteString("\n\n## Scripts\n\nRun a listed script with bash using the exact path shown below; quote the path if it contains spaces.\n\n")

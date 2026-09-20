@@ -1,6 +1,6 @@
 package evidence
 
-import "sort"
+import "slices"
 
 // ChildEvidenceSummary is the ordered, host-observable evidence a sub-agent
 // produced. Parents merge these receipts so delegated writes, reads, commands,
@@ -36,7 +36,7 @@ func (s ChildEvidenceSummary) MutationPaths() []string {
 			out = append(out, p)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -58,7 +58,7 @@ func (s ChildEvidenceSummary) EvidencePaths() []string {
 			out = append(out, p)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

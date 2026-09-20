@@ -5,7 +5,7 @@
 // function of the error and the installed catalogue.
 import { beforeEach, describe, expect, it } from "vitest";
 import { boot, STORAGE } from "./index";
-import { reason } from "./kernel";
+import { PROVIDER_EDIT_DISABLED, codes, reason } from "./kernel";
 import { HttpError } from "../port/port";
 
 // Pinned, not defaulted: with nothing stored the window follows the machine, so
@@ -35,6 +35,14 @@ describe("what a reader is told a refusal was", () => {
     const before = reason(coded("inbox item not found", "inbox.not_found"));
     const after = reason(coded("no such entry in this session's inbox", "inbox.not_found"));
     expect(after).toBe(before);
+  });
+
+  // The pane map is one window's, so a holder in another process leaves nothing
+  // in this window to close. The pid is the only actionable fact.
+  it("names the process holding a conversation open", () => {
+    const said = reason(coded("another process holds this conversation open", "session.in_use_by", { pid: 77941, host: "mac-mini.local" }));
+    expect(said).toContain("77941");
+    expect(said).toContain("mac-mini.local");
   });
 
   it("fills a code's sentence from the params, not from the kernel's prose", () => {
@@ -75,5 +83,14 @@ describe("what a reader is told a refusal was", () => {
     expect(reason(coded("inbox item not found", "inbox.not_found"))).toBe(
       "That entry is no longer in the pending queue",
     );
+  });
+});
+
+// A code a caller branches on is spelled twice: once as the exported constant,
+// once as a literal key the kernel's parity guard can read as text. Nothing in
+// either language notices when one of them moves.
+describe("codes a caller branches on", () => {
+  it("spells the provider refusal the same in the constant and the catalogue", () => {
+    expect(codes[PROVIDER_EDIT_DISABLED]).toBeTruthy();
   });
 });

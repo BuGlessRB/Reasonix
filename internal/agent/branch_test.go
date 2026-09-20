@@ -12,6 +12,15 @@ import (
 	"reasonix/internal/testenv"
 )
 
+// touchBranchMeta bumps only the activity timestamp, the one field these
+// listing tests vary.
+func touchBranchMeta(sessionPath string) error {
+	return UpdateBranchMeta(sessionPath, false, func(m *BranchMeta) error {
+		m.UpdatedAt = time.Now().UTC()
+		return nil
+	})
+}
+
 func TestBranchMetaCrossProcessReadModifyWrite(t *testing.T) {
 	if os.Getenv("REASONIX_META_LOCK_HELPER") == "1" {
 		path := os.Getenv("REASONIX_META_LOCK_PATH")
@@ -19,7 +28,7 @@ func TestBranchMetaCrossProcessReadModifyWrite(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		meta, err := EnsureBranchMetaLocked(path)
+		meta, err := ensureBranchMetaUnlocked(path)
 		if err != nil {
 			unlock()
 			t.Fatal(err)
@@ -132,7 +141,7 @@ func TestBranchMetaRoundTripAndList(t *testing.T) {
 	if err := root.Save(rootPath); err != nil {
 		t.Fatal(err)
 	}
-	if err := TouchBranchMeta(rootPath); err != nil {
+	if err := touchBranchMeta(rootPath); err != nil {
 		t.Fatal(err)
 	}
 
@@ -206,7 +215,7 @@ func TestListBranchesSkipsCleanupPending(t *testing.T) {
 	if err := visible.Save(visiblePath); err != nil {
 		t.Fatal(err)
 	}
-	if err := TouchBranchMeta(visiblePath); err != nil {
+	if err := touchBranchMeta(visiblePath); err != nil {
 		t.Fatal(err)
 	}
 
@@ -242,7 +251,7 @@ func TestSessionInFlightTurnMetaRoundTrip(t *testing.T) {
 	if err := sess.Save(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := TouchBranchMeta(path); err != nil {
+	if err := touchBranchMeta(path); err != nil {
 		t.Fatal(err)
 	}
 	before, ok, err := LoadBranchMeta(path)

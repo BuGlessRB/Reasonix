@@ -1,9 +1,8 @@
 // What a window can do and a page cannot, behind one interface so nothing in
-// the app learns which shell it is running in. Wails publishes bound methods on
-// window.go; Electron exposes a preload bridge; a browser tab has neither, and
-// answers for itself.
+// the app learns which shell it is running in. Electron exposes a preload
+// bridge; a browser tab has none, and answers for itself.
 
-export type Shell = "wails" | "electron" | "browser";
+export type Shell = "electron" | "browser";
 
 export interface HostInfo {
   shell: Shell;
@@ -22,7 +21,7 @@ export interface HostPort {
   closeWindow(): void;
   openExternal(url: string): void;
   /** Where dropped files live. Empty where the shell cannot say — a browser
-   *  tab never learns a path, and Wails reports them on its own channel. */
+   *  tab never learns a path. */
   pathsForFiles(files: File[]): string[];
   /** Put text on disk where the user picks. null means this shell has no save
    *  surface at all; "" means they dismissed the dialog, which is an answer. */
@@ -33,7 +32,25 @@ export interface HostPort {
    *  to open: the shell owns the dialog, the kernel owns which workspace runs,
    *  so the page carries one to the other. */
   pickFolder(startIn: string): Promise<string | null>;
+  /** Whether this shell draws the agent's browser pages inside the window. */
+  drawsBrowserViews(): boolean;
+  /** Draw one of the agent's pages over rect, in on-screen coordinates, and
+   *  hide every other; hideBrowserView puts them all away again. */
+  showBrowserView(target: string, rect: ViewRect): void;
+  hideBrowserView(): void;
+  controlBrowserView(target: string, action: BrowserControl): void;
+  /** Load what the person typed. false when the shell refused the address. */
+  navigateBrowserView(target: string, address: string): Promise<boolean>;
 }
+
+export interface ViewRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type BrowserControl = "back" | "forward" | "reload" | "stop";
 
 // The preload bridge. Verbs only: the origin the page was loaded from and the
 // credential that opens it never cross it.
@@ -50,30 +67,16 @@ interface ElectronBridge {
   saveText(name: string, content: string): Promise<string>;
   saveBytes(name: string, bytes: Uint8Array): Promise<string>;
   pickFolder(startIn: string): Promise<string>;
-}
-
-interface WailsShell {
-  runtime?: { Environment?: () => Promise<{ platform?: string }> };
-  go?: {
-    main?: {
-      App?: {
-        MinimiseWindow?: () => Promise<void>;
-        ToggleMaximiseWindow?: () => Promise<void>;
-        IsWindowMaximised?: () => Promise<boolean>;
-        CloseWindow?: () => Promise<void>;
-        OpenExternal?: (url: string) => Promise<void>;
-        SaveText?: (name: string, content: string) => Promise<string>;
-        PickWorkspace?: () => Promise<string>;
-      };
-    };
-  };
+  showBrowserView?(target: string, rect: ViewRect): Promise<void>;
+  hideBrowserView?(): Promise<void>;
+  controlBrowserView?(target: string, action: string): Promise<void>;
+  navigateBrowserView?(target: string, address: string): Promise<boolean>;
 }
 
 const bridge = () => (window as unknown as { reasonixHost?: ElectronBridge }).reasonixHost;
-const wails = () => (window as unknown as WailsShell).go?.main?.App;
 
-// Electron reports the Go name for two of the three; the page has always spelled
-// them the way Wails does, and one spelling is what keeps a CSS selector honest.
+// Electron reports the platform under Node's names; the page spells them the
+// way Go does, and one spelling is what keeps a CSS selector honest.
 function normalise(platform: string): string {
   if (platform === "win32") return "windows";
   return platform;
@@ -117,51 +120,24 @@ class ElectronHost implements HostPort {
   pickFolder(startIn: string) {
     return this.api.pickFolder(startIn);
   }
-}
-
-class WailsHost implements HostPort {
-  async describe(): Promise<HostInfo> {
-    const env = await (window as unknown as WailsShell).runtime?.Environment?.().catch(() => undefined);
-    return { shell: "wails", platform: normalise(env?.platform ?? ""), titleBar: true };
+  // A shell older than the verbs has no views to draw, and says so by lacking them.
+  drawsBrowserViews() {
+    return typeof this.api.showBrowserView === "function";
   }
-  minimiseWindow() {
-    void wails()?.MinimiseWindow?.();
+  showBrowserView(target: string, rect: ViewRect) {
+    void this.api.showBrowserView?.(target, rect);
   }
-  toggleMaximiseWindow() {
-    void wails()?.ToggleMaximiseWindow?.();
+  hideBrowserView() {
+    void this.api.hideBrowserView?.();
   }
-  isWindowMaximised() {
-    return wails()?.IsWindowMaximised?.().catch(() => false) ?? Promise.resolve(false);
+  controlBrowserView(target: string, action: BrowserControl) {
+    void this.api.controlBrowserView?.(target, action);
   }
-  closeWindow() {
-    void wails()?.CloseWindow?.();
-  }
-  openExternal(url: string) {
-    void wails()?.OpenExternal?.(url);
-  }
-  // The paths arrive on the shell's own drop channel instead, which is why
-  // nothing here can answer for a file the page is holding.
-  pathsForFiles() {
-    return [];
-  }
-  async saveText(name: string, content: string) {
-    return (await wails()?.SaveText?.(name, content)) ?? null;
-  }
-  // Packing and saving are one binding in this shell; the caller reaches it
-  // rather than assembling the bytes itself.
-  saveBytes() {
-    return Promise.resolve(null);
-  }
-  // The Go side titles the panel and opens it on the running workspace, which
-  // it reads from the kernel directly, so startIn is the page telling this
-  // shell something it already knows.
-  async pickFolder() {
-    return (await wails()?.PickWorkspace?.()) ?? null;
+  navigateBrowserView(target: string, address: string) {
+    return this.api.navigateBrowserView?.(target, address) ?? Promise.resolve(false);
   }
 }
 
-// A tab has no window of its own to drive: the chrome that would call these is
-// not rendered there, and a link opens the way a link always has.
 class BrowserHost implements HostPort {
   describe() {
     return Promise.resolve({ shell: "browser" as const, platform: "", titleBar: false });
@@ -187,12 +163,20 @@ class BrowserHost implements HostPort {
   pickFolder() {
     return Promise.resolve(null);
   }
+  drawsBrowserViews() {
+    return false;
+  }
+  showBrowserView() {}
+  hideBrowserView() {}
+  controlBrowserView() {}
+  navigateBrowserView() {
+    return Promise.resolve(false);
+  }
 }
 
 function pick(): HostPort {
   const api = bridge();
   if (api) return new ElectronHost(api);
-  if ((window as unknown as WailsShell).runtime?.Environment) return new WailsHost();
   return new BrowserHost();
 }
 

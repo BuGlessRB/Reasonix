@@ -3,7 +3,7 @@ package serve
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/eventwire"
@@ -154,7 +154,7 @@ func oneOpenCall(open map[string]bool) string {
 		ids = append(ids, id)
 	}
 	if len(ids) != 1 {
-		sort.Strings(ids)
+		slices.Sort(ids)
 		return fmt.Sprintf("%d open: %s", len(ids), strings.Join(ids, ","))
 	}
 	return ids[0]

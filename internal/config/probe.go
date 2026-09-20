@@ -196,10 +196,18 @@ func describe(baseURL string, s shape, chat []string) Probe {
 	return p
 }
 
+// inferVisionModelsForEndpoint answers from the curated preset covering this
+// address wherever there is one. Which models read images is a fact about the
+// vendor and not about how it spells a name: the spelling misses every Kimi,
+// Qwen, MiniMax and Claude model these presets declare. Only an undeclared
+// address falls back to it.
 func inferVisionModelsForEndpoint(baseURL, kind string, models []string) []string {
-	inferred := InferVisionModels(models)
-	out := make([]string, 0, len(inferred))
-	for _, model := range inferred {
+	candidates, declared := declaredVisionModels(baseURL, models)
+	if !declared {
+		candidates = InferVisionModels(models)
+	}
+	out := make([]string, 0, len(candidates))
+	for _, model := range candidates {
 		entry := &ProviderEntry{Kind: kind, BaseURL: baseURL, Model: model}
 		if CanConfigureVision(entry) {
 			out = append(out, model)
@@ -216,4 +224,34 @@ func chatModelsOf(models []string) []string {
 		}
 	}
 	return out
+}
+
+// declaredVisionModels is what the presets for this address say reads images,
+// narrowed to the models on offer. Matched on the address, not the protocol: a
+// vendor serving one catalog over two endpoint shapes has not changed which of
+// its models can see. The second return tells "these presets state none" from
+// "no preset covers this address".
+func declaredVisionModels(baseURL string, models []string) ([]string, bool) {
+	declared, found := map[string]bool{}, false
+	for _, preset := range CuratedProviderPresets() {
+		for _, entry := range preset.Entries {
+			if normalizedBaseURLForMigration(entry.BaseURL) != normalizedBaseURLForMigration(baseURL) {
+				continue
+			}
+			found = true
+			for _, model := range entry.VisionModels {
+				declared[model] = true
+			}
+		}
+	}
+	if !found {
+		return nil, false
+	}
+	out := make([]string, 0, len(declared))
+	for _, model := range models {
+		if declared[model] {
+			out = append(out, model)
+		}
+	}
+	return out, true
 }

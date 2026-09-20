@@ -330,7 +330,7 @@ func appendClaudeMCPFile(root string, manifest *Manifest) ([]string, []Compatibi
 	for name := range raw.MCPServers {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	var warnings []string
 	var issues []CompatibilityIssue
 	for _, displayName := range names {
@@ -551,6 +551,6 @@ func uniqueSorted(in []string) []string {
 			out = append(out, value)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }

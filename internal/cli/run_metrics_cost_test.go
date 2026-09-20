@@ -23,7 +23,7 @@ func quote(usd, cny string) billing.CostQuote {
 		Selected: &selected, BillingMode: "payg", Estimated: true,
 		CostComplete: true, DisplayComplete: true, Complete: true,
 		DisplayStatus: "matched", AggregateMode: "single_currency",
-		ModelRef: "deepseek/deepseek-v4-flash", UsageSource: "executor",
+		ModelRef: "deepseek/deepseek-flash", UsageSource: "executor",
 		PricingFingerprint: "5f35aab018a3af3b", CatalogSource: "https://example.test/pricing",
 	}
 }

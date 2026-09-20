@@ -2,12 +2,20 @@ const ARG_KEYS = ["command", "path", "file_path", "pattern", "query", "url", "de
 
 export function shortArgs(raw: string) {
   if (!raw) return "";
-  try {
-    const v = JSON.parse(raw);
+  const pick = (o: unknown): string => {
+    if (!o || typeof o !== "object") return "";
+    const rec = o as Record<string, unknown>;
     for (const k of ARG_KEYS) {
-      if (typeof v[k] === "string" && v[k]) return v[k].replace(/\s+/g, " ").slice(0, 96);
+      const v = rec[k];
+      if (typeof v === "string" && v) return v.replace(/\s+/g, " ").slice(0, 96);
     }
     return "";
+  };
+  try {
+    const v = JSON.parse(raw);
+    // A stable proxy nests the real call under `arguments`, which its own
+    // schema declares. Reading only the outer object describes the proxy.
+    return pick(v) || pick((v as Record<string, unknown>)?.arguments);
   } catch {
     // A model occasionally emits JSON with an unescaped quote inside a string.
     // Spilling the first 96 characters of that is not "what this call touched",

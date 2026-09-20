@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -20,7 +20,7 @@ func runTrajMode(dir string) (string, error) {
 	if len(paths) == 0 {
 		return "", fmt.Errorf("no *.trajectory.jsonl files under %s", dir)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 
 	var b strings.Builder
 	var results []result

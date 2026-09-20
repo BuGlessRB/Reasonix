@@ -1,4 +1,4 @@
-import type { ContextBreakdown, ShellOption, ShellSettings } from "./port";
+import type { CompactionSettings, ContextBreakdown, ShellOption, ShellSettings } from "./port";
 import { MockExtensions } from "./mock_ext";
 
 // The interpreter half of the fixture. It stands on a Windows host because that
@@ -31,18 +31,42 @@ const POWERSHELL: ShellOption = {
 
 export class MockShell extends MockExtensions {
   private ctx: ContextBreakdown = CONTEXT;
+  // Stored, not resolved: zero is the default and negative retires the bound,
+  // which is the distinction the three choices are made of.
+  private softLimit = 0;
 
   async context(): Promise<ContextBreakdown> {
     return { ...this.ctx };
+  }
+
+  // The gauge and the settings sheet read the same pair here, because the
+  // kernel has only one: a fixture answering 128k to one and 1M to the other
+  // draws a session no kernel can produce.
+  async compaction(): Promise<CompactionSettings> {
+    return {
+      soft_limit_tokens: this.softLimit,
+      default_soft_limit: DEFAULT_SOFT_LIMIT,
+      ratio: RATIO,
+      context_window: this.ctx.window,
+      trigger: this.ctx.compact_at,
+      path: "~/.reasonix/config.toml",
+    };
+  }
+
+  // The kernel rebuilds on this and the gauge moves with it, so the fixture
+  // moves both: a bound that saves without changing where the session folds is
+  // the one failure this editor has to be developed against.
+  async saveCompaction(softLimitTokens: number): Promise<CompactionSettings> {
+    this.softLimit = softLimitTokens;
+    this.ctx = { ...this.ctx, ...bounds(this.ctx.window, softLimitTokens) };
+    return this.compaction();
   }
 
   // The kernel rebuilds on this and answers with the fresh gauge; here the
   // window is simply the one that was declared, which is what the panel needs
   // to be developed against a source that reports none.
   async setContextWindow(window: number): Promise<ContextBreakdown> {
-    // The fold point moves with the window, so a mock that changed one and not
-    // the other would draw a pair the kernel can never produce.
-    this.ctx = { ...this.ctx, window, compact_at: Math.min(Math.round(window * 0.85), 160000) };
+    this.ctx = { ...this.ctx, window, ...bounds(window, this.softLimit) };
     return { ...this.ctx };
   }
 
@@ -70,4 +94,20 @@ export class MockShell extends MockExtensions {
 
 // 够把分段条和悬停面板画出来的一份构成：工具定义比对话本身还大，正是这个面板
 // 要让人看见的那种情况。
-const CONTEXT: ContextBreakdown = { used: 24800, window: 128000, compact_at: 108800, system: 5200, tools: 7400, user: 1800, reply: 3100, output: 7300 };
+const RATIO = 0.85;
+const DEFAULT_SOFT_LIMIT = 160000;
+
+// Which of the two bounds fires, worked out once. The pair is the kernel's
+// rule, and a fixture with its own copy of it drifts into states the product
+// cannot reach — which is what a fixture exists to rule out.
+function bounds(window: number, soft: number) {
+  const capacity = Math.round(window * RATIO);
+  const economic = soft < 0 ? 0 : soft || DEFAULT_SOFT_LIMIT;
+  const compact_at = economic > 0 && economic < capacity ? economic : capacity;
+  return { compact_at, capacity_at: capacity, boundary: compact_at < capacity ? "economic" : "capacity" };
+}
+
+const CONTEXT: ContextBreakdown = {
+  used: 24800, window: 128000, ...bounds(128000, 0),
+  system: 5200, tools: 7400, user: 1800, reply: 3100, output: 7300,
+};

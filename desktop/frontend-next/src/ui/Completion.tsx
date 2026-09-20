@@ -201,12 +201,12 @@ export function CompletionMenu({ id, items, active, kind, query, kb, onPick, onH
                 </span>
                 {it.hint && <span className="ds">{it.hint}</span>}
               </span>
-              {it.kind && <span className="rt">{KIND[it.kind] ?? it.kind}</span>}
+              {it.kind && <span className="rt">{t(KIND[it.kind] ?? it.kind)}</span>}
             </button>
           );
         })}
       </div>
-      <div className="mkeys">{HINT[kind] ?? HINT.slash}</div>
+      <div className="mkeys">{t(HINT[kind] ?? HINT.slash)}</div>
     </div>
   );
 }

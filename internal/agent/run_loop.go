@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"reasonix/internal/agentpreset"
@@ -267,7 +268,8 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: contextBudgetNoticeSummary(a.ContextBudget())})
 		}
 
-		schemas := a.svc.tools.Schemas()
+		schemas := a.svc.tools.ProviderSchemas(ctx)
+		a.sess.lastProviderSchemas = schemas
 		prefixShape := a.capturePrefixShape(schemas)
 		prevPrefixShape := a.sess.lastPrefixShape
 		if !a.sess.haveLastPrefixShape {
@@ -519,9 +521,14 @@ func (a *Agent) emitStreamAttempt(id string, action event.StreamAttemptAction, a
 	})
 }
 
+// streamAttemptSeq makes attempt ids unique by construction. A clock reading is
+// not: two rounds started within one tick of a coarse clock (seen on Windows)
+// shared an id, and events keyed by it landed on the wrong round.
+var streamAttemptSeq atomic.Uint64
+
 func newStreamAttemptID(attempt int) string {
 	// Host-local only: never persisted, never sent to the model.
-	return fmt.Sprintf("sa-%d-%d", attempt, time.Now().UnixNano())
+	return fmt.Sprintf("sa-%d-%d", attempt, streamAttemptSeq.Add(1))
 }
 
 // streamRetrySleep is the body-retry backoff. Tests replace it with a no-op so
@@ -534,7 +541,7 @@ func sleepStreamRetryBackoff(ctx context.Context, attempt int) bool {
 	// attempt is 1-based for the failed attempt about to be retried.
 	shift := min(max(attempt-1, 0), 4)
 	base := time.Duration(1<<shift) * 500 * time.Millisecond
-	jitter := time.Duration(rand.Intn(250)) * time.Millisecond
+	jitter := time.Duration(rand.IntN(250)) * time.Millisecond
 	timer := time.NewTimer(base + jitter)
 	defer timer.Stop()
 	select {
@@ -661,6 +668,11 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 		}
 		if i < len(batch.executions) {
 			msg.ToolExecution = toProviderToolExecution(batch.executions[i])
+		}
+		if i < len(batch.outcomes) {
+			if o := batch.outcomes[i]; o.errMsg != "" || o.blocked || o.refusalCode != "" {
+				msg.ToolFailure = &provider.ToolFailure{RefusalCode: o.refusalCode, Blocked: o.blocked}
+			}
 		}
 		a.sess.conversation.Add(msg)
 	}

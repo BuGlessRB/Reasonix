@@ -6,15 +6,17 @@ export function GuardianCard({ g }: { g: Guardian }) {
   const risk = g.risk_level ?? "unknown";
   const riskLabel = risk === "low" ? t("低风险") : risk === "medium" ? t("中风险") : risk === "high" ? t("高风险") : t("风险未知");
   return (
-    <div className="call">
+    <div className="call" data-k="host">
       <div className="g">
         <Sym glyph="⊛" />
         <span className="line" />
       </div>
       <div className="c">
         <div className="hl">
-          <span className="nm">Guardian</span>
-          <span className="tag">guardian_assessment</span>
+          {/* tag 这一格别的卡放的是 git-bash、security-review 这种人能读的东西。
+              事件名属于轨迹，不属于这里。 */}
+          <span className="nm">{t("守卫复核")}</span>
+          <span className="tag">{t("主机")}</span>
           <span className="arg">{g.subject}</span>
         </div>
         <div className="out">

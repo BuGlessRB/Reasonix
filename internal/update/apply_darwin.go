@@ -243,8 +243,6 @@ func reportMacHandoffStartupFailure(cfg macUpdateHandoffConfig, phase string, er
 	})
 }
 
-// maybeRunMacUpdateHandoff handles the detached self-update child before Wails
-// or single-instance setup runs.
 // MaybeRunMacHandoff runs the detached bundle swap when this process was
 // re-executed as the handoff child, and reports that it handled the run. Every
 // host's main must call it before startup, or the child would boot a second UI.

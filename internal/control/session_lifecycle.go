@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/browser"
 	"reasonix/internal/event"
 	"reasonix/internal/extension"
 	"reasonix/internal/extension/dispatch"
 	"reasonix/internal/guardian"
 	"reasonix/internal/provider"
+	"reasonix/internal/sessiontemp"
 )
 
 // SetOnSessionRecovered installs the ownership handoff invoked before the
@@ -59,8 +62,8 @@ func (c *Controller) NewSession() error {
 	// Claim the rotation gate for the whole snapshot-then-swap sequence. A bare
 	// `if c.gate.running` check released before Snapshot() left a window where a turn
 	// could start during the snapshot and then have its live session replaced by
-	// the SetSession below. Submit ("/new") and the bot gateway call this
-	// asynchronously, so the gate is load-bearing, not defensive.
+	// the SetSession below. Submit ("/new") calls this asynchronously, so the
+	// gate is load-bearing, not defensive.
 	if err := c.beginRotation(); err != nil {
 		return err
 	}
@@ -464,4 +467,163 @@ func (c *Controller) SessionPath() string {
 
 func (c *Controller) parentSessionID() string {
 	return agent.BranchID(c.SessionPath())
+}
+
+// beginRotation claims the session-rotation gate. It fails if a turn is running
+// or another rotation is already in progress, so the caller holds exclusive
+// rights to swap the executor session from the check here through endRotation.
+// This closes the TOCTOU window that a bare `if c.gate.running` check left open:
+// between that check and the actual SetSession, a turn could start and then be
+// yanked out from under the run loop.
+func (c *Controller) beginRotation() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.gate.active() {
+		return errTurnRunningRotation
+	}
+	if c.gate.rotating {
+		return errRotationInProgress
+	}
+	c.gate.rotating = true
+	return nil
+}
+
+func shouldRotateSessionTempOnResume(prevPath, nextPath string) bool {
+	prevPath = strings.TrimSpace(prevPath)
+	nextPath = strings.TrimSpace(nextPath)
+	if prevPath == "" || nextPath == "" {
+		return false
+	}
+	return filepath.Clean(prevPath) != filepath.Clean(nextPath)
+}
+
+// ReleaseResources stops plugin subprocesses and releases resources without
+// firing SessionEnd. Use it only when replacing the controller for the same
+// logical session.
+func (c *Controller) ReleaseResources() {
+	c.close(false, closeJobsWithGrace)
+}
+
+// Close stops plugin subprocesses and releases resources. A session that ever
+// started fires SessionEnd so a teardown hook runs.
+func (c *Controller) Close() {
+	c.close(true, closeJobsWithGrace)
+}
+
+// CloseAfterDestroy releases controller resources after the caller has already
+// begun session-specific job teardown. It avoids a second synchronous job grace
+// wait while still cancelling the manager root and reaping temporary artifacts
+// once every job goroutine finally exits.
+func (c *Controller) CloseAfterDestroy() {
+	c.close(true, closeJobsAsync)
+}
+
+func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
+	// Desktop tab lifecycles can race a rebind/model-switch/close on the same
+	// controller; make teardown idempotent so a duplicate Close cannot re-fire
+	// SessionEnd hooks or re-run cleanup. The first caller's jobsMode wins.
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		started := c.startedOnce
+		cancel := c.gate.cancel
+		// Seal turn admission and drop anything already parked: a parked turn
+		// must not start against a controller that is being torn down, and
+		// without the closed flag a submit landing after this critical
+		// section (while a running turn's TurnDone delivery is still in
+		// flight) would park again and start after teardown.
+		c.gate.closed = true
+		c.parkedTurns = nil
+		// A finishing-only controller no longer needs the delivery gate because
+		// closed seals every admission path. Keep running truthful until the
+		// foreground goroutine actually exits; clearing it here would report idle
+		// while tools and prompt waiters were still live.
+		c.gate.finishing = false
+		if cancel != nil {
+			c.gate.canceling = true
+		}
+		c.mu.Unlock()
+		if cancel != nil {
+			// clearAll deliberately does not signal waiters. Pair it with the
+			// foreground cancellation so approval/ask waits always unblock.
+			c.approval.clearAll()
+			cancel()
+		}
+		if fireSessionEnd && started {
+			c.hooks.SessionEnd(context.Background(), "other")
+			c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, c.SessionPath())
+		}
+		if c.jobs != nil {
+			switch jobsMode {
+			case closeJobsAsync:
+				c.jobs.CloseAsync()
+			default:
+				c.jobs.Close() // cancel any still-running background jobs
+			}
+		}
+		if c.cleanup != nil {
+			c.cleanup()
+		}
+		// Drop the Controller owner reference last so background job leases
+		// that outlive close still pin retired generations until they exit.
+		if c.sessionTemp != nil {
+			c.sessionTemp.Release()
+		}
+		if c.browser != nil {
+			c.browser.Release()
+		}
+	})
+}
+
+// adoptSessionResources takes an owner reference on what outlives one runtime
+// generation — the private temporary directory and the browser — reusing what a
+// hot rebuild hands over, so ReleaseResources/Close never race a replacement.
+func (c *Controller) adoptSessionResources(opts Options) {
+	c.sessionTemp = opts.SessionTemp
+	if c.sessionTemp == nil {
+		c.sessionTemp = sessiontemp.New()
+	}
+	c.sessionTemp.Retain()
+	if opts.BrowserSession != nil {
+		c.browser = opts.BrowserSession
+		c.browser.Retain()
+		c.browser.OnTabsChanged(func() { c.sink.Emit(event.Event{Kind: event.BrowserTabsChanged}) })
+	}
+}
+
+// BrowserTabs lists the agent's open tabs, none when it has no browser.
+func (c *Controller) BrowserTabs() []browser.TabInfo {
+	if c == nil || c.browser == nil {
+		return []browser.TabInfo{}
+	}
+	return c.browser.Tabs()
+}
+
+// BrowserSession is the agent's browser, which a rebuild hands to the
+// controller that replaces this one.
+func (c *Controller) BrowserSession() *browser.Session {
+	if c == nil {
+		return nil
+	}
+	return c.browser
+}
+
+// SessionTemp returns the logical-session private temporary directory manager.
+// Hot rebuilds pass this to the replacement Controller so the directory survives
+// model/settings swaps. Nil only when the Controller was constructed without one
+// (should not happen after New).
+func (c *Controller) SessionTemp() *sessiontemp.Manager {
+	if c == nil {
+		return nil
+	}
+	return c.sessionTemp
+}
+
+// rotateSessionTemp advances the private temporary generation so a new logical
+// session cannot see the previous session's temporary files. In-flight command
+// leases keep the old generation alive until they release.
+func (c *Controller) rotateSessionTemp() {
+	if c == nil || c.sessionTemp == nil {
+		return
+	}
+	c.sessionTemp.Rotate()
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -154,6 +155,78 @@ func TestCheckProviderModelUsesUnsavedEndpointAndKeyOnlyForTheProbe(t *testing.T
 	}
 	if _, ok := config.LoadForEdit(config.UserConfigPath()).Provider("not-saved"); ok {
 		t.Fatal("an inline probe persisted its temporary provider")
+	}
+}
+
+// A gateway that answers chat and refuses a tools array is the case a check
+// without tools calls available, leaving the failure to the first real turn.
+// The finding is established by the second attempt succeeding, never by
+// reading the refusal's words.
+func TestCheckProviderModelReportsAnEndpointThatRefusesTools(t *testing.T) {
+	var withTools, withoutTools int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), `"tools"`) {
+			withTools++
+			http.Error(w, `{"error":{"type":"invalid_request_error","message":"unsupported"}}`, http.StatusBadRequest)
+			return
+		}
+		withoutTools++
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"O\"}}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer upstream.Close()
+
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+	body := fmt.Sprintf(`{"name":"not-saved","model":"m","baseUrl":%q,"apiKey":"k","kind":"openai"}`, upstream.URL+"/v1")
+	resp := postProvider(t, srv.URL, "/providers/check/model", body)
+	defer resp.Body.Close()
+	var got providerModelCheck
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "unavailable" || got.Reason != "tools" {
+		t.Fatalf("check = %+v, want the tools refusal named", got)
+	}
+	// Two downgrades meet and each asks once: the provider drops stream_options,
+	// this check drops the tools array.
+	if withTools != 2 || withoutTools != 1 {
+		t.Fatalf("attempts with tools = %d, without = %d; want each downgrade asked once", withTools, withoutTools)
+	}
+}
+
+// An endpoint that refuses everything must not be reported as a tools problem,
+// and the retry must not turn one rejection into two findings.
+func TestCheckProviderModelKeepsRejectionWhenRemovingToolsDoesNotHelp(t *testing.T) {
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		http.Error(w, `{"error":{"type":"invalid_request_error","param":"model"}}`, http.StatusUnprocessableEntity)
+	}))
+	defer upstream.Close()
+
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+	body := fmt.Sprintf(`{"name":"not-saved","model":"m","baseUrl":%q,"apiKey":"k","kind":"openai"}`, upstream.URL+"/v1")
+	resp := postProvider(t, srv.URL, "/providers/check/model", body)
+	defer resp.Body.Close()
+	var got providerModelCheck
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "unavailable" || got.Reason != "rejected" {
+		t.Fatalf("check = %+v, want the model rejection kept", got)
+	}
+	// Bounded rather than doubling: the provider asks about stream_options once
+	// per endpoint however often a body is refused, so a gateway that rejects
+	// everything sees the probe, that one question, and the retry without tools.
+	if calls != 3 {
+		t.Fatalf("upstream calls = %d, want the probe and one question from each downgrade", calls)
 	}
 }
 

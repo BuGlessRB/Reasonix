@@ -51,14 +51,7 @@ var modelReasoningCapabilities = map[string]modelReasoningCapability{
 	// Windows are the ones already stated for these models in the shipped
 	// entries; carrying them by model is what lets a gateway serving the same
 	// model inherit the ceiling instead of resolving to nothing.
-	"deepseek-v4-flash": {
-		Protocol:      ReasoningProtocolDeepSeek,
-		VendorHost:    "api.deepseek.com",
-		Levels:        []string{"disabled", "low", "high", "max"},
-		Default:       "high",
-		Aliases:       map[string]string{"xhigh": "high"},
-		ContextWindow: 1_000_000,
-	},
+	DeepSeekFlashModel: deepSeekFlashCapability(),
 	"deepseek-v4-pro": {
 		Protocol:      ReasoningProtocolDeepSeek,
 		VendorHost:    "api.deepseek.com",
@@ -66,23 +59,32 @@ var modelReasoningCapabilities = map[string]modelReasoningCapability{
 		Default:       "high",
 		ContextWindow: 1_000_000,
 	},
-	// Vision, measured 2026-08-21: the docs say nothing about reasoning, but the
-	// endpoint answers this model exactly as it answers flash — same vocabulary,
-	// same rejections, reasoning_content throughout. So it carries flash's ladder.
-	"deepseek-v4-flash-vision-exp": {
-		Protocol:      ReasoningProtocolDeepSeek,
-		VendorHost:    "api.deepseek.com",
-		Levels:        []string{"disabled", "low", "high", "max"},
-		Default:       "high",
-		Aliases:       map[string]string{"xhigh": "high"},
-		ContextWindow: 1_000_000,
-	},
+	// The retired flash names are the same model under an old id, so they carry
+	// the same ladder rather than resolving to nothing on a gateway still asked
+	// by one of them.
+	"deepseek-v4-flash":            deepSeekFlashCapability(),
+	"deepseek-v4-flash-vision-exp": deepSeekFlashCapability(),
 	// GPT-5.6, measured 2026-08-20: the endpoint refuses "minimal" by naming the
 	// model, though the generic API vocabulary carries it. Keyed by model so a
 	// gateway serving them under its own name inherits the ladder.
 	"gpt-5.6-luna":  gpt56Capability(),
 	"gpt-5.6-sol":   gpt56Capability(),
 	"gpt-5.6-terra": gpt56Capability(),
+}
+
+// deepSeekFlashCapability is the flash ladder, measured 2026-09-13: the endpoint
+// names its own enum low|medium|high|xhigh|ultra|max in a 400, rejects minimal
+// and none outright, and stops thinking only for thinking.type=disabled — so
+// "disabled" is a level of ours and the aliases carry the rest onto the enum.
+func deepSeekFlashCapability() modelReasoningCapability {
+	return modelReasoningCapability{
+		Protocol:      ReasoningProtocolDeepSeek,
+		VendorHost:    "api.deepseek.com",
+		Levels:        []string{"disabled", "low", "high", "max"},
+		Default:       "high",
+		Aliases:       map[string]string{"minimal": "low", "medium": "high", "xhigh": "high", "ultra": "max"},
+		ContextWindow: 1_000_000,
+	}
 }
 
 func gpt56Capability() modelReasoningCapability {

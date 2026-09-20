@@ -14,9 +14,9 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
 - Layering (enforced): utility packages import nothing under `reasonix/` except
   one another — that layer is closed, so a leaf reaching a leaf drags no graph
   along, while refusing it leaves one judgement copied into several of them; only
-  the frontends `cli`, `serve`, `acp`, `bot`, `botruntime`, `boot` and the hosts
-  `cmd/`, `desktop/` may import `control`; nothing below a frontend may import
-  one. The declared sets live in `tools/repolint/layers.go`.
+  the frontends `cli`, `serve`, `acp`, `boot` and the hosts `cmd/`, `desktop/`
+  may import `control`; nothing below a frontend may import one. The declared
+  sets live in `tools/repolint/layers.go`.
 - Subagent delegation keeps five concepts apart: a profile says how a worker
   thinks, `TaskSpec` what this call wants, `CapabilityGrant` what it may touch,
   `ContextRequest` what it starts from, `SchedulerPolicy` when it runs. Put a
@@ -134,6 +134,27 @@ Default is none — the code is the truth. Write one only when the **why** is
 non-obvious: a hidden constraint, a workaround anchored to something verifiable,
 an invariant the type system cannot express, or an external-protocol quirk.
 
+A comment states the constraint that holds now. It does not narrate how the code
+got here: a reader who has never seen an earlier version must lose nothing, and
+past tense about this code's own behaviour is the tell — an external protocol's
+history is not. "Ids alone do not answer it" is the rule; "ids alone were the
+wrong question, so the list went on reading as the model wrote it" is the
+incident behind the rule, and the incident belongs in the commit message. This
+outranks the surrounding style: much of the tree reads as prose and none of it
+is the standard. No gate reads register — telling narrative from a statement of
+constraint needs a phrase table, which is the one thing this repo does not
+build — so this rule is held by review.
+
+- **Stylesheets carry none.** A rule's selector and its declarations are the
+  whole statement. What a `.css` comment would have said goes to whichever of
+  two places can act on it: a constraint a component has to honour belongs in
+  that component, and a decision about the medium itself — a measured colour, a
+  layout mechanic, why the obvious rule is the wrong one — belongs in the
+  stylesheet's companion document (`src/styles/TOKENS.md`, `LAYOUT.md`), which
+  is read end to end rather than met 600 times as an aside.
+- **English, always** — every comment, in every other language the tree is
+  written in. A codebase whose commentary is half one language reads as two
+  codebases, and the half a given reader cannot read is the half that rots.
 - Declaration doc: ≤5 lines. Package comment: ≤8 lines, or ≤40 in a `doc.go`.
 - Every other comment: ≤3 lines. Struct-field and trailing `//`: 1 line.
 - Never: restatements of the code, phase/stage narrative, incident or
@@ -143,13 +164,13 @@ an invariant the type system cannot express, or an external-protocol quirk.
   their length tracks how many cases they cover, not how many concerns they
   carry, so splitting one only scatters a subject's table across files.
 
-`go run ./tools/repolint` enforces all of it against a ratchet baseline: recorded
-debt is tolerated, anything new fails CI. Never widen the baseline to land a
-change — fix the code. `-update` lowers budgets freely and refuses to raise one
-without `-allow-widen`, so carrying debt through a rename or an extraction is
-asked for in the command and justified in the PR. A clean run also reports
-budget the tree stopped using: it is only reclaimed by an `-update`, and until
-then it is room a file can grow back into.
+`go run ./tools/repolint` enforces the budgets above against a ratchet baseline:
+recorded debt is tolerated, anything new fails CI. Never widen the baseline to
+land a change — fix the code. `-update` lowers budgets freely and refuses to
+raise one without `-allow-widen`, so carrying debt through a rename or an
+extraction is asked for in the command and justified in the PR. A clean run also
+reports budget the tree stopped using: it is only reclaimed by an `-update`, and
+until then it is room a file can grow back into.
 
 ## Context projection
 
@@ -206,6 +227,44 @@ other belong in the same round: several reads, edits to different files, a check
 after the edit that enables it. Several edits to the *same* file are one
 `multi_edit` — it applies them against each other in memory and rewrites the
 file only if all of them land, so a failure midway leaves nothing half-edited.
+
+## Vendor rates
+
+Official list prices live in one place: `officialRates` in
+`internal/billing/rates.go`, oldest generation first, the last being what a
+model charges today. A price change is an **append, never an edit** — the
+superseded rate is what lets an installed config be recognised as holding one
+of ours and brought forward, instead of quoting a retired rate for the rest of
+its life. `config` reads these through `billing.CurrentRate` and
+`SupersededRates` and restates none of them; a table written twice is one that
+drifts, which is how a vendor's USD rate ended up published on one side only.
+
+`make pricecheck` reads each vendor's own page and compares it against that
+table, and reports how long ago a person last confirmed each one. It reaches
+the network, so it stays out of `make lint` and out of CI: run it before
+touching a rate and when a vendor announces a change. A page it cannot read
+exits non-zero — unread is its own verdict and never counts as agreement.
+
+## Curated presets
+
+A preset changing shape reaches the installs that already have the old one
+through `shippedPresets` in `internal/config/preset_upgrade.go`: one declared
+shape per generation, and one upgrade that brings a matching entry forward. The
+guard is the whole shape — catalog, window, default — because an entry holding
+what we shipped is ours to move and anything else its user curated.
+
+A preset is also what settles which of its models read images. Probing an
+address a preset covers answers from that declaration, because reading a name
+misses every Kimi, Qwen, MiniMax and Claude model they declare and `deepseek-
+flash` spells nothing at all; the spelling is the last resort for an address
+nothing has declared, and stays a correctable suggestion rather than a claim.
+
+Three distinctions are load-bearing, and each was a separate migration function
+before they were written down. A window the shape did not name is the user's,
+so only a shape identified by its window moves one. `vision_models` **narrows**,
+so an upgrade marks only the models it adds and only where the preset says they
+read images. And an explicitly empty list is a choice — nothing here reads
+images — which is not the same as the nil that means nobody has said.
 
 ## Pre-push CI simulation
 
@@ -272,6 +331,7 @@ out of how a path is spelled, which cannot tell `internal/auth` from
 - sensitive: internal/shellsafe/**
 - sensitive: internal/shellparse/**
 - sensitive: internal/control/approval.go
+- sensitive: internal/control/approval_bridge.go
 - sensitive: internal/control/approval_orchestration.go
 - sensitive: internal/providerbroker/**
 - sensitive: internal/installsource/**
@@ -279,6 +339,8 @@ out of how a path is spelled, which cannot tell `internal/auth` from
 - sensitive: internal/pluginpkg/**
 - sensitive: internal/netclient/**
 - sensitive: internal/redirectguard/**
+- sensitive: internal/browser/**
+- sensitive: internal/computer/**
 
 One declaration, two effects: the same list is also the coverage gate's subject.
 `make coverage-gate` holds each path to the coverage it already has, because

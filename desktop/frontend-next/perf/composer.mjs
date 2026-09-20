@@ -82,7 +82,10 @@ await page.fill(BOX, "@");
 await page.waitForSelector(".slashmenu");
 await page.click('.turntools > .picker:first-of-type > button');
 await page.waitForSelector(".slashmenu", { state: "detached" });
-await page.waitForSelector('.turntools > .picker:first-of-type .modemenu:not([hidden])');
+// 问控件自己开没开，不问菜单被画到了哪：这个菜单是 portal 出去的，挂在 body
+// 下而不是 picker 里，所以按后代去找它只会等到超时 —— 而那时候互斥其实是成
+// 立的。aria-expanded 是这个控件自己声明的状态，搬家搬不掉。
+await page.waitForSelector('.turntools > .picker:first-of-type > button[aria-expanded="true"]');
 check("补全与模型菜单互斥", await page.locator(".menu:not([hidden])").count() === 1);
 
 await browser.close();

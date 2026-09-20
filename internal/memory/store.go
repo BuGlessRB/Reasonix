@@ -1,11 +1,12 @@
 package memory
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -434,7 +435,7 @@ func flushIndexIn(dir string, lines map[string]string) error {
 			names = append(names, n)
 		}
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	var b strings.Builder
 	if preservedEmpty && len(names) > 0 {
@@ -506,7 +507,7 @@ func (s Store) List() []Memory {
 			}
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b Memory) int { return cmp.Compare(a.Name, b.Name) })
 	return out
 }
 
@@ -540,14 +541,8 @@ func (s Store) ListAll() []Memory {
 			out = append(out, memory)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Name != out[j].Name {
-			return out[i].Name < out[j].Name
-		}
-		if out[i].Scope != out[j].Scope {
-			return out[i].Scope < out[j].Scope
-		}
-		return out[i].ID < out[j].ID
+	slices.SortFunc(out, func(a, b Memory) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Scope, b.Scope), cmp.Compare(a.ID, b.ID))
 	})
 	return out
 }
@@ -588,11 +583,8 @@ func (s Store) pinnedGuidance() []Memory {
 			out = append(out, m)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if !out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
-			return out[i].UpdatedAt.After(out[j].UpdatedAt)
-		}
-		return out[i].Name < out[j].Name
+	slices.SortFunc(out, func(a, b Memory) int {
+		return cmp.Or(b.UpdatedAt.Compare(a.UpdatedAt), cmp.Compare(a.Name, b.Name))
 	})
 	return out
 }
@@ -680,14 +672,8 @@ func (s Store) ListArchived() []ArchivedMemory {
 			out = append(out, ArchivedMemory{Memory: m, Path: path, ArchivedAt: when})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if !out[i].ArchivedAt.Equal(out[j].ArchivedAt) {
-			return out[i].ArchivedAt.After(out[j].ArchivedAt)
-		}
-		if out[i].Name != out[j].Name {
-			return out[i].Name < out[j].Name
-		}
-		return out[i].Path < out[j].Path
+	slices.SortFunc(out, func(a, b ArchivedMemory) int {
+		return cmp.Or(b.ArchivedAt.Compare(a.ArchivedAt), cmp.Compare(a.Name, b.Name), cmp.Compare(a.Path, b.Path))
 	})
 	return out
 }

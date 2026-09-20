@@ -23,6 +23,10 @@ type contextView struct {
 	// and not the window: drawn against the window, a 1M session reads 16% full
 	// at the moment it folds.
 	CompactAt int `json:"compact_at"`
+	// Which bound that is, and where the other one sits. Without the pair the
+	// panel shows a fold point nothing on the screen explains.
+	Boundary   string `json:"boundary"`
+	CapacityAt int    `json:"capacity_at"`
 }
 
 func (s *Server) contextView() contextView {
@@ -31,7 +35,7 @@ func (s *Server) contextView() contextView {
 	return contextView{
 		Used: used, Window: window,
 		System: b.System, Tools: b.Tools, User: b.User, Reply: b.Reply, Output: b.Output,
-		CompactAt: b.CompactAt,
+		CompactAt: b.CompactAt, Boundary: b.Boundary, CapacityAt: b.CapacityAt,
 	}
 }
 

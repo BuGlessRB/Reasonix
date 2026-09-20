@@ -1,4 +1,5 @@
 import { esc, page } from "./shell";
+import { SETTINGS_METRIC_GROUPS } from "./metric_groups";
 import { type User, userNav } from "./auth";
 
 type Daily = { date: string; users: number; opens: number };
@@ -91,7 +92,17 @@ ${label}</g>`;
 ${grid}${bars}</svg>`;
 }
 
+const LEASE_BUCKET_LABELS: Record<string, string> = {
+  lt_25: "< 25%",
+  pc_25_50: "25–50%",
+  pc_50_75: "50–75%",
+  pc_75_100: "75–100%",
+};
+
 function bucketDisplayLabel(signal: string, bucket: string): string {
+  if (signal === "lease_idle" && LEASE_BUCKET_LABELS[bucket]) {
+    return esc(LEASE_BUCKET_LABELS[bucket]);
+  }
   if (signal.includes("_model") && bucket.startsWith("custom_")) {
     const model = bucket.slice("custom_".length).replace(/_/g, " ");
     return `<span class="bucket-prefix">custom</span><span class="bucket-main">${esc(model)}</span>`;
@@ -272,66 +283,6 @@ const AGENT_METRIC_SIGNALS = [
 ];
 const DEFAULT_OPEN_SETTING_GROUPS = new Set(["Client", "Models", "Providers"]);
 
-const SETTINGS_METRIC_GROUPS: { en: string; zh: string; signals: string[] }[] = [
-  {
-    en: "Client",
-    zh: "客户端",
-    signals: ["client_surface", "client_version", "settings_language", "cli_mode", "cli_profile", "cli_permission_mode", "cli_session_mode"],
-  },
-  {
-    en: "Appearance and layout",
-    zh: "外观与布局",
-    signals: [
-      "settings_desktop_layout",
-      "settings_theme",
-      "settings_theme_style",
-      "settings_display_mode",
-      "settings_status_bar_style",
-      "settings_status_bar_items_count",
-    ],
-  },
-  {
-    en: "Models",
-    zh: "模型",
-    signals: [
-      "settings_default_model",
-      "settings_planner_model",
-      "settings_subagent_model",
-      "settings_subagent_effort",
-      "settings_reasoning_language",
-    ],
-  },
-  {
-    en: "Providers",
-    zh: "Provider",
-    signals: ["settings_provider_count", "settings_provider_access_count", "settings_provider_access"],
-  },
-  {
-    en: "Behavior toggles",
-    zh: "行为开关",
-    signals: ["settings_close_behavior", "settings_check_updates"],
-  },
-  {
-    en: "Bots",
-    zh: "机器人",
-    signals: [
-      "settings_bot_enabled",
-      "settings_bot_model",
-      "settings_bot_tool_approval",
-      "settings_bot_allowlist",
-      "settings_bot_allow_all",
-      "settings_bot_qq_enabled",
-      "settings_bot_feishu_enabled",
-      "settings_bot_weixin_enabled",
-      "settings_bot_connection_count",
-      "settings_bot_connection_provider",
-      "settings_bot_connection_enabled",
-      "settings_bot_connection_status",
-      "settings_bot_connection_model",
-      "settings_bot_connection_approval",
-    ],
-  },
-];
 
 function metricSignalLabel(signal: string): string {
   const label = METRIC_SIGNAL_LABELS[signal];

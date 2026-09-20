@@ -34,7 +34,7 @@ func chatTUIWithRunningBackgroundJob(t *testing.T) chatTUI {
 	})
 	m := newTestChatTUI()
 	m.ctrl = ctrl
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.runtimeProfile = "full"
 	m.buildController = func(controllerBuildSpec, []provider.Message, string, control.SessionAPI) (*control.Controller, error) {
 		t.Fatal("runtime switch built a replacement while a background job was running")
@@ -236,7 +236,7 @@ func TestModelSwitchCarriesRecoveryPathAfterSnapshotConflict(t *testing.T) {
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
 
-	m.runModelSubcommand("/model deepseek-flash/deepseek-v4-flash")
+	m.runModelSubcommand("/model deepseek-flash/deepseek-flash")
 	if m.pendingModelSwitch == nil {
 		t.Fatal("runModelSubcommand did not queue a model switch")
 	}
@@ -259,7 +259,7 @@ func TestEffortSwitchCarriesRecoveryPathAfterSnapshotConflict(t *testing.T) {
 
 	m := newTestChatTUI()
 	m.ctrl = divergedSessionController(t, dir, originalPath)
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	var gotResumePath string
 	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ control.SessionAPI) (*control.Controller, error) {
 		gotResumePath = resumePath
@@ -288,7 +288,7 @@ func TestSkillRefreshCarriesRecoveryPathAfterSnapshotConflict(t *testing.T) {
 
 	m := newTestChatTUI()
 	m.ctrl = divergedSessionController(t, dir, originalPath)
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	var gotResumePath string
 	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ control.SessionAPI) (*control.Controller, error) {
 		gotResumePath = resumePath
@@ -315,7 +315,7 @@ func TestWorkModeSwitchUpdatesInPlaceWithoutRebuildOrLeaseMove(t *testing.T) {
 	m := newTestChatTUI()
 	oldCtrl := divergedSessionController(t, dir, originalPath)
 	m.ctrl = oldCtrl
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.runtimeProfile = "full"
 	m.leases = control.NewSessionLeaseKeeper()
 	t.Cleanup(m.leases.Release)
@@ -531,7 +531,7 @@ func TestModelSwitchFailureKeepsLeaseOnRecoveryPathAfterSnapshotConflict(t *test
 		t.Fatalf("seed active lease: %v", err)
 	}
 
-	m.runModelSubcommand("/model deepseek-flash/deepseek-v4-flash")
+	m.runModelSubcommand("/model deepseek-flash/deepseek-flash")
 	if m.pendingModelSwitch == nil {
 		t.Fatal("runModelSubcommand did not queue a model switch")
 	}
@@ -570,7 +570,7 @@ func TestModelSwitchMovesLeaseToRecoveryPathBeforeRebuild(t *testing.T) {
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
 
-	m.runModelSubcommand("/model deepseek-flash/deepseek-v4-flash")
+	m.runModelSubcommand("/model deepseek-flash/deepseek-flash")
 	if m.pendingModelSwitch == nil {
 		t.Fatal("runModelSubcommand did not queue a model switch")
 	}
@@ -588,7 +588,7 @@ func TestEffortSwitchMovesLeaseToRecoveryPathBeforeRebuild(t *testing.T) {
 
 	m := newTestChatTUI()
 	m.ctrl = divergedSessionController(t, dir, active)
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.leases = control.NewSessionLeaseKeeper()
 	t.Cleanup(m.leases.Release)
 	if err := m.leases.Rebind(active); err != nil {
@@ -617,7 +617,7 @@ func TestSkillRefreshMovesLeaseToRecoveryPathBeforeRebuild(t *testing.T) {
 
 	m := newTestChatTUI()
 	m.ctrl = divergedSessionController(t, dir, active)
-	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.modelRef = "deepseek-flash/deepseek-flash"
 	m.leases = control.NewSessionLeaseKeeper()
 	t.Cleanup(m.leases.Release)
 	if err := m.leases.Rebind(active); err != nil {

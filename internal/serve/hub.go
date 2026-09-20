@@ -15,7 +15,6 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
 	"reasonix/internal/boot"
-	"strconv"
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
@@ -41,22 +40,6 @@ func (h *Hub) decorateSink(sink event.Sink) event.Sink {
 // runtimePrefix is where a hub publishes its runtimes. The frontend builds
 // every request under it, so it is part of the wire contract.
 const runtimePrefix = "/rt/"
-
-// maxRuntimesDefault caps concurrently driven sessions: each runtime is a full
-// assembly — tools, extensions, MCP sidecars — so an unbounded pane count is an
-// unbounded process. Where the ceiling belongs depends on the machine, so
-// [desktop] max_panes moves it, up to 32.
-const maxRuntimesDefault = 8
-
-// maxRuntimes reads the ceiling for this machine. Opening a pane is not a hot
-// path, so it is read per call rather than cached into a stale number.
-func maxRuntimes() int {
-	cfg, err := config.Load()
-	if err != nil {
-		return maxRuntimesDefault
-	}
-	return cfg.DesktopMaxPanes(maxRuntimesDefault)
-}
 
 // Hub serves several sessions at the same time. Each Runtime is a complete
 // Server with its own controller, event stream, title cache and session lease,
@@ -135,8 +118,8 @@ type HubOptions struct {
 	// Grant applies the host's capabilities (folder picking, provider edits) to
 	// each runtime, so a pane opened later can do what the first one could.
 	Grant func(*Server)
-	// OnOpen and OnClose let a host attach its own transport to a runtime — the
-	// Wails shell pumps each one's frames onto its bus, keyed by ID.
+	// OnOpen and OnClose let a host attach its own transport to a runtime,
+	// keyed by ID.
 	OnOpen  func(*Runtime)
 	OnClose func(*Runtime)
 	// DecorateSink wraps each runtime's event sink, the way Grant applies its
@@ -162,6 +145,9 @@ type HubOptions struct {
 	// unregistered and the link layer with nobody to ask, which is what makes
 	// the strict host-key path the default on a server with no window.
 	Asks *AskBroker
+	// BrowserHost draws hosted browser views in the window behind this hub. Nil
+	// leaves its routes unregistered, and browsers are launched instead.
+	BrowserHost *BrowserHost
 	// Tray is the window behind this hub, where there is one. Nil leaves the
 	// tray routes unregistered rather than answering for an icon that does not
 	// exist — a networked server has no window to put one on.
@@ -195,6 +181,10 @@ type RuntimeView struct {
 	// Set only on a pane driven over SSH. Its absence is what tells the
 	// frontend the pane is this machine's own — the common case stays unmarked.
 	Host string `json:"host,omitempty"`
+	// Set on a pane whose conversation another window holds the write lease
+	// for. It reads like any other; what it cannot do is add to it — said here
+	// so the composer can say so before a line is typed, not after.
+	ReadOnly bool `json:"readOnly,omitempty"`
 }
 
 // NewHub returns an empty hub. Adopt or Open publishes the first runtime.
@@ -224,6 +214,7 @@ func (h *Hub) Adopt(srv *Server, bc *Broadcaster) (*Runtime, error) {
 	srv.auth = h.auth
 	srv.surface = h.surface()
 	srv.stance = h.stance
+	srv.resolver = h.opts.ProviderResolver
 	// The posture the host launched in, which is the one every later pane
 	// inherits until someone changes it on the composer.
 	h.stance.set(srv.Controller().ToolApprovalMode())
@@ -274,14 +265,6 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 	if rt := h.findSession(req.SessionPath); rt != nil {
 		return rt, nil
 	}
-	limit := maxRuntimes()
-	h.mu.RLock()
-	full := len(h.order) >= limit
-	h.mu.RUnlock()
-	if full {
-		return nil, refusal(http.StatusConflict, "hub.too_many_panes",
-			fmt.Errorf("already driving %d sessions — close one first", limit), map[string]any{"max": limit})
-	}
 	root, err := h.resolveRoot(req)
 	if err != nil {
 		return nil, err
@@ -307,6 +290,7 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 	srv.AdoptRuntime(built)
 	srv.auth = h.auth
 	srv.surface = h.surface()
+	srv.resolver = h.opts.ProviderResolver
 	if h.opts.Grant != nil {
 		h.opts.Grant(srv)
 	}
@@ -325,10 +309,10 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 		return nil, err
 	}
 	if path := strings.TrimSpace(req.SessionPath); path != "" {
-		if _, err := srv.resumeInto(path); err != nil {
+		if status, err := srv.resumeInto(path); err != nil {
 			built.Controller.Close()
 			leases.Release()
-			return nil, err
+			return nil, keepRefusalStatus(status, err)
 		}
 	}
 	rt := &Runtime{ID: h.nextID(), Root: root, Server: srv, Events: bc, leases: leases}
@@ -450,7 +434,22 @@ func (rt *Runtime) view() RuntimeView {
 		Root:        ctrl.WorkspaceRoot(),
 		Name:        fileutil.RootName(ctrl.WorkspaceRoot()),
 		SessionPath: ctrl.SessionPath(),
+		ReadOnly:    !rt.writable(),
 	}
+}
+
+// writable reports whether this pane holds the write lease for the session it
+// is showing. Derived rather than stored: the keeper either holds that path or
+// it does not, and a pane with no session yet has nothing to be held out of.
+func (rt *Runtime) writable() bool {
+	if rt.Server == nil {
+		return true
+	}
+	path := strings.TrimSpace(rt.Server.Controller().SessionPath())
+	if path == "" || rt.leases == nil {
+		return true
+	}
+	return rt.leases.HeldPath() == agent.CanonicalSessionPath(path)
 }
 
 // Handler routes hub endpoints and mounts every runtime under /rt/{id}/. Auth,
@@ -473,6 +472,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
 	h.registerTreeRoutes(mux)
 	h.registerTrayRoutes(mux)
+	h.registerBrowserHostRoutes(mux)
 	h.registerStudioVersionRoutes(mux)
 	h.registerUpdateRoutes(mux)
 	h.registerAskRoutes(mux)
@@ -481,10 +481,7 @@ func (h *Hub) Handler() http.Handler {
 	return logMiddleware(h.auth.middleware(withPage(csrfGuard(mux), h.opts.Page)))
 }
 
-// The ceiling rides the list rather than a second endpoint: a client that
-// hardcoded it would grey out its control at the wrong count.
 func (h *Hub) listRuntimes(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("X-Panes-Max", strconv.Itoa(maxRuntimes()))
 	writeJSON(w, h.List())
 }
 
@@ -496,7 +493,10 @@ func (h *Hub) openRuntime(w http.ResponseWriter, r *http.Request) {
 	}
 	rt, err := h.Open(r.Context(), req)
 	if err != nil {
-		writeErr(w, http.StatusConflict, err)
+		// Every refusal Open produces carries its own status; what is left is
+		// a pane the kernel could not build, which is ours and not a clash.
+		// 409 as the catch-all dressed a missing transcript as a held one.
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, rt.view())

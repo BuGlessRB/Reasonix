@@ -58,13 +58,22 @@ function reachCauses(hit, effects, opaqueSites) {
  *  Those are different debts and are recorded as different causes. */
 function presenceCauses(d, effects, why) {
   const raw = [];
-  const e = d.by ? effects.get(d.by) : null;
-  if (d.mountOpen) raw.push({ kind: "mount-open", at: d.id, projection: true, sources: dedupe((e?.setup.openEdges ?? []).map(sourceOf)) });
+  // From the effects the openness was decided over, never from the one `by`
+  // names: a component whose mount is open elsewhere can have `by` point at an
+  // effect with no cleanup at all, and the cause would then name nothing.
+  const cleanupSources = (k) => {
+    const e = effects.get(k);
+    return e?.cleanup?.unresolved
+      ? [{ mechanism: "cleanup-unreadable", source: "cleanup-unreadable:" + k }]
+      : (e?.cleanup?.openEdges ?? []).map(sourceOf);
+  };
+  if (d.mountOpen) {
+    raw.push({ kind: "mount-open", at: d.id, projection: true,
+      sources: dedupe((d.mountOpenBy ?? []).flatMap((k) => (effects.get(k)?.setup.openEdges ?? []).map(sourceOf))) });
+  }
   if (d.unmountOpen) {
     raw.push({ kind: "unmount-open", at: d.id, projection: true,
-      sources: e?.cleanup?.unresolved
-        ? [{ mechanism: "cleanup-unreadable", source: "cleanup-unreadable:" + d.by }]
-        : dedupe((e?.cleanup?.openEdges ?? []).map(sourceOf)) });
+      sources: dedupe((d.unmountOpenBy ?? []).flatMap(cleanupSources)) });
   }
   // A guard the walk can read is not a cause. An opaque local and an unresolved
   // hop are, and they are the presence path's own rather than the effect's.

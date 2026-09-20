@@ -134,3 +134,28 @@ func backgroundCompletionTexts(ev jobs.CompletionEvent) (display, submit string)
 	b.WriteString("A background job you started has finished. Read its result with wait or bash_output, then continue the work it was part of. Do not redo what it already did, and end the turn if nothing is left to do.")
 	return display, b.String()
 }
+
+// Jobs returns the still-running background jobs for the status bar (nil when
+// background jobs are disabled).
+func (c *Controller) Jobs() []jobs.View {
+	if c.jobs == nil {
+		return nil
+	}
+	return c.jobs.RunningForSession(c.parentSessionID())
+}
+
+// KillJob cancels a running background job by ID.
+func (c *Controller) KillJob(id string) bool {
+	if c.jobs == nil {
+		return false
+	}
+	return c.jobs.Kill(id)
+}
+
+// CancelJob stops one background job owned by this controller's session.
+func (c *Controller) CancelJob(id string) bool {
+	if c.jobs == nil {
+		return false
+	}
+	return c.jobs.KillForSession(c.parentSessionID(), id)
+}

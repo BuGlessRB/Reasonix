@@ -99,7 +99,8 @@ func (m *chatTUI) inboxBodies() []string {
 	return out
 }
 
-// handleQueueSlash runs /queue and /steer as local commands even while running.
+// handleQueueSlash runs the local commands that answer even while a turn runs:
+// /queue, /steer, and /tabs.
 func (m *chatTUI) handleQueueSlash(line string) (handled bool, notice string) {
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
@@ -128,6 +129,8 @@ func (m *chatTUI) handleQueueSlash(line string) (handled bool, notice string) {
 		}
 	case "/queue":
 		return true, m.runQueueCommand(args)
+	case "/tabs":
+		return true, renderBrowserTabs(m.ctrl.BrowserTabs())
 	default:
 		return false, ""
 	}

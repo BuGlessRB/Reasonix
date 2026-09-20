@@ -88,27 +88,27 @@ func TestRegistryClasses(t *testing.T) {
 
 func TestDecodeHelpersRejectWrongDirection(t *testing.T) {
 	raw := []byte(`{}`)
-	if _, err := DecodeHostRequestParams(MethodHostContentRead, raw); err == nil {
+	if _, err := decodeHostRequestParams(MethodHostContentRead, raw); err == nil {
 		t.Fatal("DecodeHostRequestParams accepted an extension request method")
 	}
 	if _, err := DecodeExtensionRequestParams(MethodExtensionInitialize, raw); err == nil {
 		t.Fatal("DecodeExtensionRequestParams accepted a host request method")
 	}
-	if _, err := DecodeHostNotificationParams(MethodExtensionEvent, []byte(`{"event":"session.start","payload":{}}`)); err == nil {
+	if _, err := decodeHostNotificationParams(MethodExtensionEvent, []byte(`{"event":"session.start","payload":{}}`)); err == nil {
 		// extension/event IS a host notification; must decode.
 	} else {
-		t.Fatalf("DecodeHostNotificationParams(extension/event) = %v", err)
+		t.Fatalf("decodeHostNotificationParams(extension/event) = %v", err)
 	}
 	if _, err := DecodeExtensionNotificationParams(MethodExtensionEvent, raw); err == nil {
 		t.Fatal("DecodeExtensionNotificationParams accepted a host notification method")
 	}
-	if _, err := DecodeHostRequestParams("extension/bogus", raw); err == nil {
+	if _, err := decodeHostRequestParams("extension/bogus", raw); err == nil {
 		t.Fatal("DecodeHostRequestParams accepted an unregistered method")
 	}
 	if _, err := DecodeHostRequestResult(MethodExtensionEvent, raw); err == nil {
 		t.Fatal("DecodeHostRequestResult accepted a notification (no result)")
 	}
-	if _, err := DecodeExtensionRequestResult(MethodExtensionProviderStreamChunk, raw); err == nil {
+	if _, err := decodeExtensionRequestResult(MethodExtensionProviderStreamChunk, raw); err == nil {
 		t.Fatal("DecodeExtensionRequestResult accepted a notification method")
 	}
 }
@@ -134,12 +134,12 @@ func TestInterceptEventsFrozen(t *testing.T) {
 	// Every frozen event must round-trip through the strict enum check.
 	for _, event := range events {
 		raw := []byte(`{"event":"` + event + `","payload":{}}`)
-		if _, err := DecodeHostNotificationParams(MethodExtensionEvent, raw); err != nil {
+		if _, err := decodeHostNotificationParams(MethodExtensionEvent, raw); err != nil {
 			t.Fatalf("frozen event %q rejected: %v", event, err)
 		}
 	}
 	raw := []byte(`{"event":"session.bogus","payload":{}}`)
-	if _, err := DecodeHostNotificationParams(MethodExtensionEvent, raw); err == nil {
+	if _, err := decodeHostNotificationParams(MethodExtensionEvent, raw); err == nil {
 		t.Fatal("unknown intercept event accepted")
 	}
 }

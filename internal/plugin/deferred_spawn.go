@@ -8,15 +8,15 @@ import "context"
 // registerDeferredCancel records a background connect so Close can reach it, and
 // returns the generation the caller's result will be checked against. Zero means
 // the host is closed and the caller must not start.
-func (h *Host) registerDeferredCancel(name string, cancel context.CancelFunc) uint64 {
+func (h *Host) registerDeferredCancel(name string, cancel context.CancelCauseFunc) uint64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
-		cancel()
+		cancel(ErrHostClosed)
 		return 0
 	}
 	if h.deferredCancels == nil {
-		h.deferredCancels = make(map[string][]context.CancelFunc)
+		h.deferredCancels = make(map[string][]context.CancelCauseFunc)
 	}
 	if h.deferredGenerations == nil {
 		h.deferredGenerations = make(map[string]uint64)

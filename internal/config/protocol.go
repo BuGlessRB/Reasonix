@@ -22,13 +22,17 @@ type Protocol struct {
 	// ReasoningParams marks wires whose thinking/reasoning_effort fields a
 	// relay can reject outright, so reasoning_protocol governs the shape.
 	ReasoningParams bool
+	// StatefulContinuation marks wires that can carry context by reference
+	// rather than replaying it, which an endpoint may not honour — so
+	// responses_mode governs it. Chat Completions replays by construction.
+	StatefulContinuation bool
 }
 
 // protocols is ordered as a chooser should offer them: the common wire first,
 // then the ones a particular endpoint adds on top of it.
 var protocols = []Protocol{
 	{Kind: "openai", Discovery: "openai", ReasoningParams: true},
-	{Kind: "responses", Discovery: "openai", ServerWebSearch: true},
+	{Kind: "responses", Discovery: "openai", ServerWebSearch: true, StatefulContinuation: true},
 	{Kind: "anthropic", Discovery: "anthropic", ServerWebSearch: true},
 }
 

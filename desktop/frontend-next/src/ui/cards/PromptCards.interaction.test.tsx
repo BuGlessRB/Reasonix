@@ -27,6 +27,37 @@ describe("decision cards", () => {
     expect(approve).toHaveBeenCalledTimes(1);
   });
 
+  // An answer the host drops must not be offered: the card used to promise "do
+  // not ask again" and send a grant that died with the session, and the grant
+  // that actually writes a rule was not reachable from this window at all.
+  it("offers the answers this call's host says it will honour, and no others", async () => {
+    const card = (allows: { allowsSession?: boolean; allowsPersist?: boolean }) => {
+      const approve = vi.fn(pending);
+      const item = {
+        t: "approval", id: "row", a: { id: "gate", tool: "computer_act", subject: "com.apple.Notes", ...allows },
+      } as Extract<Item, { t: "approval" }>;
+      const r = render(<ApprovalCard item={item} onApprove={approve} onPlan={vi.fn(pending)} />);
+      return { approve, ...r };
+    };
+    const names = () => screen.getAllByRole("button").map((b) => b.textContent);
+
+    const fresh = card({});
+    expect(names()).toEqual(["允许这一次", "拒绝"]);
+    cleanup();
+
+    const scoped = card({ allowsSession: true });
+    expect(names()).toEqual(["允许这一次", "本会话都允许", "拒绝"]);
+    await userEvent.click(screen.getByRole("button", { name: "本会话都允许" }));
+    expect(scoped.approve).toHaveBeenCalledWith("row", "gate", "session");
+    cleanup();
+
+    const full = card({ allowsSession: true, allowsPersist: true });
+    expect(names()).toEqual(["允许这一次", "本会话都允许", "此类操作不再询问", "拒绝"]);
+    await userEvent.click(screen.getByRole("button", { name: "此类操作不再询问" }));
+    expect(full.approve).toHaveBeenCalledWith("row", "gate", "always");
+    void fresh;
+  });
+
   it("does not invent a recommendation and restores answered tab state", () => {
     const item = {
       t: "ask", id: "row", answered: [["B"]], ask: { id: "ask", questions: [

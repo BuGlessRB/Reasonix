@@ -3,6 +3,7 @@ package providerbroker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -298,6 +299,47 @@ func TestUnknownRefFailsAtTheStream(t *testing.T) {
 	}
 	if _, err := client.Resolve(provider.Selection{Ref: "  "}); err == nil {
 		t.Fatal("an empty ref resolved")
+	}
+}
+
+// unknownModelResolver refuses every ref the way a config-backed resolver does.
+type unknownModelResolver struct{}
+
+func (unknownModelResolver) Catalog() []provider.Descriptor { return nil }
+
+func (unknownModelResolver) Resolve(sel provider.Selection) (provider.Provider, error) {
+	return nil, fmt.Errorf("%w %q", provider.ErrUnknownModel, sel.Ref)
+}
+
+// The host reporting a missing model keeps a config of its own, so the refusal
+// has to arrive as the identity it is and say which machine had no such model —
+// a bare "unknown model" there reads as that host's config being wrong.
+func TestUnknownModelCrossesWithItsIdentityAndRef(t *testing.T) {
+	client := newPair(t, unknownModelResolver{})
+	p, err := client.Resolve(provider.Selection{Ref: "paratera/DeepSeek-V4-Flash"})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	_, err = p.Stream(context.Background(), provider.Request{})
+	if !errors.Is(err, provider.ErrUnknownModel) {
+		t.Fatalf("Stream error = %#v, want provider.ErrUnknownModel", err)
+	}
+	var unknown *UnknownModelError
+	if !errors.As(err, &unknown) || unknown.Ref != "paratera/DeepSeek-V4-Flash" {
+		t.Fatalf("Stream error = %#v, want *UnknownModelError naming the ref", err)
+	}
+}
+
+// The far side starts a session on whatever the catalog marks, so the mark has
+// to survive the wire.
+func TestCatalogCarriesItsDefault(t *testing.T) {
+	fake := &fakeProvider{name: "home"}
+	client := newPair(t, staticResolver(fake,
+		provider.Descriptor{Ref: "home/a"},
+		provider.Descriptor{Ref: "home/b", Default: true},
+	))
+	if got := provider.DefaultRef(client.Catalog()); got != "home/b" {
+		t.Fatalf("default across the wire = %q, want home/b", got)
 	}
 }
 

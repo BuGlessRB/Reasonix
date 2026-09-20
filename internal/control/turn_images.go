@@ -17,14 +17,25 @@ type turnImages struct {
 	userImages []string
 	candidates []string
 	skipped    []error
+	// modelReads is the model's capability, which a turn carrying no pixels of
+	// its own (a Goal continuation) still has.
+	modelReads bool
 }
 
 // unreadable counts what the user attached and this turn's own model cannot see.
 func (t *turnImages) unreadable() int {
-	if t == nil || len(t.userImages) > 0 {
+	if t == nil || t.modelReads {
 		return 0
 	}
 	return len(t.candidates)
+}
+
+// received counts the images this turn's own message carries to the model.
+func (t *turnImages) received() int {
+	if t == nil {
+		return 0
+	}
+	return len(t.userImages)
 }
 
 func (t *turnImages) reasons() string {
@@ -40,8 +51,8 @@ func (t *turnImages) reasons() string {
 // parents reuse the same data URLs for their own provider request.
 func (c *Controller) resolveTurnImages(line string) *turnImages {
 	candidates, skipped := c.resolveInputImageCandidates(line)
-	images := &turnImages{candidates: candidates, skipped: skipped}
-	if c.imageInputEnabled() {
+	images := &turnImages{candidates: candidates, skipped: skipped, modelReads: c.imageInputEnabled()}
+	if images.modelReads {
 		images.userImages = candidates
 	}
 	return images
@@ -59,8 +70,8 @@ func (c *Controller) prepareOrchestratedTurnImages(turn orchestratedTurn) orches
 
 // frozenTurnImages pins an already-resolved image set to a turn.
 func (c *Controller) frozenTurnImages(images []string) *turnImages {
-	frozen := &turnImages{candidates: append([]string(nil), images...)}
-	if c.imageInputEnabled() {
+	frozen := &turnImages{candidates: append([]string(nil), images...), modelReads: c.imageInputEnabled()}
+	if frozen.modelReads {
 		frozen.userImages = append([]string(nil), images...)
 	}
 	return frozen
@@ -74,7 +85,7 @@ func (c *Controller) imagesForOrchestratedTurn(ctx context.Context, turn orchest
 		// A Goal continuation belongs to the same visible user turn, so keep its
 		// child-only image candidates. Do not add them to the synthetic parent
 		// message: a vision parent already has the image in its earlier history.
-		return &turnImages{candidates: agent.SubagentImageCandidates(ctx)}
+		return &turnImages{candidates: agent.SubagentImageCandidates(ctx), modelReads: c.imageInputEnabled()}
 	}
 	return c.resolveTurnImages(turn.imageReferenceInput())
 }
@@ -118,6 +129,19 @@ func (turn orchestratedTurn) imageReferenceInput() string {
 // Exported so a frontend's tests can assert the note arrived without copying its
 // wording, which is this package's to change.
 const ImageRoutingTag = "attached-images"
+
+// receivedImagesNote is the reference block's other answer: the pictures are in
+// this message. A block that defers to a note that never arrives reads as the
+// image not having arrived, and a model reasoning at length answers that way.
+func receivedImagesNote(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"<%s>\nThe user attached %d image(s), and they are in this message as images. Look at them directly and answer from what they show.\n"+
+			"Each image block in the text only marks where one was referenced. Do not open the files with tools: read_file reads text and will refuse.\n</%s>\n\n",
+		ImageRoutingTag, n, ImageRoutingTag)
+}
 
 // imageRoutingNote is the only place that tells the model what to do about an
 // attachment it cannot read. The reference block beside the image states facts
@@ -169,7 +193,7 @@ func (c *Controller) bindOrchestratedTurnImages(ctx context.Context, turn orches
 // the product ignoring it.
 func (c *Controller) imageRoutingPrefix(images *turnImages) string {
 	c.noticeUnfitImages(images)
-	note := c.unfitImagesNote(images)
+	note := c.unfitImagesNote(images) + receivedImagesNote(images.received())
 	if unreadable := images.unreadable(); unreadable > 0 {
 		c.notice(c.imagesNotReadableNotice(unreadable))
 		note += c.imageRoutingNote(unreadable)

@@ -329,10 +329,12 @@ func TestOfficialDeepSeekVisionModelSendsImageParts(t *testing.T) {
 	}
 }
 
-// The sibling models on the same host keep refusing, so the change is the model
-// list and not the endpoint guard coming off.
+// Pro on the same host stays untickable, so the change is the model list and
+// not the endpoint guard coming off. It does not refuse an image — measured
+// 2026-09-13, it returns 200 and answers as if it saw nothing — which is what
+// makes the guard the only thing that can tell a user their picture was lost.
 func TestOfficialDeepSeekTextModelsStillRefuseImages(t *testing.T) {
-	for _, model := range []string{"deepseek-v4-flash", "deepseek-v4-pro"} {
+	for _, model := range []string{"deepseek-v4-pro"} {
 		p, err := New(provider.Config{
 			Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: model,
 			Extra: map[string]any{"vision": true},

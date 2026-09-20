@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"reasonix/internal/extension"
@@ -12,13 +11,7 @@ import (
 
 func fixturesDir(t *testing.T) string {
 	t.Helper()
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	// internal/extension -> repo root
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-	return filepath.Join(root, "docs", "superpowers", "specs", "fixtures", "spatiotemporal-v2")
+	return filepath.Join("testdata", "spatiotemporal-v2")
 }
 
 func TestGoldenLifecycleStates(t *testing.T) {

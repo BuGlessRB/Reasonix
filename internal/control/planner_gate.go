@@ -117,12 +117,6 @@ func plannerPlanDecision(route agent.PlannerRoute, depth agent.PlannerDepth, rea
 	}
 }
 
-// TaskWarrantsPlanner is retained as a small compatibility predicate for
-// callers and tests that do not need depth or approval semantics.
-func TaskWarrantsPlanner(input string) bool {
-	return DecidePlannerRoute(context.Background(), input).Route != agent.PlannerRouteExecutorOnly
-}
-
 // NewPlannerPolicy returns the structured deterministic policy used by the
 // two-model product path.
 func NewPlannerPolicy() agent.PlannerPolicy {

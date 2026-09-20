@@ -24,7 +24,6 @@ export const EN_METRICS: Record<string, string> = {
   "还没有请求": "no requests yet",
   "该来源未声明窗口大小，因此无法显示已用比例，也不会自动压缩。中转服务转发的是第三方模型，其容量只有你知道。":
     "Nobody has said how large this source's window is, so there is no share to draw — and no automatic compaction either. A relay forwards somebody else's model, so only you know what it holds.",
-  "记录": "Save",
   "该窗口值的来源无法确定 —— 点击可改为该模型的实际上限":
     "Whoever entered this window may not have meant this model — click to set what it actually holds",
   "只改当前这个模型，同一个来源下的其它模型不动。填模型文档写的上下文上限，不是最大输出。会重建运行时，任务跑着的时候改不了。":

@@ -10,12 +10,12 @@ import { EditConn } from "./EditConn";
 afterEach(cleanup);
 
 it("keeps vision capability discovered while refreshing a saved source", async () => {
-  const visionModel = "deepseek-v4-flash-vision-exp";
+  const visionModel = "deepseek-flash-vision-exp";
   const editProvider = vi.fn(async () => {});
   const port = {
     checkProvider: vi.fn(async () => ({
       ok: true,
-      models: ["deepseek-v4-flash", visionModel],
+      models: ["deepseek-flash", visionModel],
       vision: [visionModel],
     })),
     editProvider,
@@ -24,8 +24,8 @@ it("keeps vision capability discovered while refreshing a saved source", async (
     name: "deepseek-flash",
     kind: "responses",
     baseUrl: "https://api.deepseek.com",
-    models: ["deepseek-v4-flash"],
-    default: "deepseek-v4-flash",
+    models: ["deepseek-flash"],
+    default: "deepseek-flash",
     hasKey: true,
     inUse: false,
     preset: true,

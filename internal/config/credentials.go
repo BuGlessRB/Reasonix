@@ -3,9 +3,10 @@ package config
 import (
 	"crypto/sha256"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -182,18 +183,14 @@ func credentialEnvNamesFromConfig(cfg *Config) []string {
 	for _, p := range cfg.Providers {
 		add(p.APIKeyEnv)
 	}
-	add(cfg.Bot.QQ.AppSecretEnv)
-	add(cfg.Bot.Feishu.AppSecretEnv)
-	add(cfg.Bot.Weixin.TokenEnv)
-	for _, conn := range cfg.Bot.Connections {
-		add(conn.Credential.AppSecretEnv)
-		add(conn.Credential.TokenEnv)
+	for _, name := range passthroughCredentialEnvNames(cfg.Bot) {
+		add(name)
 	}
 	for _, h := range cfg.Remote.Hosts {
 		add(h.PassphraseEnv)
 		add(h.PasswordEnv)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -218,7 +215,7 @@ func (c *Config) CredentialEnvNames() []string {
 			names = append(names, name)
 		}
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names
 }
 
@@ -696,11 +693,7 @@ func storeCredentialsInFile(path string, assignments map[string]string) error {
 			replaced[key] = true
 		}
 	}
-	keys := make([]string, 0, len(assignments))
-	for key := range assignments {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(assignments))
 	for _, key := range keys {
 		if !replaced[key] {
 			lines = append(lines, formatCredentialLine(key, assignments[key]))

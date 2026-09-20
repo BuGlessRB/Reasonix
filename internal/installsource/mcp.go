@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/config"
@@ -197,7 +197,7 @@ func parseMCPJSON(b []byte) ([]config.PluginEntry, []string, error) {
 	for name := range raw.MCPServers {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	out := make([]config.PluginEntry, 0, len(names))
 	var warnings []string
 	for _, name := range names {

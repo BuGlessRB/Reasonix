@@ -1,8 +1,7 @@
 package control
 
-// The driving port promises segregation and nothing enforced it: bot had
-// drifted to the full SessionAPI — 8 sub-ports, 122 methods it never calls,
-// including the memory and checkpoint surfaces port.go says it must not see.
+// The driving port promises segregation: a frontend handed sub-ports it never
+// calls reaches surfaces port.go says it must not see, so over-declaring fails.
 
 import (
 	"go/ast"
@@ -10,7 +9,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -130,7 +129,7 @@ func TestFrontendsDeclareOnlyThePortsTheyDrive(t *testing.T) {
 	if len(model.methodOwner) == 0 || len(model.composed) == 0 {
 		t.Fatal("no sub-ports read from this package; this guard is watching nothing")
 	}
-	for _, frontend := range []string{"bot", "acp", "serve", "cli"} {
+	for _, frontend := range []string{"acp", "serve", "cli"} {
 		t.Run(frontend, func(t *testing.T) {
 			dir := filepath.Join("..", frontend)
 			if _, err := os.Stat(dir); err != nil {
@@ -146,10 +145,10 @@ func TestFrontendsDeclareOnlyThePortsTheyDrive(t *testing.T) {
 					spare = append(spare, port)
 				}
 			}
-			sort.Strings(spare)
+			slices.Sort(spare)
 			if len(spare) > slackSubPorts {
 				t.Errorf("%s is handed %d sub-ports it never calls: %s\n"+
-					"Name the composite it actually drives (see GatewayAPI/EditorAPI), or add the calls.",
+					"Name the composite it actually drives (see EditorAPI), or add the calls.",
 					frontend, len(spare), strings.Join(spare, ", "))
 			}
 		})

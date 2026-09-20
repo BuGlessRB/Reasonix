@@ -51,6 +51,10 @@ export interface Appearance {
   readSize?: number;
   fontUi?: string;
   fontMono?: string;
+  // How far prose may run: "standard" holds it to a reading line length,
+  // "full" lets it use the window. Cards, commands and output are not
+  // governed by it.
+  width?: string;
   wallpaper?: Wallpaper;
 }
 

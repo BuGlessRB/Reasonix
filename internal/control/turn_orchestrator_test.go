@@ -966,6 +966,43 @@ func TestTurnOrchestratorCancelBeforeRunnerAddsUserPreservesVisiblePrompt(t *tes
 	}
 }
 
+// The message a vision model is given carries the picture and the note that says
+// the picture is there, together. The image block in the text defers to that note,
+// so a message holding the pixels without it reads to the model as holding none.
+func TestAVisionTurnLandsItsImageWithTheNoteSayingItIsThere(t *testing.T) {
+	workspace := testenv.TempDir(t)
+	writeVisionTestConfig(t, workspace)
+	if err := os.WriteFile(filepath.Join(workspace, "diagram.png"), mustBase64(t, tinyPNG), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sess := agent.NewSession("system")
+	c := New(Options{
+		Runner:        cancelBeforeUserRunner{},
+		Executor:      agent.New(nil, nil, sess, agent.Options{}, event.Discard),
+		WorkspaceRoot: workspace,
+		ModelRef:      "custom/vision-pro",
+	})
+	c.mu.Lock()
+	c.gate.canceling = true
+	c.mu.Unlock()
+
+	_ = newTurnOrchestrator(c).runOrchestratedTurn(context.Background(), orchestratedTurn{input: "@diagram.png what does it say", raw: "@diagram.png what does it say", imageRefs: "@diagram.png"})
+	msgs := sess.Snapshot()
+	if len(msgs) < 2 || msgs[1].Role != provider.RoleUser {
+		t.Fatalf("no user message landed: %+v", msgs)
+	}
+	user := msgs[1]
+	if len(user.Images) != 1 {
+		t.Fatalf("the vision model's message carries %d image(s), want 1", len(user.Images))
+	}
+	if !strings.Contains(user.Content, "<"+ImageRoutingTag+">") || !strings.Contains(user.Content, "in this message as images") {
+		t.Fatalf("the message holding the image does not say so:\n%s", user.Content)
+	}
+	if strings.Contains(user.Content, "cannot read images") {
+		t.Fatalf("a vision model was told it cannot read images:\n%s", user.Content)
+	}
+}
+
 // TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk verifies that after a
 // user-cancel strip the cleaned transcript is written to disk, so a restart or
 // session resume does not reload the partial turn from a stale mid-turn

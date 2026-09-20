@@ -12,15 +12,14 @@
 ## 目录
 
 - [配置](#配置)
-- [计费与展示币种](./BILLING.zh-CN.md)
+- [计费与展示币种](./BILLING.md)
 - [CLI 命令参考](./CLI.zh-CN.md)
 - [环境变量](#环境变量)
 - [Web 前端](#web-前端)
-- [配置路径](./CONFIG_PATHS.zh-CN.md)
-- [思考语言](./REASONING_LANGUAGE.zh-CN.md)
-- [任务合约与暂停策略](./TASK_CONTRACT.zh-CN.md)
+- [配置路径](./CONFIG_PATHS.md)
+- [思考语言](./REASONING_LANGUAGE.md)
+- [任务合约与暂停策略](./TASK_CONTRACT.md)
 - [自定义 OpenAI-compatible provider](#自定义-openai-compatible-provider)
-- [桌面端 Hooks](./DESKTOP_HOOKS.zh-CN.md)
 - [快捷键](#快捷键)
 - [权限与沙盒](#权限与沙盒)
 - [能力诊断](#能力诊断)
@@ -35,13 +34,12 @@
 优先级：**flag > `./reasonix.toml` > 用户配置文件 > 内置默认值**。从
 **Reasonix v1.8.1** 开始，用户配置位于 macOS/Linux 的
 `~/.reasonix/config.toml`，Windows 为 `%AppData%\reasonix\config.toml`；迁移和相关数据路径见
-[配置路径](./CONFIG_PATHS.zh-CN.md)。标注为“仅用户/全局”的字段（包括 agent 轮数上限）不会被 `./reasonix.toml` 覆盖。
+[配置路径](./CONFIG_PATHS.md)。标注为“仅用户/全局”的字段（包括 agent 轮数上限）不会被 `./reasonix.toml` 覆盖。
 Provider 通过 `api_key_env` 命名密钥，真实密钥值保存在 CLI 与桌面端共用的
 Reasonix 全局 `<Reasonix home>/.env`。项目 `.env`、home `.env`、继承的 shell 环境变量、旧 credentials 和系统 keyring 都不再作为 provider key 的运行时 fallback；旧凭据只作为迁移来源读取。项目 `.env` 仍会作为当前 workspace 范围内的 MCP/plugin 非 provider `${VAR}` 展开来源，但不会导入 provider key 或 Reasonix 控制变量。全局 `config.toml` 和 `.env` 的完整结构见
-[配置路径](./CONFIG_PATHS.zh-CN.md)。
+[配置路径](./CONFIG_PATHS.md)。
 
-桌面端和 CLI 端的可见思考语言设置，见 [思考语言](./REASONING_LANGUAGE.zh-CN.md)。
-桌面端 Hooks 的 JSON 配置、事件 key 和 payload 字段，见 [桌面端 Hooks](./DESKTOP_HOOKS.zh-CN.md)。
+桌面端和 CLI 端的可见思考语言设置，见 [思考语言](./REASONING_LANGUAGE.md)。
 `SessionStart` hook 可通过 stdout 或 `hookSpecificOutput.additionalContext` 把插件/工作流 bootstrap 内容一次性注入下一轮真实用户输入上下文，而不是写入稳定 system prompt。
 插件包可通过 `hooks/session-start-codex` 或插件根目录 `CLAUDE.md` 提供该启动上下文；Claude 风格 `.claude/settings.json` command hooks 也会按同名事件映射到 Reasonix hooks。
 
@@ -74,7 +72,7 @@ reasoning_language = "auto"      # 可见思考过程语言：auto|zh|en
 name        = "deepseek-flash"
 kind        = "anthropic"
 base_url    = "https://api.deepseek.com/anthropic"
-model       = "deepseek-v4-flash"
+model       = "deepseek-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 web_search  = true
 # 还有预设：deepseek-pro
@@ -255,7 +253,7 @@ Goal、由 `todo_write` 工具驱动的实时 Todo 面板、扩展发布的 stat
 ## 通过 ACP 接入编辑器
 
 `reasonix acp` 把 Reasonix 作为 ACP v1 stdio agent 提供给编辑器和其他 host 客户端。
-独立的 **[ACP 编辑器接入](./ACP.zh-CN.md)** 文档集中说明启动方式、能力协商、会话生命周期、
+独立的 **[ACP 编辑器接入](./ACP.md)** 文档集中说明启动方式、能力协商、会话生命周期、
 彼此独立的模型/工作/协作/审批控制轴、客户端文件与 terminal 能力、MCP server、权限请求，
 以及 Reasonix 的回合中引导扩展。
 
@@ -573,7 +571,7 @@ CLI/TUI 文本输入可通过 `[ui].cursor_shape` 设置光标形状，支持 `u
 | `Ctrl+O` | 切换详细 reasoning 显示 | 也可通过 `/verbose` 使用。 |
 | `Ctrl+B` | 展开或收起较长 shell 输出 | 较长 shell 输出的提示行也可点击；全屏 TUI 开启鼠标接管时，文本选区由应用内处理。 |
 | `/goal <目标>`、`/goal status`、`/goal pause`、`/goal resume`、`/goal clear` | 启动、查看、暂停、恢复或清除 Goal | Goal 默认持续执行；只有用户显式预算会按数字暂停。 |
-| `/migrate`、`/migrate --from <旧目录>` | 重试旧数据迁移，或从指定 v0.x 来源导入 sessions | Windows v0.52 自定义安装/数据目录用 `--from`；该形式只导入 sessions。详见[配置路径](./CONFIG_PATHS.zh-CN.md)。 |
+| `/migrate`、`/migrate --from <旧目录>` | 重试旧数据迁移，或从指定 v0.x 来源导入 sessions | Windows v0.52 自定义安装/数据目录用 `--from`；该形式只导入 sessions。详见[配置路径](./CONFIG_PATHS.md)。 |
 
 选择器与审批：
 
@@ -670,7 +668,7 @@ compaction 摘要数，以及可用时的桌面端 token/cache telemetry。结�
 ## 能力诊断
 
 当 skill、斜杠命令、Hook、插件包、MCP 或 `AGENTS.md` 缺失、被覆盖或启动失败时，用统一只读诊断。完整参数、JSON schema 与 issue code 见
-**[能力诊断](./CAPABILITY_DIAGNOSTICS.zh-CN.md)**。
+**[能力诊断](./CAPABILITY_DIAGNOSTICS.md)**。
 
 ```bash
 # 静态（默认）：无网络、不启动 MCP 子进程
@@ -778,7 +776,7 @@ headers = { Authorization = "Bearer ${STRIPE_KEY}" }
 启用的 MCP 服务器会在会话开始后于后台自动连接，因此工具上线期间聊天仍可正常使用。
 用 `/mcp` 或桌面端 MCP 面板可刷新状态、重连服务器、查看失败原因，或在当前会话内禁用某个服务器。
 若要跨 skills / hooks / 插件包 / MCP 做只读健康检查（不改配置），见
-[能力诊断](./CAPABILITY_DIAGNOSTICS.zh-CN.md)
+[能力诊断](./CAPABILITY_DIAGNOSTICS.md)
 （`reasonix doctor capabilities` 或 **设置 → 诊断**）。
 
 交互调用方只会为冷启动短暂等待；即使等待结束，共享启动仍会在后台继续，不会被杀掉后反复重启，
@@ -809,7 +807,7 @@ RPC 调用。两者都可按服务器覆盖。
 内置 **Skill**（如 `/init`、`/explore`、`/test`、`/reasonix-guide`）也会出现在斜杠菜单，
 并可通过 `run_skill` 调用（正文按需加载；只有索引行进入缓存稳定前缀）。配置或能力排障时
 用 `/reasonix-guide`，它会引导运行 `reasonix doctor capabilities`（见
-[能力诊断](./CAPABILITY_DIAGNOSTICS.zh-CN.md)）。
+[能力诊断](./CAPABILITY_DIAGNOSTICS.md)）。
 `/new` 会开启新会话，同时保存之前的 transcript 供历史记录和恢复使用；`/clear` 会二次确认，确认后丢弃当前上下文且不保存。
 `/tree` 查看已保存的对话分支，`/branch [name]` 从当前对话末端分支，`/switch <id|name>`
 切换到另一个分支。**自定义命令**
@@ -843,7 +841,7 @@ custom path 或包含更多手写结构的 Skill，避免丢失 frontmatter、re
 `--model` 和 `--effort`，并写入与桌面设置页相同的按名称覆盖配置。
 
 完整 CLI 参数、Skill 文件格式、模型优先级、安全行为和排障说明见
-[子智能体 Profile](./SUBAGENT_PROFILES.zh-CN.md)。
+[子智能体 Profile](./SUBAGENT_PROFILES.md)。
 
 Context Engine v2 把上下文分成两个用途不同的层：
 
@@ -920,7 +918,7 @@ feedback、更新、重复项、敏感/超长内容，以及所有 `forget` 仍�
 
 旧事实会原地获得确定性 ID 和 revision 1；缺失 scope 时根据所在目录推导。Migration 幂等，
 旧客户端仍能安全路由，旧 Memory v5 transcript 也继续可读。完整行为、隐私与 cache 契约见
-[`Context Engine v2`](SESSION_MEMORY_RETRIEVAL.zh-CN.md)。
+[`Context Engine v2`](SESSION_MEMORY_RETRIEVAL.md)。
 
 ```markdown
 ---
@@ -935,24 +933,20 @@ Review the staged diff. Focus on $ARGUMENTS, list bugs with file:line.
 
 ## 内置文档检索
 
-Reasonix 会把 `docs/` 中的 Markdown 文档和已审查的 `release-notes/releases.json` 更新日志
-目录随 CLI 和桌面端一起编译发布。只读 `docs` 工具通过本地 BM25 检索这份与当前安装版本
-完全一致的离线语料，并可按命中的 `section_id` 读取完整章节及来源。每个版本都会生成
-`changelog/v1.19.5.md`、`changelog/v1.19.5.zh-CN.md` 这类中英文虚拟文档，因此可以离线
-查询指定版本的新增功能、升级说明、修复和已知风险。涉及 Reasonix 配置、CLI/桌面端行为、
-版本历史、权限、MCP、记忆、恢复、Provider 或维护流程的问题，Agent 应先查询这里，再考虑
-联网搜索或凭经验回答。
+Reasonix 会把 `docs/` 中的 Markdown 文档随 CLI 和桌面端一起编译发布。只读 `docs` 工具
+通过本地 BM25 检索这份与当前安装版本完全一致的离线语料，并可按命中的 `section_id` 读取
+完整章节及来源。涉及 Reasonix 配置、CLI/桌面端行为、权限、MCP、记忆、恢复、Provider 或
+维护流程的问题，Agent 应先查询这里，再考虑联网搜索或凭经验回答。
 
 普通路径不需要设置、联网、向量数据库或 embedding 服务。搜索会优先匹配提问语言，同时支持
 显式 `en`、`zh-CN`、受众和目录筛选。Balanced 与 Delivery 默认暴露该工具；Economy 会在需要时
 按需连接 `docs` 来源。每次返回都会给出产品版本、不可变源码 revision 与语料 SHA-256 digest。
-发布 CI 会实际编译 CLI；只有编译后的清单与候选提交的 `docs/*.md`、
-`release-notes/releases.json` 和构建身份完全一致时才允许发布。因此，更新较快的在线
-`main-v2` 页面不会静默覆盖与本地版本匹配的说明或更新历史。
+编译后的清单与候选提交的 `docs/*.md` 和构建身份一一对应，因此在线页面不会静默覆盖与本地
+版本匹配的说明。
 
 直接输入 `/docs` 会在本地显示内置语料的版本、revision、digest 和使用示例，不调用模型。
-输入 `/docs <问题>`（例如 `/docs 1.19.5 更新日志`）时，Reasonix 会先在本地完成检索，再把
-与当前版本匹配的证据交给当前配置的 AI 生成带来源的回答。这个命令路径不依赖模型是否主动
+输入 `/docs <问题>`（例如 `/docs 如何配置 MCP 服务器`）时，Reasonix 会先在本地完成检索，再把
+命中的文档片段交给当前配置的 AI 生成带来源的回答。这个命令路径不依赖模型是否主动
 选择 `docs` 工具；普通自然语言问题仍可由模型自动调用该工具。已有自定义命令以及兼容插件或
 Skill 别名会继续拥有 `/docs`；发生冲突时，CLI 与桌面端通常会改为通过 `/reasonix:docs` 暴露
 内置语料。如果这个限定名也已被占用，Reasonix 会选择下一个空闲的 `reasonix:` 限定后备名，
@@ -988,7 +982,7 @@ token、可选的显式 token 阈值和工作时间。每个目标 turn 结束�
 continue/complete/blocked；没有报告时由独立的有界 evaluator 判定一次，任何 evaluator
 故障都会安全暂停目标而不是静默继续。
 
-复杂任务建议把目标写成[任务合约](./TASK_CONTRACT.zh-CN.md)：Context、Request、
+复杂任务建议把目标写成[任务合约](./TASK_CONTRACT.md)：Context、Request、
 Output format、Constraints 和 Pause policy。Goal 模式会把这些部分当作自主执行的边界；
 除非下一步需要不可逆或对外可见操作、任务范围变化，或必须由用户提供信息，否则会继续采用合理默认值推进，并在最后汇报假设与结果。
 
@@ -1048,8 +1042,7 @@ Reasonix 会自动管理正常执行：活跃 Todo 连续 8 个工具调用轮�
 
 升级时仍可解析已有的 `[agent].max_steps` 和 `planner_max_steps`，但其值会被忽略，并在一次性
 迁移提示后从配置中移除，避免隐藏的旧上限截断自动进度管理或子 Agent 的继承任务。确实需要
-为单次运行设置预算时使用 CLI `--max-steps`；无人值守 Bot 仍保留 `[bot].max_steps`，其中 `0`
-表示自动持续执行，正数表示用户显式上限。
+为单次运行设置预算时使用 CLI `--max-steps`。
 
 **普通对话任务默认没有任何上限**——轮数、token、时长、花费都不限。它一直跑到模型自己
 结束、自适应守卫判定它不再产生进展，或者你手动停止为止。
@@ -1167,11 +1160,8 @@ provider 可见核心工具面（直接读/bash/编辑/写入、后台 shell 生
 `reasonix config reasoning-language auto|zh|en`。只有明确想为
 reasoning-language 写项目级覆盖时，才给 shell 命令加 `--local`。
 
-桌面端“协作方式”菜单里的计划模式、目标模式和“轻量 / 均衡 / 交付优先”三档运行模式的使用方法与注意事项，
-见 [`COLLABORATION_MODES.zh-CN.md`](./COLLABORATION_MODES.zh-CN.md)。
-
 桌面端“工具权限”里的询问、自动和 Yolo 模式的区别与使用场景，
-见 [`TOOL_APPROVAL_MODES.zh-CN.md`](./TOOL_APPROVAL_MODES.zh-CN.md)。
+见 [`TOOL_APPROVAL_MODES.md`](./TOOL_APPROVAL_MODES.md)。
 
 分离 session（让各模型前缀缓存稳定）背后的取舍见
 [`SPEC.md` §3.5](./SPEC.md#35-two-model-collaboration-coordinator)。

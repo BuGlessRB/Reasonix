@@ -1,6 +1,6 @@
 # Extension Runtime v2 (Spatiotemporal Composability)
 
-English overview of the Reasonix plugin/runtime v2 model. Chinese: [EXTENSION_RUNTIME_V2.zh-CN.md](./EXTENSION_RUNTIME_V2.zh-CN.md).
+English overview of the Reasonix plugin/runtime v2 model.
 
 ## Protocol and manifest
 

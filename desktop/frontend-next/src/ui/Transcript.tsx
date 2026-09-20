@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { decimals } from "../i18n/format";
 import { t } from "../i18n";
 import type { Item, Waiting } from "../state/session";
@@ -20,6 +20,7 @@ import { ExtensionCard } from "./cards/ExtensionCard";
 import { toolFailed } from "./cards/outcome";
 import { Rail, type RailMark } from "./Rail";
 import { StudioIcon } from "./StudioIcon";
+import { clearFind, paintFind } from "./findpaint";
 
 interface Props {
   items: Item[];
@@ -35,6 +36,8 @@ interface Props {
   // node you clicked. The nonce, not the id, is what makes asking twice land
   // twice; null while nothing has been asked for.
   focus: { call: string; n: number } | null;
+  find?: { id: string; n: number } | null;
+  query?: string;
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => Promise<void>;
   onPlan: (itemId: string, id: string, action: PlanAction) => Promise<void>;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => Promise<void>;
@@ -100,7 +103,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, onApprove, onPlan, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
+export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, find, query, onApprove, onPlan, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -112,6 +115,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   const [pinned, setPinned] = useState(true);
   const end = useRef<HTMLDivElement>(null);
   const flow = useRef<HTMLDivElement>(null);
+  const scrollId = useId();
   // Read from observer callbacks that must not be torn down and rebuilt every
   // time the reader crosses the bottom.
   const at = useRef(pinned);
@@ -146,6 +150,12 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       self.current = false;
     });
   }, [scroll]);
+
+  useEffect(() => {
+    if (hidden) return clearFind();
+    paintFind(flow.current, query ?? "", find?.id ?? null);
+    return clearFind;
+  }, [hidden, query, find, items, revision]);
 
   useEffect(() => {
     const onSelect = () => {
@@ -437,12 +447,12 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   return (
     <div
       className="scroll"
-      id="flowScroll"
+      id={scrollId}
       data-pane="flow"
       ref={scroll}
       hidden={hidden}
     >
-      <Rail marks={marks} total={items.length} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} />
+      <Rail marks={marks} total={items.length} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} controls={scrollId} />
       <div className="flow-edge" aria-hidden="true" />
       {/* 空转录是「窗口的空白」，壁纸该在那儿；一有内容它就是内容了。 */}
       <div className="flow" ref={flow} data-empty={items.length === 0 ? "" : undefined}>

@@ -4,6 +4,7 @@ import { t } from "../i18n";
 import type { AccountState, AgentPort, Appearance as Look, ProviderSetup, ThemePack } from "../port/port";
 import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { Chrome } from "./Chrome";
+import { useLaunchHealth } from "./launchhealth";
 import { Nav } from "./Nav";
 import { AccountRow } from "./AccountRow";
 import { apply as applyThemePack } from "./theme";
@@ -121,6 +122,7 @@ export function App({ hub }: { hub: HubPort }) {
   const [focus, setFocus] = useState(false);
   const [railW, setRailW] = useState(() => widthOf(RAIL));
   const [report, setReport] = useState<PaneReport>(NO_REPORT);
+  const [findPulse, setFindPulse] = useState(0);
   const [error, setError] = useState("");
   // false = closed, true = open at its last section, a string = open there.
   const [settings, setSettings] = useState<string | boolean>(false);
@@ -148,6 +150,7 @@ export function App({ hub }: { hub: HubPort }) {
   const [runs, setRuns] = useState<Record<string, { run: string; live: boolean }>>({});
   const activeRef = useRef("");
   activeRef.current = active;
+  const reportsRef = useRef<Record<string, PaneReport>>({});
   const runsRef = useRef(runs);
   runsRef.current = runs;
 
@@ -161,8 +164,22 @@ export function App({ hub }: { hub: HubPort }) {
     setRuns((prev) =>
       prev[id]?.run === next.run && prev[id]?.live === next.live ? prev : { ...prev, [id]: { run: next.run, live: next.live } },
     );
+    // Every pane's last report, kept in a ref so a background pane's usage
+    // round does not re-render the window — and so switching tabs has
+    // something to read. Rendering from state here is the same figure at the
+    // cost of a window render per background beat.
+    reportsRef.current[id] = next;
     if (id === activeRef.current) setReport(next);
   }, []);
+
+  // The window's title, run pill and status belong to the pane in front. They
+  // were only ever written when a pane reported, so switching to an idle pane
+  // left the title naming the conversation that had last spoken — a pane that
+  // has nothing to say never says it again. Freshness follows the switch here
+  // rather than waiting for the new pane to happen to report.
+  useEffect(() => {
+    setReport(reportsRef.current[active] ?? NO_REPORT);
+  }, [active]);
 
   const reloadTree = useCallback(
     () =>
@@ -248,6 +265,8 @@ export function App({ hub }: { hub: HubPort }) {
     return map;
   }, [hub, runtimes]);
   const activePort = panePorts.get(active) ?? panePorts.values().next().value ?? null;
+
+  useLaunchHealth(activePort, setup, welcomed);
 
   useEffect(() => {
     if (!activePort) return;
@@ -335,7 +354,7 @@ export function App({ hub }: { hub: HubPort }) {
       // prototype. Legacy theme packs may still be managed in settings, but
       // they must not repaint this shell or reintroduce the old background,
       // glow and translucency rules over the product UI.
-      applyThemePack(null, scheme as "light" | "dark", running);
+      applyThemePack(null, scheme as "light" | "dark", running, contrast);
       // After the pack, never before: size and type are the reader's, and a
       // palette someone else authored does not get to overrule them.
       applyLook({ ...look, wallpaper: undefined }, running);
@@ -344,7 +363,7 @@ export function App({ hub }: { hub: HubPort }) {
     mq.addEventListener("change", paint);
     localStorage.setItem("rx-theme", theme);
     return () => mq.removeEventListener("change", paint);
-  }, [theme, pack, running, look]);
+  }, [theme, pack, running, look, contrast]);
 
   useEffect(() => {
     if (contrast) document.documentElement.dataset.contrast = contrast;
@@ -399,7 +418,7 @@ export function App({ hub }: { hub: HubPort }) {
       // idle pane in the same workspace instead of accumulating full hidden
       // transcripts until the kernel refuses another open.
       const idle = runtimes.filter((rt) => rt.id !== active && !runsRef.current[rt.id]?.live);
-      const atCapacity = runtimes.length >= Math.min(WARM_PANES, hub.maxPanes());
+      const atCapacity = runtimes.length >= WARM_PANES;
       const reusable = atCapacity && req.sessionPath
         ? idle.find((rt) => rt.root === req.root && panePorts.has(rt.id))
         : undefined;
@@ -414,7 +433,7 @@ export function App({ hub }: { hub: HubPort }) {
       // one settled background pane before opening so the row never reaches the
       // old "nothing happens" max-pane failure.
       let retired = "";
-      if (runtimes.length >= hub.maxPanes() && idle[0]) {
+      if (atCapacity && idle[0]) {
         retired = idle[0].id;
         await hub.close(retired);
       }
@@ -491,6 +510,7 @@ export function App({ hub }: { hub: HubPort }) {
     () => [
       { chord: "\\", action: "rail.toggle", run: () => setRail((v) => !v) },
       { chord: ",", action: "chrome.settings", run: showPrefs },
+      { chord: "f", action: "transcript.find", run: () => setFindPulse((n) => n + 1) },
     ],
     [showPrefs],
   );
@@ -859,6 +879,7 @@ export function App({ hub }: { hub: HubPort }) {
                   // looks blank — the next history row would take it over.
                   onSessionChanged={reloadPanes}
                   pulse={settingsPulse}
+                  findPulse={findPulse}
                   needsProject={needsProject}
                   // 手输那条逃生口只在侧栏有一份 UI，所以先把栏打开再问。
                   onOpenProject={() => {

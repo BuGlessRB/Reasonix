@@ -1,5 +1,8 @@
 {
+  "internal/browser/**": 21.7,
+  "internal/computer/**": 89.8,
   "internal/control/approval.go": 94.3,
+  "internal/control/approval_bridge.go": 77,
   "internal/control/approval_orchestration.go": 90.7,
   "internal/installsource/**": 77.2,
   "internal/netclient/**": 47.2,
@@ -10,5 +13,5 @@
   "internal/redirectguard/**": 92.6,
   "internal/sandbox/**": 78.1,
   "internal/shellparse/**": 64.5,
-  "internal/shellsafe/**": 61.1
+  "internal/shellsafe/**": 81.6
 }

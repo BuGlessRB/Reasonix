@@ -103,7 +103,6 @@ func TestWrappersForwardEveryCapability(t *testing.T) {
 		"Sync":          Sync(inner),
 		"Coalesce":      Coalesce(inner, DefaultStreamDeltaWindow),
 		"CostQuoteSink": NewCostQuoteSink(inner, nil),
-		"FanOut":        NewFanOut(inner),
 	}
 	for name, w := range wrappers {
 		t.Run(name, func(t *testing.T) {

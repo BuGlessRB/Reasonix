@@ -22,7 +22,7 @@ import (
 	"reasonix/internal/tool"
 )
 
-// Stage 6b1 control wiring tests. The dispatcher under test is real; only its
+// Control wiring tests. The dispatcher under test is real; only its
 // sidecar client is faked, so every assertion exercises the actual dispatch
 // ruling logic (chain walk, strict replacement decode, slot ownership).
 
@@ -486,7 +486,7 @@ func TestFrontendEventStrategyBlockSuppresses(t *testing.T) {
 	}
 }
 
-// Stage 6b2: the dispatcher installed on the controller must reach the
+// The dispatcher installed on the controller must reach the
 // executor agent, and a strategy-replaced system prompt must land in the
 // executor's live session (and survive session rotations).
 

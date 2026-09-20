@@ -159,14 +159,15 @@ func isTLSRecordError(err error) bool {
 	return errors.As(err, &recordErr)
 }
 
-// trimTransportError drops the URL prefix net/http prepends, which repeats what
-// the row already says and pushes the actual cause off the end of the line.
+// trimTransportError drops the operation and URL net/http carries on a
+// transport failure, which repeat what the row already says and push the
+// actual cause off the end of the line.
 func trimTransportError(err error) string {
-	msg := err.Error()
-	if _, after, ok := strings.Cut(msg, ": "); ok && strings.HasPrefix(msg, "Head ") {
-		return after
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) && urlErr.Err != nil {
+		return urlErr.Err.Error()
 	}
-	return msg
+	return err.Error()
 }
 
 func clip(values []string, n int) []string {

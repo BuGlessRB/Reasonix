@@ -100,26 +100,42 @@ func (l *Ledger) HasVerificationCommandAfter(after int) bool {
 // suite, since the shell's status is go vet's. Outcomes fold per check, so
 // re-running one until it passes clears it.
 func (l *Ledger) HasFailedVerificationAfter(after int) bool {
+	return len(l.FailedVerificationsAfter(after)) > 0
+}
+
+// FailedVerificationsAfter names the checks that stand failed after the
+// boundary, latest run last. A model told only that "the check did not pass"
+// has to guess which of the ones it ran the host means, and a check it cannot
+// name is one it can neither re-run nor conclude on.
+func (l *Ledger) FailedVerificationsAfter(after int) []string {
 	if l == nil {
-		return false
+		return nil
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	latest := map[string]string{}
+	var order []string
 	for _, r := range l.receipts[max(after+1, 0):] {
 		if !ReceiptRunsVerification(r) {
 			continue
 		}
-		if outcome := VerificationOutcome(r); outcome != "" {
-			latest[VerificationIdentity(r.Command)] = outcome
+		outcome := VerificationOutcome(r)
+		if outcome == "" {
+			continue
+		}
+		id := VerificationIdentity(r.Command)
+		if _, seen := latest[id]; !seen {
+			order = append(order, id)
+		}
+		latest[id] = outcome
+	}
+	var failed []string
+	for _, id := range order {
+		if latest[id] == VerificationFailed {
+			failed = append(failed, id)
 		}
 	}
-	for _, outcome := range latest {
-		if outcome == VerificationFailed {
-			return true
-		}
-	}
-	return false
+	return failed
 }
 
 // HasBlockedConclusionAfter reports whether the model declared, after the

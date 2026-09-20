@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -1322,7 +1322,7 @@ func sameRepairMutationPaths(a, b []string) bool {
 			seen[key] = struct{}{}
 			result = append(result, key)
 		}
-		sort.Strings(result)
+		slices.Sort(result)
 		return result
 	}
 	return reflect.DeepEqual(keys(a), keys(b))
@@ -2415,12 +2415,6 @@ func markUpdateHealthyMatching(runningVersion, expectedCreatedAt, expectedTransa
 	return nil
 }
 
-// CancelPendingUpdate removes a transaction that failed before control was
-// handed to the replacement build. A version mismatch is intentionally inert.
-func CancelPendingUpdate(toVersion string) error {
-	return cancelPendingUpdateInvocation(toVersion, "", "")
-}
-
 // CancelPendingUpdateMatching removes only the exact transaction prepared by
 // the caller. It is used by updater failure paths where a same-version retry can
 // replace pending-update.json before cleanup runs.
@@ -3056,10 +3050,10 @@ var (
 )
 
 // restoreReleaseUnit swaps every backup into place with compensation, so a
-// failed rollback never leaves a mixed old/new install. Phase 1 stages each
-// backup next to its target — a copy can fail halfway (disk full, unreadable
+// failed rollback never leaves a mixed old/new install. Every backup is first
+// staged next to its target — a copy can fail halfway (disk full, unreadable
 // backup) and staging keeps the live binaries untouched until every byte is
-// on the target filesystem. Phase 2 swaps via renames only: each target moves
+// on the target filesystem. The swap that follows is renames only: each target moves
 // aside first (renaming works even for the running executable, where
 // overwriting does not), so a failure renames the asides back and the unit
 // stays coherent on the new version for a retried rollback. Only when that

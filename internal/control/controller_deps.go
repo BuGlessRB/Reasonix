@@ -148,7 +148,7 @@ func newControllerDeps(opts Options, sink event.Sink, usageTee *goalUsageTee, ru
 		ablation:               opts.Ablation,
 		workspaceRoot:          opts.WorkspaceRoot,
 		runtimeOwner:           runtimeOwner,
-		approval:               newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout),
+		approval:               newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout, opts.OnRemember != nil),
 	}
 }
 

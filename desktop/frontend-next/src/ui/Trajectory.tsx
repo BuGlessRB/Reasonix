@@ -35,6 +35,12 @@ function serialise(rows: TrajRow[], availability: TrajectoryAvailability | undef
   );
 }
 
+// The same line as one string, for a row narrow enough to clip it: an error
+// nobody can read the end of is the half that says what actually failed.
+export function spanText(of: Span[]): string {
+  return of.map((s) => ("b" in s ? s.b : "n" in s ? s.n : s.t)).join("");
+}
+
 export function Spans({ of }: { of: Span[] }) {
   return (
     <>

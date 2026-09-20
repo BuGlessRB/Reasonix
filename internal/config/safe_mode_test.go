@@ -32,7 +32,7 @@ func TestBuiltinDefaultsDoNotReadOrRewriteMalformedConfig(t *testing.T) {
 func TestRecoveryDefaultsAliasBuiltin(t *testing.T) {
 	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	cfg := LoadRecoveryDefaultsForRoot(testenv.TempDir(t))
+	cfg := LoadBuiltinDefaultsForRoot(testenv.TempDir(t))
 	if cfg == nil {
 		t.Fatal("recovery defaults must return a configuration")
 	}

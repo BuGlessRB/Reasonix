@@ -28,10 +28,12 @@ export type Kind =
   | "stream_attempt"
   | "context_maintenance"
   | "todo_progress"
+  | "workspace_lease"
   | "workspace_changed"
   | "completion_summary"
   | "inbox_changed"
   | "adjudications_changed"
+  | "browser_tabs_changed"
   | "graph_delta"
   // Transport frames, not kernel events: the stream describing itself. Handled
   // in the port and never reaching the reducer.
@@ -54,15 +56,22 @@ export interface Profile {
 export interface Execution {
   kind?: string;
   shell?: string;
+  /** PowerShell 5.1 and 7 are two different languages to write a command in,
+   *  and the shell name alone cannot say which one answered. */
+  shellVersion?: string;
   platform?: string;
+  /** False on Windows PowerShell 5.1, where `&&` is a syntax error. */
+  supportsAndAnd?: boolean;
   state?: string;
   failurePhase?: string;
   exitCode?: number;
   outputTail?: string;
+  /** The command with its leading environment assignments dropped, when
+   *  dropping them changed it. What a row names; never what authorised it. */
+  subject?: string;
   mutationRisk?: string;
   verification?: string;
   durationMs?: number;
-  contextTokens?: number;
 }
 
 // How a result was fitted into the model's context, absent when it arrived
@@ -97,7 +106,12 @@ export interface Tool {
   resolvedName?: string;
   capabilityId?: string;
   output?: string;
+  // What the call showed the model, as data URLs. The output text only names
+  // them, so without these a person is told a picture was taken and not shown it.
+  images?: string[];
   err?: string;
+  // The host's dotted identity for a refusal. err is only its wording.
+  refusalCode?: string;
   readOnly: boolean;
   // truncated is the pre-Bound projection kept for old journals; read bound.
   truncated?: boolean;
@@ -198,8 +212,14 @@ export interface Approval {
   id: string;
   tool: string;
   subject: string;
+  // reason is the sentence the model was given; reasonCode is the same answer
+  // as an identity, which is what this window renders.
   reason?: string;
+  reasonCode?: string;
   fresh?: boolean;
+  // Which answers beyond "once" this host will honour for this call.
+  allowsSession?: boolean;
+  allowsPersist?: boolean;
   kind?: "tool" | "plan" | "recovery";
 }
 
@@ -366,6 +386,17 @@ export interface TodoProgress {
   progressRevision?: number;
 }
 
+/** One closed account of the workspace write lease. Waits under the notice
+ *  grace are counted here and nowhere else, and idleMs is the stretch held
+ *  after the last write asked for it. */
+export interface WorkspaceLease {
+  contended: number;
+  reported?: number;
+  waitedMs?: number;
+  heldMs: number;
+  idleMs: number;
+}
+
 // One context-maintenance transaction. status "noop" carries code: the attempt
 // ran and freed nothing, and code is what tells "already folded this turn" from
 // "nothing left to fold" — they read alike and mean opposite things about what
@@ -400,6 +431,11 @@ export interface Compaction {
   coverageMissing?: number;
   // The host wrote the dropped facts in itself, because the digest did not.
   coverageBackstopped?: boolean;
+  // Which threshold sent this fold and how big it is. "Reached a threshold"
+  // is all the card can say without them, and a fold at 16% of the declared
+  // window is exactly the one that needs saying.
+  boundary?: string;
+  triggerTokens?: number;
 }
 
 export interface StreamAttempt {
@@ -584,6 +620,7 @@ export interface WireEvent {
   compaction?: Compaction;
   maintenance?: ContextMaintenance;
   todoProgress?: TodoProgress;
+  workspaceLease?: WorkspaceLease;
   streamAttempt?: StreamAttempt;
   completion?: CompletionSummary;
   graph?: GraphDelta;

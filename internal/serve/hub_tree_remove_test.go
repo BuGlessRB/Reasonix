@@ -174,3 +174,63 @@ func TestRemoveSessionSucceedsOnceTheLeaseIsReleased(t *testing.T) {
 		t.Error("event log survived the delete, so the conversation could be resurrected")
 	}
 }
+
+// A holder in another process is invisible to the pane map, so the sidebar
+// offers no pane to close and the window no button that would close one. The
+// refusal has to name the holder the guard already read.
+func TestRemoveSessionNamesTheProcessHoldingIt(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	root := testenv.TempDir(t)
+	h := NewHub(HubOptions{})
+	hubRuntime(t, h, root)
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+
+	path := filepath.Join(SessionDirFor(root), "elsewhere.jsonl")
+	writeSessionAt(t, path)
+
+	// A holder this process cannot reach, written the way another one writes it.
+	lease, err := agent.TryAcquireSessionLease(path)
+	if err != nil {
+		t.Fatalf("TryAcquireSessionLease: %v", err)
+	}
+	defer lease.Release()
+	stampForeignLeaseHolder(t, path, os.Getpid()+1)
+
+	resp := postRemoveSession(t, srv, path)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("POST /tree/sessions/remove = %d, want 409", resp.StatusCode)
+	}
+	var body struct {
+		Code   string         `json:"code"`
+		Params map[string]any `json:"params"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode refusal: %v", err)
+	}
+	if body.Code != "session.in_use_by" {
+		t.Fatalf("refusal code = %q, want the one that carries a holder", body.Code)
+	}
+	if pid, ok := body.Params["pid"].(float64); !ok || int(pid) != os.Getpid()+1 {
+		t.Fatalf("params = %v, want the holder's pid — without it the reader has nothing to act on", body.Params)
+	}
+}
+
+// stampForeignLeaseHolder rewrites the lease's recorded holder. Only the info
+// file names one; the lock itself does not.
+func stampForeignLeaseHolder(t *testing.T, path string, pid int) {
+	t.Helper()
+	info, err := agent.LoadSessionLeaseInfo(path)
+	if err != nil || info == nil {
+		t.Fatalf("LoadSessionLeaseInfo: %v", err)
+	}
+	info.PID = pid
+	raw, err := json.Marshal(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.SessionLeaseInfo(path), raw, 0o600); err != nil {
+		t.Fatalf("write lease info: %v", err)
+	}
+}

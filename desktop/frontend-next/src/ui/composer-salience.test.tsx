@@ -98,7 +98,7 @@ describe("the quiet may not swallow a fully-permitted session", () => {
   it("shows it, marks it, and does so even with everything else at baseline", () => {
     const { container } = draw(status({ toolApprovalMode: "yolo" as ApprovalMode }));
     expect(container.querySelector(".polrisk")?.textContent).toContain("全部放行");
-    expect(container.querySelector(".polwarn")?.textContent).toBe("⚠");
+    expect(container.querySelector(".polwarn svg")).not.toBeNull();
   });
 
   it("shows it while a plan is running too", () => {

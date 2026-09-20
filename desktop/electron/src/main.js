@@ -1,6 +1,7 @@
 "use strict";
 const { app, BrowserWindow, dialog, ipcMain, screen, session, shell } = require("electron");
 const fs = require("node:fs/promises");
+const { existsSync } = require("node:fs");
 const path = require("node:path");
 const { start } = require("./host");
 const { StudioHost } = require("./hostclient");
@@ -11,6 +12,17 @@ const { externalTarget } = require("./links");
 const { appIcon } = require("./appicon");
 const layout = require("./layout");
 const { offerCleanup } = require("./legacy");
+const { stripPackageGrants, unpaintedWindowCause } = require("./packagegrants");
+const { BrowserProtocol } = require("./browserprotocol");
+const { BrowserViews } = require("./browserviews");
+const { startBrowserRelay } = require("./browserrelay");
+
+// A page in a minimized or fully covered window counts as hidden, and a hidden
+// page drops the input the agent sends it: measured, its clicks never arrive and
+// the protocol call does not even answer. The agent works while the person is in
+// another app, so occlusion must not reach its pages. The cost is that this
+// application's renderers keep running at full rate while nobody is looking.
+app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 
 // Must match serve.TokenCookie and the namespace the kernel serves the page on.
 const TOKEN_COOKIE = "reasonix_token";
@@ -26,6 +38,7 @@ const where = {
   env: process.env,
 };
 const hostBinary = layout.hostBinary(where);
+const computerHelper = layout.computerHelper(where);
 const pageDir = layout.pageDir(where);
 
 let kernel = null;
@@ -34,6 +47,9 @@ let origin = "";
 let quitting = false;
 let client = null;
 let tray = null;
+let grants = null;
+let browserViews = null;
+let browserRelay = null;
 
 async function boot() {
   // Which build this is belongs to the shell: inside the bundle the kernel's
@@ -42,6 +58,7 @@ async function boot() {
   // falls back to Electron's own, which named a Studio that never shipped and
   // ranked it ahead of every published release.
   const args = ["-page", pageDir];
+  if (computerHelper && existsSync(computerHelper)) args.push("-computer-helper", computerHelper);
   if (app.isPackaged) {
     args.push("-studio-version", app.getVersion());
     // The other half the kernel cannot work out: which file the application
@@ -63,18 +80,39 @@ async function boot() {
   await armCredential(ready);
   win = createWindow();
   guard(win.webContents);
+  win.webContents.once("render-process-gone", (_event, details) => {
+    if (win.isVisible() || details.reason !== "crashed") return;
+    const cause = unpaintedWindowCause(grants, app.getLocale());
+    if (cause) dialog.showErrorBox(cause.title, cause.detail);
+  });
   installContextMenu(win.webContents, win);
   win.once("ready-to-show", () => win.show());
   // No icon, no backgrounding: the close button can only hide the window where
   // something is left that brings it back.
   tray = installTray(client, { onOpen: showWindow, onQuit: () => app.quit() });
   win.on("close", onWindowClose);
+  hostAgentBrowser();
   await win.loadURL(origin + PAGE_PATH);
   await tray?.refresh();
   // After the window, deliberately. This asks about an install left behind by
   // the shell this one replaces, and a modal in front of a window that has not
   // painted reads as the application having failed to start.
   cleanUpLegacyInstalls();
+}
+
+// The agent's browser draws its pages as views in this window: the kernel
+// drives them through the relay, and the page decides where one is shown.
+function hostAgentBrowser() {
+  browserViews = new BrowserViews({ win, kernelOrigin: origin });
+  const protocol = new BrowserProtocol({
+    createView: (spec) => browserViews.create(spec),
+    post: (frame) => browserRelay?.post(frame),
+  });
+  browserRelay = startBrowserRelay({
+    client,
+    onFrame: (frame) => protocol.receive(frame),
+    onDrop: () => protocol.drop(),
+  });
 }
 
 // The Wails install a dmg download leaves beside this one. Detached from boot:
@@ -200,6 +238,18 @@ ipcMain.handle("window:is-maximised", (event) => fromWindow(event)?.isMaximized(
 ipcMain.handle("window:close", (event) => {
   fromWindow(event)?.close();
 });
+ipcMain.handle("browser:show", (event, targetId, rect) => {
+  if (fromWindow(event)) browserViews?.show(String(targetId), rect);
+});
+ipcMain.handle("browser:hide", (event) => {
+  if (fromWindow(event)) browserViews?.hide();
+});
+ipcMain.handle("browser:control", (event, targetId, action) => {
+  if (fromWindow(event)) browserViews?.control(String(targetId), String(action));
+});
+ipcMain.handle("browser:navigate", (event, targetId, address) =>
+  fromWindow(event) ? (browserViews?.navigate(String(targetId), String(address)) ?? false) : false,
+);
 ipcMain.handle("shell:open-external", (event, raw) => {
   if (!fromWindow(event)) return;
   const target = externalTarget(raw);
@@ -255,6 +305,10 @@ if (!primary) {
   app.quit();
 } else {
   app.on("second-instance", showWindow);
+  grants = stripPackageGrants(hostBinary, { ...where, execPath: process.execPath });
+  if (grants?.stripped.length) {
+    console.error(`reasonix-studio: removed app-package grants that stop sandboxed processes loading: ${grants.stripped.join(", ")}`);
+  }
 }
 
 app.whenReady().then(() => {
@@ -291,6 +345,7 @@ module.exports = { current: () => ({ win, tray, client, origin }) };
 
 app.on("before-quit", () => {
   quitting = true;
+  browserRelay?.stop();
   tray?.close();
   kernel?.child.stdin.end();
 });

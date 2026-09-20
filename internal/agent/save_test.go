@@ -1123,7 +1123,7 @@ func TestSaveSnapshotMigratesLegacyJSONLToEventLog(t *testing.T) {
 	if got := reloaded.Messages[len(reloaded.Messages)-1].Content; got != "migrated" {
 		t.Fatalf("migrated tail = %q, want migrated", got)
 	}
-	if _, err := os.Stat(SessionEventIndexPath(path)); err != nil {
+	if _, err := os.Stat(store.SessionEventIndex(path)); err != nil {
 		t.Fatalf("event index missing: %v", err)
 	}
 }

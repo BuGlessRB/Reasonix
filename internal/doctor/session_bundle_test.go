@@ -4,9 +4,10 @@ import (
 	"archive/zip"
 	"encoding/json"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -137,10 +138,6 @@ func zipFiles(t *testing.T, path string) map[string][]byte {
 }
 
 func keys(m map[string][]byte) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
+	out := slices.Sorted(maps.Keys(m))
 	return out
 }

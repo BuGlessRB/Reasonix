@@ -52,7 +52,6 @@ export const EN_SETTINGS: Record<string, string> = {
   "在 Git worktree 中创建独立副本，修改不会影响当前分支": "Work in a separate Git worktree so changes do not land on the current branch",
 
   // ── 设置：模型 ───────────────────────────────────────────────────
-  "模型": "Model",
   "角色分工": "Roles",
   "每个位置默认使用主模型，只有明确指派过的才会单独设置。更换指派与更换主模型一样需要重建运行时，任务运行期间无法修改。":
     "Each slot uses the main model unless you assign one explicitly. Changing an assignment rebuilds the runtime just as changing the main model does, and cannot be done while a task is running.",
@@ -192,6 +191,17 @@ export const EN_SETTINGS: Record<string, string> = {
     "How this endpoint expresses thinking depth. It cannot be probed: a relay forwards someone else's model, and only you know what is behind it. Choosing one enables the reasoning level; choosing wrong makes the endpoint reject the request.",
   "自动 · 按模型和地址推断": "Auto · inferred from the model and address",
   "不发思考参数": "Send no thinking parameter",
+  "上下文续接": "Carrying context",
+  "{name} 的上下文续接方式": "How {name} carries context between turns",
+  "引用上一轮": "By reference",
+  "每轮完整发送": "Replay each turn",
+  "按端点厂商判断。中转站若回报 previous_response_id 不受支持，改为「每轮完整发送」。":
+    "Decided by the endpoint's vendor. If a relay reports that previous_response_id is unsupported, switch to Replay each turn.",
+  "只发送新的一轮，历史由端点自己保存 —— 前缀缓存命中率最高，但要求端点真的存了。":
+    "Sends only the new turn and lets the endpoint hold the history — the best prefix-cache hit rate, and it requires that the endpoint really stored it.",
+  "每轮重发完整历史。中转站只转发、不保存状态时用这一档。":
+    "Replays the whole history every turn. Use this where a relay forwards requests without storing any state.",
+
   "额外请求头": "Extra request headers",
   "每行一个「名称: 值」。中转站通常用它识别站点；密钥仍填写在上方。": "One name: value per line. Relays often use these to identify the site; the key still goes in the field above.",
   "额外请求体": "Extra request body",
@@ -257,7 +267,6 @@ export const EN_SETTINGS: Record<string, string> = {
   "旧版桌面端": "Previous desktop app",
 
   // ── 设置：行内操作 ───────────────────────────────────────────────
-  "取消": "Never mind",
   "配置": "the config",
   "从 {where} 中删除 {name}？若只是暂时停用，关闭开关即可。":
     "Delete {name} from {where}? If you only want it out of the way for now, the switch is enough.",
@@ -283,6 +292,7 @@ export const EN_SETTINGS: Record<string, string> = {
   "机器、工作区与会话": "Machines, workspaces and sessions",
   "{n} 个项目": "{n} projects",
   "允许这一次": "Allow once",
+  "本会话都允许": "Allow for this session",
   "此类操作不再询问": "Stop asking for this kind",
   "内核已记入会话授权，不写入磁盘。": "The kernel records it for this session only; nothing is written to disk.",
   "agent 已收到拒绝，将改用其他方式或终止。": "The agent takes the refusal and either finds another way or stops.",
@@ -337,7 +347,6 @@ export const EN_SETTINGS: Record<string, string> = {
   "覆盖已安装的版本": "Replace the installed copy",
   "勾「读图」的才会收到图片": "Only the ones marked “reads images” receive them",
   "关掉": "Close",
-  "还原": "Restore",
   "回退到这个版本": "Roll back to this version",
   "记住了": "Remembered",
   "接入": "Connect",
@@ -354,9 +363,22 @@ export const EN_SETTINGS: Record<string, string> = {
   "退出登录": "Sign out",
   "忘掉中…": "Forgetting…",
   "压缩完成": "Compaction done",
+  "手动触发": "Triggered by hand",
+  "上下文达到阈值，自动触发": "Automatic: a context threshold was reached",
+  "自动触发 · 输入到达固定维护线 {n}": "Automatic · input reached the fixed maintenance line at {n}",
+  "自动触发 · 输入到达窗口容量线 {n}": "Automatic · input reached the window's capacity line at {n}",
+  "自动触发 · 输入到达 {n}": "Automatic · input reached {n}",
   "移除中…": "Removing…",
   "{err}　—— 本地功能不受影响，请稍后重试。": "{err} — nothing local is affected; try again later.",
   "已固定在 {v}，不会自动更新": "Pinned to {v}; updates will not move it",
+  "固定版本为 {pinned}，当前运行的是 {current}": "Pinned to {pinned}; what is running is {current}",
+  "有新版本 {v}": "{v} is out",
+  "切换到 {v} 失败": "Switching to {v} failed",
+  "{err}　—— 当前版本未被改动，可以重试。": "{err} — the running version was not touched; you can try again.",
+  "正在运行": "Running now",
+  "更早的版本": "An earlier version",
+  "更新的版本": "A newer version",
+  "未发布": "Not published",
   "（无正文）": "(no body)",
   "没有可用的贡献": "Nothing usable inside",
   "删除 {name}？其提供的技能、命令与服务将一并移除。若只是暂时停用，关闭开关即可。": "Delete {name}? The skills, commands and services it brought go with it. To just set it aside, the switch is enough.",
@@ -370,6 +392,7 @@ export const EN_SETTINGS: Record<string, string> = {
   "只发送常规聊天参数，不再指定思考深度；模型自身的推理行为不受影响。": "Sends only the ordinary chat parameters and stops specifying a thinking depth; the model reasons as it otherwise would.",
   "安装到「我的」，所有项目均可使用": "Install to “Mine”, available in every project",
   "最大化": "Maximize",
+  "向下还原": "Restore",
 
   // ── 对比度与钩子示例 ─────────────────────────────────────────
   "系统已开启「增强对比度」时使用最强档": "Uses the strongest step when the system asks for increased contrast",
@@ -416,8 +439,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "自定义 {n}": "Custom, {n}",
   "高级设置": "Advanced",
   "经济维护阈值": "Economic threshold",
-  "可见输入达到该大小即整理，与模型声明的窗口无关。默认 {n}。":
-    "Tidy up once visible input reaches this size, whatever window the model declares. Default {n}.",
+  "可见输入达到该大小即整理，与模型声明的窗口无关 —— 输入越大，每轮越慢。默认 {n}。":
+    "Tidy up once visible input reaches this size, whatever window the model declares — the larger the input, the slower each round. Default {n}.",
   "使用默认值": "Use the default",
   "自定义": "Custom",
   "只按模型容量保护": "Capacity guard only",
@@ -425,4 +448,24 @@ export const EN_SETTINGS: Record<string, string> = {
   "容量保护": "Capacity guard",
   "模型窗口的 {p}%，始终生效 —— 关闭经济阈值不会影响它。":
     "{p}% of the model's window, always in force — turning the economic threshold off does not turn this off.",
+  // ── 装上/接上之后说了什么 ─────────────────────────────────────
+  "在浏览器里打开的页面输入这串代码。没自动打开就手动访问 {uri}":
+    "Type this code into the page your browser opened. If none opened, go to {uri}",
+  "装好了，下一轮就能用": "Installed — the next turn can use it",
+  "装好了，但这一轮还在跑：等它结束或新建会话后生效":
+    "Installed, but this turn is still running: it takes effect when the turn ends, or in a new session",
+  "没装上": "Not installed",
+  "这个地址上已经有「{name}」了。留空 key": "This address already holds “{name}”. Leave the key blank",
+  "已就位 · {n} 个工具，下一轮就能用": "In place · {n} tools, ready next turn",
+  "配置留下了，去授权后在列表里点重连": "The configuration was kept — authorise it, then reconnect from the list",
+  "没装上，什么都没留下": "Not added; nothing was left behind",
+  "{name} 有几项没生效": "A few of {name}'s entries did not take",
+  "没能删掉": "It could not be removed",
+  "这个包和当前版本不兼容，已经被停用。": "This package does not work with the current version and has been switched off.",
+  "里面的密钥值已经去掉，装它的人要自己提供：{names}":
+    "The key values were stripped out; whoever installs it supplies their own: {names}",
+  "该包不需要填写任何密钥。": "This package asks for no keys.",
+  "用不了：{why}": "Unusable: {why}",
+  "key 有效，协议也对得上。": "The key works, and the protocol is the one on file.",
+  "走代理连不上、直连可以。": "The proxy cannot reach it; a direct connection can.",
 };

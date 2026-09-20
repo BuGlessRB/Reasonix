@@ -27,7 +27,7 @@ func (a *Agent) withHostContextTail(visible []provider.Message) []provider.Messa
 		if strings.TrimSpace(block) == "" {
 			continue
 		}
-		visible = append(visible, provider.Message{Role: provider.RoleUser, Content: block})
+		visible = append(visible, provider.Message{Role: provider.RoleUser, Content: block, Derived: true})
 	}
 	return visible
 }

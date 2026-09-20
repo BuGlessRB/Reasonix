@@ -1,6 +1,7 @@
 package boot
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -141,5 +142,41 @@ command = "C:\Users\reasonix\mcp.exe"
 	}
 	if string(next) != raw {
 		t.Fatalf("build rewrote malformed project config:\n%s", next)
+	}
+}
+
+// TestABrokenConfigSaysSoWithNoFrontendListening pins the other half: a host
+// that registered no handler still tells whoever started the session. The
+// loader keeps going on built-in defaults — another model, and none of the
+// person's permission rules — so silence there is a session running as someone
+// else with nothing on screen to say it.
+func TestABrokenConfigSaysSoWithNoFrontendListening(t *testing.T) {
+	home := isolateConfigHome(t)
+	workspace := robustTempDir(t)
+	broken := "default_model = \"x/y\"\n\n[browser]\nenabled = true\n\n[browser]\nheadless = true\n"
+	userConfig := filepath.Join(home, ".reasonix", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(userConfig), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(userConfig, []byte(broken), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var said bytes.Buffer
+	ctrl, err := Build(context.Background(), Options{
+		WorkspaceRoot: workspace,
+		StatsSource:   surface.CLI,
+		Sink:          event.Discard,
+		Stderr:        &said,
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	ctrl.Close()
+	// The words that carry the consequence: which file, that it was not read,
+	// and what the session is running on instead.
+	for _, want := range []string{userConfig, "invalid", "built-in defaults"} {
+		if !strings.Contains(said.String(), want) {
+			t.Fatalf("the broken config was not reported (%q missing):\n%s", want, said.String())
+		}
 	}
 }

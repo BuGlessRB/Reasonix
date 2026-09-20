@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"reasonix/internal/config"
+	"reasonix/internal/textutil"
 )
 
 // Refusal is one reason a move cannot proceed. Code is stable for the caller to
@@ -200,21 +201,5 @@ func samePath(a, b string) bool {
 	return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
 }
 
-// HumanBytes renders a size the way the storage panel shows it. It rounds down
-// so a number never claims more room than the disk has.
-func HumanBytes(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := int64(unit), 0
-	for v := n / unit; v >= unit && exp < 4; v /= unit {
-		div *= unit
-		exp++
-	}
-	value := float64(n) / float64(div)
-	if value >= 100 {
-		return fmt.Sprintf("%.0f %cB", value, "KMGTP"[exp])
-	}
-	return fmt.Sprintf("%.1f %cB", value, "KMGTP"[exp])
-}
+// HumanBytes renders a size the way the storage panel shows it.
+func HumanBytes(n int64) string { return textutil.HumanBytes(n) }

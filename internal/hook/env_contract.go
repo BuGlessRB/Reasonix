@@ -6,7 +6,7 @@ package hook
 
 import (
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -60,7 +60,7 @@ func UndefinedPayloadVars(config HookConfig) []string {
 		}
 		undefined = append(undefined, name)
 	}
-	sort.Strings(undefined)
+	slices.Sort(undefined)
 	return undefined
 }
 

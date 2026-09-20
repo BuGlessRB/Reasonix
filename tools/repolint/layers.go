@@ -13,8 +13,6 @@ const modulePrefix = "reasonix/"
 var frontends = []string{
 	"internal/acp",
 	"internal/boot",
-	"internal/bot",
-	"internal/botruntime",
 	"internal/cli",
 	"internal/serve",
 }
@@ -28,6 +26,8 @@ var leaves = []string{
 	"internal/agentgraph",
 	"internal/agentpreset",
 	"internal/billing",
+	"internal/browser",
+	"internal/computer",
 	"internal/diff",
 	"internal/extension/rpcwire",
 	"internal/execgraph",
@@ -40,7 +40,9 @@ var leaves = []string{
 	"internal/frontmatter",
 	"internal/i18n",
 	"internal/mcpdiag",
+	"internal/neterr",
 	"internal/nilutil",
+	"internal/packagegrant",
 	"internal/planmode",
 	"internal/proc",
 	"internal/redirectguard",

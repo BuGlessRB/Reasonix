@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
+import { Clip } from "./Clip";
 import { useEscape } from "./dismiss";
 import { t } from "../i18n";
 import type { Protocol, ProviderCheck, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe } from "../port/port";
 import { AddProvider } from "./AddProvider";
 import { EditConn } from "./EditConn";
 import { KIND_LABEL, accountKey, accountLabel, disambiguate, hostOf } from "./vendors";
-import { reason } from "../i18n/kernel";
+import { PROVIDER_EDIT_DISABLED, reason } from "../i18n/kernel";
+import { HttpError } from "../port/http_error";
 
 // A connection is an account, not a config row. One endpoint answering two
 // protocols is two rows in the file and one service to the person paying for it,
@@ -28,6 +30,7 @@ export type Port = {
   editProvider(edit: ProviderEdit): Promise<void>;
   setProviderWebSearch(name: string, on: boolean): Promise<void>;
   setProviderThinking(name: string, on: boolean): Promise<void>;
+  setProviderContinuation(name: string, mode: string): Promise<void>;
 };
 
 // One account: every configured entry that answers on the same host.
@@ -137,6 +140,21 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
   );
 }
 
+// How a turn's context reaches the next one. Auto is vendor detection, which is
+// the only honest answer for an endpoint nobody has characterised; the other two
+// are what a reader picks when the endpoint has already contradicted it.
+const CONTINUATIONS: ReadonlyArray<readonly [string, string]> = [
+  ["", "自动"],
+  ["stateful", "引用上一轮"],
+  ["stateless", "每轮完整发送"],
+];
+
+const CONTINUATION_WHY: Record<string, string> = {
+  "": "按端点厂商判断。中转站若回报 previous_response_id 不受支持，改为「每轮完整发送」。",
+  stateful: "只发送新的一轮，历史由端点自己保存 —— 前缀缓存命中率最高，但要求端点真的存了。",
+  stateless: "每轮重发完整历史。中转站只转发、不保存状态时用这一档。",
+};
+
 // One account. The protocol is a switch on it rather than a fact on a row,
 // because both entries are the same key at the same host; 测一下 is what turns
 // "which protocol did we record" back into a finding when the endpoint moved.
@@ -148,6 +166,11 @@ function Conn({
   onEdited: () => void; onFailed: (why: string) => void;
 }) {
   const [found, setFound] = useState<ProviderCheck | null>(null);
+  // A refusal is not a failed probe. The kernel withholds these routes from a
+  // server reachable over the network, because adding a source writes a key
+  // into the credential store of the machine running the kernel — so nothing
+  // was tried, and "cannot connect" names the wrong thing to go fix.
+  const [refused, setRefused] = useState("");
   const [editing, setEditing] = useState(false);
   useEscape(editing, () => setEditing(false));
   const entry = a.byKind[kind] ?? a.byKind[a.kinds[0]];
@@ -180,13 +203,30 @@ function Conn({
     }
   };
 
+  const setContinuation = async (mode: string) => {
+    setBusy(`continuation:${entry.name}`);
+    onFailed("");
+    try {
+      await port.setProviderContinuation(entry.name, mode);
+      onEdited();
+    } catch (e) {
+      onFailed(reason(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
   const check = async () => {
     setBusy(`check:${entry.name}`);
     setFound(null);
+    setRefused("");
     try {
       setFound(await port.checkProvider(entry.name));
     } catch (e) {
-      setFound({ ok: false, error: reason(e) });
+      // Read off the code the kernel sent, never the status: 403 is also what a
+      // gateway in front of it answers, and that is a different thing to do next.
+      if (e instanceof HttpError && e.reason?.code === PROVIDER_EDIT_DISABLED) setRefused(reason(e));
+      else setFound({ ok: false, error: reason(e) });
     } finally {
       setBusy("");
     }
@@ -201,11 +241,9 @@ function Conn({
     <>
       <div className="vrow" data-on={inUse ? "" : undefined}>
         <span className="nm">{a.label}</span>
-        <span className="ds">
-          {a.host}
-          {models > 0 ? ` · ${t("{n} 个模型", { n: models })}` : ""}
-          {t(entry.hasKey ? "" : " · 缺 key")}
-        </span>
+        <Clip className="ds">
+          {a.host + (models > 0 ? ` · ${t("{n} 个模型", { n: models })}` : "") + t(entry.hasKey ? "" : " · 缺 key")}
+        </Clip>
         <span className="sc">{t(inUse ? "正在用" : "")}</span>
         {/* Hover-reveal is right for 删除; a diagnostic nobody can find is not
             a diagnostic, so this one stays on the row. */}
@@ -271,6 +309,21 @@ function Conn({
           </span>
         </div>
       )}
+      {entry.canSetContinuation && (
+        <div className="vway">
+          <span className="lb">{t("上下文续接")}</span>
+          <div className="seg" role="group" aria-label={t("{name} 的上下文续接方式", { name: a.label })}>
+            {CONTINUATIONS.map(([mode, label]) => (
+              <button key={mode} data-action="provider.continuation" data-target={entry.name} data-value={mode}
+                aria-pressed={(entry.continuation ?? "") === mode} disabled={busy !== ""}
+                onClick={() => setContinuation(mode)}>
+                {t(label)}
+              </button>
+            ))}
+          </div>
+          <span className="why">{t(CONTINUATION_WHY[entry.continuation ?? ""] ?? CONTINUATION_WHY[""])}</span>
+        </div>
+      )}
       {editing && (
         <EditConn
           entry={entry}
@@ -284,6 +337,12 @@ function Conn({
           }}
         />
       )}
+      {refused && (
+        <div className="find" data-lvl="warn" role="status">
+          <span className="t">{refused}</span>
+          <span className="why">{t("模型来源要在运行内核的那台机器上配置。")}</span>
+        </div>
+      )}
       {found && (
         <div className="find" data-lvl={found.ok ? "ok" : "warn"} role="status">
           <span className="t">
@@ -295,8 +354,8 @@ function Conn({
             {!found.ok && found.error}
             {found.ok && found.matches === false &&
               t("记的是 {had}，但它答的是 {got}。", { had: t(KIND_LABEL[entry.kind] ?? entry.kind), got: t(KIND_LABEL[found.kind ?? ""] ?? found.kind ?? "") })}
-            {found.ok && found.matches !== false && "key 有效，协议也对得上。"}
-            {found.ok && found.noProxy && " 走代理连不上、直连可以。"}
+            {found.ok && found.matches !== false && t("key 有效，协议也对得上。")}
+            {found.ok && found.noProxy && " " + t("走代理连不上、直连可以。")}
             {/* A stored list cannot learn that the vendor shipped something. The
                 probe already knows, so saying it costs nothing and is the only
                 moment anyone finds out. */}

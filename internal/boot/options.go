@@ -4,6 +4,7 @@ import (
 	"io"
 	"time"
 
+	"reasonix/internal/browser"
 	"reasonix/internal/config"
 
 	"reasonix/internal/ablation"
@@ -91,7 +92,7 @@ type Options struct {
 	// reconciler; frontends with different deletion semantics can override it.
 	CleanupPendingReconciler func(sessionDir string) error
 	// Bounds how long an approval or ask prompt blocks. Zero waits forever,
-	// correct for a terminal; headless/bot frontends pass a positive value so
+	// correct for a terminal; headless frontends pass a positive value so
 	// an unanswered prompt cannot wedge the session (#4626, #4402).
 	ApprovalTimeout time.Duration
 	// The non-interactive approval contract for every headless gate this build
@@ -127,6 +128,9 @@ type Options struct {
 	WorkspaceOnly          bool
 	// SessionTemp is the session-private temp manager; Rebuild reuses old's.
 	SessionTemp *sessiontemp.Manager
+	// BrowserSession is the agent's browser and the tabs it has open; Rebuild
+	// reuses old's so a model switch does not close them.
+	BrowserSession *browser.Session
 	RuntimeReload
 	// deferPublish keeps a replacement generation private until migration and
 	// commit succeed. Cold BuildRuntime leaves this false and publishes at boot.

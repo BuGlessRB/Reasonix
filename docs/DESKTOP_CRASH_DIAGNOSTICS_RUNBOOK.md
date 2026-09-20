@@ -1,7 +1,5 @@
 # Windows and Linux Desktop crash diagnostics runbook
 
-<a href="./DESKTOP_CRASH_DIAGNOSTICS_RUNBOOK.zh-CN.md">简体中文</a>
-
 This is the release, privacy, performance, and root-cause checklist for the
 cross-platform Desktop diagnostics pipeline. Windows build `17763` remains a
 priority experiment, not a code whitelist. A diagnostic release does not by

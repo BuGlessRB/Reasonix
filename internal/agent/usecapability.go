@@ -714,16 +714,6 @@ func (t *UseCapabilityTool) Execute(ctx context.Context, args json.RawMessage) (
 	return out, nil
 }
 
-// listServerInfo is one configured MCP server entry returned by action=list.
-// It never starts a server or opens a network connection.
-type listServerInfo struct {
-	Name         string `json:"name"`
-	CapabilityID string `json:"capability_id"`
-	Status       string `json:"status"`
-	Authorized   bool   `json:"authorized"`
-	Connected    bool   `json:"connected"`
-}
-
 func (t *UseCapabilityTool) inspect(ctx context.Context, id string) (string, error) {
 	cat := t.currentCatalog()
 	if e, ok := cat.Lookup(id); ok {

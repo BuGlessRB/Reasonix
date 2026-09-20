@@ -1,8 +1,6 @@
 # Reasoning Language
 
 <a href="./GUIDE.md">Guide</a>
-&nbsp;·&nbsp;
-<a href="./REASONING_LANGUAGE.zh-CN.md">简体中文</a>
 
 `agent.reasoning_language` controls the preferred language of visible
 reasoning or thinking text when a provider exposes it.

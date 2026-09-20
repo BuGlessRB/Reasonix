@@ -71,6 +71,27 @@
     }
   },
   {
+    "Name": "await_user",
+    "Description": "Hand control back to the user with the task list still open, when what the current item needs next is something only they can give: their view on what you just showed them, the material they said they would add, the judgement the list exists to collect. The list is kept as it stands and the turn ends; their next message resumes it, and the host will not continue the list on its own in the meantime. This is not `ask`, which offers options you wrote and answers inside the same turn, and not `conclude_blocked`, which says the work cannot be done at all. Name the waiting item with `step_id`, and put in `need` what you are waiting for, addressed to them. Say the substance — the item you are presenting, the question you want answered — in your own reply; this call records the wait, it does not speak for you.",
+    "ReadOnly": true,
+    "Schema": {
+      "properties": {
+        "need": {
+          "description": "What you need from the user before this item can go on, written to them.",
+          "type": "string"
+        },
+        "step_id": {
+          "description": "The task-list item that is waiting. Defaults to the list's current in_progress item.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "need"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "Name": "bash",
     "Description": "Execute a command in the shell and return combined stdout/stderr. Use for builds, tests, git, package managers, etc. To read or modify a file use read_file / edit_file / write_file — never Get-Content, cat, sed, head/tail or a shell redirect. read_file returns up to 2000 lines per call, each prefixed with its line number, and those numbers are what edit_file targets; paging a file through the shell instead costs one round trip per chunk and yields no line anchors.",
     "ReadOnly": false,
@@ -122,6 +143,168 @@
       "required": [
         "job_id"
       ],
+      "type": "object"
+    }
+  },
+  {
+    "Name": "browser_act",
+    "Description": "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; select sets a \u003cselect\u003e; scroll takes delta_y, or delta_x across; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers alert/confirm/prompt; resize sets the viewport to width×height; back, forward and reload move this tab — reload is what a page needs after the file behind it changed.",
+    "ReadOnly": false,
+    "Schema": {
+      "properties": {
+        "steps": {
+          "items": {
+            "properties": {
+              "accept": {
+                "type": "boolean"
+              },
+              "action": {
+                "enum": [
+                  "click",
+                  "double_click",
+                  "hover",
+                  "fill",
+                  "type",
+                  "press",
+                  "select",
+                  "scroll",
+                  "drag",
+                  "upload",
+                  "wait",
+                  "wait_for",
+                  "dialog",
+                  "resize",
+                  "back",
+                  "forward",
+                  "reload"
+                ],
+                "type": "string"
+              },
+              "delta_x": {
+                "type": "number"
+              },
+              "delta_y": {
+                "type": "number"
+              },
+              "files": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "height": {
+                "type": "integer"
+              },
+              "key": {
+                "type": "string"
+              },
+              "ms": {
+                "type": "integer"
+              },
+              "ref": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "to_ref": {
+                "type": "string"
+              },
+              "to_x": {
+                "type": "number"
+              },
+              "to_y": {
+                "type": "number"
+              },
+              "values": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "tab": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "Name": "browser_open",
+    "Description": "Load a page in your browser and return its snapshot: one element per line, with [eN] refs for browser_act. url is http(s), about:blank or a workspace file. Without url, tab switches to that tab; close closes it.",
+    "ReadOnly": false,
+    "Schema": {
+      "properties": {
+        "close": {
+          "type": "boolean"
+        },
+        "new_tab": {
+          "type": "boolean"
+        },
+        "tab": {
+          "description": "t1, t2...; default active",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "Name": "browser_read",
+    "Description": "Read a browser page: snapshot (default; page with offset/limit, or ref for one subtree), find (lines carrying text, with their refs), screenshot (browser_act x/y use its pixels, and the person is shown it too), logs (errors since you last read them), network (what it requested and what came back; text narrows by URL), tabs.",
+    "ReadOnly": true,
+    "Schema": {
+      "properties": {
+        "limit": {
+          "type": "integer"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "tab": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "what": {
+          "enum": [
+            "snapshot",
+            "find",
+            "screenshot",
+            "logs",
+            "network",
+            "tabs"
+          ],
+          "type": "string"
+        }
+      },
       "type": "object"
     }
   },

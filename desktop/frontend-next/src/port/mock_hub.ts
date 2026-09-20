@@ -8,15 +8,12 @@ import { MockPort } from "./mock";
 // without a kernel — the dev build's only reason to exist.
 export class MockHub implements HubPort {
   private readonly ports = new Map<string, AgentPort>();
+  private readonly machine = { configured: false };
   private readonly views: RuntimeView[] = [
     { id: "r1", base: "", root: "~/projects/DeepSeek-Reasonix", name: "DeepSeek-Reasonix", sessionPath: "/sessions/mock.jsonl" },
   ];
   private readonly roots = ["~/projects/DeepSeek-Reasonix", "~/projects/my-website"];
   private seq = 1;
-
-  maxPanes() {
-    return 8;
-  }
 
   runtimes() {
     return Promise.resolve([...this.views]);
@@ -215,15 +212,11 @@ export class MockHub implements HubPort {
     return Promise.resolve<string | null>("~/projects/mock-workspace");
   }
 
-  // The fixture has no shell to report a path, so a drop there carries bytes.
-  onDroppedPaths(): () => void {
-    return () => {};
-  }
-
   portFor(rt: RuntimeView): AgentPort {
     const held = this.ports.get(rt.id);
     if (held) return held;
     const port = new MockPort();
+    port.machine = this.machine;
     this.ports.set(rt.id, port);
     return port;
   }

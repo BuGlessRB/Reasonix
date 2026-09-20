@@ -17,7 +17,6 @@ import (
 	"reasonix/internal/agentgraph"
 	"reasonix/internal/billing"
 	"reasonix/internal/evidence"
-	"reasonix/internal/nilutil"
 	"reasonix/internal/provider"
 )
 
@@ -116,6 +115,8 @@ const (
 	// TodoProgressEvent reports what one task-list write did to the plan:
 	// rewritten, replanned, or advanced. Content-free, and decides nothing.
 	TodoProgressEvent
+	// WorkspaceLeaseEvent closes one session's account of the write lease.
+	WorkspaceLeaseEvent
 	// WorkspaceChanged reports a debounced host-side workspace mutation.
 	WorkspaceChanged
 	// TurnPhase reports a host-side work phase for the active turn (working |
@@ -145,6 +146,10 @@ const (
 	// behind "interrupted" stay in one place instead of being rebuilt from the
 	// frames a client happened to see.
 	AdjudicationsChanged
+	// BrowserTabsChanged reports that the agent's browser opened, closed,
+	// switched or navigated a tab. Content-free: a window reads the tabs back,
+	// from the session that owns them.
+	BrowserTabsChanged
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount
@@ -239,11 +244,15 @@ type Tool struct {
 	ResolvedName string
 	CapabilityID string
 	Output       string // ToolResult: the result text fed to the model
-	Err          string // ToolResult: non-empty when the call failed or was blocked
-	RefusalCode  string // ToolResult: dotted identity of a host refusal; Err is only its wording
-	ReadOnly     bool
-	Bound        OutputBound // ToolResult: how Output was fitted into context
-	DurationMs   int64       // ToolResult: wall-clock execution time in milliseconds
+	// Images are what the call showed the model, as data URLs. The result text
+	// only names them, so a window with nothing else to go on shows a person a
+	// placeholder where the agent had a picture.
+	Images      []string
+	Err         string // ToolResult: non-empty when the call failed or was blocked
+	RefusalCode string // ToolResult: dotted identity of a host refusal; Err is only its wording
+	ReadOnly    bool
+	Bound       OutputBound // ToolResult: how Output was fitted into context
+	DurationMs  int64       // ToolResult: wall-clock execution time in milliseconds
 	// StartedAt/EndedAt are unix-millisecond execution bounds (ToolResult).
 	// Zero when the call never ran (dependency-skipped, cancelled, synthetic).
 	StartedAt int64
@@ -296,6 +305,7 @@ type ShellExecution struct {
 	FailurePhase   string `json:"failurePhase,omitempty"`
 	ExitCode       *int   `json:"exitCode,omitempty"`
 	OutputTail     string `json:"outputTail,omitempty"`
+	Subject        string `json:"subject,omitempty"`
 	MutationRisk   string `json:"mutationRisk,omitempty"`
 	Verification   string `json:"verification,omitempty"`
 	DurationMs     int64  `json:"durationMs,omitempty"`
@@ -318,10 +328,19 @@ type Approval struct {
 	Tool    string
 	Subject string
 	Reason  string // optional annotation explaining why approval is needed
+	// ReasonCode names the class of call that needs a person, for a frontend to
+	// render in the reader's language. Reason carries the same answer as the
+	// sentence the model was given.
+	ReasonCode string
 	// RawInput is the exact structured tool input. ACP permission clients use it
 	// together with locations/reason instead of parsing a human title.
 	RawInput json.RawMessage
 	Fresh    bool // current human decision required; do not offer remembered grants
+	// Which answers beyond "once" this host will honour: a grant for the rest of
+	// the session, and writing the answer down as a rule. A frontend that offers
+	// one the host drops promises what it cannot keep.
+	AllowsSession bool
+	AllowsPersist bool
 	// Kind classifies the approval surface: "tool" (default), "plan", or
 	// "recovery". Empty means ordinary tool permission for backward compat.
 	Kind string
@@ -394,9 +413,11 @@ type Compaction struct {
 	// otherwise indistinguishable from a clean one without reading the digest.
 	SourceTokens        int
 	ProjectionTokens    int
-	CoverageRequired    int  // changes and failures the folded region produced
-	CoverageMissing     int  // ...of those, how many the digest did not carry
-	CoverageBackstopped bool // the host wrote the dropped facts in itself
+	CoverageRequired    int    // changes and failures the folded region produced
+	CoverageMissing     int    // ...of those, how many the digest did not carry
+	CoverageBackstopped bool   // the host wrote the dropped facts in itself
+	Boundary            string // "capacity" | "economic": which threshold sent this fold
+	TriggerTokens       int    // ...and its size, so a card need not say only "a threshold"
 }
 
 // ContextMaintenance is the typed wire-safe receipt for snip/prune/noop/
@@ -517,6 +538,7 @@ type Event struct {
 	Compaction      Compaction          // Compaction
 	Maintenance     *ContextMaintenance // ContextMaintenanceEvent
 	TodoProgress    *TodoProgress       // TodoProgressEvent
+	WorkspaceLease  *WorkspaceLease     // WorkspaceLeaseEvent
 	Guardian        GuardianResult
 	DecisionReceipt *provider.DecisionReceipt // Notice: durable user decision receipt
 	RetryAttempt    int                       // Retrying: 1-based attempt about to be made
@@ -577,200 +599,6 @@ type ReadinessAuditSink interface {
 // transports may mistake for an interactive completion.
 type TurnCompletionSink interface {
 	RecordTurnCompletion()
-}
-
-// RecordTurnCompletion records one successfully admitted top-level controller
-// run on sinks that opt into completion accounting.
-func RecordTurnCompletion(s Sink) {
-	if nilutil.IsNil(s) {
-		return
-	}
-	if ts, ok := s.(TurnCompletionSink); ok {
-		ts.RecordTurnCompletion()
-	}
-}
-
-// RecordReadinessAudit forwards a readiness audit receipt to sinks that opt in.
-func RecordReadinessAudit(s Sink, a evidence.ReadinessAudit) {
-	if nilutil.IsNil(s) {
-		return
-	}
-	if rs, ok := s.(ReadinessAuditSink); ok {
-		rs.RecordReadinessAudit(a)
-	}
-}
-
-// ProtocolRecoveryKind is a content-free internal observation about a provider
-// protocol repair. It is deliberately separate from Event/Notice so recovery
-// stays invisible in chat transcripts and frontends do not need to understand
-// provider implementation details.
-type ProtocolRecoveryKind string
-
-const (
-	ProtocolRecoveryMissingReasoningDetected        ProtocolRecoveryKind = "missing_reasoning_detected"
-	ProtocolRecoveryMissingReasoningRetryAttempted  ProtocolRecoveryKind = "missing_reasoning_retry_attempted"
-	ProtocolRecoveryMissingReasoningRetryRecovered  ProtocolRecoveryKind = "missing_reasoning_retry_recovered"
-	ProtocolRecoveryMissingReasoningRetryReplaced   ProtocolRecoveryKind = "missing_reasoning_retry_replaced_response"
-	ProtocolRecoveryMissingReasoningRetrySuppressed ProtocolRecoveryKind = "missing_reasoning_retry_suppressed"
-	ProtocolRecoveryMissingReasoningFallback        ProtocolRecoveryKind = "missing_reasoning_fallback_used"
-	// ProtocolRecoveryMissingReasoningModelSilent is a tool-call turn the provider
-	// billed no thinking tokens for. Recorded to keep the shape visible, never
-	// replayed: nothing was lost in transit, so an identical request buys nothing.
-	ProtocolRecoveryMissingReasoningModelSilent ProtocolRecoveryKind = "missing_reasoning_model_silent"
-)
-
-type ProtocolRecoveryAudit struct {
-	Kind ProtocolRecoveryKind
-	// ChildID names the delegated run this repair happened inside, stamped by
-	// the nesting sink that already knows it; empty is the parent's own loop.
-	ChildID string
-}
-
-// ContractShadowAudit is the shadow task-contract's end-of-turn summary:
-// counts and enums only, never requirement text. Shadow means observed, not
-// enforced — the old control logic still decides behavior.
-type ContractShadowAudit struct {
-	Intent                string
-	Requirements          int
-	RequirementsSatisfied int
-	Checks                int
-	ChecksSatisfied       int
-	Epoch                 uint64
-	Verdict               string
-	Complete              bool
-	ReadyToFinalize       bool
-}
-
-// ContractShadowAuditSink is an optional sink capability; implementations
-// must keep it content-free, like every other audit channel.
-type ContractShadowAuditSink interface {
-	RecordContractShadow(ContractShadowAudit)
-}
-
-// RecordContractShadow forwards the shadow contract summary only to sinks
-// that explicitly opt in. Ordinary UI sinks receive nothing.
-func RecordContractShadow(s Sink, a ContractShadowAudit) {
-	if nilutil.IsNil(s) {
-		return
-	}
-	if cs, ok := s.(ContractShadowAuditSink); ok {
-		cs.RecordContractShadow(a)
-	}
-}
-
-// CompletionReportAudit is the host-authored completion report's end-of-turn
-// summary: counts, enums, and gap kinds only, never paths or command text.
-// The gap counters carry the point — what the turn left unproven.
-type CompletionReportAudit struct {
-	Verdict             string
-	Risk                string
-	Criteria            int
-	CriteriaSatisfied   int
-	Changes             int
-	ChangesUnreviewed   int
-	Verifications       int
-	VerificationsFailed int
-	VerificationsStale  int
-	// VerificationsInconclusive counts checks that ran behind a shell stage
-	// that decided the exit status, so neither outcome was readable.
-	VerificationsInconclusive int
-	Gaps                      int
-	GapKinds                  []string
-	// ClaimsVerified counts the turn's own asserted verifications;
-	// ClaimsUnbacked is how many of them the ledger did not support.
-	ClaimsVerified int
-	ClaimsUnbacked int
-}
-
-// CompletionReportAuditSink is an optional sink capability; implementations
-// must keep it content-free, like every other audit channel.
-type CompletionReportAuditSink interface {
-	RecordCompletionReport(CompletionReportAudit)
-}
-
-// RecordCompletionReport forwards the completion summary only to sinks that
-// explicitly opt in. Ordinary UI sinks receive nothing.
-func RecordCompletionReport(s Sink, a CompletionReportAudit) {
-	if nilutil.IsNil(s) {
-		return
-	}
-	if cs, ok := s.(CompletionReportAuditSink); ok {
-		cs.RecordCompletionReport(a)
-	}
-}
-
-// MemoryRecallAudit summarizes one automatic-recall decision: identifiers,
-// scores, and budget numbers only — never the query or fact text.
-type MemoryRecallAudit struct {
-	Hits       []MemoryRecallHit
-	UsedChars  int
-	Omitted    int
-	Suppressed string // reason recall stayed silent; "" when hits were injected
-	// Shadow is the Retrieval V2 ranking (telemetry only, never served).
-	Shadow []MemoryRecallHit
-}
-
-// MemoryRecallHit is one recalled fact's content-free fingerprint.
-type MemoryRecallHit struct {
-	ID        string
-	Revision  int
-	Scope     string
-	Type      string
-	Freshness string
-	Score     float64
-}
-
-// MemoryRecallSink is an optional sink capability; implementations must keep
-// it content-free, like every other audit channel.
-type MemoryRecallSink interface {
-	RecordMemoryRecall(MemoryRecallAudit)
-}
-
-// RecordMemoryRecall forwards a recall decision only to sinks that explicitly
-// opt in. Ordinary UI sinks receive nothing.
-func RecordMemoryRecall(s Sink, a MemoryRecallAudit) {
-	if nilutil.IsNil(s) {
-		return
-	}
-	if mr, ok := s.(MemoryRecallSink); ok {
-		mr.RecordMemoryRecall(a)
-	}
-}
-
-// OutcomeProgressSink is an optional sink capability for the shadow outcome
-// scorer's per-round samples: counts only, never paths or commands. Shadow
-// means observed, not enforced — the novelty guard still decides behavior.
-type OutcomeProgressSink interface {
-	RecordOutcomeProgress(evidence.OutcomeSample)
-}
-
-// RecordOutcomeProgress forwards a shadow outcome sample only to sinks that
-// explicitly opt in. Ordinary UI sinks receive nothing.
-func RecordOutcomeProgress(s Sink, sample evidence.OutcomeSample) {
-	if nilutil.IsNil(s) {
-		return
-	}
-	if op, ok := s.(OutcomeProgressSink); ok {
-		op.RecordOutcomeProgress(sample)
-	}
-}
-
-// ProtocolRecoveryAuditSink is an optional sink capability. Implementations
-// must keep it content-free; prompts, responses, endpoints, model names, and
-// tool arguments do not belong in this audit channel.
-type ProtocolRecoveryAuditSink interface {
-	RecordProtocolRecovery(ProtocolRecoveryAudit)
-}
-
-// RecordProtocolRecovery forwards a content-free recovery observation only to
-// sinks that explicitly opt in. Ordinary UI sinks receive nothing.
-func RecordProtocolRecovery(s Sink, a ProtocolRecoveryAudit) {
-	if nilutil.IsNil(s) {
-		return
-	}
-	if rs, ok := s.(ProtocolRecoveryAuditSink); ok {
-		rs.RecordProtocolRecovery(a)
-	}
 }
 
 // Sink consumes a turn's events. The agent calls Emit serially from its run

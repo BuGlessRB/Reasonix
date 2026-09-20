@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,9 +18,9 @@ import (
 )
 
 // userEditMu serializes in-process read-modify-write cycles. The public lock
-// helpers also take a path-derived advisory file lock, so CLI, Desktop, bot, and
+// helpers also take a path-derived advisory file lock, so CLI, Desktop, and
 // other Reasonix processes cannot save stale snapshots over one another.
-// Desktop's read-only config loads (tray/view/bot-runtime paths) never write:
+// Desktop's read-only config loads (tray/view paths) never write:
 // they apply legacy migrations in memory only, and the migrated form reaches
 // disk through the first locked write path (loadDesktopUserConfigForEdit,
 // called with this lock held).
@@ -97,12 +96,6 @@ func EditConfigFile(path string, edit func(*Config) error) error {
 	return editConfigFile(path, true, edit)
 }
 
-// EditConfigFileWithoutCredentials is EditConfigFile without loading the
-// Reasonix credential environment.
-func EditConfigFileWithoutCredentials(path string, edit func(*Config) error) error {
-	return editConfigFile(path, false, edit)
-}
-
 func editConfigFile(path string, loadCredentials bool, edit func(*Config) error) error {
 	if edit == nil {
 		return fmt.Errorf("edit config: nil callback")
@@ -158,7 +151,7 @@ func lockConfigFilesEdits(paths ...string) (func(), error) {
 		seenLocks[target.lockPath] = struct{}{}
 		lockPaths = append(lockPaths, target.lockPath)
 	}
-	sort.Strings(lockPaths)
+	slices.Sort(lockPaths)
 
 	ctx, cancel := context.WithTimeout(context.Background(), configEditLockTimeout)
 	defer cancel()

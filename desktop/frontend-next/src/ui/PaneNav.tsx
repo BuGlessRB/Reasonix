@@ -3,12 +3,12 @@ import { t } from "../i18n";
 import { Picker, type MenuItem } from "./Menu";
 import { arrowTabs } from "./tablist";
 
-/** The five things a pane can be showing. These identities are the pane's and
+/** The things a pane can be showing. These identities are the pane's and
  *  are not this file's to change: a graph node hands focus to a call by landing
  *  on one of them, the task board reaches two more, and a run that loses its
  *  graph sends the reader back to the first. Only which of them the bar spends
  *  a permanent slot on is decided here. */
-export type PaneView = "flow" | "line" | "traj" | "graph" | "task";
+export type PaneView = "flow" | "line" | "traj" | "graph" | "task" | "browser";
 
 // Which of the five answer "how do I read this run" rather than "what am I
 // doing". Two navigations sat one above the other speaking the same grammar —
@@ -25,7 +25,7 @@ const isDetail = (view: PaneView): view is Detail => (DETAIL as readonly string[
  *  purposes; it does not own them, and it never holds a selection of its own —
  *  a second piece of state saying which detail is open is a second answer to a
  *  question the pane has already answered. */
-export function PaneNav({ view, onPick, done, steps, nodes, rows }: {
+export function PaneNav({ view, onPick, done, steps, nodes, rows, pages, dock, onDock }: {
   view: PaneView;
   onPick: (to: PaneView) => void;
   done: number;
@@ -34,6 +34,11 @@ export function PaneNav({ view, onPick, done, steps, nodes, rows }: {
   // two counts drawn from it.
   nodes: number;
   rows: number;
+  // The agent's open browser pages. The tab exists only while there is one.
+  pages: number;
+  // Whether those pages sit beside the conversation, and the switch for it.
+  dock: boolean;
+  onDock: () => void;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const detail = isDetail(view) ? view : null;
@@ -41,7 +46,7 @@ export function PaneNav({ view, onPick, done, steps, nodes, rows }: {
   // table built in the module body freezes the labels in the source language.
   const name: Record<PaneView, string> = {
     flow: t("对话"), task: t("任务"),
-    line: t("时间线"), traj: t("事件轨迹"), graph: t("运行图"),
+    line: t("时间线"), traj: t("事件轨迹"), graph: t("运行图"), browser: t("浏览器"),
   };
   // The timeline is offered only while there is a graph to draw one from — the
   // same condition that sends a session watching it back to the transcript when
@@ -73,6 +78,26 @@ export function PaneNav({ view, onPick, done, steps, nodes, rows }: {
           {name.task}
           {steps > 0 && <span className="n">{done}/{steps}</span>}
         </button>
+        {pages > 0 && (
+          <button
+            className="tab" role="tab" data-action="pane.view" data-value="browser"
+            aria-selected={view === "browser"} onClick={() => onPick("browser")}
+          >
+            {name.browser}
+            <span className="n">{pages}</span>
+          </button>
+        )}
+        {/* Beside, not instead: watching the agent browse and reading what it
+            says are one activity. Drawn only where there is a page for it. */}
+        {pages > 0 && (
+          <button
+            className="tab dock" data-action="pane.dock" data-value={dock ? "off" : "on"}
+            aria-pressed={dock} title={t("并排显示浏览器")} aria-label={t("并排显示浏览器")}
+            onClick={onDock}
+          >
+            ⿲
+          </button>
+        )}
       </div>
       <Picker
         className={detail ? "tab more on" : "tab more"}

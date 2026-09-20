@@ -42,12 +42,15 @@ func (s *Server) model(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	catalog := s.ctl().ProviderCatalog()
-	// The switch only rebuilt the running controller. Without this the next
-	// launch boots from default_model and lands back on whatever was there
-	// before, which reads as the choice not having been saved at all — the CLI
-	// and the old desktop have both persisted it since they had a picker.
-	persistDefaultModel(ref, catalog)
+	// A pane resolving through the hub's resolver takes its default from there;
+	// this machine's default_model is one it never reads.
+	if s.resolver == nil {
+		// The switch only rebuilt the running controller. Without this the next
+		// launch boots from default_model and lands back on whatever was there
+		// before, which reads as the choice not having been saved at all — the CLI
+		// and the old desktop have both persisted it since they had a picker.
+		persistDefaultModel(ref, s.ctl().ProviderCatalog())
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

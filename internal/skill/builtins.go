@@ -1,7 +1,7 @@
 package skill
 
 import (
-	"sort"
+	"slices"
 	"strings"
 
 	"reasonix/internal/tool"
@@ -242,7 +242,7 @@ func normalizeExtraToolNames(names []string) []string {
 		seen[name] = true
 		out = append(out, name)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

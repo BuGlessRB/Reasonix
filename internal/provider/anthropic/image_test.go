@@ -184,7 +184,8 @@ func TestOfficialDeepSeekVisionIsPerModel(t *testing.T) {
 		want  bool
 	}{
 		{"deepseek-v4-flash-vision-exp", true},
-		{"deepseek-v4-flash", false},
+		{"deepseek-flash", true},
+		{"deepseek-v4-flash", true},
 		{"deepseek-v4-pro", false},
 		// A name is not a declaration: this model does not exist.
 		{"deepseek-v5-vision", false},

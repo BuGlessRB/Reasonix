@@ -86,7 +86,7 @@ future_provider_field = "untouched"
 	}
 	// Both models now live under the one folded entry, and per-model efforts
 	// ride its overrides — so this asks what each model actually resolves to.
-	for _, model := range []string{"deepseek-v4-flash", "deepseek-v4-pro"} {
+	for _, model := range []string{DeepSeekFlashModel, deepSeekProModel} {
 		entry, ok := cfg.ResolveModel("deepseek/" + model)
 		if !ok {
 			t.Fatalf("migrated model %q missing", model)
@@ -621,10 +621,10 @@ func TestNormalizeOfficialDeepSeekModelsDoesNotAddProToResponses(t *testing.T) {
 	if !ok {
 		t.Fatal("DeepSeek provider missing after normalization")
 	}
-	if !p.HasModel("deepseek-v4-flash") {
+	if !p.HasModel(DeepSeekFlashModel) {
 		t.Fatal("Responses provider lost its Flash model")
 	}
-	if p.HasModel("deepseek-v4-pro") {
+	if p.HasModel(deepSeekProModel) {
 		t.Fatalf("Responses normalization added unsupported Pro model: %+v", p.ModelList())
 	}
 }

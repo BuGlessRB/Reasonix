@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -236,7 +237,7 @@ func perClassWinners(paths []string, arms []armStats) string {
 	for class := range classes {
 		names = append(names, class)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	var b strings.Builder
 	b.WriteString("### Per-class winners\n\n| Class |")
@@ -352,7 +353,7 @@ func marginalUtilitySection(a, b armStats) string {
 	if len(classes) == 0 || (len(classes) == 1 && classes[0] == "unclassified") {
 		return out.String()
 	}
-	sort.Strings(classes)
+	slices.Sort(classes)
 	out.WriteString("| Class | A solved | B solved | Δ accuracy | A wall/task | B wall/task | Δ wall |\n|---|---:|---:|---:|---:|---:|---:|\n")
 	for _, class := range classes {
 		ca, cb := a.ByClass[class], b.ByClass[class]

@@ -192,7 +192,7 @@ export function Picker({
               ref={find}
               className="mfind"
               value={query}
-              placeholder={`筛选 ${choosable} 项`}
+              placeholder={t("筛选 {n} 项", { n: choosable })}
               aria-label={t("筛选")}
               spellCheck={false}
               onChange={(e) => setQuery(e.target.value)}

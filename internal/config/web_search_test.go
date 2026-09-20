@@ -139,7 +139,7 @@ func TestWebSearchTOMLRoundTripPreservesExplicitOff(t *testing.T) {
 		Model:     "deepseek-v4-flash",
 		WebSearch: &explicitFalse,
 	}}}
-	rendered := RenderTOML(cfg)
+	rendered := RenderTOMLForScope(cfg, RenderScopeFull)
 	if !strings.Contains(rendered, "web_search  = false") {
 		t.Fatalf("rendered TOML lost explicit web_search=false:\n%s", rendered)
 	}

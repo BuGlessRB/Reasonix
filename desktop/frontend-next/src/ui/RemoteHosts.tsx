@@ -5,6 +5,7 @@ import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { REMOTE_STEP_LABEL, REMOTE_STEPS, type RemoteHost } from "../port/remote";
 import { RemoteDirs } from "./RemoteDirs";
 import { workspacesOf } from "./Remotes";
+import { Cross } from "./glyphs";
 
 // The same ceiling the local column uses. A machine worked on for months holds
 // thousands of conversations, and drawing them all is what put 98k nodes in a
@@ -206,6 +207,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
               className="machrow"
               title={host.target}
               role="treeitem"
+              aria-level={1}
               aria-expanded={!folded}
               onClick={() => fold(host.name)}
             >
@@ -217,7 +219,11 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
               <i className="rmtpip" aria-hidden="true" />
               <span className="rmtname">{host.name}</span>
               <span className="rmttarget" dir="ltr">{host.target}</span>
-              <span className="rmtsub">{note(host) || t("{n} 会话", { n: panes.length })}</span>
+              {/* 数的是开着的面板，所以静止时每台机器都会说「0 会话」。零说不出
+                  任何行看不出的事，于是不说。 */}
+              {(note(host) || panes.length > 0) && (
+                <span className="rmtsub">{note(host) || t("{n} 会话", { n: panes.length })}</span>
+              )}
               {/* Always drawn, never only on hover: an entry nobody can see is
                   read as a feature this build does not have. */}
               <button
@@ -251,6 +257,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                       <div
                         className="wsrow rmtwsrow"
                         role="treeitem"
+                        aria-level={2}
                         aria-expanded={!folded}
                         onClick={() => fold(key)}
                       >
@@ -266,7 +273,9 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                         {/* Only the far kernel knows what it holds. Cold, "0
                             会话" would be this window guessing, and guessing
                             zero about a project worked in for months. */}
-                        {tree ? <span className="wsmeta">{t("{n} 会话", { n: ws.sessions.length })}</span> : null}
+                        {tree && ws.sessions.length > 0 ? (
+                          <span className="wsmeta">{t("{n} 会话", { n: ws.sessions.length })}</span>
+                        ) : null}
                         <span className="wsacts">
                           <button
                             className="wsadd"
@@ -299,7 +308,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                                 void drop(host.name, ws.root);
                               }}
                             >
-                              ×
+                              <Cross />
                             </button>
                           ) : null}
                         </span>
@@ -316,6 +325,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                                 key={session.path}
                                 className="sessrow"
                                 role="treeitem"
+                                aria-level={3}
                                 aria-selected={held?.id === active}
                                 data-on={held?.id === active ? "" : undefined}
                                 data-live={held ? "" : undefined}
@@ -353,6 +363,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                     key={rt.id}
                     className="sessrow"
                     role="treeitem"
+                    aria-level={3}
                     aria-selected={rt.id === active}
                     data-on={rt.id === active ? "" : undefined}
                     data-live=""

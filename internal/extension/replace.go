@@ -1,6 +1,8 @@
 package extension
 
 import (
+	"reasonix/internal/extensioncontract"
+
 	"fmt"
 	"maps"
 	"strings"
@@ -65,44 +67,12 @@ func ParseSlot(s string) (Slot, error) {
 		return Slot(s), nil
 	}
 	if rest, ok := strings.CutPrefix(s, slotProviderPrefix); ok {
-		if !validProviderSlotTarget(rest) {
+		if !extensioncontract.ValidProviderTarget(rest) {
 			return "", fmt.Errorf("extension: invalid provider slot %q: want provider:<name>/<model> or provider:plugin/<plugin>/<name>/<model>", s)
 		}
 		return Slot(s), nil
 	}
 	return "", fmt.Errorf("extension: unknown slot %q", s)
-}
-
-// validProviderSlotTarget reports whether ref can name a provider:<ref>
-// replacement slot: an ordinary <name>/<model> ref, or an extension-hosted
-// plugin/<pluginID>/<name>/<model> ref (stage 7). Plugin providers carry the
-// extra namespace segments so claims can name them without relaxing the
-// ordinary ref grammar.
-func validProviderSlotTarget(ref string) bool {
-	if _, _, ok := splitProviderRef(ref); ok {
-		return true
-	}
-	rest, ok := strings.CutPrefix(ref, "plugin/")
-	if !ok {
-		return false
-	}
-	pluginID, nameModel, ok := strings.Cut(rest, "/")
-	if !ok || pluginID == "" || strings.ContainsAny(pluginID, " \t\n") {
-		return false
-	}
-	_, _, ok = splitProviderRef(nameModel)
-	return ok
-}
-
-// splitProviderRef splits a "name/model" ref. Providers address models by
-// exactly one slash (see internal/boot/resolver.go), so refs without that
-// shape are malformed rather than merely unusual.
-func splitProviderRef(ref string) (name, model string, ok bool) {
-	name, model, found := strings.Cut(ref, "/")
-	if !found || name == "" || model == "" || strings.Contains(model, "/") {
-		return "", "", false
-	}
-	return name, model, true
 }
 
 // IsProviderRef reports whether ref is a kernel-shaped provider ID
@@ -111,7 +81,7 @@ func splitProviderRef(ref string) (name, model string, ok bool) {
 // model that itself contains a slash — so assemblers wrapping those catalogs
 // use this to pre-filter entries instead of failing the whole build.
 func IsProviderRef(ref string) bool {
-	_, _, ok := splitProviderRef(ref)
+	_, _, ok := extensioncontract.SplitProviderRef(ref)
 	return ok
 }
 

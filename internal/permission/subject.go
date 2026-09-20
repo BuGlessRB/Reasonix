@@ -9,7 +9,7 @@ import "encoding/json"
 // need not implement a permission-specific method: bash exposes command, the
 // file tools expose path / file_path, grep & glob expose pattern. planId leads
 // because it is a ticket rather than a target — see subjectRequiresHuman.
-var subjectKeys = []string{"planId", "command", "file_path", "path", "source_path", "destination_path", "pattern"}
+var subjectKeys = []string{"planId", "command", "file_path", "path", "source_path", "destination_path", "pattern", "origin", "app"}
 
 // Subject extracts the primary matchable subject string from a call's raw JSON
 // args, returning "" when none of the known keys is present (such a call only
@@ -42,6 +42,12 @@ func Subjects(args json.RawMessage) []string {
 			out = append(out, dst)
 		}
 		return out
+	}
+	if origin := stringArg(m, "origin"); BrowserSubjectRequiresExplicitApproval(origin) {
+		return browserSubjects(origin)
+	}
+	if app := stringArg(m, "app"); ComputerSubjectTakesPointer(app) {
+		return computerSubjects(app)
 	}
 	for _, k := range subjectKeys {
 		if s := stringArg(m, k); s != "" {

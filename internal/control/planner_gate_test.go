@@ -7,6 +7,11 @@ import (
 	"reasonix/internal/agent"
 )
 
+func warrantsPlanner(t *testing.T, input string) bool {
+	t.Helper()
+	return DecidePlannerRoute(context.Background(), input).Route != agent.PlannerRouteExecutorOnly
+}
+
 // The gate answers "did the user ask for a plan?", so a turn that reads as
 // work — however large, however risky-sounding — still belongs to the executor
 // until someone says otherwise. These are the inputs the retired scoring layer
@@ -113,10 +118,10 @@ func TestPlannerPolicyUsesPristineMetadataInsteadOfInjectedContext(t *testing.T)
 }
 
 func TestTaskWarrantsPlannerTracksTheRoute(t *testing.T) {
-	if TaskWarrantsPlanner("fix the bug") {
+	if warrantsPlanner(t, "fix the bug") {
 		t.Error("an ordinary work request must not warrant the planner")
 	}
-	if !TaskWarrantsPlanner(PlannerRouteMarker + "\n\n重写解析器") {
+	if !warrantsPlanner(t, PlannerRouteMarker+"\n\n重写解析器") {
 		t.Error("the planner marker must warrant the planner")
 	}
 }

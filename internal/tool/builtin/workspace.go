@@ -2,7 +2,7 @@ package builtin
 
 import (
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -249,7 +249,7 @@ func (r *PathResolver) TokensIn(command string) []string {
 			found = append(found, token)
 		}
 	}
-	sort.Strings(found)
+	slices.Sort(found)
 	return found
 }
 

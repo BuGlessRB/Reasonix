@@ -11,6 +11,11 @@ import { t } from "./index";
 // The map goes code → Chinese source text, which then runs through the ordinary
 // t(): one translation mechanism for the whole app rather than a second
 // catalogue keyed by codes.
+// Codes a caller branches on rather than only renders. The table below keeps
+// its literal keys — the kernel's parity guard reads this file as text and can
+// only see those — so kernel.test.ts holds the two spellings together.
+export const PROVIDER_EDIT_DISABLED = "provider.editing_disabled";
+
 const SAID: Record<string, string> = {
   // ── 忙：不是出错，是「现在不行」 ─────────────────────────────────
   "plan.decision_stale": "该决定已不符合当前状态：计划在你回答前已发生变更",
@@ -22,7 +27,6 @@ const SAID: Record<string, string> = {
   // ── 冲突：有东西挡着 ─────────────────────────────────────────────
   "workspace.has_open_panes": "该文件夹仍有 {n} 个打开的面板，请先关闭再移除",
   "provider.model_in_use": "该来源正在使用中，请先切换模型再删除",
-  "hub.too_many_panes": "最多同时打开 {max} 个面板，请先关闭一个",
 
   // ── 来源：填错了什么 ─────────────────────────────────────────────
   "provider.name_required": "请为该来源填写名称",
@@ -34,6 +38,7 @@ const SAID: Record<string, string> = {
 
   // ── 来源：这个协议做不到 ─────────────────────────────────────────
   "provider.no_thinking_param": "该协议不发送思考参数，启用后不会生效",
+  "provider.no_continuation": "该协议在轮次之间不保留状态，无需选择续接方式",
   "request.bad_body": "无法解析本次请求的内容，请刷新页面后重试",
   "request.missing_field": "缺少「{field}」",
   "request.not_found": "找不到名为「{name}」的{kind}",
@@ -45,6 +50,7 @@ const SAID: Record<string, string> = {
   "request.bad_value": "「{field}」只能为以下值之一：{allowed}",
   "session.bad_name": "会话名不能是路径",
   "session.bad_path": "无法解析该会话路径",
+  "session.open_failed": "打不开这个会话",
   "session.outside_dir": "该路径位于会话目录之外",
   "request.method_not_allowed": "该地址不接受此种请求方式",
   "request.bad_content_type": "请求体必须是 application/json",
@@ -106,6 +112,8 @@ const SAID: Record<string, string> = {
   "session.disabled": "这台服务器已关闭会话切换",
   "session.pending_cleanup": "该会话正在清理，请稍后再打开",
   "session.in_use": "该会话正被其他位置占用，请先关闭该处",
+  // 占用者在另一个进程时，这个窗口里没有可关闭的对象，pid 是唯一可操作的事实。
+  "session.in_use_by": "该会话被另一个进程占用（{host} 上的 pid {pid}），结束它之后再删",
   "session.bind_failed": "接管该会话失败，请重新打开窗口",
   "session.has_open_pane": "该会话仍有打开的面板，请先关闭",
   "session.outside_workspace": "该路径不属于任何已知的工作区",
@@ -215,6 +223,7 @@ const SAID: Record<string, string> = {
   // ── 本机通道：这个请求不是 Studio 自己发的 ───────────────────────
   "tray.rejected": "状态图标设置未能保存：{detail}",
   "update.rejected": "本次启动未能记录为健康状态：{detail}",
+  "browser_host.bad_frames": "内置浏览器的消息格式不正确，本次回传被丢弃",
 
   // ── 版本：这个内核背后有没有一个可更新的 Studio ─────────────────
   "studio.no_install": "这个内核不是由 Studio 启动的，没有可以查看或切换的版本",

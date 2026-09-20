@@ -116,7 +116,7 @@ export function Account({ port, state, unread, reload }: { port: AgentPort; stat
         <div className="acct-code">
           <span className="cd">{code.userCode}</span>
           <span className="acct-note">
-            在浏览器里打开的页面输入这串代码。没自动打开就手动访问 {code.uri}
+            {t("在浏览器里打开的页面输入这串代码。没自动打开就手动访问 {uri}", { uri: code.uri })}
           </span>
           <button className="btn" onClick={() => (cancelled.current = true)}>
             {t("取消")}
