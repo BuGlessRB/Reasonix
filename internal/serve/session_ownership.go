@@ -325,12 +325,35 @@ func (s *Server) ownershipIdentity(w http.ResponseWriter, raw string) {
 			return
 		}
 	}
+	if d := s.detachedIdentityHolder(ref); d != nil {
+		view.Holder = "serve"
+		view.Running = controllerHasActiveRuntimeWork(d.ctrl)
+		s.appendServeIdentity(&view)
+		writeJSON(w, view)
+		return
+	}
 	if session.ProbeWriterHeld(dir) {
 		view.Holder = "other"
 	} else {
 		view.Holder = "free"
 	}
 	writeJSON(w, view)
+}
+
+// detachedIdentityHolder returns the background session bound to ref, if any.
+// A detached legacy controller keeps its transcript-path registry key after
+// upgrading to an identity mid-turn, so the registry must be scanned by bound
+// identity rather than looked up by path. Only detachedMu is taken; callers
+// may or may not hold bindMu.
+func (s *Server) detachedIdentityHolder(ref session.SessionRef) *detachedSession {
+	s.detachedMu.Lock()
+	defer s.detachedMu.Unlock()
+	for _, d := range s.detached {
+		if controllerBoundToIdentity(d.ctrl, ref.SessionID) {
+			return d
+		}
+	}
+	return nil
 }
 
 // ownership reports who currently writes a session, whether a remote SSE
@@ -493,6 +516,9 @@ func (s *Server) handoffIdentity(w http.ResponseWriter, r *http.Request, route, 
 		http.Error(w, err.Error(), statusForHandoffError(err))
 		return
 	}
+	if handoffIdentityBeforeLockHookForTest != nil {
+		handoffIdentityBeforeLockHookForTest()
+	}
 
 	s.bindMu.Lock()
 	m, err := s.handoffIdentityLocked(r.Context(), route, ref, targetWriterID)
@@ -536,61 +562,119 @@ func quietHandoffLoop(target quietHandoffTarget, mode handoffMode, timeout time.
 	}
 }
 
-// quietIdentityForHandoff waits for (or cancels toward) an idle foreground
-// bound to the identity before the release transaction runs.
+// quietIdentityForHandoff waits for (or cancels toward) an idle holder of the
+// identity — the foreground or a detached session — before the release
+// transaction runs.
 func (s *Server) quietIdentityForHandoff(ref session.SessionRef, mode handoffMode, timeout time.Duration) error {
 	return quietHandoffLoop(func() (control.SessionAPI, bool, bool) {
-		cur, ok := s.ctl().(*control.Controller)
-		if !ok {
-			return nil, false, false
+		if cur, ok := s.ctl().(*control.Controller); ok {
+			if current, bound := cur.SessionRef(); bound && current == ref {
+				return cur, true, controllerHasActiveRuntimeWork(cur)
+			}
 		}
-		current, bound := cur.SessionRef()
-		if !bound || current != ref {
-			return nil, false, false
+		if d := s.detachedIdentityHolder(ref); d != nil {
+			return d.ctrl, true, controllerHasActiveRuntimeWork(d.ctrl)
 		}
-		return cur, true, controllerHasActiveRuntimeWork(cur)
+		return nil, false, false
 	}, mode, timeout)
 }
 
+// handoffIdentityBeforeLockHookForTest runs between the unlocked quiet probe
+// and the locked release so tests can admit a turn in that window.
+var handoffIdentityBeforeLockHookForTest func()
+
+// identityHolderLocked resolves which controller of this serve runs ref: the
+// foreground, else the detached session bound to it. Callers hold bindMu.
+func (s *Server) identityHolderLocked(ref session.SessionRef) (*control.Controller, *detachedSession) {
+	if cur, ok := s.ctl().(*control.Controller); ok && cur.UsesExclusiveSession() {
+		if current, bound := cur.SessionRef(); bound && current == ref {
+			return cur, nil
+		}
+	}
+	if d := s.detachedIdentityHolder(ref); d != nil {
+		if concrete, ok := d.ctrl.(*control.Controller); ok {
+			return concrete, d
+		}
+	}
+	return nil, nil
+}
+
 // handoffIdentityLocked performs the identity release. Callers hold bindMu and
-// have already quieted the foreground.
+// have already quieted the holder; the busy state is re-checked here because
+// turn admission also holds bindMu, so an idle holder observed under the lock
+// cannot start a turn before the release completes.
 func (s *Server) handoffIdentityLocked(ctx context.Context, route string, ref session.SessionRef, targetWriterID string) (mirroredSession, error) {
-	concrete, ok := s.ctl().(*control.Controller)
-	if !ok || !concrete.UsesExclusiveSession() {
+	holder, detached := s.identityHolderLocked(ref)
+	if holder == nil {
 		return mirroredSession{}, errSessionNotHeld
 	}
-	current, bound := concrete.SessionRef()
-	if !bound || current != ref {
-		return mirroredSession{}, errSessionNotHeld
+	if controllerHasActiveRuntimeWork(holder) {
+		return mirroredSession{}, errHandoffBusyAgain
+	}
+	service := holder.SessionService()
+	if service == nil {
+		return mirroredSession{}, errors.New("handoff: session service unavailable")
+	}
+	// The runtime can still be finalizing a turn the controller already reports
+	// as done; Close would refuse it as busy, so treat it as busy up front.
+	if live, ok := service.Runtime(ref); ok && live.Snapshot().Phase.Busy() {
+		return mirroredSession{}, errHandoffBusyAgain
 	}
 	m, err := newMirroredSession(route, agent.SessionWriterID(), targetWriterID, mirrorPhasePending)
 	if err != nil {
 		return mirroredSession{}, fmt.Errorf("handoff: create generation: %w", err)
 	}
-	service := concrete.SessionService()
-	if service == nil {
-		return mirroredSession{}, errors.New("handoff: session service unavailable")
+	var taken *detachedSession
+	if detached != nil {
+		// Transfer ownership from the close-on-idle watcher before releasing,
+		// exactly as the legacy detached handoff does; a retiring entry is
+		// already closing and must not be handed off.
+		taken = s.takeDetached(detached.path)
+		if taken == nil {
+			return mirroredSession{}, errHandoffBusyAgain
+		}
+		if controllerHasActiveRuntimeWork(holder) {
+			_, _ = s.registerDetached(taken.ctrl, taken.keeper, taken.tag)
+			return mirroredSession{}, errHandoffBusyAgain
+		}
+	}
+	restore := func() {
+		s.reattachAfterFailedHandoff(ctx, holder, ref)
+		if taken != nil {
+			_, _ = s.registerDetached(taken.ctrl, taken.keeper, taken.tag)
+		}
 	}
 	// Release authority the way the legacy lease keeper does: flush and unbind,
-	// but allocate nothing. The foreground is left in the never-bound exclusive
-	// state, so the next turn or /new allocates lazily and a handoff no longer
-	// leaves an empty canonical row behind in /sessions.
-	if err := concrete.ReleaseSessionForHandoff(); err != nil {
-		s.reattachAfterFailedHandoff(ctx, concrete, ref)
+	// but allocate nothing. A foreground holder is left in the never-bound
+	// exclusive state, so the next turn or /new allocates lazily and a handoff
+	// no longer leaves an empty canonical row behind in /sessions.
+	if err := holder.ReleaseSessionForHandoff(); err != nil {
+		restore()
 		return mirroredSession{}, fmt.Errorf("handoff: release session binding: %w", err)
 	}
 	// Deterministic writer release: Close drops the writer lock now instead of
 	// waiting out the idle-retirement TTL, so the taker's open cannot race a
-	// lingering lease. A refused close leaves the runtime live, so the
-	// foreground is re-attached to it rather than left unbound with the writer
-	// still held here.
+	// lingering lease. A refused close leaves the runtime live, so the holder is
+	// re-attached to it rather than left unbound with the writer still held
+	// here; a busy refusal is the same retryable outcome as the legacy path.
 	if err := service.Close(ctx, ref); err != nil {
-		s.reattachAfterFailedHandoff(ctx, concrete, ref)
+		restore()
+		if errors.Is(err, session.ErrRuntimeBusy) {
+			return mirroredSession{}, errHandoffBusyAgain
+		}
 		return mirroredSession{}, fmt.Errorf("handoff: release session writer: %w", err)
 	}
-	// Re-point the frame tag: a stale tag stamps live frames with the
-	// handed-off identity and the desktop pump drops them as background.
-	s.setControllerPath(concrete, "")
+	if taken != nil {
+		if taken.keeper != nil {
+			taken.keeper.Release()
+		}
+		holder.Close()
+		s.forgetSessionTag(holder)
+	} else {
+		// Re-point the frame tag: a stale tag stamps live frames with the
+		// handed-off identity and the desktop pump drops them as background.
+		s.setControllerPath(holder, "")
+	}
 	s.markMirrored(m)
 	slog.Info("serve: final-format session handed off to local runtime", "session", route)
 	s.bc.Emit(event.Event{
@@ -927,13 +1011,17 @@ func (s *Server) serveHoldsSession(realPath string) bool {
 	return s.detachedBusy(realPath)
 }
 
+// serveHoldsIdentity reports whether this serve process runs ref anywhere: on
+// the foreground or as a detached background session. The writer-lock probe
+// cannot tell the two apart from a foreign holder, so every identity ownership
+// answer must consult this first.
 func (s *Server) serveHoldsIdentity(ref session.SessionRef) bool {
-	concrete, ok := s.ctl().(*control.Controller)
-	if !ok {
-		return false
+	if concrete, ok := s.ctl().(*control.Controller); ok {
+		if current, bound := concrete.SessionRef(); bound && current == ref {
+			return true
+		}
 	}
-	current, bound := concrete.SessionRef()
-	return bound && current == ref
+	return s.detachedIdentityHolder(ref) != nil
 }
 
 // reclaimIdentity is the remote side's way back for a final-format identity:

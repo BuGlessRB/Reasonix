@@ -491,3 +491,196 @@ func TestIdentityHandoffDoesNotPersistReplacementSession(t *testing.T) {
 		t.Fatalf("/sessions rows after /new = %d, want %d", got, before+1)
 	}
 }
+
+// A turn admitted between the unlocked quiet probe and the locked release must
+// be refused with the legacy path's busy-again error, not raced: otherwise the
+// foreground is unbound mid-turn, the close fails as busy, and the caller gets
+// a 500 with an orphaned running runtime.
+func TestIdentityHandoffRefusesTurnAdmittedAfterQuietProbe(t *testing.T) {
+	_, ctrl, service, current := newExclusiveSessionServeWithOptions(t, func(opts *control.Options) {
+		opts.Runner = blockingRunner{}
+	})
+	root := identityRoot(t, service, current)
+	lifecycle := newIdentityLifecycleServe(t, ctrl, current)
+	ts := httptest.NewServer(lifecycle.Handler())
+	defer ts.Close()
+	defer retireExclusiveForeground(t, ctrl, service)
+	route := "session-id:" + current.SessionID
+
+	handoffIdentityBeforeLockHookForTest = func() {
+		// POST /chat was admitted right after the probe saw an idle foreground.
+		ctrl.Submit("keep running")
+		waitRunning(t, ctrl)
+	}
+	t.Cleanup(func() { handoffIdentityBeforeLockHookForTest = nil })
+	defer func() {
+		ctrl.Cancel()
+		waitNotRunning(t, ctrl)
+	}()
+
+	resp, raw := serveBody(t, http.MethodPost, ts.URL+"/handoff", `{"sessionPath":"`+route+`","targetWriterId":"taker-writer","force":true,"mode":"wait","timeoutMs":2000}`)
+	if resp.StatusCode != http.StatusConflict || !strings.Contains(raw, errHandoffBusyAgain.Error()) {
+		t.Fatalf("handoff against a freshly admitted turn = %d %q, want 409 busy-again", resp.StatusCode, raw)
+	}
+	if ref, bound := ctrl.SessionRef(); !bound || ref != current {
+		t.Fatalf("foreground binding after refused handoff = %+v (bound %v), want %+v", ref, bound, current)
+	}
+	if _, mirrored := lifecycle.mirroredEntry(route); mirrored {
+		t.Fatal("refused handoff registered a mirror entry")
+	}
+	if !session.ProbeWriterHeld(filepath.Join(root, current.SessionID)) {
+		t.Fatal("refused handoff dropped the writer lock")
+	}
+	if !ctrl.Running() {
+		t.Fatal("refused handoff interrupted the admitted turn")
+	}
+}
+
+// The controller can report idle while the runtime is still finalizing the
+// turn's terminal commit; closing such a runtime is refused as busy. The
+// handoff must report busy-again from the locked re-check and leave the
+// binding intact, then succeed once the runtime settles.
+func TestIdentityHandoffRefusesFinalizingRuntimeAndRecovers(t *testing.T) {
+	_, ctrl, service, current := newExclusiveSessionServe(t)
+	lifecycle := newIdentityLifecycleServe(t, ctrl, current)
+	ts := httptest.NewServer(lifecycle.Handler())
+	defer ts.Close()
+	defer retireExclusiveForeground(t, ctrl, service)
+	route := "session-id:" + current.SessionID
+	runtime, ok := service.Runtime(current)
+	if !ok {
+		t.Fatal("current runtime is not published")
+	}
+	generation := ctrl.ExecutionGeneration()
+	handoffIdentityBeforeLockHookForTest = func() {
+		runtime.NoteExecution(generation, session.RuntimeFinalizing, "terminal_commit")
+	}
+	t.Cleanup(func() { handoffIdentityBeforeLockHookForTest = nil })
+
+	body := `{"sessionPath":"` + route + `","targetWriterId":"taker-writer","force":true,"mode":"wait","timeoutMs":2000}`
+	resp, raw := serveBody(t, http.MethodPost, ts.URL+"/handoff", body)
+	if resp.StatusCode != http.StatusConflict || !strings.Contains(raw, errHandoffBusyAgain.Error()) {
+		t.Fatalf("handoff against a finalizing runtime = %d %q, want 409 busy-again", resp.StatusCode, raw)
+	}
+	if ref, bound := ctrl.SessionRef(); !bound || ref != current {
+		t.Fatalf("foreground binding after refused handoff = %+v (bound %v), want %+v", ref, bound, current)
+	}
+	if _, mirrored := lifecycle.mirroredEntry(route); mirrored {
+		t.Fatal("refused handoff registered a mirror entry")
+	}
+
+	handoffIdentityBeforeLockHookForTest = nil
+	runtime.NoteExecution(generation, session.RuntimeIdle, "")
+	resp, raw = serveBody(t, http.MethodPost, ts.URL+"/handoff", body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("handoff after the runtime settled = %d %q, want 200", resp.StatusCode, raw)
+	}
+	if _, bound := ctrl.SessionRef(); bound {
+		t.Fatal("foreground still bound after the successful handoff")
+	}
+}
+
+// registerDetachedIdentityHolderForTest parks ctrl in the background registry
+// the way a detached legacy controller ends up there after upgrading to an
+// identity mid-turn: keyed by its former transcript path while SessionRef
+// reports the identity. The close-on-idle watcher is omitted because these
+// tests assert ownership predicates, not idle retirement; done is pre-closed so
+// takeDetached hands the entry over immediately.
+func (s *Server) registerDetachedIdentityHolderForTest(key string, ctrl *control.Controller, tag *sessionTagSink) *detachedSession {
+	done := make(chan struct{})
+	close(done)
+	d := &detachedSession{
+		path: agent.CanonicalSessionPath(key), ctrl: ctrl, tag: tag,
+		force: make(chan struct{}), reattach: make(chan struct{}), done: done,
+	}
+	s.detachedMu.Lock()
+	s.detached[d.path] = d
+	s.detachedMu.Unlock()
+	return d
+}
+
+// A detached background session that runs an identity is still this serve's
+// writer. /ownership must say so instead of "other", /adopt must refuse the
+// claim instead of registering a mirror over our own writer, /status must not
+// pin the tab read-only, and /handoff must release the detached holder the way
+// the legacy detached handoff does.
+func TestIdentityOwnershipCoversDetachedHolder(t *testing.T) {
+	_, ctrl, service, current := newExclusiveSessionServe(t)
+	root := identityRoot(t, service, current)
+	lifecycle := newIdentityLifecycleServe(t, ctrl, current)
+	ts := httptest.NewServer(lifecycle.Handler())
+	defer ts.Close()
+	defer retireExclusiveForeground(t, ctrl, service)
+
+	background, err := service.Create(t.Context(), session.CreateOptions{SessionID: "background"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Close(t.Context(), background.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	exec := agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard)
+	bg := control.New(control.Options{Runner: blockingRunner{}, Executor: exec, SessionDir: ctrl.SessionDir(), SessionService: service, ExclusiveSession: true})
+	if _, err := bg.OpenSession(t.Context(), background.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	tag := newSessionTagSink(lifecycle.bc)
+	tag.SetIdentity("", background.Ref().SessionID)
+	lifecycle.RegisterSessionTag(bg, tag)
+	bg.Submit("keep running")
+	waitRunning(t, bg)
+	lifecycle.registerDetachedIdentityHolderForTest(filepath.Join(ctrl.SessionDir(), "upgraded.jsonl"), bg, tag)
+	closed := false
+	defer func() {
+		if !closed {
+			bg.Cancel()
+			waitNotRunning(t, bg)
+			bg.Close()
+		}
+	}()
+	route := "session-id:" + background.Ref().SessionID
+
+	resp, raw := serveBody(t, http.MethodGet, ts.URL+"/ownership?session="+route, "")
+	var view ownershipView
+	if err := json.Unmarshal([]byte(raw), &view); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK || view.Holder != "serve" || !view.Running {
+		t.Fatalf("ownership of a detached identity = %+v (status %d), want serve holder running", view, resp.StatusCode)
+	}
+	resp, raw = serveBody(t, http.MethodPost, ts.URL+"/adopt", `{"sessionPath":"`+route+`","writerId":"impostor"}`)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("adopt of our own detached identity = %d body %s, want 409", resp.StatusCode, raw)
+	}
+	if _, mirrored := lifecycle.mirroredEntry(route); mirrored {
+		t.Fatal("adopt registered a mirror over this serve's own detached writer")
+	}
+	resp, raw = serveBody(t, http.MethodGet, ts.URL+"/status?session="+route, "")
+	var status map[string]any
+	if err := json.Unmarshal([]byte(raw), &status); err != nil {
+		t.Fatal(err)
+	}
+	if taken, _ := status["takenOver"].(bool); resp.StatusCode != http.StatusOK || taken {
+		t.Fatalf("status of a detached identity reports takenOver: %v (status %d)", status, resp.StatusCode)
+	}
+
+	// The detached holder is handed off like a legacy detached session: the
+	// turn is interrupted, the writer lock drops, the controller is retired.
+	resp, raw = serveBody(t, http.MethodPost, ts.URL+"/handoff", `{"sessionPath":"`+route+`","targetWriterId":"taker-writer","force":true,"mode":"interrupt","timeoutMs":5000}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("handoff of a detached identity = %d body %s", resp.StatusCode, raw)
+	}
+	closed = true
+	if lifecycle.detachedBusy(filepath.Join(ctrl.SessionDir(), "upgraded.jsonl")) {
+		t.Fatal("handed-off detached holder is still registered")
+	}
+	if session.ProbeWriterHeld(filepath.Join(root, background.Ref().SessionID)) {
+		t.Fatal("writer lock still held after handing off the detached identity")
+	}
+	if _, mirrored := lifecycle.mirroredEntry(route); !mirrored {
+		t.Fatal("handoff of the detached identity did not register a mirror entry")
+	}
+	if ref, bound := ctrl.SessionRef(); !bound || ref != current {
+		t.Fatalf("foreground changed while handing off a detached identity: %+v (bound %v)", ref, bound)
+	}
+}

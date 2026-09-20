@@ -128,6 +128,14 @@ func TestDeleteSessionDeletesCanonicalIdentity(t *testing.T) {
 
 func newExclusiveSessionServe(t *testing.T) (*Server, *control.Controller, *session.Service, session.SessionRef) {
 	t.Helper()
+	return newExclusiveSessionServeWithOptions(t, nil)
+}
+
+// newExclusiveSessionServeWithOptions lets a test shape the foreground
+// controller (for example install a blocking Runner so a turn can be held open)
+// before the exclusive identity is bound.
+func newExclusiveSessionServeWithOptions(t *testing.T, configure func(*control.Options)) (*Server, *control.Controller, *session.Service, session.SessionRef) {
+	t.Helper()
 	root := filepath.Join(t.TempDir(), "sessions-v4")
 	service, err := session.NewService("serve-test", session.NewFilesystemPersistence(root))
 	if err != nil {
@@ -139,9 +147,13 @@ func newExclusiveSessionServe(t *testing.T) (*Server, *control.Controller, *sess
 		}
 	})
 	exec := agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard)
-	ctrl := control.New(control.Options{
+	opts := control.Options{
 		Executor: exec, SessionDir: t.TempDir(), SessionService: service, ExclusiveSession: true,
-	})
+	}
+	if configure != nil {
+		configure(&opts)
+	}
+	ctrl := control.New(opts)
 	ref, err := ctrl.BindFreshSession(t.Context(), "current")
 	if err != nil {
 		t.Fatal(err)
