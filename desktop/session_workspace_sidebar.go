@@ -165,19 +165,19 @@ func (a *App) updateCanonicalTopicPresentation(topicID string, title *string, pi
 	}
 	if title != nil {
 		for _, id := range ids {
-			if err := a.desktopSessionService("").SetTitle(a.bootContext(), session.SessionRef{HostID: localDesktopHostID, SessionID: id}, *title); err != nil {
+			ref := session.SessionRef{HostID: localDesktopHostID, SessionID: id}
+			if err := a.desktopSessionService("").SetTitle(a.bootContext(), ref, *title); err != nil {
 				return true, err
 			}
+			a.publishCanonicalSessionTitle(ref, *title)
 		}
 	}
-	if err := a.workspaceRegistry().UpdatePresentation(a.bootContext(), ids, title, pinned); err != nil {
-		return true, err
+	if pinned != nil {
+		if err := a.workspaceRegistry().UpdatePresentation(a.bootContext(), ids, nil, pinned); err != nil {
+			return true, err
+		}
+		a.emitProjectTreeMetadataChanged()
 	}
-	if title != nil {
-		a.updateOpenTopicTitle(topicID, *title, topicTitleSourceManual)
-		a.saveTabsFromRemote()
-	}
-	a.emitProjectTreeMetadataChanged()
 	return true, nil
 }
 
@@ -328,16 +328,7 @@ func (a *App) canonicalTopicNodes(req ProjectTopicPageRequest, state workspacest
 		}
 		ref := session.SessionRef{HostID: localDesktopHostID, SessionID: id}
 		presentation := state.Presentation[id]
-		label := row.Title
-		if label == "" {
-			label = row.Preview
-		}
-		if label == "" {
-			label = presentation.Title
-		}
-		if label == "" {
-			label = defaultTopicTitle
-		}
+		label := a.localizedTopicTitle(sessionDisplayTitle(info, presentation))
 		kind := "topic"
 		if req.Scope != "project" {
 			kind = "global_topic"
