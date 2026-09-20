@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -269,5 +270,87 @@ func TestMergeResumeStoresCapKeepsNewestCanonicalRow(t *testing.T) {
 	}
 	if got[len(got)-1] != "L12" {
 		t.Fatalf("cap dropped %q instead of the oldest legacy row (order %v)", got[len(got)-1], got)
+	}
+}
+
+// fakeSessionCatalog pages a synthetic catalog in session-id order with the
+// same cursor contract as FilesystemPersistence.List.
+type fakeSessionCatalog struct {
+	infos []session.SessionInfo
+	calls int
+}
+
+func (f *fakeSessionCatalog) List(_ context.Context, cursor string, limit int) (session.SessionPage, error) {
+	f.calls++
+	page := session.SessionPage{Sessions: []session.SessionInfo{}}
+	for _, info := range f.infos {
+		if info.SessionID <= cursor {
+			continue
+		}
+		if len(page.Sessions) == limit {
+			page.NextCursor = page.Sessions[len(page.Sessions)-1].SessionID
+			break
+		}
+		page.Sessions = append(page.Sessions, info)
+	}
+	return page, nil
+}
+
+func newFakeSessionCatalog(rows int, updatedAt func(i int) time.Time) *fakeSessionCatalog {
+	catalog := &fakeSessionCatalog{}
+	for i := range rows {
+		id := fmt.Sprintf("s%05d", i)
+		catalog.infos = append(catalog.infos, session.SessionInfo{
+			SessionID: id, Ref: session.SessionRef{HostID: "local", SessionID: id}, Codec: session.Codec,
+			MetadataStatus: session.MetadataReady, Turns: 1, Preview: id, UpdatedAt: updatedAt(i), Path: "/sessions-v4/" + id,
+		})
+	}
+	return catalog
+}
+
+// TestCanonicalResumeEntriesRankNewestAcrossCatalogPages proves the listing
+// walks every catalog page before ranking: with more than one page of
+// sessions whose newest activity sorts last by id, the newest rows are the
+// ones offered (and therefore the ones --continue picks), not the first page
+// in lexical order.
+func TestCanonicalResumeEntriesRankNewestAcrossCatalogPages(t *testing.T) {
+	base := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	catalog := newFakeSessionCatalog(250, func(i int) time.Time { return base.Add(time.Duration(i) * time.Minute) })
+
+	entries := canonicalResumeEntriesFrom(context.Background(), catalog)
+
+	if len(entries) != canonicalResumeScanCap {
+		t.Fatalf("listed %d rows, want the display cap of %d", len(entries), canonicalResumeScanCap)
+	}
+	if got := entries[0].target.ref.SessionID; got != "s00249" {
+		t.Fatalf("newest row = %q, want s00249 from the last catalog page", got)
+	}
+	if got := entries[len(entries)-1].target.ref.SessionID; got != "s00150" {
+		t.Fatalf("oldest offered row = %q, want s00150", got)
+	}
+	for i := 1; i < len(entries); i++ {
+		if entries[i].session.ModTime.After(entries[i-1].session.ModTime) {
+			t.Fatalf("rows are not newest-first at %d: %v after %v", i, entries[i].session.ModTime, entries[i-1].session.ModTime)
+		}
+	}
+	if catalog.calls != 3 {
+		t.Fatalf("catalog pages walked = %d, want 3 (250 rows at %d per page)", catalog.calls, canonicalResumeScanCap)
+	}
+}
+
+// TestCanonicalResumeEntriesBoundTheCatalogWalk pins the documented hard cap:
+// a store larger than canonicalResumeWalkCap stops paging instead of scanning
+// every directory on each /resume.
+func TestCanonicalResumeEntriesBoundTheCatalogWalk(t *testing.T) {
+	base := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	catalog := newFakeSessionCatalog(canonicalResumeWalkCap+canonicalResumeScanCap, func(int) time.Time { return base })
+
+	entries := canonicalResumeEntriesFrom(context.Background(), catalog)
+
+	if want := canonicalResumeWalkCap / canonicalResumeScanCap; catalog.calls != want {
+		t.Fatalf("catalog pages walked = %d, want %d (walk cap %d)", catalog.calls, want, canonicalResumeWalkCap)
+	}
+	if len(entries) != canonicalResumeScanCap {
+		t.Fatalf("listed %d rows, want the display cap of %d", len(entries), canonicalResumeScanCap)
 	}
 }

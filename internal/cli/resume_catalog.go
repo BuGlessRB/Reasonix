@@ -12,10 +12,19 @@ import (
 	"reasonix/internal/session"
 )
 
-// canonicalResumeScanCap bounds how many final-format catalog rows one picker
-// open walks. It matches the Serve-side listing page so both surfaces see the
-// same conversation universe even on long-lived workspaces.
+// canonicalResumeScanCap bounds how many final-format catalog rows one resume
+// surface offers after ranking by recency. It matches the Serve-side listing
+// page so both surfaces see the same conversation universe even on long-lived
+// workspaces.
 const canonicalResumeScanCap = 100
+
+// canonicalResumeWalkCap bounds how many catalog rows one listing walks before
+// ranking. The catalog pages in session-id order, not recency, so the newest
+// conversation can sit on the last page; stopping after the first page hid it
+// from the picker and from --continue. The cap keeps a pathological store from
+// turning every /resume into an unbounded directory scan; rows beyond it are
+// the lexically largest ids, not the newest activity.
+const canonicalResumeWalkCap = 20 * canonicalResumeScanCap
 
 // cliResumeTarget is one resumable conversation: either a legacy transcript
 // path or a final-format session identity. Exactly one side is set.
@@ -28,6 +37,13 @@ func (t cliResumeTarget) canonical() bool { return t.ref.SessionID != "" }
 
 func (t cliResumeTarget) empty() bool { return t.path == "" && t.ref.SessionID == "" }
 
+// canonicalCatalogLister is the catalog paging surface canonicalResumeEntries
+// walks; *session.Query implements it. Tests page a synthetic catalog through
+// the same code without building hundreds of on-disk sessions.
+type canonicalCatalogLister interface {
+	List(ctx context.Context, cursor string, limit int) (session.SessionPage, error)
+}
+
 // canonicalResumeEntries lists final-format (sessions-v4) sessions sharing the
 // workspace of the legacy session dir. The catalog is the authoritative store
 // once a legacy transcript has been imported, so every resume surface must
@@ -37,13 +53,22 @@ func canonicalResumeEntries(ctx context.Context, sessionDir string) []resumeEntr
 	if service == nil {
 		return nil
 	}
+	return canonicalResumeEntriesFrom(ctx, service.Query())
+}
+
+// canonicalResumeEntriesFrom walks the whole catalog (up to
+// canonicalResumeWalkCap rows) before sorting by recency and applying the
+// display cap, so the newest conversation is offered regardless of where its
+// id sorts.
+func canonicalResumeEntriesFrom(ctx context.Context, catalog canonicalCatalogLister) []resumeEntry {
 	var out []resumeEntry
 	cursor := ""
-	for len(out) < canonicalResumeScanCap {
-		page, err := service.Query().List(ctx, cursor, canonicalResumeScanCap)
+	for walked := 0; walked < canonicalResumeWalkCap; {
+		page, err := catalog.List(ctx, cursor, canonicalResumeScanCap)
 		if err != nil {
 			break
 		}
+		walked += len(page.Sessions)
 		for _, info := range page.Sessions {
 			if canonicalResumeHidden(info) {
 				continue
@@ -53,7 +78,7 @@ func canonicalResumeEntries(ctx context.Context, sessionDir string) []resumeEntr
 				target:  cliResumeTarget{ref: info.Ref},
 			})
 		}
-		if page.NextCursor == "" || page.NextCursor == cursor {
+		if page.NextCursor == "" || page.NextCursor == cursor || len(page.Sessions) == 0 {
 			break
 		}
 		cursor = page.NextCursor
