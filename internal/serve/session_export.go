@@ -78,14 +78,21 @@ func (s *Server) fixedSessionExportSource(w http.ResponseWriter, r *http.Request
 		http.Error(w, "export target host changed", http.StatusConflict)
 		return nil, session.SessionRef{}, nil, false
 	}
+	var ref session.SessionRef
 	if targetID == "" {
 		if !bound {
 			http.Error(w, "canonical session identity is unavailable", http.StatusConflict)
 			return nil, session.SessionRef{}, nil, false
 		}
-		targetID = current.SessionID
+		ref = current
+	} else {
+		var err error
+		ref, err = query.ResolveSessionID(r.Context(), targetID)
+		if err != nil {
+			http.Error(w, "session export source is unavailable", http.StatusConflict)
+			return nil, session.SessionRef{}, nil, false
+		}
 	}
-	ref := session.SessionRef{HostID: hostID, SessionID: targetID}
 	if _, err := query.Stat(r.Context(), ref); err != nil {
 		http.Error(w, "session export source is unavailable", http.StatusConflict)
 		return nil, session.SessionRef{}, nil, false
