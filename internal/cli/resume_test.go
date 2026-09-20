@@ -402,7 +402,6 @@ func TestResumeWhileScrolledUpPinsViewportToBottom(t *testing.T) {
 	}
 }
 
-
 // mergedResumeSessions projects the merged picker rows onto the legacy row
 // shape the older listing tests assert against.
 func mergedResumeSessions(dir string) []agent.SessionInfo {

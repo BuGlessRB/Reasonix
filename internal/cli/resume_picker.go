@@ -58,9 +58,10 @@ func (m *chatTUI) openResumePicker() {
 	items := make([]quickPickerItem, 0, len(entries))
 	for i, entry := range entries {
 		status := ""
-		if i == activeIdx {
+		switch i {
+		case activeIdx:
 			status = "active"
-		} else if i == reclaimedIdx {
+		case reclaimedIdx:
 			status = "taken back"
 		}
 		label := sessionPickerLabel(entry.session)

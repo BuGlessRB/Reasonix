@@ -48,7 +48,7 @@ func cliTakeoverIdentityHeldSession(route string, manager *cliTakeoverManager) (
 	// rewrites its state file, so an all-fail round may simply have raced the
 	// restart. PIDs of dead serves are pruned during discovery.
 	var lastErr error
-	for pass := 0; pass < 2; pass++ {
+	for range 2 {
 		records := discoverCLIServesForTakeover()
 		if len(records) == 0 {
 			break

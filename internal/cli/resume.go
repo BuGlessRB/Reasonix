@@ -37,9 +37,7 @@ const resumeOtherProjectsCap = 5
 func resumeEntries(dir string) []resumeEntry {
 	base := mergedResumeEntries(dir, resumeListCap)
 	out := make([]resumeEntry, 0, len(base)+resumeOtherProjectsCap)
-	for _, s := range base {
-		out = append(out, s)
-	}
+	out = append(out, base...)
 	out = append(out, otherProjectResumeEntries(dir)...)
 	return out
 }
