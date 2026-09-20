@@ -86,7 +86,6 @@ interface Props {
   reloadAccount: () => void;
   workspaceRoot?: string;
 }
-
 export function Settings({ hub, onError, port, status, theme, onTheme, contrast, onContrast, weight, onWeight, look, onLook, onClose, onChanged, onSessionsRecovered, reloadThemes, at: opened, account: acct, accountUnread, reloadAccount, workspaceRoot }: Props) {
   const [openedSection, openedAnchor = ""] = (opened ?? "").split(":", 2);
   const [at, setAt] = useState<Section>((openedSection as Section) || "session");
@@ -513,15 +512,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
 
           {at === "model" && (
             <>
-              <Group id="roles" title={t("角色分工")} now={roles ? t("{n} 个已指派", { n: assigned }) : undefined}
-                hint={t("每个位置默认使用主模型，只有明确指派过的才会单独设置。更换指派与更换主模型一样需要重建运行时，任务运行期间无法修改。")}>
-                <Roles models={models} roles={roles} main={status?.modelRef} busy={busy}
-                  onSet={(role, ref) => run(`role:${role}`, async () => {
-                    await port.setRole(role, ref);
-                    loadRoles();
-                  })} />
-              </Group>
-              <Group id="model" title={t("模型")} now={nav.model} hint={t("切换会保留对话并重建运行时，任务运行期间无法切换。标签只显示已探测到的能力；留空表示端点未声明，不代表不支持。")}>
+              <Group id="model" title={t("主模型")} now={nav.model} hint={t("用于当前对话和大多数任务。切换会保留对话并重建运行时；任务执行期间无法修改。端点没有声明的能力不会显示标签。")}>
                 <Models models={models} current={status?.modelRef} busy={busy} protocol={protocol}
                   onPick={(ref) => run(ref, () => port.setModel(ref))} />
               </Group>
@@ -540,17 +531,25 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
               ) : (
                 <Group id="effort" title={t("推理强度")} hint={t("当前模型未提供可调的推理档位，因此不显示该选项。")} />
               )}
-              <Group id="context" title={t("上下文维护")}
-                hint={t("对话长到一定程度会自动整理成摘要再继续。整理点取「经济维护阈值」与「容量保护」中先到的那个。")}>
-                <Compaction port={port} onChanged={onChanged} />
-              </Group>
               <Group id="providers"
-                title={t("连接")}
-                hint={t("从端点读取模型目录；未列出的模型也可以按原始 ID 添加并单独验证。图片输入单独配置，并以不发送为安全默认。")}
+                title={t("模型来源")}
+                hint={t("管理供应商、API 地址、协议和密钥。模型列表从端点读取；未列出的模型也可以按原始 ID 添加并验证。")}
               >
                 <Providers port={port} onChanged={loadModels} onFailed={setFailed} protocol={protocol}
                   activeKindFor={(a) => kindFor(a.key)}
                   onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
+              </Group>
+              <Group id="context" title={t("上下文维护")}
+                hint={t("默认按模型容量自动整理。自定义中转站若无法提供最大上下文，先按 160k 计算；你可以在这里填写实际容量。")}>
+                <Compaction port={port} onChanged={onChanged} />
+              </Group>
+              <Group id="roles" title={t("按任务指定模型")} now={roles ? t("{n} 个已指派", { n: assigned }) : undefined}
+                hint={t("默认全部使用主模型。只有需要为计划、子代理、看图或复核指定不同模型时才修改这里。")}>
+                <Roles models={models} roles={roles} main={status?.modelRef} busy={busy}
+                  onSet={(role, ref) => run(`role:${role}`, async () => {
+                    await port.setRole(role, ref);
+                    loadRoles();
+                  })} />
               </Group>
             </>
           )}

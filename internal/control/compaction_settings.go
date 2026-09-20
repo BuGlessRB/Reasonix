@@ -3,19 +3,16 @@ package control
 import (
 	"fmt"
 
-	"reasonix/internal/agent"
 	"reasonix/internal/config"
 )
 
 // CompactionSettings is what the two configured bounds are and which of them
 // the session is actually running under. The pair is the point: they are set
 // independently, only the lower one ever fires, and a panel showing the
-// settings alone cannot say which — a 1M window declared against the default
-// soft limit folds at 160k, and nothing on that screen would explain it.
+// settings alone cannot say which when a custom fixed threshold is present.
 type CompactionSettings struct {
-	// SoftLimitTokens is the stored value, not the resolved one: zero means
-	// the default and a negative value means off, and a caller that cannot
-	// tell those apart cannot offer them.
+	// SoftLimitTokens is the stored value. Zero or a negative legacy value means
+	// capacity-based maintenance; a positive value adds a fixed earlier bound.
 	SoftLimitTokens  int     `json:"soft_limit_tokens"`
 	DefaultSoftLimit int     `json:"default_soft_limit"`
 	Ratio            float64 `json:"ratio"`
@@ -35,7 +32,7 @@ func (c *Controller) CompactionSettings() CompactionSettings {
 	cfg := config.LoadForEdit(path)
 	out := CompactionSettings{
 		SoftLimitTokens:  cfg.Agent.ContextSoftLimitTokens,
-		DefaultSoftLimit: agent.DefaultContextSoftLimitTokens,
+		DefaultSoftLimit: 0,
 		Ratio:            c.CompactRatio(),
 		Path:             path,
 	}

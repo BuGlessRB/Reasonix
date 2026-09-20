@@ -916,8 +916,6 @@
     letter-spacing: var(--track-display); color: var(--text);
   }
   .hero .s { margin-top: 12px; max-width: 48ch; font-size: var(--fs-ui); line-height: 1.75; color: var(--faint) }
-  .hero .qs { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 26px }
-
   .herogo { display: flex; flex-direction: column; align-items: center; gap: 9px; margin-top: 19px }
   .pick {
     padding: 8px 20px; border: 1px solid var(--accent); border-radius: var(--r-sm);
@@ -2221,15 +2219,6 @@
 
   .pane[data-run="running"] .btn.send:disabled { display: none }
 
-  .sug {
-    border: 0; background: var(--overlay); border-radius: var(--r-sm);
-    padding: 4px 10px; color: var(--faint); font: var(--w-reg) var(--fs-ui) var(--ui); cursor: pointer;
-    transition: color var(--m-line), background var(--m-line);
-  }
-  .sug::before { content: "↩ "; color: var(--ghost); font: var(--w-reg) var(--fs-micro) var(--mono) }
-  .sug:hover { color: var(--text); background: var(--border) }
-  .sug:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-
   .tkv { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 28px; max-width: 1080px; margin: 0 auto; width: 100%; container-type: inline-size }
 
   .tkcard {
@@ -2739,7 +2728,7 @@
     .compose .row:has([data-pending])::after { animation: none; background: var(--net); opacity: .5 }
     .scroll { scroll-behavior: auto }
     .tk-acts button:hover::after, .btn:active, .navbtn:active,
-    .tab:active, .copy:active, .sug:active,
+    .tab:active, .copy:active,
     .act:active, .chip:active, .scope button:active { transform: none !important }
     * { transition-duration: .01ms !important }
   }
@@ -3519,6 +3508,13 @@
   .msearch input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .msearch .cnt { flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
 
+  .model-list-hd {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin: 0 2px 8px; color: var(--faint);
+    font: var(--w-med) var(--fs-meta) var(--ui);
+  }
+  .model-list-hd span:last-child { font-family: var(--mono); font-weight: var(--w-reg); color: var(--ghost) }
+
   .mgrp { margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden;
     animation: card var(--t-card) var(--ease-out) both }
   .mgrp:last-child { margin-bottom: 0 }
@@ -3527,11 +3523,15 @@
     background: var(--surface); border-bottom: 1px solid var(--hair);
   }
   .mgrp-hd .nm { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
+  .mgrp-hd .protocol {
+    flex: none; padding: 1px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
+    font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--muted); background: var(--raised);
+  }
   .mgrp-hd .url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
   .mgrp-hd .n { margin-left: auto; flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
 
-  .mrow { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 12px;
+  .mrow { display: flex; align-items: center; gap: 11px; width: 100%; padding: 11px 12px;
     background: var(--raised); border: 0; border-bottom: 1px solid var(--hair);
     text-align: left }
   button.mrow { cursor: pointer }
@@ -3556,8 +3556,19 @@
     background: var(--raised); transform: scale(0);
     transition: transform var(--t-line) var(--ease-out) }
   .mrow[data-on] .mark::after { transform: scale(1) }
+  .mrow .model-copy { min-width: 150px; flex: 1; display: flex; flex-direction: column; gap: 3px }
+  .mrow .model-name { min-width: 0; display: flex; align-items: baseline; gap: 7px }
   .mrow .nm { min-width: 0; font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--text); overflow-wrap: anywhere }
-  .mrow .caps { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px }
+  .mrow .current {
+    flex: none; padding: 1px 6px; border-radius: var(--r-pill); font-style: normal;
+    font: var(--w-med) var(--fs-micro) var(--ui); color: var(--accent-ink);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .mrow .model-route {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost);
+  }
+  .mrow .caps { margin-left: auto; max-width: 56%; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px }
   .mrow .cap {
     padding: 1.5px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
     background: var(--surface); color: var(--faint); font: var(--w-reg) var(--fs-micro) var(--ui); white-space: nowrap;
@@ -3566,6 +3577,13 @@
     border-color: color-mix(in srgb, var(--deleg) 30%, transparent) }
   .mrow .cap[data-k="think"] { color: var(--net); background: var(--net-wash);
     border-color: color-mix(in srgb, var(--net) 26%, transparent) }
+
+  @media (max-width: 720px) {
+    .mgrp-hd .url { display: none }
+    .mrow { align-items: flex-start; flex-wrap: wrap }
+    .mrow .model-copy { min-width: calc(100% - 28px) }
+    .mrow .caps { margin-left: 24px; max-width: none; justify-content: flex-start }
+  }
 
   .vway { display: flex; align-items: center; gap: 10px; padding: 2px 12px 10px;
     border-bottom: 1px solid var(--hair) }

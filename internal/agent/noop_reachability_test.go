@@ -122,7 +122,7 @@ func TestEveryNoopVerdictIsReachable(t *testing.T) {
 		// Growth that never closes: the tail a first fold kept verbatim is
 		// reachable, and folding it costs more than it frees.
 		NoopFoldBelowEconomics: func(t *testing.T) []string {
-			a, sink := economicFixture(t, 0, 30)
+			a, sink := economicFixture(t, 160_000, 30)
 			a.activeTurnCreatedAt.Store(economicActiveTurnAt)
 			ctx := context.Background()
 			if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {

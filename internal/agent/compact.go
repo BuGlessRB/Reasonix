@@ -21,22 +21,21 @@ import (
 // checkpoint is installed (stable prefix + one structured digest + recent tail).
 // 50% is only the normal acceptance ceiling — candidates are never padded up to it.
 const (
-	defaultCompactRatio           = 0.85    // capacity share of the window before maintenance
-	defaultContextSoftLimitTokens = 160_000 // economic maintenance boundary, independent of the window
-	checkpointCeilingRatio        = 0.50    // normal auto-checkpoint acceptance ceiling
-	recentTailBudgetRatio         = 0.10    // recent verbatim tail as a fraction of the window
-	minRecentTailTokens           = 32 * 1024
-	maxRecentTailTokens           = 96 * 1024
-	summaryOutputMaxTokens        = 16 * 1024 // max digest output; further clipped by remaining candidate space
-	exceptionalMinSavingsRatio    = 0.25      // when fixed prefix alone exceeds 50%, require at least this savings
-	minRecentKeep                 = 2         // never keep fewer recent messages than this
-	minCompactMessages            = 2         // skip compaction below this many compactable messages
-	fallbackTokPerChar            = 0.25      // ~4 chars/token, used before any usage is available to calibrate
-	defaultPinnedFirstUserTokens  = 1500      // default ceiling on pinning the first user turn verbatim
-	pinnedFirstUserWindowFrac     = 0.15      // and never pin a first turn worth more than this fraction of the window
-	keptUserTurnsWindowFrac       = 0.05      // default verbatim user-turn budget, as a fraction of the window
-	keptUserTurnsFloorTokens      = 1024      // ...with a floor so a small window still holds something
-	protocolReserveTokens         = 256       // provider framing and control fields not represented by message estimates
+	defaultCompactRatio          = 0.85 // capacity share of the window before maintenance
+	checkpointCeilingRatio       = 0.50 // normal auto-checkpoint acceptance ceiling
+	recentTailBudgetRatio        = 0.10 // recent verbatim tail as a fraction of the window
+	minRecentTailTokens          = 32 * 1024
+	maxRecentTailTokens          = 96 * 1024
+	summaryOutputMaxTokens       = 16 * 1024 // max digest output; further clipped by remaining candidate space
+	exceptionalMinSavingsRatio   = 0.25      // when fixed prefix alone exceeds 50%, require at least this savings
+	minRecentKeep                = 2         // never keep fewer recent messages than this
+	minCompactMessages           = 2         // skip compaction below this many compactable messages
+	fallbackTokPerChar           = 0.25      // ~4 chars/token, used before any usage is available to calibrate
+	defaultPinnedFirstUserTokens = 1500      // default ceiling on pinning the first user turn verbatim
+	pinnedFirstUserWindowFrac    = 0.15      // and never pin a first turn worth more than this fraction of the window
+	keptUserTurnsWindowFrac      = 0.05      // default verbatim user-turn budget, as a fraction of the window
+	keptUserTurnsFloorTokens     = 1024      // ...with a floor so a small window still holds something
+	protocolReserveTokens        = 256       // provider framing and control fields not represented by message estimates
 )
 
 var (
@@ -105,25 +104,19 @@ func (a *Agent) capacityCompactTrigger() int {
 }
 
 // economicCompactTrigger answers what a prompt costs to replay, which is a
-// property of its size and not of what the model could have held: a declared 1M
-// window makes a 300k prompt legal, never economical. Negative disables it.
+// property of its size and not of what the model could have held. It is an
+// explicit override: an unset or negative value leaves capacity as the only
+// automatic boundary.
 func (a *Agent) economicCompactTrigger() int {
 	if a.ablation.Off(ablation.Compaction) {
 		return 0
 	}
 	limit := a.budgets.ContextSoftLimitTokens
-	if limit < 0 {
+	if limit <= 0 {
 		return 0
-	}
-	if limit == 0 {
-		limit = defaultContextSoftLimitTokens
 	}
 	return limit
 }
-
-// DefaultContextSoftLimitTokens is what an unset context_soft_limit_tokens
-// means, published so a frontend can say what the empty field will do.
-const DefaultContextSoftLimitTokens = defaultContextSoftLimitTokens
 
 // CompactTrigger is the boundary in force, which is the number a frontend has
 // to show: the two bounds are configured separately and only one of them fires,

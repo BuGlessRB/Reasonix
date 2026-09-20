@@ -429,6 +429,7 @@ describe("a question the run is still blocked on", () => {
     expect(answerable(s).map((i) => i.a.id)).toEqual(["apv-2"]);
     const sealed = s.items.find((i) => i.t === "approval" && i.a.id === "apv-1") as Extract<Item, { t: "approval" }>;
     expect(sealed.verdict, "the outcome the kernel recorded, not a guess").toBe("deny");
+    expect(s.items.some((i) => i.t === "notice"), "the audit receipt is not a chat message").toBe(false);
   });
 
   it("does not guess that a new receipt outcome was allowed", () => {

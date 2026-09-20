@@ -17,10 +17,11 @@ type ContextBreakdown struct {
 	Window int `json:"window"`
 	// CompactAt is the lower of the two configured bounds, which is where this
 	// session actually folds: against a 1M window the default soft limit fires
-	// at 160k, so a gauge drawn against the window reads 16% when it happens.
+	// at a custom fixed threshold, so a gauge drawn against the window can look
+	// nearly empty when maintenance happens.
 	CompactAt int `json:"compactAt"`
 	// Which bound that is, decided here rather than re-derived from the pair:
-	// a reader told only the number cannot say why a 1M session folds at 160k,
+	// a reader told only the number cannot say why a large-window session folds,
 	// and one comparing the two itself owns a second copy of the rule.
 	Boundary string `json:"boundary"`
 	// The window share, which is the bound the user configured and the one

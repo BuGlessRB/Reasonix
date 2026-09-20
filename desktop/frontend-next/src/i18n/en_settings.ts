@@ -52,6 +52,23 @@ export const EN_SETTINGS: Record<string, string> = {
   "在 Git worktree 中创建独立副本，修改不会影响当前分支": "Work in a separate Git worktree so changes do not land on the current branch",
 
   // ── 设置：模型 ───────────────────────────────────────────────────
+  "主模型": "Primary model",
+  "用于当前对话和大多数任务。切换会保留对话并重建运行时；任务执行期间无法修改。端点没有声明的能力不会显示标签。":
+    "Used for this conversation and most tasks. Switching keeps the conversation and rebuilds the runtime; it is unavailable while a task is running. Capabilities the endpoint did not declare are left unlabelled.",
+  "可用模型": "Available models",
+  "{n} 个": "{n}",
+  "当前使用": "In use",
+  "可调推理": "Adjustable reasoning",
+  "上下文 {size}": "{size} context",
+  "输入 {input} · 输出 {output} / 1M tokens": "Input {input} · output {output} / 1M tokens",
+  "模型来源": "Model providers",
+  "管理供应商、API 地址、协议和密钥。模型列表从端点读取；未列出的模型也可以按原始 ID 添加并验证。":
+    "Manage providers, API addresses, protocols, and keys. Models are read from the endpoint; unlisted models can still be added by exact ID and verified.",
+  "高级模型设置": "Advanced model settings",
+  "按任务指定模型与上下文整理策略": "Assign models by task and tune context maintenance",
+  "按任务指定模型": "Models by task",
+  "默认全部使用主模型。只有需要为计划、子代理、看图或复核指定不同模型时才修改这里。":
+    "Everything uses the primary model by default. Change this only when planning, subagents, vision, or review should use another model.",
   "角色分工": "Roles",
   "每个位置默认使用主模型，只有明确指派过的才会单独设置。更换指派与更换主模型一样需要重建运行时，任务运行期间无法修改。":
     "Each slot uses the main model unless you assign one explicitly. Changing an assignment rebuilds the runtime just as changing the main model does, and cannot be done while a task is running.",
@@ -325,8 +342,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "本地优先 · 凭据由系统安全存储 · 连接前不会发送请求":
     "Local first · credentials stay in secure system storage · nothing is sent before you connect",
   "首先连接模型服务": "Connect a model service first",
-  "填写地址与 key，其余由系统探测 —— 协议、模型清单、是否支持读图均可自动获取。":
-    "Give it an address and a key; the rest is asked of the endpoint — protocol, model list, whether it reads images.",
+  "填写地址与 key，系统会探测可用协议、模型清单与读图能力；无法自动区分的协议由你确认。":
+    "Give it an address and a key. Reasonix probes the available protocols, model catalog, and image support; you confirm protocols it cannot tell apart.",
   "key 保存在本机配置中，不会上传至任何第三方。模型、推理强度与执行设定均有默认值，可随时在输入框上方调整。":
     "The key goes into this machine's config and is uploaded nowhere. Model, reasoning effort and execution settings all have defaults you can change from the composer at any time.",
   "常用服务": "Common services",
@@ -334,6 +351,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "https://你的地址/v1": "https://your-host/v1",
   "优先使用": "Which one to start with",
   "选择默认模型": "Choose the default model",
+  "模型目录只能确认账号与模型，不能排除其他聊天协议。请选择服务商实际支持的协议；已知服务的专用地址会自动切换。":
+    "A model catalog confirms the account and models, but cannot rule out other chat protocols. Choose a protocol the provider supports; dedicated addresses for known services switch automatically.",
   "该端点响应了多种协议，上方为偏好选择而非确定结果。连接后可在设置中更改。":
     "More than one protocol answered at this endpoint, so the choice above is a preference rather than a fact. You can change it in Settings once connected.",
 

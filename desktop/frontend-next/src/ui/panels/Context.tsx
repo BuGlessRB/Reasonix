@@ -293,15 +293,11 @@ export function Context({ ctx, legend = false, port, onCtx }: {
               <p className="ctxnote">
                 {fold.preview !== null
                   ? fold.preview >= fold.capacity
-                    ? t("松开即只按窗口容量")
-                    : fold.detent
-                      ? t("松开即回到默认")
-                      : t("松开即生效")
+                    ? t("松开即按窗口容量")
+                    : t("松开即生效")
                   : fold.mode === "capacity"
-                    ? t("只按窗口容量 · {n}", { n: tokens(fold.capacity) })
-                    : fold.mode === "default"
-                      ? t("默认 {n} · 拖到最右只按窗口容量", { n: tokens(fold.fallback) })
-                      : t("自定义 {n} · 拖到最右只按窗口容量", { n: tokens(fold.stored) })}
+                    ? t("按窗口容量（默认）· {n}", { n: tokens(fold.capacity) })
+                    : t("自定义 {n} · 拖到最右恢复按窗口容量", { n: tokens(fold.stored) })}
               </p>
               <p className="ctxfine">{t("会重建运行时；任务运行中改不了。")}</p>
             </div>

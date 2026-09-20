@@ -7,6 +7,7 @@ import { StudioIcon } from "./StudioIcon";
 import { download } from "../port/download";
 import { host } from "../port/host";
 import { useTreeKeys } from "./tree";
+import { useDismiss } from "./dismiss";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -60,6 +61,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   const [editing, setEditing] = useState("");
   const [sessionMenu, setSessionMenu] = useState("");
   const [sessionMenuAt, setSessionMenuAt] = useState({ left: 0, top: 0 });
+  const sessionMenuBox = useRef<HTMLDivElement>(null);
+  useDismiss(!!sessionMenu, sessionMenuBox, () => setSessionMenu(""));
   // What was already sent for this session, so Enter's commit and the blur it
   // causes do not both reach the host with the same name.
   const renamed = useRef<Record<string, string>>({});
@@ -356,6 +359,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                     return (
                       <Fragment key={session.path}>
                       <div
+                        ref={sessionMenu === session.path ? sessionMenuBox : undefined}
                         data-action-click="session.open"
                         data-action-keydown="session.open"
                         data-target={session.path}

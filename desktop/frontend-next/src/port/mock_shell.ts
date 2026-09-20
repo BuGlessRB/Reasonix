@@ -95,7 +95,7 @@ export class MockShell extends MockExtensions {
 // 够把分段条和悬停面板画出来的一份构成：工具定义比对话本身还大，正是这个面板
 // 要让人看见的那种情况。
 const RATIO = 0.85;
-const DEFAULT_SOFT_LIMIT = 160000;
+const DEFAULT_SOFT_LIMIT = 0;
 
 // Which of the two bounds fires, worked out once. The pair is the kernel's
 // rule, and a fixture with its own copy of it drifts into states the product

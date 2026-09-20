@@ -56,7 +56,7 @@ func (m *chatTUI) setFoldThreshold(arg string) tea.Cmd {
 }
 
 // foldBounds says both bounds and which one is current, because only the lower
-// one fires: a 1M window against the default threshold folds at 160k, and the
+// one fires: a custom fixed threshold can precede the capacity boundary, and the
 // settings alone do not say so.
 func (m *chatTUI) foldBounds() string {
 	c := m.ctrl.CompactionSettings()

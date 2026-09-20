@@ -184,6 +184,7 @@ export const ACTIONS: UIAction[] = [
   { id: "model.select", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "network.save", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "onboarding.connect", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "onboarding.protocol", kind: "view", target: "none", proof: "interaction" },
   // Handing the reader to a browser. The vendor's console during setup and a
   // link in the transcript are the same thing to do, and neither moves any
   // state — which is why it is one id and why it is not a mutation.

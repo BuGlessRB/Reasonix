@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { useEscape } from "./dismiss";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import type { AgentPort, CompactionSettings } from "../port/port";
@@ -7,10 +6,8 @@ import { foldModeOf, foldModeValue, type FoldMode as Mode } from "./foldbound";
 
 const tokens = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
 
-// Two bounds decide when a session folds and only the lower one fires, so the
-// number in force is shown beside the choice rather than left to be worked out:
-// a 1M window against the default soft limit folds at 160k, and a screen that
-// showed the setting alone would read as broken.
+// Capacity is the default. A fixed token threshold is an explicit override and
+// stays visible because hiding the policy made it hard to discover and audit.
 export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: () => void }) {
   const [box, setBox] = useState<CompactionSettings | null>(null);
   const [used, setUsed] = useState<number | null>(null);
@@ -20,8 +17,6 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
   // that click with nothing to show — the field appears only once a value has
   // been committed, so it could never be committed.
   const [choice, setChoice] = useState<Mode | null>(null);
-  const [advanced, setAdvanced] = useState(false);
-  useEscape(advanced, () => setAdvanced(false));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const field = useId();
@@ -31,12 +26,8 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
       .compaction()
       .then((s) => {
         setBox(s);
-        setDraft(String(s.soft_limit_tokens > 0 ? s.soft_limit_tokens : s.default_soft_limit));
+        setDraft(String(s.soft_limit_tokens > 0 ? s.soft_limit_tokens : Math.round(s.context_window * s.ratio)));
         setChoice(null);
-        // Advanced opens itself for a session already running under something
-        // other than the default: hiding the setting in force behind a
-        // disclosure is how a screen comes to disagree with the session.
-        setAdvanced(s.soft_limit_tokens !== 0);
       })
       .catch(() => setBox(null));
     // The threshold is a number until it is next to the session's own usage,
@@ -55,7 +46,7 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
     try {
       const saved = await port.saveCompaction(value);
       setBox(saved);
-      setDraft(String(saved.soft_limit_tokens > 0 ? saved.soft_limit_tokens : saved.default_soft_limit));
+      setDraft(String(saved.soft_limit_tokens > 0 ? saved.soft_limit_tokens : Math.round(saved.context_window * saved.ratio)));
       setChoice(null);
       onChanged();
     } catch (e) {
@@ -98,8 +89,6 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
 
   const win = box.context_window;
   const capacity = Math.round(win * box.ratio);
-  // A window nobody declared is what turns automatic maintenance off entirely,
-  // and it outranks whatever either bound says.
   const off = win === 0;
   const economicWins = !off && mode !== "capacity" && box.trigger < capacity;
   const pct = off || !used ? 0 : Math.min((used / box.trigger) * 100, 100);
@@ -140,39 +129,16 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
       </div>
 
       <div className="lrow">
-        <span className="tx">
-          <span className="lb">{t("整理策略")}</span>
-          {/* Which of the three is in force, said while the block is closed:
-              folded, the panel could otherwise not distinguish a session on the
-              default from one somebody had changed. */}
-          <span className="ds">
-            {mode === "capacity" ? t("只按模型容量保护") : mode === "custom" ? t("自定义 {n}", { n: tokens(box.soft_limit_tokens) }) : t("使用默认值")}
-          </span>
-        </span>
-        <button
-          className="more"
-          data-action="compaction.advanced"
-          aria-expanded={advanced}
-          onClick={() => setAdvanced((v) => !v)}
-        >
-          {advanced ? t("收起") : t("高级设置")}
-        </button>
-      </div>
-
-      {advanced && (
-        <>
-          <div className="lrow">
             <span className="tx">
-              <span className="lb">{t("经济维护阈值")}</span>
+              <span className="lb">{t("整理策略")}</span>
               <span className="ds">
-                {t("可见输入达到该大小即整理，与模型声明的窗口无关 —— 输入越大，每轮越慢。默认 {n}。", { n: tokens(box.default_soft_limit) })}
+                {t("默认跟随模型容量；需要提前整理时再设置固定阈值。")}
               </span>
             </span>
-            <div className="seg" data-text role="group" aria-label={t("经济维护阈值")}>
+            <div className="seg" data-text role="group" aria-label={t("整理策略")}>
               {([
-                ["default", t("使用默认值")],
+                ["capacity", t("按模型容量（默认）")],
                 ["custom", t("自定义")],
-                ["capacity", t("只按模型容量保护")],
               ] as [Mode, string][]).map(([m, label]) => (
                 <button
                   key={m}
@@ -186,7 +152,7 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
                 </button>
               ))}
             </div>
-          </div>
+      </div>
 
           {mode === "custom" && (
             <div className="lrow">
@@ -201,7 +167,7 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
                 inputMode="numeric"
                 value={draft}
                 disabled={busy}
-                placeholder={String(box.default_soft_limit)}
+                placeholder={String(capacity)}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commitCustom}
                 // Enter is the aimed-at commit and carries the identity. Blur
@@ -218,17 +184,15 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
             </div>
           )}
 
-          <div className="lrow">
+      <div className="lrow">
             <span className="tx">
               <span className="lb">{t("容量保护")}</span>
               <span className="ds">
-                {t("模型窗口的 {p}%，始终生效 —— 关闭经济阈值不会影响它。", { p: String(Math.round(box.ratio * 100)) })}
+                {t("模型窗口的 {p}% 自动整理。中转站未提供容量时使用 160k，可在上下文面板改为实际值。", { p: String(Math.round(box.ratio * 100)) })}
               </span>
             </span>
             <span className="sc">{off ? "—" : tokens(capacity)}</span>
-          </div>
-        </>
-      )}
+      </div>
       {error && <p className="note" data-lvl="warn">{error}</p>}
     </>
   );

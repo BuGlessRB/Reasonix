@@ -40,13 +40,14 @@ interface Props {
   triggerAction?: string;
   ariaPressed?: boolean;
   wrapClassName?: string;
+  menuClassName?: string;
 }
 
 // data-* rides through to the item that raises the pick, the way Switch and Seg
 // carry theirs: the action's identity is written at the call site, and the
 // answer this menu gives is the item's own value.
 export function Picker({
-  label, items, current, onPick, place, align = "start", className, title, pending, triggerAction, ariaPressed, wrapClassName, ...id
+  label, items, current, onPick, place, align = "start", className, title, pending, triggerAction, ariaPressed, wrapClassName, menuClassName, ...id
 }: Props & { [K in `data-${string}`]?: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -182,7 +183,7 @@ export function Picker({
       {createPortal(
         <div
           ref={menu}
-          className={place === "top" ? "menu portmenu pm-down" : "menu portmenu pm-up"}
+          className={[place === "top" ? "menu portmenu pm-down" : "menu portmenu pm-up", menuClassName].filter(Boolean).join(" ")}
           role="menu"
           hidden={!open}
           onKeyDown={arrows}

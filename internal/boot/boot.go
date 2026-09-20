@@ -363,7 +363,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if multiThresholdMigrated || multiThresholdMigErr != nil {
 		level := event.LevelInfo
 		text := "上下文维护已简化为单一自动压缩阈值。"
-		detail := "Context maintenance now folds at whichever comes first: compact_ratio of the window (default 0.85), or context_soft_limit_tokens of visible input (default 160000). soft_compact_ratio, tool_result_snip_ratio, compact_force_ratio, cold_resume_prune, and context_editing were removed from config."
+		detail := "Context maintenance now follows compact_ratio of the model window by default (0.85). Set context_soft_limit_tokens only when an earlier fixed boundary is wanted. soft_compact_ratio, tool_result_snip_ratio, compact_force_ratio, cold_resume_prune, and context_editing were removed from config."
 		if multiThresholdMigErr != nil {
 			level = event.LevelWarn
 			text = "Deprecated multi-threshold compaction keys were ignored."

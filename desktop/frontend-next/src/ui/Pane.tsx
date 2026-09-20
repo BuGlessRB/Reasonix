@@ -686,7 +686,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         focus={focus}
         find={find.at}
         query={find.query}
-        onSuggest={submit}
         onApprove={onApprove}
         onPlan={onPlan}
         onAnswer={onAnswer}

@@ -41,8 +41,8 @@ export function useFoldBound(port: AgentPort | undefined, window: number, onCtx?
   // detent, because "the default" and "a number equal to today's default" stop
   // meaning the same thing the moment the default moves.
   const intent = useCallback(
-    (value: number) => (box ? foldIntent(value, capacity, box.default_soft_limit, step) : value),
-    [box, capacity, step],
+    (value: number) => (box ? foldIntent(value, capacity) : value),
+    [box, capacity],
   );
 
   const commit = useCallback(
@@ -69,9 +69,8 @@ export function useFoldBound(port: AgentPort | undefined, window: number, onCtx?
 
   return {
     ready: box !== null,
-    mode: box ? foldModeOf(box.soft_limit_tokens) : "default",
+    mode: box ? foldModeOf(box.soft_limit_tokens) : "capacity",
     stored: box?.soft_limit_tokens ?? 0,
-    fallback: box?.default_soft_limit ?? 0,
     capacity,
     step,
     busy,
@@ -86,7 +85,6 @@ export function useFoldBound(port: AgentPort | undefined, window: number, onCtx?
     reading: draft === null ? null : Math.min(draft, capacity),
     // Whether letting go here writes the default back rather than a number
     // that merely equals it today.
-    detent: draft !== null && intent(draft) === 0,
     move: setDraft,
     commit,
   };

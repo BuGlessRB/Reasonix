@@ -184,8 +184,8 @@ export const SETTINGS: SettingEntry[] = [
   { section: "session", anchor: "plan-mode", title: "计划模式", scope: "session", apply: "immediate", keywords: ["只读", "先规划"] },
   { section: "session", anchor: "session-dir", title: "会话写入位置", scope: "workspace", apply: "none", keywords: ["工作目录", "路径"] },
 
-  { section: "model", anchor: "roles", title: "角色分工", scope: "machine", apply: "runtime-rebuild", keywords: ["子代理", "规划", "执行", "审查"] },
-  { section: "model", anchor: "model", title: "模型", scope: "machine", apply: "runtime-rebuild", keywords: ["切换", "端点"] },
+  { section: "model", anchor: "roles", title: "按任务指定模型", scope: "machine", apply: "runtime-rebuild", keywords: ["角色分工", "子代理", "规划", "执行", "审查"] },
+  { section: "model", anchor: "model", title: "主模型", scope: "machine", apply: "runtime-rebuild", keywords: ["模型", "切换", "端点"] },
   // Written onto the provider entry, not the model row: SetProviderEffort keys
   // by provider name, so every model reached through that source shares it.
   { section: "model", anchor: "effort", title: "推理强度", scope: "model", apply: "runtime-rebuild", keywords: ["思考", "reasoning", "档位"] },
@@ -197,7 +197,7 @@ export const SETTINGS: SettingEntry[] = [
   // reached through switches the model, and that does. The stronger of the two
   // is what the row promises, because the weaker one would be a promise this
   // block cannot keep.
-  { section: "model", anchor: "providers", title: "连接", scope: "machine", apply: "runtime-rebuild", keywords: ["提供商", "api key", "密钥", "协议", "地址"] },
+  { section: "model", anchor: "providers", title: "模型来源", scope: "machine", apply: "runtime-rebuild", keywords: ["连接", "提供商", "api key", "密钥", "协议", "地址"] },
 
   // Takes effect on this session at once and is also persisted as the default
   // every later session starts from. Machine is the wider of the two answers

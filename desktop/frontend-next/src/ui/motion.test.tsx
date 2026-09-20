@@ -20,7 +20,7 @@ function draw(items: Item[], entering: string[], hidden = false) {
       items={items} entering={entering} onEntered={onEntered} revision={1}
       waiting={{}} scroll={{ current: null }} hidden={hidden} onPinned={() => {}}
       jump={0} focus={null}
-      onApprove={noop} onPlan={noop} onAnswer={noop} onSuggest={() => {}} onForget={noop}
+      onApprove={noop} onPlan={noop} onAnswer={noop} onForget={noop}
       onCancelQueued={() => {}} onExtInvoke={() => {}} onExtSubmit={noop}
       checkpoints={new Map()} onPrepareRewind={noop} onCommitRewind={noop} onUndoRewind={noop}
       onPrepareFileRevert={noop} onCommitFileRevert={noop}
@@ -65,7 +65,7 @@ describe("a card's one entrance", () => {
         waiting={{}} scroll={{ current: null }} hidden={false} onPinned={() => {}}
         jump={0} focus={null}
         onApprove={(async () => undefined) as never} onPlan={(async () => undefined) as never}
-        onAnswer={(async () => undefined) as never} onSuggest={() => {}} onForget={(async () => undefined) as never}
+        onAnswer={(async () => undefined) as never} onForget={(async () => undefined) as never}
         onCancelQueued={() => {}} onExtInvoke={() => {}} onExtSubmit={(async () => undefined) as never}
         checkpoints={new Map()} onPrepareRewind={(async () => undefined) as never}
         onCommitRewind={(async () => undefined) as never} onUndoRewind={(async () => undefined) as never}

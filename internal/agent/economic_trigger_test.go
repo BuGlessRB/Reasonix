@@ -25,7 +25,7 @@ func TestMaintenanceBoundaryIsTheNearerOfCapacityAndEconomics(t *testing.T) {
 		trigger  int
 		boundary string
 	}{
-		{"million-window folds on economics", 1_000_000, 0.85, 0, defaultContextSoftLimitTokens, "economic"},
+		{"million-window defaults to capacity", 1_000_000, 0.85, 0, 850_000, "capacity"},
 		{"small window keeps capacity first", 128_000, 0.85, 0, 108_800, "capacity"},
 		{"configured soft limit wins when lower", 1_000_000, 0.85, 96_000, 96_000, "economic"},
 		{"configured soft limit loses when higher", 200_000, 0.85, 400_000, 170_000, "capacity"},
@@ -85,7 +85,7 @@ func economicFixture(t *testing.T, soft int, activeTurnRound int) (*Agent, *reco
 // A prompt above the economic boundary must be maintained even though it is
 // nowhere near the window share, and one below it must not be.
 func TestEconomicTriggerFoldsBelowCapacityShare(t *testing.T) {
-	a, sink := economicFixture(t, 0, -1)
+	a, sink := economicFixture(t, 160_000, -1)
 	visible := a.estimatedVisibleRequestTokens(a.modelVisibleMessages())
 	if visible <= a.economicCompactTrigger() || visible >= a.capacityCompactTrigger() {
 		t.Fatalf("fixture input %d is not between the economic (%d) and capacity (%d) boundaries",
@@ -155,7 +155,7 @@ func maintenanceCodes(sink *recordSink, status string) []string {
 // flight. Everything below is one turn: the 15.6-hour session that motivated
 // this ran 2150 rounds inside a single one.
 func TestRepeatedMaintenanceInsideOneTurn(t *testing.T) {
-	a, sink := economicFixture(t, 0, 30)
+	a, sink := economicFixture(t, 160_000, 30)
 	a.activeTurnCreatedAt.Store(economicActiveTurnAt)
 	ctx := context.Background()
 	canonicalBefore := len(a.sess.conversation.Snapshot())
@@ -217,7 +217,7 @@ found:
 // rather than in the frozen body. Reaching it is legitimate, so the verdict is
 // the economics of folding it, not an absence of new history.
 func TestGrowthWithNoClosedTransactionStaysBelowFoldEconomics(t *testing.T) {
-	a, sink := economicFixture(t, 0, 30)
+	a, sink := economicFixture(t, 160_000, 30)
 	a.activeTurnCreatedAt.Store(economicActiveTurnAt)
 	ctx := context.Background()
 	if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
@@ -260,6 +260,7 @@ func TestActiveTurnBoundaryLeavesNothingToFold(t *testing.T) {
 	sink := &recordSink{}
 	a := New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), sess, Options{
 		ContextWindow: 1_000_000, CompactRatio: 0.85, RecentKeep: 2, ArchiveDir: testenv.TempDir(t),
+		CompactionBudgets: CompactionBudgets{ContextSoftLimitTokens: 160_000},
 	}, sink)
 	a.activeTurnCreatedAt.Store(economicActiveTurnAt)
 	if _, err := a.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {

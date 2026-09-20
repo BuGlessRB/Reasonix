@@ -7,9 +7,8 @@ import { KIND_LABEL } from "./vendors";
 
 // One flat list said "deepseek" four times: the provider name is the config's
 // word for an entry, not the user's for an endpoint, and two doors onto one
-// account share it. Rows carry the account they belong to and the protocol that
-// reaches them — but only where either is ambiguous, so a single source stays a
-// plain list of models.
+// account share it. Every row keeps its source and wire format underneath the
+// model name, so the second line is useful even when there is only one account.
 export function modelMenu(models: ModelEntry[]): MenuItem[] {
   const accounts = groupVendors(models);
   const out: MenuItem[] = [];
@@ -24,7 +23,7 @@ export function modelMenu(models: ModelEntry[]): MenuItem[] {
         out.push({
           value: m.ref,
           label: m.model,
-          right: manyDoors ? t(KIND_LABEL[kind] ?? kind) : undefined,
+          desc: `${a.label} · ${t(KIND_LABEL[kind] ?? kind)}`,
         });
       }
     }

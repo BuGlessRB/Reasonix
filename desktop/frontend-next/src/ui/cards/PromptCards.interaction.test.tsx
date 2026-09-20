@@ -69,4 +69,24 @@ describe("decision cards", () => {
     expect(screen.getByRole("button", { name: "B" }).getAttribute("aria-pressed")).toBe("true");
     expect(within(container).getByText(/方向：/).parentElement?.textContent).toContain("B");
   });
+
+  it("turns a supplied Other option into the single free-text choice", async () => {
+    const answer = vi.fn(pending);
+    const item = {
+      t: "ask", id: "row", ask: { id: "ask", questions: [
+        {
+          id: "city", header: "城市", prompt: "选择城市", multi: false,
+          options: [{ label: "北京" }, { label: "其他（请填写城市名）", description: "输入列表之外的城市。" }],
+        },
+      ] },
+    } as Extract<Item, { t: "ask" }>;
+    render(<AskCard item={item} onAnswer={answer} />);
+
+    expect(screen.getAllByText("其他（请填写城市名）")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: /其他（请填写城市名）/ }));
+    await userEvent.type(screen.getByPlaceholderText("在此填写你希望采用的方案"), "深圳");
+    await userEvent.click(screen.getByRole("button", { name: "确认" }));
+
+    expect(answer).toHaveBeenCalledWith("row", "ask", [{ questionId: "city", selected: ["深圳"] }]);
+  });
 });

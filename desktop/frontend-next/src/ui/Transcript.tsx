@@ -41,7 +41,6 @@ interface Props {
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => Promise<void>;
   onPlan: (itemId: string, id: string, action: PlanAction) => Promise<void>;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => Promise<void>;
-  onSuggest: (text: string) => void;
   onForget: (itemId: string, name: string) => void;
   // Takes a still-queued line back. Only rows the kernel has given an
   // item id can offer it, and only until the turn reads them.
@@ -103,7 +102,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, find, query, onApprove, onPlan, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
+export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, find, query, onApprove, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -457,7 +456,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       {/* 空转录是「窗口的空白」，壁纸该在那儿；一有内容它就是内容了。 */}
       <div className="flow" ref={flow} data-empty={items.length === 0 ? "" : undefined}>
         {items.length === 0 && (
-          <Hero onPick={onSuggest} needsProject={needsProject} onOpen={onOpenProject} onKeep={onKeepHere} />
+          <Hero needsProject={needsProject} onOpen={onOpenProject} onKeep={onKeepHere} />
         )}
         {blocks.map((block, i) => (
           <Block
@@ -737,22 +736,13 @@ function Await({ since, retry }: { since: number; retry?: Waiting["retry"] }) {
   );
 }
 
-const SUGGESTIONS = [
-  "运行本仓库的测试，并将失败项定位到具体文件",
-  "审阅最近三次提交，指出风险最高的改动",
-  "排查本项目缓存命中率下降的原因",
-];
-
 interface HeroProps {
-  onPick: (text: string) => void;
   needsProject: boolean;
   onOpen: () => void;
   onKeep: () => void;
 }
 
-// 没有项目时那三条建议说的是「这个仓库」，而这个窗口的根只是它碰巧启动的地方 ——
-// 建议本身就不成立。同一块地方换成这次真正该做的那一件事。
-function Hero({ onPick, needsProject, onOpen, onKeep }: HeroProps) {
+function Hero({ needsProject, onOpen, onKeep }: HeroProps) {
   return (
     <div className="hero">
       <RMark />
@@ -771,15 +761,7 @@ function Hero({ onPick, needsProject, onOpen, onKeep }: HeroProps) {
             {t("使用当前位置")}
           </button>
         </div>
-      ) : (
-        <div className="qs">
-          {SUGGESTIONS.map((s) => (
-            <button className="sug" data-action="session.send" key={s} onClick={() => onPick(t(s))}>
-              {t(s)}
-            </button>
-          ))}
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }

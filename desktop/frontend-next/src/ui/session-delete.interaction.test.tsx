@@ -98,3 +98,14 @@ describe("deleting a conversation from the rail", () => {
     expect(onClose).toHaveBeenCalledWith(["r1"]);
   });
 });
+
+describe("the conversation action menu", () => {
+  it("closes when the reader clicks outside it", async () => {
+    draw();
+    await userEvent.click(screen.getByRole("button", { name: /会话操作：/ }));
+    expect(screen.getByRole("menu", { name: "会话操作" })).toBeTruthy();
+
+    await userEvent.click(document.body);
+    expect(screen.queryByRole("menu", { name: "会话操作" })).toBeNull();
+  });
+});

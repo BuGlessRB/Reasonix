@@ -1,7 +1,6 @@
 import type { AskReason } from "../../port/session";
 import { useState } from "react";
 import { t } from "../../i18n";
-import { Sym } from "../Sym";
 import type { Item } from "../../state/session";
 
 interface Props {
@@ -35,6 +34,13 @@ export function AskCard({ item, onAnswer }: Props) {
     return (chosen[i] ?? []).filter((v) => !offered.has(v)).join("、");
   };
   const freeShown = (i: number) => (sealed ? sealedFree(i) : other[i]);
+  const customOption = (i: number) => qs[i].options.find((option) => isOtherOption(option.label));
+  const customChosen = (i: number) => {
+    const offered = customOption(i);
+    return sealed
+      ? !!sealedFree(i) || (!!offered && (chosen[i] ?? []).includes(offered.label))
+      : otherOn[i];
+  };
 
   const at = <T,>(list: T[], i: number, v: T) => list.map((x, k) => (k === i ? v : x));
 
@@ -67,12 +73,9 @@ export function AskCard({ item, onAnswer }: Props) {
 
   return (
     <div className="call" data-k="ask">
-      <div className="g">
-        <Sym glyph="?" />
-        <span className="line" />
-      </div>
       <div className="c">
         <div className="hl">
+          <span className="ask-badge" aria-hidden="true">?</span>
           <span className="nm">{askHeading(qs)}</span>
           <span className="arg">{t("{n} 个问题", { n: qs.length })}</span>
         </div>
@@ -99,8 +102,8 @@ export function AskCard({ item, onAnswer }: Props) {
               <div className="ask-pane" key={q.id} data-on={i === tab ? "" : undefined}>
                 <div className="ask-q">{q.prompt}</div>
                 <div className="ask-hint">{t(q.multi ? "可多选" : "请选择一项")}</div>
-                <div className="opts">
-                  {q.options.map((o) => (
+                <div className="opts" aria-label={q.prompt}>
+                  {q.options.filter((o) => !isOtherOption(o.label)).map((o) => (
                     <button
                       key={o.label}
                       className="opt"
@@ -122,18 +125,19 @@ export function AskCard({ item, onAnswer }: Props) {
                   <button
                     className="opt opt-other"
                     data-multi={q.multi ? "" : undefined}
-                    data-on={(sealed ? !!sealedFree(i) : otherOn[i]) ? "" : undefined}
-                    aria-pressed={sealed ? !!sealedFree(i) : otherOn[i]}
+                    data-on={customChosen(i) ? "" : undefined}
+                    aria-pressed={customChosen(i)}
                     disabled={sealed}
                     onClick={() => toggleOther(i)}
                   >
                     <span className="mark" />
                     <span className="txt">
-                      <span className="lb">{t("其他 —— 自行填写")}</span>
+                      <span className="lb">{customOption(i)?.label ?? t("其他 —— 自行填写")}</span>
+                      {customOption(i)?.description && <span className="ds">{customOption(i)?.description}</span>}
                     </span>
                   </button>
                 </div>
-                <div className="other-wrap" data-on={(sealed ? !!sealedFree(i) : otherOn[i]) ? "" : undefined}>
+                <div className="other-wrap" data-on={customChosen(i) ? "" : undefined}>
                   <input
                     value={freeShown(i)}
                     readOnly={sealed}
@@ -162,14 +166,14 @@ export function AskCard({ item, onAnswer }: Props) {
             )}
             {!sealed && (
               <div className="ask-foot">
-                <button className="btn" data-primary data-action="ask.answer" data-value="chosen" disabled={left > 0 || submitting} onClick={() => void send(qs.map((_, i) => selected(i)))}>
-                  {submitting ? t("正在提交…") : left ? t("确认（还有 {n} 个没答）", { n: left }) : t("确认")}
-                </button>
                 {/* An answer batch with nothing selected is the kernel's explicit
                     "don't decide for me" path: it ends the turn rather than
                     feeding a prose dismissal back to the model. */}
                 <button className="dismiss" data-action="ask.answer" data-value="none" disabled={submitting} onClick={() => void send(qs.map(() => []))}>
                   {t("先不选择，直接回复")}
+                </button>
+                <button className="btn" data-primary data-action="ask.answer" data-value="chosen" disabled={left > 0 || submitting} onClick={() => void send(qs.map((_, i) => selected(i)))}>
+                  {submitting ? t("正在提交…") : t("确认")}
                 </button>
               </div>
             )}
@@ -178,6 +182,10 @@ export function AskCard({ item, onAnswer }: Props) {
       </div>
     </div>
   );
+}
+
+function isOtherOption(label: string): boolean {
+  return /^\s*(?:其他|其它|other)(?:\s|[（(—\-:：]|$)/i.test(label);
 }
 
 // reasonLabel is exhaustive on purpose. A third reason would be a decision with

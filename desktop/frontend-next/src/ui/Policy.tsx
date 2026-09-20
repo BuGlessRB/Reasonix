@@ -46,7 +46,11 @@ export function Policy({ port, status, onChanged, onBoundary }: Props) {
   };
 
   return (
-    <div className="picker policy" ref={wrap} data-quiet={apv === "ask" ? "" : undefined}>
+    <div
+      className="picker policy"
+      ref={wrap}
+      data-quiet={apv === "ask" ? "" : undefined}
+    >
       <button
         className="mode plain"
         data-action="chrome.policy"
@@ -58,7 +62,7 @@ export function Policy({ port, status, onChanged, onBoundary }: Props) {
         <span className="ic" aria-hidden="true">
           <svg viewBox="0 0 16 16"><path d="M8 2.2 13 4v3.5c0 3-1.8 5.1-5 6.3-3.2-1.2-5-3.3-5-6.3V4l5-1.8Z" /></svg>
         </span>
-        <span className={apv === "yolo" ? "lb polrisk" : "lb"}>
+        <span className={apv === "yolo" ? "lb polrisk" : "lb"} data-display={label}>
           {apv === "yolo" && <i className="polwarn" aria-hidden><StudioIcon name="warning" /></i>}
           {label}
         </span>

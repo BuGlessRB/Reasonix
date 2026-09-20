@@ -47,9 +47,9 @@ func TestDeclaredWindowsOutrankTheRegistry(t *testing.T) {
 	}
 }
 
-// A model nobody has established a window for stays at nothing, and says so
-// rather than being handed a number somebody remembered.
-func TestAnUnestablishedWindowStaysUnanswered(t *testing.T) {
+// A custom relay cannot always expose context metadata. In that case it gets a
+// usable 160k baseline until the user supplies the model's actual limit.
+func TestAnUnestablishedWindowUsesTheRelayFallback(t *testing.T) {
 	cfg := &Config{Providers: []ProviderEntry{{
 		Name: "relay", Kind: "openai", BaseURL: "https://relay.example.com/v1",
 		Models: []string{"gpt-5.6-sol"}, Default: "gpt-5.6-sol",
@@ -58,8 +58,8 @@ func TestAnUnestablishedWindowStaysUnanswered(t *testing.T) {
 	if !ok {
 		t.Fatal("model did not resolve")
 	}
-	if window, declared := ResolvedContextWindow(e); declared || window != 0 {
-		t.Fatalf("window = %d declared=%v, want it left open", window, declared)
+	if window, declared := ResolvedContextWindow(e); !declared || window != DefaultUnknownContextWindow {
+		t.Fatalf("window = %d declared=%v, want fallback %d", window, declared, DefaultUnknownContextWindow)
 	}
 	// The effort ladder for the same model is established, so the two questions
 	// stay independent: knowing one thing about a model is not knowing all.

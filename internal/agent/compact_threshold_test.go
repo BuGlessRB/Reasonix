@@ -45,14 +45,10 @@ func TestRecentTailBudgetClamp(t *testing.T) {
 	}
 }
 
-// A tail reaching the trigger leaves nothing to fold, so the tail follows
-// whichever boundary is in force — including the one that does not come from
-// the window. Without this the economic boundary would arrive with the whole
-// prompt still held verbatim.
-func TestRecentTailFollowsTheEconomicBoundary(t *testing.T) {
+func TestRecentTailUsesWindowClampUnderCapacityDefault(t *testing.T) {
 	a := &Agent{agentConfig: agentConfig{contextWindow: 1_000_000, compactRatio: defaultCompactRatio}}
-	if got, want := a.recentTailBudget(), defaultContextSoftLimitTokens/2; got != want {
-		t.Fatalf("recentTailBudget = %d, want %d (half the economic trigger)", got, want)
+	if got, want := a.recentTailBudget(), maxRecentTailTokens; got != want {
+		t.Fatalf("recentTailBudget = %d, want %d", got, want)
 	}
 }
 

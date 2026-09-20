@@ -20,8 +20,9 @@ func (c *Config) SetCompactRatio(ratio float64) error {
 
 // SetContextSoftLimitTokens updates the economic maintenance boundary: the
 // visible input size a fold happens at whatever the declared window allows.
-// Zero restores the default and a negative value turns the boundary off,
-// because both are answers a caller has to be able to give.
+// Zero uses the model-capacity policy. Positive values add an earlier fixed
+// boundary; negative values remain accepted for compatibility and also mean
+// capacity-based maintenance.
 func (c *Config) SetContextSoftLimitTokens(tokens int) error {
 	c.Agent.ContextSoftLimitTokens = tokens
 	return nil

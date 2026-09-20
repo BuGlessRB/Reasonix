@@ -21,6 +21,7 @@ const wide: ContextBreakdown = {
 const mount = async (over: Partial<ContextBreakdown> = {}) => {
   const port = new MockPort() as unknown as AgentPort;
   await port.setContextWindow(1_000_000);
+  await port.saveCompaction(160_000);
   const onCtx = vi.fn();
   render(<Context ctx={{ ...wide, ...over }} legend port={port} onCtx={onCtx} />);
   return { port, onCtx };
@@ -76,7 +77,7 @@ describe("changing the fold point where it is read", () => {
     await userEvent.click(screen.getByRole("button", { name: "160k" }));
     const handle = await screen.findByRole("slider", { name: "维护点" });
     fireEvent.change(handle, { target: { value: "900000" } });
-    expect(screen.getByText("松开即只按窗口容量")).toBeTruthy();
+    expect(screen.getByText("松开即按窗口容量")).toBeTruthy();
   });
 
   // The footnote answers "why 160k"; the chosen mode answers "what this does".

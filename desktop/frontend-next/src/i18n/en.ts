@@ -42,12 +42,6 @@ export const EN: Record<string, string> = {
   "这个会话正在别处运行，这里只能看": "Running in another window — read-only here",
   "可读取代码、查找资料、运行工具并修改文件。完整执行过程可在「轨迹」中查看。":
     "It can read code, research, run tools, and edit files. The full run stays visible in the Trajectory.",
-  "运行本仓库的测试，并将失败项定位到具体文件":
-    "Run this repository's tests and pin the failures down to specific files",
-  "审阅最近三次提交，指出风险最高的改动":
-    "Read the last three commits and tell me which changes carry the most risk",
-  "排查本项目缓存命中率下降的原因":
-    "Find out why this project's cache hit rate is dropping",
   "等待回包 {secs}s": "Waiting for a response · {secs}s",
   "连接在响应头前断了，重试 {attempt}/{max} · {secs}s":
     "Connection dropped before the headers · retry {attempt}/{max} · {secs}s",

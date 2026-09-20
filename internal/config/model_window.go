@@ -3,6 +3,11 @@
 // source added by hand resolved to nothing, and nothing turns compaction off.
 package config
 
+// DefaultUnknownContextWindow is the safe working window for a custom relay
+// whose endpoint and model registry provide no capacity metadata. Users can
+// replace it with the relay model's actual limit through a model override.
+const DefaultUnknownContextWindow = 160_000
+
 // ResolvedContextWindow reports the window to run this entry against and
 // whether anything established it. Most-specific first: what the config says
 // for this provider (including its per-model overrides), then what is known
@@ -31,5 +36,7 @@ func (e *ProviderEntry) applyModelCapabilities() {
 	}
 	if window, ok := ResolvedContextWindow(e); ok {
 		e.ContextWindow = window
+		return
 	}
+	e.ContextWindow = DefaultUnknownContextWindow
 }

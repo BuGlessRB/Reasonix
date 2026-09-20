@@ -6,14 +6,14 @@
 //
 // Shared because the setting is offered in two places — the settings sheet and
 // the context rail — and those are one intent, not two.
-export type FoldMode = "default" | "custom" | "capacity";
+export type FoldMode = "custom" | "capacity";
 
 export const foldModeOf = (stored: number): FoldMode =>
-  stored < 0 ? "capacity" : stored > 0 ? "custom" : "default";
+  stored > 0 ? "custom" : "capacity";
 
 // What each mode writes. Custom is absent: it is a choice before it is a
 // number, and the write happens when a number is committed.
-export const foldModeValue: Partial<Record<FoldMode, number>> = { default: 0, capacity: -1 };
+export const foldModeValue: Partial<Record<FoldMode, number>> = { capacity: 0 };
 
 // How finely the rail's handle moves. A fixed step is wrong at both ends: 8k
 // leaves a 128k window 15 positions, and 1k leaves a 1M window a thousand of
@@ -30,8 +30,7 @@ export const foldStep = (window: number) => Math.max(1000, 1000 * Math.round(win
 // The detent is two steps wide, not one: one step is about two pixels of track,
 // which is a target nobody hits, and landing next to the default instead of on
 // it silently converts "use the default" into a number that stops following it.
-export function foldIntent(value: number, capacity: number, fallback: number, step: number): number {
-  if (value >= capacity) return -1;
-  if (Math.abs(value - fallback) <= step * 2) return 0;
+export function foldIntent(value: number, capacity: number): number {
+  if (value >= capacity) return 0;
   return value;
 }

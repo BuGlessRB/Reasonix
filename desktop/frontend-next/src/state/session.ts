@@ -321,6 +321,11 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
   }
   // Rides the frame that carries it, so the notice still lands in the record.
   if ("decisionReceipt" in ev && ev.decisionReceipt) s = sealByReceipt(s, ev.decisionReceipt);
+  // A decision receipt is state synchronization, not conversation content.
+  // The card it names already changes to its settled state, while rendering the
+  // receipt again exposes the kernel's audit wording ("Decision recorded: …")
+  // as a second, unexplained chat row.
+  if (ev.kind === "notice" && ev.code === "decision_receipt") return s;
   switch (ev.kind) {
     case "turn_started":
       // A new turn clears how the last one ended. Terminal is a fact about the

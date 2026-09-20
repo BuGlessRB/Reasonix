@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import { HttpError } from "../port/port";
-import type { AgentPort, ProviderProbe, ProviderSetup } from "../port/port";
+import type { AgentPort, Protocol, ProviderProbe, ProviderSetup } from "../port/port";
 import { KIND_LABEL, nameFrom } from "./vendors";
 import { Picker } from "./Menu";
+import { WindowControls, zoomOnTitleBar } from "./WindowControls";
 
 interface Props {
   port: AgentPort;
@@ -22,8 +23,17 @@ interface Props {
 // cannot name links to its platform root instead: sending someone to a 404 is
 // worse than sending them to a front door. These are addresses on someone
 // else's site and will rot; a dead one is a bug report, not a silent failure.
-const SHORTCUTS: { label: string; url: string; console?: string }[] = [
-  { label: "DeepSeek", url: "https://api.deepseek.com", console: "https://platform.deepseek.com/api_keys" },
+const SHORTCUTS: { label: string; url: string; console?: string; protocolUrls?: Record<string, string> }[] = [
+  {
+    label: "DeepSeek",
+    url: "https://api.deepseek.com",
+    console: "https://platform.deepseek.com/api_keys",
+    protocolUrls: {
+      openai: "https://api.deepseek.com",
+      responses: "https://api.deepseek.com",
+      anthropic: "https://api.deepseek.com/anthropic",
+    },
+  },
   { label: "硅基流动", url: "https://api.siliconflow.cn/v1", console: "https://cloud.siliconflow.cn" },
   { label: "月之暗面", url: "https://api.moonshot.cn/v1", console: "https://platform.moonshot.cn" },
   { label: "智谱", url: "https://open.bigmodel.cn/api/paas/v4", console: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys" },
@@ -36,6 +46,12 @@ const SHORTCUTS: { label: string; url: string; console?: string }[] = [
 // account behind it is out of credit. Both are settled on the vendor's site,
 // so the refusal carries a way to get there instead of only a sentence.
 const FIX_AT_VENDOR = new Set(["provider.probe.unauthorized", "provider.probe.payment_required"]);
+
+const KIND_DETAIL: Record<string, string> = {
+  openai: "Chat Completions",
+  responses: "Responses API",
+  anthropic: "Messages API",
+};
 
 // Failed is a refusal kept whole: the sentence to read, and the code that says
 // whether reading it is enough.
@@ -59,10 +75,15 @@ export function Onboarding({ port, setup, onDone }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<Failed | null>(setup.error ? { text: setup.error } : null);
   const [found, setFound] = useState<ProviderProbe | null>(null);
+  const [catalog, setCatalog] = useState<Protocol[]>([]);
+  const [kind, setKind] = useState("");
   const [model, setModel] = useState("");
   const first = useRef<HTMLInputElement>(null);
 
-  useEffect(() => first.current?.focus(), []);
+  useEffect(() => {
+    first.current?.focus();
+    void port.protocols().then(setCatalog).catch(() => setCatalog([]));
+  }, [port]);
 
   // Where this vendor hands out keys, and — for the refusals that are settled
   // there rather than here — where this particular failure sends the reader.
@@ -74,6 +95,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
     setPick(label);
     setUrl(next);
     setFound(null);
+    setKind("");
     setErr(null);
   };
 
@@ -89,6 +111,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
     try {
       const probe = await port.probeProvider(at, k);
       setFound(probe);
+      setKind(probe.kind);
       setModel(probe.default || probe.models[0] || "");
     } catch (e) {
       setErr(failed(e));
@@ -98,14 +121,14 @@ export function Onboarding({ port, setup, onDone }: Props) {
   };
 
   const start = async () => {
-    if (!found || !model || busy) return;
+    if (!found || !kind || !model || busy) return;
     setBusy(true);
     setErr(null);
     const name = nameFrom(url.trim());
     try {
       await port.saveProvider({
         name,
-        kind: found.kind,
+        kind,
         baseUrl: url.trim(),
         apiKey: key.trim(),
         models: found.models,
@@ -123,11 +146,28 @@ export function Onboarding({ port, setup, onDone }: Props) {
     }
   };
 
+  const kinds = found ? (found.kinds?.length ? found.kinds : [found.kind]) : [];
+  const protocols = [...new Set([...catalog.map((entry) => entry.kind), ...kinds])];
+  const selectProtocol = (value: string) => {
+    setKind(value);
+    const mapped = vendor?.protocolUrls?.[value];
+    const known = Object.values(vendor?.protocolUrls ?? {});
+    if (mapped && known.includes(url.trim().replace(/\/$/, ""))) setUrl(mapped);
+  };
+  const modelItems = found?.models.map((name) => {
+    const detail = [
+      name === found.default ? t("默认") : "",
+      found.vision.includes(name) ? t("读图") : "",
+    ].filter(Boolean).join(" · ");
+    return { value: name, label: name, desc: detail || undefined };
+  }) ?? [];
+
   return (
     <div className="onb-stage">
-      <header className="onb-brandbar">
+      <header className="onb-brandbar" onDoubleClick={zoomOnTitleBar}>
         <span className="onb-brandmark" aria-hidden="true">R</span>
         <span className="onb-brandname"><b>reasonix</b><small>studio</small></span>
+        <WindowControls />
       </header>
       <div className="onb-shell">
         <aside className="onb-progress" aria-label={t("开始设置")}>
@@ -144,7 +184,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
             <span className="onb-eyebrow">MODEL CONNECTION</span>
         <h1 className="onb-t">{t("首先连接模型服务")}</h1>
         <p className="onb-s">
-          {t("填写地址与 key，其余由系统探测 —— 协议、模型清单、是否支持读图均可自动获取。")}
+          {t("填写地址与 key，系统会探测可用协议、模型清单与读图能力；无法自动区分的协议由你确认。")}
         </p>
 
         <div className="onb-chips" role="group" aria-label={t("常用服务")}>
@@ -172,7 +212,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
             autoComplete="off"
             placeholder={t("https://你的地址/v1")}
             disabled={busy}
-            onChange={(e) => { setUrl(e.target.value); setFound(null); }}
+            onChange={(e) => { setUrl(e.target.value); setFound(null); setKind(""); }}
           />
         </div>
 
@@ -197,7 +237,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
             autoComplete="off"
             placeholder="sk-…"
             disabled={busy}
-            onChange={(e) => { setKey(e.target.value); setFound(null); }}
+            onChange={(e) => { setKey(e.target.value); setFound(null); setKind(""); }}
             onKeyDown={(e) => e.key === "Enter" && (found ? start() : connect())}
           />
           {err && (
@@ -216,29 +256,62 @@ export function Onboarding({ port, setup, onDone }: Props) {
           <div className="onb-found">
             <div className="onb-found-hd">
               <span className="tick">✓</span>
-              <span>{KIND_LABEL[found.kind] || found.kind}</span>
+              <span>{t("连上了")}</span>
               <span className="k">{t("{n} 个模型 · key 保存在本机", { n: found.models.length })}</span>
             </div>
-            {/* More than one wire answered, or one listing several may be
-                driven with: either way the line above is a preference. */}
+            <div className="onb-field">
+              <span className="lb">{t("接入方式")}</span>
+              <div className="onb-protocols" role="radiogroup" aria-label={t("接入方式")}>
+                {protocols.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    data-action="onboarding.protocol"
+                    data-value={value}
+                    aria-checked={kind === value}
+                    disabled={busy}
+                    onClick={() => selectProtocol(value)}
+                  >
+                    <i aria-hidden="true" />
+                    <span>
+                      <b>{t(KIND_LABEL[value] || value)}</b>
+                      <small>{KIND_DETAIL[value] || value}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="onb-protocol-note">
+                {t("模型目录只能确认账号与模型，不能排除其他聊天协议。请选择服务商实际支持的协议；已知服务的专用地址会自动切换。")}
+              </p>
+            </div>
             {(found.ambiguous || (found.kinds?.length ?? 0) > 1) && (
               <p className="onb-why">
-                {t("该端点响应了多种协议，上方为偏好选择而非确定结果。连接后可在设置中更改。")}
+                {t("两种接入方式都能返回模型列表，仅凭列表无法区分；两者的聊天入口路径通常不同，选错会导致聊天报错。如需同时使用，请再添加一次并选择另一种。")}
               </p>
             )}
             <div className="onb-field">
-              <span className="lb">{t("优先使用")}</span>
+              <span className="lb">{t("选择默认模型")}</span>
               {/* The app's own picker rather than a <select>: a gateway can
                   publish a hundred models, and this one grows a filter past
                   ten. A native dropdown would also paint its list in the
                   system's colours on top of this scene. */}
               <div className="onb-pick" data-busy={busy ? "" : undefined}>
                 <Picker
-                  label={model || t("请选择一项")}
-                  items={found.models.map((m) => ({ value: m, label: m }))}
+                  label={(
+                    <span className="onb-model-trigger">
+                      <i aria-hidden="true">M</i>
+                      <span>
+                        <b>{model || t("请选择一项")}</b>
+                        <small>{t(KIND_LABEL[kind] || kind)}</small>
+                      </span>
+                    </span>
+                  )}
+                  items={modelItems}
                   current={model}
                   onPick={setModel}
                   place="bottom"
+                  menuClassName="onb-model-menu"
                   title={t("选择默认模型")}
                 />
               </div>
@@ -249,7 +322,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
         <button
           className="btn onb-go"
           data-primary
-          disabled={busy || !url.trim() || !key.trim() || (!!found && !model)}
+          disabled={busy || !url.trim() || !key.trim() || (!!found && (!kind || !model))}
           onClick={found ? start : connect}
         >
           {t(busy ? (found ? "正在保存…" : "正在连接…") : found ? "开始" : "连接并继续")}
