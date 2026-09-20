@@ -50,6 +50,7 @@ func singleSurfaceTabsFile(f desktopTabsFile) desktopTabsFile {
 			// The remote surface keeps the head of the strip order so any
 			// first-tab fallback still resolves to the surface the user left on.
 			TabOrder: []string{entry.ID, local.ID},
+			extra:    cloneDesktopJSONFields(f.extra),
 		}
 	}
 	for _, entry := range f.Tabs {
