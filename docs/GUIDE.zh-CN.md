@@ -579,7 +579,7 @@ MCP 等独立沙盒继续使用自己的隔离规范，不继承父会话临时�
 
 **Windows 说明：**Windows 没有 OS 级 Shell 沙箱。受限令牌后端已退出强制执行：
 它对当前用户自身 SID 加拒绝项会把宿主锁在自己的凭据存储之外，受限令牌也会破坏常见
-工具链（退役设计见[Windows 沙箱架构](./WINDOWS_SANDBOX.zh-CN.md)）。权限模式仍作为
+工具链。权限模式仍作为
 Reasonix 工具层边界生效：仅可查看拒绝文件写入并在每条 Shell 命令前询问；工作区内修改
 把文件工具限定在 `workspace_root` 与 `allow_write` 内，越界写入前询问。所有模式下的
 Shell 命令都以当前系统账户运行、不受约束，因此 `[sandbox] network` 与 Shell 层的

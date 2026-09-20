@@ -8,34 +8,7 @@
 // OSSandboxSupported). File-writer built-ins are confined in tool/builtin.
 package sandbox
 
-import (
-	"runtime"
-	"sync/atomic"
-	"time"
-)
-
-// WindowsHelperCommand is the private subprocess entry point for the native
-// Windows sandbox. Host binaries must register and dispatch it before normal
-// startup so an enforced launch can never fall through into an unconfined GUI
-// or CLI process.
-const WindowsHelperCommand = "__reasonix_windows_sandbox"
-
-var helperDispatchRegistered atomic.Bool
-
-func RegisterHelperDispatch() { helperDispatchRegistered.Store(true) }
-
-// RepairLegacyCredentialDeny removes only the exact current-user deny ACE that
-// older Windows builds placed on Reasonix's credential file. Other platforms
-// and unrelated ACLs are left untouched.
-func RepairLegacyCredentialDeny(path string) error {
-	return repairLegacyCredentialDeny(path)
-}
-
-const (
-	WindowsSandboxFailureAuthorization = "authorization"
-	WindowsSandboxFailureDependency    = "dependency"
-	WindowsSandboxFailureLaunch        = "launch"
-)
+import "runtime"
 
 // Spec describes how to confine one command. The zero value (Mode == "") does
 // not enforce, so an unconfigured caller runs commands unchanged.
@@ -50,18 +23,6 @@ type Spec struct {
 	// plus any configured extras). Platforms may add command-scoped temp/cache
 	// roots so builds and package managers keep working without broad writes.
 	WriteRoots []string
-	// ReadRoots are explicit host paths a Windows AppContainer may read. The
-	// macOS/Linux profiles already mount the host read-only by default.
-	ReadRoots []string
-	// AppContainerWriteRoots are the small subset of WriteRoots that a
-	// read-only Windows AppContainer may write (for MCP this is only its
-	// private state/temp tree). macOS and Linux already enforce this through
-	// WriteRoots and ignore this platform-specific distinction.
-	AppContainerWriteRoots []string
-	// DirectWrites marks a raw-argv launch as a write-capable command. On
-	// Windows this selects the WRITE_RESTRICTED writer lane; it is deliberately
-	// false for ordinary read-only helpers such as rg.
-	DirectWrites bool
 	// ForbidReadRoots are files or directories the command may not read from
 	// when confined. The OS sandbox denies access to these paths (macOS Seatbelt
 	// deny file-read* rules, Linux bubblewrap masks); on other platforms the
@@ -90,10 +51,6 @@ type Spec struct {
 	// even when a broader WriteRoot such as the user's home directory would
 	// otherwise cover them.
 	ProtectedWriteRoots []string
-	// WindowsLockWait bounds native ACL coordination. A short foreground
-	// default avoids hanging an approval; background launches may opt into a
-	// larger value. Other platforms ignore it.
-	WindowsLockWait time.Duration
 }
 
 // Enforce reports whether the spec asks for confinement.

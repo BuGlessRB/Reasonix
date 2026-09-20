@@ -1,6 +1,6 @@
 //go:build windows
 
-package winsandbox
+package winaclresidue
 
 import (
 	"fmt"
@@ -14,6 +14,29 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+func installLegacyDeny(t *testing.T, path, userSID string) {
+	t.Helper()
+	if err := icacls(path, "/deny", "*"+userSID+":(RX)"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = icacls(path, "/remove:d", "*"+userSID, "/C") })
+}
+
+// writeMarker records a deny for path under a marker owned by pid. Our own PID
+// stands for a crashed predecessor after PID reuse; the parent test runner's
+// PID stands for a live owner.
+func writeMarker(t *testing.T, pid int, path string) string {
+	t.Helper()
+	if err := os.MkdirAll(markerDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(markerDir(), strconv.Itoa(pid)+"-credential-test.txt")
+	if err := os.WriteFile(marker, []byte("deny\t"+path+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return marker
+}
+
 func TestRepairLegacyCredentialDenyRemovesExactCurrentUserACE(t *testing.T) {
 	t.Setenv("TEMP", t.TempDir())
 	path := filepath.Join(t.TempDir(), ".env")
@@ -24,14 +47,12 @@ func TestRepairLegacyCredentialDenyRemovesExactCurrentUserACE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := denyAppContainerSIDsWithInheritance(path, []string{userSID}, "RX", false); err != nil {
-		t.Fatal(err)
-	}
+	installLegacyDeny(t, path, userSID)
 	legacy, other, err := currentUserDenyACECounts(path, userSID)
 	if err != nil || legacy != 1 || other != 0 {
 		t.Fatalf("deny counts before repair = legacy:%d other:%d err:%v", legacy, other, err)
 	}
-	marker := writeStaleCredentialMarker(t, path)
+	marker := writeMarker(t, os.Getpid(), path)
 
 	if err := RepairLegacyCredentialDeny(path); err != nil {
 		t.Fatal(err)
@@ -46,27 +67,10 @@ func TestRepairLegacyCredentialDenyRemovesExactCurrentUserACE(t *testing.T) {
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("stale marker survived repair: %v", err)
 	}
-	if err := denyAppContainerSIDsWithInheritance(path, []string{userSID}, "RX", false); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { removeDeniedAppContainerSIDs(path, []string{userSID}) })
+	installLegacyDeny(t, path, userSID)
 	if err := RepairLegacyCredentialDeny(path); err == nil {
 		t.Fatal("repair reused a consumed stale marker")
 	}
-}
-
-func writeStaleCredentialMarker(t *testing.T, path string) string {
-	t.Helper()
-	if err := os.MkdirAll(windowsDenyMarkerDir(), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	// An unregistered self-PID marker represents a crashed predecessor after
-	// PID reuse, matching the existing sandbox residue lifecycle.
-	marker := filepath.Join(windowsDenyMarkerDir(), strconv.Itoa(os.Getpid())+"-credential-test.txt")
-	if err := os.WriteFile(marker, []byte("deny\t"+path+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return marker
 }
 
 func TestRepairLegacyCredentialDenyMatchesFileAcrossPathAliases(t *testing.T) {
@@ -94,11 +98,8 @@ func TestRepairLegacyCredentialDenyMatchesFileAcrossPathAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := denyAppContainerSIDsWithInheritance(path, []string{userSID}, "RX", false); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { removeDeniedAppContainerSIDs(path, []string{userSID}) })
-	writeStaleCredentialMarker(t, alias)
+	installLegacyDeny(t, path, userSID)
+	writeMarker(t, os.Getpid(), alias)
 	if err := RepairLegacyCredentialDeny(path); err != nil {
 		t.Fatal(err)
 	}
@@ -119,25 +120,21 @@ func TestRepairLegacyCredentialDenyPreservesUnattributedAndLiveACL(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := denyAppContainerSIDsWithInheritance(path, []string{userSID}, "RX", false); err != nil {
-				t.Fatal(err)
-			}
+			installLegacyDeny(t, path, userSID)
 			switch source {
 			case "live marker":
-				marker := writeStaleCredentialMarker(t, path)
-				liveResidueMarkers.Store(marker, struct{}{})
-				t.Cleanup(func() { liveResidueMarkers.Delete(marker) })
+				writeMarker(t, os.Getppid(), path)
 			case "wrong path":
-				writeStaleCredentialMarker(t, path+"-other")
+				writeMarker(t, os.Getpid(), path+"-other")
 			}
-			before, err := windowsPathDACLSDDL(path)
+			before, err := pathDACLSDDL(path)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if err := RepairLegacyCredentialDeny(path); err == nil {
 				t.Fatal("repair accepted an unattributed or live deny")
 			}
-			after, err := windowsPathDACLSDDL(path)
+			after, err := pathDACLSDDL(path)
 			if err != nil || after != before {
 				t.Fatalf("DACL changed: before %s, after %s, err %v", before, after, err)
 			}
@@ -150,14 +147,14 @@ func TestRepairLegacyCredentialDenyLeavesOrdinaryACLAlone(t *testing.T) {
 	if err := os.WriteFile(path, []byte("KEY=value\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	before, err := windowsPathDACLSDDL(path)
+	before, err := pathDACLSDDL(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := RepairLegacyCredentialDeny(path); err != nil {
 		t.Fatal(err)
 	}
-	after, err := windowsPathDACLSDDL(path)
+	after, err := pathDACLSDDL(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,15 +191,14 @@ func TestRepairLegacyCredentialDenyRefusesMixedCurrentUserDenyACL(t *testing.T) 
 	if err != nil || legacy != 1 || other == 0 {
 		t.Fatalf("deny counts before repair = legacy:%d other:%d err:%v", legacy, other, err)
 	}
-	before, err := windowsPathDACLSDDL(path)
+	before, err := pathDACLSDDL(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if err := RepairLegacyCredentialDeny(path); err == nil {
 		t.Fatal("RepairLegacyCredentialDeny accepted mixed current-user deny ACL")
 	}
-	after, err := windowsPathDACLSDDL(path)
+	after, err := pathDACLSDDL(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +207,7 @@ func TestRepairLegacyCredentialDenyRefusesMixedCurrentUserDenyACL(t *testing.T) 
 	}
 }
 
-func windowsPathDACLSDDL(path string) (string, error) {
+func pathDACLSDDL(path string) (string, error) {
 	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
 	if err != nil || sd == nil {
 		return "", err

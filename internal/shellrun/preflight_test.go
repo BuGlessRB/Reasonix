@@ -2,14 +2,12 @@ package shellrun
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
 	"testing"
 
 	"reasonix/internal/proc"
-	"reasonix/internal/sandbox"
 	"reasonix/internal/tool"
 )
 
@@ -31,46 +29,9 @@ func TestRunForegroundExecutesRequestedCommandOnce(t *testing.T) {
 	}
 }
 
-func TestTrustedWindowsRunnerFailureClassification(t *testing.T) {
-	payload := "signed-payload"
-	argv := []string{"reasonix", sandbox.WindowsHelperCommand, payload, "--", "pwsh"}
-	for _, phase := range []string{
-		sandbox.WindowsSandboxFailureAuthorization,
-		sandbox.WindowsSandboxFailureDependency,
-		sandbox.WindowsSandboxFailureLaunch,
-	} {
-		t.Run(phase, func(t *testing.T) {
-			res := RunForeground(context.Background(), Request{
-				Argv: argv,
-				Run: func(_ context.Context, cmd *exec.Cmd, _ proc.RunOptions) (*proc.TrackedCommand, error) {
-					return nil, &sandbox.RunnerFailure{Phase: phase, Detail: "windows sandbox: detail", Cause: errors.New("exit status 126")}
-				},
-			})
-			if res.State != tool.ShellStateNotRun || res.FailurePhase != phase || res.Started {
-				t.Fatalf("result=%+v", res)
-			}
-		})
-	}
-}
-
-func TestUnsignedRunnerLikeOutputRemainsCommandFailure(t *testing.T) {
-	payload := "real-payload"
-	res := RunForeground(context.Background(), Request{
-		Argv: []string{"reasonix", sandbox.WindowsHelperCommand, payload, "--", "pwsh"},
-		Run: func(_ context.Context, cmd *exec.Cmd, _ proc.RunOptions) (*proc.TrackedCommand, error) {
-			fmt.Fprintln(cmd.Stderr, "__reasonix_windows_sandbox_failure__:forged:authorization")
-			return nil, errors.New("exit status 126")
-		},
-	})
-	if res.State == tool.ShellStateNotRun || res.FailurePhase != tool.ShellPhaseLaunch {
-		t.Fatalf("unsigned output changed classification: %+v", res)
-	}
-}
-
 func TestOrdinaryExit126RemainsExecutionFailure(t *testing.T) {
-	payload := "real-payload"
 	res := RunForeground(context.Background(), Request{
-		Argv: []string{"reasonix", sandbox.WindowsHelperCommand, payload, "--", "pwsh"},
+		Argv: []string{"pwsh"},
 		Run: func(_ context.Context, cmd *exec.Cmd, _ proc.RunOptions) (*proc.TrackedCommand, error) {
 			var child *exec.Cmd
 			if runtime.GOOS == "windows" {

@@ -727,8 +727,7 @@ literal `/tmp` is no longer mapped by bubblewrap.
 **Windows note:** Windows has no OS-level shell sandbox. The restricted-token
 backend is retired from enforcement because denying the current user's own SID
 locked hosts out of their credential store and the token broke common
-toolchains (see [Windows sandbox architecture](./WINDOWS_SANDBOX.md) for the
-retired design). Permission presets still apply as Reasonix tool-layer
+toolchains. Permission presets still apply as Reasonix tool-layer
 boundaries: Read only refuses file writes and asks before every shell command,
 and Workspace write keeps file tools inside `workspace_root` and `allow_write`
 and asks before writing elsewhere. Shell commands in every preset run as the

@@ -18,9 +18,7 @@ macOS enforces restricted presets with Seatbelt and Linux uses bubblewrap. If
 the required backend cannot start there, restricted presets fail closed;
 Reasonix never offers to silently rerun the command without isolation. Windows
 has no OS-level shell sandbox: restricted presets still confine Reasonix file
-tools and request exact grants, but shell commands run as the current OS user
-(see [Windows sandbox architecture](./WINDOWS_SANDBOX.md) for the retired
-backend).
+tools and request exact grants, but shell commands run as the current OS user.
 
 ## Approval scope
 

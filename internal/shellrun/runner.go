@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"reasonix/internal/proc"
-	"reasonix/internal/sandbox"
 	"reasonix/internal/tool"
 )
 
@@ -103,10 +102,6 @@ func RunForeground(ctx context.Context, req Request) Result {
 	cmd.Dir = req.Dir
 	cmd.Env = req.Env
 	cmd.WaitDelay = waitDelay
-	finishReport, reportErr := sandbox.PrepareRunnerDiagnostics(cmd)
-	if reportErr != nil {
-		return Result{State: tool.ShellStateNotRun, FailurePhase: tool.ShellPhaseDependency, Err: reportErr}
-	}
 
 	collector := newOutputCollector(combinedOutputMaxBytes, tool.OutputTailMaxBytes)
 	var writers []io.Writer
@@ -142,7 +137,6 @@ func RunForeground(ctx context.Context, req Request) Result {
 		ShellPath:       req.ShellPath,
 		CommandPreview:  req.CommandPreview,
 	})
-	err = finishReport(err)
 
 	if progress != nil {
 		progress.Flush()
@@ -191,17 +185,6 @@ func classifyForegroundResult(runCtx context.Context, req Request, out Result, e
 		// successful runs from persisting up to 16 KiB of ordinary stdout into
 		// every session record and tool card.
 		out.OutputTail = ""
-		return out
-	}
-	if phase, detail, ok := sandbox.RunnerFailureFromError(err); ok {
-		out.Started = false
-		out.State = tool.ShellStateNotRun
-		out.FailurePhase = phase
-		out.ExitCode = exitCodeFromErr(err)
-		if detail == "" {
-			detail = "windows sandbox runner failed before the command started"
-		}
-		out.Err = fmt.Errorf("%s", detail)
 		return out
 	}
 	if code := exitCodeFromErr(err); code != nil {

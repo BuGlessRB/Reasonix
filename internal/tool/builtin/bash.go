@@ -243,12 +243,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	out, runEx, err := b.runForegroundDetailed(ctx, p, sh, argv, wrapped, cmdEnv)
 	mergeRunInto(ex, runEx)
 	ex.DurationMs = time.Since(start).Milliseconds()
-	if runEx != nil && runEx.FailurePhase == tool.ShellPhaseAuthorization {
-		out = appendSessionDataHint(out, b.guard.CommandHint(b.workDir, p.Command))
-		out = appendRunnerAuthorizationHint(out, p.Command, string(sandbox.PermissionPresetFrom(ctx)))
-	} else {
-		out = b.appendWriteHints(ctx, out, err, p, wrapped)
-	}
+	out = b.appendWriteHints(ctx, out, err, p, wrapped)
 	return tool.DetailedResult{
 		Output:    out,
 		Execution: ex,
@@ -520,17 +515,10 @@ func shouldTrackShellProcess(wrapped bool, sh sandbox.Shell, command string, pre
 	if preserveBackgroundProcesses {
 		return false
 	}
-	if runtime.GOOS == "windows" && wrapped {
-		return false
-	}
 	return !sh.Kind.IsPOSIX() || !hasExplicitBackgroundKeepalive(command)
 }
 
 func runShellProcess(ctx context.Context, cmd *exec.Cmd, sh sandbox.Shell, command string, track bool) (*proc.TrackedCommand, error) {
-	finishReport, err := sandbox.PrepareRunnerDiagnostics(cmd)
-	if err != nil {
-		return nil, &sandbox.RunnerFailure{Phase: sandbox.WindowsSandboxFailureDependency, Detail: err.Error(), Cause: err}
-	}
 	source := "bash_tool"
 	if sh.Kind == sandbox.ShellPowerShell {
 		source = "pwsh_tool"
@@ -543,7 +531,7 @@ func runShellProcess(ctx context.Context, cmd *exec.Cmd, sh sandbox.Shell, comma
 		ShellPath:       sh.Path,
 		CommandPreview:  commandPreview(command),
 	})
-	return tracked, finishReport(err)
+	return tracked, err
 }
 
 func reapShellProcess(cmd *exec.Cmd, tracked *proc.TrackedCommand) {
