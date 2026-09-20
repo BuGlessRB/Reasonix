@@ -39,8 +39,8 @@ func openExact(path string, access uint32) (windows.Handle, error) {
 // ntPath converts an absolute Win32 path to the NT object namespace.
 func ntPath(path string) string {
 	clean := filepath.Clean(path)
-	if strings.HasPrefix(clean, `\\`) {
-		return `\??\UNC\` + strings.TrimPrefix(clean, `\\`)
+	if rest, ok := strings.CutPrefix(clean, `\\`); ok {
+		return `\??\UNC\` + rest
 	}
 	return `\??\` + clean
 }
