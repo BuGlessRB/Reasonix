@@ -5411,20 +5411,7 @@ func (state *historyMessageConvertState) convertHistoryMessage(
 ) []HistoryMessage {
 	var out []HistoryMessage
 	if m.Role == provider.Role("compaction") {
-		var op event.SessionOperationInfo
-		if json.Unmarshal([]byte(m.Content), &op) == nil && op.OperationID != "" {
-			pending := op.Status == "running" || op.Status == "cancelling" || op.Status == "finalizing"
-			status := op.Status
-			return append(out, HistoryMessage{
-				RecordID: m.ID, Role: "compaction", Pending: pending, Trigger: "manual",
-				Messages: op.Messages, Summary: op.Summary, Archive: op.Archive,
-				OperationID: op.OperationID, OperationRevision: op.OperationRevision, RuntimeEpoch: op.RuntimeEpoch, OperationKind: op.Kind,
-				OperationStatus: status, OperationActivity: op.Activity,
-				ErrorCode: op.ErrorCode, Detail: op.Detail, Applied: op.Applied,
-				InputTokens: op.InputTokens, ResultTokens: op.ResultTokens,
-			})
-		}
-		return out
+		return maintenanceHistoryMessage(m)
 	}
 	if m.DecisionReceipt != nil {
 		return append(out, HistoryMessage{
@@ -6118,27 +6105,7 @@ func previewEventSessionMessages(path string) ([]HistoryMessage, bool, error) {
 				Archive:  c.Archive,
 			})
 		case "session_operation":
-			if op := rec.SessionOperation; op != nil && op.OperationID != "" {
-				pending := op.Status == "running" || op.Status == "cancelling" || op.Status == "finalizing"
-				status := op.Status
-				row := HistoryMessage{Role: "compaction", Pending: pending, Trigger: "manual",
-					OperationID: op.OperationID, OperationRevision: op.OperationRevision, RuntimeEpoch: op.RuntimeEpoch,
-					OperationKind: op.Kind, OperationStatus: status,
-					OperationActivity: op.Activity, ErrorCode: op.ErrorCode, Detail: op.Detail,
-					Applied: op.Applied, InputTokens: op.InputTokens, ResultTokens: op.ResultTokens,
-					Messages: op.Messages, Summary: op.Summary, Archive: op.Archive}
-				replaced := false
-				for i := len(out) - 1; i >= 0; i-- {
-					if out[i].OperationID == op.OperationID {
-						out[i] = row
-						replaced = true
-						break
-					}
-				}
-				if !replaced {
-					out = append(out, row)
-				}
-			}
+			out = upsertMaintenancePreview(out, rec.SessionOperation)
 		}
 	}
 	return out, sawEvent, nil

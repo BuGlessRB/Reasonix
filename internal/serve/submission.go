@@ -65,17 +65,9 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	}
 	if ctrl.Running() {
 		s.bindMu.Unlock()
-		if trimmed == "/compact" || strings.HasPrefix(trimmed, "/compact ") {
-			if concrete, ok := ctrl.(*control.Controller); ok {
-				if maintenance := concrete.RuntimeStateSnapshot().Maintenance; maintenance != nil {
-					err := control.ErrMaintenanceBusy
-					if maintenance.Activity == "recovery_required" {
-						err = control.ErrMaintenanceRecovery
-					}
-					http.Error(w, err.Error(), http.StatusConflict)
-					return
-				}
-			}
+		if _, err := control.MaintenanceCommandConflict(ctrl, trimmed); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
 		}
 		http.Error(w, "session is busy; use POST /inbox/items for durable follow-up", http.StatusConflict)
 		return

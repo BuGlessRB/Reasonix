@@ -177,25 +177,7 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 		next.Todos = []event.Todo{}
 	}
 	setRuntimePhase(&next, exclusiveSession, v3Runtime, v3RuntimeSnapshot, running, finishing, closed, cancelling)
-	next.Maintenance = maintenance
-	if maintenance != nil && !closed {
-		switch maintenance.Activity {
-		case "cancelling":
-			next.Phase = "cancelling"
-		case "finalizing":
-			next.Phase = "finishing"
-		case "recovery_required":
-			next.Phase = "recovery_required"
-		default:
-			next.Phase = "executing"
-		}
-	}
-	// Close is immediately authoritative for the public controller view even
-	// while the session runtime remains in its private finalizing barrier. The
-	// latter keeps commit authority alive until TurnDone is durable; exposing it
-	// here would make a closed controller look runnable again.
-	next.Running = (running || finishing || maintenance != nil) && !closed
-	next.CancelRequested = (cancelling || maintenance != nil && maintenance.Activity == "cancelling") && !closed
+	applyMaintenanceRuntimeState(&next, maintenance, running, finishing, closed, cancelling)
 	identities, promptRevision := c.promptOwner.IdentitiesRevision()
 	next.PendingPrompt = len(identities) > 0
 	next.Interactions = make([]event.PendingInteraction, len(identities))
@@ -401,4 +383,26 @@ func (c *Controller) runtimeBoundaryStable(running, finishing, closed, cancellin
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return running == c.bodyActiveLocked() && finishing == c.finalizingLocked() && closed == c.closed && cancelling == c.cancelRequestedLocked() && path == c.sessionPath && reflect.DeepEqual(maintenance, c.maintenanceSnapshotLocked())
+}
+
+func applyMaintenanceRuntimeState(next *event.RuntimeStateSnapshot, maintenance *event.MaintenanceState, running, finishing, closed, cancelling bool) {
+	next.Maintenance = maintenance
+	if maintenance != nil && !closed {
+		switch maintenance.Activity {
+		case "cancelling":
+			next.Phase = "cancelling"
+		case "finalizing":
+			next.Phase = "finishing"
+		case "recovery_required":
+			next.Phase = "recovery_required"
+		default:
+			next.Phase = "executing"
+		}
+	}
+	// Close is immediately authoritative for the public controller view even
+	// while the session runtime remains in its private finalizing barrier. The
+	// latter keeps commit authority alive until TurnDone is durable; exposing it
+	// here would make a closed controller look runnable again.
+	next.Running = (running || finishing || maintenance != nil) && !closed
+	next.CancelRequested = (cancelling || maintenance != nil && maintenance.Activity == "cancelling") && !closed
 }

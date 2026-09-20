@@ -65,36 +65,7 @@ func (c *Controller) runSynchronousTurn(
 		defer stop()
 	}
 	c.refreshRuntimeState(event.Event{})
-	finish := func() {
-		c.mu.Lock()
-		if c.turns.done != nil {
-			close(c.turns.done)
-			c.turns.done = nil
-		}
-		c.turns.cancel = nil
-		c.turns.cancelRequested = false
-		closing := c.closed
-		recovery := c.turns.phase == session.RuntimeRecoveryRequired
-		c.turns.finishingBound.end()
-		c.turns.finishingBound.endIdle()
-		if !recovery {
-			c.turns.lastToken = c.turns.token
-			if closing {
-				c.turns.phase = session.RuntimeClosed
-			} else {
-				c.turns.phase = session.RuntimeIdle
-			}
-			c.turns.turnID = ""
-			c.noteExecutionLocked(session.RuntimeIdle, "")
-		}
-		c.mu.Unlock()
-		if closing {
-			c.finalizeControllerClose()
-		}
-		c.refreshRuntimeState(event.Event{})
-		c.kickGoalDriver()
-		cancel()
-	}
+	finish := func() { c.finishSynchronousTurn(cancel) }
 	if onAdmitted != nil {
 		if err := onAdmitted(); err != nil {
 			finish()
@@ -145,4 +116,35 @@ func (c *Controller) runSynchronousTurn(
 		}
 	}
 	return runErr
+}
+
+func (c *Controller) finishSynchronousTurn(cancel context.CancelFunc) {
+	c.mu.Lock()
+	if c.turns.done != nil {
+		close(c.turns.done)
+		c.turns.done = nil
+	}
+	c.turns.cancel = nil
+	c.turns.cancelRequested = false
+	closing := c.closed
+	recovery := c.turns.phase == session.RuntimeRecoveryRequired
+	c.turns.finishingBound.end()
+	c.turns.finishingBound.endIdle()
+	if !recovery {
+		c.turns.lastToken = c.turns.token
+		if closing {
+			c.turns.phase = session.RuntimeClosed
+		} else {
+			c.turns.phase = session.RuntimeIdle
+		}
+		c.turns.turnID = ""
+		c.noteExecutionLocked(session.RuntimeIdle, "")
+	}
+	c.mu.Unlock()
+	if closing {
+		c.finalizeControllerClose()
+	}
+	c.refreshRuntimeState(event.Event{})
+	c.kickGoalDriver()
+	cancel()
 }

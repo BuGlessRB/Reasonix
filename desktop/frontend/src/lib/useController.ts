@@ -1,3 +1,4 @@
+import { reduceCompactionEvent, reduceMaintenanceRuntimeSnapshot, reconcileMaintenanceState } from "./sessionMaintenanceReducer";
 import { isShellToolName } from "./shellToolIdentity";
 // useController is the frontend's state machine over the agent event stream. It keeps
 // per-tab output, tool state, and approvals while the user switches tabs; components
@@ -63,7 +64,7 @@ import { setTranscriptBindingIdentity } from "./canonicalTranscriptBackend";
 import { getTranscriptStore } from "./transcriptStore";
 import { TranscriptSessionFollower } from "./transcriptSessionFollower";
 import { historyReplaceAction, historyRevisionIsOlder } from "./sessionTranscriptMode";
-import { interruptOrphanedSessionOperationItems, reconcileSessionOperationItems, sessionOperationItem, upsertSessionOperationItem } from "./sessionMaintenanceOperation";
+import { reconcileSessionOperationItems } from "./sessionMaintenanceOperation";
 import { matchingSnapshotItem, transcriptPageState, transcriptSnapshotState } from "./transcriptSnapshotState";
 import type { TranscriptSnapshot } from "./transcriptProtocol";
 import { recordFrontendDiagnostic } from "./frontendDiagnosticBridge";
@@ -1685,34 +1686,10 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
     }
     case "phase":
       return { ...s, seq: s.seq + 1, items: [...s.items, { kind: "phase", id: `p${s.seq}`, text: e.text ?? "" }] };
-    case "session_operation": {
-      const op = e.sessionOperation;
-      if (!op?.operationId) return s;
-      const updated = upsertSessionOperationItem(s.items, { ...sessionOperationItem(op), observedRuntimeRevision: s.runtimeStateSnapshot?.revision ?? 0 });
-      return { ...s, seq: s.seq + (updated.inserted ? 1 : 0), items: updated.items };
-    }
+    case "session_operation":
     case "compaction_started":
-      if (s.items.some((it) => it.kind === "compaction" && it.operationId && it.pending)) return s;
-      return { ...s, seq: s.seq + 1, items: [...s.items, { kind: "compaction", id: `c${s.seq}`, pending: true, trigger: e.compaction?.trigger ?? "", messages: 0, summary: "", archive: "" }] };
-    case "compaction_done": {
-      const c = e.compaction;
-      const operationAt = [...s.items].reverse().findIndex((it) => it.kind === "compaction" && it.operationId && it.pending);
-      if (operationAt >= 0) {
-        const at = s.items.length - 1 - operationAt;
-        const items = s.items.map((it, i) => i === at && it.kind === "compaction" ? { ...it,
-          messages: c?.messages ?? it.messages, summary: c?.summary ?? it.summary, archive: c?.archive ?? it.archive } : it);
-        return { ...s, items };
-      }
-      const idx = [...s.items].reverse().findIndex((it) => it.kind === "compaction" && it.pending);
-      const at = idx < 0 ? -1 : s.items.length - 1 - idx;
-      if (!c?.summary) {
-        const items = at < 0 ? s.items : s.items.filter((_, i) => i !== at);
-        return { ...s, running: s.turnActive ? s.running : false, items };
-      }
-      const filled: Item = { kind: "compaction", id: at < 0 ? `c${s.seq}` : (s.items[at] as Extract<Item, { kind: "compaction" }>).id, pending: false, trigger: c.trigger ?? "", messages: c.messages ?? 0, summary: c.summary, archive: c.archive ?? "" };
-      const items = at < 0 ? [...s.items, filled] : s.items.map((it, i) => (i === at ? filled : it));
-      return { ...s, running: s.turnActive ? s.running : false, seq: s.seq + 1, items };
-    }
+    case "compaction_done":
+      return reduceCompactionEvent(s, e);
     case "steer":
       if (isHostRecoveryGuidance(e.text ?? "")) return s;
       return { ...s, seq: s.seq + 1, items: [...s.items, { kind: "notice", id: `s${s.seq}`, level: "info", text: `${STEER_NOTICE_PREFIX}${e.text ?? ""}`, inboxItemId: e.itemId }] };
@@ -1917,22 +1894,7 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
 }
 
 export function reducer(s: State, a: Action): State {
-  let next = reduceState(s, a);
-  const historyOrRuntimeSynchronized = a.type === "runtime_snapshot" || a.type === "meta"
-    || a.type === "history" || a.type === "history_page" || a.type === "history_replace"
-    || a.type === "history_rebase" || a.type === "history_prepend" || a.type === "history_append"
-    || a.type === "history_items_patch" || a.type === "transcript_snapshot"
-    || a.type === "transcript_v2_snapshot" || a.type === "transcript_page" || a.type === "transcript_records";
-  if (historyOrRuntimeSynchronized && next.runtimeStateSnapshot) {
-    const maintenance = next.runtimeStateSnapshot.maintenance;
-    const items = interruptOrphanedSessionOperationItems(
-      next.items,
-      maintenance?.operationId,
-      maintenance?.runtimeEpoch || next.runtimeStateSnapshot.runtimeEpoch,
-      next.runtimeStateSnapshot.revision,
-    );
-    if (items !== next.items) next = { ...next, items };
-  }
+  const next = reconcileMaintenanceState(reduceState(s, a), a);
   return next.items !== s.items ? settleLocalSubmissions(next, next.items) : next;
 }
 
@@ -2117,33 +2079,8 @@ function reduceState(s: State, a: Action): State {
         : { ...s, meta: acceptedMeta, runtimeStateSnapshot };
     }
     case "optimistic_meta": return sameMeta(s.meta, a.meta) ? s : { ...s, meta: a.meta, hydrateError: undefined };
-    case "runtime_snapshot": {
-      const runtimeStateSnapshot = acceptSessionRuntimeSnapshot(s.runtimeStateSnapshot, a.snapshot);
-      if (runtimeStateSnapshot === s.runtimeStateSnapshot) return s;
-      const meta = runtimeStateSnapshot.todos !== undefined && s.meta
-        ? { ...s.meta, runtimeStateSnapshot, canonicalTodos: runtimeStateSnapshot.todos }
-        : s.meta;
-      const maintenance = runtimeStateSnapshot.maintenance;
-      if (!maintenance) return { ...s, meta, runtimeStateSnapshot };
-      const status = maintenance.activity === "cancelling" ? "cancelling"
-        : maintenance.activity === "finalizing" ? "finalizing"
-        : maintenance.activity === "recovery_required" ? "recovery_required" : "running";
-      const updated = upsertSessionOperationItem(s.items, { ...sessionOperationItem({
-        operationId: maintenance.operationId,
-        kind: maintenance.kind,
-        activity: maintenance.activity,
-        status: maintenance.status || status,
-        operationRevision: maintenance.operationRevision,
-        runtimeEpoch: maintenance.runtimeEpoch || runtimeStateSnapshot.runtimeEpoch,
-        errorCode: maintenance.errorCode,
-        detail: maintenance.detail,
-        applied: maintenance.applied,
-        inputTokens: maintenance.inputTokens,
-        resultTokens: maintenance.resultTokens,
-        messages: maintenance.messages,
-      }), observedRuntimeRevision: runtimeStateSnapshot.revision });
-      return { ...s, meta, runtimeStateSnapshot, items: updated.items, seq: s.seq + (updated.inserted ? 1 : 0) };
-    }
+    case "runtime_snapshot":
+      return reduceMaintenanceRuntimeSnapshot(s, a.snapshot);
     case "context": {
       const sessionTokens = typeof a.context.sessionTokens === "number"
         ? Math.max(0, a.context.sessionTokens)

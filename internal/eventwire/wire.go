@@ -80,29 +80,7 @@ type StreamAttempt struct {
 func ToWire(e event.Event) Event {
 	w := Event{Kind: kindNames[e.Kind], MessageID: e.MessageID, AttemptID: e.AttemptID, Source: e.Source, PromptKind: e.PromptKind, TurnID: e.TurnID, Sequence: e.Sequence, Status: string(e.Status), Text: e.Text, Detail: e.Detail, Reasoning: e.Reasoning, ItemID: e.ItemID, SessionPath: e.SessionPath, SessionReset: e.SessionReset}
 	w.SessionID, w.RuntimeEpoch, w.SubmissionID = e.SessionID, e.RuntimeEpoch, e.SubmissionID
-	if e.ItemID != "" {
-		promptEvent := false
-		switch e.Kind {
-		case event.AskRequest:
-			promptEvent = true
-			w.PromptKind = "ask"
-		case event.ApprovalRequest:
-			promptEvent = true
-			w.PromptKind = e.Approval.Kind
-			if w.PromptKind == "" {
-				w.PromptKind = "approval"
-			}
-		case event.MCPInteractionRequest:
-			promptEvent = true
-			w.PromptKind = "mcp"
-		case event.PromptAnswered:
-			promptEvent = true
-		}
-		if promptEvent {
-			w.PromptID = e.ItemID
-			w.PromptLegacy = e.TurnID == ""
-		}
-	}
+	w.applyPromptIdentity(e)
 	if len(e.MemoryCitations) > 0 {
 		w.MemoryCitations = ToWireMemoryCitations(e.MemoryCitations)
 	}
@@ -290,6 +268,32 @@ func ToWireMemoryCitations(in []provider.MemoryCitation) []MemoryCitation {
 		})
 	}
 	return out
+}
+
+func (w *Event) applyPromptIdentity(e event.Event) {
+	if e.ItemID != "" {
+		promptEvent := false
+		switch e.Kind {
+		case event.AskRequest:
+			promptEvent = true
+			w.PromptKind = "ask"
+		case event.ApprovalRequest:
+			promptEvent = true
+			w.PromptKind = e.Approval.Kind
+			if w.PromptKind == "" {
+				w.PromptKind = "approval"
+			}
+		case event.MCPInteractionRequest:
+			promptEvent = true
+			w.PromptKind = "mcp"
+		case event.PromptAnswered:
+			promptEvent = true
+		}
+		if promptEvent {
+			w.PromptID = e.ItemID
+			w.PromptLegacy = e.TurnID == ""
+		}
+	}
 }
 
 // Compaction is the JSON form of an event.Compaction.

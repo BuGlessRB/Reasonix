@@ -239,20 +239,7 @@ func (s *turnEventSink) persistAndPublish(e event.Event) error {
 	if e.Kind == event.TurnStarted && ledger.CurrentStatus() == event.TurnInProgress {
 		return nil
 	}
-	status := e.Status
-	if status == "" {
-		status = ledger.CurrentStatus()
-	}
-	switch e.Kind {
-	case event.TurnStarted:
-		status = event.TurnInProgress
-	case event.AskRequest, event.ApprovalRequest, event.MCPInteractionRequest:
-		status = event.TurnWaitingUser
-	case event.TurnDone:
-		status = terminalTurnStatus(e)
-	case event.TurnStatusChanged:
-		// The emitter supplied the exact transition in e.Status.
-	}
+	status := publicationTurnStatus(e, ledger)
 	if e.WriteIntent {
 		return nil
 	}
@@ -771,4 +758,22 @@ func (c *Controller) DrainTurnEventMetrics() turnevent.MetricsSnapshot {
 		return turnevent.MetricsSnapshot{}
 	}
 	return ledger.DrainMetrics()
+}
+
+func publicationTurnStatus(e event.Event, ledger *turnevent.Ledger) event.TurnStatus {
+	status := e.Status
+	if status == "" {
+		status = ledger.CurrentStatus()
+	}
+	switch e.Kind {
+	case event.TurnStarted:
+		status = event.TurnInProgress
+	case event.AskRequest, event.ApprovalRequest, event.MCPInteractionRequest:
+		status = event.TurnWaitingUser
+	case event.TurnDone:
+		status = terminalTurnStatus(e)
+	case event.TurnStatusChanged:
+		// The emitter supplied the exact transition in e.Status.
+	}
+	return status
 }

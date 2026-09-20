@@ -1573,12 +1573,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// dismiss.
 			switch {
 			case m.maintenanceCancellable():
-				m.ctrl.Cancel()
-				updated := *m.maintenance
-				updated.Activity = "cancelling"
-				updated.Status = "cancelling"
-				m.maintenance = &updated
-				m.renderSessionOperation(&updated)
+				m.stopMaintenance()
 			case m.maintenance != nil:
 				// A projection already being saved cannot be rolled back. Keep
 				// the draft intact while the authoritative operation settles.
@@ -3237,80 +3232,6 @@ func (m chatTUI) cancelRequested() bool {
 	return m.ctrl.CancelRequested()
 }
 
-func (m chatTUI) maintenanceCancellable() bool {
-	if m.maintenance == nil || m.ctrl == nil {
-		return false
-	}
-	switch strings.ToLower(strings.TrimSpace(m.maintenance.Activity)) {
-	case "", "starting", "running":
-		return true
-	default:
-		return false
-	}
-}
-
-func (m chatTUI) runningWorkingLine(cancelRequested, styled bool) string {
-	if m.state != tuiRunning {
-		if m.maintenance == nil {
-			return ""
-		}
-		var label string
-		switch strings.ToLower(strings.TrimSpace(m.maintenance.Activity)) {
-		case "cancelling":
-			label = i18n.M.CompactionStopping
-		case "finalizing":
-			label = i18n.M.CompactionSaving
-		case "recovery_required":
-			label = i18n.M.CompactionRecoveryRequired
-		default:
-			label = i18n.M.CompactionWorking
-		}
-		return fmt.Sprintf("  %s %s", m.spinner.View(), label)
-	}
-	if m.retryAttempt > 0 && !cancelRequested {
-		if line, ok := m.waitingRecoveryLine(); ok {
-			return line
-		}
-
-		return fmt.Sprintf("  "+i18n.M.ChatStatusRetryingFmt, m.spinner.View(), m.retryAttempt, m.retryMax)
-	}
-
-	var working string
-	if cancelRequested {
-		working = fmt.Sprintf("  "+i18n.M.ChatStatusCancellingFmt, m.spinner.View(), m.elapsed)
-	} else {
-		phaseLabel := m.readStatusLabel
-		if phaseLabel == "" {
-			phaseLabel = turnPhaseStatusLabel(m.turnPhase)
-		}
-		if phaseLabel != "" {
-			working = fmt.Sprintf("  %s %s · %ds", m.spinner.View(), phaseLabel, m.elapsed)
-		} else {
-			working = fmt.Sprintf("  "+i18n.M.ChatStatusThinkingFmt, m.spinner.View(), m.elapsed)
-		}
-	}
-	if m.turnTokens > 0 {
-		working += " · ↓" + shortTokens(m.turnTokens)
-	}
-	if n := m.inboxQueuedCount(); n > 0 {
-		var queued string
-		if n == 1 {
-			queued = " · ✎ 1 in inbox"
-		} else {
-			queued = fmt.Sprintf(" · ✎ %d in inbox", n)
-		}
-		if m.inboxSnap().Paused {
-			queued += " (paused)"
-		}
-		if styled {
-			working += dim(queued)
-		} else {
-			working += queued
-		}
-	}
-	return working
-}
-
 func (m chatTUI) View() tea.View {
 	if m.themeSweep != nil {
 		v := tea.NewView(m.themeSweep.render())
@@ -4210,36 +4131,7 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 			ctrl.SubmitFinalReadinessRecovery(input, prompt)
 		})
 	case "/compact":
-		m.echoLocalCommand(input)
-		// The result-capable controller route registers maintenance synchronously
-		// and starts its worker in the background. That closes the interval where
-		// the command had returned but Esc/new input could still see an idle
-		// controller. Any text after "/compact" remains summary focus guidance.
-		if submitter, ok := m.ctrl.(interface {
-			SubmitDisplayWithResult(display, input string) control.SubmitResult
-		}); ok {
-			result := submitter.SubmitDisplayWithResult(input, input)
-			if result.OperationID != "" {
-				op := &event.SessionOperationInfo{
-					OperationID: result.OperationID,
-					Kind:        "compact",
-					Activity:    "running",
-					Status:      "running",
-				}
-				m.maintenance = op
-				m.renderSessionOperation(op)
-			}
-			return nil
-		}
-
-		// Compatibility path for older SessionAPI implementations. Keep an
-		// explicit maintenance placeholder so Esc preserves the draft while the
-		// blocking Compact call runs as a Bubble Tea command.
-		focus := strings.TrimSpace(strings.TrimPrefix(input, typedCmd))
-		m.maintenance = &event.SessionOperationInfo{Kind: "compact", Activity: "starting", Status: "running"}
-		m.compactCompatibilityPending = true
-		m.compactLifecycleObserved = false
-		return func() tea.Msg { return compactDoneMsg{err: m.ctrl.Compact(context.Background(), focus)} }
+		return m.runCompactCommand(input, typedCmd)
 	case "/context":
 		return m.showContextReport(input)
 	case "/new":

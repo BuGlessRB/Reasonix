@@ -20,28 +20,38 @@ var (
 )
 
 type controllerMaintenance struct {
-	publishMu         sync.Mutex
+	maintenanceIdentity
+	maintenanceResult
+	publishMu       sync.Mutex
+	activity        string
+	revision        uint64
+	cancel          context.CancelFunc
+	done            chan struct{}
+	safeToRelease   bool
+	cancelSignalled bool
+	terminal        bool
+}
+
+// Identity and the pre-operation checkpoint are immutable after admission.
+type maintenanceIdentity struct {
 	id                string
 	kind              string
-	activity          string
-	status            string
-	errorCode         string
-	detail            string
 	runtimeEpoch      string
-	revision          uint64
 	sessionPath       string
-	cancel            context.CancelFunc
-	done              chan struct{}
-	inputTokens       int
 	projectionVersion uint64
-	applied           bool
-	safeToRelease     bool
-	cancelSignalled   bool
-	terminal          bool
-	resultTokens      int
-	messages          int
-	summary           string
-	archive           string
+}
+
+// Result fields are frozen together at each serialized publication boundary.
+type maintenanceResult struct {
+	status       string
+	errorCode    string
+	detail       string
+	inputTokens  int
+	applied      bool
+	resultTokens int
+	messages     int
+	summary      string
+	archive      string
 }
 
 func (c *Controller) beginMaintenance(parent context.Context, kind string) (*controllerMaintenance, context.Context, error) {
@@ -89,11 +99,13 @@ func (c *Controller) beginMaintenance(parent context.Context, kind string) (*con
 	work, cancel := context.WithCancel(extension.ContextWithRuntimeOwner(c.withAuthentication(parent), c.runtimeOwner))
 	before := c.ContextMaintenanceSnapshot()
 	op := &controllerMaintenance{
-		id: "maintenance-" + newRuntimeStateEpoch(), kind: kind, activity: "running", status: "running",
-		runtimeEpoch: runtimeEpoch,
-		sessionPath:  c.sessionPath, cancel: cancel, done: make(chan struct{}),
-		inputTokens:       before.ProjectedTokens,
-		projectionVersion: before.ProjectionVersion,
+		maintenanceIdentity: maintenanceIdentity{
+			id: "maintenance-" + newRuntimeStateEpoch(), kind: kind,
+			runtimeEpoch: runtimeEpoch, sessionPath: c.sessionPath,
+			projectionVersion: before.ProjectionVersion,
+		},
+		maintenanceResult: maintenanceResult{status: "running", inputTokens: before.ProjectedTokens},
+		activity:          "running", cancel: cancel, done: make(chan struct{}),
 	}
 	c.maintenance = op
 	c.mu.Unlock()
