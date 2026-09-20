@@ -491,10 +491,10 @@ func (a *App) restoreRemoteTabShells(f desktopTabsFile) {
 		sessionID := strings.TrimSpace(entry.SessionID)
 		title := strings.TrimSpace(entry.TopicTitle)
 		// Older builds persisted the canonical session ID as the tab title when
-		// a blank remote session was materialized. That value is an identity
-		// token, not user-facing text; discard it during restore so the tab and
-		// sidebar keep the same localized "new session" presentation.
-		if title == sessionID || title == sessionName {
+		// a blank remote session was materialized. That opaque token is only
+		// recognisable once a canonical identity is present; a legacy row's
+		// name is its basename, which the sidebar shows as the title too.
+		if sessionID != "" && (title == sessionID || title == sessionName) {
 			title = ""
 		}
 		if title == "" {
