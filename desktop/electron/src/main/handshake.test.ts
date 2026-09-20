@@ -94,3 +94,11 @@ test("handshake failures map every documented code and keep the real error text"
   assert.equal(spawn.code, null);
   assert.equal(spawn.detail, "spawn ENOENT");
 });
+
+test("a service without lifecycle diagnostics reports empty run and incident ids", () => {
+  const result = validateHelloResult({ ...goodResult, runId: "", incidentId: "", diagnosticsEnabled: false });
+  assert.equal(result.runId, "");
+  assert.equal(result.incidentId, "");
+  assert.equal(result.diagnosticsEnabled, false);
+  assert.throws(() => validateHelloResult({ ...goodResult, runId: undefined }), /result\.runId/);
+});

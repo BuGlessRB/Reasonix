@@ -63,16 +63,19 @@ type HelloInstance struct {
 
 // HelloResult is the service's desktop/hello response.
 type HelloResult struct {
-	ProtocolVersion    int             `json:"protocolVersion"`
-	ContractDigest     string          `json:"contractDigest"`
-	Service            ServiceInfo     `json:"service"`
-	RuntimeGeneration  string          `json:"runtimeGeneration"`
-	Resources          Resources       `json:"resources"`
-	Window             *WindowGeometry `json:"window,omitempty"`
-	Instance           *InstanceInfo   `json:"instance,omitempty"`
-	RunID              string          `json:"runId,omitempty"`
-	IncidentID         string          `json:"incidentId,omitempty"`
-	DiagnosticsEnabled bool            `json:"diagnosticsEnabled"`
+	ProtocolVersion   int             `json:"protocolVersion"`
+	ContractDigest    string          `json:"contractDigest"`
+	Service           ServiceInfo     `json:"service"`
+	RuntimeGeneration string          `json:"runtimeGeneration"`
+	Resources         Resources       `json:"resources"`
+	Window            *WindowGeometry `json:"window,omitempty"`
+	Instance          *InstanceInfo   `json:"instance,omitempty"`
+	// The shell validates both identifiers as present strings and accepts
+	// empty values when diagnostics are disabled; omitting the keys is a
+	// handshake failure, so they must never carry omitempty.
+	RunID              string `json:"runId"`
+	IncidentID         string `json:"incidentId"`
+	DiagnosticsEnabled bool   `json:"diagnosticsEnabled"`
 }
 
 // InstanceInfo extends the handshake without invalidating older shells.

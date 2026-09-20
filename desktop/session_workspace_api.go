@@ -709,11 +709,18 @@ func (a *App) openSessionWithNavigation(ref session.SessionRef, navigationSequen
 	if a.desktopSessions.navigationSeq.Load() != navigationSequence {
 		return HistoryPage{}, errSessionNavigationSuperseded
 	}
-	tab, ctrl := a.tabAndCtrlByID("")
-	if tab == nil {
-		return HistoryPage{}, errors.New("workspace is not ready")
+	workspace, err := a.canonicalSessionWorkspace(a.bootContext(), ref)
+	if err != nil {
+		return HistoryPage{}, err
+	}
+	tab, ctrl, created, err := a.surfaceForCanonicalSession(ref, workspace)
+	if err != nil {
+		return HistoryPage{}, err
 	}
 	if _, err := a.resumeCanonicalSessionForTranscript(tab, ctrl, sessionRoute(ref.SessionID), defaultHistoryPageTurns, false, navigationSequence); err != nil {
+		if created {
+			a.discardUnboundSurface(tab)
+		}
 		return HistoryPage{}, err
 	}
 	// runtime:rebuilt intentionally has no reload semantics. SessionRef opening
