@@ -4,7 +4,8 @@ import { createLegacyRemotePolicyNoticeTracker } from "./legacyRemotePolicyNotic
 import { app, onRemoteTabEvent, onRemoteTabState } from "./bridge";
 import { onRemoteTabUpdated } from "./remoteTabEvents";
 import { hydrateRemoteTelemetry, loadRemoteStatusSnapshot } from "./remoteTelemetry";
-import { remoteStatusToAction } from "./remoteStatus";
+import { remoteStatusTakenOver, remoteStatusToAction } from "./remoteStatus";
+import { isRemoteTakeoverError } from "./remoteErrors";
 import { useRemoteForkTurn } from "./remoteForkTurn";
 import { useT } from "./i18n";
 import type { CancelOutcome } from "./inboxCancel";
@@ -164,8 +165,20 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   const runtimeAtActivityRef = useRef(runtimeState.state);
   // True while the serve reports a local runtime on the host owns this
   // session; a spectator surface idles with no other status polling, so this
-  // flag also drives a slow reconcile loop below.
+  // flag also drives a slow reconcile loop below. The ref mirrors the last
+  // observation so the owner-return transition can be detected at the source.
   const [spectator, setSpectator] = useState(false);
+  const spectatorRef = useRef(false);
+  const noteOwnership = useCallback((takenOver: boolean) => {
+    const wasSpectator = spectatorRef.current;
+    spectatorRef.current = takenOver;
+    setSpectator(takenOver);
+    // Ownership returning is the only path back to the live transcript: the
+    // legacy fallback installed a protocol-1 view whose submit() refuses to
+    // send, and neither the state channel nor the status poll re-attaches the
+    // follower on its own.
+    if (wasSpectator && !takenOver) void hydrateRef.current?.run().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     for (const listener of liveListenersRef.current) listener();
@@ -193,8 +206,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     setGoalRuntime(remoteGoalRuntime(status));
     setGoalView(remoteGoalView(status));
     setEffortInfo(next.effort);
-    setSpectator(Boolean(status.takenOver));
-  }, []);
+    noteOwnership(remoteStatusTakenOver(status));
+  }, [noteOwnership]);
 
   useEffect(() => {
     if (!tabId) return;
@@ -220,6 +233,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     hydratingRef.current = false;
     bufferedEventsRef.current = [];
     primeRef.current = "idle";
+    spectatorRef.current = false;
+    setSpectator(false);
     setHydrated(false);
     let cancelled = false;
     let generation = 0;
@@ -302,33 +317,41 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
         setSurfaceGeneration(value => value + 1);
         void forkTargetsRefreshRef.current?.();
       } catch (error) {
+        if (cancelled || ticket !== generation) return;
         // The transcript protocol requires the live runtime that owns the
-        // session. A session taken over by a local runtime (the serve rotated
-        // its foreground away, the desktop is a spectator) answers 409, and
-        // the identity/legacy history view is the supported read path there.
-        const legacyLoaded = await loadRemoteStatusSnapshot(tabId, mountedState === "ready" ? 3 : 60,
-          () => cancelled || ticket !== generation, isAuthoritativeRemoteStatus, false);
-        if (!legacyLoaded || cancelled || ticket !== generation) {
-          if (!cancelled && ticket === generation) setError(String(error));
-          return;
+        // session. Only a session taken over by a local runtime on the serve
+        // host (the Follow request answers 409, or status reports the
+        // take-over) may fall back to the identity/legacy history view; every
+        // other failure keeps its error and waits for the next ready
+        // publication or an explicit retry.
+        const takenOver = isRemoteTakeoverError(error) || await app.RemoteTabStatus(tabId).then(remoteStatusTakenOver, () => false);
+        if (cancelled || ticket !== generation) return;
+        if (!takenOver) { setError(String(error)); return; }
+        try {
+          const legacyLoaded = await loadRemoteStatusSnapshot(tabId, mountedState === "ready" ? 3 : 60,
+            () => cancelled || ticket !== generation, isAuthoritativeRemoteStatus, false);
+          if (!legacyLoaded || cancelled || ticket !== generation) return;
+          const [snapshot, status] = legacyLoaded;
+          const messages = Array.isArray(snapshot.history) ? snapshot.history as HistoryMessage[] : [];
+          const checkpoints = remoteCheckpoints(snapshot.checkpoints);
+          primeRef.current = "retired";
+          applyRemoteStatus(status);
+          setCommands(Array.isArray(snapshot.commands) ? snapshot.commands as CommandInfo[] : []);
+          setTranscript(current => {
+            let next = reducer(current, { type: "history", messages, remote: true });
+            next = reducer(next, { type: "checkpoints", checkpoints });
+            next = reducer(next, remoteStatusToAction(status, Date.now(), next.running));
+            return hydrateRemoteTelemetry(next, status);
+          });
+          hydratedRef.current = true;
+          setState("ready");
+          setHydrated(true);
+          setError("");
+          setSurfaceGeneration(value => value + 1);
+          void forkTargetsRefreshRef.current?.();
+        } catch (fallbackError) {
+          if (!cancelled && ticket === generation) setError(String(fallbackError));
         }
-        const [snapshot, status] = legacyLoaded;
-        const messages = Array.isArray(snapshot.history) ? snapshot.history as HistoryMessage[] : [];
-        const checkpoints = remoteCheckpoints(snapshot.checkpoints);
-        applyRemoteStatus(status);
-        setCommands(Array.isArray(snapshot.commands) ? snapshot.commands as CommandInfo[] : []);
-        setTranscript(current => {
-          let next = reducer(current, { type: "history", messages, remote: true });
-          next = reducer(next, { type: "checkpoints", checkpoints });
-          next = reducer(next, remoteStatusToAction(status, Date.now(), next.running));
-          return hydrateRemoteTelemetry(next, status);
-        });
-        hydratedRef.current = true;
-        setState("ready");
-        setHydrated(true);
-        setError("");
-        setSurfaceGeneration(value => value + 1);
-        void forkTargetsRefreshRef.current?.();
       }
     };
     const offContent = getTranscriptStore().subscribe(tabId, change => dispatch({ type: "history_items_patch", patches: change.patches, expected: change.expected }));
@@ -382,7 +405,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     // spectator flag that drives the reconcile loop below.
     const offMeta = onRemoteTabUpdated(meta => {
       if (cancelled || meta?.id !== tabId) return;
-      setSpectator(Boolean(meta.takenOver));
+      noteOwnership(Boolean(meta.takenOver));
       // The attach publication is the reliable "identity live, activation
       // still in flight" signal — retry the early history read there.
       void primeEarlyHistory();
@@ -413,7 +436,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       refreshStatusRef.current = null;
       reconcileHistoryRef.current = null;
     };
-  }, [applyRemoteStatus, tabId, sessionPath, setTranscript]);
+  }, [applyRemoteStatus, noteOwnership, tabId, sessionPath, setTranscript]);
 
   // A spectator surface idles with no status traffic: the running watchdog
   // only reconciles turns, and the read-only composer blocks the sends that
