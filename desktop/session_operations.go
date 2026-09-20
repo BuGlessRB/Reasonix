@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -82,6 +83,8 @@ func sessionOperationErrorForTarget(err error, targetKey, operationID string) er
 			TargetKey: targetKey, OperationID: operationID, Retryable: true,
 		}
 	}
+	// The host log is the only place that still carries the cause.
+	slog.Warn("desktop: unclassified session operation failure", "target", targetKey, "operation", operationID, "err", err)
 	// RPC messages are user-visible. Do not pass through paths, lease holder
 	// details, provider bodies, or credential-adjacent diagnostics from an
 	// unclassified lower-level error.
