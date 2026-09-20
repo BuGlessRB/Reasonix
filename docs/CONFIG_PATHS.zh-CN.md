@@ -90,6 +90,9 @@ theme = "auto"
 cursor_shape = "bar"         # CLI/TUI 输入光标：underline|block|bar
 show_turn_usage = false       # 隐藏 TUI 每轮 token/费用回执；默认 true
 
+[cli]
+diff_formatter = "delta --color-only --paging=never"   # 围栏 diff 块的外部格式化器；仅用户/全局配置
+
 [desktop]
 provider_access = ["deepseek"]
 
@@ -115,6 +118,14 @@ CJK 双宽字符；如果偏好其它形状，可以设为 `block` 或 `underlin
 
 `[ui].show_turn_usage = false` 会隐藏 TUI transcript 中每次模型请求完成后的 token 与
 费用回执；统计和运行中状态仍正常更新。默认值为 `true`。
+
+`[cli].diff_formatter` 指定一个可选的外部命令，在 CLI/TUI 写入 diff 之前对其格式化：
+既包括回答流中的围栏 ` ```diff ` / ` ```patch ` 块，也包括 transcript 中写文件工具的
+diff 卡片，例如 `delta --color-only --paging=never`。它是 argv 形式、不经过 shell：整个
+diff 写入该命令的 stdin，其 stdout 原样回写——不加行号槽、不做宽度裁剪、不过滤转义序列，
+因此格式化器输出的颜色与控制序列会完整送达终端。命令失败、超时或输出为空时回退到内置
+渲染器。与 `[cli].update_channel` 一样，它仅属于用户/全局配置，项目内的
+`reasonix.toml` 无法设置。
 
 ### 自定义 provider 的 `api_key_env` 命名
 

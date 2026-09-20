@@ -69,6 +69,9 @@ func diffPath(args string) string {
 
 // diffBlock renders a writer call as a header line ("✎ name path  +A -B") plus
 // the highlighted, folded diff body. Returns nil when there's no textual diff.
+// A configured [cli].diff_formatter (e.g. delta) takes the whole diff on stdin
+// and its stdout is shown verbatim under the header, mirroring the fenced-diff
+// path — the built-in body (and its fold) is the fallback.
 func diffBlock(name, args string, d event.FileDiff, width, maxLines int) []string {
 	if d.Diff == "" {
 		return nil
@@ -77,6 +80,9 @@ func diffBlock(name, args string, d event.FileDiff, width, maxLines int) []strin
 	header := "  " + toolDot(name) + " " + toolHead(name, path, width)
 	if stat := diffStat(d); stat != "" {
 		header += "  " + stat
+	}
+	if rows, ok := formatToolDiff(d.Diff); ok {
+		return append([]string{header}, rows...)
 	}
 	return append([]string{header}, diffBody(d, path, width, maxLines)...)
 }
@@ -87,6 +93,12 @@ func diffBlock(name, args string, d event.FileDiff, width, maxLines int) []strin
 func diffBody(d event.FileDiff, path string, width, maxLines int) []string {
 	if d.Diff == "" {
 		return nil
+	}
+	// A diff that already carries colour (a formatter's output pasted back, a
+	// file whose own content is coloured) must not be re-parsed: the SGR-prefixed
+	// lines would be mis-read and the colours dropped, so show it verbatim.
+	if hasSGR(d.Diff) {
+		return verbatimDiffBody(d.Diff, width, maxLines)
 	}
 	src := strings.Split(strings.TrimRight(d.Diff, "\n"), "\n")
 	// Drop the "--- a/… / +++ b/…" header pair positionally — matching the prefix
@@ -137,6 +149,83 @@ func diffBody(d event.FileDiff, path string, width, maxLines int) []string {
 		rows = append(rows, "  "+dim(fmt.Sprintf(i18n.M.DiffFoldedFmt, folded)))
 	}
 	return rows
+}
+
+// hasSGR reports whether s carries an ANSI CSI/SGR introducer. A diff already
+// containing one was colourised externally and must not be re-parsed.
+func hasSGR(s string) bool {
+	return strings.Contains(s, "\x1b[")
+}
+
+// verbatimDiffBody renders an externally colourised diff as-is: no gutter, no
+// background bars, no header-drop, no syntax re-highlight — just the lines,
+// width-clamped and sanitised so a hostile payload cannot drive the terminal.
+func verbatimDiffBody(diff string, width, maxLines int) []string {
+	lines := strings.Split(strings.TrimRight(diff, "\n"), "\n")
+	rows := make([]string, 0, len(lines))
+	for _, ln := range lines {
+		if ln == "" {
+			continue
+		}
+		rows = append(rows, "  "+clampPlain(sgrOnly(ln), max(width-2, 1)))
+	}
+	if maxLines > 0 && len(rows) > maxLines {
+		folded := len(rows) - (maxLines - 1)
+		rows = rows[:maxLines-1]
+		rows = append(rows, "  "+dim(fmt.Sprintf(i18n.M.DiffFoldedFmt, folded)))
+	}
+	return rows
+}
+
+// sgrOnly keeps SGR (colour/style) escape sequences and drops every other
+// control sequence — OSC (clipboard pokes), cursor moves, non-SGR CSI — so an
+// externally rendered diff can colour the terminal without hijacking it.
+func sgrOnly(s string) string {
+	if !strings.ContainsRune(s, 0x1b) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] != 0x1b {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		if i+1 >= len(s) {
+			break
+		}
+		switch s[i+1] {
+		case '[': // CSI … final byte in 0x40–0x7e
+			j := i + 2
+			for j < len(s) && (s[j] < 0x40 || s[j] > 0x7e) {
+				j++
+			}
+			if j >= len(s) {
+				return b.String() // unterminated: drop the tail
+			}
+			if s[j] == 'm' {
+				b.WriteString(s[i : j+1])
+			}
+			i = j + 1
+		case ']': // OSC … BEL or ST
+			j := i + 2
+			for j < len(s) {
+				if s[j] == 0x07 {
+					j++
+					break
+				}
+				if s[j] == 0x1b && j+1 < len(s) && s[j+1] == '\\' {
+					j += 2
+					break
+				}
+				j++
+			}
+			i = j
+		default: // other escape: drop ESC and its introducer byte
+			i += 2
+		}
+	}
+	return b.String()
 }
 
 // diffBar draws one added/removed row on a full-width coloured background. The

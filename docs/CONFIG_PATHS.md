@@ -112,6 +112,9 @@ theme = "auto"
 cursor_shape = "bar"         # CLI/TUI text cursor: underline|block|bar
 show_turn_usage = false       # hide per-request token/cost receipts in the TUI; default true
 
+[cli]
+diff_formatter = "delta --color-only --paging=never"   # external formatter for fenced diff blocks; user/global only
+
 [desktop]
 provider_access = ["deepseek"]
 
@@ -140,6 +143,17 @@ visible without covering double-width CJK characters; use `block` or
 `[ui].show_turn_usage = false` hides the token and cost receipt appended to the
 TUI transcript after each model request. Accounting and live status updates
 remain active. The default is `true`.
+
+`[cli].diff_formatter` names an optional external command that formats a diff
+before the CLI/TUI emits it: both a fenced ` ```diff ` / ` ```patch ` block in
+the answer stream and a writer tool's diff card in the transcript, e.g.
+`delta --color-only --paging=never`. It is an argv line run without a shell: the
+whole diff is written to the command's stdin and its stdout is re-emitted
+verbatim — no gutter, no width clamp, and no escape filtering, so the
+formatter's own colours and control sequences reach the terminal intact. On any
+failure, timeout, or empty output the built-in renderer is used. Like
+`[cli].update_channel` it is user/global only — a project-local `reasonix.toml`
+cannot set it.
 
 ### Custom provider `api_key_env` names
 

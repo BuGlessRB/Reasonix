@@ -279,6 +279,10 @@ type CLIConfig struct {
 	// configurations. Runtime behavior is always the official release channel,
 	// and the canonical renderer intentionally drops this field.
 	UpdateChannel string `toml:"update_channel"`
+	// DiffFormatter is an optional external command (argv, no shell) that formats
+	// a fenced ```diff/```patch block and a writer diff card, e.g. "delta". Empty
+	// uses the built-in renderer. User-global only; ./reasonix.toml cannot set it.
+	DiffFormatter string `toml:"diff_formatter"`
 }
 
 // NotificationsConfig controls optional system notifications for CLI chat/run.

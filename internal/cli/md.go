@@ -345,7 +345,30 @@ func isDiffFence(fc *ast.FencedCodeBlock, src []byte) bool {
 func (r *mdRenderer) renderDiffFence(buf *strings.Builder, fc *ast.FencedCodeBlock, src []byte, indent int) {
 	prefix := strings.Repeat(" ", indent)
 	width := max(r.width-indent, 8)
-	for _, sec := range splitDiffSections(diffFenceText(fc, src)) {
+	text := diffFenceText(fc, src)
+	// A configured [cli].diff_formatter (e.g. delta) takes the whole block on
+	// stdin and its stdout is re-emitted verbatim — no gutter, no width clamp,
+	// no escape filtering — so the formatter's colours reach the stream intact.
+	if out, ok := renderDiffExternal(activeDiffFormatter, text); ok {
+		buf.WriteString(out)
+		if !strings.HasSuffix(out, "\n") {
+			buf.WriteString("\n")
+		}
+		buf.WriteString("\n")
+		return
+	}
+	// A fence that already carries ANSI (e.g. pasted delta output) is shown
+	// verbatim — splitting/counting it would mis-read the SGR-prefixed lines.
+	if hasSGR(text) {
+		for _, row := range verbatimDiffBody(text, width, 0) {
+			buf.WriteString(prefix)
+			buf.WriteString(row)
+			buf.WriteString("\n")
+		}
+		buf.WriteString("\n")
+		return
+	}
+	for _, sec := range splitDiffSections(text) {
 		path := diffFencePath(sec)
 		if header := diffFenceHeader(path, countDiff(sec)); header != "" {
 			buf.WriteString(prefix)

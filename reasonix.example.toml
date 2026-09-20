@@ -14,6 +14,9 @@ theme = "auto"   # auto|dark|light; controls CLI colors only; REASONIX_THEME can
 # cursor_shape = "bar"   # block|underline|bar; text input cursor shape; slim default avoids covering CJK characters
 show_turn_usage = true   # CLI/TUI: show per-request token and cost receipts in transcript scrollback
 
+[cli]   # user/global only; ./reasonix.toml cannot override
+# diff_formatter = "delta --color-only --paging=never"   # optional external argv (no shell) that formats a fenced ```diff/```patch block and a writer tool's diff card; the diff is piped on stdin and its stdout is shown verbatim
+
 [desktop]
 # language = "auto"   # auto|en|zh; auto follows the browser/OS locale
 # currency = "auto"   # legacy display currency; prefer [billing].display_currency

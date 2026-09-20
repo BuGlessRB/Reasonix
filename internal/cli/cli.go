@@ -241,9 +241,11 @@ func configureCLIThemeFromConfig() {
 	if cfg, err := config.Load(); err == nil {
 		configureCLIThemeWithStyle(cfg.UITheme(), cfg.UIThemeStyle())
 		cliCursorShape = cfg.UICursorShape()
+		configureDiffFormatter(cfg)
 	} else {
 		configureCLITheme("auto")
 		cliCursorShape = "bar"
+		configureDiffFormatter(nil)
 	}
 }
 
@@ -1019,6 +1021,7 @@ func chatREPL(args []string, version string) int {
 	if err == nil {
 		configureCLIThemeWithStyle(cfg.UITheme(), cfg.UIThemeStyle())
 		cliCursorShape = cfg.UICursorShape()
+		configureDiffFormatter(cfg)
 	}
 	diagnostics.Milestone("config_load_done")
 

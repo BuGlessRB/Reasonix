@@ -92,6 +92,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		b.WriteString("\n")
 	}
 
+	renderCLIConfig(&b, c, scope)
 	if scope != RenderScopeProject {
 		b.WriteString("[desktop]\n")
 		if lang := c.DesktopLanguage(); lang != "" {
