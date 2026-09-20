@@ -14,17 +14,23 @@ unknown transcript synchronization root cause has been fixed.
 - `QuitSequencer` owns window close, app quit, system quit, and update relaunch.
   Repeated requests share draft preparation and one service shutdown. An app
   quit arriving during a background-close policy check upgrades that operation
-  to a real quit.
+  to a real quit. Preparation retains ownership through renderer resume and
+  draft-error dialogs; queued quit requests run after that ownership is released.
 - The service publishes `stopping` as soon as shutdown begins. Its public
   readiness is false, new business calls fail as shutting down, and lifecycle
   shutdown/status traffic continues on the existing service session.
 - Transcript followers stop without sending subscription-cleanup RPCs once the
-  service is stopping. A delayed response from the old generation cannot update
-  the displayed transcript.
+  service is stopping. The shared follower owner covers local and remote tabs,
+  including late hydration. A delayed response from the old generation cannot
+  update the displayed transcript or send cleanup after service stopping.
 - Transcript failures are logged with bounded stage, reason, error type, transport,
   revision, commit, attempt count, failure count, duration, service phase, and
   service generation fields. Repeated identical failures emit at most one
-  visible summary per 30 seconds; a reason change and recovery are immediate.
+  visible summary per 30 seconds; a reason change is immediate. Recovery is
+  recorded after a successful delta follow, not merely a replacement snapshot,
+  so repeated broken deltas retain their failure count and duration. Repeated
+  recovery snapshots do not add breadcrumbs. Missing or failing shell diagnostic
+  capabilities cannot interrupt transcript recovery.
   The renderer-to-shell endpoint rejects free text, unknown fields, payloads
   over 2 KiB, untrusted senders, and more than ten accepted events per second.
 
@@ -39,6 +45,27 @@ evidence. A successful exit removes the current run's file, and diagnostics can
 also be disabled by policy or a development build. An empty directory after a
 normal exit is therefore expected. Collect `%APPDATA%\reasonix\logs\shell.log`
 and `service.log` for post-exit investigation.
+
+## Follow-up review verification
+
+Review baseline: `a40c1eca5f9c6849ee82c5e027798085d9692519`. Repair commit: `fee5c199b9838e2f1c606f962327f5fb5404a67f`.
+The following local macOS checks passed:
+
+| Directory | Commands / evidence |
+| --- | --- |
+| `desktop/electron` | `pnpm typecheck`, `pnpm test` (235 tests), `pnpm build`; the final log-order adjustment also passed all 22 lifecycle tests |
+| `desktop/frontend` | `pnpm typecheck`, `pnpm test:typecheck`, `pnpm build` including unchanged bundle budgets |
+| `desktop/frontend` | `pnpm test:transcript`, `pnpm test:app-lifecycle`, `pnpm test:remote` |
+| `desktop/frontend` | `pnpm exec tsx src/__tests__/transcript-follow-client.test.ts` (22 tests), `pnpm exec tsx src/__tests__/transcript-session-follower.test.ts` (37 tests) |
+| `desktop/frontend` | `node --import ./scripts/svg-stub-register.mjs --import tsx src/__tests__/remote-session-history-prime.test.tsx` (14 checks) |
+| `desktop/frontend` | `pnpm test:app-browser` (Chromium lifecycle, navigation, runtime, and attention checks) |
+| Repository | `git diff --check` |
+
+New regressions control draft-error dialogs, renderer resume, delayed baselines,
+lazy loading, rejection and retry timing using deferred promises and fake clocks.
+They cover both local and remote followers, bounded diagnostics during persistent
+delta failure, optional/failing diagnostic hosts, and generation-specific cleanup.
+No Go sources changed. Native Windows package qualification remains unexecuted.
 
 ## Windows package qualification
 

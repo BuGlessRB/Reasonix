@@ -11,13 +11,17 @@
   仍使用旧 Go 窗口方法名的调用方由通用 invoke 层转到同一个原生窗口所有者。
 - `QuitSequencer` 统一处理窗口关闭、应用退出、系统退出和更新重启。重复请求复用同一次
   草稿准备和服务收尾；后台关闭策略检查期间到达的应用退出会把当前事务升级为真实退出。
+  恢复编辑和草稿失败对话框结束前，准备事务持续持有所有权；期间到达的退出请求在所有权
+  释放后继续执行。
 - 服务开始 shutdown 时立即发布 `stopping`，公开的 `ready` 同时变为 false；新的业务调用
   返回“正在退出”，shutdown/status 仍通过当前服务会话完成。
-- 服务进入 `stopping` 后，transcript follower 停止且不再发送订阅清理 RPC；旧世代的在途
-  响应不能更新已经显示的聊天内容。
+- 服务进入 `stopping` 后，共同的 follower 所有者停止本地和远程订阅，并阻止晚到的加载
+  回调重新订阅；旧世代的在途响应不能更新已经显示的聊天内容，也不能再发送清理 RPC。
 - transcript 故障以受限字段记录 stage、reason、错误类型、传输类型、revision、commit、活动 attempt
   数、失败次数、持续时间、服务阶段和服务 generation。相同故障每 30 秒最多输出一次可见
-  汇总，原因变化和恢复立即记录。renderer → shell 端点拒绝自由文本、未知字段、超过 2 KiB
+  汇总，原因变化立即记录。只有增量跟随成功才记录恢复，重新安装快照不会清空故障计数和
+  持续时间，故障期间的重复快照也不再写入 breadcrumb。宿主缺少诊断能力、同步抛错或异步
+  拒绝都不影响同步恢复。renderer → shell 端点拒绝自由文本、未知字段、超过 2 KiB
   的载荷、不可信发送者，以及每秒超过十条的已接收事件。
 
 长期诊断以轮转的 `shell.log` 为准。启动日志包含 shell 版本、channel、commit、PID 和运行
@@ -27,6 +31,25 @@ generation；握手成功日志包含服务构建、PID 和 generation；退出�
 `%APPDATA%\reasonix\diagnostics\lifecycle\` 中的文件是临时生命周期证据。正常退出会删除
 当前运行对应的文件；策略关闭诊断或使用开发构建时也可能不创建文件。因此正常退出后目录
 为空属于预期行为。退出后的调查应采集 `%APPDATA%\reasonix\logs\shell.log` 和 `service.log`。
+
+## 检查后修复验证
+
+检查基线：`a40c1eca5f9c6849ee82c5e027798085d9692519`；修复提交：`fee5c199b9838e2f1c606f962327f5fb5404a67f`。
+以下本地 macOS 检查已通过：
+
+| 目录 | 命令与证据 |
+| --- | --- |
+| `desktop/electron` | `pnpm typecheck`、`pnpm test`（235 项）、`pnpm build`；最后的日志顺序调整再次通过全部 22 项 lifecycle 测试 |
+| `desktop/frontend` | `pnpm typecheck`、`pnpm test:typecheck`、`pnpm build`，资源预算未放宽 |
+| `desktop/frontend` | `pnpm test:transcript`、`pnpm test:app-lifecycle`、`pnpm test:remote` |
+| `desktop/frontend` | `pnpm exec tsx src/__tests__/transcript-follow-client.test.ts`（22 项）、`pnpm exec tsx src/__tests__/transcript-session-follower.test.ts`（37 项） |
+| `desktop/frontend` | `node --import ./scripts/svg-stub-register.mjs --import tsx src/__tests__/remote-session-history-prime.test.tsx`（14 项） |
+| `desktop/frontend` | `pnpm test:app-browser`，覆盖 Chromium 生命周期、导航、运行时和通知行为 |
+| 仓库 | `git diff --check` |
+
+新增回归通过 deferred Promise 和假时钟控制草稿失败对话框、恢复编辑、迟到基线、延迟加载、
+拒绝和重试时序；同时覆盖本地与远程 follower、持续增量失败时的诊断限频、诊断能力缺失或
+失败，以及按世代区分的订阅清理。未修改 Go 源码。Windows 原生正式包验收仍未执行。
 
 ## Windows 正式包验收
 
