@@ -71,6 +71,8 @@ export function AppRuntime() {
   const activeSessionIdentity = sessionIdentityKey({
     tabId: activeTabId,
     session: activeTab?.session ?? state.meta?.session,
+    sessionId: activeTab?.sessionId,
+    remote: activeTab?.remote,
     sessionPath: activeTab?.sessionPath ?? state.meta?.sessionPath,
     sessionGeneration: activeTab?.sessionGeneration ?? state.meta?.sessionGeneration ?? state.sessionGen,
     scope: activeTab?.scope,
@@ -87,7 +89,7 @@ export function AppRuntime() {
       ...tabMetas.filter(tab => tab.id !== activeTabId).map(tab => ({
         tabId: tab.id,
         sessionKey: sessionIdentityKey({ tabId: tab.id, sessionPath: tab.sessionPath,
-          session: tab.session, sessionGeneration: tab.sessionGeneration,
+          session: tab.session, sessionId: tab.sessionId, remote: tab.remote, sessionGeneration: tab.sessionGeneration,
           scope: tab.scope, workspaceRoot: tab.workspaceRoot, topicId: tab.topicId }),
       })),
     ],

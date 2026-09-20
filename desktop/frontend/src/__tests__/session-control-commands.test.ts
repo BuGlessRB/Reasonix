@@ -8,10 +8,29 @@ import { sessionIdentityKey } from "../app-runtime/sessionTarget";
 
 const dom = new JSDOM("<div id='root'></div>");
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true });
+// Remote tab metas carry the canonical id as a top-level `sessionId` with no
+// SessionRef (desktop/remote_projects.go), and their generation is a pump
+// reconnect counter. The runtime identity must still fence sessions apart.
+const remoteHost = { hostId: "gpu-box" };
+assert.notEqual(
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-a", scope: "project", workspaceRoot: "/repo", topicId: "topic", sessionGeneration: 3 }),
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-b", scope: "project", workspaceRoot: "/repo", topicId: "topic", sessionGeneration: 3 }),
+  "canonical remote session IDs must fence reused remote tabs separately",
+);
+assert.equal(
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-a", sessionGeneration: 3 }),
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-a", sessionGeneration: 4 }),
+  "a remote pump reconnect (generation bump) does not change the session identity",
+);
+assert.notEqual(
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-a" }),
+  sessionIdentityKey({ tabId: "remote", remote: { hostId: "other-box" }, sessionId: "session-a" }),
+  "the same session id on two hosts stays two identities",
+);
 assert.notEqual(
   sessionIdentityKey({ tabId: "remote", sessionId: "session-a" }),
   sessionIdentityKey({ tabId: "remote", sessionId: "session-b" }),
-  "canonical remote session IDs must fence reused remote tabs separately",
+  "a compatibility sessionId without a host still keys the session, not the tab",
 );
 const legacyLocalKey = sessionIdentityKey({ tabId: "local", sessionPath: "/sessions/local.jsonl", sessionGeneration: 3 });
 assert.equal(
