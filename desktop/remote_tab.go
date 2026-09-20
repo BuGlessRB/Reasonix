@@ -651,6 +651,33 @@ func (a *App) remoteTabCurrentModel(tabID string) (string, bool) {
 	return cur, true
 }
 
+// remoteTabReclaimObservation is the tab state a reclaim fences against. The
+// reclaim releases remoteTabMu for a long poll and then dereferences tab, so
+// the observation must prove the binding existed at snapshot time.
+type remoteTabReclaimObservation struct {
+	tab               *remoteTab
+	gen               uint64
+	runtimeRevision   uint64
+	selectionRevision uint64
+}
+
+// observeRemoteTabForReclaim snapshots the tab a reclaim will fence against.
+// The tab can close or reconnect between the command-target read and this
+// snapshot, so a missing entry or a replaced client is reported as a
+// disconnected tab rather than carried forward as a nil or retired binding.
+func (a *App) observeRemoteTabForReclaim(tabID string, client *http.Client) (remoteTabReclaimObservation, error) {
+	a.remoteTabMu.Lock()
+	defer a.remoteTabMu.Unlock()
+	tab := a.remoteTabs[tabID]
+	if tab == nil || tab.client != client {
+		return remoteTabReclaimObservation{}, fmt.Errorf("remote tab %q is not connected", tabID)
+	}
+	return remoteTabReclaimObservation{
+		tab: tab, gen: tab.gen,
+		runtimeRevision: tab.runtime.revision, selectionRevision: tab.selectionRevision,
+	}, nil
+}
+
 // ReclaimRemoteTabSession takes a mirrored session back from the local
 // runtime that took it over. Serve long-polls until the local writer yields,
 // so this call can outlast a normal command timeout.
@@ -665,18 +692,14 @@ func (a *App) ReclaimRemoteTabSession(tabID string) error {
 	if strings.TrimSpace(expectedPath) == "" {
 		return fmt.Errorf("remote tab %q has no active session", tabID)
 	}
-	a.remoteTabMu.Lock()
-	observedTab := a.remoteTabs[tabID]
-	observedGen, observedRuntimeRevision, observedSelectionRevision := uint64(0), uint64(0), uint64(0)
-	if observedTab != nil {
-		observedGen = observedTab.gen
-		observedRuntimeRevision = observedTab.runtime.revision
-		observedSelectionRevision = observedTab.selectionRevision
+	observed, err := a.observeRemoteTabForReclaim(tabID, client)
+	if err != nil {
+		return err
 	}
-	a.remoteTabMu.Unlock()
+	observedTab, observedGen := observed.tab, observed.gen
 	stillCurrent := func(tab *remoteTab) bool {
-		return tab != nil && tab == observedTab && tab.client == client && tab.gen == observedGen &&
-			tab.runtime.revision == observedRuntimeRevision && tab.selectionRevision == observedSelectionRevision &&
+		return tab != nil && tab == observedTab && tab.client == client && tab.gen == observed.gen &&
+			tab.runtime.revision == observed.runtimeRevision && tab.selectionRevision == observed.selectionRevision &&
 			agent.CanonicalSessionPath(tab.routing.currentPath) == agent.CanonicalSessionPath(expectedPath)
 	}
 	reconcileOwnership := func() { a.reconcileRemoteTabReclaimOwnership(tabID, client, base, expectedPath, stillCurrent) }
