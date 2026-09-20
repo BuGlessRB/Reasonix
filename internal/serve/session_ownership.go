@@ -146,16 +146,12 @@ func (m mirroredSession) grant(status string) mirrorGrant {
 	}
 }
 
-// mirrorKey normalizes a session reference for the mirror registry. Final-format
-// identity routes ("session-id:<id>") key verbatim — canonicalizing them as
-// paths would mangle the identity — while legacy transcript paths keep the
-// canonical-path key form the registry has always used.
+// mirrorKey normalizes a session reference for the mirror registry. It is the
+// broadcaster's route rule: final-format identity routes key verbatim, legacy
+// transcript paths keep the canonical-path form the registry has always used,
+// so a mirror entry and the frames emitted about it always agree on the key.
 func mirrorKey(path string) string {
-	path = strings.TrimSpace(path)
-	if strings.HasPrefix(path, remoteSessionIDQueryPrefix) {
-		return path
-	}
-	return agent.CanonicalSessionPath(path)
+	return sessionRouteKey(path)
 }
 
 func (s *Server) markMirrored(m mirroredSession) {
