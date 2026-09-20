@@ -12,7 +12,7 @@ const smokeRoots = internalRoots(
   // platform exercises, so Windows is the only lane that can prove it.
   "persistentshell", "proc",
   "lsp", "pathidentity", "projectiondb", "remote", "repair", "sandbox", "sessioncatalog", "sqliteuri", "sysproxy",
-  "topicstate", "winsandbox", "workspacelease",
+  "topicstate", "winaclresidue", "workspacelease",
 ).concat("reasonix/cmd");
 
 export function selectPackages(packages, group) {

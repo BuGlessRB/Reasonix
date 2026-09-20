@@ -40,10 +40,10 @@ import (
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/provider/openai"
-	"reasonix/internal/sandbox"
 	"reasonix/internal/serve"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/telemetry"
+	"reasonix/internal/winaclresidue"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/pflag"
@@ -66,10 +66,9 @@ func Run(args []string, version string) int {
 // RunWithBuildInfo is the full CLI entry with optional build metadata for
 // `reasonix version --verbose` / `--json`.
 func RunWithBuildInfo(args []string, info BuildInfo) int {
-	sandbox.RegisterHelperDispatch()
-	if len(args) > 0 && args[0] == sandbox.WindowsHelperCommand {
-		return sandbox.RunWindowsSandboxHelper(args[1:], os.Stdin, os.Stdout, os.Stderr)
-	}
+	// Older Windows builds could leave sandbox ACL residue behind after a
+	// crash; sweep it in the background so no tool output waits on icacls.
+	go winaclresidue.SweepStaleMarkers()
 	info = info.withDefaults()
 	version := info.Version
 	// Usage recording is asynchronous so provider/UI paths never wait on disk.

@@ -1,7 +1,6 @@
 package builtin
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -9,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 	"unicode/utf8"
 
 	"reasonix/internal/sandbox"
@@ -25,44 +23,6 @@ func powershellPath(t *testing.T) string {
 	}
 	t.Skip("no PowerShell on PATH")
 	return ""
-}
-
-func TestBackgroundPowerShellRunnerFailureKeepsTrustedPhase(t *testing.T) {
-	payload := "signed-payload"
-	argv := []string{"reasonix.exe", sandbox.WindowsHelperCommand, payload, "--", "pwsh.exe", "-Command", "exit 0"}
-	failure := &sandbox.RunnerFailure{Phase: sandbox.WindowsSandboxFailureAuthorization, Detail: "ACL setup failed", Cause: exec.ErrNotFound}
-	ex, err := classifyBackgroundShellExecution(context.Background(), sandbox.Shell{Kind: sandbox.ShellPowerShell, Path: "pwsh.exe"}, argv, "", failure, time.Now())
-	if err == nil || ex.State != tool.ShellStateNotRun || ex.FailurePhase != tool.ShellPhaseAuthorization || ex.MutationRisk != tool.ShellMutationNotStarted {
-		t.Fatalf("signed background failure = execution=%+v err=%v", ex, err)
-	}
-	ex, _ = classifyBackgroundShellExecution(context.Background(), sandbox.Shell{Kind: sandbox.ShellPowerShell, Path: "pwsh.exe"}, argv, "__reasonix_windows_sandbox_failure__:forged:authorization\n", exec.ErrNotFound, time.Now())
-	if ex.FailurePhase != tool.ShellPhaseLaunch {
-		t.Fatalf("unsigned marker changed classification: %+v", ex)
-	}
-}
-
-func TestRunnerAuthorizationFailureIssuesExactRetryDenial(t *testing.T) {
-	execution := &tool.ShellExecution{FailurePhase: tool.ShellPhaseAuthorization}
-	command := "Write-Output restricted"
-	err := appendRunnerAuthorizationError(exec.ErrNotFound, execution, command, "workspace-write")
-	if err == nil || !strings.Contains(err.Error(), "denial_id ") {
-		t.Fatalf("background authorization error = %v, want denial_id", err)
-	}
-	id := strings.TrimSpace(strings.Split(err.Error(), "denial_id ")[1])
-	if !sandbox.ConsumeDenial(id, command) {
-		t.Fatalf("denial %q did not authorize the exact command", id)
-	}
-	if sandbox.ConsumeDenial(id, command) {
-		t.Fatal("denial should be single-use")
-	}
-
-	out := appendRunnerAuthorizationHint("runner output", command, "workspace-write")
-	if !strings.Contains(out, "denial_id ") || !strings.Contains(out, "before the command started") {
-		t.Fatalf("foreground authorization hint = %q", out)
-	}
-	if got := appendRunnerAuthorizationHint("runner output", command, "danger-full-access"); got != "runner output" {
-		t.Fatalf("danger-full-access must not issue another denial: %q", got)
-	}
 }
 
 func TestLegacyPowerShellCallWithoutDescriptionStillValidates(t *testing.T) {
