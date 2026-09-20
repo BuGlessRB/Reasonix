@@ -341,9 +341,19 @@ func (a *App) prepareHistoricalSession(id string, interactive, batch bool) (*his
 		c.mu.Unlock()
 		return call, nil
 	}
+	for operationID, previous := range c.operations {
+		if previous.sourceKey == id {
+			if previous.status == "ready" {
+				c.mu.Unlock()
+				return previous, nil
+			}
+			delete(c.operations, operationID)
+		}
+	}
 	ctx, cancel := context.WithCancel(c.ctx)
 	c.revision++
-	call := &historicalImportCall{operationID: "prepare-" + id, sourceKey: id, ctx: ctx, cancel: cancel,
+	operationID := "prepare-" + strings.TrimPrefix(newTabID(), "tab_")
+	call := &historicalImportCall{operationID: operationID, sourceKey: id, ctx: ctx, cancel: cancel,
 		done: make(chan struct{}), status: "queued", revision: c.revision, interactive: interactive, batch: batch}
 	c.calls[id] = call
 	c.operations[call.operationID] = call
@@ -382,6 +392,12 @@ func (a *App) runHistoricalPreparation(call *historicalImportCall, id string, so
 		presentationErr = a.applyHistoricalSourcePresentation(desktopSourceKey(source.path, source.head), result.Session)
 	}
 	c.mu.Lock()
+	if c.calls[id] != call {
+		call.result, call.err = result, err
+		close(call.done)
+		c.mu.Unlock()
+		return
+	}
 	call.result, call.err = result, err
 	view = c.views[id]
 	if err == nil {
