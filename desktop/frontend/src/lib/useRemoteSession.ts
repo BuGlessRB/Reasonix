@@ -159,7 +159,6 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   const activityRevisionRef = useRef(0);
   const eventTurnIdRef = useRef<string | undefined>(undefined);
   const runtimeAtActivityRef = useRef(runtimeState.state);
-  const pendingTurnRef = useRef<{ previousTurnId?: string } | null>(null);
   // True while the serve reports a local runtime on the host owns this
   // session; a spectator surface idles with no other status polling, so this
   // flag also drives a slow reconcile loop below.
@@ -207,7 +206,6 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     setError("");
     setPromptError("");
     // The store owns mounted content across reconnects and tab switches.
-    pendingTurnRef.current = null;
     eventTurnIdRef.current = undefined;
     setModelLabel("");
     setCommands([]);
@@ -357,16 +355,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       if (cancelled) return;
       setState(next.state);
       setError(next.error ?? "");
-      if (next.state === "ready") {
-        // Every ready publication precedes a full re-hydration, and the
-        // hydrated transcript is authoritative about whether a turn is still
-        // running. Any optimistic pending submission from before the
-        // republish (e.g. frames lost across a reconnect) is stale; keeping
-        // it would block the runtime-idle reconciliation and leave a zombie
-        // "processing" indicator beside the rendered reply.
-        pendingTurnRef.current = null;
-        void hydrate();
-      }
+      if (next.state === "ready") void hydrate();
       else if (next.state === "disconnected") {
         setHydrated(false);
         dispatch({ type: "transcript_connection", status: "disconnected" });
@@ -438,7 +427,6 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     const submissionId = createTurnSubmissionId(tabId, before.sessionGen, before.seq, before.meta?.runtime?.epoch);
     activityRevisionRef.current += 1;
     runtimeAtActivityRef.current = runtimeState.state;
-    pendingTurnRef.current = { previousTurnId: runtimeState.state?.turnId };
     setTranscript((s) => reducer(s, { type: "user", text: displayText.trim(), seq: s.seq, submissionId }));
     try {
       if (app.SubmitRemoteTabWithSubmission) await app.SubmitRemoteTabWithSubmission(tabId, trimmed, submissionId);
