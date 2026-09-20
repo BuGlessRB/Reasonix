@@ -131,6 +131,7 @@ function dataTransferLooksLikeFileDrag(dt: DataTransfer | null): boolean {
 }
 
 const noop = () => {};
+const asyncNoop = async (): Promise<void> => {};
 const win = () => (typeof window === "undefined" ? undefined : window);
 
 // The bare browser has no shell, so the browser-control page degrades to its
@@ -160,12 +161,12 @@ const serverHost: DesktopHost = {
     setWindowBackground: noop,
     getWindowBounds: () => undefined,
     isWindowMaximised: async () => false,
-    minimiseWindow: async () => {},
-    toggleMaximiseWindow: async () => {},
-    closeWindow: async () => {},
+    minimiseWindow: asyncNoop,
+    toggleMaximiseWindow: asyncNoop,
+    closeWindow: asyncNoop,
     onFilesDropped: () => noop,
     onServiceState: () => noop,
-    recordRendererDiagnostic: async () => {},
+    recordRendererDiagnostic: asyncNoop,
     getAppZoom: async () => 1,
     setAppZoom: async () => 1,
     resetAppZoom: async () => 1,
@@ -208,6 +209,8 @@ const installElectronDropHandlers = () => {
 const electronHostFrom = (host: ReasonixDesktopHost): DesktopHost => {
   if (electronHost && electronHostFor === host) return electronHost;
   electronHostFor = host;
+  const native = host.native;
+  const nativeWindow = native.window;
   electronHost = {
     kind: "electron",
     // contract.commands is read live so a replaced preload (service restart)
@@ -218,25 +221,25 @@ const electronHostFrom = (host: ReasonixDesktopHost): DesktopHost => {
     }),
     events: { on: (name, cb) => host.on(name, cb) },
     native: {
-      openExternal: (url) => void host.native.openExternal(url).catch((err: unknown) => console.warn("openExternal failed", err)),
-      clipboardWriteText: (text) => host.native.clipboard.writeText(text),
-      clipboardReadText: () => host.native.clipboard.readText(),
-      setWindowTheme: (theme) => host.native.window.setTheme(theme),
-      setWindowBackground: (r, g, b, a) => host.native.window.setBackgroundColour(r, g, b, a),
-      getWindowBounds: () => host.native.window.getBounds(),
-      isWindowMaximised: () => host.native.window.isMaximised(),
-      minimiseWindow: () => host.native.window.minimise(),
-      toggleMaximiseWindow: () => host.native.window.toggleMaximise(),
-      closeWindow: () => host.native.window.close(),
-      getAppZoom: () => host.native.window.getAppZoom(),
-      setAppZoom: (factor) => host.native.window.setAppZoom(factor),
-      resetAppZoom: () => host.native.window.resetAppZoom(),
-      graphics: host.native.graphics,
-      ...(host.native.processDiagnostics ? { processDiagnostics: () => host.native.processDiagnostics!() } : {}),
-      ...(host.native.captureRendererProfile ? { captureRendererProfile: (id?: string) => host.native.captureRendererProfile!(id) } : {}),
-      ...(host.native.cancelRendererProfile ? { cancelRendererProfile: (id?: string) => host.native.cancelRendererProfile!(id) } : {}),
-      ...(host.native.exportHeapSnapshot ? { exportHeapSnapshot: () => host.native.exportHeapSnapshot!() } : {}),
-      browserControl: host.native.browserControl,
+      openExternal: (url) => void native.openExternal(url).catch((err: unknown) => console.warn("openExternal failed", err)),
+      clipboardWriteText: (text) => native.clipboard.writeText(text),
+      clipboardReadText: () => native.clipboard.readText(),
+      setWindowTheme: (theme) => nativeWindow.setTheme(theme),
+      setWindowBackground: (r, g, b, a) => nativeWindow.setBackgroundColour(r, g, b, a),
+      getWindowBounds: () => nativeWindow.getBounds(),
+      isWindowMaximised: () => nativeWindow.isMaximised(),
+      minimiseWindow: () => nativeWindow.minimise(),
+      toggleMaximiseWindow: () => nativeWindow.toggleMaximise(),
+      closeWindow: () => nativeWindow.close(),
+      getAppZoom: () => nativeWindow.getAppZoom(),
+      setAppZoom: (factor) => nativeWindow.setAppZoom(factor),
+      resetAppZoom: () => nativeWindow.resetAppZoom(),
+      graphics: native.graphics,
+      ...(native.processDiagnostics ? { processDiagnostics: () => native.processDiagnostics!() } : {}),
+      ...(native.captureRendererProfile ? { captureRendererProfile: (id?: string) => native.captureRendererProfile!(id) } : {}),
+      ...(native.cancelRendererProfile ? { cancelRendererProfile: (id?: string) => native.cancelRendererProfile!(id) } : {}),
+      ...(native.exportHeapSnapshot ? { exportHeapSnapshot: () => native.exportHeapSnapshot!() } : {}),
+      browserControl: native.browserControl,
       onFilesDropped: (cb) => {
         installElectronDropHandlers();
         dropListeners.add(cb);
@@ -244,9 +247,9 @@ const electronHostFrom = (host: ReasonixDesktopHost): DesktopHost => {
           dropListeners.delete(cb);
         };
       },
-      getPathForFile: (file) => host.native.getPathForFile(file),
-      onServiceState: (cb) => host.native.onServiceState(cb),
-      recordRendererDiagnostic: async (event) => { await host.native.recordRendererDiagnostic?.(event); },
+      getPathForFile: (file) => native.getPathForFile(file),
+      onServiceState: (cb) => native.onServiceState(cb),
+      recordRendererDiagnostic: (event) => native.recordRendererDiagnostic?.(event) ?? asyncNoop(),
     },
     browser: host.browser,
   };

@@ -19,6 +19,10 @@ export type AppChromeCommandsInput = {
   reloadDesktopPreferences: (settings?: SettingsView | null) => Promise<unknown>;
 };
 
+function reportNativeWindowFailure(error: unknown): void {
+  console.warn("native window action failed", error);
+}
+
 /**
  * Owns the window-chrome and settings-surface commands: native window
  * minimize/toggle/close with the maximised re-sync, the frameless titlebar
@@ -54,17 +58,17 @@ export function useAppChromeCommands(input: AppChromeCommandsInput) {
     if (target?.closest("button, input, textarea, select, a, [role='button'], [role='tab'], .windows-window-controls")) return;
     event.preventDefault();
     void nativeWindowCommands.toggleMaximize().then(syncMainWindowMaximised)
-      .catch((error) => console.warn("native window maximise failed", error));
+      .catch(reportNativeWindowFailure);
   });
   const minimizeMainWindow = useCommittedCommand(() => {
-    void nativeWindowCommands.minimize().catch((error) => console.warn("native window minimise failed", error));
+    void nativeWindowCommands.minimize().catch(reportNativeWindowFailure);
   });
   const toggleMainWindowMaximized = useCommittedCommand(() => {
     void nativeWindowCommands.toggleMaximize().then(syncMainWindowMaximised)
-      .catch((error) => console.warn("native window maximise failed", error));
+      .catch(reportNativeWindowFailure);
   });
   const closeMainWindow = useCommittedCommand(() => {
-    void nativeWindowCommands.close().catch((error) => console.warn("native window close failed", error));
+    void nativeWindowCommands.close().catch(reportNativeWindowFailure);
   });
   const closeSettings = useCommittedCommand(() => {
     input.setSettingsFocus(null);

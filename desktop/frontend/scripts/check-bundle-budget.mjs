@@ -486,8 +486,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // above (2074313 B combined), with 0.11 KiB headroom. Historical preparation
 // remains lazy; compressed, chunk, CSS, and locale limits stay unchanged.
 // Native window ownership, stopping-state handling and bounded transcript crash
-// context measure 2075327 B locally (+1200 B, 0.058%). Preserve the same 186 B
-// Linux producer difference (2075513 B) and retain the next one-decimal ceiling;
+// context measure 2075238 B locally (+1111 B, 0.054%). Preserve the same 186 B
+// Linux producer difference (2075424 B) and retain the next one-decimal ceiling;
 // gzip, chunk, CSS, and locale limits remain unchanged.
 const rawInitialBudgetKiB = 2_027.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);

@@ -37,20 +37,16 @@ export type TranscriptDiagnostic = RendererDiagnosticPayload & {
   errorType: "classified" | "error" | "string" | "object" | "unknown";
 };
 
-const active = new Map<number, TranscriptDiagnostic>();
+const active = new Map<number, string>();
 let nextOwner = 1;
-const crashSnapshotHost = globalThis as typeof globalThis & {
-  __reasonixTranscriptDiagnostics?: string;
-};
+const crashSnapshotHost = globalThis as typeof globalThis & { __reasonixTranscriptDiagnostics?: string };
 
-function syncCrashSnapshot(): void {
-  crashSnapshotHost.__reasonixTranscriptDiagnostics = [...active.values()]
-    .map(event => `${event.transport}:${event.stage}:${event.reason}:${event.errorType} revision=${event.revision} commit=${event.commit} attempts=${event.attempts} failures=${event.failures} duration_ms=${event.durationMs}`)
-    .join("\n");
+function formatDiagnostic(event: TranscriptDiagnostic): string {
+  return `${event.event} stage=${event.stage} reason=${event.reason} type=${event.errorType} transport=${event.transport} revision=${event.revision} commit=${event.commit} attempts=${event.attempts} failures=${event.failures} duration_ms=${event.durationMs}`;
 }
 
-export function transcriptDiagnosticSnapshot(): string {
-  return crashSnapshotHost.__reasonixTranscriptDiagnostics ?? "";
+function syncCrashSnapshot(): void {
+  crashSnapshotHost.__reasonixTranscriptDiagnostics = [...active.values()].join("\n");
 }
 
 export function newTranscriptDiagnosticOwner(): number {
@@ -58,14 +54,12 @@ export function newTranscriptDiagnosticOwner(): number {
 }
 
 export function publishTranscriptDiagnostic(owner: number, event: TranscriptDiagnostic, visible = true): void {
-  if (event.event === "failure" || event.event === "summary") active.set(owner, { ...event });
+  const message = formatDiagnostic(event);
+  if (event.event === "failure" || event.event === "summary") active.set(owner, message);
   else active.delete(owner);
   syncCrashSnapshot();
   if (!visible) return;
-  addBreadcrumb(
-    "transcript.v2",
-    `${event.event} stage=${event.stage} reason=${event.reason} type=${event.errorType} transport=${event.transport} revision=${event.revision} commit=${event.commit} attempts=${event.attempts} failures=${event.failures} duration_ms=${event.durationMs}`,
-  );
+  addBreadcrumb("transcript.v2", message);
   try {
     void desktopHost().native.recordRendererDiagnostic(event).catch(() => undefined);
   } catch {

@@ -8,7 +8,6 @@ export { formatPerformanceContext } from "./performanceReportFormat";
 import { boundedDiagnostics, type ProcessDiagnosticsSnapshot, type RendererProfileResult } from "./processDiagnostics";
 import { t } from "./i18n";
 import { sessionPipelineDiagnostics, type SessionPipelineDiagnostics } from "./sessionDiagnostics";
-import { transcriptDiagnosticSnapshot } from "./transcriptDiagnostics";
 declare const __BUILD_COMMIT__: string;
 declare const __BUILD_CHANNEL__: string;
 
@@ -250,7 +249,7 @@ function formatText(label: string, normalized: NormalizedError, extra?: string):
   const detail = normalized.stack || normalized.errorMessage;
   const crumbs = dumpBreadcrumbs();
   const buildCommit = currentBuildCommit();
-  const transcriptText = transcriptDiagnosticSnapshot();
+  const transcriptText = (globalThis as { __reasonixTranscriptDiagnostics?: string }).__reasonixTranscriptDiagnostics ?? "";
   return [`[${label}]`, detail, extra?.trim(), transcriptText && `--- transcript failures ---\n${transcriptText}`,
     crumbs && `--- breadcrumbs ---\n${crumbs}`, `occurred ${new Date().toISOString()}`, `build ${buildCommit}`]
     .filter(Boolean).join("\n\n");
