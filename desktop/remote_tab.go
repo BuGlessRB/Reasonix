@@ -206,11 +206,9 @@ func (a *App) markRemoteTabSpectatorIfLocalOwned(ctx context.Context, tabID stri
 		a.remoteTabMu.Unlock()
 		return
 	}
+	// A reclaim completed while this probe was in flight: its answer describes
+	// the ownership that reclaim ended. Same fence in-flight status gets.
 	if current.reclaimRevision != reclaimRevision {
-		// An explicit reclaim completed while this probe was in flight, so its
-		// answer describes the ownership that reclaim just ended. The same
-		// fence status payloads get: never re-pin the spectator banner after
-		// ownership returned.
 		a.remoteTabMu.Unlock()
 		return
 	}
@@ -660,9 +658,8 @@ func (a *App) remoteTabCurrentModel(tabID string) (string, bool) {
 	return cur, true
 }
 
-// remoteTabReclaimObservation is the tab state a reclaim fences against. The
-// reclaim releases remoteTabMu for a long poll and then dereferences tab, so
-// the observation must prove the binding existed at snapshot time.
+// remoteTabReclaimObservation is the tab state a reclaim fences against: it
+// releases remoteTabMu for a long poll, then dereferences tab.
 type remoteTabReclaimObservation struct {
 	tab               *remoteTab
 	gen               uint64
@@ -670,10 +667,9 @@ type remoteTabReclaimObservation struct {
 	selectionRevision uint64
 }
 
-// observeRemoteTabForReclaim snapshots the tab a reclaim will fence against.
-// The tab can close or reconnect between the command-target read and this
-// snapshot, so a missing entry or a replaced client is reported as a
-// disconnected tab rather than carried forward as a nil or retired binding.
+// observeRemoteTabForReclaim snapshots the tab a reclaim fences against. The
+// tab can close or reconnect between the command-target read and this
+// snapshot; either is a disconnected tab, not a nil or retired binding.
 func (a *App) observeRemoteTabForReclaim(tabID string, client *http.Client) (remoteTabReclaimObservation, error) {
 	a.remoteTabMu.Lock()
 	defer a.remoteTabMu.Unlock()

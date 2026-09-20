@@ -3085,17 +3085,10 @@ func (a *App) closeTabRuntime(tabID string, allowDetach bool) error {
 		a.terminals.closeForTab(tabID)
 	}
 
-	// Claim the mirror's farewell while this tab still owns its writer, so the
-	// mirror loop cannot tell Serve the writer is gone before it is released.
-	// A close that returns early (detach, or a tab that changed underneath)
-	// keeps its writer, so the claim is handed back to the loop.
-	closingMirror := a.markTakeoverMirrorClosing(a.currentSessionPathFor(tab))
-	mirrorClosed := false
-	defer func() {
-		if !mirrorClosed && closingMirror != nil {
-			closingMirror.closing.Store(false)
-		}
-	}()
+	// Claim the mirror's farewell while this tab still owns its writer; a close
+	// that returns early keeps the writer and hands the claim back.
+	closingMirror, releaseMirrorClaim := a.claimTakeoverMirrorFarewell(a.currentSessionPathFor(tab))
+	defer releaseMirrorClaim()
 
 	a.mu.Lock()
 	if current := a.tabs[tabID]; current != tab {
@@ -3167,7 +3160,6 @@ func (a *App) closeTabRuntime(tabID string, allowDetach bool) error {
 	}
 	// The writer is released: tell Serve now so it hands the session straight
 	// back instead of waiting for the writer to drop.
-	mirrorClosed = true
 	a.endTakeoverMirrorForClosedTab(closingMirror)
 	if closeSink != nil {
 		closeSink.clearContext() // stop further emissions (nil ctx -> Emit becomes no-op)

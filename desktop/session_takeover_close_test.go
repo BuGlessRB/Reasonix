@@ -47,10 +47,11 @@ func TestClosingTabOwnsTheMirrorFarewellUntilTheWriterIsReleased(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "closing.jsonl")
 	m, ends := closeMirrorFixture(t, app, path)
 
-	claimed := app.markTakeoverMirrorClosing(path)
+	claimed, release := app.claimTakeoverMirrorFarewell(path)
 	if claimed != m || !m.closing.Load() {
 		t.Fatalf("claim = %p, want the registered mirror marked closing", claimed)
 	}
+	defer release()
 	// While the close is still tearing the writer down, the loop's tab-gone
 	// branch only detaches: announcing the writer as gone here is exactly the
 	// ordering that makes Serve wait.
@@ -102,13 +103,8 @@ func TestAbandonedCloseReturnsTheFarewellClaim(t *testing.T) {
 	m, ends := closeMirrorFixture(t, app, path)
 
 	func() {
-		closingMirror := app.markTakeoverMirrorClosing(path)
-		mirrorClosed := false
-		defer func() {
-			if !mirrorClosed && closingMirror != nil {
-				closingMirror.closing.Store(false)
-			}
-		}()
+		_, release := app.claimTakeoverMirrorFarewell(path)
+		defer release()
 		// The close bails out here (detached runtime, or the tab changed).
 	}()
 

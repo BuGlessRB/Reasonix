@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -141,11 +142,9 @@ func (a *App) resumeRemoteTabSessionPathForOpenSelection(tabID, name, sessionPat
 	client, base, gen := tab.client, tab.base, tab.gen
 	requestedSessionID := ""
 	if strings.TrimSpace(sessionPath) == "" && strings.TrimSpace(tab.session.name) == strings.TrimSpace(name) {
-		// Canonical rows have no legacy path. When a reused shell has already
-		// committed the selected row, carry its stable ID into /resume instead
-		// of resolving the display/name token through the listing. The name
-		// may legitimately be empty (a synthetic identity row): the committed
-		// ID alone identifies the target.
+		// Canonical rows have no legacy path: carry the committed ID into
+		// /resume instead of resolving a display token through the listing.
+		// A synthetic identity row's name is empty; the ID still identifies it.
 		requestedSessionID = strings.TrimSpace(tab.session.sessionID)
 	}
 	failureRoute := remoteTabProvisionalResume{
@@ -226,12 +225,9 @@ func (a *App) resumeRemoteTabSessionPathForOpenSelection(tabID, name, sessionPat
 		}
 		title := strings.TrimSpace(target.Title)
 		if title == "" {
-			title = name
-		}
-		if title == "" {
-			// An ID-only target carries no display text; keep the tab labelled
-			// until the status/title refresh learns the generated title.
-			title = remoteWorkspaceName(tab.ref.Workspace)
+			// An ID-only target carries no display text; stay labelled until
+			// the title refresh learns the generated one.
+			title = cmp.Or(name, remoteWorkspaceName(tab.ref.Workspace))
 		}
 		if !a.commitAndPublishRemoteTabResume(tabID, tab, client, gen, route, target, title) {
 			// A newer route won the publication fence; never restore the older
