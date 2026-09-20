@@ -678,6 +678,8 @@ func TestE2EApprovalRoundTrip(t *testing.T) {
 func TestE2ECancelMidTurn(t *testing.T) {
 	releaseTool := make(chan struct{})
 	started := make(chan struct{})
+	cancelled := make(chan struct{})
+	defer close(releaseTool) // always let the tool goroutine unwind on failure
 	prov := &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
 		{
 			{Type: provider.ChunkText, Text: "Starting."},
@@ -688,7 +690,7 @@ func TestE2ECancelMidTurn(t *testing.T) {
 	}}
 	factory := &e2eFactory{
 		prov:       prov,
-		tool:       blockingTool{started: started, release: releaseTool},
+		tool:       blockingTool{started: started, cancelled: cancelled, release: releaseTool},
 		policy:     permission.New("ask", nil, nil, nil),
 		sessionDir: t.TempDir(),
 	}
@@ -703,6 +705,7 @@ func TestE2ECancelMidTurn(t *testing.T) {
 
 	waitForACPToolStart(t, started, promptCh)
 	client.notify("session/cancel", SessionCancelParams{SessionID: sid})
+	waitForACPToolCancellation(t, cancelled, promptCh)
 
 	select {
 	case resp := <-promptCh:
@@ -711,10 +714,9 @@ func TestE2ECancelMidTurn(t *testing.T) {
 		if pr.StopReason != StopCancelled {
 			t.Errorf("stopReason = %q, want cancelled", pr.StopReason)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("cancel did not end the turn")
+	case <-time.After(10 * time.Second):
+		t.Fatal("turn did not finish after the tool observed cancellation")
 	}
-	close(releaseTool) // let the tool goroutine unwind
 }
 
 // waitForACPToolStart distinguishes a blocked turn from a provider/RPC error
@@ -734,11 +736,28 @@ func waitForACPToolStart(t *testing.T, started <-chan struct{}, prompt <-chan fr
 	}
 }
 
+// waitForACPToolCancellation proves that the notification reached the running
+// tool before waiting for the prompt response. This separates cancellation
+// delivery from the slower status/transcript finalization that follows it on
+// loaded Windows runners.
+func waitForACPToolCancellation(t *testing.T, cancelled <-chan struct{}, prompt <-chan frame) {
+	t.Helper()
+	select {
+	case <-cancelled:
+		return
+	case early := <-prompt:
+		t.Fatalf("prompt returned before the tool observed cancellation: error=%+v result=%s", early.Error, early.Result)
+	case <-time.After(10 * time.Second):
+		t.Fatal("tool did not observe cancellation before the ACP hang guard")
+	}
+}
+
 // blockingTool blocks in Execute until released or ctx is cancelled, signalling
 // when it has started so the test can cancel mid-execution.
 type blockingTool struct {
-	started chan struct{}
-	release chan struct{}
+	started   chan struct{}
+	cancelled chan struct{}
+	release   chan struct{}
 }
 
 func (t blockingTool) Name() string            { return "slow" }
@@ -749,6 +768,9 @@ func (t blockingTool) Execute(ctx context.Context, _ json.RawMessage) (string, e
 	close(t.started)
 	select {
 	case <-ctx.Done():
+		if t.cancelled != nil {
+			close(t.cancelled)
+		}
 		return "", ctx.Err()
 	case <-t.release:
 		return "released", nil
