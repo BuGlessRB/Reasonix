@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -393,8 +394,7 @@ func (a *App) reattachRemoteTabOnce(tabID string) bool {
 	}
 	hostID, workspace := tab.ref.HostID, tab.ref.Workspace
 	previousInstanceID := tab.session.instanceID
-	sessionName := strings.TrimSpace(tab.session.name)
-	resetSession := tab.session.reset
+	selection := snapshotRemoteTabReattachSelectionLocked(tab)
 	a.remoteTabMu.Unlock()
 
 	rt, err := a.remoteRT()
@@ -425,7 +425,7 @@ func (a *App) reattachRemoteTabOnce(tabID string) bool {
 		return false
 	}
 	relaunched := previousInstanceID != "" && view.InstanceID != "" && previousInstanceID != view.InstanceID
-	if relaunched && !resetSession && sessionName == "" {
+	if relaunched && !selection.identified() {
 		// A replacement Serve starts on a blank controller. Publishing ready in
 		// that state would silently detach the tab from its conversation, so fail
 		// closed until the user explicitly chooses a session or New Topic.
@@ -452,6 +452,7 @@ func (a *App) reattachRemoteTabOnce(tabID string) bool {
 	tab.base = view.LocalURL
 	tab.token = token
 	gen := tab.gen
+	pathRevision := tab.routing.pathRevision
 	pumpCtx, cancelPump := context.WithCancel(ctx)
 	tab.cancel = cancelPump
 	a.remoteTabMu.Unlock()
@@ -471,14 +472,10 @@ func (a *App) reattachRemoteTabOnce(tabID string) bool {
 		a.emitRemoteTabState(tabID, "reconnecting", "")
 		return false
 	}
-	if relaunched {
-		opts := RemoteTabOpenOptions{NewSession: resetSession, SessionName: sessionName}
-		if err := enterRemoteSession(callCtx, client, view.LocalURL, opts); err != nil {
-			log.Printf("[remote] reattachRemoteTab: session re-entry FAILED tab=%s err=%v", tabID, err)
-			a.retireRemoteTabGeneration(tabID, gen)
-			a.emitRemoteTabState(tabID, "reconnecting", "")
-			return false
-		}
+	if selection.identified() && !a.reenterRemoteTabSelection(callCtx, tabID, tab, client, view.LocalURL, gen, pathRevision, relaunched, selection) {
+		a.retireRemoteTabGeneration(tabID, gen)
+		a.emitRemoteTabState(tabID, "reconnecting", "")
+		return false
 	}
 	if !a.waitRemoteTabStreamStable(callCtx, tabID, gen) {
 		return false
@@ -493,5 +490,120 @@ func (a *App) reattachRemoteTabOnce(tabID string) bool {
 		return false
 	}
 	a.goRemoteTabSafe("remoteTabDeferredSelection", func() { a.applyPendingRemoteTabOpenSelection(tabID) })
+	return true
+}
+
+// remoteTabReattachSelection is the session a reattaching tab must land on,
+// snapshotted before the network work starts so the re-entry decision cannot
+// observe a selection committed mid-flight.
+type remoteTabReattachSelection struct {
+	route     string
+	name      string
+	path      string
+	sessionID string
+	// newSession marks a New Topic this tab never entered (its first pump died
+	// before /new was sent); reset marks a blank an earlier generation entered.
+	newSession bool
+	reset      bool
+}
+
+func snapshotRemoteTabReattachSelectionLocked(tab *remoteTab) remoteTabReattachSelection {
+	return remoteTabReattachSelection{
+		route: strings.TrimSpace(tab.routing.currentPath), name: strings.TrimSpace(tab.session.name),
+		path: strings.TrimSpace(tab.session.path), sessionID: strings.TrimSpace(tab.session.sessionID),
+		newSession: tab.session.newSession, reset: tab.session.reset,
+	}
+}
+
+// identified reports whether the tab was opened for a particular session. A
+// focus-only tab follows Serve's foreground and needs no re-entry.
+func (s remoteTabReattachSelection) identified() bool {
+	return s.route != "" || s.name != "" || s.reset || s.newSession
+}
+
+// blank reports a selection that names no saved transcript. Re-entry then
+// creates a fresh session: resuming a never-saved blank would fail.
+func (s remoteTabReattachSelection) blank() bool {
+	return s.reset || s.route == "" && s.name == "" && s.newSession
+}
+
+func (s remoteTabReattachSelection) openOptions() RemoteTabOpenOptions {
+	if s.blank() {
+		return RemoteTabOpenOptions{NewSession: true}
+	}
+	return RemoteTabOpenOptions{SessionName: s.name, SessionPath: s.path, SessionID: s.sessionID}
+}
+
+// matchesServeForeground reports whether Serve still runs the selected
+// session. An unsaved blank is absent from /sessions, so an empty foreground
+// is consistent with a blank selection.
+func (s remoteTabReattachSelection) matchesServeForeground(current serveSessionEntry) bool {
+	foreground := remoteSessionRoute(current)
+	if s.blank() {
+		return foreground == "" || foreground == s.route
+	}
+	if s.route != "" {
+		return foreground == s.route
+	}
+	return strings.TrimSpace(current.Name) == s.name
+}
+
+// reenterRemoteTabSelection lands a reattached pump on the session the tab was
+// opened for. A replacement Serve always needs the transition. A surviving
+// Serve is asked for its foreground first: another client may have moved it
+// while this tab's stream was down, and publishing ready without re-entering
+// would let the next /status silently adopt that foreign session.
+func (a *App) reenterRemoteTabSelection(ctx context.Context, tabID string, tab *remoteTab, client *http.Client, base string, gen, pathRevision uint64, relaunched bool, selection remoteTabReattachSelection) bool {
+	if !relaunched {
+		current, err := serveCurrentSession(ctx, client, base)
+		if err != nil {
+			log.Printf("[remote] reattachRemoteTab: foreground probe FAILED tab=%s err=%v", tabID, err)
+			return false
+		}
+		if selection.matchesServeForeground(current) {
+			return true
+		}
+	}
+	opts := selection.openOptions()
+	target, err := enterRemoteSessionTarget(ctx, client, base, opts)
+	entered := err == nil && !target.TakenOver
+	switch {
+	case err == nil:
+	case remoteSessionTransitionBusy(err):
+		// Serve refuses transitions mid-turn but keeps a usable foreground.
+		// Follow it, as the first attach does, instead of parking the tab.
+		log.Printf("[remote] reattachRemoteTab: session re-entry BUSY (following current session) tab=%s err=%v", tabID, err)
+		if target, err = serveCurrentSession(ctx, client, base); err != nil {
+			return false
+		}
+		if remoteSessionRoute(target) == "" {
+			return true
+		}
+	case remoteSessionTakenOver(err):
+		log.Printf("[remote] reattachRemoteTab: session re-entry TAKEN OVER (read-only spectator) tab=%s err=%v", tabID, err)
+		target = serveSessionEntry{Name: selection.name, Path: selection.path, SessionID: selection.sessionID, TakenOver: true}
+	default:
+		log.Printf("[remote] reattachRemoteTab: session re-entry FAILED tab=%s err=%v", tabID, err)
+		return false
+	}
+	if !a.commitRemoteTabAttachResponse(tabID, tab, gen, pathRevision, target, opts.NewSession) {
+		return true
+	}
+	a.remoteTabMu.Lock()
+	current := a.remoteTabs[tabID]
+	if current != tab || current.gen != gen {
+		a.remoteTabMu.Unlock()
+		return true
+	}
+	if entered && opts.NewSession {
+		// Same blank contract as bootstrap: the fresh session is reusable by
+		// New Topic and carries the localized default title.
+		current.session.reset = true
+		current.topicTitle = a.localizedDefaultTopicTitle()
+	}
+	meta := remoteTabMetaLocked(current)
+	a.remoteTabMu.Unlock()
+	a.emitRemoteEvent("remote-tab:updated", meta)
+	a.saveTabsFromRemote()
 	return true
 }

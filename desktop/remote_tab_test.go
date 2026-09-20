@@ -47,6 +47,7 @@ type fakeServe struct {
 	eventFrames                    []string
 	eventFeed                      <-chan string
 	eventsStatus                   int  // non-zero makes /events fail before opening
+	eventsFailCount                int  // refuse this many /events opens with 503, then serve normally
 	eventsCloseEarly               bool // return immediately after the initial 200 frames
 	statusPayload                  string
 	statusAfterCancel              string
@@ -239,6 +240,12 @@ func newFakeServe(t *testing.T, token string, sessions []serveSessionEntry) *fak
 		fs.eventsConns++
 		fs.eventsQuery = r.URL.RawQuery
 		eventsStatus := fs.eventsStatus
+		if fs.eventsFailCount > 0 {
+			fs.eventsFailCount--
+			if eventsStatus == 0 {
+				eventsStatus = http.StatusServiceUnavailable
+			}
+		}
 		closeEarly := fs.eventsCloseEarly
 		frames := append([]string(nil), fs.eventFrames...)
 		feed := fs.eventFeed
