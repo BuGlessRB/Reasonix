@@ -57,7 +57,7 @@ func (a *App) OpenFileBrowserPreviewForTab(tabID string, request FileBrowserPrev
 	return a.openFileBrowserPreview(ctx, tabID, request, nil)
 }
 
-func (a *App) openFileBrowserPreview(ctx context.Context, tabID string, request FileBrowserPreviewRequest, supplied browser.Executor) (FileBrowserPreviewResult, error) {
+func normalizeFileBrowserPreviewRequest(request FileBrowserPreviewRequest) (FileBrowserPreviewRequest, error) {
 	request.Source = strings.TrimSpace(request.Source)
 	request.Path = strings.TrimSpace(request.Path)
 	request.OperationID = strings.TrimSpace(request.OperationID)
@@ -65,15 +65,22 @@ func (a *App) openFileBrowserPreview(ctx context.Context, tabID string, request 
 		request.Source = "workspace"
 	}
 	if request.Source != "workspace" && request.Source != "presented" && request.Source != "reference" {
-		return FileBrowserPreviewResult{}, fmt.Errorf("unsupported file preview source %q", request.Source)
+		return FileBrowserPreviewRequest{}, fmt.Errorf("unsupported file preview source %q", request.Source)
 	}
 	if request.Path == "" || request.OperationID == "" {
-		return FileBrowserPreviewResult{}, errors.New("path and operationId are required")
+		return FileBrowserPreviewRequest{}, errors.New("path and operationId are required")
 	}
 	if request.Source == "presented" && strings.TrimSpace(request.ToolCallID) == "" {
-		return FileBrowserPreviewResult{}, errors.New("toolCallId is required for a presented file")
+		return FileBrowserPreviewRequest{}, errors.New("toolCallId is required for a presented file")
 	}
+	return request, nil
+}
 
+func (a *App) openFileBrowserPreview(ctx context.Context, tabID string, request FileBrowserPreviewRequest, supplied browser.Executor) (FileBrowserPreviewResult, error) {
+	request, err := normalizeFileBrowserPreviewRequest(request)
+	if err != nil {
+		return FileBrowserPreviewResult{}, err
+	}
 	tab, generation, err := a.fileBrowserPreviewTab(tabID, request.ExpectedSessionGeneration)
 	if err != nil {
 		return FileBrowserPreviewResult{}, err
