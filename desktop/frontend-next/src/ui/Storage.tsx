@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { bytes } from "../i18n/format";
 import type { AgentPort } from "../port/port";
+import type { HubPort } from "../port/hub";
 import type { StoragePlan, StorageRoot, StorageState } from "../port/storage";
 
 // Three questions in the order a person asks them: how much is there, where is
@@ -19,13 +20,16 @@ const NAMED: Record<string, [string, string]> = {
   locks: ["进程锁", "用于多实例互斥，必须保留在本机固定位置。每个均为空文件；删除会破坏互斥，因此只保留不清理"],
 };
 
-export function Storage({ port }: { port: AgentPort }) {
+export function Storage({ port, hub, workspace, onRecovered }: { port: AgentPort; hub: HubPort; workspace: string; onRecovered: () => void }) {
   const [state, setState] = useState<StorageState | null>(null);
   const [error, setError] = useState("");
   const [picking, setPicking] = useState<string | null>(null);
   const [target, setTarget] = useState("");
   const [plan, setPlan] = useState<StoragePlan | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const [recovering, setRecovering] = useState(false);
+  const [recovery, setRecovery] = useState<{ imported: number; warnings: number } | null>(null);
+  const [recoveryError, setRecoveryError] = useState("");
 
   const read = useCallback(() => {
     port
@@ -77,6 +81,22 @@ export function Storage({ port }: { port: AgentPort }) {
     [port, read],
   );
 
+  const recoverLegacy = useCallback(async () => {
+    setRecoveryError("");
+    const source = await hub.pickFolder();
+    if (!source) return;
+    setRecovering(true);
+    try {
+      const result = await hub.importLegacySessions(source, workspace);
+      setRecovery({ imported: result.imported, warnings: result.warnings });
+      onRecovered();
+    } catch {
+      setRecoveryError(t("未能扫描这个文件夹。请确认它是旧版 Reasonix 的数据目录。"));
+    } finally {
+      setRecovering(false);
+    }
+  }, [hub, onRecovered, workspace]);
+
   if (error) return <div className="empty">{error}</div>;
   if (!state) return <div className="empty">{t("正在统计…")}</div>;
 
@@ -85,6 +105,28 @@ export function Storage({ port }: { port: AgentPort }) {
 
   return (
     <div className="storage">
+      <section className="grp">
+        <h3 className="lbl">{t("找回旧版会话")}</h3>
+        <div className="item">
+          <div className="l">
+            <b>{t("从旧版 Reasonix 导入")}</b>
+            <span className="hint">{t("选择旧版的数据文件夹。扫描只会复制会话，不会移动或删除原文件；找不到原工作区的会话会归入当前工作区。")}</span>
+            {recovery && (
+              <span className="ready">
+                {recovery.imported > 0
+                  ? t("已找回 {n} 个会话。", { n: recovery.imported })
+                  : t("没有发现尚未导入的旧会话。")}
+                {recovery.warnings > 0 ? " " + t("有 {n} 项无法读取。", { n: recovery.warnings }) : null}
+              </span>
+            )}
+            {recoveryError && <span className="held">{recoveryError}</span>}
+          </div>
+          <button className="btn" data-action="session.import-legacy" disabled={recovering || !workspace} onClick={() => void recoverLegacy()}>
+            {t(recovering ? "正在扫描…" : "选择旧版数据目录…")}
+          </button>
+        </div>
+      </section>
+
       <section className="grp">
         <h3 className="lbl">{t("占用")}</h3>
         {measured.map((root) => (

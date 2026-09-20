@@ -1,20 +1,22 @@
+import { t } from "../i18n";
+
 // The spec names a call by what it is — Search, Update, Read — and derives the
 // running line from its category, so a new tool needs no new copy. The raw id
 // is still on the row, in the tag beside the name.
 const LABEL: Record<string, string> = {
-  web_search: "Search", web_fetch: "Fetch", task: "Task", bash: "Bash",
-  bash_output: "Bash 输出", kill_shell: "Kill", wait: "Wait",
-  read_file: "Read", grep: "Search", glob: "Glob", ls: "List",
-  edit_file: "Update", write_file: "Write", multi_edit: "MultiEdit",
-  todo_write: "Plan", remember: "Remember", use_capability: "MCP",
-  code_index: "Index", complete_step: "Step", review_report: "Review",
-  update_goal: "Goal", guardian_assessment: "Guardian", compress: "Compress",
+  web_search: "网页搜索", web_fetch: "获取网页", task: "委派任务", bash: "运行命令",
+  bash_output: "命令输出", kill_shell: "停止命令", wait: "等待任务",
+  read_file: "读取文件", grep: "搜索代码", glob: "查找文件", ls: "列出目录",
+  edit_file: "编辑文件", write_file: "写入文件", multi_edit: "编辑多个文件",
+  todo_write: "更新计划", remember: "保存记忆", use_capability: "调用 MCP",
+  code_index: "建立索引", complete_step: "完成步骤", review_report: "审阅结果",
+  update_goal: "更新目标", guardian_assessment: "安全检查", compress: "压缩上下文",
   // Checked against the kernel's registered names, not guessed: these all ship
   // and were rendering as their raw id under a default icon.
-  delete_range: "Delete", delete_symbol: "Delete", move_file: "Migrate",
-  notebook_edit: "Notebook", submit_plan: "Plan", ask: "Ask",
-  fleet: "Fleet", read_only_task: "Task", read_subagent_result: "Result",
-  complete_subtask: "Subtask", lsp_diagnostics: "Diagnostics",
+  delete_range: "删除内容", delete_symbol: "删除符号", move_file: "移动文件",
+  notebook_edit: "编辑笔记本", submit_plan: "提交计划", ask: "询问用户",
+  fleet: "并行任务", read_only_task: "只读任务", read_subagent_result: "读取子任务结果",
+  complete_subtask: "完成子任务", lsp_diagnostics: "代码诊断",
 };
 
 const RUNNING: Record<string, string> = {
@@ -28,7 +30,7 @@ const RUNNING: Record<string, string> = {
 // resolved to belongs in the mono tag beside it — and anything else with no
 // entry here is title-cased rather than passed through.
 export const labelFor = (tool: string) =>
-  LABEL[tool] ?? (isCapability(tool) ? "MCP" : titleCase(tool));
+  LABEL[tool] ? t(LABEL[tool]) : (isCapability(tool) ? t("调用 MCP") : titleCase(tool));
 
 export const isCapability = (tool: string) => tool === "use_capability" || tool.startsWith("mcp__");
 
@@ -40,7 +42,7 @@ const titleCase = (id: string) =>
     .join(" ") || id;
 
 export function runLabelFor(tool: string) {
-  return RUNNING[categoryOf(tool)] ?? "正在处理…";
+  return t(RUNNING[categoryOf(tool)] ?? "正在处理…");
 }
 
 // A tool that changes the tree has to read as one. delete_range, delete_symbol,

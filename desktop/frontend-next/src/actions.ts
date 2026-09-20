@@ -49,18 +49,34 @@ export interface UIAction {
 
 export const ACTIONS: UIAction[] = [
   // ── The window's own switches, and the way into the turn's policy ────────
-  // chrome.preset keeps the id it was registered under when the preset still
-  // lived in the title bar: where a control is drawn is not its identity,
-  // which is why the settings sheet has always rendered it too. The composer's
-  // panel renders it beside reasoning.effort and tool-approval.mode, which the
-  // settings sheet already owned — one question, three ids that already exist.
-  { id: "chrome.preset", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  // Completion verification is adaptive now, rather than a user-facing preset.
+  // The legacy endpoint remains in the port for older clients and sessions,
+  // but it is intentionally not advertised as an interface action.
   { id: "chrome.policy", kind: "view", target: "none", proof: "interaction" },
-  { id: "chrome.focus", kind: "view", target: "none", proof: "browser" },
+  { id: "chrome.rail", kind: "view", target: "none", proof: "browser" },
+  { id: "appearance.theme", kind: "view", target: "none", proof: "interaction" },
+  { id: "workspace.search", kind: "view", target: "none", proof: "interaction" },
+  { id: "workspace.switch", kind: "view", target: "none", proof: "interaction" },
+  { id: "session.filter", kind: "view", target: "none", proof: "interaction" },
   { id: "chrome.settings", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "browser.open", kind: "view", target: "none", proof: "interaction" },
+  { id: "browser.close", kind: "view", target: "none", proof: "interaction" },
+  { id: "browser.back", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "browser.reload", kind: "repeatable", target: "none", proof: "interaction" },
+  { id: "browser.navigate", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "browser.address", kind: "view", target: "none", proof: "static" },
+  { id: "browser.external", kind: "shell-native", target: "none", proof: "interaction" },
+  { id: "tool.copy-output", kind: "shell-native", target: "none", proof: "interaction" },
   // The way out of a window whose assets an update replaced underneath it.
   { id: "chrome.reload", kind: "navigation", target: "none", proof: "interaction" },
   { id: "chrome.account", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "metrics.details", kind: "view", target: "optional", proof: "interaction" },
+  { id: "session.menu", kind: "view", target: "entity", proof: "interaction" },
+  { id: "session.pin", kind: "view", target: "entity", proof: "interaction" },
+  { id: "session.pause", kind: "kernel-mutation", target: "entity", proof: "interaction" },
+  { id: "session.archive", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
+  { id: "session.export", kind: "shell-native", target: "entity", proof: "browser" },
+  { id: "session.delete", kind: "destructive", target: "entity", proof: "authority-effect" },
 
   // ── The turn ─────────────────────────────────────────────────────────────
   // Send and stop remain two actions even when they sit together: during a
@@ -242,6 +258,7 @@ export const ACTIONS: UIAction[] = [
   { id: "reasoning.effort", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "tool-approval.mode", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "storage.move", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  { id: "session.import-legacy", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "network.diagnose", kind: "repeatable", target: "none", proof: "interaction" },
 
   // ── Permissions, the sandbox, and the endpoints a session can reach.
@@ -261,7 +278,6 @@ export const ACTIONS: UIAction[] = [
   // ── The two side panels. Reached from the keyboard here, and from each
   //    gutter's own grip, which this pass has not annotated yet.
   { id: "rail.toggle", kind: "view", target: "none", proof: "interaction" },
-  { id: "inspector.toggle", kind: "view", target: "none", proof: "interaction" },
 ];
 
 // No action in Studio is reachable from the keyboard alone: every shortcut in

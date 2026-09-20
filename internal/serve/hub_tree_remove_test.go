@@ -3,6 +3,7 @@ package serve
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,6 +25,60 @@ func writeSessionAt(t *testing.T, path string) {
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("SaveSnapshot: %v", err)
+	}
+}
+
+func postExportSession(t *testing.T, srv *httptest.Server, path string) *http.Response {
+	t.Helper()
+	body, err := json.Marshal(map[string]string{"path": path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.Post(srv.URL+"/tree/sessions/export", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func TestExportSessionReadsOnlyAKnownWorkspaceTranscript(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	root := testenv.TempDir(t)
+	h := NewHub(HubOptions{})
+	hubRuntime(t, h, root)
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+
+	path := filepath.Join(SessionDirFor(root), "export-me.jsonl")
+	writeSessionAt(t, path)
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := postExportSession(t, srv, path)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		got, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST /tree/sessions/export = %d, want 200: %s", resp.StatusCode, got)
+	}
+	var out struct {
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Name != "export-me" || out.Content != string(want) {
+		t.Errorf("export = (%q, %d bytes), want (export-me, %d bytes)", out.Name, len(out.Content), len(want))
+	}
+
+	outside := filepath.Join(testenv.TempDir(t), "outside.jsonl")
+	writeSessionAt(t, outside)
+	refused := postExportSession(t, srv, outside)
+	defer refused.Body.Close()
+	if refused.StatusCode != http.StatusForbidden {
+		t.Errorf("outside export = %d, want 403", refused.StatusCode)
 	}
 }
 

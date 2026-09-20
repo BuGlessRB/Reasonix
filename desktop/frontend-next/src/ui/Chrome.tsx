@@ -2,9 +2,6 @@ import { useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { AccountState, AgentPort, SessionStatus, WorkspaceInfo } from "../port/port";
 import { WindowControls, zoomOnTitleBar } from "./WindowControls";
-import { chord } from "./keys";
-
-const RUN_LB: Record<string, string> = { running: "运行中", halt: "等待确认", done: "已完成", idle: "待命" };
 
 const base = (p: string) => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || p;
 // The filename is a timestamp and a model ref — true, and useless to read. The
@@ -22,17 +19,20 @@ interface Props {
   status: SessionStatus | null;
   title?: string;
   steer: number;
-  // What the focused pane is doing, as the pane already reports it upward. The
-  // chrome names it because that is the one line always on screen.
-  run: string;
   // 临时观看状态，不是偏好：窗口决定它，这里只负责把开关画出来。
   focus: boolean;
   onFocus: () => void;
   onSettings: (section?: string) => void;
+  onBrowser: () => void;
+  browser: boolean;
   account: AccountState | null;
+  rail: boolean;
+  theme: string;
+  onRail: () => void;
+  onTheme: () => void;
 }
 
-export function Chrome({ port, status, title, steer, run, onSettings, account, host, focus, onFocus }: Props) {
+export function Chrome({ port, status, title, steer, onSettings, onBrowser, browser, account, host, rail, theme, onRail, onTheme }: Props) {
   const root = status?.workspaceRoot || status?.cwd || "";
   const project = root ? base(root) : "—";
   // Only for the "隔离" tag: the folder list and the switch itself moved to the
@@ -48,9 +48,12 @@ export function Chrome({ port, status, title, steer, run, onSettings, account, h
 
   return (
     <div className="chrome" onDoubleClick={zoomOnTitleBar}>
-      <span className="brand" role="img" aria-label="Reasonix" />
+      <button className="thbtn studio-menu" data-action="chrome.rail" onClick={onRail} aria-pressed={rail} aria-label={rail ? t("收起工作区栏") : t("展开工作区栏")}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h10" /></svg>
+      </button>
 
       <div className="crumb">
+        <svg className="crumb-folder" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h4l1.2 1.4h5.8v6.6h-11z" /></svg>
         <span className="crumb-proj" title={root}>
           {project}
         </span>
@@ -71,62 +74,22 @@ export function Chrome({ port, status, title, steer, run, onSettings, account, h
       </span>
 
       <div className="r">
-        <span className="runpill" data-run={run}>
-          <i />
-          {t(RUN_LB[run] ?? "待命")}
-        </span>
-        {/* Identity sits where every app puts it, but signed out it stays an
-            outline in the icon cluster: an entry point, not a pitch. Reasonix
-            runs fine without an account and must not imply otherwise. */}
         <button
-          className="thbtn acct-btn"
-          data-action="chrome.account"
-          data-on={account?.signedIn ? "" : undefined}
-          onClick={() => onSettings("account")}
-          aria-label={account?.signedIn ? t("账号：{name}", { name: account.user?.label ?? "" }) : t("登录")}
-          title={account?.signedIn ? `${account.user?.label ?? ""} <${account.user?.email ?? ""}>` : t("登录（社区与崩溃跟进，不影响使用）")}
+          className="thbtn theme-toggle"
+          data-action="appearance.theme"
+          onClick={onTheme}
+          aria-label={theme === "dark" ? t("切换浅色主题") : t("切换深色主题")}
+          title={theme === "dark" ? t("切换浅色主题") : t("切换深色主题")}
         >
-          {account?.signedIn && account.user?.label ? (
-            <span className="ini" aria-hidden="true">
-              {[...account.user.label][0]?.toUpperCase()}
-            </span>
-          ) : (
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <circle cx="8" cy="5.6" r="2.6" />
-              <path d="M3.2 13.4a4.8 4.8 0 0 1 9.6 0" />
-            </svg>
-          )}
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a5.5 5.5 0 1 0 0 11V2.5Z" /></svg>
         </button>
-        {/* The icon cluster's weight class, not the preset control's: what is
-            left up here is the window's, and the turn's policy is the shelf's. */}
-        {/* 进出都是这一枚。专注不是模式切换到别处去了，是同一个会话把外围收起来
-            —— 所以按钮留在原地，只换它说的话。 */}
-        <button
-          className="thbtn"
-          data-action="chrome.focus"
-          onClick={onFocus}
-          aria-pressed={focus}
-          aria-label={focus ? t("退出专注") : t("专注")}
-          title={focus ? t("退出专注") : t("专注：收起两侧栏")}
-        >
-          <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.3">
-            {focus ? (
-              <>
-                <path d="M6.4 2.2v4.2H2.2M9.6 2.2v4.2h4.2M6.4 13.8V9.6H2.2M9.6 13.8V9.6h4.2" />
-              </>
-            ) : (
-              <>
-                <path d="M2.2 6.4V2.2h4.2M13.8 6.4V2.2H9.6M2.2 9.6v4.2h4.2M13.8 9.6v4.2H9.6" />
-              </>
-            )}
-          </svg>
+        <button className="top-action" data-action="settings.section" data-value="tools" onClick={() => onSettings("tools")} aria-label={t("沙盒")} title={t("沙盒与运行边界")}>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 2.5 5 2.7v5.6l-5 2.7-5-2.7V5.2Z" /><path d="m3 5.2 5 2.7 5-2.7M8 7.9v5.6" /></svg><span>{t("沙盒")}</span>
         </button>
-        <button className="thbtn" data-action="chrome.settings" onClick={() => onSettings()} aria-label={t("设置")} title={`${t("设置")}　${chord(",")}`}>
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M8 5.9a2.1 2.1 0 1 0 0 4.2 2.1 2.1 0 0 0 0-4.2" />
-            <path d="M12.7 9.8a1 1 0 0 0 .2 1.1l.04.04a1.2 1.2 0 1 1-1.7 1.7l-.04-.04a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9v.11a1.2 1.2 0 1 1-2.4 0v-.06a1 1 0 0 0-.65-.9 1 1 0 0 0-1.1.2l-.04.04a1.2 1.2 0 1 1-1.7-1.7l.04-.04a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6h-.11a1.2 1.2 0 0 1 0-2.4h.06a1 1 0 0 0 .9-.65 1 1 0 0 0-.2-1.1l-.04-.04a1.2 1.2 0 1 1 1.7-1.7l.04.04a1 1 0 0 0 1.1.2h.05a1 1 0 0 0 .6-.9v-.11a1.2 1.2 0 1 1 2.4 0v.06a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.04-.04a1.2 1.2 0 1 1 1.7 1.7l-.04.04a1 1 0 0 0-.2 1.1v.05a1 1 0 0 0 .9.6h.11a1.2 1.2 0 0 1 0 2.4h-.06a1 1 0 0 0-.9.6" />
-          </svg>
+        <button className="thbtn browser-action" data-action="browser.open" onClick={onBrowser} aria-pressed={browser} aria-label="Browser" title={browser ? t("关闭内置 Browser") : t("打开内置 Browser")}>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.4" /><path d="M2.8 8h10.4M8 2.6c1.5 1.5 2.3 3.3 2.3 5.4S9.5 11.9 8 13.4C6.5 11.9 5.7 10.1 5.7 8S6.5 4.1 8 2.6Z" /></svg>
         </button>
+        <span className="account-presence" title={account?.signedIn ? account.user?.label : t("未登录")} />
         <WindowControls />
       </div>
     </div>

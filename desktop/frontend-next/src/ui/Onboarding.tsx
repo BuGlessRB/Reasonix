@@ -124,8 +124,24 @@ export function Onboarding({ port, setup, onDone }: Props) {
   };
 
   return (
-    <div className="onb">
-      <div className="onb-card">
+    <div className="onb-stage">
+      <header className="onb-brandbar">
+        <span className="onb-brandmark" aria-hidden="true">R</span>
+        <span className="onb-brandname"><b>reasonix</b><small>studio</small></span>
+      </header>
+      <div className="onb-shell">
+        <aside className="onb-progress" aria-label={t("开始设置")}>
+          <span className="onb-progress-kicker">{t("开始设置")}</span>
+          <ol>
+            <li data-active=""><i>1</i><span><b>{t("连接模型服务")}</b><small>{t("地址、协议与凭据")}</small></span></li>
+            <li data-active={found ? "" : undefined}><i>2</i><span><b>{t("选择默认模型")}</b><small>{t("确认模型与能力")}</small></span></li>
+            <li><i>3</i><span><b>{t("打开工作区")}</b><small>{t("开始第一个任务")}</small></span></li>
+          </ol>
+          <p>{t("之后可以在设置中随时修改，不会锁定当前选择。")}</p>
+        </aside>
+        <main className="onb">
+          <div className="onb-card">
+            <span className="onb-eyebrow">MODEL CONNECTION</span>
         <h1 className="onb-t">{t("首先连接模型服务")}</h1>
         <p className="onb-s">
           {t("填写地址与 key，其余由系统探测 —— 协议、模型清单、是否支持读图均可自动获取。")}
@@ -242,7 +258,10 @@ export function Onboarding({ port, setup, onDone }: Props) {
         <div className="onb-note">
           {t("key 保存在本机配置中，不会上传至任何第三方。模型、推理强度与执行设定均有默认值，可随时在输入框上方调整。")}
         </div>
+          </div>
+        </main>
       </div>
+      <footer className="onb-foot">{t("本地优先 · 凭据由系统安全存储 · 连接前不会发送请求")}</footer>
     </div>
   );
 }

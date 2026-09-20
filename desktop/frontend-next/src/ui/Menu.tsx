@@ -14,6 +14,7 @@ export interface MenuItem {
   // is not a button — a menu whose headings take focus is a menu you arrow
   // through twice.
   header?: boolean;
+  disabled?: boolean;
 }
 
 // Where a list stops fitting the menu's own height cap. Past it a scrollbar
@@ -36,13 +37,16 @@ interface Props {
   // trigger alone: whatever else is on that shelf is still the reader's to
   // change while this one waits.
   pending?: boolean;
+  triggerAction?: string;
+  ariaPressed?: boolean;
+  wrapClassName?: string;
 }
 
 // data-* rides through to the item that raises the pick, the way Switch and Seg
 // carry theirs: the action's identity is written at the call site, and the
 // answer this menu gives is the item's own value.
 export function Picker({
-  label, items, current, onPick, place, align = "start", className, title, pending, ...id
+  label, items, current, onPick, place, align = "start", className, title, pending, triggerAction, ariaPressed, wrapClassName, ...id
 }: Props & { [K in `data-${string}`]?: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -161,12 +165,14 @@ export function Picker({
   };
 
   return (
-    <div className="picker" ref={wrap}>
+    <div className={["picker", wrapClassName].filter(Boolean).join(" ")} ref={wrap}>
       <button
         ref={btn}
         className={className}
+        data-action={triggerAction}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-pressed={ariaPressed}
         data-pending={pending ? "" : undefined}
         title={title}
         onClick={() => setOpen((v) => !v)}
@@ -211,6 +217,7 @@ export function Picker({
                   data-value={it.value}
                   className={it.plain ? "mi plain" : "mi"}
                   role="menuitem"
+                  disabled={it.disabled}
                   data-on={it.value === current ? "" : undefined}
                   data-lead={it.value === lead ? "" : undefined}
                   onClick={() => take(it.value)}

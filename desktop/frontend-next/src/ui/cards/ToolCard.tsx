@@ -13,6 +13,7 @@ import { DiffView } from "./DiffView";
 import { Term, ToolOutput } from "./ToolOutput";
 import { ExtensionView } from "./ExtensionView";
 import { toolFailed, toolFailureLabel } from "./outcome";
+import { StudioIcon } from "../StudioIcon";
 
 // The spec pops a symbol as it settles — colour arriving is the finish signal.
 // Only the transition may fire it: a restored transcript is all settled cards,
@@ -20,6 +21,17 @@ import { toolFailed, toolFailureLabel } from "./outcome";
 // The head crossfades before it swaps: "「正在读取…」→「读了 7 个文件」是这一步
 // 唯一的状态跃迁，别用 0ms 换掉它". 90ms out, then the settled text.
 const SWAP = 90;
+
+function prettyArgs(args?: string): string {
+  if (!args) return "";
+  try {
+    return JSON.stringify(JSON.parse(args), null, 2);
+  } catch {
+    return args;
+  }
+}
+
+const shortCallId = (id?: string) => id ? id.replace(/^call_/, "").slice(-8) : "—";
 
 function useSettling(running: boolean): { pop: boolean; swap: boolean } {
   const [pop, setPop] = useState(false);
@@ -42,10 +54,11 @@ function useSettling(running: boolean): { pop: boolean; swap: boolean } {
 }
 
 export function ToolCard({
-  tool, running, children = [], takeover, onExtInvoke, onPrepareFileRevert, onCommitFileRevert,
+  tool, running, children = [], takeover, onExtInvoke, onPrepareFileRevert, onCommitFileRevert, activity = false,
 }: {
   tool: Tool;
   running: boolean;
+  activity?: boolean;
   children?: Tool[];
   // Reverting the file this call wrote. Optional: a card drawn outside a live
   // pane (history, a fixture) has nothing to revert against.
@@ -60,9 +73,10 @@ export function ToolCard({
   // about who answered. Name the resolved tool; only a target that really is an
   // MCP tool reads MCP, which labelFor decides from the mcp__ prefix.
   const shown = tool.resolvedName || tool.name;
+  const from = mcpOrigin(shown);
   // Running and settled are two different lines: the category says what it is
   // doing now, the label says what it was once it is done.
-  const head = running ? runLabelFor(shown) : labelFor(shown);
+  const head = activity ? (from?.tool || shown) : running ? runLabelFor(shown) : labelFor(shown);
   // A write's payload streams as arguments, and the provider only reports how
   // many characters have landed — the JSON is unparseable until the last one.
   // Showing that count is the difference between a card that is visibly filling
@@ -77,7 +91,6 @@ export function ToolCard({
   const badLabel = toolFailureLabel(tool);
   // Which server answered belongs on the card, not in a panel: this is the
   // moment the user can judge whether an external service should have run.
-  const from = mcpOrigin(shown);
   // The interpreter that actually ran it, or the remote tool a capability call
   // resolved to. Anything else the name already said.
   const tag = tagFor(tool);
@@ -93,44 +106,85 @@ export function ToolCard({
   // one claim — done, still going, or stuck — so the card says the claim rather
   // than the object carrying it.
   const goal = tool.name === "update_goal" ? goalUpdate(tool.args) : null;
-  return (
-    // data-call is the anchor the run graph lands on. The rail could already
-    // find a user message; a tool call had no id in the DOM at all, so nothing
-    // outside the transcript could point at one.
-    <div
-      className="call"
-      data-call={tool.id || undefined}
-      data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined}
-      data-running={running ? "" : undefined}
-    >
-      <div className="g">
-        <Sym glyph={glyphFor(shown)} done={settling.pop && !bad} />
-        <span className="line" />
-      </div>
-      <div className="c">
-        <div className="hl" data-swap={settling.swap ? "" : undefined}>
-          {/* 名字是给人读的，id 是给人查的。标签只在它说了名字没说的事时才占地方
-              （见 tagFor），所以精确的那个字符串挂在这里，一直够得着。 */}
-          <span className={running ? "nm shim" : "nm"} title={shown}>{head}</span>
-          {who && <span className="who" title={t("按技能 {name} 的设定运行的子代理", { name: who })}>{who}</span>}
-          {from && <span className="src" title={t("外部服务 {name} 提供的工具", { name: from.server })}>{from.server}</span>}
-          {tag && <span className="tag" title={tagHint(tool)}>{tag}</span>}
-          {arg && <span className={streaming ? "arg shim" : "arg"}>{arg}</span>}
-          {bad && <span className="fail">{badLabel}</span>}
-          <Cost tools={[tool]} running={running} />
-        </div>
-        <div className="out">
-          {/* A takeover replaces what the body shows, never the frame around
-              it: the tool's name, its status and the attribution below stay
-              the host's, so a redrawn card is still recognisably this call and
-              still visibly the extension's work. */}
-          {takeover ? (
-            <>
-              <ExtensionView body={takeover.view?.body ?? []} onAction={(id) => onExtInvoke?.(id)} />
-              <div className="drawnby">{t("由 {name} 渲染", { name: takeover.pluginId })}</div>
-            </>
-          ) : (
-            <>
+  const [open, setOpen] = useState(running || bad);
+  useEffect(() => {
+    if (running || bad) setOpen(true);
+  }, [running, bad]);
+  const changes = changeCounts(tool);
+  const hasBody = Boolean(
+    takeover || tool.diff || goal || tool.name === "todo_write" ||
+    (tool.output && !echoed && children.length === 0) || tool.err || children.length,
+  );
+  const activityArgs = activity ? prettyArgs(tool.args) : "";
+  const activityResult = Boolean(
+    takeover || tool.diff || goal || tool.name === "todo_write" || tool.output || tool.err || children.length,
+  );
+  const heading = (
+    <>
+      {/* 名字是给人读的，id 是给人查的。标签只在它说了名字没说的事时才占地方
+          （见 tagFor），所以精确的那个字符串挂在这里，一直够得着。 */}
+      <span className={running ? "nm shim" : "nm"} title={shown}>{head}</span>
+      {who && <span className="who" title={t("按技能 {name} 的设定运行的子代理", { name: who })}>{who}</span>}
+      {from && <span className="src" title={t("外部服务 {name} 提供的工具", { name: from.server })}>{from.server}</span>}
+      {tag && <span className="tag" title={tagHint(tool)}>{tag}</span>}
+      {arg && <span className={streaming ? "arg shim" : "arg"}>{arg}</span>}
+      {changes && (
+        <span className="tool-delta" aria-label={t("新增 {added} 行，删除 {removed} 行", changes)}>
+          <b>+{changes.added}</b><i>−{changes.removed}</i>
+        </span>
+      )}
+      {bad && <span className="fail">{badLabel}</span>}
+      <Cost tools={[tool]} running={running} />
+      <span
+        className="tool-state"
+        data-state={running ? "running" : bad ? "failed" : "done"}
+        aria-label={t(running ? "运行中" : bad ? "失败" : "已完成")}
+        title={t(running ? "运行中" : bad ? "失败" : "已完成")}
+      >
+        <StudioIcon name={running ? "clock" : bad ? "warning" : "check"} />
+      </span>
+      {hasBody && <span className="tool-fold" aria-hidden="true" />}
+    </>
+  );
+  const body = (
+    <div className="out">
+      {activity && (
+        <>
+          <div className="activity-call-meta">
+            <span>{t("调用 {id}", { id: shortCallId(tool.id) })}</span>
+            <span>{t(running ? "运行中" : bad ? "失败" : "已完成")}</span>
+          </div>
+          {activityArgs && (
+            <section className="activity-call-input">
+              <header><b>{t("输入")}</b><span>JSON</span></header>
+              <pre>{activityArgs}</pre>
+            </section>
+          )}
+          {activityResult && (
+            <div className="activity-call-result">
+              <b>{t("结果")}</b>
+              {tool.output && (
+                <button
+                  type="button"
+                  data-action="tool.copy-output"
+                  onClick={() => void navigator.clipboard.writeText(tool.output ?? "").catch(() => {})}
+                >{t("复制")}</button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+      {/* A takeover replaces what the body shows, never the frame around
+          it: the tool's name, its status and the attribution below stay
+          the host's, so a redrawn card is still recognisably this call and
+          still visibly the extension's work. */}
+      {takeover ? (
+        <>
+          <ExtensionView body={takeover.view?.body ?? []} onAction={(id) => onExtInvoke?.(id)} />
+          <div className="drawnby">{t("由 {name} 渲染", { name: takeover.pluginId })}</div>
+        </>
+      ) : (
+        <>
           {tool.diff && (
             <DiffView
               diff={tool.diff}
@@ -149,41 +203,73 @@ export function ToolCard({
           {!tool.diff && !goal && tool.name !== "todo_write" && tool.output && !echoed && children.length === 0 && (
             <ToolOutput name={shown} text={tool.output} bound={tool.bound} id={tool.id} />
           )}
-            </>
-          )}
-          {/* The error stays outside the takeover: an extension may redraw what
-              a call produced, never whether it failed. */}
-          {tool.err && <div className="txt bad">{tool.err}</div>}
-          {children.length > 0 && (
-            <div className="nest">
-              <div className="nest-hd">
-                <i className="pip" />
-                <span className="who">{nestLabel(who, tool.profile?.count, children.length)}</span>
-                <span className="prof">{t("独立上下文 · 不进主轨迹")}</span>
-                {/* 委派出去那部分的账：耗时是父调用的，token 是子步骤各自留下的 */}
-                <span className="rt">
-                  {[
-                    tool.durationMs ? seconds(tool.durationMs) : "",
-                    childTokens(children) ? tokens(childTokens(children)) : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </div>
-              <div className="nest-bd">
-                {children.map((c) => (
-                  <NestedCall key={c.id} tool={c} />
-                ))}
-              </div>
-              {/* What the delegate handed back closes its own panel: outside it,
-                  the sentence reads as the main run's conclusion. */}
-              {tool.output && <div className="nest-ret">{tool.output}</div>}
-            </div>
-          )}
+        </>
+      )}
+      {/* The error stays outside the takeover: an extension may redraw what
+          a call produced, never whether it failed. */}
+      {tool.err && <div className="txt bad">{tool.err}</div>}
+      {children.length > 0 && (
+        <div className="nest">
+          <div className="nest-hd">
+            <i className="pip" />
+            <span className="who">{nestLabel(who, tool.profile?.count, children.length)}</span>
+            <span className="prof">{t("独立上下文 · 不进主轨迹")}</span>
+            {/* 委派出去那部分的账：耗时是父调用的，token 是子步骤各自留下的 */}
+            <span className="rt">
+              {[
+                tool.durationMs ? seconds(tool.durationMs) : "",
+                childTokens(children) ? tokens(childTokens(children)) : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </div>
+          <div className="nest-bd">
+            {children.map((c) => (
+              <NestedCall key={c.id} tool={c} />
+            ))}
+          </div>
+          {/* What the delegate handed back closes its own panel: outside it,
+              the sentence reads as the main run's conclusion. */}
+          {tool.output && <div className="nest-ret">{tool.output}</div>}
         </div>
+      )}
+    </div>
+  );
+  return (
+    // data-call is the anchor the run graph lands on. The rail could already
+    // find a user message; a tool call had no id in the DOM at all, so nothing
+    // outside the transcript could point at one.
+    <div
+      className="call"
+      data-call={tool.id || undefined}
+      data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined}
+      data-running={running ? "" : undefined}
+    >
+      <div className="g">
+        <Sym glyph={glyphFor(shown)} done={settling.pop && !bad} />
+        <span className="line" />
+      </div>
+      <div className="c">
+        {hasBody ? (
+          <details className="tool-disclosure" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+            <summary className="hl" data-swap={settling.swap ? "" : undefined}>{heading}</summary>
+            {body}
+          </details>
+        ) : (
+          <div className="hl" data-swap={settling.swap ? "" : undefined}>{heading}</div>
+        )}
       </div>
     </div>
   );
+}
+
+function changeCounts(tool: Tool): { added: number; removed: number } | null {
+  if (!tool.diff && tool.added === undefined && tool.removed === undefined) return null;
+  const lines = tool.diff?.split("\n") ?? [];
+  const added = tool.added ?? lines.filter((line) => line.startsWith("+") && !line.startsWith("+++")).length;
+  const removed = tool.removed ?? lines.filter((line) => line.startsWith("-") && !line.startsWith("---")).length;
+  return { added, removed };
 }
 
 function NestedCall({ tool }: { tool: Tool }) {

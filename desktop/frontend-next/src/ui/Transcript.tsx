@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { decimals } from "../i18n/format";
 import { t } from "../i18n";
 import type { Item, Waiting } from "../state/session";
@@ -17,7 +17,9 @@ import { UserCard } from "./cards/UserCard";
 import { NoticeCard } from "./cards/NoticeCard";
 import { RememberCard } from "./cards/RememberCard";
 import { ExtensionCard } from "./cards/ExtensionCard";
+import { toolFailed } from "./cards/outcome";
 import { Rail, type RailMark } from "./Rail";
+import { StudioIcon } from "./StudioIcon";
 
 interface Props {
   items: Item[];
@@ -500,13 +502,49 @@ const Block = memo(function Block({
     if (near && box.current) tall.current = box.current.offsetHeight;
   });
 
+  // Tool traffic is evidence for the answer, not a stack of equally important
+  // messages. Keep consecutive execution steps in one disclosure so a finished
+  // turn reads answer-first while every command and output remains inspectable.
+  const rows: Array<{ item: Item; activity?: Item[] } | { activity: Item[] }> = [];
+  for (let at = 0; at < items.length;) {
+    let end = at + 1;
+    while (end < items.length && items[end].t !== "user") end++;
+    const turn = items.slice(at, end);
+    const activity = turn.filter((item) => item.t === "tool" || item.t === "reads");
+    const answer = turn.find((item) => item.t === "say" && item.done);
+    if (answer && activity.length) {
+      for (const item of turn) {
+        if (item.t === "tool" || item.t === "reads") continue;
+        rows.push(item === answer ? { item, activity } : { item });
+      }
+    } else {
+      for (const item of turn) {
+        const isActivity = item.t === "tool" || item.t === "reads";
+        const last = rows[rows.length - 1];
+        if (isActivity && last && "activity" in last && !("item" in last)) last.activity.push(item);
+        else rows.push(isActivity ? { activity: [item] } : { item });
+      }
+    }
+    at = end;
+  }
+
   return (
     <div
       className="chunk"
       ref={box}
       style={near || keep ? undefined : { height: `${tall.current || items.length * 96}px` }}
     >
-      {(near || keep) && items.map((it) => <Row key={it.id} it={it} {...rowProps} cp={checkpoints.get(it.id)} />)}
+      {(near || keep) && rows.map((row) => "item" in row ? (
+        <Row
+          key={row.item.id}
+          it={row.item}
+          {...rowProps}
+          cp={checkpoints.get(row.item.id)}
+          afterAnswer={row.activity ? <ActivityGroup items={row.activity} checkpoints={checkpoints} {...rowProps} /> : undefined}
+        />
+      ) : (
+        <ActivityGroup key={`activity:${row.activity[0].id}`} items={row.activity} checkpoints={checkpoints} {...rowProps} />
+      ))}
     </div>
   );
 });
@@ -528,6 +566,39 @@ interface RowHandlers {
   onCommitFileRevert: Props["onCommitFileRevert"];
 }
 
+const ActivityGroup = memo(function ActivityGroup({
+  items,
+  checkpoints,
+  ...rowProps
+}: { items: Item[]; checkpoints: Map<string, Checkpoint> } & RowHandlers) {
+  const running = items.some((item) => item.t === "tool" && item.running);
+  const [open, setOpen] = useState(running);
+  useEffect(() => {
+    if (running) setOpen(true);
+  }, [running]);
+  const calls = items.reduce((count, item) => count + (item.t === "reads" ? item.tools.length : 1), 0);
+  const failures = items.reduce((count, item) => {
+    if (item.t === "tool") return count + (toolFailed(item.tool) ? 1 : 0);
+    if (item.t === "reads") return count + item.tools.filter(toolFailed).length;
+    return count;
+  }, 0);
+  return (
+    <details className="activity-group" data-failed={failures ? "" : undefined} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>
+        <StudioIcon name={running ? "clock" : failures ? "warning" : "check"} className="activity-status-icon" />
+        <span className="activity-title">{t("执行过程")}</span>
+        {failures > 0 && <span className="activity-errors">{t("{n} 项失败", { n: failures })}</span>}
+        <span className="activity-count">{t("{count} 项操作", { count: calls })}</span>
+        <StudioIcon name="down" className="activity-fold-icon" />
+      </summary>
+      <div className="activity-body">
+        {items.map((item) => <Row key={item.id} it={item} activity {...rowProps} cp={checkpoints.get(item.id)} />)}
+      </div>
+      <p className="activity-note">{t("点击步骤可原位查看详情、结果或文件差异")}</p>
+    </details>
+  );
+});
+
 // A streamed token replaces one item and leaves the rest identical, so the rest
 // must not re-render: at a working session's length that walk cost more per
 // chunk than parsing the message did.
@@ -548,7 +619,9 @@ const Row = memo(function Row({
   onUndoRewind,
   onPrepareFileRevert,
   onCommitFileRevert,
-}: RowHandlers & { it: Item; cp?: Checkpoint }) {
+  afterAnswer,
+  activity = false,
+}: RowHandlers & { it: Item; cp?: Checkpoint; afterAnswer?: ReactNode; activity?: boolean }) {
   // Read once, for the life of this element. The projection spends the debt as
   // soon as this is drawn, and a card whose answer is still streaming would
   // otherwise lose the attribute mid-animation and have it cut short. A block
@@ -576,7 +649,7 @@ const Row = memo(function Row({
       // model. Gating the card on text meant all of it stayed invisible and
       // then landed at once. An empty card is still not a message, so a turn
       // that produced neither draws nothing.
-      return it.text.trim() || it.reasoning?.trim() ? <SayCard item={it} /> : null;
+      return it.text.trim() || it.reasoning?.trim() ? <SayCard item={it} afterAnswer={afterAnswer} /> : null;
     case "tool":
       // The ask tool also raises ask_request, which carries the id /answer
       // needs. Drawing the tool call too put two copies of the same question on
@@ -585,6 +658,7 @@ const Row = memo(function Row({
         <ToolCard
             tool={it.tool}
             running={it.running}
+            activity={activity}
             children={it.children}
             takeover={it.tool.id ? takeovers[`tool:${it.tool.id}`] : undefined}
             onExtInvoke={onExtInvoke}

@@ -11,7 +11,9 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
+	"reasonix/internal/event"
 	"reasonix/internal/fileutil"
+	"reasonix/internal/migration"
 	"reasonix/internal/store"
 	"reasonix/internal/worktree"
 )
@@ -52,6 +54,7 @@ type treeSession struct {
 	Title     string `json:"title,omitempty"`
 	Turns     int    `json:"turns,omitempty"`
 	RuntimeID string `json:"runtimeId,omitempty"`
+	Archived  bool   `json:"archived,omitempty"`
 	// Copies are this conversation's conflict-recovery copies. A save that
 	// keeps conflicting writes one file per turn, all under the one title, and
 	// unfolded that is a sidebar of rows the user never made.
@@ -63,7 +66,10 @@ func (h *Hub) registerTreeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /tree/workspaces", h.addWorkspace)
 	mux.HandleFunc("POST /tree/workspaces/remove", h.removeWorkspace)
 	mux.HandleFunc("POST /tree/sessions/remove", h.removeSession)
+	mux.HandleFunc("POST /tree/sessions/archive", h.archiveSession)
 	mux.HandleFunc("POST /tree/sessions/rename", h.renameSession)
+	mux.HandleFunc("POST /tree/sessions/export", h.exportSession)
+	mux.HandleFunc("POST /tree/sessions/import-legacy", h.importLegacySessions)
 }
 
 // tree answers the whole sidebar in one request: every remembered workspace
@@ -144,10 +150,82 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 			lead[recoveryLineageRoot(si, byID)] = len(out)
 		}
 		out = append(out, treeSession{
-			Path: si.Path, Name: name, Title: title, Turns: si.Turns, RuntimeID: runtimeID,
+			Path: si.Path, Name: name, Title: title, Turns: si.Turns, RuntimeID: runtimeID, Archived: si.Archived,
 		})
 	}
 	return out
+}
+
+// archiveSession changes catalog visibility without moving or deleting data.
+// An open pane is closed by the client first; the server still refuses one to
+// protect callers that bypass the UI from hiding a conversation being written.
+func (h *Hub) archiveSession(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Path     string `json:"path"`
+		Archived bool   `json:"archived"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		badBody(w)
+		return
+	}
+	path, err := filepath.Abs(strings.TrimSpace(body.Path))
+	if err != nil || !store.IsSessionTranscriptName(filepath.Base(path)) {
+		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session path could not be resolved", nil)
+		return
+	}
+	if h.openSessions()[agent.CanonicalSessionPath(path)] != "" {
+		busy(w, "session.has_open_pane", "close this session's pane first", nil)
+		return
+	}
+	if !h.ownsSessionDir(filepath.Dir(path)) {
+		refuse(w, http.StatusForbidden, "session.outside_workspace", "path outside a known workspace", nil)
+		return
+	}
+	if err := agent.SetSessionArchived(path, body.Archived); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// importLegacySessions is the user-facing recovery path for old installations.
+// Unknown historical workspaces fall back to the workspace the user selected,
+// so a successful import is never stranded outside the desktop tree.
+func (h *Hub) importLegacySessions(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Path      string `json:"path"`
+		Workspace string `json:"workspace"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		badBody(w)
+		return
+	}
+	workspace, err := resolveWorkspaceDir(strings.TrimSpace(body.Workspace))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	known := false
+	for _, ref := range h.roots() {
+		if ref.dir == workspace {
+			known = true
+			break
+		}
+	}
+	if !known {
+		refuse(w, http.StatusForbidden, "workspace.unknown", "select a known workspace for recovered sessions", nil)
+		return
+	}
+	result := migration.RunLegacySessionImportInto(strings.TrimSpace(body.Path), SessionDirFor(workspace), event.Discard)
+	count := 0
+	for _, imported := range result.SessionImports {
+		count += imported.Count
+	}
+	writeJSON(w, struct {
+		Summary  string `json:"summary"`
+		Imported int    `json:"imported"`
+		Warnings int    `json:"warnings"`
+	}{Summary: result.Summary(), Imported: count, Warnings: len(result.SessionErrs)})
 }
 
 // recoveryLineageRoot names the conversation a copy belongs to. The stamped
@@ -291,6 +369,37 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// exportSession returns the transcript only after applying the same workspace
+// boundary as rename and removal. The shell owns where the copy is saved; the
+// kernel owns which path is safe to read.
+func (h *Hub) exportSession(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		badBody(w)
+		return
+	}
+	path, err := filepath.Abs(strings.TrimSpace(body.Path))
+	if err != nil || !store.IsSessionTranscriptName(filepath.Base(path)) {
+		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session path could not be resolved", nil)
+		return
+	}
+	if !h.ownsSessionDir(filepath.Dir(path)) {
+		refuse(w, http.StatusForbidden, "session.outside_workspace", "path outside a known workspace", nil)
+		return
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, struct {
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	}{Name: strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)), Content: string(content)})
 }
 
 // ownsSessionDir reports whether dir is the session directory of a workspace

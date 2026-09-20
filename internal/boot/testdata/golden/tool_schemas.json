@@ -464,24 +464,34 @@
   },
   {
     "Name": "use_capability",
-    "Description": "Unified capability proxy with a fixed schema: list catalog capabilities, inspect one (metadata plus its input schema), call a capability by stable id (tool:grep, skill:review, task:subagent, task:fleet, mcp-tool:server/tool), or decline a prefer capability with a non-empty reason. action=list names every callable id and its aliases; inspect one for its arguments before calling. task:subagent delegates one investigation; task:fleet dispatches 2-64 at once and orders them with depends_on where one needs another's answer. Calling does not change the provider-visible tool schema. Resolved writers still pass permission, plan mode, sandbox, write-path, and workspace-lease checks. The Planner leaves destructive MCP for the Executor.",
+    "Description": "Search and call deferred tools, skills, and MCP through stable IDs such as tool:grep, skill:review, task:subagent, task:fleet, and mcp-tool:server/tool. Before saying a tool, network, or integration is unavailable, search by natural-language goal; results include ranked IDs and available schemas. list enumerates the catalog, inspect loads one definition, call invokes it, and decline records why a preferred capability is skipped. task:subagent delegates one task; task:fleet delegates 2-64. Calls retain all permission, sandbox, and execution checks.",
     "ReadOnly": true,
     "Schema": {
       "properties": {
         "action": {
-          "description": "list | inspect | call | decline",
+          "description": "search | list | inspect | call | decline",
           "type": "string"
         },
         "arguments": {
-          "description": "Raw MCP tool arguments for action=call",
+          "description": "Target arguments for call",
           "type": "object"
         },
         "capability_id": {
-          "description": "Capability id such as skill:review, task:subagent, mcp-server:github, or mcp-tool:github/search_issues. Not required for action=list.",
+          "description": "Stable ID required by inspect, call, and decline",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Result limit; default 5",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "description": "Natural-language search goal",
           "type": "string"
         },
         "reason": {
-          "description": "Required non-empty reason when action=decline",
+          "description": "Non-empty decline reason",
           "type": "string"
         }
       },

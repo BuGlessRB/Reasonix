@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
+import { StudioIcon } from "./StudioIcon";
 
 // Wails serves the window over a custom scheme on macOS and Linux, so those two
 // hosts are not a secure context and navigator.clipboard is undefined there.
@@ -17,7 +18,7 @@ async function write(text: string) {
   if (!ok) throw new Error("copy rejected");
 }
 
-export function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text, iconOnly = false }: { text: string; iconOnly?: boolean }) {
   const [state, setState] = useState<"idle" | "done" | "failed">("idle");
   const timer = useRef<number | null>(null);
 
@@ -33,11 +34,20 @@ export function CopyButton({ text }: { text: string }) {
 
   // A clipboard the host denied is not the same as nothing happening, and the
   // reader is about to try again — so the failure says so instead of staying idle.
-  const label = state === "done" ? t("已复制") : state === "failed" ? t("复制不了") : t("复制");
+  const label = state === "done" ? t("已复制") : state === "failed" ? t("复制不了") : t("复制回复");
 
   return (
-    <button className="copy" type="button" data-state={state} onClick={copy} aria-label={t("复制这段回答")}>
-      <span aria-live="polite">{label}</span>
+    <button
+      className="copy"
+      type="button"
+      data-icon={iconOnly ? "" : undefined}
+      data-state={state}
+      onClick={copy}
+      aria-label={t("复制这段回答")}
+      title={label}
+    >
+      {iconOnly && <StudioIcon name={state === "done" ? "check" : "copy"} />}
+      <span className={iconOnly ? "sr-only" : undefined} aria-live="polite">{label}</span>
     </button>
   );
 }

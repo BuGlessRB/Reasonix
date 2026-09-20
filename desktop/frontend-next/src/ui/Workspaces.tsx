@@ -3,6 +3,9 @@ import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/hub";
 import type { Adder } from "./addws";
 import { useRailQuery } from "./railsearch";
+import { StudioIcon } from "./StudioIcon";
+import { download } from "../port/download";
+import { host } from "../port/host";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -22,6 +25,11 @@ interface Props {
   // Which of these panes are mid-turn. A callback rather than a prop: run state
   // changes constantly and this is only ever asked at confirmation time.
   liveIds: (ids: string[]) => string[];
+  scope?: "all" | "live" | "pinned" | "archived";
+  pinned: Set<string>;
+  onPin: (path: string) => void;
+  onPause: (runtimeId: string) => void;
+  onArchive: (path: string, archived: boolean, runtimeId?: string) => Promise<void>;
   onRename: (path: string, title: string) => void;
   onError: (e: unknown) => void;
   // 打开项目这个动作归 App —— 首启那条横幅按的是同一个它。
@@ -38,7 +46,7 @@ interface Props {
 // nodes in the sidebar — more than the transcript at 20000 turns.
 const SHOWN = 30;
 
-function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, onRename, onError, adder, children }: Props) {
+function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, scope = "all", pinned, onPin, onPause, onArchive, onRename, onError, adder, children }: Props) {
   const [busy, setBusy] = useState("");
   // Folding a machine is the reader's own preference, held the way a host row
   // holds it.
@@ -48,6 +56,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   // Renaming is a pencil, not a double-click: a single click already opens the
   // session, so a double one would open it twice on the way to the edit.
   const [editing, setEditing] = useState("");
+  const [sessionMenu, setSessionMenu] = useState("");
+  const [sessionMenuAt, setSessionMenuAt] = useState({ left: 0, top: 0 });
   // What was already sent for this session, so Enter's commit and the blur it
   // causes do not both reach the host with the same name.
   const renamed = useRef<Record<string, string>>({});
@@ -74,7 +84,10 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   // one transcript — the kernel refuses that, and it is what forked a recovery
   // branch on every save when two writers shared a file.
   const pick = async (ws: TreeWorkspace, session: TreeSession) => {
-    if (session.runtimeId) {
+    // The tree and runtime list arrive from separate reads. During a close or
+    // restore the tree can briefly retain an id that no longer exists; focusing
+    // that stale id changes no pane and makes the row look unclickable.
+    if (session.runtimeId && runtimes.some((rt) => rt.id === session.runtimeId)) {
       onFocus(session.runtimeId);
       return;
     }
@@ -137,6 +150,31 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
     }
   };
 
+  const saveSession = async (session: TreeSession) => {
+    setBusy("export:" + session.path);
+    try {
+      const exported = await hub.exportSession(session.path);
+      const records = exported.content
+        .split(/\r?\n/)
+        .filter((line) => line.trim())
+        .map((line) => JSON.parse(line) as unknown);
+      const content = JSON.stringify(
+        { version: 1, title: session.title || session.name, exportedAt: new Date().toISOString(), records },
+        null,
+        2,
+      );
+      const clean = (session.title || exported.name || session.name).replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").trim() || "reasonix-session";
+      const filename = `${clean}.json`;
+      const saved = await host().saveText(filename, content);
+      if (saved === null) download(filename, content);
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy("");
+      setSessionMenu("");
+    }
+  };
+
   // Filtering is client-side because the tree is already here: the kernel has no
   // search route, and a round trip to re-derive what the window is holding would
   // be slower than the typing. A hit on the folder keeps all of its sessions.
@@ -147,7 +185,19 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
     const sessions = ws.sessions.filter(named);
     return sessions.length ? { ...ws, sessions } : null;
   };
-  const shownTree = needle ? (tree.map(hit).filter(Boolean) as TreeWorkspace[]) : tree;
+  const searchedTree = needle ? (tree.map(hit).filter(Boolean) as TreeWorkspace[]) : tree;
+  const shownTree = searchedTree
+    .map((ws) => ({
+      ...ws,
+      sessions: ws.sessions.filter((session) => {
+        if (scope === "archived") return !!session.archived;
+        if (session.archived) return false;
+        if (scope === "live") return !!session.runtimeId && liveIds([session.runtimeId]).length > 0;
+        if (scope === "pinned") return pinned.has(session.path);
+        return true;
+      }),
+    }))
+    .filter((ws) => scope === "all" || ws.sessions.length > 0);
   // A fold is a resting-state preference: while a word is being typed it would
   // hide the very rows that word just found.
   const shutHere = needle ? false : hereShut;
@@ -217,7 +267,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
             const doomed = confirm === ws.root ? panesOf(ws.root) : [];
             const busyPanes = liveIds(doomed).length;
             return (
-              <div className="wsnode" key={ws.root} data-missing={ws.missing ? "" : undefined}>
+              <div className="wsnode" key={ws.root} data-current={panesOf(ws.root).includes(active) ? "" : undefined} data-missing={ws.missing ? "" : undefined}>
                 {confirm === ws.root ? (
                   <Confirm
                     what={`从列表移除「${ws.name}」？`}
@@ -308,7 +358,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                     return (
                       <Fragment key={session.path}>
                       <div
-                        data-action="session.open"
+                        data-action-click="session.open"
+                        data-action-keydown="session.open"
+                        data-target={session.path}
                         className="sessrow"
                         role="treeitem"
                         aria-selected={on}
@@ -316,6 +368,15 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         data-live={session.runtimeId ? "" : undefined}
                         data-busy={busy === session.path ? "" : undefined}
                         onClick={() => void pick(ws, session)}
+                        tabIndex={0}
+                        onKeyDown={(ev) => {
+                          if (ev.target !== ev.currentTarget) return;
+                          if (editing === session.path) return;
+                          if (ev.key === "Enter" || ev.key === " ") {
+                            ev.preventDefault();
+                            void pick(ws, session);
+                          }
+                        }}
                       >
                         <i className="pip" />
                         {editing === session.path ? (
@@ -347,13 +408,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                             }}
                           />
                         ) : (
-                          <span className="sesstitle" title={session.title || session.name}>{session.title || session.name}</span>
+                          <span className="sesstitle" title={session.title || session.name}><span>{session.title || session.name}</span></span>
                         )}
-                        {/* The unit is the same on every row, so the row says
-                            the number and the title says what it is about. */}
-                        <span className="sessmeta" title={session.turns ? t("{n} 轮", { n: session.turns }) : t("空会话")}>
-                          {session.turns || ""}
-                        </span>
                         {copies.length > 0 && (
                           <button
                             className="sesscopies"
@@ -373,27 +429,73 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                           </button>
                         )}
                         <button
-                          className="sessedit-btn"
-                          title={t("重命名")}
-                          aria-label={t("重命名该会话")}
+                          className="session-more"
+                          data-action="session.menu"
+                          data-target={session.path}
+                          title={t("更多操作")}
+                          aria-label={t("会话操作：{title}", { title: session.title || session.name })}
+                          aria-expanded={sessionMenu === session.path}
                           onClick={(ev) => {
                             ev.stopPropagation();
-                            setEditing(session.path);
+                            const opening = sessionMenu !== session.path;
+                            if (opening) {
+                              const anchor = ev.currentTarget.getBoundingClientRect();
+                              setSessionMenuAt({
+                                left: Math.min(window.innerWidth - 240, anchor.right + 8),
+                                top: Math.max(12, Math.min(window.innerHeight - 270, anchor.top - 7)),
+                              });
+                            }
+                            setSessionMenu(opening ? session.path : "");
                           }}
                         >
-                          ✎
+                          <StudioIcon name="more" />
                         </button>
-                        <button
-                          className="wsdel"
-                          title={t("删除该会话")}
-                          aria-label={t("删除该会话")}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            setConfirm(session.path);
-                          }}
-                        >
-                          ×
-                        </button>
+                        {sessionMenu === session.path && (
+                          <div className="session-pop" role="menu" aria-label={t("会话操作")} style={sessionMenuAt} onClick={(ev) => ev.stopPropagation()}>
+                            <div className="session-pop-head">
+                              <b>{session.title || session.name}</b>
+                              <small>{session.runtimeId && liveIds([session.runtimeId]).length ? t("执行中") : t("已完成")} · {t("本地工作区")}</small>
+                            </div>
+                            <div className="session-pop-group">
+                              <button role="menuitem" data-action="session.pin" data-target={session.path} onClick={() => { onPin(session.path); setSessionMenu(""); }}>
+                                <StudioIcon name="pin" /><span>{pinned.has(session.path) ? t("取消置顶") : t("置顶会话")}</span>
+                              </button>
+                              <button role="menuitem" data-action="session.rename" data-target={session.path} onClick={() => { setEditing(session.path); setSessionMenu(""); }}>
+                                <StudioIcon name="edit" /><span>{t("重命名")}</span>
+                              </button>
+                              {session.runtimeId && liveIds([session.runtimeId]).length > 0 && (
+                                <button role="menuitem" data-action="session.pause" data-target={session.path} onClick={() => { onPause(session.runtimeId!); setSessionMenu(""); }}>
+                                  <StudioIcon name="pause" /><span>{t("暂停执行")}</span>
+                                </button>
+                              )}
+                              <button
+                                role="menuitem"
+                                data-action="session.archive"
+                                data-target={session.path}
+                                data-value={session.archived ? "restore" : "archive"}
+                                disabled={!!session.runtimeId && liveIds([session.runtimeId]).length > 0}
+                                onClick={() => {
+                                  setSessionMenu("");
+                                  void onArchive(session.path, !session.archived, session.runtimeId).catch(onError);
+                                }}
+                              >
+                                <StudioIcon name="archive" /><span>{t(session.archived ? "取消归档" : "归档会话")}</span>
+                              </button>
+                            </div>
+                            <div className="session-pop-divider" />
+                            <div className="session-pop-group">
+                              <button role="menuitem" data-action="session.export" data-target={session.path} disabled={busy === "export:" + session.path} onClick={() => void saveSession(session)}>
+                                <StudioIcon name="download" /><span>{t("导出会话")}</span><small>JSON</small>
+                              </button>
+                            </div>
+                            <div className="session-pop-divider" />
+                            <div className="session-pop-group">
+                              <button className="danger" role="menuitem" data-action="session.delete" data-target={session.path} onClick={() => { setConfirm(session.path); setSessionMenu(""); }}>
+                                <StudioIcon name="trash" /><span>{t("删除会话")}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       {open &&
                         copies.map((copy) =>
@@ -409,16 +511,25 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                             />
                           ) : (
                             <div
-                              data-action="session.open"
+                              data-action-click="session.open"
+                              data-action-keydown="session.open"
+                              data-target={copy.path}
                               key={copy.path}
                               className="sessrow sesscopy"
                               role="treeitem"
                               data-busy={busy === copy.path ? "" : undefined}
                               onClick={() => void pick(ws, copy)}
+                              tabIndex={0}
+                              onKeyDown={(ev) => {
+                                if (ev.target !== ev.currentTarget) return;
+                                if (ev.key === "Enter" || ev.key === " ") {
+                                  ev.preventDefault();
+                                  void pick(ws, copy);
+                                }
+                              }}
                             >
                               <i className="pip" />
-                              <span className="sesstitle">{t("恢复副本")}</span>
-                              <span className="sessmeta">{copy.turns ? t("{n} 轮", { n: copy.turns }) : t("空会话")}</span>
+                              <span className="sesstitle"><span>{t("恢复副本")}</span></span>
                               <button
                                 className="wsdel"
                                 title={t("删除该会话")}

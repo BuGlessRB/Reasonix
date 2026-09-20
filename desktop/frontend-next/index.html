@@ -120,6 +120,23 @@
         .bmark .bl, .bline { animation-duration: .01ms; animation-delay: 0s }
         .boot[data-done] { transform: none }
       }
+      /* The product shell uses a restrained, neutral first paint. The startup
+         screen confirms the app is opening; it is not a second brand film. */
+      :root {
+        --boot-bg: #f6f6f4; --boot-ink: #292b29; --boot-dim: #7b7e77;
+        --boot-gilt: #292b29; --boot-grain-a: .012;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --boot-bg: #171817; --boot-ink: #e5e7e1; --boot-dim: #777a73; --boot-gilt: #e5e7e1; --boot-grain-a: .018 }
+      }
+      :root[data-theme="dark"] { --boot-bg: #171817; --boot-ink: #e5e7e1; --boot-dim: #777a73; --boot-gilt: #e5e7e1; --boot-grain-a: .018 }
+      :root[data-theme="light"] { --boot-bg: #f6f6f4; --boot-ink: #292b29; --boot-dim: #7b7e77; --boot-gilt: #292b29; --boot-grain-a: .012 }
+      .bsky { display: none }
+      .bmid { gap: 18px; margin-top: -2vh }
+      .bmark { width: 154px }
+      .bmark .bl { animation-duration: .42s; animation-delay: calc(var(--i) * 35ms + 80ms) }
+      .bline { letter-spacing: .02em; animation-delay: 360ms }
+      @keyframes bootletter { from { opacity: 0 } to { opacity: 1 } }
     </style>
   </head>
   <body>

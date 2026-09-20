@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { t } from "../i18n";
 import { listenAction } from "./listen";
 import { useRuntimeReload } from "./RuntimeReload";
-import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, CapabilityScope, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
+import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, CapabilityScope, McpEntry, ModelEntry, PluginPackage, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { bytes, tokens as fmtTokens } from "../i18n/format";
 import { ICON, NAV, SECTION_NAME, SETTINGS, settingMatches } from "./prefsnav";
@@ -40,11 +40,6 @@ import { Appearance, SCHEMES } from "./Appearance";
 import { ScopeBar } from "./CapabilityScope";
 import { reason } from "../i18n/kernel";
 import { SettingsHeading } from "./SettingsHeading";
-
-const PRESETS: [Preset, string, string][] = [
-  ["balanced", "均衡", "以模型判定任务完成为准，适用于日常任务"],
-  ["delivery", "交付", "任何修改均需经过验证、复核与签收，缺一不可视为完成"],
-];
 
 const APPROVALS: [ApprovalMode, string, string][] = [
   ["dontAsk", "不询问", "不显示审批请求；需要批准的操作一律不执行"],
@@ -84,18 +79,21 @@ interface Props {
   onContrast: (c: string) => void;
   onClose: () => void;
   onChanged: () => void;
+  onSessionsRecovered?: () => void;
   at?: string;
   account: AccountState | null;
   accountUnread: string;
   reloadAccount: () => void;
+  workspaceRoot?: string;
 }
 
-export function Settings({ hub, onError, port, status, theme, onTheme, contrast, onContrast, weight, onWeight, look, onLook, onClose, onChanged, reloadThemes, at: opened, account: acct, accountUnread, reloadAccount }: Props) {
-  const [at, setAt] = useState<Section>((opened as Section) || "session");
+export function Settings({ hub, onError, port, status, theme, onTheme, contrast, onContrast, weight, onWeight, look, onLook, onClose, onChanged, onSessionsRecovered, reloadThemes, at: opened, account: acct, accountUnread, reloadAccount, workspaceRoot }: Props) {
+  const [openedSection, openedAnchor = ""] = (opened ?? "").split(":", 2);
+  const [at, setAt] = useState<Section>((openedSection as Section) || "session");
   // 搜索的语料是这张表，不是屏幕上的 DOM：分区是按需挂载的，读 DOM 就只搜得到
   // 当前这一页，而为了搜索把每一页都挂起来会让隐藏页面开始发请求。
   const [query, setQuery] = useState("");
-  const [landed, setLanded] = useState("");
+  const [landed, setLanded] = useState(openedAnchor);
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
   const [protocol, setProtocol] = useState<Record<string, string>>({});
@@ -255,7 +253,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
   };
   const efforts = models.find((m) => m.ref === status?.modelRef)?.efforts ?? [];
   const assigned = roles ? Object.values(roles).filter(Boolean).length : 0;
-  const preset = t(PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "") || "—";
+  const preset = t("自动");
   const approval = t(APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—");
   const broken = mcp.filter((m) => m.state === "failed").length;
   // A package owns what it brought, and its own row already lists it. What is
@@ -466,17 +464,8 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           )}
           {at === "session" && (
             <>
-              <Group id="preset" title={t("执行设定")} now={preset} hint={t("决定任务完成的判定标准。切换立即生效，不会重建运行时。")}>
-                <div className="seg" data-text role="radiogroup" aria-label={t("执行设定")}>
-                  {PRESETS.map(([id, name]) => (
-                    <button key={id} role="radio" data-action="chrome.preset" data-value={id}
-                      aria-checked={status?.preset === id} disabled={!!busy}
-                      onClick={() => run(id, () => port.setPreset(id))}>
-                      {t(name)}
-                    </button>
-                  ))}
-                </div>
-                <p className="note">{t(PRESETS.find(([id]) => id === status?.preset)?.[2] ?? "")}</p>
+              <Group id="preset" title={t("完成标准")} now={preset} hint={t("系统根据任务风险自动决定需要的验证程度，不再要求手动选择均衡或交付。")}>
+                <p className="note">{t("日常问答保持轻量；涉及文件修改、代码执行或明确交付物时自动增加验证与复核。")}</p>
               </Group>
               {/* An on/off that reverses by clicking again is a switch, not two
                   options — the same control the recipes and the sandbox's
@@ -759,7 +748,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           )}
 
           {at === "storage" && (
-            <Group id="storage" title={t("存储")} hint={t("数据的存储位置与占用空间。会话和索引会持续增长，配置和凭据不会，因此只有前者可以迁移。迁移在重启后生效。")}><Storage port={port} /></Group>
+            <Group id="storage" title={t("存储")} hint={t("数据的存储位置与占用空间。会话和索引会持续增长，配置和凭据不会，因此只有前者可以迁移。迁移在重启后生效。")}><Storage port={port} hub={hub} workspace={workspaceRoot ?? status?.workspaceRoot ?? ""} onRecovered={() => { onChanged(); onSessionsRecovered?.(); }} /></Group>
           )}
 
           {at === "appearance" && (

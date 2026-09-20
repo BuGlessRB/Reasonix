@@ -34,6 +34,7 @@ export interface TreeSession {
   // Set when a pane already drives this transcript: the sidebar focuses that
   // pane rather than opening a second writer for one file.
   runtimeId?: string;
+  archived?: boolean;
   // Conflict-recovery copies of this same conversation. A save that keeps
   // conflicting writes one per turn, all under one title.
   copies?: TreeSession[];
@@ -66,7 +67,10 @@ export interface HubPort {
   addWorkspace(path: string): Promise<TreeWorkspace>;
   removeWorkspace(path: string): Promise<void>;
   removeSession(path: string): Promise<void>;
+  archiveSession(path: string, archived: boolean): Promise<void>;
   renameSession(path: string, title: string): Promise<void>;
+  exportSession(path: string): Promise<{ name: string; content: string }>;
+  importLegacySessions(path: string, workspace: string): Promise<{ summary: string; imported: number; warnings: number }>;
   // The host book with each link's state, or null where this kernel refuses
   // remote panes outright — a page served to a browser, rather than the window.
   // Null is what lets the sidebar leave the whole section out instead of
@@ -210,8 +214,20 @@ export class SseHub implements HubPort {
     await this.post<void>("/tree/sessions/remove", { path });
   }
 
+  async archiveSession(path: string, archived: boolean) {
+    await this.post<void>("/tree/sessions/archive", { path, archived });
+  }
+
   async renameSession(path: string, title: string) {
     await this.post<void>("/tree/sessions/rename", { path, title });
+  }
+
+  exportSession(path: string) {
+    return this.post<{ name: string; content: string }>("/tree/sessions/export", { path });
+  }
+
+  importLegacySessions(path: string, workspace: string) {
+    return this.post<{ summary: string; imported: number; warnings: number }>("/tree/sessions/import-legacy", { path, workspace });
   }
 
   async remoteHosts() {

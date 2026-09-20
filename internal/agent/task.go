@@ -1093,7 +1093,8 @@ func (t *restrictedCapabilityProxy) check(args json.RawMessage) error {
 	if err := json.Unmarshal(args, &p); err != nil {
 		return fmt.Errorf("invalid args: %w", err)
 	}
-	if strings.EqualFold(strings.TrimSpace(p.Action), "list") {
+	action := strings.ToLower(strings.TrimSpace(p.Action))
+	if action == "list" || action == "search" {
 		return nil
 	}
 	id := strings.TrimSpace(p.CapabilityID)
@@ -1118,8 +1119,11 @@ func (t *restrictedCapabilityProxy) ResolveCall(ctx context.Context, args json.R
 		Action string `json:"action"`
 	}
 	_ = json.Unmarshal(args, &p)
-	if strings.EqualFold(strings.TrimSpace(p.Action), "list") && rc.SkipExecute {
+	action := strings.ToLower(strings.TrimSpace(p.Action))
+	if action == "list" && rc.SkipExecute {
 		rc.Result = filterCapabilityListResult(rc.Result, t.servers)
+	} else if action == "search" && rc.SkipExecute {
+		rc.Result = filterCapabilitySearchResult(rc.Result, t.allowed)
 	}
 	return rc, nil
 }
@@ -1136,8 +1140,11 @@ func (t *restrictedCapabilityProxy) Execute(ctx context.Context, args json.RawMe
 		Action string `json:"action"`
 	}
 	_ = json.Unmarshal(args, &p)
-	if strings.EqualFold(strings.TrimSpace(p.Action), "list") {
+	action := strings.ToLower(strings.TrimSpace(p.Action))
+	if action == "list" {
 		return filterCapabilityListResult(out, t.servers), nil
+	} else if action == "search" {
+		return filterCapabilitySearchResult(out, t.allowed), nil
 	}
 	return out, nil
 }

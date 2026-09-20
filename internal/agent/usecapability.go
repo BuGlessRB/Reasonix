@@ -533,23 +533,25 @@ func (*UseCapabilityTool) Name() string { return "use_capability" }
 var CapabilityIDExamples = []string{"tool:grep", "skill:review", "task:subagent", "task:fleet"}
 
 func (*UseCapabilityTool) Description() string {
-	return "Unified capability proxy with a fixed schema: list catalog capabilities, inspect one (metadata plus its input schema), call a capability by stable id (tool:grep, skill:review, task:subagent, task:fleet, mcp-tool:server/tool), or decline a prefer capability with a non-empty reason. action=list names every callable id and its aliases; inspect one for its arguments before calling. task:subagent delegates one investigation; task:fleet dispatches 2-64 at once and orders them with depends_on where one needs another's answer. Calling does not change the provider-visible tool schema. Resolved writers still pass permission, plan mode, sandbox, write-path, and workspace-lease checks. The Planner leaves destructive MCP for the Executor."
+	return "Search and call deferred tools, skills, and MCP through stable IDs such as tool:grep, skill:review, task:subagent, task:fleet, and mcp-tool:server/tool. Before saying a tool, network, or integration is unavailable, search by natural-language goal; results include ranked IDs and available schemas. list enumerates the catalog, inspect loads one definition, call invokes it, and decline records why a preferred capability is skipped. task:subagent delegates one task; task:fleet delegates 2-64. Calls retain all permission, sandbox, and execution checks."
 }
 
 func (*UseCapabilityTool) ReadOnly() bool { return true }
 
 func (*UseCapabilityTool) Schema() json.RawMessage {
 	// Stable schema — must not change across turns or when MCP connects.
-	// capability_id is optional only for action=list; inspect/call/decline still
+	// capability_id is optional for list/search; inspect/call/decline still
 	// require it at resolve time. One intentional prefix upgrade; thereafter
 	// install/connect churn does not change this schema.
 	return json.RawMessage(`{
 		"type":"object",
 		"properties":{
-			"action":{"type":"string","description":"list | inspect | call | decline"},
-			"capability_id":{"type":"string","description":"Capability id such as skill:review, task:subagent, mcp-server:github, or mcp-tool:github/search_issues. Not required for action=list."},
-			"arguments":{"type":"object","description":"Raw MCP tool arguments for action=call"},
-			"reason":{"type":"string","description":"Required non-empty reason when action=decline"}
+			"action":{"type":"string","description":"search | list | inspect | call | decline"},
+			"query":{"type":"string","description":"Natural-language search goal"},
+			"limit":{"type":"integer","minimum":1,"maximum":20,"description":"Result limit; default 5"},
+			"capability_id":{"type":"string","description":"Stable ID required by inspect, call, and decline"},
+			"arguments":{"type":"object","description":"Target arguments for call"},
+			"reason":{"type":"string","description":"Non-empty decline reason"}
 		},
 		"required":["action"]
 	}`)
@@ -561,6 +563,8 @@ func (t *UseCapabilityTool) ResolveCall(ctx context.Context, args json.RawMessag
 	var p struct {
 		Action       string          `json:"action"`
 		CapabilityID string          `json:"capability_id"`
+		Query        string          `json:"query"`
+		Limit        int             `json:"limit"`
 		Arguments    json.RawMessage `json:"arguments"`
 		Reason       string          `json:"reason"`
 	}
@@ -576,6 +580,21 @@ func (t *UseCapabilityTool) ResolveCall(ctx context.Context, args json.RawMessag
 		Args:         p.Arguments,
 	}
 	switch action {
+	case "search":
+		out, err := t.searchCapabilities(p.Query, p.Limit)
+		if err != nil {
+			if t.audit != nil {
+				t.audit.RecordMCPProxy(true, false, true)
+			}
+			return tool.ResolvedCall{}, err
+		}
+		if t.audit != nil {
+			t.audit.RecordMCPProxy(true, false, false)
+		}
+		base.SkipExecute = true
+		base.Result = out
+		base.ReadOnly = true
+		return base, nil
 	case "list":
 		out, err := t.listCapabilities()
 		if err != nil {
@@ -645,7 +664,7 @@ func (t *UseCapabilityTool) ResolveCall(ctx context.Context, args json.RawMessag
 		}
 		return t.resolveCall(ctx, id, p.Arguments, base)
 	default:
-		return tool.ResolvedCall{}, fmt.Errorf("unknown action %q; use list, inspect, call, or decline", p.Action)
+		return tool.ResolvedCall{}, fmt.Errorf("unknown action %q; use search, list, inspect, call, or decline", p.Action)
 	}
 }
 
@@ -703,109 +722,6 @@ type listServerInfo struct {
 	Status       string `json:"status"`
 	Authorized   bool   `json:"authorized"`
 	Connected    bool   `json:"connected"`
-}
-
-// listCapabilities returns the unified catalog summary: MCP servers plus
-// non-provider-visible tools and skills available through this proxy. The
-// top-level "servers" key stays compatible with restricted subagent list
-// filtering.
-func (t *UseCapabilityTool) listCapabilities() (string, error) {
-	type capInfo struct {
-		ID          string   `json:"id"`
-		Aliases     []string `json:"aliases,omitempty"`
-		Kind        string   `json:"kind"`
-		Name        string   `json:"name"`
-		Status      string   `json:"status,omitempty"`
-		ReadOnly    bool     `json:"read_only,omitempty"`
-		Description string   `json:"description,omitempty"`
-	}
-	var caps []capInfo
-	if t.catalog != nil {
-		for _, e := range t.catalog().Entries {
-			// Skip provider-visible core tools — they are already top-level.
-			if e.Kind == capability.KindTool && t.registry != nil && t.registry.ProviderVisible(e.ToolName) {
-				continue
-			}
-			caps = append(caps, capInfo{
-				ID:          e.ID,
-				Aliases:     e.Aliases,
-				Kind:        string(e.Kind),
-				Name:        e.Name,
-				Status:      string(e.Status),
-				ReadOnly:    e.ReadOnly,
-				Description: capabilityLead(e.Description),
-			})
-		}
-	}
-	serversJSON, err := t.listServers()
-	if err != nil {
-		return "", err
-	}
-	var serversPayload struct {
-		Servers []listServerInfo `json:"servers"`
-		Note    string           `json:"note"`
-	}
-	_ = json.Unmarshal([]byte(serversJSON), &serversPayload)
-	payload := map[string]any{
-		"capabilities": caps,
-		"servers":      serversPayload.Servers,
-		"note":         "Call action=call with a capability_id to invoke a non-core tool, skill, MCP tool, or other catalog entry without changing the provider tool schema.",
-	}
-	if serversPayload.Note != "" {
-		payload["note"] = payload["note"].(string) + " " + serversPayload.Note
-	}
-	b, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-// listServers returns sorted configured MCP server names, status, and
-// capability IDs without starting servers. Used by Planner discovery when no
-// specific capability route was provided.
-func (t *UseCapabilityTool) listServers() (string, error) {
-	configured := t.configuredServers()
-	list := make([]listServerInfo, 0, len(configured))
-	for _, server := range configured {
-		spec := server.spec
-		name := strings.TrimSpace(spec.Name)
-		if name == "" {
-			continue
-		}
-		// Apply stored project grants without process/network side effects so
-		// list status matches resolve/execute authorization.
-		resolved := plugin.ResolveStoredAuthorization(context.Background(), spec)
-		connected := server.enabled && resolved.ServerAuthorized() && t.host != nil && t.host.HasClientForSpec(resolved)
-		status := "configured"
-		if !server.enabled {
-			status = "disabled"
-		} else if connected {
-			status = "ready"
-		} else if t.host != nil {
-			for _, f := range t.host.Failures() {
-				if f.Name == name && strings.TrimSpace(f.Error) != "" {
-					status = "failed"
-					break
-				}
-			}
-		}
-		list = append(list, listServerInfo{
-			Name:         name,
-			CapabilityID: "mcp-server:" + name,
-			Status:       status,
-			Authorized:   resolved.ServerAuthorized(),
-			Connected:    connected,
-		})
-	}
-	b, err := json.MarshalIndent(map[string]any{
-		"servers": list,
-		"note":    "list does not start MCP servers. Call action=call on mcp-server:<name> to connect after authorization, or mcp-tool:<server>/<tool> for a concrete tool.",
-	}, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
 }
 
 func (t *UseCapabilityTool) inspect(ctx context.Context, id string) (string, error) {
@@ -1659,9 +1575,10 @@ func EmitProxyAudit(sink event.Sink, resolved tool.ResolvedCall) {
 		return
 	}
 	sink.Emit(event.Event{
-		Kind:   event.Notice,
-		Level:  event.LevelInfo,
-		Text:   fmt.Sprintf("capability proxy: %s → %s", resolved.DisplayName, resolved.TargetName),
-		Detail: resolved.CapabilityID,
+		Kind:     event.Notice,
+		Level:    event.LevelInfo,
+		Audience: event.NoticeAudienceOperator,
+		Text:     fmt.Sprintf("capability proxy: %s → %s", resolved.DisplayName, resolved.TargetName),
+		Detail:   resolved.CapabilityID,
 	})
 }

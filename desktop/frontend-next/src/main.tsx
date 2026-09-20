@@ -5,6 +5,7 @@ import { reason } from "./i18n/kernel";
 import { track as trackWidth } from "./ui/viewport";
 import "./styles/tokens.css";
 import "./styles/app.css";
+import "./styles/studio.css";
 import { App } from "./ui/App";
 import { SseHub } from "./port/hub";
 import type { HubPort } from "./port/hub";

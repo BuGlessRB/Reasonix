@@ -124,6 +124,28 @@ func TestEffectDescribedCapabilityIDsAreDiscoverable(t *testing.T) {
 	}
 }
 
+func TestEffectCapabilitySearchContractReachesFirstRequest(t *testing.T) {
+	probe := &capabilityProbeProvider{}
+	runProbeWith(t, "boot-capability-search-contract", probe, event.Discard)
+	probe.mu.Lock()
+	defer probe.mu.Unlock()
+	if len(probe.reqs) == 0 {
+		t.Fatal("provider received no request")
+	}
+	for _, schema := range probe.reqs[0].Tools {
+		if schema.Name != "use_capability" {
+			continue
+		}
+		if !strings.Contains(schema.Description, "Before saying a tool, network, or integration is unavailable") ||
+			!strings.Contains(string(schema.Parameters), `"query"`) ||
+			!strings.Contains(string(schema.Parameters), `"search | list | inspect | call | decline"`) {
+			t.Fatalf("first request carries an incomplete capability search contract:\n%s\n%s", schema.Description, schema.Parameters)
+		}
+		return
+	}
+	t.Fatal("first provider request is missing use_capability")
+}
+
 // TestEffectDelegationIDsCarryTheirSchema closes the second half: an id the
 // provider schema hides is callable only if inspect hands back its arguments.
 // Description text alone left the model guessing them.

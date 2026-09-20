@@ -31,4 +31,13 @@ describe("a line the host composed is not a thing the user said", () => {
     const items = users([{ role: "user", content: "完全不像任何模板的一句话", msgIndex: 1, hostAuthored: true }]);
     expect(items).toEqual([]);
   });
+
+  it("hides the legacy unavailable-tool repair prompt from older sessions", () => {
+    const items = users([{
+      role: "user",
+      content: "The following tools are unavailable in the current workflow phase: update_goal. Do not call them again. Respond to the user's request with visible answer text now; call a different tool only if it is still needed to complete the request.",
+      msgIndex: 1,
+    }]);
+    expect(items).toEqual([]);
+  });
 });

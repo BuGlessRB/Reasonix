@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ReadsCard } from "./ReadsCard";
 import { ToolCard } from "./ToolCard";
 
@@ -21,6 +21,38 @@ describe("tool outcome cards", () => {
     render(<ToolCard tool={{ id: "bad", name: "bash", err: "boom", readOnly: false }} running={false} />);
     expect(screen.getByText("失败")).toBeTruthy();
     expect(screen.getByText("boom")).toBeTruthy();
+  });
+
+  it("keeps a completed result compact until its row is opened", () => {
+    const { container } = render(<ToolCard tool={{ id: "ok", name: "bash", args: '{"command":"npm test"}', output: "passed", readOnly: false }} running={false} />);
+    const disclosure = container.querySelector("details.tool-disclosure") as HTMLDetailsElement;
+    expect(disclosure.open).toBe(false);
+    expect(screen.getByText("运行命令")).toBeTruthy();
+    fireEvent.click(disclosure.querySelector("summary")!);
+    expect(disclosure.open).toBe(true);
+  });
+
+  it("summarises edit size before the diff is opened", () => {
+    render(<ToolCard tool={{ id: "edit", name: "edit_file", args: '{"path":"src/App.tsx"}', diff: "+new\n-old", readOnly: false }} running={false} />);
+    expect(screen.getByLabelText("新增 1 行，删除 1 行").textContent).toBe("+1−1");
+  });
+
+  it("uses the prototype's compact audit row and structured details inside activity", () => {
+    const { container } = render(
+      <ToolCard
+        activity
+        tool={{ id: "call_example123", name: "read_file", args: '{"path":"README.md"}', output: "hello", readOnly: true }}
+        running={false}
+      />,
+    );
+    expect(screen.getByText("read_file")).toBeTruthy();
+    const disclosure = container.querySelector("details.tool-disclosure") as HTMLDetailsElement;
+    fireEvent.click(disclosure.querySelector("summary")!);
+    expect(disclosure.open).toBe(true);
+    expect(screen.getByText("调用 ample123")).toBeTruthy();
+    expect(screen.getByText("输入")).toBeTruthy();
+    expect(screen.getByText("结果")).toBeTruthy();
+    expect(screen.getAllByText(/README\.md/)).toHaveLength(2);
   });
 });
 

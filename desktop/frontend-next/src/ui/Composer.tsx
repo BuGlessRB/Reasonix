@@ -10,6 +10,7 @@ import { useIme } from "./ime";
 import { countLines, pasteIsLong, planTone, planVerb } from "./intake";
 import { useIntake } from "./useIntake";
 import type { Dropped } from "./filedrop";
+import { StudioIcon } from "./StudioIcon";
 
 // Only the ladder the kernel would accept for the model in hand. A fixed list
 // here offered rungs a given model does not have, and picking one looked like
@@ -29,6 +30,36 @@ function effortsFor(models: ModelEntry[], ref?: string): string[] {
   return EFFORT_FALLBACK;
 }
 
+function effortReading(value?: string): string {
+  const id = (value || "auto").toLowerCase();
+  const label = ({ auto: "自动", low: "快速", medium: "平衡", high: "深入", xhigh: "极致", max: "极致" } as Record<string, string>)[id] ?? id;
+  const raw = id === "auto" ? "Auto" : id.charAt(0).toUpperCase() + id.slice(1);
+  return `${t(label)} · ${raw}`;
+}
+
+function effortLabel(value: string): string {
+  const id = value.toLowerCase();
+  return t(({ auto: "自动", disabled: "关闭", low: "快速", medium: "平衡", high: "深入", xhigh: "极致", max: "极致" } as Record<string, string>)[id] ?? id);
+}
+
+function effortApi(value: string): string {
+  const id = value.toLowerCase();
+  return id === "xhigh" ? "XHigh" : id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+function effortDescription(value: string): string {
+  const id = value.toLowerCase();
+  return t(({
+    auto: "使用模型默认或自适应策略，按任务复杂度调整",
+    disabled: "不发送推理强度参数，使用服务端默认设置",
+    low: "轻量思考，适合改写、提取和明确的小任务",
+    medium: "兼顾响应速度与可靠性，适合大多数任务",
+    high: "投入更多时间分析复杂上下文与执行方案",
+    xhigh: "用于最复杂的问题，等待时间与消耗最高",
+    max: "用于最复杂的问题，等待时间与消耗最高",
+  } as Record<string, string>)[id] ?? value);
+}
+
 interface Props {
   port: AgentPort;
   status: SessionStatus | null;
@@ -41,6 +72,7 @@ interface Props {
   onSubmit: (text: string) => Promise<boolean>;
   onChanged: () => void;
   onError: (e: unknown) => void;
+  onSettings?: (section?: string) => void;
 }
 
 // What is riding along with this turn. An attachment travels as bytes or a path
@@ -98,7 +130,15 @@ function releaseChip(c: Chip) {
 let chipSeq = 0;
 const chipId = () => `c${++chipSeq}`;
 
-export function Composer({ port, status, running, focus, onSubmit, onChanged, onError }: Props) {
+export function Composer({ port, status, running, focus, onSubmit, onChanged, onError, onSettings = () => {} }: Props) {
+  const [branch, setBranch] = useState("");
+  useEffect(() => {
+    let alive = true;
+    port.capabilityScope()
+      .then((scope) => alive && setBranch(scope.repo ? (scope.branch || t("分离状态")) : ""))
+      .catch(() => alive && setBranch(""));
+    return () => { alive = false; };
+  }, [port, status?.workspaceRoot]);
   const [text, setText] = useState("");
   // The caret decides which token is being completed, so it is state here
   // rather than something read off the element when a menu happens to open.
@@ -114,6 +154,8 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
   const box = useRef<HTMLTextAreaElement>(null);
   const guide = useId();
   const completionId = useId();
+  const attachTipId = useId();
+  const branchTipId = useId();
   // Set only when a completion moved the caret: the browser puts it at the end
   // of a programmatic value, which is wrong for anything accepted mid-line.
   const pending = useRef<number | null>(null);
@@ -395,7 +437,7 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
                     {c.state === "adding" && <span className="sz live">{t("正在添加…")}</span>}
                     {c.state === "ready" && <span className="sz">{isPicture(c) ? t("图片") : t("文件")}</span>}
                     {c.state === "failed" && (
-                      <button
+        <button
                         className="retry"
                         data-action="session.attach"
                         title={c.error}
@@ -576,56 +618,67 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
         />
         <div className="turntools">
           <button
-            className="mode plain attach"
-            title={t("添加附件　也可直接拖入或粘贴")}
+            className="mode plain attach studio-attach"
             aria-label={t("添加附件")}
+            aria-describedby={attachTipId}
             onClick={() => picker.current?.click()}
           >
-            <span className="ic" aria-hidden="true">
-              <svg viewBox="0 0 16 16">
-                <path d="M8 4.3v7.4M4.3 8h7.4" />
-              </svg>
+            <StudioIcon name="plus" />
+            <span className="studio-control-tip" id={attachTipId} role="tooltip">
+              <b>{t("添加附件")}</b>
+              <span>{t("也可直接拖入或粘贴")}</span>
             </span>
           </button>
-        {/* The one control on this shelf with no width of its own: a gateway
-            can publish an id longer than the shelf is wide. It gives up
-            characters before the shelf gives up a line, and the ref it was
-            shortened from stays readable on hover. */}
         <Picker
-          className="mode"
+          wrapClassName="studio-model-control"
+          className="mode model-picker"
           data-action="model.select"
           place="bottom"
           title={status?.modelRef ?? modelLb}
           current={status?.modelRef}
           items={modelMenu(models)}
           pending={busy["model"]}
-          onPick={(ref) => change("model", () => port.setModel(ref))}
-          label={
-            <>
-              <span className="modelmark" aria-hidden="true" />
-              <span className="nm">{modelLb}</span>
-            </>
-          }
+          onPick={(ref) => ref === "__manage-models" ? onSettings("model") : change("model", () => port.setModel(ref))}
+          label={<><span className="modelmark" aria-hidden="true" /><span className="nm">{modelLb}</span><StudioIcon name="down" /></>}
         />
-        {/* A status may recede to its baseline; the only way into a mode may
-            not. This is where plan mode is discovered, so it stays, drawn
-            quietly while it is off. */}
         <span className="sep" aria-hidden="true" />
-        <button
-          className="mode tog"
-          data-action="plan.mode"
-          data-pending={busy["plan"] ? "" : undefined}
-          disabled={busy["plan"]}
-          aria-pressed={status?.plan ?? false}
-          onClick={() => change("plan", () => port.setPlanMode(!status?.plan))}
-        >
-          <span className="ic" aria-hidden="true">
-            <svg viewBox="0 0 16 16">
-              <path pathLength={1} d="M2.9 5.1 4.2 6.4l2.2-2.4M8 5.1h5.2M2.9 10.6l1.3 1.3 2.2-2.4M8 10.6h5.2" />
-            </svg>
-          </span>
-          <span className="lb">{t("计划")}</span>
-        </button>
+        <div className="studio-mode-control">
+          <Picker
+            className="mode studio-mode-picker"
+            triggerAction="plan.mode"
+            ariaPressed={status?.plan ?? false}
+            place="bottom"
+            title={t("工作模式")}
+            current={status?.plan ? "plan" : "agent"}
+            pending={busy["plan"]}
+            items={[
+              { value: "__mode", label: t("工作模式"), right: t("当前任务"), header: true },
+              { value: "agent", label: "Agent", desc: t("执行任务并使用已启用工具") },
+              { value: "plan", label: "Plan", desc: t("先整理步骤，不写入文件") },
+              { value: "ask", label: "Ask", desc: t("直接回答，不调用工具"), disabled: true },
+            ]}
+            onPick={(value) => change("plan", () => port.setPlanMode(value === "plan"))}
+            label={<><StudioIcon name="spark" /><span className="studio-sr-label">{t("计划")}</span><span>{status?.plan ? "Plan" : "Agent"}</span><StudioIcon name="down" /></>}
+          />
+        </div>
+        {branch && (
+          <div className="studio-branch-pop">
+            <div
+              className="mode plain studio-branch"
+              tabIndex={0}
+              aria-label={t("当前 Git 分支：{branch}", { branch })}
+              aria-describedby={branchTipId}
+            >
+              <span className="ic" aria-hidden="true"><StudioIcon name="branch" /></span>
+              <span className="lb">{branch}</span>
+            </div>
+            <div className="studio-branch-card" id={branchTipId} role="tooltip">
+              <b>{t("当前分支 · {branch}", { branch })}</b>
+              <span>{t("当前工作区 · 后续任务继续使用此分支")}</span>
+              <small>{t("仅作状态提示，无需点击")}</small>
+            </div>
+          </div>
+        )}
         {/* The toggle keeps its legacy meaning: it follows `plan`, which the
             kernel turns off the moment a plan is approved. The lifecycle is a
             separate reading — an approved plan is still running, and saying so
@@ -635,11 +688,34 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
             <span className="lb">{t("执行计划中")}</span>
           </span>
         )}
-        {/* 执行方式、思考强度、工具权限说的是同一件事：这一轮怎么跑。它们原来
-            一个在窗口顶栏、两个在这里，要拼出下一轮会怎么执行得看两个地方。
-            模型留在外面：它是最常改也最认得出的选择，而且没有一个「默认」可以
-            退回去 —— 每个值都是一次真实的选择。 */}
-        <Policy port={port} status={status} efforts={efforts} onChanged={onChanged} />
+        <Policy port={port} status={status} onChanged={onChanged} onBoundary={() => onSettings("tools:sandbox")} />
+        {/* 推理强度只在这里出现一次。它属于模型能力，不属于执行权限。 */}
+        {status && (
+          <div className="studio-effort-control">
+            <Picker
+              className="mode studio-effort-picker"
+              data-action="reasoning.effort"
+              place="bottom"
+              align="end"
+              title={t("推理强度")}
+              current={status.effort || "auto"}
+              pending={busy["effort"]}
+              items={[
+                { value: "__effort-heading", label: t("推理强度"), right: modelLb, header: true },
+                ...(efforts.length ? efforts : ["auto"]).map((value) => ({
+                  value,
+                  label: effortLabel(value),
+                  right: effortApi(value),
+                  desc: effortDescription(value),
+                })),
+                { value: "__effort-note", label: t("仅显示当前模型实际支持的档位。"), right: t("按模型生效"), header: true },
+              ]}
+              onPick={(value) => change("effort", () => port.setEffort(value))}
+              label={<><span>{effortReading(status.effort)}</span><StudioIcon name="down" /></>}
+            />
+          </div>
+        )}
+        <span className="turntools-spacer" aria-hidden="true" />
         </div>
         <span className="go">
           {running && (
@@ -684,7 +760,7 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
           >
             <span className="ic" aria-hidden="true">
               <svg viewBox="0 0 16 16">
-                <path d="M2.8 8h9.4M8.4 4.2 12.2 8l-3.8 3.8" />
+                <path d="M8 12.8V3.4M4.2 7.2 8 3.4l3.8 3.8" />
               </svg>
             </span>
             <span>{t(submitting ? "正在发送…" : running ? "插话" : "发送")}</span>

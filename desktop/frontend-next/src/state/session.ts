@@ -476,6 +476,12 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
 
     case "notice": {
       const level = ev.level ?? "info";
+      // Older journals stored the capability resolver's audit line as an
+      // ordinary conversation notice. The resolved tool card already carries
+      // the target and capability id, so rendering both produces two cards for
+      // one action. Current kernels mark this operator-only; keep the prefix
+      // guard so reopening an old session gets the same quiet transcript.
+      if (level === "info" && ev.text?.startsWith("capability proxy:")) return s;
       // A notice about the runtime is not a turn in the conversation, so it
       // does not join the record of one. What it says is still kept: every
       // frame reaches the trajectory either way, which is where a question
@@ -671,7 +677,11 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
       // turn that was nothing but a dropped file still has text here. What is
       // left with none is host chrome, and so is a line the host composed —
       // the kernel says which, and drawing it would put words in your mouth.
-      const text = m.hostAuthored ? "" : stripControl(m.content);
+      // Older sessions predate hostAuthored on this repair prompt. It is kernel
+      // guidance, not something the person said, so keep those transcripts clean
+      // after an upgrade as well as for newly written history.
+      const legacyHostRepair = m.content.startsWith("The following tools are unavailable in the current workflow phase:");
+      const text = m.hostAuthored || legacyHostRepair ? "" : stripControl(m.content);
       if (text) out.push({ t: "user", id: nextId(), text, msgIndex: m.msgIndex });
       continue;
     }

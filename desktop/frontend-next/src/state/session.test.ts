@@ -191,6 +191,11 @@ describe("a notice about the runtime rather than the conversation", () => {
     expect(notices(s)).toEqual(["undid last rewind"]);
     expect(s.runtime).toEqual([]);
   });
+
+  it("keeps legacy capability proxy audits out of the transcript", () => {
+    const s = run([notice(undefined, "info", "capability proxy: use_capability → web_fetch")]);
+    expect(notices(s)).toEqual([]);
+  });
 });
 
 describe("a line that is still queued", () => {

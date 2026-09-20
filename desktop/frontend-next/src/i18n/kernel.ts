@@ -38,6 +38,7 @@ const SAID: Record<string, string> = {
   "request.missing_field": "缺少「{field}」",
   "request.not_found": "找不到名为「{name}」的{kind}",
   "project.unknown": "该项目未在当前窗口中打开",
+  "workspace.unknown": "该工作区未在当前窗口中打开",
   "busy.session_in_use": "该会话正被其他位置占用：{detail}",
   "busy.session_running": "该会话正在运行，此消息已排入队列",
   "busy.session_active": "这是当前打开的会话，请先切换后再删除",

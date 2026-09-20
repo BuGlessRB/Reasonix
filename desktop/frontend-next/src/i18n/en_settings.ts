@@ -2,6 +2,9 @@
 // alone — one catalogue is still the model, and this file is read as its
 // continuation: same keying by Chinese source text, same grouping by screen.
 export const EN_SETTINGS: Record<string, string> = {
+  "完成标准": "Completion standard",
+  "系统根据任务风险自动决定需要的验证程度，不再要求手动选择均衡或交付。": "Reasonix chooses the needed verification level from task risk; there is no longer a Balanced or Delivery choice.",
+  "日常问答保持轻量；涉及文件修改、代码执行或明确交付物时自动增加验证与复核。": "Everyday questions stay lightweight; file changes, code execution, and explicit deliverables automatically receive more verification and review.",
   "设置没能打开": "Settings did not open",
   "重新载入": "Reload",
   "这一页是单独取的，这次没取到": "This screen is fetched on its own, and this time it did not arrive",
@@ -301,6 +304,16 @@ export const EN_SETTINGS: Record<string, string> = {
   "折叠了 {n} 条消息": "Folded {n} messages",
 
   // ── 首次连接 ─────────────────────────────────────────────────────
+  "开始设置": "Set up Reasonix",
+  "连接模型服务": "Connect a model service",
+  "地址、协议与凭据": "Address, protocol, and credentials",
+  "确认模型与能力": "Confirm the model and its capabilities",
+  "打开工作区": "Open a workspace",
+  "开始第一个任务": "Start your first task",
+  "之后可以在设置中随时修改，不会锁定当前选择。":
+    "You can change any of this later in Settings; the choices are not locked in.",
+  "本地优先 · 凭据由系统安全存储 · 连接前不会发送请求":
+    "Local first · credentials stay in secure system storage · nothing is sent before you connect",
   "首先连接模型服务": "Connect a model service first",
   "填写地址与 key，其余由系统探测 —— 协议、模型清单、是否支持读图均可自动获取。":
     "Give it an address and a key; the rest is asked of the endpoint — protocol, model list, whether it reads images.",

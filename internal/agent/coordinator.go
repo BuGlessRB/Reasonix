@@ -65,8 +65,8 @@ the lack of execution tools; it is by design. Just plan what the executor
 should do with its tools.
 
 When you need external real data and the capability route does not name a
-specific tool, call use_capability(action="list") first to see configured MCP
-servers, then inspect or call a non-destructive capability. If a capability is
+specific tool, call use_capability(action="search") with the goal before saying
+the capability is unavailable, then inspect or call a non-destructive result. If a capability is
 destructive, do not treat that as missing configuration or an unavailable MCP:
 write the operation into the plan for the executor instead.
 

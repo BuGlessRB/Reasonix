@@ -130,6 +130,14 @@ func RunLegacyRescueCommand(args string, sink event.Sink) Result {
 // directory itself. Only sessions are imported; config and credentials stay on
 // the default non-destructive migration path.
 func RunLegacySessionImportFrom(sourceRoot string, sink event.Sink) Result {
+	return RunLegacySessionImportInto(sourceRoot, config.SessionDir(), sink)
+}
+
+// RunLegacySessionImportInto is the desktop recovery form. Sessions whose
+// historical workspace still exists keep that workspace; orphaned or unscoped
+// sessions land in fallbackDest so the user can see and resume them instead of
+// being copied into the global store that the workspace sidebar cannot list.
+func RunLegacySessionImportInto(sourceRoot, fallbackDest string, sink event.Sink) Result {
 	sink = event.Sync(sink)
 	emit := func(level event.Level, text string) {
 		sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text})
@@ -150,14 +158,14 @@ func RunLegacySessionImportFrom(sourceRoot string, sink event.Sink) Result {
 		return result
 	}
 	for _, src := range sources {
-		n, err := agent.MigrateLegacySessionsFromExplicitDir(src.dir, config.SessionDir(), config.ProjectSessionDir)
+		n, err := agent.MigrateLegacySessionsFromExplicitDir(src.dir, fallbackDest, config.ProjectSessionDir)
 		if err != nil {
 			result.SessionErrs = append(result.SessionErrs, fmt.Errorf("%s: %w", src.label, err))
 			emit(event.LevelWarn, "migration rescue: skipped "+src.label+": "+err.Error())
 			continue
 		}
 		if n > 0 {
-			result.SessionImports = append(result.SessionImports, SessionImport{Source: src.label, Destination: config.SessionDir(), Count: n})
+			result.SessionImports = append(result.SessionImports, SessionImport{Source: src.label, Destination: fallbackDest, Count: n})
 			emit(event.LevelInfo, fmt.Sprintf("imported %d past session(s) from %s — resume them with --resume or the history panel", n, src.label))
 		}
 	}

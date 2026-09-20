@@ -176,11 +176,11 @@ export interface SettingEntry {
 // what it really renders — a block with no row here fails, and a row nothing
 // renders fails too.
 export const SETTINGS: SettingEntry[] = [
-  // Runtime only, both of them: POST /preset and POST /plan reach the
-  // controller and write nothing, so a new session starts at the default. The
-  // two rows below them on the model and tools pages look identical on screen
-  // and do persist — which is the whole reason this column exists.
-  { section: "session", anchor: "preset", title: "执行设定", scope: "session", apply: "immediate", keywords: ["均衡", "交付", "完成判定"] },
+  // The kernel still accepts legacy preset values for old clients and saved
+  // sessions, but Studio presents one adaptive completion standard. Asking
+  // people to predict the amount of verification before writing the task made
+  // an internal policy look like a required work mode.
+  { section: "session", anchor: "preset", title: "完成标准", scope: "session", apply: "immediate", keywords: ["自动", "验证", "复核", "完成判定"] },
   { section: "session", anchor: "plan-mode", title: "计划模式", scope: "session", apply: "immediate", keywords: ["只读", "先规划"] },
   { section: "session", anchor: "session-dir", title: "会话写入位置", scope: "workspace", apply: "none", keywords: ["工作目录", "路径"] },
 

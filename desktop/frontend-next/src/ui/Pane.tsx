@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { money } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
@@ -28,6 +28,9 @@ import { ABSENT, accountOf, type Wallet } from "./wallet";
 import { swapping } from "./swap";
 import { PaneNav, type PaneView } from "./PaneNav";
 import { useRate } from "./num";
+import { StudioIcon } from "./StudioIcon";
+import { useDismiss } from "./dismiss";
+import { ContextSummaryCard } from "./ContextSummaryCard";
 
 // PaneReport is what the window's own chrome needs from whichever pane has
 // focus: everything else about a session stays inside the pane that owns it.
@@ -40,6 +43,10 @@ export interface PaneReport {
   // this: a reopened history sits at halt too, and closing that costs nothing.
   live: boolean;
   cost: string;
+  contextPercent: number | null;
+  context: ContextBreakdown | null;
+  mcp: McpEntry[];
+  wallet: string;
 }
 
 // A shared constant, not `?? []`: a fresh empty array every render reads as a
@@ -67,7 +74,7 @@ interface Props {
   // its session. /status is polled only while a turn runs, so without this the
   // pane keeps reporting the posture it had when it opened.
   pulse: number;
-  onSettings: () => void;
+  onSettings: (section?: string) => void;
   // 这个窗口还没有人选过的项目文件夹。空转录是唯一说得出这句话的地方 —— 那里
   // 本来就在替一段还没开始的对话说明它该怎么开始。
   needsProject: boolean;
@@ -99,6 +106,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [queue, setQueue] = useState<QueueSnapshot | null>(null);
   const [slots, setSlots] = useState<Record<string, string>>({});
+  const [meterOpen, setMeterOpen] = useState(false);
+  const meterRef = useRef<HTMLDivElement>(null);
+  const closeMeter = useCallback(() => setMeterOpen(false), []);
+  useDismiss(meterOpen, meterRef, closeMeter);
   const flow = useRef<HTMLDivElement>(null);
   const startedAt = useRef(0);
   // Elapsed is a clock reading and belongs on the tick. Throughput is not: it
@@ -594,12 +605,27 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const blocked = hasPendingDecision(status);
   const run = runState({ blocked, running: s.running, hasItems: s.items.length > 0, terminal: s.terminal });
   const cost = money(s.metrics.cost, s.metrics.currency);
+  const cacheTokens = s.metrics.hit + s.metrics.miss;
+  const cacheRate = cacheTokens > 0 ? Math.round((s.metrics.hit / cacheTokens) * 100) : null;
+  const contextPercent = ctx && ctx.window > 0 ? Math.min(100, Math.round((ctx.used / ctx.window) * 100)) : null;
+  const walletDisplay = wallet.kind === "read" ? wallet.reading.display : "";
 
   // The chrome reads the focused pane. Reporting from an effect keeps it out of
   // render, where it would set state on the parent mid-paint.
   useEffect(() => {
-    onReport(rt.id, { status, title, steer: counts.steer, run, live: s.running || blocked, cost });
-  }, [rt.id, onReport, status, title, counts.steer, run, s.running, blocked, cost]);
+    onReport(rt.id, {
+      status,
+      title,
+      steer: counts.steer,
+      run,
+      live: s.running || blocked,
+      cost,
+      contextPercent,
+      context: ctx,
+      mcp,
+      wallet: walletDisplay,
+    });
+  }, [rt.id, onReport, status, title, counts.steer, run, s.running, blocked, cost, contextPercent, ctx, mcp, walletDisplay]);
 
   return (
     <section
@@ -733,7 +759,32 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             </div>
           )}
         </div>
-        <Composer port={port} status={status} running={s.running} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} />
+        <Composer port={port} status={status} running={s.running} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} />
+        <div className="studio-meterrail" ref={meterRef} aria-label={t("运行统计")}>
+          <span className="studio-meter-static studio-meter-speed" title={t(s.running ? "生成中" : "本轮均速")}>
+            <StudioIcon name="gauge" /><b>{tps > 0 ? tps.toFixed(1) : "—"}</b><span>tok/s</span><i data-live={s.running ? "" : undefined} aria-hidden="true" />
+          </span>
+          <span className="studio-meter-static studio-meter-cache" title={cacheRate === null ? t("尚无缓存数据") : t("命中 {hit} · 未命中 {miss}", { hit: s.metrics.hit.toLocaleString(), miss: s.metrics.miss.toLocaleString() })}>
+            <span>{t("缓存")}</span><b>{cacheRate === null ? "—" : `${cacheRate}%`}</b>
+          </span>
+          {ctx && ctx.window > 0 && (
+            <div className="studio-context-anchor" data-open={meterOpen ? "" : undefined}>
+              <button className="studio-meter-context" data-action="metrics.details" data-value="context" aria-expanded={meterOpen} aria-haspopup="dialog" aria-label={t("查看上下文与压缩")} onClick={() => setMeterOpen((open) => !open)}>
+                <span className="studio-context-ring" style={{ "--fill": `${Math.min(100, Math.round((ctx.used / ctx.window) * 100))}%` } as CSSProperties} aria-hidden="true" />
+                <span>{t("上下文")}</span><b>{Math.min(100, Math.round((ctx.used / ctx.window) * 100))}%</b>
+              </button>
+              <ContextSummaryCard
+                className="studio-context-summary"
+                context={ctx}
+                mcp={mcp}
+                percent={Math.min(100, Math.round((ctx.used / ctx.window) * 100))}
+                onManage={() => { closeMeter(); onSettings("ext"); }}
+              />
+            </div>
+          )}
+          {cost && <span className="studio-meter-cost"><span>{t("本轮")}</span><b>{cost}</b></span>}
+          {wallet.kind === "read" && <button className="studio-meter-wallet" data-action="settings.section" data-value="usage" aria-label={t("查看钱包余额")} onClick={() => onSettings("usage")}><StudioIcon name="wallet" /><b>{wallet.reading.display}</b></button>}
+        </div>
         {/* Below the box, under a ceiling of their own. Both arrive unbidden and
             both are dismissed one at a time, so nothing else bounds how many can
             be on screen at once. */}

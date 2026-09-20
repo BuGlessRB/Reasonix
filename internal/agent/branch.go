@@ -29,7 +29,11 @@ type BranchMeta struct {
 	TopicID       string    `json:"topic_id,omitempty"`
 	TopicTitle    string    `json:"topic_title,omitempty"`
 	CustomTitle   string    `json:"custom_title,omitempty"`
-	Model         string    `json:"model,omitempty"`
+	// Archived removes a finished conversation from the everyday session list
+	// without moving or deleting its transcript. Keeping this as metadata makes
+	// archive/unarchive atomic and preserves every sidecar needed to resume it.
+	Archived bool   `json:"archived,omitempty"`
+	Model    string `json:"model,omitempty"`
 	// TokenMode is the legacy dual-write value (economy|full|delivery). Prefer
 	// AgentPreset (balanced|delivery) when both are present.
 	TokenMode string `json:"token_mode,omitempty"`
@@ -341,6 +345,15 @@ func ensureBranchMetaUnlocked(sessionPath string) (BranchMeta, error) {
 func TouchBranchMeta(sessionPath string) error {
 	return UpdateBranchMeta(sessionPath, false, func(m *BranchMeta) error {
 		m.UpdatedAt = time.Now().UTC()
+		return nil
+	})
+}
+
+// SetSessionArchived changes only the catalog state of a transcript. The
+// conversation and all of its artifacts stay in place so unarchive is lossless.
+func SetSessionArchived(sessionPath string, archived bool) error {
+	return UpdateBranchMeta(sessionPath, false, func(m *BranchMeta) error {
+		m.Archived = archived
 		return nil
 	})
 }

@@ -6,12 +6,11 @@ import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { Chrome } from "./Chrome";
 import { Nav } from "./Nav";
 import { AccountRow } from "./AccountRow";
-import { swapping } from "./swap";
 import { apply as applyThemePack } from "./theme";
 import { apply as applyLook } from "./look";
 import { adopt as adoptLang } from "../i18n";
 import { Pane, type PaneReport } from "./Pane";
-import { Gutter, RAIL, SIDE, widthOf } from "./Gutter";
+import { Gutter, RAIL, widthOf } from "./Gutter";
 import { folded as roomGaveUp, onFolds } from "./viewport";
 import { trailing } from "./trailing";
 import { RemoteAsk } from "./RemoteAsk";
@@ -27,14 +26,48 @@ import { useAddWorkspace } from "./addws";
 import { PaneTabs } from "./PaneTabs";
 import { Onboarding } from "./Onboarding";
 import { Welcome } from "./Welcome";
+import { StudioIcon } from "./StudioIcon";
+import { BrowserPanel } from "./BrowserPanel";
 
-const Settings = lazy(async () => ({ default: (await import("./Settings")).Settings }));
+// Start fetching the settings chunk with the shell instead of waiting for the
+// first click. It remains a separate chunk (and keeps its failure boundary),
+// but opening settings no longer produces a veil while the module catches up.
+const settingsModule = import("./Settings").then(
+  (module) => ({ module, error: null as unknown }),
+  (error: unknown) => ({ module: null, error }),
+);
+const Settings = lazy(async () => {
+  const loaded = await settingsModule;
+  if (loaded.error) throw loaded.error;
+  return { default: loaded.module!.Settings };
+});
 
-const NO_REPORT: PaneReport = { status: null, title: "", steer: 0, run: "idle", live: false, cost: "" };
+const NO_REPORT: PaneReport = {
+  status: null,
+  title: "",
+  steer: 0,
+  run: "idle",
+  live: false,
+  cost: "",
+  contextPercent: null,
+  context: null,
+  mcp: [],
+  wallet: "",
+};
+const PINNED_SESSIONS_KEY = "reasonix:pinned-sessions";
+// Keep a small warm set for instant back-and-forth switching. Older settled
+// panes are cheap to restore from disk and expensive to leave mounted: every
+// hidden pane retains a transcript, observers and markdown tree.
+const WARM_PANES = 4;
 
-// 度量栏默认展开，收起是用户的选择 —— 那个选择跟主题一样留在盘上，不然拖一下
-// 窗口或者重开一次就被顶回展开。
-const sideWanted = () => localStorage.getItem("rx-side") !== "0";
+function savedPins(): Set<string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PINNED_SESSIONS_KEY) ?? "[]");
+    return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
 
 // 两栏共用一条规则：窄到放不下就收起，缝和把手留在原处。宽档下的那个选择要留
 // 着 —— 拖窄一下再拖回来，不该把用户自己收起或展开的决定抹掉。
@@ -78,25 +111,20 @@ export function App({ hub }: { hub: HubPort }) {
   // 窄到放不下工作区栏时它是收起的，而不是消失的：栏一旦从 DOM 里拿掉，把手也
   // 跟着没了，剩下的入口只有一个没人知道的快捷键。
   const [rail, setRail] = useState(() => !roomGaveUp("rail"));
-  const [side, setSide] = useState(() => sideWanted() && !roomGaveUp("side"));
-  const chooseSide = useCallback((v: boolean | ((p: boolean) => boolean)) => {
-    setSide((cur) => {
-      const next = typeof v === "function" ? v(cur) : v;
-      localStorage.setItem("rx-side", next ? "1" : "0");
-      return next;
-    });
-  }, []);
+  const [railScope, setRailScope] = useState<"all" | "live" | "pinned" | "archived">("all");
+  const [pinnedSessions, setPinnedSessions] = useState<Set<string>>(savedPins);
+  const [showProjects, setShowProjects] = useState(false);
   // 三层所有权，只在用的地方相乘：wanted（用户的选择，rail 在 useFoldAway 的
   // 记忆里、side 还在盘上）、allowed（当前视口，useFoldAway 管）、focus（临时
   // 观看状态）。focus 绝不调 setRail/chooseSide —— 那会把临时状态写回偏好，退
   // 出后就恢复不了了。它也不存盘：重开一次窗口不该还在专注里。
   const [focus, setFocus] = useState(false);
   const [railW, setRailW] = useState(() => widthOf(RAIL));
-  const [sideW, setSideW] = useState(() => widthOf(SIDE));
   const [report, setReport] = useState<PaneReport>(NO_REPORT);
   const [error, setError] = useState("");
   // false = closed, true = open at its last section, a string = open there.
   const [settings, setSettings] = useState<string | boolean>(false);
+  const [browser, setBrowser] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("rx-theme") ?? "auto");
   // "" means never chosen, which is what lets the system's own contrast setting
   // decide. Any explicit pick wins over it from then on.
@@ -110,9 +138,6 @@ export function App({ hub }: { hub: HubPort }) {
   const [accountUnread, setAccountUnread] = useState("");
   const [pack, setPack] = useState<ThemePack | null>(null);
   const [look, setLook] = useState<Look>({});
-  // The metrics column is the window's, but its contents belong to the focused
-  // pane, which renders into it through a portal.
-  const [sideHost, setSideHost] = useState<HTMLElement | null>(null);
   // Bumped when a pane is rebound to another transcript. It rides the Pane key,
   // so the takeover remounts it: every bit of what is on screen belonged to the
   // conversation it just left.
@@ -127,7 +152,6 @@ export function App({ hub }: { hub: HubPort }) {
   runsRef.current = runs;
 
   const fail = useCallback((e: unknown) => setError(reason(e)), []);
-
   // Asked at the moment a confirmation opens, never subscribed to: runs moves
   // on every usage round, and handing the sidebar that would rebuild a tree of
   // a few hundred sessions each frame — which is what its memo is there for.
@@ -307,10 +331,14 @@ export function App({ hub }: { hub: HubPort }) {
     const paint = () => {
       const scheme = theme === "auto" ? (mq.matches ? "dark" : "light") : theme;
       document.documentElement.dataset.theme = scheme;
-      applyThemePack(pack, scheme as "light" | "dark", running);
+      // Studio now has one authored visual system shared with the approved
+      // prototype. Legacy theme packs may still be managed in settings, but
+      // they must not repaint this shell or reintroduce the old background,
+      // glow and translucency rules over the product UI.
+      applyThemePack(null, scheme as "light" | "dark", running);
       // After the pack, never before: size and type are the reader's, and a
       // palette someone else authored does not get to overrule them.
-      applyLook(look, running);
+      applyLook({ ...look, wallpaper: undefined }, running);
     };
     paint();
     mq.addEventListener("change", paint);
@@ -330,16 +358,19 @@ export function App({ hub }: { hub: HubPort }) {
   // A pane with no session file has never been written to — the empty one every
   // window opens with. Opening a conversation takes it over instead of parking
   // a blank column next to it.
-  const focusPane = useCallback((id: string) => swapping(() => setActive(id), "pane"), []);
+  // A transcript can be thousands of pixels tall. Capturing it into a View
+  // Transition made a simple sidebar click pay for a full-page texture before
+  // the active id changed. Selection feedback should be immediate.
+  const focusPane = useCallback((id: string) => setActive(id), []);
   // Settings is the next layer over the whole screen and had entry but no exit: it
   // simply vanished on unmount. A view transition can animate out an element that
   // is absent from the new state, so the tree need not stay mounted.
-  const showPrefs = useCallback((sec?: string) => swapping(() => setSettings(sec ?? true), "prefs"), []);
+  const showPrefs = useCallback((sec?: string) => setSettings(sec ?? true), []);
   // The host book is edited in settings and read by the sidebar, and nothing
   // else would tell it a machine was added: an idle host reports no change to
   // poll for, so a folder added there stayed invisible until the next launch.
   const hidePrefs = useCallback(() => {
-    swapping(() => setSettings(false), "prefs");
+    setSettings(false);
     void reloadRemotes();
   }, [reloadRemotes]);
 
@@ -359,18 +390,43 @@ export function App({ hub }: { hub: HubPort }) {
       if (blank && req.sessionPath && blank.root === req.root) {
         await panePorts.get(blank.id)?.resume(req.sessionPath);
         setTakeover((prev) => ({ ...prev, [blank.id]: (prev[blank.id] ?? 0) + 1 }));
-        await reloadPanes();
         focusPane(blank.id);
+        void reloadPanes();
         return;
+      }
+      // One visible pane plus live background work is the product model. Keep a
+      // few settled panes warm for quick backtracking, then reuse the oldest
+      // idle pane in the same workspace instead of accumulating full hidden
+      // transcripts until the kernel refuses another open.
+      const idle = runtimes.filter((rt) => rt.id !== active && !runsRef.current[rt.id]?.live);
+      const atCapacity = runtimes.length >= Math.min(WARM_PANES, hub.maxPanes());
+      const reusable = atCapacity && req.sessionPath
+        ? idle.find((rt) => rt.root === req.root && panePorts.has(rt.id))
+        : undefined;
+      if (reusable && req.sessionPath) {
+        await panePorts.get(reusable.id)?.resume(req.sessionPath);
+        setTakeover((prev) => ({ ...prev, [reusable.id]: (prev[reusable.id] ?? 0) + 1 }));
+        focusPane(reusable.id);
+        void reloadPanes();
+        return;
+      }
+      // A different workspace cannot be resumed into the same runtime. Retire
+      // one settled background pane before opening so the row never reaches the
+      // old "nothing happens" max-pane failure.
+      let retired = "";
+      if (runtimes.length >= hub.maxPanes() && idle[0]) {
+        retired = idle[0].id;
+        await hub.close(retired);
       }
       const rt = await hub.open(req);
       // Another folder needs its own runtime, so the blank one is retired
       // rather than left behind.
       if (blank && blank.id !== rt.id) await hub.close(blank.id);
-      await reloadPanes();
+      setRuntimes((prev) => [...prev.filter((pane) => pane.id !== rt.id && pane.id !== blank?.id && pane.id !== retired), rt]);
       focusPane(rt.id);
+      void reloadPanes();
     },
-    [hub, reloadPanes, runtimes, panePorts, focusPane],
+    [hub, reloadPanes, runtimes, panePorts, focusPane, active],
   );
 
   // Awaitable because deleting a conversation has to close its pane first and
@@ -404,15 +460,10 @@ export function App({ hub }: { hub: HubPort }) {
   const needsProject = !claimed && tree.every((ws) => !ws.remembered);
 
   useFoldAway("rail", setRail);
-  useFoldAway("side", setSide, sideWanted());
 
   const onRailW = useCallback((w: number) => {
     setRailW(w);
     localStorage.setItem(RAIL.key, String(Math.round(w)));
-  }, []);
-  const onSideW = useCallback((w: number) => {
-    setSideW(w);
-    localStorage.setItem(SIDE.key, String(Math.round(w)));
   }, []);
 
   // A webview has nowhere to put a new tab, so target="_blank" opens nothing at
@@ -439,10 +490,9 @@ export function App({ hub }: { hub: HubPort }) {
   const shortcuts: { chord: string; shift?: boolean; action: string; run: () => void }[] = useMemo(
     () => [
       { chord: "\\", action: "rail.toggle", run: () => setRail((v) => !v) },
-      { chord: "\\", shift: true, action: "inspector.toggle", run: () => chooseSide((v) => !v) },
       { chord: ",", action: "chrome.settings", run: showPrefs },
     ],
-    [showPrefs, chooseSide],
+    [showPrefs],
   );
 
   useEffect(() => {
@@ -464,14 +514,16 @@ export function App({ hub }: { hub: HubPort }) {
       // the two, and doing both on one press would be neither.
       // Escape is two actions on one key, the way send and stop share one
       // button: session.stop while a turn is live, chrome.focus otherwise.
-      if (e.key === "Escape" && !settings) {
+      if (e.key === "Escape" && browser) {
+        setBrowser(false);
+      } else if (e.key === "Escape" && !settings) {
         if (running) activePort?.cancel();
         else setFocus(false);
       }
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [activePort, running, settings, shortcuts]);
+  }, [activePort, browser, running, settings, shortcuts]);
 
   // A setting changed in the pane is a fact about the session behind it, and
   // the pane is what holds that fact. Without a nudge it keeps polling only
@@ -505,6 +557,11 @@ export function App({ hub }: { hub: HubPort }) {
   );
   // The folder only earns tab space when the panes actually span more than one.
   const manyRoots = useMemo(() => new Set(runtimes.map((rt) => rt.root)).size > 1, [runtimes]);
+  const activeRuntime = runtimes.find((rt) => rt.id === active);
+  const activeWorkspace = tree.find((ws) => ws.root === activeRuntime?.root) ?? tree[0];
+  const sessionCount = tree.reduce((n, ws) => n + ws.sessions.filter((session) => !session.archived).length, 0);
+  const archivedCount = tree.reduce((n, ws) => n + ws.sessions.filter((session) => session.archived).length, 0);
+  const liveCount = liveIds(runtimes.map((rt) => rt.id)).length;
 
   // The tab strip has nowhere to await: closing is the end of the gesture there,
   // so a refusal has to land in the error bar rather than in a caller.
@@ -520,13 +577,37 @@ export function App({ hub }: { hub: HubPort }) {
     [hub, reloadTree, fail],
   );
 
+  const archiveSession = useCallback(
+    async (path: string, archived: boolean, runtimeId?: string) => {
+      if (runtimeId) await closePanes([runtimeId]);
+      await hub.archiveSession(path, archived);
+      if (archived) {
+        setPinnedSessions((current) => {
+          if (!current.has(path)) return current;
+          const next = new Set(current);
+          next.delete(path);
+          localStorage.setItem(PINNED_SESSIONS_KEY, JSON.stringify([...next]));
+          return next;
+        });
+      }
+      await reloadTree();
+    },
+    [closePanes, hub, reloadTree],
+  );
+
+  const togglePinnedSession = useCallback((path: string) => {
+    setPinnedSessions((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      localStorage.setItem(PINNED_SESSIONS_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
   if (setup === undefined || welcomed === undefined) return <div className="app" data-run="idle" />;
-  // The sequence and the first connection are one scene, not two screens: the
-  // card rises inside it after the collapse, with the introduction still above.
-  // A machine that has seen the sequence but still owes a key gets the card
-  // over a still scene rather than a replay.
-  if ((!welcomed || setup?.required) && activePort) {
-    const card = setup?.required ? (
+  if (setup?.required && activePort) {
+    return (
       <Onboarding
         port={activePort}
         setup={setup}
@@ -539,18 +620,18 @@ export function App({ hub }: { hub: HubPort }) {
           void reloadPanes();
         }}
       />
-    ) : undefined;
+    );
+  }
+  if (!welcomed && activePort) {
     return (
       <Welcome
-        variant={setup?.required ? "full" : "short"}
-        replay={!welcomed}
+        variant="short"
+        replay
         onDone={() => {
           setWelcomed(true);
           void activePort.markWelcomed().catch(() => {});
         }}
-      >
-        {card}
-      </Welcome>
+      />
     );
   }
 
@@ -559,13 +640,13 @@ export function App({ hub }: { hub: HubPort }) {
       className="app"
       data-run={report.run}
       data-rail={rail ? "on" : "off"}
-      data-side={side ? "on" : "off"}
+      data-side={browser ? "on" : "off"}
       data-focus={focus ? "true" : undefined}
       data-plan={report.status?.plan ? "on" : "off"}
       data-apv={report.status?.toolApprovalMode ?? "ask"}
       data-prefs={settings ? "" : undefined}
       data-tabs={runtimes.length > 1 ? "" : undefined}
-      style={{ "--rail-open": `${railW}px`, "--side-open": `${sideW}px` } as CSSProperties}
+      style={{ "--rail-open": `${railW}px`, "--side-open": "min(430px, 42vw)" } as CSSProperties}
     >
       {ask && <RemoteAsk ask={ask} onAnswer={answerRemote} />}
 
@@ -573,13 +654,18 @@ export function App({ hub }: { hub: HubPort }) {
         host={runtimes.find((rt) => rt.id === active)?.host}
         port={activePort}
         status={report.status}
-        title={report.title}
+        title={tabs.find((tab) => tab.rt.id === active)?.title ?? report.title}
         steer={report.steer}
-        run={report.run}
         onSettings={showPrefs}
+        onBrowser={() => setBrowser((value) => !value)}
+        browser={browser}
         account={account}
         focus={focus}
         onFocus={() => setFocus((v) => !v)}
+        rail={rail}
+        theme={theme}
+        onRail={() => setRail((v) => !v)}
+        onTheme={() => setTheme((v) => (v === "dark" ? "light" : "dark"))}
       />
 
       {pack?.sky && <Sky />}
@@ -595,6 +681,90 @@ export function App({ hub }: { hub: HubPort }) {
             屏幕上没有的栏还能被 Tab 走进去。 */}
         <div className="rail" inert={focus}>
           <div className="railscroll">
+          <div className="studio-rail-head">
+            <div className="studio-brand" aria-label="Reasonix Studio">
+              <span className="studio-brand-mark" aria-hidden="true"><StudioIcon name="brand" /></span>
+              <span className="studio-brand-word" aria-hidden="true">
+                <b>reasoni<span className="studio-brand-accent">x</span></b>
+                <small>studio</small>
+              </span>
+              <button className="studio-collapse" data-action="chrome.rail" onClick={() => setRail(false)} aria-label={t("收起工作区栏")}><StudioIcon name="menu" /></button>
+            </div>
+            <button
+              className="studio-new-task"
+              data-action="session.new"
+              onClick={() => void openPane({ root: tree[0]?.root }).catch(fail)}
+            >
+              <span aria-hidden="true"><StudioIcon name="plus" /></span>{t("新建会话")}<kbd>Alt N</kbd>
+            </button>
+            <button className="studio-search" data-action="workspace.search" onClick={() => document.querySelector<HTMLInputElement>(".wsfind input")?.focus()}>
+              <span aria-hidden="true"><StudioIcon name="search" /></span>{t("搜索与快捷操作")}<kbd>Ctrl K</kbd>
+            </button>
+            <div className="studio-section-label"><span>{t("工作空间")}</span><button data-action="workspace.add" onClick={() => adder.add("rail")} aria-label={t("添加工作区")}><StudioIcon name="plus" /></button></div>
+            {activeWorkspace && (
+              <div className="studio-workspace-switcher">
+                <button className="studio-current-workspace" data-action="workspace.switch" aria-haspopup="listbox" aria-expanded={showProjects} onClick={() => setShowProjects((v) => !v)} title={activeWorkspace.root}>
+                  <span aria-hidden="true"><StudioIcon name="folder" /></span>
+                  <span><b>{activeWorkspace.name}</b><small>{t("当前工作区 · 本地")}</small></span>
+                  <i aria-hidden="true"><StudioIcon name="chevron" /></i>
+                </button>
+                {showProjects && (
+                  <div className="studio-workspace-pop" role="listbox" aria-label={t("切换工作区")}>
+                    <div className="studio-workspace-pop-head">
+                      <span>{t("切换工作区")}</span><small>{tree.length}</small>
+                    </div>
+                    <div className="studio-workspace-pop-list">
+                      {tree.map((workspace) => {
+                        const current = workspace.root === activeWorkspace.root;
+                        return (
+                          <button
+                            key={workspace.root}
+                            role="option"
+                            data-action="workspace.switch"
+                            data-value={workspace.root}
+                            aria-selected={current}
+                            title={workspace.root}
+                            onClick={() => {
+                              setShowProjects(false);
+                              if (current) return;
+                              const openRuntime = runtimes.find((runtime) => runtime.root === workspace.root);
+                              if (openRuntime) {
+                                focusPane(openRuntime.id);
+                                return;
+                              }
+                              void openPane({ root: workspace.root, sessionPath: workspace.sessions[0]?.path }).catch(fail);
+                            }}
+                          >
+                            <span aria-hidden="true"><StudioIcon name="folder" /></span>
+                            <span><b>{workspace.name}</b><small>{t("{n} 会话", { n: workspace.sessions.length })}</small></span>
+                            {current && <i aria-hidden="true"><StudioIcon name="check" /></i>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button className="studio-workspace-pop-add" data-action="workspace.add" onClick={() => { setShowProjects(false); adder.add("rail"); }}>
+                      <StudioIcon name="plus" /><span>{t("添加工作区")}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="studio-quicknav">
+              <button data-action="settings.section" data-value="storage" onClick={() => showPrefs("storage")}><span aria-hidden="true"><StudioIcon name="file" /></span><b>{t("文件")}</b></button>
+              <button data-action="settings.section" data-value="ext" onClick={() => showPrefs("ext")}><span aria-hidden="true"><StudioIcon name="plug" /></span><b>{t("工具与集成")}</b><small>MCP · Skills</small></button>
+              <button data-action="settings.section" data-value="remote" onClick={() => showPrefs("remote")}><span aria-hidden="true"><StudioIcon name="server" /></span><b>{t("运行环境")}</b><small>Local / SSH</small></button>
+            </div>
+            <div className="studio-section-label studio-session-label"><span>{t("会话")}</span></div>
+            <div className="studio-session-filters" role="group" aria-label={t("会话范围")}>
+              <div className="studio-session-segments">
+                <button data-action="session.filter" data-value="all" aria-pressed={railScope === "all"} onClick={() => setRailScope("all")}><span>{t("全部")}</span><b>{sessionCount}</b></button>
+                <button data-action="session.filter" data-value="live" aria-pressed={railScope === "live"} onClick={() => setRailScope("live")}><span>{t("进行中")}</span><b>{liveCount}</b></button>
+                <button data-action="session.filter" data-value="pinned" aria-pressed={railScope === "pinned"} onClick={() => setRailScope("pinned")}><span>{t("置顶")}</span><b>{pinnedSessions.size}</b></button>
+                <button data-action="session.filter" data-value="archived" aria-pressed={railScope === "archived"} onClick={() => setRailScope("archived")}><span>{t("归档")}</span><b>{archivedCount}</b></button>
+              </div>
+              <button className="studio-filter-search" data-action="workspace.search" onClick={() => document.querySelector<HTMLInputElement>(".wsfind input")?.focus()} aria-label={t("按名称筛选会话")}><StudioIcon name="search" /></button>
+            </div>
+          </div>
           <RailSearch>
           <Workspaces
             hub={hub}
@@ -608,6 +778,11 @@ export function App({ hub }: { hub: HubPort }) {
             onFocus={focusPane}
             onClose={closePanes}
             liveIds={liveIds}
+            scope={railScope}
+            pinned={pinnedSessions}
+            onPin={togglePinnedSession}
+            onPause={(runtimeId) => panePorts.get(runtimeId)?.cancel()}
+            onArchive={archiveSession}
             onRename={renameSession}
             onError={fail}
             adder={adder}
@@ -630,7 +805,12 @@ export function App({ hub }: { hub: HubPort }) {
           </RailSearch>
           </div>
           <div className="railfoot">
-            <AccountRow account={account} unread={accountUnread} onOpen={() => showPrefs("account")} />
+            <button className="studio-wallet" data-action="settings.section" data-value="usage" onClick={() => showPrefs("usage")}><span aria-hidden="true"><StudioIcon name="wallet" /></span><b>{t("钱包与用量")}</b>{report.wallet && <small>{report.wallet}</small>}</button>
+            <div className="studio-user-foot">
+              <AccountRow account={account} unread={accountUnread} onOpen={() => showPrefs("account")} />
+              <span className="studio-workspace-kind">{t(account?.signedIn ? "个人工作空间" : "本地工作空间")}</span>
+              <button className="studio-settings" data-action="chrome.settings" onClick={() => showPrefs()} aria-label={t("设置")}><StudioIcon name="settings" /></button>
+            </div>
           </div>
         </div>
 
@@ -644,16 +824,6 @@ export function App({ hub }: { hub: HubPort }) {
             onWidth={onRailW}
             onOpen={setRail}
           />
-          <Gutter
-            edge="r"
-            span={SIDE}
-            width={sideW}
-            label={t("调整度量栏宽度")}
-            open={side}
-            onWidth={onSideW}
-            onOpen={chooseSide}
-          />
-
           {/* One conversation on screen at a time. Side by side, two panes
               squeezed each other and a glance could not tell which composer
               belonged to which run; the ones behind keep streaming either way. */}
@@ -669,7 +839,8 @@ export function App({ hub }: { hub: HubPort }) {
           )}
 
           <div className="panes">
-            {runtimes.map((rt) => {
+            {activeRuntime && (() => {
+              const rt = activeRuntime;
               const port = panePorts.get(rt.id);
               return port ? (
                 <Pane
@@ -678,8 +849,8 @@ export function App({ hub }: { hub: HubPort }) {
                   port={port}
                   title={tabs.find((tab) => tab.rt.id === rt.id)?.title ?? t("新会话")}
                   active={rt.id === active}
-                  sideHost={sideHost}
-                  side={side}
+                  sideHost={null}
+                  side={false}
                   onFocus={() => focusPane(rt.id)}
                   visible={rt.id === active}
                   onReport={onReport}
@@ -698,10 +869,10 @@ export function App({ hub }: { hub: HubPort }) {
                     localStorage.setItem("rx-claim", "off");
                     setClaimed(true);
                   }}
-                  onSettings={() => showPrefs()}
+                  onSettings={(section) => section ? showPrefs(section) : showPrefs()}
                 />
               ) : null;
-            })}
+            })()}
             {runtimes.length === 0 && (
               <div className="panes-empty">
                 <span className="mk" aria-hidden="true">
@@ -722,28 +893,17 @@ export function App({ hub }: { hub: HubPort }) {
           )}
         </div>
 
-        {/* 栏横过来时缝也横过来，把手跟着走：位置仍是「主区和度量之间」，形状和
-            左边那枚一样，只是转了 90°。DOM 在栏之前，收起后它就落到窗口底边。 */}
-        <button
-          className="sidepeek"
-          data-shut={side ? undefined : ""}
-          title={side ? t("收起") : t("展开")}
-          aria-label={side ? t("收起度量栏") : t("展开度量栏")}
-          onClick={() => chooseSide(!side)}
-        >
-          <i className="knurl" aria-hidden="true" />
-          <span className="dir" aria-hidden="true">
-            {side ? "⌄" : "⌃"}
-          </span>
-        </button>
+        {browser && (
+          <BrowserPanel
+            onClose={() => setBrowser(false)}
+            onExternal={(url) => void activePort?.openExternal(url).catch(fail)}
+            scheme={document.documentElement.dataset.theme === "light" ? "light" : "dark"}
+          />
+        )}
 
-        <div className="side" ref={setSideHost} inert={focus} />
       </div>
 
       {settings && activePort && (
-        // The transcript's lazy markdown has had this since it was written; the
-        // settings chunk is the other deferred route and had a Suspense with
-        // nothing behind it, so a chunk that never arrives took the window.
         <Boundary fallback={<SettingsUnavailable onClose={hidePrefs} />}>
         <Suspense fallback={<div className="prefs" aria-busy="true" />}>
           <Settings
@@ -761,11 +921,13 @@ export function App({ hub }: { hub: HubPort }) {
             onContrast={setContrast}
             onClose={hidePrefs}
             onChanged={onSettingsChanged}
+            onSessionsRecovered={() => void reloadTree()}
             reloadThemes={reloadThemes}
             at={typeof settings === "string" ? settings : undefined}
             account={account}
             accountUnread={accountUnread}
             reloadAccount={reloadAccount}
+            workspaceRoot={activeWorkspace?.root ?? ""}
           />
         </Suspense>
         </Boundary>

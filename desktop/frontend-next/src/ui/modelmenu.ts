@@ -29,5 +29,12 @@ export function modelMenu(models: ModelEntry[]): MenuItem[] {
       }
     }
   }
+  out.push({
+    value: "__manage-models",
+    label: t("管理模型与连接"),
+    desc: t("服务商、API 与可用模型"),
+    plain: true,
+    divide: out.length > 0,
+  });
   return out;
 }

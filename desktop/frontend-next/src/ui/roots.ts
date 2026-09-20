@@ -46,7 +46,6 @@ export interface Primitive {
 export const PRIMITIVES: Primitive[] = [
   { file: "ui/Switch.tsx", callbacks: { onClick: "click" } },
   { file: "ui/Menu.tsx", callbacks: { onPick: "click" } },
-  { file: "ui/Seg.tsx", callbacks: { onClick: "click" } },
 ];
 
 /** A primitive is the file, wherever the tree being scanned is rooted. The

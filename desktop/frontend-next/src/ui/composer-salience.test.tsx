@@ -29,8 +29,8 @@ describe("what the composer shows when nothing is unusual", () => {
   it("keeps policy discoverable without default-state noise", () => {
     const { container } = draw();
     expect(container.querySelector(".policy[data-quiet]")).toBeTruthy();
-    expect(container.querySelector('[data-action="chrome.policy"]')?.getAttribute("aria-label")).toBe("本轮执行策略");
-    expect(container.querySelector('[data-action="chrome.policy"]')?.textContent).not.toMatch(/均衡|询问/);
+    expect(container.querySelector('[data-action="chrome.policy"]')?.getAttribute("aria-label")).toBe("执行权限：逐项确认");
+    expect(container.querySelector('[data-action="chrome.policy"]')?.textContent).toMatch(/逐项确认/);
   });
 
   // A status may recede to its baseline. The only way into a mode may not: the
@@ -58,14 +58,19 @@ describe("what the composer shows when nothing is unusual", () => {
     expect(draw().seps()).toBe(1);
     expect(draw(status({ preset: "delivery" as Preset })).seps()).toBe(1);
   });
+
+  it("does not ask people to choose an internal completion policy", () => {
+    const { container } = draw(status({ preset: "delivery" as Preset }));
+    expect(container.querySelector('[data-action="chrome.preset"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/均衡|交付/);
+  });
 });
 
 describe("every deviation is visible", () => {
   it.each([
 
-    ["preset", status({ preset: "delivery" as Preset }), /交付/],
     ["effort", status({ effort: "high" }), /High/],
-    ["approval", status({ toolApprovalMode: "auto" as ApprovalMode }), /自动批准/],
+    ["approval", status({ toolApprovalMode: "auto" as ApprovalMode }), /自动继续/],
     ["a stricter approval", status({ toolApprovalMode: "dontAsk" as ApprovalMode }), /不询问/],
   ])("surfaces %s", (_what, st, want) => {
     const { container } = draw(st);
@@ -80,9 +85,9 @@ describe("every deviation is visible", () => {
 
   it("surfaces several at once without losing any", () => {
     const { container } = draw(
-      status({ preset: "delivery" as Preset, effort: "high", toolApprovalMode: "yolo" as ApprovalMode, plan: true }),
+      status({ effort: "high", toolApprovalMode: "yolo" as ApprovalMode, plan: true }),
     );
-    for (const want of [/交付/, /High/, /全部放行/, /计划/]) expect(container.textContent).toMatch(want);
+    for (const want of [/High/, /全部放行/, /计划/]) expect(container.textContent).toMatch(want);
   });
 });
 

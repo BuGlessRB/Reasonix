@@ -194,8 +194,21 @@ export class MockHub implements HubPort {
     return Promise.resolve();
   }
 
+  archiveSession(_path: string, _archived: boolean) {
+    return Promise.resolve();
+  }
+
   renameSession(_path: string, _title: string) {
     return Promise.resolve();
+  }
+
+  exportSession(path: string) {
+    const name = path.split(/[/\\]/).at(-1)?.replace(/\.jsonl$/i, "") || "session";
+    return Promise.resolve({ name, content: '{"role":"user","content":"mock session"}\n' });
+  }
+
+  importLegacySessions(_path: string, _workspace: string) {
+    return Promise.resolve({ summary: "mock migration complete", imported: 0, warnings: 0 });
   }
 
   pickFolder() {

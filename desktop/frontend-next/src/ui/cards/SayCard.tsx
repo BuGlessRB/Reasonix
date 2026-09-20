@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { count, decimals } from "../../i18n/format";
 import { Sym } from "../Sym";
@@ -20,7 +20,7 @@ function thoughtLabel(item: Extract<Item, { t: "say" }>) {
     : t("思考 {chars}", { chars });
 }
 
-export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
+export function SayCard({ item, afterAnswer }: { item: Extract<Item, { t: "say" }>; afterAnswer?: ReactNode }) {
   const [open, setOpen] = useState(!item.done);
   const wasDone = useRef(item.done);
   useEffect(() => {
@@ -39,7 +39,7 @@ export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
       </div>
       <div className="c">
         <div className="hl">
-          <span className="nm">{t("助手")}</span>
+          <span className="nm">reasonix</span>
         </div>
         <div className="out">
           {item.reasoning && (
@@ -60,11 +60,12 @@ export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
               </Boundary>
             </div>
           )}
+          {afterAnswer}
           {/* Only once the answer is whole: copying half a stream hands over
               something that was never said. */}
           {item.done && item.text.trim() && (
             <div className="acts">
-              <CopyButton text={item.text} />
+              <CopyButton text={item.text} iconOnly />
             </div>
           )}
         </div>

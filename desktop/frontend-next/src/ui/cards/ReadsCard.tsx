@@ -31,16 +31,16 @@ function rowOf(t: Tool): Row {
   switch (t.name) {
     case "read_file": {
       const [dir, name] = splitPath(arg);
-      return { ...state, dir, name, n: state.failed ? tr("失败") : `Read · ${countLines(t.output)} 行` };
+      return { ...state, dir, name, n: state.failed ? tr("失败") : tr("读取 · {n} 行", { n: countLines(t.output) }) };
     }
     case "grep": {
       const where = argOf(t.args, "path", "file_path");
-      return { ...state, dir: "", name: `Search "${arg}"${where ? ` ${where}` : ""}`, n: state.failed ? tr("失败") : `${countHits(t.output)} 处` };
+      return { ...state, dir: "", name: `${tr("搜索")} “${arg}”${where ? ` ${where}` : ""}`, n: state.failed ? tr("失败") : tr("{n} 处", { n: countHits(t.output) }) };
     }
     case "glob":
-      return { ...state, dir: "", name: `Glob ${arg}`, n: state.failed ? tr("失败") : `${countRows(t.output)} 个` };
+      return { ...state, dir: "", name: `${tr("查找文件")} ${arg}`, n: state.failed ? tr("失败") : tr("{n} 个", { n: countRows(t.output) }) };
     default:
-      return { ...state, dir: "", name: `List ${arg}`, n: state.failed ? tr("失败") : `${countRows(t.output)} 项` };
+      return { ...state, dir: "", name: `${tr("列出目录")} ${arg}`, n: state.failed ? tr("失败") : tr("{n} 项", { n: countRows(t.output) }) };
   }
 }
 
@@ -53,10 +53,10 @@ function summarise(tools: Tool[]): string {
   const lists = tools.filter((t) => t.name === "ls").length;
   const hits = greps.reduce((n, t) => n + countHits(t.output), 0);
   return [
-    reads && `read_file ×${reads}`,
-    greps.length && `grep 命中 ${hits} 处`,
-    globs && `glob ×${globs}`,
-    lists && `ls ×${lists}`,
+    reads && tr("读取文件 ×{n}", { n: reads }),
+    greps.length && tr("搜索命中 {n} 处", { n: hits }),
+    globs && tr("查找文件 ×{n}", { n: globs }),
+    lists && tr("列出目录 ×{n}", { n: lists }),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -95,26 +95,38 @@ function Body({ tool }: { tool: Tool }) {
 // touched; the result itself is one click away rather than dumped into the flow.
 export function ReadsCard({ tools }: { tools: Tool[] }) {
   const [open, setOpen] = useState(-1);
+  const failed = tools.filter(toolFailed).length;
+  const [expanded, setExpanded] = useState(failed > 0);
   const rows = tools.map(rowOf);
   const files = tools.filter((t) => t.name === "read_file").length;
-  const failed = tools.filter(toolFailed).length;
+  const searches = tools.filter((t) => t.name === "grep" || t.name === "glob").length;
+  const headline = files === tools.length
+    ? tr("读取了 {n} 个文件", { n: files })
+    : searches === tools.length
+      ? tr("完成了 {n} 次搜索", { n: searches })
+      : tr("查阅了 {n} 项内容", { n: tools.length });
   return (
-    <div className="call">
+    <div className="call" data-state={failed ? "failed" : "done"}>
       <div className="g">
         <Sym glyph={glyphFor("read_file")} />
         <span className="line" />
       </div>
       <div className="c">
-        <div className="hl">
-          <span className="nm">{tr("读了 {n} 个文件", { n: files })}</span>
-          {failed > 0 && <span className="fail">{tr("{n} 项失败", { n: failed })}</span>}
-          <Cost tools={tools} />
-        </div>
-        <div className="out">
-          <details>
-            <summary>
-              <span className="fold">{summarise(tools)}</span>
-            </summary>
+        <details className="tool-disclosure reads-disclosure" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
+          <summary className="hl">
+            <span className="nm">{headline}</span>
+            <span className="arg">{summarise(tools)}</span>
+            {failed > 0 && <span className="fail">{tr("{n} 项失败", { n: failed })}</span>}
+            <Cost tools={tools} />
+            <span
+              className="tool-state"
+              data-state={failed ? "failed" : "done"}
+              aria-label={tr(failed ? "失败" : "已完成")}
+              title={tr(failed ? "失败" : "已完成")}
+            />
+            <span className="tool-fold" aria-hidden="true" />
+          </summary>
+          <div className="out">
             <div className="peek">
               {rows.map((r, i) => (
                 <button
@@ -134,8 +146,8 @@ export function ReadsCard({ tools }: { tools: Tool[] }) {
               ))}
             </div>
             {open >= 0 && tools[open] && <Body tool={tools[open]} />}
-          </details>
-        </div>
+          </div>
+        </details>
       </div>
     </div>
   );

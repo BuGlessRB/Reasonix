@@ -169,6 +169,33 @@ func TestBranchMetaRoundTripAndList(t *testing.T) {
 	}
 }
 
+func TestSetSessionArchivedRoundTripsAndAppearsInListing(t *testing.T) {
+	dir := testenv.TempDir(t)
+	path := filepath.Join(dir, "kept.jsonl")
+	s := NewSession("")
+	s.Add(provider.Message{Role: provider.RoleUser, Content: "keep this conversation"})
+	if err := s.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetSessionArchived(path, true); err != nil {
+		t.Fatalf("SetSessionArchived(true): %v", err)
+	}
+	ordered, err := ListSessionOrder(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ordered) != 1 || !ordered[0].Archived {
+		t.Fatalf("archived listing = %+v, want one archived session", ordered)
+	}
+	if err := SetSessionArchived(path, false); err != nil {
+		t.Fatalf("SetSessionArchived(false): %v", err)
+	}
+	meta, ok, err := LoadBranchMeta(path)
+	if err != nil || !ok || meta.Archived {
+		t.Fatalf("unarchived meta = %+v ok=%v err=%v", meta, ok, err)
+	}
+}
+
 func TestListBranchesSkipsCleanupPending(t *testing.T) {
 	dir := testenv.TempDir(t)
 	visiblePath := filepath.Join(dir, "visible.jsonl")
