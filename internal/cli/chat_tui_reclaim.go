@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+
 	"reasonix/internal/control"
 )
 
@@ -13,6 +15,25 @@ import (
 type tuiSessionReclaimedMsg struct{}
 
 const sessionReclaimedNotice = "this session was taken back by the remote side; /resume switches to another session, /takeover takes it back, /quit exits"
+
+// sessionDetached reports whether the remote side owns the session this TUI
+// last wrote: either the reclaim callback has landed or the mirror manager has
+// already returned it. A detached TUI must not snapshot or lease-follow the
+// session it no longer writes.
+func (m *chatTUI) sessionDetached() bool {
+	return m.sessionReclaimed || m.takeover != nil && m.takeover.Returned()
+}
+
+// completeSessionReclaim applies the manager's yield to the model, then honors
+// an exit request that arrived while the handoff was still in flight.
+func (m chatTUI) completeSessionReclaim() (tea.Model, tea.Cmd) {
+	m.handleSessionReclaimed()
+	if m.shutdownAfterReclaim {
+		m.shutdownAfterReclaim = false
+		return m.shutdownAndQuit(tuiShutdownMsg{})
+	}
+	return m, nil
+}
 
 func (m *chatTUI) handleSessionReclaimed() {
 	if m == nil || m.sessionReclaimed {

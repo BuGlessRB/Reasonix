@@ -327,6 +327,10 @@ type chatTUI struct {
 	// reclaimedTarget retains the session that was just yielded after its
 	// controller binding is released, so the picker can select a different row.
 	reclaimedTarget cliResumeTarget
+	// shutdownAfterReclaim records a signal or watchdog exit request that
+	// arrived while a reclaim transaction was in flight; it is honored once the
+	// reclaim callback lands instead of racing the handoff.
+	shutdownAfterReclaim bool
 	// pendingTakeoverPath remembers the last /resume target refused because a
 	// resident serve on this machine holds its lease; "/takeover" force-takes
 	// that session back.
@@ -1921,8 +1925,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.shutdownAndQuit(msg)
 
 	case tuiSessionReclaimedMsg:
-		m.handleSessionReclaimed()
-		return m, nil
+		return m.completeSessionReclaim()
 
 	case turnModelSettingsMsg:
 		return m, m.handleTurnModelSettings(msg)

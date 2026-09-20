@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"reasonix/internal/control"
+	"reasonix/internal/session"
 )
 
 type shutdownSnapshotSpy struct {
@@ -20,6 +21,14 @@ type shutdownSnapshotSpy struct {
 	snapshotCalls atomic.Int32
 	shutdownCalls atomic.Int32
 }
+
+// The spy stands for a controller whose session identity is gone: the reclaim
+// path reads both locators and must find neither.
+func (s *shutdownSnapshotSpy) SessionRef() (session.SessionRef, bool) {
+	return session.SessionRef{}, false
+}
+
+func (s *shutdownSnapshotSpy) SessionPath() string { return "" }
 
 func (s *shutdownSnapshotSpy) Snapshot() error {
 	s.snapshotCalls.Add(1)
@@ -65,32 +74,53 @@ func TestTUIShutdownUsesRecoveringSnapshotAndKeepsFailure(t *testing.T) {
 	}
 }
 
-func TestTUIShutdownSignalDoesNotQuitAfterReclaim(t *testing.T) {
-	m := newTestChatTUI()
-	m.sessionReclaimed = true
-	completion := newTUIShutdownCompletion()
+// TestTUIShutdownSignalQuitsAfterReclaim pins the post-reclaim contract: once
+// the remote side owns the session, SIGHUP/SIGTERM terminate the process like
+// any other exit, without snapshotting a session this TUI no longer writes.
+// Consuming the signal here left an orphan after an SSH drop and forced
+// SIGKILL under systemctl stop.
+func TestTUIShutdownSignalQuitsAfterReclaim(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(m *chatTUI)
+	}{
+		{"after the reclaim callback", func(m *chatTUI) { m.sessionReclaimed = true }},
+		{"after the return but before the callback", func(m *chatTUI) {
+			m.takeover = newCLITakeoverManager(nil, nil)
+			m.takeover.returned.Store(true)
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := &shutdownSnapshotSpy{}
+			m := newTestChatTUI()
+			m.ctrl = ctrl
+			tc.setup(&m)
+			completion := newTUIShutdownCompletion()
 
-	next, cmd := m.update(tuiShutdownMsg{completion: completion})
-	if cmd != nil {
-		t.Fatalf("stale shutdown after reclaim returned %T, want no quit command", cmd)
-	}
-	if !next.(chatTUI).sessionReclaimed {
-		t.Fatal("reclaim marker was cleared by stale shutdown")
-	}
-	select {
-	case <-completion.done:
-	default:
-		t.Fatal("stale shutdown completion was not acknowledged")
-	}
-
-	_, cmd = m.update(tuiShutdownMsg{userInitiated: true})
-	if cmd == nil || cmd() != (tea.QuitMsg{}) {
-		t.Fatal("explicit quit after reclaim did not return tea.Quit")
+			_, cmd := m.update(tuiShutdownMsg{completion: completion})
+			if cmd == nil || cmd() != (tea.QuitMsg{}) {
+				t.Fatal("signal shutdown after reclaim did not return tea.Quit")
+			}
+			if calls := ctrl.shutdownCalls.Load(); calls != 0 {
+				t.Fatalf("SnapshotForShutdown calls = %d, want 0 for a session the remote side owns", calls)
+			}
+			select {
+			case <-completion.done:
+			default:
+				t.Fatal("shutdown completion was not acknowledged")
+			}
+		})
 	}
 }
 
-func TestTUIShutdownSignalDoesNotQuitWhileReclaiming(t *testing.T) {
+// TestTUIShutdownSignalDeferredWhileReclaiming keeps the in-flight guard: a
+// signal during the handoff transaction must not race the manager's final
+// snapshot, but it is honored as soon as the reclaim callback lands.
+func TestTUIShutdownSignalDeferredWhileReclaiming(t *testing.T) {
+	ctrl := &shutdownSnapshotSpy{}
 	m := newTestChatTUI()
+	m.ctrl = ctrl
 	m.takeover = newCLITakeoverManager(nil, nil)
 	m.takeover.reclaiming.Store(true)
 	completion := newTUIShutdownCompletion()
@@ -99,13 +129,35 @@ func TestTUIShutdownSignalDoesNotQuitWhileReclaiming(t *testing.T) {
 	if cmd != nil {
 		t.Fatalf("shutdown during reclaim returned %T, want no quit command", cmd)
 	}
-	if !next.(chatTUI).takeover.Reclaiming() {
+	got := next.(chatTUI)
+	if !got.takeover.Reclaiming() {
 		t.Fatal("reclaim marker was cleared by shutdown race")
+	}
+	if !got.shutdownAfterReclaim {
+		t.Fatal("signal during reclaim was dropped instead of deferred")
 	}
 	select {
 	case <-completion.done:
 	default:
 		t.Fatal("shutdown during reclaim was not acknowledged")
+	}
+	if calls := ctrl.shutdownCalls.Load(); calls != 0 {
+		t.Fatalf("SnapshotForShutdown calls = %d during reclaim, want 0", calls)
+	}
+
+	// The handoff completes and its callback arrives: the deferred exit fires
+	// without snapshotting the session the remote side now owns.
+	got.takeover.reclaiming.Store(false)
+	got.takeover.returned.Store(true)
+	next, cmd = got.update(tuiSessionReclaimedMsg{})
+	if cmd == nil || cmd() != (tea.QuitMsg{}) {
+		t.Fatal("deferred signal shutdown did not quit after the reclaim callback")
+	}
+	if !next.(chatTUI).sessionReclaimed {
+		t.Fatal("reclaim callback did not mark the session reclaimed before quitting")
+	}
+	if calls := ctrl.shutdownCalls.Load(); calls != 0 {
+		t.Fatalf("SnapshotForShutdown calls = %d after reclaim, want 0", calls)
 	}
 }
 
@@ -139,27 +191,23 @@ func TestBubbleTeaKeepsRunningWhenShutdownRacesReclaim(t *testing.T) {
 		}
 	}
 
-	// Exercise every ordering window in the real program loop. The process must
-	// survive both the transaction and the gap before its UI callback arrives.
+	// A signal that races the handoff transaction must not tear the program
+	// down underneath the manager's final snapshot...
 	p.Send(tuiShutdownMsg{})
 	assertRunning("while reclaiming")
+	// ...but it is a real exit request: once the reclaim callback lands the
+	// program leaves gracefully instead of lingering as an orphan.
 	m.takeover.returned.Store(true)
 	m.takeover.reclaiming.Store(false)
-	p.Send(tuiShutdownMsg{})
-	assertRunning("after return and before the reclaim callback")
 	p.Send(tuiSessionReclaimedMsg{})
-	p.Send(tuiShutdownMsg{})
-	assertRunning("after the reclaim callback")
-
-	p.Send(tuiShutdownMsg{userInitiated: true})
 	select {
 	case result := <-done:
 		if result.err != nil {
-			t.Fatalf("explicit shutdown error = %v", result.err)
+			t.Fatalf("deferred shutdown error = %v", result.err)
 		}
 	case <-time.After(time.Second):
 		p.Kill()
-		t.Fatal("Bubble Tea did not exit after explicit quit")
+		t.Fatal("Bubble Tea did not honor the signal deferred across the reclaim")
 	}
 }
 
