@@ -834,10 +834,10 @@ func cliPrepareTakeoverCandidate(binding *cliTakeoverBinding, leases *control.Se
 }
 
 // commitPrevious retires the source keeper only after the handed-off target
-// has been loaded successfully. A mirrored source is returned through its
-// reverse reservation; an ordinary source is simply released.
+// has been loaded successfully. A mirrored source is returned through the
+// manager's single leave step; an ordinary source is simply released.
 func (b *cliTakeoverBinding) commitPrevious(manager *cliTakeoverManager) error {
-	if b == nil || b.previous == nil {
+	if b == nil {
 		return nil
 	}
 	if b.priorMirror == nil {
@@ -852,16 +852,60 @@ func (b *cliTakeoverBinding) commitPrevious(manager *cliTakeoverManager) error {
 }
 
 func (m *cliTakeoverManager) commitPriorMirror(next *cliTakeoverBinding) error {
-	if m == nil || next == nil || next.previous == nil || next.priorMirror == nil {
+	if m == nil || next == nil || next.priorMirror == nil {
 		return nil
 	}
-	err := m.returnCurrentMirror(next.priorMirror.path, func(current *cliTakeoverBinding) error {
-		return next.previous.RetireDetachedForHandoff(current.grant.SourceWriterID, current.grant.ReturnHandoffID)
-	})
-	if err == nil {
-		next.previous = nil
+	if err := m.leaveMirror(next.priorMirror.path, next.previous); err != nil {
+		return err
 	}
-	return err
+	next.previous = nil
+	return nil
+}
+
+// leaveMirror returns the active mirror on behalf of a session switch that
+// has already secured its target, so no frame of the next session travels
+// under the old mirror id and the remote tab regains its writer. It is the one
+// exit every switch takes before binding the next session — /resume and
+// /takeover, legacy and canonical targets alike — and it retires the source's
+// ownership by kind. A legacy lease publishes its reverse reservation from
+// whichever keeper still holds it: previous when a legacy switch already moved
+// the source out of the live keeper, otherwise the live keeper; a lease nobody
+// holds (an exclusive-mode import released its compatibility lease) has
+// nothing to publish. A canonical identity's writer lock travels with the
+// controller binding the caller moves, so only the mirror itself ends.
+// expectedPath, when set, names the mirror the caller observed; a different
+// current mirror aborts the switch.
+func (m *cliTakeoverManager) leaveMirror(expectedPath string, previous *control.SessionLeaseKeeper) error {
+	if m == nil {
+		return nil
+	}
+	current, _, _, _ := m.snapshot()
+	if current == nil || m.returned.Load() {
+		// Nothing is mirrored, so the detached source keeper is plain state.
+		previous.RetireDetached()
+		return nil
+	}
+	if expectedPath == "" {
+		expectedPath = current.path
+	}
+	return m.returnCurrentMirror(expectedPath, func(current *cliTakeoverBinding) error {
+		if current.canonical {
+			previous.RetireDetached()
+			return nil
+		}
+		holder := previous
+		if holder == nil {
+			holder = m.leases
+		}
+		if holder.HeldPath() != agent.CanonicalSessionPath(current.path) {
+			previous.RetireDetached()
+			return nil
+		}
+		if previous != nil {
+			return previous.RetireDetachedForHandoff(current.grant.SourceWriterID, current.grant.ReturnHandoffID)
+		}
+		return m.leases.ReleaseForHandoff(current.grant.SourceWriterID, current.grant.ReturnHandoffID)
+	})
 }
 
 func (m *cliTakeoverManager) mirrorEnd(binding *cliTakeoverBinding) {

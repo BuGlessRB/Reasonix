@@ -264,14 +264,41 @@ func resumeEntryIsActive(ctrl control.SessionAPI, entry resumeEntry) bool {
 // final-format session identity. Writer ownership is enforced by the session
 // service's directory lease, so unlike a legacy switch there is no transcript
 // path lease to move: the outgoing legacy lease is released and authority
-// follows the controller binding.
+// follows the controller binding. The order matches the legacy switch: secure
+// the target, return the mirror of the session being left, then publish.
 func (m *chatTUI) commitCanonicalSessionSwitch(ref session.SessionRef) error {
 	identity, ok := m.ctrl.(control.IdentityLifecycle)
 	if !ok || !identity.UsesExclusiveSession() {
 		return errors.New("final-format session resume requires the session engine")
 	}
-	if _, err := identity.OpenSession(context.Background(), ref); err != nil {
+	service := identity.SessionService()
+	if service == nil {
+		return errors.New("session service unavailable")
+	}
+	ctx := context.Background()
+	// A probe grant secures the target writer before anything changes hands,
+	// so a held target (ErrWriterOwned) leaves the current session, its lease,
+	// and its mirror untouched, and no frame emitted while publishing the new
+	// runtime can land in the old mirror's queue. A retired stored codec has no
+	// writer to secure; OpenSession upgrades it into a fresh identity.
+	probe, err := service.Open(ctx, ref)
+	if err != nil && !errors.Is(err, session.ErrUnsupportedVersion) {
 		return err
+	}
+	if m.takeover != nil {
+		if err := m.takeover.leaveMirror("", nil); err != nil {
+			_ = probe.Release(ctx)
+			return err
+		}
+	}
+	if _, err := identity.OpenSession(ctx, ref); err != nil {
+		_ = probe.Release(ctx)
+		return err
+	}
+	// The controller now holds its own grant on the runtime; the probe's
+	// release cannot retire it.
+	if err := probe.Release(ctx); err != nil {
+		return fmt.Errorf("release session probe grant: %w", err)
 	}
 	if m.leases != nil {
 		if err := m.leases.Rebind(""); err != nil {
