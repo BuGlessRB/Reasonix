@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Change, FollowRequest, Snapshot, TranscriptFollowResponse } from "../generated/desktopContract.generated";
-import { TranscriptFollowClient, type FollowConsumer } from "../lib/transcriptFollowClient";
+import { TranscriptFollowClient, type FollowConsumer, type TranscriptFollowClientOptions } from "../lib/transcriptFollowClient";
+import type { TranscriptDiagnostic } from "../lib/transcriptDiagnostics";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>(done => { resolve = done; });
-  return { promise, resolve };
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 }
 async function microtasks() { for (let i = 0; i < 16; i++) await Promise.resolve(); }
 function baseline(subscription = "subscription", overrides: Partial<Snapshot> = {}): TranscriptFollowResponse {
@@ -24,7 +26,7 @@ function suffix(changes: Change[], resetRequired = false): TranscriptFollowRespo
 function frame(revision: number, text: string): Change {
   return { revision, commitSeq: 4, durableSeq: 4, index: 0, event: { kind: "text", messageId: "answer", text } } as Change;
 }
-function transport() {
+function transport(options: TranscriptFollowClientOptions = {}) {
   const requests: FollowRequest[] = [];
   const pending: ReturnType<typeof deferred<TranscriptFollowResponse>>[] = [];
   const read = (request: FollowRequest) => {
@@ -32,7 +34,7 @@ function transport() {
     if (request.close) return Promise.resolve(suffix([]));
     const next = deferred<TranscriptFollowResponse>(); pending.push(next); return next.promise;
   };
-  return { requests, pending, client: new TranscriptFollowClient(read) };
+  return { requests, pending, client: new TranscriptFollowClient(read, options) };
 }
 function consumer(): FollowConsumer & { text: string; installed: number; delivered: Change[]; states: string[] } {
   return {
@@ -84,7 +86,9 @@ test("settlement pairs with the stable attempt and commit despite delivery order
 for (const failure of ["overflow", "revision gap", "business gap", "sampling gap", "settlement mismatch"] as const) {
   test(`follow ${failure} preserves visible content and only requests a new baseline`, async t => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
-    const io = transport(); const view = consumer(); const starting = io.client.start(view);
+    const diagnostics: TranscriptDiagnostic[] = [];
+    const io = transport({ onDiagnostic: (event, visible) => { if (visible) diagnostics.push(event); } });
+    const view = consumer(); const starting = io.client.start(view);
     io.pending.shift()!.resolve(baseline()); await starting;
     const broken = failure === "overflow" ? suffix([], true)
       : failure === "revision gap" ? suffix([frame(12, "bad")])
@@ -95,6 +99,15 @@ for (const failure of ["overflow", "revision gap", "business gap", "sampling gap
     assert.equal(view.text, "prefix"); assert.equal(view.delivered.length, 0);
     assert.equal(view.states[view.states.length - 1], "disconnected");
     assert.ok(io.requests.some(request => request.close && request.subscription === "subscription"));
+    const expectedReason = failure === "overflow" ? "resync_required"
+      : failure === "revision gap" ? "revision_gap"
+      : failure === "business gap" ? "business_gap"
+      : failure === "sampling gap" ? "sampling_gap"
+      : "settlement_identity_mismatch";
+    assert.deepEqual(
+      diagnostics[0] && { event: diagnostics[0].event, stage: diagnostics[0].stage, reason: diagnostics[0].reason },
+      { event: "failure", stage: "delta_validate", reason: expectedReason },
+    );
     t.mock.timers.tick(1000); await microtasks();
     assert.deepEqual(io.requests[io.requests.length - 1], {}, "recovery issues a read, never a model submission");
     assert.equal(view.text, "prefix", "content remains visible while replacement is pending");
@@ -104,6 +117,56 @@ for (const failure of ["overflow", "revision gap", "business gap", "sampling gap
     io.client.stop();
   });
 }
+
+test("identical transcript failures are summarized every 30 seconds and recovery is recorded once", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let now = 0;
+  const diagnostics: Array<{ event: TranscriptDiagnostic; visible: boolean }> = [];
+  const io = transport({ now: () => now, onDiagnostic: (event, visible) => diagnostics.push({ event, visible }) });
+  const view = consumer();
+  const starting = io.client.start(view);
+  io.pending.shift()!.resolve(baseline());
+  await starting;
+
+  io.pending.shift()!.reject(new Error("transport unavailable"));
+  await microtasks();
+  now = 1_000; t.mock.timers.tick(1000); await microtasks();
+  io.pending.shift()!.reject(new Error("transport unavailable"));
+  await microtasks();
+  now = 2_000; t.mock.timers.tick(1000); await microtasks();
+  io.pending.shift()!.reject(new Error("transport unavailable"));
+  await microtasks();
+  now = 32_000; t.mock.timers.tick(1000); await microtasks();
+  io.pending.shift()!.reject(new Error("transport unavailable"));
+  await microtasks();
+  now = 33_000; t.mock.timers.tick(1000); await microtasks();
+  io.pending.shift()!.resolve(baseline("replacement", { projectionRevision: 20 }));
+  await microtasks();
+
+  assert.deepEqual(
+    diagnostics.map(({ event, visible }) => ({ type: event.event, stage: event.stage, failures: event.failures, visible })),
+    [
+      { type: "failure", stage: "delta_read", failures: 1, visible: true },
+      { type: "failure", stage: "baseline_read", failures: 2, visible: true },
+      { type: "failure", stage: "baseline_read", failures: 3, visible: false },
+      { type: "summary", stage: "baseline_read", failures: 4, visible: true },
+      { type: "recovered", stage: "baseline_read", failures: 4, visible: true },
+    ],
+  );
+  io.client.stop();
+});
+
+test("remote baseline transport failures retain their channel and stable classification", async () => {
+  const diagnostics: TranscriptDiagnostic[] = [];
+  const io = transport({ transport: "remote", onDiagnostic: (event, visible) => { if (visible) diagnostics.push(event); } });
+  const starting = io.client.start(consumer());
+  io.pending.shift()!.reject(new Error("remote response body must stay private"));
+  await assert.rejects(starting, /remote response body/);
+  assert.deepEqual(
+    diagnostics.map(event => ({ transport: event.transport, stage: event.stage, reason: event.reason })),
+    [{ transport: "remote", stage: "baseline_read", reason: "transport_rejected" }],
+  );
+});
 
 test("stopped generations ignore delayed suffixes and close their subscription", async () => {
   const io = transport(); const oldView = consumer(); const starting = io.client.start(oldView);
@@ -115,6 +178,24 @@ test("stopped generations ignore delayed suffixes and close their subscription",
   oldSuffix.resolve(suffix([frame(11, " stale")])); await microtasks();
   assert.equal(oldView.text, "prefix"); assert.equal(newView.text, "prefix");
   assert.ok(io.requests.some(request => request.close && request.subscription === "subscription")); io.client.stop();
+});
+
+test("service shutdown stops in-flight delivery without sending a cleanup RPC", async () => {
+  const diagnostics: TranscriptDiagnostic[] = [];
+  const io = transport({ onDiagnostic: (event, visible) => { if (visible) diagnostics.push(event); } });
+  const view = consumer(); const starting = io.client.start(view);
+  io.pending.shift()!.resolve(baseline()); await starting;
+  const delayed = io.pending.shift()!;
+  io.client.stop(false, "service_stopping");
+  delayed.resolve(suffix([frame(11, " stale")]));
+  await microtasks();
+
+  assert.equal(view.text, "prefix");
+  assert.ok(!io.requests.some(request => request.close), "a stopping service must not receive subscription cleanup");
+  assert.deepEqual(
+    diagnostics.map(event => ({ event: event.event, stage: event.stage, reason: event.reason })),
+    [{ event: "stopped", stage: "none", reason: "service_stopping" }],
+  );
 });
 
 test("stopping before baseline arrives closes the late subscription without installation", async () => {

@@ -22,9 +22,9 @@ export class TranscriptSessionFollower {
     await runtime.start();
   }
 
-  stop(): void {
+  stop(closeSubscription = true, reason?: "service_stopping"): void {
     this.generation++;
-    this.runtime?.stop();
+    this.runtime?.stop(closeSubscription, reason);
     this.runtime = undefined;
   }
 }
