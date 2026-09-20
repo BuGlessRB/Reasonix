@@ -151,8 +151,11 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   const hydratedRef = useRef(false);
   const hydratingRef = useRef(false);
   const bufferedEventsRef = useRef<WireEvent[]>([]);
-  const primedRef = useRef(false);
-  const primeInFlightRef = useRef(false);
+  // The pre-activation history prime and the follower are never both allowed
+  // to write the resident store. "retired" is terminal for the mounted
+  // identity: it is set the moment the follower publishes its first cut (or
+  // the legacy fallback installs), after which every prime attempt is a no-op.
+  const primeRef = useRef<"idle" | "loading" | "primed" | "retired">("idle");
   const hydrateRef = useRef<{ tabId: string; run: (force?: boolean) => Promise<void> } | null>(null);
   const refreshStatusRef = useRef<{ tabId: string; run: () => Promise<void> } | null>(null);
   const reconcileHistoryRef = useRef<(() => Promise<void>) | null>(null);
@@ -216,7 +219,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     hydratedRef.current = false;
     hydratingRef.current = false;
     bufferedEventsRef.current = [];
-    primedRef.current = false;
+    primeRef.current = "idle";
     setHydrated(false);
     let cancelled = false;
     let generation = 0;
@@ -230,29 +233,37 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     // live transcript owner — once the runtime is ready, hydrate()'s follower
     // installs the authoritative protocol-v2 cut and owns everything after it.
     // Mirrors the local primeReadableHistoryForTab contract.
+    const transcriptHasContent = () => {
+      const mounted = transcriptRef.current;
+      return mounted.items.length > 0 || Boolean(mounted.live?.text || mounted.live?.reasoning);
+    };
     const primeEarlyHistory = async () => {
-      if (primedRef.current || hydratedRef.current || primeInFlightRef.current) return;
-      primeInFlightRef.current = true;
-      const ticket = generation;
+      if (primeRef.current !== "idle") return;
+      // Only a blank transcript may be primed, and the check has to run before
+      // loadLatest: that call bumps the resident session generation (retiring
+      // the follower's in-flight reads) and replaces records before it reads
+      // `current`, so a transcript that already has content must never reach
+      // it. history_replace has no revision guard either — a stale or empty
+      // window landing after the follower's cut would wipe the conversation.
+      if (transcriptHasContent()) { primeRef.current = "retired"; return; }
+      primeRef.current = "loading";
+      // The prime is scoped to this mounted identity and to store ownership,
+      // not to a hydrate generation: hydrate() bumps the generation the moment
+      // it starts, and a follower that then fails or stalls must not have
+      // discarded the only baseline the tab could show.
+      const current = () => !cancelled && primeRef.current === "loading";
       try {
-        const projection = await getTranscriptStore().loadLatest(tabId, sessionPath ?? "", {
-          current: () => !cancelled && ticket === generation && !hydratedRef.current,
-        });
-        if (!projection || cancelled || ticket !== generation || hydratedRef.current || primedRef.current) return;
-        // Only a blank transcript may be primed. Once the follower (or a
-        // previous hydrate) published items or a live tail, that cut owns the
-        // surface: history_replace has no revision guard, so a stale or empty
-        // window landing after it would wipe the conversation.
-        const mounted = transcriptRef.current;
-        if (mounted.items.length > 0 || mounted.live?.text || mounted.live?.reasoning) return;
-        primedRef.current = true;
+        const projection = await getTranscriptStore().loadLatest(tabId, sessionPath ?? "", { current });
+        if (!projection || !current()) return;
+        if (transcriptHasContent()) { primeRef.current = "retired"; return; }
+        primeRef.current = "primed";
         setTranscript(current => reducer(current, historyReplaceAction(projection)));
       } catch {
         // Before the attach handshake lands (or on a legacy serve) the window
-        // read is unavailable. A miss stays non-fatal: the ready-time
-        // hydration and its 409 fallback take over unchanged.
+        // read is unavailable. A miss stays non-fatal: the next attach
+        // publication retries, and the ready-time hydration takes over.
       } finally {
-        primeInFlightRef.current = false;
+        if (primeRef.current === "loading") primeRef.current = "idle";
       }
     };
     const refreshStatus = async () => {
@@ -266,7 +277,12 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       const ticket = ++generation;
       follower?.stop();
       follower = new TranscriptSessionFollower(tabId, sessionPath ?? "", true, action => {
-        if (!cancelled && ticket === generation) dispatch(action);
+        if (cancelled || ticket !== generation) return;
+        // The follower's install cut makes it the store owner (connection
+        // status frames precede it and own nothing); an early history prime
+        // still in flight must not land after that cut.
+        if (action.type === "transcript_v2_snapshot") primeRef.current = "retired";
+        dispatch(action);
       });
       setHydrated(false);
       try {
