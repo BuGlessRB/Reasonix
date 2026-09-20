@@ -165,10 +165,11 @@ func (a *App) markRemoteTabSpectatorIfLocalOwned(ctx context.Context, tabID stri
 	a.remoteTabMu.Lock()
 	tab := a.remoteTabs[tabID]
 	path := ""
-	selectionRevision := uint64(0)
+	selectionRevision, reclaimRevision := uint64(0), uint64(0)
 	if tab != nil && tab.gen == gen {
 		path = strings.TrimSpace(tab.routing.currentPath)
 		selectionRevision = tab.selectionRevision
+		reclaimRevision = tab.reclaimRevision
 	}
 	a.remoteTabMu.Unlock()
 	if path == "" {
@@ -202,6 +203,14 @@ func (a *App) markRemoteTabSpectatorIfLocalOwned(ctx context.Context, tabID stri
 		// free session). Clear any stale spectator pin left over from the
 		// previous session so the banner and read-only composer go away.
 		current.session.takenOver = false
+		a.remoteTabMu.Unlock()
+		return
+	}
+	if current.reclaimRevision != reclaimRevision {
+		// An explicit reclaim completed while this probe was in flight, so its
+		// answer describes the ownership that reclaim just ended. The same
+		// fence status payloads get: never re-pin the spectator banner after
+		// ownership returned.
 		a.remoteTabMu.Unlock()
 		return
 	}
