@@ -5,6 +5,7 @@
 import type { DictKey } from "./en";
 
 export const zhTW: Record<DictKey, string> = {
+  "code.plainText": "純文字",
   "chat.syncing": "正在同步會話…",
   "chat.turnCounts": "採樣 {samples} 次 · 工具 {tools} 次",
   "chat.disconnected": "連線中斷，任務狀態等待同步確認。",

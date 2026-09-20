@@ -5201,6 +5201,7 @@ button.reasoning-summary:focus-visible {
   position: relative;
 }
 
+
 /* ── line-numbered code viewer ─────────────────────────────────────────── */
 .code--lines {
   padding: 0;
@@ -10252,71 +10253,6 @@ body > .mermaid-diagram--fullscreen {
   line-height: 1.5;
 }
 
-/* ── highlight.js token theme (mapped to palette) ────────────────────────── */
-.hljs-comment,
-.hljs-quote {
-  color: var(--hl-comment);
-  font-style: italic;
-}
-.hljs-keyword,
-.hljs-selector-tag,
-.hljs-literal,
-.hljs-section,
-.hljs-doctag,
-.hljs-type,
-.hljs-name,
-.hljs-strong {
-  color: var(--hl-keyword);
-}
-.hljs-string,
-.hljs-regexp,
-.hljs-attribute,
-.hljs-meta .hljs-string {
-  color: var(--hl-string);
-}
-.hljs-addition {
-  color: var(--add-fg);
-}
-.hljs-deletion {
-  color: var(--del-fg);
-}
-.hljs-number,
-.hljs-symbol,
-.hljs-bullet,
-.hljs-link,
-.hljs-selector-attr,
-.hljs-selector-pseudo {
-  color: var(--hl-number);
-}
-.hljs-title,
-.hljs-title.function_,
-.hljs-section .hljs-title {
-  color: var(--hl-func);
-}
-.hljs-class .hljs-title,
-.hljs-title.class_,
-.hljs-built_in,
-.hljs-attr {
-  color: var(--hl-type);
-}
-.hljs-variable,
-.hljs-template-variable,
-.hljs-property,
-.hljs-params,
-.hljs-selector-id,
-.hljs-selector-class {
-  color: var(--hl-builtin);
-}
-.hljs-meta,
-.hljs-comment .hljs-doctag {
-  color: var(--hl-meta);
-}
-.hljs-emphasis {
-  font-style: italic;
-}
-.hljs-strong {
-  font-weight: 600;
-}
 
 /* ── scrollbars ──────────────────────────────────────────────────────────── */
 * {
@@ -33552,7 +33488,7 @@ body > .mermaid-diagram--fullscreen {
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .mermaid-diagram,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .md:not(.chat-transcript .md) th,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .md-code,
-:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .copybtn,
+:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .copybtn:not(.code-block__header-copy),
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .msg-meta__btn,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .turn-actions__btn,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .rewind__btn,
@@ -33597,11 +33533,11 @@ body > .mermaid-diagram--fullscreen {
 }
 
 /* Home: interact elements — hover/active states */
-:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .copybtn:hover,
+:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .copybtn:not(.code-block__header-copy):hover,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .turn-actions__btn:hover:not(:disabled),
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .rewind__btn:hover,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .msg-meta__btn:hover:not(:disabled),
-:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .msg-meta .copybtn:hover,
+:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .msg-meta .copybtn:not(.code-block__header-copy):hover,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .composer-task-mode-trigger:hover:not(:disabled),
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .modelsw__trigger:hover:not(:disabled),
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="home"] .app:not(.app--creation) .prompt-action:hover,
@@ -33678,7 +33614,7 @@ body > .mermaid-diagram--fullscreen {
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .mermaid-diagram,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .md:not(.chat-transcript .md) th,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .md-code,
-:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .copybtn,
+:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .copybtn:not(.code-block__header-copy),
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .msg-meta__btn,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .turn-actions__btn,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .rewind__btn,
@@ -33722,11 +33658,11 @@ body > .mermaid-diagram--fullscreen {
 }
 
 /* Task: interact elements — hover/active states */
-:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .copybtn:hover,
+:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .copybtn:not(.code-block__header-copy):hover,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .turn-actions__btn:hover:not(:disabled),
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .rewind__btn:hover,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .msg-meta__btn:hover:not(:disabled),
-:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .msg-meta .copybtn:hover,
+:root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .msg-meta .copybtn:not(.code-block__header-copy):hover,
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .composer-task-mode-trigger:hover:not(:disabled),
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .modelsw__trigger:hover:not(:disabled),
 :root[data-theme-pack][data-theme-has-bg="true"][data-theme-scene="task"] .app:not(.app--creation) .prompt-action:hover,
@@ -33801,7 +33737,7 @@ body > .mermaid-diagram--fullscreen {
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .mermaid-diagram,
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .md:not(.chat-transcript .md) th,
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .md-code,
-:root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .copybtn,
+:root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .copybtn:not(.code-block__header-copy),
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .msg-meta__btn,
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .turn-actions__btn,
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .rewind__btn,
@@ -33846,11 +33782,11 @@ body > .mermaid-diagram--fullscreen {
 }
 
 /* Fallback: interact elements — hover/active states */
-:root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .copybtn:hover,
+:root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .copybtn:not(.code-block__header-copy):hover,
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .turn-actions__btn:hover:not(:disabled),
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .rewind__btn:hover,
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .msg-meta__btn:hover:not(:disabled),
-:root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .msg-meta .copybtn:hover,
+:root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .msg-meta .copybtn:not(.code-block__header-copy):hover,
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .composer-task-mode-trigger:hover:not(:disabled),
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .modelsw__trigger:hover:not(:disabled),
 :root[data-theme-pack][data-theme-has-bg="true"] .app:not(.app--creation) .prompt-action:hover,

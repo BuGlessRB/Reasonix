@@ -26,11 +26,11 @@ const MarkdownSvgBlock = lazy(() => import("./MarkdownSvgBlock"));
 /** Fences that may hold an SVG document; the body still has to prove it. */
 const SVG_FENCES = new Set(["svg", "xml", "html"]);
 
-function MarkdownCode({ value, language }: { value: string; language?: string }) {
+export function MarkdownCode({ value, language }: { value: string; language?: string }) {
   const [expanded, setExpanded] = useState(false);
   const lines = useMemo(() => value.split("\n"), [value]);
   const large = lines.length > 200;
-  return <><CodeViewer value={large && !expanded ? lines.slice(0, 200).join("\n") : value} copyValue={value} language={language} scrollMode="expand" />
+  return <><CodeViewer value={large && !expanded ? lines.slice(0, 200).join("\n") : value} copyValue={value} language={language} scrollMode="expand" showHeader />
     {large && <div className="chat-code-fold"><button className="btn" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{t(expanded ? "chat.collapseCode" : "chat.expandCode")}</button></div>}
   </>;
 }
