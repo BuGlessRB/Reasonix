@@ -17,10 +17,11 @@ export interface WindowBounds {
 }
 
 export interface ServiceState {
-  phase: "starting" | "ready" | "restarting" | "failed" | "exited";
+  phase: "starting" | "ready" | "restarting" | "stopping" | "failed" | "exited";
   generation: string;
   error?: string;
 }
+export type RendererDiagnosticPayload = Record<string, string | number>;
 export interface GraphicsSettingsState {
   hardwareAcceleration: boolean; startupEnabled: boolean;
   override: "none" | "environment" | "command-line"; restartRequired: boolean;
@@ -71,9 +72,9 @@ export interface ReasonixDesktopHost {
       setBackgroundColour(r: number, g: number, b: number, a: number): void;
       getBounds(): Promise<WindowBounds>;
       isMaximised(): Promise<boolean>;
-      minimise(): void;
-      toggleMaximise(): void;
-      close(): void;
+      minimise(): Promise<void>;
+      toggleMaximise(): Promise<void>;
+      close(): Promise<void>;
       getAppZoom(): Promise<number>;
       setAppZoom(factor: number): Promise<number>;
       resetAppZoom(): Promise<number>;
@@ -82,6 +83,7 @@ export interface ReasonixDesktopHost {
     browserControl: BrowserControlApi;
     getPathForFile(file: File): string;
     onServiceState(cb: (state: ServiceState) => void): () => void;
+    recordRendererDiagnostic(event: RendererDiagnosticPayload): Promise<void>;
   };
   browser: DesktopBrowserHost;
 }
@@ -104,6 +106,10 @@ export interface DesktopHost {
     setWindowTheme(theme: WindowTheme): void;
     setWindowBackground(r: number, g: number, b: number, a: number): void;
     getWindowBounds(): Promise<WindowBounds> | undefined;
+    isWindowMaximised(): Promise<boolean>;
+    minimiseWindow(): Promise<void>;
+    toggleMaximiseWindow(): Promise<void>;
+    closeWindow(): Promise<void>;
     getAppZoom(): Promise<number>;
     setAppZoom(factor: number): Promise<number>;
     resetAppZoom(): Promise<number>;
@@ -112,6 +118,7 @@ export interface DesktopHost {
     onFilesDropped(cb: (paths: string[]) => void): () => void;
     getPathForFile?(file: File): string;
     onServiceState(cb: (state: ServiceState) => void): () => void;
+    recordRendererDiagnostic(event: RendererDiagnosticPayload): Promise<void>;
   };
   /** Native website views; only the Electron shell provides them. */
   browser?: DesktopBrowserHost;
@@ -152,8 +159,13 @@ const serverHost: DesktopHost = {
     setWindowTheme: noop,
     setWindowBackground: noop,
     getWindowBounds: () => undefined,
+    isWindowMaximised: async () => false,
+    minimiseWindow: async () => {},
+    toggleMaximiseWindow: async () => {},
+    closeWindow: async () => {},
     onFilesDropped: () => noop,
     onServiceState: () => noop,
+    recordRendererDiagnostic: async () => {},
     getAppZoom: async () => 1,
     setAppZoom: async () => 1,
     resetAppZoom: async () => 1,
@@ -212,9 +224,13 @@ const electronHostFrom = (host: ReasonixDesktopHost): DesktopHost => {
       setWindowTheme: (theme) => host.native.window.setTheme(theme),
       setWindowBackground: (r, g, b, a) => host.native.window.setBackgroundColour(r, g, b, a),
       getWindowBounds: () => host.native.window.getBounds(),
+      isWindowMaximised: () => host.native.window.isMaximised(),
+      minimiseWindow: () => host.native.window.minimise(),
+      toggleMaximiseWindow: () => host.native.window.toggleMaximise(),
+      closeWindow: () => host.native.window.close(),
       getAppZoom: () => host.native.window.getAppZoom(),
       setAppZoom: (factor) => host.native.window.setAppZoom(factor),
-    resetAppZoom: () => host.native.window.resetAppZoom(),
+      resetAppZoom: () => host.native.window.resetAppZoom(),
       graphics: host.native.graphics,
       ...(host.native.processDiagnostics ? { processDiagnostics: () => host.native.processDiagnostics!() } : {}),
       ...(host.native.captureRendererProfile ? { captureRendererProfile: (id?: string) => host.native.captureRendererProfile!(id) } : {}),
@@ -230,6 +246,7 @@ const electronHostFrom = (host: ReasonixDesktopHost): DesktopHost => {
       },
       getPathForFile: (file) => host.native.getPathForFile(file),
       onServiceState: (cb) => host.native.onServiceState(cb),
+      recordRendererDiagnostic: (event) => host.native.recordRendererDiagnostic(event),
     },
     browser: host.browser,
   };

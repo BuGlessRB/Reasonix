@@ -53,13 +53,19 @@ export function useAppChromeCommands(input: AppChromeCommandsInput) {
     if (!onChromeSurface && !onMacOSWorkbenchSidebarTitlebar) return;
     if (target?.closest("button, input, textarea, select, a, [role='button'], [role='tab'], .windows-window-controls")) return;
     event.preventDefault();
-    void nativeWindowCommands.toggleMaximize().then(syncMainWindowMaximised).catch(() => undefined);
+    void nativeWindowCommands.toggleMaximize().then(syncMainWindowMaximised)
+      .catch((error) => console.warn("native window maximise failed", error));
   });
-  const minimizeMainWindow = useCommittedCommand(() => { void nativeWindowCommands.minimize(); });
+  const minimizeMainWindow = useCommittedCommand(() => {
+    void nativeWindowCommands.minimize().catch((error) => console.warn("native window minimise failed", error));
+  });
   const toggleMainWindowMaximized = useCommittedCommand(() => {
-    void nativeWindowCommands.toggleMaximize().then(syncMainWindowMaximised).catch(() => undefined);
+    void nativeWindowCommands.toggleMaximize().then(syncMainWindowMaximised)
+      .catch((error) => console.warn("native window maximise failed", error));
   });
-  const closeMainWindow = useCommittedCommand(() => { void nativeWindowCommands.close(); });
+  const closeMainWindow = useCommittedCommand(() => {
+    void nativeWindowCommands.close().catch((error) => console.warn("native window close failed", error));
+  });
   const closeSettings = useCommittedCommand(() => {
     input.setSettingsFocus(null);
     input.setSettingsTarget(null);
