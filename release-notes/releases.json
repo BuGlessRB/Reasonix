@@ -11,8 +11,8 @@
         "zh": "桌面版 1.38.11：会话可靠性、Windows 修复与图片附件"
       },
       "summary": {
-        "en": "This release improves session migration, takeover, and export reliability, fixes Windows credential and shell issues, and adds image attachment support.",
-        "zh": "此版本提升了会话迁移、接管与导出的可靠性，修复了 Windows 凭据与 Shell 问题，并新增图片附件支持。"
+        "en": "This release improves session migration, takeover, and export reliability, fixes Windows credential and shell issues, and repairs image attachment handling across submission, history, and export.",
+        "zh": "此版本提升了会话迁移、接管与导出的可靠性，修复了 Windows 凭据与 Shell 问题，并完善图片附件在提交、历史记录与导出中的处理。"
       },
       "surfaces": [
         "desktop",
@@ -226,7 +226,7 @@
             },
             "body": {
               "en": "Reasoning settings are resolved per model, fixing legacy connections and session effort binding.",
-              "zh": "思考设置按模型解析，修复旧连接与会话努力绑定。"
+              "zh": "思考设置按模型解析，修复旧连接与会话思考强度的绑定。"
             },
             "refs": [
               10500
@@ -340,8 +340,8 @@
               "zh": "Windows Shell 执行"
             },
             "body": {
-              "en": "Shell commands use pwsh with stable job contracts and no nested probes.",
-              "zh": "Shell 命令使用 pwsh，具有稳定的作业契约，无嵌套探测。"
+              "en": "Shell commands use PowerShell with reliable working-directory and process handling.",
+              "zh": "Shell 命令使用 PowerShell，工作目录与进程处理更加可靠。"
             },
             "refs": [
               10553
