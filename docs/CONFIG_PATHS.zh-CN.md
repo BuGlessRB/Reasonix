@@ -66,10 +66,9 @@ bot 和 agent 设置。Provider 条目只保存 `api_key_env` 里的凭据变量
 
 已保存的 provider 与 bot 凭据变量不会进入任何由模型控制的子进程环境。在 macOS
 和 Linux 上，Reasonix 的文件读取工具、受沙盒保护的 shell 命令和 MCP server 也
-无法读取全局凭据 `.env`；项目自身的普通 `.env` 可见性保持不变。Windows 使用与
-Harness 同类的 `WRITE_RESTRICTED` 令牌，只约束写入、不隔离读取。本地工具仍以当前
-系统用户运行，可以主动读取该用户可读的文件，包括凭据存储；因此受限权限应视为
-写入边界，而不是凭据保险库。
+无法读取全局凭据 `.env`；项目自身的普通 `.env` 可见性保持不变。Windows 没有 OS 级
+Shell 沙箱：Shell 命令和本地工具都以当前系统用户运行，可以主动读取该用户可读的文件，
+包括凭据存储；因此受限权限在 Windows 上应视为工具层写入边界，而不是凭据保险库。
 
 示例：
 

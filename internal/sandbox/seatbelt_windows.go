@@ -23,9 +23,9 @@ type windowsSandboxPayload struct {
 
 const windowsSandboxPayloadVersion = 1
 
-// Command wraps the shell invocation in Reasonix's hidden Windows sandbox
-// helper. The helper applies the native Windows sandbox backend and a Job
-// Object before starting the requested command.
+// Command returns the shell invocation unwrapped: the Windows backend is
+// retired from enforcement (Available is always false), so the helper argv is
+// never produced. The wrapping code remains only until the backend is removed.
 func Command(spec Spec, sh Shell, command string) ([]string, bool) {
 	if ValidateShellPolicy(spec, sh) != nil {
 		return nil, false
@@ -63,21 +63,12 @@ func windowsSandboxCommand(spec Spec, args []string, writable bool) ([]string, b
 	return out, true
 }
 
-// Available reports whether Reasonix can reach its bundled Windows sandbox
-// helper and the native Windows sandbox backend is available. The helper is
-// this same executable relaunched with WindowsHelperCommand, so the entry
-// point must have registered its dispatch route (RegisterHelperDispatch);
-// without it the relaunch would not reach RunWindowsSandboxHelper at all.
-func Available() bool {
-	if !helperDispatchRegistered.Load() {
-		return false
-	}
-	exe, err := os.Executable()
-	if err != nil || exe == "" {
-		return false
-	}
-	return winsandbox.Available()
-}
+// Available is always false on Windows: the restricted-token/AppContainer
+// backend is retired from enforcement (see OSSandboxSupported). Reporting it
+// as unavailable keeps every wrapper, MCP confinement, and capability surface
+// on the unwrapped path without a second platform switch, and it guarantees
+// the helper never mutates ACLs or creates restricted tokens on user machines.
+func Available() bool { return false }
 
 func repairLegacyCredentialDeny(path string) error {
 	return winsandbox.RepairLegacyCredentialDeny(path)

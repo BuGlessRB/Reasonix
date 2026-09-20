@@ -52,14 +52,22 @@ func TestUnavailableMessageIsActionable(t *testing.T) {
 		"Full access",
 	}
 	if runtime.GOOS == "windows" {
-		// Windows ships no OS-level Bash backend and the effective mode is
+		// Windows ships no OS-level shell sandbox and the effective mode is
 		// fixed to off, so the remediation states that fact instead of
 		// pointing at a config edit the platform would ignore.
-		want = []string{"refusing to run unconfined", "Full access"}
+		want = []string{"refusing to run unconfined", "no OS-level shell sandbox", "Full access"}
 	}
 	for _, w := range want {
 		if !strings.Contains(msg, w) {
 			t.Fatalf("UnavailableMessage() = %q, want %q", msg, w)
+		}
+	}
+}
+
+func TestOSSandboxSupportedPerPlatform(t *testing.T) {
+	for goos, want := range map[string]bool{"darwin": true, "linux": true, "windows": false, "freebsd": true} {
+		if got := osSandboxSupportedForGOOS(goos); got != want {
+			t.Fatalf("osSandboxSupportedForGOOS(%q) = %v, want %v", goos, got, want)
 		}
 	}
 }

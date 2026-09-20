@@ -1,6 +1,13 @@
 # Windows 沙箱架构
 
-Reasonix 在 Windows 的 Shell 和写入进程中采用了 DeepSeek Harness
+> **状态：已退出强制执行。**Reasonix 不再在 Windows 上启动受限令牌/AppContainer
+> helper。`sandbox.Available()` 在 Windows 上恒为 false，`[sandbox] bash` 解析为
+> `off`，权限模式仅作为 Reasonix 工具层边界生效。该后端曾通过对当前用户自身加拒绝
+> ACE 把宿主锁在自己的凭据存储之外，并破坏常见工具链（Git Bash/MSYS2、Node stdio
+> 管道、映射网络盘、冷启动预算）。以下章节描述的是退役设计，在代码移除前保留；
+> 旧安装的凭据 ACL 修复是其中唯一仍在使用的部分。
+
+Reasonix 曾在 Windows 的 Shell 和写入进程中采用 DeepSeek Harness
 `c291e7961a` 的受限令牌思路。当前实现是原生 Go 移植，运行时不依赖
 Harness 代码。
 
