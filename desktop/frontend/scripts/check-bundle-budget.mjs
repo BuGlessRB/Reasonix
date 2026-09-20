@@ -495,6 +495,9 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // 2084776 B (+9538 B, 0.46% over that base). Preserve the measured 186 B Linux
 // producer difference (2084962 B) and use the next one-decimal ceiling; gzip,
 // per-chunk, CSS, and locale gates remain unchanged.
+// Integrating browser deliverables and delayed loading feedback, then sharing
+// maintenance lookup/classification logic, measures 2084836 B locally and
+// retains the same gate.
 const rawInitialBudgetKiB = 2_036.1;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

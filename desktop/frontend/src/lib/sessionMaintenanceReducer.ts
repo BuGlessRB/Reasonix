@@ -3,6 +3,14 @@ import type { WireEvent } from "./types";
 import { acceptSessionRuntimeSnapshot, type RuntimeState } from "./runtimeStateStore";
 import { interruptOrphanedSessionOperationItems, sessionOperationItem, upsertSessionOperationItem } from "./sessionMaintenanceOperation";
 
+function lastPendingCompaction(items: readonly Item[], manual = false): number {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.kind === "compaction" && item.pending && (!manual || item.operationId)) return i;
+  }
+  return -1;
+}
+
 export function reduceCompactionEvent(s: State, e: WireEvent): State {
   switch (e.kind) {
     case "session_operation": {
@@ -12,19 +20,17 @@ export function reduceCompactionEvent(s: State, e: WireEvent): State {
       return { ...s, seq: s.seq + (updated.inserted ? 1 : 0), items: updated.items };
     }
     case "compaction_started":
-      if (s.items.some((it) => it.kind === "compaction" && it.operationId && it.pending)) return s;
+      if (lastPendingCompaction(s.items, true) >= 0) return s;
       return { ...s, seq: s.seq + 1, items: [...s.items, { kind: "compaction", id: `c${s.seq}`, pending: true, trigger: e.compaction?.trigger ?? "", messages: 0, summary: "", archive: "" }] };
     case "compaction_done": {
       const c = e.compaction;
-      const operationAt = [...s.items].reverse().findIndex((it) => it.kind === "compaction" && it.operationId && it.pending);
+      const operationAt = lastPendingCompaction(s.items, true);
       if (operationAt >= 0) {
-        const at = s.items.length - 1 - operationAt;
-        const items = s.items.map((it, i) => i === at && it.kind === "compaction" ? { ...it,
+        const items = s.items.map((it, i) => i === operationAt && it.kind === "compaction" ? { ...it,
           messages: c?.messages ?? it.messages, summary: c?.summary ?? it.summary, archive: c?.archive ?? it.archive } : it);
         return { ...s, items };
       }
-      const idx = [...s.items].reverse().findIndex((it) => it.kind === "compaction" && it.pending);
-      const at = idx < 0 ? -1 : s.items.length - 1 - idx;
+      const at = lastPendingCompaction(s.items);
       if (!c?.summary) {
         const items = at < 0 ? s.items : s.items.filter((_, i) => i !== at);
         return { ...s, running: s.turnActive ? s.running : false, items };
@@ -45,9 +51,8 @@ export function reduceMaintenanceRuntimeSnapshot(s: State, snapshot: RuntimeStat
     : s.meta;
   const maintenance = runtimeStateSnapshot.maintenance;
   if (!maintenance) return { ...s, meta, runtimeStateSnapshot };
-  const status = maintenance.activity === "cancelling" ? "cancelling"
-    : maintenance.activity === "finalizing" ? "finalizing"
-    : maintenance.activity === "recovery_required" ? "recovery_required" : "running";
+  const status = ["cancelling", "finalizing", "recovery_required"].includes(maintenance.activity)
+    ? maintenance.activity : "running";
   const updated = upsertSessionOperationItem(s.items, { ...sessionOperationItem({
     ...maintenance,
     status: maintenance.status || status,
@@ -57,11 +62,9 @@ export function reduceMaintenanceRuntimeSnapshot(s: State, snapshot: RuntimeStat
 }
 
 export function reconcileMaintenanceState(next: State, a: Action): State {
-  const historyOrRuntimeSynchronized = a.type === "runtime_snapshot" || a.type === "meta"
-    || a.type === "history" || a.type === "history_page" || a.type === "history_replace"
-    || a.type === "history_rebase" || a.type === "history_prepend" || a.type === "history_append"
-    || a.type === "history_items_patch" || a.type === "transcript_snapshot"
-    || a.type === "transcript_v2_snapshot" || a.type === "transcript_page" || a.type === "transcript_records";
+  const historyOrRuntimeSynchronized = ["runtime_snapshot", "meta", "history", "history_page",
+    "history_replace", "history_rebase", "history_prepend", "history_append", "history_items_patch",
+    "transcript_snapshot", "transcript_v2_snapshot", "transcript_page", "transcript_records"].includes(a.type);
   if (historyOrRuntimeSynchronized && next.runtimeStateSnapshot) {
     const maintenance = next.runtimeStateSnapshot.maintenance;
     const items = interruptOrphanedSessionOperationItems(

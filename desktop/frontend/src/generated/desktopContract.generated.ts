@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:0613a7b67ea9709e4b443dfc73ec6d025479712343b42ae5394137ec60e162ae";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:4834c0e613010e6104b461f33ca8ddd31d407adbc5977b8e221269abfbbfb936";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -326,6 +326,7 @@ export const DESKTOP_COMMANDS = [
   "OpenChannelSessionPageForTab",
   "OpenChannelTranscriptSessionForTab",
   "OpenDownloadPage",
+  "OpenFileBrowserPreviewForTab",
   "OpenGlobalTab",
   "OpenLocalPath",
   "OpenLocalPathInExternalOpener",
@@ -2347,6 +2348,23 @@ export interface FeishuBotView {
   mode: string;
   webhookPort: number;
   requireMention: boolean;
+}
+
+export interface FileBrowserPreviewRequest {
+  source: string;
+  path: string;
+  toolCallId?: string;
+  operationId: string;
+  expectedSessionGeneration?: number;
+  userInitiated?: boolean;
+}
+
+export interface FileBrowserPreviewResult {
+  tabId: string;
+  url: string;
+  status: string;
+  error?: string;
+  sessionGeneration: number;
 }
 
 export interface FilePreview {
@@ -5959,6 +5977,7 @@ export interface GeneratedDesktopCommands {
   OpenChannelSessionPageForTab(arg0: string, arg1: string, arg2: number): Promise<HistoryPage>;
   OpenChannelTranscriptSessionForTab(arg0: string, arg1: string): Promise<HistorySwitchPhases>;
   OpenDownloadPage(): Promise<void>;
+  OpenFileBrowserPreviewForTab(arg0: string, arg1: FileBrowserPreviewRequest): Promise<FileBrowserPreviewResult>;
   OpenGlobalTab(arg0: string): Promise<TabMeta>;
   OpenLocalPath(arg0: string): Promise<void>;
   OpenLocalPathInExternalOpener(arg0: string, arg1: string): Promise<void>;
