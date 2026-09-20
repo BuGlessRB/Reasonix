@@ -354,12 +354,37 @@ func (a *App) ListSessionDraftSummaries() ([]SessionDraftSummary, error) {
 	}
 	out := make([]SessionDraftSummary, 0, len(records))
 	for _, record := range records {
-		content := strings.TrimSpace(record.ContentJSON)
 		out = append(out, SessionDraftSummary{ID: record.ID, WorkspaceID: record.WorkspaceID, Scope: record.Scope,
 			WorkspaceRoot: record.WorkspaceRoot, Revision: record.Revision,
-			HasContent: content != "" && content != "{}", State: "saved", UpdatedAt: record.UpdatedAt.UnixMilli()})
+			HasContent: draftHasContent(record.ContentJSON), State: "saved", UpdatedAt: record.UpdatedAt.UnixMilli()})
 	}
 	return out, nil
+}
+
+// draftHasContent reports unsent work the user may want to return to: text or
+// any attached reference. The composer saves a full content object even after
+// every field was cleared, so only the fields themselves can decide this.
+func draftHasContent(contentJSON string) bool {
+	trimmed := strings.TrimSpace(contentJSON)
+	if trimmed == "" || trimmed == "{}" {
+		return false
+	}
+	var content struct {
+		Text             string            `json:"text"`
+		Invocations      []json.RawMessage `json:"invocations"`
+		Attachments      []json.RawMessage `json:"attachments"`
+		WorkspaceRefs    []json.RawMessage `json:"workspaceRefs"`
+		PastedBlocks     []json.RawMessage `json:"pastedBlocks"`
+		SessionRefs      []json.RawMessage `json:"sessionRefs"`
+		SelectedTextRefs []json.RawMessage `json:"selectedTextRefs"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &content); err != nil {
+		// Unknown shapes stay visible rather than silently hiding saved work.
+		return true
+	}
+	return strings.TrimSpace(content.Text) != "" || len(content.Invocations) > 0 || len(content.Attachments) > 0 ||
+		len(content.WorkspaceRefs) > 0 || len(content.PastedBlocks) > 0 || len(content.SessionRefs) > 0 ||
+		len(content.SelectedTextRefs) > 0
 }
 
 func (a *App) DiscardSessionDraft(draftID string, revision uint64) error {

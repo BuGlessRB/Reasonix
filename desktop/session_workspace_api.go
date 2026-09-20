@@ -391,13 +391,10 @@ func (a *App) archiveCanonicalSessionWithOperation(ref session.SessionRef, opera
 	if !ok {
 		return SessionTarget{}, errTopicArchiveBusy
 	}
-	fallback, err := a.archiveSessionRefsWithOperation([]session.SessionRef{ref}, operationID)
+	err := a.archiveSessionRefsWithOperation([]session.SessionRef{ref}, operationID)
 	release()
 	if err != nil {
 		return SessionTarget{}, err
-	}
-	if fallback.needs {
-		_ = a.openFallbackRuntime(fallback)
 	}
 	a.emitProjectTreeChanged()
 	target, err := a.resolveCanonicalSessionTargetState(ref, "", true)

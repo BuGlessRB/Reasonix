@@ -3135,71 +3135,22 @@ func (a *App) closeRemovedSessionRuntime(item removedSessionRuntime, closed map[
 	item.ctrl.Close()
 }
 
+// openFallbackRuntime re-activates the topic that still owns content after one
+// of its sessions was removed. When no topic remains, the surface stays empty
+// and the frontend lands on the workspace draft: a replacement blank session
+// would be registered as a real sidebar row that can be archived again, so the
+// workspace could never become empty.
 func (a *App) openFallbackRuntime(target fallbackRuntimeTarget) error {
-	scope := target.scope
-	root := target.workspaceRoot
 	topicID := strings.TrimSpace(target.topicID)
-	if scope == "global" {
+	if topicID == "" {
+		return nil
+	}
+	root := target.workspaceRoot
+	if target.scope == "global" {
 		root = ""
 	}
-	if topicID == "" {
-		return a.openTransientBlankRuntime(scope, root)
-	}
-	_, err := a.ActivateTopic(scope, root, topicID, "")
+	_, err := a.ActivateTopic(target.scope, root, topicID, "")
 	return err
-}
-
-func (a *App) openTransientBlankRuntime(scope, workspaceRoot string) error {
-	scope = strings.TrimSpace(scope)
-	if scope != "project" {
-		scope = "global"
-	}
-	actualRoot := ""
-	if scope == "project" {
-		workspaceRoot = normalizeProjectRoot(workspaceRoot)
-		if workspaceRoot == "" {
-			return fmt.Errorf("workspaceRoot is required")
-		}
-		actualRoot = workspaceRoot
-	} else {
-		actualRoot = globalWorkspaceRoot()
-		if err := os.MkdirAll(actualRoot, 0o755); err != nil {
-			return fmt.Errorf("create global workspace: %w", err)
-		}
-	}
-	releaseAdmission, err := a.beginProjectRuntimeAdmission(scope, actualRoot)
-	if err != nil {
-		return err
-	}
-	defer releaseAdmission()
-	if scope == "project" {
-		saveWorkspace(workspaceRoot)
-		a.registerProjectRoot(workspaceRoot)
-	}
-
-	model, toolApprovalMode := desktopNewSessionDefaults(scope, actualRoot)
-	tab := &WorkspaceTab{
-		Scope:            scope,
-		WorkspaceRoot:    actualRoot,
-		TopicTitle:       defaultTopicTitle,
-		topicTitleSource: topicTitleSourceAuto,
-		model:            model,
-		qualityFloor:     "",
-		mode:             tabModeFromAxes(false, toolApprovalMode == control.ToolApprovalYolo),
-		toolApprovalMode: toolApprovalMode,
-		disabledMCP:      map[string]ServerView{},
-	}
-	a.mu.Lock()
-	tab.ID = a.newUniqueTabIDLocked()
-	tab.sink = &tabEventSink{tabID: tab.ID, app: a}
-	a.tabs[tab.ID] = tab
-	a.tabOrder = append(a.tabOrder, tab.ID)
-	a.activeTabID = tab.ID
-	a.saveTabsLocked()
-	a.mu.Unlock()
-
-	a.startTabControllerBuild(tab)
-	return nil
 }
 
 func (a *App) beginDestroySessionJobs(dir, sessionPath string) []control.SessionDestroyHandle {
