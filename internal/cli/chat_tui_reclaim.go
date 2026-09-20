@@ -15,6 +15,22 @@ import (
 // session must not terminate the process that may still host other sessions.
 type tuiSessionReclaimedMsg struct{}
 
+// reclaimState is the chatTUI substate a remote take-back owns: the three
+// flags are set when the mirror yields and cleared together when the TUI
+// adopts another session, so they never disagree about who writes.
+type reclaimState struct {
+	// sessionReclaimed means the remote side owns the previously active
+	// session. The TUI stays alive, but input is restricted to leaving it.
+	sessionReclaimed bool
+	// reclaimedTarget retains the session that was just yielded after its
+	// controller binding is released, so the picker can select another row.
+	reclaimedTarget cliResumeTarget
+	// shutdownAfterReclaim records a signal or watchdog exit request that
+	// arrived mid-reclaim; it is honored once the reclaim callback lands
+	// instead of racing the handoff.
+	shutdownAfterReclaim bool
+}
+
 const sessionReclaimedNotice = "this session was taken back by the remote side; /resume switches to another session, /takeover takes it back, /quit exits"
 
 // sessionDetached reports whether the remote side owns the session this TUI
@@ -133,6 +149,31 @@ func (m *chatTUI) resumeAfterReclaim() {
 	if m.takeover != nil {
 		m.takeover.ResumeAfterYield()
 	}
+}
+
+// reclaimBlocksInput reports whether a composer line must be refused because
+// the remote side owns this session. A refusal clears the composer and
+// explains itself, so the caller only has to finalize the frame.
+func (m *chatTUI) reclaimBlocksInput(line string) bool {
+	if !m.sessionDetached() || reclaimInputAllowed(line) {
+		return false
+	}
+	m.resetComposerInput()
+	m.notice(sessionReclaimedNotice)
+	return true
+}
+
+// slashInputBlockedNotice returns the refusal for a slash command typed while
+// the remote side is taking this session back or already owns it; the empty
+// string means the command may run.
+func (m *chatTUI) slashInputBlockedNotice(typedCmd string) string {
+	switch {
+	case m.sessionDetached() && !reclaimInputAllowed(typedCmd):
+		return sessionReclaimedNotice
+	case m.takeover != nil && m.takeover.Reclaiming() && typedCmd != "/quit" && typedCmd != "/exit":
+		return "the remote side is taking this session back; new input is disabled"
+	}
+	return ""
 }
 
 func reclaimInputAllowed(line string) bool {
