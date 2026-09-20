@@ -8,17 +8,19 @@ import (
 
 // activeOrSingleLocalTab resolves the workspace tab a local command should
 // target: the active tab when there is one, otherwise the dormant tab a
-// remote-only layout restores. The controller is read with the tab so a
-// runtime built in between cannot look like a replaced one.
+// remote-only layout restores. Both resolve through tabAndCtrlByID so a tab
+// whose startup was blocked by a session lease gets the same recovery attempt
+// every other tab-scoped command performs before reporting a missing runtime.
 func (a *App) activeOrSingleLocalTab() (*WorkspaceTab, control.SessionAPI) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	if tab := a.tabByIDLocked(""); tab != nil {
-		return tab, tab.Ctrl
+	if tab, ctrl := a.tabAndCtrlByID(""); tab != nil {
+		return tab, ctrl
 	}
-	for _, id := range a.orderedTabIDsLocked() {
-		if tab := a.tabs[id]; tab != nil {
-			return tab, tab.Ctrl
+	a.mu.RLock()
+	ordered, _ := a.orderedTabIDsSnapshotLocked()
+	a.mu.RUnlock()
+	for _, id := range ordered {
+		if tab, ctrl := a.tabAndCtrlByID(id); tab != nil {
+			return tab, ctrl
 		}
 	}
 	return nil, nil
