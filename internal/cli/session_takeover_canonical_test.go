@@ -62,6 +62,11 @@ func newCanonicalTakeoverTUI(t *testing.T) (*chatTUI, *control.Controller, *sess
 		ctrl.Close()
 		_ = service.CloseAll(context.Background())
 	})
+	// Registered last so it runs first: the manager's loop reads the serve
+	// discovery seam that withFakeCanonicalDiscovery restores on cleanup, so a
+	// loop outliving its test races the next test's fixture.
+	takeover := m.takeover
+	t.Cleanup(func() { _ = takeover.Close() })
 	return &m, ctrl, service, held.Ref()
 }
 
