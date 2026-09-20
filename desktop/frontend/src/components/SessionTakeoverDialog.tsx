@@ -139,6 +139,8 @@ export function HistoricalSessionBanners({ tab, navigate, captureNavigation }: H
   const preparation = useSyncExternalStore(subscribeHistoricalPreparation, historicalPreparationSnapshot);
   const [update, setUpdate] = useState<HistoricalSourceUpdateView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cancellingOperationId, setCancellingOperationId] = useState("");
+  const cancellingOperationRef = useRef("");
   const activeHostId = activeRef?.hostId ?? "";
   const activeSessionId = activeRef?.sessionId ?? "";
   const activeKey = activeSessionId ? `${activeHostId}:${activeSessionId}` : "";
@@ -192,11 +194,18 @@ export function HistoricalSessionBanners({ tab, navigate, captureNavigation }: H
     finally { if (mounted.current) setBusy(false); }
   };
   const cancelPreparation = async () => {
-    if (!preparation || !app.CancelSessionPreparation) return;
+    if (!preparation || !app.CancelSessionPreparation || cancellingOperationRef.current === preparation.operationId) return;
+    const operationId = preparation.operationId;
+    cancellingOperationRef.current = operationId;
+    setCancellingOperationId(operationId);
     try {
-      const view = await app.CancelSessionPreparation(preparation.operationId);
+      const view = await app.CancelSessionPreparation(operationId);
       if (mounted.current) reconcileHistoricalPreparation(preparation, view);
     } catch { /* The preparation poll remains the authority after a failed cancellation request. */ }
+    finally {
+      if (cancellingOperationRef.current === operationId) cancellingOperationRef.current = "";
+      if (mounted.current) setCancellingOperationId(current => current === operationId ? "" : current);
+    }
   };
 
   if (preparation) {
@@ -205,7 +214,7 @@ export function HistoricalSessionBanners({ tab, navigate, captureNavigation }: H
       <span className="banner__msg">{m("historicalImporting")}: {preparation.session.title || preparation.session.topicId || m("historicalTitle")}</span>
       <span className="banner__hint">{m(preparation.status === "queued" ? "historicalQueued" : preparation.status === "preparing" ? "historicalImporting" : "historicalImportFailed")}</span>
       <span className="banner__spacer" />
-      {waiting && <button type="button" className="btn btn--small" onClick={() => void cancelPreparation()}>{t("common.cancel")}</button>}
+      {waiting && <button type="button" className="btn btn--small" disabled={cancellingOperationId === preparation.operationId} onClick={() => void cancelPreparation()}>{t("common.cancel")}</button>}
       {!waiting && preparation.retryable && <button type="button" className="btn btn--small" onClick={() => void navigate({ kind: "resume-session", session: preparation.session })}>{t("common.retry")}</button>}
     </div>;
   }

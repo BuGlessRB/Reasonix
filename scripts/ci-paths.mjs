@@ -17,11 +17,12 @@ const PACKAGING = /^(?:desktop\/(?:packaging\/|build\/)|scripts\/(?:desktop-buil
 const RELEASE_CONTROL = /^(?:\.github\/workflows\/(?:release[^/]*|prepare-release-notes|pages)\.yml|scripts\/(?:release|resolve-release-candidate|validate-release-candidate|build-release-cli-candidate|publish-homebrew-cask|desktop-release-artifacts|finalize-windows-signed-candidate|verify-release-artifact-archive|verify-stable-release-artifacts)[^/]*|npm\/publish(?:-candidate)?(?:\.test)?\.mjs)$/;
 const DESKTOP_GO = /^(?:desktop\/(?:[^/]+\.go|go\.(?:mod|sum)|cmd\/|internal\/)|internal\/|cmd\/|go\.(?:mod|sum)$)/;
 const SDK = /^(?:sdk\/|internal\/extension\/)/;
+const WINDOWS_BUILTIN = /^(?:internal\/(?:tool\/builtin\/|tool\/tool\.go$|sandbox\/|permission\/|permissionpreset\/)|scripts\/windows-pr-contract-tests(?:\.test)?\.mjs$)/;
 const CI_CONTROL = /^(?:\.github\/workflows\/ci\.yml|scripts\/ci-paths(?:\.test)?\.mjs)$/;
 const MEMORY_CONTROL = /^(?:\.github\/workflows\/app-memory\.yml|scripts\/ci-paths(?:\.test)?\.mjs)$/;
 const MEMORY_FULL = /^(?:desktop\/frontend\/(?:bench\/app-(?:memory|browser|page-actions)[^/]*|src\/(?:App(?:Runtime)?\.tsx|app-runtime\/.*|app-shell\/.*|components\/Transcript(?:Cards)?\.tsx|lib\/(?:useController[^/]*|subscriptionScope|useNavigationSurface|navigationSurfaceTransition|keyedResource|fileResource|useWorkspaceChangesResource|mcpServerLifecycle|fileNavigationLifetime|bridge(?:BenchFixtures|HistoryFixtures)?)\.[^/]+))|\.github\/workflows\/app-memory\.yml|scripts\/ci-paths(?:\.test)?\.mjs)$/;
 
-const FLAG_NAMES = ["code", "desktop", "desktop_go", "frontend", "browser", "memory", "memory_full", "electron", "native", "packaging", "site", "sdk", "release_control", "notes_only"];
+const FLAG_NAMES = ["code", "desktop", "desktop_go", "frontend", "browser", "memory", "memory_full", "electron", "native", "packaging", "site", "sdk", "windows_builtin", "release_control", "notes_only"];
 
 function normalized(path) {
   return path.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -67,11 +68,15 @@ export function classifyPaths(input, { full = false } = {}) {
       flags.sdk = true;
       setReason(reasons, "sdk", path, "SDK or generated protocol source");
     }
+    if (WINDOWS_BUILTIN.test(path)) {
+      flags.windows_builtin = true;
+      setReason(reasons, "windows_builtin", path, "Windows shell, workspace or sandbox contract");
+    }
     // site and sdk belong here too: a PR that edits the routing contract must
     // exercise every gate it can change, and without them such a PR skips site
     // and no-ops sdk while the aggregates trivially accept those skips.
     if (CI_CONTROL.test(path)) {
-      for (const flag of ["desktop_go", "frontend", "browser", "electron", "native", "packaging", "site", "sdk"]) {
+      for (const flag of ["desktop_go", "frontend", "browser", "electron", "native", "packaging", "site", "sdk", "windows_builtin"]) {
         flags[flag] = true;
         setReason(reasons, flag, path, "CI routing contract");
       }

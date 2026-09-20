@@ -4,7 +4,7 @@ import { beneath, internalRoots, listPackages, runGoTest } from "./go-test-group
 
 // Start the long filesystem suites immediately on independent runners instead
 // of leaving them behind hundreds of short packages in the residual queue.
-export const isolatedGroups = ["agent", "boot", "control", "serve", "session", "worktree"];
+export const isolatedGroups = ["acp", "agent", "boot", "bot", "control", "serve", "session", "worktree"];
 const smokeRoots = internalRoots(
   "appidentity", "checkpoint", "cli", "desktoplauncher", "extension/sidecar",
   "filelock", "fileops", "fileutil", "hook", "instruction", "mcplaunch", "notify",
@@ -29,7 +29,12 @@ export function selectPackages(packages, group) {
 export function testArgs(packages, group) {
   const selected = selectPackages(packages, group);
   if (selected.length === 0) throw new Error(`Empty Windows test group: ${group}`);
-  return ["test", "-p", isolatedGroups.includes(group) ? "1" : "4", "-timeout=8m", ...selected];
+  const args = ["test", "-p", isolatedGroups.includes(group) ? "1" : "4", "-timeout=8m"];
+  // Bot has produced process-level Windows exits without a Go stack or test
+  // name. JSON preserves the last start/output event and the subprocess exit
+  // status while keeping the whole package in one process (no retry or split).
+  if (group === "bot") args.push("-json");
+  return [...args, ...selected];
 }
 
 function main(group) {

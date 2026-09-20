@@ -52,6 +52,10 @@ const pendingA = { operationId: "prepare-a", status: "preparing", retryable: fal
 await act(async () => setHistoricalPreparation(pendingA));
 cancellation = deferred<SessionPreparationView>();
 await act(async () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Cancel")!.click());
+const pendingCancel = [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Cancel")!;
+assert.equal(pendingCancel.disabled, true, "one operation accepts only one in-flight cancellation");
+await act(async () => pendingCancel.click());
+assert.equal(cancelled, 2, "a disabled cancellation control does not submit twice");
 await act(async () => setHistoricalPreparation({ ...pendingA, operationId: "prepare-b" }));
 await act(async () => cancellation!.resolve({ operationId: "prepare-a", sourceKey: "legacy", status: "cancelled", revision: 5, retryable: true }));
 assert.equal(historicalPreparationSnapshot()?.operationId, "prepare-b", "late cancellation cannot replace a newer selection");
