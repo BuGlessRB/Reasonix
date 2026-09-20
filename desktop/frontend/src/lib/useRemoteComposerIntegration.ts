@@ -83,16 +83,25 @@ export function useRemoteComposerProfileSync(options: {
   setProfiles: Dispatch<SetStateAction<ComposerProfilesByTab>>;
 }): boolean {
   const { activeTabId, sessionRoute, remote, remoteProfile, collaborationMode, toolApprovalMode, goal, qualityFloor, pending, setProfiles } = options;
-  const lastRouteRef = useRef<string>("");
+  // The last synced session route per tab. A tab switch A -> B -> A is not a
+  // route change for A; only A's own session rotation is, so the memory must
+  // be keyed by tab rather than hold the most recently active tab alone.
+  const routesRef = useRef(new Map<string, string>());
   useEffect(() => {
     if (!activeTabId || !remote || !remoteProfile) return;
     // One remote tab rotates through many sessions; a cached profile belongs
     // to the session it was read from, so a route change adopts the backend
     // snapshot instead of reconciling over the previous session's overrides.
-    const routeKey = `${activeTabId}|${sessionRoute ?? ""}`;
-    const routeChanged = lastRouteRef.current !== routeKey;
-    lastRouteRef.current = routeKey;
+    const routes = routesRef.current;
+    const route = sessionRoute ?? "";
+    const routeChanged = routes.has(activeTabId) && routes.get(activeTabId) !== route;
+    routes.set(activeTabId, route);
     setProfiles((current) => {
+      // The profile table drops closed tabs on hydration; forget their routes
+      // at the next sync so the memory stays bounded to live tabs. Deleting
+      // absent ids is idempotent, which keeps this updater pure enough for a
+      // double invocation.
+      for (const id of routes.keys()) if (id !== activeTabId && !(id in current)) routes.delete(id);
       const existing = routeChanged ? undefined : current[activeTabId];
       const backend: ComposerProfile = {
         collaborationMode: remoteProfile.collaborationMode,
