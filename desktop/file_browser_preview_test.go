@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -92,7 +93,7 @@ func TestFileBrowserPreviewReusesTaskTabAndHonoursGeneration(t *testing.T) {
 	exec.takenOver = true
 	if _, err := app.openFileBrowserPreview(context.Background(), "task", FileBrowserPreviewRequest{
 		Source: "workspace", Path: "index.html", OperationID: "open-3", ExpectedSessionGeneration: 7,
-	}, exec); err != browser.ErrTakenOver {
+	}, exec); !errors.Is(err, browser.ErrTakenOver) {
 		t.Fatalf("taken-over refresh error = %v, want %v", err, browser.ErrTakenOver)
 	}
 	if len(exec.opens) != 1 {
