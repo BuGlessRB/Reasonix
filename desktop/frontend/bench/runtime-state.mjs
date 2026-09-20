@@ -94,10 +94,15 @@ try {
   await publish("idle");
   await page.locator(".composer-run-strip").waitFor({ state: "hidden" });
   // The invariant is that no activity indicator stays visible once the last
-  // job completes; other sidebar surfaces may still hold a detached or hidden
-  // fallback indicator, so count visible ones after the store has settled.
-  await page.waitForFunction(() => [...document.querySelectorAll(".runtime-activity-indicator")].every(el => el.getClientRects().length === 0));
-  check(await page.locator(".runtime-activity-indicator:visible").count() === 0, "last job completion clears project activity");
+  // job completes. Sidebar surfaces settle asynchronously, so wait for the
+  // settled state and name whatever stayed lit if it never arrives.
+  const lingering = await page.evaluate(async () => {
+    const visible = () => [...document.querySelectorAll(".runtime-activity-indicator")].filter(el => el.getClientRects().length > 0);
+    const deadline = Date.now() + 15000;
+    while (visible().length && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+    return visible().map(el => `${el.closest("[class]")?.className ?? "?"}: ${el.getAttribute("aria-label") ?? el.className}`);
+  });
+  check(lingering.length === 0, `last job completion clears project activity (lingering: ${lingering.join(" | ") || "none"})`);
   await page.locator('.project-tree__folder-main:has(svg.lucide-cloud)').click();
   await page.locator('.project-tree__topic-main:has-text("Remote demo session")').click();
   await page.locator(".remote-surface--ready").waitFor();
