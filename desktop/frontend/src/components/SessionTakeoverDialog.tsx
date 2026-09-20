@@ -5,6 +5,7 @@ import { app } from "../lib/bridge";
 import type { SessionTakeoverView, TabMeta } from "../lib/types";
 import type { HistoricalSourceUpdateView, SessionPreparationView } from "../generated/desktopContract.generated";
 import { historicalPreparationSnapshot, setHistoricalPreparation, subscribeHistoricalPreparation, type DesktopNavigationIntent } from "../app-runtime/desktopNavigationOwner";
+import { useManagementT } from "../lib/managementLocale";
 
 /**
  * SessionTakeoverDialog confirms taking a lease-blocked session over from the
@@ -131,6 +132,7 @@ export function HistoricalSessionBanners({ tab, navigate }: {
   navigate(intent: DesktopNavigationIntent): Promise<void>;
 }) {
   const t = useT();
+  const m = useManagementT();
   const activeRef = tab?.session ?? (tab?.sessionId ? { hostId: "local", sessionId: tab.sessionId } : undefined);
   const preparation = useSyncExternalStore(subscribeHistoricalPreparation, historicalPreparationSnapshot);
   const [update, setUpdate] = useState<HistoricalSourceUpdateView | null>(null);
@@ -190,8 +192,8 @@ export function HistoricalSessionBanners({ tab, navigate }: {
   if (preparation) {
     const waiting = preparation.status === "queued" || preparation.status === "preparing";
     return <div className={`banner ${waiting ? "banner--warning" : "banner--error"} banner--actionable`} role="status">
-      <span className="banner__msg">{t("history.importStatus.importing")}: {preparation.session.title || preparation.session.topicId || t("history.historicalSection")}</span>
-      <span className="banner__hint">{t(preparation.status === "queued" ? "history.importStatus.queued" : preparation.status === "preparing" ? "history.importStatus.importing" : "history.importFailed")}</span>
+      <span className="banner__msg">{m("historicalImporting")}: {preparation.session.title || preparation.session.topicId || m("historicalTitle")}</span>
+      <span className="banner__hint">{m(preparation.status === "queued" ? "historicalQueued" : preparation.status === "preparing" ? "historicalImporting" : "historicalImportFailed")}</span>
       <span className="banner__spacer" />
       {waiting && <button type="button" className="btn btn--small" onClick={() => void cancelPreparation()}>{t("common.cancel")}</button>}
       {!waiting && preparation.retryable && <button type="button" className="btn btn--small" onClick={() => void navigate({ kind: "resume-session", session: preparation.session })}>{t("common.retry")}</button>}
@@ -199,9 +201,9 @@ export function HistoricalSessionBanners({ tab, navigate }: {
   }
   if (!update) return null;
   return <div className="banner banner--warning banner--actionable" role="status">
-    <span className="banner__msg">{t("history.historicalSection")} · {t("history.importStatus.available")}</span>
+    <span className="banner__msg">{m("historicalTitle")} · {m("historicalAvailable")}</span>
     <span className="banner__spacer" />
-    <button type="button" className="btn btn--small" disabled={busy} onClick={() => void importUpdate()}>{t("history.importOpen")} · {t("history.branchBadge")}</button>
+    <button type="button" className="btn btn--small" disabled={busy} onClick={() => void importUpdate()}>{m("historicalImportOpen")} · {m("branch")}</button>
     <button type="button" className="btn btn--small" disabled={busy} onClick={dismissUpdate}>{t("updater.dismiss")}</button>
   </div>;
 }

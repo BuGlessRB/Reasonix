@@ -123,7 +123,6 @@ try {
   await finish("legacy-topic", legacy);
   assert.ok(calls.includes("prepare:legacy"), "legacy navigation prepares through the shared coordinator");
   assert.equal(preparationReads, 2, "navigation polls revisioned preparation until ready");
-  assert.ok(calls.includes("notice:history.importStatus.importing"));
 
   calls.length = 0;
   const failed = topic("failed");

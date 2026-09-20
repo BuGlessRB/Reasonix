@@ -5,12 +5,14 @@ import { useT } from "../lib/i18n";
 import type { RecoveryEntryView, SessionRestoreResult } from "../generated/desktopContract.generated";
 import type { HistoryMessage } from "../lib/types";
 import type { SessionRef } from "../lib/sessionRef";
+import { useManagementT } from "../lib/managementLocale";
 
 export function HistoricalRecoveryList({ active, onOpenSession }: {
   active: boolean;
   onOpenSession?: (ref: SessionRef) => Promise<void>;
 }) {
   const t = useT();
+  const m = useManagementT();
   const [items, setItems] = useState<RecoveryEntryView[]>([]);
   const [query, setQuery] = useState("");
   const [nextCursor, setNextCursor] = useState("");
@@ -92,13 +94,13 @@ export function HistoricalRecoveryList({ active, onOpenSession }: {
     }
   };
   return <div className="archived-sessions">
-    <p>{t("history.historicalDescription")}</p>
+    <p>{m("historicalDescription")}</p>
     <input aria-label={t("history.searchPlaceholder")} placeholder={t("history.searchPlaceholder")} value={query} disabled={busy} onChange={event => setQuery(event.target.value)} />
     <button className="btn btn--small" disabled={busy || loading} onClick={() => void reload().catch(() => {})}>{t("common.retry")}</button>
     {loading && <div role="status">{t("common.loading")}</div>}
     {error && <div role="alert">{error}</div>}
     {restored && onOpenSession && <button className="btn btn--small" onClick={() => void onOpenSession(restored.session).catch(err => setError(String(err)))}>{t("history.openRestored")}</button>}
-    {!loading && !error && items.length === 0 && <p>{t("history.noHistoricalSessions")}</p>}
+    {!loading && !error && items.length === 0 && <p>{m("noHistoricalSessions")}</p>}
     {items.map(entry => <div className="archived-sessions__row" key={entry.id}>
       <span>{entry.title}</span>
       <small>{entry.format} · {entry.status}</small>

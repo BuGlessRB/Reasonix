@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEnsureWorkspaceResolvedReturnsExistingPhysicalOwner(t *testing.T) {
@@ -33,18 +35,9 @@ func TestEnsureWorkspaceResolvedReturnsExistingPhysicalOwner(t *testing.T) {
 	}
 }
 
-func TestEnsureWorkspaceResolvedRejectsAmbiguousLegacyOwners(t *testing.T) {
-	root := t.TempDir()
-	alias := filepath.Join(t.TempDir(), "alias")
-	if err := os.Symlink(root, alias); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
-	path := filepath.Join(t.TempDir(), "workspace-state-v1.json")
-	state := newState()
+func writeRegistryState(t *testing.T, path string, state State) []byte {
+	t.Helper()
 	state.Initialized = true
-	state.WorkspaceIDs = []string{"old-a", "old-b"}
-	state.Workspaces["old-a"] = Workspace{ID: "old-a", Root: root, SessionIDs: []string{}}
-	state.Workspaces["old-b"] = Workspace{ID: "old-b", Root: alias, SessionIDs: []string{}}
 	body, err := json.Marshal(state)
 	if err != nil {
 		t.Fatal(err)
@@ -52,14 +45,137 @@ func TestEnsureWorkspaceResolvedRejectsAmbiguousLegacyOwners(t *testing.T) {
 	if err := os.WriteFile(path, append(body, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	before := append([]byte(nil), body...)
-	_, err = NewStore(path).EnsureWorkspaceResolved(t.Context(), Workspace{ID: "candidate", Root: root})
-	if !errors.Is(err, ErrAmbiguousIdentity) {
-		t.Fatalf("error = %v", err)
+	return body
+}
+
+// A state written before physical identity could record one directory twice.
+// The registry must repair that on contact: refusing leaves every projection
+// over the directory ambiguous, which strands both records in the sidebar.
+func TestEnsureWorkspaceResolvedRepairsAmbiguousLegacyOwners(t *testing.T) {
+	root := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
 	}
-	after, readErr := os.ReadFile(path)
-	if readErr != nil || strings.TrimSpace(string(after)) != string(before) {
-		t.Fatalf("ambiguous state changed: %v", readErr)
+	path := filepath.Join(t.TempDir(), "workspace-state-v1.json")
+	state := newState()
+	state.WorkspaceIDs = []string{"old-a", "old-b"}
+	state.Workspaces["old-a"] = Workspace{ID: "old-a", Root: root, Title: "kept", SessionIDs: []string{"session-a"}}
+	state.Workspaces["old-b"] = Workspace{
+		ID: "old-b", Root: alias, Visible: true, SessionIDs: []string{"session-b"},
+		Organization: &Organization{Groups: []OrganizationGroup{{ID: "group-b", Title: "B", Members: []string{SessionKey("session-b")}}}},
+	}
+	state.SessionStates = map[string]SessionState{
+		"session-a": {Lifecycle: Active}, "session-b": {Lifecycle: Active},
+	}
+	state.SourceMappings["source-b"] = SourceMapping{SourceKey: "source-b", SessionID: "session-b", WorkspaceID: "old-b", Fingerprint: "fp-b"}
+	writeRegistryState(t, path, state)
+
+	store := NewStore(path)
+	if id, found, err := ResolveWorkspaceID(state, alias); err != nil || !found || id != "old-a" {
+		t.Fatalf("read-only resolution = %q (found=%v): %v", id, found, err)
+	}
+	id, err := store.EnsureWorkspaceResolved(t.Context(), Workspace{ID: "candidate", Root: root})
+	if err != nil || id != "old-a" {
+		t.Fatalf("resolved id = %q, err = %v", id, err)
+	}
+	repaired, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, ok := repaired.Workspaces["old-a"]
+	if !ok || len(repaired.Workspaces) != 1 || !slices.Equal(repaired.WorkspaceIDs, []string{"old-a"}) {
+		t.Fatalf("duplicate survived the repair: %+v", repaired.Workspaces)
+	}
+	if owner.Root != root || owner.Title != "kept" || !owner.Visible {
+		t.Fatalf("owner lost its identity or presentation: %+v", owner)
+	}
+	if !slices.Equal(owner.SessionIDs, []string{"session-a", "session-b"}) {
+		t.Fatalf("sessions = %v", owner.SessionIDs)
+	}
+	if owner.Organization == nil || len(owner.Organization.Groups) != 1 || owner.Organization.Groups[0].ID != "group-b" {
+		t.Fatalf("organization was dropped: %+v", owner.Organization)
+	}
+	if repaired.SourceMappings["source-b"].WorkspaceID != "old-a" {
+		t.Fatalf("source mapping still names the absorbed workspace: %+v", repaired.SourceMappings)
+	}
+}
+
+// The Global folder lives at a fixed directory. A user who also added that
+// directory as an ordinary project owns it twice, and Global must survive:
+// its ID is addressed across the app and cannot be removed or hidden.
+func TestEnsureWorkspaceResolvedKeepsGlobalOverOlderProjectDuplicate(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(t.TempDir(), "workspace-state-v1.json")
+	state := newState()
+	state.WorkspaceIDs = []string{"project-legacy", GlobalWorkspaceID}
+	state.Workspaces["project-legacy"] = Workspace{
+		ID: "project-legacy", Root: root, Title: "global-workspace", Visible: true,
+		SessionIDs: []string{}, CreatedAt: time.Unix(0, 0).UTC(),
+	}
+	state.Workspaces[GlobalWorkspaceID] = Workspace{
+		ID: GlobalWorkspaceID, Root: root, Title: "Global", Visible: true,
+		SessionIDs: []string{}, CreatedAt: time.Unix(1, 0).UTC(),
+	}
+	writeRegistryState(t, path, state)
+
+	store := NewStore(path)
+	id, err := store.EnsureWorkspaceResolved(t.Context(), Workspace{ID: "project-legacy", Root: root, Title: "global-workspace"})
+	if err != nil || id != GlobalWorkspaceID {
+		t.Fatalf("resolved id = %q, err = %v", id, err)
+	}
+	repaired, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repaired.Workspaces) != 1 || repaired.Workspaces[GlobalWorkspaceID].Title != "Global" {
+		t.Fatalf("global did not keep the directory: %+v", repaired.Workspaces)
+	}
+}
+
+// A path that does not exist resolves through whichever ancestor does, so two
+// distinct directories on an unreachable case-sensitive volume can share a key
+// on a case-insensitive host. Folding records is not reversible: while the
+// directory cannot be verified, a lookup answers but changes nothing.
+func TestEnsureWorkspaceResolvedLeavesUnverifiableDirectoriesUnmerged(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "unmounted", "project")
+	path := filepath.Join(t.TempDir(), "workspace-state-v1.json")
+	state := newState()
+	state.WorkspaceIDs = []string{"project-a", "project-b"}
+	state.Workspaces["project-a"] = Workspace{ID: "project-a", Root: missing, SessionIDs: []string{"session-a"}}
+	state.Workspaces["project-b"] = Workspace{ID: "project-b", Root: missing + string(os.PathSeparator) + ".", SessionIDs: []string{"session-b"}}
+	state.SessionStates = map[string]SessionState{
+		"session-a": {Lifecycle: Active}, "session-b": {Lifecycle: Active},
+	}
+	before := writeRegistryState(t, path, state)
+
+	id, err := NewStore(path).EnsureWorkspaceResolved(t.Context(), Workspace{ID: "candidate", Root: missing})
+	if err != nil || id != "project-a" {
+		t.Fatalf("resolved id = %q, err = %v", id, err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || strings.TrimSpace(string(after)) != string(before) {
+		t.Fatalf("lookup rewrote records for a directory it could not verify: %v", err)
+	}
+}
+
+// One record this host cannot resolve must not fail every other workspace.
+func TestUnresolvableWorkspaceRootDoesNotBlockOtherWorkspaces(t *testing.T) {
+	loop := filepath.Join(t.TempDir(), "loop")
+	if err := os.Symlink(loop, loop); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	root := t.TempDir()
+	path := filepath.Join(t.TempDir(), "workspace-state-v1.json")
+	state := newState()
+	state.WorkspaceIDs = []string{"project-broken", "project-ok"}
+	state.Workspaces["project-broken"] = Workspace{ID: "project-broken", Root: loop, SessionIDs: []string{}}
+	state.Workspaces["project-ok"] = Workspace{ID: "project-ok", Root: root, SessionIDs: []string{}}
+	writeRegistryState(t, path, state)
+
+	id, err := NewStore(path).EnsureWorkspaceResolved(t.Context(), Workspace{ID: "candidate", Root: root})
+	if err != nil || id != "project-ok" {
+		t.Fatalf("resolved id = %q, err = %v", id, err)
 	}
 }
 

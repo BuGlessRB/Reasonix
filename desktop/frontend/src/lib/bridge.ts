@@ -1445,7 +1445,7 @@ function makeMockApp(): MockAppBindings {
       workspaceRoot: normalizedRoot,
       revision: 1,
       contentJson: "{}",
-      settings: { model: "deepseek/deepseek-v4-flash", mode: "default", toolApprovalMode: "ask", disabledMcp: {}, mcpOrder: [] },
+      settings: { model: "deepseek/deepseek-v4-flash", modelSource: "default", mode: "default", toolApprovalMode: "ask", disabledMcp: {}, mcpOrder: [] },
       status: "active",
       updatedAt: now,
     };

@@ -5,11 +5,17 @@ import { useT } from "../lib/i18n";
 import type { HistoricalImportStatus, HistoricalSessionView, HistoricalSourceUpdateView } from "../generated/desktopContract.generated";
 import type { SessionRef } from "../lib/sessionRef";
 import { desktopHost } from "../lib/desktopHost";
+import { useManagementT, type ManagementKey } from "../lib/managementLocale";
 
 const emptyHistoricalStatus: HistoricalImportStatus = { items: [], running: false, paused: false, remaining: 0, completed: 0, blocked: 0, failed: 0 };
+const historicalStatusKeys: Record<string, ManagementKey> = {
+  available: "historicalAvailable", queued: "historicalQueued", importing: "historicalImporting", imported: "historicalImported",
+  blocked: "historicalBlocked", failed: "historicalNeedsAttention", archived: "historicalArchived", deleted: "historicalDeleted",
+};
 
 export function HistoricalImportList({ active, onOpenSession }: { active: boolean; onOpenSession?: (ref: SessionRef) => Promise<void> }) {
   const t = useT();
+  const m = useManagementT();
   const [status, setStatus] = useState<HistoricalImportStatus>(emptyHistoricalStatus);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -72,16 +78,16 @@ export function HistoricalImportList({ active, onOpenSession }: { active: boolea
     catch (err) { setError(String(err)); }
     finally { setBusy(""); }
   };
-  return <section className="archived-sessions" aria-label={t("history.importTitle")}>
-    <h3>{t("history.importTitle")}</h3>
-    <p>{t("history.importDescription")}</p>
+  return <section className="archived-sessions" aria-label={m("historicalTitle")}>
+    <h3>{m("historicalTitle")}</h3>
+    <p>{m("historicalImportDescription")}</p>
     <input aria-label={t("history.searchPlaceholder")} placeholder={t("history.searchPlaceholder")} value={query} onChange={event => setQuery(event.target.value)} />
     <div>
-      <button className="btn btn--small" disabled={status.running || !!busy} onClick={() => void control("start")}>{t("history.importAll")}</button>
+      <button className="btn btn--small" disabled={status.running || !!busy} onClick={() => void control("start")}>{m("historicalImportAll")}</button>
       {(status.running || (status.paused && status.remaining > 0)) && <>
-        <button className="btn btn--small" onClick={() => void control(status.paused ? "resume" : "pause")}>{t(status.paused ? "history.importResume" : "history.importPause")}</button>
-        <button className="btn btn--small" onClick={() => void control("cancel")}>{t("history.importCancel")}</button>
-        <span role="status">{t("history.importRemaining")} {status.remaining} · {t("history.importStatus.imported")} {status.completed} · {t("history.importStatus.blocked")} {status.blocked} · {t("history.importStatus.failed")} {status.failed}</span>
+        <button className="btn btn--small" onClick={() => void control(status.paused ? "resume" : "pause")}>{m(status.paused ? "historicalImportResume" : "historicalImportPause")}</button>
+        <button className="btn btn--small" onClick={() => void control("cancel")}>{m("historicalImportCancel")}</button>
+        <span role="status">{m("historicalRemaining")} {status.remaining} · {m("historicalImported")} {status.completed} · {m("historicalBlocked")} {status.blocked} · {m("historicalNeedsAttention")} {status.failed}</span>
       </>}
       <button className="btn btn--small" onClick={() => void reload(true)}>{t("common.retry")}</button>
     </div>
@@ -89,14 +95,14 @@ export function HistoricalImportList({ active, onOpenSession }: { active: boolea
     {status.items.filter(item => item.title.toLowerCase().includes(query.toLowerCase())).map(item =>
       <div className="archived-sessions__row" key={item.id}>
         <span>{item.title}</span><small>{item.format}</small>
-        <span>{t(`history.importStatus.${item.status}` as Parameters<typeof t>[0])}</span>
-        {item.errorCode && <small>{item.errorCode === "source_busy" ? t("history.importSourceBusy") : t("history.importFailed")}</small>}
+        <span>{m(historicalStatusKeys[item.status] ?? "historicalNeedsAttention")}</span>
+        {item.errorCode && <small>{m(item.errorCode === "source_busy" ? "historicalSourceBusy" : "historicalImportFailed")}</small>}
         <button className="btn btn--small" disabled={!!busy || item.status === "importing" || item.status === "queued" || item.status === "archived" || item.status === "deleted"}
-          onClick={() => void open(item)}>{t(item.session && onOpenSession ? "history.openRestored" : "history.importOpen")}</button>
-        {item.session && item.source && <button className="btn btn--small" disabled={!!busy} onClick={() => void checkUpdate(item)}>{t("common.retry")} · {t("history.historicalSection")}</button>}
-        {updates[item.id]?.status === "available" && <button className="btn btn--small" disabled={!!busy} onClick={() => void prepareUpdate(item, updates[item.id])}>{t("history.importOpen")} · {t("history.branchBadge")}</button>}
-        {updates[item.id]?.status === "unchanged" && <small>{t("history.importStatus.imported")}</small>}
+          onClick={() => void open(item)}>{item.session && onOpenSession ? t("history.openRestored") : m("historicalImportOpen")}</button>
+        {item.session && item.source && <button className="btn btn--small" disabled={!!busy} onClick={() => void checkUpdate(item)}>{t("common.retry")} · {m("historicalTitle")}</button>}
+        {updates[item.id]?.status === "available" && <button className="btn btn--small" disabled={!!busy} onClick={() => void prepareUpdate(item, updates[item.id])}>{m("historicalImportOpen")} · {m("branch")}</button>}
+        {updates[item.id]?.status === "unchanged" && <small>{m("historicalImported")}</small>}
       </div>)}
-    {status.items.length === 0 && <p>{t("history.noHistoricalSessions")}</p>}
+    {status.items.length === 0 && <p>{m("noHistoricalSessions")}</p>}
   </section>;
 }

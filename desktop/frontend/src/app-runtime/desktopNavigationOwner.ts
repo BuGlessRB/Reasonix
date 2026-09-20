@@ -52,7 +52,7 @@ export const setHistoricalPreparation = (surface: HistoricalPreparationSurface |
   historicalPreparationListeners.forEach(listener => listener());
 };
 export type NavigationNotice = {
-  key: "history.failedOpenSession" | "history.missingWorkspaceRoot" | "history.failedOpenProject" | "history.importStatus.importing" | "sidebar.imWaiting" | "sidebar.imOpenFailed"
+  key: "history.failedOpenSession" | "history.missingWorkspaceRoot" | "history.failedOpenProject" | "sidebar.imWaiting" | "sidebar.imOpenFailed"
     | "projectTree.worktreeCreated" | "projectTree.worktreeCreatedDirty";
   params?: Record<string, string>;
   tone?: "error" | "warn" | "info";
@@ -163,7 +163,6 @@ export async function executeDesktopNavigation(input: DesktopNavigationCapture, 
     } else if (session.sessionId && (!session.hostId || session.hostId === "local")) {
       tab = await openTopic(scope, session.workspaceRoot || "", session.topicId || `canonical-${session.sessionId}`, `session-id:${session.sessionId}`);
     } else if (session.source) {
-      ports.notice({ key: "history.importStatus.importing", tone: "info", durationMs: 2500 });
       const prepared = await ports.prepareSession({ source: session.source, topicId: session.topicId || "" });
       checkpoint();
       const target = await waitForPreparation(prepared, ports, checkpoint, view => setHistoricalPreparation({
