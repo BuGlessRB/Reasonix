@@ -477,9 +477,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // leave their lazily loaded surface chunk), plus the canonical session-id
 // plumbing, the spectator reconcile loop and its ownership classification, the
 // pre-activation history prime, the rebased optimistic-submission settlement,
-// and the project tree's canonical row identity. Retain 0.11 KiB headroom at
-// the next one-decimal ceiling; gzip, CSS, and chunk limits are unchanged and
-// keep passing.
-const rawInitialBudgetKiB = 2_025.3;
+// and the project tree's canonical row identity. The CI Linux stable build
+// measures 2073980 B (2025.4 KiB), 186 B above the same-toolchain macOS build;
+// the ceiling follows the CI producer. Retain 0.13 KiB headroom at the next
+// one-decimal ceiling; gzip, CSS, and chunk limits are unchanged.
+const rawInitialBudgetKiB = 2_025.5;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
