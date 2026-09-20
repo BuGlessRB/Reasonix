@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"reasonix/desktop/internal/upgradefixture"
@@ -56,7 +57,14 @@ func TestWindowsUpgradeFixtureMigratesLegacyAndRestarts(t *testing.T) {
 	}
 	for _, phase := range []string{"first", "restart"} {
 		app := NewApp()
-		t.Cleanup(app.closeSessionServices)
+		closeApp := sync.OnceFunc(func() {
+			app.stopHistoricalImports()
+			app.closeSessionServices()
+			if err := app.draftStore().Close(); err != nil {
+				t.Errorf("close fixture draft store: %v", err)
+			}
+		})
+		t.Cleanup(closeApp)
 		if app.NeedsOnboarding() {
 			t.Fatal("legacy fixture must restore the conversation instead of opening first-run provider settings")
 		}
@@ -105,6 +113,6 @@ func TestWindowsUpgradeFixtureMigratesLegacyAndRestarts(t *testing.T) {
 		if err != nil || len(page.Messages) != 2 || page.Messages[1].Content != evidence.History {
 			t.Fatalf("%s history API: %+v, %v", phase, page, err)
 		}
-		app.closeSessionServices()
+		closeApp()
 	}
 }
