@@ -83,7 +83,7 @@ export interface ReasonixDesktopHost {
     browserControl: BrowserControlApi;
     getPathForFile(file: File): string;
     onServiceState(cb: (state: ServiceState) => void): () => void;
-    recordRendererDiagnostic(event: RendererDiagnosticPayload): Promise<void>;
+    recordRendererDiagnostic?(event: RendererDiagnosticPayload): Promise<void>;
   };
   browser: DesktopBrowserHost;
 }
@@ -246,7 +246,7 @@ const electronHostFrom = (host: ReasonixDesktopHost): DesktopHost => {
       },
       getPathForFile: (file) => host.native.getPathForFile(file),
       onServiceState: (cb) => host.native.onServiceState(cb),
-      recordRendererDiagnostic: (event) => host.native.recordRendererDiagnostic(event),
+      recordRendererDiagnostic: async (event) => { await host.native.recordRendererDiagnostic?.(event); },
     },
     browser: host.browser,
   };

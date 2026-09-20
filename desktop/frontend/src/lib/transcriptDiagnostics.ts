@@ -62,7 +62,11 @@ export function publishTranscriptDiagnostic(owner: number, event: TranscriptDiag
     "transcript.v2",
     `${event.event} stage=${event.stage} reason=${event.reason} type=${event.errorType} transport=${event.transport} revision=${event.revision} commit=${event.commit} attempts=${event.attempts} failures=${event.failures} duration_ms=${event.durationMs}`,
   );
-  void desktopHost().native.recordRendererDiagnostic(event).catch(() => undefined);
+  try {
+    void desktopHost().native.recordRendererDiagnostic(event).catch(() => undefined);
+  } catch {
+    // Diagnostics are optional; a broken host must not interrupt following.
+  }
 }
 
 export function clearTranscriptDiagnostic(owner: number): void {

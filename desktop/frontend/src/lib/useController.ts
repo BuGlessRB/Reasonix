@@ -2372,8 +2372,9 @@ export function useController() {
   useEffect(() => desktopHost().native.onServiceState((service) => {
     addBreadcrumb("service", `phase=${service.phase} generation=${service.generation || "unknown"}`);
     if (service.phase !== "stopping" && service.phase !== "exited") return;
-    if (followers.current.size === 0) return;
-    for (const follower of followers.current.values()) follower.stop(false, "service_stopping");
+    // Each follower owns its service-stop fence, including remote followers.
+    // Retire only the controller's references here so late hydration cannot
+    // mistake a stopped follower for an active subscription.
     followers.current.clear();
   }), []);
   const cancelReconcileTimers = useRef(new Map<string, number>());

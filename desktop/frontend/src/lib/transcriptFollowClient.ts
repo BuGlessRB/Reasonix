@@ -11,6 +11,7 @@ import {
 
 export type TranscriptConnection = "syncing" | "connected" | "disconnected";
 type Change = NonNullable<TranscriptFollowResponse["changes"]>[number];
+type FollowGeneration = { closeSubscription: boolean };
 
 export interface FollowConsumer {
   install(response: TranscriptFollowResponse): Promise<void> | void;
@@ -61,7 +62,7 @@ function classifiedFailure(error: unknown, stage: TranscriptDiagnosticStage, rea
 /** One ordered consumer for both transports. Connection failures only request
  * another snapshot; this class has no model, submit, stop or retry-turn API. */
 export class TranscriptFollowClient {
-  private generation = 0;
+  private generation: FollowGeneration = { closeSubscription: true };
   private subscription = "";
   private revision = 0;
   private coverage = 0;
@@ -97,10 +98,12 @@ export class TranscriptFollowClient {
   }
 
   stop(closeSubscription = true, reason?: "service_stopping"): void {
-    this.generation++;
+    const generation = this.generation;
+    generation.closeSubscription = closeSubscription;
+    this.generation = { closeSubscription: true };
     const subscription = this.subscription;
     this.subscription = "";
-    if (subscription && closeSubscription) void this.read({ subscription, close: true }).catch(() => undefined);
+    this.closeSubscription(subscription, generation);
     if (reason === "service_stopping") {
       this.publish("stopped", this.failureState?.stage ?? "none", "service_stopping", true);
       this.failureState = null;
@@ -110,7 +113,11 @@ export class TranscriptFollowClient {
     }
   }
 
-  private async baseline(generation: number, consumer: FollowConsumer): Promise<void> {
+  private closeSubscription(subscription: string | undefined, generation: FollowGeneration): void {
+    if (subscription && generation.closeSubscription) void this.read({ subscription, close: true }).catch(() => undefined);
+  }
+
+  private async baseline(generation: FollowGeneration, consumer: FollowConsumer): Promise<void> {
     let response: TranscriptFollowResponse;
     try {
       response = await this.read({});
@@ -118,33 +125,33 @@ export class TranscriptFollowClient {
       throw classifiedFailure(error, "baseline_read", "transport_rejected");
     }
     if (generation !== this.generation) {
-      if (response.subscription) void this.read({ subscription: response.subscription, close: true }).catch(() => undefined);
+      this.closeSubscription(response.subscription, generation);
       return;
     }
     if (response.protocolVersion !== 2) {
-      if (response.subscription) void this.read({ subscription: response.subscription, close: true }).catch(() => undefined);
+      this.closeSubscription(response.subscription, generation);
       throw failure("baseline_validate", "protocol_version", "Transcript v2 is required. Upgrade Desktop and Serve together.");
     }
     if (!response.snapshot || !response.subscription) {
-      if (response.subscription) void this.read({ subscription: response.subscription, close: true }).catch(() => undefined);
+      this.closeSubscription(response.subscription, generation);
       throw failure("baseline_validate", "snapshot_missing", "Transcript v2 snapshot or subscription is missing.");
     }
     const snapshot = response.snapshot;
     const identity = JSON.stringify(snapshot.identity);
     if (identity === this.identity && snapshot.projectionRevision < this.revision) {
-      void this.read({ subscription: response.subscription, close: true }).catch(() => undefined);
+      this.closeSubscription(response.subscription, generation);
       throw failure("baseline_validate", "revision_regressed", "transcript snapshot revision regressed");
     }
     if (response.history && response.history.status !== "ready") {
-      void this.read({ subscription: response.subscription, close: true }).catch(() => undefined);
+      this.closeSubscription(response.subscription, generation);
       throw failure("baseline_validate", "history_not_ready", `transcript history ${response.history.status}`);
     }
     try { await consumer.install(response); } catch (error) {
-      void this.read({ subscription: response.subscription, close: true }).catch(() => undefined);
+      this.closeSubscription(response.subscription, generation);
       throw classifiedFailure(error, "snapshot_install", "consumer_error");
     }
     if (generation !== this.generation) {
-      void this.read({ subscription: response.subscription, close: true }).catch(() => undefined);
+      this.closeSubscription(response.subscription, generation);
       return;
     }
     this.identity = identity;
@@ -158,9 +165,10 @@ export class TranscriptFollowClient {
       this.indexes.set(attempt.id, attempt.nextIndex ?? 0);
       this.attemptMessages.set(attempt.id, attempt.messageId);
     }
-    addBreadcrumb("transcript.v2", `snapshot epoch=${snapshot.identity.runtimeEpoch} revision=${this.revision} commit=${this.coverage} durable=${snapshot.durableSeq} records=${snapshot.totalRecords} attempts=${this.indexes.size}`);
+    if (!this.failureState) addBreadcrumb("transcript.v2", `snapshot epoch=${snapshot.identity.runtimeEpoch} revision=${this.revision} commit=${this.coverage} durable=${snapshot.durableSeq} records=${snapshot.totalRecords} attempts=${this.indexes.size}`);
     consumer.connection("connected");
-    this.noteRecovery();
+    // Installing a replacement snapshot does not prove that delta following
+    // recovered. Keep this fault segment until a full follow succeeds.
   }
 
   private validate(changes: Change[]): Change[] {
@@ -211,7 +219,7 @@ export class TranscriptFollowClient {
     return accepted;
   }
 
-  private async follow(generation: number, consumer: FollowConsumer): Promise<void> {
+  private async follow(generation: FollowGeneration, consumer: FollowConsumer): Promise<void> {
     while (generation === this.generation) {
       try {
         if (!this.subscription) await this.baseline(generation, consumer);
@@ -238,7 +246,7 @@ export class TranscriptFollowClient {
         const transcriptFailure = classifiedFailure(error, "delta_read", "unknown");
         const old = this.subscription;
         this.subscription = "";
-        if (old) void this.read({ subscription: old, close: true }).catch(() => undefined);
+        this.closeSubscription(old, generation);
         consumer.connection("disconnected", String(error));
         this.noteFailure(transcriptFailure);
         await new Promise(resolve => setTimeout(resolve, 1000));

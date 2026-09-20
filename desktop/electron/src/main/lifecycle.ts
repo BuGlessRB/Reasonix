@@ -136,16 +136,15 @@ export class QuitSequencer {
     } catch (error) {
       this.deps.log.warn(`beforeClose(quit) failed, quitting anyway: ${errorText(error)}`);
     }
-    this.phase = "idle";
     if (prevent && !this.approved) {
       this.deps.log.info(`exit ${this.attempt}: cancelled`);
+      this.quitRequested = false;
       await this.resumeRenderer();
       this.rendererFlushed = false;
-      this.resetTrigger();
+      if (!this.quitRequested && !this.approved) this.resetTrigger();
       return;
     }
     this.approved = true;
-    this.deps.app.quit();
   }
 
   private async prepareWindowClose(): Promise<void> {
@@ -156,18 +155,22 @@ export class QuitSequencer {
     } catch (error) {
       this.deps.log.warn(`beforeClose(window) failed, quitting anyway: ${errorText(error)}`);
     }
-    this.phase = "idle";
     if (this.quitRequested || this.approved || !prevent) {
       this.approved = true;
       this.quitRequested = true;
       this.claimReason("user_quit");
-      this.deps.app.quit();
       return;
     }
-    this.deps.log.info(`exit ${this.attempt}: window hidden`);
     await this.resumeRenderer();
     this.rendererFlushed = false;
+    // Resuming editing crosses the renderer boundary. A quit received during
+    // that await owns the next transition and must flush any resumed edits.
+    if (this.quitRequested || this.approved) {
+      this.approved = true;
+      return;
+    }
     this.deps.onWindowClosePrevented?.();
+    this.deps.log.info(`exit ${this.attempt}: window hidden`);
     this.resetTrigger();
   }
 
@@ -241,6 +244,7 @@ export class QuitSequencer {
     if (this.preparing) return this.preparing;
     this.preparing = run().finally(() => {
       this.preparing = null;
+      this.settlePreparation();
     });
     return this.preparing;
   }
@@ -249,8 +253,17 @@ export class QuitSequencer {
     if (this.finishing) return this.finishing;
     this.finishing = this.finish().finally(() => {
       this.finishing = null;
+      this.settlePreparation();
     });
     return this.finishing;
+  }
+
+  private settlePreparation(): void {
+    if (this.phase !== "preparing") return;
+    // Publish idle only after the previous promise releases ownership. A new
+    // transaction must never attach to a cancelled preparation's promise.
+    this.phase = "idle";
+    if (this.approved || this.quitRequested) this.deps.app.quit();
   }
 
   private async flushRenderer(cancelled: string): Promise<boolean> {
@@ -265,7 +278,7 @@ export class QuitSequencer {
     } catch (error) {
       const message = errorText(error);
       this.deps.log.warn(`exit ${this.attempt}: draft flush failed; ${cancelled}: ${message}`);
-      this.phase = "idle";
+      this.phase = "preparing";
       this.approved = false;
       this.quitRequested = false;
       this.rendererFlushed = false;
@@ -274,7 +287,7 @@ export class QuitSequencer {
       } catch (promptError) {
         this.deps.log.warn(`exit ${this.attempt}: draft failure prompt failed: ${errorText(promptError)}`);
       }
-      this.resetTrigger();
+      if (!this.quitRequested && !this.approved) this.resetTrigger();
       return false;
     }
   }

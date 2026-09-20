@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Change, FollowRequest, Snapshot, TranscriptFollowResponse } from "../generated/desktopContract.generated";
 import { TranscriptFollowClient, type FollowConsumer, type TranscriptFollowClientOptions } from "../lib/transcriptFollowClient";
 import type { TranscriptDiagnostic } from "../lib/transcriptDiagnostics";
+import { addBreadcrumb, snapshotBreadcrumbs } from "../lib/breadcrumbs";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -142,6 +143,9 @@ test("identical transcript failures are summarized every 30 seconds and recovery
   now = 33_000; t.mock.timers.tick(1000); await microtasks();
   io.pending.shift()!.resolve(baseline("replacement", { projectionRevision: 20 }));
   await microtasks();
+  assert.ok(!diagnostics.some(({ event }) => event.event === "recovered"), "a baseline alone does not prove following recovered");
+  io.pending.shift()!.resolve(suffix([]));
+  await microtasks();
 
   assert.deepEqual(
     diagnostics.map(({ event, visible }) => ({ type: event.event, stage: event.stage, failures: event.failures, visible })),
@@ -155,6 +159,74 @@ test("identical transcript failures are summarized every 30 seconds and recovery
   );
   io.client.stop();
 });
+
+test("persistent delta failure retains its segment across successful baseline retries", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let now = 0;
+  const diagnostics: TranscriptDiagnostic[] = [];
+  const io = transport({ now: () => now, onDiagnostic: (event, visible) => { if (visible) diagnostics.push(event); } });
+  const starting = io.client.start(consumer());
+  io.pending.shift()!.resolve(baseline()); await starting;
+  addBreadcrumb("test.close", "preserve navigation and close context");
+  for (let i = 0; i < 32; i++) {
+    io.pending.shift()!.resolve(suffix([frame(12, "gap")])); await microtasks();
+    now += 1000; t.mock.timers.tick(1000); await microtasks();
+    io.pending.shift()!.resolve(baseline(`retry-${i}`)); await microtasks();
+  }
+  assert.deepEqual(diagnostics.map(event => [event.event, event.failures]), [["failure", 1], ["summary", 31]]);
+  assert.ok(snapshotBreadcrumbs().some(crumb => crumb.cat === "test.close"));
+  io.pending.shift()!.resolve(suffix([frame(11, "valid")])); await microtasks();
+  const recovery = diagnostics[diagnostics.length - 1];
+  assert.deepEqual([recovery.event, recovery.failures, recovery.durationMs], ["recovered", 32, 32_000]);
+  io.client.stop();
+});
+
+for (const capability of ["absent", "throws", "rejects"] as const) {
+  test(`diagnostic host capability ${capability} cannot interrupt follow recovery`, async t => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const native = capability === "absent" ? {} : {
+      recordRendererDiagnostic: () => {
+        if (capability === "throws") throw new Error("diagnostic transport broken");
+        return Promise.reject(new Error("diagnostic write failed"));
+      },
+    };
+    Object.defineProperty(globalThis, "window", { configurable: true, value: { reasonixDesktop: { native } } });
+    const io = transport(); const view = consumer();
+    try {
+      const starting = io.client.start(view);
+      io.pending.shift()!.resolve(baseline()); await starting;
+      io.pending.shift()!.reject(new Error("original transport failure")); await microtasks();
+      t.mock.timers.tick(1000); await microtasks();
+      assert.deepEqual(io.requests[io.requests.length - 1], {}, "the original failure still schedules recovery");
+      io.pending.shift()!.resolve(baseline("recovered")); await microtasks();
+      io.pending.shift()!.resolve(suffix([frame(11, " recovered")])); await microtasks();
+      assert.equal(view.text, "prefix recovered");
+      assert.equal(view.states[view.states.length - 1], "connected");
+    } finally {
+      io.client.stop();
+      if (previous) Object.defineProperty(globalThis, "window", previous);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+}
+
+for (const outcome of ["late baseline", "install resolves", "install rejects"] as const) {
+  test(`service stopping suppresses cleanup when ${outcome}`, async () => {
+    const io = transport(); const view = consumer(); const install = deferred<void>();
+    if (outcome !== "late baseline") view.install = () => install.promise;
+    const starting = io.client.start(view);
+    if (outcome !== "late baseline") { io.pending.shift()!.resolve(baseline()); await microtasks(); }
+    io.client.stop(false, "service_stopping");
+    if (outcome === "late baseline") io.pending.shift()!.resolve(baseline());
+    else if (outcome === "install resolves") install.resolve();
+    else install.reject(new Error("late content read rejected"));
+    if (outcome === "install rejects") await assert.rejects(starting, /late content read rejected/);
+    else await starting;
+    assert.ok(!io.requests.some(request => request.close));
+    assert.ok(!view.states.includes("connected"));
+  });
+}
 
 test("remote baseline transport failures retain their channel and stable classification", async () => {
   const diagnostics: TranscriptDiagnostic[] = [];
@@ -212,4 +284,16 @@ test("stopping during asynchronous installation releases the newly opened subscr
   io.client.stop(); installed.resolve(); await starting; await microtasks();
   assert.ok(io.requests.some(request => request.close && request.subscription === "subscription"), "cancelled install leaked its subscription");
   assert.ok(!view.states.includes("connected"));
+});
+
+test("a stopped generation's cleanup policy cannot affect a replacement subscription", async () => {
+  const io = transport();
+  const oldStart = io.client.start(consumer());
+  const oldBaseline = io.pending.shift()!;
+  io.client.stop(false, "service_stopping");
+  const newStart = io.client.start(consumer());
+  io.pending.shift()!.resolve(baseline("new-service")); await newStart;
+  oldBaseline.resolve(baseline("old-service")); await oldStart;
+  io.client.stop();
+  assert.deepEqual(io.requests.filter(request => request.close), [{ subscription: "new-service", close: true }]);
 });
