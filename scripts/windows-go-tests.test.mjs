@@ -29,6 +29,8 @@ test("PR smoke keeps platform coverage without duplicating isolated suites", () 
   for (const group of isolatedGroups) {
     assert.deepEqual(testArgs(packages, group).slice(0, 4), ["test", "-p", "1", "-timeout=8m"]);
   }
+  assert.equal(testArgs(packages, "bot")[4], "-json");
+  assert.equal(testArgs(packages, "acp").includes("-json"), false);
   assert.deepEqual(testArgs(packages, "full").slice(0, 4), ["test", "-p", "4", "-timeout=8m"]);
   assert.throws(() => testArgs(packages, "typo"), /Unknown/);
   assert.throws(() => testArgs([], "full"), /Empty/);

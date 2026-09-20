@@ -29,7 +29,12 @@ export function selectPackages(packages, group) {
 export function testArgs(packages, group) {
   const selected = selectPackages(packages, group);
   if (selected.length === 0) throw new Error(`Empty Windows test group: ${group}`);
-  return ["test", "-p", isolatedGroups.includes(group) ? "1" : "4", "-timeout=8m", ...selected];
+  const args = ["test", "-p", isolatedGroups.includes(group) ? "1" : "4", "-timeout=8m"];
+  // Bot has produced process-level Windows exits without a Go stack or test
+  // name. JSON preserves the last start/output event and the subprocess exit
+  // status while keeping the whole package in one process (no retry or split).
+  if (group === "bot") args.push("-json");
+  return [...args, ...selected];
 }
 
 function main(group) {
