@@ -163,3 +163,62 @@ func currentUserDenyACECounts(path, userSID string) (legacy, other int, err erro
 	runtime.KeepAlive(sd)
 	return legacy, other, nil
 }
+
+// ResetCredentialDACL replaces the DACL of the credential store with a
+// protected entry that grants only the current user full control. It opens
+// the file for WRITE_DAC alone and never reads the existing descriptor, so it
+// works when READ_CONTROL is denied and the caller is not the owner. Callers
+// reserve it for an explicit save of Reasonix's own credential file after the
+// provenance-checked repair could not run.
+func ResetCredentialDACL(path string) error {
+	ptr, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	attrs, err := windows.GetFileAttributes(ptr)
+	if err != nil {
+		return fmt.Errorf("inspect credential store %q: %w", path, err)
+	}
+	if attrs&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+		return fmt.Errorf("refusing to reset the ACL of reparse point %q", path)
+	}
+	handle, err := windows.CreateFile(ptr, windows.WRITE_DAC, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		return fmt.Errorf("open credential store %q for WRITE_DAC: %w", path, err)
+	}
+	defer windows.CloseHandle(handle)
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		return err
+	}
+	if user == nil || user.User.Sid == nil {
+		return fmt.Errorf("current process token has no user SID")
+	}
+	entry := windows.EXPLICIT_ACCESS{
+		AccessPermissions: windows.STANDARD_RIGHTS_ALL | windows.SPECIFIC_RIGHTS_ALL,
+		AccessMode:        windows.GRANT_ACCESS,
+		Inheritance:       windows.NO_INHERITANCE,
+		Trustee:           windows.TRUSTEE{TrusteeForm: windows.TRUSTEE_IS_SID, TrusteeType: windows.TRUSTEE_IS_USER, TrusteeValue: windows.TrusteeValueFromSID(user.User.Sid)},
+	}
+	acl, err := windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{entry}, nil)
+	if err != nil {
+		return fmt.Errorf("build credential store DACL: %w", err)
+	}
+	sd, err := windows.NewSecurityDescriptor()
+	if err != nil {
+		return err
+	}
+	if err := sd.SetDACL(acl, true, false); err != nil {
+		return err
+	}
+	// Protected: inherited entries from the profile directory must not bring
+	// back the trustees the reset is meant to replace.
+	if err := sd.SetControl(windows.SE_DACL_PROTECTED, windows.SE_DACL_PROTECTED); err != nil {
+		return err
+	}
+	if err := windows.SetKernelObjectSecurity(handle, windows.DACL_SECURITY_INFORMATION, sd); err != nil {
+		return fmt.Errorf("reset credential store DACL %q: %w", path, err)
+	}
+	return nil
+}

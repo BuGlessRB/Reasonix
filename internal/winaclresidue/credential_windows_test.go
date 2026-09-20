@@ -214,3 +214,31 @@ func pathDACLSDDL(path string) (string, error) {
 	}
 	return sd.String(), nil
 }
+
+func TestResetCredentialDACLRestoresAccessWithoutReadingACL(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	userSID, err := currentProcessUserSIDString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	installLegacyDeny(t, path, userSID)
+	if _, err := os.ReadFile(path); err == nil {
+		t.Fatal("deny did not block reads")
+	}
+	if err := ResetCredentialDACL(path); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "KEY=value\n" {
+		t.Fatalf("credential after reset = %q, %v", data, err)
+	}
+	sddl, err := pathDACLSDDL(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(sddl, "D:P") || strings.Contains(sddl, "(D;") || !strings.Contains(sddl, userSID) {
+		t.Fatalf("reset DACL = %s, want a protected current-user grant only", sddl)
+	}
+}
