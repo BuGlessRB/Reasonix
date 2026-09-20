@@ -232,17 +232,30 @@ const desktopStub = installDesktopHostStub(({ main: { App: {
   async SetActiveTab(tabID: string) {
     tape.push(`setActive:${tabID}`);
   },
+  // The pre-activation history prime reads the canonical window through the
+  // remote binding. Answer like a serve whose tab has not attached yet, so
+  // the prime stays inert here and cannot consume the RemoteTabSnapshot
+  // deferreds the hydration race and rotation scenarios count.
+  async RemoteSessionHistoryWindowForTab(tabID: string) {
+    tape.push(`window:${tabID}`);
+    throw new Error("remote tab is not attached");
+  },
 } as Partial<AppBindings> as AppBindings } }).main.App);
 
 const __emitMockRemoteTab = (tabId: string, channel: "state" | "event", payload: unknown) => desktopStub.emit(`remote-tab:${tabId}:${channel}`, payload);
 installRemoteTranscriptFixture(desktopStub.commands);
-const [{ createRoot }, { RemoteSessionSurface }, { LocaleProvider }, { useRemoteSession }, { remoteRuntimeCommand }] = await Promise.all([
+const [{ createRoot }, { RemoteSessionSurface }, { LocaleProvider }, { useRemoteSession }, { remoteRuntimeCommand }, { setTranscriptBindingIdentity }] = await Promise.all([
   import("react-dom/client"),
   import("../components/RemoteSessionSurface"),
   import("../lib/i18n"),
   import("../lib/useRemoteSession"),
   import("../lib/useRemoteComposerIntegration"),
+  import("../lib/canonicalTranscriptBackend"),
 ]);
+// Production resolves remote tabs through the controller's meta; this harness
+// mounts the hook without a controller, so bind canonical reads to the remote
+// bridge the way the app does for every remote tab.
+setTranscriptBindingIdentity(() => "remote");
 
 const remoteTab: TabMeta = {
   id: "tab-remote-1",
