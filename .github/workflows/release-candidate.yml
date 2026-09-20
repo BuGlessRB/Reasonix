@@ -236,6 +236,11 @@ jobs:
     name: build, sign, and accept Desktop candidate
     needs: resolve
     if: needs.resolve.outputs.reuse != 'true'
+    # GitHub validates every nested job before evaluating its condition, even
+    # though candidate preparation skips the publisher and mirror jobs.
+    permissions:
+      actions: write
+      contents: write
     uses: ./.github/workflows/release-desktop.yml
     with:
       channel: stable
