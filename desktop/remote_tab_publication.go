@@ -179,20 +179,25 @@ func (a *App) installRemoteTabAttachPump(ctx context.Context, tabID string, tab 
 	pumpCtx, cancelPump := context.WithCancel(ctx)
 	tab.cancel = cancelPump
 	a.remoteTabMu.Unlock()
+	// Only an attach that committed a session route announces itself here.
+	if installRoute && targetPath != "" {
+		a.publishRemoteTabAttachIdentityLocked(tabID, tab, gen)
+	}
 	tab.routeEventMu.Unlock()
-
-	// History-first hydration: the identity, client, and capabilities are
-	// live from here, before the foreground rotation starts — announce the
-	// tab so the frontend can read the persisted window during /resume.
-	a.publishRemoteTabAttachIdentity(tabID, tab, gen)
 
 	return pumpCtx, gen, attachPathRevision, nil
 }
 
-// publishRemoteTabAttachIdentity announces the tab once its route, client,
-// and capabilities are live but before the foreground rotation starts, so
-// history-first hydration can read the persisted window during /resume.
-func (a *App) publishRemoteTabAttachIdentity(tabID string, tab *remoteTab, gen uint64) {
+// publishRemoteTabAttachIdentityLocked announces the tab once its route,
+// client, and capabilities are live but before the foreground rotation
+// starts, so history-first hydration can read the persisted window during
+// /resume. Only an attach that committed a session route owns such a window;
+// a routeless attach (a fresh session) must stay silent, because the first
+// remote-tab:updated of a bootstrap is what the sidebar re-pulls its brand-new
+// project group on, and a connecting meta there carries no session to list.
+// The caller holds the tab's publication fence, so this meta cannot overtake
+// or be overtaken by another publication for the same tab.
+func (a *App) publishRemoteTabAttachIdentityLocked(tabID string, tab *remoteTab, gen uint64) {
 	a.remoteTabMu.Lock()
 	current := a.remoteTabs[tabID]
 	if current != tab || current.gen != gen {
