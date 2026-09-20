@@ -146,7 +146,7 @@ func cliServeClient(ctx context.Context, record cliServeRecord) (*http.Client, e
 	authReq.Header.Set("Content-Type", "application/json")
 	authResp, err := client.Do(authReq)
 	if err != nil {
-		return nil, err
+		return nil, &cliServeUnreachableError{err: err}
 	}
 	_, _ = io.Copy(io.Discard, authResp.Body)
 	authResp.Body.Close()
@@ -212,7 +212,7 @@ func postCLITakeoverHandoff(ctx context.Context, client *http.Client, base, sess
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return cliTakeoverGrant{}, fmt.Errorf("%s: %w", errPrefix, err)
+		return cliTakeoverGrant{}, fmt.Errorf("%s: %w", errPrefix, &cliServeUnreachableError{err: err})
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))

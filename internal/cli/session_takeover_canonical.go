@@ -36,6 +36,22 @@ func sessionWriterHeldNotice() string {
 	return "this session is written by another Reasonix runtime on this machine; run /takeover to take it over"
 }
 
+// cliServeUnreachableError marks a takeover attempt that never obtained a
+// serve's verdict: the dial, the token exchange, or the request itself failed
+// at the transport. Only this kind of failure justifies a re-discovery pass.
+// An HTTP verdict — a refusal, "still running; retry with mode=interrupt", an
+// invalid grant — is the serve's answer and repeating the round would only
+// repeat the same bounded wait.
+type cliServeUnreachableError struct{ err error }
+
+func (e *cliServeUnreachableError) Error() string { return e.err.Error() }
+func (e *cliServeUnreachableError) Unwrap() error { return e.err }
+
+func cliServeUnreachable(err error) bool {
+	var unreachable *cliServeUnreachableError
+	return errors.As(err, &unreachable)
+}
+
 // cliTakeoverIdentityHeldSession asks every resident serve to hand the
 // final-format identity over. The writer lock carries no PID, so discovery is
 // exhaustive rather than PID-matched; the serve that actually holds the
@@ -44,25 +60,32 @@ func cliTakeoverIdentityHeldSession(route string, manager *cliTakeoverManager) (
 	if manager != nil && manager.Reclaiming() {
 		return nil, fmt.Errorf("the remote side is reclaiming the current session")
 	}
-	// One re-discovery pass: a desktop reconnect respawns the serve and
-	// rewrites its state file, so an all-fail round may simply have raced the
-	// restart. PIDs of dead serves are pruned during discovery.
+	// One re-discovery pass, and only when no serve could be reached: a
+	// desktop reconnect respawns the serve and rewrites its state file, so an
+	// all-unreachable round may simply have raced the restart. PIDs of dead
+	// serves are pruned during discovery.
 	var lastErr error
 	for range 2 {
 		records := discoverCLIServesForTakeover()
 		if len(records) == 0 {
 			break
 		}
-		tried := false
+		answered := false
+		lastErr = nil
 		for i := range records {
 			binding, err := cliTakeoverIdentityFromServe(route, &records[i])
 			if err == nil {
 				return binding, nil
 			}
-			tried = true
-			lastErr = err
+			if !cliServeUnreachable(err) {
+				// A serve that answered is the one worth reporting.
+				answered = true
+				lastErr = err
+			} else if lastErr == nil {
+				lastErr = err
+			}
 		}
-		if !tried {
+		if answered {
 			break
 		}
 	}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -630,5 +631,78 @@ func TestResumeCanonicalSessionHeldElsewhereKeepsMirror(t *testing.T) {
 	}
 	if ends := fake.mirrorEnds(); len(ends) != 0 {
 		t.Fatalf("mirror-end requests = %v after a refused switch, want none", ends)
+	}
+}
+
+// TestCanonicalTakeoverDoesNotRetryOnServeVerdict pins the retry rule: a serve
+// that answers — here the wait-mode "still running" verdict, which already
+// cost one bounded drain window — is not asked again through a second
+// discovery pass, so the synchronous worst case is one round, not two.
+func TestCanonicalTakeoverDoesNotRetryOnServeVerdict(t *testing.T) {
+	var handoffs atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/auth/token":
+			w.WriteHeader(http.StatusNoContent)
+		case "/handoff":
+			handoffs.Add(1)
+			http.Error(w, "session is still running; retry with mode=interrupt", http.StatusConflict)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	var discoveries atomic.Int32
+	previous := discoverCLIServesForTakeover
+	discoverCLIServesForTakeover = func() []cliServeRecord {
+		discoveries.Add(1)
+		return []cliServeRecord{{pid: 1, base: srv.URL, token: "test-token"}}
+	}
+	t.Cleanup(func() { discoverCLIServesForTakeover = previous })
+
+	binding, err := cliTakeoverIdentityHeldSession(cliCanonicalRoute("held"), nil)
+
+	if binding != nil || err == nil || !strings.Contains(err.Error(), "still running") {
+		t.Fatalf("takeover = %+v, %v; want the serve's verdict", binding, err)
+	}
+	if cliServeUnreachable(err) {
+		t.Fatal("an HTTP verdict was classified as a transport failure")
+	}
+	if got := handoffs.Load(); got != 1 {
+		t.Fatalf("handoff requests = %d, want exactly 1 after a verdict", got)
+	}
+	if got := discoveries.Load(); got != 1 {
+		t.Fatalf("discovery passes = %d, want 1 after a verdict", got)
+	}
+}
+
+// TestCanonicalTakeoverRediscoversAfterTransportFailure keeps the one
+// re-discovery pass for the case it exists for: every recorded serve was
+// unreachable (a desktop reconnect respawned it), and the fresh state file
+// names the live serve.
+func TestCanonicalTakeoverRediscoversAfterTransportFailure(t *testing.T) {
+	route := cliCanonicalRoute("held")
+	fake := newFakeCanonicalServe(t, route)
+	var discoveries atomic.Int32
+	previous := discoverCLIServesForTakeover
+	discoverCLIServesForTakeover = func() []cliServeRecord {
+		if discoveries.Add(1) == 1 {
+			// Nothing listens on port 1: the dial fails at the transport.
+			return []cliServeRecord{{pid: 1, base: "http://127.0.0.1:1", token: "stale-token"}}
+		}
+		return []cliServeRecord{{pid: 2, base: fake.base, token: "test-token"}}
+	}
+	t.Cleanup(func() { discoverCLIServesForTakeover = previous })
+
+	binding, err := cliTakeoverIdentityHeldSession(route, nil)
+
+	if err != nil || binding == nil || binding.path != route {
+		t.Fatalf("takeover = %+v, %v; want a grant from the re-discovered serve", binding, err)
+	}
+	if got := discoveries.Load(); got != 2 {
+		t.Fatalf("discovery passes = %d, want 2 (one after the transport failure)", got)
+	}
+	if fake.handoffCount() != 1 {
+		t.Fatalf("handoff requests to the live serve = %d, want 1", fake.handoffCount())
 	}
 }
