@@ -242,8 +242,7 @@ func (a *App) replaceControllerForSessionOpenLocked(ctx context.Context, tab *Wo
 	tab.adoptDisplayState(&tabDisplayState{})
 	tab.ActivityStatus = ""
 	tab.replaceTelemetry(tabTelemetrySnapshot{}, sessionRuntimeKey(sessionRoute(ref.SessionID)))
-	tab.SessionID = ref.SessionID
-	tab.SessionPath = ""
+	setTabSessionIdentity(tab, sessionRoute(ref.SessionID))
 	tab.model = targetModel
 	tab.Label = candidate.Label()
 	applyNormalizedRuntimeToTabLocked(tab, runtime)

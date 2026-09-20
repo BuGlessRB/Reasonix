@@ -95,6 +95,9 @@ try {
   Assert-True (-not (Test-VisibleUpgradeHistory $root $marker)) 'A matching sidebar title must not pass.'
   $root.Children = @($sidebar, $transcript)
   Assert-True (Test-VisibleUpgradeHistory $root $marker) 'Visible transcript assistant body should pass.'
+  $root.Children = @($sidebar, $transcript, $pending)
+  Assert-True (-not (Test-VisibleUpgradeHistory $root $marker)) 'Prepared content must not retain the import action.'
+  $root.Children = @($sidebar, $transcript)
   $failure = New-UIElement 'Failed to load conversation history. Previous content was kept when available — retry to try again.'
   $transcript.Children = @($body, $failure)
   Assert-True (-not (Test-VisibleUpgradeHistory $root $marker)) 'Visible history with an obsolete failure notice must not pass.'

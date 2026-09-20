@@ -8,6 +8,7 @@ const { default: React, act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { LocaleProvider } = await import("../lib/i18n");
 const { HistoricalSessionBanners } = await import("../components/SessionTakeoverDialog");
+const { seedActiveTabMetaList } = await import("../lib/tabMetaRefresh");
 const { setHistoricalPreparation, historicalPreparationSnapshot, reconcileHistoricalPreparation } = await import("../app-runtime/desktopNavigationOwner");
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 let cancellation: ReturnType<typeof deferred<SessionPreparationView>> | undefined;
@@ -75,6 +76,10 @@ assert.deepEqual(pendingIntents, [], "restoring a legacy tab never starts prepar
 await act(async () => document.getElementById("reasonix-prepare-restored-session")!.click());
 assert.equal(pendingIntents.length, 1);
 assert.equal((pendingIntents[0] as { kind: string }).kind, "resume-session", "explicit preparation uses the shared navigation owner");
+const [canonicalTab] = seedActiveTabMetaList([{ ...baseProps.tab, historicalSource: source }], baseProps.tab);
+assert.equal(canonicalTab.historicalSource, undefined, "canonical metadata omission clears the old preparation state");
+await act(async () => root.render(<LocaleProvider><HistoricalSessionBanners {...baseProps} tab={canonicalTab} /></LocaleProvider>));
+assert.equal(document.getElementById("reasonix-prepare-restored-session"), null, "successful activation removes the preparation action");
 await act(async () => root.unmount());
 host.uninstall();
 dom.window.close();

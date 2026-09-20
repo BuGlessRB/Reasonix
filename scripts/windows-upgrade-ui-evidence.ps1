@@ -30,6 +30,7 @@ function Test-VisibleUpgradeHistory($root, [string]$text) {
     # Old content alone cannot prove recovery: reject a still-loading/failed
     # recovery surface and the obsolete chat notice that originally hid this bug.
     if (([string]$current.AutomationId).StartsWith('reasonix-session-recovery-') -or
+        $current.AutomationId -eq 'reasonix-prepare-restored-session' -or
         ([string]$current.Name).Contains('Failed to load conversation history.') -or
         ([string]$current.Name).Contains('加载会话历史失败。') -or
         ([string]$current.Name).Contains('載入會話歷史失敗。')) { return $false }

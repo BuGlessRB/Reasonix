@@ -167,7 +167,7 @@ func (a *App) commitCanonicalSessionBinding(tab *WorkspaceTab, ctrl control.Sess
 		return errSessionNavigationSuperseded
 	}
 	applyCanonicalWorkspaceLocked(tab, workspace, workspaceChanged)
-	tab.SessionID, tab.SessionPath = ref.SessionID, ""
+	setTabSessionIdentity(tab, sessionRoute(ref.SessionID))
 	tab.TopicID, tab.TopicTitle, tab.topicTitleSource = topicID, topicTitle, topicSource
 	a.bindSessionRuntimeKeyLocked(tab, tab.currentSessionIdentity())
 	a.saveTabsLocked()
@@ -197,7 +197,7 @@ func (a *App) reconcileCanonicalTabWorkspace(ctx context.Context, tab *Workspace
 		return errSessionNavigationSuperseded
 	}
 	applyCanonicalWorkspaceLocked(tab, workspace, workspaceChanged)
-	tab.SessionPath = ""
+	setTabSessionIdentity(tab, sessionRoute(id))
 	a.saveTabsLocked()
 	return nil
 }

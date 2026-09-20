@@ -472,7 +472,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // (2017.617 KiB). Retain 0.183 KiB; gzip, chunk, CSS, and locale gates stay fixed.
 // Restored historical tabs carry an optional source reference through metadata
 // and readiness projection; their preparation UI remains lazy. The measured
-// payload is 2066283 B (+243 B / 0.012% over 2066040 B), not a new dependency.
+// payload, including seed-time clearing, is 2066319 B (+279 B / 0.014% over
+// 2066040 B), not a new dependency.
 // Retain 0.2 KiB build-identity headroom; all compressed/chunk/CSS gates stay fixed.
 const rawInitialBudgetKiB = 2_018.1;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
