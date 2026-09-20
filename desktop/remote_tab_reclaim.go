@@ -2,14 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
-
-	"reasonix/internal/agent"
 )
 
 func takeoverViewLocallyOwned(view SessionTakeoverView) bool {
@@ -85,86 +81,6 @@ func (a *App) observeRemoteTabForReclaim(tabID string, client *http.Client) (rem
 		tab: tab, gen: tab.gen,
 		runtimeRevision: tab.runtime.revision, selectionRevision: tab.selectionRevision,
 	}, nil
-}
-
-// ReclaimRemoteTabSession takes a mirrored session back from the local
-// runtime that took it over. Serve long-polls until the local writer yields,
-// so this call can outlast a normal command timeout.
-func (a *App) ReclaimRemoteTabSession(tabID string) error {
-	if err := a.requireRemoteExecutionProtocol(tabID); err != nil {
-		return err
-	}
-	client, base, expectedPath, err := a.remoteTabCommandTarget(tabID)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(expectedPath) == "" {
-		return fmt.Errorf("remote tab %q has no active session", tabID)
-	}
-	observed, err := a.observeRemoteTabForReclaim(tabID, client)
-	if err != nil {
-		return err
-	}
-	observedTab, observedGen := observed.tab, observed.gen
-	stillCurrent := func(tab *remoteTab) bool {
-		return tab != nil && tab == observedTab && tab.client == client && tab.gen == observed.gen &&
-			tab.runtime.revision == observed.runtimeRevision && tab.selectionRevision == observed.selectionRevision &&
-			agent.CanonicalSessionPath(tab.routing.currentPath) == agent.CanonicalSessionPath(expectedPath)
-	}
-	reconcileOwnership := func() { a.reconcileRemoteTabReclaimOwnership(tabID, client, base, expectedPath, stillCurrent) }
-	// Short timeout: the serve caps un-mirrored reclaims at 10s and mirrored
-	// ones use the writer's cooperative heartbeat (seconds, not minutes). A
-	// long client-side timeout only hangs the UI button.
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	body, _ := json.Marshal(map[string]any{
-		"sessionPath": expectedPath,
-		"mode":        "wait",
-		"timeoutMs":   15000,
-	})
-	resp, err := serveDo(ctx, client, http.MethodPost, serveURL(base, "/reclaim"), body)
-	if err != nil {
-		reconcileOwnership()
-		return fmt.Errorf("reclaim session: %w", err)
-	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-	if resp.StatusCode != http.StatusNoContent {
-		errMsg := strings.TrimSpace(string(respBody))
-		// A failed reclaim is not proof that ownership changed — generation
-		// conflicts and transient 5xx included. Keep the spectator pin until a
-		// fenced probe proves this exact binding is no longer locally owned.
-		reconcileOwnership()
-		return fmt.Errorf("reclaim session: %s", errMsg)
-	}
-	// Reclaim succeeded: Serve now owns the session again. Clear the spectator
-	// pin immediately so the composer un-locks without waiting for the next
-	// status poll to observe takenOver=false.
-	observedTab.routeEventMu.Lock()
-	defer observedTab.routeEventMu.Unlock()
-	a.remoteTabMu.Lock()
-	if tab := a.remoteTabs[tabID]; stillCurrent(tab) {
-		tab.session.takenOver = false
-		// Fence status payloads reserved before this reclaim: they may still
-		// be in flight and carry the pre-reclaim takenOver=true, which would
-		// re-pin the spectator banner the moment ownership returned.
-		tab.ownership.reclaimRevision = tab.runtime.revision + 1
-		deferBarrier := tab.runtime.running || tab.runtime.pendingPrompt
-		tab.ownership.readyBarrierPending = deferBarrier
-		meta := remoteTabMetaLocked(tab)
-		a.remoteTabMu.Unlock()
-		a.emitRemoteEvent("remote-tab:updated", meta)
-		// The spectator era froze the projection, so publish the ready barrier
-		// to re-hydrate the view and accept the re-owned writer's frames. Defer
-		// it mid-turn: the barrier bumps the frontend connection generation.
-		if !deferBarrier {
-			a.transitionRemoteTabStateLocked(tab, observedGen, "ready", "ready", "")
-		}
-	} else {
-		a.remoteTabMu.Unlock()
-	}
-	a.goRemoteTabSafe("reclaimStatusRefresh", func() { _, _ = a.RemoteTabStatus(tabID) })
-	return nil
 }
 
 // remoteSessionTakenOver reports whether a session-entry refusal means the
