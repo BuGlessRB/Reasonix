@@ -1,6 +1,5 @@
 // Last-resort crash surface: a React render error with no boundary unmounts the
 // whole tree (blank window), and global errors/rejections leave no trace either.
-
 import { addBreadcrumb, dumpBreadcrumbs, snapshotBreadcrumbs, type Breadcrumb } from "./breadcrumbs";
 import { writeClipboardText } from "./clipboard";
 import { desktopHost } from "./desktopHost";
@@ -9,6 +8,7 @@ export { formatPerformanceContext } from "./performanceReportFormat";
 import { boundedDiagnostics, type ProcessDiagnosticsSnapshot, type RendererProfileResult } from "./processDiagnostics";
 import { t } from "./i18n";
 import { sessionPipelineDiagnostics, type SessionPipelineDiagnostics } from "./sessionDiagnostics";
+import { transcriptDiagnosticSnapshot } from "./transcriptDiagnostics";
 declare const __BUILD_COMMIT__: string;
 declare const __BUILD_CHANNEL__: string;
 
@@ -78,7 +78,6 @@ export type CrashPayload = {
   view: string;
   breadcrumbs: Breadcrumb[];
   occurredAt: string;
-  transcriptFailureSummary?: string;
 };
 
 type NormalizedError = {
@@ -252,23 +251,9 @@ function formatText(label: string, normalized: NormalizedError, extra?: string):
   const crumbs = dumpBreadcrumbs();
   const buildCommit = currentBuildCommit();
   const transcriptText = transcriptDiagnosticSnapshot();
-  return [
-    `[${label}]`,
-    detail,
-    extra?.trim(),
-    transcriptText && `--- transcript failures ---\n${transcriptText}`,
-    crumbs && `--- breadcrumbs ---\n${crumbs}`,
-    `occurred ${new Date().toISOString()}`,
-    `build ${buildCommit}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-function transcriptDiagnosticSnapshot(): string {
-  return (globalThis as typeof globalThis & {
-    __reasonixTranscriptDiagnostics?: string;
-  }).__reasonixTranscriptDiagnostics ?? "";
+  return [`[${label}]`, detail, extra?.trim(), transcriptText && `--- transcript failures ---\n${transcriptText}`,
+    crumbs && `--- breadcrumbs ---\n${crumbs}`, `occurred ${new Date().toISOString()}`, `build ${buildCommit}`]
+    .filter(Boolean).join("\n\n");
 }
 
 export function crashErrorFamily(errorMessage: string): string | undefined { return /maximum update depth exceeded|too many re-renders/i.test(errorMessage) ? "react.maximum_update_depth" : undefined; }
@@ -472,7 +457,6 @@ export function buildPerformancePayload(snapshot: PerformanceSnapshot): CrashPay
 export function buildCrashPayload(label: string, err: unknown, extra?: string): CrashPayload {
   const normalized = normalizeCrashError(err);
   const buildCommit = currentBuildCommit();
-  const transcriptFailureSummary = transcriptDiagnosticSnapshot();
   return {
     schemaVersion: 2,
     source: sourceForLabel(label),
@@ -491,7 +475,6 @@ export function buildCrashPayload(label: string, err: unknown, extra?: string): 
     view: currentView(),
     breadcrumbs: snapshotBreadcrumbs(),
     occurredAt: new Date().toISOString(),
-    ...(transcriptFailureSummary ? { transcriptFailureSummary } : {}),
   };
 }
 

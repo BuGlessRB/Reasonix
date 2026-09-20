@@ -49,6 +49,10 @@ function syncCrashSnapshot(): void {
     .join("\n");
 }
 
+export function transcriptDiagnosticSnapshot(): string {
+  return crashSnapshotHost.__reasonixTranscriptDiagnostics ?? "";
+}
+
 export function newTranscriptDiagnosticOwner(): number {
   return nextOwner++;
 }
