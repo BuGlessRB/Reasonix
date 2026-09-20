@@ -242,3 +242,30 @@ func TestResetCredentialDACLRestoresAccessWithoutReadingACL(t *testing.T) {
 		t.Fatalf("reset DACL = %s, want a protected current-user grant only", sddl)
 	}
 }
+
+func TestRenameLockedFileMovesDeniedStore(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	if err := os.WriteFile(path, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	userSID, err := currentProcessUserSIDString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	installLegacyDeny(t, path, userSID)
+	target := path + ".locked-test"
+	if err := RenameLockedFile(path, target); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = icacls(target, "/remove:d", "*"+userSID, "/C") })
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("source still present after rename: %v", err)
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("target missing after rename: %v", err)
+	}
+	if err := RenameLockedFile(filepath.Join(dir, "missing"), target); err == nil {
+		t.Fatal("rename of a missing file must fail")
+	}
+}

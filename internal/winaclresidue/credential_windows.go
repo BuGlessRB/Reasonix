@@ -175,6 +175,8 @@ func ResetCredentialDACL(path string) error {
 	if err != nil {
 		return err
 	}
+	// Attributes are readable through the parent directory's list right even
+	// while the file itself denies FILE_READ_ATTRIBUTES.
 	attrs, err := windows.GetFileAttributes(ptr)
 	if err != nil {
 		return fmt.Errorf("inspect credential store %q: %w", path, err)
@@ -182,10 +184,9 @@ func ResetCredentialDACL(path string) error {
 	if attrs&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
 		return fmt.Errorf("refusing to reset the ACL of reparse point %q", path)
 	}
-	handle, err := windows.CreateFile(ptr, windows.WRITE_DAC, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
-		nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	handle, err := openExact(path, windows.WRITE_DAC)
 	if err != nil {
-		return fmt.Errorf("open credential store %q for WRITE_DAC: %w", path, err)
+		return fmt.Errorf("open credential store for WRITE_DAC: %w", err)
 	}
 	defer windows.CloseHandle(handle)
 	user, err := windows.GetCurrentProcessToken().GetTokenUser()

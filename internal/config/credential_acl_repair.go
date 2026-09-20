@@ -75,11 +75,11 @@ func credentialRepairPath(path string) string {
 }
 
 // quarantineCredentialStore keeps the locked file beside the store under a
-// timestamped name; rename needs only directory rights, which a deny on the
-// file itself does not remove.
+// timestamped name. The move needs DELETE on the file plus directory rights,
+// neither of which a read deny removes.
 func quarantineCredentialStore(path string) (string, error) {
 	target := path + ".locked-" + time.Now().UTC().Format("20060102-150405")
-	if err := os.Rename(path, target); err != nil {
+	if err := winaclresidue.RenameLockedFile(path, target); err != nil {
 		return "", err
 	}
 	return target, nil

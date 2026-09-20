@@ -95,8 +95,8 @@ v1.38.10) blocks the credential store, Reasonix removes it automatically when
 a marker from that sandbox run proves the entry came from Reasonix. Saving a
 key works even without that proof: the save resets the file's ACL to the
 current user without reading it, and if that is also denied it moves the
-locked file aside as `.env.locked-<timestamp>` and writes a new store, so
-re-entering a key always succeeds. Plain reads never rewrite ACLs; they report
+locked file aside as `.env.locked-<timestamp>` (a read deny does not block
+the move) and writes a new store, so re-entering a key always succeeds. Plain reads never rewrite ACLs; they report
 the original access error together with the repair outcome.
 
 Example:
