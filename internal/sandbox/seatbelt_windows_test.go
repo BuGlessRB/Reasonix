@@ -4,94 +4,35 @@ package sandbox
 
 import (
 	"encoding/base64"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
-	"strings"
 	"testing"
-
-	"reasonix/internal/winsandbox"
 )
 
-func TestWindowsCommandWrapsWithHelper(t *testing.T) {
-	// Command only wraps when Available(), which requires the entry point to
-	// have registered its helper dispatch route (cli.Run / desktop main do).
+// The Windows backend is retired from enforcement: even with the helper
+// dispatch registered and the native APIs present, no launch path may wrap a
+// command, and the effective spec must never demand confinement.
+func TestWindowsNeverWrapsCommands(t *testing.T) {
 	RegisterHelperDispatch()
-	if !winsandbox.Available() {
-		t.Skip("windows sandbox APIs unavailable")
+	if Available() {
+		t.Fatal("Available() must be false on Windows")
 	}
-	cmd, wrapped := Command(Spec{Mode: "enforce", WriteRoots: []string{`C:\work`}, Network: true}, Shell{Kind: ShellPowerShell, Path: "powershell"}, "Write-Output ok")
-	if !wrapped {
-		t.Fatal("windows enforce should wrap through helper")
+	if OSSandboxSupported() {
+		t.Fatal("OSSandboxSupported() must be false on Windows")
 	}
-	if len(cmd) < 6 {
-		t.Fatalf("wrapped argv too short: %v", cmd)
+	spec := Spec{Mode: "enforce", WriteRoots: []string{`C:\work`}, Network: true}
+	sh := Shell{Kind: ShellPowerShell, Path: "powershell"}
+	if argv, wrapped := Command(spec, sh, "Write-Output ok"); wrapped || len(argv) == 0 || argv[0] != sh.Path {
+		t.Fatalf("Command wrapped=%v argv=%v", wrapped, argv)
 	}
-	if got := cmd[1]; got != WindowsHelperCommand {
-		t.Fatalf("helper command = %q, want %q (argv=%v)", got, WindowsHelperCommand, cmd)
+	if argv, wrapped := CommandArgs(spec, []string{`C:\tools\rg.exe`, "needle"}); wrapped || argv[0] != `C:\tools\rg.exe` {
+		t.Fatalf("CommandArgs wrapped=%v argv=%v", wrapped, argv)
 	}
-	if cmd[3] != "--" {
-		t.Fatalf("helper argv separator = %q, want -- (argv=%v)", cmd[3], cmd)
-	}
-	payload, err := decodeWindowsSandboxPayload(cmd[2])
-	if err != nil {
-		t.Fatalf("decode helper payload: %v", err)
-	}
-	if payload.Spec.Mode != "enforce" || !payload.Spec.Network || len(payload.Spec.WriteRoots) != 1 || !payload.Writable {
-		t.Fatalf("payload not preserved: %+v writable=%v", payload.Spec, payload.Writable)
-	}
-	if payload.Version != windowsSandboxPayloadVersion {
-		t.Fatalf("payload version = %d, want %d", payload.Version, windowsSandboxPayloadVersion)
-	}
-	if !strings.Contains(strings.Join(cmd[4:], " "), "Write-Output ok") {
-		t.Fatalf("child argv not appended: %v", cmd)
-	}
-}
-
-func TestWindowsPersistentShellUsesSameTokenLaneAsOneShot(t *testing.T) {
-	RegisterHelperDispatch()
-	if !winsandbox.Available() {
-		t.Skip("Windows sandbox APIs unavailable")
-	}
-	for _, readOnly := range []bool{false, true} {
-		spec := Spec{Mode: "enforce", Network: true, ReadOnly: readOnly, WriteRoots: []string{`C:\work`}}
-		sh := Shell{Kind: ShellPowerShell, Path: `C:\PowerShell\pwsh.exe`}
-		oneShot := PrepareShell(spec, sh, "exit 0", `C:\private-temp`)
-		persistent := PrepareShellArgs(spec, []string{sh.Path, "-NoLogo", "-NoProfile"}, `C:\private-temp`)
-		for _, launch := range []Prepared{oneShot, persistent} {
-			if !launch.Wrapped {
-				t.Fatal("shell escaped sandbox")
-			}
-			payload, err := decodeWindowsSandboxPayload(launch.Argv[2])
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !payload.Writable || payload.Spec.ReadOnly != readOnly || payload.Spec.SessionTemp != `C:\private-temp` {
-				t.Fatalf("shell policy diverged: %+v", payload)
-			}
+	for _, launch := range []Prepared{
+		PrepareShell(spec, sh, "exit 0", `C:\private-temp`),
+		PrepareShellArgs(spec, []string{sh.Path, "-NoLogo", "-NoProfile"}, `C:\private-temp`),
+	} {
+		if launch.Wrapped {
+			t.Fatalf("prepared launch wrapped: %+v", launch)
 		}
-	}
-}
-
-func TestWindowsCommandArgsWrapsReadOnly(t *testing.T) {
-	RegisterHelperDispatch()
-	if !winsandbox.Available() {
-		t.Skip("windows sandbox APIs unavailable")
-	}
-	cmd, wrapped := CommandArgs(Spec{Mode: "enforce", WriteRoots: []string{`C:\work`}, Network: false}, []string{`C:\tools\rg.exe`, "needle"})
-	if !wrapped {
-		t.Fatal("windows enforce should wrap direct argv through helper")
-	}
-	payload, err := decodeWindowsSandboxPayload(cmd[2])
-	if err != nil {
-		t.Fatalf("decode helper payload: %v", err)
-	}
-	if payload.Writable {
-		t.Fatalf("direct argv should be marked read-only: %+v", payload)
-	}
-	if payload.Spec.Network {
-		t.Fatalf("network=false should be preserved for AppContainer launch: %+v", payload.Spec)
 	}
 }
 
@@ -147,120 +88,4 @@ func TestWindowsSandboxPayloadRejectsUnknownOrStaleProtocol(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestWindowsSandboxAvailableOnCI(t *testing.T) {
-	if os.Getenv("CI") == "" {
-		t.Skip("only require Windows sandbox availability on CI")
-	}
-	if RegisterHelperDispatch(); !Available() {
-		t.Fatal("windows sandbox APIs unavailable on CI")
-	}
-	if !winsandbox.Available() {
-		t.Fatal("bundled windows sandbox APIs unavailable on CI")
-	}
-}
-
-func TestWindowsUnavailableWithoutHelperDispatch(t *testing.T) {
-	// The dispatch flag is process-global and other tests set it, so this can
-	// only assert the wrap-side contract indirectly: with the flag forced off,
-	// Command must refuse to wrap (unwrapped argv triggers the bash tool's
-	// fail-closed / escape-approval path) rather than emit a helper argv that
-	// a dispatch-less binary would swallow into empty output.
-	prev := helperDispatchRegistered.Load()
-	helperDispatchRegistered.Store(false)
-	defer helperDispatchRegistered.Store(prev)
-	if Available() {
-		t.Fatal("Available() must be false while the helper dispatch is unregistered")
-	}
-	argv, wrapped := Command(Spec{Mode: "enforce", WriteRoots: []string{`C:\work`}, Network: true}, Shell{Kind: ShellPowerShell, Path: "powershell"}, "Write-Output ok")
-	if wrapped {
-		t.Fatalf("enforce without helper dispatch must not wrap, got argv %v", argv)
-	}
-}
-
-func TestRunWindowsSandboxHelperRunsExternalSandbox(t *testing.T) {
-	RegisterHelperDispatch()
-	if !Available() {
-		t.Skip("windows sandbox APIs unavailable")
-	}
-	sh := powershellArgvForWindowsSandboxTest(t, "")
-	if sh == nil {
-		t.Skip("PowerShell unavailable")
-	}
-	workspace := t.TempDir()
-	outside := t.TempDir()
-	insideFile := filepath.Join(workspace, "inside.txt")
-	outsideFile := filepath.Join(outside, "outside.txt")
-	payload, err := encodeWindowsSandboxPayload(windowsSandboxPayload{
-		Spec:     Spec{Mode: "enforce", WriteRoots: []string{workspace}, Network: true},
-		Writable: true,
-	})
-	if err != nil {
-		t.Fatalf("encode helper payload: %v", err)
-	}
-	script := "$ErrorActionPreference='Stop'; " +
-		"Set-Content -LiteralPath " + psQuoteWindowsSandboxTest(insideFile) + " -Value ok; " +
-		"try { Set-Content -LiteralPath " + psQuoteWindowsSandboxTest(outsideFile) + " -Value nope; exit 9 } catch { exit 0 }"
-	helperArgs := append([]string{payload, "--"}, append(sh, script)...)
-	if code := RunWindowsSandboxHelper(helperArgs, os.Stdin, os.Stdout, os.Stderr); code != 0 {
-		t.Fatalf("helper exit code = %d, want 0", code)
-	}
-	if got, err := os.ReadFile(insideFile); err != nil || !strings.Contains(string(got), "ok") {
-		t.Fatalf("inside write missing: %q err=%v", got, err)
-	}
-	if _, err := os.Stat(outsideFile); err == nil {
-		t.Fatalf("outside write unexpectedly succeeded: %s", outsideFile)
-	}
-}
-
-func TestWindowsRestrictedTokenDocumentsNodeStdioBoundary(t *testing.T) {
-	RegisterHelperDispatch()
-	if !Available() {
-		t.Skip("windows sandbox APIs unavailable")
-	}
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node unavailable")
-	}
-	workspace := t.TempDir()
-	boundaryOutput := filepath.Join(workspace, "stdio-boundary.txt")
-	payload, err := encodeWindowsSandboxPayload(windowsSandboxPayload{
-		Spec:     Spec{Mode: "enforce", WriteRoots: []string{workspace}, Network: true},
-		Writable: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	js := `const fs=require("fs");const {spawnSync}=require("child_process");` +
-		`for(const stdio of ["inherit","ignore"]){const r=spawnSync(process.execPath,["-e","process.exit(0)"],{stdio});if(r.error||r.status!==0)process.exit(2);}` +
-		`const piped=spawnSync(process.execPath,["-e","process.exit(0)"],{stdio:"pipe"});` +
-		`if(!piped.error||piped.error.code!=="EPERM")process.exit(3);fs.writeFileSync(` + strconv.Quote(boundaryOutput) + `,"inherit=ok ignore=ok pipe=EPERM");`
-	if code := RunWindowsSandboxHelper([]string{payload, "--", node, "-e", js}, os.Stdin, os.Stdout, os.Stderr); code != 0 {
-		t.Fatalf("helper exit=%d", code)
-	}
-	got, err := os.ReadFile(boundaryOutput)
-	if err != nil || !strings.Contains(string(got), "pipe=EPERM") {
-		t.Fatalf("child_process stdio boundary missing: %q err=%v", got, err)
-	}
-}
-
-func powershellArgvForWindowsSandboxTest(t *testing.T, command string) []string {
-	t.Helper()
-	for _, name := range []string{"pwsh", "powershell"} {
-		path, err := exec.LookPath(name)
-		if err != nil {
-			continue
-		}
-		args := []string{path, "-NoProfile", "-NonInteractive", "-Command"}
-		if command != "" {
-			args = append(args, command)
-		}
-		return args
-	}
-	return nil
-}
-
-func psQuoteWindowsSandboxTest(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }

@@ -1,6 +1,16 @@
 # Windows sandbox architecture
 
-Reasonix uses the same restricted-token pattern as DeepSeek Harness commit
+> **Status: retired from enforcement.** Reasonix no longer launches the
+> restricted-token/AppContainer helper on Windows. `sandbox.Available()` is
+> always false there, `[sandbox] bash` resolves to `off`, and permission presets
+> apply only as Reasonix tool-layer boundaries. The backend locked hosts out of
+> their own credential store through same-user deny ACEs and broke common
+> toolchains (Git Bash/MSYS2, Node stdio pipes, mapped drives, cold-start
+> budgets). The remaining sections describe the retired design and stay here
+> until the code is removed; the credential ACL repair for older installs is
+> the only part still exercised.
+
+Reasonix used the same restricted-token pattern as DeepSeek Harness commit
 `c291e7961a` for shell and writer processes on Windows. The implementation is a
 native Go port; it does not load Harness code at runtime.
 

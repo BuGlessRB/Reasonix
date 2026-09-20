@@ -85,10 +85,10 @@ Saved provider and bot credential variables are removed from every
 model-controlled child-process environment. On macOS and Linux, the global
 credential `.env` is also hidden from Reasonix's file readers, sandboxed shell
 commands, and MCP servers; this does not change the visibility of a project's
-ordinary `.env`. Windows uses Harness-style `WRITE_RESTRICTED` tokens that
-constrain writes but not reads. Its local tools run as the same OS user and can
-deliberately read user-readable files, including the credential store, so use
-restricted permissions as a write boundary rather than a credential vault.
+ordinary `.env`. Windows has no OS-level shell sandbox: shell commands and
+local tools run as the same OS user and can deliberately read user-readable
+files, including the credential store, so treat restricted permissions there
+as a tool-layer write boundary rather than a credential vault.
 
 Example:
 

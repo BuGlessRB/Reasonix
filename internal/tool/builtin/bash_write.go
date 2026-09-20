@@ -125,6 +125,12 @@ func (b bash) specForCall(ctx context.Context) sandbox.Spec {
 		spec.Mode = "off"
 		spec.ReadOnly = false
 	}
+	// Windows has no OS-level shell sandbox: demanding one made every
+	// restricted-preset shell call fail closed (#10292). Presets stay tool-layer
+	// boundaries there and bash runs as the OS user after the approval gate.
+	if !sandbox.OSSandboxSupported() {
+		spec.Mode = "off"
+	}
 	if preset == permissionpreset.WorkspaceWrite {
 		if b.rootSet != nil {
 			spec.WriteRoots = b.rootSet.EffectiveSandboxRoots(ctx)
