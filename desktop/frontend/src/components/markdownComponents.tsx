@@ -8,7 +8,7 @@
 // Links open in the system browser via RichMarkdownLink. Tables use natural
 // document flow; large code fences have an explicit disclosure.
 
-import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 import { CodeViewer } from "./CodeViewer";
 import { RichMarkdownLink } from "./githubLink";
@@ -156,8 +156,22 @@ export function createComponents(plainStatusBlocks: boolean): Components {
 function MarkdownFileLink({ href, scanned, children }: { href?: string; scanned: boolean; children: ReactNode }) {
   const path = href ? localPathFromHref(href) : null;
   const link = useChatFileLink(path ?? "");
+  const pendingOpen = useRef(false);
+  useEffect(() => {
+    if (!pendingOpen.current || !link) return;
+    pendingOpen.current = false;
+    void import("../lib/fileNavigationCommands")
+      .then(({ openResource }) => openResource(link.ref, { view: "preview" }))
+      .catch(() => undefined);
+  }, [link]);
   if (path && link) return <ChatFileReferenceAnchor link={link} href={href!}>{children}</ChatFileReferenceAnchor>;
   if (path && scanned) return <span className="md-rich-link__plain">{children}</span>;
+  if (path) {
+    return <a href={href} aria-label={String(path)} onClick={(event) => {
+      event.preventDefault();
+      pendingOpen.current = true;
+    }}>{children}</a>;
+  }
   return <RichMarkdownLink href={href}>{children}</RichMarkdownLink>;
 }
 

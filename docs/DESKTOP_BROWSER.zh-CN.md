@@ -36,6 +36,17 @@ Agent 工具调用 ─▶ Go BrowserExecutor ─▶ ledger.reserve ─▶ host/b
 持久化表单状态、凭据或可重放提交。标签元数据与操作日志是桌面状态目录下新增的带
 版本文件（`browser/tabs-v1.json`、`browser/operations-v1.json`）。
 
+本地 `.html` / `.htm` 文件默认在该面板运行。聊天文件链接、成果卡片、文件树与 Agent
+按需预览共用一条链路：按文件来源重新授权，生成带随机令牌的 loopback HTTP URL，并
+绑定到当前任务和会话的标签；“查看源码”仍进入文件面板，“在外置浏览器打开”仅由用户
+显式触发。刷新会重新授权并替换令牌，关闭标签、会话销毁或离开文件 URL 会解除绑定。
+用户接管时 Agent 不能刷新或另开副本绕过接管；用户点击刷新可以更新页面，但标签仍保持
+`human` 模式。
+
+这条文件链路服务于单文件和受现有静态预览策略支持的资源。需要模块构建、客户端路由或
+本地 API 的项目继续由 Agent 通过终端启动或复用项目声明的开发服务器，再用
+`browser_open` 打开已确认的地址。SSH 文件首期仍使用原文件预览。
+
 ## 浏览器控制设置
 
 设置中心的「浏览器控制」页管理下列开关，取值都保存在壳 userData 配置目录
@@ -66,6 +77,7 @@ Agent 工具调用 ─▶ Go BrowserExecutor ─▶ ledger.reserve ─▶ host/b
 | --- | --- | --- |
 | `browser_tabs` | 读 | 列出任务标签及 URL、标题、加载状态 |
 | `browser_open` | 写 | 在共享或临时分区打开标签到某 URL |
+| `browser_preview` | 写 | 按需授权本地任务文件，并在任务绑定标签中运行或刷新 |
 | `browser_navigate` | 写 | 导航绑定标签（URL、后退、前进、刷新） |
 | `browser_snapshot` | 读 | 带元素引用的结构快照 |
 | `browser_screenshot` | 读 | 视口或元素的 PNG，作为图像返回 |
@@ -77,6 +89,9 @@ Agent 工具调用 ─▶ Go BrowserExecutor ─▶ ledger.reserve ─▶ host/b
 | `browser_upload` | 写 | 把任务文件附加到文件输入 |
 | `browser_download` | 读 | 等待或列出标签的下载 |
 | `browser_close` | 写 | 关闭标签 |
+
+`browser_preview` 只在支持共享文件预览服务的本地桌面执行器上通过
+`use_capability` 发现；它不进入常驻工具定义，也不向系统提示注入 URL、端口或标签状态。
 
 快照格式：在主框架及每个可达框架的隔离世界中生成的无障碍风格树
 （`role "name" [state] ref=e12`）。引用绑定 `{tabID, frameID, documentVersion}`；导航、
