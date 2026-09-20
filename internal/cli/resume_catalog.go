@@ -201,6 +201,11 @@ func scanWorkspaceResume(ctx context.Context, sessionDir string) workspaceResume
 		}
 		scan.canonical = append(scan.canonical, entry)
 	}
+	// Borrowed legacy activity can move a row, so the newest-first order the
+	// merge and --continue rely on is established after the borrows.
+	sort.SliceStable(scan.canonical, func(i, j int) bool {
+		return scan.canonical[i].session.ModTime.After(scan.canonical[j].session.ModTime)
+	})
 	return scan
 }
 
@@ -256,7 +261,10 @@ func mergeResumeStores(legacy []agent.SessionInfo, canonical []resumeEntry, limi
 			}
 			runEnd++
 		}
-		for nextCanonical < len(canonical) && !canonical[nextCanonical].session.ModTime.After(runActivity) {
+		// Both inputs arrive newest-first, so every canonical row newer than
+		// this run's latest activity precedes the run; ties keep the legacy row
+		// first so numeric indices of an unchanged legacy list stay put.
+		for nextCanonical < len(canonical) && canonical[nextCanonical].session.ModTime.After(runActivity) {
 			merged = append(merged, canonical[nextCanonical])
 			nextCanonical++
 		}

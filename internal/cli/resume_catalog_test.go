@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/provider"
 	"reasonix/internal/session"
 )
@@ -155,7 +158,6 @@ func TestCanonicalResumeHidden(t *testing.T) {
 	}
 }
 
-
 // TestMergedResumeEntriesCapsAcrossStores keeps the picker cap honest when
 // both stores contribute rows: the cap applies to the merged stream, not per
 // store.
@@ -166,11 +168,11 @@ func TestMergedResumeEntriesCapsAcrossStores(t *testing.T) {
 	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		saveQueryTestSession(t, sessionDir, "legacy-"+string(rune('a'+i))+"-session.jsonl", "legacy prompt "+string(rune('a'+i)))
 	}
 	var ids []string
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		id := "bbbb" + string(rune('0'+i)) + "cccc"
 		createCanonicalTestSession(t, v4root, id, "canonical prompt "+string(rune('0'+i)))
 		ids = append(ids, id)
@@ -192,5 +194,80 @@ func TestMergedResumeEntriesCapsAcrossStores(t *testing.T) {
 	}
 	if newest.IsZero() {
 		t.Fatal("merged rows carry no recency stamps")
+	}
+}
+
+func resumeStoreLegacyRow(name string, at time.Time) agent.SessionInfo {
+	return agent.SessionInfo{Path: "/sessions/" + name + ".jsonl", ModTime: at, Preview: name, Turns: 1}
+}
+
+func resumeStoreCanonicalRow(id string, at time.Time) resumeEntry {
+	return resumeEntry{
+		session: agent.SessionInfo{Path: "/sessions-v4/" + id, ModTime: at, Preview: id, Turns: 1},
+		target:  cliResumeTarget{ref: session.SessionRef{HostID: "local", SessionID: id}},
+	}
+}
+
+func resumeEntryPreviews(entries []resumeEntry) []string {
+	out := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		out = append(out, entry.session.Preview)
+	}
+	return out
+}
+
+// TestMergeResumeStoresOrdersByRecency pins the interleave contract: both
+// stores arrive newest-first and a canonical row is emitted ahead of every
+// legacy run it is newer than. An inverted comparison pushed newer canonical
+// rows behind the whole legacy list, where the display cap dropped them and a
+// desktop-created session vanished from /resume, the picker, and /takeover <n>.
+func TestMergeResumeStoresOrdersByRecency(t *testing.T) {
+	base := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	at := func(minutes int) time.Time { return base.Add(time.Duration(minutes) * time.Minute) }
+	legacy := []agent.SessionInfo{resumeStoreLegacyRow("L10", at(10)), resumeStoreLegacyRow("L5", at(5))}
+	cases := []struct {
+		name      string
+		canonical []resumeEntry
+		want      []string
+	}{
+		{"newer canonical row leads", []resumeEntry{resumeStoreCanonicalRow("C12", at(12))}, []string{"C12", "L10", "L5"}},
+		{"canonical row slots between legacy rows", []resumeEntry{resumeStoreCanonicalRow("C7", at(7))}, []string{"L10", "C7", "L5"}},
+		{"older canonical row trails", []resumeEntry{resumeStoreCanonicalRow("C1", at(1))}, []string{"L10", "L5", "C1"}},
+		{"tie keeps the legacy row first", []resumeEntry{resumeStoreCanonicalRow("C10", at(10))}, []string{"L10", "C10", "L5"}},
+		{"several canonical rows keep their own order", []resumeEntry{
+			resumeStoreCanonicalRow("C12", at(12)), resumeStoreCanonicalRow("C7", at(7)), resumeStoreCanonicalRow("C6", at(6)),
+		}, []string{"C12", "L10", "C7", "C6", "L5"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resumeEntryPreviews(mergeResumeStores(legacy, tc.canonical, resumeListCap))
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("merged order = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMergeResumeStoresCapKeepsNewestCanonicalRow proves the display cap trims
+// the oldest rows, not the canonical store: with a full page of legacy
+// transcripts the newest conversation stays listed when it is a catalog row.
+func TestMergeResumeStoresCapKeepsNewestCanonicalRow(t *testing.T) {
+	base := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	var legacy []agent.SessionInfo
+	for i := range resumeListCap {
+		minute := 20 - i
+		legacy = append(legacy, resumeStoreLegacyRow("L"+strconv.Itoa(minute), base.Add(time.Duration(minute)*time.Minute)))
+	}
+	canonical := []resumeEntry{resumeStoreCanonicalRow("C21", base.Add(21*time.Minute))}
+
+	got := resumeEntryPreviews(mergeResumeStores(legacy, canonical, resumeListCap))
+	if len(got) != resumeListCap {
+		t.Fatalf("merged list has %d rows, want the cap of %d", len(got), resumeListCap)
+	}
+	if got[0] != "C21" {
+		t.Fatalf("newest row = %q, want the canonical row C21 (order %v)", got[0], got)
+	}
+	if got[len(got)-1] != "L12" {
+		t.Fatalf("cap dropped %q instead of the oldest legacy row (order %v)", got[len(got)-1], got)
 	}
 }
