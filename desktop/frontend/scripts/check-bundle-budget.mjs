@@ -485,10 +485,25 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // 2074127 B locally. Preserve the measured 186 B Linux producer difference
 // above (2074313 B combined), with 0.11 KiB headroom. Historical preparation
 // remains lazy; compressed, chunk, CSS, and locale limits stay unchanged.
+// Tool-result identity coalescing and authoritative lazy-content projection
+// measure 2074766 B locally (+639 B over the preceding macOS measurement).
+// Preserve the established 186 B Linux producer difference: 2074952 B, with
+// the next one-decimal ceiling. Gzip, chunk, CSS, locale, and resident-history
+// budgets remain unchanged.
+// Conflict-preserving tool identity, anchored local rows, evidence-aware state
+// handoff, and idempotent projection replay measure 2081572 B locally (+6806 B,
+// 0.328%). The durable-user/live-turn anchor measures 2081799 B in the generic
+// Linux producer and 2081943 B in desktop-prepare. Retain 53 B of headroom over
+// the larger producer at the next decimal; compressed, chunk, CSS, locale, and
+// resident-history budgets remain fixed.
 // Native window ownership, stopping-state handling and bounded transcript crash
 // context measure 2075238 B locally (+1111 B, 0.054%). Preserve the same 186 B
 // Linux producer difference (2075424 B) and retain the next one-decimal ceiling;
 // gzip, chunk, CSS, and locale limits remain unchanged.
+// Integrating main-v2's HTML delivery and layout changes measures 2083186 B
+// locally (+264 B). Preserve the observed 186 B desktop Linux producer
+// difference (2083372 B) at the next decimal. Compressed, chunk, CSS, locale,
+// and resident-history budgets remain fixed.
 // Manual compaction lifecycle visibility and recovery add one keyed operation
 // projection, monotonic history/runtime reconciliation, and lazy persisted-row
 // decoding. Integrated with native window ownership, the measured payload is
@@ -500,6 +515,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // 2084968 B in the Linux Electron producer, 2 B above the previous rounded
 // ceiling. Retain the next one-decimal ceiling (100 B headroom); all other
 // gates remain unchanged.
-const rawInitialBudgetKiB = 2_036.2;
+// Combining maintenance with conflict-preserving tool projection measures
+// 2092520 B locally (+7684 B over main-v2, 0.37%). Preserve the established
+// 186 B Linux producer difference (2092706 B) at the next decimal; other
+// payload and resident-window budgets remain unchanged.
+const rawInitialBudgetKiB = 2_043.7;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

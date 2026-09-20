@@ -367,6 +367,7 @@ export type Item = { turnId?: string } & (
       capabilityId?: string; subagentOutcome?: import("./subagentOutcome").SubagentOutcome;
       status: ToolStatus;
       resultMissing?: boolean; contentState?: "unloaded" | "loading" | "ready" | "failed";
+      resultEvidence?: "missing" | "observation" | "formal"; sourceEntryId?: string; identityConflict?: boolean;
       output?: string; searchSources?: SearchSource[]; searchSourcesStatus?: "available" | "not_provided"; searchSummary?: string; // display-only provider search results; replay data stays in output/serverSearch
       error?: string;
       truncated?: boolean;
@@ -479,7 +480,7 @@ export interface State extends ReadStatusHost, ForkTurnState {
   historyRevision?: number;
   historyDigest?: string;
   /** Number of leading items owned by the persisted transcript projection. */
-  historyPrefixCount: number;
+  historyPrefixCount: number; transcriptProjectedIds: string[];
   /** Bumped when lazy history content can change already-estimated row sizes. */
   historyLayoutRevision: number;
   historyMutation: HistoryMutation;
@@ -635,7 +636,7 @@ export const initialState: State = {
   historyOlderLoading: false,
   historyNewerLoading: false,
   historyLayoutRevision: 0,
-  historyPrefixCount: 0,
+  historyPrefixCount: 0, transcriptProjectedIds: [],
   historyMutation: { seq: 0, kind: "replace" },
   backendActivationPending: false,
   deliveryRecoveryActive: false,
@@ -1546,6 +1547,8 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
       if (!t) return s;
       const next = [...s.items];
       let idx = t.id ? next.findIndex((it) => it.kind === "tool" && it.id === t.id) : -1;
+      const matched = idx >= 0 ? next[idx] : undefined;
+      if (matched?.kind === "tool" && matched.identityConflict) return s;
       if (idx < 0) {
         for (let i = next.length - 1; i >= 0; i--) {
           const it = next[i];
@@ -1925,7 +1928,8 @@ function reduceState(s: State, a: Action): State {
     }
     case "transcript_v2_snapshot": {
       const next = transcriptSnapshotState(s, a.snapshot, historyMessagesToItems, (state, event) => applyEvent(state, event, a.remote), promptEventClock(), a.projection.items);
-      return { ...next, transcriptProtocol: 2, historyHasOlder: a.projection.hasOlder, historyHasNewer: a.projection.hasNewer,
+      return { ...next, transcriptProtocol: 2, transcriptProjectedIds: a.projection.items.map(item => item.id), historyStartTurn: a.projection.startTurn,
+        historyEndTurn: a.projection.endTurn, historyTotalTurns: a.projection.totalTurns, historyHasOlder: a.projection.hasOlder, historyHasNewer: a.projection.hasNewer,
         historyRevision: a.projection.revision, historyDigest: a.projection.digest };
     }
     case "transcript_records": return installTranscriptRecords(s, a);
@@ -2637,7 +2641,7 @@ export function useController() {
     if (transcriptSubscriptions.current.has(tabId)) return;
     const unsubscribe = getTranscriptStore().subscribe(tabId, (change) => {
       if (!statesRef.current.has(tabId)) return;
-      dispatchTo(tabId, { type: "history_items_patch", patches: change.patches, expected: change.expected });
+      if (change.projection) dispatchTo(tabId, { type: "transcript_records", projection: change.projection, confirmedUsers: [] }); else dispatchTo(tabId, { type: "history_items_patch", patches: change.patches, expected: change.expected });
       const patchCount = Object.keys(change.patches).length;
       if (patchCount > 0) {
         recordFrontendDiagnostic("history", "history.items-patch", {

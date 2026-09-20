@@ -241,6 +241,7 @@ try {
       engine: electronEngine ? "electron" : "chromium", platform: process.platform,
       versions: electronApp ? await electronApp.evaluate(() => process.versions) : { chromium: browser.version() },
       sourceCommit: JSON.parse(config.define.__BUILD_COMMIT__),
+      screenshot: "layout.png",
     }, null, 2));
   }
   if (evidence) {

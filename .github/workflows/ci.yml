@@ -1072,6 +1072,7 @@ jobs:
         env:
           DESKTOP_BUILD_SKIP_DMG: "1"
           REASONIX_PACKAGE_REUSE_FRONTEND: "1"
+          REASONIX_FRONTEND_PRODUCER_ATTEMPT: ${{ needs.desktop-prepare.outputs.producer_attempt }}
         run: |
           REASONIX_FRONTEND_PNPM_VERSION="$(pnpm --version)"
           export REASONIX_FRONTEND_PNPM_VERSION
@@ -1176,6 +1177,7 @@ jobs:
         timeout-minutes: 15
         env:
           REASONIX_PACKAGE_REUSE_FRONTEND: "1"
+          REASONIX_FRONTEND_PRODUCER_ATTEMPT: ${{ needs.desktop-prepare.outputs.producer_attempt }}
         run: |
           REASONIX_FRONTEND_PNPM_VERSION="$(pnpm --version)"
           export REASONIX_FRONTEND_PNPM_VERSION
@@ -1403,6 +1405,7 @@ jobs:
         timeout-minutes: 20
         env:
           REASONIX_PACKAGE_REUSE_FRONTEND: "1"
+          REASONIX_FRONTEND_PRODUCER_ATTEMPT: ${{ needs.desktop-prepare.outputs.producer_attempt }}
         run: |
           REASONIX_FRONTEND_PNPM_VERSION="$(pnpm --version)"
           export REASONIX_FRONTEND_PNPM_VERSION
