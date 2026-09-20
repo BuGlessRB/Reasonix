@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 
 	"reasonix/internal/fileutil"
 )
@@ -84,10 +85,8 @@ func historicalVersionReservationConflict(state *State, op Operation, mapping So
 		if other.Mapping != nil && other.Mapping.SourceKey == versionKey {
 			return true
 		}
-		for _, target := range other.SessionIDs {
-			if target == mapping.SessionID {
-				return true
-			}
+		if slices.Contains(other.SessionIDs, mapping.SessionID) {
+			return true
 		}
 	}
 	return false
