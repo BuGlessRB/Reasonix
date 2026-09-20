@@ -37,6 +37,14 @@ export function remoteSessionActionIdentity(remote: Pick<RemoteSessionView, "ses
   return route.startsWith("session-id:") ? route.slice("session-id:".length).trim() : "";
 }
 
+// A remote session cannot be trashed while it is the serve's current row, or
+// before it has an identity the delete call can name.
+export function remoteSessionArchiveBlocked(
+  remote: (Pick<RemoteSessionView, "sessionId" | "name" | "path"> & { current?: boolean }) | undefined,
+): boolean {
+  return Boolean(remote && (remote.current || !remoteSessionActionIdentity(remote)));
+}
+
 export function remoteSessionLabel(row: Pick<RemoteSessionView, "sessionId" | "name" | "title">, t: Translator): string {
   const title = row.title?.trim();
   if (title) return title;
