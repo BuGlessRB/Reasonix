@@ -108,6 +108,59 @@ func (a *App) resumeRemoteTabSessionPathForSelection(tabID, name, sessionPath, s
 	return a.resumeRemoteTabSessionPathForOpenSelection(tabID, name, sessionPath, sessionTitle, selectionRevision, nil)
 }
 
+// remoteTabResumeAdmission carries the bridge a resume may use and the route
+// it restores on failure. admitted=false means the locked pre-check already
+// answered the request and the caller returns answer unchanged.
+type remoteTabResumeAdmission struct {
+	admitted           bool
+	answer             bool
+	client             *http.Client
+	base               string
+	gen                uint64
+	requestedSessionID string
+	failureRoute       remoteTabProvisionalResume
+}
+
+// admitRemoteTabResume fences a resume against a newer selection and decides
+// whether the tab's bridge can carry it now.
+func (a *App) admitRemoteTabResume(tabID string, tab *remoteTab, name, sessionPath, sessionTitle string,
+	selectionRevision uint64, previous *remoteTabOpenSelection) remoteTabResumeAdmission {
+	a.remoteTabMu.Lock()
+	defer a.remoteTabMu.Unlock()
+	if a.remoteTabs[tabID] != tab || (selectionRevision != 0 && tab.selectionRevision != selectionRevision) {
+		return remoteTabResumeAdmission{answer: true}
+	}
+	if tab.client == nil || tab.state != "ready" {
+		if tab.state != "connecting" && tab.state != "reconnecting" {
+			return remoteTabResumeAdmission{}
+		}
+		// Always defer the selection while connecting: the first click after a
+		// fresh desktop start has selectionRevision 0, which once fell through
+		// to a refusal and silently dropped the click while the tunnel came up.
+		requeueRemoteTabOpenSelectionLocked(tab, &remoteTabPendingOpenSelection{
+			name: strings.TrimSpace(name), sessionID: strings.TrimSpace(tab.session.sessionID), path: strings.TrimSpace(sessionPath), title: strings.TrimSpace(sessionTitle),
+			revision: selectionRevision, deferred: true, identityCommitted: true, previous: previous,
+		})
+		return remoteTabResumeAdmission{answer: true}
+	}
+	consumeQueuedRemoteTabOpenSelectionLocked(tab, selectionRevision)
+	admission := remoteTabResumeAdmission{
+		admitted: true, answer: true,
+		client: tab.client, base: tab.base, gen: tab.gen,
+		failureRoute: remoteTabProvisionalResume{
+			targetPath: tab.routing.currentPath, pathRevision: tab.routing.pathRevision,
+			selectionRevision: tab.selectionRevision, previousSelection: previous,
+		},
+	}
+	if strings.TrimSpace(sessionPath) == "" && strings.TrimSpace(tab.session.name) == strings.TrimSpace(name) {
+		// Canonical rows have no legacy path: carry the committed ID into
+		// /resume instead of resolving a display token through the listing.
+		// A synthetic identity row's name is empty; the ID still identifies it.
+		admission.requestedSessionID = strings.TrimSpace(tab.session.sessionID)
+	}
+	return admission
+}
+
 func (a *App) resumeRemoteTabSessionPathForOpenSelection(tabID, name, sessionPath, sessionTitle string, selectionRevision uint64, previous *remoteTabOpenSelection) bool {
 	a.remoteTabMu.Lock()
 	tab := a.remoteTabs[tabID]
@@ -117,41 +170,12 @@ func (a *App) resumeRemoteTabSessionPathForOpenSelection(tabID, name, sessionPat
 	}
 	tab.sessionMu.Lock()
 	defer tab.sessionMu.Unlock()
-	a.remoteTabMu.Lock()
-	if a.remoteTabs[tabID] != tab || (selectionRevision != 0 && tab.selectionRevision != selectionRevision) {
-		a.remoteTabMu.Unlock()
-		return true
+	admission := a.admitRemoteTabResume(tabID, tab, name, sessionPath, sessionTitle, selectionRevision, previous)
+	if !admission.admitted {
+		return admission.answer
 	}
-	if tab.client == nil || tab.state != "ready" {
-		if tab.state == "connecting" || tab.state == "reconnecting" {
-			// Always defer the selection while connecting: the first click
-			// after a fresh desktop start has selectionRevision 0, which
-			// previously fell through to "return false" — the user's click
-			// was silently dropped because the SSH tunnel wasn't ready yet.
-			requeueRemoteTabOpenSelectionLocked(tab, &remoteTabPendingOpenSelection{
-				name: strings.TrimSpace(name), sessionID: strings.TrimSpace(tab.session.sessionID), path: strings.TrimSpace(sessionPath), title: strings.TrimSpace(sessionTitle),
-				revision: selectionRevision, deferred: true, identityCommitted: true, previous: previous,
-			})
-			a.remoteTabMu.Unlock()
-			return true
-		}
-		a.remoteTabMu.Unlock()
-		return false
-	}
-	consumeQueuedRemoteTabOpenSelectionLocked(tab, selectionRevision)
-	client, base, gen := tab.client, tab.base, tab.gen
-	requestedSessionID := ""
-	if strings.TrimSpace(sessionPath) == "" && strings.TrimSpace(tab.session.name) == strings.TrimSpace(name) {
-		// Canonical rows have no legacy path: carry the committed ID into
-		// /resume instead of resolving a display token through the listing.
-		// A synthetic identity row's name is empty; the ID still identifies it.
-		requestedSessionID = strings.TrimSpace(tab.session.sessionID)
-	}
-	failureRoute := remoteTabProvisionalResume{
-		targetPath: tab.routing.currentPath, pathRevision: tab.routing.pathRevision,
-		selectionRevision: tab.selectionRevision, previousSelection: previous,
-	}
-	a.remoteTabMu.Unlock()
+	client, base, gen := admission.client, admission.base, admission.gen
+	requestedSessionID, failureRoute := admission.requestedSessionID, admission.failureRoute
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

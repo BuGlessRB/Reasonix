@@ -48,3 +48,10 @@ func (a *App) setTabReadOnlyWithTerminalPolicy(tabID string, readOnly, preserveT
 		a.terminals.closeSessions(terminalSessions)
 	}
 }
+
+// terminalReadOnlyForTab reports whether the tab's terminals must be locked.
+// A takeover spectator is read-only for the session writer only: its shells
+// keep running so the user can switch the CLI to another session.
+func terminalReadOnlyForTab(tab *WorkspaceTab) bool {
+	return tab != nil && tab.ReadOnly && !tab.Takeover.Spectator
+}

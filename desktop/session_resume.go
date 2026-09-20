@@ -109,10 +109,9 @@ func (a *App) resumeCanonicalSessionForTranscript(tab *WorkspaceTab, ctrl contro
 
 	current := a.controllerForTab(tab)
 	if ctrl == nil {
-		// The caller resolved a dormant tab (restored for a remote-only layout)
-		// before it had a runtime. A concurrent activation may have built one
-		// since; adopting it here, under the rebuild lock, is the authoritative
-		// read, and the publication fences below still reject a later build.
+		// The caller resolved a dormant tab before it had a runtime. Adopting a
+		// concurrently built one here, under the rebuild lock, is the
+		// authoritative read; the fences below still reject a later build.
 		ctrl = current
 		if identity, err = canonicalOpenIdentity(ctrl); err != nil {
 			return HistoryPage{}, err

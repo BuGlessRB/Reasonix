@@ -307,10 +307,6 @@ func (a *App) revalidateTerminalTarget(target terminalTarget, requireWritable bo
 	return nil
 }
 
-func terminalReadOnlyForTab(tab *WorkspaceTab) bool {
-	return tab != nil && tab.ReadOnly && !tab.Takeover.Spectator
-}
-
 func canonicalDirectory(path string) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {

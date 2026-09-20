@@ -262,24 +262,14 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 		a.goRemoteTabSafe("remoteRuntimeSync", func() { _, _ = a.SyncRuntimeState() })
 		return false
 	}
-	// Serve still reports the outgoing foreground until an in-flight /resume
-	// commits. That status is older than the provisional route and must not roll
-	// it back; target SSE frames are already buffering behind its ready barrier.
 	payloadRoute := remoteSessionIdentityRoute(payload.SessionPath, payload.SessionID)
-	if pendingPath := tab.routing.rehydratingPath; pendingPath != "" && payloadRoute != "" && payloadRoute != pendingPath {
+	if remoteTabStatusRouteRejectedLocked(tab, payloadRoute) {
 		a.remoteTabMu.Unlock()
 		return false
 	}
-	// A spectator watches the session it explicitly selected; the foreground
-	// status of a different session must not re-route its tab.
-	if payloadRoute != "" && payloadRoute != tab.routing.currentPath && tab.session.takenOver {
-		a.remoteTabMu.Unlock()
-		return false
-	}
-	// A payload reserved before an explicit reclaim completed can still be in
-	// flight and mirror the pre-reclaim ownership; dropping just its
-	// takenOver=true keeps the rest of its runtime facts usable without
-	// letting it re-pin the spectator banner.
+	// A payload reserved before an explicit reclaim can still be in flight with
+	// the pre-reclaim ownership; drop only its takenOver=true so its remaining
+	// runtime facts stay usable without re-pinning the spectator banner.
 	if statusSeq < tab.ownership.reclaimRevision && payload.TakenOver != nil && *payload.TakenOver {
 		payload.TakenOver = nil
 	}
@@ -290,30 +280,10 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 	}
 	applyRemoteTabStatusPayload(tab, payload)
 	after := remoteTabMetaLocked(tab)
-	readyBarrier := remoteTabReadyBarrier(tab, pathChanged)
-	// Ownership returned through polling (auto-reclaim after the local writer
-	// exited) rather than an explicit /reclaim: the surface is still on the
-	// spectator-era projection and needs the ready barrier that re-hydrates
-	// the view. Defer it while a turn runs so the barrier never orphans an
-	// in-flight submission.
-	if before.TakenOver && !after.TakenOver {
-		if tab.runtime.running || tab.runtime.pendingPrompt {
-			tab.ownership.readyBarrierPending = true
-		} else {
-			readyBarrier = true
-		}
-	}
-	// A deferred barrier fires as soon as polling observes the surface idle.
-	deferredBarrier := tab.ownership.readyBarrierPending && !tab.runtime.running && !tab.runtime.pendingPrompt
-	if deferredBarrier {
-		tab.ownership.readyBarrierPending = false
-	}
+	readyBarrier, deferredBarrier := resolveRemoteTabOwnershipBarrierLocked(tab, before, after,
+		remoteTabReadyBarrier(tab, pathChanged))
 	a.remoteTabMu.Unlock()
-	if before.SessionPath != after.SessionPath || before.TopicID != after.TopicID ||
-		before.Running != after.Running || before.TurnStartedAt != after.TurnStartedAt ||
-		before.PendingPrompt != after.PendingPrompt || before.BackgroundJobs != after.BackgroundJobs ||
-		before.CancelRequested != after.CancelRequested || before.Cancellable != after.Cancellable ||
-		before.TakenOver != after.TakenOver {
+	if remoteTabStatusMetaChanged(before, after) {
 		a.emitRemoteEvent("remote-tab:updated", after)
 	}
 	if readyBarrier || deferredBarrier {
@@ -324,6 +294,56 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 	}
 	a.emitRuntimeStateChanged()
 	return true
+}
+
+// remoteTabStatusRouteRejectedLocked reports whether a /status payload names a
+// session this tab must not follow.
+//
+// Serve still reports the outgoing foreground until an in-flight /resume
+// commits: that status is older than the provisional route and must not roll
+// it back, and the target's SSE frames are already buffering behind its ready
+// barrier. A spectator watches the session it explicitly selected, so the
+// foreground status of any other session must not re-route its tab.
+func remoteTabStatusRouteRejectedLocked(tab *remoteTab, payloadRoute string) bool {
+	if pendingPath := tab.routing.rehydratingPath; pendingPath != "" && payloadRoute != "" && payloadRoute != pendingPath {
+		return true
+	}
+	return payloadRoute != "" && payloadRoute != tab.routing.currentPath && tab.session.takenOver
+}
+
+// resolveRemoteTabOwnershipBarrierLocked decides whether this status refresh
+// publishes the re-hydration barrier, given the barrier a route change already
+// requires.
+//
+// Ownership also returns through polling — an auto-reclaim once the local
+// writer exits — rather than an explicit /reclaim. The surface is then still
+// on the spectator-era projection and needs the barrier that re-hydrates it.
+// Defer while a turn runs so the barrier never orphans an in-flight
+// submission; a deferred barrier fires as soon as polling observes the surface
+// idle.
+func resolveRemoteTabOwnershipBarrierLocked(tab *remoteTab, before, after TabMeta, readyBarrier bool) (bool, bool) {
+	if before.TakenOver && !after.TakenOver {
+		if tab.runtime.running || tab.runtime.pendingPrompt {
+			tab.ownership.readyBarrierPending = true
+		} else {
+			readyBarrier = true
+		}
+	}
+	deferredBarrier := tab.ownership.readyBarrierPending && !tab.runtime.running && !tab.runtime.pendingPrompt
+	if deferredBarrier {
+		tab.ownership.readyBarrierPending = false
+	}
+	return readyBarrier, deferredBarrier
+}
+
+// remoteTabStatusMetaChanged reports whether a status refresh moved a field the
+// tab strip renders, keeping remote-tab:updated off unchanged refreshes.
+func remoteTabStatusMetaChanged(before, after TabMeta) bool {
+	return before.SessionPath != after.SessionPath || before.TopicID != after.TopicID ||
+		before.Running != after.Running || before.TurnStartedAt != after.TurnStartedAt ||
+		before.PendingPrompt != after.PendingPrompt || before.BackgroundJobs != after.BackgroundJobs ||
+		before.CancelRequested != after.CancelRequested || before.Cancellable != after.Cancellable ||
+		before.TakenOver != after.TakenOver
 }
 
 func applyRemoteTabStatusPayload(tab *remoteTab, payload remoteTabStatusPayload) {

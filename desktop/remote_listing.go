@@ -450,9 +450,8 @@ func (a *App) remoteProjectSessions(ctx context.Context, client *http.Client, ba
 		}
 		pinnedRow := remoteSessionPinnedLocked(prefs, prefKey)
 		// A never-chatted canonical session is the remote analog of a local
-		// blank: local blanks disappear when unused, so hide these rows unless
-		// the user pinned one. MetadataReady gates the check so a stale catalog
-		// (turns/title not rebuilt yet) cannot hide a real conversation.
+		// blank, so hide it unless pinned. MetadataReady gates the check: a
+		// stale catalog must not hide a real conversation.
 		if e.SessionID != "" && !e.Current && !pinnedRow && e.Turns == 0 && title == "" && e.Preview == "" && e.MetadataReady {
 			continue
 		}
