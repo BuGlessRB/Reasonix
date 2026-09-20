@@ -3088,6 +3088,11 @@ func (a *App) closeTabRuntime(tabID string, allowDetach bool) error {
 		a.terminals.closeForTab(tabID)
 	}
 
+	// Claim the mirror's farewell while this tab still owns its writer; a close
+	// that returns early keeps the writer and hands the claim back.
+	closingMirror, releaseMirrorClaim := a.claimTakeoverMirrorFarewell(a.currentSessionPathFor(tab))
+	defer releaseMirrorClaim()
+
 	a.mu.Lock()
 	if current := a.tabs[tabID]; current != tab {
 		a.mu.Unlock()
@@ -3156,6 +3161,9 @@ func (a *App) closeTabRuntime(tabID string, allowDetach bool) error {
 		a.releaseTabSharedHost(tab)
 		tab.releaseSessionLease()
 	}
+	// The writer is released: tell Serve now so it hands the session straight
+	// back instead of waiting for the writer to drop.
+	a.endTakeoverMirrorForClosedTab(closingMirror)
 	if closeSink != nil {
 		closeSink.clearContext() // stop further emissions (nil ctx -> Emit becomes no-op)
 	}
@@ -3453,7 +3461,9 @@ func (a *App) closeTabRuntimeAdmissionHeld(tab *WorkspaceTab) {
 func (a *App) startTabControllerBuild(tab *WorkspaceTab) {
 	buildCtx, cancel := context.WithCancel(a.bootContext())
 	a.mu.Lock()
-	if tab == nil || tab.removed {
+	// Historical shells are not ordinary dormant tabs. Only explicit
+	// preparation may replace their source identity before a runtime starts.
+	if tab == nil || tab.removed || tab.HistoricalSource != nil {
 		a.mu.Unlock()
 		cancel()
 		return

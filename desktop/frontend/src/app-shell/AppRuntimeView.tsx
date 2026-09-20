@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useState, useLayoutEffect, type CSSProperties } from "react";
 import { DockNavigation } from "./dockNavigation";
 import { useFileNavigationRuntime } from "../app-runtime/useFileNavigationRuntime";
+import { useActiveRemoteRef } from "../app-runtime/useActiveRemoteRef";
 import { fileNavigationKey } from "../lib/fileNavigationOwner";
 import { useActivityBarStore } from "../store/activityBar";
 import { ShellExpandProvider } from "../lib/shellExpand";
@@ -115,6 +116,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
   const { state, activeTab, activeTabId, t, locale } = core;
   const { windowsFramelessChrome, mainWindowMaximised } = shell;
   const draftActive = Boolean(draft.surface);
+  const activeRemoteRef = useActiveRemoteRef(draftActive ? undefined : activeTab);
   const {
     conversationView, visibleRuntimeState, sidebarImDetailConnection,
     surfaceWorkspacePanelRenderable, surfaceWorkspacePanelGridOpen, surfaceWorkspacePanelOverlay, terminalSurfaceOpen,
@@ -244,6 +246,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           geometry: shellGeometry,
           projectTree: {
             activeTab: draftActive ? undefined : activeTab,
+            activeRemote: activeRemoteRef,
             activeScope: draft.surface?.draft.scope,
             activeWorkspaceRoot: draft.surface?.draft.workspaceRoot,
             imTopicSources: shell.preferences.imTopicSources, refreshSignal: local.projectRevision,
@@ -502,7 +505,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           surfaceOpen: !draftActive && terminalSurfaceOpen,
           contentVisible: local.terminalContentVisible,
           remote: core.remoteSurfaceActive,
-          readOnly: Boolean(activeTab?.readOnly),
+          readOnly: Boolean(activeTab?.readOnly && !activeTab.takenOver),
           tabId: activeTabId,
           meta: state.meta,
           fitEnabled: local.terminalFitEnabled,

@@ -793,25 +793,13 @@ func (a *App) restoreOrBuildTabs() {
 				toBuild = append(toBuild, tab)
 			}
 		}
-		a.mu.Lock()
-		if _, ok := a.tabs[f.ActiveTab]; ok {
-			a.activeTabID = f.ActiveTab
-		} else {
-			ordered := a.orderedTabIDsLocked()
-			if len(ordered) > 0 {
-				a.activeTabID = ordered[0]
-			}
-		}
-		a.saveTabsLocked()
-		a.mu.Unlock()
-		for _, tab := range toBuild {
-			a.startTabControllerBuild(tab)
-		}
+		a.finishRestoredLocalTabs(f, toBuild)
 		return
 	}
 	if len(f.RemoteTabs) > 0 {
-		// A remote-only single-surface layout is restored above as disconnected
-		// shells. It is not a first launch and must not grow a fallback Global tab.
+		// Remote-only layout: the remote shell is the visible surface, but local
+		// commands still need a workspace tab to target.
+		a.restoreDormantWorkspaceTab(ctx)
 		return
 	}
 

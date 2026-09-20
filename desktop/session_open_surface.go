@@ -10,11 +10,12 @@ import (
 )
 
 // surfaceForCanonicalSession returns the tab OpenSession installs ref into.
-// The active tab wins. Without one (fresh start, or the last visible session
-// was archived), a visible tab that already runs ref is activated, and
-// otherwise an empty surface is created for ref's workspace and bound by the
-// caller. Opening a session must never depend on a replacement blank session
-// having been created for it.
+// The active tab wins. Without one (fresh start, remote-only layout, or the
+// last visible session was archived), a visible tab that already runs ref is
+// activated, then a dormant local tab is reused, and otherwise an empty
+// surface is created for ref's workspace and bound by the caller. Opening a
+// session must never depend on a replacement blank session having been
+// created for it.
 func (a *App) surfaceForCanonicalSession(ref session.SessionRef, workspace workspacestate.Workspace) (*WorkspaceTab, control.SessionAPI, bool, error) {
 	if tab, ctrl := a.tabAndCtrlByID(""); tab != nil {
 		return tab, ctrl, false, nil
@@ -28,6 +29,19 @@ func (a *App) surfaceForCanonicalSession(ref session.SessionRef, workspace works
 		return owner, ctrl, false, nil
 	}
 	a.mu.Unlock()
+
+	if tab, ctrl := a.firstResolvableLocalTab(); tab != nil {
+		// A remote-only layout keeps one dormant local tab for local work;
+		// opening a session there beats creating a second surface.
+		a.mu.Lock()
+		if a.tabs[tab.ID] == tab && !tab.removed {
+			a.activeTabID = tab.ID
+			a.saveTabsLocked()
+			a.mu.Unlock()
+			return tab, ctrl, false, nil
+		}
+		a.mu.Unlock()
+	}
 
 	scope := canonicalWorkspaceScope(workspace)
 	workspaceRoot := ""
