@@ -1608,11 +1608,42 @@ func (s *Server) mirrorEnd(w http.ResponseWriter, r *http.Request) {
 	s.reclaimMirroredLocked(w, realPath, current)
 }
 
+// The desktop sends mirror-end at tab close and releases its runtime in the
+// same teardown with no ordering guarantee, so the writer lock normally drops
+// within milliseconds of the farewell. mirrorEndReleaseWait bounds how long the
+// farewell waits for that drop so the remote side is re-owned at once instead
+// of sitting read-only until the 30 s stale auto-reclaim notices; a writer that
+// keeps the lock past the bound is accepted and left to that fallback.
+var (
+	mirrorEndReleaseWait = 2 * time.Second
+	mirrorEndReleasePoll = 25 * time.Millisecond
+	// mirrorEndProbeHookForTest runs after each probe that still sees the
+	// writer lock held, so tests can release the writer at a chosen point.
+	mirrorEndProbeHookForTest func(attempt int)
+)
+
+// awaitIdentityWriterRelease reports whether the identity's writer lock dropped
+// within mirrorEndReleaseWait.
+func awaitIdentityWriterRelease(dir string) bool {
+	deadline := time.Now().Add(mirrorEndReleaseWait)
+	for attempt := 0; session.ProbeWriterHeld(dir); attempt++ {
+		if mirrorEndProbeHookForTest != nil {
+			mirrorEndProbeHookForTest(attempt)
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(mirrorEndReleasePoll)
+	}
+	return true
+}
+
 // mirrorEndIdentity handles the local writer's farewell for a final-format
 // identity. The farewell is sent before the live writer releases its runtime,
-// so a still-held writer lock is expected, not an error: accept it and let the
-// outstanding reclaim finish when the lock drops. Process exit remains the
-// stale auto-reclaim fallback. Only an already-free lock re-owns now.
+// so a still-held writer lock is expected, not an error: wait briefly for the
+// drop and re-own the identity as the legacy farewell does; a writer that
+// outlives the wait is accepted and the stale auto-reclaim (or process exit)
+// finishes the return later.
 func (s *Server) mirrorEndIdentity(w http.ResponseWriter, r *http.Request, route, mirrorID string) {
 	ref, dir, err := s.resolveSessionIdentity(route)
 	if err != nil {
@@ -1624,7 +1655,9 @@ func (s *Server) mirrorEndIdentity(w http.ResponseWriter, r *http.Request, route
 		http.Error(w, "mirror generation changed", http.StatusConflict)
 		return
 	}
-	if session.ProbeWriterHeld(dir) {
+	// Wait outside bindMu: blocking every other command for the whole bound
+	// would freeze the serve for a writer that is merely slow to exit.
+	if !awaitIdentityWriterRelease(dir) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

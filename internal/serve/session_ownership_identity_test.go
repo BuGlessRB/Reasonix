@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
@@ -307,19 +308,25 @@ func TestIdentityHandoffRefusesForeignHolder(t *testing.T) {
 	retireExclusiveForeground(t, ctrl, service)
 }
 
-// TestIdentityMirrorEndAcceptsLiveWriter pins the farewell contract: the
-// writer's return transaction sends mirror-end before process exit, so the
-// writer lock is still held and the serve must accept (204) instead of 409ing
-// a call its own protocol ordering requires.
-func TestIdentityMirrorEndAcceptsLiveWriter(t *testing.T) {
-	_, ctrl, service, current := newExclusiveSessionServe(t)
-	root := identityRoot(t, service, current)
-	lifecycle := newIdentityLifecycleServe(t, ctrl, current)
-	ts := httptest.NewServer(lifecycle.Handler())
-	defer ts.Close()
-	route := "session-id:" + current.SessionID
+// shortMirrorEndWait shrinks the farewell's release wait so the tests pin the
+// protocol (which probe re-owns, how many probes the bound allows) rather than
+// wall-clock time.
+func shortMirrorEndWait(t *testing.T, polls int) {
+	t.Helper()
+	wait, poll := mirrorEndReleaseWait, mirrorEndReleasePoll
+	mirrorEndReleasePoll = 2 * time.Millisecond
+	mirrorEndReleaseWait = time.Duration(polls) * mirrorEndReleasePoll
+	t.Cleanup(func() {
+		mirrorEndReleaseWait, mirrorEndReleasePoll = wait, poll
+		mirrorEndProbeHookForTest = nil
+	})
+}
 
-	resp, raw := serveBody(t, http.MethodPost, ts.URL+"/handoff", `{"sessionPath":"`+route+`","targetWriterId":"taker-writer","force":true,"mode":"wait","timeoutMs":2000}`)
+// handoffIdentityForTest hands the fixture's identity to "taker-writer" and
+// returns the grant.
+func handoffIdentityForTest(t *testing.T, url, route string) mirrorGrant {
+	t.Helper()
+	resp, raw := serveBody(t, http.MethodPost, url+"/handoff", `{"sessionPath":"`+route+`","targetWriterId":"taker-writer","force":true,"mode":"wait","timeoutMs":2000}`)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("handoff status = %d body %s", resp.StatusCode, raw)
 	}
@@ -327,17 +334,121 @@ func TestIdentityMirrorEndAcceptsLiveWriter(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &grant); err != nil {
 		t.Fatal(err)
 	}
+	return grant
+}
+
+// TestIdentityMirrorEndAcceptsLiveWriter pins the farewell contract: the
+// writer's return transaction sends mirror-end before process exit, so the
+// writer lock may still be held past the release wait and the serve must accept
+// (204) instead of 409ing a call its own protocol ordering requires. The
+// outstanding return then belongs to the stale auto-reclaim, and the wait is
+// bounded by the configured number of probes.
+func TestIdentityMirrorEndAcceptsLiveWriter(t *testing.T) {
+	const polls = 3
+	shortMirrorEndWait(t, polls)
+	_, ctrl, service, current := newExclusiveSessionServe(t)
+	root := identityRoot(t, service, current)
+	lifecycle := newIdentityLifecycleServe(t, ctrl, current)
+	ts := httptest.NewServer(lifecycle.Handler())
+	defer ts.Close()
+	route := "session-id:" + current.SessionID
+	grant := handoffIdentityForTest(t, ts.URL, route)
 	writer := openIdentityWriter(t, root, current)
 	defer writer.Close(t.Context())
+	probes := 0
+	mirrorEndProbeHookForTest = func(int) { probes++ }
 
-	resp, raw = serveBody(t, http.MethodPost, ts.URL+"/mirror-end", `{"sessionPath":"`+route+`","mirrorId":"`+grant.MirrorID+`"}`)
+	resp, raw := serveBody(t, http.MethodPost, ts.URL+"/mirror-end", `{"sessionPath":"`+route+`","mirrorId":"`+grant.MirrorID+`"}`)
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("mirror-end with live writer status = %d body %s", resp.StatusCode, raw)
 	}
 	if ref, bound := ctrl.SessionRef(); bound && ref == current {
 		t.Fatal("mirror-end re-owned the identity under a live writer")
 	}
+	if _, mirrored := lifecycle.mirroredEntry(route); !mirrored {
+		t.Fatal("mirror entry dropped although the writer never released; the auto-reclaim has nothing to finish")
+	}
+	if probes < 1 || probes > polls+2 {
+		t.Fatalf("farewell probed %d times, want between 1 and %d (bounded wait)", probes, polls+2)
+	}
 	retireExclusiveForeground(t, ctrl, service)
+}
+
+// The desktop releases its runtime right after sending mirror-end; the
+// farewell must re-own the identity on the first probe that sees the lock
+// free instead of answering 204 and leaving the remote side read-only until
+// the 30 s stale auto-reclaim.
+func TestIdentityMirrorEndReclaimsOnceWriterReleases(t *testing.T) {
+	shortMirrorEndWait(t, 50)
+	_, ctrl, service, current := newExclusiveSessionServe(t)
+	root := identityRoot(t, service, current)
+	lifecycle := newIdentityLifecycleServe(t, ctrl, current)
+	ts := httptest.NewServer(lifecycle.Handler())
+	defer ts.Close()
+	route := "session-id:" + current.SessionID
+	grant := handoffIdentityForTest(t, ts.URL, route)
+	writer := openIdentityWriter(t, root, current)
+	heldProbes := 0
+	mirrorEndProbeHookForTest = func(attempt int) {
+		heldProbes++
+		if attempt == 0 {
+			// The writer's teardown lands after the farewell was sent.
+			if err := writer.Close(t.Context()); err != nil {
+				t.Errorf("release taker writer: %v", err)
+			}
+		}
+	}
+
+	resp, raw := serveBody(t, http.MethodPost, ts.URL+"/mirror-end", `{"sessionPath":"`+route+`","mirrorId":"`+grant.MirrorID+`"}`)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("mirror-end status = %d body %s", resp.StatusCode, raw)
+	}
+	if heldProbes != 1 {
+		t.Fatalf("farewell saw the lock held on %d probes, want exactly 1: the release must be picked up by the very next probe", heldProbes)
+	}
+	if ref, bound := ctrl.SessionRef(); !bound || ref != current {
+		t.Fatalf("foreground after farewell = %+v (bound %v), want the reclaimed identity %+v", ref, bound, current)
+	}
+	if _, mirrored := lifecycle.mirroredEntry(route); mirrored {
+		t.Fatal("mirror entry survived the farewell reclaim")
+	}
+	defer retireExclusiveForeground(t, ctrl, service)
+	if !session.ProbeWriterHeld(filepath.Join(root, current.SessionID)) {
+		t.Fatal("serve did not re-acquire the writer after the farewell")
+	}
+}
+
+// An identity history read runs outside bindMu. A rotation or handoff landing
+// between the read and the response must be reported as a changed runtime, as
+// transcriptBoundRead already does, instead of answering the new route with
+// the outgoing controller's transcript.
+func TestHistoryIdentityRouteDetectsRuntimeChangeDuringRead(t *testing.T) {
+	_, ctrl, service, current := newExclusiveSessionServe(t)
+	lifecycle := newIdentityLifecycleServe(t, ctrl, current)
+	ts := httptest.NewServer(lifecycle.Handler())
+	defer ts.Close()
+	defer retireExclusiveForeground(t, ctrl, service)
+	route := "session-id:" + current.SessionID
+
+	historyIdentityReadHookForTest = func() {
+		if _, err := ctrl.BindFreshSession(context.Background(), "rotated-mid-read"); err != nil {
+			t.Errorf("rotate during read: %v", err)
+		}
+	}
+	t.Cleanup(func() { historyIdentityReadHookForTest = nil })
+	resp, raw := serveBody(t, http.MethodGet, ts.URL+"/history?session="+route, "")
+	if resp.StatusCode != http.StatusConflict || !strings.Contains(raw, "transcript runtime changed during read") {
+		t.Fatalf("history across a mid-read rotation = %d %q, want 409 runtime changed", resp.StatusCode, raw)
+	}
+	historyIdentityReadHookForTest = nil
+	if err := service.Close(t.Context(), current); err != nil {
+		t.Fatalf("close rotated-out runtime: %v", err)
+	}
+	// With the rotation settled the route is served cold from the event log.
+	resp, raw = serveBody(t, http.MethodGet, ts.URL+"/history?session="+route, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("history after rotation = %d body %s", resp.StatusCode, raw)
+	}
 }
 
 // TestSessionsFoldsEngineMirrorOfLegacyTranscript pins the listing fold: the

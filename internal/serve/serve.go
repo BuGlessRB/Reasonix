@@ -744,7 +744,21 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		writeJSONCached(w, r, historyMessages(ctrl.History()))
+		msgs := ctrl.History()
+		if historyIdentityReadHookForTest != nil {
+			historyIdentityReadHookForTest()
+		}
+		// The read ran outside bindMu; the same re-resolution transcriptBoundRead
+		// performs keeps a rotation or handoff that landed mid-read from being
+		// answered with the outgoing controller's transcript under the new route.
+		s.bindMu.Lock()
+		current := s.resolveReadControllerLocked(raw) == ctrl
+		s.bindMu.Unlock()
+		if !current {
+			http.Error(w, "transcript runtime changed during read", http.StatusConflict)
+			return
+		}
+		writeJSONCached(w, r, historyMessages(msgs))
 		return
 	}
 	// A read-only surface can select a specific session a local runtime owns
@@ -1568,6 +1582,10 @@ func (s *Server) generateTitle(ctx context.Context, firstMsg string) string {
 }
 
 var deleteSessionBeforeOwnershipLockHookForTest func()
+
+// historyIdentityReadHookForTest runs between an identity history read and its
+// re-resolution so tests can rotate the foreground in that window.
+var historyIdentityReadHookForTest func()
 
 // deleteSession removes a saved session by the session name returned from /sessions.
 func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
