@@ -448,17 +448,6 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // measure 2488853 B. Keep the next tenth; gzip, CSS, and chunk limits unchanged.
 // Combined model-settings and read-evidence integration measures 2492541 B,
 // adding 3688 B (0.148%) over the base. Retain the next one-decimal ceiling.
-// Takeover-aware terminal access adds one startup-path predicate, measuring
-// 2492831 B. Retain only the next one-decimal ceiling.
-// Statically importing remote telemetry into useRemoteSession removes the
-// late-resolving dynamic-chunk await between the connection-generation check
-// and status application; the module moves onto the startup path and the
-// merged payload measures 2437.6 KiB. Retain the next tenth.
-// The snapshot orphan reconciliation (content fallback for id-less rebase)
-// adds 0.3 KiB raw; the merged payload measures 2437.9 KiB. Same ceiling rule.
-// The spectator status reconcile loop and its status/meta plumbing measure
-// 2438.1 KiB on the branch baseline; the merged main baseline below already
-// covers them.
 // SessionRef bridge methods, active-row identity and the mock hydration event
 // contract measure 2439.8 KiB. Extracting exact-tab mock rebinding from the
 // startup bridge measures 2439.6 KiB; retain 0.3 KiB bounded toolchain headroom.
@@ -475,8 +464,20 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Reasoning capability recovery copy moves the same-toolchain local build from
 // 2064327 B to 2064614 B (+287 B, 0.014%). The stable build with a full source
 // identity measures 2064746 B; retain the next one-decimal ceiling.
-// Merging the sessionid-migration branch onto main adds the dormant-tab and
-// retired-row guards (2068800 B, +4.1 KiB); keep the next ceiling.
-const rawInitialBudgetKiB = 2_020.5;
+// The React error-family field adds 177 B to the same production build. The
+// measured 2064923 B payload keeps the existing gzip, CSS, and chunk limits.
+// Approval outcome recovery measures 2065149 B on current main-v2, versus the
+// 2015.6 KiB base. Retain 0.15 KiB headroom; all other limits stay unchanged.
+// Session-id migration and cross-client takeover measure 2071101 B on the
+// merged branch, 5952 B (0.288%) over that main-v2 payload. The startup-path
+// growth is attributable to this branch's remote session identity work: the
+// remote telemetry and status modules become static imports of
+// useRemoteSession (they leave their lazily loaded surface chunk), plus the
+// canonical session-id plumbing, the spectator reconcile loop and its
+// ownership classification, the pre-activation history prime, the rebased
+// optimistic-submission settlement, and the project tree's canonical row
+// identity. Retain 0.14 KiB headroom at the next one-decimal ceiling; gzip,
+// CSS, and chunk limits are unchanged and keep passing.
+const rawInitialBudgetKiB = 2_022.7;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
