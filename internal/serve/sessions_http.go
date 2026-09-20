@@ -151,7 +151,20 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 	// there is exactly one canonical target for it. Keep the canonical row as
 	// the authoritative open/delete identity, while borrowing the old preview
 	// title until its asynchronous catalog metadata is ready.
-	migration := loadMigrationIndex(canonicalRows)
+	canonicalIDs := make(map[string]struct{}, len(canonicalRows))
+	roots := make(map[string]struct{})
+	for _, row := range canonicalRows {
+		if row.row.SessionID != "" {
+			canonicalIDs[row.row.SessionID] = struct{}{}
+		}
+		if path := strings.TrimSpace(row.info.Path); path != "" {
+			roots[filepath.Dir(filepath.Clean(path))] = struct{}{}
+		}
+	}
+	migration := loadMigrationIndex(roots, func(targetID string) bool {
+		_, exists := canonicalIDs[targetID]
+		return exists
+	})
 	// The engine mirrors an in-flight legacy transcript into a final-format
 	// event log whose session id is the legacy branch id. Such a mirror is
 	// plumbing, not a second conversation; fold it into the legacy row. The
@@ -199,26 +212,25 @@ type canonicalSessionRow struct {
 	info session.SessionInfo
 }
 
+// migrationSourceIndex is the one rule for when a frozen legacy transcript is
+// hidden behind its canonical row. Listing consults it to fold the source out
+// of /sessions; deletion consults it to decide whether removing a canonical row
+// may also remove the source. Both answers must agree, or a delete can remove a
+// transcript the listing still shows as a distinct session.
 type migrationSourceIndex struct {
 	bySource map[string]struct{}
 	byTarget map[string]string
 }
 
-// loadMigrationIndex returns only unambiguous source->target mappings.
-// Multiple canonical targets can legitimately be produced from one legacy DAG
-// head, in which case hiding the source would remove a still-distinct view.
-func loadMigrationIndex(rows []canonicalSessionRow) migrationSourceIndex {
+// loadMigrationIndex reads the migration maps under roots and keeps only
+// unambiguous source->target mappings. Multiple canonical targets can
+// legitimately be produced from one legacy DAG head, in which case hiding or
+// deleting the source would remove a still-distinct view. exists reports
+// whether a target id is a live canonical row; targets that are gone do not
+// count, so a source whose other targets were already deleted is again the
+// sole source of the remaining one.
+func loadMigrationIndex(roots map[string]struct{}, exists func(targetID string) bool) migrationSourceIndex {
 	index := migrationSourceIndex{bySource: map[string]struct{}{}, byTarget: map[string]string{}}
-	canonicalIDs := make(map[string]struct{}, len(rows))
-	roots := make(map[string]struct{})
-	for _, row := range rows {
-		if row.row.SessionID != "" {
-			canonicalIDs[row.row.SessionID] = struct{}{}
-		}
-		if path := strings.TrimSpace(row.info.Path); path != "" {
-			roots[filepath.Dir(filepath.Clean(path))] = struct{}{}
-		}
-	}
 	targetsBySource := make(map[string][]string)
 	for root := range roots {
 		data, err := os.ReadFile(filepath.Join(root, "migration-map.json"))
@@ -232,10 +244,7 @@ func loadMigrationIndex(rows []canonicalSessionRow) migrationSourceIndex {
 		for _, entry := range mapping.Entries {
 			source := agent.CanonicalSessionPath(entry.SourcePath)
 			target := strings.TrimSpace(entry.TargetID)
-			if source == "" || target == "" {
-				continue
-			}
-			if _, exists := canonicalIDs[target]; !exists {
+			if source == "" || target == "" || !exists(target) {
 				continue
 			}
 			seen := false

@@ -1645,36 +1645,49 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "path outside session dir", http.StatusForbidden)
 		return
 	}
-	if filepath.Clean(abs) == filepath.Clean(s.ctl().SessionPath()) {
-		http.Error(w, "cannot delete active session", http.StatusConflict)
+	if msg, status := s.legacyTranscriptDeleteRefusalLocked(abs); msg != "" {
+		http.Error(w, msg, status)
 		return
 	}
-	if s.detachedBusy(filepath.Clean(abs)) {
-		http.Error(w, "session is running in the background; switch to it and stop the turn first", http.StatusConflict)
-		return
-	}
-	if s.sessionMirrored(abs) {
-		// A local runtime is writing this transcript; deleting it here would
-		// pull the file out from under the writer.
-		http.Error(w, "session is taken over by a local Reasonix window", http.StatusConflict)
-		return
-	}
-	destroy := s.ctl().BeginDestroySession(abs)
-	if result := finishSessionDestroy(destroy); result.HasTimedOut() {
-		if err := agent.MarkCleanupPending(abs, "delete"); err != nil {
-			go delayedSessionDelete(absDir, abs, destroy)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		go delayedSessionDelete(absDir, abs, destroy)
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	if err := removeSessionFiles(absDir, abs); err != nil {
+	if err := s.destroyLegacyTranscriptLocked(absDir, abs); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// legacyTranscriptDeleteRefusalLocked is the ownership gate every legacy
+// transcript removal passes, whether the user named the transcript or it is
+// the frozen source of a canonical row being deleted. Callers hold bindMu so a
+// concurrent promotion cannot move the transcript between checks.
+func (s *Server) legacyTranscriptDeleteRefusalLocked(abs string) (string, int) {
+	if filepath.Clean(abs) == filepath.Clean(s.ctl().SessionPath()) {
+		return "cannot delete active session", http.StatusConflict
+	}
+	if s.detachedBusy(filepath.Clean(abs)) {
+		return "session is running in the background; switch to it and stop the turn first", http.StatusConflict
+	}
+	if s.sessionMirrored(abs) {
+		// A local runtime is writing this transcript; deleting it here would
+		// pull the file out from under the writer.
+		return "session is taken over by a local Reasonix window", http.StatusConflict
+	}
+	return "", 0
+}
+
+// destroyLegacyTranscriptLocked tears down session-scoped jobs and removes the
+// transcript with its sidecars. A teardown that outlives its grace period marks
+// the transcript for delayed cleanup instead of leaving live jobs writing beside
+// a half-removed session; the marker error is the only failure that still
+// schedules the delayed removal.
+func (s *Server) destroyLegacyTranscriptLocked(absDir, abs string) error {
+	destroy := s.ctl().BeginDestroySession(abs)
+	if result := finishSessionDestroy(destroy); result.HasTimedOut() {
+		err := agent.MarkCleanupPending(abs, "delete")
+		go delayedSessionDelete(absDir, abs, destroy)
+		return err
+	}
+	return removeSessionFiles(absDir, abs)
 }
 
 // deleteCanonicalSession deletes one canonical identity and reports whether
@@ -1696,6 +1709,16 @@ func (s *Server) deleteCanonicalSession(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "cannot delete active session", http.StatusConflict)
 		return true
 	}
+	// Resolve the frozen legacy source while the catalog row still exists: the
+	// shared index counts live targets only, so this row must be present to be
+	// recognised as the source's sole target. The source obeys the same
+	// ownership gate as a named legacy delete; a refusal stops the whole
+	// request rather than deleting the row and resurrecting the source.
+	source, hasSource, msg, status := s.migratedSourceForDeleteLocked(r.Context(), service, ref)
+	if msg != "" {
+		http.Error(w, msg, status)
+		return true
+	}
 	if err := service.Delete(r.Context(), ref); err != nil {
 		switch {
 		case errors.Is(err, session.ErrSessionNotFound):
@@ -1707,56 +1730,48 @@ func (s *Server) deleteCanonicalSession(w http.ResponseWriter, r *http.Request, 
 		}
 		return true
 	}
-	// The migration map is keyed by the canonical row; once the catalog row
-	// is gone the legacy source stops counting as migrated and would resurface
-	// in /sessions as a fresh legacy row. Remove the frozen source too.
-	s.removeMigratedLegacySource(service, sessionID)
+	if hasSource {
+		// The row is gone, so the source would resurface in /sessions as a
+		// fresh legacy row. Remove it through the legacy teardown; a failure
+		// here leaves only that pre-existing resurfacing, which is why it is
+		// reported rather than failing the delete the user asked for.
+		if err := s.destroyLegacyTranscriptLocked(filepath.Dir(source), source); err != nil {
+			slog.Warn("serve: remove migrated legacy source after canonical delete", "source", source, "err", err)
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 	return true
 }
 
-// removeMigratedLegacySource deletes the legacy transcript a canonical
-// session was migrated from, so removing the canonical row does not resurrect
-// the source in /sessions. Failures are best-effort: the canonical delete has
-// already succeeded, and a leftover source only degrades to the pre-fix
-// behavior.
-func (s *Server) removeMigratedLegacySource(service *session.Service, sessionID string) {
-	q := service.Query()
-	defer q.Close()
-	page, err := q.List(context.Background(), "", 1000)
+// migratedSourceForDeleteLocked returns the legacy transcript that ref is the
+// sole canonical target of, already validated as a deletable transcript inside
+// the session dir. A source outside the session dir (or otherwise unresolvable)
+// is left alone without blocking the canonical delete; a source that is active,
+// running detached or mirrored returns the legacy delete's refusal. Callers
+// hold bindMu.
+func (s *Server) migratedSourceForDeleteLocked(ctx context.Context, service *session.Service, ref session.SessionRef) (source string, ok bool, refusal string, status int) {
+	dir, err := service.SessionDir(ctx, ref)
 	if err != nil {
-		return
+		return "", false, "", 0
 	}
-	roots := make(map[string]struct{})
-	for _, info := range page.Sessions {
-		if path := strings.TrimSpace(info.Path); path != "" {
-			roots[filepath.Dir(filepath.Clean(path))] = struct{}{}
-		}
+	index := loadMigrationIndex(map[string]struct{}{filepath.Dir(filepath.Clean(dir)): {}}, func(targetID string) bool {
+		_, statErr := service.SessionDir(ctx, session.SessionRef{HostID: ref.HostID, SessionID: targetID})
+		return statErr == nil
+	})
+	recorded, ok := index.byTarget[ref.SessionID]
+	if !ok {
+		return "", false, "", 0
 	}
-	if source, ok := migrationSourceForTarget(roots, sessionID); ok {
-		_ = removeSessionFiles(filepath.Dir(source), source)
+	realPath, err := s.resolveSessionPath(recorded)
+	if err != nil {
+		slog.Warn("serve: migrated legacy source is not a deletable transcript; leaving it", "source", recorded, "err", err)
+		return "", false, "", 0
 	}
-}
-
-// migrationSourceForTarget reads the migration maps under roots and returns
-// the legacy source path recorded for sessionID.
-func migrationSourceForTarget(roots map[string]struct{}, sessionID string) (string, bool) {
-	for root := range roots {
-		data, err := os.ReadFile(filepath.Join(root, "migration-map.json"))
-		if err != nil {
-			continue
-		}
-		var mapping session.MigrationMapping
-		if json.Unmarshal(data, &mapping) != nil || mapping.SchemaVersion != session.SchemaVersion {
-			continue
-		}
-		for _, entry := range mapping.Entries {
-			if entry.TargetID == sessionID {
-				return entry.SourcePath, true
-			}
-		}
+	abs := filepath.Clean(realPath)
+	if msg, code := s.legacyTranscriptDeleteRefusalLocked(abs); msg != "" {
+		return "", false, msg, code
 	}
-	return "", false
+	return abs, true, "", 0
 }
 
 func (s *Server) canonicalSessionIsCurrent(sessionID string) bool {
