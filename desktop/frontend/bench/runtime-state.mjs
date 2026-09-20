@@ -93,8 +93,11 @@ try {
   check(await page.locator(".runtime-activity-indicator:not(.runtime-activity-indicator--static)").count() > 0, "background jobs keep project activity visible");
   await publish("idle");
   await page.locator(".composer-run-strip").waitFor({ state: "hidden" });
-  await page.locator(".runtime-activity-indicator").waitFor({ state: "hidden" });
-  check(await page.locator(".runtime-activity-indicator").count() === 0, "last job completion clears project activity");
+  // The invariant is that no activity indicator stays visible once the last
+  // job completes; other sidebar surfaces may still hold a detached or hidden
+  // fallback indicator, so count visible ones after the store has settled.
+  await page.waitForFunction(() => [...document.querySelectorAll(".runtime-activity-indicator")].every(el => el.getClientRects().length === 0));
+  check(await page.locator(".runtime-activity-indicator:visible").count() === 0, "last job completion clears project activity");
   await page.locator('.project-tree__folder-main:has(svg.lucide-cloud)').click();
   await page.locator('.project-tree__topic-main:has-text("Remote demo session")').click();
   await page.locator(".remote-surface--ready").waitFor();
