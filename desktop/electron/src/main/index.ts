@@ -453,7 +453,7 @@ function bootstrap(dataHome: string): void {
           ? `, path identity v${hello.instance.identityVersion} ${hello.instance.identityDigest}`
           : ", legacy path identity";
         log.info(
-          `desktop service ready: generation=${hello.runtimeGeneration} pid=${hello.service.pid} version=${hello.service.version} channel=${hello.service.channel || "unknown"} commit=${hello.service.commit || "unknown"}${identityLog}`,
+          `desktop service ready: generation ${hello.runtimeGeneration}, pid ${hello.service.pid}, version=${hello.service.version} channel=${hello.service.channel || "unknown"} commit=${hello.service.commit || "unknown"}${identityLog}`,
         );
         try {
           await zoomStore.load();
