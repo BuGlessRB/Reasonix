@@ -457,7 +457,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
                 gitBranch: workspaceContextProject && !activeTab?.remote ? state.meta?.gitBranch : undefined,
                 tabId: activeTabId,
                 scopeKey: session.workspaceScopeKey,
-                remote: Boolean(workspaceContextTab?.remote),
+                remote: Boolean(activeTab?.remote),
                 onSwitchWorkspace: navigation.projectTopicCommands.onAddProject,
                 onWorkWithoutProject: () => navigationCommands.openBlankSession("global", ""),
                 onRefreshProjects: navigation.projectTopicCommands.refreshProjectsAndTabs,
