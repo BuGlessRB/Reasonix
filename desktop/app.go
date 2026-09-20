@@ -3431,6 +3431,7 @@ func (a *App) onSessionTitleChanged(dir, sessionPath, _ string) error {
 	if err := syncSessionTitleFromBranchMeta(dir, validated); err != nil {
 		return err
 	}
+	a.projectLegacySessionTitleToTabs(validated)
 	a.requestSessionCatalogPath("", "", validated)
 	a.invalidatePromptHistoryCache()
 	a.emitProjectTreeChangedForSessionDirs(dir)

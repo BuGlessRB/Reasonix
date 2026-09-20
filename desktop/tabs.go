@@ -3567,6 +3567,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	tabWorkspaceRoot := tab.WorkspaceRoot
 	tabScope := tab.Scope
 	tabTopicID := tab.TopicID
+	tabSeedTitle := canonicalSeedTitle(tab.TopicTitle, tab.topicTitleSource)
 	tabSessionPath := tab.SessionPath
 	tabSessionID := tab.SessionID
 	tabModel := tab.model
@@ -3777,12 +3778,9 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	restoredRuntime := buildRuntime
 	identity, usesExclusiveV3 := ctrl.(control.IdentityLifecycle)
 	if usesExclusiveV3 && identity.UsesExclusiveSession() {
-		ref, workspaceID, bindErr := a.bindTabCanonicalSession(
-			buildCtx, identity, cfg, tabScope, tabWorkspaceRoot, tabSessionID, startupSessionPath, model, modelFallback,
+		bound, bindErr := a.bindTabCanonicalSessionTopic(
+			buildCtx, identity, cfg, tabScope, tabWorkspaceRoot, tabSessionID, startupSessionPath, model, modelFallback, tabTopicID, tabSeedTitle,
 		)
-		if bindErr == nil {
-			bindErr = a.workspaceRegistry().EnsureSessionTopic(buildCtx, ref.SessionID, tabTopicID, "")
-		}
 		if bindErr != nil {
 			a.recordTabStartupFailure(tab, buildGeneration, appCtx, friendlySessionLoadError(bindErr))
 			ctrl.Close()
@@ -3795,11 +3793,9 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 			a.abandonSupersededBuild(tab, ctrl, rootKey, "")
 			return
 		}
-		tab.SessionID = ref.SessionID
-		tab.SessionPath = ""
-		tab.SessionWorkspace.ID = workspaceID
+		bound.applyLocked(tab)
 		a.mu.Unlock()
-		tab.replaceTelemetry(tabTelemetrySnapshot{}, sessionRuntimeKey(remoteSessionIDRoutePrefix+ref.SessionID))
+		tab.replaceTelemetry(tabTelemetrySnapshot{}, sessionRuntimeKey(remoteSessionIDRoutePrefix+bound.ref.SessionID))
 	} else if dir := ctrl.SessionDir(); dir != "" {
 		// Refresh the topic/session locals under the lock: a rebind or the
 		// recovery callback may have rewritten them since the early snapshot.

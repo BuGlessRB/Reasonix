@@ -78,12 +78,12 @@ func sessionSourceRoute(source *SessionSourceRef) string {
 
 // Session title projection is addressed by the same durable ID as its write.
 // A topic may gain another branch while an asynchronous title is generated.
-func (a *App) updateCanonicalSessionTitle(ref session.SessionRef, title string) {
+func (a *App) updateCanonicalSessionTitle(ref session.SessionRef, title, source string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, tab := range a.runtimeTabsLocked() {
 		if tab != nil && tab.SessionID == ref.SessionID {
-			tab.TopicTitle, tab.topicTitleSource = title, topicTitleSourceManual
+			tab.TopicTitle, tab.topicTitleSource = title, source
 		}
 	}
 	a.saveTabsLocked()

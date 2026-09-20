@@ -789,7 +789,6 @@ func (a *App) renameCanonicalSessionTarget(target SessionTarget, title string) e
 	if err != nil {
 		return err
 	}
-	a.updateCanonicalSessionTitle(ref, strings.TrimSpace(title))
-	a.emitProjectTreeChanged()
+	a.publishCanonicalSessionTitle(ref, title)
 	return nil
 }

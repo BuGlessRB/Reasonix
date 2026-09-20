@@ -200,9 +200,7 @@ func (a *App) aiRenameCanonicalSession(operationCtx context.Context, target Sess
 	}); err != nil {
 		return "", sessionOperationConflict(err)
 	}
-	a.updateCanonicalSessionTitle(ref, title)
-	a.invalidatePromptHistoryCache()
-	a.emitProjectTreeChanged()
+	a.publishCanonicalSessionTitle(ref, title)
 	return title, nil
 }
 
