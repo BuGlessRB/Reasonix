@@ -48,7 +48,11 @@ func (s *Server) fixedSessionExportSource(w http.ResponseWriter, r *http.Request
 
 	targetID := ""
 	addTarget := func(raw string) bool {
-		candidate := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), remoteSessionIDQueryPrefix))
+		candidate, err := canonicalSessionExportID(raw)
+		if err != nil {
+			http.Error(w, "invalid export target identity", http.StatusBadRequest)
+			return false
+		}
 		if candidate == "" {
 			return true
 		}
@@ -90,6 +94,23 @@ func (s *Server) fixedSessionExportSource(w http.ResponseWriter, r *http.Request
 		controller = nil
 	}
 	return query, ref, controller, true
+}
+
+// canonicalSessionExportID terminates HTTP taint at the storage identity
+// boundary. A remote caller selects an opaque session name; it never supplies
+// a path beneath the service-owned storage root.
+func canonicalSessionExportID(raw string) (string, error) {
+	candidate := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), remoteSessionIDQueryPrefix))
+	if candidate == "" {
+		return "", nil
+	}
+	if err := session.ValidateSessionID(candidate); err != nil {
+		return "", err
+	}
+	// filepath.Base is deliberately applied after the stricter cross-platform
+	// validator so static analysis and future persistence implementations both
+	// receive a single local path component.
+	return filepath.Base(candidate), nil
 }
 
 func (s *Server) sessionExportSnapshot(w http.ResponseWriter, r *http.Request) {

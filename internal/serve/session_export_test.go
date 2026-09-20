@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -141,7 +142,7 @@ func postFixedSessionExport(t *testing.T, serverURL, path, queryID, headerID str
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, err := http.NewRequest(http.MethodPost, serverURL+path+"?sessionId="+queryID, bytes.NewReader(encoded))
+	req, err := http.NewRequest(http.MethodPost, serverURL+path+"?sessionId="+url.QueryEscape(queryID), bytes.NewReader(encoded))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,6 +209,37 @@ func TestSessionExportRemainsPinnedAfterForegroundSwitch(t *testing.T) {
 	resp, body = postFixedSessionExport(t, ts.URL, "/session-export/document", source.SessionID, source.SessionID, map[string]any{"snapshot": snapshot, "format": "json"})
 	if resp.StatusCode != http.StatusConflict {
 		t.Fatalf("deleted source export status=%d body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestSessionExportRejectsPathLikeTargetIdentities(t *testing.T) {
+	srv, _, _, source := newExclusiveSessionServe(t)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	snapshot := captureSessionExportTestSnapshot(t, ts.URL, source, false)
+
+	for _, target := range []string{
+		"../" + source.SessionID,
+		source.SessionID + "/child",
+		`C:\\outside\\` + source.SessionID,
+		".query-cache",
+	} {
+		t.Run(target, func(t *testing.T) {
+			resp, body := postFixedSessionExport(t, ts.URL, "/session-export/document", target, "", map[string]any{
+				"snapshot": snapshot,
+				"format":   "json",
+			})
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("path-like query target status=%d body=%s", resp.StatusCode, body)
+			}
+		})
+	}
+
+	invalidSnapshot := snapshot
+	invalidSnapshot.Ref.SessionID = "../" + source.SessionID
+	resp, body := postFixedSessionExport(t, ts.URL, "/session-export/validate", "", "", invalidSnapshot)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("path-like snapshot target status=%d body=%s", resp.StatusCode, body)
 	}
 }
 
