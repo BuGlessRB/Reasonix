@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"slices"
 	"strings"
 
 	"reasonix/internal/provider"
@@ -125,9 +126,9 @@ func (a *Agent) LastCompactionSummary() string {
 	a.sess.compactionMu.Lock()
 	state := a.sess.compactionState
 	a.sess.compactionMu.Unlock()
-	for i := len(state.Projection.Messages) - 1; i >= 0; i-- {
-		if isCompactionSummary(state.Projection.Messages[i]) {
-			return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(state.Projection.Messages[i].Content, summaryTagOpen), summaryTagClose))
+	for _, message := range slices.Backward(state.Projection.Messages) {
+		if isCompactionSummary(message) {
+			return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(message.Content, summaryTagOpen), summaryTagClose))
 		}
 	}
 	return ""

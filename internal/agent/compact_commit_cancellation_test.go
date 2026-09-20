@@ -98,7 +98,7 @@ func (p *lateSummaryProvider) Stream(_ context.Context, _ provider.Request) (<-c
 func TestCancelledLateSummaryCannotCommit(t *testing.T) {
 	prov := &lateSummaryProvider{started: make(chan struct{}), release: make(chan struct{})}
 	sess := NewSession("sys")
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: strings.Repeat("question ", 300)})
 		sess.Add(provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("answer ", 300)})
 	}

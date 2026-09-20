@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"slices"
 )
 
 func maintenanceHistoryRow(op *event.SessionOperationInfo) HistoryMessage {
@@ -30,8 +31,8 @@ func upsertMaintenancePreview(rows []HistoryMessage, op *event.SessionOperationI
 		return rows
 	}
 	row := maintenanceHistoryRow(op)
-	for i := len(rows) - 1; i >= 0; i-- {
-		if rows[i].OperationID == op.OperationID {
+	for i, prior := range slices.Backward(rows) {
+		if prior.OperationID == op.OperationID {
 			rows[i] = row
 			return rows
 		}

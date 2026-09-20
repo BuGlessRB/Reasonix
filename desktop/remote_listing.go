@@ -249,7 +249,6 @@ const serveCapabilitySessionIdentityV1 = "session-identity-v1"
 const serveCapabilitySessionOwnershipV1 = "session-ownership-v1"
 const serveCapabilityGoalLifecycleV2 = servecontract.GoalLifecycleV2
 const serveCapabilitySessionForkTargetsV1 = servecontract.SessionForkTargetsV1
-const serveCapabilityMaintenanceV1 = "maintenance-v1"
 
 // serveHandshakeCapabilities exchanges the pre-shared token for the session
 // cookie and returns the serve's advertised capabilities; older serves omit
