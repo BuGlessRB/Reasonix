@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"reasonix/internal/control"
+	"reasonix/internal/session"
 )
 
 // tuiSessionReclaimedMsg tells the live TUI that the takeover mirror has
@@ -44,6 +45,9 @@ func (m *chatTUI) handleSessionReclaimed() {
 		m.releaseCanonicalRuntime(current)
 	}
 	m.sessionReclaimed = true
+	// A picker opened before the reclaim listed the yielded session as
+	// switchable; its rows and default selection are stale now.
+	m.resumePick = nil
 	m.resetComposerInput()
 	// Keep the reclaimed conversation rendered and the process alive: the
 	// notice explains the read-only state and the input gate accepts only the
@@ -52,11 +56,30 @@ func (m *chatTUI) handleSessionReclaimed() {
 	m.notice(sessionReclaimedNotice)
 }
 
+// rememberReclaimedTarget records where "/takeover takes it back" must go.
+// The yielded mirror's own key decides: a legacy path lease is re-taken
+// through the serve's path handoff even though the exclusive engine imports
+// the transcript under an identity (so SessionRef is bound for both kinds), a
+// canonical route through the identity handoff. Without a yielded mirror the
+// bound identity, then the legacy path, stand in.
 func (m *chatTUI) rememberReclaimedTarget() {
 	if m == nil || m.ctrl == nil {
 		return
 	}
+	yielded := m.takeover.yieldedBinding()
+	if yielded != nil && !yielded.canonical {
+		m.reclaimedTarget = cliResumeTarget{path: yielded.path}
+		return
+	}
 	if identity, ok := m.ctrl.(control.IdentityLifecycle); ok {
+		if yielded != nil {
+			if id, ok := cliCanonicalRouteID(yielded.path); ok {
+				if service := identity.SessionService(); service != nil {
+					m.reclaimedTarget = cliResumeTarget{ref: session.SessionRef{HostID: service.HostID(), SessionID: id}}
+					return
+				}
+			}
+		}
 		if ref, bound := identity.SessionRef(); bound {
 			m.reclaimedTarget = cliResumeTarget{ref: ref}
 			return

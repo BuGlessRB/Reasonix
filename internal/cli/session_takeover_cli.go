@@ -321,6 +321,11 @@ type cliTakeoverManager struct {
 	sendMu   sync.Mutex
 	mu       sync.Mutex
 	binding  *cliTakeoverBinding
+	// yielded is the binding the last reclaim (or Close) returned. The TUI
+	// routes "/takeover takes it back" by the mirror's own key: a legacy path
+	// lease stays a path even though the engine imports the transcript under
+	// an identity, so the controller's SessionRef cannot tell the kinds apart.
+	yielded  *cliTakeoverBinding
 	revision uint64
 	failures int
 	ctrl     control.SessionAPI
@@ -424,6 +429,7 @@ func (m *cliTakeoverManager) Activate(binding *cliTakeoverBinding) {
 	defer m.sendMu.Unlock()
 	m.mu.Lock()
 	m.binding = binding
+	m.yielded = nil
 	m.revision++
 	m.failures = 0
 	m.returned.Store(false)
@@ -467,10 +473,22 @@ func (m *cliTakeoverManager) ResumeAfterYield() {
 	defer m.returnMu.Unlock()
 	m.mu.Lock()
 	if m.binding == nil {
+		m.yielded = nil
 		m.returned.Store(false)
 		m.reclaiming.Store(false)
 	}
 	m.mu.Unlock()
+}
+
+// yieldedBinding reports the mirror a reclaim returned, until the TUI either
+// re-takes it or moves on to another session.
+func (m *cliTakeoverManager) yieldedBinding() *cliTakeoverBinding {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.yielded
 }
 
 func (m *cliTakeoverManager) snapshot() (*cliTakeoverBinding, control.SessionAPI, func(), uint64) {

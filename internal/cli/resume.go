@@ -358,11 +358,16 @@ func (m *chatTUI) runTakeoverCommand(input string) {
 		m.notice("takeover: " + err.Error())
 		return
 	}
-	if err := m.ctrl.Snapshot(); err != nil {
-		m.notice("takeover: snapshot current session: " + err.Error())
-		return
+	// A reclaimed session's runtime is already released; snapshotting it
+	// would fail and there is no lease of ours to follow.
+	detached := m.sessionDetached()
+	if !detached {
+		if err := m.ctrl.Snapshot(); err != nil {
+			m.notice("takeover: snapshot current session: " + err.Error())
+			return
+		}
+		m.followSessionLease()
 	}
-	m.followSessionLease()
 	binding, bindErr := cliAcquireFreeSession(target, m.leases, m.takeover)
 	if bindErr != nil {
 		if !cliSessionTakeoverCandidate(bindErr) {
@@ -393,12 +398,15 @@ func (m *chatTUI) runTakeoverCommand(input string) {
 		return
 	}
 	m.pendingTakeoverPath = ""
+	m.resumeAfterReclaim()
+	m.replayActiveBranch(i18n.M.ResumedTitle)
 	if m.takeover != nil && binding.grant.MirrorID != "" {
 		m.takeover.AttachController(m.ctrl)
 		m.takeover.Activate(binding)
+		m.notice("session taken over; the remote side is now read-only and can take it back")
+		return
 	}
-	m.replayActiveBranch(i18n.M.ResumedTitle)
-	m.notice("session taken over; the remote side is now read-only and can take it back")
+	m.notice("session resumed; no other runtime held it")
 }
 
 // resumeArgItems completes the index argument of "/resume <n>": once past the
