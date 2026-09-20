@@ -521,7 +521,7 @@ jobs:
             desktop/build/sourcemaps/${{ matrix.name }}
             desktop/frontend/sourcemaps
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
 
       - name: Sign artifacts (minisign)
         working-directory: desktop

@@ -9,7 +9,7 @@ import (
 
 	"reasonix/desktop/internal/legacycleanup"
 	"reasonix/desktop/internal/workspacestate"
-	"reasonix/internal/filelock"
+	filelock "reasonix/internal/identitylock"
 	"reasonix/internal/session"
 )
 

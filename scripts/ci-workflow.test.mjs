@@ -433,6 +433,7 @@ test("all desktop consumers verify the prepared build and reject a failed prepar
   assert.match(prepare, /producer_attempt: \$\{\{ steps\.artifact-identity\.outputs\.attempt \}\}/);
   assert.match(prepare, /id: artifact-identity\n\s+run: echo "attempt=\$GITHUB_RUN_ATTEMPT" >> "\$GITHUB_OUTPUT"/);
   assert.match(prepare, /stable_artifact_name: desktop-frontend-stable-\$\{\{ github\.run_id \}\}-\$\{\{ steps\.artifact-identity\.outputs\.attempt \}\}/);
+  assert.equal(prepare.match(/desktop\/frontend\/sourcemaps\/\$\{\{ github\.sha \}\}/g)?.length, 2);
 });
 
 test("browser matrix preserves five entry points and fails closed through desktop-browser", () => {

@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 
 // Exercise the real helper, restricted token, inherited child and filesystem
 // boundary together. Cross-compilation does not execute this acceptance test.
-func TestWindowsNativeShellPreflightRetainsWriteBoundary(t *testing.T) {
+func TestWindowsNativeShellRunRetainsWriteBoundary(t *testing.T) {
 	path, err := exec.LookPath("pwsh")
 	if err != nil {
 		t.Skip("PowerShell 7 required for native Windows acceptance")
@@ -41,12 +41,12 @@ func TestWindowsNativeShellPreflightRetainsWriteBoundary(t *testing.T) {
 		t.Fatal("sandbox helper unavailable")
 	}
 	res := RunForeground(context.Background(), Request{
-		Argv: prepared.Argv, ProbeArgv: WindowsProbeArgv(spec, sh, temp),
-		Dir: workspace, Env: os.Environ(), Timeout: 30 * time.Second,
+		Argv: prepared.Argv,
+		Dir:  workspace, Env: os.Environ(), Timeout: 30 * time.Second,
 		ShellKind: sh.Kind.String(), ShellPath: sh.Path,
 	})
 	if res.Err != nil {
-		t.Fatalf("native preflight/execution: %v\n%s", res.Err, res.Combined)
+		t.Fatalf("native execution: %v\n%s", res.Err, res.Combined)
 	}
 	if _, err := os.Stat(insideFile); err != nil {
 		t.Fatalf("workspace write failed: %v", err)

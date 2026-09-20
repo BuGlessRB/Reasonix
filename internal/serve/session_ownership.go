@@ -20,7 +20,6 @@ import (
 	"reasonix/internal/eventwire"
 	"reasonix/internal/provider"
 	"reasonix/internal/session"
-	"reasonix/internal/store"
 )
 
 // Session ownership handoff: the single-writer protocol behind local takeover.
@@ -256,40 +255,6 @@ func (s *Server) snapshotForeground(cur control.SessionAPI) {
 	if err := cur.Snapshot(); err != nil {
 		slog.Warn("serve: snapshot before switch", "err", err)
 	}
-}
-
-// resolveSessionPath validates a client-supplied session path against the
-// foreground session dir the same way POST /resume does: absolute, a real
-// transcript file, inside the session dir, and not pending cleanup. The
-// returned path is symlink-resolved.
-func (s *Server) resolveSessionPath(raw string) (string, error) {
-	dir := s.ctl().SessionDir()
-	if dir == "" {
-		return "", errors.New("sessions disabled")
-	}
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		return "", errors.New("invalid session dir")
-	}
-	realDir, err := filepath.EvalSymlinks(absDir)
-	if err != nil {
-		return "", errors.New("invalid session dir")
-	}
-	absPath, err := filepath.Abs(strings.TrimSpace(raw))
-	if err != nil || !store.IsSessionTranscriptName(filepath.Base(absPath)) {
-		return "", errors.New("invalid session path")
-	}
-	realPath, err := filepath.EvalSymlinks(absPath)
-	if err != nil {
-		return "", errors.New("invalid session path")
-	}
-	if realPath == realDir || !strings.HasPrefix(realPath, realDir+string(os.PathSeparator)) {
-		return "", errors.New("path outside session dir")
-	}
-	if agent.IsCleanupPending(realPath) {
-		return "", errors.New("session is pending cleanup")
-	}
-	return realPath, nil
 }
 
 type ownershipView struct {

@@ -502,11 +502,17 @@ func (a *App) MoveWorkspace(workspaceID, beforeWorkspaceID string) error {
 // browser. The existing controller creation transaction still owns prompt/model
 // seeding; this method only resolves a durable Workspace identity to that flow.
 func (a *App) CreateSession(workspaceID string) (session.SessionRef, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == workspacestate.GlobalWorkspaceID {
+		if _, err := a.ensureDesktopWorkspace(context.Background(), "global", ""); err != nil {
+			return session.SessionRef{}, err
+		}
+	}
 	state, err := a.workspaceRegistry().Load(context.Background())
 	if err != nil {
 		return session.SessionRef{}, err
 	}
-	workspace, ok := state.Workspaces[strings.TrimSpace(workspaceID)]
+	workspace, ok := state.Workspaces[workspaceID]
 	if !ok {
 		return session.SessionRef{}, workspacestate.ErrWorkspaceNotFound
 	}
@@ -783,7 +789,6 @@ func (a *App) renameCanonicalSessionTarget(target SessionTarget, title string) e
 	if err != nil {
 		return err
 	}
-	a.updateCanonicalSessionTitle(ref, strings.TrimSpace(title))
-	a.emitProjectTreeChanged()
+	a.publishCanonicalSessionTitle(ref, title)
 	return nil
 }

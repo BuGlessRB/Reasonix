@@ -9,5 +9,5 @@ func Available() bool {
 
 // Run executes argv in a native Windows sandbox.
 func Run(_ Spec, _ []string, _ RunOptions) (Result, error) {
-	return Result{}, ErrUnsupported
+	return Result{}, failureAt(FailureDependency, ErrUnsupported)
 }

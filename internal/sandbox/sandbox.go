@@ -14,8 +14,6 @@
 package sandbox
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -38,19 +36,11 @@ func RepairLegacyCredentialDeny(path string) error {
 	return repairLegacyCredentialDeny(path)
 }
 
-const windowsSandboxFailureMarkerPrefix = "__reasonix_windows_sandbox_failure__:"
-
-func WindowsSandboxFailureMarker(payload string) string {
-	sum := sha256.Sum256([]byte(payload))
-	return windowsSandboxFailureMarkerPrefix + hex.EncodeToString(sum[:])
-}
-
-func WindowsSandboxFailureMarkerFromCommand(argv []string) (string, bool) {
-	if len(argv) < 4 || argv[1] != WindowsHelperCommand || argv[2] == "" || argv[3] != "--" {
-		return "", false
-	}
-	return WindowsSandboxFailureMarker(argv[2]), true
-}
+const (
+	WindowsSandboxFailureAuthorization = "authorization"
+	WindowsSandboxFailureDependency    = "dependency"
+	WindowsSandboxFailureLaunch        = "launch"
+)
 
 // Spec describes how to confine one command. The zero value (Mode == "") does
 // not enforce, so an unconfigured caller runs commands unchanged.
@@ -114,10 +104,10 @@ type Spec struct {
 // Enforce reports whether the spec asks for confinement.
 func (s Spec) Enforce() bool { return s.Mode == "enforce" }
 
-// UnavailableMessage explains why an enforced bash sandbox cannot run and gives
+// UnavailableMessage explains why an enforced shell sandbox cannot run and gives
 // the platform-specific remediation.
 func UnavailableMessage() string {
-	return "bash sandbox requested but unavailable on this host; refusing to run unconfined. " + UnavailableRemediation()
+	return "shell sandbox requested but unavailable on this host; refusing to run unconfined. " + UnavailableRemediation()
 }
 
 // UnavailableRemediation is split out so status surfaces can append the same

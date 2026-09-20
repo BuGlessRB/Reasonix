@@ -252,11 +252,9 @@ func validateCapabilityBoundaries(writeRoots []string, tempRoot string, protecte
 			return fmt.Errorf("session temp %q overlaps protected state root %q", tempRoot, abs)
 		}
 		for _, root := range writeRoots {
-			// A capability is placed on the exact writable directory, not on its
-			// ancestors. It is therefore safe for the desktop's explicit
-			// global-workspace to live below the Reasonix state root. The reverse
-			// relationship is unsafe: granting a workspace that contains the
-			// protected root would make the protected data inherit the write ACE.
+			// Capabilities apply to exact directories, so global-workspace may live
+			// below protected state. A workspace containing protected state would
+			// make that state inherit the write ACE and remains forbidden.
 			if windowsPathWithin(abs, root) {
 				if isWindowsGlobalWorkspaceException(abs, root) {
 					continue

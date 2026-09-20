@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"reasonix/internal/config"
-	"reasonix/internal/filelock"
 	"reasonix/internal/fileutil"
+	filelock "reasonix/internal/identitylock"
 	"reasonix/internal/session"
 )
 
@@ -29,10 +29,10 @@ const (
 	pendingCrashFile     = "crash-pending.json" // legacy single-report path
 	pendingCrashQueueDir = "crash-pending"
 	maxPendingCrashes    = 10
-	currentCrashSchema   = 3
+	currentCrashSchema   = 4
 	crashLedgerFile      = "crash-upload-ledger-v1.json"
 	maxCrashLedger       = 512
-	crashLedgerRetention = 180 * 24 * time.Hour
+	crashLedgerRetention = 90 * 24 * time.Hour
 )
 
 var (
@@ -56,15 +56,36 @@ func (a *App) recoverToPending(site string) {
 	if r == nil {
 		return
 	}
-	writePendingCrash(site, r, debug.Stack())
+	writePendingCrashWithDiagnostics(site, r, debug.Stack(), a.currentCrashDiagnostics("confirmed", "crash"))
 	panic(r)
 }
 
 func writePendingCrash(site string, r any, stack []byte) {
+	writePendingCrashWithDiagnostics(site, r, stack, nil)
+}
+
+func (a *App) currentCrashDiagnostics(evidence, category string) *crashDiagnostics {
+	diagnostic := &crashDiagnostics{
+		SubjectVersion: version, SubjectBuildCommit: buildCommit(), SubjectChannel: channel,
+		ObserverVersion: version, ObserverBuildCommit: buildCommit(), ProcessRole: "service",
+		ObservedAt: time.Now().UTC().Format(time.RFC3339Nano), Evidence: evidence, Category: category,
+	}
+	if a != nil && a.lifecycle.tracker != nil {
+		a.lifecycle.tracker.mu.Lock()
+		diagnostic.RunID = a.lifecycle.tracker.state.RunID
+		diagnostic.IncidentID = a.lifecycle.tracker.state.IncidentID
+		diagnostic.LastPhase = a.lifecycle.tracker.state.Phase
+		diagnostic.LastPhaseAt = a.lifecycle.tracker.state.UpdatedAt
+		a.lifecycle.tracker.mu.Unlock()
+	}
+	return diagnostic
+}
+
+func writePendingCrashWithDiagnostics(site string, r any, stack []byte, diagnostics *crashDiagnostics) {
 	stackText := string(stack)
 	msg := sanitizeCrashText(fmt.Sprintf("[go panic] %s\n\n%s", site, stackText), maxCrashDetailBytes)
 	report := baseCrashReport("crash")
-	report.SchemaVersion = 2
+	report.SchemaVersion = currentCrashSchema
 	report.Source = "go"
 	report.Label = sanitizeCrashField(site, 64)
 	report.ErrorType = sanitizeCrashField(fmt.Sprintf("%T", r), 128)
@@ -72,6 +93,7 @@ func writePendingCrash(site string, r any, stack []byte) {
 	report.Stack = sanitizeCrashText(stackText, maxCrashStackBytes)
 	report.TopFrame = topFrameFromStack(report.Stack)
 	report.Message = msg
+	report.Diagnostics = diagnostics
 	if writePendingReport(report, true) {
 		markFatalCrashCovered()
 	}
@@ -165,7 +187,7 @@ func crashLedgerPath() string {
 }
 
 func crashLedgerKey(report crashReport) string {
-	return report.Version + ":" + report.DedupKey
+	return report.EventID
 }
 
 func loadCrashLedger(path string, now time.Time) crashUploadLedger {

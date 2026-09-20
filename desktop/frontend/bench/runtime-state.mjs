@@ -89,9 +89,11 @@ try {
   check(calls.length === 1 && queries.length === 1 && calls[0].at(-1) === queries[0].at(-1), "retry only queries the original durable idempotency key");
   await publish("idle", { backgroundJobs: 2 });
   await page.locator(".composer-run-strip").filter({ hasText: /2/ }).waitFor();
+  await page.locator(".runtime-activity-indicator:not(.runtime-activity-indicator--static)").first().waitFor();
   check(await page.locator(".runtime-activity-indicator:not(.runtime-activity-indicator--static)").count() > 0, "background jobs keep project activity visible");
   await publish("idle");
   await page.locator(".composer-run-strip").waitFor({ state: "hidden" });
+  await page.locator(".runtime-activity-indicator").waitFor({ state: "hidden" });
   check(await page.locator(".runtime-activity-indicator").count() === 0, "last job completion clears project activity");
   await page.locator('.project-tree__folder-main:has(svg.lucide-cloud)').click();
   await page.locator('.project-tree__topic-main:has-text("Remote demo session")').click();

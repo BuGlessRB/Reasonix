@@ -170,8 +170,14 @@ func TestLegacyMigrationTranscriptFailurePreservesSourceAndContinues(t *testing.
 				app.closeSessionServices()
 			}
 			NewApp().flushPendingCrash()
-			if len(uploaded) != 1 || uploaded[0].Source != "desktop.session_migration" || len(pendingCrashPaths()) != 0 {
-				t.Fatalf("diagnostic delivery did not use the crash endpoint once: uploaded=%+v pending=%v", uploaded, pendingCrashPaths())
+			if len(uploaded) != 2 || uploaded[0].Source != "desktop.session_migration" || uploaded[1].Source != "desktop.session_migration" || len(pendingCrashPaths()) != 0 {
+				t.Fatalf("diagnostic delivery did not preserve both startup failures: uploaded=%+v pending=%v", uploaded, pendingCrashPaths())
+			}
+			if uploaded[0].EventID == "" || uploaded[0].EventID == uploaded[1].EventID {
+				t.Fatalf("separate startup failures reused an event identity: uploaded=%+v", uploaded)
+			}
+			if uploaded[0].DedupKey == "" || uploaded[0].DedupKey != uploaded[1].DedupKey {
+				t.Fatalf("equivalent startup failures lost their correlation key: uploaded=%+v", uploaded)
 			}
 		})
 	}

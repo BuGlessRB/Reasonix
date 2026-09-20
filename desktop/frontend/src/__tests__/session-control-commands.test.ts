@@ -31,12 +31,16 @@ const calls: string[] = [], errors: string[] = [];
 let finish: ((value: boolean) => void) | undefined;
 let started: (() => void) | undefined;
 let delayed = false;
+let cancelError: string | undefined;
 let commands!: ReturnType<typeof useSessionControlCommands>;
 function Probe({ visible = a, resources = [a, b] }: { visible?: SessionResource; resources?: SessionResource[] }) {
   const operations = useSessionOperations({ visible, resources });
   commands = useSessionControlCommands({ activeTabId: visible.tabId, resources, operations,
     showToast: message => errors.push(message), clearWorkspaceConflict() {}, ports: {
-      cancel: async () => ({ discardedItemIds: [] }), cancelForTab: async () => ({ discardedItemIds: [] }),
+      cancel: async () => ({ discardedItemIds: [] }), cancelForTab: async tab => {
+        calls.push(`stop:${tab}`);
+        return { discardedItemIds: [], error: cancelError };
+      },
       acceptDelivery: async () => {}, disconnectRemote: async () => {},
       cancelJobForTab: async (tab, job) => {
         calls.push(`${tab}:${job}`);
@@ -59,6 +63,17 @@ try {
   assert.deepEqual(calls.slice(1), ["A:active", "refresh"]);
   assert.equal(await retained("missing", "gone"), false);
   assert.equal(calls.length, 3, "removed resources never reach the bridge");
+
+  cancelError = "cancellation transport failed";
+  await assert.rejects(commands.handleStopActive(), /cancellation transport failed/,
+    "decision Stop rejects the controller's failure receipt so its lock can recover");
+  assert.equal(calls[calls.length - 1], "stop:A");
+  cancelError = undefined;
+  const stop = commands.handleStopActive();
+  await paint([a, b], b);
+  await stop;
+  assert.equal(calls[calls.length - 1], "stop:A", "Stop captures its source before a navigation commit");
+  await paint();
 
   delayed = true;
   let entered = new Promise<void>(resolve => { started = resolve; });
