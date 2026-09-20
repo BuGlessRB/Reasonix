@@ -513,7 +513,6 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.shuttingDown.Store(false)
 	a.initializeDesktopSessionRoot()
-	a.registerLegacyCleanupUpgradeBatch()
 	// Only the process that claimed the pre-shell diagnostics lock consumes
 	// lifecycle evidence.
 	initializeLifecycleDiagnostics(a)

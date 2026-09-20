@@ -238,9 +238,24 @@ func (a *App) attachDesktopSession(ctx context.Context, scope, workspaceRoot str
 	}
 	if runtime, ok := a.desktopSessionService("").Runtime(ref); ok {
 		if source := runtime.Session().Manifest().Source; source != nil && source.Path != "" {
-			if fingerprint, err := desktopSourceFingerprint(source.Path); err == nil {
-				if err := a.recordDesktopSource(ctx, source.Path, "legacy", fingerprint, ref.SessionID, workspaceID); err != nil {
-					return "", err
+			// Adoption is durable; opening a tab must not re-hash a refreshed
+			// source. The import path owns source validation and registry writes.
+			state, stateErr := a.workspaceRegistry().Load(ctx)
+			adopted := false
+			if stateErr == nil {
+				for _, mapping := range state.SourceMappings {
+					if mapping.SessionID == ref.SessionID && mapping.WorkspaceID == workspaceID &&
+						sessionRuntimeKey(mapping.Path) == sessionRuntimeKey(source.Path) {
+						adopted = true
+						break
+					}
+				}
+			}
+			if !adopted {
+				if fingerprint, err := desktopSourceFingerprint(source.Path); err == nil {
+					if err := a.recordDesktopSource(ctx, source.Path, "legacy", fingerprint, ref.SessionID, workspaceID); err != nil {
+						return "", err
+					}
 				}
 			}
 		}

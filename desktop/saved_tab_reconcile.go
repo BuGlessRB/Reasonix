@@ -155,7 +155,7 @@ func filterReconciledSavedTabs(tabs []desktopTabEntry, decisions []savedTabRecon
 		if decision.outcome == dropStalePresentation || decision.outcome == archiveEmptyThenDrop {
 			removed[entry.ID] = true
 		} else {
-			if decision.identityKind != "" && (decision.outcome == preserveError || decision.outcome == preserveRecovery) {
+			if (entry.SessionPath != "" || entry.SessionID != "") && (decision.outcome == preserveError || decision.outcome == preserveRecovery) {
 				entry.restoreBlocked = true
 				entry.restoreBlockReason = decision.reason
 			}

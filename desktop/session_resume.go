@@ -23,6 +23,14 @@ func (a *App) continueLegacySessionForTranscript(tab *WorkspaceTab, ctrl control
 	if err := context.Cause(navigationCtx); err != nil {
 		return HistoryPage{}, err
 	}
+	if _, adopted, err := a.legacyCanonicalRef(navigationCtx, sourcePath); err != nil {
+		return HistoryPage{}, err
+	} else if !adopted {
+		// Explicit navigation imports before taking any controller swap gate.
+		if _, err := a.ImportHistoricalSession(desktopSourceKey(sourcePath, "")); err != nil {
+			return HistoryPage{}, err
+		}
+	}
 
 	a.runtimeRebuildMu.Lock()
 	defer a.runtimeRebuildMu.Unlock()

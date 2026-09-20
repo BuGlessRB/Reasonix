@@ -3016,6 +3016,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "ControlHistoricalImport",
+      "owner": "App.ControlHistoricalImport",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalImportStatus"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "action"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.ControlHistoricalImport"
+      },
+      "sources": [
+        "desktop/historical_import.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/session_workspace_api.go",
       "name": "CopySessionTarget",
       "owner": "App.CopySessionTarget",
@@ -5103,6 +5129,25 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "GetHistoricalImportStatus",
+      "owner": "App.GetHistoricalImportStatus",
+      "params": [],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalImportStatus"
+      },
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.GetHistoricalImportStatus"
+      },
+      "sources": [
+        "desktop/historical_import.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/history_catalog.go",
       "name": "GetHistoryIndexStatus",
       "owner": "App.GetHistoryIndexStatus",
@@ -6324,6 +6369,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "ImportHistoricalSession",
+      "owner": "App.ImportHistoricalSession",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionRestoreResult"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "id"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.ImportHistoricalSession"
+      },
+      "sources": [
+        "desktop/historical_import.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/theme_app.go",
       "name": "ImportThemePack",
       "owner": "App.ImportThemePack",
@@ -6798,6 +6869,26 @@
       },
       "sources": [
         "desktop/session_draft.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "ListHistoricalSessions",
+      "owner": "App.ListHistoricalSessions",
+      "params": [],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalImportStatus"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.ListHistoricalSessions"
+      },
+      "sources": [
+        "desktop/historical_import.go"
       ]
     },
     {
@@ -17946,6 +18037,35 @@
       },
       "sources": [
         "desktop/bot_connection_app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "StartHistoricalImport",
+      "owner": "App.StartHistoricalImport",
+      "params": [
+        {
+          "elem": {
+            "kind": "string"
+          },
+          "kind": "array"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalImportStatus"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "ids"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.StartHistoricalImport"
+      },
+      "sources": [
+        "desktop/historical_import.go"
       ]
     },
     {
@@ -29422,6 +29542,84 @@
           "type": {
             "elem": {
               "kind": "boolean"
+            },
+            "kind": "nullable"
+          }
+        }
+      ]
+    },
+    "main.HistoricalImportStatus": {
+      "fields": [
+        {
+          "name": "items",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.HistoricalSessionView"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "running",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "paused",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "remaining",
+          "type": {
+            "kind": "integer"
+          }
+        }
+      ]
+    },
+    "main.HistoricalSessionView": {
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "title",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "format",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "status",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "errorCode",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "session",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "session.SessionRef"
             },
             "kind": "nullable"
           }

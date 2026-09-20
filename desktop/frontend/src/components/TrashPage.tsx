@@ -5,6 +5,7 @@ import { useT } from "../lib/i18n";
 import { ManagementPageShell } from "./ManagementPageShell";
 import { ArchivedSessionsList } from "./ArchivedSessionsList";
 import { HistoricalRecoveryList } from "./HistoricalRecoveryList";
+import { HistoricalImportList } from "./HistoricalImportList";
 import "./TrashPage.css";
 
 export function TrashPage({ active, onBack, list, restore, purge, onOpenSession }: {
@@ -27,7 +28,10 @@ export function TrashPage({ active, onBack, list, restore, purge, onOpenSession 
       </button>
     </div>
     <div className="trash-center__body">
-      <div hidden={!historical}><HistoricalRecoveryList active={active && historical} onOpenSession={onOpenSession} /></div>
+      <div hidden={!historical}>
+        <HistoricalImportList active={active && historical} onOpenSession={onOpenSession} />
+        <details><summary>{t("history.recoveryReview")}</summary><HistoricalRecoveryList active={active && historical} onOpenSession={onOpenSession} /></details>
+      </div>
       <div hidden={historical}><ArchivedSessionsList active={active && !historical} onOpenSession={onOpenSession} legacyList={list} legacyRestore={restore} legacyPurge={purge} /></div>
     </div>
   </ManagementPageShell>;

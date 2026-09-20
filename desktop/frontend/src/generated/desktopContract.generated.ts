@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:712d91ecf80057290bb444076a15538f2f2688ac7128cb720dd33cda7cb871fc";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:ecbd3df073d96a93c1e683018a5beee9322c553e6e1a93ab33b9e86e3cb37795";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -118,6 +118,7 @@ export const DESKTOP_COMMANDS = [
   "ConnectRemoteHost",
   "ContextPanel",
   "ContextUsageForTab",
+  "ControlHistoricalImport",
   "CopySessionTarget",
   "CopyThemePack",
   "CreateBlankProject",
@@ -192,6 +193,7 @@ export const DESKTOP_COMMANDS = [
   "GetDesktopZoomFactor",
   "GetDraftContext",
   "GetDraftSubmission",
+  "GetHistoricalImportStatus",
   "GetHistoryIndexStatus",
   "GetHistorySearchContext",
   "GetLegacyEmptySessionCleanupStatus",
@@ -241,6 +243,7 @@ export const DESKTOP_COMMANDS = [
   "HistorySliceForTab",
   "HistorySliceForTarget",
   "HooksSettings",
+  "ImportHistoricalSession",
   "ImportThemePack",
   "InboxHasItems",
   "InboxSnapshot",
@@ -258,6 +261,7 @@ export const DESKTOP_COMMANDS = [
   "ListDir",
   "ListDirForTab",
   "ListDirForTarget",
+  "ListHistoricalSessions",
   "ListHistorySessions",
   "ListProjectGroups",
   "ListProjectTopics",
@@ -671,6 +675,7 @@ export const DESKTOP_COMMANDS = [
   "StageImageForTab",
   "StageImageForTarget",
   "StartBotConnectionInstall",
+  "StartHistoricalImport",
   "StartTopicActivation",
   "StartTurnForAttachmentTarget",
   "StartTurnForTab",
@@ -2426,6 +2431,22 @@ export interface HeartbeatTask {
   timeWindowStart?: string;
   timeWindowEnd?: string;
   notifyChannels?: boolean | null;
+}
+
+export interface HistoricalImportStatus {
+  items: HistoricalSessionView[];
+  running: boolean;
+  paused: boolean;
+  remaining: number;
+}
+
+export interface HistoricalSessionView {
+  id: string;
+  title: string;
+  format: string;
+  status: string;
+  errorCode?: string;
+  session?: SessionRef | null;
 }
 
 export interface HistoryContentChunk {
@@ -5647,6 +5668,7 @@ export interface GeneratedDesktopCommands {
   ConnectRemoteHost(arg0: string): Promise<void>;
   ContextPanel(arg0: string): Promise<ContextPanelInfo>;
   ContextUsageForTab(arg0: string): Promise<ContextInfo>;
+  ControlHistoricalImport(arg0: string): Promise<HistoricalImportStatus>;
   CopySessionTarget(arg0: SessionSelector, arg1: string): Promise<SessionCreationResult>;
   CopyThemePack(arg0: string, arg1: string, arg2: string): Promise<ThemePackView>;
   CreateBlankProject(arg0: string, arg1: string): Promise<string>;
@@ -5721,6 +5743,7 @@ export interface GeneratedDesktopCommands {
   GetDesktopZoomFactor(): Promise<number>;
   GetDraftContext(arg0: string): Promise<SessionDraftContextView>;
   GetDraftSubmission(arg0: string): Promise<SessionDraftSubmissionView>;
+  GetHistoricalImportStatus(): Promise<HistoricalImportStatus>;
   GetHistoryIndexStatus(): Promise<historycatalog_Status>;
   GetHistorySearchContext(arg0: HistorySearchContextRequest): Promise<HistorySearchContextLine[]>;
   GetLegacyEmptySessionCleanupStatus(): Promise<LegacyEmptySessionCleanupStatus>;
@@ -5770,6 +5793,7 @@ export interface GeneratedDesktopCommands {
   HistorySliceForTab(arg0: string, arg1: HistorySliceRequest): Promise<HistorySlice>;
   HistorySliceForTarget(arg0: SessionSelector, arg1: HistorySliceRequest): Promise<HistorySlice>;
   HooksSettings(arg0: string): Promise<HooksSettingsView>;
+  ImportHistoricalSession(arg0: string): Promise<SessionRestoreResult>;
   ImportThemePack(arg0: string, arg1: boolean): Promise<ThemeImportResult>;
   InboxHasItems(arg0: string): Promise<boolean>;
   InboxSnapshot(arg0: string): Promise<InboxSnapshotView>;
@@ -5787,6 +5811,7 @@ export interface GeneratedDesktopCommands {
   ListDir(arg0: string): Promise<DirEntry[]>;
   ListDirForTab(arg0: string, arg1: string): Promise<DirEntry[]>;
   ListDirForTarget(arg0: ComposerTarget, arg1: string): Promise<DirEntry[]>;
+  ListHistoricalSessions(): Promise<HistoricalImportStatus>;
   ListHistorySessions(arg0: HistorySessionPageRequest): Promise<HistorySessionPage>;
   ListProjectGroups(arg0: string, arg1: string): Promise<desktopGroup[]>;
   ListProjectTopics(arg0: ProjectTopicPageRequest): Promise<ProjectTopicPage>;
@@ -6200,6 +6225,7 @@ export interface GeneratedDesktopCommands {
   StageImageForTab(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string): Promise<DraftImageView>;
   StageImageForTarget(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string): Promise<DraftImageView>;
   StartBotConnectionInstall(arg0: string, arg1: string): Promise<BotInstallStartResult>;
+  StartHistoricalImport(arg0: string[]): Promise<HistoricalImportStatus>;
   StartTopicActivation(arg0: TopicActivationRequest): Promise<TopicActivationTicket>;
   StartTurnForAttachmentTarget(arg0: string, arg1: string, arg2: SubmissionRequest): Promise<TurnStartView>;
   StartTurnForTab(arg0: string, arg1: string, arg2: string): Promise<TurnStartView>;

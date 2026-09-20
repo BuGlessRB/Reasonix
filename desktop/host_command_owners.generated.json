@@ -1626,6 +1626,20 @@
       ]
     }
   },
+  "ControlHistoricalImport": {
+    "domain": "desktop/historical_import.go",
+    "owner": "App.ControlHistoricalImport",
+    "sources": [
+      "desktop/historical_import.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ControlHistoricalImport",
+      "inputs": [
+        "action"
+      ]
+    }
+  },
   "CopySessionTarget": {
     "domain": "desktop/session_workspace_api.go",
     "owner": "App.CopySessionTarget",
@@ -2704,6 +2718,18 @@
       ]
     }
   },
+  "GetHistoricalImportStatus": {
+    "domain": "desktop/historical_import.go",
+    "owner": "App.GetHistoricalImportStatus",
+    "sources": [
+      "desktop/historical_import.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.GetHistoricalImportStatus",
+      "inputs": []
+    }
+  },
   "GetHistoryIndexStatus": {
     "domain": "desktop/history_catalog.go",
     "owner": "App.GetHistoryIndexStatus",
@@ -3369,6 +3395,20 @@
       ]
     }
   },
+  "ImportHistoricalSession": {
+    "domain": "desktop/historical_import.go",
+    "owner": "App.ImportHistoricalSession",
+    "sources": [
+      "desktop/historical_import.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ImportHistoricalSession",
+      "inputs": [
+        "id"
+      ]
+    }
+  },
   "ImportThemePack": {
     "domain": "desktop/theme_app.go",
     "owner": "App.ImportThemePack",
@@ -3610,6 +3650,18 @@
         "target",
         "rel"
       ]
+    }
+  },
+  "ListHistoricalSessions": {
+    "domain": "desktop/historical_import.go",
+    "owner": "App.ListHistoricalSessions",
+    "sources": [
+      "desktop/historical_import.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.ListHistoricalSessions",
+      "inputs": []
     }
   },
   "ListHistorySessions": {
@@ -9632,6 +9684,20 @@
       "inputs": [
         "provider",
         "domain"
+      ]
+    }
+  },
+  "StartHistoricalImport": {
+    "domain": "desktop/historical_import.go",
+    "owner": "App.StartHistoricalImport",
+    "sources": [
+      "desktop/historical_import.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.StartHistoricalImport",
+      "inputs": [
+        "ids"
       ]
     }
   },
