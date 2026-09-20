@@ -37121,6 +37121,13 @@
           }
         },
         {
+          "name": "modelSource",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "effort",
           "optional": true,
           "type": {

@@ -391,7 +391,7 @@ export function buildComposerSurface(input: ComposerSurfaceInput): DecisionFoote
       onEditGoal: (goal) => draftController.updateSettingsFor(draft.draft.id, draft.generation, { goal, collaborationMode: goal ? "goal" : "normal" }),
       onPauseGoal: () => {},
       onResumeGoal: () => {},
-      onSwitchModel: (model) => { draftController.updateSettingsFor(draft.draft.id, draft.generation, { model }); return true; },
+      onSwitchModel: (model) => { draftController.updateSettingsFor(draft.draft.id, draft.generation, { model, modelSource: "explicit" }); return true; },
       onSetEffort: (effort) => draftController.updateSettingsFor(draft.draft.id, draft.generation, { effort }),
       effort: {
         supported: true,

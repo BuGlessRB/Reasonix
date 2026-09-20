@@ -468,6 +468,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // measured 2064923 B payload keeps the existing gzip, CSS, and chunk limits.
 // Approval outcome recovery measures 2065149 B on current main-v2, versus the
 // 2015.6 KiB base. Retain 0.15 KiB headroom; all other limits stay unchanged.
-const rawInitialBudgetKiB = 2_016.9;
+// Live-default draft fencing and frozen-model recovery measure 2066040 B
+// (2017.617 KiB). Retain 0.183 KiB; gzip, chunk, CSS, and locale gates stay fixed.
+const rawInitialBudgetKiB = 2_017.8;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

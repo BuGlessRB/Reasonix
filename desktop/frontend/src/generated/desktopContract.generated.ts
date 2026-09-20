@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:712d91ecf80057290bb444076a15538f2f2688ac7128cb720dd33cda7cb871fc";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:f401cd62401c1793f747c5083f8c571b9c76c3f7aa88a10b6397528e32a40416";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3876,6 +3876,7 @@ export interface SessionDraftSaveResult {
 
 export interface SessionDraftSettings {
   model: string;
+  modelSource?: string;
   effort?: string;
   qualityFloor?: string;
   mode: string;
