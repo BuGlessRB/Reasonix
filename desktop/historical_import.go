@@ -173,6 +173,9 @@ func scanHistoricalRoot(ctx context.Context, source desktopMigrationSource, form
 			continue
 		}
 		path := filepath.Join(source.root, entry.Name())
+		if format == "canonical" && !hasHistoricalSessionArtifacts(path) {
+			continue
+		}
 		if format == "legacy" && addIndexedHistoricalHeads(path, source, add) {
 			continue
 		}

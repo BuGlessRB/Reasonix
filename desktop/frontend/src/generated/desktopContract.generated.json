@@ -32357,6 +32357,17 @@
           }
         },
         {
+          "name": "historicalSource",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionSourceRef"
+            },
+            "kind": "nullable"
+          }
+        },
+        {
           "name": "eventChannel",
           "type": {
             "kind": "string"
@@ -40359,6 +40370,17 @@
           "optional": true,
           "type": {
             "kind": "string"
+          }
+        },
+        {
+          "name": "historicalSource",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionSourceRef"
+            },
+            "kind": "nullable"
           }
         },
         {

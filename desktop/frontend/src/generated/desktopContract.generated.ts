@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:ce2602a15744172d13314169afaa42c75f804d3646cbf67b03a22e8b40fd7b9e";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:bd3ca289b0444e33be634816036c2a8debcdb8ae5f87262a82eff6a1796bb448";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -2970,6 +2970,7 @@ export interface Meta {
   ready: boolean;
   runtime: SessionRuntimeView;
   startupErr?: string;
+  historicalSource?: SessionSourceRef | null;
   eventChannel: string;
   sessionPath?: string;
   sessionId?: string;
@@ -4431,6 +4432,7 @@ export interface TabMeta {
   versionState?: string;
   parentVersionId?: string;
   startupErr?: string;
+  historicalSource?: SessionSourceRef | null;
   authentication?: AuthenticationState | null;
   modelSettingsPending?: boolean;
   active: boolean;

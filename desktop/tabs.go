@@ -100,6 +100,7 @@ type WorkspaceTab struct {
 	Label                    string                     // model label (for the tab badge)
 	Ready                    bool                       // true once boot.Build completes
 	StartupErr               string                     // build error, surfaced to the frontend
+	HistoricalSource         *SessionSourceRef          // immutable, pending explicit preparation after restore
 	StartupErrLeaseHeld      bool                       // true when StartupErr can be retried after a session lease releases
 	modelApplication         tabModelApplicationState   // guarded by App.mu; never persisted
 	runtimeID                string                     // process-local SessionRuntime registry identity
@@ -613,6 +614,7 @@ func setTabSessionIdentity(tab *WorkspaceTab, identity string) {
 	if tab == nil {
 		return
 	}
+	tab.HistoricalSource = nil
 	locator := classifySessionLocator(identity)
 	if locator.kind == sessionLocatorCanonical {
 		tab.SessionID = locator.ref.SessionID
@@ -2158,6 +2160,7 @@ func (a *App) tabMeta(tab *WorkspaceTab, active bool) TabMeta {
 		Goal:              currentTabGoal(tab),
 		GoalStatus:        currentTabGoalStatus(tab),
 		StartupErr:        tab.StartupErr,
+		HistoricalSource:  tab.HistoricalSource,
 		Active:            active,
 		Cwd:               tab.WorkspaceRoot,
 		IsolatedWorktree:  floor.isolated,

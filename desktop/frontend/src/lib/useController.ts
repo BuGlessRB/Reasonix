@@ -727,6 +727,8 @@ export function sameMeta(a?: Meta, b?: Meta): boolean {
     a.runtime?.issue?.holderHost === b.runtime?.issue?.holderHost &&
     a.runtime?.issue?.acquiredAt === b.runtime?.issue?.acquiredAt &&
     a.startupErr === b.startupErr &&
+    a.historicalSource?.path === b.historicalSource?.path &&
+    a.historicalSource?.headId === b.historicalSource?.headId &&
     a.eventChannel === b.eventChannel &&
     a.cwd === b.cwd &&
     a.workspaceRoot === b.workspaceRoot &&

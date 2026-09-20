@@ -209,6 +209,15 @@ export function HistoricalSessionBanners({ tab, navigate, captureNavigation }: H
       {!waiting && preparation.retryable && <button type="button" className="btn btn--small" onClick={() => void navigate({ kind: "resume-session", session: preparation.session })}>{t("common.retry")}</button>}
     </div>;
   }
+  if (tab?.historicalSource) return <div className="banner banner--warning banner--actionable" role="status">
+    <span className="banner__msg">{tab.topicTitle || m("historicalTitle")} · {m("historicalAvailable")}</span>
+    <span className="banner__hint">{m("historicalImportDescription")}</span>
+    <span className="banner__spacer" />
+    <button id="reasonix-prepare-restored-session" type="button" className="btn btn--small" onClick={() => void navigate({ kind: "resume-session", session: {
+      source: tab.historicalSource, path: tab.historicalSource!.path, scope: tab.scope, workspaceRoot: tab.workspaceRoot,
+      topicId: tab.topicId, title: tab.topicTitle, preview: "", turns: 0, turnsState: "unknown", createdAt: 0, lastActivityAt: 0, modTime: 0, current: true, open: true,
+    } })}>{m("historicalImportOpen")}</button>
+  </div>;
   if (!update) return null;
   return <div className="banner banner--warning banner--actionable" role="status">
     <span className="banner__msg">{m("historicalTitle")} · {m("historicalAvailable")}</span>

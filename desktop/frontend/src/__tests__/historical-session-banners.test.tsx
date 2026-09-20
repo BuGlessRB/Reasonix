@@ -66,6 +66,15 @@ navigationEpoch++;
 await act(async () => branch!.resolve({ operationId: "version-v2", sourceKey: "legacy", status: "ready", revision: 7,
   target: { hostId: "local", sessionId: "stale-branch" }, retryable: false }));
 assert.deepEqual(opened, ["branch-v2"], "pending navigation invalidates a branch open even while the old tab is retained");
+const pendingIntents: unknown[] = [];
+await act(async () => root.render(<LocaleProvider><HistoricalSessionBanners
+  tab={{ ...baseProps.tab, sessionId: undefined, ready: false, historicalSource: source }}
+  navigate={async intent => { pendingIntents.push(intent); }}
+/></LocaleProvider>));
+assert.deepEqual(pendingIntents, [], "restoring a legacy tab never starts preparation automatically");
+await act(async () => document.getElementById("reasonix-prepare-restored-session")!.click());
+assert.equal(pendingIntents.length, 1);
+assert.equal((pendingIntents[0] as { kind: string }).kind, "resume-session", "explicit preparation uses the shared navigation owner");
 await act(async () => root.unmount());
 host.uninstall();
 dom.window.close();

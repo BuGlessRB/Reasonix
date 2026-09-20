@@ -9,6 +9,12 @@ durable registry metadata. Legacy and canonical v4 rows participate in the norma
 history search; opening one starts preparation in the conversation navigation
 flow and switches to the canonical target only after preparation commits.
 
+Restored, unprepared tabs retain their title and a non-error **Import and open**
+action. Merely restarting does not prepare content or start a controller. The
+action uses the same navigation owner as sidebar/history selection. Empty
+canonical probe directories are not historical sessions; damaged session
+artifacts remain discoverable for an explicit retry.
+
 The management surface is **Settings → Storage → Historical sessions**. Trash
 contains archived/deleted canonical sessions only.
 

@@ -4,6 +4,23 @@ function Get-UpgradeUIDescendants($element) {
   return $element.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
 }
 
+function Invoke-UpgradeUIButton($element) {
+  $pattern = $element.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)
+  $pattern.Invoke()
+}
+
+function Invoke-PendingHistoricalSession($root) {
+  foreach ($element in (Get-UpgradeUIDescendants $root)) {
+    $current = $element.Current
+    if ($current.AutomationId -eq 'reasonix-prepare-restored-session' -and -not $current.IsOffscreen -and
+        $current.BoundingRectangle.Width -gt 0 -and $current.BoundingRectangle.Height -gt 0) {
+      Invoke-UpgradeUIButton $element
+      return $true
+    }
+  }
+  return $false
+}
+
 function Test-VisibleUpgradeHistory($root, [string]$text) {
   if ([string]::IsNullOrWhiteSpace($text)) { return $false }
   $descendants = @(Get-UpgradeUIDescendants $root)

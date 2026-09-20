@@ -470,6 +470,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // 2015.6 KiB base. Retain 0.15 KiB headroom; all other limits stay unchanged.
 // Live-default draft fencing and frozen-model recovery measure 2066040 B
 // (2017.617 KiB). Retain 0.183 KiB; gzip, chunk, CSS, and locale gates stay fixed.
-const rawInitialBudgetKiB = 2_017.8;
+// Restored historical tabs carry an optional source reference through metadata
+// and readiness projection; their preparation UI remains lazy. The measured
+// payload is 2066283 B (+243 B / 0.012% over 2066040 B), not a new dependency.
+// Retain 0.2 KiB build-identity headroom; all compressed/chunk/CSS gates stay fixed.
+const rawInitialBudgetKiB = 2_018.1;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

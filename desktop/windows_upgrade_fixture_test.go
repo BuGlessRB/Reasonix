@@ -60,8 +60,26 @@ func TestWindowsUpgradeFixtureMigratesLegacyAndRestarts(t *testing.T) {
 		if app.NeedsOnboarding() {
 			t.Fatal("legacy fixture must restore the conversation instead of opening first-run provider settings")
 		}
-		if err := app.migrateDesktopSessionsV5(t.Context()); err != nil {
-			t.Fatal(err)
+		app.startDesktopSessionMigration(t.Context())
+		if !app.waitForDesktopMigration(t.Context()) {
+			t.Fatal("startup discovery did not finish")
+		}
+		if phase == "first" {
+			file, _ := app.reconcileSavedTabs(t.Context(), loadTabsFile())
+			if len(file.Tabs) != 1 || file.Tabs[0].historicalSource == nil {
+				t.Fatalf("saved historical tab must be pending, not corrupt: %+v", file.Tabs)
+			}
+			tab := &WorkspaceTab{}
+			if prepareRestoredTabIdentity(tab, file.Tabs[0]) || tab.Ctrl != nil || tab.StartupErr != "" || tab.HistoricalSource == nil {
+				t.Fatalf("passive restore started a runtime or reported corruption: %+v", tab)
+			}
+			state, err := app.workspaceRegistry().Load(t.Context())
+			if err != nil || len(state.SourceMappings) != 0 || len(state.PendingOperations) != 0 {
+				t.Fatalf("startup converted historical content: %+v, %v", state, err)
+			}
+			if _, err := app.ImportHistoricalSession(desktopSourceKey(legacyPath, "")); err != nil {
+				t.Fatalf("explicit user preparation failed: %v", err)
+			}
 		}
 		if phase == "restart" {
 			// Real startup also snapshots the current registry before recovery.
