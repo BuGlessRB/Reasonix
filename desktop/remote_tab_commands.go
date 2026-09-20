@@ -140,10 +140,12 @@ func (a *App) resumeRemoteTabSessionPathForOpenSelection(tabID, name, sessionPat
 	consumeQueuedRemoteTabOpenSelectionLocked(tab, selectionRevision)
 	client, base, gen := tab.client, tab.base, tab.gen
 	requestedSessionID := ""
-	if strings.TrimSpace(sessionPath) == "" && strings.TrimSpace(name) != "" && strings.TrimSpace(tab.session.name) == strings.TrimSpace(name) {
+	if strings.TrimSpace(sessionPath) == "" && strings.TrimSpace(tab.session.name) == strings.TrimSpace(name) {
 		// Canonical rows have no legacy path. When a reused shell has already
 		// committed the selected row, carry its stable ID into /resume instead
-		// of resolving the display/name token through the listing.
+		// of resolving the display/name token through the listing. The name
+		// may legitimately be empty (a synthetic identity row): the committed
+		// ID alone identifies the target.
 		requestedSessionID = strings.TrimSpace(tab.session.sessionID)
 	}
 	failureRoute := remoteTabProvisionalResume{
@@ -225,6 +227,11 @@ func (a *App) resumeRemoteTabSessionPathForOpenSelection(tabID, name, sessionPat
 		title := strings.TrimSpace(target.Title)
 		if title == "" {
 			title = name
+		}
+		if title == "" {
+			// An ID-only target carries no display text; keep the tab labelled
+			// until the status/title refresh learns the generated title.
+			title = remoteWorkspaceName(tab.ref.Workspace)
 		}
 		if !a.commitAndPublishRemoteTabResume(tabID, tab, client, gen, route, target, title) {
 			// A newer route won the publication fence; never restore the older

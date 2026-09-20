@@ -26,6 +26,7 @@ type fakeServe struct {
 	newCalled                      int
 	newSessionPath                 string
 	resumePath                     string
+	resumeSessionID                string
 	cookieOnNew                    bool
 	sessions                       []serveSessionEntry
 	calls                          []string // "METHOD /path body" per command request
@@ -172,10 +173,13 @@ func newFakeServe(t *testing.T, token string, sessions []serveSessionEntry) *fak
 	})
 	mux.HandleFunc("POST /resume", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Path string `json:"path"`
+			Path      string `json:"path"`
+			SessionID string `json:"sessionId"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Path == "" {
-			http.Error(w, "missing path", http.StatusBadRequest)
+		// Mirrors the real handler: a canonical row carries only sessionId, so
+		// requiring a path here would hide every identity-route regression.
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Path == "" && body.SessionID == "" {
+			http.Error(w, "missing path or sessionId", http.StatusBadRequest)
 			return
 		}
 		fs.mu.Lock()
@@ -189,11 +193,15 @@ func newFakeServe(t *testing.T, token string, sessions []serveSessionEntry) *fak
 			http.Error(w, fail, http.StatusConflict)
 			return
 		}
-		fs.resumePath = body.Path
+		fs.resumePath, fs.resumeSessionID = body.Path, body.SessionID
 		for i := range fs.sessions {
-			fs.sessions[i].Current = fs.sessions[i].Path == body.Path
+			fs.sessions[i].Current = body.SessionID != "" && fs.sessions[i].SessionID == body.SessionID ||
+				body.SessionID == "" && fs.sessions[i].Path == body.Path
 		}
 		fs.mu.Unlock()
+		if body.SessionID != "" {
+			w.Header().Set("X-Reasonix-Session-ID", body.SessionID)
+		}
 		if drop {
 			// Serve committed the switch; only the response is lost.
 			dropHTTPConnection(w)

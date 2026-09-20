@@ -127,6 +127,16 @@ func remoteSessionRoute(entry serveSessionEntry) string {
 	return remoteSessionIdentityRoute(entry.Path, entry.SessionID)
 }
 
+// remoteSessionRouteIdentity inverts remoteSessionIdentityRoute: rows built
+// from a live route must expose an identity route as SessionID, never as a
+// path, or resuming the row sends Serve a filesystem path it cannot resolve.
+func remoteSessionRouteIdentity(route string) (path, sessionID string) {
+	if id, ok := strings.CutPrefix(route, remoteSessionIDRoutePrefix); ok {
+		return "", id
+	}
+	return route, ""
+}
+
 // servePostForSession fences a foreground mutation to the session the Desktop
 // tab displayed when the command was issued. Older Serve binaries ignore the
 // optional header and retain their single-session behavior.
@@ -438,12 +448,12 @@ func (a *App) remoteProjectSessions(ctx context.Context, client *http.Client, ba
 		if override := prefs.SessionTitles[prefKey]; override != "" {
 			title = override
 		}
+		pinnedRow := remoteSessionPinnedLocked(prefs, prefKey)
 		// A never-chatted canonical session is the remote analog of a local
-		// blank: local blanks disappear when unused, so hide these rows.
-		// MetadataStatus gates the check: a session whose catalog has not
-		// rebuilt (stale turns/title) stays visible until it definitively
-		// has no turns and no preview.
-		if e.SessionID != "" && !e.Current && e.Turns == 0 && title == "" && e.Preview == "" && e.MetadataReady {
+		// blank: local blanks disappear when unused, so hide these rows unless
+		// the user pinned one. MetadataReady gates the check so a stale catalog
+		// (turns/title not rebuilt yet) cannot hide a real conversation.
+		if e.SessionID != "" && !e.Current && !pinnedRow && e.Turns == 0 && title == "" && e.Preview == "" && e.MetadataReady {
 			continue
 		}
 		current := e.Current
@@ -455,7 +465,7 @@ func (a *App) remoteProjectSessions(ctx context.Context, client *http.Client, ba
 			HostID: e.HostID, SessionID: e.SessionID, Name: e.Name, Path: e.Path, Title: title, Turns: e.Turns, Current: current,
 			Running:        remoteSessionRunning(e.Running, liveRunning, route, preferLiveCurrent),
 			LastActivityAt: e.MtimeMilli,
-			Pinned:         remoteSessionPinnedLocked(prefs, prefKey),
+			Pinned:         pinnedRow,
 		}
 		hasCurrent = hasCurrent || view.Current
 		if view.Pinned {
@@ -484,9 +494,10 @@ func (a *App) remoteProjectSessions(ctx context.Context, client *http.Client, ba
 			// Known current path: blank while the serve listing cannot see it
 			// yet. Unknown path (a legacy /new without a path header): blank
 			// while the fresh-session marker is still set.
-			if path := tab.routing.currentPath; path != "" {
-				if !listedRoutes[path] {
-					blank = &RemoteSessionView{Name: "", Path: path, Title: tab.topicTitle, Current: true, Running: tab.runtime.running, LastActivityAt: time.Now().UnixMilli()}
+			if route := tab.routing.currentPath; route != "" {
+				if !listedRoutes[route] {
+					path, sessionID := remoteSessionRouteIdentity(route)
+					blank = &RemoteSessionView{Name: "", Path: path, SessionID: sessionID, Title: tab.topicTitle, Current: true, Running: tab.runtime.running, LastActivityAt: time.Now().UnixMilli()}
 				}
 			} else if tab.session.reset {
 				blank = &RemoteSessionView{Name: "", Title: tab.topicTitle, Current: true, Running: tab.runtime.running, LastActivityAt: time.Now().UnixMilli()}

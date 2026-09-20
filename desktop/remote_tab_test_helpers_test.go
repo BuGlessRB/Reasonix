@@ -49,6 +49,13 @@ func waitForRemoteTabError(t *testing.T, a *App, tabID, want string) {
 	}
 }
 
+// resumedSessionID reports the identity the last /resume carried.
+func (fs *fakeServe) resumedSessionID() string {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	return fs.resumeSessionID
+}
+
 // takeFault consumes one scheduled fault from a fakeServe counter. Caller
 // holds fs.mu.
 func (fs *fakeServe) takeFault(counter *int) bool {
