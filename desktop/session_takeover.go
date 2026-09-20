@@ -415,9 +415,17 @@ type takeoverMirror struct {
 	returnBackoff   time.Duration
 	releaseHandoff  func(*agent.SessionLease, string, string) error
 
-	reclaimRequested    atomic.Bool
-	returned            atomic.Bool
-	stopping            atomic.Bool
+	reclaimRequested atomic.Bool
+	returned         atomic.Bool
+	stopping         atomic.Bool
+	// closing marks a tab close that owns the farewell: it releases the writer
+	// first and then tells Serve, so Serve hands the session back immediately
+	// instead of waiting for the writer to drop. The loop's tab-gone branch
+	// stays the backstop for a tab that disappears without that epilogue.
+	closing atomic.Bool
+	// ended records a delivered farewell so the close epilogue and the loop
+	// cannot send it twice; a failed send leaves it unset for the retry.
+	ended               atomic.Bool
 	consecutiveFailures int32
 	stop                chan struct{}
 	done                chan struct{}
@@ -799,10 +807,14 @@ func (m *takeoverMirror) run(initialClient *http.Client, initialRecord takeoverS
 			}
 		}
 		// A mirror whose tab is gone entirely (closed, not detached) ends
-		// itself so Serve can hand the session back to the remote side.
+		// itself so Serve can hand the session back to the remote side. A tab
+		// close owns that farewell itself — it sends after releasing the
+		// writer — so this branch only detaches and leaves the epilogue to it.
 		if !m.app.takeoverTabLive(m.sessionPath) {
 			m.detach()
-			m.mirrorEnd()
+			if !m.closing.Load() {
+				m.mirrorEnd()
+			}
 			return
 		}
 	}
@@ -1208,15 +1220,49 @@ func (m *takeoverMirror) mirrorEnd() {
 }
 
 func (m *takeoverMirror) mirrorEndLocked(client *http.Client, record takeoverServeRecord, grant takeoverGrant) {
+	if m.ended.Load() {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	payload, _ := json.Marshal(map[string]string{"sessionPath": m.sessionPath, "mirrorId": grant.MirrorID})
 	resp, err := serveDo(ctx, client, http.MethodPost, serveURL(record.base, "/mirror-end"), payload)
 	if err != nil {
+		// Undelivered: leave the farewell unmarked so a later path retries.
 		return
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
+	m.ended.Store(true)
+}
+
+// markTakeoverMirrorClosing hands the farewell to the closing tab. It runs
+// while the tab still owns its writer, so the mirror loop cannot announce the
+// writer as gone before the close releases it.
+func (a *App) markTakeoverMirrorClosing(sessionPath string) *takeoverMirror {
+	m := a.takeoverMirrorForKey(sessionRuntimeKey(sessionPath))
+	if m == nil {
+		return nil
+	}
+	m.closing.Store(true)
+	return m
+}
+
+// endTakeoverMirrorForClosedTab is the per-tab analogue of endTakeoverMirrors:
+// the closed tab has released its writer, so Serve can hand the session back
+// to the remote side at once instead of waiting for the writer to drop.
+func (a *App) endTakeoverMirrorForClosedTab(m *takeoverMirror) {
+	if m == nil {
+		return
+	}
+	// Off the close path's locks: the farewell is a bounded HTTP round trip
+	// and must not hold the runtime mutation barrier.
+	a.goSafe("endTakeoverMirrorForClosedTab", func() {
+		if m.finalizePendingReturn() {
+			m.mirrorEnd()
+		}
+		m.detach()
+	})
 }
 
 // stopLoop halts the forwarding goroutine. Idempotent.
