@@ -67,56 +67,12 @@ func WriteColdSessionDiagnostics(ctx context.Context, dst io.Writer, query *sess
 			return err
 		}
 	}
-	if _, err := io.WriteString(dst, "  \"commits\": ["); err != nil {
-		return err
-	}
-	first := true
-	through := uint64(0)
-	var destinationError error
-	err := query.StreamExportCommits(ctx, snapshot, func(commit session.Commit) error {
-		if commit.LastSequence() > snapshot.SnapshotSequence {
-			return nil
-		}
-		encoded, err := json.MarshalIndent(commit, "    ", "  ")
-		if err != nil {
-			return err
-		}
-		encoded = []byte(secrets.Redact(string(encoded)))
-		if !json.Valid(encoded) {
-			return errors.New("redacted cold diagnostic commit is not valid JSON")
-		}
-		separator := "\n    "
-		if !first {
-			separator = ",\n    "
-		}
-		if _, err = io.WriteString(dst, separator); err != nil {
-			destinationError = err
-			return err
-		}
-		if _, err = dst.Write(encoded); err != nil {
-			destinationError = err
-			return err
-		}
-		first = false
-		through = commit.LastSequence()
-		return nil
-	})
-	if destinationError != nil {
-		return destinationError
-	}
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
+	through, traversalErr, err := writeColdDiagnosticCommits(ctx, dst, query, snapshot)
 	if err != nil {
-		unavailable = append(unavailable, "durable event traversal failed: "+secrets.RedactError(err))
-	}
-	if !first {
-		if _, err = io.WriteString(dst, "\n  "); err != nil {
-			return err
-		}
-	}
-	if _, err = io.WriteString(dst, "],\n"); err != nil {
 		return err
+	}
+	if traversalErr != nil {
+		unavailable = append(unavailable, "durable event traversal failed: "+secrets.RedactError(traversalErr))
 	}
 	if err = writeGoalDiagnosticField(dst, "activationChanges", []goalDiagnosticTransition{}, true); err != nil {
 		return err
@@ -132,4 +88,55 @@ func WriteColdSessionDiagnostics(ctx context.Context, dst io.Writer, query *sess
 	}
 	_, err = io.WriteString(dst, "}\n")
 	return err
+}
+
+func writeColdDiagnosticCommits(ctx context.Context, dst io.Writer, query *session.Query, snapshot session.ExportSnapshot) (through uint64, traversalErr, err error) {
+	if _, err = io.WriteString(dst, "  \"commits\": ["); err != nil {
+		return 0, nil, err
+	}
+	first := true
+	var destinationError error
+	traversalErr = query.StreamExportCommits(ctx, snapshot, func(commit session.Commit) error {
+		if commit.LastSequence() > snapshot.SnapshotSequence {
+			return nil
+		}
+		encoded, marshalErr := json.MarshalIndent(commit, "    ", "  ")
+		if marshalErr != nil {
+			return marshalErr
+		}
+		encoded = []byte(secrets.Redact(string(encoded)))
+		if !json.Valid(encoded) {
+			return errors.New("redacted cold diagnostic commit is not valid JSON")
+		}
+		separator := "\n    "
+		if !first {
+			separator = ",\n    "
+		}
+		if _, writeErr := io.WriteString(dst, separator); writeErr != nil {
+			destinationError = writeErr
+			return writeErr
+		}
+		if _, writeErr := dst.Write(encoded); writeErr != nil {
+			destinationError = writeErr
+			return writeErr
+		}
+		first = false
+		through = commit.LastSequence()
+		return nil
+	})
+	if destinationError != nil {
+		return 0, nil, destinationError
+	}
+	if err = ctx.Err(); err != nil {
+		return 0, nil, err
+	}
+	if !first {
+		if _, err = io.WriteString(dst, "\n  "); err != nil {
+			return 0, nil, err
+		}
+	}
+	if _, err = io.WriteString(dst, "],\n"); err != nil {
+		return 0, nil, err
+	}
+	return through, traversalErr, nil
 }
