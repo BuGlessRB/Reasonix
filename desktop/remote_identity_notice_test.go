@@ -108,7 +108,7 @@ func TestOwnershipProbeCannotRepinAcrossACompletedReclaim(t *testing.T) {
 	srv := identityOwnershipServe(t, "external", &asked, func() {
 		a.remoteTabMu.Lock()
 		tab.session.takenOver = false
-		tab.reclaimRevision = tab.runtime.revision + 1
+		tab.ownership.reclaimRevision = tab.runtime.revision + 1
 		a.remoteTabMu.Unlock()
 	})
 	a, tab = identityNoticeTab(srv)

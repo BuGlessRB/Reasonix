@@ -298,7 +298,7 @@ func (a *App) adoptRemoteTabFrameCurrent(tabID string, gen uint64, sessionPath s
 // remoteTabMu.
 func resetRemoteTabForegroundRuntimeLocked(tab *remoteTab) {
 	tab.pendingEvents = nil
-	tab.pendingReadyBarrier = false
+	tab.ownership.readyBarrierPending = false
 	tab.runtime.revision++
 	tab.runtime.running = false
 	tab.runtime.turnStartedAt = 0

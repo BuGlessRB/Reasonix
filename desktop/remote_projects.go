@@ -107,16 +107,9 @@ type remoteTab struct {
 	// rejected request cannot restore metadata over a newer user selection.
 	selectionRevision uint64
 	pendingSelection  *remoteTabPendingOpenSelection
-	// pendingReadyBarrier defers the ownership-return re-hydration barrier
-	// while a turn is in flight: firing it mid-turn bumps the frontend's
-	// connection generation, orphans the optimistic submission, and leaves a
-	// zombie "processing" indicator beside the rendered reply.
-	pendingReadyBarrier bool
-	// reclaimRevision fences in-flight status payloads against an explicit
-	// reclaim: responses reserved before the reclaim completed can still
-	// carry the pre-reclaim takenOver=true and must never re-pin the
-	// spectator banner after ownership returned.
-	reclaimRevision uint64
+	// ownership fences the handback of this session's writer; see
+	// remoteTabOwnershipState in remote_tab_reclaim.go.
+	ownership remoteTabOwnershipState
 }
 
 type remoteTabRuntimeState struct {
@@ -490,10 +483,9 @@ func (a *App) restoreRemoteTabShells(f desktopTabsFile) {
 		sessionPath := strings.TrimSpace(entry.SessionPath)
 		sessionID := strings.TrimSpace(entry.SessionID)
 		title := strings.TrimSpace(entry.TopicTitle)
-		// Older builds persisted the canonical session ID as the tab title when
-		// a blank remote session was materialized. That opaque token is only
-		// recognisable once a canonical identity is present; a legacy row's
-		// name is its basename, which the sidebar shows as the title too.
+		// Older builds persisted the canonical session ID as the tab title, and
+		// a legacy row's name is its basename, which the sidebar shows as the
+		// title too. Both are opaque, so drop them once an ID is present.
 		if sessionID != "" && (title == sessionID || title == sessionName) {
 			title = ""
 		}

@@ -280,7 +280,7 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 	// flight and mirror the pre-reclaim ownership; dropping just its
 	// takenOver=true keeps the rest of its runtime facts usable without
 	// letting it re-pin the spectator banner.
-	if statusSeq < tab.reclaimRevision && payload.TakenOver != nil && *payload.TakenOver {
+	if statusSeq < tab.ownership.reclaimRevision && payload.TakenOver != nil && *payload.TakenOver {
 		payload.TakenOver = nil
 	}
 	before := remoteTabMetaLocked(tab)
@@ -298,15 +298,15 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 	// in-flight submission.
 	if before.TakenOver && !after.TakenOver {
 		if tab.runtime.running || tab.runtime.pendingPrompt {
-			tab.pendingReadyBarrier = true
+			tab.ownership.readyBarrierPending = true
 		} else {
 			readyBarrier = true
 		}
 	}
 	// A deferred barrier fires as soon as polling observes the surface idle.
-	deferredBarrier := tab.pendingReadyBarrier && !tab.runtime.running && !tab.runtime.pendingPrompt
+	deferredBarrier := tab.ownership.readyBarrierPending && !tab.runtime.running && !tab.runtime.pendingPrompt
 	if deferredBarrier {
-		tab.pendingReadyBarrier = false
+		tab.ownership.readyBarrierPending = false
 	}
 	a.remoteTabMu.Unlock()
 	if before.SessionPath != after.SessionPath || before.TopicID != after.TopicID ||

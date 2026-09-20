@@ -778,7 +778,7 @@ func TestReclaimBarrierDefersWhileTurnInFlight(t *testing.T) {
 		}
 	}
 	mu.Unlock()
-	if !tab.pendingReadyBarrier {
+	if !tab.ownership.readyBarrierPending {
 		t.Fatal("reclaim did not defer the barrier for the running turn")
 	}
 
@@ -798,7 +798,7 @@ func TestReclaimBarrierDefersWhileTurnInFlight(t *testing.T) {
 		pending := func() bool {
 			app.remoteTabMu.Lock()
 			defer app.remoteTabMu.Unlock()
-			return tab.pendingReadyBarrier
+			return tab.ownership.readyBarrierPending
 		}()
 		if sawReady && !pending {
 			break
@@ -823,7 +823,7 @@ func TestStaleStatusCannotRepinTakenOverAfterReclaim(t *testing.T) {
 		// The reclaim stamped epoch 5; the in-flight poll reserved revision 3.
 		runtime: remoteTabRuntimeState{revision: 3},
 	}
-	tab.reclaimRevision = 5
+	tab.ownership.reclaimRevision = 5
 	a.remoteTabs[tab.id] = tab
 	payload := []byte(`{"sessionId":"held","takenOver":true}`)
 
@@ -844,7 +844,7 @@ func TestStaleStatusCannotRepinTakenOverAfterReclaim(t *testing.T) {
 		t.Fatal("post-reclaim ownership observation did not apply")
 	}
 	tab.runtime.revision = 6
-	tab.reclaimRevision = 6
+	tab.ownership.reclaimRevision = 6
 	released := []byte(`{"sessionId":"held","takenOver":false}`)
 	if !a.recordRemoteTabSessionStatus(tab.id, client, 2, 6, released) {
 		t.Fatal("fresh release observation was rejected")
