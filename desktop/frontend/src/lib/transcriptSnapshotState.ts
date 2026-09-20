@@ -1,7 +1,7 @@
 import type { HistoryMessage, WireEvent } from "./types";
 import type { Item, State } from "./useController";
 import type { TranscriptRecord, TranscriptSnapshot } from "./transcriptProtocol";
-import { canonicalUserConfirmations, settleLocalSubmissions } from "./localSubmissionState";
+import { canonicalUserConfirmations, settleLocalSubmissions, settleRebasedSubmissions } from "./localSubmissionState";
 
 export function snapshotRecords(snapshot: TranscriptSnapshot): TranscriptRecord[] {
   if (!Number.isSafeInteger(snapshot.totalRecords) || snapshot.totalRecords < 0) {
@@ -114,6 +114,12 @@ export function transcriptSnapshotState(state: State, snapshot: TranscriptSnapsh
   state = settleLocalSubmissions(state, converted.items, canonicalUserConfirmations(messages.map(message => ({
     kind: message.role, messageId: message.messageId, submissionId: message.submissionId, turnId: message.turnId,
   }))));
+  const active = snapshot.runtime.status === "queued" || snapshot.runtime.status === "in_progress" ||
+    snapshot.runtime.status === "waiting_user" || snapshot.runtime.status === "cancelling";
+  // Older serves and history-rebased projections omit message ids, so the
+  // id-keyed settlement above cannot retire an echo the server already owns.
+  state = settleRebasedSubmissions(state, state.items,
+    converted.items.filter((item): item is Extract<Item, { kind: "user" }> => item.kind === "user"), !active);
   const order = projectedItems ? Object.fromEntries(projectedItems.map((item, index) => [item.id, index])) : recordItemOrder(records, convert);
   const users = state.items.filter((item): item is Extract<Item, { kind: "user" }> => item.kind === "user");
   const items = converted.items.map((item) => {
@@ -130,8 +136,6 @@ export function transcriptSnapshotState(state: State, snapshot: TranscriptSnapsh
   });
   const hasLocalSubmission = Boolean(state.pendingSubmissionId && state.localSubmissions[state.pendingSubmissionId]
     && state.localSubmissions[state.pendingSubmissionId].status !== "failed");
-  const active = snapshot.runtime.status === "queued" || snapshot.runtime.status === "in_progress" ||
-    snapshot.runtime.status === "waiting_user" || snapshot.runtime.status === "cancelling";
   let next: State = {
     ...state,
     transcriptSessionId: sessionId,

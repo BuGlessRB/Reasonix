@@ -59,10 +59,23 @@ func (a *App) continueLegacySessionForTranscript(tab *WorkspaceTab, ctrl control
 	return historyPageFromMessagesForTab(tab, current, current.History(), 0, limit), nil
 }
 
-func (a *App) resumeCanonicalSessionForTranscript(tab *WorkspaceTab, ctrl control.SessionAPI, route string, limit int, includeHistory bool, navigationSequence ...uint64) (HistoryPage, error) {
+// canonicalOpenIdentity validates the identity protocol of a resolved runtime.
+// A nil runtime is a dormant tab, not a protocol failure.
+func canonicalOpenIdentity(ctrl control.SessionAPI) (control.IdentityLifecycle, error) {
+	if ctrl == nil {
+		return nil, nil
+	}
 	identity, ok := ctrl.(control.IdentityLifecycle)
-	if ctrl != nil && (!ok || !identity.UsesExclusiveSession()) {
-		return HistoryPage{}, fmt.Errorf("session identity protocol is unavailable")
+	if !ok || !identity.UsesExclusiveSession() {
+		return nil, fmt.Errorf("session identity protocol is unavailable")
+	}
+	return identity, nil
+}
+
+func (a *App) resumeCanonicalSessionForTranscript(tab *WorkspaceTab, ctrl control.SessionAPI, route string, limit int, includeHistory bool, navigationSequence ...uint64) (HistoryPage, error) {
+	identity, err := canonicalOpenIdentity(ctrl)
+	if err != nil {
+		return HistoryPage{}, err
 	}
 	service := a.desktopSessionService("")
 	ref, ok := sessionRefForRoute(service, route)
@@ -95,6 +108,15 @@ func (a *App) resumeCanonicalSessionForTranscript(tab *WorkspaceTab, ctrl contro
 	}
 
 	current := a.controllerForTab(tab)
+	if ctrl == nil {
+		// The caller resolved a dormant tab before it had a runtime. Adopting a
+		// concurrently built one here, under the rebuild lock, is the
+		// authoritative read; the fences below still reject a later build.
+		ctrl = current
+		if identity, err = canonicalOpenIdentity(ctrl); err != nil {
+			return HistoryPage{}, err
+		}
+	}
 	if current != ctrl {
 		return HistoryPage{}, fmt.Errorf("tab runtime changed while opening session")
 	}

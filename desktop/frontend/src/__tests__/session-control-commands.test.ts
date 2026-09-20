@@ -8,6 +8,41 @@ import { sessionIdentityKey } from "../app-runtime/sessionTarget";
 
 const dom = new JSDOM("<div id='root'></div>");
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true });
+// Remote tab metas carry the canonical id as a top-level `sessionId` with no
+// SessionRef (desktop/remote_projects.go), and their generation is a pump
+// reconnect counter. The runtime identity must still fence sessions apart.
+const remoteHost = { hostId: "gpu-box" };
+assert.notEqual(
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-a", scope: "project", workspaceRoot: "/repo", topicId: "topic", sessionGeneration: 3 }),
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-b", scope: "project", workspaceRoot: "/repo", topicId: "topic", sessionGeneration: 3 }),
+  "canonical remote session IDs must fence reused remote tabs separately",
+);
+assert.equal(
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-a", sessionGeneration: 3 }),
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-a", sessionGeneration: 4 }),
+  "a remote pump reconnect (generation bump) does not change the session identity",
+);
+assert.notEqual(
+  sessionIdentityKey({ tabId: "remote", remote: remoteHost, sessionId: "session-a" }),
+  sessionIdentityKey({ tabId: "remote", remote: { hostId: "other-box" }, sessionId: "session-a" }),
+  "the same session id on two hosts stays two identities",
+);
+assert.notEqual(
+  sessionIdentityKey({ tabId: "remote", sessionId: "session-a" }),
+  sessionIdentityKey({ tabId: "remote", sessionId: "session-b" }),
+  "a compatibility sessionId without a host still keys the session, not the tab",
+);
+const legacyLocalKey = sessionIdentityKey({ tabId: "local", sessionPath: "/sessions/local.jsonl", sessionGeneration: 3 });
+assert.equal(
+  sessionIdentityKey({ tabId: "local", sessionPath: "/sessions/local.jsonl", sessionGeneration: 3, sessionId: "" }),
+  legacyLocalKey,
+  "legacy local sessions keep their path+generation identity when no ID exists",
+);
+assert.notEqual(
+  sessionIdentityKey({ tabId: "local", sessionPath: "", sessionGeneration: 3, sessionId: "local-v3" }),
+  legacyLocalKey,
+  "canonical local sessions use their immutable ID only when the v3 identity is present",
+);
 const resource = (tabId: string, generation = 1): SessionResource => ({ tabId,
   sessionKey: sessionIdentityKey({ tabId, sessionPath: `/${tabId}`, sessionGeneration: generation }) });
 const a = resource("A"), b = resource("B");
