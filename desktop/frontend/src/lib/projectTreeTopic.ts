@@ -280,8 +280,8 @@ export function projectTreeTopicOpenRequest(node: ProjectNode): ProjectTreeTopic
     scope,
     workspaceRoot: scope === "global" ? "" : node.root ?? "",
     topicId: node.topicId ?? "",
-    sessionPath: node.session ? `session-id:${node.session.sessionId}` : node.source?.headId
-      ? `session-source:${encodeURIComponent(JSON.stringify(node.source))}` : node.sessionPath,
+    sessionPath: node.session ? `session-id:${node.session.sessionId}` : node.source
+      ? `session-source:${encodeURIComponent(JSON.stringify({ ...node.source, title: node.label }))}` : node.sessionPath,
   };
 }
 

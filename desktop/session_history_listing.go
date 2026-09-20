@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reasonix/internal/config"
 	"reasonix/internal/sessioncatalog"
 	"sort"
 )
@@ -37,6 +38,26 @@ func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
 	state, stateErr := a.workspaceRegistry().Load(a.bootContext())
 	if stateErr != nil {
 		return v3
+	}
+	scope, root := "", ""
+	if sameDesktopPath(dir, config.SessionDir()) || sameDesktopPath(dir, desktopSessionDir(globalWorkspaceRoot())) {
+		scope = "global"
+	} else {
+		for _, target := range a.sessionCatalogTargets() {
+			if sameDesktopPath(dir, target.Path) {
+				scope, root = target.Scope, target.WorkspaceRoot
+				break
+			}
+		}
+	}
+	historical := a.historicalCanonicalTopics(scope, root, state)
+	saved, _ := readHistoricalSidecar()
+	applyHistoricalPresentations(historical, saved)
+	for _, node := range historical {
+		v3 = append(v3, SessionMeta{Source: node.Source, Historical: true, PreparationStatus: node.PreparationStatus,
+			Path: node.SessionPath, Title: node.Label, TopicID: node.TopicID, Scope: scope, WorkspaceRoot: root,
+			Preview: node.Preview, Turns: node.Turns, TurnsState: node.TurnsState,
+			CreatedAt: node.CreatedAt, LastActivityAt: node.LastActivityAt, ModTime: node.LastActivityAt})
 	}
 	adopted := map[string]bool{}
 	for _, mapping := range state.SourceMappings {
@@ -85,6 +106,9 @@ func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
 			headMeta.Source = row.Source
 			headMeta.Historical, headMeta.HistoricalBranch = true, row.HistoricalBranch
 			headMeta.PreparationStatus = a.historicalPreparationStatus(row.Source.SourceKey)
+			if presentation := saved.Presentations[row.Source.SourceKey]; presentation.Title != "" {
+				headMeta.Title = presentation.Title
+			}
 			headMeta.Turns, headMeta.Preview = row.Turns, row.Preview
 			if row.LastActivityAt > 0 {
 				headMeta.LastActivityAt, headMeta.ModTime = row.LastActivityAt, row.LastActivityAt

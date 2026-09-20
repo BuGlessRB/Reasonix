@@ -9,6 +9,7 @@ import type { SidebarImConnection } from "../app-runtime/sidebarImProjection";
 import type { Translator } from "../lib/i18n";
 import { __emitMockRemoteTabOpened } from "../lib/remoteTabEvents";
 import { useRemoteTabOpened } from "../lib/useRemoteTabOpened";
+import { projectTreeTopicOpenRequest } from "../lib/projectTreeTopic";
 
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void;
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
@@ -123,6 +124,17 @@ try {
   await finish("legacy-topic", legacy);
   assert.ok(calls.includes("prepare:legacy"), "legacy navigation prepares through the shared coordinator");
   assert.equal(preparationReads, 2, "navigation polls revisioned preparation until ready");
+
+  calls.length = 0; preparationReads = 0;
+  const sidebarRequest = projectTreeTopicOpenRequest({ kind: "global_topic", key: "cold-v4", label: "Cold v4",
+    topicId: "cold-topic", source: { hostId: "local", sourceKey: "cold-v4", path: "cold-store" } });
+  assert.ok(sidebarRequest?.sessionPath?.startsWith("session-source:"), "headless canonical sources keep their explicit identity");
+  const sidebar = api.enqueueNavigation({ kind: "topic", ...sidebarRequest! });
+  const sidebarIntent = intent;
+  await finish("cold-topic", sidebar);
+  assert.ok(calls.includes("prepare:cold-v4"), "sidebar uses the same preparation owner as history");
+  assert.equal(preparationReads, 2);
+  assert.equal(acceptedTopics.at(-1), sidebarIntent, "prepared sidebar navigation retains topic acceptance");
 
   calls.length = 0;
   const failed = topic("failed");

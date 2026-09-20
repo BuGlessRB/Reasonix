@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -135,6 +136,11 @@ func (a *App) RenameSessionTarget(selector SessionSelector, title string) (Sessi
 		}
 		if err != nil {
 			return SessionMutationResult{}, sessionOperationErrorForTarget(err, key, operationID)
+		}
+		if info, statErr := os.Stat(target.SessionPath); target.Source != nil && statErr == nil && info.IsDir() {
+			a.emitSessionTargetChange("session_metadata_changed", SessionTargetChangeEvent{TargetKey: key, OperationID: operationID, Title: title})
+			a.emitProjectTreeMetadataChanged()
+			return SessionMutationResult{TargetKey: key, OperationID: operationID, Committed: true, Title: title}, nil
 		}
 		err = a.RenameSession(target.SessionPath, title)
 		if err == nil {

@@ -76,7 +76,11 @@ func (a *App) unifiedProjectTopics(req ProjectTopicPageRequest) (ProjectTopicPag
 	if err != nil {
 		return legacy, err
 	}
-	nodes := a.canonicalTopicNodes(all, state, workspace, infos, legacy.Items)
+	sources := append(legacy.Items, a.historicalCanonicalTopics(scope, root, state)...)
+	if saved, err := readHistoricalSidecar(); err == nil {
+		applyHistoricalPresentations(sources, saved)
+	}
+	nodes := a.canonicalTopicNodes(all, state, workspace, infos, sources)
 	filtered := filterWorkspaceSessionNodes(req, org, state, workspaceID, nodes)
 	sort.SliceStable(filtered, func(i, j int) bool {
 		return projectTopicLess(filtered[i], filtered[j], req.SortMode, org.ManualOrderEnabled)
@@ -227,10 +231,6 @@ func (a *App) mergeCanonicalWorkspaceShells(projects []ProjectNode) []ProjectNod
 		scope, root := "project", project.Root
 		if project.Kind == "global_folder" {
 			scope, root = "global", ""
-		}
-		workspace := state.Workspaces[desktopWorkspaceOwnerID(state, scope, root)]
-		if len(workspace.SessionIDs) == 0 {
-			continue
 		}
 		req := ProjectTopicPageRequest{Scope: scope, WorkspaceRoot: root, Limit: 200}
 		pins := []ProjectNode{}

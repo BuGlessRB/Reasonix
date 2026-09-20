@@ -39,6 +39,8 @@ export type HistoricalPreparationSurface = {
   status: SessionPreparationView["status"];
   errorCode?: string;
   retryable: boolean;
+  revision?: number;
+  isCurrent?: () => boolean;
 };
 let historicalPreparation: HistoricalPreparationSurface | null = null;
 const historicalPreparationListeners = new Set<() => void>();
@@ -51,6 +53,14 @@ export const setHistoricalPreparation = (surface: HistoricalPreparationSurface |
   historicalPreparation = surface;
   historicalPreparationListeners.forEach(listener => listener());
 };
+export function reconcileHistoricalPreparation(expected: HistoricalPreparationSurface, view: SessionPreparationView) {
+  const current = historicalPreparation;
+  if (!current || current.operationId !== expected.operationId || current.session !== expected.session
+    || expected.isCurrent?.() === false || view.operationId !== expected.operationId
+    || view.revision < (current.revision ?? 0) || view.status === "ready") return;
+  setHistoricalPreparation({ ...current, status: view.status, errorCode: view.errorCode,
+    retryable: view.retryable, revision: view.revision });
+}
 export type NavigationNotice = {
   key: "history.failedOpenSession" | "history.missingWorkspaceRoot" | "history.failedOpenProject" | "sidebar.imWaiting" | "sidebar.imOpenFailed"
     | "projectTree.worktreeCreated" | "projectTree.worktreeCreatedDirty";
@@ -88,7 +98,8 @@ async function waitForPreparation(initial: SessionPreparationView, ports: Deskto
 
 /** One executor for topic, blank, IM, worktree and history activation. */
 export async function executeDesktopNavigation(input: DesktopNavigationCapture, authority: SessionOperationAuthority) {
-  const { intent: request, navigationIntentSeq: seq, ports } = input;
+  const { navigationIntentSeq: seq, ports } = input;
+  let request = input.intent;
   const checkpoint = () => {
     authority.checkpoint();
     if (!ports.isNavigationIntentCurrent(seq)) throw new CommandCancelled("superseded");
@@ -105,6 +116,11 @@ export async function executeDesktopNavigation(input: DesktopNavigationCapture, 
   checkpoint();
   setHistoricalPreparation(null);
   try {
+    if (request.kind === "topic" && request.sessionPath?.startsWith("session-source:")) {
+      const { title, ...source } = JSON.parse(decodeURIComponent(request.sessionPath.slice("session-source:".length)));
+      request = { kind: "resume-session", session: { scope: request.scope, workspaceRoot: request.workspaceRoot,
+        topicId: request.topicId, title, path: source.path, source } as SessionMeta };
+    }
     if (request.kind === "canonical-session") {
       await ports.openCanonicalSession(request.ref, seq);
       checkpoint(); ports.closeHistory();
@@ -167,6 +183,7 @@ export async function executeDesktopNavigation(input: DesktopNavigationCapture, 
       checkpoint();
       const target = await waitForPreparation(prepared, ports, checkpoint, view => setHistoricalPreparation({
         session, operationId: view.operationId, status: view.status, errorCode: view.errorCode, retryable: view.retryable,
+        revision: view.revision, isCurrent: () => { try { checkpoint(); return true; } catch { return false; } },
       }));
       setHistoricalPreparation(null);
       tab = await openTopic(scope, session.workspaceRoot || "", session.topicId || `canonical-${target.sessionId}`, `session-id:${target.sessionId}`);
@@ -177,6 +194,7 @@ export async function executeDesktopNavigation(input: DesktopNavigationCapture, 
     } else throw new InvalidSessionTarget(scope === "global" && !session.topicId
       ? "history.failedOpenSession" : session.topicId ? "history.missingWorkspaceRoot" : "history.failedOpenSession");
     checkpoint(); ports.seedTab(tab); ports.closeHistory();
+    if (input.intent.kind === "topic") ports.topicAccepted?.(seq);
     ports.reveal(); await refresh();
   } catch (error) {
     checkpoint();

@@ -524,18 +524,8 @@ func (a *App) replayDesktopSessionOperation(ctx context.Context, state workspace
 		}
 		return nil
 	}
-	checks := []workspacestate.Operation{op}
-	for _, dependency := range op.Dependencies {
-		checks = append(checks, state.PendingOperations[dependency])
-	}
-	for _, check := range checks {
-		if check.Mapping == nil {
-			continue
-		}
-		fingerprint, err := desktopSourceFingerprint(check.Mapping.Path)
-		if err != nil || fingerprint != check.Mapping.Fingerprint {
-			return errors.Join(err, workspacestate.ErrMutationConflict)
-		}
+	if err := validateDesktopOperationSources(state, op); err != nil {
+		return err
 	}
 	if op.Phase == "prepared" && op.Mapping != nil {
 		return a.replayPreparedImport(ctx, state, op)

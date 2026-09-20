@@ -66,11 +66,6 @@ func parseSessionSourceRoute(route string) (*SessionSourceRef, error) {
 	return &source, nil
 }
 
-func sessionSourceRoute(source *SessionSourceRef) string {
-	encoded, _ := json.Marshal(source)
-	return "session-source:" + url.PathEscape(string(encoded))
-}
-
 // Session title projection is addressed by the same durable ID as its write.
 // A topic may gain another branch while an asynchronous title is generated.
 func (a *App) updateCanonicalSessionTitle(ref session.SessionRef, title, source string) {

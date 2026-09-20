@@ -4,7 +4,7 @@ import { useT } from "../lib/i18n";
 import { app } from "../lib/bridge";
 import type { SessionTakeoverView, TabMeta } from "../lib/types";
 import type { HistoricalSourceUpdateView, SessionPreparationView } from "../generated/desktopContract.generated";
-import { historicalPreparationSnapshot, setHistoricalPreparation, subscribeHistoricalPreparation, type DesktopNavigationIntent } from "../app-runtime/desktopNavigationOwner";
+import { historicalPreparationSnapshot, reconcileHistoricalPreparation, subscribeHistoricalPreparation, type DesktopNavigationIntent } from "../app-runtime/desktopNavigationOwner";
 import { useManagementT } from "../lib/managementLocale";
 
 /**
@@ -127,10 +127,12 @@ export function SessionTakeoverDialog({ tabId, onClose }: { tabId: string; onClo
 }
 
 const terminalPreparation = new Set(["ready", "blocked", "failed", "cancelled"]);
-export function HistoricalSessionBanners({ tab, navigate }: {
+export type HistoricalSessionBannerProps = {
   tab?: TabMeta;
   navigate(intent: DesktopNavigationIntent): Promise<void>;
-}) {
+  captureNavigation?(): () => boolean;
+};
+export function HistoricalSessionBanners({ tab, navigate, captureNavigation }: HistoricalSessionBannerProps) {
   const t = useT();
   const m = useManagementT();
   const activeRef = tab?.session ?? (tab?.sessionId ? { hostId: "local", sessionId: tab.sessionId } : undefined);
@@ -142,6 +144,8 @@ export function HistoricalSessionBanners({ tab, navigate }: {
   const activeKey = activeSessionId ? `${activeHostId}:${activeSessionId}` : "";
   const activeKeyRef = useRef(activeKey);
   activeKeyRef.current = activeKey;
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   useEffect(() => {
     let current = true;
@@ -173,20 +177,26 @@ export function HistoricalSessionBanners({ tab, navigate }: {
   const importUpdate = async () => {
     if (!update?.source || !update.version || !app.PrepareHistoricalSourceVersion || !app.GetSessionPreparation) return;
     const expectedActive = activeKey;
+    const navigationCurrent = captureNavigation?.() ?? (() => activeKeyRef.current === expectedActive);
+    const current = () => mounted.current && navigationCurrent();
     setBusy(true);
     try {
       let view: SessionPreparationView = await app.PrepareHistoricalSourceVersion(update.source, update.version);
-      while (!terminalPreparation.has(view.status)) {
+      while (current() && !terminalPreparation.has(view.status)) {
         await new Promise(resolve => setTimeout(resolve, 300));
+        if (!current()) return;
         view = await app.GetSessionPreparation(view.operationId);
       }
-      if (view.status === "ready" && view.target && activeKeyRef.current === expectedActive) void navigate({ kind: "canonical-session", ref: view.target });
-    } finally { setBusy(false); }
+      if (view.status === "ready" && view.target && current()) await navigate({ kind: "canonical-session", ref: view.target });
+    } catch { /* Keep the update available for an explicit retry. */ }
+    finally { if (mounted.current) setBusy(false); }
   };
   const cancelPreparation = async () => {
     if (!preparation || !app.CancelSessionPreparation) return;
-    const view = await app.CancelSessionPreparation(preparation.operationId);
-    setHistoricalPreparation({ ...preparation, status: view.status, errorCode: view.errorCode, retryable: view.retryable });
+    try {
+      const view = await app.CancelSessionPreparation(preparation.operationId);
+      if (mounted.current) reconcileHistoricalPreparation(preparation, view);
+    } catch { /* The preparation poll remains the authority after a failed cancellation request. */ }
   };
 
   if (preparation) {
@@ -211,7 +221,7 @@ export function HistoricalSessionBanners({ tab, navigate }: {
 export function SessionRuntimeOverlays({ takeoverTabId, onCloseTakeover, historical }: {
   takeoverTabId: string | null;
   onCloseTakeover(): void;
-  historical?: { tab?: TabMeta; navigate(intent: DesktopNavigationIntent): Promise<void> };
+  historical?: HistoricalSessionBannerProps;
 }) {
   return <>
     {takeoverTabId ? <SessionTakeoverDialog tabId={takeoverTabId} onClose={onCloseTakeover} /> : null}

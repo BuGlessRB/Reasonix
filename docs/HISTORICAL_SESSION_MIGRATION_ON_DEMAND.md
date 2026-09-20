@@ -5,7 +5,7 @@
 Desktop startup no longer converts every legacy transcript or canonical v4
 directory. Startup only repairs small, non-historical lifecycle reservations.
 The historical catalog reads directory entries, published head indexes, and
-durable registry metadata. Legacy rows participate in the normal sidebar and
+durable registry metadata. Legacy and canonical v4 rows participate in the normal sidebar and
 history search; opening one starts preparation in the conversation navigation
 flow and switches to the canonical target only after preparation commits.
 
@@ -27,7 +27,8 @@ contains archived/deleted canonical sessions only.
   explicitly continues. Cancellation leaves
   `prepared` and `content_ready` reservations for the next explicit attempt.
 - Existing `content_ready` operations are replayed against their durable target;
-  they are not converted into a second session.
+  they are not converted into a second session. Recovery validates the target
+  and lifecycle fences without requiring the old source or its ownership lock.
 - Archive and purge state remains authoritative. Deleted or archived sessions
   are not resurrected by a later catalog scan.
 - `PrepareSession`, `GetSessionPreparation`, and
@@ -37,6 +38,19 @@ contains archived/deleted canonical sessions only.
   metadata. A confirmed version can be explicitly imported with
   `PrepareHistoricalSourceVersion`; its `:review:<fingerprint>` mapping is a
   separate branch while the original mapping remains stable.
+
+Discovery publishes a metadata snapshot in the background; ordinary lists only
+read that snapshot. Renames and pins are applied before search and sorting, and
+transferred on adoption. A pending sidebar source follows the same navigation
+preparation owner as history. Cancellation responses are fenced by navigation
+intent, operation identity, and revision; branch preparation cannot take focus
+back after the user navigates elsewhere.
+
+Shutdown drains the batch worker before releasing queue ownership, preserving
+the current and remaining selections for manual continuation. One process owns
+a batch worker lease. Sidecar mutations read the latest disk value under the
+write lock, modify only their owned fields, and atomically replace it; stale
+queue revisions are rejected rather than overwriting another process's work.
 
 ## Compatibility
 
@@ -53,10 +67,20 @@ ignore the sidecar and optional RPC fields; committed sessions and retained
 sources remain readable after rollback. Preparation metadata is never added to
 model prompts or transcript messages.
 
+| Data | Compatibility behavior |
+| --- | --- |
+| Lifecycle registry | No new operation types or phases; existing target IDs and mappings remain authoritative. |
+| Version 1 queue sidecar | Optional `queueRevision` defaults to zero; existing files load paused. Unknown root and presentation fields survive writes. |
+| Rollback to pre-sidecar builds | Scheduling is unavailable; source files and committed canonical sessions remain readable. |
+| Concurrent older sidecar writers | Older code does not honor the new worker lease/revision contract; do not run mixed-version batch writers. Upgrade all Desktop instances first. |
+
 ## Verification
 
 The implementation has deterministic coverage for startup non-migration,
 cross-process cold-export contention, duplicate and cancelled imports,
 prepared/content-ready resume, revisioned duplicate preparation, paused queue
 restart, archive/purge fencing, and browser interactions for listing, retry,
-open-after-commit, and batch controls.
+open-after-commit, and batch controls. Regression tests additionally cover normal
+global/project discovery while a source is occupied, title/pin search and adoption,
+shutdown during commit followed by restart, independent sidecar writers, unknown
+field preservation, source-independent recovery, and late navigation responses.
