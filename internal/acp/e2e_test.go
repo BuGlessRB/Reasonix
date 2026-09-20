@@ -529,11 +529,7 @@ func TestE2EDeleteActiveSessionDoesNotRecreateFiles(t *testing.T) {
 		Prompt:    []ContentBlock{{Type: "text", Text: "delete me while running"}},
 	})
 
-	select {
-	case <-started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("tool never started")
-	}
+	waitForACPToolStart(t, started, promptCh)
 	deleteResp := client.call(t, "session/delete", SessionDeleteParams{SessionID: sid})
 	if deleteResp.Error != nil {
 		t.Fatalf("session/delete errored: %+v", deleteResp.Error)
@@ -613,8 +609,10 @@ func TestE2EApprovalRoundTrip(t *testing.T) {
 	var req frame
 	select {
 	case req = <-client.reqs:
-	case <-time.After(2 * time.Second):
-		t.Fatal("no permission request was raised")
+	case early := <-promptCh:
+		t.Fatalf("prompt returned before requesting permission: error=%+v result=%s", early.Error, early.Result)
+	case <-time.After(10 * time.Second):
+		t.Fatal("no permission request was raised before the ACP hang guard")
 	}
 	var pr PermissionRequestParams
 	if err := json.Unmarshal(req.Params, &pr); err != nil {
@@ -703,11 +701,7 @@ func TestE2ECancelMidTurn(t *testing.T) {
 		Prompt:    []ContentBlock{{Type: "text", Text: "go"}},
 	})
 
-	select {
-	case <-started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("tool never started")
-	}
+	waitForACPToolStart(t, started, promptCh)
 	client.notify("session/cancel", SessionCancelParams{SessionID: sid})
 
 	select {
@@ -721,6 +715,23 @@ func TestE2ECancelMidTurn(t *testing.T) {
 		t.Fatal("cancel did not end the turn")
 	}
 	close(releaseTool) // let the tool goroutine unwind
+}
+
+// waitForACPToolStart distinguishes a blocked turn from a provider/RPC error
+// that completed the prompt before tool execution. The ten-second branch is a
+// hang guard, not an ordering assertion; ordering is proved by the started and
+// prompt result events themselves. Windows full-package CI has measured more
+// than two seconds of scheduler delay while the same focused test stays fast.
+func waitForACPToolStart(t *testing.T, started <-chan struct{}, prompt <-chan frame) {
+	t.Helper()
+	select {
+	case <-started:
+		return
+	case early := <-prompt:
+		t.Fatalf("prompt returned before the tool started: error=%+v result=%s", early.Error, early.Result)
+	case <-time.After(10 * time.Second):
+		t.Fatal("tool did not start before the ACP hang guard")
+	}
 }
 
 // blockingTool blocks in Execute until released or ctx is cancelled, signalling
