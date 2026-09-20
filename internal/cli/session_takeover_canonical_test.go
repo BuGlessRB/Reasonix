@@ -231,7 +231,10 @@ func TestCanonicalTakeoverCommandReportsRefusedGrant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = holder.CloseAll(context.Background()) })
+	// Shutdown, not CloseAll: the binding below is never unbound, and only the
+	// terminal boundary releases its writer lease before TempDir removal.
+	// Windows refuses to unlink a still-open ownership lock.
+	t.Cleanup(func() { _ = holder.Shutdown(context.Background()) })
 	if _, err := holder.Open(t.Context(), held); err != nil {
 		t.Fatal(err)
 	}

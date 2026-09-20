@@ -196,7 +196,7 @@ func TestResumeCanonicalSessionHeldElsewhereKeepsMirror(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = other.CloseAll(context.Background()) })
+	t.Cleanup(func() { _ = other.Shutdown(context.Background()) })
 	busy, err := other.Create(t.Context(), session.CreateOptions{SessionID: "busy"})
 	if err != nil {
 		t.Fatal(err)
