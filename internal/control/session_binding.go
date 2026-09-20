@@ -70,9 +70,8 @@ func (c *Controller) ReleaseSessionForHandoff() error {
 		return err
 	}
 	// Under snapshotMu so the swap cannot interleave with an in-flight save.
-	// The emptied transcript keeps a later Snapshot a no-op instead of an
-	// "unbound runtime" error, and keeps the handed-off conversation out of
-	// the identity the next turn allocates.
+	// Emptying the transcript keeps a later Snapshot a no-op and keeps the
+	// handed-off conversation out of the identity the next turn allocates.
 	c.snapshotMu.Lock()
 	if c.executor != nil {
 		c.executor.SetSession(agent.NewSession(c.basePrompt()))

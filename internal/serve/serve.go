@@ -1,8 +1,3 @@
-// Package serve exposes a control.Controller over HTTP: the typed event stream
-// as Server-Sent Events, and the commands as small JSON POST endpoints. It is a
-// second frontend alongside the chat TUI — proof that the controller is
-// transport-agnostic, and the basis for a browser/desktop client. A server has
-// one foreground session and may finish switched-away sessions in background.
 package serve
 
 import (
