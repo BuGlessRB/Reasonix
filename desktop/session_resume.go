@@ -23,6 +23,14 @@ func (a *App) continueLegacySessionForTranscript(tab *WorkspaceTab, ctrl control
 	if err := context.Cause(navigationCtx); err != nil {
 		return HistoryPage{}, err
 	}
+	if _, adopted, err := a.legacyCanonicalRef(navigationCtx, sourcePath); err != nil {
+		return HistoryPage{}, err
+	} else if !adopted {
+		// Explicit navigation imports before taking any controller swap gate.
+		if _, err := a.ImportHistoricalSession(desktopSourceKey(sourcePath, "")); err != nil {
+			return HistoryPage{}, err
+		}
+	}
 
 	a.runtimeRebuildMu.Lock()
 	defer a.runtimeRebuildMu.Unlock()
@@ -256,8 +264,7 @@ func (a *App) replaceControllerForSessionOpenLocked(ctx context.Context, tab *Wo
 	tab.adoptDisplayState(&tabDisplayState{})
 	tab.ActivityStatus = ""
 	tab.replaceTelemetry(tabTelemetrySnapshot{}, sessionRuntimeKey(sessionRoute(ref.SessionID)))
-	tab.SessionID = ref.SessionID
-	tab.SessionPath = ""
+	setTabSessionIdentity(tab, sessionRoute(ref.SessionID))
 	tab.model = targetModel
 	tab.Label = candidate.Label()
 	applyNormalizedRuntimeToTabLocked(tab, runtime)

@@ -562,6 +562,7 @@ export interface WireFinalReadiness {
 
 // Tab management types (desktop/tabs.go).
 export interface TabMeta extends RemoteTabMetaFields {
+  historicalSource?: import("../generated/desktopContract.generated").SessionSourceRef;
   id: string;
   tabType?: "session" | "file";
   scope: string;
@@ -991,6 +992,7 @@ export interface Meta extends RemoteSessionMetaFields {
   ready: boolean;
   runtime?: SessionRuntimeView;
   startupErr?: string;
+  historicalSource?: import("../generated/desktopContract.generated").SessionSourceRef;
   eventChannel: string;
   sessionPath?: string;
   sessionId?: string; session?: SessionRef | null;

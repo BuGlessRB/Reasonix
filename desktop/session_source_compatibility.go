@@ -315,18 +315,8 @@ func (a *App) legacyCanonicalRef(ctx context.Context, path string) (session.Sess
 		if state.SessionStates[mapping.SessionID].Lifecycle == workspacestate.Deleted {
 			return session.SessionRef{}, true, session.ErrSessionNotFound
 		}
-		if fingerprint, readErr := desktopSourceFingerprint(path); readErr == nil {
-			if mapping.Fingerprint != fingerprint {
-				workspace := state.Workspaces[mapping.WorkspaceID]
-				scope := "project"
-				if mapping.WorkspaceID == workspacestate.GlobalWorkspaceID {
-					scope = "global"
-				}
-				return session.SessionRef{}, false, errors.Join(workspacestate.ErrMutationConflict, a.sourceRecovery(ctx, path, mapping.Format, "source_conflict", scope, workspace.Root))
-			}
-		} else if !os.IsNotExist(readErr) {
-			return session.SessionRef{}, false, readErr
-		}
+		// Adoption is durable. Opening the new conversation must not hash or
+		// depend on the retained source, which another CLI may still be using.
 		return session.SessionRef{HostID: localDesktopHostID, SessionID: mapping.SessionID}, true, nil
 	}
 	a.mu.RLock()

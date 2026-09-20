@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:f401cd62401c1793f747c5083f8c571b9c76c3f7aa88a10b6397528e32a40416";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:bd3ca289b0444e33be634816036c2a8debcdb8ae5f87262a82eff6a1796bb448";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -73,6 +73,7 @@ export const DESKTOP_COMMANDS = [
   "CancelRemoteTabJobs",
   "CancelSessionExport",
   "CancelSessionForTab",
+  "CancelSessionPreparation",
   "CancelShellInstall",
   "CancelTab",
   "CancelTabWithInboxItems",
@@ -85,6 +86,7 @@ export const DESKTOP_COMMANDS = [
   "CapabilityDiagnostics",
   "CaptureAttachmentTarget",
   "CaptureInboxTarget",
+  "CheckHistoricalSourceUpdate",
   "CheckRemotePlatform",
   "CheckUpdate",
   "Checkpoints",
@@ -118,6 +120,7 @@ export const DESKTOP_COMMANDS = [
   "ConnectRemoteHost",
   "ContextPanel",
   "ContextUsageForTab",
+  "ControlHistoricalImport",
   "CopySessionTarget",
   "CopyThemePack",
   "CreateBlankProject",
@@ -192,6 +195,7 @@ export const DESKTOP_COMMANDS = [
   "GetDesktopZoomFactor",
   "GetDraftContext",
   "GetDraftSubmission",
+  "GetHistoricalImportStatus",
   "GetHistoryIndexStatus",
   "GetHistorySearchContext",
   "GetLegacyEmptySessionCleanupStatus",
@@ -209,6 +213,7 @@ export const DESKTOP_COMMANDS = [
   "GetSessionDraft",
   "GetSessionDraftState",
   "GetSessionOrganization",
+  "GetSessionPreparation",
   "GetSessionUpgradeStatus",
   "GetSessionVersionState",
   "GetTask",
@@ -241,6 +246,7 @@ export const DESKTOP_COMMANDS = [
   "HistorySliceForTab",
   "HistorySliceForTarget",
   "HooksSettings",
+  "ImportHistoricalSession",
   "ImportThemePack",
   "InboxHasItems",
   "InboxSnapshot",
@@ -258,6 +264,7 @@ export const DESKTOP_COMMANDS = [
   "ListDir",
   "ListDirForTab",
   "ListDirForTarget",
+  "ListHistoricalSessions",
   "ListHistorySessions",
   "ListProjectGroups",
   "ListProjectTopics",
@@ -353,6 +360,8 @@ export const DESKTOP_COMMANDS = [
   "PluginDoctor",
   "Plugins",
   "PollBotConnectionInstall",
+  "PrepareHistoricalSourceVersion",
+  "PrepareSession",
   "PrepareWorktreeMerge",
   "PreviewRecoveryEntry",
   "PreviewRewindForTab",
@@ -671,6 +680,7 @@ export const DESKTOP_COMMANDS = [
   "StageImageForTab",
   "StageImageForTarget",
   "StartBotConnectionInstall",
+  "StartHistoricalImport",
   "StartTopicActivation",
   "StartTurnForAttachmentTarget",
   "StartTurnForTab",
@@ -2428,6 +2438,36 @@ export interface HeartbeatTask {
   notifyChannels?: boolean | null;
 }
 
+export interface HistoricalImportStatus {
+  items: HistoricalSessionView[];
+  running: boolean;
+  paused: boolean;
+  remaining: number;
+  completed: number;
+  blocked: number;
+  failed: number;
+}
+
+export interface HistoricalSessionView {
+  id: string;
+  title: string;
+  format: string;
+  status: string;
+  errorCode?: string;
+  session?: SessionRef | null;
+  source?: SessionSourceRef | null;
+}
+
+export interface HistoricalSourceUpdateView {
+  sourceKey: string;
+  status: string;
+  version?: string;
+  target?: SessionRef | null;
+  source?: SessionSourceRef | null;
+  errorCode?: string;
+  retryable: boolean;
+}
+
 export interface HistoryContentChunk {
   entryId: string;
   field: string;
@@ -2930,6 +2970,7 @@ export interface Meta {
   ready: boolean;
   runtime: SessionRuntimeView;
   startupErr?: string;
+  historicalSource?: SessionSourceRef | null;
   eventChannel: string;
   sessionPath?: string;
   sessionId?: string;
@@ -3144,6 +3185,9 @@ export interface ProjectGroupsSnapshot {
 
 export interface ProjectNode {
   source?: SessionSourceRef | null;
+  historical?: boolean;
+  historicalBranch?: boolean;
+  preparationStatus?: string;
   identityAliases?: string[];
   lifecycleGeneration?: number;
   tabId?: string;
@@ -4015,6 +4059,9 @@ export interface SessionLifecycleTarget {
 
 export interface SessionMeta {
   source?: SessionSourceRef | null;
+  historical?: boolean;
+  historicalBranch?: boolean;
+  preparationStatus?: string;
   path: string;
   sessionId?: string;
   hostId?: string;
@@ -4081,6 +4128,16 @@ export interface SessionOrganizationWorkspace {
   scope: string;
   workspaceRoot?: string;
   hostId?: string;
+}
+
+export interface SessionPreparationView {
+  operationId: string;
+  sourceKey: string;
+  status: string;
+  revision: number;
+  target?: SessionRef | null;
+  errorCode?: string;
+  retryable: boolean;
 }
 
 export interface SessionRestoreResult {
@@ -4375,6 +4432,7 @@ export interface TabMeta {
   versionState?: string;
   parentVersionId?: string;
   startupErr?: string;
+  historicalSource?: SessionSourceRef | null;
   authentication?: AuthenticationState | null;
   modelSettingsPending?: boolean;
   active: boolean;
@@ -5603,6 +5661,7 @@ export interface GeneratedDesktopCommands {
   CancelRemoteTabJobs(arg0: string, arg1: string[]): Promise<void>;
   CancelSessionExport(arg0: string): Promise<void>;
   CancelSessionForTab(arg0: string): Promise<CancelReceipt>;
+  CancelSessionPreparation(arg0: string): Promise<SessionPreparationView>;
   CancelShellInstall(): Promise<void>;
   CancelTab(arg0: string): Promise<void>;
   CancelTabWithInboxItems(arg0: string, arg1: string[]): Promise<void>;
@@ -5615,6 +5674,7 @@ export interface GeneratedDesktopCommands {
   CapabilityDiagnostics(arg0: boolean): Promise<Report>;
   CaptureAttachmentTarget(arg0: ComposerTarget): Promise<AttachmentTargetView>;
   CaptureInboxTarget(arg0: string, arg1: string): Promise<InboxTargetView>;
+  CheckHistoricalSourceUpdate(arg0: SessionSelector): Promise<HistoricalSourceUpdateView>;
   CheckRemotePlatform(arg0: string): Promise<void>;
   CheckUpdate(arg0: string): Promise<UpdateInfo | null>;
   Checkpoints(): Promise<CheckpointMeta[]>;
@@ -5648,6 +5708,7 @@ export interface GeneratedDesktopCommands {
   ConnectRemoteHost(arg0: string): Promise<void>;
   ContextPanel(arg0: string): Promise<ContextPanelInfo>;
   ContextUsageForTab(arg0: string): Promise<ContextInfo>;
+  ControlHistoricalImport(arg0: string): Promise<HistoricalImportStatus>;
   CopySessionTarget(arg0: SessionSelector, arg1: string): Promise<SessionCreationResult>;
   CopyThemePack(arg0: string, arg1: string, arg2: string): Promise<ThemePackView>;
   CreateBlankProject(arg0: string, arg1: string): Promise<string>;
@@ -5722,6 +5783,7 @@ export interface GeneratedDesktopCommands {
   GetDesktopZoomFactor(): Promise<number>;
   GetDraftContext(arg0: string): Promise<SessionDraftContextView>;
   GetDraftSubmission(arg0: string): Promise<SessionDraftSubmissionView>;
+  GetHistoricalImportStatus(): Promise<HistoricalImportStatus>;
   GetHistoryIndexStatus(): Promise<historycatalog_Status>;
   GetHistorySearchContext(arg0: HistorySearchContextRequest): Promise<HistorySearchContextLine[]>;
   GetLegacyEmptySessionCleanupStatus(): Promise<LegacyEmptySessionCleanupStatus>;
@@ -5739,6 +5801,7 @@ export interface GeneratedDesktopCommands {
   GetSessionDraft(arg0: string): Promise<SessionDraftView>;
   GetSessionDraftState(arg0: string): Promise<SessionDraftState>;
   GetSessionOrganization(arg0: SessionOrganizationWorkspace): Promise<SessionOrganizationSnapshot>;
+  GetSessionPreparation(arg0: string): Promise<SessionPreparationView>;
   GetSessionUpgradeStatus(): Promise<SessionUpgradeStatus>;
   GetSessionVersionState(arg0: ProjectTopicKey): Promise<SessionVersionStateView>;
   GetTask(arg0: string): Promise<TaskSnapshot | null>;
@@ -5771,6 +5834,7 @@ export interface GeneratedDesktopCommands {
   HistorySliceForTab(arg0: string, arg1: HistorySliceRequest): Promise<HistorySlice>;
   HistorySliceForTarget(arg0: SessionSelector, arg1: HistorySliceRequest): Promise<HistorySlice>;
   HooksSettings(arg0: string): Promise<HooksSettingsView>;
+  ImportHistoricalSession(arg0: string): Promise<SessionRestoreResult>;
   ImportThemePack(arg0: string, arg1: boolean): Promise<ThemeImportResult>;
   InboxHasItems(arg0: string): Promise<boolean>;
   InboxSnapshot(arg0: string): Promise<InboxSnapshotView>;
@@ -5788,6 +5852,7 @@ export interface GeneratedDesktopCommands {
   ListDir(arg0: string): Promise<DirEntry[]>;
   ListDirForTab(arg0: string, arg1: string): Promise<DirEntry[]>;
   ListDirForTarget(arg0: ComposerTarget, arg1: string): Promise<DirEntry[]>;
+  ListHistoricalSessions(): Promise<HistoricalImportStatus>;
   ListHistorySessions(arg0: HistorySessionPageRequest): Promise<HistorySessionPage>;
   ListProjectGroups(arg0: string, arg1: string): Promise<desktopGroup[]>;
   ListProjectTopics(arg0: ProjectTopicPageRequest): Promise<ProjectTopicPage>;
@@ -5883,6 +5948,8 @@ export interface GeneratedDesktopCommands {
   PluginDoctor(arg0: string): Promise<PluginView>;
   Plugins(): Promise<PluginView[]>;
   PollBotConnectionInstall(arg0: string): Promise<BotInstallPollResult>;
+  PrepareHistoricalSourceVersion(arg0: SessionSourceRef, arg1: string): Promise<SessionPreparationView>;
+  PrepareSession(arg0: SessionSelector): Promise<SessionPreparationView>;
   PrepareWorktreeMerge(arg0: string): Promise<MergeInspection>;
   PreviewRecoveryEntry(arg0: string): Promise<HistoryPage>;
   PreviewRewindForTab(arg0: string, arg1: number, arg2: string): Promise<RewindPlanView>;
@@ -6201,6 +6268,7 @@ export interface GeneratedDesktopCommands {
   StageImageForTab(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string): Promise<DraftImageView>;
   StageImageForTarget(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string): Promise<DraftImageView>;
   StartBotConnectionInstall(arg0: string, arg1: string): Promise<BotInstallStartResult>;
+  StartHistoricalImport(arg0: string[]): Promise<HistoricalImportStatus>;
   StartTopicActivation(arg0: TopicActivationRequest): Promise<TopicActivationTicket>;
   StartTurnForAttachmentTarget(arg0: string, arg1: string, arg2: SubmissionRequest): Promise<TurnStartView>;
   StartTurnForTab(arg0: string, arg1: string, arg2: string): Promise<TurnStartView>;

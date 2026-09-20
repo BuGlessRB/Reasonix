@@ -741,27 +741,23 @@ func (a *App) RenameCanonicalSession(ref session.SessionRef, title string) error
 	return a.renameCanonicalSessionTarget(target, title)
 }
 
-// SetSessionPinned updates one durable session, never all members of its topic.
-// An older path is adopted through the existing journal before storing the
-// session-specific preference.
+// SetSessionPinned updates canonical presentation directly. A historical
+// source keeps its lightweight topic preference without converting content;
+// import transfers that presentation when the target is committed.
 func (a *App) SetSessionPinned(selector SessionSelector, pinned bool) error {
-	target, err := a.resolveSessionMutationTarget(selector)
+	target, err := a.resolveSessionTarget(selector)
 	if err != nil {
 		return err
 	}
-	if target.SessionRef.SessionID == "" && target.SessionPath != "" {
-		workspaceID, ensureErr := a.ensureDesktopWorkspace(a.bootContext(), target.Scope, target.WorkspaceRoot)
-		if ensureErr != nil {
-			return ensureErr
-		}
-		if err = a.migrateLegacySession(a.bootContext(), target.SessionPath,
-			desktopMigrationSource{scope: target.Scope, workspaceRoot: target.WorkspaceRoot}, workspaceID); err != nil {
+	if target.SessionRef.SessionID == "" && target.Source != nil {
+		value := pinned
+		if err := a.saveHistoricalSourcePresentation(target.Source.SourceKey, func(presentation *historicalSourcePresentation) {
+			presentation.Pinned = &value
+		}); err != nil {
 			return err
 		}
-		target, err = a.resolveSessionTarget(SessionSelector{SessionPath: target.SessionPath})
-		if err != nil {
-			return err
-		}
+		a.emitProjectTreeMetadataChanged()
+		return nil
 	}
 	if target.SessionRef.SessionID == "" {
 		return newSessionOperationError(sessionOperationNoMessages, "This empty session has no durable preference yet.")

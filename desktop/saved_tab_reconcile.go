@@ -128,6 +128,11 @@ func (a *App) reconcileSavedTabs(ctx context.Context, file desktopTabsFile) (des
 				file.Tabs[index].SessionID = sessionID
 				repairedIdentity = true
 			}
+			if source := a.savedTabHistoricalSource(file.Tabs[index], afterMigration); source != nil {
+				file.Tabs[index].historicalSource = source
+				decisions[index] = savedTabReconcileDecision{outcome: preserveRecovery, reason: "historical_source_pending", waitedForMigration: true}
+				continue
+			}
 			decision, _ := a.classifySavedTab(file.Tabs[index], afterMigration, true)
 			if identityKind != "" {
 				decision.identityKind = identityKind
@@ -155,7 +160,7 @@ func filterReconciledSavedTabs(tabs []desktopTabEntry, decisions []savedTabRecon
 		if decision.outcome == dropStalePresentation || decision.outcome == archiveEmptyThenDrop {
 			removed[entry.ID] = true
 		} else {
-			if decision.identityKind != "" && (decision.outcome == preserveError || decision.outcome == preserveRecovery) {
+			if (entry.SessionPath != "" || entry.SessionID != "") && (decision.outcome == preserveError || decision.outcome == preserveRecovery) {
 				entry.restoreBlocked = true
 				entry.restoreBlockReason = decision.reason
 			}

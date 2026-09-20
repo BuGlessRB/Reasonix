@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ProjectTreeSessionBadges } from "./ProjectTreeSessionBadges";
 import { sessionLifecycleFences } from "../lib/sessionLifecycleFences";
 import { projectSessionIdentity, projectSessionRowKey } from "../lib/projectSessionIdentity";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
@@ -1366,8 +1367,7 @@ export function ProjectTree({
             <span className="project-tree__topic-copy">
               <span className="project-tree__topic-heading">
                 <span className="project-tree__topic-label">{label}</span>
-                {forkedFromLabel && <span className="project-tree__topic-recovery" title={forkedFromLabel}><GitBranch size={10} />{forkedFromLabel}</span>}
-                {recoveryLabel && <span className="project-tree__topic-recovery" title={recoveryLabel}>{recoveryLabel}</span>}
+                <ProjectTreeSessionBadges node={node} forkedFromLabel={forkedFromLabel} recoveryLabel={recoveryLabel} />
                 {imSource && (
                   <span
                     className={`project-tree__topic-im project-tree__topic-im--${imSourcePlatform}`}

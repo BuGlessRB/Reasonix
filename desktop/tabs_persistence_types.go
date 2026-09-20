@@ -33,6 +33,7 @@ type desktopTabEntry struct {
 	extra              map[string]json.RawMessage
 	restoreBlocked     bool
 	restoreBlockReason string
+	historicalSource   *SessionSourceRef
 }
 
 type desktopTabsFile struct {

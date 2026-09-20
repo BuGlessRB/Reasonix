@@ -1890,6 +1890,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "CancelSessionPreparation",
+      "owner": "App.CancelSessionPreparation",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionPreparationView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "operationID"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.CancelSessionPreparation"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/shell_support.go",
       "name": "CancelShellInstall",
       "owner": "App.CancelShellInstall",
@@ -2207,6 +2233,33 @@
       },
       "sources": [
         "desktop/inbox_target.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "CheckHistoricalSourceUpdate",
+      "owner": "App.CheckHistoricalSourceUpdate",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.SessionSelector"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalSourceUpdateView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "selector"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.CheckHistoricalSourceUpdate"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
       ]
     },
     {
@@ -3012,6 +3065,32 @@
       },
       "sources": [
         "desktop/app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "ControlHistoricalImport",
+      "owner": "App.ControlHistoricalImport",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalImportStatus"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "action"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.ControlHistoricalImport"
+      },
+      "sources": [
+        "desktop/historical_import.go"
       ]
     },
     {
@@ -5103,6 +5182,25 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "GetHistoricalImportStatus",
+      "owner": "App.GetHistoricalImportStatus",
+      "params": [],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalImportStatus"
+      },
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.GetHistoricalImportStatus"
+      },
+      "sources": [
+        "desktop/historical_import.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/history_catalog.go",
       "name": "GetHistoryIndexStatus",
       "owner": "App.GetHistoryIndexStatus",
@@ -5498,6 +5596,32 @@
       },
       "sources": [
         "desktop/session_organization.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "GetSessionPreparation",
+      "owner": "App.GetSessionPreparation",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionPreparationView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "operationID"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.GetSessionPreparation"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
       ]
     },
     {
@@ -6324,6 +6448,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "ImportHistoricalSession",
+      "owner": "App.ImportHistoricalSession",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionRestoreResult"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "id"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.ImportHistoricalSession"
+      },
+      "sources": [
+        "desktop/historical_import.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/theme_app.go",
       "name": "ImportThemePack",
       "owner": "App.ImportThemePack",
@@ -6798,6 +6948,26 @@
       },
       "sources": [
         "desktop/session_draft.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "ListHistoricalSessions",
+      "owner": "App.ListHistoricalSessions",
+      "params": [],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalImportStatus"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.ListHistoricalSessions"
+      },
+      "sources": [
+        "desktop/historical_import.go"
       ]
     },
     {
@@ -9312,6 +9482,64 @@
       },
       "sources": [
         "desktop/bot_connection_app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "PrepareHistoricalSourceVersion",
+      "owner": "App.PrepareHistoricalSourceVersion",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.SessionSourceRef"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionPreparationView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "sourceRef",
+          "version"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.PrepareHistoricalSourceVersion"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "PrepareSession",
+      "owner": "App.PrepareSession",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.SessionSelector"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionPreparationView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "selector"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.PrepareSession"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
       ]
     },
     {
@@ -17946,6 +18174,35 @@
       },
       "sources": [
         "desktop/bot_connection_app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/historical_import.go",
+      "name": "StartHistoricalImport",
+      "owner": "App.StartHistoricalImport",
+      "params": [
+        {
+          "elem": {
+            "kind": "string"
+          },
+          "kind": "array"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalImportStatus"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "ids"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.StartHistoricalImport"
+      },
+      "sources": [
+        "desktop/historical_import.go"
       ]
     },
     {
@@ -29428,6 +29685,171 @@
         }
       ]
     },
+    "main.HistoricalImportStatus": {
+      "fields": [
+        {
+          "name": "items",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.HistoricalSessionView"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "running",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "paused",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "remaining",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "completed",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "blocked",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "failed",
+          "type": {
+            "kind": "integer"
+          }
+        }
+      ]
+    },
+    "main.HistoricalSessionView": {
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "title",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "format",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "status",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "errorCode",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "session",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "session.SessionRef"
+            },
+            "kind": "nullable"
+          }
+        },
+        {
+          "name": "source",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionSourceRef"
+            },
+            "kind": "nullable"
+          }
+        }
+      ]
+    },
+    "main.HistoricalSourceUpdateView": {
+      "fields": [
+        {
+          "name": "sourceKey",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "status",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "version",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "target",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "session.SessionRef"
+            },
+            "kind": "nullable"
+          }
+        },
+        {
+          "name": "source",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionSourceRef"
+            },
+            "kind": "nullable"
+          }
+        },
+        {
+          "name": "errorCode",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "retryable",
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ]
+    },
     "main.HistoryContentChunk": {
       "fields": [
         {
@@ -31935,6 +32357,17 @@
           }
         },
         {
+          "name": "historicalSource",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionSourceRef"
+            },
+            "kind": "nullable"
+          }
+        },
+        {
           "name": "eventChannel",
           "type": {
             "kind": "string"
@@ -33127,6 +33560,27 @@
               "ref": "main.SessionSourceRef"
             },
             "kind": "nullable"
+          }
+        },
+        {
+          "name": "historical",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "historicalBranch",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "preparationStatus",
+          "optional": true,
+          "type": {
+            "kind": "string"
           }
         },
         {
@@ -37829,6 +38283,27 @@
           }
         },
         {
+          "name": "historical",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "historicalBranch",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "preparationStatus",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "path",
           "type": {
             "kind": "string"
@@ -38218,6 +38693,58 @@
           "optional": true,
           "type": {
             "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.SessionPreparationView": {
+      "fields": [
+        {
+          "name": "operationId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "sourceKey",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "status",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "revision",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "target",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "session.SessionRef"
+            },
+            "kind": "nullable"
+          }
+        },
+        {
+          "name": "errorCode",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "retryable",
+          "type": {
+            "kind": "boolean"
           }
         }
       ]
@@ -39843,6 +40370,17 @@
           "optional": true,
           "type": {
             "kind": "string"
+          }
+        },
+        {
+          "name": "historicalSource",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionSourceRef"
+            },
+            "kind": "nullable"
           }
         },
         {

@@ -223,6 +223,7 @@ func (a *App) runShutdown(c *desktopShutdownCoordinator) (err error) {
 		c.setPhase("cancelling_background")
 		a.lifecycle.tracker.markShutdown(reason, "cancelling_background", "in_progress")
 		a.shuttingDown.Store(true)
+		a.stopHistoricalImports()
 		a.cancelSessionExports()
 		a.cancelSessionNavigation()
 		a.cancelAllTabBuilds()

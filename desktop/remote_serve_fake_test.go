@@ -380,11 +380,25 @@ func writeTestJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+func TestRemoteHostFixtureIsolatesCanonicalWorkspaceRegistry(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	prior := NewApp()
+	if _, err := prior.ensureDesktopWorkspace(t.Context(), "global", ""); err != nil {
+		t.Fatal(err)
+	}
+	seedBridgeTestHost(t, "box")
+	fresh := NewApp()
+	if _, err := fresh.ensureDesktopWorkspace(t.Context(), "global", ""); err != nil {
+		t.Fatalf("remote fixture reused another home's canonical registry: %v", err)
+	}
+}
+
 func seedBridgeTestHost(t *testing.T, hostID string) {
 	t.Helper()
-	home := t.TempDir()
+	// A new config home also needs its own canonical registry: global workspace
+	// identity contains that home, while REASONIX_STATE_HOME otherwise survives.
+	home := isolateDesktopUserDirs(t)
 	t.Setenv("REASONIX_HOME", home)
-	t.Setenv("HOME", home)
 	if err := editUserConfig(func(c *config.Config) error {
 		return c.UpsertRemoteHost(config.RemoteHostEntry{Name: hostID, Host: "127.0.0.1", Port: 22, User: "dev"})
 	}); err != nil {

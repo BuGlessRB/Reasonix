@@ -123,6 +123,10 @@ func (s *Session) Export(ctx context.Context, destination string) error {
 }
 
 func (p *FilesystemPersistence) exportCold(ctx context.Context, sessionID, destination string) error {
+	return p.exportColdMode(ctx, sessionID, destination, false)
+}
+
+func (p *FilesystemPersistence) exportColdMode(ctx context.Context, sessionID, destination string, try bool) error {
 	if err := validateSessionID(sessionID); err != nil {
 		return err
 	}
@@ -130,7 +134,16 @@ func (p *FilesystemPersistence) exportCold(ctx context.Context, sessionID, desti
 	if err != nil {
 		return err
 	}
-	releaseDirectory, err := filelock.AcquireMode(ctx, directoryOwnershipPath(source), filelock.ModeShared)
+	acquire := func(path string) (func(), error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if try {
+			return filelock.TryAcquireMode(path, filelock.ModeShared)
+		}
+		return filelock.AcquireMode(ctx, path, filelock.ModeShared)
+	}
+	releaseDirectory, err := acquire(directoryOwnershipPath(source))
 	if err != nil {
 		return err
 	}
@@ -138,7 +151,7 @@ func (p *FilesystemPersistence) exportCold(ctx context.Context, sessionID, desti
 	if _, err := readManifest(filepath.Join(source, "manifest.json")); err != nil {
 		return err
 	}
-	release, err := filelock.AcquireMode(ctx, filepath.Join(source, "writer.lock"), filelock.ModeShared)
+	release, err := acquire(filepath.Join(source, "writer.lock"))
 	if err != nil {
 		return fmt.Errorf("session: freeze cold export: %w", err)
 	}
@@ -367,6 +380,23 @@ func (s *Service) Export(ctx context.Context, ref SessionRef, destination string
 		return errors.New("session: persistence does not support export")
 	}
 	return filesystem.exportCold(ctx, ref.SessionID, destination)
+}
+
+// TryExportCold takes a consistent snapshot without waiting for a writer.
+// Import coordinators use this for historical sources owned by other processes.
+// The locks remain held during copying; this is not a racy probe then export.
+func (s *Service) TryExportCold(ctx context.Context, ref SessionRef, destination string) error {
+	if err := ref.validate(s.hostID); err != nil {
+		return err
+	}
+	if _, live := s.Runtime(ref); live {
+		return filelock.ErrHeld
+	}
+	filesystem, ok := s.persistence.(*FilesystemPersistence)
+	if !ok {
+		return errors.New("session: persistence does not support export")
+	}
+	return filesystem.exportColdMode(ctx, ref.SessionID, destination, true)
 }
 
 // Import validates and atomically adopts a self-contained exported directory.

@@ -481,6 +481,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // measures 2073980 B (2025.4 KiB), 186 B above the same-toolchain macOS build;
 // the ceiling follows the CI producer. Retain 0.13 KiB headroom at the next
 // one-decimal ceiling; gzip, CSS, and chunk limits are unchanged.
-const rawInitialBudgetKiB = 2_025.5;
+// Combining that migration with restored historical-tab preparation measures
+// 2074127 B locally. Preserve the measured 186 B Linux producer difference
+// above (2074313 B combined), with 0.11 KiB headroom. Historical preparation
+// remains lazy; compressed, chunk, CSS, and locale limits stay unchanged.
+const rawInitialBudgetKiB = 2_025.8;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

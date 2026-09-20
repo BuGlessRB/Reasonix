@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -93,7 +94,7 @@ func sessionOperationErrorForTarget(err error, targetKey, operationID string) er
 // RenameSessionTarget performs a manual persistent rename without opening or
 // selecting the target session.
 func (a *App) RenameSessionTarget(selector SessionSelector, title string) (SessionMutationResult, error) {
-	target, err := a.resolveSessionMutationTarget(selector)
+	target, err := a.resolveSessionTarget(selector)
 	if err != nil {
 		return SessionMutationResult{}, err
 	}
@@ -128,6 +129,19 @@ func (a *App) RenameSessionTarget(selector SessionSelector, title string) (Sessi
 			return result, nil
 		}
 	} else if target.SessionPath != "" {
+		if target.Source != nil {
+			err = a.saveHistoricalSourcePresentation(target.Source.SourceKey, func(presentation *historicalSourcePresentation) {
+				presentation.Title = title
+			})
+		}
+		if err != nil {
+			return SessionMutationResult{}, sessionOperationErrorForTarget(err, key, operationID)
+		}
+		if info, statErr := os.Stat(target.SessionPath); target.Source != nil && statErr == nil && info.IsDir() {
+			a.emitSessionTargetChange("session_metadata_changed", SessionTargetChangeEvent{TargetKey: key, OperationID: operationID, Title: title})
+			a.emitProjectTreeMetadataChanged()
+			return SessionMutationResult{TargetKey: key, OperationID: operationID, Committed: true, Title: title}, nil
+		}
 		err = a.RenameSession(target.SessionPath, title)
 		if err == nil {
 			_, revision, revisionErr := agent.SessionTitleSnapshot(target.SessionPath)
