@@ -1366,6 +1366,7 @@ export function ProjectTree({
             <span className="project-tree__topic-copy">
               <span className="project-tree__topic-heading">
                 <span className="project-tree__topic-label">{label}</span>
+                {node.historical && <span className="project-tree__topic-recovery">{t(node.historicalBranch ? "history.branchBadge" : "history.legacyBadge")}</span>}
                 {forkedFromLabel && <span className="project-tree__topic-recovery" title={forkedFromLabel}><GitBranch size={10} />{forkedFromLabel}</span>}
                 {recoveryLabel && <span className="project-tree__topic-recovery" title={recoveryLabel}>{recoveryLabel}</span>}
                 {imSource && (

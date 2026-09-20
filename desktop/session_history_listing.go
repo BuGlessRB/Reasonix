@@ -82,7 +82,9 @@ func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
 				continue
 			}
 			headMeta := meta
-			headMeta.Source, headMeta.Path = row.Source, sessionSourceRoute(row.Source)
+			headMeta.Source = row.Source
+			headMeta.Historical, headMeta.HistoricalBranch = true, row.HistoricalBranch
+			headMeta.PreparationStatus = a.historicalPreparationStatus(row.Source.SourceKey)
 			headMeta.Turns, headMeta.Preview = row.Turns, row.Preview
 			if row.LastActivityAt > 0 {
 				headMeta.LastActivityAt, headMeta.ModTime = row.LastActivityAt, row.LastActivityAt
@@ -90,7 +92,7 @@ func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
 			if row.CreatedAt > 0 {
 				headMeta.CreatedAt = row.CreatedAt
 			}
-			headMeta.Current = headMeta.Path == active
+			headMeta.Current = sessionRuntimeKey(headMeta.Path) == sessionRuntimeKey(active)
 			out = append(out, headMeta)
 		}
 	}

@@ -275,6 +275,7 @@ func (a *App) unadoptedLegacyTopics(req ProjectTopicPageRequest, adopted, adopte
 		}
 		for _, node := range expanded {
 			if node.Source != nil {
+				node.PreparationStatus = a.historicalPreparationStatus(node.Source.SourceKey)
 				if !adopted[projectNodeSessionKey(node)] {
 					legacy.Items = append(legacy.Items, node)
 				}

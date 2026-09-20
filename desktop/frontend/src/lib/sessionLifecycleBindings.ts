@@ -9,11 +9,16 @@ export interface CanonicalProjectNodeFields {
 }
 
 export interface SessionLifecycleBindings {
-  ListHistoricalSessions(): Promise<import("../generated/desktopContract.generated").HistoricalImportStatus>;
-  GetHistoricalImportStatus(): Promise<import("../generated/desktopContract.generated").HistoricalImportStatus>;
-  ImportHistoricalSession(id: string): Promise<import("../generated/desktopContract.generated").SessionRestoreResult>;
-  StartHistoricalImport(ids: string[]): Promise<import("../generated/desktopContract.generated").HistoricalImportStatus>;
-  ControlHistoricalImport(action: string): Promise<import("../generated/desktopContract.generated").HistoricalImportStatus>;
+  ListHistoricalSessions?(): Promise<import("../generated/desktopContract.generated").HistoricalImportStatus>;
+  GetHistoricalImportStatus?(): Promise<import("../generated/desktopContract.generated").HistoricalImportStatus>;
+  ImportHistoricalSession?(id: string): Promise<import("../generated/desktopContract.generated").SessionRestoreResult>;
+  PrepareSession?(selector: import("../generated/desktopContract.generated").SessionSelector): Promise<import("../generated/desktopContract.generated").SessionPreparationView>;
+  GetSessionPreparation?(operationId: string): Promise<import("../generated/desktopContract.generated").SessionPreparationView>;
+  CancelSessionPreparation?(operationId: string): Promise<import("../generated/desktopContract.generated").SessionPreparationView>;
+  CheckHistoricalSourceUpdate?(selector: import("../generated/desktopContract.generated").SessionSelector): Promise<import("../generated/desktopContract.generated").HistoricalSourceUpdateView>;
+  PrepareHistoricalSourceVersion?(source: import("../generated/desktopContract.generated").SessionSourceRef, version: string): Promise<import("../generated/desktopContract.generated").SessionPreparationView>;
+  StartHistoricalImport?(ids: string[]): Promise<import("../generated/desktopContract.generated").HistoricalImportStatus>;
+  ControlHistoricalImport?(action: string): Promise<import("../generated/desktopContract.generated").HistoricalImportStatus>;
 	ApplySessionLifecycle(request: import("../generated/desktopContract.generated").SessionLifecycleRequest): Promise<import("../generated/desktopContract.generated").SessionLifecycleResult>;
 	ListTrashEntries(query: string, cursor: string, limit: number): Promise<import("../generated/desktopContract.generated").TrashEntryPage>;
   ListRecoveryEntries(query: string, cursor: string, limit: number): Promise<import("../generated/desktopContract.generated").RecoveryEntryPage>;
@@ -26,11 +31,6 @@ export interface SessionLifecycleBindings {
 export function makeMockSessionLifecycleBindings(mockWorkspaceSnapshot: () => WorkspaceSnapshot, mockArchivedSessionIDs: Set<string>, mockPurgedSessionIDs: Set<string>, notifyMockProjectTreeChanged: () => void): SessionLifecycleBindings {
   const mockLifecycleResults = new Map<string, { request: string; result: import("../generated/desktopContract.generated").SessionLifecycleResult }>();
   return {
-    async ListHistoricalSessions() { return { items: [], running: false, paused: false, remaining: 0 }; },
-    async GetHistoricalImportStatus() { return { items: [], running: false, paused: false, remaining: 0 }; },
-    async ImportHistoricalSession() { throw new Error("historical session is unavailable"); },
-    async StartHistoricalImport() { return { items: [], running: false, paused: false, remaining: 0 }; },
-    async ControlHistoricalImport() { return { items: [], running: false, paused: false, remaining: 0 }; },
     async PurgeCanonicalSession(ref: SessionRef) {
       if (!mockArchivedSessionIDs.has(ref.sessionId) && !mockPurgedSessionIDs.has(ref.sessionId)) throw new Error("Only archived sessions can be permanently deleted");
       mockPurgedSessionIDs.add(ref.sessionId); mockArchivedSessionIDs.delete(ref.sessionId); notifyMockProjectTreeChanged();

@@ -1890,6 +1890,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "CancelSessionPreparation",
+      "owner": "App.CancelSessionPreparation",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionPreparationView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "operationID"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.CancelSessionPreparation"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/shell_support.go",
       "name": "CancelShellInstall",
       "owner": "App.CancelShellInstall",
@@ -2207,6 +2233,33 @@
       },
       "sources": [
         "desktop/inbox_target.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "CheckHistoricalSourceUpdate",
+      "owner": "App.CheckHistoricalSourceUpdate",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.SessionSelector"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.HistoricalSourceUpdateView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "selector"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.CheckHistoricalSourceUpdate"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
       ]
     },
     {
@@ -5543,6 +5596,32 @@
       },
       "sources": [
         "desktop/session_organization.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "GetSessionPreparation",
+      "owner": "App.GetSessionPreparation",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionPreparationView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "operationID"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.GetSessionPreparation"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
       ]
     },
     {
@@ -9403,6 +9482,64 @@
       },
       "sources": [
         "desktop/bot_connection_app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "PrepareHistoricalSourceVersion",
+      "owner": "App.PrepareHistoricalSourceVersion",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.SessionSourceRef"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionPreparationView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "sourceRef",
+          "version"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.PrepareHistoricalSourceVersion"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/session_preparation.go",
+      "name": "PrepareSession",
+      "owner": "App.PrepareSession",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.SessionSelector"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.SessionPreparationView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "selector"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.PrepareSession"
+      },
+      "sources": [
+        "desktop/session_preparation.go"
       ]
     },
     {
@@ -29577,6 +29714,24 @@
           "type": {
             "kind": "integer"
           }
+        },
+        {
+          "name": "completed",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "blocked",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "failed",
+          "type": {
+            "kind": "integer"
+          }
         }
       ]
     },
@@ -29622,6 +29777,75 @@
               "ref": "session.SessionRef"
             },
             "kind": "nullable"
+          }
+        },
+        {
+          "name": "source",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionSourceRef"
+            },
+            "kind": "nullable"
+          }
+        }
+      ]
+    },
+    "main.HistoricalSourceUpdateView": {
+      "fields": [
+        {
+          "name": "sourceKey",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "status",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "version",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "target",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "session.SessionRef"
+            },
+            "kind": "nullable"
+          }
+        },
+        {
+          "name": "source",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionSourceRef"
+            },
+            "kind": "nullable"
+          }
+        },
+        {
+          "name": "errorCode",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "retryable",
+          "type": {
+            "kind": "boolean"
           }
         }
       ]
@@ -33325,6 +33549,27 @@
               "ref": "main.SessionSourceRef"
             },
             "kind": "nullable"
+          }
+        },
+        {
+          "name": "historical",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "historicalBranch",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "preparationStatus",
+          "optional": true,
+          "type": {
+            "kind": "string"
           }
         },
         {
@@ -38020,6 +38265,27 @@
           }
         },
         {
+          "name": "historical",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "historicalBranch",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "preparationStatus",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "path",
           "type": {
             "kind": "string"
@@ -38409,6 +38675,58 @@
           "optional": true,
           "type": {
             "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.SessionPreparationView": {
+      "fields": [
+        {
+          "name": "operationId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "sourceKey",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "status",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "revision",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "target",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "session.SessionRef"
+            },
+            "kind": "nullable"
+          }
+        },
+        {
+          "name": "errorCode",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "retryable",
+          "type": {
+            "kind": "boolean"
           }
         }
       ]

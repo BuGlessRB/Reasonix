@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"reasonix/desktop/internal/workspacestate"
 	"reasonix/internal/config"
 	"reasonix/internal/identitylock"
+	"reasonix/internal/provider"
 	"reasonix/internal/session"
 )
 
@@ -137,6 +139,153 @@ func TestHistoricalConcurrentRequestsKeepOneTarget(t *testing.T) {
 	state, err := app.workspaceRegistry().Load(t.Context())
 	if err != nil || len(state.SourceMappings) != 1 || len(state.Workspaces[workspacestate.GlobalWorkspaceID].SessionIDs) != 1 {
 		t.Fatalf("duplicate durable identities: %+v %v", state, err)
+	}
+}
+
+func TestPrepareSessionReturnsRevisionedSharedTask(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	coldV4MigrationFixture(t, config.SessionStoreDir(), "prepared-navigation")
+	app := newHistoricalLifecycleApp(t)
+	list, err := app.ListHistoricalSessions()
+	if err != nil || len(list.Items) != 1 || list.Items[0].Source == nil {
+		t.Fatalf("historical listing: %+v %v", list, err)
+	}
+	entered, proceed := make(chan struct{}), make(chan struct{})
+	app.desktopSessions.beforeMigrationRegistryCommit = func() error {
+		select {
+		case <-entered:
+		default:
+			close(entered)
+		}
+		<-proceed
+		return nil
+	}
+	first, err := app.PrepareSession(SessionSelector{Source: list.Items[0].Source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := app.PrepareSession(SessionSelector{Source: list.Items[0].Source})
+	if err != nil || first.OperationID != second.OperationID {
+		t.Fatalf("duplicate prepare did not join: %+v %+v %v", first, second, err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("preparation did not reach publication")
+	}
+	close(proceed)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		view, getErr := app.GetSessionPreparation(first.OperationID)
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		if view.Status == "ready" {
+			if view.Target == nil || view.Revision <= first.Revision {
+				t.Fatalf("invalid terminal preparation: %+v", view)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("preparation did not complete: %+v", view)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestHistoricalQueueRestartsPaused(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	root := config.SessionStoreDir()
+	coldV4MigrationFixture(t, root, "queue-one")
+	coldV4MigrationFixture(t, root, "queue-two")
+	app := newHistoricalLifecycleApp(t)
+	first := historicalLifecycleID(t, app, "queue-one")
+	second := historicalLifecycleID(t, app, "queue-two")
+	c := &app.historicalImports
+	c.mu.Lock()
+	c.queue = []string{first, second}
+	if err := c.saveQueueLocked(); err != nil {
+		c.mu.Unlock()
+		t.Fatal(err)
+	}
+	c.mu.Unlock()
+	app.closeSessionServices()
+	app = newHistoricalLifecycleApp(t)
+	status, err := app.ListHistoricalSessions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Running || !status.Paused || status.Remaining != 2 {
+		t.Fatalf("restarted queue must wait for manual continue: %+v", status)
+	}
+}
+
+func TestHistoricalSourceUpdateImportsOneStableBranch(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	old := coldV4MigrationFixture(t, config.SessionStoreDir(), "updated-source")
+	app := newHistoricalLifecycleApp(t)
+	list, err := app.ListHistoricalSessions()
+	if err != nil || len(list.Items) != 1 || list.Items[0].Source == nil {
+		t.Fatalf("list: %+v %v", list, err)
+	}
+	base, err := app.ImportHistoricalSession(list.Items[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := old.Open(t.Context(), session.SessionRef{HostID: "migration-source", SessionID: "updated-source"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(map[string]any{"message": provider.Message{ID: "new", Role: provider.RoleAssistant, Content: "new historical content"}})
+	if _, err := binding.Runtime().Session().AppendBatch(t.Context(), "new-content", []session.Event{{Kind: "message/complete", Payload: payload}}); err != nil {
+		t.Fatal(err)
+	}
+	oldRef := binding.Runtime().Ref()
+	if err := binding.Release(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := old.Close(t.Context(), oldRef); err != nil {
+		t.Fatal(err)
+	}
+	selector := SessionSelector{Ref: &base.Session}
+	update, err := app.CheckHistoricalSourceUpdate(selector)
+	if err != nil || update.Status != "checking" {
+		t.Fatalf("initial check: %+v %v", update, err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for update.Status == "checking" {
+		if time.Now().After(deadline) {
+			t.Fatal("source update check did not complete")
+		}
+		time.Sleep(time.Millisecond)
+		update, err = app.CheckHistoricalSourceUpdate(selector)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if update.Status != "available" || update.Version == "" || update.Source == nil {
+		t.Fatalf("updated source not detected: %+v", update)
+	}
+	prepared, err := app.PrepareHistoricalSourceVersion(*update.Source, update.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for prepared.Status != "ready" {
+		if time.Now().After(deadline) {
+			t.Fatal("updated source preparation did not complete")
+		}
+		time.Sleep(time.Millisecond)
+		prepared, err = app.GetSessionPreparation(prepared.OperationID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if prepared.Target == nil || prepared.Target.SessionID == base.Session.SessionID {
+		t.Fatalf("source update did not create an independent branch: base=%+v update=%+v", base, prepared)
+	}
+	again, err := app.PrepareHistoricalSourceVersion(*list.Items[0].Source, update.Version)
+	if err != nil || again.OperationID != prepared.OperationID {
+		t.Fatalf("same version was not deduplicated: %+v %v", again, err)
 	}
 }
 

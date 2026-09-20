@@ -328,7 +328,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
             shell,
             banners: session.bannerCommands,
             onboarding: navigation.onboardingCommands,
-          })} />}
+          })} historical={core.remoteSurfaceActive ? undefined : { tab: activeTab, navigate: session.desktopNavigation.enqueueNavigation }} />}
 
           <ChatPaneRegion
             // Local navigation is now history-first: keep the transcript
@@ -410,7 +410,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
             composer={buildComposerSurface({
               view: {
                 hidden: composerSurfaceHidden,
-                inert: presentationTransitioning,
+                inert: runtimeTransitioning,
                 hero: session.transcript.emptyHero,
                 headline: t("welcome.creation.title"),
                 remote: core.remoteSurfaceActive,

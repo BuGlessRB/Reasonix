@@ -1,8 +1,10 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "../lib/i18n";
 import { app } from "../lib/bridge";
-import type { SessionTakeoverView } from "../lib/types";
+import type { SessionTakeoverView, TabMeta } from "../lib/types";
+import type { HistoricalSourceUpdateView, SessionPreparationView } from "../generated/desktopContract.generated";
+import { historicalPreparationSnapshot, setHistoricalPreparation, subscribeHistoricalPreparation, type DesktopNavigationIntent } from "../app-runtime/desktopNavigationOwner";
 
 /**
  * SessionTakeoverDialog confirms taking a lease-blocked session over from the
@@ -121,4 +123,96 @@ export function SessionTakeoverDialog({ tabId, onClose }: { tabId: string; onClo
     </div>,
     document.body,
   );
+}
+
+const terminalPreparation = new Set(["ready", "blocked", "failed", "cancelled"]);
+export function HistoricalSessionBanners({ tab, navigate }: {
+  tab?: TabMeta;
+  navigate(intent: DesktopNavigationIntent): Promise<void>;
+}) {
+  const t = useT();
+  const activeRef = tab?.session ?? (tab?.sessionId ? { hostId: "local", sessionId: tab.sessionId } : undefined);
+  const preparation = useSyncExternalStore(subscribeHistoricalPreparation, historicalPreparationSnapshot);
+  const [update, setUpdate] = useState<HistoricalSourceUpdateView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const activeHostId = activeRef?.hostId ?? "";
+  const activeSessionId = activeRef?.sessionId ?? "";
+  const activeKey = activeSessionId ? `${activeHostId}:${activeSessionId}` : "";
+  const activeKeyRef = useRef(activeKey);
+  activeKeyRef.current = activeKey;
+
+  useEffect(() => {
+    let current = true;
+    setUpdate(null);
+    if (!activeSessionId || activeHostId !== "local" || !app.CheckHistoricalSourceUpdate) return () => { current = false; };
+    const ref = { hostId: activeHostId, sessionId: activeSessionId };
+    const run = async () => {
+      let next = await app.CheckHistoricalSourceUpdate!({ ref });
+      for (let attempt = 0; current && next.status === "checking" && attempt < 60; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (current) next = await app.CheckHistoricalSourceUpdate!({ ref });
+      }
+      if (!current || next.status !== "available" || !next.version || !next.source) return;
+      try {
+        if (localStorage.getItem(`historical-source-update:${next.sourceKey}`) === next.version) return;
+      } catch { /* private storage can be unavailable */ }
+      setUpdate(next);
+    };
+    void run().catch(() => {});
+    return () => { current = false; };
+  }, [activeHostId, activeSessionId]);
+
+  const dismissUpdate = () => {
+    if (update?.version) {
+      try { localStorage.setItem(`historical-source-update:${update.sourceKey}`, update.version); } catch { /* best effort */ }
+    }
+    setUpdate(null);
+  };
+  const importUpdate = async () => {
+    if (!update?.source || !update.version || !app.PrepareHistoricalSourceVersion || !app.GetSessionPreparation) return;
+    const expectedActive = activeKey;
+    setBusy(true);
+    try {
+      let view: SessionPreparationView = await app.PrepareHistoricalSourceVersion(update.source, update.version);
+      while (!terminalPreparation.has(view.status)) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        view = await app.GetSessionPreparation(view.operationId);
+      }
+      if (view.status === "ready" && view.target && activeKeyRef.current === expectedActive) void navigate({ kind: "canonical-session", ref: view.target });
+    } finally { setBusy(false); }
+  };
+  const cancelPreparation = async () => {
+    if (!preparation || !app.CancelSessionPreparation) return;
+    const view = await app.CancelSessionPreparation(preparation.operationId);
+    setHistoricalPreparation({ ...preparation, status: view.status, errorCode: view.errorCode, retryable: view.retryable });
+  };
+
+  if (preparation) {
+    const waiting = preparation.status === "queued" || preparation.status === "preparing";
+    return <div className={`banner ${waiting ? "banner--warning" : "banner--error"} banner--actionable`} role="status">
+      <span className="banner__msg">{t("history.importStatus.importing")}: {preparation.session.title || preparation.session.topicId || t("history.historicalSection")}</span>
+      <span className="banner__hint">{t(preparation.status === "queued" ? "history.importStatus.queued" : preparation.status === "preparing" ? "history.importStatus.importing" : "history.importFailed")}</span>
+      <span className="banner__spacer" />
+      {waiting && <button type="button" className="btn btn--small" onClick={() => void cancelPreparation()}>{t("common.cancel")}</button>}
+      {!waiting && preparation.retryable && <button type="button" className="btn btn--small" onClick={() => void navigate({ kind: "resume-session", session: preparation.session })}>{t("common.retry")}</button>}
+    </div>;
+  }
+  if (!update) return null;
+  return <div className="banner banner--warning banner--actionable" role="status">
+    <span className="banner__msg">{t("history.historicalSection")} · {t("history.importStatus.available")}</span>
+    <span className="banner__spacer" />
+    <button type="button" className="btn btn--small" disabled={busy} onClick={() => void importUpdate()}>{t("history.importOpen")} · {t("history.branchBadge")}</button>
+    <button type="button" className="btn btn--small" disabled={busy} onClick={dismissUpdate}>{t("updater.dismiss")}</button>
+  </div>;
+}
+
+export function SessionRuntimeOverlays({ takeoverTabId, onCloseTakeover, historical }: {
+  takeoverTabId: string | null;
+  onCloseTakeover(): void;
+  historical?: { tab?: TabMeta; navigate(intent: DesktopNavigationIntent): Promise<void> };
+}) {
+  return <>
+    {takeoverTabId ? <SessionTakeoverDialog tabId={takeoverTabId} onClose={onCloseTakeover} /> : null}
+    {historical ? <HistoricalSessionBanners {...historical} /> : null}
+  </>;
 }

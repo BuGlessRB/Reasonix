@@ -32,27 +32,22 @@ func (a *App) resolveSessionMutationTarget(selector SessionSelector) (SessionTar
 	if err != nil || target.Source == nil {
 		return target, err
 	}
-	_, _, err = a.ensureSessionOrganization(target.Scope, target.WorkspaceRoot)
+	view, err := a.PrepareSession(SessionSelector{Source: target.Source, TopicID: target.TopicID})
 	if err != nil {
 		return SessionTarget{}, err
 	}
-	workspace, err := a.ensureDesktopWorkspace(a.bootContext(), target.Scope, target.WorkspaceRoot)
+	c := &a.historicalImports
+	c.mu.Lock()
+	call := c.operations[view.OperationID]
+	c.mu.Unlock()
+	if call == nil {
+		return SessionTarget{}, newSessionOperationError("target_changed", "The source preparation task is unavailable.")
+	}
+	result, err := waitHistoricalImport(call)
 	if err != nil {
 		return SessionTarget{}, err
 	}
-	err = a.migrateLegacySession(a.bootContext(), target.SessionPath, desktopMigrationSource{scope: target.Scope, workspaceRoot: target.WorkspaceRoot, headID: target.Source.HeadID}, workspace)
-	if err != nil {
-		return SessionTarget{}, err
-	}
-	state, err := a.workspaceRegistry().Load(a.bootContext())
-	if err != nil {
-		return SessionTarget{}, err
-	}
-	mapping, ok := state.SourceMappings[target.Source.SourceKey]
-	if !ok {
-		return SessionTarget{}, newSessionOperationError("target_changed", "The source adoption has not completed.")
-	}
-	return a.resolveCanonicalSessionTarget(session.SessionRef{HostID: localDesktopHostID, SessionID: mapping.SessionID}, target.TopicID)
+	return a.resolveCanonicalSessionTarget(result.Session, target.TopicID)
 }
 
 func parseSessionSourceRoute(route string) (*SessionSourceRef, error) {

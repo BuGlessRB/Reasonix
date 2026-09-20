@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,6 +12,8 @@ import (
 
 	"reasonix/desktop/internal/workspacestate"
 	"reasonix/internal/agent"
+	"reasonix/internal/config"
+	"reasonix/internal/fileutil"
 	"reasonix/internal/identitylock"
 	"reasonix/internal/session"
 	"reasonix/internal/store"
@@ -25,6 +28,7 @@ type HistoricalSessionView struct {
 	Status    string              `json:"status"`
 	ErrorCode string              `json:"errorCode,omitempty"`
 	Session   *session.SessionRef `json:"session,omitempty"`
+	Source    *SessionSourceRef   `json:"source,omitempty"`
 }
 
 type HistoricalImportStatus struct {
@@ -32,24 +36,42 @@ type HistoricalImportStatus struct {
 	Running   bool                    `json:"running"`
 	Paused    bool                    `json:"paused"`
 	Remaining int                     `json:"remaining"`
+	Completed int                     `json:"completed"`
+	Blocked   int                     `json:"blocked"`
+	Failed    int                     `json:"failed"`
 }
 
 type historicalSource struct {
-	path, format, scope, root, head string
+	path, format, scope, root, head, version string
 }
 type historicalImportCall struct {
-	done   chan struct{}
-	result SessionRestoreResult
-	err    error
+	operationID        string
+	sourceKey          string
+	ctx                context.Context
+	cancel             context.CancelFunc
+	done               chan struct{}
+	result             SessionRestoreResult
+	err                error
+	status             string
+	errorCode          string
+	revision           uint64
+	interactive, batch bool
 }
 type historicalImportCoordinator struct {
 	mu                       sync.Mutex
 	sources                  map[string]historicalSource
 	views                    map[string]HistoricalSessionView
 	calls                    map[string]*historicalImportCall
+	operations               map[string]*historicalImportCall
+	updates                  map[string]*historicalSourceUpdateCall
+	updateWorker             chan struct{}
+	revision                 uint64
 	ctx                      context.Context
 	cancel                   context.CancelFunc
 	queue                    []string
+	current                  string
+	queueLoaded              bool
+	presentations            map[string]historicalSourcePresentation
 	running, paused, stopped bool
 	wake                     chan struct{}
 	workers                  sync.WaitGroup
@@ -62,6 +84,16 @@ func (a *App) GetHistoricalImportStatus() HistoricalImportStatus {
 	return c.status()
 }
 
+func (a *App) historicalPreparationStatus(sourceKey string) string {
+	c := &a.historicalImports
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if view, ok := c.views[sourceKey]; ok {
+		return view.Status
+	}
+	return "available"
+}
+
 // Listing reads directory entries and registry metadata only.
 func (a *App) ListHistoricalSessions() (HistoricalImportStatus, error) {
 	ctx := a.bootContext()
@@ -71,7 +103,7 @@ func (a *App) ListHistoricalSessions() (HistoricalImportStatus, error) {
 	}
 	sources := map[string]historicalSource{}
 	add := func(path, format, scope, root, head string) {
-		sources[desktopSourceKey(path, head)] = historicalSource{path, format, scope, root, head}
+		sources[desktopSourceKey(path, head)] = historicalSource{path: path, format: format, scope: scope, root: root, head: head}
 	}
 	canonical, legacy := a.desktopHistoricalRoots()
 	var joined error
@@ -86,12 +118,19 @@ func (a *App) ListHistoricalSessions() (HistoricalImportStatus, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.initialize(ctx)
+	if !c.queueLoaded {
+		c.loadQueueLocked()
+	}
 	for id, source := range sources {
 		if source.path == "" {
 			continue
 		}
 		c.sources[id] = source
-		c.views[id] = historicalImportView(state, id, source, c.views[id])
+		view := historicalImportView(state, id, source, c.views[id])
+		if presentation := c.presentations[id]; presentation.Title != "" {
+			view.Title = presentation.Title
+		}
+		c.views[id] = view
 	}
 	return c.status(), joined
 }
@@ -169,6 +208,7 @@ func historicalImportView(state workspacestate.State, id string, source historic
 	if view.ID == "" {
 		view = HistoricalSessionView{ID: id, Title: filepath.Base(source.path), Format: source.format, Status: "available"}
 	}
+	view.Source = &SessionSourceRef{HostID: localDesktopHostID, SourceKey: desktopSourceKey(source.path, source.head), Path: source.path, HeadID: source.head}
 	mapping, ok := historicalMappingForSource(state, id)
 	if !ok {
 		return view
@@ -214,16 +254,86 @@ func (c *historicalImportCoordinator) initialize(ctx context.Context) {
 	c.sources = map[string]historicalSource{}
 	c.views = map[string]HistoricalSessionView{}
 	c.calls = map[string]*historicalImportCall{}
+	c.operations = map[string]*historicalImportCall{}
+	c.updates = map[string]*historicalSourceUpdateCall{}
+	c.updateWorker = make(chan struct{}, 1)
+	c.presentations = map[string]historicalSourcePresentation{}
 	c.ctx, c.cancel = context.WithCancel(ctx)
 	c.wake = make(chan struct{}, 1)
 }
 func (c *historicalImportCoordinator) status() HistoricalImportStatus {
 	out := HistoricalImportStatus{Items: []HistoricalSessionView{}, Running: c.running, Paused: c.paused, Remaining: len(c.queue)}
+	if c.current != "" {
+		out.Remaining++
+	}
 	for _, view := range c.views {
 		out.Items = append(out.Items, view)
+		switch view.Status {
+		case "imported":
+			out.Completed++
+		case "blocked":
+			out.Blocked++
+		case "failed":
+			out.Failed++
+		}
 	}
 	sort.Slice(out.Items, func(i, j int) bool { return out.Items[i].ID < out.Items[j].ID })
 	return out
+}
+
+type historicalImportQueueSidecar struct {
+	Version       int                                     `json:"version"`
+	Current       string                                  `json:"current,omitempty"`
+	Queue         []string                                `json:"queue"`
+	Presentations map[string]historicalSourcePresentation `json:"presentations,omitempty"`
+}
+
+type historicalSourcePresentation struct {
+	Title  string `json:"title,omitempty"`
+	Pinned *bool  `json:"pinned,omitempty"`
+}
+
+func historicalImportQueuePath() string {
+	return filepath.Join(filepath.Dir(config.DesktopWorkspaceStatePath()), "historical-import-queue.v1.json")
+}
+
+func (c *historicalImportCoordinator) loadQueueLocked() {
+	c.queueLoaded = true
+	data, err := os.ReadFile(historicalImportQueuePath())
+	if err != nil {
+		return
+	}
+	var saved historicalImportQueueSidecar
+	if json.Unmarshal(data, &saved) != nil || saved.Version != 1 {
+		return
+	}
+	if saved.Current != "" {
+		c.queue = append(c.queue, saved.Current)
+	}
+	c.queue = append(c.queue, saved.Queue...)
+	for key, presentation := range saved.Presentations {
+		c.presentations[key] = presentation
+	}
+	if len(c.queue) > 0 {
+		c.paused = true
+	}
+}
+
+func (c *historicalImportCoordinator) saveQueueLocked() error {
+	path := historicalImportQueuePath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	release, err := identitylock.TryAcquire(path + ".lock")
+	if err != nil {
+		return err
+	}
+	defer release()
+	data, err := json.Marshal(historicalImportQueueSidecar{Version: 1, Current: c.current, Queue: append([]string(nil), c.queue...), Presentations: c.presentations})
+	if err != nil {
+		return err
+	}
+	return fileutil.AtomicWriteFileStrict(path, append(data, '\n'), 0o600)
 }
 
 func (a *App) ImportHistoricalSession(id string) (SessionRestoreResult, error) {
@@ -240,66 +350,133 @@ func (a *App) ImportHistoricalSession(id string) (SessionRestoreResult, error) {
 			return SessionRestoreResult{}, listErr
 		}
 	}
-	return a.importHistoricalSession(id)
+	call, err := a.prepareHistoricalSession(id, true, false)
+	if err != nil {
+		return SessionRestoreResult{}, err
+	}
+	return waitHistoricalImport(call)
 }
 
-// Duplicate requests join one import. No runtime/controller lock is acquired
-// during source access or conversion. Durable reservations protect publication.
-func (a *App) importHistoricalSession(id string) (SessionRestoreResult, error) {
+// Duplicate requests join one import. Interactive navigation and the bulk queue
+// hold independent demands so cancelling one cannot abort the other.
+func (a *App) prepareHistoricalSession(id string, interactive, batch bool) (*historicalImportCall, error) {
 	c := &a.historicalImports
 	c.mu.Lock()
 	if c.stopped || a.shuttingDown.Load() {
 		c.mu.Unlock()
-		return SessionRestoreResult{}, context.Canceled
+		return nil, context.Canceled
 	}
 	source, ok := c.sources[id]
 	if !ok {
 		c.mu.Unlock()
-		return SessionRestoreResult{}, errors.New("historical session is unavailable; refresh the list")
+		return nil, errors.New("historical session is unavailable; refresh the list")
 	}
-	ctx := c.ctx
 	if call := c.calls[id]; call != nil {
+		call.interactive = call.interactive || interactive
+		call.batch = call.batch || batch
 		c.mu.Unlock()
-		select {
-		case <-call.done:
-			return call.result, call.err
-		case <-ctx.Done():
-			return SessionRestoreResult{}, ctx.Err()
-		}
+		return call, nil
 	}
-	call := &historicalImportCall{done: make(chan struct{})}
+	ctx, cancel := context.WithCancel(c.ctx)
+	c.revision++
+	call := &historicalImportCall{operationID: "prepare-" + id, sourceKey: id, ctx: ctx, cancel: cancel,
+		done: make(chan struct{}), status: "queued", revision: c.revision, interactive: interactive, batch: batch}
 	c.calls[id] = call
+	c.operations[call.operationID] = call
+	view := c.views[id]
+	view.Status, view.ErrorCode = "queued", ""
+	c.views[id] = view
 	c.workers.Add(1)
+	c.mu.Unlock()
+	go a.runHistoricalPreparation(call, id, source)
+	return call, nil
+}
+
+func waitHistoricalImport(call *historicalImportCall) (SessionRestoreResult, error) {
+	select {
+	case <-call.done:
+		return call.result, call.err
+	case <-call.ctx.Done():
+		<-call.done
+		return call.result, call.err
+	}
+}
+
+func (a *App) runHistoricalPreparation(call *historicalImportCall, id string, source historicalSource) {
+	c := &a.historicalImports
 	defer c.workers.Done()
+	c.mu.Lock()
+	c.revision++
+	call.status, call.revision = "preparing", c.revision
 	view := c.views[id]
 	view.Status, view.ErrorCode = "importing", ""
 	c.views[id] = view
 	c.mu.Unlock()
-	result, err := a.importHistoricalSource(ctx, id, source)
+	result, err := a.importHistoricalSource(call.ctx, id, source)
+	var presentationErr error
+	if err == nil {
+		presentationErr = a.applyHistoricalSourcePresentation(desktopSourceKey(source.path, source.head), result.Session)
+	}
 	c.mu.Lock()
 	call.result, call.err = result, err
 	view = c.views[id]
 	if err == nil {
-		view.Status = "imported"
+		view.Status, call.status = "imported", "ready"
 		ref := result.Session
 		view.Session = &ref
+		if presentationErr != nil {
+			view.ErrorCode = "presentation_pending"
+		}
 	} else {
-		view.Status, view.ErrorCode = "failed", "import_failed"
+		view.Status, view.ErrorCode, call.status, call.errorCode = "failed", "import_failed", "failed", "import_failed"
 		if historicalSourceBusyError(err) {
-			view.Status, view.ErrorCode = "blocked", "source_busy"
+			view.Status, view.ErrorCode, call.status, call.errorCode = "blocked", "source_busy", "blocked", "source_busy"
 			err = errHistoricalSourceBusy
 		}
 		if errors.Is(err, context.Canceled) {
-			view.Status, view.ErrorCode = "available", "cancelled"
+			view.Status, view.ErrorCode, call.status, call.errorCode = "available", "cancelled", "cancelled", "cancelled"
 		}
 		call.err = err
 	}
+	c.revision++
+	call.revision = c.revision
 	c.views[id] = view
 	delete(c.calls, id)
 	close(call.done)
 	c.mu.Unlock()
 	a.emitProjectTreeChanged()
-	return result, err
+}
+
+func (a *App) saveHistoricalSourcePresentation(sourceKey string, update func(*historicalSourcePresentation)) error {
+	c := &a.historicalImports
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.initialize(a.bootContext())
+	if !c.queueLoaded {
+		c.loadQueueLocked()
+	}
+	presentation := c.presentations[sourceKey]
+	update(&presentation)
+	c.presentations[sourceKey] = presentation
+	return c.saveQueueLocked()
+}
+
+func (a *App) applyHistoricalSourcePresentation(sourceKey string, ref session.SessionRef) error {
+	c := &a.historicalImports
+	c.mu.Lock()
+	presentation, ok := c.presentations[sourceKey]
+	c.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	var joined error
+	if presentation.Title != "" {
+		joined = errors.Join(joined, a.desktopSessionService("").SetTitle(a.bootContext(), ref, presentation.Title))
+	}
+	if presentation.Pinned != nil {
+		joined = errors.Join(joined, a.workspaceRegistry().UpdatePresentation(a.bootContext(), []string{ref.SessionID}, nil, presentation.Pinned))
+	}
+	return joined
 }
 
 func historicalSourceBusyError(err error) bool {
@@ -314,7 +491,11 @@ func (a *App) importHistoricalSource(ctx context.Context, id string, source hist
 	if err != nil {
 		return SessionRestoreResult{}, err
 	}
-	if mapping, ok := historicalMappingForSource(state, id); ok {
+	mapping, mapped := historicalMappingForSource(state, id)
+	if source.version != "" {
+		mapping, mapped = state.SourceMappings[id]
+	}
+	if mapped {
 		if state.SessionStates[mapping.SessionID].Lifecycle != workspacestate.Active {
 			return SessionRestoreResult{}, errors.New("historical session was archived or deleted; use the archive to restore it")
 		}
@@ -329,11 +510,20 @@ func (a *App) importHistoricalSource(ctx context.Context, id string, source hist
 		return SessionRestoreResult{}, err
 	}
 	defer release()
+	if source.version != "" {
+		current, fingerprintErr := desktopSourceFingerprint(source.path)
+		if fingerprintErr != nil {
+			return SessionRestoreResult{}, fingerprintErr
+		}
+		if current != source.version {
+			return SessionRestoreResult{}, newSessionOperationError("target_changed", "The historical source changed. Check for updates again.")
+		}
+	}
 	workspace, err := a.ensureDesktopWorkspace(ctx, source.scope, source.root)
 	if err != nil {
 		return SessionRestoreResult{}, err
 	}
-	migration := desktopMigrationSource{scope: source.scope, workspaceRoot: source.root, headID: source.head}
+	migration := desktopMigrationSource{scope: source.scope, workspaceRoot: source.root, headID: source.head, versionFingerprint: source.version}
 	// Resume the exact durable operation, including content_ready, rather than
 	// creating another identity for interrupted work from previous versions.
 	// The registry is a map, so choose deterministically when an older build
@@ -447,6 +637,11 @@ func (a *App) StartHistoricalImport(ids []string) (HistoricalImportStatus, error
 		}
 	}
 	c.queue, c.running, c.paused = queue, true, false
+	c.current = ""
+	if err := c.saveQueueLocked(); err != nil {
+		c.queue, c.running = nil, false
+		return c.status(), err
+	}
 	go a.runHistoricalImportQueue()
 	return c.status(), nil
 }
@@ -471,8 +666,19 @@ func (a *App) runHistoricalImportQueue() {
 		}
 		id := c.queue[0]
 		c.queue = c.queue[1:]
+		c.current = id
+		_ = c.saveQueueLocked()
 		c.mu.Unlock()
-		_, _ = a.importHistoricalSession(id)
+		call, err := a.prepareHistoricalSession(id, false, true)
+		if err == nil {
+			_, _ = waitHistoricalImport(call)
+		}
+		c.mu.Lock()
+		if c.current == id {
+			c.current = ""
+		}
+		_ = c.saveQueueLocked()
+		c.mu.Unlock()
 	}
 }
 
@@ -481,25 +687,50 @@ func (a *App) runHistoricalImportQueue() {
 func (a *App) ControlHistoricalImport(action string) (HistoricalImportStatus, error) {
 	c := &a.historicalImports
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.initialize(a.bootContext())
+	startWorker := false
 	switch action {
 	case "pause":
 		c.paused = true
 	case "resume":
 		c.paused = false
+		if !c.running && (len(c.queue) > 0 || c.current != "") {
+			if c.current != "" {
+				c.queue = append([]string{c.current}, c.queue...)
+				c.current = ""
+			}
+			c.running, startWorker = true, true
+		}
 		select {
 		case c.wake <- struct{}{}:
 		default:
 		}
 	case "cancel":
-		c.cancel()
 		c.queue = nil
+		c.current = ""
 		c.paused = false
+		for _, call := range c.calls {
+			call.batch = false
+			if !call.interactive {
+				call.cancel()
+			}
+		}
 	default:
-		return c.status(), errors.New("unknown historical import action")
+		status := c.status()
+		c.mu.Unlock()
+		return status, errors.New("unknown historical import action")
 	}
-	return c.status(), nil
+	if err := c.saveQueueLocked(); err != nil {
+		status := c.status()
+		c.mu.Unlock()
+		return status, err
+	}
+	status := c.status()
+	c.mu.Unlock()
+	if startWorker {
+		go a.runHistoricalImportQueue()
+	}
+	return status, nil
 }
 
 func (a *App) stopHistoricalImports() {
@@ -509,6 +740,9 @@ func (a *App) stopHistoricalImports() {
 	c.stopped = true
 	c.queue = nil
 	c.cancel()
+	for _, call := range c.calls {
+		call.cancel()
+	}
 	c.mu.Unlock()
 	// Cancellation and draining happen before the runtime shutdown barrier.
 	c.workers.Wait()
@@ -522,7 +756,8 @@ func acquireHistoricalSource(ctx context.Context, id string, source historicalSo
 	if err := os.MkdirAll(lockDir, 0700); err != nil {
 		return nil, err
 	}
-	release, err := identitylock.TryAcquire(filepath.Join(lockDir, id+".lock"))
+	lockKey := desktopSourceKey(source.path, source.head)
+	release, err := identitylock.TryAcquire(filepath.Join(lockDir, lockKey+".lock"))
 	if err != nil {
 		return nil, err
 	}

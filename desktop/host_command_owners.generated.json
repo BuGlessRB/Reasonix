@@ -990,6 +990,20 @@
       ]
     }
   },
+  "CancelSessionPreparation": {
+    "domain": "desktop/session_preparation.go",
+    "owner": "App.CancelSessionPreparation",
+    "sources": [
+      "desktop/session_preparation.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.CancelSessionPreparation",
+      "inputs": [
+        "operationID"
+      ]
+    }
+  },
   "CancelShellInstall": {
     "domain": "desktop/shell_support.go",
     "owner": "App.CancelShellInstall",
@@ -1159,6 +1173,20 @@
       "inputs": [
         "tabID",
         "expectedPath"
+      ]
+    }
+  },
+  "CheckHistoricalSourceUpdate": {
+    "domain": "desktop/session_preparation.go",
+    "owner": "App.CheckHistoricalSourceUpdate",
+    "sources": [
+      "desktop/session_preparation.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.CheckHistoricalSourceUpdate",
+      "inputs": [
+        "selector"
       ]
     }
   },
@@ -2950,6 +2978,20 @@
       "resolver": "App.GetSessionOrganization",
       "inputs": [
         "workspace"
+      ]
+    }
+  },
+  "GetSessionPreparation": {
+    "domain": "desktop/session_preparation.go",
+    "owner": "App.GetSessionPreparation",
+    "sources": [
+      "desktop/session_preparation.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.GetSessionPreparation",
+      "inputs": [
+        "operationID"
       ]
     }
   },
@@ -4997,6 +5039,35 @@
       "resolver": "App.PollBotConnectionInstall",
       "inputs": [
         "installID"
+      ]
+    }
+  },
+  "PrepareHistoricalSourceVersion": {
+    "domain": "desktop/session_preparation.go",
+    "owner": "App.PrepareHistoricalSourceVersion",
+    "sources": [
+      "desktop/session_preparation.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.PrepareHistoricalSourceVersion",
+      "inputs": [
+        "sourceRef",
+        "version"
+      ]
+    }
+  },
+  "PrepareSession": {
+    "domain": "desktop/session_preparation.go",
+    "owner": "App.PrepareSession",
+    "sources": [
+      "desktop/session_preparation.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.PrepareSession",
+      "inputs": [
+        "selector"
       ]
     }
   },
