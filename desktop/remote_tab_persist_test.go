@@ -37,6 +37,19 @@ func seedLocalTab(a *App, id string) {
 	a.mu.Unlock()
 }
 
+func TestRemoteHostFixtureIsolatesCanonicalWorkspaceRegistry(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	prior := NewApp()
+	if _, err := prior.ensureDesktopWorkspace(t.Context(), "global", ""); err != nil {
+		t.Fatal(err)
+	}
+	seedBridgeTestHost(t, "box")
+	fresh := NewApp()
+	if _, err := fresh.ensureDesktopWorkspace(t.Context(), "global", ""); err != nil {
+		t.Fatalf("remote fixture reused another home's canonical registry: %v", err)
+	}
+}
+
 func TestRemoveRemoteHostReplacesSoleRemoteSurfaceWithLocalBlank(t *testing.T) {
 	seedBridgeTestHost(t, "box")
 	a := NewApp()

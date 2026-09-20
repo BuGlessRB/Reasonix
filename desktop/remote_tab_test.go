@@ -390,9 +390,10 @@ func writeTestJSON(w http.ResponseWriter, v any) {
 
 func seedBridgeTestHost(t *testing.T, hostID string) {
 	t.Helper()
-	home := t.TempDir()
+	// A new config home also needs its own canonical registry: global workspace
+	// identity contains that home, while REASONIX_STATE_HOME otherwise survives.
+	home := isolateDesktopUserDirs(t)
 	t.Setenv("REASONIX_HOME", home)
-	t.Setenv("HOME", home)
 	if err := editUserConfig(func(c *config.Config) error {
 		return c.UpsertRemoteHost(config.RemoteHostEntry{Name: hostID, Host: "127.0.0.1", Port: 22, User: "dev"})
 	}); err != nil {
