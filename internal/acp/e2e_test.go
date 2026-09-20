@@ -58,9 +58,10 @@ func (p *scriptedProvider) Stream(ctx context.Context, _ provider.Request) (<-ch
 
 // fakeTool is a no-op tool whose read-only flag and output the test controls.
 type fakeTool struct {
-	name string
-	ro   bool
-	out  string
+	name     string
+	ro       bool
+	out      string
+	executed chan struct{}
 }
 
 func (t fakeTool) Name() string            { return t.name }
@@ -68,6 +69,9 @@ func (t fakeTool) Description() string     { return "fake tool" }
 func (t fakeTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
 func (t fakeTool) ReadOnly() bool          { return t.ro }
 func (t fakeTool) Execute(context.Context, json.RawMessage) (string, error) {
+	if t.executed != nil {
+		close(t.executed)
+	}
 	return t.out, nil
 }
 
@@ -571,6 +575,7 @@ func TestE2EDeleteActiveSessionDoesNotRecreateFiles(t *testing.T) {
 // the controller raises an ApprovalRequest, the sink forwards it as
 // session/request_permission, the client allows it, and the tool then runs.
 func TestE2EApprovalRoundTrip(t *testing.T) {
+	toolExecuted := make(chan struct{})
 	prov := &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
 		{
 			{Type: provider.ChunkText, Text: "Writing."},
@@ -584,7 +589,7 @@ func TestE2EApprovalRoundTrip(t *testing.T) {
 	}}
 	factory := &e2eFactory{
 		prov:       prov,
-		tool:       fakeTool{name: "writeit", ro: false, out: "written ok"},
+		tool:       fakeTool{name: "writeit", ro: false, out: "written ok", executed: toolExecuted},
 		policy:     permission.New("ask", nil, nil, nil),
 		sessionDir: t.TempDir(),
 	}
@@ -636,7 +641,8 @@ func TestE2EApprovalRoundTrip(t *testing.T) {
 		})
 	}
 
-	notifs, resp := drainPrompt(t, client, promptCh)
+	waitForACPToolExecution(t, toolExecuted, promptCh)
+	notifs, resp := drainPromptWithin(t, client, promptCh, 10*time.Second)
 
 	// The allowed tool ran: a completed tool_call_update with its output.
 	var ran bool
@@ -670,6 +676,20 @@ func TestE2EApprovalRoundTrip(t *testing.T) {
 	// after a write; controlled readiness pauses use ACP v1 end_turn.
 	if result.StopReason != StopEndTurn {
 		t.Errorf("stopReason = %q, want end_turn", result.StopReason)
+	}
+}
+
+// waitForACPToolExecution separates permission-delivery correctness from the
+// status and transcript work that follows a completed tool call.
+func waitForACPToolExecution(t *testing.T, executed <-chan struct{}, prompt <-chan frame) {
+	t.Helper()
+	select {
+	case <-executed:
+		return
+	case early := <-prompt:
+		t.Fatalf("prompt returned before the approved tool executed: error=%+v result=%s", early.Error, early.Result)
+	case <-time.After(10 * time.Second):
+		t.Fatal("approved tool did not execute before the ACP hang guard")
 	}
 }
 

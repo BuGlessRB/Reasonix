@@ -495,6 +495,11 @@ func requireAvailableCommandsFrame(t *testing.T, f frame) {
 // arrives, then sweeps any notifications still buffered.
 func drainPrompt(t *testing.T, c *rpcClient, promptCh chan frame) ([]frame, frame) {
 	t.Helper()
+	return drainPromptWithin(t, c, promptCh, 5*time.Second)
+}
+
+func drainPromptWithin(t *testing.T, c *rpcClient, promptCh chan frame, idleTimeout time.Duration) ([]frame, frame) {
+	t.Helper()
 	var notifs []frame
 	var resp frame
 	for {
@@ -514,7 +519,7 @@ func drainPrompt(t *testing.T, c *rpcClient, promptCh chan frame) ([]frame, fram
 		// persistence path. Loaded Windows release runners can leave that
 		// asynchronous pipeline idle for more than two seconds, so keep a
 		// generous but bounded responsiveness limit for the end-to-end helper.
-		case <-time.After(5 * time.Second):
+		case <-time.After(idleTimeout):
 			t.Fatal("session/prompt: timed out")
 		}
 	}
