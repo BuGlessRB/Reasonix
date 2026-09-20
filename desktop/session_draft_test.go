@@ -351,6 +351,7 @@ func TestInvalidDraftModelFailsBeforeSessionReservation(t *testing.T) {
 	}
 	settings := draft.Settings
 	settings.Model = "removed-provider/removed-model"
+	settings.ModelSource = draftModelSourceExplicit
 	saved, err := a.SaveSessionDraft(SessionDraftSaveRequest{
 		DraftID: draft.ID, Revision: draft.Revision, ContentJSON: `{"text":"inspect"}`, Settings: settings,
 	})
