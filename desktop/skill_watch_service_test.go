@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"reasonix/internal/skill/skillwatch"
@@ -28,5 +29,21 @@ func TestSharedSkillWatchServiceIsNilInTestBinaries(t *testing.T) {
 	if service := NewApp().sharedSkillWatchService(); service != nil {
 		_ = service.Close()
 		t.Fatal("a package test binary must not create a skill watch service")
+	}
+}
+
+// The host watcher must be closed by shutdown: boot.Build deliberately leaves a
+// caller-owned service alone, so nothing else closes it. A real helper cannot
+// be observed from here (creating a service in a test binary would spawn this
+// binary), so this pins the step wiring instead.
+func TestShutdownRunsTheSkillWatchStep(t *testing.T) {
+	app := NewApp()
+	app.shutdown(context.Background())
+	state := app.shutdownState()
+	state.mu.Lock()
+	ran := state.finished["skill-watch-service"]
+	state.mu.Unlock()
+	if !ran {
+		t.Fatal("shutdown did not run the skill-watch step")
 	}
 }
