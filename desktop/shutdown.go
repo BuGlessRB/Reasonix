@@ -376,4 +376,7 @@ func (a *App) shutdownBody(c *desktopShutdownCoordinator, items []desktopShutdow
 		c.runStep("topic-state", a.topicState.close)
 	}
 	c.runStep("session-services", a.closeSessionServices)
+	// Last: every controller that subscribed to the host watcher is gone, and
+	// boot.Build leaves a caller-owned service alone, so this is the only close.
+	c.runStep("skill-watch-service", a.closeSharedSkillWatchService)
 }

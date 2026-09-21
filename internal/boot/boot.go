@@ -63,6 +63,7 @@ import (
 	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/skill"
+	"reasonix/internal/skill/skillwatch"
 	"reasonix/internal/stats"
 	"reasonix/internal/taskmonitor"
 	"reasonix/internal/tool"
@@ -165,6 +166,10 @@ type Options struct {
 	// instead of creating new subprocesses, and the caller manages the host's
 	// lifecycle. When nil, Build creates and owns a new host as before.
 	SharedHost *plugin.Host
+	// SharedSkillWatchService is the optional host-lifetime skill watcher shared
+	// by every controller on one host: Build subscribes this controller's stores
+	// to it and the caller owns its lifecycle. Nil gives this build its own.
+	SharedSkillWatchService *skillwatch.Service
 	// MCPHostProfile is the capability surface for hosts Build creates;
 	// ignored when SharedHost is set (it fixed its own profile).
 	MCPHostProfile plugin.HostProfile
@@ -669,18 +674,23 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	sysPrompt = memory.Compose(sysPrompt, mem)
 
 	implicitSkillInvocation := cfg.ImplicitSkillInvocationEnabled()
-	// Production controllers own watchers; package fixtures opt out to avoid
-	// exhausting descriptors, while store watcher tests opt in explicitly.
-	watchSkills := !strings.HasSuffix(strings.TrimSuffix(os.Args[0], ".exe"), ".test")
+	watchSkills := watchSkillsEnabled()
 	// Skills: rediscovery skipped on no-op/interceptor/UI rebuilds when
 	// ReuseAssembly is retained from the previous BuildResult.
 	var skillStore *skill.Store
 	var skills []skill.Skill
 	var allSkillStore *skill.Store
 	var allSkills []skill.Skill
-	// Enabled and all-stores share one host-lifetime physical watch service.
-	skillWatchService := newSkillWatchService(watchSkills, opts.Stderr)
-	skillCleanup := func() { closeSkillsWithWatcher(skillStore, allSkillStore, &skillWatchService) }
+	// Enabled and all-stores share one physical watch service: the caller's when
+	// it supplies a host-lifetime one, otherwise a service owned by this build.
+	skillWatchService := opts.SharedSkillWatchService
+	hostOwnedWatch := skillWatchService != nil
+	if !hostOwnedWatch {
+		skillWatchService = newSkillWatchService(watchSkills, opts.Stderr)
+	}
+	skillCleanup := func() {
+		closeSkillsWithWatcher(skillStore, allSkillStore, &skillWatchService, hostOwnedWatch)
+	}
 	skillsOwned := false
 	defer closeUnownedSkills(&skillsOwned, skillCleanup)
 	canReuseSkills := opts.ReuseAssembly != nil && shouldReuseDiscovery(opts.PreviousPlan) &&

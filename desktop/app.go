@@ -44,6 +44,7 @@ import (
 	"reasonix/internal/sessioncatalog"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/skill"
+	"reasonix/internal/skill/skillwatch"
 	"reasonix/internal/store"
 	"reasonix/internal/taskcatalog"
 	"reasonix/internal/taskmonitor"
@@ -208,6 +209,11 @@ type App struct {
 	// Desktop host. desktopSessions owns its persistence and navigation state.
 	sessionServicesMu sync.Mutex
 	sessionServices   map[string]*session.Service
+	// skillWatch is the one skill-watch service this host shares across every
+	// controller build, so the host owns a single watcher helper process
+	// instead of one per rebuild. Created on first use; closed at shutdown.
+	skillWatchMu sync.Mutex
+	skillWatch   *skillwatch.Service
 	desktopPersistenceState
 
 	// tabsRestored is closed when restoreOrBuildTabs has finished populating
@@ -9358,6 +9364,7 @@ func (a *App) SetModelForTab(tabID, name string) (retErr error) {
 		SessionService:       a.desktopSessionService(sessionDirForSnapshot(snap)),
 		EffortOverride:       cloneStringPtr(effortOverride),
 		SharedHost:           sharedHost, BrowserExecutor: a.browserExecutorForRuntime(tab.ID, snap.sink),
+		SharedSkillWatchService:  a.sharedSkillWatchService(),
 		MCPHostProfile:           plugin.HostProfileDesktopApps,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 		SubagentParentLive:       a.subagentParentProbeForBuild(tab),
@@ -9564,6 +9571,7 @@ func (a *App) SetEffortForTab(tabID, level string) error {
 		SessionService:       a.desktopSessionService(sessionDirForSnapshot(snap)),
 		EffortOverride:       &effort,
 		SharedHost:           sharedHost, BrowserExecutor: a.browserExecutorForRuntime(tab.ID, snap.sink),
+		SharedSkillWatchService:  a.sharedSkillWatchService(),
 		MCPHostProfile:           plugin.HostProfileDesktopApps,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 		SubagentParentLive:       a.subagentParentProbeForBuild(tab),
