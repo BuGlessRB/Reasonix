@@ -5,10 +5,11 @@ import type { ToastContextValue } from "./toast";
 import type { ProjectNode } from "./types";
 import { sessionLifecycleFences } from "./sessionLifecycleFences";
 import { projectSessionIdentity } from "./projectSessionIdentity";
+import { releaseReadSnapshot } from "./readSnapshot";
 
 export { projectTreeWithoutTopics } from "./projectTreeTopic";
 
-type TopicPageState = { itemKeys?: string[]; nextCursor?: string; loading: boolean; initialized?: boolean; error?: string };
+type TopicPageState = { snapshotId?: string; itemKeys?: string[]; nextCursor?: string; loading: boolean; initialized?: boolean; error?: string };
 
 export type ProjectTreeRefreshOptions = {
   reloadTopicKeys?: string[];
@@ -216,7 +217,8 @@ export function useProjectTreeArchiveController({
             }
             for (const [key, state] of Object.entries(topicPageStateRef.current)) {
               if (key !== folderKey && !key.startsWith(prefix)) continue;
-              updateTopicPageState(key, { ...state, nextCursor: undefined, loading: false, initialized: false, error: undefined });
+              releaseReadSnapshot(state.snapshotId);
+              updateTopicPageState(key, { ...state, snapshotId: undefined, nextCursor: undefined, loading: false, initialized: false, error: undefined });
             }
           }
           optimisticallyRemoveTopic(topicId);
