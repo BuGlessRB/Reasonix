@@ -28,7 +28,7 @@ func (c *Catalog) WithReadView(ctx context.Context, visit func(context.Context) 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// The first read establishes the WAL view, even for an empty result.
 	var count int
 	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM catalog_sessions`).Scan(&count); err != nil {

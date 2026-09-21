@@ -28,7 +28,7 @@ func (c *Catalog) CaptureSearch(ctx context.Context, req SearchRequest, visit fu
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	ctx = context.WithValue(ctx, searchViewKey{}, &searchView{c, tx})
 	req.After = nil
 	return c.searchCandidates(ctx, req, true, visit)
