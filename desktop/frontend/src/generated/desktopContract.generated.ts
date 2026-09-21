@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:285d7bac59e7c397192a825292d7ffff6d40097ce873e58651abe032f3c3b072";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:fe21b8a4015865a60bac47a8865d5c782b3169f6b0723a015269eb8a7caa4cd2";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -4762,6 +4762,7 @@ export interface TurnStartView {
   status: string;
   disposition: string;
   operationId?: string;
+  managementErrorCode?: string;
   runtimeEpoch?: string;
   submissionId?: string;
 }
