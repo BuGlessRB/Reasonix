@@ -38,6 +38,7 @@ import { PROJECT_TREE_SEARCH_PAGE, PROJECT_TREE_WINDOW_INITIAL, PROJECT_TREE_WIN
 import { useProjectTreeReadActivity } from "./useProjectTreeReadActivity";
 import { useProjectTreeListRuntime } from "../lib/useProjectTreeListRuntime";
 import { activeSessionAncestorKeys, collapsibleProjectTreeFolderKeys, defaultExpandedProjectTreeKeys, projectTreeNodeKey as projectNodeKey } from "../lib/projectTreeExpansion";
+import { createProjectTreeRequestDiagnostic } from "../lib/projectTreeRequestDiagnostics";
 export { activeSessionAncestorKeys, defaultExpandedProjectTreeKeys } from "../lib/projectTreeExpansion";
 
 type WorkbenchHeaderMenu = "more" | "add" | null;
@@ -214,7 +215,6 @@ export function ProjectTree({
     };
   }, []);
   const manuallyCollapsedRef = useRef(manuallyCollapsed);
-
   const updateManuallyCollapsed = useCallback((updater: (prev: Set<string>) => Set<string>) => {
     setManuallyCollapsed((prev) => {
       const next = updater(prev);
@@ -279,10 +279,12 @@ export function ProjectTree({
     topicLoadSeqRef.current[listKey] = seq;
     topicLoadPendingRef.current[listKey] = seq;
     updateTopicPageState(listKey, { ...pageState, loading: true, error: undefined });
+    const emitRequest = createProjectTreeRequestDiagnostic({ projectKind: project.kind, creationTopics, sequence: seq, stats: () => topicRequestLimiterRef.current.stats() });
     try {
       const page = await topicRequestLimiterRef.current.run(() => {
+        emitRequest("started");
         const context = topicRequestContextRef.current;
-        if (topicLoadSeqRef.current[listKey] !== seq || context.query !== normalizedQuery || context.sortMode !== sortMode) return Promise.resolve(null);
+        if (topicLoadSeqRef.current[listKey] !== seq || context.query !== normalizedQuery || context.sortMode !== sortMode) return (emitRequest("discarded", { status: "stale" }), Promise.resolve(null));
         return loadProjectTreePageWindow(cursor, limit, (pageCursor, pageLimit) => app.ListProjectTopics({
           scope: project.kind === "global_folder" ? "global" : "project",
           workspaceRoot: project.kind === "global_folder" ? "" : project.root ?? "",
@@ -299,15 +301,16 @@ export function ProjectTree({
         }), append ? Math.max(limit, (pageState?.itemKeys?.length ?? 0) + limit) : limit);
       });
       if (!page) return;
-      if (topicLoadSeqRef.current[listKey] !== seq) { if (!append || page.replacedSnapshot) releaseReadSnapshot(page.snapshotId); return; }
+      if (topicLoadSeqRef.current[listKey] !== seq) { if (!append || page.replacedSnapshot) releaseReadSnapshot(page.snapshotId); emitRequest("discarded", { status: "stale", itemCount: page.items.length }); return; }
       const currentContext = topicRequestContextRef.current;
-      if (currentContext.query !== normalizedQuery || currentContext.sortMode !== sortMode) { if (!append || page.replacedSnapshot) releaseReadSnapshot(page.snapshotId); return; }
+      if (currentContext.query !== normalizedQuery || currentContext.sortMode !== sortMode) { if (!append || page.replacedSnapshot) releaseReadSnapshot(page.snapshotId); emitRequest("discarded", { status: "stale", itemCount: page.items.length }); return; }
       const appendPage = append && !page.replacedSnapshot;
       if (appendPage && pageState?.snapshotId && page.snapshotId !== pageState.snapshotId) throw new Error("Mixed read snapshots in one list");
       delete topicLoadErrorRef.current[listKey];
       if (!projectTreeTopicPageIsFresh(topicRevisionRef.current, listKey, page.revision)) {
         if (!appendPage) releaseReadSnapshot(page.snapshotId);
         updateTopicPageState(listKey, { ...topicPageStateRef.current[listKey], loading: false });
+        emitRequest("discarded", { status: "stale", itemCount: page.items.length });
         return;
       }
       topicRevisionRef.current[listKey] = Math.max(topicRevisionRef.current[listKey] ?? 0, page.revision);
@@ -318,6 +321,7 @@ export function ProjectTree({
       if (preserveCompletePage && !appendPage) {
         releaseReadSnapshot(page.snapshotId);
         updateTopicPageState(listKey, { ...topicPageStateRef.current[listKey], loading: false });
+        emitRequest("completed", { status: "ok", itemCount: items.length });
         return;
       }
       const incomingKeys = items.map((item) => item.key);
@@ -347,14 +351,16 @@ export function ProjectTree({
         : { itemKeys, nextCursor: page.nextCursor, snapshotId: page.snapshotId, loading: false, initialized: true });
       if (preserveCompletePage && !appendPage) releaseReadSnapshot(page.snapshotId);
       else if (!appendPage && pageState?.snapshotId !== page.snapshotId) releaseReadSnapshot(pageState?.snapshotId);
+      emitRequest("completed", { status: "ok", itemCount: items.length });
     } catch (error) {
-      if (topicLoadSeqRef.current[listKey] !== seq) return;
+      if (topicLoadSeqRef.current[listKey] !== seq) return void emitRequest("discarded", { status: "stale" });
       const message = error instanceof Error ? error.message : String(error);
       updateTopicPageState(listKey, { ...topicPageStateRef.current[listKey], loading: false, initialized: true, error: message });
       if (topicLoadErrorRef.current[listKey] !== message) {
         topicLoadErrorRef.current[listKey] = message;
         showToast(message, "error", { durationMs: 6000 });
       }
+      emitRequest("failed", { status: "error" });
     } finally {
       if (topicLoadPendingRef.current[listKey] === seq) delete topicLoadPendingRef.current[listKey];
       if (topicLoadSeqRef.current[listKey] === seq) {
