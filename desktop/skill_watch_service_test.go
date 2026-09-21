@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"reasonix/internal/skill/skillwatch"
@@ -32,10 +33,34 @@ func TestSharedSkillWatchServiceIsNilInTestBinaries(t *testing.T) {
 	}
 }
 
-// The host watcher must be closed by shutdown: boot.Build deliberately leaves a
-// caller-owned service alone, so nothing else closes it. A real helper cannot
-// be observed from here (creating a service in a test binary would spawn this
-// binary), so this pins the step wiring instead.
+// The host watcher is closed only here: boot.Build deliberately leaves a
+// caller-owned service alone, so a missed close would leave the helper process
+// behind after exit. ScanOnly keeps this process-free.
+func TestCloseSharedSkillWatchServiceClosesTheWatcher(t *testing.T) {
+	app := NewApp()
+	service := skillwatch.NewService(skillwatch.Options{ScanOnly: true, Stderr: io.Discard})
+	sub := service.Subscribe(t.TempDir(), 1,
+		func(context.Context, string, int) ([]string, bool) { return nil, true },
+		func(context.Context, string, int) ([32]byte, int, bool) { return [32]byte{}, 0, true },
+		func(string) {})
+	t.Cleanup(sub.Release)
+	if service.Diagnostics().LogicalSubscriptions != 1 {
+		t.Fatal("fixture: the subscription did not register")
+	}
+
+	app.skillWatch = service
+	app.closeSharedSkillWatchService()
+	if app.skillWatch != nil {
+		t.Fatal("the host must forget a service it closed")
+	}
+	if service.Diagnostics().LogicalSubscriptions != 0 {
+		t.Fatal("the host watcher must be closed")
+	}
+}
+
+// shutdownStatus carries no step names, but the coordinator records them in
+// finished, which a package test can read. This fails if the step is dropped or
+// renamed, which is the wiring half of the shutdown path.
 func TestShutdownRunsTheSkillWatchStep(t *testing.T) {
 	app := NewApp()
 	app.shutdown(context.Background())
