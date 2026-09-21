@@ -519,6 +519,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // 2092520 B locally (+7684 B over main-v2, 0.37%). Preserve the established
 // 186 B Linux producer difference (2092706 B) at the next decimal; other
 // payload and resident-window budgets remain unchanged.
-const rawInitialBudgetKiB = 2_043.7;
+// Resource-pressure reclamation and background update isolation add 1551 B
+// (0.074%) over the same-toolchain main-v2 build: 2094017 B versus 2092466 B.
+// Preserve the measured 186 B Linux producer difference at the next decimal;
+// compressed, chunk, CSS, locale, and resident-history limits stay unchanged.
+const rawInitialBudgetKiB = 2_045.2;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

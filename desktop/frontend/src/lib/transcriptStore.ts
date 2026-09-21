@@ -14,6 +14,7 @@ import { buildToolProjectionView } from "./transcriptToolAssociation";
 import { readTranscriptContent } from "./transcriptContentRead";
 import { appendLivePageEntries, type TranscriptWindowPage } from "./transcriptLiveWindow";
 import { RESOURCE_BUDGETS } from "./resourceBudgets";
+import { reclaimInvisibleBodies } from "./transcriptMemory";
 import { bindTranscriptSession, boundSessionKey, detachTranscriptTab, type TranscriptTabBinding } from "./transcriptSessionBinding";
 import { recordFrontendDiagnostic } from "./frontendDiagnosticBridge";
 import type {
@@ -108,8 +109,6 @@ export class TranscriptStore {
     this.markdown = new TranscriptMarkdownCache(Math.max(0, options.markdownBudgetBytes ?? DEFAULT_MARKDOWN_BUDGET));
   }
 
-  // ── session identity / LRU ────────────────────────────────────────────────
-
   private sessionKeyFor(tabId: string, sessionPath: string): string {
     return boundSessionKey(this.tabBindings, tabId, sessionPath);
   }
@@ -183,6 +182,7 @@ export class TranscriptStore {
     const pins = this.tabPins.get(tabId) ?? { live: false, active: false };
     if (pins.live === pinned) return;
     this.tabPins.set(tabId, { ...pins, live: pinned });
+    if (!pinned) this.enforceBudgets();
   }
 
   /**
@@ -201,6 +201,7 @@ export class TranscriptStore {
       const pins = this.tabPins.get(tabId) ?? { live: false, active: false };
       if (!pins.active) this.tabPins.set(tabId, { ...pins, active: true });
     }
+    this.enforceBudgets();
   }
 
   /** Detach a tab. Canonical sessions remain LRU-resident across tab IDs. */
@@ -213,6 +214,11 @@ export class TranscriptStore {
     session.generation += 1; // in-flight responses discard against a missing/stale session
     this.sessions.delete(session.key);
     this.historyEvictions += 1;
+    if (!this.isPinned(session)) {
+      for (const listener of this.listeners.get(session.tabId) ?? []) {
+        listener({ tabId: session.tabId, patches: {}, evictedPath: session.sessionPath });
+      }
+    }
   }
 
   private enforceBudgets(): void {
@@ -233,6 +239,8 @@ export class TranscriptStore {
     }
     let total = 0;
     for (const session of this.sessions.values()) total += session.bodyBytes;
+    total = reclaimInvisibleBodies(this.sessions.values(), tabId => Boolean(this.tabPins.get(tabId)?.active),
+      this.historyBodyBudgetBytes, total, (session, rec) => this.reconvertAndNotify(session, rec, rec.refs.some(ref => ref.field === "canonicalMessage")));
     candidates = evictable();
     while (total > this.historyBodyBudgetBytes && candidates.length > 0) {
       const victim = candidates.shift();
