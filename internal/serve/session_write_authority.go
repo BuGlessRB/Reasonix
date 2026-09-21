@@ -1,10 +1,12 @@
 package serve
 
 import (
+	"errors"
 	"log/slog"
 	"path/filepath"
 	"strings"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/control"
 )
 
@@ -62,4 +64,41 @@ func (s *Server) rebindSessionLeaseFor(path string, ctrl *control.Controller) er
 		return s.leases.BindControllerAuthority(ctrl)
 	}
 	return nil
+}
+
+// promoteSessionLease repairs a read-only attachment whose previous holder has
+// gone away. A pane can legitimately attach while another in-process pane is
+// still leaving the same transcript, and without a later promotion it stays
+// read-only with no writer left. Mutating endpoints call this before admission;
+// the hub's runtime reconciliation calls it to make the repair visible.
+func (s *Server) promoteSessionLease() error {
+	if s == nil || s.leases == nil {
+		return nil
+	}
+	ctrl, ok := s.ctl().(*control.Controller)
+	if !ok || ctrl == nil {
+		return nil
+	}
+	path := strings.TrimSpace(ctrl.SessionPath())
+	if path == "" {
+		return nil
+	}
+	writable, err := s.leases.Attach(path)
+	if err != nil {
+		return err
+	}
+	if !writable {
+		return agent.ErrSessionLeaseHeld
+	}
+	return s.leases.BindControllerAuthority(ctrl)
+}
+
+func sessionLeaseUnavailable(err error) bool {
+	return errors.Is(err, agent.ErrSessionLeaseHeld)
+}
+
+// sessionInUseError renders a lease refusal for HTTP clients in the shared CLI
+// wording, without the session file path.
+func sessionInUseError(err error) string {
+	return control.SessionInUseMessage(err) + "; " + control.SessionLeaseCloseHint
 }

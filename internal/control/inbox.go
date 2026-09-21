@@ -591,6 +591,21 @@ func (c *Controller) TrySubmitInboxItem(id string) (sessioninbox.InboxReceipt, e
 	if st.Snapshot().Paused {
 		return sessioninbox.InboxReceipt{}, sessioninbox.ErrPaused
 	}
+	// Refuse before claiming the durable item: claiming, requeuing and waking the
+	// dispatcher again stacks identical transcript notices for one pending
+	// message, and holding the queue keeps the text resumable after promotion.
+	if err := c.ensureWriteAuthorityReady(); err != nil {
+		if pauseErr := st.SetPaused(true); pauseErr != nil {
+			return sessioninbox.InboxReceipt{}, pauseErr
+		}
+		snap := st.Snapshot()
+		return sessioninbox.InboxReceipt{
+			ItemID:      id,
+			Disposition: sessioninbox.DispositionRejectedClosed,
+			Paused:      true,
+			Capacity:    snap.Capacity,
+		}, nil
+	}
 	run, block, materializeErr := c.prepareInboxRun(env, meta.Origin)
 	if materializeErr != nil {
 		return sessioninbox.InboxReceipt{}, materializeErr

@@ -266,6 +266,16 @@ describe("waiting for another session to finish writing", () => {
   });
 });
 
+describe("repeated unclassified notices", () => {
+  it("folds consecutive identical text from an older journal", () => {
+    const event = { kind: "notice", level: "warn", text: "input was not accepted: this session is no longer writable — reopen it and try again" } as SessionEvent;
+    const st = run([event, event, event]);
+    const cards = st.items.filter((i): i is Extract<Item, { t: "notice" }> => i.t === "notice");
+    expect(cards).toHaveLength(1);
+    expect(cards[0].count).toBe(3);
+  });
+});
+
 describe("the turn's verification receipt", () => {
   const done = (receipt: unknown): SessionEvent => ({ kind: "turn_done", receipt }) as SessionEvent;
   const card = { saysSomething: true, verdict: "unproven", gaps: [{ kind: "unverified_change" }] };

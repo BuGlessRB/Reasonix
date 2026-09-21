@@ -130,6 +130,14 @@ raised with its ratios kept.
   reply against machine activity 32px, two utterances 42px — the ladder's
   direction was right and its steps were too small to read as a change of
   speaker.
+- `--y-close` / `--close-h` are the close: what a card's last line sits above
+  the action that ends it, and how tall that action is. The close is one step
+  below `--y-line`, because an action belongs to the sentence it acts on rather
+  than standing apart from it; a card that ends must read as finished, not as
+  waiting for something that was never laid out.
+- That action is present for the whole life of the card. A control that appears
+  only under a pointer is one nobody finds, and on touch it does not appear at
+  all; it rests at `--muted` and comes forward on hover.
 
 ## Type
 

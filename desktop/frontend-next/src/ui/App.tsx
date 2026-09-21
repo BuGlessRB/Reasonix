@@ -28,7 +28,6 @@ import { PaneTabs } from "./PaneTabs";
 import { Onboarding } from "./Onboarding";
 import { Welcome } from "./Welcome";
 import { StudioIcon } from "./StudioIcon";
-import { BrowserPanel } from "./BrowserPanel";
 
 // Start fetching the settings chunk with the shell instead of waiting for the
 // first click. It remains a separate chunk (and keeps its failure boundary),
@@ -581,6 +580,9 @@ export function App({ hub }: { hub: HubPort }) {
   const manyRoots = useMemo(() => new Set(runtimes.map((rt) => rt.root)).size > 1, [runtimes]);
   const activeRuntime = runtimes.find((rt) => rt.id === active);
   const activeWorkspace = tree.find((ws) => ws.root === activeRuntime?.root) ?? tree[0];
+  // The folder a new session opens in is the one the switcher above names —
+  // the window's, not whichever project happens to sit first in the tree.
+  const newSessionRoot = activeWorkspace?.root;
   const sessionCount = tree.reduce((n, ws) => n + ws.sessions.filter((session) => !session.archived).length, 0);
   const archivedCount = tree.reduce((n, ws) => n + ws.sessions.filter((session) => session.archived).length, 0);
   const liveCount = liveIds(runtimes.map((rt) => rt.id)).length;
@@ -715,25 +717,25 @@ export function App({ hub }: { hub: HubPort }) {
             <button
               className="studio-new-task"
               data-action="session.new"
-              onClick={() => void openPane({ root: tree[0]?.root }).catch(fail)}
+              onClick={() => void openPane({ root: newSessionRoot }).catch(fail)}
             >
               <span aria-hidden="true"><StudioIcon name="plus" /></span>{t("新建会话")}<kbd>Alt N</kbd>
             </button>
             <button className="studio-search" data-action="workspace.search" onClick={() => document.querySelector<HTMLInputElement>(".wsfind input")?.focus()}>
               <span aria-hidden="true"><StudioIcon name="search" /></span>{t("搜索与快捷操作")}<kbd>Ctrl K</kbd>
             </button>
-            <div className="studio-section-label"><span>{t("工作空间")}</span><button data-action="workspace.add" onClick={() => adder.add()} aria-label={t("添加工作区")} title={t("选择本地文件夹")}><StudioIcon name="plus" /></button></div>
+            <div className="studio-section-label"><span>{t("已挂载工作区")}</span><small>{tree.length}</small><button data-action="workspace.add" onClick={() => adder.add()} aria-label={t("添加工作区")} title={t("选择本地文件夹")}><StudioIcon name="plus" /></button></div>
             {activeWorkspace && (
               <div className="studio-workspace-switcher">
                 <button className="studio-current-workspace" data-action="workspace.switch" aria-haspopup="listbox" aria-expanded={showProjects} onClick={() => setShowProjects((v) => !v)} title={activeWorkspace.root}>
                   <span aria-hidden="true"><StudioIcon name="folder" /></span>
-                  <span><b>{activeWorkspace.name}</b><small>{t("当前工作区 · 本地")}</small></span>
+                  <span><b>{activeWorkspace.name}</b><small>{t("当前聚焦 · 已挂载 {n} 个", { n: tree.length })}</small></span>
                   <i aria-hidden="true"><StudioIcon name="chevron" /></i>
                 </button>
                 {showProjects && (
-                  <div className="studio-workspace-pop" role="listbox" aria-label={t("切换工作区")}>
+                  <div className="studio-workspace-pop" role="listbox" aria-label={t("已挂载工作区")}>
                     <div className="studio-workspace-pop-head">
-                      <span>{t("切换工作区")}</span><small>{tree.length}</small>
+                      <span>{t("选择聚焦工作区")}</span><small>{tree.length}</small>
                     </div>
                     <div className="studio-workspace-pop-list">
                       {tree.map((workspace) => {
@@ -800,6 +802,7 @@ export function App({ hub }: { hub: HubPort }) {
             onFocus={focusPane}
             onClose={closePanes}
             liveIds={liveIds}
+            runs={runs}
             scope={railScope}
             pinned={pinnedSessions}
             onPin={togglePinnedSession}
@@ -861,8 +864,7 @@ export function App({ hub }: { hub: HubPort }) {
           )}
 
           <div className="panes">
-            {activeRuntime && (() => {
-              const rt = activeRuntime;
+            {runtimes.map((rt) => {
               const port = panePorts.get(rt.id);
               return port ? (
                 <Pane
@@ -892,9 +894,11 @@ export function App({ hub }: { hub: HubPort }) {
                     setClaimed(true);
                   }}
                   onSettings={(section) => section ? showPrefs(section) : showPrefs()}
+                  manualBrowser={rt.id === active && browser}
+                  onCloseManualBrowser={() => setBrowser(false)}
                 />
               ) : null;
-            })()}
+            })}
             {runtimes.length === 0 && (
               <div className="panes-empty">
                 <span className="mk" aria-hidden="true">
@@ -902,7 +906,7 @@ export function App({ hub }: { hub: HubPort }) {
                 </span>
                 <p className="t">{t("没有打开的会话")}</p>
                 <p className="h">{t("从左栏选择，或在当前文件夹新建")}</p>
-                <button data-action="session.new" onClick={() => void openPane({ root: tree[0]?.root }).catch(fail)}>{t("新建会话")}</button>
+                <button data-action="session.new" onClick={() => void openPane({ root: newSessionRoot }).catch(fail)}>{t("新建会话")}</button>
               </div>
             )}
           </div>
@@ -914,14 +918,6 @@ export function App({ hub }: { hub: HubPort }) {
             </div>
           )}
         </div>
-
-        {browser && (
-          <BrowserPanel
-            onClose={() => setBrowser(false)}
-            onExternal={(url) => void activePort?.openExternal(url).catch(fail)}
-            scheme={document.documentElement.dataset.theme === "light" ? "light" : "dark"}
-          />
-        )}
 
       </div>
 

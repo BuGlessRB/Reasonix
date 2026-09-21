@@ -107,6 +107,16 @@ executable = "/nonexistent/chrome"`, []func(string) *provider.ToolCall{
 	if !toolNames(reqs[0])["browser_open"] {
 		t.Fatalf("browser tools missing from the schema: %v", toolSchemaNames(reqs[0].Tools))
 	}
+	var actSchema string
+	for _, schema := range reqs[0].Tools {
+		if schema.Name == "browser_act" {
+			actSchema = string(schema.Parameters)
+			break
+		}
+	}
+	if !strings.Contains(actSchema, `"eval"`) || !strings.Contains(actSchema, `"script"`) {
+		t.Fatalf("browser_act at the provider boundary cannot execute JavaScript: %s", actSchema)
+	}
 	results := effectToolResults(reqs[len(reqs)-1])
 	if len(results) == 0 || !strings.Contains(results[0], "browser.engine_missing") {
 		t.Fatalf("the model was not told the browser is missing: %q", results)

@@ -22,7 +22,7 @@ export function PaneNav({ view, onPick, rows, pages, dock, onDock }: {
   // Read at render: t() answers out of a dictionary boot() installs, and a
   // table built in the module body freezes the labels in the source language.
   const name: Record<PaneView, string> = {
-    flow: t("对话"), analysis: t("运行分析"), browser: t("浏览器"),
+    flow: t("对话"), analysis: t("运行分析"), browser: t("工作台"),
   };
 
   return (

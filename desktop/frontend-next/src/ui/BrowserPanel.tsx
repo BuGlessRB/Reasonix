@@ -42,7 +42,7 @@ interface ManualProps {
   scheme: "light" | "dark";
 }
 
-function ManualBrowserPanel({ onClose, onExternal, scheme }: ManualProps) {
+export function ManualBrowserPanel({ onClose, onExternal, scheme }: ManualProps) {
   const [history, setHistory] = useState([START]);
   const [index, setIndex] = useState(0);
   const [input, setInput] = useState(START);
@@ -160,7 +160,7 @@ export function covered(slot: Element, rect: ViewRect, probe: Probe): boolean {
   return false;
 }
 
-function AgentBrowserPanel({ tabs, shown }: { tabs: BrowserTab[]; shown: boolean }) {
+export function AgentBrowserPanel({ tabs, shown, showTabs = true }: { tabs: BrowserTab[]; shown: boolean; showTabs?: boolean }) {
   const slot = useRef<HTMLDivElement>(null);
   const [picked, setPicked] = useState("");
   const current = tabs.find((tab) => tab.target === picked) ?? tabs.find((tab) => tab.active) ?? tabs[0];
@@ -208,13 +208,13 @@ function AgentBrowserPanel({ tabs, shown }: { tabs: BrowserTab[]; shown: boolean
   return (
     <div className="bpanel">
       <div className="bbar">
-        <div className="vtabs" role="tablist">
+        {showTabs && <div className="vtabs" role="tablist">
           {tabs.map((tab) => (
             <button key={tab.target} className="tab btab" role="tab" data-action="browser.tab" data-target={tab.id} aria-selected={tab.target === target} title={tab.url} onClick={() => setPicked(tab.target)}>
               {tab.title || tab.url || t("空白页")}
             </button>
           ))}
-        </div>
+        </div>}
         <div className="bnav">
           <button className="bbtn" data-action="browser.control" data-target={current?.id} data-value="back" aria-label={t("后退")} onClick={() => control("back")}>←</button>
           <button className="bbtn" data-action="browser.control" data-target={current?.id} data-value="forward" aria-label={t("前进")} onClick={() => control("forward")}>→</button>

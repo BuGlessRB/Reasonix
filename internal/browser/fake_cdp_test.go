@@ -9,9 +9,14 @@ import (
 // fakePage answers a tab's commands from a table, so page logic runs without
 // a browser. calls records every method sent, in order.
 type fakePage struct {
-	nodes  map[int64][]string // backend node id → localName then attributes
-	active int64              // backend node id document.activeElement names; 0 is <body>
-	calls  []string
+	nodes          map[int64][]string // backend node id → localName then attributes
+	active         int64              // backend node id document.activeElement names; 0 is <body>
+	evalExpression string
+	evalContext    string
+	evalResult     any
+	evalRemote     map[string]any
+	evalException  string
+	calls          []string
 }
 
 func newFakeSession(t *testing.T, page *fakePage) (*Session, *tab) {
@@ -35,12 +40,30 @@ func (p *fakePage) answer(msg wireMessage) any {
 		BackendNodeID int64  `json:"backendNodeId"`
 		ObjectID      string `json:"objectId"`
 		Expression    string `json:"expression"`
+		UniqueContext string `json:"uniqueContextId"`
 	}
 	_ = json.Unmarshal(msg.Params, &params)
 	switch msg.Method {
 	case "Runtime.evaluate":
 		if params.Expression == "document.activeElement" {
 			return map[string]any{"result": map[string]any{"objectId": "active"}}
+		}
+		if params.Expression != "document.title" {
+			p.evalExpression = params.Expression
+			p.evalContext = params.UniqueContext
+		}
+		if p.evalException != "" {
+			return map[string]any{
+				"result":           map[string]any{"type": "object"},
+				"exceptionDetails": map[string]any{"text": "Uncaught", "exception": map[string]any{"description": p.evalException}},
+			}
+		}
+		if p.evalResult != nil {
+			raw, _ := json.Marshal(p.evalResult)
+			return map[string]any{"result": map[string]any{"type": "string", "value": string(raw)}}
+		}
+		if p.evalRemote != nil {
+			return map[string]any{"result": p.evalRemote}
 		}
 		return map[string]any{"result": map[string]any{"value": ""}}
 	case "DOM.describeNode":
@@ -99,7 +122,7 @@ func TestUnconfirmedSecretIsRefusedBeforeAnyInput(t *testing.T) {
 	page := &fakePage{nodes: map[int64][]string{2: {"input", "autocomplete", "cc-number"}}}
 	s, _ := newFakeSession(t, page)
 	card := s.refs.refFor("t1", 2)
-	res, err := s.Act(context.Background(), "", []Step{{Action: "fill", Ref: card, Text: "4242"}}, false)
+	res, err := s.Act(context.Background(), "", []Step{{Action: "fill", Ref: card, Text: "4242"}}, false, "")
 	if CodeOf(err) != CodeUnconfirmedSecret || res.FailedAt != 0 {
 		t.Fatalf("Act = %+v, %v; want %s at step 0", res, err, CodeUnconfirmedSecret)
 	}
@@ -121,7 +144,7 @@ func TestSecretChecksAnswerForTheArgumentsTheyJudged(t *testing.T) {
 	for i := range 40 {
 		s.NoteSecretCheck([]byte{byte(i)}, true)
 	}
-	if len(s.secretChecks) > 33 {
-		t.Fatalf("secret checks grew to %d entries", len(s.secretChecks))
+	if len(s.checks.secrets) > 33 {
+		t.Fatalf("secret checks grew to %d entries", len(s.checks.secrets))
 	}
 }

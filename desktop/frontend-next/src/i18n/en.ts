@@ -17,6 +17,11 @@ import { EN_USAGE } from "./en_usage";
 import { EN_COMPOSER } from "./en_composer";
 
 export const EN: Record<string, string> = {
+  "工作台": "Workbench",
+  "从右侧选择文件，或打开浏览器": "Choose a file on the right, or open a browser",
+  "已挂载工作区": "Mounted workspaces",
+  "选择聚焦工作区": "Choose focused workspace",
+  "当前聚焦 · 已挂载 {n} 个": "Focused · {n} mounted",
   ...EN_SETTINGS,
   ...EN_METRICS,
   ...EN_STORAGE,
@@ -282,6 +287,12 @@ export const EN: Record<string, string> = {
 
   // ── 待发队列 ─────────────────────────────────────────────────────
   "待送达": "Pending",
+  "待发送": "To send",
+  "{n} 条待发送": "{n} to send",
+  "当前回复结束后发送": "Sends after the current response",
+  "发送已暂停": "Sending is paused",
+  "会话暂时只读，消息已为你保留": "This conversation is temporarily read-only; your message is preserved",
+  "队列容量": "Queue capacity",
   "条目": "Items",
   "字节": "Bytes",
   "已暂停": "Held",
@@ -896,10 +907,17 @@ export const EN: Record<string, string> = {
   // ── 回合中的通知（notices.ts 按 code 查表，扫描器看不到）──────
   "这一轮模型没有给出回答，正在让它重说一次": "The model gave no answer this round; asking it again",
   "模型直接给了答案却没动手，正在要求它先用工具": "The model answered without acting; asking it to use its tools first",
+  "同一个检查连着几轮都报同样的结果，是否继续由你定":
+    "The same check has reported the same thing for several rounds; whether to keep at it is yours to call",
   "另一个会话正在写这个工作区，等它写完会自动继续":
     "Another session is writing to this workspace; this one continues on its own when it is safe",
   "工作区空出来了，这个会话已经继续": "The workspace is free again; this session has continued",
   "还没轮到这个会话写，这次等待就结束了": "The wait ended before this session's turn to write came",
+
+  // ── 宿主通知卡片自己的头部（NoticeCard）───────────────────────
+  "警告": "Warning",
+  "提示": "Notice",
+  "出错": "Error",
 
   // ── 连不上时卡在哪一步（kernel.ts 的 refusal 措辞）─────────────
 
@@ -1020,4 +1038,21 @@ export const EN: Record<string, string> = {
   "每行长度控制在一眼能回到行首的范围": "Keeps a line short enough that your eye finds the next one",
   "正文跟随窗口宽度，宽屏上不留两侧空白": "Prose follows the window, with nothing left empty at the sides",
   "行宽只管正文：代码、命令与工具输出始终占满可用宽度。": "Line width applies to prose only — code, commands and tool output always use the width available.",
+  "决策模型": "Decision models",
+  "为 system_one 工具配置辅助决策后端，不会替换当前对话的主模型。": "Configure auxiliary decision backends for the system_one tool without replacing the main chat model.",
+  "托管的 System One 决策接口": "Hosted System One decision API",
+  "已保存；留空则保持不变": "Saved; leave blank to keep it unchanged",
+  "保存在本机凭据存储": "Stored in this machine's credential store",
+  "可使用本地 Python 模型或兼容 HTTP 网关": "Use a local Python model or a compatible HTTP gateway",
+  "启用 Laya 本地模型": "Enable the local Laya model",
+  "Python 路径": "Python path",
+  "Laya 模型": "Laya model",
+  "HTTP 网关": "HTTP gateway",
+  "网关 API Key": "Gateway API key",
+  "预览": "Preview",
+  "文件内容": "File contents",
+  "资源管理器": "Explorer",
+  "搜索文件": "Search files",
+  "清除搜索": "Clear search",
+  "没有匹配的文件": "No matching files",
 };

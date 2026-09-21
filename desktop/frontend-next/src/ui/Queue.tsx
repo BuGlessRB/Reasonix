@@ -119,11 +119,23 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
   const cap = queue.capacity;
   const fullItems = cap.maxItems > 0 && cap.items >= cap.maxItems;
   const fullBytes = cap.maxBytes > 0 && cap.bytes >= cap.maxBytes;
+  const capacityPressure = fullItems || fullBytes ||
+    (cap.maxItems > 0 && cap.items / cap.maxItems >= 0.75) ||
+    (cap.maxBytes > 0 && cap.bytes / cap.maxBytes >= 0.75);
+  const ordinary = (it: QueueItem) => it.origin !== "host" && it.state === "queued" && it.intent === "followup";
 
   return (
     <div className="queue" role="group" aria-label={t("待送达")}>
       <div className="qhd">
-        <span className="lb">{t("待送达")}</span>
+        <span className="lb">{t("待发送")}</span>
+        <span className="qcount" aria-label={t("{n} 条待发送", { n: items.length })}>{items.length}</span>
+        <span className="qsummary">
+          {queue.readonly
+            ? t("会话暂时只读，消息已为你保留")
+            : queue.paused
+              ? t("发送已暂停")
+              : t("当前回复结束后发送")}
+        </span>
         {queue.paused && <span className="qflag" data-hold="">{t("已暂停")}</span>}
         {queue.readonly && <span className="qflag" data-ro="">{t("只读")}</span>}
         {/* The kernel pauses itself when it recovers entries: something was
@@ -131,7 +143,7 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
         {!!queue.recoveredCount && <span className="qflag" data-warn="">{t("恢复了 {n} 条", { n: queue.recoveredCount })}</span>}
         {/* Both limits refuse on their own, so a header that showed one of them
             would be wrong about the other exactly when it bites. */}
-        <span className="qcap">
+        {capacityPressure && <span className="qcap" aria-label={t("队列容量")}>
           <span data-full={fullItems || undefined}>
             {t("条目")} {cap.items}/{cap.maxItems}
             <span className="mtr">
@@ -144,7 +156,7 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
               <i style={{ width: fill(cap.bytes, cap.maxBytes) }} />
             </span>
           </span>
-        </span>
+        </span>}
         <button className="qhold" data-action="queue.pause" onClick={() => onPause(!queue.paused)} disabled={queue.readonly}>
           {queue.paused ? t("继续派发") : t("暂停派发")}
         </button>
@@ -157,9 +169,13 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
             <div key={it.id} className="qi" data-state={it.state}>
               {/* The chip is the answer to "did that land". Its wording says
                   which turn the line goes into; the title says when. */}
-              <span className="pill" data-tone={tone(it.state)} title={it.state === "steer_accepted" ? t("下个工具边界送入") : undefined}>
-                {label(it)}
-              </span>
+              {ordinary(it) ? (
+                <span className="qdot" aria-hidden="true" />
+              ) : (
+                <span className="pill" data-tone={tone(it.state)} title={it.state === "steer_accepted" ? t("下个工具边界送入") : undefined}>
+                  {label(it)}
+                </span>
+              )}
               {editing === it.id ? (
                 <textarea
                     data-action-keydown="queue.edit"
@@ -193,12 +209,10 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
               )}
               {live && (
                 <span className="qacts">
-                  <button data-action="queue.move" data-target={it.id} data-value="up" onClick={() => onMove(it.id, i - 1)} disabled={i === 0} title={t("上移")}>
-                    ↑
-                  </button>
-                  <button data-action="queue.move" data-target={it.id} data-value="down" onClick={() => onMove(it.id, i + 1)} disabled={i === items.length - 1} title={t("下移")}>
-                    ↓
-                  </button>
+                  {items.length > 1 && <>
+                    <button data-action="queue.move" data-target={it.id} data-value="up" onClick={() => onMove(it.id, i - 1)} disabled={i === 0} title={t("上移")} aria-label={t("上移")}>↑</button>
+                    <button data-action="queue.move" data-target={it.id} data-value="down" onClick={() => onMove(it.id, i + 1)} disabled={i === items.length - 1} title={t("下移")} aria-label={t("下移")}>↓</button>
+                  </>}
                   <button data-action="queue.edit" data-target={it.id} onClick={() => void open(it.id)} title={t("编辑")}>
                     {t("改")}
                   </button>
@@ -217,7 +231,7 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
               )}
               {live && (
                 <button className="x" data-action="queue.cancel" data-target={it.id} onClick={() => onCancel(it.id)} title={t("取回")}>
-                  ×
+                  {t("取回")}
                 </button>
               )}
             </div>

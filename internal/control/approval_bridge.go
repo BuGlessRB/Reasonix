@@ -66,6 +66,7 @@ type gateApprover struct{ c *Controller }
 const (
 	dynamicBashApproval      = "dynamic_bash"
 	browserCredentialApprova = "browser_credential"
+	browserScriptApproval    = "browser_script"
 	computerUseApproval      = "computer_use"
 	computerPointerApproval  = "computer_pointer"
 )
@@ -73,6 +74,7 @@ const (
 var explicitApprovalTexts = map[string]string{
 	dynamicBashApproval:      "This command uses nested or indirect shell execution. Auto and broad allow rules cannot verify the inner command; approve this exact command or use YOLO.",
 	browserCredentialApprova: "This browser step types a password, a one-time code or card details into the site. Auto, the site's grant and broad allow rules do not answer it; approve it or use YOLO.",
+	browserScriptApproval:    "This browser step runs arbitrary JavaScript with the page's authority. Auto, the site's grant and broad allow rules do not answer it; approve it or use YOLO.",
 	computerPointerApproval:  "This takes the pointer the person is holding — it moves their cursor, clicks with it, and brings the application forward — rather than asking an element to act. Auto, the application's own grant and broad allow rules do not answer it; approve it or use YOLO.",
 	computerUseApproval:      "This reads or operates another application on the computer, with whatever access that application has. Auto and broad allow rules do not answer it; approve it for this application or use YOLO.",
 }
@@ -84,6 +86,8 @@ func ExplicitApprovalCode(tool, subject string) string {
 	switch {
 	case strings.EqualFold(tool, "bash") && permission.BashSubjectRequiresExplicitApproval(subject):
 		return dynamicBashApproval
+	case permission.IsBrowserTool(tool) && strings.HasPrefix(subject, permission.BrowserScriptPrefix):
+		return browserScriptApproval
 	case permission.IsBrowserTool(tool) && permission.BrowserSubjectRequiresExplicitApproval(subject):
 		return browserCredentialApprova
 	case permission.IsComputerTool(tool) && permission.ComputerSubjectTakesPointer(subject):

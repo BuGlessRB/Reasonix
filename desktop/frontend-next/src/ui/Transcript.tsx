@@ -18,6 +18,7 @@ import { NoticeCard } from "./cards/NoticeCard";
 import { RememberCard } from "./cards/RememberCard";
 import { ExtensionCard } from "./cards/ExtensionCard";
 import { toolFailed } from "./cards/outcome";
+import { transcriptRows } from "./turnrows";
 import { Rail, type RailMark } from "./Rail";
 import { StudioIcon } from "./StudioIcon";
 import { clearFind, paintFind } from "./findpaint";
@@ -532,30 +533,8 @@ const Block = memo(function Block({
   });
 
   // Tool traffic is evidence for the answer, not a stack of equally important
-  // messages. Keep consecutive execution steps in one disclosure so a finished
-  // turn reads answer-first while every command and output remains inspectable.
-  const rows: Array<{ item: Item; activity?: Item[] } | { activity: Item[] }> = [];
-  for (let at = 0; at < items.length;) {
-    let end = at + 1;
-    while (end < items.length && items[end].t !== "user") end++;
-    const turn = items.slice(at, end);
-    const activity = turn.filter((item) => item.t === "tool" || item.t === "reads");
-    const answer = turn.find((item) => item.t === "say" && item.done);
-    if (answer && activity.length) {
-      for (const item of turn) {
-        if (item.t === "tool" || item.t === "reads") continue;
-        rows.push(item === answer ? { item, activity } : { item });
-      }
-    } else {
-      for (const item of turn) {
-        const isActivity = item.t === "tool" || item.t === "reads";
-        const last = rows[rows.length - 1];
-        if (isActivity && last && "activity" in last && !("item" in last)) last.activity.push(item);
-        else rows.push(isActivity ? { activity: [item] } : { item });
-      }
-    }
-    at = end;
-  }
+  // messages; transcriptRows folds it and keeps each sentence above its own.
+  const rows = transcriptRows(items);
 
   return (
     <div
@@ -602,10 +581,7 @@ const ActivityGroup = memo(function ActivityGroup({
   ...rowProps
 }: { items: Item[]; checkpoints: Map<string, Checkpoint> } & RowHandlers) {
   const running = items.some((item) => item.t === "tool" && item.running);
-  const [open, setOpen] = useState(running);
-  useEffect(() => {
-    if (running) setOpen(true);
-  }, [running]);
+  const [open, setOpen] = useState(false);
   const calls = items.reduce((count, item) => count + (item.t === "reads" ? item.tools.length : 1), 0);
   const failures = items.reduce((count, item) => {
     if (item.t === "tool") return count + (toolFailed(item.tool) ? 1 : 0);

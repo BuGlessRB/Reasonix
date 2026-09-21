@@ -90,6 +90,8 @@
 
     --y-say: 21px;
 
+    --y-close: 4px; --close-h: 26px;
+
     --track-display: -.018em;
     --track-tight: -.02em; --track-lead: .06em; --track-cap: .12em;
 

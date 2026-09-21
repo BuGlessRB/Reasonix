@@ -117,3 +117,41 @@ func TestAdoptLeavesAHostArrangedLeaseAlone(t *testing.T) {
 		t.Error("closing the pane released a lease the host still holds")
 	}
 }
+
+func TestReadonlyPanePromotesAfterTransientHolderLeaves(t *testing.T) {
+	dir := testenv.TempDir(t)
+	path := filepath.Join(dir, "handoff.jsonl")
+	saveServeTestSession(t, path)
+	holder, err := agent.TryAcquireSessionLease(path)
+	if err != nil {
+		t.Fatalf("holder acquire: %v", err)
+	}
+
+	bc := NewBroadcaster()
+	ctrl := control.New(control.Options{Sink: bc, SessionDir: dir, SessionPath: path})
+	defer ctrl.Close()
+	srv := New(ctrl, bc, config.ServeConfig{})
+	leases := control.NewSessionLeaseKeeper()
+	defer leases.Release()
+	if err := srv.SetSessionLeases(leases); err != nil {
+		t.Fatal(err)
+	}
+	if writable, err := leases.Attach(path); err != nil || writable {
+		t.Fatalf("attach while held = writable %v, err %v", writable, err)
+	}
+	if err := leases.BindControllerAuthority(ctrl); err != nil {
+		t.Fatal(err)
+	}
+	rt := &Runtime{ID: "handoff", Server: srv, Events: bc, leases: leases}
+	if !rt.view().ReadOnly {
+		t.Fatal("pane should remain read-only while the holder is live")
+	}
+
+	holder.Release()
+	if view := rt.view(); view.ReadOnly {
+		t.Fatal("pane stayed read-only after the transient holder released")
+	}
+	if got := leases.HeldPath(); got != agent.CanonicalSessionPath(path) {
+		t.Fatalf("promoted lease path = %q", got)
+	}
+}

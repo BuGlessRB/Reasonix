@@ -1,0 +1,71 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import "./testkit";
+import { App } from "./App";
+import { MockHub } from "../port/mock_hub";
+
+afterEach(cleanup);
+
+// The second folder the fixture knows. The switcher names it; a new session has
+// to land in it.
+const SECOND = "~/projects/my-website";
+
+// Where a new session lands is the whole claim: the fake kernel records which
+// folder every open asked for, so a button reading a different answer than the
+// switcher above it shows up as the wrong folder rather than as styling.
+describe("a new session opens in the workspace on screen", () => {
+  it("does not fall back to the first folder in the tree", async () => {
+    const hub = new MockHub();
+    const asked: (string | undefined)[] = [];
+    const open = hub.open.bind(hub);
+    hub.open = async (req) => {
+      asked.push(req.root);
+      return open(req);
+    };
+    // Past onboarding: a window still asking for a key draws neither the rail
+    // nor a panes area, and this is a claim about a window that is working.
+    const build = hub.portFor.bind(hub);
+    hub.portFor = (rt) => {
+      const port = build(rt);
+      port.providerSetup = async () => null;
+      port.welcomeSeen = async () => true;
+      return port;
+    };
+
+    render(<App hub={hub} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /当前聚焦/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /my-website/ }));
+    await waitFor(() => expect(asked).toEqual([SECOND]));
+
+    asked.length = 0;
+    // The button in the rail's head, which is the one that has no folder of its
+    // own to belong to — the rows below name theirs.
+    const head = document.querySelector(".studio-rail-head") as HTMLElement;
+    await userEvent.click(within(head).getByRole("button", { name: /新建会话/ }));
+    await waitFor(() => expect(asked).toEqual([SECOND]));
+  });
+
+  it("keeps a conversation's composer mounted while another is in front", async () => {
+    const hub = new MockHub();
+    const build = hub.portFor.bind(hub);
+    hub.portFor = (rt) => {
+      const port = build(rt);
+      port.providerSetup = async () => null;
+      port.welcomeSeen = async () => true;
+      return port;
+    };
+
+    render(<App hub={hub} />);
+
+    const composer = await screen.findByRole("combobox", { name: "任务输入" });
+    await userEvent.type(composer, "keep this draft");
+    await userEvent.click(screen.getByRole("treeitem", { name: /上一次的会话/ }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "任务输入" })).not.toBe(composer));
+    await userEvent.click(screen.getByRole("treeitem", { name: /并行会话演示/ }));
+
+    expect((await screen.findByRole("combobox", { name: "任务输入" }) as HTMLTextAreaElement).value).toBe("keep this draft");
+  });
+});

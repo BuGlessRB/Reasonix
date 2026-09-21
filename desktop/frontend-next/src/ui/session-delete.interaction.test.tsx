@@ -41,6 +41,7 @@ function draw(over: { runtimes?: RuntimeView[]; workspaces?: TreeWorkspace[] } =
       onFocus={() => {}}
       onClose={onClose}
       liveIds={() => []}
+      runs={{}}
       onRename={() => {}}
       onError={onError}
       adder={{ add: () => {}, close: () => {}, at: null } as never}
@@ -48,6 +49,34 @@ function draw(over: { runtimes?: RuntimeView[]; workspaces?: TreeWorkspace[] } =
   );
   return { removeSession, onClose, reload, onError };
 }
+
+it("projects each open session's run state onto its own row", () => {
+  const runtime = { id: "r1", base: "", root: "/w", name: "w", sessionPath: SESSION };
+  const workspaces = tree({ sessions: [{ path: SESSION, name: "session", title: "running session", runtimeId: runtime.id }] });
+  const onClose = vi.fn(async () => {});
+  const onError = vi.fn();
+  render(
+    <Workspaces
+      hub={{} as never}
+      tree={workspaces}
+      runtimes={[runtime]}
+      active=""
+      folded={new Set()}
+      onFold={() => {}}
+      reload={async () => {}}
+      onOpen={async () => {}}
+      onFocus={() => {}}
+      onClose={onClose}
+      liveIds={() => [runtime.id]}
+      runs={{ [runtime.id]: { run: "running", live: true } }}
+      onRename={() => {}}
+      onError={onError}
+      adder={{ add: () => {}, close: () => {}, at: null } as never}
+    />,
+  );
+
+  expect(screen.getByRole("treeitem", { name: /running session/ }).getAttribute("data-run")).toBe("running");
+});
 
 const trash = async () => {
   await userEvent.click(screen.getByRole("button", { name: /会话操作：/ }));

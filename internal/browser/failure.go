@@ -28,6 +28,7 @@ const (
 	CodeWaitTimeout       Code = "browser.wait_timeout"
 	CodeBadStep           Code = "browser.bad_step"
 	CodeScriptFailed      Code = "browser.script_failed"
+	CodeOriginChanged     Code = "browser.origin_changed"
 	CodeUnconfirmedSecret Code = "browser.unconfirmed_secret"
 )
 

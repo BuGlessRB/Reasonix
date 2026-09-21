@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode, memo, useRef, useState } from "react";
+import { Fragment, type ReactNode, memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/hub";
@@ -28,6 +28,7 @@ interface Props {
   // Which of these panes are mid-turn. A callback rather than a prop: run state
   // changes constantly and this is only ever asked at confirmation time.
   liveIds: (ids: string[]) => string[];
+  runs: Record<string, { run: string; live: boolean }>;
   scope?: "all" | "live" | "pinned" | "archived";
   pinned?: Set<string>;
   onPin?: (path: string) => void;
@@ -49,7 +50,7 @@ interface Props {
 // nodes in the sidebar — more than the transcript at 20000 turns.
 const SHOWN = 30;
 
-function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, scope = "all", pinned = new Set(), onPin = () => {}, onPause = () => {}, onArchive = async () => {}, onRename, onError, adder, children }: Props) {
+function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, runs, scope = "all", pinned = new Set(), onPin = () => {}, onPause = () => {}, onArchive = async () => {}, onRename, onError, adder, children }: Props) {
   const [busy, setBusy] = useState("");
   // Folding a machine is the reader's own preference, held the way a host row
   // holds it.
@@ -68,6 +69,27 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   // What was already sent for this session, so Enter's commit and the blur it
   // causes do not both reach the host with the same name.
   const renamed = useRef<Record<string, string>>({});
+  // Finishing is a transition this run witnessed, not a state a row can hold: a
+  // persisted done replays nothing when the window opens or the scope changes.
+  const priorRun = useRef<Record<string, string>>({});
+  const [justDone, setJustDone] = useState<Set<string>>(new Set());
+
+  // A first sighting only records what the state already was, so a row that is
+  // done as it mounts is history and says so silently. Each timer clears only
+  // the ids it added, which is why nothing has to be cancelled when `runs`
+  // moves on: the animation has already been spent by then.
+  useEffect(() => {
+    const fresh = newlyDone(priorRun.current, runs);
+    if (fresh.length === 0) return;
+    setJustDone((prev) => new Set([...prev, ...fresh]));
+    window.setTimeout(() => {
+      setJustDone((prev) => {
+        const next = new Set(prev);
+        for (const id of fresh) next.delete(id);
+        return next;
+      });
+    }, 1200);
+  }, [runs]);
   const rename = (session: { path: string; title?: string; name: string }, raw: string) => {
     const next = raw.trim();
     const was = session.title || session.name;
@@ -324,6 +346,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                   <div className="kids">
                 {(whole.has(ws.root) ? ws.sessions : ws.sessions.slice(0, SHOWN)).map((session) => {
                     const on = session.runtimeId === active;
+                    const run = session.runtimeId ? runs[session.runtimeId]?.run : undefined;
                     if (confirm === session.path) {
                       return (
                         <Confirm
@@ -351,6 +374,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         aria-selected={on}
                         data-on={on ? "" : undefined}
                         data-live={session.runtimeId ? "" : undefined}
+                        data-run={run === "idle" ? undefined : run}
+                        data-just-done={session.runtimeId && justDone.has(session.runtimeId) ? "" : undefined}
                         data-busy={busy === session.path ? "" : undefined}
                         onClick={() => void pick(ws, session)}
                         tabIndex={0}
@@ -562,6 +587,21 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
 // Panes report upward on every usage round, so the window repaints often; the
 // tree it holds does not change nearly that often.
 export const Workspaces = memo(WorkspacesView);
+
+// Which runs reached "done" since `before` last recorded them. A state is not
+// an event: `done` persists, so only a change no first sighting can produce —
+// both sides known and different — is the completion this window watched.
+export function newlyDone(
+  before: Record<string, string>,
+  runs: Record<string, { run: string; live: boolean }>,
+): string[] {
+  const fresh: string[] = [];
+  for (const [id, st] of Object.entries(runs)) {
+    if (st.run === "done" && before[id] !== undefined && before[id] !== "done") fresh.push(id);
+    before[id] = st.run;
+  }
+  return fresh;
+}
 
 // Removing a folder closes its panes, and closing one stops what it is running.
 // That price is said here rather than discovered afterwards — the kernel refuses

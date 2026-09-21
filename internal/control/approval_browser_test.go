@@ -81,6 +81,16 @@ func TestBrowserCredentialEntryNeedsAPersonInAuto(t *testing.T) {
 	}
 }
 
+func TestBrowserScriptCarriesItsOwnApprovalIdentity(t *testing.T) {
+	subject := permission.BrowserScriptPrefix + "https://example.com"
+	if got := ExplicitApprovalCode("browser_act", subject); got != browserScriptApproval {
+		t.Fatalf("approval code = %q, want %q", got, browserScriptApproval)
+	}
+	if !strings.Contains(explicitApprovalReason("browser_act", subject), "arbitrary JavaScript") {
+		t.Fatal("script approval did not explain the authority being granted")
+	}
+}
+
 func TestUnattendedRefusalNamesTheSecret(t *testing.T) {
 	_, _, reason, _ := denyPermissionApprover{}.ApproveWithReason(context.Background(), "browser_act", permission.BrowserCredentialPrefix+"https://bank.example", nil)
 	if !strings.HasPrefix(reason, explicitApprovalReason("browser_act", permission.BrowserCredentialPrefix+"https://bank.example")) {

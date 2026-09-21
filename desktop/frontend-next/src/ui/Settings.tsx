@@ -26,6 +26,7 @@ import { Compaction } from "./Compaction";
 import { Sandbox } from "./Sandbox";
 import { Account } from "./Account";
 import { Providers } from "./Providers";
+import { DecisionModelsPanel } from "./DecisionModels";
 import { Models, activeKind, groupVendors } from "./Models";
 import { KIND_LABEL } from "./vendors";
 import { planProtocolSwitch } from "./protocolswitch";
@@ -519,6 +520,9 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
                 <Providers port={port} onChanged={loadModels} onFailed={setFailed} protocol={protocol}
                   activeKindFor={(a) => kindFor(a.key)}
                   onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
+              </Group>
+              <Group id="decision-models" title={t("决策模型")} hint={t("为 system_one 工具配置辅助决策后端，不会替换当前对话的主模型。")}>
+                <DecisionModelsPanel port={port} onChanged={onChanged} />
               </Group>
               <Group id="model" title={t("主模型")} now={nav.model} hint={t("用于当前对话和大多数任务。切换会保留对话并重建运行时；任务执行期间无法修改。端点没有声明的能力不会显示标签。")}>
                 <Models models={models} current={status?.modelRef} busy={busy} protocol={protocol}

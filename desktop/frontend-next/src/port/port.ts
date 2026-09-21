@@ -18,7 +18,7 @@ import type { ApprovalMode, ApprovalVerdict, BrowserTab, Checkpoint, HistoryMess
 import type { ContextBreakdown, ShellOption, ShellSettings } from "./shell";
 import type { SkillCatalog, SkillEntry } from "./skill";
 import type { UpdateProgress, VersionEntry, VersionHub } from "./version";
-import type { ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, WorkspaceInfo } from "./workspace";
+import type { ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, WorkspaceFile, WorkspaceFiles, WorkspaceInfo } from "./workspace";
 
 // The port is one contract; its subjects each keep their own file, the way the
 // wire and the layers below already do. This is where a reader still finds
@@ -30,7 +30,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
   MemoryEntry, ModelEntry, ModelPrice, NetworkProbe, NetworkSettings, Preset, RewindPlan,
   RewindResult, RewindScope, RoleAssignments, ScopeLayer, SessionEntry, SessionStatus,
   ShellOption, ShellSettings, SkillCatalog, SkillEntry, UpdateProgress, VersionEntry,
-  VersionHub, WalletLine, WalletReading, ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, WorkspaceInfo };
+  VersionHub, WalletLine, WalletReading, ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, WorkspaceFile, WorkspaceFiles, WorkspaceInfo };
 
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
@@ -39,6 +39,8 @@ import type { ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, San
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 export type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 import type { StoragePlan, StorageState } from "./storage";
+import type { DecisionModels, DecisionModelsDraft } from "./decision";
+export type { DecisionModels, DecisionModelsDraft } from "./decision";
 
 export type * from "./plugin";
 
@@ -122,6 +124,8 @@ export interface TrayPrefs {
 }
 
 export interface AgentPort {
+  decisionModels(): Promise<DecisionModels>;
+  saveDecisionModels(value: DecisionModelsDraft): Promise<void>;
   providerSetup(): Promise<ProviderSetup | null>;
   saveProviderKey(apiKey: string): Promise<void>;
   models(): Promise<ModelEntry[]>;
@@ -334,6 +338,9 @@ export interface AgentPort {
   // only this says how, and asking per path is what keeps a session that
   // touched two hundred files from shipping two hundred diffs nobody opened.
   changeDiff(path: string): Promise<ChangeDiff>;
+  workspaceFiles(path?: string, query?: string): Promise<WorkspaceFiles>;
+  workspaceFile(path: string): Promise<WorkspaceFile>;
+  saveWorkspaceFile(file: WorkspaceFile): Promise<WorkspaceFile>;
   // Saves bytes into the workspace's attachment directory and returns the
   // "@path" token a turn references it by. This is the door for what has no
   // path to offer — the clipboard, and a browser tab's dropped File. A window

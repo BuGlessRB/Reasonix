@@ -41,7 +41,10 @@ func (a *Agent) noticeStalledVerification(sample evidence.OutcomeSample) {
 	}
 	a.svc.sink.Emit(event.Event{
 		Kind: event.Notice, Level: event.LevelWarn, Code: event.NoticeCodeVerificationStalled,
-		Text: fmt.Sprintf("The same check has failed %d rounds running and still reports the same thing.", sample.StallAge),
+		// About the run rather than the conversation: it is the window's to say
+		// beside the composer, not a card in the transcript.
+		Audience: event.NoticeAudienceOperator,
+		Text:     fmt.Sprintf("The same check has failed %d rounds running and still reports the same thing.", sample.StallAge),
 		Detail: fmt.Sprintf("verification stalled: %d rounds, %d change(s) landed against it without moving it",
 			sample.StallAge, sample.StallMutations),
 	})

@@ -161,6 +161,18 @@ rules are written in.
   freezes where it stopped — reasoning stopped half way is exactly what that
   means. Done is persisted state, not proof that completion happened on this
   mount.
+- The rail's session rows answer to the same distinction. A run's state is a
+  2px, 14px-tall tick at the row's left edge, square-cut and set 3px in: drawn
+  rather than an inset shadow, because a shadow in a rounded row can only
+  follow that radius and a short mark cannot. It is one mark in three colours —
+  accent, warn, ok — so the row says which state it is in without the row
+  itself becoming the signal.
+- Finishing is the one rail state that is an event rather than a state, so it
+  alone is animated, and only for the run this window watched cross into
+  `done`. A session that was already done when the rail mounted, or that comes
+  back into scope, draws its tick and nothing else. `data-just-done` carries
+  that event and `data-run="done"` carries the state; keeping them apart is
+  what stops history from replaying as news.
 
 ## The queue
 
@@ -242,6 +254,10 @@ rules are written in.
   sides, so two rail widths are reserved, not one: half of one lands on the rail
   side and the prose reaches under a strip that takes every pointer event, where
   a click is a jump rather than a selection.
+- Docking the agent's browser puts the pane on a grid, and the browser's column
+  spans the body's row and the composer's. Inside the conversation column `100%`
+  is that column, so the composer's own centring keeps it off the divider, and
+  the panel reaches the pane's bottom rather than the composer's top edge.
 
 ## Virtualisation
 

@@ -7,7 +7,7 @@ import { SayCard } from "./SayCard";
 afterEach(cleanup);
 
 describe("completed reasoning", () => {
-  it("can be opened again after it automatically folds", async () => {
+  it("starts folded and opens on click", async () => {
     const { container } = render(<SayCard item={{ t: "say", id: "s", text: "answer", reasoning: "reason", done: true }} />);
     const details = container.querySelector("details") as HTMLDetailsElement;
     expect(details.open).toBe(false);

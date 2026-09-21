@@ -26,6 +26,13 @@ const SAID: Record<string, string> = {
 
   // ── 冲突：有东西挡着 ─────────────────────────────────────────────
   "workspace.has_open_panes": "该文件夹仍有 {n} 个打开的面板，请先关闭再移除",
+  "workspace.file_invalid": "文件保存请求格式不正确",
+  "workspace.file_changed": "文件已在打开后被其他操作修改，请重新载入",
+  "workspace.file_missing": "找不到该文件，它可能已被移动或删除",
+  "workspace.file_failed": "文件操作失败，请重试",
+  "workspace.path_outside_tree": "该路径不在当前工作区内",
+  "workspace.files_failed": "无法读取工作区文件列表",
+  "workspace.file_unreadable": "该文件不是可编辑文本或超过大小限制",
   "provider.model_in_use": "该来源正在使用中，请先切换模型再删除",
 
   // ── 来源：填错了什么 ─────────────────────────────────────────────
@@ -74,6 +81,8 @@ const SAID: Record<string, string> = {
   "stream.unsupported": "该连接不支持流式传输",
   "internal.failed": "服务端出现异常，与你的操作无关",
   "provider.bad_context_window": "上下文长度不能是负数；填 0 表示不自动压缩",
+  "provider.bad_token_limit": "Token 上限不能是负数",
+  "provider.bad_max_output_tokens": "最大输出 Token 不能是负数",
   "provider.bad_reasoning_protocol": "无法识别「{protocol}」这种思考协议",
   "provider.no_current_model": "当前没有正在使用的模型，无法记录其窗口大小",
   "context.window_after_this_turn": "窗口大小已记录，将在本轮结束后生效",

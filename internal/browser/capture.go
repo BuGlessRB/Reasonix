@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/base64"
 	"image"
+	"image/color"
+	"image/draw"
+	"image/jpeg"
 	"strings"
 
 	"reasonix/internal/visionimage"
@@ -52,10 +55,48 @@ func (s *Session) Screenshot(ctx context.Context, tabID string) (string, TabInfo
 		t.shotScale = float64(rawCfg.Width) / float64(cfg.Width) / dpr.Result.Value
 		t.mu.Unlock()
 	}
+	t.mu.Lock()
+	pointer, scale := t.pointer, t.shotScale
+	t.mu.Unlock()
+	if pointer.visible && scale > 0 {
+		marked, markErr := markPointer(fitted, pointer.x/scale, pointer.y/scale)
+		if markErr == nil {
+			fitted, mime = marked, "image/jpeg"
+		}
+	}
 	var b strings.Builder
 	b.WriteString("data:" + mime + ";base64,")
 	b.WriteString(base64.StdEncoding.EncodeToString(fitted))
 	return b.String(), t.info(true), nil
+}
+
+func markPointer(raw []byte, x, y float64) ([]byte, error) {
+	src, _, err := image.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	dst := image.NewRGBA(src.Bounds())
+	draw.Draw(dst, dst.Bounds(), src, src.Bounds().Min, draw.Src)
+	cx, cy := int(x+.5), int(y+.5)
+	for radius := 10; radius >= 0; radius-- {
+		ink := color.RGBA{255, 255, 255, 235}
+		if radius >= 7 {
+			ink = color.RGBA{20, 22, 20, 230}
+		}
+		r2 := radius * radius
+		for py := cy - radius; py <= cy+radius; py++ {
+			for px := cx - radius; px <= cx+radius; px++ {
+				if (px-cx)*(px-cx)+(py-cy)*(py-cy) <= r2 && image.Pt(px, py).In(dst.Bounds()) {
+					dst.Set(px, py, ink)
+				}
+			}
+		}
+	}
+	var out bytes.Buffer
+	if err := jpeg.Encode(&out, dst, &jpeg.Options{Quality: 84}); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 // screenshotScale converts screenshot pixels to CSS pixels. Before any

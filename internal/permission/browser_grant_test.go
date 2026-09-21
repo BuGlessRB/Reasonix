@@ -89,3 +89,18 @@ func TestBrowserCredentialAnswersOnlyToItsExactSubject(t *testing.T) {
 		t.Fatalf("credential grant %q does not cover exactly its own subject", grant)
 	}
 }
+
+func TestBrowserScriptAnswersOnlyToItsExactSubject(t *testing.T) {
+	const site = "https://example.com"
+	script := BrowserScriptPrefix + site
+	args, _ := json.Marshal(map[string]any{"origin": script})
+	if got := Subjects(args); len(got) != 2 || got[0] != script || got[1] != site {
+		t.Fatalf("subjects = %v, want the script then its site", got)
+	}
+	if got := New("allow", []string{"Browser=" + site}, nil, nil).Decide("browser_act", false, args); got != Ask {
+		t.Fatalf("site grant decided arbitrary script as %v, want ask", got)
+	}
+	if got := New("allow", []string{"Browser=" + script}, nil, nil).Decide("browser_act", false, args); got != Allow {
+		t.Fatalf("exact script grant decided %v, want allow", got)
+	}
+}

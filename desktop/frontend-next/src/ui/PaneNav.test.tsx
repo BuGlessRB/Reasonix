@@ -20,10 +20,10 @@ describe("pane navigation", () => {
     expect(screen.queryByText("运行详情")).toBeNull();
   });
 
-  it("opens analysis directly and adds browser only while a page exists", () => {
+  it("opens analysis directly and adds the workbench when it has a surface", () => {
     const onPick = draw(2, 1);
     fireEvent.click(screen.getByRole("tab", { name: "运行分析" }));
     expect(onPick).toHaveBeenCalledWith("analysis");
-    expect(screen.getByRole("tab", { name: /浏览器/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /工作台/ })).toBeTruthy();
   });
 });

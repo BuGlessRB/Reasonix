@@ -131,12 +131,6 @@ func (s *Server) ctl() control.SessionAPI {
 // the interleaving bindMu exists to prevent; production never sets it.
 var resumeBindHookForTest func()
 
-// sessionInUseError renders a lease refusal for HTTP clients using the shared
-// CLI wording, without the session file path.
-func sessionInUseError(err error) string {
-	return control.SessionInUseMessage(err) + "; " + control.SessionLeaseCloseHint
-}
-
 // AuthToken returns the pre-shared token when in token mode, or "" otherwise.
 func (s *Server) AuthToken() string {
 	if s.auth == nil {
@@ -576,6 +570,11 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	// request could otherwise start on cur after reload's initial busy check.
 	s.bindMu.Lock()
 	ctrl := s.ctl()
+	if err := s.promoteSessionLease(); err != nil {
+		s.bindMu.Unlock()
+		sessionInUse(w, err)
+		return
+	}
 	// Fix false 202 while a turn is active: SubmitHTTPFormat silently drops
 	// concurrent input. Clients must use POST /inbox/items for durable follow-up.
 	if ctrl.Running() {

@@ -198,6 +198,7 @@ export const SETTINGS: SettingEntry[] = [
   // is what the row promises, because the weaker one would be a promise this
   // block cannot keep.
   { section: "model", anchor: "providers", title: "模型来源", scope: "machine", apply: "runtime-rebuild", keywords: ["连接", "提供商", "api key", "密钥", "协议", "地址"] },
+  { section: "model", anchor: "decision-models", title: "决策模型", scope: "machine", apply: "runtime-rebuild", keywords: ["system one", "typesafe", "laya", "辅助决策"] },
 
   // Takes effect on this session at once and is also persisted as the default
   // every later session starts from. Machine is the wider of the two answers

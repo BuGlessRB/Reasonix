@@ -437,6 +437,16 @@ export class MockPort extends MockTheme implements AgentPort {
     };
   }
 
+  async workspaceFiles(path = "", query = "") {
+    const all = ["README.md", "internal/provider/retry.go"];
+    if (query) return { files: all.filter((p) => p.toLowerCase().includes(query.toLowerCase())), directories: [] };
+    if (path === "internal") return { files: [], directories: ["internal/provider"] };
+    if (path === "internal/provider") return { files: ["internal/provider/retry.go"], directories: [] };
+    return { files: ["README.md"], directories: ["internal"] };
+  }
+  async workspaceFile(path: string) { return { path, content: `// ${path}\n`, revision: "fixture" }; }
+  async saveWorkspaceFile(file: import("./port").WorkspaceFile) { return { ...file, revision: file.revision + "-saved" }; }
+
   async trajectory(): Promise<TrajectoryRead> {
     return { availability: "complete", events: [] };
   }

@@ -29,10 +29,12 @@ import { ContextSummaryCard } from "./ContextSummaryCard";
 import { Find } from "./Find";
 import { useFind } from "./usefind";
 import { RunAnalysis } from "./RunAnalysis";
-import { BrowserPanel, useBrowserTabs } from "./BrowserPanel";
+import { useBrowserTabs } from "./BrowserPanel";
+import { WorkbenchPanel } from "./WorkbenchPanel";
 import { refreshTodos } from "../state/restore";
 import { RMark } from "./RMark";
 import { speedOf } from "./speed";
+import { RuntimeBar } from "./RuntimeBar";
 
 const BROWSER_DOCK = "rx-browser-dock";
 
@@ -85,9 +87,11 @@ interface Props {
   needsProject: boolean;
   onOpenProject: () => void;
   onKeepHere: () => void;
+  manualBrowser?: boolean;
+  onCloseManualBrowser?: () => void;
 }
 
-function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere }: Props) {
+function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere, manualBrowser = false, onCloseManualBrowser }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
   const [status, setStatus] = useState<SessionStatus | null>(null);
@@ -102,11 +106,11 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [queue, setQueue] = useState<QueueSnapshot | null>(null);
   const [slots, setSlots] = useState<Record<string, string>>({});
   const pages = useBrowserTabs(port, s.browserTabsMoved);
-  const [dock, setDock] = useState(() => localStorage.getItem(BROWSER_DOCK) !== "off");
+  const [dock, setDock] = useState(() => localStorage.getItem(BROWSER_DOCK) === "on");
   // Analysis owns the whole working canvas. A docked browser and the composer
   // are useful while talking to the agent, but both compete with the timeline
   // for exactly the horizontal/vertical space the analysis view explains.
-  const docked = dock && pages.length > 0 && tab === "flow";
+  const docked = dock && (pages.length > 0 || manualBrowser) && tab === "flow";
   const [meterOpen, setMeterOpen] = useState(false);
   const meterRef = useRef<HTMLDivElement>(null);
   const closeMeter = useCallback(() => setMeterOpen(false), []);
@@ -572,8 +576,8 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const find = useFind(s.items, findPulse, active, useCallback(() => showView("flow"), [showView]));
 
   useEffect(() => {
-    if (tab === "browser" && pages.length === 0) setTab("flow");
-  }, [tab, pages.length]);
+    if (manualBrowser) setTab("browser");
+  }, [manualBrowser]);
 
   // Where the bottom is moves as blocks mount under it, so this only asks the
   // transcript to follow again and lets it scroll itself into place.
@@ -623,7 +627,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         view={tab}
         onPick={showView}
         rows={traj.rows.length}
-        pages={pages.length}
+        pages={pages.length + (manualBrowser ? 1 : 0) + 1}
         dock={dock}
         onDock={() => setDock((on) => {
           localStorage.setItem(BROWSER_DOCK, on ? "off" : "on");
@@ -679,17 +683,26 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         )}
       </div>
       </div>
-        {(docked || tab === "browser") && (
-          <div className="scroll" data-pane="browser">
-            <BrowserPanel tabs={pages} shown={visible} />
-          </div>
-        )}
       </div>
+      {(docked || tab === "browser") && (
+        <div className="scroll" data-pane="browser">
+          <WorkbenchPanel
+            port={port}
+            tabs={pages}
+            manual={manualBrowser}
+            shown={visible}
+            scheme={document.documentElement.dataset.theme === "light" ? "light" : "dark"}
+            changes={tree?.changes ?? []}
+            onCloseManual={onCloseManualBrowser ?? (() => {})}
+            onExternal={(url) => void port.openExternal(url).catch(fail)}
+          />
+        </div>
+      )}
 
       {/* Keep the composer mounted so a half-written prompt survives a visit to
           analysis; hidden removes it from layout without throwing its state
           away. */}
-      <div className="compose" hidden={tab === "analysis"}>
+      <div className="compose" hidden={tab !== "flow"}>
         <button className="jump" hidden={pinned || tab !== "flow"} onClick={toLatest}>
           {t("↓ 回到最新")}
         </button>
@@ -790,16 +803,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
               <button onClick={() => dispatch({ kind: "__error", text: "" } as never)}>{t("知道了")}</button>
             </div>
           )}
-          {/* Something the runtime has to report about itself. It sits with the
-              composer rather than in the transcript because it was not said by
-              anyone in the conversation — and it is dismissible, because reading
-              it is the whole of the response it needs. */}
-          {s.runtime.map((n) => (
-            <div key={n.id} className="rtbar" data-lvl={n.level} role="status">
-              <span className="t">{[n.text, n.detail].filter(Boolean).join(" — ")}</span>
-              <button onClick={() => dispatch({ kind: "__runtime_seen", id: n.id } as never)}>{t("知道了")}</button>
-            </div>
-          ))}
+          <RuntimeBar notices={s.runtime} onSeen={(id) => dispatch({ kind: "__runtime_seen", id } as never)} />
         </div>
       </div>
 

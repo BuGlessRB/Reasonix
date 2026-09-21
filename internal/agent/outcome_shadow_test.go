@@ -50,6 +50,12 @@ func TestStalledCheckIsSaidOnceAndOnlyToTheUser(t *testing.T) {
 	if notices[0].Level != event.LevelWarn {
 		t.Fatalf("stall notice level = %v, want warn", notices[0].Level)
 	}
+	// What the run is spending itself on is not something anyone in the
+	// conversation said. Said as a chat message it arrived as a card with the
+	// weight of a turn; the window has a place of its own for it.
+	if notices[0].Audience != event.NoticeAudienceOperator {
+		t.Fatalf("stall notice audience = %q, want operator", notices[0].Audience)
+	}
 	if !strings.Contains(notices[0].Detail, "3 rounds") || !strings.Contains(notices[0].Detail, "3 change") {
 		t.Fatalf("stall notice detail = %q, want the rounds and the change that moved nothing", notices[0].Detail)
 	}

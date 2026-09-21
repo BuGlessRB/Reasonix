@@ -448,16 +448,25 @@
   @keyframes drawin { from { stroke-dashoffset: 100 } to { stroke-dashoffset: 0 } }
 
   .queue {
-    display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px;
+    display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;
     min-height: 0;
     font: var(--w-reg) var(--fs-meta) var(--mono);
     animation: qin var(--m-card) both;
   }
   @keyframes qin { from { opacity: 0; transform: translateY(3px) } to { opacity: 1; transform: none } }
-  .qhd { display: flex; align-items: center; gap: 8px }
+  .qhd { display: flex; align-items: center; gap: 7px; min-width: 0 }
   .qhd .lb {
     flex: none; font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap);
     text-transform: uppercase; color: var(--faint);
+  }
+  .qcount {
+    display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: var(--r-pill); background: var(--overlay); color: var(--muted);
+    font: var(--w-med) var(--fs-micro) var(--ui); font-variant-numeric: tabular-nums;
+  }
+  .qsummary {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--faint); font: var(--w-reg) var(--fs-meta) var(--ui);
   }
   .qflag { padding: 0 5px; border-radius: var(--r-xs); background: var(--overlay); color: var(--muted) }
   .qflag[data-warn] { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 16%, transparent) }
@@ -472,8 +481,8 @@
   .qcap .mtr i { display: block; height: 100%; border-radius: 2px; background: var(--faint); transition: width var(--t-card) var(--ease) }
   .qcap > span[data-full] .mtr i { background: var(--warn-ink) }
   .qhold {
-    flex: none; padding: 1px 7px; border: 1px solid var(--hair); border-radius: var(--r-xs);
-    background: none; color: var(--muted); font: inherit; cursor: pointer;
+    flex: none; margin-left: auto; padding: 3px 8px; border: 1px solid var(--hair); border-radius: var(--r-pill);
+    background: color-mix(in srgb, var(--raised) 72%, transparent); color: var(--muted); font: inherit; cursor: pointer;
     transition: color var(--m-line) , border-color var(--m-line) ;
   }
   .qhold:hover:not(:disabled) { color: var(--text); border-color: var(--border) }
@@ -484,13 +493,17 @@
     overflow-y: auto; overscroll-behavior: contain;
   }
   .qi {
-    display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px;
+    display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 9px;
     border: 1px solid var(--hair); border-radius: var(--r-sm); background: var(--raised);
     color: var(--text); animation: qstep var(--t-card) var(--ease-out) both;
     transition:
       padding var(--t-card) var(--ease-out), font-size var(--t-card) var(--ease-out),
       opacity var(--t-card) var(--ease-out), border-color var(--t-card) var(--ease-out),
       background var(--t-card) var(--ease-out);
+  }
+  .qdot {
+    width: 5px; height: 5px; flex: none; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 11%, transparent);
   }
   @keyframes qstep { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
 
@@ -525,8 +538,8 @@
   .qacts button:hover:not(:disabled) { background: var(--overlay); color: var(--text) }
   .qacts button:disabled { opacity: .3; cursor: default }
   .qi .x {
-    flex: none; padding: 0 3px; border: none; border-radius: var(--r-xs); background: none;
-    color: var(--faint); font: inherit; font-size: var(--fs-lead); line-height: 1; cursor: pointer;
+    flex: none; padding: 2px 7px; border: none; border-radius: var(--r-pill); background: none;
+    color: var(--faint); font: var(--w-med) var(--fs-micro) var(--ui); line-height: 1.3; cursor: pointer;
     transition: color var(--m-line) , background var(--m-line) ;
   }
   .qi .x:hover { color: var(--err-ink); background: color-mix(in srgb, var(--err) 12%, transparent) }
@@ -820,14 +833,22 @@
 
   .pbody { flex: 1; min-height: 0; display: flex; flex-direction: column }
   .pviews { flex: 1; min-height: 0; display: flex; flex-direction: column }
-  .pbody > .scroll[data-pane="browser"] { flex: 1; min-height: 0 }
+  .pane > .scroll[data-pane="browser"] { flex: 1; min-height: 0 }
   /* The pages full width: the column holding the conversation is empty then,
      and an empty flex child still takes the room the page needs. */
-  .pbody[data-full] > .pviews { display: none }
-  .pbody[data-dock] { flex-direction: row }
-  .pbody[data-dock] > .pviews { flex: 1 1 auto; min-width: 0 }
-  .pbody[data-dock] > .scroll[data-pane="browser"] {
-    flex: 0 0 var(--dock-w); min-width: 0; border-left: 1px solid var(--hair);
+  .pbody[data-full] { display: none }
+  /* Docked, the pane is a grid so the browser's column spans the body's row
+     and the composer's; a child of the body would stop at the composer's edge. */
+  .pane:has(> .pbody[data-dock]) {
+    display: grid;
+    grid-template: "nav nav" auto "find find" auto "body side" minmax(0, 1fr) "compose side" auto / minmax(0, 1fr) var(--dock-w);
+  }
+  .pane:has(> .pbody[data-dock]) > .tabs { grid-area: nav }
+  .pane:has(> .pbody[data-dock]) > .findhost { grid-area: find }
+  .pane:has(> .pbody[data-dock]) > .pbody { grid-area: body }
+  .pane:has(> .pbody[data-dock]) > .compose { grid-area: compose }
+  .pane:has(> .pbody[data-dock]) > .scroll[data-pane="browser"] {
+    grid-area: side; min-width: 0; border-left: 1px solid var(--hair);
   }
   .tab.dock { padding-inline: 8px; font-size: var(--fs-meta) }
   .tab.dock[aria-pressed="true"] { background: var(--overlay); color: var(--text) }
@@ -1354,6 +1375,16 @@
     background: none; width: 0; border-radius: 0;
     border-left: 2px dashed color-mix(in srgb, var(--ok) 48%, transparent);
   }
+  .call[data-k="host"][data-lvl="warn"] > .g .sym {
+    color: var(--warn);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 38%, transparent);
+  }
+  .call[data-k="host"][data-lvl="warn"] > .g .line { border-left-color: color-mix(in srgb, var(--warn) 48%, transparent) }
+  .call[data-k="host"][data-lvl="err"] > .g .sym {
+    color: var(--err);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--err) 38%, transparent);
+  }
+  .call[data-k="host"][data-lvl="err"] > .g .line { border-left-color: color-mix(in srgb, var(--err) 48%, transparent) }
   .call[data-k="host"]  > .c .hl .nm { font-weight: var(--w-reg); color: var(--muted) }
 
   .call[data-k="say"] > .g .sym { background: none; box-shadow: none; color: var(--text) }
@@ -1765,14 +1796,14 @@
   .guard[data-risk="low"] .gauge i:nth-child(1) { background: var(--ok) }
   .guard[data-risk="medium"] .gauge i:nth-child(-n+2) { background: var(--accent-ink) }
   .guard[data-risk="high"] .gauge i { background: var(--err) }
-  .guard-why { margin-top: 3px; font-size: var(--fs-ui); line-height: 1.62; color: var(--muted) }
+  .guard-why { margin-top: var(--y-close); font-size: var(--fs-ui); line-height: 1.62; color: var(--muted) }
 
   .comp { margin-top: 7px }
   .comp-bar { height: 3px; background: color-mix(in srgb, var(--accent) 20%, var(--overlay)); overflow: hidden }
   .comp-bar i { display: block; height: 100%; background: var(--ok); transition: width var(--t-live) var(--ease-out) }
-  .comp-n { margin-top: 5px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .comp-n { margin-top: var(--y-close); font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .comp-n b { color: var(--text); font-weight: var(--w-reg); font-variant-numeric: tabular-nums }
-  .comp details { margin-top: 5px }
+  .comp details { margin-top: var(--y-close) }
   .comp-l { margin-top: 5px; display: flex; flex-direction: column; gap: 3px }
   .comp-l .row { display: flex; gap: 8px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
   .comp-l .row .x { color: var(--del); flex: none; width: 10px }
@@ -1812,7 +1843,7 @@
   .apv-ft { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 11px 12px }
   .apv-ft .hint { margin-left: auto; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
 
-  .apv-note { margin-top: 9px; font: var(--w-reg) var(--fs-ui)/1.7 var(--ui); color: var(--faint) }
+  .apv-note { margin-top: var(--y-close); font: var(--w-reg) var(--fs-ui)/1.7 var(--ui); color: var(--faint) }
   .apv-ft .hint b { color: var(--faint); font-weight: var(--w-reg) }
   .apv-done { padding: 10px 12px; font-size: var(--fs-ui); line-height: 1.65; color: var(--muted); border-top: 1px solid var(--hair) }
   .apv-done b { color: var(--text); font-weight: var(--w-med) }
@@ -4249,7 +4280,7 @@
     flex: 1; min-width: 0; font: var(--w-reg) var(--fs-meta)/1.6 var(--mono); color: var(--ghost);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .rc-more { padding: 3px 0 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
+  .rc-more { padding: var(--y-close) 0 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
 
   .md > :first-child { margin-top: 0 }
   .md > :last-child { margin-bottom: 0 }

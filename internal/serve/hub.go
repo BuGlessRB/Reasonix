@@ -427,6 +427,14 @@ func (rt *Runtime) view() RuntimeView {
 	if rt.remote != nil {
 		return rt.remoteView()
 	}
+	// A read-only attachment is often only a hand-off window: another pane was
+	// releasing this transcript when it was selected. Reconcile on the normal
+	// runtime refresh; the OS lease stays the arbiter and a live holder wins.
+	if !rt.writable() {
+		if err := rt.Server.promoteSessionLease(); err != nil && !sessionLeaseUnavailable(err) {
+			slog.Warn("serve: promote read-only session", "id", rt.ID, "err", err)
+		}
+	}
 	ctrl := rt.Server.Controller()
 	return RuntimeView{
 		ID:          rt.ID,

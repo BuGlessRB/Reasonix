@@ -87,6 +87,8 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 	if strings.EqualFold(body.Intent, "steer") {
 		intent = sessioninbox.IntentSteer
 	}
+	s.bindMu.Lock()
+	defer s.bindMu.Unlock()
 	api := s.inboxAPI()
 	if ensurer, ok := any(api).(interface{ EnsureSessionPath() }); ok {
 		before := api.SessionPath()
@@ -99,6 +101,10 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+	if err := s.promoteSessionLease(); err != nil {
+		sessionInUse(w, err)
+		return
 	}
 	req := control.InboxRequest{
 		Intent:      intent,
@@ -189,6 +195,12 @@ func (s *Server) inboxPause(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) inboxResume(w http.ResponseWriter, r *http.Request) {
 	_ = r
+	s.bindMu.Lock()
+	defer s.bindMu.Unlock()
+	if err := s.promoteSessionLease(); err != nil {
+		sessionInUse(w, err)
+		return
+	}
 	if err := s.inboxAPI().SetInboxPaused(false); err != nil {
 		writeInboxError(w, err)
 		return
@@ -197,6 +209,12 @@ func (s *Server) inboxResume(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) inboxRetry(w http.ResponseWriter, r *http.Request) {
+	s.bindMu.Lock()
+	defer s.bindMu.Unlock()
+	if err := s.promoteSessionLease(); err != nil {
+		sessionInUse(w, err)
+		return
+	}
 	id := r.PathValue("id")
 	if err := s.inboxAPI().RetryInboxItem(id); err != nil {
 		writeInboxError(w, err)

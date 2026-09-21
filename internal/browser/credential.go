@@ -111,10 +111,10 @@ func secretMarkup(localName string, attributes []string) bool {
 func (s *Session) NoteSecretCheck(args []byte, secret bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.secretChecks == nil || len(s.secretChecks) > 32 {
-		s.secretChecks = map[string]bool{}
+	if s.checks.secrets == nil || len(s.checks.secrets) > 32 {
+		s.checks.secrets = map[string]bool{}
 	}
-	s.secretChecks[string(args)] = secret
+	s.checks.secrets[string(args)] = secret
 }
 
 // SecretsConfirmed reports whether a call's arguments were allowed as entering
@@ -122,5 +122,22 @@ func (s *Session) NoteSecretCheck(args []byte, secret bool) {
 func (s *Session) SecretsConfirmed(args []byte) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.secretChecks[string(args)]
+	return s.checks.secrets[string(args)]
+}
+
+// NoteScriptOrigin binds an evaluated script to the origin its permission covered.
+func (s *Session) NoteScriptOrigin(args []byte, origin string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.checks.scriptOrigin == nil || len(s.checks.scriptOrigin) > 32 {
+		s.checks.scriptOrigin = map[string]string{}
+	}
+	s.checks.scriptOrigin[string(args)] = origin
+}
+
+// ScriptOrigin returns the origin approved for a call's arbitrary JavaScript.
+func (s *Session) ScriptOrigin(args []byte) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.checks.scriptOrigin[string(args)]
 }

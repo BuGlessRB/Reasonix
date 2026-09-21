@@ -25,6 +25,7 @@ type Step struct {
 	Action string   `json:"action"`
 	Ref    string   `json:"ref,omitempty"`
 	Text   string   `json:"text,omitempty"`
+	Script string   `json:"script,omitempty"`
 	Key    string   `json:"key,omitempty"`
 	Values []string `json:"values,omitempty"`
 	X      *float64 `json:"x,omitempty"`
@@ -58,7 +59,7 @@ type ActResult struct {
 // returned error is that step's failure; the result says what came before it.
 // secrets says the call was confirmed as entering one (see CredentialEntry);
 // without it a step that types into a secret field is refused.
-func (s *Session) Act(ctx context.Context, tabID string, steps []Step, secrets bool) (ActResult, error) {
+func (s *Session) Act(ctx context.Context, tabID string, steps []Step, secrets bool, scriptOrigin string) (ActResult, error) {
 	t, err := s.tab(tabID)
 	if err != nil {
 		return ActResult{FailedAt: 0}, err
@@ -78,7 +79,7 @@ func (s *Session) Act(ctx context.Context, tabID string, steps []Step, secrets b
 	}()
 	var stepErr error
 	for i, step := range steps {
-		note, err := s.runStep(ctx, t, step, secrets)
+		note, err := s.runStep(ctx, t, step, secrets, scriptOrigin)
 		if err != nil {
 			res.FailedAt, stepErr = i, err
 			break
@@ -104,7 +105,7 @@ func (s *Session) Act(ctx context.Context, tabID string, steps []Step, secrets b
 	return res, stepErr
 }
 
-func (s *Session) runStep(ctx context.Context, t *tab, step Step, secrets bool) (string, error) {
+func (s *Session) runStep(ctx context.Context, t *tab, step Step, secrets bool, scriptOrigin string) (string, error) {
 	action := strings.ToLower(strings.TrimSpace(step.Action))
 	if d := t.currentDialog(); d != nil && action != "dialog" {
 		return "", dialogFailure(d)
@@ -112,19 +113,7 @@ func (s *Session) runStep(ctx context.Context, t *tab, step Step, secrets bool) 
 	before := t.navigationCount()
 	switch action {
 	case "click", "double_click":
-		x, y, err := s.point(ctx, t, step)
-		if err != nil {
-			return "", err
-		}
-		clicks := 1
-		if action == "double_click" {
-			clicks = 2
-		}
-		if err := t.click(ctx, x, y, clicks); err != nil {
-			return "", err
-		}
-		t.settle(ctx, before)
-		return fmt.Sprintf("%s %s", action, target(step)), nil
+		return s.clickStep(ctx, t, step, action, before)
 	case "hover":
 		x, y, err := s.point(ctx, t, step)
 		if err != nil {
@@ -168,6 +157,8 @@ func (s *Session) runStep(ctx context.Context, t *tab, step Step, secrets bool) 
 		return t.waitForText(ctx, step)
 	case "dialog":
 		return t.answerDialog(ctx, step)
+	case "eval":
+		return s.evalStep(ctx, t, step, scriptOrigin)
 	case "back":
 		return t.history(ctx, -1)
 	case "forward":
@@ -182,6 +173,30 @@ func (s *Session) runStep(ctx context.Context, t *tab, step Step, secrets bool) 
 		return t.resize(ctx, step)
 	}
 	return "", fail(CodeBadStep, "unknown action %q", step.Action)
+}
+
+func (s *Session) clickStep(ctx context.Context, t *tab, step Step, action string, before int64) (string, error) {
+	x, y, err := s.point(ctx, t, step)
+	if err != nil {
+		return "", err
+	}
+	clicks := 1
+	if action == "double_click" {
+		clicks = 2
+	}
+	if err := t.click(ctx, x, y, clicks); err != nil {
+		return "", err
+	}
+	t.settle(ctx, before)
+	return fmt.Sprintf("%s %s", action, target(step)), nil
+}
+
+func (s *Session) evalStep(ctx context.Context, t *tab, step Step, approvedOrigin string) (string, error) {
+	value, _, err := s.Evaluate(ctx, t.id, step.Script, approvedOrigin)
+	if err != nil {
+		return "", err
+	}
+	return "eval => " + value, nil
 }
 
 // enterText types step.Text into its ref, or where focus is; fill replaces the
@@ -377,11 +392,20 @@ func (t *tab) describe(ctx context.Context, node int64) string {
 }
 
 func (t *tab) mouse(ctx context.Context, kind string, x, y float64, clicks int) error {
+	before := t.navigationCount()
 	params := map[string]any{"type": kind, "x": x, "y": y}
 	if clicks > 0 {
 		params["button"], params["clickCount"] = "left", clicks
 	}
-	return engineFailure(t.call(ctx, "Input.dispatchMouseEvent", params, nil))
+	if err := t.call(ctx, "Input.dispatchMouseEvent", params, nil); err != nil {
+		return engineFailure(err)
+	}
+	t.mu.Lock()
+	if t.navigated == before {
+		t.pointer = pointerState{x: x, y: y, visible: true}
+	}
+	t.mu.Unlock()
+	return nil
 }
 
 // drag moves the pointer with the left button held.
@@ -392,6 +416,14 @@ func (t *tab) drag(ctx context.Context, x, y float64) error {
 }
 
 func (t *tab) click(ctx context.Context, x, y float64, clicks int) error {
+	before := t.navigationCount()
+	defer func() {
+		t.mu.Lock()
+		if t.navigated != before {
+			t.pointer = pointerState{}
+		}
+		t.mu.Unlock()
+	}()
 	if err := t.mouse(ctx, "mouseMoved", x, y, 0); err != nil {
 		return err
 	}
@@ -703,5 +735,9 @@ func (t *tab) resize(ctx context.Context, step Step) (string, error) {
 	if err := t.call(ctx, "Emulation.setDeviceMetricsOverride", args, nil); err != nil {
 		return "", engineFailure(err)
 	}
+	t.mu.Lock()
+	t.pointer = pointerState{}
+	t.shotScale = 0
+	t.mu.Unlock()
 	return fmt.Sprintf("resize to %d×%d", step.Width, step.Height), nil
 }

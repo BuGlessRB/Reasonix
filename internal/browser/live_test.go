@@ -259,7 +259,7 @@ func TestLiveDownloadsAreRefusedAndReported(t *testing.T) {
 }
 
 func actPlain(ctx context.Context, s *Session, tab string, steps []Step) (ActResult, error) {
-	return s.Act(ctx, tab, steps, false)
+	return s.Act(ctx, tab, steps, false, "")
 }
 
 func TestLiveSecretsNeedConfirmation(t *testing.T) {
@@ -297,11 +297,11 @@ func TestLiveSecretsNeedConfirmation(t *testing.T) {
 		}
 	}
 
-	_, err = s.Act(ctx, "", []Step{{Action: "fill", Ref: email, Text: "a@b.c"}, {Action: "press", Key: "Tab"}, {Action: "type", Text: "hunter2"}}, false)
+	_, err = s.Act(ctx, "", []Step{{Action: "fill", Ref: email, Text: "a@b.c"}, {Action: "press", Key: "Tab"}, {Action: "type", Text: "hunter2"}}, false, "")
 	if CodeOf(err) != CodeUnconfirmedSecret {
 		t.Fatalf("typing into the password field without confirmation = %v, want %s", err, CodeUnconfirmedSecret)
 	}
-	if _, err := s.Act(ctx, "", []Step{{Action: "fill", Ref: password, Text: "hunter2"}}, true); err != nil {
+	if _, err := s.Act(ctx, "", []Step{{Action: "fill", Ref: password, Text: "hunter2"}}, true, ""); err != nil {
 		t.Fatalf("confirmed secret entry: %v", err)
 	}
 }

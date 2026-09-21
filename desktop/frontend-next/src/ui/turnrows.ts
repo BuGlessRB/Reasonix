@@ -1,0 +1,44 @@
+import type { Item } from "../state/session";
+
+type Row = { item: Item; activity?: Item[] } | { activity: Item[] };
+
+/** transcriptRows arranges a transcript the way it reads: a turn is one user
+ *  message and everything done about it, consecutive tool steps fold into one
+ *  disclosure, and each run of work sits under the sentence it followed — a turn
+ *  that answers several times keeps each answer with its own work. */
+export function transcriptRows(items: Item[]): Row[] {
+  const rows: Row[] = [];
+  for (let at = 0; at < items.length;) {
+    let end = at + 1;
+    while (end < items.length && items[end].t !== "user") end++;
+    const turn: Row[] = [];
+    for (const item of items.slice(at, end)) {
+      const work = item.t === "tool" || item.t === "reads";
+      const last = turn[turn.length - 1];
+      if (work && last && "activity" in last && !("item" in last)) last.activity.push(item);
+      else turn.push(work ? { activity: [item] } : { item });
+    }
+    for (let i = turn.length - 1; i >= 0; i--) {
+      const row = turn[i];
+      if ("item" in row) continue;
+      let host = -1;
+      for (let j = i - 1; j >= 0 && host < 0; j--) {
+        const prior = turn[j];
+        if ("item" in prior && prior.item.t === "say") host = j;
+      }
+      // A turn that opens with work has no sentence before it yet, and the one
+      // it was for is the first that follows.
+      for (let j = i + 1; j < turn.length && host < 0; j++) {
+        const later = turn[j];
+        if ("item" in later && later.item.t === "say") host = j;
+      }
+      if (host < 0) continue;
+      const into = turn[host] as { item: Item; activity?: Item[] };
+      into.activity = [...row.activity, ...(into.activity ?? [])];
+      turn.splice(i, 1);
+    }
+    rows.push(...turn);
+    at = end;
+  }
+  return rows;
+}

@@ -54,7 +54,7 @@ describe("what the pending strip says back", () => {
 
   it("keeps a queued follow-up apart from a steer the kernel took", () => {
     const html = draw(snapshot({ items: [item({ intent: "followup", state: "queued" })] }));
-    expect(html).toContain("排队");
+    expect(html).toContain("当前回复结束后发送");
     expect(html).not.toContain("插话已收");
   });
 
@@ -68,11 +68,18 @@ describe("what the pending strip says back", () => {
     expect(draw(snapshot({ items: [item({ state: "steer_consumed" })] }))).not.toContain("取回");
   });
 
-  // Both limits refuse on their own, and a strip that showed one of them would
-  // be wrong about the other exactly when it bites.
-  it("meters count and bytes together", () => {
+  it("keeps technical capacity out of the ordinary one-line queue", () => {
     const html = draw(snapshot());
-    expect(html).toContain("1/64");
+    expect(html).not.toContain("1/64");
+    expect(html).not.toContain("3.1k/64M");
+    expect(html).toContain("当前回复结束后发送");
+  });
+
+  // Capacity becomes useful when it needs attention rather than occupying the
+  // primary layout for every one-line follow-up.
+  it("reveals both capacity limits when either is under pressure", () => {
+    const html = draw(snapshot({ capacity: { items: 49, maxItems: 64, bytes: 3174, maxBytes: 64 << 20 } }));
+    expect(html).toContain("49/64");
     expect(html).toContain("3.1k/64M");
   });
 

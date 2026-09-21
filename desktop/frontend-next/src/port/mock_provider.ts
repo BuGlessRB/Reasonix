@@ -13,6 +13,9 @@ import { MockBoundary } from "./mock_boundary";
 // MockPort satisfies AgentPort in one declaration, and each face keeps its own
 // file.
 export class MockProvider extends MockBoundary {
+  private decision = { typeSafe: { baseUrl: "https://api.typesafe.ai", model: "system-one", keyEnv: "TYPESAFE_API_KEY", hasKey: false }, laya: { local: false, python: "python", model: "auto", httpBaseUrl: "", httpKeyEnv: "", hasHttpKey: false } };
+  async decisionModels() { return this.decision; }
+  async saveDecisionModels(value: typeof this.decision): Promise<void> { this.decision = value; }
   // Whether this machine has been given a provider. The fixture opens without
   // one so the connect card can be designed, and every port the same window
   // builds reads the same answer: a key belongs to the machine, not to the

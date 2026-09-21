@@ -49,7 +49,18 @@ type tab struct {
 	navigated int64   // main-frame cross-document navigations so far
 	logRead   int64   // newest log seq a Logs call has returned
 	shotScale float64 // CSS pixels per pixel of the latest screenshot
+	pointer   pointerState
+	runtime   runtimeState
 	seen      seenSnapshot
+}
+
+type pointerState struct {
+	x, y    float64
+	visible bool
+}
+
+type runtimeState struct {
+	contexts map[string]string
 }
 
 // seenSnapshot is the last whole-page snapshot the agent was given, and which
@@ -64,6 +75,7 @@ func newTab(s *Session, eng *engine, id, targetID, sessionID string) *tab {
 	t := &tab{
 		s: s, eng: eng, id: id, targetID: targetID, sessionID: sessionID,
 		loaded: map[string]bool{}, changed: make(chan struct{}), requests: map[string]*Request{},
+		runtime: runtimeState{contexts: map[string]string{}},
 	}
 	t.unsub = eng.conn.subscribe(sessionID, t.onEvent)
 	return t
@@ -203,6 +215,9 @@ func (t *tab) signalLocked() {
 }
 
 func (t *tab) onEvent(ev event) {
+	if t.onRuntimeEvent(ev) {
+		return
+	}
 	switch ev.Method {
 	case "Page.frameNavigated":
 		var p struct {
@@ -217,8 +232,10 @@ func (t *tab) onEvent(ev event) {
 			return
 		}
 		t.mu.Lock()
+		delete(t.runtime.contexts, t.mainFrame)
 		t.mainFrame, t.url = p.Frame.ID, p.Frame.URL+p.Frame.URLFragment
 		t.navigated++
+		t.pointer = pointerState{}
 		t.signalLocked()
 		t.mu.Unlock()
 		t.s.refs.retireTab(t.id)
@@ -293,6 +310,46 @@ func (t *tab) onEvent(ev event) {
 	default:
 		t.onNetwork(ev)
 	}
+}
+
+func (t *tab) onRuntimeEvent(ev event) bool {
+	switch ev.Method {
+	case "Runtime.executionContextCreated":
+		var p struct {
+			Context struct {
+				UniqueID string `json:"uniqueId"`
+				AuxData  struct {
+					FrameID   string `json:"frameId"`
+					IsDefault bool   `json:"isDefault"`
+				} `json:"auxData"`
+			} `json:"context"`
+		}
+		if json.Unmarshal(ev.Params, &p) == nil && p.Context.AuxData.IsDefault && p.Context.UniqueID != "" {
+			t.mu.Lock()
+			t.runtime.contexts[p.Context.AuxData.FrameID] = p.Context.UniqueID
+			t.mu.Unlock()
+		}
+	case "Runtime.executionContextDestroyed":
+		var p struct {
+			UniqueID string `json:"executionContextUniqueId"`
+		}
+		if json.Unmarshal(ev.Params, &p) == nil {
+			t.mu.Lock()
+			for frame, id := range t.runtime.contexts {
+				if id == p.UniqueID {
+					delete(t.runtime.contexts, frame)
+				}
+			}
+			t.mu.Unlock()
+		}
+	case "Runtime.executionContextsCleared":
+		t.mu.Lock()
+		clear(t.runtime.contexts)
+		t.mu.Unlock()
+	default:
+		return false
+	}
+	return true
 }
 
 // stack is as much of a console message's origin as this needs: which script

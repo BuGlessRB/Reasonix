@@ -37,9 +37,12 @@ type Session struct {
 	owners   int
 	openedBy map[string]string // popup target id → opener tab id
 	changed  func()
-	// secretChecks maps a browser_act's arguments to whether its permission
-	// check treated it as entering a secret.
-	secretChecks map[string]bool
+	checks   browserCallChecks
+}
+
+type browserCallChecks struct {
+	secrets      map[string]bool
+	scriptOrigin map[string]string
 }
 
 func NewSession(cfg Config) *Session {

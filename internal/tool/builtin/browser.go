@@ -237,14 +237,14 @@ type browserAct struct{ session *browser.Session }
 func (browserAct) Name() string { return "browser_act" }
 
 func (browserAct) Description() string {
-	return "Operate a browser page with real input. Steps run in order and stop at the first failure; target by ref, or x/y from a screenshot. " +
-		"Returns each step's result, page errors and what changed. fill replaces a value, type inserts text; press takes keys like Enter or Control+a; " +
-		"select sets a <select>; scroll takes delta_y, or delta_x across; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers alert/confirm/prompt; " +
-		"resize sets the viewport to width×height; back, forward and reload move this tab — reload is what a page needs after the file behind it changed."
+	return "Operate a page with real input. Ordered steps stop at the first failure; target by ref, or screenshot x/y. " +
+		"Returns results, page errors and changes. fill replaces, type inserts; press takes keys like Enter or Control+a; " +
+		"select sets a <select>; scroll takes delta_y or delta_x; drag ends at to_ref or to_x/to_y; upload gives a file input workspace files; dialog answers prompts; " +
+		"eval executes arbitrary page JavaScript from script and awaits promises; resize sets the viewport to width×height; back, forward and reload move this tab."
 }
 
 func (browserAct) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"tab":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","double_click","hover","fill","type","press","select","scroll","drag","upload","wait","wait_for","dialog","resize","back","forward","reload"]},"ref":{"type":"string"},"text":{"type":"string"},"key":{"type":"string"},"values":{"type":"array","items":{"type":"string"}},"x":{"type":"number"},"y":{"type":"number"},"delta_x":{"type":"number"},"delta_y":{"type":"number"},"to_ref":{"type":"string"},"to_x":{"type":"number"},"to_y":{"type":"number"},"files":{"type":"array","items":{"type":"string"}},"ms":{"type":"integer"},"width":{"type":"integer"},"height":{"type":"integer"},"accept":{"type":"boolean"}},"required":["action"]}}},"required":["steps"]}`)
+	return json.RawMessage(`{"type":"object","properties":{"tab":{"type":"string"},"steps":{"type":"array","items":{"type":"object","properties":{"action":{"type":"string","enum":["click","double_click","hover","fill","type","press","select","scroll","drag","upload","wait","wait_for","dialog","eval","resize","back","forward","reload"]},"ref":{"type":"string"},"text":{"type":"string"},"script":{"type":"string"},"key":{"type":"string"},"values":{"type":"array","items":{"type":"string"}},"x":{"type":"number"},"y":{"type":"number"},"delta_x":{"type":"number"},"delta_y":{"type":"number"},"to_ref":{"type":"string"},"to_x":{"type":"number"},"to_y":{"type":"number"},"files":{"type":"array","items":{"type":"string"}},"ms":{"type":"integer"},"width":{"type":"integer"},"height":{"type":"integer"},"accept":{"type":"boolean"}},"required":["action"]}}},"required":["steps"]}`)
 }
 
 // PermissionArgs names the site the steps will operate, as a credential
@@ -261,7 +261,19 @@ func (b browserAct) PermissionArgs(ctx context.Context, args json.RawMessage) js
 	origin := b.session.Origin(p.Tab)
 	secret := origin != "" && b.session.CredentialEntry(ctx, p.Tab, p.Steps)
 	b.session.NoteSecretCheck(args, secret)
-	if secret {
+	script := false
+	for _, step := range p.Steps {
+		if strings.EqualFold(strings.TrimSpace(step.Action), "eval") {
+			script = true
+			break
+		}
+	}
+	if script && origin != "" {
+		b.session.NoteScriptOrigin(args, origin)
+		origin = permission.BrowserScriptPrefix + origin
+	} else if script {
+		b.session.NoteScriptOrigin(args, "")
+	} else if secret {
 		origin = permission.BrowserCredentialPrefix + origin
 	}
 	return hostSubjectArgs(b.Schema(), args, "origin", origin)
@@ -311,7 +323,7 @@ func (b browserAct) Execute(ctx context.Context, args json.RawMessage) (string, 
 	if len(p.Steps) == 0 {
 		return "", &browser.Failure{Code: browser.CodeBadStep, Detail: "steps is empty"}
 	}
-	res, stepErr := b.session.Act(ctx, p.Tab, p.Steps, b.session.SecretsConfirmed(args))
+	res, stepErr := b.session.Act(ctx, p.Tab, p.Steps, b.session.SecretsConfirmed(args), b.session.ScriptOrigin(args))
 	var out strings.Builder
 	fmt.Fprintf(&out, "Completed %d of %d step(s).\n", res.Done, len(p.Steps))
 	for i, note := range res.Notes {

@@ -22,6 +22,17 @@ export interface ChangeDiff {
   truncated: boolean;
 }
 
+export interface WorkspaceFiles {
+  files: string[];
+  directories: string[];
+}
+
+export interface WorkspaceFile {
+  path: string;
+  content: string;
+  revision: string;
+}
+
 export interface WorkspaceEntry {
   path: string;
   name: string;

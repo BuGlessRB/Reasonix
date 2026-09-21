@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { count, decimals } from "../../i18n/format";
 import { Sym } from "../Sym";
@@ -21,12 +21,7 @@ function thoughtLabel(item: Extract<Item, { t: "say" }>) {
 }
 
 export function SayCard({ item, afterAnswer }: { item: Extract<Item, { t: "say" }>; afterAnswer?: ReactNode }) {
-  const [open, setOpen] = useState(!item.done);
-  const wasDone = useRef(item.done);
-  useEffect(() => {
-    if (!wasDone.current && item.done) setOpen(false);
-    wasDone.current = item.done;
-  }, [item.done]);
+  const [open, setOpen] = useState(false);
   // Thinking is the longest-running stream of the turn — 10s of it before the
   // first answer token, measured — so it gets the same paced reveal the answer
   // does rather than tracking the wire's bursts.
