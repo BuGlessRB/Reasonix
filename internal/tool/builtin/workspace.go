@@ -35,6 +35,7 @@ type Workspace struct {
 	BashTimeout     time.Duration
 	Search          SearchSpec
 	ProxySpec       netclient.ProxySpec
+	SystemOne       SystemOneSpec
 	ReadPaths       *PathResolver
 	SessionGuard    SessionDataGuard
 	// ManagedConfig names the Reasonix-owned config files the file-writers may
@@ -93,6 +94,9 @@ func (w Workspace) Tools(enabled ...string) []tool.Tool {
 				all[i] = bound
 			}
 		}
+		if SystemOneConfigured(w.SystemOne) {
+			all = append(all, NewSystemOne(w.SystemOne))
+		}
 		return all
 	}
 	want := make(map[string]bool, len(enabled))
@@ -107,6 +111,9 @@ func (w Workspace) Tools(enabled ...string) []tool.Tool {
 			}
 			out = append(out, t)
 		}
+	}
+	if want["system_one"] && SystemOneConfigured(w.SystemOne) {
+		out = append(out, NewSystemOne(w.SystemOne))
 	}
 	return out
 }

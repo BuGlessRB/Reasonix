@@ -121,7 +121,6 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	secrets.SetProtectSensitiveFiles(cfg.Secrets.ProtectSensitiveFiles)
 	secrets.SetProtectCredentialFiles(cfg.Secrets.ProtectCredentialFiles)
 	secrets.RegisterCredentialEnvKeys(cfg.CredentialEnvNames())
-
 	// Serialize the frontend's sink once: background jobs (below) emit from their
 	// own goroutines, which can overlap a running turn's emission, so every emitter
 	// shares this synchronized sink. It is created before extension preflight so
@@ -463,6 +462,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// Register the full built-in inventory for use_capability dispatch. The
 	// provider-visible surface is narrowed later via SetProviderVisibleTools.
 	addBuiltins(reg, enabledBuiltins, writeRoots, bashSpec, bashTimeout, searchSpec, stderr, root, proxySpec, forbidReadRoots, readPathResolver, sessionGuard, managedConfig, opts.FileOverlay, opts.TerminalRunner, sessionTemp, fileWriteReceipt)
+	addSystemOne(reg, enabledBuiltins, cfg, balanceClient)
 	// Use the caller-supplied shared host when set, so controllers for the same
 	// workspace root reuse running MCP processes (e.g. one CodeGraph daemon
 	// instead of one per tab). Otherwise construct a private host per controller.

@@ -2665,6 +2665,21 @@ func TestAddBuiltinsWithWorkspaceRootKeepsSessionTools(t *testing.T) {
 	}
 }
 
+func TestAddBuiltinsBindsConfiguredSystemOne(t *testing.T) {
+	reg := tool.NewRegistry()
+	cfg := &config.Config{Tools: config.ToolsConfig{SystemOne: config.SystemOneConfig{}}}
+	t.Setenv("TYPESAFE_API_KEY", "secret")
+	addSystemOne(reg, []string{"system_one"}, cfg, http.DefaultClient)
+	registered, ok := reg.Get("system_one")
+	if !ok {
+		t.Fatal("configured system_one was not registered")
+	}
+	visible, ok := registered.(tool.ContextualTool)
+	if !ok || !visible.ProviderVisible(context.Background()) {
+		t.Fatal("configured system_one is not provider-visible")
+	}
+}
+
 func TestBuildOmitsDisabledSkillsFromPromptAndRuntimeList(t *testing.T) {
 	dir := robustTempDir(t)
 	home := robustTempDir(t)

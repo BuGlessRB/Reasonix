@@ -1,7 +1,6 @@
 // Package config loads Reasonix's runtime configuration from TOML. Resolution order:
 // flag > project ./reasonix.toml > user config.toml (in the OS user-config dir) > built-in defaults.
-// Secrets come from the environment via api_key_env and are never stored in
-// config files.
+// Secrets come from the environment via api_key_env and are never stored in config files.
 package config
 
 import (
@@ -1346,6 +1345,7 @@ type ToolsConfig struct {
 	BackgroundJobs           BackgroundJobsConfig `toml:"background_jobs"`
 	Search                   SearchConfig         `toml:"search"`
 	Shell                    ShellConfig          `toml:"shell"`
+	SystemOne                SystemOneConfig      `toml:"system_one"`
 }
 
 const (

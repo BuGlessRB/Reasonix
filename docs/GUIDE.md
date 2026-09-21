@@ -91,6 +91,18 @@ bash_timeout_seconds = 120   # foreground safety cap; set 0 for no tool-local ca
 mcp_startup_timeout_seconds = 30   # background initialize + tools/list safety cap
 mcp_call_timeout_seconds = 300   # default MCP call safety cap; per-plugin/tool overrides may raise it
 
+[tools.system_one]
+api_key_env = "TYPESAFE_API_KEY" # optional TypeSafe AI System One decision protocol
+model = "jev-latest"
+# base_url = "https://api.typesafe.ai"
+
+[tools.system_one.laya]
+local = false                      # true: run the official Python SDK locally (`pip install laya`)
+python = "python"                  # interpreter containing the laya package
+model = "auto"                     # auto|english|multilingual|typed-decisions
+# http_base_url = "http://127.0.0.1:8080" # self-hosted POST /v1/systemone gateway
+# http_api_key_env = "LAYA_API_KEY"       # optional gateway Bearer token
+
 [environment]
 enabled = true   # inject a stable startup summary of OS, shell, and common tools
 offline = false  # set true when outbound network access is unavailable; prevents futile retries

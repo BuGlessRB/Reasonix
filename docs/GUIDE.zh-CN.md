@@ -83,6 +83,18 @@ bash_timeout_seconds = 120   # 前台安全上限；设为 0 表示不设工具�
 mcp_startup_timeout_seconds = 30   # 后台 initialize + tools/list 安全上限
 mcp_call_timeout_seconds = 300   # MCP 调用默认安全上限；可用 plugin/tool 覆盖
 
+[tools.system_one]
+api_key_env = "TYPESAFE_API_KEY" # 可选：TypeSafe AI System One 决策协议
+model = "jev-latest"
+# base_url = "https://api.typesafe.ai"
+
+[tools.system_one.laya]
+local = false                      # true：通过官方 Python SDK 在本地运行（`pip install laya`）
+python = "python"                  # 安装了 laya 包的解释器
+model = "auto"                     # auto|english|multilingual|typed-decisions
+# http_base_url = "http://127.0.0.1:8080" # 自托管 POST /v1/systemone 网关
+# http_api_key_env = "LAYA_API_KEY"       # 可选的网关 Bearer token
+
 [environment]
 enabled = true   # 启动时把 OS、shell 和常见工具摘要稳定注入 prompt
 offline = false  # 无出站网络时设为 true，避免 agent 无效重试网络请求
