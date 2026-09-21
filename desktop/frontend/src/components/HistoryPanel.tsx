@@ -1,5 +1,5 @@
 import { useManagementT } from "../lib/managementLocale";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Archive, GitBranch, Pencil, Search, Trash2, RotateCcw } from "lucide-react";
 import { app } from "../lib/bridge";
@@ -67,7 +67,7 @@ export function HistoryPanel({
   const [showSystemRecoveryData, setShowSystemRecoveryData] = useState(false);
   const [selectedVersions, setSelectedVersions] = useState<RecoveryLineageView | null>(null);
   const [searchContext, setSearchContext] = useState<{ hit: HistorySearchHit; lines: HistorySearchContextLine[]; loading: boolean } | null>(null);
-  const { sessions, nextCursor, partial: catalogPartial, progress: catalogProgress, searchHits, loadMore } = useHistoryCatalog({
+  const { readIdentity, sessions, nextCursor, partial: catalogPartial, progress: catalogProgress, searchHits, loadMore, error: catalogError, retry: retryCatalog } = useHistoryCatalog({
     isTrash, suppliedSessions, scope: scopeFilter, status: statusFilter, timeFilter: dateFilter, query,
   });
   const [menuSession, setMenuSession] = useState<SessionMeta | null>(null);
@@ -87,11 +87,23 @@ export function HistoryPanel({
   const previewSeq = useRef(0);
   const lineageSeq = useRef(0);
 
+  useLayoutEffect(() => {
+    ++previewSeq.current;
+    ++lineageSeq.current;
+    setPreview(null);
+    setSearchContext(null);
+    setSelectedVersions(null);
+    setMenuSession(null);
+    setMenuConfirmTarget(null);
+    setEditing(null);
+    return () => { ++previewSeq.current; ++lineageSeq.current; };
+  }, [readIdentity]);
+
   const loadSearchContext = useCallback(async (hit: HistorySearchHit) => {
     const seq = ++previewSeq.current;
     setPreview(null);
     setSearchContext({ hit, lines: [], loading: true });
-    const lines = await app.GetHistorySearchContext({ sessionPath: hit.sessionPath, messageIndex: hit.messageIndex, before: 2, after: 2 }).catch(() => []);
+    const lines = await app.GetHistorySearchContext({ sessionPath: hit.sessionPath, messageIndex: hit.messageIndex, contentDigest: hit.contentDigest, before: 2, after: 2 }).catch(() => []);
     if (seq === previewSeq.current) setSearchContext({ hit, lines, loading: false });
   }, []);
 
@@ -550,6 +562,11 @@ export function HistoryPanel({
             onChange={(next) => setDateFilter(next as HistoryDateFilter)}
           />
         </div>
+        {!isTrash && catalogError && (
+          <div className="management-modal__summary history-modal__summary" role="alert">
+            {catalogError} <button type="button" onClick={retryCatalog}>Retry</button>
+          </div>
+        )}
         {!isTrash && catalogPartial && (
           <div className="management-modal__summary history-modal__summary" role="status">
             History index is still building ({catalogProgress.indexed}/{catalogProgress.total}); results may be incomplete.
@@ -580,7 +597,7 @@ export function HistoryPanel({
                     <span className="hist-group__count">{searchHits.length}</span>
                   </div>
                   {searchHits.map((hit) => (
-                    <div className="hist-item" key={`${hit.sessionPath}:${hit.messageIndex}:${hit.kind}:${hit.toolName ?? ""}`}>
+                    <div className="hist-item" key={`${hit.sessionPath}:${hit.messageIndex}:${hit.partIndex ?? 0}:${hit.kind}:${hit.toolName ?? ""}`}>
                       <button className="hist-item__main" type="button" onClick={() => void loadSearchContext(hit)}>
                         <div className="hist-item__preview">{historySearchHitDisplayTitle(hit)}</div>
                         <div className="hist-item__meta">

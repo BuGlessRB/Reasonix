@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:4834c0e613010e6104b461f33ca8ddd31d407adbc5977b8e221269abfbbfb936";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:b8cf617dc04874637b88fdd494b04227c4383ed958892b81647245d348848d9b";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -402,6 +402,7 @@ export const DESKTOP_COMMANDS = [
   "ReleaseAttachmentTarget",
   "ReleaseDraftImageForTab",
   "ReleaseDraftImageForTarget",
+  "ReleaseReadSnapshot",
   "ReloadCommands",
   "ReloadRuntime",
   "ReloadSettings",
@@ -2567,6 +2568,7 @@ export interface HistorySearchContextLine {
 }
 
 export interface HistorySearchContextRequest {
+  contentDigest?: string;
   sessionPath: string;
   messageIndex: number;
   before: number;
@@ -2574,6 +2576,8 @@ export interface HistorySearchContextRequest {
 }
 
 export interface HistorySearchHit {
+  partIndex?: number;
+  contentDigest?: string;
   sessionPath: string;
   sessionId: string;
   source: string;
@@ -2593,6 +2597,9 @@ export interface HistorySearchHit {
 }
 
 export interface HistorySearchPage {
+  snapshotId?: string;
+  snapshotExpiresAt?: number;
+  readError?: ReadError | null;
   items: HistorySearchHit[];
   nextCursor: string;
   revision: number;
@@ -2614,6 +2621,9 @@ export interface HistorySearchRequest {
 }
 
 export interface HistorySessionPage {
+  snapshotId?: string;
+  snapshotExpiresAt?: number;
+  readError?: ReadError | null;
   items: SessionMeta[];
   nextCursor: string;
   revision: number;
@@ -3296,6 +3306,8 @@ export interface ProjectTopicKey {
 }
 
 export interface ProjectTopicPage {
+  snapshotId?: string;
+  snapshotExpiresAt?: number;
   items: ProjectNode[];
   nextCursor?: string;
   revision: number;
@@ -3485,6 +3497,20 @@ export interface QQBotView {
 export interface QuestionAnswer {
   questionId: string;
   selected: string[];
+}
+
+export interface ReadError {
+  code: string;
+  reason: string;
+  message: string;
+}
+
+export interface ReadSnapshotDiagnostics {
+  handles: number;
+  activeBuilders: number;
+  pendingBuilders: number;
+  residentBytes: number;
+  reservedDiskBytes: number;
 }
 
 export interface RecoveryCleanupItem {
@@ -3899,6 +3925,7 @@ export interface SessionActivityBaseline {
 }
 
 export interface SessionArchitectureDiagnostics {
+  readSnapshots?: ReadSnapshotDiagnostics | null;
   pending_operations: number;
   missing_members: number;
   identity_mismatches: number;
@@ -6053,6 +6080,7 @@ export interface GeneratedDesktopCommands {
   ReleaseAttachmentTarget(arg0: string): Promise<void>;
   ReleaseDraftImageForTab(arg0: string, arg1: string): Promise<void>;
   ReleaseDraftImageForTarget(arg0: string, arg1: string): Promise<void>;
+  ReleaseReadSnapshot(arg0: string): Promise<void>;
   ReloadCommands(): Promise<void>;
   ReloadRuntime(arg0: string): Promise<void>;
   ReloadSettings(): Promise<void>;

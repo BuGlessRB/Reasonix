@@ -3707,10 +3707,10 @@
     }
   },
   "ListHistorySessions": {
-    "domain": "desktop/history_catalog.go",
+    "domain": "desktop/history_read_snapshots.go",
     "owner": "App.ListHistorySessions",
     "sources": [
-      "desktop/history_catalog.go"
+      "desktop/history_read_snapshots.go"
     ],
     "scope": {
       "kind": "owner-inputs",
@@ -5646,6 +5646,20 @@
       "inputs": [
         "token",
         "draftID"
+      ]
+    }
+  },
+  "ReleaseReadSnapshot": {
+    "domain": "desktop/read_snapshot_store.go",
+    "owner": "App.ReleaseReadSnapshot",
+    "sources": [
+      "desktop/read_snapshot_store.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ReleaseReadSnapshot",
+      "inputs": [
+        "id"
       ]
     }
   },
@@ -8075,10 +8089,10 @@
     }
   },
   "SearchHistoryContent": {
-    "domain": "desktop/history_catalog.go",
+    "domain": "desktop/history_read_snapshots.go",
     "owner": "App.SearchHistoryContent",
     "sources": [
-      "desktop/history_catalog.go"
+      "desktop/history_read_snapshots.go"
     ],
     "scope": {
       "kind": "owner-inputs",

@@ -606,9 +606,14 @@ func bump(ctx context.Context, tx *sql.Tx) (uint64, error) {
 
 func (c *Catalog) Search(ctx context.Context, req SearchRequest) (SearchResult, error) {
 	out := SearchResult{Items: []Candidate{}, Revision: c.revision.Load(), Partial: c.Status().Pending > 0}
+	err := c.searchCandidates(ctx, req, false, func(item Candidate) error { out.Items = append(out.Items, item); return nil })
+	return out, err
+}
+
+func (c *Catalog) searchCandidates(ctx context.Context, req SearchRequest, captureAll bool, visit func(Candidate) error) error {
 	terms, err := retrieval.QueryTerms(req.Query)
 	if err != nil {
-		return out, err
+		return err
 	}
 	limit := req.Limit
 	if limit <= 0 {
@@ -616,6 +621,9 @@ func (c *Catalog) Search(ctx context.Context, req SearchRequest) (SearchResult, 
 	}
 	if limit > MaxLimit {
 		limit = MaxLimit
+	}
+	if captureAll {
+		limit = 2147483647
 	}
 	match := make([]string, 0, len(terms))
 	for _, term := range terms {
@@ -676,9 +684,9 @@ func (c *Catalog) Search(ctx context.Context, req SearchRequest) (SearchResult, 
 			after.Rank, after.SessionPath, after.MessageIndex, after.PartIndex, after.RowID)
 	}
 	args = append(args, limit)
-	rows, err := c.db.QueryContext(ctx, query, args...)
+	rows, err := c.searchDB(ctx).QueryContext(ctx, query, args...)
 	if err != nil {
-		return out, err
+		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -686,7 +694,7 @@ func (c *Catalog) Search(ctx context.Context, req SearchRequest) (SearchResult, 
 		if err := rows.Scan(&item.RowID, &item.SessionPath, &item.Root, &item.Source, &item.Scope, &item.WorkspaceRoot, &item.ContentDigest,
 			&item.MessageIndex, &item.PartIndex, &item.Role, &item.Kind, &item.ToolName, &item.Rank,
 			&item.SessionTitle, &item.TopicTitle, &item.LastActivityAt); err != nil {
-			return out, err
+			return err
 		}
 		if !catalogPathWithin(item.SessionPath, item.Root) {
 			continue
@@ -696,9 +704,11 @@ func (c *Catalog) Search(ctx context.Context, req SearchRequest) (SearchResult, 
 		} else {
 			item.Score = 1 / (1 + item.Rank)
 		}
-		out.Items = append(out.Items, item)
+		if err := visit(item); err != nil {
+			return err
+		}
 	}
-	return out, rows.Err()
+	return rows.Err()
 }
 
 func catalogPathWithin(path, root string) bool {

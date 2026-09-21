@@ -6972,7 +6972,7 @@
     },
     {
       "cancellation": "before-dispatch",
-      "domain": "desktop/history_catalog.go",
+      "domain": "desktop/history_read_snapshots.go",
       "name": "ListHistorySessions",
       "owner": "App.ListHistorySessions",
       "params": [
@@ -6993,7 +6993,7 @@
         "resolver": "App.ListHistorySessions"
       },
       "sources": [
-        "desktop/history_catalog.go"
+        "desktop/history_read_snapshots.go"
       ]
     },
     {
@@ -7069,6 +7069,7 @@
         },
         "kind": "array"
       },
+      "returnsError": true,
       "scope": {
         "inputs": [],
         "kind": "owner-state",
@@ -10598,6 +10599,27 @@
       },
       "sources": [
         "desktop/attachment_targets.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/read_snapshot_store.go",
+      "name": "ReleaseReadSnapshot",
+      "owner": "App.ReleaseReadSnapshot",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "scope": {
+        "inputs": [
+          "id"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.ReleaseReadSnapshot"
+      },
+      "sources": [
+        "desktop/read_snapshot_store.go"
       ]
     },
     {
@@ -15198,7 +15220,7 @@
     },
     {
       "cancellation": "before-dispatch",
-      "domain": "desktop/history_catalog.go",
+      "domain": "desktop/history_read_snapshots.go",
       "name": "SearchHistoryContent",
       "owner": "App.SearchHistoryContent",
       "params": [
@@ -15219,7 +15241,7 @@
         "resolver": "App.SearchHistoryContent"
       },
       "sources": [
-        "desktop/history_catalog.go"
+        "desktop/history_read_snapshots.go"
       ]
     },
     {
@@ -30391,6 +30413,13 @@
     "main.HistorySearchContextRequest": {
       "fields": [
         {
+          "name": "contentDigest",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "sessionPath",
           "type": {
             "kind": "string"
@@ -30418,6 +30447,20 @@
     },
     "main.HistorySearchHit": {
       "fields": [
+        {
+          "name": "partIndex",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "contentDigest",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
         {
           "name": "sessionPath",
           "type": {
@@ -30522,6 +30565,31 @@
     },
     "main.HistorySearchPage": {
       "fields": [
+        {
+          "name": "snapshotId",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "snapshotExpiresAt",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "readError",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.ReadError"
+            },
+            "kind": "nullable"
+          }
+        },
         {
           "name": "items",
           "type": {
@@ -30629,6 +30697,31 @@
     },
     "main.HistorySessionPage": {
       "fields": [
+        {
+          "name": "snapshotId",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "snapshotExpiresAt",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "readError",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.ReadError"
+            },
+            "kind": "nullable"
+          }
+        },
         {
           "name": "items",
           "type": {
@@ -34251,6 +34344,20 @@
     "main.ProjectTopicPage": {
       "fields": [
         {
+          "name": "snapshotId",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "snapshotExpiresAt",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
           "name": "items",
           "type": {
             "elem": {
@@ -35323,6 +35430,62 @@
               "kind": "string"
             },
             "kind": "array"
+          }
+        }
+      ]
+    },
+    "main.ReadError": {
+      "fields": [
+        {
+          "name": "code",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reason",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "message",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.ReadSnapshotDiagnostics": {
+      "fields": [
+        {
+          "name": "handles",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "activeBuilders",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "pendingBuilders",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "residentBytes",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "reservedDiskBytes",
+          "type": {
+            "kind": "integer"
           }
         }
       ]
@@ -37513,6 +37676,17 @@
     },
     "main.SessionArchitectureDiagnostics": {
       "fields": [
+        {
+          "name": "readSnapshots",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.ReadSnapshotDiagnostics"
+            },
+            "kind": "nullable"
+          }
+        },
         {
           "name": "pending_operations",
           "type": {
