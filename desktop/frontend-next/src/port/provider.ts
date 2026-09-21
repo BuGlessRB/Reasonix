@@ -44,6 +44,7 @@ export interface ProviderEntry {
   // endpoints do not report, and headers / extra body are what a relay demands
   // on top of the protocol.
   contextWindow?: number;
+  maxOutputTokens?: number;
   headers?: Record<string, string>;
   extraBody?: Record<string, unknown>;
 }
@@ -145,6 +146,7 @@ export interface ProviderEdit {
   // clear headers a gateway needs. 0 is a real window: it turns automatic
   // compaction off for this source.
   contextWindow?: number;
+  maxOutputTokens?: number;
   headers?: Record<string, string>;
   extraBody?: Record<string, unknown>;
   // Which request shape controls thinking here. "" is auto — no declaration,
@@ -164,6 +166,13 @@ export interface ProviderDraft {
   noProxy: boolean;
   effort: string;
   vision: string[];
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  // Optional endpoint compatibility. Omitted values keep the kernel's
+  // protocol defaults; they live behind the advanced disclosure in the UI.
+  reasoningProtocol?: string;
+  headers?: Record<string, string>;
+  extraBody?: Record<string, unknown>;
 }
 
 // What the opening sequence still owes a machine with no usable key. GET

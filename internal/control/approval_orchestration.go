@@ -558,7 +558,7 @@ func (c *Controller) requestApprovalDecision(ctx context.Context, req approvalRe
 		id, reply = c.approval.registerWithInput(req.tool, req.subject, req.reason, req.args)
 	}
 
-	session, persist := ApprovalGrants(req.tool, req.fresh)
+	session, persist := approvalGrantsForRequest(req.tool, req.fresh, req.requireHuman)
 	c.sink.Emit(c.approvalRequestEvent(event.Approval{
 		ID: id, Tool: req.tool, Subject: req.subject, Reason: req.reason, ReasonCode: ExplicitApprovalCode(req.tool, req.subject),
 		RawInput: append(json.RawMessage(nil), req.args...), Fresh: req.fresh,

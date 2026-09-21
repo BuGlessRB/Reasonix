@@ -70,8 +70,8 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
     const text = draft.trim();
     if (text === "") return;
     const next = Number(text);
-    if (!Number.isFinite(next) || !Number.isInteger(next) || next <= 0) {
-      setError(t("请填一个大于 0 的整数。"));
+    if (!Number.isFinite(next) || !Number.isInteger(next) || next < 1000 || (!off && next >= win)) {
+      setError(t("阈值需至少为 1,000，并小于模型上下文窗口。"));
       return;
     }
     setError("");
@@ -155,32 +155,38 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
       </div>
 
           {mode === "custom" && (
-            <div className="lrow">
+            <div className="lrow threshold-row">
               <span className="tx">
                 <label className="lb" htmlFor={field}>{t("阈值")}</label>
-                <span className="ds">{t("tokens")}</span>
+                <span className="ds">{t("达到这个用量时开始整理")}</span>
               </span>
-              <input
-                id={field}
-                className="in"
-                type="text"
-                inputMode="numeric"
-                value={draft}
-                disabled={busy}
-                placeholder={String(capacity)}
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={commitCustom}
-                // Enter is the aimed-at commit and carries the identity. Blur
-                // still saves — clicking away is an answer too — but a write
-                // that only ever hangs off blur has no gesture anyone made on
-                // purpose, and a census built on user input cannot see it.
-                data-action-keydown="compaction.threshold"
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  commitCustom();
-                  e.currentTarget.blur();
-                }}
-              />
+              <div className="threshold-control">
+                <span className="unit-field">
+                  <input
+                    id={field}
+                    type="text"
+                    inputMode="numeric"
+                    value={draft}
+                    disabled={busy}
+                    placeholder={String(capacity)}
+                    onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+                    onBlur={commitCustom}
+                    data-action-keydown="compaction.threshold"
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      commitCustom();
+                      e.currentTarget.blur();
+                    }}
+                  />
+                  <i>tokens</i>
+                </span>
+                <span className="threshold-presets" aria-label={t("常用阈值")}>
+                  {[0.5, 0.7, 0.85].map((ratio) => {
+                    const value = Math.round(win * ratio / 1000) * 1000;
+                    return <button key={ratio} type="button" disabled={busy || off} onClick={() => { setDraft(String(value)); send(value); }}>{Math.round(ratio * 100)}%</button>;
+                  })}
+                </span>
+              </div>
             </div>
           )}
 

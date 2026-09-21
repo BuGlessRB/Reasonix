@@ -17,7 +17,7 @@ describe("decision cards", () => {
     } as Extract<Item, { t: "approval" }>;
     let release = () => {};
     const approve = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
-    render(<ApprovalCard item={item} onApprove={approve} onPlan={vi.fn(pending)} />);
+    render(<ApprovalCard item={item} onApprove={approve} onFullAccess={vi.fn(pending)} onPlan={vi.fn(pending)} />);
 
     await userEvent.click(screen.getByRole("button", { name: "允许这一次" }));
     expect(screen.getByText("正在提交…")).toBeTruthy();
@@ -36,7 +36,7 @@ describe("decision cards", () => {
       const item = {
         t: "approval", id: "row", a: { id: "gate", tool: "computer_act", subject: "com.apple.Notes", ...allows },
       } as Extract<Item, { t: "approval" }>;
-      const r = render(<ApprovalCard item={item} onApprove={approve} onPlan={vi.fn(pending)} />);
+      const r = render(<ApprovalCard item={item} onApprove={approve} onFullAccess={vi.fn(pending)} onPlan={vi.fn(pending)} />);
       return { approve, ...r };
     };
     const names = () => screen.getAllByRole("button").map((b) => b.textContent);
@@ -56,6 +56,23 @@ describe("decision cards", () => {
     await userEvent.click(screen.getByRole("button", { name: "此类操作不再询问" }));
     expect(full.approve).toHaveBeenCalledWith("row", "gate", "always");
     void fresh;
+  });
+
+  it("puts full access behind an explicit second confirmation", async () => {
+    const fullAccess = vi.fn(pending);
+    const item = {
+      t: "approval", id: "row", a: {
+        id: "gate", tool: "bash", subject: "python - <<'PY'", reasonCode: "dynamic_bash", allowsSession: true,
+      },
+    } as Extract<Item, { t: "approval" }>;
+    render(<ApprovalCard item={item} onApprove={vi.fn(pending)} onFullAccess={fullAccess} onPlan={vi.fn(pending)} />);
+
+    expect(screen.getByRole("button", { name: "本会话不再询问" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "切换全部放行…" }));
+    expect(fullAccess).not.toHaveBeenCalled();
+    expect(screen.getByText("全部放行会跳过后续工具确认")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "确认全部放行" }));
+    expect(fullAccess).toHaveBeenCalledWith("row");
   });
 
   it("does not invent a recommendation and restores answered tab state", () => {

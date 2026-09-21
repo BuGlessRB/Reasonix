@@ -129,7 +129,8 @@ export class MockProvider extends MockBoundary {
       p.name === edit.name
         ? {
             ...p, models: edit.models, default: edit.default, visionModels: edit.vision,
-            contextWindow: edit.contextWindow, headers: edit.headers, extraBody: edit.extraBody,
+            contextWindow: edit.contextWindow, maxOutputTokens: edit.maxOutputTokens,
+            headers: edit.headers, extraBody: edit.extraBody,
           }
         : p,
     );

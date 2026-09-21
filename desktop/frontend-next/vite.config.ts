@@ -23,6 +23,7 @@ const ROUTES = [
   "/extensions", "/themes", "/plugins", "/surfaces",
   "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",
   "/permissions", "/sandbox", "/context", "/storage", "/tray", "/browser", "/browser-host", "/asks", "/update",
+  "/host",
   "/slash", "/workspaces", "/welcome", "/usage", "/config", "/studio",
 ];
 

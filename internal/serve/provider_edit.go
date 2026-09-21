@@ -23,15 +23,16 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 	// empty" stay different answers: a client that does not show them must not
 	// silently clear the headers a gateway needs.
 	var body struct {
-		Name          string             `json:"name"`
-		BaseURL       string             `json:"baseUrl"`
-		APIKey        string             `json:"apiKey"`
-		Models        []string           `json:"models"`
-		Default       string             `json:"default"`
-		Vision        []string           `json:"vision"`
-		ContextWindow *int               `json:"contextWindow"`
-		Headers       *map[string]string `json:"headers"`
-		ExtraBody     *map[string]any    `json:"extraBody"`
+		Name            string             `json:"name"`
+		BaseURL         string             `json:"baseUrl"`
+		APIKey          string             `json:"apiKey"`
+		Models          []string           `json:"models"`
+		Default         string             `json:"default"`
+		Vision          []string           `json:"vision"`
+		ContextWindow   *int               `json:"contextWindow"`
+		MaxOutputTokens *int               `json:"maxOutputTokens"`
+		Headers         *map[string]string `json:"headers"`
+		ExtraBody       *map[string]any    `json:"extraBody"`
 		// Which request shape this endpoint controls thinking with. No probe
 		// answers it — a relay forwards a vendor's models under its own name —
 		// so the declaration has to come from whoever knows what is behind it.
@@ -73,6 +74,13 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		entry.ContextWindow = *body.ContextWindow
+	}
+	if body.MaxOutputTokens != nil {
+		if *body.MaxOutputTokens < 0 {
+			refuse(w, http.StatusBadRequest, "provider.bad_max_output_tokens", "maximum output tokens cannot be negative", nil)
+			return
+		}
+		entry.MaxOutputTokens = *body.MaxOutputTokens
 	}
 	if body.Headers != nil {
 		entry.Headers = trimmedHeaders(*body.Headers)

@@ -13,6 +13,9 @@ export interface TrajRow {
   // 以及是哪个工具跑的 —— 颜色由界面那层按类别决定。
   dur?: number;
   tool?: string;
+  // Provider-reported completion tokens for a model round. Kept numeric so a
+  // performance view never has to parse the abbreviated text drawn on screen.
+  out?: number;
 }
 
 export interface TrajState {
@@ -42,6 +45,7 @@ interface Made {
   subs?: Span[][];
   dur?: number;
   tool?: string;
+  out?: number;
   // The key this record opens an activity under, settles, or adds to.
   open?: string;
   close?: string;
@@ -122,6 +126,7 @@ function record(ev: WireEvent): Made | null {
       return {
         kind: "event",
         round: u.attemptId,
+        out: u.completionTokens,
         standalone: [{ t: "usage" }],
         payload: [
           { t: " · hit " },
@@ -286,6 +291,7 @@ export function reduceTraj(
         // reader waited for it.
         dur: r.close ? (r.dur ?? at - row.at) : r.grow ? at - row.at : row.dur,
         tool: row.tool ?? r.tool,
+        out: (row.out ?? 0) + (r.out ?? 0),
       };
       if (!r.close) return { ...s, rows };
       const open = { ...s.open };
@@ -301,7 +307,7 @@ export function reduceTraj(
   const payload = r.standalone ? [...r.standalone, ...r.payload] : r.payload;
   const rows = [
     ...s.rows,
-    { seq: s.rows.length + 1, at, kind: r.kind, payload, subs: r.subs ?? [], dur: r.dur, tool: r.tool },
+    { seq: s.rows.length + 1, at, kind: r.kind, payload, subs: r.subs ?? [], dur: r.dur, tool: r.tool, out: r.out },
   ];
   const next: TrajState = { ...s, t0, rows };
   if (r.open) {

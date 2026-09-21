@@ -169,6 +169,15 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
   );
 
   const custom = packs.some((p) => p.active);
+  // Calm, workbench-like themes stay in the first shelf. Illustrated packs
+  // are still first-class installed themes, but they no longer dominate the
+  // page a user opens merely to switch between light and dark. If one of them
+  // is active it remains visible beside the foundations, so the current state
+  // never disappears into a closed disclosure.
+  const foundations = packs.filter((p) => !p.background?.image);
+  const activeIllustrated = packs.find((p) => p.active && p.background?.image);
+  const featured = activeIllustrated ? [...foundations, activeIllustrated] : foundations;
+  const illustrated = packs.filter((p) => p.background?.image && p.id !== activeIllustrated?.id);
 
   // A change lands on screen through App's own effect; this only sends it on
   // so the next launch opens the same way.
@@ -230,7 +239,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
   // Read here rather than inside the summary: these are the same three values
   // the folded blocks render, and a second reading of them is a second answer.
   const changed = [
-    look.fontUi || look.fontMono ? t("字体") : "",
+    look.fontUi ? t("字体") : "",
     weight ? t("文字粗细") : "",
     contrast ? t("文字对比度") : "",
   ].filter(Boolean);
@@ -264,17 +273,33 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
 
       <section className="grp" id="set-scheme" data-setting="scheme">
         <div className="grp-hd">
-          <h3>{t("配色")}</h3>
-          <span className="now">{packs.length ? t("{n} 个已装", { n: packs.length }) : ""}</span>
+          <h3>{t("界面主题")}</h3>
+          <span className="now">{t("立即生效")}</span>
         </div>
-        <p className="hint">{t("配色包安装在记忆目录的 themes/ 下，每个目录包含一个 theme.json。配色包会应用表面色、强调色、圆角和字体；状态色（成功/警告/失败）不受影响。")}</p>
+        <p className="hint">{t("选择工作台的表面色与强调色。成功、警告和失败等状态色保持一致，代码字体在下方单独设置。")}</p>
         <div className="grp-items">
-          <div className="palettes" role="group" aria-label={t("配色")}>
+          <div className="palettes" role="group" aria-label={t("界面主题")}>
             <Swatch name={t("默认")} on={!custom} onPick={() => pick("")} />
-            {packs.map((p) => (
+            {featured.map((p) => (
               <Swatch key={p.id} pack={p} theme={theme} name={p.name} on={!!p.active} onPick={() => pick(p.id)} />
             ))}
           </div>
+          {illustrated.length > 0 && (
+            <details className="theme-more">
+              <summary>
+                <span>
+                  <b>{t("更多已安装主题")}</b>
+                  <em>{t("插画与背景主题，可随时切回基础主题")}</em>
+                </span>
+                <span className="now">{t("{n} 个", { n: illustrated.length })}</span>
+              </summary>
+              <div className="palettes" role="group" aria-label={t("更多已安装主题")}>
+                {illustrated.map((p) => (
+                  <Swatch key={p.id} pack={p} theme={theme} name={p.name} on={!!p.active} onPick={() => pick(p.id)} />
+                ))}
+              </div>
+            </details>
+          )}
           {/* A pack loads with its good tokens and says which ones it lost. The
               author is the only one who can fix that, and they will not read a
               log — so it is here, next to the thing that looks wrong. */}
@@ -291,6 +316,24 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
           {packs.length === 0 && <p className="note">{t("尚未安装配色包。将包含 theme.json 的目录放入 themes/ 后即会显示在此处。")}</p>}
         </div>
         <ApplyNote id="scheme" />
+      </section>
+
+      <section className="grp" id="set-code-appearance" data-setting="font">
+        <div className="grp-hd">
+          <h3>{t("代码外观")}</h3>
+        </div>
+        <p className="hint">{t("代码块、命令、差异与工具输出共用这一等宽字体，不跟随界面主题改变。")}</p>
+        <div className="grp-items">
+          <FontPick
+            slot="mono"
+            label={t("等宽字体")}
+            value={look.fontMono ?? ""}
+            options={monoFonts}
+            sample="func main() { fmt.Println(0O1lI) }"
+            onPick={(v) => set({ fontMono: v })}
+          />
+        </div>
+        <ApplyNote id="font" />
       </section>
 
       <section className="grp" id="set-size" data-setting="size">
@@ -353,6 +396,13 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         <ApplyNote id="size" />
       </section>
 
+      <details className="advset personal">
+        <summary>
+          <span className="tx">
+            <span className="lb">{t("更多个性化")}</span>
+            <span className="ds">{look.wallpaper ? t("已设置自定义壁纸") : t("壁纸与背景位置")}</span>
+          </span>
+        </summary>
       <section className="grp" id="set-wallpaper" data-setting="wallpaper">
         <div className="grp-hd">
           <h3>{t("壁纸")}</h3>
@@ -481,6 +531,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         </div>
         <ApplyNote id="wallpaper" />
       </section>
+      </details>
 
       <section className="grp" id="set-language" data-setting="language">
         <div className="grp-hd">
@@ -584,14 +635,6 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               options={uiFonts}
               sample={t("字体预览 · 中文 Aa Bb 0123")}
               onPick={(v) => set({ fontUi: v })}
-            />
-            <FontPick
-              slot="mono"
-              label={t("等宽")}
-              value={look.fontMono ?? ""}
-              options={monoFonts}
-              sample="func main() { fmt.Println(0O1lI) }"
-              onPick={(v) => set({ fontMono: v })}
             />
           </div>
           <ApplyNote id="font" />

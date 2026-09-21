@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Clip } from "./Clip";
 import { useEscape } from "./dismiss";
 import { t } from "../i18n";
-import type { Protocol, ProviderCheck, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe } from "../port/port";
+import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe } from "../port/port";
 import { AddProvider } from "./AddProvider";
 import { EditConn } from "./EditConn";
 import { KIND_LABEL, accountKey, accountLabel, disambiguate, hostOf } from "./vendors";
@@ -20,10 +20,7 @@ export type Port = {
   providers(): Promise<ProviderEntry[]>;
   protocols(): Promise<Protocol[]>;
   probeProvider(baseUrl: string, apiKey: string): Promise<ProviderProbe>;
-  saveProvider(draft: {
-    name: string; kind: string; baseUrl: string; apiKey: string; models: string[];
-    default: string; authHeader: boolean; noProxy: boolean; effort: string; vision: string[];
-  }): Promise<void>;
+  saveProvider(draft: ProviderDraft): Promise<void>;
   removeProvider(name: string): Promise<void>;
   checkProvider(name: string): Promise<ProviderCheck>;
   checkProviderModel(request: ProviderModelCheckRequest): Promise<ProviderModelCheck>;
@@ -108,18 +105,15 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
 
   return (
     <>
-      <div className="vlist">
-        {groupAccounts(list).map((a) => (
-          <Conn key={a.key} a={a} port={port} busy={busy} setBusy={setBusy}
-            kind={protocol[a.key] ?? activeKindFor(a)}
-            onProtocol={(k) => onProtocol(a, k)}
-            onRemove={remove}
-            onEdited={() => { reload(); onChanged(); }}
-            onFailed={onFailed} />
-        ))}
-        {list.length === 0 && <div className="empty">{t("尚未配置任何模型来源。")}</div>}
+      <div className="provider-toolbar">
+        <span>{t("{n} 个来源", { n: groupAccounts(list).length })}</span>
+        {!adding && (
+          <button className="act" data-primary data-action="provider.add-start" onClick={() => setAdding(true)}>
+            <b aria-hidden="true">＋</b>{t("添加来源")}
+          </button>
+        )}
       </div>
-      {adding ? (
+      {adding && (
         <AddProvider
           port={port}
           taken={list.map((p) => p.name)}
@@ -131,11 +125,18 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
           }}
           onCancel={() => setAdding(false)}
         />
-      ) : (
-        <button className="lnk" onClick={() => setAdding(true)}>
-          {t("添加模型来源")}
-        </button>
       )}
+      <div className="vlist">
+        {groupAccounts(list).map((a) => (
+          <Conn key={a.key} a={a} port={port} busy={busy} setBusy={setBusy}
+            kind={protocol[a.key] ?? activeKindFor(a)}
+            onProtocol={(k) => onProtocol(a, k)}
+            onRemove={remove}
+            onEdited={() => { reload(); onChanged(); }}
+            onFailed={onFailed} />
+        ))}
+        {list.length === 0 && <div className="empty">{t("尚未配置任何模型来源。")}</div>}
+      </div>
     </>
   );
 }
@@ -259,6 +260,17 @@ function Conn({
           </button>
         )}
       </div>
+      {(a.kinds.length > 1 || entry.canWebSearch || entry.canSetThinking || entry.canSetContinuation) && (
+        <details className="provider-options">
+          <summary>
+            <span className="tx">
+              <strong>{t("请求与能力")}</strong>
+              <small>{t("思考、联网搜索与上下文续接")}</small>
+            </span>
+            <span className="provider-options-state">
+              {entry.canSetThinking && t(entry.sendsThinking === false ? "不发送思考参数" : "思考自动")}
+            </span>
+          </summary>
       {a.kinds.length > 1 && (
         <div className="vway">
           <span className="lb">{t("接入方式")}</span>
@@ -323,6 +335,8 @@ function Conn({
           </div>
           <span className="why">{t(CONTINUATION_WHY[entry.continuation ?? ""] ?? CONTINUATION_WHY[""])}</span>
         </div>
+      )}
+        </details>
       )}
       {editing && (
         <EditConn

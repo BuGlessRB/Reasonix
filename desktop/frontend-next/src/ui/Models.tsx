@@ -148,6 +148,7 @@ export function Models({ models, current, busy, protocol, onPick }: Props) {
         <span>{t("可用模型")}</span>
         <span>{t("{n} 个", { n: total })}</span>
       </div>
+      <div className="models-scroll">
       {live.map(({ v, kind, rows }) => (
         <div className="mgrp" key={v.key}>
           <div className="mgrp-hd">
@@ -184,6 +185,7 @@ export function Models({ models, current, busy, protocol, onPick }: Props) {
           ))}
         </div>
       ))}
+      </div>
       {live.length === 0 && <div className="empty">{t("没有匹配的模型。")}</div>}
     </>
   );

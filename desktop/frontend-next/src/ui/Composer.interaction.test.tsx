@@ -27,7 +27,7 @@ function deferred<T>() {
 }
 
 function draw(
-  over: { running?: boolean; onSubmit?: (text: string) => Promise<boolean>; port?: MockPort; st?: SessionStatus } = {},
+  over: { running?: boolean; onSubmit?: (text: string) => Promise<boolean>; port?: MockPort; st?: SessionStatus; changeCount?: number } = {},
 ) {
   const port = over.port ?? new MockPort();
   const onSubmit = over.onSubmit ?? vi.fn(async () => true);
@@ -40,6 +40,7 @@ function draw(
       onSubmit={onSubmit}
       onChanged={vi.fn()}
       onError={vi.fn()}
+      changeCount={over.changeCount}
     />,
   );
   const box = view.container.querySelector('textarea[aria-label="任务输入"]') as HTMLTextAreaElement;
@@ -138,6 +139,11 @@ describe("composer run controls", () => {
 });
 
 describe("composer menus", () => {
+  it("shows real workspace changes beside the current branch", async () => {
+    draw({ changeCount: 3 });
+    expect(await screen.findByText("3 个变更")).toBeTruthy();
+  });
+
   it("dismisses completion when focus moves to a toolbar control", async () => {
     const { box } = draw();
     fireEvent.change(box, { target: { value: "@", selectionStart: 1 } });
@@ -193,6 +199,6 @@ describe("composer attachments", () => {
 it("keeps every segment after the provider in a namespaced model id", async () => {
   const { container } = draw({ st: status({ modelRef: "relay/anthropic/claude-sonnet" }) });
   // The rows are the ready signal, and a Picker renders them into the body.
-    await waitFor(() => expect(document.querySelector('[data-action="model.select"]')).toBeTruthy());
-  expect(container.querySelector(".turntools > .picker > .mode")?.textContent).toContain("anthropic/claude-sonnet");
+  await waitFor(() => expect(document.querySelector('[data-action="model.select"]')).toBeTruthy());
+  expect(container.querySelector(".studio-model-group .model-picker")?.textContent).toContain("anthropic/claude-sonnet");
 });

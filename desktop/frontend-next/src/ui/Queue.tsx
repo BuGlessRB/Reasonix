@@ -110,7 +110,11 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
     setEditing("");
   }, [draft, editing, onEdit]);
 
-  if (!queue || (queue.items.length === 0 && !queue.paused)) return null;
+  // No pending work means no pending UI. A persisted pause is an internal
+  // queue policy; drawing a full strip for it above an empty composer makes it
+  // look like a stuck task. If a new item arrives while held, the strip returns
+  // with both the item and the action needed to release it.
+  if (!queue || queue.items.length === 0) return null;
   const items = queue.items;
   const cap = queue.capacity;
   const fullItems = cap.maxItems > 0 && cap.items >= cap.maxItems;

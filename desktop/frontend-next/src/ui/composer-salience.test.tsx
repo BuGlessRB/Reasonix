@@ -17,10 +17,7 @@ function draw(st: SessionStatus | null = status(), running = false) {
     <Composer port={new MockPort() as unknown as AgentPort} status={st} running={running}
       focus={0} onSubmit={vi.fn()} onChanged={vi.fn()} onError={vi.fn()} />,
   );
-  // The separators are the shelf's own, so counting them says whether anything
-  // was left behind by a control that receded.
-  const seps = () => r.container.querySelectorAll(".turntools > .sep").length;
-  return { ...r, seps };
+  return r;
 }
 
 describe("what the composer shows when nothing is unusual", () => {
@@ -52,11 +49,14 @@ describe("what the composer shows when nothing is unusual", () => {
     await waitFor(() => expect(document.querySelector('[data-action="model.select"]')).toBeTruthy());
   });
 
-  // Model and turn policy are one semantic boundary, regardless of whether a
-  // policy value is unusual enough to spell out.
-  it("keeps one separator between model and turn controls", () => {
-    expect(draw().seps()).toBe(1);
-    expect(draw(status({ preset: "delivery" as Preset })).seps()).toBe(1);
+  // Effort is a model capability in the prototype, so the two controls share
+  // one group instead of being separated by an unrelated toolbar divider.
+  it("keeps model and effort in one capability group", () => {
+    const { container } = draw();
+    const group = container.querySelector(".studio-model-group");
+    expect(group?.querySelector(".model-picker")).toBeTruthy();
+    expect(group?.querySelector(".studio-effort-picker")).toBeTruthy();
+    expect(container.querySelectorAll(".turntools > .sep")).toHaveLength(0);
   });
 
   it("does not ask people to choose an internal completion policy", () => {

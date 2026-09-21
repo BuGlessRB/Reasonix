@@ -39,6 +39,7 @@ describe("a round's tokens land on the round", () => {
     expect(line(s, 0)).toContain("model_round");
     expect(line(s, 0)).toContain("out ");
     expect(line(s, 0)).toContain("src=executor");
+    expect(s.rows[0].out).toBe(900);
   });
 
   it("bills the attempt that committed, not the one still on the page", () => {

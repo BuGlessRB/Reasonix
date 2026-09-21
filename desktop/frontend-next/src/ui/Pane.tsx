@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import { money } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
@@ -8,15 +8,13 @@ import { HttpError } from "../port/port";
 import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, Queue as QueueSnapshot, RewindScope, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import type { TrajectoryRead } from "../port/wire";
-import { fromHistory, initialState, localId, quoteAmount, reduce, stepDone } from "../state/session";
+import { fromHistory, initialState, localId, quoteAmount, reduce } from "../state/session";
 import { pairCheckpoints } from "../state/checkpoints";
 import { initialTraj, reduceTraj } from "../state/trajectory";
-import { ExecutionStore } from "../state/execution";
 import { Transcript } from "./Transcript";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
 import { SlottedView } from "./SlottedView";
-import { Task } from "./Task";
 import type { PlanAction } from "./cards/ApprovalCard";
 import { key as slotKey, placement } from "./slots";
 import { Metrics } from "./Metrics";
@@ -30,9 +28,11 @@ import { useDismiss } from "./dismiss";
 import { ContextSummaryCard } from "./ContextSummaryCard";
 import { Find } from "./Find";
 import { useFind } from "./usefind";
-import { PaneDetail } from "./PaneDetail";
+import { RunAnalysis } from "./RunAnalysis";
 import { BrowserPanel, useBrowserTabs } from "./BrowserPanel";
 import { refreshTodos } from "../state/restore";
+import { RMark } from "./RMark";
+import { speedOf } from "./speed";
 
 const BROWSER_DOCK = "rx-browser-dock";
 
@@ -90,21 +90,11 @@ interface Props {
 function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
-  // The run graph is read, never accumulated: the kernel answers with what its
-  // durable facts justify, and the stream folds onto that answer. One store per
-  // port, because what it describes is that pane's session.
-  const graphStore = useMemo(() => new ExecutionStore(), [port]);
-  const exec = useSyncExternalStore(graphStore.subscribe, graphStore.read);
-  const readGraph = useCallback(() => port.executionGraph(), [port]);
   const [status, setStatus] = useState<SessionStatus | null>(null);
   const [tab, setTab] = useState<PaneView>("flow");
   const [pinned, setPinned] = useState(true);
   const [jump, setJump] = useState(0);
-  // What the run graph asked to be shown. The counter is the request, not the
-  // id: clicking the same node twice has to land twice.
-  const [focus, setFocus] = useState<{ call: string; n: number } | null>(null);
   const [mcp, setMcp] = useState<McpEntry[]>([]);
-  const [elapsed, setElapsed] = useState(0);
   const [askFocus, setAskFocus] = useState(0);
   const [tree, setTree] = useState<WorkspaceChanges | null>(null);
   const [ctx, setCtx] = useState<ContextBreakdown | null>(null);
@@ -113,16 +103,19 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [slots, setSlots] = useState<Record<string, string>>({});
   const pages = useBrowserTabs(port, s.browserTabsMoved);
   const [dock, setDock] = useState(() => localStorage.getItem(BROWSER_DOCK) !== "off");
-  const docked = dock && pages.length > 0 && tab !== "browser";
+  // Analysis owns the whole working canvas. A docked browser and the composer
+  // are useful while talking to the agent, but both compete with the timeline
+  // for exactly the horizontal/vertical space the analysis view explains.
+  const docked = dock && pages.length > 0 && tab === "flow";
   const [meterOpen, setMeterOpen] = useState(false);
   const meterRef = useRef<HTMLDivElement>(null);
   const closeMeter = useCallback(() => setMeterOpen(false), []);
   useDismiss(meterOpen, meterRef, closeMeter);
   const flow = useRef<HTMLDivElement>(null);
-  const startedAt = useRef(0);
   // Elapsed is a clock reading and belongs on the tick. Throughput is not: it
   // follows the deltas themselves, and expires rather than being re-derived.
   const tps = useRate(s.outWindow, s.running);
+  const speed = useMemo(() => speedOf(traj.rows), [traj.rows]);
 
   const reloadMcp = useCallback(() => {
     void port.mcp().then((c) => setMcp(c.servers)).catch(() => setMcp([]));
@@ -161,7 +154,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         (ev) => {
           dispatch(ev);
           trajDispatch(ev);
-          graphStore.onEvent(ev);
           // A server finishing its handshake changes what /mcp answers, and this
           // is the only precise signal for it — the turn boundary below is the
           // fallback for changes that arrive without an event.
@@ -178,11 +170,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         },
         () => {
           rebuild();
-          void graphStore.recoverFromGap(readGraph);
         },
-        () => graphStore.bootstrap(readGraph),
       ),
-    [port, reloadMcp, rebuild, graphStore, readGraph, refreshStatus],
+    [port, reloadMcp, rebuild, refreshStatus],
   );
 
   // What the rows cover is dispatched before the rows themselves, so the table
@@ -258,11 +248,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // be re-read rather than patched.
   const reloadSession = useCallback(() => {
     trajDispatch({ kind: "__clear" } as never);
-    // The graph is not replayed out of the trajectory: it goes back to the
-    // authority for the conversation this pane now holds, and shows nothing of
-    // the one it left while that read is in flight.
-    graphStore.resetForSession();
-    void graphStore.bootstrap(readGraph).catch(() => {});
     port.trajectory().then(replayTrajectory).catch(() => {});
     port.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([]));
     // Two reads, the same way the first mount takes them: the record does not
@@ -284,7 +269,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     });
     refreshWallet();
     onSessionChanged();
-  }, [port, applyStatus, refreshWallet, onSessionChanged, graphStore, readGraph]);
+  }, [port, applyStatus, refreshWallet, onSessionChanged, replayTrajectory]);
 
   // A rewind rewrites the transcript and the files under it, so the whole
   // session is re-read rather than patched — the same treatment a session
@@ -324,15 +309,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     }
     return { steps, steer };
   }, [s.revision]);
-  // The ask the task view heads itself with: the latest thing you actually sent,
-  // not a queued line the kernel has not been given yet.
-  const ask = useMemo(() => {
-    for (let i = s.items.length - 1; i >= 0; i--) {
-      const it = s.items[i];
-      if (it.t === "user" && !it.pending) return it.text;
-    }
-    return "";
-  }, [s.revision]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   // An MCP server connects lazily and fails at first use, so a turn boundary is
@@ -370,13 +346,8 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // /status is the only source for background jobs and for settings the run does
   // not echo, so a live turn has to re-read it rather than infer from events.
   useEffect(() => {
-    if (!s.running) startedAt.current = 0;
-    else if (!startedAt.current) startedAt.current = Date.now();
     if (!s.running || !visible) return;
-    const tick = () => {
-      setElapsed((Date.now() - startedAt.current) / 1000);
-      refreshStatus();
-    };
+    const tick = () => refreshStatus();
     tick();
     const t = setInterval(tick, 250);
     return () => clearInterval(t);
@@ -512,6 +483,19 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     [port, refreshStatus, fail],
   );
 
+  const onFullAccess = useCallback(
+    async (itemId: string) => {
+      try {
+        await port.setApprovalMode("yolo");
+        dispatch({ kind: "__decided", id: itemId, verdict: "yolo" } as never);
+        refreshStatus();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [port, refreshStatus, fail],
+  );
+
   // The plan gate has three outcomes the kernel keeps apart, and only one of
   // them is "allow". The other two both deny at the gate and differ in where
   // they leave you: revise stays in plan mode so the next thing you type is
@@ -581,32 +565,15 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     [port, fail],
   );
 
-  // Both graph views hand back the same gesture — show me the call behind this
-  // node — and it is two commits' worth of work in one: the view transition
-  // defers what it is given, so asking for the call before the tab switch would
-  // spend the request on a pane that is still off screen.
-  const toCall = useCallback(
-    (call: string) =>
-      swapping(() => {
-        setTab("flow");
-        setFocus((was) => ({ call, n: (was?.n ?? 0) + 1 }));
-      }, "tab"),
-    [],
-  );
-
   // Every route into a view goes through one place, so the menu never grows a
   // motion language of its own: it says which view, and this says how a pane
   // changes from one to another.
   const showView = useCallback((to: PaneView) => swapping(() => setTab(to), "tab"), []);
   const find = useFind(s.items, findPulse, active, useCallback(() => showView("flow"), [showView]));
 
-  // The timeline's tab is drawn only while the run has a graph, so a session
-  // that delegated nothing is not offered an empty page. Leaving someone parked
-  // on a tab that just lost its button is the other half of that.
   useEffect(() => {
-    if (tab === "line" && exec.graph.nodes.length === 0) setTab("flow");
     if (tab === "browser" && pages.length === 0) setTab("flow");
-  }, [tab, exec.graph.nodes.length, pages.length]);
+  }, [tab, pages.length]);
 
   // Where the bottom is moves as blocks mount under it, so this only asks the
   // transcript to follow again and lets it scroll itself into place.
@@ -655,9 +622,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       <PaneNav
         view={tab}
         onPick={showView}
-        done={s.plan.filter(stepDone).length}
-        steps={s.plan.length}
-        nodes={exec.graph.nodes.length}
         rows={traj.rows.length}
         pages={pages.length}
         dock={dock}
@@ -683,10 +647,11 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         hidden={tab !== "flow"}
         onPinned={setPinned}
         jump={jump}
-        focus={focus}
+        focus={null}
         find={find.at}
         query={find.query}
         onApprove={onApprove}
+        onFullAccess={onFullAccess}
         onPlan={onPlan}
         onAnswer={onAnswer}
         onForget={onForget}
@@ -704,25 +669,12 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onKeepHere={onKeepHere}
       />
 
-      <PaneDetail view={tab} run={exec} items={s.items} traj={traj} onOpen={toCall} onSave={port.saveText} />
-
-      <div className="scroll" data-pane="task" hidden={tab !== "task"}>
-        {tab === "task" && (
-          <Task
-            goal={status?.goal ?? ""}
-            ask={ask}
-            plan={s.plan}
+      <div className="scroll" data-pane="analysis" hidden={tab !== "analysis"}>
+        {tab === "analysis" && (
+          <RunAnalysis
             rows={traj.rows}
-            t0={traj.t0}
-            running={s.running}
-            blocked={blocked}
-            elapsed={elapsed}
-            onTrajectory={() => swapping(() => setTab("traj"), "tab")}
-            onLatest={() => {
-              swapping(() => setTab("flow"), "tab");
-              toLatest();
-            }}
-            onSummary={() => submit(t("汇总当前进度与潜在风险，并列出接下来三步"))}
+            availability={traj.availability}
+            onSave={(name, content) => port.saveText(name, content)}
           />
         )}
       </div>
@@ -734,7 +686,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         )}
       </div>
 
-      <div className="compose">
+      {/* Keep the composer mounted so a half-written prompt survives a visit to
+          analysis; hidden removes it from layout without throwing its state
+          away. */}
+      <div className="compose" hidden={tab === "analysis"}>
         <button className="jump" hidden={pinned || tab !== "flow"} onClick={toLatest}>
           {t("↓ 回到最新")}
         </button>
@@ -745,6 +700,15 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             of these was bounded on its own or not at all, and "not at all" is
             what let the queue grow until the transcript had no height left —
             the next child to do it would have been a different one. */}
+        {/* This is the state of the input surface itself, so it follows the
+            textarea's left edge. Putting it inside composeaux centred it to
+            the narrower queue rail and made it appear to float inward. */}
+        {(s.running || blocked) && (
+          <div className="studio-runstate" role="status" aria-live="polite" data-waiting={blocked ? "" : undefined}>
+            <RMark />
+            <span>{t(s.doing || "运行中")}</span>
+          </div>
+        )}
         <div className="composeaux">
           <Queue
             queue={queue}
@@ -773,11 +737,28 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             </div>
           )}
         </div>
-        <Composer port={port} status={status} running={s.running} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} />
+        <Composer port={port} status={status} running={s.running} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} />
         <div className="studio-meterrail" ref={meterRef} aria-label={t("运行统计")}>
-          <span className="studio-meter-static studio-meter-speed" title={t(s.running ? "生成中" : "本轮均速")}>
-            <StudioIcon name="gauge" /><b>{tps > 0 ? tps.toFixed(1) : "—"}</b><span>tok/s</span><i data-live={s.running ? "" : undefined} aria-hidden="true" />
-          </span>
+          <div className="studio-speed-anchor">
+            <button
+              className="studio-meter-static studio-meter-speed"
+              type="button"
+              aria-describedby="studio-speed-detail"
+              aria-label={t("查看生成速度详情")}
+            >
+              <StudioIcon name="gauge" /><b>{tps > 0 ? tps.toFixed(1) : "—"}</b><span>tok/s</span><i data-live={s.running ? "" : undefined} aria-hidden="true" />
+            </button>
+            <div className="studio-speed-detail" id="studio-speed-detail" role="tooltip">
+              <header><b>{t("生成速度")}</b><small>{s.running ? t("实时更新") : t("最近一轮")}</small></header>
+              <dl>
+                <div><dt>{t("当前速度")}</dt><dd>{tps > 0 ? `${tps.toFixed(1)} tok/s` : "—"}</dd></div>
+                <div><dt>{t("整轮平均")}</dt><dd>{speed.average > 0 ? `${speed.average.toFixed(1)} tok/s` : "—"}</dd></div>
+                <div><dt>{t("本轮输出")}</dt><dd>{speed.output > 0 ? t("{n} tokens", { n: speed.output.toLocaleString() }) : "—"}</dd></div>
+                <div><dt>{t("模型耗时")}</dt><dd>{speed.modelSeconds > 0 ? `${speed.modelSeconds.toFixed(1)}s` : "—"}</dd></div>
+              </dl>
+              <p>{t("当前速度按最近 4 秒流式文本估算；整轮平均使用服务商返回的输出 Token 除以模型回合耗时。")}</p>
+            </div>
+          </div>
           <span className="studio-meter-static studio-meter-cache" title={cacheRate === null ? t("尚无缓存数据") : t("命中 {hit} · 未命中 {miss}", { hit: s.metrics.hit.toLocaleString(), miss: s.metrics.miss.toLocaleString() })}>
             <span>{t("缓存")}</span><b>{cacheRate === null ? "—" : `${cacheRate}%`}</b>
           </span>

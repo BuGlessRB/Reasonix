@@ -116,7 +116,12 @@ export function apply(pack: ThemePack | null, scheme: "light" | "dark", busy = f
   root.style.setProperty("--bg-x", `${pct(bg.focusX)}%`);
   root.style.setProperty("--bg-y", `${pct(bg.focusY)}%`);
   root.style.setProperty("--bg-alpha", String(busy ? bg.taskOpacity : bg.homeOpacity));
-  root.style.setProperty("--bg-overlay", String(bg.overlayStrength));
+  // A light palette already carries dark readable ink and pale panels. Using
+  // the same opaque page-colour veil as dark mode washed illustrations into a
+  // nearly white sheet, especially in the empty state. Keep a gentler scrim in
+  // light mode; cards and navigation provide their own local contrast.
+  const overlay = scheme === "light" ? bg.overlayStrength * 0.58 : bg.overlayStrength;
+  root.style.setProperty("--bg-overlay", String(overlay));
   root.dataset.bg = "on";
 }
 

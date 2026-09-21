@@ -39,6 +39,7 @@ interface Props {
   find?: { id: string; n: number } | null;
   query?: string;
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => Promise<void>;
+  onFullAccess: (itemId: string) => Promise<void>;
   onPlan: (itemId: string, id: string, action: PlanAction) => Promise<void>;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => Promise<void>;
   onForget: (itemId: string, name: string) => void;
@@ -102,7 +103,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, find, query, onApprove, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
+export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, find, query, onApprove, onFullAccess, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -127,6 +128,10 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   // only resumes the follow if they are the one who went there.
   const gesture = useRef(0);
   const wasAt = useRef(0);
+  // Following and offering a shortcut back are deliberately separate. A tiny
+  // upward wheel gesture should stop live content from pulling the reader
+  // down, but it should not immediately flash a "back to latest" pill.
+  const jumpVisible = useRef(false);
   // Scroll events before this moment are the browser's, not the reader's.
   const quiet = useRef(0);
 
@@ -192,8 +197,17 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
     if (!at.current) return;
     at.current = false;
     setPinned(false);
+  }, []);
+
+  const revealJumpIfFar = useCallback(() => {
+    const root = scroll.current;
+    if (!root || jumpVisible.current) return;
+    const away = root.scrollHeight - root.scrollTop - root.clientHeight;
+    const revealAt = Math.min(280, Math.max(160, root.clientHeight * 0.24));
+    if (away < revealAt) return;
+    jumpVisible.current = true;
     onPinned(false);
-  }, [onPinned]);
+  }, [scroll, onPinned]);
 
   useEffect(() => {
     const root = scroll.current;
@@ -213,8 +227,10 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       const top = root.scrollTop;
       const up = top < wasAt.current - 2;
       wasAt.current = top;
+      const away = root.scrollHeight - top - root.clientHeight;
+      revealJumpIfFar();
       if (!up || self.current || !at.current || performance.now() < quiet.current) return;
-      if (root.scrollHeight - top - root.clientHeight <= 48) return;
+      if (away <= 48) return;
       release();
     };
     root.addEventListener("wheel", onWheel, { passive: true });
@@ -229,7 +245,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       root.removeEventListener("touchmove", mark);
       root.removeEventListener("scroll", onScroll);
     };
-  }, [scroll, onPinned, release]);
+  }, [scroll, onPinned, release, revealJumpIfFar]);
 
   // One observer for every block, not one per block. Hundreds of separate
   // observers did not reliably report a block leaving — blocks stayed mounted
@@ -289,6 +305,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
         if (performance.now() - gesture.current > 400 && performance.now() > quiet.current) return;
         at.current = true;
         setPinned(true);
+        jumpVisible.current = false;
         onPinned(true);
       },
       { root, rootMargin: "0px 0px 48px 0px" },
@@ -330,6 +347,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       gesture.current = 0;
       at.current = false;
       setPinned(false);
+      jumpVisible.current = true;
       onPinned(false);
       // Measured against the scroller, not offsetTop: the nearest positioned
       // ancestor is .pane, which does not scroll, so offsetTop answers "where
@@ -364,6 +382,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
     if (!jump) return;
     at.current = true;
     setPinned(true);
+    jumpVisible.current = false;
     onPinned(true);
     follow();
   }, [jump, follow, onPinned]);
@@ -377,10 +396,11 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
     if (!el) return;
     const ro = new ResizeObserver(() => {
       if (at.current) follow();
+      else revealJumpIfFar();
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [follow]);
+  }, [follow, revealJumpIfFar]);
 
   // Only a message still being written can grow; anything else is final the
   // moment it lands, so the split is exactly one card wide.
@@ -422,7 +442,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   }, [entering, onEntered]);
   const owed = useMemo(() => new Set(entering), [entering]);
 
-  const rowProps = { owed, onApprove, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
+  const rowProps = { owed, onApprove, onFullAccess, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
 
   // What you said, and where it sits. Derived from the same blocks the
   // transcript renders, so a mark always knows which block holds it — that is
@@ -451,7 +471,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       ref={scroll}
       hidden={hidden}
     >
-      <Rail marks={marks} total={items.length} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} controls={scrollId} />
+      <Rail marks={marks} total={items.length} scroll={scroll} flow={flow} onJump={jumpTo} bound={!hidden} />
       <div className="flow-edge" aria-hidden="true" />
       {/* 空转录是「窗口的空白」，壁纸该在那儿；一有内容它就是内容了。 */}
       <div className="flow" ref={flow} data-empty={items.length === 0 ? "" : undefined}>
@@ -561,6 +581,7 @@ const Block = memo(function Block({
 interface RowHandlers {
   owed: Set<string>;
   onApprove: Props["onApprove"];
+  onFullAccess: Props["onFullAccess"];
   onPlan: Props["onPlan"];
   onAnswer: Props["onAnswer"];
   onForget: Props["onForget"];
@@ -615,6 +636,7 @@ const Row = memo(function Row({
   it,
   owed,
   onApprove,
+  onFullAccess,
   onPlan,
   onForget,
   onCancelQueued,
@@ -680,7 +702,7 @@ const Row = memo(function Row({
     case "guardian":
       return <GuardianCard g={it.g} />;
     case "approval":
-      return <ApprovalCard item={it} onApprove={onApprove} onPlan={onPlan} />;
+      return <ApprovalCard item={it} onApprove={onApprove} onFullAccess={onFullAccess} onPlan={onPlan} />;
     case "ask":
       return <AskCard item={it} onAnswer={onAnswer} />;
     case "compaction":

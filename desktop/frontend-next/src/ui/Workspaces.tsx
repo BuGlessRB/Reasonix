@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode, memo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/hub";
 import type { Adder } from "./addws";
@@ -62,7 +63,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   const [sessionMenu, setSessionMenu] = useState("");
   const [sessionMenuAt, setSessionMenuAt] = useState({ left: 0, top: 0 });
   const sessionMenuBox = useRef<HTMLDivElement>(null);
-  useDismiss(!!sessionMenu, sessionMenuBox, () => setSessionMenu(""));
+  const sessionMenuPortal = useRef<HTMLDivElement>(null);
+  useDismiss(!!sessionMenu, sessionMenuBox, () => setSessionMenu(""), sessionMenuPortal);
   // What was already sent for this session, so Enter's commit and the blur it
   // causes do not both reach the host with the same name.
   const renamed = useRef<Record<string, string>>({});
@@ -205,25 +207,6 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
 
   return (
     <>
-      {/* Naming a folder by typing it is the same thing as naming it with the
-          picker: one intent, two ways in, and the id belongs to the intent —
-          which is why this is the id the empty transcript's own button already
-          carries. */}
-      {adder.typing === "rail" && (
-        <form
-          className="addpath"
-          data-action-submit="workspace.add"
-          onSubmit={(ev) => {
-            ev.preventDefault();
-            const input = ev.currentTarget.elements.namedItem("path") as HTMLInputElement | null;
-            adder.setTyping("");
-            adder.addPath(input?.value ?? "");
-          }}
-        >
-          <input name="path" autoFocus placeholder={t("文件夹的完整路径")} onBlur={() => adder.setTyping("")} />
-        </form>
-      )}
-
       <div className="scroll">
         <div role="tree" aria-label={t("机器、工作区与会话")} data-action-keydown="tree.navigate" ref={treeKeys.ref} onKeyDown={treeKeys.onKeyDown}>
           {/* This machine is the first row of the list rather than another kind of
@@ -252,7 +235,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
               data-action="workspace.add"
               onClick={(ev) => {
                 ev.stopPropagation();
-                adder.add("rail");
+                adder.add();
               }}
             >
               <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -452,8 +435,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         >
                           <StudioIcon name="more" />
                         </button>
-                        {sessionMenu === session.path && (
-                          <div className="session-pop" role="menu" aria-label={t("会话操作")} style={sessionMenuAt} onClick={(ev) => ev.stopPropagation()}>
+                        {sessionMenu === session.path && createPortal(
+                          <div ref={sessionMenuPortal} className="session-pop" role="menu" aria-label={t("会话操作")} style={sessionMenuAt} onClick={(ev) => ev.stopPropagation()}>
                             <div className="session-pop-head">
                               <b>{session.title || session.name}</b>
                               <small>{session.runtimeId && liveIds([session.runtimeId]).length ? t("执行中") : t("已完成")} · {t("本地工作区")}</small>
@@ -496,7 +479,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                                 <StudioIcon name="trash" /><span>{t("删除会话")}</span>
                               </button>
                             </div>
-                          </div>
+                          </div>,
+                          document.body,
                         )}
                       </div>
                       {open &&

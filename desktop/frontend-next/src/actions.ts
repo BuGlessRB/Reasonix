@@ -111,6 +111,7 @@ export const ACTIONS: UIAction[] = [
   //    on data-value: the kernel takes one decision with an answer, not three
   //    calls named after button text.
   { id: "decision.tool", kind: "interaction", target: "entity", proof: "authority-effect" },
+  { id: "decision.full-access", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "decision.plan", kind: "interaction", target: "entity", proof: "authority-effect" },
 
   // ── Capabilities ─────────────────────────────────────────────────────────
@@ -165,6 +166,8 @@ export const ACTIONS: UIAction[] = [
   // because reaching a view from the bar and from the detail menu is one intent
   // in two places, not two things a person can do.
   { id: "pane.view", kind: "view", target: "none", proof: "interaction" },
+  { id: "analysis.signal", kind: "view", target: "entity", proof: "interaction" },
+  { id: "analysis.row", kind: "view", target: "entity", proof: "interaction" },
   { id: "pane.dock", kind: "view", target: "none", proof: "interaction" },
   // The agent's browser as a person watches it: which of its pages is drawn,
   // and the controls a person has over the page on screen. They reach the
@@ -175,7 +178,6 @@ export const ACTIONS: UIAction[] = [
   { id: "transcript.find", kind: "view", target: "none", proof: "interaction" },
   { id: "turn.edit", kind: "view", target: "entity", proof: "interaction" },
   { id: "turn.resend", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
-  { id: "transcript.scroll", kind: "navigation", target: "none", proof: "browser" },
   { id: "session.new", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   // The bytes reach the host as the file is chosen, before anything is sent:
   // the picker's button only opens a dialog, and this is where the upload is.
@@ -190,7 +192,6 @@ export const ACTIONS: UIAction[] = [
   // state — which is why it is one id and why it is not a mutation.
   { id: "external.open", kind: "shell-native", target: "none", proof: "interaction" },
   { id: "remote-host.remove", kind: "destructive", target: "none", proof: "authority-effect" },
-  { id: "task.summarize-phase", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "workspace.remove", kind: "destructive", target: "none", proof: "authority-effect" },
   { id: "extensions.invoke", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
 
@@ -217,8 +218,10 @@ export const ACTIONS: UIAction[] = [
   { id: "rewind.undo", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   { id: "extensions.submit", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "provider.probe", kind: "repeatable", target: "none", proof: "interaction" },
+  { id: "provider.draft", kind: "interaction", target: "none", proof: "interaction" },
   { id: "provider.model-check", kind: "repeatable", target: "entity", proof: "interaction" },
   { id: "provider.add", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "provider.add-start", kind: "view", target: "none", proof: "interaction" },
   { id: "provider.save", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "roles.model", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "permissions.rule-level", kind: "kernel-mutation", target: "none", proof: "authority-effect" },

@@ -23,7 +23,13 @@ const EXPLICIT_APPROVAL: Record<string, string> = {
 };
 
 function approvalReason(a: { reason?: string; reasonCode?: string }): string {
-  return (a.reasonCode && t(EXPLICIT_APPROVAL[a.reasonCode])) || a.reason || "";
+  if (a.reasonCode && EXPLICIT_APPROVAL[a.reasonCode]) return t(EXPLICIT_APPROVAL[a.reasonCode]);
+  // Older kernels only sent the English sentence. Keep that compatibility
+  // path readable instead of exposing an implementation message in a Chinese UI.
+  if (a.reason?.toLowerCase().includes("nested or indirect shell execution")) {
+    return t(EXPLICIT_APPROVAL.dynamic_bash);
+  }
+  return a.reason || "";
 }
 
 import type { PlanAction } from "../../port/session";
@@ -32,14 +38,18 @@ export type { PlanAction };
 interface Props {
   item: Extract<Item, { t: "approval" }>;
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => Promise<void>;
+  onFullAccess: (itemId: string) => Promise<void>;
   onPlan: (itemId: string, id: string, action: PlanAction) => Promise<void>;
 }
 
 // The run is genuinely blocked here until Approve() resolves it, so this card
 // must be the only way past — no other control may advance the queue.
-export function ApprovalCard({ item, onApprove, onPlan }: Props) {
+export function ApprovalCard({ item, onApprove, onFullAccess, onPlan }: Props) {
   const sealed = item.verdict !== undefined;
   const [submitting, setSubmitting] = useState<ApprovalVerdict | "">("");
+  const [confirmFullAccess, setConfirmFullAccess] = useState(false);
+  const [switchingFullAccess, setSwitchingFullAccess] = useState(false);
+  const explicit = !!item.a.reasonCode || item.a.reason?.toLowerCase().includes("nested or indirect shell execution");
   const decide = async (verdict: ApprovalVerdict) => {
     if (submitting) return;
     setSubmitting(verdict);
@@ -49,19 +59,28 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
       setSubmitting("");
     }
   };
+  const useFullAccess = async () => {
+    if (switchingFullAccess) return;
+    setSwitchingFullAccess(true);
+    try {
+      await onFullAccess(item.id);
+    } finally {
+      setSwitchingFullAccess(false);
+    }
+  };
   if (item.a.kind === "plan" || item.a.tool === PLAN_TOOL) return <PlanGate item={item} onPlan={onPlan} />;
   return (
     // 咨询与授权此前共用 data-k="ask" 和同一个「?」：一个是模型想听你的意见，
     // 另一个是它要动你的文件。授权借「写」的类别 —— 它本来就是一次写权限。
-    <div className="call" data-k="write">
+    <div className="call" data-k="write" data-approval={sealed ? item.verdict : "pending"}>
       <div className="g">
-        <Sym glyph="⚿" />
+        <Sym glyph="⊛" />
         <span className="line" />
       </div>
       <div className="c">
         <div className="hl">
           <span className="nm">{item.a.tool === FENCE_TOOL ? t("要求扩大可改范围") : t("请求执行权限")}</span>
-          <span className="tag">{t("授权")}</span>
+          <span className="tag">{sealed ? t("已处理") : t("等待确认")}</span>
         </div>
         <div className="out">
           <div className="apv" data-sealed={sealed ? item.verdict : undefined} aria-busy={!!submitting}>
@@ -69,7 +88,12 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
               <span className="tool">{item.a.tool === FENCE_TOOL ? t("这个子任务声明之外的文件") : item.a.tool}</span>
               <span className="sub" title={item.a.subject}>{item.a.subject}</span>
             </div>
-            {approvalReason(item.a) && <div className="apv-dt">{approvalReason(item.a)}</div>}
+            {approvalReason(item.a) && (
+              <div className="apv-dt">
+                <span className="apv-dt-label">{t("需要确认的原因")}</span>
+                <span>{approvalReason(item.a)}</span>
+              </div>
+            )}
             {!sealed && (
               <div className="apv-ft">
                 <button className="btn" data-primary data-action="decision.tool" data-target={item.a.id} data-value="once"
@@ -82,7 +106,7 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
                 {item.a.allowsSession && (
                   <button className="btn" data-weak="" data-action="decision.tool" data-target={item.a.id} data-value="session"
                     disabled={!!submitting} onClick={() => void decide("session")}>
-                    {t("本会话都允许")}
+                    {t(explicit ? "本会话不再询问" : "本会话都允许")}
                   </button>
                 )}
                 {item.a.allowsPersist && (
@@ -95,6 +119,23 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
                   disabled={!!submitting} onClick={() => void decide("deny")}>
                   {t("拒绝")}
                 </button>
+                {explicit && (
+                  <button className="btn" data-weak="" data-yolo="" data-action="decision.full-access"
+                    disabled={!!submitting} onClick={() => setConfirmFullAccess(true)}>
+                    {t("切换全部放行…")}
+                  </button>
+                )}
+              </div>
+            )}
+            {!sealed && confirmFullAccess && (
+              <div className="apv-yolo-confirm" role="alertdialog" aria-label={t("确认切换全部放行")}>
+                <div><b>{t("全部放行会跳过后续工具确认")}</b><span>{t("拒绝规则与沙盒边界仍然生效。仅在完全信任当前工作区时使用。")}</span></div>
+                <div>
+                  <button className="btn" disabled={switchingFullAccess} onClick={() => setConfirmFullAccess(false)}>{t("返回")}</button>
+                  <button className="btn" data-yolo-confirm="" disabled={switchingFullAccess} onClick={() => void useFullAccess()}>
+                    {switchingFullAccess ? t("正在切换…") : t("确认全部放行")}
+                  </button>
+                </div>
               </div>
             )}
             {sealed && (
@@ -103,6 +144,8 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
                   <><b>{t("本会话不再询问此类操作。")}</b>{t("内核已记入会话授权，不写入磁盘。")}</>
                 ) : item.verdict === "always" ? (
                   <><b>{t("已保存为规则。")}</b>{t("已写入配置，后续会话也不再询问此类操作。")}</>
+                ) : item.verdict === "yolo" ? (
+                  <><b>{t("已切换全部放行。")}</b>{t("后续工具不再请求确认；拒绝规则与沙盒边界仍然生效。")}</>
                 ) : item.verdict === "deny" ? (
                   <><b>{t("已拒绝。")}</b>{t("agent 已收到拒绝，将改用其他方式或终止。")}</>
                 ) : item.verdict === "unknown" ? (

@@ -12,6 +12,11 @@ const pack: ThemePack = {
   },
 };
 
+const illustrated: ThemePack = {
+  ...pack,
+  background: { image: true, focusX: 0.5, focusY: 0.5, safeArea: "left", homeOpacity: 0.96, taskOpacity: 0.18, overlayStrength: 0.72 },
+};
+
 const read = (name: string) => document.documentElement.style.getPropertyValue(name).trim();
 
 afterEach(() => apply(null, "light"));
@@ -48,5 +53,12 @@ describe("a pack's inks answer to the reader's contrast", () => {
     apply(pack, "light", false, "strong");
     expect(read("--page")).toBe("#FFFFFF");
     expect(read("--accent")).toBe("#0066CC");
+  });
+
+  it("uses a gentler illustration scrim in light mode", () => {
+    apply(illustrated, "light");
+    expect(Number(read("--bg-overlay"))).toBeCloseTo(0.72 * 0.58);
+    apply(illustrated, "dark");
+    expect(Number(read("--bg-overlay"))).toBeCloseTo(0.72);
   });
 });

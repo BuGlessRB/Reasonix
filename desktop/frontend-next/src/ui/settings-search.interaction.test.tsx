@@ -85,7 +85,7 @@ describe("finding a setting", () => {
     await userEvent.type(find(), "柔和");
     await userEvent.click(await screen.findByRole("option", { name: /文字对比度/ }));
     await waitFor(() => expect(block("contrast")).toBeTruthy());
-    expect(document.querySelector<HTMLDetailsElement>("details.advset")?.open).toBe(true);
+    expect(block("contrast")?.closest<HTMLDetailsElement>("details.advset")?.open).toBe(true);
   });
 
   // An alias is a way in. "代理" is not what this setting is called, and the

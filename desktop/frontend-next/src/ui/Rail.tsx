@@ -26,21 +26,15 @@ interface Props {
   scroll: RefObject<HTMLDivElement | null>;
   flow: RefObject<HTMLDivElement | null>;
   onJump: (mark: RailMark) => void;
-  // Dragging the box is the reader moving, and the follow has to be told so —
-  // the same release a wheel gets.
-  onGrab: () => void;
   // Only the transcript on screen answers the keys; a pane on another tab keeps
   // its rail but must not fight for them.
   bound: boolean;
-  controls: string;
 }
 
-// The rail is a fisheye, not a map. Marks sit together in the middle at a fixed
-// step, so the list reads as a list — placing them by their position in the
-// transcript drew how much each turn produced instead, and a turn that ran
-// twenty tools landed ten times further from its neighbour than one that ran
-// two (measured: gaps from 14 to 171px). Where the reader is in the transcript
-// is what the viewport box already says; this is what you asked, in order.
+// The native scrollbar owns continuous position. The semantic rail is a compact
+// fisheye index, like Codex: questions stay together in reading order and only
+// the neighbourhood under the pointer expands. Spreading sparse turns across
+// the full height makes two messages look like unrelated controls.
 const STEP = 9;
 const PAD = 26;
 
@@ -51,12 +45,12 @@ const PAD = 26;
 const REACH = 5;
 
 function layout(count: number, rail: number) {
-  if (count <= 0) return { tops: [] as number[], step: STEP };
+  if (count <= 0) return [] as number[];
   const room = Math.max(0, rail - PAD * 2);
   const step = count > 1 ? Math.min(STEP, room / (count - 1)) : STEP;
   const span = (count - 1) * step;
   const start = rail / 2 - span / 2;
-  return { tops: Array.from({ length: count }, (_, i) => start + i * step), step };
+  return Array.from({ length: count }, (_, i) => start + i * step);
 }
 
 /** How strongly a mark answers the focus: 1 at it, 0 beyond REACH. */
@@ -66,18 +60,25 @@ function pull(i: number, focus: number): number {
   return d > REACH ? 0 : (Math.cos((Math.PI * d) / REACH) + 1) / 2;
 }
 
-export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, controls }: Props) {
+/** Convert a pointer position from the screen-sized rectangle into the rail's
+ * layout coordinate system. CSS zoom changes the former but clientHeight and
+ * the mark tops stay in the latter, so subtracting the two directly drifts in
+ * compact and enlarged interface modes. */
+export function railLocalY(clientY: number, rectTop: number, rectHeight: number, railHeight: number): number {
+  if (rectHeight <= 0 || railHeight <= 0) return 0;
+  return (clientY - rectTop) * (railHeight / rectHeight);
+}
+
+export function Rail({ marks, total, scroll, flow, onJump, bound }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const [tops, setTops] = useState<number[]>([]);
-  const [view, setView] = useState({ top: 0, height: 0 });
   const [at, setAt] = useState(-1);
   // Which mark the keys last walked to. Kept apart from `at`, which the pointer
   // owns: hovering somewhere else must not move where the keys resume from.
   const here = useRef(-1);
-  // Content height and rail height, read when they change rather than per
-  // frame: a follow writes scrollTop every frame and must not pay a layout for
-  // this on the way.
-  const geom = useRef({ content: 1, rail: 1 });
+  // Rail height is read when the surface changes rather than on every streamed
+  // frame.
+  const geom = useRef({ rail: 1 });
 
   const measure = useCallback(() => {
     const root = scroll.current;
@@ -86,12 +87,8 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, contro
     if (!root || !inner || !box) return;
     const rail = root.clientHeight;
     box.style.setProperty("--rail-h", rail + "px");
-    geom.current = { content: root.scrollHeight || 1, rail };
-    setTops(layout(marks.length, rail).tops);
-    setView({
-      top: (root.scrollTop / (root.scrollHeight || 1)) * rail,
-      height: Math.max(16, (root.clientHeight / (root.scrollHeight || 1)) * rail),
-    });
+    geom.current = { rail };
+    setTops(layout(marks.length, rail));
   }, [marks, total, scroll, flow]);
 
   // Deferred for the same reason the size observer below is: measure() reads
@@ -107,13 +104,6 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, contro
     const root = scroll.current;
     const inner = flow.current;
     if (!root || !inner) return;
-    // Scrolling only moves the viewport box, and that needs no measurement —
-    // the two heights it divides by were captured when they last changed.
-    const onScroll = () => {
-      const { content, rail } = geom.current;
-      setView((v) => ({ ...v, top: (root.scrollTop / content) * rail }));
-    };
-    root.addEventListener("scroll", onScroll, { passive: true });
     // One measurement per frame, not one per mutation. Mounting a long
     // transcript resizes the content once per block, and measure() reads
     // clientHeight and scrollHeight — a forced layout apiece, then a state
@@ -129,27 +119,25 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, contro
     ro.observe(inner);
     ro.observe(root);
     return () => {
-      root.removeEventListener("scroll", onScroll);
       if (raf) cancelAnimationFrame(raf);
       ro.disconnect();
     };
   }, [scroll, flow, measure]);
 
-  // ⌘↑ / ⌘↓ walk the marks. Which one you are "at" is decided by the viewport,
+  // Ctrl/⌘ + ↑/↓ walks the marks. Which one you are "at" is decided by the viewport,
   // not by a cursor the rail would have to keep: the nearest mark above the top
   // of the view is where you are, so the keys agree with what you can see.
   useEffect(() => {
     if (!bound) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+      if (!(e.metaKey || e.ctrlKey) || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable)) return;
       const root = scroll.current;
       if (!root || tops.length === 0) return;
       const up = e.key === "ArrowUp";
-      // Walk the marks themselves. Comparing the viewport's pixel position
-      // against mark positions would mix two rulers — the marks are placed by
-      // entry count now, precisely so that mounting cannot move them.
+      // Walk the marks themselves. The nearest starting point is derived from
+      // the same transcript fraction used by the overview ruler.
       let pick: number;
       if (here.current >= 0) {
         pick = here.current + (up ? -1 : 1);
@@ -157,8 +145,7 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, contro
         // Nothing walked yet: start from whichever mark the viewport is nearest,
         // which is the one fraction of the transcript it is showing. Measured
         // against where each message sits in the transcript, not against the
-        // rail — the rail is a cluster in the middle and its geometry says
-        // nothing about how far down the record a mark is.
+        // overview track rather than any currently mounted card geometry.
         const seen = Math.min(1, root.scrollTop / Math.max(1, root.scrollHeight - root.clientHeight));
         const place = (i: number) => marks[i].at / Math.max(1, total);
         const near = marks.reduce((best, _m, i) => (Math.abs(place(i) - seen) < Math.abs(place(best) - seen) ? i : best), 0);
@@ -188,58 +175,23 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, contro
         best = i;
       }
     });
-    // Anywhere in the cluster picks the nearest, plus a margin outside it so
-    // the ends are no harder to reach than the middle. It was 120px, from when
-    // the marks were spread over the whole track and the nearest one could be
-    // that far; they now sit within a step of each other.
+    // Give every two-pixel mark a generous hit corridor; the visible line can
+    // stay quiet without demanding pixel-perfect pointing.
     setAt(dist <= 40 ? best : -1);
-  };
-
-  // Dragging the viewport box scrolls, because it is now the only scroll
-  // indicator this transcript has — the native bar is hidden, two things saying
-  // "you are here" side by side being the thing that made it look doubled.
-  const drag = (e: React.PointerEvent) => {
-    const root = scroll.current;
-    const nav = e.currentTarget.parentElement;
-    if (!root || !nav) return;
-    e.preventDefault();
-    e.stopPropagation();
-    onGrab();
-    const from = e.clientY;
-    const start = root.scrollTop;
-    const { rail } = geom.current;
-    // What can be dragged is the track minus the box; what it covers is the
-    // content minus one screen. Using rail-over-content instead makes every
-    // drag fall behind the pointer by exactly the ratio of those two.
-    //
-    // Both are read per move, not captured on grab: blocks mount as the drag
-    // travels and the content grows under it, which otherwise leaves the box
-    // a few percent ahead of the pointer by the end. A drag is a handful of
-    // events, so the layout it costs is nothing next to a streaming frame.
-    const move = (ev: PointerEvent) => {
-      const content = root.scrollHeight || 1;
-      const box = Math.max(16, (root.clientHeight / content) * rail);
-      const track = Math.max(1, rail - box);
-      root.scrollTop = start + ((ev.clientY - from) / track) * Math.max(0, content - root.clientHeight);
-    };
-    const up = () => {
-      removeEventListener("pointermove", move);
-      removeEventListener("pointerup", up);
-    };
-    addEventListener("pointermove", move);
-    addEventListener("pointerup", up);
   };
 
   if (marks.length === 0) return null;
   const shown = at >= 0 ? marks[at] : null;
-  const viewPercent = Math.round((view.top / Math.max(1, geom.current.rail - view.height)) * 100);
 
   return (
     <div className="railhost" ref={host} aria-hidden={undefined}>
       <nav
         className="srail"
         aria-label={t("你说过的话")}
-        onMouseMove={(e) => aim(e.clientY - e.currentTarget.getBoundingClientRect().top)}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          aim(railLocalY(e.clientY, rect.top, rect.height, geom.current.rail));
+        }}
         onMouseLeave={() => setAt(-1)}
         onClick={(e) => {
           if (e.target !== e.currentTarget) return;
@@ -247,35 +199,6 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, contro
           if (i >= 0) onJump(marks[i]);
         }}
       >
-        <button
-          type="button"
-          className="srail-view"
-          data-action-pointerdown="transcript.scroll"
-          data-action-keydown="transcript.scroll"
-          style={{ top: view.top, height: view.height }}
-          role="scrollbar"
-          aria-label={t("你说过的话")}
-          aria-controls={controls}
-          aria-orientation="vertical"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.min(100, Math.max(0, viewPercent))}
-          onPointerDown={drag}
-          onKeyDown={(e) => {
-            const root = scroll.current;
-            if (!root) return;
-            const page = Math.max(40, root.clientHeight * .82);
-            if (e.key === "ArrowUp") root.scrollTop -= 40;
-            else if (e.key === "ArrowDown") root.scrollTop += 40;
-            else if (e.key === "PageUp") root.scrollTop -= page;
-            else if (e.key === "PageDown") root.scrollTop += page;
-            else if (e.key === "Home") root.scrollTop = 0;
-            else if (e.key === "End") root.scrollTop = root.scrollHeight;
-            else return;
-            e.preventDefault();
-            onGrab();
-          }}
-        />
         {marks.map((m, i) => {
           const lit = pull(i, at);
           return (
@@ -284,7 +207,7 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, contro
               className="srail-m"
               style={{ top: tops[i] ?? 0 }}
               data-on={i === at ? "" : undefined}
-              aria-label={m.text.slice(0, 40)}
+              aria-label={t("定位到你说的：{text}", { text: m.text.slice(0, 40) })}
               onFocus={() => setAt(i)}
               onBlur={() => setAt(-1)}
               onClick={() => onJump(m)}
@@ -306,7 +229,7 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound, contro
           role="tooltip"
         >
           <div className="hd">
-            <span className="n">{t("第 {n} 句", { n: at + 1 })}</span>
+            <span className="n">{t("你的第 {n} 条消息", { n: at + 1 })}</span>
             {shown.files > 0 && <span>{t("{n} 个文件", { n: shown.files })}</span>}
           </div>
           <div className="tx">{shown.text}</div>

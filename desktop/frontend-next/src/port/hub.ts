@@ -335,8 +335,23 @@ export class SseHub implements HubPort {
     }
   }
 
-  pickFolder() {
-    return this.shell.pickFolder();
+  async pickFolder() {
+    const shellPath = await this.shell.pickFolder();
+    if (shellPath !== null) return shellPath;
+
+    // A browser cannot reveal an absolute local path, but this UI is served by
+    // the loopback kernel on the same machine. Let that trusted local process
+    // open the platform picker; the page receives only the selected path.
+    const res = await fetch("/host/pick-folder", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: "{}",
+    });
+    if (res.status === 501) return null;
+    if (!res.ok) await SseHub.fail("/host/pick-folder", res);
+    const body = (await res.json()) as { path?: string };
+    return body.path ?? "";
   }
 
   portFor(rt: RuntimeView): AgentPort {

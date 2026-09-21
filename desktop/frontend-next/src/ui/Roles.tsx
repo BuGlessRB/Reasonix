@@ -98,13 +98,9 @@ function Slot({
         disabled={busy !== ""}
         onClick={onOpen}
       >
-        <i className="node" />
-        <span className="role">{name}</span>
-        {/* Keyed on the assignment so the value replays its entrance when it
-            changes — the row is the only thing that moved, and a silent swap
-            reads as nothing having happened. */}
+        <span className="rolecopy"><span className="role">{name}</span><span className="tag">{tag}</span></span>
         <span className="val" key={set || "follow"}>{set ? (chosen?.model ?? set) : t("跟随主模型")}</span>
-        <span className="tag">{set ? t("已指派") : tag}</span>
+        <i className="slotchev" aria-hidden="true">⌄</i>
       </button>
       {/* Kept conditional: .mgrp rounds its corners with overflow:hidden, released
           via :has(.rpick) only while the menu is open. Mounting it always would

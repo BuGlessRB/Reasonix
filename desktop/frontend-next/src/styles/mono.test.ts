@@ -25,7 +25,6 @@ const MARKS: Record<string, string> = {
   ah: "› — the affordance arrow",
   prompt: "› — the composer's own prompt character",
   esc: "Esc — a keycap, which is lettering on a key rather than prose",
-  "traj-saved": "carries the path it saved to",
   "oobe-brand": "the wordmark, deliberately set in the terminal's face",
   "oobe-sub": "the wordmark's eyebrow, set with it",
   "oobe-skip": "the third line of that same screen",
@@ -38,7 +37,7 @@ const MARKS: Record<string, string> = {
 const MIXED = new Set([
   "arg", "c", "cnt", "cost", "cur", "d", "delta", "dt", "fail", "glyph", "isolab", "k",
   "lb", "meta", "mk", "n", "nm", "ntimes", "path", "pill", "pt", "r", "rmtcand", "rt",
-  "sc", "sessmeta", "st", "sub", "sym", "sz", "tag", "tl-file", "u", "uspan", "v", "wsmeta",
+  "sc", "sessmeta", "st", "sub", "sym", "sz", "tag", "u", "uspan", "v", "wsmeta",
 ]);
 
 const TRANSLATORS = ["t", "tx", "plural"];

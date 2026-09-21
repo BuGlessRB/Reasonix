@@ -557,7 +557,7 @@ func (a *approvalManager) snapshotPrompts() ([]event.Approval, []event.Ask) {
 	defer a.mu.Unlock()
 	approvals := make([]event.Approval, 0, len(a.approvals))
 	for id, p := range a.approvals {
-		session, persist := ApprovalGrants(p.tool, p.fresh)
+		session, persist := approvalGrantsForRequest(p.tool, p.fresh, p.requireHuman)
 		approvals = append(approvals, event.Approval{
 			ID: id, Tool: p.tool, Subject: p.subject, Reason: p.reason, ReasonCode: ExplicitApprovalCode(p.tool, p.subject),
 			RawInput: append(json.RawMessage(nil), p.rawInput...), Fresh: p.fresh,
@@ -703,6 +703,19 @@ func ApprovalGrants(tool string, fresh bool) (session, persist bool) {
 		return allowsFreshSessionGrantTool(tool), false
 	}
 	return true, true
+}
+
+// approvalGrantsForRequest narrows the generic tool grant contract for calls
+// whose shape itself requires a person. An exact same-session grant is useful
+// for these calls, but a persisted broad rule is not: required-human checks do
+// not consult broad rules on the next launch, so offering "always" would make
+// a promise the runtime deliberately cannot keep.
+func approvalGrantsForRequest(tool string, fresh, requireHuman bool) (session, persist bool) {
+	session, persist = ApprovalGrants(tool, fresh)
+	if requireHuman {
+		persist = false
+	}
+	return session, persist
 }
 
 func allowsFreshSessionGrantTool(tool string) bool {

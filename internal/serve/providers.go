@@ -95,9 +95,10 @@ type providerView struct {
 	Preset bool `json:"preset"`
 	// The three no probe can answer: a wrong window moves compaction to the
 	// wrong moment, and a relay without its headers refuses every request.
-	ContextWindow int               `json:"contextWindow,omitempty"`
-	Headers       map[string]string `json:"headers,omitempty"`
-	ExtraBody     map[string]any    `json:"extraBody,omitempty"`
+	ContextWindow   int               `json:"contextWindow,omitempty"`
+	MaxOutputTokens int               `json:"maxOutputTokens,omitempty"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	ExtraBody       map[string]any    `json:"extraBody,omitempty"`
 	// Which request shape controls thinking here, as declared. Empty is "not
 	// declared", which is a different answer from "none" and the reason the
 	// effort ladder can come out empty on a relay.
@@ -136,6 +137,7 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 			Preset:             strings.TrimSpace(p.PresetID) != "",
 			ReasoningProtocol:  strings.ToLower(strings.TrimSpace(p.ReasoningProtocol)),
 			ContextWindow:      p.ContextWindow,
+			MaxOutputTokens:    p.MaxOutputTokens,
 			Headers:            p.Headers,
 			ExtraBody:          p.ExtraBody,
 		})
@@ -229,16 +231,21 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name       string   `json:"name"`
-		Kind       string   `json:"kind"`
-		BaseURL    string   `json:"baseUrl"`
-		APIKey     string   `json:"apiKey"`
-		Models     []string `json:"models"`
-		Default    string   `json:"default"`
-		AuthHeader bool     `json:"authHeader"`
-		NoProxy    bool     `json:"noProxy"`
-		Effort     string   `json:"effort"`
-		Vision     []string `json:"vision"`
+		Name              string            `json:"name"`
+		Kind              string            `json:"kind"`
+		BaseURL           string            `json:"baseUrl"`
+		APIKey            string            `json:"apiKey"`
+		Models            []string          `json:"models"`
+		Default           string            `json:"default"`
+		AuthHeader        bool              `json:"authHeader"`
+		NoProxy           bool              `json:"noProxy"`
+		Effort            string            `json:"effort"`
+		Vision            []string          `json:"vision"`
+		ContextWindow     int               `json:"contextWindow"`
+		MaxOutputTokens   int               `json:"maxOutputTokens"`
+		ReasoningProtocol *string           `json:"reasoningProtocol"`
+		Headers           map[string]string `json:"headers"`
+		ExtraBody         map[string]any    `json:"extraBody"`
 	}
 	if !decodeProviderBody(w, r, &body) {
 		return
@@ -248,6 +255,26 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	if body.ContextWindow < 0 || body.MaxOutputTokens < 0 {
+		refuse(w, http.StatusBadRequest, "provider.bad_token_limit", "token limits cannot be negative", nil)
+		return
+	}
+	entry.ContextWindow = body.ContextWindow
+	entry.MaxOutputTokens = body.MaxOutputTokens
+	if body.ReasoningProtocol != nil {
+		stored, ok := config.StoredReasoningProtocol(*body.ReasoningProtocol)
+		if !ok {
+			refuse(w, http.StatusBadRequest, "provider.bad_reasoning_protocol", "unsupported reasoning protocol", map[string]any{"protocol": *body.ReasoningProtocol})
+			return
+		}
+		entry.ReasoningProtocol = stored
+	}
+	entry.Headers = trimmedHeaders(body.Headers)
+	if path, ok := firstNullPath(body.ExtraBody, ""); ok {
+		refuse(w, http.StatusBadRequest, "provider.extra_body_null", fmt.Sprintf("extra body field %q cannot be null", path), map[string]any{"path": path})
+		return
+	}
+	entry.ExtraBody = body.ExtraBody
 	entry.APIKeyEnv = keyEnvForNewSource(entry.Name, entry.BaseURL, body.APIKey)
 	if key := strings.TrimSpace(body.APIKey); key != "" {
 		if _, err := config.SetCredential(entry.APIKeyEnv, key); err != nil {

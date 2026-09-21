@@ -8,6 +8,13 @@ export interface MenuItem {
   label: string;
   desc?: string;
   right?: string;
+  // Dense choice menus sometimes need one short machine-facing label beside
+  // the human one (for example "深入  High") without pushing that label to
+  // the far edge of the row.
+  meta?: string;
+  badge?: string;
+  strength?: number;
+  recommended?: boolean;
   plain?: boolean;
   divide?: boolean;
   // A group caption. It labels the rows under it and cannot be chosen, so it
@@ -41,13 +48,14 @@ interface Props {
   ariaPressed?: boolean;
   wrapClassName?: string;
   menuClassName?: string;
+  menuTitle?: ReactNode;
 }
 
 // data-* rides through to the item that raises the pick, the way Switch and Seg
 // carry theirs: the action's identity is written at the call site, and the
 // answer this menu gives is the item's own value.
 export function Picker({
-  label, items, current, onPick, place, align = "start", className, title, pending, triggerAction, ariaPressed, wrapClassName, menuClassName, ...id
+  label, items, current, onPick, place, align = "start", className, title, pending, triggerAction, ariaPressed, wrapClassName, menuClassName, menuTitle, ...id
 }: Props & { [K in `data-${string}`]?: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -188,6 +196,7 @@ export function Picker({
           hidden={!open}
           onKeyDown={arrows}
         >
+          {menuTitle && <div className="studio-picker-title">{menuTitle}</div>}
           {filtering && (
             <input
               ref={find}
@@ -221,13 +230,24 @@ export function Picker({
                   disabled={it.disabled}
                   data-on={it.value === current ? "" : undefined}
                   data-lead={it.value === lead ? "" : undefined}
+                  data-strength={it.strength}
+                  data-recommended={it.recommended ? "" : undefined}
                   onClick={() => take(it.value)}
                 >
                   <span className="dot" />
                   <span className="tx">
-                    <span className="lb">{it.label}</span>
+                    <span className="studio-item-line">
+                      <span className="lb">{it.label}</span>
+                      {it.meta && <span className="studio-item-meta">{it.meta}</span>}
+                      {it.badge && <span className="studio-item-badge">{it.badge}</span>}
+                    </span>
                     {it.desc && <span className="ds">{it.desc}</span>}
                   </span>
+                  {it.strength != null && (
+                    <span className="studio-effort-strength" aria-hidden="true">
+                      {[1, 2, 3, 4].map((level) => <i key={level} data-on={level <= (it.strength ?? 0) ? "" : undefined} />)}
+                    </span>
+                  )}
                   {it.right && <span className="rt">{it.right}</span>}
                 </button>
               )}

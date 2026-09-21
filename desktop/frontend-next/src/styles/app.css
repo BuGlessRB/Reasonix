@@ -3416,12 +3416,7 @@
     overflow-wrap: anywhere }
   .anchor .meta { display: block; margin-top: 3px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
 
-  .fan { position: relative }
-  .fan::before {
-    content: ""; position: absolute; left: 8.5px; top: 0; bottom: 19px; width: 1px;
-    background: var(--border); transform-origin: top;
-    animation: rail var(--t-panel) var(--ease-out) both;
-  }
+  .fan { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px }
   @keyframes rail { from { transform: scaleY(0) } to { transform: scaleY(1) } }
 
   .grp:has(.rpick) { position: relative; z-index: 5 }
@@ -3429,44 +3424,22 @@
 
   .slotbox { position: relative }
   .slot {
-    display: grid; grid-template-columns: 18px 52px minmax(0, 1fr) auto; gap: 12px;
-    align-items: center; width: 100%; padding: 9px 2px 9px 0; text-align: left;
-    background: none; border: 0; border-top: 1px solid var(--hair); cursor: pointer;
-    animation: card var(--t-card) var(--ease-out) both;
+    display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr) 14px; gap: 10px;
+    align-items: center; width: 100%; min-height: 58px; padding: 9px 11px; text-align: left;
+    background: var(--raised); border: 1px solid var(--hair); border-radius: var(--r-sm); cursor: pointer;
+    transition: border-color var(--t-line) var(--ease-out), background var(--t-line) var(--ease-out);
   }
-  .fan > .slotbox:last-child .slot { border-bottom: 1px solid var(--hair) }
-  .slot:hover { background: var(--overlay) }
+  .slot:hover { background: var(--overlay); border-color: var(--border) }
   .slot:disabled { cursor: default }
   .slot:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-  .slot .role { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--muted) }
-  .slot .val { min-width: 0; font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--ghost); overflow-wrap: anywhere;
-    animation: bumpup var(--t-line) var(--ease-out) both }
-  .slot .tag { font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost); white-space: nowrap }
-
-  @supports (grid-template-columns: subgrid) {
-    .fan { display: grid; grid-template-columns: 18px max-content minmax(0, 1fr) auto }
-    .slotbox { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid }
-    .slot { grid-column: 1 / -1; grid-template-columns: subgrid }
-  }
-
-  .slot .node {
-    justify-self: center; position: relative; z-index: 1; width: 9px; height: 9px;
-    border: 1.5px solid var(--ghost); border-radius: 50%; background: var(--page);
-    transition: border-color var(--t-line) var(--ease-out);
-  }
-  .slot .node::after {
-    content: ""; position: absolute; inset: 1px; border-radius: 50%; background: var(--deleg);
-    transform: scale(0); transition: transform var(--t-card) var(--ease-spring);
-  }
-  .slot[data-set] .node { border-color: var(--deleg) }
-  .slot[data-set] .node::after { transform: scale(1) }
-  .slot[data-set] .role { color: var(--deleg); font-weight: var(--w-semi) }
+  .slot .rolecopy { min-width: 0; display: flex; flex-direction: column; gap: 2px }
+  .slot .role { font: var(--w-semi) var(--fs-ui) var(--ui); color: var(--text) }
+  .slot .val { min-width: 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .slot .tag { font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .slot .slotchev { color: var(--ghost); font: var(--w-reg) var(--fs-ui) var(--ui); font-style: normal; transition: transform var(--t-line) var(--ease-out) }
+  .slot[aria-expanded="true"] .slotchev { transform: rotate(180deg) }
+  .slot[data-set] { border-color: color-mix(in srgb, var(--deleg) 30%, var(--hair)); background: color-mix(in srgb, var(--deleg) 5%, var(--raised)) }
   .slot[data-set] .val { color: var(--text) }
-  .slot[data-set] .tag { color: var(--deleg) }
-
-  .slot[data-borrowed] { cursor: default }
-  .slot[data-borrowed] .node { border-color: color-mix(in srgb, var(--deleg) 55%, transparent) }
-  .slot[data-borrowed] .tag { color: var(--faint) }
 
   .rpick {
     position: absolute; z-index: 30; top: calc(100% + 5px); left: 0; min-width: 260px;
@@ -3514,6 +3487,11 @@
     font: var(--w-med) var(--fs-meta) var(--ui);
   }
   .model-list-hd span:last-child { font-family: var(--mono); font-weight: var(--w-reg); color: var(--ghost) }
+
+  .models-scroll {
+    max-height: 360px; overflow-y: auto; overscroll-behavior: contain;
+    padding-right: 3px; scrollbar-gutter: stable;
+  }
 
   .mgrp { margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden;
     animation: card var(--t-card) var(--ease-out) both }
@@ -3696,11 +3674,65 @@
 
   .viabox .rpick { left: auto; right: 0; min-width: 172px }
 
-  .addp { border-top: 1px solid var(--hair); padding: 12px 0 2px }
+  .provider-toolbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 0 0 10px;
+  }
+  .provider-toolbar > span { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .provider-toolbar .act[data-primary] {
+    display: inline-flex; align-items: center; gap: 5px; min-height: 30px;
+    border-color: var(--text); background: var(--text); color: var(--page);
+  }
+  .provider-toolbar .act[data-primary] b { font: var(--w-reg) var(--fs-lead)/1 var(--ui) }
+
+  .addp {
+    margin: 0 0 14px; padding: 14px; border: 1px solid var(--border); border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--raised) 88%, var(--overlay));
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--shadow) 22%, transparent);
+  }
+  .addp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 13px }
+  .addp-head > div { min-width: 0 }
+  .addp-head .step, .addp-stage > span {
+    display: block; margin-bottom: 3px; font: var(--w-med) var(--fs-micro) var(--ui);
+    color: var(--faint); letter-spacing: var(--track-cap); text-transform: uppercase;
+  }
+  .addp-head strong { display: block; font: var(--w-semi) var(--fs-lead) var(--ui); color: var(--text) }
+  .addp-head p { margin: 4px 0 0; font: var(--w-reg) var(--fs-meta)/1.5 var(--ui); color: var(--muted) }
+  .addp-close {
+    flex: none; width: 28px; height: 28px; border: 0; border-radius: var(--r-xs);
+    background: transparent; color: var(--faint); font: var(--w-reg) var(--fs-title)/1 var(--ui); cursor: pointer;
+  }
+  .addp-close:hover { background: var(--overlay); color: var(--text) }
+  .addp-close:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .addp-stage {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 16px 0 10px; padding-top: 13px; border-top: 1px solid var(--hair);
+  }
+  .addp-stage > span { margin: 0 }
+  .addp-stage > i {
+    padding: 2px 7px; border-radius: var(--r-pill); font: var(--w-med) var(--fs-micro) var(--ui);
+    font-style: normal; color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent);
+  }
+  .addp-privacy { flex-basis: 100%; margin: -3px 0 0; font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost) }
+  .addp-auto { align-self: center; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .addp .fields { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px }
   .addp .fields label { display: flex; flex-direction: column; gap: 4px }
   .addp .fields label.grow { flex: 1; min-width: 150px }
   .addp .fields label.full { flex-basis: 100% }
+  .addp .fields .tip { font: var(--w-reg) var(--fs-micro)/1.45 var(--ui); font-style: normal; color: var(--ghost) }
+  .addp-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--hair) }
+  .addp-section.compact { margin-top: 12px }
+  .addp-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px }
+  .addp-section-head > div { min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px }
+  .addp-section-head strong { font: var(--w-semi) var(--fs-ui) var(--ui); color: var(--text) }
+  .addp-section-head span { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .addp-section-head .quiet { flex: none; background: transparent; color: var(--muted) }
+  .probe-ok { margin: 8px 0 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ok) }
+  .unit-field { display: flex; min-width: 0; align-items: stretch; border: 1px solid var(--border); border-radius: var(--r-xs); background: var(--raised); overflow: hidden }
+  .unit-field:focus-within { outline: 2px solid var(--focus); outline-offset: 1px }
+  .unit-field input { min-width: 0; width: 100%; border: 0 !important; outline: 0 !important; background: transparent !important }
+  .unit-field > i { flex: none; display: flex; align-items: center; padding: 0 9px; border-left: 1px solid var(--hair); color: var(--faint); font: var(--w-reg) var(--fs-micro) var(--mono); font-style: normal }
+  .addp-footer { justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--hair) }
 
   .addp .fields.compat { margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--hair) }
   .addp .fields.compat textarea {
@@ -3804,6 +3836,18 @@
     background: var(--accent-ink); transition: width var(--m-panel) ;
   }
   .cmp .note { margin-top: 8px }
+  .threshold-control { width: min(360px, 100%); display: flex; align-items: center; gap: 7px }
+  .threshold-control .unit-field { flex: 1 }
+  .threshold-control input { height: 30px; padding: 4px 8px; color: var(--text); font: var(--w-reg) var(--fs-ui) var(--mono) }
+  .threshold-presets { display: flex; align-items: center; gap: 3px }
+  .threshold-presets button { padding: 4px 6px; border: 1px solid var(--hair); border-radius: var(--r-xs); background: transparent; color: var(--muted); font: var(--w-reg) var(--fs-micro) var(--ui); cursor: pointer }
+  .threshold-presets button:hover { background: var(--overlay); color: var(--text); border-color: var(--border) }
+  .threshold-presets button:disabled { opacity: .4; cursor: default }
+
+  @media (max-width: 680px) {
+    .fan { grid-template-columns: 1fr }
+    .threshold-control { align-items: stretch; flex-direction: column }
+  }
 
   .expert { margin-top: 12px; display: flex; flex-direction: column; gap: 10px }
   .rule { padding: 10px 12px; border: 1px solid var(--hair); border-radius: var(--r-sm) }
@@ -4379,6 +4423,27 @@
   .extform[data-sealed] { opacity: .72 }
 
   .palettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(164px, 1fr)); gap: 14px 12px }
+  [data-setting="scheme"] .palettes { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)) }
+  .theme-more {
+    margin-top: 4px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair);
+  }
+  .theme-more > summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 11px 2px; list-style: none; cursor: pointer; color: var(--muted);
+  }
+  .theme-more > summary::-webkit-details-marker { display: none }
+  .theme-more > summary::before {
+    content: ""; width: 6px; height: 6px; flex: none; margin-right: -7px;
+    border-right: 1px solid currentColor; border-bottom: 1px solid currentColor;
+    transform: rotate(-45deg); transition: transform var(--m-line);
+  }
+  .theme-more[open] > summary::before { transform: rotate(45deg) }
+  .theme-more > summary > span:first-of-type { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 }
+  .theme-more > summary b { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
+  .theme-more > summary em { font: var(--w-reg) var(--fs-meta) var(--ui); font-style: normal; color: var(--faint) }
+  .theme-more > .palettes { padding: 5px 0 15px }
+  .personal { margin-top: 12px }
+  .personal > .grp { border-top: 1px solid var(--hair); margin-top: 0 }
   .pal { display: flex; flex-direction: column; gap: 7px; padding: 0; border: 0; background: none; text-align: left; cursor: pointer }
   .pal-art {
     position: relative; display: flex; aspect-ratio: 16 / 10; overflow: hidden;

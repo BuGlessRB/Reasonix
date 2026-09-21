@@ -4,18 +4,7 @@ import type { ProviderCheck, ProviderEntry } from "../port/port";
 import { clearModelCheckFacts, ModelChoice, type ModelFact } from "./ModelChoice";
 import type { Port } from "./Providers";
 import { reason } from "../i18n/kernel";
-
-// The reasoning vocabularies the kernel knows, in config's own spelling. Auto
-// is the absence of a declaration, not a seventh shape.
-const THINKING: [string, string][] = [
-  ["", "自动 · 按模型和地址推断"],
-  ["openai", "OpenAI reasoning_effort"],
-  ["anthropic", "Anthropic thinking"],
-  ["deepseek", "DeepSeek"],
-  ["glm", "GLM enable_thinking"],
-  ["kimi-k3", "Kimi K3"],
-  ["none", "不发思考参数"],
-];
+import { THINKING, headerLines, parseExtraBody, parseHeaders } from "./provider_compat";
 
 // Only what this form owns is sent: the entry keeps its prices, effort
 // vocabularies and everything else the panel cannot show.
@@ -42,6 +31,7 @@ export function EditConn({
   const [err, setErr] = useState("");
   const [more, setMore] = useState(false);
   const [win, setWin] = useState(entry.contextWindow ? String(entry.contextWindow) : "");
+  const [maxOut, setMaxOut] = useState(entry.maxOutputTokens ? String(entry.maxOutputTokens) : "");
   const [think, setThink] = useState(entry.reasoningProtocol ?? "");
   const [heads, setHeads] = useState(headerLines(entry.headers));
   const [extra, setExtra] = useState(entry.extraBody ? JSON.stringify(entry.extraBody, null, 2) : "");
@@ -141,6 +131,7 @@ export function EditConn({
         default: picked.includes(def) ? def : picked[0] ?? "",
         vision: vision.filter((m) => picked.includes(m)),
         contextWindow: Number(win.replace(/\D/g, "")) || 0,
+        maxOutputTokens: Number(maxOut.replace(/\D/g, "")) || 0,
         reasoningProtocol: think,
         headers: parseHeaders(heads),
         extraBody: parseExtraBody(extra) ?? {},
@@ -171,6 +162,24 @@ export function EditConn({
               setFacts(clearModelCheckFacts);
             }} disabled={busy !== "" || checkingModel !== ""} spellCheck={false} />
         </label>
+      </div>
+
+      <div className="addp-section compact">
+        <div className="addp-section-head">
+          <div><strong>{t("模型限制")}</strong><span>{t("不要依赖接口猜测，请按模型文档填写")}</span></div>
+        </div>
+        <div className="fields token-limits">
+          <label className="grow">
+            <span>{t("上下文窗口")}</span>
+            <span className="unit-field"><input aria-label={t("上下文窗口")} inputMode="numeric" value={win} placeholder={t("未声明")} onChange={(e) => setWin(e.target.value.replace(/\D/g, ""))} /><i>tokens</i></span>
+            <i className="tip">{t("模型可承载的输入、工具结果与输出总量。")}</i>
+          </label>
+          <label className="grow">
+            <span>{t("最大输出")}</span>
+            <span className="unit-field"><input aria-label={t("最大输出")} inputMode="numeric" value={maxOut} placeholder={t("自动")} onChange={(e) => setMaxOut(e.target.value.replace(/\D/g, ""))} /><i>tokens</i></span>
+            <i className="tip">{t("单轮生成上限；留空使用内核的模型默认值。")}</i>
+          </label>
+        </div>
       </div>
 
       <div className="mlist">
@@ -211,23 +220,11 @@ export function EditConn({
           answer, and most endpoints need none of them. */}
       <button className="more" aria-expanded={more} onClick={() => setMore((v) => !v)}>
         {t(more ? "收起" : "端点要求的额外设置")}
-        <span className="c">{compatSummary(win, heads, extra)}</span>
+        <span className="c">{compatSummary(heads, extra)}</span>
       </button>
 
       {more && (
         <div className="fields compat">
-          <label className="grow full">
-            <span>{t("上下文窗口（tokens）")}</span>
-            <input
-              inputMode="numeric"
-              value={win}
-              placeholder={t("留空表示使用内置的已知值；自行添加的来源没有内置值，将不进行压缩")}
-              onChange={(e) => setWin(e.target.value.replace(/\D/g, ""))}
-            />
-            <i className="tip">
-              {t("填模型文档写的上下文上限，不是最大输出。填小了会一直压缩，填大了会在真到上限时被端点拒绝。")}
-            </i>
-          </label>
           <label className="grow full">
             <span>{t("思考参数")}</span>
             <select value={think} onChange={(e) => setThink(e.target.value)}>
@@ -317,43 +314,8 @@ function catalogDiff(before: string[], found: string[]) {
   };
 }
 
-// The three compatibility fields move between a config object and the text the
-// user types. Headers are one "name: value" per line because that is how the
-// gateway's own documentation writes them.
-function headerLines(headers?: Record<string, string>): string {
-  return Object.entries(headers ?? {})
-    .map(([k, v]) => `${k}: ${v}`)
-    .join("\n");
-}
-
-function parseHeaders(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of text.split("\n")) {
-    const at = line.indexOf(":");
-    if (at <= 0) continue;
-    const name = line.slice(0, at).trim();
-    const value = line.slice(at + 1).trim();
-    if (name && value) out[name] = value;
-  }
-  return out;
-}
-
-// null means "typed but not valid JSON yet", which is different from an empty
-// object — the save button reads the difference rather than sending garbage.
-function parseExtraBody(text: string): Record<string, unknown> | null {
-  if (!text.trim()) return {};
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    return parsed as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function compatSummary(win: string, heads: string, extra: string): string {
+function compatSummary(heads: string, extra: string): string {
   const parts: string[] = [];
-  if (win.trim()) parts.push(win === "0" ? t("不压缩") : `${Number(win) / 1000}k`);
   const headCount = Object.keys(parseHeaders(heads)).length;
   if (headCount) parts.push(t("{n} 个头", { n: headCount }));
   const body = parseExtraBody(extra);

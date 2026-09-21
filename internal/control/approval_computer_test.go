@@ -94,6 +94,13 @@ func TestAnApprovalSaysWhichGrantsThisHostWillHonour(t *testing.T) {
 	}
 }
 
+func TestRequiredHumanApprovalKeepsExactSessionGrantButNotPersistentRule(t *testing.T) {
+	session, persist := approvalGrantsForRequest("bash", false, true)
+	if !session || persist {
+		t.Fatalf("required-human bash grants = session %v persist %v, want true false", session, persist)
+	}
+}
+
 // And the request carries that answer, so a frontend renders what the host
 // will act on rather than a menu of its own.
 func TestTheApprovalRequestCarriesItsGrants(t *testing.T) {

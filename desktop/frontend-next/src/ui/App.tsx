@@ -350,11 +350,13 @@ export function App({ hub }: { hub: HubPort }) {
     const paint = () => {
       const scheme = theme === "auto" ? (mq.matches ? "dark" : "light") : theme;
       document.documentElement.dataset.theme = scheme;
-      // Studio now has one authored visual system shared with the approved
-      // prototype. Legacy theme packs may still be managed in settings, but
-      // they must not repaint this shell or reintroduce the old background,
-      // glow and translucency rules over the product UI.
-      applyThemePack(null, scheme as "light" | "dark", running, contrast);
+      // The active pack is the same state shown by the appearance picker.
+      // Applying `null` here made activation persist in the kernel while the
+      // shell deliberately kept drawing the default palette, so a successful
+      // click looked broken until forever. Keep the authored Studio layout,
+      // but let the selected pack supply its documented colour/background
+      // tokens immediately.
+      applyThemePack(pack, scheme as "light" | "dark", running, contrast);
       // After the pack, never before: size and type are the reader's, and a
       // palette someone else authored does not get to overrule them.
       applyLook({ ...look, wallpaper: undefined }, running);
@@ -708,7 +710,7 @@ export function App({ hub }: { hub: HubPort }) {
                 <b>reasoni<span className="studio-brand-accent">x</span></b>
                 <small>studio</small>
               </span>
-              <button className="studio-collapse" data-action="chrome.rail" onClick={() => setRail(false)} aria-label={t("收起工作区栏")}><StudioIcon name="menu" /></button>
+              <button className="studio-collapse" data-action="chrome.rail" onClick={() => setRail(false)} aria-label={t("收起工作区栏")} title={t("收起侧栏")}><StudioIcon name="panel" /></button>
             </div>
             <button
               className="studio-new-task"
@@ -720,7 +722,7 @@ export function App({ hub }: { hub: HubPort }) {
             <button className="studio-search" data-action="workspace.search" onClick={() => document.querySelector<HTMLInputElement>(".wsfind input")?.focus()}>
               <span aria-hidden="true"><StudioIcon name="search" /></span>{t("搜索与快捷操作")}<kbd>Ctrl K</kbd>
             </button>
-            <div className="studio-section-label"><span>{t("工作空间")}</span><button data-action="workspace.add" onClick={() => adder.add("rail")} aria-label={t("添加工作区")}><StudioIcon name="plus" /></button></div>
+            <div className="studio-section-label"><span>{t("工作空间")}</span><button data-action="workspace.add" onClick={() => adder.add()} aria-label={t("添加工作区")} title={t("选择本地文件夹")}><StudioIcon name="plus" /></button></div>
             {activeWorkspace && (
               <div className="studio-workspace-switcher">
                 <button className="studio-current-workspace" data-action="workspace.switch" aria-haspopup="listbox" aria-expanded={showProjects} onClick={() => setShowProjects((v) => !v)} title={activeWorkspace.root}>
@@ -762,7 +764,7 @@ export function App({ hub }: { hub: HubPort }) {
                         );
                       })}
                     </div>
-                    <button className="studio-workspace-pop-add" data-action="workspace.add" onClick={() => { setShowProjects(false); adder.add("rail"); }}>
+                    <button className="studio-workspace-pop-add" data-action="workspace.add" onClick={() => { setShowProjects(false); adder.add(); }}>
                       <StudioIcon name="plus" /><span>{t("添加工作区")}</span>
                     </button>
                   </div>
@@ -881,10 +883,9 @@ export function App({ hub }: { hub: HubPort }) {
                   pulse={settingsPulse}
                   findPulse={findPulse}
                   needsProject={needsProject}
-                  // 手输那条逃生口只在侧栏有一份 UI，所以先把栏打开再问。
                   onOpenProject={() => {
                     setRail(true);
-                    adder.add("rail");
+                    adder.add();
                   }}
                   onKeepHere={() => {
                     localStorage.setItem("rx-claim", "off");

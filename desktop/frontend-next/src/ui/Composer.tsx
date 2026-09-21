@@ -73,6 +73,7 @@ interface Props {
   onChanged: () => void;
   onError: (e: unknown) => void;
   onSettings?: (section?: string) => void;
+  changeCount?: number;
 }
 
 // What is riding along with this turn. An attachment travels as bytes or a path
@@ -130,7 +131,7 @@ function releaseChip(c: Chip) {
 let chipSeq = 0;
 const chipId = () => `c${++chipSeq}`;
 
-export function Composer({ port, status, running, focus, onSubmit, onChanged, onError, onSettings = () => {} }: Props) {
+export function Composer({ port, status, running, focus, onSubmit, onChanged, onError, onSettings = () => {}, changeCount = 0 }: Props) {
   const [branch, setBranch] = useState("");
   useEffect(() => {
     let alive = true;
@@ -629,19 +630,6 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
               <span>{t("也可直接拖入或粘贴")}</span>
             </span>
           </button>
-        <Picker
-          wrapClassName="studio-model-control"
-          className="mode model-picker"
-          data-action="model.select"
-          place="bottom"
-          title={status?.modelRef ?? modelLb}
-          current={status?.modelRef}
-          items={modelMenu(models)}
-          pending={busy["model"]}
-          onPick={(ref) => ref === "__manage-models" ? onSettings("model") : change("model", () => port.setModel(ref))}
-          label={<><span className="modelmark" aria-hidden="true" /><span className="nm">{modelLb}</span><StudioIcon name="down" /></>}
-        />
-        <span className="sep" aria-hidden="true" />
         <div className="studio-mode-control">
           <Picker
             className="mode studio-mode-picker"
@@ -658,7 +646,7 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
               { value: "ask", label: "Ask", desc: t("直接回答，不调用工具"), disabled: true },
             ]}
             onPick={(value) => change("plan", () => port.setPlanMode(value === "plan"))}
-            label={<><StudioIcon name="spark" /><span className="studio-sr-label">{t("计划")}</span><span>{status?.plan ? "Plan" : "Agent"}</span><StudioIcon name="down" /></>}
+            label={<><StudioIcon name="agent" /><span className="studio-sr-label">{t("计划")}</span><span>{status?.plan ? "Plan" : "Agent"}</span><StudioIcon name="down" /></>}
           />
         </div>
         {branch && (
@@ -671,10 +659,11 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
             >
               <span className="ic" aria-hidden="true"><StudioIcon name="branch" /></span>
               <span className="lb">{branch}</span>
+              {changeCount > 0 && <small>{t("{n} 个变更", { n: changeCount })}</small>}
             </div>
             <div className="studio-branch-card" id={branchTipId} role="tooltip">
               <b>{t("当前分支 · {branch}", { branch })}</b>
-              <span>{t("当前工作区 · 后续任务继续使用此分支")}</span>
+              <span>{changeCount > 0 ? t("当前工作区 · {n} 个本地变更", { n: changeCount }) : t("当前工作区 · 后续任务继续使用此分支")}</span>
               <small>{t("仅作状态提示，无需点击")}</small>
             </div>
           </div>
@@ -689,33 +678,53 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
           </span>
         )}
         <Policy port={port} status={status} onChanged={onChanged} onBoundary={() => onSettings("tools:sandbox")} />
-        {/* 推理强度只在这里出现一次。它属于模型能力，不属于执行权限。 */}
-        {status && (
-          <div className="studio-effort-control">
-            <Picker
-              className="mode studio-effort-picker"
-              data-action="reasoning.effort"
-              place="bottom"
-              align="end"
-              title={t("推理强度")}
-              current={status.effort || "auto"}
-              pending={busy["effort"]}
-              items={[
-                { value: "__effort-heading", label: t("推理强度"), right: modelLb, header: true },
-                ...(efforts.length ? efforts : ["auto"]).map((value) => ({
-                  value,
-                  label: effortLabel(value),
-                  right: effortApi(value),
-                  desc: effortDescription(value),
-                })),
-                { value: "__effort-note", label: t("仅显示当前模型实际支持的档位。"), right: t("按模型生效"), header: true },
-              ]}
-              onPick={(value) => change("effort", () => port.setEffort(value))}
-              label={<><span>{effortReading(status.effort)}</span><StudioIcon name="down" /></>}
-            />
-          </div>
-        )}
         <span className="turntools-spacer" aria-hidden="true" />
+        <div className="studio-model-group">
+          <Picker
+            wrapClassName="studio-model-control"
+            className="mode model-picker"
+            data-action="model.select"
+            place="bottom"
+            title={status?.modelRef ?? modelLb}
+            current={status?.modelRef}
+            items={modelMenu(models)}
+            menuClassName="studio-model-menu"
+            menuTitle={<><b>{t("选择模型")}</b><small>{t("用于后续任务")}</small></>}
+            pending={busy["model"]}
+            onPick={(ref) => ref === "__manage-models" ? onSettings("model") : change("model", () => port.setModel(ref))}
+            label={<><span className="nm">{modelLb}</span><StudioIcon name="down" /></>}
+          />
+          {/* 推理强度属于模型能力，因此与模型共用一组轮廓。 */}
+          {status && (
+            <div className="studio-effort-control">
+              <Picker
+                className="mode studio-effort-picker"
+                data-action="reasoning.effort"
+                place="bottom"
+                align="end"
+                menuClassName="studio-effort-menu"
+                title={t("推理强度")}
+                current={status.effort || "auto"}
+                pending={busy["effort"]}
+                items={[
+                  { value: "__effort-heading", label: t("推理强度"), right: modelLb, header: true },
+                  ...(efforts.length ? efforts : ["auto"]).map((value) => ({
+                    value,
+                    label: effortLabel(value),
+                    meta: effortApi(value),
+                    badge: value === "auto" ? t("推荐") : undefined,
+                    recommended: value === "auto",
+                    strength: value === "disabled" ? 0 : ({ auto: 1, low: 1, medium: 2, high: 3, xhigh: 4, max: 4 } as Record<string, number>)[value.toLowerCase()] ?? 1,
+                    desc: effortDescription(value),
+                  })),
+                  { value: "__effort-note", label: t("仅显示当前模型实际支持的档位。"), right: t("按模型生效"), header: true },
+                ]}
+                onPick={(value) => change("effort", () => port.setEffort(value))}
+                label={<><span>{effortReading(status.effort)}</span><StudioIcon name="down" /></>}
+              />
+            </div>
+          )}
+        </div>
         </div>
         <span className="go">
           {running && (

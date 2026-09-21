@@ -512,6 +512,14 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
 
           {at === "model" && (
             <>
+              <Group id="providers"
+                title={t("模型来源")}
+                hint={t("先连接模型服务，再从其目录选择主模型。自定义中转站可以命名，协议与模型会在连接后自动探测。")}
+              >
+                <Providers port={port} onChanged={loadModels} onFailed={setFailed} protocol={protocol}
+                  activeKindFor={(a) => kindFor(a.key)}
+                  onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
+              </Group>
               <Group id="model" title={t("主模型")} now={nav.model} hint={t("用于当前对话和大多数任务。切换会保留对话并重建运行时；任务执行期间无法修改。端点没有声明的能力不会显示标签。")}>
                 <Models models={models} current={status?.modelRef} busy={busy} protocol={protocol}
                   onPick={(ref) => run(ref, () => port.setModel(ref))} />
@@ -531,14 +539,6 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
               ) : (
                 <Group id="effort" title={t("推理强度")} hint={t("当前模型未提供可调的推理档位，因此不显示该选项。")} />
               )}
-              <Group id="providers"
-                title={t("模型来源")}
-                hint={t("管理供应商、API 地址、协议和密钥。模型列表从端点读取；未列出的模型也可以按原始 ID 添加并验证。")}
-              >
-                <Providers port={port} onChanged={loadModels} onFailed={setFailed} protocol={protocol}
-                  activeKindFor={(a) => kindFor(a.key)}
-                  onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
-              </Group>
               <Group id="context" title={t("上下文维护")}
                 hint={t("默认按模型容量自动整理。自定义中转站若无法提供最大上下文，先按 160k 计算；你可以在这里填写实际容量。")}>
                 <Compaction port={port} onChanged={onChanged} />

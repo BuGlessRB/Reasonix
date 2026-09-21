@@ -460,6 +460,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("GET /runtimes", h.listRuntimes)
 	mux.HandleFunc("POST /runtimes", h.openRuntime)
 	mux.HandleFunc("POST /runtimes/{id}/close", h.closeRuntime)
+	mux.HandleFunc("POST /host/pick-folder", h.pickLocalFolderHTTP)
 	mux.HandleFunc("GET /remotes", h.listRemoteHosts)
 	mux.HandleFunc("POST /remotes", h.saveRemoteHost)
 	mux.HandleFunc("GET /remotes/candidates", h.remoteCandidates)

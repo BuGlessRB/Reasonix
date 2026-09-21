@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import "./testkit";
 import { Transcript } from "./Transcript";
 import type { Item } from "../state/session";
@@ -12,15 +12,16 @@ afterEach(cleanup);
 
 const user = (id: string, text: string): Item => ({ t: "user", id, text });
 
-function draw(items: Item[], entering: string[], hidden = false) {
+function draw(items: Item[], entering: string[], hidden = false, onPinned = () => {}) {
   const onEntered = vi.fn();
   const noop = async () => undefined as never;
+  const scroll = { current: null as HTMLDivElement | null };
   const view = render(
     <Transcript
       items={items} entering={entering} onEntered={onEntered} revision={1}
-      waiting={{}} scroll={{ current: null }} hidden={hidden} onPinned={() => {}}
+      waiting={{}} scroll={scroll} hidden={hidden} onPinned={onPinned}
       jump={0} focus={null}
-      onApprove={noop} onPlan={noop} onAnswer={noop} onForget={noop}
+      onApprove={noop} onFullAccess={noop} onPlan={noop} onAnswer={noop} onForget={noop}
       onCancelQueued={() => {}} onExtInvoke={() => {}} onExtSubmit={noop}
       checkpoints={new Map()} onPrepareRewind={noop} onCommitRewind={noop} onUndoRewind={noop}
       onPrepareFileRevert={noop} onCommitFileRevert={noop}
@@ -28,8 +29,32 @@ function draw(items: Item[], entering: string[], hidden = false) {
     />,
   );
   const entered = () => [...document.querySelectorAll(".enterbox[data-enter]")].length;
-  return { view, onEntered, entered };
+  return { view, onEntered, entered, scroll };
 }
+
+describe("leaving the live edge", () => {
+  it("does not offer back to latest for one small upward wheel gesture", () => {
+    const onPinned = vi.fn();
+    const { scroll } = draw([user("i1", "hi")], [], false, onPinned);
+    const root = scroll.current!;
+    let top = 400;
+    Object.defineProperties(root, {
+      scrollTop: { configurable: true, get: () => top, set: (value: number) => { top = value; } },
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 600 },
+    });
+    onPinned.mockClear();
+
+    fireEvent.wheel(root, { deltaY: -80 });
+    top = 330;
+    fireEvent.scroll(root);
+    expect(onPinned).not.toHaveBeenCalledWith(false);
+
+    top = 180;
+    fireEvent.scroll(root);
+    expect(onPinned).toHaveBeenCalledWith(false);
+  });
+});
 
 describe("a card's one entrance", () => {
   it("is marked on the card that has just arrived", () => {
@@ -64,7 +89,7 @@ describe("a card's one entrance", () => {
         items={[user("i1", "hi")]} entering={[]} onEntered={() => {}} revision={2}
         waiting={{}} scroll={{ current: null }} hidden={false} onPinned={() => {}}
         jump={0} focus={null}
-        onApprove={(async () => undefined) as never} onPlan={(async () => undefined) as never}
+        onApprove={(async () => undefined) as never} onFullAccess={(async () => undefined) as never} onPlan={(async () => undefined) as never}
         onAnswer={(async () => undefined) as never} onForget={(async () => undefined) as never}
         onCancelQueued={() => {}} onExtInvoke={() => {}} onExtSubmit={(async () => undefined) as never}
         checkpoints={new Map()} onPrepareRewind={(async () => undefined) as never}

@@ -79,4 +79,9 @@ describe("what the pending strip says back", () => {
   it("renders nothing when there is nothing waiting and the queue is not held", () => {
     expect(draw(snapshot({ items: [], capacity: { items: 0, maxItems: 64, bytes: 0, maxBytes: 64 << 20 } }))).toBe("");
   });
+
+  it("renders nothing when a held queue has no pending work", () => {
+    const html = draw(snapshot({ paused: true, items: [], capacity: { items: 0, maxItems: 64, bytes: 0, maxBytes: 64 << 20 } }));
+    expect(html).toBe("");
+  });
 });
