@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:469b869ff7365e43b060861f5ea5a37262b06c0d9914f31d75db132935b2d783";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:4ebd8279ea69f7585a64df4ee97f92a48fef625a202ba76f79d1d22efae73916";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -249,6 +249,7 @@ export const DESKTOP_COMMANDS = [
   "ImportHistoricalSession",
   "ImportThemePack",
   "InboxHasItems",
+  "InboxQueueForTarget",
   "InboxSnapshot",
   "InspectWorktreeMerge",
   "InstallMCPServer",
@@ -1100,6 +1101,26 @@ export interface CancelReceipt {
   accepted: boolean;
   alreadyIdle: boolean;
   recoveryRequired: boolean;
+}
+
+export interface InboxQueueEdit {
+  id: string;
+  text: string;
+  contentVersion: string;
+  references: string[];
+}
+
+export interface InboxQueueRequest {
+  kind: string;
+  itemId?: string;
+  text?: string;
+  contentVersion?: string;
+  beforeItemId?: string | null;
+  queueRevision: number;
+  paused?: boolean;
+  turnId?: string;
+  display?: string;
+  idempotencyKey?: string;
 }
 
 export interface control_InvocationRequest {
@@ -2710,6 +2731,14 @@ export interface InboxItemView {
   position: number;
 }
 
+export interface InboxQueueResultView {
+  outcome: string;
+  reason?: string;
+  snapshot: InboxSnapshotView;
+  edit?: InboxQueueEdit | null;
+  receipt?: InboxReceipt | null;
+}
+
 export interface InboxReceiptView {
   itemId: string;
   disposition: string;
@@ -2720,6 +2749,8 @@ export interface InboxReceiptView {
 }
 
 export interface InboxSnapshotView {
+  readonly?: boolean;
+  mutationsSupported: boolean;
   revision: number;
   paused: boolean;
   recovered: boolean;
@@ -5255,6 +5286,23 @@ export interface Ref {
   integrityBlockBytes?: number;
 }
 
+export interface Capacity {
+  items: number;
+  maxItems: number;
+  bytes: number;
+  maxBytes: number;
+  maxItemBytes: number;
+}
+
+export interface InboxReceipt {
+  itemId: string;
+  disposition: string;
+  position: number;
+  paused: boolean;
+  capacity: Capacity;
+  idempotent?: boolean;
+}
+
 export interface Diagnostics {
   physicalWatches: number;
   logicalSubscriptions: number;
@@ -5929,6 +5977,7 @@ export interface GeneratedDesktopCommands {
   ImportHistoricalSession(arg0: string): Promise<SessionRestoreResult>;
   ImportThemePack(arg0: string, arg1: boolean): Promise<ThemeImportResult>;
   InboxHasItems(arg0: string): Promise<boolean>;
+  InboxQueueForTarget(arg0: InboxTargetView, arg1: InboxQueueRequest): Promise<InboxQueueResultView>;
   InboxSnapshot(arg0: string): Promise<InboxSnapshotView>;
   InspectWorktreeMerge(arg0: string): Promise<MergeInspection>;
   InstallMCPServer(arg0: MCPServerInput): Promise<MCPInstallResult>;

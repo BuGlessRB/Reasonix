@@ -41,6 +41,7 @@ export type { FileBrowserPreviewRequest, FileBrowserPreviewResult } from "../gen
 import type { ExactInteractionBindings } from "./exactInteractionBindings";
 import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
+import type { InboxQueueBindings } from "./inboxQueueCommands";
 import { addBreadcrumb } from "./breadcrumbs";
 import { maybeShare } from "./queryCoalesce";
 import { makeMockSessionCatalogBindings } from "./sessionCatalogBridge";
@@ -248,7 +249,7 @@ interface DesktopWindowState {
 }
 // AppBindings is the hand-written React-to-Go contract. _CheckGeneratedBindings
 // catches generated methods missing here; update this interface and typecheck.
-export interface AppBindings extends AttachmentBindings, SessionExportBindings, SessionLifecycleBindings, ForkTargetsBindings, ToolRecoveryBindings, ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings, TranscriptProtocolBindings, SessionReaderBindings, ExactInteractionBindings {
+export interface AppBindings extends AttachmentBindings, SessionExportBindings, SessionLifecycleBindings, ForkTargetsBindings, ToolRecoveryBindings, ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings, InboxQueueBindings, TranscriptProtocolBindings, SessionReaderBindings, ExactInteractionBindings {
   GetLegacyEmptySessionCleanupStatus(): Promise<LegacyEmptySessionCleanupStatus>;
   RetryLegacyEmptySessionCleanup(): Promise<LegacyEmptySessionCleanupStatus>;
   OpenSessionDraft(workspaceId: string): Promise<SessionDraftView>;
@@ -1146,7 +1147,10 @@ export const app: AppBindings = new Proxy({} as AppBindings, {
   get(_t, prop) {
     const host = desktopHost().app, target = host ?? getMock();
     let v = (target as unknown as Record<string, unknown>)[String(prop)];
-    if (!host && v === undefined && typeof prop === "string") v = (...args: unknown[]) => import("./attachmentBindings").then(
+    // Inbox commands are optional. A synthesized attachment fallback would
+    // make ordinary browser mocks claim support for absent queue methods.
+    if (!host && v === undefined && typeof prop === "string" &&
+        !prop.includes("Inbox")) v = (...args: unknown[]) => import("./attachmentBindings").then(
       module => module.callMockAttachment(target, prop as keyof AttachmentBindings, args));
     if (typeof v !== "function") return v;
     return (...args: unknown[]) => {
@@ -1427,7 +1431,9 @@ function makeMockApp(): MockAppBindings {
     },
   });
   const freshMock = scenario === "fresh";
-  const guidanceMock = scenario === "guidance", recoveryMock = typeof import.meta.env !== "undefined" && import.meta.env.DEV && scenario === "recovery";
+  const devPreview = typeof import.meta.env !== "undefined" && import.meta.env.DEV;
+  const guidanceMock = scenario === "guidance", recoveryMock = devPreview && scenario === "recovery";
+  const inboxQueuePreview = devPreview && guidanceMock ? import("./inboxQueuePreview").then(module => module.createInboxQueuePreviewBindings()) : undefined;
   const runningMock = scenario === "running" || guidanceMock;
   const sandboxEscapeMock = scenario === "sandbox_escape";
   const noticePreviewMock = scenario === "notice";
@@ -3128,7 +3134,11 @@ function makeMockApp(): MockAppBindings {
         async SteerForTab(_tabID, _text) {
           await this.Steer(_text);
         },
-        async InboxSnapshot(_tabID) { if (recoveryMock) return (await import("./inboxRecoveryPreview")).inboxRecoveryPreviewSnapshot();
+        ...inboxQueuePreview && Object.fromEntries(["CaptureInboxTarget", "InboxQueueForTarget", "EnqueueInboxFollowupForTarget", "LookupInboxFollowupForTarget"].map(name => [name, async (...args: unknown[]) => {
+          const bindings = await inboxQueuePreview as Record<string, (...values: unknown[]) => Promise<unknown>>;
+          return bindings[name](...args);
+        }])),
+        async InboxSnapshot(_tabID) { if (inboxQueuePreview) return (await inboxQueuePreview).InboxSnapshot(_tabID); if (recoveryMock) return (await import("./inboxRecoveryPreview")).inboxRecoveryPreviewSnapshot();
           return {
             revision: 0,
             paused: false,
