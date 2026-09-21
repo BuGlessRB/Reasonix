@@ -3,7 +3,7 @@ import { projectSessionRowKey } from "./projectSessionIdentity";
 import { topicIsActive } from "./projectTreeTopic";
 import type { ProjectNode } from "./types";
 
-function nodeKey(node: ProjectNode, depth: number): string {
+export function projectTreeNodeKey(node: ProjectNode, depth: number): string {
   if (node.session || node.sessionPath || node.source || node.remoteSession || node.tabId) return projectSessionRowKey(node);
   return node.key || `${node.kind}-${node.root ?? ""}-${node.topicId ?? ""}-${node.sessionPath ?? ""}-${depth}`;
 }
@@ -13,7 +13,7 @@ export function collapsibleProjectTreeFolderKeys(nodes: ProjectNode[], depth = 0
   for (const node of nodes) {
     if (!node) continue;
     const children = asArray(node.children);
-    if ((node.kind === "project" || node.kind === "global_folder") && children.length > 0) keys.push(nodeKey(node, depth));
+    if ((node.kind === "project" || node.kind === "global_folder") && children.length > 0) keys.push(projectTreeNodeKey(node, depth));
     keys.push(...collapsibleProjectTreeFolderKeys(children, depth + 1));
   }
   return keys;
@@ -32,7 +32,7 @@ export function activeSessionAncestorKeys(
       if (topicIsActive(node, activeScope, activeWorkspaceRoot, activeTopicId, activeSessionPath)) return ancestors;
       const children = asArray(node.children);
       if (children.length > 0) {
-        const next = walk(children, [...ancestors, nodeKey(node, ancestors.length)]);
+        const next = walk(children, [...ancestors, projectTreeNodeKey(node, ancestors.length)]);
         if (next) return next;
       }
     }
@@ -46,9 +46,9 @@ export function activeSessionAncestorKeys(
   const root = (activeWorkspaceRoot ?? "").trim();
   for (const node of nodes) {
     if (!node) continue;
-    if (scope === "global" && node.kind === "global_folder") return [nodeKey(node, 0)];
-    if (node.kind === "project" && root && (node.root === root || node.root === activeWorkspaceRoot)) return [nodeKey(node, 0)];
-    if (!scope && !root && activeTopicId && (node.kind === "project" || node.kind === "global_folder")) return [nodeKey(node, 0)];
+    if (scope === "global" && node.kind === "global_folder") return [projectTreeNodeKey(node, 0)];
+    if (node.kind === "project" && root && (node.root === root || node.root === activeWorkspaceRoot)) return [projectTreeNodeKey(node, 0)];
+    if (!scope && !root && activeTopicId && (node.kind === "project" || node.kind === "global_folder")) return [projectTreeNodeKey(node, 0)];
   }
   return [];
 }

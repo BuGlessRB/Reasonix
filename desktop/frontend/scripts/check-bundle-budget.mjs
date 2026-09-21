@@ -531,6 +531,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // and local/remote callbacks measure 2098700 B (+2810 B, 0.134%). Retain the
 // established 186 B producer difference (2098886 B) at the next decimal;
 // compressed, chunk, CSS, locale, and body-residency budgets stay unchanged.
-const rawInitialBudgetKiB = 2_049.7;
+// Immutable list snapshots and their extracted presentation/expansion owners
+// measure 2099572 B in the Linux producer and 2099584 B with the local Node 26
+// producer (+698 B, 0.033%). Retain the next one-decimal ceiling; compressed,
+// chunk, CSS, locale, and resident-history budgets stay unchanged.
+const rawInitialBudgetKiB = 2_050.4;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

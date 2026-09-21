@@ -37,13 +37,8 @@ import type { ProjectTreeProps } from "./ProjectTreeProps";
 import { PROJECT_TREE_SEARCH_PAGE, PROJECT_TREE_WINDOW_INITIAL, PROJECT_TREE_WINDOW_STEP, forgetProjectTreeWindowLimits, loadProjectTreePageWindow, projectTreeListKey, projectTreeListNeedsInitialization, projectTreeProjectsNeedingInitialLoad, projectTreeWindowRows, reloadProjectTreeTopicLists, rememberProjectTreeWindowLimit, type ProjectTreeListPageState } from "../lib/projectTreeWindow";
 import { useProjectTreeReadActivity } from "./useProjectTreeReadActivity";
 import { useProjectTreeListRuntime } from "../lib/useProjectTreeListRuntime";
-import { activeSessionAncestorKeys, collapsibleProjectTreeFolderKeys, defaultExpandedProjectTreeKeys } from "../lib/projectTreeExpansion";
-export * from "../lib/projectTreeExpansion";
-
-function projectNodeKey(node: ProjectNode, depth: number): string {
-  if (node.session || node.sessionPath || node.source || node.remoteSession || node.tabId) return projectSessionRowKey(node);
-  return node.key || `${node.kind}-${node.root ?? ""}-${node.topicId ?? ""}-${node.sessionPath ?? ""}-${depth}`;
-}
+import { activeSessionAncestorKeys, collapsibleProjectTreeFolderKeys, defaultExpandedProjectTreeKeys, projectTreeNodeKey as projectNodeKey } from "../lib/projectTreeExpansion";
+export { activeSessionAncestorKeys, defaultExpandedProjectTreeKeys } from "../lib/projectTreeExpansion";
 
 type WorkbenchHeaderMenu = "more" | "add" | null;
 
