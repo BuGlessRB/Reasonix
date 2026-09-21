@@ -37,6 +37,8 @@ import type { ProjectTreeProps } from "./ProjectTreeProps";
 import { PROJECT_TREE_SEARCH_PAGE, PROJECT_TREE_WINDOW_INITIAL, PROJECT_TREE_WINDOW_STEP, forgetProjectTreeWindowLimits, loadProjectTreePageWindow, projectTreeListKey, projectTreeListNeedsInitialization, projectTreeProjectsNeedingInitialLoad, projectTreeWindowRows, reloadProjectTreeTopicLists, rememberProjectTreeWindowLimit, type ProjectTreeListPageState } from "../lib/projectTreeWindow";
 import { useProjectTreeReadActivity } from "./useProjectTreeReadActivity";
 import { useProjectTreeListRuntime } from "../lib/useProjectTreeListRuntime";
+import { activeSessionAncestorKeys, collapsibleProjectTreeFolderKeys, defaultExpandedProjectTreeKeys } from "../lib/projectTreeExpansion";
+export * from "../lib/projectTreeExpansion";
 
 function projectNodeKey(node: ProjectNode, depth: number): string {
   if (node.session || node.sessionPath || node.source || node.remoteSession || node.tabId) return projectSessionRowKey(node);
@@ -49,70 +51,6 @@ type CollapseSnapshot = {
   expanded: Set<string>;
   manuallyCollapsed: Set<string>;
 };
-
-function collapsibleFolderKeys(nodes: ProjectNode[], depth = 0): string[] {
-  const keys: string[] = [];
-  for (const node of nodes) {
-    if (!node) continue;
-    const children = asArray(node.children);
-    if ((node.kind === "project" || node.kind === "global_folder") && children.length > 0) {
-      keys.push(projectNodeKey(node, depth));
-    }
-    keys.push(...collapsibleFolderKeys(children, depth + 1));
-  }
-  return keys;
-}
-
-export function activeSessionAncestorKeys(
-  nodes: ProjectNode[],
-  activeScope?: string,
-  activeWorkspaceRoot?: string,
-  activeTopicId?: string,
-  activeSessionPath?: string,
-): string[] {
-  const walk = (nodeList: ProjectNode[], ancestors: string[]): string[] | null => {
-    for (const node of nodeList) {
-      if (!node) continue;
-      if (topicIsActive(node, activeScope, activeWorkspaceRoot, activeTopicId, activeSessionPath)) return ancestors;
-      const children = asArray(node.children);
-      if (children.length > 0) {
-        const next = walk(children, [...ancestors, projectNodeKey(node, ancestors.length)]);
-        if (next) return next;
-      }
-    }
-    return null;
-  };
-  const found = walk(nodes, []);
-  if (found) return found;
-  // Shell-only snapshots no longer embed topics. Expand the matching project or
-  // Global folder by workspace identity so the first lazy page can load.
-  const scope = (activeScope ?? "").trim();
-  const root = (activeWorkspaceRoot ?? "").trim();
-  for (const node of nodes) {
-    if (!node) continue;
-    if (scope === "global" && node.kind === "global_folder") {
-      return [projectNodeKey(node, 0)];
-    }
-    if (node.kind === "project" && root && (node.root === root || node.root === activeWorkspaceRoot)) {
-      return [projectNodeKey(node, 0)];
-    }
-    if (!scope && !root && activeTopicId && (node.kind === "project" || node.kind === "global_folder")) {
-      // Active topic without resolved scope still needs a folder open path.
-      return [projectNodeKey(node, 0)];
-    }
-  }
-  return [];
-}
-
-export function defaultExpandedProjectTreeKeys(
-  nodes: ProjectNode[],
-  activeScope?: string,
-  activeWorkspaceRoot?: string,
-  activeTopicId?: string,
-  activeSessionPath?: string,
-): string[] {
-  return activeSessionAncestorKeys(nodes, activeScope, activeWorkspaceRoot, activeTopicId, activeSessionPath);
-}
 
 // Global rows use the same project tree recipe; the fallback supplies their non-workspace accent.
 function projectAccentStyle(color?: string, fallbackValue?: string): CSSProperties | undefined {
@@ -763,7 +701,7 @@ export function ProjectTree({
     });
   };
 
-  const folderKeys = useMemo(() => collapsibleFolderKeys(tree), [tree]);
+  const folderKeys = useMemo(() => collapsibleProjectTreeFolderKeys(tree), [tree]);
   const searchActive = query.trim().length > 0;
   const hasExpandedFolders = !searchActive && folderKeys.some((key) => expanded.has(key));
   const canRestoreCollapsedView = collapseSnapshot !== null;

@@ -91,7 +91,7 @@ func TestReadSnapshotSpillExpiryAndRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	store.mu.Lock()
-	snap.used = time.Now().Add(-readSnapshotIdle)
+	snap.lifetime.used = time.Now().Add(-readSnapshotIdle)
 	store.mu.Unlock()
 	if _, _, _, _, err := store.page(t.Context(), "spill", next, nil, 200, func([]byte) error { return nil }); err == nil {
 		t.Fatal("expired snapshot accepted")
@@ -205,7 +205,7 @@ func TestReadSnapshotExpiredDiskReclaimedBeforeAdmission(t *testing.T) {
 	store.mu.Lock()
 	reserved := store.disk
 	for _, snap := range store.entries {
-		snap.used = time.Now().Add(-readSnapshotIdle)
+		snap.lifetime.used = time.Now().Add(-readSnapshotIdle)
 	}
 	store.mu.Unlock()
 	if reserved != readSnapshotDisk {

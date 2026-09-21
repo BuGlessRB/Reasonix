@@ -4,17 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/history"
-	"reasonix/internal/historycatalog"
-	"reasonix/internal/provider"
-	"reasonix/internal/retrieval"
 	"reasonix/internal/sessioncatalog"
 )
 
@@ -143,106 +135,7 @@ func (a *App) searchHistorySnapshot(req HistorySearchRequest, targetPath string)
 	var err error
 	if req.Cursor == "" {
 		first, err = store.build(a.bootContext(), binding, func(ctx context.Context, snap *readSnapshot) error {
-			status := a.GetHistoryIndexStatus()
-			meta := HistorySearchPage{Status: status, Revision: status.Revision, Partial: status.State != "ready" || status.Pending > 0}
-			catalog := history.SharedCatalog()
-			if catalog == nil || req.Query == "" {
-				snap.metadata, _ = json.Marshal(meta)
-				return nil
-			}
-			candidates := &readSnapshot{}
-			defer store.dispose(candidates)
-			roots := historySearchRootFilter(a, req)
-			if targetPath != "" {
-				roots = nil
-			}
-			if err := catalog.CaptureSearch(ctx, historycatalog.SearchRequest{Query: req.Query, Scope: req.Scope, WorkspaceRoot: req.WorkspaceRoot, SessionPath: targetPath, Kinds: req.Kinds, ToolName: req.ToolName, Roots: roots}, func(row historycatalog.Candidate) error { return store.append(ctx, candidates, row) }); err != nil {
-				return err
-			}
-			_, overlays := a.catalogRuntimeOverlays()
-			terms, err := retrieval.QueryTerms(req.Query)
-			if err != nil {
-				return err
-			}
-			// Keep at most one source transcript resident. Ranking may interleave
-			// sources; rereading is preferable to an unbounded transcript cache.
-			var messages []provider.Message
-			var loadedPath, loadedDigest string
-			var covered, intact bool
-			cutoffTime := time.Now()
-			fence, err := a.newReadSourceFence(store, snap)
-			if err != nil {
-				return err
-			}
-			err = candidates.walk(ctx, func(b []byte) error {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				var row historycatalog.Candidate
-				if err := json.Unmarshal(b, &row); err != nil {
-					return err
-				}
-				overlay := overlays[sessionRuntimeKey(row.SessionPath)]
-				if !historyStatusMatches(req.Status, overlay.open, row.SessionPath == active) || !historyTimeMatchesAt(row.LastActivityAt, req.TimeFilter, cutoffTime) {
-					return nil
-				}
-				if loadedPath != row.SessionPath {
-					loadedPath, covered = row.SessionPath, false
-					if sessions := a.sessionCatalog.Load(); sessions != nil {
-						record, ok, err := sessions.GetSession(ctx, row.SessionPath)
-						if err != nil {
-							return err
-						}
-						covered = ok && record.RecoveryCopy
-					}
-					if !covered {
-						if err := fence.add(ctx, row.SessionPath); err != nil {
-							if !errors.Is(err, os.ErrNotExist) {
-								return err
-							}
-							meta.Partial = true
-							intact = false
-							messages = nil
-							return nil
-						}
-						var state agent.PersistedState
-						messages, state, intact, err = agent.LoadSessionDisplayMessages(row.SessionPath)
-						if errors.Is(err, os.ErrNotExist) {
-							meta.Partial = true
-							messages = nil
-							intact = false
-						} else if err != nil {
-							return err
-						}
-						loadedDigest = state.DigestHex
-					}
-				}
-				if covered {
-					return nil
-				}
-				if !intact || row.ContentDigest == "" || loadedDigest != row.ContentDigest {
-					catalog.EnqueueExisting(ctx, row.SessionPath)
-					meta.Partial = true
-					return nil
-				}
-				text, ok := desktopHistoryText(messages, row)
-				if !ok {
-					catalog.EnqueueExisting(ctx, row.SessionPath)
-					meta.Partial = true
-					return nil
-				}
-				if err := fence.add(ctx, row.SessionPath); err != nil {
-					return err
-				}
-				hit := HistorySearchHit{SessionPath: row.SessionPath, SessionID: strings.TrimSuffix(filepath.Base(row.SessionPath), filepath.Ext(row.SessionPath)), Source: row.Source, MessageIndex: row.MessageIndex, PartIndex: row.PartIndex, ContentDigest: loadedDigest, Role: row.Role, Kind: row.Kind, ToolName: row.ToolName, Snippet: retrieval.MakeSnippet(text, req.Query, terms, 240), Score: row.Score, SessionTitle: row.SessionTitle, TopicTitle: row.TopicTitle, WorkspaceRoot: row.WorkspaceRoot, LastActivityAt: row.LastActivityAt, Open: overlay.open, Running: overlay.running, Current: row.SessionPath == active}
-				return store.append(ctx, snap, hit)
-			})
-			if err != nil {
-				return err
-			}
-			snap.validate = fence.freeze()
-			snap.metadata, err = json.Marshal(meta)
-			return err
+			return a.buildHistorySearchSnapshot(ctx, store, snap, req, targetPath, active)
 		})
 	}
 	if err == nil {

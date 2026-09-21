@@ -49,7 +49,7 @@ type readSnapshot struct {
 	removed            bool
 	mu                 sync.Mutex
 	id, binding        string
-	created, used      time.Time
+	lifetime           readSnapshotLifetime
 	rows               [][]byte
 	db                 *sql.DB
 	dir                string
@@ -59,6 +59,11 @@ type readSnapshot struct {
 	metadata           json.RawMessage
 	validate           func() error
 	released           bool
+}
+
+type readSnapshotLifetime struct {
+	created time.Time
+	used    time.Time
 }
 
 type readSnapshotCursor struct {
@@ -112,80 +117,10 @@ func (s *readSnapshotStore) initLocked() {
 // Cancellation belongs to the waiter. A shared build is cancelled only by
 // shutdown, so one dismissed UI cannot interrupt another reader's build.
 func (s *readSnapshotStore) build(ctx context.Context, binding string, fill func(context.Context, *readSnapshot) error) (*readSnapshot, error) {
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return nil, snapshotStale("restarted")
+	job, err := s.joinBuild(binding, fill)
+	if err != nil {
+		return nil, err
 	}
-	s.initLocked()
-	job := s.building[binding]
-	if job == nil {
-		if len(s.building) >= 64 {
-			s.mu.Unlock()
-			return nil, fmt.Errorf("read snapshot resource limit: too many builds")
-		}
-		job = &readSnapshotBuild{done: make(chan struct{})}
-		s.building[binding] = job
-		s.buildWG.Add(1)
-		go func() {
-			defer s.buildWG.Done()
-			select {
-			case s.gate <- struct{}{}:
-				defer func() { <-s.gate }()
-			case <-s.ctx.Done():
-				job.err = s.ctx.Err()
-			}
-			var snap *readSnapshot
-			if job.err == nil {
-				// Reclaim before allocating: expired disk reservations must not
-				// prevent the build that would otherwise reclaim them.
-				s.pruneExpired()
-				var id [24]byte
-				_, job.err = rand.Read(id[:])
-				snap = &readSnapshot{id: hex.EncodeToString(id[:]), binding: binding, created: time.Now(), used: time.Now(), leases: 1}
-				if job.err == nil {
-					job.err = fill(s.ctx, snap)
-				}
-				if job.err == nil && snap.validate != nil {
-					job.err = snap.validate()
-				}
-			}
-			s.mu.Lock()
-			var victims []*readSnapshot
-			if job.err == nil && !s.closed {
-				for id, old := range s.entries {
-					if time.Since(old.used) >= readSnapshotIdle || time.Since(old.created) >= readSnapshotLife {
-						delete(s.entries, id)
-						victims = append(victims, old)
-					}
-				}
-				if len(s.entries) >= 64 {
-					var oldest *readSnapshot
-					for _, old := range s.entries {
-						if oldest == nil || old.used.Before(oldest.used) {
-							oldest = old
-						}
-					}
-					delete(s.entries, oldest.id)
-					victims = append(victims, oldest)
-				}
-				s.entries[snap.id] = snap
-				job.snapshot = snap
-			} else if job.err == nil {
-				job.err = snapshotStale("restarted")
-			}
-			delete(s.building, binding)
-			s.mu.Unlock()
-			for _, old := range victims {
-				s.dispose(old)
-			}
-			if job.err != nil && snap != nil {
-				s.dispose(snap)
-			}
-			close(job.done)
-		}()
-	}
-	s.mu.Unlock()
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -193,47 +128,142 @@ func (s *readSnapshotStore) build(ctx context.Context, binding string, fill func
 		if job.err != nil {
 			return nil, job.err
 		}
-		// Every waiter receives its own idempotent release handle. Shared build
-		// storage remains alive until the last handle (or cache lease) expires.
-		var id [24]byte
-		if _, err := rand.Read(id[:]); err != nil {
-			return nil, err
-		}
-		s.mu.Lock()
-		root := job.snapshot
-		if s.closed || root.leases <= 0 {
-			s.mu.Unlock()
-			return nil, snapshotStale("evicted")
-		}
-		root.leases++
-		handle := &readSnapshot{id: hex.EncodeToString(id[:]), binding: binding, created: root.created, used: time.Now(), data: root}
-		var victim *readSnapshot
-		if len(s.entries) >= 64 {
-			for _, old := range s.entries {
-				if victim == nil || old.used.Before(victim.used) {
-					victim = old
-				}
-			}
-			delete(s.entries, victim.id)
-		}
-		s.entries[handle.id] = handle
-		s.mu.Unlock()
-		if victim != nil {
-			s.dispose(victim)
-		}
-		return handle, nil
+		return s.acquireBuildHandle(binding, job.snapshot)
 	}
+}
+
+func (s *readSnapshotStore) joinBuild(binding string, fill func(context.Context, *readSnapshot) error) (*readSnapshotBuild, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, snapshotStale("restarted")
+	}
+	s.initLocked()
+	job := s.building[binding]
+	if job != nil {
+		return job, nil
+	}
+	if len(s.building) >= 64 {
+		return nil, fmt.Errorf("read snapshot resource limit: too many builds")
+	}
+	job = &readSnapshotBuild{done: make(chan struct{})}
+	s.building[binding] = job
+	s.buildWG.Add(1)
+	go s.runBuild(binding, job, fill)
+	return job, nil
+}
+
+func (s *readSnapshotStore) runBuild(binding string, job *readSnapshotBuild, fill func(context.Context, *readSnapshot) error) {
+	defer s.buildWG.Done()
+	select {
+	case s.gate <- struct{}{}:
+		defer func() { <-s.gate }()
+	case <-s.ctx.Done():
+		job.err = s.ctx.Err()
+	}
+	var snap *readSnapshot
+	if job.err == nil {
+		snap, job.err = s.executeBuild(binding, fill)
+	}
+	s.publishBuild(binding, job, snap)
+}
+
+func (s *readSnapshotStore) executeBuild(binding string, fill func(context.Context, *readSnapshot) error) (*readSnapshot, error) {
+	// Reclaim before allocating: expired disk reservations must not prevent the
+	// build that would otherwise reclaim them.
+	s.pruneExpired()
+	var id [24]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	snap := &readSnapshot{id: hex.EncodeToString(id[:]), binding: binding, lifetime: readSnapshotLifetime{created: now, used: now}, leases: 1}
+	if err := fill(s.ctx, snap); err != nil {
+		return snap, err
+	}
+	if snap.validate != nil {
+		return snap, snap.validate()
+	}
+	return snap, nil
+}
+
+func (s *readSnapshotStore) publishBuild(binding string, job *readSnapshotBuild, snap *readSnapshot) {
+	s.mu.Lock()
+	var victims []*readSnapshot
+	if job.err == nil && !s.closed {
+		victims = s.evictExpiredLocked()
+		if len(s.entries) >= 64 {
+			victims = append(victims, s.evictOldestLocked())
+		}
+		s.entries[snap.id] = snap
+		job.snapshot = snap
+	} else if job.err == nil {
+		job.err = snapshotStale("restarted")
+	}
+	delete(s.building, binding)
+	s.mu.Unlock()
+	for _, victim := range victims {
+		s.dispose(victim)
+	}
+	if job.err != nil && snap != nil {
+		s.dispose(snap)
+	}
+	close(job.done)
+}
+
+func (s *readSnapshotStore) acquireBuildHandle(binding string, root *readSnapshot) (*readSnapshot, error) {
+	var id [24]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	if s.closed || root.leases <= 0 {
+		s.mu.Unlock()
+		return nil, snapshotStale("evicted")
+	}
+	root.leases++
+	handle := &readSnapshot{id: hex.EncodeToString(id[:]), binding: binding, lifetime: readSnapshotLifetime{created: root.lifetime.created, used: time.Now()}, data: root}
+	var victim *readSnapshot
+	if len(s.entries) >= 64 {
+		victim = s.evictOldestLocked()
+	}
+	s.entries[handle.id] = handle
+	s.mu.Unlock()
+	if victim != nil {
+		s.dispose(victim)
+	}
+	return handle, nil
+
+}
+
+func (s *readSnapshotStore) evictExpiredLocked() []*readSnapshot {
+	var victims []*readSnapshot
+	for id, snap := range s.entries {
+		if time.Since(snap.lifetime.used) >= readSnapshotIdle || time.Since(snap.lifetime.created) >= readSnapshotLife {
+			delete(s.entries, id)
+			victims = append(victims, snap)
+		}
+	}
+	return victims
+}
+
+func (s *readSnapshotStore) evictOldestLocked() *readSnapshot {
+	var oldest *readSnapshot
+	for _, snap := range s.entries {
+		if oldest == nil || snap.lifetime.used.Before(oldest.lifetime.used) {
+			oldest = snap
+		}
+	}
+	if oldest != nil {
+		delete(s.entries, oldest.id)
+	}
+	return oldest
 }
 
 func (s *readSnapshotStore) pruneExpired() {
 	s.mu.Lock()
 	var victims []*readSnapshot
-	for id, snap := range s.entries {
-		if time.Since(snap.used) >= readSnapshotIdle || time.Since(snap.created) >= readSnapshotLife {
-			delete(s.entries, id)
-			victims = append(victims, snap)
-		}
-	}
+	victims = s.evictExpiredLocked()
 	s.mu.Unlock()
 	for _, snap := range victims {
 		s.dispose(snap)
@@ -345,13 +375,13 @@ func (s *readSnapshotStore) page(ctx context.Context, binding, cursor string, fi
 		s.mu.Unlock()
 		return "", "", 0, nil, snapshotStale("expired_or_evicted")
 	}
-	if time.Since(snap.used) >= readSnapshotIdle || time.Since(snap.created) >= readSnapshotLife {
+	if time.Since(snap.lifetime.used) >= readSnapshotIdle || time.Since(snap.lifetime.created) >= readSnapshotLife {
 		delete(s.entries, id)
 		s.mu.Unlock()
 		s.dispose(snap)
 		return "", "", 0, nil, snapshotStale("expired")
 	}
-	snap.used = time.Now()
+	snap.lifetime.used = time.Now()
 	s.mu.Unlock()
 	if snap.data != nil {
 		snap = snap.data
@@ -405,7 +435,7 @@ func (s *readSnapshotStore) page(ctx context.Context, binding, cursor string, fi
 		b, _ := json.Marshal(readSnapshotCursor{1, id, binding, end})
 		next = base64.RawURLEncoding.EncodeToString(b)
 	}
-	return next, id, snap.created.Add(readSnapshotLife).UnixMilli(), snap.metadata, nil
+	return next, id, snap.lifetime.created.Add(readSnapshotLife).UnixMilli(), snap.metadata, nil
 }
 
 func (s *readSnapshotStore) dispose(snap *readSnapshot) {
