@@ -179,10 +179,6 @@ func desktopHistoryText(messages []provider.Message, candidate historycatalog.Ca
 	}
 }
 
-func historyTimeMatches(timestamp int64, filter string) bool {
-	return historyTimeMatchesAt(timestamp, filter, time.Now())
-}
-
 func historyTimeMatchesAt(timestamp int64, filter string, now time.Time) bool {
 	if strings.TrimSpace(filter) == "" || filter == "all" {
 		return true

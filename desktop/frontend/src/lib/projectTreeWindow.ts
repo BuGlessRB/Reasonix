@@ -68,7 +68,7 @@ export async function loadProjectTreePageWindow<T, TPage extends ProjectTreePage
   load: (cursor: string, limit: number) => Promise<TPage>,
   recoveryLimit = requestedLimit,
   allowRecovery = true,
-): Promise<TPage> {
+): Promise<TPage & { replacedSnapshot?: boolean }> {
   const items: T[] = [];
   let cursor = initialCursor;
   let remaining = Math.max(1, Math.floor(requestedLimit));

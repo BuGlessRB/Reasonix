@@ -262,8 +262,7 @@ func (s *readSnapshotStore) evictOldestLocked() *readSnapshot {
 
 func (s *readSnapshotStore) pruneExpired() {
 	s.mu.Lock()
-	var victims []*readSnapshot
-	victims = s.evictExpiredLocked()
+	victims := s.evictExpiredLocked()
 	s.mu.Unlock()
 	for _, snap := range victims {
 		s.dispose(snap)

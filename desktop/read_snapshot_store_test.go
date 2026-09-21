@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -24,7 +25,7 @@ func TestReadSnapshotFrozenWindows(t *testing.T) {
 			var store readSnapshotStore
 			defer store.close()
 			snap, err := store.build(t.Context(), "query", func(ctx context.Context, snap *readSnapshot) error {
-				for n := 0; n < count; n++ {
+				for n := range count {
 					if err := store.append(ctx, snap, n); err != nil {
 						return err
 					}
@@ -119,7 +120,7 @@ func TestReadSnapshotCancelledWaiterLeavesBuildAlive(t *testing.T) {
 	}()
 	<-entered
 	cancel()
-	if err := <-done; err != context.Canceled {
+	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancel=%v", err)
 	}
 	store.mu.Lock()
