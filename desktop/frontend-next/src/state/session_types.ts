@@ -187,6 +187,11 @@ export interface SessionState {
   // in the last few seconds; usage totals only land at round boundaries, and
   // nothing at all arrives while a tool runs.
   outWindow: Sample[];
+  // What this round has produced so far, estimated from the chunks themselves,
+  // because usage only lands when the round closes. It is cleared by that usage
+  // event, which replaces the estimate with what was billed — a reading that is
+  // still an estimate says so rather than passing for the measured one.
+  outLive: number;
   metrics: Metrics;
   waiting: Waiting;
   running: boolean;

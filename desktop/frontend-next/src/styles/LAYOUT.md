@@ -846,14 +846,28 @@ told apart by the colour of a symbol.
   it does not enter the prose; it sits against the composer until it has been
   read. It is one tier lighter than `.errbar`, which says "this request failed".
 
+## Token readings
+
+- Sent steps when a round bills; received climbs while the model writes, from
+  the chunks themselves, because usage only lands when the round closes.
+- The two readings share one place, so which one is on screen is said rather
+  than inferred: an estimate is drawn in `--muted` and its unit carries `≈`.
+  A number the next event will correct must not read as the measured one.
+- Motion marks the moment a number moves and then stops: the arrow rises into
+  place and the figure ticks through `--accent`, both dropped on a timer so a
+  stream that stalls does not leave the row lit. Reduced motion removes both
+  and leaves the numbers.
+
 ## Turn receipt
 
-- A receipt says three different things, so it has three faces. All three shared
-  one size and one colour and read as a sentence that never ends — and it
-  borrowed the permission table's `.rrow`/`.rgroup`, owning no rule under its own
-  class names, which is why the missing styling went unnoticed.
+- A receipt and a notice are one runtime speaking, so a receipt with anything to
+  report is one of the host's cards: same gutter, same `.hl`, and each item a
+  `.find` rather than a private row vocabulary that drifts from it.
+- A clean turn is the exception and stays one ghost line, because the weight a
+  card carries is what it has to say. Its indent is `--call-sym` + `--call-gap`,
+  the grid's own numbers, so it cannot fall out of step with the cards above.
 - What the turn declared itself is not what the host found, so it carries no
-  warning bar.
+  warning bar and the card no severity.
 
 ## Markdown
 

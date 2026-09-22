@@ -25,15 +25,36 @@ function thoughtLabel(item: Extract<Item, { t: "say" }>) {
 // the provider stays in the title for when two of them carry the same name.
 const modelName = (ref: string) => ref.slice(ref.lastIndexOf("/") + 1);
 
+/** A quote on its way to the composer. n makes the same text twice two
+ *  requests; turn is the kernel's name for the reply it came from, absent when
+ *  the transcript was rebuilt without checkpoints. */
+export interface Quote {
+  text: string;
+  turn?: number;
+  n: number;
+}
+
 /** What a finished reply can be acted on with. Absent members are capabilities
  *  this transcript does not have — a rebuilt one cannot re-run a turn — and the
  *  bar draws only what it can actually do. */
 export interface ReplyActions {
-  onQuote: (text: string) => void;
+  onQuote: (text: string, id: string) => void;
   onRegenerate?: () => void;
   model?: string;
   onConfigureModel?: () => void;
   onRunDetail?: () => void;
+}
+
+// Quoting a whole answer to ask about one sentence of it is not quoting. What
+// the reader has highlighted inside this card is what they mean; the selection
+// has to be checked against the card because the browser keeps the last one
+// anywhere on the page.
+function selectedIn(card: Element | null): string {
+  const sel = card && window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return "";
+  const range = sel.getRangeAt(0);
+  if (!card.contains(range.commonAncestorContainer)) return "";
+  return sel.toString().trim();
 }
 
 function download(text: string) {
@@ -91,7 +112,7 @@ export function SayCard({ item, afterAnswer, reply }: { item: Extract<Item, { t:
             <div className="acts" onMouseLeave={() => setMenu("")}>
               <CopyButton text={item.text} iconOnly />
               {reply && (
-                <button type="button" data-action="reply.quote" title={t("引用到输入框")} aria-label={t("引用到输入框")} onClick={() => reply.onQuote(item.text)}>
+                <button type="button" data-action="reply.quote" title={t("引用到输入框")} aria-label={t("引用到输入框")} onClick={(e) => reply.onQuote(selectedIn(e.currentTarget.closest(".call")) || item.text, item.id)}>
                   <StudioIcon name="quote" />
                 </button>
               )}

@@ -43,6 +43,7 @@ export const initialState: SessionState = {
   revision: 0,
   plan: [],
   outWindow: [],
+  outLive: 0,
   metrics: { hit: 0, miss: 0, out: 0, bySource: {}, cost: 0, currency: "¥",
     prefixHash: "", prefixChanged: false, prefixReasons: [], bodyChanged: false, carriedMessages: 0, toolSchema: 0,
     estimated: false, coverage: "none", incompleteReason: "", alt: null, turn: 0, rounds: [] },
@@ -338,13 +339,14 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       // turn in front of you, not a record that one ever finished — without
       // this it would be the latter, and the tick from an hour ago would still
       // be on screen over work that is running now.
-      return nameTurnStart({ ...s, running: true, doing: "运行中", terminal: null, turnModel: ev.modelRef || s.turnModel, waiting: { ttftSince: Date.now() } }, ev);
+      return nameTurnStart({ ...s, running: true, doing: "运行中", terminal: null, outLive: 0, turnModel: ev.modelRef || s.turnModel, waiting: { ttftSince: Date.now() } }, ev);
 
     case "reasoning":
       return {
         ...s,
         doing: "思考中",
         outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
+        outLive: s.outLive + estimateTokens(ev.text ?? ""),
         items: appendText(s.items, ev.text ?? "", "reasoning", ev.source, ev.modelRef || s.turnModel),
       };
 
@@ -353,6 +355,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
         ...s,
         doing: "正在回答",
         outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
+        outLive: s.outLive + estimateTokens(ev.text ?? ""),
         items: appendText(s.items, ev.text ?? "", "text", ev.source, ev.modelRef || s.turnModel),
       };
 
@@ -403,7 +406,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
 
     case "usage": {
       const u = ev.usage;
-      return u ? { ...s, metrics: foldUsage(s.metrics, u) } : s;
+      return u ? { ...s, outLive: 0, metrics: foldUsage(s.metrics, u) } : s;
     }
 
     case "guardian_assessment":

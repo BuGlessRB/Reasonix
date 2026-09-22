@@ -1337,10 +1337,10 @@
   .ginter li b { font-weight: var(--w-med); color: var(--text) }
   .ginter li em { font-style: normal; color: var(--warn-ink) }
 
-  .call { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; }
+  .call { display: grid; grid-template-columns: var(--call-sym) minmax(0, 1fr); gap: var(--call-gap); }
   .call > .g { display: flex; flex-direction: column; align-items: center }
   .call > .g .sym {
-    width: 28px; height: 28px; margin-top: 5px; display: grid; place-items: center;
+    width: var(--call-sym); height: var(--call-sym); margin-top: 5px; display: grid; place-items: center;
     border-radius: var(--r-lg); font: var(--w-med) var(--fs-meta)/1 var(--mono); color: var(--faint);
 
     background: transparent; flex: none;
@@ -1351,8 +1351,8 @@
     stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
   }
 
-  .nest-bd .call { grid-template-columns: 20px minmax(0, 1fr); gap: 11px }
-  .nest-bd .call > .g .sym { width: 20px; height: 20px; margin-top: 8px; border-radius: var(--r-xs); box-shadow: none }
+  .nest-bd { --call-sym: 20px; --call-gap: 11px }
+  .nest-bd .call > .g .sym { margin-top: 8px; border-radius: var(--r-xs); box-shadow: none }
   .nest-bd .call > .g .sym svg { width: 10.5px; height: 10.5px }
 
   .call > .g .line {
@@ -1653,6 +1653,10 @@
 
   .find .why > .lnk { margin-left: 6px }
 
+  .find .gapd {
+    display: block; margin-top: 5px; font: var(--w-reg) var(--fs-meta)/1.6 var(--mono);
+    color: var(--faint); overflow-wrap: anywhere;
+  }
   .find .why.nwhy {
     margin-top: 5px; font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: var(--faint);
     white-space: pre-wrap; overflow-wrap: anywhere;
@@ -4294,30 +4298,15 @@
     font: var(--w-med) var(--fs-meta) var(--ui); text-decoration: underline; text-underline-offset: 3px;
   }
 
-  .rc { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 2px; padding-left: 42px }
+  .rc { margin: 4px 0 2px; padding-left: calc(var(--call-sym) + var(--call-gap)) }
   .rc-ok {
     display: flex; flex-direction: row; align-items: baseline; gap: 8px;
     font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--ghost);
   }
   .rc-ok .rc-tick { color: var(--ok) }
   .rc-ok .rc-src { min-width: 0; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-
-  .rc-group { display: flex; flex-direction: column; padding-left: 9px; border-left: 2px solid var(--warn) }
-
-  .rc-group[data-declared] { border-left-color: var(--hair) }
-  .rc-hd {
-    padding: 2px 0 4px; font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap);
-    text-transform: uppercase; color: var(--ghost);
-  }
-  .rc-group[data-declared] .rc-hd { text-transform: none; letter-spacing: 0 }
-  .rc-row { display: flex; align-items: baseline; gap: 9px; padding: 3px 0; min-width: 0 }
-  .rc-row + .rc-row { border-top: 1px solid color-mix(in srgb, var(--hair) 55%, transparent) }
-  .rc-t { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--text) }
-  .rc-d {
-    flex: 1; min-width: 0; font: var(--w-reg) var(--fs-meta)/1.6 var(--mono); color: var(--ghost);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .rc-more { padding: var(--y-close) 0 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
+  .rc-hd { padding: 8px 0 2px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
+  .rc-more { padding: var(--y-close) 0 0 12px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
 
   .md > :first-child { margin-top: 0 }
   .md > :last-child { margin-bottom: 0 }

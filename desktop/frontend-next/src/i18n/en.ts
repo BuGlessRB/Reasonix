@@ -468,6 +468,11 @@ export const EN: Record<string, string> = {
   // 收工回执
   "没有未经验证的部分": "nothing left unverified",
   "未验证": "not verified",
+  "交付验收": "delivery receipt",
+  "引用回复": "quoting a reply",
+  "引用第 {n} 轮回复": "quoting turn {n}",
+  "本轮已发送 / 正在接收（估算）的 token": "tokens sent this turn / arriving now (estimated)",
+  "tokens ≈": "tokens ≈",
   "这一轮自己说明的": "this turn said so itself",
   "另有 {n} 项": "and {n} more",
   "声称过但账本不支持": "claimed, but the ledger does not back it",

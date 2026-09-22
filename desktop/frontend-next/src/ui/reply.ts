@@ -3,7 +3,7 @@ import type { AgentPort, Checkpoint } from "../port/port";
 import type { Item } from "../state/session";
 import { pairCheckpoints } from "../state/checkpoints";
 import { t } from "../i18n";
-import type { ReplyActions } from "./cards/SayCard";
+import type { Quote, ReplyActions } from "./cards/SayCard";
 
 interface Inputs {
   port: AgentPort;
@@ -21,7 +21,7 @@ interface Inputs {
  *  travels to the composer on. The transcript owns neither: the pane holds the
  *  session these read from, and the composer is where a quote has to land. */
 export function useReplyActions({ port, items, checkpoints, running, model, submit, onSettings, onRunDetail, onError }: Inputs) {
-  const [quote, setQuote] = useState<{ text: string; n: number }>({ text: "", n: 0 });
+  const [quote, setQuote] = useState<Quote>({ text: "", n: 0 });
 
   // Re-running a turn is a conversation rewind and then the same words again:
   // the transcript goes back, the files do not, and the reply that was there
@@ -59,15 +59,32 @@ export function useReplyActions({ port, items, checkpoints, running, model, subm
     return undefined;
   }, [items, checkpoints]);
 
+  // Which reply is being quoted is the kernel's to say, so the turn its
+  // checkpoint named travels with the text. A transcript rebuilt without
+  // checkpoints has no turn to give and sends none rather than a guess.
+  const turnOf = useCallback(
+    (id: string) => {
+      const paired = pairCheckpoints(items, checkpoints);
+      const at = items.findIndex((i) => i.id === id);
+      for (let i = at < 0 ? items.length - 1 : at; i >= 0; i--) {
+        const item = items[i];
+        if (item.t !== "user" || item.pending) continue;
+        return paired.get(item.id)?.turn;
+      }
+      return undefined;
+    },
+    [items, checkpoints],
+  );
+
   const reply = useMemo<ReplyActions>(
     () => ({
-      onQuote: (text: string) => setQuote((q) => ({ text, n: q.n + 1 })),
+      onQuote: (text: string, id: string) => setQuote((q) => ({ text, turn: turnOf(id), n: q.n + 1 })),
       onRegenerate: lastAsk && !running ? () => void regenerate(lastAsk.turn, lastAsk.text) : undefined,
       model,
       onConfigureModel: () => onSettings("model"),
       onRunDetail,
     }),
-    [lastAsk, running, regenerate, model, onSettings, onRunDetail],
+    [lastAsk, running, regenerate, model, onSettings, onRunDetail, turnOf],
   );
 
   // Rewriting a message is the same act with different words: the turn goes

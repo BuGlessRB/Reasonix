@@ -1187,6 +1187,16 @@ body { background: var(--page) !important; }
 .studio-runtokens [data-io="down"] .studio-icon { color: var(--io-down); transform: rotate(180deg); }
 .studio-runtokens b { font: 600 10px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
 .studio-runtokens small { font: 500 9px/1 var(--ui); color: var(--faint); }
+.studio-runtokens [data-est] b { color: var(--muted); }
+.studio-runtokens [data-landed] .studio-icon { animation: studio-io-up 520ms var(--ease-out); }
+.studio-runtokens [data-io="down"][data-landed] .studio-icon { animation-name: studio-io-down; }
+.studio-runtokens [data-landed] b { animation: studio-io-tick 520ms var(--ease-out); }
+@keyframes studio-io-up { from { transform: translateY(3px) scale(.86); opacity: .45; } }
+@keyframes studio-io-down { from { transform: rotate(180deg) translateY(3px) scale(.86); opacity: .45; } }
+@keyframes studio-io-tick { from { color: var(--accent); } }
+@media (prefers-reduced-motion: reduce) {
+  .studio-runtokens [data-landed] .studio-icon, .studio-runtokens [data-landed] b { animation: none; }
+}
 
 .studio-runrate { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
 .studio-runrate .spark { width: 52px; height: 12px; flex: none; overflow: visible; }

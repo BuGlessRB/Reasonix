@@ -37,7 +37,16 @@ export default defineConfig(({ mode }) => {
     // Stylesheets are stubbed for tests by default, `?raw` included, so a
     // guard that reads app.css to check a rule gets an empty string and passes
     // on nothing. Processing it is what makes that guard able to fail.
-    test: { css: true },
+    //
+    // One worker per thread, reused across files: a fresh module registry per
+    // file meant re-importing React, the port and app.css 119 times, which was
+    // most of the run. The cost is that module-level state now outlives a file,
+    // so a test that needs a clean one has to make it, not assume it.
+    test: {
+      css: true,
+      pool: "threads",
+      isolate: false,
+    },
     server: {
       port: 5273,
       // The dev server is cross-origin to serve, which its CSRF guard rejects.

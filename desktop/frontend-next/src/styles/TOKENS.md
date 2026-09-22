@@ -87,6 +87,10 @@ grid to break.
     lightness band, chroma floor, adjacent-pair colour-vision separation
     (ΔE ≥ 8), normal-vision floor (≥ 15), and contrast with the ground.
   - In light, four segments fall below 3:1 and rely on the legend's text labels.
+- `--call-sym` / `--call-gap` are the transcript gutter: the symbol cell and the
+  space after it. Anything that has to line up with a card reads them instead of
+  restating the sum, and `.nest-bd` redefines them rather than re-specifying the
+  grid.
 - `--io-up` / `--io-down` alias the categorical set, not the status one: sent
   and received are two kinds of one quantity, not two healths, so `net` or `ok`
   there would read as "running" or "succeeded". `--io-down` is `--cat-5`, which

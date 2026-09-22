@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
-import { money, tokens as tokenCount } from "../i18n/format";
+import { money } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import { hasPendingDecision, posture, runState } from "./decisions";
@@ -15,6 +15,7 @@ import { Plan } from "./Plan";
 import { useReplyActions } from "./reply";
 import { useGateActions } from "./gates";
 import { useQueueActions } from "./queueactions";
+import { RunTokens } from "./RunTokens";
 import { useRewindActions } from "./rewind";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Transcript } from "./Transcript";
@@ -146,7 +147,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // What this turn has actually put on the wire: input counted whether or not
   // the prefix cache took it, and output as it comes back.
   const sent = s.metrics.hit + s.metrics.miss;
-  const received = s.metrics.out;
+  const received = s.metrics.out + s.outLive;
   const speed = useMemo(() => speedOf(traj.rows), [traj.rows]);
 
   const reloadMcp = useCallback(() => {
@@ -644,19 +645,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           >
             <RMark />
             <span>{t(s.doing || "运行中")}</span>
-            {sent + received > 0 && (
-              <span className="studio-runtokens" title={t("本轮已发送 / 已接收的 token")}>
-                <span data-io="up">
-                  <StudioIcon name="arrow" />
-                  <b>{tokenCount(sent)}</b>
-                </span>
-                <span data-io="down">
-                  <StudioIcon name="arrow" />
-                  <b>{tokenCount(received)}</b>
-                </span>
-                <small>tokens</small>
-              </span>
-            )}
+            <RunTokens sent={sent} received={received} estimated={s.outLive > 0} />
           </div>
         )}
         <div className="composeaux">

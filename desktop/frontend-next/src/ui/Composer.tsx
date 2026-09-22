@@ -11,6 +11,7 @@ import { useIme } from "./ime";
 import { countLines, pasteIsLong, planTone, planVerb } from "./intake";
 import { useIntake } from "./useIntake";
 import type { Dropped } from "./filedrop";
+import type { Quote } from "./cards/SayCard";
 import { StudioIcon } from "./StudioIcon";
 
 interface Props {
@@ -20,7 +21,7 @@ interface Props {
   // Text a card asked to be quoted, and a counter that makes the same text
   // twice two requests. Quoting the same reply again is an ordinary thing to
   // do, and comparing the string alone would drop the second one.
-  quote?: { text: string; n: number };
+  quote?: Quote;
   // Resolves false when the line never left, so what was typed comes back
   // rather than being lost to a refusal the user could not have prevented.
   // Bumped when something outside asks for the cursor — answering a plan card
@@ -47,7 +48,8 @@ type Chip =
       url?: string;
       error?: string;
     }
-  | { k: "paste"; id: string; body: string; lines: number; name?: string };
+  | { k: "paste"; id: string; body: string; lines: number; name?: string }
+  | { k: "quote"; id: string; body: string; turn?: number; lines: number };
 
 // Two screenshots pasted in a row are one filename apart, which is the one
 // thing the chip has to tell them by. The preview comes off the blob that was
@@ -74,7 +76,20 @@ function nameOf(path: string): string {
 }
 
 function chipName(c: Chip): string {
+  if (c.k === "quote") return c.turn === undefined ? t("引用回复") : t("引用第 {n} 轮回复", { n: c.turn });
   return c.k === "paste" ? c.name ?? t("粘贴的文本") : c.name;
+}
+
+// What the model reads instead of a bare blockquote. Which reply this is about
+// is the kernel's turn number, so it is stated rather than left to be inferred
+// from the words; a rebuilt transcript with no turn says nothing instead of
+// guessing one. English like the kernel's other host-authored prefixes: the
+// line is addressed to the model, not to the reader.
+function quoteBlock(c: Extract<Chip, { k: "quote" }>): string {
+  const head = c.turn === undefined
+    ? "[Quoting an earlier assistant reply in this conversation.]"
+    : `[Quoting the assistant reply from turn ${c.turn}.]`;
+  return [head, ...c.body.split("\n").map((line) => `> ${line}`)].join("\n");
 }
 
 function isPicture(c: Chip): boolean {
@@ -131,17 +146,16 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
     caretRef.current = at;
   };
 
-  // A quote lands in the draft, never on the wire: it is material for what the
-  // person is about to write, so it arrives unsent and with the caret after it.
+  // A quote rides above the box like a long paste does, for the same reason: an
+  // answer pasted into the composer becomes the composer. It is material for
+  // the question, not the question, so it stays removable until the turn goes.
   useEffect(() => {
     if (!quote?.n) return;
-    setText((was) => {
-      const block = quote.text.split("\n").map((line) => `> ${line}`).join("\n");
-      const head = was.trim() ? `${was.replace(/\s+$/, "")}\n\n` : "";
-      const next = `${head}${block}\n\n`;
-      pending.current = next.length;
-      return next;
-    });
+    setShots((prev) => [
+      ...prev,
+      { k: "quote", id: chipId(), body: quote.text, turn: quote.turn, lines: countLines(quote.text) },
+    ]);
+    queueMicrotask(() => box.current?.focus());
   }, [quote?.n]);
 
   const menu = useCompletion(port, text, caret, (next, at) => {
@@ -209,7 +223,10 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
     if (!v && shots.length === 0) return;
     const refs = shots.flatMap((c) => (c.k === "attachment" && c.a ? [c.a.ref] : []));
     const pastes = shots.flatMap((c) => (c.k === "paste" ? [c.body] : []));
-    const line = [[...refs, v].filter(Boolean).join(" "), ...pastes].filter(Boolean).join("\n\n");
+    // A quote is what the question is about, so it leads; a held-back paste is
+    // the material the answer needs and follows what was typed.
+    const quotes = shots.flatMap((c) => (c.k === "quote" ? [quoteBlock(c)] : []));
+    const line = [...quotes, [...refs, v].filter(Boolean).join(" "), ...pastes].filter(Boolean).join("\n\n");
     const draft = { text, shots, caret: caretRef.current };
     submittingRef.current = true;
     setSubmitting(true);
@@ -358,7 +375,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
 
   const adding = shots.some((c) => c.k === "attachment" && c.state === "adding");
   const failed = shots.some((c) => c.k === "attachment" && c.state === "failed");
-  const hasDraft = text.trim().length > 0 || shots.some((c) => c.k === "paste" || c.state === "ready");
+  const hasDraft = text.trim().length > 0 || shots.some((c) => c.k !== "attachment" || c.state === "ready");
   const lines = countLines(text);
   const showCount = text.length >= 240 || lines > 3;
   const sendDisabled = submitting || stopping || adding || failed || !hasDraft;
@@ -429,14 +446,14 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
                 </>
               ) : (
                 <>
-                  <span className="glyph" aria-hidden="true">TXT</span>
+                  <span className="glyph" aria-hidden="true">{c.k === "quote" ? "❝" : "TXT"}</span>
                   <span className="meta">
-                    <span className="nm">{c.name ?? t("粘贴的文本")}</span>
+                    <span className="nm" title={c.body}>{chipName(c)}</span>
                     <button
                       className="undo"
                       onClick={() => {
                         discard(c);
-                        insert(c.body);
+                        insert(c.k === "quote" ? quoteBlock(c) : c.body);
                       }}
                     >
                       {t("{n} 行 · 展开到输入框", { n: c.lines })}
