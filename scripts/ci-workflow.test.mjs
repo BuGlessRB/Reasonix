@@ -27,6 +27,23 @@ const release = workflow("release-desktop");
 const promote = workflow("release-promote");
 const appMemory = workflow("app-memory");
 
+test("frontend artifact workflows share one exact Node runtime", () => {
+  const version = readFileSync(new URL("../.node-version", import.meta.url), "utf8").trim();
+  assert.match(version, /^\d+\.\d+\.\d+$/);
+  for (const [name, source] of [["ci", ci], ["app-memory", appMemory], ["release-desktop", release]]) {
+    assert.doesNotMatch(source, /node-version: ["']?24(?:["']|\s)/, name);
+    assert.match(source, /node-version-file: \.node-version/, name);
+  }
+  const names = [...ci.matchAll(/^  ([a-z][a-z0-9-]*):$/gm)].map(match => match[1]);
+  const participants = names.map(name => [name, job(ci, name)])
+    .filter(([, body]) => /artifact-identity\.mjs (create|verify)/.test(body));
+  assert.ok(participants.length > 1, "cover both producer and consumers");
+  for (const [name, body] of participants) {
+    assert.match(body, /uses: actions\/setup-node@[^\n]+\n\s+with:\n\s+node-version-file: \.node-version/, name);
+    assert.doesNotMatch(body, /node-version:/, `${name} must not override the shared runtime`);
+  }
+});
+
 test("Windows PR verifies credential aliases before full push CI", () => {
   assert.match(ci, /name: test \(Windows credential ACL identity\)[\s\S]*?runner\.os == 'Windows' && github\.event_name == 'pull_request'[\s\S]*?go test -timeout=2m -run '\^TestCredentialAccessRepairsLegacyCredentialDeny\|\^TestRepairLegacyCredentialDenyMatchesFileAcrossPathAliases\$' \.\/internal\/config \.\/internal\/winaclresidue/);
 });
