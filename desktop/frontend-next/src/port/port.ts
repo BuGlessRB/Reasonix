@@ -305,6 +305,10 @@ export interface AgentPort {
   // tab — a target="_blank" click there does nothing at all — and navigating in
   // place would replace the session with the page.
   openExternal(url: string): Promise<void>;
+  /** Open this session's workspace in the machine's code editor. Answers which
+   *  one it found, so a window with several installed can say. It refuses with
+   *  a code rather than doing nothing when there is none. */
+  openInEditor(): Promise<{ editor: string; root: string }>;
   sessions(): Promise<SessionEntry[]>;
   resume(path: string): Promise<void>;
   newSession(): Promise<void>;

@@ -334,6 +334,10 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.post("/workspace", { isolate: true });
   }
 
+  async openInEditor(): Promise<{ editor: string; root: string }> {
+    return this.post0<{ editor: string; root: string }>("/workspace/editor");
+  }
+
   openExternal(url: string): Promise<void> {
     host().openExternal(url);
     return Promise.resolve();

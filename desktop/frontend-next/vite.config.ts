@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-import { ISOLATED } from "./src/testing/isolated.ts";
 
 interface ProxyEvents {
   on(event: "proxyReq", cb: (req: { setHeader(k: string, v: string): void }) => void): void;
@@ -39,21 +38,17 @@ export default defineConfig(({ mode }) => {
     // guard that reads app.css to check a rule gets an empty string and passes
     // on nothing. Processing it is what makes that guard able to fail.
     //
-    // One worker per thread, reused across files: a fresh module registry per
-    // file meant re-importing React, the port and app.css once each, which was
-    // most of the run. The cost is that module-level state now outlives a file,
-    // so a test that needs a clean one has to make it, not assume it.
+    // Threads rather than forks: a worker per file either way, but a thread is
+    // cheaper to start, which is most of what a suite of small files pays.
     //
-    // A file calling vi.mock cannot share that registry — a module another file
-    // already imported unmocked stays unmocked — so those run isolated. The list
-    // is checked against the sources by src/testing/isolated.test.ts, which is
-    // what keeps it from quietly stopping to match.
+    // Sharing a worker across files was tried and taken back out. It was fast —
+    // about 9s against 15 — and it made the suite intermittent: vi.mock cannot
+    // see a module another file already imported unmocked, and a render test
+    // that passed alone failed in one full run and passed in the next. A gate
+    // that goes red by arrangement teaches people to re-run it, not read it.
     test: {
       css: true,
-      projects: [
-        { extends: true, test: { name: "shared", pool: "threads", isolate: false, exclude: [...ISOLATED, "**/node_modules/**", "**/dist/**"] } },
-        { extends: true, test: { name: "mocked", pool: "threads", isolate: true, include: [...ISOLATED] } },
-      ],
+      pool: "threads",
     },
     server: {
       port: 5273,

@@ -155,6 +155,15 @@ export function WorkbenchPanel({
     [diff, setDiff] = useState("");
   const [busy, setBusy] = useState(false),
     [failed, setFailed] = useState("");
+  // Which editor opened it, or why none did. The host knows both and says so,
+  // because a button that does nothing is indistinguishable from a broken one.
+  const [editorNote, setEditorNote] = useState("");
+  const openEditor = useCallback(() => {
+    void port
+      .openInEditor()
+      .then(({ editor }) => setEditorNote(t("已在 {app} 中打开", { app: editor })))
+      .catch((e) => setEditorNote(reason(e)));
+  }, [port]);
   const changeKey = changes
     .map((change) => `${change.status}:${change.path}`)
     .join("\n");
@@ -466,6 +475,17 @@ export function WorkbenchPanel({
           <div className="workbench-explorer-head">
             <span>{t("资源管理器")}</span>
             <small>{files.length + directories.length}</small>
+            {/* Beside the files rather than in settings: this is the one place
+                the workspace is already what you are looking at. */}
+            <button
+              className="workbench-editor"
+              data-action="workspace.editor"
+              title={editorNote || t("在代码编辑器中打开工作区")}
+              aria-label={t("在代码编辑器中打开工作区")}
+              onClick={openEditor}
+            >
+              <StudioIcon name="code" />
+            </button>
           </div>
           <label className="workbench-search">
             <StudioIcon name="search" />

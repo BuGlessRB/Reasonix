@@ -245,6 +245,10 @@ export class MockPort extends MockTheme implements AgentPort {
     await this.setWorkspace((this.state.workspaceRoot ?? "") + " (隔离副本)");
   }
 
+  async openInEditor() {
+    return { editor: "Visual Studio Code", root: "/work/demo" };
+  }
+
   async openExternal(url: string) {
     window.open(url, "_blank", "noopener,noreferrer");
   }

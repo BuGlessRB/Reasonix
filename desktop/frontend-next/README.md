@@ -9,23 +9,20 @@ reviewed: 2026-09-22
 
 ## Tests
 
-`pnpm test` runs one worker per thread and reuses it across files (`isolate:
-false`). Re-importing React, the port and `app.css` once per file was most of
-the run; sharing the registry took it from about 19s to about 9s.
+`pnpm test` runs one worker per test file on the threads pool. Threads rather
+than forks: the same worker-per-file isolation, cheaper to start, which is most
+of what a suite of many small files pays. About 19s to about 15s.
 
-What that costs: module-level state outlives a test file. A test that needs a
-clean module makes one — a fresh instance, an explicit reset — rather than
-assuming the file boundary gave it one. `pnpm vitest run --sequence.shuffle`
-is how that assumption gets caught.
+Sharing one worker across files (`isolate: false`) was tried and taken back
+out. It reached about 9s and made the suite intermittent:
 
-`vi.mock` is the one thing that cannot share a registry: a module another file
-already imported unmocked stays unmocked, and the mock silently does nothing.
+- `vi.mock` cannot see a module another file already imported unmocked, so the
+  mock silently does nothing and the test passes alone and fails in the suite.
+- A render test then failed in one full run and passed in the next, with no
+  change in between.
 
-- Those files run in a second, isolated project.
-- Which files they are is read out of the sources at config load, never listed.
-  A list is what stops matching the moment somebody writes the next one.
-- A config load that finds no test files fails rather than quietly covering
-  nothing.
+A gate that goes red by arrangement teaches people to re-run it rather than
+read it, which costs more than the seconds it saves.
 
 `css: true` is load-bearing: the guards under `src/styles` read `app.css`
 through `?raw`, and a stubbed stylesheet hands them an empty string, which

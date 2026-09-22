@@ -469,6 +469,8 @@ export const EN: Record<string, string> = {
   "没有未经验证的部分": "nothing left unverified",
   "未验证": "not verified",
   "交付验收": "delivery receipt",
+  "在代码编辑器中打开工作区": "Open the workspace in a code editor",
+  "已在 {app} 中打开": "Opened in {app}",
   "通知": "Notifications",
   "只在你没盯着窗口的时候有用：一轮跑完、停下来等批准、或者模型反过来问你，都可以让系统提醒一次。": "Only useful while you are not watching: a turn finishing, a stop for approval, or the model asking you something can each raise one system alert.",
   "发送系统通知": "Send system notifications",

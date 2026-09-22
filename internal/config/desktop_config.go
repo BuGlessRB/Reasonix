@@ -19,6 +19,16 @@ func (c *Config) DesktopClosesToBackground() bool {
 	return false
 }
 
+// DesktopEditor is the editor a person named, taken as given. Empty leaves the
+// search to whoever does it: naming one here is how a machine with several says
+// which, and second-guessing it would make the setting advisory.
+func (c *Config) DesktopEditor() string {
+	if c == nil {
+		return ""
+	}
+	return strings.TrimSpace(c.Desktop.Editor)
+}
+
 // DesktopTray normalizes the status-icon preference: auto shows one where the
 // platform has one, off keeps the taskbar entry as the only surface.
 func (c *Config) DesktopTray() string {
@@ -59,6 +69,7 @@ type DesktopConfig struct {
 	SurfaceSlots   map[string]string `toml:"surface_slots"`
 	TerminalTheme  string            `toml:"terminal_theme"`  // auto|dark|light; auto follows the desktop app theme
 	ExternalOpener string            `toml:"external_opener"` // preferred installed app used by the desktop Open control
+	Editor         string            `toml:"editor"`          // command or path to open the workspace in; empty searches the editors this machine has
 	CloseBehavior  string            `toml:"close_behavior"`  // quit|background; desktop window close behavior
 	// Tray is auto|off. It is not a second close_behavior: with no status
 	// icon there is no way back to a hidden window, so off also means the
