@@ -42,6 +42,11 @@ test("frontend artifact workflows share one exact Node runtime", () => {
     assert.match(body, /uses: actions\/setup-node@[^\n]+\n\s+with:\n\s+node-version-file: \.node-version/, name);
     assert.doesNotMatch(body, /node-version:/, `${name} must not override the shared runtime`);
   }
+  for (const name of ["prepare", "shard", "app-memory"]) {
+    const body = job(appMemory, name);
+    assert.match(body, /node-version-file: \.node-version/, name);
+    assert.doesNotMatch(body, /node-version:/, name);
+  }
 });
 
 test("Windows PR verifies credential aliases before full push CI", () => {
@@ -465,6 +470,8 @@ test("all desktop consumers verify the prepared build and reject a failed prepar
   assert.match(prepare, /stable_artifact_name: desktop-frontend-stable-\$\{\{ github\.run_id \}\}-\$\{\{ steps\.artifact-identity\.outputs\.attempt \}\}/);
   assert.equal(prepare.match(/desktop\/frontend\/sourcemaps\/\$\{\{ github\.sha \}\}/g)?.length, 2);
 });
+
+
 
 test("browser matrix preserves five entry points and fails closed through desktop-browser", () => {
   const groups = job(ci, "desktop-browser-group");
