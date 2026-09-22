@@ -1,6 +1,6 @@
 import type { PlanAction } from "./session";
 import { HttpError } from "./port";
-import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
+import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, NotifyPrefs, TrayPrefs } from "./port";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT, mockMsgIndex, mockTurnStart } from "./fixture";
@@ -570,6 +570,17 @@ export class MockPort extends MockTheme implements AgentPort {
 
   // The fixture has a window with an icon, because the state worth designing
   // is the one where both switches mean something.
+  private notifications: NotifyPrefs = { enabled: false, turnDone: true, approval: true, ask: true };
+
+  async notifyPrefs(): Promise<NotifyPrefs | null> {
+    return { ...this.notifications };
+  }
+
+  async setNotifyPrefs(next: NotifyPrefs): Promise<NotifyPrefs | null> {
+    this.notifications = { ...next };
+    return { ...this.notifications };
+  }
+
   private tray: TrayPrefs = { icon: true, live: true, closeToTray: false };
 
   async trayPrefs(): Promise<TrayPrefs | null> {

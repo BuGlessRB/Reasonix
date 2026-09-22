@@ -112,6 +112,15 @@ export interface QueueCapacity {
 
 /** What the window says about its own status icon. null where there is no
  *  window under the page — the same build runs in a browser tab. */
+/** The desktop notifications this window sends on the machine's behalf.
+ *  enabled gates the other three, which are what is worth interrupting for. */
+export interface NotifyPrefs {
+  enabled: boolean;
+  turnDone: boolean;
+  approval: boolean;
+  ask: boolean;
+}
+
 export interface TrayPrefs {
   // What the setting asks for.
   icon: boolean;
@@ -200,6 +209,10 @@ export interface AgentPort {
   // null in a browser tab: there is no window to keep running.
   trayPrefs(): Promise<TrayPrefs | null>;
   setTrayPrefs(icon: boolean, closeToTray: boolean): Promise<TrayPrefs | null>;
+  // Null where this kernel has no window to notify from: one reached over the
+  // network would fire on its own machine, not the watcher's.
+  notifyPrefs(): Promise<NotifyPrefs | null>;
+  setNotifyPrefs(next: NotifyPrefs): Promise<NotifyPrefs | null>;
   // null when the config file reads. Everything else here writes to it.
   configProblem(): Promise<ConfigProblem | null>;
   repairConfig(): Promise<ConfigRepair>;

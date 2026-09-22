@@ -6,6 +6,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/event"
+	"reasonix/internal/i18n"
 )
 
 var errTestFailure = errors.New("failed")
@@ -30,7 +31,7 @@ type recordSender struct {
 func TestSinkForwardsProtocolRecoveryWithoutNotification(t *testing.T) {
 	inner := &recordSink{}
 	sender := &recordSender{}
-	sink := NewSink(inner, sender, config.NotificationsConfig{Enabled: true, TurnDone: true})
+	sink := NewSink(inner, sender, i18n.English, NewSettings(config.NotificationsConfig{Enabled: true, TurnDone: true}))
 
 	event.RecordProtocolRecovery(sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningFallback})
 
@@ -50,12 +51,12 @@ func (s *recordSender) Send(m Message) error {
 func TestSinkForwardsEventsAndSendsConfiguredNotifications(t *testing.T) {
 	inner := &recordSink{}
 	sender := &recordSender{}
-	sink := NewSink(inner, sender, config.NotificationsConfig{
+	sink := NewSink(inner, sender, i18n.English, NewSettings(config.NotificationsConfig{
 		Enabled:         true,
 		TurnDone:        true,
 		ApprovalRequest: true,
 		AskRequest:      true,
-	})
+	}))
 
 	sink.Emit(event.Event{Kind: event.ApprovalRequest})
 	sink.Emit(event.Event{Kind: event.AskRequest})
@@ -67,13 +68,13 @@ func TestSinkForwardsEventsAndSendsConfiguredNotifications(t *testing.T) {
 	if len(sender.messages) != 3 {
 		t.Fatalf("notifications = %d, want 3", len(sender.messages))
 	}
-	if sender.messages[0].Body != "Approval needed" {
+	if sender.messages[0].Body != i18n.English.NotifyApproval {
 		t.Errorf("approval notification body = %q", sender.messages[0].Body)
 	}
-	if sender.messages[1].Body != "Question needs your answer" {
+	if sender.messages[1].Body != i18n.English.NotifyAsk {
 		t.Errorf("ask notification body = %q", sender.messages[1].Body)
 	}
-	if sender.messages[2].Body != "Turn finished" {
+	if sender.messages[2].Body != i18n.English.NotifyTurnDone {
 		t.Errorf("turn notification body = %q", sender.messages[2].Body)
 	}
 }
@@ -81,12 +82,12 @@ func TestSinkForwardsEventsAndSendsConfiguredNotifications(t *testing.T) {
 func TestSinkSkipsNotificationsWhenDisabled(t *testing.T) {
 	inner := &recordSink{}
 	sender := &recordSender{}
-	sink := NewSink(inner, sender, config.NotificationsConfig{
+	sink := NewSink(inner, sender, i18n.English, NewSettings(config.NotificationsConfig{
 		Enabled:         false,
 		TurnDone:        true,
 		ApprovalRequest: true,
 		AskRequest:      true,
-	})
+	}))
 
 	sink.Emit(event.Event{Kind: event.TurnDone})
 
@@ -101,12 +102,12 @@ func TestSinkSkipsNotificationsWhenDisabled(t *testing.T) {
 func TestSendEventUsesSameNotificationRules(t *testing.T) {
 	sender := &recordSender{}
 
-	SendEvent(sender, config.NotificationsConfig{Enabled: true, TurnDone: true}, event.Event{Kind: event.TurnDone})
+	SendEvent(sender, i18n.English, config.NotificationsConfig{Enabled: true, TurnDone: true}, event.Event{Kind: event.TurnDone})
 
 	if len(sender.messages) != 1 {
 		t.Fatalf("notifications = %d, want 1", len(sender.messages))
 	}
-	if sender.messages[0].Body != "Turn finished" {
+	if sender.messages[0].Body != i18n.English.NotifyTurnDone {
 		t.Errorf("notification body = %q", sender.messages[0].Body)
 	}
 }
@@ -114,24 +115,24 @@ func TestSendEventUsesSameNotificationRules(t *testing.T) {
 func TestTurnDoneWithErrorSendsFailureNotification(t *testing.T) {
 	sender := &recordSender{}
 
-	SendEvent(sender, config.NotificationsConfig{Enabled: true, TurnDone: true}, event.Event{Kind: event.TurnDone, Err: errTestFailure})
+	SendEvent(sender, i18n.English, config.NotificationsConfig{Enabled: true, TurnDone: true}, event.Event{Kind: event.TurnDone, Err: errTestFailure})
 
 	if len(sender.messages) != 1 {
 		t.Fatalf("notifications = %d, want 1", len(sender.messages))
 	}
-	if sender.messages[0].Body != "Turn failed" {
+	if sender.messages[0].Body != i18n.English.NotifyTurnFailed {
 		t.Errorf("notification body = %q", sender.messages[0].Body)
 	}
 }
 
 func TestSinkHonorsPerEventConfig(t *testing.T) {
 	sender := &recordSender{}
-	sink := NewSink(&recordSink{}, sender, config.NotificationsConfig{
+	sink := NewSink(&recordSink{}, sender, i18n.English, NewSettings(config.NotificationsConfig{
 		Enabled:         true,
 		TurnDone:        false,
 		ApprovalRequest: true,
 		AskRequest:      false,
-	})
+	}))
 
 	sink.Emit(event.Event{Kind: event.TurnDone})
 	sink.Emit(event.Event{Kind: event.ApprovalRequest})
@@ -140,7 +141,46 @@ func TestSinkHonorsPerEventConfig(t *testing.T) {
 	if len(sender.messages) != 1 {
 		t.Fatalf("notifications = %d, want 1", len(sender.messages))
 	}
-	if sender.messages[0].Body != "Approval needed" {
+	if sender.messages[0].Body != i18n.English.NotifyApproval {
 		t.Errorf("notification body = %q", sender.messages[0].Body)
+	}
+}
+
+// The switch says "notify me", not "notify me after a restart". A runtime built
+// while the setting was off is the ordinary case — the window is up before
+// anybody opens settings — so it is the one that has to start delivering.
+func TestSinkBuiltWhileOffDeliversOnceTurnedOn(t *testing.T) {
+	sender := &recordSender{}
+	set := NewSettings(config.NotificationsConfig{})
+	sink := NewSink(&recordSink{}, sender, i18n.English, set)
+
+	sink.Emit(event.Event{Kind: event.TurnDone})
+	if len(sender.messages) != 0 {
+		t.Fatalf("notified while off: %+v", sender.messages)
+	}
+
+	set.Store(config.NotificationsConfig{Enabled: true, TurnDone: true})
+	sink.Emit(event.Event{Kind: event.TurnDone})
+	if len(sender.messages) != 1 {
+		t.Fatalf("notifications after turning it on = %d, want 1", len(sender.messages))
+	}
+
+	set.Store(config.NotificationsConfig{})
+	sink.Emit(event.Event{Kind: event.TurnDone})
+	if len(sender.messages) != 1 {
+		t.Fatalf("kept notifying after it was turned off = %d, want 1", len(sender.messages))
+	}
+}
+
+// A notification leaves the window, so it is said in the language the window is
+// set to rather than the kernel's log English.
+func TestNotificationSpeaksTheWindowsLanguage(t *testing.T) {
+	sender := &recordSender{}
+	SendEvent(sender, i18n.Chinese, config.NotificationsConfig{Enabled: true, TurnDone: true}, event.Event{Kind: event.TurnDone})
+	if len(sender.messages) != 1 || sender.messages[0].Body != i18n.Chinese.NotifyTurnDone {
+		t.Fatalf("notification body = %+v", sender.messages)
+	}
+	if sender.messages[0].Body == i18n.English.NotifyTurnDone {
+		t.Fatal("notification answered in English for a Chinese window")
 	}
 }

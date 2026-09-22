@@ -398,19 +398,27 @@ func TestRunServesUntilTheParentLetsGo(t *testing.T) {
 
 // Notifications are the shared [notifications] setting, not a shell of its own:
 // a window that announced turns the CLI would have kept quiet about would be a
-// second policy nobody set.
-func TestHostNotifiesOnlyWhereTheSharedSettingAsksForIt(t *testing.T) {
+// second policy nobody set. The switch is read from the holder on every event,
+// so every runtime is wrapped whatever the setting says today — deciding it at
+// boot is what made "notify me" mean "notify me after a restart".
+func TestHostNotificationsCarryTheSharedSettingLive(t *testing.T) {
 	plain := serve.NewBroadcaster()
-	off := hostNotifications(&config.Config{})
-	if got := off(plain); got != event.Sink(plain) {
-		t.Error("notifications are off, and the sink was still wrapped")
-	}
-	on := hostNotifications(&config.Config{Notifications: config.NotificationsConfig{Enabled: true}})
-	if got := on(plain); got == event.Sink(plain) {
-		t.Error("notifications are on, and nothing was wrapped to send them")
-	}
-	if nilCfg := hostNotifications(nil); nilCfg(plain) != event.Sink(plain) {
-		t.Error("no config at all must not turn notifications on")
+	for _, cfg := range []*config.Config{
+		{},
+		{Notifications: config.NotificationsConfig{Enabled: true}},
+		nil,
+	} {
+		wrap, set := hostNotifications(cfg)
+		if got := wrap(plain); got == event.Sink(plain) {
+			t.Fatalf("runtime was left unwrapped, so the switch could never reach it (cfg %+v)", cfg)
+		}
+		want := config.NotificationsConfig{}
+		if cfg != nil {
+			want = cfg.Notifications
+		}
+		if got := set.Load(); got != want {
+			t.Errorf("holder = %+v, want the shared setting %+v", got, want)
+		}
 	}
 }
 

@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { globSync, readFileSync } from "node:fs";
 
 interface ProxyEvents {
   on(event: "proxyReq", cb: (req: { setHeader(k: string, v: string): void }) => void): void;
@@ -23,9 +24,16 @@ const ROUTES = [
   "/extensions", "/themes", "/plugins", "/surfaces",
   "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",
   "/permissions", "/sandbox", "/context", "/storage", "/tray", "/browser", "/browser-host", "/asks", "/update",
-  "/host",
+  "/host", "/notifications",
   "/slash", "/workspaces", "/welcome", "/usage", "/config", "/studio",
 ];
+
+// Test files that mock a module. Read, never listed: the next one somebody
+// writes has to land in the isolated project by itself.
+const MOCKERS = globSync("src/**/*.test.{ts,tsx}", { cwd: import.meta.dirname })
+  .map((f) => f.replaceAll("\\", "/"))
+  .filter((f) => readFileSync(`${import.meta.dirname}/${f}`, "utf8").includes("vi.mock("));
+if (MOCKERS.length === 0) throw new Error("vite.config: found no test files; the isolation split would silently cover nothing");
 
 // REASONIX_SERVE points at a running `reasonix serve`; without it the app boots
 // on MockPort so the UI can be developed with no Go process at all.
@@ -39,13 +47,20 @@ export default defineConfig(({ mode }) => {
     // on nothing. Processing it is what makes that guard able to fail.
     //
     // One worker per thread, reused across files: a fresh module registry per
-    // file meant re-importing React, the port and app.css 119 times, which was
+    // file meant re-importing React, the port and app.css once each, which was
     // most of the run. The cost is that module-level state now outlives a file,
     // so a test that needs a clean one has to make it, not assume it.
+    //
+    // A file calling vi.mock cannot share that registry — a module another file
+    // already imported unmocked stays unmocked — so those run isolated. Which
+    // files they are is read from the sources rather than listed, because a list
+    // is what silently stops matching when somebody adds the next one.
     test: {
       css: true,
-      pool: "threads",
-      isolate: false,
+      projects: [
+        { extends: true, test: { name: "shared", pool: "threads", isolate: false, exclude: [...MOCKERS, "**/node_modules/**", "**/dist/**"] } },
+        { extends: true, test: { name: "mocked", pool: "threads", isolate: true, include: MOCKERS } },
+      ],
     },
     server: {
       port: 5273,

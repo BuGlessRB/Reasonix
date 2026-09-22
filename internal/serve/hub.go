@@ -20,6 +20,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/fileutil"
+	"reasonix/internal/notify"
 	"reasonix/internal/provider"
 	"reasonix/internal/surface"
 	"reasonix/internal/update"
@@ -148,6 +149,10 @@ type HubOptions struct {
 	// BrowserHost draws hosted browser views in the window behind this hub. Nil
 	// leaves its routes unregistered, and browsers are launched instead.
 	BrowserHost *BrowserHost
+	// Notifications is the holder every sink this hub decorates reads, and what
+	// the settings surface writes into. Nil leaves those routes unregistered:
+	// a kernel reached over the network would fire on its own machine.
+	Notifications *notify.Settings
 	// Tray is the window behind this hub, where there is one. Nil leaves the
 	// tray routes unregistered rather than answering for an icon that does not
 	// exist — a networked server has no window to put one on.
@@ -483,6 +488,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
 	h.registerTreeRoutes(mux)
 	h.registerTrayRoutes(mux)
+	h.registerNotifyRoutes(mux)
 	h.registerBrowserHostRoutes(mux)
 	h.registerStudioVersionRoutes(mux)
 	h.registerUpdateRoutes(mux)

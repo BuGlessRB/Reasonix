@@ -133,6 +133,11 @@ type Messages struct {
 	RecoveryPlanAfterFmt            string // compact proposed-plan line, one %s
 	RecoveryTaskGrantChoices        string // Auto Guard list with a current-task semantic grant
 	SandboxEscapeApprovalChoices    string // approval choice list for OS sandbox escape prompts
+	NotifyTitle                     string // desktop notification title
+	NotifyTurnDone                  string // desktop notification: the turn finished
+	NotifyTurnFailed                string // desktop notification: the turn failed
+	NotifyApproval                  string // desktop notification: something is waiting to be approved
+	NotifyAsk                       string // desktop notification: the model asked a question
 	ApprovalNeededFmt               string // notification text for a pending approval, tool only
 	ApprovalNeededWithSubjectFmt    string // notification text for a pending approval with subject
 	ToolApprovalSourceFmt           string // "Source: %s" / "来源: %s"

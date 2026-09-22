@@ -98,6 +98,7 @@ export const EN_KERNEL: Record<string, string> = {
   "该协议不支持由端点自行搜索": "This protocol has no wire format for a search the endpoint runs itself",
   "这台服务器不允许修改模型来源": "This server does not allow editing model sources",
   "打不开这个网页：{error}": "That page could not be opened: {error}",
+  "通知设置没能保存：{error}": "The notification settings could not be saved: {error}",
   "这个系统没有可用的文件夹选择框，请直接填写路径。": "This system has no folder picker available; type the path instead.",
   "打不开文件夹选择框：{error}": "The folder picker could not be opened: {error}",
   "名称「{name}」不能用来存放密钥：密钥槽位由名称推导，而它不能以数字开头。改一个以字母开头的名称即可，密钥本身没有问题。": "The name “{name}” cannot hold a key: the credential slot is derived from it, and a slot may not start with a digit. Use a name starting with a letter — the key itself is fine.",

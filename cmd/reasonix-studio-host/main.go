@@ -277,7 +277,7 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 	// This window is the only client of its kernel, so a system notification
 	// reaches the person who asked for it. Every pane gets the same wrapper,
 	// not just the one the launch started with.
-	notifications := hostNotifications(cfg)
+	notifications, notifySet := hostNotifications(cfg)
 	// One fold behind the status icon: every pane's events on the way through,
 	// so the tray surface answers from what the panes did rather than from a
 	// count the shell kept for itself.
@@ -308,18 +308,19 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 	boot.SetBrowserHost(browserHost.Dial)
 	hubCfg := hostServeConfig(cfg.Serve)
 	hub := serve.NewHub(serve.HubOptions{
-		Serve:        hubCfg,
-		Surface:      surface.Desktop,
-		Page:         page,
-		Grant:        grantHostCapabilities,
-		DecorateSink: decorate,
-		Tray:         &studioTray{tracker: tracker},
-		BrowserHost:  browserHost,
-		Asks:         asks,
-		Remote:       remotehost.New(ctx, version, asks),
-		OnClose:      func(rt *serve.Runtime) { tracker.Drop(paneKey(rt.Events)) },
-		Install:      studioInstall(shell),
-		Update:       studioUpdateHost(shell, handshakeTo),
+		Serve:         hubCfg,
+		Surface:       surface.Desktop,
+		Page:          page,
+		Grant:         grantHostCapabilities,
+		DecorateSink:  decorate,
+		Tray:          &studioTray{tracker: tracker},
+		Notifications: notifySet,
+		BrowserHost:   browserHost,
+		Asks:          asks,
+		Remote:        remotehost.New(ctx, version, asks),
+		OnClose:       func(rt *serve.Runtime) { tracker.Drop(paneKey(rt.Events)) },
+		Install:       studioInstall(shell),
+		Update:        studioUpdateHost(shell, handshakeTo),
 	})
 	srv := serve.New(built.Controller, bc, hubCfg)
 	srv.SetPaneSink(paneSink)
@@ -345,15 +346,18 @@ func hostServeConfig(cfg config.ServeConfig) config.ServeConfig {
 	return cfg
 }
 
-// hostNotifications is the sink wrapper every runtime gets. Off unless the
-// shared [notifications] config asks for it, so the CLI and this window answer
-// to one setting rather than each growing its own.
-func hostNotifications(cfg *config.Config) func(event.Sink) event.Sink {
-	if cfg == nil || !cfg.Notifications.Enabled {
-		return func(sink event.Sink) event.Sink { return sink }
+// hostNotifications is the sink wrapper every runtime gets, plus the holder the
+// settings surface writes into. Every runtime is wrapped whatever the switch
+// says today, because deciding here would make "notify me" mean "notify me
+// after a restart". The shared [notifications] config is the one setting this
+// window and the CLI both answer to.
+func hostNotifications(cfg *config.Config) (func(event.Sink) event.Sink, *notify.Settings) {
+	set := notify.NewSettings(config.NotificationsConfig{})
+	if cfg != nil {
+		set.Store(cfg.Notifications)
 	}
 	sender := notify.NewPlatformSender()
-	return func(sink event.Sink) event.Sink { return notify.NewSink(sink, sender, cfg.Notifications) }
+	return func(sink event.Sink) event.Sink { return notify.NewSink(sink, sender, i18n.M, set) }, set
 }
 
 // studioTray answers for a shell that can put an icon back whenever the setting

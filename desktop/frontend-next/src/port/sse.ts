@@ -1,5 +1,5 @@
 import { PLAN_ACTIONS, type PlanAction } from "./session";
-import type { AccountState, AgentPort, Appearance, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, NotifyPrefs, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceFile, type WorkspaceFiles, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { StoragePlan, StorageState } from "./storage";
@@ -278,6 +278,29 @@ export class SsePort extends SseTheme implements AgentPort {
   // A kernel with no window registers no tray routes at all, which is what a
   // browser tab reads as "there is no icon here" — the same null this panel
   // has always had to render.
+  async notifyPrefs(): Promise<NotifyPrefs | null> {
+    return this.notifyCall(await fetch("/notifications", { credentials: "same-origin" }));
+  }
+
+  async setNotifyPrefs(next: NotifyPrefs): Promise<NotifyPrefs | null> {
+    return this.notifyCall(
+      await fetch("/notifications", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(next),
+      }),
+    );
+  }
+
+  // 404 is "this kernel has no window", which is a fact about the host and not
+  // a failure: the panel draws nothing rather than an error.
+  private async notifyCall(res: Response): Promise<NotifyPrefs | null> {
+    if (res.status === 404) return null;
+    if (!res.ok) await SsePort.fail("/notifications", res);
+    return (await res.json()) as NotifyPrefs;
+  }
+
   private async trayCall(res: Response): Promise<TrayPrefs | null> {
     if (res.status === 404) return null;
     if (!res.ok) await SsePort.fail("/tray/prefs", res);

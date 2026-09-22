@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/i18n"
 	"reasonix/internal/notify"
 	"reasonix/internal/stats"
 	"reasonix/internal/trajectory"
@@ -32,7 +33,7 @@ func TestAuditCapabilitiesAreForwardedByEveryWrapper(t *testing.T) {
 		event.Sync(event.Discard),
 		event.Coalesce(event.Discard, time.Millisecond),
 		control.NewGoalUsageTee(event.Discard),
-		notify.NewSink(event.Discard, nil, config.NotificationsConfig{}),
+		notify.NewSink(event.Discard, nil, i18n.English, notify.NewSettings(config.NotificationsConfig{})),
 		&trajectory.Recorder{},
 		&stats.Recorder{},
 	}
