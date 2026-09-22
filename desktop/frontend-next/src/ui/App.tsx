@@ -6,6 +6,7 @@ import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { Chrome } from "./Chrome";
 import { useLaunchHealth } from "./launchhealth";
 import { Nav } from "./Nav";
+import { useLinkRouting } from "./links";
 import { Pane, type PaneReport } from "./Pane";
 import { DOCK, Gutter, RAIL, keepWidth, widthOf } from "./Gutter";
 import { folded as roomGaveUp, onFolds } from "./viewport";
@@ -379,22 +380,7 @@ export function App({ hub }: { hub: HubPort }) {
   const onRailW = useCallback((w: number) => { setRailW(w); keepWidth(RAIL, w); }, []);
   const onDockW = useCallback((w: number) => { setDockW(w); keepWidth(DOCK, w); }, []);
 
-  // A webview has nowhere to put a new tab, so target="_blank" opens nothing at
-  // all, and letting the link navigate in place would replace the session with
-  // the page. Every link leaves through the host instead.
-  useEffect(() => {
-    if (!activePort) return;
-    const onClick = (e: MouseEvent) => {
-      if (e.defaultPrevented || e.button !== 0) return;
-      const link = (e.target as Element | null)?.closest?.("a[href]");
-      const href = link?.getAttribute("href") ?? "";
-      if (!/^https?:\/\//i.test(href)) return;
-      e.preventDefault();
-      void activePort.openExternal(href).catch(fail);
-    };
-    addEventListener("click", onClick);
-    return () => removeEventListener("click", onClick);
-  }, [activePort, fail]);
+  useLinkRouting(activePort, useCallback(() => setBrowser(true), []), fail);
 
   // The window's shortcuts, named by the action each one performs — the same
   // identity the control on screen carries, because they are the same thing
