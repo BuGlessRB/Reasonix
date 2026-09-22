@@ -846,6 +846,18 @@ told apart by the colour of a symbol.
   it does not enter the prose; it sits against the composer until it has been
   read. It is one tier lighter than `.errbar`, which says "this request failed".
 
+## Deck readings
+
+- Sub-agents and background jobs are readings about this turn, so they sit with
+  the turn's other readings at the right end of the run rail rather than in a
+  panel of their own above it.
+- The detail is inside the same anchor as the reading, which is what lets hover
+  and keyboard focus reach it. A click pins it: a panel that closes when the
+  pointer leaves is one nobody can scroll.
+- One gesture for every summary on this row — the context reading opens the
+  same way, and a row where each control answers to a different one is a row
+  you have to learn.
+
 ## Token readings
 
 - Sent steps when a round bills; received climbs while the model writes, from

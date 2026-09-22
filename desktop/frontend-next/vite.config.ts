@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-import { globSync, readFileSync } from "node:fs";
+import { ISOLATED } from "./src/testing/isolated.ts";
 
 interface ProxyEvents {
   on(event: "proxyReq", cb: (req: { setHeader(k: string, v: string): void }) => void): void;
@@ -28,13 +28,6 @@ const ROUTES = [
   "/slash", "/workspaces", "/welcome", "/usage", "/config", "/studio",
 ];
 
-// Test files that mock a module. Read, never listed: the next one somebody
-// writes has to land in the isolated project by itself.
-const MOCKERS = globSync("src/**/*.test.{ts,tsx}", { cwd: import.meta.dirname })
-  .map((f) => f.replaceAll("\\", "/"))
-  .filter((f) => readFileSync(`${import.meta.dirname}/${f}`, "utf8").includes("vi.mock("));
-if (MOCKERS.length === 0) throw new Error("vite.config: found no test files; the isolation split would silently cover nothing");
-
 // REASONIX_SERVE points at a running `reasonix serve`; without it the app boots
 // on MockPort so the UI can be developed with no Go process at all.
 export default defineConfig(({ mode }) => {
@@ -52,14 +45,14 @@ export default defineConfig(({ mode }) => {
     // so a test that needs a clean one has to make it, not assume it.
     //
     // A file calling vi.mock cannot share that registry — a module another file
-    // already imported unmocked stays unmocked — so those run isolated. Which
-    // files they are is read from the sources rather than listed, because a list
-    // is what silently stops matching when somebody adds the next one.
+    // already imported unmocked stays unmocked — so those run isolated. The list
+    // is checked against the sources by src/testing/isolated.test.ts, which is
+    // what keeps it from quietly stopping to match.
     test: {
       css: true,
       projects: [
-        { extends: true, test: { name: "shared", pool: "threads", isolate: false, exclude: [...MOCKERS, "**/node_modules/**", "**/dist/**"] } },
-        { extends: true, test: { name: "mocked", pool: "threads", isolate: true, include: MOCKERS } },
+        { extends: true, test: { name: "shared", pool: "threads", isolate: false, exclude: [...ISOLATED, "**/node_modules/**", "**/dist/**"] } },
+        { extends: true, test: { name: "mocked", pool: "threads", isolate: true, include: [...ISOLATED] } },
       ],
     },
     server: {

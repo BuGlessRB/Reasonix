@@ -10,7 +10,7 @@ import type { RuntimeView } from "../port/hub";
 import type { TrajectoryRead } from "../port/wire";
 import { currentStep, fromHistory, initialState, localId, quoteAmount, reduce, stepDone, stepLabel } from "../state/session";
 import { pairCheckpoints } from "../state/checkpoints";
-import { Deck as DeckPanel, DeckChips, type Deck } from "./DeckChips";
+import { DeckChips, type Deck } from "./DeckChips";
 import { Plan } from "./Plan";
 import { useReplyActions } from "./reply";
 import { useGateActions } from "./gates";
@@ -679,11 +679,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           )}
         </div>
         <Composer port={port} status={status} running={s.running} quote={quote} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} />
-        {/* Above the rail rather than over the transcript: this is about the
-            run, and the run's own readings are the row it belongs to. */}
-        <DeckPanel open={deck} tasks={rail.tasks} jobs={jobs} />
         <div className="studio-meterrail" ref={meterRef} aria-label={t("运行统计")}>
-          <DeckChips tasks={rail.tasks} jobs={jobs} open={deck} onOpen={setDeck} />
           <div className="studio-speed-anchor">
             <button
               className="studio-meter-static studio-meter-speed"
@@ -726,6 +722,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           )}
           {cost && <span className="studio-meter-cost"><span>{t("本轮")}</span><b>{cost}</b></span>}
           {wallet.kind === "read" && <button className="studio-meter-wallet" data-action="settings.section" data-value="usage" aria-label={t("查看钱包余额")} onClick={() => onSettings("usage")}><StudioIcon name="wallet" /><b>{wallet.reading.display}</b></button>}
+          <DeckChips tasks={rail.tasks} jobs={jobs} open={deck} onOpen={setDeck} />
         </div>
         {/* Below the box, under a ceiling of their own. Both arrive unbidden and
             both are dismissed one at a time, so nothing else bounds how many can

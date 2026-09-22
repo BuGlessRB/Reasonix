@@ -1952,17 +1952,21 @@ body { font-size: 14px; line-height: 1.75; }
 :root[data-theme="light"] .rail .session-more:focus-visible { outline: none; }
 /* The deck opens upward out of the rail it is summarised on, so the reading and
    the detail behind it stay one object rather than two places to look. */
-.studio-deck {
-  display: grid; grid-template-rows: 0fr; overflow: hidden;
-  border-top: 1px solid transparent;
-  transition: grid-template-rows var(--t-card) var(--ease-out), border-color var(--t-card);
+.studio-deck-anchor { position: relative; height: 25px; display: flex; align-items: center; }
+.studio-deck-pop {
+  position: absolute; z-index: 1; right: 0; bottom: calc(100% + 8px);
+  width: 320px; max-height: 38vh; overflow-y: auto; overscroll-behavior: contain;
+  padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--float); box-shadow: var(--shadow-float);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateY(4px) scale(.985); transform-origin: bottom right;
+  transition: opacity var(--m-line), transform var(--m-line), visibility 0s linear var(--t-line);
 }
-.studio-deck > * { min-height: 0; overflow: hidden; }
-.studio-deck[data-open] {
-  grid-template-rows: 1fr; border-top-color: var(--hair);
-  max-height: 38vh; overflow-y: auto; overscroll-behavior: contain;
+.studio-deck-anchor:hover .studio-deck-pop,
+.studio-deck-anchor:focus-within .studio-deck-pop,
+.studio-deck-anchor[data-open] .studio-deck-pop {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition-delay: 0s;
 }
-.studio-deckchips { margin-left: auto; display: flex; align-items: center; gap: 5px; }
 .studio-deckchip {
   height: 22px; display: inline-flex; align-items: center; gap: 5px;
   padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-pill);
@@ -1978,7 +1982,7 @@ body { font-size: 14px; line-height: 1.75; }
 .studio-deckchip[data-live] .studio-icon { color: var(--accent); animation: deck-live 2.4s ease-in-out infinite; }
 @keyframes deck-live { 0%, 100% { opacity: 1 } 50% { opacity: .42 } }
 @media (prefers-reduced-motion: reduce) {
-  .studio-deck { transition: none }
+  .studio-deck-pop { transition: none }
   .studio-deckchip[data-live] .studio-icon { animation: none }
 }
 
