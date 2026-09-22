@@ -74,11 +74,15 @@ rules are written in.
   *is* the title bar, so it has to be the drag handle, and every control on it
   opts back out. Membership is what the markup says is interactive, not a list of the
   controls that happen to be on the bar today.
-- macOS floats its window controls over the corner at a y AppKit owns — measured
-  centre 25.5px. The reserved 78px is what the breadcrumb starts after, and the
-  swap inside it is opacity alone so nothing after it moves. Windows puts its
-  controls at the other end, hard against the corner, and they are the only
-  controls here that are square.
+- macOS floats its window controls over the window's corner, not over this row.
+  Whichever element owns that corner reserves them — `.chrome` collapsed, the
+  rail head open — and both read `--lights-w` / `--lights-h`. The swap inside
+  that width is opacity alone, so nothing after it moves.
+- The shell pins the lights with `trafficLightPosition`: AppKit's own placement
+  sits them above the line this row centres its controls on. The inset is
+  measured from their top edge, so it is that line minus half a control.
+- Windows puts its controls at the other end, hard against the corner, and they
+  are the only controls here that are square.
 - The wordmark is masked rather than an `<img>`: the file ships one hard-coded
   blue that reads as a status colour here and goes muddy on a dark ground.
 - `.crumb` needs `flex: 1` with `min-width: 0` together, or a long target pushes
@@ -94,6 +98,12 @@ rules are written in.
 
 ## Pickers and menus
 
+- A menu drawn outside its anchor's box cannot be dismissed by the pointer
+  leaving that box: the offset between them belongs to neither, and crossing it
+  is how the menu is reached, so it closes exactly when it is being aimed at.
+  `useDismiss` — pressing away, or Escape — is the one dismissal.
+- An offset that must stay hoverable, as under a reading that opens on hover, is
+  spanned by a pseudo-element on the anchor the size of the offset.
 - A picker is as long as the user's config: `[[providers]]` has no ceiling, so
   one gateway account can list a hundred models. The filter field is sticky
   because the rows are the scrolling part — a field that scrolls away takes the
@@ -569,9 +579,9 @@ told apart by the colour of a symbol.
 
 ## The settings sheet
 
-- One title bar exists — `.chrome` — and it owns the window buttons, the drag
-  region and the traffic-light inset; this layer starts below it, so the window
-  buttons still work while settings is open.
+- One title bar exists — `.chrome` — and it owns the window buttons and the drag
+  region; this layer starts below it, so the window buttons still work while
+  settings is open.
 - The backdrop dims and softens but stays thin: the sheet over it is glass, and
   what shows through glass has to be light.
 - A floating layer fades in rather than sliding: a full-bleed blurred backdrop

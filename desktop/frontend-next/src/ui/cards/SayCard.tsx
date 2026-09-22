@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { StudioIcon } from "../StudioIcon";
 import { t } from "../../i18n";
 import { count, decimals } from "../../i18n/format";
@@ -8,6 +8,7 @@ import { LazyMarkdown } from "../LazyMarkdown";
 import { Boundary } from "../Boundary";
 import { CopyButton } from "../CopyButton";
 import { useRevealed } from "../reveal";
+import { useDismiss } from "../dismiss";
 
 // Folded, the only thing left of a thought is how much of the turn it was. The
 // spec puts both halves there — how long, and how much — because either alone
@@ -69,6 +70,10 @@ function download(text: string) {
 export function SayCard({ item, afterAnswer, reply }: { item: Extract<Item, { t: "say" }>; afterAnswer?: ReactNode; reply?: ReplyActions }) {
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState<"" | "retry" | "more">("");
+  // The menu draws above this row, outside its box, so leaving the row is the
+  // way to reach it — not the way to dismiss it.
+  const acts = useRef<HTMLDivElement>(null);
+  useDismiss(!!menu, acts, () => setMenu(""));
   // Thinking is the longest-running stream of the turn — 10s of it before the
   // first answer token, measured — so it gets the same paced reveal the answer
   // does rather than tracking the wire's bursts.
@@ -109,7 +114,7 @@ export function SayCard({ item, afterAnswer, reply }: { item: Extract<Item, { t:
           {/* Only once the answer is whole: copying half a stream hands over
               something that was never said. */}
           {item.done && item.text.trim() && (
-            <div className="acts" onMouseLeave={() => setMenu("")}>
+            <div className="acts" ref={acts}>
               <CopyButton text={item.text} iconOnly />
               {reply && (
                 <button type="button" data-action="reply.quote" title={t("引用到输入框")} aria-label={t("引用到输入框")} onClick={(e) => reply.onQuote(selectedIn(e.currentTarget.closest(".call")) || item.text, item.id)}>

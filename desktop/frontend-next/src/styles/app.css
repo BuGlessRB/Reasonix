@@ -125,6 +125,8 @@
   }
   .app {
     --chrome-h: 45px;
+    --lights-w: 0px;
+    --lights-h: 0px;
     background: var(--page); border: 0; border-radius: 0; box-shadow: none;
     overflow: hidden; display: flex; flex-direction: column; height: calc(100vh / var(--zoom, 1));
   }
@@ -168,8 +170,18 @@
     -webkit-app-region: no-drag;
   }
 
-  [data-titlebar="app"][data-platform="darwin"] .app { --chrome-h: 51px }
-  [data-titlebar="app"][data-platform="darwin"] .chrome { padding-left: 96px }
+  [data-titlebar="app"][data-platform="darwin"] .app {
+    --chrome-h: 51px; --lights-w: 96px; --lights-h: var(--chrome-h);
+  }
+  [data-titlebar="app"][data-platform="darwin"] .app[data-rail="off"] .chrome {
+    padding-left: var(--lights-w);
+  }
+  [data-titlebar="app"][data-platform="darwin"] .app[data-rail="on"] .studio-rail-head {
+    padding-top: var(--lights-h); -webkit-app-region: drag;
+  }
+  [data-titlebar="app"][data-platform="darwin"] .app[data-rail="on"] .studio-rail-head > * {
+    -webkit-app-region: no-drag;
+  }
 
   [data-titlebar="app"][data-platform="darwin"] .brand {
     position: absolute; left: 12px; top: 50%; margin: -7px 0 0;

@@ -1961,10 +1961,13 @@ body { font-size: 14px; line-height: 1.75; }
 :root[data-theme="light"] .rail .session-more:focus-visible { outline: none; }
 /* The deck opens upward out of the rail it is summarised on, so the reading and
    the detail behind it stay one object rather than two places to look. */
-.studio-deck-anchor { position: relative; height: 25px; display: flex; align-items: center; }
+.studio-deck-anchor {
+  position: relative; height: 25px; display: flex; align-items: center;
+  --deck-gap: 8px; --deck-w: 320px;
+}
 .studio-deck-pop {
-  position: absolute; z-index: 1; right: 0; bottom: calc(100% + 8px);
-  width: 320px; max-height: 38vh; overflow-y: auto; overscroll-behavior: contain;
+  position: absolute; z-index: 1; right: 0; bottom: calc(100% + var(--deck-gap));
+  width: var(--deck-w); max-height: 38vh; overflow-y: auto; overscroll-behavior: contain;
   padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md);
   background: var(--float); box-shadow: var(--shadow-float);
   opacity: 0; visibility: hidden; pointer-events: none;
@@ -1975,6 +1978,12 @@ body { font-size: 14px; line-height: 1.75; }
 .studio-deck-anchor:focus-within .studio-deck-pop,
 .studio-deck-anchor[data-open] .studio-deck-pop {
   opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition-delay: 0s;
+}
+.studio-deck-anchor:hover::after,
+.studio-deck-anchor:focus-within::after,
+.studio-deck-anchor[data-open]::after {
+  content: ""; position: absolute; right: 0; bottom: 100%;
+  width: var(--deck-w); height: var(--deck-gap);
 }
 .studio-deckchip {
   height: 22px; display: inline-flex; align-items: center; gap: 5px;

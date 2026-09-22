@@ -24,9 +24,15 @@ const { startBrowserRelay } = require("./browserrelay");
 // application's renderers keep running at full rate while nobody is looking.
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 
-// Must match serve.TokenCookie and the namespace the kernel serves the page on.
+// Must match serve.TokenCookie and the path the kernel serves the page on. The
+// page owns the root: its assets are relative, so a path the kernel does not
+// serve them under loads the shell and none of its modules.
 const TOKEN_COOKIE = "reasonix_token";
-const PAGE_PATH = "/_studio/";
+const PAGE_PATH = "/";
+// Puts the lights' centre on the content line the chrome row draws its own
+// controls on. AppKit takes the top edge and seats them a point above what is
+// asked, so this is measured against the window rather than computed from it.
+const LIGHTS = { x: 11, y: 20 };
 const DEFAULT_SIZE = { width: 1440, height: 900 };
 const MIN_SIZE = { width: 760, height: 480 };
 
@@ -195,6 +201,7 @@ function createWindow() {
     show: false,
     frame: !windows,
     titleBarStyle: mac ? "hiddenInset" : "default",
+    ...(mac ? { trafficLightPosition: LIGHTS } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       // Stated rather than left to the defaults: this is the list a reviewer

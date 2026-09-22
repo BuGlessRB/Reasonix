@@ -87,6 +87,10 @@ grid to break.
     lightness band, chroma floor, adjacent-pair colour-vision separation
     (ΔE ≥ 8), normal-vision floor (≥ 15), and contrast with the ground.
   - In light, four segments fall below 3:1 and rely on the legend's text labels.
+- `--lights-w` / `--lights-h` are the window corner macOS draws its controls
+  over, and they are zero everywhere the shell does not hand that corner to the
+  page. Whichever element occupies the corner reserves them, so a layout change
+  that moves what sits there does not have to rediscover the measurement.
 - `--call-sym` / `--call-gap` are the transcript gutter: the symbol cell and the
   space after it. Anything that has to line up with a card reads them instead of
   restating the sum, and `.nest-bd` redefines them rather than re-specifying the
