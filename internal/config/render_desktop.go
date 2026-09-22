@@ -47,6 +47,11 @@ func renderDesktopSection(b *strings.Builder, c *Config) {
 	} else {
 		b.WriteString("# external_opener = \"vscode\"   # desktop Open control: installed application id\n")
 	}
+	if editor := c.DesktopEditor(); editor != "" {
+		fmt.Fprintf(b, "editor = %q   # command or path the workspace opens in; empty searches this machine\n", editor)
+	} else {
+		b.WriteString("# editor = \"code\"   # command or path the workspace opens in; empty searches this machine\n")
+	}
 	fmt.Fprintf(b, "close_behavior = %q   # desktop: quit|background when the window close button is clicked\n", c.DesktopCloseBehavior())
 	fmt.Fprintf(b, "tray = %q   # desktop: auto|off status icon; with no icon the close button quits whatever the line above says\n", c.DesktopTray())
 	fmt.Fprintf(b, "status_bar_style = %q   # desktop: icon|text metric labels in the bottom status bar\n", c.DesktopStatusBarStyle())
