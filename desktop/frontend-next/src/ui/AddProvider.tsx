@@ -54,6 +54,10 @@ export function AddProvider({
   const [noProxy, setNoProxy] = useState(false);
   const extraBad = extra.trim() !== "" && parseExtraBody(extra) === null;
   const protocolCanThink = catalog.find((p) => p.kind === kind)?.reasoningParams ?? false;
+  // A wire with no listing shape has nothing to read: the model id is declared
+  // rather than discovered, and offering a probe that must fail reads as a
+  // broken endpoint instead of a protocol that never had one.
+  const protocolCanProbe = (catalog.find((p) => p.kind === kind)?.discovery ?? "") !== "";
 
   // A source already at this host changes what a blank key means: another door
   // onto that account rather than an account with no credential.
@@ -298,10 +302,15 @@ export function AddProvider({
 
       <div className="addp-section">
         <div className="addp-section-head">
-          <div><strong>{t("模型目录")}</strong><span>{t("至少手动添加一个模型 ID，也可尝试从接口读取")}</span></div>
-          <button className="act quiet" data-action="provider.probe" onClick={connect} disabled={busy || checkingModel !== "" || baseUrl.trim() === ""}>
-            {t(busy ? "检测中…" : "验证连接并读取")}
-          </button>
+          <div>
+            <strong>{t("模型目录")}</strong>
+            <span>{t(protocolCanProbe ? "至少手动添加一个模型 ID，也可尝试从接口读取" : "这个协议没有模型列表接口，直接填写服务商给出的模型 ID")}</span>
+          </div>
+          {protocolCanProbe && (
+            <button className="act quiet" data-action="provider.probe" onClick={connect} disabled={busy || checkingModel !== "" || baseUrl.trim() === ""}>
+              {t(busy ? "检测中…" : "验证连接并读取")}
+            </button>
+          )}
         </div>
         {probe && <p className="probe-ok">{t("连接可用 · 找到 {n} 个模型", { n: probe.models.length })}</p>}
         <div className="mlist">

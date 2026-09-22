@@ -37,12 +37,16 @@ function startPage(scheme: "light" | "dark"): string {
 }
 
 interface ManualProps {
-  onClose: () => void;
+  id: string;
+  hidden?: boolean;
+  // What the tab should call this one. Several browsers all named 「浏览器」
+  // name none of them, and only this panel knows where it has got to.
+  onAddress: (id: string, host: string) => void;
   onExternal: (url: string) => void;
   scheme: "light" | "dark";
 }
 
-export function ManualBrowserPanel({ onClose, onExternal, scheme }: ManualProps) {
+export function ManualBrowserPanel({ id, hidden, onAddress, onExternal, scheme }: ManualProps) {
   const [history, setHistory] = useState([START]);
   const [index, setIndex] = useState(0);
   const [input, setInput] = useState(START);
@@ -52,6 +56,9 @@ export function ManualBrowserPanel({ onClose, onExternal, scheme }: ManualProps)
   const current = history[index] ?? START;
   const internal = current === START;
   const srcDoc = useMemo(() => startPage(scheme), [scheme]);
+  useEffect(() => {
+    onAddress(id, internal ? "" : new URL(current).hostname);
+  }, [id, current, internal, onAddress]);
 
   const visit = (value: string) => {
     const next = normalise(value);
@@ -95,13 +102,7 @@ export function ManualBrowserPanel({ onClose, onExternal, scheme }: ManualProps)
   };
 
   return (
-    <aside className="side studio-browser" aria-label={t("内置 Browser")}>
-      <header className="studio-browser-head">
-        <span><b>Browser</b><small>{t("内置浏览")}</small></span>
-        <button type="button" data-action="browser.close" onClick={onClose} aria-label={t("关闭 Browser")} title={t("关闭")}>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
-        </button>
-      </header>
+    <section className="studio-browser" hidden={hidden} aria-label={t("内置 Browser")}>
       <form className="studio-browser-toolbar" onSubmit={submit} data-action-submit="browser.navigate">
         <button type="button" data-action="browser.back" onClick={() => move(index - 1)} disabled={index === 0} aria-label={t("后退")} title={t("后退")}>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m9.5 3-5 5 5 5M5 8h7" /></svg>
@@ -130,10 +131,18 @@ export function ManualBrowserPanel({ onClose, onExternal, scheme }: ManualProps)
         onLoad={() => setLoading(false)}
         onError={() => setLoading(false)}
       />
+      {/* Not a hint at an icon somewhere else: a site that refuses to be framed
+          shows the shell's own "refused to connect", and the way out has to be
+          beside it. */}
       <footer className="studio-browser-note" data-loading={loading ? "" : undefined}>
-        {loading ? t("正在打开网页…") : t("页面空白通常表示网站禁止嵌入，可使用右上角按钮在外部浏览器打开。")}
+        <span>{loading ? t("正在打开网页…") : t("部分站点禁止被嵌入（Google、GitHub 等），这里会显示「拒绝连接」。")}</span>
+        {!internal && (
+          <button type="button" data-action="browser.external" onClick={() => onExternal(current)}>
+            {t("在外部浏览器打开")}
+          </button>
+        )}
       </footer>
-    </aside>
+    </section>
   );
 }
 

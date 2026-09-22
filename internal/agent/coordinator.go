@@ -322,7 +322,7 @@ func (c *Coordinator) Run(ctx context.Context, input string) error {
 	// here would make planner work and executor work two turns to every sink
 	// that resets on a start.
 	if _, hosted := HostTurnBoundaryFrom(ctx); !hosted {
-		c.sink.Emit(event.Event{Kind: event.TurnStarted})
+		c.sink.Emit(event.Event{Kind: event.TurnStarted, ModelRef: c.executor.modelRef})
 	}
 	// A turn starts owing nothing to the last one's plan; deliverPlan installs
 	// this turn's plan only once the executor is actually about to run it.
@@ -340,7 +340,7 @@ func (c *Coordinator) Run(ctx context.Context, input string) error {
 		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.svc.prov.Name() + " · executing", Detail: routeDetail, Source: event.UsageSourceExecutor})
 		return c.executor.Run(ctx, input)
 	}
-	c.sink.Emit(event.Event{Kind: event.Phase, Text: c.planner.Name() + " · planning", Detail: routeDetail, Source: event.UsageSourcePlanner})
+	c.sink.Emit(event.Event{Kind: event.Phase, Text: c.planner.Name() + " · planning", Detail: routeDetail, Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 	plannerCtx := tool.WithoutGoalTurnRecorder(ctx)
 	if decision.MaxResearchRounds > 0 {
 		plannerCtx = withRunStepLimit(plannerCtx, decision.MaxResearchRounds, "planner research rounds")
@@ -380,7 +380,7 @@ func (c *Coordinator) Run(ctx context.Context, input string) error {
 		// A planner failure must not take down the turn: the executor is
 		// healthy and owns the full tool set, so degrade to single-model for
 		// this turn.
-		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: plannerFallbackNotice, Detail: "planner failed; running the executor without a plan: " + err.Error(), Source: event.UsageSourcePlanner})
+		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: plannerFallbackNotice, Detail: "planner failed; running the executor without a plan: " + err.Error(), Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.svc.prov.Name() + " · executing", Source: event.UsageSourceExecutor})
 		return c.executor.Run(ctx, input)
 	}
@@ -396,7 +396,7 @@ func (c *Coordinator) deliverPlan(ctx context.Context, input string, outcome pla
 		c.persistExecutorNoOp(ctx, input, plan)
 		// The relayed conclusion is planner text; keep its source so sinks
 		// attribute it like every other planner emission.
-		c.sink.Emit(event.Event{Kind: event.Text, Text: DisplayAssistantText(plan), Source: event.UsageSourcePlanner})
+		c.sink.Emit(event.Event{Kind: event.Text, Text: DisplayAssistantText(plan), Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 		return nil
 	}
 	runExecutorWithPlan := func(ctx context.Context, planText string) error {
@@ -409,7 +409,7 @@ func (c *Coordinator) deliverPlan(ctx context.Context, input string, outcome pla
 	runWithPlanApproval := func() error {
 		if c.plannerPlanApprover == nil {
 			c.persistExecutorNoOp(ctx, input, plan+"\n\n"+plannerPlanAwaitingApprovalNote)
-			c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: plannerPlanAwaitingApprovalNotice, Source: event.UsageSourcePlanner})
+			c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: plannerPlanAwaitingApprovalNotice, Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 			return nil
 		}
 		executed := false
@@ -422,13 +422,13 @@ func (c *Coordinator) deliverPlan(ctx context.Context, input string, outcome pla
 			// path does — a denied turn must survive session save/reload, and
 			// the note tells the next executor turn that nothing ran.
 			c.persistExecutorNoOp(ctx, input, plan+"\n\n"+plannerPlanNotApprovedNote)
-			c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: plannerPlanNotApprovedNotice, Source: event.UsageSourcePlanner})
+			c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: plannerPlanNotApprovedNotice, Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 		}
 		return err
 	}
 	if decision.Route == PlannerRoutePlanOnly {
 		c.persistExecutorNoOp(ctx, input, plan+"\n\n"+plannerPlanOnlyNote)
-		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: plannerPlanOnlyNotice, Source: event.UsageSourcePlanner})
+		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: plannerPlanOnlyNotice, Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 		return nil
 	}
 	if decision.Route == PlannerRoutePlanForApproval {
@@ -551,7 +551,7 @@ func (c *Coordinator) planFromStream(ctx context.Context, input string) (string,
 		switch chunk.Type {
 		case provider.ChunkText:
 			text.WriteString(chunk.Text)
-			c.sink.Emit(event.Event{Kind: event.Text, Text: chunk.Text, Source: event.UsageSourcePlanner})
+			c.sink.Emit(event.Event{Kind: event.Text, Text: chunk.Text, Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 		case provider.ChunkUsage:
 			usage = chunk.Usage
 		case provider.ChunkError:
@@ -592,7 +592,7 @@ func (c *Coordinator) planWithTools(ctx context.Context, input string) (plannerO
 	}
 	if plan, ok := submission.Plan(); ok {
 		text := plancontract.Render(plan)
-		c.sink.Emit(event.Event{Kind: event.Text, Text: text, Source: event.UsageSourcePlanner})
+		c.sink.Emit(event.Event{Kind: event.Text, Text: text, Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 		return plannerOutcome{text: text, plan: plan, exit: plannerExitPlan}, nil
 	}
 	// The plan is this turn's final answer: the last non-empty assistant

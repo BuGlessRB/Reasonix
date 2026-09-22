@@ -236,6 +236,26 @@ describe("a line that is still queued", () => {
     const read = reduce(waiting, { kind: "steer", text: "x" } as SessionEvent);
     expect(rows(read)[0].pending).toBe(false);
   });
+
+  // Its seat was booked when it was typed, which is not when it happened. Every
+  // sentence and tool call that ran during the wait would otherwise sort after
+  // a line the model had not yet read.
+  it("seats the row where the turn read it, not where it was typed", () => {
+    const waiting = run([typed("row-1", "later"), queued("row-1", "inbox-9", "steer")]);
+    const worked = reduce(waiting, { kind: "text", text: "meanwhile" } as SessionEvent);
+    const read = reduce(worked, { kind: "steer", text: "later", itemId: "inbox-9" } as SessionEvent);
+    expect(read.items[read.items.length - 1]).toMatchObject({ t: "user", text: "later", pending: false });
+  });
+
+  // The same rule for the other wait: a follow-up is a turn of its own, so its
+  // row belongs at the turn the kernel started for it.
+  it("seats a follow-up where its turn began", () => {
+    const sent = ({ kind: "__user", text: "next", pending: false, id: "row-2" }) as SessionEvent;
+    const waiting = run([sent, queued("row-2", "inbox-10", "followup")]);
+    const worked = reduce(waiting, { kind: "text", text: "meanwhile" } as SessionEvent);
+    const begun = reduce(worked, { kind: "turn_started", authoredTurn: 4, msgIndex: 9 } as SessionEvent);
+    expect(begun.items[begun.items.length - 1]).toMatchObject({ t: "user", text: "next", pending: false, authoredTurn: 4 });
+  });
 });
 
 describe("waiting for another session to finish writing", () => {
@@ -492,5 +512,29 @@ describe("restoring what a session has been billed", () => {
     const s = reduce(initialState, totals({ coverage: undefined }));
     expect(s.metrics.coverage).toBe("none");
     expect(s.metrics.cost).toBe(0.02);
+  });
+});
+
+// A turn can run one model and hand part of it to another. Without the turn's
+// own name on its replies, a reader has only the composer's current setting,
+// which is a different fact and moves on its own.
+describe("which model wrote a reply", () => {
+  const says = (st: SessionState) => st.items.filter((i): i is Extract<Item, { t: "say" }> => i.t === "say");
+
+  it("names the turn's model on the replies inside it", () => {
+    const st = run([
+      { kind: "turn_started", authoredTurn: 1, msgIndex: 0, modelRef: "yyds/claude-opus-4.8" },
+      { kind: "text", text: "on it" },
+    ] as SessionEvent[]);
+    expect(says(st)[0].model).toBe("yyds/claude-opus-4.8");
+  });
+
+  // The second model names itself, and must not be recorded as the turn's.
+  it("keeps a second model's own name on what it wrote", () => {
+    const st = run([
+      { kind: "turn_started", authoredTurn: 1, msgIndex: 0, modelRef: "yyds/claude-opus-4.8" },
+      { kind: "text", text: "planning", source: "planner", modelRef: "deepseek/deepseek-pro" },
+    ] as SessionEvent[]);
+    expect(says(st)[0].model).toBe("deepseek/deepseek-pro");
   });
 });

@@ -86,6 +86,10 @@ grid to break.
   floor, adjacent-pair colour-vision separation (ΔE ≥ 8), normal-vision floor
   (≥ 15), and contrast with the ground. In light, four segments fall below 3:1
   and rely on the legend's text labels.
+- `--io-up` / `--io-down` alias the categorical set, not the status one: sent
+  and received are two kinds of one quantity, not two healths, so `net` or `ok`
+  there would read as "running" or "succeeded". `--io-down` is `--cat-5`, which
+  already is this figure — the context bar's output segment.
 
 ## Shape
 

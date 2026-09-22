@@ -8,6 +8,7 @@ export const KIND_LABEL: Record<string, string> = {
   openai: "OpenAI 兼容",
   anthropic: "Anthropic 兼容",
   responses: "Responses",
+  typesafe: "决策 · System One",
   extension: "扩展",
 };
 

@@ -3,6 +3,7 @@ package serve
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func TestPickLocalFolderHTTPReturnsChosenPath(t *testing.T) {
 		return `D:\work\project`, nil
 	}
 
-	req := httptest.NewRequest("POST", "/host/pick-folder", strings.NewReader(`{"startIn":"D:\\work"}`))
+	req := httptest.NewRequest(http.MethodPost, "/host/pick-folder", strings.NewReader(`{"startIn":"D:\\work"}`))
 	rec := httptest.NewRecorder()
 	new(Hub).pickLocalFolderHTTP(rec, req)
 	if rec.Code != 200 {
@@ -43,7 +44,7 @@ func TestPickLocalFolderHTTPReportsUnsupported(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	new(Hub).pickLocalFolderHTTP(rec, httptest.NewRequest("POST", "/host/pick-folder", nil))
+	new(Hub).pickLocalFolderHTTP(rec, httptest.NewRequest(http.MethodPost, "/host/pick-folder", nil))
 	if rec.Code != 501 {
 		t.Fatalf("status = %d", rec.Code)
 	}

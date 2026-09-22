@@ -36,9 +36,11 @@ function draw(onRead: (id: string) => Promise<string>) {
   render(
     <Queue
       queue={snapshot()}
+      running
       onRead={onRead}
       onEdit={onEdit}
       onMove={() => {}}
+      onSendNow={() => {}}
       onCancel={() => {}}
       onRetry={() => {}}
       onRefresh={() => {}}

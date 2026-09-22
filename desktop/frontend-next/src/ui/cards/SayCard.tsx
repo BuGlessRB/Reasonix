@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { StudioIcon } from "../StudioIcon";
 import { t } from "../../i18n";
 import { count, decimals } from "../../i18n/format";
 import { Sym } from "../Sym";
@@ -20,8 +21,33 @@ function thoughtLabel(item: Extract<Item, { t: "say" }>) {
     : t("思考 {chars}", { chars });
 }
 
-export function SayCard({ item, afterAnswer }: { item: Extract<Item, { t: "say" }>; afterAnswer?: ReactNode }) {
+// A ref is "provider/model"; the model is what identifies it to a reader, and
+// the provider stays in the title for when two of them carry the same name.
+const modelName = (ref: string) => ref.slice(ref.lastIndexOf("/") + 1);
+
+/** What a finished reply can be acted on with. Absent members are capabilities
+ *  this transcript does not have — a rebuilt one cannot re-run a turn — and the
+ *  bar draws only what it can actually do. */
+export interface ReplyActions {
+  onQuote: (text: string) => void;
+  onRegenerate?: () => void;
+  model?: string;
+  onConfigureModel?: () => void;
+  onRunDetail?: () => void;
+}
+
+function download(text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "reasonix-reply.md";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export function SayCard({ item, afterAnswer, reply }: { item: Extract<Item, { t: "say" }>; afterAnswer?: ReactNode; reply?: ReplyActions }) {
   const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState<"" | "retry" | "more">("");
   // Thinking is the longest-running stream of the turn — 10s of it before the
   // first answer token, measured — so it gets the same paced reveal the answer
   // does rather than tracking the wire's bursts.
@@ -35,6 +61,9 @@ export function SayCard({ item, afterAnswer }: { item: Extract<Item, { t: "say" 
       <div className="c">
         <div className="hl">
           <span className="nm">reasonix</span>
+          {/* Which model wrote this one. A turn can carry two, and without it
+              both read as whatever the composer happens to name now. */}
+          {item.model && <span className="src" title={item.model}>{modelName(item.model)}</span>}
         </div>
         <div className="out">
           {item.reasoning && (
@@ -59,8 +88,56 @@ export function SayCard({ item, afterAnswer }: { item: Extract<Item, { t: "say" 
           {/* Only once the answer is whole: copying half a stream hands over
               something that was never said. */}
           {item.done && item.text.trim() && (
-            <div className="acts">
+            <div className="acts" onMouseLeave={() => setMenu("")}>
               <CopyButton text={item.text} iconOnly />
+              {reply && (
+                <button type="button" data-action="reply.quote" title={t("引用到输入框")} aria-label={t("引用到输入框")} onClick={() => reply.onQuote(item.text)}>
+                  <StudioIcon name="quote" />
+                </button>
+              )}
+              {reply?.onRegenerate && (
+                <span className="acts-menu">
+                  <button type="button" data-action="reply.retry" title={t("重新生成")} aria-label={t("重新生成")} aria-expanded={menu === "retry"} onClick={() => setMenu((m) => (m === "retry" ? "" : "retry"))}>
+                    <StudioIcon name="refresh" />
+                  </button>
+                  {menu === "retry" && (
+                    <div className="acts-pop" role="menu">
+                      <div className="acts-pop-head">{t("重新生成")}<small>{t("当前回复会留在运行历史里")}</small></div>
+                      <button type="button" role="menuitem" data-action="reply.retry-now" onClick={() => { setMenu(""); reply.onRegenerate?.(); }}>
+                        <StudioIcon name="refresh" /><span>{t("按当前配置重试")}</span>{reply.model && <small>{reply.model}</small>}
+                      </button>
+                      {reply.onConfigureModel && (
+                        <button type="button" role="menuitem" data-action="reply.configure" onClick={() => { setMenu(""); reply.onConfigureModel?.(); }}>
+                          <StudioIcon name="sliders" /><span>{t("先调整模型与强度")}</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </span>
+              )}
+              {reply && (
+                <span className="acts-menu">
+                  <button type="button" data-action="reply.more" title={t("更多")} aria-label={t("更多")} aria-expanded={menu === "more"} onClick={() => setMenu((m) => (m === "more" ? "" : "more"))}>
+                    <StudioIcon name="more" />
+                  </button>
+                  {menu === "more" && (
+                    <div className="acts-pop" role="menu">
+                      <div className="acts-pop-head">{t("这条回复")}</div>
+                      <button type="button" role="menuitem" data-action="reply.download" onClick={() => { setMenu(""); download(item.text); }}>
+                        <StudioIcon name="download" /><span>{t("下载回复")}</span><small>Markdown</small>
+                      </button>
+                      {reply.onRunDetail && (
+                        <>
+                          <div className="acts-pop-head">{t("本轮执行")}</div>
+                          <button type="button" role="menuitem" data-action="reply.run-detail" onClick={() => { setMenu(""); reply.onRunDetail?.(); }}>
+                            <StudioIcon name="gauge" /><span>{t("运行分析")}</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </span>
+              )}
             </div>
           )}
         </div>

@@ -33,9 +33,16 @@ type historyMessage struct {
 	// HostAuthored marks a user-role message the host wrote. It is the writer's
 	// own declaration, so a reader never has to decide from the wording whether
 	// a line was typed by the person or injected on their behalf.
-	HostAuthored bool              `json:"hostAuthored,omitempty"`
-	ToolCalls    []historyToolCall `json:"toolCalls,omitempty"`
-	ToolCallID   string            `json:"toolCallId,omitempty"`
+	HostAuthored bool `json:"hostAuthored,omitempty"`
+	// Guidance sent into a turn already running, rather than a turn of its own.
+	// It has no checkpoint behind it, so nothing can be rewound to it.
+	Steer bool `json:"steer,omitempty"`
+	// Which model wrote this assistant turn. A reopened transcript has no
+	// turn_started to read it off, and the composer's current setting is a
+	// different fact that has usually moved on.
+	ModelRef   string            `json:"modelRef,omitempty"`
+	ToolCalls  []historyToolCall `json:"toolCalls,omitempty"`
+	ToolCallID string            `json:"toolCallId,omitempty"`
 	// The host's own account of a result that did not succeed. Without it a
 	// rebuilt card has only the words, which a tool's own output can imitate.
 	ToolFailed      bool   `json:"toolFailed,omitempty"`
@@ -46,10 +53,15 @@ type historyMessage struct {
 func historyMessages(msgs []provider.Message) []historyMessage {
 	out := make([]historyMessage, 0, len(msgs))
 	for i, m := range msgs {
-		// Steer messages are surfaced as a notice, not a user message.
+		// A steer is the person speaking into a running turn, so it stays a
+		// user message and carries what it was. The host's own mid-turn notice
+		// rides the same prefix and is not theirs to have said.
 		if m.Role == provider.RoleUser {
-			if steerText, isSteer := agent.SteerText(m.Content); isSteer {
-				out = append(out, historyMessage{Role: "notice", Content: "↪ " + steerText, MsgIndex: i})
+			if steerText, host, isSteer := agent.SteerKind(m.Content); isSteer {
+				out = append(out, historyMessage{
+					Role: string(provider.RoleUser), Content: steerText, Steer: true,
+					HostAuthored: host || m.HostAuthored, MsgIndex: i,
+				})
 				continue
 			}
 		}
@@ -61,6 +73,7 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 			hm.Images = len(m.Images)
 		}
 		if m.Role == provider.RoleAssistant {
+			hm.ModelRef = m.ModelRef
 			hm.Reasoning = m.ReasoningContent
 			if len(m.ToolCalls) > 0 {
 				hm.ToolCalls = make([]historyToolCall, len(m.ToolCalls))

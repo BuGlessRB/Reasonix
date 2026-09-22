@@ -638,6 +638,10 @@ export interface WireEvent {
   // turn can carry two models, and the alternative is reading it off the last
   // phase marker — an adjacency the record does not even keep.
   source?: string;
+  // Which model wrote this: the turn's on turn_started, a second model's on the
+  // text it wrote. A reply with none is the turn's, and reading it off the
+  // composer instead named the wrong one whenever the setting had moved on.
+  modelRef?: string;
   // turn_started: which message this turn is about. authoredTurn numbers the
   // conversation's own turns, msgIndex the session log — a checkpoint's `turn`
   // is neither. A client mints its own user row, so this is the only thing

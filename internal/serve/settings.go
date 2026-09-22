@@ -219,8 +219,11 @@ type modelEntry struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
 	Kind     string `json:"kind,omitempty"`
-	Active   bool   `json:"active,omitempty"`
-	Default  bool   `json:"default,omitempty"`
+	// What this model produces, projected from the protocol table so a chooser
+	// filters on a declaration rather than on a kind's spelling.
+	Answers string `json:"answers,omitempty"`
+	Active  bool   `json:"active,omitempty"`
+	Default bool   `json:"default,omitempty"`
 	// Vendor is the endpoint host. Entries sharing it are one service reached
 	// under different protocols, which is what lets a picker fold the routes.
 	Vendor string `json:"vendor,omitempty"`

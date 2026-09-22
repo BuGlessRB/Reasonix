@@ -260,6 +260,7 @@ type Messages struct {
 	CmdRewind           string // /rewind
 	CmdTree             string // /tree
 	CmdBranch           string // /branch
+	CmdBrowser          string // /browser
 	CmdSwitchBranch     string // /switch
 	CmdResume           string // /resume
 	CmdRename           string // /rename

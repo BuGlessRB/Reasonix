@@ -25,13 +25,14 @@
 
 @property --rail-w { syntax: "<length>"; inherits: true; initial-value: 264px }
 @property --side-w { syntax: "<length>"; inherits: true; initial-value: 316px }
+@property --dock-w { syntax: "<length>"; inherits: true; initial-value: 560px }
 
 @property --win-ar { syntax: "<number>"; inherits: true; initial-value: 1.6 }
 
 :root {
     interpolate-size: allow-keywords;
 
-    --rail-open: 264px; --side-open: 316px;
+    --rail-open: 264px; --side-open: 316px; --dock-open: 560px; --pane-gutter: 12px;
     --page: oklch(95.8% .0092 85); --surface: oklch(98.9% .0046 85);
     --raised: oklch(100% 0 85); --overlay: oklch(93.1% .0138 85);
     --border: oklch(87.6% .0184 85); --hair: oklch(91.7% .0126 85);
@@ -54,6 +55,7 @@
     --accent-ink: #884F00; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
 
     --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4;
+    --io-up: var(--cat-1); --io-down: var(--cat-5);
 
     --mono: "IBM Plex Mono var", ui-monospace, "Cascadia Code", "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, "Noto Sans SC var", monospace;
     --ui: "Inter var", "Noto Sans SC var", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", Arial, sans-serif;

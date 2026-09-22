@@ -4723,6 +4723,8 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 	case "/switch":
 		m.echoLocalCommand(input)
 		m.runSwitchCommand(input)
+	case "/browser":
+		m.browserCommand(input)
 	case "/mcp":
 		m.echoLocalCommand(input)
 		m.runMCPSubcommand(input)
@@ -4735,21 +4737,15 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 	case "/model":
 		m.echoLocalCommand(input)
 		m.runModelSubcommand(input)
-		if m.pendingModelSwitch != nil {
-			return m.pendingModelSwitch
-		}
+		return m.pendingModelSwitch
 	case "/provider":
 		m.echoLocalCommand(input)
 		m.runProviderCommand(input)
-		if m.pendingModelSwitch != nil {
-			return m.pendingModelSwitch
-		}
+		return m.pendingModelSwitch
 	case "/skill", "/skills":
 		m.echoLocalCommand(input)
 		m.runSkillSubcommand(input)
-		if m.pendingModelSwitch != nil {
-			return m.pendingModelSwitch
-		}
+		return m.pendingModelSwitch
 	case "/hooks":
 		m.echoLocalCommand(input)
 		m.runHooksSubcommand(input)

@@ -8,13 +8,13 @@ import { MockHub } from "../port/mock_hub";
 
 afterEach(cleanup);
 
-// The second folder the fixture knows. The switcher names it; a new session has
-// to land in it.
+// The second folder the fixture knows. Working in it is what focuses it, and a
+// new session from the head has to land there rather than in the first row.
 const SECOND = "~/projects/my-website";
 
 // Where a new session lands is the whole claim: the fake kernel records which
-// folder every open asked for, so a button reading a different answer than the
-// switcher above it shows up as the wrong folder rather than as styling.
+// folder every open asked for, so a head button reading a different answer than
+// the workspace on screen shows up as the wrong folder rather than as styling.
 describe("a new session opens in the workspace on screen", () => {
   it("does not fall back to the first folder in the tree", async () => {
     const hub = new MockHub();
@@ -36,8 +36,11 @@ describe("a new session opens in the workspace on screen", () => {
 
     render(<App hub={hub} />);
 
-    await userEvent.click(await screen.findByRole("button", { name: /当前聚焦/ }));
-    await userEvent.click(await screen.findByRole("option", { name: /my-website/ }));
+    // The tree is the only place a workspace is named now. Folders other than
+    // the focused one open shut, so this is the whole way in: unfold, then work
+    // in it.
+    await userEvent.click(await screen.findByRole("treeitem", { name: /my-website/ }));
+    await userEvent.click(await screen.findByRole("treeitem", { name: /站点改版/ }));
     await waitFor(() => expect(asked).toEqual([SECOND]));
 
     asked.length = 0;

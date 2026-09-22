@@ -67,7 +67,7 @@ async function run() {
   const url = new URL(win.webContents.getURL());
 
   check("the page is loaded from the loopback kernel", url.hostname === "127.0.0.1" && url.protocol === "http:", url.href);
-  check("the page is loaded from its own namespace", url.pathname === "/_studio/", url.pathname);
+  check("the page is loaded at the root", url.pathname === "/", url.pathname);
 
   const seen = await js(`(() => ({
     bridge: window.reasonixHost ? Object.keys(window.reasonixHost).sort() : null,
@@ -143,7 +143,7 @@ async function run() {
   win.webContents.emit("will-navigate", { preventDefault: () => (prevented = true) }, "https://attacker.example/");
   check("a navigation off this origin is refused", prevented);
   prevented = false;
-  win.webContents.emit("will-navigate", { preventDefault: () => (prevented = true) }, url.origin + "/_studio/x");
+  win.webContents.emit("will-navigate", { preventDefault: () => (prevented = true) }, url.origin + "/x");
   check("a navigation inside this origin is allowed", !prevented);
   await js(`window.open('https://attacker.example/', '_blank')`).catch(() => {});
   await wait(400);

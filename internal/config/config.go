@@ -1045,7 +1045,11 @@ type AgentConfig struct {
 	// TriageModel answers the small classifications the static tables come up
 	// short on (is this unrecognized command read-only?). Empty falls back to
 	// subagent_model, then the main model — set it to point them somewhere cheap.
-	TriageModel      string            `toml:"triage_model"`
+	TriageModel string `toml:"triage_model"`
+	// DecisionModel names the backend system_one asks. It is on a decision
+	// wire, so it never falls back to the main model: a chat model has no
+	// answer for a question set, and falling back would hide that.
+	DecisionModel    string            `toml:"decision_model"`
 	SubagentEffort   string            `toml:"subagent_effort"`
 	SubagentEfforts  map[string]string `toml:"subagent_efforts"`
 	MaxSubagentDepth int               `toml:"max_subagent_depth"`

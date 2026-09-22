@@ -66,7 +66,13 @@ export function Plan({ steps, shownElsewhere }: { steps: PlanStep[]; shownElsewh
               data-now={i === now ? "" : undefined}
               style={{ animationDelay: `${Math.min(i, 6) * 34}ms`, marginInlineStart: indent(st) }}
             >
-              <span className="b">{stepDone(st) ? "✓" : i + 1}</span>
+              {/* The state is the shape: a dotted ring is not started, a
+                  turning arc is in hand, a filled disc is done. It replaces the
+                  ordinal, which was the number the model then cited back. */}
+              <span
+                className="b"
+                aria-label={stepDone(st) ? t("已完成") : i === now ? t("进行中") : t("未开始")}
+              />
               {/* The strike is painted as a background so it can be drawn rather
                   than appear, and an inline box is what makes it repeat per line
                   — on the flex item itself a wrapped step gets one line struck. */}

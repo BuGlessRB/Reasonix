@@ -1,4 +1,6 @@
-// Package laya connects Reasonix to local or self-hosted Laya runtimes.
+// Package laya runs a Laya decision model as a local process. A self-hosted
+// gateway is not here: it speaks the same wire at a different address, so it is
+// an ordinary provider entry on the decision protocol.
 package laya
 
 import (
@@ -7,9 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"os/exec"
 	"strings"
 
@@ -17,55 +16,6 @@ import (
 )
 
 const resultMarker = "__REASONIX_LAYA_RESULT__"
-
-type HTTPClient struct {
-	HTTP    *http.Client
-	BaseURL string
-	APIKey  func() string
-}
-
-func (c HTTPClient) Evaluate(ctx context.Context, request typesafe.Request) (typesafe.Response, error) {
-	base := strings.TrimRight(strings.TrimSpace(c.BaseURL), "/")
-	endpoint, err := url.Parse(base + "/v1/systemone")
-	if err != nil || endpoint.Scheme == "" || endpoint.Host == "" {
-		return typesafe.Response{}, fmt.Errorf("invalid Laya gateway URL %q", base)
-	}
-	body, err := json.Marshal(request)
-	if err != nil {
-		return typesafe.Response{}, err
-	}
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(body))
-	if err != nil {
-		return typesafe.Response{}, err
-	}
-	httpRequest.Header.Set("Content-Type", "application/json")
-	if c.APIKey != nil {
-		if key := strings.TrimSpace(c.APIKey()); key != "" {
-			httpRequest.Header.Set("Authorization", "Bearer "+key)
-		}
-	}
-	client := c.HTTP
-	if client == nil {
-		client = http.DefaultClient
-	}
-	response, err := client.Do(httpRequest)
-	if err != nil {
-		return typesafe.Response{}, fmt.Errorf("call Laya gateway: %w", err)
-	}
-	defer response.Body.Close()
-	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
-	if err != nil {
-		return typesafe.Response{}, err
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return typesafe.Response{}, &typesafe.HTTPError{Status: response.StatusCode, Body: strings.TrimSpace(string(responseBody))}
-	}
-	var result typesafe.Response
-	if err := json.Unmarshal(responseBody, &result); err != nil {
-		return typesafe.Response{}, fmt.Errorf("decode Laya gateway response: %w", err)
-	}
-	return result, nil
-}
 
 type LocalClient struct {
 	Python string

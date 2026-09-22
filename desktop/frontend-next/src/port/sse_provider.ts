@@ -1,12 +1,9 @@
 import { SseBoundary } from "./sse_boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe } from "./port";
-import type { DecisionModels, DecisionModelsDraft } from "./decision";
 
 // Where models come from: the accounts, the protocols their endpoints answer,
 // and what probing one found.
 export class SseProvider extends SseBoundary {
-  decisionModels() { return this.get<DecisionModels>("/decision-models"); }
-  saveDecisionModels(value: DecisionModelsDraft) { return this.post("/decision-models", value); }
   providers() {
     return this.get<ProviderEntry[]>("/providers");
   }

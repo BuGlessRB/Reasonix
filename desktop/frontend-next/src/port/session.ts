@@ -11,6 +11,12 @@ export interface HistoryMessage {
   // approved plan's execution. It is the writer's own declaration — nothing
   // here decides it from the wording.
   hostAuthored?: boolean;
+  // Guidance sent into a turn that was already running, rather than a turn of
+  // its own. There is no checkpoint behind it, so nothing rewinds to it.
+  steer?: boolean;
+  // Which model wrote this assistant turn. A rebuild has no turn_started to
+  // read it off, and the composer's current setting is a different fact.
+  modelRef?: string;
   reasoning?: string;
   images?: number; // attachments on a user turn; an image-only one has no text
   toolCalls?: HistoryToolCall[];

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"reasonix/internal/config"
 	"reasonix/internal/provider"
 )
 
@@ -53,5 +54,6 @@ func catalogModelEntry(d provider.Descriptor, current string) (modelEntry, bool)
 	if model := strings.TrimSpace(d.Model); model != "" {
 		entry.Model = model
 	}
+	entry.Answers = string(config.AnswersFor(entry.Kind))
 	return entry, true
 }

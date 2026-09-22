@@ -4,6 +4,10 @@ export interface WorkspaceChange {
   oldPath?: string;
   // git porcelain XY, trimmed: "M", "A", "D", "R", "??".
   status: string;
+  // How much the file differs by. Absent is "git did not say" — a binary file,
+  // or one nothing counted — which is not the same as changed by nothing.
+  insertions?: number;
+  deletions?: number;
 }
 
 export interface WorkspaceChanges {

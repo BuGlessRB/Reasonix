@@ -88,6 +88,10 @@ type Message struct {
 	// the user typed. Declared by whoever wrote it: the wording cannot tell an
 	// injected line from a user quoting one.
 	HostAuthored bool `json:"host_authored,omitempty"` // local UI metadata; provider requests ignore it
+	// ModelRef names the model that wrote this assistant turn. Local UI metadata,
+	// stripped before every provider request: a reopened transcript otherwise has
+	// no way to say which model answered, and a turn can carry two.
+	ModelRef string `json:"modelRef,omitempty"`
 	// Derived marks a message the host projects onto one request — a tail it
 	// re-derives every time rather than conversation the next request carries.
 	// Never stored and never serialized: it is a fact about this request.

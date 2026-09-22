@@ -296,6 +296,9 @@ type Status interface {
 	Jobs() []jobs.View
 	Todos() []evidence.TodoItem
 	BrowserTabs() []browser.TabInfo
+	// One browser, one list of tabs: what the window opens the agent can drive,
+	// and what the agent opens the window can show.
+	BrowserOpen(ctx context.Context, rawURL, tabID string, newTab bool) (browser.TabInfo, error)
 }
 
 // SessionPersistence covers snapshotting a session and tearing down its on-disk

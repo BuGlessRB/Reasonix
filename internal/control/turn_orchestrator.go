@@ -314,7 +314,10 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 // it when the turn opens an authored one.
 func (c *Controller) announceAuthoredTurn(ctx context.Context, raw string, msgIndex int) context.Context {
 	boundary := agent.HostTurnBoundary{}
-	started := event.Event{Kind: event.TurnStarted}
+	// The turn names the model it runs on. Under a host boundary this is the
+	// only start the turn gets, so a reply attributed from anywhere else — the
+	// composer's current setting — is attributed from something that moves.
+	started := event.Event{Kind: event.TurnStarted, ModelRef: c.modelRef}
 	class := agent.ClassifyTurn(
 		provider.Message{Role: provider.RoleUser, RawContent: raw},
 		agent.PriorAuthoredTurn(c.History()),

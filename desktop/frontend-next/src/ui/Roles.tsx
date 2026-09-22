@@ -3,18 +3,26 @@ import { t } from "../i18n";
 import type { ModelEntry, RoleAssignments } from "../port/port";
 import { useDismiss } from "./dismiss";
 
-// Five jobs, one default. Rendering them as five equal dropdowns would only
-// move the confusion from the model list to a role list, so the main model is
-// the anchor and a role draws a branch off it only once it stops following.
+// Jobs, one default. Rendering them as equal dropdowns would only move the
+// confusion from the model list to a role list, so the main model is the anchor
+// and a role draws a branch off it only once it stops following.
+//
+// Decision is the one job that cannot follow: it asks a question set, which a
+// chat model has no answer for. Its slot offers the decision sources and says
+// so when there are none, rather than pretending the main model will do.
 
 type RoleKey = keyof RoleAssignments;
+type Answers = "chat" | "decision";
 
-const ROLES: [RoleKey, string, string][] = [
-  ["planner", "计划", "仅生成计划，不写入"],
-  ["subagent", "子代理", "派发的子任务"],
-  ["vision", "看图", "处理主模型无法识别的图片"],
-  ["guardian", "复核", "独立复核本轮"],
+const ROLES: [RoleKey, string, string, Answers][] = [
+  ["planner", "计划", "仅生成计划，不写入", "chat"],
+  ["subagent", "子代理", "派发的子任务", "chat"],
+  ["vision", "看图", "处理主模型无法识别的图片", "chat"],
+  ["guardian", "复核", "独立复核本轮", "chat"],
+  ["decision", "决策", "system_one 询问的后端", "decision"],
 ];
+
+const answersOf = (m: ModelEntry): Answers => (m.answers === "decision" ? "decision" : "chat");
 
 interface Props {
   models: ModelEntry[];
@@ -36,7 +44,8 @@ export function Roles({ models, roles, main, busy, onSet }: Props) {
 
   if (!roles) return <div className="empty">{t("无法读取角色分工。")}</div>;
 
-  const following = ROLES.filter(([k]) => !roles[k]).length;
+  const chat = ROLES.filter(([, , , a]) => a === "chat");
+  const following = chat.filter(([k]) => !roles[k]).length;
 
   return (
     <>
@@ -45,19 +54,20 @@ export function Roles({ models, roles, main, busy, onSet }: Props) {
           <span className="cap">{t("对话 · 主模型")}</span>
           <span className="nm">{anchor?.model ?? main ?? "—"}</span>
           <span className="meta">
-            {[anchor?.provider, following === ROLES.length ? t("所有角色均跟随主模型") : t("{n} 个角色跟随主模型", { n: following })]
+            {[anchor?.provider, following === chat.length ? t("所有角色均跟随主模型") : t("{n} 个角色跟随主模型", { n: following })]
               .filter(Boolean)
               .join(" · ")}
           </span>
         </div>
         <div className="fan">
-          {ROLES.map(([key, name, tag]) => (
+          {ROLES.map(([key, name, tag, answers]) => (
             <Slot
               key={key}
               name={t(name)}
               tag={t(tag)}
               set={roles[key]}
-              models={models}
+              follows={answers === "chat"}
+              models={models.filter((m) => answersOf(m) === answers)}
               busy={busy}
               open={open === key}
               onOpen={() => setOpen(open === key ? null : key)}
@@ -79,9 +89,9 @@ export function Roles({ models, roles, main, busy, onSet }: Props) {
 }
 
 function Slot({
-  name, tag, set, models, busy, open, onOpen, onPick,
+  name, tag, set, follows, models, busy, open, onOpen, onPick,
 }: {
-  name: string; tag: string; set: string; models: ModelEntry[]; busy: string;
+  name: string; tag: string; set: string; follows: boolean; models: ModelEntry[]; busy: string;
   open: boolean; onOpen: () => void; onPick: (ref: string) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -99,7 +109,9 @@ function Slot({
         onClick={onOpen}
       >
         <span className="rolecopy"><span className="role">{name}</span><span className="tag">{tag}</span></span>
-        <span className="val" key={set || "follow"}>{set ? (chosen?.model ?? set) : t("跟随主模型")}</span>
+        <span className="val" key={set || "follow"}>
+          {set ? (chosen?.model ?? set) : follows ? t("跟随主模型") : models.length ? t("未指定") : t("尚无可用来源")}
+        </span>
         <i className="slotchev" aria-hidden="true">⌄</i>
       </button>
       {/* Kept conditional: .mgrp rounds its corners with overflow:hidden, released
@@ -108,9 +120,12 @@ function Slot({
       {open && (
         <div className="rpick" role="listbox" aria-label={t("{name}用哪个模型", { name })}>
           <button role="option" data-action="roles.model" aria-selected={!set} data-cur={!set ? "" : undefined} onClick={() => onPick("")}>
-            {t("跟随主模型")}
+            {follows ? t("跟随主模型") : t("不使用")}
           </button>
           <div className="sep" />
+          {!follows && models.length === 0 && (
+            <p className="rpick-empty">{t("在「模型来源」添加一个决策协议的来源后，这里就能选。")}</p>
+          )}
           {models.map((m) => (
             <button
               key={m.ref}

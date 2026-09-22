@@ -75,6 +75,17 @@ export function apply(pack: ThemePack | null, scheme: "light" | "dark", busy = f
     for (const v of vars) root.style.removeProperty(v);
   }
   root.style.removeProperty("--accent-wash");
+  // Contrast is the reader's, so it moves the built-in inks too — not only a
+  // pack that happens to declare them. Read after the clear above, or each pass
+  // would offset the one before it.
+  const base = getComputedStyle(root);
+  for (const name of Object.keys(STEPS)) {
+    const authored = pack?.tokens[scheme]?.[name];
+    const from = authored || base.getPropertyValue(SURFACE[name][0]).trim();
+    if (!authored && from) {
+      for (const v of SURFACE[name]) root.style.setProperty(v, ink(from, name, scheme, contrast));
+    }
+  }
   if (!pack) return;
 
   const tokens = pack.tokens[scheme];

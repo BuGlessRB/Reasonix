@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"path/filepath"
@@ -32,9 +33,6 @@ import (
 	"reasonix/internal/surface"
 )
 
-//go:embed index.html
-var indexHTML []byte
-
 //go:embed logo-wordmark.svg
 var logoWordmarkSVG []byte
 
@@ -50,7 +48,10 @@ type Server struct {
 	// while the lease keeper guards another (the exact split this feature
 	// exists to prevent). It also keeps switchModel's Snapshot/Build/Close
 	// off s.mu, as the narrower switchMu did before it was widened.
-	bindMu   sync.Mutex
+	bindMu sync.Mutex
+	// The built page this kernel serves, or nil when it serves its API alone.
+	// The hub owns it, so the hub says; the root has to hand back its shell.
+	page     fs.FS
 	ctrl     control.SessionAPI
 	bc       *Broadcaster
 	paneSink event.Sink // what the controller emits into; see SetPaneSink
@@ -488,22 +489,18 @@ func csrfGuard(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
-	if setup, ok := s.providerSetupSnapshot(); ok && setup.Required {
-		s.providerSetupIndex(w)
+// index is where a browser lands, and every path the page routes itself lands
+// here too. It answers with the page's own shell, so the address bar keeps the
+// path the person asked for instead of a namespace the kernel needed.
+func (s *Server) index(w http.ResponseWriter, r *http.Request) {
+	_, _ = config.MigrateLegacyIfNeeded()
+	// The built page onboards in its own words, against the same
+	// /provider-setup this kernel answers. There is no second page to draw.
+	if s.page == nil {
+		refuse(w, http.StatusNotFound, "page.not_built", "this kernel is serving no built interface", nil)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = config.MigrateLegacyIfNeeded()
-	lang := "auto"
-	if cfg, err := config.Load(); err == nil {
-		if dl := cfg.DesktopLanguage(); dl != "" {
-			lang = dl
-		}
-	}
-	html := string(indexHTML)
-	html = strings.ReplaceAll(html, "__LANG__", lang)
-	_, _ = w.Write([]byte(html))
+	http.ServeFileFS(w, r, s.page, "index.html")
 }
 
 func (s *Server) logoWordmark(w http.ResponseWriter, _ *http.Request) {
@@ -921,6 +918,7 @@ func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
 				Provider: p.Name,
 				Model:    model,
 				Kind:     p.Kind,
+				Answers:  string(config.AnswersFor(p.Kind)),
 				Active:   active,
 				Default:  ref == cfg.DefaultModel || p.Name == cfg.DefaultModel,
 			}

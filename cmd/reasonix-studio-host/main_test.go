@@ -19,6 +19,7 @@ import (
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
 	"reasonix/internal/testenv"
+	"reasonix/internal/traystate"
 )
 
 func TestMain(m *testing.M) {
@@ -50,7 +51,10 @@ func testHub(t *testing.T, cfg config.ServeConfig) (*serve.Hub, chan string) {
 	})
 	t.Cleanup(ctrl.Close)
 	hubCfg := hostServeConfig(cfg)
-	hub := serve.NewHub(serve.HubOptions{Serve: hubCfg, Surface: surface.Desktop, Grant: grantHostCapabilities})
+	// A tray, because the tray routes exist only where there is one. Without it
+	// those paths were never registered, and the boundary test that reads them
+	// was answered by whatever the kernel served for an unknown path.
+	hub := serve.NewHub(serve.HubOptions{Serve: hubCfg, Surface: surface.Desktop, Grant: grantHostCapabilities, Tray: stubTray{}})
 	srv := serve.New(ctrl, bc, hubCfg)
 	srv.SetPaneSink(bc)
 	if _, err := hub.Adopt(srv, bc); err != nil {
@@ -359,7 +363,7 @@ func TestRunServesUntilTheParentLetsGo(t *testing.T) {
 		t.Fatalf("the handshake said %+v", said)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, said.Origin+"/_studio/", nil)
+	req, err := http.NewRequest(http.MethodGet, said.Origin+"/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +375,7 @@ func TestRunServesUntilTheParentLetsGo(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "<title>studio</title>") {
-		t.Fatalf("GET /_studio/ = %d %q", resp.StatusCode, body)
+		t.Fatalf("GET / = %d %q", resp.StatusCode, body)
 	}
 
 	// The parent goes away. Nothing is signalled: the pipe closing is the whole
@@ -434,3 +438,11 @@ func TestTrayEndpointsSitBehindTheSameBoundary(t *testing.T) {
 		t.Errorf("GET /tray/prefs = %d %s, want 200", status, body)
 	}
 }
+
+// stubTray is a window for the tray routes to answer about. It reports the
+// quiet state a host reports before anything has run.
+type stubTray struct{}
+
+func (stubTray) IconLive() bool                 { return false }
+func (stubTray) TrayFold() traystate.State      { return traystate.State{} }
+func (stubTray) ApplyTrayPrefs(serve.TrayPrefs) {}

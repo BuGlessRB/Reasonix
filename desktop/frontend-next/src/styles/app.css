@@ -511,15 +511,6 @@
     margin-left: 0; padding: 2px 7px; border-radius: var(--r-xs);
     font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: .03em;
   }
-  .qi[data-state="running"] { opacity: .55 }
-
-  .qi[data-state="steer_consumed"] {
-    padding-top: 0; padding-bottom: 0; opacity: .5;
-    border-color: transparent; background: none; font-size: var(--fs-meta);
-  }
-  .qi[data-state="steer_consumed"] .pill {
-    padding: 0; background: none; font-size: var(--fs-micro); letter-spacing: .02em;
-  }
   .pv { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .rf { flex: none; color: var(--faint) }
   .qwhy { flex: none; color: var(--warn-ink) }
@@ -529,12 +520,25 @@
     background: var(--surface); color: var(--text); font: inherit; resize: none;
   }
 
-  .qacts { display: flex; gap: 1px; flex: none }
+  .steermark {
+    flex: none; padding: 1px 6px; border-radius: var(--r-pill);
+    background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent-ink);
+    font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap);
+  }
+
+  .qacts { display: flex; align-items: center; gap: 1px; flex: none }
   .qacts button {
-    min-width: 17px; padding: 0 3px; border: none; border-radius: var(--r-xs);
+    min-width: 17px; height: 19px; padding: 0 4px; border: none; border-radius: var(--r-xs);
+    display: inline-flex; align-items: center; justify-content: center;
     background: none; color: var(--faint); font: inherit; cursor: pointer;
     transition: color var(--m-line) , background var(--m-line) ;
   }
+  .qacts .studio-icon { width: 12px; height: 12px; stroke-width: 1.9 }
+  .qacts button.qnow {
+    margin-left: 3px; padding: 0 8px; color: var(--accent-ink);
+    font: var(--w-med) var(--fs-micro) var(--ui);
+  }
+  .qacts button.qnow:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-ink) }
   .qacts button:hover:not(:disabled) { background: var(--overlay); color: var(--text) }
   .qacts button:disabled { opacity: .3; cursor: default }
   .qi .x {
@@ -568,13 +572,14 @@
   .pcancel:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
   .app {
-    --nav-w: 52px; --rail-w: var(--rail-open); --side-w: var(--side-open);
-    transition: --rail-w var(--t-panel) cubic-bezier(.32, .72, 0, 1), --side-w var(--t-panel) cubic-bezier(.32, .72, 0, 1);
+    --nav-w: 52px; --rail-w: var(--rail-open); --side-w: 0px; --dock-w: var(--dock-open);
+    transition: --rail-w var(--t-panel) cubic-bezier(.32, .72, 0, 1), --side-w var(--t-panel) cubic-bezier(.32, .72, 0, 1), --dock-w var(--t-panel) cubic-bezier(.32, .72, 0, 1);
   }
   .app[data-rail="off"] { --rail-w: 0px }
-  .app[data-side="off"] { --side-w: 0px }
+  .app[data-browser="off"] { --dock-w: 0px }
+  .app[data-side="on"] { --side-w: var(--side-open) }
 
-  .app[data-focus="true"] { --rail-w: 0px; --side-w: 0px }
+  .app[data-focus="true"] { --rail-w: 0px; --side-w: 0px; --dock-w: 0px }
   [data-focus="true"] .rail, [data-focus="true"] .side { opacity: 0; border: 0 }
 
   [data-focus="true"] .gutter-l, [data-focus="true"] .gutter-r, [data-focus="true"] .sidepeek { display: none }
@@ -587,13 +592,13 @@
   .cols { flex: 1; display: grid; grid-template-columns: var(--nav-w) var(--rail-w) minmax(0, 1fr) var(--side-w); min-height: 0 }
   .rail, .side { overflow: hidden }
   [data-rail="off"] .rail { border-right: 0 }
-  [data-side="off"] .side { border-left: 0 }
+  .app:not([data-side="on"]) .side { border-left: 0 }
 
   .rail > * { width: var(--rail-open); flex: none }
   .side > * { width: var(--side-open) }
   .rail > .scroll, .side > .scroll { flex: 1 }
   .rail, .side { transition: opacity var(--m-card) var(--m-step) }
-  [data-rail="off"] .rail, [data-side="off"] .side { opacity: 0; transition: opacity var(--m-exit) }
+  [data-rail="off"] .rail, .app:not([data-side="on"]) .side { opacity: 0; transition: opacity var(--m-exit) }
 
   .sidepeek { display: none }
   [data-fold~="side"] .sidepeek {
@@ -640,7 +645,7 @@
     cursor: col-resize; touch-action: none;
   }
 
-  .gutter-l { left: -6px }
+  .gutter-l { left: -6px; z-index: 13 }
   .gutter-r { right: -6px }
   .gutter::after {
     content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px;
@@ -659,10 +664,8 @@
 
   .gutter[data-shut] { width: 14px }
   [data-rail="off"] .gutter-l { left: 0 }
-  [data-side="off"] .gutter-r { right: 0 }
 
   [data-rail="off"] .gutter-l .grip { margin-left: -6px }
-  [data-side="off"] .gutter-r .grip { margin-left: -10px }
   .grip {
     position: absolute; top: 50%; left: 50%; margin: -16px 0 0 -8px; z-index: 1;
     width: 16px; height: 32px; padding: 0; display: grid; place-items: center;
@@ -805,7 +808,7 @@
     position: relative;
     display: flex; align-items: center; gap: 2px; flex: none;
     border-bottom: 1px solid var(--hair);
-    padding: 8px 0; padding-inline: max(16px, calc((100% - var(--wide)) / 2 + 18px));
+    padding: 8px 0; padding-inline: var(--pane-gutter);
   }
   .vtabs { display: flex; align-items: center; gap: 2px; min-width: 0 }
 
@@ -850,8 +853,23 @@
   .pane:has(> .pbody[data-dock]) > .scroll[data-pane="browser"] {
     grid-area: side; min-width: 0; border-left: 1px solid var(--hair);
   }
-  .tab.dock { padding-inline: 8px; font-size: var(--fs-meta) }
-  .tab.dock[aria-pressed="true"] { background: var(--overlay); color: var(--text) }
+  /* The divider shares the browser's cell rather than being inset into the
+     pane: the cell already starts under the nav and ends at the window, which
+     is the run the handle has to cover. */
+  .pane:has(> .pbody[data-dock]) > .gutter-r {
+    position: relative; inset: auto; grid-area: side; justify-self: start; align-self: stretch;
+    width: 11px; margin-left: -6px; z-index: 6;
+  }
+  /* Shut, the column has no width to straddle, so the handle comes wholly
+     inside the window rather than hanging half off its edge. */
+  .app[data-browser="off"] .pane > .gutter-r { margin-left: -14px }
+  [data-focus="true"] .pane > .gutter-r { display: none }
+  /* Docked, the body has no room for two columns — so the explorer is a panel
+     the tab bar opens rather than a column that is simply absent. */
+  .pane:has(> .pbody[data-dock]) .workbench-body:not([data-files]) { grid-template-columns: minmax(0, 1fr) }
+  .pane:has(> .pbody[data-dock]) .workbench-body:not([data-files]) .workbench-explorer { display: none }
+  .pane:has(> .pbody[data-dock]) .workbench-body[data-files] { grid-template-columns: minmax(0, 1fr) }
+  .pane:has(> .pbody[data-dock]) .workbench-body[data-files] .workbench-canvas { display: none }
   .bpanel { flex: 1; display: flex; flex-direction: column; min-height: 0 }
   .bbar { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--hair) }
   .bbar .vtabs { overflow-x: auto }
@@ -968,7 +986,7 @@
     @keyframes edgein { to { opacity: 1 } }
   }
 
-  .pane { --srail-w: 54px; --flow-pad: 20px; --dock-w: clamp(360px, 42%, 760px) }
+  .pane { --srail-w: 54px; --flow-pad: 20px }
   .railhost { position: sticky; top: 0; height: 0; z-index: 4; pointer-events: none }
 
   [data-pane="flow"] { scrollbar-width: none }
@@ -2361,12 +2379,16 @@
   .wsfind .clr { flex: none; border: 0; background: none; cursor: pointer; color: var(--ghost); font-size: var(--fs-ui); line-height: 1; padding: 0 2px }
   .wsfind .clr:hover { color: var(--text) }
 
+  /* Quiet, not absent. A control that exists only under the pointer is one
+     nobody finds, and the row it sits on is where a person looks for it. */
   .reask-open {
-    position: relative; flex: none; border: 0; background: var(--overlay); color: var(--faint); cursor: pointer;
-    font: var(--w-med) var(--fs-micro) var(--ui); padding: 4px 9px; border-radius: var(--r-sm); white-space: nowrap;
-    opacity: 0; transition: opacity var(--m-line), background var(--m-line), color var(--m-line);
+    position: relative; flex: none; display: inline-flex; align-items: center; gap: 4px;
+    border: 0; background: transparent; color: var(--faint); cursor: pointer;
+    font: var(--w-med) var(--fs-micro) var(--ui); padding: 4px 8px; border-radius: var(--r-sm); white-space: nowrap;
+    opacity: .58; transition: opacity var(--m-line), background var(--m-line), color var(--m-line);
   }
-  .call > .c:hover .reask-open, .call > .c:focus-within .reask-open { opacity: 1 }
+  .reask-open .studio-icon { width: 12px; height: 12px }
+  .call > .c:hover .reask-open, .call > .c:focus-within .reask-open { opacity: 1; background: var(--overlay) }
   .reask-open::after { content: ""; position: absolute; inset: -5px -2px }
   .reask-open:hover { background: var(--border); color: var(--text) }
   .reask-open:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
@@ -2625,9 +2647,24 @@
   .plan .s { display: flex; align-items: baseline; gap: 9px; padding: 6px 0 6px 10px; font-size: var(--fs-ui); color: var(--muted); border-bottom: 1px solid var(--hair); transition: color var(--m-card), opacity var(--m-card), background var(--m-line); border-radius: var(--r-xs) }
   .plan .s:hover { background: var(--overlay) }
   .plan .s:last-child { border-bottom: 0 }
-  .plan .s .b { font: var(--w-reg) var(--fs-micro) var(--mono); width: 10px; flex: none; color: var(--ghost); font-variant-numeric: tabular-nums; transition: color var(--m-card) }
+  /* Three states, three shapes: a dotted ring has not started, a turning arc is
+     in hand, a filled disc is done. Colour alone would say it to some readers
+     and to no one using the window in a bright room. */
+  .plan .s .b {
+    width: 11px; height: 11px; flex: none; align-self: center; border-radius: 50%;
+    border: 1.5px dotted var(--ghost); box-sizing: border-box;
+    transition: border-color var(--m-card), background var(--m-card);
+  }
+  .plan .s[data-now] .b {
+    border: 1.5px solid var(--hair); border-top-color: var(--accent); border-right-color: var(--accent);
+    animation: plan-turn 820ms linear infinite;
+  }
+  @keyframes plan-turn { to { transform: rotate(360deg) } }
   .plan .s[data-done] { color: var(--faint) }
-  .plan .s[data-done] .b { color: var(--ok) }
+  .plan .s[data-done] .b { border: 1.5px solid var(--ok); background: var(--ok) }
+  @media (prefers-reduced-motion: reduce) {
+    .plan .s[data-now] .b { animation: none; border-color: var(--accent) }
+  }
 
   .plan .s .t .ln, .steps .s .t .ln {
     background: linear-gradient(var(--ghost), var(--ghost)) no-repeat 0 62% / 0 1px;
@@ -2789,7 +2826,7 @@
 
   [data-fold~="side"] [data-side="on"] .gutter-r { display: none }
 
-  [data-fold~="side"] [data-side="off"] .side { display: none }
+  [data-fold~="side"] .app:not([data-side="on"]) .side { display: none }
 
   [data-fold~="short"] .compose { --aux-budget: min(calc(24vh / var(--zoom, 1)), 176px) }
   [data-fold~="short"] .compose textarea { max-height: min(calc(var(--read, 15px) * 9.6), calc(24vh / var(--zoom, 1))) }

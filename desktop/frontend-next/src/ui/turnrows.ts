@@ -6,7 +6,11 @@ type Row = { item: Item; activity?: Item[] } | { activity: Item[] };
  *  message and everything done about it, consecutive tool steps fold into one
  *  disclosure, and each run of work sits under the sentence it followed — a turn
  *  that answers several times keeps each answer with its own work. */
-export function transcriptRows(items: Item[]): Row[] {
+export function transcriptRows(all: Item[]): Row[] {
+  // A queued line has not happened yet, so it is the composer's to show and not
+  // this list's. Leaving it here also split the running turn at the moment of
+  // typing and handed its work to a line the model had not read.
+  const items = all.filter((i) => !(i.t === "user" && i.pending));
   const rows: Row[] = [];
   for (let at = 0; at < items.length;) {
     let end = at + 1;

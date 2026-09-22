@@ -31,6 +31,7 @@ const PATHS = {
   pause: "M8 5v14M16 5v14",
   warning: "M12 3 2 21h20L12 3zM12 9v5M12 17h.01",
   copy: "M8 8h13v13H8V8zM16 8V3H3v13h5",
+  quote: "M7 7H3v6h6V9m0-2v8a2 2 0 0 1-2 2H5m16-10h-4v6h6V9m0-2v8a2 2 0 0 1-2 2h-2",
   external: "M14 3h7v7M21 3 11 13M10 3H3v18h18v-7",
   plug: "M8 3v5m8-5v5M5 8h14v4a7 7 0 0 1-14 0V8M12 19v3",
   download: "M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4",

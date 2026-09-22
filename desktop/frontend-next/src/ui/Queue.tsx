@@ -3,21 +3,34 @@ import type { Queue as QueueSnapshot, QueueItem } from "../port/port";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import { Overflow } from "./Overflow";
+import { StudioIcon } from "./StudioIcon";
 
 interface Props {
   queue: QueueSnapshot | null;
+  // A turn holding the session is the whole reason these are waiting, and it is
+  // what "send now" has to interrupt. Without it the action is meaningless: an
+  // idle queue dispatches on its own.
+  running: boolean;
   onRead: (id: string) => Promise<string>;
   onEdit: (id: string, text: string) => void;
   onMove: (id: string, to: number) => void;
   onCancel: (id: string) => void;
+  onSendNow: (item: QueueItem) => void;
   onRetry: (id: string) => void;
   onRefresh: (id: string) => void;
   onPause: (paused: boolean) => void;
 }
 
-// What each state means for the row's own affordances. A consumed entry is
-// history the kernel has not swept yet: it is past taking back.
-const settled = (s: QueueItem["state"]) => s === "steer_consumed" || s === "running";
+// The kernel has taken the line: it is in the transcript now, and the entry is
+// swept only when the whole turn ends. This panel is what has not happened yet,
+// so a taken entry leaves it rather than standing there inert as a second copy.
+const taken = (s: QueueItem["state"]) => s === "steer_consumed" || s === "running";
+
+// "To send" is what the person said and has not sent yet. A host continuation —
+// a finished background job asking the session to pick the work back up — is
+// not theirs and belongs with the work it came from. It appears here only when
+// it needs a decision, which is the one case nobody else can make for them.
+const theirs = (it: QueueItem) => it.origin !== "host" || it.state === "blocked" || it.state === "uncertain";
 
 // Each arm calls t() with its own literal: the catalogue is built by reading
 // these call sites, and a table of strings looked up later is invisible to it —
@@ -29,10 +42,6 @@ function label(it: QueueItem): string {
   switch (it.state) {
     case "steer_accepted":
       return t("插话已收");
-    case "steer_consumed":
-      return t("已送入");
-    case "running":
-      return t("进行中");
     case "blocked":
       return t("受阻");
     case "uncertain":
@@ -47,10 +56,7 @@ function label(it: QueueItem): string {
 function tone(state: QueueItem["state"]): string | undefined {
   switch (state) {
     case "steer_accepted":
-    case "running":
       return "accent";
-    case "steer_consumed":
-      return "ok";
     case "blocked":
     case "uncertain":
       return "warn";
@@ -70,7 +76,7 @@ function size(n: number): string {
 }
 const fill = (n: number, max: number) => (max > 0 ? `${Math.min(100, Math.round((n / max) * 100))}%` : "0%");
 
-export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefresh, onPause }: Props) {
+export function Queue({ queue, running, onRead, onEdit, onMove, onCancel, onSendNow, onRetry, onRefresh, onPause }: Props) {
   const [editing, setEditing] = useState("");
   const [draft, setDraft] = useState("");
   // Which row could not be read back, and why. Not a draft: the editor stays
@@ -114,8 +120,9 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
   // queue policy; drawing a full strip for it above an empty composer makes it
   // look like a stuck task. If a new item arrives while held, the strip returns
   // with both the item and the action needed to release it.
-  if (!queue || queue.items.length === 0) return null;
-  const items = queue.items;
+  if (!queue) return null;
+  const items = queue.items.filter((it) => !taken(it.state) && theirs(it));
+  if (items.length === 0) return null;
   const cap = queue.capacity;
   const fullItems = cap.maxItems > 0 && cap.items >= cap.maxItems;
   const fullBytes = cap.maxBytes > 0 && cap.bytes >= cap.maxBytes;
@@ -134,7 +141,9 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
             ? t("会话暂时只读，消息已为你保留")
             : queue.paused
               ? t("发送已暂停")
-              : t("当前回复结束后发送")}
+              : running
+                ? t("尚未送达，可以改，也可以取回")
+                : t("正在送出…")}
         </span>
         {queue.paused && <span className="qflag" data-hold="">{t("已暂停")}</span>}
         {queue.readonly && <span className="qflag" data-ro="">{t("只读")}</span>}
@@ -164,7 +173,7 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
 
       <div className="qitems">
         {items.map((it, i) => {
-          const live = !settled(it.state) && !queue.readonly && editing !== it.id;
+          const live = !queue.readonly && editing !== it.id;
           return (
             <div key={it.id} className="qi" data-state={it.state}>
               {/* The chip is the answer to "did that land". Its wording says
@@ -210,12 +219,30 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
               {live && (
                 <span className="qacts">
                   {items.length > 1 && <>
-                    <button data-action="queue.move" data-target={it.id} data-value="up" onClick={() => onMove(it.id, i - 1)} disabled={i === 0} title={t("上移")} aria-label={t("上移")}>↑</button>
-                    <button data-action="queue.move" data-target={it.id} data-value="down" onClick={() => onMove(it.id, i + 1)} disabled={i === items.length - 1} title={t("下移")} aria-label={t("下移")}>↓</button>
+                    <button data-action="queue.move" data-target={it.id} data-value="up" onClick={() => onMove(it.id, i - 1)} disabled={i === 0} title={t("上移")} aria-label={t("上移")}>
+                      <StudioIcon name="arrow" />
+                    </button>
+                    <button data-action="queue.move" data-target={it.id} data-value="down" onClick={() => onMove(it.id, i + 1)} disabled={i === items.length - 1} title={t("下移")} aria-label={t("下移")}>
+                      <StudioIcon name="arrow" data-flip="" />
+                    </button>
                   </>}
                   <button data-action="queue.edit" data-target={it.id} onClick={() => void open(it.id)} title={t("编辑")}>
                     {t("改")}
                   </button>
+                  {/* Waiting is the normal case and needs no button. This is the
+                      other one: the turn in front of this line is not worth
+                      finishing, and nothing else can end it. */}
+                  {running && !queue.paused && (it.state === "queued" || it.state === "steer_accepted") && (
+                    <button
+                      className="qnow"
+                      data-action="queue.send-now"
+                      data-target={it.id}
+                      onClick={() => onSendNow(it)}
+                      title={t("停止当前回复，把这条作为新一轮立即发出")}
+                    >
+                      {t("立即发送")}
+                    </button>
+                  )}
                   {it.state === "blocked" && (
                     <button data-action="queue.retry" data-target={it.id} onClick={() => onRetry(it.id)} title={t("重试")}>
                       {t("重试")}

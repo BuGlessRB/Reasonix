@@ -2665,18 +2665,43 @@ func TestAddBuiltinsWithWorkspaceRootKeepsSessionTools(t *testing.T) {
 	}
 }
 
-func TestAddBuiltinsBindsConfiguredSystemOne(t *testing.T) {
+// The decision backend is an ordinary source the decision role names, so the
+// tool binds from the same place every other model comes from.
+func TestAddBuiltinsBindsTheDecisionRolesBackend(t *testing.T) {
 	reg := tool.NewRegistry()
-	cfg := &config.Config{Tools: config.ToolsConfig{SystemOne: config.SystemOneConfig{}}}
-	t.Setenv("TYPESAFE_API_KEY", "secret")
+	t.Setenv("DECIDER_KEY", "secret")
+	cfg := &config.Config{Providers: []config.ProviderEntry{{
+		Name: "decider", Kind: "typesafe", BaseURL: "https://decide.example",
+		Models: []string{"system-one"}, APIKeyEnv: "DECIDER_KEY",
+	}}}
+	cfg.Agent.DecisionModel = "decider/system-one"
+	// Load does this for a real config; a hand-built one has to ask.
+	cfg.Providers[0].ResolveAPIKeyForRoot(".")
 	addSystemOne(reg, []string{"system_one"}, cfg, http.DefaultClient)
 	registered, ok := reg.Get("system_one")
 	if !ok {
-		t.Fatal("configured system_one was not registered")
+		t.Fatal("the decision role's backend was not registered")
 	}
 	visible, ok := registered.(tool.ContextualTool)
 	if !ok || !visible.ProviderVisible(context.Background()) {
 		t.Fatal("configured system_one is not provider-visible")
+	}
+}
+
+// A chat model in the decision role is a model that cannot answer a question
+// set. Binding it would turn a misconfiguration into a failing turn.
+func TestAddBuiltinsRefusesAChatModelAsTheDecisionBackend(t *testing.T) {
+	reg := tool.NewRegistry()
+	t.Setenv("CHAT_KEY", "secret")
+	cfg := &config.Config{Providers: []config.ProviderEntry{{
+		Name: "chatty", Kind: "openai", BaseURL: "https://chat.example",
+		Models: []string{"gpt-x"}, APIKeyEnv: "CHAT_KEY",
+	}}}
+	cfg.Agent.DecisionModel = "chatty/gpt-x"
+	cfg.Providers[0].ResolveAPIKeyForRoot(".")
+	addSystemOne(reg, []string{"system_one"}, cfg, http.DefaultClient)
+	if _, ok := reg.Get("system_one"); ok {
+		t.Fatal("a chat model was bound as the decision backend")
 	}
 }
 

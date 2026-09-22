@@ -46,8 +46,11 @@ type Event struct {
 	// turn_started: the authored message this turn is about — its turn number
 	// in the conversation, and the session index it takes. A client mints its
 	// own user row, so this is the only thing that names which one.
-	AuthoredTurn  *int           `json:"authoredTurn,omitempty"`
-	MsgIndex      *int           `json:"msgIndex,omitempty"`
+	AuthoredTurn *int `json:"authoredTurn,omitempty"`
+	MsgIndex     *int `json:"msgIndex,omitempty"`
+	// Which model wrote this. None means the turn's own, which a client
+	// reading it off the composer instead got wrong once the setting moved.
+	ModelRef      string         `json:"modelRef,omitempty"`
 	RetryAttempt  int            `json:"retryAttempt,omitempty"`
 	RetryMax      int            `json:"retryMax,omitempty"`
 	RetryScope    string         `json:"retryScope,omitempty"` // "headers" | "stream"; omit for older clients
@@ -118,6 +121,7 @@ type StreamAttempt struct {
 // ToWire converts a typed runtime event into the shared frontend JSON contract.
 func ToWire(e event.Event) Event {
 	w := Event{Kind: kindNames[e.Kind], Text: e.Text, Detail: e.Detail, Reasoning: e.Reasoning, ItemID: e.ItemID, Source: e.Source}
+	w.ModelRef = wireModelRef(e)
 	if len(e.MemoryCitations) > 0 {
 		w.MemoryCitations = ToWireMemoryCitations(e.MemoryCitations)
 	}
@@ -784,4 +788,19 @@ type ContextMaintenance struct {
 	Code                string `json:"code,omitempty"`
 	Boundary            string `json:"boundary,omitempty"`
 	TriggerTokens       int    `json:"triggerTokens,omitempty"`
+}
+
+// wireModelRef is the model a frontend may attribute a frame to: the turn's on
+// a start, a second model's on the text it wrote. The turn's own chunks carry
+// none, because the start already said it.
+func wireModelRef(e event.Event) string {
+	switch e.Kind {
+	case event.TurnStarted:
+		return e.ModelRef
+	case event.Text, event.Message:
+		if e.Source != "" {
+			return e.ModelRef
+		}
+	}
+	return ""
 }

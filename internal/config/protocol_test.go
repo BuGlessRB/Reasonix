@@ -11,19 +11,37 @@ import (
 )
 
 // The catalog is what every frontend offers and the registry is what the kernel
-// can actually build. A kind in one and not the other is a wire nobody can pick
-// or a menu entry that fails on the first turn.
+// can build a conversation on. A chat kind in one and not the other is a wire
+// nobody can pick or a menu entry that fails on the first turn. A decision wire
+// holds no conversation, so a factory for it would be a chat client that cannot
+// chat: it is built by the decision path instead, which internal/boot holds.
 func TestCatalogAndRegistryDescribeTheSameWires(t *testing.T) {
 	registered := provider.Kinds()
 	for _, p := range Protocols() {
-		if !slices.Contains(registered, p.Kind) {
-			t.Errorf("catalog offers %q, which no provider factory registers", p.Kind)
+		chat := p.Answers != AnswersDecision
+		if chat && !slices.Contains(registered, p.Kind) {
+			t.Errorf("catalog offers chat wire %q, which no provider factory registers", p.Kind)
+		}
+		if !chat && slices.Contains(registered, p.Kind) {
+			t.Errorf("decision wire %q has a chat factory, so it can be chosen as a main model", p.Kind)
 		}
 	}
 	for _, kind := range registered {
 		if _, ok := ProtocolFor(kind); !ok {
 			t.Errorf("kind %q is registered but absent from the protocol catalog, so nothing can offer it", kind)
 		}
+	}
+}
+
+// Every protocol says what it produces, or a chooser has to guess from the kind.
+func TestEveryProtocolDeclaresWhatItAnswers(t *testing.T) {
+	for _, p := range Protocols() {
+		if p.Answers != AnswersChat && p.Answers != AnswersDecision {
+			t.Errorf("protocol %q answers %q, which is neither chat nor decision", p.Kind, p.Answers)
+		}
+	}
+	if AnswersFor("nonesuch") != AnswersChat {
+		t.Error("an unknown kind must read as chat, which is what every wire was before decision backends")
 	}
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialState, reduce, type SessionEvent, type SessionState } from "./session";
+import { fromHistory, initialState, reduce, type Item, type SessionEvent, type SessionState } from "./session";
 import { refreshTodos, restoreSession } from "./restore";
 import type { AgentPort, HistoryMessage, HostTodo } from "../port/port";
 
@@ -87,5 +87,19 @@ describe("where the task panel gets its list", () => {
       kind: "__todos",
       plan: [{ text: "item two", status: "in_progress", activeForm: undefined, level: undefined }],
     });
+  });
+});
+
+// Reopening a session had every reply attributed to whatever the composer is
+// set to now, because only the live turn_started carried a model. The message
+// carries it, so a transcript read a day later still says who answered.
+describe("which model wrote a rebuilt reply", () => {
+  it("comes from the message, not from the current setting", () => {
+    const { items } = fromHistory([
+      { role: "user", content: "hi", msgIndex: 0 },
+      { role: "assistant", content: "hello", msgIndex: 1, modelRef: "yyds/claude-opus-4.8" },
+    ]);
+    const say = items.find((i) => i.t === "say") as Extract<Item, { t: "say" }>;
+    expect(say.model).toBe("yyds/claude-opus-4.8");
   });
 });

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
 import { decimals } from "../i18n/format";
 import { t } from "../i18n";
 import type { Item, Waiting } from "../state/session";
@@ -9,7 +9,7 @@ import { ToolCard } from "./cards/ToolCard";
 import { GuardianCard } from "./cards/GuardianCard";
 import { ApprovalCard, type PlanAction } from "./cards/ApprovalCard";
 import { AskCard } from "./cards/AskCard";
-import { SayCard } from "./cards/SayCard";
+import { SayCard, type ReplyActions } from "./cards/SayCard";
 import { CompactionCard } from "./cards/CompactionCard";
 import { ReceiptCard } from "./cards/ReceiptCard";
 import { ReadsCard } from "./cards/ReadsCard";
@@ -46,12 +46,16 @@ interface Props {
   onForget: (itemId: string, name: string) => void;
   // Takes a still-queued line back. Only rows the kernel has given an
   // item id can offer it, and only until the turn reads them.
-  onCancelQueued: (rowId: string, itemId: string) => void;
   onExtInvoke: (name: string) => void;
   // Views published against a tool call, keyed by anchor. A card looks itself
   // up here rather than being handed one, so an arriving takeover repaints the
   // one card it names and nothing else.
   takeovers?: Record<string, ExtensionSurface>;
+  // What a finished reply can be acted on with. One object rather than five
+  // props: they are one capability set and travel together.
+  reply?: ReplyActions;
+  // Rewriting a message: the turn it takes back, and what to send instead.
+  onResend?: (turn: number, text: string) => Promise<void>;
   onExtSubmit: (pluginId: string, surfaceId: string, values: Record<string, unknown>) => void;
   // The checkpoint each user card can return to, keyed by item id. Absent for a
   // card whose turn could not be matched — see state/checkpoints.
@@ -104,7 +108,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, find, query, onApprove, onFullAccess, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
+export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, find, query, onApprove, onFullAccess, onPlan, onAnswer, onForget, onExtInvoke, onExtSubmit, reply, onResend, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -443,7 +447,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   }, [entering, onEntered]);
   const owed = useMemo(() => new Set(entering), [entering]);
 
-  const rowProps = { owed, onApprove, onFullAccess, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
+  const rowProps = { owed, onApprove, onFullAccess, onPlan, onAnswer, onForget, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, reply, onResend };
 
   // What you said, and where it sits. Derived from the same blocks the
   // transcript renders, so a mark always knows which block holds it — that is
@@ -535,6 +539,9 @@ const Block = memo(function Block({
   // Tool traffic is evidence for the answer, not a stack of equally important
   // messages; transcriptRows folds it and keeps each sentence above its own.
   const rows = transcriptRows(items);
+  // Which runs of work are open, held here so re-hosting one under its sentence
+  // does not close it.
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
 
   return (
     <div
@@ -548,10 +555,10 @@ const Block = memo(function Block({
           it={row.item}
           {...rowProps}
           cp={checkpoints.get(row.item.id)}
-          afterAnswer={row.activity ? <ActivityGroup items={row.activity} checkpoints={checkpoints} {...rowProps} /> : undefined}
+          afterAnswer={row.activity ? <ActivityGroup items={row.activity} checkpoints={checkpoints} opened={opened} onOpened={setOpened} {...rowProps} /> : undefined}
         />
       ) : (
-        <ActivityGroup key={`activity:${row.activity[0].id}`} items={row.activity} checkpoints={checkpoints} {...rowProps} />
+        <ActivityGroup key={`activity:${row.activity[0].id}`} items={row.activity} checkpoints={checkpoints} opened={opened} onOpened={setOpened} {...rowProps} />
       ))}
     </div>
   );
@@ -564,7 +571,6 @@ interface RowHandlers {
   onPlan: Props["onPlan"];
   onAnswer: Props["onAnswer"];
   onForget: Props["onForget"];
-  onCancelQueued: Props["onCancelQueued"];
   onExtInvoke: Props["onExtInvoke"];
   takeovers: Record<string, ExtensionSurface>;
   onExtSubmit: Props["onExtSubmit"];
@@ -572,16 +578,39 @@ interface RowHandlers {
   onCommitRewind: Props["onCommitRewind"];
   onUndoRewind: Props["onUndoRewind"];
   onPrepareFileRevert: Props["onPrepareFileRevert"];
+  reply: Props["reply"];
+  onResend: Props["onResend"];
   onCommitFileRevert: Props["onCommitFileRevert"];
 }
 
 const ActivityGroup = memo(function ActivityGroup({
   items,
   checkpoints,
+  opened,
+  onOpened,
   ...rowProps
-}: { items: Item[]; checkpoints: Map<string, Checkpoint> } & RowHandlers) {
+}: {
+  items: Item[];
+  checkpoints: Map<string, Checkpoint>;
+  opened: Record<string, boolean>;
+  onOpened: Dispatch<SetStateAction<Record<string, boolean>>>;
+} & RowHandlers) {
   const running = items.some((item) => item.t === "tool" && item.running);
-  const [open, setOpen] = useState(false);
+  // Whether this group is open is held above it, because the group itself does
+  // not survive the turn: a run of work starts as a row of its own and is
+  // re-hosted under the sentence it belongs to once that sentence arrives,
+  // which unmounts it. State kept inside would be lost at exactly that moment.
+  const gid = items[0]?.id ?? "";
+  const open = opened[gid] ?? false;
+  const setOpen = useCallback(
+    (next: boolean) => onOpened((all) => (all[gid] === next ? all : { ...all, [gid]: next })),
+    [gid, onOpened],
+  );
+  // Open while something is running: a collapsed group during execution is a
+  // window with nothing moving in it, which reads as stuck rather than busy.
+  useEffect(() => {
+    if (running) setOpen(true);
+  }, [running, setOpen]);
   const calls = items.reduce((count, item) => count + (item.t === "reads" ? item.tools.length : 1), 0);
   const failures = items.reduce((count, item) => {
     if (item.t === "tool") return count + (toolFailed(item.tool) ? 1 : 0);
@@ -615,9 +644,10 @@ const Row = memo(function Row({
   onFullAccess,
   onPlan,
   onForget,
-  onCancelQueued,
   onAnswer,
   onExtInvoke,
+  reply,
+  onResend,
   takeovers,
   onExtSubmit,
   cp,
@@ -645,7 +675,7 @@ const Row = memo(function Row({
         <UserCard
           item={it}
           cp={cp}
-          onCancelQueued={onCancelQueued}
+          onResend={onResend}
           onPrepareRewind={onPrepareRewind}
           onCommitRewind={onCommitRewind}
           onUndoRewind={onUndoRewind}
@@ -656,7 +686,7 @@ const Row = memo(function Row({
       // model. Gating the card on text meant all of it stayed invisible and
       // then landed at once. An empty card is still not a message, so a turn
       // that produced neither draws nothing.
-      return it.text.trim() || it.reasoning?.trim() ? <SayCard item={it} afterAnswer={afterAnswer} /> : null;
+      return it.text.trim() || it.reasoning?.trim() ? <SayCard item={it} afterAnswer={afterAnswer} reply={reply} /> : null;
     case "tool":
       // The ask tool also raises ask_request, which carries the id /answer
       // needs. Drawing the tool call too put two copies of the same question on

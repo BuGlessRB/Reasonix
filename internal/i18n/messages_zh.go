@@ -266,6 +266,7 @@ var Chinese = Messages{
 	CmdRewind:           "回滚到更早的一轮",
 	CmdTree:             "查看对话分支树",
 	CmdBranch:           "创建对话分支",
+	CmdBrowser:          "在会话浏览器里打开网页",
 	CmdSwitchBranch:     "切换对话分支",
 	CmdResume:           "恢复已保存的会话",
 	CmdRename:           "重命名会话",

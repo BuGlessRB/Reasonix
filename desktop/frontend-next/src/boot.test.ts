@@ -26,3 +26,20 @@ describe("the shipped entry", () => {
     expect(inline).toMatch(/\.boot\s*\{[^}]*background:\s*var\(--boot-bg\)/);
   });
 });
+
+// A shared serve link carries its credential in the fragment, which the browser
+// never sends. The kernel's own pages used to trade it for the cookie; they are
+// gone, so this page does it — before the bundle's first request, and without
+// leaving the token in the address bar for the next person to copy.
+describe("a credential arriving in the link", () => {
+  it("is traded for the cookie and wiped from the address bar", () => {
+    for (const want of [
+      "window.location.hash.slice(1)",
+      '"/auth/token"',
+      "window.history.replaceState",
+      "window.fetch =",
+    ]) {
+      expect(HTML).toContain(want);
+    }
+  });
+});

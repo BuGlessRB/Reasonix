@@ -45,12 +45,14 @@ func TestProviderSetupStoresRemoteCredentialAndRebuildsController(t *testing.T) 
 	httpServer := httptest.NewServer(s.Handler())
 	defer httpServer.Close()
 
-	index := getProviderSetupBody(t, httpServer.URL+"/")
-	if !strings.Contains(index, "Reasonix Provider Setup") {
-		t.Fatalf("missing-key index did not serve Provider setup page:\n%s", index)
+	// The page onboards; this kernel only has to say a key is owed, and it must
+	// never hand back the one it already holds.
+	owed := getProviderSetupBody(t, httpServer.URL+"/provider-setup")
+	if !strings.Contains(owed, `"required":true`) {
+		t.Fatalf("missing-key kernel did not report setup as owed:\n%s", owed)
 	}
-	if strings.Contains(index, secret) {
-		t.Fatal("setup page reflected the Provider secret")
+	if strings.Contains(owed, secret) {
+		t.Fatal("the setup state reflected the Provider secret")
 	}
 
 	resp, err := http.Get(httpServer.URL + "/provider-setup")
@@ -119,9 +121,10 @@ func TestProviderSetupStoresRemoteCredentialAndRebuildsController(t *testing.T) 
 	if state.Required {
 		t.Fatalf("setup still required after save: %+v", state)
 	}
-	index = getProviderSetupBody(t, httpServer.URL+"/")
-	if strings.Contains(index, "Reasonix Provider Setup") {
-		t.Fatal("normal Serve UI did not replace setup page after controller rebuild")
+	// Setup is answered, so the kernel stops asking for a key.
+	owed = getProviderSetupBody(t, httpServer.URL+"/provider-setup")
+	if strings.Contains(owed, `"required":true`) {
+		t.Fatalf("setup is still owed after the credential was saved:\n%s", owed)
 	}
 }
 
@@ -337,17 +340,6 @@ func TestProviderSetupRejectsUnsafeOrAmbiguousRequests(t *testing.T) {
 	}
 	if config.CredentialStored(providerSetupTestKeyEnv) {
 		t.Fatal("rejected setup request persisted a credential")
-	}
-
-	page := string(providerSetupHTML)
-	if !strings.Contains(page, `type="password"`) {
-		t.Fatal("setup UI does not use a password input")
-	}
-	if strings.Contains(strings.ToLower(page), "localstorage") {
-		t.Fatal("setup UI must not persist Provider secrets in localStorage")
-	}
-	if !strings.Contains(page, "activationPending?'':input.value") {
-		t.Fatal("setup UI does not retry activation without resubmitting the Provider secret")
 	}
 }
 

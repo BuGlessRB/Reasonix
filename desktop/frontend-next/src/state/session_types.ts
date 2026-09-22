@@ -16,6 +16,9 @@ export type Item =
       id: string;
       text: string;
       pending?: boolean;
+      // Said into a turn already running. It never was a turn of its own, so it
+      // has no checkpoint and nothing rewinds to it.
+      steer?: boolean;
       itemId?: string;
       queued?: "steer" | "followup";
       authoredTurn?: number;
@@ -23,7 +26,7 @@ export type Item =
     }
   // source names which model wrote it — a turn can carry two, and the card is
   // where the answer has to survive.
-  | { t: "say"; id: string; text: string; reasoning?: string; done: boolean; thoughtMs?: number; source?: string }
+  | { t: "say"; id: string; text: string; reasoning?: string; done: boolean; thoughtMs?: number; source?: string; model?: string }
   | { t: "tool"; id: string; tool: Tool; running: boolean; children: Tool[] }
   | { t: "reads"; id: string; tools: Tool[] }
   | { t: "guardian"; id: string; g: Guardian }
@@ -166,6 +169,10 @@ export interface SessionState {
   //
   // Presentation bookkeeping, deliberately beside Item rather than on it: what
   // a card is does not depend on whether its arrival has been shown yet.
+  // The model the running turn was started on. A reply names its own when a
+  // second model wrote it; the rest are this one, recorded when the turn began
+  // rather than read off the composer, which moves on.
+  turnModel?: string;
   entranceOwed: string[];
   enteredThrough: number;
   // Bumped when the transcript's composition changes — a card added, settled,

@@ -327,6 +327,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 			ToolCalls:          calls,
 			ResponsesItems:     responsesItems,
 			WorkDurationMs:     state.workDurationMs(),
+			ModelRef:           a.modelRef,
 		})
 
 		if len(calls) == 0 {

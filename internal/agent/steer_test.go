@@ -132,3 +132,18 @@ func TestHostNoticeDoesNotClaimTheUserSpoke(t *testing.T) {
 		t.Fatalf("host prefix = %q, want it to disclaim the user", HostNoticePrefix)
 	}
 }
+
+// Every block the host prepends to a user turn is declared once, and a steer
+// behind any of them is still a steer. The recogniser walks that declaration
+// rather than a copy: a tag it does not know stops the walk, and the steer
+// reads back as the person having typed the host's instructions at themselves.
+func TestSteerTextSeesThroughEveryDeclaredTransientBlock(t *testing.T) {
+	for _, tag := range TransientUserBlockTags {
+		wrapped := "<" + tag + ">\nwhat the host had to say\n</" + tag + ">\n\n" +
+			MidTurnSteerPrefix + "\n" + "用户自己说的话"
+		got, ok := SteerText(wrapped)
+		if !ok || got != "用户自己说的话" {
+			t.Errorf("<%s>: SteerText = %q, %v; want the user's own words", tag, got, ok)
+		}
+	}
+}

@@ -26,7 +26,6 @@ import { Compaction } from "./Compaction";
 import { Sandbox } from "./Sandbox";
 import { Account } from "./Account";
 import { Providers } from "./Providers";
-import { DecisionModelsPanel } from "./DecisionModels";
 import { Models, activeKind, groupVendors } from "./Models";
 import { KIND_LABEL } from "./vendors";
 import { planProtocolSwitch } from "./protocolswitch";
@@ -521,9 +520,6 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
                   activeKindFor={(a) => kindFor(a.key)}
                   onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
               </Group>
-              <Group id="decision-models" title={t("决策模型")} hint={t("为 system_one 工具配置辅助决策后端，不会替换当前对话的主模型。")}>
-                <DecisionModelsPanel port={port} onChanged={onChanged} />
-              </Group>
               <Group id="model" title={t("主模型")} now={nav.model} hint={t("用于当前对话和大多数任务。切换会保留对话并重建运行时；任务执行期间无法修改。端点没有声明的能力不会显示标签。")}>
                 <Models models={models} current={status?.modelRef} busy={busy} protocol={protocol}
                   onPick={(ref) => run(ref, () => port.setModel(ref))} />
@@ -543,17 +539,17 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
               ) : (
                 <Group id="effort" title={t("推理强度")} hint={t("当前模型未提供可调的推理档位，因此不显示该选项。")} />
               )}
-              <Group id="context" title={t("上下文维护")}
-                hint={t("默认按模型容量自动整理。自定义中转站若无法提供最大上下文，先按 160k 计算；你可以在这里填写实际容量。")}>
-                <Compaction port={port} onChanged={onChanged} />
-              </Group>
               <Group id="roles" title={t("按任务指定模型")} now={roles ? t("{n} 个已指派", { n: assigned }) : undefined}
-                hint={t("默认全部使用主模型。只有需要为计划、子代理、看图或复核指定不同模型时才修改这里。")}>
+                hint={t("默认全部跟随主模型；只有要为某件事换一个模型时才改这里。决策是例外，它问的是判断题，必须指向一个决策来源。")}>
                 <Roles models={models} roles={roles} main={status?.modelRef} busy={busy}
                   onSet={(role, ref) => run(`role:${role}`, async () => {
                     await port.setRole(role, ref);
                     loadRoles();
                   })} />
+              </Group>
+              <Group id="context" title={t("上下文维护")}
+                hint={t("默认按模型容量自动整理。自定义中转站若无法提供最大上下文，先按 160k 计算；你可以在这里填写实际容量。")}>
+                <Compaction port={port} onChanged={onChanged} />
               </Group>
             </>
           )}

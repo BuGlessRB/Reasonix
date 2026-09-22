@@ -19,6 +19,7 @@ var roleFields = map[string]func(*config.Config) *string{
 	"subagent": func(c *config.Config) *string { return &c.Agent.SubagentModel },
 	"guardian": func(c *config.Config) *string { return &c.Agent.GuardianModel },
 	"vision":   func(c *config.Config) *string { return &c.Agent.VisionModel },
+	"decision": func(c *config.Config) *string { return &c.Agent.DecisionModel },
 }
 
 func (s *Server) registerRoleRoutes(mux *http.ServeMux) {

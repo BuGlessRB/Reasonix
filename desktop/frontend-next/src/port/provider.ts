@@ -53,6 +53,11 @@ export interface ProviderEntry {
 // list is the kernel's and the words for it are ours: no label rides along.
 export interface Protocol {
   kind: string;
+  // What a model on this wire produces. A decision wire returns verdicts to a
+  // question set and holds no conversation, so it is offered for the decision
+  // role and nowhere else. Absent means chat: it is what every wire was before
+  // decision backends, and a kernel that predates the field still answers.
+  answers?: "chat" | "decision";
   // Which model-listing shape this wire is discovered under. Protocols sharing
   // one value answer the same listing and cannot be told apart by a probe.
   discovery: string;

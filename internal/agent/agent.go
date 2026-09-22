@@ -611,9 +611,18 @@ func midTurnSteerMessage(text string, host bool) string {
 // marker is cut from the returned text, so replay recognizes steers
 // regardless of the session's language and profile settings.
 func SteerText(content string) (string, bool) {
+	text, _, ok := SteerKind(content)
+	return text, ok
+}
+
+// SteerKind is SteerText plus whose steer it was. Only the prefix tells the
+// two apart, so a caller that shows the line to the person asks here instead
+// of reading the wording: rendering the host's mid-turn notice as something
+// they said puts words in their mouth in the one place they read them back.
+func SteerKind(content string) (string, bool, bool) {
 	s := content
 	for {
-		for _, prefix := range []string{MidTurnSteerPrefix, HostNoticePrefix} {
+		for i, prefix := range []string{MidTurnSteerPrefix, HostNoticePrefix} {
 			after, found := strings.CutPrefix(s, prefix)
 			if !found {
 				continue
@@ -623,23 +632,25 @@ func SteerText(content string) (string, bool) {
 			if trimmed, cut := strings.CutSuffix(after, "\n\n"+DeliveryRuntimeMarker); cut {
 				after = trimmed
 			}
-			return after, true
+			return after, i == 1, true
 		}
 		next, ok := trimLeadingSteerWrapper(s)
 		if !ok {
-			return "", false
+			return "", false, false
 		}
 		s = next
 	}
 }
 
-// trimLeadingSteerWrapper removes one leading transient preference block that
-// withTurnPreferences may have placed ahead of the steer prefix. It reports
-// false when content does not start with such a block.
+// trimLeadingSteerWrapper removes one leading transient block the host may
+// have placed ahead of the steer prefix. It walks TransientUserBlockTags for
+// the same reason hasLeadingInjectedBlock does: a tag the injector knows and
+// this walk does not stops it early, and the steer behind that block reads
+// back as the user having typed the host's own instructions at them.
 func trimLeadingSteerWrapper(content string) (string, bool) {
 	s := strings.TrimLeft(content, " \t\r\n")
-	for _, tag := range []string{"response-language", "reasoning-language"} {
-		if !strings.HasPrefix(s, "<"+tag+">") {
+	for _, tag := range TransientUserBlockTags {
+		if !hasOpenTag(s, tag) {
 			continue
 		}
 		if rest, ok := trimLeadingTransientBlock(s, tag); ok {

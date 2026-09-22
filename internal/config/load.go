@@ -220,19 +220,7 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	normalizeLegacyEffort(cfg)
 	cfg.ignoredLegacyStepLimits = normalizeLegacyAgentStepLimits(cfg)
 	normalizeRetiredAutoPlan(cfg)
-	normalizeLegacyMCPTiers(cfg)
-	normalizeLegacyStepFunBaseURLs(cfg)
-	upgradeShippedPresets(cfg)
-	normalizeLegacyMimoCustomProviders(cfg)
-	normalizeLegacyProviderFields(cfg)
-	normalizeDesktopOfficialProviderAccess(cfg)
-	normalizeOfficialDeepSeekModels(cfg)
-	migrateBillingDisplayCurrency(cfg)
-	freezeProviderBillingCurrencies(cfg)
-	applyOfficialDefaultPricing(cfg)
-	backfillDeepSeekOfficialPrices(cfg)
-	normalizeEffortConfig(cfg)
-	backfillDeepSeekPro(cfg)
+	bringConfigForward(cfg)
 	if userDefaultModelExplicit {
 		restoreUnresolvableProjectDefaultModel(cfg, userDefaultModel)
 	}
@@ -731,6 +719,7 @@ func normalizeConfigForEdit(cfg *Config) bool {
 	changed = normalizeRetiredMultiThresholdCompaction(cfg) || changed
 	normalizeLegacyMCPTiers(cfg)
 	changed = normalizeLegacyStepFunBaseURLs(cfg) || changed
+	changed = migrateSystemOneToDecisionRole(cfg) || changed
 	changed = upgradeShippedPresets(cfg) || changed
 	changed = normalizeLegacyMimoCustomProviders(cfg) || changed
 	changed = normalizeLegacyProviderFields(cfg) || changed
@@ -2002,4 +1991,24 @@ func retargetDesktopOfficialRef(ref string, access map[string]bool) string {
 	default:
 		return ref
 	}
+}
+
+// bringConfigForward applies every in-memory upgrade a loaded config gets:
+// retired keys normalised, shipped shapes moved forward, prices backfilled.
+// One list, because the edit path has to apply exactly the same set.
+func bringConfigForward(cfg *Config) {
+	normalizeLegacyMCPTiers(cfg)
+	normalizeLegacyStepFunBaseURLs(cfg)
+	migrateSystemOneToDecisionRole(cfg)
+	upgradeShippedPresets(cfg)
+	normalizeLegacyMimoCustomProviders(cfg)
+	normalizeLegacyProviderFields(cfg)
+	normalizeDesktopOfficialProviderAccess(cfg)
+	normalizeOfficialDeepSeekModels(cfg)
+	migrateBillingDisplayCurrency(cfg)
+	freezeProviderBillingCurrencies(cfg)
+	applyOfficialDefaultPricing(cfg)
+	backfillDeepSeekOfficialPrices(cfg)
+	normalizeEffortConfig(cfg)
+	backfillDeepSeekPro(cfg)
 }

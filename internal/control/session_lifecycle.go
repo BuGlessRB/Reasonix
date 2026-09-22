@@ -598,6 +598,18 @@ func (c *Controller) BrowserTabs() []browser.TabInfo {
 	return c.browser.Tabs()
 }
 
+// BrowserOpen opens a page in the session's browser. There is one browser and
+// one list of tabs: a tab the person opened is a tab the agent can read and
+// drive, and one it opened is a tab the person can watch. A second, private
+// surface for the window's own tabs would be a page neither could hand to the
+// other — and, as an iframe, one that sites refusing to be framed never load.
+func (c *Controller) BrowserOpen(ctx context.Context, rawURL, tabID string, newTab bool) (browser.TabInfo, error) {
+	if c == nil || c.browser == nil {
+		return browser.TabInfo{}, errors.New("this session has no browser")
+	}
+	return c.browser.Open(ctx, rawURL, tabID, newTab)
+}
+
 // BrowserSession is the agent's browser, which a rebuild hands to the
 // controller that replaces this one.
 func (c *Controller) BrowserSession() *browser.Session {

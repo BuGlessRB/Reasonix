@@ -1145,9 +1145,10 @@ func (t *restrictedCapabilityProxy) Execute(ctx context.Context, args json.RawMe
 	}
 	_ = json.Unmarshal(args, &p)
 	action := strings.ToLower(strings.TrimSpace(p.Action))
-	if action == "list" {
+	switch action {
+	case "list":
 		return filterCapabilityListResult(out, t.servers), nil
-	} else if action == "search" {
+	case "search":
 		return filterCapabilitySearchResult(out, t.allowed), nil
 	}
 	return out, nil

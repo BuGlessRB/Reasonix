@@ -2,6 +2,7 @@ package config
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -318,10 +319,15 @@ func storeCredentialAssignmentsLocked(assignments map[string]string) (string, er
 	return UserCredentialsPath(), nil
 }
 
+// ErrInvalidCredentialKey is refused when a slot name is not one an environment
+// variable may carry. Callers tell it apart to say which field the person has
+// to change: the name a slot is derived from, never the key they pasted.
+var ErrInvalidCredentialKey = errors.New("credential slot name is not a usable environment variable")
+
 func SetCredential(key, value string) (string, error) {
 	key = strings.TrimSpace(key)
 	if !isCredentialKey(key) {
-		return "", fmt.Errorf("invalid credential key %q", key)
+		return "", fmt.Errorf("%w: %q", ErrInvalidCredentialKey, key)
 	}
 	if strings.ContainsAny(value, "\r\n") {
 		return "", fmt.Errorf("credential value for %s contains a newline", key)
@@ -336,7 +342,7 @@ func SetCredential(key, value string) (string, error) {
 func SetCredentialIfRevision(key, value, expectedRevision string) (string, bool, error) {
 	key = strings.TrimSpace(key)
 	if !isCredentialKey(key) {
-		return "", false, fmt.Errorf("invalid credential key %q", key)
+		return "", false, fmt.Errorf("%w: %q", ErrInvalidCredentialKey, key)
 	}
 	if strings.ContainsAny(value, "\r\n") {
 		return "", false, fmt.Errorf("credential value for %s contains a newline", key)

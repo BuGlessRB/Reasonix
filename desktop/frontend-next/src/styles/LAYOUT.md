@@ -199,6 +199,39 @@ rules are written in.
 - Column widths change on `.app`, so the tween belongs there and `.cols` only
   reads the result into a track. The tween must be cut during a drag: a .34s
   tween makes the column chase the pointer.
+- The side track is closed unless a panel mounts in it. It was written open and
+  closed by `[data-side="off"]`, and the attribute stayed wired to the built-in
+  browser after that browser moved onto the workbench. Nothing rendered there
+  and the shell still reserved 308px. `shellcolumns.test.ts` holds it.
+- Pane chrome has one left edge: the view switcher, the workbench's tab strip
+  and the browser's toolbar all start at `--pane-gutter`. The switcher took the
+  reading column's inset, right under a conversation and wrong under a
+  full-bleed canvas — it floated 278px in from the strip below it.
+- A row nobody bounded is why the file tree had no scrollbar. `overflow: auto`
+  was already on the list; the workbench body's implicit row is `auto`, sized to
+  its content, so the column grew past the panel and was clipped instead.
+  `grid-template-rows: minmax(0, 1fr)` is the half that makes the overflow real.
+- The workbench is hidden, not unmounted. It holds the open files and a browser
+  per tab, each with its own history, and a glance at the conversation must not
+  cost them. `.scroll[data-pane="browser"][hidden]` was already written for it.
+- The workbench's divider shares the browser's grid cell rather than being inset
+  into the pane: that cell already starts under the nav and ends at the window.
+- It is in flow there, not absolute, so `inset: auto` is load-bearing:
+  `.gutter-r`'s `right: -6px` becomes a relative offset and cancels the negative
+  margin that straddles the seam.
+- Both seams are drawn. The studio layer had hidden `.gutter-l` and pinned
+  `--rail-open` with `!important`, so the rail had no handle and a dragged width
+  was read, stored, written inline and then overridden every time.
+- `.gutter-l` outranks the rail because the rail is `position: fixed` at 12: a
+  seam painted under the panel it divides cannot be grabbed where it matters.
+- The rail lists every mounted workspace, each folding over its own sessions.
+  The studio layer had hidden all but the focused one and relabelled its
+  children 「最近」, so a count of six sat above a list of one. The switcher above
+  still names where a *new* session lands; the tree is how an existing one is
+  reached.
+- Only 「这台机器」 is hidden, by `[data-here]` rather than by `.machrow`: the
+  section label above already carries that name, its count and its add button,
+  while a remote host's row is the only thing naming that machine.
 - Focus mode takes the surroundings away and changes nothing else. The columns
   collapse rather than unmount — unmounting loses the side column's scroll
   position and the inspector's disclosure, and this is a temporary state that has

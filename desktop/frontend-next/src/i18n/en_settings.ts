@@ -515,6 +515,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "单轮回复上限；留空由内核与模型共同决定。": "The per-turn reply limit; leave blank for the runtime and model to decide.",
   "模型目录": "Model catalogue",
   "至少手动添加一个模型 ID，也可尝试从接口读取": "Add at least one model ID manually, or try reading the endpoint",
+  "这个协议没有模型列表接口，直接填写服务商给出的模型 ID": "This protocol has no model listing; enter the model id the service documents.",
+  "决策 · System One": "Decision · System One",
   "检测中…": "Checking…",
   "验证连接并读取": "Check connection and read models",
   "连接可用 · 找到 {n} 个模型": "Connection works · {n} models found",

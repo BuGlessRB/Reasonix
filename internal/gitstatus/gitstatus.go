@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"reasonix/internal/gitcmd"
@@ -21,6 +22,11 @@ type Change struct {
 	Path    string `json:"path"`
 	OldPath string `json:"oldPath,omitempty"`
 	Status  string `json:"status"`
+	// How much the file differs by. Nil is "git did not say" — a binary file,
+	// or one nothing counted — and it stays nil rather than becoming a zero,
+	// which reads as "changed by nothing" and is a different fact.
+	Insertions *int `json:"insertions,omitempty"`
+	Deletions  *int `json:"deletions,omitempty"`
 }
 
 // Deleted reports whether the path is gone from the tree.
@@ -57,8 +63,79 @@ func Status(ctx context.Context, root string) (changes []Change, ok bool, err er
 		c.OldPath = relFromPrefix(root, prefix, c.OldPath)
 		out = append(out, c)
 	}
+	countLines(ctx, root, out)
 	return out, true, nil
 }
+
+// countLines fills in how much each path differs by. Tracked paths come from
+// one numstat; git spells a binary file "-", which stays uncounted. Untracked
+// files have nothing to diff against, so their whole length is the addition.
+func countLines(ctx context.Context, root string, changes []Change) {
+	raw, err := gitcmd.Command(ctx, "", "-C", root, "diff", "--numstat", "-z", "HEAD", "--", ".").Output()
+	if err == nil {
+		byPath := ParseNumstatZ(raw)
+		for i := range changes {
+			if n, ok := byPath[changes[i].Path]; ok {
+				changes[i].Insertions, changes[i].Deletions = n.added, n.removed
+			}
+		}
+	}
+	for i := range changes {
+		if changes[i].Insertions != nil || changes[i].Deletions != nil || changes[i].Status != "??" {
+			continue
+		}
+		if n, ok := newFileLines(filepath.Join(root, filepath.FromSlash(changes[i].Path))); ok {
+			zero := 0
+			changes[i].Insertions, changes[i].Deletions = &n, &zero
+		}
+	}
+}
+
+// numstat is one path's counts, either of which git may decline to give.
+type numstat struct{ added, removed *int }
+
+// ParseNumstatZ decodes `git diff --numstat -z`. Added and removed come first,
+// then the path; a rename spends two more fields on old and new.
+func ParseNumstatZ(raw []byte) map[string]numstat {
+	out := map[string]numstat{}
+	for line := range bytes.SplitSeq(raw, []byte{0}) {
+		fields := strings.SplitN(strings.TrimSpace(string(line)), "\t", 3)
+		if len(fields) != 3 || fields[2] == "" {
+			continue
+		}
+		out[fields[2]] = numstat{added: countOrNil(fields[0]), removed: countOrNil(fields[1])}
+	}
+	return out
+}
+
+// countOrNil reads a numstat column. "-" is git saying it did not count this
+// one, which is not zero.
+func countOrNil(field string) *int {
+	n, err := strconv.Atoi(strings.TrimSpace(field))
+	if err != nil {
+		return nil
+	}
+	return &n
+}
+
+// newFileLines counts an untracked file's lines, up to a size past which the
+// count is not worth the read and stays unsaid.
+func newFileLines(path string) (int, bool) {
+	st, err := os.Stat(path)
+	if err != nil || st.IsDir() || st.Size() > newFileCountLimit {
+		return 0, false
+	}
+	body, err := os.ReadFile(path)
+	if err != nil || bytes.IndexByte(body, 0) >= 0 {
+		return 0, false
+	}
+	if len(body) == 0 {
+		return 0, true
+	}
+	return bytes.Count(body, []byte{'\n'}) + 1, true
+}
+
+const newFileCountLimit = 2 << 20
 
 // ParsePorcelainZ decodes `git status --porcelain=v1 -z`. Rename and copy
 // entries spend a second NUL-separated field on the source path.

@@ -25,6 +25,10 @@ export { setShowsReceipt, showsReceipt };
 // pass away from never matching again, and nothing fails when it stops.
 const RUNNING = "运行中";
 const WAITING_WORKSPACE = "等待工作区";
+// What the turn is doing between a tool finishing and the model's next packet.
+// The chip used to keep printing the tool that had already returned, so the
+// one stretch nothing is on screen for looked like the one stretch it hung.
+const WAITING_MODEL = "等待模型回复";
 
 export const initialState: SessionState = {
   error: "",
@@ -332,14 +336,14 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       // turn in front of you, not a record that one ever finished — without
       // this it would be the latter, and the tick from an hour ago would still
       // be on screen over work that is running now.
-      return nameTurnStart({ ...s, running: true, doing: "运行中", terminal: null, waiting: { ttftSince: Date.now() } }, ev);
+      return nameTurnStart({ ...s, running: true, doing: "运行中", terminal: null, turnModel: ev.modelRef || s.turnModel, waiting: { ttftSince: Date.now() } }, ev);
 
     case "reasoning":
       return {
         ...s,
         doing: "思考中",
         outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
-        items: appendText(s.items, ev.text ?? "", "reasoning", ev.source),
+        items: appendText(s.items, ev.text ?? "", "reasoning", ev.source, ev.modelRef || s.turnModel),
       };
 
     case "text":
@@ -347,7 +351,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
         ...s,
         doing: "正在回答",
         outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
-        items: appendText(s.items, ev.text ?? "", "text", ev.source),
+        items: appendText(s.items, ev.text ?? "", "text", ev.source, ev.modelRef || s.turnModel),
       };
 
     case "message":
@@ -381,7 +385,18 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       // A refused todo_write changed no host state, so its payload is not a plan.
       const own = ev.tool.name === "todo_write" && !ev.tool.parentId && !ev.tool.err;
       const plan = (own && parsePlan(ev.tool)) || s.plan;
-      return { ...s, plan, executions, items: mergeReads(foldTool(s.items, ev.tool, false)) };
+      // A returned call hands the turn back to the model, so the wait starts
+      // again here — a sub-agent's call does not, because the parent turn was
+      // never the thing waiting on it.
+      const handedBack = !ev.tool.parentId && s.running;
+      return {
+        ...s,
+        plan,
+        executions,
+        doing: handedBack ? WAITING_MODEL : s.doing,
+        waiting: handedBack ? { ...s.waiting, ttftSince: Date.now() } : s.waiting,
+        items: mergeReads(foldTool(s.items, ev.tool, false)),
+      };
     }
 
     case "usage": {
@@ -488,10 +503,15 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
 
     case "steer": {
       const q = s.steerQueue.filter((t) => t !== ev.text);
-      const items = s.items.map((i) =>
-        i.t === "user" && i.pending && i.text === ev.text ? { ...i, pending: false } : i,
+      // The row enters where the turn read it, not where it was typed. Its seat
+      // was booked at the wrong moment: the work that ran while it waited would
+      // otherwise read as work done about it.
+      const at = s.items.findIndex(
+        (i) => i.t === "user" && i.pending && (ev.itemId ? i.itemId === ev.itemId : i.text === ev.text),
       );
-      return { ...s, steerQueue: q, items };
+      if (at < 0) return { ...s, steerQueue: q };
+      const row = { ...(s.items[at] as Extract<Item, { t: "user" }>), pending: false, steer: true };
+      return { ...s, steerQueue: q, items: [...s.items.slice(0, at), ...s.items.slice(at + 1), row] };
     }
 
     case "notice": {
@@ -716,7 +736,7 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions
       // after an upgrade as well as for newly written history.
       const legacyHostRepair = m.content.startsWith("The following tools are unavailable in the current workflow phase:");
       const text = m.hostAuthored || legacyHostRepair ? "" : stripControl(m.content);
-      if (text) out.push({ t: "user", id: nextId(), text, msgIndex: m.msgIndex });
+      if (text) out.push({ t: "user", id: nextId(), text, msgIndex: m.msgIndex, steer: m.steer });
       continue;
     }
     if (m.role === "assistant") {
@@ -730,7 +750,7 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions
         // Thinking came before the search that follows it, so it cannot ride the
         // next text part when the turn opened with a search.
         if (reasoning && (parts.length === 0 || parts[0].search)) {
-          out.push({ t: "say", id: nextId(), text: "", reasoning, done: true });
+          out.push({ t: "say", id: nextId(), text: "", reasoning, done: true, model: m.modelRef });
           reasoning = undefined;
         }
         for (const part of parts) {
@@ -745,7 +765,7 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions
             continue;
           }
           if (!part.text && !reasoning) continue;
-          out.push({ t: "say", id: nextId(), text: part.text, reasoning, done: true });
+          out.push({ t: "say", id: nextId(), text: part.text, reasoning, done: true, model: m.modelRef });
           reasoning = undefined;
         }
       }

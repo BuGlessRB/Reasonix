@@ -149,6 +149,7 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 // along: the list is the kernel's, the words for it are each frontend's.
 type protocolView struct {
 	Kind            string `json:"kind"`
+	Answers         string `json:"answers"`
 	Discovery       string `json:"discovery"`
 	ServerWebSearch bool   `json:"serverWebSearch"`
 	ReasoningParams bool   `json:"reasoningParams"`
@@ -162,6 +163,7 @@ func (s *Server) providerProtocols(w http.ResponseWriter, _ *http.Request) {
 	for _, p := range catalog {
 		out = append(out, protocolView{
 			Kind:            p.Kind,
+			Answers:         string(p.Answers),
 			Discovery:       p.Discovery,
 			ServerWebSearch: p.ServerWebSearch,
 			ReasoningParams: p.ReasoningParams,
@@ -278,6 +280,15 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 	entry.APIKeyEnv = keyEnvForNewSource(entry.Name, entry.BaseURL, body.APIKey)
 	if key := strings.TrimSpace(body.APIKey); key != "" {
 		if _, err := config.SetCredential(entry.APIKeyEnv, key); err != nil {
+			// The slot is derived from the name, so this is the person's to
+			// fix and the name is the field to point them at — not the key,
+			// which is what an unclassified failure here reads as.
+			if errors.Is(err, config.ErrInvalidCredentialKey) {
+				refuse(w, http.StatusBadRequest, "provider.bad_key_slot",
+					"the name does not make a usable credential slot",
+					map[string]any{"name": entry.Name, "slot": entry.APIKeyEnv})
+				return
+			}
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -373,21 +384,10 @@ func providerEntryFrom(name, kind, baseURL, def, effort string, models, vision [
 	}, nil
 }
 
-// providerKeyEnv is where this provider's key is stored. It is derived from the
-// name so two providers never share a slot, and uppercased because that is what
-// every other key env in the config looks like.
-func providerKeyEnv(name string) string {
-	var b strings.Builder
-	for _, r := range strings.ToUpper(name) {
-		switch {
-		case r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-		default:
-			b.WriteByte('_')
-		}
-	}
-	return b.String() + "_API_KEY"
-}
+// providerKeyEnv is where this provider's key is stored. config owns the rule,
+// because the store that refuses an invalid slot is the same package: this held
+// its own copy and produced "129_API_KEY" for a relay called "129".
+func providerKeyEnv(name string) string { return config.APIKeyEnvFor(name) }
 
 // probeClients builds the two routes a probe tries: the user's configured proxy
 // first, then a direct one for endpoints that only answer without it.

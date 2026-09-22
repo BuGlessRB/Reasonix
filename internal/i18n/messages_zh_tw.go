@@ -255,6 +255,7 @@ var ChineseTraditional = Messages{
 	CmdRewind:           "回滾到更早的一輪",
 	CmdTree:             "檢視對話分支樹",
 	CmdBranch:           "建立對話分支",
+	CmdBrowser:          "在工作階段瀏覽器開啟網頁",
 	CmdSwitchBranch:     "切換對話分支",
 	CmdResume:           "恢復已儲存的會話",
 	CmdModel:            "切換模型",

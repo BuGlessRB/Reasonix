@@ -20,7 +20,9 @@ const serveMissingKeyHelperEnv = "REASONIX_TEST_SERVE_MISSING_KEY_HELPER"
 
 // TestServeStartsWithMissingProviderKey exercises the real runServe lifecycle:
 // the listener and port file must become available before a Provider key exists,
-// and the authenticated browser surface must show the setup page.
+// and the authenticated surface must report the key it is owed. Onboarding is
+// the built page's, so what the kernel serves is /provider-setup, not a second
+// page of its own.
 func TestServeStartsWithMissingProviderKey(t *testing.T) {
 	if os.Getenv(serveMissingKeyHelperEnv) == "1" {
 		// The package TestMain clears path overrides before dispatching tests, so
@@ -120,7 +122,7 @@ api_key_env = "REASONIX_TEST_REMOTE_MISSING_KEY"
 		t.Fatal(err)
 	}
 	client := &http.Client{Jar: jar, Timeout: 5 * time.Second}
-	resp, err := client.Get("http://" + addr + "/?token=serve-setup-test-token")
+	resp, err := client.Get("http://" + addr + "/provider-setup?token=serve-setup-test-token")
 	if err != nil {
 		t.Fatalf("open missing-key Serve: %v\n%s", err, output.String())
 	}
@@ -132,8 +134,8 @@ api_key_env = "REASONIX_TEST_REMOTE_MISSING_KEY"
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("missing-key Serve status = %d, want 200: %s\n%s", resp.StatusCode, body, output.String())
 	}
-	if !bytes.Contains(body, []byte("Reasonix Provider Setup")) {
-		t.Fatalf("missing-key Serve did not show setup page:\n%s", body)
+	if !bytes.Contains(body, []byte(`"required":true`)) || !bytes.Contains(body, []byte("REASONIX_TEST_REMOTE_MISSING_KEY")) {
+		t.Fatalf("missing-key Serve did not report the owed key:\n%s", body)
 	}
 }
 

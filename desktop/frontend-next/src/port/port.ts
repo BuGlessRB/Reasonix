@@ -39,8 +39,6 @@ import type { ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, San
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 export type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 import type { StoragePlan, StorageState } from "./storage";
-import type { DecisionModels, DecisionModelsDraft } from "./decision";
-export type { DecisionModels, DecisionModelsDraft } from "./decision";
 
 export type * from "./plugin";
 
@@ -124,8 +122,6 @@ export interface TrayPrefs {
 }
 
 export interface AgentPort {
-  decisionModels(): Promise<DecisionModels>;
-  saveDecisionModels(value: DecisionModelsDraft): Promise<void>;
   providerSetup(): Promise<ProviderSetup | null>;
   saveProviderKey(apiKey: string): Promise<void>;
   models(): Promise<ModelEntry[]>;
@@ -378,6 +374,10 @@ export interface AgentPort {
   queue(): Promise<Queue>;
   // The agent's open tabs, read on every browser_tabs_changed frame.
   browserTabs(): Promise<BrowserTab[]>;
+  // Opens a page in the session's one browser. A tab the person opened is a tab
+  // the agent can read and drive; the window keeping its own would be a page
+  // neither could hand to the other.
+  browserOpen(url: string, newTab: boolean): Promise<BrowserTab>;
   // The entry's full text. preview is cut to a manifest-sized line, so editing
   // against it would silently shorten what the user actually said.
   readQueued(itemId: string): Promise<string>;

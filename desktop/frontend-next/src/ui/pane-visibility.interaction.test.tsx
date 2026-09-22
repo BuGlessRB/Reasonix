@@ -45,6 +45,9 @@ function open(visible: boolean) {
     needsProject: false,
     onOpenProject: () => {},
     onKeepHere: () => {},
+    theme: "dark",
+    dockW: 560,
+    onDockW: () => {},
   };
   const view = render(<Pane {...props} />);
   return {

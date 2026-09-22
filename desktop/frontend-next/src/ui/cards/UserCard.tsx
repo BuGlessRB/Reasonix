@@ -4,12 +4,12 @@ import type { Item } from "../../state/session";
 import { RewindControl } from "./RewindControl";
 import { reason } from "../../i18n/kernel";
 import { t } from "../../i18n";
+import { StudioIcon } from "../StudioIcon";
 
 export function UserCard({
   item,
   cp,
   onResend,
-  onCancelQueued,
   onPrepareRewind,
   onCommitRewind,
   onUndoRewind,
@@ -17,15 +17,10 @@ export function UserCard({
   item: Extract<Item, { t: "user" }>;
   cp?: Checkpoint;
   onResend?: (turn: number, text: string) => Promise<void>;
-  onCancelQueued?: (rowId: string, itemId: string) => void;
   onPrepareRewind?: (turn: number, scope: RewindScope) => Promise<RewindPlan>;
   onCommitRewind?: (planId: string) => Promise<RewindResult>;
   onUndoRewind?: (transactionId: string) => Promise<void>;
 }) {
-  // A queued line is the only thing on screen that has not happened yet, which
-  // makes it the only thing that can still be taken back. The id is the
-  // kernel's, and it goes away the moment the turn reads the line.
-  const queued = item.pending ? item.itemId : undefined;
   // A rewind needs a turn the kernel claimed, and a queued line has not
   // happened yet — there is nothing behind it to take back.
   const editable = !!onResend && !!cp && !item.pending;
@@ -60,16 +55,9 @@ export function UserCard({
       </div>
       <div className="c">
         <div className="hl user-hl">
-          {item.pending && (
-            <span className="pend">
-              {item.queued === "followup" ? t("排队中 · 本轮结束后发送") : t("排队中 · 下一个工具边界送达")}
-            </span>
-          )}
-          {queued && onCancelQueued && (
-            <button className="pcancel" data-action="queue.cancel" data-target={item.id} onClick={() => onCancelQueued(item.id, queued)}>
-              {t("撤回")}
-            </button>
-          )}
+          {/* It reached the model inside a turn already running, which is why
+              there is no checkpoint on this row to rewind to. */}
+          {item.steer && <span className="steermark">{t("插话")}</span>}
           {/* The entry point lives on the turn it returns to, so there is no
               list to read and no turn number to match up by eye. */}
           {editable && draft === null && (
@@ -80,7 +68,7 @@ export function UserCard({
               title={t("改写这条消息并重新发送")}
               onClick={() => setDraft(item.text)}
             >
-              {t("✎ 改写")}
+              <StudioIcon name="edit" />{t("改写")}
             </button>
           )}
           {cp && onPrepareRewind && onCommitRewind && onUndoRewind && (

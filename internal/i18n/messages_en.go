@@ -265,6 +265,7 @@ var English = Messages{
 	CmdRewind:           "rewind to an earlier turn",
 	CmdTree:             "show conversation branches",
 	CmdBranch:           "create a conversation branch",
+	CmdBrowser:          "open a page in the session browser",
 	CmdSwitchBranch:     "switch conversation branch",
 	CmdResume:           "resume a saved session",
 	CmdRename:           "rename a session",

@@ -29,14 +29,21 @@ func TestSystemOneToolReturnsCompleteDecision(t *testing.T) {
 	}
 }
 
-func TestSystemOneSelectsLayaHTTPBackend(t *testing.T) {
+// A self-hosted gateway was a second backend with its own client, its own
+// config section and its own settings form. It answers the same wire at another
+// address, so it is now reached as an ordinary source — by the name settings
+// gave it, which is what the model is offered.
+func TestSystemOneReachesASelfHostedEndpointByItsSourceName(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"model":"english","answers":{"risk":{"type":"noul","noul":0.7}},"routing":{"model":"english"}}`))
 	}))
 	defer server.Close()
-	decision := NewSystemOne(SystemOneSpec{LayaHTTP: &laya.HTTPClient{HTTP: server.Client(), BaseURL: server.URL}})
+	decision := NewSystemOne(SystemOneSpec{
+		Name: "laya", HTTP: server.Client(), BaseURL: server.URL, Model: "auto",
+		APIKey: func() string { return "gateway-secret" },
+	})
 	out := runTool(t, decision, map[string]any{
-		"backend": "laya-http", "state": "cancel my plan",
+		"backend": "laya", "state": "cancel my plan",
 		"questions": map[string]any{"risk": map[string]any{"type": "noul", "instructions": "Will the user churn?"}},
 	})
 	if !strings.Contains(out, `"noul":0.7`) || !strings.Contains(out, `"routing"`) {
@@ -44,10 +51,20 @@ func TestSystemOneSelectsLayaHTTPBackend(t *testing.T) {
 	}
 }
 
+// The model is offered the backends that exist, under the names settings shows.
+func TestSystemOneOffersOnlyConfiguredBackends(t *testing.T) {
+	decision := NewSystemOne(SystemOneSpec{Name: "typesafe", APIKey: func() string { return "secret" }})
+	schema := string(decision.Schema())
+	if !strings.Contains(schema, `"enum":["typesafe"]`) {
+		t.Fatalf("schema offers more than is configured: %s", schema)
+	}
+}
+
 func TestSystemOneRequiresBackendWhenSeveralAreConfigured(t *testing.T) {
 	decision := NewSystemOne(SystemOneSpec{
-		APIKey:   func() string { return "secret" },
-		LayaHTTP: &laya.HTTPClient{BaseURL: "https://example.invalid"},
+		Name:      "typesafe",
+		APIKey:    func() string { return "secret" },
+		LayaLocal: &laya.LocalClient{Python: "python", Model: "auto"},
 	})
 	_, err := decision.Execute(context.Background(), argsJSON(t, map[string]any{
 		"state": "x", "questions": map[string]any{"q": map[string]any{"type": "noul", "instructions": "yes?"}},

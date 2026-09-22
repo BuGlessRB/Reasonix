@@ -31,7 +31,6 @@ function draw(items: Item[]) {
       onPlan={noop}
       onAnswer={noop}
       onForget={noop}
-      onCancelQueued={() => {}}
       onExtInvoke={() => {}}
       onExtSubmit={noop}
       checkpoints={new Map()}

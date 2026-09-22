@@ -125,7 +125,7 @@ func (a *Agent) announceOwnTurn(ctx context.Context, pending provider.Message) {
 		a.svc.sink.Emit(started)
 		return
 	}
-	a.svc.sink.Emit(event.Event{Kind: event.TurnStarted})
+	a.svc.sink.Emit(event.Event{Kind: event.TurnStarted, ModelRef: a.modelRef})
 }
 
 // verifyAuthoredLanding checks the published identity against the message that
@@ -158,5 +158,5 @@ func (a *Agent) turnStartedEvent(pending provider.Message) (event.Event, bool) {
 		return event.Event{}, false
 	}
 	index := len(msgs)
-	return event.Event{Kind: event.TurnStarted, AuthoredTurn: &class.AuthoredTurn, MsgIndex: &index}, true
+	return event.Event{Kind: event.TurnStarted, AuthoredTurn: &class.AuthoredTurn, MsgIndex: &index, ModelRef: a.modelRef}, true
 }

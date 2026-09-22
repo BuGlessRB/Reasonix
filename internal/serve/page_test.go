@@ -13,10 +13,10 @@ import (
 	"reasonix/internal/config"
 )
 
-// The page gets one namespace and the kernel keeps everything else. The inverse
-// — a list of the kernel's routes, with the rest falling through to the page —
-// is the arrangement this mount exists to stop repeating.
-func TestPageIsServedInItsOwnNamespace(t *testing.T) {
+// The page's own files answer for themselves and every other path is the
+// kernel's. The split is read off the page, not off a list of kernel routes:
+// such a list needs editing every time the kernel grows one.
+func TestThePagesOwnFilesAnswerAndTheRestIsTheKernels(t *testing.T) {
 	page := fstest.MapFS{
 		"index.html":    &fstest.MapFile{Data: []byte("<title>studio</title>")},
 		"assets/app.js": &fstest.MapFile{Data: []byte("// the page")},
@@ -29,16 +29,16 @@ func TestPageIsServedInItsOwnNamespace(t *testing.T) {
 	defer srv.Close()
 
 	for _, c := range []struct{ path, want string }{
-		{"/_studio/", "<title>studio</title>"},
-		{"/_studio/assets/app.js", "// the page"},
-		// Client-side routing inside the namespace, which is the page's own
-		// business and can never answer for a route the kernel owns.
-		{"/_studio/sessions/whatever", "<title>studio</title>"},
-		{"/status", "the kernel"},
+		// A real file in the page answers with itself.
+		{"/assets/app.js", "// the page"},
+		// Everything else is the kernel's, including the root: its own handler
+		// is what serves the page shell back, and what shows a setup page
+		// instead when one is owed.
 		{"/", "the kernel"},
-		// The prefix is the whole segment: a path that merely starts with the
-		// same letters belongs to the kernel like any other.
-		{"/_studioish", "the kernel"},
+		{"/status", "the kernel"},
+		// A path the page routes itself names no file, so it reaches the
+		// kernel rather than being answered here.
+		{"/sessions/whatever", "the kernel"},
 	} {
 		t.Run(c.path, func(t *testing.T) {
 			resp, err := http.Get(srv.URL + c.path)
@@ -65,7 +65,7 @@ func TestPageIsBehindTheAuthGate(t *testing.T) {
 	srv := httptest.NewServer(hub.Handler())
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + PagePrefix)
+	resp, err := http.Get(srv.URL + "/")
 	if err != nil {
 		t.Fatal(err)
 	}

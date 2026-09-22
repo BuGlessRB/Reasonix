@@ -14,9 +14,6 @@ import (
 	"reasonix/internal/config"
 )
 
-//go:embed provider_setup.html
-var providerSetupHTML []byte
-
 const providerSetupMaxBody = 20 << 10
 
 type providerSetupState struct {
@@ -104,22 +101,6 @@ func (s *Server) providerSetupSnapshot() (providerSetupState, bool) {
 	s.providerSetupMu.RLock()
 	defer s.providerSetupMu.RUnlock()
 	return s.providerSetup, s.providerSetup.Enabled
-}
-
-func (s *Server) providerSetupIndex(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Referrer-Policy", "no-referrer")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'")
-	lang := "auto"
-	if cfg, err := config.Load(); err == nil {
-		if dl := cfg.DesktopLanguage(); dl != "" {
-			lang = dl
-		}
-	}
-	html := strings.ReplaceAll(string(providerSetupHTML), "__LANG__", lang)
-	_, _ = w.Write([]byte(html))
 }
 
 func (s *Server) providerSetupStatus(w http.ResponseWriter, r *http.Request) {

@@ -18,6 +18,9 @@ export interface Span {
 // 存，不进内核配置：换台机器、换块屏幕，判断本来就不同。
 export const RAIL: Span = { min: 176, max: 440, def: 264, key: "rx-rail-w", css: "--rail-open", col: "--rail-w" };
 export const SIDE: Span = { min: 244, max: 540, def: 316, key: "rx-side-w", css: "--side-open", col: "--side-w" };
+// The workbench beside the conversation. Wider than the rail because what sits
+// in it is a page someone is reading, not a list of names.
+export const DOCK: Span = { min: 320, max: 880, def: 560, key: "rx-dock-w", css: "--dock-open", col: "--dock-w" };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -35,6 +38,12 @@ const COMMIT = 56;
 export function widthOf(span: Span): number {
   const saved = Number(localStorage.getItem(span.key));
   return Number.isFinite(saved) && saved > 0 ? clamp(saved, span.min, span.max) : span.def;
+}
+
+/** The other half of widthOf: what a released drag commits, written beside the
+ *  read so one place spells the key. */
+export function keepWidth(span: Span, w: number) {
+  localStorage.setItem(span.key, String(Math.round(w)));
 }
 
 interface Props {

@@ -41,6 +41,11 @@ func renderAgentDelegation(b *strings.Builder, c *Config) {
 	} else {
 		b.WriteString("# guardian_temperature = 0.0   # the reviewer's own sampling temperature\n")
 	}
+	if c.Agent.DecisionModel != "" {
+		fmt.Fprintf(b, "decision_model = %q   # the system_one backend; a decision wire, never the main model\n", c.Agent.DecisionModel)
+	} else {
+		b.WriteString("# decision_model = \"typesafe/system-one\"   # optional: the system_one backend\n")
+	}
 	if c.Agent.TriageModel != "" {
 		fmt.Fprintf(b, "triage_model = %q   # small classifications; falls back to subagent, then main\n", c.Agent.TriageModel)
 	} else {

@@ -5,7 +5,8 @@
    {
     "kind": "turn_started",
     "authoredTurn": 1,
-    "msgIndex": 1
+    "msgIndex": 1,
+    "modelRef": "test-model/x"
    },
    {
     "kind": "turn_phase",
@@ -209,7 +210,8 @@
    {
     "kind": "turn_started",
     "authoredTurn": 1,
-    "msgIndex": 1
+    "msgIndex": 1,
+    "modelRef": "test-model/x"
    },
    {
     "kind": "stream_attempt",
@@ -382,7 +384,8 @@
    {
     "kind": "turn_started",
     "authoredTurn": 1,
-    "msgIndex": 1
+    "msgIndex": 1,
+    "modelRef": "test-model/x"
    },
    {
     "kind": "phase",
@@ -520,7 +523,8 @@
    {
     "kind": "turn_started",
     "authoredTurn": 1,
-    "msgIndex": 1
+    "msgIndex": 1,
+    "modelRef": "test-model/x"
    },
    {
     "kind": "stream_attempt",
@@ -625,7 +629,8 @@
    {
     "kind": "turn_started",
     "authoredTurn": 1,
-    "msgIndex": 1
+    "msgIndex": 1,
+    "modelRef": "test-model/x"
    },
    {
     "kind": "turn_phase",
@@ -682,7 +687,8 @@
    {
     "kind": "turn_started",
     "authoredTurn": 1,
-    "msgIndex": 1
+    "msgIndex": 1,
+    "modelRef": "test-model/x"
    },
    {
     "kind": "stream_attempt",
@@ -732,7 +738,8 @@
    {
     "kind": "turn_started",
     "authoredTurn": 1,
-    "msgIndex": 1
+    "msgIndex": 1,
+    "modelRef": "test-model/x"
    },
    {
     "kind": "turn_phase",
@@ -877,7 +884,8 @@
    {
     "kind": "turn_started",
     "authoredTurn": 1,
-    "msgIndex": 1
+    "msgIndex": 1,
+    "modelRef": "test-model/x"
    },
    {
     "kind": "stream_attempt",

@@ -68,6 +68,7 @@ export class MockPort extends MockTheme implements AgentPort {
     planner: "",
     subagent: "deepseek/deepseek-flash",
     guardian: "",
+    decision: "",
     vision: "",
   };
 
@@ -633,6 +634,10 @@ export class MockPort extends MockTheme implements AgentPort {
 
   async browserTabs(): Promise<BrowserTab[]> {
     return [];
+  }
+
+  async browserOpen(url: string): Promise<BrowserTab> {
+    return { id: "mock", target: "mock", url, title: url, active: true };
   }
 
   async queue(): Promise<Queue> {

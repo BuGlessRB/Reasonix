@@ -12,6 +12,7 @@ func (c *Config) roleModelRefTargets() []*string {
 	return []*string{
 		&c.Agent.PlannerModel, &c.Agent.SubagentModel, &c.Agent.VisionModel,
 		&c.Agent.GuardianModel, &c.Agent.RecoveryModel, &c.Agent.TriageModel,
+		&c.Agent.DecisionModel,
 	}
 }
 

@@ -597,6 +597,9 @@ export class SsePort extends SseTheme implements AgentPort {
   async browserTabs() {
     return (await this.get<BrowserTab[] | null>("/browser/tabs")) ?? [];
   }
+  browserOpen(url: string, newTab: boolean) {
+    return this.post0<BrowserTab>("/browser/open", { url, newTab });
+  }
   async readQueued(itemId: string) {
     const r = await this.get<{ envelope?: { displayText?: string } }>("/inbox/items/" + encodeURIComponent(itemId));
     // Every stored entry has a body — the kernel refuses an empty one at

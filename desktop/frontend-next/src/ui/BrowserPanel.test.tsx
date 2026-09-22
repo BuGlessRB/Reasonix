@@ -9,7 +9,7 @@ afterEach(cleanup);
 describe("BrowserPanel", () => {
   it("opens a typed address when Enter is pressed", async () => {
     const user = userEvent.setup();
-    render(<BrowserPanel scheme="light" onClose={vi.fn()} onExternal={vi.fn()} />);
+    render(<BrowserPanel id="b0" scheme="light" onAddress={vi.fn()} onExternal={vi.fn()} />);
 
     const address = screen.getByRole("textbox", { name: "网页地址" });
     await user.clear(address);
@@ -21,7 +21,7 @@ describe("BrowserPanel", () => {
 
   it("keeps invalid addresses in the field and explains the error", async () => {
     const user = userEvent.setup();
-    render(<BrowserPanel scheme="dark" onClose={vi.fn()} onExternal={vi.fn()} />);
+    render(<BrowserPanel id="b0" scheme="dark" onAddress={vi.fn()} onExternal={vi.fn()} />);
 
     const address = screen.getByRole("textbox", { name: "网页地址" });
     await user.clear(address);

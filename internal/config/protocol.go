@@ -12,6 +12,10 @@ import (
 // keeping a list of its own.
 type Protocol struct {
 	Kind string
+	// Answers names what a model on this wire produces, which is what decides
+	// the jobs it may be given. A decision wire returns verdicts to a question
+	// set and holds no conversation, so it is offered for that role alone.
+	Answers Answers
 	// Discovery names the model-listing shape an endpoint answers under.
 	// Protocols sharing one value are indistinguishable to a probe.
 	Discovery string
@@ -31,15 +35,37 @@ type Protocol struct {
 // protocols is ordered as a chooser should offer them: the common wire first,
 // then the ones a particular endpoint adds on top of it.
 var protocols = []Protocol{
-	{Kind: "openai", Discovery: "openai", ReasoningParams: true},
-	{Kind: "responses", Discovery: "openai", ServerWebSearch: true, StatefulContinuation: true},
-	{Kind: "anthropic", Discovery: "anthropic", ServerWebSearch: true},
+	{Kind: "openai", Answers: AnswersChat, Discovery: "openai", ReasoningParams: true},
+	{Kind: "responses", Answers: AnswersChat, Discovery: "openai", ServerWebSearch: true, StatefulContinuation: true},
+	{Kind: "anthropic", Answers: AnswersChat, Discovery: "anthropic", ServerWebSearch: true},
+	// No Discovery: the decision API has no model listing, so the model id is
+	// declared rather than probed for.
+	{Kind: "typesafe", Answers: AnswersDecision},
 }
 
 // protocolAliases are registry keys that resolve to a protocol above but are
 // not an independent choice, so a hand-written config spelling one gets the
 // same capabilities the wire actually has.
 var protocolAliases = map[string]string{"dashscope-responses": "responses"}
+
+// Answers is what a wire produces. Declared per protocol, never inferred from
+// a kind's spelling.
+type Answers string
+
+const (
+	AnswersChat     Answers = "chat"
+	AnswersDecision Answers = "decision"
+)
+
+// AnswersFor reports what a configured kind produces. An unknown kind answers
+// chat: it is what every wire before decision backends produced, so a config
+// written against an older build keeps the meaning it was written with.
+func AnswersFor(kind string) Answers {
+	if p, ok := ProtocolFor(kind); ok && p.Answers != "" {
+		return p.Answers
+	}
+	return AnswersChat
+}
 
 // Protocols returns the wire formats a chooser may offer, in display order.
 func Protocols() []Protocol {

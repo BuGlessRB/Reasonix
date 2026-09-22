@@ -107,10 +107,13 @@ export function ToolCard({
   // one claim — done, still going, or stuck — so the card says the claim rather
   // than the object carrying it.
   const goal = tool.name === "update_goal" ? goalUpdate(tool.args) : null;
-  const [open, setOpen] = useState(running || bad);
+  // Running is not a reason to show the arguments: the group above already says
+  // the work is happening, and a call that opens itself pushes the transcript
+  // around while it reads. A failure is different — that is what is being asked.
+  const [open, setOpen] = useState(bad);
   useEffect(() => {
-    if (running || bad) setOpen(true);
-  }, [running, bad]);
+    if (bad) setOpen(true);
+  }, [bad]);
   const changes = changeCounts(tool);
   const hasBody = Boolean(
     takeover || tool.diff || goal || tool.name === "todo_write" ||

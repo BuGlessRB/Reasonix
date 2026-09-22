@@ -1,15 +1,19 @@
 import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
-import { money } from "../i18n/format";
+import { money, tokens as tokenCount } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import { hasPendingDecision, posture, runState } from "./decisions";
 import { createPortal } from "react-dom";
 import { HttpError } from "../port/port";
-import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, Queue as QueueSnapshot, RewindScope, SessionStatus, WorkspaceChanges } from "../port/port";
+import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, Queue as QueueSnapshot, QueueItem, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import type { TrajectoryRead } from "../port/wire";
-import { fromHistory, initialState, localId, quoteAmount, reduce } from "../state/session";
+import { currentStep, fromHistory, initialState, localId, quoteAmount, reduce, stepDone, stepLabel } from "../state/session";
 import { pairCheckpoints } from "../state/checkpoints";
+import { Deck as DeckPanel, DeckChips, type Deck } from "./DeckChips";
+import { Plan } from "./Plan";
+import { useReplyActions } from "./reply";
+import { useRewindActions } from "./rewind";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Transcript } from "./Transcript";
 import { Composer } from "./Composer";
@@ -22,10 +26,12 @@ import { railOf } from "./panels/derive";
 import { ABSENT, accountOf, type Wallet } from "./wallet";
 import { swapping } from "./swap";
 import { PaneNav, type PaneView } from "./PaneNav";
-import { useRate } from "./num";
+import { useRate, useTrail } from "./num";
+import { Spark } from "./Spark";
 import { StudioIcon } from "./StudioIcon";
 import { useDismiss } from "./dismiss";
 import { ContextSummaryCard } from "./ContextSummaryCard";
+import { DOCK, Gutter } from "./Gutter";
 import { Find } from "./Find";
 import { useFind } from "./usefind";
 import { RunAnalysis } from "./RunAnalysis";
@@ -36,7 +42,6 @@ import { RMark } from "./RMark";
 import { speedOf } from "./speed";
 import { RuntimeBar } from "./RuntimeBar";
 
-const BROWSER_DOCK = "rx-browser-dock";
 
 // PaneReport is what the window's own chrome needs from whichever pane has
 // focus: everything else about a session stays inside the pane that owns it.
@@ -58,6 +63,15 @@ export interface PaneReport {
 // A shared constant, not `?? []`: a fresh empty array every render reads as a
 // changed prop to the rail below it.
 const NO_JOBS: JobEntry[] = [];
+
+const totalsOf = (st: SessionStatus) => ({
+  kind: "__totals",
+  hit: st.cacheHit,
+  miss: st.cacheMiss,
+  cost: quoteAmount(st.sessionCostQuote),
+  coverage: st.sessionCostQuote?.coverage,
+  incompleteReason: st.sessionCostQuote?.incompleteReason,
+});
 
 interface Props {
   port: AgentPort;
@@ -87,11 +101,16 @@ interface Props {
   needsProject: boolean;
   onOpenProject: () => void;
   onKeepHere: () => void;
+  // A prop, not a document read: this pane is memoised past an attribute flip.
+  theme: string;
+  // Rides on `.app`: that is where the divider writes while a drag is in flight.
+  dockW: number;
+  onDockW: (w: number) => void;
   manualBrowser?: boolean;
-  onCloseManualBrowser?: () => void;
+  onManualBrowser?: (on: boolean) => void;
 }
 
-function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere, manualBrowser = false, onCloseManualBrowser }: Props) {
+function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere, theme, dockW, onDockW, manualBrowser = false, onManualBrowser }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
   const [status, setStatus] = useState<SessionStatus | null>(null);
@@ -106,11 +125,12 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [queue, setQueue] = useState<QueueSnapshot | null>(null);
   const [slots, setSlots] = useState<Record<string, string>>({});
   const pages = useBrowserTabs(port, s.browserTabsMoved);
-  const [dock, setDock] = useState(() => localStorage.getItem(BROWSER_DOCK) === "on");
+  const [surfaces, setSurfaces] = useState(0);
   // Analysis owns the whole working canvas. A docked browser and the composer
   // are useful while talking to the agent, but both compete with the timeline
   // for exactly the horizontal/vertical space the analysis view explains.
-  const docked = dock && (pages.length > 0 || manualBrowser) && tab === "flow";
+  const docked = manualBrowser && tab === "flow";
+  const workbench = docked || tab === "browser";
   const [meterOpen, setMeterOpen] = useState(false);
   const meterRef = useRef<HTMLDivElement>(null);
   const closeMeter = useCallback(() => setMeterOpen(false), []);
@@ -119,6 +139,14 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // Elapsed is a clock reading and belongs on the tick. Throughput is not: it
   // follows the deltas themselves, and expires rather than being re-derived.
   const tps = useRate(s.outWindow, s.running);
+  // The shape of the last minute, kept while a turn runs. A number alone says
+  // how fast it is now; the line says whether it is climbing, stalling or
+  // arriving in bursts, which is the question someone watching a run has.
+  const trail = useTrail(tps, s.running);
+  // What this turn has actually put on the wire: input counted whether or not
+  // the prefix cache took it, and output as it comes back.
+  const sent = s.metrics.hit + s.metrics.miss;
+  const received = s.metrics.out;
   const speed = useMemo(() => speedOf(traj.rows), [traj.rows]);
 
   const reloadMcp = useCallback(() => {
@@ -205,14 +233,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     port.status().then((st) => {
       if (!alive) return;
       setStatus(st);
-      dispatch({
-        kind: "__totals",
-        hit: st.cacheHit,
-        miss: st.cacheMiss,
-        cost: quoteAmount(st.sessionCostQuote),
-        coverage: st.sessionCostQuote?.coverage,
-        incompleteReason: st.sessionCostQuote?.incompleteReason,
-      } as never);
+      dispatch(totalsOf(st) as never);
     });
     return () => {
       alive = false;
@@ -262,39 +283,13 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     });
     port.status().then((st) => {
       applyStatus(st);
-      dispatch({
-        kind: "__totals",
-        hit: st.cacheHit,
-        miss: st.cacheMiss,
-        cost: quoteAmount(st.sessionCostQuote),
-        coverage: st.sessionCostQuote?.coverage,
-        incompleteReason: st.sessionCostQuote?.incompleteReason,
-      } as never);
+      dispatch(totalsOf(st) as never);
     });
     refreshWallet();
     onSessionChanged();
   }, [port, applyStatus, refreshWallet, onSessionChanged, replayTrajectory]);
 
-  // A rewind rewrites the transcript and the files under it, so the whole
-  // session is re-read rather than patched — the same treatment a session
-  // switch gets, for the same reason.
-  const onPrepareRewind = useCallback((turn: number, scope: RewindScope) => port.prepareRewind(turn, scope), [port]);
-  const onCommitRewind = useCallback(
-    async (planId: string) => {
-      const result = await port.commitRewind(planId);
-      reloadSession();
-      return result;
-    },
-    [port, reloadSession],
-  );
-  const onUndoRewind = useCallback((transactionId: string) => port.undoRewind(transactionId).then(reloadSession), [port, reloadSession]);
-  // Reverting one file touches disk but not the transcript, so unlike a rewind
-  // it does not reload the session — only the file changes.
-  const onPrepareFileRevert = useCallback((path: string) => port.prepareFileRevert(path), [port]);
-  const onCommitFileRevert = useCallback(
-    (planId: string, resolution?: string) => port.commitFileRevert(planId, resolution),
-    [port],
-  );
+  const { onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert } = useRewindActions(port, reloadSession);
 
   // Both of these read only the user and tool cards, so they key off the
   // revision rather than the items array: a streamed answer leaves every card
@@ -304,6 +299,15 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   /* eslint-disable react-hooks/exhaustive-deps */
   const paired = useMemo(() => pairCheckpoints(s.items, checkpoints), [s.revision, checkpoints]);
   const rail = useMemo(() => railOf(s.items, s.executions), [s.revision, s.executions]);
+
+  // Sub-agents and background processes: built as panels, never drawn.
+  const [deck, setDeck] = useState<Deck>("");
+  // The list belongs above the line that narrates the turn, because that is
+  // what it is about. Plan was built and only ever mounted inside an inspector
+  // nothing renders, which is why it had never been seen.
+  const todoOpen = s.plan.length > 0 && tab === "flow";
+  const [todoShown, setTodoShown] = useState(false);
+  const jobs = status?.jobs ?? NO_JOBS;
   const counts = useMemo(() => {
     let steps = 0;
     let steer = 0;
@@ -428,26 +432,38 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const onQueueRefresh = useCallback((id: string) => void port.refreshQueued(id).catch(fail), [port, fail]);
   const onQueuePause = useCallback((on: boolean) => void port.setQueuePaused(on).catch(fail), [port, fail]);
   const onQueueRead = useCallback((id: string) => port.readQueued(id), [port]);
+  // "Send now" means the only thing it can while a turn holds the session: end
+  // that turn, and the queue dispatches this line as the next one. Guidance the
+  // running turn already accepted has to leave it first — a turn that ends
+  // without reading an accepted steer parks it as uncertain and pauses the
+  // whole queue, which is the opposite of sending it.
+  const onQueueSendNow = useCallback(
+    async (item: QueueItem) => {
+      try {
+        if (item.state === "steer_accepted") {
+          const text = await port.readQueued(item.id);
+          await port.cancelQueued(item.id);
+          dispatch({ kind: "__unsent", id: item.id } as never);
+          const id = localId();
+          dispatch({ kind: "__user", text, pending: false, id } as never);
+          const again = await port.queueFollowup(text);
+          if (again?.itemId) dispatch({ kind: "__queued", id, itemId: again.itemId, queued: "followup" } as never);
+        }
+        await port.cancel();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [port, fail],
+  );
   // The panel knows the entry, never the row the composer minted for it, so
-  // taking one back here has to name it the way the kernel does.
+  // taking one back here has to name it the way the kernel does. __unsent takes
+  // either name, and the queue is now the only place a waiting line is shown.
   const onQueueCancel = useCallback(
     (itemId: string) => {
       port
         .cancelQueued(itemId)
         .then(() => dispatch({ kind: "__unsent", id: itemId } as never))
-        .catch(fail);
-    },
-    [port, fail],
-  );
-
-  // Cancelling is only meaningful before the turn reads the line. After that
-  // the kernel refuses and says so, and the row stops calling itself queued on
-  // its own — the steer event that made it too late is also what clears it.
-  const onCancelQueued = useCallback(
-    (rowId: string, itemId: string) => {
-      port
-        .cancelQueued(itemId)
-        .then(() => dispatch({ kind: "__unsent", id: rowId } as never))
         .catch(fail);
     },
     [port, fail],
@@ -572,12 +588,25 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // Every route into a view goes through one place, so the menu never grows a
   // motion language of its own: it says which view, and this says how a pane
   // changes from one to another.
-  const showView = useCallback((to: PaneView) => swapping(() => setTab(to), "tab"), []);
+  // The workbench is the one view that sits beside the conversation rather than
+  // over it, because it is read against what was said. Picking it from the nav
+  // opens the same dock the globe does; there was no reason for one control to
+  // take the conversation away and the other to keep it.
+  const showView = useCallback(
+    (to: PaneView) => {
+      if (to === "browser") {
+        onManualBrowser?.(true);
+        swapping(() => setTab("flow"), "tab");
+        return;
+      }
+      if (to === "flow") onManualBrowser?.(false);
+      swapping(() => setTab(to), "tab");
+    },
+    [onManualBrowser],
+  );
   const find = useFind(s.items, findPulse, active, useCallback(() => showView("flow"), [showView]));
 
-  useEffect(() => {
-    if (manualBrowser) setTab("browser");
-  }, [manualBrowser]);
+  const { quote, reply, onResend } = useReplyActions({ port, items: s.items, checkpoints, running: s.running, model: status?.label, submit, onSettings, onRunDetail: () => showView("analysis"), onError: fail });
 
   // Where the bottom is moves as blocks mount under it, so this only asks the
   // transcript to follow again and lets it scroll itself into place.
@@ -624,23 +653,20 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       onFocusCapture={active ? undefined : onFocus}
     >
       <PaneNav
-        view={tab}
+        view={docked ? "browser" : tab}
         onPick={showView}
         rows={traj.rows.length}
-        pages={pages.length + (manualBrowser ? 1 : 0) + 1}
-        dock={dock}
-        onDock={() => setDock((on) => {
-          localStorage.setItem(BROWSER_DOCK, on ? "off" : "on");
-          return !on;
-        })}
+        surfaces={surfaces}
       />
 
       <Find find={find} />
 
-      <div className="pbody" data-dock={docked ? "" : undefined} data-full={tab === "browser" ? "" : undefined}>
+      <div className="pbody" data-dock={tab === "flow" ? "" : undefined} data-full={tab === "browser" ? "" : undefined}>
       <div className="pviews">
 
       <Transcript
+        reply={reply}
+        onResend={onResend}
         items={s.items}
         entering={s.entranceOwed}
         onEntered={(ids) => dispatch({ kind: "__entered", ids } as never)}
@@ -659,7 +685,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onPlan={onPlan}
         onAnswer={onAnswer}
         onForget={onForget}
-        onCancelQueued={onCancelQueued}
         onExtInvoke={onExtInvoke}
         onExtSubmit={onExtSubmit}
         checkpoints={paired}
@@ -684,20 +709,29 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       </div>
       </div>
       </div>
-      {(docked || tab === "browser") && (
-        <div className="scroll" data-pane="browser">
+      {/* Kept mounted rather than switched on: the open files, the browsers and
+          where each had got to are what a glance at the conversation must not
+          cost. */}
+      {/* Mounted shut as well as open: shut is where it becomes the tab that
+          brings the browser back, which is the only affordance left once the
+          column has no width. */}
+      {tab === "flow" && (
+        <Gutter edge="r" span={DOCK} width={dockW} label={t("调整浏览器宽度")} open={docked}
+          onWidth={onDockW} onOpen={(on) => onManualBrowser?.(on)} />
+      )}
+      <div className="scroll" data-pane="browser" hidden={tab === "analysis"}>
           <WorkbenchPanel
             port={port}
             tabs={pages}
             manual={manualBrowser}
-            shown={visible}
-            scheme={document.documentElement.dataset.theme === "light" ? "light" : "dark"}
+            shown={visible && workbench}
+            onSurfaces={setSurfaces}
+            scheme={theme === "light" ? "light" : "dark"}
             changes={tree?.changes ?? []}
-            onCloseManual={onCloseManualBrowser ?? (() => {})}
+            onCloseManual={() => onManualBrowser?.(false)}
             onExternal={(url) => void port.openExternal(url).catch(fail)}
           />
-        </div>
-      )}
+      </div>
 
       {/* Keep the composer mounted so a half-written prompt survives a visit to
           analysis; hidden removes it from layout without throwing its state
@@ -709,23 +743,60 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         <span className="glowring" aria-hidden="true">
           <i />
         </span>
-        {/* Everything that stacks above the input box shares one ceiling. Each
-            of these was bounded on its own or not at all, and "not at all" is
-            what let the queue grow until the transcript had no height left —
-            the next child to do it would have been a different one. */}
-        {/* This is the state of the input surface itself, so it follows the
-            textarea's left edge. Putting it inside composeaux centred it to
-            the narrower queue rail and made it appear to float inward. */}
-        {(s.running || blocked) && (
-          <div className="studio-runstate" role="status" aria-live="polite" data-waiting={blocked ? "" : undefined}>
+        {/* Everything stacked above the input box shares one ceiling, so no
+            child of this region may grow without bound. */}
+        {todoOpen && (
+          <div className="studio-todo" data-open={todoShown ? "" : undefined}>
+            {/* One line by default. The composer already carries the run line,
+                the outbox and its own toolbar; a plan opened over all of them
+                pushes the box a person types in off the bottom of a laptop. */}
+            <button
+              type="button"
+              className="studio-todo-sum"
+              data-action="plan.fold"
+              aria-expanded={todoShown}
+              onClick={() => setTodoShown((on) => !on)}
+            >
+              <StudioIcon name="list" />
+              <b>{t("计划")}</b>
+              <span>{stepLabel(s.plan[currentStep(s.plan)] ?? s.plan[0])}</span>
+              <small>{s.plan.filter(stepDone).length}/{s.plan.length}</small>
+              <StudioIcon name="down" className="studio-todo-fold" />
+            </button>
+            {todoShown && <div className="studio-todo-body"><Plan steps={s.plan} /></div>}
+          </div>
+        )}
+        {tab === "flow" && (
+          <div
+            className="studio-runstate"
+            role="status"
+            aria-live="polite"
+            data-waiting={blocked ? "" : undefined}
+            data-idle={s.running || blocked ? undefined : ""}
+          >
             <RMark />
             <span>{t(s.doing || "运行中")}</span>
+            {sent + received > 0 && (
+              <span className="studio-runtokens" title={t("本轮已发送 / 已接收的 token")}>
+                <span data-io="up">
+                  <StudioIcon name="arrow" />
+                  <b>{tokenCount(sent)}</b>
+                </span>
+                <span data-io="down">
+                  <StudioIcon name="arrow" />
+                  <b>{tokenCount(received)}</b>
+                </span>
+                <small>tokens</small>
+              </span>
+            )}
           </div>
         )}
         <div className="composeaux">
           <Queue
             queue={queue}
+            running={s.running}
             onRead={onQueueRead}
+            onSendNow={onQueueSendNow}
             onEdit={onQueueEdit}
             onMove={onQueueMove}
             onCancel={onQueueCancel}
@@ -750,8 +821,12 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             </div>
           )}
         </div>
-        <Composer port={port} status={status} running={s.running} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} />
+        <Composer port={port} status={status} running={s.running} quote={quote} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} />
+        {/* Above the rail rather than over the transcript: this is about the
+            run, and the run's own readings are the row it belongs to. */}
+        <DeckPanel open={deck} tasks={rail.tasks} jobs={jobs} />
         <div className="studio-meterrail" ref={meterRef} aria-label={t("运行统计")}>
+          <DeckChips tasks={rail.tasks} jobs={jobs} open={deck} onOpen={setDeck} />
           <div className="studio-speed-anchor">
             <button
               className="studio-meter-static studio-meter-speed"
@@ -759,7 +834,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
               aria-describedby="studio-speed-detail"
               aria-label={t("查看生成速度详情")}
             >
-              <StudioIcon name="gauge" /><b>{tps > 0 ? tps.toFixed(1) : "—"}</b><span>tok/s</span><i data-live={s.running ? "" : undefined} aria-hidden="true" />
+              <StudioIcon name="gauge" />
+              <Spark points={trail} w={44} h={13} />
+              <b>{tps > 0 ? tps.toFixed(1) : "—"}</b><span>tok/s</span><i data-live={s.running ? "" : undefined} aria-hidden="true" />
             </button>
             <div className="studio-speed-detail" id="studio-speed-detail" role="tooltip">
               <header><b>{t("生成速度")}</b><small>{s.running ? t("实时更新") : t("最近一轮")}</small></header>

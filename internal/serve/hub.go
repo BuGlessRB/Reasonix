@@ -214,6 +214,7 @@ func (h *Hub) Adopt(srv *Server, bc *Broadcaster) (*Runtime, error) {
 	srv.auth = h.auth
 	srv.surface = h.surface()
 	srv.stance = h.stance
+	srv.page = h.opts.Page
 	srv.resolver = h.opts.ProviderResolver
 	// The posture the host launched in, which is the one every later pane
 	// inherits until someone changes it on the composer.
@@ -291,6 +292,7 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 	srv.auth = h.auth
 	srv.surface = h.surface()
 	srv.resolver = h.opts.ProviderResolver
+	srv.page = h.opts.Page
 	if h.opts.Grant != nil {
 		h.opts.Grant(srv)
 	}

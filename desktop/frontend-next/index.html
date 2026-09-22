@@ -17,6 +17,35 @@
           document.documentElement.lang = zh ? "zh-CN" : "en";
         } catch (e) {}
       })();
+
+      // A shared serve link carries its credential in the fragment, which the
+      // browser never sends. Trading it for the cookie has to happen before the
+      // bundle makes its first request, and the fragment is wiped from the
+      // address bar and history on the way past so it cannot be copied on.
+      window.__rxAuth = (function () {
+        try {
+          var f = new URLSearchParams(window.location.hash.slice(1));
+          var token = f.get("token");
+          if (!token) return Promise.resolve();
+          f.delete("token");
+          var rest = f.toString();
+          window.history.replaceState(null, "", window.location.pathname + window.location.search + (rest ? "#" + rest : ""));
+          return fetch("/auth/token", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ token: token }),
+          }).then(function () {});
+        } catch (e) {
+          return Promise.resolve();
+        }
+      })();
+      if (window.__rxAuth) {
+        var native = window.fetch.bind(window);
+        window.fetch = function () {
+          var args = arguments;
+          return window.__rxAuth.then(function () { return native.apply(null, args); });
+        };
+      }
     </script>
     <style>
       /* The boot screen owns the window from the first paint until the kernel

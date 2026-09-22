@@ -91,6 +91,9 @@ const SAID: Record<string, string> = {
 
   // ── 来源：连接与授权 ─────────────────────────────────────────────
   "provider.editing_disabled": "这台服务器不允许修改模型来源",
+  "browser.open_failed": "打不开这个网页：{error}",
+  "provider.bad_key_slot": "名称「{name}」不能用来存放密钥：密钥槽位由名称推导，而它不能以数字开头。改一个以字母开头的名称即可，密钥本身没有问题。",
+  "page.not_built": "这个内核没有带界面，只提供接口",
   "provider.key_required": "请填写 API key",
   "provider.key_too_large": "该 key 长度异常，可能粘贴了错误内容",
   "provider.setup_done": "已连接，无需重复配置",

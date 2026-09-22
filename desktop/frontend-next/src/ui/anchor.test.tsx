@@ -35,3 +35,21 @@ describe("the anchor a run-graph node lands on", () => {
     expect(html).not.toContain("data-call");
   });
 });
+
+// The group above a call already says work is happening. A call that opens
+// itself moves the transcript under the reader at every step of a long turn,
+// and leaves it in a state nobody chose. Failure is the exception: that is the
+// one thing a reader is being asked to look at. Fixing this once by changing
+// the initial state left the effect still forcing it open, so both are pinned.
+describe("whether a call opens itself", () => {
+  const opened = (html: string) => /<details[^>]*\bopen\b/.test(html);
+
+  it("stays shut while it runs", () => {
+    expect(opened(renderToStaticMarkup(<ToolCard tool={call("t1", "todo_write")} running />))).toBe(false);
+  });
+
+  it("opens when the call failed, which is what a reader is being shown", () => {
+    const failed: Tool = { id: "t2", name: "bash", readOnly: false, err: "boom" };
+    expect(opened(renderToStaticMarkup(<ToolCard tool={failed} running={false} />))).toBe(true);
+  });
+});

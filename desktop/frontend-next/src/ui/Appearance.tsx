@@ -1,7 +1,7 @@
 import { ApplyNote } from "./Group";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { TrayPrefs, AgentPort, Appearance as Look, ThemePack } from "../port/port";
-import { MONO_FAMILIES, UI_FAMILIES, installed, readDefault, readSteps } from "./look";
+import { MONO_FAMILIES, UI_FAMILIES, installed, readSizeOf, readSteps } from "./look";
 import { STORAGE as LANG_KEY, t } from "../i18n";
 import { pct } from "../i18n/format";
 import { reason } from "../i18n/kernel";
@@ -372,7 +372,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
             <span className="tx">{t("正文")}</span>
             <div className="seg" data-text role="group" aria-label={t("正文字号")}>
               {readSteps().map(([v, name]) => (
-                <button key={v} data-action="appearance.reading-size" aria-pressed={(look.readSize || readDefault()) === v} onClick={() => set({ readSize: v })}>
+                <button key={v} data-action="appearance.reading-size" aria-pressed={readSizeOf(look.readSize) === v} onClick={() => set({ readSize: v })}>
                   {t(name)}
                 </button>
               ))}

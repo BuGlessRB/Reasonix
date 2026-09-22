@@ -498,9 +498,11 @@ const (
 // Event is one increment in a turn's event stream. Read the field(s) documented
 // for Kind; the others are zero.
 type Event struct {
-	Kind             Kind
-	Text             string                    // Reasoning / Text / Message / Notice / Phase
-	ModelRef         string                    // Usage: canonical "provider/model" ref that produced this usage
+	Kind Kind
+	Text string // Reasoning / Text / Message / Notice / Phase
+	// ModelRef is the canonical "provider/model" behind this: the usage, the
+	// turn a TurnStarted opens, or the text a second model wrote.
+	ModelRef         string
 	Detail           string                    // Notice: optional diagnostic text for expandable details
 	Code             string                    // Notice: stable id for frontend localization; empty = unmapped
 	Reasoning        string                    // Message: the full reasoning chain

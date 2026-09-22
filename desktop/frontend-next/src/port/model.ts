@@ -47,6 +47,9 @@ export interface ModelEntry {
   // nothing declares it — never "no". Rendering a guess here sends the user to
   // a rejected request they cannot explain.
   vision?: boolean;
+  // What this model produces. Absent means chat: it is what every model was
+  // before decision backends, so a kernel predating the field still answers.
+  answers?: "chat" | "decision";
   efforts?: string[];
   effort?: string;
   contextWindow?: number;
@@ -67,6 +70,10 @@ export interface RoleAssignments {
   subagent: string;
   guardian: string;
   vision: string;
+  // The system_one backend. It names a model on a decision wire, so unlike the
+  // others it never falls back to the main model: a chat model cannot answer a
+  // question set, and a silent fallback would make a missing backend a wrong one.
+  decision: string;
 }
 
 // The two fold bounds and which of them is in force. They are configured

@@ -64,6 +64,10 @@ interface Props {
   port: AgentPort;
   status: SessionStatus | null;
   running: boolean;
+  // Text a card asked to be quoted, and a counter that makes the same text
+  // twice two requests. Quoting the same reply again is an ordinary thing to
+  // do, and comparing the string alone would drop the second one.
+  quote?: { text: string; n: number };
   // Resolves false when the line never left, so what was typed comes back
   // rather than being lost to a refusal the user could not have prevented.
   // Bumped when something outside asks for the cursor — answering a plan card
@@ -131,7 +135,7 @@ function releaseChip(c: Chip) {
 let chipSeq = 0;
 const chipId = () => `c${++chipSeq}`;
 
-export function Composer({ port, status, running, focus, onSubmit, onChanged, onError, onSettings = () => {}, changeCount = 0 }: Props) {
+export function Composer({ port, status, running, quote, focus, onSubmit, onChanged, onError, onSettings = () => {}, changeCount = 0 }: Props) {
   const [branch, setBranch] = useState("");
   useEffect(() => {
     let alive = true;
@@ -173,6 +177,19 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
     setCaret(at);
     caretRef.current = at;
   };
+
+  // A quote lands in the draft, never on the wire: it is material for what the
+  // person is about to write, so it arrives unsent and with the caret after it.
+  useEffect(() => {
+    if (!quote?.n) return;
+    setText((was) => {
+      const block = quote.text.split("\n").map((line) => `> ${line}`).join("\n");
+      const head = was.trim() ? `${was.replace(/\s+$/, "")}\n\n` : "";
+      const next = `${head}${block}\n\n`;
+      pending.current = next.length;
+      return next;
+    });
+  }, [quote?.n]);
 
   const menu = useCompletion(port, text, caret, (next, at) => {
     pending.current = at;
@@ -364,6 +381,10 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
   });
 
   const efforts = effortsFor(models, status?.modelRef);
+  // Whether this model says anything about reasoning levels at all. The session
+  // may still carry one from a model that did, and printing that would be the
+  // composer answering for an endpoint that never spoke.
+  const declared = efforts.length > 0;
   const modelLb = status?.modelRef?.replace(/^[^/]+\//, "") ?? status?.label ?? "—";
   // A model switch rebuilds the runtime kernel-side (~0.4s on a real session);
   // the other controls on this shelf may land immediately, and which is which
@@ -704,11 +725,22 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
                 align="end"
                 menuClassName="studio-effort-menu"
                 title={t("推理强度")}
-                current={status.effort || "auto"}
+                current={declared ? status.effort || "auto" : ""}
                 pending={busy["effort"]}
                 items={[
                   { value: "__effort-heading", label: t("推理强度"), right: modelLb, header: true },
-                  ...(efforts.length ? efforts : ["auto"]).map((value) => ({
+                  // An endpoint that reported no levels has not said "none" —
+                  // it has said nothing. Rather than invent a rung, the one row
+                  // here goes where the capability is actually declared: a menu
+                  // of statements with nothing to press is a dead end.
+                  ...(declared
+                    ? []
+                    : [{
+                        value: "__effort-declare",
+                        label: t("去「模型来源」声明档位"),
+                        desc: t("这个端点没有报告推理档位。中转站通常不转发这项能力，在来源的「请求与能力」里可以声明。"),
+                      }]),
+                  ...efforts.map((value) => ({
                     value,
                     label: effortLabel(value),
                     meta: effortApi(value),
@@ -717,10 +749,12 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
                     strength: value === "disabled" ? 0 : ({ auto: 1, low: 1, medium: 2, high: 3, xhigh: 4, max: 4 } as Record<string, number>)[value.toLowerCase()] ?? 1,
                     desc: effortDescription(value),
                   })),
-                  { value: "__effort-note", label: t("仅显示当前模型实际支持的档位。"), right: t("按模型生效"), header: true },
+                  ...(declared
+                    ? [{ value: "__effort-note", label: t("仅显示当前模型实际支持的档位。"), right: t("按模型生效"), header: true }]
+                    : []),
                 ]}
-                onPick={(value) => change("effort", () => port.setEffort(value))}
-                label={<><span>{effortReading(status.effort)}</span><StudioIcon name="down" /></>}
+                onPick={(value) => value === "__effort-declare" ? onSettings("model") : change("effort", () => port.setEffort(value))}
+                label={<><span>{declared ? effortReading(status.effort) : t("未声明")}</span><StudioIcon name="down" /></>}
               />
             </div>
           )}
