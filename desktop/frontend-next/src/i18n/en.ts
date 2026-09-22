@@ -469,6 +469,7 @@ export const EN: Record<string, string> = {
   "没有未经验证的部分": "nothing left unverified",
   "未验证": "not verified",
   "交付验收": "delivery receipt",
+  "留空时按这个顺序尝试：先 ssh-agent 持有的密钥，再 ~/.ssh 下的默认密钥；只有填了下面的环境变量或该机器要求交互时，才会走密码。": "Left blank, it tries in this order: keys held by ssh-agent, then the default keys under ~/.ssh. A password is only used when one of the variables below is set, or the machine asks interactively.",
   "在代码编辑器中打开工作区": "Open the workspace in a code editor",
   "已在 {app} 中打开": "Opened in {app}",
   "通知": "Notifications",

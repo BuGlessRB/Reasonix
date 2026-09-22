@@ -5187,6 +5187,7 @@
   }
   .rmtf { display: flex; align-items: center; gap: 10px; font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted) }
   .rmtf > span { flex: none; width: 13ch }
+  .rmthint { margin: -2px 0 2px calc(13ch + 10px); font: var(--w-reg) var(--fs-meta)/1.55 var(--ui); color: var(--faint) }
   .rmtf select {
     flex: 1; min-width: 0; padding: 5px 8px; color: var(--text);
     background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-sm);

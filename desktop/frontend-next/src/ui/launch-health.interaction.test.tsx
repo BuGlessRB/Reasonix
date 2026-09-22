@@ -35,15 +35,21 @@ describe("a launch that comes up says so", () => {
   it("retires the update it booted from, once", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { hub, said } = watchedHub();
+    const started = Date.now();
     render(<App hub={hub} />);
+
+    // Let the panes resolve and the probation arm before the clock is pushed
+    // past it; nothing is asserted here, so nothing here can race.
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(3000);
+    await waitFor(() => expect(said.length, "never acknowledged; the transaction stays open").toBe(1));
 
     // Not on the first frame: a build that comes up and dies immediately must
     // not be the one that throws away the way back to the build before it.
-    await vi.advanceTimersByTimeAsync(500);
-    expect(said, "acknowledged before the probation was served").toHaveLength(0);
-
-    await vi.advanceTimersByTimeAsync(3000);
-    await waitFor(() => expect(said.length, "never acknowledged; the transaction stays open").toBe(1));
+    // Read off the moment it was said rather than sampled part-way through:
+    // the clock advances on its own here, so a sample is a race with the load
+    // on the machine and says nothing on the run where it loses.
+    expect(said[0] - started, "acknowledged before the probation was served").toBeGreaterThanOrEqual(2000);
 
     // Once for the launch, not once per pane the user opens.
     await vi.advanceTimersByTimeAsync(5000);

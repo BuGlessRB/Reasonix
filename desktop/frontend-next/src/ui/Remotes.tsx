@@ -285,12 +285,18 @@ export function Remotes({ hub, onError }: Props) {
             </div>
           </div>
           {field("identityFile", t("私钥文件"), "~/.ssh/id_ed25519")}
+          {/* What an empty form actually does is the kernel's to say. Leaving
+              these blank is not "no authentication", and a reader who has to
+              guess between agent, default keys and a password prompt is one
+              who finds out on the first connect. */}
+          <p className="rmthint">{t("留空时按这个顺序尝试：先 ssh-agent 持有的密钥，再 ~/.ssh 下的默认密钥；只有填了下面的环境变量或该机器要求交互时，才会走密码。")}</p>
           {/* Named, not carried: this is the variable to read, never the secret
               itself, so nothing typed here is a password on its way anywhere. */}
           {field("passphraseEnv", t("私钥口令的环境变量名"), "GPU_BOX_PASSPHRASE")}
           {field("passwordEnv", t("登录密码的环境变量名"), "GPU_BOX_PASSWORD")}
-          {/* 装不上时内核会点名让人改这一项，所以它必须在这里 —— 一条说「改成
-              npm 装」的错误，配上一个改不了的设置，等于没说。 */}
+          {/* The kernel names this setting when an install fails, so it has to
+              be here: an error saying "install it with npm instead" beside a
+              setting nobody can reach says nothing. */}
           <label className="rmtf">
             <span>{t("安装方式")}</span>
             <select
@@ -304,8 +310,9 @@ export function Remotes({ hub, onError }: Props) {
               <option value="never">{t("不安装，已自行安装")}</option>
             </select>
           </label>
-          {/* 远端跑的内核用哪台机器的 Key。默认用本机的，经隧道回来 —— 那台
-              机器就不用再配一遍 Key，也不用能访问模型 API。 */}
+          {/* Which machine's key the far-side kernel answers to. This one's by
+              default, tunnelled back, so the other machine needs no key of its
+              own and no route to the model API. */}
           <label className="rmtf">
             <span>{t("模型凭据")}</span>
             <select
