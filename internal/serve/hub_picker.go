@@ -21,11 +21,11 @@ func (h *Hub) pickLocalFolderHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	path, err := openLocalFolderPicker(r.Context(), req.StartIn)
 	if errors.Is(err, errFolderPickerUnsupported) {
-		http.Error(w, err.Error(), http.StatusNotImplemented)
+		refuse(w, http.StatusNotImplemented, "picker.unsupported", err.Error(), nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		refuse(w, http.StatusInternalServerError, "picker.failed", err.Error(), nil)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

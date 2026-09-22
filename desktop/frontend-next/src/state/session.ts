@@ -10,6 +10,8 @@ import { setShowsReceipt, showsReceipt } from "./prefs";
 
 // The types live next door; this stays their way in, so no reader of a
 // session has to know they were split off.
+import { splitProviderSearch } from "./providersearch";
+
 export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TodoStatus, TurnTerminal, Waiting };
 export { currentStep, stepDone, stepLabel };
 import { promptOpen, prompted, sealByReceipt } from "./prompts";
@@ -669,46 +671,6 @@ export function parsePlan(tool: Tool): PlanStep[] | null {
 export function todoStep(x: { content?: string; status?: string; activeForm?: string; level?: number }): PlanStep {
   const status: TodoStatus = x.status === "completed" || x.status === "in_progress" ? x.status : "pending";
   return { text: String(x.content ?? ""), status, activeForm: x.activeForm, level: x.level };
-}
-
-// The listing the kernel writes for the model: "- **title**" and, indented under
-// it, "<url>". Only a run of exactly that gets lifted out of the prose — reading
-// a paragraph as a result list is worse than leaving the list in place.
-const SEARCH_TITLE = /^-\s+\*\*.+\*\*\s*$/;
-const SEARCH_URL = /^\s+<\S+>\s*$/;
-
-function splitProviderSearch(content: string): { text: string; search?: boolean }[] {
-  const lines = content.split("\n");
-  const blocks: [number, number][] = [];
-  for (let i = 0; i < lines.length; ) {
-    if (!SEARCH_TITLE.test(lines[i])) {
-      i++;
-      continue;
-    }
-    let end = i;
-    let urls = 0;
-    while (end < lines.length && (SEARCH_TITLE.test(lines[end]) || SEARCH_URL.test(lines[end]))) {
-      if (SEARCH_URL.test(lines[end])) urls++;
-      end++;
-    }
-    // A run with no source is the model's own bolded list — an answer written as
-    // "- **厄瓜多尔总统将访华**" reads exactly like a result title.
-    if (urls > 0) blocks.push([i, end]);
-    i = end > i ? end : i + 1;
-  }
-  const parts: { text: string; search?: boolean }[] = [];
-  const push = (from: number, to: number, search: boolean) => {
-    const text = lines.slice(from, to).join("\n").trim();
-    if (text) parts.push(search ? { text, search: true } : { text });
-  };
-  let at = 0;
-  for (const [from, to] of blocks) {
-    push(at, from, false);
-    push(from, to, true);
-    at = to;
-  }
-  push(at, lines.length, false);
-  return parts;
 }
 
 // A reload has no event stream to replay, so the transcript is rebuilt from the

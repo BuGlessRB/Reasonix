@@ -76,16 +76,17 @@ grid to break.
   were indistinguishable on screen. `warn` sits at H45 — amber is "your turn",
   orange is "this step has a cost". Measured against `accent`'s tier: dark
   8.14:1 and light ink 5.83:1, beside `accent`'s 8.35 and 5.77.
-- `--cat-1` … `--cat-5` are categorical, not status. They once borrowed
-  deleg/net/accent/ok/faint, which spends five status positions on something
-  that is not a status, and the borrowed set failed four of the six checks a
-  categorical palette must pass — worst, "tool output" (grey) against "model
-  reply" (green) at ΔE 12.0 for normal vision, under the floor of 15, while
-  those are the second and fourth largest areas in the window. The current set
-  was chosen against all six, verified in both schemes: lightness band, chroma
-  floor, adjacent-pair colour-vision separation (ΔE ≥ 8), normal-vision floor
-  (≥ 15), and contrast with the ground. In light, four segments fall below 3:1
-  and rely on the legend's text labels.
+- `--cat-1` … `--cat-5` are categorical, not status.
+  - Borrowing deleg/net/accent/ok/faint spends five status positions on
+    something that is not a status.
+  - That borrowed set failed four of the six checks a categorical palette must
+    pass. Worst: "tool output" (grey) against "model reply" (green) at ΔE 12.0
+    for normal vision, under the floor of 15, while those are the second and
+    fourth largest areas in the window.
+  - The current set was chosen against all six and verified in both schemes:
+    lightness band, chroma floor, adjacent-pair colour-vision separation
+    (ΔE ≥ 8), normal-vision floor (≥ 15), and contrast with the ground.
+  - In light, four segments fall below 3:1 and rely on the legend's text labels.
 - `--io-up` / `--io-down` alias the categorical set, not the status one: sent
   and received are two kinds of one quantity, not two healths, so `net` or `ok`
   there would read as "running" or "succeeded". `--io-down` is `--cat-5`, which

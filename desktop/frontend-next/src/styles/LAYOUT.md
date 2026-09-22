@@ -232,14 +232,16 @@ rules are written in.
 - Only 「这台机器」 is hidden, by `[data-here]` rather than by `.machrow`: the
   section label above already carries that name, its count and its add button,
   while a remote host's row is the only thing naming that machine.
-- Focus mode takes the surroundings away and changes nothing else. The columns
-  collapse rather than unmount — unmounting loses the side column's scroll
-  position and the inspector's disclosure, and this is a temporary state that has
-  to return the world exactly as it was. It reuses the collapse path, so the
-  tween, the border and the opacity all follow it. The seam, the grip and the
-  horizontal tier's labels go with it: an invisible column should not keep a
-  draggable edge. In the narrow tier the side column is a full-width row under
-  the flow, where a zero width means nothing.
+- Focus mode takes the surroundings away and changes nothing else.
+  - The columns collapse rather than unmount — unmounting loses the side
+    column's scroll position and the inspector's disclosure, and this is a
+    temporary state that has to return the world exactly as it was.
+  - It reuses the collapse path, so the tween, the border and the opacity all
+    follow it.
+  - The seam, the grip and the horizontal tier's labels go with it: an invisible
+    column should not keep a draggable edge.
+  - In the narrow tier the side column is a full-width row under the flow, where
+    a zero width means nothing.
 - Collapsing reflows the text inside a column, which is what makes it feel
   wrong. The contents are locked to the open width so they are clipped rather
   than squeezed, and they shrink faster than the container: what is seen is
@@ -492,15 +494,16 @@ told apart by the colour of a symbol.
   "just completed" and "was already complete". It is painted on the inline `.ln`
   rather than the flex child, so `box-decoration-break` draws one per wrapped
   fragment; on the flex item a two-line step gets one line struck.
-- An unreachable external service is one row: name left, destination right, and a
-  red dot for the fact that it is broken. The reason is not read here — it is
-  beside `.srv` in settings, where it can be acted on. The row once borrowed
-  `.job`'s styling, which drew a failure in the grey that means "done". A red dot
-  plus the heading's count already say it twice; a third red bar would be a third
-  saying, and no other block on this rail has one. The name is the row's
-  identity, so it is never the first thing clipped. The fix link stays printed
-  rather than appearing on hover: it is the only thing on the row that is not a
-  status.
+- An unreachable external service is one row: name left, destination right, and
+  a red dot for the fact that it is broken.
+  - The reason is not read here — it is beside `.srv` in settings, where it can
+    be acted on.
+  - A failure is not drawn in `.job`'s grey, which means "done".
+  - A red dot plus the heading's count already say it twice; a third red bar
+    would be a third saying, and no other block on this rail has one.
+  - The name is the row's identity, so it is never the first thing clipped.
+  - The fix link stays printed rather than appearing on hover: it is the only
+    thing on the row that is not a status.
 - `.sparkbox` is not named `.spark`: the component's own root already carries
   that, and a wrapper under the same name hands its layout to the chart. A
   `viewBox` with no width or height falls back to 300×150, a chart several times
@@ -534,13 +537,13 @@ told apart by the colour of a symbol.
   screen.
 - Yielding collapses a column, never removes it: removing it takes the grip on
   the divider with it, and the only entrance left is a shortcut nobody can see.
-  The right column is the point of this design, so at a narrow width it drops
-  below the flow and stays scrollable rather than disappearing. Laid out
-  horizontally, a dragged width means nothing and there is nowhere to drag, so
-  the handle is dropped only in that state — collapsed, the column is hidden
-  entirely and the handle on the seam is the only way back. The left column is
-  different: it is only narrowed to zero, so its column and seam are still there
-  and hiding its grip would be the removal this section forbids.
+  - The right column is the point of this design, so at a narrow width it drops
+    below the flow and stays scrollable rather than disappearing.
+  - Laid out horizontally, a dragged width means nothing and there is nowhere to
+    drag, so the handle is dropped only in that state — collapsed, the column is
+    hidden entirely and the handle on the seam is the only way back.
+  - The left column is only narrowed to zero, so its column and seam are still
+    there and hiding its grip would be the removal this section forbids.
 - When both side columns have yielded, the transcript rail yields too; its ticks
   and viewport remain separately reachable.
 - A short window divides its height proportionally, and what is left over is the
@@ -1090,15 +1093,18 @@ told apart by the colour of a symbol.
   drawn here.
 - The wallpaper preview is the window's shape, not a strip: `cover` only leaves a
   focal point room on the axis it overflows.
-- The settings sheet lets the wallpaper through as well. It is a full-screen
-  overlay and the picture is on `body` (z-index −2), so it shows the moment this
-  layer stops being solid. Settings is dense, so it lets less through than the
-  workbench: reading settings, the picture is background, not content.
-  Translucency alone shows the original picture — a high-contrast photo pressed
-  against dense prose — so it is blurred: the depth stays and what is under the
-  text is a wash. A raised panel over a picture is one set of numbers: `.compose`
-  and `.runhead` are also 80% with `blur(16)`. The columns and headers inside it
-  do not frost again — glass over glass and the picture is gone.
+- The settings sheet lets the wallpaper through as well.
+  - It is a full-screen overlay and the picture is on `body` (z-index −2), so it
+    shows the moment this layer stops being solid.
+  - Settings is dense, so it lets less through than the workbench: reading
+    settings, the picture is background, not content.
+  - Translucency alone shows the original picture — a high-contrast photo
+    pressed against dense prose — so it is blurred: the depth stays and what is
+    under the text is a wash.
+  - A raised panel over a picture is one set of numbers: `.compose` and
+    `.runhead` are also 80% with `blur(16)`.
+  - The columns and headers inside it do not frost again — glass over glass and
+    the picture is gone.
 
 ## Context gauge
 

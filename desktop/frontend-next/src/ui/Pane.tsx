@@ -5,7 +5,7 @@ import { t } from "../i18n";
 import { hasPendingDecision, posture, runState } from "./decisions";
 import { createPortal } from "react-dom";
 import { HttpError } from "../port/port";
-import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, Queue as QueueSnapshot, QueueItem, SessionStatus, WorkspaceChanges } from "../port/port";
+import type { AgentPort, Checkpoint, ContextBreakdown, JobEntry, McpEntry, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import type { TrajectoryRead } from "../port/wire";
 import { currentStep, fromHistory, initialState, localId, quoteAmount, reduce, stepDone, stepLabel } from "../state/session";
@@ -13,13 +13,14 @@ import { pairCheckpoints } from "../state/checkpoints";
 import { Deck as DeckPanel, DeckChips, type Deck } from "./DeckChips";
 import { Plan } from "./Plan";
 import { useReplyActions } from "./reply";
+import { useGateActions } from "./gates";
+import { useQueueActions } from "./queueactions";
 import { useRewindActions } from "./rewind";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Transcript } from "./Transcript";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
 import { SlottedView } from "./SlottedView";
-import type { PlanAction } from "./cards/ApprovalCard";
 import { key as slotKey, placement } from "./slots";
 import { Metrics } from "./Metrics";
 import { railOf } from "./panels/derive";
@@ -122,7 +123,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [tree, setTree] = useState<WorkspaceChanges | null>(null);
   const [ctx, setCtx] = useState<ContextBreakdown | null>(null);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
-  const [queue, setQueue] = useState<QueueSnapshot | null>(null);
   const [slots, setSlots] = useState<Record<string, string>>({});
   const pages = useBrowserTabs(port, s.browserTabsMoved);
   const [surfaces, setSurfaces] = useState(0);
@@ -418,56 +418,13 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     [port, s.running, refreshStatus, fail],
   );
 
-  // The queue as the kernel holds it. The frame says only that it moved, so the
-  // answer is read back whole — which is also what puts another window's lines,
-  // and the CLI's, in front of this one. The optimistic rows say only what was
-  // sent from here, and they do not survive a reload.
-  useEffect(() => {
-    port.queue().then(setQueue).catch(() => setQueue(null));
-  }, [port, s.queueMoved, status?.sessionPath]);
-
-  const onQueueEdit = useCallback((id: string, text: string) => void port.editQueued(id, text).catch(fail), [port, fail]);
-  const onQueueMove = useCallback((id: string, to: number) => void port.moveQueued(id, to).catch(fail), [port, fail]);
-  const onQueueRetry = useCallback((id: string) => void port.retryQueued(id).catch(fail), [port, fail]);
-  const onQueueRefresh = useCallback((id: string) => void port.refreshQueued(id).catch(fail), [port, fail]);
-  const onQueuePause = useCallback((on: boolean) => void port.setQueuePaused(on).catch(fail), [port, fail]);
-  const onQueueRead = useCallback((id: string) => port.readQueued(id), [port]);
-  // "Send now" means the only thing it can while a turn holds the session: end
-  // that turn, and the queue dispatches this line as the next one. Guidance the
-  // running turn already accepted has to leave it first — a turn that ends
-  // without reading an accepted steer parks it as uncertain and pauses the
-  // whole queue, which is the opposite of sending it.
-  const onQueueSendNow = useCallback(
-    async (item: QueueItem) => {
-      try {
-        if (item.state === "steer_accepted") {
-          const text = await port.readQueued(item.id);
-          await port.cancelQueued(item.id);
-          dispatch({ kind: "__unsent", id: item.id } as never);
-          const id = localId();
-          dispatch({ kind: "__user", text, pending: false, id } as never);
-          const again = await port.queueFollowup(text);
-          if (again?.itemId) dispatch({ kind: "__queued", id, itemId: again.itemId, queued: "followup" } as never);
-        }
-        await port.cancel();
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [port, fail],
-  );
-  // The panel knows the entry, never the row the composer minted for it, so
-  // taking one back here has to name it the way the kernel does. __unsent takes
-  // either name, and the queue is now the only place a waiting line is shown.
-  const onQueueCancel = useCallback(
-    (itemId: string) => {
-      port
-        .cancelQueued(itemId)
-        .then(() => dispatch({ kind: "__unsent", id: itemId } as never))
-        .catch(fail);
-    },
-    [port, fail],
-  );
+  const { queue, onQueueEdit, onQueueMove, onQueueRetry, onQueueRefresh, onQueuePause, onQueueRead, onQueueSendNow, onQueueCancel } = useQueueActions({
+    port,
+    dispatch,
+    fail,
+    moved: s.queueMoved,
+    sessionPath: status?.sessionPath,
+  });
 
   // The kernel refuses a submit it cannot start with a code, not a sentence:
   // the words are fine, the timing is not. Queueing them is what that code
@@ -488,102 +445,13 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     [port, refreshStatus],
   );
 
-  // Transcript rows are memoised on their item; a callback rebuilt every render
-  // would defeat that on the two cards that take one.
-  const onApprove = useCallback(
-    async (itemId: string, id: string, v: ApprovalVerdict) => {
-      try {
-        await port.approve(id, v);
-        dispatch({ kind: "__decided", id: itemId, verdict: v } as never);
-        refreshStatus();
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [port, refreshStatus, fail],
-  );
-
-  const onFullAccess = useCallback(
-    async (itemId: string) => {
-      try {
-        await port.setApprovalMode("yolo");
-        dispatch({ kind: "__decided", id: itemId, verdict: "yolo" } as never);
-        refreshStatus();
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [port, refreshStatus, fail],
-  );
-
-  // The plan gate has three outcomes the kernel keeps apart, and only one of
-  // them is "allow". The other two both deny at the gate and differ in where
-  // they leave you: revise stays in plan mode so the next thing you type is
-  // feedback on the plan, exit leaves it. Leaving plan mode is the frontend's
-  // job — the kernel does not clear the flag when a plan is approved, which is
-  // why the chat TUI clears it here too. Studio never did, so approving a plan
-  // executed it and then planned the next turn all over again.
-  const onPlan = useCallback(
-    async (itemId: string, id: string, action: PlanAction) => {
-      // The three outcomes are three kernel transitions, so they go back whole
-      // rather than as an allow/deny pair. The kernel moves the lifecycle
-      // itself — setting plan mode from here would race its own transition — and
-      // a stale decision is ordinary concurrency: say so, then re-read the
-      // projection instead of binding this answer to whatever is open now.
-      try {
-        await port.planDecision(id, action);
-        dispatch({ kind: "__decided", id: itemId, verdict: action } as never);
-        refreshStatus();
-        // Revising is done by talking, so put the cursor where the talking happens.
-        if (action === "revise") setAskFocus((n) => n + 1);
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [port, refreshStatus, fail],
-  );
-
-  // Taking it back is only cheap while the conversation that caused it is still
-  // on screen; the card stays, marked, so the record of what happened survives.
-  const onForget = useCallback(
-    (itemId: string, name: string) => {
-      port.forgetMemory(name).then(() => dispatch({ kind: "__forgot", id: itemId } as never)).catch(fail);
-    },
-    [port, fail],
-  );
-
-  // An extension action reports back in its own words. Surfacing the result as
-  // a notice keeps it in the transcript where the card that offered it sits.
-  const onExtInvoke = useCallback(
-    (name: string) => {
-      port
-        .invokeExtensionAction(name)
-        .then((message) => {
-          if (message.trim()) dispatch({ kind: "notice", level: "info", text: message });
-        })
-        .catch(fail);
-    },
-    [port, fail],
-  );
-
-  const onExtSubmit = useCallback(
-    (pluginId: string, surfaceId: string, values: Record<string, unknown>) => {
-      port.submitExtensionForm(pluginId, surfaceId, values).catch(fail);
-    },
-    [port, fail],
-  );
-
-  const onAnswer = useCallback(
-    async (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => {
-      try {
-        await port.answer(id, answers);
-        dispatch({ kind: "__decided", id: itemId, answers: answers.map((a) => a.selected) } as never);
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [port, fail],
-  );
+  const { onApprove, onFullAccess, onPlan, onForget, onExtInvoke, onExtSubmit, onAnswer } = useGateActions({
+    port,
+    dispatch,
+    refreshStatus,
+    fail,
+    onRevise: () => setAskFocus((n) => n + 1),
+  });
 
   // Every route into a view goes through one place, so the menu never grows a
   // motion language of its own: it says which view, and this says how a pane

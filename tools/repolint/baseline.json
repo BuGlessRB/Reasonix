@@ -5,16 +5,16 @@
     "claude-dialect": 1,
     "codeowners": 0,
     "commented-code": 0,
-    "complexity": 1385,
+    "complexity": 1383,
     "doc-language": 0,
     "doc-owner": 43,
-    "doc-prose": 2345,
+    "doc-prose": 2327,
     "error-text": 9,
-    "essay": 3154,
-    "file-size": 29902,
+    "essay": 3142,
+    "file-size": 29492,
     "flat-view": 0,
     "frontend-parity": 129,
-    "function-size": 5948,
+    "function-size": 5932,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -75,11 +75,11 @@
     },
     "desktop/frontend-next/src/styles/LAYOUT.md": {
       "doc-owner": 1,
-      "doc-prose": 128
+      "doc-prose": 114
     },
     "desktop/frontend-next/src/styles/TOKENS.md": {
       "doc-owner": 1,
-      "doc-prose": 22
+      "doc-prose": 18
     },
     "desktop/internal/winuninstall/registry_windows.go": {
       "essay": 1
@@ -262,8 +262,8 @@
     },
     "internal/agent/agent.go": {
       "complexity": 37,
-      "essay": 45,
-      "file-size": 1386,
+      "essay": 37,
+      "file-size": 1315,
       "function-size": 102
     },
     "internal/agent/agent_options.go": {
@@ -393,7 +393,7 @@
     "internal/agent/save.go": {
       "complexity": 36,
       "essay": 109,
-      "file-size": 1342,
+      "file-size": 1281,
       "function-size": 95
     },
     "internal/agent/save_test.go": {
@@ -450,7 +450,7 @@
     "internal/agent/task.go": {
       "complexity": 12,
       "essay": 35,
-      "file-size": 1162,
+      "file-size": 1121,
       "function-size": 94,
       "orphan": 1
     },
@@ -465,7 +465,7 @@
     },
     "internal/agent/usecapability.go": {
       "essay": 9,
-      "file-size": 754,
+      "file-size": 713,
       "function-size": 2
     },
     "internal/agent/width.go": {
@@ -562,10 +562,10 @@
       "essay": 15
     },
     "internal/cli/chat_tui.go": {
-      "complexity": 324,
+      "complexity": 322,
       "essay": 109,
-      "file-size": 4629,
-      "function-size": 1277
+      "file-size": 4625,
+      "function-size": 1273
     },
     "internal/cli/chat_tui_paste.go": {
       "essay": 9
@@ -714,7 +714,7 @@
     },
     "internal/config/config.go": {
       "essay": 47,
-      "file-size": 1206
+      "file-size": 1106
     },
     "internal/config/credentials.go": {
       "essay": 1,
@@ -746,8 +746,8 @@
     },
     "internal/config/load.go": {
       "essay": 24,
-      "file-size": 1205,
-      "function-size": 58,
+      "file-size": 1194,
+      "function-size": 46,
       "orphan": 2
     },
     "internal/config/main_test.go": {
@@ -927,7 +927,7 @@
       "frontend-parity": 9
     },
     "internal/control/session_snapshot.go": {
-      "essay": 16,
+      "essay": 14,
       "frontend-parity": 2
     },
     "internal/control/session_write_authority.go": {
@@ -1348,8 +1348,8 @@
       "essay": 7
     },
     "internal/provider/provider.go": {
-      "essay": 39,
-      "file-size": 93
+      "essay": 37,
+      "file-size": 15
     },
     "internal/provider/responses/responses.go": {
       "essay": 11,
@@ -1512,7 +1512,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 404
+      "file-size": 401
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3

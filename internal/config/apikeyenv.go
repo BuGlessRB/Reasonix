@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf16"
@@ -41,3 +42,8 @@ func fnv1a32Hex(s string) string {
 	}
 	return fmt.Sprintf("%08x", hash)
 }
+
+// ErrInvalidCredentialKey is refused when a slot name is not one an environment
+// variable may carry. Callers tell it apart to say which field the person has
+// to change: the name a slot is derived from, never the key they pasted.
+var ErrInvalidCredentialKey = errors.New("credential slot name is not a usable environment variable")

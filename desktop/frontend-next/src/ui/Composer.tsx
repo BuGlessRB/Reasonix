@@ -5,60 +5,13 @@ import type { AgentPort, ModelEntry, SessionStatus, Attachment } from "../port/p
 import { Picker } from "./Menu";
 import { Policy } from "./Policy";
 import { modelMenu } from "./modelmenu";
+import { effortMenu, effortReading, effortsFor } from "./effort";
 import { CompletionMenu, useCompletion } from "./Completion";
 import { useIme } from "./ime";
 import { countLines, pasteIsLong, planTone, planVerb } from "./intake";
 import { useIntake } from "./useIntake";
 import type { Dropped } from "./filedrop";
 import { StudioIcon } from "./StudioIcon";
-
-// Only the ladder the kernel would accept for the model in hand. A fixed list
-// here offered rungs a given model does not have, and picking one looked like
-// the control was dead: the request was refused downstream, with nothing on the
-// composer to say so. The kernel's list already opens with "auto" — prepending
-// another one put the same rung in the menu twice. The fallback is for a model
-// that declares nothing at all, and only then.
-const EFFORT_FALLBACK = ["auto", "low", "medium", "high", "xhigh", "max"];
-
-function effortsFor(models: ModelEntry[], ref?: string): string[] {
-  const model = models.find((m) => m.ref === ref);
-  // A model that is in the list and names no levels has none: the host omits
-  // the field exactly when it would refuse every level but auto. Filling that
-  // in from the fallback is what put a full ladder in front of a relay whose
-  // every rung came back refused. The fallback is for a list not answered yet.
-  if (model) return model.efforts ?? [];
-  return EFFORT_FALLBACK;
-}
-
-function effortReading(value?: string): string {
-  const id = (value || "auto").toLowerCase();
-  const label = ({ auto: "自动", low: "快速", medium: "平衡", high: "深入", xhigh: "极致", max: "极致" } as Record<string, string>)[id] ?? id;
-  const raw = id === "auto" ? "Auto" : id.charAt(0).toUpperCase() + id.slice(1);
-  return `${t(label)} · ${raw}`;
-}
-
-function effortLabel(value: string): string {
-  const id = value.toLowerCase();
-  return t(({ auto: "自动", disabled: "关闭", low: "快速", medium: "平衡", high: "深入", xhigh: "极致", max: "极致" } as Record<string, string>)[id] ?? id);
-}
-
-function effortApi(value: string): string {
-  const id = value.toLowerCase();
-  return id === "xhigh" ? "XHigh" : id.charAt(0).toUpperCase() + id.slice(1);
-}
-
-function effortDescription(value: string): string {
-  const id = value.toLowerCase();
-  return t(({
-    auto: "使用模型默认或自适应策略，按任务复杂度调整",
-    disabled: "不发送推理强度参数，使用服务端默认设置",
-    low: "轻量思考，适合改写、提取和明确的小任务",
-    medium: "兼顾响应速度与可靠性，适合大多数任务",
-    high: "投入更多时间分析复杂上下文与执行方案",
-    xhigh: "用于最复杂的问题，等待时间与消耗最高",
-    max: "用于最复杂的问题，等待时间与消耗最高",
-  } as Record<string, string>)[id] ?? value);
-}
 
 interface Props {
   port: AgentPort;
@@ -727,32 +680,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
                 title={t("推理强度")}
                 current={declared ? status.effort || "auto" : ""}
                 pending={busy["effort"]}
-                items={[
-                  { value: "__effort-heading", label: t("推理强度"), right: modelLb, header: true },
-                  // An endpoint that reported no levels has not said "none" —
-                  // it has said nothing. Rather than invent a rung, the one row
-                  // here goes where the capability is actually declared: a menu
-                  // of statements with nothing to press is a dead end.
-                  ...(declared
-                    ? []
-                    : [{
-                        value: "__effort-declare",
-                        label: t("去「模型来源」声明档位"),
-                        desc: t("这个端点没有报告推理档位。中转站通常不转发这项能力，在来源的「请求与能力」里可以声明。"),
-                      }]),
-                  ...efforts.map((value) => ({
-                    value,
-                    label: effortLabel(value),
-                    meta: effortApi(value),
-                    badge: value === "auto" ? t("推荐") : undefined,
-                    recommended: value === "auto",
-                    strength: value === "disabled" ? 0 : ({ auto: 1, low: 1, medium: 2, high: 3, xhigh: 4, max: 4 } as Record<string, number>)[value.toLowerCase()] ?? 1,
-                    desc: effortDescription(value),
-                  })),
-                  ...(declared
-                    ? [{ value: "__effort-note", label: t("仅显示当前模型实际支持的档位。"), right: t("按模型生效"), header: true }]
-                    : []),
-                ]}
+                items={effortMenu(efforts, modelLb, "__effort-declare")}
                 onPick={(value) => value === "__effort-declare" ? onSettings("model") : change("effort", () => port.setEffort(value))}
                 label={<><span>{declared ? effortReading(status.effort) : t("未声明")}</span><StudioIcon name="down" /></>}
               />

@@ -192,9 +192,7 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 	// Record the listing-only sidecar fields (model, preview, user-turn count)
 	// straight from the in-memory conversation, so the sidebar and resume picker
 	// never have to decode the whole .jsonl just to show them. markActivity bumps
-	// UpdatedAt exactly like the previous TouchBranchMeta did; false preserves it
-	// like SetBranchModelPreserveUpdated. The single write subsumes the old
-	// EnsureBranchMeta / SetBranchModel / TouchBranchMeta sequence.
+	// UpdatedAt; false preserves it.
 	preview, turns := agent.SessionPreviewFromMessages(s.Snapshot())
 	if err := agent.UpdateSessionMeta(path, modelRef, preview, turns, markActivity); err != nil {
 		return transcriptDurable, err

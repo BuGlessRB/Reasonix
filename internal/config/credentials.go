@@ -2,7 +2,6 @@ package config
 
 import (
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -318,11 +317,6 @@ func storeCredentialAssignmentsLocked(assignments map[string]string) (string, er
 	pinCredentialAssignments(assignments)
 	return UserCredentialsPath(), nil
 }
-
-// ErrInvalidCredentialKey is refused when a slot name is not one an environment
-// variable may carry. Callers tell it apart to say which field the person has
-// to change: the name a slot is derived from, never the key they pasted.
-var ErrInvalidCredentialKey = errors.New("credential slot name is not a usable environment variable")
 
 func SetCredential(key, value string) (string, error) {
 	key = strings.TrimSpace(key)
