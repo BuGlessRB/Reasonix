@@ -31,6 +31,7 @@ if [ "$1" = "serve" ] && [ "$2" = "--help" ]; then
   echo "  -port-file string"
   echo "  -pid-file string"
   echo "  -provider-broker reasonix remote"
+  echo "  -provider-broker-file string"
   echo "  -provider-broker-token-file string"
   exit 0
 fi
