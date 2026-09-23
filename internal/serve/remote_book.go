@@ -248,11 +248,15 @@ func (h *Hub) remoteTree(w http.ResponseWriter, r *http.Request) {
 	host := r.PathValue("host")
 	ep, ok := h.anyRemotePane(host)
 	if !ok {
-		// Not an error to fix but a step to take: opening its default workspace
-		// is what puts a kernel over there to ask.
-		refuse(w, http.StatusConflict, "remote.not_connected",
-			"open a workspace on this machine first", map[string]any{"host": host})
-		return
+		// No pane holds a link, so this read takes one for itself and gives it
+		// back: the far kernel outlives the link, and its book is on its disk.
+		attached, release, err := h.opts.Remote.Attach(operationContext(r), host, "")
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		defer release()
+		ep = attached
 	}
 	var tree json.RawMessage
 	if err := farRequest(r.Context(), ep, http.MethodGet, "/tree", nil, &tree); err != nil {

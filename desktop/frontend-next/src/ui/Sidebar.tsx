@@ -32,6 +32,7 @@ interface Props {
   remoteTrees: Record<string, TreeWorkspace[] | null>;
   reloadRemotes: () => Promise<void>;
   reloadRemoteTrees: () => Promise<void>;
+  readRemoteTree: (host: string) => Promise<void>;
   reloadTree: () => Promise<void>;
   adder: Adder;
   onOpen: (req: { root?: string; sessionPath?: string }) => Promise<void>;
@@ -68,6 +69,7 @@ export function Sidebar({
   remoteTrees,
   reloadRemotes,
   reloadRemoteTrees,
+  readRemoteTree,
   reloadTree,
   adder,
   onOpen,
@@ -227,6 +229,7 @@ export function Sidebar({
             reload={reloadRemotes}
             trees={remoteTrees}
             reloadTrees={reloadRemoteTrees}
+            readTree={readRemoteTree}
             onError={onError}
           />
         ) : null}

@@ -111,4 +111,6 @@ export const EN_REMOTE: Record<string, string> = {
   "{name} 无法连通": "the {name} route is closed",
   "可以连接 —— 远端已有内核，或可安装一个": "Ready — there is a kernel there, or one can be installed",
   "无法连接 —— 解决上述任意一项即可": "Not ready — clearing any one of the above is enough",
+  "读取 {name} 上的会话": "Read the sessions on {name}",
+  "刷新 {name} 上的会话": "Refresh the sessions on {name}",
 };

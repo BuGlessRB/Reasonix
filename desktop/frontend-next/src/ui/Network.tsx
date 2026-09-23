@@ -21,7 +21,7 @@ const STEP_LABEL: Record<string, string> = {
 
 const TYPES = ["http", "https", "socks5", "socks5h"];
 
-export function Network({ port }: { port: AgentPort }) {
+export function Network({ port, host = "" }: { port: AgentPort; host?: string }) {
   const [net, setNet] = useState<NetworkSettings | null>(null);
   const [password, setPassword] = useState("");
   const [clearPassword, setClear] = useState(false);
@@ -68,6 +68,9 @@ export function Network({ port }: { port: AgentPort }) {
 
   return (
     <div className="net">
+      {host && (
+        <p className="note">{t("以下是 {host} 上的网络设置。本机的代理需要在打开本机会话时设置。", { host })}</p>
+      )}
       <div className="seg" data-text role="radiogroup" aria-label={t("代理模式")}>
         {MODES.map(([id, label]) => (
           <button key={id} role="radio" aria-checked={net.mode === id} onClick={() => patch({ mode: id })}>

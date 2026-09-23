@@ -168,38 +168,43 @@ func TestEditingAHostKeepsForwardsThePageCannotSee(t *testing.T) {
 	}
 }
 
-// The far machine's own workspace list, read through a pane already open on
-// it. Without one there is no kernel over there to ask, and saying so beats an
-// empty list that reads as "this machine has nothing".
-func TestRemoteTreeIsReadThroughAnOpenPane(t *testing.T) {
+// The far machine's own workspace list. With no pane open the read takes a link
+// for itself and gives it back, so the book of a machine that is not connected
+// can still be listed, and listing it opens nothing.
+func TestRemoteTreeIsReadWithOrWithoutAnOpenPane(t *testing.T) {
 	writeOpenableConfig(t)
 	far := NewHub(HubOptions{})
 	defer far.Shutdown()
 	farSide := httptest.NewServer(far.Handler())
 	defer farSide.Close()
 
+	var attached, released int
 	near := NewHub(HubOptions{Remote: &stubAttacher{
 		attach: func(host, workspace string) (RemoteEndpoint, func(), error) {
+			attached++
 			return RemoteEndpoint{
 				Host: host, Workspace: workspace,
 				Addr: farSide.Listener.Addr().String(), Token: "t",
-			}, func() {}, nil
+			}, func() { released++ }, nil
 		},
 	}})
 	nearSide := httptest.NewServer(near.Handler())
 	defer nearSide.Close()
 
+	panes := len(near.Runtimes())
 	resp, err := http.Get(nearSide.URL + "/remotes/gpu-box/tree")
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := struct {
-		Code string `json:"code"`
-	}{}
-	_ = json.NewDecoder(resp.Body).Decode(&body)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusConflict || body.Code != "remote.not_connected" {
-		t.Fatalf("unconnected host = %d/%q, want 409/remote.not_connected", resp.StatusCode, body.Code)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unconnected host tree = %d, want 200", resp.StatusCode)
+	}
+	if attached != 1 || released != 1 {
+		t.Fatalf("link taken %d and given back %d times, want once each", attached, released)
+	}
+	if got := len(near.Runtimes()); got != panes {
+		t.Fatalf("reading the book published a pane: %d runtimes, want %d", got, panes)
 	}
 
 	workspace := testenv.TempDir(t)

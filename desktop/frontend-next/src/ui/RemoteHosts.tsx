@@ -27,6 +27,8 @@ interface Props {
   // stale is the same event — a turn ending — and one owner answers for both.
   trees: Record<string, TreeWorkspace[] | null>;
   reloadTrees: () => Promise<void>;
+  // One machine's book, read whether or not a pane is open on it.
+  readTree: (host: string) => Promise<void>;
   onError: (e: unknown) => void;
 }
 
@@ -117,7 +119,7 @@ function note(host: RemoteHost): string {
   }
 }
 
-function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload, trees, reloadTrees, onError }: Props) {
+function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload, trees, reloadTrees, readTree, onError }: Props) {
   const [busy, setBusy] = useState("");
   // The machine whose folder picker is open, empty for none. One at a time:
   // it is a dialog over the window, not a panel inside a row.
@@ -151,6 +153,17 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
     try {
       await hub.removeRemoteWorkspace(host, dir);
       await reload();
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const readBook = async (host: string) => {
+    setBusy("read:" + host);
+    try {
+      await readTree(host);
     } catch (e) {
       onError(e);
     } finally {
@@ -224,6 +237,26 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
               {(note(host) || panes.length > 0) && (
                 <span className="rmtsub">{note(host) || t("{n} 会话", { n: panes.length })}</span>
               )}
+              <span className="machacts">
+              {/* Reads what the machine holds without opening anything on it;
+                  the same button re-reads once the list is there. */}
+              <button
+                className="machpick"
+                data-action="remote.read"
+                data-target={host.name}
+                data-busy={busy === "read:" + host.name ? "" : undefined}
+                disabled={!!busy}
+                title={t(tree ? "刷新 {name} 上的会话" : "读取 {name} 上的会话", { name: host.name })}
+                aria-label={t(tree ? "刷新 {name} 上的会话" : "读取 {name} 上的会话", { name: host.name })}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  void readBook(host.name);
+                }}
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M12.6 5.4A5 5 0 1 0 13 9.4M12.6 2.6v2.8H9.8" />
+                </svg>
+              </button>
               {/* Always drawn, never only on hover: an entry nobody can see is
                   read as a feature this build does not have. */}
               <button
@@ -240,6 +273,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                   <path d="M8 3.7v8.6M3.7 8h8.6" />
                 </svg>
               </button>
+              </span>
             </div>
             {hint && !folded ? <div className="rmtnote">{hint}</div> : null}
             {working && host.step && !folded ? <Steps step={host.step} detail={host.detail} /> : null}

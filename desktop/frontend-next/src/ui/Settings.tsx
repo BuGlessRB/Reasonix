@@ -67,6 +67,10 @@ interface Props {
   hub: HubPort;
   onError: (e: unknown) => void;
   port: AgentPort;
+  // Network belongs to a machine rather than a pane; host names it when that
+  // machine is not this one.
+  networkPort?: AgentPort;
+  networkHost?: string;
   status: SessionStatus | null;
   theme: string;
   reloadThemes: () => void;
@@ -86,7 +90,7 @@ interface Props {
   reloadAccount: () => void;
   workspaceRoot?: string;
 }
-export function Settings({ hub, onError, port, status, theme, onTheme, contrast, onContrast, weight, onWeight, look, onLook, onClose, onChanged, onSessionsRecovered, reloadThemes, at: opened, account: acct, accountUnread, reloadAccount, workspaceRoot }: Props) {
+export function Settings({ hub, onError, port, networkPort, networkHost, status, theme, onTheme, contrast, onContrast, weight, onWeight, look, onLook, onClose, onChanged, onSessionsRecovered, reloadThemes, at: opened, account: acct, accountUnread, reloadAccount, workspaceRoot }: Props) {
   const [openedSection, openedAnchor = ""] = (opened ?? "").split(":", 2);
   const [at, setAt] = useState<Section>((openedSection as Section) || "session");
   // 搜索的语料是这张表，不是屏幕上的 DOM：分区是按需挂载的，读 DOM 就只搜得到
@@ -697,7 +701,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
               title={t("网络")}
               hint={t("模型请求、MCP 远程服务和网页抓取都经由此处。配置错误通常表现为聊天无响应，建议先测试连接，测试会指出中断的环节。")}
             >
-              <Network port={port} />
+              <Network port={networkPort ?? port} host={networkHost ?? ""} />
             </Group>
           )}
 

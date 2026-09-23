@@ -175,7 +175,7 @@ export function App({ hub }: { hub: HubPort }) {
 
   // Held beside this machine's tree, and re-read on the same beat: see
   // useMachineBooks for why that beat is one rather than two.
-  const { trees: remoteTrees, reload: reloadRemoteTrees } = useMachineBooks(hub, remotes);
+  const { trees: remoteTrees, reload: reloadRemoteTrees, read: readRemoteTree } = useMachineBooks(hub, remotes);
 
   // Panes and tree move together: opening a session marks its row live, closing
   // one hands the row back.
@@ -248,6 +248,12 @@ export function App({ hub }: { hub: HubPort }) {
     return map;
   }, [hub, runtimes]);
   const activePort = panePorts.get(active) ?? panePorts.values().next().value ?? null;
+  // Model requests from a remote pane leave through this machine's broker, so
+  // this machine's network is the one a person configures; a remote pane is
+  // used only when no local one is open, and is named as such.
+  const localRt = runtimes.find((rt) => rt.id === active && !rt.host) ?? runtimes.find((rt) => !rt.host);
+  const networkPort = localRt ? panePorts.get(localRt.id) ?? null : activePort;
+  const networkHost = localRt ? "" : runtimes.find((rt) => rt.id === active)?.host ?? "";
 
   useLaunchHealth(activePort, setup, welcomed);
 
@@ -599,6 +605,7 @@ export function App({ hub }: { hub: HubPort }) {
           remoteTrees={remoteTrees}
           reloadRemotes={reloadRemotes}
           reloadRemoteTrees={reloadRemoteTrees}
+          readRemoteTree={readRemoteTree}
           reloadTree={reloadTree}
           adder={adder}
           onOpen={openPane}
@@ -708,6 +715,8 @@ export function App({ hub }: { hub: HubPort }) {
             hub={hub}
             onError={fail}
             port={activePort}
+            networkPort={networkPort ?? activePort}
+            networkHost={networkHost}
             status={report.status}
             theme={theme}
             onTheme={setTheme}
