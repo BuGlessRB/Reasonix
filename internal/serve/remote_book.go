@@ -106,11 +106,10 @@ func (h *Hub) removeRemoteHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(body.Name)
-	// A pane is still driving a kernel over there. Removing the entry would
-	// leave a live link nothing in the book accounts for.
-	if open := h.remotePanes(name); open > 0 {
-		refuse(w, http.StatusConflict, "remote.has_open_panes",
-			"close this machine's panes before removing it", map[string]any{"n": open})
+	// Panes on the machine are closed first, so no live link outlives its entry
+	// in the book; one mid-turn is refused.
+	onHost := func(rt *Runtime) bool { ep, ok := rt.Remote(); return ok && ep.Host == name }
+	if !h.releaseOrRefuse(w, r, "remote.running", "a conversation on this machine is running; stop it first", h.panesWhere(onHost)) {
 		return
 	}
 	err := config.EditUserConfigWithCredentials(func(c *config.Config) ([]config.CredentialChange, error) {
@@ -148,8 +147,11 @@ func (h *Hub) removeRemoteWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if n := h.remotePanesIn(host, dir); n > 0 {
-		busy(w, "workspace.has_open_panes", "close this folder's panes first", map[string]any{"n": n})
+	inFolder := func(rt *Runtime) bool {
+		ep, ok := rt.Remote()
+		return ok && ep.Host == host && ep.Workspace == dir
+	}
+	if !h.releaseOrRefuse(w, r, "workspace.running", "a conversation in this folder is running; stop it first", h.panesWhere(inFolder)) {
 		return
 	}
 	h.commitRemoteWorkspace(w, host, func(c *config.Config) { c.RemoveRemoteWorkspace(host, dir) })
@@ -312,28 +314,6 @@ func (h *Hub) anyRemotePane(host string) (RemoteEndpoint, bool) {
 		}
 	}
 	return RemoteEndpoint{}, false
-}
-
-// remotePanesIn counts panes driving one folder on one machine, which is what
-// makes dropping that folder's row a question rather than a write.
-func (h *Hub) remotePanesIn(host, workspace string) int {
-	n := 0
-	for _, rt := range h.Runtimes() {
-		if ep, ok := rt.Remote(); ok && ep.Host == host && ep.Workspace == workspace {
-			n++
-		}
-	}
-	return n
-}
-
-func (h *Hub) remotePanes(host string) int {
-	n := 0
-	for _, rt := range h.Runtimes() {
-		if ep, ok := rt.Remote(); ok && ep.Host == host {
-			n++
-		}
-	}
-	return n
 }
 
 func refuseNoRemote(w http.ResponseWriter) {

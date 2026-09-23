@@ -259,11 +259,9 @@ function Conn({
         <button className="sa lnk" data-keep data-action="provider.probe" onClick={check} disabled={busy !== ""}>
           {t(checking ? "测试中…" : "测试连接")}
         </button>
-        {!entry.inUse && (
-          <button className="sa lnk" data-action="provider.remove" data-target={entry.name} onClick={() => onRemove(entry.name)} disabled={busy !== ""}>
-            {t("删除")}
-          </button>
-        )}
+        <button className="sa lnk" data-action="provider.remove" data-target={entry.name} onClick={() => onRemove(entry.name)} disabled={busy !== ""}>
+          {t("删除")}
+        </button>
       </div>
       {(a.kinds.length > 1 || entry.canWebSearch || entry.canSetThinking || entry.canSetContinuation) && (
         <details className="provider-options">

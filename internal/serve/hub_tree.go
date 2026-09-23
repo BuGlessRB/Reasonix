@@ -157,8 +157,8 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 }
 
 // archiveSession changes catalog visibility without moving or deleting data.
-// An open pane is closed by the client first; the server still refuses one to
-// protect callers that bypass the UI from hiding a conversation being written.
+// An idle pane on the session is closed first; one that is running is refused,
+// since archiving would hide a conversation still being written.
 func (h *Hub) archiveSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Path     string `json:"path"`
@@ -173,8 +173,9 @@ func (h *Hub) archiveSession(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session path could not be resolved", nil)
 		return
 	}
-	if h.openSessions()[agent.CanonicalSessionPath(path)] != "" {
-		busy(w, "session.has_open_pane", "close this session's pane first", nil)
+	if id := h.openSessions()[agent.CanonicalSessionPath(path)]; id != "" &&
+		!h.releaseOrRefuse(w, r, "session.running", "this conversation is running; stop it first",
+			h.panesWhere(func(rt *Runtime) bool { return rt.ID == id })) {
 		return
 	}
 	if !h.ownsSessionDir(filepath.Dir(path)) {
@@ -284,17 +285,17 @@ func (h *Hub) removeWorkspace(w http.ResponseWriter, r *http.Request) {
 		missingField(w, "path")
 		return
 	}
-	if n := h.rootPanes(dir); n > 0 {
-		busy(w, "workspace.has_open_panes", "close this workspace's panes first", map[string]any{"n": n})
+	inFolder := func(rt *Runtime) bool { return rt.Local() && rt.Server.Controller().WorkspaceRoot() == dir }
+	if !h.releaseOrRefuse(w, r, "workspace.running", "a conversation in this folder is running; stop it first", h.panesWhere(inFolder)) {
 		return
 	}
 	forgetWorkspace(dir)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// removeSession deletes a conversation the sidebar lists. A session a pane is
-// driving is refused rather than pulled out from under it: the pane owns the
-// teardown of its own jobs, so closing it first is what makes this safe.
+// removeSession deletes a conversation the sidebar lists. A pane showing it is
+// closed first, which lets the pane tear down its own jobs; one mid-turn is
+// refused rather than pulled out from under the work.
 func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Path string `json:"path"`
@@ -308,8 +309,9 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session path could not be resolved", nil)
 		return
 	}
-	if h.openSessions()[agent.CanonicalSessionPath(path)] != "" {
-		busy(w, "session.has_open_pane", "close this session's pane first", nil)
+	if id := h.openSessions()[agent.CanonicalSessionPath(path)]; id != "" &&
+		!h.releaseOrRefuse(w, r, "session.running", "this conversation is running; stop it first",
+			h.panesWhere(func(rt *Runtime) bool { return rt.ID == id })) {
 		return
 	}
 	dir := filepath.Dir(path)

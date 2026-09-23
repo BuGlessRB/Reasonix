@@ -150,7 +150,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
       // pull a folder out from under a pane that is writing, and leaving that to
       // the reader only means asking which of eight tabs belong to this one.
       const open = panesOf(ws.root);
-      if (open.length) await onClose(open);
+      if (open.length && liveIds(open).length === 0) await onClose(open);
       await hub.removeWorkspace(ws.root);
       await reload();
     } catch (e) {
@@ -165,9 +165,10 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
     }
     setConfirm("");
     try {
-      // Waited on, not just fired: the pane's runtime holds the transcript's
-      // lease until it is down, and the kernel will not erase a held one.
-      if (session.runtimeId) await onClose([session.runtimeId]);
+      // An idle pane is closed and waited on, since its runtime holds the
+      // transcript's lease until it is down. A running one is left for the
+      // kernel to refuse: a delete never stops work in progress.
+      if (session.runtimeId && liveIds([session.runtimeId]).length === 0) await onClose([session.runtimeId]);
       await hub.removeSession(session.path);
       await reload();
     } catch (e) {
@@ -352,7 +353,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         <Confirm
                           key={session.path}
                           what={t("删除「{name}」？", { name: session.title || session.name })}
-                          hint={t(session.runtimeId ? "它的面板会先关掉" : "连同其记录一并删除")}
+                          hint={t(!session.runtimeId ? "连同其记录一并删除" : liveIds([session.runtimeId]).length ? "正在运行，停止后才能删除" : "它的面板会先关掉")}
                           go={t("删除")}
                           danger
                           onGo={() => void dropSession(session)}
@@ -609,7 +610,7 @@ export function newlyDone(
 export function removeHint(panes: number, live: number): string {
   if (panes === 0) return t("不会删除任何文件");
   if (live === 0) return t("将先关闭 {n} 个面板；不会删除任何文件", { n: panes });
-  return t("将先关闭 {n} 个面板，其中 {live} 个仍在运行；不会删除任何文件", { n: panes, live });
+  return t("其中 {live} 个对话正在运行，停止后才能移除", { live });
 }
 
 // 确认不跟原来那行抢位置：把「×」换成「移除」两个字，宽度一变就把文件夹名挤扁

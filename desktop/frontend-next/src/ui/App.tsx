@@ -452,10 +452,13 @@ export function App({ hub }: { hub: HubPort }) {
   // while the screen went on showing what they were when it opened.
   const [settingsPulse, setSettingsPulse] = useState(0);
   const onSettingsChanged = useCallback(() => {
+    // Removing the last model source is a setting too, and it has to land the
+    // window back on connecting one rather than on a composer with no model.
+    activePort?.providerSetup().then(setSetup).catch(() => {});
     reloadAccount();
     setSettingsPulse((n) => n + 1);
     void reloadPanes();
-  }, [reloadAccount, reloadPanes]);
+  }, [activePort, reloadAccount, reloadPanes]);
 
   // A pane's label comes from the tree row it opened, so the sidebar and the
   // tab never disagree. An unnamed session gets a number rather than a third

@@ -330,20 +330,37 @@ func (s *Server) removeProvider(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusBadRequest, "provider.name_required", "a provider name is required", nil)
 		return
 	}
-	if current, _, _ := strings.Cut(currentModelRef(s.ctl()), "/"); current == name {
-		// Removing it would leave the conversation on a model that no longer
-		// resolves, and the next turn would fail instead of this call.
-		busy(w, "provider.model_in_use", "switch to another model before removing the one in use", nil)
+	// The conversation on this provider moves to what remains once it is gone.
+	// Only work in progress stops that; an open, idle pane does not.
+	current, _, _ := strings.Cut(currentModelRef(s.ctl()), "/")
+	inUse := current == name
+	if inUse && controllerHasActiveRuntimeWork(s.ctl()) {
+		busy(w, "provider.running", "the conversation on this model is running; stop it first", nil)
 		return
 	}
 	cfg := config.LoadForEdit(config.UserConfigPath())
 	if err := cfg.RemoveProvider(name); err != nil {
-		writeErr(w, http.StatusBadRequest, err)
+		switch {
+		case errors.Is(err, config.ErrProviderNotFound):
+			// Already gone is the state the caller asked for: a second click, or
+			// another window that got there first.
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			writeErr(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 	if err := cfg.SaveTo(config.UserConfigPath()); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
+	}
+	// With nothing left there is no model to move to; the window finds the
+	// empty config and asks for a connection, as it does on a first launch.
+	if inUse && cfg.DefaultModel != "" {
+		if err := s.switchModel(r.Context(), cfg.DefaultModel); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

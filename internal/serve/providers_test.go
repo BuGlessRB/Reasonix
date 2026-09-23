@@ -237,10 +237,10 @@ func TestSaveProviderRejectsWhatItCannotStore(t *testing.T) {
 	}
 }
 
-// Removing the provider the conversation is on would leave the session pointing
-// at a model that no longer resolves, and the next turn — not this call — would
-// be the thing that failed.
-func TestRemoveProviderRefusesTheOneInUse(t *testing.T) {
+// The provider an idle conversation is on goes when asked to. With nothing
+// else configured the default is cleared, which is what sends the window back
+// to connecting a model rather than leaving it on one that no longer resolves.
+func TestRemoveProviderInUseGoesWhenIdle(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
 	srv := httptest.NewServer(s.Handler())
@@ -248,8 +248,36 @@ func TestRemoveProviderRefusesTheOneInUse(t *testing.T) {
 
 	resp := postProvider(t, srv.URL, "/providers/remove", `{"name":"existing"}`)
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("removing the in-use provider = %d, want 409", resp.StatusCode)
+	if resp.StatusCode != http.StatusNoContent {
+		b, _ := readAllString(resp)
+		t.Fatalf("removing the idle in-use provider = %d: %s", resp.StatusCode, b)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.Provider("existing"); ok || cfg.DefaultModel != "" {
+		t.Fatalf("provider kept or default left pointing at it: default=%q", cfg.DefaultModel)
+	}
+}
+
+// With another source configured, the conversation moves onto it.
+func TestRemoveProviderInUseMovesTheConversation(t *testing.T) {
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	add := postProvider(t, srv.URL, "/providers", `{"name":"spare","kind":"openai","baseUrl":"https://x.invalid","apiKey":"sk-spare","models":["m"]}`)
+	add.Body.Close()
+	resp := postProvider(t, srv.URL, "/providers/remove", `{"name":"existing"}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		b, _ := readAllString(resp)
+		t.Fatalf("remove = %d: %s", resp.StatusCode, b)
+	}
+	if got, _, _ := strings.Cut(currentModelRef(s.ctl()), "/"); got != "spare" {
+		t.Fatalf("conversation is on %q, want it moved to spare", currentModelRef(s.ctl()))
 	}
 }
 

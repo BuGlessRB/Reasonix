@@ -476,6 +476,9 @@ func (c *Config) modelRefTargetsProvider(ref, name string) bool {
 // are migrated to the first remaining configured provider when possible. The
 // default model is required, so removal is refused when no fallback exists;
 // optional planner/subagent refs are cleared instead of being left dangling.
+// ErrProviderNotFound is a removal of a provider the file does not hold.
+var ErrProviderNotFound = errors.New("no such provider")
+
 func (c *Config) RemoveProvider(name string) error {
 	name = strings.TrimSpace(name)
 	idx := -1
@@ -486,7 +489,7 @@ func (c *Config) RemoveProvider(name string) error {
 		}
 	}
 	if idx < 0 {
-		return fmt.Errorf("remove provider: no provider %q", name)
+		return fmt.Errorf("remove provider %q: %w", name, ErrProviderNotFound)
 	}
 
 	defaultRefsProvider := c.modelRefTargetsProvider(c.DefaultModel, name)
@@ -503,10 +506,6 @@ func (c *Config) RemoveProvider(name string) error {
 	if defaultRefsProvider || plannerRefsProvider || subagentRefsProvider || len(subagentModelRefsProvider) > 0 {
 		fallback = c.providerRemovalFallback(name)
 	}
-	if defaultRefsProvider && fallback == "" {
-		return fmt.Errorf("remove provider: %q is referenced by default_model and no other configured provider exists", name)
-	}
-
 	c.Providers = append(c.Providers[:idx], c.Providers[idx+1:]...)
 
 	if defaultRefsProvider {

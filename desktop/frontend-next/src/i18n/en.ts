@@ -280,8 +280,6 @@ export const EN: Record<string, string> = {
   "在 {name} 下新建会话": "Start a new session in {name}",
   "关闭这个会话面板": "Close this pane",
   "不会删除任何文件": "No files are deleted",
-  "将先关闭 {n} 个面板，其中 {live} 个仍在运行；不会删除任何文件":
-    "Closes {n} panes first, {live} of them mid-turn; no files are deleted",
   "将先关闭 {n} 个面板；不会删除任何文件": "Closes {n} panes first; no files are deleted",
 
   // ── 待发队列 ─────────────────────────────────────────────────────
@@ -1031,6 +1029,8 @@ export const EN: Record<string, string> = {
   "删除会话：{title}": "Delete session: {title}",
   "会话在文件夹里打开，先添加一个": "A session opens in a folder; add one first",
   "添加文件夹": "Add folder",
+  "其中 {live} 个对话正在运行，停止后才能移除": "{live} of them are running; stop them before removing",
+  "正在运行，停止后才能删除": "Running; stop it before deleting",
   "会话操作": "Session actions",
   "执行中": "Running",
   "执行过程": "Activity",

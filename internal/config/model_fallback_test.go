@@ -1,7 +1,6 @@
 package config
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -280,21 +279,23 @@ func TestRemoveProviderMigratesDanglingRefs(t *testing.T) {
 	}
 }
 
-func TestRemoveProviderBlocksDefaultWithoutFallback(t *testing.T) {
+// Removing the default's provider with nothing to fall back to is still a
+// removal the person asked for: it goes, and the default is cleared rather
+// than left naming a provider that no longer exists.
+func TestRemoveProviderClearsDefaultWithoutFallback(t *testing.T) {
 	c := testModelFallbackConfig(t)
 	c.DefaultModel = "prov-a/model-a1"
 	c.Providers[1].APIKeyEnv = "REASONIX_TEST_EMPTY"
 	c.Providers[1].resolvedAPIKey = ""
 
-	err := c.RemoveProvider("prov-a")
-	if err == nil {
-		t.Fatal("expected removing default provider without fallback to fail")
+	if err := c.RemoveProvider("prov-a"); err != nil {
+		t.Fatalf("remove the default's provider with no fallback: %v", err)
 	}
-	if !strings.Contains(err.Error(), "default_model") {
-		t.Fatalf("error = %q, want default_model mention", err)
+	if _, ok := c.Provider("prov-a"); ok {
+		t.Fatal("provider still configured after removal")
 	}
-	if _, ok := c.Provider("prov-a"); !ok {
-		t.Fatal("provider should remain after failed removal")
+	if c.DefaultModel != "" {
+		t.Fatalf("default_model = %q, want it cleared", c.DefaultModel)
 	}
 }
 

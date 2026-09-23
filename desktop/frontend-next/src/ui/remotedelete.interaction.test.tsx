@@ -16,7 +16,7 @@ const tree: Record<string, TreeWorkspace[] | null> = {
   gpu: [{ root: "/home/ada/training", name: "training", sessions: [{ path, name: "s1", title: "跑通构建" }] }],
 };
 
-function draw(runtimes: RuntimeView[] = []) {
+function draw(runtimes: RuntimeView[] = [], live: string[] = []) {
   const order: string[] = [];
   const removeRemoteSession = vi.fn(async () => { order.push("remove"); });
   const readTree = vi.fn(async () => { order.push("read"); });
@@ -35,6 +35,7 @@ function draw(runtimes: RuntimeView[] = []) {
         reloadTrees={async () => {}}
         readTree={readTree}
         onClose={onClose}
+        liveIds={(ids) => ids.filter((id) => live.includes(id))}
         onError={() => {}}
       />
     </RailSearch>,
@@ -60,5 +61,17 @@ describe("a conversation on another machine", () => {
     await userEvent.click(screen.getByRole("button", { name: "删除" }));
     await waitFor(() => expect(order).toEqual(["close", "remove", "read"]));
     expect(onClose).toHaveBeenCalledWith(["rt-1"]);
+  });
+});
+
+describe("a running conversation on another machine", () => {
+  it("is not closed to make way for its deletion; the far kernel answers for it", async () => {
+    const pane = { id: "rt-1", sessionPath: path, host: "gpu" } as unknown as RuntimeView;
+    const { onClose, removeRemoteSession } = draw([pane], ["rt-1"]);
+    await userEvent.click(screen.getByRole("button", { name: "删除会话：跑通构建" }));
+    expect(screen.getByText(/正在运行，停止后才能删除/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "删除" }));
+    await waitFor(() => expect(removeRemoteSession).toHaveBeenCalled());
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

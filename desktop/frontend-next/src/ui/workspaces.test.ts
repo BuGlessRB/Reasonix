@@ -10,8 +10,8 @@ describe("removeHint", () => {
     expect(removeHint(3, 0)).toBe("将先关闭 3 个面板；不会删除任何文件");
   });
 
-  it("names the cost when closing would stop a turn", () => {
-    expect(removeHint(3, 2)).toBe("将先关闭 3 个面板，其中 2 个仍在运行；不会删除任何文件");
+  it("says a running turn holds the removal instead of offering to stop it", () => {
+    expect(removeHint(3, 2)).toBe("其中 2 个对话正在运行，停止后才能移除");
   });
 });
 

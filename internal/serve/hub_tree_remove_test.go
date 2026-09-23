@@ -2,6 +2,7 @@ package serve
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -232,5 +233,35 @@ func stampForeignLeaseHolder(t *testing.T, path string, pid int) {
 	}
 	if err := os.WriteFile(store.SessionLeaseInfo(path), raw, 0o600); err != nil {
 		t.Fatalf("write lease info: %v", err)
+	}
+}
+
+// A pane that is only showing the conversation is no reason to keep it: the
+// pane closes, and the delete goes through.
+func TestRemoveSessionClosesAnIdlePaneShowingIt(t *testing.T) {
+	writeOpenableConfig(t)
+	root := testenv.TempDir(t)
+	path := filepath.Join(SessionDirFor(root), "shown.jsonl")
+	writeSessionAt(t, path)
+	rememberWorkspace(root)
+	h := NewHub(HubOptions{})
+	defer h.Shutdown()
+	if _, err := h.Open(context.Background(), OpenRequest{Root: root, SessionPath: path}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+
+	resp := postRemoveSession(t, srv, path)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		b, _ := readAllString(resp)
+		t.Fatalf("remove = %d: %s", resp.StatusCode, b)
+	}
+	if n := len(h.Runtimes()); n != 0 {
+		t.Fatalf("%d panes left on a deleted conversation, want none", n)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("transcript survived the delete: %v", err)
 	}
 }

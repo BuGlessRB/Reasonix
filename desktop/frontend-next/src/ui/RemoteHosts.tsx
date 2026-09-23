@@ -31,8 +31,10 @@ interface Props {
   reloadTrees: () => Promise<void>;
   // One machine's book, read whether or not a pane is open on it.
   readTree: (host: string) => Promise<void>;
-  // Closes panes; a conversation open in one is closed before it is erased.
+  // Closes panes; a conversation open in an idle one is closed before it is erased.
   onClose: (ids: string[]) => Promise<void>;
+  // Which of these panes are mid-turn; those are never closed to make way.
+  liveIds: (ids: string[]) => string[];
   onError: (e: unknown) => void;
 }
 
@@ -123,7 +125,7 @@ function note(host: RemoteHost): string {
   }
 }
 
-function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload, trees, reloadTrees, readTree, onClose, onError }: Props) {
+function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload, trees, reloadTrees, readTree, onClose, liveIds, onError }: Props) {
   const [busy, setBusy] = useState("");
   // The conversation whose deletion is being confirmed, keyed by host and path.
   const [confirm, setConfirm] = useState("");
@@ -144,8 +146,9 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
     setConfirm("");
     setBusy(host.name + sessionPath);
     try {
-      // The far kernel will not erase a transcript a pane still holds.
-      if (held) await onClose([held.id]);
+      // An idle pane is closed first; a running one is left for the far kernel
+      // to refuse, since a delete never stops work in progress.
+      if (held && liveIds([held.id]).length === 0) await onClose([held.id]);
       await hub.removeRemoteSession(host.name, sessionPath);
       await readTree(host.name);
     } catch (e) {
@@ -172,6 +175,10 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
   const drop = async (host: string, dir: string) => {
     setBusy(host + dir);
     try {
+      // Idle panes in the folder close here so this list stays in step; the
+      // kernel refuses the removal while any of them is running.
+      const open = runtimes.filter((rt) => rt.host === host && rt.root === dir).map((rt) => rt.id);
+      if (open.length && liveIds(open).length === 0) await onClose(open);
       await hub.removeRemoteWorkspace(host, dir);
       await reload();
     } catch (e) {
@@ -380,7 +387,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                                 <Confirm
                                   key={session.path}
                                   what={t("删除「{name}」？", { name })}
-                                  hint={t(held ? "它的面板会先关掉" : "连同其记录一并删除") + " · " + host.name}
+                                  hint={t(!held ? "连同其记录一并删除" : liveIds([held.id]).length ? "正在运行，停止后才能删除" : "它的面板会先关掉") + " · " + host.name}
                                   go={t("删除")}
                                   danger
                                   onGo={() => void dropSession(host, session.path, held)}

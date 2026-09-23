@@ -86,9 +86,9 @@ func TestAHostNeedsAnAddressUnlessSSHConfigHasIt(t *testing.T) {
 	}
 }
 
-// Removing the row under a live pane would leave a connection nothing accounts
-// for: the pane keeps driving a kernel the book no longer knows about.
-func TestRemovingAHostIsRefusedWhileItDrivesAPane(t *testing.T) {
+// An idle pane on the machine is no reason to keep its row: the pane closes
+// with it, so no link outlives the entry that accounts for it.
+func TestRemovingAHostClosesItsIdlePanes(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{Remote: &stubAttacher{}})
@@ -101,21 +101,47 @@ func TestRemovingAHostIsRefusedWhileItDrivesAPane(t *testing.T) {
 	defer front.Close()
 
 	resp := bookPost(t, front, "/remotes/remove", `{"name":"gpu-box"}`)
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("status = %d, want 409", resp.StatusCode)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", resp.StatusCode)
 	}
+	if n := len(h.Runtimes()); n != 0 {
+		t.Fatalf("%d panes left on a removed machine, want none", n)
+	}
+}
+
+// Work in progress is the one thing a removal waits for, and waiting closes
+// nothing: the running pane and its idle sibling both stay.
+func TestRemovingAHostIsRefusedWhileItsPaneRuns(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	far := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"running": r.URL.Path == "/rt/busy/status"})
+	}))
+	defer far.Close()
+	h := NewHub(HubOptions{Remote: &stubAttacher{}})
+	for _, base := range []string{"/rt/busy", "/rt/idle"} {
+		if _, err := h.OpenRemote(RemoteEndpoint{
+			Host: "gpu-box", Workspace: "/srv/training", Addr: far.Listener.Addr().String(), Token: "t", Base: base,
+		}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	front := httptest.NewServer(h.Handler())
+	defer front.Close()
+
+	resp := bookPost(t, front, "/remotes/remove", `{"name":"gpu-box"}`)
 	var body struct {
 		Code   string         `json:"code"`
 		Params map[string]any `json:"params"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatal(err)
-	}
-	if body.Code != "remote.has_open_panes" {
-		t.Fatalf("code = %q", body.Code)
+	_ = json.NewDecoder(resp.Body).Decode(&body)
+	if resp.StatusCode != http.StatusConflict || body.Code != "remote.running" {
+		t.Fatalf("remove = %d/%q, want 409/remote.running", resp.StatusCode, body.Code)
 	}
 	if n, _ := body.Params["n"].(float64); n != 1 {
-		t.Fatalf("params.n = %v, want the pane count", body.Params["n"])
+		t.Fatalf("params.n = %v, want the one running pane", body.Params["n"])
+	}
+	if n := len(h.Runtimes()); n != 2 {
+		t.Fatalf("%d panes left, want both kept while one runs", n)
 	}
 }
 
@@ -412,9 +438,9 @@ func bookEntry(t *testing.T, name string) config.RemoteHostEntry {
 	return entry
 }
 
-// Dropping a folder's row out from under the pane driving it is the same
-// question the local tree already refuses, and the same answer.
-func TestAFolderWithAPaneOnItIsNotDropped(t *testing.T) {
+// A folder with an idle pane on it is dropped when asked, and the pane goes
+// with it; only a pane mid-turn would hold the row.
+func TestAFolderWithAnIdlePaneOnItIsDroppedWithThePane(t *testing.T) {
 	writeOpenableConfig(t)
 	far := NewHub(HubOptions{})
 	defer far.Shutdown()
@@ -446,15 +472,14 @@ func TestAFolderWithAPaneOnItIsNotDropped(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp := bookPost(t, nearSide, "/remotes/gpu-box/workspaces/remove", string(drop))
-	var why struct {
-		Code string `json:"code"`
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("remove = %d, want 204: an idle pane closes with its folder", resp.StatusCode)
 	}
-	_ = json.NewDecoder(resp.Body).Decode(&why)
-	if resp.StatusCode != http.StatusConflict || why.Code != "workspace.has_open_panes" {
-		t.Fatalf("remove = %d/%q, want 409/workspace.has_open_panes", resp.StatusCode, why.Code)
+	if got := bookEntry(t, "gpu-box").WorkspaceList(); len(got) != 0 {
+		t.Fatalf("the folder is still in the book: %v", got)
 	}
-	if got := bookEntry(t, "gpu-box").WorkspaceList(); len(got) != 1 {
-		t.Fatalf("the refused remove still edited the book: %v", got)
+	if n := len(near.Runtimes()); n != 0 {
+		t.Fatalf("%d panes left in a removed folder, want none", n)
 	}
 }
 
