@@ -178,6 +178,8 @@ export const EN: Record<string, string> = {
     "This command runs another command through nesting or indirection. Auto and broad allow rules cannot tell what would actually run; approve this one, or switch to full access.",
   "这一步会把密码、一次性验证码或银行卡信息输入网站。自动放行、该站点已有的授权和宽泛规则都不能代你回答；要么批准，要么切到全部放行。":
     "This step types a password, a one-time code or card details into the site. Auto, the grant this site already has and broad rules do not answer for you; approve it, or switch to full access.",
+  "这会操作电脑上的另一个应用，拿到的是那个应用本身的权限。Windows 只把按键送给最前面的窗口，所以输入文字、按键和粘贴会先把这个应用切到前台。自动放行和宽泛规则都不能代你回答；要么为这个应用批准，要么切到全部放行。":
+    "This operates another application on the computer, with that application's own access. Windows sends keys only to the window in front, so typing, key presses and pastes bring this application forward first. Auto and broad rules do not answer for you; approve it for this application, or switch to full access.",
   "这会读取或操作电脑上的另一个应用，拿到的是那个应用本身的权限。自动放行和宽泛规则都不能代你回答；要么为这个应用批准，要么切到全部放行。":
     "This reads or operates another application on the computer, with that application's own access. Auto and broad rules do not answer for you; approve it for this application, or switch to full access.",
   "这一步会接管你正在用的鼠标指针——移动它、用它点击，并把那个应用切到前台，而不是让界面元素自己动作。自动放行、该应用已有的授权和宽泛规则都不能代你回答；要么批准，要么切到全部放行。用完指针会回到原处。":

@@ -47,6 +47,7 @@ extraResources:
       - reasonix-studio-host
       - reasonix-studio-host.exe
       - reasonix-computer-helper
+      - reasonix-computer-helper.exe
   - from: ../frontend-next/dist
     to: frontend-next/dist
 

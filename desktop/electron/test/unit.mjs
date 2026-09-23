@@ -142,11 +142,12 @@ test("the kernel and the page are found in both layouts", () => {
   }
 });
 
-test("the computer-use helper is found beside the kernel on macOS, and nowhere else", () => {
+test("the computer-use helper is found beside the kernel on macOS and Windows, and nowhere else", () => {
   const mac = { packaged: true, resourcesPath: "/res", dirname: "/d/src", platform: "darwin" };
   assert.equal(computerHelper(mac), path.join("/res", "bin", "reasonix-computer-helper"));
   assert.equal(computerHelper({ ...mac, packaged: false, dirname: path.join("/repo", "electron", "src") }), path.join("/repo", "electron", "bin", "reasonix-computer-helper"));
-  assert.equal(computerHelper({ ...mac, platform: "win32" }), "");
+  assert.equal(computerHelper({ ...mac, platform: "win32" }), path.join("/res", "bin", "reasonix-computer-helper.exe"));
+  assert.equal(computerHelper({ ...mac, platform: "linux" }), "");
   assert.equal(computerHelper({ ...mac, platform: "linux", env: { REASONIX_COMPUTER_HELPER: "/custom/helper" } }), "/custom/helper");
 });
 

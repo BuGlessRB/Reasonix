@@ -21,7 +21,8 @@ const maxWait = 30 * time.Second
 
 // refusedApps are never operated, whatever the person approves: input there
 // reaches past the boundaries the host keeps everywhere else. A security list,
-// kept as one.
+// kept as one: macOS bundle ids, and Windows process file names or a Store
+// application's package family name.
 var refusedApps = map[string]string{
 	"io.reasonix.studio":          "Reasonix Studio itself",
 	"com.github.Electron":         "Reasonix Studio itself",
@@ -38,15 +39,59 @@ var refusedApps = map[string]string{
 	"com.bitwarden.desktop":       "a password manager",
 	"com.apple.systempreferences": "System Settings",
 	"com.apple.SecurityAgent":     "a system authorization prompt",
+
+	"reasonix studio.exe":                            "Reasonix Studio itself",
+	"electron.exe":                                   "Reasonix Studio itself",
+	"windowsterminal.exe":                            "a terminal",
+	"microsoft.windowsterminal_8wekyb3d8bbwe":        "a terminal",
+	"microsoft.windowsterminalpreview_8wekyb3d8bbwe": "a terminal",
+	"openconsole.exe":                                "a terminal",
+	"conhost.exe":                                    "a terminal",
+	"cmd.exe":                                        "a terminal",
+	"powershell.exe":                                 "a terminal",
+	"pwsh.exe":                                       "a terminal",
+	"mintty.exe":                                     "a terminal",
+	"wezterm-gui.exe":                                "a terminal",
+	"alacritty.exe":                                  "a terminal",
+	"1password.exe":                                  "a password manager",
+	"bitwarden.exe":                                  "a password manager",
+	"keepass.exe":                                    "a password manager",
+	"keepassxc.exe":                                  "a password manager",
+	"credentialuibroker.exe":                         "a system authorization prompt",
+	"consent.exe":                                    "a system authorization prompt",
+	"windows.immersivecontrolpanel_cw5n1h2txyewy": "Windows Settings",
+	"systemsettings.exe":                          "Windows Settings",
+	"regedit.exe":                                 "the registry editor",
+	"mmc.exe":                                     "a system management console",
+	"taskmgr.exe":                                 "Task Manager",
+	"powershell_ise.exe":                          "a terminal",
+	"conemu.exe":                                  "a terminal",
+	"conemu64.exe":                                "a terminal",
+	"wt.exe":                                      "a terminal",
+	"microsoft.powershell_8wekyb3d8bbwe":          "a terminal",
+	"microsoft.sechealthui_8wekyb3d8bbwe":         "Windows Security",
 }
 
+// refusedFolded is refusedApps compared without case: Windows file names are
+// case-insensitive, and a refusal must not be one capital letter from missing.
+var refusedFolded = func() map[string]string {
+	m := make(map[string]string, len(refusedApps))
+	for name, why := range refusedApps {
+		m[strings.ToLower(name)] = why
+	}
+	return m
+}()
+
 // Refused reports why an application is never operated, or "" when it may be.
-func Refused(bundle string) string { return refusedApps[bundle] }
+func Refused(bundle string) string { return refusedFolded[strings.ToLower(strings.TrimSpace(bundle))] }
 
 // App is a running application a person can see.
 type App struct {
-	PID     int32    `json:"pid"`
-	Bundle  string   `json:"bundle"`
+	PID    int32  `json:"pid"`
+	Bundle string `json:"bundle"`
+	// Exe is a Windows application's file name when Bundle is its package
+	// family name; a refusal holds under either.
+	Exe     string   `json:"exe,omitempty"`
 	Name    string   `json:"name"`
 	Active  bool     `json:"active"`
 	Windows []Window `json:"windows"`
@@ -110,9 +155,13 @@ func (s *Session) App(ctx context.Context, bundle string) (App, error) {
 		return App{}, err
 	}
 	for _, app := range apps {
-		if app.Bundle == bundle {
-			return app, nil
+		if app.Bundle != bundle {
+			continue
 		}
+		if why := Refused(app.Exe); why != "" {
+			return App{}, fail(CodeAppRefused, "%s is %s (%s), which the agent never operates", bundle, why, app.Exe)
+		}
+		return app, nil
 	}
 	return App{}, fail(CodeNoApp, "no running application has the bundle id %q; list apps first", bundle)
 }

@@ -126,3 +126,26 @@ func TestTheApprovalRequestCarriesItsGrants(t *testing.T) {
 		t.Fatal("no approval arrived")
 	}
 }
+
+// Where keys reach only the foreground, the card for operating an application
+// says it will be brought forward; reading one takes nothing.
+func TestOperatingAnApplicationThatTakesTheFrontSaysSo(t *testing.T) {
+	was := computerActTakesFront
+	t.Cleanup(func() { computerActTakesFront = was })
+
+	computerActTakesFront = true
+	if got := ExplicitApprovalCode("computer_act", "notepad.exe"); got != computerFrontApproval {
+		t.Fatalf("act where keys need the front = %q, want %q", got, computerFrontApproval)
+	}
+	if got := ExplicitApprovalCode("computer_read", "notepad.exe"); got != computerUseApproval {
+		t.Fatalf("read = %q, want %q", got, computerUseApproval)
+	}
+	if got := ExplicitApprovalCode("computer_act", "pointer:notepad.exe"); got != computerPointerApproval {
+		t.Fatalf("pointer = %q, want %q", got, computerPointerApproval)
+	}
+
+	computerActTakesFront = false
+	if got := ExplicitApprovalCode("computer_act", "com.apple.Notes"); got != computerUseApproval {
+		t.Fatalf("act where keys reach a background application = %q, want %q", got, computerUseApproval)
+	}
+}

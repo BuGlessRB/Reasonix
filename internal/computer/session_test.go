@@ -65,6 +65,7 @@ func runFakeHelper(in io.Reader, out io.Writer) {
 			reply["result"] = map[string]any{"apps": []any{
 				map[string]any{"pid": 7, "bundle": "com.example.Notes", "name": "Notes", "windows": []any{}},
 				map[string]any{"pid": 8, "bundle": "com.example.Locked", "name": "Locked", "windows": []any{}},
+				map[string]any{"pid": 9, "bundle": "Vendor.Shell_abc123", "exe": "PWSH.exe", "name": "Shell", "windows": []any{}},
 			}}
 		case "snapshot":
 			if req.Params["pid"] == float64(8) {
@@ -135,6 +136,15 @@ func TestARefusedApplicationIsRefusedBeforeTheHelperIsAsked(t *testing.T) {
 	}
 	if _, err := s.Apps(context.Background()); CodeOf(err) != CodeUnavailable {
 		t.Fatalf("a helper that cannot start = %v, want %s", err, CodeUnavailable)
+	}
+}
+
+// A packaged application is named by its package, and its executable can be
+// one the list refuses under a package nobody listed.
+func TestARefusedExecutableIsRefusedUnderAnyPackageName(t *testing.T) {
+	s := fakeSession(t)
+	if _, err := s.Snapshot(context.Background(), "Vendor.Shell_abc123"); CodeOf(err) != CodeAppRefused {
+		t.Fatalf("a package whose executable is refused = %v, want %s", err, CodeAppRefused)
 	}
 }
 
@@ -218,7 +228,7 @@ func TestAHelperThatExitsFailsWhatWasPendingAndStartsAgain(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		apps, err := s.Apps(ctx)
-		if err == nil && len(apps) == 2 {
+		if err == nil && len(apps) == 3 {
 			return
 		}
 		if time.Now().After(deadline) {

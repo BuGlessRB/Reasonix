@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"reasonix/internal/i18n"
@@ -69,7 +70,12 @@ const (
 	browserScriptApproval    = "browser_script"
 	computerUseApproval      = "computer_use"
 	computerPointerApproval  = "computer_pointer"
+	computerFrontApproval    = "computer_front"
 )
+
+// computerActTakesFront is whether operating an application can take the
+// foreground: Windows delivers keys only to the window in front.
+var computerActTakesFront = runtime.GOOS == "windows"
 
 var explicitApprovalTexts = map[string]string{
 	dynamicBashApproval:      "This command uses nested or indirect shell execution. Auto and broad allow rules cannot verify the inner command; approve this exact command or use YOLO.",
@@ -77,6 +83,7 @@ var explicitApprovalTexts = map[string]string{
 	browserScriptApproval:    "This browser step runs arbitrary JavaScript with the page's authority. Auto, the site's grant and broad allow rules do not answer it; approve it or use YOLO.",
 	computerPointerApproval:  "This takes the pointer the person is holding — it moves their cursor, clicks with it, and brings the application forward — rather than asking an element to act. Auto, the application's own grant and broad allow rules do not answer it; approve it or use YOLO.",
 	computerUseApproval:      "This reads or operates another application on the computer, with whatever access that application has. Auto and broad allow rules do not answer it; approve it for this application or use YOLO.",
+	computerFrontApproval:    "This operates another application on the computer, with whatever access that application has. Windows sends keys only to the window in front, so typing, key presses and pastes bring that application forward first. Auto and broad allow rules do not answer it; approve it for this application or use YOLO.",
 }
 
 // ExplicitApprovalCode names why a call needs a person rather than auto or a
@@ -92,6 +99,8 @@ func ExplicitApprovalCode(tool, subject string) string {
 		return browserCredentialApprova
 	case permission.IsComputerTool(tool) && permission.ComputerSubjectTakesPointer(subject):
 		return computerPointerApproval
+	case permission.IsComputerTool(tool) && tool == "computer_act" && computerActTakesFront:
+		return computerFrontApproval
 	case permission.IsComputerTool(tool):
 		return computerUseApproval
 	}
