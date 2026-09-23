@@ -327,7 +327,17 @@ func (a *App) attachForkedDesktopSession(ctx context.Context, source *WorkspaceT
 			break
 		}
 	}
-	return a.workspaceRegistry().AttachSession(ctx, "", workspaceID, childSessionID, beforeID)
+	if err := a.workspaceRegistry().AttachSession(ctx, "", workspaceID, childSessionID, beforeID); err != nil {
+		return err
+	}
+	// Canonical forks use workspace membership, not the directory catalog.
+	// Invalidate the paged sidebar even if opening the child tab later fails.
+	root := ""
+	if workspaceID != workspacestate.GlobalWorkspaceID {
+		root = workspace.Root
+	}
+	a.emitProjectTreeChangedV2(a.currentSessionCatalogStatus().Revision, []string{root}, "membership")
+	return nil
 }
 
 func (a *App) verifyCanonicalTabRegistryBeforePrune(tab *WorkspaceTab) error {
