@@ -18,7 +18,7 @@ import { NoticeCard } from "./cards/NoticeCard";
 import { RememberCard } from "./cards/RememberCard";
 import { ExtensionCard } from "./cards/ExtensionCard";
 import { toolFailed } from "./cards/outcome";
-import { transcriptRows } from "./turnrows";
+import { drawn, transcriptRows } from "./turnrows";
 import { Rail, type RailMark } from "./Rail";
 import { StudioIcon } from "./StudioIcon";
 import { clearFind, paintFind } from "./findpaint";
@@ -686,7 +686,7 @@ const Row = memo(function Row({
       // model. Gating the card on text meant all of it stayed invisible and
       // then landed at once. An empty card is still not a message, so a turn
       // that produced neither draws nothing.
-      return it.text.trim() || it.reasoning?.trim() ? <SayCard item={it} afterAnswer={afterAnswer} reply={reply} /> : null;
+      return drawn(it) || afterAnswer ? <SayCard item={it} afterAnswer={afterAnswer} reply={reply} /> : null;
     case "tool":
       // The ask tool also raises ask_request, which carries the id /answer
       // needs. Drawing the tool call too put two copies of the same question on

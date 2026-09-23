@@ -62,7 +62,9 @@ export function useCompletion(
   const [completion, setCompletion] = useState<Completion>(EMPTY);
   const [active, setActive] = useState(0);
   const [picked, setPicked] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  // The answer that was dismissed, not a flag: a reset run as an effect lands
+  // after the commit that opened the menu, and a blur between the two is undone.
+  const [dismissed, setDismissed] = useState<Completion | null>(null);
   const [kb, setKb] = useState(true);
   // Answers can land out of order; only the newest question still has an answer
   // worth showing.
@@ -89,12 +91,11 @@ export function useCompletion(
   useEffect(() => {
     setActive(0);
     setPicked(false);
-    setDismissed(false);
     setKb(true);
   }, [completion]);
 
   const items = completion.items;
-  const open = !dismissed && items.length > 0;
+  const open = dismissed !== completion && items.length > 0;
   const at = Math.min(active, items.length - 1);
 
   const accept = useCallback(
@@ -123,7 +124,7 @@ export function useCompletion(
       setKb(false);
       setActive(i);
     },
-    dismiss: () => setDismissed(true),
+    dismiss: () => setDismissed(completion),
     accept,
   };
 }

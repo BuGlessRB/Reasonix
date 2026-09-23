@@ -27,4 +27,18 @@ describe("what a turn looks like once it is laid out", () => {
   it("draws the line as soon as the kernel has taken it", () => {
     expect(shape([me("u1", "go"), said("s1", "on it"), me("u2", "also this")])).toEqual(["user", "say", "user"]);
   });
+
+  // A model that calls tools with no answer yet still streams a message, often
+  // with a blank thought. That message draws nothing, so work filed under it
+  // would draw nothing either.
+  it("files work under the sentence that is drawn, not a blank one before it", () => {
+    const blank: Item = { t: "say", id: "s0", text: "", reasoning: "\n", done: true };
+    expect(shape([me("u1", "go"), blank, ran("t1"), ran("t2"), said("s1", "found it"), ran("t3"), said("s2", "done")]))
+      .toEqual(["user", "say", "say+3", "say"]);
+  });
+
+  it("keeps work under the model that did it while no sentence has come yet", () => {
+    const blank: Item = { t: "say", id: "s0", text: "", reasoning: "\n", done: true };
+    expect(shape([me("u1", "go"), blank, ran("t1"), ran("t2")])).toEqual(["user", "say+2"]);
+  });
 });

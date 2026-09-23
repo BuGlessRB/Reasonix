@@ -2,6 +2,12 @@ import type { Item } from "../state/session";
 
 type Row = { item: Item; activity?: Item[] } | { activity: Item[] };
 
+/** drawn reports whether a sentence has anything to show. One that does not
+ *  draws nothing, so it cannot host work either. */
+export function drawn(item: Item): boolean {
+  return item.t === "say" && Boolean(item.text.trim() || item.reasoning?.trim());
+}
+
 /** transcriptRows arranges a transcript the way it reads: a turn is one user
  *  message and everything done about it, consecutive tool steps fold into one
  *  disclosure, and each run of work sits under the sentence it followed — a turn
@@ -25,17 +31,9 @@ export function transcriptRows(all: Item[]): Row[] {
     for (let i = turn.length - 1; i >= 0; i--) {
       const row = turn[i];
       if ("item" in row) continue;
-      let host = -1;
-      for (let j = i - 1; j >= 0 && host < 0; j--) {
-        const prior = turn[j];
-        if ("item" in prior && prior.item.t === "say") host = j;
-      }
-      // A turn that opens with work has no sentence before it yet, and the one
-      // it was for is the first that follows.
-      for (let j = i + 1; j < turn.length && host < 0; j++) {
-        const later = turn[j];
-        if ("item" in later && later.item.t === "say") host = j;
-      }
+      // The sentence this work followed, else the one it was for. A message the
+      // model sent with no words yet is the speaker only when neither exists.
+      const host = nearest(turn, i, drawn) ?? nearest(turn, i, (item) => item.t === "say") ?? -1;
       if (host < 0) continue;
       const into = turn[host] as { item: Item; activity?: Item[] };
       into.activity = [...row.activity, ...(into.activity ?? [])];
@@ -45,4 +43,18 @@ export function transcriptRows(all: Item[]): Row[] {
     at = end;
   }
   return rows;
+}
+
+function nearest(turn: Row[], i: number, fits: (item: Item) => boolean): number | undefined {
+  for (let j = i - 1; j >= 0; j--) {
+    const row = turn[j];
+    if ("item" in row && fits(row.item)) return j;
+  }
+  // A turn that opens with work has no sentence before it yet, and the one it
+  // was for is the first that follows.
+  for (let j = i + 1; j < turn.length; j++) {
+    const row = turn[j];
+    if ("item" in row && fits(row.item)) return j;
+  }
+  return undefined;
 }

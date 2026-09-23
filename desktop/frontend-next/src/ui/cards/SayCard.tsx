@@ -92,7 +92,7 @@ export function SayCard({ item, afterAnswer, reply }: { item: Extract<Item, { t:
           {item.model && <span className="src" title={item.model}>{modelName(item.model)}</span>}
         </div>
         <div className="out">
-          {item.reasoning && (
+          {item.reasoning?.trim() && (
             <details className="think" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
               <summary>
                 <span className="fold">{item.done ? thoughtLabel(item) : t("思考中…")}</span>
