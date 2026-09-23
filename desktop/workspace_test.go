@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -332,8 +333,13 @@ func TestSwitchWorkspaceMakesPreviouslyRemovedProjectVisibleAgain(t *testing.T) 
 	if err := app.RemoveWorkspace(projectRoot); err != nil {
 		t.Fatalf("remove workspace: %v", err)
 	}
+	var sidebarNotifications atomic.Int64
+	app.projectTreeChangedHook = func() { sidebarNotifications.Add(1) }
 	if _, err := app.SwitchWorkspace(projectRoot); err != nil {
 		t.Fatalf("re-add workspace: %v", err)
+	}
+	if sidebarNotifications.Load() == 0 {
+		t.Fatal("re-adding a hidden workspace did not notify the mounted project tree")
 	}
 
 	for _, project := range mustProjectTreeSnapshot(t, app).Projects {

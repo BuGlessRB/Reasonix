@@ -5031,6 +5031,12 @@ func (a *App) SwitchWorkspace(dir string) (string, error) {
 	if err != nil {
 		return "", rollbackVisibility(err)
 	}
+	if !wasVisible {
+		// A restored workspace can reuse an existing topic, so no topic-created
+		// event follows the visibility write. Publish the completed membership
+		// change for already-mounted project trees as well as fresh readers.
+		a.emitProjectTreeMetadataChanged()
+	}
 	return meta.WorkspaceRoot, nil
 }
 
