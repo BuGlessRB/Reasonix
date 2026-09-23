@@ -1,3 +1,6 @@
+import { runtimeReadyForSubmit, needsColdHistory, metaWithoutCanonicalTodos } from "./controllerHistoryMeta";
+export { runtimeReadyForSubmit } from "./controllerHistoryMeta";
+import { usageTotalTokens, mergeChatTurnUsage } from "./controllerTurnUsage";
 import { reduceCompactionEvent, reduceMaintenanceRuntimeSnapshot, reconcileMaintenanceState } from "./sessionMaintenanceReducer";
 import { isCompactSubmission } from "./sessionMaintenanceOperation";
 import { isShellToolName } from "./shellToolIdentity";
@@ -82,7 +85,7 @@ import { applyReadStatusEvent, type ReadStatusHost } from "./readStatus";
 import { upsertReadPause } from "./readPause";
 import { applyHydrateErrorState, hydratePlaceholderItems as resolveHydratePlaceholders } from "./hydrateErrorState";
 import { isHostRecoveryGuidance } from "./hostRecoverySteer";
-import { activeTabHydrationPlan, canAdoptUnboundLiveSurface, hasCachedLiveTurn, hasReusableCachedTranscript, sameSessionHydrateIdentity, sameSessionPlaceholderItems, type HydrateSurfacePolicy } from "./hydrateHistoryApply";
+import { canAdoptUnboundLiveSurface, hasCachedLiveTurn, hasReusableCachedTranscript, sameSessionHydrateIdentity, sameSessionPlaceholderItems, type HydrateSurfacePolicy } from "./hydrateHistoryApply";
 import { useSessionCatalogActions } from "./useSessionCatalogActions";
 import { hydrateIdentityCurrent, sessionIdentityFields, sessionIdentityStableKey, type SessionHydrationOptions } from "./sessionIdentity";
 import { loadHistoryWindow } from "./historyWindowController";
@@ -675,28 +678,6 @@ export const initialState: State = {
   extensionNotifications: [],
   extensionGenerations: {},
 };
-function usageTotalTokens(usage?: WireUsage): number {
-  if (!usage) return 0;
-  if (usage.totalTokens > 0) return usage.totalTokens;
-  const promptTokens = usage.promptTokens || usage.cacheHitTokens + usage.cacheMissTokens;
-  return Math.max(0, promptTokens + usage.completionTokens);
-}
-
-function mergeChatTurnUsage(current: TurnUsage | undefined, usage: WireUsage | undefined): TurnUsage | undefined {
-  if (!usage) return current;
-  const route = usage.costQuote?.modelRef?.trim();
-  const routes = current?.routes ? [...current.routes] : [];
-  if (route && !routes.includes(route)) routes.push(route);
-  const hasCacheBuckets = usage.cacheHitTokens > 0 || usage.cacheMissTokens > 0;
-  return {
-    uncachedInputTokens: (current?.uncachedInputTokens ?? 0) + (hasCacheBuckets ? usage.cacheMissTokens : usage.promptTokens),
-    outputTokens: (current?.outputTokens ?? 0) + usage.completionTokens,
-    totalTokens: (current?.totalTokens ?? 0) + usageTotalTokens(usage),
-    cacheReadTokens: (current?.cacheReadTokens ?? 0) + usage.cacheHitTokens,
-    reasoningTokens: (current?.reasoningTokens ?? 0) + (usage.reasoningTokens ?? 0),
-    routes: routes.length ? routes : undefined,
-  };
-}
 // Clock used to order live prompt events against runtime snapshot fetches.
 // Monotonic (immune to wall-clock jumps) with sub-millisecond resolution, so
 // an event and a snapshot initiated in the same millisecond still order
@@ -777,11 +758,6 @@ export function sameMeta(a?: Meta, b?: Meta): boolean {
   );
 }
 
-export function runtimeReadyForSubmit(meta?: Meta): boolean {
-  if (!meta || meta.ready !== true || meta.startupErr) return false;
-  return !meta.runtime || meta.runtime.phase === "ready";
-}
-
 export { normalizeTurnSubmit } from "./inboxSubmit";
 
 const frontendSubmissionEpoch = typeof globalThis.crypto?.randomUUID === "function"
@@ -802,11 +778,6 @@ export function composerProfileApplicationKey(
   goal: string,
 ): string {
   return JSON.stringify([runtimeEpoch ?? "", collaborationMode, toolApprovalMode, goal]);
-}
-
-function metaWithoutCanonicalTodos(meta?: Meta): Meta | undefined {
-  if (!meta || meta.canonicalTodos === undefined) return meta;
-  return { ...meta, canonicalTodos: undefined };
 }
 
 const CANCEL_RECONCILE_DELAYS_MS = [0, 100, 300, 1_000] as const;
@@ -902,7 +873,6 @@ function backendStatusFromRuntimeMeta(meta: RuntimeMetaSnapshot): Extract<Action
 
 // ---- reducer helpers (unchanged logic) ----
 
-
 /** End the compatibility-path segment before a committed tool dispatch. */
 function settleCurrentAssistant(s: State, now = Date.now()): State {
   const settled = endTurnModelActivity(s, now, true);
@@ -993,7 +963,6 @@ function endPromptWaitIfIdle(s: State, now = Date.now()): State {
   if (s.approval || s.ask || s.mcpInteraction) return s;
   return endPromptWait(s, now);
 }
-
 
 function beginTurnModelActivity(s: State, now = Date.now()): State {
   return s.turnModelActiveAt && s.turnModelActiveAt > 0
@@ -2478,6 +2447,7 @@ export function useController() {
   const runtimeState = useRuntimeSession(activeTabId, activeState.meta);
   const stateRef = useRef(activeState);
   const backendActiveTabIdRef = useRef<string | undefined>(undefined);
+  const previousStoreActiveTabRef = useRef<string | undefined>(undefined);
   const backendActivationPromises = useRef(new Map<string, Promise<boolean>>());
   // The latest ticketed topic activation (StartTopicActivation). Registered
   // before the backend call returns so synchronously-emitted lifecycle events
@@ -2500,6 +2470,9 @@ export function useController() {
     if (action.type === "user") lastTurnActivityAtByTab.current.delete(tabId);
     const next = reducer(prev, action);
     if (prev !== next) {
+      if (tabId === activeTabIdRef.current) {
+        getTranscriptStore().noteActiveTab(tabId, previousStoreActiveTabRef.current); previousStoreActiveTabRef.current = tabId;
+      }
       getTranscriptStore().setState(tabId, next);
       // A tab with a live or in-flight turn is pinned out of transcript-store
       // eviction; its cached rows must survive until the turn settles.
@@ -2608,6 +2581,9 @@ export function useController() {
   const historyWindowSeq = useRef(new Map<string, number>());
   const cancelHydrateSeq = useRef(new Map<string, number>());
   const sessionLoadInFlight = useRef(new Map<string, { identityKey: string; revision?: number; digest?: string; promise: Promise<void> }>());
+  const coldHistoryInFlight = useRef(new Map<string, {
+    key: string; current: () => boolean; promise: Promise<"cached" | "loaded" | "miss" | "failed">;
+  }>());
   const transcriptSubscriptions = useRef(new Map<string, () => void>());
   const bumpMetaRefreshSeq = useCallback((tabId: string): number => {
     const seq = (metaRefreshSeq.current.get(tabId) ?? 0) + 1;
@@ -2881,68 +2857,80 @@ export function useController() {
     reason: HydrateReason,
     navigationIntent: number,
     current: () => boolean,
-  ): Promise<"cached" | "loaded" | "miss"> => {
+  ): Promise<"cached" | "loaded" | "miss" | "failed"> => {
     const sessionPath = (target.sessionPath ?? "").trim();
     const identity = sessionIdentityFields(target);
+    const key = JSON.stringify([sessionIdentityStableKey(target), target.sessionRevision, target.sessionDigest, navigationIntent]);
+    const pending = coldHistoryInFlight.current.get(tabId);
+    if (pending?.key === key && pending.current()) return pending.promise;
     const seq = bumpSessionLoadSeq(tabId);
     const stillCurrent = () => current()
       && sessionLoadCurrent(tabId, seq)
       && hydrateIdentityCurrent(identity, statesRef.current.get(tabId)?.meta);
     if (!stillCurrent()) return "miss";
-    ensureTranscriptSubscription(tabId, { path: sessionPath, key: sessionIdentityStableKey(target) });
-    const store = getTranscriptStore();
-    const startedAt = Date.now();
-    const resident = store.peek(tabId, sessionPath, {
-      revision: target.sessionRevision,
-      digest: target.sessionDigest,
-    });
-    noteNavigationHistoryRequested(navigationIntent, Boolean(resident));
-    recordFrontendDiagnostic("navigation", resident ? "navigation.history-cache-hit" : "navigation.history-cache-miss", {
-      tabId,
-      reason,
-    });
-    if (resident) {
-      if (!stillCurrent()) return "miss";
-      dispatchTo(tabId, historyReplaceAction(resident));
-      dispatchTo(tabId, { type: "hydrate_done" });
-      noteNavigationHistoryReadable(navigationIntent, true);
-      recordFrontendDiagnostic("navigation", "navigation.history-readable", {
+    const promise = (async (): Promise<"cached" | "loaded" | "miss" | "failed"> => {
+      ensureTranscriptSubscription(tabId, { path: sessionPath, key: sessionIdentityStableKey(target) });
+      const store = getTranscriptStore();
+      const startedAt = Date.now();
+      const resident = target.sessionDigest ? store.peek(tabId, sessionPath, {
+        revision: target.sessionRevision,
+        digest: target.sessionDigest,
+      }) : undefined;
+      noteNavigationHistoryRequested(navigationIntent, Boolean(resident));
+      recordFrontendDiagnostic("navigation", resident ? "navigation.history-cache-hit" : "navigation.history-cache-miss", {
         tabId,
         reason,
-        source: "cache",
-        durationMs: Date.now() - startedAt,
       });
-      return "cached";
-    }
+      if (resident) {
+        if (!stillCurrent()) return "miss";
+        dispatchTo(tabId, historyReplaceAction(resident));
+        dispatchTo(tabId, { type: "hydrate_done" });
+        noteNavigationHistoryReadable(navigationIntent, true);
+        recordFrontendDiagnostic("navigation", "navigation.history-readable", {
+          tabId,
+          reason,
+          source: "cache",
+          durationMs: Date.now() - startedAt,
+        });
+        return "cached";
+      }
+      try {
+        const projection = await store.loadLatest(tabId, sessionPath, {
+          preferResident: true,
+          expectedRevision: target.sessionRevision,
+          expectedDigest: target.sessionDigest,
+          current: stillCurrent,
+        });
+        if (!projection || !stillCurrent()) return "miss";
+        dispatchTo(tabId, historyReplaceAction(projection));
+        dispatchTo(tabId, { type: "hydrate_done" });
+        noteNavigationHistoryReadable(navigationIntent, false);
+        recordFrontendDiagnostic("navigation", "navigation.history-readable", {
+          tabId,
+          reason,
+          source: "disk",
+          durationMs: Date.now() - startedAt,
+        });
+        return "loaded";
+      } catch (error) {
+        // Only the reader owns history errors. A subsequent ready runtime may
+        // replace this failed cut, but execution failure must not settle it.
+        addBreadcrumb("tab.hydrate", `readable baseline failed ${reason} ${tabId}: ${errorMessage(error)}`);
+        recordFrontendDiagnostic("navigation", "navigation.history-readable-failed", {
+          tabId,
+          reason,
+          durationMs: Date.now() - startedAt,
+        });
+        if (!stillCurrent()) return "miss";
+        dispatchTo(tabId, { type: "hydrate_error", reason, error: t("history.failedLoadHistory") });
+        return "failed";
+      }
+    })();
+    coldHistoryInFlight.current.set(tabId, { key, current: stillCurrent, promise });
     try {
-      const projection = await store.loadLatest(tabId, sessionPath, {
-        preferResident: true,
-        expectedRevision: target.sessionRevision,
-        expectedDigest: target.sessionDigest,
-        current: stillCurrent,
-      });
-      if (!projection || !stillCurrent()) return "miss";
-      dispatchTo(tabId, historyReplaceAction(projection));
-      dispatchTo(tabId, { type: "hydrate_done" });
-      noteNavigationHistoryReadable(navigationIntent, false);
-      recordFrontendDiagnostic("navigation", "navigation.history-readable", {
-        tabId,
-        reason,
-        source: "disk",
-        durationMs: Date.now() - startedAt,
-      });
-      return "loaded";
-    } catch (error) {
-      // Runtime activation may still succeed and its protocol-v2 follower will
-      // retry from the controller-owned cut. Keep the target skeleton instead
-      // of turning an early-read miss into a terminal navigation failure.
-      addBreadcrumb("tab.hydrate", `readable baseline failed ${reason} ${tabId}: ${errorMessage(error)}`);
-      recordFrontendDiagnostic("navigation", "navigation.history-readable-failed", {
-        tabId,
-        reason,
-        durationMs: Date.now() - startedAt,
-      });
-      return "miss";
+      return await promise;
+    } finally {
+      if (coldHistoryInFlight.current.get(tabId)?.promise === promise) coldHistoryInFlight.current.delete(tabId);
     }
   }, [bumpSessionLoadSeq, dispatchTo, ensureTranscriptSubscription, sessionLoadCurrent]);
 
@@ -3058,6 +3046,7 @@ export function useController() {
     const expectedNavigationSeq = options.navigationIntentSeq ?? activeNavigationSeqRef.current;
     const active = await activeTabFromBackend();
     if (!active) return undefined;
+    const { activeTabHydrationPlan, coldHistoryRefreshProof, continueColdHistory } = await import("./coldHistoryRefresh");
     if (!isNavigationIntentCurrent(expectedNavigationSeq)) return active.id;
     // When guard is true, skip if the frontend already settled on a
     // different tab while we were fetching — this prevents fire-and-forget
@@ -3073,12 +3062,32 @@ export function useController() {
     if (active.runtime?.epoch) runtimeEpochByTabRef.current.set(active.id, active.runtime.epoch);
     dispatchTo(active.id, { type: "optimistic_meta", meta: metaFromTab(active, previousState?.meta) });
     if (!reset && hydration.surfacePolicy === "preserve-current") dispatchRuntimeStatusForTab(active.id, active, snapshotAt);
-    const load = loadSessionDataForTab(active.id, reset, "startup", hydration.loadOptions);
+    const loadStartup = (loadOptions: SessionHydrationOptions<Item, HydrateSurfacePolicy> = hydration.loadOptions) => loadSessionDataForTab(active.id, false, "startup", loadOptions);
+    const pendingColdHistory = !reset ? coldHistoryInFlight.current.get(active.id) : undefined;
+    if (pendingColdHistory?.current()) {
+      const current = () => isNavigationIntentCurrent(expectedNavigationSeq) && activeTabIdRef.current === active.id;
+      continueColdHistory(pendingColdHistory.promise, current, loadStartup, () => startTranscriptFollow(active.id, active.sessionPath ?? ""), () => loadStartup({ ...hydration.loadOptions, skipHistory: true, preserveCachedHistory: true }));
+      return active.id;
+    }
+    // Startup has no activation ticket. Use the same bounded cold reader as
+    // navigation while execution is recovering; the ready event will bind the
+    // live follower. Never manufacture a subscription or executable runtime.
+    if (needsColdHistory(active)) {
+      const proof = coldHistoryRefreshProof(active, previousState, !reset && hydration.loadOptions.preserveCachedHistory);
+      if (proof && getTranscriptStore().peek(active.id, active.sessionPath ?? "", proof)) return active.id;
+      dispatchTo(active.id, { type: "hydrate_start", reason: "startup" });
+      const current = () => isNavigationIntentCurrent(expectedNavigationSeq) && activeTabIdRef.current === active.id;
+      const read = primeReadableHistoryForTab(active.id, active, "startup", expectedNavigationSeq, current);
+      if (options.deferHydration) void read;
+      else await read;
+      return active.id;
+    }
+    const load = reset ? loadSessionDataForTab(active.id, reset, "startup", hydration.loadOptions) : loadStartup();
     if (reset || hydration.surfacePolicy === "replace-surface") dispatchRuntimeStatusForTab(active.id, active, snapshotAt);
     if (options.deferHydration) void load;
     else await load;
     return active.id;
-  }, [activeTabFromBackend, beginActiveNavigation, confirmBackendActiveTab, dispatchRuntimeStatusForTab, dispatchTo, isNavigationIntentCurrent, loadSessionDataForTab]);
+  }, [activeTabFromBackend, beginActiveNavigation, confirmBackendActiveTab, dispatchRuntimeStatusForTab, dispatchTo, isNavigationIntentCurrent, loadSessionDataForTab, primeReadableHistoryForTab, startTranscriptFollow]);
 
   const reconcileTabRuntime = useCallback(async (
     tabId: string,
@@ -3289,7 +3298,6 @@ export function useController() {
       // already published, keep that transcript selected and make only the
       // write side unavailable. Treating this as a history failure used to
       // restore the source surface and throw away a perfectly readable target.
-      if (current?.hydrating) dispatchTo(tabId, { type: "hydrate_error", reason: "open-topic", error: safeError });
       if (current?.meta) {
         dispatchTo(tabId, {
           type: "meta",
@@ -3392,23 +3400,17 @@ export function useController() {
     // one the old controller already resolved (#6432 round 3). A tab-less
     // rebuild (settings-wide) affects every known tab.
     const offRebuilt = onRuntimeRebuilt((rebuiltTabId, runtimeEpoch) => {
-      if (rebuiltTabId) {
-        followers.current.get(rebuiltTabId)?.stop();
-        followers.current.delete(rebuiltTabId);
-        invalidateSharedQuery("MetaForTab", [rebuiltTabId]);
-        if (runtimeEpoch) runtimeEpochByTabRef.current.set(rebuiltTabId, runtimeEpoch);
-        dispatchTo(rebuiltTabId, { type: "controller_rebuilt" });
-        if (!statesRef.current.get(rebuiltTabId)?.hydrating && !statesRef.current.get(rebuiltTabId)?.backendActivationPending) void startTranscriptFollow(rebuiltTabId, statesRef.current.get(rebuiltTabId)?.meta?.sessionPath ?? "").catch(error => dispatchTo(rebuiltTabId, { type: "transcript_connection", status: "disconnected", error: String(error) }));
-      } else {
-        if (runtimeEpoch) {
-          for (const id of Array.from(statesRef.current.keys())) runtimeEpochByTabRef.current.set(id, runtimeEpoch);
-        }
-        for (const id of Array.from(statesRef.current.keys())) {
-          followers.current.get(id)?.stop();
-          followers.current.delete(id);
-          invalidateSharedQuery("MetaForTab", [id]);
-          dispatchTo(id, { type: "controller_rebuilt" });
-          if (!statesRef.current.get(id)?.hydrating && !statesRef.current.get(id)?.backendActivationPending) void startTranscriptFollow(id, statesRef.current.get(id)?.meta?.sessionPath ?? "").catch(error => dispatchTo(id, { type: "transcript_connection", status: "disconnected", error: String(error) }));
+      const ids = rebuiltTabId ? [rebuiltTabId] : Array.from(statesRef.current.keys());
+      for (const id of ids) {
+        followers.current.get(id)?.stop();
+        followers.current.delete(id);
+        invalidateSharedQuery("MetaForTab", [id]);
+        if (runtimeEpoch) runtimeEpochByTabRef.current.set(id, runtimeEpoch);
+        dispatchTo(id, { type: "controller_rebuilt" });
+        const state = statesRef.current.get(id);
+        if (!needsColdHistory(state?.meta) && !state?.hydrating && !state?.backendActivationPending) {
+          void startTranscriptFollow(id, state?.meta?.sessionPath ?? "").catch(error =>
+            dispatchTo(id, { type: "transcript_connection", status: "disconnected", error: String(error) }));
         }
       }
     });
@@ -3439,12 +3441,22 @@ export function useController() {
       runtime: (tab, snapshotAt) => {
         dispatchRuntimeStatusForTab(tab.id, tab, snapshotAt);
       },
-      resynchronize: async tab => { await startTranscriptFollow(tab.id, tab.sessionPath ?? ""); },
+      resynchronize: async tab => {
+        if (needsColdHistory(tab)) return;
+        await startTranscriptFollow(tab.id, tab.sessionPath ?? "");
+      },
       reset: id => { followers.current.get(id)?.stop(); followers.current.delete(id); },
-      hydrate: (tab, recoveryCurrent) => loadSessionDataForTab(tab.id, true, "startup", {
-        ...sessionIdentityFields(tab), sessionRevision: tab.sessionRevision,
-        sessionDigest: tab.sessionDigest, sessionGeneration: tab.sessionGeneration, recoveryCurrent,
-      }),
+      hydrate: async (tab, recoveryCurrent) => {
+        if (needsColdHistory(tab)) {
+          dispatchTo(tab.id, { type: "hydrate_start", reason: "startup" });
+          await primeReadableHistoryForTab(tab.id, tab, "startup", activeNavigationSeqRef.current, recoveryCurrent);
+        } else {
+          await loadSessionDataForTab(tab.id, true, "startup", {
+            ...sessionIdentityFields(tab), sessionRevision: tab.sessionRevision,
+            sessionDigest: tab.sessionDigest, sessionGeneration: tab.sessionGeneration, recoveryCurrent,
+          });
+        }
+      },
     });
 
     // Passive hydration must not invalidate the concurrent draft-restore probe.
@@ -3473,13 +3485,12 @@ export function useController() {
       offTabMeta();
       offRecovery();
     };
-  }, [dispatchRuntimeStatusForTab, dispatchTo, handleTopicActivationEvent, loadSessionDataForTab, refreshBalanceForTab, refreshCheckpoints, refreshMetaForTab, syncActiveTabFromBackend, startTranscriptFollow]);
+  }, [dispatchRuntimeStatusForTab, dispatchTo, handleTopicActivationEvent, loadSessionDataForTab, primeReadableHistoryForTab, refreshBalanceForTab, refreshCheckpoints, refreshMetaForTab, syncActiveTabFromBackend, startTranscriptFollow]);
 
   // Track the visible tab in the transcript store: the active tab is pinned
   // out of LRU eviction. (In-flight loads of background tabs still complete
   // into their own per-tab state; store generations move on session switch,
   // evict, and unload — not on visible-tab changes.)
-  const previousStoreActiveTabRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     getTranscriptStore().noteActiveTab(activeTabId, previousStoreActiveTabRef.current);
     previousStoreActiveTabRef.current = activeTabId;

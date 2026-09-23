@@ -12,7 +12,10 @@ import (
 )
 
 func TestNativeIdentityMigrationRebuildsOnlyProjectionOnce(t *testing.T) {
-	for _, version := range []int{12, 13} {
+	// Version 13 already includes the identity-invalidating migration, so the
+	// stale-row assertion covers only the last pre-invalidation schema. The
+	// migration boundary itself is covered by TestSchemaV13RebuildsFilesystemIdentityProjection.
+	for _, version := range []int{12} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) {
 			ctx := context.Background()
 			root := t.TempDir()
@@ -58,7 +61,7 @@ func TestNativeIdentityMigrationRebuildsOnlyProjectionOnce(t *testing.T) {
 			if oldReader.Status.Mode != projectiondb.ModeMemory || oldReader.Status.QuarantinedPath != "" {
 				t.Fatalf("old reader reused or quarantined new projection: %+v", oldReader.Status)
 			}
-			if inspection := projectiondb.Inspect(ctx, path); inspection.Schema != 14 {
+			if inspection := projectiondb.Inspect(ctx, path); inspection.Schema != len(sessionMigrations()) {
 				t.Fatalf("old reader changed new schema: %+v", inspection)
 			}
 			if raw, err := os.ReadFile(transcript); err != nil || string(raw) != content {
