@@ -45,3 +45,13 @@ func bindBrowser(reg *tool.Registry, cfg config.BrowserConfig, root string, reus
 // SetBrowserHost routes every browser this process starts through a window
 // that draws them, instead of launching one.
 func SetBrowserHost(dial browser.EndpointDialer) { browserPool.SetEndpoint(dial) }
+
+// renderRoot is where the executor opens a page it wrote to look at it: the
+// workspace, when there is a browser to open it in and a model that can see the
+// screenshot. Either missing, a look is nothing it could owe.
+func renderRoot(session *browser.Session, entry *config.ProviderEntry, root string) string {
+	if session == nil || entry == nil || !config.EffectiveVision(entry) {
+		return ""
+	}
+	return root
+}

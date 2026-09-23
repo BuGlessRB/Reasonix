@@ -26,4 +26,5 @@ type ReadinessAudit struct {
 	MissingSignoff          int
 	MissingMutation         int
 	MissingCapabilities     int
+	MissingRender           int
 }

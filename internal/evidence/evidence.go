@@ -97,6 +97,7 @@ func (l *Ledger) Record(r Receipt) {
 	r.Paths = normalizePaths(r.Paths)
 	r.Showed = normalizePaths(r.Showed)
 	r.Created = normalizePaths(r.Created)
+	r.Viewed = normalizePaths(r.Viewed)
 	r.Todos = normalizeTodos(r.Todos)
 	if r.Args != nil {
 		cp := make(json.RawMessage, len(r.Args))

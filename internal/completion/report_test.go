@@ -462,3 +462,18 @@ func TestBlockedContractIsNotDone(t *testing.T) {
 		t.Fatalf("verdict = %v, want incomplete", rep.Verdict)
 	}
 }
+
+// A page the host watched pass after the change proves it the way a command
+// would; the card must not call the change unverified while readiness is met.
+func TestBuildCountsAHostClassifiedBrowserCheck(t *testing.T) {
+	check := evidence.Receipt{ToolName: "browser_act", Success: true, Verification: evidence.VerificationPassed, OutputBytes: 64}
+	rep := Build(nil, ledgerOf(wrote("index.html"), check), nil)
+	if slices.Contains(gapKinds(rep), GapUnverifiedChange.String()) {
+		t.Fatalf("gaps = %v: a passing browser check left the change unverified", gapKinds(rep))
+	}
+	// Unclassified, a browser call says nothing either way.
+	rep = Build(nil, ledgerOf(wrote("index.html"), evidence.Receipt{ToolName: "browser_act", Success: true}), nil)
+	if !slices.Contains(gapKinds(rep), GapUnverifiedChange.String()) {
+		t.Fatalf("gaps = %v: an unclassified browser call counted as a check", gapKinds(rep))
+	}
+}

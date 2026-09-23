@@ -240,6 +240,9 @@ func keptAnyPath(paths []string, inWorkspace func(string) bool) bool {
 	return slices.ContainsFunc(paths, inWorkspace)
 }
 
+// browserCheckTool is the browser call the host can classify as a check.
+const browserCheckTool = "browser_act"
+
 // verificationsOf keeps each delivery-verification command's latest run, in
 // first-run order, and marks the ones that predate the newest mutation. Runs
 // key on the verification they carry, not their shell wrapper, and the verdict
@@ -256,6 +259,11 @@ func verificationsOf(receipts []evidence.Receipt) []Verification {
 	at := map[string]int{}
 	for i, r := range receipts {
 		command := strings.TrimSpace(r.Command)
+		// A page the host watched the steps pass on is a check with no command
+		// line; the tool is its name, and the verdict is still the host's.
+		if command == "" && r.ToolName == browserCheckTool {
+			command = browserCheckTool
+		}
 		if command == "" || !evidence.ReceiptRunsVerification(r) {
 			continue
 		}

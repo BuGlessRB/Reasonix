@@ -30,6 +30,19 @@ const (
 	browserChangeLines   = 80
 )
 
+// The executor reads a call's host record only through tool.DetailedExecutor;
+// a browser tool missing half of it would have that record silently dropped.
+var (
+	_ tool.DetailedExecutor = browserAct{}
+	_ tool.DetailedExecutor = browserRead{}
+)
+
+// browserDescriptor is what a browser call is before it runs: a page, never a
+// shell, and nothing the host reads as a check until it has run.
+func browserDescriptor() *tool.ShellExecution {
+	return &tool.ShellExecution{Kind: browserExecutionKind, Verification: tool.ShellVerificationNotVerification}
+}
+
 // BrowserTools binds the browser tools to one agent's browser session.
 func BrowserTools(session *browser.Session) []tool.Tool {
 	return []tool.Tool{browserOpen{session: session}, browserRead{session: session}, browserAct{session: session}}
@@ -165,6 +178,22 @@ func (b browserRead) PermissionArgs(_ context.Context, args json.RawMessage) jso
 func (browserRead) ReadOnly() bool                                   { return true }
 func (browserRead) Sequential(context.Context, json.RawMessage) bool { return true }
 
+func (browserRead) ExecutionDescriptor(json.RawMessage) *tool.ShellExecution {
+	return browserDescriptor()
+}
+
+// ExecuteDetailed names the page a screenshot showed, read off the browser, so
+// the host can tell which written file has been looked at.
+func (b browserRead) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.DetailedResult, error) {
+	out, images, err := b.ExecuteWithImages(ctx, args)
+	ex := browserDescriptor()
+	if err == nil && len(images) > 0 && b.session != nil {
+		ex.Subject = b.session.PageURL(tabArg(args))
+		ex.State = tool.ShellStateCompleted
+	}
+	return tool.DetailedResult{Output: out, Images: images, Execution: ex}, err
+}
+
 func (b browserRead) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	text, _, err := b.ExecuteWithImages(ctx, args)
 	return text, err
@@ -277,6 +306,10 @@ func (b browserAct) PermissionArgs(ctx context.Context, args json.RawMessage) js
 		origin = permission.BrowserCredentialPrefix + origin
 	}
 	return hostSubjectArgs(b.Schema(), args, "origin", origin)
+}
+
+func (browserAct) ExecutionDescriptor(json.RawMessage) *tool.ShellExecution {
+	return browserDescriptor()
 }
 
 func (browserAct) ReadOnly() bool                                   { return false }

@@ -35,6 +35,10 @@ const (
 	// the final state has no passing evidence for. The workspace's own test of
 	// the same name is a different criterion — that is what capturing was for.
 	ObligationBaselineTest ObligationKind = "baseline_test_criterion"
+	// ObligationUnseenRender is a page or image written since a screenshot last
+	// showed it. Only looking settles it: a check that ran says the file parses,
+	// not that it looks like what was asked for.
+	ObligationUnseenRender ObligationKind = "unseen_render"
 )
 
 // CheckContract is what the project required when the task began beside what it

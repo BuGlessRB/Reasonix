@@ -69,7 +69,17 @@ func decorateExecutionReceipt(rec *evidence.Receipt, result string, ex *tool.She
 		rec.ExitCode = &code
 	}
 	rec.Verification = ex.Verification
+	// A screenshot of a local file is a look at that file. The page is the one
+	// the browser reported, so a model naming a different file changes nothing.
+	if ex.Kind == browserExecutionKind && ex.State == tool.ShellStateCompleted && rec.ToolName == "browser_read" {
+		if viewed := evidence.ViewedPath(ex.Subject); viewed != "" {
+			rec.Viewed = []string{viewed}
+		}
+	}
 }
+
+// browserExecutionKind marks a host record a browser tool produced.
+const browserExecutionKind = "browser"
 
 // composeSubagentAnswer assembles everything the parent is shown for one child
 // run: the host-adjudicated completion claim when the child submitted one, the

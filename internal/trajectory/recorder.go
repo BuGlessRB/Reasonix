@@ -188,6 +188,7 @@ type ReadinessAudit struct {
 	MissingSignoff            int    `json:"missing_signoff,omitempty"`
 	MissingMutation           int    `json:"missing_mutation,omitempty"`
 	MissingCapabilities       int    `json:"missing_capabilities,omitempty"`
+	MissingRender             int    `json:"missing_render,omitempty"`
 }
 
 // Recorder is an event.Sink decorator: every event (and optional-capability
@@ -341,6 +342,7 @@ func (r *Recorder) RecordReadinessAudit(a evidence.ReadinessAudit) {
 		MissingSignoff:            a.MissingSignoff,
 		MissingMutation:           a.MissingMutation,
 		MissingCapabilities:       a.MissingCapabilities,
+		MissingRender:             a.MissingRender,
 	}})
 	event.RecordReadinessAudit(r.inner, a)
 }

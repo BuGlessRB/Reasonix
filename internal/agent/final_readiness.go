@@ -30,10 +30,11 @@ type finalReadinessCheck struct {
 	missingSignoff            int
 	missingMutation           int
 	missingCapabilities       int
+	missingRender             int
 }
 
 func (c finalReadinessCheck) progressSignature() string {
-	return fmt.Sprintf("%d/%d/%d/%d/%d/%d/%d/%d/%d/%d\x00%s",
+	return fmt.Sprintf("%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d\x00%s",
 		c.missingProjectChecks,
 		c.incompleteTodos,
 		c.missingAcceptanceCriteria,
@@ -43,13 +44,14 @@ func (c finalReadinessCheck) progressSignature() string {
 		c.missingSignoff,
 		c.missingMutation,
 		c.missingCapabilities,
+		c.missingRender,
 		boolInt(c.applies),
 		c.reason,
 	)
 }
 
 func (c finalReadinessCheck) missingIDs() []string {
-	missing := make([]string, 0, 9)
+	missing := make([]string, 0, 10)
 	add := func(id string, count int) {
 		if count > 0 {
 			missing = append(missing, id)
@@ -64,6 +66,7 @@ func (c finalReadinessCheck) missingIDs() []string {
 	add("signoff", c.missingSignoff)
 	add("mutation", c.missingMutation)
 	add("capability", c.missingCapabilities)
+	add("render", c.missingRender)
 	return missing
 }
 
@@ -80,6 +83,7 @@ func (c finalReadinessCheck) audit(result evidence.ReadinessAuditResult, recover
 		MissingSignoff:            c.missingSignoff,
 		MissingMutation:           c.missingMutation,
 		MissingCapabilities:       c.missingCapabilities,
+		MissingRender:             c.missingRender,
 	}
 }
 
@@ -190,6 +194,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	missing = a.appendVerificationGap(&out, missing, writer, blockedWithCheck, verified)
 	missing = a.appendReviewGap(&out, missing)
 	missing = a.appendUnprovenMutationGap(&out, missing)
+	missing = a.appendUnseenRenderGap(&out, missing, writer)
 	if a.turnHasNothingToAnswerFor(out, missing) {
 		return finalReadinessCheck{}
 	}
@@ -305,12 +310,13 @@ func (a *Agent) appendReviewGap(out *finalReadinessCheck, missing []string) []st
 }
 
 // checkEstablished reports that something after the latest write stands as its
-// check: one the table recognised, a project's declared one, or one a
-// completion named and the ledger corroborated.
+// check: one the table recognised, a project's declared one, one a completion
+// named and the ledger corroborated, or, where only pages were drawn, a look.
 func (a *Agent) checkEstablished(writer int, verified bool) bool {
 	return verified ||
 		a.declaredChecksRanAfter(writer) ||
-		a.task.ledger.HasCorroboratedCitedCheckAfter(writer)
+		a.task.ledger.HasCorroboratedCitedCheckAfter(writer) ||
+		(a.renderRoot != "" && len(a.projectChecks) == 0 && a.task.ledger.OnlyRendersSeen(a.renderRoot))
 }
 
 // postWriteVerification reads what the checks after the latest write establish.
@@ -331,7 +337,11 @@ func (a *Agent) postWriteVerification(writer int) (verified, blockedWithCheck bo
 // turn is what the model was already told it was carrying.
 func (a *Agent) obligations() []evidence.Obligation {
 	owed := a.task.ledger.Obligations(a.checkContract())
-	return append(owed, evidence.BaselineTestObligations(a.baselineFacts(), a.mutationEpoch())...)
+	owed = append(owed, evidence.BaselineTestObligations(a.baselineFacts(), a.mutationEpoch())...)
+	if a.renderRoot != "" {
+		owed = append(owed, a.task.ledger.UnseenRenders(a.renderRoot)...)
+	}
+	return owed
 }
 
 // mutationEpoch is what a baseline result is bound to: the host's count of the
@@ -410,6 +420,28 @@ func (a *Agent) appendUnprovenMutationGap(out *finalReadinessCheck, missing []st
 	}
 	return append(missing, "a change ran whose extent the host could not establish, and no check can establish it: "+
 		"make the change again through a tool that reports what it touched, or call conclude_blocked with what cannot be established")
+}
+
+// appendUnseenRenderGap owes a look at each page or image the turn wrote and no
+// screenshot has shown since. It holds wherever verification is asked for, and
+// yields to a turn that declared the look impossible, as a missing browser is.
+func (a *Agent) appendUnseenRenderGap(out *finalReadinessCheck, missing []string, writer int) []string {
+	if a.renderRoot == "" || a.task.ledger.HasBlockedConclusionAfter(writer) {
+		return missing
+	}
+	if !a.deliveryProfile && (!a.turn.policySet || a.turn.policy.Verification < taskpolicy.VerifyTargeted) {
+		return missing
+	}
+	for _, o := range a.obligations() {
+		if o.Kind != evidence.ObligationUnseenRender {
+			continue
+		}
+		out.applies = true
+		out.missingRender++
+		missing = append(missing, "you wrote "+o.Cause+" and have not looked at it: "+o.Discharge+
+			", or call conclude_blocked if it cannot be opened")
+	}
+	return missing
 }
 
 // appendVerificationGap records what this turn owes for verification. Only what

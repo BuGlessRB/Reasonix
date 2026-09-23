@@ -58,6 +58,9 @@ type Receipt struct {
 	// output demonstrably carried. It is decided while the output is in hand,
 	// so the ledger keeps the verdict and never the content.
 	Showed []string `json:"showed,omitempty"`
+	// Viewed lists the workspace files a screenshot showed, read off the page the
+	// browser was on rather than off the model's arguments.
+	Viewed []string `json:"viewed,omitempty"`
 	// ReportKind is what a review_report handed back: the delivery fact, read
 	// off the payload. It says what the worker owed, never what it may close.
 	ReportKind ReviewKind `json:"report_kind,omitempty"`

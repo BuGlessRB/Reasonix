@@ -765,6 +765,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 			workspaceID:        strings.TrimSpace(opts.WorkspaceID),
 			classifierTaskText: opts.ClassifierTaskText,
 			writeWorkspaceRoot: strings.TrimSpace(opts.WriteWorkspaceRoot),
+			renderRoot:         strings.TrimSpace(opts.RenderRoot),
 			workspaceVCS:       strings.TrimSpace(opts.WorkspaceVCS),
 			subagentDepth:      subagentDepth,
 			maxSubagentDepth:   maxSubagentDepth,

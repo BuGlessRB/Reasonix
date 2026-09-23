@@ -112,6 +112,9 @@ type Options struct {
 	WriteScheduler *SubagentScheduler
 	// WriteWorkspaceRoot normalizes parent write reservations.
 	WriteWorkspaceRoot string
+	// RenderRoot is the workspace a written page or image is opened from to look
+	// at it. Empty when this agent has no browser or its model cannot see one.
+	RenderRoot string
 	// WorkspaceVCS names the workspace's version control ("" for none) for
 	// the turn block. Resolved once by the host, never probed per turn.
 	WorkspaceVCS string
