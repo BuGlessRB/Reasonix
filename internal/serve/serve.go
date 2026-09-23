@@ -110,6 +110,7 @@ func New(ctrl control.SessionAPI, bc *Broadcaster, serveCfg config.ServeConfig) 
 		bc.SetDisplayCurrency(cfg.ExplicitDisplayCurrency())
 	}
 	s.initTitleProvider()
+	s.nameWorkspaceHolder(ctrl)
 	s.attachWireLog()
 	return s
 }
@@ -295,6 +296,7 @@ func (s *Server) switchModelLocked(ctx context.Context, ref string) error {
 	}
 	s.ctrl = newCtrl
 	s.mu.Unlock()
+	s.nameWorkspaceHolder(newCtrl)
 	s.refreshProviderSetup(currentModelRef(newCtrl))
 
 	// Off-lock: tear down the old controller. Close can block up to 15s.
@@ -364,6 +366,7 @@ func (s *Server) reloadExtensions(ctx context.Context) error {
 	}
 	s.ctrl = newCtrl
 	s.mu.Unlock()
+	s.nameWorkspaceHolder(newCtrl)
 	s.refreshProviderSetup(currentModelRef(newCtrl))
 
 	cur.Close()
@@ -1177,25 +1180,4 @@ func removeSessionFiles(absDir, abs string) error {
 		return nil
 	}
 	return agent.ClearCleanupPending(abs)
-}
-
-// sessionTitle returns a title for a session: the cached flash-generated title
-// when its first user message is unchanged, otherwise a freshly generated one
-// (cached for next time), falling back to a truncated preview when generation
-// is off.
-func (s *Server) sessionTitle(name, first string, mod int64) string {
-	source := titleSource(first)
-	if cached, ok := s.titles.get(name, source, mod); ok {
-		return cached
-	}
-	s.scheduleTitle(name, source, mod)
-	return previewTitle(source)
-}
-
-func previewTitle(first string) string {
-	first = titleSource(first)
-	if r := []rune(first); len(r) > 50 {
-		return string(r[:47]) + "..."
-	}
-	return first
 }

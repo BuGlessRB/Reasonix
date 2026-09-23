@@ -91,9 +91,11 @@ func workspaceLeaseNotice(w workspacelease.Wait) event.Event {
 	default:
 		return event.Event{
 			Kind: event.Notice, Level: event.LevelWarn,
-			Code:   event.NoticeCodeWorkspaceLease,
-			Text:   "Another session is writing to this workspace; this session will continue automatically when it is safe.",
-			Detail: "workspace write lease is busy; read-only work remains concurrent",
+			Code: event.NoticeCodeWorkspaceLease,
+			Text: "Another session is writing to this workspace; this session will continue automatically when it is safe.",
+			// The holder's own name, as data: which conversation to go and
+			// look at is the one thing the text above cannot say.
+			Detail: w.Holder,
 		}
 	}
 }

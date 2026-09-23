@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"reasonix/internal/fileutil"
 )
 
 const retryInterval = 75 * time.Millisecond
@@ -50,6 +52,9 @@ const (
 type Wait struct {
 	Outcome WaitOutcome
 	Elapsed time.Duration
+	// Holder names the session writing when the wait began, as that session
+	// named itself; empty when it named nothing or could not be read.
+	Holder string
 }
 
 // WaitNotice receives both ends of a reported wait. It must return quickly and
@@ -63,6 +68,9 @@ type Owner struct {
 	lockPath string
 	onWait   WaitNotice
 	local    *localLock
+	// holder names this session to a session waiting on it. Read when the
+	// lease is taken, so a rename mid-hold shows on the next hold.
+	holder func() string
 
 	mu            sync.Mutex
 	activeRuns    int
@@ -96,6 +104,21 @@ func (o *Owner) State() State {
 
 type localLock struct {
 	token chan struct{}
+
+	mu     sync.Mutex
+	holder string
+}
+
+func (l *localLock) setHolder(name string) {
+	l.mu.Lock()
+	l.holder = name
+	l.mu.Unlock()
+}
+
+func (l *localLock) currentHolder() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.holder
 }
 
 var localRegistry = struct {
@@ -182,6 +205,30 @@ func nearestGitWorktreeRoot(path string) string {
 		}
 	}
 }
+
+// SetHolder names this session to anyone waiting while it holds the lease.
+func (o *Owner) SetHolder(name func() string) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.holder = name
+	o.mu.Unlock()
+}
+
+func (o *Owner) holderName() string {
+	o.mu.Lock()
+	name := o.holder
+	o.mu.Unlock()
+	if name == nil {
+		return ""
+	}
+	return strings.TrimSpace(name())
+}
+
+// holderPath is the note beside the lock naming who holds it, for a waiter in
+// another process: the lock itself says only that it is held.
+func (o *Owner) holderPath() string { return o.lockPath + ".holder" }
 
 // BeginRun registers an agent run that participates in this session. The call
 // is intentionally cheap and does not acquire the write lease; read-only turns
@@ -297,6 +344,7 @@ type waitClock struct {
 	owner   *Owner
 	started time.Time
 	began   bool
+	holder  string
 }
 
 func (w *waitClock) contend() {
@@ -311,7 +359,7 @@ func (w *waitClock) report() {
 		return
 	}
 	w.began = true
-	w.owner.notify(Wait{Outcome: WaitBegan, Elapsed: time.Since(w.started)})
+	w.owner.notify(Wait{Outcome: WaitBegan, Elapsed: time.Since(w.started), Holder: w.holder})
 }
 
 func (w *waitClock) close(outcome WaitOutcome) {
@@ -338,6 +386,7 @@ func (w *waitClock) remainingGrace() time.Duration {
 // the report is out, so a long wait stops waking to re-decide it.
 func (o *Owner) awaitToken(ctx context.Context, w *waitClock) error {
 	w.contend()
+	w.holder = o.local.currentHolder()
 	timer := time.NewTimer(w.remainingGrace())
 	defer timer.Stop()
 	grace := timer.C
@@ -372,7 +421,14 @@ func (o *Owner) acquire(ctx context.Context) (func(), error) {
 		releaseFile, err := tryLockFile(o.lockPath)
 		if err == nil {
 			w.close(WaitAcquired)
+			name := o.holderName()
+			o.local.setHolder(name)
+			if name != "" {
+				_ = fileutil.AtomicWriteFile(o.holderPath(), []byte(name+"\n"), 0o600)
+			}
 			return func() {
+				_ = os.Remove(o.holderPath())
+				o.local.setHolder("")
 				releaseFile()
 				releaseLocal()
 			}, nil
@@ -383,6 +439,9 @@ func (o *Owner) acquire(ctx context.Context) (func(), error) {
 			return nil, fmt.Errorf("acquire workspace write lease: %w", err)
 		}
 		w.contend()
+		if w.holder == "" {
+			w.holder = readHolder(o.holderPath())
+		}
 		w.report()
 		timer := time.NewTimer(retryInterval)
 		select {
@@ -396,4 +455,14 @@ func (o *Owner) acquire(ctx context.Context) (func(), error) {
 			return nil, ctx.Err()
 		}
 	}
+}
+
+// readHolder reads the name a holder in another process left beside the lock.
+// A missing or oversized note names nobody.
+func readHolder(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > 1<<10 {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }

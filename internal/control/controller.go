@@ -1380,13 +1380,6 @@ const (
 	closeJobsAsync
 )
 
-// WorkspaceLeaseState reports only whether this controller owns or is waiting
-// for the Delivery workspace writer lease. It never exposes filesystem or
-// process identity.
-func (c *Controller) WorkspaceLeaseState() workspacelease.State {
-	return c.workspaceLease.State()
-}
-
 // SetBypass is the legacy name for SetAutoApproveTools. Keep it for existing
 // desktop/serve bindings and CLI code that still uses the bypass wording.
 func (c *Controller) SetBypass(on bool) {

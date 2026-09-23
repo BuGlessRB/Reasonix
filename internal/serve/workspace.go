@@ -248,6 +248,7 @@ func (s *Server) switchWorkspaceLocked(ctx context.Context, dir string) error {
 	}
 	s.ctrl = newCtrl
 	s.mu.Unlock()
+	s.nameWorkspaceHolder(newCtrl)
 
 	// Session file names are timestamps, unique per project but not across
 	// them, so the title cache has to move with the directory.

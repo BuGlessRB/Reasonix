@@ -11,7 +11,7 @@
     "doc-prose": 2326,
     "error-text": 9,
     "essay": 2908,
-    "file-size": 24098,
+    "file-size": 24073,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4370,
@@ -732,7 +732,7 @@
     },
     "internal/control/controller.go": {
       "essay": 32,
-      "file-size": 625,
+      "file-size": 618,
       "frontend-parity": 6
     },
     "internal/control/controller_test.go": {
@@ -1391,7 +1391,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 401
+      "file-size": 383
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3

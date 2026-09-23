@@ -69,6 +69,9 @@ func TestWorkspaceLeaseHelperProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if name := os.Getenv("REASONIX_WORKSPACE_LEASE_HOLDER"); name != "" {
+		o.SetHolder(func() string { return name })
+	}
 	o.BeginRun()
 	if err := o.AcquireWrite(context.Background()); err != nil {
 		t.Fatal(err)
@@ -478,4 +481,87 @@ func TestCrossProcessLeaseBlocksAndCrashReleases(t *testing.T) {
 		t.Fatalf("OS lease did not release after helper crash: %v", err)
 	}
 	o.EndRun()
+}
+
+// A session waiting is told which one is writing, whether that one is in this
+// process or another: "another session" alone leaves a person to guess.
+func TestAWaitNamesTheSessionHoldingTheLease(t *testing.T) {
+	withWaitGrace(t, 20*time.Millisecond)
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
+	first, err := New(root, locks, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.SetHolder(func() string { return "tune the v2ray config" })
+	var log waitLog
+	second, err := New(root, locks, log.note)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.BeginRun()
+	second.BeginRun()
+	if err := first.AcquireWrite(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	acquired := make(chan error, 1)
+	go func() { acquired <- second.AcquireWrite(context.Background()) }()
+	time.Sleep(100 * time.Millisecond)
+	first.EndRun()
+	if err := <-acquired; err != nil {
+		t.Fatal(err)
+	}
+	second.EndRun()
+	log.mu.Lock()
+	defer log.mu.Unlock()
+	if len(log.seen) == 0 || log.seen[0].Holder != "tune the v2ray config" {
+		t.Fatalf("wait reports = %+v, want the first one naming the holder", log.seen)
+	}
+	if _, err := os.Stat(first.holderPath()); !os.IsNotExist(err) {
+		t.Fatalf("the holder note outlived the hold: %v", err)
+	}
+}
+
+func TestACrossProcessWaitNamesTheHolder(t *testing.T) {
+	withWaitGrace(t, 20*time.Millisecond)
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
+	ready := filepath.Join(testenv.TempDir(t), "ready")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestWorkspaceLeaseHelperProcess$")
+	cmd.Env = append(os.Environ(),
+		"REASONIX_WORKSPACE_LEASE_HELPER=1",
+		"REASONIX_WORKSPACE_LEASE_ROOT="+root,
+		"REASONIX_WORKSPACE_LEASE_DIR="+locks,
+		"REASONIX_WORKSPACE_LEASE_READY="+ready,
+		"REASONIX_WORKSPACE_LEASE_HOLDER=the other window",
+	)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	})
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(ready); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("helper process did not acquire lease")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	var log waitLog
+	o, err := New(root, locks, log.note)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o.BeginRun()
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	_ = o.AcquireWrite(ctx)
+	log.mu.Lock()
+	defer log.mu.Unlock()
+	if len(log.seen) == 0 || log.seen[0].Holder != "the other window" {
+		t.Fatalf("wait reports = %+v, want the first one naming the other process's session", log.seen)
+	}
 }

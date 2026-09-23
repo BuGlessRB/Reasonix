@@ -2,9 +2,12 @@ package serve
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"reasonix/internal/agent"
+	"reasonix/internal/control"
 	"reasonix/internal/nilutil"
 )
 
@@ -83,4 +86,46 @@ func (s *Server) drainTitles() {
 		delete(f.pending, job.name)
 		f.mu.Unlock()
 	}
+}
+
+// sessionTitle returns a title for a session: the cached flash-generated title
+// when its first user message is unchanged, otherwise a freshly generated one
+// (cached for next time), falling back to a truncated preview when generation
+// is off.
+func (s *Server) sessionTitle(name, first string, mod int64) string {
+	source := titleSource(first)
+	if cached, ok := s.titles.get(name, source, mod); ok {
+		return cached
+	}
+	s.scheduleTitle(name, source, mod)
+	return previewTitle(source)
+}
+
+// nameWorkspaceHolder lets a session waiting on this workspace see which
+// conversation is writing: the title the sidebar shows, else its first
+// message. Only a cached title is read; naming a holder never costs a call.
+func (s *Server) nameWorkspaceHolder(ctrl control.SessionAPI) {
+	named, ok := ctrl.(interface{ NameWorkspaceHolder(func() string) })
+	if !ok {
+		return
+	}
+	named.NameWorkspaceHolder(func() string {
+		path := ctrl.SessionPath()
+		if path == "" {
+			return ""
+		}
+		preview, _ := agent.SessionPreview(path)
+		if title, ok := s.titles.get(filepath.Base(path), titleSource(preview), agent.SessionContentModTime(path).UnixNano()); ok {
+			return title
+		}
+		return previewTitle(preview)
+	})
+}
+
+func previewTitle(first string) string {
+	first = titleSource(first)
+	if r := []rune(first); len(r) > 50 {
+		return string(r[:47]) + "..."
+	}
+	return first
 }
