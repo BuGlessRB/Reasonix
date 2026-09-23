@@ -183,7 +183,7 @@ export function Compaction({ port, onChanged }: { port: AgentPort; onChanged: ()
                 <span className="threshold-presets" aria-label={t("常用阈值")}>
                   {[0.5, 0.7, 0.85].map((ratio) => {
                     const value = Math.round(win * ratio / 1000) * 1000;
-                    return <button key={ratio} type="button" disabled={busy || off} onClick={() => { setDraft(String(value)); send(value); }}>{Math.round(ratio * 100)}%</button>;
+                    return <button key={ratio} type="button" data-action="compaction.threshold" data-value={String(ratio)} disabled={busy || off} onClick={() => { setDraft(String(value)); send(value); }}>{Math.round(ratio * 100)}%</button>;
                   })}
                 </span>
               </div>

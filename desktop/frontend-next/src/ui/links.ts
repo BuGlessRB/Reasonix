@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { AgentPort } from "../port/port";
 import { host } from "../port/host";
+import { listenAction } from "./listen";
 
 /** Where a link in this window goes. A webview has nowhere to put a new tab,
  *  so target="_blank" opens nothing at all, and letting the link navigate in
@@ -28,7 +29,6 @@ export function useLinkRouting(port: AgentPort | null, reveal: () => void, onErr
       // than a click that did nothing.
       void port.browserOpen(href, true).catch(() => port.openExternal(href).catch(onError));
     };
-    addEventListener("click", onClick);
-    return () => removeEventListener("click", onClick);
+    return listenAction(window, "click", { action: "external.open", listener: onClick as EventListener });
   }, [port, reveal, onError]);
 }

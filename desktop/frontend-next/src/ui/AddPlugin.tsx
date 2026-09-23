@@ -205,7 +205,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
       />
       <div className="acts">
         <span className="note">{t("仓库地址，或将文件夹拖入此处")}</span>
-        <button className="act" onClick={() => void pick()}>
+        <button className="act" data-action="extensions.pick-folder" onClick={() => void pick()}>
           {t("选文件夹")}
         </button>
         <button className="act" data-action="extensions.cancel" onClick={onClose}>

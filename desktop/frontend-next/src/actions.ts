@@ -153,6 +153,7 @@ export const ACTIONS: UIAction[] = [
   { id: "extensions.cancel", kind: "navigation", target: "none", proof: "interaction" },
   { id: "extensions.finish", kind: "navigation", target: "none", proof: "interaction" },
   { id: "extensions.add", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "extensions.pick-folder", kind: "shell-native", target: "none", proof: "interaction" },
   { id: "extensions.export", kind: "repeatable", target: "none", proof: "interaction" },
   { id: "extensions.enabled", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   { id: "extensions.remove", kind: "destructive", target: "entity", proof: "authority-effect" },
