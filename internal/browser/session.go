@@ -36,6 +36,7 @@ type Session struct {
 	closed   bool
 	owners   int
 	openedBy map[string]string // popup target id → opener tab id
+	lost     map[string]bool   // tabs closed outside the agent since it last opened one
 	changed  func()
 	checks   browserCallChecks
 }
@@ -49,7 +50,7 @@ func NewSession(cfg Config) *Session {
 	if cfg.Pool == nil {
 		cfg.Pool = &Pool{}
 	}
-	return &Session{cfg: cfg, openedBy: map[string]string{}}
+	return &Session{cfg: cfg, openedBy: map[string]string{}, lost: map[string]bool{}}
 }
 
 // TabInfo is what a tab is showing. Target is the browser's own id for the
@@ -92,6 +93,7 @@ func (s *Session) dropEngineLocked() {
 	}
 	for _, t := range s.tabs {
 		t.detach()
+		s.lost[t.id] = true
 	}
 	s.tabs, s.active = nil, nil
 	eng := s.eng
@@ -206,6 +208,9 @@ func (s *Session) tab(id string) (*tab, error) {
 	defer s.mu.Unlock()
 	if id == "" {
 		if s.active == nil {
+			if len(s.lost) > 0 {
+				return nil, closedOutside("the page")
+			}
 			return nil, fail(CodeNoTab, "no page is open; open one first")
 		}
 		return s.active, nil
@@ -214,6 +219,9 @@ func (s *Session) tab(id string) (*tab, error) {
 		if t.id == id {
 			return t, nil
 		}
+	}
+	if s.lost[id] {
+		return nil, closedOutside("tab " + id)
 	}
 	return nil, fail(CodeNoTab, "no tab %s in this session", id)
 }
@@ -242,7 +250,16 @@ func (s *Session) Open(ctx context.Context, rawURL, tabID string, newTab bool) (
 	if err := t.navigate(ctx, target); err != nil {
 		return t.info(true), err
 	}
+	s.mu.Lock()
+	clear(s.lost)
+	s.mu.Unlock()
 	return t.info(true), nil
+}
+
+// closedOutside names a page the browser lost without the agent closing it:
+// the person closed it, the page closed itself, or the browser went away.
+func closedOutside(what string) *Failure {
+	return fail(CodeTabClosed, "%s was closed outside the agent (by the person, by the page itself, or because the browser exited); ask whether to open it again rather than reopening it", what)
 }
 
 func (s *Session) activeTab() *tab {
@@ -277,8 +294,9 @@ func (s *Session) CloseTab(ctx context.Context, tabID string) error {
 	if err != nil {
 		return err
 	}
-	_ = t.eng.conn.call(ctx, "", "Target.closeTarget", map[string]any{"targetId": t.targetID}, nil)
+	// Removed first, so the destruction it causes is not read as someone else's.
 	s.removeTab(t)
+	_ = t.eng.conn.call(ctx, "", "Target.closeTarget", map[string]any{"targetId": t.targetID}, nil)
 	return nil
 }
 
@@ -386,6 +404,9 @@ func (s *Session) onBrowserEvent(ev event) {
 			return
 		}
 		if t := s.tabByTarget(p.TargetID); t != nil {
+			s.mu.Lock()
+			s.lost[t.id] = true
+			s.mu.Unlock()
 			s.removeTab(t)
 		}
 	}

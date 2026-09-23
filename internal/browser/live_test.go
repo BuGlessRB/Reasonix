@@ -546,3 +546,44 @@ addEventListener("resize", show); show();
 		t.Fatalf("the page did not scroll across: scrollX = %v", at)
 	}
 }
+
+// A page the person closes is not a page the agent lost track of. The model is
+// told which, or it reopens the window the person just shut, once per step.
+func TestLiveAPageClosedOutsideTheAgentSaysSo(t *testing.T) {
+	s := liveSession(t, true)
+	srv := liveServer(t, map[string]string{"/": `<title>Hello</title><h1>Hi</h1>`})
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	info, err := s.Open(ctx, srv.URL+"/", "", false)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := s.eng.conn.call(ctx, "", "Target.closeTarget", map[string]any{"targetId": info.Target}, nil); err != nil {
+		t.Fatalf("close from outside: %v", err)
+	}
+	for len(s.Tabs()) > 0 {
+		if ctx.Err() != nil {
+			t.Fatal("the closed page never left the session")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := s.Snapshot(ctx, "", ""); CodeOf(err) != CodeTabClosed {
+		t.Fatalf("the active page after an outside close = %v, want %s", err, CodeTabClosed)
+	}
+	if _, err := s.Switch(info.ID); CodeOf(err) != CodeTabClosed {
+		t.Fatalf("%s after an outside close = %v, want %s", info.ID, err, CodeTabClosed)
+	}
+
+	// The agent's own close is not someone else's.
+	again, err := s.Open(ctx, srv.URL+"/", "", false)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if err := s.CloseTab(ctx, again.ID); err != nil {
+		t.Fatalf("CloseTab: %v", err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if _, err := s.Snapshot(ctx, "", ""); CodeOf(err) != CodeNoTab {
+		t.Fatalf("after the agent closed its page = %v, want %s", err, CodeNoTab)
+	}
+}
