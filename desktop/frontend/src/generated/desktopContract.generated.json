@@ -5605,6 +5605,7 @@
         "kind": "object",
         "ref": "main.ProjectTreeSnapshot"
       },
+      "returnsError": true,
       "scope": {
         "inputs": [],
         "kind": "owner-state",
@@ -35851,6 +35852,16 @@
           "name": "revision",
           "type": {
             "kind": "integer"
+          }
+        },
+        {
+          "name": "workspaceGeneration",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "integer"
+            },
+            "kind": "nullable"
           }
         },
         {

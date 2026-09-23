@@ -2540,6 +2540,10 @@ func (a *App) ActivateTopic(scope, workspaceRoot, topicID, sessionPath string) (
 	navigation := a.desktopSessions.navigationSeq.Add(1)
 	a.singleSurfaceMu.Lock()
 	defer a.singleSurfaceMu.Unlock()
+	return a.activateTopicLocked(scope, workspaceRoot, topicID, sessionPath, navigation)
+}
+
+func (a *App) activateTopicLocked(scope, workspaceRoot, topicID, sessionPath string, navigation uint64) (TabMeta, error) {
 	if a.desktopSessions.navigationSeq.Load() != navigation {
 		return TabMeta{}, errSessionNavigationSuperseded
 	}

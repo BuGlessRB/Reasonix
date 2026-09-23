@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"reasonix/desktop/internal/browserops"
 	"reasonix/desktop/internal/instanceidentity"
-	"reasonix/desktop/internal/workspacestate"
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
 	"reasonix/internal/boot"
@@ -4734,6 +4733,13 @@ func (a *App) RemoveWorkspace(dir string) error {
 		return fmt.Errorf("workspace path is required")
 	}
 	dir = normalizeProjectRoot(dir)
+	a.singleSurfaceMu.Lock()
+	defer a.singleSurfaceMu.Unlock()
+	releaseRemoval, err := a.reserveWorkspaceRemoval(dir)
+	if err != nil {
+		return err
+	}
+	defer releaseRemoval()
 
 	var fallback *WorkspaceTab
 	// sessionRemovalMu covers every step that can still touch this workspace's
@@ -4741,8 +4747,8 @@ func (a *App) RemoveWorkspace(dir string) error {
 	// closing the unlinked runtimes (quiescing autosave). Once a runtime is
 	// unlinked from a.tabs/detachedSessions it is invisible to
 	// DeleteSession/TrashTopic/RestoreSession, so it must stop writing before
-	// the lock is released. Project bookkeeping, the fallback controller build,
-	// and notifications run after release.
+	// the lock is released. Durable project bookkeeping precedes unlinking;
+	// the fallback controller build and notifications run after release.
 	if err := func() error {
 		defer a.lockRuntimeMutation("remove-workspace")()
 		a.sessionRemovalMu.Lock()
@@ -4786,14 +4792,6 @@ func (a *App) RemoveWorkspace(dir string) error {
 				return fmt.Errorf("save current session before removing workspace: %w", err)
 			}
 		}
-		workspaceID, err := a.resolveDesktopWorkspaceID(a.bootContext(), "project", dir)
-		if err != nil {
-			return err
-		}
-		if err := a.workspaceRegistry().SetWorkspaceVisible(a.bootContext(), workspaceID, false); err != nil && !errors.Is(err, workspacestate.ErrWorkspaceNotFound) {
-			return err
-		}
-
 		a.mu.Lock()
 		for _, tab := range a.tabs {
 			if tabInWorkspace(tab, dir) && tab.hasActiveRuntimeWork() {
@@ -4813,6 +4811,35 @@ func (a *App) RemoveWorkspace(dir string) error {
 				return fmt.Errorf("workspace tabs changed while removing; retry")
 			}
 		}
+		a.mu.Unlock()
+
+		workspaceID, err := a.resolveDesktopWorkspaceID(a.bootContext(), "project", dir)
+		if err != nil {
+			return err
+		}
+		registry := a.workspaceRegistry()
+		state, err := registry.Load(a.bootContext())
+		if err != nil {
+			return err
+		}
+		wasVisible := state.Workspaces[workspaceID].Visible
+		if wasVisible {
+			if err := registry.SetWorkspaceVisible(a.bootContext(), workspaceID, false); err != nil {
+				return err
+			}
+		}
+		// Keep tab/runtime bindings intact until both durable sidebar stores have
+		// accepted the removal. Runtime admission remains frozen throughout.
+		if err := removeProject(dir); err != nil {
+			if wasVisible {
+				if restoreErr := registry.SetWorkspaceVisible(a.bootContext(), workspaceID, true); restoreErr != nil {
+					return errors.Join(err, fmt.Errorf("restore workspace visibility: %w", restoreErr))
+				}
+			}
+			return err
+		}
+
+		a.mu.Lock()
 		for _, candidate := range candidates {
 			id, tab := candidate.id, candidate.tab
 			if tab == nil || a.tabs[id] != tab || !tabInWorkspace(tab, dir) {
@@ -4867,9 +4894,6 @@ func (a *App) RemoveWorkspace(dir string) error {
 	}
 
 	forgetWorkspace(dir)
-	if err := removeProject(dir); err != nil {
-		return err
-	}
 	// If the removed workspace was the active one, clear the pointer
 	// so we don't leave a stale reference to a deleted project.
 	if loadWorkspace() == dir {
@@ -4944,16 +4968,68 @@ func (a *App) SwitchWorkspace(dir string) (string, error) {
 	if !info.IsDir() {
 		return "", fmt.Errorf("%s is not a directory", dir)
 	}
-
-	// Open a registered topic so the new workspace appears in the project tree
-	// immediately instead of only existing as an in-memory tab.
-	topic, err := a.CreateTopic("project", dir, "")
+	// Selecting a workspace is navigation, not a new-session command. Serialize
+	// selection and initial-topic creation so duplicate/retried opens reuse it.
+	navigation := a.desktopSessions.navigationSeq.Add(1)
+	a.singleSurfaceMu.Lock()
+	defer a.singleSurfaceMu.Unlock()
+	if a.desktopSessions.navigationSeq.Load() != navigation {
+		return "", errSessionNavigationSuperseded
+	}
+	releaseAdmission, err := a.beginProjectRuntimeAdmission("project", dir)
 	if err != nil {
 		return "", err
 	}
-	meta, err := a.ActivateTopic("project", dir, topic.ID, "")
+	releaseAdmission()
+
+	// Adding a folder is an explicit request to show that workspace again.
+	// EnsureWorkspaceResolved deliberately preserves an existing workspace's
+	// presentation, including Visible=false after RemoveWorkspace, so restore
+	// visibility through the dedicated presentation mutation before opening it.
+	workspaceID, err := a.ensureDesktopWorkspace(a.bootContext(), "project", dir)
 	if err != nil {
 		return "", err
+	}
+	registry := a.workspaceRegistry()
+	state, err := registry.Load(a.bootContext())
+	if err != nil {
+		return "", err
+	}
+	wasVisible := state.Workspaces[workspaceID].Visible
+	if !wasVisible {
+		if err := registry.SetWorkspaceVisible(a.bootContext(), workspaceID, true); err != nil {
+			return "", err
+		}
+	}
+	rollbackVisibility := func(cause error) error {
+		if wasVisible {
+			return cause
+		}
+		if restoreErr := registry.SetWorkspaceVisible(a.bootContext(), workspaceID, false); restoreErr != nil {
+			return errors.Join(cause, fmt.Errorf("restore workspace visibility: %w", restoreErr))
+		}
+		return cause
+	}
+
+	// Ensure project metadata is present before querying its existing topics,
+	// including placeholders left by an interrupted initial open.
+	if err := addProject(dir, ""); err != nil {
+		return "", rollbackVisibility(err)
+	}
+	topicID, sessionPath, err := a.workspaceEntryConversation(dir)
+	if err != nil {
+		return "", rollbackVisibility(err)
+	}
+	if topicID == "" && sessionPath == "" {
+		topic, err := a.CreateTopic("project", dir, "")
+		if err != nil {
+			return "", rollbackVisibility(err)
+		}
+		topicID = topic.ID
+	}
+	meta, err := a.activateTopicLocked("project", dir, topicID, sessionPath, navigation)
+	if err != nil {
+		return "", rollbackVisibility(err)
 	}
 	return meta.WorkspaceRoot, nil
 }

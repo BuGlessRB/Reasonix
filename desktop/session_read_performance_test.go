@@ -60,7 +60,7 @@ func TestProjectTreeSnapshotIsReadOnlyAcrossManyUnmigratedWorkspaces(t *testing.
 		t.Fatal(err)
 	}
 
-	snapshot := app.GetProjectTreeSnapshot()
+	snapshot := mustProjectTreeSnapshot(t, app)
 	if len(snapshot.Projects) < 8 {
 		t.Fatalf("snapshot projects=%d, want at least 8", len(snapshot.Projects))
 	}
