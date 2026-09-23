@@ -18,6 +18,14 @@ const SURFACE: Record<string, string[]> = {
   fgFaint: ["--faint", "--ghost"],
   accent: ["--accent"],
   accentFg: ["--accent-fg"],
+  float: ["--float"],
+  floatHi: ["--float-hi"],
+  codeBg: ["--face-code"],
+  sunkBg: ["--face-sunk"],
+  synKeyword: ["--syn-key"],
+  synString: ["--syn-str"],
+  synNumber: ["--syn-num"],
+  synFunction: ["--syn-fn"],
   // Shape and type. --r-pill is absent because a pill is a shape rather than a
   // size: a pack that could set it would round a button into something else.
   radiusXs: ["--r-xs"],
@@ -26,6 +34,14 @@ const SURFACE: Record<string, string[]> = {
   fontUi: ["--ui"],
   fontMono: ["--mono"],
 };
+
+// What a pack's own surfaces imply for the grounds it did not name.
+const DERIVED: [string, { source: string; paint: (t: Record<string, string>) => string }][] = [
+  ["float", { source: "panel", paint: (t) => t.panel }],
+  ["floatHi", { source: "bgElev", paint: (t) => t.bgElev }],
+  ["codeBg", { source: "bgSoft", paint: (t) => `color-mix(in srgb, ${t.bgSoft} 50%, ${t.bg ?? t.bgSoft})` }],
+  ["sunkBg", { source: "bg", paint: (t) => t.bg }],
+];
 
 // What a pack may not touch. ok/warn/err/net/deleg encode what is happening —
 // "this broke", "this is running", "this went out to a sub-agent" — and a
@@ -93,6 +109,12 @@ export function apply(pack: ThemePack | null, scheme: "light" | "dark", busy = f
   for (const [name, value] of Object.entries(tokens)) {
     const paint = ink(value, name, scheme, contrast);
     for (const v of SURFACE[name] ?? []) root.style.setProperty(v, paint);
+  }
+  // A pack written before these grounds existed still moves them: each follows
+  // the surface it sits on, instead of staying on the default palette under it.
+  for (const [token, from] of DERIVED) {
+    if (tokens[token] || !tokens[from.source]) continue;
+    for (const v of SURFACE[token]) root.style.setProperty(v, from.paint(tokens));
   }
   // The washes are tints of the accent, so a pack that moves the accent has to
   // move them too or the tinted backgrounds keep pointing at the old hue.

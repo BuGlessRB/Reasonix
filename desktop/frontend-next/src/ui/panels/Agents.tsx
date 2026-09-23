@@ -2,6 +2,7 @@ import type { Item } from "../../state/session";
 import { seconds } from "../../i18n/format";
 import { shortArgs } from "../args";
 import { t } from "../../i18n";
+import { toolFailed } from "../cards/outcome";
 
 import { agentsIn } from "./derive";
 import { Grp, Row } from "./kit";
@@ -29,7 +30,8 @@ export function Agents({ tasks }: { tasks: Task[] }) {
           <div className="ag" key={x.id}>
             <i
               className="pip"
-              data-settled={x.running ? undefined : ""}
+              data-settled={x.running || toolFailed(x.tool) ? undefined : ""}
+              data-failed={!x.running && toolFailed(x.tool) ? "" : undefined}
               style={x.running ? { background: "var(--net)", animation: "tick 1.6s ease-in-out infinite" } : undefined}
             />
             <span className="nm">
@@ -37,7 +39,7 @@ export function Agents({ tasks }: { tasks: Task[] }) {
               {(x.tool.profile?.count ?? 1) > 1 && <b className="mult">×{x.tool.profile?.count}</b>}
             </span>
             <span className="rt">
-              {x.running ? t("运行中") : x.tool.durationMs ? seconds(x.tool.durationMs, 0) : t("已交付")}
+              {x.running ? t("运行中") : toolFailed(x.tool) ? t("已中断") : x.tool.durationMs ? seconds(x.tool.durationMs, 0) : t("已交付")}
             </span>
           </div>
         ))}

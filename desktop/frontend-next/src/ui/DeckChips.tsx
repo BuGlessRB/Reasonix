@@ -17,11 +17,14 @@ export type Deck = "" | "agents" | "jobs";
 export function DeckChips({ tasks, jobs, open, onOpen }: { tasks: Task[]; jobs: JobEntry[]; open: Deck; onOpen: (next: (was: Deck) => Deck) => void }) {
   const liveAgents = useMemo(() => agentsIn(tasks.filter((x) => x.running)), [tasks]);
   const liveJobs = useMemo(() => jobs.filter((j) => j.status === "running").length, [jobs]);
-  if (tasks.length === 0 && jobs.length === 0) return null;
+  if (liveAgents === 0 && jobs.length === 0) return null;
 
+  // Only while a delegate is running: a finished one is history, which the
+  // transcript and the side panel keep, and a reading left standing after the
+  // work stopped reads as work still going.
   return (
     <>
-      {tasks.length > 0 && (
+      {liveAgents > 0 && (
         <div className="studio-deck-anchor" data-open={open === "agents" ? "" : undefined}>
           <button
             type="button"
@@ -33,7 +36,7 @@ export function DeckChips({ tasks, jobs, open, onOpen }: { tasks: Task[]; jobs: 
             onClick={() => onOpen((was) => (was === "agents" ? "" : "agents"))}
           >
             <StudioIcon name="branch" />
-            <b>{liveAgents || agentsIn(tasks)}</b>
+            <b>{liveAgents}</b>
             <span>{t("子代理")}</span>
           </button>
           <div className="studio-deck-pop" role="dialog" aria-label={t("子代理")}>

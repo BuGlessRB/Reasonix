@@ -317,6 +317,10 @@ rules are written in.
   a card the reader has never reached is assumed to be. `display: contents` on
   the frame between block and card keeps the card the block's child everywhere
   layout is concerned.
+- `content-visibility` contains paint, so nothing a card draws may reach past
+  its own box. The reply's action row sits 6px left of the text so its icons
+  line up with it; the reply's box is widened by the same 6px (padding with a
+  matching negative margin) so the hovered button is not cut in half.
 - `.flow-end` answers "are we at the bottom" by being observed, which costs
   nothing per scroll, rather than measuring the whole record.
 

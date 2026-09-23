@@ -40,8 +40,10 @@ describe("the deck readings", () => {
     expect(settled.querySelector('[data-action="deck.jobs"]')?.hasAttribute("data-live")).toBe(false);
   });
 
-  it("marks a reading whose work is still moving", () => {
+  // Delegates that stopped are history the transcript keeps; a reading left on
+  // the rail after they stopped reads as work still going.
+  it("shows the delegates only while one is running", () => {
     expect(draw([task(true)], []).querySelector('[data-action="deck.agents"]')?.hasAttribute("data-live")).toBe(true);
-    expect(draw([task(false)], []).querySelector('[data-action="deck.agents"]')?.hasAttribute("data-live")).toBe(false);
+    expect(draw([task(false)], []).querySelector('[data-action="deck.agents"]')).toBeNull();
   });
 });

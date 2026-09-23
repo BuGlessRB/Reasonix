@@ -72,7 +72,7 @@ export function ApprovalCard({ item, onApprove, onFullAccess, onPlan }: Props) {
   return (
     // 咨询与授权此前共用 data-k="ask" 和同一个「?」：一个是模型想听你的意见，
     // 另一个是它要动你的文件。授权借「写」的类别 —— 它本来就是一次写权限。
-    <div className="call" data-k="write" data-approval={sealed ? item.verdict : "pending"}>
+    <div className="call" data-k="write" data-approval={sealed ? item.verdict : "pending"} data-prompt={sealed ? "settled" : "pending"}>
       <div className="g">
         <Sym glyph="⊛" />
         <span className="line" />
@@ -190,7 +190,7 @@ function PlanGate({ item, onPlan }: { item: Props["item"]; onPlan: Props["onPlan
           ? [t("继续规划。"), t("在下方说明需要修改的内容，规划者将据此重写该计划。")]
           : [t("已在其他窗口处理。"), t("请以最新运行状态为准。")];
   return (
-    <div className="call" data-k="ask">
+    <div className="call" data-k="ask" data-prompt={sealed ? "settled" : "pending"}>
       <div className="g">
         <Sym glyph="?" />
         <span className="line" />

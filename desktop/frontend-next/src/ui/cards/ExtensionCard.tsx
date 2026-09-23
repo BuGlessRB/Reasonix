@@ -56,10 +56,8 @@ export function ExtensionCard({ ext, onInvoke, onSubmit }: Props) {
       </div>
       <div className="c">
         <div className="hl">
-          <span className="nm">{ext.pluginId}</span>
-          <span className="tag">{ext.kind}</span>
-          {ext.card?.title && <span className="arg">{ext.card.title}</span>}
-          {ext.form?.title && <span className="arg">{ext.form.title}</span>}
+          <span className="nm">{ext.card?.title || ext.form?.title || ext.pluginId}</span>
+          <span className="tag">{t("扩展 · {id}", { id: ext.pluginId })}</span>
         </div>
         <div className="out">
           {/* A composed surface draws itself from primitives. It comes first

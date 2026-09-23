@@ -134,7 +134,7 @@ describe("mount is not a cause", () => {
   it("does not replay an old card's inner pieces when virtualization remounts it", () => {
     for (const selector of [
       ".nest-bd .call", ".nest", ".ask", ".find", ".nest-ret",
-      ".medit-r", ".guard", ".apv", ".hl .cost", ".pip[data-settled]",
+      ".guard", ".apv", ".hl .cost", ".pip[data-settled]",
       ".pane[data-run=\"done\"] .rmark", ".pane[data-run=\"done\"] .rmark path",
     ]) {
       expect(entrances(selector), `${selector} moves merely because an old card mounted`).toEqual([]);
@@ -146,7 +146,6 @@ describe("mount is not a cause", () => {
       ".enterbox[data-enter] .nest-bd .call",
       ".enterbox[data-enter] .find",
       ".enterbox[data-enter] .nest-ret",
-      ".enterbox[data-enter] .medit-r",
       ".enterbox[data-enter] .guard",
       ".enterbox[data-enter] .apv",
       ".enterbox[data-enter] .hl .cost",

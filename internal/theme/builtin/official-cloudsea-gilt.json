@@ -18,7 +18,15 @@
       "fgDim": "#4E5766",
       "fgFaint": "#616976",
       "accent": "#9C6D0C",
-      "accentFg": "#FFFFFF"
+      "accentFg": "#FFFFFF",
+      "float": "#FFFFFF",
+      "floatHi": "#FFFFFF",
+      "codeBg": "#ECF0F6",
+      "sunkBg": "#E6EBF3",
+      "synKeyword": "#8E630B",
+      "synString": "#22775B",
+      "synNumber": "#3E7722",
+      "synFunction": "#962C95"
     },
     "dark": {
       "bg": "#080B12",
@@ -31,7 +39,15 @@
       "fgDim": "#9BA6B6",
       "fgFaint": "#808B98",
       "accent": "#E5BA72",
-      "accentFg": "#241A08"
+      "accentFg": "#241A08",
+      "float": "#1B2230",
+      "floatHi": "#171D28",
+      "codeBg": "#0C1019",
+      "sunkBg": "#080B12",
+      "synKeyword": "#E5BA72",
+      "synString": "#90DFC2",
+      "synNumber": "#AEDF90",
+      "synFunction": "#DC90DF"
     }
   },
   "sky": {

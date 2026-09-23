@@ -81,7 +81,7 @@ describe("the Studio shell closes over the active theme", () => {
 describe("scheme-scoped literals, which outrank the closure", () => {
   const css = Object.values(CSS)[0];
   const SCHEME_LITERAL = /^:root\[data-theme=[^\n]*#[0-9a-fA-F]{3,8}/gm;
-  const CARRIED = 149;
+  const CARRIED = 24;
 
   it("is not growing", () => {
     const found = css.match(SCHEME_LITERAL) ?? [];

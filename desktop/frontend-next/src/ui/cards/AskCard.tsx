@@ -1,4 +1,5 @@
 import type { AskReason } from "../../port/session";
+import { Sym } from "../Sym";
 import { useState } from "react";
 import { t } from "../../i18n";
 import type { Item } from "../../state/session";
@@ -72,12 +73,15 @@ export function AskCard({ item, onAnswer }: Props) {
   };
 
   return (
-    <div className="call" data-k="ask">
+    <div className="call" data-k="ask" data-prompt={sealed ? "settled" : "pending"}>
+      <div className="g">
+        <Sym glyph="?" />
+        <span className="line" />
+      </div>
       <div className="c">
         <div className="hl">
-          <span className="ask-badge" aria-hidden="true">?</span>
           <span className="nm">{askHeading(qs)}</span>
-          <span className="arg">{t("{n} 个问题", { n: qs.length })}</span>
+          <span className="tag">{t("{n} 个问题", { n: qs.length })}</span>
         </div>
         <div className="out">
           <div className="ask" data-sealed={sealed ? "" : undefined} aria-busy={submitting}>

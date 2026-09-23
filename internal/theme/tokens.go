@@ -21,28 +21,36 @@ const (
 	TokenFont   TokenKind = "font"
 )
 
-// Tokens is the pack-facing vocabulary and the only one; a frontend maps these
-// onto its own CSS variables, which stay ours to rename. What is absent is
-// absent on purpose: ok/warn/err/net/deleg carry meaning rather than taste, a
-// pill radius is a shape rather than a size, and a pack that could stretch a
-// transition could make the app feel broken without ever looking wrong.
+// Tokens is the pack-facing vocabulary; a frontend maps it onto its own CSS
+// variables. Absent on purpose: ok/warn/err/net/deleg carry meaning rather than
+// taste, a pill radius is a shape, and a stretched transition would make the app
+// feel broken. Floating, code and sunken grounds and syntax colours are taste,
+// so a pack sets them instead of leaving them on the default palette.
 var Tokens = map[string]TokenKind{
-	"bg":         TokenColour,
-	"bgSoft":     TokenColour,
-	"bgElev":     TokenColour,
-	"panel":      TokenColour,
-	"border":     TokenColour,
-	"borderSoft": TokenColour,
-	"fg":         TokenColour,
-	"fgDim":      TokenColour,
-	"fgFaint":    TokenColour,
-	"accent":     TokenColour,
-	"accentFg":   TokenColour,
-	"radiusXs":   TokenLength,
-	"radiusSm":   TokenLength,
-	"radiusMd":   TokenLength,
-	"fontUi":     TokenFont,
-	"fontMono":   TokenFont,
+	"bg":          TokenColour,
+	"bgSoft":      TokenColour,
+	"bgElev":      TokenColour,
+	"panel":       TokenColour,
+	"border":      TokenColour,
+	"borderSoft":  TokenColour,
+	"fg":          TokenColour,
+	"fgDim":       TokenColour,
+	"fgFaint":     TokenColour,
+	"accent":      TokenColour,
+	"accentFg":    TokenColour,
+	"float":       TokenColour,
+	"floatHi":     TokenColour,
+	"codeBg":      TokenColour,
+	"sunkBg":      TokenColour,
+	"synKeyword":  TokenColour,
+	"synString":   TokenColour,
+	"synNumber":   TokenColour,
+	"synFunction": TokenColour,
+	"radiusXs":    TokenLength,
+	"radiusSm":    TokenLength,
+	"radiusMd":    TokenLength,
+	"fontUi":      TokenFont,
+	"fontMono":    TokenFont,
 }
 
 // TokenNames returns the vocabulary sorted, for callers that report it.

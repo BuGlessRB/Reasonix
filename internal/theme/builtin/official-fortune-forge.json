@@ -18,7 +18,15 @@
       "fgDim": "#6E4E35",
       "fgFaint": "#846646",
       "accent": "#A92D22",
-      "accentFg": "#FFF8E8"
+      "accentFg": "#FFF8E8",
+      "float": "#FFFDF6",
+      "floatHi": "#FFFDF6",
+      "codeBg": "#FCF3DE",
+      "sunkBg": "#FFF8E8",
+      "synKeyword": "#A92D22",
+      "synString": "#257E2C",
+      "synNumber": "#6C7321",
+      "synFunction": "#582C96"
     },
     "dark": {
       "bg": "#1D140D",
@@ -31,7 +39,15 @@
       "fgDim": "#DDC49C",
       "fgFaint": "#A9926B",
       "accent": "#E8AD38",
-      "accentFg": "#241606"
+      "accentFg": "#241606",
+      "float": "#291E13",
+      "floatHi": "#302417",
+      "codeBg": "#221810",
+      "sunkBg": "#1D140D",
+      "synKeyword": "#E8AD38",
+      "synString": "#90DFC5",
+      "synNumber": "#ABDF90",
+      "synFunction": "#DF90DF"
     }
   },
   "recipes": {

@@ -3,6 +3,10 @@ package theme
 import (
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -121,7 +125,7 @@ func TestDecodeKeepsGoodTokensAndReportsBadOnes(t *testing.T) {
 func TestShippedPacksMeetTextContrast(t *testing.T) {
 	const aa = 4.5
 	inks := []string{"fg", "fgDim", "fgFaint"}
-	surfaces := []string{"bg", "bgSoft", "panel", "bgElev"}
+	surfaces := []string{"bg", "bgSoft", "panel", "bgElev", "float", "floatHi", "codeBg", "sunkBg"}
 	packs := listBuiltin()
 	if len(packs) == 0 {
 		t.Fatal("no packs ship; the embed is broken")
@@ -169,4 +173,52 @@ func relativeLuminance(t *testing.T, hex string) float64 {
 		return math.Pow((c+0.055)/1.055, 2.4)
 	}
 	return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
+}
+
+// Code is read on its own ground, so each syntax colour a pack ships is held to
+// the same AA line on the code background that text is held to elsewhere.
+func TestShippedPacksMeetSyntaxContrast(t *testing.T) {
+	const aa = 4.5
+	for _, pack := range listBuiltin() {
+		for _, scheme := range []string{"light", "dark"} {
+			tokens := pack.Tokens[scheme]
+			bg, ok := tokens["codeBg"]
+			if !ok {
+				t.Errorf("%s %s: no codeBg", pack.ID, scheme)
+				continue
+			}
+			for _, name := range []string{"synKeyword", "synString", "synNumber", "synFunction"} {
+				fg, ok := tokens[name]
+				if !ok {
+					t.Errorf("%s %s: no %s", pack.ID, scheme, name)
+					continue
+				}
+				if got := contrastRatio(t, fg, bg); got < aa {
+					t.Errorf("%s %s: %s %s on codeBg %s is %.2f, below AA", pack.ID, scheme, name, fg, bg, got)
+				}
+			}
+		}
+	}
+}
+
+// The vocabulary is the kernel's and the mapping onto CSS variables is the
+// frontend's; a token one side knows and the other does not is either accepted
+// and never painted, or painted and never accepted.
+func TestThemeTokenVocabularyMatchesTheFrontend(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "desktop", "frontend-next", "src", "ui", "theme.ts"))
+	if err != nil {
+		t.Skipf("frontend source not present: %v", err)
+	}
+	block := regexp.MustCompile(`(?s)const SURFACE: Record<string, string\[\]> = \{(.*?)\n\};`).FindSubmatch(src)
+	if block == nil {
+		t.Fatal("theme.ts no longer declares SURFACE; update this test with it")
+	}
+	var frontend []string
+	for _, m := range regexp.MustCompile(`(?m)^\s*([A-Za-z]+):\s*\[`).FindAllSubmatch(block[1], -1) {
+		frontend = append(frontend, string(m[1]))
+	}
+	slices.Sort(frontend)
+	if kernel := TokenNames(); !slices.Equal(frontend, kernel) {
+		t.Fatalf("frontend maps %v, kernel accepts %v", frontend, kernel)
+	}
 }

@@ -35,7 +35,7 @@ const MARKS: Record<string, string> = {
 // change per call site rather than per rule — recorded so the count cannot grow
 // while the work is outstanding. Never widen this to land a change.
 const MIXED = new Set([
-  "arg", "c", "cnt", "cost", "cur", "d", "delta", "dt", "fail", "isolab", "k",
+  "c", "cnt", "cost", "cur", "d", "delta", "dt", "fail", "isolab", "k",
   "lb", "meta", "mk", "n", "nm", "ntimes", "path", "pill", "pt", "r", "rmtcand", "rt",
   "sc", "sessmeta", "st", "sub", "sym", "sz", "tag", "u", "uspan", "v", "wsmeta",
 ]);
