@@ -8,6 +8,9 @@ import (
 	"reasonix/internal/provider"
 )
 
+// steerEntry is one mid-turn guidance admission. host marks the ones the
+// runtime queued for itself, which the model must not read as the user
+// speaking.
 type steerEntry struct {
 	itemID string
 	load   func() (string, error)
@@ -167,4 +170,92 @@ func (a *Agent) recordUnappliedSteer(text string, host bool, itemID ...string) {
 		Text:   UnappliedSteerNotice(text),
 		ItemID: id,
 	})
+}
+
+// Steer queues a message for mid-turn injection and reports whether an active
+// turn accepted it; on false nothing was queued and the caller delivers it
+// another way, typically as a new turn. The active check keeps a steer landing
+// between the exit flush and running=false from sitting unconsumed and unsaved.
+func (a *Agent) Steer(text string) bool {
+	return a.SteerItem("", func() (string, error) { return text, nil })
+}
+
+// SteerHostNotice queues runtime-authored guidance on the same path as Steer,
+// attributed to the host instead of the user.
+func (a *Agent) SteerHostNotice(text string) bool {
+	return a.queueSteer(steerEntry{load: func() (string, error) { return text, nil }, host: true})
+}
+
+// SteerItem queues durable-inbox guidance identified by itemID. load is called
+// only when the entry is consumed so the agent does not retain every body.
+func (a *Agent) SteerItem(itemID string, load func() (string, error)) bool {
+	return a.queueSteer(steerEntry{itemID: itemID, load: load})
+}
+
+func (a *Agent) queueSteer(e steerEntry) bool {
+	return a.steer.admit(e)
+}
+
+// SteerConsumed returns true when the steer queue became empty after the last consume.
+func (a *Agent) SteerConsumed() bool {
+	return a.steer.drained()
+}
+
+func (a *Agent) consumeSteer() (text, itemID string, host, ok bool) {
+	e, ok := a.steer.take()
+	if !ok {
+		return "", "", false, false
+	}
+	if e.load != nil {
+		t, err := e.load()
+		if err != nil {
+			return "", e.itemID, e.host, false
+		}
+		return t, e.itemID, e.host, true
+	}
+	return e.text, e.itemID, e.host, true
+}
+
+// closeSteerIntakeIfIdle atomically closes the normal-completion race between
+// the final queue check and Run returning. A steer accepted before this check
+// keeps the loop alive; one arriving after it is rejected so the host can keep
+// the user's draft and retry it as a regular follow-up.
+func (a *Agent) closeSteerIntakeIfIdle() bool {
+	return a.steer.closeIfIdle()
+}
+
+// flushSteerQueue ends the turn's steer intake. Guidance that arrived too late
+// to be consumed is persisted for transcript visibility but marked local-only:
+// replaying it to the model on the next unrelated user turn can execute a stale
+// historical task (#7045). An explicit warning keeps the transcript honest
+// without presenting the text as successfully applied guidance (#6238).
+func (a *Agent) flushSteerQueue() {
+	for _, e := range a.steer.close() {
+		text := e.text
+		if e.load != nil {
+			if t, err := e.load(); err == nil {
+				text = t
+			}
+		}
+		a.recordUnappliedSteer(text, e.host, e.itemID)
+	}
+}
+
+// UnappliedSteerNotice returns the durable warning shown for guidance that was
+// accepted during an abnormal turn exit but never reached a provider request.
+func UnappliedSteerNotice(text string) string {
+	return "Guidance was not applied because the turn ended before it could be processed. Send it again if it is still needed:\n" + text
+}
+
+// RecordUnappliedSteer stores guidance that could not affect its intended
+// in-flight turn. The orphan-tool sentinel makes older readers drop the record
+// during wire normalization, while current readers use LocalOnly to exclude it
+// before every provider request. itemID correlates the notice with the durable
+// session inbox entry when one exists.
+func (a *Agent) RecordUnappliedSteer(text string, itemID ...string) {
+	a.recordUnappliedSteer(text, false, itemID...)
+}
+
+func (a *Agent) steerQueueLen() int {
+	return a.steer.pending()
 }

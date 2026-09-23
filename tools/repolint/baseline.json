@@ -8,10 +8,10 @@
     "complexity": 1014,
     "doc-language": 0,
     "doc-owner": 43,
-    "doc-prose": 2327,
+    "doc-prose": 2326,
     "error-text": 9,
-    "essay": 2912,
-    "file-size": 24191,
+    "essay": 2908,
+    "file-size": 24099,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4370,
@@ -75,7 +75,7 @@
     },
     "desktop/frontend-next/src/styles/LAYOUT.md": {
       "doc-owner": 1,
-      "doc-prose": 114
+      "doc-prose": 113
     },
     "desktop/frontend-next/src/styles/TOKENS.md": {
       "doc-owner": 1,
@@ -262,8 +262,8 @@
     },
     "internal/agent/agent.go": {
       "complexity": 37,
-      "essay": 37,
-      "file-size": 1315,
+      "essay": 33,
+      "file-size": 1223,
       "function-size": 102
     },
     "internal/agent/agent_options.go": {
