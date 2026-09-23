@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useStartsOpen } from "../../state/foldpref";
 import { t } from "../../i18n";
 import { nestLabel } from "../delegation";
 import type { ExtensionSurface, Tool } from "../../port/wire";
@@ -110,10 +111,12 @@ export function ToolCard({
   // Running is not a reason to show the arguments: the group above already says
   // the work is happening, and a call that opens itself pushes the transcript
   // around while it reads. A failure is different — that is what is being asked.
-  const [open, setOpen] = useState(bad);
+  const start = useStartsOpen("steps", false, bad);
+  const [touched, setOpen] = useState<boolean | null>(null);
   useEffect(() => {
-    if (bad) setOpen(true);
+    if (bad) setOpen(null);
   }, [bad]);
+  const open = touched ?? start;
   const changes = changeCounts(tool);
   const hasBody = Boolean(
     takeover || tool.diff || goal || tool.name === "todo_write" ||
@@ -257,7 +260,7 @@ export function ToolCard({
       </div>
       <div className="c">
         {hasBody ? (
-          <details className="tool-disclosure" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+          <details className="tool-disclosure" open={open} onToggle={(event) => event.currentTarget.open !== open && setOpen(event.currentTarget.open)}>
             <summary className="hl" data-swap={settling.swap ? "" : undefined}>{heading}</summary>
             {body}
           </details>

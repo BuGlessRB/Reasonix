@@ -6,6 +6,7 @@ import { STORAGE as LANG_KEY, t } from "../i18n";
 import { pct } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { Notifications } from "./Notifications";
+import { Folding } from "./Folding";
 import { Switch } from "./Switch";
 import { setShowsReceipt, showsReceipt } from "../state/session";
 
@@ -612,6 +613,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         </section>
       )}
 
+      <Folding />
       <Notifications port={port} />
 
       {/* What makes this page read as a console is that all of it arrives at

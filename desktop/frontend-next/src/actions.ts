@@ -67,6 +67,9 @@ export const ACTIONS: UIAction[] = [
   // The way out of a window whose assets an update replaced underneath it.
   { id: "chrome.reload", kind: "navigation", target: "none", proof: "interaction" },
   { id: "chrome.receipt", kind: "view", target: "none", proof: "interaction" },
+  { id: "transcript.fold", kind: "view", target: "none", proof: "interaction" },
+  { id: "transcript.fold-preset", kind: "view", target: "none", proof: "interaction" },
+  { id: "transcript.fold-preview", kind: "view", target: "none", proof: "interaction" },
   { id: "chrome.account", kind: "navigation", target: "none", proof: "interaction" },
   { id: "metrics.details", kind: "view", target: "optional", proof: "interaction" },
   { id: "session.menu", kind: "view", target: "entity", proof: "interaction" },

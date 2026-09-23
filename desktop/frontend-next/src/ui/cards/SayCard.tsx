@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
+import { useStartsOpen } from "../../state/foldpref";
 import { StudioIcon } from "../StudioIcon";
 import { t } from "../../i18n";
 import { count, decimals } from "../../i18n/format";
@@ -68,7 +69,9 @@ function download(text: string) {
 }
 
 export function SayCard({ item, afterAnswer, reply }: { item: Extract<Item, { t: "say" }>; afterAnswer?: ReactNode; reply?: ReplyActions }) {
-  const [open, setOpen] = useState(false);
+  const start = useStartsOpen("thinking", !item.done && !item.text);
+  const [touched, setOpen] = useState<boolean | null>(null);
+  const open = touched ?? start;
   const [menu, setMenu] = useState<"" | "retry" | "more">("");
   // The menu draws above this row, outside its box, so leaving the row is the
   // way to reach it — not the way to dismiss it.
@@ -93,7 +96,7 @@ export function SayCard({ item, afterAnswer, reply }: { item: Extract<Item, { t:
         </div>
         <div className="out">
           {item.reasoning?.trim() && (
-            <details className="think" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+            <details className="think" open={open} onToggle={(e) => e.currentTarget.open !== open && setOpen(e.currentTarget.open)}>
               <summary>
                 <span className="fold">{item.done ? thoughtLabel(item) : t("思考中…")}</span>
               </summary>

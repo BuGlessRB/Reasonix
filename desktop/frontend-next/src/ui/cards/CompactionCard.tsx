@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { Compaction } from "../../port/wire";
+import { useStartsOpen } from "../../state/foldpref";
 import { Sym } from "../Sym";
 import { t } from "../../i18n";
 import { tokens } from "../../i18n/format";
@@ -131,18 +133,25 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
                 )}
               </div>
               <Coverage c={c} />
-              {c.summary && (
-                <details>
-                  <summary>
-                    <span className="fold">{t("查看其后续使用的简报")}</span>
-                  </summary>
-                  <div className="txt">{c.summary}</div>
-                </details>
-              )}
+              {c.summary && <Brief text={c.summary} />}
             </div>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function Brief({ text }: { text: string }) {
+  const start = useStartsOpen("compaction");
+  const [touched, setOpen] = useState<boolean | null>(null);
+  const open = touched ?? start;
+  return (
+    <details open={open} onToggle={(e) => e.currentTarget.open !== open && setOpen(e.currentTarget.open)}>
+      <summary>
+        <span className="fold">{t("查看其后续使用的简报")}</span>
+      </summary>
+      <div className="txt">{text}</div>
+    </details>
   );
 }

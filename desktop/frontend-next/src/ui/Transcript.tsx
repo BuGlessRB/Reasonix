@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
+import { memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
 import { decimals } from "../i18n/format";
 import { t } from "../i18n";
 import type { Item, Waiting } from "../state/session";
@@ -21,7 +21,8 @@ import { toolFailed } from "./cards/outcome";
 import { drawn, transcriptRows } from "./turnrows";
 import { Rail, type RailMark } from "./Rail";
 import { StudioIcon } from "./StudioIcon";
-import { clearFind, paintFind } from "./findpaint";
+import { LiveWork, useStartsOpen } from "../state/foldpref";
+import { landingBox, useFindLanding, useFindPaint } from "./findland";
 
 interface Props {
   items: Item[];
@@ -160,11 +161,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
     });
   }, [scroll]);
 
-  useEffect(() => {
-    if (hidden) return clearFind();
-    paintFind(flow.current, query ?? "", find?.id ?? null);
-    return clearFind;
-  }, [hidden, query, find, items, revision]);
+  useFindPaint(flow, hidden, query ?? "", find?.id ?? null);
 
   useEffect(() => {
     const onSelect = () => {
@@ -345,7 +342,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   // or the follow would read this scroll as the transcript moving and stay
   // pinned to the bottom the reader just left.
   const land = useCallback(
-    (block: number, into: number, selector: string) => {
+    (block: number, into: number, selector: string, clear = 12) => {
       const root = scroll.current;
       const inner = flow.current;
       if (!root || !inner) return;
@@ -359,18 +356,26 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       // in the window" — writing that back as scrollTop barely moves anything.
       const topOf = (el: HTMLElement) => el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
       const chunk = inner.querySelectorAll<HTMLElement>(".chunk")[block];
-      if (chunk) root.scrollTop = topOf(chunk) + into * chunk.offsetHeight - 12;
-      const settle = (tries: number) => {
-        const el = inner.querySelector<HTMLElement>(selector);
-        if (el) {
-          root.scrollTop = topOf(el) - 12;
+      if (chunk) root.scrollTop = topOf(chunk) + into * chunk.offsetHeight - clear;
+      const settle = (tries: number, last = NaN) => {
+        const found = inner.querySelector<HTMLElement>(selector);
+        if (found) {
+          const el = landingBox(found);
+          const top = topOf(el) - clear;
+          root.scrollTop = top;
+          // Blocks above it mount with their real height as it comes into view,
+          // which moves it; landing holds until two frames agree.
+          if (tries > 0 && !(Math.abs(top - last) <= 2)) {
+            requestAnimationFrame(() => settle(tries - 1, top));
+            return;
+          }
           el.setAttribute("data-hit", "");
           setTimeout(() => el.removeAttribute("data-hit"), 1200);
           return;
         }
         if (tries > 0) requestAnimationFrame(() => settle(tries - 1));
       };
-      requestAnimationFrame(() => settle(6));
+      requestAnimationFrame(() => settle(20));
     },
     [scroll, flow, onPinned],
   );
@@ -412,6 +417,8 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   const last = items.length > 0 ? items[items.length - 1] : undefined;
   const live = last?.t === "say" && !last.done ? last : undefined;
   const blocks = useBlocks(items, live ? items.length - 1 : items.length, revision);
+
+  useFindLanding(find, hidden, blocks, live, land);
 
   // Which block holds a given call, so the graph can land on one the way the
   // rail lands on a message: the card may sit in a block that is not mounted
@@ -601,16 +608,13 @@ const ActivityGroup = memo(function ActivityGroup({
   // re-hosted under the sentence it belongs to once that sentence arrives,
   // which unmounts it. State kept inside would be lost at exactly that moment.
   const gid = items[0]?.id ?? "";
-  const open = opened[gid] ?? false;
+  const live = useContext(LiveWork).has(gid);
+  const start = useStartsOpen("activity", running || live);
+  const open = opened[gid] ?? start;
   const setOpen = useCallback(
     (next: boolean) => onOpened((all) => (all[gid] === next ? all : { ...all, [gid]: next })),
     [gid, onOpened],
   );
-  // Open while something is running: a collapsed group during execution is a
-  // window with nothing moving in it, which reads as stuck rather than busy.
-  useEffect(() => {
-    if (running) setOpen(true);
-  }, [running, setOpen]);
   const calls = items.reduce((count, item) => count + (item.t === "reads" ? item.tools.length : 1), 0);
   const failures = items.reduce((count, item) => {
     if (item.t === "tool") return count + (toolFailed(item.tool) ? 1 : 0);
@@ -618,7 +622,7 @@ const ActivityGroup = memo(function ActivityGroup({
     return count;
   }, 0);
   return (
-    <details className="activity-group" data-failed={failures ? "" : undefined} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <details className="activity-group" data-failed={failures ? "" : undefined} open={open} onToggle={(event) => event.currentTarget.open !== open && setOpen(event.currentTarget.open)}>
       <summary>
         <StudioIcon name={running ? "clock" : failures ? "warning" : "check"} className="activity-status-icon" />
         <span className="activity-title">{t("执行过程")}</span>
@@ -667,7 +671,7 @@ const Row = memo(function Row({
   // display:contents, so this frame carries the one-shot mark and the card
   // stays exactly the child of .chunk that its layout is written against.
   return (
-    <div className="enterbox" data-enter={enter ? "" : undefined}>
+    <div className="enterbox" data-item={it.id} data-enter={enter ? "" : undefined}>
       {(() => {
   switch (it.t) {
     case "user":

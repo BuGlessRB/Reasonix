@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
+import { useStartsOpen } from "../../state/foldpref";
 import { bytes } from "../../i18n/format";
 import type { Bound } from "../../port/wire";
 import { splitPath } from "../args";
@@ -288,7 +289,9 @@ function shapeFor(name: string, text: string): ReactNode {
 const opened = new Map<string, boolean>();
 
 function Clip({ id, deps, children }: { id?: string; deps?: unknown; children: ReactNode }) {
-  const [open, setOpen] = useState(() => (id ? (opened.get(id) ?? false) : false));
+  const start = useStartsOpen("output");
+  const [touched, setOpen] = useState(() => (id ? opened.get(id) : undefined));
+  const open = touched ?? start;
   const [over, setOver] = useState(false);
   const body = useRef<HTMLDivElement>(null);
   // Measuring reads scrollHeight, which forces layout — so it keys off the

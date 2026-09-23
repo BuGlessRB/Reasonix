@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useStartsOpen } from "../../state/foldpref";
 import type { Tool } from "../../port/wire";
 import { argOf, splitPath } from "../args";
 import { Sym, glyphFor } from "../Sym";
@@ -96,7 +97,9 @@ function Body({ tool }: { tool: Tool }) {
 export function ReadsCard({ tools }: { tools: Tool[] }) {
   const [open, setOpen] = useState(-1);
   const failed = tools.filter(toolFailed).length;
-  const [expanded, setExpanded] = useState(failed > 0);
+  const start = useStartsOpen("steps", false, failed > 0);
+  const [touched, setExpanded] = useState<boolean | null>(null);
+  const expanded = touched ?? start;
   const rows = tools.map(rowOf);
   const files = tools.filter((t) => t.name === "read_file").length;
   const searches = tools.filter((t) => t.name === "grep" || t.name === "glob").length;
@@ -112,7 +115,7 @@ export function ReadsCard({ tools }: { tools: Tool[] }) {
         <span className="line" />
       </div>
       <div className="c">
-        <details className="tool-disclosure reads-disclosure" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
+        <details className="tool-disclosure reads-disclosure" open={expanded} onToggle={(event) => event.currentTarget.open !== expanded && setExpanded(event.currentTarget.open)}>
           <summary className="hl">
             <span className="nm">{headline}</span>
             <span className="arg">{summarise(tools)}</span>

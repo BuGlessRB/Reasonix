@@ -27,7 +27,13 @@ export function paintFind(root: HTMLElement | null, query: string, current: stri
   const now: Range[] = [];
   for (const row of root.querySelectorAll<HTMLElement>("[data-item]")) {
     const into = row.dataset.item === current ? now : rest;
-    const walk = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+    // A row can hold other rows (work under the sentence it followed); each
+    // text belongs to its nearest row, or a hit is painted twice, once as the
+    // wrong row.
+    const walk = document.createTreeWalker(row, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) =>
+        node.parentElement?.closest("[data-item]") === row ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+    });
     for (let node = walk.nextNode(); node; node = walk.nextNode()) {
       const hay = (node.nodeValue ?? "").toLocaleLowerCase();
       // A range is addressed in the original's units, and lowercasing changes

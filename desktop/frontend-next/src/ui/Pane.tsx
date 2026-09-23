@@ -43,6 +43,7 @@ import { refreshTodos } from "../state/restore";
 import { RMark } from "./RMark";
 import { speedOf } from "./speed";
 import { RuntimeBar } from "./RuntimeBar";
+import { LiveWork, useLiveWork } from "../state/foldpref";
 
 
 // PaneReport is what the window's own chrome needs from whichever pane has
@@ -140,6 +141,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // Elapsed is a clock reading and belongs on the tick. Throughput is not: it
   // follows the deltas themselves, and expires rather than being re-derived.
   const tps = useRate(s.outWindow, s.running);
+  const live = useLiveWork(s.items, s.running);
   // The shape of the last minute, kept while a turn runs. A number alone says
   // how fast it is now; the line says whether it is climbing, stalling or
   // arriving in bursts, which is the question someone watching a run has.
@@ -533,6 +535,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       <div className="pbody" data-dock={tab === "flow" ? "" : undefined} data-full={tab === "browser" ? "" : undefined}>
       <div className="pviews">
 
+      <LiveWork.Provider value={live}>
       <Transcript
         reply={reply}
         onResend={onResend}
@@ -566,6 +569,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onOpenProject={onOpenProject}
         onKeepHere={onKeepHere}
       />
+      </LiveWork.Provider>
 
       <div className="scroll" data-pane="analysis" hidden={tab !== "analysis"}>
         {tab === "analysis" && (
