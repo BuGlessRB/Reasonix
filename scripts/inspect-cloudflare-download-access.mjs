@@ -33,16 +33,23 @@ async function request(endpoint, body) {
   return json;
 }
 
-const probe = await fetch("https://dl.reasonix.io/latest/latest.json", {
-  signal: AbortSignal.timeout(30000), redirect: "error",
-});
-report("public-manifest", {
-  status: probe.status,
-  mitigation: probe.headers.get("cf-mitigated"),
-  ray: probe.headers.get("cf-ray"),
-  contentType: probe.headers.get("content-type"),
-});
-await probe.body?.cancel();
+for (const [profile, userAgent] of [
+  ["node-default", undefined],
+  ["desktop-updater", "Reasonix-Updater/1.38.11 (linux/amd64; build=stable; update=stable)"],
+]) {
+  const probe = await fetch("https://dl.reasonix.io/latest/latest.json", {
+    headers: userAgent ? { "User-Agent": userAgent } : undefined,
+    signal: AbortSignal.timeout(30000), redirect: "error",
+  });
+  report("public-manifest", {
+    profile,
+    status: probe.status,
+    mitigation: probe.headers.get("cf-mitigated"),
+    ray: probe.headers.get("cf-ray"),
+    contentType: probe.headers.get("content-type"),
+  });
+  await probe.body?.cancel();
+}
 
 const zones = await request("/zones?name=reasonix.io&status=active");
 const matches = zones?.result?.filter(zone => zone.name === "reasonix.io");
@@ -52,7 +59,7 @@ if (matches?.length !== 1) {
 const zoneID = matches[0].id;
 report("zone", { name: "reasonix.io", id: zoneID });
 
-for (const phase of ["http_request_firewall_custom", "http_request_firewall_managed", "http_request_sbfm"]) {
+for (const phase of ["http_config_settings", "http_request_firewall_custom", "http_request_firewall_managed", "http_request_sbfm"]) {
   const response = await request(`/zones/${zoneID}/rulesets/phases/${phase}/entrypoint`);
   if (!response) continue;
   const ruleset = response.result;
