@@ -530,7 +530,7 @@ func (h *Hub) closeRuntime(w http.ResponseWriter, r *http.Request) {
 func (h *Hub) routeRuntime(w http.ResponseWriter, r *http.Request) {
 	rt := h.Get(r.PathValue("id"))
 	if rt == nil {
-		notFound(w, "runtime", r.PathValue("rt"))
+		notFound(w, "runtime", r.PathValue("id"))
 		return
 	}
 	rt.handler.ServeHTTP(w, r)

@@ -158,6 +158,16 @@ func TestHubCloseRetiresTheRuntime(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("GET a closed runtime = %d, want 404", resp.StatusCode)
 	}
+	// The refusal names the runtime it could not find, so the window can say
+	// which one went away.
+	var body struct {
+		Params struct {
+			Name string `json:"name"`
+		} `json:"params"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil || body.Params.Name != rt.ID {
+		t.Fatalf("refusal named %q (%v), want %q", body.Params.Name, err, rt.ID)
+	}
 	if len(h.List()) != 0 {
 		t.Fatalf("hub still lists %d runtimes", len(h.List()))
 	}
