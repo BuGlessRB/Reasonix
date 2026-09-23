@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -192,5 +193,70 @@ func TestCurrencySpellingIsNormalizedOnIngest(t *testing.T) {
 	}
 	if len(rows[0].Costs) != 1 || rows[0].Costs[0].Amount != 2_000_000_000 {
 		t.Fatalf("costs = %+v, want a single CNY entry of 2.00", rows[0].Costs)
+	}
+}
+
+// A file reindexed any number of times answers the same totals. The cost used
+// to be added on every pass while the token columns were rebuilt, so a panel
+// read months of reindexing as spend.
+func TestReconcilingAFileAgainLeavesItsCostAlone(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(testenv.TempDir(t), "2026-08-10.jsonl")
+	lines := "{\"ts\":\"2026-08-10T10:00:00Z\",\"model\":\"deepseek/m\",\"source\":\"desktop\",\"total\":10,\"cost_amount\":\"0.25\",\"cost_currency\":\"USD\"}\n" +
+		"{\"ts\":\"2026-08-10T11:00:00Z\",\"model\":\"deepseek/m\",\"source\":\"desktop\",\"total\":20,\"cost_amount\":\"0.5\",\"cost_currency\":\"USD\",\"cost_estimated\":true}\n"
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := Open(ctx, filepath.Join(testenv.TempDir(t), "usage.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = catalog.Close(context.Background()) })
+	for range 3 {
+		if err := catalog.ReconcileFile(ctx, path, "2026-08-10"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop")
+	if err != nil || len(rows) != 1 || rows[0].Total != 30 {
+		t.Fatalf("rows=%#v err=%v", rows, err)
+	}
+	if len(rows[0].Costs) != 1 || rows[0].Costs[0].Amount != 750_000_000 || !rows[0].Costs[0].Estimated {
+		t.Fatalf("costs = %#v, want one estimated USD 0.75", rows[0].Costs)
+	}
+}
+
+// Two stores can hold a file for the same day. Reindexing one of them must
+// not take the other's day away with it.
+func TestReconcilingOneFileKeepsAnotherFileOfTheSameDay(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	write := func(total int, amount string) string {
+		path := filepath.Join(testenv.TempDir(t), "2026-08-10.jsonl")
+		line := "{\"ts\":\"2026-08-10T10:00:00Z\",\"model\":\"deepseek/m\",\"source\":\"desktop\",\"total\":" +
+			strconv.Itoa(total) + ",\"cost_amount\":\"" + amount + "\",\"cost_currency\":\"USD\"}\n"
+		if err := os.WriteFile(path, []byte(line), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	first, second := write(10, "1"), write(5, "2")
+	catalog, err := Open(ctx, filepath.Join(testenv.TempDir(t), "usage.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = catalog.Close(context.Background()) })
+	for _, path := range []string{first, second, second} {
+		if err := catalog.ReconcileFile(ctx, path, "2026-08-10"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop")
+	if err != nil || len(rows) != 1 || rows[0].Total != 15 {
+		t.Fatalf("rows=%#v err=%v", rows, err)
+	}
+	if len(rows[0].Costs) != 1 || rows[0].Costs[0].Amount != 3_000_000_000 {
+		t.Fatalf("costs = %#v, want USD 3 from both files", rows[0].Costs)
 	}
 }

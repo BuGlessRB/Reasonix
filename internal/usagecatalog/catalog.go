@@ -27,7 +27,7 @@ import (
 
 // SchemaVersion names the projection file, so a bump retires the old one
 // rather than migrating it: every column here is replayable from the JSONL.
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 type AppendReceipt struct {
 	Path     string
@@ -165,6 +165,7 @@ CREATE TABLE usage_records(
  day TEXT NOT NULL,source TEXT NOT NULL,model_ref TEXT NOT NULL,provider TEXT NOT NULL,
  prompt INTEGER NOT NULL,completion INTEGER NOT NULL,reasoning INTEGER NOT NULL,cache_hit INTEGER NOT NULL,
  cache_miss INTEGER NOT NULL,total INTEGER NOT NULL,requests INTEGER NOT NULL,turns INTEGER NOT NULL,
+ cost INTEGER NOT NULL DEFAULT 0,cost_currency TEXT NOT NULL DEFAULT '',cost_estimated INTEGER NOT NULL DEFAULT 0,
  PRIMARY KEY(file_path,byte_offset)
 );
 CREATE TABLE usage_rollups(
@@ -331,6 +332,10 @@ func (c *Catalog) applyReceipt(ctx context.Context, receipt AppendReceipt, entry
 		_ = tx.Rollback()
 		return err
 	}
+	if err := projectRecord(ctx, tx, entry); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
 	end := receipt.Offset + int64(receipt.Length)
 	mtime := int64(0)
 	if info, statErr := os.Stat(receipt.Path); statErr == nil {
@@ -359,22 +364,32 @@ func (c *Catalog) applyReceipt(ctx context.Context, receipt AppendReceipt, entry
 	return nil
 }
 
+// insertRecord stores one row with the cost it was quoted at, so a day's
+// rollups can be derived again from its records alone.
 func insertRecord(ctx context.Context, tx *sql.Tx, receipt AppendReceipt, entry Entry) error {
 	if entry.Total > 0 && entry.Requests <= 0 {
 		entry.Requests = 1
 	}
-	result, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO usage_records(file_path,byte_offset,byte_length,line_hash,day,source,
-        model_ref,provider,prompt,completion,reasoning,cache_hit,cache_miss,total,requests,turns) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	estimated := 0
+	if entry.CostEstimated {
+		estimated = 1
+	}
+	_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO usage_records(file_path,byte_offset,byte_length,line_hash,day,source,
+        model_ref,provider,prompt,completion,reasoning,cache_hit,cache_miss,total,requests,turns,cost,cost_currency,cost_estimated)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		receipt.Path, receipt.Offset, receipt.Length, receipt.LineHash, entry.Day, entry.Source, entry.ModelRef, entry.Provider,
-		entry.Prompt, entry.Completion, entry.Reasoning, entry.CacheHit, entry.CacheMiss, entry.Total, entry.Requests, entry.Turns)
-	if err != nil {
-		return err
+		entry.Prompt, entry.Completion, entry.Reasoning, entry.CacheHit, entry.CacheMiss, entry.Total, entry.Requests, entry.Turns,
+		entry.Cost, entry.CostCurrency, estimated)
+	return err
+}
+
+// projectRecord adds one new row to its day's rollup and cost. Only a row that
+// was just inserted may be projected; anything else is rederived.
+func projectRecord(ctx context.Context, tx *sql.Tx, entry Entry) error {
+	if entry.Total > 0 && entry.Requests <= 0 {
+		entry.Requests = 1
 	}
-	inserted, _ := result.RowsAffected()
-	if inserted == 0 {
-		return nil
-	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO usage_rollups(day,source,model_ref,provider,prompt,completion,reasoning,cache_hit,
+	_, err := tx.ExecContext(ctx, `INSERT INTO usage_rollups(day,source,model_ref,provider,prompt,completion,reasoning,cache_hit,
         cache_miss,total,requests,turns) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(day,source,model_ref) DO UPDATE SET
         prompt=prompt+excluded.prompt,completion=completion+excluded.completion,reasoning=reasoning+excluded.reasoning,
         cache_hit=cache_hit+excluded.cache_hit,cache_miss=cache_miss+excluded.cache_miss,total=total+excluded.total,
@@ -393,6 +408,29 @@ func insertRecord(ctx context.Context, tx *sql.Tx, receipt AppendReceipt, entry 
         estimated=MAX(estimated,excluded.estimated)`,
 		entry.Day, entry.Source, entry.ModelRef, entry.CostCurrency, entry.Cost, estimated)
 	return err
+}
+
+// rederiveDays rebuilds the rollups and costs of the given days from every
+// record that remains for them, whichever file wrote it. Adding to what was
+// there would count a reindexed file once per pass.
+func rederiveDays(ctx context.Context, tx *sql.Tx, days []string) error {
+	for _, day := range days {
+		for _, stmt := range []string{
+			`DELETE FROM usage_rollups WHERE day=?`,
+			`DELETE FROM usage_cost WHERE day=?`,
+			`INSERT INTO usage_rollups(day,source,model_ref,provider,prompt,completion,reasoning,cache_hit,cache_miss,total,requests,turns)
+        SELECT day,source,model_ref,MAX(provider),SUM(prompt),SUM(completion),SUM(reasoning),SUM(cache_hit),SUM(cache_miss),
+        SUM(total),SUM(requests),SUM(turns) FROM usage_records WHERE day=? GROUP BY day,source,model_ref`,
+			`INSERT INTO usage_cost(day,source,model_ref,currency,cost,estimated)
+        SELECT day,source,model_ref,cost_currency,SUM(cost),MAX(cost_estimated) FROM usage_records
+        WHERE day=? AND cost_currency<>'' AND cost<>0 GROUP BY day,source,model_ref,cost_currency`,
+		} {
+			if _, err := tx.ExecContext(ctx, stmt, day); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 type rawRecord struct {
@@ -444,6 +482,27 @@ func entryFromRaw(day string, raw rawRecord) Entry {
 		Cost: costOf(raw), CostCurrency: billing.NormalizeCurrency(raw.CostCurrency), CostEstimated: raw.CostEstimated}
 }
 
+// recordDays is every day the file's records were filed under, plus the day it
+// is being filed under now: both lose or gain rows in a reindex.
+func recordDays(ctx context.Context, tx *sql.Tx, path, day string) ([]string, error) {
+	found, err := tx.QueryContext(ctx, `SELECT DISTINCT day FROM usage_records WHERE file_path=?`, path)
+	if err != nil {
+		return nil, err
+	}
+	defer found.Close()
+	days := []string{day}
+	for found.Next() {
+		var d string
+		if err := found.Scan(&d); err != nil {
+			return nil, err
+		}
+		if d != day {
+			days = append(days, d)
+		}
+	}
+	return days, found.Err()
+}
+
 func (c *Catalog) ReconcileFile(ctx context.Context, path, day string) error {
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -457,7 +516,8 @@ func (c *Catalog) ReconcileFile(ctx context.Context, path, day string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM usage_rollups WHERE day IN (SELECT DISTINCT day FROM usage_records WHERE file_path=?)`, path); err != nil {
+	days, err := recordDays(ctx, tx, path, day)
+	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
@@ -494,6 +554,10 @@ func (c *Catalog) ReconcileFile(ctx context.Context, path, day string) error {
 			_ = tx.Rollback()
 			return readErr
 		}
+	}
+	if err := rederiveDays(ctx, tx, days); err != nil {
+		_ = tx.Rollback()
+		return err
 	}
 	info, _ := os.Stat(path)
 	mtime := int64(0)
