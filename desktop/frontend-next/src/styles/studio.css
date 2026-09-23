@@ -1872,6 +1872,7 @@ body { font-size: 14px; line-height: 1.75; }
   cursor: pointer;
 }
 .rail .session-more { color: var(--faint); }
+.rail .session-more.sessdel { opacity: .45; }
 .rail .session-more .studio-icon { width: 14px; height: 14px; stroke-width: 2.4; }
 .rail .sessrow:hover .session-more,
 .rail .sessrow:focus-within .session-more,

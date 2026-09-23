@@ -1,0 +1,64 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import "./testkit";
+import { RailSearch } from "./railsearch";
+import { RemoteHosts } from "./RemoteHosts";
+import type { RemoteHost } from "../port/remote";
+import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
+
+afterEach(cleanup);
+
+const host: RemoteHost = { name: "gpu", target: "ada@10.0.0.4", status: "connected", workspaces: ["/home/ada/training"] };
+const path = "/home/ada/training/s1.jsonl";
+const tree: Record<string, TreeWorkspace[] | null> = {
+  gpu: [{ root: "/home/ada/training", name: "training", sessions: [{ path, name: "s1", title: "跑通构建" }] }],
+};
+
+function draw(runtimes: RuntimeView[] = []) {
+  const order: string[] = [];
+  const removeRemoteSession = vi.fn(async () => { order.push("remove"); });
+  const readTree = vi.fn(async () => { order.push("read"); });
+  const onClose = vi.fn(async () => { order.push("close"); });
+  render(
+    <RailSearch>
+      <RemoteHosts
+        hub={{ removeRemoteSession } as unknown as HubPort}
+        hosts={[host]}
+        runtimes={runtimes}
+        active=""
+        onOpen={async () => {}}
+        onFocus={() => {}}
+        reload={async () => {}}
+        trees={tree}
+        reloadTrees={async () => {}}
+        readTree={readTree}
+        onClose={onClose}
+        onError={() => {}}
+      />
+    </RailSearch>,
+  );
+  return { removeRemoteSession, readTree, onClose, order };
+}
+
+describe("a conversation on another machine", () => {
+  it("is deleted on that machine after a confirmation, and its list is read again", async () => {
+    const { removeRemoteSession, order } = draw();
+    await userEvent.click(screen.getByRole("button", { name: "删除会话：跑通构建" }));
+    expect(removeRemoteSession).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "删除" }));
+    await waitFor(() => expect(order).toEqual(["remove", "read"]));
+    expect(removeRemoteSession).toHaveBeenCalledWith("gpu", path);
+  });
+
+  it("closes the pane holding it before asking that machine to erase it", async () => {
+    const pane = { id: "rt-1", sessionPath: path, host: "gpu" } as unknown as RuntimeView;
+    const { onClose, order } = draw([pane]);
+    await userEvent.click(screen.getByRole("button", { name: "删除会话：跑通构建" }));
+    await userEvent.click(screen.getByRole("button", { name: "删除" }));
+    await waitFor(() => expect(order).toEqual(["close", "remove", "read"]));
+    expect(onClose).toHaveBeenCalledWith(["rt-1"]);
+  });
+});

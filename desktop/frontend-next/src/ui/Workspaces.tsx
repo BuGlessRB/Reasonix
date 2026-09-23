@@ -614,7 +614,7 @@ export function removeHint(panes: number, live: number): string {
 
 // 确认不跟原来那行抢位置：把「×」换成「移除」两个字，宽度一变就把文件夹名挤扁
 // 了。整行换成一条问句，取消永远在手边，误点的代价是零。
-function Confirm({
+export function Confirm({
   what,
   hint,
   go,

@@ -6,6 +6,8 @@ import { REMOTE_STEP_LABEL, REMOTE_STEPS, type RemoteHost } from "../port/remote
 import { RemoteDirs } from "./RemoteDirs";
 import { workspacesOf } from "./Remotes";
 import { Cross } from "./glyphs";
+import { StudioIcon } from "./StudioIcon";
+import { Confirm } from "./Workspaces";
 
 // The same ceiling the local column uses. A machine worked on for months holds
 // thousands of conversations, and drawing them all is what put 98k nodes in a
@@ -29,6 +31,8 @@ interface Props {
   reloadTrees: () => Promise<void>;
   // One machine's book, read whether or not a pane is open on it.
   readTree: (host: string) => Promise<void>;
+  // Closes panes; a conversation open in one is closed before it is erased.
+  onClose: (ids: string[]) => Promise<void>;
   onError: (e: unknown) => void;
 }
 
@@ -119,8 +123,10 @@ function note(host: RemoteHost): string {
   }
 }
 
-function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload, trees, reloadTrees, readTree, onError }: Props) {
+function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload, trees, reloadTrees, readTree, onClose, onError }: Props) {
   const [busy, setBusy] = useState("");
+  // The conversation whose deletion is being confirmed, keyed by host and path.
+  const [confirm, setConfirm] = useState("");
   // The machine whose folder picker is open, empty for none. One at a time:
   // it is a dialog over the window, not a panel inside a row.
   const [picking, setPicking] = useState<RemoteHost | null>(null);
@@ -133,6 +139,21 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
   const hit = makeHit(needle);
   // Workspaces the reader asked to see in full.
   const [whole, setWhole] = useState<Set<string>>(new Set());
+
+  const dropSession = async (host: RemoteHost, sessionPath: string, held?: RuntimeView) => {
+    setConfirm("");
+    setBusy(host.name + sessionPath);
+    try {
+      // The far kernel will not erase a transcript a pane still holds.
+      if (held) await onClose([held.id]);
+      await hub.removeRemoteSession(host.name, sessionPath);
+      await readTree(host.name);
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy("");
+    }
+  };
 
   const open = async (host: RemoteHost, workspace?: string, sessionPath?: string) => {
     setBusy(host.name + (sessionPath ?? workspace ?? ""));
@@ -353,6 +374,20 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                             // A conversation this window already drives is a
                             // pane to focus, never a second writer for one file.
                             const held = panes.find((rt) => rt.sessionPath === session.path);
+                            const name = session.title || session.name;
+                            if (confirm === host.name + session.path) {
+                              return (
+                                <Confirm
+                                  key={session.path}
+                                  what={t("删除「{name}」？", { name })}
+                                  hint={t(held ? "它的面板会先关掉" : "连同其记录一并删除") + " · " + host.name}
+                                  go={t("删除")}
+                                  danger
+                                  onGo={() => void dropSession(host, session.path, held)}
+                                  onCancel={() => setConfirm("")}
+                                />
+                              );
+                            }
                             return (
                               <div
                                 data-action="session.open"
@@ -367,8 +402,22 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
                                 onClick={() => (held ? onFocus(held.id) : void open(host, ws.root, session.path))}
                               >
                                 <i className="pip" />
-                                <span className="sesstitle">{session.title || session.name}</span>
+                                <span className="sesstitle">{name}</span>
                                 <span className="sessmeta">{session.turns ? t("{n} 轮", { n: session.turns }) : t("空会话")}</span>
+                                <button
+                                  className="session-more sessdel"
+                                  data-action="session.delete"
+                                  data-target={session.path}
+                                  title={t("删除会话")}
+                                  aria-label={t("删除会话：{title}", { title: name })}
+                                  disabled={busy !== ""}
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    setConfirm(host.name + session.path);
+                                  }}
+                                >
+                                  <StudioIcon name="trash" />
+                                </button>
                               </div>
                             );
                           })}

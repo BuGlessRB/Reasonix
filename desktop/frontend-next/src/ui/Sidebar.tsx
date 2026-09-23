@@ -230,6 +230,7 @@ export function Sidebar({
             trees={remoteTrees}
             reloadTrees={reloadRemoteTrees}
             readTree={readRemoteTree}
+            onClose={onClosePanes}
             onError={onError}
           />
         ) : null}

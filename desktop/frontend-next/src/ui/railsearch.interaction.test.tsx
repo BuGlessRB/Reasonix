@@ -33,6 +33,7 @@ const draw = (hosts: RemoteHost[]) =>
         reload={async () => {}}
         trees={{}}
         reloadTrees={async () => {}}
+        onClose={async () => {}}
         readTree={async () => {}}
         onError={() => {}}
       />

@@ -480,6 +480,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("POST /remotes", h.saveRemoteHost)
 	mux.HandleFunc("GET /remotes/candidates", h.remoteCandidates)
 	mux.HandleFunc("GET /remotes/{host}/tree", h.remoteTree)
+	mux.HandleFunc("POST /remotes/{host}/sessions/remove", h.removeRemoteSession)
 	mux.HandleFunc("GET /remotes/{host}/dirs", h.remoteDirs)
 	mux.HandleFunc("GET /remotes/{host}/probe", h.remoteProbe)
 	mux.HandleFunc("POST /remotes/{host}/workspaces", h.addRemoteWorkspace)

@@ -52,6 +52,7 @@ function Rail({ hub }: { hub: HubPort }) {
         reload={async () => {}}
         trees={trees}
         reloadTrees={reload}
+        onClose={async () => {}}
         readTree={async () => {}}
         onError={() => {}}
       />

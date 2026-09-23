@@ -83,6 +83,8 @@ export interface HubPort {
   // The far machine's own workspaces, or null while nothing is open on it:
   // there is no kernel over there to ask until a pane puts one there.
   remoteTree(host: string): Promise<TreeWorkspace[] | null>;
+  // Erases a conversation on that machine; its kernel decides whether it may.
+  removeRemoteSession(host: string, path: string): Promise<void>;
   // Folders on the far machine, read over the link alone — no kernel has to be
   // installed over there to answer it, which is why picking one works on a
   // machine nothing is open on. An empty path is that machine's login home.
@@ -234,6 +236,10 @@ export class SseHub implements HubPort {
         operationId,
       ),
     );
+  }
+
+  async removeRemoteSession(host: string, path: string) {
+    await this.post<void>(`/remotes/${encodeURIComponent(host)}/sessions/remove`, { path });
   }
 
   async remoteTree(host: string) {

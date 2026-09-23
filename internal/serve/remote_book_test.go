@@ -509,3 +509,65 @@ func TestReopeningAKnownFolderLeavesTheConfigAlone(t *testing.T) {
 		t.Fatal("opening a folder the book already holds rewrote the config file")
 	}
 }
+
+// Deleting a conversation on another machine goes to that machine's kernel over
+// a link taken for the call, and a refusal comes back under that kernel's own
+// code: it knows the conversation is open there, the window does not.
+func TestRemoteSessionIsRemovedByTheFarKernel(t *testing.T) {
+	var got []string
+	refuseWith := ""
+	far := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Path string `json:"path"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		got = append(got, r.Method+" "+r.URL.Path+" "+body.Path)
+		if refuseWith != "" {
+			refuse(w, http.StatusConflict, refuseWith, "close this session's pane first", nil)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer far.Close()
+	var attached, released int
+	near := NewHub(HubOptions{Remote: &stubAttacher{
+		attach: func(host, workspace string) (RemoteEndpoint, func(), error) {
+			attached++
+			return RemoteEndpoint{Host: host, Addr: far.Listener.Addr().String(), Token: "t"}, func() { released++ }, nil
+		},
+	}})
+	defer near.Shutdown()
+	nearSide := httptest.NewServer(near.Handler())
+	defer nearSide.Close()
+
+	remove := func() *http.Response {
+		resp, err := http.Post(nearSide.URL+"/remotes/gpu-box/sessions/remove", "application/json",
+			strings.NewReader(`{"path":"/home/t/proj/.reasonix/sessions/a.jsonl"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	resp := remove()
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("remove = %d, want 204", resp.StatusCode)
+	}
+	if len(got) != 1 || got[0] != "POST /tree/sessions/remove /home/t/proj/.reasonix/sessions/a.jsonl" {
+		t.Fatalf("far kernel saw %v", got)
+	}
+	if attached != 1 || released != 1 {
+		t.Fatalf("link taken %d and given back %d times, want once each", attached, released)
+	}
+
+	refuseWith = "session.has_open_pane"
+	resp = remove()
+	defer resp.Body.Close()
+	var reason Reason
+	if err := json.NewDecoder(resp.Body).Decode(&reason); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusConflict || reason.Code != "session.has_open_pane" {
+		t.Fatalf("refusal = %d %q, want the far kernel's own 409 session.has_open_pane", resp.StatusCode, reason.Code)
+	}
+}

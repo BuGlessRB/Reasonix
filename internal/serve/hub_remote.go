@@ -273,8 +273,31 @@ func farRefusal(host, path string, code int, status string, body []byte) error {
 	if code == http.StatusMethodNotAllowed {
 		return refusal(http.StatusBadGateway, "remote.kernel_too_old", err, map[string]any{"host": host})
 	}
-	return refusal(http.StatusBadGateway, "remote.kernel_refused", err,
-		map[string]any{"host": host, "detail": detail})
+	params := map[string]any{"host": host, "detail": detail}
+	// The far kernel's own reason travels with it, so a caller that relays
+	// that kernel's decision can say which one it was.
+	var far Reason
+	if json.Unmarshal(body, &far) == nil && far.Code != "" {
+		params["farCode"], params["farStatus"], params["farParams"] = far.Code, code, far.Params
+	}
+	return refusal(http.StatusBadGateway, "remote.kernel_refused", err, params)
+}
+
+// relayFarReason re-raises the far kernel's refusal under its own code and
+// status. Used where that kernel owns the decision, so the window can say why
+// rather than only that it was refused.
+func relayFarReason(err error) error {
+	var c *coded
+	if !errors.As(err, &c) {
+		return err
+	}
+	code, _ := c.reason.Params["farCode"].(string)
+	status, _ := c.reason.Params["farStatus"].(int)
+	if code == "" || status == 0 {
+		return err
+	}
+	params, _ := c.reason.Params["farParams"].(map[string]any)
+	return refusal(status, code, err, params)
 }
 
 func (h *Hub) openRemoteRuntime(w http.ResponseWriter, r *http.Request) {

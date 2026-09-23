@@ -1028,6 +1028,7 @@ export const EN: Record<string, string> = {
   "审批决定何时询问；沙盒限定实际访问范围。": "Approvals decide when to ask; the sandbox limits actual access.",
   "高级执行设置": "Advanced execution settings",
   "会话操作：{title}": "Session actions: {title}",
+  "删除会话：{title}": "Delete session: {title}",
   "会话操作": "Session actions",
   "执行中": "Running",
   "执行过程": "Activity",

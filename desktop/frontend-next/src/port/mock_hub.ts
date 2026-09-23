@@ -191,6 +191,10 @@ export class MockHub implements HubPort {
     return Promise.resolve();
   }
 
+  removeRemoteSession(_host: string, _path: string) {
+    return Promise.resolve();
+  }
+
   archiveSession(_path: string, _archived: boolean) {
     return Promise.resolve();
   }

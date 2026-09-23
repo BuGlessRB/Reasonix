@@ -245,19 +245,12 @@ func (h *Hub) remoteTree(w http.ResponseWriter, r *http.Request) {
 		refuseNoRemote(w)
 		return
 	}
-	host := r.PathValue("host")
-	ep, ok := h.anyRemotePane(host)
-	if !ok {
-		// No pane holds a link, so this read takes one for itself and gives it
-		// back: the far kernel outlives the link, and its book is on its disk.
-		attached, release, err := h.opts.Remote.Attach(operationContext(r), host, "")
-		if err != nil {
-			writeErr(w, http.StatusBadGateway, err)
-			return
-		}
-		defer release()
-		ep = attached
+	ep, release, err := h.remoteLink(r, r.PathValue("host"))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
 	}
+	defer release()
 	var tree json.RawMessage
 	if err := farRequest(r.Context(), ep, http.MethodGet, "/tree", nil, &tree); err != nil {
 		writeErr(w, http.StatusBadGateway, err)
@@ -265,6 +258,49 @@ func (h *Hub) remoteTree(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(tree)
+}
+
+// removeRemoteSession erases a conversation on the far machine over the same
+// link its list is read through. That kernel decides whether it may, so its
+// refusal reaches the window under its own code.
+func (h *Hub) removeRemoteSession(w http.ResponseWriter, r *http.Request) {
+	if h.opts.Remote == nil {
+		refuseNoRemote(w)
+		return
+	}
+	var body struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		badBody(w)
+		return
+	}
+	path := strings.TrimSpace(body.Path)
+	if path == "" {
+		missingField(w, "path")
+		return
+	}
+	ep, release, err := h.remoteLink(r, r.PathValue("host"))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	defer release()
+	if err := farRequest(r.Context(), ep, http.MethodPost, "/tree/sessions/remove", map[string]string{"path": path}, nil); err != nil {
+		writeErr(w, http.StatusBadGateway, relayFarReason(err))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// remoteLink is an endpoint on host: a pane's link when one is open, or one
+// taken for this request and handed back by release.
+func (h *Hub) remoteLink(r *http.Request, host string) (RemoteEndpoint, func(), error) {
+	if ep, ok := h.anyRemotePane(host); ok {
+		return ep, func() {}, nil
+	}
+	// The far kernel outlives the link, and its book is on its own disk.
+	return h.opts.Remote.Attach(operationContext(r), host, "")
 }
 
 // anyRemotePane returns an endpoint on host, for a question about the machine
