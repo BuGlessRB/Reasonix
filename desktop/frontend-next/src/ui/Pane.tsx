@@ -686,7 +686,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             </div>
           )}
         </div>
-        <Composer port={port} status={status} running={s.running} quote={quote} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} />
+        <Composer port={port} status={status} running={s.running} quote={quote} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} pulse={pulse} />
         <div className="studio-meterrail" ref={meterRef} aria-label={t("运行统计")}>
           <div className="studio-speed-anchor">
             <button

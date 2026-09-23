@@ -104,6 +104,9 @@ type providerView struct {
 	// declared", which is a different answer from "none" and the reason the
 	// effort ladder can come out empty on a relay.
 	ReasoningProtocol string `json:"reasoningProtocol,omitempty"`
+	// The declared effort vocabulary and its default, as stored; empty is none.
+	SupportedEfforts []string `json:"supportedEfforts,omitempty"`
+	DefaultEffort    string   `json:"defaultEffort,omitempty"`
 }
 
 func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
@@ -137,6 +140,8 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 			InUse:              p.Name == current,
 			Preset:             strings.TrimSpace(p.PresetID) != "",
 			ReasoningProtocol:  strings.ToLower(strings.TrimSpace(p.ReasoningProtocol)),
+			SupportedEfforts:   config.StoredEffortLevels(p.SupportedEfforts),
+			DefaultEffort:      strings.ToLower(strings.TrimSpace(p.DefaultEffort)),
 			ContextWindow:      p.ContextWindow,
 			MaxOutputTokens:    p.MaxOutputTokens,
 			Headers:            p.Headers,

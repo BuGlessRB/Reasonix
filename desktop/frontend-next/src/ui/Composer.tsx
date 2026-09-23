@@ -32,6 +32,8 @@ interface Props {
   onError: (e: unknown) => void;
   onSettings?: (section?: string) => void;
   changeCount?: number;
+  // Bumped when settings change; a source edited there can change the ladder.
+  pulse?: number;
 }
 
 // What is riding along with this turn. An attachment travels as bytes or a path
@@ -103,7 +105,7 @@ function releaseChip(c: Chip) {
 let chipSeq = 0;
 const chipId = () => `c${++chipSeq}`;
 
-export function Composer({ port, status, running, quote, focus, onSubmit, onChanged, onError, onSettings = () => {}, changeCount = 0 }: Props) {
+export function Composer({ port, status, running, quote, focus, onSubmit, onChanged, onError, onSettings = () => {}, changeCount = 0, pulse = 0 }: Props) {
   const [branch, setBranch] = useState("");
   useEffect(() => {
     let alive = true;
@@ -133,9 +135,10 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
   // of a programmatic value, which is wrong for anything accepted mid-line.
   const pending = useRef<number | null>(null);
 
-  useEffect(() => {
+  const loadModels = useCallback(() => {
     port.models().then(setModels).catch(() => setModels([]));
   }, [port]);
+  useEffect(loadModels, [loadModels, pulse]);
 
   // A drop lands where the caret is, and the handler that receives it was built
   // once — so the position it reads has to be a ref, not the render's copy.
@@ -681,6 +684,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
             items={modelMenu(models)}
             menuClassName="studio-model-menu"
             menuTitle={<><b>{t("选择模型")}</b><small>{t("用于后续任务")}</small></>}
+            onOpen={loadModels}
             pending={busy["model"]}
             onPick={(ref) => ref === "__manage-models" ? onSettings("model") : change("model", () => port.setModel(ref))}
             label={<><span className="nm">{modelLb}</span><StudioIcon name="down" /></>}
@@ -694,11 +698,12 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
                 place="bottom"
                 align="end"
                 menuClassName="studio-effort-menu"
+                onOpen={loadModels}
                 title={t("推理强度")}
                 current={declared ? status.effort || "auto" : ""}
                 pending={busy["effort"]}
                 items={effortMenu(efforts, modelLb, "__effort-declare")}
-                onPick={(value) => value === "__effort-declare" ? onSettings("model") : change("effort", () => port.setEffort(value))}
+                onPick={(value) => value === "__effort-declare" ? onSettings("model:effort-declare") : change("effort", () => port.setEffort(value))}
                 label={<><span>{declared ? effortReading(status.effort) : t("未声明")}</span><StudioIcon name="down" /></>}
               />
             </div>

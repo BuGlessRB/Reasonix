@@ -97,6 +97,9 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
   // 当前这一页，而为了搜索把每一页都挂起来会让隐藏页面开始发请求。
   const [query, setQuery] = useState("");
   const [landed, setLanded] = useState(openedAnchor);
+  // Opened from the composer's effort menu: the running source's editor opens
+  // on its reasoning fields. The model ref's first segment is the source name.
+  const declare = openedAnchor === "effort-declare" ? status?.modelRef?.split("/")[0] : undefined;
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
   const [protocol, setProtocol] = useState<Record<string, string>>({});
@@ -520,8 +523,9 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
                 title={t("模型来源")}
                 hint={t("先连接模型服务，再从其目录选择主模型。自定义中转站可以命名，协议与模型会在连接后自动探测。")}
               >
-                <Providers port={port} onChanged={loadModels} onFailed={setFailed} protocol={protocol}
+                <Providers port={port} onChanged={() => { loadModels(); onChanged(); }} onFailed={setFailed} protocol={protocol}
                   activeKindFor={(a) => kindFor(a.key)}
+                  declare={declare}
                   onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
               </Group>
               <Group id="model" title={t("主模型")} now={nav.model} hint={t("用于当前对话和大多数任务。切换会保留对话并重建运行时；任务执行期间无法修改。端点没有声明的能力不会显示标签。")}>

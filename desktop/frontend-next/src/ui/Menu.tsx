@@ -49,13 +49,16 @@ interface Props {
   wrapClassName?: string;
   menuClassName?: string;
   menuTitle?: ReactNode;
+  // Opening is when the reader asks what the choices are, so a menu whose rows
+  // come from elsewhere re-reads them here rather than showing its mount's copy.
+  onOpen?: () => void;
 }
 
 // data-* rides through to the item that raises the pick, the way Switch and Seg
 // carry theirs: the action's identity is written at the call site, and the
 // answer this menu gives is the item's own value.
 export function Picker({
-  label, items, current, onPick, place, align = "start", className, title, pending, triggerAction, ariaPressed, wrapClassName, menuClassName, menuTitle, ...id
+  label, items, current, onPick, place, align = "start", className, title, pending, triggerAction, ariaPressed, wrapClassName, menuClassName, menuTitle, onOpen, ...id
 }: Props & { [K in `data-${string}`]?: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -184,7 +187,10 @@ export function Picker({
         aria-pressed={ariaPressed}
         data-pending={pending ? "" : undefined}
         title={title}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (!open) onOpen?.();
+          setOpen(!open);
+        }}
       >
         {label}
       </button>

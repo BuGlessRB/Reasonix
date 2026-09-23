@@ -1,18 +1,20 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { ProviderCheck, ProviderEntry } from "../port/port";
 import { clearModelCheckFacts, ModelChoice, type ModelFact } from "./ModelChoice";
 import type { Port } from "./Providers";
 import { reason } from "../i18n/kernel";
-import { THINKING, headerLines, parseExtraBody, parseHeaders } from "./provider_compat";
+import { THINKING, headerLines, parseEffortLevels, parseExtraBody, parseHeaders } from "./provider_compat";
 
 // Only what this form owns is sent: the entry keeps its prices, effort
 // vocabularies and everything else the panel cannot show.
+// declare opens the form on the reasoning fields: the composer sends a user
+// here when the endpoint reported no effort levels.
 export function EditConn({
-  entry, initialCheck, port, busy, setBusy, onDone,
+  entry, initialCheck, port, busy, setBusy, onDone, declare = false,
 }: {
   entry: ProviderEntry; initialCheck?: ProviderCheck; port: Port;
-  busy: string; setBusy: (b: string) => void; onDone: () => void;
+  busy: string; setBusy: (b: string) => void; onDone: () => void; declare?: boolean;
 }) {
   const seededModels = [...new Set([...entry.models, ...(initialCheck?.models ?? [])])];
   const seededVision = [...new Set([...(entry.visionModels ?? []), ...(initialCheck?.vision ?? [])])];
@@ -29,10 +31,22 @@ export function EditConn({
   const [checkingModel, setCheckingModel] = useState("");
   const [def, setDef] = useState(entry.default || entry.models[0] || "");
   const [err, setErr] = useState("");
-  const [more, setMore] = useState(false);
+  const [more, setMore] = useState(declare);
   const [win, setWin] = useState(entry.contextWindow ? String(entry.contextWindow) : "");
   const [maxOut, setMaxOut] = useState(entry.maxOutputTokens ? String(entry.maxOutputTokens) : "");
   const [think, setThink] = useState(entry.reasoningProtocol ?? "");
+  const [levelText, setLevelText] = useState((entry.supportedEfforts ?? []).join(", "));
+  const [defEffort, setDefEffort] = useState(entry.defaultEffort ?? "");
+  const levels = parseEffortLevels(levelText);
+  // Kimi K3 carries a fixed vocabulary and "none" sends no reasoning field, so
+  // a declared list is kept on file but has nothing to act on under either.
+  const levelsDormant = think === "kimi-k3" || think === "none";
+  const reasoning = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (!declare) return;
+    reasoning.current?.scrollIntoView({ block: "center" });
+    reasoning.current?.focus({ preventScroll: true });
+  }, [declare]);
   const [heads, setHeads] = useState(headerLines(entry.headers));
   const [extra, setExtra] = useState(entry.extraBody ? JSON.stringify(entry.extraBody, null, 2) : "");
   const saving = busy === `edit:${entry.name}`;
@@ -133,6 +147,8 @@ export function EditConn({
         contextWindow: Number(win.replace(/\D/g, "")) || 0,
         maxOutputTokens: Number(maxOut.replace(/\D/g, "")) || 0,
         reasoningProtocol: think,
+        supportedEfforts: levels,
+        defaultEffort: levels.includes(defEffort) ? defEffort : "",
         headers: parseHeaders(heads),
         extraBody: parseExtraBody(extra) ?? {},
       });
@@ -216,56 +232,87 @@ export function EditConn({
         />
       </div>
 
-      {/* Folded, and worth folding: these three are the ones no probe can
-          answer, and most endpoints need none of them. */}
-      <button className="more" aria-expanded={more} onClick={() => setMore((v) => !v)}>
-        {t(more ? "收起" : "端点要求的额外设置")}
-        <span className="c">{compatSummary(heads, extra)}</span>
-      </button>
-
-      {more && (
-        <div className="fields compat">
-          <label className="grow full">
-            <span>{t("思考参数")}</span>
-            <select value={think} onChange={(e) => setThink(e.target.value)}>
-              {THINKING.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {t(label)}
-                </option>
-              ))}
-            </select>
-            <i className="tip">
-              {t("端点控制思考深度的方式。此项无法自动探测：中转站转发的是第三方模型，只有你知道其后端。选择后才能调整推理强度，选择错误会导致请求被端点拒绝。")}
-            </i>
-          </label>
-          <label className="grow full">
-            <span>{t("额外请求头")}</span>
-            <textarea
-              rows={3}
-              value={heads}
-              spellCheck={false}
-              placeholder={"HTTP-Referer: https://example.com\nX-Title: Reasonix"}
-              onChange={(e) => setHeads(e.target.value)}
-            />
-            <i className="tip">{t("每行一个「名称: 值」。中转站通常用它识别站点；密钥仍填写在上方。")}</i>
-          </label>
-          <label className="grow full">
-            <span>{t("额外请求体")}</span>
-            <textarea
-              rows={4}
-              value={extra}
-              spellCheck={false}
-              placeholder={'{\n  "enable_thinking": true\n}'}
-              onChange={(e) => setExtra(e.target.value)}
-              aria-invalid={extraBad || undefined}
-            />
-            <i className="tip">
-              {t("将合并到请求体的顶层。model、messages、tools、stream 由内核控制，在此填写不会生效。")}
-            </i>
-          </label>
-          {extraBad && <div className="why">{t("这段不是合法的 JSON 对象，保存会被拒绝。")}</div>}
-        </div>
-      )}
+      {/* Folded, and worth folding: no probe can answer these, and most
+          endpoints need none of them. The fold names its contents, because a
+          relay's effort levels are declared nowhere else. */}
+      <details className="addp-options" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
+        <summary data-action="provider.draft" data-value="compat">
+          <span className="tx">
+            <strong>{t("思考参数与推理档位")}</strong>
+            <small>{t("以及额外请求头、请求体。中转站的推理强度在这里声明")}</small>
+          </span>
+          <span className="summary-value">{compatSummary(think, heads, extra, levels.length) || t("可选")}</span>
+        </summary>
+        {more && (
+          <div className="fields compat addp-options-body">
+            <label className="grow full">
+              <span>{t("思考参数")}</span>
+              <select ref={reasoning} value={think} onChange={(e) => setThink(e.target.value)}>
+                {THINKING.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {t(label)}
+                  </option>
+                ))}
+              </select>
+              <i className="tip">
+                {t("端点控制思考深度的方式。此项无法自动探测：中转站转发的是第三方模型，只有你知道其后端。选择后才能调整推理强度，选择错误会导致请求被端点拒绝。")}
+              </i>
+            </label>
+            <label className="grow">
+              <span>{t("推理档位")}</span>
+              <input
+                data-action="provider.draft"
+                data-value="effort-levels"
+                value={levelText}
+                spellCheck={false}
+                placeholder="low, medium, high"
+                disabled={levelsDormant}
+                onChange={(e) => setLevelText(e.target.value)}
+              />
+              <i className="tip">
+                {t(levelsDormant
+                  ? "当前思考参数不使用自定义档位；已填写的档位会保留，切换协议后生效。"
+                  : "端点接受的推理强度取值，用逗号分隔，按原样发送。填写后会替代思考参数自带的档位；留空则使用思考参数的默认档位。")}
+              </i>
+            </label>
+            <label className="grow">
+              <span>{t("默认档位")}</span>
+              <select data-action="provider.draft" data-value="default-effort" value={levels.includes(defEffort) ? defEffort : ""} disabled={levelsDormant || levels.length === 0}
+                onChange={(e) => setDefEffort(e.target.value)}>
+                <option value="">{t("第一个档位")}</option>
+                {levels.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+              <i className="tip">{t("推理强度选「自动」时使用的档位。")}</i>
+            </label>
+            <label className="grow full">
+              <span>{t("额外请求头")}</span>
+              <textarea
+                rows={3}
+                value={heads}
+                spellCheck={false}
+                placeholder={"HTTP-Referer: https://example.com\nX-Title: Reasonix"}
+                onChange={(e) => setHeads(e.target.value)}
+              />
+              <i className="tip">{t("每行一个「名称: 值」。中转站通常用它识别站点；密钥仍填写在上方。")}</i>
+            </label>
+            <label className="grow full">
+              <span>{t("额外请求体")}</span>
+              <textarea
+                rows={4}
+                value={extra}
+                spellCheck={false}
+                placeholder={'{\n  "enable_thinking": true\n}'}
+                onChange={(e) => setExtra(e.target.value)}
+                aria-invalid={extraBad || undefined}
+              />
+              <i className="tip">
+                {t("将合并到请求体的顶层。model、messages、tools、stream 由内核控制，在此填写不会生效。")}
+              </i>
+            </label>
+            {extraBad && <div className="why">{t("这段不是合法的 JSON 对象，保存会被拒绝。")}</div>}
+          </div>
+        )}
+      </details>
 
       {err && (
         <div className="find" data-lvl="warn">
@@ -314,8 +361,11 @@ function catalogDiff(before: string[], found: string[]) {
   };
 }
 
-function compatSummary(heads: string, extra: string): string {
+function compatSummary(think: string, heads: string, extra: string, levels: number): string {
   const parts: string[] = [];
+  const protocol = THINKING.find(([value]) => value === think);
+  if (think && protocol) parts.push(t(protocol[1]));
+  if (levels) parts.push(t("{n} 个档位", { n: levels }));
   const headCount = Object.keys(parseHeaders(heads)).length;
   if (headCount) parts.push(t("{n} 个头", { n: headCount }));
   const body = parseExtraBody(extra);

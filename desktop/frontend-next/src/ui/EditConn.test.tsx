@@ -107,3 +107,42 @@ it("preserves configured models that a refreshed catalog no longer returns", asy
   expect(within(preserved).getByText("本次未返回")).toBeTruthy();
   expect(document.querySelector(".mdiff")?.textContent).toContain("有 1 个已配置模型本次未返回，已为你保留。");
 });
+
+it("opens on the reasoning fields when sent to declare effort levels, and saves them", async () => {
+  const editProvider = vi.fn(async () => {});
+  const port = { editProvider } as unknown as Port;
+  const entry: ProviderEntry = {
+    name: "relay",
+    kind: "openai",
+    baseUrl: "https://relay.invalid/v1",
+    models: ["gpt-x"],
+    default: "gpt-x",
+    hasKey: true,
+    inUse: true,
+    preset: false,
+  };
+
+  render(<EditConn entry={entry} port={port} busy="" setBusy={() => {}} onDone={() => {}} declare />);
+  const think = screen.getByRole("combobox", { name: /^思考参数/ });
+  expect(document.activeElement).toBe(think);
+
+  await userEvent.type(screen.getByRole("textbox", { name: /^推理档位/ }), "Low, medium，auto xhigh");
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: /^默认档位/ }), "medium");
+  await userEvent.click(screen.getByRole("button", { name: "保存" }));
+
+  await waitFor(() => expect(editProvider).toHaveBeenCalled());
+  expect(editProvider).toHaveBeenCalledWith(expect.objectContaining({
+    supportedEfforts: ["low", "medium", "xhigh"],
+    defaultEffort: "medium",
+  }));
+});
+
+it("keeps the reasoning fields folded when the form was opened by hand", () => {
+  const port = { editProvider: vi.fn() } as unknown as Port;
+  const entry: ProviderEntry = {
+    name: "relay", kind: "openai", baseUrl: "https://relay.invalid/v1", models: ["gpt-x"],
+    default: "gpt-x", hasKey: true, inUse: false, preset: false,
+  };
+  render(<EditConn entry={entry} port={port} busy="" setBusy={() => {}} onDone={() => {}} />);
+  expect(screen.queryByRole("textbox", { name: /^推理档位/ })).toBeNull();
+});

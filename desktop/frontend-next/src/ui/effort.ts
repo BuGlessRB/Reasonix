@@ -56,7 +56,7 @@ export function effortMenu(efforts: string[], modelLabel: string, onDeclare: str
   const declared = efforts.length > 0;
   return [
     { value: "__effort-heading", label: t("推理强度"), right: modelLabel, header: true },
-    ...(declared ? [] : [{ value: onDeclare, label: t("去「模型来源」声明档位"), desc: t("这个端点没有报告推理档位。中转站通常不转发这项能力，在来源的「请求与能力」里可以声明。") }]),
+    ...(declared ? [] : [{ value: onDeclare, label: t("声明推理档位"), desc: t("这个端点没有报告推理档位，中转站通常不转发这项能力。将打开该来源的编辑表单，可以选择思考参数或直接填写档位。") }]),
     ...efforts.map((value) => ({
       value,
       label: effortLabel(value),

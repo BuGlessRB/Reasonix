@@ -41,3 +41,14 @@ export function parseExtraBody(text: string): Record<string, unknown> | null {
     return null;
   }
 }
+
+// Mirrors what the kernel stores: lower-cased, deduplicated, and without auto,
+// which every ladder already opens with.
+export function parseEffortLevels(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split(/[\s,，、]+/)) {
+    const level = raw.trim().toLowerCase();
+    if (level && level !== "auto" && !out.includes(level)) out.push(level);
+  }
+  return out;
+}

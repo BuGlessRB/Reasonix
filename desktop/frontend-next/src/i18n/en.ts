@@ -75,8 +75,8 @@ export const EN: Record<string, string> = {
   // ── 运行状态 ─────────────────────────────────────────────────────
   "空闲": "Idle",
   "运行中": "Running",
-  "去「模型来源」声明档位": "Declare levels under Model sources",
-  "这个端点没有报告推理档位。中转站通常不转发这项能力，在来源的「请求与能力」里可以声明。": "This endpoint reported no reasoning levels. Relays often do not forward the capability; you can declare it under the source’s requests and capabilities.",
+  "声明推理档位": "Declare reasoning levels",
+  "这个端点没有报告推理档位，中转站通常不转发这项能力。将打开该来源的编辑表单，可以选择思考参数或直接填写档位。": "This endpoint reported no reasoning levels; relays often do not forward them. Opens this source’s editor, where you can pick a thinking parameter or list the levels yourself.",
   "本轮已发送 / 已接收的 token": "Tokens sent and received this turn",
   "查看生成速度详情": "View generation speed details",
   "生成速度": "Generation speed",

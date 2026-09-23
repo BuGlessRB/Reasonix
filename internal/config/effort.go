@@ -415,6 +415,13 @@ func StoredReasoningProtocol(raw string) (string, bool) {
 	}
 }
 
+// StoredEffortLevels is what a declared effort vocabulary stores as: trimmed,
+// lower-cased, deduplicated, and without auto, which every ladder carries
+// implicitly. An empty result clears the declaration.
+func StoredEffortLevels(levels []string) []string {
+	return normalizedEffortLevels(levels)
+}
+
 func normalizeReasoningProtocol(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", ReasoningProtocolAuto:

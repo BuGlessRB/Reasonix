@@ -74,9 +74,12 @@ interface ProvidersProps {
   protocol: Record<string, string>;
   onProtocol: (account: Account, kind: string) => void;
   activeKindFor: (account: Account) => string;
+  // The source whose editor opens on its reasoning fields, when the composer
+  // sent the user here to declare effort levels.
+  declare?: string;
 }
 
-export function Providers({ port, onChanged, onFailed, protocol, onProtocol, activeKindFor }: ProvidersProps) {
+export function Providers({ port, onChanged, onFailed, protocol, onProtocol, activeKindFor, declare }: ProvidersProps) {
   const [list, setList] = useState<ProviderEntry[] | null>(null);
   const [adding, setAdding] = useState(false);
   useEscape(adding, () => setAdding(false));
@@ -132,6 +135,7 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
             kind={protocol[a.key] ?? activeKindFor(a)}
             onProtocol={(k) => onProtocol(a, k)}
             onRemove={remove}
+            declare={declare}
             onEdited={() => { reload(); onChanged(); }}
             onFailed={onFailed} />
         ))}
@@ -160,11 +164,11 @@ const CONTINUATION_WHY: Record<string, string> = {
 // because both entries are the same key at the same host; 测一下 is what turns
 // "which protocol did we record" back into a finding when the endpoint moved.
 function Conn({
-  a, port, busy, setBusy, kind, onProtocol, onRemove, onEdited, onFailed,
+  a, port, busy, setBusy, kind, onProtocol, onRemove, onEdited, onFailed, declare,
 }: {
   a: Account; port: Port; busy: string; setBusy: (b: string) => void;
   kind: string; onProtocol: (kind: string) => void; onRemove: (name: string) => void;
-  onEdited: () => void; onFailed: (why: string) => void;
+  onEdited: () => void; onFailed: (why: string) => void; declare?: string;
 }) {
   const [found, setFound] = useState<ProviderCheck | null>(null);
   // A refusal is not a failed probe. The kernel withholds these routes from a
@@ -172,9 +176,10 @@ function Conn({
   // into the credential store of the machine running the kernel — so nothing
   // was tried, and "cannot connect" names the wrong thing to go fix.
   const [refused, setRefused] = useState("");
-  const [editing, setEditing] = useState(false);
-  useEscape(editing, () => setEditing(false));
   const entry = a.byKind[kind] ?? a.byKind[a.kinds[0]];
+  const declaring = !!declare && entry.name === declare;
+  const [editing, setEditing] = useState(declaring);
+  useEscape(editing, () => setEditing(false));
   const checking = busy === `check:${entry.name}`;
   const inUse = a.kinds.some((k) => a.byKind[k].inUse);
 
@@ -345,6 +350,7 @@ function Conn({
           port={port}
           busy={busy}
           setBusy={setBusy}
+          declare={declaring}
           onDone={() => {
             setEditing(false);
             onEdited();

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "./testkit";
 import { Composer } from "./Composer";
 import { MockPort } from "../port/mock";
-import type { AgentPort, ApprovalMode, Attachment, Preset, SessionStatus } from "../port/port";
+import type { AgentPort, ApprovalMode, Attachment, ModelEntry, Preset, SessionStatus } from "../port/port";
 
 afterEach(cleanup);
 
@@ -201,4 +201,34 @@ it("keeps every segment after the provider in a namespaced model id", async () =
   // The rows are the ready signal, and a Picker renders them into the body.
   await waitFor(() => expect(document.querySelector('[data-action="model.select"]')).toBeTruthy());
   expect(container.querySelector(".studio-model-group .model-picker")?.textContent).toContain("anthropic/claude-sonnet");
+});
+
+describe("the effort ladder follows the source", () => {
+  const relay = (efforts?: string[]): ModelEntry[] => [{ ref: "relay/model-x", provider: "relay", model: "model-x", efforts }];
+  const onRelay = status({ modelRef: "relay/model-x" });
+  const trigger = (c: HTMLElement) => c.querySelector(".studio-effort-picker") as HTMLElement;
+
+  it("re-reads the ladder when settings report a change", async () => {
+    const port = new MockPort();
+    const models = vi.spyOn(port, "models").mockResolvedValueOnce(relay()).mockResolvedValue(relay(["auto", "low", "high"]));
+    const props = { port: port as unknown as AgentPort, status: onRelay, running: false, focus: 0,
+      onSubmit: vi.fn(async () => true), onChanged: vi.fn(), onError: vi.fn() };
+    const view = render(<Composer {...props} pulse={0} />);
+    await waitFor(() => expect(trigger(view.container).textContent).toContain("未声明"));
+
+    view.rerender(<Composer {...props} pulse={1} />);
+    await waitFor(() => expect(trigger(view.container).textContent).not.toContain("未声明"));
+    expect(models).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-reads the ladder when its menu opens", async () => {
+    const port = new MockPort();
+    const models = vi.spyOn(port, "models").mockResolvedValueOnce(relay()).mockResolvedValue(relay(["auto", "low"]));
+    const { container } = draw({ port, st: onRelay });
+    await waitFor(() => expect(trigger(container).textContent).toContain("未声明"));
+
+    fireEvent.click(trigger(container));
+    await waitFor(() => expect(trigger(container).textContent).not.toContain("未声明"));
+    expect(models).toHaveBeenCalledTimes(2);
+  });
 });

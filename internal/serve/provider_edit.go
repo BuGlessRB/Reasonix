@@ -37,6 +37,10 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 		// answers it — a relay forwards a vendor's models under its own name —
 		// so the declaration has to come from whoever knows what is behind it.
 		ReasoningProtocol *string `json:"reasoningProtocol"`
+		// The endpoint's effort vocabulary, for a relay whose protocol ladder is
+		// not the one its backend accepts. An empty list clears the declaration.
+		SupportedEfforts *[]string `json:"supportedEfforts"`
+		DefaultEffort    *string   `json:"defaultEffort"`
 	}
 	if !decodeProviderBody(w, r, &body) {
 		return
@@ -95,6 +99,12 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 		}
 		entry.ReasoningProtocol = stored
 	}
+	if level, ok := applyEffortDeclaration(entry, body.SupportedEfforts, body.DefaultEffort); !ok {
+		refuse(w, http.StatusBadRequest, "provider.default_effort_not_listed",
+			fmt.Sprintf("default effort %q is not one of the declared levels", level),
+			map[string]any{"level": level})
+		return
+	}
 	if body.ExtraBody != nil {
 		// A null cannot be written to TOML, so it would be dropped on save and
 		// the field would silently never reach the wire.
@@ -120,6 +130,30 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// applyEffortDeclaration stores a declared effort vocabulary and its default.
+// Only a request that touched them answers for their consistency: a mismatch
+// already in the file is one EffectiveEffort falls back past. A default left
+// with no levels to name is dropped; one outside the levels is refused.
+func applyEffortDeclaration(entry *config.ProviderEntry, levels *[]string, def *string) (string, bool) {
+	if levels == nil && def == nil {
+		return "", true
+	}
+	if levels != nil {
+		entry.SupportedEfforts = config.StoredEffortLevels(*levels)
+	}
+	if def != nil {
+		entry.DefaultEffort = strings.ToLower(strings.TrimSpace(*def))
+	}
+	if entry.DefaultEffort == "" || slices.Contains(entry.SupportedEfforts, entry.DefaultEffort) {
+		return "", true
+	}
+	if len(entry.SupportedEfforts) > 0 {
+		return entry.DefaultEffort, false
+	}
+	entry.DefaultEffort = ""
+	return "", true
 }
 
 // applyVisionSelection makes the panel's list the whole answer. The provider-wide

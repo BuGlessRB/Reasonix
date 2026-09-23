@@ -36,6 +36,10 @@ export interface ProviderEntry {
   // Absent is "nobody said", which is why a relay's effort ladder comes out
   // empty — nothing can be probed for it.
   reasoningProtocol?: string;
+  // A declared effort vocabulary, which replaces the protocol's ladder, and the
+  // level auto resolves to. Absent is no declaration.
+  supportedEfforts?: string[];
+  defaultEffort?: string;
   // Removing the one in use would leave the session on a model that no longer
   // resolves, so the row offers no delete.
   inUse: boolean;
@@ -157,6 +161,9 @@ export interface ProviderEdit {
   // Which request shape controls thinking here. "" is auto — no declaration,
   // which leaves the registry in charge. Omitted still means "leave it alone".
   reasoningProtocol?: string;
+  // An empty list clears the declared vocabulary; omitted leaves it alone.
+  supportedEfforts?: string[];
+  defaultEffort?: string;
 }
 
 // What the panel sends back after the user has looked at the probe.

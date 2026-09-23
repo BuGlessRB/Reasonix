@@ -369,6 +369,84 @@ func TestEditProviderRefusesAnUnknownReasoningProtocol(t *testing.T) {
 	}
 }
 
+// A relay whose backend takes levels its protocol's ladder does not name needs
+// the vocabulary itself declared; the panel stores it as the effort layer reads
+// it, and the listing hands it back so the form opens on the current answer.
+func TestDeclaringEffortLevelsReplacesTheLadder(t *testing.T) {
+	srv := newRichProviderServer(t)
+
+	resp := postProvider(t, srv.URL, "/providers/edit", `{
+		"name":"rich","models":["alpha","beta"],"default":"alpha","vision":[],
+		"supportedEfforts":[" Low","medium","auto","xhigh","low"],"defaultEffort":"Medium"
+	}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		body, _ := readAllString(resp)
+		t.Fatalf("edit status = %d, want 204: %s", resp.StatusCode, body)
+	}
+
+	after, ok := loadEntry(t, "rich/alpha")
+	if !ok {
+		t.Fatal("provider stopped resolving after the edit")
+	}
+	got := config.EffortCapabilityForEntry(after)
+	if !slices.Equal(got.Levels, []string{"auto", "low", "medium", "xhigh"}) || got.Default != "medium" {
+		t.Fatalf("capability = %+v, want the declared ladder defaulting to medium", got)
+	}
+
+	listed, err := http.Get(srv.URL + "/providers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listed.Body.Close()
+	var list []providerView
+	if err := json.NewDecoder(listed.Body).Decode(&list); err != nil {
+		t.Fatal(err)
+	}
+	var rich *providerView
+	for i := range list {
+		if list[i].Name == "rich" {
+			rich = &list[i]
+		}
+	}
+	if rich == nil || !slices.Equal(rich.SupportedEfforts, []string{"low", "medium", "xhigh"}) || rich.DefaultEffort != "medium" {
+		t.Fatalf("listing = %+v, want the stored vocabulary", rich)
+	}
+
+	reset := postProvider(t, srv.URL, "/providers/edit", `{
+		"name":"rich","models":["alpha","beta"],"default":"alpha","vision":[],
+		"supportedEfforts":[],"defaultEffort":""
+	}`)
+	defer reset.Body.Close()
+	if reset.StatusCode != http.StatusNoContent {
+		t.Fatalf("clear status = %d, want 204", reset.StatusCode)
+	}
+	cleared, _ := loadEntry(t, "rich/alpha")
+	if config.EffortCapabilityForEntry(cleared).Supported {
+		t.Fatal("an emptied vocabulary still produced a ladder")
+	}
+}
+
+func TestEditProviderRefusesADefaultEffortOutsideTheLevels(t *testing.T) {
+	srv := newRichProviderServer(t)
+
+	resp := postProvider(t, srv.URL, "/providers/edit", `{
+		"name":"rich","models":["alpha"],"default":"alpha","vision":[],
+		"supportedEfforts":["low","high"],"defaultEffort":"max"
+	}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	var reason Reason
+	if err := json.NewDecoder(resp.Body).Decode(&reason); err != nil {
+		t.Fatalf("decode reason: %v", err)
+	}
+	if reason.Code != "provider.default_effort_not_listed" {
+		t.Fatalf("code = %q, want provider.default_effort_not_listed", reason.Code)
+	}
+}
+
 func loadEntry(t *testing.T, ref string) (*config.ProviderEntry, bool) {
 	t.Helper()
 	cfg, err := config.Load()
