@@ -40,3 +40,40 @@ contextBridge.exposeInMainWorld("reasonixHost", {
   controlBrowserView: (targetId, action) => ipcRenderer.invoke("browser:control", String(targetId), String(action)),
   navigateBrowserView: (targetId, address) => ipcRenderer.invoke("browser:navigate", String(targetId), String(address)),
 });
+
+// localStorage is keyed by origin and the kernel's port is new each launch, so
+// the page's own preferences are restored here, before any page script reads
+// them, and handed back as they change. A key the page already holds wins: it
+// is at least as new as the copy on disk.
+const PREFIX = "rx-";
+function ownPrefs() {
+  const out = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(PREFIX)) out[key] = localStorage.getItem(key) ?? "";
+  }
+  return out;
+}
+try {
+  const saved = ipcRenderer.sendSync("prefs:load") || {};
+  for (const [key, value] of Object.entries(saved)) {
+    if (key.startsWith(PREFIX) && localStorage.getItem(key) === null) localStorage.setItem(key, String(value));
+  }
+} catch {
+  // Storage unavailable: the page runs on its defaults, as it always has.
+}
+let sent = "";
+function flush(sync) {
+  try {
+    const prefs = ownPrefs();
+    const next = JSON.stringify(prefs);
+    if (next === sent) return;
+    sent = next;
+    if (sync) ipcRenderer.sendSync("prefs:save", prefs);
+    else ipcRenderer.send("prefs:save", prefs);
+  } catch {
+    // Nothing to keep this time; the next change tries again.
+  }
+}
+setInterval(() => flush(false), 3000);
+window.addEventListener("pagehide", () => flush(true));

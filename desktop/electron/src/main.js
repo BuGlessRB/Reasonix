@@ -16,6 +16,7 @@ const { stripPackageGrants, unpaintedWindowCause } = require("./packagegrants");
 const { BrowserProtocol } = require("./browserprotocol");
 const { BrowserViews } = require("./browserviews");
 const { startBrowserRelay } = require("./browserrelay");
+const { prefsFile, registerPrefs } = require("./prefs");
 
 // A page in a minimized or fully covered window counts as hidden, and a hidden
 // page drops the input the agent sends it: measured, its clicks never arrive and
@@ -231,6 +232,8 @@ function guard(contents) {
 function fromWindow(event) {
   return win && !win.isDestroyed() && event.sender === win.webContents ? win : null;
 }
+
+registerPrefs(ipcMain, () => prefsFile(app.getPath("userData")), fromWindow);
 
 ipcMain.handle("window:minimise", (event) => {
   fromWindow(event)?.minimize();

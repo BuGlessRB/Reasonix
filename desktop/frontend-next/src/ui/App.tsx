@@ -21,6 +21,7 @@ import { Sky } from "./Sky";import { useAddWorkspace } from "./addws";
 import { PaneTabs } from "./PaneTabs";
 import { Onboarding } from "./Onboarding";
 import { Welcome } from "./Welcome";
+import { markSettled } from "../boot/gate";
 
 // Start fetching the settings chunk with the shell instead of waiting for the
 // first click. It remains a separate chunk (and keeps its failure boundary),
@@ -278,6 +279,10 @@ export function App({ hub }: { hub: HubPort }) {
       });
   }, [activePort]);
   useEffect(reloadAccount, [reloadAccount]);
+
+  useEffect(() => {
+    if (setup !== undefined && welcomed !== undefined) markSettled();
+  }, [setup, welcomed]);
 
   const running = report.run === "running";
   const { theme, setTheme, scheme, contrast, setContrast, weight, setWeight, look, onLook, pack, reloadThemes } =

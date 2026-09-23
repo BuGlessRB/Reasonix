@@ -11,6 +11,7 @@ const { contextTemplate } = require("../src/editmenu.js");
 const { externalTarget } = require("../src/links.js");
 const { offerCleanup, ownBundle } = require("../src/legacy.js");
 const { stripPackageGrants, readReport, unpaintedWindowCause } = require("../src/packagegrants.js");
+const { pick, loadPrefs, savePrefs, registerPrefs } = require("../src/prefs.js");
 
 const TOKEN = "a".repeat(64);
 const line = (over) => JSON.stringify({ version: 1, origin: "http://127.0.0.1:8080", token: TOKEN, ...over });
@@ -514,4 +515,38 @@ test("the relay reads whole SSE data frames and keeps what is unfinished", () =>
   const second = sseData(first.rest + 'nn":"2"}\n\n: ping\n\n');
   assert.deepEqual(second.data, ['{"conn":"2"}']);
   assert.equal(second.rest, "");
+});
+
+// The kernel listens on a new port each launch, and localStorage is keyed by
+// origin; these are what carries the page's choices from one launch to the next.
+test("the page's preferences survive a launch, and nothing else rides along", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rx-prefs-"));
+  const file = path.join(dir, "nested", "window-prefs.json");
+  assert.deepEqual(loadPrefs(file), {}, "a first launch starts empty");
+  savePrefs(file, { "rx-theme": "dark", "rx-weight": "heavy", other: "x", "rx-bad": 1 });
+  assert.deepEqual(loadPrefs(file), { "rx-theme": "dark", "rx-weight": "heavy" });
+  fs.writeFileSync(file, "{not json");
+  assert.deepEqual(loadPrefs(file), {}, "a damaged file reads as nothing kept, not as a crash");
+  assert.deepEqual(pick(["rx-theme"]), {});
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("only the Studio window reads or writes the preferences", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rx-prefs-"));
+  const file = path.join(dir, "window-prefs.json");
+  savePrefs(file, { "rx-theme": "dark" });
+  const handlers = {};
+  registerPrefs({ on: (name, fn) => (handlers[name] = fn) }, () => file, (event) => event.sender === "studio");
+  const ask = (name, sender, arg) => {
+    const event = { sender };
+    handlers[name](event, arg);
+    return event.returnValue;
+  };
+  assert.deepEqual(ask("prefs:load", "studio"), { "rx-theme": "dark" });
+  assert.deepEqual(ask("prefs:load", "agent-page"), {}, "a browser page is told nothing");
+  ask("prefs:save", "agent-page", { "rx-theme": "light" });
+  assert.deepEqual(loadPrefs(file), { "rx-theme": "dark" }, "a browser page cannot write");
+  ask("prefs:save", "studio", { "rx-theme": "light" });
+  assert.deepEqual(loadPrefs(file), { "rx-theme": "light" });
+  fs.rmSync(dir, { recursive: true, force: true });
 });

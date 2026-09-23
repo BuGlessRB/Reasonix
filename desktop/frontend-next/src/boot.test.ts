@@ -25,6 +25,21 @@ describe("the shipped entry", () => {
   it("paints the boot screen itself opaque", () => {
     expect(inline).toMatch(/\.boot\s*\{[^}]*background:\s*var\(--boot-bg\)/);
   });
+
+  it("marks each real startup step and names the one still pending", () => {
+    // One mark per step intro.progress can report: bundle, kernel, app.
+    expect(HTML).toContain('<div class="bsteps" aria-hidden="true"><i></i><i></i><i></i></div>');
+    for (const at of ["1", "2"]) {
+      expect(HTML).toMatch(new RegExp(`<span data-at="${at}"><span data-zh>[^<]+</span><span data-en>[^<]+</span></span>`));
+    }
+  });
+
+  it("still shows the wordmark when the intro never runs", () => {
+    // The letters start hidden for the intro to take; a bundle that fails to
+    // load must not leave the window a blank night sky.
+    expect(inline).toMatch(/\.bmark \.bl\s*\{[^}]*animation:\s*bootfallback/);
+    expect(inline).toMatch(/\.boot\[data-intro\] \.bmark \.bl\s*\{\s*animation:\s*none/);
+  });
 });
 
 // A shared serve link carries its credential in the fragment, which the browser
