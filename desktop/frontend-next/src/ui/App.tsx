@@ -397,6 +397,9 @@ export function App({ hub }: { hub: HubPort }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A control that answered the press itself — the code editor's own find
+      // on Ctrl+F, or its Escape closing that — has spent it.
+      if (e.defaultPrevented) return;
       if (e.metaKey || e.ctrlKey) {
         const hit = shortcuts.find((s) => s.chord === e.key && !!s.shift === e.shiftKey);
         if (hit) {

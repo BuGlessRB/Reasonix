@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import { host } from "../port/host";
@@ -8,10 +8,12 @@ import type {
   WorkspaceChange,
   WorkspaceFile,
 } from "../port/port";
-import { AgentBrowserPanel, ManualBrowserPanel } from "./BrowserPanel";
+import { AgentBrowserPanel, ManualBrowserPanel, UNREAD_TABS } from "./BrowserPanel";
 import { DiffView } from "./cards/DiffView";
-import { LazyMarkdown } from "./LazyMarkdown";
 import { StudioIcon } from "./StudioIcon";
+
+// The editor and its grammars load with the first file opened, not with Studio.
+const CodeEditor = lazy(() => import("./CodeEditor"));
 
 type Surface =
   | { kind: "manual"; id: string }
@@ -22,27 +24,6 @@ type TreeRow = {
   path: string;
   name: string;
   depth: number;
-};
-const LANGUAGE: Record<string, string> = {
-  ts: "typescript",
-  tsx: "typescript",
-  js: "javascript",
-  jsx: "javascript",
-  go: "go",
-  py: "python",
-  rs: "rust",
-  java: "java",
-  json: "json",
-  css: "css",
-  html: "html",
-  md: "markdown",
-  sh: "bash",
-  ps1: "powershell",
-  toml: "ini",
-  yaml: "yaml",
-  yml: "yaml",
-  xml: "xml",
-  sql: "sql",
 };
 
 function keyOf(s: Surface) {
@@ -148,8 +129,7 @@ export function WorkbenchPanel({
   const [browsers, setBrowsers] = useState<string[]>([]),
     [hosts, setHosts] = useState<Record<string, string>>({});
   const minted = useRef(0);
-  const [mode, setMode] = useState<"file" | "diff">("file"),
-    [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState<"file" | "diff">("file");
   const [file, setFile] = useState<WorkspaceFile | null>(null),
     [draft, setDraft] = useState(""),
     [diff, setDiff] = useState("");
@@ -179,14 +159,56 @@ export function WorkbenchPanel({
       );
   }, [port, shown, changeKey, query]);
   // The button in the chrome says "show me the browser", not "show me this one
-  // browser": it seeds the first tab and the strip's + opens the rest.
-  // Closing the panel is not closing the pages: they come back with it, and
-  // only a tab's own × takes one away.
+  // browser". When the agent has a page, that page is the browser; the start
+  // page is only for an empty column, and steps aside unused once the agent
+  // opens something. Closing the panel is not closing the pages: they come
+  // back with it, and only a tab's own × takes one away.
+  const agentPage = tabs.find((tab) => tab.active) ?? tabs[0];
+  const agentTarget = agentPage?.target ?? "";
+  const agentAt = agentPage ? `${agentPage.target} ${agentPage.url}` : "";
+  const visited = useRef(hosts);
+  visited.current = hosts;
+  const dropBlankStart = useCallback(() => setBrowsers((open) => open.filter((id) => !!visited.current[id])), []);
+  const agentNow = useRef(agentTarget);
+  agentNow.current = agentTarget;
   useEffect(() => {
     if (!manual) return;
+    if (agentNow.current) {
+      dropBlankStart();
+      setSelected(`browser:${agentNow.current}`);
+      return;
+    }
     setBrowsers((open) => (open.length ? open : ["b0"]));
     setSelected((at) => (at.startsWith("manual:") ? at : "manual:b0"));
-  }, [manual]);
+  }, [manual, dropBlankStart]);
+  // A page that has just appeared is the one somebody wants to see, whoever
+  // opened it: the agent's popup, or a link the person followed, which opens
+  // beside the agent's tab without becoming the one it acts on.
+  const known = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (tabs === UNREAD_TABS) return;
+    const ids = tabs.map((tab) => tab.target);
+    if (known.current === null) {
+      known.current = new Set(ids);
+      return;
+    }
+    const fresh = ids.filter((id) => !known.current!.has(id));
+    for (const id of ids) known.current.add(id);
+    if (fresh.length) {
+      dropBlankStart();
+      setSelected(`browser:${fresh[fresh.length - 1]}`);
+    }
+  }, [tabs, dropBlankStart]);
+  // Where the agent is looking, followed as it moves: a new page, or the same
+  // tab sent somewhere else.
+  const lastAgent = useRef<string | null>(null);
+  useEffect(() => {
+    const before = lastAgent.current;
+    lastAgent.current = agentAt;
+    if (before === null || !agentAt || before === agentAt) return;
+    dropBlankStart();
+    setSelected(`browser:${agentTarget}`);
+  }, [agentAt, agentTarget, dropBlankStart]);
   const noteHost = useCallback(
     (id: string, host: string) =>
       setHosts((v) => (v[id] === host ? v : { ...v, [id]: host })),
@@ -210,12 +232,18 @@ export function WorkbenchPanel({
     [files, directories, query, collapsed],
   );
   useEffect(() => onSurfaces(surfaces.length), [onSurfaces, surfaces.length]);
+  // A strip wider than the column scrolls, and the tab being shown is always
+  // brought into it: a selected tab nobody can see reads as a tab that closed.
+  const strip = useRef<HTMLDivElement>(null);
+  const activeKey = active ? keyOf(active) : "";
+  useEffect(() => {
+    strip.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [activeKey, surfaces.length]);
   useEffect(() => {
     if (!active || active.kind !== "file") return;
     let live = true;
     setBusy(true);
     setFailed("");
-    setEditing(false);
     Promise.all([
       port.workspaceFile(active.path),
       port
@@ -237,7 +265,10 @@ export function WorkbenchPanel({
       live = false;
     };
   }, [port, active?.kind === "file" ? active.path : ""]);
+  // Picking a file is asking to read it. Docked, the list and the file share one
+  // column, so the list steps aside; side by side it stays where it is.
   const openFile = (path: string) => {
+    setShowFiles(false);
     setOpenFiles((v) => (v.includes(path) ? v : [...v, path]));
     setDismissed((v) => {
       const n = new Set(v);
@@ -283,16 +314,16 @@ export function WorkbenchPanel({
       setFailed(reason(e));
     }
   };
+  // The column folds only when its last tab goes, whatever kind that tab is: a
+  // page opened with + or a file still open is a reason to keep it.
   const close = (surface: Surface) => {
     const key = keyOf(surface);
-    if (surface.kind === "manual") {
-      const rest = browsers.filter((id) => id !== surface.id);
-      setBrowsers(rest);
-      if (!rest.length) onCloseManual();
-    } else if (surface.kind === "file")
+    if (surface.kind === "manual") setBrowsers((v) => v.filter((id) => id !== surface.id));
+    else if (surface.kind === "file")
       setOpenFiles((v) => v.filter((p) => p !== surface.path));
     else setDismissed((v) => new Set(v).add(key));
     if (selected === key) setSelected("");
+    if (surfaces.every((s) => keyOf(s) === key)) onCloseManual();
   };
   const save = async () => {
     if (!file || draft === file.content) return;
@@ -300,22 +331,23 @@ export function WorkbenchPanel({
     setFailed("");
     try {
       setFile(await port.saveWorkspaceFile({ ...file, content: draft }));
-      setEditing(false);
     } catch (e) {
       setFailed(reason(e));
     } finally {
       setBusy(false);
     }
   };
-  const language =
-    active?.kind === "file"
-      ? (LANGUAGE[active.path.split(".").at(-1)?.toLowerCase() ?? ""] ??
-        "plaintext")
-      : "plaintext";
   return (
     <section className="workbench" aria-label={t("工作台")}>
       <header className="workbench-tabs">
-        <div className="workbench-tablist" role="tablist">
+        <div
+          className="workbench-tablist"
+          role="tablist"
+          ref={strip}
+          onWheel={(e) => {
+            if (e.deltaY && strip.current) strip.current.scrollLeft += e.deltaY;
+          }}
+        >
         {surfaces.map((surface) => (
           <div
             className="workbench-tab"
@@ -421,17 +453,6 @@ export function WorkbenchPanel({
                     Diff
                   </button>
                 </div>
-                {mode === "file" && (
-                  <button
-                    className="workbench-edit"
-                    data-action="workbench.edit"
-                    aria-pressed={editing}
-                    onClick={() => setEditing((v) => !v)}
-                  >
-                    <StudioIcon name="edit" />
-                    {editing ? t("预览") : t("编辑")}
-                  </button>
-                )}
                 <button
                   className="workbench-save"
                   data-action="workbench.save"
@@ -454,20 +475,18 @@ export function WorkbenchPanel({
                 <div className="workbench-diff">
                   <DiffView path={active.path} diff={diff} />
                 </div>
-              ) : editing ? (
-                <textarea
-                  data-action="workbench.edit"
-                  aria-label={t("文件内容")}
-                  className="workbench-editor"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  spellCheck={false}
-                />
-              ) : (
-                <div className="workbench-code">
-                  <LazyMarkdown text={`\`\`\`${language}\n${draft}\n\`\`\``} />
-                </div>
-              )}
+              ) : file && file.path === active.path ? (
+                <Suspense fallback={<div className="workbench-empty">{t("正在读取…")}</div>}>
+                  <CodeEditor
+                    key={active.path}
+                    path={active.path}
+                    value={draft}
+                    dark={scheme === "dark"}
+                    onChange={setDraft}
+                    onSave={() => void save()}
+                  />
+                </Suspense>
+              ) : null}
             </>
           )}
         </main>
@@ -478,7 +497,7 @@ export function WorkbenchPanel({
             {/* Beside the files rather than in settings: this is the one place
                 the workspace is already what you are looking at. */}
             <button
-              className="workbench-editor"
+              className="workbench-open-editor"
               data-action="workspace.editor"
               title={editorNote || t("在代码编辑器中打开工作区")}
               aria-label={t("在代码编辑器中打开工作区")}

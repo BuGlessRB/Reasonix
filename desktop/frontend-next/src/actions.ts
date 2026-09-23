@@ -295,7 +295,6 @@ export const ACTIONS: UIAction[] = [
   { id: "workbench.tab", kind: "view", target: "entity", proof: "interaction" },
   { id: "workbench.close", kind: "view", target: "entity", proof: "interaction" },
   { id: "workbench.mode", kind: "view", target: "none", proof: "interaction" },
-  { id: "workbench.edit", kind: "view", target: "none", proof: "interaction" },
   { id: "workbench.save", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   { id: "workbench.search", kind: "view", target: "none", proof: "interaction" },
   { id: "workbench.clear-search", kind: "view", target: "none", proof: "interaction" },

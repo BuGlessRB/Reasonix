@@ -598,16 +598,44 @@ func (c *Controller) BrowserTabs() []browser.TabInfo {
 	return c.browser.Tabs()
 }
 
-// BrowserOpen opens a page in the session's browser. There is one browser and
-// one list of tabs: a tab the person opened is a tab the agent can read and
-// drive, and one it opened is a tab the person can watch. A second, private
-// surface for the window's own tabs would be a page neither could hand to the
-// other — and, as an iframe, one that sites refusing to be framed never load.
+// BrowserOpen opens a page in the session's one browser, whose tabs both the
+// person and the agent can read and drive. The active tab is where the agent's
+// calls without a tab land, so a new tab the person opens sits beside it and
+// leaves the agent's active. A private surface for the window's own tabs would
+// be a page neither could hand the other, and one that refuses framing.
 func (c *Controller) BrowserOpen(ctx context.Context, rawURL, tabID string, newTab bool) (browser.TabInfo, error) {
 	if c == nil || c.browser == nil {
 		return browser.TabInfo{}, errors.New("this session has no browser")
 	}
-	return c.browser.Open(ctx, rawURL, tabID, newTab)
+	if !newTab {
+		return c.browser.Open(ctx, rawURL, tabID, newTab)
+	}
+	return openBeside(ctx, c.browser, rawURL)
+}
+
+type tabOpener interface {
+	Tabs() []browser.TabInfo
+	Open(ctx context.Context, rawURL, tabID string, newTab bool) (browser.TabInfo, error)
+	Switch(tabID string) (browser.TabInfo, error)
+}
+
+// openBeside opens rawURL in a new tab and hands the active one back to the
+// tab that held it, when one did.
+func openBeside(ctx context.Context, b tabOpener, rawURL string) (browser.TabInfo, error) {
+	held := ""
+	for _, t := range b.Tabs() {
+		if t.Active {
+			held = t.ID
+		}
+	}
+	info, err := b.Open(ctx, rawURL, "", true)
+	if held == "" || info.ID == "" || info.ID == held {
+		return info, err
+	}
+	if _, serr := b.Switch(held); serr == nil {
+		info.Active = false
+	}
+	return info, err
 }
 
 // BrowserSession is the agent's browser, which a rebuild hands to the

@@ -134,20 +134,26 @@ export function ManualBrowserPanel({ id, hidden, onAddress, onExternal, scheme }
       {/* Not a hint at an icon somewhere else: a site that refuses to be framed
           shows the shell's own "refused to connect", and the way out has to be
           beside it. */}
-      <footer className="studio-browser-note" data-loading={loading ? "" : undefined}>
-        <span>{loading ? t("正在打开网页…") : t("部分站点禁止被嵌入（Google、GitHub 等），这里会显示「拒绝连接」。")}</span>
-        {!internal && (
-          <button type="button" data-action="browser.external" onClick={() => onExternal(current)}>
-            {t("在外部浏览器打开")}
-          </button>
-        )}
-      </footer>
+      {(loading || !internal) && (
+        <footer className="studio-browser-note" data-loading={loading ? "" : undefined}>
+          {loading && <span>{t("正在打开网页…")}</span>}
+          {!internal && (
+            <button type="button" data-action="browser.external" onClick={() => onExternal(current)}>
+              {t("在外部浏览器打开")}
+            </button>
+          )}
+        </footer>
+      )}
     </section>
   );
 }
 
+// What useBrowserTabs holds before its first read, told apart by identity from a
+// read that found no pages.
+export const UNREAD_TABS: BrowserTab[] = [];
+
 export function useBrowserTabs(port: AgentPort, moved: number): BrowserTab[] {
-  const [tabs, setTabs] = useState<BrowserTab[]>([]);
+  const [tabs, setTabs] = useState<BrowserTab[]>(UNREAD_TABS);
   useEffect(() => {
     if (!host().drawsBrowserViews()) return;
     let live = true;

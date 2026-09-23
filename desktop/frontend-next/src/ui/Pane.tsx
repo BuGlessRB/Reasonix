@@ -38,6 +38,7 @@ import { Find } from "./Find";
 import { useFind } from "./usefind";
 import { RunAnalysis } from "./RunAnalysis";
 import { useBrowserTabs } from "./BrowserPanel";
+import { useRevealAgentPages, useRevealBrowserOpen } from "./browserreveal";
 import { WorkbenchPanel } from "./WorkbenchPanel";
 import { refreshTodos } from "../state/restore";
 import { RMark } from "./RMark";
@@ -127,6 +128,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [slots, setSlots] = useState<Record<string, string>>({});
   const pages = useBrowserTabs(port, s.browserTabsMoved);
+  const revealBrowser = useCallback(() => onManualBrowser?.(true), [onManualBrowser]);
+  useRevealAgentPages(pages, active && !rt.host, revealBrowser);
+  useRevealBrowserOpen(s.items, active && !rt.host, revealBrowser);
   const [surfaces, setSurfaces] = useState(0);
   // Analysis owns the whole working canvas. A docked browser and the composer
   // are useful while talking to the agent, but both compete with the timeline
