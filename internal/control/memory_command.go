@@ -17,6 +17,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/i18n"
 	"reasonix/internal/memory"
+	"reasonix/internal/permission"
 )
 
 const memoryCommandUsage = "usage: /memory [recall|subjects|pin <id-or-name>|unpin <id-or-name>|verify <id-or-name>|revisions <id-or-name>|restore <id-or-name> <revision>|archived|recover <archive-path>|instructions]"
@@ -555,16 +556,33 @@ func (c *Controller) Memory() *memory.Set {
 func (c *Controller) emitRememberResult(r RememberResult) {
 	if r.Err != nil {
 		c.sink.Emit(event.Event{
-			Kind:  event.Notice,
-			Level: event.LevelWarn,
-			Text:  fmt.Sprintf(i18n.M.PermissionSaveFailedFmt, r.Rule, r.Err),
+			Kind:   event.Notice,
+			Level:  event.LevelWarn,
+			Code:   event.NoticeCodePermissionSaveFailed,
+			Text:   fmt.Sprintf(i18n.M.PermissionSaveFailedFmt, r.Rule, r.Err),
+			Detail: r.Err.Error(),
 		})
 		return
 	}
 	switch {
 	case r.Saved:
-		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf(i18n.M.PermissionSavedFmt, r.Path, r.Rule)})
+		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodePermissionSaved,
+			Text: fmt.Sprintf(i18n.M.PermissionSavedFmt, r.Path, r.Rule), Detail: ruleSubject(r.Rule)})
 	case strings.TrimSpace(r.CoveredBy) != "":
-		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf(i18n.M.PermissionAlreadyAllowedFmt, r.Path, r.CoveredBy)})
+		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodePermissionCovered,
+			Text: fmt.Sprintf(i18n.M.PermissionAlreadyAllowedFmt, r.Path, r.CoveredBy), Detail: ruleSubject(r.CoveredBy)})
 	}
+}
+
+// ruleSubject is what a permission rule allows, as a person reads it: the
+// command or target it names, or the tool alone when the rule covers all of it.
+func ruleSubject(rule string) string {
+	parsed, ok := permission.ParseRule(rule)
+	if !ok {
+		return strings.TrimSpace(rule)
+	}
+	if strings.TrimSpace(parsed.Subject) == "" {
+		return parsed.Tool
+	}
+	return parsed.Tool + " · " + strings.TrimSpace(parsed.Subject)
 }

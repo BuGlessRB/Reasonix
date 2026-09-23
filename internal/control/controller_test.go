@@ -4127,6 +4127,36 @@ func TestApprovalPersistentBashPrefixRememberRule(t *testing.T) {
 	}
 }
 
+// A remembered approval carries an identity and what it allows, so a window in
+// another language can say it without reading the kernel's sentence.
+func TestRememberResultNoticesCarryCodeAndSubject(t *testing.T) {
+	var got []event.Event
+	c := New(Options{Sink: event.FuncSink(func(e event.Event) {
+		if e.Kind == event.Notice {
+			got = append(got, e)
+		}
+	})})
+	c.emitRememberResult(RememberResult{Rule: "Bash=uname -a; id", Path: "/root/reasonix.toml", Saved: true})
+	c.emitRememberResult(RememberResult{Rule: "Bash(go test ./x)", Path: "reasonix.toml", CoveredBy: "Bash(go test:*)"})
+	c.emitRememberResult(RememberResult{Rule: "WebFetch", Path: "reasonix.toml", Err: errors.New("disk unavailable")})
+	want := []struct{ code, detail string }{
+		{event.NoticeCodePermissionSaved, "Bash · uname -a; id"},
+		{event.NoticeCodePermissionCovered, "Bash · go test:*"},
+		{event.NoticeCodePermissionSaveFailed, "disk unavailable"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("notices = %+v, want %d", got, len(want))
+	}
+	for i, w := range want {
+		if got[i].Code != w.code || got[i].Detail != w.detail {
+			t.Fatalf("notice %d = (%q, %q), want (%q, %q)", i, got[i].Code, got[i].Detail, w.code, w.detail)
+		}
+	}
+	if !strings.Contains(got[0].Text, "/root/reasonix.toml") {
+		t.Fatalf("saved notice text %q lost the path it was written to", got[0].Text)
+	}
+}
+
 func TestApprovalPersistenceFailureKeepsSessionGrant(t *testing.T) {
 	ids := make(chan string, 1)
 	var notices []event.Event

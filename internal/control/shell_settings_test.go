@@ -115,3 +115,25 @@ func TestShellSettingsOffersOnlyInstalledInterpreters(t *testing.T) {
 		t.Fatalf("effective = %q, want auto's %q", s.Effective.Path, s.Auto.Path)
 	}
 }
+
+// Git for Windows ships bin/bash.exe as a launcher for usr/bin/bash.exe; the
+// pane offers one row per install, and a pinned path is the one kept.
+func TestOneGitBashPerInstall(t *testing.T) {
+	usr := ShellOption{Name: "git-bash", Path: `C:\Program Files\Git\usr\bin\bash.exe`}
+	bin := ShellOption{Name: "git-bash", Path: `C:\Program Files\Git\bin\bash.exe`}
+	other := ShellOption{Name: "git-bash", Path: `D:\tools\Git\bin\bash.exe`}
+	pwsh := ShellOption{Name: "pwsh", Path: `C:\Program Files\PowerShell\7\pwsh.exe`}
+	opts := []ShellOption{usr, bin, other, pwsh}
+
+	got := oneGitBashPerInstall(opts, usr.Path)
+	if len(got) != 3 || got[0] != usr || got[1] != other || got[2] != pwsh {
+		t.Fatalf("auto keep: %+v", got)
+	}
+	got = oneGitBashPerInstall(opts, bin.Path)
+	if len(got) != 3 || got[0] != bin {
+		t.Fatalf("pinned launcher not kept: %+v", got)
+	}
+	if opts[0] != usr {
+		t.Fatal("input slice was rewritten")
+	}
+}

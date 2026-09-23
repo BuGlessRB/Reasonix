@@ -244,7 +244,7 @@ const SAID: Record<string, string> = {
   "browser_host.bad_frames": "内置浏览器的消息格式不正确，本次回传被丢弃",
 
   // ── 版本：这个内核背后有没有一个可更新的 Studio ─────────────────
-  "studio.no_install": "这个内核不是由 Studio 启动的，没有可以查看或切换的版本",
+  "studio.no_install": "这个 Studio 不是安装版（从源码启动），没有可以查看或切换的版本",
   "studio.pin_rejected": "版本固定未能保存：{detail}",
   "update.install_running": "已有一个版本切换正在进行，请等待其完成后重试",
   "update.install_rejected": "本次版本切换未能启动：{detail}",

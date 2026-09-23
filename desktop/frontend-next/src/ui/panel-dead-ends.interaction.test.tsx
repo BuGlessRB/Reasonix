@@ -30,15 +30,28 @@ const said = (code: string) => reason(refusal(code));
 describe("a read the kernel refuses", () => {
   it("says why on the version panel instead of loading forever", async () => {
     const port = {
+      versions: () => Promise.reject(refusal("internal.failed")),
+      pinVersion: () => Promise.resolve(),
+      goToVersion: () => Promise.resolve(),
+      onUpdateProgress: () => () => {},
+    };
+    render(<Versions port={port} />);
+    expect(await screen.findByText(said("internal.failed"))).toBeTruthy();
+    expect(screen.queryByText("正在读取版本…")).toBeNull();
+    expect(screen.getByRole("button", { name: "重试" })).toBeTruthy();
+  });
+
+  it("names a build run from source on the version panel, with nothing to retry", async () => {
+    const port = {
       versions: () => Promise.reject(refusal("studio.no_install")),
       pinVersion: () => Promise.resolve(),
       goToVersion: () => Promise.resolve(),
       onUpdateProgress: () => () => {},
     };
     render(<Versions port={port} />);
-    expect(await screen.findByText(said("studio.no_install"))).toBeTruthy();
-    expect(screen.queryByText("正在读取版本…")).toBeNull();
-    expect(screen.getByRole("button", { name: "重试" })).toBeTruthy();
+    expect(await screen.findByText(/从源码启动的开发版/)).toBeTruthy();
+    expect(screen.queryByText("无法读取版本信息")).toBeNull();
+    expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
   });
 
   it("says why on the memory panel instead of calling an unread store empty", async () => {

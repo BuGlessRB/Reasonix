@@ -33,4 +33,6 @@ const (
 	// A reported lease wait always arrives as a pair: one of the two below
 	// closes the one above, so no surface is left holding an open wait.
 	NoticeCodeWorkspaceLeaseResumed, NoticeCodeWorkspaceLeaseAbandoned = "workspace_lease_resumed", "workspace_lease_abandoned"
+	// A remembered approval: Detail carries what it allows, the rule's subject.
+	NoticeCodePermissionSaved, NoticeCodePermissionCovered, NoticeCodePermissionSaveFailed = "permission_saved", "permission_covered", "permission_save_failed"
 )

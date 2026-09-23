@@ -9,4 +9,7 @@ export const NOTICE_TEXT: Record<string, string> = {
   workspace_lease: "另一个会话正在写这个工作区，等它写完会自动继续",
   workspace_lease_resumed: "工作区空出来了，这个会话已经继续",
   workspace_lease_abandoned: "还没轮到这个会话写，这次等待就结束了",
+  permission_saved: "已记住这项授权，以后同样的操作不再询问",
+  permission_covered: "已有的授权规则覆盖了这项操作，无需另存",
+  permission_save_failed: "授权没能保存，只在本次会话内有效",
 };

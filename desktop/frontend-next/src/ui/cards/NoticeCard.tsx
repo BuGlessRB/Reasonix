@@ -8,6 +8,9 @@ import { Sym } from "../Sym";
 // halves apart — the headline it wrote for a person, and the diagnostic under
 // it, which is what .why is for everywhere in this UI. Severity is a colour bar
 // here as in .guard and .find, and the gutter follows it too.
+// These name a rule as their detail: a command or target, set as code.
+const PERMISSION = new Set(["permission_saved", "permission_covered"]);
+
 export function NoticeCard({ item }: { item: Extract<Item, { t: "notice" }> }) {
   const lvl = item.level === "error" ? "err" : item.level === "warn" ? "warn" : undefined;
   // The kernel writes in English for its own logs. Where this build has the
@@ -33,7 +36,9 @@ export function NoticeCard({ item }: { item: Extract<Item, { t: "notice" }> }) {
                   before them. */}
               {item.count && item.count > 1 ? <b className="ntimes">×{item.count}</b> : null}
             </span>
-            {item.detail && <span className="why nwhy">{item.detail}</span>}
+            {item.detail && (PERMISSION.has(item.code ?? "")
+              ? <code className="nrule" title={item.text}>{item.detail}</code>
+              : <span className="why nwhy">{item.detail}</span>)}
           </div>
         </div>
       </div>

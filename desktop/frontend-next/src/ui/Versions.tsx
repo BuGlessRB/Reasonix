@@ -3,6 +3,10 @@ import { bytes } from "../i18n/format";
 import { t } from "../i18n";
 import type { UpdateProgress, VersionHub } from "../port/port";
 import { reason } from "../i18n/kernel";
+import { HttpError } from "../port/http_error";
+
+// A shell that declared no install: a build run from source, not a failure.
+const NO_INSTALL = "studio.no_install";
 
 // The panel answers three questions in the order a user asks them: what am I
 // running, is something wrong with it, and how do I get off it. Every action
@@ -55,6 +59,7 @@ export function Versions({ port }: { port: Port }) {
   const [going, setGoing] = useState("");
   const [failed, setFailed] = useState("");
   const [unread, setUnread] = useState("");
+  const [uninstalled, setUninstalled] = useState(false);
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
 
   // The kernel says why it cannot answer — a shell that never declared an
@@ -67,10 +72,13 @@ export function Versions({ port }: { port: Port }) {
       .then((h) => {
         setHub(h);
         setUnread("");
+        setUninstalled(false);
       })
       .catch((e) => {
         setHub(null);
-        setUnread(reason(e));
+        const none = e instanceof HttpError && e.reason?.code === NO_INSTALL;
+        setUninstalled(none);
+        setUnread(none ? "" : reason(e));
       });
   }, [port]);
 
@@ -116,6 +124,10 @@ export function Versions({ port }: { port: Port }) {
       reload();
     }
   }, [going, progress, reload]);
+
+  if (uninstalled) {
+    return <p className="acct-note">{t("当前是从源码启动的开发版，没有可以查看或切换的版本。安装版 Studio 会在这里列出可用的更新。")}</p>;
+  }
 
   if (unread) {
     return (
