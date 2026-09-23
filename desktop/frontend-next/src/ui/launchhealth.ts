@@ -5,7 +5,7 @@ import type { AgentPort, ProviderSetup } from "../port/port";
 // from. The desktop this replaced waited the same two seconds for the same
 // reason: a build that comes up and dies immediately must not be the one that
 // throws away the way back to the build before it.
-const PROBATION_MS = 2000;
+export const PROBATION_MS = 2000;
 
 /** Says this launch works, once, after it has stayed up long enough to mean it.
  *

@@ -1,16 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
-
-const state = vi.hoisted(() => ({ lang: "zh" as "zh" | "en" }));
-vi.mock("./index", () => ({ current: () => state.lang }));
-
+// @vitest-environment jsdom
+import { beforeAll, describe, expect, it } from "vitest";
+import { boot, STORAGE } from "./index";
 import { bytes, category, count, decimals, money, pct, seconds, tokens } from "./format";
 
+function speak(lang: "zh" | "en") {
+  localStorage.setItem(STORAGE, lang);
+  boot();
+}
+
+beforeAll(() => speak("zh"));
+
 function inEnglish<T>(fn: () => T): T {
-  state.lang = "en";
+  speak("en");
   try {
     return fn();
   } finally {
-    state.lang = "zh";
+    speak("zh");
   }
 }
 

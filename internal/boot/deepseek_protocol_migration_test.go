@@ -151,10 +151,10 @@ command = "C:\Users\reasonix\mcp.exe"
 // person's permission rules — so silence there is a session running as someone
 // else with nothing on screen to say it.
 func TestABrokenConfigSaysSoWithNoFrontendListening(t *testing.T) {
-	home := isolateConfigHome(t)
+	isolateConfigHome(t)
 	workspace := robustTempDir(t)
 	broken := "default_model = \"x/y\"\n\n[browser]\nenabled = true\n\n[browser]\nheadless = true\n"
-	userConfig := filepath.Join(home, ".reasonix", "config.toml")
+	userConfig := config.UserConfigPath()
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o700); err != nil {
 		t.Fatal(err)
 	}

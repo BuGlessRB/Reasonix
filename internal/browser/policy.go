@@ -30,13 +30,34 @@ func checkURL(raw string, roots []string) (string, error) {
 			return "about:blank", nil
 		}
 	case "file":
-		path, err := url.PathUnescape(u.Path)
-		if err != nil || !fileWithin(path, roots) {
+		path, ok := localFilePath(u)
+		if !ok || !fileWithin(path, roots) {
 			return "", fail(CodeURLRefused, "%q is outside the workspace; a page may only be a local file inside it", raw)
 		}
 		return u.String(), nil
 	}
 	return "", fail(CodeURLRefused, "the %s: scheme is not a page the agent may open", u.Scheme)
+}
+
+// localFilePath answers the path a file URL names on this machine. A host other
+// than localhost is another machine — Windows opens file://host/share as a UNC
+// path — so it names no local file; file://C:/x is a drive, as browsers read it.
+func localFilePath(u *url.URL) (string, bool) {
+	path, err := url.PathUnescape(u.Path)
+	if err != nil {
+		return "", false
+	}
+	switch host := u.Host; {
+	case host == "" || strings.EqualFold(host, "localhost"):
+		return path, true
+	case runtime.GOOS == "windows" && isDriveLetter(host):
+		return host + path, true
+	}
+	return "", false
+}
+
+func isDriveLetter(s string) bool {
+	return len(s) == 2 && s[1] == ':' && ('a' <= s[0]|0x20 && s[0]|0x20 <= 'z')
 }
 
 func fileWithin(path string, roots []string) bool {
@@ -47,6 +68,11 @@ func fileWithin(path string, roots []string) bool {
 		path = path[1:]
 	}
 	path = filepath.FromSlash(path)
+	// A bare drive (C:) is relative to that drive's working directory, which
+	// may lie inside a root while the page the browser opens is the drive root.
+	if !filepath.IsAbs(path) {
+		return false
+	}
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		path = resolved
 	}
@@ -91,8 +117,8 @@ func (s *Session) ServesWorkspace(raw string) bool {
 	}
 	switch strings.ToLower(u.Scheme) {
 	case "file":
-		path, err := url.PathUnescape(u.Path)
-		return err == nil && fileWithin(path, s.cfg.Roots)
+		path, ok := localFilePath(u)
+		return ok && fileWithin(path, s.cfg.Roots)
 	case "http", "https":
 		host := u.Hostname()
 		return host == "127.0.0.1" || host == "::1" || strings.EqualFold(host, "localhost")

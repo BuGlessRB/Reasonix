@@ -6,14 +6,27 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"reasonix/internal/testenv"
 )
+
+// slashPath is p as a URL path: C:\x is /C:/x, the form a browser reports.
+func slashPath(p string) string {
+	p = filepath.ToSlash(p)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return p
+}
+
+func fileURL(p string) string { return (&url.URL{Scheme: "file", Path: slashPath(p)}).String() }
 
 func TestCheckURL(t *testing.T) {
 	root := testenv.TempDir(t)
@@ -29,7 +42,6 @@ func TestCheckURL(t *testing.T) {
 	if err := os.Symlink(outside, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	fileURL := func(p string) string { return "file://" + filepath.ToSlash(p) }
 	cases := []struct {
 		raw  string
 		want Code
@@ -40,11 +52,29 @@ func TestCheckURL(t *testing.T) {
 		{fileURL(inside), ""},
 		{fileURL(outside), CodeURLRefused},
 		{fileURL(link), CodeURLRefused},
+		{"file://localhost" + slashPath(inside), ""},
+		{"file://elsewhere" + slashPath(inside), CodeURLRefused},
+		{"file://elsewhere/share/index.html", CodeURLRefused},
 		{"chrome://settings", CodeURLRefused},
 		{"javascript:alert(1)", CodeURLRefused},
 		{"data:text/html,<p>x</p>", CodeURLRefused},
 		{"example.com", CodeURLRefused},
 		{"https://", CodeURLRefused},
+	}
+	if runtime.GOOS == "windows" {
+		// A bare drive resolves against the working directory; standing inside
+		// the root is what would let it pass.
+		t.Chdir(root)
+		cases = append(cases, struct {
+			raw  string
+			want Code
+		}{"file://" + filepath.ToSlash(inside), ""}, struct {
+			raw  string
+			want Code
+		}{"file:///" + filepath.VolumeName(root), CodeURLRefused}, struct {
+			raw  string
+			want Code
+		}{"file://" + filepath.VolumeName(root), CodeURLRefused})
 	}
 	for _, tc := range cases {
 		_, err := checkURL(tc.raw, []string{root})
@@ -319,14 +349,14 @@ func TestWhichPagesAreTheWorkspacesOwn(t *testing.T) {
 	}
 	s := NewSession(Config{Roots: []string{root}})
 	cases := map[string]bool{
-		"http://127.0.0.1:8123/index.html": true,
-		"http://localhost:5173/":           true,
-		"https://[::1]:8443/app":           true,
-		"file://" + root + "/index.html":   true,
-		"file:///etc/passwd":               false,
-		"https://example.com/":             false,
-		"about:blank":                      false,
-		"":                                 false,
+		"http://127.0.0.1:8123/index.html":         true,
+		"http://localhost:5173/":                   true,
+		"https://[::1]:8443/app":                   true,
+		fileURL(filepath.Join(root, "index.html")): true,
+		"file:///etc/passwd":                       false,
+		"https://example.com/":                     false,
+		"about:blank":                              false,
+		"":                                         false,
 	}
 	for raw, want := range cases {
 		if got := s.ServesWorkspace(raw); got != want {

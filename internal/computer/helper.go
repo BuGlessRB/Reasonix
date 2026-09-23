@@ -8,7 +8,6 @@ import (
 	"io"
 	"os/exec"
 	"sync"
-	"time"
 
 	"reasonix/internal/proc"
 )
@@ -21,7 +20,7 @@ type Helper struct {
 
 	mu    sync.Mutex
 	live  *helperProcess
-	stop  time.Time       // when the person last asked the agent to stop
+	stops uint64          // how many times the person has asked the agent to stop
 	asked map[string]bool // permissions already requested from the system
 }
 
@@ -89,7 +88,7 @@ func (h *Helper) read(p *helperProcess, stdout io.Reader) {
 		}
 		if r.Event == "stop" {
 			h.mu.Lock()
-			h.stop = time.Now()
+			h.stops++
 			h.mu.Unlock()
 			continue
 		}
@@ -111,11 +110,20 @@ func (h *Helper) read(p *helperProcess, stdout io.Reader) {
 	p.mu.Unlock()
 }
 
-// stoppedSince reports whether the person asked the agent to stop after t.
-func (h *Helper) stoppedSince(t time.Time) bool {
+// stopMark is where stoppedSince measures from. A count rather than a clock:
+// Windows advances time.Now by timer tick, so a stop inside the tick a run
+// started in would compare equal to its start and go unseen.
+func (h *Helper) stopMark() uint64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return h.stop.After(t)
+	return h.stops
+}
+
+// stoppedSince reports whether the person asked the agent to stop after mark.
+func (h *Helper) stoppedSince(mark uint64) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.stops != mark
 }
 
 // firstAsk reports whether permission has not been requested yet, and records

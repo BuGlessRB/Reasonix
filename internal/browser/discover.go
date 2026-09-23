@@ -3,6 +3,7 @@ package browser
 import (
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 )
@@ -41,9 +42,9 @@ func installedCandidates(goos string, getenv func(string) string) []string {
 			"Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
 			"Chromium.app/Contents/MacOS/Chromium",
 		} {
-			out = append(out, filepath.Join("/Applications", app))
+			out = append(out, path.Join("/Applications", app))
 			if home != "" {
-				out = append(out, filepath.Join(home, "Applications", app))
+				out = append(out, path.Join(home, "Applications", app))
 			}
 		}
 		return out

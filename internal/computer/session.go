@@ -241,7 +241,7 @@ func (s *Session) Act(ctx context.Context, bundle string, steps []Step) (ActResu
 			cancel()
 		}()
 	}
-	started := time.Now()
+	started := s.helper.stopMark()
 	for i, step := range steps {
 		if s.helper.stoppedSince(started) {
 			res.FailedAt = i

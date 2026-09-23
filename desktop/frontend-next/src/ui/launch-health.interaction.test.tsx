@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import "./testkit";
 import { App } from "./App";
 import { MockHub } from "../port/mock_hub";
+import { PROBATION_MS } from "./launchhealth";
 
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-});
+afterEach(cleanup);
+
+const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // A hub whose ports are past onboarding and report every health acknowledgement.
 function watchedHub() {
@@ -32,17 +32,16 @@ function watchedHub() {
 // so the transaction was never closed and every later install refused with "a
 // pending update already exists" — permanently, after the first one worked.
 describe("a launch that comes up says so", () => {
-  it("retires the update it booted from, once", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+  it("retires the update it booted from, once", { timeout: PROBATION_MS * 8 }, async () => {
     const { hub, said } = watchedHub();
     const started = Date.now();
     render(<App hub={hub} />);
 
-    // Let the panes resolve and the probation arm before the clock is pushed
-    // past it; nothing is asserted here, so nothing here can race.
-    await vi.advanceTimersByTimeAsync(500);
-    await vi.advanceTimersByTimeAsync(3000);
-    await waitFor(() => expect(said.length, "never acknowledged; the transaction stays open").toBe(1));
+    // Real time: the probation is the property under test, and a shared runner
+    // gives the panes no deadline to resolve by before it is served.
+    await waitFor(() => expect(said.length, "never acknowledged; the transaction stays open").toBe(1), {
+      timeout: PROBATION_MS * 4,
+    });
 
     // Not on the first frame: a build that comes up and dies immediately must
     // not be the one that throws away the way back to the build before it.
@@ -52,15 +51,14 @@ describe("a launch that comes up says so", () => {
     expect(said[0] - started, "acknowledged before the probation was served").toBeGreaterThanOrEqual(2000);
 
     // Once for the launch, not once per pane the user opens.
-    await vi.advanceTimersByTimeAsync(5000);
+    await settle(PROBATION_MS);
     expect(said, "said again for something that is not a launch").toHaveLength(1);
   });
 
   // An application still asking for a key has not come up. Retiring the way
   // back from inside onboarding would discard it on a launch the user cannot
   // yet use.
-  it("says nothing while onboarding is still on screen", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+  it("says nothing while onboarding is still on screen", { timeout: PROBATION_MS * 4 }, async () => {
     const hub = new MockHub();
     const said: number[] = [];
     const build = hub.portFor.bind(hub);
@@ -73,7 +71,7 @@ describe("a launch that comes up says so", () => {
     };
 
     render(<App hub={hub} />);
-    await vi.advanceTimersByTimeAsync(6000);
+    await settle(PROBATION_MS * 2);
     expect(said, "retired the rollback material from inside onboarding").toHaveLength(0);
   });
 });
