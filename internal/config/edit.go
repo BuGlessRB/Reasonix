@@ -843,61 +843,6 @@ func (c *Config) ClearPluginAuthentication(name string) (PluginEntry, bool, erro
 	return PluginEntry{}, false, fmt.Errorf("clear plugin authentication: no plugin %q", name)
 }
 
-// ClearPluginAuthenticationInSourceForRoot clears auth material in the source
-// that owns name for the supplied workspace. The root is explicit so a desktop
-// action cannot drift to another project's reasonix.toml or .mcp.json after the
-// user switches tabs while the action is waiting on a lifecycle lock.
-func ClearPluginAuthenticationInSourceForRoot(root, name string) (PluginEntry, bool, string, error) {
-	resolvedRoot := resolveRoot(root)
-	projectTOML := "reasonix.toml"
-	projectMCPJSON := mcpJSONFile
-	if resolvedRoot != "." {
-		projectTOML = filepath.Join(resolvedRoot, "reasonix.toml")
-		projectMCPJSON = filepath.Join(resolvedRoot, mcpJSONFile)
-	}
-	lockPaths := append([]string{}, processRoots().userConfigCandidatePaths()...)
-	lockPaths = append(lockPaths, projectTOML, projectMCPJSON)
-	if legacy := legacyConfigPath(); strings.TrimSpace(legacy) != "" {
-		lockPaths = append(lockPaths, legacy)
-	}
-	unlock, err := lockConfigFilesEdits(lockPaths...)
-	if err != nil {
-		return PluginEntry{}, false, "", fmt.Errorf("clear plugin authentication: %w", err)
-	}
-	defer unlock()
-
-	cfg, err := LoadForRootReadOnly(root)
-	if err != nil {
-		return PluginEntry{}, false, "", err
-	}
-	entry, found := pluginEntryByName(cfg.Plugins, strings.TrimSpace(name))
-	if !found {
-		return PluginEntry{}, false, "", fmt.Errorf("clear plugin authentication: no plugin %q", name)
-	}
-	path := MCPConfigPathForEntry(root, entry)
-	if entry.Source != MCPSourceProjectMCPJSON {
-		cfg, err := LoadForEditReadOnlyStrict(path)
-		if err != nil {
-			return PluginEntry{}, false, path, err
-		}
-		updated, changed, err := cfg.ClearPluginAuthentication(name)
-		if err != nil {
-			return PluginEntry{}, false, path, err
-		}
-		if changed {
-			if err := cfg.SaveTo(path); err != nil {
-				return PluginEntry{}, false, path, err
-			}
-		}
-		return updated, changed, path, nil
-	}
-	updated, changed, err := clearMCPJSONAuthentication(path, name)
-	if err != nil {
-		return PluginEntry{}, false, "", err
-	}
-	return updated, changed, path, nil
-}
-
 func pluginTOMLSourcePathForRoot(root, name string) string {
 	projectTOML := "reasonix.toml"
 	if resolved := resolveRoot(root); resolved != "." {
@@ -1197,46 +1142,6 @@ func applyConfigSourceEdits(edits []configSourceEdit) error {
 	return nil
 }
 
-func planTOMLPluginRemoval(path, name string) (configSourceEdit, bool, error) {
-	_, exists, err := statConfigPath(path)
-	if err != nil {
-		return configSourceEdit{}, false, err
-	}
-	if !exists {
-		return configSourceEdit{}, false, nil
-	}
-	cfg := Default()
-	if err := mergeFile(cfg, path); err != nil {
-		return configSourceEdit{}, false, err
-	}
-	normalizeConfigForEdit(cfg)
-	if !cfg.RemovePlugin(name) {
-		return configSourceEdit{}, false, nil
-	}
-	edit, err := newConfigSourceEdit(path, func() error { return cfg.SaveTo(path) })
-	return edit, err == nil, err
-}
-
-func planMCPJSONPluginRemoval(path, name string) (configSourceEdit, bool, error) {
-	resolved, exists, err := statConfigPath(path)
-	if err != nil {
-		return configSourceEdit{}, false, err
-	}
-	if !exists {
-		return configSourceEdit{}, false, nil
-	}
-	root, servers, err := readMCPJSONRaw(resolved)
-	if err != nil {
-		return configSourceEdit{}, false, err
-	}
-	if _, ok := servers[name]; !ok {
-		return configSourceEdit{}, false, nil
-	}
-	delete(servers, name)
-	edit, err := newConfigSourceEdit(path, func() error { return writeMCPJSONServers(resolved, root, servers) })
-	return edit, err == nil, err
-}
-
 func planLegacyMCPDisable(path, name string) (configSourceEdit, bool, error) {
 	if strings.TrimSpace(path) == "" {
 		return configSourceEdit{}, false, nil
@@ -1324,94 +1229,6 @@ func planLegacyMCPDisable(path, name string) (configSourceEdit, bool, error) {
 		return fileutil.AtomicWriteFile(resolved, out, info.Mode().Perm())
 	})
 	return edit, err == nil, err
-}
-
-// RemovePluginFromSourcesForRoot removes an MCP server from every writable
-// config source that can contribute it for root. Removing all matching TOML
-// declarations prevents a lower-priority duplicate from reappearing after the
-// higher-priority entry is deleted. Every edit is planned before the first write,
-// and legacy JSON receives a disable marker for older Reasonix versions.
-func RemovePluginFromSourcesForRoot(root, name string) (bool, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return false, fmt.Errorf("remove MCP server: name is required")
-	}
-
-	userPaths := processRoots().userConfigCandidatePaths()
-	resolvedRoot := resolveRoot(root)
-	projectTOML := "reasonix.toml"
-	if resolvedRoot != "." {
-		projectTOML = filepath.Join(resolvedRoot, "reasonix.toml")
-	}
-	isUserPath := false
-	for _, path := range userPaths {
-		if samePath(path, projectTOML) {
-			isUserPath = true
-			break
-		}
-	}
-	mcpPath := mcpJSONFile
-	if resolvedRoot != "." {
-		mcpPath = filepath.Join(resolvedRoot, mcpJSONFile)
-	}
-	legacyPath := legacyConfigPath()
-	lockPaths := append([]string{}, userPaths...)
-	if !isUserPath {
-		lockPaths = append(lockPaths, projectTOML)
-	}
-	lockPaths = append(lockPaths, mcpPath)
-	if legacyPath != "" {
-		lockPaths = append(lockPaths, legacyPath)
-	}
-	unlock, err := lockConfigFilesEdits(lockPaths...)
-	if err != nil {
-		return false, fmt.Errorf("remove MCP server: %w", err)
-	}
-	defer unlock()
-
-	var edits []configSourceEdit
-	planTOML := func(path string) error {
-		edit, changed, err := planTOMLPluginRemoval(path, name)
-		if err != nil {
-			return err
-		}
-		if changed {
-			edits = append(edits, edit)
-		}
-		return nil
-	}
-	for _, path := range userPaths {
-		if err := planTOML(path); err != nil {
-			return false, err
-		}
-	}
-	if !isUserPath {
-		if err := planTOML(projectTOML); err != nil {
-			return false, err
-		}
-	}
-
-	mcpEdit, changed, err := planMCPJSONPluginRemoval(mcpPath, name)
-	if err != nil {
-		return false, err
-	}
-	if changed {
-		edits = append(edits, mcpEdit)
-	}
-	legacyEdit, changed, err := planLegacyMCPDisable(legacyPath, name)
-	if err != nil {
-		return false, err
-	}
-	if changed {
-		edits = append(edits, legacyEdit)
-	}
-	if len(edits) == 0 {
-		return false, nil
-	}
-	if err := applyConfigSourceEdits(edits); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // validatePlugin checks a plugin entry by transport. An empty Type means stdio.

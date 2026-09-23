@@ -39,11 +39,6 @@ func AgentPresetFromTokenMode(mode string) string {
 	return string(agentpreset.FromLegacyTokenMode(mode))
 }
 
-// TokenModeFromAgentPreset maps a role setting onto the dual-write tokenMode.
-func TokenModeFromAgentPreset(preset string) string {
-	return agentpreset.LegacyTokenMode(agentpreset.Normalize(preset))
-}
-
 // CoreProviderToolNames is the stable top-level tool surface shared by every
 // Agent role setting under identical configuration. Host-control tools
 // (ask, update_goal, todo_write, complete_step) are appended when enabled.

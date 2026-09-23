@@ -92,57 +92,6 @@ func TestModelForResumePathUsesStoredModelWhenAvailable(t *testing.T) {
 	}
 }
 
-func TestLoadResumableSessionRejectsCleanupPending(t *testing.T) {
-	dir := testenv.TempDir(t)
-	path := filepath.Join(dir, "pending.jsonl")
-	saveTestSession(t, path, "pending prompt")
-	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := loadResumableSession(path); err == nil || !strings.Contains(err.Error(), "pending cleanup") {
-		t.Fatalf("loadResumableSession cleanup-pending error = %v, want pending cleanup", err)
-	}
-}
-
-func TestRunResumeRejectsCleanupPending(t *testing.T) {
-	isolateCLIConfigHome(t)
-
-	path := filepath.Join(testenv.TempDir(t), "pending-run.jsonl")
-	saveTestSession(t, path, "pending prompt")
-	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
-		t.Fatal(err)
-	}
-
-	errOut := captureStderr(t, func() {
-		if rc := runAgent([]string{"--resume", path, "continue task"}, "dev"); rc != 1 {
-			t.Fatalf("run --resume cleanup-pending rc = %d, want 1", rc)
-		}
-	})
-	if !strings.Contains(errOut, "pending cleanup") {
-		t.Fatalf("run --resume cleanup-pending stderr = %q, want pending cleanup", errOut)
-	}
-}
-
-func TestServeResumeRejectsCleanupPending(t *testing.T) {
-	isolateCLIConfigHome(t)
-
-	path := filepath.Join(testenv.TempDir(t), "pending-serve.jsonl")
-	saveTestSession(t, path, "pending prompt")
-	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
-		t.Fatal(err)
-	}
-
-	errOut := captureStderr(t, func() {
-		if rc := runServe([]string{"--resume", path, "--addr", "127.0.0.1:0"}, "v1.20.0"); rc != 1 {
-			t.Fatalf("serve --resume cleanup-pending rc = %d, want 1", rc)
-		}
-	})
-	if !strings.Contains(errOut, "pending cleanup") {
-		t.Fatalf("serve --resume cleanup-pending stderr = %q, want pending cleanup", errOut)
-	}
-}
-
 func TestServeRejectsUnknownAuthMode(t *testing.T) {
 	isolateCLIConfigHome(t)
 
@@ -166,27 +115,6 @@ func TestServePasswordAuthRequiresPasswordMaterial(t *testing.T) {
 	})
 	if !strings.Contains(errOut, "auth mode password requires --password or serve.password_hash") {
 		t.Fatalf("serve --auth password stderr = %q, want password material validation", errOut)
-	}
-}
-
-func TestReserveNativeScrollbackFrameWritesOnlyNewlines(t *testing.T) {
-	var b bytes.Buffer
-	reserveNativeScrollbackFrame(&b, 3)
-	if got := b.String(); got != "\n\n\n" {
-		t.Fatalf("reserveNativeScrollbackFrame wrote %q, want only three newlines", got)
-	}
-
-	reserveNativeScrollbackFrame(&b, 0)
-	if got := b.String(); got != "\n\n\n" {
-		t.Fatalf("reserveNativeScrollbackFrame(0) changed output to %q", got)
-	}
-}
-
-func TestPrepareNativeScrollbackClearsBeforeFrame(t *testing.T) {
-	var b bytes.Buffer
-	prepareNativeScrollback(&b, 2)
-	if got, want := b.String(), "\x1B[3J\x1B[2J\x1B[H\n\n"; got != want {
-		t.Fatalf("prepareNativeScrollback wrote %q, want %q", got, want)
 	}
 }
 
@@ -310,115 +238,6 @@ func TestRunDispatchesACPLongFlagAlias(t *testing.T) {
 	}
 }
 
-func TestRunDefaultsToInteractiveSession(t *testing.T) {
-	isolateCLIConfigHome(t)
-
-	prev := runInteractiveSession
-	prevInteractive := cliIsInteractive
-	t.Cleanup(func() {
-		runInteractiveSession = prev
-		cliIsInteractive = prevInteractive
-	})
-	cliIsInteractive = func() bool { return true }
-
-	var gotArgs []string
-	runInteractiveSession = func(args []string, _ string) int {
-		gotArgs = append([]string(nil), args...)
-		return 17
-	}
-
-	if rc := Run(nil, "test-version"); rc != 17 {
-		t.Fatalf("Run(nil) rc = %d, want 17", rc)
-	}
-	if gotArgs != nil {
-		t.Fatalf("interactive args = %#v, want nil", gotArgs)
-	}
-}
-
-func TestRunDispatchesProfileFlagToInteractiveSession(t *testing.T) {
-	isolateCLIConfigHome(t)
-
-	prev := runInteractiveSession
-	prevInteractive := cliIsInteractive
-	t.Cleanup(func() {
-		runInteractiveSession = prev
-		cliIsInteractive = prevInteractive
-	})
-	cliIsInteractive = func() bool { return true }
-
-	var gotArgs []string
-	runInteractiveSession = func(args []string, _ string) int {
-		gotArgs = append([]string(nil), args...)
-		return 17
-	}
-
-	if rc := Run([]string{"--profile", "delivery"}, "test-version"); rc != 17 {
-		t.Fatalf("Run --profile delivery rc = %d, want 17 (interactive session dispatch)", rc)
-	}
-	want := []string{"--profile", "delivery"}
-	if !reflect.DeepEqual(gotArgs, want) {
-		t.Fatalf("interactive args = %#v, want %#v", gotArgs, want)
-	}
-}
-
-func TestRunNoArgsNonInteractivePrintsUsage(t *testing.T) {
-	isolateCLIConfigHome(t)
-
-	prev := runInteractiveSession
-	prevInteractive := cliIsInteractive
-	t.Cleanup(func() {
-		runInteractiveSession = prev
-		cliIsInteractive = prevInteractive
-	})
-	cliIsInteractive = func() bool { return false }
-	runInteractiveSession = func(args []string, _ string) int {
-		t.Fatalf("non-interactive no-arg Run should not start session with %#v", args)
-		return 99
-	}
-
-	out := captureStdout(t, func() {
-		if rc := Run(nil, "test-version"); rc != 0 {
-			t.Fatalf("Run(nil) rc = %d, want 0", rc)
-		}
-	})
-	if !strings.Contains(out, "reasonix —") || !strings.Contains(out, "reasonix run") {
-		t.Fatalf("non-interactive no-arg Run should print usage, got:\n%s", out)
-	}
-}
-
-func TestRunRoutesBareInteractiveFlagsToSession(t *testing.T) {
-	isolateCLIConfigHome(t)
-
-	prev := runInteractiveSession
-	t.Cleanup(func() { runInteractiveSession = prev })
-
-	for _, args := range [][]string{
-		{"--continue"},
-		{"--continue=true"},
-		{"-c"},
-		{"-c=true"},
-		{"--resume=true"},
-		{"-r=true"},
-		{"--yolo=true"},
-		{"--dangerously-skip-permissions=true"},
-		{"--permission-mode=plan"},
-		{"--effort=max"},
-	} {
-		var gotArgs []string
-		runInteractiveSession = func(args []string, _ string) int {
-			gotArgs = append([]string(nil), args...)
-			return 23
-		}
-
-		if rc := Run(args, "test-version"); rc != 23 {
-			t.Fatalf("Run(%#v) rc = %d, want 23", args, rc)
-		}
-		if !reflect.DeepEqual(gotArgs, args) {
-			t.Fatalf("interactive args = %#v, want %#v", gotArgs, args)
-		}
-	}
-}
-
 func TestRunReportsFlagParseErrors(t *testing.T) {
 	isolateCLIConfigHome(t)
 
@@ -430,7 +249,6 @@ func TestRunReportsFlagParseErrors(t *testing.T) {
 		{name: "run unknown flag", args: []string{"run", "--unknown"}, want: "unknown flag: --unknown"},
 		{name: "run invalid value", args: []string{"run", "--max-steps=invalid"}, want: "invalid argument \"invalid\" for \"--max-steps\" flag"},
 		{name: "run missing value", args: []string{"run", "--model"}, want: "flag needs an argument: --model"},
-		{name: "chat unknown flag", args: []string{"chat", "--unknown"}, want: "unknown flag: --unknown"},
 		{name: "serve unknown flag", args: []string{"serve", "--unknown"}, want: "flag provided but not defined: -unknown"},
 	}
 
@@ -460,7 +278,6 @@ func TestSubcommandHelpReturnsSuccess(t *testing.T) {
 		want string
 	}{
 		{name: "run", args: []string{"run", "--help"}, want: "Usage of run:"},
-		{name: "chat", args: []string{"chat", "--help"}, want: "Usage of reasonix:"},
 		{name: "serve", args: []string{"serve", "--help"}, want: "Usage of serve:"},
 		{name: "upgrade", args: []string{"upgrade", "--help"}, want: "Usage of upgrade:"},
 		{name: "remote connect", args: []string{"remote", "connect", "--help"}, want: "Usage of remote connect:"},
@@ -509,30 +326,6 @@ func TestRunPrintAliasDispatchesRunFlags(t *testing.T) {
 	}
 }
 
-// TestRunPrintFlagAfterLeadingFlagsDispatchesRun covers `reasonix --model X -p`:
-// a print flag trailing other top-level flags must still route to `run --print`,
-// not into the interactive session parser (which has no -p and returns 2).
-func TestRunPrintFlagAfterLeadingFlagsDispatchesRun(t *testing.T) {
-	isolateCLIConfigHome(t)
-	prev := runInteractiveSession
-	t.Cleanup(func() { runInteractiveSession = prev })
-	runInteractiveSession = func([]string, string) int {
-		t.Fatal("print flag after leading flags must not route to the interactive session")
-		return 0
-	}
-	out, errOut := captureCLIOutput(t, func() {
-		if rc := Run([]string{"--model", "x", "-p", "-h"}, "test-version"); rc != 0 {
-			t.Fatalf("Run(--model x -p -h) rc = %d, want 0", rc)
-		}
-	})
-	if !strings.Contains(out, "Usage of run:") {
-		t.Fatalf("--model x -p should dispatch to one-shot run flags, got:\n%s", out)
-	}
-	if errOut != "" {
-		t.Fatalf("--model x -p help wrote stderr: %q", errOut)
-	}
-}
-
 func TestParsePermissionModeClaudeAliases(t *testing.T) {
 	tests := map[string]cliPermissionMode{
 		"ask":               {approval: control.ToolApprovalAsk},
@@ -559,31 +352,6 @@ func TestResolveRunPermissionModeRequiresExplicitAuto(t *testing.T) {
 	}
 	if got, err := resolveRunPermissionMode("dontAsk", true, true); err == nil || got != "" {
 		t.Fatalf("combined permission flags = (%q, %v), want conflict", got, err)
-	}
-}
-
-func TestRunKeepsChatAndCodeCompatibilityAliases(t *testing.T) {
-	isolateCLIConfigHome(t)
-
-	prev := runInteractiveSession
-	t.Cleanup(func() { runInteractiveSession = prev })
-
-	var calls [][]string
-	runInteractiveSession = func(args []string, _ string) int {
-		calls = append(calls, append([]string(nil), args...))
-		return 0
-	}
-
-	if rc := Run([]string{"chat", "--resume"}, "test-version"); rc != 0 {
-		t.Fatalf("Run(chat --resume) rc = %d, want 0", rc)
-	}
-	if rc := Run([]string{"code", "--continue"}, "test-version"); rc != 0 {
-		t.Fatalf("Run(code --continue) rc = %d, want 0", rc)
-	}
-
-	want := [][]string{{"--resume"}, {"--continue"}}
-	if !reflect.DeepEqual(calls, want) {
-		t.Fatalf("interactive calls = %#v, want %#v", calls, want)
 	}
 }
 
@@ -1070,8 +838,8 @@ func TestWithNotificationsWrapsCLISinkWithConfiguredSender(t *testing.T) {
 	if len(sender.messages) != 1 {
 		t.Fatalf("notifications = %d, want 1", len(sender.messages))
 	}
-	if sender.messages[0].Body != "Turn finished" {
-		t.Fatalf("notification body = %q, want Turn finished", sender.messages[0].Body)
+	if sender.messages[0].Body != i18n.M.NotifyTurnDone {
+		t.Fatalf("notification body = %q, want %q", sender.messages[0].Body, i18n.M.NotifyTurnDone)
 	}
 }
 

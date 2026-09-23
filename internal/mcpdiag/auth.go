@@ -17,27 +17,6 @@ type AuthDiagnosis struct {
 	URL    string
 }
 
-func DiagnoseAuth(transport, status, errText, url string, authConfigured bool) AuthDiagnosis {
-	eligible := CanUseHTTPMCPOAuth(transport, url, authConfigured)
-	if IsAuthFailure(errText) {
-		if eligible {
-			return AuthDiagnosis{Status: AuthRequired, URL: strings.TrimSpace(url)}
-		}
-		return AuthDiagnosis{Status: AuthNone}
-	}
-	if !eligible || strings.TrimSpace(errText) != "" {
-		return AuthDiagnosis{Status: AuthNone}
-	}
-	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "connected", "failed":
-		return AuthDiagnosis{Status: AuthNone}
-	case "deferred", "initializing", "disabled":
-		return AuthDiagnosis{Status: AuthPossible, URL: strings.TrimSpace(url)}
-	default:
-		return AuthDiagnosis{Status: AuthNone}
-	}
-}
-
 // CanUseHTTPMCPOAuth reports whether Reasonix's native authorization-code flow
 // can own authentication for this server. Legacy SSE, stdio, malformed URLs,
 // and configurations with explicit credentials must keep their normal retry
@@ -61,25 +40,6 @@ func HTTPMCPOAuthResource(transport, url string, authConfigured bool) string {
 		return ""
 	}
 	return strings.TrimSpace(url)
-}
-
-func IsAuthFailure(errText string) bool {
-	lower := strings.ToLower(errText)
-	for _, needle := range []string{
-		"401",
-		"403",
-		"unauthorized",
-		"forbidden",
-		"invalid token",
-		"login required",
-		"authentication",
-		"not authenticated",
-	} {
-		if strings.Contains(lower, needle) {
-			return true
-		}
-	}
-	return false
 }
 
 func HasAuthConfig(headers, env map[string]string, url string) bool {
@@ -110,19 +70,6 @@ func ClearAuthConfig(headers, env map[string]string, rawURL string) (map[string]
 	cleanEnv, changedEnv := clearAuthMap(env)
 	cleanURL, changedURL := clearAuthURL(rawURL)
 	return cleanHeaders, cleanEnv, cleanURL, changedHeaders || changedEnv || changedURL
-}
-
-func IsRemoteTransport(transport string) bool {
-	return isRemoteTransport(transport)
-}
-
-func isRemoteTransport(transport string) bool {
-	switch strings.ToLower(strings.TrimSpace(transport)) {
-	case "http", "streamable-http", "sse":
-		return true
-	default:
-		return false
-	}
 }
 
 func looksLikeHTTPURL(rawURL string) bool {

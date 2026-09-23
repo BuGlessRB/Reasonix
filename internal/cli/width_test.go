@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -28,36 +27,6 @@ func TestVisibleWidthGraphemeClusters(t *testing.T) {
 	for _, c := range cases {
 		if got := visibleWidth(c.s); got != c.want {
 			t.Errorf("%s: visibleWidth(%q) = %d, want %d", c.name, c.s, got, c.want)
-		}
-	}
-}
-
-// TestClampWidthHardwrap verifies clampWidth (a wrapper over ansi.Hardwrap) keeps
-// every wrapped line within the column budget, hard-breaks CJK at the boundary,
-// preserves ANSI escapes as zero width, and leaves in-width lines untouched.
-func TestClampWidthHardwrap(t *testing.T) {
-	// CJK hard-breaks at the column boundary (each is 2 cols); no line over width.
-	for line := range strings.SplitSeq(clampWidth("中文字", 4), "\n") {
-		if visibleWidth(line) > 4 {
-			t.Errorf("cjk line %q exceeds width 4 (got %d)", line, visibleWidth(line))
-		}
-	}
-
-	// A line already within width is returned byte-for-byte.
-	if got := clampWidth("ab", 10); got != "ab" {
-		t.Errorf("in-width line altered: %q", got)
-	}
-
-	// ANSI SGR escapes are zero width, so two visible chars fit a width-2 line.
-	styled := clampWidth("\x1b[31mab\x1b[0m", 2)
-	if visibleWidth(styled) > 2 {
-		t.Errorf("styled line exceeds width 2 (got %d): %q", visibleWidth(styled), styled)
-	}
-
-	// Every wrapped line stays within the column budget.
-	for line := range strings.SplitSeq(clampWidth(strings.Repeat("中", 10), 6), "\n") {
-		if visibleWidth(line) > 6 {
-			t.Errorf("line %q exceeds width 6 (got %d)", line, visibleWidth(line))
 		}
 	}
 }

@@ -7,8 +7,6 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
-	"reasonix/internal/control"
-
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -86,44 +84,6 @@ func TestThemeRendersAtProfileFidelity(t *testing.T) {
 	activeColorProfile = colorprofile.NoTTY
 	if got := accent("x"); got != "x" {
 		t.Fatalf("no-tty accent = %q, want unstyled text", got)
-	}
-}
-
-func TestThemeArgCompletion(t *testing.T) {
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
-	activeColorProfile = colorprofile.ANSI256
-	configureCLIThemeWithStyle("dark", "graphite")
-
-	m := newTestChatTUI()
-	items, _, ok := m.slashArgItems("/theme ")
-	if !ok || len(items) == 0 {
-		t.Fatalf("/theme arg completion should offer themes, ok=%v n=%d", ok, len(items))
-	}
-	if !hasLabel(items, "auto") || !hasLabel(items, "graphite") || !hasLabel(items, "aurora") {
-		t.Fatalf("/theme completion missing expected themes: %v", labels(items))
-	}
-}
-
-func TestRunThemeSubcommandSwitchesAccentAndTextarea(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
-	activeColorProfile = colorprofile.ANSI256
-	configureCLIThemeWithStyle("dark", "graphite")
-
-	m := newTestChatTUI()
-	m.ctrl = control.New(control.Options{})
-	if cmd := m.runThemeSubcommand("/theme aurora"); cmd == nil {
-		t.Fatal("a real theme change should start the sweep")
-	}
-	if activeCLITheme.name != "dark" || activeCLITheme.style != "aurora" {
-		t.Fatalf("current theme = %s/%s, want dark/aurora", activeCLITheme.name, activeCLITheme.style)
-	}
-	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;79m") {
-		t.Fatalf("accent = %q, want aurora xterm color", got)
-	}
-	if m.input.Styles().Cursor.Color == nil {
-		t.Fatal("textarea cursor color was not refreshed")
 	}
 }
 
@@ -247,42 +207,6 @@ func TestApplyTextareaThemeHonorsCursorShape(t *testing.T) {
 				t.Fatalf("cursor shape = %v, want %v", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestComposerBorderAndCursorTrackThemeAccent(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
-	activeColorProfile = colorprofile.ANSI256
-
-	for _, theme := range cliThemeStyles {
-		t.Run(theme.name, func(t *testing.T) {
-			configureCLITheme(theme.name)
-			want := themeLipColor(activeCLITheme.accent)
-			if got := inputBoxStyle.GetBorderTopForeground(); !reflect.DeepEqual(got, want) {
-				t.Fatalf("composer top border color = %v, want theme accent %v", got, want)
-			}
-			if got := inputBoxStyle.GetBorderBottomForeground(); !reflect.DeepEqual(got, want) {
-				t.Fatalf("composer bottom border color = %v, want theme accent %v", got, want)
-			}
-
-			ti := textarea.New()
-			applyTextareaTheme(&ti)
-			if got := ti.Styles().Cursor.Color; !reflect.DeepEqual(got, want) {
-				t.Fatalf("composer cursor color = %v, want theme accent %v", got, want)
-			}
-		})
-	}
-
-	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
-	empty := lipgloss.NewStyle().GetBorderTopForeground()
-	if got := inputBoxStyle.GetBorderTopForeground(); !reflect.DeepEqual(got, empty) {
-		t.Fatalf("NO_COLOR composer top border color = %v, want no color", got)
-	}
-	if got := inputBoxStyle.GetBorderBottomForeground(); !reflect.DeepEqual(got, empty) {
-		t.Fatalf("NO_COLOR composer bottom border color = %v, want no color", got)
 	}
 }
 

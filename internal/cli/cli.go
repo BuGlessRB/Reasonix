@@ -31,24 +31,20 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
-	"reasonix/internal/extension/providerext"
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/i18n"
 	"reasonix/internal/notify"
-	"reasonix/internal/provider"
 	"reasonix/internal/provider/openai"
 	"reasonix/internal/telemetry"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 )
 
 var (
-	runInteractiveSession = chatREPL
-	cliIsInteractive      = isInteractive
-	runWebCommand         = runWeb
-	openBrowserURL        = openInBrowser
+	cliIsInteractive = isInteractive
+	runWebCommand    = runWeb
+	openBrowserURL   = openInBrowser
 )
 
 // Run is the CLI entry point; it returns a process exit code.
@@ -100,24 +96,19 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 		}
 	}
 
-	if len(args) == 0 {
-		if cliIsInteractive() {
-			return runInteractiveSession(nil, version)
-		}
+	// No interactive session to fall into: this binary is what Studio installs
+	// on a machine nobody is sitting at, so bare argv is a usage error rather
+	// than an invitation.
+	if len(args) == 0 || cmd == "" {
 		configureCLIThemeFromConfigForTTYOutput()
 		usage()
-		return 0
-	}
-	if cmd == "" {
-		return runInteractiveSession(args, version)
+		return 2
 	}
 
 	rest := args[1:]
 	switch cmd {
 	case "run":
 		return runAgent(rest, version)
-	case "chat", "code": // "code" is the v0.x name for the interactive session
-		return runInteractiveSession(rest, version)
 	case "serve":
 		return runServe(rest, version)
 	case "web":
@@ -207,7 +198,7 @@ func isDefaultInteractiveFlag(arg string) bool {
 
 func shouldMigrateLegacyConfigForCLI(cmd string) bool {
 	switch cmd {
-	case "", "run", "chat", "code", "serve", "web", "setup", "config", "init", "acp", "mcp", "remote", "plugin", "subagent", "doctor", "upgrade", "update", "login", "whoami", "logout":
+	case "", "run", "serve", "web", "setup", "config", "init", "acp", "mcp", "remote", "plugin", "subagent", "doctor", "upgrade", "update", "login", "whoami", "logout":
 		return true
 	default:
 		return false
@@ -302,14 +293,6 @@ func resolveRunPermissionMode(value string, auto, modeExplicit bool) (string, er
 	return "auto", nil
 }
 
-func applyPermissionMode(ctrl *control.Controller, mode cliPermissionMode) {
-	if ctrl == nil {
-		return
-	}
-	ctrl.SetToolApprovalMode(mode.approval)
-	ctrl.SetPlanMode(mode.plan)
-}
-
 // resolveCLISessionDir returns the session dir for CLI invocations. When the
 // current working directory maps to a project session dir, the project dir is
 // used so /resume shows project history. Falls back to the global session dir.
@@ -322,16 +305,6 @@ func resolveCLISessionDir() string {
 		return projDir
 	}
 	return config.SessionDir()
-}
-
-// setupQuietProfile is like setupProfile but guarantees plugin subprocess
-// stderr stays off the terminal. Interactive callers provide the private TUI
-// diagnostic writer; other callers fall back to io.Discard.
-func setupQuietProfile(ctx context.Context, modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, overrides cliBuildOverrides) (*control.Controller, error) {
-	if overrides.Stderr == nil {
-		overrides.Stderr = io.Discard
-	}
-	return boot.Build(ctx, cliProfileBuildOptions(modelName, maxStepsOverride, requireKey, sink, profile, overrides))
 }
 
 func parseRuntimeProfile(value string) (string, error) {
@@ -697,438 +670,13 @@ func runAgent(args []string, version string) int {
 	return completion.exitCode
 }
 
-// chatREPL is an interactive session: a single persistent agent/session and a
-// prompt loop that keeps conversation context across turns. Exit with
-// 'exit'/'quit' or Ctrl-D.
-func chatREPL(args []string, version string) int {
-	fs := pflag.NewFlagSet("reasonix", pflag.ContinueOnError)
-	fs.SetInterspersed(true)
-	model := fs.String("model", "", "provider name (default: config default_model)")
-	profileFlag := fs.String("profile", "", "deprecated: use --preset (economy|balanced|delivery)")
-	presetFlag := fs.String("preset", "balanced", "agent execution setting: light | balanced | delivery")
-	maxSteps := fs.Int("max-steps", 0, "one-off max tool-call rounds (0 = automatic)")
-	cont := registerContinueFlag(fs)
-	resume := fs.StringP("resume", "r", "", "resume by session ID/query, or open the picker when no value is given")
-	fs.Lookup("resume").NoOptDefVal = resumePickerSentinel
-	copySession := fs.Bool("copy", false, "with --resume/--continue: duplicate the selected session and continue in the copy (escape hatch when the original is held by another Reasonix process)")
-	yolo := fs.Bool("dangerously-skip-permissions", false, "YOLO: auto-approve approval-gated tool calls this session; same runtime mode as Ctrl+Y")
-	fs.BoolVar(yolo, "yolo", false, "alias for --dangerously-skip-permissions")
-	dir := fs.String("dir", "", "change to this directory first (project root); config, sandbox and file tools resolve from here")
-	effort := fs.String("effort", "", "session reasoning effort override")
-	permissionMode := fs.String("permission-mode", "ask", "permission mode: manual | ask | auto | acceptEdits | dontAsk | plan | bypassPermissions")
-	var additionalDirs []string
-	fs.StringArrayVar(&additionalDirs, "add-dir", nil, "allow tool access to an additional directory (repeatable)")
-	var allowedToolValues []string
-	fs.StringArrayVar(&allowedToolValues, "allowed-tools", nil, "comma or space-separated permission rules to allow")
-	fs.StringArrayVar(&allowedToolValues, "allowedTools", nil, "alias for --allowed-tools")
-	if code, ok := parseCommandFlags(fs, normalizeOptionalResumeArg(args)); !ok {
-		return code
-	}
-	allowedTools, err := splitAllowedToolRules(allowedToolValues)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-		return 2
-	}
-	profileRaw := strings.TrimSpace(*profileFlag)
-	if profileRaw != "" {
-		fmt.Fprintln(os.Stderr, "warning: --profile is deprecated; use --preset light|balanced|delivery")
-	} else {
-		profileRaw = strings.TrimSpace(*presetFlag)
-	}
-	profile, err := parseRuntimeProfile(profileRaw)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-		return 2
-	}
-	permissions, err := parsePermissionMode(*permissionMode)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-		return 2
-	}
-	allowedTools = uniqueStrings(append(allowedTools, permissions.allow...))
-	if rc := chdirTo(*dir); rc != 0 {
-		return rc
-	}
-	workspaceRoot, err := workspaceRootForDir(*dir)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-		return 1
-	}
-	// Bubble Tea owns the terminal from the resume picker through controller
-	// shutdown. Start diagnostics before config/controller work so hangs leave a
-	// non-zero log with milestones (#7435, #7507).
-	diagnostics := startTUIDiagnostics(config.ReasonixHomeDir())
-	defer diagnostics.Close()
-	diagnostics.Milestone("config_load_begin")
-	cfg, err := config.Load()
-	if err == nil {
-		configureCLIThemeWithStyle(cfg.UITheme(), cfg.UIThemeStyle())
-		cliCursorShape = cfg.UICursorShape()
-	}
-	diagnostics.Milestone("config_load_done")
-
-	// Decide whether we're starting fresh or resuming. --resume opens an
-	// interactive picker; --continue / -c jumps straight into the newest.
-	var resumePath string
-	resumeValue := strings.TrimSpace(*resume)
-	switch strings.ToLower(resumeValue) {
-	case "true":
-		resumeValue = resumePickerSentinel
-	case "false":
-		resumeValue = ""
-	}
-	switch {
-	case resumeValue == resumePickerSentinel:
-		path, rc := pickSessionToResume()
-		if rc != 0 {
-			return rc
-		}
-		resumePath = path
-	case resumeValue != "":
-		path, err := resolveSessionQuery(resolveCLISessionDir(), resumeValue)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-			return 1
-		}
-		resumePath = path
-	case *cont:
-		sessionDir := resolveCLISessionDir()
-		reclaimCLIRecoveryBranches(sessionDir)
-		session, ok := mostRecentSession(sessionDir)
-		if !ok {
-			fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResume)
-			return 1
-		}
-		resumePath = session.Path
-	}
-	if *copySession && resumePath == "" {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--copy requires --resume or --continue")
-		return 2
-	}
-	if *copySession {
-		copied, err := copySessionForWriting(resumePath)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-			return 1
-		}
-		fmt.Printf("continuing in a session copy: %s\n", copied)
-		resumePath = copied
-	}
-	sessionMode := cliTelemetrySessionMode(*cont, resumeValue != "", *copySession)
-	reporter := startCLITelemetry(cfg, telemetry.Options{
-		Version: version, Interactive: isInteractive(), CLIMode: "tui", Profile: profile,
-		PermissionMode: *permissionMode, SessionMode: sessionMode,
-	})
-
-	// Own the active session file for the TUI's lifetime; in-TUI switches
-	// (/resume, /switch, /new, ...) move the lease with the active path.
-	// Refusing a held resume target up front is what keeps a desktop window
-	// and this chat from silently double-writing one transcript.
-	leases := control.NewSessionLeaseKeeper()
-	defer leases.Release()
-	if resumePath != "" {
-		if err := leases.Rebind(resumePath); err != nil {
-			if errors.Is(err, agent.ErrSessionLeaseHeld) {
-				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, sessionLeaseResumeRefusal(err))
-			} else {
-				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-			}
-			return 1
-		}
-	}
-
-	ctx := context.Background()
-	*model = modelForResumePath(*model, resumePath, cfg)
-
-	// Plumb the controller's typed event stream through a channel so each event
-	// can become a tea.Msg inside the TUI's update loop. Buffered generously:
-	// streaming bursts (tool results, long answers) shouldn't backpressure the
-	// agent goroutine.
-	eventCh := make(chan event.Event, 1024)
-
-	var sink event.Sink = &eventSink{ch: eventCh}
-	sink = withNotifications(sink, cfg)
-	sink = reporter.Wrap(sink)
-	var effortOverride *string
-	if strings.TrimSpace(*effort) != "" {
-		effortOverride = effort
-	}
-	overrides := cliBuildOverrides{
-		Version:            version,
-		Effort:             effortOverride,
-		PermissionAllow:    allowedTools,
-		AdditionalDirs:     additionalDirs,
-		WorkspaceRoot:      workspaceRoot,
-		Stderr:             diagnostics.Writer(),
-		OnSessionRecovered: cliSessionRecoveredHandler(leases),
-	}
-	diagnostics.Milestone("controller_build_begin")
-	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, false, sink, profile, overrides)
-	if err != nil && errors.Is(err, boot.ErrUnknownModel) && isInteractive() && config.SourcePath() == "" {
-		// True first run whose default model can't resolve: guide setup, then retry.
-		// With a config present, fall through to the descriptive error — re-running
-		// the wizard would overwrite the user's config (#2856).
-		fmt.Fprintln(os.Stderr, i18n.M.ReconfigureOnUnknownModel)
-		if rc := interactiveSetup(defaultConfigTarget(), defaultEnvTarget()); rc != 0 {
-			return rc
-		}
-		ctrl, err = setupProfileWithOverrides(ctx, *model, *maxSteps, false, sink, profile, overrides)
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-		return 1
-	}
-	diagnostics.Milestone("controller_build_done")
-
-	// Decide where this conversation's auto-save lands. A resume reuses the
-	// file so closing/reopening keeps appending to the same history; a fresh
-	// session lands in a new file stamped with the model name.
-	if resumePath != "" {
-		loaded, err := agent.LoadSession(resumePath)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-			return 1
-		}
-		_ = ctrl.Resume(loaded, resumePath)
-	}
-	ctrl.EnsureSessionPath()
-	// Fresh sessions take the lease too (defensive: the path is brand new); a
-	// resumed path is already held, making this a no-op.
-	if err := rebindCLIControllerAuthority(leases, ctrl); err != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)
-		return 1
-	}
-	reclaimCLIRecoveryBranches(ctrl.SessionDir())
-
-	// Surface a missing-key warning inside the TUI banner so the first message
-	// failing is at least pre-announced; the user can still enter chat.
-	// resolveModelForCLI transparently falls through a keyless default to the
-	// next configured provider (issue #6996). Validating the final ref is a
-	// no-op for that configured fallback and preserves the warning when every
-	// eligible chat provider is still keyless.
-	missing := ""
-	if cfg, loadErr := config.Load(); loadErr == nil {
-		name, _, err := resolveModelForCLI(*model, cfg)
-		switch {
-		case err != nil:
-			missing = err.Error()
-		case name != "" && providerext.PluginRefOwner(name) != "":
-			// Plugin-namespaced refs hold no config credential; boot's merged
-			// resolver already gated them, and there is no key env to warn about.
-		case name != "":
-			if vErr := cfg.Validate(name); vErr != nil {
-				missing = vErr.Error()
-			}
-		}
-	}
-
-	// Initial terminal width — the TUI re-flows on every WindowSizeMsg so
-	// this is just a starting estimate before the first resize event lands.
-	termW := 80
-	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
-		termW = w
-	}
-
-	// Route "ask" decisions to the TUI: the controller emits an ApprovalRequest
-	// event and blocks until the user answers via ctrl.Approve. Sub-agents (the
-	// task tool) keep their headless gate from setup — no UI to prompt through.
-	ctrl.EnableInteractiveApproval()
-	applyPermissionMode(ctrl, permissions)
-	// YOLO: skip ordinary tool approval requests for the session (deny rules and
-	// fresh reviews still apply; ask questions and plan approvals still wait).
-	if *yolo {
-		ctrl.SetAutoApproveTools(true)
-	}
-
-	m := newChatTUI(ctrl, missing, eventCh, termW)
-	m.diagnostics = diagnostics
-	m.updateWatchdogStatusProvider()
-	m.planMode = permissions.plan
-	m.leases = leases
-	if cfg != nil {
-		m.outputStyle = cfg.Agent.OutputStyle    // shown as the active entry in /output-style
-		m.statuslineCmd = cfg.Statusline.Command // custom status-line command, "" = built-in row
-		m.showReasoning = cfg.UI.ShowReasoning   // /verbose persistence: start with config default
-		m.showTurnUsage = cfg.UI.ShowTurnUsage   // retain usage accounting even when transcript receipts are hidden
-		m.cfg = cfg
-	}
-
-	// /model support: a pure builder the TUI calls to rebuild on a different
-	// model (carrying the conversation). It must NOT touch the running model —
-	// runModelSubcommand performs the swap on the live copy. The same stable sink
-	// feeds the new controller, so events keep flowing to this TUI.
-	m.buildController = func(spec controllerBuildSpec, carry []provider.Message, resumePath string, oldCtrl control.SessionAPI) (*control.Controller, error) {
-		effectiveOverrides := overrides
-		if spec.EffortOverride != nil {
-			effectiveOverrides.Effort = spec.EffortOverride
-		}
-		carrySessionResources(&effectiveOverrides, oldCtrl)
-		c, err := setupQuietProfile(ctx, spec.ModelRef, *maxSteps, false, sink, spec.RuntimeProfile, effectiveOverrides)
-		if err != nil {
-			return nil, err
-		}
-		if spec.EffortOverride != nil {
-			overrides.Effort = spec.EffortOverride
-		}
-		// Keep the carried conversation in its existing file so the switch doesn't
-		// orphan a duplicate (#2807).
-		path := agent.ContinueSessionPath(resumePath, c.SessionDir(), c.Label())
-		if err := adoptCarriedHistoryPreservingProfileAndGrants(c, carry, path, oldCtrl); err != nil {
-			c.Close()
-			return nil, err
-		}
-		c.EnableInteractiveApproval()
-		c.SetPlanMode(spec.PlanMode)
-		if spec.ToolApprovalMode != "" {
-			c.SetToolApprovalMode(spec.ToolApprovalMode)
-		}
-		return c, nil
-	}
-	// /reload support: rebuild the runtime through boot.Rebuild so tools,
-	// skills, commands, hooks, MCP servers, and providers are discovered fresh
-	// while the boot layer migrates the session (history, approval grants,
-	// goal/recovery state, lifecycle). Same construction inputs as
-	// buildController so the replacement matches this session's launch wiring;
-	// the CLI holds no SharedHost, so each rebuild owns its plugin host.
-	m.bindRuntimeRebuilder(*maxSteps, sink, *yolo, overrides, cliProfileBuildOptions)
-	m.runtimeProfile = profile
-	if effortOverride != nil {
-		m.effortLevel = *effortOverride
-	}
-	if effortOverride == nil {
-		m.refreshEffortStatus()
-	}
-
-	if m.nativeScrollback {
-		prepareNativeScrollback(os.Stdout, m.bottomRows())
-	}
-
-	// Non-Termux terminals use an alt-screen transcript viewport. Termux stays
-	// in the normal buffer so native touch scrollback and soft-keyboard focus
-	// keep working; finalized transcript lines are emitted via tea.Println.
-	diagnostics.Milestone("terminal_takeover_begin")
-	p := tea.NewProgram(m)
-	diagnostics.StartWatchdog(p)
-	// SSH drop (SIGHUP) or service stop (SIGTERM): persist the conversation
-	// before the terminal goes away, then unwind through the normal close path
-	// so resume picks up the interrupted session (#3772).
-	hangup := make(chan os.Signal, 1)
-	signal.Notify(hangup, syscall.SIGHUP, syscall.SIGTERM)
-	go func() {
-		for range hangup {
-			p.Send(tuiShutdownMsg{})
-		}
-	}()
-	final, runErr := p.Run()
-	signal.Stop(hangup)
-	diagnostics.Milestone("terminal_released")
-	// Close the active controller plus any retired ones from /model switches.
-	// Retired controllers were stashed rather than closed at switch time
-	// because Controller.Close() runs SessionEnd hooks and kills plugin
-	// subprocesses — operations that corrupt bubbletea's terminal raw mode
-	// when executed while the TUI is alive.
-	var launchWeb bool
-	var launchWebPath, launchWebSessionID, launchWebModelRef, launchWebProfile string
-	if fm, ok := final.(chatTUI); ok {
-		reportShutdownFailure(fm.shutdownErr)
-		launchWeb = fm.launchWebOnExit
-		launchWebProfile = fm.runtimeProfile
-		for _, oc := range fm.oldControllers {
-			if c, ok := oc.(*control.Controller); ok {
-				reporter.RecordRecovery(c.DrainRecoveryMetrics())
-			}
-			oc.Close()
-		}
-		if fm.ctrl != nil {
-			launchWebPath = fm.launchWebResumePath
-			launchWebSessionID = fm.launchWebSessionID
-			launchWebModelRef = fm.launchWebModelRef
-			if c, ok := fm.ctrl.(*control.Controller); ok {
-				reporter.RecordRecovery(c.DrainRecoveryMetrics())
-			}
-			fm.ctrl.Close()
-		} else {
-			reporter.RecordRecovery(ctrl.DrainRecoveryMetrics())
-			ctrl.Close()
-		}
-	} else {
-		reporter.RecordRecovery(ctrl.DrainRecoveryMetrics())
-		ctrl.Close()
-	}
-	if runErr != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, runErr)
-		return 1
-	}
-	if launchWeb {
-		// The Web runtime resumes a materialized TUI transcript or binds the exact
-		// reserved identity for a never-used session. Release the TUI lease before
-		// rebuilding the controller or the handoff would correctly reject its own
-		// session as already in use. The deferred Release remains as a harmless
-		// final guard for every other return path.
-		leases.Release()
-		return runWebCommand(webHandoffArgs(launchWebPath, launchWebSessionID, launchWebModelRef, launchWebProfile), version)
-	}
-	return 0
-}
-
-// adoptCarriedHistoryPreservingProfileAndGrants resumes c on the carried
-// conversation the way buildController's callers expect: the freshly built
-// c already has its own leading system message for the target profile (see
-// boot/token_profile.go), but AdoptHistory below would otherwise replace the
-// whole history — including that message — with carry's outgoing one, so the
-// switch splices the new leading message in first. It also carries forward
-// oldCtrl's same-session "Allow for this session" tool grants and Plan-mode
-// read-only command trust, which a rebuild would otherwise silently drop,
-// forcing the user to re-approve things already granted this session.
-func adoptCarriedHistoryPreservingProfileAndGrants(c *control.Controller, carry []provider.Message, path string, oldCtrl control.SessionAPI) error {
-	if fresh := c.History(); len(fresh) > 0 && fresh[0].Role == provider.RoleSystem {
-		if len(carry) > 0 && carry[0].Role == provider.RoleSystem {
-			carry[0] = fresh[0]
-		} else {
-			carry = append([]provider.Message{fresh[0]}, carry...)
-		}
-	}
-	c.AdoptHistory(carry, path)
-	if prev, ok := oldCtrl.(*control.Controller); ok {
-		c.RestoreSessionAuthorizations(prev.SessionAuthorizations())
-	}
-	// Persist the adopted history now: the splice above only refreshed the new
-	// controller's memory and nothing saves again until the next turn ends, so
-	// quitting right after the switch and resuming would otherwise revive the
-	// outgoing profile's contract from disk.
-	if path != "" {
-		if err := c.Snapshot(); err != nil {
-			return fmt.Errorf("snapshot after runtime switch: %w", err)
-		}
-	}
-	return nil
-}
-
-func prepareNativeScrollback(w io.Writer, rows int) {
-	// Clear the terminal's scrollback history so a reopened chat starts
-	// with a clean slate (Termux stays in the normal buffer, so prior
-	// output would otherwise remain visible above the banner).
-	fmt.Fprint(w, "\x1B[3J\x1B[2J\x1B[H")
-	reserveNativeScrollbackFrame(w, rows)
-}
-
-func reserveNativeScrollbackFrame(w io.Writer, rows int) {
-	for range rows {
-		fmt.Fprintln(w)
-	}
-}
-
-// setupTargets is where the wizard writes: the TOML config and the credential
-// store. Keys always go to Reasonix's global .env so they
-// never land in a project's own .env; only the config location is project-local
-// under --local.
+// defaultConfigTarget is the user-global config file, falling back to a
+// project-local reasonix.toml only when the user config dir can't be resolved.
 type setupTargets struct {
 	config string
 	env    string
 }
 
-// defaultConfigTarget is the user-global config file, falling back to a
-// project-local reasonix.toml only when the user config dir can't be resolved.
 func defaultConfigTarget() string {
 	if p := config.UserConfigPath(); p != "" {
 		return p
@@ -1267,37 +815,6 @@ func interactiveSetup(configPath, envPath string) int {
 	fmt.Println()
 
 	return runProviderSetupManager(session, configPath, envPath)
-}
-
-// pickSessionToResume scans the session dir, takes the 10 most recent, and
-// shows a single-choice menu with timestamp + turn count + first user
-// message so the user can pick one. Returns the chosen path and a process
-// exit code (non-zero when there's nothing to pick or the user cancelled).
-func pickSessionToResume() (string, int) {
-	sessionDir := resolveCLISessionDir()
-	reclaimCLIRecoveryBranches(sessionDir)
-	sessions := recentSessions(sessionDir)
-	if len(sessions) == 0 {
-		fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResume)
-		return "", 1
-	}
-	if !isInteractive() {
-		fmt.Fprintln(os.Stderr, i18n.M.ResumeRequiresTTY)
-		return "", 1
-	}
-	items := make([]menuItem, len(sessions))
-	for i, s := range sessions {
-		when := s.ModTime.Local().Format("01-02 15:04")
-		items[i] = menuItem{
-			name: when,
-			desc: sessionSummary(s),
-		}
-	}
-	idx, err := selectOne(i18n.M.PickSessionLabel, items)
-	if err != nil {
-		return "", 1
-	}
-	return sessions[idx].Path, 0
 }
 
 // selectLanguage is the wizard's first prompt: it shows the two UI languages

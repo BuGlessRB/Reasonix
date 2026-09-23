@@ -4,7 +4,6 @@ import (
 	"strings"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -23,51 +22,6 @@ type themeSweep struct {
 	col    int
 	step   int
 	width  int
-}
-
-type themeSweepTickMsg struct{}
-
-func themeSweepTick() tea.Cmd {
-	return tea.Tick(themeSweepInterval, func(time.Time) tea.Msg { return themeSweepTickMsg{} })
-}
-
-// startThemeSweep returns nil when the terminal or the moment cannot carry the
-// animation, and the caller keeps the plain instant switch.
-func (m *chatTUI) startThemeSweep(from, to cliPalette) tea.Cmd {
-	if !colorOn() || m.width < themeSweepMinWidth || m.state == tuiRunning {
-		return nil
-	}
-	if from.name == to.name && from.style == to.style {
-		return nil
-	}
-	before := strings.Split(m.frameWithTheme(from), "\n")
-	after := strings.Split(m.frameWithTheme(to), "\n")
-	if len(before) != len(after) {
-		return nil
-	}
-	step := max(m.width/themeSweepFrames, 1)
-	m.themeSweep = &themeSweep{
-		before: before,
-		after:  after,
-		col:    step,
-		step:   step,
-		width:  m.width,
-	}
-	return themeSweepTick()
-}
-
-// frameWithTheme renders the whole view under a palette other than the active
-// one. The value receiver keeps the swapped-in sweep state local to this call.
-func (m chatTUI) frameWithTheme(p cliPalette) string {
-	m.themeSweep = nil
-	prev := activeCLITheme
-	activeCLITheme = p
-	refreshCLIStyles()
-	defer func() {
-		activeCLITheme = prev
-		refreshCLIStyles()
-	}()
-	return m.View().Content
 }
 
 func (s *themeSweep) advance() bool {

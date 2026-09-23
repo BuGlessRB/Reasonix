@@ -85,23 +85,10 @@ func cliCompletionRootSpec() cliCompletionSpec {
 		"manual", "ask", "auto", "acceptEdits", "dontAsk", "plan", "bypassPermissions")
 	help := completionFlag("--help -h", cliCompletionNoValue)
 
-	interactiveFlags := []cliCompletionFlag{
-		model, preset, profile,
-		completionFlag("--max-steps", cliCompletionStaticValue),
-		completionFlag("--continue -c", cliCompletionNoValue),
-		resume,
-		completionFlag("--copy", cliCompletionNoValue),
-		completionFlag("--dangerously-skip-permissions --yolo", cliCompletionNoValue),
-		completionFlag("--dir", cliCompletionPathValue),
-		effort, permissionMode,
-		completionFlag("--add-dir", cliCompletionPathValue),
-		completionFlag("--allowed-tools --allowedTools", cliCompletionStaticValue),
-		help,
-	}
 	// run/serve --resume require a value; only interactive root --resume [QUERY] is optional.
 	runResume := completionFlag("--resume", cliCompletionSessionValue)
 	runFlags := []cliCompletionFlag{
-		model, profile,
+		model, preset, profile,
 		completionFlag("--max-steps", cliCompletionStaticValue),
 		completionFlag("--show-thinking", cliCompletionNoValue),
 		completionFlag("--metrics", cliCompletionPathValue),
@@ -140,7 +127,6 @@ func cliCompletionRootSpec() cliCompletionSpec {
 
 	root.subcommands = []cliCompletionSpec{
 		completionSpec("run", runFlags),
-		completionSpecWithAliases("chat", []string{"code"}, interactiveFlags),
 		completionSpec("serve", serveFlags),
 		completionSpec("web", serveFlags),
 		completionSpec("setup", []cliCompletionFlag{completionFlag("--local -l", cliCompletionNoValue), help}),

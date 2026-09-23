@@ -11,39 +11,6 @@ import (
 	"reasonix/internal/provider"
 )
 
-func TestRebuildPlanNoOpCacheGuard(t *testing.T) {
-	isolateConfigHome(t)
-	oldRes, err := BuildRuntime(context.Background(), Options{})
-	if err != nil {
-		t.Fatalf("BuildRuntime: %v", err)
-	}
-	t.Cleanup(func() {
-		if oldRes.Controller != nil {
-			oldRes.Controller.Close()
-		}
-	})
-	res, err := RebuildFrom(context.Background(), oldRes, Options{})
-	if err != nil {
-		t.Fatalf("RebuildFrom: %v", err)
-	}
-	t.Cleanup(func() {
-		if res.Controller != nil {
-			res.Controller.Close()
-		}
-	})
-	if res.Plan == nil {
-		t.Fatal("expected plan")
-	}
-	if res.Plan.IsNoOp() && res.Plan.PrefixChanged {
-		t.Fatal("no-op plan marked PrefixChanged")
-	}
-	if oldRes.Snapshot != nil && res.Snapshot != nil && res.Plan.IsNoOp() {
-		if oldRes.Snapshot.CacheHash() != res.Snapshot.CacheHash() {
-			t.Fatalf("no-op rebuild changed CacheHash: %s -> %s", oldRes.Snapshot.CacheHash(), res.Snapshot.CacheHash())
-		}
-	}
-}
-
 func TestAttachPlanAndStatusObservesActualPrefixHash(t *testing.T) {
 	empty := buildPlanGraph(t, nil)
 	uiFrom := buildPlanGraph(t, []extension.ComponentDescriptor{{

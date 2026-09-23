@@ -2,47 +2,6 @@ package mcpdiag
 
 import "testing"
 
-func TestDiagnoseAuthRequiredFromFailure(t *testing.T) {
-	got := DiagnoseAuth("http", "failed", "connect: 401 unauthorized", "https://mcp.example.com/mcp", false)
-	if got.Status != AuthRequired {
-		t.Fatalf("status = %q, want %q", got.Status, AuthRequired)
-	}
-	if got.URL != "https://mcp.example.com/mcp" {
-		t.Fatalf("url = %q", got.URL)
-	}
-}
-
-func TestDiagnoseAuthPossibleForDeferredHTTPWithoutAuthConfig(t *testing.T) {
-	got := DiagnoseAuth("streamable-http", "deferred", "", "https://mcp.example.com/mcp", false)
-	if got.Status != AuthPossible {
-		t.Fatalf("status = %q, want %q", got.Status, AuthPossible)
-	}
-	if got.URL == "" {
-		t.Fatal("possible remote auth should keep the server URL")
-	}
-}
-
-func TestDiagnoseAuthRejectsIneligibleNativeOAuth(t *testing.T) {
-	for _, tc := range []struct {
-		name           string
-		transport      string
-		url            string
-		authConfigured bool
-	}{
-		{name: "stdio", transport: "stdio"},
-		{name: "legacy sse", transport: "sse", url: "https://mcp.example.com/sse"},
-		{name: "static auth", transport: "http", url: "https://mcp.example.com/mcp", authConfigured: true},
-		{name: "invalid url", transport: "http", url: "not-a-url"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := DiagnoseAuth(tc.transport, "failed", "authentication required", tc.url, tc.authConfigured)
-			if got.Status != AuthNone || got.URL != "" {
-				t.Fatalf("diagnosis = %+v, want no native OAuth action", got)
-			}
-		})
-	}
-}
-
 func TestHasAuthConfig(t *testing.T) {
 	if !HasAuthConfig(map[string]string{"Authorization": "Bearer ${TOKEN}"}, nil, "") {
 		t.Fatal("authorization header should count as auth config")

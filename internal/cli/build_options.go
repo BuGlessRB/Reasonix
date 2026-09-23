@@ -39,27 +39,6 @@ type cliBuildOverrides struct {
 	ProviderResolver provider.Resolver
 }
 
-// sessionTempFromCLIController returns the logical-session private temporary
-// directory manager for a same-session CLI controller rebuild. Nil keeps fresh
-// builds on control.New's normal new-manager path.
-func sessionTempFromCLIController(ctrl control.SessionAPI) *sessiontemp.Manager {
-	prev, ok := ctrl.(*control.Controller)
-	if !ok || prev == nil {
-		return nil
-	}
-	return prev.SessionTemp()
-}
-
-// carrySessionResources keeps what belongs to the logical session across a
-// model or profile switch: its private temporary directory (#7575) and the
-// browser with the tabs it has open.
-func carrySessionResources(overrides *cliBuildOverrides, ctrl control.SessionAPI) {
-	overrides.SessionTemp = sessionTempFromCLIController(ctrl)
-	if prev, ok := ctrl.(*control.Controller); ok && prev != nil {
-		overrides.BrowserSession = prev.BrowserSession()
-	}
-}
-
 func setupProfileWithOverrides(ctx context.Context, modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, overrides cliBuildOverrides) (*control.Controller, error) {
 	migrateMCPConfigForCLIWorkspace()
 	return boot.Build(ctx, cliProfileBuildOptions(modelName, maxStepsOverride, requireKey, sink, profile, overrides))

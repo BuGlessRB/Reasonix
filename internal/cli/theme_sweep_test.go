@@ -50,37 +50,3 @@ func TestThemeSweepAdvanceTerminates(t *testing.T) {
 		t.Fatalf("sweep stopped at col %d, want >= %d", s.col, s.width)
 	}
 }
-
-func TestThemeSweepSkippedWhenTerminalCannotCarryIt(t *testing.T) {
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
-	configureCLIThemeWithStyle("dark", "graphite")
-	dark := activeCLITheme
-	light := resolveCLIThemeWithStyle("light", "sandstone")
-
-	for _, tt := range []struct {
-		name    string
-		profile colorprofile.Profile
-		width   int
-		state   tuiState
-		from    cliPalette
-		to      cliPalette
-	}{
-		{name: "no colour", profile: colorprofile.NoTTY, width: 80, from: dark, to: light},
-		{name: "too narrow", profile: colorprofile.ANSI256, width: 8, from: dark, to: light},
-		{name: "turn running", profile: colorprofile.ANSI256, width: 80, state: tuiRunning, from: dark, to: light},
-		{name: "same theme", profile: colorprofile.ANSI256, width: 80, from: dark, to: dark},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			activeColorProfile = tt.profile
-			m := newTestChatTUI()
-			m.width = tt.width
-			m.state = tt.state
-			if cmd := m.startThemeSweep(tt.from, tt.to); cmd != nil {
-				t.Fatal("sweep should be skipped, switch must stay instant")
-			}
-			if m.themeSweep != nil {
-				t.Fatal("skipped sweep must not freeze the frame")
-			}
-		})
-	}
-}

@@ -129,7 +129,10 @@ func TestFrontendsDeclareOnlyThePortsTheyDrive(t *testing.T) {
 	if len(model.methodOwner) == 0 || len(model.composed) == 0 {
 		t.Fatal("no sub-ports read from this package; this guard is watching nothing")
 	}
-	for _, frontend := range []string{"acp", "serve", "cli"} {
+	// cli is absent: with the interactive session gone it launches serve and a
+	// one-shot run rather than operating a session, so a sub-port it never calls
+	// is not a scope it claimed too widely.
+	for _, frontend := range []string{"acp", "serve"} {
 		t.Run(frontend, func(t *testing.T) {
 			dir := filepath.Join("..", frontend)
 			if _, err := os.Stat(dir); err != nil {

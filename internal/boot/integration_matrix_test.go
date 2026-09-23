@@ -9,36 +9,6 @@ import (
 	"reasonix/internal/extensioncontract"
 )
 
-func TestIntegrationNoOpDoesNotBuildNewController(t *testing.T) {
-	isolateConfigHome(t)
-	oldRes, err := BuildRuntime(context.Background(), Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if oldRes.Controller != nil {
-			oldRes.Controller.Close()
-		}
-	})
-	res, err := RebuildFrom(context.Background(), oldRes, Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// True subgraph no-op reuses the controller pointer.
-	if !res.ReusedController {
-		t.Fatal("expected ReusedController on no-op rebuild")
-	}
-	if res.Controller != oldRes.Controller {
-		t.Fatal("no-op must keep the same controller pointer")
-	}
-	if res.Snapshot == nil || oldRes.Snapshot == nil {
-		t.Fatal("snapshots required")
-	}
-	if res.Snapshot.CacheHash() != oldRes.Snapshot.CacheHash() {
-		t.Fatalf("cache hash churned: %s -> %s", oldRes.Snapshot.CacheHash(), res.Snapshot.CacheHash())
-	}
-}
-
 func TestIntegrationDrainTimeoutFiresCancel(t *testing.T) {
 	g := extension.NewPublishGate()
 	g.Publish(1)
@@ -112,37 +82,4 @@ func TestIntegrationSnapshotLiveRefreshPreservesCache(t *testing.T) {
 		t.Fatal("empty live refresh churned cache")
 	}
 	_ = snap
-}
-
-func TestIntegrationGoalAuthPreservedOnNoOp(t *testing.T) {
-	isolateConfigHome(t)
-	oldRes, err := BuildRuntime(context.Background(), Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if oldRes.Controller != nil {
-			oldRes.Controller.Close()
-		}
-	})
-	// Seed goal + approval mode on the live controller.
-	oldRes.Controller.SetToolApprovalMode("yolo")
-	oldRes.Controller.SetGoal("ship it")
-	auth := oldRes.Controller.SessionAuthorizations()
-	res, err := RebuildFrom(context.Background(), oldRes, Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Controller.ToolApprovalMode() != "yolo" && res.Controller.ToolApprovalMode() != oldRes.Controller.ToolApprovalMode() {
-		// Reused controller keeps in-memory mode.
-		if !res.ReusedController {
-			t.Fatalf("approval mode = %q", res.Controller.ToolApprovalMode())
-		}
-	}
-	_ = auth
-	if res.ReusedController {
-		if res.Controller.Goal() != oldRes.Controller.Goal() {
-			t.Fatalf("goal drifted on reuse")
-		}
-	}
 }

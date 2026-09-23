@@ -11,31 +11,6 @@ import (
 	"reasonix/internal/provider"
 )
 
-// RebuildFrom is Rebuild using previous BuildResult for incremental sidecars
-// and subgraph-classified assembly (no-op / interceptor-only / UI-only, …).
-func RebuildFrom(ctx context.Context, previous *BuildResult, opts Options) (*BuildResult, error) {
-	if previous == nil || previous.Controller == nil {
-		return nil, fmt.Errorf("boot: RebuildFrom requires the BuildResult being replaced")
-	}
-	if previous.Extensions != nil {
-		opts.Extensions = previous.Extensions
-	}
-	if previous.Plan != nil && previous.Plan.Graph != nil {
-		opts.Graph = previous.Plan.Graph
-	}
-	if previous.Snapshot != nil {
-		opts.Generation = previous.Snapshot.Generation()
-		opts.PreviousSnapshot = previous.Snapshot
-	}
-	if previous.Dispatcher != nil {
-		opts.PreviousDispatcher = previous.Dispatcher
-	}
-	if previous.Owner != nil {
-		opts.Owner = previous.Owner
-	}
-	return rebuildWithPrevious(ctx, previous.Controller, previous, opts)
-}
-
 // Rebuild builds a replacement runtime for old, migrating session state.
 // On any failure the partially built runtime is closed and old keeps working.
 //

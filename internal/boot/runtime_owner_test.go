@@ -41,43 +41,6 @@ func TestIndependentBuildRuntimeOwnersRemainActive(t *testing.T) {
 	}
 }
 
-func TestRebuildDrainsOnlySameRuntimeOwner(t *testing.T) {
-	isolateConfigHome(t)
-	lineage, err := BuildRuntime(context.Background(), Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	sibling, err := BuildRuntime(context.Background(), Options{})
-	if err != nil {
-		lineage.Controller.Close()
-		t.Fatal(err)
-	}
-	oldGen := lineage.Snapshot.Generation()
-	siblingGen := sibling.Snapshot.Generation()
-	rebuilt, err := RebuildFrom(context.Background(), lineage, Options{})
-	if err != nil {
-		lineage.Controller.Close()
-		sibling.Controller.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		rebuilt.Controller.Close()
-		sibling.Controller.Close()
-	})
-
-	if rebuilt.Owner != lineage.Owner {
-		t.Fatal("same-session rebuild must reuse the previous runtime owner")
-	}
-	if rebuilt.Snapshot.Generation() != oldGen {
-		if !rebuilt.Owner.Gate.IsDraining(oldGen) || rebuilt.Owner.Gate.AdmitNewWork(oldGen) {
-			t.Fatal("rebuild must drain only its previous generation")
-		}
-	}
-	if sibling.Owner.Gate.Published() != siblingGen || sibling.Controller.RuntimePhase() != control.RuntimePhaseActive {
-		t.Fatal("rebuilding one lineage must not drain an independent session")
-	}
-}
-
 func TestDeferredBuildPublishesOnlyAfterCommit(t *testing.T) {
 	isolateConfigHome(t)
 	owner := extension.NewRuntimeOwner()

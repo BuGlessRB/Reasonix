@@ -37,18 +37,6 @@ type MCPImportCandidate struct {
 	Reasons     []string
 }
 
-func LoadCCSwitchMCPCandidates() ([]MCPImportCandidate, error) {
-	entries, err := LoadCCSwitchMCP()
-	if err != nil {
-		return nil, err
-	}
-	candidates := make([]MCPImportCandidate, len(entries))
-	for i, e := range entries {
-		candidates[i] = classifyMCPImportCandidate(e)
-	}
-	return candidates, nil
-}
-
 // LoadCCSwitchMCP reads MCP servers enabled for Reasonix from cc-switch and maps
 // them to Reasonix plugin entries. Newer cc-switch stores servers in SQLite;
 // older installs kept them in config.json(.migrated/.bak), so we support both.

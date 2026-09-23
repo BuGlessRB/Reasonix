@@ -246,86 +246,6 @@ func TestAuthorizeHTTPMCPUsesDiscoveryPKCEAndPersistsPrivateToken(t *testing.T) 
 	}
 }
 
-func TestAuthorizeHTTPMCPDoesNotHoldStateLockDuringBrowser(t *testing.T) {
-	stateDir := testenv.TempDir(t)
-	const endpoint = "https://mcp.example.test/mcp"
-	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		response := func(status int, body string) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: status,
-				Header:     make(http.Header),
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Request:    req,
-			}, nil
-		}
-		switch req.URL.Path {
-		case "/mcp":
-			resp, err := response(http.StatusUnauthorized, `unauthorized`)
-			if err != nil {
-				return nil, err
-			}
-			resp.Header.Set("WWW-Authenticate", `Bearer resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource"`)
-			return resp, nil
-		case "/.well-known/oauth-protected-resource":
-			return response(http.StatusOK, `{"resource":"https://mcp.example.test/mcp","authorization_servers":["https://mcp.example.test"],"scopes_supported":["mcp:connect"]}`)
-		case "/.well-known/oauth-authorization-server":
-			return response(http.StatusOK, `{"issuer":"https://mcp.example.test","authorization_endpoint":"https://mcp.example.test/authorize","token_endpoint":"https://mcp.example.test/token","registration_endpoint":"https://mcp.example.test/register","code_challenge_methods_supported":["S256"],"token_endpoint_auth_methods_supported":["client_secret_basic"]}`)
-		case "/register":
-			return response(http.StatusOK, `{"client_id":"reasonix-test","client_secret":"client-secret","token_endpoint_auth_method":"client_secret_basic"}`)
-		case "/token":
-			return response(http.StatusOK, `{"access_token":"access-one","refresh_token":"refresh-one","token_type":"Bearer","expires_in":3600}`)
-		default:
-			return response(http.StatusNotFound, `not found`)
-		}
-	})}
-
-	openURL := func(raw string) error {
-		authURL, err := url.Parse(raw)
-		if err != nil {
-			return err
-		}
-		clearDone := make(chan error, 1)
-		go func() {
-			_, clearErr := ClearHTTPMCPOAuth(Spec{StateDir: stateDir})
-			clearDone <- clearErr
-		}()
-		select {
-		case clearErr := <-clearDone:
-			if clearErr != nil {
-				return fmt.Errorf("clear during browser flow: %w", clearErr)
-			}
-		case <-time.After(time.Second):
-			return fmt.Errorf("clear during browser flow blocked on OAuth state lock")
-		}
-		callback, err := url.Parse(authURL.Query().Get("redirect_uri"))
-		if err != nil {
-			return err
-		}
-		query := callback.Query()
-		query.Set("code", "authorization-code")
-		query.Set("state", authURL.Query().Get("state"))
-		callback.RawQuery = query.Encode()
-		resp, err := http.Get(callback.String())
-		if err == nil {
-			_ = resp.Body.Close()
-		}
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	err := AuthorizeHTTPMCP(ctx, Spec{
-		Name: "remote", Type: "http", URL: endpoint, StateDir: stateDir,
-		OAuthHTTPClient: client,
-	}, openURL)
-	if err == nil || !strings.Contains(err.Error(), "invalidated") {
-		t.Fatalf("AuthorizeHTTPMCP after concurrent clear = %v, want invalidation", err)
-	}
-	if _, err := os.Stat(mcpOAuthStatePath(stateDir)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("OAuth state was written after concurrent clear: %v", err)
-	}
-}
-
 func TestHTTPMCPRefreshesExpiredTokenAndRotatesRefreshToken(t *testing.T) {
 	stateDir := testenv.TempDir(t)
 	refreshCalls := 0
@@ -484,62 +404,6 @@ func TestHTTPMCPSerializesSharedRefreshTokenRotation(t *testing.T) {
 	}
 }
 
-func TestHTTPMCPRefreshReleasesCrossProcessLockDuringTokenRequest(t *testing.T) {
-	stateDir := testenv.TempDir(t)
-	refreshStarted := make(chan struct{})
-	allowRefresh := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/token" {
-			http.NotFound(w, r)
-			return
-		}
-		close(refreshStarted)
-		<-allowRefresh
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"access_token": "access-new", "refresh_token": "refresh-new", "token_type": "Bearer", "expires_in": 3600,
-		})
-	}))
-	defer server.Close()
-	if err := saveMCPOAuthState(stateDir, mcpOAuthState{
-		Version: 1, Resource: server.URL + "/mcp", TokenEndpoint: server.URL + "/token", ClientID: "client",
-		AccessToken: "access-old", RefreshToken: "refresh-old", TokenType: "Bearer", Expiry: time.Now().Add(-time.Minute),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	transport, err := newHTTPTransport(Spec{Name: "remote", Type: "http", URL: server.URL + "/mcp", StateDir: stateDir})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer transport.close()
-	callDone := make(chan error, 1)
-	go func() {
-		_, callErr := transport.call(context.Background(), "ping", nil)
-		callDone <- callErr
-	}()
-	<-refreshStarted
-
-	clearDone := make(chan error, 1)
-	go func() {
-		_, clearErr := ClearHTTPMCPOAuth(Spec{StateDir: stateDir})
-		clearDone <- clearErr
-	}()
-	select {
-	case clearErr := <-clearDone:
-		if clearErr != nil {
-			t.Fatalf("ClearHTTPMCPOAuth during refresh: %v", clearErr)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("ClearHTTPMCPOAuth blocked on the token endpoint")
-	}
-	close(allowRefresh)
-	if err := <-callDone; err == nil || !strings.Contains(err.Error(), "invalidated") {
-		t.Fatalf("refresh after clear error = %v, want invalidation", err)
-	}
-	if _, err := os.Stat(mcpOAuthStatePath(stateDir)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("cleared OAuth state was recreated: %v", err)
-	}
-}
-
 func TestHTTPMCPRejectsOAuthStateForDifferentResource(t *testing.T) {
 	stateDir := testenv.TempDir(t)
 	if err := saveMCPOAuthState(stateDir, mcpOAuthState{
@@ -558,46 +422,6 @@ func TestHTTPMCPRejectsOAuthStateForDifferentResource(t *testing.T) {
 func TestSameCanonicalResourceRejectsURLUserinfo(t *testing.T) {
 	if sameCanonicalResource("https://user:pass@mcp.example.test/mcp", "https://mcp.example.test/mcp") {
 		t.Fatal("credentialed URL must not match an OAuth resource")
-	}
-}
-
-func TestClearHTTPMCPOAuthRemovesOnlyReasonixState(t *testing.T) {
-	stateDir := testenv.TempDir(t)
-	if err := saveMCPOAuthState(stateDir, mcpOAuthState{
-		Version: 1, Resource: "https://mcp.example.test/mcp", Issuer: "https://auth.example.test",
-		ClientID: "client", AccessToken: "access-token", TokenType: "Bearer",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	neighbor := filepath.Join(stateDir, "session.json")
-	if err := os.WriteFile(neighbor, []byte("keep"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	changed, err := ClearHTTPMCPOAuth(Spec{StateDir: stateDir})
-	if err != nil {
-		t.Fatalf("ClearHTTPMCPOAuth: %v", err)
-	}
-	if !changed {
-		t.Fatal("ClearHTTPMCPOAuth reported no change")
-	}
-	if _, err := os.Stat(filepath.Join(stateDir, mcpOAuthStateFile)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("OAuth state still exists or stat failed: %v", err)
-	}
-	if got, err := os.ReadFile(neighbor); err != nil || string(got) != "keep" {
-		t.Fatalf("neighboring MCP state changed: data=%q err=%v", got, err)
-	}
-	changed, err = ClearHTTPMCPOAuth(Spec{StateDir: stateDir})
-	if err != nil || changed {
-		t.Fatalf("second ClearHTTPMCPOAuth = (%v, %v), want (false, nil)", changed, err)
-	}
-}
-
-func TestClearHTTPMCPOAuthAllowsMissingPrivateStateDirectory(t *testing.T) {
-	stateDir := filepath.Join(testenv.TempDir(t), "not-created-yet")
-	changed, err := ClearHTTPMCPOAuth(Spec{StateDir: stateDir})
-	if err != nil || changed {
-		t.Fatalf("ClearHTTPMCPOAuth = (%v, %v), want (false, nil)", changed, err)
 	}
 }
 
@@ -665,34 +489,6 @@ func TestReconcileDifferentFallbackInvalidatesPendingAuthorizationWithoutState(t
 	})
 	if err == nil || !strings.Contains(err.Error(), "invalidated") {
 		t.Fatalf("save after different fallback reconciliation error = %v", err)
-	}
-}
-
-func TestClearedOAuthStateCannotBeResurrectedByStaleTransport(t *testing.T) {
-	stateDir := testenv.TempDir(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-	}))
-	defer server.Close()
-	if err := saveMCPOAuthState(stateDir, mcpOAuthState{
-		Version: 1, Resource: server.URL, Issuer: server.URL, TokenEndpoint: server.URL + "/token",
-		ClientID: "client", AccessToken: "access-old", RefreshToken: "refresh-old", TokenType: "Bearer",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	transport, err := newHTTPTransport(Spec{Name: "remote", Type: "http", URL: server.URL, StateDir: stateDir})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer transport.close()
-	if changed, err := ClearHTTPMCPOAuth(Spec{StateDir: stateDir}); err != nil || !changed {
-		t.Fatalf("ClearHTTPMCPOAuth = (%v, %v), want (true, nil)", changed, err)
-	}
-	if _, err := transport.call(context.Background(), "ping", nil); err == nil || !strings.Contains(err.Error(), "no refresh token") {
-		t.Fatalf("stale transport call error = %v, want cleared-state failure", err)
-	}
-	if _, err := os.Stat(filepath.Join(stateDir, mcpOAuthStateFile)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("stale transport recreated OAuth state: %v", err)
 	}
 }
 

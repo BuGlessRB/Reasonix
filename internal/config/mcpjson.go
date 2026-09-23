@@ -11,7 +11,6 @@ import (
 
 	"reasonix/internal/fileutil"
 	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/mcpdiag"
 )
 
 // mcpJSONFile is the project-root file Claude Code calls .mcp.json. Reasonix reads
@@ -448,50 +447,6 @@ func writeMCPJSONServers(path string, root map[string]json.RawMessage, servers m
 	}
 	root["mcpServers"] = serversRaw
 	return writeMCPJSON(path, root)
-}
-
-func clearMCPJSONAuthentication(path, name string) (PluginEntry, bool, error) {
-	root, servers, err := readMCPJSONRaw(path)
-	if err != nil {
-		return PluginEntry{}, false, err
-	}
-	raw, ok := servers[name]
-	if !ok {
-		return PluginEntry{}, false, fmt.Errorf("clear plugin authentication: no plugin %q", name)
-	}
-	var spec mcpServerSpec
-	if err := json.Unmarshal(raw, &spec); err != nil {
-		return PluginEntry{}, false, fmt.Errorf("mcp config %s: server %q: %w", path, name, err)
-	}
-	cleanHeaders, cleanEnv, cleanURL, changed := mcpdiag.ClearAuthConfig(spec.Headers, spec.Env, spec.URL)
-	if !changed {
-		return pluginEntryFromMCPSpec(name, spec), false, nil
-	}
-	spec.Headers = cleanHeaders
-	spec.Env = cleanEnv
-	spec.URL = cleanURL
-
-	var server map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &server); err != nil || server == nil {
-		return PluginEntry{}, false, fmt.Errorf("mcp config %s: server %q is not an object", path, name)
-	}
-	setMCPJSONStringMap(server, "headers", cleanHeaders)
-	setMCPJSONStringMap(server, "env", cleanEnv)
-	setMCPJSONString(server, "url", cleanURL)
-	updatedRaw, err := json.Marshal(server)
-	if err != nil {
-		return PluginEntry{}, false, fmt.Errorf("mcp config %s: server %q: %w", path, name, err)
-	}
-	servers[name] = updatedRaw
-	serversRaw, err := json.Marshal(servers)
-	if err != nil {
-		return PluginEntry{}, false, fmt.Errorf("mcp config %s: %w", path, err)
-	}
-	root["mcpServers"] = serversRaw
-	if err := writeMCPJSON(path, root); err != nil {
-		return PluginEntry{}, false, err
-	}
-	return pluginEntryFromMCPSpec(name, spec), true, nil
 }
 
 func setMCPJSONStringMap(server map[string]json.RawMessage, key string, values map[string]string) {

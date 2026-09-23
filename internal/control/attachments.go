@@ -2,20 +2,15 @@ package control
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"reasonix/internal/proc"
-	"reasonix/internal/secrets"
 	"reasonix/internal/visionimage"
 )
 
@@ -36,24 +31,6 @@ func SaveAttachmentBytesInRoot(root, origName string, raw []byte) (string, error
 		ext = ".bin"
 	}
 	return saveAttachmentBytesInRoot(root, ext, raw)
-}
-
-func SaveImageDataURL(dataURL string) (string, error) {
-	const prefix = "data:"
-	const marker = ";base64,"
-	if !strings.HasPrefix(dataURL, prefix) {
-		return "", fmt.Errorf("unsupported pasted image")
-	}
-	i := strings.Index(dataURL, marker)
-	if i <= len(prefix) {
-		return "", fmt.Errorf("unsupported pasted image")
-	}
-	mime := strings.ToLower(dataURL[len(prefix):i])
-	raw, err := base64.StdEncoding.DecodeString(dataURL[i+len(marker):])
-	if err != nil {
-		return "", fmt.Errorf("decode pasted image: %w", err)
-	}
-	return SaveImageBytes(mime, raw)
 }
 
 func SaveImageBytes(declaredMime string, raw []byte) (string, error) {
@@ -104,170 +81,6 @@ func saveAttachmentBytesInRoot(root, ext string, raw []byte) (string, error) {
 		return "", err
 	}
 	return filepath.ToSlash(rel), nil
-}
-
-func SaveImageFile(path string) (string, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return "", err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("pasted image path must not be a symlink")
-	}
-	if info.IsDir() || info.Size() <= 0 || info.Size() > maxImageAttachmentBytes {
-		return "", fmt.Errorf("pasted image must be between 1 byte and 10 MB")
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	opened, err := f.Stat()
-	if err != nil {
-		return "", err
-	}
-	if !os.SameFile(info, opened) {
-		return "", fmt.Errorf("pasted image changed while opening")
-	}
-	raw, err := io.ReadAll(io.LimitReader(f, maxImageAttachmentBytes+1))
-	if err != nil {
-		return "", err
-	}
-	if len(raw) == 0 || len(raw) > maxImageAttachmentBytes {
-		return "", fmt.Errorf("pasted image must be between 1 byte and 10 MB")
-	}
-	if after, err := f.Stat(); err != nil {
-		return "", err
-	} else if !os.SameFile(opened, after) || after.Size() != opened.Size() {
-		return "", fmt.Errorf("pasted image changed while reading")
-	}
-	return SaveImageBytes("", raw)
-}
-
-func SaveAttachmentFile(path string) (string, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return "", err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("attachment path must not be a symlink")
-	}
-	if info.IsDir() || info.Size() <= 0 || info.Size() > maxFileAttachmentBytes {
-		return "", fmt.Errorf("attachment must be between 1 byte and 25 MB")
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	opened, err := f.Stat()
-	if err != nil {
-		return "", err
-	}
-	if !os.SameFile(info, opened) {
-		return "", fmt.Errorf("attachment changed while opening")
-	}
-	raw, err := io.ReadAll(io.LimitReader(f, maxFileAttachmentBytes+1))
-	if err != nil {
-		return "", err
-	}
-	if len(raw) == 0 || len(raw) > maxFileAttachmentBytes {
-		return "", fmt.Errorf("attachment must be between 1 byte and 25 MB")
-	}
-	if after, err := f.Stat(); err != nil {
-		return "", err
-	} else if !os.SameFile(opened, after) || after.Size() != opened.Size() {
-		return "", fmt.Errorf("attachment changed while reading")
-	}
-	ext := strings.ToLower(filepath.Ext(path))
-	if !safeAttachmentExt.MatchString(ext) {
-		ext = ".bin"
-	}
-	if err := ensureAttachmentRoot(); err != nil {
-		return "", err
-	}
-	rel, dst, err := createAttachmentFile(ext)
-	if err != nil {
-		return "", err
-	}
-	if _, err := dst.Write(raw); err != nil {
-		_ = dst.Close()
-		_ = os.Remove(rel)
-		return "", err
-	}
-	if err := dst.Close(); err != nil {
-		_ = os.Remove(rel)
-		return "", err
-	}
-	return filepath.ToSlash(rel), nil
-}
-
-func SaveClipboardImage() (string, error) {
-	switch runtime.GOOS {
-	case "darwin":
-		return saveDarwinClipboardImage()
-	case "windows":
-		return saveWindowsClipboardImage()
-	case "linux":
-		return saveLinuxClipboardImage()
-	default:
-		return "", fmt.Errorf("clipboard image paste is not supported on %s yet", runtime.GOOS)
-	}
-}
-
-func saveWindowsClipboardImage() (string, error) {
-	// Windows PowerShell 5.1 (preinstalled) reaches the GUI clipboard; pwsh (Core)
-	// lacks Get-Clipboard -Format Image, so invoke powershell.exe. The PNG is
-	// returned as base64 on stdout so no temp file is involved.
-	script := `Add-Type -AssemblyName System.Drawing
-$img = Get-Clipboard -Format Image
-if ($null -eq $img) { [Console]::Error.WriteLine('clipboard has no image'); exit 1 }
-$ms = New-Object System.IO.MemoryStream
-$img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-[Convert]::ToBase64String($ms.ToArray())`
-	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
-	cmd.Env = secrets.ProcessEnv()
-	proc.HideWindow(cmd)
-	out, err := cmd.Output()
-	if err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) && len(ee.Stderr) > 0 {
-			return "", fmt.Errorf("read clipboard image: %s", strings.TrimSpace(string(ee.Stderr)))
-		}
-		return "", fmt.Errorf("read clipboard image: %w", err)
-	}
-	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(out)))
-	if err != nil {
-		return "", fmt.Errorf("decode clipboard image: %w", err)
-	}
-	return SaveImageBytes("", raw)
-}
-
-func saveLinuxClipboardImage() (string, error) {
-	// Wayland (wl-paste) then X11 (xclip); both write image bytes to stdout.
-	for _, c := range [][]string{
-		{"wl-paste", "--type", "image/png", "--no-newline"},
-		{"xclip", "-selection", "clipboard", "-t", "image/png", "-o"},
-	} {
-		cmd := exec.Command(c[0], c[1:]...)
-		cmd.Env = secrets.ProcessEnv()
-		if out, err := cmd.Output(); err == nil && len(out) > 0 {
-			return SaveImageBytes("", out)
-		}
-	}
-	return "", fmt.Errorf("clipboard image paste needs wl-paste (Wayland) or xclip (X11)")
-}
-
-func ImageDataURL(path string) (string, error) { return ImageDataURLInRoot(".", path) }
-
-// ImageDataURLInRoot is ImageDataURL for a host whose process directory is not
-// the workspace.
-func ImageDataURLInRoot(root, path string) (string, error) {
-	raw, mime, err := readAttachmentImage(root, path)
-	if err != nil {
-		return "", err
-	}
-	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(raw), nil
 }
 
 // visionImageDataURL reads an attachment and, unlike ImageDataURL (which feeds
@@ -411,65 +224,6 @@ func ensureAttachmentRootIn(base string) error {
 		return fmt.Errorf("attachment directory is invalid")
 	}
 	return nil
-}
-
-func saveDarwinClipboardImage() (string, error) {
-	for _, class := range []string{"PNGf", "JPEG"} {
-		if rel, err := saveDarwinClipboardClass(class); err == nil {
-			return rel, nil
-		}
-	}
-	return "", fmt.Errorf("clipboard does not contain a supported image")
-}
-
-func saveDarwinClipboardClass(class string) (string, error) {
-	if err := ensureAttachmentRoot(); err != nil {
-		return "", err
-	}
-	rel, f, err := createAttachmentFile(".bin")
-	if err != nil {
-		return "", err
-	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(rel)
-		return "", err
-	}
-	abs, err := filepath.Abs(rel)
-	if err != nil {
-		_ = os.Remove(rel)
-		return "", err
-	}
-	script := fmt.Sprintf(`
-set outPath to POSIX file %q
-try
-	set img to the clipboard as «class %s»
-on error
-	error "clipboard does not contain this image type"
-end try
-set f to open for access outPath with write permission
-try
-	set eof f to 0
-	write img to f
-	close access f
-on error errMsg
-	try
-		close access f
-	end try
-	error errMsg
-end try
-`, abs, class)
-	clip := exec.Command("osascript", "-e", script)
-	clip.Env = secrets.ProcessEnv()
-	if out, err := clip.CombinedOutput(); err != nil {
-		_ = os.Remove(rel)
-		return "", fmt.Errorf("read clipboard image: %s", strings.TrimSpace(string(out)))
-	}
-	raw, err := os.ReadFile(rel)
-	_ = os.Remove(rel)
-	if err != nil {
-		return "", err
-	}
-	return SaveImageBytes("", raw)
 }
 
 func createAttachmentFile(ext string) (string, *os.File, error) {

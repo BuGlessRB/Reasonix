@@ -1,7 +1,5 @@
 package event
 
-import "strings"
-
 // Reserved ToolProgress channel names for local sub-agent progress previews.
 //
 // These names are an internal wire contract between the agent progress
@@ -23,24 +21,3 @@ const (
 	SubagentProgressTextName      = SubagentProgressPrefix + "text"
 	SubagentProgressNoticeName    = SubagentProgressPrefix + "notice"
 )
-
-// IsReservedSubagentProgressName reports whether name belongs to the reserved
-// sub-agent progress namespace. Consumers must suppress unknown names in this
-// namespace so an older frontend never renders a channel introduced by a newer
-// agent as ordinary tool output.
-func IsReservedSubagentProgressName(name string) bool {
-	return strings.HasPrefix(name, SubagentProgressPrefix)
-}
-
-// IsSubagentProgressName reports whether the ToolProgress Name carries a
-// currently supported sub-agent progress channel. Use
-// IsReservedSubagentProgressName when routing unknown future channels away from
-// ordinary tool output.
-func IsSubagentProgressName(name string) bool {
-	switch name {
-	case SubagentProgressStatusName, SubagentProgressReasoningName,
-		SubagentProgressTextName, SubagentProgressNoticeName:
-		return true
-	}
-	return false
-}

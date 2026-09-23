@@ -17,9 +17,11 @@ type frontendPort struct {
 }
 
 // A shell that drives the kernel over HTTP is absent: wire-parity covers it.
+// internal/cli is absent for a different reason: with the interactive session
+// gone it is a launcher for serve and one-shot run, not a surface a person
+// operates a session through, so a capability it does not drive is not debt.
 var frontendPorts = []frontendPort{
 	{pkg: "internal/acp", port: "EditorAPI"},
-	{pkg: "internal/cli", port: "SessionAPI"},
 	{pkg: "internal/serve", port: "SessionAPI"},
 }
 

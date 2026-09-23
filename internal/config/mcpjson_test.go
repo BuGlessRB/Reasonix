@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -634,178 +633,6 @@ func TestMergeMCPJSONPrecedence(t *testing.T) {
 	}
 }
 
-func TestClearPluginAuthenticationInSourceUsesMCPJSON(t *testing.T) {
-	root := testenv.TempDir(t)
-	t.Setenv("HOME", root)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg"))
-	t.Setenv("AppData", filepath.Join(root, "AppData"))
-	t.Chdir(testenv.TempDir(t))
-
-	userPath := UserConfigPath()
-	if err := os.MkdirAll(filepath.Dir(userPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(userPath, []byte("[[plugins]]\nname = \"global\"\ncommand = \"global-bin\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	mcp := `{
-  "mcpServers": {
-    "dida": {
-      "type": "http",
-      "url": "https://mcp.dida365.com/mcp?access_token=abc&workspace=main",
-      "headers": { "Authorization": "Bearer ${DIDA_TOKEN}", "X-Org": "team" },
-      "env": { "DIDA_TOKEN": "${DIDA_TOKEN}", "DEBUG": "1" }
-    }
-  }
-}`
-	if err := os.WriteFile(mcpJSONFile, []byte(mcp), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	updated, changed, source, err := ClearPluginAuthenticationInSourceForRoot(".", "dida")
-	if err != nil {
-		t.Fatalf("ClearPluginAuthenticationInSource: %v", err)
-	}
-	if !changed {
-		t.Fatal("ClearPluginAuthenticationInSource should report changed")
-	}
-	if source != mcpJSONFile {
-		t.Fatalf("source = %q, want %q", source, mcpJSONFile)
-	}
-	if updated.URL != "https://mcp.dida365.com/mcp?workspace=main" {
-		t.Fatalf("updated URL = %q", updated.URL)
-	}
-
-	userRaw, err := os.ReadFile(userPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(userRaw), "dida") {
-		t.Fatalf("user config should not receive .mcp.json server:\n%s", userRaw)
-	}
-	entries, err := loadMCPJSON(mcpJSONFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != 1 {
-		t.Fatalf("entries = %+v, want one dida entry", entries)
-	}
-	got := entries[0]
-	if got.URL != "https://mcp.dida365.com/mcp?workspace=main" {
-		t.Fatalf(".mcp.json URL = %q", got.URL)
-	}
-	if _, ok := got.Headers["Authorization"]; ok {
-		t.Fatalf("auth header should be removed: %+v", got.Headers)
-	}
-	if got.Headers["X-Org"] != "team" {
-		t.Fatalf("ordinary header should be preserved: %+v", got.Headers)
-	}
-	if _, ok := got.Env["DIDA_TOKEN"]; ok {
-		t.Fatalf("auth env should be removed: %+v", got.Env)
-	}
-	if got.Env["DEBUG"] != "1" {
-		t.Fatalf("ordinary env should be preserved: %+v", got.Env)
-	}
-}
-
-func TestClearPluginAuthenticationInSourcePrefersTOML(t *testing.T) {
-	root := testenv.TempDir(t)
-	t.Setenv("HOME", root)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg"))
-	t.Setenv("AppData", filepath.Join(root, "AppData"))
-	t.Chdir(testenv.TempDir(t))
-
-	if err := os.WriteFile("reasonix.toml", []byte(`[[plugins]]
-name = "dida"
-type = "http"
-url = "https://reasonix.example/mcp?access_token=toml"
-[plugins.headers]
-Authorization = "Bearer ${TOML_TOKEN}"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	mcp := `{ "mcpServers": {
-  "dida": {
-    "type": "http",
-    "url": "https://mcp-json.example/mcp?access_token=json",
-    "headers": { "Authorization": "Bearer ${JSON_TOKEN}" }
-  }
-} }`
-	if err := os.WriteFile(mcpJSONFile, []byte(mcp), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	updated, changed, source, err := ClearPluginAuthenticationInSourceForRoot(".", "dida")
-	if err != nil {
-		t.Fatalf("ClearPluginAuthenticationInSource: %v", err)
-	}
-	if !changed {
-		t.Fatal("ClearPluginAuthenticationInSource should report changed")
-	}
-	if source != "reasonix.toml" {
-		t.Fatalf("source = %q, want reasonix.toml", source)
-	}
-	if updated.URL != "https://reasonix.example/mcp" {
-		t.Fatalf("updated URL = %q", updated.URL)
-	}
-
-	projectRaw, err := os.ReadFile("reasonix.toml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(projectRaw), "access_token=toml") || strings.Contains(string(projectRaw), "Authorization") {
-		t.Fatalf("reasonix.toml auth material should be removed:\n%s", projectRaw)
-	}
-	mcpRaw, err := os.ReadFile(mcpJSONFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(mcpRaw), "access_token=json") {
-		t.Fatalf(".mcp.json collision entry should be left untouched:\n%s", mcpRaw)
-	}
-}
-
-func TestClearPluginAuthenticationInSourceForRootDoesNotFollowWorkingDirectory(t *testing.T) {
-	home := testenv.TempDir(t)
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
-	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	rootA := testenv.TempDir(t)
-	rootB := testenv.TempDir(t)
-	write := func(root, token string) {
-		t.Helper()
-		raw := fmt.Sprintf(`[[plugins]]
-name = "dida"
-type = "http"
-url = "https://example.test/mcp?access_token=%s&workspace=main"
-`, token)
-		if err := os.WriteFile(filepath.Join(root, "reasonix.toml"), []byte(raw), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write(rootA, "root-a")
-	write(rootB, "root-b")
-	t.Chdir(rootB)
-
-	updated, changed, source, err := ClearPluginAuthenticationInSourceForRoot(rootA, "dida")
-	if err != nil {
-		t.Fatalf("ClearPluginAuthenticationInSourceForRoot: %v", err)
-	}
-	if !changed || updated.URL != "https://example.test/mcp?workspace=main" {
-		t.Fatalf("updated = %+v, changed = %v", updated, changed)
-	}
-	if want := filepath.Join(rootA, "reasonix.toml"); !samePath(source, want) {
-		t.Fatalf("source = %q, want %q", source, want)
-	}
-	rootBRaw, err := os.ReadFile(filepath.Join(rootB, "reasonix.toml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(rootBRaw), "access_token=root-b") {
-		t.Fatalf("non-target workspace was modified:\n%s", rootBRaw)
-	}
-}
-
 func TestLoadLegacyMCP(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.json")
@@ -890,82 +717,6 @@ func TestLoadLegacyMCP(t *testing.T) {
 	}
 	if got := loadLegacyMCP(""); got != nil {
 		t.Errorf("empty path: got %+v, want nil", got)
-	}
-}
-
-func TestRemovePluginFromSourcesForRootRemovesEveryWritableDeclaration(t *testing.T) {
-	_, userConfig, _ := legacyHome(t)
-	root := testenv.TempDir(t)
-	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{userConfig, filepath.Join(root, "reasonix.toml")} {
-		if err := os.WriteFile(path, []byte(`
-[[plugins]]
-name = "duplicate"
-command = "duplicate-mcp"
-`), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	mcpPath := filepath.Join(root, mcpJSONFile)
-	if err := os.WriteFile(mcpPath, []byte(`{
-  "mcpServers": {
-    "duplicate": { "command": "duplicate-json" },
-    "keep": { "command": "keep-json" }
-  }
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	removed, err := RemovePluginFromSourcesForRoot(root, "duplicate")
-	if err != nil {
-		t.Fatalf("RemovePluginFromSourcesForRoot: %v", err)
-	}
-	if !removed {
-		t.Fatal("RemovePluginFromSourcesForRoot reported no removal")
-	}
-	for _, path := range []string{userConfig, filepath.Join(root, "reasonix.toml")} {
-		for _, p := range LoadForEdit(path).Plugins {
-			if p.Name == "duplicate" {
-				t.Fatalf("duplicate MCP survived in %s: %+v", path, p)
-			}
-		}
-	}
-	if _, found, err := LoadMCPJSONPlugin(mcpPath, "duplicate"); err != nil || found {
-		t.Fatalf("duplicate .mcp.json entry survived: found=%v err=%v", found, err)
-	}
-	if _, found, err := LoadMCPJSONPlugin(mcpPath, "keep"); err != nil || !found {
-		t.Fatalf("unrelated .mcp.json entry was lost: found=%v err=%v", found, err)
-	}
-}
-
-func TestRemovePluginFromSourcesForRootPreflightsEverySource(t *testing.T) {
-	_, userConfig, _ := legacyHome(t)
-	root := testenv.TempDir(t)
-	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	const original = `[[plugins]]
-name = "duplicate"
-command = "duplicate-mcp"
-`
-	if err := os.WriteFile(userConfig, []byte(original), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, mcpJSONFile), []byte(`{"mcpServers":`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if removed, err := RemovePluginFromSourcesForRoot(root, "duplicate"); err == nil || removed {
-		t.Fatalf("RemovePluginFromSourcesForRoot = (%v, %v), want false and malformed .mcp.json error", removed, err)
-	}
-	got, err := os.ReadFile(userConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != original {
-		t.Fatalf("user config changed before every source was validated:\n%s", got)
 	}
 }
 
@@ -1126,43 +877,6 @@ func TestMCPJSONRejectsExternalAndBrokenSymlinks(t *testing.T) {
 	}
 }
 
-func TestClearPluginAuthenticationHonorsMCPJSONFileLock(t *testing.T) {
-	root := testenv.TempDir(t)
-	t.Setenv("REASONIX_HOME", filepath.Join(root, "home"))
-	mcpPath := filepath.Join(root, mcpJSONFile)
-	if err := os.WriteFile(mcpPath, []byte(`{
-  "mcpServers": {
-    "remote": {
-      "type": "http",
-      "url": "https://example.com/mcp?token=secret",
-      "headers": {"Authorization": "Bearer secret"}
-    }
-  }
-}
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	release, err := acquireConfigFileEditLockWithTimeout(mcpPath, time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer release()
-
-	previousTimeout := configEditLockTimeout
-	configEditLockTimeout = 30 * time.Millisecond
-	t.Cleanup(func() { configEditLockTimeout = previousTimeout })
-	if _, _, _, err := ClearPluginAuthenticationInSourceForRoot(root, "remote"); err == nil {
-		t.Fatal("clear authentication ignored the project MCP file lock")
-	}
-	raw, err := os.ReadFile(mcpPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(raw), "Bearer secret") {
-		t.Fatal("authentication changed after lock acquisition failed")
-	}
-}
-
 func TestInstallUserPluginForRootRestoresConfigWhenActivationFails(t *testing.T) {
 	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
@@ -1243,25 +957,6 @@ func TestRemoveEffectivePluginLocksAllCompetingSources(t *testing.T) {
 	}
 	if _, ok := pluginEntryByName(after.Plugins, "shared"); !ok {
 		t.Fatal("effective-source removal changed user config after lock acquisition failed")
-	}
-}
-
-func TestRemovePluginFromSourcesRejectsBrokenConfigSymlink(t *testing.T) {
-	root := testenv.TempDir(t)
-	t.Setenv("REASONIX_HOME", filepath.Join(root, "home"))
-	link := filepath.Join(root, "reasonix.toml")
-	if err := os.Symlink(filepath.Join(root, "missing.toml"), link); err != nil {
-		t.Skipf("symlinks are unavailable: %v", err)
-	}
-	if _, err := RemovePluginFromSourcesForRoot(root, "missing"); err == nil {
-		t.Fatal("multi-source removal silently skipped a broken config symlink")
-	}
-	info, err := os.Lstat(link)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode()&os.ModeSymlink == 0 {
-		t.Fatal("multi-source removal replaced the broken config symlink")
 	}
 }
 

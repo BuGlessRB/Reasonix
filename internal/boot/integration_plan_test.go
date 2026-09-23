@@ -9,79 +9,6 @@ import (
 	"reasonix/internal/extensioncontract"
 )
 
-func TestRebuildFromNoOpPreservesCacheHash(t *testing.T) {
-	isolateConfigHome(t)
-	oldRes, err := BuildRuntime(context.Background(), Options{})
-	if err != nil {
-		t.Fatalf("BuildRuntime: %v", err)
-	}
-	t.Cleanup(func() {
-		if oldRes.Controller != nil {
-			oldRes.Controller.Close()
-		}
-	})
-	if oldRes.Assembly == nil {
-		t.Fatal("expected Assembly retained for reuse")
-	}
-	res, err := RebuildFrom(context.Background(), oldRes, Options{})
-	if err != nil {
-		t.Fatalf("RebuildFrom: %v", err)
-	}
-	t.Cleanup(func() {
-		if res.Controller != nil {
-			res.Controller.Close()
-		}
-	})
-	if oldRes.Snapshot != nil && res.Snapshot != nil {
-		if oldRes.Snapshot.CacheHash() != res.Snapshot.CacheHash() {
-			t.Fatalf("cache hash churned on no-op: %s -> %s", oldRes.Snapshot.CacheHash(), res.Snapshot.CacheHash())
-		}
-	}
-	if res.Plan != nil && res.Plan.PrefixChanged {
-		t.Fatal("no-op plan should not set PrefixChanged")
-	}
-}
-
-func TestPublishGateAdmissionAfterRebuild(t *testing.T) {
-	isolateConfigHome(t)
-	oldRes, err := BuildRuntime(context.Background(), Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if oldRes.Controller != nil {
-			oldRes.Controller.Close()
-		}
-	})
-	oldGen := uint64(0)
-	if oldRes.Snapshot != nil {
-		oldGen = oldRes.Snapshot.Generation()
-		oldRes.Controller.SetRuntimeGeneration(oldGen)
-	}
-	res, err := RebuildFrom(context.Background(), oldRes, Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if res.Controller != nil {
-			res.Controller.Close()
-		}
-	})
-	// Old generation must not admit new work after publish of the new one.
-	if oldGen != 0 && oldRes.Owner.Gate.AdmitNewWork(oldGen) {
-		// Only fails if new gen was published and differs.
-		if res.Snapshot != nil && res.Snapshot.Generation() != oldGen {
-			t.Fatal("old generation still admits after rebuild publish")
-		}
-	}
-	if res.Controller.RuntimePhase() != "Active" && res.Controller.RuntimePhase() != "Unknown" {
-		// Active when generation is published.
-		if res.Snapshot != nil && res.Snapshot.Generation() != 0 && res.Controller.RuntimePhase() != "Active" {
-			t.Fatalf("new controller phase = %s", res.Controller.RuntimePhase())
-		}
-	}
-}
-
 func TestDoctorRuntimeReport(t *testing.T) {
 	before := extension.RuntimeOwnerFallbackCount()
 	_ = extension.RuntimeOwnerFromContext(context.Background())
@@ -123,42 +50,6 @@ func TestPlanClassifyIntegration(t *testing.T) {
 	}
 	if plan.MayChangePrefix() {
 		t.Fatal("UI-only must not affect cache")
-	}
-}
-
-func TestRapidReloadPreservesAdmission(t *testing.T) {
-	isolateConfigHome(t)
-	var prev *BuildResult
-	for i := range 3 {
-		var res *BuildResult
-		var err error
-		if prev == nil {
-			res, err = BuildRuntime(context.Background(), Options{})
-		} else {
-			res, err = RebuildFrom(context.Background(), prev, Options{})
-		}
-		if err != nil {
-			t.Fatalf("reload %d: %v", i, err)
-		}
-		t.Cleanup(func() {
-			if res.Controller != nil {
-				res.Controller.Close()
-			}
-		})
-		if res.Snapshot != nil {
-			gen := res.Snapshot.Generation()
-			if !res.Owner.Gate.AdmitNewWork(gen) {
-				t.Fatalf("reload %d: gen %d not admitted", i, gen)
-			}
-		}
-		if prev != nil && prev.Snapshot != nil && res.Snapshot != nil {
-			if prev.Snapshot.Generation() != res.Snapshot.Generation() {
-				if res.Owner.Gate.AdmitNewWork(prev.Snapshot.Generation()) {
-					t.Fatalf("reload %d: old gen still admits", i)
-				}
-			}
-		}
-		prev = res
 	}
 }
 

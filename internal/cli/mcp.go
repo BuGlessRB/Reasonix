@@ -23,8 +23,6 @@ import (
 
 func parseMCPAdd(args []string) (config.PluginEntry, error) { return mcpsetup.ParseArgs(args) }
 
-func tokenizeArgs(s string) []string { return mcpsetup.Tokenize(s) }
-
 // mcpCommand implements persisted server management plus explicit browse/install
 // access to the official MCP Registry. Config edits take effect on the next
 // session start; for a live manual connection inside an open chat, use `/mcp add`.

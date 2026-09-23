@@ -168,13 +168,3 @@ func matchExtensionAction(ctrl control.SessionAPI, typedCmd string) (control.Ext
 	}
 	return control.ExtensionActionView{}, false
 }
-
-// extensionActionHint marks an extension action in the slash menu the way
-// plugin commands are marked: "plugin <id> · <label>".
-func extensionActionHint(a control.ExtensionActionView) string {
-	source := "plugin " + a.PluginID
-	if a.Label == "" {
-		return source
-	}
-	return source + " · " + a.Label
-}

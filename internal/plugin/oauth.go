@@ -223,12 +223,6 @@ func validateHTTPMCPAuthorization(spec Spec, openURL func(string) error) error {
 	return nil
 }
 
-// ClearHTTPMCPOAuth removes Reasonix-owned OAuth client and token state for one
-// MCP server. It does not alter static headers or another application's data.
-func ClearHTTPMCPOAuth(spec Spec) (bool, error) {
-	return reconcileHTTPMCPOAuth(spec, "")
-}
-
 // ReconcileHTTPMCPOAuthAfterRemoval removes Reasonix-owned OAuth state after an
 // MCP declaration is removed, unless the remaining effective HTTP declaration
 // uses the same resource. Callers pass an empty remainingResource when no

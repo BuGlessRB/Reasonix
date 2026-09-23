@@ -31,36 +31,6 @@ func TestMCPRemoveCLIClearsReasonixOAuthState(t *testing.T) {
 	}
 }
 
-func TestMCPRemoveCLIPreservesOAuthStateForMatchingFallback(t *testing.T) {
-	isolateCLIConfigHome(t)
-	workspace := testenv.TempDir(t)
-	t.Chdir(workspace)
-	const resource = "https://mcp.example.test/mcp"
-	global := config.PluginEntry{
-		Name: "shared", Type: "http", URL: resource, Source: config.MCPSourceUserConfig,
-	}
-	if _, err := config.InstallUserPluginForRoot(workspace, global, true); err != nil {
-		t.Fatal(err)
-	}
-	projectConfig := minimalTestModelTOML + `
-[[plugins]]
-name = "shared"
-type = "http"
-url = "https://mcp.example.test/mcp"
-`
-	if err := os.WriteFile(filepath.Join(workspace, "reasonix.toml"), []byte(projectConfig), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	oauthState := writeCLIAuthState(t, workspace, global.Name, resource)
-
-	if code := mcpRemoveCLI([]string{global.Name}); code != 0 {
-		t.Fatalf("mcp remove exit = %d", code)
-	}
-	if _, err := os.Stat(oauthState); err != nil {
-		t.Fatalf("matching fallback OAuth state was removed: %v", err)
-	}
-}
-
 func writeCLIAuthState(t *testing.T, workspace, name, resource string) string {
 	t.Helper()
 	stateDir := plugin.MCPStateDir(config.ReasonixHomeDir(), workspace, name)

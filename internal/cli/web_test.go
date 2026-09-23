@@ -166,14 +166,6 @@ func TestLaunchWebBrowserInvokesOpenerWithResolvedURL(t *testing.T) {
 	}
 }
 
-func TestWebHandoffArgsResumeSameSessionOnDeterministicPort(t *testing.T) {
-	got := webHandoffArgs("/tmp/session.jsonl", "session", "deepseek/deepseek-flash", "delivery")
-	want := "--resume /tmp/session.jsonl --model deepseek/deepseek-flash --profile delivery"
-	if strings.Join(got, " ") != want {
-		t.Fatalf("webHandoffArgs() = %q, want %q", strings.Join(got, " "), want)
-	}
-}
-
 func TestWebBrowserURLUsesSessionDeepLinkBeforeTokenFragment(t *testing.T) {
 	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t)})
 	t.Cleanup(ctrl.Close)
