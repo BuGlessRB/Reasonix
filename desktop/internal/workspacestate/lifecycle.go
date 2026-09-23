@@ -1,6 +1,7 @@
 package workspacestate
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -442,28 +443,28 @@ func cancelPreparedPurge(state *State, id string) {
 
 func samePurgeIdentity(left, right Operation) bool {
 	return left.ID == right.ID && left.Kind == "purge" && right.Kind == "purge" && left.Lifecycle == right.Lifecycle &&
-		left.ExpectedGeneration == right.ExpectedGeneration && slices.Equal(left.SessionIDs, right.SessionIDs)
+		left.ExpectedGeneration == right.ExpectedGeneration && slices.Equal(left.SessionIDs, right.SessionIDs) && bytes.Equal(left.Request, right.Request)
 }
 
 // BeginPurge atomically validates the archived generation, publishes the
 // deletion tombstone and records the resumable purge operation.
 func (s *Store) BeginPurge(ctx context.Context, id string, expected uint64) error {
-	return s.beginOrResumePurge(ctx, id, expected, nil)
+	return s.beginOrResumePurge(ctx, id, expected, nil, false)
 }
 
 // ResumePurge continues only the observed operation. It cannot recreate a
 // deletion intent after a restore superseded that operation.
 func (s *Store) ResumePurge(ctx context.Context, id string, observed Operation) error {
-	return s.beginOrResumePurge(ctx, id, observed.ExpectedGeneration, &observed)
+	return s.beginOrResumePurge(ctx, id, observed.ExpectedGeneration, &observed, false)
 }
 
 // ResumePurgeForRequest keeps both the request snapshot and the observed
 // transaction identity. Neither may be refreshed while waiting for locks.
 func (s *Store) ResumePurgeForRequest(ctx context.Context, id string, expected uint64, observed Operation) error {
-	return s.beginOrResumePurge(ctx, id, expected, &observed)
+	return s.beginOrResumePurge(ctx, id, expected, &observed, false)
 }
 
-func (s *Store) beginOrResumePurge(ctx context.Context, id string, expected uint64, observed *Operation) error {
+func (s *Store) beginOrResumePurge(ctx context.Context, id string, expected uint64, observed *Operation, cleanupSources bool) error {
 	stale := false
 	err := s.mutate(ctx, func(state *State) error {
 		key := "purge-" + id
@@ -500,7 +501,15 @@ func (s *Store) beginOrResumePurge(ctx context.Context, id string, expected uint
 			if !known || status.Lifecycle != Archived || status.Generation > expected {
 				return ErrMutationConflict
 			}
-			state.PendingOperations[key] = Operation{ID: key, Kind: "purge", Phase: "tombstoned", Lifecycle: Deleted, SessionIDs: []string{id}, ExpectedGeneration: status.Generation}
+			op := Operation{ID: key, Kind: "purge", Phase: "tombstoned", Lifecycle: Deleted, SessionIDs: []string{id}, ExpectedGeneration: status.Generation}
+			if cleanupSources {
+				var err error
+				op.Request, err = purgeSourceCleanupRequest(*state, id)
+				if err != nil {
+					return err
+				}
+			}
+			state.PendingOperations[key] = op
 			setLifecycle(state, id, Deleted)
 			return nil
 		default:
@@ -548,6 +557,15 @@ func (s *Store) CompletePurge(ctx context.Context, id string) error {
 		case PurgeContentRemoved:
 		default:
 			return ErrMutationConflict
+		}
+		// Keep only the consumed topic identity in the existing purge receipt.
+		// Canonical sessions and runtime-adopted sources may have no import
+		// journal from which a future display reader could recover that identity.
+		if topicID := state.Presentation[id].TopicID; topicID != "" {
+			op.WorkspaceID, _ = sessionOwner(*state, id)
+			if op.Presentation == nil {
+				op.Presentation = &Presentation{TopicID: topicID}
+			}
 		}
 		for key, workspace := range state.Workspaces {
 			workspace.SessionIDs = remove(workspace.SessionIDs, id)
