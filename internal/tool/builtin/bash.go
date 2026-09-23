@@ -226,6 +226,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 		ex.DurationMs = time.Since(start).Milliseconds()
 		return tool.DetailedResult{Execution: ex}, err
 	}
+	nul := armNULWatch(runtime.GOOS, sh, b.workDir)
 	// Background jobs take ownership of the lease until the job goroutine ends.
 	// Foreground/terminal paths release after the process exits.
 	releaseLease := true
@@ -244,7 +245,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	if b.terminal != nil && !p.RunInBackground && !b.sb.Enforce() && !secrets.FilterSubprocessEnv() {
 		envMap := sandbox.SessionTempEnvMap(prepared.SessionTemp, prepared.LinuxSandboxed)
 		if out, ok, termErr := b.terminal.RunCommand(ctx, p.Command, b.workDir, b.foregroundTimeout(p.TimeoutSeconds), envMap); ok {
-			out = appendSessionDataHint(out, b.guard.CommandHint(b.workDir, p.Command))
+			out = appendSessionDataHint(appendSessionDataHint(out, b.guard.CommandHint(b.workDir, p.Command)), nul.note())
 			applyTerminalResult(ex, termErr)
 			ex.DurationMs = time.Since(start).Milliseconds()
 			return tool.DetailedResult{Output: out, Execution: ex}, termErr
@@ -302,7 +303,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	mergeRunInto(ex, runEx)
 	ex.DurationMs = time.Since(start).Milliseconds()
 	return tool.DetailedResult{
-		Output:    appendSessionDataHint(out, b.guard.CommandHint(b.workDir, p.Command)),
+		Output:    appendSessionDataHint(appendSessionDataHint(out, b.guard.CommandHint(b.workDir, p.Command)), nul.note()),
 		Execution: ex,
 	}, err
 }
