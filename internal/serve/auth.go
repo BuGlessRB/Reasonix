@@ -344,6 +344,22 @@ func (ag *authGate) checkToken(w http.ResponseWriter, r *http.Request, next http
 	ag.deny(w, r)
 }
 
+// authenticated reports whether r already carries the credential this gate
+// accepts, for a handler reached through a path the gate leaves public.
+func (ag *authGate) authenticated(r *http.Request) bool {
+	switch ag.mode {
+	case authNone:
+		return true
+	case authToken:
+		c, err := r.Cookie(cookieToken)
+		return err == nil && subtle.ConstantTimeCompare([]byte(c.Value), []byte(ag.token)) == 1
+	case authPassword:
+		c, err := r.Cookie(cookieSession)
+		return err == nil && ag.verifySession(c.Value)
+	}
+	return false
+}
+
 // checkSession validates the HMAC-signed session cookie for password mode.
 // Unauthenticated browser requests are redirected to /login; API/SSE requests
 // get a 401. The /login path is intercepted before this function by middleware.

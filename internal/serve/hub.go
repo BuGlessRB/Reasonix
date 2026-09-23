@@ -547,6 +547,12 @@ func (h *Hub) routeDefault(w http.ResponseWriter, r *http.Request) {
 	}
 	h.mu.RUnlock()
 	if rt == nil {
+		// A reload with every pane closed still needs the page back. Only past
+		// the gate: "/" is public in token mode so a bare shell can bootstrap.
+		if r.Method == http.MethodGet && r.URL.Path == "/" && h.opts.Page != nil && h.auth.authenticated(r) {
+			http.ServeFileFS(w, r, h.opts.Page, "index.html")
+			return
+		}
 		refuse(w, http.StatusServiceUnavailable, "hub.no_runtime_open", "no runtime is open", nil)
 		return
 	}
@@ -625,7 +631,7 @@ func (h *Hub) resolveRoot(req OpenRequest) (string, error) {
 			return dir, nil
 		}
 	}
-	return "", errors.New("no workspace to open in — add a folder first")
+	return "", refusal(http.StatusConflict, "workspace.none", errors.New("no workspace to open in — add a folder first"), nil)
 }
 
 func (h *Hub) nextID() string {

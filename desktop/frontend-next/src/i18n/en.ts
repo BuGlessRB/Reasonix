@@ -280,9 +280,9 @@ export const EN: Record<string, string> = {
   "在 {name} 下新建会话": "Start a new session in {name}",
   "关闭这个会话面板": "Close this pane",
   "不会删除任何文件": "No files are deleted",
-  "将先关闭 {n} 个面板；不会删除任何文件": "Closes {n} panes first; no files are deleted",
   "将先关闭 {n} 个面板，其中 {live} 个仍在运行；不会删除任何文件":
     "Closes {n} panes first, {live} of them mid-turn; no files are deleted",
+  "将先关闭 {n} 个面板；不会删除任何文件": "Closes {n} panes first; no files are deleted",
 
   // ── 待发队列 ─────────────────────────────────────────────────────
   "待送达": "Pending",
@@ -742,7 +742,7 @@ export const EN: Record<string, string> = {
   "筛选": "Filter",
   "补全": "Completions",
   "交还给插件": "Hand back to the extension",
-  "连不上内核：/status 没有回应。": "Cannot reach the kernel: /status did not answer.",
+  "连不上内核：/runtimes 没有回应。": "Cannot reach the kernel: /runtimes did not answer.",
   "同时调整正文与次要文字的对比度。深色主题下若觉得刺眼，可调向「柔和」。": "Adjusts the contrast of body and secondary text together. If a dark theme feels harsh, move it toward Soft.",
   "配色包安装在记忆目录的 themes/ 下，每个目录包含一个 theme.json。配色包会应用表面色、强调色、圆角和字体；状态色（成功/警告/失败）不受影响。":
     "Palettes install under themes/ in the memory directory, one theme.json per folder. A palette sets surfaces, accent, corner radii and type; the status colours (success, warning, failure) are unaffected.",
@@ -1029,6 +1029,8 @@ export const EN: Record<string, string> = {
   "高级执行设置": "Advanced execution settings",
   "会话操作：{title}": "Session actions: {title}",
   "删除会话：{title}": "Delete session: {title}",
+  "会话在文件夹里打开，先添加一个": "A session opens in a folder; add one first",
+  "添加文件夹": "Add folder",
   "会话操作": "Session actions",
   "执行中": "Running",
   "执行过程": "Activity",

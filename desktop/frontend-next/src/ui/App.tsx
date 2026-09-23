@@ -181,6 +181,13 @@ export function App({ hub }: { hub: HubPort }) {
   // one hands the row back.
   const reloadPanes = useCallback(async () => {
     const list = await hub.runtimes().catch(() => [] as RuntimeView[]);
+    // Setup and the welcome are read through a pane's port. With none open
+    // there is nothing to ask, and waiting on them would leave the window
+    // blank; the next pane to open reads both again.
+    if (list.length === 0) {
+      setSetup((cur) => (cur === undefined ? null : cur));
+      setWelcomed((cur) => cur ?? true);
+    }
     setRuntimes(list);
     setActive((cur) => (list.some((rt) => rt.id === cur) ? cur : (list[0]?.id ?? "")));
     await reloadTree();
@@ -692,8 +699,19 @@ export function App({ hub }: { hub: HubPort }) {
                   ⌘
                 </span>
                 <p className="t">{t("没有打开的会话")}</p>
-                <p className="h">{t("从左栏选择，或在当前文件夹新建")}</p>
-                <button data-action="session.new" onClick={() => void openPane({ root: newSessionRoot }).catch(fail)}>{t("新建会话")}</button>
+                {/* With no folder there is nowhere a session could open, so the
+                    one button offered is the step that makes it possible. */}
+                {tree.length === 0 ? (
+                  <>
+                    <p className="h">{t("会话在文件夹里打开，先添加一个")}</p>
+                    <button data-action="workspace.add" disabled={adder.busy} onClick={() => adder.add()}>{t("添加文件夹")}</button>
+                  </>
+                ) : (
+                  <>
+                    <p className="h">{t("从左栏选择，或在当前文件夹新建")}</p>
+                    <button data-action="session.new" onClick={() => void openPane({ root: newSessionRoot }).catch(fail)}>{t("新建会话")}</button>
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -15,12 +15,14 @@ import { play } from "./boot/intro";
 import { settled } from "./boot/gate";
 
 // The dev proxy only exists when REASONIX_SERVE was set at vite start; probing
-// /status decides which port to boot on, so neither mode needs a build flag.
-// Without the proxy vite answers /status with the SPA shell at 200, so the
-// content type — not res.ok — is what says a kernel is really there.
+// /runtimes decides which port to boot on, so neither mode needs a build flag.
+// Without the proxy vite answers it with the SPA shell at 200, so the content
+// type — not res.ok — is what says a kernel is really there.
 async function pick(): Promise<HubPort> {
   try {
-    const res = await fetch("/status", { credentials: "same-origin" });
+    // The hub's own list rather than a pane's /status: it answers with every
+    // pane closed, which is when a reload has to find the kernel again.
+    const res = await fetch("/runtimes", { credentials: "same-origin" });
     if (res.ok && (res.headers.get("content-type") ?? "").includes("json")) return new SseHub();
   } catch {
     // no serve reachable
@@ -29,7 +31,7 @@ async function pick(): Promise<HubPort> {
   // fixture there would put a scripted session on screen as if it had happened,
   // so only a dev build is allowed to; the import stays dynamic to keep the
   // fixture out of the production bundle.
-  if (!import.meta.env.DEV) throw new Error("连不上内核：/status 没有回应。");
+  if (!import.meta.env.DEV) throw new Error("连不上内核：/runtimes 没有回应。");
   const { MockHub } = await import("./port/mock_hub");
   return new MockHub();
 }

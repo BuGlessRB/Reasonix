@@ -174,6 +174,7 @@ export const EN_KERNEL: Record<string, string> = {
   "最大输出 Token 不能是负数": "The maximum output tokens cannot be negative",
   "无法识别「{protocol}」这种思考协议": "Unrecognised reasoning protocol “{protocol}”",
   "默认档位「{level}」不在填写的档位里": "The default level “{level}” is not one of the levels listed",
+  "还没有文件夹，会话需要在文件夹里打开。请先添加一个文件夹": "There is no folder yet, and a session opens in one. Add a folder first",
   "当前没有正在使用的模型，无法记录其窗口大小": "No model is in use, so there is nothing to record a window against",
   "窗口大小已记录，将在本轮结束后生效": "The window is saved; it starts counting once the running work finishes",
   "额外设置中的「{path}」不能为空值（null）": "“{path}” in the extra settings cannot be null",

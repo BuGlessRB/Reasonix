@@ -1,14 +1,17 @@
 package serve
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"testing"
+	"testing/fstest"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
@@ -211,13 +214,15 @@ func TestHubOpensInARememberedWorkspaceWithNoPanesLeft(t *testing.T) {
 	}
 }
 
-// With nothing remembered either, the refusal has to say what is missing.
+// With nothing remembered either, the refusal says what is missing by code,
+// so a window in any language can say it and offer to add a folder.
 func TestHubRefusalNamesTheMissingFolder(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	h := NewHub(HubOptions{})
 	_, err := h.resolveRoot(OpenRequest{})
-	if err == nil || !strings.Contains(err.Error(), "add a folder") {
-		t.Fatalf("err = %v, want it to point at adding a folder", err)
+	var c *coded
+	if !errors.As(err, &c) || c.reason.Code != "workspace.none" || c.status != http.StatusConflict {
+		t.Fatalf("err = %v, want a 409 workspace.none refusal", err)
 	}
 }
 
@@ -339,5 +344,56 @@ func TestUnclaimedServerRecordsAsServe(t *testing.T) {
 	t.Cleanup(ctrl.Close)
 	if got := New(ctrl, NewBroadcaster(), config.ServeConfig{}).statsSurface(); got != surface.Serve {
 		t.Fatalf("unclaimed server records as %q, want %q", got, surface.Serve)
+	}
+}
+
+// With every pane closed the window is still open, and a reload asks for the
+// page. It has to come back; a pane's own route still has no one to answer.
+func TestHubServesThePageWithNoPaneOpen(t *testing.T) {
+	h := NewHub(HubOptions{Page: fstest.MapFS{"index.html": {Data: []byte("<!doctype html><title>studio</title>")}}})
+	defer h.Shutdown()
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !bytes.Contains(body, []byte("<title>studio</title>")) {
+		t.Fatalf("GET / = %d %q, want the page", resp.StatusCode, body)
+	}
+
+	status, err := http.Get(srv.URL + "/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer status.Body.Close()
+	if status.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("GET /status with no pane = %d, want 503", status.StatusCode)
+	}
+}
+
+// Past the gate the page comes back with no pane open; the gate itself still
+// decides who gets that far (TestPageIsBehindTheAuthGate).
+func TestHubServesThePageToAnAuthenticatedReloadWithNoPane(t *testing.T) {
+	h := NewHub(HubOptions{
+		Serve: config.ServeConfig{AuthMode: "token", Token: "the-token"},
+		Page:  fstest.MapFS{"index.html": {Data: []byte("<title>studio</title>")}},
+	})
+	defer h.Shutdown()
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/", nil)
+	req.AddCookie(&http.Cookie{Name: cookieToken, Value: "the-token"})
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("authenticated GET / with no pane = %d, want the page", resp.StatusCode)
 	}
 }

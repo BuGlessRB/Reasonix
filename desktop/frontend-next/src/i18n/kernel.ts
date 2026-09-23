@@ -85,6 +85,7 @@ const SAID: Record<string, string> = {
   "provider.bad_max_output_tokens": "最大输出 Token 不能是负数",
   "provider.bad_reasoning_protocol": "无法识别「{protocol}」这种思考协议",
   "provider.default_effort_not_listed": "默认档位「{level}」不在填写的档位里",
+  "workspace.none": "还没有文件夹，会话需要在文件夹里打开。请先添加一个文件夹",
   "provider.no_current_model": "当前没有正在使用的模型，无法记录其窗口大小",
   "context.window_after_this_turn": "窗口大小已记录，将在本轮结束后生效",
   "provider.extra_body_null": "额外设置中的「{path}」不能为空值（null）",
