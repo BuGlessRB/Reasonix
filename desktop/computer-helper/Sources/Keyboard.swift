@@ -8,8 +8,20 @@ enum Keyboard {
         "enter": kVK_Return, "return": kVK_Return, "tab": kVK_Tab, "escape": kVK_Escape, "space": kVK_Space,
         "backspace": kVK_Delete, "delete": kVK_ForwardDelete,
         "arrowleft": kVK_LeftArrow, "arrowright": kVK_RightArrow, "arrowup": kVK_UpArrow, "arrowdown": kVK_DownArrow,
-        "home": kVK_Home, "end": kVK_End, "pageup": kVK_PageUp, "pagedown": kVK_PageDown,
-        "a": kVK_ANSI_A, "c": kVK_ANSI_C, "v": kVK_ANSI_V, "x": kVK_ANSI_X, "z": kVK_ANSI_Z, "s": kVK_ANSI_S, "f": kVK_ANSI_F,
+        "home": kVK_Home, "end": kVK_End, "pageup": kVK_PageUp, "pagedown": kVK_PageDown, "insert": kVK_Help,
+        "a": kVK_ANSI_A, "b": kVK_ANSI_B, "c": kVK_ANSI_C, "d": kVK_ANSI_D, "e": kVK_ANSI_E, "f": kVK_ANSI_F,
+        "g": kVK_ANSI_G, "h": kVK_ANSI_H, "i": kVK_ANSI_I, "j": kVK_ANSI_J, "k": kVK_ANSI_K, "l": kVK_ANSI_L,
+        "m": kVK_ANSI_M, "n": kVK_ANSI_N, "o": kVK_ANSI_O, "p": kVK_ANSI_P, "q": kVK_ANSI_Q, "r": kVK_ANSI_R,
+        "s": kVK_ANSI_S, "t": kVK_ANSI_T, "u": kVK_ANSI_U, "v": kVK_ANSI_V, "w": kVK_ANSI_W, "x": kVK_ANSI_X,
+        "y": kVK_ANSI_Y, "z": kVK_ANSI_Z,
+        "0": kVK_ANSI_0, "1": kVK_ANSI_1, "2": kVK_ANSI_2, "3": kVK_ANSI_3, "4": kVK_ANSI_4,
+        "5": kVK_ANSI_5, "6": kVK_ANSI_6, "7": kVK_ANSI_7, "8": kVK_ANSI_8, "9": kVK_ANSI_9,
+        "f1": kVK_F1, "f2": kVK_F2, "f3": kVK_F3, "f4": kVK_F4, "f5": kVK_F5, "f6": kVK_F6,
+        "f7": kVK_F7, "f8": kVK_F8, "f9": kVK_F9, "f10": kVK_F10, "f11": kVK_F11, "f12": kVK_F12,
+        "minus": kVK_ANSI_Minus, "equal": kVK_ANSI_Equal, "comma": kVK_ANSI_Comma, "period": kVK_ANSI_Period,
+        "slash": kVK_ANSI_Slash, "semicolon": kVK_ANSI_Semicolon, "quote": kVK_ANSI_Quote,
+        "bracketleft": kVK_ANSI_LeftBracket, "bracketright": kVK_ANSI_RightBracket,
+        "backslash": kVK_ANSI_Backslash, "backquote": kVK_ANSI_Grave,
     ]
     static let modifiers: [String: CGEventFlags] = [
         "shift": .maskShift, "control": .maskControl, "ctrl": .maskControl,
@@ -57,7 +69,7 @@ enum Keyboard {
         let parts = chord.split(separator: "+").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
         guard let last = parts.last, let code = named[last] else {
             throw Failure(code: "computer.bad_step",
-                          message: "\(chord) is not a key this can press. It presses named keys — \(named.keys.sorted().joined(separator: ", ")) — with the modifiers shift, control, alt and meta. Ordinary characters, digits included, go through the type action")
+                          message: "\(chord) is not a key this can press. It presses named keys — enter, tab, escape, space, backspace, delete, insert, the arrows, home, end, pageup, pagedown, f1 to f12, a letter, a digit, or minus, equal, comma, period, slash, semicolon, quote, bracketleft, bracketright, backslash, backquote — with the modifiers shift, control, alt and meta. Text goes through the type action")
         }
         var flags = CGEventFlags()
         for part in parts.dropLast() {

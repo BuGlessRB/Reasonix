@@ -96,12 +96,15 @@ func TestLiveWindowsOperatesAnApplication(t *testing.T) {
 		{Action: "focus", Ref: field},
 		{Action: "key", Key: "end"},
 		{Action: "type", Text: " 李雷"},
+		{Action: "key", Key: "3"},
+		{Action: "key", Key: "shift+home"},
+		{Action: "key", Key: "backspace"},
 	})
 	if err != nil {
 		t.Fatalf("Act: %v (done %d)", err, res.Done)
 	}
 	waitLog(t, p.log, "button pressed 1")
-	waitLog(t, p.log, "text from-ax 李雷")
+	waitLog(t, p.log, "text from-ax 李雷3\ntext \n")
 
 	shot, app, err := s.Screenshot(ctx, windowsTarget)
 	if err != nil {

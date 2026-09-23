@@ -16,15 +16,23 @@ struct Key {
     bool extended;
 };
 
-const std::map<std::string, Key> named = {
-    {"enter", {VK_RETURN, false}}, {"return", {VK_RETURN, false}}, {"tab", {VK_TAB, false}},
-    {"escape", {VK_ESCAPE, false}}, {"space", {VK_SPACE, false}}, {"backspace", {VK_BACK, false}},
-    {"delete", {VK_DELETE, true}}, {"arrowleft", {VK_LEFT, true}}, {"arrowright", {VK_RIGHT, true}},
-    {"arrowup", {VK_UP, true}}, {"arrowdown", {VK_DOWN, true}}, {"home", {VK_HOME, true}},
-    {"end", {VK_END, true}}, {"pageup", {VK_PRIOR, true}}, {"pagedown", {VK_NEXT, true}},
-    {"a", {'A', false}}, {"c", {'C', false}}, {"v", {'V', false}}, {"x", {'X', false}},
-    {"z", {'Z', false}}, {"s", {'S', false}}, {"f", {'F', false}},
-};
+const std::map<std::string, Key> named = [] {
+    std::map<std::string, Key> keys = {
+        {"enter", {VK_RETURN, false}}, {"return", {VK_RETURN, false}}, {"tab", {VK_TAB, false}},
+        {"escape", {VK_ESCAPE, false}}, {"space", {VK_SPACE, false}}, {"backspace", {VK_BACK, false}},
+        {"delete", {VK_DELETE, true}}, {"insert", {VK_INSERT, true}}, {"arrowleft", {VK_LEFT, true}},
+        {"arrowright", {VK_RIGHT, true}}, {"arrowup", {VK_UP, true}}, {"arrowdown", {VK_DOWN, true}},
+        {"home", {VK_HOME, true}}, {"end", {VK_END, true}}, {"pageup", {VK_PRIOR, true}}, {"pagedown", {VK_NEXT, true}},
+        {"minus", {VK_OEM_MINUS, false}}, {"equal", {VK_OEM_PLUS, false}}, {"comma", {VK_OEM_COMMA, false}},
+        {"period", {VK_OEM_PERIOD, false}}, {"slash", {VK_OEM_2, false}}, {"semicolon", {VK_OEM_1, false}},
+        {"quote", {VK_OEM_7, false}}, {"bracketleft", {VK_OEM_4, false}}, {"bracketright", {VK_OEM_6, false}},
+        {"backslash", {VK_OEM_5, false}}, {"backquote", {VK_OEM_3, false}},
+    };
+    for (char c = 'a'; c <= 'z'; c++) keys[std::string(1, c)] = {static_cast<WORD>(c - 'a' + 'A'), false};
+    for (char c = '0'; c <= '9'; c++) keys[std::string(1, c)] = {static_cast<WORD>(c), false};
+    for (int n = 1; n <= 12; n++) keys["f" + std::to_string(n)] = {static_cast<WORD>(VK_F1 + n - 1), false};
+    return keys;
+}();
 
 const std::map<std::string, WORD> modifiers = {
     {"shift", WORD{VK_SHIFT}}, {"control", WORD{VK_CONTROL}}, {"ctrl", WORD{VK_CONTROL}}, {"alt", WORD{VK_MENU}}, {"option", WORD{VK_MENU}},
@@ -51,10 +59,8 @@ KeyChord resolve(const std::string& chord) {
     }
     auto found = named.find(parts.back());
     if (found == named.end()) {
-        std::string names;
-        for (const auto& [name, _] : named) names += (names.empty() ? "" : ", ") + name;
-        throw Failure{"computer.bad_step", chord + " is not a key this can press. It presses named keys — " + names +
-                                               " — with the modifiers shift, control and alt. Ordinary characters, digits included, go through the type action"};
+        throw Failure{"computer.bad_step", chord + " is not a key this can press. It presses named keys — enter, tab, escape, space, backspace, delete, insert, the arrows, home, end, pageup, pagedown, f1 to f12, a letter, a digit, or minus, equal, comma, period, slash, semicolon, quote, bracketleft, bracketright, backslash, backquote — with the "
+                                               "modifiers shift, control and alt. Text goes through the type action"};
     }
     KeyChord c{found->second, {}};
     for (size_t i = 0; i + 1 < parts.size(); i++) {
