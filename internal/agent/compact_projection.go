@@ -436,7 +436,8 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	}
 	// The annotation rides the projection, not the canonical transcript: the
 	// original stays whole for resume and rewind.
-	kept, fold, retention, policyKeep := a.partitionFoldForProjection(a.annotateFailureDiagnostics(ctx, msgs[head:start]))
+	region := msgs[head:start]
+	_, fold, retention, policyKeep := a.partitionFoldForProjection(region)
 	if len(fold) == 0 || (!scope.ignoreEconomics && !a.foldEconomics(fold)) {
 		return CompactionNoop, NoopFoldBelowEconomics, nil
 	}
@@ -448,10 +449,10 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		return CompactionNoop, NoopFixedPrefixAboveTrigger, rejectCheckpoint("fixed prefix (%d tokens) already exceeds trigger (%d)", fixedPrefixTokens, a.compactTrigger())
 	}
 
-	sourceTokens := a.estimatedPromptTokens(msgs)
-	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: a.compactionFrame(event.Compaction{
-		Trigger: trigger, Messages: len(fold), SourceTokens: sourceTokens,
-	})})
+	sourceTokens := a.announceCompaction(trigger, len(fold), msgs)
+	// Each diagnosis is a model call, so it waits until the card is up, and only
+	// retained failures ask: a folded one never reads its selection.
+	kept, _, _, _ := a.partitionFoldForProjection(a.annotateFailureDiagnostics(ctx, region, policyKeep))
 	if a.svc.hooks != nil {
 		if hookInstr := a.svc.hooks.PreCompact(ctx, trigger); hookInstr != "" {
 			if instructions != "" {
@@ -660,4 +661,14 @@ func (a *Agent) runCompactionSummary(ctx context.Context, fold []provider.Messag
 		return "", CompactionModeSummarized, usage, "", err
 	}
 	return summary, CompactionModeSummarized, usage, "", nil
+}
+
+// announceCompaction puts the card up for a fold of n messages out of msgs and
+// returns the size it announced, which the done frame reports against.
+func (a *Agent) announceCompaction(trigger string, n int, msgs []provider.Message) int {
+	sourceTokens := a.estimatedPromptTokens(msgs)
+	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: a.compactionFrame(event.Compaction{
+		Trigger: trigger, Messages: n, SourceTokens: sourceTokens,
+	})})
+	return sourceTokens
 }

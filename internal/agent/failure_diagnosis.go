@@ -36,17 +36,17 @@ Drop: passing cases, progress and discovery noise, repeated identical lines, and
 Keep it tight — a few dozen lines at most. If nothing in the output explains the failure, reply with the last few line numbers.`
 
 // annotateFailureDiagnostics records, on each protected failure that has no
-// selection yet, which lines a model considers the diagnosis. It returns the
-// region with those annotations applied; messages it could not annotate are
-// returned unchanged and fall back to the mechanical shortening.
-func (a *Agent) annotateFailureDiagnostics(ctx context.Context, region []provider.Message) []provider.Message {
+// selection yet, which lines a model considers the diagnosis. protected marks
+// the retained indexes (nil: all); a folded failure never uses the selection.
+// Messages it could not annotate fall back to the mechanical shortening.
+func (a *Agent) annotateFailureDiagnostics(ctx context.Context, region []provider.Message, protected []bool) []provider.Message {
 	if a == nil || a.svc.prov == nil {
 		return region
 	}
 	out := region
 	copied := false
 	for i, m := range region {
-		if !wantsDiagnosisSelection(m) {
+		if (protected != nil && (i >= len(protected) || !protected[i])) || !wantsDiagnosisSelection(m) {
 			continue
 		}
 		lines, err := a.selectDiagnosticLines(ctx, m.Content)

@@ -156,7 +156,7 @@ func TestAnnotateFailureDiagnosticsAsksOnceAndRecordsTheAnswer(t *testing.T) {
 		{Role: provider.RoleTool, Content: content, ToolExecution: &provider.ToolExecution{State: tool.ShellStateFailed, ExitCode: &code}},
 	}
 
-	got := a.annotateFailureDiagnostics(context.Background(), region)
+	got := a.annotateFailureDiagnostics(context.Background(), region, nil)
 	if len(prov.requests) != 1 {
 		t.Fatalf("provider calls = %d, want exactly one (only the failure is worth asking about)", len(prov.requests))
 	}
@@ -174,7 +174,7 @@ func TestAnnotateFailureDiagnosticsAsksOnceAndRecordsTheAnswer(t *testing.T) {
 	}
 
 	// Asking again about an already-answered message must not spend a call.
-	if again := a.annotateFailureDiagnostics(context.Background(), got); len(prov.requests) != 1 {
+	if again := a.annotateFailureDiagnostics(context.Background(), got, nil); len(prov.requests) != 1 {
 		t.Errorf("provider calls after re-annotation = %d, want no further call (%v)", len(prov.requests), again[1].ToolExecution.DiagnosticLines)
 	}
 }
@@ -195,7 +195,7 @@ func TestAnnotateFailureDiagnosticsFallsBackWhenTheModelIsNoHelp(t *testing.T) {
 	a := New(prov, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
 	region := []provider.Message{{Role: provider.RoleTool, Content: content, ToolExecution: failed}}
 
-	got := a.annotateFailureDiagnostics(context.Background(), region)
+	got := a.annotateFailureDiagnostics(context.Background(), region, nil)
 	if len(got[0].ToolExecution.DiagnosticLines) != 0 {
 		t.Fatalf("an unusable reply was recorded as a selection: %v", got[0].ToolExecution.DiagnosticLines)
 	}
