@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 11;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:a3624554aaa4ae1a90028e1b14e85943b05768ea9d11cbca2e8825cf0f7850eb";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:8bd3b74b195c2d40ffd312b3df9b52a65d3836f894ca6be1e2459ae56ce03f78";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3475,6 +3475,7 @@ export interface ProjectTreeRuntimeSnapshot {
 
 export interface ProjectTreeSnapshot {
   revision: number;
+  workspaceGeneration?: number | null;
   projects: ProjectNode[];
   catalog: SessionCatalogStatus;
   indexed: number;
