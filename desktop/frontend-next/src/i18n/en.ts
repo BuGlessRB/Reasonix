@@ -308,6 +308,8 @@ export const EN: Record<string, string> = {
   "下个工具边界送入": "goes in at the next tool boundary",
   "已送入": "delivered",
   "进行中": "running",
+  "关闭会话": "Close conversation",
+  "正在运行，暂停后才能关闭": "Running; pause it before closing",
   "受阻": "blocked",
   "状态不明": "uncertain",
   "冻结 {n} 文件": "{n} frozen",

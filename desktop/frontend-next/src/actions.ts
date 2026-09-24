@@ -75,6 +75,9 @@ export const ACTIONS: UIAction[] = [
   { id: "session.menu", kind: "view", target: "entity", proof: "interaction" },
   { id: "session.pin", kind: "view", target: "entity", proof: "interaction" },
   { id: "session.pause", kind: "kernel-mutation", target: "entity", proof: "interaction" },
+  // Closing a conversation's pane ends its runtime and keeps the transcript;
+  // refused while a turn runs, so it never stops work.
+  { id: "session.close", kind: "kernel-mutation", target: "entity", proof: "interaction" },
   { id: "session.archive", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   { id: "session.export", kind: "shell-native", target: "entity", proof: "browser" },
   { id: "session.delete", kind: "destructive", target: "entity", proof: "authority-effect" },

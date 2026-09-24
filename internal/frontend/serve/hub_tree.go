@@ -153,6 +153,34 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 			Path: si.Path, Name: name, Title: title, Turns: si.Turns, RuntimeID: runtimeID, Archived: si.Archived,
 		})
 	}
+	return append(h.unlistedOpenSessions(root, out), out...)
+}
+
+// unlistedOpenSessions are the conversations a pane in root holds that the
+// listing does not show: a path is minted at the first submit, and the
+// transcript is written after it, so a first turn in flight has no file yet.
+// Without a row it can be neither found nor returned to while it runs.
+func (h *Hub) unlistedOpenSessions(root string, listed []treeSession) []treeSession {
+	seen := make(map[string]bool, len(listed))
+	for _, row := range listed {
+		seen[sessionstore.CanonicalSessionPath(row.Path)] = true
+		for _, cp := range row.Copies {
+			seen[sessionstore.CanonicalSessionPath(cp.Path)] = true
+		}
+	}
+	var out []treeSession
+	for _, rt := range h.localRuntimes() {
+		ctrl := rt.Server.Controller()
+		path := ctrl.SessionPath()
+		canonical := sessionstore.CanonicalSessionPath(path)
+		if canonical == "" || seen[canonical] || ctrl.WorkspaceRoot() != root {
+			continue
+		}
+		seen[canonical] = true
+		out = append(out, treeSession{
+			Path: path, Name: strings.TrimSuffix(filepath.Base(path), ".jsonl"), RuntimeID: rt.ID,
+		})
+	}
 	return out
 }
 

@@ -324,7 +324,11 @@ export function App({ hub }: { hub: HubPort }) {
 
   const openPane = useCallback(
     async (req: { root?: string; sessionPath?: string }) => {
-      const blank = runtimes.find((rt) => !rt.sessionPath);
+      // Blank means never written to and not working: a new session mid-turn has
+      // no path in a stale pane list yet, and taking it over would hide its run.
+      const blank = runtimes.find(
+        (rt) => !rt.sessionPath && !reportsRef.current[rt.id]?.status?.sessionPath && !runsRef.current[rt.id]?.live,
+      );
       // Asking for a new session when an unused one is already open in that
       // folder: it is the pane being asked for. Rebuilding it would cost a full
       // assembly to arrive back where we started.
@@ -470,7 +474,8 @@ export function App({ hub }: { hub: HubPort }) {
     (rt: RuntimeView, at: number) => {
       for (const ws of tree) {
         for (const session of ws.sessions) {
-          if (session.runtimeId === rt.id) return session.title || session.name;
+          // An unwritten one has only a file name; the numbered fallback reads better.
+          if (session.runtimeId === rt.id && (session.title || session.turns)) return session.title || session.name;
         }
       }
       return at === 0 ? t("新会话") : t("新会话 {n}", { n: at + 1 });

@@ -50,6 +50,11 @@ interface Props {
 // nodes in the sidebar — more than the transcript at 20000 turns.
 const SHOWN = 30;
 
+// A conversation a pane holds before its first turn is written has only a file
+// name; calling it that would show a timestamp where every other row shows words.
+const rowLabel = (session: TreeSession) =>
+  session.title || (session.runtimeId && !session.turns ? t("新会话") : session.name);
+
 function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, runs, scope = "all", pinned = new Set(), onPin = () => {}, onPause = () => {}, onArchive = async () => {}, onRename, onError, adder, children }: Props) {
   const [busy, setBusy] = useState("");
   // Folding a machine is the reader's own preference, held the way a host row
@@ -352,7 +357,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                       return (
                         <Confirm
                           key={session.path}
-                          what={t("删除「{name}」？", { name: session.title || session.name })}
+                          what={t("删除「{name}」？", { name: rowLabel(session) })}
                           hint={t(!session.runtimeId ? "连同其记录一并删除" : liveIds([session.runtimeId]).length ? "正在运行，停止后才能删除" : "它的面板会先关掉")}
                           go={t("删除")}
                           danger
@@ -419,7 +424,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                             }}
                           />
                         ) : (
-                          <span className="sesstitle" title={session.title || session.name}><span>{session.title || session.name}</span></span>
+                          <span className="sesstitle" title={rowLabel(session)}><span>{rowLabel(session)}</span></span>
                         )}
                         {copies.length > 0 && (
                           <button
@@ -444,7 +449,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                           data-action="session.menu"
                           data-target={session.path}
                           title={t("更多操作")}
-                          aria-label={t("会话操作：{title}", { title: session.title || session.name })}
+                          aria-label={t("会话操作：{title}", { title: rowLabel(session) })}
                           aria-expanded={sessionMenu === session.path}
                           onClick={(ev) => {
                             ev.stopPropagation();
@@ -464,7 +469,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         {sessionMenu === session.path && createPortal(
                           <div ref={sessionMenuPortal} className="session-pop" role="menu" aria-label={t("会话操作")} style={sessionMenuAt} onClick={(ev) => ev.stopPropagation()}>
                             <div className="session-pop-head">
-                              <b>{session.title || session.name}</b>
+                              <b>{rowLabel(session)}</b>
                               <small>{session.runtimeId && liveIds([session.runtimeId]).length ? t("执行中") : t("已完成")} · {t("本地工作区")}</small>
                             </div>
                             <div className="session-pop-group">
@@ -477,6 +482,22 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                               {session.runtimeId && liveIds([session.runtimeId]).length > 0 && (
                                 <button role="menuitem" data-action="session.pause" data-target={session.path} onClick={() => { onPause(session.runtimeId!); setSessionMenu(""); }}>
                                   <StudioIcon name="pause" /><span>{t("暂停执行")}</span>
+                                </button>
+                              )}
+                              {session.runtimeId && (
+                                <button
+                                  role="menuitem"
+                                  data-action="session.close"
+                                  data-target={session.path}
+                                  disabled={liveIds([session.runtimeId]).length > 0}
+                                  title={liveIds([session.runtimeId]).length > 0 ? t("正在运行，暂停后才能关闭") : undefined}
+                                  onClick={() => {
+                                    const id = session.runtimeId!;
+                                    setSessionMenu("");
+                                    void onClose([id]).catch(onError);
+                                  }}
+                                >
+                                  <StudioIcon name="close" /><span>{t("关闭会话")}</span>
                                 </button>
                               )}
                               <button
