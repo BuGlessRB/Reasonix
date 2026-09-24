@@ -43,10 +43,10 @@ var deprecatedContextRetentionWarning sync.Once
 
 const maxEmptyFinalBlocks = 3
 
-// maxStreamRecoveries is the number of body-phase stream retries after the
-// initial sampling attempt (Pi-style default: 1 + 3 = 4 attempts total).
-const maxStreamRecoveries = 3
-const maxSamplingAttempts = maxStreamRecoveries + 1
+// These bounds cover corrected tool arguments and protocol/context repairs.
+// Transport failures never replay the failed request automatically.
+const maxToolArgumentRepairs = 3
+const maxSamplingAttempts = 4
 
 // defaultReasoningByteLimit caps stored hidden reasoning for one stream.
 // It does not cancel generation; official DeepSeek may emit up to 384K tokens.
@@ -557,7 +557,7 @@ func (a *Agent) SessionCache() (hit, miss int) {
 }
 
 // ContextWindow returns the configured context-window size in tokens. 0
-// means compaction is disabled for this agent.
+// means automatic compaction is disabled for this agent.
 func (a *Agent) ContextWindow() int { return a.contextWindow }
 
 // mid-turn steer marker.
@@ -829,7 +829,7 @@ type Options struct {
 	// files outside the workspace roots. nil keeps fail-closed behavior.
 	ConfigWriteApprover tool.ConfigWriteApprover
 
-	// Context management. ContextWindow <= 0 disables compaction. Ratios and
+	// Context management. ContextWindow <= 0 disables automatic compaction. Ratios and
 	// RecentKeep fall back to defaults when unset.
 	ContextWindow int
 	CompactRatio  float64
@@ -1322,11 +1322,8 @@ func (a *Agent) stream(ctx context.Context, turn int, sink event.Sink) streamedT
 }
 
 func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink, frozen *samplingRequest, attemptID string) streamedTurn {
-	ctx = provider.WithRetryNotify(ctx, func(info provider.RetryInfo) {
-		sink.Emit(event.Event{Kind: event.Retrying, RetryAttempt: info.Attempt, RetryMax: info.Max, RetryScope: event.RetryScopeHeaders})
-	})
-	// Reuse a parent attempt counter when present so stream retries accumulate
-	// into one RequestCount; otherwise install a fresh counter for this call.
+	// Reuse a parent counter so protocol/context repair requests accumulate into
+	// one RequestCount; otherwise install a fresh counter for this call.
 	ctx = provider.WithRequestAttemptCounter(ctx)
 	// A stream can terminate locally before the provider channel closes (for
 	// example when the client-side reasoning guard fires). Own a child context

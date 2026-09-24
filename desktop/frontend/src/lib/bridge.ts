@@ -1,8 +1,9 @@
+import { makeLazyPreviousDraftMock } from "./previousDraftBindings";
 import { makeMockSessionExportBindings, type SessionExportBindings } from "./sessionExportBridge";
 import type { AttachmentBindings } from "./attachmentBindings";
 import { makeMockSessionLifecycleBindings, type SessionLifecycleBindings } from "./sessionLifecycleBindings";
 import { makeMockModelSettingsBindings, type ModelSettingsBindings } from "./modelSettingsBridge";
-import { mockProviderTemplate, mockPreset, mockBundlePreset, mockKimiAPIModels, mockLongCatModels, mockTokenRhythmModels, mockTokenRhythmModelOverrides, mockMiMoV25Models, mockMiniMaxModels, mockGLMAPIModels, mockGLMCodingModels, mockGLMAnthropicModels, mockQwenAPIModels, mockQwenPlanModels, mockQwenPlanVisionModels, mockStepFunModels, mockOpenCodeGoModels, mockNovitaModels, mockGMIModels, mockVercelModels, mockOllamaCloudModels } from "./mockProviderTemplates";
+import { mockProviderTemplate, mockPreset, mockBundlePreset, mockKimiAPIModels, mockLongCatModels, mockTokenRhythmModels, mockTokenRhythmModelOverrides, mockMiMoDefaults, mockMiniMaxModels, mockGLMAPIModels, mockGLMCodingModels, mockGLMAnthropicModels, mockQwenAPIModels, mockQwenPlanModels, mockQwenPlanVisionModels, mockStepFunModels, mockOpenCodeGoModels, mockNovitaModels, mockGMIModels, mockVercelModels, mockOllamaCloudModels } from "./mockProviderTemplates";
 // The Electron host and the browser mock share this React-to-Go contract.
 import type {
   CancelReceipt,
@@ -247,6 +248,9 @@ interface DesktopWindowState {
   y: number;
   maximised: boolean;
 }
+import { makeLazySessionUIMock, type SessionUIBindings } from "./sessionUIBindings";
+
+export interface AppBindings extends SessionUIBindings {}
 // AppBindings is the hand-written React-to-Go contract. _CheckGeneratedBindings
 // catches generated methods missing here; update this interface and typecheck.
 export interface AppBindings extends AttachmentBindings, SessionExportBindings, SessionLifecycleBindings, ForkTargetsBindings, ToolRecoveryBindings, ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings, InboxQueueBindings, TranscriptProtocolBindings, SessionReaderBindings, ExactInteractionBindings {
@@ -648,6 +652,7 @@ export interface AppBindings extends AttachmentBindings, SessionExportBindings, 
   SavePastedFile(name: string, dataUrl: string): Promise<string>;
   PickExportFile(defaultFilename: string, mimeType: string): Promise<string>;
   ExportGoalDiagnostics(): Promise<string>;
+  ExportManualCreationDiagnostics(): Promise<string>;
   SaveExportFile(path: string, payload: string, base64Encoded: boolean): Promise<void>;
   SaveSessionMarkdownForTab(tabID: string, path: string, title: string): Promise<void>;
   SaveExportImageFiles(path: string, payloads: string[]): Promise<void>;
@@ -1296,14 +1301,14 @@ const mockProviderPresetTemplates: MockProviderPresetTemplate[] = [
   mockPreset("kimi-cn", "Kimi CN API", "Moonshot Kimi China OpenAI-compatible API.", "KIMI_API_KEY", mockProviderTemplate({ name: "kimi-cn", kind: "openai", baseUrl: "https://api.moonshot.cn/v1", models: mockKimiAPIModels, visionModels: mockKimiAPIModels, default: "kimi-k2.7-code", apiKeyEnv: "KIMI_API_KEY", balanceUrl: "https://api.moonshot.cn/v1/users/me/balance", contextWindow: 262144, reasoningProtocol: "none", modelOverrides: [{ model: "kimi-k3", reasoningProtocol: "openai", supportedEfforts: ["low", "high", "max"], defaultEffort: "max", contextWindow: 1048576 }] })),
   mockPreset("kimi-global", "Kimi Global API", "Moonshot Kimi international OpenAI-compatible API.", "MOONSHOT_API_KEY", mockProviderTemplate({ name: "kimi-global", kind: "openai", baseUrl: "https://api.moonshot.ai/v1", models: mockKimiAPIModels, visionModels: mockKimiAPIModels, default: "kimi-k2.7-code", apiKeyEnv: "MOONSHOT_API_KEY", balanceUrl: "https://api.moonshot.ai/v1/users/me/balance", contextWindow: 262144, reasoningProtocol: "none", modelOverrides: [{ model: "kimi-k3", reasoningProtocol: "openai", supportedEfforts: ["low", "high", "max"], defaultEffort: "max", contextWindow: 1048576 }] })),
   mockPreset("kimi-coding-plan", "Kimi Coding Plan", "Kimi Coding Plan via its dedicated Anthropic-compatible endpoint.", "KIMI_CODING_API_KEY", mockProviderTemplate({ name: "kimi-coding-plan", kind: "anthropic", baseUrl: "https://api.kimi.com/coding/", models: ["kimi-for-coding"], visionModels: ["kimi-for-coding"], default: "kimi-for-coding", apiKeyEnv: "KIMI_CODING_API_KEY", headers: { "User-Agent": "claude-code/0.1.0" }, thinking: "adaptive", contextWindow: 262144 })),
-  mockPreset("mimo-api", "MiMo API", "Xiaomi MiMo direct API with text and vision-capable models.", "MIMO_API_KEY", mockProviderTemplate({ name: "mimo-api", kind: "openai", baseUrl: "https://api.xiaomimimo.com/v1", models: mockMiMoV25Models, visionModels: ["mimo-v2.5"], default: "mimo-v2.5-pro", apiKeyEnv: "MIMO_API_KEY", contextWindow: 1048576 })),
-  mockPreset("mimo-anthropic", "MiMo Anthropic", "Xiaomi MiMo direct Anthropic-compatible endpoint.", "MIMO_API_KEY", mockProviderTemplate({ name: "mimo-anthropic", kind: "anthropic", baseUrl: "https://api.xiaomimimo.com/anthropic", models: mockMiMoV25Models, visionModels: ["mimo-v2.5"], default: "mimo-v2.5-pro", apiKeyEnv: "MIMO_API_KEY", thinking: "adaptive", contextWindow: 1048576 })),
-  mockPreset("mimo-token-plan-cn", "MiMo Token Plan CN", "Xiaomi MiMo token-plan China endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ name: "mimo-token-plan-cn", kind: "openai", baseUrl: "https://token-plan-cn.xiaomimimo.com/v1", models: mockMiMoV25Models, visionModels: ["mimo-v2.5"], default: "mimo-v2.5-pro", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY", contextWindow: 1048576 })),
-  mockPreset("mimo-token-plan-cn-anthropic", "MiMo Token Plan CN Anthropic", "Xiaomi MiMo token-plan China Anthropic-compatible endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ name: "mimo-token-plan-cn-anthropic", kind: "anthropic", baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic", models: mockMiMoV25Models, visionModels: ["mimo-v2.5"], default: "mimo-v2.5-pro", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY", thinking: "adaptive", contextWindow: 1048576 })),
-  mockPreset("mimo-token-plan-sgp", "MiMo Token Plan SGP", "Xiaomi MiMo token-plan Singapore endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ name: "mimo-token-plan-sgp", kind: "openai", baseUrl: "https://token-plan-sgp.xiaomimimo.com/v1", models: mockMiMoV25Models, visionModels: ["mimo-v2.5"], default: "mimo-v2.5-pro", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY", contextWindow: 1048576 })),
-  mockPreset("mimo-token-plan-sgp-anthropic", "MiMo Token Plan SGP Anthropic", "Xiaomi MiMo token-plan Singapore Anthropic-compatible endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ name: "mimo-token-plan-sgp-anthropic", kind: "anthropic", baseUrl: "https://token-plan-sgp.xiaomimimo.com/anthropic", models: mockMiMoV25Models, visionModels: ["mimo-v2.5"], default: "mimo-v2.5-pro", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY", thinking: "adaptive", contextWindow: 1048576 })),
-  mockPreset("mimo-token-plan-ams", "MiMo Token Plan AMS", "Xiaomi MiMo token-plan Amsterdam endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ name: "mimo-token-plan-ams", kind: "openai", baseUrl: "https://token-plan-ams.xiaomimimo.com/v1", models: mockMiMoV25Models, visionModels: ["mimo-v2.5"], default: "mimo-v2.5-pro", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY", contextWindow: 1048576 })),
-  mockPreset("mimo-token-plan-ams-anthropic", "MiMo Token Plan AMS Anthropic", "Xiaomi MiMo token-plan Amsterdam Anthropic-compatible endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ name: "mimo-token-plan-ams-anthropic", kind: "anthropic", baseUrl: "https://token-plan-ams.xiaomimimo.com/anthropic", models: mockMiMoV25Models, visionModels: ["mimo-v2.5"], default: "mimo-v2.5-pro", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY", thinking: "adaptive", contextWindow: 1048576 })),
+  mockPreset("mimo-api", "MiMo API", "Xiaomi MiMo direct API with text and vision-capable models.", "MIMO_API_KEY", mockProviderTemplate({ ...mockMiMoDefaults, name: "mimo-api", kind: "openai", baseUrl: "https://api.xiaomimimo.com/v1", apiKeyEnv: "MIMO_API_KEY" })),
+  mockPreset("mimo-anthropic", "MiMo Anthropic", "Xiaomi MiMo direct Anthropic-compatible endpoint.", "MIMO_API_KEY", mockProviderTemplate({ ...mockMiMoDefaults, name: "mimo-anthropic", kind: "anthropic", baseUrl: "https://api.xiaomimimo.com/anthropic", apiKeyEnv: "MIMO_API_KEY", thinking: "adaptive" })),
+  mockPreset("mimo-token-plan-cn", "MiMo Token Plan CN", "Xiaomi MiMo token-plan China endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ ...mockMiMoDefaults, name: "mimo-token-plan-cn", kind: "openai", baseUrl: "https://token-plan-cn.xiaomimimo.com/v1", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY" })),
+  mockPreset("mimo-token-plan-cn-anthropic", "MiMo Token Plan CN Anthropic", "Xiaomi MiMo token-plan China Anthropic-compatible endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ ...mockMiMoDefaults, name: "mimo-token-plan-cn-anthropic", kind: "anthropic", baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY", thinking: "adaptive" })),
+  mockPreset("mimo-token-plan-sgp", "MiMo Token Plan SGP", "Xiaomi MiMo token-plan Singapore endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ ...mockMiMoDefaults, name: "mimo-token-plan-sgp", kind: "openai", baseUrl: "https://token-plan-sgp.xiaomimimo.com/v1", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY" })),
+  mockPreset("mimo-token-plan-sgp-anthropic", "MiMo Token Plan SGP Anthropic", "Xiaomi MiMo token-plan Singapore Anthropic-compatible endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ ...mockMiMoDefaults, name: "mimo-token-plan-sgp-anthropic", kind: "anthropic", baseUrl: "https://token-plan-sgp.xiaomimimo.com/anthropic", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY", thinking: "adaptive" })),
+  mockPreset("mimo-token-plan-ams", "MiMo Token Plan AMS", "Xiaomi MiMo token-plan Amsterdam endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ ...mockMiMoDefaults, name: "mimo-token-plan-ams", kind: "openai", baseUrl: "https://token-plan-ams.xiaomimimo.com/v1", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY" })),
+  mockPreset("mimo-token-plan-ams-anthropic", "MiMo Token Plan AMS Anthropic", "Xiaomi MiMo token-plan Amsterdam Anthropic-compatible endpoint.", "MIMO_TOKEN_PLAN_API_KEY", mockProviderTemplate({ ...mockMiMoDefaults, name: "mimo-token-plan-ams-anthropic", kind: "anthropic", baseUrl: "https://token-plan-ams.xiaomimimo.com/anthropic", apiKeyEnv: "MIMO_TOKEN_PLAN_API_KEY", thinking: "adaptive" })),
   mockPreset("minimax-cn-api", "MiniMax CN API", "MiniMax China OpenAI-compatible M-series API endpoint.", "MINIMAX_API_KEY", mockProviderTemplate({ name: "minimax-cn-api", kind: "openai", baseUrl: "https://api.minimaxi.com/v1", models: mockMiniMaxModels, visionModels: ["MiniMax-M3"], default: "MiniMax-M3", apiKeyEnv: "MINIMAX_API_KEY", extraBody: { reasoning_split: true }, contextWindow: 1048576, thinking: "adaptive", supportedEfforts: ["disabled", "adaptive"], defaultEffort: "adaptive" })),
   mockPreset("minimax-global-api", "MiniMax Global API", "MiniMax international OpenAI-compatible M-series API endpoint.", "MINIMAX_API_KEY", mockProviderTemplate({ name: "minimax-global-api", kind: "openai", baseUrl: "https://api.minimax.io/v1", models: mockMiniMaxModels, visionModels: ["MiniMax-M3"], default: "MiniMax-M3", apiKeyEnv: "MINIMAX_API_KEY", extraBody: { reasoning_split: true }, contextWindow: 1048576, thinking: "adaptive", supportedEfforts: ["disabled", "adaptive"], defaultEffort: "adaptive" })),
   mockPreset("minimax-cn-anthropic", "MiniMax CN Anthropic", "MiniMax China Anthropic-compatible M-series endpoint.", "MINIMAX_PLAN_API_KEY", mockProviderTemplate({ name: "minimax-cn-anthropic", kind: "anthropic", baseUrl: "https://api.minimaxi.com/anthropic", models: mockMiniMaxModels, visionModels: ["MiniMax-M3"], default: "MiniMax-M3", apiKeyEnv: "MINIMAX_PLAN_API_KEY", authHeader: true, contextWindow: 1048576, thinking: "adaptive", supportedEfforts: ["disabled", "adaptive"], defaultEffort: "adaptive" })),
@@ -1441,29 +1446,6 @@ function makeMockApp(): MockAppBindings {
   const noticePreviewMock = scenario === "notice";
   const deepSeekUpgradeMock = scenario === "deepseek_upgrade";
   const benchMock = scenario === "bench";
-  const mockDrafts = new Map<string, SessionDraftView>();
-  const mockDraftOperations = new Map<string, SessionDraftSubmissionView>();
-  const mockDraftForTarget = (scope: string, workspaceRoot: string): SessionDraftView => {
-    const normalizedScope = scope === "project" && workspaceRoot ? "project" : "global";
-    const normalizedRoot = normalizedScope === "project" ? workspaceRoot : "";
-    const workspaceId = normalizedScope === "global" ? "global" : `project-${normalizedRoot}`;
-    const prior = [...mockDrafts.values()].find((draft) => draft.workspaceId === workspaceId && draft.status === "active");
-    if (prior) return prior;
-    const now = Date.now();
-    const draft: SessionDraftView = {
-      id: `draft-mock-${mockDrafts.size + 1}`,
-      workspaceId,
-      scope: normalizedScope,
-      workspaceRoot: normalizedRoot,
-      revision: 1,
-      contentJson: "{}",
-      settings: { model: "deepseek/deepseek-v4-flash", modelSource: "default", mode: "default", toolApprovalMode: "ask", disabledMcp: {}, mcpOrder: [] },
-      status: "active",
-      updatedAt: now,
-    };
-    mockDrafts.set(draft.id, draft);
-    return draft;
-  };
   let cancelled = false;
   let pendingAskPreview = false, pendingApprovalPreview = false;
   // Mirrors the last emitted approval preview so mode switches can mirror the
@@ -2401,81 +2383,17 @@ function makeMockApp(): MockAppBindings {
     archivedSessionIds: [...mockArchivedSessionIDs], pendingCreates: [],
   });
   return { ...({} as AttachmentBindings),
-    async OpenSessionDraft(workspaceId: string) {
-      const prior = [...mockDrafts.values()].find((draft) => draft.workspaceId === workspaceId && draft.status === "active");
-      if (prior) return structuredClone(prior);
-      return structuredClone(mockDraftForTarget(workspaceId === "global" ? "global" : "project", workspaceId === "global" ? "" : workspaceId));
-    },
-    async OpenSessionDraftForTarget(scope: string, workspaceRoot: string) {
-      return structuredClone(mockDraftForTarget(scope, workspaceRoot));
-    },
-    async RestoreSessionDraft() {
-      return structuredClone([...mockDrafts.values()].find((draft) => draft.status === "active") ?? null);
-    },
-    async SaveSessionDraft(request: SessionDraftSaveRequest) {
-      const current = mockDrafts.get(request.draftId);
-      if (!current || current.status !== "active") throw new Error("session draft not found");
-      if (current.revision !== request.revision) return { draft: structuredClone(current), conflict: true, outcome: "conflict" };
-      const next = { ...current, revision: current.revision + 1, contentJson: request.contentJson, settings: structuredClone(request.settings), updatedAt: Date.now() };
-      mockDrafts.set(next.id, next);
-      return { draft: structuredClone(next), conflict: false, outcome: "saved" };
-    },
-    async ListSessionDraftSummaries() {
-      return [...mockDrafts.values()].filter((draft) => draft.status === "active").map((draft) => ({
-        id: draft.id, workspaceId: draft.workspaceId, scope: draft.scope, workspaceRoot: draft.workspaceRoot,
-        revision: draft.revision, hasContent: draft.contentJson !== "{}", state: "saved", updatedAt: draft.updatedAt,
-      }));
-    },
-    async DiscardSessionDraft(draftId: string, revision: number) {
-      const current = mockDrafts.get(draftId);
-      if (!current || current.revision !== revision) throw new Error("session draft revision conflict");
-      mockDrafts.set(draftId, { ...current, status: "discarded", revision: current.revision + 1 });
-    },
-    async DismissSessionDraft(_draftId: string) {},
-    async SetSessionDraftRestoreTarget(_draftId: string) {},
-    async GetSessionDraft(draftId: string) {
-      const draft = mockDrafts.get(draftId);
-      if (!draft) throw new Error("session draft not found");
-      return structuredClone(draft);
-    },
-    async GetDraftContext(draftId: string) {
-      const draft = mockDrafts.get(draftId);
-      if (!draft) throw new Error("session draft not found");
-      return { draft: structuredClone(draft), commands: [], servers: [] };
-    },
-    async GetSessionDraftState(draftId: string) {
-      const draft = mockDrafts.get(draftId);
-      if (!draft) throw new Error("session draft not found");
-      const operation = [...mockDraftOperations.values()].reverse().find(item => item.draftId === draftId);
-      return structuredClone({ draft, operation });
-    },
-    async ResumeDraftSubmission(operationId: string, revision: number) {
-      const operation = mockDraftOperations.get(operationId);
-      if (!operation || operation.revision !== revision) throw new Error("operation revision conflict");
-      return structuredClone(operation);
-    },
-    async BeginDraftSubmission(request: SessionDraftSubmissionRequest) {
-      const draft = mockDrafts.get(request.draftId);
-      if (!draft || draft.revision !== request.revision) throw new Error("session draft revision conflict");
-      const operationId = `draft-op-mock-${mockDraftOperations.size + 1}`;
-      const sessionId = `draft-session-mock-${mockDraftOperations.size + 1}`;
-      const view: SessionDraftSubmissionView = { operationId, draftId: draft.id, requestId: request.requestId, revision: 1, canResume: false, canEdit: false, canCancel: false, canDiscard: false, phase: "accepted", submissionId: `draft-submit-mock-${mockDraftOperations.size + 1}`, session: { hostId: "local", sessionId }, updatedAt: Date.now() };
-      mockDraftOperations.set(operationId, view);
-      mockDrafts.set(draft.id, { ...draft, status: "converted", revision: draft.revision + 1 });
-      return structuredClone(view);
-    },
-    async GetDraftSubmission(operationId: string) {
-      const operation = mockDraftOperations.get(operationId);
-      if (!operation) throw new Error("session draft submission not found");
-      return structuredClone(operation);
-    },
-    async CancelDraftSubmission(operationId: string) {
-      const operation = mockDraftOperations.get(operationId);
-      if (!operation) throw new Error("session draft submission not found");
-      const next = { ...operation, phase: operation.phase === "accepted" ? "accepted" : "cancelled", updatedAt: Date.now() };
-      mockDraftOperations.set(operationId, next);
-      return structuredClone(next);
-    },
+    ...makeLazySessionUIMock(async (scope, root, id) => {
+      const tab = { ...mockTabs[0], id: `tab-${id}`, topicId: id, scope, workspaceRoot: root,
+        sessionId: id, session: { hostId: "local", sessionId: id }, ready: true, active: false, running: false,
+        sessionPath: `session-id:${id}`, label: settings.defaultModel || "deepseek/deepseek-chat", topicTitle: "New conversation" };
+      mockTabs = [...mockTabs, tab];
+      let parent = scope === "global" ? ensureMockGlobalFolder() : mockProjectTree.find(node => node.kind === "project" && node.root === root);
+      if (!parent) { parent = { key:`project_${root}`, kind:"project", root, label:root, children:[] }; mockProjectTree.push(parent); }
+      parent.children = [...(parent.children || []), { key:`session_${id}`,kind:"session",root,session:{hostId:"local",sessionId:id},topicId:id,label:"New conversation",sessionPath:`session-id:${id}`,open:true,turns:0 }];
+      notifyMockProjectTreeChanged();
+    }),
+    ...makeLazyPreviousDraftMock(),
 		...makeMockSessionExportBindings(),
     ...makeMockSessionCatalogBindings(cloneProjectTree),
     ...makeMockBlankProjectBindings(),
@@ -2484,7 +2402,7 @@ function makeMockApp(): MockAppBindings {
       return { version: 1, state: "complete", removed: 0, pending: 0, busy: 0, unknown: 0, protected: 0, hasContent: 0, items: [] };
     },
     async RetryLegacyEmptySessionCleanup() {
-      return { version: 1, state: "complete", removed: 0, pending: 0, busy: 0, unknown: 0, protected: 0, hasContent: 0, items: [] };
+      throw new Error("Automatic empty-session cleanup has been retired");
     },
     ...makeMockSessionLifecycleBindings(mockWorkspaceSnapshot, mockArchivedSessionIDs, mockPurgedSessionIDs, notifyMockProjectTreeChanged, mockProjectTree),
     async CreateSession(_workspaceId: string) { return { hostId: "local", sessionId: `mock-${Date.now()}` }; },
@@ -4480,6 +4398,9 @@ function makeMockApp(): MockAppBindings {
     async ExportGoalDiagnostics() {
       return "goal-diagnostics.json";
     },
+    async ExportManualCreationDiagnostics() {
+      return "reasonix-creation-diagnostics.json";
+    },
     async SaveExportFile(path: string, payload: string, base64Encoded: boolean) {
       const a = document.createElement("a");
       let url = "";
@@ -4523,7 +4444,7 @@ function makeMockApp(): MockAppBindings {
           return mockModelCatalog.map((model) => ({ ...model, current: model.ref === current }));
         },
         async ModelsForDraft(draftID) {
-          const current = mockDrafts.get(draftID)?.settings.model ?? "";
+          const current = (await this.GetSessionDraft(draftID)).settings.model;
           return mockModelCatalog.map((model) => ({ ...model, current: model.ref === current }));
         },
         async SetModel(name) {
@@ -5444,6 +5365,7 @@ function makeMockApp(): MockAppBindings {
         topicId: _topicID,
         topicTitle: topicLabel(_topicID, t("mock.newSession")),
         sessionPath: `/mock/sessions/${_topicID}.jsonl`,
+        sessionGeneration: 1,
         projectColor: mockProjectTree.find((node) => node.root === workspaceRoot)?.projectColor,
         label: mockModelLabel(settings.defaultModel),
         ready: true,
@@ -5753,6 +5675,10 @@ function makeMockApp(): MockAppBindings {
     async AIRenameSessionTarget(selector: SessionSelector): Promise<SessionMutationResult> {
       const node = mockSessionTitleTarget(mockProjectTree, selector);
       const title = node ? mockAIRenameTarget(mockProjectTree, sessionTitleTarget(node)) : "";
+      if (node?.topicId && title) {
+        mockTabs = mockTabs.map((tab) => tab.topicId === node.topicId ? { ...tab, topicTitle: title } : tab);
+        notifyMockProjectTreeChanged();
+      }
       return { targetKey: sessionTitleTarget(node ?? { key: "", kind: "topic", label: "" }), operationId: `mock-title-${Date.now()}`, committed: true, title, lifecycleGeneration: 1 };
     },
     async RenameSessionTarget(selector: SessionSelector, title: string): Promise<SessionMutationResult> {
@@ -5761,6 +5687,8 @@ function makeMockApp(): MockAppBindings {
       if (node && nextTitle) {
         const activePrefix = node.label?.startsWith("● ") ? "● " : "";
         node.label = `${activePrefix}${nextTitle}`;
+        mockTabs = mockTabs.map((tab) => tab.topicId === node.topicId ? { ...tab, topicTitle: nextTitle } : tab);
+        notifyMockProjectTreeChanged();
       }
       return { targetKey: node ? sessionTitleTarget(node) : "", operationId: `mock-title-${Date.now()}`, committed: Boolean(node), title: nextTitle, lifecycleGeneration: 1 };
     },

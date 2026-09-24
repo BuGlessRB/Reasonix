@@ -2,6 +2,7 @@
 // decision receipts, and compaction cards.
 
 import { useState } from "react";
+import { ErrorMessage } from "./ErrorMessage";
 import { CheckCheck, ChevronRight, CirclePlay, ClipboardCheck, FileSearch, Info, TriangleAlert } from "lucide-react";
 import { useT } from "../lib/i18n";
 import type { Item } from "../lib/useController";
@@ -84,7 +85,7 @@ export function NoticeCard({ item, onAction, onAccept, onOpenVerification, actio
         ) : (
           <>
             {item.title ? <div className="notice-line__title">{item.title}</div> : null}
-            <div className="notice-line__body">{item.text}</div>
+            <div className="notice-line__body">{item.level === "warn" ? <ErrorMessage error={item.text} /> : item.text}</div>
           </>
         )}
         {showActions ? (
@@ -142,7 +143,10 @@ export function CompactionCard({ item }: { item: CompactionItem }) {
     : status === "unavailable" ? t("compaction.unavailable")
     : item.pending ? t("compaction.working") : t("compaction.title");
   if (item.pending || status === "noop" || status === "cancelled" || status === "interrupted" || status === "unavailable") {
-    return <div className={`compaction${item.pending ? " compaction--pending" : ""}`} data-entrance={item.id} data-transcript-layout-variant="static"><ProcessCompactIcon size={12} /><span>{stateLabel}</span></div>;
+    return <div className={`compaction${item.pending ? " compaction--pending" : ""}`} data-entrance={item.id} data-transcript-layout-variant="static" role="status">
+      <ProcessCompactIcon className={item.pending ? "compaction__spinner" : undefined} size={item.pending ? 14 : 12} />
+      <span>{stateLabel}{status === "running" || (!status && item.pending) ? <span className="compaction__hint">{t("compaction.workingHint")}</span> : null}</span>
+    </div>;
   }
   const tokenMeta = item.inputTokens != null && item.resultTokens != null
     ? t("compaction.tokens", { before: item.inputTokens, after: item.resultTokens }) : "";

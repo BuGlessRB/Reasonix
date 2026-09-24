@@ -113,6 +113,18 @@ func (a *App) bindTabCanonicalSession(
 		if service == nil {
 			return ref, "", errors.New("v3 session service is unavailable")
 		}
+		if tab := a.tabForSessionBoot(scope, workspaceRoot, sessionID); tab != nil && strings.HasPrefix(sessionID, "desktop-manual-") {
+			a.mu.RLock()
+			reserved := tab.PendingCreateOperationID != ""
+			a.mu.RUnlock()
+			if initializer, ok := identity.(interface {
+				InitializeReservedSession(context.Context, session.SessionRef) error
+			}); ok && reserved {
+				if err := initializer.InitializeReservedSession(ctx, session.SessionRef{HostID: service.HostID(), SessionID: sessionID}); err != nil {
+					return ref, "", err
+				}
+			}
+		}
 		ref, err = identity.OpenSession(ctx, session.SessionRef{HostID: service.HostID(), SessionID: strings.TrimSpace(sessionID)})
 		if errors.Is(err, session.ErrSessionNotFound) {
 			operationID := ""
@@ -128,9 +140,9 @@ func (a *App) bindTabCanonicalSession(
 			CWD: desktopWorkspaceRoot(scope, workspaceRoot), Origin: session.SessionOriginLegacyImport,
 		})
 		if errors.Is(err, errUnadoptedLegacySourceMissing) {
-			evidence := a.loadSavedTabReconcileEvidence(ctx, false)
-			if evidence.registryErr != nil || evidence.draftErr != nil {
-				return ref, "", errors.Join(errLegacySourceRecoveryPending, evidence.registryErr, evidence.draftErr)
+			evidence := a.loadSavedTabReconcileEvidence(ctx)
+			if evidence.registryErr != nil {
+				return ref, "", errors.Join(errLegacySourceRecoveryPending, evidence.registryErr)
 			}
 			if savedTabHasRecoveryOwner(desktopTabEntry{SessionPath: legacyPath}, evidence) {
 				return ref, "", errLegacySourceRecoveryPending

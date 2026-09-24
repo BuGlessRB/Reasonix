@@ -1,3 +1,4 @@
+import { ErrorMessage } from "../components/ErrorMessage";
 import { lazy, Suspense, type ReactNode } from "react";
 import { Transcript, type TranscriptProps } from "../components/Transcript";
 import { SessionRecoveryBanner, SessionRecoveryPlaceholder } from "../components/SessionRecoveryBanner";
@@ -13,7 +14,7 @@ import type { SessionAvailability } from "../lib/sessionAvailability";
 import { orderedLocalSubmissions } from "../lib/localSubmissionState";
 import { RotateCcw } from "lucide-react";
 import type { SessionDraftSurface } from "../app-runtime/useSessionDraftSurface";
-import { draftSurfaceNeedsAttention } from "./draftPresentation";
+import { draftSurfaceNeedsAttention, sameDraftError } from "./draftPresentation";
 
 const RemoteSessionSurface = lazy(() => import("../components/RemoteSessionSurface").then((module) => ({ default: module.RemoteSessionSurface })));
 const SidebarImConnectionDetail = lazy(() => import("./SidebarImConnectionDetail").then((module) => ({ default: module.SidebarImConnectionDetail })));
@@ -102,25 +103,26 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
       return <main className="main main--draft-landing" aria-label={t("draft.surfaceLabel")} />;
     }
     const operationUnknown = draft.operation?.phase === "dispatch_unknown";
-    const operationError = draft.operation && ["terminal_failed", "runtime_failed", "resume_required", "dispatch_unknown", "dispatching_shell"].includes(draft.operation.phase)
+    const operationError = draft.submissionError || (draft.operation && ["terminal_failed", "runtime_failed", "resume_required", "dispatch_unknown", "dispatching_shell"].includes(draft.operation.phase)
       ? draft.operation.error
-      : "";
+      : "");
     return <main className="main main--draft-attention">
       <section className="session-draft-attention" aria-label={t("draft.surfaceLabel")} role="alert">
         <div className={`session-draft-surface__status session-draft-surface__status--${draft.saveState}`} role="status">
         {draft.operation?.phase === "accepted" ? t("draft.openSession") : operationUnknown ? t("draft.resultUnknown")
           : draft.saveState === "error" ? t("draft.saveFailed")
-            : draft.saveState === "conflict" ? t("draft.conflict") : t("draft.starting")}
+            : draft.saveState === "conflict" ? t("draft.conflict")
+              : draft.resumingSubmission ? t("draft.starting") : operationError ? t("draft.startFailed") : t("draft.starting")}
         </div>
         {draft.saveState === "conflict" ? <div className="session-draft-surface__conflict" role="alert">
           <span>{t("draft.conflictDetail")}</span>
           <button type="button" onClick={props.draft.onUseSaved}><RotateCcw size={14} />{t("draft.useSaved")}</button>
           <button type="button" onClick={props.draft.onKeepLocal}>{t("draft.keepLocal")}</button>
         </div> : null}
-        {draft.error ? <p className="session-draft-surface__error">{draft.error} <button type="button" onClick={props.draft.onRetrySave}>{t("draft.retrySave")}</button></p> : null}
-        {operationError ? <p className="session-draft-surface__error">{operationError}</p> : null}
-        {draft.taskError ? <p className="session-draft-surface__error">{draft.taskError} <button type="button" onClick={props.draft.onDismissTaskError}>{t("common.close")}</button></p> : null}
-        {draft.operation?.canResume ? <button type="button" onClick={props.draft.onResume}>{t("draft.resume")}</button> : null}
+        {draft.error ? <p className="session-draft-surface__error"><ErrorMessage error={draft.error} /> <button type="button" onClick={props.draft.onRetrySave}>{t("draft.retrySave")}</button></p> : null}
+        {operationError ? <p className="session-draft-surface__error"><ErrorMessage error={operationError} /></p> : null}
+        {draft.taskError && !sameDraftError(draft.taskError, operationError) && !sameDraftError(draft.taskError, draft.error) ? <p className="session-draft-surface__error"><ErrorMessage error={draft.taskError} /> <button type="button" onClick={props.draft.onDismissTaskError}>{t("common.close")}</button></p> : null}
+        {draft.operation?.canResume ? <button type="button" disabled={draft.resumingSubmission} onClick={props.draft.onResume}>{t("draft.resume")}</button> : null}
         {operationUnknown ? <button type="button" onClick={props.draft.onCheckSubmission}>{t("draft.checkSubmission")}</button> : null}
         {draft.operation?.phase === "accepted" ? <button type="button" onClick={props.draft.onOpenSession}>{t("draft.openSession")}</button> : null}
       </section>

@@ -13,7 +13,7 @@ import type { StructuredInvocationSubmit } from "../lib/invocationDisplay";
 import type { CommandInfo, CollaborationMode, ToolApprovalMode } from "../lib/types";
 import type { PersistentComposerDraft } from "../components/Composer";
 import { applyInheritedModel, canonicalJSON, draftSubmissionLocksEditing, sameDraftSettings, useInheritedDraftModels } from "./draftModelInheritance";
-import { cloneDraftContent, cloneDraftSettings } from "./draftValues";
+import { cloneDraftContent, cloneDraftSettings, contentJSON, parseContent } from "./draftValues";
 import { buildInitialGoalSubmission } from "./sessionSubmissionOwner";
 
 export { draftSubmissionLocksEditing } from "./draftModelInheritance";
@@ -23,42 +23,6 @@ declare global {
     __reasonixFlushSessionDraft?: () => Promise<void>;
     __reasonixResumeSessionDraftEditing?: () => void;
   }
-}
-
-const EMPTY_CONTENT: PersistentComposerDraft = {
-  text: "",
-  invocations: [],
-  attachments: [],
-  workspaceRefs: [],
-  pastedBlocks: [],
-  openPastedLabels: [],
-  sessionRefs: [],
-  selectedTextRefs: [],
-};
-
-function parseContent(raw: string): PersistentComposerDraft {
-  try {
-    const value = JSON.parse(raw || "{}") as Partial<PersistentComposerDraft>;
-    return {
-      text: typeof value.text === "string" ? value.text : "",
-      invocations: Array.isArray(value.invocations) ? value.invocations : [],
-      attachments: Array.isArray(value.attachments) ? value.attachments.map(({ previewUrl: _previewUrl, ...attachment }) => attachment) : [],
-      workspaceRefs: Array.isArray(value.workspaceRefs) ? value.workspaceRefs : [],
-      pastedBlocks: Array.isArray(value.pastedBlocks) ? value.pastedBlocks : [],
-      openPastedLabels: Array.isArray(value.openPastedLabels) ? value.openPastedLabels : [],
-      sessionRefs: Array.isArray(value.sessionRefs) ? value.sessionRefs : [],
-      selectedTextRefs: Array.isArray(value.selectedTextRefs) ? value.selectedTextRefs : [],
-    };
-  } catch {
-    return { ...EMPTY_CONTENT };
-  }
-}
-
-function contentJSON(content: PersistentComposerDraft): string {
-  return JSON.stringify({
-    ...content,
-    attachments: content.attachments.map(({ previewUrl: _previewUrl, ...attachment }) => attachment),
-  });
 }
 
 export type DraftSaveState = "saved" | "dirty" | "saving" | "error" | "conflict";
@@ -77,6 +41,8 @@ export type SessionDraftSurface = {
   preparingSubmission: boolean;
   discarding?: boolean;
   saveState: DraftSaveState;
+  submissionError?: string;
+  resumingSubmission?: boolean;
   error?: string;
   taskError?: string;
   conflict?: SessionDraftView;
@@ -108,6 +74,8 @@ type DraftEntry = {
   visibleIntent: number;
   editVersion: number;
   savedEditVersion: number;
+  submissionError?: string;
+  resumingSubmission?: boolean;
   saving: boolean;
   error?: string;
   taskError?: string;
@@ -156,6 +124,8 @@ function projectEntry(entry: DraftEntry): SessionDraftSurface {
     preparingSubmission: entry.preparingSubmission || Boolean(entry.discarding),
     discarding: Boolean(entry.discarding),
     saveState: saveState(entry),
+    submissionError: entry.submissionError,
+    resumingSubmission: entry.resumingSubmission,
     error: entry.error,
     taskError: entry.taskError,
     conflict: entry.conflict,
@@ -179,11 +149,12 @@ function pruneCleanEntries(entries: Map<string, DraftEntry>, visibleDraftId: str
 }
 
 export function useSessionDraftSurface(options: DraftSurfaceOptions) {
-  const { onAccepted, onChanged, claimNavigationIntent, currentNavigationIntent, isNavigationIntentCurrent } = options;
+  const { onAccepted, onChanged, claimNavigationIntent, isNavigationIntentCurrent } = options;
   const entriesRef = useRef(new Map<string, DraftEntry>());
   const visibleDraftIdRef = useRef<string | null>(null);
   const [surface, setSurface] = useState<SessionDraftSurface | null>(null);
   const [summaries, setSummaries] = useState<SessionDraftSummary[]>([]);
+  const [summaryError, setSummaryError] = useState<string>();
   const openSequence = useRef(0);
   const localIntent = useRef(0);
   const restoreChain = useRef<Promise<void>>(Promise.resolve());
@@ -225,12 +196,13 @@ export function useSessionDraftSurface(options: DraftSurfaceOptions) {
   const refreshSummaries = useCallback(async () => {
     try {
       const records = await app.ListSessionDraftSummaries();
+      setSummaryError(undefined);
       setSummaries(records.map((summary) => {
         const entry = entriesRef.current.get(summary.id);
         return entry ? { ...summary, state: saveState(entry) } : summary;
       }));
-    } catch {
-      // Keep the last successful projection on transient list failures.
+    } catch (error) {
+      setSummaryError(error instanceof Error ? error.message : String(error));
     }
   }, []);
 
@@ -524,21 +496,8 @@ export function useSessionDraftSurface(options: DraftSurfaceOptions) {
   }, [claimIntent, flushDraft, installDraft, intentCurrent, publish, queueRestoreTarget, refreshSummaries]);
 
   const initializeEmptySurface = useCallback(async () => {
-    const baselineIntent = currentNavigationIntent?.() ?? localIntent.current;
-    const sequence = ++openSequence.current;
-    const restored = await app.RestoreSessionDraft();
-    if (sequence !== openSequence.current || !intentCurrent(baselineIntent)) return;
-    if (restored) {
-      await installDraft(restored, sequence, claimIntent());
-      return;
-    }
-    const tabs = await app.ListTabs();
-    if (sequence !== openSequence.current || !intentCurrent(baselineIntent) || tabs.length > 0) return;
-    const intent = claimIntent(), draft = await app.OpenSessionDraftForTarget("global", "");
-    if (sequence !== openSequence.current || !intentCurrent(intent)) return;
-    await installDraft(draft, sequence, intent);
     await refreshSummaries();
-  }, [claimIntent, currentNavigationIntent, installDraft, intentCurrent, refreshSummaries]);
+  }, [refreshSummaries]);
 
   const dismiss = useCallback(() => {
     ++openSequence.current;
@@ -890,14 +849,25 @@ export function useSessionDraftSurface(options: DraftSurfaceOptions) {
   const resumeSubmission = useCallback(async () => {
     const id = visibleDraftIdRef.current;
     const entry = id ? entriesRef.current.get(id) : undefined;
-    if (!id || !entry?.operation) return;
+    if (!id || !entry?.operation?.canResume || entry.resumingSubmission) return;
+    const { operationId, revision } = entry.operation;
+    entry.resumingSubmission = true;
+    entry.submissionError = undefined;
+    publish(id);
     const capture = { handle: { draftId: id, generation: entry.generation }, preparationId: "", draftId: id, generation: entry.generation, workspaceId: entry.draft.workspaceId, editVersion: entry.editVersion, navigationIntent: entry.visibleIntent, content: cloneDraftContent(entry.content), settings: cloneDraftSettings(entry.settings) };
     try {
-      const next = await app.ResumeDraftSubmission(entry.operation.operationId, entry.operation.revision);
+      const next = await app.ResumeDraftSubmission(operationId, revision);
+      if (entriesRef.current.get(id) !== entry || entry.generation !== capture.generation || entry.operation?.operationId !== operationId) return;
       entry.operationCapture = capture;
       await waitForSubmissionOnce(next, capture);
     } catch (error) {
-      if (entriesRef.current.get(id) === entry) { entry.error = String(error); publish(id); }
+      if (entriesRef.current.get(id) === entry && entry.generation === capture.generation
+        && entry.operation?.operationId === operationId && entry.operation.revision <= revision) {
+        entry.submissionError = error instanceof Error ? error.message : String(error);
+      }
+    } finally {
+      entry.resumingSubmission = false;
+      if (entriesRef.current.get(id) === entry) publish(id);
     }
   }, [publish, waitForSubmissionOnce]);
 
@@ -1011,6 +981,7 @@ export function useSessionDraftSurface(options: DraftSurfaceOptions) {
     const flushAll = async () => {
       acceptingExit.current = true;
       try {
+        await (await import("../lib/sessionComposerPersistence")).flushAllSessionComposers();
         while (allTasks.current.size) await Promise.allSettled([...allTasks.current.values()]);
         await Promise.all([...preparationBarriers.current.values()].map((barrier) => barrier.promise));
         const entries = [...entriesRef.current.values()].filter((entry) => entry.lifecycle === "active");
@@ -1029,11 +1000,13 @@ export function useSessionDraftSurface(options: DraftSurfaceOptions) {
         await restoreChain.current;
       } catch (error) {
         acceptingExit.current = false;
+        (await import("../lib/sessionComposerPersistence")).resumeSessionComposerEditing();
         throw error;
       }
     };
     const resumeEditing = () => {
       acceptingExit.current = false;
+      void import("../lib/sessionComposerPersistence").then(module => module.resumeSessionComposerEditing());
     };
     window.__reasonixFlushSessionDraft = flushAll;
     window.__reasonixResumeSessionDraftEditing = resumeEditing;
@@ -1046,6 +1019,7 @@ export function useSessionDraftSurface(options: DraftSurfaceOptions) {
   return {
     surface,
     summaries,
+    summaryError,
     open,
     initializeEmptySurface,
     dismiss,

@@ -209,9 +209,18 @@ func (a *App) runShutdown(c *desktopShutdownCoordinator) (err error) {
 	if !frozen {
 		c.setPhase("cancelling_background")
 		a.lifecycle.tracker.markShutdown(reason, "cancelling_background", "in_progress")
+		a.manualCreationMu.Lock()
 		a.shuttingDown.Store(true)
+		m := a.manualCreations
+		a.manualCreationMu.Unlock()
+		if m != nil {
+			m.StopAdmission()
+		}
 		c.runStep("cancel-session-navigation", a.cancelSessionNavigation)
 		c.runStep("cancel-tab-builds", a.cancelAllTabBuilds)
+		if err := c.runErrorStep("manual-session-creation", a.stopManualCreations); err != nil {
+			return &shutdownStepError{code: "manual_creation_stop_timeout", err: err}
+		}
 		c.runStep("cancel-session-exports", a.cancelSessionExports)
 		c.runStep("runtime-projections", a.flushRuntimeProjections)
 		c.runStep("tab-layout", a.flushTabLayoutWrites)
@@ -299,6 +308,11 @@ func completeDesktopShutdown(tracker *desktopLifecycleTracker, body func()) {
 }
 
 func (a *App) shutdownBody(c *desktopShutdownCoordinator, items []desktopShutdownItem) error {
+	if a.sessionUI != nil {
+		if err := c.runErrorStep("session-ui", a.sessionUI.Close); err != nil {
+			return &shutdownStepError{code: "session_ui_close_failed", err: err}
+		}
+	}
 	if a.desktopDrafts != nil {
 		if err := c.runErrorStep("desktop-drafts", a.desktopDrafts.Close); err != nil {
 			return &shutdownStepError{code: "draft_close_failed", err: err}
@@ -314,7 +328,6 @@ func (a *App) shutdownBody(c *desktopShutdownCoordinator, items []desktopShutdow
 	c.runStep("remote-windows", a.closeAllRemoteWindows)
 	c.runStep("deferred-rebuild", a.stopDeferredRebuildRetry)
 	c.runStep("takeover-mirrors-stop", a.stopTakeoverMirrors)
-	c.runStep("history-index", a.stopHistoryIndexMigration)
 	if a.heartbeat != nil {
 		c.runStep("heartbeat", a.heartbeat.Stop)
 	}

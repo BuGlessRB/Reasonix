@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"reasonix/internal/agent"
+	"reasonix/internal/config"
 	"reasonix/internal/session"
+	"slices"
 	"strings"
 )
 
@@ -17,14 +19,18 @@ func (a *App) resolveSourceSessionTarget(selector SessionSelector, allowArchived
 		return SessionTarget{}, newSessionOperationError("target_not_found", "The source no longer exists.")
 	}
 	key := desktopSourceKey(source.Path, source.HeadID)
-	if source.SourceKey != "" && source.SourceKey != key {
-		return SessionTarget{}, newSessionOperationError("target_changed", "The source identity changed.")
-	}
 	state, err := a.workspaceRegistry().Load(a.bootContext())
 	if err != nil {
 		return SessionTarget{}, err
 	}
-	if mapping, ok := state.SourceMappings[key]; ok {
+	if source.SourceKey != "" && !slices.Contains(state.SourceKeys(source.SourceKey), key) {
+		return SessionTarget{}, newSessionOperationError("target_changed", "The source identity changed.")
+	}
+	mapping, ok, err := state.ResolveSource(key)
+	if err != nil {
+		return SessionTarget{}, err
+	}
+	if ok {
 		return a.resolveCanonicalSessionTargetState(session.SessionRef{HostID: localDesktopHostID, SessionID: mapping.SessionID}, selector.TopicID, allowArchived)
 	}
 	if source.HeadID == "" {
@@ -48,42 +54,70 @@ func (a *App) resolveSourceSessionTarget(selector SessionSelector, allowArchived
 		}
 	}
 	if source.HeadID != "" {
-		dir, validated, err := a.sessionDirForPath(source.Path)
-		if err != nil {
-			return SessionTarget{}, err
-		}
-		if _, _, err = validateSessionPath(dir, validated); err != nil {
-			return SessionTarget{}, err
-		}
-		heads, err := agent.ListSessionHeads(validated)
-		if err != nil {
-			return SessionTarget{}, err
-		}
-		found := false
-		for _, head := range heads {
-			if head.ID == source.HeadID && !head.Retired {
-				found = true
-			}
-		}
-		if !found {
-			return SessionTarget{}, newSessionOperationError("target_not_found", "This historical head is no longer available.")
-		}
-		copy := *source
-		copy.Path, copy.HostID, copy.SourceKey = validated, localDesktopHostID, key
-		target := SessionTarget{Source: &copy, SessionPath: validated, Scope: "global"}
-		for _, project := range loadProjectsFile().Projects {
-			if canonicalRuntimeRoot(dir) == canonicalRuntimeRoot(desktopSessionDir(project.Root)) {
-				target.Scope, target.WorkspaceRoot = "project", project.Root
-				break
-			}
-		}
-		if meta, ok, err := agent.LoadBranchMeta(validated); err == nil && ok {
-			target.TopicID = meta.TopicID
-			if meta.Scope != "" {
-				target.Scope, target.WorkspaceRoot = meta.Scope, meta.WorkspaceRoot
-			}
-		}
-		return target, nil
+		target, err := a.resolveHistoricalHeadTarget(*source, key)
+		return recoverHistoricalRuntimeOwner(target), err
 	}
-	return a.resolveLegacySessionTarget(source.Path, selector.TopicID, allowArchived)
+	target, err := a.resolveLegacySessionTarget(source.Path, selector.TopicID, allowArchived)
+	if err == nil && target.SessionRef.SessionID == "" {
+		copy := *source
+		copy.HostID, copy.SourceKey = localDesktopHostID, key
+		target.Source = &copy
+		target = recoverHistoricalRuntimeOwner(target)
+	}
+	return target, err
+}
+
+// Global legacy storage is independent of old project metadata. If that
+// metadata names a removed project, recover its actual global storage owner.
+// A source inside a project never gains authority to run in another project.
+func recoverHistoricalRuntimeOwner(target SessionTarget) SessionTarget {
+	if target.Scope != "project" || target.Source == nil {
+		return target
+	}
+	if info, err := os.Stat(target.WorkspaceRoot); err == nil && info.IsDir() || err != nil && !os.IsNotExist(err) {
+		return target
+	}
+	dir := filepath.Dir(target.Source.Path)
+	if sameDesktopPath(dir, config.SessionDir()) || sameDesktopPath(dir, desktopSessionDir(globalWorkspaceRoot())) {
+		target.Scope, target.WorkspaceRoot = "global", ""
+	}
+	return target
+}
+
+func (a *App) resolveHistoricalHeadTarget(source SessionSourceRef, key string) (SessionTarget, error) {
+	dir, validated, err := a.sessionDirForPath(source.Path)
+	if err != nil {
+		return SessionTarget{}, err
+	}
+	if _, _, err = validateSessionPath(dir, validated); err != nil {
+		return SessionTarget{}, err
+	}
+	heads, err := agent.ListSessionHeads(validated)
+	if err != nil {
+		return SessionTarget{}, err
+	}
+	found := false
+	for _, head := range heads {
+		if head.ID == source.HeadID && !head.Retired {
+			found = true
+		}
+	}
+	if !found {
+		return SessionTarget{}, newSessionOperationError("target_not_found", "This historical head is no longer available.")
+	}
+	source.Path, source.HostID, source.SourceKey = validated, localDesktopHostID, key
+	target := SessionTarget{Source: &source, SessionPath: validated, Scope: "global"}
+	for _, project := range loadProjectsFile().Projects {
+		if canonicalRuntimeRoot(dir) == canonicalRuntimeRoot(desktopSessionDir(project.Root)) {
+			target.Scope, target.WorkspaceRoot = "project", project.Root
+			break
+		}
+	}
+	if meta, ok, err := agent.LoadBranchMeta(validated); err == nil && ok {
+		target.TopicID = meta.TopicID
+		if meta.Scope != "" {
+			target.Scope, target.WorkspaceRoot = meta.Scope, meta.WorkspaceRoot
+		}
+	}
+	return target, nil
 }

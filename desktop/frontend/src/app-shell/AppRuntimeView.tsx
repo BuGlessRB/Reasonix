@@ -4,7 +4,6 @@ import { useFileNavigationRuntime } from "../app-runtime/useFileNavigationRuntim
 import { useActiveRemoteRef } from "../app-runtime/useActiveRemoteRef";
 import { fileNavigationKey } from "../lib/fileNavigationOwner";
 import { useActivityBarStore } from "../store/activityBar";
-import { useToast } from "../lib/toast";
 import { ShellExpandProvider } from "../lib/shellExpand";
 import { RemoteNavigationContext } from "../lib/remoteNavigationCommands";
 import { UpdaterProvider } from "../lib/useUpdater";
@@ -17,8 +16,6 @@ import type { useNavigationSurface } from "../lib/useNavigationSurface";
 import type { useAppShellStores } from "../app-runtime/useAppShellStores";
 import type { useAppSessionComposition } from "../app-runtime/useAppSessionComposition";
 import type { useAppNavigationComposition } from "../app-runtime/useAppNavigationComposition";
-import type { useSessionDraftSurface } from "../app-runtime/useSessionDraftSurface";
-import { creationHeroVisible } from "./draftPresentation";
 import type { HistoryViewState } from "../app-runtime/historyViewProjection";
 import { ShellHotkeys, TextSizeHotkeys } from "./HotkeyRegistrations";
 import { WindowChromeLifecycle } from "../app-runtime/WindowChromeLifecycle";
@@ -29,7 +26,6 @@ import { useTopicbarHeightVar } from "../lib/useTopicbarHeightVar";
 import { SidebarRegion } from "./SidebarRegion";
 import { TopicbarRegion } from "./TopicbarRegion";
 import { buildTopicbarView, TopicbarActionsStack } from "./TopicbarActionsStack";
-import { DraftTopicbarActions } from "./DraftTopicbarActions";
 import { DockToggleButton } from "./DockToggleButton";
 import { LauncherToggleButton } from "./LauncherToggleButton";
 import { SessionStatusBanners } from "./SessionStatusBanners";
@@ -49,6 +45,7 @@ const DockLauncher = lazy(() => import("../components/DockLauncher").then((modul
 const WORKSPACE_RESIZER_WIDTH = 8;
 const SHOW_CONTEXT_DOCK = true;
 
+const ManualSessionRecovery = lazy(() => import("../components/ManualSessionRecovery").then(module => ({ default: module.ManualSessionRecovery })));
 type Runtime = ReturnType<typeof useAppRuntimeAdapter>;
 type Shell = ReturnType<typeof useAppShellStores>;
 type SessionComposition = ReturnType<typeof useAppSessionComposition>;
@@ -74,7 +71,6 @@ export type AppRuntimeViewProps = {
   session: SessionComposition;
   navigation: NavigationComposition;
   runtime: Runtime;
-  draft: ReturnType<typeof useSessionDraftSurface>;
   local: {
     tasksOpen: false | "session" | "all";
     setTasksOpen: React.Dispatch<React.SetStateAction<false | "session" | "all">>;
@@ -98,7 +94,6 @@ export type AppRuntimeViewProps = {
  * beyond value memoization live here; ownership stays in the compositions.
  */
 export function AppRuntimeView(props: AppRuntimeViewProps) {
-  const { showToast } = useToast();
   const [dockNavigation] = useState(() => new DockNavigation());
   const fileNavigation = useFileNavigationRuntime();
   useLayoutEffect(() => dockNavigation.attach(), [dockNavigation]);
@@ -114,11 +109,10 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
     return useActivityBarStore.subscribe(retain);
   }, [fileNavigation]);
   useTopicbarHeightVar();
-  const { core, shell, session, navigation, runtime, local, draft } = props;
+  const { core, shell, session, navigation, runtime, local } = props;
   const { state, activeTab, activeTabId, t, locale } = core;
   const { windowsFramelessChrome, mainWindowMaximised } = shell;
-  const draftActive = Boolean(draft.surface);
-  const activeRemoteRef = useActiveRemoteRef(draftActive ? undefined : activeTab);
+  const activeRemoteRef = useActiveRemoteRef(activeTab);
   const {
     conversationView, visibleRuntimeState, sidebarImDetailConnection,
     surfaceWorkspacePanelRenderable, surfaceWorkspacePanelGridOpen, surfaceWorkspacePanelOverlay, terminalSurfaceOpen,
@@ -151,9 +145,9 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
         "--chat-min-width": `${shellGeometry.chatReservedWidth}px`,
         "--workspace-width": `${shellGeometry.workspacePanelRenderWidth}px`,
         "--workspace-resizer-width": `${WORKSPACE_RESIZER_WIDTH}px`,
-        "--terminal-height": `${!draftActive && terminalSurfaceOpen ? shell.liveTerminalHeight ?? shellGeometry.terminalRenderHeight : 0}px`,
+        "--terminal-height": `${terminalSurfaceOpen ? shell.liveTerminalHeight ?? shellGeometry.terminalRenderHeight : 0}px`,
       }) as CSSProperties,
-    [draftActive, shellGeometry.chatReservedWidth, shell.liveTerminalHeight, shellGeometry.sidebarRenderWidth, shellGeometry.terminalRenderHeight, terminalSurfaceOpen, shellGeometry.workspacePanelRenderWidth],
+    [shellGeometry.chatReservedWidth, shell.liveTerminalHeight, shellGeometry.sidebarRenderWidth, shellGeometry.terminalRenderHeight, terminalSurfaceOpen, shellGeometry.workspacePanelRenderWidth],
   );
 
   const shellClassNames = buildAppShellClassNames({
@@ -163,11 +157,11 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
     imDetailActive: Boolean(sidebarImDetailConnection),
     sidebarCollapsed: shell.sidebarCollapsed,
     sidebarResizing: shell.sidebarResizing,
-    dockGridOpen: !draftActive && surfaceWorkspacePanelGridOpen,
-    dockOverlay: !draftActive && surfaceWorkspacePanelOverlay,
-    terminalOpen: !draftActive && terminalSurfaceOpen,
+    dockGridOpen: surfaceWorkspacePanelGridOpen,
+    dockOverlay: surfaceWorkspacePanelOverlay,
+    terminalOpen: terminalSurfaceOpen,
     terminalResizing: shell.terminalResizing,
-    dockOpen: !draftActive && shell.workspacePanelOpen,
+    dockOpen: shell.workspacePanelOpen,
     dockMaximized: shell.workspacePanelMaximized,
     dockResizing: shell.workspacePanelResizing,
   });
@@ -247,16 +241,12 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           t,
           geometry: shellGeometry,
           projectTree: {
-            activeTab: draftActive ? undefined : activeTab,
+            activeTab: activeTab,
             activeRemote: activeRemoteRef,
-            activeScope: draft.surface?.draft.scope,
-            activeWorkspaceRoot: draft.surface?.draft.workspaceRoot,
             imTopicSources: shell.preferences.imTopicSources, refreshSignal: local.projectRevision,
             searchExpanded: true, searchFocusSignal: shell.sidebarSearchFocusSignal,
             showShortcutBadges: navigation.topicShortcuts.showTopicBadges, shortcutPlatform: shell.desktopPlatform,
             onVisibleTopicsChange: navigation.topicShortcuts.handleVisibleTopicsChange,
-            draftSummaries: draft.summaries,
-            onOpenDraft: draft.open,
           },
           topics: navigation.projectTopicCommands,
           paletteShortcut: navigation.commandPaletteShortcut,
@@ -271,35 +261,18 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
         })} />
 
         <TopicbarRegion view={buildTopicbarView({
-            t, locale, activeTab: draftActive ? undefined : activeTab, cwd: draft.surface?.draft.workspaceRoot ?? state.meta?.cwd,
-            imDetail: draftActive ? null : sidebarImDetailConnection, imTopicSources: shell.preferences.imTopicSources,
+            t, locale, activeTab: activeTab, cwd: state.meta?.cwd,
+            imDetail: sidebarImDetailConnection, imTopicSources: shell.preferences.imTopicSources,
             chromeHidden: workbenchChromeHidden, windowsBrand: windowsFramelessChrome,
             automationReturn: shell.automationReturn,
             sidebar: { title: navigation.sidebarToggleTitle, blocked: navigation.sidebarExpandBlocked, pressed: shell.sidebarTogglePressed, collapsed: shell.sidebarCollapsed },
-            rename: { editing: !draftActive && navigation.projectTopicCommands.topicbarEditing, draft: navigation.projectTopicCommands.topicTitleDraft },
-            draft: draft.surface ? {
-              title: t("draft.badge"),
-              workspaceLabel: draft.surface.draft.scope === "project"
-                ? draft.surface.draft.workspaceRoot.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || draft.surface.draft.workspaceRoot
-                : t("draft.globalWorkspace"),
-            } : undefined,
+            rename: { editing: navigation.projectTopicCommands.topicbarEditing, draft: navigation.projectTopicCommands.topicTitleDraft },
           })} commands={{
             openAutomation: () => shell.openPage({ kind: "automation" }), toggleSidebar: shellGeometry.toggleSidebar,
             setTitleDraft: navigation.projectTopicCommands.setTopicTitleDraft, commitRename: navigation.projectTopicCommands.commitActiveTopicRename, cancelRename: navigation.projectTopicCommands.cancelActiveTopicRename,
             startRename: navigation.projectTopicCommands.startActiveTopicRename, openWorktree: navigation.worktreeMergeCommands.openWorktreeMerge,
           }}>
-            {draft.surface ? <DraftTopicbarActions
-              t={t}
-              draft={draft.surface}
-              onSetMCPEnabled={draft.setMCPEnabled}
-              onDiscard={() => void draft.confirmDiscard({
-                title: t("draft.discardTitle"),
-                message: t("draft.discardTitle"),
-                detail: t("draft.discardDetail"),
-                confirmLabel: t("draft.discardConfirm"),
-                cancelLabel: t("common.cancel"),
-              }).catch(error => showToast(error instanceof Error ? error.message : String(error), "error"))}
-            /> : <TopicbarActionsStack
+            <TopicbarActionsStack
               t={t}
               activeTab={activeTab}
               activeTabId={activeTabId}
@@ -318,11 +291,11 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
                 t={t}
                 onToggle={session.workspacePanelCommands.toggleLauncherCard}
               />}
-            />}
+            />
           </TopicbarRegion>
 
-        <section className={`chat-pane${creationHeroVisible(draft.surface, session.transcript.emptyHero) ? " chat-pane--creation-empty" : ""}`}>
-          {!draft.surface && <SessionStatusBanners {...buildSessionStatusBannerProps({
+        <section className={`chat-pane${session.transcript.emptyHero ? " chat-pane--creation-empty" : ""}`}>
+          <SessionStatusBanners {...buildSessionStatusBannerProps({
             t,
             activeTab,
             leaseBlocked: session.leaseBlockedTab ? { tabId: session.leaseBlockedTab.id, message: session.leaseBlockedTab.runtime!.issue!.message } : null,
@@ -333,9 +306,10 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
             shell,
             banners: session.bannerCommands,
             onboarding: navigation.onboardingCommands,
-          })} historical={core.remoteSurfaceActive ? undefined : { tab: activeTab, navigate: session.desktopNavigation.enqueueNavigation,
+          })} startupError={navigationCommands.manualCreation && navigationCommands.manualCreation.operation?.phase !== "ready" ? undefined : state.meta?.startupErr}
+          historical={core.remoteSurfaceActive ? undefined : { tab: activeTab, navigate: session.desktopNavigation.enqueueNavigation,
             captureNavigation: () => { const intent = runtime.navigation.currentNavigationIntent(); return () => runtime.navigation.isNavigationIntentCurrent(intent); },
-          }} />}
+          }} />
 
           <ChatPaneRegion
             // Local navigation is now history-first: keep the transcript
@@ -354,17 +328,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
               onOpenSession: (connection) => void navigationCommands.openSidebarImConnectionSession(connection),
             } : null}
             remote={activeTab?.remote ? { tab: activeTab, session: core.remoteSession } : undefined}
-            draft={draft.surface ? {
-              surface: draft.surface,
-              onUseSaved: draft.useSavedConflict,
-              onKeepLocal: () => void draft.keepLocalConflict(),
-              onRetrySave: () => void draft.retrySave(),
-              onDismissTaskError: () => draft.reportTaskError(draft.surface!.draft.id, draft.surface!.generation, ""),
-              onResume: () => void draft.resumeSubmission(),
-              onOpenSession: () => void draft.openAcceptedSession(),
-              onCheckSubmission: () => void draft.refreshSubmission(),
-            } : undefined}
-            launcher={!draftActive && session.workspacePanelCommands.launcherCardMounted && !core.remoteSurfaceActive ? (
+            launcher={session.workspacePanelCommands.launcherCardMounted && !core.remoteSurfaceActive ? (
               <Suspense fallback={null}>
                 <DockLauncher
                   tabId={activeTabId ?? ""}
@@ -410,16 +374,29 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           />
           <DecisionFooterRegion
             hidden={Boolean(sidebarImDetailConnection)}
+            creationNotice={!core.remoteSurfaceActive && !sidebarImDetailConnection ? <Suspense fallback={null}>
+              <ManualSessionRecovery
+                key={`${runtime.navigation.currentNavigationIntent()}:${activeTab?.session?.sessionId ?? ""}`}
+                sessionId={core.surface.surface?.phase === "source-retained" ? undefined : activeTab?.session?.sessionId}
+                attempt={navigationCommands.manualCreation}
+                onRetry={navigationCommands.retryCreation}
+                onNew={navigationCommands.handleNewTab}
+                onChooseProject={navigation.projectTopicCommands.onAddProject}
+              />
+            </Suspense> : null}
             className={["footer", terminalSurfaceOpen ? "footer--compact" : "", visibleDecisionSurface ? "footer--decision" : "", presentationTransitioning ? "footer--navigation-hidden" : ""].filter(Boolean).join(" ")}
             footerRef={footerRef}
             style={core.surface.surface?.phase === "source-retained" && footerHeight > 0 ? { height: footerHeight, minHeight: footerHeight, boxSizing: "border-box" } : undefined}
-            todo={draft.surface ? undefined : footerTodo}
-            undo={draft.surface ? undefined : footerUndo}
-            decision={draft.surface ? undefined : decisionFooterSurface}
+            todo={footerTodo}
+            undo={footerUndo}
+            decision={decisionFooterSurface}
             composer={buildComposerSurface({
+              empty: { onCreate: () => void navigationCommands.handleNewTab(), onChooseProject: () => void navigation.projectTopicCommands.onAddProject() },
               view: {
                 hidden: composerSurfaceHidden,
                 inert: runtimeTransitioning,
+                targetInputReady: Boolean(activeTab?.session) && core.surface.surface?.phase === "target-masked"
+                  && !state.backendActivationPending,
                 hero: session.transcript.emptyHero,
                 headline: t("welcome.creation.title"),
                 remote: core.remoteSurfaceActive,
@@ -431,7 +408,6 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
                 submitDisabledReason: session.transcript.availability.kind !== "ready" && session.transcript.availability.source !== "runtime"
                   ? t("sessionRecovery.sendAfterRecovery") : undefined,
                 showContextWindowRing: false,
-                draftHint: t("draft.createOnSend"),
               },
               base: conversationView.composer,
               tab: activeTab,
@@ -463,6 +439,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
                 workspaceName: workspaceContextProject
                   ? activeTab?.workspaceName ?? state.meta?.workspaceName
                   : undefined,
+                defaultWorkspaceName: activeTab?.scope === "global" && !activeTab.remote ? activeTab.workspaceName : undefined,
                 gitBranch: workspaceContextProject && !activeTab?.remote ? state.meta?.gitBranch : undefined,
                 tabId: activeTabId,
                 scopeKey: session.workspaceScopeKey,
@@ -474,13 +451,12 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
               fileRefRefreshKey: local.composerFileRefRefreshKey,
               guidance: session.transcript.latestGuidanceConsumed,
               guidanceQueuePreviewItems: navigation.guidanceQueueMockItems,
-              draft,
             })}
           />
         </section>
 
         <WorkspaceDockRegion navigation={dockNavigation} fileNavigation={fileNavigation} workspaceRoot={activeTab?.workspaceRoot ?? state.meta?.cwd ?? ""} {...buildWorkspaceDockProps({
-          surface: { renderable: !draftActive && surfaceWorkspacePanelRenderable, overlay: !draftActive && surfaceWorkspacePanelOverlay, gridOpen: !draftActive && surfaceWorkspacePanelGridOpen },
+          surface: { renderable: surfaceWorkspacePanelRenderable, overlay: surfaceWorkspacePanelOverlay, gridOpen: surfaceWorkspacePanelGridOpen },
           showContext: SHOW_CONTEXT_DOCK,
           remote: core.remoteSurfaceActive,
           t,
@@ -506,7 +482,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
         <AppBottomRegions {...buildBottomRegionsProps({
           t,
           chatSurfaceVisible: session.chatSurfaceVisible,
-          surfaceOpen: !draftActive && terminalSurfaceOpen,
+          surfaceOpen: terminalSurfaceOpen,
           contentVisible: local.terminalContentVisible,
           remote: core.remoteSurfaceActive,
           readOnly: Boolean(activeTab?.readOnly && !activeTab.takenOver),
@@ -520,7 +496,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
             onAddOutput: (sessionId) => void session.insertCommands.addTerminalOutputToComposer(sessionId),
             onAddToChat: session.insertCommands.addTerminalSelectionToComposer,
           },
-          status: draftActive || !session.statusBarVisible ? undefined : {
+          status: !session.statusBarVisible ? undefined : {
             base: conversationView.status,
             rewindCommitting: session.sessionUndo.rewindCommitting,
             sessionTurns: session.sessionTurns,

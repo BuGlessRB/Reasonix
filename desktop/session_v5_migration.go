@@ -76,13 +76,14 @@ func (a *App) startDesktopSessionMigration(ctx context.Context) {
 	c.mu.Unlock()
 	go func() {
 		defer c.workers.Done()
-		defer close(a.desktopMigrationDone)
+		admitted := false
 		defer func() {
-			c.mu.Lock()
-			c.discoveryPending = false
-			c.mu.Unlock()
+			if !admitted {
+				close(a.desktopMigrationDone)
+			}
 		}()
-		_, _ = a.listHistoricalSessions(ctx)
+		// Reservation recovery is independent of historical discovery. The
+		// catalog starts metadata discovery after the restored shell exists.
 		if err := a.recoverDesktopPendingCreateSnapshot(ctx, startupState.PendingCreates); err != nil {
 			a.desktopMigrationFailed.Store(true)
 			slogWarnDesktopMigration(err)
@@ -92,7 +93,22 @@ func (a *App) startDesktopSessionMigration(ctx context.Context) {
 		if err := a.recoverDesktopOperations(ctx, false); err != nil {
 			slogWarnDesktopMigration(err)
 		}
-		a.emitProjectTreeChanged()
+		// Saved-tab reconciliation waits for reservation recovery. It must be
+		// released before waiting for the shell that reconciliation will create.
+		close(a.desktopMigrationDone)
+		admitted = true
+		select {
+		case <-a.tabsRestoredSignal():
+		case <-ctx.Done():
+			return
+		}
+		c.mu.Lock()
+		c.discoveryPending = false
+		c.mu.Unlock()
+		a.requestHistoricalCatalog()
+		// The watcher owns initial discovery. Recovery changes the registry;
+		// invalidating every legacy root here queues a duplicate full scan.
+		a.emitProjectTreeMetadataChanged()
 	}()
 }
 
@@ -146,6 +162,7 @@ func slogWarnDesktopMigration(err error) {
 
 type desktopMigrationSource struct {
 	operationID         string
+	registeredSourceKey string
 	headID              string
 	deferArchive        bool
 	versionFingerprint  string
@@ -375,6 +392,11 @@ func (a *App) migrateCanonicalSession(ctx context.Context, old *session.Service,
 		return a.completeRegisteredMigration(ctx, source, checkpoint, checkpoint.record.TargetSessionID, checkpoint.record.ContentDigest)
 	}
 	oldRef := session.SessionRef{HostID: "migration-source", SessionID: sessionID}
+	release, err := acquireHistoricalCanonicalRead(filepath.Join(source.root, sessionID))
+	if err != nil {
+		return err
+	}
+	defer release()
 	contentDigest, err := canonicalMigrationDigest(ctx, old.Query(), oldRef)
 	if err != nil {
 		return errors.Join(err, updateDesktopMigrationLedger(key, sessionID, "failed", "source_read"))
@@ -384,6 +406,9 @@ func (a *App) migrateCanonicalSession(ctx context.Context, old *session.Service,
 	}
 	if checkpoint.matchesCompletedContent(contentDigest) {
 		return a.completeRegisteredMigration(ctx, source, checkpoint, checkpoint.record.TargetSessionID, contentDigest)
+	}
+	if handled, err := a.reconcileCanonicalConversion(ctx, source, checkpoint, contentDigest); handled || err != nil {
+		return err
 	}
 	if workspaceID == "" {
 		workspaceID, err = a.ensureDesktopMigrationWorkspace(ctx, source)

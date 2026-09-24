@@ -10,6 +10,7 @@ import (
 
 	"reasonix/desktop/internal/workspacestate"
 	"reasonix/internal/identitylock"
+	"reasonix/internal/session"
 	"reasonix/internal/sessioncatalog"
 )
 
@@ -36,6 +37,10 @@ func TestProjectTreeSnapshotIsReadOnlyAcrossManyUnmigratedWorkspaces(t *testing.
 			t.Fatal(err)
 		}
 		sessionID := fmt.Sprintf("session-%02d", i)
+		// Ordinary rows represent readable sessions, not registry-only ghosts.
+		if _, err := app.desktopSessionService("").Create(t.Context(), session.CreateOptions{SessionID: sessionID, CWD: root, Origin: session.SessionOriginNew}); err != nil {
+			t.Fatal(err)
+		}
 		if err := app.workspaceRegistry().AttachSession(t.Context(), "", workspaceID, sessionID, ""); err != nil {
 			t.Fatal(err)
 		}
@@ -60,7 +65,7 @@ func TestProjectTreeSnapshotIsReadOnlyAcrossManyUnmigratedWorkspaces(t *testing.
 		t.Fatal(err)
 	}
 
-	snapshot := app.GetProjectTreeSnapshot()
+	snapshot := mustProjectTreeSnapshot(t, app)
 	if len(snapshot.Projects) < 8 {
 		t.Fatalf("snapshot projects=%d, want at least 8", len(snapshot.Projects))
 	}
@@ -148,15 +153,16 @@ func TestTopicIndexReusesOrderAndObservesPresentationChanges(t *testing.T) {
 	}
 }
 
-func TestCatalogWatchSettledRootsStayCleanAndUnavailableRootsRetry(t *testing.T) {
+func TestCatalogWatchSettledAndUnavailableRootsWaitForRotatingAudit(t *testing.T) {
 	good, missing := t.TempDir(), t.TempDir()
+	good, missing = canonicalWorkspaceRoot(good), canonicalWorkspaceRoot(missing)
 	targets := []sessioncatalog.DirectoryTarget{{Path: good}, {Path: missing}}
 	watched, dirty := map[string]bool{good: true}, map[string]bool{}
 	current := refreshCatalogWatchTargets(nil, nil, targets, watched, dirty)
 	clear(dirty)
 	current = refreshCatalogWatchTargets(nil, current, targets, watched, dirty)
-	if dirty[good] || !dirty[missing] {
-		t.Fatalf("idle watched root scanned or fallback lost: %v", dirty)
+	if len(dirty) != 0 {
+		t.Fatalf("metadata refresh bypassed the rotating discovery audit: %v", dirty)
 	}
 	current = refreshCatalogWatchTargets(nil, current, targets[:1], watched, dirty)
 	if len(current) != 1 || dirty[missing] {

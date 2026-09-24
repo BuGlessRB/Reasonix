@@ -833,6 +833,37 @@
       ]
     }
   },
+  "BeginManualSessionCreation": {
+    "domain": "desktop/manual_session_creation.go",
+    "owner": "App.BeginManualSessionCreation",
+    "sources": [
+      "desktop/manual_session_creation.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.BeginManualSessionCreation",
+      "inputs": [
+        "req"
+      ]
+    }
+  },
+  "BeginSessionComposerSubmission": {
+    "domain": "desktop/session_composer_state.go",
+    "owner": "App.BeginSessionComposerSubmission",
+    "sources": [
+      "desktop/session_composer_state.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.BeginSessionComposerSubmission",
+      "inputs": [
+        "ref",
+        "revision",
+        "submissionID",
+        "requestJSON"
+      ]
+    }
+  },
   "BeginSessionExportForTarget": {
     "domain": "desktop/session_export.go",
     "owner": "App.BeginSessionExportForTarget",
@@ -848,6 +879,20 @@
         "format",
         "title",
         "observation"
+      ]
+    }
+  },
+  "BeginSessionHistoryReadForTab": {
+    "domain": "desktop/session_history_binding.go",
+    "owner": "App.BeginSessionHistoryReadForTab",
+    "sources": [
+      "desktop/session_history_binding.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.BeginSessionHistoryReadForTab",
+      "inputs": [
+        "tabID"
       ]
     }
   },
@@ -930,6 +975,22 @@
       "inputs": [
         "tabID",
         "jobIDs"
+      ]
+    }
+  },
+  "CancelModelApplicationBlockers": {
+    "domain": "desktop/model_application_actions.go",
+    "owner": "App.CancelModelApplicationBlockers",
+    "sources": [
+      "desktop/model_application_actions.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.CancelModelApplicationBlockers",
+      "inputs": [
+        "tabID",
+        "choice",
+        "ids"
       ]
     }
   },
@@ -1549,6 +1610,22 @@
       "inputs": [
         "tabID",
         "instructions"
+      ]
+    }
+  },
+  "CompleteSessionComposerSubmission": {
+    "domain": "desktop/session_composer_state.go",
+    "owner": "App.CompleteSessionComposerSubmission",
+    "sources": [
+      "desktop/session_composer_state.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.CompleteSessionComposerSubmission",
+      "inputs": [
+        "ref",
+        "submissionID",
+        "outcome"
       ]
     }
   },
@@ -2352,6 +2429,18 @@
       "inputs": []
     }
   },
+  "ExportManualCreationDiagnostics": {
+    "domain": "desktop/manual_creation_export.go",
+    "owner": "App.ExportManualCreationDiagnostics",
+    "sources": [
+      "desktop/manual_creation_export.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.ExportManualCreationDiagnostics",
+      "inputs": []
+    }
+  },
   "ExportScrollDiagnostics": {
     "domain": "desktop/scroll_diagnostics_export.go",
     "owner": "App.ExportScrollDiagnostics",
@@ -2796,6 +2885,20 @@
       "inputs": []
     }
   },
+  "GetManualSessionCreation": {
+    "domain": "desktop/manual_session_creation.go",
+    "owner": "App.GetManualSessionCreation",
+    "sources": [
+      "desktop/manual_session_creation.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.GetManualSessionCreation",
+      "inputs": [
+        "operationID"
+      ]
+    }
+  },
   "GetModelSettingsApplication": {
     "domain": "desktop/model_settings_api.go",
     "owner": "App.GetModelSettingsApplication",
@@ -2937,6 +3040,20 @@
       "kind": "owner-state",
       "resolver": "App.GetSessionCatalogStatus",
       "inputs": []
+    }
+  },
+  "GetSessionComposerState": {
+    "domain": "desktop/session_composer_state.go",
+    "owner": "App.GetSessionComposerState",
+    "sources": [
+      "desktop/session_composer_state.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.GetSessionComposerState",
+      "inputs": [
+        "ref"
+      ]
     }
   },
   "GetSessionDraft": {
@@ -3749,6 +3866,18 @@
       ]
     }
   },
+  "ListManualSessionCreations": {
+    "domain": "desktop/manual_session_recovery.go",
+    "owner": "App.ListManualSessionCreations",
+    "sources": [
+      "desktop/manual_session_recovery.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.ListManualSessionCreations",
+      "inputs": []
+    }
+  },
   "ListProjectGroups": {
     "domain": "desktop/project_tree_organization.go",
     "owner": "App.ListProjectGroups",
@@ -3831,6 +3960,20 @@
       "kind": "owner-state",
       "resolver": "App.ListRemoteProjects",
       "inputs": []
+    }
+  },
+  "ListSessionComposerConflicts": {
+    "domain": "desktop/session_composer_conflicts.go",
+    "owner": "App.ListSessionComposerConflicts",
+    "sources": [
+      "desktop/session_composer_conflicts.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ListSessionComposerConflicts",
+      "inputs": [
+        "ref"
+      ]
     }
   },
   "ListSessionDraftSummaries": {
@@ -4035,6 +4178,22 @@
       "kind": "owner-state",
       "resolver": "App.ListWorkspaces",
       "inputs": []
+    }
+  },
+  "LocateSessionHistoryMessage": {
+    "domain": "desktop/session_history_binding.go",
+    "owner": "App.LocateSessionHistoryMessage",
+    "sources": [
+      "desktop/session_history_binding.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.LocateSessionHistoryMessage",
+      "inputs": [
+        "id",
+        "messageID",
+        "snapshot"
+      ]
     }
   },
   "LocateSessionMessageForTab": {
@@ -5460,6 +5619,51 @@
       ]
     }
   },
+  "ReadSessionHistoryOutline": {
+    "domain": "desktop/session_history_binding.go",
+    "owner": "App.ReadSessionHistoryOutline",
+    "sources": [
+      "desktop/session_history_binding.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ReadSessionHistoryOutline",
+      "inputs": [
+        "id",
+        "req"
+      ]
+    }
+  },
+  "ReadSessionHistorySlice": {
+    "domain": "desktop/session_history_binding.go",
+    "owner": "App.ReadSessionHistorySlice",
+    "sources": [
+      "desktop/session_history_binding.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ReadSessionHistorySlice",
+      "inputs": [
+        "id",
+        "req"
+      ]
+    }
+  },
+  "ReadSessionHistoryWindow": {
+    "domain": "desktop/session_history_binding.go",
+    "owner": "App.ReadSessionHistoryWindow",
+    "sources": [
+      "desktop/session_history_binding.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ReadSessionHistoryWindow",
+      "inputs": [
+        "id",
+        "req"
+      ]
+    }
+  },
   "RebindDraftImageForTarget": {
     "domain": "desktop/attachment_targets.go",
     "owner": "App.RebindDraftImageForTarget",
@@ -5687,6 +5891,20 @@
     "scope": {
       "kind": "owner-inputs",
       "resolver": "App.ReleaseReadSnapshot",
+      "inputs": [
+        "id"
+      ]
+    }
+  },
+  "ReleaseSessionHistoryRead": {
+    "domain": "desktop/session_history_binding.go",
+    "owner": "App.ReleaseSessionHistoryRead",
+    "sources": [
+      "desktop/session_history_binding.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ReleaseSessionHistoryRead",
       "inputs": [
         "id"
       ]
@@ -7320,6 +7538,20 @@
       "inputs": []
     }
   },
+  "RetryManualSessionCreation": {
+    "domain": "desktop/manual_session_creation.go",
+    "owner": "App.RetryManualSessionCreation",
+    "sources": [
+      "desktop/manual_session_creation.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RetryManualSessionCreation",
+      "inputs": [
+        "operationID"
+      ]
+    }
+  },
   "RetryModelSettingsApplication": {
     "domain": "desktop/model_settings_api.go",
     "owner": "App.RetryModelSettingsApplication",
@@ -7958,6 +8190,20 @@
       ]
     }
   },
+  "SaveSessionComposerState": {
+    "domain": "desktop/session_composer_state.go",
+    "owner": "App.SaveSessionComposerState",
+    "sources": [
+      "desktop/session_composer_state.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SaveSessionComposerState",
+      "inputs": [
+        "req"
+      ]
+    }
+  },
   "SaveSessionDraft": {
     "domain": "desktop/session_draft.go",
     "owner": "App.SaveSessionDraft",
@@ -8206,6 +8452,23 @@
       "inputs": [
         "selector",
         "textQuery",
+        "cursor",
+        "limit"
+      ]
+    }
+  },
+  "SearchSessionHistoryRead": {
+    "domain": "desktop/session_history_binding.go",
+    "owner": "App.SearchSessionHistoryRead",
+    "sources": [
+      "desktop/session_history_binding.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SearchSessionHistoryRead",
+      "inputs": [
+        "id",
+        "text",
         "cursor",
         "limit"
       ]
@@ -9937,6 +10200,23 @@
       ]
     }
   },
+  "StartTurnWithModelApplication": {
+    "domain": "desktop/model_application_submit.go",
+    "owner": "App.StartTurnWithModelApplication",
+    "sources": [
+      "desktop/model_application_submit.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.StartTurnWithModelApplication",
+      "inputs": [
+        "tabID",
+        "submissionID",
+        "req",
+        "choice"
+      ]
+    }
+  },
   "Steer": {
     "domain": "desktop/app.go",
     "owner": "App.Steer",
@@ -10370,6 +10650,23 @@
       "inputs": [
         "target",
         "values"
+      ]
+    }
+  },
+  "SubmitRemoteTabWithModelApplication": {
+    "domain": "desktop/remote_model_application.go",
+    "owner": "App.SubmitRemoteTabWithModelApplication",
+    "sources": [
+      "desktop/remote_model_application.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SubmitRemoteTabWithModelApplication",
+      "inputs": [
+        "tabID",
+        "text",
+        "submissionID",
+        "choice"
       ]
     }
   },

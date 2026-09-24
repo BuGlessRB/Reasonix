@@ -5,6 +5,7 @@ import { showWorktreeCleanupNotice } from "../lib/worktreeCleanupNotice";
 import { desktopBridge } from "./desktopBridgeAdapter";
 import { desktopProjectAdapter } from "./desktopProjectAdapter";
 import { useHistoryCommands } from "./useHistoryCommands";
+import { useBrowserFirstOpen } from "./useBrowserFirstOpen";
 import { useSessionNavigationCommands } from "./useSessionNavigationCommands";
 import { usePaletteCommands } from "./usePaletteCommands";
 import { useTopicNavigationShortcuts } from "./useTopicNavigationShortcuts";
@@ -20,7 +21,6 @@ import type { useAppRuntimeAdapter } from "./useAppRuntimeAdapter";
 import type { useAppShellStores } from "./useAppShellStores";
 import type { useNavigationSurface } from "../lib/useNavigationSurface";
 import type { useAppSessionComposition } from "./useAppSessionComposition";
-import type { useSessionDraftSurface } from "./useSessionDraftSurface";
 
 type Runtime = ReturnType<typeof useAppRuntimeAdapter>;
 type Shell = ReturnType<typeof useAppShellStores>;
@@ -45,7 +45,6 @@ export type AppNavigationCompositionInput = {
     setTasksOpen: React.Dispatch<React.SetStateAction<false | "session" | "all">>;
   };
   session: SessionComposition;
-  draft: ReturnType<typeof useSessionDraftSurface>;
 };
 
 /**
@@ -85,6 +84,7 @@ export function useAppNavigationComposition(input: AppNavigationCompositionInput
   const { openRemoteWorkspaceFromStatus, connectAndOpenRemoteWorkspace } = remoteWorkspaceCommands;
   const { enqueueNavigation, enqueueNavigationWithIntent, openRemoteProject } = desktopNavigationBag;
   const { toggleSidebar } = session.shellGeometry;
+  useBrowserFirstOpen(activeTabId, state.activeTurnId, () => session.workspacePanelCommands.openRightDockMode("browser"), state.meta?.sessionPath);
 
   const historyCommands = useHistoryCommands({
     running: state.running,
@@ -118,11 +118,6 @@ export function useAppNavigationComposition(input: AppNavigationCompositionInput
     enterConversation,
     pickWorkspace,
     switchWorkspace,
-    draft: {
-      target: input.draft.surface ? { scope: input.draft.surface.draft.scope, workspaceRoot: input.draft.surface.draft.workspaceRoot } : undefined,
-      open: input.draft.open,
-      dismiss: input.draft.dismiss,
-    },
     ports: {
       openTaskSessionForTab: (tabId, taskId) => desktopBridge.openTaskSessionForTab(tabId, taskId),
       listSessionsForTab: (tabId) => desktopBridge.listSessionsForTab(tabId),
@@ -172,7 +167,7 @@ export function useAppNavigationComposition(input: AppNavigationCompositionInput
       target: { kind: "remote", ...activeTab.remote, sessionPath: activeTab.sessionPath || "", sessionId: activeTab.session?.sessionId || activeTab.sessionId },
     } : activeTab?.topicId ? {
       id: activeTab.topicId, title: activeTab.topicTitle || "", target: { kind: "local", topicId: activeTab.topicId,
-        selector: { ref: activeTab.session ?? undefined, sessionPath: activeTab.sessionPath } },
+        selector: { ref: activeTab.session ?? undefined, sessionPath: activeTab.sessionPath, topicId: activeTab.topicId } },
     } : undefined,
     ports: { ...desktopProjectAdapter, markChanged: setProjectRevision, refreshTabs: refreshTabMetas, syncActive: syncActiveTab },
     navigation: { openBlank: openBlankSession, enqueue: enqueueNavigation, switchFolder },

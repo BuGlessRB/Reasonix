@@ -59,13 +59,7 @@ func (a *App) listSessionsFromDir(dir, active string) []SessionMeta {
 			Preview: node.Preview, Turns: node.Turns, TurnsState: node.TurnsState,
 			CreatedAt: node.CreatedAt, LastActivityAt: node.LastActivityAt, ModTime: node.LastActivityAt})
 	}
-	adopted := map[string]bool{}
-	for _, mapping := range state.SourceMappings {
-		adopted["source\x00local\x00"+mapping.SourceKey] = true
-		if sourceMappingHasPathAlias(mapping) {
-			adopted[sessionRuntimeKey(mapping.Path)] = true
-		}
-	}
+	adopted := adoptedSourceRows(state, "")
 	catalog := a.sessionCatalog.Load()
 	if catalog == nil {
 		return v3

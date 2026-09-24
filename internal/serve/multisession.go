@@ -222,8 +222,16 @@ func (s *Server) setControllerPath(ctrl *control.Controller, path string) {
 // two-argument test builder remains supported; tests that need to assert the
 // complete boot contract can inject buildControllerWithOptions.
 func (s *Server) buildTagged(ctx context.Context, ref string, inheritTemp bool) (*control.Controller, *sessionTagSink, error) {
+	return s.buildTaggedMode(ctx, ref, inheritTemp, false)
+}
+
+func (s *Server) buildTaggedMode(ctx context.Context, ref string, inheritTemp, nativeLegacy bool) (*control.Controller, *sessionTagSink, error) {
 	tag := newSessionTagSink(s.bc)
 	opts := s.buildOptions
+	opts.NativeLegacySession = nativeLegacy
+	if nativeLegacy {
+		opts.SessionRuntime = nil
+	}
 	if s.managedModels != nil {
 		opts.ModelSettings = s.managedModels
 	}
@@ -244,6 +252,7 @@ func (s *Server) buildTagged(ctx context.Context, ref string, inheritTemp bool) 
 		opts.WorkspaceRoot = cur.WorkspaceRoot()
 		if inheritTemp {
 			opts.SessionTemp = cur.SessionTemp()
+			opts.PersistentShell = cur.PersistentShell()
 			// Model/effort switches rebuild the Agent, not the logical session:
 			// without the bound runtime the rebuilt controller's first submit
 			// allocates a new ID while the desktop fences the old one (HTTP 409).
@@ -255,18 +264,7 @@ func (s *Server) buildTagged(ctx context.Context, ref string, inheritTemp bool) 
 		}
 	}
 
-	var (
-		ctrl *control.Controller
-		err  error
-	)
-	switch {
-	case s.buildControllerWithOptions != nil:
-		ctrl, err = s.buildControllerWithOptions(ctx, ref, opts)
-	case s.buildController != nil:
-		ctrl, err = s.buildController(ctx, ref)
-	default:
-		ctrl, err = boot.Build(ctx, opts)
-	}
+	ctrl, err := s.buildModelCandidate(ctx, ref, opts, inheritTemp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -457,7 +455,7 @@ func (s *Server) busyDetach(ctx context.Context, cur *control.Controller, target
 	if s.tagFor(cur) == nil {
 		return errSessionTagUnavailable
 	}
-	newCtrl, tag, err := s.buildTagged(ctx, currentModelRef(cur), false)
+	newCtrl, tag, err := s.buildTaggedMode(ctx, currentModelRef(cur), false, strings.TrimSpace(targetPath) != "")
 	if err != nil {
 		return err
 	}

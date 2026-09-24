@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -58,20 +59,27 @@ func (a *App) historicalSourceForSelector(selector SessionSelector) (string, his
 			return "", historicalSource{}, newSessionOperationError(sessionOperationTargetNotFound, "The source no longer exists.")
 		}
 		id := desktopSourceKey(ref.Path, ref.HeadID)
-		if ref.SourceKey != "" && ref.SourceKey != id {
+		state, loadErr := a.workspaceRegistry().Load(a.bootContext())
+		if loadErr != nil {
+			return "", historicalSource{}, loadErr
+		}
+		if ref.SourceKey != "" && !slices.Contains(state.SourceKeys(ref.SourceKey), id) {
 			return "", historicalSource{}, newSessionOperationError("target_changed", "The source identity changed.")
+		}
+		mapping, adopted, resolveErr := state.ResolveSource(id)
+		if resolveErr != nil {
+			return "", historicalSource{}, resolveErr
 		}
 		format, scope, root := "legacy", "global", ""
 		if info, statErr := os.Stat(ref.Path); statErr == nil && info.IsDir() {
 			format = "canonical"
 		}
-		if state, loadErr := a.workspaceRegistry().Load(a.bootContext()); loadErr == nil {
-			if mapping, ok := state.SourceMappings[id]; ok {
-				workspace := state.Workspaces[mapping.WorkspaceID]
-				root = workspace.Root
-				if mapping.WorkspaceID != "global" {
-					scope = "project"
-				}
+		if adopted {
+			id = mapping.SourceKey
+			workspace := state.Workspaces[mapping.WorkspaceID]
+			root = workspace.Root
+			if mapping.WorkspaceID != "global" {
+				scope = "project"
 			}
 		}
 		if root == "" {
@@ -257,12 +265,12 @@ func (a *App) checkHistoricalSourceUpdate(ctx context.Context, id string, source
 	if err != nil {
 		return HistoricalSourceUpdateView{SourceKey: id, Status: "failed", ErrorCode: "registry_unavailable", Retryable: true}
 	}
-	mapping, ok := state.SourceMappings[id]
+	mapping, ok, resolveErr := state.ResolveSource(id)
+	if resolveErr != nil {
+		return HistoricalSourceUpdateView{SourceKey: id, Status: "failed", ErrorCode: "target_changed"}
+	}
 	if !ok {
 		return HistoricalSourceUpdateView{SourceKey: id, Status: "not_prepared", Retryable: true}
-	}
-	if state.SessionStates[mapping.SessionID].Lifecycle != workspacestate.Active {
-		return HistoricalSourceUpdateView{SourceKey: id, Status: "retired"}
 	}
 	release, err := acquireHistoricalSource(ctx, id, source)
 	if err != nil {
@@ -278,6 +286,9 @@ func (a *App) checkHistoricalSourceUpdate(ctx context.Context, id string, source
 	}
 	ref := session.SessionRef{HostID: localDesktopHostID, SessionID: mapping.SessionID}
 	status := "unchanged"
+	if state.SessionStates[mapping.SessionID].Lifecycle != workspacestate.Active {
+		status = "retired"
+	}
 	if fingerprint != mapping.Fingerprint {
 		status = "available"
 	}

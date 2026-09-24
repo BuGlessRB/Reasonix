@@ -35,6 +35,7 @@ type readSnapshotStore struct {
 	cancel       context.CancelFunc
 	closed       bool
 	memory, disk int64
+	accessOrder  uint64
 }
 
 type readSnapshotBuild struct {
@@ -58,12 +59,15 @@ type readSnapshot struct {
 	overhead           int64
 	metadata           json.RawMessage
 	validate           func() error
+	readPage           func(context.Context, int, int) ([][]byte, bool, error)
+	closeRead          func()
 	released           bool
 }
 
 type readSnapshotLifetime struct {
 	created time.Time
 	used    time.Time
+	order   uint64
 }
 
 type readSnapshotCursor struct {
@@ -195,6 +199,7 @@ func (s *readSnapshotStore) publishBuild(binding string, job *readSnapshotBuild,
 		if len(s.entries) >= 64 {
 			victims = append(victims, s.evictOldestLocked())
 		}
+		s.touchLocked(snap)
 		s.entries[snap.id] = snap
 		job.snapshot = snap
 	} else if job.err == nil {
@@ -222,7 +227,8 @@ func (s *readSnapshotStore) acquireBuildHandle(binding string, root *readSnapsho
 		return nil, snapshotStale("evicted")
 	}
 	root.leases++
-	handle := &readSnapshot{id: hex.EncodeToString(id[:]), binding: binding, lifetime: readSnapshotLifetime{created: root.lifetime.created, used: time.Now()}, data: root}
+	handle := &readSnapshot{id: hex.EncodeToString(id[:]), binding: binding, lifetime: readSnapshotLifetime{created: root.lifetime.created}, data: root}
+	s.touchLocked(handle)
 	var victim *readSnapshot
 	if len(s.entries) >= 64 {
 		victim = s.evictOldestLocked()
@@ -247,10 +253,17 @@ func (s *readSnapshotStore) evictExpiredLocked() []*readSnapshot {
 	return victims
 }
 
+// Access order owns LRU eviction; wall-clock samples only own expiration.
+func (s *readSnapshotStore) touchLocked(snap *readSnapshot) {
+	s.accessOrder++
+	snap.lifetime.used = time.Now()
+	snap.lifetime.order = s.accessOrder
+}
+
 func (s *readSnapshotStore) evictOldestLocked() *readSnapshot {
 	var oldest *readSnapshot
 	for _, snap := range s.entries {
-		if oldest == nil || snap.lifetime.used.Before(oldest.lifetime.used) {
+		if oldest == nil || snap.lifetime.order < oldest.lifetime.order {
 			oldest = snap
 		}
 	}
@@ -380,7 +393,7 @@ func (s *readSnapshotStore) page(ctx context.Context, binding, cursor string, fi
 		s.dispose(snap)
 		return "", "", 0, nil, snapshotStale("expired")
 	}
-	snap.lifetime.used = time.Now()
+	s.touchLocked(snap)
 	s.mu.Unlock()
 	if snap.data != nil {
 		snap = snap.data
@@ -391,7 +404,7 @@ func (s *readSnapshotStore) page(ctx context.Context, binding, cursor string, fi
 	if snap.released {
 		return "", "", 0, nil, snapshotStale("evicted")
 	}
-	if snap.binding != binding || offset > snap.count {
+	if snap.binding != binding || snap.readPage == nil && offset > snap.count {
 		return "", "", 0, nil, snapshotStale("invalid_cursor")
 	}
 	if snap.validate != nil {
@@ -403,31 +416,29 @@ func (s *readSnapshotStore) page(ctx context.Context, binding, cursor string, fi
 		limit = 50
 	}
 	limit = min(limit, 200)
-	end := min(offset+limit, snap.count)
-	if snap.db == nil {
-		for _, row := range snap.rows[offset:end] {
+	if snap.readPage != nil {
+		rows, more, err := snap.readPage(ctx, offset, limit)
+		if err != nil {
+			return "", "", 0, nil, err
+		}
+		for _, row := range rows {
 			if err := consume(row); err != nil {
 				return "", "", 0, nil, err
 			}
 		}
-	} else {
-		rows, err := snap.db.QueryContext(ctx, `SELECT body FROM rows WHERE n>=? AND n<? ORDER BY n`, offset, end)
-		if err != nil {
-			return "", "", 0, nil, err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var b []byte
-			if err := rows.Scan(&b); err != nil {
-				return "", "", 0, nil, err
+		next := ""
+		if more {
+			if len(rows) == 0 {
+				return "", "", 0, nil, fmt.Errorf("snapshot page did not advance")
 			}
-			if err := consume(b); err != nil {
-				return "", "", 0, nil, err
-			}
+			b, _ := json.Marshal(readSnapshotCursor{1, id, binding, offset + len(rows)})
+			next = base64.RawURLEncoding.EncodeToString(b)
 		}
-		if err := rows.Err(); err != nil {
-			return "", "", 0, nil, err
-		}
+		return next, id, snap.lifetime.created.Add(readSnapshotLife).UnixMilli(), snap.metadata, nil
+	}
+	end := min(offset+limit, snap.count)
+	if err := snap.consumeStoredRows(ctx, offset, end, consume); err != nil {
+		return "", "", 0, nil, err
 	}
 	next := ""
 	if end < snap.count {
@@ -459,6 +470,11 @@ func (s *readSnapshotStore) dispose(snap *readSnapshot) {
 		return
 	}
 	snap.released = true
+	if snap.closeRead != nil {
+		snap.closeRead()
+		snap.closeRead = nil
+	}
+	snap.readPage = nil
 	if snap.db != nil {
 		_ = snap.db.Close()
 	}
@@ -518,6 +534,36 @@ func (a *App) ReleaseReadSnapshot(id string) {
 	if snap != nil {
 		s.dispose(snap)
 	}
+}
+
+// The caller holds the snapshot read lease while reading memory or spilled rows.
+func (snap *readSnapshot) consumeStoredRows(ctx context.Context, offset, end int, consume func([]byte) error) error {
+	if snap.db == nil {
+		for _, row := range snap.rows[offset:end] {
+			if err := consume(row); err != nil {
+				return err
+			}
+		}
+	} else {
+		rows, err := snap.db.QueryContext(ctx, `SELECT body FROM rows WHERE n>=? AND n<? ORDER BY n`, offset, end)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var b []byte
+			if err := rows.Scan(&b); err != nil {
+				return err
+			}
+			if err := consume(b); err != nil {
+				return err
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *readSnapshotStore) close() {

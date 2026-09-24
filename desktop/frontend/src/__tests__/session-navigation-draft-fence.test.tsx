@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
+import { installDesktopHostStub } from "./desktopHostStub";
+import { makeSessionUIMock } from "../lib/sessionUIMock";
+import type { ManualSessionCreationView, ManualSessionCreationRequest } from "../generated/desktopContract.generated";
 
 import { useSessionNavigationCommands, type SessionNavigationCommandsInput } from "../app-runtime/useSessionNavigationCommands";
 
@@ -20,16 +23,28 @@ Object.assign(globalThis, {
 
 let intent = 0;
 let commands!: ReturnType<typeof useSessionNavigationCommands>;
-const firstDismiss = deferred();
-const secondDismiss = deferred();
-const dismissals = [firstDismiss, secondDismiss];
+const creationStarted = deferred();
+const finishCreation = deferred();
+let blockCreation = false;
+const created: string[] = [];
+const legacyCalls: string[] = [];
+const begun: number[] = [];
+const notices: string[] = [];
+const retired = (name: string) => async () => { legacyCalls.push(name); throw new Error("retired draft database is unreadable"); };
+const stub = installDesktopHostStub({
+  ...makeSessionUIMock(async (_scope,_root,id) => {
+    created.push(id);
+    if (blockCreation) { creationStarted.resolve(); await finishCreation.promise; }
+  }),
+  ListSessionDraftSummaries: retired("list"), OpenSessionDraftForTarget: retired("open"),
+  DismissSessionDraft: retired("dismiss"), SetSessionDraftRestoreTarget: retired("restore"),
+});
 const enqueued: Array<{ request: unknown; intent: number }> = [];
-const openedDrafts: Array<[string, string]> = [];
 
 function Probe() {
   commands = useSessionNavigationCommands({
     activeTab: { id: "fixture", scope: "project", workspaceRoot: "/workspace" },
-    showToast: () => {},
+    showToast: message => { notices.push(message); },
     closeTransientOverlays: () => {},
     clearImDetail: () => {},
     prepareBlankWorkspace: () => {},
@@ -41,7 +56,7 @@ function Probe() {
       openRemoteProject: async () => ({ status: "cancelled", reason: "superseded" }),
     },
     noteNavigationIntent: () => ++intent,
-    beginNavigationSurface: () => {},
+    beginNavigationSurface: seq => { begun.push(seq); },
     settleNavigationSurface: () => {},
     isNavigationIntentCurrent: (candidate) => candidate === intent,
     markProjectChanged: () => {},
@@ -50,10 +65,6 @@ function Probe() {
     enterConversation: () => {},
     pickWorkspace: async () => "",
     switchWorkspace: async () => {},
-    draft: {
-      open: async (scope, workspaceRoot) => { openedDrafts.push([scope, workspaceRoot]); },
-      dismiss: () => dismissals.shift()!.promise,
-    },
     ports: {
       openTaskSessionForTab: async () => ({ ok: false }),
       listSessionsForTab: async () => [],
@@ -70,32 +81,71 @@ try {
     await commands.openBlankSession("project", "/workspace");
     await commands.handleNewTab();
   });
-  assert.deepEqual(openedDrafts, [["global", ""], ["project", "/workspace"], ["project", "/workspace"]],
-    "global, project and new-tab entry points open drafts without creating formal sessions");
-  assert.deepEqual(enqueued, []);
+  assert.deepEqual(legacyCalls, [], "manual new never touches retired input, even if its database is unreadable");
+  assert.equal(new Set(created).size, 3, "each click has its own formal identity");
+  assert.equal(enqueued.length,3);
+  enqueued.length=0;
+  blockCreation = true;
 
   let stale!: Promise<void>;
-  let latest!: Promise<void>;
   act(() => {
-    stale = commands.handleOpenTopic("project", "/workspace", "topic-a");
-    latest = commands.openCanonicalSession({ hostId: "local", sessionId: "session-b" });
+    stale = commands.openBlankSession("project", "/workspace");
   });
-
-  firstDismiss.resolve();
+  await act(async () => { await creationStarted.promise; });
+  await act(async () => { await commands.openCanonicalSession({ hostId: "local", sessionId: "session-b" }); });
+  finishCreation.resolve();
   await act(async () => { await stale; });
-  assert.deepEqual(enqueued, [], "navigation superseded during draft cleanup cannot enqueue afterward");
-
-  secondDismiss.resolve();
-  await act(async () => { await latest; });
   assert.equal(enqueued.length, 1);
-  assert.equal(enqueued[0]?.intent, 2, "the winning request keeps the intent captured before its first await");
+  assert.equal(enqueued[0]?.intent, 5, "late formal creation cannot override newer navigation");
   assert.deepEqual(enqueued[0]?.request, {
     kind: "canonical-session",
     ref: { hostId: "local", sessionId: "session-b" },
   });
+  assert.deepEqual(legacyCalls, [], "navigation never waits for or writes old drafts");
+
+  enqueued.length = 0;
+  const pollStarted = deferred();
+  let complete!: (view: ManualSessionCreationView) => void;
+  const pending = new Promise<ManualSessionCreationView>(resolve => { complete = resolve; });
+  let starting!: ManualSessionCreationView;
+  stub.commands.BeginManualSessionCreation = async (request: ManualSessionCreationRequest) => {
+    starting = { operationId: request.operationId, workspaceId: "canonical", scope: "project", workspaceRoot: "/workspace",
+      ref: { hostId: "local", sessionId: "independent-new-session" }, topicId: "topic", phase: "starting", surfaceReady: true,
+      settings: { model: "stub", mode: "normal", toolApprovalMode: "default", disabledMcp: {}, mcpOrder: [] } };
+    return starting;
+  };
+  stub.commands.GetManualSessionCreation = async (operationId: string) => {
+    assert.equal(operationId, starting.operationId, "observation retains the original creation identity");
+    pollStarted.resolve(); return pending;
+  };
+  let creating!: Promise<void>;
+  act(() => { creating = commands.handleNewTab(); });
+  assert.equal(begun.at(-1), 6, "new click fences the old composer before the first asynchronous result");
+  await act(async () => { await pollStarted.promise; });
+  assert.deepEqual(enqueued[0]?.request, { kind: "canonical-session", ref: starting.ref }, "new input surface opens before runtime readiness");
+  await act(async () => { await commands.openCanonicalSession({ hostId: "local", sessionId: "session-c" }); });
+  complete({ ...starting, phase: "ready" });
+  await act(async () => { await creating; });
+  assert.equal(enqueued.length, 2, "runtime completion never reselects the new session after the user leaves");
+  assert.deepEqual(enqueued.at(-1)?.request, { kind: "canonical-session", ref: { hostId: "local", sessionId: "session-c" } });
+  assert.deepEqual(notices, []);
+
+  const failedRequests: string[] = [];
+  stub.commands.BeginManualSessionCreation = async (request: ManualSessionCreationRequest) => {
+    failedRequests.push(request.operationId);
+    throw new Error("transport unavailable");
+  };
+  stub.commands.GetManualSessionCreation = async () => { throw new Error("still unavailable"); };
+  await act(async () => { await commands.handleNewTab(); });
+  assert.equal(commands.manualCreation?.failed, true, "unacknowledged creation has an inline retry state");
+  assert.equal(commands.manualCreation?.pending, false);
+  await act(async () => { await commands.retryCreation(); });
+  assert.equal(failedRequests.length, 2);
+  assert.equal(failedRequests[0], failedRequests[1], "retrying before acknowledgement does not allocate a new operation");
+  assert.deepEqual(notices, [], "inline failure is not duplicated in a toast");
 
   await act(async () => { root.unmount(); });
-  console.log("session navigation draft fence: stale cleanup completion cannot override the latest target");
+  console.log("session navigation: retired drafts are untouched; late formal creation preserves the newest selection");
 } finally {
   dom.window.close();
 }

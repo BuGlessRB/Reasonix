@@ -91,7 +91,9 @@ func (c *Controller) initializeRuntimeState() {
 		// A manager may be shared across a controller rebuild. Subscribe to all
 		// session transitions and filter against the current committed binding.
 		_, stop := c.jobs.SubscribeRuntime("", func(state jobs.RuntimeState) {
-			c.refreshRuntimeState(event.Event{})
+			if c.receivesBackgroundRuntimeEvents() {
+				c.refreshRuntimeState(event.Event{})
+			}
 		})
 		c.runtimeState.mu.Lock()
 		c.runtimeState.jobUnsubscribe = stop
@@ -196,7 +198,7 @@ func (c *Controller) refreshRuntimeStateAttempt(e event.Event, attempt int) {
 	}
 	next.BackgroundJobs = 0
 	if c.jobs != nil {
-		next.BackgroundJobs = len(c.jobs.RunningForSession(agent.BranchID(path)))
+		next.BackgroundJobs = len(c.jobs.RunningForSession(c.parentSessionID()))
 	}
 	// Sampling owners is off their locks. Do not commit a mixture if the
 	// admission/close/binding boundary advanced while another owner was read.

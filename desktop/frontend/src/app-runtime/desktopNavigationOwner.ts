@@ -1,4 +1,5 @@
 import { CommandCancelled } from "../lib/commandOutcome";
+import { sessionTitleErrorKey } from "../lib/sessionTitleOperation";
 import type { SessionRef } from "../lib/sessionRef";
 import type { RemoteTabOpenOptions, RemoteTabRefView, SessionMeta, TabMeta } from "../lib/types";
 import type { useAppRuntimeAdapter } from "./useAppRuntimeAdapter";
@@ -63,7 +64,7 @@ export function reconcileHistoricalPreparation(expected: HistoricalPreparationSu
 }
 export type NavigationNotice = {
   key: "history.failedOpenSession" | "history.missingWorkspaceRoot" | "history.failedOpenProject" | "sidebar.imWaiting" | "sidebar.imOpenFailed"
-    | "projectTree.worktreeCreated" | "projectTree.worktreeCreatedDirty";
+    | "projectTree.worktreeCreated" | "projectTree.worktreeCreatedDirty" | ReturnType<typeof sessionTitleErrorKey>;
   params?: Record<string, string>;
   tone?: "error" | "warn" | "info";
   durationMs?: number;
@@ -75,25 +76,6 @@ export type DesktopNavigationCapture = {
 };
 class InvalidSessionTarget extends Error {
   constructor(readonly key: "history.failedOpenSession" | "history.missingWorkspaceRoot") { super(key); }
-}
-
-const preparationTerminal = new Set(["ready", "blocked", "failed", "cancelled"]);
-async function waitForPreparation(initial: SessionPreparationView, ports: DesktopNavigationPorts, checkpoint: () => void, changed: (view: SessionPreparationView) => void) {
-  let view = initial;
-  changed(view);
-  while (!preparationTerminal.has(view.status)) {
-    await new Promise(resolve => setTimeout(resolve, 250));
-    checkpoint();
-    const next = await ports.getSessionPreparation(view.operationId);
-    checkpoint();
-    if (next.revision >= view.revision) { view = next; changed(view); }
-  }
-  if (view.status !== "ready" || !view.target) {
-    if (view.status === "blocked") throw new Error("Historical session is in use. Close the other instance and retry.");
-    if (view.status === "cancelled") throw new CommandCancelled("superseded");
-    throw new Error(view.errorCode || "Historical session preparation failed.");
-  }
-  return view.target;
 }
 
 /** One executor for topic, blank, IM, worktree and history activation. */
@@ -178,15 +160,10 @@ export async function executeDesktopNavigation(input: DesktopNavigationCapture, 
       checkpoint(); await ports.openChannelSession(session.path, tab.id, seq);
     } else if (session.sessionId && (!session.hostId || session.hostId === "local")) {
       tab = await openTopic(scope, session.workspaceRoot || "", session.topicId || `canonical-${session.sessionId}`, `session-id:${session.sessionId}`);
-    } else if (session.source) {
-      const prepared = await ports.prepareSession({ source: session.source, topicId: session.topicId || "" });
-      checkpoint();
-      const target = await waitForPreparation(prepared, ports, checkpoint, view => setHistoricalPreparation({
-        session, operationId: view.operationId, status: view.status, errorCode: view.errorCode, retryable: view.retryable,
-        revision: view.revision, isCurrent: () => { try { checkpoint(); return true; } catch { return false; } },
-      }));
-      setHistoricalPreparation(null);
-      tab = await openTopic(scope, session.workspaceRoot || "", session.topicId || `canonical-${target.sessionId}`, `session-id:${target.sessionId}`);
+	} else if (session.source) {
+		// Historical sources are opened in place. Explicit conversion remains a
+		// separate user action and never blocks normal navigation.
+		tab = await openTopic(scope, session.workspaceRoot || "", session.topicId || "", `session-source:${encodeURIComponent(JSON.stringify(session.source))}`);
     } else if (scope === "project" && session.workspaceRoot && session.topicId) {
       tab = await openTopic("project", session.workspaceRoot, session.topicId, session.path);
     } else if (scope === "global" && session.topicId) {
@@ -217,13 +194,7 @@ export async function executeDesktopNavigation(input: DesktopNavigationCapture, 
     const message = error instanceof Error ? error.message : String(error ?? "");
     if (/no such file|cannot find the file|file does not exist|session is pending cleanup|session .*not found/i.test(message)) return;
     ports.closeHistory();
-    const session = request.session;
-    const scope = session.scope || (session.workspaceRoot ? "project" : "global");
-    if (scope === "project" && session.workspaceRoot) {
-      const parts = session.workspaceRoot.split(/[/\\]/).filter(Boolean);
-      ports.notice({ key: "history.failedOpenProject", params: {
-        name: parts[parts.length - 1] || session.workspaceRoot, path: session.workspaceRoot,
-      } });
-    } else ports.notice(error instanceof InvalidSessionTarget ? { key: error.key } : { message });
+    ports.notice(error instanceof InvalidSessionTarget ? { key: error.key }
+      : { key: sessionTitleErrorKey(error), tone: "error" });
   }
 }

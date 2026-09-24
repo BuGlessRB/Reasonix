@@ -26,7 +26,7 @@ function isResult(value: unknown): value is IpcResult {
 function unwrap(value: unknown): unknown {
   if (!isResult(value)) throw new Error("malformed reply from the desktop shell");
   if (value.ok) return value.value;
-  throw new Error(value.message);
+  throw Object.assign(new Error(value.message),{code:value.code,data:value.data});
 }
 
 async function call(channel: string, ...args: unknown[]): Promise<unknown> {
@@ -170,6 +170,12 @@ const browser = {
   activate: (tabId: string | null) => call(IPC.browserActivate, tabId).then(() => undefined),
   navigate: (tabId: string, target: BrowserNavigateTarget) => call(IPC.browserNavigate, tabId, target).then(() => undefined),
   setZoom: (tabId: string, factor: number) => call(IPC.browserSetZoom, tabId, factor).then(() => undefined),
+  setViewport: (tabId: string, viewport: { width: number; height: number; scale: "fit" | number } | null) => call(IPC.browserSetViewport, tabId, viewport).then(() => undefined),
+  pickElement: (tabId: string) => call(IPC.browserPickElement, tabId),
+  record: (tabId: string, action: string) => call(IPC.browserRecord, tabId, action),
+  diagnostics: (tabId: string) => call(IPC.browserDiagnostics, tabId),
+  screenshot: (tabId: string) => call(IPC.browserScreenshot, tabId),
+  restorePreview: (tabId: string) => call(IPC.browserRestorePreview, tabId).then(() => undefined),
   toggleDevTools: (tabId: string) => call(IPC.browserToggleDevTools, tabId).then(() => undefined),
   resume: (tabId: string) => call(IPC.browserResume, tabId).then(() => undefined),
   takeover: (tabId: string) => call(IPC.browserUserTakeover, tabId).then(() => undefined),
@@ -188,6 +194,7 @@ contextBridge.exposeInMainWorld("reasonixDesktop", {
     versions: { electron: process.versions.electron ?? "", chrome: process.versions.chrome ?? "", node: process.versions.node ?? "" },
   },
   invoke: (method: string, args: unknown[]) => call(IPC.invoke, method, Array.isArray(args) ? args : []),
+  invokeResult: (method:string,args:unknown[]) => ipcRenderer.invoke(IPC.invoke,method,Array.isArray(args)?args:[]),
   on,
   native: {
     processDiagnostics: () => call(IPC.processDiagnostics),

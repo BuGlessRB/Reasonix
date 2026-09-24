@@ -1,8 +1,10 @@
+import { ErrorMessage } from "./ErrorMessage";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Check, ChevronDown, Cloud, Folder, FolderOpen, GitBranch, GitGraph, MessageCircle, Plus, RefreshCw, Search, X } from "lucide-react";
 import { asArray } from "../lib/array";
 import { app, onProjectTreeChanged } from "../lib/bridge";
 import { useT } from "../lib/i18n";
+import { defaultWorkspaceTitle } from "../lib/sessionTitles";
 import { useBranchSwitcher } from "../lib/useBranchSwitcher";
 import { useToast } from "../lib/toast";
 import type { GitCommitView, ProjectNode } from "../lib/types";
@@ -13,6 +15,7 @@ export type ComposerWorkspaceContext = {
   scope: "global" | "project";
   workspaceRoot: string;
   workspaceName?: string;
+  defaultWorkspaceName?: string;
   gitBranch?: string;
   tabId?: string;
   scopeKey: string;
@@ -30,7 +33,7 @@ function projectTitle(project: ProjectNode): string {
 }
 
 function currentWorkspaceTitle(context: ComposerWorkspaceContext, noProject: string): string {
-  if (context.scope === "global" && !context.remote) return noProject;
+  if (context.scope === "global" && !context.remote) return defaultWorkspaceTitle(context.defaultWorkspaceName);
   const explicit = (context.workspaceName ?? "").trim();
   if (explicit) return explicit;
   const root = context.workspaceRoot.replace(/[\\/]+$/, "");
@@ -143,7 +146,7 @@ function ComposerGitGraphDialog({
         </div>
         <div className="composer-git-graph__body">
           {loading && commits.length === 0 ? <div className="composer-git-graph__note">{t("common.loading")}</div> : null}
-          {error ? <div className="composer-git-graph__note composer-git-graph__note--error">{error}</div> : null}
+          {error ? <div className="composer-git-graph__note composer-git-graph__note--error"><ErrorMessage error={error} /></div> : null}
           {!loading && !error && commits.length === 0 ? <div className="composer-git-graph__note">{t("composer.workspace.noHistory")}</div> : null}
           {commits.map((commit, index) => (
             <div className="composer-git-graph__row" key={commit.hash}>
@@ -273,9 +276,9 @@ export function ComposerWorkspaceContextBar({ context }: { context: ComposerWork
     }
   };
 
-  const workspaceTitle = currentWorkspaceTitle(context, t("composer.workspace.noProject"));
+  const workspaceTitle = currentWorkspaceTitle(context, t("workspace.defaultName"));
   const projectSelected = context.scope === "project" || context.remote;
-  const workspaceTitleAttribute = projectSelected ? context.workspaceRoot || workspaceTitle : workspaceTitle;
+  const workspaceTitleAttribute = projectSelected ? context.workspaceRoot || workspaceTitle : t("workspace.defaultHint");
   const branchAvailable = Boolean(context.tabId && context.workspaceRoot && branch.activeBranch && !context.remote);
 
   return (
@@ -317,7 +320,7 @@ export function ComposerWorkspaceContextBar({ context }: { context: ComposerWork
               </label>
               <div className="composer-workspace-menu__list">
                 {projectsLoading && projects.length === 0 ? <div className="composer-workspace-menu__note">{t("common.loading")}</div> : null}
-                {projectsError ? <div className="composer-workspace-menu__note composer-workspace-menu__note--error">{projectsError}</div> : null}
+                {projectsError ? <div className="composer-workspace-menu__note composer-workspace-menu__note--error"><ErrorMessage error={projectsError} /></div> : null}
                 {!projectsLoading && !projectsError && filteredProjects.length === 0 ? <div className="composer-workspace-menu__note">{t("palette.empty")}</div> : null}
                 {filteredProjects.map((project) => {
                   const path = project.root ?? "";
@@ -386,7 +389,7 @@ export function ComposerWorkspaceContextBar({ context }: { context: ComposerWork
                 <div className="composer-workspace-menu__section">{t("rightDock.branchSection")}</div>
                 <div className="composer-workspace-menu__list composer-workspace-menu__list--branches">
                   {branch.branchesLoading ? <div className="composer-workspace-menu__note">{t("rightDock.branchMenuLoading")}</div> : null}
-                  {!branch.branchesLoading && branch.branchesErr ? <div className="composer-workspace-menu__note composer-workspace-menu__note--error">{branch.branchesErr}</div> : null}
+                  {!branch.branchesLoading && branch.branchesErr ? <div className="composer-workspace-menu__note composer-workspace-menu__note--error"><ErrorMessage error={branch.branchesErr} /></div> : null}
                   {!branch.branchesLoading && !branch.branchesErr && branch.filteredBranches.length === 0 ? <div className="composer-workspace-menu__note">{t("rightDock.branchNoMatch")}</div> : null}
                   {branch.filteredBranches.map((name) => (
                     <button key={name} type="button" role="menuitem" className={`composer-workspace-menu__item${name === branch.activeBranch ? " composer-workspace-menu__item--active" : ""}`} disabled={Boolean(branch.switchingBranch)} title={name} onClick={() => {
@@ -399,7 +402,7 @@ export function ComposerWorkspaceContextBar({ context }: { context: ComposerWork
                     </button>
                   ))}
                 </div>
-                {branch.branchSwitchErr ? <div className="composer-workspace-menu__note composer-workspace-menu__note--error">{branch.branchSwitchErr}</div> : null}
+                {branch.branchSwitchErr ? <div className="composer-workspace-menu__note composer-workspace-menu__note--error"><ErrorMessage error={branch.branchSwitchErr} /></div> : null}
                 <div className="composer-workspace-menu__actions">
                   <button type="button" role="menuitem" disabled={Boolean(branch.switchingBranch) || (branchCreateMode && !branch.canCreate)} onClick={() => {
                     if (branchCreateMode && branch.canCreate) void branch.createBranch(branch.trimmedQuery);

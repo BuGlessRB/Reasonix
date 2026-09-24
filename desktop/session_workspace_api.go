@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reasonix/desktop/internal/workspacestate"
 	"reasonix/internal/agent"
+	"reasonix/internal/historywork"
 	"reasonix/internal/session"
 	"strconv"
 	"strings"
@@ -49,6 +50,7 @@ type WorkspaceSessionPage struct {
 }
 
 type SessionArchitectureDiagnostics struct {
+	HistoryMaintenance      *historywork.Diagnostics `json:"historyMaintenance,omitempty"`
 	ReadSnapshots           *ReadSnapshotDiagnostics `json:"readSnapshots,omitempty"`
 	PendingOperations       int                      `json:"pending_operations"`
 	MissingMembers          int                      `json:"missing_members"`
@@ -106,12 +108,14 @@ func (a *App) GetWorkspaceSnapshot() (WorkspaceSnapshot, error) {
 }
 
 func (a *App) GetSessionArchitectureDiagnostics() (SessionArchitectureDiagnostics, error) {
+	maintenance := a.historyMaintenance.Diagnostics()
 	state, err := a.workspaceRegistry().Load(context.Background())
 	if err != nil {
 		return SessionArchitectureDiagnostics{}, err
 	}
 	infos, listErr := listAllCanonicalSessionInfo(context.Background(), a.desktopSessionService("").Query())
 	result := SessionArchitectureDiagnostics{
+		HistoryMaintenance:      &maintenance,
 		ReadSnapshots:           a.desktopSessions.readSnapshots.diagnostics(),
 		PendingCreateRecovered:  a.desktopSessions.pendingCreateRecovered.Load(),
 		PruneBlockedPersistence: a.desktopSessions.pruneBlockedPersistence.Load(),
@@ -705,6 +709,9 @@ func (a *App) openSessionWithNavigation(ref session.SessionRef, navigationSequen
 	workspace, err := a.canonicalSessionWorkspace(a.bootContext(), ref)
 	if err != nil {
 		return HistoryPage{}, err
+	}
+	if opened, err := a.openManualCreationSurface(ref, navigationSequence); opened || err != nil {
+		return HistoryPage{Messages: []HistoryMessage{}}, err
 	}
 	tab, ctrl, created, err := a.surfaceForCanonicalSession(ref, workspace)
 	if err != nil {

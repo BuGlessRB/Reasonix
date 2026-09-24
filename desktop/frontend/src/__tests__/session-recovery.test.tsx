@@ -6,6 +6,9 @@ import { JSDOM } from "jsdom";
 import { initialState } from "../lib/useController";
 import { applyHydrateErrorState } from "../lib/hydrateErrorState";
 import { projectSessionAvailability, type SessionAvailability } from "../lib/sessionAvailability";
+
+assert.deepEqual(projectSessionAvailability({empty:true}),{kind:"ready",source:"history"},"an empty welcome has no runtime to wait for");
+assert.equal(projectSessionAvailability({}).kind,"loading","an unresolved selected source still reports loading");
 import { useTranscriptSurfaceProjection, type TranscriptSurfaceProjectionInput } from "../app-runtime/useTranscriptSurfaceProjection";
 import { projectNavigationSurfaceTarget } from "../app-runtime/conversationProjection";
 import { SessionRecoveryBanner } from "../components/SessionRecoveryBanner";
@@ -41,6 +44,11 @@ const paintProjection = (input: TranscriptSurfaceProjectionInput) => act(async (
 try {
   await paintProjection(common);
   assert.equal(projection.emptyHero, true, "successful empty history shows the welcome");
+  const guidance = { key: "inbox-second", itemId: "inbox-second", text: "same guidance" };
+  await paintProjection({ ...common, items: [{ kind: "notice", id: "he:m:first", level: "info", text: "↪ same guidance" }] });
+  assert.equal(projection.latestGuidanceConsumed, null, "history rows never consume a matching pending draft");
+  await paintProjection({ ...common, guidanceConsumed: guidance });
+  assert.equal(projection.latestGuidanceConsumed, guidance, "receipt survives without a newly appended display row");
   await paintProjection({ ...common, availability: projectSessionAvailability({ local: failedLocal }) });
   assert.equal(projection.emptyHero, false, "failed history is not a successful empty session");
   for (const state of ["connecting", "reconnecting", "serve_down", "error", "disconnected", "ready"] as const) {

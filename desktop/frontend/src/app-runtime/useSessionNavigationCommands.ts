@@ -7,8 +7,9 @@ import type { useDesktopNavigation } from "./useDesktopNavigation";
 import type { WorkspaceNavigationPorts } from "./navigationOwner";
 import type { ControlResult, SessionMeta, TabMeta } from "../lib/types";
 import type { TopicShortcutEntry } from "../lib/topicShortcuts";
-import type { Dispatch, SetStateAction } from "react";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { SessionRef } from "../lib/sessionRef";
+import type { ManualCreationObservation } from "../lib/manualCreationRequests";
 
 const loadNavigationOwner = () => import("./navigationOwner");
 
@@ -29,11 +30,6 @@ export type SessionNavigationCommandsInput = {
   enterConversation: () => void;
   pickWorkspace: WorkspaceNavigationPorts["pickWorkspace"];
   switchWorkspace: WorkspaceNavigationPorts["switchWorkspace"];
-  draft: {
-    target?: { scope: string; workspaceRoot: string };
-    open(scope: string, workspaceRoot: string): Promise<void>;
-    dismiss(): Promise<void> | void;
-  };
   ports: {
     openTaskSessionForTab(tabId: string, taskId: string): Promise<ControlResult>;
     listSessionsForTab(tabId: string): Promise<SessionMeta[]>;
@@ -41,38 +37,64 @@ export type SessionNavigationCommandsInput = {
 };
 
 /**
- * Owns the session-level navigation commands: local draft opening,
- * topic/resume/sidebar-IM enqueues, new-tab routing (remote hosts reopen
- * remotely), recovery refresh pairs, folder switching through the lazy
- * navigation owner and the task-monitor session lookup with its
- * navigation-intent fence. Formal-session navigation coalesces through the
- * shared navigation epoch from useDesktopNavigation; local drafts use their
- * own target/revision fencing.
+ * Owns explicit local creation and session navigation. Each creation is an
+ * independent mutation; only its selection follows the shared navigation
+ * epoch. Remote routing retains its own commands. Navigation never reads or
+ * waits for the retired workspace-draft store.
  */
 export function useSessionNavigationCommands(input: SessionNavigationCommandsInput) {
   const { activeTab, showToast, navigation, ports } = input;
+  const lastLocalTarget = useRef(draftLandingTargetForTab(activeTab));
+  const [creation, setCreation] = useState<(ManualCreationObservation & { seq: number }) | null>(null);
+  if (activeTab && !activeTab.remote) lastLocalTarget.current = draftLandingTargetForTab(activeTab);
 
-  const blankSessionTarget = useCommittedCommand(() => input.draft.target ?? draftLandingTargetForTab(activeTab));
+  const blankSessionTarget = useCommittedCommand(() => lastLocalTarget.current);
 
-  const openBlankSession = useCommittedCommand((scope: string, workspaceRoot: string): Promise<void> => {
+  const observeCreation = useCommittedCommand(async (attempt: ManualCreationObservation & { seq: number }, retry = false) => {
+    const { seq, request } = attempt;
+    const current = () => input.isNavigationIntentCurrent(seq) === true;
+    setCreation({ ...attempt, pending: true, failed: false });
+    try {
+      const { createManualSession } = await import("../lib/manualCreationRequests");
+      await createManualSession(request, {
+        retry,
+        isObservationCurrent: current,
+        onProgress: operation => { if (current()) setCreation({ ...attempt, operation, pending: true, failed: false }); },
+        onSurfaceReady: async (reserved) => {
+          if (current()) await navigation.enqueueNavigationWithIntent({ kind: "canonical-session", ref: reserved.ref }, seq);
+        },
+      });
+      input.markProjectChanged(value => value + 1);
+    } catch {
+      if (current()) setCreation(value => value?.seq === seq ? { ...value, failed: true } : value);
+    } finally {
+      if (current()) setCreation(value => value?.seq === seq ? { ...value, pending: false } : value);
+      input.settleNavigationSurface(seq);
+    }
+  });
+
+  const openBlankSession = useCommittedCommand(async (scope: string, workspaceRoot: string): Promise<void> => {
+    const seq = input.noteNavigationIntent();
+    const operationId = `manual-${crypto.randomUUID()}`;
     const targetRoot = scope === "project" ? workspaceRoot : "";
+    lastLocalTarget.current = { scope: scope === "project" ? "project" : "global", workspaceRoot: targetRoot };
     // UI preferences use the actual directory; global navigation uses an empty wire root.
     input.prepareBlankWorkspace(workspaceRoot);
     input.enterConversation();
-    return input.draft.open(scope, targetRoot);
+    input.beginNavigationSurface(seq);
+    // Creation is an explicit mutation, not a coalescible navigation request.
+    // Even if another click wins selection, this accepted operation survives.
+    await observeCreation({ seq, request: { operationId, workspaceId: "", scope, workspaceRoot: targetRoot }, pending: true, failed: false });
+  });
+  const retryCreation = useCommittedCommand(async () => {
+    if (creation && !creation.pending && input.isNavigationIntentCurrent(creation.seq)) await observeCreation(creation, true);
   });
 
   const handleNewTab = useCommittedCommand(async () => {
     input.closeTransientOverlays();
     input.clearImDetail();
-    if (input.draft.target) {
-      const target = input.draft.target;
-      await openBlankSession(target.scope, target.workspaceRoot);
-      return;
-    }
     if (activeTab?.remote) {
       const navigationIntentSeq = input.noteNavigationIntent();
-      await input.draft.dismiss();
       if (!input.isNavigationIntentCurrent(navigationIntentSeq)) return;
       input.prepareBlankWorkspace();
       const outcome = await navigation.openRemoteProject(activeTab.remote, { newSession: true });
@@ -85,7 +107,6 @@ export function useSessionNavigationCommands(input: SessionNavigationCommandsInp
 
   const handleOpenTopic = useCommittedCommand(async (scope: string, workspaceRoot: string, topicId: string, sessionPath?: string): Promise<void> => {
     const navigationIntentSeq = input.noteNavigationIntent();
-    await input.draft.dismiss();
     if (!input.isNavigationIntentCurrent(navigationIntentSeq)) return;
     input.closeTransientOverlays();
     input.clearImDetail();
@@ -97,7 +118,6 @@ export function useSessionNavigationCommands(input: SessionNavigationCommandsInp
 
   const openSidebarImConnectionSession = useCommittedCommand(async (connection: SidebarImConnection): Promise<void> => {
     const navigationIntentSeq = input.noteNavigationIntent();
-    await input.draft.dismiss();
     if (!input.isNavigationIntentCurrent(navigationIntentSeq)) return;
     input.clearImDetail();
     return navigation.enqueueNavigationWithIntent({ kind: "sidebar-im", connection }, navigationIntentSeq);
@@ -105,13 +125,11 @@ export function useSessionNavigationCommands(input: SessionNavigationCommandsInp
 
   const onResumeSession = useCommittedCommand(async (session: SessionMeta): Promise<void> => {
     const navigationIntentSeq = input.noteNavigationIntent();
-    await input.draft.dismiss();
     if (!input.isNavigationIntentCurrent(navigationIntentSeq)) return;
     return navigation.enqueueNavigationWithIntent({ kind: "resume-session", session }, navigationIntentSeq);
   });
   const openCanonicalSession = useCommittedCommand(async (ref: SessionRef): Promise<void> => {
     const navigationIntentSeq = input.noteNavigationIntent();
-    await input.draft.dismiss();
     if (!input.isNavigationIntentCurrent(navigationIntentSeq)) return;
     input.closeTransientOverlays();
     input.clearImDetail();
@@ -129,7 +147,6 @@ export function useSessionNavigationCommands(input: SessionNavigationCommandsInp
 
   const openTaskMonitorSession = useCommittedCommand(async (tabID: string, taskID: string): Promise<boolean> => {
     const navigationIntentSeq = input.noteNavigationIntent();
-    await input.draft.dismiss();
     if (!input.isNavigationIntentCurrent(navigationIntentSeq)) return false;
     // Claim the navigation epoch before the first bridge await. If the user
     // switches tabs while the task/session lookup is pending, its completion is
@@ -163,7 +180,6 @@ export function useSessionNavigationCommands(input: SessionNavigationCommandsInp
   ));
   const switchFolder = useCommittedCommand(async (path?: string) => {
     const navigationIntentSeq = input.noteNavigationIntent();
-    await input.draft.dismiss();
     if (!input.isNavigationIntentCurrent(navigationIntentSeq)) return;
     input.enterConversation();
     return loadNavigationOwner().then(({ navigateWorkspace }) => navigateWorkspace(path, {
@@ -183,6 +199,8 @@ export function useSessionNavigationCommands(input: SessionNavigationCommandsInp
   });
 
   return {
+    manualCreation: creation && input.isNavigationIntentCurrent(creation.seq) ? creation : null,
+    retryCreation,
     openCanonicalSession,
     openBlankSession,
     handleNewTab,

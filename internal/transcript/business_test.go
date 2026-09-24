@@ -22,6 +22,27 @@ func businessFrame(t *testing.T, p *Projection, covered uint64, e event.Event) {
 	}
 }
 
+func TestAcceptBusinessPublishesTheTurnIDItAssigns(t *testing.T) {
+	p, initial := newFollowProjection(t)
+	p.AcceptBusiness([]Message{
+		{RecordID: "m:user", MessageID: "user", Role: "user", Content: "question"},
+		{RecordID: "m:answer", MessageID: "answer", Role: "assistant", Content: "answer"},
+		{RecordID: "m:kept", MessageID: "kept", Role: "user", Content: "other", TurnID: "kept-turn"},
+	}, 1, "turn-7", false)
+	suffix := followChanges(t, p, FollowRequest{Subscription: initial.Subscription, AfterRevision: initial.Snapshot.ProjectionRevision})
+	if len(suffix.Changes) != 1 || len(suffix.Changes[0].Records) != 3 {
+		t.Fatalf("published records = %+v", suffix.Changes)
+	}
+	records := suffix.Changes[0].Records
+	if records[0].TurnID != "turn-7" || records[1].TurnID != "turn-7" || records[2].TurnID != "kept-turn" {
+		t.Fatalf("published turn identity = %q %q %q", records[0].TurnID, records[1].TurnID, records[2].TurnID)
+	}
+	cut := snapshot(t, p)
+	if len(cut.Records) != 3 || cut.Records[0].Message.TurnID != "turn-7" || cut.Records[1].Message.TurnID != "turn-7" || cut.Records[2].Message.TurnID != "kept-turn" {
+		t.Fatalf("buffer turn identity diverged from the published change: %+v", cut.Records)
+	}
+}
+
 func TestBusinessSettlementUpdatesStreamingRowWithoutDuplicateOrPendingState(t *testing.T) {
 	p, err := NewProjection(testIdentity, nil, 0)
 	if err != nil {
@@ -96,6 +117,32 @@ func TestToolResultEventThenCanonicalRecordKeepsOneStableRow(t *testing.T) {
 	got := cut.Records[0].Message
 	if got.RecordID != "tool:call-1" || got.MessageID != "result-1" || got.HistoryTurn != 2 || got.Execution == nil {
 		t.Fatalf("event/formal handoff degraded canonical row: %+v", got)
+	}
+}
+
+func TestUnappliedSteerNoticeAndCanonicalRecordShareOneRow(t *testing.T) {
+	for _, eventFirst := range []bool{false, true} {
+		p, err := NewProjection(testIdentity, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		const recordID = "m:queued:notice:0"
+		warning := event.Event{Kind: event.Notice, Code: event.NoticeCodeUnappliedSteer,
+			MessageID: "queued", Level: event.LevelWarn, Text: "Guidance was not applied:\nUse plan B"}
+		formal := []Message{{RecordID: recordID, MessageID: "queued", Role: "notice", Code: event.NoticeCodeUnappliedSteer,
+			Level: "warn", Content: warning.Text}}
+		if eventFirst {
+			businessFrame(t, p, 0, warning)
+			p.AcceptBusiness(formal, 1, "turn", false)
+		} else {
+			p.AcceptBusiness(formal, 1, "turn", false)
+			businessFrame(t, p, 1, warning)
+		}
+		businessFrame(t, p, 1, warning)
+		cut := snapshot(t, p)
+		if len(cut.Records) != 1 || cut.Records[0].ID != recordID || cut.Records[0].Message.MessageID != "queued" {
+			t.Fatalf("eventFirst=%v duplicated unapplied steer: %+v", eventFirst, cut.Records)
+		}
 	}
 }
 

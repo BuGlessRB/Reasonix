@@ -93,6 +93,11 @@ func (a *App) metadataProjectTopics(scope, workspaceRoot string) []ProjectNode {
 	for _, topicID := range f.DeletedTopics {
 		deleted[topicID] = true
 	}
+	if state, err := a.workspaceRegistry().Load(a.bootContext()); err == nil {
+		for topicID := range purgedCanonicalTopicIDs(state) {
+			deleted[topicID] = true
+		}
+	}
 	ids := f.GlobalTopics
 	pinnedIDs := f.GlobalPinnedTopics
 	manualOrder := f.GlobalManualTopicOrder
@@ -580,6 +585,7 @@ func (a *App) catalogTopicPage(catalog *sessioncatalog.Catalog, req ProjectTopic
 			Limit: limit, Query: req.Query, TimeFilter: req.TimeFilter, SortMode: req.SortMode,
 			ManualOrder: manualOrder, IncludeTopicIDsJSON: req.groupIncludeJSON,
 			ExcludeTopicIDsJSON: req.groupExcludeJSON, ExcludePinned: req.ExcludePinned,
+			PinnedOnly:    req.pinnedOnly,
 			CursorBinding: req.groupCursorBind,
 		})
 		if err != nil {
@@ -638,7 +644,10 @@ func (a *App) GetSessionCatalogStatus() SessionCatalogStatus {
 // catalog pages and project shells; it never migrates, scans, or decodes a
 // session synchronously.
 func (a *App) ListProjectTree() ([]ProjectNode, error) {
-	snapshot := a.GetProjectTreeSnapshot()
+	snapshot, err := a.GetProjectTreeSnapshot()
+	if err != nil {
+		return []ProjectNode{}, err
+	}
 	hasGlobal := false
 	for _, project := range snapshot.Projects {
 		if project.Kind == "global_folder" {

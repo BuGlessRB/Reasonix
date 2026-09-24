@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -25,11 +26,13 @@ func desktopSourceKey(path, head string) string {
 	// directories. Keep their persisted key independent from the runtime
 	// session locator, which intentionally accepts transcript paths only.
 	pathKey := agent.CanonicalSessionPath(cleanDesktopPath(path))
-	sum := sha256.Sum256([]byte(pathKey + "\x00" + head))
-	return hex.EncodeToString(sum[:])
+	return agent.SessionSourceKeyFromIdentity(pathKey, head)
 }
 
 func (source desktopMigrationSource) mappingKey(path string) string {
+	if source.registeredSourceKey != "" {
+		return source.registeredSourceKey
+	}
 	key := desktopSourceKey(path, source.headID)
 	if source.versionFingerprint != "" {
 		key += ":review:" + source.versionFingerprint
@@ -277,10 +280,18 @@ func (a *App) resolveDesktopImportTarget(ctx context.Context, query *session.Que
 	for _, op := range state.PendingOperations {
 		// Explicit source versions reserve their own mapping key. Recover the
 		// exact reservation even when the imported manifest has no provenance.
-		if op.Mapping == nil || op.Mapping.SourceKey != mappingKey || op.Mapping.Fingerprint != fingerprint || len(op.SessionIDs) != 1 {
+		if op.Mapping == nil || !slices.Contains(state.SourceKeys(op.Mapping.SourceKey), mappingKey) || op.Mapping.Fingerprint != fingerprint || len(op.SessionIDs) != 1 {
 			continue
 		}
 		id := op.SessionIDs[0]
+		if state.SessionStates[id].Lifecycle == workspacestate.Deleted {
+			// A completed import receipt can outlive purge. It is not a live
+			// reservation and cannot authorize reusing that identity.
+			if op.Phase == "committed" {
+				continue
+			}
+			return "", false, workspacestate.ErrMutationConflict
+		}
 		digest, err := canonicalMigrationDigest(ctx, query, session.SessionRef{HostID: localDesktopHostID, SessionID: id})
 		if errors.Is(err, session.ErrSessionNotFound) {
 			return id, true, nil
@@ -293,37 +304,64 @@ func (a *App) resolveDesktopImportTarget(ctx context.Context, query *session.Que
 		}
 		return id, false, nil
 	}
-	return resolveMigrationTarget(ctx, query, preferredID, key, contentDigest, path, headID)
+	remappedRetired := state.SessionStates[preferredID].Lifecycle == workspacestate.Deleted
+	if remappedRetired {
+		if err := a.proveRetiredImportOrigin(ctx, state, path, headID, preferredID); err != nil {
+			return "", false, err
+		}
+		digest := sha256.Sum256([]byte(mappingKey + "\x00" + preferredID + "\x00" + contentDigest))
+		preferredID = "migr-" + hex.EncodeToString(digest[:12])
+	}
+	id, needsImport, err := resolveMigrationTarget(ctx, query, preferredID, key, contentDigest, path, headID)
+	if err != nil {
+		return "", false, err
+	}
+	if state.SessionStates[id].Lifecycle == workspacestate.Deleted {
+		return "", false, workspacestate.ErrMutationConflict
+	}
+	for _, op := range state.PendingOperations {
+		if (remappedRetired || op.Kind == "archive-import") && op.Phase != "committed" && slices.Contains(op.SessionIDs, id) &&
+			(op.Mapping == nil || op.Mapping.SourceKey != mappingKey || op.Mapping.Fingerprint != fingerprint) {
+			return "", false, workspacestate.ErrMutationConflict
+		}
+	}
+	return id, needsImport, nil
 }
 
 func (a *App) legacyCanonicalRef(ctx context.Context, path string) (session.SessionRef, bool, error) {
-	state, err := a.workspaceRegistry().Load(ctx)
+	snapshot, err := a.workspaceRegistry().VerifySnapshot(ctx)
 	if err != nil {
 		return session.SessionRef{}, false, err
 	}
-	mapping, adopted := state.SourceMappings[desktopSourceKey(path, "")]
+	mapping, adopted, err := snapshot.ResolveSource(desktopSourceKey(path, ""))
+	if err != nil {
+		return session.SessionRef{}, false, err
+	}
 	if !adopted {
 		// DAG migration records each head separately. A path-only legacy tab
 		// still refers to the selected head, not a new import of that path.
-		for _, candidate := range state.SourceMappings {
-			if candidate.HeadID == "" || sessionRuntimeKey(candidate.Path) != sessionRuntimeKey(path) {
-				continue
-			}
+		hasHeads, err := snapshot.HasHeadSource(path)
+		if err != nil {
+			return session.SessionRef{}, false, err
+		}
+		if hasHeads {
 			heads, err := agent.ListSessionHeads(path)
 			if err != nil {
 				return session.SessionRef{}, false, err
 			}
 			for _, head := range heads {
 				if head.Selected && !head.Retired {
-					mapping, adopted = state.SourceMappings[desktopSourceKey(path, head.ID)]
+					mapping, adopted, err = snapshot.ResolveSource(desktopSourceKey(path, head.ID))
+					if err != nil {
+						return session.SessionRef{}, false, err
+					}
 					break
 				}
 			}
-			break
 		}
 	}
 	if adopted {
-		if state.SessionStates[mapping.SessionID].Lifecycle == workspacestate.Deleted {
+		if snapshot.Session(mapping.SessionID).State.Lifecycle == workspacestate.Deleted {
 			return session.SessionRef{}, true, session.ErrSessionNotFound
 		}
 		// Adoption is durable. Opening the new conversation must not hash or

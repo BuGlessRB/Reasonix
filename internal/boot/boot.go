@@ -69,7 +69,6 @@ import (
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
 	"reasonix/internal/tool/sessiontool"
-	"reasonix/internal/workspacelease"
 )
 
 // ErrUnknownModel is returned by Build when the configured model can't be
@@ -97,6 +96,7 @@ func agentKeepPolicy(keep []string) agent.KeepPolicy {
 // read from configuration. Model "" falls back to default_model; MaxSteps 0
 // uses automatic execution; RequireKey fails fast on a missing key.
 type Options struct {
+	BackgroundScope *jobs.SessionBackgroundScope
 	// ModelSettings supplies an immutable desktop credential-proxy resolver.
 	// The bundle contains virtual tunnel credentials only and stays in memory.
 	ModelSettings *config.ModelRuntimeSettings
@@ -158,9 +158,14 @@ type Options struct {
 	// the previous service/runtime so model changes keep the immutable session
 	// identity and writer owned by the same SessionRuntime.
 	SessionService       *session.Service
+	SessionCreateService *session.Service
 	SessionRuntime       *session.Runtime
 	SessionHostID        string
 	SessionCreateOptions session.CreateOptions
+	// NativeLegacySession keeps a controller on the path-addressed session
+	// backend. Hosts set it only when opening an existing legacy transcript;
+	// fresh and already-canonical sessions continue to use SessionService.
+	NativeLegacySession bool
 	// SharedHost is an optional plugin.Host shared across controllers for the
 	// same workspace root. When set, boot.Build reuses its running clients
 	// instead of creating new subprocesses, and the caller manages the host's
@@ -568,27 +573,19 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			sink.Emit(event.Event{Kind: event.Notice, Text: "Selected model is missing its API key.", Detail: fmt.Sprintf("model %q is selected but its API key %s is not set — requests will fail until you set it", modelName, entry.APIKeyEnv)})
 		}
 	}
-	// Every role setting lazily acquires a workspace write lease on the first
-	// real writer. Read-only turns never take the lease.
-	var workspaceLease *workspacelease.Owner
-	jobOptions := []jobs.Option{
-		jobs.WithStalledWarningAfter(time.Duration(cfg.BackgroundJobStalledWarningSeconds()) * time.Second),
-		jobs.WithSessionOwnershipProbe(agent.SessionLeaseHeldByCurrentRuntime),
-	}
-	workspaceLease, err = workspacelease.New(root, config.WorkspaceLeaseDir(), func() {
-		sink.Emit(event.Event{
-			Kind:   event.Notice,
-			Level:  event.LevelInfo,
-			Code:   event.NoticeCodeWorkspaceLease,
-			Text:   "Another session is writing to this workspace; this session will continue automatically when it is safe.",
-			Detail: "workspace write lease is busy; read-only work remains concurrent",
-		})
-	})
+	backgroundScope, err := acquireBackgroundScope(opts.BackgroundScope, root, sink, cfg.BackgroundJobStalledWarningSeconds())
 	if err != nil {
-		return nil, fmt.Errorf("initialize workspace write lease: %w", err)
+		return nil, err
 	}
-	jobOptions = append(jobOptions, jobs.WithJobStartObserver(workspaceLease.RetainUntil))
-	jm := jobs.NewManager(sink, jobOptions...)
+	workspaceLease := backgroundScope.WorkspaceLease
+	backgroundOwned := false
+	var stagedBackgroundController *control.Controller
+	defer func() {
+		if !backgroundOwned {
+			releaseBackgroundBuild(backgroundScope, stagedBackgroundController)
+		}
+	}()
+	jm := backgroundScope.Manager
 	sessionDir := opts.SessionDir
 	if sessionDir == "" {
 		sessionDir = config.SessionDir()
@@ -598,8 +595,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// here would create competing registries over the same writer files during
 	// model switches or multi-tab startup.
 	sessionService := opts.SessionService
-	if opts.SessionRuntime != nil && sessionService == nil {
-		return nil, errors.New("v3 session runtime requires a session service")
+	if err := opts.validateSessionBinding(); err != nil {
+		return nil, err
 	}
 	reconcileCleanupPending := opts.CleanupPendingReconciler
 	if reconcileCleanupPending == nil {
@@ -769,6 +766,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	browserExec, closeBrowser := browserBackend(opts.BrowserExecutor, cfg.Browser, writeRoots)
 	if browserExec != nil {
 		for _, t := range browser.Tools(browserExec) {
+			reg.Add(t)
+		}
+		for _, t := range browser.CapabilityTools(browserExec) {
 			reg.Add(t)
 		}
 	}
@@ -1836,6 +1836,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		AuthenticationForModel:         authenticationReader(cfg, opts.ProviderResolver),
 		ModelSettingsRevision:          cfg.ModelRuntimeFingerprint(modelRef),
 		ModelSettingsCurrent:           runtimeModelSettingsReader(root, modelName, modelRef, opts.ModelSettings),
+		ModelSettingsContinuation:      runtimeModelContinuationReader(root, modelName, cfg, opts.ModelSettings, opts.ProviderResolver, extensionResolver),
+		ModelConnectionTarget:          config.SafeModelConnectionTarget(config.ProviderEffectiveRequestURL(entry)),
 		FrozenImageInput:               &imageEnabled,
 		ImageCapabilityChanged:         runtimeImageCapabilityReader(root, modelName, imageSnapshot, opts.ModelSettings),
 		TaskBudget:                     taskBudgetFromConfig(cfg),
@@ -1857,8 +1859,10 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		PinnedContextLoader:            opts.PinnedContextLoader,
 		SessionDir:                     sessionDir,
 		SessionService:                 sessionService,
+		SessionCreateService:           opts.SessionCreateService,
 		SessionRuntime:                 opts.SessionRuntime,
-		ExclusiveSession:               sessionService != nil,
+		ExclusiveSession:               sessionService != nil && !opts.NativeLegacySession,
+		NativeLegacySession:            opts.NativeLegacySession,
 		Host:                           pluginHost,
 		Commands:                       cmds,
 		Skills:                         skills,
@@ -1879,6 +1883,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		BalanceKey:            entry.APIKey(),
 		BalanceClient:         balanceClient,
 		Jobs:                  jm,
+		BackgroundScope:       backgroundScope,
+		BackgroundSink:        sink,
 		TaskStore:             opts.TaskStore,
 		WorkspaceLease:        workspaceLease,
 		Registry:              reg,
@@ -1954,6 +1960,10 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// reviewer. Controllers that want one inject it explicitly; otherwise Goal
 	// uses the deterministic host policy.
 	ctrl := newControllerWithImageRoutes(ctrlOpts, cfg)
+	stagedBackgroundController = ctrl
+	if opts.BackgroundScope == nil {
+		ctrl.PublishBackgroundScope()
+	}
 	// Validate and consume retired role inputs without changing runtime policy.
 	_, _ = agentpreset.Normalize(firstNonEmpty(opts.AgentPreset, opts.TokenMode))
 	// Publish the controller to the extension UI hub's indirection: from here
@@ -2084,6 +2094,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		ImplicitSkillInvocation: implicitSkillInvocation,
 	}
 	skillsOwned = true
+	backgroundOwned = true
 	return finalizeBuildResult(&BuildResult{Controller: ctrl, Snapshot: snap, Runtime: runtimeSet, Owner: owner, Extensions: extensionMgr, Dispatcher: extensionDispatcher, ExtensionUI: extUIHub, ProviderResolver: providerResolver, BaseProviderResolver: baseResolver, Assembly: assembly, SkillWatchService: skillWatchService}, !opts.deferPublish), nil
 }
 

@@ -417,6 +417,14 @@ try {
       await page.locator('[data-web="search"]').waitFor();
       assert.equal(await page.locator('[data-web="search"] a').count(), 1, 'web sources retain safe host links');
       report.weatherRows = weatherRows;
+      await page.evaluate(() => window.chatFixture.backgroundLaunch()); await frame();
+      await page.locator('.chat-process').click(); await frame();
+      assert.equal(await page.locator('.chat-tool[data-state="done"]').count(), 2, 'background launch receipts settle for PowerShell and Bash');
+      assert.equal(await page.locator('.chat-tool [data-state="ongoing"]').count(), 0, 'settled launches have no perpetual running animation');
+      await page.evaluate(() => window.chatFixture.backgroundOutputHistory()); await frame();
+      await page.locator('.chat-process').click(); await frame();
+      assert.equal(await page.locator('.chat-tool[data-state="done"]').count(), 4, 'restored output reads settle independently of sampled job state');
+      assert.equal(await page.locator('.chat-tool [data-state="ongoing"], .chat-tool[data-state="error"], .chat-tool[data-state="stopped"]').count(), 0, 'job snapshots cannot restart or fail a completed output read');
       await page.evaluate(() => window.chatFixture.toolAliasRegression()); await frame();
       const aliasProcess = page.locator('.chat-process');
       assert.equal(await aliasProcess.getAttribute('aria-expanded'), 'false', 'recovered alias regression folds after completion');
@@ -424,6 +432,22 @@ try {
       assert.equal(await page.locator('[data-chat-anchor-key="alias-call"]').count(), 1, 'formal result and event alias mount one tool DOM node');
       const aliasOrder = await page.locator('[data-chat-anchor-key]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-chat-anchor-key')));
       assert.ok(aliasOrder.indexOf('alias-call') < aliasOrder.indexOf('alias-final'), 'tool DOM node remains before the final answer');
+      for (const order of ['record-first', 'event-first']) {
+        for (const count of [1, 2]) {
+          await page.evaluate(({ order, count }) => window.chatFixture.steer(order, count), { order, count }); await frame();
+          assert.equal(await page.locator('[data-chat-anchor-key^="he:m:steer-"]').count(), count,
+            `${order}: one DOM record per insertion, including equal-text insertions`);
+          assert.equal(await page.locator('.dsh-ContextInjectionRow-root').count(), count,
+            `${order}: steer event does not add another system record`);
+        }
+      }
+      for (const order of ['record-first', 'event-first']) {
+        for (const count of [1, 2]) {
+          await page.evaluate(({ order, count }) => window.chatFixture.unappliedSteer(order, count), { order, count }); await frame();
+          assert.equal(await page.locator('[data-chat-anchor-key^="he:m:unapplied-"]').count(), count,
+            `${order}: one DOM warning per unapplied insertion`);
+        }
+      }
       assert.deepEqual(errors, []);
       Object.assign(report, { complete: true, expanded, switches, switchP95: percentile(switches), heapGrowth, anchorDrift: topAfter - anchor.top, prependDrift: topPrepended - anchor.top });
       console.log(JSON.stringify({

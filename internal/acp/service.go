@@ -24,10 +24,11 @@ import (
 	"reasonix/internal/fileutil"
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/jobs"
+	"reasonix/internal/persistentshell"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
-	"reasonix/internal/session"
 	"reasonix/internal/sessioninbox"
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/store"
 	"reasonix/internal/tool/builtin"
 )
@@ -45,14 +46,20 @@ import (
 // agent to connect for this session. The path hooks keep service bookkeeping
 // aligned; factories must wire both into the controller they build.
 type SessionParams struct {
+	BackgroundScope *jobs.SessionBackgroundScope
+	SessionTemp     *sessiontemp.Manager
+	PersistentShell *persistentshell.Manager
 	// MCPInteractions enables interactive MCP only after explicit client negotiation.
-	MCPInteractions     bool
-	Cwd                 string
-	MCPServers          []plugin.Spec
-	Sink                event.Sink
-	Model               string
-	EffortOverride      *string
-	RuntimeProfile      string
+	MCPInteractions bool
+	Cwd             string
+	MCPServers      []plugin.Spec
+	Sink            event.Sink
+	Model           string
+	EffortOverride  *string
+	RuntimeProfile  string
+	// NativeLegacySession asks the factory for a path-backed controller. It is
+	// set only when load/resume resolves an existing legacy transcript.
+	NativeLegacySession bool
 	OnSessionRecovered  func(control.SessionRecoveryInfo) error
 	OnSessionTransition func(control.SessionTransitionInfo) error
 	// FileOverlay and Terminal are non-nil when the client advertised the
@@ -688,8 +695,7 @@ func (s *service) sessionNew(ctx context.Context, raw json.RawMessage) (any, err
 		EffortOverride: cloneStringPtr(cfgState.EffortOverride),
 		RuntimeProfile: cfgState.RuntimeProfile,
 	}
-	s.bindSessionPathHandlers(id, &sessionParams)
-	s.bindClientIO(&sessionParams, id)
+	s.bindSessionClients(id, &sessionParams)
 	ctrl, err := s.factory.NewSession(ctx, sessionParams)
 	if err != nil {
 		return nil, &RPCError{Code: ErrInternal, Message: "session/new: " + err.Error()}
@@ -990,15 +996,15 @@ func (s *service) openExistingSession(ctx context.Context, method, id, cwdParam 
 	sink.bindCwd(cwd)
 	sink.bindExtensionSurface(s.extensionSurfaceSupported())
 	sessionParams := SessionParams{
-		Cwd:            cwd,
-		MCPServers:     mcpServers,
-		Sink:           sink,
-		Model:          cfgState.Model,
-		EffortOverride: cloneStringPtr(cfgState.EffortOverride),
-		RuntimeProfile: cfgState.RuntimeProfile,
+		Cwd:                 cwd,
+		MCPServers:          mcpServers,
+		Sink:                sink,
+		Model:               cfgState.Model,
+		EffortOverride:      cloneStringPtr(cfgState.EffortOverride),
+		RuntimeProfile:      cfgState.RuntimeProfile,
+		NativeLegacySession: existingTranscript(persistedPath),
 	}
-	s.bindSessionPathHandlers(id, &sessionParams)
-	s.bindClientIO(&sessionParams, id)
+	s.bindSessionClients(id, &sessionParams)
 	ctrl, err := s.factory.NewSession(ctx, sessionParams)
 	if err != nil {
 		return SessionConfigState{}, &RPCError{Code: ErrInternal, Message: method + ": " + err.Error()}
@@ -1008,15 +1014,15 @@ func (s *service) openExistingSession(ctx context.Context, method, id, cwdParam 
 
 	path := ""
 	var lease *agent.SessionLease
-	if ctrl.UsesExclusiveSession() {
-		service := ctrl.SessionService()
-		if service == nil {
+	canonicalExists, statErr := canonicalSessionExists(ctx, ctrl, id)
+	if statErr != nil {
+		ctrl.Close()
+		return SessionConfigState{}, &RPCError{Code: ErrInternal, Message: method + ": " + statErr.Error()}
+	}
+	if canonicalExists {
+		if err := openCanonicalSession(ctx, ctrl, id, method); err != nil {
 			ctrl.Close()
-			return SessionConfigState{}, &RPCError{Code: ErrInternal, Message: method + ": v3 session service is unavailable"}
-		}
-		if _, err := ctrl.OpenSession(ctx, session.SessionRef{HostID: service.HostID(), SessionID: id}); err != nil {
-			ctrl.Close()
-			return SessionConfigState{}, &RPCError{Code: ErrInvalidParams, Message: method + ": unknown session " + id}
+			return SessionConfigState{}, err
 		}
 	} else {
 		dir := ctrl.SessionDir()
@@ -1416,17 +1422,15 @@ func (s *service) reloadSessionExtensionsLocked(ctx context.Context, sess *acpSe
 		return nil, &RPCError{Code: ErrInternal, Message: sessionReloadExtensionsMethod + ": session controller does not support rebuild"}
 	}
 	rebuildParams := SessionParams{
-		Cwd:            cwd,
-		MCPServers:     mcpServers,
-		Sink:           sink,
-		Model:          model,
-		EffortOverride: effortOverride,
-		RuntimeProfile: runtimeProfile,
+		Cwd:                 cwd,
+		MCPServers:          mcpServers,
+		Sink:                sink,
+		Model:               model,
+		EffortOverride:      effortOverride,
+		RuntimeProfile:      runtimeProfile,
+		NativeLegacySession: old.NativeLegacySession(),
 	}
-	s.bindSessionPathHandlers(sess.id, &rebuildParams)
-	// The rebuilt controller must keep the client-capability wiring (fs
-	// overlay, host terminal) — mirrors rebuildSessionLocked.
-	s.bindClientIO(&rebuildParams, sess.id)
+	s.bindSessionClients(sess.id, &rebuildParams)
 	newCtrl, err := rebuilder.RebuildSession(ctx, rebuildParams, old)
 	if err != nil {
 		return nil, &RPCError{Code: ErrInternal, Message: sessionReloadExtensionsMethod + ": " + err.Error()}
@@ -1750,7 +1754,8 @@ func (s *service) rebuildSessionLocked(ctx context.Context, sess *acpSession, cf
 		sess.mu.Unlock()
 		return sessionConfigActiveWorkError("answer pending prompts before switching config")
 	}
-	if !sess.running && !status.Running && status.BackgroundJobs > 0 {
+	modelOnly := modelOnlyConfigDeltas(deltas)
+	if !sess.running && !status.Running && status.BackgroundJobs > 0 && configBackgroundBlocked(sess.ctrl, modelOnly) {
 		sess.mu.Unlock()
 		return sessionConfigActiveWorkError("stop background jobs before switching config")
 	}
@@ -1805,18 +1810,16 @@ func (s *service) rebuildSessionLocked(ctx context.Context, sess *acpSession, cf
 	}
 
 	rebuildParams := SessionParams{
-		Cwd:            cwd,
-		MCPServers:     mcpServers,
-		Sink:           sink,
-		Model:          cfgState.Model,
-		EffortOverride: cloneStringPtr(cfgState.EffortOverride),
-		RuntimeProfile: cfgState.RuntimeProfile,
+		Cwd:                 cwd,
+		MCPServers:          mcpServers,
+		Sink:                sink,
+		Model:               cfgState.Model,
+		EffortOverride:      cloneStringPtr(cfgState.EffortOverride),
+		RuntimeProfile:      cfgState.RuntimeProfile,
+		NativeLegacySession: prevPath != "",
 	}
-	s.bindSessionPathHandlers(sess.id, &rebuildParams)
-	// The rebuilt controller must keep the client-capability wiring (fs
-	// overlay, host terminal) a model/effort switch would otherwise drop.
-	s.bindClientIO(&rebuildParams, sess.id)
-	newCtrl, err := s.factory.NewSession(ctx, rebuildParams)
+	s.bindSessionClients(sess.id, &rebuildParams)
+	newCtrl, err := s.buildConfigReplacement(ctx, cur, rebuildParams, modelOnly)
 	if err != nil {
 		return &RPCError{Code: ErrInternal, Message: "session config: " + err.Error()}
 	}

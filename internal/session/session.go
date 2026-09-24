@@ -193,27 +193,29 @@ func (s *Session) PrepareBatchContext(ctx context.Context, operationID string, b
 			events[i].ID = randomID()
 		}
 	}
-	storedEvents := cloneEvents(events)
-	content := s.contentStore()
-	for i := range storedEvents {
-		if len(storedEvents[i].Payload) <= v4InlinePayloadBytes {
-			continue
-		}
-		if content == nil {
-			return PreparedBatch{}, errors.New("session: content store unavailable for large event payload")
-		}
-		ref, err := content.Put(ctx, bytes.NewReader(storedEvents[i].Payload), sessioncontent.Metadata{MediaType: "application/json"})
-		if err != nil {
-			return PreparedBatch{}, fmt.Errorf("prepare event %s content: %w", storedEvents[i].ID, err)
-		}
-		storedEvents[i].Payload = nil
-		storedEvents[i].PayloadRef = &ref
-	}
 	s.mu.Lock()
-	sessionID, writerGeneration, binding := s.id, s.manifest.WriterGeneration, s.binding
+	sessionID, writerGeneration, binding, manifestCodec := s.id, s.manifest.WriterGeneration, s.binding, s.manifest.Codec
 	s.mu.Unlock()
 	if binding == nil {
 		return PreparedBatch{}, ErrReadOnly
+	}
+	storedEvents := cloneEvents(events)
+	if manifestCodec == Codec {
+		content := s.contentStore()
+		for i := range storedEvents {
+			if len(storedEvents[i].Payload) <= v4InlinePayloadBytes {
+				continue
+			}
+			if content == nil {
+				return PreparedBatch{}, errors.New("session: content store unavailable for large event payload")
+			}
+			ref, err := content.Put(ctx, bytes.NewReader(storedEvents[i].Payload), sessioncontent.Metadata{MediaType: "application/json"})
+			if err != nil {
+				return PreparedBatch{}, fmt.Errorf("prepare event %s content: %w", storedEvents[i].ID, err)
+			}
+			storedEvents[i].Payload = nil
+			storedEvents[i].PayloadRef = &ref
+		}
 	}
 	reservation, err := binding.reserve(ctx, commitHotBytes(Commit{Events: storedEvents}))
 	if err != nil {
@@ -322,8 +324,12 @@ func (s *Session) commitPrepared(prepared PreparedBatch, expectedTitleSequence *
 		s.mu.Unlock()
 		return commit, nil
 	}
+	commitSchema, commitCodec := SchemaVersion, Codec
+	if s.manifest.Codec != Codec {
+		commitSchema, commitCodec = 3, s.manifest.Codec
+	}
 	commit := Commit{
-		SchemaVersion: SchemaVersion, Codec: Codec, RecordType: "commit", ID: randomID(),
+		SchemaVersion: commitSchema, Codec: commitCodec, RecordType: "commit", ID: randomID(),
 		OperationID: prepared.operationID, OperationHash: prepared.hash, FirstSequence: s.next,
 		EventCount: len(prepared.events), TurnID: prepared.turnID,
 		WriterGeneration: s.manifest.WriterGeneration, CreatedAt: time.Now().UTC(),
@@ -392,10 +398,14 @@ func (s *Session) Snapshot() Snapshot { return s.snapshot(true, true) }
 // message and completed turn on each activity update.
 func (s *Session) StateSnapshot() Snapshot { return s.snapshot(false, false) }
 
-// ExecutionSnapshot exposes the current provider projection and business
-// state without materializing durable UI history. Controllers use it for
-// turn/model decisions; UI history is obtained from Query.
-func (s *Session) ExecutionSnapshot() Snapshot { return s.snapshot(false, true) }
+// ExecutionSnapshot exposes the current model workset and business state,
+// retaining local refusal evidence until outbound request normalization. It
+// never materializes durable UI history; UI history is obtained from Query.
+func (s *Session) ExecutionSnapshot() Snapshot {
+	snapshot := s.snapshot(false, true)
+	restoreRejectedToolResults(&snapshot.Projection)
+	return snapshot
+}
 
 func (s *Session) snapshot(includeHistory, includeModel bool) Snapshot {
 	if s == nil {
@@ -471,6 +481,9 @@ func (s *Session) cacheWeight() int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	weight := int64(64 << 10)
+	for id, result := range s.projection.RejectedToolResults {
+		weight += int64(128 + len(id) + len(result.ToolCallID) + len(result.Name) + len(result.State))
+	}
 	for _, message := range s.projection.ModelMessages {
 		weight += int64(len(message.ID) + len(message.Content) + len(message.RawContent) + len(message.ProviderContent) + len(message.ReasoningContent) + len(message.ReasoningSignature) + len(message.Original))
 		for _, image := range message.Images {

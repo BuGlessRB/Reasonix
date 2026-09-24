@@ -1,6 +1,7 @@
 package workspacestate
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -195,6 +196,9 @@ func (s *Store) BeginOperation(ctx context.Context, op Operation) error {
 		}
 		if op.ExpectedGeneration != 0 && op.ExpectedGeneration != state.Generation {
 			return ErrMutationConflict
+		}
+		if err := validateArchiveImportReservation(state, op); err != nil {
+			return err
 		}
 		// Bind child admission to the original command's observed state,
 		// not to a newer snapshot taken after content/ownership validation.
@@ -442,28 +446,28 @@ func cancelPreparedPurge(state *State, id string) {
 
 func samePurgeIdentity(left, right Operation) bool {
 	return left.ID == right.ID && left.Kind == "purge" && right.Kind == "purge" && left.Lifecycle == right.Lifecycle &&
-		left.ExpectedGeneration == right.ExpectedGeneration && slices.Equal(left.SessionIDs, right.SessionIDs)
+		left.ExpectedGeneration == right.ExpectedGeneration && slices.Equal(left.SessionIDs, right.SessionIDs) && bytes.Equal(left.Request, right.Request)
 }
 
 // BeginPurge atomically validates the archived generation, publishes the
 // deletion tombstone and records the resumable purge operation.
 func (s *Store) BeginPurge(ctx context.Context, id string, expected uint64) error {
-	return s.beginOrResumePurge(ctx, id, expected, nil)
+	return s.beginOrResumePurge(ctx, id, expected, nil, false)
 }
 
 // ResumePurge continues only the observed operation. It cannot recreate a
 // deletion intent after a restore superseded that operation.
 func (s *Store) ResumePurge(ctx context.Context, id string, observed Operation) error {
-	return s.beginOrResumePurge(ctx, id, observed.ExpectedGeneration, &observed)
+	return s.beginOrResumePurge(ctx, id, observed.ExpectedGeneration, &observed, false)
 }
 
 // ResumePurgeForRequest keeps both the request snapshot and the observed
 // transaction identity. Neither may be refreshed while waiting for locks.
 func (s *Store) ResumePurgeForRequest(ctx context.Context, id string, expected uint64, observed Operation) error {
-	return s.beginOrResumePurge(ctx, id, expected, &observed)
+	return s.beginOrResumePurge(ctx, id, expected, &observed, false)
 }
 
-func (s *Store) beginOrResumePurge(ctx context.Context, id string, expected uint64, observed *Operation) error {
+func (s *Store) beginOrResumePurge(ctx context.Context, id string, expected uint64, observed *Operation, cleanupSources bool) error {
 	stale := false
 	err := s.mutate(ctx, func(state *State) error {
 		key := "purge-" + id
@@ -500,7 +504,15 @@ func (s *Store) beginOrResumePurge(ctx context.Context, id string, expected uint
 			if !known || status.Lifecycle != Archived || status.Generation > expected {
 				return ErrMutationConflict
 			}
-			state.PendingOperations[key] = Operation{ID: key, Kind: "purge", Phase: "tombstoned", Lifecycle: Deleted, SessionIDs: []string{id}, ExpectedGeneration: status.Generation}
+			op := Operation{ID: key, Kind: "purge", Phase: "tombstoned", Lifecycle: Deleted, SessionIDs: []string{id}, ExpectedGeneration: status.Generation}
+			if cleanupSources {
+				var err error
+				op.Request, err = purgeSourceCleanupRequest(*state, id)
+				if err != nil {
+					return err
+				}
+			}
+			state.PendingOperations[key] = op
 			setLifecycle(state, id, Deleted)
 			return nil
 		default:
@@ -549,30 +561,33 @@ func (s *Store) CompletePurge(ctx context.Context, id string) error {
 		default:
 			return ErrMutationConflict
 		}
+		// Keep only the consumed topic identity in the existing purge receipt.
+		// Canonical sessions and runtime-adopted sources may have no import
+		// journal from which a future display reader could recover that identity.
+		if topicID := state.Presentation[id].TopicID; topicID != "" {
+			op.WorkspaceID, _ = sessionOwner(*state, id)
+			if op.Presentation == nil {
+				op.Presentation = &Presentation{TopicID: topicID}
+			}
+		}
 		for key, workspace := range state.Workspaces {
+			if slices.Contains(workspace.SessionIDs, id) {
+				op.WorkspaceID = workspace.ID
+			}
 			workspace.SessionIDs = remove(workspace.SessionIDs, id)
 			state.Workspaces[key] = workspace
+		}
+		// The content and presentation can go, but their topic ownership must
+		// survive: otherwise a residual metadata row looks like a new topic.
+		if topicID := state.Presentation[id].TopicID; topicID != "" {
+			if op.Presentation == nil {
+				op.Presentation = &Presentation{}
+			}
+			op.Presentation.TopicID = topicID
 		}
 		delete(state.Presentation, id)
 		op.Phase, op.ResultGeneration = "committed", state.Generation+1
 		state.PendingOperations[key] = op
-		return nil
-	})
-}
-
-func (s *Store) RecordSource(ctx context.Context, mapping SourceMapping, presentation Presentation) error {
-	return s.mutate(ctx, func(state *State) error {
-		if old, ok := state.SourceMappings[mapping.SourceKey]; ok {
-			if old.SessionID != mapping.SessionID || old.Fingerprint != mapping.Fingerprint {
-				return ErrMutationConflict
-			}
-			return nil
-		}
-		state.SourceMappings[mapping.SourceKey] = mapping
-		adoptOrganizationSource(state, mapping)
-		if _, exists := state.Presentation[mapping.SessionID]; !exists {
-			state.Presentation[mapping.SessionID] = presentation
-		}
 		return nil
 	})
 }
