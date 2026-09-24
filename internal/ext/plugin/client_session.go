@@ -79,7 +79,8 @@ func (c *Client) withProgress(ctx context.Context, t transport, method string, p
 
 func (c *Client) callTransport(ctx context.Context, t transport, method string, params any) (json.RawMessage, error) {
 	res, err := t.call(ctx, method, params)
-	if err == nil || method == "initialize" || !isHTTPSessionExpired(err) {
+	// A modern server has no session to expire; initialize would be the wrong era.
+	if err == nil || method == "initialize" || c.modern.version != "" || !isHTTPSessionExpired(err) {
 		return res, err
 	}
 	if initErr := c.initializeSessionOn(ctx, t, false); initErr != nil {

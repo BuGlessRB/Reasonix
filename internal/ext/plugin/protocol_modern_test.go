@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,6 +25,7 @@ type modernServer struct {
 	methods   []string
 	headers   []http.Header
 	rounds    int
+	flood     bool // asks for more inputs in one round than a client answers
 }
 
 func (m *modernServer) reject(w http.ResponseWriter, id any, code int, msg string, data any) {
@@ -92,6 +94,14 @@ func (m *modernServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			result = map[string]any{"resultType": "input_required", "inputRequests": map[string]any{
 				"who": map[string]any{"method": "elicitation/create", "params": map[string]any{"mode": "form", "message": "Name?"}},
 			}}
+			break
+		}
+		if m.flood {
+			asks := map[string]any{}
+			for i := range maxInputRequests + 1 {
+				asks[fmt.Sprintf("r%d", i)] = map[string]any{"method": "roots/list", "params": map[string]any{}}
+			}
+			result = map[string]any{"resultType": "input_required", "inputRequests": asks}
 			break
 		}
 		responses, answered := req.Params["inputResponses"].(map[string]any)
@@ -238,5 +248,70 @@ func TestStdioProbeChoosesTheServersEra(t *testing.T) {
 		if err != nil || out != "echo: hi" {
 			t.Fatalf("modern=%v: Execute = %q, %v", modern, out, err)
 		}
+	}
+}
+
+// A legacy server may answer the pre-handshake probe with a code the modern
+// revision also uses. Without a list of revisions that is not a modern answer,
+// and the server still gets its handshake.
+func TestLegacyServerUsingAModernCodeStillGetsTheHandshake(t *testing.T) {
+	for _, reply := range []map[string]any{
+		{"code": codeMissingClientCapability, "message": "unknown method"},
+		{"code": codeUnsupportedProtocolVersion, "message": "no"},
+		{"code": codeHeaderMismatch, "message": "no", "data": map[string]any{"supported": "garbage"}},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req struct {
+				ID     any    `json:"id"`
+				Method string `json:"method"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			w.Header().Set("Content-Type", "application/json")
+			var body map[string]any
+			switch req.Method {
+			case discoverMethod:
+				body = map[string]any{"jsonrpc": "2.0", "id": req.ID, "error": reply}
+			case "initialize":
+				body = map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": map[string]any{
+					"protocolVersion": "2025-11-25", "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]any{"name": "legacy"}}}
+			case "tools/list":
+				body = map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": map[string]any{"tools": []map[string]any{
+					{"name": "echo", "inputSchema": map[string]any{"type": "object"}}}}}
+			default:
+				w.WriteHeader(http.StatusAccepted)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(body)
+		}))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		host, tools, err := StartAll(ctx, []Spec{{Name: "l", Type: "http", URL: srv.URL}})
+		cancel()
+		srv.Close()
+		if err != nil || len(tools) != 1 {
+			t.Fatalf("probe reply %v: StartAll = %d tools, %v; want the legacy handshake", reply, len(tools), err)
+		}
+		host.Close()
+	}
+}
+
+func TestModernInputRoundIsBounded(t *testing.T) {
+	m := &modernServer{t: t, supported: []string{modernProtocolVersion}, flood: true}
+	srv := httptest.NewServer(m)
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	host, tools, err := StartAll(ctx, []Spec{{Name: "m", Type: "http", URL: srv.URL, WorkspaceRoot: t.TempDir()}})
+	if err != nil {
+		t.Fatalf("StartAll: %v", err)
+	}
+	defer host.Close()
+	query := findToolByName(tools, "mcp__m__query")
+	if _, err := query.Execute(ctx, json.RawMessage(`{"region":"x"}`)); !errors.Is(err, errMCPInputOverBounds) {
+		t.Fatalf("err = %v, want the input round refused", err)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.rounds != 1 {
+		t.Fatalf("rounds = %d, want the flood refused before answering it", m.rounds)
 	}
 }

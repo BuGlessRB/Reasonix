@@ -29,8 +29,10 @@ const (
 	codeUnsupportedProtocolVersion = -32022
 
 	// maxInputRounds bounds a multi round-trip request; a server that keeps
-	// asking is not converging.
-	maxInputRounds = 4
+	// asking is not converging. The other two bound what one round echoes.
+	maxInputRounds    = 4
+	maxInputRequests  = 16
+	maxRequestStateSz = 1 << 20
 	// modernProbeWait bounds the probe: a legacy server may answer a method
 	// sent before initialize with nothing at all, and every startup of one
 	// pays this wait before falling back.
@@ -40,6 +42,9 @@ const (
 // ErrMCPInputRequired is a modern server asking, mid-call, for input this
 // client cannot give it (an elicitation or a sampling request).
 var ErrMCPInputRequired = errors.New("MCP server needs input this client does not provide")
+
+// errMCPInputOverBounds is one input round asking for more than a client echoes.
+var errMCPInputOverBounds = errors.New("MCP input round over this client's bounds")
 
 // modernSession is what the probe learned. An empty version means the server
 // was brought up with the legacy initialize handshake.
@@ -120,21 +125,20 @@ func (c *Client) probe(ctx context.Context, t transport) (string, *discoverResul
 	if ctx.Err() != nil {
 		return "", nil, ctx.Err()
 	}
+	// The modern codes sit in JSON-RPC's implementation-defined range, where a
+	// legacy server may use them for its own reasons. Only a list of revisions
+	// marks the answer as modern; anything else gets the handshake.
 	var rpc *rpcError
-	if !errors.As(err, &rpc) {
+	if !errors.As(err, &rpc) || rpc.Code != codeUnsupportedProtocolVersion {
 		return "", nil, nil
 	}
-	switch rpc.Code {
-	case codeUnsupportedProtocolVersion:
-		var data struct {
-			Supported []string `json:"supported"`
-		}
-		_ = json.Unmarshal(rpc.Data, &data)
-		return pickEra(data.Supported, nil)
-	case codeHeaderMismatch, codeMissingClientCapability:
-		return "", nil, fmt.Errorf("modern MCP server refused discovery: %w", rpc)
+	var data struct {
+		Supported []string `json:"supported"`
 	}
-	return "", nil, nil
+	if json.Unmarshal(rpc.Data, &data) != nil || len(data.Supported) == 0 {
+		return "", nil, nil
+	}
+	return pickEra(data.Supported, nil)
 }
 
 // pickEra chooses from what a modern server says it supports: a modern
@@ -209,6 +213,9 @@ func (c *Client) callModern(ctx context.Context, t transport, method string, par
 		if round+1 >= maxInputRounds {
 			return nil, fmt.Errorf("plugin %q: %s still needed input after %d rounds", c.name, method, maxInputRounds)
 		}
+		if len(r.InputRequests) > maxInputRequests || (r.RequestState != nil && len(*r.RequestState) > maxRequestStateSz) {
+			return nil, fmt.Errorf("plugin %q: %s asked for %d inputs with %s of state: %w", c.name, method, len(r.InputRequests), stateSize(r.RequestState), errMCPInputOverBounds)
+		}
 		responses, err := c.answerInputRequests(r.InputRequests)
 		if err != nil {
 			return nil, fmt.Errorf("plugin %q: %s: %w", c.name, method, err)
@@ -241,4 +248,11 @@ func (c *Client) answerInputRequests(requests map[string]json.RawMessage) (map[s
 		}
 	}
 	return out, nil
+}
+
+func stateSize(s *string) string {
+	if s == nil {
+		return "no"
+	}
+	return fmt.Sprintf("%d bytes", len(*s))
 }
