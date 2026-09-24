@@ -5,6 +5,8 @@ import { RewindControl } from "./RewindControl";
 import { reason } from "../../i18n/kernel";
 import { t } from "../../i18n";
 import { StudioIcon } from "../StudioIcon";
+import { messageSource } from "../source";
+import { useViewer } from "../../state/viewer";
 
 export function UserCard({
   item,
@@ -28,6 +30,7 @@ export function UserCard({
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
+  const source = messageSource(item.via, useViewer());
 
   useEffect(() => {
     const el = box.current;
@@ -58,6 +61,7 @@ export function UserCard({
           {/* It reached the model inside a turn already running, which is why
               there is no checkpoint on this row to rewind to. */}
           {item.steer && <span className="steermark">{t("插话")}</span>}
+          {source && <span className="viamark">{source}</span>}
           {/* The entry point lives on the turn it returns to, so there is no
               list to read and no turn number to match up by eye. */}
           {editable && draft === null && (

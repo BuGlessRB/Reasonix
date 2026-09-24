@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort } from "../port/hub";
 import type { DeviceSelf } from "../port/share";
+import { setViewer } from "../state/viewer";
 
 // How often a device confirms the machine still answers. The event stream
 // carries the work; this only keeps the bar's dot honest when it stops.
@@ -21,18 +22,22 @@ export function DeviceBar({ hub }: { hub: HubPort }) {
     let alive = true;
     let timer: number | null = null;
     const read = () =>
-      hub
-        .device()
-        .then((d) => {
-          if (!alive) return;
+      hub.device().then(
+        (d) => {
+          if (!alive) return false;
           setSelf(d);
+          setViewer(d);
           setReachable(true);
-          // Not a device: there is nothing to keep checking.
-          if (d === null && timer !== null) window.clearInterval(timer);
-        })
-        .catch(() => alive && setReachable(false));
-    void read().then(() => {
-      if (alive) timer = window.setInterval(() => void read(), CHECK_MS);
+          return d !== null;
+        },
+        () => {
+          if (alive) setReachable(false);
+          return true;
+        },
+      );
+    // Only a device keeps checking: the window's answer never changes.
+    void read().then((device) => {
+      if (alive && device) timer = window.setInterval(() => void read(), CHECK_MS);
     });
     return () => {
       alive = false;

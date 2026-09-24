@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/base/i18n"
+	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/skill"
 )
 
@@ -37,6 +38,13 @@ func (c *Controller) SubmitHTTP(input string) {
 // or other non-turn input is discarded; @reference turns preserve it because
 // the format is bound to every submitted turn rather than a global slot.
 func (c *Controller) SubmitHTTPFormat(input, format string) {
+	c.SubmitHTTPFrom(input, format, nil)
+}
+
+// SubmitHTTPFrom is SubmitHTTPFormat for input relayed from a paired device:
+// the turn's message is landed and announced as that device's. A nil via is
+// the window's own input.
+func (c *Controller) SubmitHTTPFrom(input, format string, via *provider.Via) {
 	// format 绑定到本次提交的 turn（随请求参数传递），不再写入 Controller
 	// 全局一次性槽——评审 #7234 第 2 点：全局槽存在跨请求串用的逻辑竞态
 	// （后提交的 JSON 请求先写槽，更早的普通请求先启动消费掉）。
@@ -47,7 +55,7 @@ func (c *Controller) SubmitHTTPFormat(input, format string) {
 	// @ 引用 turn（FileRefLine/SlashPathLineRef 等）同样绑定 format——
 	// runRefTurnWithFormat 族 wrapper 注入 ctx（review fix7234and7168：
 	// format 是每个被接纳 turn 的属性，统一架构）。
-	c.submitHTTPWithFormat(input, "", f)
+	c.submitHTTPWithFormat(input, "", turnTags{format: f, via: via})
 }
 
 // SubmitDisplay runs input as a turn while remembering the user-facing display
@@ -188,14 +196,14 @@ func (c *Controller) submit(input, display, editedOriginal string) {
 		c.RunShell(trimmed[1:])
 		return
 	}
-	c.submitCommandOrTurn(trimmed, input, display, false, editedOriginal, "")
+	c.submitCommandOrTurn(trimmed, input, display, false, editedOriginal, turnTags{})
 }
 
 func (c *Controller) submitHTTP(input, display string) {
-	c.submitHTTPWithFormat(input, display, "")
+	c.submitHTTPWithFormat(input, display, turnTags{})
 }
 
-func (c *Controller) submitHTTPWithFormat(input, display, format string) {
+func (c *Controller) submitHTTPWithFormat(input, display string, tags turnTags) {
 	trimmed := strings.TrimSpace(input)
 	if note, ok := MemoryQuickAddNote(trimmed); ok {
 		c.rememberProjectNote(note)
@@ -212,15 +220,15 @@ func (c *Controller) submitHTTPWithFormat(input, display, format string) {
 		c.notice("shell commands are unavailable from this frontend")
 		return
 	}
-	c.submitCommandOrTurn(trimmed, input, display, true, "", format)
+	c.submitCommandOrTurn(trimmed, input, display, true, "", tags)
 }
 
 // refTurnBase is the shape every ref turn from one submitted line shares. An
 // edited resubmit resolves against the whole workspace and rides the
 // edited-goal loop, so it overrides scopedRefsOnly rather than combining with
 // it.
-func (c *Controller) refTurnBase(display, editedOriginal, format string, scopedRefsOnly bool) refTurn {
-	base := refTurn{display: display, original: editedOriginal, format: format}
+func (c *Controller) refTurnBase(display, editedOriginal string, tags turnTags, scopedRefsOnly bool) refTurn {
+	base := refTurn{display: display, original: editedOriginal, tags: tags}
 	if scopedRefsOnly && strings.TrimSpace(editedOriginal) == "" {
 		base.resolve = c.ResolveScopedRefs
 	}
@@ -229,21 +237,21 @@ func (c *Controller) refTurnBase(display, editedOriginal, format string, scopedR
 
 // turnLoopRunner is the loop that same line runs in: an edited resubmit rides
 // the edited-goal loop, everything else the plain one with its format bound.
-func (c *Controller) turnLoopRunner(editedOriginal, format string) func(context.Context, string, string, string) error {
+func (c *Controller) turnLoopRunner(editedOriginal string, tags turnTags) func(context.Context, string, string, string) error {
 	if strings.TrimSpace(editedOriginal) != "" {
 		return func(ctx context.Context, input, raw, display string) error {
-			return c.runTurnLoop(ctx, orchestratedTurn{
+			return c.runTurnLoop(withTurnVia(ctx, tags.via), orchestratedTurn{
 				input: input, raw: raw, display: display, editedOriginal: editedOriginal,
 			})
 		}
 	}
 	return func(ctx context.Context, input, raw, display string) error {
-		return c.runTurnLoop(c.withTurnFormat(ctx, format), orchestratedTurn{input: input, raw: raw, display: display})
+		return c.runTurnLoop(c.withTurnTags(ctx, tags), orchestratedTurn{input: input, raw: raw, display: display})
 	}
 }
 
-func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, scopedRefsOnly bool, editedOriginal, format string) {
-	base := c.refTurnBase(display, editedOriginal, format, scopedRefsOnly)
+func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, scopedRefsOnly bool, editedOriginal string, tags turnTags) {
+	base := c.refTurnBase(display, editedOriginal, tags, scopedRefsOnly)
 	runRefTurn := func(input, display string) {
 		r := base
 		r.input, r.display = input, display
@@ -254,7 +262,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 		r.input, r.refLine, r.display = input, refLine, display
 		c.runRefTurn(r)
 	}
-	runTurnLoop := c.turnLoopRunner(editedOriginal, format)
+	runTurnLoop := c.turnLoopRunner(editedOriginal, tags)
 	switch {
 	case trimmed == "/compact" || strings.HasPrefix(trimmed, "/compact "):
 		go c.compactAndReport(strings.TrimSpace(strings.TrimPrefix(trimmed, "/compact")))

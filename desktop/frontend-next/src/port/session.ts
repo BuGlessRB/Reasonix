@@ -1,3 +1,4 @@
+import type { Via } from "./wire";
 // A conversation and the states it passes through: what is running, what it
 // cost, and the points it can be wound back to.
 // GET /history: the event stream is live-only, so a reload rebuilds from these.
@@ -14,6 +15,8 @@ export interface HistoryMessage {
   // Guidance sent into a turn that was already running, rather than a turn of
   // its own. There is no checkpoint behind it, so nothing rewinds to it.
   steer?: boolean;
+  // The paired device a user message was sent from; absent is the window.
+  via?: Via;
   // Which model wrote this assistant turn. A rebuild has no turn_started to
   // read it off, and the composer's current setting is a different fact.
   modelRef?: string;

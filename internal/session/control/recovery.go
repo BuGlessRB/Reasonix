@@ -75,7 +75,7 @@ func (c *Controller) ResolveRecovery(id string, action agent.RecoveryAction, fee
 		case agent.RecoveryActionContinueTask:
 			outcome = "recovery_continue_task"
 		}
-		c.recordDecisionReceipt(pending, outcome)
+		c.recordDecisionReceipt(pending, outcome, nil)
 		switch action {
 		case agent.RecoveryActionContinue, agent.RecoveryActionContinueTask:
 			pending.reply <- approvalReply{allow: true}

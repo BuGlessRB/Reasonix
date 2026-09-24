@@ -49,6 +49,9 @@ type Event struct {
 	// own user row, so this is the only thing that names which one.
 	AuthoredTurn *int `json:"authoredTurn,omitempty"`
 	MsgIndex     *int `json:"msgIndex,omitempty"`
+	// turn_started: the paired device the message came from; absent is the
+	// window. The message itself rides text.
+	Via *Via `json:"via,omitempty"`
 	// Which model wrote this. None means the turn's own, which a client
 	// reading it off the composer instead got wrong once the setting moved.
 	ModelRef      string         `json:"modelRef,omitempty"`
@@ -171,6 +174,7 @@ func ToWire(e event.Event) Event {
 	case event.TurnStarted:
 		w.AuthoredTurn = e.AuthoredTurn
 		w.MsgIndex = e.MsgIndex
+		w.Via = ToWireVia(e.Via)
 	case event.TurnDone:
 		w.Cancelled = e.Cancelled
 		w.Outcome = e.Outcome
@@ -269,13 +273,28 @@ type DecisionReceipt struct {
 	Tool    string `json:"tool,omitempty"`
 	Subject string `json:"subject,omitempty"`
 	Outcome string `json:"outcome"`
+	Via     *Via   `json:"via,omitempty"`
 }
 
 func ToWireDecisionReceipt(in *provider.DecisionReceipt) *DecisionReceipt {
 	if in == nil {
 		return nil
 	}
-	return &DecisionReceipt{ID: in.ID, Kind: in.Kind, Tool: in.Tool, Subject: in.Subject, Outcome: in.Outcome}
+	return &DecisionReceipt{ID: in.ID, Kind: in.Kind, Tool: in.Tool, Subject: in.Subject, Outcome: in.Outcome, Via: ToWireVia(in.Via)}
+}
+
+// Via is the JSON form of the paired device a person acted from.
+type Via struct {
+	Device  string `json:"device"`
+	Ordinal int    `json:"ordinal"`
+}
+
+// ToWireVia converts a device attribution; nil stays nil, the window's own.
+func ToWireVia(in *provider.Via) *Via {
+	if in == nil {
+		return nil
+	}
+	return &Via{Device: in.Device, Ordinal: in.Ordinal}
 }
 
 type FinalReadiness struct {

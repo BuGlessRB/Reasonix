@@ -25,6 +25,13 @@ func (c *Controller) PendingPrompt() bool {
 // also remembers a grant for the rest of the session so the same approval scope
 // is not re-prompted. Unknown/expired IDs are ignored.
 func (c *Controller) Approve(id string, allow, session, persist bool) {
+	c.ApproveFrom(id, allow, session, persist, nil)
+}
+
+// ApproveFrom is Approve for a decision made on a paired device. The device is
+// recorded on the decision's receipt and nowhere else: it names who decided
+// and changes nothing about what the decision allows.
+func (c *Controller) ApproveFrom(id string, allow, session, persist bool, via *provider.Via) {
 	// Recovery cards are strict fresh decisions. Prefer ResolveRecovery so a
 	// continue/deny from an old client that only knows Approve still maps onto
 	// the recovery state machine (allow=continue, deny=revise without feedback).
@@ -64,7 +71,7 @@ func (c *Controller) Approve(id string, allow, session, persist bool) {
 			outcome = "allow_once"
 		}
 	}
-	c.recordDecisionReceipt(pending, outcome)
+	c.recordDecisionReceipt(pending, outcome, via)
 	pending.reply <- approvalReply{allow: allow, session: session, persist: persist} // buffered, never blocks
 }
 
@@ -88,7 +95,7 @@ func (c *Controller) ResolvePlanDecision(id string, action PlanDecisionAction) e
 		return fmt.Errorf("plan approval %q is no longer pending", id)
 	}
 	pending.kind = "plan"
-	c.recordDecisionReceipt(pending, string(action))
+	c.recordDecisionReceipt(pending, string(action), nil)
 	// Move before answering, so the waiting turn sees the state the user chose.
 	// Start stays with that turn: it holds the state it submitted, so only it
 	// can tell an approval from a late one.
@@ -104,7 +111,7 @@ func (c *Controller) ResolvePlanDecision(id string, action PlanDecisionAction) e
 	return nil
 }
 
-func (c *Controller) recordDecisionReceipt(pending pendingApproval, outcome string) {
+func (c *Controller) recordDecisionReceipt(pending pendingApproval, outcome string, via *provider.Via) {
 	if c == nil || c.executor == nil || pending.reply == nil {
 		return
 	}
@@ -121,6 +128,7 @@ func (c *Controller) recordDecisionReceipt(pending pendingApproval, outcome stri
 		Tool:    strings.TrimSpace(pending.tool),
 		Subject: clipUTF8(strings.TrimSpace(pending.subject), 240),
 		Outcome: strings.TrimSpace(outcome),
+		Via:     via,
 	}
 	// Keep the receipt bounded and provider-excluded even when an older caller
 	// omits optional approval metadata.

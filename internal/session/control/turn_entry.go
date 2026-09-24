@@ -67,6 +67,35 @@ func (c *Controller) RunTurn(ctx context.Context, input string) error {
 	})
 }
 
+// turnTags are what one submission carries into the turn it becomes: its
+// output format and the paired device it came from. They ride the turn's
+// context, never a controller slot, so two requests cannot trade them.
+type turnTags struct {
+	format string
+	via    *provider.Via
+}
+
+type turnViaKey struct{}
+
+// withTurnTags binds a submission's tags to the turn context.
+func (c *Controller) withTurnTags(ctx context.Context, tags turnTags) context.Context {
+	return withTurnVia(c.withTurnFormat(ctx, tags.format), tags.via)
+}
+
+func withTurnVia(ctx context.Context, via *provider.Via) context.Context {
+	if via == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, turnViaKey{}, via)
+}
+
+// turnVia is the paired device the turn's message came from, nil for the
+// window.
+func turnVia(ctx context.Context) *provider.Via {
+	via, _ := ctx.Value(turnViaKey{}).(*provider.Via)
+	return via
+}
+
 // withTurnFormat binds a structured-output format to the turn context
 // (empty is a no-op). Extracted from the runTurnLoop closure so tests can
 // assert the format actually reaches the agent request path.
@@ -144,7 +173,7 @@ func (c *Controller) runRefTurn(r refTurn) {
 // runRefTurnSync is runRefTurn on the caller's goroutine, for a caller that
 // already holds turn admission.
 func (c *Controller) runRefTurnSync(ctx context.Context, r refTurn) error {
-	ctx = c.withTurnFormat(ctx, r.format)
+	ctx = c.withTurnTags(ctx, r.tags)
 	resolve := r.resolve
 	if resolve == nil {
 		resolve = c.ResolveRefs

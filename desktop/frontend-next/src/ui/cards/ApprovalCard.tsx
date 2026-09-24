@@ -3,6 +3,8 @@ import { Sym } from "../Sym";
 import { t } from "../../i18n";
 import type { ApprovalVerdict } from "../../port/port";
 import { useState } from "react";
+import { decisionSource } from "../source";
+import { useViewer } from "../../state/viewer";
 
 // The Tool name the kernel puts on a plan gate; its own comment says frontends
 // key their plan UI on it. `kind` says the same thing on newer kernels.
@@ -81,6 +83,7 @@ interface Props {
 // must be the only way past — no other control may advance the queue.
 export function ApprovalCard({ item, onApprove, onFullAccess, onPlan }: Props) {
   const sealed = item.verdict !== undefined;
+  const settledBy = decisionSource(item.by, useViewer());
   const [submitting, setSubmitting] = useState<ApprovalVerdict | "">("");
   const [confirmFullAccess, setConfirmFullAccess] = useState(false);
   const [switchingFullAccess, setSwitchingFullAccess] = useState(false);
@@ -189,6 +192,7 @@ export function ApprovalCard({ item, onApprove, onFullAccess, onPlan }: Props) {
                 ) : (
                   <><b>{t("允许这一次。")}</b>{t("下次同样的操作仍会请求确认。")}</>
                 )}
+                {settledBy && <span className="apv-by">{settledBy}</span>}
               </div>
             )}
           </div>

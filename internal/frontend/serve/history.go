@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"reasonix/internal/state/sessionstore"
 
+	"reasonix/internal/contract/eventwire"
 	"reasonix/internal/contract/provider"
 )
 
@@ -37,6 +38,9 @@ type historyMessage struct {
 	// Guidance sent into a turn already running, rather than a turn of its own.
 	// It has no checkpoint behind it, so nothing can be rewound to it.
 	Steer bool `json:"steer,omitempty"`
+	// Via is the paired device a user message was sent from; absent is the
+	// window. Written when the message landed, so a reload still says it.
+	Via *eventwire.Via `json:"via,omitempty"`
 	// Which model wrote this assistant turn. A reopened transcript has no
 	// turn_started to read it off, and the composer's current setting is a
 	// different fact that has usually moved on.
@@ -72,6 +76,7 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 			// whole file. A reopened session has to show what was typed.
 			hm.Content = sessionstore.UserMessageText(m)
 			hm.Images = len(m.Images)
+			hm.Via = eventwire.ToWireVia(m.Via)
 		}
 		if m.Role == provider.RoleAssistant {
 			hm.ModelRef = m.ModelRef

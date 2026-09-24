@@ -90,6 +90,9 @@ type Message struct {
 	// stripped before every provider request: a reopened transcript otherwise has
 	// no way to say which model answered, and a turn can carry two.
 	ModelRef string `json:"modelRef,omitempty"`
+	// Via names the paired device a user message was sent from. Nil is the
+	// window itself. Local UI metadata, stripped before every provider request.
+	Via *Via `json:"via,omitempty"`
 	// Derived marks a message the host projects onto one request — a tail it
 	// re-derives every time rather than conversation the next request carries.
 	// Never stored and never serialized: it is a fact about this request.
@@ -113,17 +116,6 @@ type Message struct {
 	// The host's own account of a result that did not succeed: non-nil is the
 	// fact, RefusalCode names a refusal. Local metadata, like ToolExecution.
 	ToolFailure *ToolFailure `json:"tool_failure,omitempty"`
-}
-
-// DecisionReceipt is durable, provider-excluded evidence of a user-owned
-// approval decision. It intentionally contains only bounded labels and the
-// outcome, never free-form guidance or provider-visible content.
-type DecisionReceipt struct {
-	ID      string `json:"id"`
-	Kind    string `json:"kind"`
-	Tool    string `json:"tool,omitempty"`
-	Subject string `json:"subject,omitempty"`
-	Outcome string `json:"outcome"`
 }
 
 // InterruptedTurnRecovery is the durable, provider-excluded handoff for a turn

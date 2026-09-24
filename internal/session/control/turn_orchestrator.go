@@ -315,7 +315,8 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 // any of it executes, this is the only start the turn gets; the identity rides
 // it when the turn opens an authored one.
 func (c *Controller) announceAuthoredTurn(ctx context.Context, raw string, msgIndex int) context.Context {
-	boundary := agent.HostTurnBoundary{}
+	via := turnVia(ctx)
+	boundary := agent.HostTurnBoundary{Via: via}
 	// The turn names the model it runs on. Under a host boundary this is the
 	// only start the turn gets, so a reply attributed from anywhere else — the
 	// composer's current setting — is attributed from something that moves.
@@ -328,6 +329,11 @@ func (c *Controller) announceAuthoredTurn(ctx context.Context, raw string, msgIn
 		boundary.Authored = &sessionstore.AuthoredTurnIdentity{AuthoredTurn: class.AuthoredTurn, MsgIndex: msgIndex, Raw: raw}
 		authored, index := class.AuthoredTurn, msgIndex
 		started.AuthoredTurn, started.MsgIndex = &authored, &index
+		// The message itself, for every client that did not send it: each one
+		// mints its own row, and the others have nothing to draw it from. Read
+		// the way history reads it, so a reload draws the same line.
+		started.Text = sessionstore.UserMessageText(provider.Message{Role: provider.RoleUser, RawContent: raw})
+		started.Via = via
 	}
 	c.sink.Emit(started)
 	return agent.WithHostTurnBoundary(ctx, boundary)

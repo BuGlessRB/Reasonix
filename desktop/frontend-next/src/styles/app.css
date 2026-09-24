@@ -4731,6 +4731,12 @@
   }
   .chrome:has(.pc-note-pop) { z-index: 40 }
   .app:has(> .devicebar) .rail { top: 30px }
+  .viamark {
+    flex: none; padding: 1px 7px; border-radius: var(--r-pill);
+    background: color-mix(in srgb, var(--net) 14%, transparent); color: var(--text);
+    font: var(--w-med) var(--fs-micro)/1.5 var(--ui);
+  }
+  .apv-by { display: block; margin-top: 4px; color: var(--faint); font: var(--w-reg) var(--fs-micro)/1.4 var(--ui) }
   .devicebar {
     display: flex; align-items: center; gap: 8px; flex: none; height: 30px; padding: 0 12px;
     border-bottom: 1px solid var(--hair);

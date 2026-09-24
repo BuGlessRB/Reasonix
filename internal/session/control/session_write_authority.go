@@ -41,12 +41,12 @@ func (c *Controller) BindSessionWriteAuthority(lease *sessionstore.SessionLease)
 	return nil
 }
 
-func (c *Controller) submitCommandOrTurn(trimmed, input, display string, scopedRefsOnly bool, editedOriginal, format string) {
+func (c *Controller) submitCommandOrTurn(trimmed, input, display string, scopedRefsOnly bool, editedOriginal string, tags turnTags) {
 	if err := c.ensureWriteAuthorityReady(); err != nil {
 		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "input was not accepted: this session is no longer writable — reopen it and try again"})
 		return
 	}
-	c.submitCommandOrTurnReady(trimmed, input, display, scopedRefsOnly, editedOriginal, format)
+	c.submitCommandOrTurnReady(trimmed, input, display, scopedRefsOnly, editedOriginal, tags)
 }
 
 // Run verifies the live write generation before synchronous headless turns.

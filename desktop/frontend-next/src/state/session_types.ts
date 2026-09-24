@@ -1,6 +1,6 @@
 // What a session is made of, apart from the reducer that maintains it: the
 // rows the transcript draws and the state one turn hands the next.
-import type { Ask, Approval, Compaction, CostCoverage, ExtensionSurface, Guardian, Receipt, Tool } from "../port/wire";
+import type { Ask, Approval, Compaction, CostCoverage, ExtensionSurface, Guardian, Receipt, Tool, Via } from "../port/wire";
 import type { Sample } from "../port/tokens";
 import type { Executions } from "./executions";
 
@@ -23,6 +23,8 @@ export type Item =
       queued?: "steer" | "followup";
       authoredTurn?: number;
       msgIndex?: number;
+      // The paired device it was sent from; absent is the window.
+      via?: Via;
     }
   // source names which model wrote it — a turn can carry two, and the card is
   // where the answer has to survive.
@@ -30,7 +32,9 @@ export type Item =
   | { t: "tool"; id: string; tool: Tool; running: boolean; children: Tool[] }
   | { t: "reads"; id: string; tools: Tool[] }
   | { t: "guardian"; id: string; g: Guardian }
-  | { t: "approval"; id: string; a: Approval; verdict?: string }
+  // by is who settled it when that was not this screen: the device named on
+  // the kernel's receipt, or the window when the receipt names none.
+  | { t: "approval"; id: string; a: Approval; verdict?: string; by?: Via | "window" }
   | { t: "ask"; id: string; ask: Ask; answered?: string[][]; answeredElsewhere?: boolean }
   | { t: "compaction"; id: string; c: Compaction; done: boolean }
   | { t: "remember"; id: string; m: RememberedFact; forgotten?: boolean }

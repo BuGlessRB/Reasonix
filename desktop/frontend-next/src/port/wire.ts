@@ -236,6 +236,15 @@ export interface DecisionReceipt {
   tool?: string;
   subject?: string;
   outcome: string;
+  // The paired device the decision was made on; absent is the window.
+  via?: Via;
+}
+
+// The paired device a person acted from. Mirrors eventwire.Via: the pairing's
+// id, and the 设备 N the window listed it under at the time.
+export interface Via {
+  device: string;
+  ordinal: number;
 }
 
 export interface AskOption {
@@ -654,6 +663,9 @@ export interface WireEvent {
   // that says which row the kernel just started a turn for.
   authoredTurn?: number;
   msgIndex?: number;
+  // turn_started: the paired device the message came from; absent is the
+  // window. The message itself rides text, for every client that did not send it.
+  via?: Via;
   // recovery_paused is no longer emitted; sessions recorded before the retry
   // budgets were removed still carry it, so a reader has to render it.
   outcome?: "final_readiness" | "recovery_paused";

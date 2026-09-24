@@ -840,7 +840,7 @@ type refTurn struct {
 	// original is a resubmitted turn's pre-edit text; non-empty routes it
 	// through the edited-goal loop.
 	original string
-	format   string
+	tags     turnTags
 	// resolve reads the refs out of refLine. nil resolves against the whole
 	// workspace; a frontend that must not widen a ref to an arbitrary absolute
 	// path passes ResolveScopedRefs.

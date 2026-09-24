@@ -339,6 +339,14 @@ type Settings interface {
 	SetDisplayRecorder(fn func(content, display string))
 }
 
+// Provenance is input a networked frontend relays for someone acting from a
+// paired device: the same turn and the same decision, carrying who made it.
+// Only the full port names it; an editor has no paired devices to speak for.
+type Provenance interface {
+	SubmitHTTPFrom(input, format string, via *provider.Via)
+	ApproveFrom(id string, allow, session, persist bool, via *provider.Via)
+}
+
 // SessionAPI is the full driving port — the composition of every sub-port, for
 // a frontend that drives all of it: the TUI does, and the HTTP server all but
 // one. A leaner frontend names EditorAPI instead.
@@ -356,6 +364,7 @@ type SessionAPI interface {
 	Input
 	Settings
 	Inbox
+	Provenance
 }
 
 // EditorAPI is what an editor integration drives over ACP: turns, approvals and
@@ -397,5 +406,6 @@ var (
 	_ Input              = (*Controller)(nil)
 	_ Settings           = (*Controller)(nil)
 	_ Inbox              = (*Controller)(nil)
+	_ Provenance         = (*Controller)(nil)
 	_ SessionAPI         = (*Controller)(nil)
 )

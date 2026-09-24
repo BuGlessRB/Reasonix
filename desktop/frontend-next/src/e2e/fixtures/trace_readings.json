@@ -4,6 +4,7 @@
   "live": [
    {
     "kind": "turn_started",
+    "text": "go",
     "authoredTurn": 1,
     "msgIndex": 1,
     "modelRef": "test-model/x"
@@ -209,6 +210,7 @@
   "replay": [
    {
     "kind": "turn_started",
+    "text": "go",
     "authoredTurn": 1,
     "msgIndex": 1,
     "modelRef": "test-model/x"
@@ -383,6 +385,7 @@
   "live": [
    {
     "kind": "turn_started",
+    "text": "[Reasonix: plan-first] build it",
     "authoredTurn": 1,
     "msgIndex": 1,
     "modelRef": "test-model/x"
@@ -522,6 +525,7 @@
   "replay": [
    {
     "kind": "turn_started",
+    "text": "[Reasonix: plan-first] build it",
     "authoredTurn": 1,
     "msgIndex": 1,
     "modelRef": "test-model/x"
@@ -628,6 +632,7 @@
   "live": [
    {
     "kind": "turn_started",
+    "text": "go",
     "authoredTurn": 1,
     "msgIndex": 1,
     "modelRef": "test-model/x"
@@ -686,6 +691,7 @@
   "replay": [
    {
     "kind": "turn_started",
+    "text": "go",
     "authoredTurn": 1,
     "msgIndex": 1,
     "modelRef": "test-model/x"
@@ -737,6 +743,7 @@
   "live": [
    {
     "kind": "turn_started",
+    "text": "go",
     "authoredTurn": 1,
     "msgIndex": 1,
     "modelRef": "test-model/x"
@@ -883,6 +890,7 @@
   "replay": [
    {
     "kind": "turn_started",
+    "text": "go",
     "authoredTurn": 1,
     "msgIndex": 1,
     "modelRef": "test-model/x"

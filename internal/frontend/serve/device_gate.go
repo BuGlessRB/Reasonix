@@ -87,7 +87,7 @@ func NewDeviceGate(next http.Handler, opts DeviceGateOptions) http.Handler {
 		if devicePublicPath(r, opts.Page) {
 			// Still device reach: the shell a stranger loads must not come back
 			// holding anything the window's grants would add to it.
-			next.ServeHTTP(w, r.WithContext(withDeviceReach(r.Context(), "")))
+			next.ServeHTTP(w, r.WithContext(withDeviceReach(r.Context(), "", 0)))
 			return
 		}
 		refuse(w, http.StatusUnauthorized, codeDeviceUnauthorized, "this device is not paired", nil)
@@ -111,7 +111,8 @@ func serveDevice(w http.ResponseWriter, r *http.Request, next http.Handler, reg 
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	ctx := withDeviceReach(r.Context(), id)
+	_, ordinal, _ := reg.Self(id)
+	ctx := withDeviceReach(r.Context(), id, ordinal)
 	if r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 		var release func()
 		ctx, release = reg.holdStream(ctx, id)

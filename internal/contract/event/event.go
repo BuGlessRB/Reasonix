@@ -544,8 +544,12 @@ type Event struct {
 	// TurnStarted: which message this turn is about — the conversation's own
 	// turn number, and the session index that message takes. Both nil when the
 	// turn opened no authored message.
-	AuthoredTurn    *int
-	MsgIndex        *int
+	AuthoredTurn *int
+	MsgIndex     *int
+	// TurnStarted: the paired device the authored message came from; nil is
+	// the window. Text carries the message itself, which a client that did not
+	// send it has no other way to draw.
+	Via             *provider.Via
 	Compaction      Compaction          // Compaction
 	Maintenance     *ContextMaintenance // ContextMaintenanceEvent
 	TodoProgress    *TodoProgress       // TodoProgressEvent

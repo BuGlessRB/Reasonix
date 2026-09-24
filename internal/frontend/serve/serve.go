@@ -600,7 +600,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	ctrl.SubmitHTTPFormat(body.Input, body.Format)
+	submitAs(ctrl, r, body.Input, body.Format)
 	// After synchronous admission, a successful start sets Running. A silent
 	// drop (rotating/closed) leaves Running false — return 409 instead of 202.
 	// Finishing-window park also leaves Running false briefly; prefer 202 only
@@ -633,7 +633,7 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 		missingField(w, "id")
 		return
 	}
-	s.ctl().Approve(body.ID, body.Allow, body.Session, body.Persist)
+	approveAs(s.ctl(), r, body.ID, body.Allow, body.Session, body.Persist)
 	w.WriteHeader(http.StatusNoContent)
 }
 
