@@ -14,7 +14,6 @@ import (
 	"reasonix/internal/base/filelock"
 	"reasonix/internal/base/fileutil"
 	"reasonix/internal/base/workspaceid"
-	"reasonix/internal/ext/mcplaunch"
 )
 
 // Install authorizes a capability; this file only records what is currently on
@@ -357,7 +356,7 @@ func projectKeys(root string) []string {
 	if key := workspaceid.Key(root); key != "" {
 		keys = append(keys, key)
 	}
-	if fingerprint := mcplaunch.WorkspaceFingerprint(root); fingerprint != "" {
+	if fingerprint := workspaceid.PathFingerprint(root); fingerprint != "" {
 		keys = append(keys, activationLegacyPrefix+fingerprint)
 	}
 	return keys

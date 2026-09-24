@@ -1,9 +1,10 @@
-package config
+package config_test
 
 import (
 	"os"
 	"path/filepath"
-	"reasonix/internal/ext/command"
+	"reasonix/internal/contract/config"
+	"slices"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -33,14 +34,14 @@ func TestLoadMergesInstalledPluginSkillRootsAndMCP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := LoadForRoot(testenv.TempDir(t))
+	cfg, err := config.LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(cfg.Skills.Paths) == 0 || cfg.Skills.Paths[len(cfg.Skills.Paths)-1] != filepath.Join(root, "skills") {
 		t.Fatalf("skills paths = %#v", cfg.Skills.Paths)
 	}
-	owners := cfg.PluginPackageSkillOwners()[CanonicalSkillPath(filepath.Join(root, "skills"))]
+	owners := cfg.PluginPackageSkillOwners()[config.CanonicalSkillPath(filepath.Join(root, "skills"))]
 	if len(owners) != 1 || owners[0] != "superpowers" {
 		t.Fatalf("plugin skill owners = %#v, want superpowers", owners)
 	}
@@ -82,7 +83,7 @@ func TestClaudePackageMCPExpandsRootAndDoesNotAutoStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := testenv.TempDir(t)
-	cfg, err := LoadForRoot(workspace)
+	cfg, err := config.LoadForRoot(workspace)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +121,7 @@ func TestClaudePackageMCPDeduplicatesSameConnectionAcrossPackages(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	cfg, err := LoadForRoot(testenv.TempDir(t))
+	cfg, err := config.LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,12 +160,12 @@ func TestCommandDirsIncludePluginPackageCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dirs := CommandDirsForRoot(testenv.TempDir(t))
+	dirs := config.CommandDirsForRoot(testenv.TempDir(t))
 	want := filepath.Join(root, "commands")
 	if len(dirs) == 0 || dirs[0] != want {
 		t.Fatalf("CommandDirsForRoot = %#v, want plugin commands dir first (lowest priority): %s", dirs, want)
 	}
-	roots := CommandRootsForRoot(testenv.TempDir(t))
+	roots := config.CommandRootsForRoot(testenv.TempDir(t))
 	if len(roots) == 0 || roots[0].Path != want || roots[0].Plugin != "pwf" {
 		t.Fatalf("CommandRootsForRoot = %#v, want plugin ownership on first root", roots)
 	}
@@ -172,7 +173,7 @@ func TestCommandDirsIncludePluginPackageCommands(t *testing.T) {
 	if err := pluginpkg.SetEnabled(home, "pwf", false); err != nil {
 		t.Fatal(err)
 	}
-	for _, dir := range CommandDirsForRoot(testenv.TempDir(t)) {
+	for _, dir := range config.CommandDirsForRoot(testenv.TempDir(t)) {
 		if dir == want {
 			t.Fatalf("disabled plugin's commands dir must not join discovery: %#v", dir)
 		}
@@ -183,12 +184,13 @@ func TestCommandDirsIncludePluginPackageCommands(t *testing.T) {
 func TestCommandDirsWithoutPluginState(t *testing.T) {
 	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	if dirs := CommandDirsForRoot(testenv.TempDir(t)); len(dirs) == 0 {
+	if dirs := config.CommandDirsForRoot(testenv.TempDir(t)); len(dirs) == 0 {
 		t.Fatal("CommandDirsForRoot must still return the conventional dirs")
 	}
 }
 
-// A package's prompts are invoked the way its commands are: /<plugin>:<name>.
+// A package's prompts are read as the package's own commands, so they are
+// invoked the same way: /<plugin>:<name>.
 func TestPluginPromptsAreInvokedLikeItsCommands(t *testing.T) {
 	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
@@ -206,14 +208,9 @@ Review $ARGUMENTS`)
 	if err := pluginpkg.Upsert(home, pluginpkg.InstalledPlugin{Name: "review", Root: "plugins/review", Version: "1.0.0", ManifestKind: "reasonix", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	cmds, err := command.LoadRoots(CommandRootsForRoot(testenv.TempDir(t))...)
-	if err != nil {
-		t.Fatal(err)
+	want := config.CommandDir{Path: filepath.Join(root, "prompts"), Plugin: "review"}
+	dirs := config.CommandRootsForRoot(testenv.TempDir(t))
+	if !slices.Contains(dirs, want) {
+		t.Fatalf("the prompts directory is not a command root of review: %+v", dirs)
 	}
-	for _, c := range cmds {
-		if c.Name == "review:diff" {
-			return
-		}
-	}
-	t.Fatalf("no /review:diff among %d commands", len(cmds))
 }

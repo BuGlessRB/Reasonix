@@ -101,10 +101,10 @@ func TestTopLevelFrontendsDeclareVersion(t *testing.T) {
 		path  string
 		match *regexp.Regexp
 	}{
-		{"../cli/cli.go", regexp.MustCompile(`Version:\s+version,`)},
-		{"../cli/cli.go", regexp.MustCompile(`overrides\.Version = version`)},
-		{"../cli/serve_frontend.go", regexp.MustCompile(`Version:\s+opts\.version,`)},
-		{"../cli/build_options.go", regexp.MustCompile(`Version:\s+overrides\.Version,`)},
+		{"../../frontend/cli/cli.go", regexp.MustCompile(`Version:\s+version,`)},
+		{"../../frontend/cli/cli.go", regexp.MustCompile(`overrides\.Version = version`)},
+		{"../../frontend/cli/serve_frontend.go", regexp.MustCompile(`Version:\s+opts\.version,`)},
+		{"../../frontend/cli/build_options.go", regexp.MustCompile(`Version:\s+overrides\.Version,`)},
 	} {
 		src, err := os.ReadFile(want.path)
 		if err != nil {

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/base/workspaceid"
 	"runtime"
 	"slices"
 	"sort"
@@ -117,13 +118,7 @@ func ForWorkspace(reasonixHome, workspace string) *Manager {
 	return m
 }
 
-func WorkspaceFingerprint(workspace string) string {
-	workspace = canonicalPath(workspace)
-	if workspace == "" {
-		return ""
-	}
-	return digestBytes([]byte(workspace))
-}
+func WorkspaceFingerprint(workspace string) string { return workspaceid.PathFingerprint(workspace) }
 
 func ProjectLaunchIdentityDigest(identity ProjectLaunchIdentity) (string, error) {
 	identity = normalizeIdentity(identity, runtime.GOOS == "windows")

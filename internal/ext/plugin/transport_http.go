@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 
+	"reasonix/internal/contract/mcpdiag"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/ext/mcpdiag"
 )
 
 // maxHTTPBody caps how much of a JSON / SSE response body we read, so a

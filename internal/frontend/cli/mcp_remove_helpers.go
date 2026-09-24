@@ -2,7 +2,7 @@ package cli
 
 import (
 	"reasonix/internal/contract/config"
-	"reasonix/internal/ext/mcpdiag"
+	"reasonix/internal/contract/mcpdiag"
 	"reasonix/internal/ext/plugin"
 )
 

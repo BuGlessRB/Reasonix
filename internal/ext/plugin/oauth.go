@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"reasonix/internal/base/secrets"
-	"reasonix/internal/ext/mcpdiag"
+	"reasonix/internal/contract/mcpdiag"
 )
 
 const (

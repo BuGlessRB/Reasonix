@@ -9,7 +9,7 @@ import (
 
 	"reasonix/internal/base/netclient"
 	"reasonix/internal/contract/config"
-	"reasonix/internal/ext/mcpdiag"
+	"reasonix/internal/contract/mcpdiag"
 	"reasonix/internal/ext/plugin"
 	"reasonix/internal/ext/pluginspec"
 )

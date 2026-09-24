@@ -10,12 +10,12 @@
     "doc-owner": 43,
     "doc-prose": 2324,
     "error-text": 9,
-    "essay": 2907,
-    "file-size": 23965,
+    "essay": 2905,
+    "file-size": 23928,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4348,
-    "layer-order": 47,
+    "layer-order": 40,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -301,9 +301,6 @@
     "internal/contract/config/cache_policy.go": {
       "essay": 9
     },
-    "internal/contract/config/capability_activation.go": {
-      "layer-order": 1
-    },
     "internal/contract/config/ccswitch.go": {
       "essay": 2
     },
@@ -332,8 +329,7 @@
     },
     "internal/contract/config/edit.go": {
       "essay": 9,
-      "file-size": 1385,
-      "layer-order": 2
+      "file-size": 1385
     },
     "internal/contract/config/effort.go": {
       "complexity": 1,
@@ -369,15 +365,13 @@
       "essay": 3
     },
     "internal/contract/config/paths.go": {
-      "essay": 10,
-      "layer-order": 1
+      "essay": 10
     },
     "internal/contract/config/plugin_entry.go": {
       "essay": 9
     },
     "internal/contract/config/plugin_packages.go": {
-      "essay": 2,
-      "layer-order": 2
+      "essay": 2
     },
     "internal/contract/config/pricing.go": {
       "layer-order": 1
@@ -400,9 +394,6 @@
       "essay": 2,
       "file-size": 571,
       "function-size": 696,
-      "layer-order": 1
-    },
-    "internal/contract/config/systemone_migrate.go": {
       "layer-order": 1
     },
     "internal/contract/config/vision.go": {
@@ -1343,8 +1334,8 @@
       "essay": 23
     },
     "internal/safety/permission/permission.go": {
-      "essay": 17,
-      "file-size": 71
+      "essay": 15,
+      "file-size": 34
     },
     "internal/safety/permission/permission_extra_test.go": {
       "essay": 1

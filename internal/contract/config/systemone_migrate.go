@@ -1,11 +1,11 @@
 // systemone_migrate.go — the decision backend moves onto the general mechanism.
 package config
 
-import (
-	"strings"
+import "strings"
 
-	"reasonix/internal/safety/typesafe"
-)
+// systemOneHostedURL is where the hosted decision backend answered when this
+// migration was written; a migration records that, not wherever it moves next.
+const systemOneHostedURL = "https://api.typesafe.ai"
 
 // migrateSystemOneToDecisionRole turns the decision settings into what every
 // other model already is: a source with an address and a key, and a role naming
@@ -23,7 +23,7 @@ func migrateSystemOneToDecisionRole(c *Config) bool {
 		return false
 	}
 	if hosted {
-		c.adoptDecisionSource("typesafe", one.BaseURL, typesafe.DefaultBaseURL, one.Model, "system-one", one.APIKeyEnv, "TYPESAFE_API_KEY")
+		c.adoptDecisionSource("typesafe", one.BaseURL, systemOneHostedURL, one.Model, "system-one", one.APIKeyEnv, "TYPESAFE_API_KEY")
 	}
 	if gateway {
 		// The gateway never carried a model of its own: the old client sent

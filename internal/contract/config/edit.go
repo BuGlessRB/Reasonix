@@ -17,9 +17,9 @@ import (
 	"reasonix/internal/base/fileutil"
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/base/netclient"
+	"reasonix/internal/contract/mcpdiag"
+	"reasonix/internal/contract/permrule"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/ext/mcpdiag"
-	"reasonix/internal/safety/permission"
 )
 
 var validDesktopExternalOpenerID = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
@@ -589,7 +589,7 @@ func (c *Config) AddPermissionRule(list, rule string) error {
 		return err
 	}
 	rule = strings.TrimSpace(rule)
-	if _, ok := permission.ParseRule(rule); !ok {
+	if _, ok := permrule.Parse(rule); !ok {
 		return fmt.Errorf("invalid permission rule %q (want \"ToolName\" or \"ToolName(glob)\")", rule)
 	}
 	if slices.Contains(*target, rule) {

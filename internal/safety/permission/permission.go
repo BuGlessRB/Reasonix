@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/contract/permrule"
 	"strings"
 
 	"reasonix/internal/base/shellparse"
@@ -52,49 +53,11 @@ func ParseDecision(s string) Decision {
 	}
 }
 
-// Rule matches tool calls. Tool is the tool name; Subject, when non-empty,
-// constrains the call's subject. A glob Subject (see matchGlob) matches by
-// wildcard; a Literal Subject matches by exact string equality. An empty Subject
-// matches every call to Tool.
-type Rule struct {
-	Tool    string
-	Subject string
-	// Literal matches Subject by exact equality rather than as a glob, so a
-	// remembered concrete command keeps any '*'/'?' as ordinary characters
-	// instead of turning them into wildcards.
-	Literal bool
-}
+// Rule is a parsed permission rule; its syntax lives in contract/permrule.
+type Rule = permrule.Rule
 
-// ParseRule parses "ToolName", "ToolName(glob)", or the legacy
-// "ToolName=literal" form. Surrounding whitespace is trimmed. The "=literal"
-// form (taken when the '=' precedes any '(') matches the rest of the string
-// verbatim — no globbing — and is kept for existing configs that were written
-// before the Claude Code-style Tool(specifier) approval rules. ok is false for
-// a malformed entry (empty tool name) so the caller can warn rather than
-// silently install a rule that matches nothing.
-func ParseRule(s string) (Rule, bool) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return Rule{}, false
-	}
-	if eq := strings.IndexByte(s, '='); eq > 0 {
-		if paren := strings.IndexByte(s, '('); paren < 0 || eq < paren {
-			tool := strings.TrimSpace(s[:eq])
-			if tool == "" {
-				return Rule{}, false
-			}
-			return Rule{Tool: tool, Subject: s[eq+1:], Literal: true}, true
-		}
-	}
-	if i := strings.IndexByte(s, '('); i >= 0 && strings.HasSuffix(s, ")") {
-		tool := strings.TrimSpace(s[:i])
-		if tool == "" {
-			return Rule{}, false
-		}
-		return Rule{Tool: tool, Subject: s[i+1 : len(s)-1]}, true
-	}
-	return Rule{Tool: s}, true
-}
+// ParseRule parses one rule; see permrule.Parse.
+func ParseRule(s string) (Rule, bool) { return permrule.Parse(s) }
 
 func legacyBarePowerShellDenyCmdlet(s string) (string, bool) {
 	switch strings.ToLower(strings.TrimSpace(s)) {

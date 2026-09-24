@@ -6,10 +6,52 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-
-	"reasonix/internal/ext/command"
-	"reasonix/internal/ext/pluginpkg"
 )
+
+// InstalledPackage is what one enabled plugin package brings to the
+// configuration a session runs with. The package store produces it; how it
+// merges with what the person wrote is decided here.
+type InstalledPackage struct {
+	Name        string
+	Version     string
+	Root        string
+	Warnings    []string
+	SkillRoots  []string
+	AgentRoots  []string
+	CommandDirs []string
+	MCPServers  map[string]PackageMCPServer
+}
+
+// PackageMCPServer is an MCP server as a package manifest declares it, before
+// its placeholders are expanded against the package and the workspace.
+type PackageMCPServer struct {
+	Type      string
+	Command   string
+	Args      []string
+	Env       map[string]string
+	URL       string
+	Headers   map[string]string
+	AutoStart *bool
+	Tier      string
+}
+
+// installedPackages lists the enabled plugin packages under a Reasonix home.
+// The package store sets it once at init, so configuration never has to know
+// how a package is parsed.
+var installedPackages func(home string) []InstalledPackage
+
+// SetInstalledPackages names where enabled plugin packages come from.
+func SetInstalledPackages(source func(home string) []InstalledPackage) { installedPackages = source }
+
+func (r Roots) enabledPackages() []InstalledPackage {
+	home := r.Home()
+	if strings.TrimSpace(home) == "" || installedPackages == nil {
+		return nil
+	}
+	out := installedPackages(home)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
 
 // mergeInstalledPluginPackages overlays enabled plugin package capabilities onto
 // the in-memory config. It never writes config.toml: plugin package state lives
@@ -19,34 +61,26 @@ func (r Roots) mergeInstalledPluginPackages(cfg *Config, root string) []string {
 	if cfg == nil {
 		return nil
 	}
-	reasonixHome := r.Home()
-	if strings.TrimSpace(reasonixHome) == "" {
-		return nil
-	}
-	installed, warnings := pluginpkg.LoadInstalled(reasonixHome)
-	sort.SliceStable(installed, func(i, j int) bool {
-		return installed[i].Installed.Name < installed[j].Installed.Name
-	})
-	for _, item := range installed {
-		pkg := item.Package
+	var warnings []string
+	for _, item := range r.enabledPackages() {
 		for _, warning := range item.Warnings {
-			warnings = append(warnings, fmt.Sprintf("%s: %s", item.Installed.Name, warning))
+			warnings = append(warnings, fmt.Sprintf("%s: %s", item.Name, warning))
 		}
-		for _, skillRoot := range pkg.SkillRoots() {
-			cfg.addPluginSkillRoot(skillRoot, item.Installed.Name, false)
+		for _, skillRoot := range item.SkillRoots {
+			cfg.addPluginSkillRoot(skillRoot, item.Name, false)
 		}
-		for _, agentRoot := range pkg.AgentRoots() {
-			cfg.addPluginSkillRoot(agentRoot, item.Installed.Name, true)
+		for _, agentRoot := range item.AgentRoots {
+			cfg.addPluginSkillRoot(agentRoot, item.Name, true)
 		}
-		for name, srv := range pkg.Manifest.MCPServers {
+		for name, srv := range item.MCPServers {
 			entry := PluginEntry{
 				Name:      name,
 				Type:      srv.Type,
-				Command:   pluginPackageCommand(pkg.Root, pluginPackageWorkspaceValue(pkg.Root, root, srv.Command)),
-				Args:      pluginPackageWorkspaceValues(pkg.Root, root, srv.Args),
-				Env:       pluginPackageEnv(item.Installed, pkg.Root, root, srv.Env),
-				URL:       pluginPackageWorkspaceValue(pkg.Root, root, strings.TrimSpace(srv.URL)),
-				Headers:   pluginPackageWorkspaceMap(pkg.Root, root, srv.Headers),
+				Command:   pluginPackageCommand(item.Root, pluginPackageWorkspaceValue(item.Root, root, srv.Command)),
+				Args:      pluginPackageWorkspaceValues(item.Root, root, srv.Args),
+				Env:       pluginPackageEnv(item, root, srv.Env),
+				URL:       pluginPackageWorkspaceValue(item.Root, root, strings.TrimSpace(srv.URL)),
+				Headers:   pluginPackageWorkspaceMap(item.Root, root, srv.Headers),
 				AutoStart: srv.AutoStart,
 				Tier:      srv.Tier,
 				Source:    MCPSourcePluginPackage,
@@ -55,9 +89,9 @@ func (r Roots) mergeInstalledPluginPackages(cfg *Config, root string) []string {
 				if owner, packageOwned := cfg.pluginPackageOwners[name]; packageOwned && pluginPackageEntriesEqual(existing, entry) {
 					continue
 				} else if packageOwned {
-					warnings = append(warnings, fmt.Sprintf("%s: plugin MCP server %q conflicts with package %s and was skipped", item.Installed.Name, name, owner))
+					warnings = append(warnings, fmt.Sprintf("%s: plugin MCP server %q conflicts with package %s and was skipped", item.Name, name, owner))
 				} else {
-					warnings = append(warnings, fmt.Sprintf("%s: plugin MCP server %q skipped because config already defines that name", item.Installed.Name, name))
+					warnings = append(warnings, fmt.Sprintf("%s: plugin MCP server %q skipped because config already defines that name", item.Name, name))
 				}
 				continue
 			}
@@ -65,7 +99,7 @@ func (r Roots) mergeInstalledPluginPackages(cfg *Config, root string) []string {
 			if cfg.pluginPackageOwners == nil {
 				cfg.pluginPackageOwners = map[string]string{}
 			}
-			cfg.pluginPackageOwners[name] = item.Installed.Name
+			cfg.pluginPackageOwners[name] = item.Name
 		}
 	}
 	return warnings
@@ -124,16 +158,11 @@ func (c *Config) PluginPackageAgentOwners() map[string][]string {
 // enabled plugin packages in (name, path) order; both are invoked as
 // /<plugin>:<name>. CommandRootsForRoot places them ahead of every user and
 // project dir so explicit commands win exact canonical-name clashes.
-func (r Roots) pluginPackageCommandRoots() []command.Root {
-	reasonixHome := r.Home()
-	if strings.TrimSpace(reasonixHome) == "" {
-		return nil
-	}
-	installed, _ := pluginpkg.LoadInstalled(reasonixHome)
-	var out []command.Root
-	for _, item := range installed {
-		for _, root := range append(item.Package.CommandRoots(), item.Package.PromptRoots()...) {
-			out = append(out, command.Root{Path: root, Plugin: item.Installed.Name})
+func (r Roots) pluginPackageCommandRoots() []CommandDir {
+	var out []CommandDir
+	for _, item := range r.enabledPackages() {
+		for _, dir := range item.CommandDirs {
+			out = append(out, CommandDir{Path: dir, Plugin: item.Name})
 		}
 	}
 	return out
@@ -158,7 +187,8 @@ func pluginPackageCommand(root, command string) string {
 	return filepath.Join(root, filepath.FromSlash(command))
 }
 
-func pluginPackageEnv(installed pluginpkg.InstalledPlugin, root, workspaceRoot string, env map[string]string) map[string]string {
+func pluginPackageEnv(installed InstalledPackage, workspaceRoot string, env map[string]string) map[string]string {
+	root := installed.Root
 	out := pluginPackageWorkspaceMap(root, workspaceRoot, env)
 	if out == nil {
 		out = map[string]string{}

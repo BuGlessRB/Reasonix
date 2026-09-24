@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"runtime"
 	"strings"
 
 	"reasonix/internal/contract/tool"
@@ -41,20 +40,12 @@ const computerAppsSubject = "apps"
 
 var errNoComputer = &computer.Failure{Code: computer.CodeUnavailable, Detail: "computer use runs only in Reasonix Studio on macOS and Windows"}
 
-// computerOnWindows selects the descriptions for the helper this kernel runs:
-// the two name applications differently and deliver keys differently.
-var computerOnWindows = runtime.GOOS == "windows"
-
 type computerRead struct{ session *computer.Session }
 
 func (computerRead) Name() string { return "computer_read" }
 
 func (computerRead) Description() string {
-	naming := "by bundle id"
-	if computerOnWindows {
-		naming = "as what=apps lists it"
-	}
-	return "See another application on this computer, named " + naming + ". what=apps lists applications with windows; snapshot returns its accessibility tree with [aN] refs for computer_act; screenshot captures its front window (computer_act x/y use its pixels, and the person is shown it too)."
+	return "See another application on this computer, named as what=apps lists it. what=apps lists applications with windows; snapshot returns its accessibility tree with [aN] refs for computer_act; screenshot captures its front window (computer_act x/y use its pixels, and the person is shown it too)."
 }
 
 func (computerRead) Schema() json.RawMessage {
@@ -121,18 +112,11 @@ type computerAct struct{ session *computer.Session }
 func (computerAct) Name() string { return "computer_act" }
 
 func (computerAct) Description() string {
-	if computerOnWindows {
-		return "Operate another application. Steps run in order and stop at the first failure. Through accessibility actions, leaving the person's pointer alone: " +
-			"click (ref, or x/y from a screenshot), right_click opens a ref's context menu, focus and set_value take a ref, type enters text where focus is and paste puts it there at once (the clipboard is borrowed and put back), key presses keys like Enter or control+s (times repeats), " +
-			"hold_key holds one for seconds; Windows sends keys only to the front window, so these bring it forward. scroll brings a ref into view or turns the wheel by amount lines, wait pauses ms. " +
-			"pointer_move, pointer_click (button, times), pointer_drag (to_x/to_y) and pointer_position instead take the person's own pointer and bring the application forward, which is answered for separately; it is the way to reach what has no accessibility action at all, and the pointer goes back where it was. " +
-			"Returns the application's snapshot afterwards."
-	}
-	return "Operate another application. Steps run in order and stop at the first failure. Through its accessibility actions, which leave the person's pointer and focus alone: " +
-		"click (ref, or x/y from a screenshot), right_click opens a ref's context menu, focus and set_value take a ref, type enters text where focus is and paste puts it there at once (the clipboard is borrowed and put back; needs the application in front), key presses keys like Enter or Meta+s (times repeats), " +
-		"hold_key holds one for seconds, scroll brings a ref into view or turns the wheel by amount lines, wait pauses ms. " +
-		"pointer_move, pointer_click (button, times), pointer_drag (to_x/to_y) and pointer_position instead take the person's own pointer and bring the application forward, which is answered for separately; it is the way to reach what has no accessibility action at all, and the pointer goes back where it was. " +
-		"Returns the application's snapshot afterwards."
+	return "Operate another application. Steps run in order and stop at the first failure. Through its accessibility actions, leaving the pointer alone: " +
+		"click (ref, or x/y from a screenshot), right_click opens a ref's context menu, focus and set_value take a ref, type enters text where focus is and paste puts it there at once (the clipboard is borrowed and put back), key presses keys like Enter or Meta+s (control+s on Windows; times repeats), hold_key holds one for seconds. " +
+		"Paste needs the application in front on macOS; on Windows type, paste and key bring it forward. scroll brings a ref into view or turns the wheel by amount lines, wait pauses ms. " +
+		"pointer_move, pointer_click (button, times), pointer_drag (to_x/to_y) and pointer_position instead take the person's pointer and bring the application forward, approved separately; use them for what has no accessibility action, and the pointer goes back where it was. " +
+		"Returns a snapshot afterwards."
 }
 
 func (computerAct) Schema() json.RawMessage {

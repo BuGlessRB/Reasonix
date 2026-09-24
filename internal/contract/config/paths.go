@@ -9,8 +9,6 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
-
-	"reasonix/internal/ext/command"
 )
 
 var (
@@ -530,13 +528,20 @@ func CommandDirsForRoot(root string) []string {
 // CommandRootsForRoot is the ownership-aware form of CommandDirsForRoot.
 // Plugin roots retain their package name so the loader can expose stable,
 // package-qualified command names and hidden short-name compatibility aliases.
-func CommandRootsForRoot(root string) []command.Root { return processRoots().CommandRootsForRoot(root) }
+// CommandDir is one directory custom slash commands are read from, and the
+// plugin package that contributed it ("" for the person's own).
+type CommandDir struct {
+	Path   string
+	Plugin string
+}
+
+func CommandRootsForRoot(root string) []CommandDir { return processRoots().CommandRootsForRoot(root) }
 
 // CommandRootsForRoot resolves the command roots against this binding.
-func (r Roots) CommandRootsForRoot(root string) []command.Root {
+func (r Roots) CommandRootsForRoot(root string) []CommandDir {
 	root = resolveRoot(root)
-	var roots []command.Root
-	add := func(spec command.Root) {
+	var roots []CommandDir
+	add := func(spec CommandDir) {
 		if spec.Path == "" {
 			return
 		}
@@ -553,24 +558,24 @@ func (r Roots) CommandRootsForRoot(root string) []command.Root {
 		add(spec)
 	}
 	if dir := r.legacyOSSupportDir(); dir != "" {
-		add(command.Root{Path: filepath.Join(dir, "commands")})
+		add(CommandDir{Path: filepath.Join(dir, "commands")})
 	}
 	for _, legacy := range r.legacyXDGConfigPaths() {
-		add(command.Root{Path: filepath.Join(filepath.Dir(legacy), "commands")})
+		add(CommandDir{Path: filepath.Join(filepath.Dir(legacy), "commands")})
 	}
 	if home, err := osUserHomeDir(); err == nil {
 		for _, dir := range conventionSubdirsAsc(home, "commands") {
-			add(command.Root{Path: dir})
+			add(CommandDir{Path: dir})
 		}
 	}
 	if dir := r.userConfigDir(); dir != "" {
-		add(command.Root{Path: filepath.Join(dir, "commands")})
+		add(CommandDir{Path: filepath.Join(dir, "commands")})
 	}
 	if dir := r.userSupportDir(); dir != "" && !samePath(dir, r.userConfigDir()) {
-		add(command.Root{Path: filepath.Join(dir, "commands")})
+		add(CommandDir{Path: filepath.Join(dir, "commands")})
 	}
 	for _, dir := range conventionSubdirsAsc(root, "commands") {
-		add(command.Root{Path: dir})
+		add(CommandDir{Path: dir})
 	}
 	return roots
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/contract/config"
 	"regexp"
 	"sort"
 	"strconv"
@@ -30,14 +31,10 @@ type Command struct {
 	Hidden      bool   // compatibility-only short alias; invocable but omitted from listings
 }
 
-// Root is one command directory and its optional plugin-package owner. Plugin
-// ownership is carried through loading so plugin commands can use stable,
-// package-qualified display names without losing unambiguous short-name
-// compatibility.
-type Root struct {
-	Path   string
-	Plugin string
-}
+// Root is one command directory and its optional plugin-package owner, as
+// configuration names it. Plugin ownership is carried through loading so plugin
+// commands keep stable, package-qualified names.
+type Root = config.CommandDir
 
 // substRe matches the substitution tokens recognised in a command body.
 var substRe = regexp.MustCompile(`\$(\$|ARGUMENTS|[0-9]+)`)
