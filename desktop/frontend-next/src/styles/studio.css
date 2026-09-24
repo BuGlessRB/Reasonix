@@ -1792,7 +1792,7 @@ textarea,
 select { font-family: var(--ui); }
 body { font-size: 14px; line-height: 1.75; }
 
-.rail .wsnode[data-current] { padding-left: 0; }
+.rail .wsnode { padding-left: 0; }
 .rail .kids { margin-left: 19px; padding-left: 0; border-left: 1px solid var(--hair); }
 .rail .sessrow {
   min-height: 42px;
