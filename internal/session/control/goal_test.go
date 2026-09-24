@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -83,7 +84,7 @@ func TestGoalCommandAutoContinuesUntilComplete(t *testing.T) {
 		goalToolTurn(GoalStatusRunning, "work in progress", "next step"),
 		goalToolTurn(GoalStatusComplete, "", ""),
 	)}
-	ag := agent.New(prov, goalRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, goalRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	events := make(chan event.Event, 8)
 	c := New(Options{
 		Runner:   ag,
@@ -155,7 +156,7 @@ func TestPlainInputWithStrongResearchSignalStaysNormal(t *testing.T) {
 	prov := &scriptedTurns{turns: [][]provider.Chunk{
 		textTurn("Here is the normal response."),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	events := make(chan event.Event, 8)
 	c := New(Options{
 		Runner:   ag,
@@ -173,7 +174,7 @@ func TestPlainInputWithStrongResearchSignalStaysNormal(t *testing.T) {
 	if prov.call != 1 {
 		t.Fatalf("provider calls = %d, want 1", prov.call)
 	}
-	first := agent.StripTransientUserBlocks(firstUserMessage(ag.Session().Messages))
+	first := sessionstore.StripTransientUserBlocks(firstUserMessage(ag.Session().Messages))
 	if !strings.HasSuffix(first, "持续排查这个线上卡顿直到根因明确，并验证修复") {
 		t.Fatalf("ordinary turn should preserve the original prompt suffix: %q", first)
 	}
@@ -193,7 +194,7 @@ func TestPlainInputWithStrongResearchSignalPreservesRefsWithoutStartingGoal(t *t
 	prov := &scriptedTurns{turns: [][]provider.Chunk{
 		textTurn("Referenced normal response."),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	events := make(chan event.Event, 8)
 	c := New(Options{
 		WorkspaceRoot: root,
@@ -231,7 +232,7 @@ func TestPlainInputWithStrongResearchSignalPreservesRefsWithoutStartingGoal(t *t
 func TestResearchGoalUsesContinuousRuntimeWithoutArchive(t *testing.T) {
 	root := testenv.TempDir(t)
 	sessionPath := filepath.Join(root, "sessions", "s.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{WorkspaceRoot: root, SessionDir: root, Executor: exec})
 	c.Resume(sess, sessionPath)
@@ -261,7 +262,7 @@ func TestLegacyGoalSidecarMigratesToContinuousRuntimeWithoutTaskID(t *testing.T)
 	if err := os.WriteFile(goalStatePath(sessionPath), []byte(`{"goal":"investigate runtime","status":"running","researchMode":1,"autoResearchTaskID":"old-task"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{WorkspaceRoot: root, SessionDir: root, Executor: exec})
 	c.Resume(sess, sessionPath)
@@ -295,7 +296,7 @@ func TestAssistantEvidenceBlockIsIgnoredByUnifiedGoal(t *testing.T) {
 	const evidenceBlock = `<autoresearch-evidence>{"id":"legacy-evidence","kind":"verification","summary":"must remain ordinary assistant text"}</autoresearch-evidence>`
 	turns[len(turns)-1] = textTurn("worked on the goal\n" + evidenceBlock)
 	prov := &scriptedTurns{turns: flattenTurns(turns)}
-	ag := agent.New(prov, goalRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, goalRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	c := New(Options{WorkspaceRoot: root, SessionPath: sessionPath, Runner: ag, Executor: ag})
 	defer c.Close()
 	c.SetGoalWithResearchMode("verify the fix", GoalResearchOn)
@@ -315,7 +316,7 @@ func TestPlainInputWithWeakResearchSignalStaysNormal(t *testing.T) {
 	prov := &scriptedTurns{turns: [][]provider.Chunk{
 		textTurn("Here is a normal answer."),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	events := make(chan event.Event, 4)
 	c := New(Options{
 		Runner:   ag,
@@ -340,7 +341,7 @@ func TestPlainInputWithWeakResearchSignalStaysNormal(t *testing.T) {
 }
 
 func TestCancelStopsIdleGoalWithIncompleteTodos(t *testing.T) {
-	ag := agent.New(nil, nil, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(nil, nil, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	ag.SeedTodoState([]evidence.TodoItem{{Content: "finish the migration", Status: "in_progress"}})
 	c := New(Options{Executor: ag, Sink: event.Discard})
 	c.SetGoalWithResearchMode("finish the migration", GoalResearchOn)
@@ -362,7 +363,7 @@ func TestGoalRepeatedBlockedStopsAfterThreeTurns(t *testing.T) {
 	prov := &scriptedTurns{turns: flattenTurns(
 		goalToolTurn(GoalStatusBlocked, "Needs credentials.", ""),
 	)}
-	ag := agent.New(prov, goalRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, goalRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	events := make(chan event.Event, 8)
 	c := New(Options{
 		Runner:   ag,
@@ -416,7 +417,7 @@ func TestGoalRestartClearsBlockedAndCompletesOnRetry(t *testing.T) {
 		goalToolTurn(GoalStatusBlocked, "needs credentials", ""),
 		goalToolTurn(GoalStatusComplete, "", ""),
 	)}
-	ag := agent.New(prov, goalRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, goalRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	events := make(chan event.Event, 12)
 	c := New(Options{
 		Runner:   ag,
@@ -449,7 +450,7 @@ func TestGoalRestartClearsBlockedAndCompletesOnRetry(t *testing.T) {
 // when all todos are complete.
 func TestIncompleteGoalTodos(t *testing.T) {
 	prov := &scriptedTurns{turns: [][]provider.Chunk{textTurn("done")}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	c := New(Options{Runner: ag, Executor: ag, Sink: event.Discard})
 	reminder := func() string { return formatIncompleteTodos(c.goalTodos(), ag.ReadinessResult().Reason) }
 
@@ -515,7 +516,7 @@ func TestGoalInterceptsCompleteWithIncompleteTodos(t *testing.T) {
 		textTurn("All done now."),
 	}
 	prov := &scriptedTurns{turns: flattenTurns(completeTurn, fixedTurn)}
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	// Seed incomplete todos before starting.
 	ag.SeedTodoState([]evidence.TodoItem{
 		{Content: "Fix the parser", Status: "in_progress"},
@@ -645,7 +646,7 @@ func TestGoalCompletionRequiresAllTodosDone(t *testing.T) {
 			textTurn("All done."),
 		},
 	)}
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	ag.SeedTodoState([]evidence.TodoItem{
 		{Content: "Step 1", Status: "in_progress"},
 		{Content: "Step 2", Status: "pending"},
@@ -685,7 +686,7 @@ func TestGoalCompletionRequiresAllTodosDone(t *testing.T) {
 // when there are no incomplete todos or no todos at all.
 func TestCompleteRemainingGoalTodosEdgeCases(t *testing.T) {
 	t.Run("empty todo list does nothing", func(t *testing.T) {
-		ag := agent.New(nil, nil, agent.NewSession(""), agent.Options{}, event.Discard)
+		ag := agent.New(nil, nil, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 		c := New(Options{Executor: ag, Sink: event.Discard})
 		c.completeRemainingGoalTodos()
 		if len(ag.CanonicalTodoState()) != 0 {
@@ -694,7 +695,7 @@ func TestCompleteRemainingGoalTodosEdgeCases(t *testing.T) {
 	})
 
 	t.Run("all completed does nothing", func(t *testing.T) {
-		ag := agent.New(nil, nil, agent.NewSession(""), agent.Options{}, event.Discard)
+		ag := agent.New(nil, nil, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 		ag.SeedTodoState([]evidence.TodoItem{
 			{Content: "A", Status: "completed"},
 			{Content: "B", Status: "completed"},
@@ -713,7 +714,7 @@ func TestCompleteRemainingGoalTodosEdgeCases(t *testing.T) {
 	})
 
 	t.Run("force-completes mixed todos", func(t *testing.T) {
-		ag := agent.New(nil, nil, agent.NewSession(""), agent.Options{}, event.Discard)
+		ag := agent.New(nil, nil, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 		ag.SeedTodoState([]evidence.TodoItem{
 			{Content: "A", Status: "completed"},
 			{Content: "B", Status: "in_progress"},
@@ -748,7 +749,7 @@ func TestCompleteRemainingGoalTodosEdgeCases(t *testing.T) {
 	})
 
 	t.Run("empty-string status treated as incomplete", func(t *testing.T) {
-		ag := agent.New(nil, nil, agent.NewSession(""), agent.Options{}, event.Discard)
+		ag := agent.New(nil, nil, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 		ag.SeedTodoState([]evidence.TodoItem{
 			{Content: "A", Status: ""},
 			{Content: "B", Status: "completed"},
@@ -782,7 +783,7 @@ func TestRepeatedCompleteWithIncompleteTodosKeepsWorking(t *testing.T) {
 // goal-state sidecar keeps the running goal so resuming it restores the goal.
 func TestSessionRotationClearsActiveGoal(t *testing.T) {
 	dir := testenv.TempDir(t)
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	oldPath := filepath.Join(dir, "session.jsonl")
 	c := New(Options{Executor: exec, SystemPrompt: "sys", SessionDir: dir, SessionPath: oldPath, Label: "test"})
 
@@ -837,7 +838,7 @@ func TestSessionRotationClearsActiveGoal(t *testing.T) {
 func TestGoalSidecarRoundTripPreservesBlockedDeliveryCheckpoint(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
 	c.SetGoal("finish the delivery")
 	scopeID, _, ok := c.goals.deliveryScope()
@@ -862,9 +863,9 @@ func TestGoalSidecarRoundTripPreservesBlockedDeliveryCheckpoint(t *testing.T) {
 	}
 	c.stopGoal(GoalStatusBlocked)
 
-	freshExec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	freshExec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	fresh := New(Options{Executor: freshExec, SessionDir: dir, Label: "fresh"})
-	fresh.Resume(agent.NewSession("sys"), path)
+	fresh.Resume(sessionstore.NewSession("sys"), path)
 	if fresh.Goal() != "finish the delivery" || fresh.GoalStatus() != GoalStatusBlocked {
 		t.Fatalf("restored Goal = (%q, %q), want blocked Goal", fresh.Goal(), fresh.GoalStatus())
 	}
@@ -887,9 +888,9 @@ func TestLegacyRunningGoalSidecarAllocatesScope(t *testing.T) {
 	if err := os.WriteFile(store.SessionGoalState(path), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
-	c.Resume(agent.NewSession("sys"), path)
+	c.Resume(sessionstore.NewSession("sys"), path)
 	id, task, ok := c.goals.deliveryScope()
 	if !ok || id == "" || task != "legacy goal" {
 		t.Fatalf("legacy delivery scope = (%q, %q, %v)", id, task, ok)

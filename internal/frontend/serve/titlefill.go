@@ -3,11 +3,11 @@ package serve
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"sync"
 	"time"
 
 	"reasonix/internal/base/nilutil"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -114,8 +114,8 @@ func (s *Server) nameWorkspaceHolder(ctrl control.SessionAPI) {
 		if path == "" {
 			return ""
 		}
-		preview, _ := agent.SessionPreview(path)
-		if title, ok := s.titles.get(filepath.Base(path), titleSource(preview), agent.SessionContentModTime(path).UnixNano()); ok {
+		preview, _ := sessionstore.SessionPreview(path)
+		if title, ok := s.titles.get(filepath.Base(path), titleSource(preview), sessionstore.SessionContentModTime(path).UnixNano()); ok {
 			return title
 		}
 		return previewTitle(preview)

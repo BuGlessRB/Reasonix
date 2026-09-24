@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ func TestAuthorizedRecoveryPlanTransitionCanReplaceCurrentTodo(t *testing.T) {
 	gate := &recordingRecoveryGate{decision: RecoveryDecision{
 		Allow: true, AuthorizePlanReplacement: true,
 	}}
-	a := New(nil, reg, NewSession(""), Options{RecoveryGate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{RecoveryGate: gate}, event.Discard)
 	a.SeedTodoState([]evidence.TodoItem{
 		{Content: "Inspect environment", Status: "completed"},
 		{Content: "Implement parser", Status: "in_progress"},
@@ -107,7 +108,7 @@ func TestPlanTransitionNeedsDedicatedReplacementAuthorization(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(mustBuiltinTool(t, "todo_write"))
 	gate := &recordingRecoveryGate{decision: RecoveryDecision{Allow: true}}
-	a := New(nil, reg, NewSession(""), Options{RecoveryGate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{RecoveryGate: gate}, event.Discard)
 	a.SeedTodoState([]evidence.TodoItem{{Content: "Implement parser", Status: "in_progress"}})
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
@@ -195,7 +196,7 @@ func TestRecoveryBlockSurfacesConcreteReason(t *testing.T) {
 		Blocked: true,
 		Message: "blocked: Auto stopped repeating this operation after 3 consecutive failures: write a.go. Other operations remain available.",
 	}}
-	a := New(nil, reg, NewSession(""), Options{RecoveryGate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{RecoveryGate: gate}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		ID: "blocked-write", Name: "write_file", Arguments: `{"path":"a.go","content":"x"}`,
 	})

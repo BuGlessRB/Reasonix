@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -115,7 +116,7 @@ func readinessGatedController(t *testing.T, prov provider.Provider) (*Controller
 	reg.Add(agent.NewAwaitUserTool())
 	// Balanced, not Delivery: the open-list gap is what parks here, and it
 	// applies at every role setting.
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	ag.SetAsker(stubAsker{})
 	done := make(chan event.Event, 4)
 	c := New(Options{

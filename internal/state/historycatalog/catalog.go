@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"runtime"
 	"slices"
 	"strings"
@@ -17,7 +18,6 @@ import (
 	"time"
 
 	"reasonix/internal/base/retrieval"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/projectiondb"
 	"reasonix/internal/state/store"
 )
@@ -183,7 +183,7 @@ func (c *Catalog) EnqueuePath(root Root, path string) bool {
 	return c.enqueuePath(root, path, -1)
 }
 
-func (c *Catalog) EnqueuePersist(root Root, event agent.SessionPersistEvent) bool {
+func (c *Catalog) EnqueuePersist(root Root, event sessionstore.SessionPersistEvent) bool {
 	appendFrom := event.AppendFrom
 	if event.Rewrite {
 		appendFrom = -1
@@ -352,7 +352,7 @@ func (c *Catalog) takeDirtyRoot() (Root, bool) {
 func historyRootSignature(paths []string) string {
 	hash := sha256.New()
 	for _, path := range paths {
-		for _, candidate := range []string{path, agent.BranchMetaPath(path)} {
+		for _, candidate := range []string{path, sessionstore.BranchMetaPath(path)} {
 			info, err := os.Stat(candidate)
 			if err != nil {
 				_, _ = fmt.Fprintf(hash, "%s\x00missing\n", candidate)
@@ -377,7 +377,7 @@ func (c *Catalog) reconcileRoot(ctx context.Context, root Root) error {
 			continue
 		}
 		path := filepath.Join(root.Path, entry.Name())
-		if !root.Archive && !agent.IsVisibleSession(path) {
+		if !root.Archive && !sessionstore.IsVisibleSession(path) {
 			continue
 		}
 		paths = append(paths, path)
@@ -470,12 +470,12 @@ func fileFingerprint(path string) string {
 }
 
 func (c *Catalog) indexPath(ctx context.Context, root Root, path string, generation int64, appendFrom int) error {
-	if !root.Archive && !agent.IsVisibleSession(path) {
+	if !root.Archive && !sessionstore.IsVisibleSession(path) {
 		return c.Purge(ctx, path)
 	}
 	contentFingerprint := fileFingerprint(path)
-	metaFingerprint := fileFingerprint(agent.BranchMetaPath(path))
-	state, known, identityErr := agent.SessionContentIdentity(path)
+	metaFingerprint := fileFingerprint(sessionstore.BranchMetaPath(path))
+	state, known, identityErr := sessionstore.SessionContentIdentity(path)
 	digest := ""
 	revision := int64(0)
 	if identityErr == nil && known {
@@ -506,7 +506,7 @@ func (c *Catalog) indexPath(ctx context.Context, root Root, path string, generat
 			return nil
 		}
 	}
-	session, err := agent.LoadSession(path)
+	session, err := sessionstore.LoadSession(path)
 	if err != nil {
 		_, _ = c.db.ExecContext(ctx, `INSERT INTO history_sources(path,root,source,scope,workspace_root,content_fingerprint,meta_fingerprint,health,last_error,seen_generation)
             VALUES(?,?,?,?,?,?,?,'corrupt',?,?) ON CONFLICT(path) DO UPDATE SET health='corrupt',last_error=excluded.last_error,
@@ -524,8 +524,8 @@ func (c *Catalog) indexPath(ctx context.Context, root Root, path string, generat
 		}
 		digest = hex.EncodeToString(h.Sum(nil))
 	}
-	meta, _, _ := agent.LoadBranchMeta(path)
-	lastActivity := max(int64(0), agent.SessionContentModTime(path).UnixMilli())
+	meta, _, _ := sessionstore.LoadBranchMeta(path)
+	lastActivity := max(int64(0), sessionstore.SessionContentModTime(path).UnixMilli())
 	// Hide stale terms as soon as the authoritative fingerprint changes. Rows
 	// remain available for retry and are atomically replaced below.
 	if _, err := c.db.ExecContext(ctx, `UPDATE history_sources SET health='stale',last_error='' WHERE path=?`, path); err != nil {

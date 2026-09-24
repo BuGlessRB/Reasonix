@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -11,7 +12,7 @@ import (
 // summary checkpoint path. These tests lock that contract so native flags and
 // request-shape switches cannot reappear silently.
 func TestNativeContextEditingRemoved(t *testing.T) {
-	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{
 		ContextWindow:  100_000,
 		CompactRatio:   0.85,
 		ContextEditing: "native", // deprecated input; ignored

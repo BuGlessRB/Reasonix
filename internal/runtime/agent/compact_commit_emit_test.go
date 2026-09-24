@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -39,7 +40,7 @@ func (s *reentrantSnapshotSink) Emit(e event.Event) {
 
 func TestCommitSummaryEmitsOutsideCompactionLock(t *testing.T) {
 	prov := &fakeProvider{reply: "digest for reentrant emit"}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("work line\n", 800)},
@@ -79,7 +80,7 @@ func TestCommitSurvivesPostPublishDirSyncFailure(t *testing.T) {
 	t.Cleanup(restore)
 
 	prov := &fakeProvider{reply: "digest after dir-sync fault"}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("work line\n", 800)},
@@ -100,7 +101,7 @@ func TestCommitSurvivesPostPublishDirSyncFailure(t *testing.T) {
 	if memVer != 1 {
 		t.Fatalf("memory projection version = %d, want 1", memVer)
 	}
-	disk, ok, err := LoadCompactionState(path)
+	disk, ok, err := sessionstore.LoadCompactionState(path)
 	if err != nil || !ok {
 		t.Fatalf("load disk checkpoint: ok=%v err=%v", ok, err)
 	}
@@ -131,7 +132,7 @@ func TestBlockedReceiptSurvivesPostPublishDirSyncFailure(t *testing.T) {
 	}
 	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	prov := &failingSummaryProvider{}
-	a := New(prov, tool.NewRegistry(), &Session{Messages: append([]provider.Message(nil), messages...)}, Options{
+	a := New(prov, tool.NewRegistry(), &sessionstore.Session{Messages: append([]provider.Message(nil), messages...)}, Options{
 		ContextWindow: window, CompactRatio: 0.85, RecentKeep: 2,
 		WorkspaceID: "workspace", ModelRef: "model",
 	}, event.Discard)
@@ -150,7 +151,7 @@ func TestBlockedReceiptSurvivesPostPublishDirSyncFailure(t *testing.T) {
 	if status := a.sess.compactionState.LastReceipt.Status; status != "blocked" && status != "failed" {
 		t.Fatalf("receipt status = %q", status)
 	}
-	disk, ok, err := LoadCompactionState(path)
+	disk, ok, err := sessionstore.LoadCompactionState(path)
 	if err != nil || !ok || disk.LastReceipt == nil {
 		t.Fatalf("disk receipt missing: ok=%v err=%v", ok, err)
 	}
@@ -171,33 +172,33 @@ func TestLoadProjectionSidecarDoesNotRewriteExactKey(t *testing.T) {
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "u"},
 	}
-	hash := coveredPrefixHash(msgs, len(msgs))
-	key := promptCacheKey("ws", BranchID(path), "p/m")
-	st := CompactionState{
-		SchemaVersion:     compactionStateSchemaCurrent,
+	hash := sessionstore.CoveredPrefixHash(msgs, len(msgs))
+	key := promptCacheKey("ws", sessionstore.BranchID(path), "p/m")
+	st := sessionstore.CompactionState{
+		SchemaVersion:     sessionstore.CompactionStateSchemaCurrent,
 		TranscriptVersion: 0,
 		PromptCacheKey:    key,
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages: msgs, CoveredCount: len(msgs), CoveredPrefixHash: hash,
 			ProjectionVersion: 3, TranscriptVersion: 0,
 		},
 		UpdatedAt: time.Now().UTC(),
 	}
-	if err := SaveCompactionState(path, st); err != nil {
+	if err := sessionstore.SaveCompactionState(path, st); err != nil {
 		t.Fatal(err)
 	}
-	before, err := os.ReadFile(ContextStatePath(path))
+	before, err := os.ReadFile(sessionstore.ContextStatePath(path))
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := New(nil, tool.NewRegistry(), &Session{Messages: append([]provider.Message(nil), msgs...)}, Options{
+	a := New(nil, tool.NewRegistry(), &sessionstore.Session{Messages: append([]provider.Message(nil), msgs...)}, Options{
 		SessionPath: path, WorkspaceID: "ws", ModelRef: "p/m",
 	}, event.Discard)
 	a.LoadProjectionSidecar(path)
 	if a.currentProjectionVersion() != 3 {
 		t.Fatalf("version = %d, want 3", a.currentProjectionVersion())
 	}
-	after, err := os.ReadFile(ContextStatePath(path))
+	after, err := os.ReadFile(sessionstore.ContextStatePath(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,8 +209,8 @@ func TestLoadProjectionSidecarDoesNotRewriteExactKey(t *testing.T) {
 
 func TestSaveCompactionStateStripsLegacyWriterFields(t *testing.T) {
 	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
-	st := CompactionState{
-		SchemaVersion:     compactionStateSchemaCurrent,
+	st := sessionstore.CompactionState{
+		SchemaVersion:     sessionstore.CompactionStateSchemaCurrent,
 		TranscriptVersion: 1,
 		PromptCacheKey:    "k",
 		LastTrigger:       CompactionTriggerPressure,
@@ -218,15 +219,15 @@ func TestSaveCompactionStateStripsLegacyWriterFields(t *testing.T) {
 		LastResultTokens:  200,
 		BlockedInputHash:  "legacy-blocked",
 		BlockedReason:     "legacy",
-		LastReceipt: &ContextMaintenanceReceipt{
+		LastReceipt: &sessionstore.ContextMaintenanceReceipt{
 			Status: "applied", Action: "summary", ProjectionVersion: 1,
 			InputHash: "in", OutputHash: "out",
 		},
 	}
-	if err := SaveCompactionState(path, st); err != nil {
+	if err := sessionstore.SaveCompactionState(path, st); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(ContextStatePath(path))
+	raw, err := os.ReadFile(sessionstore.ContextStatePath(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +239,7 @@ func TestSaveCompactionStateStripsLegacyWriterFields(t *testing.T) {
 			t.Fatalf("new writer re-emitted %s:\n%s", banned, raw)
 		}
 	}
-	got, ok, err := LoadCompactionState(path)
+	got, ok, err := sessionstore.LoadCompactionState(path)
 	if err != nil || !ok {
 		t.Fatalf("load: ok=%v err=%v", ok, err)
 	}
@@ -256,44 +257,44 @@ func TestLoadProjectionSidecarNormalizesNativeKeyOnce(t *testing.T) {
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "u"},
 	}
-	hash := coveredPrefixHash(msgs, len(msgs))
-	key := promptCacheKey("ws", BranchID(path), "p/m")
-	st := CompactionState{
-		SchemaVersion:     compactionStateSchemaCurrent,
+	hash := sessionstore.CoveredPrefixHash(msgs, len(msgs))
+	key := promptCacheKey("ws", sessionstore.BranchID(path), "p/m")
+	st := sessionstore.CompactionState{
+		SchemaVersion:     sessionstore.CompactionStateSchemaCurrent,
 		TranscriptVersion: 0,
 		PromptCacheKey:    key + "|context-editing-native-anthropic",
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages: msgs, CoveredCount: len(msgs), CoveredPrefixHash: hash,
 			ProjectionVersion: 2, TranscriptVersion: 0,
 		},
 		UpdatedAt: time.Now().UTC(),
 	}
-	if err := SaveCompactionState(path, st); err != nil {
+	if err := sessionstore.SaveCompactionState(path, st); err != nil {
 		t.Fatal(err)
 	}
-	a := New(nil, tool.NewRegistry(), &Session{Messages: append([]provider.Message(nil), msgs...)}, Options{
+	a := New(nil, tool.NewRegistry(), &sessionstore.Session{Messages: append([]provider.Message(nil), msgs...)}, Options{
 		SessionPath: path, WorkspaceID: "ws", ModelRef: "p/m",
 	}, event.Discard)
 	a.LoadProjectionSidecar(path)
 	if a.currentProjectionVersion() != 2 {
 		t.Fatalf("version = %d, want 2", a.currentProjectionVersion())
 	}
-	loaded, ok, err := LoadCompactionState(path)
+	loaded, ok, err := sessionstore.LoadCompactionState(path)
 	if err != nil || !ok {
 		t.Fatalf("reload: ok=%v err=%v", ok, err)
 	}
 	if loaded.PromptCacheKey != key {
 		t.Fatalf("PromptCacheKey = %q, want normalized %q", loaded.PromptCacheKey, key)
 	}
-	before, err := os.ReadFile(ContextStatePath(path))
+	before, err := os.ReadFile(sessionstore.ContextStatePath(path))
 	if err != nil {
 		t.Fatal(err)
 	}
-	a2 := New(nil, tool.NewRegistry(), &Session{Messages: append([]provider.Message(nil), msgs...)}, Options{
+	a2 := New(nil, tool.NewRegistry(), &sessionstore.Session{Messages: append([]provider.Message(nil), msgs...)}, Options{
 		SessionPath: path, WorkspaceID: "ws", ModelRef: "p/m",
 	}, event.Discard)
 	a2.LoadProjectionSidecar(path)
-	after, err := os.ReadFile(ContextStatePath(path))
+	after, err := os.ReadFile(sessionstore.ContextStatePath(path))
 	if err != nil {
 		t.Fatal(err)
 	}

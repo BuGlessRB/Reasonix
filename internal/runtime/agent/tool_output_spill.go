@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"runtime"
 	"strings"
 
@@ -70,14 +71,7 @@ func (a *Agent) spillDir() string {
 	if dir := a.archiveOutputsDir(); dir != "" {
 		return dir
 	}
-	return scratchOutputsDir()
-}
-
-// scratchOutputsDir is the spill of last resort, for an agent owning neither a
-// transcript nor an archive. Nothing there has an owner to be collected with,
-// so reconcileOrphanOutputs ages it out instead.
-func scratchOutputsDir() string {
-	return filepath.Join(os.TempDir(), "reasonix-outputs")
+	return sessionstore.ScratchOutputsDir()
 }
 
 // toolIsPaged reports whether this tool addresses its own continuation, read off

@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"unicode"
-
-	"reasonix/internal/runtime/agent"
 )
 
 const resumePickerSentinel = "__reasonix_resume_picker__"
@@ -139,7 +138,7 @@ func resolveSessionQuery(dir, query string) (string, error) {
 		}
 		return abs, nil
 	}
-	sessions, err := agent.ListSessions(dir)
+	sessions, err := sessionstore.ListSessions(dir)
 	if err != nil {
 		return "", fmt.Errorf("list sessions: %w", err)
 	}
@@ -152,7 +151,7 @@ func resolveSessionQuery(dir, query string) (string, error) {
 			return "", fmt.Errorf("machine identity is unavailable: %w", keyErr)
 		}
 		for _, session := range sessions {
-			if machineSessionIDWithKey(agent.BranchID(session.Path), key) == query {
+			if machineSessionIDWithKey(sessionstore.BranchID(session.Path), key) == query {
 				return session.Path, nil
 			}
 		}
@@ -162,7 +161,7 @@ func resolveSessionQuery(dir, query string) (string, error) {
 	var exact []string
 	var partial []string
 	for _, session := range sessions {
-		id := agent.BranchID(session.Path)
+		id := sessionstore.BranchID(session.Path)
 		base := filepath.Base(session.Path)
 		if query == id || query == base || query == session.Path {
 			exact = append(exact, session.Path)

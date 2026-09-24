@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -192,7 +193,7 @@ func TestJobCompletionSteersLiveTurnAsHost(t *testing.T) {
 		started: make(chan struct{}), release: make(chan struct{}),
 		requests: make(chan provider.Request, 8),
 	}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(prov, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	c := New(Options{
 		Runner: exec, Executor: exec, Sink: event.Discard,
@@ -239,7 +240,7 @@ func hostSteerInHistory(msgs []provider.Message, jobID string) bool {
 		if m.Role != provider.RoleUser || !strings.Contains(m.Content, jobID) {
 			continue
 		}
-		if strings.Contains(m.Content, agent.HostNoticePrefix) {
+		if strings.Contains(m.Content, sessionstore.HostNoticePrefix) {
 			return true
 		}
 	}
@@ -250,7 +251,7 @@ func hostSteerInHistory(msgs []provider.Message, jobID string) bool {
 // host's. Writing it back as the user's would put words in their mouth in the
 // one transcript the next turn reads.
 func TestUnappliedHostSteerKeepsHostAttribution(t *testing.T) {
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := agent.New(&liveTurnProvider{
 		started: make(chan struct{}), release: make(chan struct{}),
 		requests: make(chan provider.Request, 1),
@@ -258,7 +259,7 @@ func TestUnappliedHostSteerKeepsHostAttribution(t *testing.T) {
 	a.RecordUnappliedHostSteer("a background job finished")
 	for _, m := range a.Session().Snapshot() {
 		if strings.Contains(m.Content, "a background job finished") {
-			if !strings.Contains(m.Content, agent.HostNoticePrefix) {
+			if !strings.Contains(m.Content, sessionstore.HostNoticePrefix) {
 				t.Fatalf("unapplied host steer recorded as %q, want the host prefix", m.Content)
 			}
 			return

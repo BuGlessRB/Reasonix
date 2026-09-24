@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
@@ -15,7 +16,7 @@ import (
 // question can be outstanding — while fleet items, parallel tasks and
 // background jobs carry no asker and stay silent here without needing a flag.
 func newDelegatedAgent(ctx context.Context, prov provider.Provider, reg *tool.Registry,
-	sess *Session, opts Options, sink event.Sink,
+	sess *sessionstore.Session, opts Options, sink event.Sink,
 ) *Agent {
 	sub := New(prov, reg, sess, opts, sink)
 	if _, _, asker, ok := CallContext(ctx); ok && asker != nil {

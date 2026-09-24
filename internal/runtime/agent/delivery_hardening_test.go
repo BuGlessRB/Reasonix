@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -48,7 +49,7 @@ func TestDeliveryResolvedReadOnlyBashDoesNotArmMutationReadiness(t *testing.T) {
 		{toolCallChunk("pwd-base", "bash", `{"command":"basename \"$(pwd)\""}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "workspace basename inspected"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
 	if err := a.Run(context.Background(), "inspect and report the current workspace basename"); err != nil {
 		t.Fatalf("resolved read-only delivery command: %v", err)
 	}
@@ -74,7 +75,7 @@ func TestDeliveryConversationTokenSurvivesToNextTurnWithoutActionEvidence(t *tes
 		{{Type: provider.ChunkText, Text: "Understood."}, {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "ORBIT-42"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
 	if err := a.Run(context.Background(), "Remember ORBIT-42 and answer on the next turn."); err != nil {
 		t.Fatalf("deferred conversation turn was blocked: %v", err)
 	}
@@ -96,7 +97,7 @@ func TestDeliveryDurableMemoryRequiresRememberWithoutCodeCeremony(t *testing.T) 
 		{toolCallChunk("remember", "remember", `{"description":"ORBIT code","body":"ORBIT-42"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "Saved for future sessions."}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
 	if err := a.Run(context.Background(), "Remember ORBIT-42 permanently across sessions"); err != nil {
 		t.Fatalf("durable-memory workflow inherited code-delivery ceremony: %v", err)
 	}
@@ -119,7 +120,7 @@ func TestNonGoalUpdateGoalWithVisibleTextDoesNotSpendRepairRound(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "Here is the answer."}, toolCallChunk("goal", "update_goal", `{"status":"complete"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "unexpected repair"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "answer normally"); err != nil {
 		t.Fatalf("non-Goal update_goal with text: %v", err)
 	}
@@ -146,7 +147,7 @@ func TestNonGoalToolOnlyUpdateGoalGetsAtMostOneRepairRound(t *testing.T) {
 		{toolCallChunk("goal-2", "update_goal", `{"status":"complete"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "unexpected third round"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	err := a.Run(context.Background(), "answer normally")
 	if err == nil || !strings.Contains(err.Error(), "repeatedly called update_goal outside Goal mode") {
 		t.Fatalf("repeated tool-only misuse error = %v", err)
@@ -164,7 +165,7 @@ func TestDeliveryPlanModeReturnsProposalBeforeExecutionReadiness(t *testing.T) {
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{{Type: provider.ChunkText, Text: proposal}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
 	a.SetPlanMode(true)
 
 	if err := a.Run(context.Background(), "fix the parser bug in a.go"); err != nil {
@@ -184,7 +185,7 @@ func TestDeliveryPlanModeReturnsProposalBeforeExecutionReadiness(t *testing.T) {
 // The same requirement becomes active immediately after Plan is disabled.
 func TestPlanModeDefersCapabilityRequirementsUntilExecution(t *testing.T) {
 	reg := tool.NewRegistry()
-	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"),
+	a := New(&scriptedProvider{name: "p"}, reg, sessionstore.NewSession("sys"),
 		Options{DeliveryProfile: true, CapabilityLedger: capability.NewLedger()}, event.Discard)
 	a.SetPlanMode(true)
 	a.SeedCapabilityRoute(capability.RouteDecision{Candidates: []capability.RouteCandidate{
@@ -214,7 +215,7 @@ func TestRunSubAgentReviewReportNudgeRecovers(t *testing.T) {
 		{toolCallChunk("2", "review_report", `{"kind":"review","verdict":"pass","reviewed_paths":["a.go"]}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "review_report submitted: pass"}, {Type: provider.ChunkDone}},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, sess, "review a.go",
 		Options{RequireReviewReportKind: evidence.ReviewKindReview}, event.Discard)
 	if err != nil {
@@ -241,7 +242,7 @@ func TestRunSubAgentReviewReportExhaustionNamesRecovery(t *testing.T) {
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{{Type: provider.ChunkText, Text: "looks fine"}, {Type: provider.ChunkDone}},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	_, err := RunSubAgentWithSession(context.Background(), prov, reg, sess, "review it",
 		Options{RequireReviewReportKind: evidence.ReviewKindReview, ArchiveDir: dir, DeliveryProfile: true}, event.Discard)
 	if err == nil {
@@ -275,7 +276,7 @@ func TestRunSubAgentSalvagesReadinessExhaustedWork(t *testing.T) {
 		finalText, // block 2 — no new receipts, stalled
 		finalText, // block 3 — budget exhausted
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, sess,
 		"add explanations to the question bank", Options{DeliveryProfile: true, SubagentDepth: 1}, event.Discard)
 	if err != nil {
@@ -308,7 +309,7 @@ func TestFinalReadinessFailsImmediatelyWithoutRetries(t *testing.T) {
 	// The write landed; its verification and sign-off never did — a
 	// receipt-grounded readiness failure, not one inferred from the wording.
 	stalled := &scriptedProvider{name: "p", turns: [][]provider.Chunk{criteriaCall, writeCall, finalText}}
-	a := New(stalled, newReg(), NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
+	a := New(stalled, newReg(), sessionstore.NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
 	err := a.Run(context.Background(), "fix the crash in a.go")
 	var readinessErr *FinalReadinessError
 	if !errors.As(err, &readinessErr) {
@@ -330,7 +331,7 @@ func TestFinalReadinessFailsImmediatelyWithoutRetries(t *testing.T) {
 		criteriaCall, writeCall, readCall("1"), finalText,
 		readCall("2"), finalText,
 	}}
-	a2 := New(converging, newReg(), NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
+	a2 := New(converging, newReg(), sessionstore.NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
 	err2 := a2.Run(context.Background(), "fix the crash in a.go")
 	var readinessErr2 *FinalReadinessError
 	if !errors.As(err2, &readinessErr2) {
@@ -354,7 +355,7 @@ func TestExplicitDeliveryRecoveryPreservesEvidenceOnce(t *testing.T) {
 		{toolCallChunk("signoff", "complete_step", `{"step":"Ship main","result":"done","evidence":[{"kind":"verification","summary":"tests pass","command":"go test ./..."}]}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "delivered"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
 	var readinessErr *FinalReadinessError
 	if err := a.Run(context.Background(), "implement main"); !errors.As(err, &readinessErr) {
 		t.Fatalf("first Run error = %v, want FinalReadinessError", err)
@@ -384,7 +385,7 @@ func TestOrdinaryFollowUpDoesNotPreserveFailedDeliveryEvidence(t *testing.T) {
 		finalText,
 		finalText,
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
 	var firstErr *FinalReadinessError
 	if err := a.Run(context.Background(), "implement main"); !errors.As(err, &firstErr) {
 		t.Fatalf("first Run error = %v, want FinalReadinessError", err)
@@ -404,25 +405,25 @@ func TestOrdinaryFollowUpDoesNotPreserveFailedDeliveryEvidence(t *testing.T) {
 }
 
 func TestPreviewStripsDeliveryMarkerAndSyntheticTurns(t *testing.T) {
-	first := "你是谁？\n\n" + DeliveryRuntimeMarker
-	if got := UserPreviewText(first); got != "你是谁？" {
+	first := "你是谁？\n\n" + sessionstore.DeliveryRuntimeMarker
+	if got := sessionstore.UserPreviewText(first); got != "你是谁？" {
 		t.Fatalf("UserPreviewText kept framing: %q", got)
 	}
 	// A literal <delivery-runtime> mention inside user prose is not the host
 	// suffix: nothing may be cut. (The agent never appends the marker when the
 	// input already mentions the tag, so this content carries no host suffix.)
 	inline := "Explain this literal: <delivery-runtime>example</delivery-runtime> and keep this sentence"
-	if got := UserPreviewText(inline); got != inline {
+	if got := sessionstore.UserPreviewText(inline); got != inline {
 		t.Fatalf("inline delivery-runtime mention was mangled: %q", got)
 	}
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: first},
 		{Role: provider.RoleAssistant, Content: "hi"},
-		{Role: provider.RoleUser, Content: MidTurnSteerPrefix + "\nslow down"},
-		{Role: provider.RoleUser, Content: "帮我写一个魂斗罗游戏\n\n" + DeliveryRuntimeMarker},
+		{Role: provider.RoleUser, Content: sessionstore.MidTurnSteerPrefix + "\nslow down"},
+		{Role: provider.RoleUser, Content: "帮我写一个魂斗罗游戏\n\n" + sessionstore.DeliveryRuntimeMarker},
 	}
-	preview, turns := SessionPreviewFromMessages(msgs)
+	preview, turns := sessionstore.SessionPreviewFromMessages(msgs)
 	if preview != "你是谁？" {
 		t.Fatalf("preview = %q", preview)
 	}
@@ -452,7 +453,7 @@ func TestDeliveryDiagnosticConversationCompletes(t *testing.T) {
 				{Type: provider.ChunkDone},
 			}
 			prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{advice}}
-			a := New(prov, reg, NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
+			a := New(prov, reg, sessionstore.NewSession("sys"), Options{DeliveryProfile: true}, event.Discard)
 			if err := a.Run(context.Background(), input); err != nil {
 				t.Fatalf("diagnostic conversation deadlocked: %v", err)
 			}
@@ -474,7 +475,7 @@ func TestRunSubAgentReviewWithoutVerdictDegradesOutsideDelivery(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "verdict: pass, nothing to fix"}, {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "verdict: pass, nothing to fix"}, {Type: provider.ChunkDone}},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, sess, "review it",
 		Options{RequireReviewReportKind: evidence.ReviewKindReview, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	if err != nil {

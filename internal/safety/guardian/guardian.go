@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"sync"
@@ -39,7 +40,7 @@ const (
 type Session struct {
 	prov     provider.Provider
 	agent    *agent.Agent
-	sess     *agent.Session
+	sess     *sessionstore.Session
 	sink     event.Sink
 	pricing  *provider.Pricing
 	modelRef string
@@ -78,7 +79,7 @@ func NewSession(prov provider.Provider, readOnlyReg *tool.Registry, policyPrompt
 		modelRef:     strings.TrimSpace(modelRef),
 		policyPrompt: policyPrompt,
 	}
-	sess := agent.NewSession(policyPrompt)
+	sess := sessionstore.NewSession(policyPrompt)
 	ag := agent.New(prov, readOnlyReg, sess, agent.Options{
 		ModelRef:            strings.TrimSpace(modelRef),
 		MaxSteps:            6, // guardian reviews: enough for a few read-only tool calls
@@ -112,7 +113,7 @@ func NewSession(prov provider.Provider, readOnlyReg *tool.Registry, policyPrompt
 // reviews cannot interleave their messages (guardian reuses one session for
 // prefix-cache warmth). Event emission is deferred to outside the lock so a
 // slow sink does not stall the next review.
-func (gs *Session) Review(ctx context.Context, toolName string, args json.RawMessage, parentSession *agent.Session) (allow bool, reason string, err error) {
+func (gs *Session) Review(ctx context.Context, toolName string, args json.RawMessage, parentSession *sessionstore.Session) (allow bool, reason string, err error) {
 	allow, reason, _ = gs.review(ctx, toolName, args, parentSession)
 	return allow, reason, nil
 }
@@ -123,11 +124,11 @@ func (gs *Session) Review(ctx context.Context, toolName string, args json.RawMes
 // same circuit-breaker bookkeeping); authentic allow/deny verdicts return a
 // nil error. auto_review uses this so a failed review degrades to a fresh
 // human decision instead of masquerading as a reviewer deny.
-func (gs *Session) ReviewVerdict(ctx context.Context, toolName string, args json.RawMessage, parentSession *agent.Session) (allow bool, reason string, err error) {
+func (gs *Session) ReviewVerdict(ctx context.Context, toolName string, args json.RawMessage, parentSession *sessionstore.Session) (allow bool, reason string, err error) {
 	return gs.review(ctx, toolName, args, parentSession)
 }
 
-func (gs *Session) review(ctx context.Context, toolName string, args json.RawMessage, parentSession *agent.Session) (allow bool, reason string, failure error) {
+func (gs *Session) review(ctx context.Context, toolName string, args json.RawMessage, parentSession *sessionstore.Session) (allow bool, reason string, failure error) {
 	reviewCtx, cancel := context.WithTimeout(ctx, reviewTimeout)
 	defer cancel()
 
@@ -343,7 +344,7 @@ func (gs *Session) normalizeAlternation() {
 // Load replaces the guardian's internal agent session with the one at path,
 // restoring the conversation so the prefix cache stays warm across restarts.
 func (gs *Session) Load(path string) error {
-	sess, err := agent.LoadSession(path)
+	sess, err := sessionstore.LoadSession(path)
 	if err != nil {
 		return err
 	}
@@ -393,7 +394,7 @@ func loadCursor(path string) TranscriptCursor {
 	return cursor
 }
 
-func (gs *Session) validateLoadedSession(sess *agent.Session) error {
+func (gs *Session) validateLoadedSession(sess *sessionstore.Session) error {
 	msgs := sess.Snapshot()
 	if gs.policyPrompt == "" {
 		if len(msgs) > 0 && msgs[0].Role == provider.RoleSystem && msgs[0].Content != "" {
@@ -413,7 +414,7 @@ func (gs *Session) validateLoadedSession(sess *agent.Session) error {
 func (gs *Session) Reset() {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
-	sess := agent.NewSession(gs.policyPrompt)
+	sess := sessionstore.NewSession(gs.policyPrompt)
 	gs.agent.SetSession(sess)
 	gs.sess = sess
 	gs.cursor = TranscriptCursor{}
@@ -493,7 +494,7 @@ func firstRunesStr(s string, n int) string {
 	return string(runes[:n]) + "…"
 }
 
-func lastAssistantText(sess *agent.Session) string {
+func lastAssistantText(sess *sessionstore.Session) string {
 	msgs := sess.Snapshot()
 	for _, v := range slices.Backward(msgs) {
 		if v.Role == provider.RoleAssistant && strings.TrimSpace(v.Content) != "" {

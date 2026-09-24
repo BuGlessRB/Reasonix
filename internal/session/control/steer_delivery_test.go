@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -83,7 +84,7 @@ func TestSteerUnreadAtTurnEndIsDeliveredAsAFollowup(t *testing.T) {
 		t.Fatal(err)
 	}
 	prov := &haltingText{started: make(chan struct{}), release: make(chan struct{})}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	c := New(Options{Runner: ag, Executor: ag, SessionPath: session, SessionDir: dir, Sink: event.Discard})
 	defer c.autosaveWG.Wait()
 

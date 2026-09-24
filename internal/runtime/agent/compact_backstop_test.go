@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -70,7 +71,7 @@ func TestBackstopReportsWhatItTruncated(t *testing.T) {
 
 // foldableSessionWithChanges is bulk the free prune cannot reclaim, with two
 // real changes and a failed command inside it, so a fold has facts to lose.
-func foldableSessionWithChanges(turns int) *Session {
+func foldableSessionWithChanges(turns int) *sessionstore.Session {
 	big := strings.Repeat("word ", 400)
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
@@ -83,7 +84,7 @@ func foldableSessionWithChanges(turns int) *Session {
 			provider.Message{Role: provider.RoleUser, Content: "continue"},
 		)
 	}
-	return &Session{Messages: msgs}
+	return &sessionstore.Session{Messages: msgs}
 }
 
 func projectionDigest(a *Agent) string {

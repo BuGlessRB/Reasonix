@@ -8,11 +8,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
-	"reasonix/internal/runtime/agent"
 )
 
 // A pane the hub builds itself goes through boot, which needs a provider it can
@@ -96,7 +96,7 @@ func TestOpenPaneReadsASessionAnotherRuntimeHolds(t *testing.T) {
 
 	held := filepath.Join(SessionDirFor(root), "held.jsonl")
 	writeSessionAt(t, held)
-	lease, err := agent.TryAcquireSessionLease(held)
+	lease, err := sessionstore.TryAcquireSessionLease(held)
 	if err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestOpenPaneReadsASessionAnotherRuntimeHolds(t *testing.T) {
 		t.Fatalf("opening a session held elsewhere = %d, want 200 (body %s)", status, body)
 	}
 	// The holder still holds it: the pane that just opened took nothing.
-	if !agent.SessionLeaseHeldByOtherRuntime(held) && lease.Path() == "" {
+	if !sessionstore.SessionLeaseHeldByOtherRuntime(held) && lease.Path() == "" {
 		t.Error("the holder's lease did not survive the read-only open")
 	}
 }

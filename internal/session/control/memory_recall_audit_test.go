@@ -1,6 +1,7 @@
 package control
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -18,7 +19,7 @@ func (s *recallAuditSink) RecordMemoryRecall(a event.MemoryRecallAudit) {
 }
 
 func TestComposeEmitsMemoryRecallAudit(t *testing.T) {
-	ag := agent.New(nil, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	ag := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	sink := &recallAuditSink{Sink: event.Discard}
 	c := New(Options{Runner: ag, Executor: ag, Sink: sink})
 	_ = c.Compose("what is the canonical fast check command")

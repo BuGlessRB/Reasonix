@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -115,7 +116,7 @@ func (t *SubagentResultTool) Execute(ctx context.Context, args json.RawMessage) 
 // ReadFinalAnswer returns a completed child answer only when the caller owns
 // the parent conversation (or a verified descendant) and the workspace still
 // matches. The per-ref lock prevents a read racing the terminal transcript save.
-func (s *SubagentStore) ReadFinalAnswer(ref, parentSession, workspaceRoot string) (string, SubagentStatus, error) {
+func (s *SubagentStore) ReadFinalAnswer(ref, parentSession, workspaceRoot string) (string, sessionstore.SubagentStatus, error) {
 	if s == nil {
 		return "", "", fmt.Errorf("subagent result storage is not available")
 	}
@@ -147,11 +148,11 @@ func (s *SubagentStore) ReadFinalAnswer(ref, parentSession, workspaceRoot string
 	if want := strings.TrimSpace(workspaceRoot); want != "" && strings.TrimSpace(meta.WorkspaceRoot) != want {
 		return "", meta.Status, fmt.Errorf("subagent reference %q belongs to a different workspace", ref)
 	}
-	if meta.Status != SubagentCompleted {
+	if meta.Status != sessionstore.SubagentCompleted {
 		return "", meta.Status, fmt.Errorf("subagent reference %q is %s; only completed results can be read", ref, meta.Status)
 	}
 
-	sess, err := LoadSession(s.sessionPath(ref))
+	sess, err := sessionstore.LoadSession(s.sessionPath(ref))
 	if err != nil {
 		return "", meta.Status, fmt.Errorf("load subagent transcript %q: %w", ref, err)
 	}
@@ -322,7 +323,7 @@ func extractSubagentRef(output string) string {
 		line = line[:end]
 	}
 	ref := strings.TrimSpace(strings.TrimPrefix(line, prefix))
-	if validSubagentRef(ref) {
+	if sessionstore.ValidSubagentRef(ref) {
 		return ref
 	}
 	return ""

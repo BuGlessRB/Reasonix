@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -31,7 +32,7 @@ func TestContextualToolHostGateRunsBeforePermissionAndExecute(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(unavailableTool{fakeTool: fakeTool{name: "phase_tool", readOnly: false}, calls: &executions})
 	gate := &recordingPermissionGate{allow: true}
-	a := New(nil, reg, NewSession("sys"), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession("sys"), Options{Gate: gate}, event.Discard)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{ID: "phase", Name: "phase_tool", Arguments: `{}`})
 	if !out.blocked || !strings.Contains(out.output, "unavailable") {
@@ -51,7 +52,7 @@ func TestMixedContextualBatchExecutesAvailableCallsOnce(t *testing.T) {
 		{toolCallChunk("phase", "phase_tool", `{}`), toolCallChunk("read", "read_file", `{}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "answer after the available read"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "inspect the file"); err != nil {
 		t.Fatalf("mixed contextual batch failed: %v", err)
 	}
@@ -72,7 +73,7 @@ func TestRepeatedMixedContextualBatchStopsAllCalls(t *testing.T) {
 		{toolCallChunk("phase-1", "phase_tool", `{}`), toolCallChunk("read-1", "read_file", `{}`), {Type: provider.ChunkDone}},
 		{toolCallChunk("phase-2", "phase_tool", `{}`), toolCallChunk("read-2", "read_file", `{}`), {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	err := a.Run(context.Background(), "inspect the file")
 	if err == nil || !strings.Contains(err.Error(), "context-unavailable tools") {
 		t.Fatalf("repeated contextual batch error = %v", err)
@@ -92,7 +93,7 @@ func TestRepeatedPureContextualCallWithVisibleAnswerFinishes(t *testing.T) {
 		{toolCallChunk("phase-1", "phase_tool", `{}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "visible answer"}, toolCallChunk("phase-2", "phase_tool", `{}`), {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "answer normally"); err != nil {
 		t.Fatalf("visible answer after repeated contextual call failed: %v", err)
 	}

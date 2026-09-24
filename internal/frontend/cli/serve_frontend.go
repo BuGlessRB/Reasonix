@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"syscall"
 
@@ -20,7 +21,6 @@ import (
 	"reasonix/internal/contract/surface"
 	"reasonix/internal/frontend/serve"
 	"reasonix/internal/platform/telemetry"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -194,7 +194,7 @@ func serveFrontendLoop(ctrl *control.Controller, srv serveHost, resources *serve
 	if opts.openBrowser {
 		sessionID := ""
 		if opts.hasSession {
-			sessionID = agent.BranchID(ctrl.SessionPath())
+			sessionID = sessionstore.BranchID(ctrl.SessionPath())
 		}
 		serveErr = runServeListenerAfterReady(ctx, srv, resources.listener, resources.displayAddr, func() {
 			browserURL, err := launchWebBrowser(srv, resources.displayAddr, sessionID)
@@ -341,10 +341,10 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	// through the same keeper. Released after the controller closes.
 	leases := control.NewSessionLeaseKeeper()
 	defer leases.Release()
-	var resumeSession *agent.Session
+	var resumeSession *sessionstore.Session
 	if *resume != "" {
 		if err := leases.Rebind(*resume); err != nil {
-			if errors.Is(err, agent.ErrSessionLeaseHeld) {
+			if errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)
 			} else {
 				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

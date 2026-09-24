@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -71,7 +72,7 @@ func TestApprovalToolWideEndToEnd(t *testing.T) {
 		toolCallTurn("c2", "write_file", `{"path":"b.txt"}`),
 		textTurn("Done."),
 	}}
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	approvalID := make(chan string, 4)
 	prompts := 0
@@ -163,7 +164,7 @@ func TestPlanPhaseBlocksSideEffectsInEveryApprovalPosture(t *testing.T) {
 				toolCallTurn("call", tc.tool, `{"path":"plan.txt"}`),
 				textTurn("Plan ready."),
 			}}
-			ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+			ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 			c := New(Options{
 				Runner:   ag,
@@ -365,7 +366,7 @@ func TestApprovalAnsweredAfterTheWorkflowMovedStartsNothing(t *testing.T) {
 		textTurn("Plan:\n1. Add the field\n2. Wire it up"),
 		textTurn("Should never run."),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	var c *Controller
 	c = New(Options{

@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
-
-	"reasonix/internal/runtime/agent"
 )
 
 // SessionLeaseKeeper owns at most one session lease on behalf of a frontend
@@ -21,7 +20,7 @@ import (
 // The zero value is not ready for use; construct with NewSessionLeaseKeeper.
 type SessionLeaseKeeper struct {
 	mu         sync.Mutex
-	lease      *agent.SessionLease
+	lease      *sessionstore.SessionLease
 	controller *Controller
 	retired    []<-chan struct{}
 }
@@ -36,7 +35,7 @@ func NewSessionLeaseKeeper() *SessionLeaseKeeper {
 // is a no-op; an empty path (session persistence disabled) just releases.
 // On failure the keeper is unchanged — the caller still holds its previous
 // lease and must not bind path for writing. A held path surfaces as an error
-// wrapping agent.ErrSessionLeaseHeld; format it with SessionInUseMessage.
+// wrapping sessionstore.ErrSessionLeaseHeld; format it with SessionInUseMessage.
 func (k *SessionLeaseKeeper) Rebind(path string) error {
 	if k == nil {
 		return nil
@@ -47,10 +46,10 @@ func (k *SessionLeaseKeeper) Rebind(path string) error {
 		k.releaseLocked()
 		return nil
 	}
-	if k.lease != nil && k.lease.Path() == agent.CanonicalSessionPath(path) {
+	if k.lease != nil && k.lease.Path() == sessionstore.CanonicalSessionPath(path) {
 		return nil
 	}
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		reclaimed, reclaimErr := reclaimOwnSessionLease(path, err)
 		if reclaimErr != nil {
@@ -78,14 +77,14 @@ func (k *SessionLeaseKeeper) Attach(path string) (writable bool, err error) {
 		k.releaseLocked()
 		return true, nil
 	}
-	if k.lease != nil && k.lease.Path() == agent.CanonicalSessionPath(path) {
+	if k.lease != nil && k.lease.Path() == sessionstore.CanonicalSessionPath(path) {
 		return true, nil
 	}
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		reclaimed, reclaimErr := reclaimOwnSessionLease(path, err)
 		if reclaimErr != nil {
-			if !errors.Is(err, agent.ErrSessionLeaseHeld) {
+			if !errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 				return false, err
 			}
 			// Held by a live runtime. Drop whatever this keeper held so the
@@ -106,16 +105,16 @@ func (k *SessionLeaseKeeper) Attach(path string) (writable bool, err error) {
 // naming this very process as the holder. Only our own leftover is taken: a
 // readable info naming someone else is respected, and the OS lock refuses a
 // live holder anyway — damaged info with a free lock is a leftover, not one.
-func reclaimOwnSessionLease(path string, cause error) (*agent.SessionLease, error) {
-	if !errors.Is(cause, agent.ErrSessionLeaseHeld) {
+func reclaimOwnSessionLease(path string, cause error) (*sessionstore.SessionLease, error) {
+	if !errors.Is(cause, sessionstore.ErrSessionLeaseHeld) {
 		return nil, cause
 	}
-	var leaseErr *agent.SessionLeaseError
+	var leaseErr *sessionstore.SessionLeaseError
 	if errors.As(cause, &leaseErr) && leaseErr != nil && leaseErr.Info != nil &&
-		(leaseErr.Info.PID != os.Getpid() || leaseErr.Info.WriterID != agent.SessionWriterID()) {
+		(leaseErr.Info.PID != os.Getpid() || leaseErr.Info.WriterID != sessionstore.SessionWriterID()) {
 		return nil, cause
 	}
-	return agent.TryReclaimCurrentProcessSessionLease(path)
+	return sessionstore.TryReclaimCurrentProcessSessionLease(path)
 }
 
 // HandleSessionRecovered moves the single-session frontend lease before a
@@ -129,11 +128,11 @@ func (k *SessionLeaseKeeper) HandleSessionRecovered(info SessionRecoveryInfo) er
 		return nil
 	}
 	k.mu.Lock()
-	if k.lease != nil && k.lease.Path() == agent.CanonicalSessionPath(recoveryPath) {
+	if k.lease != nil && k.lease.Path() == sessionstore.CanonicalSessionPath(recoveryPath) {
 		k.mu.Unlock()
 		return nil
 	}
-	lease, err := agent.TryAcquireSessionLease(recoveryPath)
+	lease, err := sessionstore.TryAcquireSessionLease(recoveryPath)
 	if err != nil {
 		if reclaimed, reclaimErr := reclaimOwnSessionLease(recoveryPath, err); reclaimErr == nil {
 			lease, err = reclaimed, nil
@@ -147,7 +146,7 @@ func (k *SessionLeaseKeeper) HandleSessionRecovered(info SessionRecoveryInfo) er
 			lease.Release()
 		}
 		k.mu.Unlock()
-		if errors.Is(err, agent.ErrSessionLeaseHeld) {
+		if errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 			return fmt.Errorf("bind recovery session: %s; %s",
 				SessionInUseMessage(err), SessionLeaseCloseHint)
 		}
@@ -222,7 +221,7 @@ func (k *SessionLeaseKeeper) HeldPath() string {
 
 // Lease returns the held lease for authority issuance. Callers must not
 // Release it; use Release/Rebind on the keeper instead.
-func (k *SessionLeaseKeeper) Lease() *agent.SessionLease {
+func (k *SessionLeaseKeeper) Lease() *sessionstore.SessionLease {
 	if k == nil {
 		return nil
 	}
@@ -268,7 +267,7 @@ const SessionLeaseCloseHint = "close the other Reasonix window or process first"
 // caller already knows which session it asked for.
 func SessionInUseMessage(err error) string {
 	const fallback = "this session is in use by another Reasonix window or process"
-	var leaseErr *agent.SessionLeaseError
+	var leaseErr *sessionstore.SessionLeaseError
 	if !errors.As(err, &leaseErr) || leaseErr == nil || leaseErr.Info == nil || leaseErr.Info.PID <= 0 {
 		return fallback
 	}

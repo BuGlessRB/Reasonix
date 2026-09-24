@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"slices"
 	"strings"
@@ -53,7 +54,7 @@ func TestResolvePlanDecisionRecordsDistinctOutcomes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.action), func(t *testing.T) {
-			session := agent.NewSession("sys")
+			session := sessionstore.NewSession("sys")
 			session.Add(provider.Message{Role: provider.RoleAssistant, Content: "proposed plan"})
 			exec := agent.New(nil, nil, session, agent.Options{}, event.Discard)
 			c := New(Options{Executor: exec})
@@ -105,7 +106,7 @@ func controlTestPluginByName(entries []config.PluginEntry, name string) (config.
 }
 
 type appendingRunner struct {
-	session *agent.Session
+	session *sessionstore.Session
 }
 
 func (r appendingRunner) Run(_ context.Context, input string) error {
@@ -114,7 +115,7 @@ func (r appendingRunner) Run(_ context.Context, input string) error {
 }
 
 type handoffRunner struct {
-	session *agent.Session
+	session *sessionstore.Session
 }
 
 func (r handoffRunner) Run(_ context.Context, input string) error {
@@ -150,7 +151,7 @@ func TestContextSnapshotMeasuresTheTriggerInput(t *testing.T) {
 		{Type: provider.ChunkUsage, Usage: &provider.Usage{PromptTokens: 6840, CompletionTokens: 48, TotalTokens: 6888, ReasoningTokens: 48}},
 		{Type: provider.ChunkDone},
 	}}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{ContextWindow: 1_000_000}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{ContextWindow: 1_000_000}, event.Discard)
 	c := New(Options{Runner: ag, Executor: ag})
 
 	if err := c.Run(context.Background(), "hello"); err != nil {
@@ -193,11 +194,11 @@ func TestCancelJobCannotCrossSessionBoundary(t *testing.T) {
 	controllerA.sessionPath = pathA
 	controllerB.sessionPath = pathB
 
-	jobA := manager.StartForSession(agent.BranchID(pathA), "bash", "a", func(ctx context.Context, _ io.Writer) (string, error) {
+	jobA := manager.StartForSession(sessionstore.BranchID(pathA), "bash", "a", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-ctx.Done()
 		return "", ctx.Err()
 	})
-	jobB := manager.StartForSession(agent.BranchID(pathB), "bash", "b", func(ctx context.Context, _ io.Writer) (string, error) {
+	jobB := manager.StartForSession(sessionstore.BranchID(pathB), "bash", "b", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-ctx.Done()
 		return "", ctx.Err()
 	})
@@ -298,7 +299,7 @@ func TestClearSessionMarksCleanupPendingBeforeReturningForRunningJobs(t *testing
 	if err := os.WriteFile(oldPath, []byte(`{"role":"user","content":"old"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	jm := jobs.NewManager(event.Discard)
 	release := make(chan struct{})
 	started := make(chan struct{})
@@ -306,7 +307,7 @@ func TestClearSessionMarksCleanupPendingBeforeReturningForRunningJobs(t *testing
 		close(release)
 		jm.Close()
 	}()
-	jm.StartForSession(agent.BranchID(oldPath), "task", "stuck clear", func(ctx context.Context, _ io.Writer) (string, error) {
+	jm.StartForSession(sessionstore.BranchID(oldPath), "task", "stuck clear", func(ctx context.Context, _ io.Writer) (string, error) {
 		close(started)
 		<-ctx.Done()
 		<-release
@@ -322,13 +323,13 @@ func TestClearSessionMarksCleanupPendingBeforeReturningForRunningJobs(t *testing
 	if err := ctrl.ClearSession(); err != nil {
 		t.Fatalf("ClearSession: %v", err)
 	}
-	if !agent.IsCleanupPending(oldPath) {
+	if !sessionstore.IsCleanupPending(oldPath) {
 		t.Fatalf("old session should be cleanup-pending before ClearSession returns")
 	}
 	if _, err := os.Stat(oldPath); err != nil {
 		t.Fatalf("old session file should remain until delayed cleanup: %v", err)
 	}
-	sessions, err := agent.ListSessions(dir)
+	sessions, err := sessionstore.ListSessions(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +349,7 @@ func TestClearSessionQueuesSessionStartHookContext(t *testing.T) {
 	if err := os.WriteFile(oldPath, []byte(`{"role":"user","content":"old"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	hooks := hook.NewRunner([]hook.ResolvedHook{{
 		HookConfig: hook.HookConfig{Command: "session-start"},
 		Event:      hook.SessionStart,
@@ -372,7 +373,7 @@ func TestReconcileCleanupPendingRemovesOrphanedArtifacts(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"role":"user","content":"orphan"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.SaveBranchMeta(path, agent.BranchMeta{Name: "orphan"}); err != nil {
+	if err := sessionstore.SaveBranchMeta(path, sessionstore.BranchMeta{Name: "orphan"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(jobs.ArtifactDir(path), 0o755); err != nil {
@@ -384,14 +385,14 @@ func TestReconcileCleanupPendingRemovesOrphanedArtifacts(t *testing.T) {
 	if err := os.MkdirAll(ckptDir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(path, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := ReconcileCleanupPending(dir); err != nil {
 		t.Fatalf("ReconcileCleanupPending: %v", err)
 	}
-	for _, p := range []string{path, agent.BranchMetaPath(path), jobs.ArtifactDir(path), ckptDir(path), agent.CleanupPendingPath(path)} {
+	for _, p := range []string{path, sessionstore.BranchMetaPath(path), jobs.ArtifactDir(path), ckptDir(path), sessionstore.CleanupPendingPath(path)} {
 		if _, err := os.Stat(p); !os.IsNotExist(err) {
 			t.Fatalf("%s still exists after reconciliation (err=%v)", p, err)
 		}
@@ -410,7 +411,7 @@ func TestTurnOutcomeClassifiesFinalReadiness(t *testing.T) {
 
 func TestRunTurnSnapshotsActivityWhenTranscriptChanges(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
 	c := New(Options{Runner: appendingRunner{session: sess}, Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
@@ -419,14 +420,14 @@ func TestRunTurnSnapshotsActivityWhenTranscriptChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(loaded.Messages) != 2 {
 		t.Fatalf("saved messages = %d, want system + user", len(loaded.Messages))
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("load activity meta ok=%v err=%v", ok, err)
 	}
@@ -438,7 +439,7 @@ func TestRunTurnSnapshotsActivityWhenTranscriptChanges(t *testing.T) {
 func TestFinishInFlightTurnKeepsMarkerUntilSnapshotSucceeds(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
 
@@ -453,7 +454,7 @@ func TestFinishInFlightTurnKeepsMarkerUntilSnapshotSucceeds(t *testing.T) {
 	}
 
 	c.finishInFlightTurn(start, marker)
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok || meta.InFlightTurn == nil || meta.InFlightTurn.ID != marker.ID {
 		t.Fatalf("marker after failed snapshot = %+v ok=%v err=%v, want original marker", meta.InFlightTurn, ok, err)
 	}
@@ -465,14 +466,14 @@ func TestFinishInFlightTurnKeepsMarkerUntilSnapshotSucceeds(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.finishInFlightTurn(start, marker)
-	meta, ok, err = agent.LoadBranchMeta(path)
+	meta, ok, err = sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta after successful snapshot ok=%v err=%v", ok, err)
 	}
 	if meta.InFlightTurn != nil {
 		t.Fatalf("marker survived successful snapshot: %+v", meta.InFlightTurn)
 	}
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +485,7 @@ func TestFinishInFlightTurnKeepsMarkerUntilSnapshotSucceeds(t *testing.T) {
 func TestResumePreservesTranscriptWhenCrashFollowsFinalSnapshot(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "post-snapshot-crash.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	if err := sess.Save(path); err != nil {
 		t.Fatal(err)
 	}
@@ -497,7 +498,7 @@ func TestResumePreservesTranscriptWhenCrashFollowsFinalSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	committedMarker, matched, err := agent.PrepareSessionInFlightTurnCommit(path, marker, digest)
+	committedMarker, matched, err := sessionstore.PrepareSessionInFlightTurnCommit(path, marker, digest)
 	if err != nil || !matched {
 		t.Fatalf("PrepareSessionInFlightTurnCommit matched=%v err=%v", matched, err)
 	}
@@ -505,7 +506,7 @@ func TestResumePreservesTranscriptWhenCrashFollowsFinalSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -516,7 +517,7 @@ func TestResumePreservesTranscriptWhenCrashFollowsFinalSnapshot(t *testing.T) {
 	if len(msgs) != 3 || msgs[2].Content != "completed answer" || msgs[2].LocalOnly {
 		t.Fatalf("post-snapshot recovery changed durable transcript: %+v", msgs)
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta ok=%v err=%v", ok, err)
 	}
@@ -529,14 +530,14 @@ func TestRunInjectsParentSessionForJobs(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	runner := &sessionContextRunner{}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Runner: runner, Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
 
 	if err := c.Run(context.Background(), "hello"); err != nil {
 		t.Fatal(err)
 	}
-	want := agent.BranchID(path)
+	want := sessionstore.BranchID(path)
 	if runner.parentSession != want {
 		t.Fatalf("ParentSession = %q, want %q", runner.parentSession, want)
 	}
@@ -590,7 +591,7 @@ func TestSetSessionPathAdoptsTemporaryBackgroundJobs(t *testing.T) {
 		toolCallTurn("call-1", "start_background_job", `{}`),
 		textTurn("done"),
 	}}
-	ag := agent.New(prov, reg, agent.NewSession("sys"), agent.Options{Jobs: jm}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession("sys"), agent.Options{Jobs: jm}, event.Discard)
 	c := New(Options{Runner: ag, Executor: ag, SessionDir: dir, Label: "test", Jobs: jm})
 	defer c.Close()
 
@@ -601,7 +602,7 @@ func TestSetSessionPathAdoptsTemporaryBackgroundJobs(t *testing.T) {
 	c.SetSessionPath(path)
 	close(release)
 
-	parentSession := agent.BranchID(path)
+	parentSession := sessionstore.BranchID(path)
 	res, _ := c.jobs.WaitForSession(context.Background(), parentSession, []string{jobID}, jobs.WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || !strings.Contains(res[0].Output, "before\n") || !strings.Contains(res[0].Output, "after\n") {
 		t.Fatalf("adopted controller job = %+v, want before/after output", res)
@@ -614,7 +615,7 @@ func TestSetSessionPathAdoptsTemporaryBackgroundJobs(t *testing.T) {
 func TestGoalStatePersistsNextToSessionPath(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
 
@@ -637,7 +638,7 @@ func TestGoalStatePersistsNextToSessionPath(t *testing.T) {
 func TestSetGoalDurableRestoresInMemoryStateWhenSidecarWriteFails(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
 
@@ -664,7 +665,7 @@ func TestSetGoalDurableNeverCreatesLegacyArchive(t *testing.T) {
 	root := testenv.TempDir(t)
 	path := filepath.Join(root, "session.jsonl")
 	sink := &noticeSink{}
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{
 		Executor:      exec,
 		SessionDir:    root,
@@ -698,7 +699,7 @@ func TestSetGoalDurableNeverCreatesLegacyArchive(t *testing.T) {
 func TestResumeRestoresTerminalGoalTodosFromSidecar(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	loaded := agent.NewSession("sys")
+	loaded := sessionstore.NewSession("sys")
 	loaded.Add(provider.Message{
 		Role: provider.RoleAssistant,
 		ToolCalls: []provider.ToolCall{{
@@ -717,7 +718,7 @@ func TestResumeRestoresTerminalGoalTodosFromSidecar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
 	c.Resume(loaded, path)
 
@@ -730,7 +731,7 @@ func TestResumeRestoresTerminalGoalTodosFromSidecar(t *testing.T) {
 func TestResumeKeepsTranscriptTodosForRunningGoalSidecar(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	loaded := agent.NewSession("sys")
+	loaded := sessionstore.NewSession("sys")
 	loaded.Add(provider.Message{
 		Role: provider.RoleAssistant,
 		ToolCalls: []provider.ToolCall{{
@@ -749,7 +750,7 @@ func TestResumeKeepsTranscriptTodosForRunningGoalSidecar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
 	c.Resume(loaded, path)
 
@@ -760,7 +761,7 @@ func TestResumeKeepsTranscriptTodosForRunningGoalSidecar(t *testing.T) {
 }
 
 func TestRunTurnRecordsDisplayForPersistedUserMessage(t *testing.T) {
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Runner: handoffRunner{session: sess}, Executor: exec})
 	var gotContent, gotDisplay string
@@ -783,7 +784,7 @@ func TestRunTurnRecordsDisplayForPersistedUserMessage(t *testing.T) {
 
 func TestSnapshotDoesNotRefreshSessionActivity(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test", ModelRef: "provider/model-a"})
@@ -792,7 +793,7 @@ func TestSnapshotDoesNotRefreshSessionActivity(t *testing.T) {
 	if err := c.SnapshotActivity(); err != nil {
 		t.Fatal(err)
 	}
-	first, ok, err := agent.LoadBranchMeta(c.SessionPath())
+	first, ok, err := sessionstore.LoadBranchMeta(c.SessionPath())
 	if err != nil || !ok {
 		t.Fatalf("load initial meta ok=%v err=%v", ok, err)
 	}
@@ -802,7 +803,7 @@ func TestSnapshotDoesNotRefreshSessionActivity(t *testing.T) {
 	if err := c.Snapshot(); err != nil {
 		t.Fatal(err)
 	}
-	second, ok, err := agent.LoadBranchMeta(c.SessionPath())
+	second, ok, err := sessionstore.LoadBranchMeta(c.SessionPath())
 	if err != nil || !ok {
 		t.Fatalf("load second meta ok=%v err=%v", ok, err)
 	}
@@ -818,14 +819,14 @@ func TestSnapshotAdoptsNewerDiskForPureStalePrefix(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	staleSess := agent.NewSession("sys")
+	staleSess := sessionstore.NewSession("sys")
 	staleSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	staleSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	staleExec := agent.New(nil, nil, staleSess, agent.Options{}, event.Discard)
 	sink := &noticeSink{}
 	stale := New(Options{Executor: staleExec, SessionDir: dir, SessionPath: path, Label: "test", Sink: sink})
 
-	currentSess := agent.NewSession("sys")
+	currentSess := sessionstore.NewSession("sys")
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	currentSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "second"})
@@ -840,7 +841,7 @@ func TestSnapshotAdoptsNewerDiskForPureStalePrefix(t *testing.T) {
 		t.Fatalf("Snapshot stale prefix: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -863,14 +864,14 @@ func TestSnapshotRecoversDivergedControllerTranscript(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	staleSess := agent.NewSession("sys")
+	staleSess := sessionstore.NewSession("sys")
 	staleSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	staleSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	staleSess.Add(provider.Message{Role: provider.RoleUser, Content: "local second"})
 	staleExec := agent.New(nil, nil, staleSess, agent.Options{}, event.Discard)
 	stale := New(Options{Executor: staleExec, SessionDir: dir, SessionPath: path, Label: "test"})
 
-	currentSess := agent.NewSession("sys")
+	currentSess := sessionstore.NewSession("sys")
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	currentSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "disk second"})
@@ -887,14 +888,14 @@ func TestSnapshotRecoversDivergedControllerTranscript(t *testing.T) {
 	if recoveryPath == path || recoveryPath == "" {
 		t.Fatalf("stale session path after recovery = %q, want recovery path", recoveryPath)
 	}
-	recovered, err := agent.LoadSession(recoveryPath)
+	recovered, err := sessionstore.LoadSession(recoveryPath)
 	if err != nil {
 		t.Fatalf("LoadSession recovery: %v", err)
 	}
 	if got := recovered.Messages[len(recovered.Messages)-1].Content; got != "local second" {
 		t.Fatalf("recovery tail = %q, want local second", got)
 	}
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession original: %v", err)
 	}
@@ -912,14 +913,14 @@ func TestSnapshotConflictRecoveryTransplantsInFlightTurnMarker(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	staleSess := agent.NewSession("sys")
+	staleSess := sessionstore.NewSession("sys")
 	staleSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	staleSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	staleSess.Add(provider.Message{Role: provider.RoleUser, Content: "local second"})
 	staleExec := agent.New(nil, nil, staleSess, agent.Options{}, event.Discard)
 	stale := New(Options{Executor: staleExec, SessionDir: dir, SessionPath: path, Label: "test"})
 
-	currentSess := agent.NewSession("sys")
+	currentSess := sessionstore.NewSession("sys")
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	currentSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "disk second"})
@@ -930,10 +931,10 @@ func TestSnapshotConflictRecoveryTransplantsInFlightTurnMarker(t *testing.T) {
 	}
 
 	// The stale runtime had a foreground turn running when the conflict fired.
-	if err := agent.MarkSessionInFlightTurn(path, 2, true); err != nil {
+	if err := sessionstore.MarkSessionInFlightTurn(path, 2, true); err != nil {
 		t.Fatalf("MarkSessionInFlightTurn: %v", err)
 	}
-	markedMeta, ok, err := agent.LoadBranchMeta(path)
+	markedMeta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok || markedMeta.InFlightTurn == nil {
 		t.Fatalf("LoadBranchMeta marked ok=%v err=%v meta=%+v", ok, err, markedMeta)
 	}
@@ -947,14 +948,14 @@ func TestSnapshotConflictRecoveryTransplantsInFlightTurnMarker(t *testing.T) {
 		t.Fatalf("stale session path after recovery = %q, want recovery path", recoveryPath)
 	}
 
-	origMeta, ok, err := agent.LoadBranchMeta(path)
+	origMeta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta original ok=%v err=%v", ok, err)
 	}
 	if origMeta.InFlightTurn != nil {
 		t.Fatal("in-flight turn marker left on the forked-from branch; reopening it would strip the turn")
 	}
-	recMeta, ok, err := agent.LoadBranchMeta(recoveryPath)
+	recMeta, ok, err := sessionstore.LoadBranchMeta(recoveryPath)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta recovery ok=%v err=%v", ok, err)
 	}
@@ -978,25 +979,25 @@ func TestRecoverInterruptedTurnSparesTurnContinuedOnRecoveryBranch(t *testing.T)
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	orig := agent.NewSession("sys")
+	orig := sessionstore.NewSession("sys")
 	orig.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	orig.Add(provider.Message{Role: provider.RoleAssistant, Content: "partial"})
 	if err := orig.Save(path); err != nil {
 		t.Fatalf("Save original: %v", err)
 	}
-	if err := agent.MarkSessionInFlightTurn(path, 1, true); err != nil {
+	if err := sessionstore.MarkSessionInFlightTurn(path, 1, true); err != nil {
 		t.Fatalf("MarkSessionInFlightTurn: %v", err)
 	}
 	// A legacy runtime forked the running turn onto a recovery branch and
 	// left the marker behind on the original.
-	forked := agent.NewSession("sys")
+	forked := sessionstore.NewSession("sys")
 	forked.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	forked.Add(provider.Message{Role: provider.RoleAssistant, Content: "continued elsewhere"})
-	if _, err := forked.SaveRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: path}); err != nil {
+	if _, err := forked.SaveRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: path}); err != nil {
 		t.Fatalf("SaveRecoveryBranch: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -1007,7 +1008,7 @@ func TestRecoverInterruptedTurnSparesTurnContinuedOnRecoveryBranch(t *testing.T)
 	if got := c.executor.Session().Len(); got != 3 {
 		t.Fatalf("message count after reopening forked-from branch = %d, want 3 (turn stripped despite recovery child)", got)
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta ok=%v err=%v", ok, err)
 	}
@@ -1024,17 +1025,17 @@ func TestRecoverInterruptedTurnPreservesGenuineCrashDisplay(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	orig := agent.NewSession("sys")
+	orig := sessionstore.NewSession("sys")
 	orig.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	orig.Add(provider.Message{Role: provider.RoleAssistant, Content: "partial"})
 	if err := orig.Save(path); err != nil {
 		t.Fatalf("Save original: %v", err)
 	}
-	if err := agent.MarkSessionInFlightTurn(path, 1, true); err != nil {
+	if err := sessionstore.MarkSessionInFlightTurn(path, 1, true); err != nil {
 		t.Fatalf("MarkSessionInFlightTurn: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -1049,7 +1050,7 @@ func TestRecoverInterruptedTurnPreservesGenuineCrashDisplay(t *testing.T) {
 	if !recovery.LocalOnly || recovery.Content != "partial" || recovery.InterruptedTurn == nil || !recovery.InterruptedTurn.Pending {
 		t.Fatalf("crash display/recovery was not retained safely: %+v", recovery)
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta ok=%v err=%v", ok, err)
 	}
@@ -1062,7 +1063,7 @@ func TestRecoverInterruptedTurnAfterCompactionRelocatesVisibleTurn(t *testing.T)
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "compacted-crash.jsonl")
 
-	orig := agent.NewSession("sys")
+	orig := sessionstore.NewSession("sys")
 	for range 3 {
 		orig.Add(provider.Message{Role: provider.RoleUser, Content: "old task"})
 		orig.Add(provider.Message{Role: provider.RoleAssistant, Content: "old answer"})
@@ -1071,15 +1072,15 @@ func TestRecoverInterruptedTurnAfterCompactionRelocatesVisibleTurn(t *testing.T)
 	if err := orig.Save(path); err != nil {
 		t.Fatalf("Save original: %v", err)
 	}
-	if err := agent.MarkSessionInFlightTurn(path, staleStart, true); err != nil {
+	if err := sessionstore.MarkSessionInFlightTurn(path, staleStart, true); err != nil {
 		t.Fatalf("MarkSessionInFlightTurn: %v", err)
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok || meta.InFlightTurn == nil {
 		t.Fatalf("LoadBranchMeta ok=%v err=%v meta=%+v", ok, err, meta)
 	}
 
-	compacted, err := agent.LoadSession(path)
+	compacted, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("Load compacting owner: %v", err)
 	}
@@ -1100,7 +1101,7 @@ func TestRecoverInterruptedTurnAfterCompactionRelocatesVisibleTurn(t *testing.T)
 		t.Fatalf("Save compacted: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -1125,7 +1126,7 @@ func TestRecoverInterruptedTurnAfterCompactionRelocatesVisibleTurn(t *testing.T)
 	if recovery == nil || !recovery.Pending || len(recovery.CompletedTools) != 1 || recovery.CompletedTools[0].Name != "write_file" || !recovery.DroppedPartialText || !recovery.DroppedPartialReasoning {
 		t.Fatalf("crash recovery metadata = %+v", recovery)
 	}
-	meta, ok, err = agent.LoadBranchMeta(path)
+	meta, ok, err = sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta after recovery ok=%v err=%v", ok, err)
 	}
@@ -1143,7 +1144,7 @@ func TestResumePreservesNewerWALAfterStaleMarker(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "wal-newer-than-anchor.jsonl")
 
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	for sess.Len() < 1149 {
 		role := provider.RoleAssistant
 		if sess.Len()%2 == 1 {
@@ -1155,7 +1156,7 @@ func TestResumePreservesNewerWALAfterStaleMarker(t *testing.T) {
 	if err := sess.Save(path); err != nil {
 		t.Fatalf("Save anchor: %v", err)
 	}
-	if err := agent.MarkSessionInFlightTurn(path, 1149, false); err != nil {
+	if err := sessionstore.MarkSessionInFlightTurn(path, 1149, false); err != nil {
 		t.Fatalf("MarkSessionInFlightTurn: %v", err)
 	}
 
@@ -1187,7 +1188,7 @@ func TestResumePreservesNewerWALAfterStaleMarker(t *testing.T) {
 		t.Fatalf("restore stale compatibility anchor: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -1201,7 +1202,7 @@ func TestResumePreservesNewerWALAfterStaleMarker(t *testing.T) {
 	if got := exec.Session().Len(); got != 1315 {
 		t.Fatalf("recovery shrank newer WAL transcript to %d, want 1315", got)
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta ok=%v err=%v", ok, err)
 	}
@@ -1217,13 +1218,13 @@ func TestSnapshotRewriteRecoversStaleControllerTranscript(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	staleSess := agent.NewSession("sys")
+	staleSess := sessionstore.NewSession("sys")
 	staleSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	staleSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	staleExec := agent.New(nil, nil, staleSess, agent.Options{}, event.Discard)
 	stale := New(Options{Executor: staleExec, SessionDir: dir, SessionPath: path, Label: "test"})
 
-	currentSess := agent.NewSession("sys")
+	currentSess := sessionstore.NewSession("sys")
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	currentSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "second"})
@@ -1242,7 +1243,7 @@ func TestSnapshotRewriteRecoversStaleControllerTranscript(t *testing.T) {
 		t.Fatalf("SnapshotRewrite stale: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -1256,18 +1257,18 @@ func TestSnapshotRewriteRecoversStaleControllerTranscript(t *testing.T) {
 	if recoveryPath == path || recoveryPath == "" {
 		t.Fatalf("stale session path after rewrite recovery = %q, want recovery path", recoveryPath)
 	}
-	recovered, err := agent.LoadSession(recoveryPath)
+	recovered, err := sessionstore.LoadSession(recoveryPath)
 	if err != nil {
 		t.Fatalf("LoadSession recovery: %v", err)
 	}
 	if got := recovered.Messages[1].Content; got != "summarized first" {
 		t.Fatalf("recovery content = %q, want summarized first", got)
 	}
-	meta, ok, err := agent.LoadBranchMeta(recoveryPath)
+	meta, ok, err := sessionstore.LoadBranchMeta(recoveryPath)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta recovery ok=%v err=%v", ok, err)
 	}
-	if !meta.Recovered || meta.ParentID != agent.BranchID(path) {
+	if !meta.Recovered || meta.ParentID != sessionstore.BranchID(path) {
 		t.Fatalf("recovery meta = %+v, want recovered parent", meta)
 	}
 }
@@ -1276,14 +1277,14 @@ func TestSnapshotActivityPersistsOwnedCompactionRewrite(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	if err := sess.Save(path); err != nil {
 		t.Fatalf("Save base: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -1310,7 +1311,7 @@ func TestSnapshotActivityPersistsOwnedCompactionRewrite(t *testing.T) {
 	if got := c.SessionPath(); got != path {
 		t.Fatalf("session path after owned compaction = %q, want original %q", got, path)
 	}
-	reloaded, err := agent.LoadSession(path)
+	reloaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession rewritten: %v", err)
 	}
@@ -1329,7 +1330,7 @@ func TestEditedPromptMetadataAfterMidTurnSnapshotStaysOnOwnedSession(t *testing.
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "edited-mid-turn.jsonl")
 
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "edited prompt"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "partial"})
 	if err := sess.Save(path); err != nil {
@@ -1348,7 +1349,7 @@ func TestEditedPromptMetadataAfterMidTurnSnapshotStaysOnOwnedSession(t *testing.
 	if got := ctrl.SessionPath(); got != path {
 		t.Fatalf("edited turn moved to recovery path %q, want owned path %q", got, path)
 	}
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -1368,14 +1369,14 @@ func TestRecoveryBranchPersistsLaterOwnedCompactionRewrite(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	currentSess := agent.NewSession("sys")
+	currentSess := sessionstore.NewSession("sys")
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	currentSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "disk"})
 	if err := currentSess.Save(path); err != nil {
 		t.Fatalf("Save current: %v", err)
 	}
 
-	localSess := agent.NewSession("sys")
+	localSess := sessionstore.NewSession("sys")
 	localSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	localSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "local"})
 	localExec := agent.New(nil, nil, localSess, agent.Options{}, event.Discard)
@@ -1397,7 +1398,7 @@ func TestRecoveryBranchPersistsLaterOwnedCompactionRewrite(t *testing.T) {
 	if !ok || notice.Code != event.NoticeCodeSessionRecoveryForked || notice.Audience != event.NoticeAudienceOperator {
 		t.Fatalf("fork recovery notice = %+v, want typed operator recovery notice", notice)
 	}
-	if got := notices[len(notices)-1]; strings.Contains(got, agent.BranchID(recoveryPath)) || strings.Contains(got, "recovery branch") {
+	if got := notices[len(notices)-1]; strings.Contains(got, sessionstore.BranchID(recoveryPath)) || strings.Contains(got, "recovery branch") {
 		t.Fatalf("initial recovery notice exposed internal branch detail: %q", got)
 	}
 
@@ -1418,7 +1419,7 @@ func TestRecoveryBranchPersistsLaterOwnedCompactionRewrite(t *testing.T) {
 	if got := c.SessionPath(); got != recoveryPath {
 		t.Fatalf("session path after recovery compaction = %q, want recovery %q", got, recoveryPath)
 	}
-	reloaded, err := agent.LoadSession(recoveryPath)
+	reloaded, err := sessionstore.LoadSession(recoveryPath)
 	if err != nil {
 		t.Fatalf("LoadSession recovery: %v", err)
 	}
@@ -1437,14 +1438,14 @@ func TestConcurrentSnapshotsShareSingleRecoveryHandoff(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	currentSess := agent.NewSession("sys")
+	currentSess := sessionstore.NewSession("sys")
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	currentSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "disk"})
 	if err := currentSess.Save(path); err != nil {
 		t.Fatalf("Save current: %v", err)
 	}
 
-	localSess := agent.NewSession("sys")
+	localSess := sessionstore.NewSession("sys")
 	localSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	localSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "local"})
 	localExec := agent.New(nil, nil, localSess, agent.Options{}, event.Discard)
@@ -1518,13 +1519,13 @@ func TestConcurrentSnapshotsShareSingleRecoveryHandoff(t *testing.T) {
 func TestRecoverShutdownSnapshotPersistsAndReanchorsSession(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	base := agent.NewSession("sys")
+	base := sessionstore.NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "persisted"})
 	if err := base.SaveSnapshot(path); err != nil {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	current, err := agent.LoadSession(path)
+	current, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -1544,7 +1545,7 @@ func TestRecoverShutdownSnapshotPersistsAndReanchorsSession(t *testing.T) {
 		},
 	})
 
-	recoveryPath, err := c.recoverShutdownSnapshot(path, agent.ErrSessionFileLockHeld)
+	recoveryPath, err := c.recoverShutdownSnapshot(path, sessionstore.ErrSessionFileLockHeld)
 	if err != nil {
 		t.Fatalf("recoverShutdownSnapshot: %v", err)
 	}
@@ -1557,7 +1558,7 @@ func TestRecoverShutdownSnapshotPersistsAndReanchorsSession(t *testing.T) {
 	if handoff.OriginalPath != path || handoff.RecoveryPath != recoveryPath || handoff.Reason != "shutdown session file lock timeout" {
 		t.Fatalf("shutdown recovery handoff = %+v", handoff)
 	}
-	recovered, err := agent.LoadSession(recoveryPath)
+	recovered, err := sessionstore.LoadSession(recoveryPath)
 	if err != nil {
 		t.Fatalf("load shutdown recovery: %v", err)
 	}
@@ -1593,7 +1594,7 @@ type blockedRecoveryHandoff struct {
 	c         *Controller
 	dir       string
 	path      string
-	local     *agent.Session
+	local     *sessionstore.Session
 	first     controlRecoveryInfo
 	release   chan struct{}
 	firstDone chan error
@@ -1604,14 +1605,14 @@ func startBlockedRecoveryHandoff(t *testing.T) *blockedRecoveryHandoff {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	currentSess := agent.NewSession("sys")
+	currentSess := sessionstore.NewSession("sys")
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	currentSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "disk"})
 	if err := currentSess.Save(path); err != nil {
 		t.Fatalf("Save current: %v", err)
 	}
 
-	localSess := agent.NewSession("sys")
+	localSess := sessionstore.NewSession("sys")
 	localSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	localSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "local"})
 	localExec := agent.New(nil, nil, localSess, agent.Options{}, event.Discard)
@@ -1672,7 +1673,7 @@ func TestSessionSwapWaitsForRecoveryHandoff(t *testing.T) {
 		}},
 		{name: "Resume", run: func(t *testing.T, h *blockedRecoveryHandoff) (chan struct{}, string) {
 			other := filepath.Join(h.dir, "resumed.jsonl")
-			sess := agent.NewSession("sys")
+			sess := sessionstore.NewSession("sys")
 			sess.Add(provider.Message{Role: provider.RoleUser, Content: "resumed"})
 			if err := sess.Save(other); err != nil {
 				t.Fatalf("Save resumed: %v", err)
@@ -1707,7 +1708,7 @@ func TestSessionSwapWaitsForRecoveryHandoff(t *testing.T) {
 				if got := len(h.local.Snapshot()); got != 2 {
 					t.Fatalf("session = %d messages after cancel flush, want 2", got)
 				}
-				loaded, err := agent.LoadSession(h.first.recoveryPath)
+				loaded, err := sessionstore.LoadSession(h.first.recoveryPath)
 				if err != nil {
 					t.Fatalf("LoadSession recovery: %v", err)
 				}
@@ -1766,16 +1767,16 @@ func TestSnapshotConflictAdoptionResetsRewriteBaseline(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	base := agent.NewSession("sys")
+	base := sessionstore.NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := base.Save(path); err != nil {
 		t.Fatalf("Save base: %v", err)
 	}
-	stale, err := agent.LoadSession(path)
+	stale, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession stale: %v", err)
 	}
-	other, err := agent.LoadSession(path)
+	other, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession other: %v", err)
 	}
@@ -1819,7 +1820,7 @@ func TestSnapshotConflictAdoptionResetsRewriteBaseline(t *testing.T) {
 	if matches, err := filepath.Glob(filepath.Join(dir, "*-recovery-*.jsonl")); err != nil || len(matches) != 0 {
 		t.Fatalf("recovery branches after adopted compaction = %v err=%v, want none", matches, err)
 	}
-	reloaded, err := agent.LoadSession(path)
+	reloaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession rewritten: %v", err)
 	}
@@ -1837,7 +1838,7 @@ func TestSnapshotConflictAdoptionResetsRewriteBaseline(t *testing.T) {
 func TestConcurrentCompactionAndAutosaveNeverBranch(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "turn-0"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
@@ -1879,7 +1880,7 @@ func TestConcurrentCompactionAndAutosaveNeverBranch(t *testing.T) {
 	if matches, err := filepath.Glob(filepath.Join(dir, "*-recovery-*.jsonl")); err != nil || len(matches) != 0 {
 		t.Fatalf("compaction racing autosave created recovery branches: %v err=%v", matches, err)
 	}
-	reloaded, err := agent.LoadSession(path)
+	reloaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession final: %v", err)
 	}
@@ -1892,7 +1893,7 @@ func TestAdoptHistoryPreservesRewriteBaseline(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	s := agent.NewSession("old sys")
+	s := sessionstore.NewSession("old sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "tool-1", Name: "read_file", Arguments: "{}"}}})
 	s.Add(provider.Message{Role: provider.RoleTool, ToolCallID: "tool-1", Name: "read_file", Content: strings.Repeat("detail ", 100)})
@@ -1901,14 +1902,14 @@ func TestAdoptHistoryPreservesRewriteBaseline(t *testing.T) {
 		t.Fatalf("Save base: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
 	msgs := loaded.Snapshot()
 	msgs[0].Content = "new sys"
 
-	exec := agent.New(nil, nil, agent.NewSession("new sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("new sys"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test", DisableColdResumePrune: true})
 	c.AdoptHistory(msgs, path)
 	rewrite := exec.Session().Snapshot()
@@ -1921,7 +1922,7 @@ func TestAdoptHistoryPreservesRewriteBaseline(t *testing.T) {
 	if got := c.SessionPath(); got != path {
 		t.Fatalf("SessionPath after adopted rewrite = %q, want %q", got, path)
 	}
-	reloaded, err := agent.LoadSession(path)
+	reloaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession rewritten: %v", err)
 	}
@@ -1939,16 +1940,16 @@ func TestAdoptHistoryPreservesRewriteBaseline(t *testing.T) {
 func TestAdoptEmptyHistoryRestoresPersistedGoalState(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "empty-session.jsonl")
-	if err := agent.NewSession("").Save(path); err != nil {
+	if err := sessionstore.NewSession("").Save(path); err != nil {
 		t.Fatalf("Save empty session: %v", err)
 	}
 
-	oldExec := agent.New(nil, nil, agent.NewSession(""), agent.Options{}, event.Discard)
+	oldExec := agent.New(nil, nil, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	old := New(Options{Executor: oldExec, SessionDir: dir, SessionPath: path, Label: "old"})
 	old.SetGoal("preserve the zero-turn goal")
 	old.stopGoal(GoalStatusBlocked)
 
-	newExec := agent.New(nil, nil, agent.NewSession(""), agent.Options{}, event.Discard)
+	newExec := agent.New(nil, nil, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	replacement := New(Options{Executor: newExec, SessionDir: dir, Label: "replacement", DisableColdResumePrune: true})
 	replacement.AdoptHistory(nil, path)
 
@@ -1964,7 +1965,7 @@ func TestAdoptHistoryRejectsStaleCarriedHistoryBaseline(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	current := agent.NewSession("sys")
+	current := sessionstore.NewSession("sys")
 	current.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	current.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	current.Add(provider.Message{Role: provider.RoleUser, Content: "disk second"})
@@ -1978,7 +1979,7 @@ func TestAdoptHistoryRejectsStaleCarriedHistoryBaseline(t *testing.T) {
 		{Role: provider.RoleUser, Content: "first"},
 		{Role: provider.RoleAssistant, Content: "one"},
 	}
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test", DisableColdResumePrune: true})
 	c.AdoptHistory(stale, path)
 	if err := c.SnapshotRewrite(); err != nil {
@@ -1988,7 +1989,7 @@ func TestAdoptHistoryRejectsStaleCarriedHistoryBaseline(t *testing.T) {
 	if got := c.SessionPath(); got != path {
 		t.Fatalf("SessionPath after stale adopted rewrite = %q, want original path", got)
 	}
-	reloaded, err := agent.LoadSession(path)
+	reloaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession original: %v", err)
 	}
@@ -2004,14 +2005,14 @@ func TestCancelFlushRejectsStaleControllerOverwrite(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
-	staleSess := agent.NewSession("sys")
+	staleSess := sessionstore.NewSession("sys")
 	staleSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	staleSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	staleSess.Add(provider.Message{Role: provider.RoleUser, Content: "partial"})
 	staleExec := agent.New(nil, nil, staleSess, agent.Options{}, event.Discard)
 	stale := New(Options{Executor: staleExec, SessionDir: dir, SessionPath: path, Label: "test"})
 
-	currentSess := agent.NewSession("sys")
+	currentSess := sessionstore.NewSession("sys")
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	currentSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	currentSess.Add(provider.Message{Role: provider.RoleUser, Content: "second"})
@@ -2027,7 +2028,7 @@ func TestCancelFlushRejectsStaleControllerOverwrite(t *testing.T) {
 		{Role: provider.RoleUser, Content: "first"},
 	})
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -2041,7 +2042,7 @@ func TestCancelFlushRejectsStaleControllerOverwrite(t *testing.T) {
 
 func TestSnapshotActivityRefreshesSessionActivity(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
@@ -2050,7 +2051,7 @@ func TestSnapshotActivityRefreshesSessionActivity(t *testing.T) {
 	if err := c.SnapshotActivity(); err != nil {
 		t.Fatal(err)
 	}
-	first, _, err := agent.LoadBranchMeta(c.SessionPath())
+	first, _, err := sessionstore.LoadBranchMeta(c.SessionPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2060,7 +2061,7 @@ func TestSnapshotActivityRefreshesSessionActivity(t *testing.T) {
 	if err := c.SnapshotActivity(); err != nil {
 		t.Fatal(err)
 	}
-	second, _, err := agent.LoadBranchMeta(c.SessionPath())
+	second, _, err := sessionstore.LoadBranchMeta(c.SessionPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2072,21 +2073,21 @@ func TestSnapshotActivityRefreshesSessionActivity(t *testing.T) {
 func TestSnapshotActivitySavesTranscriptBeforeModelMeta(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "must persist"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test", ModelRef: "provider/model-a"})
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(agent.BranchMetaPath(path), []byte("{bad json"), 0o644); err != nil {
+	if err := os.WriteFile(sessionstore.BranchMetaPath(path), []byte("{bad json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := c.SnapshotActivity(); err == nil {
 		t.Fatal("SnapshotActivity should report malformed branch metadata")
 	}
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("transcript was not saved before metadata error: %v", err)
 	}
@@ -2097,7 +2098,7 @@ func TestSnapshotActivitySavesTranscriptBeforeModelMeta(t *testing.T) {
 
 func TestNewSessionStartsFreshContextAndSavesTranscript(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old context"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
@@ -2109,7 +2110,7 @@ func TestNewSessionStartsFreshContextAndSavesTranscript(t *testing.T) {
 	if c.SessionPath() == path {
 		t.Fatal("/new did not rotate to a fresh session path")
 	}
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2123,9 +2124,9 @@ func TestNewSessionStartsFreshContextAndSavesTranscript(t *testing.T) {
 }
 
 func TestSnapshotConflictLogAttrsCarryRevisionLedger(t *testing.T) {
-	conflict := &agent.SessionSnapshotConflictError{
+	conflict := &sessionstore.SessionSnapshotConflictError{
 		Path:             "/tmp/session.jsonl",
-		Kind:             agent.SessionSnapshotConflictDiverged,
+		Kind:             sessionstore.SessionSnapshotConflictDiverged,
 		ExistingMessages: 7,
 		SnapshotMessages: 5,
 		BaseRevision:     3,
@@ -2151,7 +2152,7 @@ func TestSnapshotConflictLogAttrsCarryRevisionLedger(t *testing.T) {
 	}
 
 	// A conflict error without the typed detail still logs path and mode.
-	plain := snapshotConflictLogAttrs(agent.ErrSessionSnapshotConflict, "/tmp/session.jsonl", "snapshot")
+	plain := snapshotConflictLogAttrs(sessionstore.ErrSessionSnapshotConflict, "/tmp/session.jsonl", "snapshot")
 	if len(plain) != 4 {
 		t.Fatalf("plain attrs = %v, want only path and mode", plain)
 	}
@@ -2210,24 +2211,24 @@ func (s *noticeSink) lastNotice() (event.Event, bool) {
 func TestSnapshotConflictAtRecoveryDepthCapIsolatesCurrentBranch(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	disk := agent.NewSession("sys")
+	disk := sessionstore.NewSession("sys")
 	disk.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	disk.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	disk.Add(provider.Message{Role: provider.RoleUser, Content: "disk second"})
 	if err := disk.Save(path); err != nil {
 		t.Fatalf("Save disk: %v", err)
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta ok=%v err=%v", ok, err)
 	}
 	meta.Recovered = true
-	meta.RecoveryDepth = agent.SessionRecoveryMaxDepth
-	if err := agent.SaveBranchMeta(path, meta); err != nil {
+	meta.RecoveryDepth = sessionstore.SessionRecoveryMaxDepth
+	if err := sessionstore.SaveBranchMeta(path, meta); err != nil {
 		t.Fatalf("SaveBranchMeta: %v", err)
 	}
 
-	stale := agent.NewSession("sys")
+	stale := sessionstore.NewSession("sys")
 	stale.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	stale.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	stale.Add(provider.Message{Role: provider.RoleUser, Content: "local second"})
@@ -2256,7 +2257,7 @@ func TestSnapshotConflictAtRecoveryDepthCapIsolatesCurrentBranch(t *testing.T) {
 	if len(forks) != 1 {
 		t.Fatalf("depth cap should preserve one isolated fork: %v", forks)
 	}
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -2293,7 +2294,7 @@ func TestSnapshotConflictAtRecoveryDepthCapIsolatesCurrentBranch(t *testing.T) {
 
 func TestNewSessionRefusesWhileTurnRunning(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old context"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
@@ -2334,13 +2335,13 @@ func TestNewSessionRefusesTurnStartedDuringSnapshot(t *testing.T) {
 
 	// A diverged on-disk transcript makes Snapshot enter the recovery callback,
 	// where the test parks NewSession mid-rotation.
-	diskSess := agent.NewSession("sys")
+	diskSess := sessionstore.NewSession("sys")
 	diskSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	diskSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "disk"})
 	if err := diskSess.Save(path); err != nil {
 		t.Fatalf("Save disk: %v", err)
 	}
-	localSess := agent.NewSession("sys")
+	localSess := sessionstore.NewSession("sys")
 	localSess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	localSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "local"})
 	localExec := agent.New(nil, nil, localSess, agent.Options{}, event.Discard)
@@ -2412,7 +2413,7 @@ func TestNewSessionRefusesTurnStartedDuringSnapshot(t *testing.T) {
 func TestSessionMutationsRefuseWhileRotating(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "there"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -2480,7 +2481,7 @@ func TestSessionMutationsRefuseWhileRotating(t *testing.T) {
 
 func TestNewSessionQueuesSessionStartHookContext(t *testing.T) {
 	dir := testenv.TempDir(t)
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
 	hooks := hook.NewRunner([]hook.ResolvedHook{{
 		HookConfig: hook.HookConfig{Command: "session-start"},
@@ -2509,8 +2510,8 @@ func TestNewSessionResetsTwoModelPlannerContext(t *testing.T) {
 		textTurn("old done"),
 		textTurn("new done"),
 	}}
-	exec := agent.New(execProv, tool.NewRegistry(), agent.NewSession("exec sys"), agent.Options{}, event.Discard)
-	plannerSess := agent.NewSession("planner sys")
+	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
+	plannerSess := sessionstore.NewSession("planner sys")
 	coord := agent.NewCoordinator(planner, plannerSess, nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	path := filepath.Join(dir, "session.jsonl")
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: path, Label: "test"})
@@ -2547,8 +2548,8 @@ func TestTwoModelPlannerApprovalUsesHostGate(t *testing.T) {
 	execProv := &recordingProvider{name: "executor", streams: [][]provider.Chunk{
 		textTurn("approved execution complete"),
 	}}
-	exec := agent.New(execProv, tool.NewRegistry(), agent.NewSession("exec sys"), agent.Options{}, event.Discard)
-	coord := agent.NewCoordinator(planner, agent.NewSession("planner sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, exec, 0, event.Discard, nil)
+	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
+	coord := agent.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, exec, 0, event.Discard, nil)
 
 	ids := make(chan string, 1)
 	var prompts int
@@ -2614,15 +2615,15 @@ func TestResumeResetsTwoModelPlannerContext(t *testing.T) {
 		textTurn("old done"),
 		textTurn("resumed done"),
 	}}
-	exec := agent.New(execProv, tool.NewRegistry(), agent.NewSession("exec sys"), agent.Options{}, event.Discard)
-	plannerSess := agent.NewSession("planner sys")
+	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
+	plannerSess := sessionstore.NewSession("planner sys")
 	coord := agent.NewCoordinator(planner, plannerSess, nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: filepath.Join(dir, "old.jsonl"), Label: "test"})
 
 	if err := c.Run(context.Background(), "old task alpha"); err != nil {
 		t.Fatal(err)
 	}
-	resumed := agent.NewSession("exec sys")
+	resumed := sessionstore.NewSession("exec sys")
 	resumed.Add(provider.Message{Role: provider.RoleUser, Content: "saved task gamma"})
 	c.Resume(resumed, filepath.Join(dir, "resumed.jsonl"))
 	if err := c.Run(context.Background(), "continue gamma"); err != nil {
@@ -2651,8 +2652,8 @@ func TestResetPlannerSessionClearsPlannerHistory(t *testing.T) {
 		textTurn("first done"),
 		textTurn("second done"),
 	}}
-	exec := agent.New(execProv, tool.NewRegistry(), agent.NewSession("exec sys"), agent.Options{}, event.Discard)
-	plannerSess := agent.NewSession("planner sys")
+	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
+	plannerSess := sessionstore.NewSession("planner sys")
 	coord := agent.NewCoordinator(planner, plannerSess, nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	path := filepath.Join(dir, "session.jsonl")
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: path, Label: "test"})
@@ -2686,11 +2687,11 @@ func TestTwoModelShortChoiceReplySkipsPlanner(t *testing.T) {
 	execProv := &recordingProvider{name: "executor", streams: [][]provider.Chunk{
 		textTurn("selected option 1"),
 	}}
-	execSess := agent.NewSession("exec sys")
+	execSess := sessionstore.NewSession("exec sys")
 	execSess.Add(provider.Message{Role: provider.RoleUser, Content: "先给我两个执行方案"})
 	execSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "两个执行方式可选：\n\n1. Subagent-Driven（推荐）\n2. 当前会话执行\n\n你选哪种？"})
 	exec := agent.New(execProv, tool.NewRegistry(), execSess, agent.Options{}, event.Discard)
-	coord := agent.NewCoordinator(planner, agent.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, NewPlannerGate())
+	coord := agent.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, NewPlannerGate())
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: filepath.Join(dir, "session.jsonl"), Label: "test"})
 
 	if err := c.Run(context.Background(), "1"); err != nil {
@@ -2710,14 +2711,14 @@ func TestTwoModelShortChoiceReplySkipsPlanner(t *testing.T) {
 	if strings.Contains(reqText, "Reasonix executor handoff") {
 		t.Fatalf("short choice reply should not be wrapped as a planner handoff:\n%s", reqText)
 	}
-	if got := agent.StripTransientUserBlocks(lastUserMessage(execProv.requests[0].Messages)); got != "1" {
+	if got := sessionstore.StripTransientUserBlocks(lastUserMessage(execProv.requests[0].Messages)); got != "1" {
 		t.Fatalf("executor last user = %q, want raw choice reply (execution-policy may append)", lastUserMessage(execProv.requests[0].Messages))
 	}
 }
 
 func TestSubmitClearDiscardsCurrentContextWithoutSavingTranscript(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old context"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
@@ -2748,7 +2749,7 @@ func TestSubmitClearDiscardsCurrentContextWithoutSavingTranscript(t *testing.T) 
 	if c.SessionPath() == path {
 		t.Fatal("/clear did not rotate to a fresh session path")
 	}
-	for _, p := range []string{path, agent.BranchMetaPath(path), ckpt} {
+	for _, p := range []string{path, sessionstore.BranchMetaPath(path), ckpt} {
 		if _, err := os.Stat(p); !os.IsNotExist(err) {
 			t.Fatalf("discarded artifact %s still exists or stat failed with %v", p, err)
 		}
@@ -3686,7 +3687,7 @@ func TestGuardianCannotAutoAllowFreshHumanApprovalTools(t *testing.T) {
 		streams: [][]provider.Chunk{textTurn(`{"risk_level":"low","user_authorization":"high","outcome":"allow","rationale":"authorized memory update"}`)},
 	}
 	guardianSess := guardian.NewSession(guardianProv, tool.NewRegistry(), guardian.PolicyPrompt(), "guardian-test", 0, nil, event.Discard)
-	exec := agent.New(&recordingProvider{name: "executor"}, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(&recordingProvider{name: "executor"}, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 
 	approvals := make(chan event.Approval, 1)
 	c := New(Options{
@@ -3796,7 +3797,7 @@ func TestSessionGrantShortCircuitsGuardianReview(t *testing.T) {
 		streams: [][]provider.Chunk{textTurn(`{"risk_level":"high","user_authorization":"unknown","outcome":"deny","rationale":"should never run"}`)},
 	}
 	guardianSess := guardian.NewSession(guardianProv, tool.NewRegistry(), guardian.PolicyPrompt(), "guardian-test", 0, nil, event.Discard)
-	exec := agent.New(&recordingProvider{name: "executor"}, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(&recordingProvider{name: "executor"}, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	prompts := 0
 	c := New(Options{
 		Executor: exec,
@@ -4310,7 +4311,7 @@ func TestParseRewindEmptyCheckpoints(t *testing.T) {
 }
 
 func TestRunGuardedPanicEmitsTurnDone(t *testing.T) {
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	events := make(chan event.Event, 4)
 	c := New(Options{
 		Runner: appendingRunner{session: sess},
@@ -4418,7 +4419,7 @@ func TestRunGuardedParksReplacementUntilTurnDoneReturns(t *testing.T) {
 }
 
 func TestRunGuardedPanicDoesNotDoubleEmitTurnDone(t *testing.T) {
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	var count atomic.Int32
 	events := make(chan event.Event, 8)
 	c := New(Options{
@@ -4457,7 +4458,7 @@ func TestRunGuardedPanicDoesNotDoubleEmitTurnDone(t *testing.T) {
 }
 
 type blockingRunner struct {
-	session *agent.Session
+	session *sessionstore.Session
 	release chan struct{}
 }
 
@@ -4468,7 +4469,7 @@ func (r blockingRunner) Run(_ context.Context, input string) error {
 }
 
 func TestRunTurnReportsErrTurnRunning(t *testing.T) {
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	release := make(chan struct{})
 	c := New(Options{Runner: blockingRunner{session: sess, release: release}})
 
@@ -4494,7 +4495,7 @@ func TestRunTurnReportsErrTurnRunning(t *testing.T) {
 }
 
 func TestSendWhileRunningDoesNotInterleaveTurns(t *testing.T) {
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	release := make(chan struct{})
 	events := make(chan event.Event, 4)
 	c := New(Options{
@@ -4540,7 +4541,7 @@ func TestMidTurnAutosavePersistsDuringLongTurn(t *testing.T) {
 	defer midTurnSnapshotInterval.Store(old)
 
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
 	release := make(chan struct{})
@@ -4578,7 +4579,7 @@ func (r *scriptedRunner) Run(_ context.Context, input string) error {
 }
 
 func TestApprovedPlanAutoApproveEndsWithExecutionTurn(t *testing.T) {
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	runner := &scriptedRunner{exec: exec}
 
 	var c *Controller
@@ -4637,7 +4638,7 @@ func TestApprovedPlanAutoApproveEndsWithExecutionTurn(t *testing.T) {
 }
 
 func TestApprovedPlanDoesNotAutoApproveNonContinuationTurn(t *testing.T) {
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	runner := &scriptedRunner{exec: exec}
 
 	var c *Controller

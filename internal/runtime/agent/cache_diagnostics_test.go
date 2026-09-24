@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -51,7 +52,7 @@ func TestRunPopulatesCacheDiagnosticsOnUsageEvents(t *testing.T) {
 			diagnostics = append(diagnostics, e.CacheDiagnostics)
 		}
 	})
-	session := NewSession("stable system")
+	session := sessionstore.NewSession("stable system")
 	session.IncrementRewrite()
 	a := New(prov, reg, session, Options{}, sink)
 
@@ -111,7 +112,7 @@ func TestUsageReportsTheBodyTheRequestActuallyCarried(t *testing.T) {
 			diagnostics = append(diagnostics, e.CacheDiagnostics)
 		}
 	})
-	a := New(prov, tool.NewRegistry(), NewSession("stable system"), Options{}, sink)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession("stable system"), Options{}, sink)
 
 	if err := a.Run(context.Background(), "one"); err != nil {
 		t.Fatalf("first Run: %v", err)

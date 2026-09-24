@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"sort"
 	"strings"
 	"time"
@@ -18,7 +19,6 @@ import (
 	"reasonix/internal/base/filelock"
 	"reasonix/internal/base/fileutil"
 	"reasonix/internal/contract/config"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/recovery"
 	"reasonix/internal/state/store"
 )
@@ -201,17 +201,17 @@ func parseSessionMachineOptions(args []string, operation string) (sessionMachine
 }
 
 func machineRecoveries(dir, target string, identityKey []byte) ([]machineRecovery, error) {
-	ordered, err := agent.ListSessionOrder(dir)
+	ordered, err := sessionstore.ListSessionOrder(dir)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]machineRecovery, 0, len(ordered))
 	for _, info := range ordered {
-		sessionID := machineSessionIDWithKey(agent.BranchID(info.Path), identityKey)
+		sessionID := machineSessionIDWithKey(sessionstore.BranchID(info.Path), identityKey)
 		if target != "" && sessionID != target {
 			continue
 		}
-		meta, metaOK, _ := agent.LoadBranchMeta(info.Path)
+		meta, metaOK, _ := sessionstore.LoadBranchMeta(info.Path)
 		snapshot, err := recovery.LoadSnapshot(info.Path)
 		if err != nil {
 			return nil, err
@@ -269,22 +269,22 @@ func parseMachineTime(value string) time.Time {
 }
 
 func machineSessions(dir string, identityKey []byte) ([]machineSession, error) {
-	ordered, err := agent.ListSessionOrder(dir)
+	ordered, err := sessionstore.ListSessionOrder(dir)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]machineSession, 0, len(ordered))
 	for _, info := range ordered {
 		turns := info.Turns
-		if info.SchemaVersion < agent.BranchMetaCountsVersion {
-			_, turns = agent.SessionPreview(info.Path)
+		if info.SchemaVersion < sessionstore.BranchMetaCountsVersion {
+			_, turns = sessionstore.SessionPreview(info.Path)
 		}
 		if turns == 0 {
 			continue
 		}
-		meta, ok, _ := agent.LoadBranchMeta(info.Path)
+		meta, ok, _ := sessionstore.LoadBranchMeta(info.Path)
 		state := "idle"
-		if agent.SessionLeaseHeld(info.Path) {
+		if sessionstore.SessionLeaseHeld(info.Path) {
 			state = "active"
 		} else if ok && meta.InFlightTurn != nil {
 			state = "interrupted"
@@ -296,7 +296,7 @@ func machineSessions(dir string, identityKey []byte) ([]machineSession, error) {
 			scope = "global"
 		}
 		out = append(out, machineSession{
-			ID:        machineSessionIDWithKey(agent.BranchID(info.Path), identityKey),
+			ID:        machineSessionIDWithKey(sessionstore.BranchID(info.Path), identityKey),
 			CreatedAt: machineTime(info.CreatedAt),
 			UpdatedAt: machineTime(info.LastActivityAt),
 			Scope:     scope,

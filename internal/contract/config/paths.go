@@ -433,7 +433,7 @@ func ProjectSessionDir(workspaceRoot string) string {
 // WorkspaceSlug flattens an absolute workspace path into the directory name
 // used under <config root>/projects. Windows spells the same folder with
 // varying case (drive-letter case, Explorer renames), so the slug folds case
-// there — matching agent.CanonicalSessionPath's key form — or equivalent
+// there — matching sessionstore.CanonicalSessionPath's key form — or equivalent
 // spellings of one workspace would produce distinct slug strings. Existing
 // mixed-case slug directories need no migration: NTFS resolves names
 // case-insensitively, so the folded slug opens the same directory.

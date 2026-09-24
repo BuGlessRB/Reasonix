@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -15,15 +16,15 @@ import (
 
 func TestBranchAndSwitch(t *testing.T) {
 	dir := testenv.TempDir(t)
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	exec.Session().Add(provider.Message{Role: provider.RoleUser, Content: "root prompt"})
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
-	c.SetSessionPath(agent.NewSessionPath(dir, "test"))
+	c.SetSessionPath(sessionstore.NewSessionPath(dir, "test"))
 	if err := c.Snapshot(); err != nil {
 		t.Fatal(err)
 	}
 	rootPath := c.SessionPath()
-	rootID := agent.BranchID(rootPath)
+	rootID := sessionstore.BranchID(rootPath)
 
 	if _, err := c.Branch("try something"); err != nil {
 		t.Fatal(err)
@@ -32,7 +33,7 @@ func TestBranchAndSwitch(t *testing.T) {
 	if childPath == rootPath {
 		t.Fatal("branch should switch to a new session path")
 	}
-	meta, ok, err := agent.LoadBranchMeta(childPath)
+	meta, ok, err := sessionstore.LoadBranchMeta(childPath)
 	if err != nil || !ok {
 		t.Fatalf("load child meta ok=%v err=%v", ok, err)
 	}
@@ -60,7 +61,7 @@ func TestBranchAndSwitch(t *testing.T) {
 
 func TestSwitchBranchRejectsCleanupPending(t *testing.T) {
 	dir := testenv.TempDir(t)
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	exec.Session().Add(provider.Message{Role: provider.RoleUser, Content: "root prompt"})
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
 	c.SetSessionPath(filepath.Join(dir, "root.jsonl"))
@@ -68,17 +69,17 @@ func TestSwitchBranchRejectsCleanupPending(t *testing.T) {
 		t.Fatal(err)
 	}
 	rootPath := c.SessionPath()
-	rootID := agent.BranchID(rootPath)
+	rootID := sessionstore.BranchID(rootPath)
 
 	if _, err := c.Branch("pending experiment"); err != nil {
 		t.Fatal(err)
 	}
 	pendingPath := c.SessionPath()
-	pendingID := agent.BranchID(pendingPath)
+	pendingID := sessionstore.BranchID(pendingPath)
 	if _, err := c.SwitchBranch(rootID); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.MarkCleanupPending(pendingPath, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(pendingPath, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -110,8 +111,8 @@ func TestBranchResetsTwoModelPlannerContext(t *testing.T) {
 		textTurn("old done"),
 		textTurn("branch done"),
 	}}
-	exec := agent.New(execProv, tool.NewRegistry(), agent.NewSession("exec sys"), agent.Options{}, event.Discard)
-	coord := agent.NewCoordinator(planner, agent.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
+	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
+	coord := agent.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: filepath.Join(dir, "root.jsonl"), Label: "test"})
 
 	if err := c.Run(context.Background(), "old task alpha"); err != nil {
@@ -148,15 +149,15 @@ func TestSwitchBranchResetsTwoModelPlannerContext(t *testing.T) {
 		textTurn("child done"),
 		textTurn("root again done"),
 	}}
-	exec := agent.New(execProv, tool.NewRegistry(), agent.NewSession("exec sys"), agent.Options{}, event.Discard)
-	coord := agent.NewCoordinator(planner, agent.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
+	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
+	coord := agent.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	rootPath := filepath.Join(dir, "root.jsonl")
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: rootPath, Label: "test"})
 
 	if err := c.Run(context.Background(), "root task alpha"); err != nil {
 		t.Fatal(err)
 	}
-	rootID := agent.BranchID(c.SessionPath())
+	rootID := sessionstore.BranchID(c.SessionPath())
 	if _, err := c.Branch("child"); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +185,7 @@ func TestSwitchBranchResetsTwoModelPlannerContext(t *testing.T) {
 
 func TestSubmitSwitchEmitsErrorNotice(t *testing.T) {
 	var notices []string
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{
@@ -213,7 +214,7 @@ func TestSubmitSwitchEmitsErrorNotice(t *testing.T) {
 
 func TestSubmitBranchEmitsErrorNoticeWhileRunning(t *testing.T) {
 	var notices []string
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{
@@ -226,7 +227,7 @@ func TestSubmitBranchEmitsErrorNoticeWhileRunning(t *testing.T) {
 			}
 		}),
 	})
-	c.SetSessionPath(agent.NewSessionPath(c.sessionDir, "test"))
+	c.SetSessionPath(sessionstore.NewSessionPath(c.sessionDir, "test"))
 
 	c.mu.Lock()
 	c.gate.running = true
@@ -242,9 +243,9 @@ func TestSubmitBranchEmitsErrorNoticeWhileRunning(t *testing.T) {
 }
 
 func TestFormatBranchTreeMarksCurrent(t *testing.T) {
-	branches := []agent.BranchInfo{
-		{BranchMeta: agent.BranchMeta{ID: "root"}, Preview: "root", Turns: 1},
-		{BranchMeta: agent.BranchMeta{ID: "child", ParentID: "root", Name: "child branch"}, Turns: 2},
+	branches := []sessionstore.BranchInfo{
+		{BranchMeta: sessionstore.BranchMeta{ID: "root"}, Preview: "root", Turns: 1},
+		{BranchMeta: sessionstore.BranchMeta{ID: "child", ParentID: "root", Name: "child branch"}, Turns: 2},
 	}
 	got := FormatBranchTree(branches, "child")
 	if !strings.Contains(got, "child branch  2 turns  current") {
@@ -256,14 +257,14 @@ func TestFormatBranchTreeMarksCurrent(t *testing.T) {
 }
 
 func TestFormatBranchTreeUsesCompactVisualRows(t *testing.T) {
-	branches := []agent.BranchInfo{
+	branches := []sessionstore.BranchInfo{
 		{
-			BranchMeta: agent.BranchMeta{ID: "20260601-033830.928433000-deepseek-v4-flash"},
+			BranchMeta: sessionstore.BranchMeta{ID: "20260601-033830.928433000-deepseek-v4-flash"},
 			Preview:    "你是谁",
 			Turns:      3,
 		},
 		{
-			BranchMeta: agent.BranchMeta{
+			BranchMeta: sessionstore.BranchMeta{
 				ID:       "20260601-033937.165828000-deepseek-v4-flash",
 				ParentID: "20260601-033830.928433000-deepseek-v4-flash",
 			},
@@ -293,8 +294,8 @@ func TestFormatBranchTreeUsesCompactVisualRows(t *testing.T) {
 }
 
 func TestResolveBranchAcceptsDisplayedShortID(t *testing.T) {
-	branches := []agent.BranchInfo{
-		{BranchMeta: agent.BranchMeta{ID: "20260601-033937.165828000-deepseek-v4-flash"}},
+	branches := []sessionstore.BranchInfo{
+		{BranchMeta: sessionstore.BranchMeta{ID: "20260601-033937.165828000-deepseek-v4-flash"}},
 	}
 	got, err := resolveBranch(branches, "0601-033937.165")
 	if err != nil {

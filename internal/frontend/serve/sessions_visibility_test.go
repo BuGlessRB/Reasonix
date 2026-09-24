@@ -6,13 +6,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -40,7 +40,7 @@ func listSessionNames(t *testing.T, ctrl *control.Controller) []string {
 
 func saveVisibilitySession(t *testing.T, path string, messages ...string) {
 	t.Helper()
-	s := agent.NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	for i, message := range messages {
 		role := provider.RoleUser
 		if i%2 == 1 {
@@ -62,9 +62,9 @@ func TestSessionsFoldsCoveredRecoveryCopies(t *testing.T) {
 	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	saveVisibilitySession(t, root, "今日热点", "好的")
 	for range 3 {
-		fork := agent.NewSession("sys")
+		fork := sessionstore.NewSession("sys")
 		fork.Add(provider.Message{Role: provider.RoleUser, Content: "今日热点"})
-		if _, err := fork.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: root}); err != nil {
+		if _, err := fork.SaveConflictRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: root}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -85,9 +85,9 @@ func TestSessionsKeepsRecoveryBranchesThatHoldContent(t *testing.T) {
 	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	saveVisibilitySession(t, root, "今日热点", "好的")
 
-	diverged := agent.NewSession("sys")
+	diverged := sessionstore.NewSession("sys")
 	diverged.Add(provider.Message{Role: provider.RoleUser, Content: "今日热点"})
-	divergedInfo, err := diverged.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: root})
+	divergedInfo, err := diverged.SaveConflictRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,9 +96,9 @@ func TestSessionsKeepsRecoveryBranchesThatHoldContent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	active := agent.NewSession("sys")
+	active := sessionstore.NewSession("sys")
 	active.Add(provider.Message{Role: provider.RoleUser, Content: "今日热点"})
-	activeInfo, err := active.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: root})
+	activeInfo, err := active.SaveConflictRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: root})
 	if err != nil {
 		t.Fatal(err)
 	}

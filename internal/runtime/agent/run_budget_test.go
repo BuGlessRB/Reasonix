@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"sync/atomic"
 	"testing"
 
@@ -68,7 +69,7 @@ func TestRunBudgetTracksRealTurnSpend(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(readProbe{})
 	pricing := &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2, Currency: "CNY"}
-	a := New(&spendingProvider{max: 3}, reg, NewSession("sys"), Options{Pricing: pricing}, sink)
+	a := New(&spendingProvider{max: 3}, reg, sessionstore.NewSession("sys"), Options{Pricing: pricing}, sink)
 
 	if err := a.Run(context.Background(), "read a few files"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -106,7 +107,7 @@ func TestTaskBudgetSurvivesAContinuation(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(readProbe{})
 	pricing := &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2, Currency: "CNY"}
-	a := New(&spendingProvider{max: 2}, reg, NewSession("sys"), Options{Pricing: pricing}, sink)
+	a := New(&spendingProvider{max: 2}, reg, sessionstore.NewSession("sys"), Options{Pricing: pricing}, sink)
 
 	if err := a.Run(context.Background(), "start the work"); err != nil {
 		t.Fatalf("first Run: %v", err)
@@ -144,7 +145,7 @@ func TestTaskBudgetResetsWithTheEvidenceLedger(t *testing.T) {
 	sink := newBudgetSink()
 	reg := tool.NewRegistry()
 	reg.Add(readProbe{})
-	a := New(&spendingProvider{max: 1}, reg, NewSession("sys"),
+	a := New(&spendingProvider{max: 1}, reg, sessionstore.NewSession("sys"),
 		Options{Pricing: &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2}}, sink)
 
 	if err := a.Run(context.Background(), "first task"); err != nil {
@@ -222,7 +223,7 @@ func TestTaskTokenBudgetAccumulatesAcrossAContinuation(t *testing.T) {
 	sink := newBudgetSink()
 	reg := tool.NewRegistry()
 	reg.Add(readProbe{})
-	a := New(&spendingProvider{max: 2}, reg, NewSession("sys"), Options{}, sink)
+	a := New(&spendingProvider{max: 2}, reg, sessionstore.NewSession("sys"), Options{}, sink)
 
 	if err := a.Run(context.Background(), "start the work"); err != nil {
 		t.Fatalf("first Run: %v", err)

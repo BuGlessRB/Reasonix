@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func (r *plannerMetadataRunner) Run(ctx context.Context, input string) error {
 }
 
 func TestTurnOrchestratorAttachesTrustedPlannerMetadata(t *testing.T) {
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "explain the bug"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "the bug is in parser.go"})
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{AgentPreset: "delivery"}, event.Discard)
@@ -158,7 +159,7 @@ func TestTurnOrchestratorTypedSyntheticTurnDoesNotDependOnPrefix(t *testing.T) {
 }
 
 func TestGoalTurnOutputCannotAdvanceReplacementGoal(t *testing.T) {
-	executor := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
+	executor := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession("system"), agent.Options{}, event.Discard)
 	runner := &goalReplacingRunner{executor: executor}
 	evaluator := &fakeGoalEvaluator{}
 	c := New(Options{
@@ -189,7 +190,7 @@ func TestGoalTurnOutputCannotAdvanceReplacementGoal(t *testing.T) {
 
 func TestGoalContinuationNoticeCannotMoveOldInterceptIntoReplacementGoal(t *testing.T) {
 	runner := &fakeTurnRunner{}
-	session := agent.NewSession("")
+	session := sessionstore.NewSession("")
 	session.Add(provider.Message{
 		Role:    provider.RoleAssistant,
 		Content: "All done.",
@@ -242,7 +243,7 @@ func TestGoalContinuationNoticeCannotMoveOldInterceptIntoReplacementGoal(t *test
 }
 
 func TestGoalContinuationOutputCannotAdvanceReplacementGoal(t *testing.T) {
-	session := agent.NewSession("system")
+	session := sessionstore.NewSession("system")
 	session.Add(provider.Message{
 		Role:    provider.RoleAssistant,
 		Content: "All done.",
@@ -320,7 +321,7 @@ func TestTurnOrchestratorStopHookIgnoresCanceledTurnContext(t *testing.T) {
 }
 
 type recordingSessionRunner struct {
-	session *agent.Session
+	session *sessionstore.Session
 	inputs  []string
 	raw     []string
 }
@@ -349,7 +350,7 @@ func (r *deliveryScopeErrorRunner) Run(ctx context.Context, _ string) error {
 
 func TestGoalReadinessFailureContinuesUntilExternalStop(t *testing.T) {
 	runner := &deliveryScopeErrorRunner{terminalAfter: 3}
-	executor := agent.New(nil, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	executor := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	c := New(Options{Runner: runner, Executor: executor})
 	c.SetGoal("ship the integration")
 
@@ -385,7 +386,7 @@ func TestTurnOrchestratorGoalContinuationRunsStopPerUnit(t *testing.T) {
 		goalToolTurn(GoalStatusRunning, "started", "next"),
 		goalToolTurn(GoalStatusComplete, "", ""),
 	)}
-	ag := agent.New(prov, goalRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, goalRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	var stopEvents int
 	hooks := hook.NewRunner([]hook.ResolvedHook{{
 		HookConfig: hook.HookConfig{Command: "record-stop"},
@@ -422,7 +423,7 @@ func TestTurnOrchestratorApprovedPlanSharesOneStopHook(t *testing.T) {
 		textTurn("Plan:\n1. Make the change\n2. Verify it"),
 		textTurn("Done."),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	approvalID := make(chan string, 1)
 	var promptSubmitEvents, stopEvents int
 	hooks := hook.NewRunner([]hook.ResolvedHook{
@@ -483,7 +484,7 @@ func TestTurnOrchestratorRefTurnRecordsVisibleDisplay(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "notes.txt"), []byte("referenced evidence"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	runner := &recordingSessionRunner{session: sess}
 	events := make(chan event.Event, 4)
@@ -524,7 +525,7 @@ func TestTurnOrchestratorRefTurnPreservesExpandedPasteForRouting(t *testing.T) {
 	const display = "inspect\n\n" + label
 	const expanded = display + "\n\n--- Begin " + label + " ---\nroute-expanded-paste\nfunc main() {}\n--- End " + label + " ---"
 
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	runner := &recordingSessionRunner{session: sess}
 	reg := tool.NewRegistry()
@@ -595,7 +596,7 @@ func TestTurnOrchestratorAutoReasoningLanguageUsesRawPromptForRefTurns(t *testin
 func TestTurnOrchestratorCheckpointBoundaryPrecedesUserMessage(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	runner := &recordingSessionRunner{session: sess}
 	c := New(Options{
@@ -617,14 +618,14 @@ func TestTurnOrchestratorCheckpointBoundaryPrecedesUserMessage(t *testing.T) {
 	if len(sess.Messages) != 2 || sess.Messages[1].Content != "write the test" {
 		t.Fatalf("session messages after turn = %+v, want system + user", sess.Messages)
 	}
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(loaded.Messages) != 2 {
 		t.Fatalf("saved messages = %d, want system + user", len(loaded.Messages))
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("load branch meta ok=%v err=%v", ok, err)
 	}
@@ -648,7 +649,7 @@ func TestTurnOrchestratorCheckpointBoundaryPrecedesUserMessage(t *testing.T) {
 func TestTurnOrchestratorCheckpointPromptIsRawUserInput(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	runner := &recordingSessionRunner{session: sess}
 	c := New(Options{
@@ -682,7 +683,7 @@ func TestTurnOrchestratorCheckpointPromptIsRawUserInput(t *testing.T) {
 func TestTurnOrchestratorSyntheticTurnDoesNotCreateCheckpoint(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	runner := &recordingSessionRunner{session: sess}
 	c := New(Options{
@@ -715,7 +716,7 @@ func TestTurnOrchestratorSyntheticTurnDoesNotCreateCheckpoint(t *testing.T) {
 
 func TestTurnOrchestratorStopFailureHookCancelledContext(t *testing.T) {
 	prov := &scriptedTurns{turns: [][]provider.Chunk{textTurn("done")}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	var stopCalls int
 	hooks := hook.NewRunner([]hook.ResolvedHook{{
 		HookConfig: hook.HookConfig{Command: "stop"},
@@ -752,7 +753,7 @@ func TestTurnOrchestratorStopFailureHookCancelledContext(t *testing.T) {
 // fully paired tool work remain in the session while unsafe fragments become
 // provider-excluded display history.
 func TestTurnOrchestratorCancelPreservesVisibleUserPrompt(t *testing.T) {
-	sess := agent.NewSession("you are a helpful agent")
+	sess := sessionstore.NewSession("you are a helpful agent")
 	// Pre-populate with a few messages from an earlier turn.
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "previous work"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "done"})
@@ -817,7 +818,7 @@ func TestTurnOrchestratorCancelPreservesVisibleUserPrompt(t *testing.T) {
 }
 
 func TestTurnOrchestratorProviderErrorPreservesCompletedPairAndLocalPartial(t *testing.T) {
-	sess := agent.NewSession("system")
+	sess := sessionstore.NewSession("system")
 	apiErr := errors.New("provider connection reset")
 	runner := &cancelStrippingRunner{
 		session: sess,
@@ -862,7 +863,7 @@ func TestTurnOrchestratorInterruptedAfterCompactionRelocatesVisibleTurn(t *testi
 		{name: "provider error", err: errors.New("provider connection reset")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sess := agent.NewSession("system")
+			sess := sessionstore.NewSession("system")
 			for range 3 {
 				sess.Add(provider.Message{Role: provider.RoleUser, Content: "old task"})
 				sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "old answer"})
@@ -905,7 +906,7 @@ func TestTurnOrchestratorInterruptedAfterCompactionRelocatesVisibleTurn(t *testi
 }
 
 func TestTurnOrchestratorCancelClassifiesCancelledToolResultAsInterrupted(t *testing.T) {
-	sess := agent.NewSession("system")
+	sess := sessionstore.NewSession("system")
 	runner := &cancelStrippingRunner{
 		session: sess,
 		add: []provider.Message{
@@ -940,7 +941,7 @@ func TestTurnOrchestratorCancelBeforeRunnerAddsUserPreservesVisiblePrompt(t *tes
 	if err := os.WriteFile(imagePath, mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sess := agent.NewSession("system")
+	sess := sessionstore.NewSession("system")
 	ex := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{
 		Runner:        cancelBeforeUserRunner{},
@@ -975,7 +976,7 @@ func TestAVisionTurnLandsItsImageWithTheNoteSayingItIsThere(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "diagram.png"), mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sess := agent.NewSession("system")
+	sess := sessionstore.NewSession("system")
 	c := New(Options{
 		Runner:        cancelBeforeUserRunner{},
 		Executor:      agent.New(nil, nil, sess, agent.Options{}, event.Discard),
@@ -1008,7 +1009,7 @@ func TestAVisionTurnLandsItsImageWithTheNoteSayingItIsThere(t *testing.T) {
 // session resume does not reload the partial turn from a stale mid-turn
 // autosave.  See #5286.
 func TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk(t *testing.T) {
-	sess := agent.NewSession("system")
+	sess := sessionstore.NewSession("system")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "earlier turn"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "done"})
 	// Count only non-system messages; the system prompt is not written to the
@@ -1032,7 +1033,7 @@ func TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk(t *testing.T) {
 		err: context.Canceled,
 	}
 
-	sessionPath := agent.NewSessionPath(testenv.TempDir(t), "test-model")
+	sessionPath := sessionstore.NewSessionPath(testenv.TempDir(t), "test-model")
 	c := New(Options{
 		Runner:      runner,
 		Executor:    agent.New(nil, nil, sess, agent.Options{}, event.Discard),
@@ -1050,7 +1051,7 @@ func TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk(t *testing.T) {
 
 	// Load the session file written after cleanup and verify the complete pair and
 	// provider-excluded recovery marker survive restart.
-	loaded, err := agent.LoadSession(sessionPath)
+	loaded, err := sessionstore.LoadSession(sessionPath)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -1073,7 +1074,7 @@ func TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk(t *testing.T) {
 func TestResumeRecoversStaleVisibleInFlightTurn(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "stale-visible.jsonl")
-	sess := agent.NewSession("system")
+	sess := sessionstore.NewSession("system")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "previous work"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "done"})
 	start := len(sess.Messages)
@@ -1085,15 +1086,15 @@ func TestResumeRecoversStaleVisibleInFlightTurn(t *testing.T) {
 	if err := sess.Save(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.MarkSessionInFlightTurn(path, start, true); err != nil {
+	if err := sessionstore.MarkSessionInFlightTurn(path, start, true); err != nil {
 		t.Fatal(err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	exec := agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("system"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path})
 	c.Resume(loaded, path)
 
@@ -1108,14 +1109,14 @@ func TestResumeRecoversStaleVisibleInFlightTurn(t *testing.T) {
 	if todos := c.Todos(); len(todos) != 1 || todos[0].Status != "in_progress" {
 		t.Fatalf("Todos() after stale in-flight recovery = %+v, want retained completed todo_write", todos)
 	}
-	reloaded, err := agent.LoadSession(path)
+	reloaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(reloaded.Messages) != start+4 {
 		t.Fatalf("persisted messages = %d, want recovered count %d: %+v", len(reloaded.Messages), start+4, reloaded.Messages)
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta ok=%v err=%v", ok, err)
 	}
@@ -1127,7 +1128,7 @@ func TestResumeRecoversStaleVisibleInFlightTurn(t *testing.T) {
 func TestResumeClearsStaleSyntheticInFlightTurn(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "stale-synthetic.jsonl")
-	sess := agent.NewSession("system")
+	sess := sessionstore.NewSession("system")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "ship it"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "Started.\n\n[goal:continue]"})
 	start := len(sess.Messages)
@@ -1136,15 +1137,15 @@ func TestResumeClearsStaleSyntheticInFlightTurn(t *testing.T) {
 	if err := sess.Save(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.MarkSessionInFlightTurn(path, start, false); err != nil {
+	if err := sessionstore.MarkSessionInFlightTurn(path, start, false); err != nil {
 		t.Fatal(err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	exec := agent.New(nil, nil, agent.NewSession("system"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("system"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path})
 	c.Resume(loaded, path)
 
@@ -1155,7 +1156,7 @@ func TestResumeClearsStaleSyntheticInFlightTurn(t *testing.T) {
 	if last := msgs[len(msgs)-1]; last.Role != provider.RoleAssistant || !strings.Contains(last.Content, "[goal:continue]") {
 		t.Fatalf("last resumed message = %+v, want completed visible turn preserved", last)
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta ok=%v err=%v", ok, err)
 	}
@@ -1167,13 +1168,13 @@ func TestResumeClearsStaleSyntheticInFlightTurn(t *testing.T) {
 // cancelStrippingRunner adds messages to a session then returns a fixed error,
 // simulating an agent that was interrupted mid-turn.
 type cancelStrippingRunner struct {
-	session *agent.Session
+	session *sessionstore.Session
 	add     []provider.Message
 	err     error
 }
 
 type compactingErrorRunner struct {
-	session *agent.Session
+	session *sessionstore.Session
 	err     error
 }
 

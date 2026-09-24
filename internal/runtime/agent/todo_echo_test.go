@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -45,7 +46,7 @@ func TestEchoedTodoWriteDrawsNoSecondPlanCard(t *testing.T) {
 		testutil.Turn{Text: "all done"},
 	)
 	sink := &recordSink{}
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, sink)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, sink)
 	if err := a.Run(context.Background(), "implement the plan"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -77,7 +78,7 @@ func TestChangedTodoWriteStillDrawsItsCard(t *testing.T) {
 		testutil.Turn{Text: "listed"},
 	)
 	sink := &recordSink{}
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, sink)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, sink)
 	_ = a.Run(context.Background(), "plan the work")
 
 	var dispatched, resulted int
@@ -102,7 +103,7 @@ func TestCompletionGateHintDoesNotAskForAReSend(t *testing.T) {
 			Arguments: `{"todos":[{"content":"test","status":"completed"}]}`}}},
 		testutil.Turn{Text: "done"},
 	)
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	_ = a.Run(context.Background(), "finish the step")
 
 	if !sessionContains(a, "complete_step receipt") {

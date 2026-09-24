@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 // A generation is one round of work followed by one compaction. Compaction
@@ -19,7 +19,7 @@ const (
 
 // workUnit is one read_file round: the shape that dominates a real coding
 // session's token weight.
-func workUnit(sess *agent.Session, gen, i int) {
+func workUnit(sess *sessionstore.Session, gen, i int) {
 	id := fmt.Sprintf("g%02dc%02d", gen, i)
 	path := fmt.Sprintf("internal/pkg%02d/file%02d.go", gen, i)
 	sess.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
@@ -41,7 +41,7 @@ func fakeGoFile(gen, i, size int) string {
 // growSession appends one generation of work, planting whatever probes belong
 // to that generation so a fact's age is exactly the number of folds it has
 // survived.
-func growSession(sess *agent.Session, gen int, probes []probe) {
+func growSession(sess *sessionstore.Session, gen int, probes []probe) {
 	for _, p := range probes {
 		if p.plantAt == gen {
 			p.plant(sess)
@@ -55,16 +55,16 @@ func growSession(sess *agent.Session, gen int, probes []probe) {
 	}
 }
 
-func newSession() *agent.Session {
-	sess := agent.NewSession("You are a terse coding agent. Answer questions from what you know; do not guess.")
+func newSession() *sessionstore.Session {
+	sess := sessionstore.NewSession("You are a terse coding agent. Answer questions from what you know; do not guess.")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "Fix the config round-trip formatting bug in this repo."})
 	return sess
 }
 
 // visibleContext splices the stored projection with the canonical messages
 // appended after it — the same model-visible view the agent would send.
-func visibleContext(sessionPath string, sess *agent.Session) ([]provider.Message, error) {
-	st, ok, err := agent.LoadCompactionState(sessionPath)
+func visibleContext(sessionPath string, sess *sessionstore.Session) ([]provider.Message, error) {
+	st, ok, err := sessionstore.LoadCompactionState(sessionPath)
 	if err != nil {
 		return nil, err
 	}

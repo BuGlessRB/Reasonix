@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestTurnEmitsWorkingPhase(t *testing.T) {
 		{Type: provider.ChunkText, Text: "hi"},
 		{Type: provider.ChunkDone},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession("sys"), Options{}, sink)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, sink)
 	if err := a.Run(context.Background(), "hello there"); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestCompletionSummaryEmittedOnMutationContract(t *testing.T) {
 		{toolCallChunk("w1", "write_file", `{"path":"a.go","content":"package a"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{AgentPreset: "balanced"}, sink)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{AgentPreset: "balanced"}, sink)
 	// May fail readiness; still expect completion summary when mutations landed.
 	_ = a.Run(context.Background(), "add a.go helper")
 	if sink.completions == 0 {
@@ -69,7 +70,7 @@ func TestExecutionPolicyPresentOnMutationTurn(t *testing.T) {
 		{Type: provider.ChunkText, Text: "ok"},
 		{Type: provider.ChunkDone},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession("sys"), Options{AgentPreset: "delivery"}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{AgentPreset: "delivery"}, event.Discard)
 	_ = a.Run(context.Background(), "explain mutexes")
 	found := false
 	for _, m := range a.sess.conversation.Messages {

@@ -1,9 +1,8 @@
 package cli
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"time"
-
-	"reasonix/internal/runtime/agent"
 )
 
 // reclaimCLIRecoveryBranches performs the same conservative recovery-copy
@@ -11,11 +10,11 @@ import (
 // and any lease, concurrent save, I/O error, or failed revalidation either
 // preserves the live branch or leaves a durable hidden stage for startup repair.
 func reclaimCLIRecoveryBranches(dir string) {
-	candidates, err := agent.ReclaimableRecoveryBranches(dir, time.Now(), agent.RecoveryGCGracePeriod)
+	candidates, err := sessionstore.ReclaimableRecoveryBranches(dir, time.Now(), sessionstore.RecoveryGCGracePeriod)
 	if err != nil {
 		return
 	}
 	for _, path := range candidates {
-		_ = agent.TrashReclaimableRecoveryBranch(path, dir)
+		_ = sessionstore.TrashReclaimableRecoveryBranch(path, dir)
 	}
 }

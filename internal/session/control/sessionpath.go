@@ -2,7 +2,7 @@ package control
 
 import (
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/state/sessionstore"
 )
 
 // EnsureSessionPath pins a fresh auto-save file for this controller when none is
@@ -15,7 +15,7 @@ func (c *Controller) EnsureSessionPath() {
 	if c.SessionPath() != "" || c.SessionDir() == "" {
 		return
 	}
-	c.SetFreshSessionPath(agent.NewSessionPath(c.SessionDir(), c.Label()))
+	c.SetFreshSessionPath(sessionstore.NewSessionPath(c.SessionDir(), c.Label()))
 }
 
 // SetOnSessionPathChanged installs the handler that moves write authority onto
@@ -43,7 +43,7 @@ func (c *Controller) sessionPathChangedHandler() func(string) {
 // same-path resume (rebuild migration) keeps it. It claims the rotation gate
 // NewSession and Fork claim: a live turn owns the session it writes to, and
 // Resume was the one swap that bound another one under it.
-func (c *Controller) Resume(s *agent.Session, path string) error {
+func (c *Controller) Resume(s *sessionstore.Session, path string) error {
 	if err := c.beginRotation(); err != nil {
 		return err
 	}
@@ -64,20 +64,20 @@ func (c *Controller) Resume(s *agent.Session, path string) error {
 func (c *Controller) AdoptHistory(msgs []provider.Message, path string) {
 	if len(msgs) > 0 {
 		if path != "" {
-			if loaded, err := agent.LoadSession(path); err == nil && loaded != nil {
+			if loaded, err := sessionstore.LoadSession(path); err == nil && loaded != nil {
 				if resumed, ok := loaded.CloneWithMessagesIfCompatible(msgs); ok {
 					c.resume(resumed, path, false)
 					return
 				}
 			}
 		}
-		c.resume(agent.NewSession("").CloneWithMessages(msgs), path, false)
+		c.resume(sessionstore.NewSession("").CloneWithMessages(msgs), path, false)
 	} else if path != "" {
 		// Even an empty transcript can carry session-scoped sidecars such as a
 		// running or blocked Goal. Resume a persisted empty session so controller
 		// rebuilds preserve that state; fall back to a plain binding for a fresh
 		// path that has not been saved yet.
-		if loaded, err := agent.LoadSession(path); err == nil && loaded != nil {
+		if loaded, err := sessionstore.LoadSession(path); err == nil && loaded != nil {
 			c.resume(loaded, path, false)
 			return
 		}

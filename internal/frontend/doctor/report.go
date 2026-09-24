@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"runtime"
 	"strings"
 	"time"
@@ -20,7 +21,6 @@ import (
 	"reasonix/internal/contract/config"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/platform/gitcmd"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/store"
 )
@@ -343,7 +343,7 @@ func collectSessions(dir string) SessionsReport {
 	if dir == "" {
 		return r
 	}
-	sessions, err := agent.ListSessions(dir)
+	sessions, err := sessionstore.ListSessions(dir)
 	if err != nil {
 		r.Error = err.Error()
 	}

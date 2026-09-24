@@ -3,6 +3,7 @@ package control
 import (
 	"errors"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -14,11 +15,11 @@ import (
 	"reasonix/internal/state/sessioninbox"
 )
 
-func steeringTurn(t *testing.T) (*Controller, *agent.Agent, *agent.Session, *inboxSteerProvider, chan event.Event) {
+func steeringTurn(t *testing.T) (*Controller, *agent.Agent, *sessionstore.Session, *inboxSteerProvider, chan event.Event) {
 	t.Helper()
 	dir := testenv.TempDir(t)
 	prov := &inboxSteerProvider{started: make(chan struct{}), release: make(chan struct{})}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(prov, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	sink, done, _ := collectSink()
 	c := New(Options{

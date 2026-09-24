@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -886,9 +887,9 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 func (t *TaskTool) saveRunTerminal(run *SubagentRun, runErr error) error {
 	switch {
 	case errors.Is(runErr, context.DeadlineExceeded):
-		return t.transcripts.SaveCancelled(run, TerminalDeadline)
+		return t.transcripts.SaveCancelled(run, sessionstore.TerminalDeadline)
 	case errors.Is(runErr, context.Canceled):
-		return t.transcripts.SaveCancelled(run, TerminalCancelled)
+		return t.transcripts.SaveCancelled(run, sessionstore.TerminalCancelled)
 	default:
 		return t.transcripts.SaveFailed(run)
 	}
@@ -1459,7 +1460,7 @@ func (t *TaskTool) resolveSubSessionRuntime(modelRef, effort string) (provider.P
 	return prov, pricing, ctxWin, nil
 }
 
-func (t *TaskTool) runSubSession(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int, prov provider.Provider, pricing *provider.Pricing, ctxWin int, sess *Session, childDepth int, recoveryTaskID, modelRef string, mutationObserver *checkpoint.MutationObserver, entrance string, grant ReviewReportGrant) (string, error) {
+func (t *TaskTool) runSubSession(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int, prov provider.Provider, pricing *provider.Pricing, ctxWin int, sess *sessionstore.Session, childDepth int, recoveryTaskID, modelRef string, mutationObserver *checkpoint.MutationObserver, entrance string, grant ReviewReportGrant) (string, error) {
 	opts := t.subagentOptions(ctx, maxSteps, pricing, ctxWin, childDepth, recoveryTaskID, mutationObserver)
 	opts.ModelRef = modelRef
 	opts.RequireReviewReportKind = grant.Delivery
@@ -1474,7 +1475,7 @@ func (t *TaskTool) runSubSession(ctx context.Context, prompt string, subReg *too
 	return RunSubAgentWithSession(ctx, prov, subReg, sess, prompt, opts, sink)
 }
 
-func (t *TaskTool) runReadOnlySubSession(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int, prov provider.Provider, pricing *provider.Pricing, ctxWin int, sess *Session, childDepth int, recoveryTaskID, modelRef string, mutationObserver *checkpoint.MutationObserver, entrance string, grant ReviewReportGrant) (string, error) {
+func (t *TaskTool) runReadOnlySubSession(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int, prov provider.Provider, pricing *provider.Pricing, ctxWin int, sess *sessionstore.Session, childDepth int, recoveryTaskID, modelRef string, mutationObserver *checkpoint.MutationObserver, entrance string, grant ReviewReportGrant) (string, error) {
 	opts := t.subagentOptions(ctx, maxSteps, pricing, ctxWin, childDepth, recoveryTaskID, mutationObserver)
 	opts.RequireReviewReportKind = grant.Delivery
 	ctx, prompt, opts = t.prepareSubSession(ctx, prompt, opts, modelRef, entrance)
@@ -1644,7 +1645,7 @@ func reviewReportNudgePrompt(kind evidence.ReviewKind) string {
 // so parent, sibling, and nested sub-agents never share temporary files.
 // continue_from restores conversation history only — a new run still gets a
 // fresh temporary directory.
-func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *tool.Registry, sess *Session, prompt string, opts Options, sink event.Sink) (answer string, err error) {
+func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *tool.Registry, sess *sessionstore.Session, prompt string, opts Options, sink event.Sink) (answer string, err error) {
 	if sess == nil {
 		return "", fmt.Errorf("sub-agent session is nil")
 	}
@@ -1753,7 +1754,7 @@ func readOnlyAgentConstruction(reg *tool.Registry, opts Options) (*tool.Registry
 // ReadOnlyExecution still blocks bash, file writers, and ordinary non-MCP
 // writers, while PlannerMCPExecution allows authorized, non-destructive MCP
 // through the stable use_capability proxy without requiring readOnlyHint.
-func NewPlannerAgent(prov provider.Provider, reg *tool.Registry, sess *Session, opts Options, sink event.Sink) *Agent {
+func NewPlannerAgent(prov provider.Provider, reg *tool.Registry, sess *sessionstore.Session, opts Options, sink event.Sink) *Agent {
 	opts.EventSource = event.UsageSourcePlanner
 	opts.ReadOnlyExecution = true
 	opts.PlannerMCPExecution = true
@@ -1805,7 +1806,7 @@ func plannerExecutionRegistry(reg *tool.Registry) *tool.Registry {
 // strictly read-only child loop. Registry filtering limits the visible surface;
 // this permanent execution flag also re-checks targets resolved dynamically by
 // proxy tools such as use_capability. It never enables PlannerMCPExecution.
-func RunReadOnlySubAgentWithSession(ctx context.Context, prov provider.Provider, reg *tool.Registry, sess *Session, prompt string, opts Options, sink event.Sink) (string, error) {
+func RunReadOnlySubAgentWithSession(ctx context.Context, prov provider.Provider, reg *tool.Registry, sess *sessionstore.Session, prompt string, opts Options, sink event.Sink) (string, error) {
 	reg, opts = readOnlyAgentConstruction(reg, opts)
 	return RunSubAgentWithSession(ctx, prov, reg, sess, prompt, opts, sink)
 }
@@ -1839,7 +1840,7 @@ func strictReadOnlyExecutionRegistry(reg *tool.Registry) *tool.Registry {
 // latestAssistantAnswer walks the session backwards for the last assistant
 // message with content — that's the sub-agent's final answer. Intermediate
 // assistant messages with tool_calls but no text don't count.
-func latestAssistantAnswer(sess *Session) string {
+func latestAssistantAnswer(sess *sessionstore.Session) string {
 	if sess == nil {
 		return ""
 	}
@@ -1856,7 +1857,7 @@ func latestAssistantAnswer(sess *Session) string {
 // subagent transcript for post-hoc diagnosis (read-only skill subagents are
 // otherwise ephemeral, so a protocol failure leaves no trace). Returns a
 // human-readable suffix naming the dump, or "" when disabled/failed.
-func dumpFailedSubagentSession(archiveDir, kind string, sess *Session) string {
+func dumpFailedSubagentSession(archiveDir, kind string, sess *sessionstore.Session) string {
 	if strings.TrimSpace(archiveDir) == "" || sess == nil {
 		return ""
 	}
@@ -1900,7 +1901,7 @@ func (a *Agent) EvidenceSummary() evidence.ChildEvidenceSummary {
 	return a.task.ledger.Summary()
 }
 
-func isFreshSubagentSession(sess *Session) bool {
+func isFreshSubagentSession(sess *sessionstore.Session) bool {
 	if sess == nil {
 		return false
 	}

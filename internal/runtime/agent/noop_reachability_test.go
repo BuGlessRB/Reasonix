@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
@@ -63,7 +64,7 @@ func TestEveryNoopVerdictIsReachable(t *testing.T) {
 		// visible context is one transaction still in flight.
 		NoopActiveTurnBoundary: func(t *testing.T) []string {
 			body := strings.Repeat("x", 24*1024)
-			sess := &Session{Messages: []provider.Message{
+			sess := &sessionstore.Session{Messages: []provider.Message{
 				{Role: provider.RoleSystem, Content: "system"},
 				{Role: provider.RoleUser, Content: body, CreatedAt: economicActiveTurnAt},
 			}}
@@ -83,7 +84,7 @@ func TestEveryNoopVerdictIsReachable(t *testing.T) {
 		// A conversation with nothing between its pinned head and its recent
 		// tail has no region a fold could take.
 		NoopNoFoldableRegion: func(t *testing.T) []string {
-			a := New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), &Session{Messages: []provider.Message{
+			a := New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), &sessionstore.Session{Messages: []provider.Message{
 				{Role: provider.RoleSystem, Content: "system"},
 				{Role: provider.RoleUser, Content: "one question"},
 			}}, Options{ContextWindow: 100_000, CompactRatio: 0.85, RecentKeep: 2,
@@ -159,7 +160,7 @@ func TestEveryNoopVerdictIsReachable(t *testing.T) {
 // into the body. The window is the variable that decides how far it reaches.
 func windowedFoldFixture(t *testing.T, window int) *Agent {
 	t.Helper()
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: "long-running task"},
 	}}

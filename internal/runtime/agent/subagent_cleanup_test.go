@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -18,7 +19,7 @@ func TestDeleteSubagentsByParentSweepsEventLogLeftovers(t *testing.T) {
 	}
 	ref := "sa_cleanup_test"
 	sessionPath := filepath.Join(subDir, ref+".jsonl")
-	meta := SubagentMeta{Ref: ref, ParentSession: "parent-1", Status: SubagentCompleted}
+	meta := sessionstore.SubagentMeta{Ref: ref, ParentSession: "parent-1", Status: sessionstore.SubagentCompleted}
 	metaBytes, err := json.Marshal(meta)
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +58,7 @@ func TestSubagentSaveUsesDurableEventLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(subDir, "sa_force.jsonl")
-	s := NewSession("sub")
+	s := sessionstore.NewSession("sub")
 	if err := s.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}

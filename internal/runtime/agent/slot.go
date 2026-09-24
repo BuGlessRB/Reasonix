@@ -1,6 +1,8 @@
 package agent
 
-import "context"
+import (
+	"context"
+)
 
 // acquireSlot queues this run for a session concurrency/write slot and tells its
 // policy the moment one is held. That moment is the only place the wait can be

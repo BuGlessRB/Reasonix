@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"sync"
@@ -83,7 +84,7 @@ func ledgerTotal(sink *recordSink) (calls, input, output int) {
 func foldWithSpend(t *testing.T, replies []scriptedReply) (CompactionTelemetry, *recordSink, error) {
 	t.Helper()
 	sink := &recordSink{}
-	a := New(&scriptedSummarizer{replies: replies}, coverageRegistry(), &Session{},
+	a := New(&scriptedSummarizer{replies: replies}, coverageRegistry(), &sessionstore.Session{},
 		Options{ContextWindow: 200000}, sink)
 	ctx, _ := withCompactionSpend(context.Background())
 	_, tele, err := a.foldOrDegrade(ctx, CompactionTriggerPressure, false, coverageRegion(), "", 4000)
@@ -93,10 +94,10 @@ func foldWithSpend(t *testing.T, replies []scriptedReply) (CompactionTelemetry, 
 // callsInOneTransaction drives n summarizer calls inside a single transaction.
 // No production path bills a fold twice any more, and the accounting still has
 // to add them up: whatever brings a second call back must land in one bill.
-func callsInOneTransaction(t *testing.T, replies []scriptedReply) (CompactionUsage, *recordSink) {
+func callsInOneTransaction(t *testing.T, replies []scriptedReply) (sessionstore.CompactionUsage, *recordSink) {
 	t.Helper()
 	sink := &recordSink{}
-	a := New(&scriptedSummarizer{replies: replies}, coverageRegistry(), &Session{},
+	a := New(&scriptedSummarizer{replies: replies}, coverageRegistry(), &sessionstore.Session{},
 		Options{ContextWindow: 200000}, sink)
 	ctx, spend := withCompactionSpend(context.Background())
 	for range replies {

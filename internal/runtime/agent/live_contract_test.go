@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -11,7 +12,7 @@ import (
 
 func liveContractAgent(t *testing.T, sink event.Sink) *Agent {
 	t.Helper()
-	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, sink)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, sink)
 	a.resetTurnEvidence()
 	a.turn.turnInput = "make the cache key model-aware"
 	a.SetPlanContract(new(contractPlan()))
@@ -64,7 +65,7 @@ func TestLiveContractMatchesTheEndOfTurnReplay(t *testing.T) {
 }
 
 func TestLiveContractIsNilWithoutALedger(t *testing.T) {
-	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	a.task.ledger = nil
 	if a.LiveContract() != nil {
 		t.Fatal("no ledger means no contract to answer with")

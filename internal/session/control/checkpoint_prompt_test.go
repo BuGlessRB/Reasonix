@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -18,7 +19,7 @@ import (
 // "必须使用简体中文…" in the rewind list (#6903).
 func TestCheckpointsReturnUserPromptWithoutComposedPrefixes(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	runner := &recordingSessionRunner{session: sess}
 	c := New(Options{
@@ -52,7 +53,7 @@ func TestCheckpointsReturnUserPromptWithoutComposedPrefixes(t *testing.T) {
 
 func TestHeadlessRunOpensCheckpoint(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{
 		Runner:      &fakeTurnRunner{},

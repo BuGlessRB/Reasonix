@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"sort"
 	"strings"
 	"time"
 
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/skill"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -453,7 +453,7 @@ func skillCancelVerdict(before Observation) string {
 	switch {
 	case terminal == "":
 		return verdictNotMeasured
-	case cancelled && terminal != string(agent.SubagentCancelled):
+	case cancelled && terminal != string(sessionstore.SubagentCancelled):
 		return verdictViolated
 	default:
 		return verdictHolds

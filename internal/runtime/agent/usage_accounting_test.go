@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -167,7 +168,7 @@ func TestEstimateFailedAttemptUsageSkipsZeroHTTPLocalFailure(t *testing.T) {
 func TestStreamReturnsRequestOnlyUsageOnProviderFailure(t *testing.T) {
 	var events []event.Event
 	sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
-	a := New(failedRequestProvider{}, tool.NewRegistry(), NewSession(""), Options{ModelRef: "failed/model"}, sink)
+	a := New(failedRequestProvider{}, tool.NewRegistry(), sessionstore.NewSession(""), Options{ModelRef: "failed/model"}, sink)
 
 	st := a.stream(context.Background(), 1, sink)
 	if st.err == nil {
@@ -212,7 +213,7 @@ func TestTurnUsageNamesTheCommittedStreamAttempt(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	sink := &recordSink{}
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run should recover the interrupted stream, got %v", err)
 	}

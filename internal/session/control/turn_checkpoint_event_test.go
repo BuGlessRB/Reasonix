@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 )
 
 type checkpointEventRunner struct {
-	session   *agent.Session
+	session   *sessionstore.Session
 	err       error
 	started   chan struct{}
 	wait      bool
@@ -72,7 +73,7 @@ func requireCheckpointTurn(t *testing.T, e event.Event, want int) {
 }
 
 func TestTurnDoneCarriesValidatedCheckpointAcrossSuccessAndError(t *testing.T) {
-	session := agent.NewSession("system")
+	session := sessionstore.NewSession("system")
 	runner := &checkpointEventRunner{session: session}
 	controller, events := newCheckpointEventController(runner)
 	defer controller.Close()
@@ -94,7 +95,7 @@ func TestTurnDoneCarriesValidatedCheckpointAcrossSuccessAndError(t *testing.T) {
 }
 
 func TestCancelledTurnDoneCarriesRetainedUserCheckpoint(t *testing.T) {
-	session := agent.NewSession("system")
+	session := sessionstore.NewSession("system")
 	started := make(chan struct{})
 	runner := &checkpointEventRunner{session: session, started: started, wait: true}
 	controller, events := newCheckpointEventController(runner)
@@ -115,7 +116,7 @@ func TestCancelledTurnDoneCarriesRetainedUserCheckpoint(t *testing.T) {
 }
 
 func TestCancelBeforeRunnerAddsUserCarriesFallbackCheckpoint(t *testing.T) {
-	session := agent.NewSession("system")
+	session := sessionstore.NewSession("system")
 	started := make(chan struct{})
 	runner := &checkpointEventRunner{session: session, started: started, wait: true, skipUser: true}
 	controller, events := newCheckpointEventController(runner)
@@ -132,7 +133,7 @@ func TestCancelBeforeRunnerAddsUserCarriesFallbackCheckpoint(t *testing.T) {
 	requireCheckpointTurn(t, done, 0)
 	messages := session.Snapshot()
 	if len(messages) < 2 || messages[1].Role != provider.RoleUser ||
-		!agent.IsUserAuthoredTurn(agent.UserMessageText(messages[1])) {
+		!sessionstore.IsUserAuthoredTurn(sessionstore.UserMessageText(messages[1])) {
 		t.Fatalf("cancel fallback messages = %+v, want a retained user prompt at the checkpoint boundary", messages)
 	}
 }
@@ -147,7 +148,7 @@ func TestTurnDoneOmitsUncommittedOrNonVisibleCheckpoint(t *testing.T) {
 		{name: "local-only user", localOnly: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			session := agent.NewSession("system")
+			session := sessionstore.NewSession("system")
 			runner := &checkpointEventRunner{session: session, skipUser: tc.skipUser, localOnly: tc.localOnly}
 			controller, events := newCheckpointEventController(runner)
 			defer controller.Close()
@@ -161,7 +162,7 @@ func TestTurnDoneOmitsUncommittedOrNonVisibleCheckpoint(t *testing.T) {
 }
 
 func TestTurnDoneRejectsCheckpointAfterSessionSwap(t *testing.T) {
-	oldSession := agent.NewSession("system")
+	oldSession := sessionstore.NewSession("system")
 	completion := &guardedTurnCompletion{}
 	ctx := context.WithValue(context.Background(), guardedTurnCompletionKey{}, completion)
 	runner := &checkpointEventRunner{session: oldSession}
@@ -170,14 +171,14 @@ func TestTurnDoneRejectsCheckpointAfterSessionSwap(t *testing.T) {
 
 	controller.beginCheckpoint(ctx, "old prompt")
 	oldSession.Add(provider.Message{Role: provider.RoleUser, Content: "old prompt", CreatedAt: time.Now().UnixMilli()})
-	controller.executor.SetSession(agent.NewSession("replacement"))
+	controller.executor.SetSession(sessionstore.NewSession("replacement"))
 	if got := controller.validatedCheckpointTurn(completion); got != nil {
 		t.Fatalf("session-swapped checkpoint = %d, want nil", *got)
 	}
 }
 
 func TestTurnDoneRejectsSameSessionCheckpointStoreCollision(t *testing.T) {
-	session := agent.NewSession("system")
+	session := sessionstore.NewSession("system")
 	completion := &guardedTurnCompletion{}
 	ctx := context.WithValue(context.Background(), guardedTurnCompletionKey{}, completion)
 	runner := &checkpointEventRunner{session: session}
@@ -196,7 +197,7 @@ func TestTurnDoneRejectsSameSessionCheckpointStoreCollision(t *testing.T) {
 }
 
 func TestBlockedCandidateDoesNotLeakIntoNextTurn(t *testing.T) {
-	session := agent.NewSession("system")
+	session := sessionstore.NewSession("system")
 	runner := &checkpointEventRunner{session: session, skipUser: true}
 	controller, events := newCheckpointEventController(runner)
 	defer controller.Close()
@@ -212,7 +213,7 @@ func TestBlockedCandidateDoesNotLeakIntoNextTurn(t *testing.T) {
 }
 
 func TestParkedTurnsKeepIndependentCheckpointCandidates(t *testing.T) {
-	session := agent.NewSession("system")
+	session := sessionstore.NewSession("system")
 	runner := &checkpointEventRunner{session: session}
 	events := make(chan event.Event, 2)
 	firstDelivery := make(chan struct{})

@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"unicode"
 
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/agent"
 )
 
 // probeAnswerContract rides with every probe question. A context full of tool
@@ -36,22 +36,22 @@ func invalidAnswer(s string) bool {
 type probe struct {
 	class   string
 	plantAt int
-	plant   func(*agent.Session)
+	plant   func(*sessionstore.Session)
 	// later plants more of the same fact in later generations, so a decision
 	// that changes across folds is tested the way it actually happens: each
 	// revision lands on the far side of a compaction, not next to the last one.
-	later    map[int]func(*agent.Session)
+	later    map[int]func(*sessionstore.Session)
 	question string
 	want     []string // answer must contain one of these, lowercased
 	reject   []string // ...and none of these: the pre-correction answer
 }
 
-func userTurn(text string) func(*agent.Session) {
-	return func(s *agent.Session) { s.Add(provider.Message{Role: provider.RoleUser, Content: text}) }
+func userTurn(text string) func(*sessionstore.Session) {
+	return func(s *sessionstore.Session) { s.Add(provider.Message{Role: provider.RoleUser, Content: text}) }
 }
 
-func toolRound(id, name, args, result string) func(*agent.Session) {
-	return func(s *agent.Session) {
+func toolRound(id, name, args, result string) func(*sessionstore.Session) {
+	return func(s *sessionstore.Session) {
 		s.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: id, Name: name, Arguments: args}}})
 		s.Add(provider.Message{Role: provider.RoleTool, ToolCallID: id, Name: name, Content: result})
 	}
@@ -60,8 +60,8 @@ func toolRound(id, name, args, result string) func(*agent.Session) {
 // failedToolRound is a tool round the host recorded as failed, the way a real
 // non-zero bash run arrives. Without the execution record the keep policy sees
 // only text, which is exactly the gap the buried-evidence probe measures.
-func failedToolRound(id, name, args, result string, code int) func(*agent.Session) {
-	return func(s *agent.Session) {
+func failedToolRound(id, name, args, result string, code int) func(*sessionstore.Session) {
+	return func(s *sessionstore.Session) {
 		exit := code
 		s.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: id, Name: name, Arguments: args}}})
 		s.Add(provider.Message{
@@ -75,8 +75,8 @@ func failedToolRound(id, name, args, result string, code int) func(*agent.Sessio
 	}
 }
 
-func seq(fns ...func(*agent.Session)) func(*agent.Session) {
-	return func(s *agent.Session) {
+func seq(fns ...func(*sessionstore.Session)) func(*sessionstore.Session) {
+	return func(s *sessionstore.Session) {
 		for _, fn := range fns {
 			fn(s)
 		}
@@ -249,7 +249,7 @@ func revisionProbes() []probe {
 			class:   "reversal-chain",
 			plantAt: 0,
 			plant:   userTurn("Use PostgreSQL for the datastore."),
-			later: map[int]func(*agent.Session){
+			later: map[int]func(*sessionstore.Session){
 				1: userTurn("Change of plan: drop PostgreSQL, use SQLite instead."),
 				2: userTurn("Final call: back to PostgreSQL after all."),
 			},
@@ -261,7 +261,7 @@ func revisionProbes() []probe {
 			class:   "distractor-file",
 			plantAt: 1,
 			plant:   userTurn("Draft note: the fix might belong in config/legacy_parser.go."),
-			later: map[int]func(*agent.Session){
+			later: map[int]func(*sessionstore.Session){
 				3: userTurn("Confirmed: the fix belongs in config/emitter.go; the legacy parser is not involved."),
 			},
 			question: "Which file does the fix belong in? Reply with just the filename, no path.",

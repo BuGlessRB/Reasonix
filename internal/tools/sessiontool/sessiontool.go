@@ -1,7 +1,7 @@
 // Package sessiontool provides list_sessions and read_session tools that let
 // the AI discover and read past conversation sessions, enabling cross-session
-// AI context sharing. The tools reuse agent.ListSessionOrder, agent.LoadSession,
-// and agent.IsCleanupPending — the same infrastructure used by the history
+// AI context sharing. The tools reuse sessionstore.ListSessionOrder, sessionstore.LoadSession,
+// and sessionstore.IsCleanupPending — the same infrastructure used by the history
 // tool and session picker — to avoid duplicating session-file logic.
 package sessiontool
 
@@ -10,11 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/base/textutil"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 // list_sessions tool
@@ -40,7 +40,7 @@ func (t *listSessionsTool) Schema() json.RawMessage {
 }
 
 func (t *listSessionsTool) Execute(_ context.Context, _ json.RawMessage) (string, error) {
-	ordered, err := agent.ListSessionOrder(t.sessionDir)
+	ordered, err := sessionstore.ListSessionOrder(t.sessionDir)
 	if err != nil {
 		return "", fmt.Errorf("list_sessions: %w", err)
 	}
@@ -55,7 +55,7 @@ func (t *listSessionsTool) Execute(_ context.Context, _ json.RawMessage) (string
 	for i, s := range ordered {
 		ts := s.LastActivityAt.Format("2006-01-02 15:04")
 		model := modelFromPath(s.Path)
-		preview, turns := agent.SessionPreview(s.Path)
+		preview, turns := sessionstore.SessionPreview(s.Path)
 		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | `%s`\n",
 			i+1, ts, model, turns, preview, filepath.Base(s.Path))
 	}
@@ -127,13 +127,13 @@ func (t *readSessionTool) Execute(_ context.Context, args json.RawMessage) (stri
 		return "", fmt.Errorf("read_session: path %q is outside the session directory", params.Session)
 	}
 
-	// Reject cleanup-pending sessions (reuses agent.IsCleanupPending directly).
-	if agent.IsCleanupPending(sessionPath) {
+	// Reject cleanup-pending sessions (reuses sessionstore.IsCleanupPending directly).
+	if sessionstore.IsCleanupPending(sessionPath) {
 		return "", fmt.Errorf("read_session: session %q is pending cleanup", filepath.Base(sessionPath))
 	}
 
-	// Reuse agent.LoadSession for JSONL decoding.
-	ses, err := agent.LoadSession(sessionPath)
+	// Reuse sessionstore.LoadSession for JSONL decoding.
+	ses, err := sessionstore.LoadSession(sessionPath)
 	if err != nil {
 		return "", fmt.Errorf("read_session: %w", err)
 	}

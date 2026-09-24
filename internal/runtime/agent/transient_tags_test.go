@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -12,13 +13,13 @@ import (
 // <autoresearch-runtime> showed up in session titles and the rewind picker.
 func TestStripTransientUserBlocksCoversEveryDeclaredTag(t *testing.T) {
 	const prompt = "refactor the parser"
-	for _, tag := range TransientUserBlockTags {
+	for _, tag := range sessionstore.TransientUserBlockTags {
 		t.Run(tag, func(t *testing.T) {
 			block := "<" + tag + ">\nruntime detail\n</" + tag + ">\n\n"
-			if got := StripTransientUserBlocks(block + prompt); got != prompt {
+			if got := sessionstore.StripTransientUserBlocks(block + prompt); got != prompt {
 				t.Fatalf("StripTransientUserBlocks(%q) = %q, want %q", block+prompt, got, prompt)
 			}
-			if got := UserPreviewText(block + prompt); !strings.HasPrefix(got, prompt) {
+			if got := sessionstore.UserPreviewText(block + prompt); !strings.HasPrefix(got, prompt) {
 				t.Fatalf("UserPreviewText leaked markup: %q", got)
 			}
 		})
@@ -34,7 +35,7 @@ func TestStripTransientUserBlocksConsumesStackedBlocks(t *testing.T) {
 		"<autoresearch-runtime>\nstatus: running\n</autoresearch-runtime>\n\n" +
 		"<response-language>\nprefer zh\n</response-language>\n\n" +
 		prompt
-	if got := StripTransientUserBlocks(stacked); got != prompt {
+	if got := sessionstore.StripTransientUserBlocks(stacked); got != prompt {
 		t.Fatalf("StripTransientUserBlocks = %q, want %q", got, prompt)
 	}
 }
@@ -43,7 +44,7 @@ func TestStripTransientUserBlocksConsumesStackedBlocks(t *testing.T) {
 func TestStripTransientUserBlocksHandlesAttributedTags(t *testing.T) {
 	const prompt = "run the tests"
 	in := `<capability-route version="1">` + "\nroute: test\n</capability-route>\n\n" + prompt
-	if got := StripTransientUserBlocks(in); got != prompt {
+	if got := sessionstore.StripTransientUserBlocks(in); got != prompt {
 		t.Fatalf("StripTransientUserBlocks = %q, want %q", got, prompt)
 	}
 }
@@ -52,7 +53,7 @@ func TestStripTransientUserBlocksHandlesAttributedTags(t *testing.T) {
 // behind other injected blocks is detected instead of being added twice.
 func TestHasLeadingInjectedBlockSkipsEveryDeclaredTag(t *testing.T) {
 	const target = "reasoning-language"
-	for _, tag := range TransientUserBlockTags {
+	for _, tag := range sessionstore.TransientUserBlockTags {
 		if tag == target {
 			continue
 		}
@@ -81,10 +82,10 @@ func TestHasLeadingInjectedBlockIgnoresUserProse(t *testing.T) {
 // markup in the transcript and the pending queue as if the user had sent it.
 func TestUserMessageTextStripsHostBlocksFromRawContent(t *testing.T) {
 	const said = "A background job you started has finished."
-	for _, tag := range TransientUserBlockTags {
+	for _, tag := range sessionstore.TransientUserBlockTags {
 		t.Run(tag, func(t *testing.T) {
 			raw := "<" + tag + ">\njob-17 — failed\n</" + tag + ">\n\n" + said
-			got := UserMessageText(provider.Message{Role: provider.RoleUser, Content: raw, RawContent: raw})
+			got := sessionstore.UserMessageText(provider.Message{Role: provider.RoleUser, Content: raw, RawContent: raw})
 			if got != said {
 				t.Fatalf("UserMessageText = %q, want %q", got, said)
 			}
@@ -96,7 +97,7 @@ func TestUserMessageTextStripsHostBlocksFromRawContent(t *testing.T) {
 // that merely mentions one of the tags.
 func TestUserMessageTextKeepsAuthoredRawContent(t *testing.T) {
 	const typed = "why does <background-jobs> show up in the queue?"
-	got := UserMessageText(provider.Message{Role: provider.RoleUser, Content: "wrapped", RawContent: typed})
+	got := sessionstore.UserMessageText(provider.Message{Role: provider.RoleUser, Content: "wrapped", RawContent: typed})
 	if got != typed {
 		t.Fatalf("UserMessageText = %q, want %q", got, typed)
 	}

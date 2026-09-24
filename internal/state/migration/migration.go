@@ -6,11 +6,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/agent"
 )
 
 // SessionImport records one legacy session source that contributed sessions.
@@ -158,7 +158,7 @@ func RunLegacySessionImportInto(sourceRoot, fallbackDest string, sink event.Sink
 		return result
 	}
 	for _, src := range sources {
-		n, err := agent.MigrateLegacySessionsFromExplicitDir(src.dir, fallbackDest, config.ProjectSessionDir)
+		n, err := sessionstore.MigrateLegacySessionsFromExplicitDir(src.dir, fallbackDest, config.ProjectSessionDir)
 		if err != nil {
 			result.SessionErrs = append(result.SessionErrs, fmt.Errorf("%s: %w", src.label, err))
 			emit(event.LevelWarn, "migration rescue: skipped "+src.label+": "+err.Error())
@@ -419,24 +419,24 @@ func migrateLegacySessionSources(sink event.Sink, verbose bool) sessionMigration
 				dir:     srcDir,
 				dest:    dstDir,
 				label:   srcDir,
-				migrate: agent.MigrateLegacySessionsFromConfigDir,
+				migrate: sessionstore.MigrateLegacySessionsFromConfigDir,
 			})
 		}
 	}
 	if home, herr := os.UserHomeDir(); herr == nil {
 		reasonixHome := filepath.Join(home, ".reasonix")
-		addFlatSource(filepath.Join(reasonixHome, "sessions"), "~/.reasonix/sessions", agent.MigrateLegacySessions)
+		addFlatSource(filepath.Join(reasonixHome, "sessions"), "~/.reasonix/sessions", sessionstore.MigrateLegacySessions)
 		addProjectSources(reasonixHome)
 	}
 	for _, legacyConfig := range config.LegacyUserConfigPaths() {
 		legacyDir := filepath.Join(filepath.Dir(legacyConfig), "sessions")
-		addFlatSource(legacyDir, legacyDir, agent.MigrateLegacySessionsFromConfigDir)
+		addFlatSource(legacyDir, legacyDir, sessionstore.MigrateLegacySessionsFromConfigDir)
 		addProjectSources(filepath.Dir(legacyConfig))
 	}
 	// Back-fill v0.x sessions from the current user config session directory as
 	// well. This covers users whose platform config root was redirected before the
 	// Go rewrite; their event logs can already live where v2 stores sessions.
-	addFlatSource(dest, dest, agent.MigrateLegacySessionsFromConfigDir)
+	addFlatSource(dest, dest, sessionstore.MigrateLegacySessionsFromConfigDir)
 
 	seen := map[string]bool{}
 	result := sessionMigrationResult{}

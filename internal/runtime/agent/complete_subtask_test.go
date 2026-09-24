@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -121,7 +122,7 @@ func TestSubAgentAnswerLeadsWithAdjudicatedStatus(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "all good"}, {Type: provider.ChunkDone}},
 	}}
 
-	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, NewSession("sys"),
+	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, sessionstore.NewSession("sys"),
 		"fix the parser", Options{}, event.Discard)
 	if err != nil {
 		t.Fatalf("RunSubAgentWithSession: %v", err)

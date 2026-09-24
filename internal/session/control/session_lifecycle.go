@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/event"
@@ -12,7 +13,6 @@ import (
 	"reasonix/internal/ext/extension"
 	"reasonix/internal/ext/extension/dispatch"
 	"reasonix/internal/platform/browser"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/safety/guardian"
 	"reasonix/internal/state/sessiontemp"
 )
@@ -90,12 +90,12 @@ func (c *Controller) NewSession() error {
 	c.snapshotMu.Lock()
 	if c.sessionDir != "" {
 		c.mu.Lock()
-		c.sessionPath = agent.NewSessionPath(c.sessionDir, c.label)
+		c.sessionPath = sessionstore.NewSessionPath(c.sessionDir, c.label)
 		c.guardianPath = guardian.PathFor(c.sessionPath)
 		c.mu.Unlock()
 	}
 	c.setActiveJobSession(c.SessionPath())
-	c.executor.SetSession(agent.NewSession(c.systemPrompt))
+	c.executor.SetSession(sessionstore.NewSession(c.systemPrompt))
 	c.bindExecutorProjection(c.SessionPath(), false)
 	if c.guardianSess != nil {
 		c.guardianSess.Reset()
@@ -145,7 +145,7 @@ func (c *Controller) ClearSession() error {
 	c.mu.Unlock()
 	preMarkedCleanup := c.hasUnfinishedSessionJobs(oldPath)
 	if preMarkedCleanup {
-		if err := agent.MarkCleanupPending(oldPath, "clear"); err != nil {
+		if err := sessionstore.MarkCleanupPending(oldPath, "clear"); err != nil {
 			return err
 		}
 	}
@@ -178,12 +178,12 @@ func (c *Controller) ClearSession() error {
 	c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, oldPath)
 	if c.sessionDir != "" {
 		c.mu.Lock()
-		c.sessionPath = agent.NewSessionPath(c.sessionDir, c.label)
+		c.sessionPath = sessionstore.NewSessionPath(c.sessionDir, c.label)
 		c.guardianPath = guardian.PathFor(c.sessionPath)
 		c.mu.Unlock()
 	}
 	c.setActiveJobSession(c.SessionPath())
-	c.executor.SetSession(agent.NewSession(c.systemPrompt))
+	c.executor.SetSession(sessionstore.NewSession(c.systemPrompt))
 	c.bindExecutorProjection(c.SessionPath(), false)
 	if c.guardianSess != nil {
 		c.guardianSess.Reset()
@@ -207,7 +207,7 @@ func (c *Controller) ClearSession() error {
 		go func() {
 			result := destroy.Wait()
 			if result.HasTimedOut() && destroy.WaitAll != nil {
-				if err := agent.MarkCleanupPending(oldPath, "clear"); err != nil {
+				if err := sessionstore.MarkCleanupPending(oldPath, "clear"); err != nil {
 					c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "mark cleanup pending failed: " + err.Error()})
 				}
 				destroy.WaitAll()
@@ -225,7 +225,7 @@ func (c *Controller) hasUnfinishedSessionJobs(sessionPath string) bool {
 	if c.jobs == nil {
 		return false
 	}
-	return c.jobs.HasUnfinishedForSession(agent.BranchID(sessionPath))
+	return c.jobs.HasUnfinishedForSession(sessionstore.BranchID(sessionPath))
 }
 
 // Branch copies the current conversation into a child branch and switches to it.
@@ -253,23 +253,23 @@ func (c *Controller) Branch(name string) (string, error) {
 		return "", c.rewindFail(err)
 	}
 	parentPath := c.SessionPath()
-	parentID := agent.BranchID(parentPath)
+	parentID := sessionstore.BranchID(parentPath)
 	src := c.executor.Session().Snapshot()
 	branched := append([]provider.Message(nil), src...)
-	sess := agent.NewSession("")
+	sess := sessionstore.NewSession("")
 	sess.Messages = branched
 
-	newPath := agent.NewSessionPath(c.sessionDir, c.label)
+	newPath := sessionstore.NewSessionPath(c.sessionDir, c.label)
 	if err := sess.SaveIfAbsent(newPath); err != nil {
 		return "", c.rewindFail(err)
 	}
-	branchPreview, branchTurns := agent.SessionPreviewFromMessages(branched)
-	if err := agent.SaveBranchMeta(newPath, agent.BranchMeta{
+	branchPreview, branchTurns := sessionstore.SessionPreviewFromMessages(branched)
+	if err := sessionstore.SaveBranchMeta(newPath, sessionstore.BranchMeta{
 		Name:          strings.TrimSpace(name),
 		ParentID:      parentID,
 		Preview:       branchPreview,
 		Turns:         branchTurns,
-		SchemaVersion: agent.BranchMetaCountsVersion,
+		SchemaVersion: sessionstore.BranchMetaCountsVersion,
 	}); err != nil {
 		return "", c.rewindFail(err)
 	}
@@ -291,49 +291,49 @@ func (c *Controller) Branch(name string) (string, error) {
 	c.rotateSessionTemp()
 	c.snapshotMu.Unlock()
 	c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo,
-		Text: fmt.Sprintf("created branch %s", agent.BranchID(newPath))})
+		Text: fmt.Sprintf("created branch %s", sessionstore.BranchID(newPath))})
 	return newPath, nil
 }
 
 // Branches lists saved conversation branches in this controller's session dir.
-func (c *Controller) Branches() ([]agent.BranchInfo, error) {
+func (c *Controller) Branches() ([]sessionstore.BranchInfo, error) {
 	if c.sessionDir == "" {
 		return nil, fmt.Errorf("session persistence is disabled")
 	}
 	if err := c.Snapshot(); err != nil {
 		return nil, err
 	}
-	return agent.ListBranches(c.sessionDir)
+	return sessionstore.ListBranches(c.sessionDir)
 }
 
-func (c *Controller) SwitchBranch(ref string) (agent.BranchInfo, error) {
+func (c *Controller) SwitchBranch(ref string) (sessionstore.BranchInfo, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return agent.BranchInfo{}, c.rewindFail(fmt.Errorf("usage: /switch <branch id|name>"))
+		return sessionstore.BranchInfo{}, c.rewindFail(fmt.Errorf("usage: /switch <branch id|name>"))
 	}
 	// Hold the rotation gate across the branch listing/load and the switch so a
 	// turn cannot start between the check and the SetSession below.
 	if err := c.beginRotation(); err != nil {
 		if errors.Is(err, errTurnRunningRotation) {
-			return agent.BranchInfo{}, c.rewindFail(fmt.Errorf("cannot switch branches while a turn is running"))
+			return sessionstore.BranchInfo{}, c.rewindFail(fmt.Errorf("cannot switch branches while a turn is running"))
 		}
-		return agent.BranchInfo{}, c.rewindFail(err)
+		return sessionstore.BranchInfo{}, c.rewindFail(err)
 	}
 	defer c.endRotation()
 	branches, err := c.Branches()
 	if err != nil {
-		return agent.BranchInfo{}, c.rewindFail(err)
+		return sessionstore.BranchInfo{}, c.rewindFail(err)
 	}
 	match, err := resolveBranch(branches, ref)
 	if err != nil {
-		return agent.BranchInfo{}, c.rewindFail(err)
+		return sessionstore.BranchInfo{}, c.rewindFail(err)
 	}
-	if !agent.IsVisibleSession(match.Path) {
-		return agent.BranchInfo{}, c.rewindFail(fmt.Errorf("branch %q not found", ref))
+	if !sessionstore.IsVisibleSession(match.Path) {
+		return sessionstore.BranchInfo{}, c.rewindFail(fmt.Errorf("branch %q not found", ref))
 	}
-	loaded, err := agent.LoadSession(match.Path)
+	loaded, err := sessionstore.LoadSession(match.Path)
 	if err != nil {
-		return agent.BranchInfo{}, c.rewindFail(err)
+		return sessionstore.BranchInfo{}, c.rewindFail(err)
 	}
 	// See snapshotMu: the swap must not interleave with an in-flight save.
 	c.snapshotMu.Lock()
@@ -361,7 +361,7 @@ func (c *Controller) SwitchBranch(ref string) (agent.BranchInfo, error) {
 // resume is Resume with the cold-cache notice made optional: a rebuild
 // migration re-binds a session the user never left, so it records the cache
 // state without announcing an idle gap nobody just sat through.
-func (c *Controller) resume(s *agent.Session, path string, announceColdResume bool) {
+func (c *Controller) resume(s *sessionstore.Session, path string, announceColdResume bool) {
 	// See snapshotMu: the swap must not interleave with an in-flight save.
 	// recoverInterruptedTurn and maybeColdResumePrune snapshot on their own,
 	// so they stay outside the locked section (snapshotMu is not reentrant).
@@ -453,7 +453,7 @@ func (c *Controller) setSessionPath(p string, fresh bool) {
 
 func (c *Controller) setActiveJobSession(sessionPath string) {
 	if c.jobs != nil {
-		c.jobs.SetActiveSessionPath(agent.BranchID(sessionPath), sessionPath)
+		c.jobs.SetActiveSessionPath(sessionstore.BranchID(sessionPath), sessionPath)
 	}
 }
 
@@ -466,7 +466,7 @@ func (c *Controller) SessionPath() string {
 }
 
 func (c *Controller) parentSessionID() string {
-	return agent.BranchID(c.SessionPath())
+	return sessionstore.BranchID(c.SessionPath())
 }
 
 // beginRotation claims the session-rotation gate. It fails if a turn is running

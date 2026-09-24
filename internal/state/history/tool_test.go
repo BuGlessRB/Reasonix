@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 func TestHistoryToolSearchAndAroundAreUsable(t *testing.T) {
@@ -78,7 +78,7 @@ func TestHistoryToolSkipsCleanupPending(t *testing.T) {
 	writeSession(t, pendingPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "pending cleanup-hidden retrieval note"},
 	})
-	if err := agent.MarkCleanupPending(pendingPath, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(pendingPath, "delete"); err != nil {
 		t.Fatal(err)
 	}
 

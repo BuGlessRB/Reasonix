@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/provider"
@@ -26,10 +27,10 @@ func TestProjectionValidAcceptsLegacyNativeKey(t *testing.T) {
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "u"},
 	}
-	hash := coveredPrefixHash(msgs, len(msgs))
-	st := CompactionState{
+	hash := sessionstore.CoveredPrefixHash(msgs, len(msgs))
+	st := sessionstore.CompactionState{
 		PromptCacheKey: "ws|s|m|context-editing-native-x",
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages:          msgs,
 			CoveredCount:      len(msgs),
 			CoveredPrefixHash: hash,

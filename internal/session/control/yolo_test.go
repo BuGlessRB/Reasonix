@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func TestAutoApproveToolsStillRequiresExplicitPlanApproval(t *testing.T) {
 		textTurn("Plan:\n1. Add the config field\n2. Wire it into boot\n3. Add tests"),
 		textTurn("Done — implemented the approved plan."),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	approvalRequests := make(chan event.Approval, 1)
 	var seeded bool
@@ -70,7 +71,7 @@ func TestAutoApproveToolsStillRequiresExplicitPlanApproval(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("approved plan did not continue into execution")
 	}
-	if got := agent.StripTransientUserBlocks(firstUserMessage(ag.Session().Messages)); !strings.HasPrefix(got, PlanModeMarker) {
+	if got := sessionstore.StripTransientUserBlocks(firstUserMessage(ag.Session().Messages)); !strings.HasPrefix(got, PlanModeMarker) {
 		t.Fatalf("first model input = %q, want the plan marker prefixed", got)
 	}
 	if c.PlanMode() {
@@ -726,7 +727,7 @@ func TestApplyModePlanPropagationRunnerFallbacks(t *testing.T) {
 	}{
 		{name: "single agent", runner: func(executor *agent.Agent) agent.Runner { return executor }},
 		{name: "runner without setter", runner: func(*agent.Agent) agent.Runner {
-			return appendingRunner{session: agent.NewSession("runner")}
+			return appendingRunner{session: sessionstore.NewSession("runner")}
 		}},
 		{name: "nil runner", runner: func(*agent.Agent) agent.Runner { return nil }},
 	} {
@@ -738,7 +739,7 @@ func TestApplyModePlanPropagationRunnerFallbacks(t *testing.T) {
 				toolCallTurn("phase-1", "planner_phase_only", `{}`),
 				textTurn("done"),
 			}}
-			executor := agent.New(prov, reg, agent.NewSession("executor"), agent.Options{}, event.Discard)
+			executor := agent.New(prov, reg, sessionstore.NewSession("executor"), agent.Options{}, event.Discard)
 			c := New(Options{Runner: tc.runner(executor), Executor: executor})
 			c.ApplyMode(true, true)
 			if err := executor.Run(context.Background(), "try the execution-phase tool"); err != nil {
@@ -774,8 +775,8 @@ func TestApplyModePropagatesPlanToCoordinatorPlannerAndKeepsYolo(t *testing.T) {
 		textTurn("1. inspect the current behavior\n2. implement the fix"),
 	}}
 	execProvider := &scriptedTurns{turns: [][]provider.Chunk{textTurn("executor done")}}
-	executor := agent.New(execProvider, tool.NewRegistry(), agent.NewSession("exec"), agent.Options{}, event.Discard)
-	coordinator := agent.NewCoordinator(planner, agent.NewSession("planner"), nil, plannerTools, agent.Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(execProvider, tool.NewRegistry(), sessionstore.NewSession("exec"), agent.Options{}, event.Discard)
+	coordinator := agent.NewCoordinator(planner, sessionstore.NewSession("planner"), nil, plannerTools, agent.Options{}, executor, 0, event.Discard, nil)
 	c := New(Options{Runner: coordinator, Executor: executor})
 
 	c.ApplyMode(true, true)

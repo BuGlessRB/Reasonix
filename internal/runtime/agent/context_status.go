@@ -1,6 +1,9 @@
 package agent
 
-import "reasonix/internal/contract/provider"
+import (
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/state/sessionstore"
+)
 
 // ContextMaintenanceSnapshot is a read-only view of the current provider-bound
 // context. It separates present composition from cumulative summary-call cost.
@@ -18,7 +21,7 @@ type ContextMaintenanceSnapshot struct {
 	Headroom          int
 	ProjectionVersion uint64
 	Blocked           bool
-	LastReceipt       *ContextMaintenanceReceipt
+	LastReceipt       *sessionstore.ContextMaintenanceReceipt
 }
 
 func (a *Agent) ContextMaintenanceSnapshot() ContextMaintenanceSnapshot {
@@ -79,7 +82,7 @@ func (a *Agent) ContextMaintenanceSnapshot() ContextMaintenanceSnapshot {
 	return snapshot
 }
 
-func stateCheckpointState(runtimeState string, state CompactionState) string {
+func stateCheckpointState(runtimeState string, state sessionstore.CompactionState) string {
 	if len(state.Projection.Messages) == 0 {
 		return "none"
 	}

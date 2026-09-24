@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/event"
@@ -44,7 +45,7 @@ func (a *Agent) CompressContext(ctx context.Context, req tool.CompressRequest) (
 		if !compressAnchorCandidate(msg) {
 			continue
 		}
-		if strings.Contains(UserMessageText(msg), anchor) {
+		if strings.Contains(sessionstore.UserMessageText(msg), anchor) {
 			matches = append(matches, i)
 		}
 	}
@@ -55,7 +56,7 @@ func (a *Agent) CompressContext(ctx context.Context, req tool.CompressRequest) (
 		return tool.CompressResult{}, fmt.Errorf("compress: anchor matched %d user messages; retry with a longer unique excerpt", len(matches))
 	}
 
-	return a.compressVisibleRange(ctx, snap, CompactionTriggerTool, direction, matches[0], anchorPreview(UserMessageText(snap.visible[matches[0]])), focus)
+	return a.compressVisibleRange(ctx, snap, CompactionTriggerTool, direction, matches[0], anchorPreview(sessionstore.UserMessageText(snap.visible[matches[0]])), focus)
 }
 
 type explicitCompressionSnapshot struct {
@@ -85,7 +86,7 @@ func (a *Agent) snapshotExplicitCompression() explicitCompressionSnapshot {
 		canonical:         canonical,
 		visible:           compressionVisibleMessages(visible),
 		transcriptVersion: version,
-		coveredHash:       coveredPrefixHash(canonical, len(canonical)),
+		coveredHash:       sessionstore.CoveredPrefixHash(canonical, len(canonical)),
 		projectionVersion: state.Projection.ProjectionVersion,
 		generation:        state.Generation,
 		promptCacheKey:    cacheKey,
@@ -137,11 +138,11 @@ func compressAnchorCandidate(msg provider.Message) bool {
 	if msg.Role != provider.RoleUser || msg.LocalOnly || isCompactionSummary(msg) {
 		return false
 	}
-	return IsUserAuthoredTurn(UserMessageText(msg))
+	return sessionstore.IsUserAuthoredTurn(sessionstore.UserMessageText(msg))
 }
 
 func anchorPreview(text string) string {
-	return truncatePreview(previewProse(text))
+	return sessionstore.TruncatePreview(sessionstore.PreviewProse(text))
 }
 
 type visibleCompressionPlan struct {
@@ -226,8 +227,8 @@ func (a *Agent) compressVisibleRange(
 		return result, nil
 	}
 
-	inputHash := providerVisibleFingerprint(provider.ModelMessages(snap.visible))
-	outputHash := providerVisibleFingerprint(projection)
+	inputHash := sessionstore.ProviderVisibleFingerprint(provider.ModelMessages(snap.visible))
+	outputHash := sessionstore.ProviderVisibleFingerprint(projection)
 	// This fold masks a range rather than cutting a prefix, so its body keeps
 	// messages from both sides of the digest. Claiming less than the whole
 	// transcript would splice copies of them back in behind it.
@@ -256,13 +257,13 @@ func (a *Agent) compressVisibleRange(
 }
 
 func (a *Agent) explicitCompressionSnapshotCurrent(snap explicitCompressionSnapshot) bool {
-	current, version := a.sess.conversation.snapshotMessagesVersion()
+	current, version := a.sess.conversation.SnapshotMessagesVersion()
 	a.sess.compactionMu.Lock()
 	projectionVersion := a.sess.compactionState.Projection.ProjectionVersion
 	generation := a.sess.compactionState.Generation
 	a.sess.compactionMu.Unlock()
 	return version == snap.transcriptVersion && len(current) == len(snap.canonical) &&
-		coveredPrefixHash(current, len(current)) == snap.coveredHash &&
+		sessionstore.CoveredPrefixHash(current, len(current)) == snap.coveredHash &&
 		projectionVersion == snap.projectionVersion && generation == snap.generation &&
 		a.currentPromptCacheKey() == snap.promptCacheKey
 }
@@ -360,7 +361,7 @@ func buildVisibleCompressionProjection(visible []provider.Message, plan visibleC
 // spend is the transaction's bill, not the adopted call's usage: a repair that
 // improved nothing, failed, or was discarded was charged all the same, and the
 // answer that got kept is not the question "what did this cost" is asking.
-func compactionTelemetryFromSummary(trigger, cacheState string, sourceTokens int, res foldSummary, spend CompactionUsage) CompactionTelemetry {
+func compactionTelemetryFromSummary(trigger, cacheState string, sourceTokens int, res foldSummary, spend sessionstore.CompactionUsage) CompactionTelemetry {
 	return CompactionTelemetry{
 		Trigger: trigger, CacheState: cacheState, Mode: res.Mode,
 		SourceTokens:        sourceTokens,
@@ -405,14 +406,14 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	a.sess.compactionRunMu.Lock()
 	defer a.sess.compactionRunMu.Unlock()
 	activeTurn := a.activeTurnCreatedAt.Load()
-	canonical, transcriptVersion := a.sess.conversation.snapshotMessagesVersion()
+	canonical, transcriptVersion := a.sess.conversation.SnapshotMessagesVersion()
 	a.sess.compactionMu.Lock()
 	stateSnapshot := a.sess.compactionState
 	startProjectionVersion := a.sess.compactionState.Projection.ProjectionVersion
 	startGeneration := a.sess.compactionState.Generation
 	a.sess.compactionMu.Unlock()
 	msgs, fromProjection := a.visibleInputForFold(stateSnapshot, canonical, transcriptVersion)
-	viewInputHash := providerVisibleFingerprint(provider.ModelMessages(msgs))
+	viewInputHash := sessionstore.ProviderVisibleFingerprint(provider.ModelMessages(msgs))
 	if !scope.ignoreEconomics && stateSnapshot.LastReceipt != nil && stateSnapshot.LastReceipt.Status == "applied" && stateSnapshot.LastReceipt.Action == "summary" && stateSnapshot.LastReceipt.InputHash == viewInputHash {
 		return CompactionNoop, NoopInputUnchanged, nil
 	}
@@ -488,7 +489,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	}
 
 	projMsgs, boundary := a.foldedProjection(stateSnapshot, fromProjection, msgs, kept, head, start, summary)
-	candidate := modelVisibleFromProjection(ContextProjection{Messages: projMsgs, CoveredCount: boundary.Covered}, canonical)
+	candidate := modelVisibleFromProjection(sessionstore.ContextProjection{Messages: projMsgs, CoveredCount: boundary.Covered}, canonical)
 	projTokens := a.estimatedPromptTokens(a.withTodoIdentityTail(candidate))
 	fixedPrefixTokens = a.estimatedPromptTokens(msgs[:head])
 	tele.ProjectionTokens = projTokens
@@ -498,7 +499,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		a.emitCompactionAborted(trigger)
 		return CompactionNoop, "", err
 	}
-	viewOutputHash := providerVisibleFingerprint(provider.ModelMessages(candidate))
+	viewOutputHash := sessionstore.ProviderVisibleFingerprint(provider.ModelMessages(candidate))
 	_, err = a.commitSummaryProjection(summaryProjectionCommit{
 		canonical: canonical, covered: boundary.Covered, fold: fold, projected: projMsgs, result: res,
 		transcriptVersion: transcriptVersion, projectionVersion: startProjectionVersion,
@@ -526,7 +527,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 // visibleInputForFold returns the view a fold operates on, and whether it came
 // from the installed projection. The caller needs that second answer to tell a
 // fold reaching new history from one re-folding what a checkpoint already holds.
-func (a *Agent) visibleInputForFold(state CompactionState, canonical []provider.Message, transcriptVersion uint64) ([]provider.Message, bool) {
+func (a *Agent) visibleInputForFold(state sessionstore.CompactionState, canonical []provider.Message, transcriptVersion uint64) ([]provider.Message, bool) {
 	if projectionValid(state, canonical, a.currentPromptCacheKey(), a.prefixHasher(a.sess.conversation.RewriteVersion())) {
 		if projected := modelVisibleFromProjection(state.Projection, canonical); len(projected) > 0 {
 			return projected, true
@@ -553,7 +554,7 @@ func checkpointProjectionMessages(msgs []provider.Message, head int, kept, bodyS
 // boundary it claims. A boundary inside an older body carries that body's
 // remainder forward: those messages have no canonical counterpart to splice
 // them back from.
-func (a *Agent) foldedProjection(state CompactionState, projected bool, msgs, kept []provider.Message, head, start int, summary string) ([]provider.Message, foldBoundary) {
+func (a *Agent) foldedProjection(state sessionstore.CompactionState, projected bool, msgs, kept []provider.Message, head, start int, summary string) ([]provider.Message, foldBoundary) {
 	body := state.Projection.Messages
 	boundary := mapFoldBoundary(start, len(body), state.Projection.CoveredCount, projected)
 	var suffix []provider.Message

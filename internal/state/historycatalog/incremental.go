@@ -2,8 +2,8 @@ package historycatalog
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -16,16 +16,16 @@ func (c *Catalog) tryAppendPath(ctx context.Context, root Root, path string, gen
 	if appendFrom != oldMessageCount || revision != oldRevision+1 {
 		return false, nil
 	}
-	index, err := agent.LoadSessionDisplayIndex(store.SessionDisplayIndex(path))
+	index, err := sessionstore.LoadSessionDisplayIndex(store.SessionDisplayIndex(path))
 	if err != nil || !index.RevisionKnown || index.Revision != revision || index.ContentDigest != digest || index.MessageCount < appendFrom {
 		return false, nil
 	}
-	tail, checkedIndex, err := agent.LoadSessionDisplayMessageRange(path, appendFrom, index.MessageCount)
+	tail, checkedIndex, err := sessionstore.LoadSessionDisplayMessageRange(path, appendFrom, index.MessageCount)
 	if err != nil || checkedIndex.ContentDigest != digest || checkedIndex.Revision != revision {
 		return false, nil
 	}
-	meta, _, _ := agent.LoadBranchMeta(path)
-	lastActivity := max(int64(0), agent.SessionContentModTime(path).UnixMilli())
+	meta, _, _ := sessionstore.LoadBranchMeta(path)
+	lastActivity := max(int64(0), sessionstore.SessionContentModTime(path).UnixMilli())
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err

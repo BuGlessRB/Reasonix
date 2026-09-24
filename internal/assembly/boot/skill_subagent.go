@@ -3,6 +3,7 @@ package boot
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/config"
@@ -139,7 +140,7 @@ func (r *skillSubagents) runReadOnly(sctx context.Context, sk skill.Skill, task 
 	// the child model's own vision capability. Text-only children retain the
 	// attachment metadata locally but never receive image parts on the wire.
 	childCtx := agent.WithUserImages(sctx, agent.SubagentImageCandidates(sctx))
-	return agent.RunReadOnlySubAgentWithSession(childCtx, prov, subReg, agent.NewSession(sysPrompt), task,
+	return agent.RunReadOnlySubAgentWithSession(childCtx, prov, subReg, sessionstore.NewSession(sysPrompt), task,
 		runOptions, agent.NestedSink(sctx, event.Discard))
 }
 

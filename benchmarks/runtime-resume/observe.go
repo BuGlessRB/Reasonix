@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"regexp"
 	"sort"
 	"strings"
@@ -272,7 +273,7 @@ func childrenObs(root armRoot, sessionPath string) ChildrenObs {
 		return ChildrenObs{}
 	}
 	parent := strings.TrimSuffix(filepath.Base(sessionPath), ".jsonl")
-	artifacts, err := agent.ListSubagentsByParent(root.Sessions, parent)
+	artifacts, err := sessionstore.ListSubagentsByParent(root.Sessions, parent)
 	if err != nil {
 		return ChildrenObs{Err: err.Error()}
 	}
@@ -337,7 +338,7 @@ func capture(phase, arm, bootSystem string, ctrl *control.Controller, sink *grap
 	history := ctrl.History()
 	system := systemText(history)
 	snap := ctrl.ContextMaintenanceSnapshot()
-	st, loaded, loadErr := agent.LoadCompactionState(path)
+	st, loaded, loadErr := sessionstore.LoadCompactionState(path)
 	view, viewMsgs := viewObs(st, loaded, history)
 	graph, deltas := sink.snapshot()
 	return Observation{
@@ -420,7 +421,7 @@ func shortSum(s string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-func sidecarObs(st agent.CompactionState, ok bool, err error) SidecarObs {
+func sidecarObs(st sessionstore.CompactionState, ok bool, err error) SidecarObs {
 	out := SidecarObs{Present: ok}
 	if err != nil {
 		out.Err = err.Error()
@@ -440,7 +441,7 @@ func sidecarObs(st agent.CompactionState, ok bool, err error) SidecarObs {
 
 // viewObs splices the model-visible context. With no usable projection the
 // view is the canonical transcript, which is what the host would send.
-func viewObs(st agent.CompactionState, ok bool, canonical []provider.Message) (ViewObs, []provider.Message) {
+func viewObs(st sessionstore.CompactionState, ok bool, canonical []provider.Message) (ViewObs, []provider.Message) {
 	var out ViewObs
 	if !ok || len(st.Projection.Messages) == 0 {
 		out.Messages = len(canonical)

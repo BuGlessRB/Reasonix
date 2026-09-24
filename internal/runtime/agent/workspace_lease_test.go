@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -59,7 +60,7 @@ func deliveryLeaseTestAgent(t *testing.T, owner *workspacelease.Owner, tools ...
 	for _, candidate := range tools {
 		reg.Add(candidate)
 	}
-	a := New(nil, reg, NewSession(""), Options{DeliveryProfile: true, WorkspaceLease: owner}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true, WorkspaceLease: owner}, event.Discard)
 	a.turn.deliveryCriteriaEstablished = true
 	a.setTodoState([]evidence.TodoItem{{Content: "mutate", Status: "in_progress"}})
 	return a

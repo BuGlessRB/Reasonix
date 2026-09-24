@@ -1,3 +1,5 @@
+// Package agent wires a Provider, a tool Registry, and a Session into the
+// harness loop that drives a coding task to completion.
 package agent
 
 import (
@@ -5,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -49,17 +52,6 @@ const defaultReasoningByteLimit = 128 * 1024
 const finishReasonClientReasoningLimit = "client_reasoning_limit"
 
 var errReasoningByteLimitExceeded = errors.New("reasoning output exceeded client byte limit")
-
-// DeliveryRuntimeMarker is the retired delivery contract block. Nothing
-// appends it any more; it survives byte-exact so a session recorded before
-// the retirement still strips it out of previews and steer replay.
-const DeliveryRuntimeMarker = `<delivery-runtime>
-This session is in delivery-first mode. Before any state-changing tool call,
-establish concrete, verifiable acceptance criteria with todo_write. After the
-change, inspect the result, run relevant verification, and sign off each step
-with complete_step citing the successful verification command. The host enforces
-these gates and will reject mutation or finalization when evidence is missing.
-</delivery-runtime>`
 
 // Renderer redraws the assistant's final-answer text as styled output. It is
 // applied only after a turn's text stream completes, so the user sees raw
@@ -543,7 +535,7 @@ func (a *Agent) MutationObserver() *checkpoint.MutationObserver {
 // pointer read against SetSession, so a frontend (serve's concurrent /history and
 // /new handlers) can't race the swap. The run loop touches a.session directly and
 // only swaps it via SetSession while idle, so its reads need no lock.
-func (a *Agent) Session() *Session {
+func (a *Agent) Session() *sessionstore.Session {
 	a.sess.mu.Lock()
 	defer a.sess.mu.Unlock()
 	return a.sess.conversation
@@ -553,7 +545,7 @@ func (a *Agent) Session() *Session {
 // `reasonix --resume` to load a saved JSONL transcript before the first turn,
 // so the model picks up exactly where it left off. Callers serialise it against a
 // running turn (it only fires while idle); sessMu guards the pointer swap itself.
-func (a *Agent) SetSession(s *Session) {
+func (a *Agent) SetSession(s *sessionstore.Session) {
 	a.sess.reset(s)
 	// The replaced conversation's task is over, but the ledger and the bill
 	// answer to beginRunTurn's scope check rather than to this seam.
@@ -613,7 +605,7 @@ func (a *Agent) CompactNow(ctx context.Context, req CompactRequest) (CompactVerd
 // until the model gives a final answer, the context is cancelled, or the
 // provider errors (compaction keeps the context bounded). A nil sink is replaced
 // with event.Discard so the agent can always emit unconditionally.
-func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Options, sink event.Sink) *Agent {
+func New(prov provider.Provider, tools *tool.Registry, session *sessionstore.Session, opts Options, sink event.Sink) *Agent {
 	if opts.CompactRatio <= 0 {
 		opts.CompactRatio = defaultCompactRatio
 	}

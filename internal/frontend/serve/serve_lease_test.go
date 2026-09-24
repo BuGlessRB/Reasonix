@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,13 +17,12 @@ import (
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
 func saveServeTestSession(t *testing.T, path string) {
 	t.Helper()
-	s := agent.NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	if err := s.Save(path); err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestResumeReadsASessionAnotherRuntimeHolds(t *testing.T) {
 	saveServeTestSession(t, active)
 	saveServeTestSession(t, held)
 
-	holder, err := agent.TryAcquireSessionLease(held)
+	holder, err := sessionstore.TryAcquireSessionLease(held)
 	if err != nil {
 		t.Fatalf("test holder acquire: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestResumeReadsASessionAnotherRuntimeHolds(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("resume of a held session = %d, want 204 (body %q)", resp.StatusCode, respBody)
 	}
-	if got, want := agent.CanonicalSessionPath(ctrl.SessionPath()), agent.CanonicalSessionPath(held); got != want {
+	if got, want := sessionstore.CanonicalSessionPath(ctrl.SessionPath()), sessionstore.CanonicalSessionPath(held); got != want {
 		t.Fatalf("session path after resume = %q, want the session asked for %q", got, want)
 	}
 	// Opened, and holding nothing: the writer keeps its lease, and this pane
@@ -81,7 +81,7 @@ func TestResumeReadsASessionAnotherRuntimeHolds(t *testing.T) {
 	// The writer still has it: asking for it again is refused. (Not
 	// SessionLeaseHeldByOtherRuntime — the holder here is this same test
 	// process, and that helper answers false for our own by design.)
-	if again, err := agent.TryAcquireSessionLease(held); err == nil {
+	if again, err := sessionstore.TryAcquireSessionLease(held); err == nil {
 		again.Release()
 		t.Error("the holder's lease did not survive the read-only resume")
 	}
@@ -124,10 +124,10 @@ func TestResumeMovesSessionLease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, wantHeld := leases.HeldPath(), agent.CanonicalSessionPath(want); got != wantHeld {
+	if got, wantHeld := leases.HeldPath(), sessionstore.CanonicalSessionPath(want); got != wantHeld {
 		t.Fatalf("lease after resume = %q, want %q", got, wantHeld)
 	}
-	lease, err := agent.TryAcquireSessionLease(active)
+	lease, err := sessionstore.TryAcquireSessionLease(active)
 	if err != nil {
 		t.Fatalf("old session lease not released by resume: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestConcurrentResumesKeepControllerAndLeaseAligned(t *testing.T) {
 		}
 	}
 
-	got := agent.CanonicalSessionPath(server.ctl().SessionPath())
+	got := sessionstore.CanonicalSessionPath(server.ctl().SessionPath())
 	held := leases.HeldPath()
 	if got != held {
 		t.Fatalf("controller/lease split after concurrent resumes:\n  controller writes %q\n  lease guards      %q", got, held)
@@ -319,7 +319,7 @@ func TestConcurrentResumeAndForkKeepAlignment(t *testing.T) {
 		}
 	}
 
-	got := agent.CanonicalSessionPath(server.ctl().SessionPath())
+	got := sessionstore.CanonicalSessionPath(server.ctl().SessionPath())
 	held := leases.HeldPath()
 	if got != held {
 		t.Fatalf("controller/lease split after resume×fork interleave:\n  controller writes %q\n  lease guards      %q", got, held)
@@ -422,7 +422,7 @@ func TestInterleavedResumesForcedThroughBindWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := agent.CanonicalSessionPath(server.ctl().SessionPath())
+	got := sessionstore.CanonicalSessionPath(server.ctl().SessionPath())
 	held := leases.HeldPath()
 	if got != held {
 		t.Fatalf("controller/lease split after forced interleave:\n  controller writes %q\n  lease guards      %q", got, held)
@@ -431,7 +431,7 @@ func TestInterleavedResumesForcedThroughBindWindow(t *testing.T) {
 	if resolved, err := filepath.EvalSymlinks(targetC); err == nil {
 		wantC = resolved // serve resolves the request path; match its form
 	}
-	if got != agent.CanonicalSessionPath(wantC) {
+	if got != sessionstore.CanonicalSessionPath(wantC) {
 		t.Fatalf("last resume should win: controller on %q, want %q", got, wantC)
 	}
 }

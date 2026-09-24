@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"sync"
@@ -272,7 +273,7 @@ type SessionRecoveryInfo struct {
 	RecoveryPath string
 	Existing     bool
 	Reason       string
-	Meta         agent.BranchMeta
+	Meta         sessionstore.BranchMeta
 }
 
 type externalFolderToolRefs interface {
@@ -391,7 +392,7 @@ type Options struct {
 	OnRemember func(rule string) RememberResult
 	// SessionRecoveryMeta lets a frontend attach scope/topic/profile metadata to
 	// an automatic recovery branch before it is written.
-	SessionRecoveryMeta func(SessionRecoveryRequest) agent.BranchMeta
+	SessionRecoveryMeta func(SessionRecoveryRequest) sessionstore.BranchMeta
 	// OnSessionRecovered is called after a stale runtime's transcript has been
 	// saved as a recovery branch, before the controller commits to that branch.
 	OnSessionRecovered func(SessionRecoveryInfo) error
@@ -450,7 +451,7 @@ func New(opts Options) *Controller {
 		runtimeProfile = capability.ProfileBalanced
 	}
 	if opts.Hooks != nil {
-		opts.Hooks.SetSessionID(agent.BranchID(opts.SessionPath))
+		opts.Hooks.SetSessionID(sessionstore.BranchID(opts.SessionPath))
 	}
 	c := &Controller{
 		controllerDeps:     newControllerDeps(opts, sink, usageTee, runtimeOwner, pluginCtx),
@@ -594,7 +595,7 @@ func (c *Controller) markEditedForNewUser(startMessages int, original string) {
 		if msgs[i].Role != provider.RoleUser {
 			continue
 		}
-		if agent.UserMessageText(msgs[i]) == original {
+		if sessionstore.UserMessageText(msgs[i]) == original {
 			return
 		}
 		msgs[i].Edited = true

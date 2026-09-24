@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"runtime"
 	"strings"
@@ -88,7 +89,7 @@ func echoRegistry() *tool.Registry {
 func TestRunPersistsUserCreatedAtWithoutSendingItToProvider(t *testing.T) {
 	const existingCreatedAt int64 = 1_718_000_000_000
 	prov := testutil.NewMock("m", testutil.Turn{Text: "done"})
-	session := NewSession("system")
+	session := sessionstore.NewSession("system")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "existing", CreatedAt: existingCreatedAt})
 	agent := New(prov, tool.NewRegistry(), session, Options{}, event.Discard)
 
@@ -121,7 +122,7 @@ func TestRunPersistsResponsesItemsAcrossSessionReload(t *testing.T) {
 		{Type: provider.ChunkText, Text: "answer"},
 		{Type: provider.ChunkDone},
 	}})
-	session := NewSession("system")
+	session := sessionstore.NewSession("system")
 	agent := New(prov, tool.NewRegistry(), session, Options{}, event.Discard)
 	if err := agent.Run(context.Background(), "search"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -137,7 +138,7 @@ func TestRunPersistsResponsesItemsAcrossSessionReload(t *testing.T) {
 	if err := session.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	loaded, err := LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -160,7 +161,7 @@ func TestRunMultiToolRoundEmptyIDsSurvivePairing(t *testing.T) {
 		}},
 		testutil.Turn{Text: "done"},
 	)
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -188,7 +189,7 @@ func TestRunPersistsCumulativeAssistantWorkDuration(t *testing.T) {
 		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "call-1", Name: "echo", Arguments: `{"text":"hello"}`}}},
 		testutil.Turn{Text: "done"},
 	)
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -212,7 +213,7 @@ func TestRunPersistsCumulativeAssistantWorkDuration(t *testing.T) {
 // nothing dangling, and the repaired history is sendable as-is on resume.
 func TestRunCancelledMidStreamLeavesResumableSession(t *testing.T) {
 	mp := testutil.NewMock("m", testutil.ErrorTurn(context.Canceled))
-	a := New(mp, echoRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(mp, echoRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 
 	err := a.Run(context.Background(), "do the thing")
 	if !errors.Is(err, context.Canceled) {
@@ -226,7 +227,7 @@ func TestRunCancelledMidStreamLeavesResumableSession(t *testing.T) {
 		}
 	}
 	last := repaired[len(repaired)-1]
-	if last.Role != provider.RoleUser || StripTransientUserBlocks(last.Content) != "do the thing" {
+	if last.Role != provider.RoleUser || sessionstore.StripTransientUserBlocks(last.Content) != "do the thing" {
 		t.Errorf("the pending user message should survive a cancel, got %+v", last)
 	}
 }
@@ -238,7 +239,7 @@ func TestRunRecoversInterruptedStreamAfterPartialText(t *testing.T) {
 		testutil.Turn{Text: "continued"},
 	)
 	sink := &recordSink{}
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run should recover the interrupted stream, got %v", err)
@@ -313,7 +314,7 @@ func TestRunRecoversRepeatedInterruptedStreams(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	sink := &recordSink{}
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run should recover repeated interrupted streams, got %v", err)
@@ -353,7 +354,7 @@ func TestRunRecoversInterruptedPartialToolCallWithoutExecutingIt(t *testing.T) {
 		}},
 		testutil.Turn{Text: "recovered"},
 	)
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run should recover the interrupted tool-call stream, got %v", err)
@@ -381,7 +382,7 @@ func TestRunStreamRetryRequestCountIsLinearNotTriangular(t *testing.T) {
 		testutil.Turn{Text: "ok", Usage: &provider.Usage{PromptTokens: 30, CompletionTokens: 2, TotalTokens: 32, CacheMissTokens: 30}},
 	)
 	sink := &recordSink{}
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -422,7 +423,7 @@ func TestRunExhaustedStreamRetriesPersistPendingLocalOnly(t *testing.T) {
 		turns = append(turns, testutil.Turn{Text: "half", ChunkError: interrupted})
 	}
 	mp := testutil.NewMock("m", turns...)
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 
 	err := a.Run(context.Background(), "go")
 	if !provider.IsStreamInterrupted(err) {
@@ -464,7 +465,7 @@ func TestRunCompleteUncommittedToolCallNeverExecutes(t *testing.T) {
 		}},
 		testutil.Turn{Text: "recovered without write"},
 	)
-	a := New(mp, reg, NewSession(""), Options{}, event.Discard)
+	a := New(mp, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "write it"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -538,7 +539,7 @@ func TestRunGenericStreamErrorPersistsLocalDisplayAndInjectsBoundedRecovery(t *t
 		testutil.Turn{Reasoning: "private partial reasoning", Text: "visible partial", ChunkError: apiErr},
 		testutil.Turn{Text: "continued safely"},
 	)
-	session := NewSession("system")
+	session := sessionstore.NewSession("system")
 	a := New(mp, echoRegistry(), session, Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "change the file"); !errors.Is(err, apiErr) {
@@ -567,13 +568,13 @@ func TestRunGenericStreamErrorPersistsLocalDisplayAndInjectsBoundedRecovery(t *t
 		!strings.Contains(lastUser.Content, "unsafe_partial_output: excluded") || !strings.Contains(lastUser.Content, "continue") {
 		t.Fatalf("next user turn missing bounded recovery block: %+v", lastUser)
 	}
-	if got := StripTransientUserBlocks(lastUser.Content); got != "continue" {
+	if got := sessionstore.StripTransientUserBlocks(lastUser.Content); got != "continue" {
 		t.Fatalf("recovery block leaked into user display: %q", got)
 	}
 }
 
 func TestRunRecoveryKeepsCompletedToolPairAndSummarizesChangedFile(t *testing.T) {
-	session := NewSession("system")
+	session := sessionstore.NewSession("system")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "update config"})
 	session.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{
 		ID: "done-1", Name: "write_file", Arguments: `{"path":"config.json","content":"{}"}`, Added: 1,
@@ -623,7 +624,7 @@ func TestRunWellFormedToolLoopRoundTrips(t *testing.T) {
 		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
 		testutil.Turn{Text: "all set"},
 	)
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -647,7 +648,7 @@ func TestRunNonDeepSeekMissingToolCallReasoningDoesNotRetry(t *testing.T) {
 		testutil.Turn{Text: "all set"},
 	)
 	sink := &recordSink{}
-	a := New(mp, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(mp, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -683,7 +684,7 @@ func TestRunSilentlyRecoversMissingToolCallReasoning(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	sink := &recordSink{}
-	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -739,7 +740,7 @@ func TestMissingReasoningRecoveryAdoptsRetryWithoutToolCall(t *testing.T) {
 		},
 	)
 	sink := &recordSink{}
-	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -791,7 +792,7 @@ func TestMissingReasoningRecoveryFailureFallsBackBeforeToolExecution(t *testing.
 		testutil.Turn{Text: "done"},
 	)
 	sink := &recordSink{}
-	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run should keep the complete first response, got %v", err)
@@ -817,7 +818,7 @@ func TestMissingReasoningRecoveryFailureFallsBackBeforeToolExecution(t *testing.
 func TestMissingReasoningRecoveryCancellationAccountsBothAttempts(t *testing.T) {
 	prov := &cancelMissingReasoningRetryProvider{retryUsageSent: make(chan struct{})}
 	sink := &recordSink{}
-	a := New(prov, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(prov, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- a.Run(ctx, "go") }()
@@ -854,12 +855,12 @@ func TestSetSessionRearmsInMemoryMissingReasoningRecovery(t *testing.T) {
 		testutil.Turn{Text: "done again"},
 	)
 	sink := &recordSink{}
-	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("first Run: %v", err)
 	}
-	a.SetSession(NewSession(""))
+	a.SetSession(sessionstore.NewSession(""))
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("second Run: %v", err)
 	}
@@ -879,7 +880,7 @@ func TestMissingReasoningRecoveryRateLimitsAcrossProcesses(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	sink1 := &recordSink{}
-	a1 := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, sink1)
+	a1 := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), sessionstore.NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, sink1)
 	if err := a1.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("first Run: %v", err)
 	}
@@ -892,7 +893,7 @@ func TestMissingReasoningRecoveryRateLimitsAcrossProcesses(t *testing.T) {
 		testutil.Turn{Text: "done again"},
 	)
 	sink2 := &recordSink{}
-	a2 := New(toolCallReasoningRequiredProvider{mp2}, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, sink2)
+	a2 := New(toolCallReasoningRequiredProvider{mp2}, echoRegistry(), sessionstore.NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, sink2)
 	if err := a2.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("second process Run: %v", err)
 	}
@@ -913,7 +914,7 @@ func TestMissingReasoningRecoverySeparatesProviderConfigurations(t *testing.T) {
 			testutil.Turn{Text: "done"},
 		)
 		sink := &recordSink{}
-		a := New(configuredToolCallReasoningProvider{MockProvider: mp, identity: identity}, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, sink)
+		a := New(configuredToolCallReasoningProvider{MockProvider: mp, identity: identity}, echoRegistry(), sessionstore.NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, sink)
 		if err := a.Run(context.Background(), "go"); err != nil {
 			t.Fatalf("Run(%q): %v", identity, err)
 		}
@@ -938,7 +939,7 @@ func TestThreeHealthyToolCallReasoningTurnsRearmFutureRegression(t *testing.T) {
 	run := func(turns ...testutil.Turn) int {
 		mp := testutil.NewMock("deepseek-proxy", turns...)
 		sink := &recordSink{}
-		a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, sink)
+		a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), sessionstore.NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, sink)
 		if err := a.Run(context.Background(), "go"); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
@@ -962,7 +963,7 @@ func TestThreeHealthyToolCallReasoningTurnsRearmFutureRegression(t *testing.T) {
 func TestHealthyToolCallReasoningStreakWorksWithinOneAgentAndResetsOnMissing(t *testing.T) {
 	stateDir := testenv.TempDir(t)
 	prov := toolCallReasoningRequiredProvider{testutil.NewMock("deepseek-proxy")}
-	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, event.Discard)
+	a := New(prov, echoRegistry(), sessionstore.NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
 
 	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostReplay {
@@ -988,7 +989,7 @@ func TestMissingReasoningRecoveryIOFailureStillSuppressesLocally(t *testing.T) {
 		t.Fatal(err)
 	}
 	prov := toolCallReasoningRequiredProvider{testutil.NewMock("deepseek-proxy")}
-	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: statePath}, event.Discard)
+	a := New(prov, echoRegistry(), sessionstore.NewSession(""), Options{MissingReasoningWarnStateDir: statePath}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
 
 	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostReplay {
@@ -1005,7 +1006,7 @@ func TestHealthyToolCallReasoningRetriesTransientStateWriteFailure(t *testing.T)
 	}
 	stateDir := testenv.TempDir(t)
 	prov := toolCallReasoningRequiredProvider{testutil.NewMock("deepseek-proxy")}
-	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, event.Discard)
+	a := New(prov, echoRegistry(), sessionstore.NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
 
 	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostReplay {
@@ -1049,7 +1050,7 @@ func TestRunPreservesOriginalRequiredToolCallReasoningAcrossHook(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	h := &stubHooks{hasPostLLM: true, postLLMOut: "translated display"}
-	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), NewSession(""), Options{Hooks: h}, event.Discard)
+	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), sessionstore.NewSession(""), Options{Hooks: h}, event.Discard)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1079,7 +1080,7 @@ func TestRunStoresTransformedNonToolReasoningForToolCallOnlyProvider(t *testing.
 		Text:      "done",
 	})
 	h := &stubHooks{hasPostLLM: true, postLLMOut: "translated display"}
-	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), NewSession(""), Options{Hooks: h}, event.Discard)
+	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), sessionstore.NewSession(""), Options{Hooks: h}, event.Discard)
 
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)

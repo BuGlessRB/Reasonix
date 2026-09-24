@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 // divergedConflictCopy writes a conflict copy whose tail differs from its
@@ -19,12 +19,12 @@ import (
 func divergedConflictCopy(t *testing.T, parentPath string, turns int, lane string) string {
 	t.Helper()
 	t.Setenv("REASONIX_WRITER_ID", lane)
-	fork := agent.NewSession("sys")
+	fork := sessionstore.NewSession("sys")
 	for i := range turns {
 		fork.Add(provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("why %d", i)})
 		fork.Add(provider.Message{Role: provider.RoleAssistant, Content: fmt.Sprintf("answer %s-%d", lane, i)})
 	}
-	info, err := fork.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: parentPath})
+	info, err := fork.SaveConflictRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: parentPath})
 	if err != nil {
 		t.Fatalf("conflict copy %s: %v", lane, err)
 	}
@@ -42,7 +42,7 @@ func seedConflictChain(t *testing.T) (root, dir string, chain []string) {
 		t.Fatal(err)
 	}
 	parentPath := filepath.Join(dir, "20260821-120000-deepseek.jsonl")
-	parent := agent.NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	for i := range 10 {
 		parent.Add(provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("why %d", i)})
 		parent.Add(provider.Message{Role: provider.RoleAssistant, Content: fmt.Sprintf("parent %d", i)})

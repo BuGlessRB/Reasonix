@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/ablation"
@@ -41,7 +42,7 @@ func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.R
 	case query == "" && len(req.Positions) == 0:
 		return tool.RecallResult{}, fmt.Errorf("recall: no positions given")
 	}
-	canonical, _ := a.sess.conversation.snapshotMessagesVersion()
+	canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
 
 	a.sess.compactionMu.Lock()
 	defer a.sess.compactionMu.Unlock()
@@ -51,7 +52,7 @@ func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.R
 		return tool.RecallResult{}, fmt.Errorf("recall: nothing has been folded in this session yet, so every position is still in your context")
 	}
 	if state.Recall.Generation != state.Generation {
-		state.Recall = RecallLedger{Generation: state.Generation}
+		state.Recall = sessionstore.RecallLedger{Generation: state.Generation}
 	}
 	budget := a.recallBudget()
 	left := budget - state.Recall.SpentTokens

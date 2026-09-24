@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"image"
 	"image/png"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strings"
 	"testing"
@@ -159,7 +160,7 @@ func TestRequestImageTokensCountOnlyWhatTheRequestCarries(t *testing.T) {
 }
 
 func TestCalibrationDeclinesARequestThatCarriedImages(t *testing.T) {
-	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	text := requestCalibrationShape{requestChars: 4000}
 	a.setPromptTokenCalibration(1000, text)
 	pictured := text
@@ -186,7 +187,7 @@ func TestRunKeepsRequestsInsideTheToolImageBudget(t *testing.T) {
 	}
 	turns = append(turns, []provider.Chunk{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}})
 	prov := &scriptedProvider{name: "p", turns: turns}
-	a := New(prov, reg, NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	if err := a.Run(context.Background(), "take screenshots"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/base/i18n"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -62,33 +62,33 @@ func copySessionForWriting(src string) (string, error) {
 	}
 	msgs := loaded.Snapshot()
 
-	var srcMeta agent.BranchMeta
-	if meta, ok, metaErr := agent.LoadBranchMeta(src); metaErr == nil && ok {
+	var srcMeta sessionstore.BranchMeta
+	if meta, ok, metaErr := sessionstore.LoadBranchMeta(src); metaErr == nil && ok {
 		srcMeta = meta
 	}
 	label := "session"
-	if model, ok := agent.LoadSessionModel(src); ok && strings.TrimSpace(model) != "" {
+	if model, ok := sessionstore.LoadSessionModel(src); ok && strings.TrimSpace(model) != "" {
 		label = model
 	}
 
-	newPath := agent.NewSessionPath(filepath.Dir(src), label)
-	copySess := agent.NewSession("")
+	newPath := sessionstore.NewSessionPath(filepath.Dir(src), label)
+	copySess := sessionstore.NewSession("")
 	copySess.Messages = msgs
 	if err := copySess.SaveIfAbsent(newPath); err != nil {
 		return "", fmt.Errorf("copy session: %w", err)
 	}
-	preview, turns := agent.SessionPreviewFromMessages(msgs)
-	meta := agent.BranchMeta{
-		ParentID:      agent.BranchID(src),
+	preview, turns := sessionstore.SessionPreviewFromMessages(msgs)
+	meta := sessionstore.BranchMeta{
+		ParentID:      sessionstore.BranchID(src),
 		Preview:       preview,
 		Turns:         turns,
-		SchemaVersion: agent.BranchMetaCountsVersion,
+		SchemaVersion: sessionstore.BranchMetaCountsVersion,
 		Model:         srcMeta.Model,
 	}
 	if title := strings.TrimSpace(firstNonEmpty(srcMeta.CustomTitle, srcMeta.TopicTitle)); title != "" {
 		meta.CustomTitle = title + " (copy)"
 	}
-	if err := agent.SaveBranchMeta(newPath, meta); err != nil {
+	if err := sessionstore.SaveBranchMeta(newPath, meta); err != nil {
 		return "", fmt.Errorf("copy session meta: %w", err)
 	}
 	return newPath, nil
@@ -98,12 +98,12 @@ func copySessionForWriting(src string) (string, error) {
 // --resume path, otherwise a fresh one — and takes the write lease a turn
 // needs. A fresh path is defensively rebound too; a resumed one already holds
 // the lease, making that a no-op.
-func bindRunSession(ctrl *control.Controller, leases *control.SessionLeaseKeeper, resumed *agent.Session, resumePath string) error {
+func bindRunSession(ctrl *control.Controller, leases *control.SessionLeaseKeeper, resumed *sessionstore.Session, resumePath string) error {
 	if resumePath != "" {
 		_ = ctrl.Resume(resumed, resumePath) // startup: nothing can be running
 	}
 	if ctrl.SessionPath() == "" && ctrl.SessionDir() != "" {
-		ctrl.SetFreshSessionPath(agent.NewSessionPath(ctrl.SessionDir(), ctrl.Label()))
+		ctrl.SetFreshSessionPath(sessionstore.NewSessionPath(ctrl.SessionDir(), ctrl.Label()))
 	}
 	if err := rebindCLIControllerAuthority(leases, ctrl); err != nil {
 		return err

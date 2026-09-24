@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func TestDecisionIdentityCannotCrossRuntimeRoutes(t *testing.T) {
 	pane := func() (*control.Controller, string) {
 		reg := tool.NewRegistry()
 		reg.Add(agent.NewAskTool())
-		ex := agent.New(&askingProvider{}, reg, agent.NewSession(""), agent.Options{MaxSteps: 4}, event.Discard)
+		ex := agent.New(&askingProvider{}, reg, sessionstore.NewSession(""), agent.Options{MaxSteps: 4}, event.Discard)
 		bc := NewBroadcaster()
 		ctrl := control.New(control.Options{
 			Runner: ex, Executor: ex, Sink: bc,

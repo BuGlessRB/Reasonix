@@ -72,7 +72,7 @@ type Checkpoint struct {
 - **Sidecar to the session**, under `config.SessionDir()`: `<session-id>.ckpt/`
   with one JSON per checkpoint plus a small index (v1's layout — cheap delete, a
   corrupt snapshot only loses itself). Kept separate from the message JSONL
-  (`agent.Session.Save`) so the session format is unchanged.
+  (`sessionstore.Session.Save`) so the session format is unchanged.
 - **Persists across sessions** — resuming a session re-loads its checkpoints, so
   rewind works after a restart (Claude Code parity).
 - **Retention**: prune with the session (default ~30 days, configurable), to bound

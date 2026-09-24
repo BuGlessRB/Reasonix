@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"html"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 
@@ -33,7 +34,7 @@ func (a *Agent) pendingInterruptedRecovery() *provider.InterruptedTurnRecovery {
 			copy.InterruptedTools = append([]string(nil), copy.InterruptedTools...)
 			return &copy
 		}
-		if m.Role == provider.RoleUser && IsUserAuthoredTurn(m.Content) {
+		if m.Role == provider.RoleUser && sessionstore.IsUserAuthoredTurn(m.Content) {
 			return nil
 		}
 	}

@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"sort"
 	"strings"
 	"time"
 
 	"reasonix/internal/contract/agentgraph"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/execgraph"
 )
@@ -127,7 +127,7 @@ func answeredFromDurable(o Observation) map[string]bool {
 	}
 	out := map[string]bool{}
 	for _, e := range o.Executions {
-		out[e.ID] = e.Disposition == "adopted" || terminal[e.ID] == string(agent.SubagentCompleted)
+		out[e.ID] = e.Disposition == "adopted" || terminal[e.ID] == string(sessionstore.SubagentCompleted)
 	}
 	return out
 }

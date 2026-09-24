@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"sync/atomic"
 
 	"reasonix/internal/contract/provider"
@@ -105,7 +106,7 @@ func (a *Agent) recoverContextOverflow(ctx context.Context, frozen *samplingRequ
 	}
 	frozen.overflowFolded = true
 	a.windowProbe.noteRejected(a.estimatedRequestTokens(frozen.req))
-	refused := providerVisibleFingerprint(provider.ModelMessages(frozen.req.Messages))
+	refused := sessionstore.ProviderVisibleFingerprint(provider.ModelMessages(frozen.req.Messages))
 	if _, prepareErr := a.contextManager().Prepare(ctx, ContextPreparePolicy{
 		Trigger: CompactionTriggerOverflow,
 	}); prepareErr != nil {
@@ -115,7 +116,7 @@ func (a *Agent) recoverContextOverflow(ctx context.Context, frozen *samplingRequ
 	if buildErr != nil {
 		return false
 	}
-	if providerVisibleFingerprint(provider.ModelMessages(rebuilt.req.Messages)) == refused {
+	if sessionstore.ProviderVisibleFingerprint(provider.ModelMessages(rebuilt.req.Messages)) == refused {
 		return false
 	}
 	frozen.req = rebuilt.req

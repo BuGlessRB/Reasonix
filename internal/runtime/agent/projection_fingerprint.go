@@ -1,6 +1,9 @@
 package agent
 
-import "reasonix/internal/contract/provider"
+import (
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/state/sessionstore"
+)
 
 // A projection stays valid only while the canonical prefix it folded is
 // unchanged, and the check for that fingerprints every message behind the fold.
@@ -24,7 +27,7 @@ func (a *Agent) prefixHasher(rewriteVersion int) func([]provider.Message, int) s
 		if m := a.sess.coveredHash.Load(); m != nil && m.n == n && m.rewriteVersion == rewriteVersion {
 			return m.hash
 		}
-		hash := coveredPrefixHash(msgs, n)
+		hash := sessionstore.CoveredPrefixHash(msgs, n)
 		a.sess.coveredHash.Store(&coveredHashMemo{rewriteVersion: rewriteVersion, n: n, hash: hash})
 		return hash
 	}
@@ -39,7 +42,7 @@ type visibleSnapshot struct {
 }
 
 func (a *Agent) snapshotForProjection() visibleSnapshot {
-	msgs, version, rewriteVersion := a.sess.conversation.snapshotWithVersion()
+	msgs, version, rewriteVersion := a.sess.conversation.SnapshotWithVersion()
 	return visibleSnapshot{msgs: msgs, version: version, fingerprint: a.prefixHasher(rewriteVersion)}
 }
 
@@ -58,7 +61,7 @@ func (a *Agent) visibleBehindMemoisedFold() ([]provider.Message, bool) {
 	if len(st.Projection.Messages) == 0 || covered <= 0 || !projectionLineageOK(st, key) {
 		return nil, false
 	}
-	tail, total, _, rewriteVersion := a.sess.conversation.snapshotTail(covered)
+	tail, total, _, rewriteVersion := a.sess.conversation.SnapshotTail(covered)
 	memo := a.sess.coveredHash.Load()
 	if memo == nil || memo.n != covered || memo.rewriteVersion != rewriteVersion {
 		return nil, false

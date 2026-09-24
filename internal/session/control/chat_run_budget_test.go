@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -69,7 +70,7 @@ func TestOrdinaryChatTurnRunsPastTheOldRoundCeiling(t *testing.T) {
 	prov := &wanderingChatProvider{max: 120}
 	reg := tool.NewRegistry()
 	reg.Add(fakeControlTool{name: "read_file"})
-	exec := agent.New(prov, reg, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(prov, reg, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c, done := newChatBudgetController(t, exec)
 
 	c.Submit("collect the real state, then rewrite HANDOVER.md")
@@ -89,7 +90,7 @@ func TestOrdinaryChatTurnStopsOnItsTimeBudget(t *testing.T) {
 	prov := &wanderingChatProvider{}
 	reg := tool.NewRegistry()
 	reg.Add(fakeControlTool{name: "read_file"})
-	exec := agent.New(prov, reg, agent.NewSession("sys"),
+	exec := agent.New(prov, reg, sessionstore.NewSession("sys"),
 		agent.Options{TaskBudget: agent.TaskBudget{Wall: time.Millisecond}}, event.Discard)
 	c, done := newChatBudgetController(t, exec)
 
@@ -109,7 +110,7 @@ func TestExplicitMaxStepsOwnsTheOrdinaryTurn(t *testing.T) {
 	prov := &wanderingChatProvider{}
 	reg := tool.NewRegistry()
 	reg.Add(fakeControlTool{name: "read_file"})
-	exec := agent.New(prov, reg, agent.NewSession("sys"), agent.Options{MaxSteps: 3}, event.Discard)
+	exec := agent.New(prov, reg, sessionstore.NewSession("sys"), agent.Options{MaxSteps: 3}, event.Discard)
 	c, done := newChatBudgetController(t, exec)
 
 	c.Submit("collect the real state")

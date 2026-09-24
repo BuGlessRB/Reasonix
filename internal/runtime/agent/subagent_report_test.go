@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -108,7 +109,7 @@ func TestSubAgentAnswerCarriesHostReceipts(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "all done"}, {Type: provider.ChunkDone}},
 	}}
 
-	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, NewSession("sys"),
+	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, sessionstore.NewSession("sys"),
 		"fix the parser", Options{}, event.Discard)
 	if err != nil {
 		t.Fatalf("RunSubAgentWithSession: %v", err)

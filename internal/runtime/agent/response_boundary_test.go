@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -113,7 +114,7 @@ func TestTruncatedTailNeverRunsAndNeverEntersHistory(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, terminalChunk("stop"), {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "edit then verify"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -159,7 +160,7 @@ func TestNormalTerminalStillReportsTheModelsOwnMissingArgument(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, terminalChunk("stop"), {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "run the tests"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

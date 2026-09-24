@@ -3,7 +3,10 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
+	"reasonix/internal/state/store"
 	"slices"
 	"strings"
 	"testing"
@@ -14,8 +17,8 @@ import (
 
 // staleSessionOver returns a session holding the parent transcript plus one
 // unsaved message, which is what a snapshot conflict has in memory.
-func staleSessionOver(parent []provider.Message, extra string) *Session {
-	s := NewSession("sys")
+func staleSessionOver(parent []provider.Message, extra string) *sessionstore.Session {
+	s := sessionstore.NewSession("sys")
 	for _, m := range parent {
 		if m.Role == provider.RoleSystem {
 			continue
@@ -34,7 +37,7 @@ func staleSessionOver(parent []provider.Message, extra string) *Session {
 func TestRepeatedConflictsFromFreshSessionsDoNotFanOut(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	parent := NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "你好"})
 	parent.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 	if err := parent.Save(path); err != nil {
@@ -47,7 +50,7 @@ func TestRepeatedConflictsFromFreshSessionsDoNotFanOut(t *testing.T) {
 		// The same unsaved turns every time: one conversation reopened again
 		// and again, which is what puts a dozen identical rows in the sidebar.
 		stale := staleSessionOver(parentMsgs, "unsaved")
-		info, err := stale.SaveRecoveryBranch(RecoveryBranchOptions{OriginalPath: path})
+		info, err := stale.SaveRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: path})
 		if err != nil {
 			t.Fatalf("conflict %d: %v", i, err)
 		}
@@ -64,7 +67,7 @@ func TestRepeatedConflictsFromFreshSessionsDoNotFanOut(t *testing.T) {
 func TestDistinctConflictContentStillGetsItsOwnBranch(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	parent := NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "你好"})
 	parent.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 	if err := parent.Save(path); err != nil {
@@ -75,7 +78,7 @@ func TestDistinctConflictContentStillGetsItsOwnBranch(t *testing.T) {
 	paths := map[string]bool{}
 	for i := range 3 {
 		stale := staleSessionOver(parentMsgs, fmt.Sprintf("unsaved %d", i))
-		info, err := stale.SaveRecoveryBranch(RecoveryBranchOptions{OriginalPath: path})
+		info, err := stale.SaveRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: path})
 		if err != nil {
 			t.Fatalf("conflict %d: %v", i, err)
 		}
@@ -92,7 +95,7 @@ func TestDistinctConflictContentStillGetsItsOwnBranch(t *testing.T) {
 func TestIdenticalConflictContentReusesOneBranch(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	parent := NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "你好"})
 	parent.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 	if err := parent.Save(path); err != nil {
@@ -100,11 +103,11 @@ func TestIdenticalConflictContentReusesOneBranch(t *testing.T) {
 	}
 	parentMsgs := parent.Snapshot()
 
-	first, err := staleSessionOver(parentMsgs, "same").SaveRecoveryBranch(RecoveryBranchOptions{OriginalPath: path})
+	first, err := staleSessionOver(parentMsgs, "same").SaveRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: path})
 	if err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	second, err := staleSessionOver(parentMsgs, "same").SaveRecoveryBranch(RecoveryBranchOptions{OriginalPath: path})
+	second, err := staleSessionOver(parentMsgs, "same").SaveRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: path})
 	if err != nil {
 		t.Fatalf("second: %v", err)
 	}
@@ -115,16 +118,16 @@ func TestIdenticalConflictContentReusesOneBranch(t *testing.T) {
 
 // conflictRecoveryTick mirrors control.recoverSnapshotConflict: fork while the
 // chain has room, then keep landing in this writer's isolated lane.
-func conflictRecoveryTick(t *testing.T, s *Session, path string) RecoveryBranchInfo {
+func conflictRecoveryTick(t *testing.T, s *sessionstore.Session, path string) sessionstore.RecoveryBranchInfo {
 	t.Helper()
-	info, err := s.SaveRecoveryBranch(RecoveryBranchOptions{OriginalPath: path})
+	info, err := s.SaveRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: path})
 	if err == nil {
 		return info
 	}
-	if !errors.Is(err, ErrSessionRecoveryDepthExceeded) {
+	if !errors.Is(err, sessionstore.ErrSessionRecoveryDepthExceeded) {
 		t.Fatalf("recovery tick on %s: %v", filepath.Base(path), err)
 	}
-	info, err = s.SaveConflictRecoveryBranch(RecoveryBranchOptions{OriginalPath: path})
+	info, err = s.SaveConflictRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: path})
 	if err != nil {
 		t.Fatalf("isolated recovery tick on %s: %v", filepath.Base(path), err)
 	}
@@ -150,7 +153,7 @@ func TestGrowingConflictsFromOneWriterStayInOneLane(t *testing.T) {
 	branches := map[string]bool{}
 	for i := range 8 {
 		live = append(live, provider.Message{Role: provider.RoleAssistant, Content: fmt.Sprintf("turn output %d", i)})
-		session := NewSession("sys")
+		session := sessionstore.NewSession("sys")
 		for _, m := range live {
 			session.Add(m)
 		}
@@ -158,7 +161,7 @@ func TestGrowingConflictsFromOneWriterStayInOneLane(t *testing.T) {
 			provider.Message{Role: provider.RoleAssistant, Content: fmt.Sprintf("别处写进来的第 %d 版", i)})...)
 		if err := session.SaveSnapshot(target); err == nil {
 			continue // the branch already holds this writer's work; nothing to fork
-		} else if !errors.Is(err, ErrSessionSnapshotConflict) {
+		} else if !errors.Is(err, sessionstore.ErrSessionSnapshotConflict) {
 			t.Fatalf("tick %d: save = %v, want a conflict", i, err)
 		}
 		info := conflictRecoveryTick(t, session, target)
@@ -175,5 +178,21 @@ func TestGrowingConflictsFromOneWriterStayInOneLane(t *testing.T) {
 		slices.Sort(names)
 		t.Errorf("8 conflicts from one writer on one lineage produced %d recovery files, want 1:\n  %s",
 			len(branches), strings.Join(names, "\n  "))
+	}
+}
+
+func rewriteTranscriptOutsideReasonix(t *testing.T, path string, msgs ...provider.Message) {
+	t.Helper()
+	for _, p := range append([]string{path}, store.SessionSidecarFiles(path)...) {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("clear %s: %v", filepath.Base(p), err)
+		}
+	}
+	outside := sessionstore.NewSession("sys")
+	for _, m := range msgs {
+		outside.Add(m)
+	}
+	if err := outside.Save(path); err != nil {
+		t.Fatalf("outside write: %v", err)
 	}
 }

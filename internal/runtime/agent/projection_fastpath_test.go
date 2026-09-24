@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"runtime"
 	"slices"
 	"testing"
@@ -32,7 +33,7 @@ func TestFastPathNeverDisagreesWithFullScan(t *testing.T) {
 		{
 			name: "transcript rewritten under the projection",
 			setUp: func(a *Agent) {
-				msgs, _ := a.sess.conversation.snapshotMessagesVersion()
+				msgs, _ := a.sess.conversation.SnapshotMessagesVersion()
 				msgs[1].Content = "something else entirely"
 				a.sess.conversation.Rewrite(msgs, "test")
 			},
@@ -53,7 +54,7 @@ func TestFastPathNeverDisagreesWithFullScan(t *testing.T) {
 		},
 		{
 			name:  "no projection at all",
-			setUp: func(a *Agent) { a.sess.compactionState = CompactionState{} },
+			setUp: func(a *Agent) { a.sess.compactionState = sessionstore.CompactionState{} },
 		},
 	}
 

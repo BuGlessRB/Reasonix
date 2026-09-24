@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 func TestSearchRanksSavedSessionHistory(t *testing.T) {
@@ -161,7 +161,7 @@ func TestSearchSkipsCleanupPending(t *testing.T) {
 	writeSession(t, pendingPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "hidden alpha cleanup pending secret"},
 	})
-	if err := agent.MarkCleanupPending(pendingPath, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(pendingPath, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -186,7 +186,7 @@ func TestAroundRejectsCleanupPending(t *testing.T) {
 	sessionDir := testenv.TempDir(t)
 	path := filepath.Join(sessionDir, "pending.jsonl")
 	writeSession(t, path, []provider.Message{{Role: provider.RoleUser, Content: "pending secret"}})
-	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(path, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -203,9 +203,9 @@ func TestHistorySkipsSubagentsOwnedByCleanupPendingParent(t *testing.T) {
 	visibleParentPath := filepath.Join(sessionDir, "visible-parent.jsonl")
 	writeSession(t, visibleParentPath, []provider.Message{{Role: provider.RoleUser, Content: "visible parent prompt"}})
 
-	pendingSubagentPath := writeSubagentSession(t, sessionDir, "sa_pending", agent.BranchID(parentPath), "subagent hidden orchid result")
-	visibleSubagentPath := writeSubagentSession(t, sessionDir, "sa_visible", agent.BranchID(visibleParentPath), "subagent visible orchid result")
-	if err := agent.MarkCleanupPending(parentPath, "delete"); err != nil {
+	pendingSubagentPath := writeSubagentSession(t, sessionDir, "sa_pending", sessionstore.BranchID(parentPath), "subagent hidden orchid result")
+	visibleSubagentPath := writeSubagentSession(t, sessionDir, "sa_visible", sessionstore.BranchID(visibleParentPath), "subagent visible orchid result")
+	if err := sessionstore.MarkCleanupPending(parentPath, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -285,7 +285,7 @@ func TestAroundClampsLargeAfterWithoutOverflow(t *testing.T) {
 
 func writeSession(t *testing.T, path string, msgs []provider.Message) {
 	t.Helper()
-	sess := agent.NewSession("")
+	sess := sessionstore.NewSession("")
 	for _, msg := range msgs {
 		sess.Add(msg)
 	}
@@ -302,7 +302,7 @@ func writeSubagentSession(t *testing.T, sessionDir, ref, parentSession, content 
 	}
 	path := filepath.Join(dir, ref+".jsonl")
 	writeSession(t, path, []provider.Message{{Role: provider.RoleUser, Content: content}})
-	meta := agent.SubagentMeta{Ref: ref, ParentSession: parentSession}
+	meta := sessionstore.SubagentMeta{Ref: ref, ParentSession: parentSession}
 	b, err := json.Marshal(meta)
 	if err != nil {
 		t.Fatal(err)

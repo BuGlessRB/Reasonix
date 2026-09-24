@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ const spillMarker = "kept out of context"
 // threshold cannot promise this: set one below what the pointer costs and every
 // body in between is replaced by something longer than itself.
 func TestSpillNeverGrowsTheContext(t *testing.T) {
-	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	line := strings.Repeat("x", 78) + "\n"
 	for _, lines := range []int{1, 4, 13, 20, 26, 40, 64, 200, 800, 2000} {
 		body := strings.Repeat(line, lines)
@@ -38,7 +39,7 @@ func TestSpillNeverGrowsTheContext(t *testing.T) {
 // leaving: the pointer and the extra turn buy a trip to where it already was.
 // Everyday bash and read_file output lives in this range.
 func TestResultsThatFitOneReadBackStayInContext(t *testing.T) {
-	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	for _, size := range []int{1 << 10, 4 << 10, 16 << 10, maxToolOutputBytes} {
 		body := strings.Repeat("x", size)
 		out, _, notice := a.boundToolOutput(body, "bash", fmt.Sprintf("fit-%d", size), "", false)
@@ -55,7 +56,7 @@ func TestResultsThatFitOneReadBackStayInContext(t *testing.T) {
 func TestReadingASpillBackDoesNotSpillAgain(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(pagedReader{})
-	a := New(nil, reg, NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	body := strings.Repeat(strings.Repeat("payload ", 12)+"\n", 500)
 	out, _, _ := a.boundToolOutput(body, "bash", "call_00_ORIGIN", "", false)
 	if !strings.Contains(out, spillMarker) {
@@ -124,7 +125,7 @@ func TestSpillBarDoesNotFollowLineLength(t *testing.T) {
 // the result stays whole rather than being spilled for a rounding error, since a
 // pointer the model reads back costs a further turn.
 func TestSpillEarnsAtLeastItsOwnCost(t *testing.T) {
-	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	line := strings.Repeat("y", 96) + "\n"
 	for lines := 1; lines <= 600; lines += 3 {
 		body := strings.Repeat(line, lines)
@@ -188,7 +189,7 @@ func TestFetchingASpillIsSparedByContractNotByName(t *testing.T) {
 	root := testenv.TempDir(t)
 	reg := tool.NewRegistry()
 	reg.Add(targetedSearch{})
-	a := New(nil, reg, NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
 	body := strings.Repeat("a matching line of spilled content\n", 2000)
 
 	inSpill := fmt.Sprintf(`{"path":%q}`, filepath.Join(a.spillDir(), "call-1.txt"))
@@ -212,7 +213,7 @@ func TestFetchingASpillIsSparedByContractNotByName(t *testing.T) {
 func TestToolWithoutTheContractIsNeverSpared(t *testing.T) {
 	root := testenv.TempDir(t)
 	reg := tool.NewRegistry()
-	a := New(nil, reg, NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
 	body := strings.Repeat("a wide line of ordinary command output\n", 2000)
 	args := fmt.Sprintf(`{"command":"cat %s"}`, filepath.Join(a.spillDir(), "call-1.txt"))
 	if a.readsSpilledOutput("bash", args) {
@@ -232,7 +233,7 @@ func TestPagedReadsWindowRatherThanSpill(t *testing.T) {
 	root := testenv.TempDir(t)
 	reg := tool.NewRegistry()
 	reg.Add(pagedReader{})
-	a := New(nil, reg, NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
 	body := strings.Repeat("a wide line of ordinary file content\n", 2000)
 	args := fmt.Sprintf(`{"path":%q}`, filepath.Join(root, "somewhere", "else.go"))
 	out, bound, notice := a.boundToolOutput(body, "read_file", "call-ordinary", args, false)
@@ -254,7 +255,7 @@ func TestPagedReadsWindowRatherThanSpill(t *testing.T) {
 // so parking it somewhere readable is the only way to keep it whole.
 func TestUnpagedResultsStillSpill(t *testing.T) {
 	root := testenv.TempDir(t)
-	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
 	body := strings.Repeat("a wide line of ordinary command output\n", 2000)
 	out, bound, _ := a.boundToolOutput(body, "bash", "call-unpaged", "", false)
 	if !strings.Contains(out, spillMarker) {
@@ -267,7 +268,7 @@ func TestUnpagedResultsStillSpill(t *testing.T) {
 
 func spillBarFor(t *testing.T, lineLen int) int {
 	t.Helper()
-	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	line := strings.Repeat("x", lineLen) + "\n"
 	for lines := 1; lines <= 4000; lines++ {
 		body := strings.Repeat(line, lines)

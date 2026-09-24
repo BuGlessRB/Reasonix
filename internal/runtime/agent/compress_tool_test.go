@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -18,7 +19,7 @@ import (
 func TestCompressContextBeforePreservesCanonicalAndTail(t *testing.T) {
 	large := strings.Repeat("old tool output ", 160)
 	local := provider.Message{Role: provider.RoleTool, LocalOnly: true, Content: "private interrupted output"}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "system stays"},
 		{Role: provider.RoleUser, Content: "old request alpha"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("analysis ", 160)},
@@ -73,7 +74,7 @@ func TestCompressContextBeforePreservesCanonicalAndTail(t *testing.T) {
 func TestCompressContextAfterExcludesActiveTurnAndAppendsToolResult(t *testing.T) {
 	const activeCreatedAt = int64(99)
 	currentCall := provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "compress-1", Name: "compress", Arguments: `{}`}}}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "start folding at alpha"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("completed work ", 180)},
@@ -110,7 +111,7 @@ func TestCompressContextAfterExcludesActiveTurnAndAppendsToolResult(t *testing.T
 }
 
 func TestCompressContextAnchorErrorsDoNotChangeState(t *testing.T) {
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "shared phrase first"},
 		{Role: provider.RoleAssistant, Content: "answer"},
@@ -137,7 +138,7 @@ func TestCompressContextAnchorErrorsDoNotChangeState(t *testing.T) {
 }
 
 func TestCompressContextConsecutiveCallsMergeSummary(t *testing.T) {
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "turn alpha"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("alpha work ", 180)},
@@ -200,7 +201,7 @@ func TestCompressionVisibleMessagesSplitsLegacyStrictSummary(t *testing.T) {
 }
 
 func TestCompressContextNoSavingsIsNoop(t *testing.T) {
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "tiny"},
 		{Role: provider.RoleUser, Content: "keep boundary"},
@@ -224,7 +225,7 @@ func TestCompressContextNoSavingsIsNoop(t *testing.T) {
 
 func TestCompressContextFailureDoesNotArchiveUncommittedRange(t *testing.T) {
 	archiveDir := testenv.TempDir(t)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "old unique"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("work ", 200)},
@@ -295,7 +296,7 @@ func (p *staleCompressProvider) Stream(_ context.Context, _ provider.Request) (<
 
 func TestCompressContextRejectsStaleTranscript(t *testing.T) {
 	prov := &staleCompressProvider{started: make(chan struct{}), release: make(chan struct{})}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "old unique"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("work ", 200)},
@@ -323,7 +324,7 @@ func TestCompressContextRejectsStaleTranscript(t *testing.T) {
 
 func TestRangeCompressionSharesSummarySingleflight(t *testing.T) {
 	prov := &singleflightCompressProvider{started: make(chan struct{}), release: make(chan struct{})}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "old unique"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("work ", 200)},
@@ -341,7 +342,7 @@ func TestRangeCompressionSharesSummarySingleflight(t *testing.T) {
 	snap := a.snapshotExplicitCompression()
 	anchor := -1
 	for i, msg := range snap.visible {
-		if strings.Contains(UserMessageText(msg), "keep unique") {
+		if strings.Contains(sessionstore.UserMessageText(msg), "keep unique") {
 			anchor = i
 			break
 		}

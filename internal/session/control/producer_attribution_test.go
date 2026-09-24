@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -21,7 +22,7 @@ import (
 // marker came last — would put one model's work under the other's name.
 func TestTwoModelTurnSaysWhichModelWroteEachFrame(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	execTools := tool.NewRegistry()
 	execTools.Add(&attributionProbeTool{})
 	exec := agent.New(testutil.NewMock("exec",
@@ -36,7 +37,7 @@ func TestTwoModelTurnSaysWhichModelWroteEachFrame(t *testing.T) {
 		testutil.NewMock("planner",
 			testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "planner-probe", Name: "probe", Arguments: `{}`}}},
 			testutil.Turn{Reasoning: "the shape is clear", Text: "1. do the thing"},
-		), agent.NewSession("planner sys"), nil, plannerTools, agent.Options{}, exec, 0, sink,
+		), sessionstore.NewSession("planner sys"), nil, plannerTools, agent.Options{}, exec, 0, sink,
 		func(context.Context, string) agent.PlannerDecision {
 			return agent.PlannerDecision{Route: agent.PlannerRoutePlanAndExecute, Depth: agent.PlannerDepthFull, Reason: "test"}
 		},

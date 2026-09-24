@@ -1,6 +1,7 @@
 package control
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -13,17 +14,17 @@ import (
 func coldNoticeController(t *testing.T, sink event.Sink) (*Controller, string) {
 	t.Helper()
 	dir := testenv.TempDir(t)
-	saved := agent.NewSession("sys")
+	saved := sessionstore.NewSession("sys")
 	saved.Add(provider.Message{Role: provider.RoleUser, Content: "task"})
 	saved.Add(provider.Message{Role: provider.RoleAssistant, Content: "ok"})
-	path := agent.NewSessionPath(dir, "test")
+	path := sessionstore.NewSessionPath(dir, "test")
 	if err := saved.Save(path); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	if _, err := agent.EnsureBranchMeta(path); err != nil {
+	if _, err := sessionstore.EnsureBranchMeta(path); err != nil {
 		t.Fatalf("meta: %v", err)
 	}
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{ContextWindow: 1000, RecentKeep: 2, ArchiveDir: dir}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{ContextWindow: 1000, RecentKeep: 2, ArchiveDir: dir}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test", Sink: sink})
 	c.testCacheColdAfter = -1 // force cold
 	return c, path
@@ -63,7 +64,7 @@ func TestResumeStillAnnouncesColdResume(t *testing.T) {
 	c, path := coldNoticeController(t, event.FuncSink(func(e event.Event) { got = append(got, e) }))
 	defer c.Close()
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}

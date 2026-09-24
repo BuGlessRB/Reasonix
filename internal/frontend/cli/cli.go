@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,7 +33,6 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/platform/notify"
 	"reasonix/internal/platform/telemetry"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 
 	"github.com/spf13/pflag"
@@ -355,7 +355,7 @@ func modelForResumePath(modelName, resumePath string, cfg *config.Config) string
 	if strings.TrimSpace(modelName) != "" || strings.TrimSpace(resumePath) == "" {
 		return modelName
 	}
-	sessionModel, ok := agent.LoadSessionModel(resumePath)
+	sessionModel, ok := sessionstore.LoadSessionModel(resumePath)
 	if !ok {
 		return modelName
 	}
@@ -368,11 +368,11 @@ func modelForResumePath(modelName, resumePath string, cfg *config.Config) string
 	return sessionModel
 }
 
-func loadResumableSession(path string) (*agent.Session, error) {
-	if agent.IsCleanupPending(path) {
+func loadResumableSession(path string) (*sessionstore.Session, error) {
+	if sessionstore.IsCleanupPending(path) {
 		return nil, fmt.Errorf("session is pending cleanup")
 	}
-	return agent.LoadSession(path)
+	return sessionstore.LoadSession(path)
 }
 
 // registerContinueFlag registers --continue with its -c shorthand. The
@@ -544,10 +544,10 @@ func runAgent(args []string, version string) int {
 	// silently double-writing. Released after the controller closes.
 	leases := control.NewSessionLeaseKeeper()
 	defer leases.Release()
-	var resumeSession *agent.Session
+	var resumeSession *sessionstore.Session
 	if resumePath != "" {
 		if err := leases.Rebind(resumePath); err != nil {
-			if errors.Is(err, agent.ErrSessionLeaseHeld) {
+			if errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, sessionLeaseResumeRefusal(err))
 			} else {
 				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
@@ -655,7 +655,7 @@ func runAgent(args []string, version string) int {
 		}
 	}
 	if resultOutput != nil {
-		sessionID := runOutputSessionID(format, agent.BranchID(ctrl.SessionPath()), machineIdentityKey)
+		sessionID := runOutputSessionID(format, sessionstore.BranchID(ctrl.SessionPath()), machineIdentityKey)
 		if err := resultOutput.Finalize(sessionID, started, runErr); err != nil {
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 			return 1
@@ -1383,7 +1383,7 @@ func usage() {
 type ctrlKillerAdapter struct{ ctrl *control.Controller }
 
 func (a ctrlKillerAdapter) Kill(sessionID, id string) bool {
-	if sessionID != "" && agent.BranchID(a.ctrl.SessionPath()) != sessionID {
+	if sessionID != "" && sessionstore.BranchID(a.ctrl.SessionPath()) != sessionID {
 		return false
 	}
 	return a.ctrl.CancelJob(id)

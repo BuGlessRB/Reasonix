@@ -5,12 +5,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -44,7 +44,7 @@ func appendSnapshotConflictDiagnostic(path, mode, outcome string, saveErr error,
 		return
 	}
 	var diskRev int64
-	var conflict *agent.SessionSnapshotConflictError
+	var conflict *sessionstore.SessionSnapshotConflictError
 	if errors.As(saveErr, &conflict) && conflict != nil {
 		diskRev = conflict.DiskRevision
 	}
@@ -54,7 +54,7 @@ func appendSnapshotConflictDiagnostic(path, mode, outcome string, saveErr error,
 	}
 	rec := snapshotConflictDiagnostic{
 		At:         time.Now(),
-		BranchID:   agent.BranchID(path),
+		BranchID:   sessionstore.BranchID(path),
 		Mode:       mode,
 		Outcome:    outcome,
 		DivergedAt: -1,
@@ -70,7 +70,7 @@ func appendSnapshotConflictDiagnostic(path, mode, outcome string, saveErr error,
 		rec.SnapshotRole = conflict.SnapshotRole
 	}
 	if recoveryPath != "" {
-		rec.RecoveryBranchID = agent.BranchID(recoveryPath)
+		rec.RecoveryBranchID = sessionstore.BranchID(recoveryPath)
 		rec.ExistingRecovery = existing
 	}
 	data, err := json.Marshal(rec)

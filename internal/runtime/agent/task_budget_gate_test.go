@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func TestTaskBudgetGateLandsARunawayOnCost(t *testing.T) {
 	pricing := &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2, Currency: "CNY"}
 	// Each round bills 900 hits + 100 misses + 100 output = 3.18e-4.
 	// A 1e-3 budget lands on the fourth round; 500 rounds are available.
-	a := New(&spendingProvider{max: 500}, reg, NewSession("sys"),
+	a := New(&spendingProvider{max: 500}, reg, sessionstore.NewSession("sys"),
 		Options{Pricing: pricing, TaskBudget: TaskBudget{Cost: 1e-3}}, sink)
 
 	err := a.Run(context.Background(), "read everything")
@@ -51,7 +52,7 @@ func TestTaskBudgetGateKeepsTheWorkAndAsksForASummary(t *testing.T) {
 	sink := newBudgetSink()
 	reg := tool.NewRegistry()
 	reg.Add(readProbe{})
-	a := New(&spendingProvider{max: 500}, reg, NewSession("sys"),
+	a := New(&spendingProvider{max: 500}, reg, sessionstore.NewSession("sys"),
 		Options{
 			Pricing:    &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2},
 			TaskBudget: TaskBudget{Cost: 1e-3},
@@ -134,7 +135,7 @@ func TestExplicitMaxStepsStillLandsWhenNoBudgetApplies(t *testing.T) {
 	sink := event.FuncSink(func(event.Event) {})
 	reg := tool.NewRegistry()
 	reg.Add(readProbe{})
-	a := New(&spendingProvider{max: 500}, reg, NewSession("sys"),
+	a := New(&spendingProvider{max: 500}, reg, sessionstore.NewSession("sys"),
 		Options{MaxSteps: 3, TaskBudget: TaskBudget{Cost: 0, Wall: -1}}, sink)
 
 	err := a.Run(context.Background(), "read everything")
@@ -161,7 +162,7 @@ func TestRoundLimitPauseStillReportsCompletion(t *testing.T) {
 	probe := &completionProbe{Sink: event.FuncSink(func(event.Event) {})}
 	reg := tool.NewRegistry()
 	reg.Add(readProbe{})
-	a := New(&spendingProvider{max: 500}, reg, NewSession("sys"),
+	a := New(&spendingProvider{max: 500}, reg, sessionstore.NewSession("sys"),
 		Options{MaxSteps: 3, TaskBudget: TaskBudget{Cost: 0, Wall: -1}}, probe)
 
 	err := a.Run(context.Background(), "read everything")

@@ -2,6 +2,7 @@ package control
 
 import (
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"testing"
 
@@ -44,7 +45,7 @@ func resumeUnderDeclarations(t *testing.T, first, second string) (*agent.Agent, 
 		}}
 	}
 	one := agent.New(&scriptedTurns{turns: [][]provider.Chunk{textTurn("done")}},
-		goalRegistry(), agent.NewSession(""), declares(first), event.Discard)
+		goalRegistry(), sessionstore.NewSession(""), declares(first), event.Discard)
 	events := make(chan event.Event, 8)
 	c1 := New(Options{
 		Runner: one, Executor: one, SessionDir: dir, SessionPath: path, Label: "first",
@@ -59,11 +60,11 @@ func resumeUnderDeclarations(t *testing.T, first, second string) (*agent.Agent, 
 	waitGoalTurnDone(t, events)
 
 	two := agent.New(&scriptedTurns{turns: [][]provider.Chunk{textTurn("done")}},
-		goalRegistry(), agent.NewSession(""), declares(second), event.Discard)
+		goalRegistry(), sessionstore.NewSession(""), declares(second), event.Discard)
 	sink := &driftSink{}
 	c2 := New(Options{Runner: two, Executor: two, SessionDir: dir, SessionPath: path,
 		Label: "second", Sink: sink})
-	c2.resume(agent.NewSession(""), path, false)
+	c2.resume(sessionstore.NewSession(""), path, false)
 	return two, sink
 }
 
@@ -138,7 +139,7 @@ func TestGoalResumeRestoresProjectCheckBaselineAcrossRestart(t *testing.T) {
 
 	// Process one reads the declaration naming A and runs one goal turn.
 	first := agent.New(&scriptedTurns{turns: [][]provider.Chunk{textTurn("done")}},
-		goalRegistry(), agent.NewSession(""), declares(checkA), event.Discard)
+		goalRegistry(), sessionstore.NewSession(""), declares(checkA), event.Discard)
 	events := make(chan event.Event, 8)
 	c1 := New(Options{
 		Runner: first, Executor: first, SessionDir: dir, SessionPath: path, Label: "first",
@@ -160,9 +161,9 @@ func TestGoalResumeRestoresProjectCheckBaselineAcrossRestart(t *testing.T) {
 	// The declaration changes between the two processes. Process two reads it,
 	// which is the only way its check list can differ from the first's.
 	second := agent.New(&scriptedTurns{turns: [][]provider.Chunk{textTurn("done")}},
-		goalRegistry(), agent.NewSession(""), declares(checkB), event.Discard)
+		goalRegistry(), sessionstore.NewSession(""), declares(checkB), event.Discard)
 	c2 := New(Options{Runner: second, Executor: second, SessionDir: dir, SessionPath: path, Label: "second"})
-	c2.resume(agent.NewSession(""), path, false)
+	c2.resume(sessionstore.NewSession(""), path, false)
 
 	restored := second.DeliveryCheckpoint().BaselineChecks
 	wantB := evidence.VerificationIdentity(checkB)

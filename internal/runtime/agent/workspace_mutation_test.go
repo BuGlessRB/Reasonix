@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestToolBeforeWorkspaceMutationUsesExecutedReplacement(t *testing.T) {
 		reg.Add(&recordingTool{name: "read_file", readOnly: true})
 		reg.Add(&recordingTool{name: "write_file", readOnly: false})
 		sink := newWorkspaceSignalSink()
-		a := New(nil, reg, NewSession(""), Options{Extensions: newExtDispatcher(client, true, nil, extension.PointToolBefore)}, sink)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: newExtDispatcher(client, true, nil, extension.PointToolBefore)}, sink)
 		a.executeBatch(context.Background(), &a.turn, []provider.ToolCall{{ID: "call", Name: "read_file", Arguments: `{"path":"original.go"}`}})
 
 		select {
@@ -56,7 +57,7 @@ func TestToolBeforeWorkspaceMutationUsesExecutedReplacement(t *testing.T) {
 		reg.Add(&recordingTool{name: "write_file", readOnly: false})
 		reg.Add(&recordingTool{name: "read_file", readOnly: true})
 		sink := newWorkspaceSignalSink()
-		a := New(nil, reg, NewSession(""), Options{Extensions: newExtDispatcher(client, true, nil, extension.PointToolBefore)}, sink)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: newExtDispatcher(client, true, nil, extension.PointToolBefore)}, sink)
 		a.executeBatch(context.Background(), &a.turn, []provider.ToolCall{{ID: "call", Name: "write_file", Arguments: `{"path":"original.go","content":"x"}`}})
 
 		select {
@@ -92,7 +93,7 @@ func TestToolBeforeWriterReplacementSignalsBeforeParallelPeerCompletes(t *testin
 	reg.Add(&recordingTool{name: "write_file", readOnly: false})
 	reg.Add(blockingTool{name: "slow_read", started: started, release: release})
 	sink := newWorkspaceSignalSink()
-	a := New(nil, reg, NewSession(""), Options{Extensions: newExtDispatcher(client, true, nil, extension.PointToolBefore)}, sink)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: newExtDispatcher(client, true, nil, extension.PointToolBefore)}, sink)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -142,7 +143,7 @@ func TestToolBeforeFailedWriterReplacementOpensDependencyBarrier(t *testing.T) {
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	reg.Add(fakeTool{name: "write_one", err: errors.New("partial write")})
 	reg.Add(fakeTool{name: "write_two", calls: &secondCalls})
-	a := New(nil, reg, NewSession(""), Options{Extensions: newExtDispatcher(client, true, nil, extension.PointToolBefore)}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: newExtDispatcher(client, true, nil, extension.PointToolBefore)}, event.Discard)
 	batch := a.executeBatch(context.Background(), &a.turn, []provider.ToolCall{
 		{ID: "first", Name: "read_file", Arguments: `{"path":"original.go"}`},
 		{ID: "second", Name: "write_two", Arguments: `{"path":"second.go"}`},

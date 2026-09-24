@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -156,7 +157,7 @@ func TestSupersedeKeepsNewestOfEachVariant(t *testing.T) {
 
 func TestSeesStandingBlockReadsTheVisibleHistory(t *testing.T) {
 	a := &Agent{}
-	a.sess.conversation = NewSession("sys")
+	a.sess.conversation = sessionstore.NewSession("sys")
 	if a.SeesStandingBlock("<active-goal contract=\"full\">") {
 		t.Fatal("an empty conversation reported a standing block")
 	}

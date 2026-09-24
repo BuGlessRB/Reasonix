@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -58,7 +59,7 @@ func rewriteDeclarationRun(t *testing.T, began, rewrittenTo, ran string) (*proje
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 	sink := &projectCheckProbeSink{}
-	a := New(prov, reg, NewSession(""), Options{
+	a := New(prov, reg, sessionstore.NewSession(""), Options{
 		ProjectChecks: []instruction.VerifyCheck{{Command: began, SourcePath: "AGENTS.md", Line: 3}},
 	}, sink)
 	ctx := deliveryGoalContext("goal-probe", "edit and finish")

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 // folded away, which is the only state where an index address means anything.
 func recallAgent(t *testing.T, covered int, window int) *Agent {
 	t.Helper()
-	sess := NewSession("system")
+	sess := sessionstore.NewSession("system")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "never rewrite history, only append"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
 		{ID: "c1", Name: "read_file", Arguments: `{"path":"internal/runtime/agent/compact.go"}`},
@@ -24,7 +25,7 @@ func recallAgent(t *testing.T, covered int, window int) *Agent {
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "keep going"})
 	a := New(nil, nil, sess, Options{ContextWindow: window}, event.Discard)
 	a.sess.compactionState.Generation = 1
-	a.sess.compactionState.Projection = ContextProjection{CoveredCount: covered}
+	a.sess.compactionState.Projection = sessionstore.ContextProjection{CoveredCount: covered}
 	return a
 }
 
@@ -71,7 +72,7 @@ func TestRecallRefusesWhatIsStillVisible(t *testing.T) {
 // window. It refuses whole: half a span reads as the whole of what was there.
 func TestRecallBudgetRefusesRatherThanTruncates(t *testing.T) {
 	a := recallAgent(t, 3, 128_000)
-	a.sess.compactionState.Recall = RecallLedger{Generation: 1, SpentTokens: a.recallBudget() - 1}
+	a.sess.compactionState.Recall = sessionstore.RecallLedger{Generation: 1, SpentTokens: a.recallBudget() - 1}
 	_, err := a.RecallContext(context.Background(), tool.RecallRequest{Positions: []int{1}})
 	if err == nil || !strings.Contains(err.Error(), "recall budget") {
 		t.Fatalf("err = %v, want the budget to refuse the request", err)
@@ -82,7 +83,7 @@ func TestRecallBudgetRefusesRatherThanTruncates(t *testing.T) {
 // look back. The ledger carries its generation, so nothing has to reset it.
 func TestRecallBudgetResetsWithTheGeneration(t *testing.T) {
 	a := recallAgent(t, 3, 128_000)
-	a.sess.compactionState.Recall = RecallLedger{Generation: 1, SpentTokens: a.recallBudget()}
+	a.sess.compactionState.Recall = sessionstore.RecallLedger{Generation: 1, SpentTokens: a.recallBudget()}
 	a.sess.compactionState.Generation = 2
 
 	res, err := a.RecallContext(context.Background(), tool.RecallRequest{Positions: []int{1}})
@@ -105,7 +106,7 @@ func TestToolCallContextCarriesTheRecaller(t *testing.T) {
 	probe := &recallerProbe{}
 	reg := tool.NewRegistry()
 	reg.Add(probe)
-	a := New(prov, reg, NewSession(""), Options{MaxSteps: 1}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{MaxSteps: 1}, event.Discard)
 	_ = a.Run(context.Background(), "go") // errors at the 1-step cap; the probe is the point
 
 	if !probe.bound {

@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -59,7 +60,7 @@ func TestPlanGateEndToEnd(t *testing.T) {
 		textTurn("Plan:\n1. Add the config field\n2. Wire it into boot\n3. Add tests"),
 		textTurn("Done — implemented the plan."),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	approvalID := make(chan string, 1)
 	var seeded bool
@@ -87,7 +88,7 @@ func TestPlanGateEndToEnd(t *testing.T) {
 	}
 
 	msgs := ag.Session().Messages
-	if got := agent.StripTransientUserBlocks(firstUserMessage(msgs)); !strings.HasPrefix(got, PlanModeMarker) {
+	if got := sessionstore.StripTransientUserBlocks(firstUserMessage(msgs)); !strings.HasPrefix(got, PlanModeMarker) {
 		t.Fatalf("first model input = %q, want the plan marker prefixed", got)
 	}
 	if c.PlanMode() {
@@ -109,7 +110,7 @@ func TestApprovedPlanSeedClearsAfterExecutionWithoutModelTodoWrite(t *testing.T)
 		textTurn("Plan:\n1. Add the config field\n2. Wire it into boot"),
 		textTurn("Done."),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	approvalID := make(chan string, 1)
 	var planSeedResults []string
@@ -154,7 +155,7 @@ func TestPlanGateRejectionStaysInPlan(t *testing.T) {
 	prov := &scriptedTurns{turns: [][]provider.Chunk{
 		textTurn("Plan:\n1. Add the config field\n2. Add tests"),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	approvalID := make(chan string, 1)
 	var seeded bool

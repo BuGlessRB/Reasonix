@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 
 func rejectionAgent(t *testing.T, plan *plancontract.Plan) *Agent {
 	t.Helper()
-	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, nil)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, nil)
 	a.resetTurnEvidence()
 	a.turn.turnInput = "fix the retry race"
 	a.SetPlanContract(plan)

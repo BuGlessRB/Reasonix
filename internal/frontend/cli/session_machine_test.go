@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 func TestSessionMachineListIsStableAndRedacted(t *testing.T) {
@@ -84,7 +84,7 @@ func TestSessionMachineShowAndStatusExposeOnlySafeState(t *testing.T) {
 	dir := testenv.TempDir(t)
 	saveMachineTestSession(t, dir, "busy", time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC))
 	path := filepath.Join(dir, "busy.jsonl")
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("acquire session lease: %v", err)
 	}
@@ -164,18 +164,18 @@ func TestSessionMachineErrorsAreJSONAndNonZero(t *testing.T) {
 func saveMachineTestSession(t *testing.T, dir, id string, updatedAt time.Time) {
 	t.Helper()
 	path := filepath.Join(dir, id+".jsonl")
-	session := agent.NewSession("")
+	session := sessionstore.NewSession("")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "private prompt"})
 	session.Add(provider.Message{Role: provider.RoleAssistant, Content: "private answer"})
 	if err := session.Save(path); err != nil {
 		t.Fatalf("save session: %v", err)
 	}
-	if err := agent.SaveBranchMeta(path, agent.BranchMeta{
+	if err := sessionstore.SaveBranchMeta(path, sessionstore.BranchMeta{
 		ID:            id,
 		CreatedAt:     updatedAt.Add(-time.Hour),
 		UpdatedAt:     updatedAt,
 		Scope:         "project",
-		SchemaVersion: agent.BranchMetaCountsVersion,
+		SchemaVersion: sessionstore.BranchMetaCountsVersion,
 		Turns:         1,
 		Preview:       "PRIVATE prompt",
 	}); err != nil {

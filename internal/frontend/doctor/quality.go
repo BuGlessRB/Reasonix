@@ -3,6 +3,7 @@ package doctor
 import (
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/config"
@@ -94,11 +95,11 @@ func CollectQuality(opts QualityOptions) (QualityReport, error) {
 	if err != nil {
 		return QualityReport{}, err
 	}
-	session, err := agent.LoadSession(path)
+	session, err := sessionstore.LoadSession(path)
 	if err != nil {
 		return QualityReport{}, err
 	}
-	meta, _, err := agent.LoadBranchMeta(path)
+	meta, _, err := sessionstore.LoadBranchMeta(path)
 	if err != nil {
 		return QualityReport{}, err
 	}

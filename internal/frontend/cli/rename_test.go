@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
 
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/agent"
 )
 
 func TestRenameSessionUpdatesCustomTitle(t *testing.T) {
@@ -19,14 +19,14 @@ func TestRenameSessionUpdatesCustomTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 	updatedAt := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
-	if err := agent.SaveBranchMetaPreserveUpdated(sessionPath, agent.BranchMeta{
+	if err := sessionstore.SaveBranchMetaPreserveUpdated(sessionPath, sessionstore.BranchMeta{
 		TopicTitle: "Topic",
 		CreatedAt:  updatedAt.Add(-time.Hour),
 		UpdatedAt:  updatedAt,
 	}); err != nil {
 		t.Fatalf("seed meta: %v", err)
 	}
-	if err := agent.RenameSession(sessionPath, "My Test Title"); err != nil {
+	if err := sessionstore.RenameSession(sessionPath, "My Test Title"); err != nil {
 		t.Fatalf("RenameSession failed: %v", err)
 	}
 	metaPath := sessionPath + ".meta"
@@ -47,14 +47,14 @@ func TestRenameSessionUpdatesCustomTitle(t *testing.T) {
 	if m.TopicTitle != "Topic" {
 		t.Errorf("topic_title = %q, want preserved Topic", m.TopicTitle)
 	}
-	stored, ok, err := agent.LoadBranchMeta(sessionPath)
+	stored, ok, err := sessionstore.LoadBranchMeta(sessionPath)
 	if err != nil || !ok {
 		t.Fatalf("LoadBranchMeta after rename ok=%v err=%v", ok, err)
 	}
 	if !stored.UpdatedAt.Equal(updatedAt) {
 		t.Errorf("updated_at changed after rename: got %s want %s", stored.UpdatedAt, updatedAt)
 	}
-	if err := agent.RenameSession(sessionPath, "Updated Title"); err != nil {
+	if err := sessionstore.RenameSession(sessionPath, "Updated Title"); err != nil {
 		t.Fatalf("second rename failed: %v", err)
 	}
 	raw, _ = os.ReadFile(metaPath)
@@ -68,7 +68,7 @@ func TestRenameSessionUpdatesCustomTitle(t *testing.T) {
 }
 
 func TestSessionPickerLabelPrefersCustomTitle(t *testing.T) {
-	s := agent.SessionInfo{Turns: 5, Preview: "first user message here", TopicTitle: ""}
+	s := sessionstore.SessionInfo{Turns: 5, Preview: "first user message here", TopicTitle: ""}
 	got := sessionPickerLabel(s)
 	if got == "" {
 		t.Fatal("empty label")

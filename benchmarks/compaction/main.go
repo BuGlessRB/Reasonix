@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"time"
 
@@ -94,7 +95,7 @@ type genResult struct {
 }
 
 type harness struct {
-	sess   *agent.Session
+	sess   *sessionstore.Session
 	agentA *agent.Agent
 	path   string
 	calls  *callRecorder
@@ -148,7 +149,7 @@ func (h *harness) runGeneration(ctx context.Context, gen int, probes []probe) ge
 		r.SummarizerInput += c.tokens
 		r.LargestCall = max(r.LargestCall, c.tokens)
 	}
-	if st, ok, sterr := agent.LoadCompactionState(h.path); sterr == nil && ok {
+	if st, ok, sterr := sessionstore.LoadCompactionState(h.path); sterr == nil && ok {
 		r.ProjectionTokens = st.Projection.ProjectionTokens
 		if st.LastReceipt != nil && st.LastReceipt.Action == "summary" {
 			r.Mode = agent.CompactionModeSummarized

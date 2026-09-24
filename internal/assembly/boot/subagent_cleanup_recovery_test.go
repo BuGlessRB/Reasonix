@@ -3,6 +3,7 @@ package boot
 import (
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/tool"
@@ -33,7 +34,7 @@ func prepareRunningSubagent(t *testing.T, sessionDir string) string {
 	return ref
 }
 
-func requireSubagentStatus(t *testing.T, sessionDir, ref string, want agent.SubagentStatus) {
+func requireSubagentStatus(t *testing.T, sessionDir, ref string, want sessionstore.SubagentStatus) {
 	t.Helper()
 	meta, err := agent.NewSubagentStore(filepath.Join(sessionDir, "subagents")).LoadMeta(ref)
 	if err != nil {
@@ -51,13 +52,13 @@ func TestNewSubagentStoreCleansStaleRunningOnEveryBuild(t *testing.T) {
 	if _, err := newSubagentStore(sessionDir, nil); err != nil {
 		t.Fatalf("newSubagentStore (first): %v", err)
 	}
-	requireSubagentStatus(t, sessionDir, firstRef, agent.SubagentInterrupted)
+	requireSubagentStatus(t, sessionDir, firstRef, sessionstore.SubagentInterrupted)
 
 	secondRef := prepareRunningSubagent(t, sessionDir)
 	if _, err := newSubagentStore(sessionDir, nil); err != nil {
 		t.Fatalf("newSubagentStore (second): %v", err)
 	}
-	requireSubagentStatus(t, sessionDir, secondRef, agent.SubagentInterrupted)
+	requireSubagentStatus(t, sessionDir, secondRef, sessionstore.SubagentInterrupted)
 }
 
 func TestNewSubagentStoreParentProbeDefersThenRecovers(t *testing.T) {
@@ -70,12 +71,12 @@ func TestNewSubagentStoreParentProbeDefersThenRecovers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("newSubagentStore (live parent): %v", err)
 	}
-	requireSubagentStatus(t, sessionDir, ref, agent.SubagentRunning)
+	requireSubagentStatus(t, sessionDir, ref, sessionstore.SubagentRunning)
 
 	if _, err := newSubagentStore(sessionDir, func(string) bool { return false }); err != nil {
 		t.Fatalf("newSubagentStore (dead parent): %v", err)
 	}
-	requireSubagentStatus(t, sessionDir, ref, agent.SubagentInterrupted)
+	requireSubagentStatus(t, sessionDir, ref, sessionstore.SubagentInterrupted)
 }
 
 func TestNewSubagentStoreNeverCachesCleanupError(t *testing.T) {

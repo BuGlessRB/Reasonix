@@ -2,13 +2,13 @@ package boot
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"sync"
 	"testing"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/frontend/doctor"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/usagereport"
 )
 
@@ -74,7 +74,7 @@ model = "x"
 		t.Fatalf("Build: %v", err)
 	}
 	defer ctrl.Close()
-	sessionPath := agent.NewSessionPath(ctrl.SessionDir(), ctrl.Label())
+	sessionPath := sessionstore.NewSessionPath(ctrl.SessionDir(), ctrl.Label())
 	ctrl.SetSessionPath(sessionPath)
 
 	for _, turn := range []string{"first", "second"} {

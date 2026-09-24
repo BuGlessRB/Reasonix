@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -171,7 +172,7 @@ func (r *recordingTool) Execute(_ context.Context, args json.RawMessage) (string
 
 // sessionContents flattens the session's message contents for substring
 // assertions.
-func sessionContents(s *Session) string {
+func sessionContents(s *sessionstore.Session) string {
 	var b strings.Builder
 	for _, m := range s.Messages {
 		b.WriteString(m.Content)
@@ -180,7 +181,7 @@ func sessionContents(s *Session) string {
 	return b.String()
 }
 
-func assistantMessages(s *Session) []provider.Message {
+func assistantMessages(s *sessionstore.Session) []provider.Message {
 	var out []provider.Message
 	for _, m := range s.Messages {
 		if m.Role == provider.RoleAssistant {
@@ -209,7 +210,7 @@ func TestAgentBeforeStartContinue(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "hi"}, {Type: provider.ChunkDone},
 	}}
-	a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -239,7 +240,7 @@ func TestAgentBeforeStartBlock(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "hi"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	err := a.Run(context.Background(), "hello")
 	if err == nil || !strings.Contains(err.Error(), "no runs today") {
@@ -264,7 +265,7 @@ func TestAgentBeforeStartReplace(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "hi"}, {Type: provider.ChunkDone},
 	}}
-	a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	// The payload is informational: a replacement validates but does not alter
 	// the run.
 	if err := a.Run(context.Background(), "hello"); err != nil {
@@ -280,7 +281,7 @@ func TestAgentBeforeStartFailurePolicy(t *testing.T) {
 		}}
 		d := newExtDispatcher(client, true, nil, extension.PointAgentBeforeStart)
 		mp := &mockProvider{name: "p", chunks: []provider.Chunk{{Type: provider.ChunkDone}}}
-		a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+		a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 		err := a.Run(context.Background(), "hello")
 		if err == nil || !strings.Contains(err.Error(), "extension fake failed at agent.before_start") {
 			t.Fatalf("Run err = %v, want the required failure", err)
@@ -298,7 +299,7 @@ func TestAgentBeforeStartFailurePolicy(t *testing.T) {
 		mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 			{Type: provider.ChunkText, Text: "hi"}, {Type: provider.ChunkDone},
 		}}
-		a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+		a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 		if err := a.Run(context.Background(), "hello"); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
@@ -314,7 +315,7 @@ func TestSetExtensionsInstallsAfterConstruction(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "hi"}, {Type: provider.ChunkDone},
 	}}
-	a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	a.SetExtensions(d)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -341,7 +342,7 @@ func TestContextPrepareReplaceIsEphemeral(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -374,7 +375,7 @@ func TestContextPrepareBlock(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 	}}
-	a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	err := a.Run(context.Background(), "hello")
 	if err == nil || !strings.Contains(err.Error(), "context denied") {
 		t.Fatalf("Run err = %v, want the block reason", err)
@@ -392,7 +393,7 @@ func TestContextPrepareFailurePolicy(t *testing.T) {
 		}}
 		d := newExtDispatcher(client, true, nil, extension.PointContextPrepare)
 		mp := &mockProvider{name: "p", chunks: []provider.Chunk{{Type: provider.ChunkDone}}}
-		a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+		a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 		err := a.Run(context.Background(), "hello")
 		if err == nil || !strings.Contains(err.Error(), "extension fake failed at context.prepare") {
 			t.Fatalf("Run err = %v, want the required failure", err)
@@ -407,7 +408,7 @@ func TestContextPrepareFailurePolicy(t *testing.T) {
 		mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 			{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 		}}
-		a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+		a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 		if err := a.Run(context.Background(), "hello"); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
@@ -437,7 +438,7 @@ func TestProviderRequestReplace(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -464,7 +465,7 @@ func TestProviderRequestBlock(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 	}}
-	a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	err := a.Run(context.Background(), "hello")
 	if err == nil || !strings.Contains(err.Error(), "request denied") {
 		t.Fatalf("Run err = %v, want the block reason", err)
@@ -482,7 +483,7 @@ func TestProviderRequestFailurePolicy(t *testing.T) {
 		}}
 		d := newExtDispatcher(client, true, nil, extension.PointProviderRequest)
 		mp := &mockProvider{name: "p", chunks: []provider.Chunk{{Type: provider.ChunkDone}}}
-		a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+		a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 		err := a.Run(context.Background(), "hello")
 		if err == nil || !strings.Contains(err.Error(), "extension fake failed at provider.request") {
 			t.Fatalf("Run err = %v, want the required failure", err)
@@ -497,7 +498,7 @@ func TestProviderRequestFailurePolicy(t *testing.T) {
 		mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 			{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 		}}
-		a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+		a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 		if err := a.Run(context.Background(), "hello"); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
@@ -537,7 +538,7 @@ func TestProviderRequestReplacementCacheEphemerality(t *testing.T) {
 	d := newExtDispatcher(client, true, nil, extension.PointProviderRequest)
 
 	withExt := &mockProvider{name: "p", streams: streams()}
-	a := New(withExt, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(withExt, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	for _, input := range []string{"first", "second"} {
 		if err := a.Run(context.Background(), input); err != nil {
 			t.Fatalf("Run(%q): %v", input, err)
@@ -554,7 +555,7 @@ func TestProviderRequestReplacementCacheEphemerality(t *testing.T) {
 	}
 
 	baseline := &mockProvider{name: "p", streams: streams()}
-	b := New(baseline, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+	b := New(baseline, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	for _, input := range []string{"first", "second"} {
 		if err := b.Run(context.Background(), input); err != nil {
 			t.Fatalf("baseline Run(%q): %v", input, err)
@@ -585,7 +586,7 @@ func TestProviderResponseReplaceIsTranscript(t *testing.T) {
 		},
 		{{Type: provider.ChunkText, Text: "second"}, {Type: provider.ChunkDone}},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "one"); err != nil {
 		t.Fatalf("Run one: %v", err)
@@ -625,7 +626,7 @@ func TestProviderResponseBlock(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "ORIGINAL ANSWER"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	err := a.Run(context.Background(), "one")
 	if err == nil || !strings.Contains(err.Error(), "response denied") {
@@ -646,7 +647,7 @@ func TestProviderResponseFailurePolicy(t *testing.T) {
 		mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 			{Type: provider.ChunkText, Text: "ORIGINAL ANSWER"}, {Type: provider.ChunkDone},
 		}}
-		sess := NewSession("sys")
+		sess := sessionstore.NewSession("sys")
 		a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 		err := a.Run(context.Background(), "one")
 		if err == nil || !strings.Contains(err.Error(), "extension fake failed at provider.response") {
@@ -665,7 +666,7 @@ func TestProviderResponseFailurePolicy(t *testing.T) {
 		mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 			{Type: provider.ChunkText, Text: "ORIGINAL ANSWER"}, {Type: provider.ChunkDone},
 		}}
-		sess := NewSession("sys")
+		sess := sessionstore.NewSession("sys")
 		a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 		if err := a.Run(context.Background(), "one"); err != nil {
 			t.Fatalf("Run: %v", err)
@@ -688,7 +689,7 @@ func TestToolBeforeContinue(t *testing.T) {
 	rec := &recordingTool{name: "read_file", readOnly: true}
 	reg := tool.NewRegistry()
 	reg.Add(rec)
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 	if out.errMsg != "" || !strings.Contains(out.output, "read_file ok") {
 		t.Fatalf("outcome = %+v, want the tool to run", out)
@@ -712,7 +713,7 @@ func TestToolBeforeBlock(t *testing.T) {
 	rec := &recordingTool{name: "read_file", readOnly: true}
 	reg := tool.NewRegistry()
 	reg.Add(rec)
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 	if !out.blocked || out.output != "blocked: tool denied" {
 		t.Fatalf("outcome = %+v, want a blocked tool result with the reason", out)
@@ -733,7 +734,7 @@ func TestToolBeforeReplaceArgs(t *testing.T) {
 	rec := &recordingTool{name: "read_file", readOnly: true}
 	reg := tool.NewRegistry()
 	reg.Add(rec)
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/original"}`})
 	if out.errMsg != "" {
 		t.Fatalf("outcome = %+v, want success", out)
@@ -756,7 +757,7 @@ func TestToolBeforeReplaceName(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(orig)
 	reg.Add(substituted)
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 	if out.errMsg != "" || !strings.Contains(out.output, "grep ok") {
 		t.Fatalf("outcome = %+v, want the substituted tool to run", out)
@@ -787,7 +788,7 @@ func TestToolBeforeInvalidReplacements(t *testing.T) {
 			rec := &recordingTool{name: "read_file", readOnly: true}
 			reg := tool.NewRegistry()
 			reg.Add(rec)
-			a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+			a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 			out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 			if out.errMsg == "" || !strings.Contains(out.output, "violated the intercept contract") || !strings.Contains(out.output, tc.want) {
 				t.Fatalf("outcome = %+v, want a contract-violation error result containing %q", out, tc.want)
@@ -810,7 +811,7 @@ func TestToolBeforeInvalidReplacements(t *testing.T) {
 		rec := &recordingTool{name: "read_file", readOnly: true}
 		reg := tool.NewRegistry()
 		reg.Add(rec)
-		a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 		out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 		if out.errMsg == "" || !strings.Contains(out.output, "violated the intercept contract") {
 			t.Fatalf("outcome = %+v, want a dispatch violation error result", out)
@@ -831,7 +832,7 @@ func TestToolBeforeFailurePolicy(t *testing.T) {
 		rec := &recordingTool{name: "read_file", readOnly: true}
 		reg := tool.NewRegistry()
 		reg.Add(rec)
-		a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 		out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 		if out.errMsg == "" || !strings.Contains(out.output, "extension fake failed at tool.before") {
 			t.Fatalf("outcome = %+v, want the required failure as the tool result", out)
@@ -849,7 +850,7 @@ func TestToolBeforeFailurePolicy(t *testing.T) {
 		rec := &recordingTool{name: "read_file", readOnly: true}
 		reg := tool.NewRegistry()
 		reg.Add(rec)
-		a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 		out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 		if out.errMsg != "" || rec.execs != 1 {
 			t.Fatalf("outcome = %+v execs = %d, want the tool to run", out, rec.execs)
@@ -883,7 +884,7 @@ func TestPermissionDecisionExtensionAllowOverridesHostDeny(t *testing.T) {
 	gate := &stubGate{deny: map[string]bool{"edit_file": true}}
 	var events []event.Event
 	sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
-	a := New(nil, reg, NewSession(""), Options{Gate: gate, Extensions: d}, sink)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate, Extensions: d}, sink)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "edit_file", Arguments: `{"path":"/x"}`})
 	if out.errMsg != "" || rec.execs != 1 {
 		t.Fatalf("outcome = %+v execs = %d, want the full-trust override to execute", out, rec.execs)
@@ -913,7 +914,7 @@ func TestPermissionDecisionExtensionDenyOverridesHostAllow(t *testing.T) {
 	rec := &recordingTool{name: "edit_file", readOnly: false}
 	reg := tool.NewRegistry()
 	reg.Add(rec)
-	a := New(nil, reg, NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "edit_file", Arguments: `{"path":"/x"}`})
 	if !out.blocked || !strings.Contains(out.output, "denied by extension permission policy") {
 		t.Fatalf("outcome = %+v, want an extension denial", out)
@@ -930,7 +931,7 @@ func TestPermissionDecisionContinueKeepsHostDeny(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(rec)
 	gate := &stubGate{deny: map[string]bool{"edit_file": true}}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate, Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate, Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "edit_file", Arguments: `{"path":"/x"}`})
 	if !out.blocked || !strings.Contains(out.output, "denied by test policy") {
 		t.Fatalf("outcome = %+v, want the host denial to stand", out)
@@ -952,7 +953,7 @@ func TestPermissionDecisionBlockAndFailure(t *testing.T) {
 		rec := &recordingTool{name: "edit_file", readOnly: false}
 		reg := tool.NewRegistry()
 		reg.Add(rec)
-		a := New(nil, reg, NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
 		out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "edit_file", Arguments: `{"path":"/x"}`})
 		if !out.blocked || !strings.Contains(out.output, "policy says no") {
 			t.Fatalf("outcome = %+v, want the block reason", out)
@@ -966,7 +967,7 @@ func TestPermissionDecisionBlockAndFailure(t *testing.T) {
 		rec := &recordingTool{name: "edit_file", readOnly: false}
 		reg := tool.NewRegistry()
 		reg.Add(rec)
-		a := New(nil, reg, NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
 		out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "edit_file", Arguments: `{"path":"/x"}`})
 		if !out.blocked || !strings.Contains(out.output, "extension fake failed at permission.decision") {
 			t.Fatalf("outcome = %+v, want the required failure", out)
@@ -984,7 +985,7 @@ func TestPermissionDecisionBlockAndFailure(t *testing.T) {
 		rec := &recordingTool{name: "edit_file", readOnly: false}
 		reg := tool.NewRegistry()
 		reg.Add(rec)
-		a := New(nil, reg, NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
 		out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "edit_file", Arguments: `{"path":"/x"}`})
 		if out.errMsg != "" || rec.execs != 1 {
 			t.Fatalf("outcome = %+v execs = %d, want the host allow to stand", out, rec.execs)
@@ -1010,7 +1011,7 @@ func TestToolAfterReplaceResult(t *testing.T) {
 	rec := &recordingTool{name: "read_file", readOnly: true}
 	reg := tool.NewRegistry()
 	reg.Add(rec)
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 	if out.errMsg != "" || !strings.Contains(out.output, "EXTENSION RESULT") {
 		t.Fatalf("outcome = %+v, want the replaced result", out)
@@ -1039,7 +1040,7 @@ func TestToolAfterReplaceClearsError(t *testing.T) {
 	d := newExtDispatcher(client, true, nil, extension.PointToolAfter)
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true, err: errors.New("boom")})
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 	if out.errMsg != "" || !strings.Contains(out.output, "RECOVERED BY EXTENSION") {
 		t.Fatalf("outcome = %+v, want the failure converted to the replaced success", out)
@@ -1057,7 +1058,7 @@ func TestToolAfterBlock(t *testing.T) {
 	rec := &recordingTool{name: "read_file", readOnly: true}
 	reg := tool.NewRegistry()
 	reg.Add(rec)
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 	if out.errMsg == "" || !strings.Contains(out.output, "result withheld") {
 		t.Fatalf("outcome = %+v, want an error tool result with the reason", out)
@@ -1077,7 +1078,7 @@ func TestToolAfterFailurePolicy(t *testing.T) {
 		rec := &recordingTool{name: "read_file", readOnly: true}
 		reg := tool.NewRegistry()
 		reg.Add(rec)
-		a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 		out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 		if out.errMsg == "" || !strings.Contains(out.output, "extension fake failed at tool.after") {
 			t.Fatalf("outcome = %+v, want the required failure as the tool result", out)
@@ -1092,7 +1093,7 @@ func TestToolAfterFailurePolicy(t *testing.T) {
 		rec := &recordingTool{name: "read_file", readOnly: true}
 		reg := tool.NewRegistry()
 		reg.Add(rec)
-		a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+		a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 		out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
 		if out.errMsg != "" || !strings.Contains(out.output, "read_file ok") {
 			t.Fatalf("outcome = %+v, want the original result", out)
@@ -1114,7 +1115,7 @@ func newCompactionAgent(t *testing.T, d *dispatch.Dispatcher) (*mockProvider, *A
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "SUMMARY TEXT"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	big := strings.Repeat("a", 8000)
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "task"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: big})
@@ -1318,7 +1319,7 @@ func TestContextPrepareSlotOwnerConsulted(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1363,7 +1364,7 @@ func TestContextPrepareSlotOwnerFinalSayAfterChain(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 	}}
-	a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -1384,7 +1385,7 @@ func TestContextPrepareSlotOwnerFailureIsFatal(t *testing.T) {
 	d := newExtSlotDispatcher(client, false, nil, nil,
 		map[extension.Slot]string{extension.SlotContext: extTestPlugin})
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{{Type: provider.ChunkDone}}}
-	a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	err := a.Run(context.Background(), "hello")
 	if err == nil || !strings.Contains(err.Error(), "extension fake failed at context.prepare") {
 		t.Fatalf("Run err = %v, want the owner failure", err)
@@ -1410,7 +1411,7 @@ func TestProviderRequestSlotOwnerConsulted(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1456,7 +1457,7 @@ func TestProviderRequestSlotOwnerFinalSayAfterChain(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "answer"}, {Type: provider.ChunkDone},
 	}}
-	a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -1476,7 +1477,7 @@ func TestProviderRequestSlotOwnerFailureIsFatal(t *testing.T) {
 	d := newExtSlotDispatcher(client, false, nil, nil,
 		map[extension.Slot]string{extension.SlotProviderRequest: extTestPlugin})
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{{Type: provider.ChunkDone}}}
-	a := New(mp, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	err := a.Run(context.Background(), "hello")
 	if err == nil || !strings.Contains(err.Error(), "extension fake failed at provider.request") {
 		t.Fatalf("Run err = %v, want the owner failure", err)
@@ -1495,7 +1496,7 @@ func TestProviderResponseSlotOwnerConsulted(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "ORIGINAL"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1531,7 +1532,7 @@ func TestProviderResponseSlotOwnerFinalSayAfterChain(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "ORIGINAL"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	if err := a.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1554,7 +1555,7 @@ func TestProviderResponseSlotOwnerFailureIsFatal(t *testing.T) {
 	mp := &mockProvider{name: "p", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "ORIGINAL"}, {Type: provider.ChunkDone},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	a := New(mp, tool.NewRegistry(), sess, Options{Extensions: d}, event.Discard)
 	err := a.Run(context.Background(), "hello")
 	if err == nil || !strings.Contains(err.Error(), "extension fake failed at provider.response") {
@@ -1579,7 +1580,7 @@ func TestPermissionDecisionSlotOwnerVeto(t *testing.T) {
 	rec := &recordingTool{name: "edit_file", readOnly: false}
 	reg := tool.NewRegistry()
 	reg.Add(rec)
-	a := New(nil, reg, NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "edit_file", Arguments: `{"path":"/x"}`})
 	if !out.blocked || !strings.Contains(out.output, "owner policy says no") {
 		t.Fatalf("outcome = %+v, want the owner's veto", out)
@@ -1610,7 +1611,7 @@ func TestPermissionDecisionSlotOwnerFinalAfterChainAllow(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(rec)
 	gate := &stubGate{deny: map[string]bool{"edit_file": true}}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate, Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate, Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "edit_file", Arguments: `{"path":"/x"}`})
 	if calls != 2 {
 		t.Fatalf("owner consulted %d times, want 2 (chain, then strategy)", calls)
@@ -1632,7 +1633,7 @@ func TestPermissionDecisionSlotOwnerFailureIsFatal(t *testing.T) {
 	rec := &recordingTool{name: "edit_file", readOnly: false}
 	reg := tool.NewRegistry()
 	reg.Add(rec)
-	a := New(nil, reg, NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: &stubGate{}, Extensions: d}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "edit_file", Arguments: `{"path":"/x"}`})
 	if !out.blocked || !strings.Contains(out.output, "extension fake failed at permission.decision") {
 		t.Fatalf("outcome = %+v, want the owner failure", out)
@@ -1804,9 +1805,9 @@ func TestSlotUnownedKeepsFastPath(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "two"}, {Type: provider.ChunkDone}},
 	}
 	withExt := &mockProvider{name: "p", streams: streams}
-	a := New(withExt, tool.NewRegistry(), NewSession("sys"), Options{Extensions: d}, event.Discard)
+	a := New(withExt, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{Extensions: d}, event.Discard)
 	baseline := &mockProvider{name: "p", streams: streams}
-	b := New(baseline, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+	b := New(baseline, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	for _, input := range []string{"first", "second"} {
 		if err := a.Run(context.Background(), input); err != nil {
 			t.Fatalf("Run(%q): %v", input, err)
@@ -1839,7 +1840,7 @@ func TestToolBeforeSubstitutionStillFacesThePlanPhaseGate(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(reader)
 	reg.Add(writer)
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
@@ -1879,7 +1880,7 @@ func TestExtensionInjectedAskStillEndsTheRound(t *testing.T) {
 	reg.Add(&recordingTool{name: "read_file", readOnly: true})
 	reg.Add(fakeTool{name: "write_file", writesPaths: true, calls: &writes})
 
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	a.SetAsker(&recordingAsker{})
 
 	batch := a.executeBatch(context.Background(), &a.turn, []provider.ToolCall{
@@ -1923,7 +1924,7 @@ func TestExtensionCannotEscalateDelegationPastThePlanningPhase(t *testing.T) {
 			reg := tool.NewRegistry()
 			reg.Add(fakeTool{name: tc.from, readOnly: true})
 			reg.Add(fakeTool{name: tc.to, calls: &started})
-			a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+			a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 			a.SetPlanMode(true)
 
 			a.executeOne(context.Background(), &a.turn, provider.ToolCall{ID: "1", Name: tc.from, Arguments: `{"prompt":"do the work"}`})
@@ -1955,7 +1956,7 @@ func TestExtensionMayNarrowDelegationIntoOneThePhaseAdmits(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "task"})
 	reg.Add(fakeTool{name: "read_only_task", readOnly: true, calls: &started})
-	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Extensions: d}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{ID: "1", Name: "task", Arguments: `{"prompt":"look around"}`})

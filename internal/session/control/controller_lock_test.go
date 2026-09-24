@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -18,7 +19,7 @@ import (
 // turn, so a manual compact must be refused instead of rewriting the log
 // underneath it.
 func TestCompactRefusedWhileRunning(t *testing.T) {
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{
@@ -87,7 +88,7 @@ func TestRewindConcurrentWithHistoryReads(t *testing.T) {
 // another transcript mid-turn left the run loop writing into it — which is how
 // one conversation's output appeared in the one the user had switched to.
 func TestResumeRefusedWhileRunning(t *testing.T) {
-	live := agent.NewSession("sys")
+	live := sessionstore.NewSession("sys")
 	live.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	exec := agent.New(nil, nil, live, agent.Options{}, event.Discard)
 	c := New(Options{
@@ -102,7 +103,7 @@ func TestResumeRefusedWhileRunning(t *testing.T) {
 	c.gate.running = true
 	c.mu.Unlock()
 
-	other := agent.NewSession("sys")
+	other := sessionstore.NewSession("sys")
 	if err := c.Resume(other, "/tmp/b.jsonl"); !errors.Is(err, errTurnRunningRotation) {
 		t.Fatalf("Resume while running = %v, want errTurnRunningRotation", err)
 	}

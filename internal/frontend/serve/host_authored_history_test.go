@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 // The live stream drew one user line; so does the record.
 func TestApprovedPlanLeavesOneUserLineInHistory(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(testutil.NewMock("exec",
 		testutil.Turn{Text: "here is the plan"},
 		testutil.Turn{Text: "executed the approved plan"},

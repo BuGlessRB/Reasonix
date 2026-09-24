@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestRunSubAgentSalvagesCurrentAnswerBeforePairedGoalError(t *testing.T) {
 			{Type: provider.ChunkDone},
 		},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, sess,
 		"add explanations to the question bank", Options{DeliveryProfile: true, SubagentDepth: 1}, event.Discard)
 	if err != nil {
@@ -141,7 +142,7 @@ func TestCurrentFinalAssistantAnswerRejectsNonCurrentToolTails(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			sess := NewSession("")
+			sess := sessionstore.NewSession("")
 			for _, msg := range tc.msgs {
 				sess.Add(msg)
 			}
@@ -175,7 +176,7 @@ func TestRunSubAgentReadinessSalvageDoesNotReuseStaleToolText(t *testing.T) {
 			{Type: provider.ChunkDone},
 		},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	answer, err := RunSubAgentWithSession(
 		context.Background(), deepseekThinkingProvider{prov}, reg, sess,
 		"add explanations to the question bank",

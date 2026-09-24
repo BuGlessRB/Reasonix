@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"sync/atomic"
 	"testing"
 
@@ -64,7 +65,7 @@ func TestGoalTurnRunsPastTheOldRoundCeiling(t *testing.T) {
 	prov := &steadyWorkProvider{max: 24}
 	reg := tool.NewRegistry()
 	reg.Add(workingGoalTool{name: "apply_edit"})
-	exec := agent.New(prov, reg, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(prov, reg, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c, done := newChatBudgetController(t, exec)
 
 	c.SetGoal("apply every pending edit")

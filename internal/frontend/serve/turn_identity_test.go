@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func (p *turnIdentityProvider) Stream(_ context.Context, _ provider.Request) (<-
 // place or carry the same words.
 func TestCheckpointAndHistoryNameTheSameMessage(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(&turnIdentityProvider{}, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	done := make(chan struct{}, 4)
 	ctrl := control.New(control.Options{

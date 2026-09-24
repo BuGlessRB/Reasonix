@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestManualCompactWithNothingToFoldIsAVerdictNotAnOverflow(t *testing.T) {
 	}
 	for name, msgs := range shapes {
 		t.Run(name, func(t *testing.T) {
-			a := New(&fakeProvider{reply: "unused"}, tool.NewRegistry(), &Session{Messages: msgs}, Options{
+			a := New(&fakeProvider{reply: "unused"}, tool.NewRegistry(), &sessionstore.Session{Messages: msgs}, Options{
 				ContextWindow: 200_000, CompactRatio: 0.8, RecentKeep: 2,
 				SessionPath: filepath.Join(testenv.TempDir(t), "session.jsonl"),
 				WorkspaceID: "ws", ModelRef: "p/m",

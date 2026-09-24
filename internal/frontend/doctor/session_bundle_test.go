@@ -7,13 +7,13 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -29,10 +29,10 @@ func TestWriteSessionBundleIncludesRecoveryChain(t *testing.T) {
 	recovery := filepath.Join(dir, "parent-session-recovery-deadbeef.jsonl")
 	writeFile(t, parent, `{"role":"user","content":"parent"}`+"\n")
 	writeFile(t, recovery, `{"role":"user","content":"recovery"}`+"\n")
-	if err := agent.SaveBranchMeta(parent, agent.BranchMeta{ID: "parent-session"}); err != nil {
+	if err := sessionstore.SaveBranchMeta(parent, sessionstore.BranchMeta{ID: "parent-session"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.SaveBranchMeta(recovery, agent.BranchMeta{
+	if err := sessionstore.SaveBranchMeta(recovery, sessionstore.BranchMeta{
 		ID:             "parent-session-recovery-deadbeef",
 		ParentID:       "parent-session",
 		Recovered:      true,

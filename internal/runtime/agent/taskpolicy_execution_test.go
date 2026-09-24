@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -18,7 +19,7 @@ import (
 func TestTaskPolicyLeavesExploreSubagentAlone(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "explore", readOnly: true})
-	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{}, event.Discard)
+	a := New(&scriptedProvider{name: "p"}, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{})
 	a.turn.policySet = true
 
@@ -36,7 +37,7 @@ func TestTaskPolicyLeavesExploreSubagentAlone(t *testing.T) {
 func TestTaskPolicyPlanSignalDoesNotEnforceThePhase(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
-	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{}, event.Discard)
+	a := New(&scriptedProvider{name: "p"}, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	a.turn.policySet = true
 	call := provider.ToolCall{Name: "write_file", Arguments: `{"path":"notes.txt","content":"x"}`}
 

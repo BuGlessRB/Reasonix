@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"unicode"
 
@@ -68,7 +69,7 @@ const (
 // sidecar recording exists (e.g. sessions created before the display-recording
 // feature, or synthetic user messages injected by the controller).
 func StripComposePrefixes(content string) string {
-	s := agent.StripTransientUserBlocks(content)
+	s := sessionstore.StripTransientUserBlocks(content)
 	s = stripComposeMarker(s, PlanModeMarker)
 	s = stripComposeMarker(s, PlannerRouteMarker)
 	for _, superseded := range planmode.Superseded {
@@ -88,13 +89,13 @@ func stripComposeMarker(s, marker string) string {
 // approval, stream recovery, readiness retry, etc.). These should not be shown
 // in the chat UI.
 func IsSyntheticUserMessage(content string) bool {
-	if trimmed := strings.TrimSpace(agent.StripTransientUserBlocks(content)); trimmed == planApprovedMessage {
+	if trimmed := strings.TrimSpace(sessionstore.StripTransientUserBlocks(content)); trimmed == planApprovedMessage {
 		return true
 	}
-	// The prefix list lives in internal/runtime/agent (agent.SyntheticUserPrefixes) so
+	// The prefix list lives in internal/runtime/agent (sessionstore.SyntheticUserPrefixes) so
 	// preview/title/turn-count derivations there share the exact same filter
 	// (#3653).
-	return agent.IsSyntheticUserText(content)
+	return sessionstore.IsSyntheticUserText(content)
 }
 
 // Compose applies the plan-mode marker to a turn's text when plan mode is on,

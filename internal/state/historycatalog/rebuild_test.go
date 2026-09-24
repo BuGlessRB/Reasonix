@@ -3,11 +3,11 @@ package historycatalog
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 func TestReconcileRootDetectsMetaOnlyChange(t *testing.T) {
@@ -16,7 +16,7 @@ func TestReconcileRootDetectsMetaOnlyChange(t *testing.T) {
 	root := testenv.TempDir(t)
 	path := filepath.Join(root, "meta.jsonl")
 	saveMessages(t, path, provider.Message{Role: provider.RoleUser, Content: "stable content"})
-	if err := agent.SaveBranchMeta(path, agent.BranchMeta{CustomTitle: "old"}); err != nil {
+	if err := sessionstore.SaveBranchMeta(path, sessionstore.BranchMeta{CustomTitle: "old"}); err != nil {
 		t.Fatal(err)
 	}
 	catalog, err := Open(ctx, Options{Path: filepath.Join(testenv.TempDir(t), "history.sqlite")})
@@ -28,7 +28,7 @@ func TestReconcileRootDetectsMetaOnlyChange(t *testing.T) {
 	if err := catalog.ReconcileRoot(ctx, target); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.SaveBranchMeta(path, agent.BranchMeta{CustomTitle: "replacement title with a different size"}); err != nil {
+	if err := sessionstore.SaveBranchMeta(path, sessionstore.BranchMeta{CustomTitle: "replacement title with a different size"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := catalog.ReconcileRoot(ctx, target); err != nil {

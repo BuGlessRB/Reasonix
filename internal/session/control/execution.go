@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/runtime/agent"
@@ -11,7 +12,7 @@ import (
 // beginTurn marks the turn and hands back a context carrying its identity, so
 // every path that starts one gives its tools the same durable turn identity —
 // the only thing a delegation opened mid-turn can be recorded against.
-func (c *Controller) beginTurn(ctx context.Context, startMessageIndex int, preserveUser bool) (context.Context, agent.InFlightTurnMeta) {
+func (c *Controller) beginTurn(ctx context.Context, startMessageIndex int, preserveUser bool) (context.Context, sessionstore.InFlightTurnMeta) {
 	marker := c.markInFlightTurn(startMessageIndex, preserveUser)
 	return agent.WithTurnIdentity(ctx, marker.ID), marker
 }

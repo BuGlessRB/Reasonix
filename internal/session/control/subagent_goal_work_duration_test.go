@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 )
 
 func TestSubagentSkillGoalRecordsWorkDuration(t *testing.T) {
-	sess := agent.NewSession("")
+	sess := sessionstore.NewSession("")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 8)
 	c := New(Options{
@@ -56,7 +57,7 @@ func TestSubagentSkillGoalRecordsWorkDuration(t *testing.T) {
 }
 
 func TestSubagentSkillGoalRejectsStaleWorkDuration(t *testing.T) {
-	sess := agent.NewSession("")
+	sess := sessionstore.NewSession("")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 8)
 	started := make(chan struct{})

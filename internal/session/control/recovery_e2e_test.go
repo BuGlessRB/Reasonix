@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -36,7 +37,7 @@ func TestRecoveryCheckpointScriptedE2E(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}},
 	}}
 
-	sess := agent.NewSession("You are a test agent.")
+	sess := sessionstore.NewSession("You are a test agent.")
 	ag := agent.New(prov, reg, sess, agent.Options{MaxSteps: 10}, event.Discard)
 	// Leave SessionPath empty so autosave does not hold file locks on dir.
 	c := New(Options{

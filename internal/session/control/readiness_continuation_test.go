@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"regexp"
 	"strings"
 	"testing"
@@ -28,7 +29,7 @@ func readinessDeliveryController(t *testing.T, prov provider.Provider) (*Control
 	}
 	reg.Add(minimalFakeTool{name: "write_file"})
 	reg.Add(minimalFakeTool{name: "bash"})
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{DeliveryProfile: true}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{DeliveryProfile: true}, event.Discard)
 	done := make(chan event.Event, 4)
 	c := New(Options{
 		Runner: ag, Executor: ag,

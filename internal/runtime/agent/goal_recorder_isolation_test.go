@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ func TestSubAgentDoesNotInheritParentGoalRecorder(t *testing.T) {
 	}}
 	recorder := &childIsolationGoalRecorder{}
 	ctx := tool.WithGoalTurnRecorder(context.Background(), recorder)
-	sess := NewSession("child system")
+	sess := sessionstore.NewSession("child system")
 	answer, err := RunSubAgentWithSession(ctx, prov, reg, sess, "inspect the task", Options{}, event.Discard)
 	if err != nil {
 		t.Fatalf("Goal child: %v", err)
@@ -75,8 +76,8 @@ func TestCoordinatorPlannerCannotReportExecutorGoalDisposition(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "1. inspect the implementation\n2. apply and verify the fix"}, {Type: provider.ChunkDone}},
 	}}
 	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{{Type: provider.ChunkText, Text: "Implemented and verified."}, {Type: provider.ChunkDone}}}
-	plannerSess := NewSession("planner-sys")
-	executor := New(exec, reg, NewSession("exec-sys"), Options{}, event.Discard)
+	plannerSess := sessionstore.NewSession("planner-sys")
+	executor := New(exec, reg, sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
 	customPlannerReg := tool.NewRegistry()
 	customPlannerReg.Add(goalTool)
 	coord := NewCoordinator(planner, plannerSess, nil, customPlannerReg, Options{}, executor, 0, event.Discard, nil)

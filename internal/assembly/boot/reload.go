@@ -3,11 +3,11 @@ package boot
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/extension"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -21,7 +21,7 @@ import (
 // Migrated state (all via public control APIs, mirroring the desktop settings
 // rebuild and the CLI/ACP model switch):
 //   - conversation history: old.History() resumes on the SAME session file
-//     (agent.ContinueSessionPath), with the freshly composed system message
+//     (sessionstore.ContinueSessionPath), with the freshly composed system message
 //     spliced over the outgoing one so the next turn speaks the rebuilt
 //     profile contract;
 //   - Goal and recovery sidecars: restored by the Resume inside AdoptHistory
@@ -171,7 +171,7 @@ func CaptureRuntimeMigration(old control.SessionAPI) RuntimeMigration {
 // the error return is the fail-atomic seam for ones that gain failure modes.
 func ApplyRuntimeMigration(ctrl, old *control.Controller, m RuntimeMigration) error {
 	carried := spliceFreshSystemPrompt(m.carried, ctrl.History())
-	path := agent.ContinueSessionPath(m.prevPath, ctrl.SessionDir(), ctrl.Label())
+	path := sessionstore.ContinueSessionPath(m.prevPath, ctrl.SessionDir(), ctrl.Label())
 	ctrl.AdoptHistory(carried, path)
 
 	// Re-apply session axes a rebuild must not reset.

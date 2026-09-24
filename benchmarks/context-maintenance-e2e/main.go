@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"time"
 
@@ -103,7 +104,7 @@ func fatHistory(n int) []provider.Message {
 	)
 }
 
-func newAgent(p provider.Provider, sess *agent.Session, path string, sink event.Sink) *agent.Agent {
+func newAgent(p provider.Provider, sess *sessionstore.Session, path string, sink event.Sink) *agent.Agent {
 	return agent.New(p, tool.NewRegistry(), sess, agent.Options{
 		ContextWindow: windowTokens,
 		CompactRatio:  compactRatio,
@@ -144,7 +145,7 @@ func seed(dir string, offline bool, cap *costCap) {
 	}
 	path := filepath.Join(dir, "session.jsonl")
 	// ~80×32KB tool results: well under 85% of 1M for a cold estimate.
-	sess := &agent.Session{Messages: fatHistory(80)}
+	sess := &sessionstore.Session{Messages: fatHistory(80)}
 	sink := &recordSink{}
 	var p provider.Provider
 	if !offline {
@@ -195,7 +196,7 @@ func seed(dir string, offline bool, cap *costCap) {
 func resume(dir string, offline bool) {
 	path := filepath.Join(dir, "session.jsonl")
 	m := readMeta(dir)
-	sess, err := agent.LoadSession(path)
+	sess, err := sessionstore.LoadSession(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -235,7 +236,7 @@ func cont(dir string, offline bool, cap *costCap) {
 	}
 	path := filepath.Join(dir, "session.jsonl")
 	m := readMeta(dir)
-	sess, err := agent.LoadSession(path)
+	sess, err := sessionstore.LoadSession(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

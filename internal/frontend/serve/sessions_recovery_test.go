@@ -3,12 +3,12 @@ package serve
 import (
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -18,7 +18,7 @@ import (
 // in it: the shorter fork cannot, so it gets a lane of its own.
 func recoveryFork(t *testing.T, root string, messages ...string) string {
 	t.Helper()
-	fork := agent.NewSession("sys")
+	fork := sessionstore.NewSession("sys")
 	for i, message := range messages {
 		role := provider.RoleUser
 		if i%2 == 1 {
@@ -26,7 +26,7 @@ func recoveryFork(t *testing.T, root string, messages ...string) string {
 		}
 		fork.Add(provider.Message{Role: role, Content: message})
 	}
-	info, err := fork.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: root})
+	info, err := fork.SaveConflictRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,9 +70,9 @@ func TestSweepRecoveryBranchesKeepsContinuedFork(t *testing.T) {
 	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	saveVisibilitySession(t, root, "今日热点", "好的")
 
-	continued := agent.NewSession("sys")
+	continued := sessionstore.NewSession("sys")
 	continued.Add(provider.Message{Role: provider.RoleUser, Content: "今日热点"})
-	info, err := continued.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: root})
+	info, err := continued.SaveConflictRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: root})
 	if err != nil {
 		t.Fatal(err)
 	}

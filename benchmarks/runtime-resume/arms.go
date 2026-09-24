@@ -5,11 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/memory"
 )
 
@@ -176,7 +176,7 @@ func swapSystemPrefix(root armRoot, _ Observation) error {
 // branch uses. This is the control arm: the digest's material changed, so the
 // projection must not be reused.
 func mutateCoveredRow(_ armRoot, before Observation) error {
-	session, err := agent.LoadSession(before.SessionPath)
+	session, err := sessionstore.LoadSession(before.SessionPath)
 	if err != nil {
 		return err
 	}
@@ -222,7 +222,7 @@ func truncateTail(_ armRoot, before Observation) error {
 // rewriteSession applies a transcript rewrite through the save a rewind or a
 // recovery branch uses, refusing an arm with no live tail to act on.
 func rewriteSession(before Observation, edit func([]provider.Message, int) ([]provider.Message, error)) error {
-	session, err := agent.LoadSession(before.SessionPath)
+	session, err := sessionstore.LoadSession(before.SessionPath)
 	if err != nil {
 		return err
 	}

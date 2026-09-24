@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"time"
 
@@ -120,7 +121,7 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 
 	input := c.imageRoutingPrefix(images) + c.compose(task, raw, true)
 	startMessages := c.messageCount()
-	var marker agent.InFlightTurnMeta
+	var marker sessionstore.InFlightTurnMeta
 	defer func() { c.finishInFlightTurn(startMessages, marker) }()
 	defer c.recordDisplayForNewUser(startMessages, display)
 	// The checkpoint prompt labels the turn in the rewind picker (and is
@@ -217,7 +218,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 		return nil
 	}
 	startMessages := c.messageCount()
-	var marker agent.InFlightTurnMeta
+	var marker sessionstore.InFlightTurnMeta
 	defer func() { c.finishInFlightTurn(startMessages, marker) }()
 	defer c.recordDisplayForNewUser(startMessages, turn.display)
 	if turn.editedOriginal != "" {
@@ -318,12 +319,12 @@ func (c *Controller) announceAuthoredTurn(ctx context.Context, raw string, msgIn
 	// only start the turn gets, so a reply attributed from anywhere else — the
 	// composer's current setting — is attributed from something that moves.
 	started := event.Event{Kind: event.TurnStarted, ModelRef: c.modelRef}
-	class := agent.ClassifyTurn(
+	class := sessionstore.ClassifyTurn(
 		provider.Message{Role: provider.RoleUser, RawContent: raw},
 		agent.PriorAuthoredTurn(c.History()),
 	)
 	if class.StartsTurn {
-		boundary.Authored = &agent.AuthoredTurnIdentity{AuthoredTurn: class.AuthoredTurn, MsgIndex: msgIndex, Raw: raw}
+		boundary.Authored = &sessionstore.AuthoredTurnIdentity{AuthoredTurn: class.AuthoredTurn, MsgIndex: msgIndex, Raw: raw}
 		authored, index := class.AuthoredTurn, msgIndex
 		started.AuthoredTurn, started.MsgIndex = &authored, &index
 	}
@@ -334,7 +335,7 @@ func (c *Controller) announceAuthoredTurn(ctx context.Context, raw string, msgIn
 // openTurnBoundary marks the turn in flight and opens its boundary. One call
 // because they are one decision: the index the marker records is the index the
 // announcement names.
-func (c *Controller) openTurnBoundary(ctx context.Context, turn orchestratedTurn, msgIndex int) (context.Context, agent.InFlightTurnMeta) {
+func (c *Controller) openTurnBoundary(ctx context.Context, turn orchestratedTurn, msgIndex int) (context.Context, sessionstore.InFlightTurnMeta) {
 	ctx, marker := c.beginTurn(ctx, msgIndex, !turn.synthetic && !IsSyntheticUserMessage(turn.raw))
 	if turn.synthetic {
 		return c.continueAnnouncedTurn(ctx), marker

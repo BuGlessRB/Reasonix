@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -44,11 +45,11 @@ func TestListForParentKeepsOwnedChildrenAndDropsOthers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListForParent: %v", err)
 	}
-	refs := map[string]SubagentStatus{}
+	refs := map[string]sessionstore.SubagentStatus{}
 	for _, a := range got {
 		refs[a.Ref] = a.Meta.Status
 	}
-	if refs[mine] != SubagentCompleted || refs[failed] != SubagentFailed {
+	if refs[mine] != sessionstore.SubagentCompleted || refs[failed] != sessionstore.SubagentFailed {
 		t.Errorf("own children missing or misreported: %+v", refs)
 	}
 	if _, listed := refs[stranger]; listed {
@@ -84,10 +85,10 @@ func TestListForParentReturnsNewestFirst(t *testing.T) {
 
 func TestSubagentListingReportsStateAndRetrievalRoute(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0).UTC()
-	artifacts := []SubagentArtifact{
-		{Ref: "sa_one", Meta: SubagentMeta{Status: SubagentCompleted, Name: "research", ParentToolCallID: "call_a/fleet-1", UpdatedAt: now}},
-		{Ref: "sa_two", Meta: SubagentMeta{Status: SubagentInterrupted, Name: "task", ParentToolCallID: "call_a/fleet-2", UpdatedAt: now,
-			Capsule: ContextCapsule{Inherited: InheritedContext{UpstreamFrom: []string{"research"}}}}},
+	artifacts := []sessionstore.SubagentArtifact{
+		{Ref: "sa_one", Meta: sessionstore.SubagentMeta{Status: sessionstore.SubagentCompleted, Name: "research", ParentToolCallID: "call_a/fleet-1", UpdatedAt: now}},
+		{Ref: "sa_two", Meta: sessionstore.SubagentMeta{Status: sessionstore.SubagentInterrupted, Name: "task", ParentToolCallID: "call_a/fleet-2", UpdatedAt: now,
+			Capsule: sessionstore.ContextCapsule{Inherited: sessionstore.InheritedContext{UpstreamFrom: []string{"research"}}}}},
 	}
 
 	all := formatSubagentListing(artifacts, "")
@@ -105,11 +106,11 @@ func TestSubagentListingReportsStateAndRetrievalRoute(t *testing.T) {
 		t.Errorf("upstream marker must name exactly the fed child:\n%s", all)
 	}
 
-	completed := formatSubagentListing(artifacts, SubagentCompleted)
+	completed := formatSubagentListing(artifacts, sessionstore.SubagentCompleted)
 	if strings.Contains(completed, "sa_two") {
 		t.Errorf("status filter leaked a non-matching child:\n%s", completed)
 	}
-	if empty := formatSubagentListing(artifacts, SubagentRunning); !strings.Contains(empty, "no persisted sub-agents") {
+	if empty := formatSubagentListing(artifacts, sessionstore.SubagentRunning); !strings.Contains(empty, "no persisted sub-agents") {
 		t.Errorf("an empty filter result must say so plainly: %s", empty)
 	}
 }

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -85,7 +86,7 @@ func TestFinalReadinessAllowsIncompleteTodosInPlanMode(t *testing.T) {
 func TestFinalReadinessIgnoresLoopGuardQuotedInToolOutput(t *testing.T) {
 	todo := evidence.Receipt{ToolName: "todo_write", Success: true, Todos: []evidence.TodoItem{{Content: "edit", Status: "in_progress"}}}
 	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"a.go"}}
-	sess := NewSession("")
+	sess := sessionstore.NewSession("")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "edit"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "b1", Name: "bash"}}})
 	sess.Add(provider.Message{Role: provider.RoleTool, ToolCallID: "b1", Name: "bash", Content: "agent.go:2082: \"[loop guard] %s has now %s %d times\""})

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -27,7 +28,7 @@ func (p *userInputCaptureProvider) Stream(_ context.Context, req provider.Reques
 
 func TestRunPersistsRawUserInputSeparatelyFromProviderContext(t *testing.T) {
 	prov := &userInputCaptureProvider{}
-	sess := NewSession("system")
+	sess := sessionstore.NewSession("system")
 	a := New(prov, tool.NewRegistry(), sess, Options{}, event.Discard)
 
 	const raw = "fix the bug"
@@ -86,7 +87,7 @@ func mutatingTurn() (*scriptedProvider, *tool.Registry) {
 
 func TestTransientCapabilityRouteCannotTurnConversationIntoDeliveryReceipt(t *testing.T) {
 	prov := &userInputCaptureProvider{}
-	a := New(prov, tool.NewRegistry(), NewSession("system"), Options{}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession("system"), Options{}, event.Discard)
 
 	const raw = "请解释这个项目目前的进度"
 	const composed = `<capability-route version="1">
@@ -119,7 +120,7 @@ Policy: prefer means use the skill for the required change
 
 func TestCompletionContractUsesGoalScopeTaskText(t *testing.T) {
 	prov, reg := mutatingTurn()
-	a := New(prov, reg, NewSession("system"), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("system"), Options{}, event.Discard)
 	ctx := WithRawUserInput(context.Background(), "Continue working.")
 	ctx = WithDeliveryExecutionScope(ctx, DeliveryExecutionScope{ID: "goal-1", TaskText: "fix the parser"})
 
@@ -131,7 +132,7 @@ func TestCompletionContractUsesGoalScopeTaskText(t *testing.T) {
 
 func TestCompletionContractUsesPristineSubagentTaskText(t *testing.T) {
 	prov, reg := mutatingTurn()
-	a := New(prov, reg, NewSession("system"), Options{
+	a := New(prov, reg, sessionstore.NewSession("system"), Options{
 		ClassifierTaskText: "fix the parser",
 	}, event.Discard)
 	const wrapped = "<workspace-context>private host framing</workspace-context>\n\nfix the parser"

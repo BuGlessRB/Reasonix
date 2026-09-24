@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -21,7 +22,7 @@ func TestRunRetriesReasoningOnlyFinalAnswer(t *testing.T) {
 			{Type: provider.ChunkDone},
 		},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "answer me"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -48,7 +49,7 @@ func TestRunPrefixesReasoningLanguageOnSyntheticRetry(t *testing.T) {
 			{Type: provider.ChunkDone},
 		},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession(""), Options{ReasoningLanguage: "zh"}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession(""), Options{ReasoningLanguage: "zh"}, event.Discard)
 
 	if err := a.Run(context.Background(), "answer me"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -73,7 +74,7 @@ func TestRunStopsAfterRepeatedEmptyFinalAnswers(t *testing.T) {
 		{{Type: provider.ChunkReasoning, Text: "thinking 2"}, {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkReasoning, Text: "thinking 3"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 
 	err := a.Run(context.Background(), "answer me")
 	if err == nil {
@@ -87,7 +88,7 @@ func TestRunStopsAfterRepeatedEmptyFinalAnswers(t *testing.T) {
 	}
 }
 
-func lastAssistantContent(s *Session) string {
+func lastAssistantContent(s *sessionstore.Session) string {
 	var out string
 	for _, m := range s.Messages {
 		if m.Role == provider.RoleAssistant {
@@ -117,7 +118,7 @@ func TestRunAcceptsReasoningOnlyFinalWhenModelStopped(t *testing.T) {
 			{Type: provider.ChunkDone},
 		},
 	}}
-	a := New(deepseekThinkingProvider{prov}, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(deepseekThinkingProvider{prov}, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "answer me"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -151,7 +152,7 @@ func TestRunRetriesReasoningOnlyStopWithoutDeepSeekPolicy(t *testing.T) {
 			{Type: provider.ChunkDone},
 		},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "answer me"); err != nil {
 		t.Fatalf("Run: %v", err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ func TestSwitchModelKeepsAskInteractive(t *testing.T) {
 
 	bc := NewBroadcaster()
 	old := control.New(control.Options{
-		Executor:   agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard),
+		Executor:   agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard),
 		SessionDir: dir,
 		Label:      "old",
 		Sink:       bc,
@@ -58,7 +59,7 @@ func TestSwitchModelKeepsAskInteractive(t *testing.T) {
 	s.buildController = func(_ context.Context, _ string) (*control.Controller, error) {
 		reg := tool.NewRegistry()
 		reg.Add(agent.NewAskTool())
-		exec := agent.New(&switchAskProvider{}, reg, agent.NewSession("sys"), agent.Options{}, event.Discard)
+		exec := agent.New(&switchAskProvider{}, reg, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 		return control.New(control.Options{
 			Executor:   exec,
 			SessionDir: dir,
@@ -125,7 +126,7 @@ func TestSwitchModelStaysOnOneSessionThroughASnapshotConflict(t *testing.T) {
 	dir := testenv.TempDir(t)
 	originalPath := filepath.Join(dir, "switch-conflict.jsonl")
 
-	disk := agent.NewSession("sys prompt")
+	disk := sessionstore.NewSession("sys prompt")
 	disk.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	disk.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	disk.Add(provider.Message{Role: provider.RoleUser, Content: "disk second"})
@@ -133,7 +134,7 @@ func TestSwitchModelStaysOnOneSessionThroughASnapshotConflict(t *testing.T) {
 		t.Fatalf("save disk session: %v", err)
 	}
 
-	stale := agent.NewSession("sys prompt")
+	stale := sessionstore.NewSession("sys prompt")
 	stale.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	stale.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	stale.Add(provider.Message{Role: provider.RoleUser, Content: "local second"})
@@ -157,7 +158,7 @@ func TestSwitchModelStaysOnOneSessionThroughASnapshotConflict(t *testing.T) {
 	var built *control.Controller
 	s.buildController = func(_ context.Context, _ string) (*control.Controller, error) {
 		built = control.New(control.Options{
-			Executor:   agent.New(nil, nil, agent.NewSession("sys prompt"), agent.Options{}, event.Discard),
+			Executor:   agent.New(nil, nil, sessionstore.NewSession("sys prompt"), agent.Options{}, event.Discard),
 			SessionDir: dir,
 			Label:      "new",
 			Sink:       bc,
@@ -175,7 +176,7 @@ func TestSwitchModelStaysOnOneSessionThroughASnapshotConflict(t *testing.T) {
 	if s.ctl() != built {
 		t.Fatal("switchModel did not publish the rebuilt controller")
 	}
-	if got, want := leases.HeldPath(), agent.CanonicalSessionPath(originalPath); got != want {
+	if got, want := leases.HeldPath(), sessionstore.CanonicalSessionPath(originalPath); got != want {
 		t.Fatalf("lease after the switch = %q, want %q", got, want)
 	}
 	assertNoRecoveryBranch(t, dir, "after the switch")
@@ -189,7 +190,7 @@ func TestSwitchModelStaysOnOneSessionThroughASnapshotConflict(t *testing.T) {
 	}
 
 	// And a later divergence does the same thing: still one session.
-	diskAgain, err := agent.LoadSession(originalPath)
+	diskAgain, err := sessionstore.LoadSession(originalPath)
 	if err != nil {
 		t.Fatalf("load transcript for external change: %v", err)
 	}
@@ -230,7 +231,7 @@ func TestSwitchModelRefreshesLeadingSystemPrompt(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	dir := testenv.TempDir(t)
 
-	oldSession := agent.NewSession("old system prompt")
+	oldSession := sessionstore.NewSession("old system prompt")
 	oldSession.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	oldSession.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 
@@ -244,7 +245,7 @@ func TestSwitchModelRefreshesLeadingSystemPrompt(t *testing.T) {
 	s := &Server{ctrl: old, bc: bc}
 	s.buildController = func(_ context.Context, _ string) (*control.Controller, error) {
 		return control.New(control.Options{
-			Executor:   agent.New(nil, nil, agent.NewSession("new system prompt"), agent.Options{}, event.Discard),
+			Executor:   agent.New(nil, nil, sessionstore.NewSession("new system prompt"), agent.Options{}, event.Discard),
 			SessionDir: dir,
 			Label:      "new",
 			Sink:       bc,
@@ -277,7 +278,7 @@ func TestSwitchModelRestoresSessionAuthorizations(t *testing.T) {
 
 	bc := NewBroadcaster()
 	old := control.New(control.Options{
-		Executor:   agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard),
+		Executor:   agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard),
 		SessionDir: dir,
 		Label:      "old",
 		Sink:       bc,
@@ -289,7 +290,7 @@ func TestSwitchModelRestoresSessionAuthorizations(t *testing.T) {
 	s := &Server{ctrl: old, bc: bc}
 	s.buildController = func(_ context.Context, _ string) (*control.Controller, error) {
 		return control.New(control.Options{
-			Executor:   agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard),
+			Executor:   agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard),
 			SessionDir: dir,
 			Label:      "new",
 			Sink:       bc,
@@ -320,7 +321,7 @@ func TestSwitchModelPersistsRefreshedSystemPromptToDisk(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "switch-persist.jsonl")
 
-	oldSession := agent.NewSession("old system prompt")
+	oldSession := sessionstore.NewSession("old system prompt")
 	oldSession.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	oldSession.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 	if err := oldSession.Save(path); err != nil {
@@ -338,7 +339,7 @@ func TestSwitchModelPersistsRefreshedSystemPromptToDisk(t *testing.T) {
 	s := &Server{ctrl: old, bc: bc}
 	s.buildController = func(_ context.Context, _ string) (*control.Controller, error) {
 		return control.New(control.Options{
-			Executor:   agent.New(nil, nil, agent.NewSession("new system prompt"), agent.Options{}, event.Discard),
+			Executor:   agent.New(nil, nil, sessionstore.NewSession("new system prompt"), agent.Options{}, event.Discard),
 			SessionDir: dir,
 			Label:      "new",
 			Sink:       bc,
@@ -349,7 +350,7 @@ func TestSwitchModelPersistsRefreshedSystemPromptToDisk(t *testing.T) {
 		t.Fatalf("switchModel: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(s.ctl().SessionPath())
+	loaded, err := sessionstore.LoadSession(s.ctl().SessionPath())
 	if err != nil {
 		t.Fatalf("load transcript after switch: %v", err)
 	}
@@ -369,7 +370,7 @@ func TestSwitchModelSnapshotFailureKeepsOldController(t *testing.T) {
 		t.Fatalf("write invalid session dir: %v", err)
 	}
 
-	oldSession := agent.NewSession("old system prompt")
+	oldSession := sessionstore.NewSession("old system prompt")
 	oldSession.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	bc := NewBroadcaster()
 	old := control.New(control.Options{
@@ -381,7 +382,7 @@ func TestSwitchModelSnapshotFailureKeepsOldController(t *testing.T) {
 	s := &Server{ctrl: old, bc: bc}
 	s.buildController = func(_ context.Context, _ string) (*control.Controller, error) {
 		return control.New(control.Options{
-			Executor:   agent.New(nil, nil, agent.NewSession("new system prompt"), agent.Options{}, event.Discard),
+			Executor:   agent.New(nil, nil, sessionstore.NewSession("new system prompt"), agent.Options{}, event.Discard),
 			SessionDir: invalidSessionDir,
 			Label:      "new",
 			Sink:       bc,

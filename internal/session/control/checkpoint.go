@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,7 +14,6 @@ import (
 	"reasonix/internal/base/diff"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/checkpoint"
 	"reasonix/internal/state/store"
 )
@@ -88,7 +88,7 @@ func (m *checkpointManager) beginWithObserver(input string, msgIndex int, obs *c
 }
 
 type guardedTurnCheckpoint struct {
-	session      *agent.Session
+	session      *sessionstore.Session
 	store        *checkpoint.Store
 	turn         int
 	messageIndex int
@@ -162,7 +162,7 @@ func (c *Controller) validatedCheckpointTurn(completion *guardedTurnCompletion) 
 	}
 	message := messages[candidate.messageIndex]
 	if message.Role != provider.RoleUser || message.LocalOnly ||
-		!agent.IsUserAuthoredTurn(agent.UserMessageText(message)) ||
+		!sessionstore.IsUserAuthoredTurn(sessionstore.UserMessageText(message)) ||
 		(message.CreatedAt > 0 && candidate.openedAt > 0 && message.CreatedAt < candidate.openedAt) {
 		return nil
 	}

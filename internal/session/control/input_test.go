@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"runtime"
 	"strings"
 	"testing"
@@ -85,7 +86,7 @@ func TestSkillsReflectStoreChangesAfterControllerBuild(t *testing.T) {
 func TestSubmitSlashSubagentRunsIsolatedAndPersistsDistilledAnswer(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	sess := agent.NewSession("parent system")
+	sess := sessionstore.NewSession("parent system")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 16)
 	mainRunner := &fakeTurnRunner{}
@@ -135,7 +136,7 @@ func TestSubmitSlashSubagentRunsIsolatedAndPersistsDistilledAnswer(t *testing.T)
 	if len(mainRunner.inputs) != 0 {
 		t.Fatalf("main runner must not receive a runAs=subagent slash turn: %q", mainRunner.inputs)
 	}
-	if gotParent != agent.BranchID(path) || !strings.HasPrefix(gotCallID, "slash-skill-") || gotPlanMode || !gotHostInitiated {
+	if gotParent != sessionstore.BranchID(path) || !strings.HasPrefix(gotCallID, "slash-skill-") || gotPlanMode || !gotHostInitiated {
 		t.Fatalf("runner context parent=%q call=%q plan=%v hostInitiated=%v", gotParent, gotCallID, gotPlanMode, gotHostInitiated)
 	}
 	msgs := c.History()
@@ -176,7 +177,7 @@ func TestSubmitSlashSubagentRunsIsolatedAndPersistsDistilledAnswer(t *testing.T)
 }
 
 func TestSubmitInvocationDisplayExecutesStructuredEntitiesInVisualOrder(t *testing.T) {
-	sess := agent.NewSession("parent system")
+	sess := sessionstore.NewSession("parent system")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 24)
 	mainRunner := &fakeTurnRunner{}
@@ -237,7 +238,7 @@ func TestSubmitInvocationDisplayPreparesPluginSubagentBindings(t *testing.T) {
 		}}
 	})
 
-	sess := agent.NewSession("parent system")
+	sess := sessionstore.NewSession("parent system")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 12)
 	var got skill.Skill
@@ -310,7 +311,7 @@ func TestSubmitInvocationDisplayRunsInlineSkillInsideActiveGoal(t *testing.T) {
 	prov := &scriptedTurns{turns: [][]provider.Chunk{
 		textTurn("Notes listed.\n\n[goal:complete]"),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	events := make(chan event.Event, 8)
 	c := New(Options{
 		Runner:   ag,
@@ -343,7 +344,7 @@ func TestSubmitInvocationDisplayRunsInlineSkillInsideActiveGoal(t *testing.T) {
 }
 
 func TestSubmitInvocationDisplayRunsSubagentSkillInsideActiveGoal(t *testing.T) {
-	sess := agent.NewSession("")
+	sess := sessionstore.NewSession("")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 8)
 	var gotTask string
@@ -380,7 +381,7 @@ func TestSubmitInvocationDisplayRunsSubagentSkillInsideActiveGoal(t *testing.T) 
 }
 
 func TestSubmitSlashSubagentUsesPermissionedRunnerInPlanMode(t *testing.T) {
-	sess := agent.NewSession("parent system")
+	sess := sessionstore.NewSession("parent system")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 12)
 	var normalCalls, readOnlyCalls int
@@ -418,7 +419,7 @@ func TestSubmitSlashSubagentUsesPermissionedRunnerInPlanMode(t *testing.T) {
 }
 
 func TestSubmitStructuredSubagentUsesPermissionedRunnerInPlanMode(t *testing.T) {
-	sess := agent.NewSession("parent system")
+	sess := sessionstore.NewSession("parent system")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 12)
 	var normalCalls, readOnlyCalls int
@@ -500,7 +501,7 @@ func TestSubmitSlashSubagentWithoutRunnerFinishesWithError(t *testing.T) {
 }
 
 func TestCancelSlashSubagentStopsChildAndKeepsParentSessionUsable(t *testing.T) {
-	sess := agent.NewSession("parent system")
+	sess := sessionstore.NewSession("parent system")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 12)
 	started := make(chan struct{})
@@ -1471,7 +1472,7 @@ func TestIsSyntheticUserMessage(t *testing.T) {
 		},
 		{
 			name:  "mid-turn steer is not synthetic (handled separately in historyMessages)",
-			input: agent.MidTurnSteerPrefix + "\nplease use smaller diffs",
+			input: sessionstore.MidTurnSteerPrefix + "\nplease use smaller diffs",
 			want:  false,
 		},
 	}

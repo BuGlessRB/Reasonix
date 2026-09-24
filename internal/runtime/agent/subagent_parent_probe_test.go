@@ -2,6 +2,7 @@ package agent
 
 import (
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -13,11 +14,11 @@ func TestSubagentStoreCleanupStaleRunningParentProbe(t *testing.T) {
 		name        string
 		probeResult *bool
 		wantCleaned int
-		wantStatus  SubagentStatus
+		wantStatus  sessionstore.SubagentStatus
 	}{
-		{name: "live parent", probeResult: &live, wantStatus: SubagentRunning},
-		{name: "dead parent", probeResult: &dead, wantCleaned: 1, wantStatus: SubagentInterrupted},
-		{name: "nil probe", wantCleaned: 1, wantStatus: SubagentInterrupted},
+		{name: "live parent", probeResult: &live, wantStatus: sessionstore.SubagentRunning},
+		{name: "dead parent", probeResult: &dead, wantCleaned: 1, wantStatus: sessionstore.SubagentInterrupted},
+		{name: "nil probe", wantCleaned: 1, wantStatus: sessionstore.SubagentInterrupted},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

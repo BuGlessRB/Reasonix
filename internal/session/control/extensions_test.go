@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -280,7 +281,7 @@ func TestSetExtensionsInstallsDispatcher(t *testing.T) {
 func newSessionController(t *testing.T, d *dispatch.Dispatcher, sink event.Sink) (*Controller, string) {
 	t.Helper()
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "s.jsonl")
@@ -302,7 +303,7 @@ func TestSessionEventsFireAtLifecyclePoints(t *testing.T) {
 	if err := c.Snapshot(); err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
-	loaded := agent.NewSession("sys2")
+	loaded := sessionstore.NewSession("sys2")
 	c.Resume(loaded, filepath.Join(filepath.Dir(path), "other.jsonl"))
 	if err := c.NewSession(); err != nil {
 		t.Fatalf("NewSession: %v", err)
@@ -494,7 +495,7 @@ func TestSetExtensionsPropagatesToExecutor(t *testing.T) {
 	client := &fakeExtClient{}
 	d := newExtensionTestDispatcher(client, []extension.InterceptorPoint{extension.PointAgentBeforeStart}, nil)
 	mp := testutil.NewMock("p", testutil.Turn{Text: "hi"})
-	exec := agent.New(mp, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(mp, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{Runner: &fakeTurnRunner{}, Executor: exec})
 
 	c.SetExtensions(d)
@@ -517,7 +518,7 @@ func TestSetExtensionsPropagatesToExecutor(t *testing.T) {
 
 func TestApplyExtensionSystemPrompt(t *testing.T) {
 	dir := testenv.TempDir(t)
-	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("HOST PROMPT"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession("HOST PROMPT"), agent.Options{}, event.Discard)
 	c := New(Options{
 		Runner:       &fakeTurnRunner{},
 		Executor:     exec,

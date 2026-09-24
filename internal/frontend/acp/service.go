@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"sort"
 	"strings"
 	"sync"
@@ -308,7 +309,7 @@ type acpSession struct {
 	// Config rebuilds keep the same transcript; when a snapshot conflict
 	// retargets the controller to a recovery branch, sessionRecoveredHandler
 	// moves transcript and this lease to the recovery file at commit time.
-	lease *agent.SessionLease
+	lease *sessionstore.SessionLease
 	// retiredLeases tracks outgoing leases whose Release must run after the
 	// authority-guarded save that triggered a recovery callback returns. Any
 	// ACP operation that exposes a completed Snapshot waits for these channels,
@@ -443,7 +444,7 @@ func (s *acpSession) releaseSessionLease() {
 // retireSessionLease defers Release until the authority-guarded save that
 // invoked a recovery callback can return. Releasing synchronously inside that
 // callback would wait on the very save executing the callback and deadlock.
-func (s *acpSession) retireSessionLease(lease *agent.SessionLease) {
+func (s *acpSession) retireSessionLease(lease *sessionstore.SessionLease) {
 	if lease == nil {
 		return
 	}
@@ -618,7 +619,7 @@ func (s *service) openExistingSession(ctx context.Context, method, id, cwdParam 
 	}
 
 	if sess := s.session(id); sess != nil {
-		if agent.IsCleanupPending(sess.transcript) {
+		if sessionstore.IsCleanupPending(sess.transcript) {
 			return SessionConfigState{}, &RPCError{Code: ErrInvalidParams, Message: method + ": unknown session " + id}
 		}
 		if replay {
@@ -638,7 +639,7 @@ func (s *service) openExistingSession(ctx context.Context, method, id, cwdParam 
 	persistedPath := ""
 	if dir := s.sessionDir(); dir != "" {
 		persistedPath = resolveTranscriptPath(dir, id)
-		if agent.IsCleanupPending(persistedPath) {
+		if sessionstore.IsCleanupPending(persistedPath) {
 			return SessionConfigState{}, &RPCError{Code: ErrInvalidParams, Message: method + ": unknown session " + id}
 		}
 		meta, _, metaErr := loadACPMeta(persistedPath)
@@ -694,19 +695,19 @@ func (s *service) openExistingSession(ctx context.Context, method, id, cwdParam 
 		return SessionConfigState{}, &RPCError{Code: ErrInternal, Message: method + ": persistence is disabled"}
 	}
 	path := resolveTranscriptPath(dir, id)
-	if path != persistedPath && agent.IsCleanupPending(path) {
+	if path != persistedPath && sessionstore.IsCleanupPending(path) {
 		ctrl.Close()
 		return SessionConfigState{}, &RPCError{Code: ErrInvalidParams, Message: method + ": unknown session " + id}
 	}
 	// Bind the transcript for writing only if no other runtime (a desktop
 	// window, the CLI) holds it; the editor should not silently double-write a
 	// session that is open elsewhere.
-	lease, leaseErr := agent.TryAcquireSessionLease(path)
+	lease, leaseErr := sessionstore.TryAcquireSessionLease(path)
 	if leaseErr != nil {
 		ctrl.Close()
 		return SessionConfigState{}, sessionLeaseBindError(method, leaseErr)
 	}
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		lease.Release()
 		ctrl.Close()
@@ -1578,19 +1579,19 @@ func deleteSessionFiles(sessionPath string) error {
 			return err
 		}
 	}
-	if err := agent.DeleteSubagentsByParent(filepath.Dir(sessionPath), agent.BranchID(sessionPath)); err != nil {
+	if err := agent.DeleteSubagentsByParent(filepath.Dir(sessionPath), sessionstore.BranchID(sessionPath)); err != nil {
 		return err
 	}
 	if err := jobs.RemoveArtifacts(sessionPath); err != nil {
 		return err
 	}
-	return agent.ClearCleanupPending(sessionPath)
+	return sessionstore.ClearCleanupPending(sessionPath)
 }
 
 // ReconcileCleanupPending retries delayed ACP session cleanup left by a previous
 // process, including ACP's own metadata sidecar.
 func ReconcileCleanupPending(dir string) error {
-	return agent.ReconcileCleanupPending(dir, func(item agent.CleanupPendingInfo) error {
+	return sessionstore.ReconcileCleanupPending(dir, func(item sessionstore.CleanupPendingInfo) error {
 		return deleteSessionFiles(item.SessionPath)
 	})
 }

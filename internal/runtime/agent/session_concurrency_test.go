@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"sync"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestSessionConcurrentAddAndRead(t *testing.T) {
 		reads   = 500
 	)
 
-	s := NewSession("sys")
+	s := sessionstore.NewSession("sys")
 
 	var wg sync.WaitGroup
 	// One writer mimicking the turn goroutine.

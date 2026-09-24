@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -136,7 +137,7 @@ func TestPinnedPrefixLen(t *testing.T) {
 	as := provider.Message{Role: provider.RoleAssistant, Content: "a"}
 
 	newA := func(win int) *Agent {
-		return New(&fakeProvider{}, tool.NewRegistry(), &Session{}, Options{ContextWindow: win}, event.Discard)
+		return New(&fakeProvider{}, tool.NewRegistry(), &sessionstore.Session{}, Options{ContextWindow: win}, event.Discard)
 	}
 	cases := []struct {
 		name string
@@ -224,7 +225,7 @@ func TestKeepUserMarkedRequiresUserPrefixMarker(t *testing.T) {
 // TestSummarizeRespectsContextCancel: a stalled stream (open but never closing)
 // must unblock on context cancellation instead of pinning compaction forever.
 func TestSummarizeRespectsContextCancel(t *testing.T) {
-	a := New(&fakeProvider{hang: true}, tool.NewRegistry(), &Session{}, Options{}, event.Discard)
+	a := New(&fakeProvider{hang: true}, tool.NewRegistry(), &sessionstore.Session{}, Options{}, event.Discard)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, _, err := a.summarize(ctx, []provider.Message{{Role: provider.RoleUser, Content: "x"}}, ""); err == nil {
@@ -237,7 +238,7 @@ func TestSummarizeRespectsContextCancel(t *testing.T) {
 // message count, and summary — in that order.
 func TestCompactEmitsEvents(t *testing.T) {
 	prov := &fakeProvider{reply: "- goal: do X"}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("step one work ", 200)},
@@ -286,7 +287,7 @@ func TestCompactEmitsEvents(t *testing.T) {
 func TestCompactInjectsFocusAndPreCompactHook(t *testing.T) {
 	prov := &fakeProvider{reply: "- ok"}
 	big := strings.Repeat("step work detail ", 200)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: big},
@@ -317,7 +318,7 @@ func TestCompactInjectsFocusAndPreCompactHook(t *testing.T) {
 
 func TestCompactSkipsSingleSmallMessage(t *testing.T) {
 	prov := &fakeProvider{reply: "- should not be called"}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "tiny"},
 		{Role: provider.RoleUser, Content: "next"},
@@ -342,8 +343,8 @@ func TestMaybeCompactThreshold(t *testing.T) {
 	// windows collapse hard to 1 and force every observation.
 	const window = 10_000
 	const ratio = 0.8 // fold trigger = 8000
-	newSess := func() *Session {
-		return &Session{Messages: []provider.Message{
+	newSess := func() *sessionstore.Session {
+		return &sessionstore.Session{Messages: []provider.Message{
 			{Role: provider.RoleSystem, Content: "sys"},
 			{Role: provider.RoleUser, Content: "task"},
 			{Role: provider.RoleAssistant, Content: strings.Repeat("a ", 5000)},
@@ -402,7 +403,7 @@ func TestMaybeCompactForceCeilingBypassesEconomics(t *testing.T) {
 	// large enough that the candidate lands under the compact_ratio trigger.
 	const window = 10_000
 	big := strings.Repeat("old analysis detail ", 400)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: big},
@@ -433,7 +434,7 @@ func TestMaybeCompactSkipsLowValueRegionBeforeForceCeiling(t *testing.T) {
 	// Above compact_ratio but below the physical hard ceiling: low-value folds
 	// are rejected by foldEconomics without calling the summarizer.
 	const window = 10_000
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "small old request"},
 		{Role: provider.RoleAssistant, Content: "small old answer"},
@@ -459,7 +460,7 @@ func TestMaybeCompactSkipsLowValueRegionBeforeForceCeiling(t *testing.T) {
 func TestMaybeCompactFoldsSingleLargeMessageAtThreshold(t *testing.T) {
 	const window = 10_000
 	// Large assistant work (not the first user turn) so it is foldable, not pinned.
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("large prompt chunk ", 500)},
@@ -537,7 +538,7 @@ func TestCompactKeepsActiveTurnVerbatim(t *testing.T) {
 		}},
 	}
 	result := provider.Message{Role: provider.RoleTool, ToolCallID: "write-1", Name: "write_file", Content: "wrote a.txt"}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: strings.Repeat("old request ", 200)},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("old answer ", 200)},
@@ -620,7 +621,7 @@ func TestMaybeCompactClearsStuckLatchAnywhereBelowTrigger(t *testing.T) {
 		{"snip band", 14000},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sess := NewSession("sys")
+			sess := sessionstore.NewSession("sys")
 			sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 			a := New(&fakeProvider{reply: "- summary"}, tool.NewRegistry(), sess, Options{ContextWindow: 20000}, event.Discard)
 			a.sess.compaction.stuck = true
@@ -637,7 +638,7 @@ func TestMaybeCompactClearsStuckLatchAnywhereBelowTrigger(t *testing.T) {
 // TestMaybeCompactDefersWhenOnlyActiveTurnRemains proves current-turn
 // protection wins over a synthetic pressure observation.
 func TestMaybeCompactDefersWhenOnlyActiveTurnRemains(t *testing.T) {
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	a := New(&fakeProvider{reply: "- summary"}, tool.NewRegistry(), sess, Options{ContextWindow: 20000}, event.Discard)
 
@@ -671,7 +672,7 @@ func TestCompactRollsOldDigestsIntoNew(t *testing.T) {
 	oldDigest := summaryTagOpen + "\n" + strings.Repeat("old standing fact ", 60) + "\n" + summaryTagClose // >1500 chars → not pinnable
 	newestDigest := summaryTagOpen + "\nnewest digest\n" + summaryTagClose
 	big := strings.Repeat("work output ", 200)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleUser, Content: oldDigest}, // old digest, large → folds

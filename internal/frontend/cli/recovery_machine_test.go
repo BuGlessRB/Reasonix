@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
 
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/recovery"
 )
 
@@ -18,7 +18,7 @@ func TestSessionMachineRecoveryIsContentFree(t *testing.T) {
 	dir := testenv.TempDir(t)
 	saveMachineTestSession(t, dir, "recoverable", time.Date(2026, 7, 23, 14, 0, 0, 0, time.UTC))
 	path := filepath.Join(dir, "recoverable.jsonl")
-	if err := agent.MarkSessionInFlightTurn(path, 1, true); err != nil {
+	if err := sessionstore.MarkSessionInFlightTurn(path, 1, true); err != nil {
 		t.Fatalf("mark in-flight: %v", err)
 	}
 	if err := recovery.SaveSnapshot(path, recovery.Snapshot{Tasks: map[string]*recovery.TaskState{

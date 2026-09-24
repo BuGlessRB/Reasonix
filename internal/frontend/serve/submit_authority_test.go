@@ -3,12 +3,12 @@ package serve
 import (
 	"net/http"
 	"net/http/httptest"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -45,7 +45,7 @@ func TestSubmitBindsWriteAuthorityToAFreshlyMintedSession(t *testing.T) {
 	if minted == "" {
 		t.Fatal("submit left the pane without a session file")
 	}
-	if got, want := leases.HeldPath(), agent.CanonicalSessionPath(minted); got != want {
+	if got, want := leases.HeldPath(), sessionstore.CanonicalSessionPath(minted); got != want {
 		t.Fatalf("lease holds %q, want the minted session %q", got, want)
 	}
 }

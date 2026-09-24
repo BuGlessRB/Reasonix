@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -14,7 +15,7 @@ import (
 func benchIncrementalSave(b *testing.B, n int) {
 	dir := b.TempDir()
 	path := filepath.Join(dir, "s.jsonl")
-	s := NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	for i := range n / 2 {
 		s.Add(provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("turn %d: %s", i, strings.Repeat("please keep going. ", 20))})
 		s.Add(provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("a plain english sentence about the work. ", 40)})

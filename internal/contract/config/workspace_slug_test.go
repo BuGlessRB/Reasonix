@@ -4,7 +4,7 @@ import "testing"
 
 // WorkspaceSlug folds case on Windows so equivalent spellings of one
 // workspace (drive-letter case, Explorer renames) map to a single slug —
-// the same key form agent.CanonicalSessionPath uses for session paths.
+// the same key form sessionstore.CanonicalSessionPath uses for session paths.
 func TestWorkspaceSlugFoldsCaseOnWindows(t *testing.T) {
 	setRuntimeGOOS(t, "windows")
 	upper := WorkspaceSlug(`C:\Users\Dev\Proj`)

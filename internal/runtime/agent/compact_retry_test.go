@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestMaybeCompactIgnoresRetryAggregateBelowContextThreshold(t *testing.T) {
 	// compact_ratio is the sole trigger; LatestPromptTokens (context attempt)
 	// must drive the decision, not the billable retry aggregate.
 	const window = 10_000
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("large earlier request ", 500)},
@@ -42,7 +43,7 @@ func TestMaybeCompactIgnoresRetryAggregateBelowContextThreshold(t *testing.T) {
 
 func TestMaybeCompactStillTriggersAtLatestContextThreshold(t *testing.T) {
 	const window = 10_000
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("large earlier request ", 500)},
@@ -82,7 +83,7 @@ func TestMissingReasoningRetryAggregateDoesNotTriggerEarlyCompaction(t *testing.
 			Usage: &provider.Usage{PromptTokens: 4100, CompletionTokens: 1, TotalTokens: 4101, CacheHitTokens: 4000, CacheMissTokens: 100},
 		},
 	)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "original task"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("old analysis ", 100)},

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/assembly/boot"
@@ -49,7 +50,7 @@ func cloneRequest(req provider.Request) provider.Request {
 // disk, projection from its sidecar, the shipped tool surface at this arm —
 // and returns the request the first round hands the provider.
 func captureRequest(f builtFixture, arm ablation.Set, prompt string) (provider.Request, error) {
-	sess, err := agent.LoadSession(f.Path)
+	sess, err := sessionstore.LoadSession(f.Path)
 	if err != nil {
 		return provider.Request{}, fmt.Errorf("load session: %w", err)
 	}

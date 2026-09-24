@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -28,7 +29,7 @@ func TestCompatibilityRewindRequiresConfirmationForPartialCoverage(t *testing.T)
 	if err := os.WriteFile(path, []byte("before"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	ag := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	c := New(Options{
 		Runner:        ag,
@@ -89,7 +90,7 @@ func TestResumeRecoversCommittingCombinedRewind(t *testing.T) {
 		{Role: provider.RoleUser, Content: "second"},
 		{Role: provider.RoleAssistant, Content: "later"},
 	}
-	saved := agent.NewSession("")
+	saved := sessionstore.NewSession("")
 	saved.Replace(fullMessages[:3])
 	if err := saved.Save(sessionPath); err != nil {
 		t.Fatal(err)
@@ -140,11 +141,11 @@ func TestResumeRecoversCommittingCombinedRewind(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loaded, err := agent.LoadSession(sessionPath)
+	loaded, err := sessionstore.LoadSession(sessionPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ag := agent.New(nil, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	ag := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: ag, Runner: ag, SessionDir: dir, WorkspaceRoot: root})
 	c.Resume(loaded, sessionPath)
 	if got := ag.Session().Snapshot(); len(got) != len(fullMessages) || got[len(got)-1].Content != "later" {
@@ -185,7 +186,7 @@ func runTwoTurns(t *testing.T) (*Controller, *agent.Agent, *[]event.Event) {
 		textTurn("second answer"),
 		textTurn("edited answer"),
 	}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	var events []event.Event
 	c := New(Options{
 		Runner:     ag,
@@ -194,7 +195,7 @@ func runTwoTurns(t *testing.T) (*Controller, *agent.Agent, *[]event.Event) {
 		Label:      "test",
 		Sink:       event.FuncSink(func(e event.Event) { events = append(events, e) }),
 	})
-	c.SetSessionPath(agent.NewSessionPath(dir, "test"))
+	c.SetSessionPath(sessionstore.NewSessionPath(dir, "test"))
 	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: "first prompt", raw: "first prompt"}); err != nil {
 		t.Fatalf("turn 1: %v", err)
 	}
@@ -298,7 +299,7 @@ func TestPositionalCompressionPreservesCheckpointLineage(t *testing.T) {
 	if !reflect.DeepEqual(afterBounds, beforeBounds) {
 		t.Fatalf("checkpoint boundaries changed: before=%v after=%v", beforeBounds, afterBounds)
 	}
-	state, ok, err := agent.LoadCompactionState(c.SessionPath())
+	state, ok, err := sessionstore.LoadCompactionState(c.SessionPath())
 	if err != nil || !ok {
 		t.Fatalf("load projection sidecar: ok=%v err=%v", ok, err)
 	}
@@ -326,16 +327,16 @@ func TestEditPromptPersistsOriginalPrompt(t *testing.T) {
 	c.SubmitEditedDisplay("edited prompt", "edited prompt", "second prompt")
 	defer c.autosaveWG.Wait()
 
-	var loaded *agent.Session
+	var loaded *sessionstore.Session
 	deadline := time.Now().Add(time.Second)
 	for {
 		var err error
-		loaded, err = agent.LoadSession(c.SessionPath())
+		loaded, err = sessionstore.LoadSession(c.SessionPath())
 		if err == nil {
 			msgs := loaded.Snapshot()
 			if len(msgs) >= 2 {
 				last := msgs[len(msgs)-2]
-				if last.Role == provider.RoleUser && agent.StripTransientUserBlocks(last.Content) == "edited prompt" {
+				if last.Role == provider.RoleUser && sessionstore.StripTransientUserBlocks(last.Content) == "edited prompt" {
 					break
 				}
 			}
@@ -347,7 +348,7 @@ func TestEditPromptPersistsOriginalPrompt(t *testing.T) {
 	}
 	msgs := loaded.Snapshot()
 	last := msgs[len(msgs)-2]
-	if last.Role != provider.RoleUser || agent.StripTransientUserBlocks(last.Content) != "edited prompt" {
+	if last.Role != provider.RoleUser || sessionstore.StripTransientUserBlocks(last.Content) != "edited prompt" {
 		t.Fatalf("last user message = %+v, want edited prompt", last)
 	}
 	if !last.Edited || last.Original != "second prompt" {

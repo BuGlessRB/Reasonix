@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"slices"
 	"strings"
@@ -45,7 +46,7 @@ func toolCallChunk(id, name, args string) provider.Chunk {
 	return provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: id, Name: name, Arguments: args}}
 }
 
-func toolResult(s *Session, name string) string {
+func toolResult(s *sessionstore.Session, name string) string {
 	for _, m := range s.Messages {
 		if m.Role == provider.RoleTool && m.Name == name {
 			return m.Content
@@ -54,7 +55,7 @@ func toolResult(s *Session, name string) string {
 	return ""
 }
 
-func lastToolResult(s *Session, name string) string {
+func lastToolResult(s *sessionstore.Session, name string) string {
 	var result string
 	for _, m := range s.Messages {
 		if m.Role == provider.RoleTool && m.Name == name {
@@ -64,7 +65,7 @@ func lastToolResult(s *Session, name string) string {
 	return result
 }
 
-func toolResultByID(s *Session, id string) string {
+func toolResultByID(s *sessionstore.Session, id string) string {
 	for _, m := range s.Messages {
 		if m.Role == provider.RoleTool && m.ToolCallID == id {
 			return m.Content
@@ -73,7 +74,7 @@ func toolResultByID(s *Session, id string) string {
 	return ""
 }
 
-func toolResults(s *Session, name string) []string {
+func toolResults(s *sessionstore.Session, name string) []string {
 	var results []string
 	for _, m := range s.Messages {
 		if m.Role == provider.RoleTool && m.Name == name {
@@ -83,7 +84,7 @@ func toolResults(s *Session, name string) []string {
 	return results
 }
 
-func sessionHasUserMessageContaining(s *Session, needle string) bool {
+func sessionHasUserMessageContaining(s *sessionstore.Session, needle string) bool {
 	for _, m := range s.Messages {
 		if m.Role != provider.RoleUser {
 			continue
@@ -135,7 +136,7 @@ func TestEvidenceFlowEndToEnd(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "run the suite and sign the step off"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -169,7 +170,7 @@ func TestDeliveryProfileEnforcesAcceptanceReviewVerificationAndSignoff(t *testin
 		{{Type: provider.ChunkText, Text: "delivered"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, event.Discard)
 	if err := a.Run(context.Background(), "implement main"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -217,7 +218,7 @@ func TestDeliveryProfileRequiresReviewBeforeFinalAnswer(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done after review and signoff"}, {Type: provider.ChunkDone}},
 	}}
 	sink := &readinessAuditSink{}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, sink)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, sink)
 	ctx := deliveryGoalContext("goal-review", "implement main")
 	// The first final answer fails immediately (no readiness retries); the
 	// scoped follow-up adds the missing review and renews the sign-off.
@@ -245,7 +246,7 @@ func TestDeliveryProfileCommandOnlyActionRequiresCriteriaAndSignoff(t *testing.T
 		{toolCallChunk("signoff", "complete_step", `{"step":"Run tests","result":"tests pass","evidence":[{"kind":"verification","summary":"tests pass","command":"go test ./..."}]}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "tests pass"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, event.Discard)
 	if err := a.Run(context.Background(), "run tests"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -269,7 +270,7 @@ func TestDeliveryProfileBlocksMixedVerificationBeforeItBecomesMutation(t *testin
 		{toolCallChunk("signoff", "complete_step", `{"step":"Check snake","result":"syntax valid","evidence":[{"kind":"verification","summary":"syntax valid","command":"tail -n +2 snake.js | head -n 20 | node --check -"}]}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "checked"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, event.Discard)
 	if err := a.Run(context.Background(), "check the snake game"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -296,7 +297,7 @@ func TestDeliveryProfileExplainsMaskedVerifierExitBeforeExecution(t *testing.T) 
 		{toolCallChunk("signoff", "complete_step", `{"step":"Check snake","result":"syntax valid","evidence":[{"kind":"verification","summary":"syntax valid","command":"tail -n +2 snake.js | head -n 20 | node --check -"}]}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "checked"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, event.Discard)
 	if err := a.Run(context.Background(), "check the snake game"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -321,7 +322,7 @@ func TestOpaqueInterpreterRunsButACheckDoesNotProveItsUnknownEffects(t *testing.
 		{toolCallChunk("safe", "bash", `{"command":"go test ./..."}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "checked"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, event.Discard)
 	err := a.Run(context.Background(), "check the snake game")
 
 	if got := toolResultByID(a.sess.conversation, "opaque"); strings.Contains(got, "cannot audit inline interpreter source") {
@@ -342,7 +343,7 @@ func TestDeliveryWillNotFinishOwingAnOpaqueMutation(t *testing.T) {
 		{toolCallChunk("opaque", "bash", `{"command":"node -e 'require(\"fs\").writeFileSync(\"snake.html\",\"x\")'"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, event.Discard)
 	err := a.Run(context.Background(), "write the snake game")
 	var readiness *FinalReadinessError
 	if !errors.As(err, &readiness) {
@@ -370,7 +371,7 @@ func TestDeliveryProfileRequiresActiveTodoForLateMutation(t *testing.T) {
 		{toolCallChunk("signoff-2", "complete_step", `{"step":"Apply review fix","result":"done","evidence":[{"kind":"verification","summary":"tests pass","command":"go test ./..."}]}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "delivered"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, event.Discard)
 	if err := a.Run(context.Background(), "implement main and incorporate review fixes"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -389,7 +390,7 @@ func TestDeliveryProfileAllowsEvidenceBackedReadOnlyAnalysis(t *testing.T) {
 		{toolCallChunk("read", "read_file", `{"path":"main.go"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "analysis"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, event.Discard)
 	if err := a.Run(context.Background(), "analyze main.go"); err != nil {
 		t.Fatalf("read-only analysis should not require mutation/sign-off: %v", err)
 	}
@@ -419,7 +420,7 @@ func TestEvidenceFlowEnforcesProjectChecksAfterWrite(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{
+	a := New(prov, reg, sessionstore.NewSession(""), Options{
 		ProjectChecks: []instruction.VerifyCheck{{Command: "go test ./...", SourcePath: "AGENTS.md", Line: 3}},
 	}, event.Discard)
 	if err := a.Run(context.Background(), "edit and verify"); err != nil {
@@ -436,7 +437,7 @@ func TestFinalReadinessAllowsFinalAnswerWithoutWriter(t *testing.T) {
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession(""), Options{
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession(""), Options{
 		ProjectChecks: []instruction.VerifyCheck{{Command: "go test ./...", SourcePath: "AGENTS.md", Line: 3}},
 	}, event.Discard)
 
@@ -458,7 +459,7 @@ func TestFinalReadinessAllowsWriterWithoutChecksOrTodos(t *testing.T) {
 		},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "simple edit"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -474,7 +475,7 @@ func TestFinalReadinessAuditSkipsWhenGateDoesNotApply(t *testing.T) {
 			{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 		}}
 		sink := &readinessAuditSink{}
-		a := New(prov, tool.NewRegistry(), NewSession(""), Options{
+		a := New(prov, tool.NewRegistry(), sessionstore.NewSession(""), Options{
 			ProjectChecks: []instruction.VerifyCheck{{Command: "go test ./...", SourcePath: "AGENTS.md", Line: 3}},
 		}, sink)
 
@@ -497,7 +498,7 @@ func TestFinalReadinessAuditSkipsWhenGateDoesNotApply(t *testing.T) {
 			{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 		}}
 		sink := &readinessAuditSink{}
-		a := New(prov, reg, NewSession(""), Options{}, sink)
+		a := New(prov, reg, sessionstore.NewSession(""), Options{}, sink)
 
 		if err := a.Run(context.Background(), "simple edit"); err != nil {
 			t.Fatalf("Run: %v", err)
@@ -524,7 +525,7 @@ func TestFinalReadinessBlocksUntilProjectCheckRunsAfterWriter(t *testing.T) {
 		},
 		{{Type: provider.ChunkText, Text: "verified done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{
+	a := New(prov, reg, sessionstore.NewSession(""), Options{
 		ProjectChecks: []instruction.VerifyCheck{{Command: "go test ./...", SourcePath: "AGENTS.md", Line: 3}},
 	}, event.Discard)
 	ctx := deliveryGoalContext("goal-checks", "edit and finish")
@@ -562,7 +563,7 @@ func TestFinalReadinessAuditRecordsBlockAndRecovery(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "verified done"}, {Type: provider.ChunkDone}},
 	}}
 	sink := &readinessAuditSink{}
-	a := New(prov, reg, NewSession(""), Options{
+	a := New(prov, reg, sessionstore.NewSession(""), Options{
 		ProjectChecks: []instruction.VerifyCheck{{Command: "go test ./...", SourcePath: "AGENTS.md", Line: 3}},
 	}, sink)
 	ctx := deliveryGoalContext("goal-audit", "edit and finish")
@@ -603,7 +604,7 @@ func TestFinalReadinessRejectsProjectCheckBeforeWriter(t *testing.T) {
 		},
 		{{Type: provider.ChunkText, Text: "verified done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{
+	a := New(prov, reg, sessionstore.NewSession(""), Options{
 		ProjectChecks: []instruction.VerifyCheck{{Command: "go test ./...", SourcePath: "AGENTS.md", Line: 3}},
 	}, event.Discard)
 	ctx := deliveryGoalContext("goal-before-writer", "verify before edit, then finish")
@@ -652,7 +653,7 @@ func TestFinalReadinessRequiresCompleteStepAfterWriterWhenTodoSeen(t *testing.T)
 		},
 		{{Type: provider.ChunkText, Text: "signed off done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	ctx := deliveryGoalContext("goal-signoff", "edit with todo and finish")
 
 	// The premature final answer fails immediately; the scoped follow-up signs
@@ -682,7 +683,7 @@ func TestTodoWriteOnlyTurnMayEndWithIncompleteTodos(t *testing.T) {
 		},
 		{{Type: provider.ChunkText, Text: "here is the task list"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "create a todo list only"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -711,7 +712,7 @@ func TestReadOnlyContextAndTodoTurnMayEndWithIncompleteTodos(t *testing.T) {
 		},
 		{{Type: provider.ChunkText, Text: "I reviewed the context and wrote the list."}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "read context and only draft a todo list"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -743,7 +744,7 @@ func TestFinalReadinessAuditRecordsTerminalError(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "premature 3"}, {Type: provider.ChunkDone}},
 	}}
 	sink := &readinessAuditSink{}
-	a := New(prov, reg, NewSession(""), Options{}, sink)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, sink)
 
 	err := a.Run(context.Background(), "edit with todo and never sign off")
 	if err == nil {
@@ -782,7 +783,7 @@ func TestEvidenceFlowRejectsUncitedCommand(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "vet the tree and sign off"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -828,7 +829,7 @@ func TestEvidenceFlowRejectsStepMissingFromTodoWrite(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "update todos then sign off the wrong step"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -866,7 +867,7 @@ func TestEvidenceFlowAcceptsTodoCompletionAfterCompleteStep(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "complete the todo with a sign-off first"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -908,7 +909,7 @@ func TestEvidenceFlowRejectsTodoCompletionWithoutCompleteStep(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "complete the todo without a sign-off"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -952,7 +953,7 @@ func TestEvidenceFlowRecoversTodoCompletionAfterFailedCompleteStepWithProgress(t
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "recover after a failed complete_step"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -1021,7 +1022,7 @@ func TestEvidenceFlowRecoversAfterBatchTodoCompletionRejection(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "recover from a rejected batch todo update"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -1076,7 +1077,7 @@ func TestEvidenceFlowFailedCompleteStepDoesNotAuthorizeTodoCompletion(t *testing
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "attempt completion after a failed sign-off"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -1119,7 +1120,7 @@ func TestEvidenceFlowRejectsReplacedTodoAfterNumericCompleteStep(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "try to reuse a numeric sign-off for another todo"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -1175,7 +1176,7 @@ func TestEvidenceFlowRejectsReorderedTodoAndRecoversSerially(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "complete the signed todo after reordering it"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -1201,7 +1202,7 @@ func TestObligationDeltaReachesTheModelWithTheResultThatCausedIt(t *testing.T) {
 		{toolCallChunk("opaque", "bash", `{"command":"node -e 'require(\"fs\").writeFileSync(\"a.txt\",\"x\")'"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	// How the turn ends is another gate's business; what matters here is what
 	// the model was holding when it chose its next action.
 	_ = a.Run(context.Background(), "write it")

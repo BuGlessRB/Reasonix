@@ -2,11 +2,11 @@ package serve
 
 import (
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -46,7 +46,7 @@ func TestAnAdoptedPaneOwnsTheSessionItMints(t *testing.T) {
 		t.Fatal("no session was minted")
 	}
 
-	if lease, err := agent.TryAcquireSessionLease(path); err == nil {
+	if lease, err := sessionstore.TryAcquireSessionLease(path); err == nil {
 		lease.Release()
 		t.Fatal("the session this pane is writing was free for another writer to take")
 	}
@@ -58,7 +58,7 @@ func TestAdoptRefusesASessionAnotherWriterHolds(t *testing.T) {
 	dir := testenv.TempDir(t)
 	held := filepath.Join(dir, "held.jsonl")
 	saveServeTestSession(t, held)
-	holder, err := agent.TryAcquireSessionLease(held)
+	holder, err := sessionstore.TryAcquireSessionLease(held)
 	if err != nil {
 		t.Fatalf("test holder acquire: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestAdoptLeavesAHostArrangedLeaseAlone(t *testing.T) {
 	}
 	_ = hub.Close(rt.ID)
 	// Closing the pane must not have released the host's lease.
-	if lease, err := agent.TryAcquireSessionLease(path); err == nil {
+	if lease, err := sessionstore.TryAcquireSessionLease(path); err == nil {
 		lease.Release()
 		t.Error("closing the pane released a lease the host still holds")
 	}
@@ -122,7 +122,7 @@ func TestReadonlyPanePromotesAfterTransientHolderLeaves(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "handoff.jsonl")
 	saveServeTestSession(t, path)
-	holder, err := agent.TryAcquireSessionLease(path)
+	holder, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("holder acquire: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestReadonlyPanePromotesAfterTransientHolderLeaves(t *testing.T) {
 	if view := rt.view(); view.ReadOnly {
 		t.Fatal("pane stayed read-only after the transient holder released")
 	}
-	if got := leases.HeldPath(); got != agent.CanonicalSessionPath(path) {
+	if got := leases.HeldPath(); got != sessionstore.CanonicalSessionPath(path) {
 		t.Fatalf("promoted lease path = %q", got)
 	}
 }

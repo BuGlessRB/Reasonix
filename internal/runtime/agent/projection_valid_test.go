@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -21,17 +22,17 @@ func TestProjectionValidRejectsEditedPrefix(t *testing.T) {
 		{Role: provider.RoleAssistant, Content: "done"},
 		{Role: provider.RoleUser, Content: "next"},
 	}
-	st := CompactionState{
+	st := sessionstore.CompactionState{
 		TranscriptVersion: 2,
 		PromptCacheKey:    "ws|sess|model",
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages: []provider.Message{
 				{Role: provider.RoleSystem, Content: "sys"},
 				{Role: provider.RoleUser, Content: "summary"},
 			},
 			TranscriptVersion: 2,
 			CoveredCount:      3,
-			CoveredPrefixHash: coveredPrefixHash(msgs, 3),
+			CoveredPrefixHash: sessionstore.CoveredPrefixHash(msgs, 3),
 		},
 	}
 	if !projectionValid(st, msgs, "ws|sess|model", nil) {
@@ -55,11 +56,11 @@ func TestProjectionValidRejectsCacheKeyMismatch(t *testing.T) {
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 	}
-	hash := coveredPrefixHash(msgs, 2)
-	st := CompactionState{
+	hash := sessionstore.CoveredPrefixHash(msgs, 2)
+	st := sessionstore.CompactionState{
 		TranscriptVersion: 1,
 		PromptCacheKey:    "ws|sess|model-a",
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages:          []provider.Message{{Role: provider.RoleSystem, Content: "sys"}},
 			CoveredCount:      2,
 			CoveredPrefixHash: hash,
@@ -99,7 +100,7 @@ func TestCoveredPrefixHashIncludesProviderVisibleFields(t *testing.T) {
 		}},
 		ResponsesItems: []json.RawMessage{json.RawMessage(`{"type":"web_search_call"}`)},
 	}}
-	h1 := coveredPrefixHash(base, 1)
+	h1 := sessionstore.CoveredPrefixHash(base, 1)
 	if h1 == "" {
 		t.Fatal("empty fingerprint")
 	}
@@ -124,8 +125,8 @@ func TestCoveredPrefixHashIncludesProviderVisibleFields(t *testing.T) {
 			mutated[0].Images = append([]string(nil), base[0].Images...)
 			mutated[0].ResponsesItems = append([]json.RawMessage(nil), base[0].ResponsesItems...)
 			tc.mut(mutated)
-			if coveredPrefixHash(mutated, 1) == h1 {
-				t.Fatalf("%s change did not alter coveredPrefixHash", tc.name)
+			if sessionstore.CoveredPrefixHash(mutated, 1) == h1 {
+				t.Fatalf("%s change did not alter sessionstore.CoveredPrefixHash", tc.name)
 			}
 		})
 	}
@@ -138,12 +139,12 @@ func TestLoadProjectionSidecarRebindsMatchingContentAcrossLineage(t *testing.T) 
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 	}
-	hash := coveredPrefixHash(msgs, 2)
-	if err := SaveCompactionState(path, CompactionState{
-		SchemaVersion:     compactionStateSchemaV1,
+	hash := sessionstore.CoveredPrefixHash(msgs, 2)
+	if err := sessionstore.SaveCompactionState(path, sessionstore.CompactionState{
+		SchemaVersion:     sessionstore.CompactionStateSchemaV1,
 		PromptCacheKey:    "ws|s|other-model",
 		TranscriptVersion: 1,
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages:          []provider.Message{{Role: provider.RoleSystem, Content: "sys summary"}},
 			CoveredCount:      2,
 			CoveredPrefixHash: hash,
@@ -151,7 +152,7 @@ func TestLoadProjectionSidecarRebindsMatchingContentAcrossLineage(t *testing.T) 
 	}); err != nil {
 		t.Fatal(err)
 	}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "task"})
 	a := New(nil, nil, sess, Options{
 		SessionPath: path,
@@ -164,7 +165,7 @@ func TestLoadProjectionSidecarRebindsMatchingContentAcrossLineage(t *testing.T) 
 	if len(a.sess.compactionState.Projection.Messages) == 0 {
 		t.Fatal("matching projection body was dropped on lineage change")
 	}
-	wantKey := promptCacheKey("ws", BranchID(path), "this-model")
+	wantKey := promptCacheKey("ws", sessionstore.BranchID(path), "this-model")
 	if a.sess.compactionState.PromptCacheKey != wantKey {
 		t.Fatalf("PromptCacheKey = %q, want %q", a.sess.compactionState.PromptCacheKey, wantKey)
 	}
@@ -172,7 +173,7 @@ func TestLoadProjectionSidecarRebindsMatchingContentAcrossLineage(t *testing.T) 
 		t.Fatalf("checkpointState = %q, want restored", a.sess.checkpointState)
 	}
 	// The rebind must be persisted so the next launch does not re-downgrade.
-	disk, ok, err := LoadCompactionState(path)
+	disk, ok, err := sessionstore.LoadCompactionState(path)
 	if err != nil || !ok {
 		t.Fatalf("sidecar should remain on disk: ok=%v err=%v", ok, err)
 	}
@@ -188,18 +189,18 @@ func TestLoadProjectionSidecarDropsForeignCacheKey(t *testing.T) {
 	// Content validation must fail despite a model-only key change: lineage
 	// rebinding cannot resurrect a projection whose canonical prefix differs.
 	foreign := []provider.Message{{Role: provider.RoleSystem, Content: "sys-old"}}
-	if err := SaveCompactionState(path, CompactionState{
-		SchemaVersion:  compactionStateSchemaV1,
+	if err := sessionstore.SaveCompactionState(path, sessionstore.CompactionState{
+		SchemaVersion:  sessionstore.CompactionStateSchemaV1,
 		PromptCacheKey: "ws|s|other-model",
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages:          msgs,
 			CoveredCount:      1,
-			CoveredPrefixHash: coveredPrefixHash(foreign, 1),
+			CoveredPrefixHash: sessionstore.CoveredPrefixHash(foreign, 1),
 		},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	a := New(nil, nil, NewSession("sys"), Options{
+	a := New(nil, nil, sessionstore.NewSession("sys"), Options{
 		SessionPath: path,
 		WorkspaceID: "ws",
 		ModelRef:    "this-model",
@@ -209,7 +210,7 @@ func TestLoadProjectionSidecarDropsForeignCacheKey(t *testing.T) {
 	if len(a.sess.compactionState.Projection.Messages) != 0 {
 		t.Fatalf("foreign projection loaded: %+v", a.sess.compactionState.Projection)
 	}
-	if _, ok, err := LoadCompactionState(path); err != nil || !ok {
+	if _, ok, err := sessionstore.LoadCompactionState(path); err != nil || !ok {
 		t.Fatalf("sidecar should remain on disk: ok=%v err=%v", ok, err)
 	}
 }
@@ -218,7 +219,7 @@ func TestForceThresholdNoopReturnsCompactionRequired(t *testing.T) {
 	// Huge tool result is entirely in the recent tail → no fold region, but
 	// estimate exceeds force; preflight must refuse (not mid-turn).
 	huge := strings.Repeat("word ", 5000)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "1", Name: "read", Arguments: "{}"}}},
@@ -246,7 +247,7 @@ func TestSummarizeOnceDoesNotRetry(t *testing.T) {
 		usage1:   &provider.Usage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12, RequestCount: 1},
 		usage2:   &provider.Usage{PromptTokens: 11, CompletionTokens: 3, TotalTokens: 14, RequestCount: 1},
 	}
-	a := New(fp, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(fp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	_, _, err := a.summarizeOnce(context.Background(), []provider.Message{
 		{Role: provider.RoleUser, Content: "fold me"},
 	}, "")
@@ -290,7 +291,7 @@ func (p *retryUsageProvider) Stream(_ context.Context, _ provider.Request) (<-ch
 
 func TestCompactInstallsCoveredPrefixHash(t *testing.T) {
 	fp := &fakeProvider{reply: "digest"}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	for range 8 {
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: strings.Repeat("u", 80)})
 		sess.Add(provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("a", 120)})
@@ -312,10 +313,10 @@ func TestCompactInstallsCoveredPrefixHash(t *testing.T) {
 	if st.Projection.CoveredPrefixHash == "" {
 		t.Fatal("CoveredPrefixHash not set")
 	}
-	if st.PromptCacheKey != promptCacheKey("ws", BranchID(path), "m") {
+	if st.PromptCacheKey != promptCacheKey("ws", sessionstore.BranchID(path), "m") {
 		t.Fatalf("PromptCacheKey = %q", st.PromptCacheKey)
 	}
-	msgs, _ := sess.snapshotMessagesVersion()
+	msgs, _ := sess.SnapshotMessagesVersion()
 	if !projectionValid(st, msgs, st.PromptCacheKey, nil) {
 		t.Fatal("fresh projection should validate")
 	}

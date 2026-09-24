@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -42,7 +43,7 @@ func usageFixture(t *testing.T, toolResults int) *Agent {
 			provider.Message{Role: provider.RoleTool, ToolCallID: id, Name: "read_file", Content: big},
 		)
 	}
-	return New(nil, tool.NewRegistry(), &Session{Messages: msgs}, Options{
+	return New(nil, tool.NewRegistry(), &sessionstore.Session{Messages: msgs}, Options{
 		ContextWindow: 1_000_000,
 		RecentKeep:    2,
 		ArchiveDir:    testenv.TempDir(t),
@@ -80,7 +81,7 @@ func TestContextUsedTokensIncludesToolSchemasLikeTheTrigger(t *testing.T) {
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: "task"},
 	}
-	a := New(nil, reg, &Session{Messages: msgs}, Options{
+	a := New(nil, reg, &sessionstore.Session{Messages: msgs}, Options{
 		ContextWindow: 1_000_000,
 		RecentKeep:    2,
 		ArchiveDir:    testenv.TempDir(t),
@@ -100,7 +101,7 @@ func TestContextUsedTokensIncludesToolSchemasLikeTheTrigger(t *testing.T) {
 
 func TestContextUsedTokensFollowsLiveToolRegistry(t *testing.T) {
 	reg := tool.NewRegistry()
-	a := New(nil, reg, &Session{Messages: []provider.Message{
+	a := New(nil, reg, &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: "task"},
 	}}, Options{ContextWindow: 1_000_000, RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)

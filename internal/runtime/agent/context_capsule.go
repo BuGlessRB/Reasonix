@@ -1,9 +1,7 @@
 package agent
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"time"
 )
@@ -14,75 +12,6 @@ const (
 	SystemPromptReadOnlyDefault = "readonly-default"
 	SystemPromptProfilePrefix   = "profile:"
 )
-
-// InheritedContext states, item by item, what a child received from its parent.
-// Children are isolated by construction, so every field is false unless the
-// caller asked for it; this record exists so that stays a decision rather than
-// an accident.
-type InheritedContext struct {
-	StandingInstructions bool `json:"standingInstructions"`
-	Memory               bool `json:"memory"`
-	ParentConversation   bool `json:"parentConversation"`
-	Goal                 bool `json:"goal"`
-	PlannerOutput        bool `json:"plannerOutput"`
-	// UpstreamFrom names the dependencies whose answers opened this run, which
-	// a bool in its place could not. Nil means none; empty means a legacy
-	// record that knew there were sources without naming them.
-	UpstreamFrom []string `json:"upstreamFrom"`
-}
-
-// HasUpstream reports whether a dependency's answer opened this run.
-func (c InheritedContext) HasUpstream() bool { return c.UpstreamFrom != nil }
-
-// UnmarshalJSON reads sidecars written while the field was a flag. Such a
-// record proves a dependency opened the run without saying which, so it decodes
-// to a named-nothing slice rather than to nil: dropping it would silently
-// rewrite what the record says the run was given, and inventing a source would
-// be worse.
-func (c *InheritedContext) UnmarshalJSON(data []byte) error {
-	type plain InheritedContext
-	var raw struct {
-		plain
-		Legacy bool `json:"upstream"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	*c = InheritedContext(raw.plain)
-	if raw.Legacy && c.UpstreamFrom == nil {
-		c.UpstreamFrom = []string{}
-	}
-	return nil
-}
-
-// ContextCapsule is the immutable manifest of what one child run was actually
-// given. It holds references and digests, never copied parent context, so a
-// later question — why did this reviewer not see that constraint? — is answered
-// from the record instead of guessed from logs.
-type ContextCapsule struct {
-	WorkspaceRoot      string           `json:"workspaceRoot,omitempty"`
-	SystemPromptSource string           `json:"systemPromptSource"`
-	SystemPromptHash   string           `json:"systemPromptHash"`
-	ToolScope          []string         `json:"toolScope,omitempty"`
-	ToolSchemaHash     string           `json:"toolSchemaHash,omitempty"`
-	Model              string           `json:"model,omitempty"`
-	Effort             string           `json:"effort,omitempty"`
-	ParentSession      string           `json:"parentSession,omitempty"`
-	ParentToolCallID   string           `json:"parentToolCallId,omitempty"`
-	ResumedFrom        string           `json:"resumedFrom,omitempty"`
-	Inherited          InheritedContext `json:"inherited"`
-}
-
-// Hash is the stable identity of a capsule. Two children with the same hash saw
-// the same context; a hash that moves between runs is the thing to explain.
-func (c ContextCapsule) Hash() string {
-	encoded, err := json.Marshal(c)
-	if err != nil {
-		return ""
-	}
-	sum := sha256.Sum256(encoded)
-	return hex.EncodeToString(sum[:])
-}
 
 // systemPromptSource names where a child's system prompt came from without
 // embedding the prompt itself.
@@ -98,9 +27,9 @@ func systemPromptSource(kind, name, systemPrompt string) string {
 
 // metaFromSpec assembles the sidecar record for one run: the execution identity
 // continuation must match, plus the capsule describing the context it was given.
-func metaFromSpec(ref string, status SubagentStatus, created, updated time.Time, spec SubagentSpec) SubagentMeta {
+func metaFromSpec(ref string, status sessionstore.SubagentStatus, created, updated time.Time, spec SubagentSpec) sessionstore.SubagentMeta {
 	scope, schemaHash := toolIdentity(spec.Registry, spec.ToolContext)
-	capsule := ContextCapsule{
+	capsule := sessionstore.ContextCapsule{
 		WorkspaceRoot:      strings.TrimSpace(spec.WorkspaceRoot),
 		SystemPromptSource: systemPromptSource(spec.Kind, spec.Name, spec.SystemPrompt),
 		SystemPromptHash:   bytesHash([]byte(spec.SystemPrompt)),
@@ -111,9 +40,9 @@ func metaFromSpec(ref string, status SubagentStatus, created, updated time.Time,
 		ParentSession:      strings.TrimSpace(spec.ParentSession),
 		ParentToolCallID:   strings.TrimSpace(spec.ParentToolCallID),
 		ResumedFrom:        strings.TrimSpace(spec.ResumedFrom),
-		Inherited:          InheritedContext{UpstreamFrom: spec.UpstreamFrom},
+		Inherited:          sessionstore.InheritedContext{UpstreamFrom: spec.UpstreamFrom},
 	}
-	return SubagentMeta{
+	return sessionstore.SubagentMeta{
 		Ref:              ref,
 		CreatedAt:        created,
 		UpdatedAt:        updated,

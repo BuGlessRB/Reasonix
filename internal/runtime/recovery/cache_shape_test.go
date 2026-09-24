@@ -3,6 +3,7 @@ package recovery_test
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -28,7 +29,7 @@ func TestRecoveryWiringPreservesSuccessPathCacheShape(t *testing.T) {
 
 	// Gate with recovery enabled but no failures must not alter agent schemas.
 	gate := recovery.NewGate(recovery.Options{Mode: func() string { return "auto" }})
-	sess := agent.NewSession(sys)
+	sess := sessionstore.NewSession(sys)
 	ag := agent.New(nil, reg, sess, agent.Options{
 		RecoveryGate: gate,
 	}, event.Discard)

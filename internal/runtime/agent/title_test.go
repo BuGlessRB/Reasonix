@@ -1,13 +1,16 @@
 package agent
 
-import "testing"
+import (
+	"reasonix/internal/state/sessionstore"
+	"testing"
+)
 
 func TestReasoningLanguageDirectiveIsNotUserAuthored(t *testing.T) {
 	for _, injected := range []string{
 		"<reasoning-language>\nUse Simplified Chinese",
 		"<reasoning-language>\nUse Simplified Chinese\n</reasoning-language>",
 	} {
-		if IsUserAuthoredTurn(injected) {
+		if sessionstore.IsUserAuthoredTurn(injected) {
 			t.Fatalf("reasoning-language directive %q must not count as user-authored", injected)
 		}
 	}
@@ -28,7 +31,7 @@ func TestStripPasteDisplayLabel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := StripPasteDisplayLabel(tt.in); got != tt.want {
+			if got := sessionstore.StripPasteDisplayLabel(tt.in); got != tt.want {
 				t.Fatalf("StripPasteDisplayLabel(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})

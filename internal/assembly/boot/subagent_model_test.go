@@ -2,6 +2,7 @@ package boot
 
 import (
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/config"
@@ -191,7 +192,7 @@ func TestNewSubagentStoreCleansStaleRunningRefs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadMeta: %v", err)
 	}
-	if meta.Status != agent.SubagentInterrupted {
+	if meta.Status != sessionstore.SubagentInterrupted {
 		t.Fatalf("status = %q, want interrupted", meta.Status)
 	}
 }

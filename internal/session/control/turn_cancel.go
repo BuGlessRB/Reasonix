@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"time"
@@ -181,7 +182,7 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 		if IsSyntheticUserMessage(m.Content) {
 			continue
 		}
-		if _, ok := agent.SteerText(m.Content); ok {
+		if _, ok := sessionstore.SteerText(m.Content); ok {
 			continue
 		}
 		m.Content = StripComposePrefixes(m.Content)
@@ -326,7 +327,7 @@ func (c *Controller) replaceSessionAfterCancel(msgs []provider.Message) {
 	c.mu.Unlock()
 	if path != "" {
 		if err := c.executor.Session().SaveRewrite(path); err != nil {
-			if errors.Is(err, agent.ErrSessionSnapshotConflict) {
+			if errors.Is(err, sessionstore.ErrSessionSnapshotConflict) {
 				if _, outcome, recoverErr := c.recoverSnapshotConflict(path, err, true); recoverErr != nil {
 					slog.Warn("controller: post-cancel transcript recovery", "err", recoverErr)
 				} else if outcome == conflictDropped {
@@ -339,15 +340,15 @@ func (c *Controller) replaceSessionAfterCancel(msgs []provider.Message) {
 	}
 }
 
-func (c *Controller) markInFlightTurn(startMessageIndex int, preserveUser bool) agent.InFlightTurnMeta {
+func (c *Controller) markInFlightTurn(startMessageIndex int, preserveUser bool) sessionstore.InFlightTurnMeta {
 	path := c.SessionPath()
 	if path == "" {
-		return agent.InFlightTurnMeta{}
+		return sessionstore.InFlightTurnMeta{}
 	}
-	marker, err := agent.BeginSessionInFlightTurn(path, startMessageIndex, preserveUser)
+	marker, err := sessionstore.BeginSessionInFlightTurn(path, startMessageIndex, preserveUser)
 	if err != nil {
 		slog.Warn("controller: mark in-flight turn", "err", err)
-		return agent.InFlightTurnMeta{}
+		return sessionstore.InFlightTurnMeta{}
 	}
 	return c.withInheritedInterruptions(marker)
 }
@@ -355,13 +356,13 @@ func (c *Controller) markInFlightTurn(startMessageIndex int, preserveUser bool) 
 // finishInFlightTurn persists the completed transcript before removing the
 // crash marker. A crash can therefore leave either a recoverable marker or a
 // durable completed transcript, never an unmarked in-memory-only suffix.
-func (c *Controller) finishInFlightTurn(startMessages int, marker agent.InFlightTurnMeta) {
+func (c *Controller) finishInFlightTurn(startMessages int, marker sessionstore.InFlightTurnMeta) {
 	commitPrepared := marker.ID == ""
 	if marker.ID != "" && c.executor != nil {
 		digest, digestErr := c.executor.Session().ContentDigest()
 		if digestErr != nil {
 			slog.Warn("controller: compute completed turn digest", "err", digestErr)
-		} else if prepared, matched, prepareErr := agent.PrepareSessionInFlightTurnCommit(c.SessionPath(), marker, digest); prepareErr != nil {
+		} else if prepared, matched, prepareErr := sessionstore.PrepareSessionInFlightTurnCommit(c.SessionPath(), marker, digest); prepareErr != nil {
 			slog.Warn("controller: prepare in-flight turn commit", "err", prepareErr)
 		} else if matched {
 			marker = prepared
@@ -397,7 +398,7 @@ func (c *Controller) transplantInFlightTurnMarker(fromPath, toPath string) {
 	if strings.TrimSpace(fromPath) == "" || strings.TrimSpace(toPath) == "" || fromPath == toPath {
 		return
 	}
-	meta, ok, err := agent.LoadBranchMeta(fromPath)
+	meta, ok, err := sessionstore.LoadBranchMeta(fromPath)
 	if err != nil || !ok || meta.InFlightTurn == nil {
 		if err != nil {
 			slog.Warn("controller: load in-flight turn marker for transplant", "path", fromPath, "err", err)
@@ -405,13 +406,13 @@ func (c *Controller) transplantInFlightTurnMarker(fromPath, toPath string) {
 		return
 	}
 	marker := meta.InFlightTurn
-	if err := agent.SetSessionInFlightTurn(toPath, *marker); err != nil {
+	if err := sessionstore.SetSessionInFlightTurn(toPath, *marker); err != nil {
 		// Keep the original marker: a turn boundary on the wrong branch beats
 		// no boundary anywhere if the runtime dies before the turn completes.
 		slog.Warn("controller: transplant in-flight turn marker", "path", toPath, "err", err)
 		return
 	}
-	if _, err := agent.ClearSessionInFlightTurnIfMatch(fromPath, *marker); err != nil {
+	if _, err := sessionstore.ClearSessionInFlightTurnIfMatch(fromPath, *marker); err != nil {
 		slog.Warn("controller: clear in-flight turn marker on forked-from branch", "path", fromPath, "err", err)
 	}
 }
@@ -428,7 +429,7 @@ func interruptedTurnCrossesLaterTurn(msgs []provider.Message, start int) bool {
 		if msg.Role != provider.RoleUser || agent.IsCompactionSummary(msg) {
 			continue
 		}
-		if _, ok := agent.SteerText(msg.Content); ok {
+		if _, ok := sessionstore.SteerText(msg.Content); ok {
 			continue
 		}
 		turns++
@@ -447,15 +448,15 @@ func interruptedTurnCrossesLaterTurn(msgs []provider.Message, start int) bool {
 // crashed turn whose partial tail needs stripping. A marker without a start
 // time is treated as continued whenever any recovery child exists: erring
 // toward keeping messages is the data-safe direction.
-func interruptedTurnContinuedOnRecoveryBranch(path string, marker *agent.InFlightTurnMeta) bool {
+func interruptedTurnContinuedOnRecoveryBranch(path string, marker *sessionstore.InFlightTurnMeta) bool {
 	if marker == nil {
 		return false
 	}
-	branches, err := agent.ListBranches(filepath.Dir(path))
+	branches, err := sessionstore.ListBranches(filepath.Dir(path))
 	if err != nil {
 		return false
 	}
-	id := agent.BranchID(path)
+	id := sessionstore.BranchID(path)
 	for _, b := range branches {
 		if b.Recovered && b.ParentID == id && b.CreatedAt.After(marker.StartedAt) {
 			return true
@@ -483,7 +484,7 @@ func (c *Controller) inFlightTurnStartedAt() time.Time {
 	if path == "" {
 		return time.Time{}
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok || meta.InFlightTurn == nil {
 		return time.Time{}
 	}
@@ -509,7 +510,7 @@ func resolveInterruptedTurnStart(msgs []provider.Message, idx int, preserveUser 
 			if IsSyntheticUserMessage(m.Content) {
 				return false
 			}
-			if _, ok := agent.SteerText(m.Content); ok {
+			if _, ok := sessionstore.SteerText(m.Content); ok {
 				return false
 			}
 			if fallbackContent != "" && StripComposePrefixes(m.Content) != fallbackContent {

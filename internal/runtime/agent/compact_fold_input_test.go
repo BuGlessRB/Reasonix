@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -41,7 +42,7 @@ func foldOfToolResults(n, size int) []provider.Message {
 
 func newFoldAgent(t *testing.T, window int, prov provider.Provider) *Agent {
 	t.Helper()
-	return New(prov, nil, &Session{}, Options{ContextWindow: window}, event.Discard)
+	return New(prov, nil, &sessionstore.Session{}, Options{ContextWindow: window}, event.Discard)
 }
 
 func TestFoldUnderBudgetIsSummarizedVerbatimInOneCall(t *testing.T) {
@@ -105,7 +106,7 @@ func TestHugeFoldNeverMultiSpan(t *testing.T) {
 
 func TestNoContextWindowLeavesTheFoldUnbounded(t *testing.T) {
 	prov := &countingProvider{reply: "digest"}
-	a := New(prov, nil, &Session{}, Options{}, event.Discard)
+	a := New(prov, nil, &sessionstore.Session{}, Options{}, event.Discard)
 	fold := foldOfToolResults(40, 400)
 
 	res, err := a.foldToSummary(context.Background(), fold, "")
@@ -159,7 +160,7 @@ func TestSummarizerStreamsTheDigestAsItIsWritten(t *testing.T) {
 		}
 	})
 	prov := &countingProvider{reply: "digest"}
-	a := New(prov, nil, &Session{}, Options{ContextWindow: 200000}, sink)
+	a := New(prov, nil, &sessionstore.Session{}, Options{ContextWindow: 200000}, sink)
 
 	if _, err := a.foldToSummary(context.Background(), foldOfToolResults(3, 40), ""); err != nil {
 		t.Fatalf("foldToSummary: %v", err)

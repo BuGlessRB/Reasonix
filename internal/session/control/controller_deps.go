@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/event"
@@ -72,7 +73,7 @@ type controllerDeps struct {
 
 	shell               sandbox.Shell                    // interpreter for user-invoked "!" commands; zero = auto
 	onRemember          func(rule string) RememberResult // set via Options; invoked when user picks "always allow"
-	sessionRecoveryMeta func(SessionRecoveryRequest) agent.BranchMeta
+	sessionRecoveryMeta func(SessionRecoveryRequest) sessionstore.BranchMeta
 
 	// balance is the active provider's optional wallet endpoint (nil-answering
 	// when the provider declares none). Captured at build so a model/key switch —

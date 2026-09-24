@@ -3,6 +3,7 @@ package control
 import (
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -45,7 +46,7 @@ func TestSessionTempSurvivesHotRebuildStyleRetain(t *testing.T) {
 
 func TestNewSessionRotatesSessionTemp(t *testing.T) {
 	dir := testenv.TempDir(t)
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{
 		Executor:   exec,
 		SessionDir: dir,
@@ -82,7 +83,7 @@ func TestNewSessionRotatesSessionTemp(t *testing.T) {
 
 func TestSetSessionPathDoesNotRotateSessionTemp(t *testing.T) {
 	dir := testenv.TempDir(t)
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{
 		Executor:   exec,
 		SessionDir: dir,
@@ -111,9 +112,9 @@ func TestSetSessionPathDoesNotRotateSessionTemp(t *testing.T) {
 
 func TestResumeOtherSessionRotatesSessionTemp(t *testing.T) {
 	dir := testenv.TempDir(t)
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
-	pathA := agent.NewSessionPath(dir, "a")
-	pathB := agent.NewSessionPath(dir, "b")
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
+	pathA := sessionstore.NewSessionPath(dir, "a")
+	pathB := sessionstore.NewSessionPath(dir, "b")
 	c := New(Options{
 		Executor:    exec,
 		SessionDir:  dir,
@@ -131,7 +132,7 @@ func TestResumeOtherSessionRotatesSessionTemp(t *testing.T) {
 	lease.Release()
 
 	// Same-path resume (rebuild style) keeps generation.
-	c.Resume(agent.NewSession("sys"), pathA)
+	c.Resume(sessionstore.NewSession("sys"), pathA)
 	same, err := c.SessionTemp().Acquire()
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +143,7 @@ func TestResumeOtherSessionRotatesSessionTemp(t *testing.T) {
 	same.Release()
 
 	// Different path (user /resume) rotates.
-	c.Resume(agent.NewSession("sys"), pathB)
+	c.Resume(sessionstore.NewSession("sys"), pathB)
 	other, err := c.SessionTemp().Acquire()
 	if err != nil {
 		t.Fatal(err)

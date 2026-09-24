@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -20,9 +21,9 @@ import (
 // diverged from the returned in-memory session, so the next Snapshot on a
 // controller holding the stale session hits a conflict and retargets to a
 // recovery branch.
-func divergedACPSession(t *testing.T, path string) *agent.Session {
+func divergedACPSession(t *testing.T, path string) *sessionstore.Session {
 	t.Helper()
-	disk := agent.NewSession("sys prompt")
+	disk := sessionstore.NewSession("sys prompt")
 	disk.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	disk.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	disk.Add(provider.Message{Role: provider.RoleUser, Content: "disk second"})
@@ -30,7 +31,7 @@ func divergedACPSession(t *testing.T, path string) *agent.Session {
 		t.Fatalf("save disk session: %v", err)
 	}
 
-	stale := agent.NewSession("sys prompt")
+	stale := sessionstore.NewSession("sys prompt")
 	stale.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	stale.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
 	stale.Add(provider.Message{Role: provider.RoleUser, Content: "local second"})
@@ -69,7 +70,7 @@ func assertACPSessionOnRecoveryPath(t *testing.T, sess *acpSession, originalPath
 	if transcript != recoveryPath {
 		t.Fatalf("session transcript = %q, want recovery path %q", transcript, recoveryPath)
 	}
-	if lease == nil || lease.Path() != agent.CanonicalSessionPath(recoveryPath) {
+	if lease == nil || lease.Path() != sessionstore.CanonicalSessionPath(recoveryPath) {
 		got := ""
 		if lease != nil {
 			got = lease.Path()
@@ -78,7 +79,7 @@ func assertACPSessionOnRecoveryPath(t *testing.T, sess *acpSession, originalPath
 	}
 	// The original transcript's lease must have been released by the move so
 	// another runtime can bind it.
-	orig, err := agent.TryAcquireSessionLease(originalPath)
+	orig, err := sessionstore.TryAcquireSessionLease(originalPath)
 	if err != nil {
 		t.Fatalf("original transcript lease should be free after recovery move: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestACPRebuildSessionContinuesRecoveryPathAfterSnapshotConflict(t *testing.
 		model:      "fast",
 		transcript: originalPath,
 	}
-	lease, err := agent.TryAcquireSessionLease(originalPath)
+	lease, err := sessionstore.TryAcquireSessionLease(originalPath)
 	if err != nil {
 		t.Fatalf("acquire original session lease: %v", err)
 	}
@@ -164,7 +165,7 @@ func TestACPPersistAfterTurnMovesBookkeepingToRecoveryPath(t *testing.T) {
 		model:      "fast",
 		transcript: originalPath,
 	}
-	lease, err := agent.TryAcquireSessionLease(originalPath)
+	lease, err := sessionstore.TryAcquireSessionLease(originalPath)
 	if err != nil {
 		t.Fatalf("acquire original session lease: %v", err)
 	}
@@ -224,7 +225,7 @@ func recoverACPSessionAndRestart(t *testing.T, dir, id string) (originalPath, re
 		title:      "recovered title",
 		transcript: originalPath,
 	}
-	lease, err := agent.TryAcquireSessionLease(originalPath)
+	lease, err := sessionstore.TryAcquireSessionLease(originalPath)
 	if err != nil {
 		t.Fatalf("acquire original session lease: %v", err)
 	}
@@ -281,7 +282,7 @@ func TestACPLoadAfterRestartFollowsRecoveryTranscript(t *testing.T) {
 	// The test factory's controller has no executor, so prove the content via
 	// the transcript ACP now points at: it must hold the recovered local line,
 	// not the pre-recovery disk line.
-	resumed, err := agent.LoadSession(loaded.transcript)
+	resumed, err := sessionstore.LoadSession(loaded.transcript)
 	if err != nil {
 		t.Fatalf("load resolved transcript: %v", err)
 	}
@@ -360,7 +361,7 @@ type profileSystemPromptFactory struct {
 
 func (f *profileSystemPromptFactory) NewSession(_ context.Context, p SessionParams) (*control.Controller, error) {
 	prompt := "system prompt for profile " + p.RuntimeProfile
-	exec := agent.New(nil, nil, agent.NewSession(prompt), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession(prompt), agent.Options{}, event.Discard)
 	return control.New(control.Options{Executor: exec, SessionDir: f.dir, Label: p.RuntimeProfile}), nil
 }
 
@@ -377,7 +378,7 @@ func TestACPRebuildSessionRefreshesLeadingSystemPromptForNewProfile(t *testing.T
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "acp-profile-switch.jsonl")
 
-	oldSession := agent.NewSession("system prompt for profile balanced")
+	oldSession := sessionstore.NewSession("system prompt for profile balanced")
 	oldSession.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	oldSession.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 	if err := oldSession.Save(path); err != nil {
@@ -393,7 +394,7 @@ func TestACPRebuildSessionRefreshesLeadingSystemPromptForNewProfile(t *testing.T
 		runtimeProfile: "balanced",
 		transcript:     path,
 	}
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("acquire session lease: %v", err)
 	}
@@ -440,7 +441,7 @@ func TestACPWorkModeSwitchPersistsRefreshedSystemPromptAcrossReload(t *testing.T
 	id := "sess-profile-persist"
 	path := transcriptPath(dir, id)
 
-	oldSession := agent.NewSession("system prompt for profile balanced")
+	oldSession := sessionstore.NewSession("system prompt for profile balanced")
 	oldSession.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	oldSession.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 	if err := oldSession.Save(path); err != nil {
@@ -456,7 +457,7 @@ func TestACPWorkModeSwitchPersistsRefreshedSystemPromptAcrossReload(t *testing.T
 		runtimeProfile: "balanced",
 		transcript:     path,
 	}
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("acquire session lease: %v", err)
 	}
@@ -479,7 +480,7 @@ func TestACPWorkModeSwitchPersistsRefreshedSystemPromptAcrossReload(t *testing.T
 	}
 
 	// The refreshed contract must be on disk as soon as the switch lands.
-	onDisk, err := agent.LoadSession(path)
+	onDisk, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("load transcript after switch: %v", err)
 	}
@@ -530,7 +531,7 @@ func TestACPWorkModeSwitchSnapshotFailureKeepsOutgoingController(t *testing.T) {
 		t.Fatalf("mkdir invalid transcript path: %v", err)
 	}
 
-	oldSession := agent.NewSession("system prompt for profile balanced")
+	oldSession := sessionstore.NewSession("system prompt for profile balanced")
 	oldSession.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	oldSession.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 	oldCtrl := &snapshotLockProbeController{Controller: control.New(control.Options{

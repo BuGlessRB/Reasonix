@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -43,7 +44,7 @@ func TestListSessionsScalingManual(t *testing.T) {
 
 			// Metadata-only pass: ReadDir + Stat + LoadBranchMeta sidecar.
 			start := time.Now()
-			order, err := ListSessionOrder(dir)
+			order, err := sessionstore.ListSessionOrder(dir)
 			if err != nil {
 				t.Fatalf("ListSessionOrder: %v", err)
 			}
@@ -52,7 +53,7 @@ func TestListSessionsScalingManual(t *testing.T) {
 			// Cold ListSessions: sidecars have no recorded turn count yet, so this
 			// decodes every .jsonl in full (the pre-fix behaviour) and backfills.
 			start = time.Now()
-			cold, err := ListSessions(dir)
+			cold, err := sessionstore.ListSessions(dir)
 			if err != nil {
 				t.Fatalf("ListSessions (cold): %v", err)
 			}
@@ -62,7 +63,7 @@ func TestListSessionsScalingManual(t *testing.T) {
 			// sidecars, so this reads them and skips the whole-file decode — the
 			// post-fix steady state the sidebar hits on every refresh.
 			start = time.Now()
-			warm, err := ListSessions(dir)
+			warm, err := sessionstore.ListSessions(dir)
 			if err != nil {
 				t.Fatalf("ListSessions (warm): %v", err)
 			}
@@ -104,7 +105,7 @@ func writeSyntheticSessions(t *testing.T, dir string, n, turns int) int64 {
 		}
 		f.Close()
 
-		meta := BranchMeta{
+		meta := sessionstore.BranchMeta{
 			ID:        base,
 			CreatedAt: time.Now().Add(-time.Duration(i) * time.Minute),
 			UpdatedAt: time.Now().Add(-time.Duration(i) * time.Minute),
@@ -148,7 +149,7 @@ func TestColdStartProjectTreeManual(t *testing.T) {
 		onDisk += writeSyntheticSessions(t, dir, perDir, turns)
 		// Warm the sidecars (Turns/Preview), i.e. the steady state a real user is
 		// in after the one-time backfill — this is what cold start reads.
-		if _, err := ListSessions(dir); err != nil {
+		if _, err := sessionstore.ListSessions(dir); err != nil {
 			t.Fatalf("warm ListSessions: %v", err)
 		}
 	}
@@ -157,7 +158,7 @@ func TestColdStartProjectTreeManual(t *testing.T) {
 	start := time.Now()
 	seqTotal := 0
 	for _, dir := range dirs {
-		infos, err := ListSessions(dir)
+		infos, err := sessionstore.ListSessions(dir)
 		if err != nil {
 			t.Fatalf("ListSessions: %v", err)
 		}
@@ -173,7 +174,7 @@ func TestColdStartProjectTreeManual(t *testing.T) {
 		wg.Add(1)
 		go func(i int, dir string) {
 			defer wg.Done()
-			infos, _ := ListSessions(dir)
+			infos, _ := sessionstore.ListSessions(dir)
 			counts[i] = len(infos)
 		}(i, dir)
 	}

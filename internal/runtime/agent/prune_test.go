@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -28,7 +29,7 @@ func TestMaintenanceUsesSummaryNotPruneAtFoldTrigger(t *testing.T) {
 		provider.Message{Role: provider.RoleAssistant, Content: "ok"},
 	)
 	prov := &countingProvider{reply: "digest"}
-	a := New(prov, tool.NewRegistry(), &Session{Messages: msgs}, Options{
+	a := New(prov, tool.NewRegistry(), &sessionstore.Session{Messages: msgs}, Options{
 		ContextWindow: 20_000, CompactRatio: 0.5, RecentKeep: 2,
 	}, event.Discard)
 	if _, err := a.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {

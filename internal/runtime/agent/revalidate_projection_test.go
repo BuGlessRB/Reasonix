@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -14,9 +15,9 @@ import (
 
 // projectionWithLiveTail returns a compacted agent whose transcript has grown
 // past the fold, so a rewrite can land on either side of the boundary.
-func projectionWithLiveTail(t *testing.T) (*Agent, *Session, int) {
+func projectionWithLiveTail(t *testing.T) (*Agent, *sessionstore.Session, int) {
 	t.Helper()
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	for range 8 {
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: strings.Repeat("u", 80)})
 		sess.Add(provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("a", 120)})

@@ -2,6 +2,7 @@ package boot
 
 import (
 	"io"
+	"reasonix/internal/state/sessionstore"
 	"time"
 
 	"reasonix/internal/contract/config"
@@ -13,7 +14,6 @@ import (
 	"reasonix/internal/contract/surface"
 	"reasonix/internal/ext/plugin"
 	"reasonix/internal/model/billing"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/taskmonitor"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/sessiontemp"
@@ -103,7 +103,7 @@ type Options struct {
 	GoalTurnsUnreachable bool // this assembly never arms a Goal turn; see GoalOnlyToolNames
 	// SessionRecoveryMeta and OnSessionRecovered let richer frontends attach
 	// local UI metadata to automatic transcript recovery branches.
-	SessionRecoveryMeta func(control.SessionRecoveryRequest) agent.BranchMeta
+	SessionRecoveryMeta func(control.SessionRecoveryRequest) sessionstore.BranchMeta
 	OnSessionRecovered  func(control.SessionRecoveryInfo) error
 	// SubagentParentLive reports whether this process currently owns or is
 	// building the parent session. Desktop uses it to avoid probing a live tab's

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -22,7 +23,7 @@ func TestGoalRunHasNoDefaultModelRoundCeiling(t *testing.T) {
 	}
 	turns = append(turns, testutil.Turn{Text: "Done."})
 	prov := testutil.NewMock("m", turns...)
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	ctx := WithDeliveryExecutionScope(context.Background(), DeliveryExecutionScope{ID: "goal-1", TaskText: "work"})
 	if err := a.Run(ctx, "work"); err != nil {
 		t.Fatalf("Goal run stopped at a default round boundary: %v", err)

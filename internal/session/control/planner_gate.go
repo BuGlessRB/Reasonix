@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/agentpreset"
@@ -68,7 +69,7 @@ func (c *Controller) withPlannerTurnMetadata(ctx context.Context, userText strin
 // asked for a plan. It never calls a model and never scores the task text.
 func DecidePlannerRoute(ctx context.Context, input string) agent.PlannerDecision {
 	meta, hasMeta := plannerTurnMetadataFromContext(ctx)
-	composedText := strings.TrimSpace(agent.StripTransientUserBlocks(input))
+	composedText := strings.TrimSpace(sessionstore.StripTransientUserBlocks(input))
 	text := composedText
 	if hasMeta && strings.TrimSpace(meta.UserText) != "" {
 		text = strings.TrimSpace(meta.UserText)

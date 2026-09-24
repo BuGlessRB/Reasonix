@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestOrdinaryModeBlocksMixedMutationAndVerification(t *testing.T) {
 		{toolCallChunk("m1", "bash", `{"command":"go generate ./... ; go test ./..."}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "test"); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestOrdinaryModeRunsShortCircuitBuildAndVerify(t *testing.T) {
 				{toolCallChunk("m1", "bash", string(args)), {Type: provider.ChunkDone}},
 				{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
 			}}
-			a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+			a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 			if err := a.Run(context.Background(), "test"); err != nil {
 				t.Fatal(err)
 			}
@@ -110,7 +111,7 @@ func TestOrdinaryModeRunsBuildAndVerifyThroughReadablePipe(t *testing.T) {
 		{toolCallChunk("m1", "bash", string(args)), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "test"); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func TestOrdinaryModeBlocksMaskedVerifierExit(t *testing.T) {
 		{toolCallChunk("m1", "bash", `{"command":"go test ./...; echo $?"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "test"); err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +200,7 @@ func TestDeliveryNoLongerRefusesAnInlineInterpreter(t *testing.T) {
 				{toolCallChunk("m1", "bash", string(args)), {Type: provider.ChunkDone}},
 				{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
 			}}
-			a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+			a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true}, event.Discard)
 			_ = a.Run(context.Background(), "check")
 			if got := toolResultByID(a.sess.conversation, "m1"); strings.Contains(got, "cannot audit inline interpreter source") {
 				t.Fatalf("result = %q, want no refusal for handing over source", got)
@@ -216,7 +217,7 @@ func TestOrdinaryModeBlocksNonTerminalInlineInterpreter(t *testing.T) {
 		// A `&&` variant of the same pair is covered by the allow-list test above.
 		{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "test"); err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +250,7 @@ func TestBatchDependencyBarrierSkipsVerificationAfterFailedMutation(t *testing.T
 		},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "edit then verify"); err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +302,7 @@ func TestBatchDependencyBarrierIgnoresFailedNonMutationMetaTool(t *testing.T) {
 		},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "track then edit"); err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +337,7 @@ func TestBatchDependencyBarrierStopsAfterFailedWorkspaceWrite(t *testing.T) {
 		},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "two edits"); err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +430,7 @@ func TestBatchDependencyBarrierBlocksResolvedMCPWriterAfterFailedMutation(t *tes
 		},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "fail then mcp write"); err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +473,7 @@ func TestBatchDependencyBarrierAllowsReadOnlyDiagnosisAfterFailedMutation(t *tes
 		},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "fail then diagnose"); err != nil {
 		t.Fatal(err)
 	}

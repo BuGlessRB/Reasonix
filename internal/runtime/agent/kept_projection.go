@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 
@@ -33,8 +34,8 @@ func (a *Agent) keptForProjection(m provider.Message) provider.Message {
 func supersedeStandingState(kept []provider.Message) []provider.Message {
 	seen := make(map[string]bool)
 	drop := func(tag, opening string) bool {
-		if !supersededUserBlock[tag] || seen[opening] {
-			return supersededUserBlock[tag]
+		if !sessionstore.SupersededUserBlock[tag] || seen[opening] {
+			return sessionstore.SupersededUserBlock[tag]
 		}
 		seen[opening] = true
 		return false
@@ -54,7 +55,7 @@ func supersedeStandingState(kept []provider.Message) []provider.Message {
 // few blocks rather than one per turn.
 func StripSupersededUserBlocks(content string) string {
 	return filterLeadingBlocks(content, func(tag, _ string) bool {
-		return supersededUserBlock[tag]
+		return sessionstore.SupersededUserBlock[tag]
 	})
 }
 
@@ -101,7 +102,7 @@ func filterLeadingBlocks(content string, drop func(tag, opening string) bool) st
 // opening tag (the variant key, attributes included), and where it ends. The
 // tag is read from the opening because RE2 cannot backreference a capture.
 func leadingTransientBlock(s string) (tag, opening string, end int, ok bool) {
-	loc := reTransientUserBlock.FindStringIndex(s)
+	loc := sessionstore.ReTransientUserBlock.FindStringIndex(s)
 	if loc == nil || loc[0] != 0 {
 		return "", "", 0, false
 	}
@@ -110,7 +111,7 @@ func leadingTransientBlock(s string) (tag, opening string, end int, ok bool) {
 	if close < 0 {
 		return "", "", 0, false
 	}
-	for _, t := range TransientUserBlockTags {
+	for _, t := range sessionstore.TransientUserBlockTags {
 		if strings.HasPrefix(head, "<"+t+">") || strings.HasPrefix(head, "<"+t+" ") {
 			return t, head[:close+1], loc[1], true
 		}

@@ -1,6 +1,7 @@
 package control
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -11,16 +12,16 @@ import (
 
 func TestNewSessionRebindsProjectionSidecarPath(t *testing.T) {
 	dir := testenv.TempDir(t)
-	oldPath := agent.NewSessionPath(dir, "old")
-	sess := agent.NewSession("sys")
+	oldPath := sessionstore.NewSessionPath(dir, "old")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old work"})
 	if err := sess.Save(oldPath); err != nil {
 		t.Fatal(err)
 	}
 	// Seed an old projection sidecar.
-	if err := agent.SaveCompactionState(oldPath, agent.CompactionState{
+	if err := sessionstore.SaveCompactionState(oldPath, sessionstore.CompactionState{
 		SchemaVersion: 1,
-		Projection: agent.ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages:     []provider.Message{{Role: provider.RoleSystem, Content: "sys"}},
 			CoveredCount: 1,
 		},
@@ -29,7 +30,7 @@ func TestNewSessionRebindsProjectionSidecarPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{
 		ContextWindow: 1000,
 		SessionPath:   oldPath,
 		ModelRef:      "test/model",
@@ -52,18 +53,18 @@ func TestNewSessionRebindsProjectionSidecarPath(t *testing.T) {
 		t.Fatalf("executor SessionPath after NewSession = %q, want %q", got, newPath)
 	}
 	// Old sidecar must remain; new path must not inherit the old projection body.
-	if _, ok, err := agent.LoadCompactionState(oldPath); err != nil || !ok {
+	if _, ok, err := sessionstore.LoadCompactionState(oldPath); err != nil || !ok {
 		t.Fatalf("old sidecar should remain: ok=%v err=%v", ok, err)
 	}
-	if st, ok, err := agent.LoadCompactionState(newPath); err != nil {
+	if st, ok, err := sessionstore.LoadCompactionState(newPath); err != nil {
 		t.Fatalf("load new sidecar: %v", err)
 	} else if ok && len(st.Projection.Messages) > 0 {
 		t.Fatalf("new session should not load old projection: %+v", st.Projection)
 	}
 	// Writing a projection after rotation must land on the new path.
-	if err := agent.SaveCompactionState(exec.SessionPath(), agent.CompactionState{
+	if err := sessionstore.SaveCompactionState(exec.SessionPath(), sessionstore.CompactionState{
 		SchemaVersion: 1,
-		Projection: agent.ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages:          []provider.Message{{Role: provider.RoleSystem, Content: "sys"}},
 			CoveredCount:      1,
 			CoveredPrefixHash: "x",
@@ -71,11 +72,11 @@ func TestNewSessionRebindsProjectionSidecarPath(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, err := agent.LoadCompactionState(newPath); err != nil || !ok {
+	if _, ok, err := sessionstore.LoadCompactionState(newPath); err != nil || !ok {
 		t.Fatalf("projection must be readable at new path: ok=%v err=%v", ok, err)
 	}
 	// Ensure we did not overwrite old sidecar content with the new key.
-	old, ok, err := agent.LoadCompactionState(oldPath)
+	old, ok, err := sessionstore.LoadCompactionState(oldPath)
 	if err != nil || !ok {
 		t.Fatalf("old sidecar: ok=%v err=%v", ok, err)
 	}
@@ -86,13 +87,13 @@ func TestNewSessionRebindsProjectionSidecarPath(t *testing.T) {
 
 func TestClearSessionRebindsProjectionSidecarPath(t *testing.T) {
 	dir := testenv.TempDir(t)
-	path := agent.NewSessionPath(dir, "s")
-	sess := agent.NewSession("sys")
+	path := sessionstore.NewSessionPath(dir, "s")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	if err := sess.Save(path); err != nil {
 		t.Fatal(err)
 	}
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{SessionPath: path}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{SessionPath: path}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test", DisableColdResumePrune: true})
 	c.Resume(sess, path)
 
@@ -109,17 +110,17 @@ func TestClearSessionRebindsProjectionSidecarPath(t *testing.T) {
 
 func TestBranchRebindsProjectionSidecarPath(t *testing.T) {
 	dir := testenv.TempDir(t)
-	path := agent.NewSessionPath(dir, "main")
-	sess := agent.NewSession("sys")
+	path := sessionstore.NewSessionPath(dir, "main")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "task"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "ok"})
 	if err := sess.Save(path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := agent.EnsureBranchMeta(path); err != nil {
+	if _, err := sessionstore.EnsureBranchMeta(path); err != nil {
 		t.Fatal(err)
 	}
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{SessionPath: path, ContextWindow: 1000}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{SessionPath: path, ContextWindow: 1000}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test", DisableColdResumePrune: true})
 	c.Resume(sess, path)
 

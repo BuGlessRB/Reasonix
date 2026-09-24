@@ -2,6 +2,7 @@ package control
 
 import (
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -12,11 +13,11 @@ import (
 	"reasonix/internal/runtime/agent"
 )
 
-func coldResumeFixture(t *testing.T, threshold time.Duration) (*agent.Session, string, *Controller) {
+func coldResumeFixture(t *testing.T, threshold time.Duration) (*sessionstore.Session, string, *Controller) {
 	t.Helper()
 
 	dir := testenv.TempDir(t)
-	loaded := &agent.Session{Messages: []provider.Message{
+	loaded := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "1", Name: "grep", Arguments: "{}"}}},
@@ -25,15 +26,15 @@ func coldResumeFixture(t *testing.T, threshold time.Duration) (*agent.Session, s
 		{Role: provider.RoleUser, Content: "next"},
 		{Role: provider.RoleAssistant, Content: "ok"},
 	}}
-	path := agent.NewSessionPath(dir, "test")
+	path := sessionstore.NewSessionPath(dir, "test")
 	if err := loaded.Save(path); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	if _, err := agent.EnsureBranchMeta(path); err != nil {
+	if _, err := sessionstore.EnsureBranchMeta(path); err != nil {
 		t.Fatalf("meta: %v", err)
 	}
 
-	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{ContextWindow: 1000, RecentKeep: 2, ArchiveDir: dir}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{ContextWindow: 1000, RecentKeep: 2, ArchiveDir: dir}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
 	if threshold == 0 {
 		c.testCacheColdAfter = -1 // force cold
@@ -51,7 +52,7 @@ func TestColdResumeDoesNotRewriteOrNetwork(t *testing.T) {
 	if !strings.HasPrefix(msgs[3].Content, "yyy") {
 		t.Fatalf("cold resume rewrote tool result: %.60q", msgs[3].Content)
 	}
-	re, err := agent.LoadSession(path)
+	re, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -66,22 +67,22 @@ func TestColdResumeDoesNotRewriteOrNetwork(t *testing.T) {
 
 func TestColdResumeAfterClonedHistoryStaysInPlace(t *testing.T) {
 	dir := testenv.TempDir(t)
-	saved := agent.NewSession("old sys")
+	saved := sessionstore.NewSession("old sys")
 	saved.Add(provider.Message{Role: provider.RoleUser, Content: "task"})
 	saved.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "1", Name: "grep", Arguments: "{}"}}})
 	saved.Add(provider.Message{Role: provider.RoleTool, ToolCallID: "1", Name: "grep", Content: strings.Repeat("y", 5000)})
 	saved.Add(provider.Message{Role: provider.RoleAssistant, Content: "step done"})
 	saved.Add(provider.Message{Role: provider.RoleUser, Content: "next"})
 	saved.Add(provider.Message{Role: provider.RoleAssistant, Content: "ok"})
-	path := agent.NewSessionPath(dir, "test")
+	path := sessionstore.NewSessionPath(dir, "test")
 	if err := saved.Save(path); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	if _, err := agent.EnsureBranchMeta(path); err != nil {
+	if _, err := sessionstore.EnsureBranchMeta(path); err != nil {
 		t.Fatalf("meta: %v", err)
 	}
 
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -89,7 +90,7 @@ func TestColdResumeAfterClonedHistoryStaysInPlace(t *testing.T) {
 	msgs[0].Content = "new sys"
 	resumed := loaded.CloneWithMessages(msgs)
 
-	exec := agent.New(nil, nil, agent.NewSession("new sys"), agent.Options{ContextWindow: 1000, RecentKeep: 2, ArchiveDir: dir}, event.Discard)
+	exec := agent.New(nil, nil, sessionstore.NewSession("new sys"), agent.Options{ContextWindow: 1000, RecentKeep: 2, ArchiveDir: dir}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
 	c.testCacheColdAfter = -1 // force cold
 	c.Resume(resumed, path)
@@ -100,7 +101,7 @@ func TestColdResumeAfterClonedHistoryStaysInPlace(t *testing.T) {
 	// Snapshot was not rewritten by cold resume; in-memory clone keeps new sys
 	// until an explicit save. Disk still has whatever was last saved unless
 	// SnapshotRewrite ran — cold path must not rewrite.
-	re, err := agent.LoadSession(path)
+	re, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -122,7 +123,7 @@ func TestWarmResumeLeavesHistoryAlone(t *testing.T) {
 	if got := loaded.Snapshot()[3].Content; !strings.HasPrefix(got, "yyy") {
 		t.Fatalf("warm resume rewrote history: %.60q", got)
 	}
-	re, err := agent.LoadSession(path)
+	re, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}

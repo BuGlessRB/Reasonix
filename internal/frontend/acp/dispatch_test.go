@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +14,6 @@ import (
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -87,7 +87,7 @@ func TestUpdateSinkReplayStripsSteerWrapper(t *testing.T) {
 	sink := newUpdateSink(fn, "sess-1")
 	sink.replay([]provider.Message{{
 		Role:    provider.RoleUser,
-		Content: agent.MidTurnSteerPrefix + "\nuse plan B",
+		Content: sessionstore.MidTurnSteerPrefix + "\nuse plan B",
 	}})
 
 	u := fn.updateMap(t, 0)

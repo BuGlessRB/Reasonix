@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"sort"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"reasonix/internal/base/fileutil"
 	"reasonix/internal/base/secrets"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -179,12 +179,12 @@ func redactionSessionPath(path string) string {
 }
 
 func sessionRedactionLeaseHeld(sessionPath string) bool {
-	if agent.SessionLeaseHeld(sessionPath) {
+	if sessionstore.SessionLeaseHeld(sessionPath) {
 		return true
 	}
 	if before, ok := strings.CutSuffix(sessionPath, ".guardian.jsonl"); ok {
 		parent := before + ".jsonl"
-		return agent.SessionLeaseHeld(parent)
+		return sessionstore.SessionLeaseHeld(parent)
 	}
 	return false
 }
@@ -231,7 +231,7 @@ func redactSessionArtifact(path string, dryRun bool) (changed int64, bytesRewrit
 // same cross-process locks live sessions use. Ordinary Session.Save calls keep
 // transcript content byte-for-byte intact.
 func redactSessionTranscript(path string, dryRun bool) (int64, int64, error) {
-	s, err := agent.LoadSession(path)
+	s, err := sessionstore.LoadSession(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, 0, nil
@@ -329,12 +329,12 @@ func redactedEncodedSize(msgs []provider.Message) int64 {
 // (preview, titles, goal, recovery reason) through the typed load/save pair so
 // revisions, digests, and timestamps survive untouched.
 func redactBranchMeta(sessionPath string, dryRun bool) (int64, int64, error) {
-	unlock, err := agent.LockSessionMetaPath(sessionPath)
+	unlock, err := sessionstore.LockSessionMetaPath(sessionPath)
 	if err != nil {
 		return 0, 0, err
 	}
 	defer unlock()
-	meta, ok, err := agent.LoadBranchMeta(sessionPath)
+	meta, ok, err := sessionstore.LoadBranchMeta(sessionPath)
 	if err != nil || !ok {
 		return 0, 0, err
 	}
@@ -351,11 +351,11 @@ func redactBranchMeta(sessionPath string, dryRun bool) (int64, int64, error) {
 	if dryRun {
 		return 1, 0, nil
 	}
-	if err := agent.SaveBranchMetaPreserveUpdatedLocked(sessionPath, meta); err != nil {
+	if err := sessionstore.SaveBranchMetaPreserveUpdatedLocked(sessionPath, meta); err != nil {
 		return 0, 0, err
 	}
 	var rewritten int64
-	if info, err := os.Stat(agent.BranchMetaPath(sessionPath)); err == nil {
+	if info, err := os.Stat(sessionstore.BranchMetaPath(sessionPath)); err == nil {
 		rewritten = info.Size()
 	}
 	return 1, rewritten, nil

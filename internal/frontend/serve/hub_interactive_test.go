@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -46,7 +47,7 @@ func TestHubAdoptPublishesLocalRuntimeWithInteractiveWiring(t *testing.T) {
 	dir := testenv.TempDir(t)
 	reg := tool.NewRegistry()
 	reg.Add(agent.NewAskTool())
-	executor := agent.New(&askingProvider{}, reg, agent.NewSession(""), agent.Options{MaxSteps: 4}, event.Discard)
+	executor := agent.New(&askingProvider{}, reg, sessionstore.NewSession(""), agent.Options{MaxSteps: 4}, event.Discard)
 
 	bc := NewBroadcaster()
 	asked := make(chan event.Ask, 1)

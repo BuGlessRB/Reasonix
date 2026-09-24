@@ -3,11 +3,11 @@ package cli
 import (
 	"io"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"sort"
 	"strings"
 	"time"
 
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/jobs"
 )
 
@@ -133,18 +133,18 @@ func parseTaskMachineOptions(args []string, operation string) (taskMachineOption
 }
 
 func machineTasks(dir, sessionFilter string, identityKey []byte) ([]machineTask, error) {
-	ordered, err := agent.ListSessionOrder(dir)
+	ordered, err := sessionstore.ListSessionOrder(dir)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]machineTask, 0)
 	for _, session := range ordered {
-		rawSessionID := agent.BranchID(session.Path)
+		rawSessionID := sessionstore.BranchID(session.Path)
 		sessionID := machineSessionIDWithKey(rawSessionID, identityKey)
 		if sessionFilter != "" && sessionID != sessionFilter {
 			continue
 		}
-		sessionActive := agent.SessionLeaseHeld(session.Path)
+		sessionActive := sessionstore.SessionLeaseHeld(session.Path)
 		views, err := jobs.ListArtifactViews(session.Path)
 		if err != nil {
 			return nil, err
@@ -171,7 +171,7 @@ func machineTasks(dir, sessionFilter string, identityKey []byte) ([]machineTask,
 				ArtifactComplete: artifactComplete,
 			})
 		}
-		artifacts, err := agent.ListSubagentsByParent(dir, rawSessionID)
+		artifacts, err := sessionstore.ListSubagentsByParent(dir, rawSessionID)
 		if err != nil {
 			return nil, err
 		}
@@ -182,9 +182,9 @@ func machineTasks(dir, sessionFilter string, identityKey []byte) ([]machineTask,
 			status := artifact.Meta.Status
 			finishedAt := ""
 			artifactComplete := false
-			if status == agent.SubagentRunning {
+			if status == sessionstore.SubagentRunning {
 				if !sessionActive {
-					status = agent.SubagentInterrupted
+					status = sessionstore.SubagentInterrupted
 				}
 			} else {
 				finishedAt = machineTime(artifact.Meta.UpdatedAt)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -158,7 +159,7 @@ func TestCanceledContextClosedProviderStreamReturnsCancel(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		a := New(closedStreamProvider{}, tool.NewRegistry(), NewSession(""), Options{}, &recordSink{})
+		a := New(closedStreamProvider{}, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, &recordSink{})
 		err := a.Run(ctx, "already cancelled")
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("Run error on iteration %d = %v, want context cancellation", i, err)
@@ -167,7 +168,7 @@ func TestCanceledContextClosedProviderStreamReturnsCancel(t *testing.T) {
 }
 
 func TestCancelDuringStuckProviderStreamReturnsPromptly(t *testing.T) {
-	a := New(stuckStreamProvider{}, tool.NewRegistry(), NewSession(""), Options{}, &recordSink{})
+	a := New(stuckStreamProvider{}, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, &recordSink{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -234,7 +235,7 @@ func (p reasoningGuardCancelProvider) Stream(ctx context.Context, _ provider.Req
 
 func TestRunawayReasoningStopsAtAgentSideByteGuard(t *testing.T) {
 	sink := &recordSink{}
-	a := New(activeReasoningUntilCancelProvider{}, tool.NewRegistry(), NewSession(""), Options{ReasoningByteLimit: 64}, sink)
+	a := New(activeReasoningUntilCancelProvider{}, tool.NewRegistry(), sessionstore.NewSession(""), Options{ReasoningByteLimit: 64}, sink)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -257,7 +258,7 @@ func TestRunawayReasoningStopsAtAgentSideByteGuard(t *testing.T) {
 
 func TestReasoningByteGuardCancelsProviderStream(t *testing.T) {
 	canceled := make(chan struct{})
-	a := New(reasoningGuardCancelProvider{canceled: canceled}, tool.NewRegistry(), NewSession(""), Options{ReasoningByteLimit: 32}, event.Discard)
+	a := New(reasoningGuardCancelProvider{canceled: canceled}, tool.NewRegistry(), sessionstore.NewSession(""), Options{ReasoningByteLimit: 32}, event.Discard)
 
 	if err := a.Run(context.Background(), "trigger the reasoning guard"); !errors.Is(err, errReasoningByteLimitExceeded) {
 		t.Fatalf("Run error = %v, want reasoning limit guard", err)
@@ -271,7 +272,7 @@ func TestReasoningByteGuardCancelsProviderStream(t *testing.T) {
 
 func TestInterruptedReasoningEmitsBestEffortUsage(t *testing.T) {
 	sink := &recordSink{}
-	a := New(activeReasoningUntilCancelProvider{}, tool.NewRegistry(), NewSession(""), Options{}, sink)
+	a := New(activeReasoningUntilCancelProvider{}, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, sink)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -320,7 +321,7 @@ func TestReasoningByteGuardDoesNotSetProviderOutputBudget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			prov := testutil.NewMock("m", testutil.Turn{Text: "done"})
-			a := New(prov, tool.NewRegistry(), NewSession(""), Options{ReasoningByteLimit: tt.limit}, event.Discard)
+			a := New(prov, tool.NewRegistry(), sessionstore.NewSession(""), Options{ReasoningByteLimit: tt.limit}, event.Discard)
 			if err := a.Run(context.Background(), "go"); err != nil {
 				t.Fatal(err)
 			}
@@ -338,7 +339,7 @@ func TestReasoningByteGuardDoesNotSetProviderOutputBudget(t *testing.T) {
 		)
 		registry := tool.NewRegistry()
 		registry.Add(fakeTool{name: "read", readOnly: true})
-		a := New(prov, registry, NewSession(""), Options{MaxOutputTokens: 8192}, event.Discard)
+		a := New(prov, registry, sessionstore.NewSession(""), Options{MaxOutputTokens: 8192}, event.Discard)
 		if err := a.Run(context.Background(), "go"); err != nil {
 			t.Fatal(err)
 		}
@@ -389,7 +390,7 @@ func TestCancelDuringToolExecutionBreaksOutPromptly(t *testing.T) {
 	)
 
 	sink := &recordSink{}
-	a := New(mp, reg, NewSession(""), Options{}, sink)
+	a := New(mp, reg, sessionstore.NewSession(""), Options{}, sink)
 
 	// Create a cancellable context and cancel it shortly after starting
 	ctx, cancel := context.WithCancel(context.Background())
@@ -456,7 +457,7 @@ func TestCancelDuringBatchStopsRemainingTools(t *testing.T) {
 	)
 
 	sink := &recordSink{}
-	a := New(mp, reg, NewSession(""), Options{}, sink)
+	a := New(mp, reg, sessionstore.NewSession(""), Options{}, sink)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -543,7 +544,7 @@ func TestCancelBeforeParallelBatchSkipsTheWholeRemainingBatch(t *testing.T) {
 	)
 
 	sink := &recordSink{}
-	a := New(mp, reg, NewSession(""), Options{}, sink)
+	a := New(mp, reg, sessionstore.NewSession(""), Options{}, sink)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -607,7 +608,7 @@ func TestCancelInsideLargeParallelBatchStopsSchedulingNewTools(t *testing.T) {
 	}
 
 	mp := testutil.NewMock("m", testutil.Turn{ToolCalls: calls})
-	a := New(mp, reg, NewSession(""), Options{}, &recordSink{})
+	a := New(mp, reg, sessionstore.NewSession(""), Options{}, &recordSink{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

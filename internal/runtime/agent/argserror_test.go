@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -21,7 +22,7 @@ func TestMalformedToolArgsEchoSchema(t *testing.T) {
 		{toolCallChunk("c1", "ask", `{"questions":["q":1]}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "ask me"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -40,7 +41,7 @@ func TestValidArgsErrorOmitsSchema(t *testing.T) {
 		{toolCallChunk("c1", "ask", `{"questions":[{"question":"q","header":"h","options":[{"label":"a"}]}]}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "ask me"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

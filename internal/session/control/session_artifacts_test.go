@@ -3,11 +3,11 @@ package control
 import (
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/safety/guardian"
 	"reasonix/internal/state/store"
 )
@@ -18,7 +18,7 @@ import (
 func TestRemoveSessionArtifactsSweepsEventLogAndSidecars(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	s := agent.NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "secret work"})
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("SaveSnapshot: %v", err)
@@ -58,7 +58,7 @@ func TestRemoveSessionArtifactsSweepsEventLogAndSidecars(t *testing.T) {
 			t.Errorf("artifact survived clear: %s (err=%v)", p, err)
 		}
 	}
-	if _, err := agent.LoadSession(path); !os.IsNotExist(err) {
+	if _, err := sessionstore.LoadSession(path); !os.IsNotExist(err) {
 		t.Fatalf("LoadSession after clear = %v, want IsNotExist (no resurrection)", err)
 	}
 }

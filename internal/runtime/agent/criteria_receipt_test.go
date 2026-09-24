@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -54,7 +55,7 @@ func TestMedian(t *testing.T) {
 func TestRewrittenCheckReachesTheLedger(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(previewingEdit{change: diff.Build("mathutil/mathutil_test.go", criteriaTestBefore, criteriaTestAfter, diff.Modify)})
-	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		Name: "edit_file", Arguments: `{"path":"mathutil/mathutil_test.go"}`,
@@ -80,7 +81,7 @@ func TestMedianEven(t *testing.T) {
 `
 	reg := tool.NewRegistry()
 	reg.Add(previewingEdit{change: diff.Build("mathutil/mathutil_test.go", criteriaTestBefore, added, diff.Modify)})
-	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 
 	a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		Name: "edit_file", Arguments: `{"path":"mathutil/mathutil_test.go"}`,

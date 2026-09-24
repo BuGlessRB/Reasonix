@@ -2,6 +2,7 @@ package agent
 
 import (
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ import (
 func commitTestAgent(t *testing.T) *Agent {
 	t.Helper()
 	dir := testenv.TempDir(t)
-	return New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), NewSession("sys"), Options{
+	return New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{
 		ContextWindow: 2000, RecentKeep: 2, ArchiveDir: dir,
 		SessionPath: filepath.Join(dir, "s.jsonl"), WorkspaceID: "ws", ModelRef: "m",
 	}, event.Discard)
@@ -48,13 +49,13 @@ func TestSummaryProjectionStateRecordsTheCommittedBoundary(t *testing.T) {
 	if got := state.Projection.CoveredCount; got != covered {
 		t.Fatalf("CoveredCount = %d, want the committed %d", got, covered)
 	}
-	want := coveredPrefixHash(canonical, covered)
+	want := sessionstore.CoveredPrefixHash(canonical, covered)
 	if got := state.Projection.CoveredPrefixHash; got != want {
 		t.Fatalf("CoveredPrefixHash = %q, want the hash of canonical[:%d] %q", got, covered, want)
 	}
 	// The half-migrated shape this guards against: the count moves to the fold
 	// boundary while the hash still covers the whole transcript.
-	if whole := coveredPrefixHash(canonical, len(canonical)); state.Projection.CoveredPrefixHash == whole {
+	if whole := sessionstore.CoveredPrefixHash(canonical, len(canonical)); state.Projection.CoveredPrefixHash == whole {
 		t.Fatal("CoveredPrefixHash still covers the whole canonical transcript")
 	}
 	if r := state.LastReceipt; r == nil {
@@ -93,7 +94,7 @@ func TestFoldedProjectionCarriesTheOldBodyRemainder(t *testing.T) {
 		{Role: provider.RoleUser, Content: "body-kept-a"},
 		{Role: provider.RoleAssistant, Content: "body-kept-b"},
 	}
-	state := CompactionState{Projection: ContextProjection{Messages: body, CoveredCount: 19}}
+	state := sessionstore.CompactionState{Projection: sessionstore.ContextProjection{Messages: body, CoveredCount: 19}}
 	view := append(append([]provider.Message(nil), body...),
 		provider.Message{Role: provider.RoleUser, Content: "live-tail"})
 

@@ -3,11 +3,10 @@ package cli
 import (
 	"fmt"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strconv"
 	"strings"
-
-	"reasonix/internal/runtime/agent"
 )
 
 type cliCompletionValueKind uint8
@@ -594,13 +593,13 @@ func runtimeCompletionValues(kind cliCompletionValueKind) []string {
 }
 
 func completionSessionIDs() []string {
-	ordered, err := agent.ListSessionOrder(resolveCLISessionDir())
+	ordered, err := sessionstore.ListSessionOrder(resolveCLISessionDir())
 	if err != nil {
 		return nil
 	}
 	out := make([]string, 0, len(ordered))
 	for _, session := range ordered {
-		out = append(out, agent.BranchID(session.Path))
+		out = append(out, sessionstore.BranchID(session.Path))
 	}
 	return stableUniqueCompletionValues(out)
 }

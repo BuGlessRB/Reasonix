@@ -189,7 +189,7 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 		return prepared, nil
 	}
 	if outcome == CompactionNoop {
-		canonical, _ := a.sess.conversation.snapshotMessagesVersion()
+		canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
 		if policy.Trigger == CompactionTriggerPressure && a.activeTurnStart(canonical) >= 0 {
 			// Saying so is the only record that the attempt happened; this
 			// path deliberately does not block the next one.

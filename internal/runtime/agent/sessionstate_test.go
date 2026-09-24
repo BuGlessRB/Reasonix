@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 	"time"
 )
@@ -142,10 +143,10 @@ func TestSetSessionRestartsTheConversationState(t *testing.T) {
 	a.sess.missingReasoning = missingReasoningWatch{active: true, stateRecorded: true, healthyStreak: 2}
 	a.sess.compaction.stuck = true
 	a.sess.compaction.lastNoop = maintenanceNoop{reason: NoopNoNewClosedPrefix, turn: 9}
-	a.sess.compactionState = CompactionState{}
+	a.sess.compactionState = sessionstore.CompactionState{}
 	a.unwrittenResolve.at = time.Unix(1, 0)
 
-	next := NewSession("")
+	next := sessionstore.NewSession("")
 	a.SetSession(next)
 
 	if a.sess.session() != next {

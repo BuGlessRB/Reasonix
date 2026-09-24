@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ const digestNamingOneChange = "## Files & code\n- internal/parser/lexer.go was r
 func repairAgent(t *testing.T, replies []scriptedReply) (*Agent, *scriptedSummarizer) {
 	t.Helper()
 	prov := &scriptedSummarizer{replies: replies}
-	return New(prov, coverageRegistry(), &Session{}, Options{ContextWindow: 200000}, nil), prov
+	return New(prov, coverageRegistry(), &sessionstore.Session{}, Options{ContextWindow: 200000}, nil), prov
 }
 
 // Correcting a digest may consume the digest and the facts the host already

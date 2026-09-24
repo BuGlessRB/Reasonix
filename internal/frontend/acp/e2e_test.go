@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -86,7 +87,7 @@ func (f *e2eFactory) SessionDir() string { return f.sessionDir }
 func (f *e2eFactory) NewSession(_ context.Context, p SessionParams) (*control.Controller, error) {
 	reg := tool.NewRegistry()
 	reg.Add(f.tool)
-	executor := agent.New(f.prov, reg, agent.NewSession("you are a test agent"),
+	executor := agent.New(f.prov, reg, sessionstore.NewSession("you are a test agent"),
 		agent.Options{MaxSteps: 5}, p.Sink)
 	return control.New(control.Options{
 		Runner:     executor,

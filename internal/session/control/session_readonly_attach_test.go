@@ -4,16 +4,16 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 func seedTranscript(t *testing.T, path string, text string) {
 	t.Helper()
-	s := agent.NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: text})
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -27,7 +27,7 @@ func TestAttachReadsASessionAnotherRuntimeHolds(t *testing.T) {
 	path := filepath.Join(testenv.TempDir(t), "held.jsonl")
 	seedTranscript(t, path, "what the other window is writing")
 
-	holder, err := agent.TryAcquireSessionLease(path)
+	holder, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("holder: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestReadOnlyAttachmentCannotWriteTheTranscript(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	holder, err := agent.TryAcquireSessionLease(path)
+	holder, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("holder: %v", err)
 	}
@@ -75,11 +75,11 @@ func TestReadOnlyAttachmentCannotWriteTheTranscript(t *testing.T) {
 	// What a read-only pane holds: a loaded transcript, and no authority. This
 	// is the state Attach leaves the controller in, reproduced directly so the
 	// assertion is about the save path rather than about controller wiring.
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "an edit this window must not persist"})
 	sess.RequireWriteAuthority()
 
-	if err := sess.SaveSnapshot(path); !errors.Is(err, agent.ErrSessionWriteAuthorityMissing) {
+	if err := sess.SaveSnapshot(path); !errors.Is(err, sessionstore.ErrSessionWriteAuthorityMissing) {
 		t.Fatalf("SaveSnapshot without authority = %v, want ErrSessionWriteAuthorityMissing", err)
 	}
 	after, err := os.ReadFile(path)
@@ -103,7 +103,7 @@ func TestAttachTakesTheLeaseWhenItIsFree(t *testing.T) {
 	if err != nil || !writable {
 		t.Fatalf("Attach on a free session = (%v, %v), want (true, nil)", writable, err)
 	}
-	if got, want := k.HeldPath(), agent.CanonicalSessionPath(path); got != want {
+	if got, want := k.HeldPath(), sessionstore.CanonicalSessionPath(path); got != want {
 		t.Errorf("held %q, want %q", got, want)
 	}
 }
@@ -117,7 +117,7 @@ func TestAttachReleasesThePreviousLeaseWhenTheNextIsHeld(t *testing.T) {
 	seedTranscript(t, mine, "mine")
 	seedTranscript(t, theirs, "theirs")
 
-	holder, err := agent.TryAcquireSessionLease(theirs)
+	holder, err := sessionstore.TryAcquireSessionLease(theirs)
 	if err != nil {
 		t.Fatalf("holder: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestAttachReleasesThePreviousLeaseWhenTheNextIsHeld(t *testing.T) {
 		t.Errorf("still holding %q after moving to a session held elsewhere", got)
 	}
 	// And the one it let go of is free for whoever wants it next.
-	got, err := agent.TryAcquireSessionLease(mine)
+	got, err := sessionstore.TryAcquireSessionLease(mine)
 	if err != nil {
 		t.Fatalf("the released session is still locked: %v", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/assembly/boot"
@@ -96,7 +97,7 @@ func reviewCommand(args []string) int {
 	// through TaskTool.subagentOptions / boot's subagentSkillOptions. If a new
 	// Options field becomes load-bearing for sub-agents, decide explicitly
 	// whether this path needs it too.
-	result, err := agent.RunReadOnlySubAgentWithSession(ctx, prov, reg, agent.NewSession(reviewSk.Body), task, agent.Options{
+	result, err := agent.RunReadOnlySubAgentWithSession(ctx, prov, reg, sessionstore.NewSession(reviewSk.Body), task, agent.Options{
 		MaxSteps:      12,
 		Temperature:   cfg.Agent.Temperature,
 		Pricing:       entry.Price,

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -18,7 +19,7 @@ const billedThinkingTokens = 64
 // so it must neither replay the request nor consume the incident's one replay.
 func TestModelSilentToolCallReasoningIsNotReplayed(t *testing.T) {
 	prov := toolCallReasoningRequiredProvider{testutil.NewMock("deepseek-proxy")}
-	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: testenv.TempDir(t)}, event.Discard)
+	a := New(prov, echoRegistry(), sessionstore.NewSession(""), Options{MissingReasoningWarnStateDir: testenv.TempDir(t)}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
 
 	for round := 1; round <= 3; round++ {

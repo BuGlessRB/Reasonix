@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"sync"
 	"sync/atomic"
 
@@ -15,7 +16,7 @@ import (
 // forgotten" property is enforced by sessionstate_test.go instead.
 type sessionRuntime struct {
 	mu           sync.Mutex // guards conversation for external Session()/SetSession
-	conversation *Session
+	conversation *sessionstore.Session
 	output       outputBudgetState
 
 	// cacheHit/cacheMiss are the session aggregate, which compaction must not
@@ -37,7 +38,7 @@ type sessionRuntime struct {
 	// holding the session lock during network I/O.
 	compactionRunMu sync.Mutex
 	compaction      compactionProgress
-	compactionState CompactionState
+	compactionState sessionstore.CompactionState
 	cacheState      string // legacy resume telemetry; never provider-visible
 
 	// path and checkpointState are rebound by preflight when a transcript is
@@ -69,7 +70,7 @@ type sessionRuntime struct {
 // in sessionCarryOver, and sessionstate_test.go checks both lists against the
 // struct: an atomic-bearing type cannot be replaced by one assignment, so the
 // guarantee has to be tested rather than compiled.
-func (r *sessionRuntime) reset(s *Session) {
+func (r *sessionRuntime) reset(s *sessionstore.Session) {
 	r.mu.Lock()
 	r.conversation = s
 	r.mu.Unlock()
@@ -81,7 +82,7 @@ func (r *sessionRuntime) reset(s *Session) {
 	// carried-over entry could answer for history this session never had.
 	r.coveredHash.Store(nil)
 	r.compactionMu.Lock()
-	r.compactionState = CompactionState{} // lineage change; disk reloaded on Resume
+	r.compactionState = sessionstore.CompactionState{} // lineage change; disk reloaded on Resume
 	r.cacheState = CacheStateUnknown
 	r.compactionMu.Unlock()
 	r.compaction.restart()
@@ -90,7 +91,7 @@ func (r *sessionRuntime) reset(s *Session) {
 
 // session returns the bound conversation under the lock that guards the
 // pointer against a concurrent SetSession.
-func (r *sessionRuntime) session() *Session {
+func (r *sessionRuntime) session() *sessionstore.Session {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.conversation

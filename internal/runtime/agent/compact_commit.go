@@ -3,6 +3,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"time"
 
 	"reasonix/internal/contract/provider"
@@ -21,28 +22,28 @@ type summaryProjectionCommit struct {
 	sourceTokens, projectionTokens                   int
 	// summaryUsage is what the transaction spent producing this projection,
 	// which has nothing to do with sourceTokens above.
-	summaryUsage CompactionUsage
+	summaryUsage sessionstore.CompactionUsage
 }
 
 // commitSummaryProjection CAS-installs a checkpoint under compactionMu:
 // transcript version/hash, projection version, and generation must still match.
 // The maintenance event is emitted only after the lock is released so a sink
 // that re-enters ContextMaintenanceSnapshot cannot deadlock.
-func (a *Agent) commitSummaryProjection(commit summaryProjectionCommit) (CompactionState, error) {
+func (a *Agent) commitSummaryProjection(commit summaryProjectionCommit) (sessionstore.CompactionState, error) {
 	if commit.covered <= 0 || commit.covered > len(commit.canonical) {
-		return CompactionState{}, fmt.Errorf("compaction commit: covered %d outside canonical length %d",
+		return sessionstore.CompactionState{}, fmt.Errorf("compaction commit: covered %d outside canonical length %d",
 			commit.covered, len(commit.canonical))
 	}
 	state := a.summaryProjectionState(commit)
 	a.sess.compactionMu.Lock()
-	current, currentVersion := a.sess.conversation.snapshotMessagesVersion()
+	current, currentVersion := a.sess.conversation.SnapshotMessagesVersion()
 	if currentVersion != commit.transcriptVersion ||
 		len(current) != len(commit.canonical) ||
-		coveredPrefixHash(current, len(current)) != coveredPrefixHash(commit.canonical, len(commit.canonical)) ||
+		sessionstore.CoveredPrefixHash(current, len(current)) != sessionstore.CoveredPrefixHash(commit.canonical, len(commit.canonical)) ||
 		a.sess.compactionState.Projection.ProjectionVersion != commit.projectionVersion ||
 		a.sess.compactionState.Generation != commit.generation {
 		a.sess.compactionMu.Unlock()
-		return CompactionState{}, errCompressStaleContext
+		return sessionstore.CompactionState{}, errCompressStaleContext
 	}
 	prev := a.sess.compactionState
 	a.sess.compactionState = state
@@ -50,9 +51,9 @@ func (a *Agent) commitSummaryProjection(commit summaryProjectionCommit) (Compact
 		a.sess.compactionState = prev
 		a.sess.compactionMu.Unlock()
 		if errors.Is(err, errCompressStaleContext) {
-			return CompactionState{}, err
+			return sessionstore.CompactionState{}, err
 		}
-		return CompactionState{}, fmt.Errorf("persist projection: %w", err)
+		return sessionstore.CompactionState{}, fmt.Errorf("persist projection: %w", err)
 	}
 	a.sess.checkpointState = "applied"
 	receipt := state.LastReceipt
@@ -63,12 +64,12 @@ func (a *Agent) commitSummaryProjection(commit summaryProjectionCommit) (Compact
 	return state, nil
 }
 
-func (a *Agent) summaryProjectionState(commit summaryProjectionCommit) CompactionState {
+func (a *Agent) summaryProjectionState(commit summaryProjectionCommit) sessionstore.CompactionState {
 	projectionVersion := commit.projectionVersion + 1
 	now := time.Now().UTC()
 	summaryHash := summaryContentHash(commit.summary)
-	coveredHash := coveredPrefixHash(commit.canonical, commit.covered)
-	receipt := &ContextMaintenanceReceipt{
+	coveredHash := sessionstore.CoveredPrefixHash(commit.canonical, commit.covered)
+	receipt := &sessionstore.ContextMaintenanceReceipt{
 		OperationID: fmt.Sprintf("summary-%d-%s", projectionVersion, commit.outputHash), Status: "applied",
 		Action: "summary", Trigger: commit.trigger, SourceProjection: commit.projectionVersion,
 		ProjectionVersion: projectionVersion, CoveredCount: commit.covered, CoveredPrefixHash: coveredHash,
@@ -79,10 +80,10 @@ func (a *Agent) summaryProjectionState(commit summaryProjectionCommit) Compactio
 	}
 	// LastReceipt is authoritative; do not mirror last_trigger/last_mode/token
 	// counters or top-level blocked_* fields (stripped again on save).
-	return CompactionState{
-		SchemaVersion: compactionStateSchemaCurrent, TranscriptVersion: commit.transcriptVersion,
+	return sessionstore.CompactionState{
+		SchemaVersion: sessionstore.CompactionStateSchemaCurrent, TranscriptVersion: commit.transcriptVersion,
 		Generation: commit.generation + 1, PromptCacheKey: a.currentPromptCacheKey(),
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages: commit.projected, TranscriptVersion: commit.transcriptVersion,
 			ProjectionVersion: projectionVersion, CoveredCount: commit.covered, CoveredPrefixHash: coveredHash,
 			SummaryHash: summaryHash, SourceTokens: commit.sourceTokens, ProjectionTokens: commit.projectionTokens,

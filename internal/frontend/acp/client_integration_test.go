@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -373,7 +374,7 @@ unknownMode:
 func TestRebuildSessionKeepsClientIOAndMode(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "sess-rebuild.jsonl")
-	base := agent.NewSession("sys prompt")
+	base := sessionstore.NewSession("sys prompt")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	if err := base.Save(path); err != nil {
 		t.Fatalf("save session: %v", err)
@@ -388,7 +389,7 @@ func TestRebuildSessionKeepsClientIOAndMode(t *testing.T) {
 		transcript: path,
 		modeID:     sessionModePlan,
 	}
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("acquire session lease: %v", err)
 	}

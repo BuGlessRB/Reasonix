@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestTailBudgetYieldsToLowTrigger(t *testing.T) {
 			if err != nil {
 				t.Fatalf("provider: %v", err)
 			}
-			a := New(prov, reg, NewSession(systemPrompt), Options{
+			a := New(prov, reg, sessionstore.NewSession(systemPrompt), Options{
 				Temperature: 0, ContextWindow: tc.window, CompactRatio: tc.ratio,
 				RecentKeep: 4, MaxSteps: 40,
 			}, &collectSink{})

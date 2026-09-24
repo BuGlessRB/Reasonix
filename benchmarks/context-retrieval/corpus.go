@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"reasonix/internal/state/sessionstore"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 // Synthetic history on purpose: an answer that exists in the workspace is
@@ -102,7 +102,7 @@ func instantiateTask(t contextTask, rng *rand.Rand) (fixtureInstance, error) {
 }
 
 // plant appends the instantiated target and returns its canonical position.
-func (f fixtureInstance) plant(s *agent.Session) int {
+func (f fixtureInstance) plant(s *sessionstore.Session) int {
 	at := len(s.Messages)
 	if f.Task.Plant == plantAssistant {
 		s.Add(provider.Message{Role: provider.RoleAssistant, Content: f.body})

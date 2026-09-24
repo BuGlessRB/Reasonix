@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"sort"
 	"strings"
@@ -121,7 +122,7 @@ func runOne(p provider.Provider, t contextTask, arm ablation.Set, armName, root 
 	if err != nil {
 		return contextMetrics{}, err
 	}
-	sess, err := agent.LoadSession(f.Path)
+	sess, err := sessionstore.LoadSession(f.Path)
 	if err != nil {
 		return contextMetrics{}, fmt.Errorf("load session: %w", err)
 	}

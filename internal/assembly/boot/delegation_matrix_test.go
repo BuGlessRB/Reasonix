@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -79,7 +80,7 @@ func TestDelegationClassesStayApart(t *testing.T) {
 // assertDurable is the durable class's whole contract: an opening precedes the
 // picture, a slot grant precedes the work, the store answers for what ran, and
 // the two identities join so a rebuild can place it.
-func assertDurable(t *testing.T, root bool, entries []execjournal.Entry, children []agent.SubagentArtifact, rebuilt, drawn, running []string) {
+func assertDurable(t *testing.T, root bool, entries []execjournal.Entry, children []sessionstore.SubagentArtifact, rebuilt, drawn, running []string) {
 	t.Helper()
 	if len(running) == 0 {
 		t.Fatal("a child was executing and the store had never heard of it: nothing could be asked about work in flight")
@@ -132,7 +133,7 @@ func assertDurable(t *testing.T, root bool, entries []execjournal.Entry, childre
 // assertEphemeral is the other contract, and it is a promise of absence. The run
 // really happened — the provider was entered — so each empty column here is a
 // claim not made rather than a fact not reached.
-func assertEphemeral(t *testing.T, entries []execjournal.Entry, children []agent.SubagentArtifact, rebuilt, drawn, running []string) {
+func assertEphemeral(t *testing.T, entries []execjournal.Entry, children []sessionstore.SubagentArtifact, rebuilt, drawn, running []string) {
 	t.Helper()
 	if len(running) != 0 {
 		t.Fatalf("an ephemeral run was recorded as %v while executing; it promises no record at all", running)
@@ -219,7 +220,7 @@ func newMatrixWorld(t *testing.T) *matrixWorld {
 		WithScheduler(sched)
 	prov.inspect = func() []string {
 		var out []string
-		facts, err := agent.ListSubagentsByParent(sessions, "probe")
+		facts, err := sessionstore.ListSubagentsByParent(sessions, "probe")
 		if err != nil {
 			return []string{"error: " + err.Error()}
 		}
@@ -246,9 +247,9 @@ func newMatrixWorld(t *testing.T) *matrixWorld {
 	}
 }
 
-func (w *matrixWorld) children(t *testing.T) []agent.SubagentArtifact {
+func (w *matrixWorld) children(t *testing.T) []sessionstore.SubagentArtifact {
 	t.Helper()
-	facts, err := agent.ListSubagentsByParent(w.sessions, "probe")
+	facts, err := sessionstore.ListSubagentsByParent(w.sessions, "probe")
 	if err != nil {
 		t.Fatalf("list children: %v", err)
 	}
@@ -257,7 +258,7 @@ func (w *matrixWorld) children(t *testing.T) []agent.SubagentArtifact {
 
 func (w *matrixWorld) drawn() []string { return w.sink.workers() }
 
-func rebuiltWorkers(entries []execjournal.Entry, children []agent.SubagentArtifact) []string {
+func rebuiltWorkers(entries []execjournal.Entry, children []sessionstore.SubagentArtifact) []string {
 	outcomes := make([]execgraph.ChildOutcome, 0, len(children))
 	for _, c := range children {
 		outcomes = append(outcomes, execgraph.ChildOutcome{

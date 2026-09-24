@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -73,7 +74,7 @@ func TestSessionSwapKeepsPromptCalibration(t *testing.T) {
 	a.setPromptTokenCalibration(36_000, requestCalibrationShapeOf(provider.Request{Messages: msgs}))
 
 	before := a.estimatedPromptTokens(msgs)
-	a.SetSession(NewSession("system"))
+	a.SetSession(sessionstore.NewSession("system"))
 	after := a.estimatedPromptTokens(msgs)
 
 	if before != after {
@@ -320,7 +321,7 @@ func TestCalibratedOutputBudgetCountsToolSchemasOnce(t *testing.T) {
 func TestPrepareSamplingRequestClipsSharedWindowOutput(t *testing.T) {
 	prov := &sharedWindowTestProvider{budget: 128 * 1024, shared: true}
 	msgs := []provider.Message{{Role: provider.RoleUser, Content: strings.Repeat("字", 950_000)}}
-	sess := NewSession("")
+	sess := sessionstore.NewSession("")
 	sess.Replace(msgs)
 	// compactRatio 2 disables auto maintenance for this output-clip test
 	a := &Agent{agentConfig: agentConfig{contextWindow: 1_048_576, compactRatio: 2}, svc: agentServices{prov: prov, tools: tool.NewRegistry()},
@@ -409,7 +410,7 @@ func TestSetSessionResetsPerTranscriptUsageState(t *testing.T) {
 	active := requestCalibrationShape{requestChars: 900_000, compactChars: 850_000}
 	a.sess.output.activeReqShape.Store(&active)
 	a.setPromptTokenCalibration(200_000, requestCalibrationShape{requestChars: 1_000_000, compactChars: 950_000})
-	a.SetSession(NewSession("new"))
+	a.SetSession(sessionstore.NewSession("new"))
 
 	if got := a.sess.output.lastUsage.Load(); got != nil {
 		t.Fatalf("lastUsage survived session switch: %+v", got)
@@ -458,7 +459,7 @@ func TestForkCaptureProviderPreservesOutputBudgetCapabilities(t *testing.T) {
 	t.Setenv("REASONIX_EXPERIMENT_FORK_CAPTURE_DIR", testenv.TempDir(t))
 	prov := &sharedWindowTestProvider{budget: 128 * 1024, shared: true,
 		policy: provider.SharedWindowInputPolicy{ReplaysOrdinaryReasoning: true, ReplaysResponsesItems: true}}
-	a := New(prov, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 
 	if !sharesContextWindow(a.svc.prov) {
 		t.Fatal("fork capture wrapper erased shared-window output capability")

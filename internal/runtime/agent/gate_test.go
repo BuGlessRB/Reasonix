@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reasonix/internal/contract/event"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestGateBlocksDeniedCall(t *testing.T) {
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 
 	g := &stubGate{deny: map[string]bool{"bash": true}}
-	a := New(nil, reg, NewSession(""), Options{Gate: g}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: g}, event.Discard)
 
 	blocked := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "bash", Arguments: `{"command":"rm -rf /"}`})
 	if !strings.HasPrefix(blocked.output, "blocked:") {
@@ -60,7 +61,7 @@ func TestNilGateRunsEverything(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 
-	a := New(nil, reg, NewSession(""), Options{}, event.Discard) // no Gate
+	a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard) // no Gate
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "write_file", Arguments: `{"path":"/a"}`})
 	if strings.HasPrefix(out.output, "blocked:") {
 		t.Errorf("nil gate should not block: %q", out.output)

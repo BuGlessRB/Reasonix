@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,10 +11,10 @@ import (
 	"reasonix/internal/contract/tool"
 )
 
-func capsuleForSpec(t *testing.T, spec SubagentSpec) ContextCapsule {
+func capsuleForSpec(t *testing.T, spec SubagentSpec) sessionstore.ContextCapsule {
 	t.Helper()
 	now := time.Unix(0, 0)
-	return metaFromSpec("sa_test", SubagentRunning, now, now, spec).Capsule
+	return metaFromSpec("sa_test", sessionstore.SubagentRunning, now, now, spec).Capsule
 }
 
 // Children are isolated by construction, and a run nobody fed inherits nothing
@@ -24,7 +25,7 @@ func TestContextCapsuleRecordsWhatIsNotInherited(t *testing.T) {
 	capsule := capsuleForSpec(t, SubagentSpec{ExecutionID: "exec-test",
 		Kind: "task", Name: "task", SystemPrompt: DefaultTaskSystemPrompt,
 	})
-	if !reflect.DeepEqual(capsule.Inherited, InheritedContext{}) {
+	if !reflect.DeepEqual(capsule.Inherited, sessionstore.InheritedContext{}) {
 		t.Fatalf("Inherited = %+v, want nothing recorded: a child receives no standing instructions, memory, parent conversation, goal, or planner output", capsule.Inherited)
 	}
 	if capsule.Inherited.HasUpstream() {
@@ -42,7 +43,7 @@ func TestContextCapsuleRecordsDeliveredUpstream(t *testing.T) {
 	other := isolated
 	other.UpstreamFrom = []string{"survey"}
 
-	if got := capsuleForSpec(t, fed).Inherited; !reflect.DeepEqual(got, InheritedContext{UpstreamFrom: []string{"research"}}) {
+	if got := capsuleForSpec(t, fed).Inherited; !reflect.DeepEqual(got, sessionstore.InheritedContext{UpstreamFrom: []string{"research"}}) {
 		t.Fatalf("Inherited = %+v, want the delivering dependency named and nothing else", got)
 	}
 	if capsuleForSpec(t, isolated).Hash() == capsuleForSpec(t, fed).Hash() {
@@ -59,7 +60,7 @@ func TestContextCapsuleRecordsDeliveredUpstream(t *testing.T) {
 // opened the run. Reading one as though it had no upstream would rewrite what
 // the record claims; naming a source it never held would be worse.
 func TestInheritedContextReadsLegacyUpstreamFlag(t *testing.T) {
-	var legacy InheritedContext
+	var legacy sessionstore.InheritedContext
 	if err := json.Unmarshal([]byte(`{"upstream":true}`), &legacy); err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +71,7 @@ func TestInheritedContextReadsLegacyUpstreamFlag(t *testing.T) {
 		t.Fatalf("UpstreamFrom = %v, want no invented source", legacy.UpstreamFrom)
 	}
 
-	var none InheritedContext
+	var none sessionstore.InheritedContext
 	if err := json.Unmarshal([]byte(`{"upstream":false}`), &none); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +79,7 @@ func TestInheritedContextReadsLegacyUpstreamFlag(t *testing.T) {
 		t.Fatal("a legacy record with no upstream must not report one")
 	}
 
-	var named InheritedContext
+	var named sessionstore.InheritedContext
 	if err := json.Unmarshal([]byte(`{"upstreamFrom":["research"]}`), &named); err != nil {
 		t.Fatal(err)
 	}

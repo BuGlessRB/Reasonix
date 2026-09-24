@@ -3,13 +3,13 @@ package history
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"sync"
 
 	"reasonix/internal/base/retrieval"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/historycatalog"
 )
 
@@ -189,12 +189,12 @@ func (m *indexedCatalogManager) get() *historycatalog.Catalog {
 
 // PersistObserver returns the process-wide non-blocking projection sink. The
 // authoritative save has already released its path/file locks before this is
-// called by agent.Session.
-func PersistObserver() agent.SessionPersistObserver { return historyPersistObserver{} }
+// called by sessionstore.Session.
+func PersistObserver() sessionstore.SessionPersistObserver { return historyPersistObserver{} }
 
 type historyPersistObserver struct{}
 
-func (historyPersistObserver) EnqueueSessionPersist(event agent.SessionPersistEvent) bool {
+func (historyPersistObserver) EnqueueSessionPersist(event sessionstore.SessionPersistEvent) bool {
 	catalog := processHistoryCatalog.get()
 	if catalog == nil {
 		return false
@@ -301,7 +301,7 @@ func (s *IndexedSearcher) Search(ctx context.Context, req SearchRequest) ([]Hit,
 		}
 		messages, ok := loaded[candidate.SessionPath]
 		if !ok {
-			state, known, identityErr := agent.SessionContentIdentity(candidate.SessionPath)
+			state, known, identityErr := sessionstore.SessionContentIdentity(candidate.SessionPath)
 			if identityErr != nil || (known && state.DigestHex != candidate.ContentDigest) {
 				failed[candidate.SessionPath] = true
 				catalog.EnqueueExisting(context.Background(), candidate.SessionPath)

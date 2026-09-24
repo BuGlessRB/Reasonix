@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"reasonix/internal/state/sessionstore"
 	"sync"
 
 	"reasonix/internal/contract/event"
@@ -11,7 +12,6 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/extension"
 	"reasonix/internal/ext/extension/dispatch"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/evidence"
 )
 
@@ -311,5 +311,5 @@ func (c *Controller) ApplyExtensionSystemPrompt(prompt string) {
 	c.mu.Lock()
 	c.systemPrompt = prompt
 	c.mu.Unlock()
-	c.executor.SetSession(agent.NewSession(prompt))
+	c.executor.SetSession(sessionstore.NewSession(prompt))
 }

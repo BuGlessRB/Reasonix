@@ -4,6 +4,7 @@ package agent
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 )
 
@@ -55,7 +56,7 @@ type ExecutionIdentity struct {
 // confirms the one legacy shape that may be aliased, where the older writer
 // demonstrably used one id for both. A parent naming no execution stays unknown:
 // a single task once stored the call while the journal opened the node.
-func ResolveExecutionIdentity(meta SubagentMeta, opened func(execution string) bool) ExecutionIdentity {
+func ResolveExecutionIdentity(meta sessionstore.SubagentMeta, opened func(execution string) bool) ExecutionIdentity {
 	if id := strings.TrimSpace(meta.ExecutionID); id != "" {
 		return ExecutionIdentity{Execution: id, Source: ExecutionRecorded}
 	}
@@ -66,14 +67,14 @@ func ResolveExecutionIdentity(meta SubagentMeta, opened func(execution string) b
 	return ExecutionIdentity{Execution: parent, Source: ExecutionLegacyConfirmed}
 }
 
-func validateMeta(meta SubagentMeta, spec SubagentSpec) error {
-	if meta.Status == SubagentRunning {
+func validateMeta(meta sessionstore.SubagentMeta, spec SubagentSpec) error {
+	if meta.Status == sessionstore.SubagentRunning {
 		return fmt.Errorf("subagent reference %q is still in progress", meta.Ref)
 	}
-	if meta.Status == SubagentFailed {
+	if meta.Status == sessionstore.SubagentFailed {
 		return fmt.Errorf("subagent reference %q failed and cannot be continued", meta.Ref)
 	}
-	if meta.Status == SubagentInterrupted {
+	if meta.Status == sessionstore.SubagentInterrupted {
 		return fmt.Errorf("subagent reference %q was interrupted by a previous shutdown or crash and cannot be continued or forked; run a fresh subagent instead", meta.Ref)
 	}
 	want := metaFromSpec(meta.Ref, meta.Status, meta.CreatedAt, meta.UpdatedAt, spec)

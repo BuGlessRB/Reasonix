@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reasonix/internal/contract/pricing"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -330,7 +331,7 @@ func TestStatusSnapshotSurvivesSessionResume(t *testing.T) {
 	}, UsageSource: event.UsageSourceExecutor})
 	telemetry.finishTurn(nil, false, "", "persisted summary")
 	path := filepath.Join(dir, sessionID+".jsonl")
-	if err := agent.NewSession("system").Save(path); err != nil {
+	if err := sessionstore.NewSession("system").Save(path); err != nil {
 		t.Fatalf("save transcript: %v", err)
 	}
 	if err := saveACPMeta(path, acpSessionMeta{
@@ -365,7 +366,7 @@ func TestStatusInterruptedSnapshotResumesPaused(t *testing.T) {
 		PromptTokens: 5, CompletionTokens: 1,
 	}, UsageSource: event.UsageSourceExecutor})
 	path := filepath.Join(dir, sessionID+".jsonl")
-	if err := agent.NewSession("system").Save(path); err != nil {
+	if err := sessionstore.NewSession("system").Save(path); err != nil {
 		t.Fatalf("save transcript: %v", err)
 	}
 	if err := saveACPMeta(path, acpSessionMeta{

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strings"
 	"testing"
@@ -23,7 +24,7 @@ func TestRunSubAgentRetriesReasoningOnlyStopForVisibleFinal(t *testing.T) {
 			{Type: provider.ChunkDone},
 		},
 	}}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "previous task"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "previous result"})
 
@@ -68,7 +69,7 @@ func TestRunSubAgentDoesNotReturnStalePreToolTextAfterReasoningOnlyStop(t *testi
 	reg.Add(echoTool{})
 
 	answer, err := RunSubAgentWithSession(
-		testTaskContext(), deepseekThinkingProvider{prov}, reg, NewSession("sys"),
+		testTaskContext(), deepseekThinkingProvider{prov}, reg, sessionstore.NewSession("sys"),
 		"inspect the input", Options{SubagentDepth: 1}, event.Discard,
 	)
 	if err != nil {
@@ -93,7 +94,7 @@ func TestRunSubAgentStopsAfterRepeatedReasoningOnlyStops(t *testing.T) {
 	}}
 
 	_, err := RunSubAgentWithSession(
-		testTaskContext(), deepseekThinkingProvider{prov}, tool.NewRegistry(), NewSession("sys"),
+		testTaskContext(), deepseekThinkingProvider{prov}, tool.NewRegistry(), sessionstore.NewSession("sys"),
 		"analyze the code", Options{SubagentDepth: 1}, event.Discard,
 	)
 	if err == nil || !strings.Contains(err.Error(), "visible final answer") {
@@ -129,9 +130,9 @@ func TestCoordinatorToolPlannerRetriesReasoningOnlyStopForVisiblePlan(t *testing
 	}}
 	plannerTools := tool.NewRegistry()
 	plannerTools.Add(echoTool{})
-	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
+	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
 	coord := NewCoordinator(
-		deepseekThinkingProvider{plannerScript}, NewSession("planner-sys"), nil,
+		deepseekThinkingProvider{plannerScript}, sessionstore.NewSession("planner-sys"), nil,
 		plannerTools, Options{}, executor, 0, event.Discard, nil,
 	)
 
@@ -145,7 +146,7 @@ func TestCoordinatorToolPlannerRetriesReasoningOnlyStopForVisiblePlan(t *testing
 		t.Fatal("executor received no handoff request")
 	}
 	got := lastUser(exec.requests[0])
-	if !strings.Contains(got, "1. apply the verified fix") || !strings.Contains(got, executorHandoffMarker) {
+	if !strings.Contains(got, "1. apply the verified fix") || !strings.Contains(got, sessionstore.ExecutorHandoffMarker) {
 		t.Fatalf("executor input = %q, want visible plan and handoff marker", got)
 	}
 	if strings.Contains(got, "I'll inspect first.") {
@@ -154,7 +155,7 @@ func TestCoordinatorToolPlannerRetriesReasoningOnlyStopForVisiblePlan(t *testing
 }
 
 func TestCoordinatorRollbackAfterRewriteDropsReasoningOnlyRetryTail(t *testing.T) {
-	plannerSess := NewSession("planner-sys")
+	plannerSess := sessionstore.NewSession("planner-sys")
 	before := plannerSess.Snapshot()
 	rewriteBefore := plannerSess.RewriteVersion()
 

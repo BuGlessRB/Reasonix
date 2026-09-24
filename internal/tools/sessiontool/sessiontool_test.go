@@ -4,19 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 // writeSessionJSONL writes provider.Messages as JSONL to a file, matching
-// the format produced by agent.Session.Save.
+// the format produced by sessionstore.Session.Save.
 func writeSessionJSONL(t *testing.T, path string, msgs []provider.Message) {
 	t.Helper()
-	ses := agent.NewSession("")
+	ses := sessionstore.NewSession("")
 	for _, m := range msgs {
 		ses.Add(m)
 	}
@@ -77,7 +77,7 @@ func TestListSessions_OnlyCleanupPending(t *testing.T) {
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "hello"},
 	})
-	if err := agent.MarkCleanupPending(sessionPath, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(sessionPath, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -236,7 +236,7 @@ func TestReadSession_RejectsCleanupPending(t *testing.T) {
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "data"},
 	})
-	if err := agent.MarkCleanupPending(sessionPath, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(sessionPath, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -350,7 +350,7 @@ func TestTruncateRunes(t *testing.T) {
 }
 
 // TestCleanupPendingContract verifies that our tools use the SAME marker
-// contract as agent.MarkCleanupPending / agent.IsCleanupPending.
+// contract as sessionstore.MarkCleanupPending / sessionstore.IsCleanupPending.
 func TestCleanupPendingContract(t *testing.T) {
 	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
@@ -359,18 +359,18 @@ func TestCleanupPendingContract(t *testing.T) {
 	})
 
 	// Mark cleanup-pending using the REAL agent function
-	if err := agent.MarkCleanupPending(sessionPath, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(sessionPath, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
 	// Verify both agent and our read_session detect it
-	if !agent.IsCleanupPending(sessionPath) {
-		t.Fatal("agent.IsCleanupPending should detect marker created by agent.MarkCleanupPending")
+	if !sessionstore.IsCleanupPending(sessionPath) {
+		t.Fatal("sessionstore.IsCleanupPending should detect marker created by sessionstore.MarkCleanupPending")
 	}
 
 	tool := NewReadSessionTool(dir)
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"session":"session.jsonl"}`))
 	if err == nil {
-		t.Fatal("read_session should reject cleanup-pending session created by agent.MarkCleanupPending")
+		t.Fatal("read_session should reject cleanup-pending session created by sessionstore.MarkCleanupPending")
 	}
 }

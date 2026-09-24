@@ -1,6 +1,7 @@
 package control
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/agentgraph"
@@ -66,7 +67,7 @@ func (c *Controller) ExecutionGraph() ExecutionGraphSnapshot {
 // key that is resolved rather than assumed. An unreadable store, and a record
 // nothing places, both leave outcomes unknown rather than borrowed.
 func (c *Controller) executionChildren(path string, history []execjournal.Entry) []execgraph.ChildOutcome {
-	artifacts, err := agent.ListSubagentsByParent(c.sessionDir, parentSessionOf(path))
+	artifacts, err := sessionstore.ListSubagentsByParent(c.sessionDir, parentSessionOf(path))
 	if err != nil {
 		return nil
 	}

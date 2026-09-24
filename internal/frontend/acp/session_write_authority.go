@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
 // bindACPWriteAuthority issues a generation-bound write authority when ctrl is
 // a concrete *control.Controller. Test fakes without the method stay unbound.
-func bindACPWriteAuthority(ctrl acpController, lease *agent.SessionLease) error {
+func bindACPWriteAuthority(ctrl acpController, lease *sessionstore.SessionLease) error {
 	c, ok := ctrl.(*control.Controller)
 	if !ok || c == nil {
 		return nil
@@ -21,7 +21,7 @@ func bindACPWriteAuthority(ctrl acpController, lease *agent.SessionLease) error 
 	return c.BindSessionWriteAuthority(lease)
 }
 
-func bindACPWriteAuthorityOrClose(ctrl acpController, lease *agent.SessionLease) error {
+func bindACPWriteAuthorityOrClose(ctrl acpController, lease *sessionstore.SessionLease) error {
 	if err := bindACPWriteAuthority(ctrl, lease); err != nil {
 		if lease != nil {
 			lease.Release()
@@ -32,7 +32,7 @@ func bindACPWriteAuthorityOrClose(ctrl acpController, lease *agent.SessionLease)
 	return nil
 }
 
-func resumeACPControllerForWrite(ctrl acpController, loaded *agent.Session, path string, lease *agent.SessionLease) error {
+func resumeACPControllerForWrite(ctrl acpController, loaded *sessionstore.Session, path string, lease *sessionstore.SessionLease) error {
 	// Refused while a turn is in flight: that turn owns the session it writes to.
 	if err := ctrl.Resume(loaded, path); err != nil {
 		return err
@@ -82,9 +82,9 @@ func (s *service) sessionRecoveredHandlerFor(id string, owner acpController) fun
 		if sess == nil {
 			return nil
 		}
-		lease, err := agent.TryAcquireSessionLease(recoveryPath)
+		lease, err := sessionstore.TryAcquireSessionLease(recoveryPath)
 		if err != nil {
-			if errors.Is(err, agent.ErrSessionLeaseHeld) {
+			if errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 				return fmt.Errorf("bind recovery session: %s; %s",
 					control.SessionInUseMessage(err), control.SessionLeaseCloseHint)
 			}

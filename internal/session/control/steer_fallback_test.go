@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ import (
 func steerFallbackController(t *testing.T) (*Controller, *agent.Agent) {
 	t.Helper()
 	prov := &scriptedTurns{turns: [][]provider.Chunk{textTurn("ok")}}
-	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	return New(Options{Runner: ag, Executor: ag, Sink: event.Discard}), ag
 }
 
@@ -68,7 +69,7 @@ func TestSteerFallbackParksWhileRunning(t *testing.T) {
 	}
 	for _, m := range ag.Session().Snapshot() {
 		if strings.Contains(m.Content, "queued while exiting") {
-			if got, ok := agent.SteerText(m.Content); !ok || got != "queued while exiting" {
+			if got, ok := sessionstore.SteerText(m.Content); !ok || got != "queued while exiting" {
 				t.Fatalf("parked fallback = %q, want persisted steer guidance", m.Content)
 			}
 			if !m.LocalOnly {
@@ -96,7 +97,7 @@ func TestSteerBetweenTurnsRecordsUnappliedGuidance(t *testing.T) {
 	}
 	for _, m := range ag.Session().Snapshot() {
 		if strings.Contains(m.Content, "late steer") {
-			if got, ok := agent.SteerText(m.Content); !ok || got != "late steer" {
+			if got, ok := sessionstore.SteerText(m.Content); !ok || got != "late steer" {
 				t.Fatalf("idle fallback = %q, want persisted steer guidance", m.Content)
 			}
 			if !m.LocalOnly {
@@ -114,7 +115,7 @@ func TestSteerFallbackDoesNotInjectCapabilityRoute(t *testing.T) {
 			notices = append(notices, e)
 		}
 	})
-	ag := agent.New(nil, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, sink)
+	ag := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, sink)
 	reg := tool.NewRegistry()
 	reg.Add(capabilityTestTool{name: "run_skill"})
 	c := New(Options{
@@ -142,7 +143,7 @@ func TestSteerFallbackDoesNotInjectCapabilityRoute(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("unapplied steer messages = %d, want 1 local record", len(msgs))
 	}
-	if got, ok := agent.SteerText(msgs[0].Content); !ok || got != "modify polish_client.py" || !msgs[0].LocalOnly {
+	if got, ok := sessionstore.SteerText(msgs[0].Content); !ok || got != "modify polish_client.py" || !msgs[0].LocalOnly {
 		t.Fatalf("unapplied steer = %+v, want stable local-only guidance", msgs[0])
 	}
 	if len(notices) != 1 || notices[0].Level != event.LevelWarn ||

@@ -57,7 +57,7 @@ func (a *Agent) ContextReport() ContextReport {
 		rep.LatestPrompt = u.LatestPromptTokens()
 	}
 	if a.sess.conversation != nil {
-		canonical, _ := a.sess.conversation.snapshotMessagesVersion()
+		canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
 		rep.CanonicalTokens = a.estimatedPromptTokens(provider.ModelMessages(canonical))
 	}
 	visible := a.modelVisibleMessages()

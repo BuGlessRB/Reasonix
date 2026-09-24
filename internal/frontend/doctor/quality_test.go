@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/agent"
 )
 
 func TestCollectQualityProducesPublicSafeSummary(t *testing.T) {
@@ -29,7 +29,7 @@ func TestCollectQualityProducesPublicSafeSummary(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Join(messages, "\n")+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.SaveBranchMeta(path, agent.BranchMeta{
+	if err := sessionstore.SaveBranchMeta(path, sessionstore.BranchMeta{
 		ID:               "private-session-id",
 		Model:            "corp.private.example/supersecret-model",
 		TokenMode:        "economy",

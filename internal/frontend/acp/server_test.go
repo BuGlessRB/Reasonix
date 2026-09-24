@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -79,7 +80,7 @@ type steerFactory struct {
 func (f *steerFactory) NewSession(_ context.Context, p SessionParams) (*control.Controller, error) {
 	tools := tool.NewRegistry()
 	tools.Add(f.barrier)
-	executor := agent.New(f.provider, tools, agent.NewSession(""), agent.Options{MaxSteps: 2}, p.Sink)
+	executor := agent.New(f.provider, tools, sessionstore.NewSession(""), agent.Options{MaxSteps: 2}, p.Sink)
 	return control.New(control.Options{Runner: executor, Executor: executor, Sink: p.Sink}), nil
 }
 
@@ -788,7 +789,7 @@ func TestServeAdvertisesAndExpandsCustomCommands(t *testing.T) {
 	case got := <-factory.seen:
 		// The turn also carries whatever the host prepends to it; the claim
 		// here is only that the slash command expanded.
-		if expanded := strings.TrimSpace(agent.DropLeadingTransientBlocks(got)); expanded != "Review src/main.go" {
+		if expanded := strings.TrimSpace(sessionstore.DropLeadingTransientBlocks(got)); expanded != "Review src/main.go" {
 			t.Fatalf("runner input = %q, want expanded command", got)
 		}
 	case <-time.After(rpcCallBudget(t)):
@@ -854,7 +855,7 @@ func TestServeAdvertisesCommandsAfterEverySessionOpenResponse(t *testing.T) {
 
 	persistedID := "ordered-session-open"
 	path := transcriptPath(sessionDir, persistedID)
-	if err := agent.NewSession("").Save(path); err != nil {
+	if err := sessionstore.NewSession("").Save(path); err != nil {
 		t.Fatalf("save transcript: %v", err)
 	}
 	now := time.Now().UTC()
@@ -1108,7 +1109,7 @@ func TestServeSessionAxesRestoreFromMetadata(t *testing.T) {
 	dir := testenv.TempDir(t)
 	sessionID := "axes-restore"
 	path := transcriptPath(dir, sessionID)
-	saved := agent.NewSession("")
+	saved := sessionstore.NewSession("")
 	saved.Add(provider.Message{Role: provider.RoleUser, Content: "persist these axes"})
 	if err := saved.Save(path); err != nil {
 		t.Fatalf("save transcript: %v", err)
@@ -1258,7 +1259,7 @@ func TestServeSessionConfigRejectsBackgroundJobsWhileIdle(t *testing.T) {
 	var releaseOnce sync.Once
 	started := make(chan struct{})
 	sessionPath := transcriptPath(dir, nr.SessionID)
-	jm.StartForSession(agent.BranchID(sessionPath), "bash", "server", func(ctx context.Context, _ io.Writer) (string, error) {
+	jm.StartForSession(sessionstore.BranchID(sessionPath), "bash", "server", func(ctx context.Context, _ io.Writer) (string, error) {
 		close(started)
 		select {
 		case <-release:
@@ -1292,13 +1293,13 @@ func TestServeSessionConfigRejectsBackgroundJobsWhileIdle(t *testing.T) {
 	if got := factory.buildCount(); got != 1 {
 		t.Fatalf("build count after rejected switch = %d, want 1", got)
 	}
-	if running := jm.RunningForSession(agent.BranchID(sessionPath)); len(running) != 1 {
+	if running := jm.RunningForSession(sessionstore.BranchID(sessionPath)); len(running) != 1 {
 		t.Fatalf("running jobs after rejected switch = %+v, want original job still running", running)
 	}
 
 	releaseOnce.Do(func() { close(release) })
-	_, _ = jm.WaitForSession(context.Background(), agent.BranchID(sessionPath), nil, jobs.WaitOptions{Timeout: 5 * time.Second})
-	if running := jm.RunningForSession(agent.BranchID(sessionPath)); len(running) != 0 {
+	_, _ = jm.WaitForSession(context.Background(), sessionstore.BranchID(sessionPath), nil, jobs.WaitOptions{Timeout: 5 * time.Second})
+	if running := jm.RunningForSession(sessionstore.BranchID(sessionPath)); len(running) != 0 {
 		t.Fatalf("running jobs after release = %+v, want none before retry", running)
 	}
 
@@ -1539,7 +1540,7 @@ func TestServeQueuedSessionConfigDiscardedWhenPromptLeavesBackgroundJob(t *testi
 
 	close(releaseJob)
 	jm := factory.managerAt(t, 0)
-	_, _ = jm.WaitForSession(context.Background(), agent.BranchID(transcriptPath(dir, nr.SessionID)), nil, jobs.WaitOptions{Timeout: 5 * time.Second})
+	_, _ = jm.WaitForSession(context.Background(), sessionstore.BranchID(transcriptPath(dir, nr.SessionID)), nil, jobs.WaitOptions{Timeout: 5 * time.Second})
 	second := client.callAsync("session/prompt", SessionPromptParams{
 		SessionID: nr.SessionID,
 		Prompt:    []ContentBlock{{Type: "text", Text: "second"}},
@@ -1671,7 +1672,7 @@ func TestServeSessionLoadFallsBackFromStaleSavedModel(t *testing.T) {
 	cwd := testenv.TempDir(t)
 	sessionID := "stale-model"
 	path := transcriptPath(dir, sessionID)
-	saved := agent.NewSession("")
+	saved := sessionstore.NewSession("")
 	saved.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	if err := saved.Save(path); err != nil {
 		t.Fatal(err)
@@ -1725,7 +1726,7 @@ func TestServeSessionLoadRejectsCleanupPending(t *testing.T) {
 	cwd := testenv.TempDir(t)
 	sessionID := "pending-load"
 	path := transcriptPath(dir, sessionID)
-	saved := agent.NewSession("")
+	saved := sessionstore.NewSession("")
 	saved.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	if err := saved.Save(path); err != nil {
 		t.Fatal(err)
@@ -1738,7 +1739,7 @@ func TestServeSessionLoadRejectsCleanupPending(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(path, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1851,7 +1852,7 @@ func TestServeSteerInjectsIntoActivePrompt(t *testing.T) {
 	}
 	found := false
 	for _, m := range reqs[1].Messages {
-		if text, ok := agent.SteerText(m.Content); ok && text == "use plan B" {
+		if text, ok := sessionstore.SteerText(m.Content); ok && text == "use plan B" {
 			found = true
 			break
 		}
@@ -1998,7 +1999,7 @@ func TestSessionDeleteWithStuckJobReturnsAfterSingleGrace(t *testing.T) {
 	if elapsed > maxElapsed {
 		t.Fatalf("session/delete took %s, want one teardown grace plus scheduling slack", elapsed)
 	}
-	if !agent.IsCleanupPending(path) {
+	if !sessionstore.IsCleanupPending(path) {
 		t.Fatalf("stuck ACP delete should mark cleanup pending")
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -2006,7 +2007,7 @@ func TestSessionDeleteWithStuckJobReturnsAfterSingleGrace(t *testing.T) {
 	}
 	releaseJob()
 	deadline := time.Now().Add(2 * time.Second)
-	for agent.IsCleanupPending(path) {
+	for sessionstore.IsCleanupPending(path) {
 		if time.Now().After(deadline) {
 			t.Fatalf("cleanup-pending marker was not cleared after stuck job release")
 		}
@@ -2047,7 +2048,7 @@ func TestListACPMetasSkipsCleanupPending(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := agent.MarkCleanupPending(transcriptPath(dir, pendingID), "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(transcriptPath(dir, pendingID), "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2067,7 +2068,7 @@ func TestDeleteSessionFilesDeletesOwnedSubagents(t *testing.T) {
 		t.Fatal(err)
 	}
 	ref := "sa_20260102_030405_000000000_aabbccddeeff"
-	writeACPSubagentArtifact(t, dir, ref, agent.BranchID(sessionPath))
+	writeACPSubagentArtifact(t, dir, ref, sessionstore.BranchID(sessionPath))
 	jobsDir := jobs.ArtifactDir(sessionPath)
 	if err := os.MkdirAll(jobsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -2106,14 +2107,14 @@ func TestReconcileCleanupPendingDeletesACPMeta(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(jobsDir, "bash-1.log"), []byte("output"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.MarkCleanupPending(sessionPath, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(sessionPath, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := ReconcileCleanupPending(dir); err != nil {
 		t.Fatalf("ReconcileCleanupPending: %v", err)
 	}
-	for _, path := range []string{sessionPath, acpMetaPath(sessionPath), jobsDir, agent.CleanupPendingPath(sessionPath)} {
+	for _, path := range []string{sessionPath, acpMetaPath(sessionPath), jobsDir, sessionstore.CleanupPendingPath(sessionPath)} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("%s still exists after reconciliation (err=%v)", path, err)
 		}
@@ -2129,9 +2130,9 @@ func writeACPSubagentArtifact(t *testing.T, dir, ref, parentSession string) {
 	if err := os.WriteFile(filepath.Join(subagentDir, ref+".jsonl"), []byte(`{"role":"user","content":"sub"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	data, err := json.Marshal(agent.SubagentMeta{
+	data, err := json.Marshal(sessionstore.SubagentMeta{
 		Ref:           ref,
-		Status:        agent.SubagentCompleted,
+		Status:        sessionstore.SubagentCompleted,
 		Kind:          "task",
 		Name:          "task",
 		ParentSession: parentSession,
@@ -2148,7 +2149,7 @@ func startNonCooperativeACPJob(t *testing.T, jm *jobs.Manager, sessionPath strin
 	t.Helper()
 	started := make(chan struct{})
 	release := make(chan struct{})
-	jm.StartForSession(agent.BranchID(sessionPath), "bash", "stuck job", func(ctx context.Context, _ io.Writer) (string, error) {
+	jm.StartForSession(sessionstore.BranchID(sessionPath), "bash", "stuck job", func(ctx context.Context, _ io.Writer) (string, error) {
 		close(started)
 		<-ctx.Done()
 		<-release

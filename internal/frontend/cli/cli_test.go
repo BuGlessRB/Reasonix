@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -23,7 +24,6 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/platform/notify"
 	"reasonix/internal/platform/telemetry"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -61,12 +61,12 @@ func TestChdirTo(t *testing.T) {
 func TestModelForResumePathUsesStoredModelWhenAvailable(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	session := agent.NewSession("sys")
+	session := sessionstore.NewSession("sys")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	if err := session.Save(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := agent.SetBranchModelPreserveUpdated(path, "saved/model"); err != nil {
+	if err := sessionstore.SetBranchModelPreserveUpdated(path, "saved/model"); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{

@@ -2,6 +2,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"sync"
 
 	"reasonix/internal/contract/event"
@@ -158,7 +159,7 @@ func (a *Agent) recordUnappliedSteer(text string, host bool, itemID ...string) {
 	}
 	a.sess.conversation.Add(provider.Message{
 		Role:       provider.RoleTool,
-		Content:    a.withTurnPreferences(midTurnSteerMessage(text, host)),
+		Content:    a.withTurnPreferences(sessionstore.MidTurnSteerMessage(text, host)),
 		ToolCallID: provider.LocalOnlyToolID,
 		Name:       provider.LocalOnlyToolName,
 		LocalOnly:  true,

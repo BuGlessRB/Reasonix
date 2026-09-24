@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/plancontract"
@@ -10,7 +11,7 @@ import (
 
 func scopedAgent(t *testing.T, plan *plancontract.Plan) *Agent {
 	t.Helper()
-	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, nil)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, nil)
 	a.SetPlanContract(plan)
 	return a
 }

@@ -7,12 +7,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"time"
 
 	"reasonix/internal/contract/config"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -87,7 +87,7 @@ func WriteSessionBundle(opts SessionBundleOptions) (SessionBundleResult, error) 
 	chain := sessionBundleChain(sessionPath)
 	outPath := strings.TrimSpace(opts.OutputPath)
 	if outPath == "" {
-		outPath = defaultSessionBundlePath(agent.BranchID(sessionPath))
+		outPath = defaultSessionBundlePath(sessionstore.BranchID(sessionPath))
 	}
 	if abs, err := filepath.Abs(outPath); err == nil {
 		outPath = abs
@@ -128,13 +128,13 @@ func WriteSessionBundle(opts SessionBundleOptions) (SessionBundleResult, error) 
 		if i == 0 {
 			role = "requested"
 		}
-		meta, ok, metaErr := agent.LoadBranchMeta(path)
+		meta, ok, metaErr := sessionstore.LoadBranchMeta(path)
 		if metaErr != nil {
 			metaPath := store.SessionMeta(path)
 			manifest.Missing = append(manifest.Missing, redactSessionBundlePath(metaPath)+": "+redactSessionBundleError(metaErr))
 		}
 		entry := SessionBundleEntry{
-			BranchID: agent.BranchID(path),
+			BranchID: sessionstore.BranchID(path),
 			Role:     role,
 			Path:     redactSessionBundlePath(path),
 		}
@@ -157,7 +157,7 @@ func WriteSessionBundle(opts SessionBundleOptions) (SessionBundleResult, error) 
 			if info.IsDir() {
 				continue
 			}
-			zipName := filepath.ToSlash(filepath.Join("sessions", safeBundleName(agent.BranchID(path)), filepath.Base(artifact.path)))
+			zipName := filepath.ToSlash(filepath.Join("sessions", safeBundleName(sessionstore.BranchID(path)), filepath.Base(artifact.path)))
 			if err := addBundleFile(zw, zipName, artifact.path, info); err != nil {
 				_ = zw.Close()
 				return SessionBundleResult{}, err
@@ -364,7 +364,7 @@ func sessionBundleChain(path string) []string {
 		}
 		seen[path] = true
 		out = append(out, path)
-		meta, ok, err := agent.LoadBranchMeta(path)
+		meta, ok, err := sessionstore.LoadBranchMeta(path)
 		if err != nil || !ok || strings.TrimSpace(meta.ParentID) == "" {
 			break
 		}

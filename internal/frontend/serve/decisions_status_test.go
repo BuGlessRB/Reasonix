@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 func TestStatusProjectsThePendingApprovalTheEventAnnounced(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(serveApprovalWriter{})
-	ag := agent.New(&serveApprovalProvider{}, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(&serveApprovalProvider{}, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{
 		Runner: ag, Executor: ag, Sink: bc,

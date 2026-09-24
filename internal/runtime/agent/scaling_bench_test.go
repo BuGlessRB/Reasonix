@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -19,19 +20,19 @@ func longSession(n int) *Agent {
 			provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("a plain english sentence about the work. ", 40)},
 		)
 	}
-	sess := &Session{Messages: msgs}
+	sess := &sessionstore.Session{Messages: msgs}
 	a := New(nil, nil, sess, Options{ContextWindow: 128_000}, event.Discard)
 	covered := len(msgs) - 4 // a fold leaves a short verbatim tail
-	a.sess.compactionState = CompactionState{
-		TranscriptVersion: sess.version,
-		Projection: ContextProjection{
+	a.sess.compactionState = sessionstore.CompactionState{
+		TranscriptVersion: sess.TranscriptVersion(),
+		Projection: sessionstore.ContextProjection{
 			Messages: []provider.Message{
 				{Role: provider.RoleSystem, Content: "sys"},
 				{Role: provider.RoleUser, Content: summaryTagOpen + "digest" + summaryTagClose},
 			},
-			TranscriptVersion: sess.version,
+			TranscriptVersion: sess.TranscriptVersion(),
 			CoveredCount:      covered,
-			CoveredPrefixHash: coveredPrefixHash(msgs, covered),
+			CoveredPrefixHash: sessionstore.CoveredPrefixHash(msgs, covered),
 		},
 		PromptCacheKey: a.currentPromptCacheKey(),
 		Generation:     1,

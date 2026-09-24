@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -29,7 +30,7 @@ func TestReadOnlySubagentBashRefusalReachesSinkAsBlocked(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	sink := &recordSink{}
-	a := New(mp, sub, NewSession(""), Options{}, sink)
+	a := New(mp, sub, sessionstore.NewSession(""), Options{}, sink)
 	if err := a.Run(context.Background(), "probe the toolchain"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

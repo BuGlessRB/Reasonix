@@ -2,6 +2,7 @@ package cli
 
 import (
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strings"
 	"testing"
@@ -9,7 +10,6 @@ import (
 	"github.com/spf13/pflag"
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 func TestSplitAllowedToolRules(t *testing.T) {
@@ -127,7 +127,7 @@ func TestResolveSessionQueryByMachineSessionID(t *testing.T) {
 	identityKey := installMachineTestIdentity(t)
 	dir := testenv.TempDir(t)
 	path := saveQueryTestSession(t, dir, "opaque-branch.jsonl", "resume by machine id")
-	machineID := machineSessionIDWithKey(agent.BranchID(path), identityKey)
+	machineID := machineSessionIDWithKey(sessionstore.BranchID(path), identityKey)
 	if machineID == "" || !looksLikeMachineSessionID(machineID) {
 		t.Fatalf("machine session id = %q", machineID)
 	}
@@ -166,7 +166,7 @@ func TestResolveSessionQueryByIDAndPreview(t *testing.T) {
 func saveQueryTestSession(t *testing.T, dir, name, prompt string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
-	session := agent.NewSession("")
+	session := sessionstore.NewSession("")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: prompt})
 	session.Add(provider.Message{Role: provider.RoleAssistant, Content: "done"})
 	if err := session.Save(path); err != nil {

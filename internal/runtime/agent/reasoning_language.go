@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"unicode"
 )
@@ -102,7 +103,7 @@ func InferReasoningLanguageFromText(source string) string {
 }
 
 func reasoningLanguageSourceText(source string) string {
-	s := strings.TrimSpace(StripTransientUserBlocks(source))
+	s := strings.TrimSpace(sessionstore.StripTransientUserBlocks(source))
 	const preamble = "Referenced context:"
 	if !strings.HasPrefix(s, preamble) {
 		return s
@@ -265,15 +266,15 @@ func WithReasoningLanguageForSource(content, lang, source string) string {
 func hasLeadingInjectedBlock(content, target string) bool {
 	s := strings.TrimLeft(content, " \t\r\n")
 	for {
-		if hasOpenTag(s, target) {
+		if sessionstore.HasOpenTag(s, target) {
 			return strings.Contains(s, "</"+target+">")
 		}
 		skipped := false
-		for _, tag := range TransientUserBlockTags {
-			if tag == target || !hasOpenTag(s, tag) {
+		for _, tag := range sessionstore.TransientUserBlockTags {
+			if tag == target || !sessionstore.HasOpenTag(s, tag) {
 				continue
 			}
-			rest, ok := trimLeadingTransientBlock(s, tag)
+			rest, ok := sessionstore.TrimLeadingTransientBlock(s, tag)
 			if !ok {
 				return false
 			}
@@ -284,21 +285,6 @@ func hasLeadingInjectedBlock(content, target string) bool {
 			return false
 		}
 	}
-}
-
-// hasOpenTag reports whether s opens with tag, with or without attributes
-// (hook-context and capability-route carry them).
-func hasOpenTag(s, tag string) bool {
-	return strings.HasPrefix(s, "<"+tag+">") || strings.HasPrefix(s, "<"+tag+" ")
-}
-
-func trimLeadingTransientBlock(content, tag string) (string, bool) {
-	closeTag := "</" + tag + ">"
-	_, after, ok := strings.Cut(content, closeTag)
-	if !ok {
-		return content, false
-	}
-	return strings.TrimLeft(after, " \t\r\n"), true
 }
 
 // WithResponseLanguagePreference carries the runtime final-answer language

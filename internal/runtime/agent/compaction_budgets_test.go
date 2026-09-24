@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -58,7 +59,7 @@ func TestLargeFixedPrefixDoesNotRefuseCompaction(t *testing.T) {
 	// ~120K characters is ~30K tokens: over the trigger by the wrong measure,
 	// well under it by the right one.
 	prefix := strings.Repeat("standing project instruction. ", 4_000)
-	sess := &Session{Messages: []provider.Message{{Role: provider.RoleSystem, Content: prefix}}}
+	sess := &sessionstore.Session{Messages: []provider.Message{{Role: provider.RoleSystem, Content: prefix}}}
 	for range 40 {
 		sess.Messages = append(sess.Messages,
 			provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("word ", 400)},

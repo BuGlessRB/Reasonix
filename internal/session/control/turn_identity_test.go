@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -31,7 +32,7 @@ func (p *turnIdentityProvider) Stream(_ context.Context, _ provider.Request) (<-
 // everywhere a turn opens no snapshot — or a snapshot opens no turn.
 func TestCheckpointTurnIsNotTheAuthoredTurn(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(&turnIdentityProvider{}, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	sink, done, events := collectSink()
 	c := New(Options{

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -25,7 +26,7 @@ func TestEarlyToolDispatch(t *testing.T) {
 
 	var got []event.Event
 	sink := event.FuncSink(func(e event.Event) { got = append(got, e) })
-	a := New(prov, reg, NewSession(""), Options{MaxSteps: 1}, sink)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{MaxSteps: 1}, sink)
 	_ = a.Run(context.Background(), "go") // errors at the 1-step cap; we only want the events
 
 	var partial, full int

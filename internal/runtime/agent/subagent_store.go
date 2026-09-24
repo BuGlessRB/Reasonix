@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"sync"
@@ -21,77 +22,6 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/state/store"
 )
-
-type SubagentStatus string
-
-const (
-	SubagentRunning   SubagentStatus = "running"
-	SubagentCompleted SubagentStatus = "completed"
-	SubagentFailed    SubagentStatus = "failed"
-	// SubagentCancelled is a run the caller stopped: a cancelled context or an
-	// expired deadline. It is not failed — nothing about the work went wrong —
-	// and it is not interrupted, which is what a lost owner leaves behind.
-	SubagentCancelled   SubagentStatus = "cancelled"
-	SubagentInterrupted SubagentStatus = "interrupted"
-)
-
-// Terminal reasons refine a status without splitting it. The run graph maps a
-// cancelled context and an expired deadline onto one state, so the store keeps
-// one status and records which of them it was beside it.
-const (
-	TerminalCancelled = "cancel"
-	TerminalDeadline  = "deadline"
-)
-
-// SubagentMeta is the sidecar for a persisted sub-agent transcript. It captures
-// the execution identity that must stay stable for continuation/fork.
-type SubagentMeta struct {
-	Ref       string         `json:"ref"`
-	CreatedAt time.Time      `json:"createdAt"`
-	UpdatedAt time.Time      `json:"updatedAt"`
-	Status    SubagentStatus `json:"status"`
-	// TerminalReason refines a terminal status the way its producer meant it,
-	// so a reader tells a deadline from a cancellation without a second status.
-	TerminalReason string `json:"terminalReason,omitempty"`
-	Kind           string `json:"kind"` // task | skill
-	Name           string `json:"name"`
-	// ExecutionID is which execution this transcript belongs to — a different
-	// question from ParentToolCallID, which names the provider-visible call it
-	// descends from. Empty is a record written before the two were told apart.
-	ExecutionID      string   `json:"executionId,omitempty"`
-	WorkspaceRoot    string   `json:"workspaceRoot"`
-	ParentSession    string   `json:"parentSession,omitempty"`
-	ParentToolCallID string   `json:"parentToolCallId,omitempty"`
-	ForkedFrom       string   `json:"forkedFrom,omitempty"`
-	SystemPromptHash string   `json:"systemPromptHash"`
-	ToolScope        []string `json:"toolScope"`
-	ToolSchemaHash   string   `json:"toolSchemaHash"`
-	Model            string   `json:"model"`
-	Effort           string   `json:"effort"`
-	// Capsule records what context this run was given; CapsuleHash is its
-	// stable identity for comparing two runs.
-	Capsule     ContextCapsule `json:"capsule"`
-	CapsuleHash string         `json:"capsuleHash"`
-}
-
-// subagentMetaDecodeError distinguishes malformed metadata content from file
-// I/O failures. Cleanup may safely skip one undecodable record, but storage
-// errors must remain visible because they can affect every subagent record.
-type subagentMetaDecodeError struct {
-	ref string
-	err error
-}
-
-func (e *subagentMetaDecodeError) Error() string {
-	return fmt.Sprintf("decode subagent metadata %q: %v", e.ref, e.err)
-}
-
-func (e *subagentMetaDecodeError) Unwrap() error { return e.err }
-
-func isSubagentMetaDecodeError(err error) bool {
-	var decodeErr *subagentMetaDecodeError
-	return errors.As(err, &decodeErr)
-}
 
 // SubagentSpec describes the current invocation identity.
 type SubagentSpec struct {
@@ -117,22 +47,12 @@ type SubagentSpec struct {
 // SubagentRun is a prepared transcript run. Call Release exactly once.
 type SubagentRun struct {
 	Ref        string
-	Session    *Session
-	Meta       SubagentMeta
+	Session    *sessionstore.Session
+	Meta       sessionstore.SubagentMeta
 	ForkedFrom string
 
 	store   *SubagentStore
 	release func()
-}
-
-// SubagentArtifact is a persisted sub-agent transcript and metadata pair owned
-// by a parent session. One file may be missing after a crash; lifecycle cleanup
-// should operate on the paths that exist.
-type SubagentArtifact struct {
-	Ref         string
-	SessionPath string
-	MetaPath    string
-	Meta        SubagentMeta
 }
 
 func (r *SubagentRun) Release() {
@@ -149,7 +69,7 @@ func (r *SubagentRun) Release() {
 // reference, so the sub-agent behaves exactly as it did before persisted
 // transcripts existed. It holds no lock, so Release is a no-op.
 func EphemeralSubagentRun(systemPrompt string) *SubagentRun {
-	return &SubagentRun{Session: NewSession(systemPrompt)}
+	return &SubagentRun{Session: sessionstore.NewSession(systemPrompt)}
 }
 
 // SubagentStore persists sub-agent transcripts under config.SessionDir()/subagents.
@@ -194,56 +114,10 @@ func (s *SubagentStore) WithParentSessionProbe(fn func(sessionPath string) bool)
 	return s
 }
 
-// ListSubagentsByParent returns persisted sub-agent artifacts whose metadata
-// declares the given parent session owner.
-func ListSubagentsByParent(sessionDir, parentSession string) ([]SubagentArtifact, error) {
-	parentSession = strings.TrimSpace(parentSession)
-	if strings.TrimSpace(sessionDir) == "" || parentSession == "" {
-		return nil, nil
-	}
-	dir := filepath.Join(sessionDir, "subagents")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	out := []SubagentArtifact{}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".meta.json") {
-			continue
-		}
-		ref := strings.TrimSuffix(entry.Name(), ".meta.json")
-		if !validSubagentRef(ref) {
-			continue
-		}
-		metaPath := filepath.Join(dir, entry.Name())
-		data, err := fileencoding.ReadFileUTF8(metaPath)
-		if err != nil {
-			return nil, err
-		}
-		var meta SubagentMeta
-		if err := json.Unmarshal(data, &meta); err != nil {
-			continue
-		}
-		if strings.TrimSpace(meta.ParentSession) != parentSession {
-			continue
-		}
-		out = append(out, SubagentArtifact{
-			Ref:         ref,
-			SessionPath: filepath.Join(dir, ref+".jsonl"),
-			MetaPath:    metaPath,
-			Meta:        meta,
-		})
-	}
-	return out, nil
-}
-
 // DeleteSubagentsByParent permanently removes sub-agent artifacts owned by a
 // parent session. Missing counterpart files are ignored.
 func DeleteSubagentsByParent(sessionDir, parentSession string) error {
-	artifacts, err := ListSubagentsByParent(sessionDir, parentSession)
+	artifacts, err := sessionstore.ListSubagentsByParent(sessionDir, parentSession)
 	if err != nil {
 		return err
 	}
@@ -309,7 +183,7 @@ func (s *SubagentStore) CleanupStaleRunning() (int, error) {
 			continue
 		}
 		ref := strings.TrimSuffix(entry.Name(), ".meta.json")
-		if !validSubagentRef(ref) {
+		if !sessionstore.ValidSubagentRef(ref) {
 			continue
 		}
 		meta, err := s.LoadMeta(ref)
@@ -318,12 +192,12 @@ func (s *SubagentStore) CleanupStaleRunning() (int, error) {
 			// not abort startup. Skip all content decode failures, including
 			// errors from custom field decoders such as time.Time, while genuine
 			// file I/O errors remain fatal so storage problems stay visible.
-			if isSubagentMetaDecodeError(err) {
+			if sessionstore.IsSubagentMetaDecodeError(err) {
 				continue
 			}
 			return 0, err
 		}
-		if meta.Status != SubagentRunning {
+		if meta.Status != sessionstore.SubagentRunning {
 			continue
 		}
 		parentSession := strings.TrimSpace(meta.ParentSession)
@@ -350,8 +224,8 @@ func (s *SubagentStore) CleanupStaleRunning() (int, error) {
 		if s.parentSessionProbe != nil && s.parentSessionProbe(parent.sessionPath) {
 			continue
 		}
-		lease, err := TryAcquireSessionLease(parent.sessionPath)
-		if errors.Is(err, ErrSessionLeaseHeld) {
+		lease, err := sessionstore.TryAcquireSessionLease(parent.sessionPath)
+		if errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 			continue
 		}
 		if err != nil {
@@ -365,16 +239,16 @@ func (s *SubagentStore) CleanupStaleRunning() (int, error) {
 			// have completed the child between the initial scan and handoff.
 			meta, err := s.LoadMeta(ref)
 			if err != nil {
-				if isSubagentMetaDecodeError(err) {
+				if sessionstore.IsSubagentMetaDecodeError(err) {
 					continue
 				}
 				lease.Release()
 				return cleaned, err
 			}
-			if meta.Status != SubagentRunning || strings.TrimSpace(meta.ParentSession) != parentID {
+			if meta.Status != sessionstore.SubagentRunning || strings.TrimSpace(meta.ParentSession) != parentID {
 				continue
 			}
-			meta.Status = SubagentInterrupted
+			meta.Status = sessionstore.SubagentInterrupted
 			meta.UpdatedAt = now
 			if err := s.saveMeta(meta); err != nil {
 				lease.Release()
@@ -414,8 +288,8 @@ func (s *SubagentStore) PrepareFresh(spec SubagentSpec) (*SubagentRun, error) {
 		return nil, err
 	}
 	now := time.Now().UTC()
-	meta := metaFromSpec(ref, SubagentRunning, now, now, spec)
-	return &SubagentRun{Ref: ref, Session: NewSession(spec.SystemPrompt), Meta: meta, store: s, release: release}, nil
+	meta := metaFromSpec(ref, sessionstore.SubagentRunning, now, now, spec)
+	return &SubagentRun{Ref: ref, Session: sessionstore.NewSession(spec.SystemPrompt), Meta: meta, store: s, release: release}, nil
 }
 
 func (s *SubagentStore) PrepareContinue(ref string, spec SubagentSpec) (*SubagentRun, error) {
@@ -453,7 +327,7 @@ func (s *SubagentStore) PrepareContinue(ref string, spec SubagentSpec) (*Subagen
 		release()
 		return nil, err
 	}
-	sess, err := LoadSession(s.sessionPath(ref))
+	sess, err := sessionstore.LoadSession(s.sessionPath(ref))
 	if err != nil {
 		release()
 		return nil, fmt.Errorf("load subagent transcript %q: %w", ref, err)
@@ -533,11 +407,11 @@ func (s *SubagentStore) nearestLineageSource(requestedRef string, spec SubagentS
 		return "", err
 	}
 	for _, ancestor := range ancestors {
-		artifacts, err := ListSubagentsByParent(filepath.Dir(s.dir), ancestor)
+		artifacts, err := sessionstore.ListSubagentsByParent(filepath.Dir(s.dir), ancestor)
 		if err != nil {
 			return "", err
 		}
-		var candidates []SubagentArtifact
+		var candidates []sessionstore.SubagentArtifact
 		for _, artifact := range artifacts {
 			if artifact.Ref == requestedRef || s.derivesFrom(artifact.Meta, requestedRef) {
 				candidates = append(candidates, artifact)
@@ -576,7 +450,7 @@ func (s *SubagentStore) sessionAncestors(current string) ([]string, error) {
 		if !valid {
 			return nil, fmt.Errorf("invalid session identifier %q", cursor)
 		}
-		meta, ok, err := LoadBranchMeta(metaPath)
+		meta, ok, err := sessionstore.LoadBranchMeta(metaPath)
 		if err != nil {
 			return nil, err
 		}
@@ -596,7 +470,7 @@ func (s *SubagentStore) sessionAncestors(current string) ([]string, error) {
 	return ancestors, nil
 }
 
-func (s *SubagentStore) derivesFrom(meta SubagentMeta, sourceRef string) bool {
+func (s *SubagentStore) derivesFrom(meta sessionstore.SubagentMeta, sourceRef string) bool {
 	sourceRef = strings.TrimSpace(sourceRef)
 	seen := map[string]bool{}
 	for cursor := strings.TrimSpace(meta.ForkedFrom); cursor != ""; {
@@ -616,12 +490,12 @@ func (s *SubagentStore) derivesFrom(meta SubagentMeta, sourceRef string) bool {
 	return false
 }
 
-func (s *SubagentStore) compatibleCopiesFromSource(sourceRef string, spec SubagentSpec) ([]SubagentArtifact, error) {
-	artifacts, err := ListSubagentsByParent(filepath.Dir(s.dir), spec.ParentSession)
+func (s *SubagentStore) compatibleCopiesFromSource(sourceRef string, spec SubagentSpec) ([]sessionstore.SubagentArtifact, error) {
+	artifacts, err := sessionstore.ListSubagentsByParent(filepath.Dir(s.dir), spec.ParentSession)
 	if err != nil {
 		return nil, err
 	}
-	var copies []SubagentArtifact
+	var copies []sessionstore.SubagentArtifact
 	for _, artifact := range artifacts {
 		if strings.TrimSpace(artifact.Meta.ForkedFrom) != sourceRef {
 			continue
@@ -669,7 +543,7 @@ func (s *SubagentStore) prepareFork(ref string, spec SubagentSpec) (*SubagentRun
 		sourceRelease()
 		return nil, err
 	}
-	sess, err := LoadSession(s.sessionPath(sourceRef))
+	sess, err := sessionstore.LoadSession(s.sessionPath(sourceRef))
 	if err != nil {
 		sourceRelease()
 		return nil, fmt.Errorf("load subagent transcript %q: %w", sourceRef, err)
@@ -684,7 +558,7 @@ func (s *SubagentStore) prepareFork(ref string, spec SubagentSpec) (*SubagentRun
 		return nil, err
 	}
 	now := time.Now().UTC()
-	newMeta := metaFromSpec(newRef, SubagentRunning, now, now, spec)
+	newMeta := metaFromSpec(newRef, sessionstore.SubagentRunning, now, now, spec)
 	newMeta.ForkedFrom = sourceRef
 	return &SubagentRun{Ref: newRef, Session: sess, Meta: newMeta, ForkedFrom: sourceRef, store: s, release: newRelease}, nil
 }
@@ -697,7 +571,7 @@ func (s *SubagentStore) MarkRunning(run *SubagentRun) error {
 		return nil
 	}
 	meta := run.Meta
-	meta.Status = SubagentRunning
+	meta.Status = sessionstore.SubagentRunning
 	meta.UpdatedAt = time.Now().UTC()
 	return s.saveMeta(meta)
 }
@@ -716,14 +590,14 @@ func (s *SubagentStore) SaveCompleted(run *SubagentRun) error {
 		return err
 	}
 	meta := run.Meta
-	meta.Status = SubagentCompleted
+	meta.Status = sessionstore.SubagentCompleted
 	meta.UpdatedAt = time.Now().UTC()
 	run.Meta = meta
 	return s.saveMeta(meta)
 }
 
 func (s *SubagentStore) SaveFailed(run *SubagentRun) error {
-	return s.saveTerminal(run, SubagentFailed, "")
+	return s.saveTerminal(run, sessionstore.SubagentFailed, "")
 }
 
 // ensureBranchCreatedAt seeds the session list sidecar before the first
@@ -735,7 +609,7 @@ func (s *SubagentStore) ensureBranchCreatedAt(run *SubagentRun) error {
 		return nil
 	}
 	path := s.sessionPath(run.Ref)
-	if _, ok, err := LoadBranchMeta(path); err != nil {
+	if _, ok, err := sessionstore.LoadBranchMeta(path); err != nil {
 		return err
 	} else if ok {
 		return nil
@@ -744,15 +618,15 @@ func (s *SubagentStore) ensureBranchCreatedAt(run *SubagentRun) error {
 	if created.IsZero() {
 		created = time.Now().UTC()
 	}
-	return SaveBranchMetaPreserveUpdated(path, BranchMeta{
-		ID:        BranchID(path),
+	return sessionstore.SaveBranchMetaPreserveUpdated(path, sessionstore.BranchMeta{
+		ID:        sessionstore.BranchID(path),
 		CreatedAt: created,
 	})
 }
 
-func (s *SubagentStore) LoadMeta(ref string) (SubagentMeta, error) {
-	var meta SubagentMeta
-	if !validSubagentRef(ref) {
+func (s *SubagentStore) LoadMeta(ref string) (sessionstore.SubagentMeta, error) {
+	var meta sessionstore.SubagentMeta
+	if !sessionstore.ValidSubagentRef(ref) {
 		return meta, fmt.Errorf("invalid subagent reference %q", ref)
 	}
 	data, err := fileencoding.ReadFileUTF8(s.metaPath(ref))
@@ -760,12 +634,12 @@ func (s *SubagentStore) LoadMeta(ref string) (SubagentMeta, error) {
 		return meta, fmt.Errorf("load subagent metadata %q: %w", ref, err)
 	}
 	if err := json.Unmarshal(data, &meta); err != nil {
-		return meta, &subagentMetaDecodeError{ref: ref, err: err}
+		return meta, &sessionstore.SubagentMetaDecodeError{Ref: ref, Err: err}
 	}
 	return meta, nil
 }
 
-func validateContinueOwner(meta SubagentMeta, spec SubagentSpec) error {
+func validateContinueOwner(meta sessionstore.SubagentMeta, spec SubagentSpec) error {
 	current := strings.TrimSpace(spec.ParentSession)
 	owner := strings.TrimSpace(meta.ParentSession)
 	if owner == current {
@@ -777,7 +651,7 @@ func validateContinueOwner(meta SubagentMeta, spec SubagentSpec) error {
 	return fmt.Errorf("subagent reference %q belongs to parent session %q, current parent session is %q", meta.Ref, owner, current)
 }
 
-func (s *SubagentStore) validateForkOwner(meta SubagentMeta, spec SubagentSpec) error {
+func (s *SubagentStore) validateForkOwner(meta sessionstore.SubagentMeta, spec SubagentSpec) error {
 	current := strings.TrimSpace(spec.ParentSession)
 	owner := strings.TrimSpace(meta.ParentSession)
 	if owner == current {
@@ -816,7 +690,7 @@ func (s *SubagentStore) isAncestorSession(ancestor, current string) (bool, error
 		if !valid {
 			return false, fmt.Errorf("invalid session identifier %q", cursor)
 		}
-		meta, ok, err := LoadBranchMeta(metaPath)
+		meta, ok, err := sessionstore.LoadBranchMeta(metaPath)
 		if err != nil {
 			return false, err
 		}
@@ -836,7 +710,7 @@ func (s *SubagentStore) isAncestorSession(ancestor, current string) (bool, error
 }
 
 func (s *SubagentStore) lock(ref string) (func(), error) {
-	if !validSubagentRef(ref) {
+	if !sessionstore.ValidSubagentRef(ref) {
 		return nil, fmt.Errorf("invalid subagent reference %q", ref)
 	}
 	s.mu.Lock()
@@ -863,7 +737,7 @@ func (s *SubagentStore) newRef() (string, error) {
 func (s *SubagentStore) sessionPath(ref string) string { return filepath.Join(s.dir, ref+".jsonl") }
 func (s *SubagentStore) metaPath(ref string) string    { return filepath.Join(s.dir, ref+".meta.json") }
 
-func (s *SubagentStore) saveMeta(meta SubagentMeta) error {
+func (s *SubagentStore) saveMeta(meta sessionstore.SubagentMeta) error {
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return err
 	}
@@ -894,19 +768,6 @@ func (s *SubagentStore) parentDestroyed(run *SubagentRun) bool {
 		return false
 	}
 	return s.destroyed(run.Meta.ParentSession)
-}
-
-func validSubagentRef(ref string) bool {
-	if !strings.HasPrefix(ref, "sa_") {
-		return false
-	}
-	for _, r := range ref {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
-			continue
-		}
-		return false
-	}
-	return true
 }
 
 func bytesHash(data []byte) string {

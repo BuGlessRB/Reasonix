@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 
@@ -60,9 +61,9 @@ func (t *SubagentListTool) Execute(ctx context.Context, args json.RawMessage) (s
 			return "", fmt.Errorf("invalid args: %w", err)
 		}
 	}
-	want := SubagentStatus(strings.TrimSpace(p.Status))
+	want := sessionstore.SubagentStatus(strings.TrimSpace(p.Status))
 	switch want {
-	case "", SubagentCompleted, SubagentFailed, SubagentCancelled, SubagentInterrupted, SubagentRunning:
+	case "", sessionstore.SubagentCompleted, sessionstore.SubagentFailed, sessionstore.SubagentCancelled, sessionstore.SubagentInterrupted, sessionstore.SubagentRunning:
 	default:
 		return "", fmt.Errorf("unknown status %q; want completed, failed, cancelled, interrupted, or running", p.Status)
 	}
@@ -81,8 +82,8 @@ func (t *SubagentListTool) Execute(ctx context.Context, args json.RawMessage) (s
 	return formatSubagentListing(artifacts, want), nil
 }
 
-func formatSubagentListing(artifacts []SubagentArtifact, want SubagentStatus) string {
-	kept := make([]SubagentArtifact, 0, len(artifacts))
+func formatSubagentListing(artifacts []sessionstore.SubagentArtifact, want sessionstore.SubagentStatus) string {
+	kept := make([]sessionstore.SubagentArtifact, 0, len(artifacts))
 	for _, a := range artifacts {
 		if want == "" || a.Meta.Status == want {
 			kept = append(kept, a)
@@ -124,7 +125,7 @@ func formatSubagentListing(artifacts []SubagentArtifact, want SubagentStatus) st
 // inherits its ancestor's children instead of losing sight of them. A record
 // whose lineage cannot be proven is skipped rather than failing the listing:
 // one odd sidecar must not hide every other child.
-func (s *SubagentStore) ListForParent(parentSession, workspaceRoot string) ([]SubagentArtifact, error) {
+func (s *SubagentStore) ListForParent(parentSession, workspaceRoot string) ([]sessionstore.SubagentArtifact, error) {
 	if s == nil {
 		return nil, fmt.Errorf("subagent transcript storage is not available")
 	}
@@ -141,13 +142,13 @@ func (s *SubagentStore) ListForParent(parentSession, workspaceRoot string) ([]Su
 	}
 	wantWorkspace := strings.TrimSpace(workspaceRoot)
 	owned := map[string]bool{parentSession: true}
-	var out []SubagentArtifact
+	var out []sessionstore.SubagentArtifact
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".meta.json") {
 			continue
 		}
 		ref := strings.TrimSuffix(entry.Name(), ".meta.json")
-		if !validSubagentRef(ref) {
+		if !sessionstore.ValidSubagentRef(ref) {
 			continue
 		}
 		meta, err := s.readListedMeta(ref, entry.Name())
@@ -163,14 +164,14 @@ func (s *SubagentStore) ListForParent(parentSession, workspaceRoot string) ([]Su
 		if !s.ownedForListing(owned, strings.TrimSpace(meta.ParentSession), parentSession) {
 			continue
 		}
-		out = append(out, SubagentArtifact{
+		out = append(out, sessionstore.SubagentArtifact{
 			Ref:         ref,
 			SessionPath: s.sessionPath(ref),
 			MetaPath:    s.metaPath(ref),
 			Meta:        *meta,
 		})
 	}
-	slices.SortFunc(out, func(a, b SubagentArtifact) int {
+	slices.SortFunc(out, func(a, b sessionstore.SubagentArtifact) int {
 		if !a.Meta.UpdatedAt.Equal(b.Meta.UpdatedAt) {
 			return b.Meta.UpdatedAt.Compare(a.Meta.UpdatedAt)
 		}
@@ -181,7 +182,7 @@ func (s *SubagentStore) ListForParent(parentSession, workspaceRoot string) ([]Su
 
 // readListedMeta returns nil for a sidecar this listing should pass over: an
 // undecodable record is one child's problem, not the listing's.
-func (s *SubagentStore) readListedMeta(ref, name string) (*SubagentMeta, error) {
+func (s *SubagentStore) readListedMeta(ref, name string) (*sessionstore.SubagentMeta, error) {
 	data, err := fileencoding.ReadFileUTF8(filepath.Join(s.dir, name))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -189,7 +190,7 @@ func (s *SubagentStore) readListedMeta(ref, name string) (*SubagentMeta, error) 
 		}
 		return nil, fmt.Errorf("load subagent metadata %q: %w", ref, err)
 	}
-	var meta SubagentMeta
+	var meta sessionstore.SubagentMeta
 	if err := json.Unmarshal(data, &meta); err != nil {
 		return nil, nil
 	}

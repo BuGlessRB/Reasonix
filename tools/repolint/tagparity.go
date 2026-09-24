@@ -14,7 +14,7 @@ import (
 // a transcript from /history and must not print host markup as if a person had
 // typed it.
 const (
-	goTagFile = "internal/runtime/agent/preview.go"
+	goTagFile = "internal/state/sessionstore/preview.go"
 	tsTagFile = "desktop/frontend-next/src/state/session.ts"
 )
 

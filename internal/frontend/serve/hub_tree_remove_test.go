@@ -9,11 +9,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -22,7 +22,7 @@ func writeSessionAt(t *testing.T, path string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir session dir: %v", err)
 	}
-	s := agent.NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("SaveSnapshot: %v", err)
@@ -111,7 +111,7 @@ func TestRemoveSessionRefusesALeasedTranscript(t *testing.T) {
 	path := filepath.Join(SessionDirFor(root), "held.jsonl")
 	writeSessionAt(t, path)
 
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("TryAcquireSessionLease: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestRemoveSessionRefusesALeasedTranscript(t *testing.T) {
 			t.Errorf("artifact erased despite the refusal: %s (%v)", p, err)
 		}
 	}
-	if agent.IsCleanupPending(path) {
+	if sessionstore.IsCleanupPending(path) {
 		t.Error("a refused delete must not mark the session for cleanup")
 	}
 }
@@ -157,7 +157,7 @@ func TestRemoveSessionSucceedsOnceTheLeaseIsReleased(t *testing.T) {
 	path := filepath.Join(SessionDirFor(root), "free.jsonl")
 	writeSessionAt(t, path)
 
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("TryAcquireSessionLease: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestRemoveSessionNamesTheProcessHoldingIt(t *testing.T) {
 	writeSessionAt(t, path)
 
 	// A holder this process cannot reach, written the way another one writes it.
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("TryAcquireSessionLease: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestRemoveSessionNamesTheProcessHoldingIt(t *testing.T) {
 // file names one; the lock itself does not.
 func stampForeignLeaseHolder(t *testing.T, path string, pid int) {
 	t.Helper()
-	info, err := agent.LoadSessionLeaseInfo(path)
+	info, err := sessionstore.LoadSessionLeaseInfo(path)
 	if err != nil || info == nil {
 		t.Fatalf("LoadSessionLeaseInfo: %v", err)
 	}

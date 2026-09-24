@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -70,7 +71,7 @@ func TestBindWritePathsKeepsCapabilitySchemaButBlocksResolvedWriter(t *testing.T
 	if got.Name() != proxy.Name() || got.Description() != proxy.Description() || string(got.Schema()) != string(proxy.Schema()) || got.ReadOnly() != proxy.ReadOnly() {
 		t.Fatal("path-bound wrapper changed provider-visible use_capability contract")
 	}
-	a := New(nil, bound, NewSession("sys"), Options{}, event.Discard)
+	a := New(nil, bound, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		ID: "writer", Name: "use_capability",
 		Arguments: `{"action":"call","capability_id":"mcp-tool:fs/write","arguments":{}}`,
@@ -100,7 +101,7 @@ func TestBindWritePathsAllowsResolvedReadOnlyCapability(t *testing.T) {
 		Args:        json.RawMessage(`{}`),
 	}})
 	bound, _ := BindWritePaths(reg, NewWriteGrant(claim), nil, NewSubagentScheduler(4, 2), root, false)
-	a := New(nil, bound, NewSession("sys"), Options{}, event.Discard)
+	a := New(nil, bound, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		ID: "reader", Name: "use_capability",
 		Arguments: `{"action":"call","capability_id":"mcp-tool:search/query","arguments":{}}`,
@@ -242,7 +243,7 @@ func TestAgentReservesParentWriteBeforePreToolUse(t *testing.T) {
 	writer := &recordingWriter{name: "write_file", writesPaths: true}
 	reg := tool.NewRegistry()
 	reg.Add(writer)
-	a := New(nil, reg, NewSession(""), Options{
+	a := New(nil, reg, sessionstore.NewSession(""), Options{
 		Hooks:              hooks,
 		WriteScheduler:     sched,
 		WriteWorkspaceRoot: root,

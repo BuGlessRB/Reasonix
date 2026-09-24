@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
@@ -35,7 +36,7 @@ import (
 type Lifecycle interface {
 	NewSession() error
 	ClearSession() error
-	Resume(s *agent.Session, path string) error
+	Resume(s *sessionstore.Session, path string) error
 	SetSessionPath(p string)
 	SessionPath() string
 	SessionDir() string
@@ -150,9 +151,9 @@ type SessionHistory interface {
 	PrepareFileRevert(path string) (checkpoint.RewindPlan, error)
 	CommitFileRevert(planID string, resolution checkpoint.ConflictResolution) (checkpoint.RewindResult, error)
 	Branch(name string) (string, error)
-	Branches() ([]agent.BranchInfo, error)
+	Branches() ([]sessionstore.BranchInfo, error)
 	BranchTreeText() string
-	SwitchBranch(ref string) (agent.BranchInfo, error)
+	SwitchBranch(ref string) (sessionstore.BranchInfo, error)
 	Compact(ctx context.Context, req agent.CompactRequest) (agent.CompactVerdict, error)
 	CompactRatio() float64
 	ContextReport() (summary, detail string)

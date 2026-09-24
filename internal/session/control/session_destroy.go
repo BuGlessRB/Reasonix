@@ -2,9 +2,9 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"time"
 
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/jobs"
 )
 
@@ -19,7 +19,7 @@ type SessionDestroyHandle struct {
 }
 
 func (c *Controller) BeginDestroySession(sessionPath string) SessionDestroyHandle {
-	parentSession := agent.BranchID(sessionPath)
+	parentSession := sessionstore.BranchID(sessionPath)
 	if c.jobs == nil || parentSession == "" {
 		wait := func() jobs.TeardownResult { return jobs.TeardownResult{} }
 		noop := func() {}

@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -72,7 +73,7 @@ func TestGoalTokenBudgetPausesAndResumes(t *testing.T) {
 
 func TestGoalReadinessFailurePausesOnExplicitSpendBudget(t *testing.T) {
 	runner := &deliveryScopeErrorRunner{}
-	executor := agent.New(nil, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	executor := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	c := New(Options{Runner: runner, Executor: executor, GoalTokenBudget: 200})
 	runner.usage = c.goalUsageTee
 	c.SetGoal("ship the integration")

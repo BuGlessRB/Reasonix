@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
@@ -19,7 +20,7 @@ const obscureConstraint = "the vendored zlib fork cannot be replaced because its
 // searchableSession buries the constraint in assistant reasoning at a known
 // canonical position. Not a user turn: keepUserTurns holds old ones verbatim
 // oldest-first, so a fact placed there stays visible and proves nothing.
-func searchableSession(turns int) (*Session, int) {
+func searchableSession(turns int) (*sessionstore.Session, int) {
 	big := strings.Repeat("word ", 400)
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
@@ -33,14 +34,14 @@ func searchableSession(turns int) (*Session, int) {
 			provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("continue %d", i)},
 		)
 	}
-	return &Session{Messages: msgs}, constraintAt
+	return &sessionstore.Session{Messages: msgs}, constraintAt
 }
 
 // foldedOutOfSight reports that the model can no longer read the fact anywhere
 // in its context — not in the digest, not in a kept turn, not as an index line.
 // Every claim about search rests on this being true first.
 func foldedOutOfSight(a *Agent, needle string) bool {
-	canonical, _ := a.sess.conversation.snapshotMessagesVersion()
+	canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
 	for _, m := range modelVisibleFromProjection(a.sess.compactionState.Projection, canonical) {
 		if strings.Contains(m.Content, needle) {
 			return false

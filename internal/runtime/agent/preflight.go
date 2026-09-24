@@ -3,6 +3,7 @@ package agent
 import (
 	"errors"
 	"log/slog"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"time"
 
@@ -100,7 +101,7 @@ func (a *Agent) currentPromptCacheKey() string {
 }
 
 func (a *Agent) currentPromptCacheKeyLocked() string {
-	return promptCacheKey(a.workspaceID, BranchID(a.sess.path), a.modelRef)
+	return promptCacheKey(a.workspaceID, sessionstore.BranchID(a.sess.path), a.modelRef)
 }
 
 // InvalidateProjection drops the in-memory and on-disk projection after
@@ -111,11 +112,11 @@ func (a *Agent) InvalidateProjection() {
 	}
 	a.sess.compactionMu.Lock()
 	path := a.sess.path
-	a.sess.compactionState = CompactionState{}
+	a.sess.compactionState = sessionstore.CompactionState{}
 	a.sess.compactionMu.Unlock()
 	a.sess.compaction.restart()
 	if path != "" {
-		if err := RemoveCompactionState(path); err != nil {
+		if err := sessionstore.RemoveCompactionState(path); err != nil {
 			slog.Warn("agent: remove context projection", "err", err)
 		}
 	}
@@ -152,17 +153,17 @@ func (a *Agent) LoadProjectionSidecar(sessionPath string) {
 	}
 	a.sess.compactionMu.Lock()
 	a.sess.path = sessionPath
-	a.sess.compactionState = CompactionState{}
+	a.sess.compactionState = sessionstore.CompactionState{}
 	a.sess.checkpointState = "none"
 	a.sess.compactionMu.Unlock()
 	if sessionPath == "" {
 		a.resetCompactionState()
 		return
 	}
-	st, ok, err := LoadCompactionState(sessionPath)
+	st, ok, err := sessionstore.LoadCompactionState(sessionPath)
 	if err != nil {
 		slog.Warn("agent: load context projection", "err", err)
-		_ = RemoveCompactionState(sessionPath)
+		_ = sessionstore.RemoveCompactionState(sessionPath)
 		a.resetCompactionState()
 		return
 	}
@@ -186,7 +187,7 @@ func (a *Agent) LoadProjectionSidecar(sessionPath string) {
 		var fingerprint func([]provider.Message, int) string
 		if a.sess.conversation != nil {
 			var rewriteVersion int
-			msgs, _, rewriteVersion = a.sess.conversation.snapshotWithVersion()
+			msgs, _, rewriteVersion = a.sess.conversation.SnapshotWithVersion()
 			fingerprint = a.prefixHasher(rewriteVersion)
 		}
 		if projectionContentValid(st, msgs, fingerprint) {
@@ -194,7 +195,7 @@ func (a *Agent) LoadProjectionSidecar(sessionPath string) {
 		}
 	}
 	if (key != "" && !keyOK) || !hasMaintenanceSignal {
-		a.sess.compactionState = CompactionState{}
+		a.sess.compactionState = sessionstore.CompactionState{}
 		a.sess.checkpointState = "none"
 		a.sess.compactionMu.Unlock()
 		return
@@ -210,13 +211,13 @@ func (a *Agent) LoadProjectionSidecar(sessionPath string) {
 	var fingerprint func([]provider.Message, int) string
 	if a.sess.conversation != nil {
 		var rewriteVersion int
-		msgs, _, rewriteVersion = a.sess.conversation.snapshotWithVersion()
+		msgs, _, rewriteVersion = a.sess.conversation.SnapshotWithVersion()
 		fingerprint = a.prefixHasher(rewriteVersion)
 	}
 	valid := len(st.Projection.Messages) > 0 && projectionValid(st, msgs, key, fingerprint)
 	if !valid && len(st.Projection.Messages) > 0 {
 		// Keep blocked receipts / telemetry; drop unusable projection body.
-		st.Projection = ContextProjection{}
+		st.Projection = sessionstore.ContextProjection{}
 	}
 	a.sess.compactionState = st
 	if valid {
@@ -259,7 +260,7 @@ func lineageKeyCompatible(stored, current string) (normalized string, ok bool) {
 
 func (a *Agent) resetCompactionState() {
 	a.sess.compactionMu.Lock()
-	a.sess.compactionState = CompactionState{}
+	a.sess.compactionState = sessionstore.CompactionState{}
 	a.sess.checkpointState = "none"
 	a.sess.compactionMu.Unlock()
 }
@@ -277,7 +278,7 @@ func (a *Agent) BindSessionPath(path string, loadSidecar bool) {
 	}
 	a.sess.compactionMu.Lock()
 	a.sess.path = path
-	a.sess.compactionState = CompactionState{}
+	a.sess.compactionState = sessionstore.CompactionState{}
 	a.sess.checkpointState = "none"
 	a.sess.cacheState = CacheStateUnknown
 	a.sess.compactionMu.Unlock()
@@ -318,7 +319,7 @@ func (a *Agent) SetCacheState(state string) {
 	defer a.sess.compactionMu.Unlock()
 	a.sess.cacheState = state
 	if a.sess.compactionState.SchemaVersion == 0 && len(a.sess.compactionState.Projection.Messages) == 0 {
-		a.sess.compactionState.SchemaVersion = compactionStateSchemaCurrent
+		a.sess.compactionState.SchemaVersion = sessionstore.CompactionStateSchemaCurrent
 	}
 	a.sess.compactionState.LastCacheState = state
 	a.sess.compactionState.UpdatedAt = time.Now().UTC()
@@ -341,7 +342,7 @@ func (a *Agent) persistCompactionStateLocked() error {
 	if a.sess.path == "" {
 		return nil
 	}
-	return SaveCompactionState(a.sess.path, a.sess.compactionState)
+	return sessionstore.SaveCompactionState(a.sess.path, a.sess.compactionState)
 }
 
 // promptCacheKey builds a stable lineage key for session + model identity.

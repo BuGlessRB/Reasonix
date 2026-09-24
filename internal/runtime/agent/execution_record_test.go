@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"sync"
@@ -560,13 +561,13 @@ func completedChildRefs(t *testing.T, sessionPath string) []string {
 	t.Helper()
 	dir := filepath.Dir(sessionPath)
 	parent := strings.TrimSuffix(filepath.Base(sessionPath), ".jsonl")
-	artifacts, err := ListSubagentsByParent(dir, parent)
+	artifacts, err := sessionstore.ListSubagentsByParent(dir, parent)
 	if err != nil {
 		t.Fatalf("list children: %v", err)
 	}
 	var out []string
 	for _, a := range artifacts {
-		if a.Meta.Status == SubagentCompleted {
+		if a.Meta.Status == sessionstore.SubagentCompleted {
 			out = append(out, a.Ref)
 		}
 	}

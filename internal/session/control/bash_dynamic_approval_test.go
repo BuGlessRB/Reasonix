@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -231,7 +232,7 @@ func TestDynamicBashSkipsGuardianAllow(t *testing.T) {
 		streams: [][]provider.Chunk{textTurn(`{"risk_level":"low","user_authorization":"high","outcome":"allow","rationale":"safe"}`)},
 	}
 	guardianSess := guardian.NewSession(guardianProv, tool.NewRegistry(), guardian.PolicyPrompt(), "guardian-test", 0, nil, event.Discard)
-	exec := agent.New(&recordingProvider{name: "executor"}, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	exec := agent.New(&recordingProvider{name: "executor"}, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	approvals := make(chan event.Approval, 1)
 	c := New(Options{
 		Executor: exec,

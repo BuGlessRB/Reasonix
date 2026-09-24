@@ -3,13 +3,13 @@ package control
 import (
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/state/store"
 )
@@ -262,7 +262,7 @@ func TestSupersessionIsScopedToTheTurnThatInheritedIt(t *testing.T) {
 		t.Fatal("an unowned barrier is not being projected")
 	}
 
-	marker, err := agent.BeginSessionInFlightTurn(c.SessionPath(), 0, true)
+	marker, err := sessionstore.BeginSessionInFlightTurn(c.SessionPath(), 0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestSupersessionIsScopedToTheTurnThatInheritedIt(t *testing.T) {
 	}
 
 	// Once that turn commits, nothing later carries it.
-	if _, err := agent.ClearSessionInFlightTurnIfMatch(c.SessionPath(), marker); err != nil {
+	if _, err := sessionstore.ClearSessionInFlightTurnIfMatch(c.SessionPath(), marker); err != nil {
 		t.Fatal(err)
 	}
 	if got := next.RequestContext(); len(got) != 0 {

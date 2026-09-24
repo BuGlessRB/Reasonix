@@ -1,11 +1,10 @@
 package control
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
-
-	"reasonix/internal/runtime/agent"
 )
 
 // The order blocks are declared in is the order the model reads them, so it is
@@ -45,8 +44,8 @@ func TestEveryTurnBlockIsRegisteredAsTransient(t *testing.T) {
 		if blk.tag == "" {
 			continue
 		}
-		if !slices.Contains(agent.TransientUserBlockTags, blk.tag) {
-			t.Errorf("block %q is projected onto turns but is not in agent.TransientUserBlockTags", blk.tag)
+		if !slices.Contains(sessionstore.TransientUserBlockTags, blk.tag) {
+			t.Errorf("block %q is projected onto turns but is not in sessionstore.TransientUserBlockTags", blk.tag)
 		}
 	}
 }

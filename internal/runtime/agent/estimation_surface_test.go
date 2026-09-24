@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"testing"
 
@@ -42,7 +43,7 @@ func TestEstimateMeasuresTheSurfaceTheRequestCarried(t *testing.T) {
 	prov := &scriptedProvider{name: "estimation", turns: [][]provider.Chunk{
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession("sys"), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -67,7 +68,7 @@ func TestEstimateFallsBackToTheWholeSurfaceBeforeAnyRequest(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(estimationProbe{name: "always_here"})
 	reg.SetProviderVisibleTools([]string{"always_here"})
-	a := New(&scriptedProvider{name: "estimation-cold"}, reg, NewSession("sys"), Options{}, event.Discard)
+	a := New(&scriptedProvider{name: "estimation-cold"}, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	if got := toolSchemaNames(a.estimationSurface()); !slices.Equal(got, []string{"always_here"}) {
 		t.Fatalf("cold estimate = %v, want the whole visible surface", got)
 	}

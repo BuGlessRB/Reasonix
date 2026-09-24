@@ -30,7 +30,7 @@ func TestRewrittenPrefixInvalidatesTheProjection(t *testing.T) {
 		t.Fatalf("fixture projection is not in force: %d visible messages", visible)
 	}
 
-	msgs, _, _ := a.sess.conversation.snapshotWithVersion()
+	msgs, _, _ := a.sess.conversation.SnapshotWithVersion()
 	msgs[1].Content = "the user asked for something else entirely"
 	a.sess.conversation.Rewrite(msgs, "test rewrite")
 
@@ -43,7 +43,7 @@ func TestRewrittenPrefixInvalidatesTheProjection(t *testing.T) {
 // once a second projection covers a different prefix.
 func TestFingerprintMemoIsKeyedOnTheCoveredLength(t *testing.T) {
 	a := longSession(50)
-	msgs, _, rewriteVersion := a.sess.conversation.snapshotWithVersion()
+	msgs, _, rewriteVersion := a.sess.conversation.SnapshotWithVersion()
 	hasher := a.prefixHasher(rewriteVersion)
 
 	short, long := hasher(msgs, 10), hasher(msgs, 40)

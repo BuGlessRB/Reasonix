@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -82,7 +83,7 @@ func TestAgentEmitsRetryingThenStreams(t *testing.T) {
 	}
 
 	sink := &recordSink{}
-	a := New(prov, tool.NewRegistry(), NewSession(""), Options{}, sink)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, sink)
 	if err := a.Run(context.Background(), "hi"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -141,7 +142,7 @@ func TestDeepSeekFlashMissingReasoningRecoveryWithRealSSE(t *testing.T) {
 		t.Fatalf("New provider: %v", err)
 	}
 	sink := &recordSink{}
-	a := New(prov, echoRegistry(), NewSession(""), Options{}, sink)
+	a := New(prov, echoRegistry(), sessionstore.NewSession(""), Options{}, sink)
 	if err := a.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

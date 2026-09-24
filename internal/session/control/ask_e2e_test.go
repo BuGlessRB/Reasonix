@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -45,7 +46,7 @@ func TestAskReachesTheUserOnceInteractiveApprovalIsOn(t *testing.T) {
 		toolCallTurn("a1", "ask", askQuestionArgs),
 		textTurn("Done."),
 	}}
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	asked := make(chan event.Ask, 1)
 	c := New(Options{
@@ -92,7 +93,7 @@ func TestAskLeavesTheDecisionUnresolvedWhenNoAskerIsWired(t *testing.T) {
 		toolCallTurn("a1", "ask", askQuestionArgs),
 		textTurn("Done."),
 	}}
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	c := New(Options{
 		Runner:   ag,
@@ -126,7 +127,7 @@ func TestNoApprovalPostureAnswersAQuestionForTheUser(t *testing.T) {
 				toolCallTurn("a1", "ask", askQuestionArgs),
 				textTurn("Done."),
 			}}
-			ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+			ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 			asked := make(chan event.Ask, 1)
 			c := New(Options{

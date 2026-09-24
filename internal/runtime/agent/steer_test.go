@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 )
@@ -14,31 +15,31 @@ func TestSteerText(t *testing.T) {
 	}{
 		{
 			name:    "happy path: prefix + newline + text",
-			content: MidTurnSteerPrefix + "\nplease use smaller diffs",
+			content: sessionstore.MidTurnSteerPrefix + "\nplease use smaller diffs",
 			want:    "please use smaller diffs",
 			wantOK:  true,
 		},
 		{
 			name:    "prefix only, no user text",
-			content: MidTurnSteerPrefix,
+			content: sessionstore.MidTurnSteerPrefix,
 			want:    "",
 			wantOK:  true,
 		},
 		{
 			name:    "prefix with trailing whitespace only",
-			content: MidTurnSteerPrefix + "\n  ",
+			content: sessionstore.MidTurnSteerPrefix + "\n  ",
 			want:    "  ",
 			wantOK:  true,
 		},
 		{
-			name:    "round-trip through midTurnSteerMessage",
-			content: midTurnSteerMessage("stop using such large diffs", false),
+			name:    "round-trip through sessionstore.MidTurnSteerMessage",
+			content: sessionstore.MidTurnSteerMessage("stop using such large diffs", false),
 			want:    "stop using such large diffs",
 			wantOK:  true,
 		},
 		{
 			name:    "user text with leading/trailing spaces preserved (matches live event)",
-			content: MidTurnSteerPrefix + "\n   keep going but use read_file first   ",
+			content: sessionstore.MidTurnSteerPrefix + "\n   keep going but use read_file first   ",
 			want:    "   keep going but use read_file first   ",
 			wantOK:  true,
 		},
@@ -68,20 +69,20 @@ func TestSteerText(t *testing.T) {
 		},
 		{
 			name:    "prefix appears mid-message, not at start",
-			content: "hey model " + MidTurnSteerPrefix + "\nuse smaller diffs",
+			content: "hey model " + sessionstore.MidTurnSteerPrefix + "\nuse smaller diffs",
 			want:    "",
 			wantOK:  false,
 		},
 		{
 			name:    "multiline steer text preserved",
-			content: MidTurnSteerPrefix + "\nline one\nline two",
+			content: sessionstore.MidTurnSteerPrefix + "\nline one\nline two",
 			want:    "line one\nline two",
 			wantOK:  true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := SteerText(tt.content)
+			got, ok := sessionstore.SteerText(tt.content)
 			if ok != tt.wantOK {
 				t.Errorf("SteerText() ok = %v, want %v", ok, tt.wantOK)
 			}
@@ -89,7 +90,7 @@ func TestSteerText(t *testing.T) {
 				t.Errorf("SteerText() text = %q, want %q", got, tt.want)
 			}
 			// Sanity: when ok is true the result must never contain the prefix.
-			if ok && strings.Contains(got, MidTurnSteerPrefix) {
+			if ok && strings.Contains(got, sessionstore.MidTurnSteerPrefix) {
 				t.Errorf("SteerText() returned text still contains the prefix: %q", got)
 			}
 		})
@@ -105,14 +106,14 @@ func TestMidTurnSteerMessageRoundTrip(t *testing.T) {
 	}
 	for _, host := range []bool{false, true} {
 		for _, in := range inputs {
-			msg := midTurnSteerMessage(in, host)
-			got, ok := SteerText(msg)
+			msg := sessionstore.MidTurnSteerMessage(in, host)
+			got, ok := sessionstore.SteerText(msg)
 			if !ok {
-				t.Errorf("SteerText(midTurnSteerMessage(%q, %v)): not recognized as steer", in, host)
+				t.Errorf("SteerText(sessionstore.MidTurnSteerMessage(%q, %v)): not recognized as steer", in, host)
 				continue
 			}
 			if got != in {
-				t.Errorf("SteerText(midTurnSteerMessage(%q, %v)) = %q, want %q", in, host, got, in)
+				t.Errorf("SteerText(sessionstore.MidTurnSteerMessage(%q, %v)) = %q, want %q", in, host, got, in)
 			}
 		}
 	}
@@ -121,15 +122,15 @@ func TestMidTurnSteerMessageRoundTrip(t *testing.T) {
 // Recovery guidance rides the steer path but must never present itself as the
 // user speaking: a model told the user interrupted answers a person who did not.
 func TestHostNoticeDoesNotClaimTheUserSpoke(t *testing.T) {
-	msg := midTurnSteerMessage("a tool failed", true)
-	if strings.Contains(msg, MidTurnSteerPrefix) {
+	msg := sessionstore.MidTurnSteerMessage("a tool failed", true)
+	if strings.Contains(msg, sessionstore.MidTurnSteerPrefix) {
 		t.Fatalf("host notice = %q, want no user-steer prefix", msg)
 	}
-	if !strings.HasPrefix(msg, HostNoticePrefix) {
+	if !strings.HasPrefix(msg, sessionstore.HostNoticePrefix) {
 		t.Fatalf("host notice = %q, want the host prefix", msg)
 	}
-	if !strings.Contains(HostNoticePrefix, "the user did not send this") {
-		t.Fatalf("host prefix = %q, want it to disclaim the user", HostNoticePrefix)
+	if !strings.Contains(sessionstore.HostNoticePrefix, "the user did not send this") {
+		t.Fatalf("host prefix = %q, want it to disclaim the user", sessionstore.HostNoticePrefix)
 	}
 }
 
@@ -138,10 +139,10 @@ func TestHostNoticeDoesNotClaimTheUserSpoke(t *testing.T) {
 // rather than a copy: a tag it does not know stops the walk, and the steer
 // reads back as the person having typed the host's instructions at themselves.
 func TestSteerTextSeesThroughEveryDeclaredTransientBlock(t *testing.T) {
-	for _, tag := range TransientUserBlockTags {
+	for _, tag := range sessionstore.TransientUserBlockTags {
 		wrapped := "<" + tag + ">\nwhat the host had to say\n</" + tag + ">\n\n" +
-			MidTurnSteerPrefix + "\n" + "用户自己说的话"
-		got, ok := SteerText(wrapped)
+			sessionstore.MidTurnSteerPrefix + "\n" + "用户自己说的话"
+		got, ok := sessionstore.SteerText(wrapped)
 		if !ok || got != "用户自己说的话" {
 			t.Errorf("<%s>: SteerText = %q, %v; want the user's own words", tag, got, ok)
 		}

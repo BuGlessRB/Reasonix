@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"runtime"
 	"slices"
 	"strings"
@@ -212,7 +213,7 @@ func TestHeldBackDelegationIsNeverDrawnRunning(t *testing.T) {
 	if got := journalStanding(sessionPath, loneNodeID); got != "opened+queued:slots" {
 		t.Fatalf("journal = %q, want the refusal and its cause recorded and no start", got)
 	}
-	if running := childrenInStore(t, sessionPath, SubagentRunning); len(running) > 0 {
+	if running := childrenInStore(t, sessionPath, sessionstore.SubagentRunning); len(running) > 0 {
 		t.Errorf("store marked %v running before a slot was granted", running)
 	}
 
@@ -278,7 +279,7 @@ func TestBackgroundDelegationIsNotMarkedRunningWhileQueued(t *testing.T) {
 		t.Fatalf("task: %v", err)
 	}
 	waitUntil(t, "the job to be refused a slot", func() bool { return sink.sawState(agentgraph.StateQueued) })
-	if running := childrenInStore(t, sessionPath, SubagentRunning); len(running) > 0 {
+	if running := childrenInStore(t, sessionPath, sessionstore.SubagentRunning); len(running) > 0 {
 		t.Errorf("store marked %v running while the job was still queued", running)
 	}
 	if got := journalStanding(sessionPath, loneNodeID); got != "opened+queued:slots" {
@@ -288,7 +289,7 @@ func TestBackgroundDelegationIsNotMarkedRunningWhileQueued(t *testing.T) {
 	hold()
 	waitUntil(t, "the job to take the slot", func() bool { return sink.sawState(agentgraph.StateRunning) })
 	<-prov.entered
-	if running := childrenInStore(t, sessionPath, SubagentRunning); len(running) == 0 {
+	if running := childrenInStore(t, sessionPath, sessionstore.SubagentRunning); len(running) == 0 {
 		t.Error("store kept no running child once the slot was granted and the child was executing")
 	}
 	close(prov.release)
@@ -332,9 +333,9 @@ func journalEntry(t *testing.T, sessionPath, id string) execjournal.Entry {
 	return execjournal.Entry{}
 }
 
-func childrenInStore(t *testing.T, sessionPath string, status SubagentStatus) []string {
+func childrenInStore(t *testing.T, sessionPath string, status sessionstore.SubagentStatus) []string {
 	t.Helper()
-	artifacts, err := ListSubagentsByParent(filepath.Dir(sessionPath), "probe")
+	artifacts, err := sessionstore.ListSubagentsByParent(filepath.Dir(sessionPath), "probe")
 	if err != nil {
 		return nil
 	}
@@ -368,7 +369,7 @@ func TestCancelledDelegationSettlesAndOwnsItsTerminal(t *testing.T) {
 	if got := journalStanding(sessionPath, loneNodeID); got != "opened+started+settled" {
 		t.Fatalf("journal = %q, want a started execution the orchestration let go of", got)
 	}
-	if cancelled := childrenInStore(t, sessionPath, SubagentCancelled); len(cancelled) == 0 {
+	if cancelled := childrenInStore(t, sessionPath, sessionstore.SubagentCancelled); len(cancelled) == 0 {
 		t.Error("the child ran and was cancelled, and the store kept no cancelled record of it")
 	}
 }
@@ -402,7 +403,7 @@ func TestRefusedAdmissionLeavesNoChildTerminal(t *testing.T) {
 	waitUntil(t, "the orchestration to let the refused delegation go", func() bool {
 		return journalStanding(sessionPath, loneNodeID) == "opened+queued:slots+settled"
 	})
-	artifacts, _ := ListSubagentsByParent(filepath.Dir(sessionPath), "probe")
+	artifacts, _ := sessionstore.ListSubagentsByParent(filepath.Dir(sessionPath), "probe")
 	for _, a := range artifacts {
 		if a.Meta.ParentToolCallID == loneNodeID {
 			t.Fatalf("store kept %q for a delegation that was never admitted", a.Meta.Status)

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 	"testing/fstest"
 
@@ -17,7 +18,6 @@ import (
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/surface"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -111,7 +111,7 @@ func TestHubTreeListsWorkspaceSessionsAndMarksOpenOnes(t *testing.T) {
 	open := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	idle := filepath.Join(dir, "20260815-090000-deepseek-v4-flash.jsonl")
 	for _, path := range []string{open, idle} {
-		s := agent.NewSession("sys")
+		s := sessionstore.NewSession("sys")
 		s.Add(provider.Message{Role: provider.RoleUser, Content: "今日热点"})
 		s.Add(provider.Message{Role: provider.RoleAssistant, Content: "好的"})
 		if err := s.Save(path); err != nil {
@@ -237,7 +237,7 @@ func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
 	dir := SessionDirFor(root)
 
 	origin := filepath.Join(dir, "20260817-090000-deepseek-v4-flash.jsonl")
-	live := agent.NewSession("sys")
+	live := sessionstore.NewSession("sys")
 	live.Add(provider.Message{Role: provider.RoleUser, Content: `"C:\Users\FuChen\report.txt"`})
 	live.Add(provider.Message{Role: provider.RoleAssistant, Content: "好的"})
 	if err := live.Save(origin); err != nil {
@@ -245,7 +245,7 @@ func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
 	}
 	// The origin moves on to content no runtime had, so no copy is covered by
 	// its parent and none of them is hidden.
-	outside, err := agent.LoadSession(origin)
+	outside, err := sessionstore.LoadSession(origin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
 	parent := origin
 	var copies []string
 	for turn := range 3 {
-		conflicted := agent.NewSession("sys")
+		conflicted := sessionstore.NewSession("sys")
 		for _, m := range base {
 			if m.Role != provider.RoleSystem {
 				conflicted.Add(m)
@@ -269,7 +269,7 @@ func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
 		}
 		conflicted.Add(provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("第 %d 轮", turn)})
 		conflicted.Add(provider.Message{Role: provider.RoleAssistant, Content: "好"})
-		info, err := conflicted.SaveRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: parent})
+		info, err := conflicted.SaveRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: parent})
 		if err != nil {
 			t.Fatal(err)
 		}

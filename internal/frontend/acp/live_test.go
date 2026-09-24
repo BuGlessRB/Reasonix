@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 	"time"
 
@@ -29,7 +30,7 @@ type liveFactory struct{ prov provider.Provider }
 
 func (f *liveFactory) NewSession(_ context.Context, p SessionParams) (*control.Controller, error) {
 	executor := agent.New(f.prov, tool.NewRegistry(),
-		agent.NewSession("You are a terse assistant. Answer in as few words as possible."),
+		sessionstore.NewSession("You are a terse assistant. Answer in as few words as possible."),
 		agent.Options{MaxSteps: 3}, p.Sink)
 	return control.New(control.Options{Runner: executor, Executor: executor, Sink: p.Sink, Label: "deepseek"}), nil
 }

@@ -3,43 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 )
-
-// TurnClassification names the authored turn a message belongs to. StartsTurn
-// marks the one that opens it; Steer and Synthetic say why a user message that
-// opened none is still a user message.
-type TurnClassification struct {
-	AuthoredTurn int
-	StartsTurn   bool
-	Steer        bool
-	Synthetic    bool
-}
-
-// ClassifyTurn answers which authored turn msg belongs to, given the turns
-// closed before it. Both projections of that number derive it here: the
-// display-index sidecar counts a whole transcript with it, and a live turn
-// start names its own pending message with it.
-func ClassifyTurn(msg provider.Message, priorTurn int) TurnClassification {
-	class := TurnClassification{AuthoredTurn: priorTurn}
-	if msg.Role != provider.RoleUser {
-		return class
-	}
-	content := UserMessageText(msg)
-	if IsUserAuthoredTurn(content) {
-		class.AuthoredTurn = priorTurn + 1
-		class.StartsTurn = true
-		return class
-	}
-	if _, isSteer := SteerText(content); isSteer {
-		class.Steer = true
-	} else if IsSyntheticUserText(content) {
-		class.Synthetic = true
-	}
-	return class
-}
 
 // PriorAuthoredTurn is the authored-turn count over msgs: the number the next
 // message appended after them would follow. Re-derived from the transcript
@@ -48,18 +16,9 @@ func ClassifyTurn(msg provider.Message, priorTurn int) TurnClassification {
 func PriorAuthoredTurn(msgs []provider.Message) int {
 	turn := 0
 	for _, m := range msgs {
-		turn = ClassifyTurn(m, turn).AuthoredTurn
+		turn = sessionstore.ClassifyTurn(m, turn).AuthoredTurn
 	}
 	return turn
-}
-
-// AuthoredTurnIdentity is what a host published for the message a turn is
-// about, before any work that could produce it: the turn number, the session
-// index it named, and the raw authored text both were derived from.
-type AuthoredTurnIdentity struct {
-	AuthoredTurn int
-	MsgIndex     int
-	Raw          string
 }
 
 // HostTurnBoundary declares that the host announced this run's turn boundary,
@@ -68,7 +27,7 @@ type AuthoredTurnIdentity struct {
 // separate fact: a turn can open none and still be the user's, because their
 // line only has to read like one the host writes.
 type HostTurnBoundary struct {
-	Authored     *AuthoredTurnIdentity
+	Authored     *sessionstore.AuthoredTurnIdentity
 	HostAuthored bool
 }
 
@@ -108,7 +67,7 @@ func (a *Agent) LandAuthoredUserMessage(ctx context.Context, msg provider.Messag
 		msg.RawContent = boundary.Authored.Raw
 	}
 	msg.HostAuthored = boundary.HostAuthored
-	index := a.sess.conversation.addIndexed(msg)
+	index := a.sess.conversation.AddIndexed(msg)
 	if boundary.Authored != nil {
 		a.verifyAuthoredLanding(*boundary.Authored, msg, index)
 	}
@@ -132,8 +91,8 @@ func (a *Agent) announceOwnTurn(ctx context.Context, pending provider.Message) {
 // actually landed. It detects; it cannot repair — the name is already out — so
 // a break is reported to the operator rather than swallowed, and the durable
 // index remains the authority a reload reads.
-func (a *Agent) verifyAuthoredLanding(id AuthoredTurnIdentity, msg provider.Message, index int) {
-	class := ClassifyTurn(msg, id.AuthoredTurn-1)
+func (a *Agent) verifyAuthoredLanding(id sessionstore.AuthoredTurnIdentity, msg provider.Message, index int) {
+	class := sessionstore.ClassifyTurn(msg, id.AuthoredTurn-1)
 	if index == id.MsgIndex && class.StartsTurn && class.AuthoredTurn == id.AuthoredTurn {
 		return
 	}
@@ -153,7 +112,7 @@ func (a *Agent) verifyAuthoredLanding(id AuthoredTurnIdentity, msg provider.Mess
 // turn that opens no authored message names none rather than minting one.
 func (a *Agent) turnStartedEvent(pending provider.Message) (event.Event, bool) {
 	msgs := a.sess.conversation.Snapshot()
-	class := ClassifyTurn(pending, PriorAuthoredTurn(msgs))
+	class := sessionstore.ClassifyTurn(pending, PriorAuthoredTurn(msgs))
 	if !class.StartsTurn {
 		return event.Event{}, false
 	}

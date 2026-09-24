@@ -2,6 +2,7 @@ package agent
 
 import (
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/provider"
@@ -10,7 +11,7 @@ import (
 // currentFinalAssistantAnswer returns visible Content from the current turn.
 // It accepts a plain final or the answer immediately before the paired
 // update_goal error batch handled without another model round.
-func currentFinalAssistantAnswer(sess *Session) string {
+func currentFinalAssistantAnswer(sess *sessionstore.Session) string {
 	if sess == nil {
 		return ""
 	}
@@ -63,7 +64,7 @@ func updateGoalResultsExactlyMatch(calls []provider.ToolCall, results []provider
 // salvageReadinessExhaustedAnswer preserves completed writes as unverified.
 // It requires a current visible answer and refuses claim-only and typed-report
 // runs; the parent still verifies the merged mutation receipts.
-func salvageReadinessExhaustedAnswer(sub *Agent, sess *Session, opts Options, err error) (string, bool) {
+func salvageReadinessExhaustedAnswer(sub *Agent, sess *sessionstore.Session, opts Options, err error) (string, bool) {
 	var readinessErr *FinalReadinessError
 	if !errors.As(err, &readinessErr) || opts.RequireReviewReportKind != "" {
 		return "", false

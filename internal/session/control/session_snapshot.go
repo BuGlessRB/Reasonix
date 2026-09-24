@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -139,7 +140,7 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 		return false, err
 	}
 	if err != nil {
-		if shutdownRecovery && errors.Is(err, agent.ErrSessionFileLockHeld) {
+		if shutdownRecovery && errors.Is(err, sessionstore.ErrSessionFileLockHeld) {
 			recoveredPath, recoverErr := c.recoverShutdownSnapshot(path, err)
 			if recoverErr != nil {
 				return false, recoverErr
@@ -150,12 +151,12 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 		}
 	}
 	if err != nil {
-		if !errors.Is(err, agent.ErrSessionSnapshotConflict) {
+		if !errors.Is(err, sessionstore.ErrSessionSnapshotConflict) {
 			return false, err
 		}
 		recoveredPath, outcome, recoverErr := c.recoverSnapshotConflict(path, err, forceRewrite)
 		if recoverErr != nil {
-			if shutdownRecovery && errors.Is(recoverErr, agent.ErrSessionFileLockHeld) {
+			if shutdownRecovery && errors.Is(recoverErr, sessionstore.ErrSessionFileLockHeld) {
 				recoveredPath, recoverErr = c.recoverShutdownSnapshot(path, recoverErr)
 				if recoverErr != nil {
 					return false, recoverErr
@@ -193,8 +194,8 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 	// straight from the in-memory conversation, so the sidebar and resume picker
 	// never have to decode the whole .jsonl just to show them. markActivity bumps
 	// UpdatedAt; false preserves it.
-	preview, turns := agent.SessionPreviewFromMessages(s.Snapshot())
-	if err := agent.UpdateSessionMeta(path, modelRef, preview, turns, markActivity); err != nil {
+	preview, turns := sessionstore.SessionPreviewFromMessages(s.Snapshot())
+	if err := sessionstore.UpdateSessionMeta(path, modelRef, preview, turns, markActivity); err != nil {
 		return transcriptDurable, err
 	}
 	c.extensionSessionPayloadEvent(extension.PointSessionSave, savePayload)
@@ -225,7 +226,7 @@ func (c *Controller) recoverSnapshotConflict(path string, saveErr error, forceRe
 		mode = "rewrite"
 	}
 	logAttrs := snapshotConflictLogAttrs(saveErr, path, mode)
-	if kind, ok := agent.SnapshotConflictKind(saveErr); ok && kind == agent.SessionSnapshotConflictStalePrefix {
+	if kind, ok := sessionstore.SnapshotConflictKind(saveErr); ok && kind == sessionstore.SessionSnapshotConflictStalePrefix {
 		if c.adoptDiskSession(path) {
 			appendSnapshotConflictDiagnostic(path, mode, "adopted_newer_disk_transcript", saveErr, "", false)
 			slog.Warn("controller: snapshot conflict; adopted newer disk transcript", logAttrs...)
@@ -239,22 +240,22 @@ func (c *Controller) recoverSnapshotConflict(path string, saveErr error, forceRe
 		reason = "rewrite conflict"
 	}
 	req := SessionRecoveryRequest{OriginalPath: path, Reason: reason, Mode: mode}
-	meta := agent.BranchMeta{}
+	meta := sessionstore.BranchMeta{}
 	if c.sessionRecoveryMeta != nil {
 		meta = c.sessionRecoveryMeta(req)
 	}
-	info, err := c.executor.Session().SaveRecoveryBranch(agent.RecoveryBranchOptions{
+	info, err := c.executor.Session().SaveRecoveryBranch(sessionstore.RecoveryBranchOptions{
 		OriginalPath: path,
 		Reason:       reason,
 		BranchMeta:   meta,
 	})
 	if err != nil {
-		if errors.Is(err, agent.ErrSessionRecoveryDepthExceeded) {
+		if errors.Is(err, sessionstore.ErrSessionRecoveryDepthExceeded) {
 			// The canonical branch may have advanced since this runtime loaded it.
 			// Never force-write the stale in-memory snapshot back onto that path just
 			// to stop a recovery chain. Preserve it in a writer-specific isolated
 			// branch instead; the depth cap limits lineage fan-out, not data safety.
-			isolated, isolatedErr := c.executor.Session().SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{
+			isolated, isolatedErr := c.executor.Session().SaveConflictRecoveryBranch(sessionstore.RecoveryBranchOptions{
 				OriginalPath: path,
 				Reason:       reason,
 				BranchMeta:   meta,
@@ -270,7 +271,7 @@ func (c *Controller) recoverSnapshotConflict(path string, saveErr error, forceRe
 			c.emitRecoveryDepthCapNotice(path)
 			return isolated.Path, conflictForkedBranch, nil
 		}
-		if errors.Is(err, agent.ErrSessionRecoveryNotNeeded) {
+		if errors.Is(err, sessionstore.ErrSessionRecoveryNotNeeded) {
 			if c.adoptDiskSession(path) {
 				appendSnapshotConflictDiagnostic(path, mode, "recovery_not_needed_adopted_disk_transcript", saveErr, "", false)
 				slog.Warn("controller: snapshot conflict; recovery not needed, adopted disk transcript", logAttrs...)
@@ -304,11 +305,11 @@ func (c *Controller) recoverShutdownSnapshot(path string, saveErr error) (string
 	}
 	const reason = "shutdown session file lock timeout"
 	req := SessionRecoveryRequest{OriginalPath: path, Reason: reason, Mode: "shutdown"}
-	meta := agent.BranchMeta{}
+	meta := sessionstore.BranchMeta{}
 	if c.sessionRecoveryMeta != nil {
 		meta = c.sessionRecoveryMeta(req)
 	}
-	info, err := c.executor.Session().SaveShutdownRecoveryBranch(agent.RecoveryBranchOptions{
+	info, err := c.executor.Session().SaveShutdownRecoveryBranch(sessionstore.RecoveryBranchOptions{
 		OriginalPath: path,
 		Reason:       reason,
 		BranchMeta:   meta,
@@ -327,7 +328,7 @@ func (c *Controller) recoverShutdownSnapshot(path string, saveErr error) (string
 	return info.Path, nil
 }
 
-func (c *Controller) commitRecoveredSession(originalPath, reason string, info agent.RecoveryBranchInfo) error {
+func (c *Controller) commitRecoveredSession(originalPath, reason string, info sessionstore.RecoveryBranchInfo) error {
 	recoveryInfo := SessionRecoveryInfo{
 		OriginalPath: originalPath,
 		RecoveryPath: info.Path,
@@ -354,7 +355,7 @@ func (c *Controller) commitRecoveredSession(originalPath, reason string, info ag
 }
 
 func (c *Controller) adoptDiskSession(path string) bool {
-	loaded, err := agent.LoadSession(path)
+	loaded, err := sessionstore.LoadSession(path)
 	if err != nil || loaded == nil {
 		return false
 	}
@@ -366,12 +367,12 @@ func (c *Controller) adoptDiskSession(path string) bool {
 	return true
 }
 
-func (c *Controller) clearInFlightTurn(marker agent.InFlightTurnMeta) {
+func (c *Controller) clearInFlightTurn(marker sessionstore.InFlightTurnMeta) {
 	path := c.SessionPath()
 	if path == "" || marker.ID == "" {
 		return
 	}
-	if _, err := agent.ClearSessionInFlightTurnIfMatch(path, marker); err != nil {
+	if _, err := sessionstore.ClearSessionInFlightTurnIfMatch(path, marker); err != nil {
 		slog.Warn("controller: clear in-flight turn", "err", err)
 	}
 }
@@ -380,7 +381,7 @@ func (c *Controller) recoverInterruptedTurn(path string) {
 	if c.executor == nil || path == "" {
 		return
 	}
-	meta, ok, err := agent.LoadBranchMeta(path)
+	meta, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok || meta.InFlightTurn == nil {
 		if err != nil {
 			slog.Warn("controller: load in-flight turn marker", "err", err)
@@ -395,7 +396,7 @@ func (c *Controller) recoverInterruptedTurn(path string) {
 		// transplant in recoverSnapshotConflict left the marker behind on the
 		// forked-from branch; stripping now would truncate a transcript the
 		// completed turn already superseded. Clear the stale marker instead.
-		if _, err := agent.ClearSessionInFlightTurnIfMatch(path, *marker); err != nil {
+		if _, err := sessionstore.ClearSessionInFlightTurnIfMatch(path, *marker); err != nil {
 			slog.Warn("controller: clear fork-orphaned in-flight turn", "err", err)
 		}
 		return
@@ -407,7 +408,7 @@ func (c *Controller) recoverInterruptedTurn(path string) {
 		} else if digest == marker.CommitDigest {
 			// The exact transcript named before the final snapshot is present. The
 			// process died after commit and before CAS cleanup; preserve everything.
-			if _, err := agent.ClearSessionInFlightTurnIfMatch(path, *marker); err != nil {
+			if _, err := sessionstore.ClearSessionInFlightTurnIfMatch(path, *marker); err != nil {
 				slog.Warn("controller: clear committed in-flight turn marker", "err", err)
 			}
 			return
@@ -420,7 +421,7 @@ func (c *Controller) recoverInterruptedTurn(path string) {
 			"marker_revision", marker.StartRevision, "current_revision", meta.Revision)
 		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn,
 			Text: "Session recovery found completed turns after a stale interruption marker; the full WAL history was preserved."})
-		if _, err := agent.ClearSessionInFlightTurnIfMatch(path, *marker); err != nil {
+		if _, err := sessionstore.ClearSessionInFlightTurnIfMatch(path, *marker); err != nil {
 			slog.Warn("controller: clear stale multi-turn in-flight marker", "err", err)
 		}
 		return
@@ -436,7 +437,7 @@ func (c *Controller) recoverInterruptedTurn(path string) {
 			slog.Warn("controller: post-interrupted-turn snapshot", "err", err)
 		}
 	}
-	if _, err := agent.ClearSessionInFlightTurnIfMatch(path, *marker); err != nil {
+	if _, err := sessionstore.ClearSessionInFlightTurnIfMatch(path, *marker); err != nil {
 		slog.Warn("controller: clear stale in-flight turn", "err", err)
 	}
 }
@@ -462,9 +463,9 @@ func (c *Controller) SessionHasUnsavedChanges() bool {
 // SessionPersistedState exposes the session's persistence baseline for the
 // controller's current session path, so a paging frontend can validate a
 // display-index sidecar against the live session.
-func (c *Controller) SessionPersistedState() (agent.PersistedState, bool) {
+func (c *Controller) SessionPersistedState() (sessionstore.PersistedState, bool) {
 	if c.executor == nil {
-		return agent.PersistedState{}, false
+		return sessionstore.PersistedState{}, false
 	}
 	return c.executor.Session().PersistedState(c.SessionPath())
 }
@@ -494,10 +495,10 @@ func removeSessionArtifacts(path string) error {
 			return err
 		}
 	}
-	if err := agent.DeleteSubagentsByParent(filepath.Dir(path), agent.BranchID(path)); err != nil {
+	if err := agent.DeleteSubagentsByParent(filepath.Dir(path), sessionstore.BranchID(path)); err != nil {
 		return err
 	}
-	if err := agent.ClearCleanupPending(path); err != nil {
+	if err := sessionstore.ClearCleanupPending(path); err != nil {
 		return err
 	}
 	return nil
@@ -513,7 +514,7 @@ func RemoveSessionArtifacts(path string) error {
 // ReconcileCleanupPending retries physical cleanup for logically removed
 // sessions that were left behind by a previous process.
 func ReconcileCleanupPending(dir string) error {
-	return agent.ReconcileCleanupPending(dir, func(item agent.CleanupPendingInfo) error {
+	return sessionstore.ReconcileCleanupPending(dir, func(item sessionstore.CleanupPendingInfo) error {
 		return removeSessionArtifacts(item.SessionPath)
 	})
 }
@@ -524,7 +525,7 @@ func ReconcileCleanupPending(dir string) error {
 // ledger looked like, so every recoverSnapshotConflict outcome logs these.
 func snapshotConflictLogAttrs(saveErr error, path, mode string) []any {
 	attrs := []any{"path", path, "mode", mode}
-	var conflict *agent.SessionSnapshotConflictError
+	var conflict *sessionstore.SessionSnapshotConflictError
 	if errors.As(saveErr, &conflict) && conflict != nil {
 		attrs = append(attrs,
 			"kind", string(conflict.Kind),

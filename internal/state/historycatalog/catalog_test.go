@@ -3,16 +3,16 @@ package historycatalog
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 func saveMessages(t *testing.T, path string, messages ...provider.Message) {
 	t.Helper()
-	session := agent.NewSession("")
+	session := sessionstore.NewSession("")
 	for _, message := range messages {
 		session.Add(message)
 	}
@@ -66,7 +66,7 @@ func TestRewriteRemovesOldTerms(t *testing.T) {
 	if err := catalog.ReconcileRoot(ctx, target); err != nil {
 		t.Fatal(err)
 	}
-	session, err := agent.LoadSession(path)
+	session, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestAppendIndexesOnlyDisplayTail(t *testing.T) {
 	if err := catalog.db.QueryRow(`SELECT id FROM history_documents WHERE source_path=? AND message_index=0`, path).Scan(&prefixRowID); err != nil {
 		t.Fatal(err)
 	}
-	session, err := agent.LoadSession(path)
+	session, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}

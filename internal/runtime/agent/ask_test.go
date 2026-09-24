@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -211,7 +212,7 @@ func TestAnsweredAskInvalidatesRemainingCallsFromItsProviderBatch(t *testing.T) 
 	reg.Add(fakeTool{name: "grep", readOnly: true, calls: &after})
 	reg.Add(fakeTool{name: "write_file", writesPaths: true, calls: &writes})
 
-	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	a.SetAsker(&recordingAsker{})
 
 	const question = `{"questions":[{"header":"Store","question":"Delete or archive?","options":[{"label":"Archive"},{"label":"Delete"}]}]}`

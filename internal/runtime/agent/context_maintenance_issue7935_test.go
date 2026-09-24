@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestIssue7935Maintains206ToolResultsOnceAndOnlyProcessesNewTail(t *testing.
 		provider.Message{Role: provider.RoleUser, Content: "recent question"},
 		provider.Message{Role: provider.RoleAssistant, Content: "recent answer"},
 	)
-	sess := &Session{Messages: messages}
+	sess := &sessionstore.Session{Messages: messages}
 	sink := &recordSink{}
 	a := New(&fakeProvider{reply: "structured history digest"}, tool.NewRegistry(), sess, Options{
 		ContextWindow: 8_000,

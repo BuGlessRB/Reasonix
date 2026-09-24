@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/ablation"
@@ -43,7 +44,7 @@ func (p *digestProvider) Stream(_ context.Context, _ provider.Request) (<-chan p
 
 // fillerCall is one ordinary read whose only job is to take up room — in the
 // window, and in the fold index ahead of a cue.
-func fillerCall(sess *agent.Session, n int) {
+func fillerCall(sess *sessionstore.Session, n int) {
 	id := fmt.Sprintf("f%04d", n)
 	sess.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
 		{ID: id, Name: "read_file", Arguments: fmt.Sprintf(`{"path":"internal/mod%03d/handler%03d.go"}`, n%37, n)},
@@ -63,8 +64,8 @@ func fillerBody(n int) string {
 // builtFixture is one task's history after real folds, plus where its target
 // ended up.
 type builtFixture struct {
-	Session  *agent.Session
-	State    agent.CompactionState
+	Session  *sessionstore.Session
+	State    sessionstore.CompactionState
 	Target   int
 	Path     string
 	Instance fixtureInstance
@@ -75,7 +76,7 @@ type builtFixture struct {
 // itself would.
 func buildFixture(f fixtureInstance, arm ablation.Set, sessionPath string) (builtFixture, error) {
 	t := f.Task
-	sess := agent.NewSession("You are a coding agent.")
+	sess := sessionstore.NewSession("You are a coding agent.")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "Work through the transport and scheduler backlog."})
 
 	n := 0
@@ -108,7 +109,7 @@ func buildFixture(f fixtureInstance, arm ablation.Set, sessionPath string) (buil
 	if err := sess.Save(sessionPath); err != nil {
 		return builtFixture{}, fmt.Errorf("%s: save session: %w", t.ID, err)
 	}
-	state, ok, err := agent.LoadCompactionState(sessionPath)
+	state, ok, err := sessionstore.LoadCompactionState(sessionPath)
 	if err != nil {
 		return builtFixture{}, fmt.Errorf("%s: load context state: %w", t.ID, err)
 	}

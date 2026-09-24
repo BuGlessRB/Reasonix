@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
@@ -90,7 +91,7 @@ func retrievalCarriers() []retrievalCarrier {
 
 // horizonSession plants the carrier early, then buries it under bulk the free
 // prune cannot reclaim.
-func horizonSession(c retrievalCarrier, turns int) (*Session, int) {
+func horizonSession(c retrievalCarrier, turns int) (*sessionstore.Session, int) {
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "start the hydration work"},
@@ -103,7 +104,7 @@ func horizonSession(c retrievalCarrier, turns int) (*Session, int) {
 			provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("continue %d", i)},
 		)
 	}
-	return &Session{Messages: msgs}, at
+	return &sessionstore.Session{Messages: msgs}, at
 }
 
 // growSession adds another generation's worth of foldable work.
@@ -118,7 +119,7 @@ func growSession(a *Agent, gen int) {
 // this position. It is an observation, not a requirement: search must work
 // whether or not the index happens to have kept the line.
 func indexCarriesAddress(a *Agent, pos int) bool {
-	canonical, _ := a.sess.conversation.snapshotMessagesVersion()
+	canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
 	for _, m := range modelVisibleFromProjection(a.sess.compactionState.Projection, canonical) {
 		_, index := splitFoldIndex(m.Content)
 		if index == "" {

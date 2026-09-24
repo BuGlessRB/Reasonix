@@ -2,11 +2,11 @@ package boot
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"time"
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/workspacelease"
@@ -27,7 +27,7 @@ type sessionRuntime struct {
 func startSessionRuntime(opts Options, cfg *config.Config, root string, sink event.Sink) (sessionRuntime, error) {
 	jobOptions := []jobs.Option{
 		jobs.WithStalledWarningAfter(time.Duration(cfg.BackgroundJobStalledWarningSeconds()) * time.Second),
-		jobs.WithSessionOwnershipProbe(agent.SessionLeaseHeldByCurrentRuntime),
+		jobs.WithSessionOwnershipProbe(sessionstore.SessionLeaseHeldByCurrentRuntime),
 	}
 	lease, err := workspacelease.New(root, config.WorkspaceLeaseDir(), func(w workspacelease.Wait) {
 		sink.Emit(workspaceLeaseNotice(w))

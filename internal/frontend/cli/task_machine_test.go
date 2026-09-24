@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,6 @@ import (
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/jobs"
 )
 
@@ -77,10 +77,10 @@ func TestTaskMachineProjectsSubagentLifecycleAndArtifactCompleteness(t *testing.
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	metas := []agent.SubagentMeta{
-		{Ref: "sa_running", CreatedAt: now, UpdatedAt: now, Status: agent.SubagentRunning, Kind: "task", ParentSession: "session"},
-		{Ref: "sa_complete", CreatedAt: now.Add(-time.Minute), UpdatedAt: now, Status: agent.SubagentCompleted, Kind: "task", ParentSession: "session"},
-		{Ref: "sa_missing", CreatedAt: now.Add(-2 * time.Minute), UpdatedAt: now, Status: agent.SubagentCompleted, Kind: "task", ParentSession: "session"},
+	metas := []sessionstore.SubagentMeta{
+		{Ref: "sa_running", CreatedAt: now, UpdatedAt: now, Status: sessionstore.SubagentRunning, Kind: "task", ParentSession: "session"},
+		{Ref: "sa_complete", CreatedAt: now.Add(-time.Minute), UpdatedAt: now, Status: sessionstore.SubagentCompleted, Kind: "task", ParentSession: "session"},
+		{Ref: "sa_missing", CreatedAt: now.Add(-2 * time.Minute), UpdatedAt: now, Status: sessionstore.SubagentCompleted, Kind: "task", ParentSession: "session"},
 	}
 	for _, meta := range metas {
 		data, err := json.Marshal(meta)
@@ -103,17 +103,17 @@ func TestTaskMachineProjectsSubagentLifecycleAndArtifactCompleteness(t *testing.
 	for _, task := range tasks {
 		byID[task.ID] = task
 	}
-	if got := byID["sa_running"]; got.Status != string(agent.SubagentInterrupted) || got.FinishedAt != "" || got.ArtifactComplete {
+	if got := byID["sa_running"]; got.Status != string(sessionstore.SubagentInterrupted) || got.FinishedAt != "" || got.ArtifactComplete {
 		t.Fatalf("stale running projection = %+v", got)
 	}
-	if got := byID["sa_complete"]; got.Status != string(agent.SubagentCompleted) || got.FinishedAt == "" || !got.ArtifactComplete {
+	if got := byID["sa_complete"]; got.Status != string(sessionstore.SubagentCompleted) || got.FinishedAt == "" || !got.ArtifactComplete {
 		t.Fatalf("completed projection = %+v", got)
 	}
 	if got := byID["sa_missing"]; got.FinishedAt == "" || got.ArtifactComplete {
 		t.Fatalf("missing artifact projection = %+v", got)
 	}
 
-	lease, err := agent.TryAcquireSessionLease(filepath.Join(dir, "session.jsonl"))
+	lease, err := sessionstore.TryAcquireSessionLease(filepath.Join(dir, "session.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestTaskMachineProjectsSubagentLifecycleAndArtifactCompleteness(t *testing.
 		t.Fatal(err)
 	}
 	for _, task := range tasks {
-		if task.ID == "sa_running" && (task.Status != string(agent.SubagentRunning) || task.FinishedAt != "" || task.ArtifactComplete) {
+		if task.ID == "sa_running" && (task.Status != string(sessionstore.SubagentRunning) || task.FinishedAt != "" || task.ArtifactComplete) {
 			t.Fatalf("live running projection = %+v", task)
 		}
 	}

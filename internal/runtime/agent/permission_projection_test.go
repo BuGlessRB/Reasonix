@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -38,7 +39,7 @@ func TestPermissionReadsTheProjectedArgsAndTheToolReadsItsOwn(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(siteTool{got: &got})
 	gate := &argsGate{}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 	sent := `{"origin":"https://model.example","step":"click"}`
 	a.executeOne(context.Background(), &a.turn, provider.ToolCall{ID: "c1", Name: "site_tool", Arguments: sent})
 	if string(gate.args) != `{"origin":"https://host.example"}` {

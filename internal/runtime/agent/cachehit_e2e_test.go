@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"strconv"
 	"strings"
 	"testing"
@@ -366,7 +367,7 @@ func TestSetSessionResetsSessionCache(t *testing.T) {
 	if hit+miss == 0 {
 		t.Fatalf("SessionCache()=%d/%d before reset, want telemetry to record the turn", hit, miss)
 	}
-	a.SetSession(NewSession("system"))
+	a.SetSession(sessionstore.NewSession("system"))
 	hit, miss = a.SessionCache()
 	if hit != 0 || miss != 0 {
 		t.Fatalf("SessionCache()=%d/%d after SetSession, want reset", hit, miss)
@@ -560,7 +561,7 @@ func newAgent(t *testing.T, url string, reg *tool.Registry, contextWindow, recen
 		t.Fatalf("provider New: %v", err)
 	}
 	sink := &collectSink{}
-	a := New(prov, reg, NewSession(systemPrompt), Options{
+	a := New(prov, reg, sessionstore.NewSession(systemPrompt), Options{
 		Temperature:   0,
 		ContextWindow: contextWindow,
 		RecentKeep:    recentKeep,

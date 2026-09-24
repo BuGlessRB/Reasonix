@@ -2,9 +2,9 @@ package serve
 
 import (
 	"net/http"
+	"reasonix/internal/state/sessionstore"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 type historyToolCall struct {
@@ -57,7 +57,7 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 		// user message and carries what it was. The host's own mid-turn notice
 		// rides the same prefix and is not theirs to have said.
 		if m.Role == provider.RoleUser {
-			if steerText, host, isSteer := agent.SteerKind(m.Content); isSteer {
+			if steerText, host, isSteer := sessionstore.SteerKind(m.Content); isSteer {
 				out = append(out, historyMessage{
 					Role: string(provider.RoleUser), Content: steerText, Steer: true,
 					HostAuthored: host || m.HostAuthored, MsgIndex: i,
@@ -69,7 +69,7 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 		if m.Role == provider.RoleUser {
 			// Content is what the model saw, and one @-reference expands into a
 			// whole file. A reopened session has to show what was typed.
-			hm.Content = agent.UserMessageText(m)
+			hm.Content = sessionstore.UserMessageText(m)
 			hm.Images = len(m.Images)
 		}
 		if m.Role == provider.RoleAssistant {

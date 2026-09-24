@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strconv"
 	"strings"
 	"testing"
@@ -542,10 +543,10 @@ func TestTaskToolContinueFromAncestorReturnsCopiedReferenceGuidance(t *testing.T
 	}
 	rootRef := subagentRefFromOutput(t, first)
 
-	if err := SaveBranchMeta(filepath.Join(sessionDir, "root.jsonl"), BranchMeta{}); err != nil {
+	if err := sessionstore.SaveBranchMeta(filepath.Join(sessionDir, "root.jsonl"), sessionstore.BranchMeta{}); err != nil {
 		t.Fatalf("SaveBranchMeta root: %v", err)
 	}
-	if err := SaveBranchMeta(filepath.Join(sessionDir, "child.jsonl"), BranchMeta{ParentID: "root"}); err != nil {
+	if err := sessionstore.SaveBranchMeta(filepath.Join(sessionDir, "child.jsonl"), sessionstore.BranchMeta{ParentID: "root"}); err != nil {
 		t.Fatalf("SaveBranchMeta child: %v", err)
 	}
 
@@ -594,10 +595,10 @@ func TestTaskToolLegacyForkFromAncestorConvertsToCopiedReference(t *testing.T) {
 	}
 	rootRef := subagentRefFromOutput(t, first)
 
-	if err := SaveBranchMeta(filepath.Join(sessionDir, "root.jsonl"), BranchMeta{}); err != nil {
+	if err := sessionstore.SaveBranchMeta(filepath.Join(sessionDir, "root.jsonl"), sessionstore.BranchMeta{}); err != nil {
 		t.Fatalf("SaveBranchMeta root: %v", err)
 	}
-	if err := SaveBranchMeta(filepath.Join(sessionDir, "child.jsonl"), BranchMeta{ParentID: "root"}); err != nil {
+	if err := sessionstore.SaveBranchMeta(filepath.Join(sessionDir, "child.jsonl"), sessionstore.BranchMeta{ParentID: "root"}); err != nil {
 		t.Fatalf("SaveBranchMeta child: %v", err)
 	}
 
@@ -674,10 +675,10 @@ func TestTaskToolFailedForegroundContinuationPersistsAndRejectsReuse(t *testing.
 	if err != nil {
 		t.Fatalf("LoadMeta: %v", err)
 	}
-	if meta.Status != SubagentFailed {
+	if meta.Status != sessionstore.SubagentFailed {
 		t.Fatalf("status = %q, want failed", meta.Status)
 	}
-	loaded, err := LoadSession(store.sessionPath(ref))
+	loaded, err := sessionstore.LoadSession(store.sessionPath(ref))
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -723,7 +724,7 @@ func TestTaskToolBackgroundPanicPersistsFailedMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadMeta: %v", err)
 	}
-	if meta.Status != SubagentFailed {
+	if meta.Status != sessionstore.SubagentFailed {
 		t.Fatalf("status = %q, want failed", meta.Status)
 	}
 	if _, err := task.Execute(testTaskContext(), []byte(`{"prompt":"again","continue_from":"`+ref+`"}`)); err == nil || !strings.Contains(err.Error(), "failed and cannot be continued") {
@@ -794,10 +795,10 @@ func TestTaskToolBackgroundAncestorContinuationIncludesForkGuidance(t *testing.T
 		t.Fatalf("root Execute: %v", err)
 	}
 	rootRef := subagentRefFromOutput(t, rootOut)
-	if err := SaveBranchMeta(filepath.Join(sessionDir, "root.jsonl"), BranchMeta{}); err != nil {
+	if err := sessionstore.SaveBranchMeta(filepath.Join(sessionDir, "root.jsonl"), sessionstore.BranchMeta{}); err != nil {
 		t.Fatalf("SaveBranchMeta root: %v", err)
 	}
-	if err := SaveBranchMeta(filepath.Join(sessionDir, "child.jsonl"), BranchMeta{ParentID: "root"}); err != nil {
+	if err := sessionstore.SaveBranchMeta(filepath.Join(sessionDir, "child.jsonl"), sessionstore.BranchMeta{ParentID: "root"}); err != nil {
 		t.Fatalf("SaveBranchMeta child: %v", err)
 	}
 
@@ -988,7 +989,7 @@ func TestBackgroundEvidenceNotCommittedWhenTurnFails(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "all set"}, {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "all set"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true, Jobs: jm}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true, Jobs: jm}, event.Discard)
 	ctx := jobs.WithManager(WithParentSession(context.Background(), "parent-session"), jm)
 	ctx = jobs.WithSession(ctx, "parent-session")
 
@@ -1020,7 +1021,7 @@ func TestBackgroundEvidenceCommittedWhenTurnDelivers(t *testing.T) {
 	}}
 	// No delivery profile: the turn succeeds immediately after collecting, so the
 	// commit-on-success hook fires without a full sign-off script.
-	a := New(prov, reg, NewSession(""), Options{Jobs: jm}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{Jobs: jm}, event.Discard)
 	ctx := jobs.WithManager(WithParentSession(context.Background(), "parent-session"), jm)
 	ctx = jobs.WithSession(ctx, "parent-session")
 
@@ -1056,7 +1057,7 @@ func TestFailedTurnBackgroundMutationForcesReadinessOnNextRunWithoutWait(t *test
 		{{Type: provider.ChunkText, Text: "sure, here you go"}, {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "sure, here you go"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true, Jobs: jm}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true, Jobs: jm}, event.Discard)
 	ctx := jobs.WithManager(WithParentSession(context.Background(), "parent-session"), jm)
 	ctx = jobs.WithSession(ctx, "parent-session")
 
@@ -1108,7 +1109,7 @@ func TestRestartRecoversPendingBackgroundMutationForcesReadinessWithoutWait(t *t
 		{{Type: provider.ChunkText, Text: "all set"}, {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "all set"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true, Jobs: second}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{DeliveryProfile: true, Jobs: second}, event.Discard)
 	ctx := jobs.WithManager(WithParentSession(context.Background(), "parent-session"), second)
 	ctx = jobs.WithSession(ctx, "parent-session")
 

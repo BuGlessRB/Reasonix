@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -43,7 +44,7 @@ func TestContextManagerPersistsAndRestoresBlockedFailureFingerprint(t *testing.T
 	}
 	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	newAgent := func(p *failingSummaryProvider) *Agent {
-		a := New(p, tool.NewRegistry(), &Session{Messages: append([]provider.Message(nil), messages...)}, Options{
+		a := New(p, tool.NewRegistry(), &sessionstore.Session{Messages: append([]provider.Message(nil), messages...)}, Options{
 			ContextWindow: window, CompactRatio: 0.85, RecentKeep: 2,
 			WorkspaceID: "workspace", ModelRef: "model",
 		}, event.Discard)
@@ -113,7 +114,7 @@ func TestPrepareThresholdSkipsExtensionInterceptors(t *testing.T) {
 		return protocol.InterceptResult{Decision: protocol.DecisionContinue}, nil
 	}}
 	d := newExtDispatcher(client, true, nil, extension.PointContextPrepare, extension.PointProviderRequest)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: "ok"},
@@ -145,7 +146,7 @@ func TestPrepareThresholdSkipsExtensionInterceptors(t *testing.T) {
 }
 
 func TestStrictAlternatingRolesStillConvergesBeforeSampling(t *testing.T) {
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: "old request"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("old work ", 400)},

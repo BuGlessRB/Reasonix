@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -53,7 +53,7 @@ func TestRedactSessionsScrubsHistoricalSessionArtifacts(t *testing.T) {
 	}
 	// The rewrite must go through the real save machinery: the session still
 	// loads, the event log still replays, and the masked value survived.
-	loaded, err := agent.LoadSession(sessionPath)
+	loaded, err := sessionstore.LoadSession(sessionPath)
 	if err != nil {
 		t.Fatalf("redacted session no longer loads: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestRedactSessionsHandlesQuotedSecretsWithoutCorruption(t *testing.T) {
 	if res.FilesChanged != 1 {
 		t.Fatalf("FilesChanged = %d, want 1", res.FilesChanged)
 	}
-	loaded, err := agent.LoadSession(sessionPath)
+	loaded, err := sessionstore.LoadSession(sessionPath)
 	if err != nil {
 		t.Fatalf("redaction corrupted the transcript: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestRedactSessionsHandlesQuotedSecretsWithoutCorruption(t *testing.T) {
 func TestRedactSessionsIsNoOpOnHealthyStore(t *testing.T) {
 	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "abc.jsonl")
-	s := agent.NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "inspect"})
 	s.Add(provider.Message{
 		Role:       provider.RoleTool,
@@ -140,7 +140,7 @@ func TestRedactSessionsIsNoOpOnHealthyStore(t *testing.T) {
 	if string(before) != string(after) {
 		t.Fatalf("healthy transcript bytes changed:\nbefore: %s\nafter:  %s", before, after)
 	}
-	if _, err := agent.LoadSession(sessionPath); err != nil {
+	if _, err := sessionstore.LoadSession(sessionPath); err != nil {
 		t.Fatalf("healthy session no longer loads: %v", err)
 	}
 }
@@ -174,7 +174,7 @@ func TestRedactSessionsSkipsLeasedSession(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"role":"tool","content":"DEEPSEEK_API_KEY=`+secret+`"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("TryAcquireSessionLease: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestRedactSessionsSkipsLeasedDamagedSalvage(t *testing.T) {
 	if err := os.WriteFile(damagedPath, []byte("torn bytes"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	lease, err := agent.TryAcquireSessionLease(sessionPath)
+	lease, err := sessionstore.TryAcquireSessionLease(sessionPath)
 	if err != nil {
 		t.Fatalf("TryAcquireSessionLease: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestRedactSessionsScrubsStaleEventLogRecords(t *testing.T) {
 	if strings.Contains(string(data), secret) {
 		t.Fatalf("stale event log record still leaks secret:\n%s", data)
 	}
-	loaded, err := agent.LoadSession(sessionPath)
+	loaded, err := sessionstore.LoadSession(sessionPath)
 	if err != nil {
 		t.Fatalf("session no longer loads after compaction: %v", err)
 	}

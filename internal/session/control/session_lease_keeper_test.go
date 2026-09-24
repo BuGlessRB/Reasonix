@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strconv"
 	"strings"
 	"testing"
@@ -26,28 +27,28 @@ func TestSessionLeaseKeeperRebindMovesLease(t *testing.T) {
 	if err := k.Rebind(a); err != nil {
 		t.Fatalf("Rebind(a): %v", err)
 	}
-	if got, want := k.HeldPath(), agent.CanonicalSessionPath(a); got != want {
+	if got, want := k.HeldPath(), sessionstore.CanonicalSessionPath(a); got != want {
 		t.Fatalf("HeldPath = %q, want %q", got, want)
 	}
-	if _, err := os.Stat(store.SessionLeaseInfo(agent.CanonicalSessionPath(a))); err != nil {
+	if _, err := os.Stat(store.SessionLeaseInfo(sessionstore.CanonicalSessionPath(a))); err != nil {
 		t.Fatalf("lease info for a missing: %v", err)
 	}
 	// a is held: an outside acquire must fail.
-	if _, err := agent.TryAcquireSessionLease(a); !errors.Is(err, agent.ErrSessionLeaseHeld) {
+	if _, err := sessionstore.TryAcquireSessionLease(a); !errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 		t.Fatalf("TryAcquireSessionLease(a) while kept = %v, want ErrSessionLeaseHeld", err)
 	}
 
 	if err := k.Rebind(b); err != nil {
 		t.Fatalf("Rebind(b): %v", err)
 	}
-	if got, want := k.HeldPath(), agent.CanonicalSessionPath(b); got != want {
+	if got, want := k.HeldPath(), sessionstore.CanonicalSessionPath(b); got != want {
 		t.Fatalf("HeldPath after rebind = %q, want %q", got, want)
 	}
 	// The old lease is released: a is acquirable again and its info is gone.
-	if _, err := os.Stat(store.SessionLeaseInfo(agent.CanonicalSessionPath(a))); !os.IsNotExist(err) {
+	if _, err := os.Stat(store.SessionLeaseInfo(sessionstore.CanonicalSessionPath(a))); !os.IsNotExist(err) {
 		t.Fatalf("lease info for a after rebind stat err = %v, want not exist", err)
 	}
-	lease, err := agent.TryAcquireSessionLease(a)
+	lease, err := sessionstore.TryAcquireSessionLease(a)
 	if err != nil {
 		t.Fatalf("TryAcquireSessionLease(a) after rebind: %v", err)
 	}
@@ -67,7 +68,7 @@ func TestSessionLeaseKeeperRebindSamePathIsNoop(t *testing.T) {
 	if err := k.Rebind(a); err != nil {
 		t.Fatalf("Rebind(a) again: %v", err)
 	}
-	if got, want := k.HeldPath(), agent.CanonicalSessionPath(a); got != want {
+	if got, want := k.HeldPath(), sessionstore.CanonicalSessionPath(a); got != want {
 		t.Fatalf("HeldPath = %q, want %q", got, want)
 	}
 }
@@ -77,7 +78,7 @@ func TestSessionLeaseKeeperRefusesHeldPathAndKeepsCurrent(t *testing.T) {
 	a := filepath.Join(dir, "a.jsonl")
 	b := filepath.Join(dir, "b.jsonl")
 
-	holder, err := agent.TryAcquireSessionLease(b)
+	holder, err := sessionstore.TryAcquireSessionLease(b)
 	if err != nil {
 		t.Fatalf("holder acquire: %v", err)
 	}
@@ -89,11 +90,11 @@ func TestSessionLeaseKeeperRefusesHeldPathAndKeepsCurrent(t *testing.T) {
 		t.Fatalf("Rebind(a): %v", err)
 	}
 	err = k.Rebind(b)
-	if !errors.Is(err, agent.ErrSessionLeaseHeld) {
+	if !errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 		t.Fatalf("Rebind(held b) = %v, want ErrSessionLeaseHeld", err)
 	}
 	// Failure leaves the keeper on its previous session.
-	if got, want := k.HeldPath(), agent.CanonicalSessionPath(a); got != want {
+	if got, want := k.HeldPath(), sessionstore.CanonicalSessionPath(a); got != want {
 		t.Fatalf("HeldPath after refused rebind = %q, want %q", got, want)
 	}
 }
@@ -113,7 +114,7 @@ func TestSessionLeaseKeeperEmptyPathReleases(t *testing.T) {
 	if got := k.HeldPath(); got != "" {
 		t.Fatalf("HeldPath after empty rebind = %q, want empty", got)
 	}
-	lease, err := agent.TryAcquireSessionLease(a)
+	lease, err := sessionstore.TryAcquireSessionLease(a)
 	if err != nil {
 		t.Fatalf("TryAcquireSessionLease(a) after empty rebind: %v", err)
 	}
@@ -130,7 +131,7 @@ func TestSessionLeaseKeeperReleaseRemovesLeaseInfo(t *testing.T) {
 	}
 	k.Release()
 	k.Release() // idempotent
-	if _, err := os.Stat(store.SessionLeaseInfo(agent.CanonicalSessionPath(a))); !os.IsNotExist(err) {
+	if _, err := os.Stat(store.SessionLeaseInfo(sessionstore.CanonicalSessionPath(a))); !os.IsNotExist(err) {
 		t.Fatalf("lease info after Release stat err = %v, want not exist", err)
 	}
 	if got := k.HeldPath(); got != "" {
@@ -142,7 +143,7 @@ func TestSessionLeaseKeeperRecoveryRebindsControllerBeforeReturning(t *testing.T
 	dir := testenv.TempDir(t)
 	a := filepath.Join(dir, "a.jsonl")
 	b := filepath.Join(dir, "b.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	ctrl := New(Options{Executor: exec, SessionPath: a, Sink: event.Discard})
 
@@ -161,8 +162,8 @@ func TestSessionLeaseKeeperRecoveryRebindsControllerBeforeReturning(t *testing.T
 	if err := k.HandleSessionRecovered(SessionRecoveryInfo{RecoveryPath: b}); err != nil {
 		t.Fatalf("HandleSessionRecovered: %v", err)
 	}
-	if got := k.HeldPath(); got != agent.CanonicalSessionPath(b) {
-		t.Fatalf("HeldPath = %q, want %q", got, agent.CanonicalSessionPath(b))
+	if got := k.HeldPath(); got != sessionstore.CanonicalSessionPath(b) {
+		t.Fatalf("HeldPath = %q, want %q", got, sessionstore.CanonicalSessionPath(b))
 	}
 	if auth := sess.WriteAuthority(); auth == nil || !auth.Covers(b) {
 		t.Fatal("controller was published without authority for recovery path")
@@ -172,9 +173,9 @@ func TestSessionLeaseKeeperRecoveryRebindsControllerBeforeReturning(t *testing.T
 
 func TestSessionInUseMessageNamesHolder(t *testing.T) {
 	acquired := time.Date(2026, 7, 6, 3, 4, 0, 0, time.UTC)
-	err := &agent.SessionLeaseError{
+	err := &sessionstore.SessionLeaseError{
 		Path: "/tmp/x.jsonl",
-		Info: &agent.SessionLeaseInfo{
+		Info: &sessionstore.SessionLeaseInfo{
 			SessionPath: "/tmp/x.jsonl",
 			WriterID:    "writer-nonce-should-not-appear",
 			PID:         12345,
@@ -202,9 +203,9 @@ func TestSessionInUseMessageNamesHolder(t *testing.T) {
 
 func TestSessionInUseMessageFallsBackWithoutInfo(t *testing.T) {
 	for name, err := range map[string]error{
-		"nil info":   &agent.SessionLeaseError{Path: "/tmp/x.jsonl"},
-		"plain held": agent.ErrSessionLeaseHeld,
-		"zero pid":   &agent.SessionLeaseError{Info: &agent.SessionLeaseInfo{PID: 0}},
+		"nil info":   &sessionstore.SessionLeaseError{Path: "/tmp/x.jsonl"},
+		"plain held": sessionstore.ErrSessionLeaseHeld,
+		"zero pid":   &sessionstore.SessionLeaseError{Info: &sessionstore.SessionLeaseInfo{PID: 0}},
 	} {
 		msg := SessionInUseMessage(err)
 		if msg != "this session is in use by another Reasonix window or process" {

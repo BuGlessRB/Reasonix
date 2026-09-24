@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -49,7 +50,7 @@ type boundaryRoute struct {
 func twoModelTurn(t *testing.T, route boundaryRoute, prompt string) ([]event.Event, []provider.Message) {
 	t.Helper()
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(testutil.NewMock("exec", testutil.Turn{Text: "executor answered"}),
 		tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	plannerTools := tool.NewRegistry()
@@ -58,7 +59,7 @@ func twoModelTurn(t *testing.T, route boundaryRoute, prompt string) ([]event.Eve
 	}
 	sink, done, events := collectSink()
 	coordinator := agent.NewCoordinatorWithPlannerPolicy(
-		testutil.NewMock("planner", route.planner...), agent.NewSession("planner sys"), nil,
+		testutil.NewMock("planner", route.planner...), sessionstore.NewSession("planner sys"), nil,
 		plannerTools, agent.Options{}, exec, 0, sink,
 		func(context.Context, string) agent.PlannerDecision { return route.policy },
 	)
@@ -159,7 +160,7 @@ func requireOneNamedTurn(t *testing.T, evs []event.Event, messages []provider.Me
 	if index < 0 || index >= len(messages) {
 		t.Fatalf("named message %d outside a session of %d", index, len(messages))
 	}
-	class := agent.ClassifyTurn(messages[index], agent.PriorAuthoredTurn(messages[:index]))
+	class := sessionstore.ClassifyTurn(messages[index], agent.PriorAuthoredTurn(messages[:index]))
 	if messages[index].Role != provider.RoleUser || !class.StartsTurn || class.AuthoredTurn != authored {
 		t.Fatalf("named turn %d at message %d; that message is %s authored=%d starts=%v",
 			authored, index, messages[index].Role, class.AuthoredTurn, class.StartsTurn)
@@ -172,7 +173,7 @@ func requireOneNamedTurn(t *testing.T, evs []event.Event, messages []provider.Me
 // done it still emits would only move the asymmetry to the end of the turn.
 func TestSyntheticContinuationOpensNoTurnOfItsOwn(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(testutil.NewMock("exec",
 		testutil.Turn{Text: "here is the plan"},
 		testutil.Turn{Text: "executed the approved plan"},
@@ -216,7 +217,7 @@ func TestSyntheticContinuationOpensNoTurnOfItsOwn(t *testing.T) {
 
 func hasSyntheticContinuation(messages []provider.Message) bool {
 	for _, m := range messages {
-		if m.Role == provider.RoleUser && agent.IsSyntheticUserText(agent.UserMessageText(m)) {
+		if m.Role == provider.RoleUser && sessionstore.IsSyntheticUserText(sessionstore.UserMessageText(m)) {
 			return true
 		}
 	}
@@ -230,7 +231,7 @@ func hasSyntheticContinuation(messages []provider.Message) bool {
 // lands through the same seam an executed turn's does.
 func TestSlashInvokedSubagentSkillOpensOneNamedTurn(t *testing.T) {
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(testutil.NewMock("exec", testutil.Turn{Text: "unused"}),
 		tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	sink, done, events := collectSink()

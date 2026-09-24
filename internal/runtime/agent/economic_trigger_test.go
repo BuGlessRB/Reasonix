@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -35,7 +36,7 @@ func TestMaintenanceBoundaryIsTheNearerOfCapacityAndEconomics(t *testing.T) {
 		{"ratio past the window stays off", 1_000_000, 2, 0, 2_000_000, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			a := New(nil, tool.NewRegistry(), &Session{}, Options{
+			a := New(nil, tool.NewRegistry(), &sessionstore.Session{}, Options{
 				ContextWindow:     tc.window,
 				CompactRatio:      tc.ratio,
 				CompactionBudgets: CompactionBudgets{ContextSoftLimitTokens: tc.soft},
@@ -57,7 +58,7 @@ const economicActiveTurnAt int64 = 1_700_000_000_000
 
 func economicFixture(t *testing.T, soft int, activeTurnRound int) (*Agent, *recordSink) {
 	t.Helper()
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: "long-running task"},
 	}}
@@ -245,7 +246,7 @@ func TestActiveTurnBoundaryLeavesNothingToFold(t *testing.T) {
 	body := strings.Repeat("x", 24*1024)
 	// Too large to be pinned as a brief, so the fixed prefix is the system
 	// message alone and the running turn starts exactly where a fold would.
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: body, CreatedAt: economicActiveTurnAt},
 	}}

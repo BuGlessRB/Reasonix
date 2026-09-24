@@ -3,6 +3,7 @@ package control
 import (
 	"fmt"
 	"log/slog"
+	"reasonix/internal/state/sessionstore"
 	"time"
 
 	"reasonix/internal/contract/event"
@@ -27,7 +28,7 @@ func (c *Controller) maybeColdResumePrune(path string, announce bool) {
 		return
 	}
 	// Sidecar path is rebound in Resume; only refresh cache state here.
-	m, ok, err := agent.LoadBranchMeta(path)
+	m, ok, err := sessionstore.LoadBranchMeta(path)
 	if err != nil || !ok || m.UpdatedAt.IsZero() {
 		c.executor.SetCacheState(agent.CacheStateUnknown)
 		slog.Info("controller: resume cache state", "path", path, "cache_state", agent.CacheStateUnknown)

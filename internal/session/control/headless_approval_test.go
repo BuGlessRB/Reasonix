@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func runHeadlessWriteOnce(t *testing.T, mode string, askRules []string) (prompts
 		toolCallTurn("c1", "write_file", `{"path":"a.txt"}`),
 		textTurn("Done."),
 	}}
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	c := New(Options{
 		Runner:   ag,
@@ -122,7 +123,7 @@ func TestApplyHeadlessApprovalModeDontAskDeniesWithoutPrompting(t *testing.T) {
 		toolCallTurn("c1", "write_file", `{"path":"a.txt"}`),
 		textTurn("Done."),
 	}}
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 
 	prompts := 0
 	c := New(Options{
@@ -178,7 +179,7 @@ func TestApplyHeadlessApprovalModeAllowsOnlyLowRiskProjectMemoryCreate(t *testin
 				toolCallTurn("c1", "remember", tc.args),
 				textTurn("Done."),
 			}}
-			ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+			ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 			prompts := 0
 			c := New(Options{
 				Runner:   ag,
@@ -252,7 +253,7 @@ func TestBuildHeadlessApprovalGateMatchesParentExecutorContract(t *testing.T) {
 			textTurn("Done."),
 		}}
 		gate := BuildHeadlessApprovalGate(permission.New("ask", nil, []string{"write_file"}, nil), mode)
-		ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{Gate: gate}, event.Discard)
+		ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{Gate: gate}, event.Discard)
 
 		done := make(chan error, 1)
 		go func() { done <- ag.Run(context.Background(), "edit") }()
@@ -300,7 +301,7 @@ func TestSetToolApprovalModePropagatesToSubagentGate(t *testing.T) {
 			toolCallTurn("c1", "write_file", `{"path":"a.txt"}`),
 			textTurn("Done."),
 		}}
-		ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{Gate: subagentGate}, event.Discard)
+		ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{Gate: subagentGate}, event.Discard)
 		done := make(chan error, 1)
 		go func() { done <- ag.Run(context.Background(), "edit") }()
 		select {

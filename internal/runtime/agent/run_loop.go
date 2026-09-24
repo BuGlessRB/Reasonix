@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -210,7 +211,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	// opening a second object: one turn, one turnRuntime. The zero values the
 	// old literal spelled out are already there from the reset at the top.
 	state = &a.turn
-	state.executorHandoff = a.role.executorHandoff && strings.Contains(input, executorHandoffMarker)
+	state.executorHandoff = a.role.executorHandoff && strings.Contains(input, sessionstore.ExecutorHandoffMarker)
 	state.input = input
 	state.budget = runBudget{started: time.Now()}
 	return rawInput, state
@@ -253,7 +254,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		// guidance (with a prefix), not a new task. One cache miss per
 		// steer is unavoidable — the model must see the new instruction.
 		if text, itemID, host, ok := a.consumeSteer(); ok {
-			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(midTurnSteerMessage(text, host))})
+			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(sessionstore.MidTurnSteerMessage(text, host))})
 			a.svc.sink.Emit(event.Event{Kind: event.Steer, Text: text, ItemID: itemID})
 		} else if itemID != "" {
 			// Loader failed after dequeue: durable entry stays for inspection
@@ -264,7 +265,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		// append leaves the prefix byte-stable, and a model that knows a fold
 		// is near can restate what the summary would drop.
 		if notice := a.contextBudgetNotice(); notice != "" {
-			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: midTurnSteerMessage(notice, true)})
+			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: sessionstore.MidTurnSteerMessage(notice, true)})
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: contextBudgetNoticeSummary(a.ContextBudget())})
 		}
 

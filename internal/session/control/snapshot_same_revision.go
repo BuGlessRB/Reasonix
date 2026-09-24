@@ -3,15 +3,14 @@ package control
 import (
 	"errors"
 	"log/slog"
-
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/state/sessionstore"
 )
 
 // persistSessionSnapshot writes path with snapshot semantics, escalating to an
 // owned rewrite when mid-turn reshape or same-revision divergence is detected.
 // Authority-bound rewrites stay on the canonical path; missing/stale authority
 // is returned as a typed error so callers rebind instead of forking recovery.
-func persistSessionSnapshot(s *agent.Session, path string, forceRewrite bool) (error, bool) {
+func persistSessionSnapshot(s *sessionstore.Session, path string, forceRewrite bool) (error, bool) {
 	if s == nil {
 		return nil, forceRewrite
 	}
@@ -23,7 +22,7 @@ func persistSessionSnapshot(s *agent.Session, path string, forceRewrite bool) (e
 	if authoritySaveError(err) {
 		return err, false
 	}
-	if !errors.Is(err, agent.ErrSessionSnapshotConflict) {
+	if !errors.Is(err, sessionstore.ErrSessionSnapshotConflict) {
 		return err, false
 	}
 	// Auto-compaction may rewrite between the decision and the write.
@@ -38,12 +37,12 @@ func persistSessionSnapshot(s *agent.Session, path string, forceRewrite bool) (e
 	return err, false
 }
 
-func retrySameRevisionDivergedRewrite(s *agent.Session, path string, err error) (error, bool) {
-	kind, ok := agent.SnapshotConflictKind(err)
-	if !ok || kind != agent.SessionSnapshotConflictDiverged {
+func retrySameRevisionDivergedRewrite(s *sessionstore.Session, path string, err error) (error, bool) {
+	kind, ok := sessionstore.SnapshotConflictKind(err)
+	if !ok || kind != sessionstore.SessionSnapshotConflictDiverged {
 		return err, false
 	}
-	var conflict *agent.SessionSnapshotConflictError
+	var conflict *sessionstore.SessionSnapshotConflictError
 	if !errors.As(err, &conflict) || conflict == nil || conflict.BaseRevision != conflict.DiskRevision {
 		return err, false
 	}

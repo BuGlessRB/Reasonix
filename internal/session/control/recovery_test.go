@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -65,7 +66,7 @@ func TestRecoveryExecutionRiskDoesNotPrompt(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}},
 	}}
 
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	ag := agent.New(prov, reg, sess, agent.Options{MaxSteps: 6}, event.Discard)
 	c := New(Options{
 		Runner:   ag,
@@ -108,7 +109,7 @@ func TestRecoveryStaleEditCanReadAndRetryWithFreshAnchor(t *testing.T) {
 		}}},
 		{{Type: provider.ChunkText, Text: "done"}},
 	}}
-	ag := agent.New(prov, reg, agent.NewSession("sys"), agent.Options{MaxSteps: 8}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession("sys"), agent.Options{MaxSteps: 8}, event.Discard)
 	c := New(Options{
 		Runner: ag, Executor: ag,
 		Policy: permission.Policy{Mode: permission.Allow},
@@ -128,7 +129,7 @@ func TestRecoveryStaleEditCanReadAndRetryWithFreshAnchor(t *testing.T) {
 }
 
 func TestRecoveryReviseBlocksPlanTransition(t *testing.T) {
-	ag := agent.New(nil, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	ag := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	var c *Controller
 	c = New(Options{
 		Runner: ag, Executor: ag, Policy: permission.Policy{Mode: permission.Allow},
@@ -167,7 +168,7 @@ func TestRecoveryInactiveUnderYolo(t *testing.T) {
 		{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "3", Name: "bash", Arguments: `{"command":"go test ./..."}`}}},
 		{{Type: provider.ChunkText, Text: "done"}},
 	}}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	ag := agent.New(prov, reg, sess, agent.Options{MaxSteps: 6}, event.Discard)
 	c := New(Options{
 		Runner:   ag,
@@ -202,7 +203,7 @@ func TestRecoveryHeadlessDoesNotBlockExecutionRisk(t *testing.T) {
 		{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "2", Name: "bash", Arguments: `{"command":"git push origin feature"}`}}},
 		{{Type: provider.ChunkText, Text: "reported blocker"}},
 	}}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	ag := agent.New(prov, reg, sess, agent.Options{MaxSteps: 6}, event.Discard)
 	c := New(Options{
 		Runner:           ag,
@@ -228,7 +229,7 @@ func TestRecoveryHeadlessDoesNotBlockExecutionRisk(t *testing.T) {
 func TestLegacyApproveResolvesWaiterOnlyPlanTransition(t *testing.T) {
 	// Old clients only call Approve. Normal-execution plan cards have a
 	// live waiter but no taskRuntime, so Snapshot cannot discover them.
-	ag := agent.New(nil, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	ag := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	var c *Controller
 	var approvalID string
 	c = New(Options{
@@ -269,7 +270,7 @@ func TestLegacyApproveResolvesWaiterOnlyPlanTransition(t *testing.T) {
 }
 
 func TestRecoveryPromptCanResolveSynchronouslyFromSink(t *testing.T) {
-	ag := agent.New(nil, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	ag := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	var c *Controller
 	var resolveErr error
 	c = New(Options{
@@ -311,7 +312,7 @@ func TestSetFreshSessionPathClearsRecoveryState(t *testing.T) {
 	dir := testenv.TempDir(t)
 	oldPath := filepath.Join(dir, "old.jsonl")
 	newPath := filepath.Join(dir, "new.jsonl")
-	ag := agent.New(nil, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
+	ag := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{
 		Runner: ag, Executor: ag, SessionDir: dir, SessionPath: oldPath,
 	})
@@ -362,7 +363,7 @@ func TestFreshSessionRotationsClearRecoveryState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := testenv.TempDir(t)
 			path := filepath.Join(dir, "old.jsonl")
-			sess := agent.NewSession("sys")
+			sess := sessionstore.NewSession("sys")
 			sess.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 			if err := sess.Save(path); err != nil {
 				t.Fatalf("Save session: %v", err)
@@ -394,7 +395,7 @@ func TestFreshSessionRotationsClearRecoveryState(t *testing.T) {
 func TestNewSessionWaitsForPendingRecoveryPersistence(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "old.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	if err := sess.Save(path); err != nil {
 		t.Fatalf("Save session: %v", err)

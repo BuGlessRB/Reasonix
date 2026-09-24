@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/base/fileutil"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/platform/worktree"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/migration"
 	"reasonix/internal/state/store"
 )
@@ -102,14 +102,14 @@ func (h *Hub) tree(w http.ResponseWriter, _ *http.Request) {
 // open stays, because something is driving it.
 func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSession {
 	dir := SessionDirFor(root)
-	listed, err := agent.ListSessions(dir)
+	listed, err := sessionstore.ListSessions(dir)
 	if err != nil {
 		return nil
 	}
 	titles := h.titleCacheFor(dir)
-	byID := make(map[string]agent.SessionInfo, len(listed))
+	byID := make(map[string]sessionstore.SessionInfo, len(listed))
 	for _, si := range listed {
-		byID[agent.BranchID(si.Path)] = si
+		byID[sessionstore.BranchID(si.Path)] = si
 	}
 	out := make([]treeSession, 0, len(listed))
 	// Lineage root -> the row that copies of it fold into. The list is
@@ -123,7 +123,7 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 		if store.IsSubagentTranscriptName(base) {
 			continue
 		}
-		runtimeID := open[agent.CanonicalSessionPath(si.Path)]
+		runtimeID := open[sessionstore.CanonicalSessionPath(si.Path)]
 		if runtimeID == "" && hiddenRecoveryCopy(si, "") {
 			continue
 		}
@@ -141,7 +141,7 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 		// rename would be written to the sidecar and never show up.
 		title := strings.TrimSpace(si.CustomTitle)
 		if title == "" {
-			title, _ = titles.get(name+".jsonl", titleSource(si.Preview), agent.SessionContentModTime(si.Path).UnixNano())
+			title, _ = titles.get(name+".jsonl", titleSource(si.Preview), sessionstore.SessionContentModTime(si.Path).UnixNano())
 		}
 		if title == "" {
 			title = previewTitle(si.Preview)
@@ -173,7 +173,7 @@ func (h *Hub) archiveSession(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session path could not be resolved", nil)
 		return
 	}
-	if id := h.openSessions()[agent.CanonicalSessionPath(path)]; id != "" &&
+	if id := h.openSessions()[sessionstore.CanonicalSessionPath(path)]; id != "" &&
 		!h.releaseOrRefuse(w, r, "session.running", "this conversation is running; stop it first",
 			h.panesWhere(func(rt *Runtime) bool { return rt.ID == id })) {
 		return
@@ -182,7 +182,7 @@ func (h *Hub) archiveSession(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusForbidden, "session.outside_workspace", "path outside a known workspace", nil)
 		return
 	}
-	if err := agent.SetSessionArchived(path, body.Archived); err != nil {
+	if err := sessionstore.SetSessionArchived(path, body.Archived); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -232,11 +232,11 @@ func (h *Hub) importLegacySessions(w http.ResponseWriter, r *http.Request) {
 // recoveryLineageRoot names the conversation a copy belongs to. The stamped
 // root is authoritative: walking parents instead splits one chain into a row
 // per reclaimed middle link, which is precisely what GC leaves behind.
-func recoveryLineageRoot(si agent.SessionInfo, byID map[string]agent.SessionInfo) string {
+func recoveryLineageRoot(si sessionstore.SessionInfo, byID map[string]sessionstore.SessionInfo) string {
 	if root := strings.TrimSpace(si.RecoveryRootID); root != "" {
 		return root
 	}
-	id := agent.BranchID(si.Path)
+	id := sessionstore.BranchID(si.Path)
 	for range maxRecoveryLineageWalk {
 		info, ok := byID[id]
 		if !ok || !info.Recovered {
@@ -309,7 +309,7 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session path could not be resolved", nil)
 		return
 	}
-	if id := h.openSessions()[agent.CanonicalSessionPath(path)]; id != "" &&
+	if id := h.openSessions()[sessionstore.CanonicalSessionPath(path)]; id != "" &&
 		!h.releaseOrRefuse(w, r, "session.running", "this conversation is running; stop it first",
 			h.panesWhere(func(rt *Runtime) bool { return rt.ID == id })) {
 		return
@@ -322,9 +322,9 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 	// A pane's current path is narrower than "anyone writing this file": a
 	// recovery branch or a mid-rotation session is held without being one.
 	// Taking the guard beats probing it, which leaves a window for a writer.
-	guard, err := agent.TryAcquireSessionRemovalGuard(path)
+	guard, err := sessionstore.TryAcquireSessionRemovalGuard(path)
 	if err != nil {
-		var held *agent.SessionLeaseError
+		var held *sessionstore.SessionLeaseError
 		if errors.As(err, &held) {
 			if who := sessionHolder(held); who != nil {
 				busy(w, "session.in_use_by", "another process holds this conversation open", who)
@@ -352,7 +352,7 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 // sessionHolder names the process holding a conversation, and only when it is
 // not this one. A lease this process holds means a write is in flight here,
 // which is a different cause and carries a different code.
-func sessionHolder(held *agent.SessionLeaseError) map[string]any {
+func sessionHolder(held *sessionstore.SessionLeaseError) map[string]any {
 	if held == nil || held.Info == nil || held.Info.PID == 0 || held.Info.PID == os.Getpid() {
 		return nil
 	}
@@ -380,7 +380,7 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusForbidden, "session.outside_workspace", "path outside a known workspace", nil)
 		return
 	}
-	if err := agent.RenameSession(path, body.Title); err != nil {
+	if err := sessionstore.RenameSession(path, body.Title); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -467,7 +467,7 @@ func (h *Hub) roots() []rootRef {
 func (h *Hub) openSessions() map[string]string {
 	out := map[string]string{}
 	for _, rt := range h.localRuntimes() {
-		if path := agent.CanonicalSessionPath(rt.Server.Controller().SessionPath()); path != "" {
+		if path := sessionstore.CanonicalSessionPath(rt.Server.Controller().SessionPath()); path != "" {
 			out[path] = rt.ID
 		}
 	}
@@ -503,7 +503,7 @@ func (h *Hub) titleCacheFor(dir string) *titleCache {
 // workspaceRootForSession recovers which folder a transcript belongs to from
 // its own sidecar, for an open request that names a session but no root.
 func workspaceRootForSession(path string) string {
-	meta, ok, err := agent.LoadBranchMeta(strings.TrimSpace(path))
+	meta, ok, err := sessionstore.LoadBranchMeta(strings.TrimSpace(path))
 	if err != nil || !ok {
 		return ""
 	}

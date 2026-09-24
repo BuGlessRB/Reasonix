@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -36,7 +37,7 @@ func TestNewNormalizesTypedNilInterfaces(t *testing.T) {
 	var gate *typedNilGate
 	var hooks *typedNilHooks
 
-	a := New(nil, tool.NewRegistry(), NewSession(""), Options{Gate: gate, Hooks: hooks}, sink)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession(""), Options{Gate: gate, Hooks: hooks}, sink)
 	a.svc.sink.Emit(event.Event{Kind: event.Text, Text: "typed nil sink should not panic"})
 	if a.svc.gate != nil {
 		t.Fatal("typed nil gate should be normalized to nil")
@@ -48,7 +49,7 @@ func TestNewNormalizesTypedNilInterfaces(t *testing.T) {
 
 func TestSetGateNormalizesTypedNil(t *testing.T) {
 	var gate *typedNilGate
-	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 
 	a.SetGate(gate)
 	if a.svc.gate != nil {

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/provider"
@@ -22,7 +23,7 @@ func (secretOutputTool) Execute(context.Context, json.RawMessage) (string, error
 func TestExecuteOnePreservesToolResultBeforeHistory(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(secretOutputTool{})
-	a := &Agent{svc: agentServices{tools: reg}, sess: sessionRuntime{conversation: NewSession("")}}
+	a := &Agent{svc: agentServices{tools: reg}, sess: sessionRuntime{conversation: sessionstore.NewSession("")}}
 
 	outcome := a.executeOne(context.Background(), &a.turn, provider.ToolCall{ID: "call_1", Name: "secret_output", Arguments: `{}`})
 	const want = "DEEPSEEK_API_KEY=sk-real-secret-value-123456\n"

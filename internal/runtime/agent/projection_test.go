@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
@@ -19,10 +20,10 @@ import (
 func TestCompactionStateAtomicSaveLoad(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "sess.jsonl")
-	st := CompactionState{
-		SchemaVersion:     compactionStateSchemaCurrent,
+	st := sessionstore.CompactionState{
+		SchemaVersion:     sessionstore.CompactionStateSchemaCurrent,
 		TranscriptVersion: 3,
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages: []provider.Message{
 				{Role: provider.RoleSystem, Content: "sys"},
 				{Role: provider.RoleUser, Content: "summary-body"},
@@ -37,19 +38,19 @@ func TestCompactionStateAtomicSaveLoad(t *testing.T) {
 		PromptCacheKey: "ws|sess|model",
 		LastCacheState: CacheStateCold,
 		Generation:     7,
-		LastReceipt: &ContextMaintenanceReceipt{
+		LastReceipt: &sessionstore.ContextMaintenanceReceipt{
 			Status: "applied", Action: "summary", ProjectionVersion: 1,
 			InputHash: "in", OutputHash: "out", SavedTokens: 800,
 		},
 	}
-	if err := SaveCompactionState(path, st); err != nil {
+	if err := sessionstore.SaveCompactionState(path, st); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	got, ok, err := LoadCompactionState(path)
+	got, ok, err := sessionstore.LoadCompactionState(path)
 	if err != nil || !ok {
 		t.Fatalf("load: ok=%v err=%v", ok, err)
 	}
-	if got.SchemaVersion != compactionStateSchemaCurrent || got.TranscriptVersion != 3 {
+	if got.SchemaVersion != sessionstore.CompactionStateSchemaCurrent || got.TranscriptVersion != 3 {
 		t.Fatalf("loaded state = %+v", got)
 	}
 	if len(got.Projection.Messages) != 2 || got.Projection.CoveredCount != 10 {
@@ -62,10 +63,10 @@ func TestCompactionStateAtomicSaveLoad(t *testing.T) {
 
 func TestLoadCompactionStateAcceptsLegacyV1(t *testing.T) {
 	path := filepath.Join(testenv.TempDir(t), "legacy.jsonl")
-	legacy := CompactionState{
-		SchemaVersion:     compactionStateSchemaV1,
+	legacy := sessionstore.CompactionState{
+		SchemaVersion:     sessionstore.CompactionStateSchemaV1,
 		TranscriptVersion: 2,
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages:          []provider.Message{{Role: provider.RoleUser, Content: "legacy summary"}},
 			TranscriptVersion: 2,
 			ProjectionVersion: 1,
@@ -77,30 +78,30 @@ func TestLoadCompactionStateAcceptsLegacyV1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(ContextStatePath(path), raw, 0o600); err != nil {
+	if err := os.WriteFile(sessionstore.ContextStatePath(path), raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	got, ok, err := LoadCompactionState(path)
+	got, ok, err := sessionstore.LoadCompactionState(path)
 	if err != nil || !ok {
 		t.Fatalf("load legacy V1: ok=%v err=%v", ok, err)
 	}
-	if got.SchemaVersion != compactionStateSchemaV1 || got.Projection.Messages[0].Content != "legacy summary" {
+	if got.SchemaVersion != sessionstore.CompactionStateSchemaV1 || got.Projection.Messages[0].Content != "legacy summary" {
 		t.Fatalf("legacy state changed: %+v", got)
 	}
 }
 
 func TestSaveCompactionStateCreatesPreviousReaderBoundary(t *testing.T) {
 	path := filepath.Join(testenv.TempDir(t), "current.jsonl")
-	if err := SaveCompactionState(path, CompactionState{
-		Projection: ContextProjection{
+	if err := sessionstore.SaveCompactionState(path, sessionstore.CompactionState{
+		Projection: sessionstore.ContextProjection{
 			Messages:     []provider.Message{{Role: provider.RoleUser, Content: "logical summary"}, {Role: provider.RoleUser, Content: "retained anchor"}},
 			CoveredCount: 2,
 		},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(ContextStatePath(path))
+	raw, err := os.ReadFile(sessionstore.ContextStatePath(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,13 +111,13 @@ func TestSaveCompactionStateCreatesPreviousReaderBoundary(t *testing.T) {
 	if err := json.Unmarshal(raw, &header); err != nil {
 		t.Fatal(err)
 	}
-	if header.SchemaVersion != compactionStateSchemaCurrent {
-		t.Fatalf("written schema = %d, want %d", header.SchemaVersion, compactionStateSchemaCurrent)
+	if header.SchemaVersion != sessionstore.CompactionStateSchemaCurrent {
+		t.Fatalf("written schema = %d, want %d", header.SchemaVersion, sessionstore.CompactionStateSchemaCurrent)
 	}
 	if previousCompactionReaderAccepts(raw) {
 		t.Fatal("V1-only reader would accept a sidecar with V2 logical message invariants")
 	}
-	if _, ok, err := LoadCompactionState(path); err != nil || !ok {
+	if _, ok, err := sessionstore.LoadCompactionState(path); err != nil || !ok {
 		t.Fatalf("current reader rejected V2 sidecar: ok=%v err=%v", ok, err)
 	}
 }
@@ -128,12 +129,12 @@ func previousCompactionReaderAccepts(raw []byte) bool {
 	if json.Unmarshal(raw, &header) != nil {
 		return false
 	}
-	return header.SchemaVersion == 0 || header.SchemaVersion == compactionStateSchemaV1
+	return header.SchemaVersion == 0 || header.SchemaVersion == sessionstore.CompactionStateSchemaV1
 }
 
 func TestCompactToProjectionLeavesCanonicalIntact(t *testing.T) {
 	fp := &fakeProvider{reply: "GOAL: ship projection\nFACTS: keep path /tmp/x"}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	// Build enough history that a fold is economical.
 	for i := range 12 {
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: "user turn " + strings.Repeat("x", 80) + " " + string(rune('A'+i%26))})
@@ -175,7 +176,7 @@ func TestCompactToProjectionLeavesCanonicalIntact(t *testing.T) {
 	}
 	// Sidecar must exist and reload with an applied summary receipt (v3 does not
 	// persist the legacy last_mode field).
-	st, ok, err := LoadCompactionState(sessionPath)
+	st, ok, err := sessionstore.LoadCompactionState(sessionPath)
 	if err != nil || !ok {
 		t.Fatalf("reload sidecar: ok=%v err=%v", ok, err)
 	}
@@ -198,7 +199,7 @@ func TestCompactToProjectionLeavesCanonicalIntact(t *testing.T) {
 
 func TestCompactFailureDoesNotWriteMechanicalMarker(t *testing.T) {
 	fp := &fakeProvider{streamErr: errors.New("boom")}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	for range 10 {
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: strings.Repeat("u", 100)})
 		sess.Add(provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("a", 200)})
@@ -225,7 +226,7 @@ func TestCompactFailureDoesNotWriteMechanicalMarker(t *testing.T) {
 
 func TestFixedEarlyUserTurnsStableAcrossCompactions(t *testing.T) {
 	fp := &fakeProvider{reply: "digest-1"}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	// 30 distinct user turns so a "latest N" strategy would reshuffle. The
 	// first four are large enough that usage-calibrated eligibility would reject
 	// them at 1 token/char, but the fixed fallback estimate accepts them.
@@ -295,7 +296,7 @@ func earlyUserPrefix(msgs []provider.Message) string {
 
 func TestLocalOnlyExcludedFromCompactionRequest(t *testing.T) {
 	fp := &fakeProvider{reply: "ok"}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	for range 8 {
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: strings.Repeat("u", 80)})
 		sess.Add(provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("a", 120)})
@@ -325,7 +326,7 @@ func TestLocalOnlyExcludedFromCompactionRequest(t *testing.T) {
 // a successful summary install.
 func TestArchiveDirIgnoredOnCheckpointInstall(t *testing.T) {
 	fp := &fakeProvider{reply: "digest"}
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	big := strings.Repeat("assistant work detail ", 200)
 	for range 6 {
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: "turn"})
@@ -379,7 +380,7 @@ func joinContents(msgs []provider.Message) string {
 func TestCompactReplacesHistory(t *testing.T) {
 	prov := &fakeProvider{reply: "- goal: do X\n- changed file Y"}
 	bigStep := strings.Repeat("important implementation detail ", 200)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "1", Name: "read_file", Arguments: "{}"}}},
@@ -441,7 +442,7 @@ func TestManualCompactReportsSummarizerFailure(t *testing.T) {
 	// fold when the summarizer fails. The error is returned so the caller,
 	// who is present, can retry or report it.
 	prov := &fakeProvider{streamErr: errors.New("provider down")}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: "step one"},
@@ -487,7 +488,7 @@ func TestCompactRewriteVersionFeedsCacheDiagnostics(t *testing.T) {
 	// The provider-visible change is the projection sidecar (version + summary).
 	prov := &fakeProvider{reply: "- summary"}
 	big := strings.Repeat("work detail ", 200)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: big},
@@ -525,7 +526,7 @@ func TestCompactKeepsMidSessionUserTurns(t *testing.T) {
 	// ~1500 tokens of work after the mid-fact pushes it out of the ~800-token tail.
 	big := strings.Repeat("work output line with detail. ", 250)
 	midFact := "by the way, always use pnpm not npm"
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "first task"},
 		{Role: provider.RoleAssistant, Content: big},
@@ -591,7 +592,7 @@ func TestCompactKeepsPriorDigests(t *testing.T) {
 	// provider echoes the prior fact so we can assert the fold input included it.
 	priorDigest := summaryTagOpen + "\n## Standing facts\n- db is orion_prod_42\n" + summaryTagClose
 	big := strings.Repeat("work output ", 200)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: big}, // breaks leading-summary contiguity
@@ -640,7 +641,7 @@ func TestCompactKeepsPriorDigests(t *testing.T) {
 func TestCompactKeepsErrorMessages(t *testing.T) {
 	prov := &fakeProvider{reply: "- normal work summarized"}
 	big := strings.Repeat("normal work output ", 200)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "1", Name: "bash", Arguments: `{"cmd":"bad"}`}}},
@@ -686,7 +687,7 @@ func TestCompactKeepsUserMarkedMessages(t *testing.T) {
 	// work must be large enough that folding it still reduces the candidate.
 	marked := "[[keep]] exact requirement " + strings.Repeat("must stay verbatim ", 40)
 	big := strings.Repeat("unmarked work output ", 300)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleUser, Content: marked},
@@ -735,7 +736,7 @@ func TestRunCompactsAfterFinalAnswer(t *testing.T) {
 	const window = 10_000
 	// ~2×4K tokens of foldable work so estimatedPromptTokens ≥ fold (8500).
 	big := strings.Repeat("old work detail line with substance. ", 800)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: big},
@@ -763,7 +764,7 @@ func TestRunCompactsAfterFinalAnswer(t *testing.T) {
 
 func TestCompactFoldsSingleLargeMessage(t *testing.T) {
 	prov := &fakeProvider{reply: "- captured the large file contents"}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleTool, ToolCallID: "1", Name: "read_file", Content: strings.Repeat("large output line\n", 500)},
 		{Role: provider.RoleUser, Content: "next"},

@@ -10,11 +10,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"sort"
 	"strings"
 	"time"
 
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/sessioninbox"
 )
@@ -23,7 +23,7 @@ import (
 // error the client sees: a held session names its holder with the shared CLI
 // wording; anything else is an internal error.
 func sessionLeaseBindError(method string, err error) *RPCError {
-	if errors.Is(err, agent.ErrSessionLeaseHeld) {
+	if errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 		return &RPCError{
 			Code:    ErrInvalidRequest,
 			Message: method + ": " + control.SessionInUseMessage(err) + "; " + control.SessionLeaseCloseHint,
@@ -114,7 +114,7 @@ func (s *service) sessionNew(ctx context.Context, raw json.RawMessage) (any, err
 	// so no other runtime can bind the transcript while this session lives.
 	if dir := ctrl.SessionDir(); dir != "" {
 		sess.transcript = transcriptPath(dir, id)
-		lease, err := agent.TryAcquireSessionLease(sess.transcript)
+		lease, err := sessionstore.TryAcquireSessionLease(sess.transcript)
 		if err != nil {
 			ctrl.Close()
 			return nil, sessionLeaseBindError("session/new", err)
@@ -554,7 +554,7 @@ func (s *service) sessionDelete(_ context.Context, raw json.RawMessage) (any, er
 		path = sess.transcript
 		destroy = sess.ctrl.BeginDestroySession(path)
 		if result := destroy.Wait(); result.HasTimedOut() {
-			if err := agent.MarkCleanupPending(path, "delete"); err != nil {
+			if err := sessionstore.MarkCleanupPending(path, "delete"); err != nil {
 				go delayedDeleteSessionFiles(path, destroy)
 				sess.ctrl.CloseAfterDestroy()
 				return nil, &RPCError{Code: ErrInternal, Message: "session/delete: " + err.Error()}

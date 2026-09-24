@@ -3,6 +3,7 @@ package boot
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -200,11 +201,11 @@ func journalEntry(sessionPath, id string) (execjournal.Entry, bool) {
 	return execjournal.Entry{}, false
 }
 
-func ownedChildren(t *testing.T, store *agent.SubagentStore, sessionPath string) []agent.SubagentArtifact {
+func ownedChildren(t *testing.T, store *agent.SubagentStore, sessionPath string) []sessionstore.SubagentArtifact {
 	t.Helper()
 	sessions := filepath.Dir(sessionPath)
 	stem := strings.TrimSuffix(filepath.Base(sessionPath), ".jsonl")
-	facts, err := agent.ListSubagentsByParent(sessions, stem)
+	facts, err := sessionstore.ListSubagentsByParent(sessions, stem)
 	if err != nil {
 		t.Fatalf("list children: %v", err)
 	}

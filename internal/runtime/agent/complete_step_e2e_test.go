@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -99,7 +100,7 @@ func TestE2ESerialPlanHostAdvancesAndAllowsFinalAnswer(t *testing.T) {
 		testutil.Turn{Text: "all done"},
 	)
 	sink := &recordSink{}
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, sink)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, sink)
 
 	runErr := a.Run(context.Background(), "implement the plan")
 	if runErr != nil {
@@ -128,7 +129,7 @@ func TestE2ECommandDriftAcceptedInTurn(t *testing.T) {
 			Arguments: `{"step":"sync","result":"synced","evidence":[{"kind":"verification","summary":"fast-forwarded","command":"git merge upstream/main --ff-only"}]}`}}},
 		testutil.Turn{Text: "synced"},
 	)
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "sync the branch"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestE2ECommandDriftAcceptedInTurn(t *testing.T) {
 // todos is blocked by the canonical fallback, then clears once both steps are
 // actually signed off (host-advanced) — the loop that #2917 could not close.
 func TestE2ECrossTurnCanonicalGateBlocksThenClears(t *testing.T) {
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{
 		ID: "t0", Name: "todo_write",
 		Arguments: `{"todos":[{"content":"alpha","status":"in_progress"},{"content":"beta","status":"pending"}]}`}}})
@@ -178,7 +179,7 @@ func TestE2ECrossTurnCanonicalGateBlocksThenClears(t *testing.T) {
 }
 
 func TestE2ECrossTurnPendingSignoffIsRejectedUntilCurrentAdvances(t *testing.T) {
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{
 		ID: "t0", Name: "todo_write",
 		Arguments: `{"todos":[{"content":"alpha","status":"in_progress"},{"content":"beta","status":"pending"}]}`}}})
@@ -220,7 +221,7 @@ func TestE2ECrossTurnDiffEvidenceViaSessionFallback(t *testing.T) {
 			Arguments: `{"step":"edit x","result":"x updated","evidence":[{"kind":"diff","summary":"changed x","paths":["pkg/x.go"]}]}`}}},
 		testutil.Turn{Text: "signed off"},
 	)
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 
 	// The mock edits without verifying, so turn 1 legitimately ends with a
 	// readiness gap; what this test proves is turn 2's cross-turn citation.
@@ -244,7 +245,7 @@ func TestE2EUnbackedDiffEvidenceStillRejected(t *testing.T) {
 			Arguments: `{"step":"x","result":"y","evidence":[{"kind":"diff","summary":"claimed","paths":["never/written.go"]}]}`}}},
 		testutil.Turn{Text: "done"},
 	)
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "sign off without doing the work"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -275,7 +276,7 @@ func TestE2EFinalSignOffDoesNotAskForANextStep(t *testing.T) {
 			Arguments: `{"step":"vet","result":"vet passes","evidence":[{"kind":"verification","summary":"vet passes","command":"go vet ./..."}]}`}}},
 		testutil.Turn{Text: "all done"},
 	)
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "implement the plan"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -323,7 +324,7 @@ func TestE2ERewritingThePlanIsNotAdvancingIt(t *testing.T) {
 		testutil.Turn{Text: "still looking"},
 	)
 	sink := &recordSink{}
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, sink)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, sink)
 	_ = a.Run(context.Background(), "work the plan")
 
 	revs := todoTransitions(sink)
@@ -361,7 +362,7 @@ func TestE2ESigningOffAdvancesThePlanRevision(t *testing.T) {
 		testutil.Turn{Text: "one down"},
 	)
 	sink := &recordSink{}
-	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, sink)
+	a := New(mp, evidenceRegistry(), sessionstore.NewSession("sys"), Options{}, sink)
 	// The turn ends short of the plan on purpose: readiness holds it there, and
 	// the transition under test already happened.
 	_ = a.Run(context.Background(), "work the plan")

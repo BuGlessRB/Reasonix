@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 // multi-million-token canonical raw history.
 func TestIncrementalFoldSummarizesPriorDigestPlusNewWork(t *testing.T) {
 	prov := &recordingProvider{reply: "merged digest"}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("old work ", 400)},

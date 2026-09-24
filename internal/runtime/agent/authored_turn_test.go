@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -24,7 +25,7 @@ func (p *turnStartProvider) Stream(_ context.Context, _ provider.Request) (<-cha
 // runTurns runs each input as its own turn and returns the TurnStarted events,
 // in order. The agent is built with no host around it at all: this layer cannot
 // import control, so nothing a checkpoint knows can reach these numbers.
-func runTurns(t *testing.T, session *Session, inputs ...string) []event.Event {
+func runTurns(t *testing.T, session *sessionstore.Session, inputs ...string) []event.Event {
 	t.Helper()
 	var started []event.Event
 	sink := event.FuncSink(func(e event.Event) {
@@ -53,7 +54,7 @@ func requireNamed(t *testing.T, e event.Event, wantTurn int) int {
 }
 
 func TestTurnStartedNamesTheAuthoredMessageItIsAbout(t *testing.T) {
-	session := NewSession("system")
+	session := sessionstore.NewSession("system")
 	started := runTurns(t, session, "first", "second")
 	if len(started) != 2 {
 		t.Fatalf("turn_started events = %d, want 2", len(started))
@@ -69,14 +70,14 @@ func TestTurnStartedNamesTheAuthoredMessageItIsAbout(t *testing.T) {
 }
 
 func TestLiveTurnStartAndDisplayIndexNameTheSameMessage(t *testing.T) {
-	session := NewSession("system")
+	session := sessionstore.NewSession("system")
 	started := runTurns(t, session, "first", "second")
 	msgs := session.Snapshot()
-	digest, err := digestSessionMessages(msgs)
+	digest, err := sessionstore.DigestSessionMessages(msgs)
 	if err != nil {
-		t.Fatalf("digestSessionMessages: %v", err)
+		t.Fatalf("DigestSessionMessages: %v", err)
 	}
-	idx := BuildSessionDisplayIndex(msgs, 1, true, digest)
+	idx := sessionstore.BuildSessionDisplayIndex(msgs, 1, true, digest)
 	if idx == nil {
 		t.Fatal("BuildSessionDisplayIndex returned nil")
 	}
@@ -93,9 +94,9 @@ func TestLiveTurnStartAndDisplayIndexNameTheSameMessage(t *testing.T) {
 }
 
 func TestMidTurnSteerMintsNoAuthoredTurn(t *testing.T) {
-	session := NewSession("system")
+	session := sessionstore.NewSession("system")
 	runTurns(t, session, "first")
-	session.Add(provider.Message{Role: provider.RoleUser, Content: midTurnSteerMessage("keep going", false)})
+	session.Add(provider.Message{Role: provider.RoleUser, Content: sessionstore.MidTurnSteerMessage("keep going", false)})
 	started := runTurns(t, session, "second")
 	if len(started) != 1 {
 		t.Fatalf("turn_started events = %d, want 1", len(started))
@@ -104,7 +105,7 @@ func TestMidTurnSteerMintsNoAuthoredTurn(t *testing.T) {
 }
 
 func TestSyntheticUserTurnMintsNoAuthoredTurn(t *testing.T) {
-	session := NewSession("system")
+	session := sessionstore.NewSession("system")
 	runTurns(t, session, "first")
 	injected := runTurns(t, session, "Continue pursuing the active goal: finish the migration.")
 	if len(injected) != 1 {
@@ -139,10 +140,10 @@ func TestPlannerNeverNamesTheTurnAtTheParentSink(t *testing.T) {
 			})
 			// The planner's transcript is longer, so a name minted over it
 			// cannot be mistaken for one minted over the executor's.
-			plannerSession := NewSession("planner system")
+			plannerSession := sessionstore.NewSession("planner system")
 			plannerSession.Add(provider.Message{Role: provider.RoleUser, Content: "earlier planner turn"})
 			plannerSession.Add(provider.Message{Role: provider.RoleAssistant, Content: "earlier plan"})
-			exec := New(&turnStartProvider{}, tool.NewRegistry(), NewSession("system"), Options{}, sink)
+			exec := New(&turnStartProvider{}, tool.NewRegistry(), sessionstore.NewSession("system"), Options{}, sink)
 			c := NewCoordinatorWithPlannerPolicy(
 				&turnStartProvider{}, plannerSession, nil, tool.NewRegistry(), Options{}, exec, 0, sink,
 				func(context.Context, string) PlannerDecision {
@@ -183,14 +184,14 @@ func TestPlannerNeverNamesTheTurnAtTheParentSink(t *testing.T) {
 // control measures the index one statement before handing over the identity —
 // so this proves the check fires, not that anything reaches it.
 func TestLandingHoldsTheMessageToTheAnnouncedIdentity(t *testing.T) {
-	land := func(id AuthoredTurnIdentity, text string) []event.Event {
+	land := func(id sessionstore.AuthoredTurnIdentity, text string) []event.Event {
 		var notices []event.Event
 		sink := event.FuncSink(func(e event.Event) {
 			if e.Kind == event.Notice && e.Code == event.NoticeCodeTurnIdentityMismatch {
 				notices = append(notices, e)
 			}
 		})
-		session := NewSession("system")
+		session := sessionstore.NewSession("system")
 		a := New(&turnStartProvider{}, tool.NewRegistry(), session, Options{}, sink)
 		ctx := WithHostTurnBoundary(context.Background(), HostTurnBoundary{Authored: &id})
 		a.LandAuthoredUserMessage(ctx, provider.Message{Role: provider.RoleUser, Content: text})
@@ -200,10 +201,10 @@ func TestLandingHoldsTheMessageToTheAnnouncedIdentity(t *testing.T) {
 		return notices
 	}
 
-	if notices := land(AuthoredTurnIdentity{AuthoredTurn: 1, MsgIndex: 1, Raw: "第一句"}, "第一句"); len(notices) != 0 {
+	if notices := land(sessionstore.AuthoredTurnIdentity{AuthoredTurn: 1, MsgIndex: 1, Raw: "第一句"}, "第一句"); len(notices) != 0 {
 		t.Fatalf("a message that landed where it was named reported %d mismatches", len(notices))
 	}
-	notices := land(AuthoredTurnIdentity{AuthoredTurn: 1, MsgIndex: 7, Raw: "第一句"}, "第一句")
+	notices := land(sessionstore.AuthoredTurnIdentity{AuthoredTurn: 1, MsgIndex: 7, Raw: "第一句"}, "第一句")
 	if len(notices) != 1 {
 		t.Fatalf("a message that landed elsewhere reported %d mismatches, want 1", len(notices))
 	}

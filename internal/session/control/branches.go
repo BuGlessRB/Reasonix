@@ -2,9 +2,8 @@ package control
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
-
-	"reasonix/internal/runtime/agent"
 )
 
 func (c *Controller) BranchTreeText() string {
@@ -12,19 +11,19 @@ func (c *Controller) BranchTreeText() string {
 	if err != nil {
 		return "branches: " + err.Error()
 	}
-	return FormatBranchTree(branches, agent.BranchID(c.SessionPath()))
+	return FormatBranchTree(branches, sessionstore.BranchID(c.SessionPath()))
 }
 
-func FormatBranchTree(branches []agent.BranchInfo, currentID string) string {
+func FormatBranchTree(branches []sessionstore.BranchInfo, currentID string) string {
 	if len(branches) == 0 {
 		return "branches: none"
 	}
-	byID := map[string]agent.BranchInfo{}
-	children := map[string][]agent.BranchInfo{}
+	byID := map[string]sessionstore.BranchInfo{}
+	children := map[string][]sessionstore.BranchInfo{}
 	for _, b := range branches {
 		byID[b.ID] = b
 	}
-	var roots []agent.BranchInfo
+	var roots []sessionstore.BranchInfo
 	for _, b := range branches {
 		if b.ParentID == "" {
 			roots = append(roots, b)
@@ -39,8 +38,8 @@ func FormatBranchTree(branches []agent.BranchInfo, currentID string) string {
 	var out strings.Builder
 	out.WriteString("branches:\n")
 	seen := map[string]bool{}
-	var walk func(agent.BranchInfo, string, bool, int)
-	walk = func(b agent.BranchInfo, prefix string, last bool, depth int) {
+	var walk func(sessionstore.BranchInfo, string, bool, int)
+	walk = func(b sessionstore.BranchInfo, prefix string, last bool, depth int) {
 		if seen[b.ID] {
 			return
 		}
@@ -70,7 +69,7 @@ func FormatBranchTree(branches []agent.BranchInfo, currentID string) string {
 	return strings.TrimRight(out.String(), "\n")
 }
 
-func branchTitle(b agent.BranchInfo, depth int) string {
+func branchTitle(b sessionstore.BranchInfo, depth int) string {
 	title := strings.TrimSpace(b.Name)
 	if title == "" {
 		title = strings.TrimSpace(b.Preview)
@@ -154,9 +153,9 @@ func oneLineBranch(s string, maxRunes int) string {
 	return string(r[:maxRunes-1]) + "..."
 }
 
-func resolveBranch(branches []agent.BranchInfo, ref string) (agent.BranchInfo, error) {
+func resolveBranch(branches []sessionstore.BranchInfo, ref string) (sessionstore.BranchInfo, error) {
 	refLower := strings.ToLower(ref)
-	var matches []agent.BranchInfo
+	var matches []sessionstore.BranchInfo
 	for _, b := range branches {
 		nameLower := strings.ToLower(strings.TrimSpace(b.Name))
 		switch {
@@ -176,12 +175,12 @@ func resolveBranch(branches []agent.BranchInfo, ref string) (agent.BranchInfo, e
 		return matches[0], nil
 	}
 	if len(matches) > 1 {
-		return agent.BranchInfo{}, fmt.Errorf("branch %q is ambiguous", ref)
+		return sessionstore.BranchInfo{}, fmt.Errorf("branch %q is ambiguous", ref)
 	}
-	return agent.BranchInfo{}, fmt.Errorf("branch %q not found", ref)
+	return sessionstore.BranchInfo{}, fmt.Errorf("branch %q not found", ref)
 }
 
-func branchDisplayName(b agent.BranchInfo) string {
+func branchDisplayName(b sessionstore.BranchInfo) string {
 	if strings.TrimSpace(b.Name) != "" {
 		return fmt.Sprintf("%s (%s)", b.Name, b.ID)
 	}

@@ -11,11 +11,11 @@
     "doc-prose": 2324,
     "error-text": 9,
     "essay": 2891,
-    "file-size": 23824,
+    "file-size": 23694,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4348,
-    "layer-order": 26,
+    "layer-order": 18,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -215,7 +215,7 @@
     "internal/assembly/boot/boot.go": {
       "complexity": 125,
       "essay": 76,
-      "file-size": 897,
+      "file-size": 898,
       "function-size": 1013
     },
     "internal/assembly/boot/boot_test.go": {
@@ -713,7 +713,7 @@
     },
     "internal/frontend/acp/service.go": {
       "essay": 49,
-      "file-size": 876,
+      "file-size": 877,
       "function-size": 97,
       "struct-state": 2
     },
@@ -831,7 +831,7 @@
     },
     "internal/frontend/serve/serve.go": {
       "essay": 22,
-      "file-size": 383
+      "file-size": 384
     },
     "internal/frontend/serve/serve_lease_test.go": {
       "essay": 3
@@ -898,9 +898,6 @@
     },
     "internal/platform/installlayout/current.go": {
       "orphan": 1
-    },
-    "internal/platform/instanceid/instanceid.go": {
-      "layer-order": 1
     },
     "internal/platform/remote/auth.go": {
       "essay": 7
@@ -1007,7 +1004,7 @@
     "internal/runtime/agent/agent.go": {
       "complexity": 37,
       "essay": 33,
-      "file-size": 1223,
+      "file-size": 1215,
       "function-size": 102
     },
     "internal/runtime/agent/agent_options.go": {
@@ -1015,10 +1012,6 @@
     },
     "internal/runtime/agent/ask.go": {
       "essay": 1
-    },
-    "internal/runtime/agent/branch.go": {
-      "essay": 10,
-      "orphan": 3
     },
     "internal/runtime/agent/cache_shape.go": {
       "essay": 3
@@ -1082,27 +1075,12 @@
     "internal/runtime/agent/listsessions_bench_test.go": {
       "essay": 4
     },
-    "internal/runtime/agent/migrate.go": {
-      "complexity": 32,
-      "essay": 23,
-      "file-size": 195,
-      "function-size": 73
-    },
-    "internal/runtime/agent/normalize.go": {
-      "essay": 14
-    },
     "internal/runtime/agent/parallel_tasks.go": {
       "essay": 3,
       "function-size": 71
     },
     "internal/runtime/agent/parallel_tasks_test.go": {
       "essay": 2
-    },
-    "internal/runtime/agent/preview.go": {
-      "essay": 17
-    },
-    "internal/runtime/agent/preview_test.go": {
-      "essay": 3
     },
     "internal/runtime/agent/profile_spec.go": {
       "essay": 4
@@ -1117,12 +1095,6 @@
     "internal/runtime/agent/recovery_gate.go": {
       "essay": 8
     },
-    "internal/runtime/agent/recovery_gc.go": {
-      "essay": 17
-    },
-    "internal/runtime/agent/recovery_gc_test.go": {
-      "essay": 1
-    },
     "internal/runtime/agent/review_unavailable.go": {
       "orphan": 1
     },
@@ -1134,52 +1106,8 @@
       "complexity": 1,
       "essay": 5
     },
-    "internal/runtime/agent/save.go": {
-      "complexity": 36,
-      "essay": 109,
-      "file-size": 1281,
-      "function-size": 95
-    },
-    "internal/runtime/agent/save_test.go": {
-      "essay": 9
-    },
     "internal/runtime/agent/scheduler.go": {
       "essay": 1
-    },
-    "internal/runtime/agent/session.go": {
-      "essay": 28
-    },
-    "internal/runtime/agent/session_compat_legacy_test.go": {
-      "essay": 3
-    },
-    "internal/runtime/agent/session_content.go": {
-      "orphan": 1
-    },
-    "internal/runtime/agent/session_display_index.go": {
-      "essay": 18,
-      "orphan": 2
-    },
-    "internal/runtime/agent/session_display_read_model.go": {
-      "orphan": 2
-    },
-    "internal/runtime/agent/session_events.go": {
-      "essay": 9,
-      "file-size": 82
-    },
-    "internal/runtime/agent/session_events_test.go": {
-      "essay": 3
-    },
-    "internal/runtime/agent/session_lease.go": {
-      "essay": 13
-    },
-    "internal/runtime/agent/session_lease_test.go": {
-      "essay": 4
-    },
-    "internal/runtime/agent/session_lock_windows.go": {
-      "essay": 4
-    },
-    "internal/runtime/agent/session_removal.go": {
-      "essay": 6
     },
     "internal/runtime/agent/steer_flush_test.go": {
       "essay": 1
@@ -1188,13 +1116,12 @@
       "essay": 10
     },
     "internal/runtime/agent/subagent_store.go": {
-      "essay": 5,
-      "file-size": 127
+      "essay": 5
     },
     "internal/runtime/agent/task.go": {
       "complexity": 12,
       "essay": 35,
-      "file-size": 1121,
+      "file-size": 1122,
       "function-size": 94,
       "orphan": 1
     },
@@ -1353,7 +1280,7 @@
     },
     "internal/session/control/controller.go": {
       "essay": 32,
-      "file-size": 594,
+      "file-size": 595,
       "frontend-parity": 6
     },
     "internal/session/control/controller_test.go": {
@@ -1494,20 +1421,7 @@
       "function-size": 73
     },
     "internal/state/history/indexed.go": {
-      "layer-order": 1,
       "orphan": 1
-    },
-    "internal/state/history/search.go": {
-      "layer-order": 1
-    },
-    "internal/state/history/strip.go": {
-      "layer-order": 1
-    },
-    "internal/state/historycatalog/catalog.go": {
-      "layer-order": 1
-    },
-    "internal/state/historycatalog/incremental.go": {
-      "layer-order": 1
     },
     "internal/state/instruction/resolver.go": {
       "essay": 1
@@ -1526,8 +1440,74 @@
       "complexity": 17,
       "function-size": 17
     },
-    "internal/state/migration/migration.go": {
-      "layer-order": 1
+    "internal/state/sessionstore/branch.go": {
+      "essay": 10,
+      "orphan": 3
+    },
+    "internal/state/sessionstore/migrate.go": {
+      "complexity": 32,
+      "essay": 23,
+      "file-size": 195,
+      "function-size": 73
+    },
+    "internal/state/sessionstore/normalize.go": {
+      "essay": 14
+    },
+    "internal/state/sessionstore/preview.go": {
+      "essay": 17
+    },
+    "internal/state/sessionstore/preview_test.go": {
+      "essay": 3
+    },
+    "internal/state/sessionstore/recovery_gc.go": {
+      "essay": 17
+    },
+    "internal/state/sessionstore/recovery_gc_test.go": {
+      "essay": 1
+    },
+    "internal/state/sessionstore/save.go": {
+      "complexity": 36,
+      "essay": 109,
+      "file-size": 1281,
+      "function-size": 95
+    },
+    "internal/state/sessionstore/save_test.go": {
+      "essay": 9
+    },
+    "internal/state/sessionstore/session.go": {
+      "essay": 28
+    },
+    "internal/state/sessionstore/session_compat_legacy_test.go": {
+      "essay": 3
+    },
+    "internal/state/sessionstore/session_content.go": {
+      "orphan": 1
+    },
+    "internal/state/sessionstore/session_display_index.go": {
+      "essay": 18,
+      "orphan": 2
+    },
+    "internal/state/sessionstore/session_display_read_model.go": {
+      "orphan": 2
+    },
+    "internal/state/sessionstore/session_events.go": {
+      "essay": 9,
+      "file-size": 82
+    },
+    "internal/state/sessionstore/session_events_test.go": {
+      "essay": 3
+    },
+    "internal/state/sessionstore/session_lease.go": {
+      "essay": 13
+    },
+    "internal/state/sessionstore/session_lease_test.go": {
+      "essay": 4
+    },
+    "internal/state/sessionstore/session_lock_windows.go": {
+      "essay": 4
+    },
+    "internal/state/sessionstore/session_removal.go": {
+      "essay": 6
     },
     "internal/state/sessiontemp/manager.go": {
       "essay": 5,
@@ -1627,9 +1607,6 @@
     },
     "internal/tools/builtin/writefile.go": {
       "essay": 2
-    },
-    "internal/tools/sessiontool/sessiontool.go": {
-      "layer-order": 1
     },
     "internal/tools/shellrun/runner.go": {
       "essay": 4

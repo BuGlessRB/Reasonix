@@ -4,9 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"time"
-
-	"reasonix/internal/runtime/agent"
 )
 
 // recoveryGCInterval bounds how often the background sweep repeats after the
@@ -18,11 +17,11 @@ const recoveryGCInterval = 6 * time.Hour
 // fills the sidebar with identical-looking copies of one conversation — the
 // desktop catalog and the CLI picker each fold them, serve listed every one.
 // The session in use is never hidden, and coverage is proven from content.
-func hiddenRecoveryCopy(info agent.SessionInfo, current string) bool {
-	if !info.Recovered || agent.CanonicalSessionPath(info.Path) == current {
+func hiddenRecoveryCopy(info sessionstore.SessionInfo, current string) bool {
+	if !info.Recovered || sessionstore.CanonicalSessionPath(info.Path) == current {
 		return false
 	}
-	return agent.RecoveryBranchCoveredByParent(info.Path, filepath.Dir(info.Path))
+	return sessionstore.RecoveryBranchCoveredByParent(info.Path, filepath.Dir(info.Path))
 }
 
 // StartRecoveryGC runs the recovery hygiene the CLI and desktop hosts already
@@ -31,7 +30,7 @@ func hiddenRecoveryCopy(info agent.SessionInfo, current string) bool {
 // fork a studio window ever made stayed forever. Returns immediately.
 func (s *Server) StartRecoveryGC(ctx context.Context) {
 	go func() {
-		startup := time.NewTimer(agent.RecoveryGCStartupGracePeriod)
+		startup := time.NewTimer(sessionstore.RecoveryGCStartupGracePeriod)
 		defer startup.Stop()
 		select {
 		case <-ctx.Done():
@@ -40,7 +39,7 @@ func (s *Server) StartRecoveryGC(ctx context.Context) {
 		}
 		// Protect an upgrading user for a full startup grace before the first
 		// sweep, then clear the backlog without waiting out the long interval.
-		s.sweepRecoveryBranches(agent.RecoveryGCStartupGracePeriod)
+		s.sweepRecoveryBranches(sessionstore.RecoveryGCStartupGracePeriod)
 		ticker := time.NewTicker(recoveryGCInterval)
 		defer ticker.Stop()
 		for {
@@ -48,7 +47,7 @@ func (s *Server) StartRecoveryGC(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				s.sweepRecoveryBranches(agent.RecoveryGCGracePeriod)
+				s.sweepRecoveryBranches(sessionstore.RecoveryGCGracePeriod)
 			}
 		}
 	}()
@@ -62,22 +61,22 @@ func (s *Server) sweepRecoveryBranches(grace time.Duration) int {
 	if dir == "" {
 		return 0
 	}
-	candidates, err := agent.ReclaimableRecoveryBranches(dir, time.Now(), grace)
+	candidates, err := sessionstore.ReclaimableRecoveryBranches(dir, time.Now(), grace)
 	if err != nil {
 		slog.Warn("serve: scan reclaimable recovery branches", "dir", dir, "err", err)
 		return 0
 	}
-	current := agent.CanonicalSessionPath(s.ctl().SessionPath())
+	current := sessionstore.CanonicalSessionPath(s.ctl().SessionPath())
 	swept := 0
 	for _, path := range candidates {
 		// The lease check inside the scan already covers a live runtime; this
 		// also covers a controller holding the branch without one.
-		if agent.CanonicalSessionPath(path) == current {
+		if sessionstore.CanonicalSessionPath(path) == current {
 			continue
 		}
 		// Coverage is re-proven under removal guards here, so a branch someone
 		// continued on between the scan and now is left alone.
-		if err := agent.TrashCoveredRecoveryBranch(path, dir); err != nil {
+		if err := sessionstore.TrashCoveredRecoveryBranch(path, dir); err != nil {
 			slog.Warn("serve: trash redundant recovery branch", "path", path, "err", err)
 			continue
 		}

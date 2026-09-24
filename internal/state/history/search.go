@@ -7,13 +7,13 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"sort"
 	"strings"
 
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/base/retrieval"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -308,7 +308,7 @@ func (s *Searcher) sources(scope string) ([]sourceFile, error) {
 }
 
 func appendSessionSources(out []sourceFile, seen map[string]bool, dir, source string) []sourceFile {
-	out = appendFiles(out, seen, listJSONL(dir, source, agent.IsVisibleSession)...)
+	out = appendFiles(out, seen, listJSONL(dir, source, sessionstore.IsVisibleSession)...)
 	if strings.TrimSpace(dir) != "" {
 		out = appendFiles(out, seen, listJSONL(subagentsDir(dir), source, func(path string) bool {
 			return visibleSubagentSession(dir, path)
@@ -356,7 +356,7 @@ func listJSONL(dir, source string, visible func(string) bool) []sourceFile {
 		// Recency must track the event log too: the .jsonl checkpoint's mtime
 		// only moves at checkpoints.
 		mod := info.ModTime()
-		if contentMod := agent.SessionContentModTime(path); !contentMod.IsZero() {
+		if contentMod := sessionstore.SessionContentModTime(path); !contentMod.IsZero() {
 			mod = contentMod
 		}
 		out = append(out, sourceFile{
@@ -369,7 +369,7 @@ func listJSONL(dir, source string, visible func(string) bool) []sourceFile {
 }
 
 func loadMessages(path string) ([]provider.Message, error) {
-	sess, err := agent.LoadSession(path)
+	sess, err := sessionstore.LoadSession(path)
 	if err != nil {
 		return nil, err
 	}
@@ -494,11 +494,11 @@ func (s *Searcher) visiblePath(path string) bool {
 	case underRoot(path, subagentsDir(s.sessionDir)):
 		return visibleSubagentSession(s.sessionDir, path)
 	case underRoot(path, s.sessionDir):
-		return agent.IsVisibleSession(path)
+		return sessionstore.IsVisibleSession(path)
 	case underRoot(path, subagentsDir(s.globalSessionDir)):
 		return visibleSubagentSession(s.globalSessionDir, path)
 	case underRoot(path, s.globalSessionDir):
-		return agent.IsVisibleSession(path)
+		return sessionstore.IsVisibleSession(path)
 	case underRoot(path, s.archiveDir):
 		return true
 	default:
@@ -507,14 +507,14 @@ func (s *Searcher) visiblePath(path string) bool {
 }
 
 func visibleSubagentSession(sessionDir, path string) bool {
-	if !agent.IsVisibleSession(path) {
+	if !sessionstore.IsVisibleSession(path) {
 		return false
 	}
 	parentSession, ok := subagentParentSession(path)
 	if !ok || parentSession == "" {
 		return true
 	}
-	return !agent.IsCleanupPending(filepath.Join(sessionDir, parentSession+".jsonl"))
+	return !sessionstore.IsCleanupPending(filepath.Join(sessionDir, parentSession+".jsonl"))
 }
 
 func subagentParentSession(path string) (string, bool) {
@@ -526,7 +526,7 @@ func subagentParentSession(path string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	var meta agent.SubagentMeta
+	var meta sessionstore.SubagentMeta
 	if err := json.Unmarshal(b, &meta); err != nil {
 		return "", false
 	}

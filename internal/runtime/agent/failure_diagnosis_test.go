@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -150,7 +151,7 @@ func TestAnnotateFailureDiagnosticsAsksOnceAndRecordsTheAnswer(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "29-32"}, {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "1-5"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	region := []provider.Message{
 		{Role: provider.RoleTool, Content: "fine", ToolExecution: &provider.ToolExecution{State: tool.ShellStateCompleted}},
 		{Role: provider.RoleTool, Content: content, ToolExecution: &provider.ToolExecution{State: tool.ShellStateFailed, ExitCode: &code}},
@@ -192,7 +193,7 @@ func TestAnnotateFailureDiagnosticsFallsBackWhenTheModelIsNoHelp(t *testing.T) {
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{{Type: provider.ChunkText, Text: "I cannot determine that."}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	region := []provider.Message{{Role: provider.RoleTool, Content: content, ToolExecution: failed}}
 
 	got := a.annotateFailureDiagnostics(context.Background(), region, nil)
@@ -229,7 +230,7 @@ func TestHandoffNudgeReadsThePlanContract(t *testing.T) {
 		{"plan naming a command expects action", &verify, true},
 		{"prose-only plan does not", &prose, false},
 	} {
-		a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+		a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 		a.SetPlanContract(tc.plan)
 		if got := a.shouldNudgeExecutorHandoff(); got != tc.want {
 			t.Errorf("%s: shouldNudgeExecutorHandoff = %v, want %v", tc.name, got, tc.want)
@@ -245,7 +246,7 @@ func TestOversizeOutputSpillsRatherThanTruncates(t *testing.T) {
 	big := strings.Repeat("a line of tool output padded out a bit\n", 2000)
 	root := testenv.TempDir(t)
 
-	withRoot := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
+	withRoot := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
 	out, _, notice := withRoot.boundToolOutput(big, "bash", "call-1", "", false)
 	if notice != "" {
 		t.Errorf("spilled output must carry no truncation notice: %q", notice)
@@ -261,7 +262,7 @@ func TestOversizeOutputSpillsRatherThanTruncates(t *testing.T) {
 	// Owning neither a transcript nor an archive is likewise not a reason to
 	// lose the middle: scratch is somewhere, and truncation drops most of a
 	// result this size.
-	bare := New(nil, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+	bare := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	bareOut, _, bareNotice := bare.boundToolOutput(big, "bash", "call-2", "", false)
 	if bareNotice != "" {
 		t.Errorf("the scratch fallback must keep the result whole, not truncate it: %q", bareNotice)

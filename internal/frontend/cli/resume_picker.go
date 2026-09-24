@@ -2,15 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 
 	"github.com/charmbracelet/x/ansi"
-
-	"reasonix/internal/runtime/agent"
 )
 
 // sessionPickerLabel is the "N turns · display title" line, truncated to fit.
 // Explicit session renames win, then topic titles, then the raw preview.
-func sessionPickerLabel(s agent.SessionInfo) string {
+func sessionPickerLabel(s sessionstore.SessionInfo) string {
 	preview := s.CustomTitle
 	if preview == "" {
 		preview = s.TopicTitle

@@ -154,7 +154,7 @@ func collect(dirs []string) ([]turn, skipReasons) {
 
 // sessionStart reads when a session began from its file name, which is the only
 // clock the durable log carries for frames that never ran a tool. The stamp is
-// UTC (agent.NewSessionPath writes it that way); reading it as local time moves
+// UTC (sessionstore.NewSessionPath writes it that way); reading it as local time moves
 // every session by the machine's offset and lets one from before the freeze
 // pass the filter.
 func sessionStart(path string) (time.Time, bool) {

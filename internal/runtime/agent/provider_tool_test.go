@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -36,7 +37,7 @@ func (searchingProvider) Stream(_ context.Context, _ provider.Request) (<-chan p
 func TestProviderRunSearchSurfacesAsFinishedCall(t *testing.T) {
 	var events []event.Event
 	sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
-	a := New(searchingProvider{}, tool.NewRegistry(), NewSession(""), Options{ModelRef: "stub/model"}, sink)
+	a := New(searchingProvider{}, tool.NewRegistry(), sessionstore.NewSession(""), Options{ModelRef: "stub/model"}, sink)
 
 	st := a.stream(context.Background(), 1, sink)
 	if st.err != nil {
@@ -88,7 +89,7 @@ func TestProviderToolChunkWithoutCall(t *testing.T) {
 			results++
 		}
 	})
-	a := New(callessProvider{}, tool.NewRegistry(), NewSession(""), Options{ModelRef: "stub/model"}, sink)
+	a := New(callessProvider{}, tool.NewRegistry(), sessionstore.NewSession(""), Options{ModelRef: "stub/model"}, sink)
 	st := a.stream(context.Background(), 1, sink)
 	if st.err != nil {
 		t.Fatalf("stream: %v", st.err)

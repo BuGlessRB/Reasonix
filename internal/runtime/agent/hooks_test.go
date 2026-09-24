@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -103,7 +104,7 @@ func TestSubagentStopFiresForForegroundTask(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(okTool{name: "task"}) // stands in for the real task tool; returns "ok"
 	h := &stubHooks{}
-	a := New(nil, reg, NewSession(""), Options{Hooks: h}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Hooks: h}, event.Discard)
 
 	a.executeBatch(context.Background(), &a.turn, []provider.ToolCall{{Name: "task", Arguments: `{"prompt":"x"}`}})
 	if len(h.subagentSeen) != 1 || h.subagentSeen[0] != "ok" {
@@ -125,7 +126,7 @@ func TestPreToolUseHookBlocks(t *testing.T) {
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 
 	h := &stubHooks{blockPre: map[string]bool{"bash": true}}
-	a := New(nil, reg, NewSession(""), Options{Hooks: h}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Hooks: h}, event.Discard)
 
 	blocked := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "bash", Arguments: `{"command":"x"}`})
 	if !blocked.blocked || !strings.HasPrefix(blocked.output, "blocked:") {
@@ -153,7 +154,7 @@ func TestPostToolUseFailureUsesFailureHook(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(failTool{name: "broken"})
 	h := &stubHooks{}
-	a := New(nil, reg, NewSession(""), Options{Hooks: h}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Hooks: h}, event.Discard)
 	a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "broken", Arguments: `{}`})
 	if got := strings.Join(h.postFailureSeen, ","); got != "broken" {
 		t.Fatalf("failure hooks = %q", got)

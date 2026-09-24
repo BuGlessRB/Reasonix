@@ -9,12 +9,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 
 	"reasonix/internal/assembly/boot"
 	"reasonix/internal/model/billing"
-	"reasonix/internal/runtime/agent"
 
 	"reasonix/internal/base/fileutil"
 	"reasonix/internal/contract/config"
@@ -464,7 +464,7 @@ func (rt *Runtime) writable() bool {
 	if path == "" || rt.leases == nil {
 		return true
 	}
-	return rt.leases.HeldPath() == agent.CanonicalSessionPath(path)
+	return rt.leases.HeldPath() == sessionstore.CanonicalSessionPath(path)
 }
 
 // Handler routes hub endpoints and mounts every runtime under /rt/{id}/. Auth,
@@ -584,7 +584,7 @@ func (h *Hub) publish(rt *Runtime) {
 // spelled more than one way, so compare them canonically — binding a second
 // writer to one transcript is what forks a recovery branch on every save.
 func (h *Hub) findSession(path string) *Runtime {
-	path = agent.CanonicalSessionPath(strings.TrimSpace(path))
+	path = sessionstore.CanonicalSessionPath(strings.TrimSpace(path))
 	if path == "" {
 		return nil
 	}
@@ -594,7 +594,7 @@ func (h *Hub) findSession(path string) *Runtime {
 		rt := h.runtimes[id]
 		// A remote transcript names a file on another machine: it cannot
 		// collide with a local one, and deduplicating it is that kernel's job.
-		if rt != nil && rt.remote == nil && agent.CanonicalSessionPath(rt.Server.Controller().SessionPath()) == path {
+		if rt != nil && rt.remote == nil && sessionstore.CanonicalSessionPath(rt.Server.Controller().SessionPath()) == path {
 			return rt
 		}
 	}

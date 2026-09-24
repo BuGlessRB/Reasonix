@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"runtime"
 	"slices"
@@ -202,7 +203,7 @@ model = "x"
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	past := agent.NewSession("")
+	past := sessionstore.NewSession("")
 	past.Add(provider.Message{Role: provider.RoleUser, Content: "Should the history layer use vector embeddings?"})
 	past.Add(provider.Message{Role: provider.RoleAssistant, Content: "Decision: port lightweight BM25 history retrieval without a vector database."})
 	if err := past.Save(filepath.Join(sessionDir, "past.jsonl")); err != nil {
@@ -496,7 +497,7 @@ model = "x"
 		t.Fatalf("Build: %v", err)
 	}
 	defer ctrl.Close()
-	sessionPath := agent.NewSessionPath(ctrl.SessionDir(), ctrl.Label())
+	sessionPath := sessionstore.NewSessionPath(ctrl.SessionDir(), ctrl.Label())
 	ctrl.SetSessionPath(sessionPath)
 
 	if err := ctrl.Run(context.Background(), "first review"); err != nil {
@@ -513,13 +514,13 @@ model = "x"
 	if err != nil {
 		t.Fatalf("LoadMeta: %v", err)
 	}
-	if meta.Status != agent.SubagentFailed {
+	if meta.Status != sessionstore.SubagentFailed {
 		t.Fatalf("status = %q, want failed", meta.Status)
 	}
-	if meta.ParentSession != agent.BranchID(sessionPath) {
-		t.Fatalf("parent session = %q, want %q", meta.ParentSession, agent.BranchID(sessionPath))
+	if meta.ParentSession != sessionstore.BranchID(sessionPath) {
+		t.Fatalf("parent session = %q, want %q", meta.ParentSession, sessionstore.BranchID(sessionPath))
 	}
-	sess, err := agent.LoadSession(filepath.Join(config.SessionDir(), "subagents", ref+".jsonl"))
+	sess, err := sessionstore.LoadSession(filepath.Join(config.SessionDir(), "subagents", ref+".jsonl"))
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
@@ -556,7 +557,7 @@ model = "x"
 		t.Fatalf("Build: %v", err)
 	}
 	defer ctrl.Close()
-	sessionPath := agent.NewSessionPath(ctrl.SessionDir(), ctrl.Label())
+	sessionPath := sessionstore.NewSessionPath(ctrl.SessionDir(), ctrl.Label())
 	ctrl.SetSessionPath(sessionPath)
 
 	if err := ctrl.Run(context.Background(), "first review"); err != nil {
@@ -569,8 +570,8 @@ model = "x"
 	if err != nil {
 		t.Fatalf("LoadMeta from override dir: %v", err)
 	}
-	if meta.ParentSession != agent.BranchID(sessionPath) {
-		t.Fatalf("parent session = %q, want %q", meta.ParentSession, agent.BranchID(sessionPath))
+	if meta.ParentSession != sessionstore.BranchID(sessionPath) {
+		t.Fatalf("parent session = %q, want %q", meta.ParentSession, sessionstore.BranchID(sessionPath))
 	}
 	if _, err := os.Stat(filepath.Join(config.SessionDir(), "subagents", ref+".meta.json")); !os.IsNotExist(err) {
 		t.Fatalf("subagent metadata should not be written to global session dir, stat err = %v", err)
@@ -855,7 +856,7 @@ model = "x"
 		t.Fatalf("Build: %v", err)
 	}
 	defer ctrl.Close()
-	ctrl.SetSessionPath(agent.NewSessionPath(ctrl.SessionDir(), ctrl.Label()))
+	ctrl.SetSessionPath(sessionstore.NewSessionPath(ctrl.SessionDir(), ctrl.Label()))
 
 	if err := ctrl.Run(context.Background(), "first review"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -3731,7 +3732,7 @@ func TestBuildSkipsLegacySessionMigrationWhenIsolated(t *testing.T) {
 
 	slug := config.WorkspaceSlug(proj)
 	legacyProjectDir := filepath.Join(legacyRoot, "projects", slug, "sessions")
-	session := agent.NewSession("")
+	session := sessionstore.NewSession("")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "hello from old project session"})
 	if err := session.Save(filepath.Join(legacyProjectDir, "project-chat.jsonl")); err != nil {
 		t.Fatalf("save legacy project session: %v", err)

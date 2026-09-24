@@ -2,28 +2,28 @@ package cli
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/base/i18n"
-	"reasonix/internal/runtime/agent"
 )
 
 // mostRecentSession returns the chronologically newest saved session for
 // --continue. Interactive resume surfaces deliberately group recovery families
 // and prefer visible leaves, but --continue promises the most recent session and
 // must not let that presentation ordering select an older recovery copy.
-func mostRecentSession(dir string) (agent.SessionInfo, bool) {
+func mostRecentSession(dir string) (sessionstore.SessionInfo, bool) {
 	if dir == "" {
-		return agent.SessionInfo{}, false
+		return sessionstore.SessionInfo{}, false
 	}
-	sessions, err := agent.ListSessions(dir)
+	sessions, err := sessionstore.ListSessions(dir)
 	if err != nil || len(sessions) == 0 {
-		return agent.SessionInfo{}, false
+		return sessionstore.SessionInfo{}, false
 	}
 	return sessions[0], true
 }
 
-func recoverySessionBadge(s agent.SessionInfo) string {
+func recoverySessionBadge(s sessionstore.SessionInfo) string {
 	if !s.Recovered {
 		return ""
 	}

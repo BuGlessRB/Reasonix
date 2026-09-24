@@ -2,6 +2,7 @@ package agent
 
 import (
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"time"
 )
 
@@ -9,10 +10,10 @@ import (
 // failure does — the transcript is as worth keeping when work is cut short as
 // when it goes wrong — and differs only in what it says happened.
 func (s *SubagentStore) SaveCancelled(run *SubagentRun, reason string) error {
-	return s.saveTerminal(run, SubagentCancelled, reason)
+	return s.saveTerminal(run, sessionstore.SubagentCancelled, reason)
 }
 
-func (s *SubagentStore) saveTerminal(run *SubagentRun, status SubagentStatus, reason string) error {
+func (s *SubagentStore) saveTerminal(run *SubagentRun, status sessionstore.SubagentStatus, reason string) error {
 	if s == nil || run == nil || run.Ref == "" {
 		return nil
 	}

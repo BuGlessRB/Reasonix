@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func goTestFailure() string {
 // is invisible to the pass after next and the model silently stops seeing it.
 func TestRecordedFailureSurvivesRepeatedCompaction(t *testing.T) {
 	bulk := strings.Repeat("work output line with detail. ", 250)
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 	}}

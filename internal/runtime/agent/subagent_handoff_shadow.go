@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/event"
@@ -18,7 +19,7 @@ import (
 // a single defer so every exit path is counted the same: a salvage, a review
 // failure and a clean answer are all runs that either submitted a report or
 // did not.
-func observeSubagentHandoff(sink event.Sink, sub *Agent, sess *Session, opts Options, answer string, runErr error) {
+func observeSubagentHandoff(sink event.Sink, sub *Agent, sess *sessionstore.Session, opts Options, answer string, runErr error) {
 	if sub == nil || sess == nil {
 		return
 	}

@@ -3,11 +3,11 @@ package serve
 import (
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -18,7 +18,7 @@ import (
 func TestRemoveSessionFilesHidesSessionWhenAnArtifactIsHeld(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	s := agent.NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "delete me"})
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("SaveSnapshot: %v", err)
@@ -41,10 +41,10 @@ func TestRemoveSessionFilesHidesSessionWhenAnArtifactIsHeld(t *testing.T) {
 
 	// Gone from every surface that lists or resumes, and marked so the next
 	// start finishes sweeping what is still held.
-	if agent.IsVisibleSession(path) {
+	if sessionstore.IsVisibleSession(path) {
 		t.Error("session is still visible after being deleted")
 	}
-	if !agent.IsCleanupPending(path) {
+	if !sessionstore.IsCleanupPending(path) {
 		t.Error("no cleanup marker left, so the held artifacts would never be swept")
 	}
 	if _, err := os.Stat(stuck); err != nil {
@@ -59,7 +59,7 @@ func TestRemoveSessionFilesHidesSessionWhenAnArtifactIsHeld(t *testing.T) {
 	if err := removeSessionFiles(dir, path); err != nil {
 		t.Fatalf("second sweep: %v", err)
 	}
-	if agent.IsCleanupPending(path) {
+	if sessionstore.IsCleanupPending(path) {
 		t.Error("cleanup marker survived a sweep that had nothing left to remove")
 	}
 	for _, p := range append([]string{path}, store.SessionSidecarFiles(path)...) {
@@ -74,7 +74,7 @@ func TestRemoveSessionFilesHidesSessionWhenAnArtifactIsHeld(t *testing.T) {
 func TestRemoveSessionFilesIsAllOrHidden(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	s := agent.NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "keep me"})
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("SaveSnapshot: %v", err)
@@ -82,7 +82,7 @@ func TestRemoveSessionFilesIsAllOrHidden(t *testing.T) {
 	if err := removeSessionFiles(dir, path); err != nil {
 		t.Fatalf("removeSessionFiles: %v", err)
 	}
-	if agent.IsCleanupPending(path) {
+	if sessionstore.IsCleanupPending(path) {
 		t.Error("a clean delete must not leave a cleanup marker behind")
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {

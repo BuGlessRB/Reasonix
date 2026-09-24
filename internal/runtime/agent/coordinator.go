@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"time"
 
@@ -78,8 +79,6 @@ complete answer in its reason field, which the host delivers directly instead of
 starting the executor. Never conclude that way when any workspace change,
 command, verification, or follow-up action remains.`
 
-const executorHandoffMarker = "Reasonix executor handoff"
-
 // plannerFallbackNotice is shown when the planner fails and the turn degrades
 // to executor-only instead of failing outright.
 const plannerFallbackNotice = "Planner failed; continuing this turn with the executor only."
@@ -109,7 +108,7 @@ func PlannerPromptWithContext(context string) string {
 // neither model's prefix is disturbed by the other's turns.
 type Coordinator struct {
 	planner         provider.Provider
-	plannerSess     *Session
+	plannerSess     *sessionstore.Session
 	plannerSystem   string
 	plannerPricing  *provider.Pricing
 	plannerModelRef string
@@ -128,7 +127,7 @@ type Coordinator struct {
 // sink receives the planner's phase/text/usage events; the executor emits its
 // own events to its own sink (the CLI wires the same sink into both). A nil
 // sink is replaced with event.Discard.
-func NewCoordinator(planner provider.Provider, plannerSession *Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, shouldPlan func(context.Context, string) bool) *Coordinator {
+func NewCoordinator(planner provider.Provider, plannerSession *sessionstore.Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, shouldPlan func(context.Context, string) bool) *Coordinator {
 	var policy PlannerPolicy
 	if shouldPlan != nil {
 		policy = func(ctx context.Context, input string) PlannerDecision {
@@ -144,16 +143,16 @@ func NewCoordinator(planner provider.Provider, plannerSession *Session, plannerP
 // NewCoordinatorWithPlannerPolicy wires the structured deterministic planner
 // router used by the product boot path. NewCoordinator remains as a compatibility
 // adapter for direct callers and older tests that still provide a bool gate.
-func NewCoordinatorWithPlannerPolicy(planner provider.Provider, plannerSession *Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, policy PlannerPolicy) *Coordinator {
+func NewCoordinatorWithPlannerPolicy(planner provider.Provider, plannerSession *sessionstore.Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, policy PlannerPolicy) *Coordinator {
 	return newCoordinator(planner, plannerSession, plannerPricing, plannerTools, plannerOptions, executor, temperature, sink, policy)
 }
 
-func newCoordinator(planner provider.Provider, plannerSession *Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, policy PlannerPolicy) *Coordinator {
+func newCoordinator(planner provider.Provider, plannerSession *sessionstore.Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, policy PlannerPolicy) *Coordinator {
 	if nilutil.IsNil(sink) {
 		sink = event.Discard
 	}
 	if plannerSession == nil {
-		plannerSession = NewSession("")
+		plannerSession = sessionstore.NewSession("")
 	}
 	plannerSystem := sessionSystemPrompt(plannerSession)
 	var plannerAgent *Agent
@@ -180,7 +179,7 @@ func newCoordinator(planner provider.Provider, plannerSession *Session, plannerP
 	}
 }
 
-func sessionSystemPrompt(s *Session) string {
+func sessionSystemPrompt(s *sessionstore.Session) string {
 	if s == nil {
 		return ""
 	}
@@ -204,7 +203,7 @@ func (c *Coordinator) ResetPlannerSession() {
 	if system == "" {
 		system = sessionSystemPrompt(c.plannerSess)
 	}
-	next := NewSession(system)
+	next := sessionstore.NewSession(system)
 	c.plannerSess = next
 	if c.plannerAgent != nil {
 		c.plannerAgent.SetSession(next)
@@ -707,7 +706,7 @@ Executor instructions:
 - If a target path is outside the writable workspace or otherwise blocked, explain that specific blocker and ask for the needed path/approval.
 - **Serial workflow**: establish the task list with one todo_write (first sub-task in_progress), then for EACH sub-task execute it and call complete_step with evidence. The host advances the list for you — it marks the sub-task completed and moves the next to in_progress, so you don't need another todo_write to mark completions. Sign off one sub-task at a time; never batch completions.
 
-Carry out the task, adapting the plan as needed.`, executorHandoffMarker, task, plan, toolBlock, decision.Depth)
+Carry out the task, adapting the plan as needed.`, sessionstore.ExecutorHandoffMarker, task, plan, toolBlock, decision.Depth)
 }
 
 // executorToolHandoffContext counters planner "tool unavailable" hallucinations
@@ -756,30 +755,6 @@ func boundedToolNames(names []string, max int) string {
 		return strings.Join(names, ", ")
 	}
 	return fmt.Sprintf("%s, ... +%d more", strings.Join(names[:max], ", "), len(names)-max)
-}
-
-// HandoffTask returns the original user task embedded in an executor handoff
-// message, or s unchanged when it is not one. Session previews and auto-titles
-// use it so dual-model sessions surface the user's words, not the handoff
-// boilerplate (#3860).
-func HandoffTask(s string) string {
-	trimmed := strings.TrimSpace(s)
-	if !strings.HasPrefix(trimmed, "# "+executorHandoffMarker) {
-		return s
-	}
-	const header = "Original task:\n"
-	_, after, ok := strings.Cut(trimmed, header)
-	if !ok {
-		return s
-	}
-	rest := after
-	if j := strings.Index(rest, "\n\nPlanner output:"); j >= 0 {
-		rest = rest[:j]
-	}
-	if task := strings.TrimSpace(rest); task != "" {
-		return task
-	}
-	return s
 }
 
 // SetAsker gives both models the host's question surface. The planner needs it

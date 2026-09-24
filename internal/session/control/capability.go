@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/config"
@@ -14,9 +15,9 @@ func (c *Controller) withCapabilityRoute(ctx context.Context, composed, routeInp
 	if c == nil {
 		return composed
 	}
-	routeInput = strings.TrimSpace(agent.StripTransientUserBlocks(routeInput))
+	routeInput = strings.TrimSpace(sessionstore.StripTransientUserBlocks(routeInput))
 	if routeInput == "" {
-		routeInput = strings.TrimSpace(agent.StripTransientUserBlocks(composed))
+		routeInput = strings.TrimSpace(sessionstore.StripTransientUserBlocks(composed))
 	}
 	if routeInput == "" {
 		return composed

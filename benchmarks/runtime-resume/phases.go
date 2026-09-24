@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"time"
 
 	"reasonix/internal/runtime/agent"
@@ -102,7 +103,7 @@ func rewindTurn(root armRoot, arm, bootSystem string, ctrl *control.Controller, 
 // system row is never persisted, so the restart would read the arm's work back.
 func turnBelowFold(ctrl *control.Controller, points []checkpoint.Meta) (int, error) {
 	covered := 0
-	if st, ok, _ := agent.LoadCompactionState(ctrl.SessionPath()); ok {
+	if st, ok, _ := sessionstore.LoadCompactionState(ctrl.SessionPath()); ok {
 		covered = st.Projection.CoveredCount
 	}
 	target := -1
@@ -286,7 +287,7 @@ func runSuccessor(dir, arm string) error {
 	}
 	defer ctrl.Close()
 	bootSystem := bootSystemText(ctrl)
-	session, err := agent.LoadSession(before.SessionPath)
+	session, err := sessionstore.LoadSession(before.SessionPath)
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
@@ -321,7 +322,7 @@ func runResume(dir, arm string) error {
 	defer ctrl.Close()
 
 	bootSystem := bootSystemText(ctrl)
-	session, err := agent.LoadSession(before.SessionPath)
+	session, err := sessionstore.LoadSession(before.SessionPath)
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}

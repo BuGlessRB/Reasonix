@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -44,7 +45,7 @@ func TestToolResultImagesBypassTruncation(t *testing.T) {
 		{toolCallChunk("c1", "shot", `{}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	if err := a.Run(context.Background(), "take a screenshot"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -85,7 +86,7 @@ func TestFailedToolResultKeepsItsImages(t *testing.T) {
 		{toolCallChunk("c1", "shot", `{}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	if err := a.Run(context.Background(), "click the button"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -115,7 +116,7 @@ func TestToolResultEventCarriesWhatTheCallShowed(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 	sink := &recordSink{}
-	a := New(prov, reg, NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, sink)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, sink)
 	if err := a.Run(context.Background(), "take a screenshot"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

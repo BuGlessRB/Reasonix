@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -96,7 +97,7 @@ func TestPlanModeRoutesOrdinaryToolsThroughPermissionGate(t *testing.T) {
 			reg := tool.NewRegistry()
 			reg.Add(tc.tool)
 			gate := &recordingPermissionGate{allow: true}
-			a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+			a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 			a.SetPlanMode(true)
 
 			out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: tc.tool.Name(), Arguments: tc.args})
@@ -119,7 +120,7 @@ func TestPermissionDenialStopsWriterBeforeExecution(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "write_file", calls: &executions, writesPaths: true})
 	gate := &recordingPermissionGate{reason: "denied by permission rule"}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "write_file"})
 	if !out.blocked || !strings.Contains(out.output, gate.reason) || out.errMsg == "" {
@@ -143,7 +144,7 @@ func TestAuthorizedMCPUsesInstallAuthorizationAndExplicitDenyOnly(t *testing.T) 
 	// The ordinary writer fallback would deny, but an authorized MCP server must
 	// not re-enter that per-call approval path.
 	gate := &recordingPermissionGate{allow: false, reason: "ordinary ask declined"}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "mcp__srv__write"})
 	if out.blocked || out.errMsg != "" || executions != 1 || len(gate.calls) != 0 || len(gate.denyCalls) != 1 {
 		t.Fatalf("authorized MCP outcome=%+v gate=%+v executions=%d", out, gate, executions)
@@ -161,7 +162,7 @@ func TestPlanModeUnsafePhaseToolStopsBeforePermission(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(planSafeTool{fakeTool: fakeTool{name: "complete_step", readOnly: true, calls: &executions}, planSafe: false})
 	gate := &recordingPermissionGate{allow: true}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "complete_step"})
@@ -177,7 +178,7 @@ func TestPlanModeSafeWriterStillUsesWriterPermission(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(planSafeTool{fakeTool: fakeTool{name: "phase_safe_writer"}, planSafe: true})
 	gate := &recordingPermissionGate{allow: true}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "phase_safe_writer"})
@@ -198,7 +199,7 @@ func TestBashWaitsForApprovalThenReachesOrdinaryPermission(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "bash"})
 	gate := &recordingPermissionGate{allow: true}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 
 	a.SetPlanMode(true)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "bash", Arguments: command})
@@ -236,7 +237,7 @@ func TestPlanningPhaseStopsWritersBeforePermission(t *testing.T) {
 			reg := tool.NewRegistry()
 			reg.Add(tc.tool)
 			gate := &recordingPermissionGate{allow: true}
-			a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+			a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 
 			a.SetPlanMode(true)
 			out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: tc.tool.Name(), Arguments: tc.args})
@@ -265,7 +266,7 @@ func TestPlanningPhaseStopsWritersBeforePermission(t *testing.T) {
 func TestPlanningPhaseSplitsDelegationByWriterCapability(t *testing.T) {
 	task := &TaskTool{}
 	reg := tool.NewRegistry()
-	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	a.SetPlanMode(true)
 
 	blocked := map[string]bool{}
@@ -315,7 +316,7 @@ func TestPlanningPhaseSplitsDelegationByWriterCapability(t *testing.T) {
 func TestPlanModeCanReplacePriorExecutionTodoState(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(mustBuiltinTool(t, "todo_write"))
-	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	recoveryGate := &recordingRecoveryGate{decision: RecoveryDecision{Allow: true}}
 	a.SetRecoveryGate(recoveryGate)
 	a.SeedTodoState([]evidence.TodoItem{{Content: "old execution step", Status: "in_progress"}})
@@ -353,7 +354,7 @@ func TestPlanModeDoesNotMutateSystemOrTools(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	reg.Add(fakeTool{name: "write_file", writesPaths: true})
-	a := New(prov, reg, NewSession("STABLE-SYS"), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession("STABLE-SYS"), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "explore"); err != nil {
 		t.Fatalf("standard Run: %v", err)
@@ -396,7 +397,7 @@ func TestUnauthorizedMCPReaderBlockedInMainPlanAndExcludedFromReadOnlyAgents(t *
 		serverAuthorized: false,
 	})
 	gate := &recordingPermissionGate{allow: true}
-	a := New(nil, parent, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, parent, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "mcp__srv__query"})
@@ -421,7 +422,7 @@ func TestPlanModeMCPWriterIsHardBlockedBeforePermission(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(annotatedMCPTool{fakeTool: fakeTool{name: "mcp__srv__write"}, server: "srv", raw: "write"})
 	gate := &mcpPermissionRecordingGate{allowNormal: true}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "mcp__srv__write"})
@@ -439,7 +440,7 @@ func TestPlanModeMCPWriterHonorsPermissionDenial(t *testing.T) {
 		raw:      "write",
 	})
 	gate := &mcpPermissionRecordingGate{reason: "denied by policy"}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "mcp__srv__write"})
@@ -457,7 +458,7 @@ func TestDestructiveMCPUsesFreshApprovalInPlanEvenWhenReadOnly(t *testing.T) {
 		destructive: true,
 	})
 	gate := &mcpPermissionRecordingGate{allowNormal: true}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "mcp__srv__danger"})
@@ -475,7 +476,7 @@ func TestDestructiveMCPFailsClosedWithoutFreshApprovalGate(t *testing.T) {
 		destructive: true,
 	})
 	ordinary := &recordingPermissionGate{allow: true}
-	a := New(nil, reg, NewSession(""), Options{Gate: ordinary}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: ordinary}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "mcp__srv__danger"})
@@ -491,7 +492,7 @@ func TestPlanModeOffStillUsesSamePermissionGate(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "write_file", writesPaths: true})
 	gate := &recordingPermissionGate{allow: true}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: gate}, event.Discard)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "write_file"})
 	if out.blocked || len(gate.calls) != 1 {
@@ -510,7 +511,7 @@ func TestRunSubAgentWithSessionInheritsPlanWorkflow(t *testing.T) {
 		{toolCallChunk("phase", "complete_step", `{}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "Plan ready."}, {Type: provider.ChunkDone}},
 	}}
-	sess := NewSession("CHILD-SYSTEM")
+	sess := sessionstore.NewSession("CHILD-SYSTEM")
 	ctx := WithToolCallContext(context.Background(), "parent", event.Discard, nil, true)
 	answer, err := RunSubAgentWithSession(ctx, prov, reg, sess, "inspect the change", Options{}, event.Discard)
 	if err != nil {
@@ -604,7 +605,7 @@ func TestPlanPhaseGateRunsBeforeResolvedCommit(t *testing.T) {
 				target:    tc.target,
 				committed: &committed,
 			})
-			a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+			a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 			a.SetPlanMode(true)
 
 			out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
@@ -624,7 +625,7 @@ func TestPlanPhaseGateRunsBeforeResolvedCommit(t *testing.T) {
 // exists for the day a new pre-execution path forgets the gate, and a backstop
 // nobody ever exercised is not one.
 func TestPlanPhaseAssertionRefusesAnUnadmittedCall(t *testing.T) {
-	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 
 	a.SetPlanMode(true)
 	out, blocked := a.assertPlanPhaseAdmitted(&toolCallPlan{})
@@ -661,7 +662,7 @@ func TestStaleAuthorityCallsAreRefusedAcrossATransition(t *testing.T) {
 	var executions int32
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "write_file", writesPaths: true, calls: &executions})
-	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	a.SetPlanMode(true)
 	born := a.PlanState()
 	if born.Phase != planmode.Planning {
@@ -703,7 +704,7 @@ func TestEnteringThePlanWorkflowDoesNotInvalidateWorkInFlight(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true, calls: &reads})
 	reg.Add(fakeTool{name: "write_file", writesPaths: true, calls: &writes})
-	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 
 	born := a.PlanState()
 	a.SetPlanMode(true)

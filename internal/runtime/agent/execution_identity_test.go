@@ -1,6 +1,9 @@
 package agent
 
-import "testing"
+import (
+	"reasonix/internal/state/sessionstore"
+	"testing"
+)
 
 // The six shapes a stored child can arrive in, and what each one may be joined
 // on. Reads are lenient about records written before executions were named
@@ -16,21 +19,21 @@ func TestResolveExecutionIdentityIsEvidenceDriven(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name       string
-		meta       SubagentMeta
+		meta       sessionstore.SubagentMeta
 		journal    func(string) bool
 		wantID     string
 		wantSource string
 	}{
 		{
 			name:       "a delegated run names its own execution",
-			meta:       SubagentMeta{ExecutionID: "call-1/sub-1", ParentToolCallID: "call-1/sub-1"},
+			meta:       sessionstore.SubagentMeta{ExecutionID: "call-1/sub-1", ParentToolCallID: "call-1/sub-1"},
 			journal:    opened("call-1/sub-1"),
 			wantID:     "call-1/sub-1",
 			wantSource: ExecutionRecorded,
 		},
 		{
 			name:       "a host-started run names one with no parent call",
-			meta:       SubagentMeta{ExecutionID: "host-abc"},
+			meta:       sessionstore.SubagentMeta{ExecutionID: "host-abc"},
 			journal:    opened("host-abc"),
 			wantID:     "host-abc",
 			wantSource: ExecutionRecorded,
@@ -40,7 +43,7 @@ func TestResolveExecutionIdentityIsEvidenceDriven(t *testing.T) {
 			// shows it: a parent id alone proves only what that writer meant by
 			// lineage.
 			name:       "a legacy record whose parent the journal also opened",
-			meta:       SubagentMeta{ParentToolCallID: "call-1/sub-1"},
+			meta:       sessionstore.SubagentMeta{ParentToolCallID: "call-1/sub-1"},
 			journal:    opened("call-1/sub-1"),
 			wantID:     "call-1/sub-1",
 			wantSource: ExecutionLegacyConfirmed,
@@ -50,19 +53,19 @@ func TestResolveExecutionIdentityIsEvidenceDriven(t *testing.T) {
 			// node in the journal. A prefix rule would have joined these two,
 			// and it would have been wrong.
 			name:       "a legacy record whose parent names no execution",
-			meta:       SubagentMeta{ParentToolCallID: "call-1"},
+			meta:       sessionstore.SubagentMeta{ParentToolCallID: "call-1"},
 			journal:    opened("call-1/sub-1"),
 			wantSource: ExecutionUnknown,
 		},
 		{
 			name:       "a legacy host record, which never had an execution to name",
-			meta:       SubagentMeta{},
+			meta:       sessionstore.SubagentMeta{},
 			journal:    opened("call-1/sub-1"),
 			wantSource: ExecutionUnknown,
 		},
 		{
 			name:       "no journal to confirm anything",
-			meta:       SubagentMeta{ParentToolCallID: "call-1/sub-1"},
+			meta:       sessionstore.SubagentMeta{ParentToolCallID: "call-1/sub-1"},
 			journal:    nil,
 			wantSource: ExecutionUnknown,
 		},

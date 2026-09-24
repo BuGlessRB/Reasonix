@@ -6,12 +6,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -27,7 +27,7 @@ func TestSessionsListReadsSidecarsNotTranscripts(t *testing.T) {
 		filepath.Join(dir, "20260101-000002-model.jsonl"),
 	}
 	for i, path := range paths {
-		s := agent.NewSession("system")
+		s := sessionstore.NewSession("system")
 		s.Add(provider.Message{Role: provider.RoleUser, Content: "first prompt"})
 		if i == 1 {
 			s.Add(provider.Message{Role: provider.RoleAssistant, Content: "reply"})

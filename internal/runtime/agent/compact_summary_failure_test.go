@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"testing"
@@ -16,7 +17,7 @@ import (
 
 // foldableSessionOverForce builds a transcript whose bulk is assistant text, so
 // the free prune pass cannot reclaim it and Prepare must reach the summarizer.
-func foldableSessionOverForce(turns int) *Session {
+func foldableSessionOverForce(turns int) *sessionstore.Session {
 	big := strings.Repeat("word ", 400)
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
@@ -28,10 +29,10 @@ func foldableSessionOverForce(turns int) *Session {
 			provider.Message{Role: provider.RoleUser, Content: "continue"},
 		)
 	}
-	return &Session{Messages: msgs}
+	return &sessionstore.Session{Messages: msgs}
 }
 
-func agentOverForce(t *testing.T, prov provider.Provider, sess *Session) *Agent {
+func agentOverForce(t *testing.T, prov provider.Provider, sess *sessionstore.Session) *Agent {
 	t.Helper()
 	return agentOverForceWindow(t, prov, sess, 5000)
 }
@@ -39,7 +40,7 @@ func agentOverForce(t *testing.T, prov provider.Provider, sess *Session) *Agent 
 // agentOverForceWindow sits the session above the force ratio. A folded
 // transcript lands back under the trigger, so a blocked turn can only mean the
 // fold itself failed.
-func agentOverForceWindow(t *testing.T, prov provider.Provider, sess *Session, window int) *Agent {
+func agentOverForceWindow(t *testing.T, prov provider.Provider, sess *sessionstore.Session, window int) *Agent {
 	t.Helper()
 	return New(prov, tool.NewRegistry(), sess, Options{
 		ContextWindow: window,
@@ -65,7 +66,7 @@ func prepareContext(ctx context.Context, a *Agent, trigger string) error {
 
 // foldRegionOf is the region the next compaction would hand the summarizer.
 func foldRegionOf(a *Agent) []provider.Message {
-	canonical, version := a.sess.conversation.snapshotMessagesVersion()
+	canonical, version := a.sess.conversation.SnapshotMessagesVersion()
 	msgs, _ := a.visibleInputForFold(a.sess.compactionState, canonical, version)
 	head, start, ok, _ := a.planFoldRegion(msgs, false)
 	if !ok {
@@ -87,7 +88,7 @@ func latestDigest(msgs []provider.Message) string {
 
 // projectionTokens reports what the model would actually see.
 func projectionTokens(a *Agent) int {
-	msgs, _ := a.sess.conversation.snapshotMessagesVersion()
+	msgs, _ := a.sess.conversation.SnapshotMessagesVersion()
 	return a.estimatedPromptTokens(provider.ModelMessages(modelVisibleFromProjection(a.sess.compactionState.Projection, msgs)))
 }
 

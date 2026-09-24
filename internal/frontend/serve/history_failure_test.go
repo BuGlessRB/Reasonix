@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/provider"
@@ -54,7 +55,7 @@ func TestHistoryLeavesASuccessUnmarked(t *testing.T) {
 // showed the user saying the host's mid-turn instructions to themselves.
 func TestHistoryShowsAStoredSteerAsWhatWasTyped(t *testing.T) {
 	stored := agent.WorkspaceBlock(`D:\Somewhere`, "git") + "\n\n" +
-		agent.MidTurnSteerPrefix + "\n" + "最后再报一下今天的日期"
+		sessionstore.MidTurnSteerPrefix + "\n" + "最后再报一下今天的日期"
 	out := historyMessages([]provider.Message{{Role: provider.RoleUser, Content: stored}})
 	if len(out) != 1 {
 		t.Fatalf("history = %d messages, want 1", len(out))
@@ -74,7 +75,7 @@ func TestHistoryShowsAStoredSteerAsWhatWasTyped(t *testing.T) {
 // person's would have them reading their own words for something they never
 // said, which is the one place that mistake is unrecoverable.
 func TestHistoryDoesNotCreditTheHostsOwnSteerToThePerson(t *testing.T) {
-	stored := agent.HostNoticePrefix + "\n" + "a background job finished"
+	stored := sessionstore.HostNoticePrefix + "\n" + "a background job finished"
 	out := historyMessages([]provider.Message{{Role: provider.RoleUser, Content: stored}})
 	if !out[0].HostAuthored {
 		t.Errorf("host steer = %+v, want it attributed to the host", out[0])

@@ -3,9 +3,9 @@ package control
 import (
 	"context"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/agent"
 )
 
 // BindSessionWriteAuthority issues a generation-bound write authority from
@@ -13,11 +13,11 @@ import (
 // call this after acquiring a lease and before entering Ready / Submit /
 // autosave / tab publication. A nil lease clears the bound authority so later
 // saves fail closed rather than forking recovery under a released lease.
-func (c *Controller) BindSessionWriteAuthority(lease *agent.SessionLease) error {
+func (c *Controller) BindSessionWriteAuthority(lease *sessionstore.SessionLease) error {
 	if c == nil {
 		return nil
 	}
-	gen := agent.NextSessionWriteGeneration()
+	gen := sessionstore.NextSessionWriteGeneration()
 	if c.executor == nil {
 		return nil
 	}
@@ -75,18 +75,18 @@ func (c *Controller) ensureWriteAuthorityReady() error {
 	auth := sess.WriteAuthority()
 	if auth == nil {
 		if sess.WriteAuthorityRequired() {
-			return agent.ErrSessionWriteAuthorityMissing
+			return sessionstore.ErrSessionWriteAuthorityMissing
 		}
 		return nil
 	}
 	if auth.Covers(path) {
 		return nil
 	}
-	return agent.ErrSessionWriteAuthorityStale
+	return sessionstore.ErrSessionWriteAuthorityStale
 }
 
 // authoritySaveError classifies authority failures so recovery does not fire.
 func authoritySaveError(err error) bool {
-	return errors.Is(err, agent.ErrSessionWriteAuthorityMissing) ||
-		errors.Is(err, agent.ErrSessionWriteAuthorityStale)
+	return errors.Is(err, sessionstore.ErrSessionWriteAuthorityMissing) ||
+		errors.Is(err, sessionstore.ErrSessionWriteAuthorityStale)
 }

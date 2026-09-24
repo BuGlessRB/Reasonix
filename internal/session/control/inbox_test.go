@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 	"time"
@@ -235,7 +236,7 @@ func (p *inboxSteerProvider) Stream(ctx context.Context, req provider.Request) (
 func TestThirtySteersApplyAndAckExactlyOnce(t *testing.T) {
 	dir := testenv.TempDir(t)
 	prov := &inboxSteerProvider{started: make(chan struct{}), release: make(chan struct{})}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(prov, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	sink, done, _ := collectSink()
 	c := New(Options{
@@ -336,7 +337,7 @@ func TestSubmitInboxUsesFrozenReferenceWithoutLiveReresolve(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessionPath := filepath.Join(dir, "s.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	sink, done, _ := collectSink()
 	c := New(Options{
@@ -398,7 +399,7 @@ func TestInboxFreezesTypedDirectoryAndPathInstructions(t *testing.T) {
 		}
 	}
 	sessionPath := filepath.Join(dir, "s.jsonl")
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	sink, done, _ := collectSink()
 	c := New(Options{
@@ -453,7 +454,7 @@ func TestInboxUsesFrozenImageBytesAfterWorkspaceChanges(t *testing.T) {
 		{Type: provider.ChunkText, Text: "done"},
 		{Type: provider.ChunkDone},
 	}}}
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(prov, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	sink, done, _ := collectSink()
 	c := New(Options{

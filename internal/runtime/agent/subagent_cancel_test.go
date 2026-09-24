@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -31,15 +32,15 @@ func cancelTestRun(t *testing.T) (*SubagentStore, *SubagentRun) {
 func TestRunTerminalClassifiesWhatHappened(t *testing.T) {
 	for name, tc := range map[string]struct {
 		runErr     error
-		wantStatus SubagentStatus
+		wantStatus sessionstore.SubagentStatus
 		wantReason string
 	}{
-		"succeeded":          {nil, SubagentCompleted, ""},
-		"cancelled":          {context.Canceled, SubagentCancelled, TerminalCancelled},
-		"deadline expired":   {context.DeadlineExceeded, SubagentCancelled, TerminalDeadline},
-		"wrapped cancel":     {fmt.Errorf("child run: %w", context.Canceled), SubagentCancelled, TerminalCancelled},
-		"ordinary failure":   {errors.New("the tool refused"), SubagentFailed, ""},
-		"failure mentioning": {errors.New("context canceled by the remote"), SubagentFailed, ""},
+		"succeeded":          {nil, sessionstore.SubagentCompleted, ""},
+		"cancelled":          {context.Canceled, sessionstore.SubagentCancelled, sessionstore.TerminalCancelled},
+		"deadline expired":   {context.DeadlineExceeded, sessionstore.SubagentCancelled, sessionstore.TerminalDeadline},
+		"wrapped cancel":     {fmt.Errorf("child run: %w", context.Canceled), sessionstore.SubagentCancelled, sessionstore.TerminalCancelled},
+		"ordinary failure":   {errors.New("the tool refused"), sessionstore.SubagentFailed, ""},
+		"failure mentioning": {errors.New("context canceled by the remote"), sessionstore.SubagentFailed, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			store, run := cancelTestRun(t)
@@ -79,7 +80,7 @@ func TestSaveFailedCannotSeeACancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load meta: %v", err)
 	}
-	if meta.Status != SubagentFailed || meta.TerminalReason != "" {
+	if meta.Status != sessionstore.SubagentFailed || meta.TerminalReason != "" {
 		t.Fatalf("status=%q reason=%q, want failed with no reason", meta.Status, meta.TerminalReason)
 	}
 }
@@ -93,7 +94,7 @@ func TestCancelledRunKeepsItsTranscript(t *testing.T) {
 	if err := task.saveRunTerminal(run, context.Canceled); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	if _, err := LoadSession(store.sessionPath(run.Ref)); err != nil {
+	if _, err := sessionstore.LoadSession(store.sessionPath(run.Ref)); err != nil {
 		t.Fatalf("cancelled run left no readable transcript: %v", err)
 	}
 }

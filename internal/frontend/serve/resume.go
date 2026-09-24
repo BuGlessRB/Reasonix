@@ -13,9 +13,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/store"
 )
@@ -65,7 +65,7 @@ func (s *Server) resumeInto(path string) (int, error) {
 	if realPath == realDir || !strings.HasPrefix(realPath, realDir+string(os.PathSeparator)) {
 		return http.StatusForbidden, refusal(http.StatusForbidden, codeSessionOutside, errors.New("path outside session dir"), nil)
 	}
-	if agent.IsCleanupPending(realPath) {
+	if sessionstore.IsCleanupPending(realPath) {
 		return http.StatusBadRequest, refusal(http.StatusBadRequest, "session.pending_cleanup", errors.New("session is pending cleanup"), nil)
 	}
 	// Serialize with /new, /fork, and switchModel so the controller and lease
@@ -85,7 +85,7 @@ func (s *Server) resumeInto(path string) (int, error) {
 			return http.StatusInternalServerError, fmt.Errorf("session lease: %w", err)
 		}
 	}
-	loaded, err := agent.LoadSession(realPath)
+	loaded, err := sessionstore.LoadSession(realPath)
 	if err != nil {
 		// The lease already moved to the target; re-point it at the session the
 		// controller still owns (best-effort).

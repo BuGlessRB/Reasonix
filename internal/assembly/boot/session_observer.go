@@ -1,12 +1,12 @@
 package boot
 
 import (
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/history"
+	"reasonix/internal/state/sessionstore"
 )
 
-func newObservedSession(systemPrompt string) *agent.Session {
-	session := agent.NewSession(systemPrompt)
+func newObservedSession(systemPrompt string) *sessionstore.Session {
+	session := sessionstore.NewSession(systemPrompt)
 	session.SetPersistObserver(history.PersistObserver())
 	return session
 }

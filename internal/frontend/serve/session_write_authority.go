@@ -4,9 +4,9 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
 
@@ -88,13 +88,13 @@ func (s *Server) promoteSessionLease() error {
 		return err
 	}
 	if !writable {
-		return agent.ErrSessionLeaseHeld
+		return sessionstore.ErrSessionLeaseHeld
 	}
 	return s.leases.BindControllerAuthority(ctrl)
 }
 
 func sessionLeaseUnavailable(err error) bool {
-	return errors.Is(err, agent.ErrSessionLeaseHeld)
+	return errors.Is(err, sessionstore.ErrSessionLeaseHeld)
 }
 
 // sessionInUseError renders a lease refusal for HTTP clients in the shared CLI

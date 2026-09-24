@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"slices"
 	"strings"
@@ -125,7 +126,7 @@ func TestGuardianReasoningOnlyStopRetriesInsteadOfReusingPriorVerdict(t *testing
 	}}
 	prov := &reasoningScriptedProvider{scriptedProvider: base}
 	gs := NewSession(prov, tool.NewRegistry(), PolicyPrompt(), "guardian-test", 0, nil, &captureSink{})
-	parent := agent.NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "review two different actions"})
 
 	if allow, _, err := gs.ReviewVerdict(context.Background(), "read_file", json.RawMessage(`{"file_path":"a.txt"}`), parent); err != nil || !allow {
@@ -152,7 +153,7 @@ func TestGuardianRepeatedReasoningOnlyStopsFailClosedWithoutReusingPriorAllow(t 
 	}}
 	prov := &reasoningScriptedProvider{scriptedProvider: base}
 	gs := NewSession(prov, tool.NewRegistry(), PolicyPrompt(), "guardian-test", 0, nil, &captureSink{})
-	parent := agent.NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "review two different actions"})
 
 	if allow, _, err := gs.ReviewVerdict(context.Background(), "read_file", json.RawMessage(`{"file_path":"a.txt"}`), parent); err != nil || !allow {
@@ -242,7 +243,7 @@ func TestGuardianSaveLoadRestoresCursorForDeltaTranscript(t *testing.T) {
 	}}
 	sink := &captureSink{}
 	gs := NewSession(prov, tool.NewRegistry(), PolicyPrompt(), "guardian-test", 0, nil, sink)
-	parent := agent.NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "first user request"})
 
 	if allow, _, err := gs.Review(context.Background(), "write_file", json.RawMessage(`{"file_path":"a.txt"}`), parent); err != nil || !allow {
@@ -305,7 +306,7 @@ func TestGuardianUsageDoesNotLeakAcrossReviews(t *testing.T) {
 	}}
 	sink := &captureSink{}
 	gs := NewSession(prov, tool.NewRegistry(), PolicyPrompt(), "guardian-test", 0, nil, sink)
-	parent := agent.NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "do it"})
 
 	if allow, _, err := gs.Review(context.Background(), "write_file", json.RawMessage(`{"file_path":"a.txt"}`), parent); err != nil || !allow {
@@ -334,7 +335,7 @@ func TestGuardianUsageAggregatesEveryModelCall(t *testing.T) {
 	}}
 	sink := &captureSink{}
 	gs := NewSession(prov, tool.NewRegistry(), PolicyPrompt(), "guardian-test", 0, nil, sink)
-	parent := agent.NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "do it"})
 
 	if allow, _, err := gs.Review(context.Background(), "write_file", json.RawMessage(`{"file_path":"a.txt"}`), parent); err != nil || !allow {
@@ -360,7 +361,7 @@ func TestGuardianReviewTurnsAlternateRoles(t *testing.T) {
 		{text: `{"risk_level":"low","user_authorization":"high","outcome":"allow","rationale":"second ok"}`},
 	}}
 	gs := NewSession(prov, tool.NewRegistry(), PolicyPrompt(), "guardian-test", 0, nil, &captureSink{})
-	parent := agent.NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "do the thing"})
 
 	for i := range 2 {
@@ -408,7 +409,7 @@ func TestGuardianFailedReviewRollsBackSession(t *testing.T) {
 		{text: `{"risk_level":"low","user_authorization":"high","outcome":"allow","rationale":"ok"}`},
 	}}
 	gs := NewSession(prov, tool.NewRegistry(), PolicyPrompt(), "guardian-test", 0, nil, &captureSink{})
-	parent := agent.NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "do the thing"})
 
 	allow, _, err := gs.Review(context.Background(), "write_file", json.RawMessage(`{"file_path":"a.txt"}`), parent)
@@ -436,7 +437,7 @@ func TestGuardianFailedReviewRollsBackSession(t *testing.T) {
 // consecutive user messages that would poison strict-alternation providers, so
 // Load starts fresh instead of adopting them.
 func TestGuardianLoadResetsLegacyConsecutiveUserSessions(t *testing.T) {
-	legacy := agent.NewSession(PolicyPrompt())
+	legacy := sessionstore.NewSession(PolicyPrompt())
 	legacy.Add(provider.Message{Role: provider.RoleUser, Content: "transcript evidence"})
 	legacy.Add(provider.Message{Role: provider.RoleUser, Content: "action request"})
 	legacy.Add(provider.Message{Role: provider.RoleAssistant, Content: `{"risk_level":"low","user_authorization":"high","outcome":"allow","rationale":"ok"}`})
@@ -466,7 +467,7 @@ func TestGuardianSessionAlternatesAfterCompaction(t *testing.T) {
 	prov := &scriptedProvider{defaultUsage: &provider.Usage{TotalTokens: 1}} // default allow verdict, also serves the summarizer
 	sink := &captureSink{}
 	gs := NewSession(prov, tool.NewRegistry(), PolicyPrompt(), "guardian-test", 0, nil, sink)
-	parent := agent.NewSession("sys")
+	parent := sessionstore.NewSession("sys")
 
 	filler := strings.Repeat("parent transcript filler. ", 160)
 	for i := range compactEvery {

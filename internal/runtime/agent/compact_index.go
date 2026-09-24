@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strconv"
 	"strings"
@@ -277,7 +278,7 @@ func (a *Agent) attachFoldIndex(digest, priorIndex string, entries []foldIndexEn
 // canonical transcript, which is what an index address has to name. Positions
 // inside a previous projection have no canonical address of their own — that
 // content was already folded once — so they answer -1.
-func (a *Agent) canonicalOriginFor(state CompactionState, canonical, msgs []provider.Message, head int) func(int) int {
+func (a *Agent) canonicalOriginFor(state sessionstore.CompactionState, canonical, msgs []provider.Message, head int) func(int) int {
 	projected := len(state.Projection.Messages)
 	// visibleInputForFold either returned canonical itself, or the projection
 	// spliced with canonical[CoveredCount:]. The two cases differ only in where

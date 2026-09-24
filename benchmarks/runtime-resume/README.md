@@ -12,7 +12,7 @@ phase here is a child process that exits before the next one starts.
 ```
 process A (construct)          process B (resume)
   boot a real runtime            boot a real runtime
-  drive turns (scripted)         agent.LoadSession(path)
+  drive turns (scripted)         sessionstore.LoadSession(path)
   set a durable Goal             ctrl.Resume(session, path)
   fold the context               read host state
   record what it sees            record what it sees

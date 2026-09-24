@@ -3,6 +3,7 @@ package agent
 import (
 	"errors"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -11,7 +12,7 @@ import (
 
 func seedTwoTurnSession(t *testing.T, path string) {
 	t.Helper()
-	s := NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "你好"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 	if err := s.Save(path); err != nil {
@@ -27,11 +28,11 @@ func TestTwoWritersOnOneTranscriptDiverge(t *testing.T) {
 	path := filepath.Join(dir, "session.jsonl")
 	seedTwoTurnSession(t, path)
 
-	first, err := LoadSession(path)
+	first, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := LoadSession(path)
+	second, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,11 +44,11 @@ func TestTwoWritersOnOneTranscriptDiverge(t *testing.T) {
 
 	second.Add(provider.Message{Role: provider.RoleUser, Content: "写者乙的话"})
 	err = second.SaveSnapshot(path)
-	if !errors.Is(err, ErrSessionSnapshotConflict) {
+	if !errors.Is(err, sessionstore.ErrSessionSnapshotConflict) {
 		t.Fatalf("second writer = %v, want a snapshot conflict", err)
 	}
-	kind, _ := SnapshotConflictKind(err)
-	if kind != SessionSnapshotConflictDiverged {
+	kind, _ := sessionstore.SnapshotConflictKind(err)
+	if kind != sessionstore.SessionSnapshotConflictDiverged {
 		t.Fatalf("conflict kind = %q, want diverged", kind)
 	}
 }
@@ -61,7 +62,7 @@ func TestDivergedWritersShareOneRecoveryBranch(t *testing.T) {
 	path := filepath.Join(dir, "session.jsonl")
 	seedTwoTurnSession(t, path)
 
-	winner, err := LoadSession(path)
+	winner, err := sessionstore.LoadSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,14 +73,14 @@ func TestDivergedWritersShareOneRecoveryBranch(t *testing.T) {
 
 	branches := map[string]bool{}
 	for i := range 5 {
-		loser, err := LoadSession(path)
+		loser, err := sessionstore.LoadSession(path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Every loser holds the same unsaved turn: one conversation reopened,
 		// rebuilt or resumed again and again after the same incident.
 		loser.Replace(append(seedPrefix(t, path), provider.Message{Role: provider.RoleUser, Content: "没落盘的那一轮"}))
-		info, err := loser.SaveRecoveryBranch(RecoveryBranchOptions{OriginalPath: path})
+		info, err := loser.SaveRecoveryBranch(sessionstore.RecoveryBranchOptions{OriginalPath: path})
 		if err != nil {
 			t.Fatalf("loser %d: %v", i, err)
 		}
@@ -94,7 +95,7 @@ func TestDivergedWritersShareOneRecoveryBranch(t *testing.T) {
 // is the baseline every loser is holding.
 func seedPrefix(t *testing.T, path string) []provider.Message {
 	t.Helper()
-	s := NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "你好"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
 	return s.Snapshot()

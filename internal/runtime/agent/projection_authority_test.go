@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/provider"
@@ -20,11 +21,11 @@ func authorityMessages() []provider.Message {
 	}
 }
 
-func authorityState(covered int, hash string, version uint64) CompactionState {
-	return CompactionState{
+func authorityState(covered int, hash string, version uint64) sessionstore.CompactionState {
+	return sessionstore.CompactionState{
 		TranscriptVersion: version,
 		PromptCacheKey:    "ws|sess|model",
-		Projection: ContextProjection{
+		Projection: sessionstore.ContextProjection{
 			Messages:          []provider.Message{{Role: provider.RoleSystem, Content: "digest"}},
 			TranscriptVersion: version,
 			CoveredCount:      covered,
@@ -45,7 +46,7 @@ func TestProjectionValidityIsCoveredPrefixIdentity(t *testing.T) {
 	edited := append([]provider.Message(nil), msgs...)
 	edited[1].Content = "task-EDITED"
 
-	full := coveredPrefixHash(msgs, len(msgs))
+	full := sessionstore.CoveredPrefixHash(msgs, len(msgs))
 	cases := []struct {
 		name    string
 		covered int
@@ -80,7 +81,7 @@ func TestProjectionValidityIsCoveredPrefixIdentity(t *testing.T) {
 // decides the verdict, and the counter the sidecar happens to carry does not.
 func TestProjectionValidityIgnoresTranscriptVersion(t *testing.T) {
 	msgs := authorityMessages()
-	hash := coveredPrefixHash(msgs, len(msgs))
+	hash := sessionstore.CoveredPrefixHash(msgs, len(msgs))
 	first := projectionValid(authorityState(len(msgs), hash, storedVersions[0]), msgs, "ws|sess|model", nil)
 	if !first {
 		t.Fatal("a projection whose covered prefix still matches must be valid")

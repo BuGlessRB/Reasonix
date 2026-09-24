@@ -1,12 +1,12 @@
 package acp
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/safety/permission"
 )
 
@@ -29,13 +29,13 @@ func TestSessionLoadRefusedWhenLeaseHeld(t *testing.T) {
 	dir := testenv.TempDir(t)
 	const id = "sess-held-lease"
 	path := transcriptPath(dir, id)
-	s := agent.NewSession("sys")
+	s := sessionstore.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "editor session"})
 	if err := s.Save(path); err != nil {
 		t.Fatal(err)
 	}
 
-	holder, err := agent.TryAcquireSessionLease(path)
+	holder, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("test holder acquire: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestSessionCloseReleasesLease(t *testing.T) {
 	path := transcriptPath(dir, sid)
 
 	// Held while the session is open.
-	if lease, err := agent.TryAcquireSessionLease(path); err == nil {
+	if lease, err := sessionstore.TryAcquireSessionLease(path); err == nil {
 		lease.Release()
 		t.Fatalf("transcript lease not held after session/new")
 	}
@@ -86,7 +86,7 @@ func TestSessionCloseReleasesLease(t *testing.T) {
 	if resp.Error != nil {
 		t.Fatalf("session/close errored: %+v", resp.Error)
 	}
-	lease, err := agent.TryAcquireSessionLease(path)
+	lease, err := sessionstore.TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatalf("transcript lease not released by session/close: %v", err)
 	}

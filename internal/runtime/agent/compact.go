@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"time"
@@ -243,7 +244,7 @@ func (a *Agent) summarizeAtProjectionBoundary(ctx context.Context, canonicalInde
 			visibleIndex = i
 			break
 		}
-		if anchor.CreatedAt == 0 && UserMessageText(msg) == UserMessageText(anchor) {
+		if anchor.CreatedAt == 0 && sessionstore.UserMessageText(msg) == sessionstore.UserMessageText(anchor) {
 			if visibleIndex >= 0 {
 				return fmt.Errorf("summarize boundary is ambiguous in the current model context")
 			}
@@ -253,7 +254,7 @@ func (a *Agent) summarizeAtProjectionBoundary(ctx context.Context, canonicalInde
 	if visibleIndex < 0 {
 		return fmt.Errorf("context compression unavailable: selected turn is no longer present in the model context")
 	}
-	result, err := a.compressVisibleRange(ctx, snap, CompactionTriggerManual, direction, visibleIndex, anchorPreview(UserMessageText(anchor)), "")
+	result, err := a.compressVisibleRange(ctx, snap, CompactionTriggerManual, direction, visibleIndex, anchorPreview(sessionstore.UserMessageText(anchor)), "")
 	if err != nil {
 		return err
 	}

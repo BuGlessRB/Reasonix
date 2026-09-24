@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -13,7 +14,7 @@ import (
 	"reasonix/internal/contract/tool"
 )
 
-func armedAgent(t *testing.T, sess *Session, arm ablation.Set) *Agent {
+func armedAgent(t *testing.T, sess *sessionstore.Session, arm ablation.Set) *Agent {
 	t.Helper()
 	return New(&fakeProvider{reply: "Work continued."}, tool.NewRegistry(), sess, Options{
 		ContextWindow: 5000, CompactRatio: 0.5, RecentKeep: 2,
@@ -24,7 +25,7 @@ func armedAgent(t *testing.T, sess *Session, arm ablation.Set) *Agent {
 // indexHeavySession makes far more index lines than any arm's budget can hold,
 // so the four scales are separated by what they trim rather than by what the
 // fixture happened to produce.
-func indexHeavySession(calls int) *Session {
+func indexHeavySession(calls int) *sessionstore.Session {
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "sweep the tree"},
@@ -38,7 +39,7 @@ func indexHeavySession(calls int) *Session {
 			provider.Message{Role: provider.RoleTool, ToolCallID: id, Name: "read_file", Content: strings.Repeat("line ", 200)},
 		)
 	}
-	return &Session{Messages: msgs}
+	return &sessionstore.Session{Messages: msgs}
 }
 
 // The axis has to reach the index, not just the arm name: a scale that changes
@@ -55,7 +56,7 @@ func TestFoldIndexScaleChangesWhatTheModelSees(t *testing.T) {
 		if err := prepareContext(context.Background(), a, CompactionTriggerOverflow); err != nil {
 			t.Fatalf("scale %q prepare = %v", scale, err)
 		}
-		canonical, _ := a.sess.conversation.snapshotMessagesVersion()
+		canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
 		lines := 0
 		for _, m := range modelVisibleFromProjection(a.sess.compactionState.Projection, canonical) {
 			if _, index := splitFoldIndex(m.Content); index != "" {

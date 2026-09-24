@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"reasonix/internal/state/sessionstore"
 	"time"
 
 	"reasonix/internal/contract/event"
@@ -15,7 +16,7 @@ func (a *Agent) contextMaintenanceInputHash(visible []provider.Message) string {
 	if a == nil {
 		return ""
 	}
-	seed := a.currentPromptCacheKey() + "\n" + providerVisibleFingerprint(provider.ModelMessages(visible))
+	seed := a.currentPromptCacheKey() + "\n" + sessionstore.ProviderVisibleFingerprint(provider.ModelMessages(visible))
 	sum := sha256.Sum256([]byte(seed))
 	return hex.EncodeToString(sum[:])
 }
@@ -44,7 +45,7 @@ func (a *Agent) contextMaintenanceBlocked(inputHash string) (bool, string) {
 	return true, firstNonEmpty(a.sess.compactionState.BlockedReason, r.Reason)
 }
 
-func (a *Agent) emitContextMaintenance(r *ContextMaintenanceReceipt) {
+func (a *Agent) emitContextMaintenance(r *sessionstore.ContextMaintenanceReceipt) {
 	if a == nil || r == nil || a.svc.sink == nil {
 		return
 	}
@@ -122,7 +123,7 @@ func (a *Agent) recordContextMaintenanceOutcome(inputHash, trigger, action, stat
 	if status != "failed" {
 		status = "blocked"
 	}
-	_, transcriptVersion := a.sess.conversation.snapshotMessagesVersion()
+	_, transcriptVersion := a.sess.conversation.SnapshotMessagesVersion()
 	promptCacheKey := a.currentPromptCacheKey()
 	a.sess.compactionMu.Lock()
 	state := a.sess.compactionState
@@ -134,7 +135,7 @@ func (a *Agent) recordContextMaintenanceOutcome(inputHash, trigger, action, stat
 		return
 	}
 	now := time.Now().UTC()
-	state.SchemaVersion = compactionStateSchemaCurrent
+	state.SchemaVersion = sessionstore.CompactionStateSchemaCurrent
 	state.TranscriptVersion = transcriptVersion
 	state.PromptCacheKey = promptCacheKey
 	// Do not advance projection version on failure; generation still advances so
@@ -147,7 +148,7 @@ func (a *Agent) recordContextMaintenanceOutcome(inputHash, trigger, action, stat
 	state.LastMode = ""
 	state.LastSourceTokens = 0
 	state.LastResultTokens = 0
-	state.LastReceipt = &ContextMaintenanceReceipt{
+	state.LastReceipt = &sessionstore.ContextMaintenanceReceipt{
 		OperationID: fmt.Sprintf("%s-%s-%d", status, action, state.Generation), Status: status, Action: action,
 		Trigger: trigger, SourceProjection: state.Projection.ProjectionVersion,
 		ProjectionVersion: state.Projection.ProjectionVersion, InputHash: inputHash,

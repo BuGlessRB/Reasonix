@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"time"
 
 	"reasonix/internal/base/fileutil"
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
 )
 
 func (s *acpSession) saveMetaIfPresent() {
@@ -169,7 +169,7 @@ func listACPMetas(dir string) ([]acpSessionMeta, error) {
 		}
 		id := strings.TrimSuffix(e.Name(), ".acp.json")
 		sessionPath := transcriptPath(dir, id)
-		if agent.IsCleanupPending(sessionPath) {
+		if sessionstore.IsCleanupPending(sessionPath) {
 			continue
 		}
 		if !sessionFileExists(sessionPath) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestTodoCitationPrefersTheStableID(t *testing.T) {
 // A view carrying what the host holds is owed nothing; the same host state
 // against a view without it is owed the note.
 func TestTodoIdentityTailIsOwedByTheViewNotByHistory(t *testing.T) {
-	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	a.ReplaceTodoState(planTodos())
 
 	readable := []provider.Message{{Role: provider.RoleUser, Content: todoIdentityNote(a.CanonicalTodoState())}}
@@ -61,7 +62,7 @@ func TestTodoIdentityTailIsOwedByTheViewNotByHistory(t *testing.T) {
 // The case that killed the remembered-shown design: identity moves with no fold
 // in between. A request that showed A may not suppress B.
 func TestTodoIdentityTailFollowsTheHostAcrossARewrite(t *testing.T) {
-	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	a.ReplaceTodoState(planTodos())
 	folded := []provider.Message{{Role: provider.RoleUser, Content: "summary of earlier work"}}
 	if got := a.withTodoIdentityTail(folded); !strings.Contains(got[1].Content, "[plan_step_03]") {
@@ -89,7 +90,7 @@ func TestTodoIdentityTailFollowsTheHostAcrossARewrite(t *testing.T) {
 // complete_step signs only the item the host calls in_progress, so a view
 // showing a signed-off step as current costs a refused round at full context.
 func TestTodoIdentityTailFollowsTheStatusNotOnlyTheID(t *testing.T) {
-	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	sent := provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{
 		Name: "todo_write",
 		Arguments: `{"todos":[` +
@@ -114,7 +115,7 @@ func TestTodoIdentityTailFollowsTheStatusNotOnlyTheID(t *testing.T) {
 }
 
 func TestNoProjectionWithoutStableIDs(t *testing.T) {
-	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(&scriptedProvider{name: "p"}, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	a.ReplaceTodoState([]evidence.TodoItem{{Content: "Do the thing", Status: "in_progress"}})
 
 	// Nothing to re-project: an ordinal is not an identity the host owns.
@@ -142,7 +143,7 @@ func TestTodoWriteResultNamesTheSignableStepID(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, sessionstore.NewSession(""), Options{}, event.Discard)
 	if err := a.Run(context.Background(), "plan the work"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

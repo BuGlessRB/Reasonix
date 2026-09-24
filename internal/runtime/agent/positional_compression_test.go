@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strings"
 	"testing"
@@ -19,7 +20,7 @@ func TestSummarizeFromPreservesLocalOnlyOutsideModelAndArchive(t *testing.T) {
 	}
 	prov := &fakeProvider{reply: "later summary"}
 	// Enough foldable assistant work so the projection candidate reduces tokens.
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
 		local,
@@ -51,7 +52,7 @@ func TestSummarizeUpToPreservesLocalOnlyOutsideModelAndArchive(t *testing.T) {
 		InterruptedTurn: &provider.InterruptedTurnRecovery{Pending: true, InterruptedTools: []string{"read_file"}},
 	}
 	prov := &fakeProvider{reply: "earlier summary"}
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "old task"},
 		local,
@@ -77,7 +78,7 @@ func TestSummarizeUpToPreservesLocalOnlyOutsideModelAndArchive(t *testing.T) {
 }
 
 func TestSummarizeAtProjectionBoundaryReportsFoldedAnchor(t *testing.T) {
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "old boundary"},
 		{Role: provider.RoleAssistant, Content: strings.Repeat("old work ", 200)},
@@ -104,7 +105,7 @@ func TestSummarizeAtProjectionBoundaryReportsFoldedAnchor(t *testing.T) {
 }
 
 func TestSummarizeAtProjectionBoundaryReportsNoSavings(t *testing.T) {
-	sess := &Session{Messages: []provider.Message{
+	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "tiny"},
 		{Role: provider.RoleUser, Content: "keep boundary"},

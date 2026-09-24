@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
 	"testing"
@@ -320,13 +321,13 @@ func TestHistoryMessagesCountAttachmentsOnATextlessTurn(t *testing.T) {
 func TestSessionsListPreviewStripsTransientReasoningLanguageBlock(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	s := agent.NewSession("system")
+	s := sessionstore.NewSession("system")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "<reasoning-language>\nVisible reasoning/thinking text preference: use English.\n</reasoning-language>\n\nExplain this module"})
 	if err := s.Save(path); err != nil {
 		t.Fatal(err)
 	}
 
-	preview, turns := agent.SessionPreview(path)
+	preview, turns := sessionstore.SessionPreview(path)
 	if turns != 1 {
 		t.Errorf("turns = %d, want 1", turns)
 	}
@@ -338,7 +339,7 @@ func TestSessionsListPreviewStripsTransientReasoningLanguageBlock(t *testing.T) 
 func TestSessionsListPreviewSeesEventLogTurns(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
-	s := agent.NewSession("system")
+	s := sessionstore.NewSession("system")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatal(err)
@@ -351,10 +352,10 @@ func TestSessionsListPreviewSeesEventLogTurns(t *testing.T) {
 
 	// The second turn lives only in the event log; a checkpoint-only reader
 	// would still report one turn.
-	if _, turns := agent.SessionPreview(path); turns != 2 {
+	if _, turns := sessionstore.SessionPreview(path); turns != 2 {
 		t.Errorf("turns = %d, want 2 (event log turns visible)", turns)
 	}
-	if mod := agent.SessionContentModTime(path); mod.IsZero() {
+	if mod := sessionstore.SessionContentModTime(path); mod.IsZero() {
 		t.Error("SessionContentModTime returned zero for a live session")
 	}
 }
@@ -714,7 +715,7 @@ func TestResumeRejectsCleanupPendingSession(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := agent.MarkCleanupPending(pending, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(pending, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -749,7 +750,7 @@ func TestSessionsSkipsCleanupPending(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := agent.MarkCleanupPending(pending, "delete"); err != nil {
+	if err := sessionstore.MarkCleanupPending(pending, "delete"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -785,7 +786,7 @@ func TestDeleteSessionRequiresSessionNameInsideSessionDir(t *testing.T) {
 		}
 	}
 	ref := "sa_20260102_030405_000000000_aabbccddeeff"
-	writeServeSubagentArtifact(t, dir, ref, agent.BranchID(old))
+	writeServeSubagentArtifact(t, dir, ref, sessionstore.BranchID(old))
 	oldJobsDir := jobs.ArtifactDir(old)
 	if err := os.MkdirAll(oldJobsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -853,9 +854,9 @@ func writeServeSubagentArtifact(t *testing.T, dir, ref, parentSession string) {
 	if err := os.WriteFile(filepath.Join(subagentDir, ref+".jsonl"), []byte(`{"role":"user","content":"sub"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	data, err := json.Marshal(agent.SubagentMeta{
+	data, err := json.Marshal(sessionstore.SubagentMeta{
 		Ref:           ref,
-		Status:        agent.SubagentCompleted,
+		Status:        sessionstore.SubagentCompleted,
 		Kind:          "task",
 		Name:          "task",
 		ParentSession: parentSession,
@@ -1057,7 +1058,7 @@ func TestServeEventsReplayHandoffSerializesPromptEmission(t *testing.T) {
 func TestServeEventsReplaysPendingApprovalOnAttach(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(serveApprovalWriter{})
-	ag := agent.New(&serveApprovalProvider{}, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(&serveApprovalProvider{}, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{
 		Runner:   ag,

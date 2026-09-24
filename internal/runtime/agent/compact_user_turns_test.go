@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -12,9 +13,9 @@ import (
 
 // retentionSession puts one user turn of the given size in the fold region,
 // behind enough assistant work that the recent tail cannot reach it.
-func retentionSession(midTurn string) *Session {
+func retentionSession(midTurn string) *sessionstore.Session {
 	big := strings.Repeat("work output line with detail. ", 250)
-	return &Session{Messages: []provider.Message{
+	return &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "first task"},
 		{Role: provider.RoleAssistant, Content: big},
@@ -27,7 +28,7 @@ func retentionSession(midTurn string) *Session {
 	}}
 }
 
-func compactWithSink(t *testing.T, sess *Session) []event.Event {
+func compactWithSink(t *testing.T, sess *sessionstore.Session) []event.Event {
 	t.Helper()
 	var got []event.Event
 	sink := event.FuncSink(func(e event.Event) { got = append(got, e) })
@@ -102,7 +103,7 @@ func TestSubagentInheritsUserTurnRetention(t *testing.T) {
 		t.Fatalf("child ContextWindow = %d, want the resolved sub-session window", opts.ContextWindow)
 	}
 
-	child := New(&fakeProvider{reply: "ok"}, tool.NewRegistry(), &Session{}, opts, event.Discard)
+	child := New(&fakeProvider{reply: "ok"}, tool.NewRegistry(), &sessionstore.Session{}, opts, event.Discard)
 	if got, want := child.keptUserTurnsBudget(), int(32_000*keptUserTurnsWindowFrac); got != want {
 		t.Fatalf("child retention budget = %d, want %d scaled to its own window", got, want)
 	}

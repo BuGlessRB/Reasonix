@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"net/http"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -134,7 +135,7 @@ func TestContextOverflowProbesAnUndeclaredWindow(t *testing.T) {
 // told the same thing.
 func TestContextOverflowWithNothingToFoldFailsTheTurn(t *testing.T) {
 	prov := testutil.NewMock("mock", testutil.Turn{StreamError: contextOverflowRejection()})
-	a := New(prov, tool.NewRegistry(), NewSession("system"), Options{
+	a := New(prov, tool.NewRegistry(), sessionstore.NewSession("system"), Options{
 		ContextWindow: 40_000,
 		ArchiveDir:    testenv.TempDir(t),
 	}, event.Discard)

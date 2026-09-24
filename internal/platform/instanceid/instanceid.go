@@ -9,10 +9,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 
 	"reasonix/internal/contract/config"
-	"reasonix/internal/runtime/agent"
 )
 
 // Prefix is the bundle's own identifier, so a Studio launch never answers the
@@ -34,7 +34,7 @@ func For(home string) string {
 	}
 	// The lease path canonicalizer, so a home below a link — or one that does
 	// not exist yet — still names the physical directory.
-	if marker := agent.CanonicalSessionPath(filepath.Join(root, ".reasonix-home.identity")); marker != "" {
+	if marker := sessionstore.CanonicalSessionPath(filepath.Join(root, ".reasonix-home.identity")); marker != "" {
 		root = filepath.Dir(marker)
 	}
 	sum := sha256.Sum256([]byte(filepath.Clean(root)))

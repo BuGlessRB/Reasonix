@@ -4,11 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/agent"
 )
 
 func leasePath(t *testing.T, name string) string {
@@ -22,9 +22,9 @@ func leasePath(t *testing.T, name string) string {
 // them to delete files.
 func TestReclaimOwnSessionLeaseTakesOverThisProcessLeftover(t *testing.T) {
 	path := leasePath(t, "own")
-	held := &agent.SessionLeaseError{
+	held := &sessionstore.SessionLeaseError{
 		Path: path,
-		Info: &agent.SessionLeaseInfo{PID: os.Getpid(), WriterID: agent.SessionWriterID()},
+		Info: &sessionstore.SessionLeaseInfo{PID: os.Getpid(), WriterID: sessionstore.SessionWriterID()},
 	}
 
 	lease, err := reclaimOwnSessionLease(path, held)
@@ -32,8 +32,8 @@ func TestReclaimOwnSessionLeaseTakesOverThisProcessLeftover(t *testing.T) {
 		t.Fatalf("reclaimOwnSessionLease: %v", err)
 	}
 	defer lease.Release()
-	if lease.Path() != agent.CanonicalSessionPath(path) {
-		t.Fatalf("reclaimed %q, want %q", lease.Path(), agent.CanonicalSessionPath(path))
+	if lease.Path() != sessionstore.CanonicalSessionPath(path) {
+		t.Fatalf("reclaimed %q, want %q", lease.Path(), sessionstore.CanonicalSessionPath(path))
 	}
 }
 
@@ -41,9 +41,9 @@ func TestReclaimOwnSessionLeaseTakesOverThisProcessLeftover(t *testing.T) {
 // the lock anyway; refusing here keeps the intent explicit.
 func TestReclaimOwnSessionLeaseLeavesAnotherProcessAlone(t *testing.T) {
 	path := leasePath(t, "foreign")
-	held := &agent.SessionLeaseError{
+	held := &sessionstore.SessionLeaseError{
 		Path: path,
-		Info: &agent.SessionLeaseInfo{PID: os.Getpid() + 1, WriterID: "someone-else"},
+		Info: &sessionstore.SessionLeaseInfo{PID: os.Getpid() + 1, WriterID: "someone-else"},
 	}
 
 	if _, err := reclaimOwnSessionLease(path, held); !errors.Is(err, held) {
@@ -55,7 +55,7 @@ func TestReclaimOwnSessionLeaseLeavesAnotherProcessAlone(t *testing.T) {
 // missing info file would wedge a session nobody holds as permanently busy.
 func TestReclaimOwnSessionLeaseProceedsWithoutInfo(t *testing.T) {
 	path := leasePath(t, "noinfo")
-	lease, err := reclaimOwnSessionLease(path, &agent.SessionLeaseError{Path: path})
+	lease, err := reclaimOwnSessionLease(path, &sessionstore.SessionLeaseError{Path: path})
 	if err != nil {
 		t.Fatalf("reclaimOwnSessionLease with no info: %v", err)
 	}
@@ -85,10 +85,10 @@ func TestRebindStillRefusesALiveHolderInThisProcess(t *testing.T) {
 	if err := other.Rebind(path); err == nil {
 		other.Release()
 		t.Fatal("a second keeper took a lease the first one is still holding")
-	} else if !errors.Is(err, agent.ErrSessionLeaseHeld) {
+	} else if !errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
 		t.Fatalf("second Rebind failed with %v, want a held-lease refusal", err)
 	}
-	if holder.HeldPath() != agent.CanonicalSessionPath(path) {
+	if holder.HeldPath() != sessionstore.CanonicalSessionPath(path) {
 		t.Fatalf("holder lost its lease to the refused bind: %q", holder.HeldPath())
 	}
 }
@@ -108,9 +108,9 @@ func TestRebindToTheHeldPathIsANoOp(t *testing.T) {
 // "Another Reasonix process (pid <ours>)" reads as a second window to close,
 // which is what made the report unactionable.
 func TestSessionInUseMessageDoesNotCallThisProcessAnother(t *testing.T) {
-	held := &agent.SessionLeaseError{
+	held := &sessionstore.SessionLeaseError{
 		Path: leasePath(t, "self"),
-		Info: &agent.SessionLeaseInfo{PID: os.Getpid(), WriterID: agent.SessionWriterID()},
+		Info: &sessionstore.SessionLeaseInfo{PID: os.Getpid(), WriterID: sessionstore.SessionWriterID()},
 	}
 	msg := SessionInUseMessage(held)
 	if strings.Contains(msg, "another Reasonix process") {
@@ -122,9 +122,9 @@ func TestSessionInUseMessageDoesNotCallThisProcessAnother(t *testing.T) {
 }
 
 func TestSessionInUseMessageStillNamesAForeignHolder(t *testing.T) {
-	held := &agent.SessionLeaseError{
+	held := &sessionstore.SessionLeaseError{
 		Path: leasePath(t, "far"),
-		Info: &agent.SessionLeaseInfo{PID: os.Getpid() + 1, Hostname: "DESKTOP-X"},
+		Info: &sessionstore.SessionLeaseInfo{PID: os.Getpid() + 1, Hostname: "DESKTOP-X"},
 	}
 	msg := SessionInUseMessage(held)
 	if !strings.Contains(msg, "another Reasonix process") || !strings.Contains(msg, "DESKTOP-X") {

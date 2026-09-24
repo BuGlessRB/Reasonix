@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -41,7 +42,7 @@ func newRestartMaintenanceAgent(path string, messages []provider.Message, sink e
 	// Explicit 0.80 matches the v1.22.0 user scenario and the plan's regression
 	// fixture. New configs default to 0.85; users who set 0.80 keep 0.80.
 	// Economics off: the capacity share is the only trigger under test here.
-	return New(nil, tool.NewRegistry(), &Session{Messages: append([]provider.Message(nil), messages...)}, Options{
+	return New(nil, tool.NewRegistry(), &sessionstore.Session{Messages: append([]provider.Message(nil), messages...)}, Options{
 		ContextWindow:     restartMaintenanceWindow,
 		CompactRatio:      0.80,
 		RecentKeep:        2,
@@ -107,7 +108,7 @@ func TestContextMaintenanceRestoresAppliedProjectionWithoutReapplying(t *testing
 	// A deterministic fake provider so the single summary transaction can land.
 	firstSink := &recordSink{}
 	first := New(&fakeProvider{reply: "structured resume briefing"}, tool.NewRegistry(),
-		&Session{Messages: append([]provider.Message(nil), messages...)}, Options{
+		&sessionstore.Session{Messages: append([]provider.Message(nil), messages...)}, Options{
 			ContextWindow: restartMaintenanceWindow,
 			CompactRatio:  0.80,
 			RecentKeep:    2,
@@ -136,7 +137,7 @@ func TestContextMaintenanceRestoresAppliedProjectionWithoutReapplying(t *testing
 
 	reopenedSink := &recordSink{}
 	reopened := New(nil, tool.NewRegistry(),
-		&Session{Messages: append([]provider.Message(nil), messages...)}, Options{
+		&sessionstore.Session{Messages: append([]provider.Message(nil), messages...)}, Options{
 			ContextWindow: restartMaintenanceWindow,
 			CompactRatio:  0.80,
 			RecentKeep:    2,

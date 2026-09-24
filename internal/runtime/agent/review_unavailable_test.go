@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestRequireReviewReportRetriesOnceThenUnavailable(t *testing.T) {
 	}}
 	reg := tool.NewRegistry()
 	AttachReviewReportTool(reg, reviewGrant(evidence.ReviewKindReview))
-	sess := NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	out, err := RunSubAgentWithSession(context.Background(), scripted, reg, sess, "review a.go",
 		Options{RequireReviewReportKind: evidence.ReviewKindReview, MaxSteps: 2, DeliveryProfile: true}, event.Discard)
 	if err == nil {

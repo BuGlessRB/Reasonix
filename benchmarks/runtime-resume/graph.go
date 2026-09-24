@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"sort"
 	"strings"
@@ -87,7 +88,7 @@ func executedWorkers(o Observation) []string {
 // a store record are both such a claim, and neither has an owner behind it —
 // the goroutine that would have settled them died with the first process.
 func ghostRow(before, after Observation) row {
-	ghosts := append(runningWorkers(after), childrenInState(after, string(agent.SubagentRunning))...)
+	ghosts := append(runningWorkers(after), childrenInState(after, string(sessionstore.SubagentRunning))...)
 	verdict := verdictHolds
 	if len(ghosts) > 0 {
 		verdict = verdictViolated
@@ -177,11 +178,11 @@ func interruptedOutcome(before, after Observation) (string, string) {
 	switch {
 	case len(before.Graph.Nodes) == 0 || len(runningWorkers(before)) == 0:
 		return graphNotMeasured, verdictNotMeasured
-	case len(runningWorkers(after)) > 0 || len(childrenInState(after, string(agent.SubagentRunning))) > 0:
+	case len(runningWorkers(after)) > 0 || len(childrenInState(after, string(sessionstore.SubagentRunning))) > 0:
 		return graphGhost, verdictViolated
 	case len(after.InterruptedExecutions) > 0:
 		return graphInterrupted, verdictLossy
-	case len(childrenInState(after, string(agent.SubagentInterrupted))) > 0:
+	case len(childrenInState(after, string(sessionstore.SubagentInterrupted))) > 0:
 		return graphInterrupted, verdictLossy
 	case len(after.Obligation.UnansweredCalls) > 0 || after.Obligation.InterruptionMarked > 0:
 		return graphInterrupted, verdictLossy
@@ -259,7 +260,7 @@ func rebuiltGraph(o Observation) execgraph.Result {
 	children := make([]execgraph.ChildOutcome, 0, len(o.Children.Facts))
 	for _, f := range o.Children.Facts {
 		identity := agent.ResolveExecutionIdentity(
-			agent.SubagentMeta{ExecutionID: f.ExecutionID, ParentToolCallID: f.ParentToolCallID},
+			sessionstore.SubagentMeta{ExecutionID: f.ExecutionID, ParentToolCallID: f.ParentToolCallID},
 			func(id string) bool { return opened[id] })
 		children = append(children, execgraph.ChildOutcome{
 			Execution: identity.Execution, Ref: f.Ref, Status: f.Status,

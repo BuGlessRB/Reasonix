@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 // manualAgent sits well below the trigger, which is where a hand-typed compact
 // lives: a session that has reached the automatic threshold would have been
 // folded without anyone asking.
-func manualAgent(t *testing.T, sess *Session) (*Agent, *countingProvider) {
+func manualAgent(t *testing.T, sess *sessionstore.Session) (*Agent, *countingProvider) {
 	t.Helper()
 	prov := &countingProvider{reply: "## Standing facts\n- never change the public API"}
 	a := New(prov, tool.NewRegistry(), sess, Options{
@@ -27,7 +28,7 @@ func manualAgent(t *testing.T, sess *Session) (*Agent, *countingProvider) {
 	return a, prov
 }
 
-func addTurns(sess *Session, n, words int) {
+func addTurns(sess *sessionstore.Session, n, words int) {
 	body := strings.Repeat("word ", words)
 	for range n {
 		sess.Messages = append(sess.Messages,

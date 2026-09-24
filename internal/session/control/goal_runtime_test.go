@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -27,7 +28,7 @@ func goalRuntimeController(t *testing.T, prov provider.Provider, eval goaleval.E
 
 func goalRuntimeControllerWithTokenBudget(t *testing.T, prov provider.Provider, eval goaleval.Evaluator, tokens int) (*Controller, *agent.Agent, <-chan event.Event) {
 	t.Helper()
-	ag := agent.New(prov, goalRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+	ag := agent.New(prov, goalRegistry(), sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	events := make(chan event.Event, 8)
 	c := New(Options{
 		Runner:          ag,
@@ -80,7 +81,7 @@ func TestGoalEvaluatorUsageCommitsBeforeFSMCompletion(t *testing.T) {
 		{Type: provider.ChunkUsage, Usage: &provider.Usage{PromptTokens: 60, CompletionTokens: 17, TotalTokens: 77}},
 		{Type: provider.ChunkDone},
 	}}}
-	executor := agent.New(mainProv, goalRegistry(), agent.NewSession(""), agent.Options{}, sink)
+	executor := agent.New(mainProv, goalRegistry(), sessionstore.NewSession(""), agent.Options{}, sink)
 	evaluator := goaleval.NewSessionWithSink(evalProv, nil, "test/evaluator", sink)
 	c := New(Options{Runner: executor, Executor: executor, GoalEvaluator: evaluator, Sink: sink})
 	c.SetGoal("answer once")
@@ -481,9 +482,9 @@ func TestGoalSidecarCompatRestoresOldAndNewFields(t *testing.T) {
 		if err := os.WriteFile(store.SessionGoalState(path), data, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+		exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 		c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
-		c.Resume(agent.NewSession("sys"), path)
+		c.Resume(sessionstore.NewSession("sys"), path)
 		rt := c.GoalRuntime()
 		if rt.TurnsUsed != 3 {
 			t.Fatalf("TurnsUsed = %d, want 3 (legacy Turns carried over)", rt.TurnsUsed)
@@ -502,7 +503,7 @@ func TestGoalSidecarCompatRestoresOldAndNewFields(t *testing.T) {
 	t.Run("removed numeric pause auto-migrates on rebuild", func(t *testing.T) {
 		dir := testenv.TempDir(t)
 		path := filepath.Join(dir, "session.jsonl")
-		exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+		exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 		c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
 		c.SetGoal("ship the release")
 		c.goals.pauseFor(stopCauseBudgetTurns, "turn budget exhausted", nil)
@@ -514,9 +515,9 @@ func TestGoalSidecarCompatRestoresOldAndNewFields(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		freshExec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
+		freshExec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, event.Discard)
 		fresh := New(Options{Executor: freshExec, SessionDir: dir, Label: "fresh"})
-		fresh.Resume(agent.NewSession("sys"), path)
+		fresh.Resume(sessionstore.NewSession("sys"), path)
 		if fresh.GoalStatus() != GoalStatusRunning {
 			t.Fatalf("restored status = %q, want running after numeric pause migration", fresh.GoalStatus())
 		}
@@ -635,7 +636,7 @@ func TestGoalDeliveryWorkflowCompletesAfterVerifiedSignoff(t *testing.T) {
 			textTurn("Ship main delivered."),
 		},
 	)}
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{DeliveryProfile: true}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{DeliveryProfile: true}, event.Discard)
 	done := make(chan event.Event, 1)
 	var doneReadiness *event.FinalReadiness
 	c := New(Options{
@@ -677,7 +678,7 @@ func TestPlainDeliveryReadinessFailureStillSurfacesRecoveryCard(t *testing.T) {
 		textTurn("premature final"),
 		textTurn("extra turn that must never run"),
 	}}
-	ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{DeliveryProfile: true}, event.Discard)
+	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{DeliveryProfile: true}, event.Discard)
 	done := make(chan event.Event, 1)
 	c := New(Options{
 		Runner:   ag,

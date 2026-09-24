@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"time"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/store"
 )
 
@@ -198,7 +198,7 @@ func barrierSummary(questions []event.AskQuestion) string {
 // once the turn is identified and durable, and before the model is called.
 // Only what the turn actually receives is claimed: a barrier nothing showed it
 // is not one it took over.
-func (c *Controller) withInheritedInterruptions(marker agent.InFlightTurnMeta) agent.InFlightTurnMeta {
+func (c *Controller) withInheritedInterruptions(marker sessionstore.InFlightTurnMeta) sessionstore.InFlightTurnMeta {
 	c.inheritInterruptions(marker.ID)
 	return marker
 }
@@ -241,7 +241,7 @@ func (c *Controller) inheritedByRunningTurn() []InterruptedAdjudication {
 // last one committed. A completed turn clears its marker, which is what stops
 // an inherited interruption from following every later request.
 func runningTurnID(sessionPath string) string {
-	meta, ok, err := agent.LoadBranchMeta(sessionPath)
+	meta, ok, err := sessionstore.LoadBranchMeta(sessionPath)
 	if err != nil || !ok || meta.InFlightTurn == nil {
 		return ""
 	}

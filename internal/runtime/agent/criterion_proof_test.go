@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/contract/plancontract"
@@ -120,7 +121,7 @@ func TestUnknownCriterionCitationIsIgnoredByTheReplay(t *testing.T) {
 }
 
 func TestAcceptanceCriterionIDsReachTheToolCall(t *testing.T) {
-	a := New(nil, nil, NewSession(""), Options{}, nil)
+	a := New(nil, nil, sessionstore.NewSession(""), Options{}, nil)
 	if ids := a.acceptanceCriterionIDs(); len(ids) != 0 {
 		t.Fatalf("no plan must yield no ids, got %v", ids)
 	}

@@ -1,9 +1,8 @@
 package history
 
 import (
+	"reasonix/internal/state/sessionstore"
 	"strings"
-
-	"reasonix/internal/runtime/agent"
 )
 
 const planModeMarkerPrefix = "[Plan mode"
@@ -14,7 +13,7 @@ const planModeMarkerPrefix = "[Plan mode"
 // blocks went into the search index and a query for a path matched every turn
 // of every session.
 func stripComposePrefixes(content string) string {
-	trimmed := strings.TrimSpace(agent.DropLeadingTransientBlocks(content))
+	trimmed := strings.TrimSpace(sessionstore.DropLeadingTransientBlocks(content))
 	if strings.HasPrefix(trimmed, planModeMarkerPrefix) {
 		if _, rest, ok := strings.Cut(trimmed, "]"); ok {
 			return strings.TrimSpace(rest)

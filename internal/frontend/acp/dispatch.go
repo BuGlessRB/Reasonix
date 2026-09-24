@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"strconv"
 	"strings"
 	"sync"
@@ -348,10 +349,10 @@ func (s *updateSink) replay(msgs []provider.Message) {
 			// etc.) and unwraps memory-compiler contracts, same as every other
 			// surface (#6882). A turn that was pure injection replays as nothing.
 			text := m.Content
-			if steer, ok := agent.SteerText(text); ok {
+			if steer, ok := sessionstore.SteerText(text); ok {
 				text = steer
 			} else {
-				text = agent.UserMessageText(m)
+				text = sessionstore.UserMessageText(m)
 			}
 			if text != "" {
 				s.send(messageChunk{SessionUpdate: "user_message_chunk", Content: textBlock(text)})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -52,7 +53,7 @@ func TestRunFlushesUnconsumedSteersOnCancel(t *testing.T) {
 			notices = append(notices, e)
 		}
 	})
-	a := New(mp, reg, NewSession(""), Options{}, sink)
+	a := New(mp, reg, sessionstore.NewSession(""), Options{}, sink)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	hijack.agent = a
@@ -69,7 +70,7 @@ func TestRunFlushesUnconsumedSteersOnCancel(t *testing.T) {
 	var persisted []string
 	var localOnly bool
 	for _, m := range a.Session().Messages {
-		if text, ok := SteerText(m.Content); ok {
+		if text, ok := sessionstore.SteerText(m.Content); ok {
 			persisted = append(persisted, text)
 			localOnly = m.LocalOnly && m.Role == provider.RoleTool &&
 				m.ToolCallID == provider.LocalOnlyToolID && m.Name == provider.LocalOnlyToolName
@@ -82,7 +83,7 @@ func TestRunFlushesUnconsumedSteersOnCancel(t *testing.T) {
 		t.Fatal("unconsumed steer must use the provider-excluded local-only sentinel")
 	}
 	for _, m := range provider.ModelMessages(a.Session().Snapshot()) {
-		if text, ok := SteerText(m.Content); ok {
+		if text, ok := sessionstore.SteerText(m.Content); ok {
 			t.Fatalf("unconsumed steer %q leaked into the next model context", text)
 		}
 	}
@@ -103,7 +104,7 @@ func TestRunFlushesUnconsumedSteersOnCancel(t *testing.T) {
 // exit boundary: once the final queue check observes no pending guidance, a
 // later steer must be rejected rather than accepted and flushed as unapplied.
 func TestCloseSteerIntakeIfIdleMakesAdmissionLinearizable(t *testing.T) {
-	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(nil, tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	a.steer.open()
 
 	if !a.closeSteerIntakeIfIdle() {
@@ -124,8 +125,8 @@ func TestCloseSteerIntakeIfIdleMakesAdmissionLinearizable(t *testing.T) {
 // wrapping and return the user's exact original text, or replay degrades the
 // steer into a plain user message.
 func TestSteerTextSurvivesTurnPreferenceWrapping(t *testing.T) {
-	plain := New(nil, nil, NewSession(""), Options{}, event.Discard)
-	explicit := New(nil, nil, NewSession(""), Options{}, event.Discard)
+	plain := New(nil, nil, sessionstore.NewSession(""), Options{}, event.Discard)
+	explicit := New(nil, nil, sessionstore.NewSession(""), Options{}, event.Discard)
 	explicit.SetReasoningLanguage("zh")
 	explicit.SetResponseLanguage("zh")
 
@@ -140,8 +141,8 @@ func TestSteerTextSurvivesTurnPreferenceWrapping(t *testing.T) {
 		{"exact text preserved", plain, "  spaced\ttext  "},
 	}
 	for _, tc := range cases {
-		persisted := tc.agent.withTurnPreferences(midTurnSteerMessage(tc.text, false))
-		got, ok := SteerText(persisted)
+		persisted := tc.agent.withTurnPreferences(sessionstore.MidTurnSteerMessage(tc.text, false))
+		got, ok := sessionstore.SteerText(persisted)
 		if !ok {
 			t.Fatalf("%s: SteerText failed to recognize the persisted steer (head %.80q)", tc.name, persisted)
 		}
@@ -150,7 +151,7 @@ func TestSteerTextSurvivesTurnPreferenceWrapping(t *testing.T) {
 		}
 	}
 
-	if _, ok := SteerText(plain.withTurnPreferences("请总结一下这个文件")); ok {
+	if _, ok := sessionstore.SteerText(plain.withTurnPreferences("请总结一下这个文件")); ok {
 		t.Fatalf("a wrapped ordinary user message must not be detected as a steer")
 	}
 }
@@ -159,7 +160,7 @@ func TestSteerTextSurvivesTurnPreferenceWrapping(t *testing.T) {
 // running is rejected instead of parked in a queue no loop will consume, so
 // the controller can convert it into a regular turn.
 func TestSteerRejectedWithoutActiveTurn(t *testing.T) {
-	a := New(testutil.NewMock("m", testutil.Turn{Text: "done"}), tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+	a := New(testutil.NewMock("m", testutil.Turn{Text: "done"}), tool.NewRegistry(), sessionstore.NewSession(""), Options{}, event.Discard)
 	if a.Steer("early") {
 		t.Fatalf("Steer with no active turn must be rejected")
 	}

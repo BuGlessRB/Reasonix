@@ -2,6 +2,7 @@ package control
 
 import (
 	"path/filepath"
+	"reasonix/internal/state/sessionstore"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -60,10 +61,10 @@ func TestHostAuthorshipIsDeclaredNotRecognised(t *testing.T) {
 	})
 }
 
-func newOneTurnController(t *testing.T, turns ...testutil.Turn) (*Controller, *agent.Session, chan event.Event) {
+func newOneTurnController(t *testing.T, turns ...testutil.Turn) (*Controller, *sessionstore.Session, chan event.Event) {
 	t.Helper()
 	dir := testenv.TempDir(t)
-	sess := agent.NewSession("sys")
+	sess := sessionstore.NewSession("sys")
 	exec := agent.New(testutil.NewMock("exec", turns...), tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	sink, done, _ := collectSink()
 	c := New(Options{

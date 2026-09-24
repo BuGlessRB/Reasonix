@@ -2,29 +2,11 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/state/sessionstore"
 	"sync"
 
 	"reasonix/internal/contract/provider"
 )
-
-// CompactionUsage is what one maintenance transaction spent with the provider:
-// every summarizer call it made, including the ones whose answer was thrown
-// away. It is not the size of the context that was worked on — a receipt's
-// InputTokens is that, and the two are routinely orders apart.
-type CompactionUsage struct {
-	// Calls is billed summarizer calls. A call the provider never charged for
-	// is not one, which is what makes this comparable to the usage ledger.
-	Calls int `json:"calls,omitempty"`
-	// RequestAttempts is the provider requests those calls represent: a call
-	// the provider retried internally is one call and several requests.
-	RequestAttempts  int `json:"request_attempts,omitempty"`
-	InputTokens      int `json:"input_tokens,omitempty"`
-	OutputTokens     int `json:"output_tokens,omitempty"`
-	ReasoningTokens  int `json:"reasoning_tokens,omitempty"`
-	CacheHitTokens   int `json:"cache_hit_tokens,omitempty"`
-	CacheMissTokens  int `json:"cache_miss_tokens,omitempty"`
-	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
-}
 
 type compactionSpendKey struct{}
 
@@ -34,7 +16,7 @@ type compactionSpendKey struct{}
 // that discarded a result: a discarded answer is still a charge.
 type compactionSpend struct {
 	mu    sync.Mutex
-	total CompactionUsage
+	total sessionstore.CompactionUsage
 }
 
 // withCompactionSpend opens a transaction. A nested call keeps the outer one so
@@ -77,9 +59,9 @@ func (s *compactionSpend) record(u *provider.Usage) {
 	s.total.CacheWriteTokens += u.CacheWriteTokens
 }
 
-func (s *compactionSpend) read() CompactionUsage {
+func (s *compactionSpend) read() sessionstore.CompactionUsage {
 	if s == nil {
-		return CompactionUsage{}
+		return sessionstore.CompactionUsage{}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

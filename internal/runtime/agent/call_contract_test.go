@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestMissingRequiredArgumentSkipsApproval(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(contractTool{ran: &ran})
 	g := &stubGate{}
-	a := New(nil, reg, NewSession(""), Options{Gate: g}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: g}, event.Discard)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		Name: "remember", Arguments: `{"name":"pkg-manager","body":"the project uses pnpm"}`,
@@ -57,7 +58,7 @@ func TestCompleteArgumentsReachPermissionAndTool(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(contractTool{ran: &ran})
 	g := &stubGate{}
-	a := New(nil, reg, NewSession(""), Options{Gate: g}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: g}, event.Discard)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		Name: "remember", Arguments: `{"description":"the project uses pnpm","body":"the project uses pnpm"}`,
@@ -131,7 +132,7 @@ func TestMistypedArgumentIsRefusedBeforeItRuns(t *testing.T) {
 			reg := tool.NewRegistry()
 			reg.Add(evidenceTool{ran: &ran})
 			g := &stubGate{}
-			a := New(nil, reg, NewSession(""), Options{Gate: g}, event.Discard)
+			a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: g}, event.Discard)
 
 			out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 				Name: "conclude_blocked", Arguments: tc.args,
@@ -158,7 +159,7 @@ func TestNullArgumentIsNotAMistype(t *testing.T) {
 	ran := false
 	reg := tool.NewRegistry()
 	reg.Add(evidenceTool{ran: &ran})
-	a := New(nil, reg, NewSession(""), Options{Gate: &stubGate{}}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: &stubGate{}}, event.Discard)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		Name: "conclude_blocked", Arguments: `{"blocker":"down","evidence":[{"command":"curl","paths":null}]}`,
@@ -182,7 +183,7 @@ func TestMistypedArgumentIsRefusedThroughTheCapabilityProxy(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
 	g := &stubGate{}
-	a := New(nil, reg, NewSession(""), Options{Gate: g}, event.Discard)
+	a := New(nil, reg, sessionstore.NewSession(""), Options{Gate: g}, event.Discard)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		Name:      "use_capability",

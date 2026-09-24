@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -120,7 +121,7 @@ func (c *Controller) initRecoveryGate(reviewer recovery.Reviewer, headless bool)
 			msgs := c.executor.Session().Snapshot()
 			for _, v := range slices.Backward(msgs) {
 				if string(v.Role) == "user" && strings.TrimSpace(v.Content) != "" {
-					text := agent.UserMessageText(v)
+					text := sessionstore.UserMessageText(v)
 					if len(text) > 800 {
 						return text[:800] + "…"
 					}

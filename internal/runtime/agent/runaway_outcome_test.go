@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/state/sessionstore"
 	"sync/atomic"
 	"testing"
 
@@ -70,7 +71,7 @@ func outcomeSeries(t *testing.T, calls []scriptedCall) []evidence.OutcomeSample 
 	reg.Add(scriptedTool{name: "edit_file"})
 	reg.Add(scriptedTool{name: "bash"})
 	prov := &seriesProvider{calls: calls}
-	a := New(prov, reg, NewSession("sys"), Options{MaxSteps: 0}, sink)
+	a := New(prov, reg, sessionstore.NewSession("sys"), Options{MaxSteps: 0}, sink)
 	if err := a.Run(context.Background(), "collect the real state, then rewrite HANDOVER.md"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
