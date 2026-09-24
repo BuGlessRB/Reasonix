@@ -98,7 +98,7 @@ export function usePaint(hub: HubPort, runtimes: RuntimeView[], running: boolean
       applyThemePack(pack, now as "light" | "dark", running, contrast);
       // After the pack, never before: size and type are the reader's, and a
       // palette someone else authored does not get to overrule them.
-      applyLook({ ...look, wallpaper: undefined }, running);
+      applyLook(look, running);
     };
     paint();
     mq.addEventListener("change", paint);

@@ -6,7 +6,12 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 
 const ASSETS = path.join(__dirname, "..", "assets");
-const ICO_SIZES = [16, 24, 32, 48, 64, 256];
+const ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 256];
+// The tray is drawn at 16 logical pixels; nativeImage picks the @Nx file that
+// matches the display, so a scaled screen never enlarges the 16px one.
+const TRAY_SCALES = [[1, ""], [1.25, "@1.25x"], [1.5, "@1.5x"], [2, "@2x"], [3, "@3x"]];
+// The app icon's margin is the platform's to keep; a tray slot has none to spare.
+const TRAY_VIEWBOX = 'viewBox="103 103 818 818"';
 // PNG payloads for every type modern macOS reads; ic11–ic14 are the @2x slots.
 const ICNS_TYPES = [
   ["ic04", 16], ["ic05", 32], ["ic07", 128], ["ic08", 256], ["ic09", 512], ["ic10", 1024],
@@ -64,7 +69,10 @@ async function main() {
   };
   try {
     fs.writeFileSync(path.join(ASSETS, "icon.png"), await at(512));
-    fs.writeFileSync(path.join(ASSETS, "tray.png"), await at(16));
+    const traySvg = svg.replace('viewBox="0 0 1024 1024"', TRAY_VIEWBOX);
+    for (const [scale, suffix] of TRAY_SCALES) {
+      fs.writeFileSync(path.join(ASSETS, `tray${suffix}.png`), await render(page, traySvg, 16 * scale));
+    }
     const icoPngs = [];
     for (const size of ICO_SIZES) icoPngs.push([size, await at(size)]);
     fs.writeFileSync(path.join(ASSETS, "icon.ico"), ico(icoPngs));
