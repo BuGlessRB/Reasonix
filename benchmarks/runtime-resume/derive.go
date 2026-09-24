@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/control"
-	"reasonix/internal/execgraph"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/runtime/agent"
+	"reasonix/internal/session/control"
+	"reasonix/internal/state/execgraph"
 )
 
 // The derivability arms. Everything before them asked what survives; these ask

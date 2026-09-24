@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/control"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/session/control"
 )
 
 // The terminal-disposition arms. SETTLED says an opening is no longer active

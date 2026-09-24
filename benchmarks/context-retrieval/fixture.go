@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/ablation"
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"reasonix/internal/contract/ablation"
+	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/agent"
 )
 
 // A fixture is a real session that has really been compacted: no bench-only

@@ -5,15 +5,15 @@ import (
 	"os"
 	"runtime/debug"
 
-	"reasonix/internal/cli"
-	"reasonix/internal/config"
-	"reasonix/internal/crashreport"
+	"reasonix/internal/contract/config"
+	"reasonix/internal/frontend/cli"
+	"reasonix/internal/platform/crashreport"
 
 	// Blank imports wire compile-time built-ins into their registries.
-	_ "reasonix/internal/provider/anthropic"
-	_ "reasonix/internal/provider/openai"
-	_ "reasonix/internal/provider/responses"
-	_ "reasonix/internal/tool/builtin"
+	_ "reasonix/internal/model/anthropic"
+	_ "reasonix/internal/model/openai"
+	_ "reasonix/internal/model/responses"
+	_ "reasonix/internal/tools/builtin"
 )
 
 // Build identity injected via -ldflags (see Makefile). version remains the

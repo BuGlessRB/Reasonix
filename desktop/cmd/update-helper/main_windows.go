@@ -21,8 +21,8 @@ import (
 	"golang.org/x/sys/windows"
 
 	"reasonix/desktop/internal/winuninstall"
-	"reasonix/internal/installlayout"
-	"reasonix/internal/repair"
+	"reasonix/internal/platform/installlayout"
+	"reasonix/internal/platform/repair"
 )
 
 const parentExitTimeout = 2 * time.Minute

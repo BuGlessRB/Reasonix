@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
 )
 
 // writeTraj lays down a trajectory whose rounds all report prefix hash "p1".

@@ -12,13 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/config"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/execjournal"
-	"reasonix/internal/provider"
-	"reasonix/internal/serve"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/contract/config"
+	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/frontend/serve"
+	"reasonix/internal/session/control"
+	"reasonix/internal/state/execjournal"
 )
 
 // armUIGraphMixed is the only arm that reads the frontend rather than the host.

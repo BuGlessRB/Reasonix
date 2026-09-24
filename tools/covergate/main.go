@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"reasonix/internal/instruction"
+	"reasonix/internal/state/instruction"
 )
 
 func main() {

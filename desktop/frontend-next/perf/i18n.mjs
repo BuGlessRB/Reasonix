@@ -1,6 +1,6 @@
 // 词表守卫：源码里每个 t("…") 的中文 key，英文词表都要有；反过来词表里也不
 // 该留下源码已经不用的条目。缺翻译时界面会退回中文而不是空白，正因如此漏了
-// 不会自己暴露 —— 这个检查就是替代品，对应 internal/i18n 的 catalog 测试。
+// 不会自己暴露 —— 这个检查就是替代品，对应 internal/base/i18n 的 catalog 测试。
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

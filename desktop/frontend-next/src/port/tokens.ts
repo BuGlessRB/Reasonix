@@ -1,4 +1,4 @@
-// Mirrors internal/tokencount.Text: Latin near four bytes per token, CJK near
+// Mirrors internal/base/tokencount.Text: Latin near four bytes per token, CJK near
 // one token per character. Used to size streamed deltas, which arrive as text
 // and carry no count of their own — usage only lands at the end of a round.
 export function estimateTokens(s: string): number {

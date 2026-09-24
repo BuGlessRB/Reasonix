@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/installlayout"
-	"reasonix/internal/repair"
+	"reasonix/internal/platform/installlayout"
+	"reasonix/internal/platform/repair"
 )
 
 // activateVersionedWindowsFromStaging publishes the versioned-v1 layout from a

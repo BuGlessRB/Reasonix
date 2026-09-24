@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/billing"
+	"reasonix/internal/model/billing"
 )
 
 func tableFrom(t *testing.T, path string) table {

@@ -50,7 +50,7 @@ const (
 
 var allRules = []string{
 	ruleEssay, ruleBanner, ruleMarker, ruleDeadCode,
-	ruleNarrative, ruleFileSize, ruleLayering,
+	ruleNarrative, ruleFileSize, ruleLayering, ruleLayerOrder,
 	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText,
 	ruleClaudeDialect, ruleWireParity, ruleOrphan,
 	ruleFrontendParity, ruleFlatView, ruleBuildArtifact,
@@ -196,6 +196,7 @@ func run(root string) ([]Finding, error) {
 	}
 	findings = append(findings, orphans.findings()...)
 	findings = append(findings, checkLayering(imports)...)
+	findings = append(findings, checkLayerOrder(imports)...)
 	findings = append(findings, checkBuildArtifacts(root)...)
 	findings = append(findings, checkCodeOwners(root)...)
 	findings = append(findings, checkDocs(root)...)

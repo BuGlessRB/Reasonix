@@ -115,7 +115,7 @@ effort      = "high"
 # Anthropic (Claude) — the "anthropic" kind speaks the Messages API directly (no
 # OpenAI shim). base_url is optional (defaults to https://api.anthropic.com). Note:
 # this provider does not enable extended thinking and does not send temperature —
-# current Claude models reject sampling params (see internal/provider/anthropic).
+# current Claude models reject sampling params (see internal/model/anthropic).
 # Some Anthropic-compatible gateways use Bearer auth instead of x-api-key; set
 # auth_header = true for those (for example MiniMax Global or Vercel AI Gateway).
 [[providers]]

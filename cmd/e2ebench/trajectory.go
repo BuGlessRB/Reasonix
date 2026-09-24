@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"reasonix/internal/evidence"
+	"reasonix/internal/runtime/evidence"
 )
 
 // trajectorySummary is the harness-side digest of one run's trajectory file:

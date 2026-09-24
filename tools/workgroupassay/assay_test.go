@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/config"
-	"reasonix/internal/event"
-	"reasonix/internal/eventwire"
-	"reasonix/internal/workgroup"
+	"reasonix/internal/contract/config"
+	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/eventwire"
+	"reasonix/internal/state/workgroup"
 )
 
 func toolFrame(id string, issuer event.ToolIssuer, kind string) eventwire.Event {

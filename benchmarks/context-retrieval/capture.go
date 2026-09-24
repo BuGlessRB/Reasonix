@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/ablation"
-	"reasonix/internal/agent"
-	"reasonix/internal/boot"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
-	_ "reasonix/internal/tool/builtin"
+	"reasonix/internal/assembly/boot"
+	"reasonix/internal/contract/ablation"
+	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/agent"
+	_ "reasonix/internal/tools/builtin"
 )
 
 // A projection is what the agent believes; a provider.Request is what the model

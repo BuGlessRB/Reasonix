@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/installlayout"
-	"reasonix/internal/repair"
+	"reasonix/internal/platform/installlayout"
+	"reasonix/internal/platform/repair"
 
-	"reasonix/internal/tempdir"
+	"reasonix/internal/base/tempdir"
 )
 
 const testInstallerSHA256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

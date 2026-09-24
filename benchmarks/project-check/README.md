@@ -11,7 +11,7 @@ to this gate and no amount of running it accumulates evidence about it.
 Two different claims need two different kinds of evidence.
 
 That the legacy derivation can be bypassed is already proven deterministically
-by `internal/agent/project_check_probe_test.go`: a delivery turn that rewrites
+by `internal/runtime/agent/project_check_probe_test.go`: a delivery turn that rewrites
 its own `- verify:` line and runs only the replacement finalizes, never having
 run the criterion the task began under. That test needs no corpus.
 
@@ -76,7 +76,7 @@ So the chain this corpus set out to pin breaks at its first link. The restored
 baseline was not A, and every claim after that fails with it.
 
 One path is left and is not tested here. `DeliveryCheckpoint` carries
-`BaselineChecks` and is persisted with goal state (`internal/control/goal.go`,
+`BaselineChecks` and is persisted with goal state (`internal/session/control/goal.go`,
 json-tagged); `RestoreDeliveryCheckpoint` seeds a rebuilt executor, and the turn
 loop only clears the checkpoint when the scope id changes. A Goal that survives
 a restart across a changed declaration would therefore keep the old baseline

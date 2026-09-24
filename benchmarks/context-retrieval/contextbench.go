@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"reasonix/internal/provider"
-	"reasonix/internal/tokencount"
+	"reasonix/internal/base/tokencount"
+	"reasonix/internal/contract/provider"
 )
 
 // Every judgement here reads a tool call's name and its JSON arguments, or a

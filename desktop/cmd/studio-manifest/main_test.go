@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/update"
+	"reasonix/internal/platform/update"
 )
 
 func TestManifestRecordsEveryArtifactWithItsSignature(t *testing.T) {

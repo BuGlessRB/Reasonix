@@ -61,7 +61,7 @@ prompts) so the desktop module consumes the same surface. See §Remote below.
 
 ## 3. Core Abstractions
 
-### 3.1 Provider + registry (`internal/provider`)
+### 3.1 Provider + registry (`internal/contract/provider`)
 
 ```go
 type Provider interface {
@@ -106,7 +106,7 @@ type Config struct {
 - Streaming tool-call deltas are accumulated by index inside the provider; only
   complete `ToolCall`s are emitted.
 
-### 3.2 Tool + registry (`internal/tool`)
+### 3.2 Tool + registry (`internal/contract/tool`)
 
 ```go
 type Tool interface {
@@ -127,7 +127,7 @@ type Tool interface {
 - `Execute` parses raw JSON args itself. Errors are returned, not fatal — the
   agent feeds them back so the model can self-correct.
 
-### 3.3 Plugins (`internal/plugin`) — MCP client
+### 3.3 Plugins (`internal/ext/plugin`) — MCP client
 
 An external plugin is an MCP server declared in config. The wire protocol is
 **JSON-RPC 2.0** in every case; only the transport differs. A `transport`
@@ -195,7 +195,7 @@ interface (`call` / `notify` / `close`) abstracts that, so the MCP-level logic
 - `cmd/reasonix-plugin-example` is a runnable reference stdio server (`echo`,
   `wordcount`), driven by an end-to-end test that builds the real binary.
 
-### 3.4 Agent (`internal/agent`)
+### 3.4 Agent (`internal/runtime/agent`)
 
 - `Session` holds `[]Message`.
 - `Run(ctx, input)` loop: build `Request` (with tool schemas) → `provider.Stream`
@@ -384,7 +384,7 @@ This is the **only** point where the prompt prefix changes — a deliberate, rar
 stays cache-friendly, so cache hit rate (the key observability signal) stays
 high. `context_window = 0` disables compaction for an instance.
 
-### 3.7 Permissions (`internal/permission`) — per-call gating
+### 3.7 Permissions (`internal/safety/permission`) — per-call gating
 
 A coding agent runs shell commands and edits files autonomously. The permission
 layer decides, **per tool call**, whether to allow it, deny it, or ask the user
@@ -567,7 +567,7 @@ fallback in unattended automation; `--permission-mode auto` is equivalent.
 Explicit `ask` rules still fail closed under Auto, and `deny` rules harden every
 posture.
 
-### 3.8 Slash commands (`internal/command`)
+### 3.8 Slash commands (`internal/ext/command`)
 
 The chat TUI accepts `/command` input. Three kinds share one dispatch:
 
@@ -704,7 +704,7 @@ retry or verification policy — those are decided by the task or the scheduler.
 Skill frontmatter may keep growing; `agent.ProfileFromSkill` is the single
 narrowing point, and routing metadata (triggers, auto-use, cost, freshness)
 stops there because it decides *when* a worker is chosen, not how it thinks.
-`internal/agent/profile_boundary_test.go` fails on any widening.
+`internal/runtime/agent/profile_boundary_test.go` fails on any widening.
 
 ### 3.11 Sub-agents close with a host-adjudicated claim
 
@@ -900,9 +900,9 @@ An entry point that must not persist a transcript says so with
 `ContextRequest.Ephemeral` rather than building its own session, so its promise
 is a field on the spec instead of a second construction path.
 
-`internal/agent/spawn_boundary_test.go` enumerates the files that still call the
+`internal/runtime/agent/spawn_boundary_test.go` enumerates the files that still call the
 low-level runners directly and fails on any new one. The remaining entries —
-`internal/boot` (skill runners), `internal/cli/review.go`, and
+`internal/assembly/boot` (skill runners), `internal/frontend/cli/review.go`, and
 `desktop/subagents_app.go` — are known debt, not precedent.
 
 ### 3.16 MCP concurrency: read-only is not stateless
@@ -1034,7 +1034,7 @@ Not yet measured, and deliberately not faked: rework-after-handoff needs
 mutation ordering across a whole run, which belongs to the harness driving the
 arms rather than the instrument recording one.
 
-## 4. Data Types (`internal/provider`)
+## 4. Data Types (`internal/contract/provider`)
 
 ```go
 type Role string

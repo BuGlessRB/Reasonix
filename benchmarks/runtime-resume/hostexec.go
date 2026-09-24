@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/control"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/session/control"
 )
 
 // The interactive host-initiated arms, named for the one surface they measure: a

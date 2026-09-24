@@ -7,7 +7,7 @@ owns replacement strategies, contributes streaming model providers, and
 publishes structured UI — without ever linking into the host binary.
 
 - Protocol ID: `reasonix.extension.v2`
-- Machine-readable schema: `internal/extension/protocol/schema.generated.json`
+- Machine-readable schema: `internal/ext/extension/protocol/schema.generated.json`
 - Method/event/limit/error index: `docs/EXTENSION_PROTOCOL.generated.md`
   (generated, drift-checked in CI)
 - Go SDK (implements everything below): `sdk/go`

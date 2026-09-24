@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/boot"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
+	"reasonix/internal/assembly/boot"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/contract/event"
+	"reasonix/internal/session/control"
 )
 
 // armRoot names the four directories one arm owns. Home and Workspace are

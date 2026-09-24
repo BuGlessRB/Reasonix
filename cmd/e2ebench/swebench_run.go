@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/ablation"
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "reasonix/internal/base/fileutil/encoding"
+	"reasonix/internal/contract/ablation"
 )
 
 type swebenchOpts struct {

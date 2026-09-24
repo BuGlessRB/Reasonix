@@ -16,7 +16,7 @@
 // should exit with code 0; the host reaps it by that exit status.
 //
 // Protocol reference: docs/EXTENSION_PROTOCOL.generated.md and
-// internal/extension/protocol/schema.generated.json in the Reasonix
+// internal/ext/extension/protocol/schema.generated.json in the Reasonix
 // repository.
 package extension
 

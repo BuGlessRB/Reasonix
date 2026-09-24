@@ -13,16 +13,16 @@ import (
 // narrowing edit would quietly erase its own debt.
 type frontendPort struct {
 	pkg  string // repo-relative package directory
-	port string // the interface in internal/control it drives
+	port string // the interface in internal/session/control it drives
 }
 
 // A shell that drives the kernel over HTTP is absent: wire-parity covers it.
-// internal/cli is absent for a different reason: with the interactive session
+// internal/frontend/cli is absent for a different reason: with the interactive session
 // gone it is a launcher for serve and one-shot run, not a surface a person
 // operates a session through, so a capability it does not drive is not debt.
 var frontendPorts = []frontendPort{
-	{pkg: "internal/acp", port: "EditorAPI"},
-	{pkg: "internal/serve", port: "SessionAPI"},
+	{pkg: "internal/frontend/acp", port: "EditorAPI"},
+	{pkg: "internal/frontend/serve", port: "SessionAPI"},
 }
 
 // frontendScope excuses one capability a frontend's port declares and that it

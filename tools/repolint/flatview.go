@@ -11,16 +11,16 @@ import (
 // over it, so the adapter's callers are a closed list. Asking instead whether a
 // read is "new" would judge intent, which nothing in the source records.
 var flatViewReaders = []string{
-	"internal/frontmatter/frontmatter.go",    // SplitLegacy, its one wrapper
-	"internal/command/command.go",            // slash-command vocabulary
-	"internal/installsource/skill.go",        // install-time skill sniffing
-	"internal/memory/store.go",               // memory note vocabulary
-	"internal/outputstyle/outputstyle.go",    // output-style vocabulary
-	"internal/pluginpkg/claude_compat.go",    // imported Claude packages
-	"internal/pluginpkg/pluginpkg.go",        // plugin manifest vocabulary
-	"internal/skill/builtincontent/embed.go", // shipped built-in bodies
-	"internal/skill/profile.go",              // profile vocabulary
-	"internal/skill/skill.go",                // the 17-key skill vocabulary
+	"internal/base/frontmatter/frontmatter.go",    // SplitLegacy, its one wrapper
+	"internal/ext/command/command.go",             // slash-command vocabulary
+	"internal/ext/installsource/skill.go",         // install-time skill sniffing
+	"internal/state/memory/store.go",              // memory note vocabulary
+	"internal/runtime/outputstyle/outputstyle.go", // output-style vocabulary
+	"internal/ext/pluginpkg/claude_compat.go",     // imported Claude packages
+	"internal/ext/pluginpkg/pluginpkg.go",         // plugin manifest vocabulary
+	"internal/ext/skill/builtincontent/embed.go",  // shipped built-in bodies
+	"internal/ext/skill/profile.go",               // profile vocabulary
+	"internal/ext/skill/skill.go",                 // the 17-key skill vocabulary
 }
 
 // flatViewCalls are the two entry points into the lossy view, named so a

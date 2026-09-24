@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/provider"
 )
 
 // scriptedProvider walks the chain a competent model would: search, read the

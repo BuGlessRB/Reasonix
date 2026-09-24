@@ -11,8 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"reasonix/internal/ablation"
-	"reasonix/internal/shellparse"
+	"reasonix/internal/base/shellparse"
+	"reasonix/internal/contract/ablation"
 )
 
 type diffOpts struct {
@@ -423,8 +423,8 @@ func parseCoverProfile(repo, path string) map[string][]coverBlock {
 	return out
 }
 
-// repoRelFromModulePath turns "reasonix/internal/agent/foo.go" into
-// "internal/agent/foo.go" by dropping the first path element (the module root).
+// repoRelFromModulePath turns "reasonix/internal/runtime/agent/foo.go" into
+// "internal/runtime/agent/foo.go" by dropping the first path element (the module root).
 func repoRelFromModulePath(p string) string {
 	// Strip the full module prefix; a generic first-segment cut mis-strips a multi-segment module path.
 	prefix := "reasonix/"

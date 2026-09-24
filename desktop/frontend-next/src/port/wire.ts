@@ -1,4 +1,4 @@
-// Mirrors internal/eventwire. Field names and kind strings must match exactly;
+// Mirrors internal/contract/eventwire. Field names and kind strings must match exactly;
 // this file is the contract, not a convenience shape.
 
 export type Kind =
@@ -509,7 +509,7 @@ export interface ReceiptGap {
 }
 
 // The run's execution graph, published as facts rather than drawn from id
-// prefixes. Mirrors internal/agentgraph: a node named again updates the one
+// prefixes. Mirrors internal/contract/agentgraph: a node named again updates the one
 // already there, and an edge kind is what tells "waited for this" apart from
 // "started from this answer".
 export type GraphNodeKind = "group" | "worker" | "external";

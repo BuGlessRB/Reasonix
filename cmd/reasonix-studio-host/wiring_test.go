@@ -6,8 +6,8 @@ import (
 	"go/token"
 	"testing"
 
-	"reasonix/internal/config"
-	"reasonix/internal/i18n"
+	"reasonix/internal/base/i18n"
+	"reasonix/internal/contract/config"
 )
 
 // A capability this host implements and does not hand to its hub is one the

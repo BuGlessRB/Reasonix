@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/config"
-	"reasonix/internal/memory"
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/config"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/runtime/agent"
+	"reasonix/internal/state/memory"
 )
 
 // arm is one death-and-resume run. Lever runs between the two processes and is

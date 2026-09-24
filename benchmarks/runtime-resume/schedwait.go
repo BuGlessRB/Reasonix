@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/control"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/session/control"
 )
 
 // The scheduler-wait arms. Each dies with one item ready and refused admission,

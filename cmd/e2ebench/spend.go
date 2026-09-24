@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/event"
+	"reasonix/internal/contract/event"
 )
 
 // conversationSources carry the session's tools and history. Every other

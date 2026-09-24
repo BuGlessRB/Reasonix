@@ -15,6 +15,7 @@
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4348,
+    "layer-order": 47,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -211,1372 +212,1465 @@
       "doc-owner": 1,
       "doc-prose": 2
     },
-    "internal/acp/clientio.go": {
-      "essay": 4
-    },
-    "internal/acp/dispatch.go": {
-      "essay": 16
-    },
-    "internal/acp/dispatch_extension_test.go": {
-      "essay": 1
-    },
-    "internal/acp/e2e_test.go": {
-      "essay": 2
-    },
-    "internal/acp/extension_models.go": {
-      "essay": 2
-    },
-    "internal/acp/live_test.go": {
-      "essay": 1
-    },
-    "internal/acp/protocol.go": {
-      "essay": 13,
-      "file-size": 26
-    },
-    "internal/acp/server.go": {
-      "essay": 4
-    },
-    "internal/acp/server_test.go": {
-      "essay": 1
-    },
-    "internal/acp/service.go": {
-      "essay": 49,
-      "file-size": 876,
-      "function-size": 97,
-      "struct-state": 2
-    },
-    "internal/acp/service_lock_test.go": {
-      "essay": 7
-    },
-    "internal/acp/session.go": {
-      "essay": 6
-    },
-    "internal/acp/session_config.go": {
-      "essay": 6
-    },
-    "internal/acp/status.go": {
-      "file-size": 20
-    },
-    "internal/acp/switch_recovery_test.go": {
-      "essay": 7
-    },
-    "internal/agent/agent.go": {
-      "complexity": 37,
-      "essay": 33,
-      "file-size": 1223,
-      "function-size": 102
-    },
-    "internal/agent/agent_options.go": {
-      "essay": 10
-    },
-    "internal/agent/ask.go": {
-      "essay": 1
-    },
-    "internal/agent/branch.go": {
-      "essay": 10,
-      "orphan": 3
-    },
-    "internal/agent/cache_shape.go": {
-      "essay": 3
-    },
-    "internal/agent/cache_shape_test.go": {
-      "essay": 1
-    },
-    "internal/agent/capability_gate.go": {
-      "essay": 7
-    },
-    "internal/agent/capability_gate_test.go": {
-      "essay": 1
-    },
-    "internal/agent/compact_test.go": {
-      "essay": 1
-    },
-    "internal/agent/context_manager.go": {
-      "essay": 1
-    },
-    "internal/agent/coordinator.go": {
-      "essay": 14,
-      "orphan": 1
-    },
-    "internal/agent/coordinator_test.go": {
-      "essay": 3
-    },
-    "internal/agent/delivery_hardening_test.go": {
-      "essay": 3
-    },
-    "internal/agent/delivery_scope_test.go": {
-      "essay": 1
-    },
-    "internal/agent/dependent_writer_preview_test.go": {
-      "essay": 1
-    },
-    "internal/agent/empty_final_test.go": {
-      "essay": 5
-    },
-    "internal/agent/execute_batch.go": {
-      "complexity": 22,
-      "function-size": 108
-    },
-    "internal/agent/execute_one.go": {
-      "essay": 14
-    },
-    "internal/agent/extensions.go": {
-      "essay": 64
-    },
-    "internal/agent/extensions_test.go": {
-      "essay": 4
-    },
-    "internal/agent/final_readiness.go": {
-      "complexity": 1
-    },
-    "internal/agent/fleet.go": {
-      "essay": 3
-    },
-    "internal/agent/format.go": {
-      "orphan": 1
-    },
-    "internal/agent/listsessions_bench_test.go": {
-      "essay": 4
-    },
-    "internal/agent/migrate.go": {
-      "complexity": 32,
-      "essay": 23,
-      "file-size": 195,
-      "function-size": 73
-    },
-    "internal/agent/normalize.go": {
-      "essay": 14
-    },
-    "internal/agent/parallel_tasks.go": {
-      "essay": 3,
-      "function-size": 71
-    },
-    "internal/agent/parallel_tasks_test.go": {
-      "essay": 2
-    },
-    "internal/agent/preview.go": {
-      "essay": 17
-    },
-    "internal/agent/preview_test.go": {
-      "essay": 3
-    },
-    "internal/agent/profile_spec.go": {
-      "essay": 4
-    },
-    "internal/agent/reasoning_language.go": {
-      "essay": 2
-    },
-    "internal/agent/reasoning_warn_state.go": {
-      "complexity": 2,
-      "essay": 14
-    },
-    "internal/agent/recovery_gate.go": {
-      "essay": 8
-    },
-    "internal/agent/recovery_gc.go": {
-      "essay": 17
-    },
-    "internal/agent/recovery_gc_test.go": {
-      "essay": 1
-    },
-    "internal/agent/review_unavailable.go": {
-      "orphan": 1
-    },
-    "internal/agent/run_loop.go": {
-      "essay": 21,
-      "function-size": 2
-    },
-    "internal/agent/run_usage.go": {
-      "complexity": 1,
-      "essay": 5
-    },
-    "internal/agent/save.go": {
-      "complexity": 36,
-      "essay": 109,
-      "file-size": 1281,
-      "function-size": 95
-    },
-    "internal/agent/save_test.go": {
-      "essay": 9
-    },
-    "internal/agent/scheduler.go": {
-      "essay": 1
-    },
-    "internal/agent/session.go": {
-      "essay": 28
-    },
-    "internal/agent/session_compat_legacy_test.go": {
-      "essay": 3
-    },
-    "internal/agent/session_content.go": {
-      "orphan": 1
-    },
-    "internal/agent/session_display_index.go": {
-      "essay": 18,
-      "orphan": 2
-    },
-    "internal/agent/session_display_read_model.go": {
-      "orphan": 2
-    },
-    "internal/agent/session_events.go": {
-      "essay": 9,
-      "file-size": 82
-    },
-    "internal/agent/session_events_test.go": {
-      "essay": 3
-    },
-    "internal/agent/session_lease.go": {
-      "essay": 13
-    },
-    "internal/agent/session_lease_test.go": {
-      "essay": 4
-    },
-    "internal/agent/session_lock_windows.go": {
-      "essay": 4
-    },
-    "internal/agent/session_removal.go": {
-      "essay": 6
-    },
-    "internal/agent/steer_flush_test.go": {
-      "essay": 1
-    },
-    "internal/agent/subagent_progress.go": {
-      "essay": 10
-    },
-    "internal/agent/subagent_store.go": {
-      "essay": 5,
-      "file-size": 127
-    },
-    "internal/agent/task.go": {
-      "complexity": 12,
-      "essay": 35,
-      "file-size": 1121,
-      "function-size": 94,
-      "orphan": 1
-    },
-    "internal/agent/task_test.go": {
-      "essay": 4
-    },
-    "internal/agent/testutil/mock_provider.go": {
-      "essay": 10
-    },
-    "internal/agent/textsink.go": {
-      "essay": 9
-    },
-    "internal/agent/usecapability.go": {
-      "essay": 9,
-      "file-size": 713,
-      "function-size": 2
-    },
-    "internal/agent/width.go": {
-      "essay": 1
-    },
-    "internal/agent/write_claims.go": {
-      "orphan": 1
-    },
-    "internal/billing/migrate.go": {
-      "orphan": 1
-    },
-    "internal/boot/boot.go": {
+    "internal/assembly/boot/boot.go": {
       "complexity": 125,
       "essay": 76,
       "file-size": 897,
       "function-size": 1013
     },
-    "internal/boot/boot_test.go": {
+    "internal/assembly/boot/boot_test.go": {
       "essay": 10
     },
-    "internal/boot/extension_dispatch_test.go": {
+    "internal/assembly/boot/extension_dispatch_test.go": {
       "essay": 3
     },
-    "internal/boot/extension_firstboot_test.go": {
+    "internal/assembly/boot/extension_firstboot_test.go": {
       "essay": 1
     },
-    "internal/boot/extension_sidecar_test.go": {
+    "internal/assembly/boot/extension_sidecar_test.go": {
       "essay": 28
     },
-    "internal/boot/extension_ui_gate_test.go": {
+    "internal/assembly/boot/extension_ui_gate_test.go": {
       "essay": 1
     },
-    "internal/boot/golden_baseline_test.go": {
+    "internal/assembly/boot/golden_baseline_test.go": {
       "essay": 17
     },
-    "internal/boot/model_error_test.go": {
+    "internal/assembly/boot/model_error_test.go": {
       "essay": 2
     },
-    "internal/boot/prompt_stability_test.go": {
+    "internal/assembly/boot/prompt_stability_test.go": {
       "essay": 4
     },
-    "internal/boot/rebuild_subgraph.go": {
+    "internal/assembly/boot/rebuild_subgraph.go": {
       "function-size": 7
     },
-    "internal/boot/reload.go": {
+    "internal/assembly/boot/reload.go": {
       "essay": 32
     },
-    "internal/boot/runtime.go": {
+    "internal/assembly/boot/runtime.go": {
       "essay": 50,
       "function-size": 1
     },
-    "internal/boot/token_profile.go": {
+    "internal/assembly/boot/token_profile.go": {
       "essay": 1
     },
-    "internal/capability/audit.go": {
-      "struct-state": 6
-    },
-    "internal/capability/catalog.go": {
+    "internal/base/fileref/search.go": {
       "essay": 1
     },
-    "internal/capdiag/collect.go": {
-      "essay": 1
-    },
-    "internal/capdiag/render.go": {
-      "orphan": 1
-    },
-    "internal/checkpoint/barrier.go": {
-      "essay": 1
-    },
-    "internal/checkpoint/checkpoint.go": {
-      "essay": 8,
-      "file-size": 291
-    },
-    "internal/checkpoint/observer.go": {
-      "essay": 1
-    },
-    "internal/checkpoint/transaction.go": {
-      "complexity": 24,
-      "essay": 2,
-      "file-size": 739,
-      "function-size": 73
-    },
-    "internal/cli/acp.go": {
-      "essay": 7,
-      "function-size": 31
-    },
-    "internal/cli/buildinfo.go": {
-      "essay": 7
-    },
-    "internal/cli/cli.go": {
-      "complexity": 32,
-      "essay": 41,
-      "file-size": 1079,
-      "function-size": 167
-    },
-    "internal/cli/cli_test.go": {
-      "essay": 9
-    },
-    "internal/cli/default_model.go": {
-      "essay": 12
-    },
-    "internal/cli/extension_surface.go": {
-      "essay": 4
-    },
-    "internal/cli/hook_machine.go": {
-      "essay": 3
-    },
-    "internal/cli/mathnode.go": {
-      "essay": 1
-    },
-    "internal/cli/mcp.go": {
-      "essay": 1
-    },
-    "internal/cli/md.go": {
-      "essay": 7
-    },
-    "internal/cli/remote_connect.go": {
-      "essay": 3
-    },
-    "internal/cli/review.go": {
-      "essay": 8
-    },
-    "internal/cli/run_metrics.go": {
-      "essay": 1
-    },
-    "internal/cli/run_output.go": {
-      "essay": 1
-    },
-    "internal/cli/select.go": {
-      "complexity": 60,
-      "essay": 1,
-      "function-size": 153
-    },
-    "internal/cli/serve_frontend.go": {
-      "complexity": 6,
-      "function-size": 77
-    },
-    "internal/cli/session_lease.go": {
-      "essay": 4
-    },
-    "internal/cli/setup_manager.go": {
-      "essay": 2,
-      "file-size": 93
-    },
-    "internal/cli/shell_completion.go": {
-      "function-size": 76
-    },
-    "internal/cli/transcript.go": {
-      "essay": 1
-    },
-    "internal/cli/upgrade.go": {
-      "complexity": 1,
-      "essay": 2,
-      "function-size": 28
-    },
-    "internal/cli/width_test.go": {
-      "essay": 1
-    },
-    "internal/config/billing.go": {
-      "orphan": 1
-    },
-    "internal/config/cache_policy.go": {
-      "essay": 9
-    },
-    "internal/config/ccswitch.go": {
-      "essay": 2
-    },
-    "internal/config/config.go": {
-      "essay": 47,
-      "file-size": 1106
-    },
-    "internal/config/credentials.go": {
-      "essay": 1,
-      "file-size": 50
-    },
-    "internal/config/credentials_keyring_unix.go": {
-      "essay": 7
-    },
-    "internal/config/decode.go": {
-      "essay": 9
-    },
-    "internal/config/deepseek_protocol_migration.go": {
-      "orphan": 2
-    },
-    "internal/config/dotenv.go": {
-      "essay": 1
-    },
-    "internal/config/edit.go": {
-      "essay": 9,
-      "file-size": 1385
-    },
-    "internal/config/effort.go": {
-      "complexity": 1,
-      "essay": 11
-    },
-    "internal/config/effort_test.go": {
-      "essay": 2
-    },
-    "internal/config/load.go": {
-      "essay": 24,
-      "file-size": 1194,
-      "function-size": 46,
-      "orphan": 2
-    },
-    "internal/config/main_test.go": {
-      "essay": 1
-    },
-    "internal/config/mcpjson.go": {
-      "essay": 3
-    },
-    "internal/config/migrate.go": {
-      "orphan": 1
-    },
-    "internal/config/mutate.go": {
-      "essay": 2
-    },
-    "internal/config/mutate_test.go": {
-      "essay": 3
-    },
-    "internal/config/paths.go": {
-      "essay": 10
-    },
-    "internal/config/plugin_entry.go": {
-      "essay": 9
-    },
-    "internal/config/plugin_packages.go": {
-      "essay": 2
-    },
-    "internal/config/provider_isolation_test.go": {
-      "essay": 3
-    },
-    "internal/config/provider_presets.go": {
-      "claude-dialect": 1,
-      "file-size": 219
-    },
-    "internal/config/render.go": {
-      "complexity": 195,
-      "essay": 2,
-      "file-size": 571,
-      "function-size": 696
-    },
-    "internal/config/vision.go": {
-      "essay": 1,
-      "orphan": 1
-    },
-    "internal/control/approval.go": {
-      "essay": 19
-    },
-    "internal/control/approval_bridge.go": {
-      "essay": 1
-    },
-    "internal/control/approval_orchestration.go": {
-      "essay": 38,
-      "frontend-parity": 3
-    },
-    "internal/control/attachments.go": {
-      "orphan": 1
-    },
-    "internal/control/capability_scope.go": {
-      "frontend-parity": 1
-    },
-    "internal/control/checkpoint.go": {
-      "essay": 16
-    },
-    "internal/control/controller.go": {
-      "essay": 32,
-      "file-size": 594,
-      "frontend-parity": 6
-    },
-    "internal/control/controller_test.go": {
-      "essay": 9
-    },
-    "internal/control/errmsg.go": {
-      "essay": 2
-    },
-    "internal/control/extension_ui.go": {
-      "essay": 4,
-      "frontend-parity": 1
-    },
-    "internal/control/extensions.go": {
-      "essay": 5
-    },
-    "internal/control/goal.go": {
-      "complexity": 2,
-      "essay": 6,
-      "file-size": 193,
-      "struct-state": 9
-    },
-    "internal/control/goal_control.go": {
-      "essay": 1,
-      "frontend-parity": 1
-    },
-    "internal/control/goalusage.go": {
-      "essay": 2
-    },
-    "internal/control/headless_approval_test.go": {
-      "essay": 10
-    },
-    "internal/control/inbox.go": {
-      "frontend-parity": 2
-    },
-    "internal/control/input.go": {
-      "essay": 3,
-      "frontend-parity": 3
-    },
-    "internal/control/input_test.go": {
-      "essay": 4
-    },
-    "internal/control/mcp.go": {
-      "essay": 7
-    },
-    "internal/control/mcp_admin.go": {
-      "frontend-parity": 7
-    },
-    "internal/control/mcp_servers.go": {
-      "essay": 2,
-      "frontend-parity": 2
-    },
-    "internal/control/memory.go": {
-      "essay": 12
-    },
-    "internal/control/memory_command.go": {
-      "essay": 2
-    },
-    "internal/control/plan_todos.go": {
-      "essay": 6
-    },
-    "internal/control/planner_gate.go": {
-      "orphan": 1
-    },
-    "internal/control/port.go": {
-      "essay": 8
-    },
-    "internal/control/recovery.go": {
-      "essay": 1
-    },
-    "internal/control/recovery_test.go": {
-      "essay": 1
-    },
-    "internal/control/refs.go": {
-      "essay": 5,
-      "file-size": 403
-    },
-    "internal/control/session_lease_keeper.go": {
-      "essay": 5
-    },
-    "internal/control/session_lifecycle.go": {
-      "essay": 11,
-      "frontend-parity": 3
-    },
-    "internal/control/session_snapshot.go": {
-      "essay": 14
-    },
-    "internal/control/sessionpath.go": {
-      "essay": 6
-    },
-    "internal/control/shell_test.go": {
-      "essay": 2
-    },
-    "internal/control/skill.go": {
-      "essay": 4
-    },
-    "internal/control/slash.go": {
-      "complexity": 4,
-      "essay": 2
-    },
-    "internal/control/steer_fallback_test.go": {
-      "essay": 1
-    },
-    "internal/control/turn_cancel.go": {
-      "essay": 22,
-      "frontend-parity": 1,
-      "function-size": 4
-    },
-    "internal/control/turn_entry.go": {
-      "frontend-parity": 1
-    },
-    "internal/control/turn_orchestrator.go": {
-      "essay": 10,
-      "function-size": 3
-    },
-    "internal/control/turn_orchestrator_test.go": {
-      "essay": 1
-    },
-    "internal/control/turn_submit.go": {
-      "complexity": 3,
-      "essay": 5,
-      "frontend-parity": 1,
-      "function-size": 23
-    },
-    "internal/doctor/report.go": {
-      "essay": 3
-    },
-    "internal/doctor/session_bundle.go": {
-      "essay": 1
-    },
-    "internal/doctor/session_redact.go": {
-      "essay": 12
-    },
-    "internal/environment/probe.go": {
-      "essay": 5
-    },
-    "internal/environment/snapshot.go": {
-      "essay": 5
-    },
-    "internal/environment/snapshot_test.go": {
-      "essay": 2
-    },
-    "internal/event/event.go": {
-      "essay": 7
-    },
-    "internal/event/subagent_progress.go": {
-      "essay": 9
-    },
-    "internal/event/sync.go": {
-      "essay": 2
-    },
-    "internal/evidence/evidence.go": {
-      "essay": 2
-    },
-    "internal/evidence/ledger_queries.go": {
-      "essay": 6
-    },
-    "internal/evidence/review_report.go": {
-      "essay": 7
-    },
-    "internal/evidence/todos.go": {
-      "essay": 8
-    },
-    "internal/evidence/verification_command.go": {
-      "complexity": 6,
-      "essay": 18
-    },
-    "internal/evidence/verification_summary_test.go": {
-      "essay": 1
-    },
-    "internal/extension/adapters.go": {
-      "essay": 3
-    },
-    "internal/extension/builder.go": {
-      "essay": 21
-    },
-    "internal/extension/catalog.go": {
-      "essay": 6
-    },
-    "internal/extension/contributor.go": {
-      "essay": 1
-    },
-    "internal/extension/dispatch/dispatch.go": {
-      "essay": 19
-    },
-    "internal/extension/dispatch/payloads.go": {
-      "essay": 2
-    },
-    "internal/extension/intercept.go": {
-      "essay": 1
-    },
-    "internal/extension/metrics.go": {
-      "struct-state": 5
-    },
-    "internal/extension/protocol/dto_content.go": {
-      "essay": 1
-    },
-    "internal/extension/protocol/dto_provider.go": {
-      "essay": 3
-    },
-    "internal/extension/protocol/dto_ui.go": {
-      "essay": 4
-    },
-    "internal/extension/protocol/limits.go": {
-      "orphan": 1
-    },
-    "internal/extension/protocol/protocol.go": {
-      "essay": 5
-    },
-    "internal/extension/protocol/registry.go": {
-      "essay": 1
-    },
-    "internal/extension/protocol/validate.go": {
-      "complexity": 3
-    },
-    "internal/extension/protocolgen/sdkgo.go": {
-      "essay": 2
-    },
-    "internal/extension/providerext/provider.go": {
-      "essay": 1
-    },
-    "internal/extension/providerext/providerext.go": {
-      "essay": 5
-    },
-    "internal/extension/publish.go": {
-      "orphan": 1
-    },
-    "internal/extension/replace.go": {
-      "essay": 1,
-      "orphan": 1
-    },
-    "internal/extension/rpcwire/bootstrap.go": {
-      "orphan": 1
-    },
-    "internal/extension/rpcwire/conn.go": {
-      "essay": 11,
-      "file-size": 74
-    },
-    "internal/extension/rpcwire/stall_test.go": {
-      "essay": 1
-    },
-    "internal/extension/scope_resources.go": {
-      "orphan": 2
-    },
-    "internal/extension/sessionstate.go": {
-      "orphan": 1
-    },
-    "internal/extension/sidecar/client.go": {
-      "essay": 3
-    },
-    "internal/extension/sidecar/content.go": {
-      "essay": 2
-    },
-    "internal/extension/sidecar/externalize.go": {
-      "essay": 9
-    },
-    "internal/extension/sidecar/fake_test.go": {
-      "essay": 9
-    },
-    "internal/extension/sidecar/probe_client.go": {
-      "orphan": 1
-    },
-    "internal/extension/snapshot.go": {
-      "essay": 1
-    },
-    "internal/extension/source.go": {
-      "essay": 2
-    },
-    "internal/extension/uihub/hub.go": {
-      "essay": 6
-    },
-    "internal/fileref/search.go": {
-      "essay": 1
-    },
-    "internal/fileutil/atomicwrite.go": {
+    "internal/base/fileutil/atomicwrite.go": {
       "essay": 18,
       "orphan": 1
     },
-    "internal/fileutil/atomicwrite_test.go": {
+    "internal/base/fileutil/atomicwrite_test.go": {
       "essay": 2
     },
-    "internal/fileutil/replacefallback_other.go": {
+    "internal/base/fileutil/replacefallback_other.go": {
       "essay": 1
     },
-    "internal/fileutil/replacefallback_windows_test.go": {
+    "internal/base/fileutil/replacefallback_windows_test.go": {
       "essay": 1
     },
-    "internal/gitcmd/gitcmd.go": {
-      "essay": 14
+    "internal/base/i18n/catalog_parity_test.go": {
+      "essay": 13
     },
-    "internal/guardian/guardian.go": {
-      "essay": 25
+    "internal/base/i18n/i18n.go": {
+      "essay": 6
     },
-    "internal/guardian/guardian_policy.md": {
-      "doc-prose": 1
+    "internal/base/proc/kill_other.go": {
+      "essay": 1
     },
-    "internal/history/indexed.go": {
+    "internal/base/proc/kill_windows.go": {
+      "essay": 5
+    },
+    "internal/base/secrets/redact.go": {
+      "complexity": 9,
+      "essay": 1,
+      "layer-order": 1
+    },
+    "internal/base/shellparse/bash.go": {
+      "essay": 8
+    },
+    "internal/contract/config/anthropic_contract.go": {
+      "layer-order": 1
+    },
+    "internal/contract/config/billing.go": {
+      "layer-order": 1,
       "orphan": 1
     },
-    "internal/hook/hook.go": {
+    "internal/contract/config/cache_policy.go": {
+      "essay": 9
+    },
+    "internal/contract/config/capability_activation.go": {
+      "layer-order": 1
+    },
+    "internal/contract/config/ccswitch.go": {
+      "essay": 2
+    },
+    "internal/contract/config/config.go": {
+      "essay": 47,
+      "file-size": 1106
+    },
+    "internal/contract/config/credentials.go": {
+      "essay": 1,
+      "file-size": 50
+    },
+    "internal/contract/config/credentials_keyring_unix.go": {
+      "essay": 7
+    },
+    "internal/contract/config/decode.go": {
+      "essay": 9
+    },
+    "internal/contract/config/deepseek_catalog.go": {
+      "layer-order": 1
+    },
+    "internal/contract/config/deepseek_protocol_migration.go": {
+      "orphan": 2
+    },
+    "internal/contract/config/dotenv.go": {
+      "essay": 1
+    },
+    "internal/contract/config/edit.go": {
+      "essay": 9,
+      "file-size": 1385,
+      "layer-order": 2
+    },
+    "internal/contract/config/effort.go": {
+      "complexity": 1,
+      "essay": 11,
+      "layer-order": 1
+    },
+    "internal/contract/config/effort_test.go": {
+      "essay": 2
+    },
+    "internal/contract/config/fetch.go": {
+      "layer-order": 1
+    },
+    "internal/contract/config/load.go": {
+      "essay": 24,
+      "file-size": 1194,
+      "function-size": 46,
+      "layer-order": 1,
+      "orphan": 2
+    },
+    "internal/contract/config/main_test.go": {
+      "essay": 1
+    },
+    "internal/contract/config/mcpjson.go": {
+      "essay": 3
+    },
+    "internal/contract/config/migrate.go": {
+      "orphan": 1
+    },
+    "internal/contract/config/mutate.go": {
+      "essay": 2
+    },
+    "internal/contract/config/mutate_test.go": {
+      "essay": 3
+    },
+    "internal/contract/config/paths.go": {
+      "essay": 10,
+      "layer-order": 1
+    },
+    "internal/contract/config/plugin_entry.go": {
+      "essay": 9
+    },
+    "internal/contract/config/plugin_packages.go": {
+      "essay": 2,
+      "layer-order": 2
+    },
+    "internal/contract/config/pricing.go": {
+      "layer-order": 1
+    },
+    "internal/contract/config/probe_failure.go": {
+      "layer-order": 1
+    },
+    "internal/contract/config/protocol_declared.go": {
+      "layer-order": 1
+    },
+    "internal/contract/config/provider_isolation_test.go": {
+      "essay": 3
+    },
+    "internal/contract/config/provider_presets.go": {
+      "claude-dialect": 1,
+      "file-size": 219
+    },
+    "internal/contract/config/render.go": {
+      "complexity": 195,
+      "essay": 2,
+      "file-size": 571,
+      "function-size": 696,
+      "layer-order": 1
+    },
+    "internal/contract/config/systemone_migrate.go": {
+      "layer-order": 1
+    },
+    "internal/contract/config/vision.go": {
+      "essay": 1,
+      "layer-order": 1,
+      "orphan": 1
+    },
+    "internal/contract/event/audit_forwarder.go": {
+      "layer-order": 1
+    },
+    "internal/contract/event/coalesce.go": {
+      "layer-order": 1
+    },
+    "internal/contract/event/costquote_sink.go": {
+      "layer-order": 1
+    },
+    "internal/contract/event/event.go": {
+      "essay": 7,
+      "layer-order": 2
+    },
+    "internal/contract/event/record.go": {
+      "layer-order": 1
+    },
+    "internal/contract/event/subagent_progress.go": {
+      "essay": 9
+    },
+    "internal/contract/event/sync.go": {
+      "essay": 2,
+      "layer-order": 1
+    },
+    "internal/contract/eventwire/wire.go": {
+      "layer-order": 1
+    },
+    "internal/contract/plancontract/project.go": {
+      "layer-order": 1,
+      "orphan": 1
+    },
+    "internal/contract/provider/provider.go": {
+      "essay": 37,
+      "file-size": 15
+    },
+    "internal/contract/provider/retry.go": {
+      "essay": 10
+    },
+    "internal/contract/provider/schema_canonicalize.go": {
+      "essay": 4
+    },
+    "internal/contract/provider/schema_dialect.go": {
+      "essay": 19
+    },
+    "internal/contract/provider/schema_dialect_test.go": {
+      "essay": 1
+    },
+    "internal/contract/provider/schema_validate.go": {
+      "essay": 2
+    },
+    "internal/contract/provider/usage.go": {
+      "essay": 11
+    },
+    "internal/contract/taskcontract/proof.go": {
+      "layer-order": 1
+    },
+    "internal/contract/taskcontract/taskcontract.go": {
+      "essay": 1,
+      "layer-order": 1
+    },
+    "internal/contract/tool/contract.go": {
+      "essay": 1,
+      "orphan": 1
+    },
+    "internal/contract/tool/contract_lock_test.go": {
+      "essay": 2
+    },
+    "internal/contract/tool/contract_test.go": {
+      "essay": 4
+    },
+    "internal/contract/tool/resolved.go": {
+      "essay": 1
+    },
+    "internal/contract/tool/shell_execution.go": {
+      "essay": 3
+    },
+    "internal/contract/tool/tool.go": {
+      "essay": 15
+    },
+    "internal/ext/extension/adapters.go": {
+      "essay": 3
+    },
+    "internal/ext/extension/builder.go": {
+      "essay": 21
+    },
+    "internal/ext/extension/catalog.go": {
+      "essay": 6
+    },
+    "internal/ext/extension/contributor.go": {
+      "essay": 1
+    },
+    "internal/ext/extension/dispatch/dispatch.go": {
+      "essay": 19
+    },
+    "internal/ext/extension/dispatch/payloads.go": {
+      "essay": 2
+    },
+    "internal/ext/extension/intercept.go": {
+      "essay": 1
+    },
+    "internal/ext/extension/metrics.go": {
+      "struct-state": 5
+    },
+    "internal/ext/extension/protocol/dto_content.go": {
+      "essay": 1
+    },
+    "internal/ext/extension/protocol/dto_provider.go": {
+      "essay": 3
+    },
+    "internal/ext/extension/protocol/dto_ui.go": {
+      "essay": 4
+    },
+    "internal/ext/extension/protocol/limits.go": {
+      "orphan": 1
+    },
+    "internal/ext/extension/protocol/protocol.go": {
+      "essay": 5
+    },
+    "internal/ext/extension/protocol/registry.go": {
+      "essay": 1
+    },
+    "internal/ext/extension/protocol/validate.go": {
+      "complexity": 3
+    },
+    "internal/ext/extension/protocolgen/sdkgo.go": {
+      "essay": 2
+    },
+    "internal/ext/extension/providerext/provider.go": {
+      "essay": 1
+    },
+    "internal/ext/extension/providerext/providerext.go": {
+      "essay": 5
+    },
+    "internal/ext/extension/publish.go": {
+      "orphan": 1
+    },
+    "internal/ext/extension/replace.go": {
+      "essay": 1,
+      "orphan": 1
+    },
+    "internal/ext/extension/rpcwire/bootstrap.go": {
+      "orphan": 1
+    },
+    "internal/ext/extension/rpcwire/conn.go": {
+      "essay": 11,
+      "file-size": 74
+    },
+    "internal/ext/extension/rpcwire/stall_test.go": {
+      "essay": 1
+    },
+    "internal/ext/extension/scope_resources.go": {
+      "orphan": 2
+    },
+    "internal/ext/extension/sessionstate.go": {
+      "orphan": 1
+    },
+    "internal/ext/extension/sidecar/client.go": {
+      "essay": 3
+    },
+    "internal/ext/extension/sidecar/content.go": {
+      "essay": 2
+    },
+    "internal/ext/extension/sidecar/externalize.go": {
+      "essay": 9
+    },
+    "internal/ext/extension/sidecar/fake_test.go": {
+      "essay": 9
+    },
+    "internal/ext/extension/sidecar/probe_client.go": {
+      "orphan": 1
+    },
+    "internal/ext/extension/snapshot.go": {
+      "essay": 1
+    },
+    "internal/ext/extension/source.go": {
+      "essay": 2
+    },
+    "internal/ext/extension/uihub/hub.go": {
+      "essay": 6
+    },
+    "internal/ext/hook/hook.go": {
       "complexity": 15,
       "essay": 44,
       "file-size": 788
     },
-    "internal/hook/hook_test.go": {
+    "internal/ext/hook/hook_test.go": {
       "essay": 8
     },
-    "internal/hook/runner.go": {
+    "internal/ext/hook/runner.go": {
       "essay": 2
     },
-    "internal/hook/windows_compat.go": {
+    "internal/ext/hook/windows_compat.go": {
       "essay": 1
     },
-    "internal/i18n/catalog_parity_test.go": {
-      "essay": 13
-    },
-    "internal/i18n/i18n.go": {
-      "essay": 6
-    },
-    "internal/installlayout/activate.go": {
-      "complexity": 7,
-      "function-size": 32
-    },
-    "internal/installlayout/current.go": {
-      "orphan": 1
-    },
-    "internal/installsource/apply.go": {
+    "internal/ext/installsource/apply.go": {
       "essay": 3
     },
-    "internal/installsource/install_source.go": {
+    "internal/ext/installsource/install_source.go": {
       "essay": 2
     },
-    "internal/installsource/install_source_test.go": {
+    "internal/ext/installsource/install_source_test.go": {
       "essay": 2
     },
-    "internal/installsource/mcp.go": {
+    "internal/ext/installsource/mcp.go": {
       "essay": 1
     },
-    "internal/installsource/plugin_package.go": {
+    "internal/ext/installsource/plugin_package.go": {
       "complexity": 9,
       "essay": 7,
       "function-size": 38
     },
-    "internal/installsource/skill.go": {
+    "internal/ext/installsource/skill.go": {
       "essay": 4
     },
-    "internal/installsource/ssrf.go": {
+    "internal/ext/installsource/ssrf.go": {
       "essay": 6
     },
-    "internal/installsource/types.go": {
+    "internal/ext/installsource/types.go": {
       "essay": 2
     },
-    "internal/instruction/resolver.go": {
-      "essay": 1
-    },
-    "internal/jobs/artifacts_test.go": {
+    "internal/ext/plugin/chrome_devtools_live_test.go": {
       "essay": 5
     },
-    "internal/jobs/jobs.go": {
-      "essay": 42,
-      "file-size": 1135,
-      "orphan": 1
-    },
-    "internal/jobs/jobs_extra_test.go": {
-      "essay": 1
-    },
-    "internal/jobs/jobs_security_test.go": {
-      "essay": 4
-    },
-    "internal/memory/doc.go": {
-      "essay": 1
-    },
-    "internal/memory/memory.go": {
-      "essay": 2
-    },
-    "internal/memory/store.go": {
-      "essay": 6,
-      "file-size": 24
-    },
-    "internal/memory/store_v2.go": {
-      "complexity": 17,
-      "function-size": 17
-    },
-    "internal/permission/bash_decompose.go": {
-      "essay": 23
-    },
-    "internal/permission/permission.go": {
-      "essay": 17,
-      "file-size": 71
-    },
-    "internal/permission/permission_extra_test.go": {
-      "essay": 1
-    },
-    "internal/plancontract/project.go": {
-      "orphan": 1
-    },
-    "internal/plugin/chrome_devtools_live_test.go": {
-      "essay": 5
-    },
-    "internal/plugin/codegraph_limit.go": {
+    "internal/ext/plugin/codegraph_limit.go": {
       "essay": 3
     },
-    "internal/plugin/known_overrides.go": {
+    "internal/ext/plugin/known_overrides.go": {
       "essay": 2
     },
-    "internal/plugin/launcher_lock.go": {
+    "internal/ext/plugin/launcher_lock.go": {
       "essay": 5
     },
-    "internal/plugin/lazy.go": {
+    "internal/ext/plugin/lazy.go": {
       "essay": 40
     },
-    "internal/plugin/lazy_test.go": {
+    "internal/ext/plugin/lazy_test.go": {
       "essay": 19
     },
-    "internal/plugin/plugin.go": {
+    "internal/ext/plugin/plugin.go": {
       "essay": 28,
       "file-size": 925,
       "function-size": 12,
       "orphan": 3
     },
-    "internal/plugin/plugin_test.go": {
+    "internal/ext/plugin/plugin_test.go": {
       "essay": 10
     },
-    "internal/plugin/registration_scope.go": {
+    "internal/ext/plugin/registration_scope.go": {
       "orphan": 1
     },
-    "internal/plugin/security.go": {
+    "internal/ext/plugin/security.go": {
       "essay": 3
     },
-    "internal/plugin/stats.go": {
+    "internal/ext/plugin/stats.go": {
       "essay": 18
     },
-    "internal/plugin/stats_test.go": {
+    "internal/ext/plugin/stats_test.go": {
       "essay": 1
     },
-    "internal/plugin/stdio_cancel_test.go": {
+    "internal/ext/plugin/stdio_cancel_test.go": {
       "essay": 1
     },
-    "internal/plugin/transport_http.go": {
+    "internal/ext/plugin/transport_http.go": {
       "essay": 5
     },
-    "internal/plugin/transport_http_test.go": {
+    "internal/ext/plugin/transport_http_test.go": {
       "essay": 1
     },
-    "internal/plugin/transport_stdio.go": {
+    "internal/ext/plugin/transport_stdio.go": {
       "essay": 11,
       "file-size": 4
     },
-    "internal/pluginpkg/claude_compat.go": {
+    "internal/ext/pluginpkg/claude_compat.go": {
       "essay": 19,
       "function-size": 6
     },
-    "internal/pluginpkg/manifest_v1.go": {
+    "internal/ext/pluginpkg/manifest_v1.go": {
       "essay": 7
     },
-    "internal/pluginpkg/pluginpkg.go": {
+    "internal/ext/pluginpkg/pluginpkg.go": {
       "complexity": 1,
       "essay": 2,
       "file-size": 398
     },
-    "internal/pluginpkg/state_lock_test.go": {
+    "internal/ext/pluginpkg/state_lock_test.go": {
       "essay": 1
     },
-    "internal/proc/kill_other.go": {
+    "internal/ext/skill/builtincontent/embed.go": {
+      "orphan": 1
+    },
+    "internal/ext/skill/builtins.go": {
+      "essay": 2
+    },
+    "internal/ext/skill/index.go": {
+      "orphan": 1
+    },
+    "internal/ext/skill/skill.go": {
+      "essay": 7,
+      "file-size": 557
+    },
+    "internal/ext/skill/tools.go": {
+      "essay": 2
+    },
+    "internal/ext/skill/tools_test.go": {
+      "essay": 2
+    },
+    "internal/ext/theme/tokens.go": {
+      "orphan": 1
+    },
+    "internal/frontend/acp/clientio.go": {
+      "essay": 4
+    },
+    "internal/frontend/acp/dispatch.go": {
+      "essay": 16
+    },
+    "internal/frontend/acp/dispatch_extension_test.go": {
       "essay": 1
     },
-    "internal/proc/kill_windows.go": {
-      "essay": 5
+    "internal/frontend/acp/e2e_test.go": {
+      "essay": 2
     },
-    "internal/provider/anthropic/anthropic.go": {
+    "internal/frontend/acp/extension_models.go": {
+      "essay": 2
+    },
+    "internal/frontend/acp/live_test.go": {
+      "essay": 1
+    },
+    "internal/frontend/acp/protocol.go": {
+      "essay": 13,
+      "file-size": 26
+    },
+    "internal/frontend/acp/server.go": {
+      "essay": 4
+    },
+    "internal/frontend/acp/server_test.go": {
+      "essay": 1
+    },
+    "internal/frontend/acp/service.go": {
+      "essay": 49,
+      "file-size": 876,
+      "function-size": 97,
+      "struct-state": 2
+    },
+    "internal/frontend/acp/service_lock_test.go": {
+      "essay": 7
+    },
+    "internal/frontend/acp/session.go": {
+      "essay": 6
+    },
+    "internal/frontend/acp/session_config.go": {
+      "essay": 6
+    },
+    "internal/frontend/acp/status.go": {
+      "file-size": 20
+    },
+    "internal/frontend/acp/switch_recovery_test.go": {
+      "essay": 7
+    },
+    "internal/frontend/capdiag/collect.go": {
+      "essay": 1
+    },
+    "internal/frontend/capdiag/render.go": {
+      "orphan": 1
+    },
+    "internal/frontend/cli/acp.go": {
+      "essay": 7,
+      "function-size": 31
+    },
+    "internal/frontend/cli/buildinfo.go": {
+      "essay": 7
+    },
+    "internal/frontend/cli/cli.go": {
+      "complexity": 32,
+      "essay": 41,
+      "file-size": 1079,
+      "function-size": 167
+    },
+    "internal/frontend/cli/cli_test.go": {
+      "essay": 9
+    },
+    "internal/frontend/cli/default_model.go": {
+      "essay": 12
+    },
+    "internal/frontend/cli/extension_surface.go": {
+      "essay": 4
+    },
+    "internal/frontend/cli/hook_machine.go": {
+      "essay": 3
+    },
+    "internal/frontend/cli/mathnode.go": {
+      "essay": 1
+    },
+    "internal/frontend/cli/mcp.go": {
+      "essay": 1
+    },
+    "internal/frontend/cli/md.go": {
+      "essay": 7
+    },
+    "internal/frontend/cli/remote_connect.go": {
+      "essay": 3
+    },
+    "internal/frontend/cli/review.go": {
+      "essay": 8
+    },
+    "internal/frontend/cli/run_metrics.go": {
+      "essay": 1
+    },
+    "internal/frontend/cli/run_output.go": {
+      "essay": 1
+    },
+    "internal/frontend/cli/select.go": {
+      "complexity": 60,
+      "essay": 1,
+      "function-size": 153
+    },
+    "internal/frontend/cli/serve_frontend.go": {
+      "complexity": 6,
+      "function-size": 77
+    },
+    "internal/frontend/cli/session_lease.go": {
+      "essay": 4
+    },
+    "internal/frontend/cli/setup_manager.go": {
+      "essay": 2,
+      "file-size": 93
+    },
+    "internal/frontend/cli/shell_completion.go": {
+      "function-size": 76
+    },
+    "internal/frontend/cli/transcript.go": {
+      "essay": 1
+    },
+    "internal/frontend/cli/upgrade.go": {
+      "complexity": 1,
+      "essay": 2,
+      "function-size": 28
+    },
+    "internal/frontend/cli/width_test.go": {
+      "essay": 1
+    },
+    "internal/frontend/doctor/report.go": {
+      "essay": 3
+    },
+    "internal/frontend/doctor/session_bundle.go": {
+      "essay": 1
+    },
+    "internal/frontend/doctor/session_redact.go": {
+      "essay": 12
+    },
+    "internal/frontend/serve/auth.go": {
+      "essay": 2
+    },
+    "internal/frontend/serve/provider_setup.go": {
+      "essay": 1
+    },
+    "internal/frontend/serve/serve.go": {
+      "essay": 22,
+      "file-size": 383
+    },
+    "internal/frontend/serve/serve_lease_test.go": {
+      "essay": 3
+    },
+    "internal/frontend/serve/serve_lock_test.go": {
+      "essay": 1
+    },
+    "internal/frontend/serve/settings.go": {
+      "essay": 1
+    },
+    "internal/frontend/serve/switch_recovery_test.go": {
+      "essay": 2
+    },
+    "internal/model/anthropic/anthropic.go": {
       "complexity": 40,
       "essay": 31,
       "file-size": 80,
       "function-size": 142,
       "struct-state": 5
     },
-    "internal/provider/anthropic/anthropic_test.go": {
+    "internal/model/anthropic/anthropic_test.go": {
       "essay": 1
     },
-    "internal/provider/openai/host.go": {
+    "internal/model/billing/migrate.go": {
+      "orphan": 1
+    },
+    "internal/model/openai/host.go": {
       "essay": 8
     },
-    "internal/provider/openai/openai.go": {
+    "internal/model/openai/openai.go": {
       "complexity": 58,
       "essay": 32,
       "file-size": 515,
       "function-size": 245
     },
-    "internal/provider/openai/openai_test.go": {
+    "internal/model/openai/openai_test.go": {
       "essay": 5
     },
-    "internal/provider/openai/realcache_test.go": {
+    "internal/model/openai/realcache_test.go": {
       "essay": 7
     },
-    "internal/provider/provider.go": {
-      "essay": 37,
-      "file-size": 15
-    },
-    "internal/provider/responses/responses.go": {
+    "internal/model/responses/responses.go": {
       "essay": 11,
       "struct-state": 5
     },
-    "internal/provider/responses/responses_test.go": {
+    "internal/model/responses/responses_test.go": {
       "essay": 5
     },
-    "internal/provider/responses/vendor.go": {
+    "internal/model/responses/vendor.go": {
       "essay": 19
     },
-    "internal/provider/retry.go": {
-      "essay": 10
+    "internal/platform/environment/probe.go": {
+      "essay": 5
     },
-    "internal/provider/schema_canonicalize.go": {
-      "essay": 4
+    "internal/platform/environment/snapshot.go": {
+      "essay": 5
     },
-    "internal/provider/schema_dialect.go": {
-      "essay": 19
-    },
-    "internal/provider/schema_dialect_test.go": {
-      "essay": 1
-    },
-    "internal/provider/schema_validate.go": {
+    "internal/platform/environment/snapshot_test.go": {
       "essay": 2
     },
-    "internal/provider/usage.go": {
-      "essay": 11
+    "internal/platform/gitcmd/gitcmd.go": {
+      "essay": 14
     },
-    "internal/recovery/decision.go": {
-      "essay": 9
+    "internal/platform/installlayout/activate.go": {
+      "complexity": 7,
+      "function-size": 32
     },
-    "internal/recovery/decision_test.go": {
-      "essay": 1
+    "internal/platform/installlayout/current.go": {
+      "orphan": 1
     },
-    "internal/recovery/gate.go": {
-      "essay": 4,
-      "file-size": 393
+    "internal/platform/instanceid/instanceid.go": {
+      "layer-order": 1
     },
-    "internal/recovery/rules.go": {
-      "complexity": 19,
-      "essay": 1,
-      "file-size": 154
-    },
-    "internal/recovery/types.go": {
-      "essay": 1
-    },
-    "internal/remote/auth.go": {
+    "internal/platform/remote/auth.go": {
       "essay": 7
     },
-    "internal/remote/bootstrap/ensure_test.go": {
+    "internal/platform/remote/bootstrap/ensure_test.go": {
       "essay": 2
     },
-    "internal/remote/bootstrap/launch.go": {
+    "internal/platform/remote/bootstrap/launch.go": {
       "essay": 7
     },
-    "internal/remote/client_test.go": {
+    "internal/platform/remote/client_test.go": {
       "essay": 1
     },
-    "internal/remote/dial.go": {
+    "internal/platform/remote/dial.go": {
       "essay": 3
     },
-    "internal/remote/forward/forward.go": {
+    "internal/platform/remote/forward/forward.go": {
       "essay": 2
     },
-    "internal/remote/knownhosts.go": {
+    "internal/platform/remote/knownhosts.go": {
       "essay": 1
     },
-    "internal/remote/remote.go": {
+    "internal/platform/remote/remote.go": {
       "error-text": 5,
       "essay": 4
     },
-    "internal/remote/sftpfs/sftpfs_test.go": {
+    "internal/platform/remote/sftpfs/sftpfs_test.go": {
       "essay": 2
     },
-    "internal/remote/sshconfig.go": {
+    "internal/platform/remote/sshconfig.go": {
       "essay": 2
     },
-    "internal/repair/apply_failure.go": {
+    "internal/platform/repair/apply_failure.go": {
       "orphan": 2
     },
-    "internal/repair/config.go": {
+    "internal/platform/repair/config.go": {
       "complexity": 12
     },
-    "internal/repair/config_test.go": {
+    "internal/platform/repair/config_test.go": {
       "essay": 1
     },
-    "internal/repair/derived.go": {
+    "internal/platform/repair/derived.go": {
       "orphan": 1
     },
-    "internal/repair/mutation_lock.go": {
+    "internal/platform/repair/mutation_lock.go": {
       "essay": 4,
       "orphan": 2
     },
-    "internal/repair/plan.go": {
+    "internal/platform/repair/plan.go": {
       "essay": 2,
       "file-size": 48,
       "orphan": 2
     },
-    "internal/repair/snapshot.go": {
+    "internal/platform/repair/snapshot.go": {
       "complexity": 9,
       "essay": 1,
       "function-size": 34,
       "orphan": 1
     },
-    "internal/repair/startup.go": {
+    "internal/platform/repair/startup.go": {
       "orphan": 1
     },
-    "internal/repair/transaction.go": {
+    "internal/platform/repair/transaction.go": {
       "complexity": 22,
       "essay": 4,
       "function-size": 86,
       "orphan": 1
     },
-    "internal/repair/update.go": {
+    "internal/platform/repair/update.go": {
       "complexity": 109,
       "essay": 43,
       "file-size": 2895,
       "function-size": 308,
       "orphan": 12
     },
-    "internal/repair/update_handoff_darwin_smoke_test.go": {
+    "internal/platform/repair/update_handoff_darwin_smoke_test.go": {
       "essay": 4
     },
-    "internal/repair/update_legacy.go": {
+    "internal/platform/repair/update_legacy.go": {
       "complexity": 1,
       "essay": 8,
       "orphan": 2
     },
-    "internal/repair/update_lock_test.go": {
+    "internal/platform/repair/update_lock_test.go": {
       "essay": 1
     },
-    "internal/repair/update_test.go": {
+    "internal/platform/repair/update_test.go": {
       "essay": 2
     },
-    "internal/sandbox/sandbox.go": {
-      "essay": 11
+    "internal/platform/telemetry/sink.go": {
+      "layer-order": 1
     },
-    "internal/sandbox/seatbelt_darwin.go": {
-      "essay": 3
-    },
-    "internal/sandbox/seatbelt_other.go": {
-      "essay": 4
-    },
-    "internal/sandbox/session_temp_env.go": {
-      "essay": 1
-    },
-    "internal/sandbox/shell.go": {
-      "essay": 1
-    },
-    "internal/secrets/redact.go": {
-      "complexity": 9,
-      "essay": 1
-    },
-    "internal/serve/auth.go": {
-      "essay": 2
-    },
-    "internal/serve/provider_setup.go": {
-      "essay": 1
-    },
-    "internal/serve/serve.go": {
-      "essay": 22,
-      "file-size": 383
-    },
-    "internal/serve/serve_lease_test.go": {
-      "essay": 3
-    },
-    "internal/serve/serve_lock_test.go": {
-      "essay": 1
-    },
-    "internal/serve/settings.go": {
-      "essay": 1
-    },
-    "internal/serve/switch_recovery_test.go": {
-      "essay": 2
-    },
-    "internal/sessiontemp/manager.go": {
-      "essay": 5,
-      "orphan": 1
-    },
-    "internal/shellparse/bash.go": {
-      "essay": 8
-    },
-    "internal/shellrun/runner.go": {
-      "essay": 4
-    },
-    "internal/shellsafe/bash_redirect.go": {
-      "essay": 5
-    },
-    "internal/shellsafe/shellsafe.go": {
-      "essay": 1
-    },
-    "internal/skill/builtincontent/embed.go": {
-      "orphan": 1
-    },
-    "internal/skill/builtins.go": {
-      "essay": 2
-    },
-    "internal/skill/index.go": {
-      "orphan": 1
-    },
-    "internal/skill/skill.go": {
-      "essay": 7,
-      "file-size": 557
-    },
-    "internal/skill/tools.go": {
-      "essay": 2
-    },
-    "internal/skill/tools_test.go": {
-      "essay": 2
-    },
-    "internal/stats/query.go": {
-      "essay": 2
-    },
-    "internal/stats/record.go": {
-      "essay": 7
-    },
-    "internal/stats/recorder.go": {
-      "essay": 1
-    },
-    "internal/store/remote.go": {
-      "essay": 6
-    },
-    "internal/store/session.go": {
-      "essay": 8
-    },
-    "internal/taskcontract/taskcontract.go": {
-      "essay": 1
-    },
-    "internal/taskmonitor/control.go": {
-      "complexity": 21,
-      "essay": 1,
-      "function-size": 127
-    },
-    "internal/taskmonitor/jsonstore.go": {
-      "essay": 3,
-      "orphan": 1
-    },
-    "internal/taskmonitor/memory.go": {
-      "essay": 5,
-      "orphan": 1
-    },
-    "internal/taskmonitor/store.go": {
-      "essay": 8
-    },
-    "internal/taskmonitor/tmux.go": {
-      "orphan": 1
-    },
-    "internal/theme/tokens.go": {
-      "orphan": 1
-    },
-    "internal/tool/builtin/bash.go": {
-      "essay": 11,
-      "orphan": 1
-    },
-    "internal/tool/builtin/bash_env_test.go": {
-      "essay": 4
-    },
-    "internal/tool/builtin/bgjobs.go": {
-      "essay": 10
-    },
-    "internal/tool/builtin/bgjobs_test.go": {
-      "essay": 6
-    },
-    "internal/tool/builtin/builtin_test.go": {
-      "essay": 3
-    },
-    "internal/tool/builtin/clientio.go": {
-      "essay": 14
-    },
-    "internal/tool/builtin/completestep.go": {
-      "essay": 1
-    },
-    "internal/tool/builtin/confine.go": {
-      "essay": 16
-    },
-    "internal/tool/builtin/encoding_helpers.go": {
-      "essay": 1
-    },
-    "internal/tool/builtin/gitignore.go": {
-      "essay": 4
-    },
-    "internal/tool/builtin/glob.go": {
-      "essay": 3
-    },
-    "internal/tool/builtin/grep.go": {
-      "essay": 1
-    },
-    "internal/tool/builtin/managed_config.go": {
-      "essay": 2
-    },
-    "internal/tool/builtin/multiedit.go": {
-      "essay": 1
-    },
-    "internal/tool/builtin/notebookedit.go": {
-      "essay": 6
-    },
-    "internal/tool/builtin/preview.go": {
-      "essay": 7
-    },
-    "internal/tool/builtin/readfile.go": {
-      "function-size": 12
-    },
-    "internal/tool/builtin/session_guard.go": {
-      "essay": 25
-    },
-    "internal/tool/builtin/updategoal.go": {
-      "essay": 2
-    },
-    "internal/tool/builtin/webfetch.go": {
-      "essay": 3,
-      "function-size": 2
-    },
-    "internal/tool/builtin/workspace.go": {
-      "essay": 12
-    },
-    "internal/tool/builtin/writefile.go": {
-      "essay": 2
-    },
-    "internal/tool/contract.go": {
-      "essay": 1,
-      "orphan": 1
-    },
-    "internal/tool/contract_lock_test.go": {
-      "essay": 2
-    },
-    "internal/tool/contract_test.go": {
-      "essay": 4
-    },
-    "internal/tool/resolved.go": {
-      "essay": 1
-    },
-    "internal/tool/shell_execution.go": {
-      "essay": 3
-    },
-    "internal/tool/tool.go": {
-      "essay": 15
-    },
-    "internal/update/apply_darwin.go": {
+    "internal/platform/update/apply_darwin.go": {
       "complexity": 42,
       "essay": 1,
       "function-size": 180
     },
-    "internal/update/install_windows.go": {
+    "internal/platform/update/install_windows.go": {
       "essay": 1
     },
-    "internal/update/manifest.go": {
+    "internal/platform/update/manifest.go": {
       "essay": 1
+    },
+    "internal/runtime/agent/agent.go": {
+      "complexity": 37,
+      "essay": 33,
+      "file-size": 1223,
+      "function-size": 102
+    },
+    "internal/runtime/agent/agent_options.go": {
+      "essay": 10
+    },
+    "internal/runtime/agent/ask.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/branch.go": {
+      "essay": 10,
+      "orphan": 3
+    },
+    "internal/runtime/agent/cache_shape.go": {
+      "essay": 3
+    },
+    "internal/runtime/agent/cache_shape_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/capability_gate.go": {
+      "essay": 7
+    },
+    "internal/runtime/agent/capability_gate_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/compact_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/context_manager.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/coordinator.go": {
+      "essay": 14,
+      "orphan": 1
+    },
+    "internal/runtime/agent/coordinator_test.go": {
+      "essay": 3
+    },
+    "internal/runtime/agent/delivery_hardening_test.go": {
+      "essay": 3
+    },
+    "internal/runtime/agent/delivery_scope_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/dependent_writer_preview_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/empty_final_test.go": {
+      "essay": 5
+    },
+    "internal/runtime/agent/execute_batch.go": {
+      "complexity": 22,
+      "function-size": 108
+    },
+    "internal/runtime/agent/execute_one.go": {
+      "essay": 14
+    },
+    "internal/runtime/agent/extensions.go": {
+      "essay": 64
+    },
+    "internal/runtime/agent/extensions_test.go": {
+      "essay": 4
+    },
+    "internal/runtime/agent/final_readiness.go": {
+      "complexity": 1
+    },
+    "internal/runtime/agent/fleet.go": {
+      "essay": 3
+    },
+    "internal/runtime/agent/format.go": {
+      "orphan": 1
+    },
+    "internal/runtime/agent/listsessions_bench_test.go": {
+      "essay": 4
+    },
+    "internal/runtime/agent/migrate.go": {
+      "complexity": 32,
+      "essay": 23,
+      "file-size": 195,
+      "function-size": 73
+    },
+    "internal/runtime/agent/normalize.go": {
+      "essay": 14
+    },
+    "internal/runtime/agent/parallel_tasks.go": {
+      "essay": 3,
+      "function-size": 71
+    },
+    "internal/runtime/agent/parallel_tasks_test.go": {
+      "essay": 2
+    },
+    "internal/runtime/agent/preview.go": {
+      "essay": 17
+    },
+    "internal/runtime/agent/preview_test.go": {
+      "essay": 3
+    },
+    "internal/runtime/agent/profile_spec.go": {
+      "essay": 4
+    },
+    "internal/runtime/agent/reasoning_language.go": {
+      "essay": 2
+    },
+    "internal/runtime/agent/reasoning_warn_state.go": {
+      "complexity": 2,
+      "essay": 14
+    },
+    "internal/runtime/agent/recovery_gate.go": {
+      "essay": 8
+    },
+    "internal/runtime/agent/recovery_gc.go": {
+      "essay": 17
+    },
+    "internal/runtime/agent/recovery_gc_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/review_unavailable.go": {
+      "orphan": 1
+    },
+    "internal/runtime/agent/run_loop.go": {
+      "essay": 21,
+      "function-size": 2
+    },
+    "internal/runtime/agent/run_usage.go": {
+      "complexity": 1,
+      "essay": 5
+    },
+    "internal/runtime/agent/save.go": {
+      "complexity": 36,
+      "essay": 109,
+      "file-size": 1281,
+      "function-size": 95
+    },
+    "internal/runtime/agent/save_test.go": {
+      "essay": 9
+    },
+    "internal/runtime/agent/scheduler.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/session.go": {
+      "essay": 28
+    },
+    "internal/runtime/agent/session_compat_legacy_test.go": {
+      "essay": 3
+    },
+    "internal/runtime/agent/session_content.go": {
+      "orphan": 1
+    },
+    "internal/runtime/agent/session_display_index.go": {
+      "essay": 18,
+      "orphan": 2
+    },
+    "internal/runtime/agent/session_display_read_model.go": {
+      "orphan": 2
+    },
+    "internal/runtime/agent/session_events.go": {
+      "essay": 9,
+      "file-size": 82
+    },
+    "internal/runtime/agent/session_events_test.go": {
+      "essay": 3
+    },
+    "internal/runtime/agent/session_lease.go": {
+      "essay": 13
+    },
+    "internal/runtime/agent/session_lease_test.go": {
+      "essay": 4
+    },
+    "internal/runtime/agent/session_lock_windows.go": {
+      "essay": 4
+    },
+    "internal/runtime/agent/session_removal.go": {
+      "essay": 6
+    },
+    "internal/runtime/agent/steer_flush_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/subagent_progress.go": {
+      "essay": 10
+    },
+    "internal/runtime/agent/subagent_store.go": {
+      "essay": 5,
+      "file-size": 127
+    },
+    "internal/runtime/agent/task.go": {
+      "complexity": 12,
+      "essay": 35,
+      "file-size": 1121,
+      "function-size": 94,
+      "orphan": 1
+    },
+    "internal/runtime/agent/task_test.go": {
+      "essay": 4
+    },
+    "internal/runtime/agent/testutil/mock_provider.go": {
+      "essay": 10
+    },
+    "internal/runtime/agent/textsink.go": {
+      "essay": 9
+    },
+    "internal/runtime/agent/usecapability.go": {
+      "essay": 9,
+      "file-size": 713,
+      "function-size": 2
+    },
+    "internal/runtime/agent/width.go": {
+      "essay": 1
+    },
+    "internal/runtime/agent/write_claims.go": {
+      "orphan": 1
+    },
+    "internal/runtime/capability/audit.go": {
+      "struct-state": 6
+    },
+    "internal/runtime/capability/catalog.go": {
+      "essay": 1
+    },
+    "internal/runtime/evidence/evidence.go": {
+      "essay": 2
+    },
+    "internal/runtime/evidence/ledger_queries.go": {
+      "essay": 6
+    },
+    "internal/runtime/evidence/review_report.go": {
+      "essay": 7
+    },
+    "internal/runtime/evidence/todos.go": {
+      "essay": 8
+    },
+    "internal/runtime/evidence/verification_command.go": {
+      "complexity": 6,
+      "essay": 18
+    },
+    "internal/runtime/evidence/verification_summary_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/jobs/artifacts_test.go": {
+      "essay": 5
+    },
+    "internal/runtime/jobs/jobs.go": {
+      "essay": 42,
+      "file-size": 1135,
+      "orphan": 1
+    },
+    "internal/runtime/jobs/jobs_extra_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/jobs/jobs_security_test.go": {
+      "essay": 4
+    },
+    "internal/runtime/recovery/decision.go": {
+      "essay": 9
+    },
+    "internal/runtime/recovery/decision_test.go": {
+      "essay": 1
+    },
+    "internal/runtime/recovery/gate.go": {
+      "essay": 4,
+      "file-size": 393
+    },
+    "internal/runtime/recovery/rules.go": {
+      "complexity": 19,
+      "essay": 1,
+      "file-size": 154
+    },
+    "internal/runtime/recovery/types.go": {
+      "essay": 1
+    },
+    "internal/runtime/taskmonitor/control.go": {
+      "complexity": 21,
+      "essay": 1,
+      "function-size": 127
+    },
+    "internal/runtime/taskmonitor/jsonstore.go": {
+      "essay": 3,
+      "orphan": 1
+    },
+    "internal/runtime/taskmonitor/memory.go": {
+      "essay": 5,
+      "orphan": 1
+    },
+    "internal/runtime/taskmonitor/store.go": {
+      "essay": 8
+    },
+    "internal/runtime/taskmonitor/tmux.go": {
+      "orphan": 1
+    },
+    "internal/safety/guardian/guardian.go": {
+      "essay": 25,
+      "layer-order": 1
+    },
+    "internal/safety/guardian/guardian_policy.md": {
+      "doc-prose": 1
+    },
+    "internal/safety/permission/bash_decompose.go": {
+      "essay": 23
+    },
+    "internal/safety/permission/permission.go": {
+      "essay": 17,
+      "file-size": 71
+    },
+    "internal/safety/permission/permission_extra_test.go": {
+      "essay": 1
+    },
+    "internal/safety/sandbox/sandbox.go": {
+      "essay": 11
+    },
+    "internal/safety/sandbox/seatbelt_darwin.go": {
+      "essay": 3
+    },
+    "internal/safety/sandbox/seatbelt_other.go": {
+      "essay": 4
+    },
+    "internal/safety/sandbox/session_temp_env.go": {
+      "essay": 1
+    },
+    "internal/safety/sandbox/shell.go": {
+      "essay": 1
+    },
+    "internal/safety/shellsafe/bash_redirect.go": {
+      "essay": 5
+    },
+    "internal/safety/shellsafe/shellsafe.go": {
+      "essay": 1
+    },
+    "internal/session/control/approval.go": {
+      "essay": 19
+    },
+    "internal/session/control/approval_bridge.go": {
+      "essay": 1
+    },
+    "internal/session/control/approval_orchestration.go": {
+      "essay": 38,
+      "frontend-parity": 3
+    },
+    "internal/session/control/attachments.go": {
+      "orphan": 1
+    },
+    "internal/session/control/capability_scope.go": {
+      "frontend-parity": 1
+    },
+    "internal/session/control/checkpoint.go": {
+      "essay": 16
+    },
+    "internal/session/control/controller.go": {
+      "essay": 32,
+      "file-size": 594,
+      "frontend-parity": 6
+    },
+    "internal/session/control/controller_test.go": {
+      "essay": 9
+    },
+    "internal/session/control/errmsg.go": {
+      "essay": 2
+    },
+    "internal/session/control/extension_ui.go": {
+      "essay": 4,
+      "frontend-parity": 1
+    },
+    "internal/session/control/extensions.go": {
+      "essay": 5
+    },
+    "internal/session/control/goal.go": {
+      "complexity": 2,
+      "essay": 6,
+      "file-size": 193,
+      "struct-state": 9
+    },
+    "internal/session/control/goal_control.go": {
+      "essay": 1,
+      "frontend-parity": 1
+    },
+    "internal/session/control/goalusage.go": {
+      "essay": 2
+    },
+    "internal/session/control/headless_approval_test.go": {
+      "essay": 10
+    },
+    "internal/session/control/inbox.go": {
+      "frontend-parity": 2
+    },
+    "internal/session/control/input.go": {
+      "essay": 3,
+      "frontend-parity": 3
+    },
+    "internal/session/control/input_test.go": {
+      "essay": 4
+    },
+    "internal/session/control/mcp.go": {
+      "essay": 7
+    },
+    "internal/session/control/mcp_admin.go": {
+      "frontend-parity": 7
+    },
+    "internal/session/control/mcp_servers.go": {
+      "essay": 2,
+      "frontend-parity": 2
+    },
+    "internal/session/control/memory.go": {
+      "essay": 12
+    },
+    "internal/session/control/memory_command.go": {
+      "essay": 2
+    },
+    "internal/session/control/plan_todos.go": {
+      "essay": 6
+    },
+    "internal/session/control/planner_gate.go": {
+      "orphan": 1
+    },
+    "internal/session/control/port.go": {
+      "essay": 8
+    },
+    "internal/session/control/recovery.go": {
+      "essay": 1
+    },
+    "internal/session/control/recovery_test.go": {
+      "essay": 1
+    },
+    "internal/session/control/refs.go": {
+      "essay": 5,
+      "file-size": 403
+    },
+    "internal/session/control/session_lease_keeper.go": {
+      "essay": 5
+    },
+    "internal/session/control/session_lifecycle.go": {
+      "essay": 11,
+      "frontend-parity": 3
+    },
+    "internal/session/control/session_snapshot.go": {
+      "essay": 14
+    },
+    "internal/session/control/sessionpath.go": {
+      "essay": 6
+    },
+    "internal/session/control/shell_test.go": {
+      "essay": 2
+    },
+    "internal/session/control/skill.go": {
+      "essay": 4
+    },
+    "internal/session/control/slash.go": {
+      "complexity": 4,
+      "essay": 2
+    },
+    "internal/session/control/steer_fallback_test.go": {
+      "essay": 1
+    },
+    "internal/session/control/turn_cancel.go": {
+      "essay": 22,
+      "frontend-parity": 1,
+      "function-size": 4
+    },
+    "internal/session/control/turn_entry.go": {
+      "frontend-parity": 1
+    },
+    "internal/session/control/turn_orchestrator.go": {
+      "essay": 10,
+      "function-size": 3
+    },
+    "internal/session/control/turn_orchestrator_test.go": {
+      "essay": 1
+    },
+    "internal/session/control/turn_submit.go": {
+      "complexity": 3,
+      "essay": 5,
+      "frontend-parity": 1,
+      "function-size": 23
+    },
+    "internal/state/checkpoint/barrier.go": {
+      "essay": 1
+    },
+    "internal/state/checkpoint/checkpoint.go": {
+      "essay": 8,
+      "file-size": 291
+    },
+    "internal/state/checkpoint/observer.go": {
+      "essay": 1
+    },
+    "internal/state/checkpoint/transaction.go": {
+      "complexity": 24,
+      "essay": 2,
+      "file-size": 739,
+      "function-size": 73
+    },
+    "internal/state/history/indexed.go": {
+      "layer-order": 1,
+      "orphan": 1
+    },
+    "internal/state/history/search.go": {
+      "layer-order": 1
+    },
+    "internal/state/history/strip.go": {
+      "layer-order": 1
+    },
+    "internal/state/historycatalog/catalog.go": {
+      "layer-order": 1
+    },
+    "internal/state/historycatalog/incremental.go": {
+      "layer-order": 1
+    },
+    "internal/state/instruction/resolver.go": {
+      "essay": 1
+    },
+    "internal/state/memory/doc.go": {
+      "essay": 1
+    },
+    "internal/state/memory/memory.go": {
+      "essay": 2
+    },
+    "internal/state/memory/store.go": {
+      "essay": 6,
+      "file-size": 24
+    },
+    "internal/state/memory/store_v2.go": {
+      "complexity": 17,
+      "function-size": 17
+    },
+    "internal/state/migration/migration.go": {
+      "layer-order": 1
+    },
+    "internal/state/sessiontemp/manager.go": {
+      "essay": 5,
+      "orphan": 1
+    },
+    "internal/state/stats/query.go": {
+      "essay": 2
+    },
+    "internal/state/stats/record.go": {
+      "essay": 7
+    },
+    "internal/state/stats/recorder.go": {
+      "essay": 1
+    },
+    "internal/state/store/remote.go": {
+      "essay": 6
+    },
+    "internal/state/store/session.go": {
+      "essay": 8
+    },
+    "internal/state/trajectory/recorder.go": {
+      "layer-order": 1
+    },
+    "internal/tools/builtin/bash.go": {
+      "essay": 11,
+      "layer-order": 1,
+      "orphan": 1
+    },
+    "internal/tools/builtin/bash_env_test.go": {
+      "essay": 4
+    },
+    "internal/tools/builtin/bgjobs.go": {
+      "essay": 10,
+      "layer-order": 2
+    },
+    "internal/tools/builtin/bgjobs_test.go": {
+      "essay": 6
+    },
+    "internal/tools/builtin/builtin_test.go": {
+      "essay": 3
+    },
+    "internal/tools/builtin/clientio.go": {
+      "essay": 14
+    },
+    "internal/tools/builtin/completestep.go": {
+      "essay": 1,
+      "layer-order": 1
+    },
+    "internal/tools/builtin/confine.go": {
+      "essay": 16
+    },
+    "internal/tools/builtin/encoding_helpers.go": {
+      "essay": 1
+    },
+    "internal/tools/builtin/gitignore.go": {
+      "essay": 4
+    },
+    "internal/tools/builtin/glob.go": {
+      "essay": 3
+    },
+    "internal/tools/builtin/grep.go": {
+      "essay": 1
+    },
+    "internal/tools/builtin/managed_config.go": {
+      "essay": 2
+    },
+    "internal/tools/builtin/multiedit.go": {
+      "essay": 1
+    },
+    "internal/tools/builtin/notebookedit.go": {
+      "essay": 6
+    },
+    "internal/tools/builtin/pipe_status.go": {
+      "layer-order": 1
+    },
+    "internal/tools/builtin/preview.go": {
+      "essay": 7
+    },
+    "internal/tools/builtin/readfile.go": {
+      "function-size": 12
+    },
+    "internal/tools/builtin/session_guard.go": {
+      "essay": 25
+    },
+    "internal/tools/builtin/todo.go": {
+      "layer-order": 1
+    },
+    "internal/tools/builtin/updategoal.go": {
+      "essay": 2
+    },
+    "internal/tools/builtin/webfetch.go": {
+      "essay": 3,
+      "function-size": 2
+    },
+    "internal/tools/builtin/workspace.go": {
+      "essay": 12
+    },
+    "internal/tools/builtin/writefile.go": {
+      "essay": 2
+    },
+    "internal/tools/sessiontool/sessiontool.go": {
+      "layer-order": 1
+    },
+    "internal/tools/shellrun/runner.go": {
+      "essay": 4
     },
     "release-notes/studio/2.0.0.md": {
       "release-note": 29

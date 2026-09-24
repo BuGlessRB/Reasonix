@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/checkpoint"
-	"reasonix/internal/control"
+	"reasonix/internal/runtime/agent"
+	"reasonix/internal/session/control"
+	"reasonix/internal/state/checkpoint"
 )
 
 // probeTurns is enough conversation for a fold to have a region to work on:

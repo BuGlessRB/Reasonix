@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"reasonix/internal/evidence"
+	"reasonix/internal/runtime/evidence"
 )
 
 // The terminal-barrier counterfactual: what a barrier at a child's first

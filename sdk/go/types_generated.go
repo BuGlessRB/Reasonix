@@ -2,7 +2,7 @@
 
 // Package extension: Extension Protocol v2 wire DTOs, enums, method
 // names, frozen limits, and the frozen error table, mirrored from the
-// host's internal/extension/protocol package. Behavior (validators,
+// host's internal/ext/extension/protocol package. Behavior (validators,
 // error constructors, helpers) lives in the handwritten files.
 package extension
 

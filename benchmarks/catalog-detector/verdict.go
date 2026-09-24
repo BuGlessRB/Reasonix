@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/skill"
+	"reasonix/internal/ext/skill"
 )
 
 type verdict struct {

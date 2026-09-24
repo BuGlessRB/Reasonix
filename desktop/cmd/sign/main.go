@@ -33,7 +33,7 @@ import (
 
 	"aead.dev/minisign"
 
-	"reasonix/internal/update"
+	"reasonix/internal/platform/update"
 )
 
 // platforms are the manifest keys we publish. A built artifact is matched to a key
@@ -138,7 +138,7 @@ func verifyFile(path string) error {
 // genKey generates a fresh minisign key pair, writing the encrypted private key
 // (reasonix.key) and the public key (reasonix.pub) into dir. The password comes
 // from $MINISIGN_PASSWORD. The public key is printed — it's safe to publish; embed
-// it in internal/update/verify.go. The private key never leaves dir.
+// it in internal/platform/update/verify.go. The private key never leaves dir.
 func genKey(dir string) error {
 	pw := os.Getenv("MINISIGN_PASSWORD")
 	if strings.TrimSpace(pw) == "" {
@@ -169,7 +169,7 @@ func genKey(dir string) error {
 	}
 	fmt.Printf("private key -> %s (keep secret; this is the MINISIGN_PRIVATE_KEY value)\n", keyPath)
 	fmt.Printf("public key  -> %s\n\n", pubPath)
-	fmt.Printf("public key (embed in internal/update/verify.go, key ID %016X):\n%s\n", pub.ID(), pubText)
+	fmt.Printf("public key (embed in internal/platform/update/verify.go, key ID %016X):\n%s\n", pub.ID(), pubText)
 	return nil
 }
 

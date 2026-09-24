@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
 )
 
 func TestScanMemoryRecallCountsAndPointOfUse(t *testing.T) {

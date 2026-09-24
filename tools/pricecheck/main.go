@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/billing"
+	"reasonix/internal/model/billing"
 )
 
 type verdict string

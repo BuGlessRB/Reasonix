@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/control"
-	"reasonix/internal/execjournal"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/session/control"
+	"reasonix/internal/state/execjournal"
 )
 
 // armFleetActiveStore asks whether the sub-agent store can be asked about a

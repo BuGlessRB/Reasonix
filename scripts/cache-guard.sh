@@ -5,7 +5,7 @@ tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
 
 set +e
-REASONIX_RELEASE_CACHE_GUARD=1 go test ./internal/agent -run '^TestReleaseCacheHitGuard$' -v -count=1 2>&1 | tee "$tmp"
+REASONIX_RELEASE_CACHE_GUARD=1 go test ./internal/runtime/agent -run '^TestReleaseCacheHitGuard$' -v -count=1 2>&1 | tee "$tmp"
 status=${PIPESTATUS[0]}
 set -e
 
@@ -16,7 +16,7 @@ fi
 # A deterministic enabled extension may intentionally establish a different
 # prefix once, but independent reload generations must reproduce identical
 # provider-visible prompt and tool-schema bytes.
-go test ./internal/boot -run '^TestBootStableExtensionCacheGuard$' -v -count=1
+go test ./internal/assembly/boot -run '^TestBootStableExtensionCacheGuard$' -v -count=1
 
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {

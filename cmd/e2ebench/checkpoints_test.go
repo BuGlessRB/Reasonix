@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
 )
 
 func writeTaskVerify(t *testing.T, taskDir, script string) {

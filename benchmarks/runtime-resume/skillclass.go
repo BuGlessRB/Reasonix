@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/control"
-	"reasonix/internal/provider"
-	"reasonix/internal/skill"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/ext/skill"
+	"reasonix/internal/runtime/agent"
+	"reasonix/internal/session/control"
 )
 
 // The skill-runner classification arms. They ask what kind of execution a

@@ -1,7 +1,7 @@
 # Extension Runtime v2 — Performance baselines
 
-Soft CI thresholds live in `internal/extension/bench_threshold_test.go`.
-Benchmarks live in `internal/extension/benchmark_test.go`.
+Soft CI thresholds live in `internal/ext/extension/bench_threshold_test.go`.
+Benchmarks live in `internal/ext/extension/benchmark_test.go`.
 
 ## Targets (developer machine / CI soft fail)
 
@@ -19,9 +19,9 @@ Benchmarks live in `internal/extension/benchmark_test.go`.
 Measure:
 
 ```bash
-go test ./internal/extension/ -run 'TestGraphAndPlanLatencyBaseline|TestEffectScopeDisposeBaseline' -count=1
-go test ./internal/extension/ -bench 'BenchmarkDependencyGraphAndPlan|BenchmarkExtensionKernelStartup' -benchmem -count=3
-go test ./internal/boot/ -run 'TestIntegrationNoOpDoesNotBuildNewController|TestRebuildFromNoOp' -count=1
+go test ./internal/ext/extension/ -run 'TestGraphAndPlanLatencyBaseline|TestEffectScopeDisposeBaseline' -count=1
+go test ./internal/ext/extension/ -bench 'BenchmarkDependencyGraphAndPlan|BenchmarkExtensionKernelStartup' -benchmem -count=3
+go test ./internal/assembly/boot/ -run 'TestIntegrationNoOpDoesNotBuildNewController|TestRebuildFromNoOp' -count=1
 ```
 
 ## Cache hit expectation

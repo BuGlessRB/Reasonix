@@ -8,7 +8,7 @@ import (
 )
 
 // Claude caches only where cache_control marks a breakpoint, and that field is
-// serialized by internal/provider/anthropic alone. The same model reached
+// serialized by internal/model/anthropic alone. The same model reached
 // through an openai-kind entry is not an error and not a visible wire
 // difference — it is full input rate on every prompt token, forever, and the
 // only symptom is a cache_read that never arrives.
@@ -113,7 +113,7 @@ func checkClaudeDialect(entries []providerDialect, vars map[string][]string) []F
 				continue
 			}
 			out = append(out, Finding{entry.file, entry.line, ruleClaudeDialect, fmt.Sprintf(
-				"%q on the %q dialect: cache_control ships only from internal/provider/anthropic, so every prompt token bills at full input rate",
+				"%q on the %q dialect: cache_control ships only from internal/model/anthropic, so every prompt token bills at full input rate",
 				model, entry.kind), 1})
 			break
 		}

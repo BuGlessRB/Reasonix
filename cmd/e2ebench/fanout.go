@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// fanoutMetrics mirrors internal/cli.RunMetrics's field of the same name: what
+// fanoutMetrics mirrors internal/frontend/cli.RunMetrics's field of the same name: what
 // a run's fan-outs cost in wall clock against what the same work costs one at a
 // time. The agent folds it from the run graph, which is the only record of it.
 type fanoutMetrics struct {

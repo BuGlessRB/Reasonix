@@ -4,7 +4,7 @@
 archives. What Reasonix Studio reads instead:
 
 - one directory per pack, holding a `theme.json` (`schemaVersion: 1`) and
-  optional `background` and `preview` images, read by `internal/theme`;
+  optional `background` and `preview` images, read by `internal/ext/theme`;
 - plugin themes are packs of that shape, listed as
   `plugin:<plugin>:<directory>` (see `docs/PLUGIN_PACKAGES.md`).
 

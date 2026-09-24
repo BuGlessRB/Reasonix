@@ -14,8 +14,8 @@ import (
 // the kernel, and no spelling tells the writer that carries an identity from
 // one that carries a sentence.
 const (
-	inboxFamilyFile = "internal/sessioninbox/types.go"
-	inboxWriterFile = "internal/serve/inbox.go"
+	inboxFamilyFile = "internal/state/sessioninbox/types.go"
+	inboxWriterFile = "internal/frontend/serve/inbox.go"
 	inboxWriterFunc = "writeInboxError"
 )
 

@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/config"
-	"reasonix/internal/eventwire"
+	"reasonix/internal/contract/config"
+	"reasonix/internal/contract/eventwire"
 )
 
 // turn is one authored turn: the frames it owns and where in time it sits.

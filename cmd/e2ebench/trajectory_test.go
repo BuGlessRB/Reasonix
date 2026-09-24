@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
 )
 
 func TestSummarizeTrajectoryAttributesTimeAndSkipsTruncatedTail(t *testing.T) {

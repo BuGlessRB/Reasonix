@@ -6,36 +6,36 @@
 agent:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/agent/**'
-          - 'internal/control/**'
+          - 'internal/runtime/agent/**'
+          - 'internal/session/control/**'
 
 mcp:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/plugin/**'
+          - 'internal/ext/plugin/**'
           - 'internal/codegraph/**'
 
 config:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/config/**'
-          - 'internal/boot/**'
+          - 'internal/contract/config/**'
+          - 'internal/assembly/boot/**'
 
 provider:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/provider/**'
+          - 'internal/contract/provider/**'
 
 skills:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/skill/**'
-          - 'internal/tool/**'
+          - 'internal/ext/skill/**'
+          - 'internal/contract/tool/**'
 
 tui:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/cli/**'
+          - 'internal/frontend/cli/**'
 
 desktop:
   - changed-files:

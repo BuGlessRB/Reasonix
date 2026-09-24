@@ -12,8 +12,8 @@ import (
 // a caller sees a status and a sentence nobody translated — and, before the
 // transport read plain bodies at all, only the status.
 const (
-	refusalPackage = "internal/serve/"
-	refusalAdapter = "internal/serve/fail.go"
+	refusalPackage = "internal/frontend/serve/"
+	refusalAdapter = "internal/frontend/serve/fail.go"
 )
 
 // checkRefusalPath flags a refusal that carries no code where the coded one

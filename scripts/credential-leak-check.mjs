@@ -16,7 +16,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 
-const PKG = process.argv[2] ?? "./internal/config/";
+const PKG = process.argv[2] ?? "./internal/contract/config/";
 
 // Anything shaped like a provider token. Deliberately loose: a false positive
 // costs one look at the fixtures, a false negative costs a leaked key.

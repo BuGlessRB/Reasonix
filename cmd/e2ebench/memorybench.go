@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/config"
+	"reasonix/internal/contract/config"
 )
 
 // seedTaskMemory populates stateHome's memory store from the task's memory/

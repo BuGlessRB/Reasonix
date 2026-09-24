@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/execgraph"
-	"reasonix/internal/execjournal"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/state/execgraph"
+	"reasonix/internal/state/execjournal"
 )
 
 // What a lone delegation leaves behind, layer by layer. The columns are the

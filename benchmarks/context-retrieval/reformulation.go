@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/retrieval"
+	"reasonix/internal/base/retrieval"
 )
 
 // The host probe ranks every target first, so the engine is not what makes a

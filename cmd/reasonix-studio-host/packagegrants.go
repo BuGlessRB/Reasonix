@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/packagegrant"
+	"reasonix/internal/platform/packagegrant"
 )
 
 // stripPackageGrants works on the directory the application runs from and is

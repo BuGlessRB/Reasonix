@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/ablation"
-	"reasonix/internal/agent"
-	"reasonix/internal/boot"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	_ "reasonix/internal/provider/openai"
-	"reasonix/internal/tool"
-	_ "reasonix/internal/tool/builtin"
+	"reasonix/internal/assembly/boot"
+	"reasonix/internal/contract/ablation"
+	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/contract/tool"
+	_ "reasonix/internal/model/openai"
+	"reasonix/internal/runtime/agent"
+	_ "reasonix/internal/tools/builtin"
 )
 
 // A run is one recall question against a fixture the preflight has already

@@ -6,10 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/execgraph"
-	"reasonix/internal/execjournal"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/runtime/agent"
+	"reasonix/internal/state/execgraph"
+	"reasonix/internal/state/execjournal"
 )
 
 // How a run graph can stand after the process that built it exits. Three are

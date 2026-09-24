@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/config"
-	"reasonix/internal/crashreport"
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
+	"reasonix/internal/contract/config"
+	"reasonix/internal/platform/crashreport"
 )
 
 func TestRunWithCrashCaptureRecordsAndReraises(t *testing.T) {

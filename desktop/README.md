@@ -2,7 +2,7 @@
 
 A desktop window around the Reasonix Go kernel. The window hosts a React SPA,
 and every request the SPA makes reaches the kernel's own HTTP server
-(`internal/serve`) over loopback, so Studio, `reasonix serve` and the remote UI
+(`internal/frontend/serve`) over loopback, so Studio, `reasonix serve` and the remote UI
 all answer the same routes.
 
 ```
@@ -19,7 +19,7 @@ all answer the same routes.
                 │ spawns, holds the lease    │
 ┌───────────────┴────────────────────────────▼─────────────────┐
 │  cmd/reasonix-studio-host  (main module, CGO-free)            │
-│    internal/boot.Build → internal/control.Controller          │
+│    internal/assembly/boot.Build → internal/session/control.Controller          │
 │    (same assembly the CLI uses: providers, tools, gate, …)    │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -35,7 +35,7 @@ are written down in [`docs/STUDIO_SHELL_BOUNDARIES.md`](../docs/STUDIO_SHELL_BOU
 | --- | --- |
 | `electron/` | the shell: main process, preload bridge, packaging |
 | `frontend-next/` | the SPA it serves |
-| `internal/update/` | manifest, download, verify, apply — shared by the shell and the helper |
+| `internal/platform/update/` | manifest, download, verify, apply — shared by the shell and the helper |
 | `cmd/update-helper/` | the elevated half of an update (dpkg on Linux, versioned install on Windows) |
 | `cmd/studio-manifest/`, `cmd/sign/` | release-side tools |
 | `internal/winuninstall/` | taking a previous Windows install over |

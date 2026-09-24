@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/rand"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/runtime/agent"
 )
 
 // Synthetic history on purpose: an answer that exists in the workspace is

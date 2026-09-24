@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"reasonix/internal/update"
+	"reasonix/internal/platform/update"
 )
 
 // archMap is desktop/electron/arch.json: what the packager builds for, and what

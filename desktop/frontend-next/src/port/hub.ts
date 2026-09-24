@@ -7,7 +7,7 @@ import { SsePort } from "./sse";
 // and a missed round loses nothing, because the snapshot is the record.
 const ASK_POLL_MS = 500;
 
-// Must match operationHeader in internal/serve. The caller names the operation
+// Must match operationHeader in internal/frontend/serve. The caller names the operation
 // because the question can arrive before the response does.
 function operationHeaders(operationId?: string): Record<string, string> {
   return operationId ? { "x-reasonix-operation-id": operationId } : {};

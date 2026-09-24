@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"reasonix/internal/billing"
+	"reasonix/internal/model/billing"
 )
 
 // published is one rate a vendor's page states for a model.

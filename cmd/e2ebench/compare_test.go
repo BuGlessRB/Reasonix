@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
 )
 
 func writeArm(t *testing.T, dir, name string, results []result) string {

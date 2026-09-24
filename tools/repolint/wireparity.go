@@ -29,80 +29,80 @@ const (
 // wrong. Declared and not inferred, for the reason the sensitive paths are: no
 // spelling tells a mirrored contract from a struct with json tags.
 var mirroredWireTypes = []wireMirror{
-	{"internal/agentgraph/graph.go", "Node", tsWireFile, "GraphNode"},
-	{"internal/agentgraph/graph.go", "Edge", tsWireFile, "GraphEdge"},
-	{"internal/agentgraph/graph.go", "Delta", tsWireFile, "GraphDelta"},
+	{"internal/contract/agentgraph/graph.go", "Node", tsWireFile, "GraphNode"},
+	{"internal/contract/agentgraph/graph.go", "Edge", tsWireFile, "GraphEdge"},
+	{"internal/contract/agentgraph/graph.go", "Delta", tsWireFile, "GraphDelta"},
 	// The snapshot is the execution model's whole authority: no delta carries an
 	// interruption or an unrecorded identity, and a watermark the page cannot
 	// find is a bootstrap that resumes from zero.
-	{"internal/agentgraph/graph.go", "Graph", tsWireFile, "ExecutionGraph"},
-	{"internal/control/execution_graph.go", "ExecutionGraphSnapshot", tsWireFile, "ExecutionGraphSnapshot"},
-	{"internal/control/execution_graph.go", "ExecutionInterruption", tsWireFile, "ExecutionInterruption"},
-	{"internal/serve/executiongraph.go", "executionGraphView", tsWireFile, "ExecutionGraphView"},
+	{"internal/contract/agentgraph/graph.go", "Graph", tsWireFile, "ExecutionGraph"},
+	{"internal/session/control/execution_graph.go", "ExecutionGraphSnapshot", tsWireFile, "ExecutionGraphSnapshot"},
+	{"internal/session/control/execution_graph.go", "ExecutionInterruption", tsWireFile, "ExecutionInterruption"},
+	{"internal/frontend/serve/executiongraph.go", "executionGraphView", tsWireFile, "ExecutionGraphView"},
 	// Whether a replayed trajectory covers the session or only a prefix of it.
 	// A page that cannot read the coverage is back to the empty array that meant
 	// three different things.
-	{"internal/serve/wirelog.go", "trajectoryView", tsWireFile, "TrajectoryRead"},
+	{"internal/frontend/serve/wirelog.go", "trajectoryView", tsWireFile, "TrajectoryRead"},
 	// The tool frame itself. Who issued a call is the one thing separating the
 	// model's work from the host's own bookkeeping, and a page that cannot read
 	// it folds them together.
-	{"internal/eventwire/wire.go", "Tool", tsWireFile, "Tool"},
+	{"internal/contract/eventwire/wire.go", "Tool", tsWireFile, "Tool"},
 	// The canonical task list, which the panel reads rather than derives. A
 	// status the page cannot read is a signed-off step drawn as the current one.
-	{"internal/serve/todos.go", "todoItem", tsSessionFile, "HostTodo"},
+	{"internal/frontend/serve/todos.go", "todoItem", tsSessionFile, "HostTodo"},
 	// The agent's tabs. The target id is what the window draws a view by, so a
 	// tab the page cannot read one for is a tab it cannot show.
-	{"internal/browser/session.go", "TabInfo", tsSessionFile, "BrowserTab"},
+	{"internal/platform/browser/session.go", "TabInfo", tsSessionFile, "BrowserTab"},
 	// A rebuilt transcript's tool calls. The proxy's resolved identity was on
 	// the kernel side and not on this one, so a reopened session drew
 	// use_capability where the live one drew what it reached.
-	{"internal/serve/history.go", "historyToolCall", tsSessionFile, "HistoryToolCall"},
-	{"internal/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
+	{"internal/frontend/serve/history.go", "historyToolCall", tsSessionFile, "HistoryToolCall"},
+	{"internal/session/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
 	// The MCP row: a status the host answered with and the page cannot read is a
 	// row that goes back to reading the server's own prose for it.
-	{"internal/serve/catalog.go", "mcpEntry", tsMcpFile, "McpEntry"},
+	{"internal/frontend/serve/catalog.go", "mcpEntry", tsMcpFile, "McpEntry"},
 	// The fold bounds and the one in force: a field the panel cannot read is a
 	// threshold a user sets and never sees applied.
-	{"internal/control/compaction_settings.go", "CompactionSettings", tsModelFile, "CompactionSettings"},
+	{"internal/session/control/compaction_settings.go", "CompactionSettings", tsModelFile, "CompactionSettings"},
 	// The completion summary is the turn's own verdict on itself; a gap kind the
 	// desktop cannot read is a turn it shows as clean.
-	{"internal/eventwire/wire.go", "CompletionSummary", tsWireFile, "CompletionSummary"},
+	{"internal/contract/eventwire/wire.go", "CompletionSummary", tsWireFile, "CompletionSummary"},
 	// A maintenance verdict the desktop cannot read is a session that shows no
 	// attempt to bound its context — which is what its trajectory export said
 	// about the run that motivated the second boundary.
-	{"internal/eventwire/wire.go", "ContextMaintenance", tsWireFile, "ContextMaintenance"},
+	{"internal/contract/eventwire/wire.go", "ContextMaintenance", tsWireFile, "ContextMaintenance"},
 	// The gauge and the two ceilings behind it. A panel that cannot read which
 	// bound fires draws a fold point at 16% of the declared window with nothing
 	// on the screen that explains it, which is what it read as.
-	{"internal/serve/context_window.go", "contextView", tsShellFile, "ContextBreakdown"},
+	{"internal/frontend/serve/context_window.go", "contextView", tsShellFile, "ContextBreakdown"},
 	// What sent one fold. Without the boundary and its size the card falls back
 	// to "a threshold was reached", and the reader supplies their own reason.
-	{"internal/eventwire/wire.go", "Compaction", tsWireFile, "Compaction"},
+	{"internal/contract/eventwire/wire.go", "Compaction", tsWireFile, "Compaction"},
 	// Plan rewriting and plan advancement are told apart by three counters; a
 	// desktop that can read only some of them reads churn as work.
-	{"internal/eventwire/wire.go", "TodoProgress", tsWireFile, "TodoProgress"},
+	{"internal/contract/eventwire/wire.go", "TodoProgress", tsWireFile, "TodoProgress"},
 	// RemoteHostEdit is left out on purpose: the kernel still takes the single
 	// `workspace` an old row was saved with, which the page deliberately does
 	// not send. An under-filled request is not a picture that cannot be read.
-	{"internal/serve/hub_remote.go", "RemoteHostView", tsRemoteFile, "RemoteHost"},
-	{"internal/serve/remote_browse.go", "RemoteListing", tsRemoteFile, "RemoteListing"},
-	{"internal/serve/remote_browse.go", "RemoteFolder", tsRemoteFile, "RemoteFolder"},
+	{"internal/frontend/serve/hub_remote.go", "RemoteHostView", tsRemoteFile, "RemoteHost"},
+	{"internal/frontend/serve/remote_browse.go", "RemoteListing", tsRemoteFile, "RemoteListing"},
+	{"internal/frontend/serve/remote_browse.go", "RemoteFolder", tsRemoteFile, "RemoteFolder"},
 	// What waits on the user, and which call answers it. The desktop reads this
 	// list as the whole set of open prompts — one it cannot read is a card it
 	// seals as decided while the run stays blocked on it.
-	{"internal/control/decisions.go", "Decision", tsSessionFile, "Decision"},
-	{"internal/control/decisions.go", "DecisionQuestion", tsSessionFile, "DecisionQuestion"},
-	{"internal/control/decisions.go", "DecisionOption", tsSessionFile, "DecisionOption"},
+	{"internal/session/control/decisions.go", "Decision", tsSessionFile, "Decision"},
+	{"internal/session/control/decisions.go", "DecisionQuestion", tsSessionFile, "DecisionQuestion"},
+	{"internal/session/control/decisions.go", "DecisionOption", tsSessionFile, "DecisionOption"},
 	// How a window learns a prompt was answered in another one. A field it
 	// cannot read is a card left answerable over a decision already made.
-	{"internal/eventwire/wire.go", "DecisionReceipt", tsWireFile, "DecisionReceipt"},
+	{"internal/contract/eventwire/wire.go", "DecisionReceipt", tsWireFile, "DecisionReceipt"},
 	// What an install in flight is doing. The page polls it and renders one
 	// sentence per phase; a phase it cannot read renders as nothing, which on
 	// the long pause after the last byte is indistinguishable from a hang.
-	{"internal/update/progress.go", "Progress", tsVersionFile, "UpdateProgress"},
-	{"internal/checkpoint/types.go", "RewindResult", tsSessionFile, "RewindResult"},
-	{"internal/eventwire/wire.go", "ShellExecution", tsWireFile, "Execution"},
-	{"internal/eventwire/workspace_lease.go", "WorkspaceLease", tsWireFile, "WorkspaceLease"},
+	{"internal/platform/update/progress.go", "Progress", tsVersionFile, "UpdateProgress"},
+	{"internal/state/checkpoint/types.go", "RewindResult", tsSessionFile, "RewindResult"},
+	{"internal/contract/eventwire/wire.go", "ShellExecution", tsWireFile, "Execution"},
+	{"internal/contract/eventwire/workspace_lease.go", "WorkspaceLease", tsWireFile, "WorkspaceLease"},
 }
 
 type wireMirror struct {
@@ -115,7 +115,7 @@ type wireMirror struct {
 // name the reader declares and the writer never sends reads as zero forever,
 // which is what a rename on the writing side looks like from here.
 var readMirrors = []readMirror{
-	{"cmd/e2ebench/main.go", "runMetrics", "internal/cli/run_metrics.go", "RunMetrics"},
+	{"cmd/e2ebench/main.go", "runMetrics", "internal/frontend/cli/run_metrics.go", "RunMetrics"},
 }
 
 type readMirror struct {

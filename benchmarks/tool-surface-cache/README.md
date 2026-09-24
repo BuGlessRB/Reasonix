@@ -35,5 +35,5 @@ across three switches, with no miss spike at either. The absent surface is a byt
 cache entry serves both.
 
 This is what `Registry.ProviderSchemas` is built on: stable tools first,
-contextual ones after, each sorted. `internal/tool/provider_surface_test.go`
+contextual ones after, each sorted. `internal/contract/tool/provider_surface_test.go`
 holds the shape — the segment boundary is the property this benchmark priced.

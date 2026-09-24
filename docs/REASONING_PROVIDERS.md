@@ -8,7 +8,7 @@ known backend uses and which parameters it honours or ignores.
 
 ## Auto-detected backends
 
-These are recognised by base URL (see `internal/provider/openai/host.go`) and
+These are recognised by base URL (see `internal/model/openai/host.go`) and
 get a tailored request shape automatically — no extra config needed.
 
 | Provider | Base URL | Reasoning control | `/effort` levels | Notes |

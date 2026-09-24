@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/skill"
+	"reasonix/internal/ext/skill"
 )
 
 // detector answers one question: has the thing the model would be sent changed?

@@ -8,10 +8,10 @@ import (
 	"slices"
 	"time"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/session/control"
 )
 
 // The four single-delegation arms. A lone task is not another executor: it

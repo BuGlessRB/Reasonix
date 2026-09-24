@@ -11,7 +11,7 @@ const DICTS: Record<Lang, Record<string, string>> = { zh: {}, en: EN };
 // more than it returns, and this way the call site still reads as the sentence
 // it renders — a translation that is missing falls back to the original rather
 // than to a blank or a key. The catalogue's completeness is a test's job, the
-// same way internal/i18n does it for the CLI.
+// same way internal/base/i18n does it for the CLI.
 let lang: Lang = "zh";
 let dict = DICTS.zh;
 

@@ -1,6 +1,6 @@
 // Command reasonix-plugin-example is a reference Reasonix plugin: a minimal MCP stdio
 // server speaking newline-delimited JSON-RPC 2.0 on stdin/stdout. It exists to
-// document the contract end-to-end (the protocol the internal/plugin client
+// document the contract end-to-end (the protocol the internal/ext/plugin client
 // drives) and to give users a working example to copy.
 //
 // Wire it up in reasonix.toml:

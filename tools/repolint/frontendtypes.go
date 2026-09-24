@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	controlPkgPath = "reasonix/internal/control"
+	controlPkgPath = "reasonix/internal/session/control"
 	controllerName = "Controller"
 	modulePath     = "reasonix"
 )
 
 // One declared build target keeps the matrix off the machine that reads it:
-// internal/cli carries _windows and _unix files, and a GOOS-dependent file set
+// internal/frontend/cli carries _windows and _unix files, and a GOOS-dependent file set
 // would put a developer's baseline at odds with CI. This is the CLI's own
 // release configuration, so the tree has to keep it building anyway.
 var parityTarget = []string{"CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64"}

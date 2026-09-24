@@ -11,7 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/provider"
 )
 
 // newScripted builds the provider with its synchronisation channels open. The

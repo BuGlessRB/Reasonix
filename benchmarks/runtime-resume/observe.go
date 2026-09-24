@@ -10,13 +10,13 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/control"
-	"reasonix/internal/evidence"
-	"reasonix/internal/execjournal"
-	"reasonix/internal/provider"
-	"reasonix/internal/store"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/session/control"
+	"reasonix/internal/state/execjournal"
+	"reasonix/internal/state/store"
 )
 
 // Observation is everything one phase can read about a session without asking a

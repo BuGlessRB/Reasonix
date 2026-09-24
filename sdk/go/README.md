@@ -106,7 +106,7 @@ The resulting directory is a complete Manifest v2 plugin package. The binary
 speaks the protocol on stdin/stdout, so install the directory as a plugin
 package (or point the host-side conformance suite at it) rather than running
 the binary interactively. It is installed into a temporary Reasonix home and
-driven end-to-end against the real host by `internal/extension/conformance` in
+driven end-to-end against the real host by `internal/ext/extension/conformance` in
 the Reasonix repository.
 
 ## Generated wire types
@@ -119,7 +119,7 @@ constructors, enum helpers) lives in `types_ext.go`.
 ## Protocol reference
 
 - Method/DTO contract: [`docs/EXTENSION_PROTOCOL.generated.md`](../../docs/EXTENSION_PROTOCOL.generated.md)
-- Canonical JSON schema: [`internal/extension/protocol/schema.generated.json`](../../internal/extension/protocol/schema.generated.json)
+- Canonical JSON schema: [`internal/ext/extension/protocol/schema.generated.json`](../../internal/ext/extension/protocol/schema.generated.json)
 - Transport: strict JSON-RPC 2.0 over NDJSON (one object per line), integer
   request ids, object params, 8 MiB frames.
 

@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/ablation"
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/retrieval"
-	"reasonix/internal/tool"
+	"reasonix/internal/base/retrieval"
+	"reasonix/internal/contract/ablation"
+	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/agent"
 )
 
 // TargetHit is not EvidenceSufficient: a rank-1 hit can still hand over a

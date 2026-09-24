@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/control"
+	"reasonix/internal/session/control"
 )
 
 // Two trees, read at once. A stop aimed at a turn must close the turn's own

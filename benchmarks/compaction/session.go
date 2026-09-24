@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/runtime/agent"
 )
 
 // A generation is one round of work followed by one compaction. Compaction

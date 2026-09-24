@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
 )
 
 // A build product is gitignored and regenerated, so its size is neither
@@ -27,7 +27,7 @@ func TestGeneratedOutputIsNotCollected(t *testing.T) {
 	}
 	write("desktop/frontend/dist/models.js", "export class X {}\n")
 	write("desktop/frontend/src/app.ts", "export const x = 1\n")
-	write("internal/agent/agent.go", "package agent\n")
+	write("internal/runtime/agent/agent.go", "package agent\n")
 
 	got, err := collect(root)
 	if err != nil {
@@ -38,7 +38,7 @@ func TestGeneratedOutputIsNotCollected(t *testing.T) {
 			t.Fatalf("generated output was collected: %v", got)
 		}
 	}
-	for _, want := range []string{"desktop/frontend/src/app.ts", "internal/agent/agent.go"} {
+	for _, want := range []string{"desktop/frontend/src/app.ts", "internal/runtime/agent/agent.go"} {
 		if !slices.ContainsFunc(got, func(rel string) bool { return filepath.ToSlash(rel) == want }) {
 			t.Errorf("%s was skipped; only generated output should be", want)
 		}

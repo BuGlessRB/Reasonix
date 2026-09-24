@@ -9,15 +9,15 @@ import (
 // on a narrower composite, so a capability can be out of reach for a reason
 // port.go already compiles.
 var testPorts = []frontendPort{
-	{pkg: "internal/acp", port: "EditorAPI"},
-	{pkg: "internal/cli", port: "SessionAPI"},
-	{pkg: "internal/serve", port: "SessionAPI"},
+	{pkg: "internal/frontend/acp", port: "EditorAPI"},
+	{pkg: "internal/frontend/cli", port: "SessionAPI"},
+	{pkg: "internal/frontend/serve", port: "SessionAPI"},
 }
 
 const (
-	acpPkg   = "internal/acp"
-	cliPkg   = "internal/cli"
-	servePkg = "internal/serve"
+	acpPkg   = "internal/frontend/acp"
+	cliPkg   = "internal/frontend/cli"
+	servePkg = "internal/frontend/serve"
 )
 
 // parityOf builds what the type check would have produced: capabilities the
@@ -26,7 +26,7 @@ const (
 func parityOf(caps []string, reachable, consumed map[string][]string) parityMatrix {
 	m := parityMatrix{reachable: map[string]map[string]bool{}, consumed: map[string]map[string]bool{}}
 	for i, name := range caps {
-		m.capabilities = append(m.capabilities, capability{name, "internal/control/controller.go", i + 1})
+		m.capabilities = append(m.capabilities, capability{name, "internal/session/control/controller.go", i + 1})
 	}
 	for pkg, names := range reachable {
 		m.reachable[pkg] = nameSet(names)
@@ -184,9 +184,9 @@ func TestScopeRowsReportAtTheTable(t *testing.T) {
 }
 
 func TestRecordedParityDebtDoesNotFail(t *testing.T) {
-	b := budget(map[string]map[string]int{"internal/control/controller.go": {ruleFrontendParity: 3}},
+	b := budget(map[string]map[string]int{"internal/session/control/controller.go": {ruleFrontendParity: 3}},
 		map[string]int{ruleFrontendParity: 3})
-	_, msgs := b.exceeded([]Finding{{"internal/control/controller.go", 1, ruleFrontendParity, "", 3}})
+	_, msgs := b.exceeded([]Finding{{"internal/session/control/controller.go", 1, ruleFrontendParity, "", 3}})
 	if len(msgs) != 0 {
 		t.Fatalf("baselined parity debt reported as new: %v", msgs)
 	}
@@ -195,9 +195,9 @@ func TestRecordedParityDebtDoesNotFail(t *testing.T) {
 // The gate's whole purpose: a capability that gains a frontend it does not
 // reach must fail, even though the capability's row already existed.
 func TestOneMoreMissingEdgeOnAnAlreadyBaselinedCapabilityFails(t *testing.T) {
-	b := budget(map[string]map[string]int{"internal/control/controller.go": {ruleFrontendParity: 3}},
+	b := budget(map[string]map[string]int{"internal/session/control/controller.go": {ruleFrontendParity: 3}},
 		map[string]int{ruleFrontendParity: 3})
-	_, msgs := b.exceeded([]Finding{{"internal/control/controller.go", 1, ruleFrontendParity, "", 4}})
+	_, msgs := b.exceeded([]Finding{{"internal/session/control/controller.go", 1, ruleFrontendParity, "", 4}})
 	if len(msgs) == 0 {
 		t.Fatal("a fourth missing edge under a budget of three must fail")
 	}
@@ -206,7 +206,7 @@ func TestOneMoreMissingEdgeOnAnAlreadyBaselinedCapabilityFails(t *testing.T) {
 func TestANewCapabilityWiredToOneFrontendFails(t *testing.T) {
 	b := budget(map[string]map[string]int{}, map[string]int{ruleFrontendParity: 0})
 	over, msgs := b.exceeded([]Finding{
-		{"internal/control/goal.go", 12, ruleFrontendParity, "Controller.SetGoal: acp=no cli=yes serve=no", 2}})
+		{"internal/session/control/goal.go", 12, ruleFrontendParity, "Controller.SetGoal: acp=no cli=yes serve=no", 2}})
 	if len(msgs) == 0 || len(over) != 1 {
 		t.Fatalf("a capability landing in an unbaselined file must fail: over=%v msgs=%v", over, msgs)
 	}
@@ -215,9 +215,9 @@ func TestANewCapabilityWiredToOneFrontendFails(t *testing.T) {
 // Wiring a frontend pays debt down, and the surplus has to be reported: budget
 // left on a file is room the gap can reopen into without anyone noticing.
 func TestWiringAFrontendLeavesReclaimableBudget(t *testing.T) {
-	b := budget(map[string]map[string]int{"internal/control/controller.go": {ruleFrontendParity: 3}},
+	b := budget(map[string]map[string]int{"internal/session/control/controller.go": {ruleFrontendParity: 3}},
 		map[string]int{ruleFrontendParity: 3})
-	paid := []Finding{{"internal/control/controller.go", 1, ruleFrontendParity, "", 2}}
+	paid := []Finding{{"internal/session/control/controller.go", 1, ruleFrontendParity, "", 2}}
 	if slack := reclaimable(b, paid); slack[ruleFrontendParity] != 1 {
 		t.Fatalf("paying one edge must free one unit of budget: %v", slack)
 	}
@@ -231,9 +231,9 @@ func TestWiringAFrontendLeavesReclaimableBudget(t *testing.T) {
 }
 
 func TestRaisingTheParityCeilingIsRefusedWithoutAllowWiden(t *testing.T) {
-	b := budget(map[string]map[string]int{"internal/control/controller.go": {ruleFrontendParity: 2}},
+	b := budget(map[string]map[string]int{"internal/session/control/controller.go": {ruleFrontendParity: 2}},
 		map[string]int{ruleFrontendParity: 2})
-	next := baselineFrom([]Finding{{"internal/control/controller.go", 1, ruleFrontendParity, "", 3}})
+	next := baselineFrom([]Finding{{"internal/session/control/controller.go", 1, ruleFrontendParity, "", 3}})
 	if w := widenings(b, next); len(w) == 0 {
 		t.Fatal("carrying a new missing edge into the baseline must be asked for")
 	}

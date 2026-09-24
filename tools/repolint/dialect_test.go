@@ -34,7 +34,7 @@ func flagged(t *testing.T, rel string) []Finding {
 // The models a preset offers are usually a package-level slice, so an entry
 // that never spells "claude" in its own literal is the ordinary case.
 func TestClaudeDialectResolvesModelsThroughAVariable(t *testing.T) {
-	got := flagged(t, "internal/config/presets.go")
+	got := flagged(t, "internal/contract/config/presets.go")
 	if len(got) != 3 {
 		t.Fatalf("findings = %d, want 3 (variable, inline, single): %v", len(got), got)
 	}
@@ -48,7 +48,7 @@ func TestClaudeDialectResolvesModelsThroughAVariable(t *testing.T) {
 // One finding per entry, not per model: the entry is what a fix changes.
 func TestClaudeDialectReportsEachEntryOnce(t *testing.T) {
 	seen := map[int]bool{}
-	for _, f := range flagged(t, "internal/config/presets.go") {
+	for _, f := range flagged(t, "internal/contract/config/presets.go") {
 		if seen[f.Line] {
 			t.Fatalf("line %d reported twice", f.Line)
 		}
@@ -59,7 +59,7 @@ func TestClaudeDialectReportsEachEntryOnce(t *testing.T) {
 // The anthropic dialect is where cache_control comes from, so the same models
 // there are the fix, not the finding.
 func TestClaudeDialectAllowsTheAnthropicDialect(t *testing.T) {
-	for _, f := range flagged(t, "internal/config/presets.go") {
+	for _, f := range flagged(t, "internal/contract/config/presets.go") {
 		if f.Line == 11 {
 			t.Fatalf("anthropic-kind entry was flagged: %+v", f)
 		}
@@ -67,7 +67,7 @@ func TestClaudeDialectAllowsTheAnthropicDialect(t *testing.T) {
 }
 
 func TestClaudeDialectSkipsFixtures(t *testing.T) {
-	if got := flagged(t, "internal/config/presets_test.go"); len(got) != 0 {
+	if got := flagged(t, "internal/contract/config/presets_test.go"); len(got) != 0 {
 		t.Fatalf("a test fixture was flagged: %v", got)
 	}
 }

@@ -18,13 +18,13 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/ablation"
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	_ "reasonix/internal/provider/openai"
-	"reasonix/internal/tokencount"
-	"reasonix/internal/tool"
+	"reasonix/internal/base/tokencount"
+	"reasonix/internal/contract/ablation"
+	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/contract/tool"
+	_ "reasonix/internal/model/openai"
+	"reasonix/internal/runtime/agent"
 )
 
 const (

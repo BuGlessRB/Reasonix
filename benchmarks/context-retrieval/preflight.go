@@ -7,9 +7,9 @@ import (
 	"slices"
 	"strings"
 
-	"reasonix/internal/ablation"
-	"reasonix/internal/provider"
-	"reasonix/internal/retrieval"
+	"reasonix/internal/base/retrieval"
+	"reasonix/internal/contract/ablation"
+	"reasonix/internal/contract/provider"
 )
 
 // Preflight is what makes a real run worth paying for. An answer the model can

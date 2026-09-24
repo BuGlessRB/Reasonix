@@ -13,7 +13,7 @@ import (
 
 	"aead.dev/minisign"
 
-	"reasonix/internal/tempdir"
+	"reasonix/internal/base/tempdir"
 )
 
 func TestSanitizeHelperErrorStripsPaths(t *testing.T) {

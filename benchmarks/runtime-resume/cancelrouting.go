@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/control"
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/session/control"
 )
 
 // Where a stop goes — and, first, whose stop it is. A controller owns the turns

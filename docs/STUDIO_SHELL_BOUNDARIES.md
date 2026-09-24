@@ -28,7 +28,7 @@ a counter of its own turns it red.
 
 The kernel reaches a separate-process renderer through a socket, so the socket
 carries a boundary the host owns and no configuration can switch off
-(`internal/serve/loopback.go`):
+(`internal/frontend/serve/loopback.go`):
 
 - `tcp4 127.0.0.1:0` — never a wildcard, never a name a resolver answers for.
 - A credential minted per launch from `crypto/rand`, never read from config and
@@ -103,7 +103,7 @@ here as well.
 - The helper draws its own cursor where the agent acts. Escape pressed while it
   shows stops the run between steps.
 
-`internal/computer/live_test.go` (`REASONIX_LIVE_COMPUTER=<helper>`) drives a
+`internal/platform/computer/live_test.go` (`REASONIX_LIVE_COMPUTER=<helper>`) drives a
 real application through the helper.
 
 ## 6. State taxonomy

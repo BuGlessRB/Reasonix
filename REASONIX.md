@@ -21,13 +21,13 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   thinks, `TaskSpec` what this call wants, `CapabilityGrant` what it may touch,
   `ContextRequest` what it starts from, `SchedulerPolicy` when it runs. Put a
   field in whichever member decides its value — profiles carry ceilings, never
-  per-call values. `internal/agent/profile_boundary_test.go` enforces it.
+  per-call values. `internal/runtime/agent/profile_boundary_test.go` enforces it.
 - Cache-first: the system-prompt prefix (base prompt, tools, declared prefix
   configuration) must stay byte-stable across turns so DeepSeek's automatic
   prefix cache stays warm. Never mutate it mid-session — ride the turn tail
   instead (see `control.Compose`), under the rules in *Context projection*.
 - Performance features land with an effect test at their final boundary
-  (`internal/boot/effect_test.go` pattern): assert what actually reaches the
+  (`internal/assembly/boot/effect_test.go` pattern): assert what actually reaches the
   provider request, frontend sink, or trajectory through the real `boot.Build`
   assembly. Component correctness is not system effectiveness.
 - A mutex- or atomic-guarded struct is ratcheted on its **scalar** field count
@@ -48,7 +48,7 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   knows a deadline expired rather than a socket closed, and a message is where
   that knowledge goes to die: the reader is left matching words, or with
   nothing. Across HTTP the identity is a dotted code through `refuse`;
-  `refusal-path` fails a new `http.Error` in `internal/serve`, and the parity
+  `refusal-path` fails a new `http.Error` in `internal/frontend/serve`, and the parity
   test fails a code the frontend cannot say. Inside Go it is `errors.Is` on a
   sentinel the wrapping preserves; `error-text` fails a new match against an
   error message, following it one hop into a local because storing the text
@@ -196,7 +196,7 @@ prefix was never where these belonged wrongly; freshness ownership was missing.
   canonical state, so a switch flipped and a file edited past every API are the
   same question, and a change no projection renders is not a change.
 
-`internal/boot/context_projection_test.go` holds all five at the provider
+`internal/assembly/boot/context_projection_test.go` holds all five at the provider
 boundary, with the skills listing and the standing instructions as the two
 worked examples. A block is settled only once the turn carrying it reaches the
 runner: a turn blocked by a hook or refused by an extension after composing put
@@ -231,7 +231,7 @@ file only if all of them land, so a failure midway leaves nothing half-edited.
 ## Vendor rates
 
 Official list prices live in one place: `officialRates` in
-`internal/billing/rates.go`, oldest generation first, the last being what a
+`internal/model/billing/rates.go`, oldest generation first, the last being what a
 model charges today. A price change is an **append, never an edit** — the
 superseded rate is what lets an installed config be recognised as holding one
 of ours and brought forward, instead of quoting a retired rate for the rest of
@@ -248,7 +248,7 @@ exits non-zero — unread is its own verdict and never counts as agreement.
 ## Curated presets
 
 A preset changing shape reaches the installs that already have the old one
-through `shippedPresets` in `internal/config/preset_upgrade.go`: one declared
+through `shippedPresets` in `internal/contract/config/preset_upgrade.go`: one declared
 shape per generation, and one upgrade that brings a matching entry forward. The
 guard is the whole shape — catalog, window, default — because an entry holding
 what we shipped is ours to move and anything else its user curated.
@@ -274,7 +274,7 @@ Run these **before every commit** to catch the fastest CI failures locally:
 gofmt -w .                          # catches gofmt (saves ~13s CI)
 go vet ./...                        # catches vet warnings (saves ~52s CI/lint)
 make lint                           # golangci-lint at CI's pin + repolint
-go test ./internal/tool/builtin/ ./internal/boot/  # catches tool/boot test breaks
+go test ./internal/tools/builtin/ ./internal/assembly/boot/  # catches tool/boot test breaks
 ```
 
 `make lint` runs both gates CI runs, at the version in `.golangci-version`;
@@ -326,21 +326,21 @@ can finish. Sensitivity is declared, never inferred: the host does not read it
 out of how a path is spelled, which cannot tell `internal/auth` from
 `session_write_authority.go`, or a trace file from a data race.
 
-- sensitive: internal/permission/**
-- sensitive: internal/sandbox/**
-- sensitive: internal/shellsafe/**
-- sensitive: internal/shellparse/**
-- sensitive: internal/control/approval.go
-- sensitive: internal/control/approval_bridge.go
-- sensitive: internal/control/approval_orchestration.go
-- sensitive: internal/providerbroker/**
-- sensitive: internal/installsource/**
-- sensitive: internal/plugin/**
-- sensitive: internal/pluginpkg/**
-- sensitive: internal/netclient/**
-- sensitive: internal/redirectguard/**
-- sensitive: internal/browser/**
-- sensitive: internal/computer/**
+- sensitive: internal/safety/permission/**
+- sensitive: internal/safety/sandbox/**
+- sensitive: internal/safety/shellsafe/**
+- sensitive: internal/base/shellparse/**
+- sensitive: internal/session/control/approval.go
+- sensitive: internal/session/control/approval_bridge.go
+- sensitive: internal/session/control/approval_orchestration.go
+- sensitive: internal/model/providerbroker/**
+- sensitive: internal/ext/installsource/**
+- sensitive: internal/ext/plugin/**
+- sensitive: internal/ext/pluginpkg/**
+- sensitive: internal/base/netclient/**
+- sensitive: internal/safety/redirectguard/**
+- sensitive: internal/platform/browser/**
+- sensitive: internal/platform/computer/**
 
 One declaration, two effects: the same list is also the coverage gate's subject.
 `make coverage-gate` holds each path to the coverage it already has, because
@@ -376,7 +376,7 @@ moving a number here must not move the promise.
   establishes nothing and the mutation stays unproven.
 - Symlinks are recorded by `Lstat`, so a write through one lands outside what
   the walk compares. Confining the resolved target is the sandbox's job.
-- `internal/sandbox` confines writes to the workspace, configured extras, temp
+- `internal/safety/sandbox` confines writes to the workspace, configured extras, temp
   and toolchain caches — on macOS and Linux. Windows has no OS-level bash
   sandbox, so there nothing the host enforces bounds `Writable`.
 - The governed host authorities are a *named* set — ssh-agent, docker, podman.

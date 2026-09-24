@@ -139,10 +139,10 @@ export class MockMcp extends MockProvider {
     s.state = s.error ? "failed" : s.tools ? "standby" : "idle";
   }
 
-  // A rough stand-in for internal/mcpsetup: enough shape for the confirmation
+  // A rough stand-in for internal/ext/mcpsetup: enough shape for the confirmation
   // card to be developed against, not a second implementation of the grammar.
 
-  // A rough stand-in for internal/mcpsetup: enough shape for the confirmation
+  // A rough stand-in for internal/ext/mcpsetup: enough shape for the confirmation
   // card to be developed against, not a second implementation of the grammar.
   async parseMcp(input: string): Promise<McpDraft> {
     const text = input.trim();

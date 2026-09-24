@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/provider"
 )
 
 // The scorer decides what the pilot concludes, so it is held to the same rule

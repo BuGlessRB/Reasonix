@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"reasonix/internal/ablation"
+	"reasonix/internal/contract/ablation"
 )
 
 func TestAppendBenchmarkProfileArgsBaselineIsByteIdentical(t *testing.T) {

@@ -107,7 +107,7 @@ destroy cache reuse; dynamic data should stay in the current turn tail when
 possible. Maintainers can measure host overhead with:
 
 ```bash
-go test ./internal/extension/... -run '^$' -bench 'Extension|Dispatch' -benchmem
+go test ./internal/ext/extension/... -run '^$' -bench 'Extension|Dispatch' -benchmem
 ```
 
 ## Developing an extension

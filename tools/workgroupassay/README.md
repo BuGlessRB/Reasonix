@@ -43,7 +43,7 @@ verdict**. Raw trajectory, task list and result:
 It cost ¥2.13 and its most durable result was not a number: on its ninth turn
 it broke an invariant ten fixtures had agreed held, because a `Partial=true`
 dispatch is a transport statement and not a promise that a completion frame
-follows. See `internal/workgroup`.
+follows. See `internal/state/workgroup`.
 
 ## The verdict
 

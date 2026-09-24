@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { initialState, reduce, type Item, type SessionEvent } from "./session";
 
-// The kinds internal/serve/wirelog.go keeps. Everything else is dropped from
+// The kinds internal/frontend/serve/wirelog.go keeps. Everything else is dropped from
 // the record on purpose — streamed deltas are one frame per chunk and say
 // nothing the settled frame does not.
 const KEPT = new Set(["turn_started", "message", "tool_dispatch", "tool_result", "turn_done"]);

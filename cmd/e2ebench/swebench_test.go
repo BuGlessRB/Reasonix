@@ -8,8 +8,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"reasonix/internal/ablation"
-	"reasonix/internal/config"
+	"reasonix/internal/contract/ablation"
+	"reasonix/internal/contract/config"
 )
 
 // The harness prints an unmangled local image key but pulls a mangled one; the

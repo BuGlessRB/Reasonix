@@ -33,9 +33,9 @@ does, and version 1 means exactly these:
 
 | definition | where it lives |
 | --- | --- |
-| `ClassifyTodoTransition` — the six verdicts and how they are read | `internal/evidence/todo_progress.go` @ 2d379d411 |
-| `stepIdentity` — stable id, else normalized text, never position | `internal/evidence/todo_progress.go` @ 2d379d411 |
-| what advances a progress revision | `internal/agent/todo_progress_shadow.go` @ 2d379d411 |
+| `ClassifyTodoTransition` — the six verdicts and how they are read | `internal/runtime/evidence/todo_progress.go` @ 2d379d411 |
+| `stepIdentity` — stable id, else normalized text, never position | `internal/runtime/evidence/todo_progress.go` @ 2d379d411 |
+| what advances a progress revision | `internal/runtime/agent/todo_progress_shadow.go` @ 2d379d411 |
 | gap arithmetic — measured from the previous advance | `progress_corpus.py` @ 92d7e37de |
 | episode segmentation — the three resolving kinds, censored tail | `progress_corpus.py` @ 92d7e37de |
 

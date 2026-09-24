@@ -11,7 +11,7 @@ import (
 // generator cannot emit (validators, error constructors, enum helpers). The
 // wire DTOs, enums, method names, frozen limits, and the frozen error table
 // live in types_generated.go, mirrored from the host's
-// internal/extension/protocol package by cmd/extension-protocol-gen.
+// internal/ext/extension/protocol package by cmd/extension-protocol-gen.
 //
 // Stability contract (mirrored from the host): within major version 1 only
 // optional fields, new enum values, and new methods may be added. Existing

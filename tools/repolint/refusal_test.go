@@ -24,7 +24,7 @@ func h(w http.ResponseWriter, err error) {
 `
 
 func TestRefusalPathFlagsPlainHTTPErrorInServe(t *testing.T) {
-	s := parseBytes("internal/serve/x.go", []byte(refusalSource))
+	s := parseBytes("internal/frontend/serve/x.go", []byte(refusalSource))
 	got := checkRefusalPath(s)
 	if len(got) != 1 {
 		t.Fatalf("findings = %d, want 1: %v", len(got), got)
@@ -37,7 +37,7 @@ func TestRefusalPathFlagsPlainHTTPErrorInServe(t *testing.T) {
 // The rule is about the refusal contract one package owes its frontends, not
 // about http.Error everywhere: a CLI or a worker has no Reason to send.
 func TestRefusalPathIgnoresPackagesWithoutThatContract(t *testing.T) {
-	for _, rel := range []string{"internal/cli/x.go", "internal/serve/x_test.go", "cmd/reasonix/main.go"} {
+	for _, rel := range []string{"internal/frontend/cli/x.go", "internal/frontend/serve/x_test.go", "cmd/reasonix/main.go"} {
 		if got := checkRefusalPath(parseBytes(rel, []byte(refusalSource))); len(got) != 0 {
 			t.Fatalf("%s was flagged: %v", rel, got)
 		}
@@ -50,7 +50,7 @@ func TestRefusalPathExemptsOnlyTheAdapter(t *testing.T) {
 	if got := checkRefusalPath(parseBytes(refusalAdapter, []byte(refusalSource))); len(got) != 0 {
 		t.Fatalf("the adapter was flagged: %v", got)
 	}
-	for _, rel := range []string{"internal/serve/fail_extra.go", "internal/serve/failure.go", "internal/serve/sub/fail.go"} {
+	for _, rel := range []string{"internal/frontend/serve/fail_extra.go", "internal/frontend/serve/failure.go", "internal/frontend/serve/sub/fail.go"} {
 		if got := checkRefusalPath(parseBytes(rel, []byte(refusalSource))); len(got) != 1 {
 			t.Fatalf("%s took the adapter's exemption: %v", rel, got)
 		}
@@ -61,7 +61,7 @@ func TestRefusalPathExemptsOnlyTheAdapter(t *testing.T) {
 // same to a frontend whether they arrive as text or as JSON. A body carrying
 // anything else is a report the panel renders, and stays out of it.
 func TestRefusalPathFlagsAnErrorOnlyBody(t *testing.T) {
-	got := checkRefusalPath(parseBytes("internal/serve/x.go", []byte(errorBodySource)))
+	got := checkRefusalPath(parseBytes("internal/frontend/serve/x.go", []byte(errorBodySource)))
 	if len(got) != 1 {
 		t.Fatalf("findings = %d, want only the error-only body: %v", len(got), got)
 	}

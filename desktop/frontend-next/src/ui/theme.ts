@@ -4,7 +4,7 @@ import type { ThemePack } from "../port/port";
 // The mapping lives on this side because only the frontend knows what each
 // surface in its layout is called — a pack should not have to learn our
 // variable names to be worth installing. The vocabulary itself is the kernel's
-// (internal/theme.Tokens), and TestThemeTokenVocabularyMatchesTheFrontend holds
+// (internal/ext/theme.Tokens), and TestThemeTokenVocabularyMatchesTheFrontend holds
 // the two halves together.
 const SURFACE: Record<string, string[]> = {
   bg: ["--page"],

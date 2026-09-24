@@ -25,7 +25,7 @@
 //	                       pacing between provider chunks (default 15)
 //
 // The two hooks below exist for the host↔SDK conformance suite
-// (internal/extension/conformance); they are inert unless set:
+// (internal/ext/extension/conformance); they are inert unless set:
 //
 //	FULLSIDECAR_CRASH_ON_INPUT  exit(3) without answering when an
 //	                            input.receive text matches exactly

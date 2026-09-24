@@ -137,7 +137,7 @@ it, and its parent call stays empty. `SubagentMeta` carries both answers, and
 this is the first place they differ — until a host-started run existed, every
 durable execution came from a tool call and one field could hold both.
 
-`TestDelegationClassesStayApart` in `internal/boot` holds the classification, and
+`TestDelegationClassesStayApart` in `internal/assembly/boot` holds the classification, and
 holds it where a completed run cannot: what the store answers at the one instant
 a child is inside the provider. A check made afterwards cannot tell a recorded
 execution from an unrecorded one that happened to finish, because completion
@@ -1105,7 +1105,7 @@ released.
 
 ## Rebuilding the graph
 
-`internal/execgraph` folds the journal, the store's child terminals, and this
+`internal/state/execgraph` folds the journal, the store's child terminals, and this
 process's live executions into a graph. It recomputes rather than restores:
 nothing reads a file or emits an event, and the same inputs always give the
 same picture.

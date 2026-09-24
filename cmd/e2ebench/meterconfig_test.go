@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
 )
 
 const twoProviderConfig = `

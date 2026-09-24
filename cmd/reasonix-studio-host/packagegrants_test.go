@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"reasonix/internal/packagegrant"
+	"reasonix/internal/platform/packagegrant"
 )
 
 func TestStripPackageGrantsOnlyAnswersForAnApplication(t *testing.T) {

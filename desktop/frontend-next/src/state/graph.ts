@@ -1,6 +1,6 @@
 import type { ExecutionGraph, GraphDelta, GraphEdge, GraphNode } from "../port/wire";
 
-// The run graph, folded the way internal/agentgraph folds it. The kernel is the
+// The run graph, folded the way internal/contract/agentgraph folds it. The kernel is the
 // only thing that knows a dependency from a delivered answer, so this reducer
 // reads what it published rather than re-deriving structure from id prefixes —
 // which is what the panel used to do, and why it could only ever draw a list.

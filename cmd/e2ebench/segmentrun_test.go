@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
 )
 
 // requireShellStub skips where a #!/usr/bin/env bash stub cannot be executed.

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"reasonix/internal/config"
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "reasonix/internal/base/fileutil/encoding"
+	"reasonix/internal/contract/config"
 )
 
 type Task struct {

@@ -16,7 +16,7 @@ const httpUrl = z.string().trim().url().max(500);
 
 // A publishable install source. The registry stores only a pointer; the real
 // install runs client-side through install_source, so a source it cannot
-// classify is dead on arrival. These mirror internal/installsource/names.go
+// classify is dead on arrival. These mirror internal/ext/installsource/names.go
 // (isURL || git: shorthand || looksLikePackage); a bare local path is refused
 // because it resolves on the publisher's machine, never the installer's.
 const pkgSegment = /^[a-zA-Z0-9._-]+$/;

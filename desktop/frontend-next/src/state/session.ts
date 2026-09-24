@@ -640,7 +640,7 @@ function withReceipt(items: Item[], r?: Receipt): Item[] {
 // instructions to the model, not something the user said, so they never reach
 // the transcript. This list mirrors agent.TransientUserBlockTags by hand, and
 // naming a subset of it is how <background-jobs> rendered as a user message:
-// the same drift internal/history/strip.go records having had with five of
+// the same drift internal/state/history/strip.go records having had with five of
 // eleven. The server strips these before /history now — this is what covers
 // sessions already on disk.
 const CONTROL =

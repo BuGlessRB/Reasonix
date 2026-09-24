@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/cli"
+	"reasonix/internal/frontend/cli"
 )
 
 // jsonTags collects a struct's JSON field names, descending into embedded and
@@ -48,7 +48,7 @@ func TestBenchMetricsOnlyReadTagsTheAgentEmits(t *testing.T) {
 	}
 	if len(orphaned) > 0 {
 		t.Fatalf("e2ebench reads metrics tags no agent writes: %v\n"+
-			"either internal/cli.RunMetrics lost them in a rename, or the bench "+
+			"either internal/frontend/cli.RunMetrics lost them in a rename, or the bench "+
 			"invented them; both leave the field zero in every report", orphaned)
 	}
 }

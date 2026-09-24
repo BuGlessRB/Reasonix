@@ -11,10 +11,10 @@ const modulePrefix = "reasonix/"
 // Transport-agnostic control.Controller sits behind every frontend; nothing
 // below it may reach up. See REASONIX.md.
 var frontends = []string{
-	"internal/acp",
-	"internal/boot",
-	"internal/cli",
-	"internal/serve",
+	"internal/frontend/acp",
+	"internal/assembly/boot",
+	"internal/frontend/cli",
+	"internal/frontend/serve",
 }
 
 // Utility layer: these packages carry no knowledge of the kernel and must
@@ -22,42 +22,42 @@ var frontends = []string{
 // One may reach another: the layer is closed, so that drags nothing in, and
 // refusing it is what leaves the same judgement copied into several of them.
 var leaves = []string{
-	"internal/ablation",
-	"internal/agentgraph",
-	"internal/agentpreset",
-	"internal/billing",
-	"internal/browser",
-	"internal/computer",
-	"internal/diff",
-	"internal/extension/rpcwire",
-	"internal/execgraph",
-	"internal/execjournal",
-	"internal/extensioncontract",
-	"internal/filelock",
-	"internal/fileref",
-	"internal/fileutil",
-	"internal/fileutil/encoding",
-	"internal/frontmatter",
-	"internal/i18n",
-	"internal/mcpdiag",
-	"internal/neterr",
-	"internal/nilutil",
-	"internal/packagegrant",
-	"internal/planmode",
-	"internal/proc",
-	"internal/redirectguard",
-	"internal/releaseasset",
-	"internal/retrieval",
-	"internal/shellparse",
-	"internal/store",
-	"internal/surface",
-	"internal/sysproxy",
-	"internal/textutil",
-	"internal/tokencount",
-	"internal/usagereport",
-	"internal/visionimage",
-	"internal/workspaceid",
-	"internal/workspacelease",
+	"internal/contract/ablation",
+	"internal/contract/agentgraph",
+	"internal/contract/agentpreset",
+	"internal/model/billing",
+	"internal/platform/browser",
+	"internal/platform/computer",
+	"internal/base/diff",
+	"internal/ext/extension/rpcwire",
+	"internal/state/execgraph",
+	"internal/state/execjournal",
+	"internal/ext/extensioncontract",
+	"internal/base/filelock",
+	"internal/base/fileref",
+	"internal/base/fileutil",
+	"internal/base/fileutil/encoding",
+	"internal/base/frontmatter",
+	"internal/base/i18n",
+	"internal/ext/mcpdiag",
+	"internal/base/neterr",
+	"internal/base/nilutil",
+	"internal/platform/packagegrant",
+	"internal/contract/planmode",
+	"internal/base/proc",
+	"internal/safety/redirectguard",
+	"internal/platform/releaseasset",
+	"internal/base/retrieval",
+	"internal/base/shellparse",
+	"internal/state/store",
+	"internal/contract/surface",
+	"internal/base/sysproxy",
+	"internal/base/textutil",
+	"internal/base/tokencount",
+	"internal/state/usagereport",
+	"internal/model/visionimage",
+	"internal/base/workspaceid",
+	"internal/state/workspacelease",
 }
 
 // A host adapter implements a frontend's driven port and is shared by the hosts
@@ -66,7 +66,7 @@ var leaves = []string{
 // assembles one. remotehost holds the machines a Studio opens a workspace on —
 // the connection, not the window — so neither shell owns it.
 var hostAdapters = []string{
-	"internal/remotehost",
+	"internal/frontend/remotehost",
 }
 
 func checkLayering(imports map[string][]importRef) []Finding {
@@ -90,7 +90,7 @@ func violates(pkg, dep string) string {
 	switch {
 	case matches(leaves, pkg) && !matches(leaves, dep):
 		return fmt.Sprintf("%s is a utility-layer package and must not import %s", pkg, dep)
-	case under(dep, "internal/control") && !matches(frontends, pkg) && !under(pkg, "internal/control") && !host(pkg):
+	case under(dep, "internal/session/control") && !matches(frontends, pkg) && !under(pkg, "internal/session/control") && !host(pkg):
 		return fmt.Sprintf("%s may not import %s: the controller is reachable from frontends and entrypoints only", pkg, dep)
 	case matches(frontends, dep) && !above(pkg):
 		return fmt.Sprintf("%s may not import the %s frontend: move shared behavior below the controller", pkg, dep)

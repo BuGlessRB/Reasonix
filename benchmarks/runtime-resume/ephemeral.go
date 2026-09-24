@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/control"
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/session/control"
 )
 
 // The two ephemeral entry points, read against the execution read model's own

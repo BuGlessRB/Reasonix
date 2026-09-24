@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/agentgraph"
-	"reasonix/internal/control"
-	"reasonix/internal/provider"
+	"reasonix/internal/contract/agentgraph"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/session/control"
 )
 
 // The three fan-out arms. Each dies at a different point in one fleet's life,

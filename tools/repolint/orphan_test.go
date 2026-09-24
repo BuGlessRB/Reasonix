@@ -28,7 +28,7 @@ func names(findings []Finding) string {
 
 func TestOrphanReportsExportedKernelFuncWithNoCaller(t *testing.T) {
 	got := orphanFindings(t, map[string]string{
-		"internal/repair/config.go": "package repair\nfunc RecordHealthyConfig(v string) error { return nil }\n",
+		"internal/platform/repair/config.go": "package repair\nfunc RecordHealthyConfig(v string) error { return nil }\n",
 	})
 	if !strings.Contains(names(got), "RecordHealthyConfig") {
 		t.Fatalf("uncalled exported kernel func not reported: %q", names(got))
@@ -39,8 +39,8 @@ func TestOrphanReportsExportedKernelFuncWithNoCaller(t *testing.T) {
 // not a caller and must not silence the finding.
 func TestOrphanIgnoresCommentMentions(t *testing.T) {
 	got := orphanFindings(t, map[string]string{
-		"internal/repair/config.go": "package repair\nfunc RecordHealthyConfig(v string) error { return nil }\n",
-		"internal/config/lkg.go":    "package config\n\n// Written by repair.RecordHealthyConfig after a successful boot.\nfunc Path() string { return \"\" }\n",
+		"internal/platform/repair/config.go": "package repair\nfunc RecordHealthyConfig(v string) error { return nil }\n",
+		"internal/contract/config/lkg.go":    "package config\n\n// Written by repair.RecordHealthyConfig after a successful boot.\nfunc Path() string { return \"\" }\n",
 	})
 	if !strings.Contains(names(got), "RecordHealthyConfig") {
 		t.Fatal("a comment mention silenced the finding")
@@ -50,8 +50,8 @@ func TestOrphanIgnoresCommentMentions(t *testing.T) {
 // Tests are what keep an orphan green; they are not evidence of a caller.
 func TestOrphanIgnoresTestCallers(t *testing.T) {
 	got := orphanFindings(t, map[string]string{
-		"internal/repair/config.go":      "package repair\nfunc RecordHealthyConfig(v string) error { return nil }\n",
-		"internal/repair/config_test.go": "package repair\nfunc TestX(t *T) { RecordHealthyConfig(\"v\") }\n",
+		"internal/platform/repair/config.go":      "package repair\nfunc RecordHealthyConfig(v string) error { return nil }\n",
+		"internal/platform/repair/config_test.go": "package repair\nfunc TestX(t *T) { RecordHealthyConfig(\"v\") }\n",
 	})
 	if !strings.Contains(names(got), "RecordHealthyConfig") {
 		t.Fatal("a test caller silenced the finding")
@@ -62,8 +62,8 @@ func TestOrphanIgnoresTestCallers(t *testing.T) {
 // module would call its APIs dead.
 func TestOrphanCountsCallersInOtherModules(t *testing.T) {
 	got := orphanFindings(t, map[string]string{
-		"internal/repair/config.go": "package repair\nfunc RecordHealthyConfig(v string) error { return nil }\n",
-		"desktop/next/main.go":      "package main\nfunc main() { repair.RecordHealthyConfig(\"1\") }\n",
+		"internal/platform/repair/config.go": "package repair\nfunc RecordHealthyConfig(v string) error { return nil }\n",
+		"desktop/next/main.go":               "package main\nfunc main() { repair.RecordHealthyConfig(\"1\") }\n",
 	})
 	if strings.Contains(names(got), "RecordHealthyConfig") {
 		t.Fatalf("a desktop-module caller was not counted: %q", names(got))
@@ -72,8 +72,8 @@ func TestOrphanCountsCallersInOtherModules(t *testing.T) {
 
 func TestOrphanSkipsUnexportedAndNonKernel(t *testing.T) {
 	got := orphanFindings(t, map[string]string{
-		"internal/repair/config.go": "package repair\nfunc recordHealthy(v string) error { return nil }\n",
-		"cmd/reasonix/main.go":      "package main\nfunc Unused() {}\n",
+		"internal/platform/repair/config.go": "package repair\nfunc recordHealthy(v string) error { return nil }\n",
+		"cmd/reasonix/main.go":               "package main\nfunc Unused() {}\n",
 	})
 	if n := names(got); n != "" {
 		t.Fatalf("reported outside the kernel export surface: %q", n)
@@ -82,9 +82,9 @@ func TestOrphanSkipsUnexportedAndNonKernel(t *testing.T) {
 
 func TestOrphanSkipsTestSupportPackages(t *testing.T) {
 	got := orphanFindings(t, map[string]string{
-		"internal/agent/testutil/fake.go": "package testutil\nfunc NewFake() int { return 0 }\n",
-		"internal/testenv/home.go":        "package testenv\nfunc IsolateUserState() {}\n",
-		"internal/remote/sshtest/s.go":    "package sshtest\nfunc Start() {}\n",
+		"internal/runtime/agent/testutil/fake.go": "package testutil\nfunc NewFake() int { return 0 }\n",
+		"internal/base/testenv/home.go":           "package testenv\nfunc IsolateUserState() {}\n",
+		"internal/platform/remote/sshtest/s.go":   "package sshtest\nfunc Start() {}\n",
 	})
 	if n := names(got); n != "" {
 		t.Fatalf("reported a test-support package: %q", n)
@@ -97,7 +97,7 @@ func TestOrphanSkipsTestSupportPackages(t *testing.T) {
 // scope: guessing wrong here deletes live code.
 func TestOrphanSkipsMethods(t *testing.T) {
 	got := orphanFindings(t, map[string]string{
-		"internal/cli/tui.go": "package cli\ntype chatTUI struct{}\nfunc (chatTUI) Init() int { return 0 }\nfunc (chatTUI) NeverCalled() {}\n",
+		"internal/frontend/cli/tui.go": "package cli\ntype chatTUI struct{}\nfunc (chatTUI) Init() int { return 0 }\nfunc (chatTUI) NeverCalled() {}\n",
 	})
 	if n := names(got); n != "" {
 		t.Fatalf("reported a method: %q", n)
@@ -109,8 +109,8 @@ func TestOrphanSkipsMethods(t *testing.T) {
 // first breaks real tests, which is why the message carries the distinction.
 func TestOrphanDistinguishesTestFixturesFromCorpses(t *testing.T) {
 	got := orphanFindings(t, map[string]string{
-		"internal/repair/update.go":      "package repair\nfunc PrepareFileUpdate() {}\nfunc NeverUsed() {}\n",
-		"internal/repair/update_test.go": "package repair\nfunc TestX(t *T) { PrepareFileUpdate() }\n",
+		"internal/platform/repair/update.go":      "package repair\nfunc PrepareFileUpdate() {}\nfunc NeverUsed() {}\n",
+		"internal/platform/repair/update_test.go": "package repair\nfunc TestX(t *T) { PrepareFileUpdate() }\n",
 	})
 	msg := names(got)
 	if !strings.Contains(msg, "PrepareFileUpdate is referenced only by tests") {

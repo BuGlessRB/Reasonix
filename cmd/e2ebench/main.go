@@ -17,10 +17,10 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"reasonix/internal/ablation"
-	"reasonix/internal/config"
-	"reasonix/internal/control"
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "reasonix/internal/base/fileutil/encoding"
+	"reasonix/internal/contract/ablation"
+	"reasonix/internal/contract/config"
+	"reasonix/internal/session/control"
 )
 
 type task struct {
@@ -55,7 +55,7 @@ type runMetrics struct {
 	CompletionTokens int `json:"completion_tokens"`
 	CacheHitTokens   int `json:"cache_hit_tokens"`
 	CacheMissTokens  int `json:"cache_miss_tokens"`
-	// PrefixChangeReasonCounts mirrors internal/cli.RunMetrics's field of the
+	// PrefixChangeReasonCounts mirrors internal/frontend/cli.RunMetrics's field of the
 	// same name: per-run tallies of why the cache prefix changed (e.g.
 	// "compact_auto", "snip", "tools"), omitempty for older metrics files.
 	PrefixChangeReasonCounts map[string]int `json:"prefix_change_reason_counts,omitempty"`
@@ -67,7 +67,7 @@ type runMetrics struct {
 	Currency      string                 `json:"currency"`
 	Compactions   int                    `json:"compactions"`
 
-	// Delegation counters mirror internal/cli.RunMetrics. They are what makes a
+	// Delegation counters mirror internal/frontend/cli.RunMetrics. They are what makes a
 	// single-agent arm comparable against a delegated one for the same model.
 	SubagentRuns          int `json:"subagent_runs,omitempty"`
 	SubagentNestedRuns    int `json:"subagent_nested_runs,omitempty"`
@@ -84,7 +84,7 @@ type runMetrics struct {
 	ParentNamedFiles     int `json:"parent_named_files,omitempty"`
 	ChildEvidencePaths   int `json:"child_evidence_paths,omitempty"`
 	ChildDiscoveredPaths int `json:"child_discovered_paths,omitempty"`
-	// Fanout mirrors internal/cli.RunMetrics: fan-out timing folded from the run
+	// Fanout mirrors internal/frontend/cli.RunMetrics: fan-out timing folded from the run
 	// graph, which is where a scheduling wait is recorded and nowhere else.
 	Fanout *fanoutMetrics `json:"fanout,omitempty"`
 	// Optional Delivery capability counters (omitempty for baseline/old metrics).

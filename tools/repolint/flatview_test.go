@@ -4,7 +4,7 @@ import "testing"
 
 const flatViewSource = `package p
 
-import "reasonix/internal/frontmatter"
+import "reasonix/internal/base/frontmatter"
 
 func a(s string) map[string]string {
 	fm, _ := frontmatter.SplitLegacy(s)
@@ -37,12 +37,12 @@ func TestFlatViewFlagsBothEntryPointsOutsideTheList(t *testing.T) {
 // Reading the structure is the whole point of the boundary, so a declared
 // reader and the structured accessors are both left alone.
 func TestFlatViewLeavesDeclaredReadersAndStructuredAccessAlone(t *testing.T) {
-	if got := checkFlatView(parseBytes("internal/skill/skill.go", []byte(flatViewSource))); len(got) != 0 {
+	if got := checkFlatView(parseBytes("internal/ext/skill/skill.go", []byte(flatViewSource))); len(got) != 0 {
 		t.Fatalf("a declared reader was flagged: %v", got)
 	}
 	structured := `package p
 
-import "reasonix/internal/frontmatter"
+import "reasonix/internal/base/frontmatter"
 
 func c(s string) bool {
 	doc, _ := frontmatter.Parse(s)

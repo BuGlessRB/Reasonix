@@ -6,9 +6,9 @@ import (
 	"strings"
 	"unicode"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"reasonix/internal/contract/provider"
+	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/agent"
 )
 
 // probeAnswerContract rides with every probe question. A context full of tool
@@ -240,8 +240,8 @@ func revisionProbes() []probe {
 		{
 			class:    "late-constraint",
 			plantAt:  3,
-			plant:    userTurn("New hard rule from here on: never edit anything under internal/store/."),
-			question: "Are you allowed to edit files under internal/store/? Answer yes or no.",
+			plant:    userTurn("New hard rule from here on: never edit anything under internal/state/store/."),
+			question: "Are you allowed to edit files under internal/state/store/? Answer yes or no.",
 			want:     []string{"no"},
 			reject:   []string{"yes"},
 		},

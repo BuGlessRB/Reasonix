@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/repair"
-	"reasonix/internal/update"
+	"reasonix/internal/platform/repair"
+	"reasonix/internal/platform/update"
 )
 
 const maxWindowsPayloadMetadataSize = 64 << 10

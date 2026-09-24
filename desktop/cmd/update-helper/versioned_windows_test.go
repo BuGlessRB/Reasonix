@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"reasonix/internal/installlayout"
-	"reasonix/internal/repair"
+	"reasonix/internal/platform/installlayout"
+	"reasonix/internal/platform/repair"
 
-	"reasonix/internal/tempdir"
+	"reasonix/internal/base/tempdir"
 )
 
 func TestPreferVersionedWindowsActivation(t *testing.T) {

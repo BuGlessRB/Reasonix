@@ -39,7 +39,7 @@ export interface HistoryToolCall {
   capabilityId?: string;
 }
 
-// GET /todos as internal/serve writes it: the canonical task list, the latest
+// GET /todos as internal/frontend/serve writes it: the canonical task list, the latest
 // todo_write merged with every complete_step advance. Deriving it from the
 // transcript instead loses the advances and keeps the refused writes.
 // A tab the agent's browser has open. target is the browser's own id for the
@@ -59,7 +59,7 @@ export interface HostTodo {
   level?: number;
 }
 
-// GET /checkpoints as internal/serve writes it: the snapshot the kernel took
+// GET /checkpoints as internal/frontend/serve writes it: the snapshot the kernel took
 // before each turn's first write. prompt is the user's own text, with the
 // compose prefixes already stripped kernel-side.
 export interface Checkpoint {
@@ -140,7 +140,7 @@ export type Preset = "light" | "balanced" | "delivery";
 // will honour rides on the request — see Approval.allowsSession/allowsPersist.
 export type ApprovalVerdict = "once" | "session" | "always" | "deny";
 
-// Shape of GET /status as internal/serve writes it. Anything the UI wants that
+// Shape of GET /status as internal/frontend/serve writes it. Anything the UI wants that
 // is not here has to be added on the Go side, not invented in the client.
 // PlanAction is what a plan card can answer. The three are distinct kernel
 // transitions, not an allow/deny pair: revising keeps planning, exiting leaves
@@ -251,7 +251,7 @@ export interface JobEntry {
   startedAt: number;
 }
 
-// The UI depends on this and nothing else. SsePort talks to internal/serve;
+// The UI depends on this and nothing else. SsePort talks to internal/frontend/serve;
 // MockPort replays a fixture. Neither is allowed to leak transport details
 // upward, which is what keeps the same UI usable in a browser and in a shell.
 export interface SessionEntry {

@@ -7,16 +7,16 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/testenv"
+	"reasonix/internal/base/testenv"
 )
 
 func TestPackagesForMapsGlobsOntoPackages(t *testing.T) {
 	got := packagesFor([]string{
-		"internal/permission/**",
-		"internal/control/approval.go",
-		"internal/permission/**",
+		"internal/safety/permission/**",
+		"internal/session/control/approval.go",
+		"internal/safety/permission/**",
 	})
-	want := []string{"./internal/control/...", "./internal/permission/..."}
+	want := []string{"./internal/safety/permission/...", "./internal/session/control/..."}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("packagesFor = %v, want %v", got, want)
 	}
@@ -35,10 +35,10 @@ func TestMatchesGlobHandlesSubtreesAndExactFiles(t *testing.T) {
 		glob, file string
 		want       bool
 	}{
-		{"internal/permission/**", "internal/permission/rule.go", true},
-		{"internal/permission/**", "internal/permissionx/rule.go", false},
-		{"internal/control/approval.go", "internal/control/approval.go", true},
-		{"internal/control/approval.go", "internal/control/controller.go", false},
+		{"internal/safety/permission/**", "internal/safety/permission/rule.go", true},
+		{"internal/safety/permission/**", "internal/permissionx/rule.go", false},
+		{"internal/session/control/approval.go", "internal/session/control/approval.go", true},
+		{"internal/session/control/approval.go", "internal/session/control/controller.go", false},
 	} {
 		if got := matchesGlob(tc.glob, tc.file); got != tc.want {
 			t.Errorf("matchesGlob(%q, %q) = %v, want %v", tc.glob, tc.file, got, tc.want)
@@ -52,22 +52,22 @@ func TestFromProfileAggregatesPerDeclaredPath(t *testing.T) {
 	dir := testenv.TempDir(t)
 	profile := filepath.Join(dir, "c.out")
 	body := "mode: set\n" +
-		"reasonix/internal/control/approval.go:1.1,2.2 4 1\n" +
-		"reasonix/internal/control/approval.go:3.1,4.2 4 0\n" +
-		"reasonix/internal/control/controller.go:1.1,2.2 100 0\n" +
-		"reasonix/internal/permission/rule.go:1.1,2.2 3 1\n"
+		"reasonix/internal/session/control/approval.go:1.1,2.2 4 1\n" +
+		"reasonix/internal/session/control/approval.go:3.1,4.2 4 0\n" +
+		"reasonix/internal/session/control/controller.go:1.1,2.2 100 0\n" +
+		"reasonix/internal/safety/permission/rule.go:1.1,2.2 3 1\n"
 	if err := os.WriteFile(profile, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, _, err := fromProfile(profile, []string{"internal/control/approval.go", "internal/permission/**"})
+	got, _, err := fromProfile(profile, []string{"internal/session/control/approval.go", "internal/safety/permission/**"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got["internal/control/approval.go"] != 50.0 {
-		t.Errorf("approval.go = %v, want 50 (the file, not its package)", got["internal/control/approval.go"])
+	if got["internal/session/control/approval.go"] != 50.0 {
+		t.Errorf("approval.go = %v, want 50 (the file, not its package)", got["internal/session/control/approval.go"])
 	}
-	if got["internal/permission/**"] != 100.0 {
-		t.Errorf("permission = %v, want 100", got["internal/permission/**"])
+	if got["internal/safety/permission/**"] != 100.0 {
+		t.Errorf("permission = %v, want 100", got["internal/safety/permission/**"])
 	}
 }
 
@@ -120,7 +120,7 @@ func TestSensitiveGlobsComeFromTheProjectHostChecks(t *testing.T) {
 	}
 	found := false
 	for _, g := range globs {
-		if g == "internal/shellsafe/**" {
+		if g == "internal/safety/shellsafe/**" {
 			found = true
 		}
 	}
