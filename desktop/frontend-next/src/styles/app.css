@@ -4696,6 +4696,7 @@
   }
   .rmtadd:hover { border-color: var(--accent); color: var(--text) }
 
+  .chrome:has(.phonecard) { z-index: 40 }
   .phonepop { position: relative; display: flex }
   .phone-action[data-live] { color: var(--accent-ink) }
   .phone-action[data-live]::after {

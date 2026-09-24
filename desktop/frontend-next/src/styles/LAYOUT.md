@@ -104,6 +104,10 @@ rules are written in.
   them would move the window.
 - The phone card's dot is the door being open, not a notification: a live
   listener is state the person at the window should see without opening it.
+- The bar's `backdrop-filter` makes it a stacking context, so a card's own
+  z-index only ranks it inside the bar, and the panes after it in the DOM take
+  the hits it paints over. While a card is open the bar itself is lifted; a
+  press on the card otherwise lands on the pane and closes it.
 
 ## Pickers and menus
 
