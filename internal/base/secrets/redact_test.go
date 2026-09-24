@@ -42,8 +42,13 @@ func TestRedactLongConcurrentTranscriptAvoidsRegexpBacktracking(t *testing.T) {
 	}
 	input := transcript.String()
 
-	const workers = 24
-	const iterations = 20
+	workers, iterations := 24, 20
+	// Under -race the full load runs close to the ten-minute test limit. A few
+	// concurrent workers still expose a data race; the full load is the check
+	// on backtracking, and the ordinary run keeps it.
+	if raceDetector {
+		workers, iterations = 4, 2
+	}
 	var wg sync.WaitGroup
 	errs := make(chan string, workers)
 	for range workers {
