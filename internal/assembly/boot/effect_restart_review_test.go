@@ -255,7 +255,7 @@ model = "x"
 
 // The production form of the agent-level restart harness: two real boots and
 // the controller's own resume. A high-risk goal change that never had a review
-// is held to one uninterrupted; restarted between its phases, it is not.
+// is held to one whether or not the process restarted between its phases.
 func TestEffectRestartKeepsTheReviewAHighRiskGoalOwes(t *testing.T) {
 	uninterrupted := runReviewArm(t, uniqueKind("boot-restart-review-a"), false)
 	restarted := runReviewArm(t, uniqueKind("boot-restart-review-b"), true)
@@ -264,12 +264,9 @@ func TestEffectRestartKeepsTheReviewAHighRiskGoalOwes(t *testing.T) {
 	if uninterrupted.status == control.GoalStatusComplete || !uninterrupted.nudged {
 		t.Fatalf("the uninterrupted arm never held the change to a review, so it proves nothing: %+v", uninterrupted)
 	}
-	// Known divergence, pinned: the day a restart keeps the review, this fails
-	// and the assertion becomes that both arms end the same way.
-	if restarted.status != control.GoalStatusComplete || restarted.nudged {
-		t.Fatalf("the restart no longer drops the review (%+v): assert equivalence here instead", restarted)
+	if restarted != uninterrupted {
+		t.Fatalf("a restart between the phases changed the outcome: uninterrupted %+v, restarted %+v", uninterrupted, restarted)
 	}
-	t.Log("KNOWN: restarted between its phases, the goal completes without the review it owed")
 }
 
 var kindSeq atomic.Int64

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -124,16 +123,6 @@ func verdictOf(t *testing.T, err error) stepVerdict {
 	return stepVerdict{Missing: missing}
 }
 
-// divergence describes where two arms first disagree, or "" when they agree.
-func divergence(a, b []stepVerdict) string {
-	for i := range min(len(a), len(b)) {
-		if a[i].String() != b[i].String() {
-			return "step " + strconv.Itoa(i+1) + ": uninterrupted " + a[i].String() + ", restarted " + b[i].String()
-		}
-	}
-	return ""
-}
-
 func deliveryRegistry() *tool.Registry {
 	reg := evidenceRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
@@ -171,10 +160,10 @@ func TestRestartEquivalence(t *testing.T) {
 		// settles is the step the uninterrupted arm must end ready on, so an
 		// agreement cannot be two arms stuck the same way.
 		settles int
-		// knownDivergence marks a case restart is known to change, and pins
-		// that it still does: the day it stops, this case fails and the mark
-		// comes off. It names the owed thing a restart loses.
-		knownDivergence string
+		// knownStricter pins what a restart is known to re-demand at a step:
+		// proof whose receipts did not cross the boundary. The day it stops,
+		// or grows, this case fails.
+		knownStricter map[int][]string
 	}{
 		{
 			name: "signed-off ordinary change",
@@ -185,14 +174,14 @@ func TestRestartEquivalence(t *testing.T) {
 			settles:      2,
 		},
 		{
-			// The review a high-risk change owes is derived from mutation
-			// receipts in the ledger, and the ledger does not cross a restart.
+			// The review is owed through the checkpoint, so a restart keeps it.
+			// What it does not keep is the proof already given for the change.
 			name: "high-risk change still owes review",
 			scenario: restartScenario{scope: "goal-auth", task: "change auth", registry: deliveryRegistry,
 				options: Options{DeliveryProfile: true, ProjectSensitivePaths: []string{"auth/**"}},
 				steps:   []restartStep{shipStep("auth/login.go"), finishStep, reverifyStep("auth/login.go")}},
-			restartAfter:    1,
-			knownDivergence: "structured_review",
+			restartAfter:  1,
+			knownStricter: map[int][]string{2: {"path_inspection", "signoff", "verification"}},
 		},
 	}
 	for _, tc := range cases {
@@ -203,23 +192,23 @@ func TestRestartEquivalence(t *testing.T) {
 			if tc.settles > 0 && !uninterrupted[tc.settles-1].Ready {
 				t.Fatalf("the scenario never settles: step %d %s", tc.settles, uninterrupted[tc.settles-1])
 			}
-			diff := divergence(uninterrupted, restarted)
-			if tc.knownDivergence == "" {
-				if diff != "" {
-					t.Fatalf("restart changed the host's decision at %s", diff)
+			for i := range uninterrupted {
+				step := i + 1
+				for _, owed := range uninterrupted[i].Missing {
+					if !slices.Contains(restarted[i].Missing, owed) {
+						t.Fatalf("step %d: the restart dropped %s, which the uninterrupted run still owes", step, owed)
+					}
 				}
-				return
+				var extra []string
+				for _, owed := range restarted[i].Missing {
+					if !slices.Contains(uninterrupted[i].Missing, owed) {
+						extra = append(extra, owed)
+					}
+				}
+				if want := tc.knownStricter[step]; !slices.Equal(extra, want) {
+					t.Fatalf("step %d: the restart re-demands %v, known %v", step, extra, want)
+				}
 			}
-			lost := false
-			for i := tc.restartAfter; i < len(uninterrupted); i++ {
-				lost = lost || (slices.Contains(uninterrupted[i].Missing, tc.knownDivergence) &&
-					!slices.Contains(restarted[i].Missing, tc.knownDivergence))
-			}
-			if !lost {
-				t.Fatalf("restart no longer loses %s (%s): remove knownDivergence from this case",
-					tc.knownDivergence, diff)
-			}
-			t.Logf("KNOWN: restart loses %s — %s", tc.knownDivergence, diff)
 		})
 	}
 }

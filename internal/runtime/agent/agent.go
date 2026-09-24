@@ -920,6 +920,7 @@ func (a *Agent) updateDeliveryCheckpoint(runErr error) {
 	if persistentOnlyReady {
 		cp.MutationObserved = true
 	}
+	cp.OwedReview = a.owedReview(cp.OwedReview)
 	if runErr == nil && cp.PendingMutation && a.deliveryMutationCheckpointReady() {
 		cp.PendingMutation = false
 	}

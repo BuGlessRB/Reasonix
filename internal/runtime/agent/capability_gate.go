@@ -214,6 +214,9 @@ func (a *Agent) reviewGateFailure() string {
 		// file or run git diff/status) still applies via finalReadinessCheck.
 		return ""
 	}
+	if msg := a.carriedReviewFailure(); msg != "" {
+		return msg
+	}
 	baseline, ok := a.task.ledger.UnreviewedMutationBaseline()
 	if !ok {
 		return ""
@@ -275,15 +278,8 @@ func (a *Agent) reviewObligationFailure(baseline, freshness int, paths []string)
 		if !hasReviewTool && !hasSecurityTool {
 			return "high-risk changes require review and security_review tools after the latest mutation"
 		}
-		okR, blockR, _ := a.task.ledger.HasStructuredReviewAfter(evidence.ReviewKindReview, freshness, paths)
-		if !okR || blockR {
-			return "high-risk changes require review with review_report after the latest mutation" +
-				a.reviewProofHint(evidence.ReviewKindReview) + reviewCoverageHint(paths)
-		}
-		okS, blockS, _ := a.task.ledger.HasStructuredReviewAfter(evidence.ReviewKindSecurity, freshness, paths)
-		if !okS || blockS {
-			return "high-risk changes require security_review with review_report after the latest mutation" +
-				a.reviewProofHint(evidence.ReviewKindSecurity) + reviewCoverageHint(paths)
+		if owed := a.unmetReviewKinds(freshness, paths); len(owed) > 0 {
+			return a.reviewDemand(owed[0], paths)
 		}
 	}
 	return ""

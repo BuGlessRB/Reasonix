@@ -59,6 +59,16 @@ type DeliveryCheckpoint struct {
 	// checkpoint written before contracts existed and is never backfilled from
 	// the current declaration: that would invent an acceptance nobody made.
 	Verification *VerificationContract `json:"verification,omitempty"`
+	// OwedReview is the structured review a change in this scope still owes. It
+	// rides the checkpoint because the ledger it is derived from does not.
+	OwedReview *OwedReview `json:"owedReview,omitempty"`
+}
+
+// OwedReview names the review kinds a high-risk change owes and the paths a
+// review has to cover to settle them.
+type OwedReview struct {
+	Kinds []ReviewKind `json:"kinds"`
+	Paths []string     `json:"paths,omitempty"`
 }
 
 // Ledger stores the receipts available to complete_step for the current turn.
