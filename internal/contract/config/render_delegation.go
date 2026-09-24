@@ -56,6 +56,11 @@ func renderAgentDelegation(b *strings.Builder, c *Config) {
 	} else {
 		b.WriteString("# advisor_model = \"deepseek-pro\"   # optional: offers the advise tool, backed by this model\n")
 	}
+	if c.Agent.BestOfN {
+		b.WriteString("best_of_n = true   # parallel attempts in git worktrees; a judge applies the best\n")
+	} else {
+		b.WriteString("# best_of_n = true   # parallel attempts in git worktrees; a judge applies the best\n")
+	}
 	if c.Agent.ScreenExternalContent {
 		b.WriteString("screen_external_content = true   # triage flags external results that address the agent\n")
 	} else {

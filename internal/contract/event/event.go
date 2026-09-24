@@ -496,6 +496,8 @@ const (
 	UsageSourcePromptRefine     = "prompt-refine"
 	UsageSourceInjectionScreen  = "injection-screen"
 	UsageSourceAdvisor          = "advisor"
+	UsageSourceBestOf           = "best-of"
+	UsageSourceBestOfJudge      = "best-of-judge"
 )
 
 // Event is one increment in a turn's event stream. Read the field(s) documented

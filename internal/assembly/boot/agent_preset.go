@@ -4,6 +4,7 @@ import (
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/agentpreset"
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/bestof"
 	"reasonix/internal/tools/advisor"
 	"reasonix/internal/tools/builtin"
 )
@@ -165,9 +166,11 @@ func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bo
 			allow = append(allow, name)
 		}
 	}
-	// advise is registered only when advisor_model is set, which boot decides.
-	if _, ok := reg.Get(advisor.Name); ok {
-		allow = append(allow, advisor.Name)
+	// advise and best_of_n are registered only when config asks, at boot.
+	for _, name := range []string{advisor.Name, bestof.Name} {
+		if _, ok := reg.Get(name); ok {
+			allow = append(allow, name)
+		}
 	}
 	// Always keep use_capability if somehow only that remains.
 	if len(allow) == 0 {

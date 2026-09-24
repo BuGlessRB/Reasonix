@@ -85,6 +85,7 @@ type toolStage struct {
 	runners     skillRunners
 	cmds        []command.Command
 	caps        *capabilitySurface
+	candidates  *candidateApproval // nil unless best_of_n is offered
 }
 
 // build is the assembly behind BuildRuntime: it loads config, resolves the
@@ -105,6 +106,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	b.tools.candidates.bind(ctrl)
 	return b.freeze(ctrl)
 }
 
@@ -211,6 +213,7 @@ func (b *builder) wireTools() error {
 	addBuiltins(t.reg, cfg.Tools.Enabled, env.writeRoots, env.bash, env.bashTimeout, env.search, b.stderr, root, b.proxy, env.forbidReadRoots, env.readPaths, env.sessionGuard, env.managedConfig, opts.FileOverlay, opts.TerminalRunner, env.sessionTemp, b.fileWriteReceipt)
 	addSystemOne(t.reg, cfg.Tools.Enabled, cfg, b.balanceClient)
 	addAdvisor(t.reg, cfg, b.proxy, b.sink)
+	b.addBestOf()
 	b.wireMCP()
 	t.browser = bindMachineTools(t.reg, cfg.Browser, root, opts.BrowserSession)
 	b.timer.mark("mcp")
