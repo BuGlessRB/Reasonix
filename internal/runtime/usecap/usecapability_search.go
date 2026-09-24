@@ -3,6 +3,7 @@ package usecap
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"reasonix/internal/base/retrieval"
@@ -42,7 +43,7 @@ func (t *UseCapabilityTool) searchCapabilities(query string, limit int) (string,
 		fields := map[string]string{
 			"name":        entry.ID + " " + entry.Name + " " + entry.ToolName,
 			"description": entry.Description,
-			"keywords":    strings.Join(entry.Aliases, " "),
+			"keywords":    strings.Join(append(slices.Clone(entry.Aliases), entry.Triggers...), " "),
 		}
 		if entry.Kind == capability.KindTool && t.registry != nil {
 			if target, ok := t.registry.Get(entry.ToolName); ok {

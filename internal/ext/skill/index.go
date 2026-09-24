@@ -3,12 +3,13 @@ package skill
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"reasonix/internal/base/textutil"
 )
 
 // IndexMaxChars caps the skills listing so a large catalog cannot dominate the
-// turn it rides on; bodies never enter it at all.
+// turn it rides on; past it the listing only names skills and the capability search describes them.
 const IndexMaxChars = 4000
 
 const missingDescPlaceholder = `(no description — frontmatter is missing a "description:" line; tell the user to add one)`
@@ -34,27 +35,62 @@ func ReadOnlyIndexBlock(skills []Skill) string {
 }
 
 func indexBlockWithHeader(header string, skills []Skill) string {
-	if len(skills) == 0 {
+	listed := modelListed(skills)
+	if len(listed) == 0 {
 		return ""
 	}
-	lines := make([]string, 0, len(skills))
+	lines := make([]string, len(listed))
+	for i, sk := range listed {
+		lines[i] = indexLine(sk)
+	}
+	if joined := strings.Join(lines, "\n"); runeLen(joined) <= IndexMaxChars {
+		return header + "\n\n```\n" + joined + "\n```"
+	}
+	return header + "\n\n" + fmt.Sprintf(namesOnlyNote, len(listed)) + "\n\n```\n" + namesWithin(listed) + "\n```"
+}
+
+// namesOnlyNote replaces descriptions when they would not fit: every skill stays
+// reachable by name, and the capability search answers what a name leaves out.
+const namesOnlyNote = "This project has %d skills, more than this listing can describe, so it names them without descriptions. " +
+	"To learn what a skill is for, search by the task: `use_capability({ action: \"search\", query: \"<what you need>\" })` — skills come back as `skill:<name>` with their descriptions."
+
+// modelListed drops manual-invocation skills (e.g. user-authored subagent
+// profiles): they stay invocable by name (/<name>, run_skill) but never enter
+// what the model scans for candidates to call on its own initiative.
+func modelListed(skills []Skill) []Skill {
+	out := make([]Skill, 0, len(skills))
 	for _, sk := range skills {
-		// Manual-invocation skills (e.g. user-authored subagent profiles) stay
-		// invocable by name (/<name>, run_skill) but must never enter the
-		// listing the model scans for candidates to call on its own initiative.
-		if sk.Invocation == "manual" {
-			continue
+		if sk.Invocation != "manual" {
+			out = append(out, sk)
 		}
-		lines = append(lines, indexLine(sk))
 	}
-	if len(lines) == 0 {
-		return ""
+	return out
+}
+
+// namesWithin lists names whole-line until IndexMaxChars and counts the rest,
+// so a cut never leaves half an identifier for the model to call.
+func namesWithin(skills []Skill) string {
+	lines := make([]string, 0, len(skills))
+	used := 0
+	for i, sk := range skills {
+		line := "- " + sk.Name + subagentTag(sk)
+		if i > 0 && used+1+runeLen(line) > IndexMaxChars {
+			lines = append(lines, fmt.Sprintf("… %d more not named here; use_capability search reaches every skill", len(skills)-i))
+			break
+		}
+		lines = append(lines, line)
+		used += 1 + runeLen(line)
 	}
-	joined := strings.Join(lines, "\n")
-	if r := []rune(joined); len(r) > IndexMaxChars {
-		joined = string(r[:IndexMaxChars]) + fmt.Sprintf("\n… (truncated %d chars)", len(r)-IndexMaxChars)
+	return strings.Join(lines, "\n")
+}
+
+func runeLen(s string) int { return utf8.RuneCountInString(s) }
+
+func subagentTag(sk Skill) string {
+	if sk.RunAs == RunSubagent {
+		return " [🧬 subagent]"
 	}
-	return header + "\n\n```\n" + joined + "\n```"
+	return ""
 }
 
 // indexLine renders one skill as "- name [tag] — description", clipped to a
@@ -65,10 +101,7 @@ func indexLine(sk Skill) string {
 	if desc == "" {
 		desc = missingDescPlaceholder
 	}
-	tag := ""
-	if sk.RunAs == RunSubagent {
-		tag = " [🧬 subagent]"
-	}
+	tag := subagentTag(sk)
 	max := 130 - len([]rune(sk.Name)) - len([]rune(tag))
 	clipped := clipRunes(desc, max)
 	if clipped == "" {

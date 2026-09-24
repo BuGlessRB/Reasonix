@@ -2,6 +2,7 @@ package skill
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/base/testenv"
@@ -1038,14 +1040,56 @@ func TestManualInvocationSkillExcludedFromIndex(t *testing.T) {
 	}
 }
 
-func TestIndexBlockTruncates(t *testing.T) {
+func TestIndexBlockKeepsEveryNameWhenDescriptionsDoNotFit(t *testing.T) {
 	var skills []Skill
-	for range 200 {
-		skills = append(skills, Skill{Name: "skill" + strings.Repeat("x", 20), Description: strings.Repeat("d", 50)})
+	for i := range 60 {
+		skills = append(skills, Skill{Name: fmt.Sprintf("skill-%02d", i), Description: "desc-" + strings.Repeat("d", 80), RunAs: RunInline})
+	}
+	skills[7].RunAs = RunSubagent
+	out := IndexBlock(skills)
+	for _, sk := range skills {
+		if !strings.Contains(out, "\n- "+sk.Name+subagentTag(sk)+"\n") {
+			t.Fatalf("%s is missing from the names-only listing:\n%s", sk.Name, out)
+		}
+	}
+	if strings.Contains(out, "desc-") {
+		t.Fatalf("a names-only listing still carries descriptions:\n%s", out)
+	}
+	if !strings.Contains(out, "This project has 60 skills") || !strings.Contains(out, `action: "search"`) {
+		t.Fatalf("the listing does not say descriptions were left out or where to find them:\n%s", out)
+	}
+	if out != IndexBlock(skills) {
+		t.Fatal("the same catalog rendered two different listings")
+	}
+}
+
+func TestIndexBlockCutsNamesWholeLine(t *testing.T) {
+	var skills []Skill
+	for i := range 400 {
+		skills = append(skills, Skill{Name: fmt.Sprintf("skill-%03d-%s", i, strings.Repeat("n", 20)), Description: "d"})
 	}
 	out := IndexBlock(skills)
-	if !strings.Contains(out, "truncated") {
-		t.Error("oversized index should be truncated")
+	body := out[strings.Index(out, "```\n")+4 : strings.LastIndex(out, "\n```")]
+	lines := strings.Split(body, "\n")
+	last := lines[len(lines)-1]
+	named := lines[:len(lines)-1]
+	if want := fmt.Sprintf("… %d more not named here", len(skills)-len(named)); !strings.HasPrefix(last, want) {
+		t.Fatalf("overflow line = %q, want prefix %q", last, want)
+	}
+	for i, line := range named {
+		if line != "- "+skills[i].Name {
+			t.Fatalf("line %d = %q, want the whole name %q", i, line, skills[i].Name)
+		}
+	}
+	if n := utf8.RuneCountInString(strings.Join(named, "\n")); n > IndexMaxChars {
+		t.Fatalf("named lines take %d chars, over the %d cap", n, IndexMaxChars)
+	}
+}
+
+func TestIndexBlockFullTierUnchangedUnderTheCap(t *testing.T) {
+	skills := []Skill{{Name: "alpha", Description: "the alpha", RunAs: RunInline}}
+	if got, want := IndexBlock(skills), indexHeader+"\n\n```\n- alpha — the alpha\n```"; got != want {
+		t.Fatalf("a catalog under the cap must keep its descriptions verbatim:\ngot  %q\nwant %q", got, want)
 	}
 }
 
