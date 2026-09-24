@@ -1052,6 +1052,9 @@ type AgentConfig struct {
 	// BestOfN offers best_of_n: parallel unattended attempts in git worktrees,
 	// judged, with the winner applied. Off by default; every attempt is a full run.
 	BestOfN bool `toml:"best_of_n"`
+	// CodeMode offers run_script: a Starlark script whose tool calls each pass
+	// the ordinary checks, so dependent steps cost one round trip.
+	CodeMode bool `toml:"code_mode"`
 	// DecisionModel names the backend system_one asks. It is on a decision
 	// wire, so it never falls back to the main model: a chat model has no
 	// answer for a question set, and falling back would hide that.

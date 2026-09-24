@@ -70,6 +70,18 @@ type toolCallPlan struct {
 	mutationObserved  bool
 	mutationAfterDone bool
 	executed          bool
+	// nestedOrigin is the first external origin among calls this tool made
+	// through its invoker; it labels the result when the tool declares none.
+	nestedOrigin tool.Provenance
+}
+
+// provenanceOf is where the result's content came from: the tool's own
+// answer, else what its nested calls fetched.
+func (p *toolCallPlan) provenanceOf(t tool.Tool, args json.RawMessage) tool.Provenance {
+	if own := tool.ProvenanceOf(t, args); own.External() {
+		return own
+	}
+	return p.nestedOrigin
 }
 
 // executeOne runs a single tool call. It is pure with respect to the event sink
@@ -78,6 +90,7 @@ type toolCallPlan struct {
 func (a *Agent) executeOne(ctx context.Context, turn *turnRuntime, call provider.ToolCall) (out toolOutcome) {
 	ctx = a.withAgentContext(ctx)
 	plan := &toolCallPlan{call: call}
+	ctx = tool.WithInvoker(ctx, &nestedInvoker{a: a, turn: turn, parent: plan})
 	todosBefore := a.todoStateBefore(call)
 	defer func() { out.todoEcho = a.todoWriteEchoes(call, todosBefore, out.errMsg) }()
 	defer func() {
@@ -728,7 +741,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		// A failed call's screenshot is often the only record of why it failed.
 		out := toolOutcome{
 			output: body, images: images, errMsg: firstLine(err.Error()), bound: bound, truncMsg: truncMsg,
-			execution: execution, provenance: tool.ProvenanceOf(runTool, runArgs),
+			execution: execution, provenance: plan.provenanceOf(runTool, runArgs),
 		}
 		if truncMsg != "" {
 			out.rawOutput = rawErr
@@ -745,7 +758,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	body, bound, truncMsg := a.boundToolOutput(result, call.Name, call.ID, call.Arguments, false)
 	out := toolOutcome{
 		output: body, images: images, bound: bound, truncMsg: truncMsg,
-		execution: execution, provenance: tool.ProvenanceOf(runTool, runArgs),
+		execution: execution, provenance: plan.provenanceOf(runTool, runArgs),
 	}
 	if truncMsg != "" {
 		out.rawOutput = result

@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/runtime/bestof"
 	"reasonix/internal/tools/advisor"
 	"reasonix/internal/tools/builtin"
+	"reasonix/internal/tools/script"
 )
 
 // Canonical Agent role-setting identifiers re-exported for frontends that
@@ -166,8 +167,8 @@ func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bo
 			allow = append(allow, name)
 		}
 	}
-	// advise and best_of_n are registered only when config asks, at boot.
-	for _, name := range []string{advisor.Name, bestof.Name} {
+	// advise, best_of_n and run_script are registered only when config asks, at boot.
+	for _, name := range []string{advisor.Name, bestof.Name, script.Name} {
 		if _, ok := reg.Get(name); ok {
 			allow = append(allow, name)
 		}

@@ -30,6 +30,7 @@ import (
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/session/control"
+	"reasonix/internal/tools/script"
 )
 
 // builder carries one build's state from stage to stage. Each stage reads
@@ -214,6 +215,9 @@ func (b *builder) wireTools() error {
 	addSystemOne(t.reg, cfg.Tools.Enabled, cfg, b.balanceClient)
 	addAdvisor(t.reg, cfg, b.proxy, b.sink)
 	b.addBestOf()
+	if cfg.Agent.CodeMode {
+		t.reg.Add(script.New())
+	}
 	b.wireMCP()
 	t.browser = bindMachineTools(t.reg, cfg.Browser, root, opts.BrowserSession)
 	b.timer.mark("mcp")
