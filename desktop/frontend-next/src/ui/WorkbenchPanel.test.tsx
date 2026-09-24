@@ -17,7 +17,10 @@ describe("WorkbenchPanel", () => {
 
     await user.click(await screen.findByRole("button", { name: "README.md" }));
     expect(screen.getByRole("tab", { name: "README.md" }).getAttribute("aria-selected")).toBe("true");
-    // Read and edit are one surface: the file opens in the editor directly.
+    // A document opens rendered; editing is the next mode over.
+    await waitFor(() => expect(document.querySelector(".workbench-read .md")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "阅读" }).getAttribute("aria-pressed")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "编辑" }));
     const content = await waitFor(() => {
       const el = document.querySelector(".cm-content");
       if (!el) throw new Error("editor not mounted");
@@ -28,6 +31,10 @@ describe("WorkbenchPanel", () => {
     await user.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect(save).toHaveBeenCalled());
     expect(save.mock.calls[0][0].content.endsWith("updated")).toBe(true);
+    // What reading shows is the draft, so an edit is visible before it is saved.
+    act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: "\n\n## Draft heading" } }));
+    await user.click(screen.getByRole("button", { name: "阅读" }));
+    await waitFor(() => expect(document.querySelector(".workbench-read h2")?.textContent).toBe("Draft heading"));
   });
 
   it("shows the start page only while the agent has none, and gives way to the agent's", () => {

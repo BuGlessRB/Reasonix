@@ -11,6 +11,7 @@ import type {
 import { AgentBrowserPanel, ManualBrowserPanel, UNREAD_TABS } from "./BrowserPanel";
 import { DiffView } from "./cards/DiffView";
 import { StudioIcon } from "./StudioIcon";
+import { LazyMarkdown } from "./LazyMarkdown";
 
 // The editor and its grammars load with the first file opened, not with Studio.
 const CodeEditor = lazy(() => import("./CodeEditor"));
@@ -129,7 +130,7 @@ export function WorkbenchPanel({
   const [browsers, setBrowsers] = useState<string[]>([]),
     [hosts, setHosts] = useState<Record<string, string>>({});
   const minted = useRef(0);
-  const [mode, setMode] = useState<"file" | "diff">("file");
+  const [mode, setMode] = useState<"file" | "diff" | "read">("file");
   const [file, setFile] = useState<WorkspaceFile | null>(null),
     [draft, setDraft] = useState(""),
     [diff, setDiff] = useState("");
@@ -236,6 +237,14 @@ export function WorkbenchPanel({
     surfaces.find((s) => keyOf(s) === selected) ??
     surfaces.find((s) => s.kind === "browser" && s.tab.active) ??
     surfaces[0];
+  // A document opens rendered: it is read far more often than edited, and the
+  // source view is one click away.
+  const filePath = active?.kind === "file" ? active.path : "";
+  const readable = /\.(md|markdown|mdx)$/i.test(filePath);
+  useEffect(() => {
+    if (readable) setMode((m) => (m === "file" ? "read" : m));
+    else setMode((m) => (m === "read" ? "file" : m));
+  }, [filePath, readable]);
   const rows = useMemo(
     () => treeRows(files, directories, query, collapsed),
     [files, directories, query, collapsed],
@@ -445,13 +454,18 @@ export function WorkbenchPanel({
               <div className="workbench-filebar">
                 <strong>{active.path}</strong>
                 <div role="group">
+                  {readable && (
+                    <button data-action="workbench.mode" data-value="read" aria-pressed={mode === "read"} onClick={() => setMode("read")}>
+                      {t("阅读")}
+                    </button>
+                  )}
                   <button
                     data-action="workbench.mode"
                     data-value="file"
                     aria-pressed={mode === "file"}
                     onClick={() => setMode("file")}
                   >
-                    {t("文件")}
+                    {readable ? t("编辑") : t("文件")}
                   </button>
                   <button
                     data-action="workbench.mode"
@@ -483,6 +497,10 @@ export function WorkbenchPanel({
               ) : mode === "diff" ? (
                 <div className="workbench-diff">
                   <DiffView path={active.path} diff={diff} />
+                </div>
+              ) : mode === "read" && file && file.path === active.path ? (
+                <div className="workbench-read">
+                  <LazyMarkdown text={draft} />
                 </div>
               ) : file && file.path === active.path ? (
                 <Suspense fallback={<div className="workbench-empty">{t("正在读取…")}</div>}>
