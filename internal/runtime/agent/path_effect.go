@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"reasonix/internal/runtime/writeclaim"
@@ -10,7 +9,6 @@ import (
 	"strings"
 
 	"reasonix/internal/base/diff"
-	"reasonix/internal/base/fileutil"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/checkpoint"
@@ -304,54 +302,6 @@ type workspaceScan struct {
 // filtered walk would report the biggest writes there are as no change at all.
 func scanWorkspace(ctx context.Context, root string) workspaceScan {
 	return scanWorkspaceTo(ctx, root, workspaceScanLimit)
-}
-
-// scanWorkspaceTo takes the limit as an argument so a test can reach the
-// over-limit answer without laying down fifty thousand files, and without a
-// package variable two tests could write while a third reads it.
-func scanWorkspaceTo(ctx context.Context, root string, limit int) workspaceScan {
-	if root == "" {
-		return workspaceScan{}
-	}
-	state := make(map[string]pathState, 4096)
-	complete := true
-	overLimit := false
-	// A stop has to reach the walk: it runs on the turn's critical path twice
-	// per call, and an uninterruptible one is what a user experiences as the
-	// stop button not working.
-	checked := 0
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if checked++; checked%scanCancelCheckEvery == 0 && ctx.Err() != nil {
-			complete = false
-			return filepath.SkipAll
-		}
-		if err != nil {
-			complete = false
-			return nil
-		}
-		if d.IsDir() {
-			if fileutil.IsVCSStoreDir(d.Name()) && path != root {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if len(state) >= limit {
-			complete = false
-			overLimit = true
-			return filepath.SkipAll
-		}
-		info, err := d.Info()
-		if err != nil {
-			complete = false
-			return nil
-		}
-		state[path] = pathState{exists: true, size: info.Size(), modTime: info.ModTime().UnixNano()}
-		return nil
-	})
-	if err != nil {
-		complete = false
-	}
-	return workspaceScan{state: state, complete: complete, overLimit: overLimit}
 }
 
 // unchanged reports whether the workspace is byte-for-byte as this scan found
