@@ -55,7 +55,7 @@ func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey b
 		Sink:                 sink,
 		AgentPreset:          boot.NormalizeAgentPreset(profile),
 		TokenMode:            boot.NormalizeTokenMode(profile),
-		SessionDir:           resolveCLISessionDir(),
+		SessionDir:           resolveCLISessionDirFor(overrides.WorkspaceRoot),
 		WorkspaceRoot:        overrides.WorkspaceRoot,
 		EffortOverride:       overrides.Effort,
 		PermissionAllow:      overrides.PermissionAllow,

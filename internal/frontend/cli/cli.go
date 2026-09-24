@@ -291,20 +291,6 @@ func resolveRunPermissionMode(value string, auto, modeExplicit bool) (string, er
 	return "auto", nil
 }
 
-// resolveCLISessionDir returns the session dir for CLI invocations. When the
-// current working directory maps to a project session dir, the project dir is
-// used so /resume shows project history. Falls back to the global session dir.
-func resolveCLISessionDir() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return config.SessionDir()
-	}
-	if projDir := config.ProjectSessionDir(cwd); projDir != "" && projDir != config.SessionDir() {
-		return projDir
-	}
-	return config.SessionDir()
-}
-
 func parseRuntimeProfile(value string) (string, error) {
 	// Accept both --preset balanced|delivery and legacy --profile
 	// economy|full|delivery. Returns dual-write TokenMode values.
@@ -332,23 +318,6 @@ func chdirTo(dir string) int {
 		return 2
 	}
 	return 0
-}
-
-// workspaceRootForDir returns the explicit project root to pin when --dir was
-// given. It runs after chdirTo has already switched into dir, so the process
-// working directory is the resolved root. An empty dir means no override (fall
-// back to git-root detection). A Getwd failure is returned rather than swallowed:
-// silently reverting to "" would re-trigger git-root/default resolution and break
-// the explicit --dir guarantee, so the caller must fail loudly instead.
-func workspaceRootForDir(dir string) (string, error) {
-	if dir == "" {
-		return "", nil
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("resolve --dir workspace root: %w", err)
-	}
-	return wd, nil
 }
 
 func modelForResumePath(modelName, resumePath string, cfg *config.Config) string {
@@ -496,7 +465,7 @@ func runAgent(args []string, version string) int {
 	// IDs, preview text, and opaque machine session IDs (#7429).
 	resumePath := strings.TrimSpace(*resume)
 	if resumePath != "" {
-		resolved, err := resolveSessionQuery(resolveCLISessionDir(), resumePath)
+		resolved, err := resolveSessionQuery(resolveCLISessionDirFor(workspaceRoot), resumePath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 			return 1
@@ -504,7 +473,7 @@ func runAgent(args []string, version string) int {
 		resumePath = resolved
 	}
 	if resumePath == "" && *cont {
-		sessionDir := resolveCLISessionDir()
+		sessionDir := resolveCLISessionDirFor(workspaceRoot)
 		reclaimCLIRecoveryBranches(sessionDir)
 		session, ok := mostRecentSession(sessionDir)
 		if !ok {
