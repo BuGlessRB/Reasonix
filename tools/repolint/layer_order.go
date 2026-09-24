@@ -3,9 +3,9 @@
 // A package's layer is the directory it sits in under internal/, so where a
 // package is kept is its declaration: moving it is the one way to change what it
 // may depend on, and a reader sees the layer before opening a file. A package
-// may import its own layer and any layer below; the subsystem directories share
-// one layer. What sits above internal/ — cmd, desktop, benchmarks, tools — are
-// hosts and assemble everything.
+// may import its own layer and any layer below; directories sharing a rank are
+// independent peers, not a pool. What sits above internal/ — cmd, desktop,
+// benchmarks, tools — are hosts and assemble everything.
 package main
 
 import (
@@ -16,21 +16,22 @@ import (
 
 const ruleLayerOrder = "layer-order"
 
-// layerRank orders the directories under internal/. Equal ranks may import each
-// other: the subsystems are peers.
+// layerRank orders the directories under internal/. A package imports its own
+// directory and strictly lower ranks; two directories sharing a rank are
+// independent of each other, so neither can start a cycle between them.
 var layerRank = map[string]int{
 	"base":     0,
 	"contract": 1,
-	"model":    2,
-	"tools":    2,
 	"safety":   2,
-	"ext":      2,
 	"state":    2,
-	"platform": 2,
-	"runtime":  3,
-	"session":  4,
-	"assembly": 5,
-	"frontend": 6,
+	"model":    3,
+	"platform": 4,
+	"ext":      5,
+	"tools":    5,
+	"runtime":  6,
+	"session":  7,
+	"assembly": 8,
+	"frontend": 9,
 }
 
 // layerOf names the layer directory a package lives in, or "" for one outside
@@ -63,7 +64,7 @@ func checkLayerOrder(imports map[string][]importRef) []Finding {
 				continue
 			}
 			depLayer, inside := layerOf(dep)
-			if !inside || layerRank[depLayer] <= rank {
+			if !inside || depLayer == layer || layerRank[depLayer] < rank {
 				continue
 			}
 			out = append(out, Finding{rel, ref.line, ruleLayerOrder,

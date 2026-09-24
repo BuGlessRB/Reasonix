@@ -37,3 +37,26 @@ func TestLayerOrderAllowsOnlyDownwardAndPeerImports(t *testing.T) {
 		t.Errorf("stray package: %q", got["internal/stray/x.go"])
 	}
 }
+
+func TestLayerOrderKeepsSameRankDirectoriesIndependent(t *testing.T) {
+	for _, tc := range []struct {
+		pkg, dep string
+		want     bool
+	}{
+		{"internal/state/store", "internal/tools/builtin", true},
+		{"internal/safety/sandbox", "internal/ext/plugin", true},
+		{"internal/model/laya", "internal/platform/remote", true},
+		{"internal/state/store", "internal/safety/sandbox", true},
+		{"internal/tools/builtin", "internal/ext/skill", true},
+		{"internal/ext/skill", "internal/tools/builtin", true},
+		{"internal/tools/builtin", "internal/platform/browser", false},
+		{"internal/platform/remote", "internal/state/store", false},
+		{"internal/model/laya", "internal/safety/typesafe", false},
+		{"internal/runtime/agent", "internal/runtime/delegation", false},
+	} {
+		imports := map[string][]importRef{tc.pkg + "/a.go": {{path: modulePrefix + tc.dep, line: 3}}}
+		if got := len(checkLayerOrder(imports)) > 0; got != tc.want {
+			t.Errorf("%s → %s: violation = %v, want %v", tc.pkg, tc.dep, got, tc.want)
+		}
+	}
+}
