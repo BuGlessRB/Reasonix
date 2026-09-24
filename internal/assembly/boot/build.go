@@ -95,7 +95,9 @@ type toolStage struct {
 // Controller.Close releases them.
 func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	b := &builder{timer: newPhaseTimer()}
-	b.ctx, b.opts, b.owner, b.fileWriteReceipt = bindRuntimeOwner(ctx, opts)
+	// The runtime outlives the request that built it (Studio opens a pane with
+	// one), and its MCP servers and sidecars start on that context later.
+	b.ctx, b.opts, b.owner, b.fileWriteReceipt = bindRuntimeOwner(context.WithoutCancel(ctx), opts)
 	defer b.retireUnownedSidecars()
 	if err := b.load(); err != nil {
 		return nil, err
