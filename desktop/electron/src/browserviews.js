@@ -8,6 +8,10 @@ const { guestNavigationAllowed, typedAddress } = require("./browserguard");
 // a phone layout or not at all.
 const AGENT_VIEWPORT = { width: 1280, height: 900 };
 
+// CSS cannot clip a native view, so the page's corners are rounded here; the
+// value is .bview's border-radius in studio.css, whose rect the view fills.
+const PAGE_RADIUS = 8;
+
 // BrowserViews owns the pages the agent's browser opens in this window. Each is
 // a view on its own partition — never the session the window's credential
 // lives in. A page nobody is watching is not hidden and not moved wholly off
@@ -75,6 +79,7 @@ class BrowserViews {
         backgroundThrottling: false,
       },
     });
+    view.setBorderRadius(PAGE_RADIUS);
     const contents = view.webContents;
     let mainFrame = "";
     const allowed = (to) => guestNavigationAllowed(to, this.kernelOrigin);
