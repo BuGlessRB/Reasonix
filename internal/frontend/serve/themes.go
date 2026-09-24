@@ -13,6 +13,8 @@ import (
 func (s *Server) registerThemeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /themes", s.themes)
 	mux.HandleFunc("POST /themes", s.activateTheme)
+	mux.HandleFunc("POST /themes/import", s.importTheme)
+	mux.HandleFunc("POST /themes/folder", s.openThemeFolder)
 	mux.HandleFunc("GET /themes/{id}/{asset}", s.themeAsset)
 }
 

@@ -1,5 +1,5 @@
 import { MockNetwork } from "./mock_network";
-import type { ThemePack } from "./port";
+import type { ThemeImport, ThemePack } from "./port";
 
 // Theme packs, and where an extension's view was told to sit.
 export class MockTheme extends MockNetwork {
@@ -36,6 +36,15 @@ export class MockTheme extends MockNetwork {
 
   async activateTheme(id: string) {
     this.activeTheme = id;
+  }
+
+  async importTheme(files: File[]): Promise<ThemeImport> {
+    const name = files[0]?.name.replace(/\.(zip|json)$/i, "") || "imported";
+    return { pack: { id: name, name, tokens: { light: { bg: "#FFFFFF" }, dark: { bg: "#000000" } } } };
+  }
+
+  async openThemeFolder() {
+    return "~/.reasonix/themes";
   }
 
   // No sidecar runs behind the fixture, so an invocation answers the way a

@@ -746,7 +746,15 @@ export const EN: Record<string, string> = {
   "同时调整正文与次要文字的对比度。深色主题下若觉得刺眼，可调向「柔和」。": "Adjusts the contrast of body and secondary text together. If a dark theme feels harsh, move it toward Soft.",
   "配色包安装在记忆目录的 themes/ 下，每个目录包含一个 theme.json。配色包会应用表面色、强调色、圆角和字体；状态色（成功/警告/失败）不受影响。":
     "Palettes install under themes/ in the memory directory, one theme.json per folder. A palette sets surfaces, accent, corner radii and type; the status colours (success, warning, failure) are unaffected.",
-  "尚未安装配色包。将包含 theme.json 的目录放入 themes/ 后即会显示在此处。": "No palettes installed. Put a folder containing a theme.json into themes/ and it appears here.",
+  "导入主题…": "Import theme…",
+  "正在导入…": "Importing…",
+  "打开主题目录": "Open themes folder",
+  "主题目录：{path}": "Themes folder: {path}",
+  "已导入「{name}」。": "Imported “{name}”.",
+  "立即使用": "Use now",
+  "未读取：{names}": "Not read: {names}",
+  "尚未安装主题。选择一个 .zip，或同时选中主题文件夹里的 theme.json 和图片。": "No themes installed. Choose a .zip, or select a theme folder’s theme.json and images together.",
+  "选择一个 .zip，或同时选中主题文件夹里的 theme.json 和图片。": "Choose a .zip, or select a theme folder’s theme.json and images together.",
 
   // ── 常量表：档位、分区、状态 ─────────────────────────────────────
   "以模型判定任务完成为准，适用于日常任务": "Runs until the model considers it done. The everyday setting",

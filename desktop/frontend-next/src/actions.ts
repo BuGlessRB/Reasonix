@@ -266,6 +266,8 @@ export const ACTIONS: UIAction[] = [
   { id: "wallpaper.remove", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "wallpaper.change", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "theme.activate", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "theme.import", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "theme.folder", kind: "repeatable", target: "none", proof: "interaction" },
 
   // ── How the window looks ─────────────────────────────────────────────────
   // Named for what a person is doing, not for the control they reached for.

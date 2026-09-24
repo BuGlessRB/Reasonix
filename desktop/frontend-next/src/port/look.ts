@@ -40,6 +40,13 @@ export interface ThemePack {
   warnings?: string[];
 }
 
+// What an import installed, and the files it did not read because a pack has
+// no place for them.
+export interface ThemeImport {
+  pack: ThemePack;
+  ignored?: string[];
+}
+
 // What the user set for themselves, over whatever pack is active. Zero and ""
 // mean "unset" rather than a value, so an untouched install draws from the
 // stylesheet instead of from numbers written into a config.

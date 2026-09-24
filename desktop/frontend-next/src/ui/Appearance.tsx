@@ -8,6 +8,7 @@ import { reason } from "../i18n/kernel";
 import { Notifications } from "./Notifications";
 import { Folding } from "./Folding";
 import { Switch } from "./Switch";
+import { ThemeImport } from "./ThemeImport";
 import { setShowsReceipt, showsReceipt } from "../state/session";
 
 // "" follows the machine; the rest are explicit, the same shape the light/dark
@@ -315,7 +316,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               ))}
             </div>
           ))}
-          {packs.length === 0 && <p className="note">{t("尚未安装配色包。将包含 theme.json 的目录放入 themes/ 后即会显示在此处。")}</p>}
+          <ThemeImport port={port} empty={packs.length === 0} onImported={load} onUse={pick} />
         </div>
         <ApplyNote id="scheme" />
       </section>

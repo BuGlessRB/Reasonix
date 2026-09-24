@@ -34,7 +34,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
 
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
-import type { Appearance, ThemePack } from "./look";
+import type { Appearance, ThemeImport, ThemePack } from "./look";
 import type { ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 export type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
@@ -446,6 +446,10 @@ export interface AgentPort {
   surfaceSlots(): Promise<Record<string, string>>;
   assignSurface(surface: string, slot: string): Promise<void>;
   activateTheme(id: string): Promise<void>;
+  // A zip, or a pack's loose files; the kernel keeps what a pack can hold.
+  importTheme(files: File[]): Promise<ThemeImport>;
+  // Shows where installed packs live and answers that directory.
+  openThemeFolder(): Promise<string>;
   // Extension surfaces arrive on the event stream; these carry the user's half
   // back — an action the card offered, or a published form's values.
   invokeExtensionAction(name: string): Promise<string>;
