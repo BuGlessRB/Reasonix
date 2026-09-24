@@ -135,6 +135,51 @@ func assignJob(cmd *exec.Cmd) uintptr {
 // resumeProcess resumes the primary thread. Before it runs, a CREATE_SUSPENDED
 // process cannot create another thread; absence or duplication is fail-closed.
 func resumeProcess(pid uint32) error {
+	th, found, err := soleThreadOf(pid)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return resumeBySnapshot(pid)
+	}
+	defer func() { _ = windows.CloseHandle(th) }()
+	return resumeSuspendedThread(th)
+}
+
+var procNtGetNextThread = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtGetNextThread")
+
+const statusNoMoreEntries = 0x8000001A
+
+// soleThreadOf opens the one thread of pid by walking that process's threads
+// alone; a system-wide thread snapshot costs tens of milliseconds per launch.
+// found is false when the walk is unavailable, and the snapshot answers.
+func soleThreadOf(pid uint32) (th windows.Handle, found bool, err error) {
+	if procNtGetNextThread.Find() != nil {
+		return 0, false, nil
+	}
+	process, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION, false, pid)
+	if err != nil {
+		return 0, false, nil
+	}
+	defer func() { _ = windows.CloseHandle(process) }()
+	var first, second windows.Handle
+	if st, _, _ := procNtGetNextThread.Call(uintptr(process), 0, windows.THREAD_SUSPEND_RESUME, 0, 0, uintptr(unsafe.Pointer(&first))); st != 0 {
+		return 0, false, nil
+	}
+	st, _, _ := procNtGetNextThread.Call(uintptr(process), uintptr(first), windows.THREAD_SUSPEND_RESUME, 0, 0, uintptr(unsafe.Pointer(&second)))
+	switch st {
+	case statusNoMoreEntries:
+		return first, true, nil
+	case 0:
+		_ = windows.CloseHandle(second)
+		_ = windows.CloseHandle(first)
+		return 0, true, fmt.Errorf("multiple threads found for suspended process %d", pid)
+	}
+	_ = windows.CloseHandle(first)
+	return 0, false, nil
+}
+
+func resumeBySnapshot(pid uint32) error {
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
 	if err != nil {
 		return err
@@ -160,12 +205,16 @@ func resumeProcess(pid uint32) error {
 		return err
 	}
 	defer func() { _ = windows.CloseHandle(th) }()
+	return resumeSuspendedThread(th)
+}
+
+func resumeSuspendedThread(th windows.Handle) error {
 	previous, err := windows.ResumeThread(th)
 	if err != nil {
 		return err
 	}
 	if previous > 1 {
-		return fmt.Errorf("thread %d remains suspended (previous count %d)", threadID, previous)
+		return fmt.Errorf("thread remains suspended (previous count %d)", previous)
 	}
 	return nil
 }
