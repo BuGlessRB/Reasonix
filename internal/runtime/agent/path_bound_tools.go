@@ -46,7 +46,7 @@ func (p pathBoundCapabilityProxy) ResolveCall(ctx context.Context, args json.Raw
 	if resolved.ProxyAction != "call" || resolved.SkipExecute {
 		return resolved, nil
 	}
-	if resolved.Target == nil || !resolved.ReadOnly || mcpDestructiveHint(resolved.Target) {
+	if resolved.Target == nil || !resolved.ReadOnly || tool.HasMCPDestructiveHint(resolved.Target) {
 		return tool.ResolvedCall{}, fmt.Errorf("use_capability target %q is not proven read-only; explicit write_paths sub-agents cannot execute unscoped MCP writers", resolved.TargetName)
 	}
 	return resolved, nil

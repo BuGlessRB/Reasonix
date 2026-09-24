@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/runtime/usecap"
 	"slices"
 	"testing"
 
@@ -23,7 +24,7 @@ func (s namedSchemaTool) Execute(context.Context, json.RawMessage) (string, erro
 	return "", nil
 }
 
-func argumentCatalog(t *testing.T) *UseCapabilityTool {
+func argumentCatalog(t *testing.T) *usecap.UseCapabilityTool {
 	t.Helper()
 	reg := tool.NewRegistry()
 	reg.Add(namedSchemaTool{
@@ -37,7 +38,7 @@ func argumentCatalog(t *testing.T) *UseCapabilityTool {
 	catalog := func() capability.Catalog {
 		return capability.BuildCatalog(capability.CatalogOptions{Tools: reg.AllContractEntries()})
 	}
-	return NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
+	return usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
 }
 
 type listedCapability struct {
@@ -46,7 +47,7 @@ type listedCapability struct {
 	Accepts  []string `json:"accepts"`
 }
 
-func listedCapabilities(t *testing.T, uc *UseCapabilityTool) []listedCapability {
+func listedCapabilities(t *testing.T, uc *usecap.UseCapabilityTool) []listedCapability {
 	t.Helper()
 	out, err := uc.Execute(context.Background(), json.RawMessage(`{"action":"list"}`))
 	if err != nil {
@@ -85,7 +86,7 @@ func TestListOmitsArgumentsItCannotRead(t *testing.T) {
 	catalog := func() capability.Catalog {
 		return capability.BuildCatalog(capability.CatalogOptions{Tools: reg.AllContractEntries()})
 	}
-	uc := NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
+	uc := usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
 	for _, c := range listedCapabilities(t, uc) {
 		if c.ID == "tool:opaque" && (len(c.Requires) > 0 || len(c.Accepts) > 0) {
 			t.Fatalf("a propertyless schema reported arguments: requires=%v accepts=%v", c.Requires, c.Accepts)

@@ -48,6 +48,7 @@ import (
 	"reasonix/internal/runtime/promptrefine"
 	"reasonix/internal/runtime/recovery"
 	"reasonix/internal/runtime/taskmonitor"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/safety/sandbox"
@@ -362,7 +363,7 @@ type Options struct {
 	// CapabilityRuntime is the controller-local authoritative MCP inventory used
 	// by stable use_capability frontends. It shares Host processes with sibling
 	// tabs but never shares their enabled/disabled state.
-	CapabilityRuntime *agent.MCPCapabilityRuntime
+	CapabilityRuntime *usecap.MCPCapabilityRuntime
 	RuntimeGeneration uint64 // PublishGate generation for admission
 	// RuntimeOwner isolates publish/drain gates and receipts to one
 	// controller/session rebuild lineage. Nil preserves compatibility behavior.

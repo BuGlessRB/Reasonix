@@ -13,8 +13,8 @@ import (
 	"reasonix/internal/ext/plugin"
 	"reasonix/internal/ext/pluginspec"
 	"reasonix/internal/ext/skill"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/capability"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/history"
 	"reasonix/internal/state/memory"
@@ -113,10 +113,10 @@ func registerSkillTools(reg *tool.Registry, set ablation.Set, store *skill.Store
 // ledger and audit while reusing the processes.
 type capabilitySurface struct {
 	specs   []plugin.Spec
-	runtime *agent.MCPCapabilityRuntime
+	runtime *usecap.MCPCapabilityRuntime
 	ledger  *capability.Ledger
 	audit   *capability.Audit
-	proxy   *agent.UseCapabilityTool
+	proxy   *usecap.UseCapabilityTool
 	catalog func() capability.Catalog
 }
 
@@ -154,7 +154,7 @@ func newCapabilitySurface(ctx context.Context, cfg *config.Config, root string, 
 		return capability.BuildCatalog(catOpts)
 	}
 	// WithoutCancel: ctx is often one request, and MCP children outlive it.
-	c.runtime = agent.NewMCPCapabilityRuntime(context.WithoutCancel(ctx), host, c.specs, reg, c.catalog)
+	c.runtime = usecap.NewMCPCapabilityRuntime(context.WithoutCancel(ctx), host, c.specs, reg, c.catalog)
 	c.runtime.ConfigureServers(cfg.Plugins, c.specs, enabled)
 	c.ledger = capability.NewLedger()
 	c.audit = &capability.Audit{}

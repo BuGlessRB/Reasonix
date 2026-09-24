@@ -1,4 +1,4 @@
-package agent
+package usecap
 
 import (
 	"context"
@@ -162,10 +162,10 @@ func emptyCapabilityListResult(note string) string {
 	return string(b)
 }
 
-// filterCapabilityListResult keeps only servers in the allowlist for restricted
+// FilterCapabilityListResult keeps only servers in the allowlist for restricted
 // proxies. Empty allowlist or unreadable payloads fail closed (empty server
 // list) so discovery never leaks the full configured MCP inventory.
-func filterCapabilityListResult(raw string, servers map[string]bool) string {
+func FilterCapabilityListResult(raw string, servers map[string]bool) string {
 	const baseNote = "list is filtered to this subagent's allowed MCP servers."
 	if len(servers) == 0 {
 		return emptyCapabilityListResult(baseNote + " No allowed MCP servers were resolved from the profile allowlist.")

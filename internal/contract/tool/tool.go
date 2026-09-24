@@ -207,20 +207,6 @@ type MCPBinding struct {
 	CapabilityID string
 }
 
-// MCPAnnotations exposes safety-relevant annotations reported by an installed
-// MCP server. These hints do not change the provider-visible tool contract;
-// execution policy consumes them locally.
-type MCPAnnotations interface {
-	MCPDestructiveHint() bool
-}
-
-// MCPServerAuthorization reports whether the user installed this MCP server or
-// authorized its exact project identity. Authorization belongs to the server,
-// not to individual tools; readOnly/destructive metadata is checked separately.
-type MCPServerAuthorization interface {
-	MCPServerAuthorized() bool
-}
-
 // readerExecutionIntentKey carries a per-call, immutable authorization basis:
 // the call was approved as a non-destructive reader. The MCP dispatcher makes
 // the final, linearizable check against live security state and must never

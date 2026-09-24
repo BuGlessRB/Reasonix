@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/runtime/usecap"
 	"strings"
 
 	"reasonix/internal/contract/tool"
@@ -85,7 +86,7 @@ func SubagentToolRegistryForDepth(parent *tool.Registry, names []string, childDe
 // an optional session MCP runtime used when the parent registry has no
 // use_capability (for example Economy or legacy callers) but sub-agents still
 // need the proxy.
-func SubagentToolRegistryForDepthWithRuntime(parent *tool.Registry, names []string, childDepth, maxDepth int, runtime *MCPCapabilityRuntime) *tool.Registry {
+func SubagentToolRegistryForDepthWithRuntime(parent *tool.Registry, names []string, childDepth, maxDepth int, runtime *usecap.MCPCapabilityRuntime) *tool.Registry {
 	exclude := append([]string(nil), subagentAlwaysHiddenTools...)
 	if childDepth >= NormalizeMaxSubagentDepth(maxDepth) {
 		exclude = append(exclude, subagentRecursiveTools...)
@@ -217,7 +218,7 @@ func serversFromCapabilityAllowlist(allowed map[string]bool) map[string]bool {
 // state. No allowlist → full proxy. Explicit allowlist with MCP names →
 // restricted proxy. Explicit "use_capability" → full proxy. Explicit allowlist
 // without MCP entries → no proxy.
-func attachSubagentCapabilityProxy(parent, sub *tool.Registry, names []string, runtime *MCPCapabilityRuntime) {
+func attachSubagentCapabilityProxy(parent, sub *tool.Registry, names []string, runtime *usecap.MCPCapabilityRuntime) {
 	if sub == nil {
 		return
 	}
@@ -257,7 +258,7 @@ func attachSubagentCapabilityProxy(parent, sub *tool.Registry, names []string, r
 	})
 }
 
-func newSubagentCapabilityFrontend(parent *tool.Registry, runtime *MCPCapabilityRuntime) tool.Tool {
+func newSubagentCapabilityFrontend(parent *tool.Registry, runtime *usecap.MCPCapabilityRuntime) tool.Tool {
 	if runtime != nil {
 		return runtime.NewFrontend(nil, nil)
 	}
@@ -268,7 +269,7 @@ func newSubagentCapabilityFrontend(parent *tool.Registry, runtime *MCPCapability
 	if !ok {
 		return nil
 	}
-	if uc, ok := inner.(*UseCapabilityTool); ok {
+	if uc, ok := inner.(*usecap.UseCapabilityTool); ok {
 		return uc.CloneForAgent(nil, nil)
 	}
 	return inner
@@ -358,7 +359,7 @@ func ReadOnlySubagentToolRegistryForDepth(parent *tool.Registry, names []string,
 
 // ReadOnlySubagentToolRegistryForDepthWithRuntime is the read-only registry
 // builder with an optional session MCP runtime for proxy injection.
-func ReadOnlySubagentToolRegistryForDepthWithRuntime(parent *tool.Registry, names []string, childDepth, maxDepth int, runtime *MCPCapabilityRuntime) *tool.Registry {
+func ReadOnlySubagentToolRegistryForDepthWithRuntime(parent *tool.Registry, names []string, childDepth, maxDepth int, runtime *usecap.MCPCapabilityRuntime) *tool.Registry {
 	exclude := append([]string(nil), subagentAlwaysHiddenTools...)
 	if childDepth >= NormalizeMaxSubagentDepth(maxDepth) {
 		exclude = append(exclude, subagentRecursiveTools...)
@@ -460,7 +461,7 @@ func FilterReadOnlyRegistry(parent *tool.Registry, exclude ...string) *tool.Regi
 		if !ok || !tl.ReadOnly() {
 			continue
 		}
-		if isInstalledMCPTool(tl) && (!mcpServerAuthorized(tl) || mcpDestructiveHint(tl)) {
+		if isInstalledMCPTool(tl) && (!tool.IsMCPServerAuthorized(tl) || tool.HasMCPDestructiveHint(tl)) {
 			continue
 		}
 		sub.Add(tl)
@@ -536,9 +537,9 @@ func (t *restrictedCapabilityProxy) ResolveCall(ctx context.Context, args json.R
 	_ = json.Unmarshal(args, &p)
 	action := strings.ToLower(strings.TrimSpace(p.Action))
 	if action == "list" && rc.SkipExecute {
-		rc.Result = filterCapabilityListResult(rc.Result, t.servers)
+		rc.Result = usecap.FilterCapabilityListResult(rc.Result, t.servers)
 	} else if action == "search" && rc.SkipExecute {
-		rc.Result = filterCapabilitySearchResult(rc.Result, t.allowed)
+		rc.Result = usecap.FilterCapabilitySearchResult(rc.Result, t.allowed)
 	}
 	return rc, nil
 }
@@ -558,9 +559,9 @@ func (t *restrictedCapabilityProxy) Execute(ctx context.Context, args json.RawMe
 	action := strings.ToLower(strings.TrimSpace(p.Action))
 	switch action {
 	case "list":
-		return filterCapabilityListResult(out, t.servers), nil
+		return usecap.FilterCapabilityListResult(out, t.servers), nil
 	case "search":
-		return filterCapabilitySearchResult(out, t.allowed), nil
+		return usecap.FilterCapabilitySearchResult(out, t.allowed), nil
 	}
 	return out, nil
 }

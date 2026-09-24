@@ -3,7 +3,6 @@ package agent_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/contract/provider"
@@ -11,8 +10,8 @@ import (
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/capability"
 	"reasonix/internal/runtime/delegation"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/state/sessionstore"
-	"strings"
 	"testing"
 )
 
@@ -47,7 +46,7 @@ func TestDelegationSurvivesTheProxyBoundary(t *testing.T) {
 	catalog := func() capability.Catalog {
 		return capability.BuildCatalog(capability.CatalogOptions{Tools: reg.AllContractEntries()})
 	}
-	uc := agent.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
+	uc := usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
 
 	for _, tc := range []struct {
 		id, args  string
@@ -125,47 +124,5 @@ func TestPlanningPhaseSplitsDelegationByWriterCapability(t *testing.T) {
 		if got != wantBlocked {
 			t.Errorf("%q blocked=%v during planning, want %v", name, got, wantBlocked)
 		}
-	}
-}
-
-// The delegation calls that motivated this: a fleet item was refused with
-// `json: unknown field "name"`, which names neither the level the field sits on
-// nor what that level accepts. One observed run tried "name", then "title",
-// then "description", paying a round trip for each before finding "prompt".
-func TestContractHintDescendsIntoArrayItems(t *testing.T) {
-	schema := (&delegation.FleetTool{}).Schema()
-	got := agent.ContractHint(schema, json.RawMessage(`{"tasks":[{"name":"fix-alpha","prompt":"do it"}]}`))
-	// Membership, not position: the accepted list is alphabetical, so anchoring
-	// on whichever key sorts first breaks every time one is added.
-	for _, want := range []string{`"name" is not a parameter of a ` + "`tasks`" + ` item`, ` accepts `, `"depends_on"`, `"prompt"`} {
-		if !strings.Contains(got, want) {
-			t.Errorf("hint = %q, want it to contain %q", got, want)
-		}
-	}
-	if strings.Contains(got, "this capability") {
-		t.Errorf("hint = %q, want the item level named, not the outer call", got)
-	}
-}
-
-// Well-formed items stay silent: descending must not invent a contract breach
-// where the call matches the schema at every level.
-func TestContractHintSilentOnWellFormedItems(t *testing.T) {
-	schema := (&delegation.FleetTool{}).Schema()
-	if got := agent.ContractHint(schema, json.RawMessage(`{"tasks":[{"prompt":"a"},{"prompt":"b","model":"m"}]}`)); got != "" {
-		t.Errorf("well-formed items produced hint %q, want silence", got)
-	}
-}
-
-// The end of the path the hint exists for: a capability call whose target
-// refused the arguments comes back carrying the level the field belongs to.
-func TestCapabilityCallFailureCarriesTheItemContract(t *testing.T) {
-	uc := &agent.UseCapabilityTool{}
-	resolved := tool.ResolvedCall{
-		Target: &delegation.FleetTool{},
-		Args:   json.RawMessage(`{"tasks":[{"name":"fix-alpha","prompt":"do it"}]}`),
-	}
-	err := agent.RecordCallFailure(uc, resolved, errors.New(`invalid args: json: unknown field "name"`))
-	if err == nil || !strings.Contains(err.Error(), "`tasks`"+" item") {
-		t.Fatalf("err = %v, want the item level named alongside the target's own message", err)
 	}
 }

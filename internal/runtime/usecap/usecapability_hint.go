@@ -1,4 +1,4 @@
-package agent
+package usecap
 
 import (
 	"encoding/json"
@@ -26,11 +26,11 @@ func misplacedArgumentHint(arguments json.RawMessage, field string) string {
 // nothing on its own: "unknown field \"items\"" never names "tasks", and the
 // model pays round trips to inspect and to the docs to learn one name.
 func contractHint(schema, arguments json.RawMessage) string {
-	contract, ok := readArgumentContract(schema, arguments)
+	contract, ok := ReadArgumentContract(schema, arguments)
 	if !ok {
 		return ""
 	}
-	return contract.hint()
+	return contract.Hint()
 }
 
 func quoted(names []string) []string {
@@ -54,10 +54,10 @@ func (t *UseCapabilityTool) recordCallFailure(resolved tool.ResolvedCall, err er
 	return fmt.Errorf("%w%s", err, contractHint(resolved.Target.Schema(), resolved.Args))
 }
 
-// withContractHint attaches the contract a rejected call broke. A rejection
+// WithContractHint attaches the contract a rejected call broke. A rejection
 // teaches nothing on its own: `unknown field "items"` never names "tasks", and
 // the model pays round trips to inspect and to the docs to learn it.
-func withContractHint(err error, target tool.Tool, args json.RawMessage) error {
+func WithContractHint(err error, target tool.Tool, args json.RawMessage) error {
 	if err == nil || target == nil {
 		return err
 	}

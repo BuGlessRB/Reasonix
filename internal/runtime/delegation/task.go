@@ -8,6 +8,7 @@ import (
 	"io"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/langpref"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/sessionstore"
 	"runtime/debug"
@@ -108,7 +109,7 @@ type TaskTool struct {
 	// capabilityRuntime is the session-shared MCP Host/specs substrate. Each
 	// sub-agent gets its own use_capability frontend so ledger state stays
 	// isolated while connections reuse the parent Host.
-	capabilityRuntime *agent.MCPCapabilityRuntime
+	capabilityRuntime *usecap.MCPCapabilityRuntime
 }
 
 // TaskToolOptions holds the construction parameters for a TaskTool.
@@ -277,7 +278,7 @@ func (t *TaskTool) WithBashSandboxEnforced(fn func() bool) *TaskTool {
 // WithCapabilityRuntime attaches the session-shared MCP runtime so ordinary and
 // read-only sub-agents receive a stable use_capability frontend without
 // inheriting dynamic mcp__* schemas.
-func (t *TaskTool) WithCapabilityRuntime(rt *agent.MCPCapabilityRuntime) *TaskTool {
+func (t *TaskTool) WithCapabilityRuntime(rt *usecap.MCPCapabilityRuntime) *TaskTool {
 	if t != nil {
 		t.capabilityRuntime = rt
 	}

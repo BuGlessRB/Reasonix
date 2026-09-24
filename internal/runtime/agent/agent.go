@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"reasonix/internal/runtime/langpref"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
@@ -1536,7 +1537,7 @@ func (a *Agent) emitResolvedToolDispatch(c provider.ToolCall, profile *event.Pro
 		return
 	}
 	if c.ResolvedName != "" && c.ResolvedName != c.Name {
-		EmitProxyAudit(a.svc.sink, tool.ResolvedCall{
+		usecap.EmitProxyAudit(a.svc.sink, tool.ResolvedCall{
 			DisplayName:  c.Name,
 			TargetName:   c.ResolvedName,
 			CapabilityID: c.CapabilityID,
@@ -1708,7 +1709,7 @@ func (a *Agent) readOnlyExecutionBlock(visible tool.Tool, resolved *tool.Resolve
 	}
 	if resolved == nil {
 		if a.role.plannerMCPExecution && isMCPExecutionTarget(visible, "") {
-			if !mcpServerAuthorized(visible) {
+			if !tool.IsMCPServerAuthorized(visible) {
 				return block("execute an MCP capability from an unauthorized server")
 			}
 			if readOnlyExecutionMCPDestructive(visible) {
@@ -1722,7 +1723,7 @@ func (a *Agent) readOnlyExecutionBlock(visible tool.Tool, resolved *tool.Resolve
 			}
 			return block("execute a state-changing tool")
 		}
-		if isInstalledMCPTool(visible) && !mcpServerAuthorized(visible) {
+		if isInstalledMCPTool(visible) && !tool.IsMCPServerAuthorized(visible) {
 			return block("execute a reader from an unauthorized MCP server")
 		}
 		if readOnlyExecutionMCPDestructive(visible) {
@@ -1745,7 +1746,7 @@ func (a *Agent) readOnlyExecutionBlock(visible tool.Tool, resolved *tool.Resolve
 	case "call":
 		if resolved.Target == nil {
 			if a.role.plannerMCPExecution && resolved.HostCompleted && resolved.SkipExecute && resolved.ReadOnly && !resolved.Unavailable {
-				if _, ok := parseMCPServerCapabilityID(resolved.CapabilityID); ok {
+				if _, ok := usecap.ParseMCPServerCapabilityID(resolved.CapabilityID); ok {
 					return toolOutcome{}, false
 				}
 			}
@@ -1756,7 +1757,7 @@ func (a *Agent) readOnlyExecutionBlock(visible tool.Tool, resolved *tool.Resolve
 				if !plannerMCPConnectAllowed(resolved.Target) {
 					return block("start an unauthorized MCP server")
 				}
-			} else if !mcpServerAuthorized(resolved.Target) {
+			} else if !tool.IsMCPServerAuthorized(resolved.Target) {
 				return block("execute an MCP capability from an unauthorized server")
 			}
 			if readOnlyExecutionMCPDestructive(resolved.Target) {
@@ -1774,7 +1775,7 @@ func (a *Agent) readOnlyExecutionBlock(visible tool.Tool, resolved *tool.Resolve
 			}
 			return block("execute a state-changing dynamic capability")
 		}
-		if isInstalledMCPTool(resolved.Target) && !mcpServerAuthorized(resolved.Target) {
+		if isInstalledMCPTool(resolved.Target) && !tool.IsMCPServerAuthorized(resolved.Target) {
 			return block("execute a dynamic reader from an unauthorized MCP server")
 		}
 		if readOnlyExecutionMCPDestructive(resolved.Target) {
@@ -1790,14 +1791,14 @@ func (a *Agent) readOnlyExecutionBlock(visible tool.Tool, resolved *tool.Resolve
 }
 
 func readOnlyExecutionMCPDestructive(t tool.Tool) bool {
-	return mcpDestructiveHint(t)
+	return tool.HasMCPDestructiveHint(t)
 }
 
 func readOnlyExecutionAllowsMCPStartup(t tool.Tool) bool {
 	if t == nil || !t.ReadOnly() || readOnlyExecutionMCPDestructive(t) {
 		return false
 	}
-	if !mcpServerAuthorized(t) {
+	if !tool.IsMCPServerAuthorized(t) {
 		return false
 	}
 	meta, ok := t.(tool.MCPMetadata)
@@ -1844,7 +1845,7 @@ func plannerMCPConnectAllowed(t tool.Tool) bool {
 	if life, ok := t.(mcpLifecycleConnect); ok {
 		return life.MCPServerAuthorized()
 	}
-	return mcpServerAuthorized(t)
+	return tool.IsMCPServerAuthorized(t)
 }
 
 func isInstalledMCPTool(t tool.Tool) bool {
@@ -1854,16 +1855,6 @@ func isInstalledMCPTool(t tool.Tool) bool {
 
 func isMCPExecutionTarget(t tool.Tool, name string) bool {
 	return isInstalledMCPTool(t) || strings.HasPrefix(strings.TrimSpace(name), "mcp__")
-}
-
-func mcpServerAuthorized(t tool.Tool) bool {
-	authority, ok := t.(tool.MCPServerAuthorization)
-	return ok && authority.MCPServerAuthorized()
-}
-
-func mcpDestructiveHint(t tool.Tool) bool {
-	annotations, ok := t.(tool.MCPAnnotations)
-	return ok && annotations.MCPDestructiveHint()
 }
 
 func (a *Agent) staleAnchorEditBlock(call provider.ToolCall) (string, bool) {

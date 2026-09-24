@@ -40,7 +40,7 @@ func (a *Agent) planPhaseEffect(t tool.Tool, name string, readOnly bool) planmod
 // runs during planning even though a writer-capable schema cannot say so.
 func (a *Agent) plannerTrustsMCP(t tool.Tool, name string) bool {
 	return a.role.plannerMCPExecution && isMCPExecutionTarget(t, name) &&
-		mcpServerAuthorized(t) && !mcpDestructiveHint(t)
+		tool.IsMCPServerAuthorized(t) && !tool.HasMCPDestructiveHint(t)
 }
 
 // planPhaseBlockReason keeps the three ways a call fails the phase apart where
@@ -79,9 +79,9 @@ func (a *Agent) planPhaseGateForTarget(plan *toolCallPlan) (toolOutcome, bool) {
 		}
 	}
 	if isMCPExecutionTarget(plan.execTool, plan.permName) && !a.plannerTrustsMCP(plan.execTool, plan.permName) &&
-		(!plan.readOnly || !mcpServerAuthorized(plan.execTool) || mcpDestructiveHint(plan.execTool)) {
+		(!plan.readOnly || !tool.IsMCPServerAuthorized(plan.execTool) || tool.HasMCPDestructiveHint(plan.execTool)) {
 		reason := "writer/destructive target"
-		if plan.readOnly && !mcpServerAuthorized(plan.execTool) {
+		if plan.readOnly && !tool.IsMCPServerAuthorized(plan.execTool) {
 			reason = "reader from an unauthorized server"
 		}
 		return toolOutcome{

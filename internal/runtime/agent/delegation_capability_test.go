@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/capability"
+	"reasonix/internal/runtime/usecap"
 	"testing"
 )
 
@@ -19,7 +20,7 @@ func TestNonDelegatingCallHasNoProfile(t *testing.T) {
 	catalog := func() capability.Catalog {
 		return capability.BuildCatalog(capability.CatalogOptions{Tools: reg.AllContractEntries()})
 	}
-	uc := NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
+	uc := usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
 	rc, err := uc.ResolveCall(context.Background(), json.RawMessage(`{"action":"call","capability_id":"tool:inert","arguments":{}}`))
 	if err != nil {
 		t.Fatalf("resolve: %v", err)

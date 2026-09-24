@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/runtime/coordinator"
 	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/runtime/recovery"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/sessionstore"
 )
@@ -38,7 +39,7 @@ type roleWiring struct {
 // planner wraps the executor in a Coordinator when a distinct planner_model is
 // configured. The planner keeps its own session for cache stability and a
 // read-only tool set; an unresolvable planner degrades to the executor (#4615).
-func (w roleWiring) planner(opts Options, executor *agent.Agent, executorModel, staticContext string, capRuntime *agent.MCPCapabilityRuntime) (agent.Runner, string, error) {
+func (w roleWiring) planner(opts Options, executor *agent.Agent, executorModel, staticContext string, capRuntime *usecap.MCPCapabilityRuntime) (agent.Runner, string, error) {
 	pm := effectivePlannerModel(w.cfg, opts)
 	if pm == "" {
 		return executor, executorModel, nil

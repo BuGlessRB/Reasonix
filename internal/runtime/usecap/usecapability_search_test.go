@@ -1,4 +1,4 @@
-package agent
+package usecap
 
 import (
 	"context"
@@ -63,7 +63,7 @@ func TestUseCapabilitySearchRequiresQueryAndBoundsLimit(t *testing.T) {
 
 func TestRestrictedCapabilitySearchDoesNotLeakOutsideAllowlist(t *testing.T) {
 	raw := `{"query":"data","matches":[{"id":"mcp-tool:allowed/read","kind":"mcp-tool","name":"allowed/read","status":"ready"},{"id":"mcp-tool:secret/read","kind":"mcp-tool","name":"secret/read","status":"ready"}],"note":"full"}`
-	out := filterCapabilitySearchResult(raw, map[string]bool{"mcp-tool:allowed/read": true})
+	out := FilterCapabilitySearchResult(raw, map[string]bool{"mcp-tool:allowed/read": true})
 	if !strings.Contains(out, "mcp-tool:allowed/read") || strings.Contains(out, "mcp-tool:secret/read") {
 		t.Fatalf("restricted search leaked or removed the wrong capability:\n%s", out)
 	}

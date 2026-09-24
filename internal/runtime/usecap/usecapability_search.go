@@ -1,4 +1,4 @@
-package agent
+package usecap
 
 import (
 	"encoding/json"
@@ -92,7 +92,7 @@ func (t *UseCapabilityTool) searchCapabilities(query string, limit int) (string,
 	return string(b), nil
 }
 
-func filterCapabilitySearchResult(raw string, allowed map[string]bool) string {
+func FilterCapabilitySearchResult(raw string, allowed map[string]bool) string {
 	var payload struct {
 		Query   string                `json:"query"`
 		Matches []capabilitySearchHit `json:"matches"`

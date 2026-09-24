@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"strconv"
@@ -216,7 +217,7 @@ func TestReadOnlyExecutionBlocksUnauthorizedMCPAndDecline(t *testing.T) {
 	ledger.SeedCandidates(capability.RouteDecision{Candidates: []capability.RouteCandidate{
 		{Entry: capability.Entry{ID: "skill:review"}, Policy: capability.AutoUsePrefer},
 	}})
-	proxy := NewUseCapabilityTool(context.Background(), nil, nil, tool.NewRegistry(), ledger, nil, nil)
+	proxy := usecap.NewUseCapabilityTool(context.Background(), nil, nil, tool.NewRegistry(), ledger, nil, nil)
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
 	readOnlyAgent := New(nil, reg, sessionstore.NewSession("sys"), Options{ReadOnlyExecution: true}, event.Discard)
@@ -242,7 +243,7 @@ func TestReadOnlyExecutionBlocksUnauthorizedMCPAndDecline(t *testing.T) {
 func TestReadOnlyExecutionDoesNotStartUnauthorizedUnconnectedMCP(t *testing.T) {
 	host := plugin.NewHost()
 	defer host.Close()
-	proxy := NewUseCapabilityTool(context.Background(), host, []plugin.Spec{{
+	proxy := usecap.NewUseCapabilityTool(context.Background(), host, []plugin.Spec{{
 		Name: "lazy", Type: "stdio", Command: "reasonix-test-definitely-missing-binary",
 	}}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
 	reg := tool.NewRegistry()
@@ -348,7 +349,7 @@ func TestPlannerFirstOnDemandMCPCallPreservesImages(t *testing.T) {
 	host := plugin.NewHost()
 	defer host.Close()
 	spec := plugin.Spec{Name: "image", Type: "http", URL: server.URL, Authorized: true}
-	runtime := NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
+	runtime := usecap.NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
 	proxy := runtime.NewFrontend(capability.NewLedger(), nil)
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
@@ -492,7 +493,7 @@ func TestReadOnlyExecutionStartsInstalledUnconnectedMCPReader(t *testing.T) {
 
 	host := plugin.NewHost()
 	defer host.Close()
-	proxy := NewUseCapabilityTool(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
+	proxy := usecap.NewUseCapabilityTool(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
 	a := New(nil, reg, sessionstore.NewSession("sys"), Options{ReadOnlyExecution: true}, event.Discard)
@@ -528,7 +529,7 @@ func TestReadOnlyExecutionStartsPreviouslyAuthorizedProjectMCPReaderOnDemand(t *
 
 	host := plugin.NewHost()
 	defer host.Close()
-	proxy := NewUseCapabilityTool(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
+	proxy := usecap.NewUseCapabilityTool(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
 	a := New(nil, reg, sessionstore.NewSession("sys"), Options{ReadOnlyExecution: true}, event.Discard)
@@ -564,7 +565,7 @@ func TestReadOnlyExecutionAllowsSchemaOnlyDriftForAuthorizedReader(t *testing.T)
 
 	host := plugin.NewHost()
 	defer host.Close()
-	proxy := NewUseCapabilityTool(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
+	proxy := usecap.NewUseCapabilityTool(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
 	a := New(nil, reg, sessionstore.NewSession("sys"), Options{ReadOnlyExecution: true}, event.Discard)
@@ -582,7 +583,7 @@ func TestReadOnlyExecutionAllowsSchemaOnlyDriftForAuthorizedReader(t *testing.T)
 
 func TestReadOnlyExecutionDoesNotMarkUnknownCapabilityUnavailable(t *testing.T) {
 	ledger := capability.NewLedger()
-	proxy := NewUseCapabilityTool(context.Background(), nil, nil, tool.NewRegistry(), ledger, nil, nil)
+	proxy := usecap.NewUseCapabilityTool(context.Background(), nil, nil, tool.NewRegistry(), ledger, nil, nil)
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
 	a := New(nil, reg, sessionstore.NewSession("sys"), Options{ReadOnlyExecution: true}, event.Discard)
@@ -614,7 +615,7 @@ func TestUseCapabilityDeclineAndInspect(t *testing.T) {
 		{Entry: capability.Entry{ID: "skill:review"}, Policy: capability.AutoUsePrefer},
 	}})
 	audit := &capability.Audit{}
-	tl := NewUseCapabilityTool(context.Background(), nil, nil, tool.NewRegistry(), ledger, audit, func() capability.Catalog {
+	tl := usecap.NewUseCapabilityTool(context.Background(), nil, nil, tool.NewRegistry(), ledger, audit, func() capability.Catalog {
 		return capability.Catalog{Entries: []capability.Entry{{
 			ID: "skill:review", Kind: capability.KindSkill, Name: "review", Description: "review code", Status: capability.StatusReady,
 		}}}
@@ -658,7 +659,7 @@ func TestUseCapabilityInspectMCPToolDoesNotListSiblingSchemas(t *testing.T) {
 		ID: "mcp-tool:db/read", Kind: capability.KindMCPTool, Name: "read",
 		Description: "allowed reader", Source: "db", Status: capability.StatusConfigured,
 	}
-	tl := NewUseCapabilityTool(context.Background(), nil, []plugin.Spec{spec}, tool.NewRegistry(), nil, nil, func() capability.Catalog {
+	tl := usecap.NewUseCapabilityTool(context.Background(), nil, []plugin.Spec{spec}, tool.NewRegistry(), nil, nil, func() capability.Catalog {
 		return capability.Catalog{Entries: []capability.Entry{target}}
 	})
 
@@ -699,7 +700,7 @@ func TestUseCapabilityProxyHonorsRealMCPPermissionDeny(t *testing.T) {
 	// Register a fake MCP tool in the registry so resolve uses it without host.
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "mcp__github__search_issues", readOnly: true})
-	tl := NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, nil)
+	tl := usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, nil)
 
 	resolved, err := tl.ResolveCall(context.Background(), json.RawMessage(`{"action":"call","capability_id":"mcp-tool:github/search_issues","arguments":{}}`))
 	if err != nil {
@@ -831,7 +832,7 @@ func TestUseCapabilityServerConnectHonorsPermissionInPlanMode(t *testing.T) {
 	defer host.Close()
 	specs := []plugin.Spec{{Name: "lazy", Type: "stdio", Command: "reasonix-test-definitely-missing-binary", Authorized: true}}
 	reg := tool.NewRegistry()
-	uc := NewUseCapabilityTool(context.Background(), host, specs, reg, capability.NewLedger(), nil, nil)
+	uc := usecap.NewUseCapabilityTool(context.Background(), host, specs, reg, capability.NewLedger(), nil, nil)
 	reg.Add(uc)
 
 	resolved, err := uc.ResolveCall(context.Background(), json.RawMessage(`{"action":"call","capability_id":"mcp-server:lazy"}`))
@@ -867,7 +868,7 @@ func TestOnDemandModelNameMatchesPluginCanonicalName(t *testing.T) {
 	host := plugin.NewHost()
 	defer host.Close()
 	specs := []plugin.Spec{{Name: "lazy", Type: "stdio", Command: "reasonix-test-definitely-missing-binary"}}
-	tl := NewUseCapabilityTool(context.Background(), host, specs, tool.NewRegistry(), capability.NewLedger(), nil, nil)
+	tl := usecap.NewUseCapabilityTool(context.Background(), host, specs, tool.NewRegistry(), capability.NewLedger(), nil, nil)
 	for _, raw := range []string{"@model/tool", "search/issues", "with space", "plain_ok"} {
 		resolved, err := tl.ResolveCall(context.Background(),
 			json.RawMessage(`{"action":"call","capability_id":"mcp-tool:lazy/`+raw+`"}`))
@@ -885,7 +886,7 @@ func TestProxyCallAuditCountsOnAgentPath(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "mcp__github__search_issues", readOnly: true})
 	audit := &capability.Audit{}
-	uc := NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), audit, nil)
+	uc := usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), audit, nil)
 	reg.Add(uc)
 	a := New(&scriptedProvider{name: "p"}, reg, sessionstore.NewSession("sys"),
 		Options{CapabilityLedger: capability.NewLedger(), CapabilityAudit: audit}, event.Discard)
@@ -959,46 +960,11 @@ func TestRunSubAgentRequiresReviewReport(t *testing.T) {
 	}
 }
 
-func TestUseCapabilityResolveCallIsSideEffectFree(t *testing.T) {
-	host := plugin.NewHost()
-	defer host.Close()
-	specs := []plugin.Spec{{
-		Name:    "lazy",
-		Type:    "stdio",
-		Command: "reasonix-test-definitely-missing-binary",
-	}}
-	tl := NewUseCapabilityTool(context.Background(), host, specs, tool.NewRegistry(), capability.NewLedger(), nil, nil)
-
-	resolved, err := tl.ResolveCall(context.Background(), json.RawMessage(`{"action":"call","capability_id":"mcp-tool:lazy/do_write","arguments":{}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resolved.SkipExecute || resolved.Target == nil {
-		t.Fatalf("expected a deferred target, got %+v", resolved)
-	}
-	if resolved.ReadOnly {
-		t.Fatal("unstarted tool without read-only metadata must resolve as a writer")
-	}
-	if host.HasClient("lazy") {
-		t.Fatal("ResolveCall must not start the MCP server")
-	}
-	// Execution is where the connect finally happens — and fails for the
-	// missing binary, marking the capability unavailable.
-	ledger := capability.NewLedger()
-	tl.ledger = ledger
-	if _, err := resolved.Target.Execute(context.Background(), resolved.Args); err == nil {
-		t.Fatal("expected connect failure for missing binary")
-	}
-	if e, ok := ledger.Get("mcp-tool:lazy/do_write"); !ok || e.Outcome != capability.OutcomeUnavailable {
-		t.Fatalf("expected unavailable outcome, got %+v ok=%v", e, ok)
-	}
-}
-
 func TestUseCapabilityInspectDoesNotStartServer(t *testing.T) {
 	host := plugin.NewHost()
 	defer host.Close()
 	specs := []plugin.Spec{{Name: "lazy", Type: "stdio", Command: "reasonix-test-definitely-missing-binary"}}
-	tl := NewUseCapabilityTool(context.Background(), host, specs, tool.NewRegistry(), capability.NewLedger(), nil, func() capability.Catalog {
+	tl := usecap.NewUseCapabilityTool(context.Background(), host, specs, tool.NewRegistry(), capability.NewLedger(), nil, func() capability.Catalog {
 		return capability.Catalog{Entries: []capability.Entry{{
 			ID: "mcp-server:lazy", Kind: capability.KindMCPServer, Name: "lazy", Source: "lazy", Status: capability.StatusConfigured,
 		}}}
@@ -1019,7 +985,7 @@ func TestPlanModeBlocksInstalledWriteMCPResolvedThroughUseCapability(t *testing.
 	reg := tool.NewRegistry()
 	reg.Add(annotatedMCPTool{fakeTool: fakeTool{name: "mcp__github__create_issue", readOnly: false}, server: "github", raw: "create_issue"})
 	reg.Add(annotatedMCPTool{fakeTool: fakeTool{name: "mcp__github__search_issues", readOnly: true}, server: "github", raw: "search_issues", serverAuthorized: true})
-	uc := NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, nil)
+	uc := usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, nil)
 	reg.Add(uc)
 	gate := &mcpPermissionRecordingGate{allowNormal: true}
 	a := New(&scriptedProvider{name: "p"}, reg, sessionstore.NewSession("sys"), Options{Gate: gate}, event.Discard)
@@ -1045,7 +1011,7 @@ func TestPlanModeBlocksInstalledWriteMCPResolvedThroughUseCapability(t *testing.
 func TestPlanModeMCPStyleNameWithoutMetadataStillUsesPermission(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "mcp__github__create_issue", readOnly: false})
-	uc := NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, nil)
+	uc := usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, nil)
 	reg.Add(uc)
 	gate := &recordingPermissionGate{reason: "denied by ordinary permission"}
 	a := New(&scriptedProvider{name: "p"}, reg, sessionstore.NewSession("sys"), Options{Gate: gate}, event.Discard)
@@ -1069,7 +1035,7 @@ func TestPlanModeBlocksAuthorizedDestructiveMCPThroughUseCapability(t *testing.T
 		destructive:      true,
 		serverAuthorized: true,
 	})
-	uc := NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, nil)
+	uc := usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, nil)
 	reg.Add(uc)
 	gate := &mcpPermissionRecordingGate{allowNormal: true}
 	a := New(&scriptedProvider{name: "p"}, reg, sessionstore.NewSession("sys"), Options{Gate: gate}, event.Discard)
@@ -1102,7 +1068,7 @@ func TestCapabilityGateAppliesToReadOnlyTasks(t *testing.T) {
 func TestUseCapabilityListActionNoSideEffects(t *testing.T) {
 	host := plugin.NewHost()
 	defer host.Close()
-	proxy := NewUseCapabilityTool(context.Background(), host, []plugin.Spec{
+	proxy := usecap.NewUseCapabilityTool(context.Background(), host, []plugin.Spec{
 		{Name: "zeta", Authorized: true},
 		{Name: "alpha", Authorized: true},
 	}, tool.NewRegistry(), nil, nil, nil)
@@ -1175,7 +1141,7 @@ func TestPlannerPlanModeExecutesAuthorizedOpaqueMCPThroughRuntime(t *testing.T) 
 	if _, err := host.Add(ctx, spec); err != nil {
 		t.Fatal(err)
 	}
-	runtime := NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
+	runtime := usecap.NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
 	reg := tool.NewRegistry()
 	reg.Add(runtime.NewFrontend(capability.NewLedger(), nil))
 	planner := NewPlannerAgent(nil, reg, sessionstore.NewSession("sys"), Options{Gate: denyAllGate{}}, event.Discard)
@@ -1208,7 +1174,7 @@ func TestPlannerAllowsConnectedServerDirectoryCall(t *testing.T) {
 	if _, err := host.Add(ctx, spec); err != nil {
 		t.Fatal(err)
 	}
-	runtime := NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
+	runtime := usecap.NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
 	reg := tool.NewRegistry()
 	reg.Add(runtime.NewFrontend(capability.NewLedger(), nil))
 	planner := NewPlannerAgent(nil, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
@@ -1353,7 +1319,7 @@ func TestUseCapabilityBatchingFollowsWhatItProxies(t *testing.T) {
 		{ID: "mcp:srv/read", Kind: capability.KindTool, ReadOnly: true},
 		{ID: "mcp:srv/write", Kind: capability.KindTool, ReadOnly: false},
 	}}
-	proxy := NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil,
+	proxy := usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil,
 		func() capability.Catalog { return cat })
 	reg.Add(proxy)
 
@@ -1455,7 +1421,7 @@ func TestPlannerSchemaStableAcrossProxyPresence(t *testing.T) {
 	// Building planner registry with or without pre-registered mcp tools must
 	// not change the fixed use_capability schema bytes.
 	parent := tool.NewRegistry()
-	proxy := NewUseCapabilityTool(context.Background(), nil, nil, parent, nil, nil, nil)
+	proxy := usecap.NewUseCapabilityTool(context.Background(), nil, nil, parent, nil, nil, nil)
 	parent.Add(proxy)
 	parent.Add(fakeTool{name: "read_file", readOnly: true})
 	parent.Add(annotatedMCPTool{
@@ -1505,7 +1471,7 @@ func TestMCPCapabilityRuntimeTracksHotLifecycleAndSharedHostRevocation(t *testin
 
 	host := plugin.NewHost()
 	defer host.Close()
-	runtime := NewMCPCapabilityRuntime(ctx, host, nil, tool.NewRegistry(), nil)
+	runtime := usecap.NewMCPCapabilityRuntime(ctx, host, nil, tool.NewRegistry(), nil)
 	frontend := runtime.NewFrontend(nil, nil)
 	entry := config.PluginEntry{Name: "hot", Type: "http", URL: oldServer.URL, Source: config.MCPSourceUserConfig}
 	oldSpec := plugin.Spec{Name: "hot", Type: "http", URL: oldServer.URL, Authorized: true}
@@ -1604,7 +1570,7 @@ func TestSharedHostSameNameRequiresCurrentRuntimeAuthorizationAndIdentity(t *tes
 				t.Fatal(err)
 			}
 			currentSpec := plugin.Spec{Name: "shared", Type: "http", URL: currentServer.URL, Authorized: tc.authorized}
-			runtime := NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{currentSpec}, tool.NewRegistry(), nil)
+			runtime := usecap.NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{currentSpec}, tool.NewRegistry(), nil)
 			frontend := runtime.NewFrontend(capability.NewLedger(), nil)
 
 			out, err := frontend.Execute(ctx, json.RawMessage(`{"action":"call","capability_id":"mcp-tool:shared/search","arguments":{"q":"x"}}`))
@@ -1633,7 +1599,7 @@ func TestResolvedMCPCallRechecksRuntimeDisableBeforeDispatch(t *testing.T) {
 	if _, err := host.Add(ctx, spec); err != nil {
 		t.Fatal(err)
 	}
-	runtime := NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
+	runtime := usecap.NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
 	frontend := runtime.NewFrontend(capability.NewLedger(), nil)
 	resolved, err := frontend.ResolveCall(ctx, json.RawMessage(`{"action":"call","capability_id":"mcp-tool:revoked/search","arguments":{"q":"x"}}`))
 	if err != nil || resolved.Target == nil {
@@ -1670,7 +1636,7 @@ func TestRuntimeDisableLinearizesWithInFlightMCPDispatch(t *testing.T) {
 	if _, err := host.Add(ctx, spec); err != nil {
 		t.Fatal(err)
 	}
-	runtime := NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
+	runtime := usecap.NewMCPCapabilityRuntime(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), nil)
 	frontend := runtime.NewFrontend(capability.NewLedger(), nil)
 	resolved, err := frontend.ResolveCall(ctx, json.RawMessage(`{"action":"call","capability_id":"mcp-tool:linear/search","arguments":{}}`))
 	if err != nil || resolved.Target == nil {
@@ -1711,37 +1677,6 @@ func TestRuntimeDisableLinearizesWithInFlightMCPDispatch(t *testing.T) {
 	}
 }
 
-func TestMCPCapabilityRuntimeConcurrentUpdatesAndSnapshots(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
-	runtime := NewMCPCapabilityRuntime(context.Background(), plugin.NewHost(), nil, tool.NewRegistry(), nil)
-	defer runtime.host.Close()
-	frontend := runtime.NewFrontend(nil, nil)
-	entry := config.PluginEntry{Name: "race", Type: "http", Source: config.MCPSourceUserConfig}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for i := range 100 {
-			entry.URL = fmt.Sprintf("http://127.0.0.1:%d", 10000+i)
-			runtime.UpsertServer(entry, plugin.Spec{Name: "race", Type: "http", URL: entry.URL, Authorized: true}, true)
-			runtime.state.setLiveTools("race", []plugin.CachedTool{{Name: "query", ReadOnly: true}})
-			runtime.SetServerEnabled("race", i%2 == 0)
-			if i%10 == 0 {
-				runtime.RemoveServer("race")
-			}
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		for range 100 {
-			_, _ = frontend.Execute(context.Background(), json.RawMessage(`{"action":"list"}`))
-			_, _, _, _, _ = runtime.CapabilityCatalogState()
-		}
-	}()
-	wg.Wait()
-}
-
 func TestUnauthorizedNonProjectMCPZeroProcessStart(t *testing.T) {
 	// Spec.Authorized is the single truth: a host/session server with
 	// RequireLaunchApproval=false but Authorized=false must not start.
@@ -1759,7 +1694,7 @@ func TestUnauthorizedNonProjectMCPZeroProcessStart(t *testing.T) {
 		// Explicitly unauthorized: boot/install must set Authorized=true for trust.
 		Authorized: false, RequireLaunchApproval: false,
 	}
-	proxy := NewUseCapabilityTool(context.Background(), host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
+	proxy := usecap.NewUseCapabilityTool(context.Background(), host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
 	a := New(nil, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
@@ -1812,7 +1747,7 @@ func TestAuthorizedMCPConnectUsesExplicitDenyOnlyGate(t *testing.T) {
 	defer host.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	proxy := NewUseCapabilityTool(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
+	proxy := usecap.NewUseCapabilityTool(ctx, host, []plugin.Spec{spec}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
 
@@ -1839,7 +1774,7 @@ func TestAuthorizedMCPConnectUsesExplicitDenyOnlyGate(t *testing.T) {
 		Authorized: true,
 	}
 	cacheExplicitReaderSchema(t, spec2)
-	proxy2 := NewUseCapabilityTool(ctx, host, []plugin.Spec{spec2}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
+	proxy2 := usecap.NewUseCapabilityTool(ctx, host, []plugin.Spec{spec2}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
 	reg2 := tool.NewRegistry()
 	reg2.Add(proxy2)
 	denyConnect := permission.NewGate(permission.New("ask", nil, nil, []string{plugin.MCPConnectPermissionName("other-reader")}), nil)

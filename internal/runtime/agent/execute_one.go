@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reasonix/internal/contract/event"
+	"reasonix/internal/runtime/usecap"
 	"strings"
 
 	"reasonix/internal/contract/planmode"
@@ -474,7 +475,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 	// not re-prompt under headless or partial-auto policies.
 	gateArgs := tool.PermissionArgs(ctx, plan.execTool, plan.permArgs)
 	if isInstalledMCPTool(plan.execTool) || isMCPLifecycleConnectTarget(plan.execTool) {
-		if !mcpServerAuthorized(plan.execTool) {
+		if !tool.IsMCPServerAuthorized(plan.execTool) {
 			return toolOutcome{
 				output:  "blocked: this project MCP server identity has not been authorized; approve the server from a parent session and retry",
 				blocked: true,
@@ -655,12 +656,12 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	// basis into dispatch: the MCP execution layer re-verifies it linearizably
 	// against server authorization and live safety metadata, and refuses to
 	// promote it into a writer lane if reclassification landed after the gate.
-	if readOnly && isInstalledMCPTool(runTool) && mcpServerAuthorized(runTool) && !mcpDestructiveHint(runTool) {
+	if readOnly && isInstalledMCPTool(runTool) && tool.IsMCPServerAuthorized(runTool) && !tool.HasMCPDestructiveHint(runTool) {
 		cctx = tool.WithReaderExecutionIntent(cctx)
 	}
 	// Planner-trusted MCP: authorized + non-destructive, even without
 	// readOnlyHint. Final dispatch re-checks live authorization/destructiveHint.
-	if a.role.plannerMCPExecution && isMCPExecutionTarget(runTool, permName) && mcpServerAuthorized(runTool) && !mcpDestructiveHint(runTool) {
+	if a.role.plannerMCPExecution && isMCPExecutionTarget(runTool, permName) && tool.IsMCPServerAuthorized(runTool) && !tool.HasMCPDestructiveHint(runTool) {
 		cctx = tool.WithNonDestructiveMCPExecutionIntent(cctx)
 	}
 	var execution *tool.ShellExecution
@@ -699,7 +700,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	if msg, refused := tool.BlockedMessage(err); refused {
 		return a.blockedToolOutcome(plan, msg)
 	}
-	err = withContractHint(err, runTool, runArgs)
+	err = usecap.WithContractHint(err, runTool, runArgs)
 	owedBefore := a.obligations()
 	a.recordToolReceipts(ctx, plan, result, execution, err)
 	result = withObligationDelta(result, evidence.DiffObligations(owedBefore, a.obligations()))

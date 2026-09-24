@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"reasonix/internal/contract/hostaudit"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/runtime/writeclaim"
 	"testing"
 
@@ -41,7 +42,7 @@ func TestDelegationAuditSurvivesCapabilityProxy(t *testing.T) {
 	reg.Add(task)
 
 	ctx := context.Background()
-	runtime := agent.NewMCPCapabilityRuntime(ctx, plugin.NewHost(), []plugin.Spec{}, reg, nil)
+	runtime := usecap.NewMCPCapabilityRuntime(ctx, plugin.NewHost(), []plugin.Spec{}, reg, nil)
 	proxy := runtime.NewFrontend(capability.NewLedger(), nil)
 
 	args, err := json.Marshal(map[string]any{

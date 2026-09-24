@@ -10,8 +10,8 @@ import (
 
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/plugin"
-	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/capability"
+	"reasonix/internal/runtime/usecap"
 )
 
 // mockSpec mirrors helperSpec (lazy_test.go): the test binary re-runs itself
@@ -36,7 +36,7 @@ func TestUseCapabilityFirstDiscoveryConnectListCall(t *testing.T) {
 	lifeCtx := t.Context()
 	ledger := capability.NewLedger()
 	audit := &capability.Audit{}
-	proxy := agent.NewUseCapabilityTool(lifeCtx, host, []plugin.Spec{mockSpec()}, tool.NewRegistry(), ledger, audit, nil)
+	proxy := usecap.NewUseCapabilityTool(lifeCtx, host, []plugin.Spec{mockSpec()}, tool.NewRegistry(), ledger, audit, nil)
 
 	resolved, err := proxy.ResolveCall(context.Background(), json.RawMessage(`{"action":"call","capability_id":"mcp-server:mock"}`))
 	if err != nil {
@@ -118,7 +118,7 @@ func TestUseCapabilitySharedHostSnapshot(t *testing.T) {
 	}
 
 	// "Tab B": empty registry (auto_start=false semantics), fresh proxy.
-	proxyB := agent.NewUseCapabilityTool(lifeCtx, host, []plugin.Spec{mockSpec()}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
+	proxyB := usecap.NewUseCapabilityTool(lifeCtx, host, []plugin.Spec{mockSpec()}, tool.NewRegistry(), capability.NewLedger(), nil, nil)
 	resolved, err := proxyB.ResolveCall(context.Background(), json.RawMessage(`{"action":"call","capability_id":"mcp-tool:mock/echo","arguments":{}}`))
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +131,7 @@ func TestUseCapabilitySharedHostSnapshot(t *testing.T) {
 	}
 
 	// A third proxy sees it via inspect too.
-	proxyC := agent.NewUseCapabilityTool(lifeCtx, host, []plugin.Spec{mockSpec()}, tool.NewRegistry(), capability.NewLedger(), nil, func() capability.Catalog {
+	proxyC := usecap.NewUseCapabilityTool(lifeCtx, host, []plugin.Spec{mockSpec()}, tool.NewRegistry(), capability.NewLedger(), nil, func() capability.Catalog {
 		return capability.Catalog{Entries: []capability.Entry{{
 			ID: "mcp-server:mock", Kind: capability.KindMCPServer, Name: "mock", Source: "mock", Status: capability.StatusReady,
 		}}}

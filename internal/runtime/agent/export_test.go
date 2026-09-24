@@ -20,12 +20,6 @@ func DelegationProfile(t tool.Tool, args json.RawMessage) *event.Profile {
 	return delegationProfile(t, args)
 }
 
-func ContractHint(schema, arguments json.RawMessage) string { return contractHint(schema, arguments) }
-
-func RecordCallFailure(uc *UseCapabilityTool, resolved tool.ResolvedCall, err error) error {
-	return uc.recordCallFailure(resolved, err)
-}
-
 func PlanModeDecision(a *Agent, t tool.Tool, safety planmode.PlanSafety) planmode.Decision {
 	return a.planModeDecision(t, t.Name(), t.ReadOnly(), safety, nil)
 }

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
@@ -177,7 +178,7 @@ func TestMistypedArgumentIsRefusedThroughTheCapabilityProxy(t *testing.T) {
 	ran := false
 	targets := tool.NewRegistry()
 	targets.Add(evidenceTool{ran: &ran})
-	proxy := NewUseCapabilityTool(context.Background(), nil, nil, targets,
+	proxy := usecap.NewUseCapabilityTool(context.Background(), nil, nil, targets,
 		capability.NewLedger(), &capability.Audit{},
 		func() capability.Catalog { return capability.Catalog{} })
 	reg := tool.NewRegistry()

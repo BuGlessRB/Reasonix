@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/platform/environment"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/delegation"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/runtime/writeclaim"
 )
 
@@ -33,7 +34,7 @@ type skillSubagents struct {
 	scheduler  *writeclaim.SubagentScheduler
 	provider   provider.Provider
 	entry      *config.ProviderEntry
-	capRuntime *agent.MCPCapabilityRuntime
+	capRuntime *usecap.MCPCapabilityRuntime
 	maxDepth   int
 	maxSteps   int
 

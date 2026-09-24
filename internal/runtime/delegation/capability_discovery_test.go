@@ -1,7 +1,7 @@
 package delegation
 
 import (
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/usecap"
 	"strings"
 	"testing"
 )
@@ -12,7 +12,7 @@ import (
 // reached 6 times against 74 single delegations: a capability nothing names is
 // one the model has no reason to look for.
 func TestTheProxyDescriptionNamesAWayToDelegateMoreThanOneThing(t *testing.T) {
-	desc := (*agent.UseCapabilityTool)(nil).Description()
+	desc := (*usecap.UseCapabilityTool)(nil).Description()
 	batch := (*FleetTool)(nil).CapabilityAliases()
 	if len(batch) == 0 {
 		t.Fatal("the fleet dispatcher declares no capability id")
@@ -23,7 +23,7 @@ func TestTheProxyDescriptionNamesAWayToDelegateMoreThanOneThing(t *testing.T) {
 	// Naming an id the catalog cannot resolve is the opposite failure, and the
 	// boot effect test covers it — but only for ids listed here.
 	found := false
-	for _, id := range agent.CapabilityIDExamples {
+	for _, id := range usecap.CapabilityIDExamples {
 		if id == batch[0] {
 			found = true
 		}

@@ -3,7 +3,7 @@ package delegation
 import (
 	"context"
 	"encoding/json"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/usecap"
 	"strings"
 	"testing"
 
@@ -19,7 +19,7 @@ func delegationTools() []tool.Tool {
 	return []tool.Tool{task, NewReadOnlyTaskTool(task), NewParallelTasksTool(task, nil), NewFleetTool(task)}
 }
 
-func aliasCatalog(t *testing.T) (*tool.Registry, *agent.UseCapabilityTool) {
+func aliasCatalog(t *testing.T) (*tool.Registry, *usecap.UseCapabilityTool) {
 	t.Helper()
 	reg := tool.NewRegistry()
 	for _, tl := range delegationTools() {
@@ -29,7 +29,7 @@ func aliasCatalog(t *testing.T) (*tool.Registry, *agent.UseCapabilityTool) {
 	catalog := func() capability.Catalog {
 		return capability.BuildCatalog(capability.CatalogOptions{Tools: reg.AllContractEntries()})
 	}
-	return reg, agent.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
+	return reg, usecap.NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil, catalog)
 }
 
 // TestDeclaredAliasIsListedInspectableAndCallable is the gate this package was

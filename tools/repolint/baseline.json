@@ -11,7 +11,7 @@
     "doc-prose": 2324,
     "error-text": 9,
     "essay": 2829,
-    "file-size": 21934,
+    "file-size": 21927,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 3335,
@@ -23,6 +23,7 @@
     "refusal-path": 0,
     "release-note": 661,
     "struct-state": 32,
+    "window-state": 0,
     "wire-parity": 0
   },
   "files": {
@@ -974,7 +975,7 @@
     "internal/runtime/agent/agent.go": {
       "complexity": 37,
       "essay": 33,
-      "file-size": 1216,
+      "file-size": 1207,
       "function-size": 102
     },
     "internal/runtime/agent/agent_options.go": {
@@ -1068,11 +1069,6 @@
     "internal/runtime/agent/textsink.go": {
       "essay": 9
     },
-    "internal/runtime/agent/usecapability.go": {
-      "essay": 9,
-      "file-size": 713,
-      "function-size": 2
-    },
     "internal/runtime/agent/width.go": {
       "essay": 1
     },
@@ -1111,7 +1107,7 @@
     "internal/runtime/delegation/task.go": {
       "complexity": 12,
       "essay": 12,
-      "file-size": 258,
+      "file-size": 259,
       "function-size": 94,
       "orphan": 1
     },
@@ -1169,6 +1165,11 @@
     },
     "internal/runtime/taskmonitor/tmux.go": {
       "orphan": 1
+    },
+    "internal/runtime/usecap/usecapability.go": {
+      "essay": 9,
+      "file-size": 713,
+      "function-size": 2
     },
     "internal/runtime/writeclaim/scheduler.go": {
       "essay": 1
@@ -1247,7 +1248,7 @@
     },
     "internal/session/control/controller.go": {
       "essay": 32,
-      "file-size": 595,
+      "file-size": 596,
       "frontend-parity": 6
     },
     "internal/session/control/controller_test.go": {

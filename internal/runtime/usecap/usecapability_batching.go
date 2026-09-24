@@ -1,5 +1,5 @@
 // usecapability_batching.go — whether a proxied call may share a batch.
-package agent
+package usecap
 
 import (
 	"context"

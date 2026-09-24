@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/usecap"
 	"strings"
 	"testing"
 
@@ -483,7 +484,7 @@ func TestMCPToolAvailabilityAcrossGeneralAndReadOnlySubagents(t *testing.T) {
 func TestRestrictedCapabilityProxyDescriptionIsStable(t *testing.T) {
 	parent := tool.NewRegistry()
 	// Real UseCapabilityTool so description bytes match production.
-	proxy := agent.NewUseCapabilityTool(context.Background(), nil, []plugin.Spec{
+	proxy := usecap.NewUseCapabilityTool(context.Background(), nil, []plugin.Spec{
 		{Name: "alpha", Authorized: true},
 		{Name: "beta", Authorized: true},
 	}, parent, nil, nil, nil)
@@ -526,7 +527,7 @@ func TestRestrictedCapabilityProxyDescriptionIsStable(t *testing.T) {
 func TestRestrictedCapabilityProxyListFiltersServers(t *testing.T) {
 	host := plugin.NewHost()
 	defer host.Close()
-	proxy := agent.NewUseCapabilityTool(context.Background(), host, []plugin.Spec{
+	proxy := usecap.NewUseCapabilityTool(context.Background(), host, []plugin.Spec{
 		{Name: "alpha", Authorized: true},
 		{Name: "beta", Authorized: true},
 		{Name: "secret-db", Authorized: true},
@@ -561,7 +562,7 @@ func TestRestrictedCapabilityProxyListFiltersServers(t *testing.T) {
 
 func TestMalformedCapabilityAllowlistDoesNotInstallProxy(t *testing.T) {
 	parent := tool.NewRegistry()
-	parent.Add(agent.NewUseCapabilityTool(context.Background(), nil, []plugin.Spec{
+	parent.Add(usecap.NewUseCapabilityTool(context.Background(), nil, []plugin.Spec{
 		{Name: "alpha", Authorized: true},
 		{Name: "secret-db", Authorized: true},
 	}, parent, nil, nil, nil))

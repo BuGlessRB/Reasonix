@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
@@ -206,11 +207,11 @@ func TestAngleBracketInsideAStringIsValidJSON(t *testing.T) {
 	if !json.Valid([]byte(`{"summary":"A > B"}`)) {
 		t.Fatal("an angle bracket inside a JSON string must stay valid")
 	}
-	contract, ok := readArgumentContract(
+	contract, ok := usecap.ReadArgumentContract(
 		json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"]}`),
 		json.RawMessage(`{"summary":"A > B"}`))
-	if !ok || contract.broken() {
-		t.Fatalf("contract ok=%v broken=%v, want an angle bracket in a string to pass cleanly", ok, contract.broken())
+	if !ok || contract.Broken() {
+		t.Fatalf("contract ok=%v broken=%v, want an angle bracket in a string to pass cleanly", ok, contract.Broken())
 	}
 }
 

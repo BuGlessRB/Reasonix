@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/runtime/promptrefine"
 	"reasonix/internal/runtime/recovery"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/workspacelease"
@@ -93,7 +94,7 @@ type controllerDeps struct {
 	// The Controller keeps the config-facing orchestration. See mcp.go.
 	mcp               mcpManager
 	mcpConfigureSpec  func(*plugin.Spec)
-	capabilityRuntime *agent.MCPCapabilityRuntime
+	capabilityRuntime *usecap.MCPCapabilityRuntime
 	runtimeOwner      *extension.RuntimeOwner
 	ablation          ablation.Set
 

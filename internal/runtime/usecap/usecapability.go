@@ -1,4 +1,4 @@
-package agent
+package usecap
 
 import (
 	"context"
@@ -438,7 +438,7 @@ func (b *runtimeBoundMCPTool) ReadOnly() bool            { return b.target.ReadO
 func (b *runtimeBoundMCPTool) MCPServerAuthorized() bool { return b.authorized }
 func (b *runtimeBoundMCPTool) MCPServerName() string     { return b.server }
 func (b *runtimeBoundMCPTool) MCPRawToolName() string    { return mcpRawToolName(b.target) }
-func (b *runtimeBoundMCPTool) MCPDestructiveHint() bool  { return mcpDestructiveHint(b.target) }
+func (b *runtimeBoundMCPTool) MCPDestructiveHint() bool  { return tool.HasMCPDestructiveHint(b.target) }
 func (b *runtimeBoundMCPTool) MCPVisibleToolName() string {
 	if meta, ok := b.target.(tool.MCPVisibleMetadata); ok {
 		return meta.MCPVisibleToolName()
@@ -867,7 +867,7 @@ func (t *UseCapabilityTool) resolveCall(ctx context.Context, id string, args jso
 	// Server-level call is the first-discovery path for servers with no
 	// schema cache: it resolves to a gated connect-and-list target so the
 	// model can learn tool names without inspect ever starting a process.
-	if server, ok := parseMCPServerCapabilityID(id); ok {
+	if server, ok := ParseMCPServerCapabilityID(id); ok {
 		return t.resolveServerConnect(ctx, server, base)
 	}
 	server, raw, err := parseMCPCapabilityID(id)
@@ -1182,7 +1182,7 @@ func (o *onDemandMCPTool) executeWithImages(ctx context.Context, args json.RawMe
 	// Planner non-destructive lane and reader lane: re-check live metadata
 	// before tools/call even when Reconcile did not see a cache promotion.
 	if tool.HasNonDestructiveMCPExecutionIntent(ctx) {
-		if !mcpServerAuthorized(target) || mcpDestructiveHint(target) {
+		if !tool.IsMCPServerAuthorized(target) || tool.HasMCPDestructiveHint(target) {
 			return "", nil, fmt.Errorf("MCP server %q changed the authorization or destructive classification for tool %q; the call was blocked before dispatch — retry so Reasonix can re-apply the current Planner MCP safety boundary", o.server, o.raw)
 		}
 	}
@@ -1262,7 +1262,7 @@ func (t *UseCapabilityTool) serverToolsForSpec(ctx context.Context, server strin
 			Description: tl.Description(),
 			Schema:      tl.Schema(),
 			ReadOnly:    tl.ReadOnly(),
-			Destructive: mcpDestructiveHint(tl),
+			Destructive: tool.HasMCPDestructiveHint(tl),
 		})
 	}
 	t.ensureState().setLiveTools(server, snap)
@@ -1407,8 +1407,8 @@ func (t *UseCapabilityTool) currentCatalog() capability.Catalog {
 	return capability.Catalog{}
 }
 
-// parseMCPServerCapabilityID extracts the server name from an mcp-server id.
-func parseMCPServerCapabilityID(id string) (string, bool) {
+// ParseMCPServerCapabilityID extracts the server name from an mcp-server id.
+func ParseMCPServerCapabilityID(id string) (string, bool) {
 	if !strings.HasPrefix(id, "mcp-server:") {
 		return "", false
 	}

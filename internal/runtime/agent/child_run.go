@@ -178,7 +178,7 @@ func plannerExecutionRegistry(reg *tool.Registry) *tool.Registry {
 			// Defense in depth: planner never exposes direct MCP schemas.
 			continue
 		}
-		if !target.ReadOnly() || mcpDestructiveHint(target) {
+		if !target.ReadOnly() || tool.HasMCPDestructiveHint(target) {
 			continue
 		}
 		if h, ok := target.(tool.ReadOnlyExecutionHostMutation); ok && h.ReadOnlyExecutionHostMutation() {
@@ -211,10 +211,10 @@ func strictReadOnlyExecutionRegistry(reg *tool.Registry) *tool.Registry {
 	}
 	for _, name := range reg.Names() {
 		target, ok := reg.Get(name)
-		if !ok || !target.ReadOnly() || mcpDestructiveHint(target) {
+		if !ok || !target.ReadOnly() || tool.HasMCPDestructiveHint(target) {
 			continue
 		}
-		if isInstalledMCPTool(target) && !mcpServerAuthorized(target) {
+		if isInstalledMCPTool(target) && !tool.IsMCPServerAuthorized(target) {
 			continue
 		}
 		if mutation, ok := target.(tool.ReadOnlyExecutionHostMutation); ok && mutation.ReadOnlyExecutionHostMutation() && !readOnlyExecutionAllowsMCPStartup(target) {

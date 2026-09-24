@@ -33,6 +33,7 @@ import (
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/coordinator"
 	"reasonix/internal/runtime/guardian"
+	"reasonix/internal/runtime/usecap"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/state/checkpoint"
 	"reasonix/internal/state/memory"
@@ -2856,7 +2857,7 @@ func TestControllerMCPHotLifecycleUpdatesCapabilityRuntime(t *testing.T) {
 	host := plugin.NewHost()
 	defer host.Close()
 	reg := tool.NewRegistry()
-	runtime := agent.NewMCPCapabilityRuntime(context.Background(), host, nil, reg, nil)
+	runtime := usecap.NewMCPCapabilityRuntime(context.Background(), host, nil, reg, nil)
 	ctrl := New(Options{
 		Host: host, Registry: reg, PluginCtx: context.Background(), CapabilityRuntime: runtime,
 	})
@@ -3237,7 +3238,7 @@ tier = "lazy"
 	host := plugin.NewHost()
 	defer host.Close()
 	spec := plugin.Spec{Name: "mock", Command: "mock-mcp", Authorized: true}
-	runtime := agent.NewMCPCapabilityRuntime(context.Background(), host, []plugin.Spec{spec}, reg, nil)
+	runtime := usecap.NewMCPCapabilityRuntime(context.Background(), host, []plugin.Spec{spec}, reg, nil)
 	runtime.ConfigureServers([]config.PluginEntry{{Name: "mock", Command: "mock-mcp"}}, []plugin.Spec{spec}, map[string]bool{"mock": true})
 	c := New(Options{Host: host, Registry: reg, CapabilityRuntime: runtime, WorkspaceRoot: dir})
 
