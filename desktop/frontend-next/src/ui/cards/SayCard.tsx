@@ -125,7 +125,7 @@ export function SayCard({ item, afterAnswer, reply }: { item: Extract<Item, { t:
           )}
           {item.text && (
             <div className="txt">
-              <Boundary fallback={<div className="md">{item.text}</div>}>
+              <Boundary retryKey={item.text} fallback={<div className="md" style={{ whiteSpace: "pre-wrap" }}>{item.text}</div>}>
                 <LazyMarkdown text={item.text} streaming={!item.done} />
               </Boundary>
             </div>
