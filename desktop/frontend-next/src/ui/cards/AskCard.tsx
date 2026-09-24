@@ -4,6 +4,8 @@ import { useState } from "react";
 import { t } from "../../i18n";
 import type { Item } from "../../state/session";
 
+const ADVANCE_MS = 220;
+
 interface Props {
   item: Extract<Item, { t: "ask" }>;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => Promise<void>;
@@ -45,6 +47,16 @@ export function AskCard({ item, onAnswer }: Props) {
 
   const at = <T,>(list: T[], i: number, v: T) => list.map((x, k) => (k === i ? v : x));
 
+  // The next question still waiting for an answer after `from`, wrapping, or -1.
+  // `done` counts one more question as answered than state yet shows.
+  const nextOpen = (from: number, done = -1) => {
+    for (let k = 1; k < qs.length; k++) {
+      const j = (from + k) % qs.length;
+      if (j !== done && !answered(j)) return j;
+    }
+    return -1;
+  };
+
   const toggle = (qi: number, label: string) => {
     if (sealed) return;
     setPicks((prev) => {
@@ -52,7 +64,13 @@ export function AskCard({ item, onAnswer }: Props) {
       const has = prev[qi].includes(label);
       return at(prev, qi, has ? prev[qi].filter((l) => l !== label) : [...prev[qi], label]);
     });
-    if (!qs[qi].multi) setOtherOn((prev) => at(prev, qi, false));
+    if (!qs[qi].multi) {
+      setOtherOn((prev) => at(prev, qi, false));
+      // One pick answers a single-choice question, so the card moves on by
+      // itself; the pause lets the mark land before the pane changes.
+      const next = nextOpen(qi, qi);
+      if (next >= 0) window.setTimeout(() => setTab((cur) => (cur === qi ? next : cur)), ADVANCE_MS);
+    }
   };
 
   const toggleOther = (qi: number) => {
@@ -176,9 +194,23 @@ export function AskCard({ item, onAnswer }: Props) {
                 <button className="dismiss" data-action="ask.answer" data-value="none" disabled={submitting} onClick={() => void send(qs.map(() => []))}>
                   {t("先不选择，直接回复")}
                 </button>
-                <button className="btn" data-primary data-action="ask.answer" data-value="chosen" disabled={left > 0 || submitting} onClick={() => void send(qs.map((_, i) => selected(i)))}>
-                  {submitting ? t("正在提交…") : t("确认")}
-                </button>
+                {qs.length > 1 && tab > 0 && (
+                  <button className="dismiss" data-action="ask.step" data-value="prev" disabled={submitting} onClick={() => setTab(tab - 1)}>
+                    {t("上一题")}
+                  </button>
+                )}
+                {nextOpen(tab, tab) >= 0 ? (
+                  // While another question is still open the primary step is to
+                  // it; it waits for this one to be answered first.
+                  <button className="btn" data-primary data-action="ask.step" data-value="next"
+                    disabled={!answered(tab) || submitting} onClick={() => setTab(nextOpen(tab))}>
+                    {t("下一题（{i}/{n}）", { i: tab + 1, n: qs.length })}
+                  </button>
+                ) : (
+                  <button className="btn" data-primary data-action="ask.answer" data-value="chosen" disabled={left > 0 || submitting} onClick={() => void send(qs.map((_, i) => selected(i)))}>
+                    {submitting ? t("正在提交…") : t("确认")}
+                  </button>
+                )}
               </div>
             )}
           </div>

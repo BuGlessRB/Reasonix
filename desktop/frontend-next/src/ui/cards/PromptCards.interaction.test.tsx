@@ -106,4 +106,44 @@ describe("decision cards", () => {
 
     expect(answer).toHaveBeenCalledWith("row", "ask", [{ questionId: "city", selected: ["深圳"] }]);
   });
+
+  // Several questions are walked, not hunted for: a single-choice pick moves on
+  // by itself, a multi-choice one waits for Next, and Confirm appears only once
+  // every question has an answer.
+  it("steps through several questions without reaching for the tabs", async () => {
+    const answer = vi.fn(pending);
+    const item = {
+      t: "ask", id: "row", ask: { id: "ask", questions: [
+        { id: "mode", header: "方式", prompt: "怎么做", multi: false, options: [{ label: "直接改" }, { label: "先出计划" }] },
+        { id: "scope", header: "范围", prompt: "改哪些", multi: true, options: [{ label: "calc.go" }, { label: "calc_test.go" }] },
+        { id: "style", header: "风格", prompt: "注释", multi: false, options: [{ label: "简短" }, { label: "详细" }] },
+      ] },
+    } as Extract<Item, { t: "ask" }>;
+    render(<AskCard item={item} onAnswer={answer} />);
+    const tab = (name: string) => screen.getByRole("tab", { name: new RegExp(name) });
+
+    expect((screen.getByRole("button", { name: "下一题（1/3）" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: /直接改/ }));
+    await waitFor(() => expect(tab("范围").getAttribute("aria-selected")).toBe("true"));
+
+    await userEvent.click(screen.getByRole("button", { name: /calc_test\.go/ }));
+    expect(tab("范围").getAttribute("aria-selected")).toBe("true");
+    await userEvent.click(screen.getByRole("button", { name: "下一题（2/3）" }));
+    expect(tab("风格").getAttribute("aria-selected")).toBe("true");
+
+    // The last open question offers Confirm, waiting for its answer, not a Next
+    // that leads nowhere.
+    expect((screen.getByRole("button", { name: "确认" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: "上一题" }));
+    expect(tab("范围").getAttribute("aria-selected")).toBe("true");
+    await userEvent.click(tab("风格"));
+    await userEvent.click(screen.getByRole("button", { name: /简短/ }));
+    await userEvent.click(screen.getByRole("button", { name: "确认" }));
+
+    expect(answer).toHaveBeenCalledWith("row", "ask", [
+      { questionId: "mode", selected: ["直接改"] },
+      { questionId: "scope", selected: ["calc_test.go"] },
+      { questionId: "style", selected: ["简短"] },
+    ]);
+  });
 });

@@ -992,6 +992,8 @@ export const EN: Record<string, string> = {
   "无法解析该供应商余额接口返回的内容": "The provider's balance endpoint answered in a shape this build cannot read",
 
   "{n} 个问题": "{n} questions",
+  "上一题": "Previous",
+  "下一题（{i}/{n}）": "Next ({i}/{n})",
   "提交（还差 {n} 项）": "Submit ({n} still to fill)",
   "提交": "Submit",
 
