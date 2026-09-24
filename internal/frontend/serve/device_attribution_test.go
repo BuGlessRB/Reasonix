@@ -72,6 +72,15 @@ func (rig *attributionRig) submit(t *testing.T, input, deviceID string, ordinal 
 	case <-time.After(20 * time.Second):
 		t.Fatalf("the turn for %q never finished", input)
 	}
+	// TurnDone is emitted before the controller lets go of the session, and
+	// the next submit is refused until it has.
+	deadline := time.Now().Add(5 * time.Second)
+	for rig.s.ctrl.Running() {
+		if time.Now().After(deadline) {
+			t.Fatalf("the turn for %q finished but still owns the session", input)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 // A line sent from a phone is the phone's in the record and on the wire: the
