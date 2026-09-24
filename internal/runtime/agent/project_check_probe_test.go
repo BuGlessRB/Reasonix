@@ -1,8 +1,11 @@
 package agent
 
 import (
-	"reasonix/internal/state/sessionstore"
+	"context"
+	"strings"
 	"testing"
+
+	"reasonix/internal/state/sessionstore"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
@@ -75,26 +78,21 @@ func rewriteDeclarationRun(t *testing.T, began, rewrittenTo, ran string) (*proje
 }
 
 // A criterion the task began under cannot be retired by the declaration that
-// required it changing underneath. The gate reads the declaration as it stands
-// and sees nothing owed; the obligations still owe the baseline, and the probe
-// says so by name. This is the mechanism, held to the state it needs; whether a
-// real run reaches that state is a separate question the corpus asks.
-func TestProjectCheckProbeReportsBaselinePreservation(t *testing.T) {
+// required it changing underneath: the gate still owes it, and the probe names
+// the disagreement with the current declaration as baseline preservation.
+func TestProjectCheckBaselineSurvivesARewrittenDeclaration(t *testing.T) {
 	const began, replacement = "go test ./...", "go test ./internal/foo"
 	sink, err := rewriteDeclarationRun(t, began, replacement, replacement)
 
-	// What the probe measures: the turn finalizes. A declaration that no longer
-	// names the criterion is enough to stop being asked for it, and flipping
-	// the gate to the obligations is what changes this line.
-	if err != nil {
-		t.Fatalf("finalization err = %v, want the rewritten declaration to ship — the gap this probe measures", err)
+	if !readinessBlocked(err) {
+		t.Fatalf("finalization err = %v, want the baseline criterion to block", err)
+	}
+	if !strings.Contains(err.Error(), began) {
+		t.Fatalf("readiness error %q does not name the baseline criterion %q", err, began)
 	}
 	probe := sink.last(t)
-	if probe.LegacyBlocked {
-		t.Fatalf("legacy blocked on project checks = true, want false: %+v", probe)
-	}
-	if !probe.CandidateBlocked {
-		t.Fatalf("candidate blocked = false, want the baseline criterion still owed: %+v", probe)
+	if !probe.LegacyBlocked || !probe.CandidateBlocked {
+		t.Fatalf("both derivations must owe the baseline criterion: %+v", probe)
 	}
 	baseline := evidence.VerificationIdentity(began)
 	if got := classOf(probe, baseline); got != event.ProjectCheckBaselinePreservation {
@@ -102,6 +100,43 @@ func TestProjectCheckProbeReportsBaselinePreservation(t *testing.T) {
 	}
 	if classOf(probe, evidence.VerificationIdentity(replacement)) != "" {
 		t.Fatalf("the check that ran is not a disagreement: %+v", probe)
+	}
+}
+
+// Holding the baseline must not turn into a deadlock: once both the criterion
+// the task began under and the one declared now have run, the turn finalizes.
+func TestProjectCheckBaselineAndCurrentBothRunFinalizes(t *testing.T) {
+	const began, replacement = "go test ./...", "go test ./internal/foo"
+	_, err := rewriteDeclarationRun(t, began, replacement, began+" && "+replacement)
+	if err != nil {
+		t.Fatalf("finalization err = %v, want both criteria satisfied to finalize", err)
+	}
+}
+
+// Outside a delivery scope the checkpoint is left over from whatever restored
+// it, so its baseline is not this turn's to owe.
+func TestProjectCheckBaselineIgnoredOutsideItsScope(t *testing.T) {
+	const began, replacement = "go test ./...", "go test ./internal/foo"
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
+	reg.Add(fakeTool{name: "bash", readOnly: false})
+	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+		{
+			toolCallChunk("c1", "write_file", `{"path":"changed.go","content":"package main"}`),
+			{Type: provider.ChunkDone},
+		},
+		{
+			toolCallChunk("c2", "bash", `{"command":"`+replacement+`"}`),
+			{Type: provider.ChunkDone},
+		},
+		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
+	}}
+	a := New(prov, reg, sessionstore.NewSession(""), Options{
+		ProjectChecks: []instruction.VerifyCheck{{Command: replacement, SourcePath: "AGENTS.md", Line: 3}},
+	}, &projectCheckProbeSink{})
+	a.RestoreDeliveryCheckpoint(evidence.DeliveryCheckpoint{ScopeID: "goal-elsewhere", BaselineChecks: []string{began}})
+	if err := a.Run(context.Background(), "edit"); err != nil {
+		t.Fatalf("unscoped turn err = %v, want a restored goal's baseline not to bind it", err)
 	}
 }
 

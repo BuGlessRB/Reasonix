@@ -87,14 +87,17 @@ controller-level test rather than a corpus.
 Until it is run, the bypass is a conditional mechanism with no demonstrated
 production path, and the cutover below has no defect to justify it.
 
-## The cutover this is evidence for
+## What the gate enforces now
 
-The gate keeps enforcement until this corpus shows, across runs:
+The Goal resume path was shown reachable by
+`internal/session/control/goal_resume_project_check_test.go`, and the trust-domain
+rule in `REASONIX.md` settles its authority question: the workspace cannot
+supersede a captured criterion. The gate therefore owes every baseline criterion
+the current declaration no longer names, inside the delivery scope that
+captured it, anchored where the gate already anchors. The rest of the obligation
+derivation is not switched in: a resumed process starts from an empty ledger, and
+the obligations would owe nothing there.
 
-- the known bypass reproduces under the legacy path while the obligation path
-  preserves the baseline;
-- no unexplained `candidate_only` and no unexplained `legacy_only`;
-- the only divergences are `baseline_preservation`, `identity_normalization`,
-  and a `mutation_index` difference the two after-indices explain;
-- and, once every baseline and current obligation is genuinely satisfied, the
-  candidate permits finalization — a bypass fixed into a deadlock is not fixed.
+The probe still runs. The full cutover it is evidence for needs, across runs,
+no unexplained `candidate_only` or `legacy_only`, and a candidate that permits
+finalization once every baseline and current obligation is satisfied.

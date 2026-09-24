@@ -109,20 +109,41 @@ func (a *Agent) declaredChecksRanAfter(writer int) bool {
 	return true
 }
 
-// unmetProjectChecks lists the declared checks that have not run since the
-// latest write, phrased as the instruction that would settle each one.
+// unmetProjectChecks lists the checks that have not run since the latest write,
+// phrased as the instruction that would settle each one: every check declared
+// now, and every one the delivery scope began under that no declaration names.
 func (a *Agent) unmetProjectChecks(writer int) []string {
 	var gaps []string
+	declared := map[string]bool{}
 	for _, check := range a.projectChecks {
 		command := strings.TrimSpace(check.Command)
 		if command == "" {
 			continue
 		}
+		declared[evidence.VerificationIdentity(command)] = true
 		if !a.task.ledger.HasSuccessfulCommandAfter(command, writer) {
 			gaps = append(gaps, fmt.Sprintf("run %q from %s after the latest write", command, finalReadinessCheckSource(check)))
 		}
 	}
+	if !a.deliveryCheckpointApplies() {
+		return gaps
+	}
+	// The workspace cannot supersede a captured criterion, so a declaration
+	// rewritten since the scope began does not retire what it used to name.
+	for _, id := range a.task.checkpoint.BaselineChecks {
+		if declared[id] || a.task.ledger.HasSuccessfulCommandAfter(id, writer) {
+			continue
+		}
+		gaps = append(gaps, fmt.Sprintf("run %q after the latest write: this task began under it, and a changed "+
+			"declaration does not retire a check the task was accepted under", id))
+	}
 	return gaps
+}
+
+// deliveryCheckpointApplies reports whether the checkpoint belongs to the
+// delivery scope this turn runs in, rather than to a scope a restore left behind.
+func (a *Agent) deliveryCheckpointApplies() bool {
+	return a.turn.deliveryScopeActive && a.task.checkpoint.ScopeID == a.task.scopeID
 }
 
 func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
@@ -142,7 +163,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	deliveryMutation := false
 	deliveryVerificationOnly := false
 	checkpoint := a.task.checkpoint
-	checkpointApplies := a.turn.deliveryScopeActive && checkpoint.ScopeID == a.task.scopeID
+	checkpointApplies := a.deliveryCheckpointApplies()
 	if a.deliveryProfile {
 		if mutation, ok := a.mutationBaseline(true); ok {
 			writer, hasWriter = mutation, true
@@ -260,9 +281,9 @@ func (a *Agent) appendIncompleteTodoGap(out *finalReadinessCheck, missing []stri
 	return append(missing, finalReadinessIncompleteTodos(incomplete))
 }
 
-// appendProjectCheckGaps records the project's own declared checks that have
-// not run since the latest write, and shadows the same question against the
-// ledger's obligations without letting the answer reach the gate.
+// appendProjectCheckGaps records the project's checks that have not run since
+// the latest write, and shadows the same question against the ledger's
+// obligations, whose remaining disagreements the probe classifies.
 func (a *Agent) appendProjectCheckGaps(out *finalReadinessCheck, missing []string, writer int) []string {
 	gaps := a.unmetProjectChecks(writer)
 	out.missingProjectChecks += len(gaps)
