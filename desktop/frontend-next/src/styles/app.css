@@ -4686,6 +4686,37 @@
   }
   .rmtadd:hover { border-color: var(--accent); color: var(--text) }
 
+  .share .rmtf { margin-top: 10px }
+  .shareopen { display: grid; gap: 12px; margin-top: 12px }
+  .shareopen .rmtadd { margin-top: 0; justify-self: start }
+  .shareqr { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap }
+  .shareqr img {
+    flex: none; width: 184px; height: 184px; padding: 8px; box-sizing: content-box;
+    background: #fff; border: 1px solid var(--border); border-radius: var(--r-sm);
+    image-rendering: pixelated;
+  }
+  .sharehow { display: grid; gap: 6px; flex: 1; min-width: 22ch }
+  .sharehow .lb { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
+  .sharehow .ds { font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: var(--faint) }
+  .sharehow code { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--muted); overflow-wrap: anywhere }
+  .sharedevs { display: grid; gap: 4px }
+  .sharedev { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 2px; border-top: 1px solid var(--hair) }
+  .sharedev .nm {
+    flex: 1 1 18ch; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--text);
+  }
+  .sharedev .st { flex: none; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .sharedev .rmtlnk {
+    flex: none; border: 0; background: none; cursor: pointer; padding: 0 2px;
+    font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint);
+  }
+  .sharedev .rmtlnk:hover { color: var(--err) }
+  .sharedev .rmtconfirm { flex: 1 1 100%; margin: 0 }
+  .sharewarn {
+    margin: 0; padding: 8px 10px; border-left: 2px solid var(--warn);
+    font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: var(--muted); max-width: 64ch;
+  }
+
   .find .ntimes {
     margin-left: 6px; padding: 0 5px; border-radius: var(--r-pill);
     background: var(--overlay); color: var(--faint);

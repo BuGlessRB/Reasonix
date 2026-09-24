@@ -31,7 +31,7 @@ func (s *Server) permissions(w http.ResponseWriter, _ *http.Request) {
 // ride the same grant as the other host-owned settings: a networked client must
 // not be able to widen its own boundary.
 func (s *Server) savePermissions(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "permissions.editing_disabled", "permission editing is not enabled on this server", nil)
 		return
 	}
@@ -71,7 +71,7 @@ func (s *Server) sandboxSettings(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) saveSandboxSettings(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "sandbox.editing_disabled", "sandbox editing is not enabled on this server", nil)
 		return
 	}

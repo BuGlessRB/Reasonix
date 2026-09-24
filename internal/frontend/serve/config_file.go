@@ -14,8 +14,8 @@ func (s *Server) registerConfigFileRoutes(mux *http.ServeMux) {
 // once instead of each panel learning it from its own refused save. It rides
 // the edit grant despite only reading: it returns a line of the file as
 // written, and the line that stopped the parser may be the one holding a key.
-func (s *Server) configProblem(w http.ResponseWriter, _ *http.Request) {
-	if !s.grants.providerEdit {
+func (s *Server) configProblem(w http.ResponseWriter, r *http.Request) {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "config.editing_disabled", "config editing is not enabled on this server", nil)
 		return
 	}
@@ -27,7 +27,7 @@ func (s *Server) configProblem(w http.ResponseWriter, _ *http.Request) {
 // provider-edit grant with every other route that writes the config of the
 // machine the kernel runs on.
 func (s *Server) repairConfigFile(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "config.editing_disabled", "config editing is not enabled on this server", nil)
 		return
 	}

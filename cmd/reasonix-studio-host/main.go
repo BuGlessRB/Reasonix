@@ -307,6 +307,13 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 	browserHost := serve.NewBrowserHost()
 	boot.SetBrowserHost(browserHost.Dial)
 	hubCfg := hostServeConfig(cfg.Serve)
+	// Shut until the person at the window opens it; the context ending closes
+	// it with the rest of the kernel, unpairing every device.
+	share := serve.NewDeviceShare(page)
+	go func() {
+		<-ctx.Done()
+		share.Close()
+	}()
 	hub := serve.NewHub(serve.HubOptions{
 		Serve:         hubCfg,
 		Surface:       surface.Desktop,
@@ -321,7 +328,9 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 		OnClose:       func(rt *serve.Runtime) { tracker.Drop(paneKey(rt.Events)) },
 		Install:       studioInstall(shell),
 		Update:        studioUpdateHost(shell, handshakeTo),
+		Share:         share,
 	})
+	share.Attach(hub.Handler())
 	srv := serve.New(built.Controller, bc, hubCfg)
 	srv.SetPaneSink(paneSink)
 	srv.AdoptRuntime(built)

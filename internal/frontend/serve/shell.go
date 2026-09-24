@@ -21,7 +21,7 @@ func (s *Server) shellSettings(w http.ResponseWriter, _ *http.Request) {
 // the machine running the kernel — a networked client must not pick which
 // program the agent's commands are handed to.
 func (s *Server) saveShellSettings(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "shell.editing_disabled", "shell editing is not enabled on this server", nil)
 		return
 	}

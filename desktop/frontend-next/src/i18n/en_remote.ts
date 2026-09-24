@@ -113,4 +113,21 @@ export const EN_REMOTE: Record<string, string> = {
   "无法连接 —— 解决上述任意一项即可": "Not ready — clearing any one of the above is enough",
   "读取 {name} 上的会话": "Read the sessions on {name}",
   "刷新 {name} 上的会话": "Refresh the sessions on {name}",
+
+  // ── 手机访问 ─────────────────────────────────────────────────
+  "手机访问": "Phone access",
+  "允许手机访问": "Allow phones to connect",
+  "这台电脑现在没有局域网地址，连上 Wi-Fi 或网线后再试。": "This computer has no private network address right now. Connect to Wi-Fi or Ethernet and try again.",
+  "手机和这台电脑在同一个网络里，扫码后就能看会话、发消息、批准操作。关闭或退出 Studio 会断开所有手机。": "A phone on the same network as this computer can scan a code to follow sessions, send messages and approve actions. Turning this off or quitting Studio disconnects every phone.",
+  "虚拟网卡": "virtual adapter",
+  "配对二维码": "Pairing QR code",
+  "用手机相机扫码": "Scan with your phone's camera",
+  "二维码只能配对一台手机，{time} 前有效。别把它发到群里或截图外传。": "The code pairs one phone and is valid until {time}. Do not post it to a group chat or share a screenshot of it.",
+  "显示配对二维码": "Show a pairing code",
+  "未知设备": "Unknown device",
+  "{time} 配对 · 最近 {seen}": "Paired {time} · last seen {seen}",
+  "断开这台手机？它需要重新扫码才能再连上。": "Disconnect this phone? It will need to scan a new code to connect again.",
+  "断开": "Disconnect",
+  "还没有手机连上来。": "No phone is connected yet.",
+  "连接走的是局域网里的明文 HTTP：同一个网络里的其他人能看到传输内容。在自己家里可以用，咖啡馆、机场这类公共网络不要开。Tailscale 地址的流量本身是加密的。": "The connection is plain HTTP on your local network, so others on the same network can read it. Fine at home; do not turn it on at a café, an airport or any other public network. Traffic to a Tailscale address is already encrypted.",
 };

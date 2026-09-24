@@ -128,7 +128,7 @@ func (s *Server) storage(w http.ResponseWriter, r *http.Request) {
 			VolumeFree: root.Volume.Free, VolumeTotal: root.Volume.Total,
 		})
 	}
-	body := map[string]any{"roots": out, "editable": s.grants.providerEdit}
+	body := map[string]any{"roots": out, "editable": s.grants.at(r).providerEdit}
 	if dir, names := storage.LeftBehind(); len(names) > 0 {
 		body["leftBehind"] = map[string]any{"dir": dir, "names": names}
 	}
@@ -157,7 +157,7 @@ func (s *Server) storagePlan(w http.ResponseWriter, r *http.Request) {
 // reports the rest through GET /storage: a move copies gigabytes, and holding
 // the request open for it would leave the panel unable to say anything.
 func (s *Server) storageMove(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "storage.moving_disabled", "moving data is not enabled on this server", nil)
 		return
 	}

@@ -148,8 +148,8 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 		Isolated bool            `json:"isolated,omitempty"`
 	}{
 		Current:  current,
-		Switch:   s.grants.workspaceSwitch,
-		Isolate:  s.grants.workspaceSwitch && worktree.Inspect(r.Context(), current).Available,
+		Switch:   s.grants.at(r).workspaceSwitch,
+		Isolate:  s.grants.at(r).workspaceSwitch && worktree.Inspect(r.Context(), current).Available,
 		Recents:  recents,
 		Isolated: worktree.IsManagedPath(current, config.DeliveryWorktreeDir()),
 	})
@@ -159,7 +159,7 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 // deliberately not carried: the transcript, the memory index, and the skill set
 // all belong to the project that produced them.
 func (s *Server) workspace(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.workspaceSwitch {
+	if !s.grants.at(r).workspaceSwitch {
 		refuse(w, http.StatusForbidden, "workspace.changing_disabled", "this server may not change its workspace", nil)
 		return
 	}

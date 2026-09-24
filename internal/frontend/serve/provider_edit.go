@@ -15,7 +15,7 @@ import (
 // from the form would drop every field the form cannot show — per-model prices,
 // effort vocabularies, context windows, headers, the preset it came from.
 func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
@@ -256,7 +256,7 @@ func visionSettableOf(cfg *config.Config, p *config.ProviderEntry) []string {
 // that reject an unknown thinking/reasoning_effort field fail every request
 // until this is off, and the endpoint's own error rarely names the field.
 func (s *Server) setProviderThinking(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
@@ -291,7 +291,7 @@ func (s *Server) setProviderThinking(w http.ResponseWriter, r *http.Request) {
 // until this is stateless. Declared rather than probed: a retry that happens to
 // succeed says nothing about why the first attempt did not.
 func (s *Server) setProviderContinuation(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
@@ -329,7 +329,7 @@ func (s *Server) setProviderContinuation(w http.ResponseWriter, r *http.Request)
 // tool. It is a real per-entry choice, unlike the protocol: the wire format is
 // what makes it available, and this only says whether to use it.
 func (s *Server) setProviderWebSearch(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}

@@ -220,6 +220,10 @@ export const SETTINGS: SettingEntry[] = [
 
   { section: "network", anchor: "network", title: "网络", scope: "machine", apply: "immediate", keywords: ["代理", "proxy", "抓取", "超时"] },
   { section: "remote", anchor: "remote", title: "远程", scope: "machine", apply: "immediate", keywords: ["ssh", "机器", "远端工作区"] },
+  // Machine rather than session: the door is this window's, and a phone that
+  // walks through it reaches every pane. Nothing is written, so nothing outlives
+  // the window either.
+  { section: "remote", anchor: "phone", title: "手机访问", scope: "machine", apply: "immediate", keywords: ["手机", "扫码", "二维码", "局域网", "配对", "phone", "mobile", "qr"] },
   { section: "account", anchor: "account", title: "账号", scope: "account", apply: "immediate", keywords: ["登录", "社区"] },
   { section: "versions", anchor: "versions", title: "版本", scope: "machine", apply: "immediate", keywords: ["更新", "升级"] },
   { section: "memory", anchor: "memory", title: "记忆", scope: "chosen", apply: "immediate", keywords: ["记住", "忘记", "事实"] },

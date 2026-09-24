@@ -1,5 +1,6 @@
 import { HttpError, type AgentPort } from "./port";
 import type { RemoteAsk, RemoteHost, RemoteHostEdit, RemoteListing, RemoteProbe } from "./remote";
+import type { ShareOffer, SharePort, ShareStatus } from "./share";
 import { SsePort } from "./sse";
 
 // How often a client waiting on a dial looks for the question it might be
@@ -60,7 +61,7 @@ export interface TreeWorkspace {
 
 // HubPort is the window's view of the kernel: which panes it drives and which
 // folders it can open. One AgentPort hangs off each pane.
-export interface HubPort {
+export interface HubPort extends SharePort {
   runtimes(): Promise<RuntimeView[]>;
   open(req: { root?: string; sessionPath?: string }): Promise<RuntimeView>;
   close(id: string): Promise<void>;
@@ -222,8 +223,9 @@ export class SseHub implements HubPort {
 
   async remoteHosts() {
     const res = await fetch("/remotes", { credentials: "same-origin" });
-    // Not an error to report: this kernel simply does not do remote panes.
-    if (res.status === 501) return null;
+    // Not an error to report: this kernel does not do remote panes, or answers
+    // a paired device, which the window's own routes are not found for.
+    if (res.status === 501 || res.status === 404) return null;
     if (!res.ok) await SseHub.fail("/remotes", res);
     return (await res.json()) as RemoteHost[];
   }
@@ -354,10 +356,33 @@ export class SseHub implements HubPort {
       credentials: "same-origin",
       body: "{}",
     });
-    if (res.status === 501) return null;
+    if (res.status === 501 || res.status === 404) return null;
     if (!res.ok) await SseHub.fail("/host/pick-folder", res);
     const body = (await res.json()) as { path?: string };
     return body.path ?? "";
+  }
+
+  async shareStatus() {
+    const res = await fetch("/share", { credentials: "same-origin" });
+    if (res.status === 404) return null;
+    if (!res.ok) await SseHub.fail("/share", res);
+    return (await res.json()) as ShareStatus;
+  }
+
+  openShare(ip: string) {
+    return this.post<ShareStatus>("/share/open", { ip });
+  }
+
+  closeShare() {
+    return this.post<ShareStatus>("/share/close", {});
+  }
+
+  offerShare() {
+    return this.post<ShareOffer>("/share/offer", {});
+  }
+
+  revokeDevice(id: string) {
+    return this.post<ShareStatus>("/share/revoke", { id });
   }
 
   portFor(rt: RuntimeView): AgentPort {

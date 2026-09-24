@@ -182,7 +182,7 @@ func (s *Server) providerProtocols(w http.ResponseWriter, _ *http.Request) {
 // probeProvider reports what an endpoint turns out to be. It writes nothing:
 // the user sees the guesses and confirms them before anything is saved.
 func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
@@ -235,7 +235,7 @@ func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
 // store, never into the config file — a config is something a user pastes into
 // an issue.
 func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
@@ -316,7 +316,7 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) removeProvider(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}

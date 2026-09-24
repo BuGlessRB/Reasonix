@@ -1,6 +1,7 @@
 import type { AgentPort } from "./port";
 import type { HubPort, RuntimeView, TreeWorkspace } from "./hub";
 import type { RemoteHost, RemoteListing, RemoteProbe } from "./remote";
+import type { ShareStatus } from "./share";
 import { MockPort } from "./mock";
 
 // MockHub is the fixture's answer to a window that drives several panes. Each
@@ -214,6 +215,42 @@ export class MockHub implements HubPort {
 
   pickFolder() {
     return Promise.resolve<string | null>("~/projects/mock-workspace");
+  }
+
+  private share: ShareStatus = {
+    open: false,
+    addresses: [
+      { interface: "Wi-Fi", ip: "192.168.1.20", kind: "lan" },
+      { interface: "Tailscale", ip: "100.101.7.3", kind: "tailnet" },
+      { interface: "vEthernet (WSL)", ip: "172.28.160.1", kind: "virtual" },
+    ],
+    devices: [],
+  };
+
+  shareStatus() {
+    return Promise.resolve<ShareStatus | null>({ ...this.share });
+  }
+
+  openShare(ip: string) {
+    this.share = { ...this.share, open: true, origin: `http://${ip}:41234`, devices: [] };
+    return Promise.resolve({ ...this.share });
+  }
+
+  closeShare() {
+    this.share = { ...this.share, open: false, origin: undefined, devices: [], offerExpires: undefined };
+    return Promise.resolve({ ...this.share });
+  }
+
+  offerShare() {
+    const expires = new Date(Date.now() + 5 * 60_000).toISOString();
+    this.share = { ...this.share, offerExpires: expires };
+    const qr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><rect width="29" height="29" fill="#fff"/><path fill="#000" d="M4 4h7v7h-7zM18 4h7v7h-7zM4 18h7v7h-7zM13 13h3v3h-3z"/></svg>`;
+    return Promise.resolve({ url: `${this.share.origin}/#pair=mock-code`, qr, expires });
+  }
+
+  revokeDevice(id: string) {
+    this.share = { ...this.share, devices: this.share.devices.filter((d) => d.id !== id) };
+    return Promise.resolve({ ...this.share });
   }
 
   portFor(rt: RuntimeView): AgentPort {

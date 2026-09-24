@@ -69,7 +69,7 @@ func servedRoutes(t *testing.T) [][]string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	route := regexp.MustCompile(`mux\.HandleFunc\("(?:\w+ )?(/[^"]*)"`)
+	route := regexp.MustCompile(`(?:mux|hostMux)\.HandleFunc\("(?:\w+ )?(/[^"]*)"`)
 	var out [][]string
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {

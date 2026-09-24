@@ -49,7 +49,7 @@ func (s *Server) registerProviderCheckRoutes(mux *http.ServeMux) {
 // "is this key still good, and is it still the protocol we recorded" is one
 // button rather than a delete and a re-add.
 func (s *Server) checkProvider(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
@@ -116,7 +116,7 @@ type providerModelCheck struct {
 // asks for it. A model need not appear in the saved or remote catalog: the
 // exact caller-supplied ID is put on the wire and nothing is persisted.
 func (s *Server) checkProviderModel(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}

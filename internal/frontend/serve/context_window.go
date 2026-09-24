@@ -44,7 +44,7 @@ func (s *Server) contextView() contextView {
 // catalogue can answer what that model holds — only whoever bought it can, and
 // until they say, the gauge has no denominator and compaction stays off.
 func (s *Server) setContextWindow(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}

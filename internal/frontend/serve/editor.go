@@ -23,8 +23,8 @@ const (
 // openInEditor opens this runtime's workspace, not a path the client names:
 // the kernel already knows which directory it is driving, and taking one from
 // the request would make this a way to open anything on the machine.
-func (s *Server) openInEditor(w http.ResponseWriter, _ *http.Request) {
-	if !s.grants.editorOpen {
+func (s *Server) openInEditor(w http.ResponseWriter, r *http.Request) {
+	if !s.grants.at(r).editorOpen {
 		refuse(w, http.StatusForbidden, codeEditorNoWindow, "this kernel has no window to open an editor from", nil)
 		return
 	}

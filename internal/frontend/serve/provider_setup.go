@@ -105,6 +105,10 @@ func (s *Server) providerSetupSnapshot() (providerSetupState, bool) {
 
 func (s *Server) providerSetupStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
+	if !hostReach(r) {
+		http.NotFound(w, r)
+		return
+	}
 	setup, ok := s.providerSetupSnapshot()
 	if !ok {
 		http.NotFound(w, r)
@@ -115,6 +119,12 @@ func (s *Server) providerSetupStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) providerSetupSave(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
+	// The surface opens for the listener the host named, and a device reaches
+	// the same handler through another one.
+	if !hostReach(r) {
+		refuse(w, http.StatusNotFound, codeDeviceHostOnly, "a paired device cannot use this", nil)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, providerSetupMaxBody)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()

@@ -1,0 +1,179 @@
+import { useCallback, useEffect, useState } from "react";
+import { t } from "../i18n";
+import type { HubPort } from "../port/hub";
+import type { ShareOffer, ShareStatus } from "../port/share";
+import { ApplyNote } from "./Group";
+import { Switch } from "./Switch";
+
+interface Props {
+  hub: HubPort;
+  onError: (e: unknown) => void;
+}
+
+// While the door is open the list is what changes under the reader: a phone
+// pairs, the code on screen is spent. Nothing pushes that, so it is read.
+const POLL_MS = 3000;
+
+function clock(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/** A phone on the same network drives this window's panes. Nothing here is
+ *  kept: the door shuts with the window, and shutting it unpairs every phone. */
+export function PhoneAccess({ hub, onError }: Props) {
+  const [st, setSt] = useState<ShareStatus | null>(null);
+  const [ip, setIp] = useState("");
+  const [offer, setOffer] = useState<ShareOffer | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState("");
+
+  const read = useCallback(() => hub.shareStatus().then(setSt), [hub]);
+
+  useEffect(() => {
+    read().catch(() => setSt(null));
+  }, [read]);
+
+  useEffect(() => {
+    if (!st?.open) return;
+    const timer = setInterval(() => read().catch(() => {}), POLL_MS);
+    return () => clearInterval(timer);
+  }, [st?.open, read]);
+
+  // The kernel withdraws a code once it pairs or lapses; the picture of it has
+  // to go too, or the next phone scans a code that can no longer work.
+  useEffect(() => {
+    if (offer && st && !st.offerExpires) setOffer(null);
+  }, [st, offer]);
+
+  const run = useCallback(
+    async (step: () => Promise<void>) => {
+      setBusy(true);
+      try {
+        await step();
+      } catch (e) {
+        onError(e);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onError],
+  );
+
+  const newCode = () => run(async () => {
+    setOffer(await hub.offerShare());
+    await read();
+  });
+
+  const toggle = () => run(async () => {
+    if (st?.open) {
+      setOffer(null);
+      setSt(await hub.closeShare());
+      return;
+    }
+    const at = ip || st?.addresses[0]?.ip || "";
+    setSt(await hub.openShare(at));
+    setOffer(await hub.offerShare());
+    await read();
+  });
+
+  // A settings page must not grow a heading for a door this kernel cannot open.
+  if (!st) return null;
+  const chosen = ip || (st.open ? st.origin?.replace(/^https?:\/\//, "").replace(/:\d+$/, "") : "") || st.addresses[0]?.ip || "";
+  const noNetwork = st.addresses.length === 0;
+
+  return (
+    <section className="grp" id="set-phone" data-setting="phone">
+      <div className="grp-hd">
+        <h3>{t("手机访问")}</h3>
+      </div>
+      <div className="grp-items share">
+      <div className="lrow">
+        <span className="tx">
+          <span className="lb">{t("允许手机访问")}</span>
+          <span className="ds">
+            {noNetwork
+              ? t("这台电脑现在没有局域网地址，连上 Wi-Fi 或网线后再试。")
+              : t("手机和这台电脑在同一个网络里，扫码后就能看会话、发消息、批准操作。关闭或退出 Studio 会断开所有手机。")}
+          </span>
+        </span>
+        <Switch data-action="share.toggle" on={st.open} busy={busy || noNetwork} label={t("允许手机访问")} onClick={() => void toggle()} />
+      </div>
+
+      {st.addresses.length > 1 && (
+        <label className="rmtf">
+          <span>{t("网络")}</span>
+          <select
+            data-action="share.address"
+            value={chosen}
+            disabled={busy || st.open}
+            onChange={(e) => setIp(e.target.value)}
+          >
+            {st.addresses.map((a) => (
+              <option key={a.ip} value={a.ip}>
+                {a.kind === "tailnet" ? `${a.ip} · Tailscale` : a.kind === "virtual" ? `${a.ip} · ${a.interface} · ${t("虚拟网卡")}` : `${a.ip} · ${a.interface}`}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {st.open && (
+        <div className="shareopen">
+          {offer ? (
+            <div className="shareqr">
+              <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(offer.qr)}`} alt={t("配对二维码")} width={184} height={184} />
+              <div className="sharehow">
+                <span className="lb">{t("用手机相机扫码")}</span>
+                <span className="ds">{t("二维码只能配对一台手机，{time} 前有效。别把它发到群里或截图外传。", { time: clock(offer.expires) })}</span>
+                <code dir="ltr">{st.origin}</code>
+              </div>
+            </div>
+          ) : (
+            <button className="rmtadd" data-action="share.offer" disabled={busy} onClick={() => void newCode()}>
+              {t("显示配对二维码")}
+            </button>
+          )}
+
+          <div className="sharedevs">
+            {st.devices.map((d) => (
+              <div className="sharedev" key={d.id}>
+                <span className="nm" title={d.name}>{d.name || t("未知设备")}</span>
+                <span className="st">{t("{time} 配对 · 最近 {seen}", { time: clock(d.pairedAt), seen: clock(d.lastSeen) })}</span>
+                {confirm === d.id ? (
+                  <span className="rmtconfirm" role="alertdialog">
+                    <span>{t("断开这台手机？它需要重新扫码才能再连上。")}</span>
+                    <button data-action="share.keep" data-target={d.id} onClick={() => setConfirm("")}>{t("取消")}</button>
+                    <button
+                      data-danger=""
+                      data-action="share.revoke"
+                      data-target={d.id}
+                      autoFocus
+                      onClick={() => {
+                        setConfirm("");
+                        void run(async () => setSt(await hub.revokeDevice(d.id)));
+                      }}
+                    >
+                      {t("断开")}
+                    </button>
+                  </span>
+                ) : (
+                  <button className="rmtlnk" data-danger="" data-action="share.ask-revoke" data-target={d.id} onClick={() => setConfirm(d.id)}>
+                    {t("断开")}
+                  </button>
+                )}
+              </div>
+            ))}
+            {st.devices.length === 0 && <p className="rmtempty">{t("还没有手机连上来。")}</p>}
+          </div>
+
+          <p className="sharewarn">
+            {t("连接走的是局域网里的明文 HTTP：同一个网络里的其他人能看到传输内容。在自己家里可以用，咖啡馆、机场这类公共网络不要开。Tailscale 地址的流量本身是加密的。")}
+          </p>
+        </div>
+      )}
+      </div>
+      <ApplyNote id="phone" />
+    </section>
+  );
+}

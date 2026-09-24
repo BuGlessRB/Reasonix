@@ -165,6 +165,9 @@ type HubOptions struct {
 	// inside one. Nil leaves the update routes unregistered: owning the
 	// application is what makes replacing it this process's business.
 	Update UpdateHost
+	// Share is the window's door for paired devices. Nil leaves its routes
+	// unregistered: a networked server has no window to open one from.
+	Share *DeviceShare
 }
 
 // OpenRequest asks for a runtime. An empty SessionPath opens a fresh session in
@@ -475,28 +478,32 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("GET /runtimes", h.listRuntimes)
 	mux.HandleFunc("POST /runtimes", h.openRuntime)
 	mux.HandleFunc("POST /runtimes/{id}/close", h.closeRuntime)
-	mux.HandleFunc("POST /host/pick-folder", h.pickLocalFolderHTTP)
-	mux.HandleFunc("GET /remotes", h.listRemoteHosts)
-	mux.HandleFunc("POST /remotes", h.saveRemoteHost)
-	mux.HandleFunc("GET /remotes/candidates", h.remoteCandidates)
-	mux.HandleFunc("GET /remotes/{host}/tree", h.remoteTree)
-	mux.HandleFunc("POST /remotes/{host}/sessions/remove", h.removeRemoteSession)
-	mux.HandleFunc("GET /remotes/{host}/dirs", h.remoteDirs)
-	mux.HandleFunc("GET /remotes/{host}/probe", h.remoteProbe)
-	mux.HandleFunc("POST /remotes/{host}/workspaces", h.addRemoteWorkspace)
-	mux.HandleFunc("POST /remotes/{host}/workspaces/remove", h.removeRemoteWorkspace)
-	mux.HandleFunc("POST /remotes/remove", h.removeRemoteHost)
-	mux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
 	h.registerTreeRoutes(mux)
-	h.registerTrayRoutes(mux)
-	h.registerNotifyRoutes(mux)
-	h.registerBrowserHostRoutes(mux)
 	h.registerStudioVersionRoutes(mux)
-	h.registerUpdateRoutes(mux)
-	h.registerAskRoutes(mux)
 	mux.HandleFunc(runtimePrefix+"{id}/", h.routeRuntime)
 	mux.HandleFunc("/", h.routeDefault)
-	return logMiddleware(h.auth.middleware(withPage(csrfGuard(mux), h.opts.Page)))
+	// What acts on the machine behind the window, or dials onward from it,
+	// stays the window's: a paired device reaches the rest.
+	hostMux := http.NewServeMux()
+	hostMux.HandleFunc("POST /host/pick-folder", h.pickLocalFolderHTTP)
+	hostMux.HandleFunc("GET /remotes", h.listRemoteHosts)
+	hostMux.HandleFunc("POST /remotes", h.saveRemoteHost)
+	hostMux.HandleFunc("GET /remotes/candidates", h.remoteCandidates)
+	hostMux.HandleFunc("GET /remotes/{host}/tree", h.remoteTree)
+	hostMux.HandleFunc("POST /remotes/{host}/sessions/remove", h.removeRemoteSession)
+	hostMux.HandleFunc("GET /remotes/{host}/dirs", h.remoteDirs)
+	hostMux.HandleFunc("GET /remotes/{host}/probe", h.remoteProbe)
+	hostMux.HandleFunc("POST /remotes/{host}/workspaces", h.addRemoteWorkspace)
+	hostMux.HandleFunc("POST /remotes/{host}/workspaces/remove", h.removeRemoteWorkspace)
+	hostMux.HandleFunc("POST /remotes/remove", h.removeRemoteHost)
+	hostMux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
+	h.registerTrayRoutes(hostMux)
+	h.registerNotifyRoutes(hostMux)
+	h.registerBrowserHostRoutes(hostMux)
+	h.registerUpdateRoutes(hostMux)
+	h.registerAskRoutes(hostMux)
+	h.registerShareRoutes(hostMux)
+	return logMiddleware(h.auth.middleware(withPage(csrfGuard(hostOnly(hostMux, mux)), h.opts.Page)))
 }
 
 func (h *Hub) listRuntimes(w http.ResponseWriter, _ *http.Request) {

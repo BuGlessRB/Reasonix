@@ -21,6 +21,7 @@ const (
 	tsModelFile    = "desktop/frontend-next/src/port/model.ts"
 	tsMcpFile      = "desktop/frontend-next/src/port/mcp.ts"
 	tsShellFile    = "desktop/frontend-next/src/port/shell.ts"
+	tsShareFile    = "desktop/frontend-next/src/port/share.ts"
 )
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
@@ -57,6 +58,12 @@ var mirroredWireTypes = []wireMirror{
 	// the kernel side and not on this one, so a reopened session drew
 	// use_capability where the live one drew what it reached.
 	{"internal/frontend/serve/history.go", "historyToolCall", tsSessionFile, "HistoryToolCall"},
+	// Who can reach this window from another device. A device the page cannot
+	// list is one the person at the window cannot see to disconnect.
+	{"internal/frontend/serve/device_share.go", "ShareStatus", tsShareFile, "ShareStatus"},
+	{"internal/frontend/serve/device_share.go", "ShareAddress", tsShareFile, "ShareAddress"},
+	{"internal/frontend/serve/device_share.go", "ShareOffer", tsShareFile, "ShareOffer"},
+	{"internal/frontend/serve/device_registry.go", "DeviceView", tsShareFile, "PairedDevice"},
 	{"internal/session/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
 	// The MCP row: a status the host answered with and the page cannot read is a
 	// row that goes back to reading the server's own prose for it.

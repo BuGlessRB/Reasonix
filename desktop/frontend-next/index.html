@@ -22,18 +22,21 @@
       // browser never sends. Trading it for the cookie has to happen before the
       // bundle makes its first request, and the fragment is wiped from the
       // address bar and history on the way past so it cannot be copied on.
+      // A scanned pairing link carries a one-time code the same way.
       window.__rxAuth = (function () {
         try {
           var f = new URLSearchParams(window.location.hash.slice(1));
           var token = f.get("token");
-          if (!token) return Promise.resolve();
+          var pair = f.get("pair");
+          if (!token && !pair) return Promise.resolve();
           f.delete("token");
+          f.delete("pair");
           var rest = f.toString();
           window.history.replaceState(null, "", window.location.pathname + window.location.search + (rest ? "#" + rest : ""));
-          return fetch("/auth/token", {
+          return fetch(pair ? "/pair" : "/auth/token", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ token: token }),
+            body: JSON.stringify(pair ? { code: pair } : { token: token }),
           }).then(function () {});
         } catch (e) {
           return Promise.resolve();

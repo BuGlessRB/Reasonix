@@ -8,6 +8,7 @@ import "./styles/app.css";
 import "./styles/studio.css";
 import { App } from "./ui/App";
 import { SseHub } from "./port/hub";
+import { HttpError } from "./port/http_error";
 import type { HubPort } from "./port/hub";
 import { install as installFileDrop } from "./ui/filedrop";
 import { host } from "./port/host";
@@ -24,7 +25,14 @@ async function pick(): Promise<HubPort> {
     // pane closed, which is when a reload has to find the kernel again.
     const res = await fetch("/runtimes", { credentials: "same-origin" });
     if (res.ok && (res.headers.get("content-type") ?? "").includes("json")) return new SseHub();
-  } catch {
+    // A kernel that answered and refused: a phone that is not paired, or no
+    // longer is. Its code says which, and "cannot reach" would say neither.
+    if (res.status === 401) {
+      const body = (await res.json().catch(() => null)) as { code?: string; error?: string } | null;
+      if (body?.code) throw new HttpError(res.status, body.error ?? "", body);
+    }
+  } catch (e) {
+    if (e instanceof HttpError) throw e;
     // no serve reachable
   }
   // A shipped build is served by the kernel it talks to. Falling back to the

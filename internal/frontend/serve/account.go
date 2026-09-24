@@ -38,7 +38,7 @@ func accountsBaseURL() string { return strings.TrimSpace(os.Getenv("REASONIX_ACC
 // error, and an unreachable identity service is reported as itself so the UI
 // never tells a signed-in user to sign in again because a worker was down.
 func (s *Server) account(w http.ResponseWriter, r *http.Request) {
-	if !s.accountAuthAllowed(w) {
+	if !s.accountAuthAllowed(w, r) {
 		return
 	}
 	token := account.Token()
@@ -67,7 +67,7 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 // exactly as it does for the CLI: it is the client's half of the exchange and
 // is worthless without the human approving the user code in a browser.
 func (s *Server) accountLogin(w http.ResponseWriter, r *http.Request) {
-	if !s.accountAuthAllowed(w) {
+	if !s.accountAuthAllowed(w, r) {
 		return
 	}
 	client, err := s.accountClient()
@@ -93,7 +93,7 @@ func (s *Server) accountLogin(w http.ResponseWriter, r *http.Request) {
 // accountPoll answers one poll. The frontend drives the loop so it can show a
 // live "waiting" state and cancel; the kernel only stores the token that ends it.
 func (s *Server) accountPoll(w http.ResponseWriter, r *http.Request) {
-	if !s.accountAuthAllowed(w) {
+	if !s.accountAuthAllowed(w, r) {
 		return
 	}
 	var req struct {
@@ -127,7 +127,7 @@ func (s *Server) accountPoll(w http.ResponseWriter, r *http.Request) {
 // accountLogout revokes the session and forgets the token. Revoking remotely is
 // best effort: an offline machine must still be able to sign out.
 func (s *Server) accountLogout(w http.ResponseWriter, r *http.Request) {
-	if !s.accountAuthAllowed(w) {
+	if !s.accountAuthAllowed(w, r) {
 		return
 	}
 	if token := account.Token(); token != "" {
@@ -142,8 +142,8 @@ func (s *Server) accountLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) accountAuthAllowed(w http.ResponseWriter) bool {
-	if s.grants.accountAuth {
+func (s *Server) accountAuthAllowed(w http.ResponseWriter, r *http.Request) bool {
+	if s.grants.at(r).accountAuth {
 		return true
 	}
 	refuse(w, http.StatusForbidden, "account.signin_disabled", "account sign-in is not enabled for this server", nil)

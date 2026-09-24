@@ -47,7 +47,7 @@ func (s *Server) roles(w http.ResponseWriter, _ *http.Request) {
 // write the configuration of the machine running the kernel, which is the one
 // thing a server reachable over a network must not let a client do.
 func (s *Server) setRole(w http.ResponseWriter, r *http.Request) {
-	if !s.grants.providerEdit {
+	if !s.grants.at(r).providerEdit {
 		refuse(w, http.StatusForbidden, "roles.editing_disabled", "role editing is not enabled on this server", nil)
 		return
 	}

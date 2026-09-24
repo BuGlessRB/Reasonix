@@ -9,6 +9,7 @@ import { ICON, NAV, SECTION_NAME, SETTINGS, settingMatches } from "./prefsnav";
 import { Group, SCOPE_SAID } from "./Group";
 import type { Section } from "./prefsnav";
 import { AddServer } from "./AddServer";
+import { PhoneAccess } from "./PhoneAccess";
 import { Remotes } from "./Remotes";
 import type { HubPort } from "../port/hub";
 import type { RemoteHost } from "../port/remote";
@@ -717,6 +718,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
               <Remotes hub={hub} onError={onError} />
             </Group>
           )}
+          {at === "remote" && <PhoneAccess hub={hub} onError={onError} />}
 
           {at === "account" && (
             <Group id="account"
