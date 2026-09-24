@@ -510,18 +510,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 			if len(pl.Env) > 0 {
 				fmt.Fprintf(&b, "env     = %s\n", renderStringMap(pl.Env))
 			}
-			if pl.StartupTimeoutSeconds > 0 {
-				b.WriteString("# Per-server MCP initialize + tools/list timeout; 0 keeps the global/default cap.\n")
-				fmt.Fprintf(&b, "startup_timeout_seconds = %d\n", pl.StartupTimeoutSeconds)
-			}
-			if pl.CallTimeoutSeconds > 0 {
-				b.WriteString("# Per-server MCP call timeout; 0 keeps the global/default cap.\n")
-				fmt.Fprintf(&b, "call_timeout_seconds = %d\n", pl.CallTimeoutSeconds)
-			}
-			if hasPositiveIntMap(pl.ToolTimeoutSeconds) {
-				b.WriteString("# Raw MCP tool names with per-tool call timeouts.\n")
-				fmt.Fprintf(&b, "tool_timeout_seconds = %s\n", renderIntMap(pl.ToolTimeoutSeconds))
-			}
+			renderPluginOverrides(&b, pl)
 			renderPluginPolicy(&b, pl)
 		}
 	}

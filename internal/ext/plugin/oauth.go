@@ -123,6 +123,9 @@ func AuthorizeHTTPMCP(ctx context.Context, spec Spec, openURL func(string) error
 	if strings.TrimSpace(authMeta.AuthorizationEndpoint) == "" || strings.TrimSpace(authMeta.TokenEndpoint) == "" {
 		return fmt.Errorf("MCP OAuth: authorization server metadata is missing authorization_endpoint or token_endpoint")
 	}
+	if len(authMeta.CodeChallengeMethodsSupported) == 0 && !spec.OAuthAllowMissingPKCEMetadata {
+		return fmt.Errorf("%w (set oauth_allow_missing_pkce_metadata = true on server %q in your own config to proceed)", ErrOAuthPKCEUnadvertised, spec.Name)
+	}
 	if len(authMeta.CodeChallengeMethodsSupported) > 0 && !slices.Contains(authMeta.CodeChallengeMethodsSupported, "S256") {
 		return fmt.Errorf("MCP OAuth: authorization server does not support PKCE S256")
 	}

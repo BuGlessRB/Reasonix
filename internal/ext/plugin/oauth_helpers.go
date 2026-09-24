@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -65,3 +66,8 @@ func parseAuthParamValue(raw string, i int) (string, int) {
 	}
 	return value.String(), i
 }
+
+// ErrOAuthPKCEUnadvertised is an authorization server whose metadata does not
+// list code_challenge_methods_supported. The spec has the client refuse: it
+// cannot tell whether the server verifies the PKCE challenge it is sent.
+var ErrOAuthPKCEUnadvertised = errors.New("MCP OAuth: authorization server does not advertise PKCE support")

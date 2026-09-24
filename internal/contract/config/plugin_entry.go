@@ -25,6 +25,10 @@ type PluginEntry struct {
 	// from this server. Keys are server-local tool names, not model-visible
 	// mcp__server__tool names.
 	ToolTimeoutSeconds map[string]int `toml:"tool_timeout_seconds"`
+	// OAuthAllowMissingPKCEMetadata lets OAuth proceed with an authorization
+	// server that does not advertise code_challenge_methods_supported. PKCE
+	// S256 is still sent; it is honoured only from a user-authorized source.
+	OAuthAllowMissingPKCEMetadata bool `toml:"oauth_allow_missing_pkce_metadata"`
 	// Concurrency is "parallel" (default) or "serial"; see SPEC 3.16.
 	Concurrency string `toml:"concurrency"`
 	// AutoStart controls whether the server connects during session startup.

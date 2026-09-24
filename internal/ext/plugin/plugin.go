@@ -139,6 +139,9 @@ type Spec struct {
 	Sandbox         sandbox.Spec
 	StateDir        string
 	OAuthHTTPClient *http.Client
+	// OAuthAllowMissingPKCEMetadata accepts an authorization server that does
+	// not list code_challenge_methods_supported; see ErrOAuthPKCEUnadvertised.
+	OAuthAllowMissingPKCEMetadata bool
 	// StripRawPrefix, when non-empty, removes this prefix from each MCP tool's
 	// raw name before namespacing. For example, StripRawPrefix="server_" turns
 	// "server_search" into "search", yielding "mcp__search__search" instead of

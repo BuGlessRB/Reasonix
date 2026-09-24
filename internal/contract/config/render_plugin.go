@@ -16,3 +16,24 @@ func renderPluginPolicy(b *strings.Builder, pl PluginEntry) {
 		fmt.Fprintf(b, "auto_start = %v\n", *pl.AutoStart)
 	}
 }
+
+// renderPluginOverrides writes a server's own timeouts and OAuth allowance,
+// each only when set, so an untouched entry renders as it always has.
+func renderPluginOverrides(b *strings.Builder, pl PluginEntry) {
+	if pl.StartupTimeoutSeconds > 0 {
+		b.WriteString("# Per-server MCP initialize + tools/list timeout; 0 keeps the global/default cap.\n")
+		fmt.Fprintf(b, "startup_timeout_seconds = %d\n", pl.StartupTimeoutSeconds)
+	}
+	if pl.CallTimeoutSeconds > 0 {
+		b.WriteString("# Per-server MCP call timeout; 0 keeps the global/default cap.\n")
+		fmt.Fprintf(b, "call_timeout_seconds = %d\n", pl.CallTimeoutSeconds)
+	}
+	if hasPositiveIntMap(pl.ToolTimeoutSeconds) {
+		b.WriteString("# Raw MCP tool names with per-tool call timeouts.\n")
+		fmt.Fprintf(b, "tool_timeout_seconds = %s\n", renderIntMap(pl.ToolTimeoutSeconds))
+	}
+	if pl.OAuthAllowMissingPKCEMetadata {
+		b.WriteString("# Proceed with an OAuth server that does not advertise PKCE methods (user config only).\n")
+		b.WriteString("oauth_allow_missing_pkce_metadata = true\n")
+	}
+}
