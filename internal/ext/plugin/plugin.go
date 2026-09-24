@@ -592,6 +592,10 @@ type Client struct {
 	registrationClaims    map[uint64]struct{}
 	registrationCommitted bool
 
+	// modern is set once, at connect, when the server speaks a handshake-free
+	// revision; every request then carries its own _meta.
+	modern modernSession
+
 	// Capabilities advertised by the server at initialize. prompts/list and
 	// resources/list are only called when advertised, so we never provoke a
 	// "method not found" on a tools-only server.
@@ -1239,10 +1243,8 @@ func start(lifeCtx, callCtx context.Context, s Spec) (*Client, error) {
 	}
 	c := &Client{name: s.Name, spec: s, transport: tt}
 	c.t = newReconnectingTransport(lifeCtx, t, s.ResolvedStartupTimeout(), c.redial,
-		func(ctx context.Context, next transport) error {
-			return c.initializeSessionOn(ctx, next, false)
-		})
-	if err := c.initialize(callCtx); err != nil {
+		c.handshakeOn)
+	if err := c.connect(callCtx); err != nil {
 		c.close()
 		err = newStartupFailure("initialize", started, c.startupStderr(), err)
 		return nil, err
@@ -1380,6 +1382,13 @@ func (c *Client) listTools(ctx context.Context) ([]tool.Tool, error) {
 			toolInfos = append(toolInfos, info)
 			continue
 		}
+		headers, err := c.toolParamHeaders(t.InputSchema)
+		if err != nil {
+			slog.Warn("plugin: tool left out for its header annotations", "server", c.name, "tool", t.Name, "err", err)
+			info.SchemaError = err.Error()
+			toolInfos = append(toolInfos, info)
+			continue
+		}
 		visibleName := t.Name
 		if c.spec.StripRawPrefix != "" {
 			visibleName = strings.TrimPrefix(visibleName, c.spec.StripRawPrefix)
@@ -1397,6 +1406,7 @@ func (c *Client) listTools(ctx context.Context) ([]tool.Tool, error) {
 			declaredReadOnly: readOnlyHint,
 			readOnly:         readOnly,
 			destructive:      destructiveHint,
+			paramHeaders:     headers,
 		})
 	}
 	sort.SliceStable(toolInfos, func(i, j int) bool { return toolInfos[i].Name < toolInfos[j].Name })
@@ -1571,8 +1581,9 @@ type rpcResponse struct {
 }
 
 type rpcError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 func (e *rpcError) Error() string { return fmt.Sprintf("rpc error %d: %s", e.Code, e.Message) }
@@ -1592,6 +1603,9 @@ type remoteTool struct {
 	// destructive is the MCP destructiveHint. It takes precedence over a
 	// conflicting readOnlyHint in Plan and strict read-only execution.
 	destructive bool
+	// paramHeaders are the arguments a modern HTTP server has mirrored into
+	// Mcp-Param headers; nil on every other connection.
+	paramHeaders []paramHeader
 }
 
 func (t *remoteTool) Name() string        { return t.name }
@@ -1679,7 +1693,7 @@ func (t *remoteTool) ExecuteWithImages(ctx context.Context, args json.RawMessage
 			return "", nil, fmt.Errorf("MCP server %q changed the authorization or destructive classification for tool %q; the call was blocked before dispatch — retry so Reasonix can re-apply the current Planner MCP safety boundary", t.client.name, t.rawName)
 		}
 	}
-	res, err := t.client.call(ctx, "tools/call", map[string]any{
+	res, err := t.client.call(withParamHeaders(ctx, t.paramHeaders, argMap), "tools/call", map[string]any{
 		"name":      t.rawName,
 		"arguments": argMap,
 	})

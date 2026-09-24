@@ -23,6 +23,13 @@ func (c *Client) call(ctx context.Context, method string, params any) (json.RawM
 }
 
 func (c *Client) callOn(ctx context.Context, t transport, method string, params any) (json.RawMessage, error) {
+	if c.modern.version != "" {
+		return c.callModern(ctx, t, method, params)
+	}
+	return c.callOnce(ctx, t, method, params)
+}
+
+func (c *Client) callOnce(ctx context.Context, t transport, method string, params any) (json.RawMessage, error) {
 	params, unregisterProgress := c.withProgress(ctx, t, method, params)
 	defer unregisterProgress()
 

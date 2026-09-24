@@ -64,6 +64,8 @@ type authorizationServerMetadata struct {
 	RegistrationEndpoint              string   `json:"registration_endpoint"`
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
+	// RFC 9207: a server that says it sends iss must send it on every response.
+	AuthorizationResponseIssParameterSupported bool `json:"authorization_response_iss_parameter_supported"`
 }
 
 type dynamicClientRegistration struct {
@@ -156,7 +158,9 @@ func AuthorizeHTTPMCP(ctx context.Context, spec Spec, openURL func(string) error
 
 	callbackResult := make(chan oauthCallbackResult, 1)
 	callbackServer := &http.Server{ReadHeaderTimeout: 5 * time.Second}
-	callbackServer.Handler = oauthCallbackHandler(requestState, callbackResult)
+	callbackServer.Handler = oauthCallbackHandler(oauthCallbackExpect{
+		state: requestState, issuer: authMeta.Issuer, issRequired: authMeta.AuthorizationResponseIssParameterSupported,
+	}, callbackResult)
 	serveDone := make(chan error, 1)
 	go func() {
 		err := callbackServer.Serve(listener)
@@ -406,7 +410,10 @@ func registerOAuthClient(ctx context.Context, client *http.Client, metadata auth
 	}
 	method := chooseTokenEndpointAuthMethod(metadata.TokenEndpointAuthMethodsSupported)
 	body, err := json.Marshal(map[string]any{
-		"client_name":                "Reasonix",
+		"client_name": "Reasonix",
+		// A desktop client with a loopback redirect is a native application;
+		// saying so keeps an OpenID provider from refusing that redirect.
+		"application_type":           "native",
 		"redirect_uris":              []string{redirectURI},
 		"grant_types":                []string{"authorization_code", "refresh_token"},
 		"response_types":             []string{"code"},
@@ -519,7 +526,16 @@ type oauthCallbackResult struct {
 	Err  error
 }
 
-func oauthCallbackHandler(expectedState string, result chan<- oauthCallbackResult) http.Handler {
+// oauthCallbackExpect is what a genuine authorization response must carry:
+// this flow's state, and the issuer the code came from (RFC 9207), which is
+// what stops a code minted by another authorization server being redeemed.
+type oauthCallbackExpect struct {
+	state       string
+	issuer      string
+	issRequired bool
+}
+
+func oauthCallbackHandler(expect oauthCallbackExpect, result chan<- oauthCallbackResult) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/oauth/callback" {
 			http.NotFound(w, r)
@@ -528,8 +544,10 @@ func oauthCallbackHandler(expectedState string, result chan<- oauthCallbackResul
 		query := r.URL.Query()
 		var callback oauthCallbackResult
 		switch {
-		case query.Get("state") != expectedState:
+		case query.Get("state") != expect.state:
 			callback.Err = fmt.Errorf("MCP OAuth callback state did not match")
+		case !issuerMatches(query, expect):
+			callback.Err = ErrOAuthIssuerMismatch
 		case query.Get("error") != "":
 			callback.Err = fmt.Errorf("MCP OAuth authorization failed: %s: %s", secrets.RedactCredentials(query.Get("error")), secrets.RedactCredentials(query.Get("error_description")))
 		case strings.TrimSpace(query.Get("code")) == "":

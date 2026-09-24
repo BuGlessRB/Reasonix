@@ -123,6 +123,9 @@ func TestAuthorizeHTTPMCPUsesDiscoveryPKCEAndPersistsPrivateToken(t *testing.T) 
 				http.Error(w, "bad registration", http.StatusBadRequest)
 				return
 			}
+			if registration["application_type"] != "native" {
+				t.Errorf("application_type = %#v, want native for a loopback redirect", registration["application_type"])
+			}
 			redirects, _ := registration["redirect_uris"].([]any)
 			if len(redirects) != 1 {
 				t.Errorf("redirect_uris = %#v", registration["redirect_uris"])
@@ -504,7 +507,7 @@ func TestOAuthErrorsRedactCredentialMaterial(t *testing.T) {
 	}
 
 	result := make(chan oauthCallbackResult, 1)
-	handler := oauthCallbackHandler("expected", result)
+	handler := oauthCallbackHandler(oauthCallbackExpect{state: "expected"}, result)
 	req := httptest.NewRequest(http.MethodGet, "/oauth/callback?state=expected&error=access_denied&error_description=token%3A"+secret, nil)
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 	if callback := <-result; callback.Err == nil || strings.Contains(callback.Err.Error(), secret) {

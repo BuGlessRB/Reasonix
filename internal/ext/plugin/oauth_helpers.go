@@ -71,3 +71,16 @@ func parseAuthParamValue(raw string, i int) (string, int) {
 // list code_challenge_methods_supported. The spec has the client refuse: it
 // cannot tell whether the server verifies the PKCE challenge it is sent.
 var ErrOAuthPKCEUnadvertised = errors.New("MCP OAuth: authorization server does not advertise PKCE support")
+
+// ErrOAuthIssuerMismatch is an authorization response whose iss is not the
+// server the flow was started with, or one missing an iss it promised.
+var ErrOAuthIssuerMismatch = errors.New("MCP OAuth: authorization response came from a different issuer")
+
+// issuerMatches applies RFC 9207 to a callback's query: a present iss must be
+// the recorded issuer, and a server that advertised iss must have sent it.
+func issuerMatches(query url.Values, expect oauthCallbackExpect) bool {
+	if !query.Has("iss") {
+		return !expect.issRequired
+	}
+	return strings.TrimRight(query.Get("iss"), "/") == strings.TrimRight(expect.issuer, "/")
+}

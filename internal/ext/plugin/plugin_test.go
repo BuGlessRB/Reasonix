@@ -1316,6 +1316,32 @@ func TestHelperProcess(t *testing.T) {
 		}
 
 		var result any
+		// GO_WANT_HELPER_MODERN serves 2026-07-28 only: discovery answers,
+		// initialize is an unknown method, and a request without _meta is refused.
+		if os.Getenv("GO_WANT_HELPER_MODERN") == "1" {
+			var p struct {
+				Meta map[string]any `json:"_meta"`
+			}
+			_ = json.Unmarshal(req.Params, &p)
+			var rpcErr map[string]any
+			switch {
+			case req.Method == "initialize" || p.Meta[metaProtocolVersion] != modernProtocolVersion:
+				rpcErr = map[string]any{"code": -32601, "message": "initialize is not a method here"}
+			case req.Method == discoverMethod:
+				result = map[string]any{"supportedVersions": []string{modernProtocolVersion}, "capabilities": map[string]any{"tools": map[string]any{}}}
+			}
+			if rpcErr != nil || result != nil {
+				resp := map[string]any{"jsonrpc": "2.0", "id": *req.ID}
+				if rpcErr != nil {
+					resp["error"] = rpcErr
+				} else {
+					resp["result"] = result
+				}
+				b, _ := json.Marshal(resp)
+				os.Stdout.Write(append(b, '\n'))
+				continue
+			}
+		}
 		switch req.Method {
 		case "initialize":
 			if initDelay > 0 {
