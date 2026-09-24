@@ -14,6 +14,12 @@ rules are written in.
   standard properties and the `::-webkit-*` pair are written: new WebView2 reads
   the first and ignores the second, older shells only read the second. A
   container that wants no scrollbar hides it itself.
+- The transcript card is the one container that sets both standard properties
+  back to `auto`. While either is set, Chromium ignores every `::-webkit-*`
+  rule and draws the system scrollbar, whose arrow buttons sit on the card's
+  rounded corners and whose track runs through them. Drawn with the
+  `::-webkit-*` pair instead, it has no buttons, a track inset by the corner
+  radius, and a thumb inset from the border.
 - `body` divides `100vh` back out by the zoom. Zooming the interface leaves `vh`
   measured against the unzoomed viewport, so `100vh` overflows by exactly the
   zoom factor — which is how the composer was pushed off the bottom of the
