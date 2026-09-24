@@ -86,3 +86,35 @@ describe("the work under a turn's sentences", () => {
     expect(shape).toEqual(["s1", "work", "s2", "work", "s3"]);
   });
 });
+
+// A mounting block closes only where a turn does, so a turn longer than one
+// block keeps its work under its own sentences, and the rule between turns
+// falls between turns.
+describe("the blocks a transcript mounts in", () => {
+  it("keeps a turn longer than a block whole", () => {
+    const work = Array.from({ length: 60 }, (_, i) => call(`t${i}`, "bash"));
+    draw([user("u1", "第一件"), say("s1", "开始"), ...work, say("s2", "做完了"), user("u2", "第二件"), say("s3", "好")]);
+
+    const chunks = [...document.querySelectorAll(".chunk")];
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0].querySelectorAll(".activity-group")).toHaveLength(1);
+    expect(chunks[0].textContent).toContain("做完了");
+    expect(chunks[1].textContent).toContain("第二件");
+  });
+
+  it("draws a rule before every turn and none before the first", () => {
+    const turns = Array.from({ length: 30 }, (_, i) => [user(`u${i}`, `问题 ${i}`), say(`s${i}`, `回答 ${i}`)]).flat();
+    draw(turns);
+
+    const chunks = [...document.querySelectorAll(".chunk")];
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) expect(chunk.firstElementChild?.className).toBe("turn-rule");
+    expect(document.querySelectorAll(".turn-rule")).toHaveLength(30);
+  });
+
+  it("does not open a turn for a line steered into one", () => {
+    draw([user("u1", "做这件事"), say("s1", "在做"), { t: "user", id: "st", text: "顺便看下测试", steer: true }, say("s2", "好")]);
+
+    expect(document.querySelectorAll(".turn-rule")).toHaveLength(1);
+  });
+});

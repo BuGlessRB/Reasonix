@@ -1,4 +1,4 @@
-import { memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
+import { Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
 import { decimals } from "../i18n/format";
 import { t } from "../i18n";
 import type { Item, Waiting } from "../state/session";
@@ -19,6 +19,7 @@ import { RememberCard } from "./cards/RememberCard";
 import { ExtensionCard } from "./cards/ExtensionCard";
 import { toolFailed } from "./cards/outcome";
 import { drawn, transcriptRows } from "./turnrows";
+import { opensTurn, useBlocks } from "./blocks";
 import { Rail, type RailMark } from "./Rail";
 import { StudioIcon } from "./StudioIcon";
 import { LiveWork, useStartsOpen } from "../state/foldpref";
@@ -74,39 +75,6 @@ interface Props {
    *  may not run at all. */
   entering: string[];
   onEntered: (ids: string[]) => void;
-}
-
-// How many settled cards share one mounting unit. Small enough that scrolling
-// mounts a block within a frame, large enough that a long session holds a few
-// hundred blocks rather than tens of thousands.
-const BLOCK = 48;
-
-// A streamed delta rewrites the last card and leaves every earlier one at the
-// same identity, so the settled head is cut into blocks that keep their array
-// identity across frames — that is what lets each block memo instead of being
-// rebuilt on every chunk of text.
-//
-// Revision and length decide when to re-cut: anything that edits a card in the
-// middle — a tool settling, an approval being answered — bumps the revision by
-// construction, and a delta that opens a new message changes the cut. Between
-// two revisions this is O(1); on a revision it walks the blocks once and hands
-// back the ones whose contents did not move, which is a per-turn cost, not a
-// per-frame one.
-function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
-  const held = useRef<{ at: number; cut: number; blocks: Item[][] }>({ at: -1, cut: -1, blocks: [] });
-  if (held.current.at === revision && held.current.cut === cut) return held.current.blocks;
-
-  const prev = held.current.blocks;
-  const blocks: Item[][] = [];
-  for (let at = 0; at < cut; at += BLOCK) {
-    const end = Math.min(at + BLOCK, cut);
-    const old = prev[blocks.length];
-    let same = old !== undefined && old.length === end - at;
-    for (let i = 0; same && i < end - at; i++) same = old[i] === items[at + i];
-    blocks.push(same ? old : items.slice(at, end));
-  }
-  held.current = { at: revision, cut, blocks };
-  return blocks;
 }
 
 export function Transcript({ items, entering, onEntered, revision, waiting, scroll, hidden, onPinned, jump, focus, find, query, onApprove, onFullAccess, onPlan, onAnswer, onForget, onExtInvoke, onExtSubmit, reply, onResend, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
@@ -460,20 +428,23 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   // transcript renders, so a mark always knows which block holds it — that is
   // what makes it locatable while the message itself is unmounted.
   const marks: RailMark[] = [];
-  blocks.forEach((block, b) =>
+  let offset = 0;
+  blocks.forEach((block, b) => {
+    const base = offset;
+    offset += block.length;
     block.forEach((it, i) => {
       if (it.t !== "user") return;
       marks.push({
         id: it.id,
         text: it.text,
-        at: b * BLOCK + i,
+        at: base + i,
         block: b,
         within: i,
         of: block.length,
         files: checkpoints.get(it.id)?.files ?? 0,
       });
-    }),
-  );
+    });
+  });
 
   return (
     <div
@@ -557,13 +528,15 @@ const Block = memo(function Block({
       style={near || keep ? undefined : { height: `${tall.current || items.length * 96}px` }}
     >
       {(near || keep) && rows.map((row) => "item" in row ? (
-        <Row
-          key={row.item.id}
-          it={row.item}
-          {...rowProps}
-          cp={checkpoints.get(row.item.id)}
-          afterAnswer={row.activity ? <ActivityGroup items={row.activity} checkpoints={checkpoints} opened={opened} onOpened={setOpened} {...rowProps} /> : undefined}
-        />
+        <Fragment key={row.item.id}>
+          {opensTurn(row.item) && <hr className="turn-rule" />}
+          <Row
+            it={row.item}
+            {...rowProps}
+            cp={checkpoints.get(row.item.id)}
+            afterAnswer={row.activity ? <ActivityGroup items={row.activity} checkpoints={checkpoints} opened={opened} onOpened={setOpened} {...rowProps} /> : undefined}
+          />
+        </Fragment>
       ) : (
         <ActivityGroup key={`activity:${row.activity[0].id}`} items={row.activity} checkpoints={checkpoints} opened={opened} onOpened={setOpened} {...rowProps} />
       ))}

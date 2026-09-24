@@ -787,8 +787,8 @@ body { background: var(--page) !important; }
 .hero .mk { color: #555951; font-size: 66px; font-weight: 300; }
 .hero .t { color: var(--text); font-size: 23px; letter-spacing: -.025em; }
 .hero .s { color: var(--faint); font-size: 12px; line-height: 1.8; }
-.chunk { padding-block: 0 24px; }
-.chunk + .chunk { padding-top: 24px; border-top: 1px solid var(--hair); }
+.turn-rule { margin: 24px 0; border: 0; border-top: 1px solid var(--hair); }
+.chunk:first-child > .turn-rule:first-child { display: none; }
 .say { color: var(--text); }
 .call,
 .apv,
