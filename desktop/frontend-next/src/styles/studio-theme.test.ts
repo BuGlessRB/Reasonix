@@ -56,9 +56,10 @@ describe("the Studio shell closes over the active theme", () => {
     expect(closure).toMatch(/\.studio-collapse\s*\{[^}]*width:\s*30px[^}]*height:\s*30px/s);
   });
 
-  it("gives light-theme run data and composer metrics their own readable surfaces", () => {
-    expect(closure).toMatch(/\.studio-meterrail\s*\{[^}]*background:\s*color-mix\([^}]*var\(--surface\)/s);
-    expect(closure).toMatch(/:root\[data-theme="light"\] \.studio-meterrail\s*\{[^}]*var\(--float\)/s);
+  it("gives light-theme run data readable surfaces and leaves the composer metrics unframed", () => {
+    const rails = [...closure.matchAll(/(?:^|\})\s*((?::root\[data-theme="light"\] )?\.studio-meterrail)\s*\{([^}]*)\}/g)];
+    expect(rails.length).toBeGreaterThan(0);
+    for (const [, , body] of rails) expect(body).not.toMatch(/\b(border|background|box-shadow|backdrop-filter)\s*:/);
     expect(closure).toMatch(/\.scroll\[data-pane="analysis"\]\s*\{[^}]*background:\s*transparent/s);
     expect(closure).toMatch(/\.run-budget, \.run-signals, \.run-rounds\s*\{[^}]*background:[^}]*var\(--raised\)/s);
   });
