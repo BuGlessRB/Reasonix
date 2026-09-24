@@ -89,6 +89,7 @@ function useFoldAway(name: string, set: Dispatch<SetStateAction<boolean>>, wideD
 // that owns it. That split is what lets two sessions run side by side.
 export function App({ hub }: { hub: HubPort }) {
   const [runtimes, setRuntimes] = useState<RuntimeView[]>([]);
+  const [panesRead, setPanesRead] = useState(false);
   const [active, setActive] = useState("");
   const [tree, setTree] = useState<TreeWorkspace[]>([]);
   // Null until asked, and null again where this kernel refuses remote panes —
@@ -190,6 +191,7 @@ export function App({ hub }: { hub: HubPort }) {
       setWelcomed((cur) => cur ?? true);
     }
     setRuntimes(list);
+    setPanesRead(true);
     setActive((cur) => (list.some((rt) => rt.id === cur) ? cur : (list[0]?.id ?? "")));
     await reloadTree();
     void reloadRemoteTrees();
@@ -487,6 +489,28 @@ export function App({ hub }: { hub: HubPort }) {
   // The folder a new session opens in is the one the switcher above names —
   // the window's, not whichever project happens to sit first in the tree.
   const newSessionRoot = activeWorkspace?.root;
+
+  // Every settings route is a runtime's, so with no pane open there is nothing
+  // to read them from. Asking for settings then opens a session in the current
+  // folder, as the empty state's own button would, and the sheet follows it.
+  const prefsPane = useRef(false);
+  useEffect(() => {
+    if (!settings || !panesRead || runtimes.length > 0) {
+      prefsPane.current = false;
+      return;
+    }
+    if (prefsPane.current) return;
+    prefsPane.current = true;
+    if (!newSessionRoot) {
+      setSettings(false);
+      setError(t("设置需要一个打开的会话。请先在左栏添加一个文件夹。"));
+      return;
+    }
+    void openPane({ root: newSessionRoot }).catch((e) => {
+      setSettings(false);
+      fail(e);
+    });
+  }, [settings, panesRead, runtimes.length, newSessionRoot, openPane, fail]);
 
   // The tab strip has nowhere to await: closing is the end of the gesture there,
   // so a refusal has to land in the error bar rather than in a caller.

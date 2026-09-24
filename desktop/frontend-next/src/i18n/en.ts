@@ -749,6 +749,7 @@ export const EN: Record<string, string> = {
   "导入主题…": "Import theme…",
   "正在导入…": "Importing…",
   "打开主题目录": "Open themes folder",
+  "设置需要一个打开的会话。请先在左栏添加一个文件夹。": "Settings need an open session. Add a folder in the sidebar first.",
   "{host} 需要登录": "{host} asks you to sign in",
   "代理 {host} 需要登录": "The proxy {host} asks you to sign in",
   "用户名": "Username",
