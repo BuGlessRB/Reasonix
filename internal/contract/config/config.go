@@ -1046,6 +1046,9 @@ type AgentConfig struct {
 	// ScreenExternalContent asks the triage model whether each external tool
 	// result tries to instruct the agent. Advisory only: a hit adds a notice.
 	ScreenExternalContent bool `toml:"screen_external_content"`
+	// AdvisorModel is the stronger model the advise tool consults. Empty leaves
+	// the tool out; it never falls back, since advice from the same model is none.
+	AdvisorModel string `toml:"advisor_model"`
 	// DecisionModel names the backend system_one asks. It is on a decision
 	// wire, so it never falls back to the main model: a chat model has no
 	// answer for a question set, and falling back would hide that.

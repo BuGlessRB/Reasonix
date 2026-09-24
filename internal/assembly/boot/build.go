@@ -210,6 +210,7 @@ func (b *builder) wireTools() error {
 	// The full inventory registers for use_capability; the provider-visible surface narrows later.
 	addBuiltins(t.reg, cfg.Tools.Enabled, env.writeRoots, env.bash, env.bashTimeout, env.search, b.stderr, root, b.proxy, env.forbidReadRoots, env.readPaths, env.sessionGuard, env.managedConfig, opts.FileOverlay, opts.TerminalRunner, env.sessionTemp, b.fileWriteReceipt)
 	addSystemOne(t.reg, cfg.Tools.Enabled, cfg, b.balanceClient)
+	addAdvisor(t.reg, cfg, b.proxy, b.sink)
 	b.wireMCP()
 	t.browser = bindMachineTools(t.reg, cfg.Browser, root, opts.BrowserSession)
 	b.timer.mark("mcp")

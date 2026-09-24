@@ -5,6 +5,7 @@ import (
 	"reasonix/internal/runtime/langpref"
 
 	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/safety/sandbox"
@@ -21,6 +22,7 @@ func (a *Agent) toolCallContext(ctx context.Context, plan *toolCallPlan) context
 	cctx := tool.WithContextCompressor(WithCallContext(ctx, plan.call.ID, a.svc.sink, a.svc.asker, a.PlanningPhase()), a)
 	cctx = tool.WithContextRecaller(cctx, a)
 	cctx = tool.WithContextBudgetReporter(cctx, a)
+	cctx = tool.WithTranscriptReader(cctx, a)
 	cctx = WithSubagentDepth(cctx, a.subagentDepth)
 	if a.task.ledger != nil {
 		cctx = evidence.WithLedger(cctx, a.task.ledger)
@@ -65,4 +67,10 @@ func (a *Agent) toolCallContext(ctx context.Context, plan *toolCallPlan) context
 		a.svc.sink.Emit(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: callID, Output: chunk}})
 	})
 	return cctx
+}
+
+// Transcript is a copy of this agent's conversation, for a tool that has to
+// read all of it; see tool.TranscriptReader.
+func (a *Agent) Transcript() []provider.Message {
+	return a.sess.conversation.Snapshot()
 }

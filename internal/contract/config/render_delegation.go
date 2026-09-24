@@ -51,6 +51,11 @@ func renderAgentDelegation(b *strings.Builder, c *Config) {
 	} else {
 		b.WriteString("# triage_model = \"deepseek-flash\"   # small classifications; point it somewhere cheap\n")
 	}
+	if c.Agent.AdvisorModel != "" {
+		fmt.Fprintf(b, "advisor_model = %q   # the stronger model the advise tool consults\n", c.Agent.AdvisorModel)
+	} else {
+		b.WriteString("# advisor_model = \"deepseek-pro\"   # optional: offers the advise tool, backed by this model\n")
+	}
 	if c.Agent.ScreenExternalContent {
 		b.WriteString("screen_external_content = true   # triage flags external results that address the agent\n")
 	} else {

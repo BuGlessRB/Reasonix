@@ -4,6 +4,7 @@ import (
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/agentpreset"
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/tools/advisor"
 	"reasonix/internal/tools/builtin"
 )
 
@@ -163,6 +164,10 @@ func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bo
 		if t, ok := reg.Get(name); ok && builtin.ComputerBound(t) {
 			allow = append(allow, name)
 		}
+	}
+	// advise is registered only when advisor_model is set, which boot decides.
+	if _, ok := reg.Get(advisor.Name); ok {
+		allow = append(allow, advisor.Name)
 	}
 	// Always keep use_capability if somehow only that remains.
 	if len(allow) == 0 {
