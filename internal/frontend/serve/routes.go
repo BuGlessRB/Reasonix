@@ -89,6 +89,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /mcp", s.mcp)
 	mux.HandleFunc("POST /mcp/reconnect", s.mcpReconnect)
 	mux.HandleFunc("POST /mcp/enabled", s.mcpEnabled)
+	mux.HandleFunc("POST /mcp/load", s.mcpLoad)
 	mux.HandleFunc("POST /mcp/parse", s.mcpParse)
 	mux.HandleFunc("POST /mcp/install", s.mcpInstall)
 	mux.HandleFunc("POST /mcp/remove", s.mcpRemove)

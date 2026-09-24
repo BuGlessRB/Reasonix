@@ -2764,6 +2764,16 @@
     font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost); font-style: normal;
   }
 
+  .srv .ld {
+    flex: none; padding: 1px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
+    font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--faint); font-style: normal; white-space: nowrap;
+  }
+  .srv .ld[data-pending] { border-style: dashed; color: var(--ghost) }
+  .srv .load { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px 15px; min-width: 0 }
+  .srv .load .lb { flex: none; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .srv .load .seg { flex: none }
+  .srv .load .hn { min-width: 0; font: var(--w-reg) var(--fs-meta)/1.5 var(--ui); color: var(--ghost) }
+
   .srv .peek .trow { display: flex; align-items: baseline; gap: 9px; padding: 1px 0 }
   .srv .peek .trow .nm { flex: none; font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--faint) }
   .srv .peek .trow .ds {

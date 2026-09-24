@@ -1167,24 +1167,63 @@ func TestAutoStartPlugins(t *testing.T) {
 	}
 }
 
-func TestPluginResolvedTierDefaultsToBackground(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		tier string
-		want string
-	}{
-		{name: "empty", tier: "", want: "background"},
-		{name: "legacy lazy", tier: "lazy", want: "background"},
-		{name: "background", tier: "background", want: "background"},
-		{name: "eager", tier: "eager", want: "eager"},
-		{name: "unknown", tier: "startup", want: "background"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := (PluginEntry{Name: "mcp", Command: "mcp-server", Tier: tc.tier}).ResolvedTier()
-			if got != tc.want {
-				t.Fatalf("ResolvedTier(%q) = %q, want %q", tc.tier, got, tc.want)
-			}
-		})
+func TestMCPAlwaysLoadOverrideWinsOverDeclaration(t *testing.T) {
+	declared := PluginEntry{Name: "ops", Load: "always"}
+	plain := PluginEntry{Name: "docs"}
+	odd := PluginEntry{Name: "odd", Load: "sometimes"}
+	c := Default()
+	if !c.MCPAlwaysLoad(declared) || c.MCPAlwaysLoad(plain) || c.MCPAlwaysLoad(odd) {
+		t.Fatal("without overrides the declaration decides, and an unknown mode is deferred")
+	}
+	if err := c.SetMCPLoad("ops", "deferred"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetMCPLoad("docs", "always"); err != nil {
+		t.Fatal(err)
+	}
+	if c.MCPAlwaysLoad(declared) || !c.MCPAlwaysLoad(plain) {
+		t.Fatal("an override must win over the declaration in both directions")
+	}
+	if err := c.SetMCPLoad("docs", "sometimes"); err == nil {
+		t.Fatal("an unknown mode must be refused, not stored")
+	}
+	if err := c.SetMCPLoad("ops", ""); err != nil {
+		t.Fatal(err)
+	}
+	if !c.MCPAlwaysLoad(declared) {
+		t.Fatal("clearing the override must hand the decision back to the declaration")
+	}
+}
+
+func TestMCPLoadSurvivesARenderRoundTrip(t *testing.T) {
+	c := Default()
+	c.Plugins = []PluginEntry{{Name: "ops", Command: "ops-mcp", Load: "always", Source: MCPSourceUserConfig}}
+	if err := c.SetMCPLoad("docs server", "always"); err != nil {
+		t.Fatal(err)
+	}
+	var back Config
+	if _, err := toml.Decode(RenderTOMLForScope(c, RenderScopeUser), &back); err != nil {
+		t.Fatalf("decode rendered config: %v", err)
+	}
+	if len(back.Plugins) != 1 || back.Plugins[0].Load != MCPLoadAlways {
+		t.Fatalf("plugin load lost on render: %+v", back.Plugins)
+	}
+	if back.Tools.MCPLoad["docs server"] != MCPLoadAlways {
+		t.Fatalf("[tools.mcp_load] lost on render: %+v", back.Tools.MCPLoad)
+	}
+}
+
+func TestMCPJSONAlwaysLoadMapsToLoad(t *testing.T) {
+	entries, err := ParseMCPServersJSON([]byte(`{"mcpServers":{"ops":{"command":"ops-mcp","alwaysLoad":true},"docs":{"command":"docs-mcp"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loads := map[string]string{}
+	for _, e := range entries {
+		loads[e.Name] = e.DeclaredMCPLoad()
+	}
+	if loads["ops"] != MCPLoadAlways || loads["docs"] != MCPLoadDeferred {
+		t.Fatalf("loads = %v", loads)
 	}
 }
 

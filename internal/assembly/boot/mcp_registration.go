@@ -13,21 +13,20 @@ import (
 )
 
 // registerMCPTools puts every enabled server into the tool catalog and returns
-// the configured specs it registered. Host-session servers take a short
-// readiness probe; configured ones stay process-idle until their first call.
-func registerMCPTools(ctx context.Context, host *plugin.Host, reg *tool.Registry, plan mcpSpecPlan, sink event.Sink) []plugin.Spec {
+// the configured specs it registered, with the names of those whose tools were
+// known at registration. Host-session servers take a short readiness probe;
+// configured ones stay process-idle until their first call.
+func registerMCPTools(ctx context.Context, host *plugin.Host, reg *tool.Registry, plan mcpSpecPlan, sink event.Sink) ([]plugin.Spec, map[string]bool) {
 	for _, s := range plan.extra {
 		registerHostSessionServer(ctx, host, reg, s, sink)
 	}
-	// The eager tier already carries the host-session servers connected above.
-	configSpecs := withoutSpecs(append(append([]plugin.Spec{}, plan.eager...), plan.background...), plan.extra)
-	for _, s := range configSpecs {
-		registerConfiguredServer(ctx, host, reg, s)
+	known := map[string]bool{}
+	for _, s := range plan.configured {
+		if registerConfiguredServer(ctx, host, reg, s, plan.alwaysLoad[s.Name]) {
+			known[s.Name] = true
+		}
 	}
-	for _, msg := range plan.demotions {
-		report(sink, event.Event{Level: event.LevelInfo, Text: msg})
-	}
-	return configSpecs
+	return plan.configured, known
 }
 
 // registerHostSessionServer connects a server the host session named for this
@@ -59,18 +58,23 @@ func registerHostSessionServer(ctx context.Context, host *plugin.Host, reg *tool
 		Text: "An MCP server failed to start.", Detail: fmt.Sprintf("mcp %s: %v", s.Name, err)})
 }
 
-// registerConfiguredServer registers placeholders from the cached schema, and
-// starts a process for catalog discovery only when no usable schema is cached.
-func registerConfiguredServer(ctx context.Context, host *plugin.Host, reg *tool.Registry, s plugin.Spec) {
+// registerConfiguredServer registers placeholders from the cached schema. It
+// starts a process at once for catalog discovery when no usable schema is
+// cached, and for an authorized always-loaded server, whose tools the model
+// may call directly on its first turn; any other server connects on first use.
+// It reports whether the server's tools were known when it returned.
+func registerConfiguredServer(ctx context.Context, host *plugin.Host, reg *tool.Registry, s plugin.Spec, alwaysLoad bool) bool {
 	if host.HasClient(s.Name) {
 		if tools, err := host.ToolsFor(ctx, s.Name); err == nil {
 			addTools(reg, tools)
-			return
+			return true
 		}
 	}
 	cs, _ := plugin.LoadCachedSchemaForSpec(s)
-	kick := cs == nil || len(cs.Tools) == 0
-	addTools(reg, plugin.LazyToolset(s, cs, host, reg, ctx, kick))
+	known := cs != nil && len(cs.Tools) > 0
+	preconnect := alwaysLoad && plugin.ResolveStoredAuthorization(ctx, s).ServerAuthorized()
+	addTools(reg, plugin.LazyToolset(s, cs, host, reg, ctx, !known || preconnect))
+	return known
 }
 
 func withoutSpecs(specs, drop []plugin.Spec) []plugin.Spec {

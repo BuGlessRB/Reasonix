@@ -87,6 +87,9 @@ type toolStage struct {
 	cmds        []command.Command
 	caps        *capabilitySurface
 	candidates  *candidateApproval // nil unless best_of_n is offered
+	// mcpSchemaKnown names the configured servers whose tools were known at
+	// registration, the only ones an always-load can show this session.
+	mcpSchemaKnown map[string]bool
 }
 
 // build is the assembly behind BuildRuntime: it loads config, resolves the
@@ -287,7 +290,7 @@ func (b *builder) wireMCP() {
 		OAuthHTTPClient:       b.balanceClient,
 	}
 	t.mcp = resolveMCPSpecs(opts, cfg, root, t.specOptions)
-	t.configSpecs = registerMCPTools(b.ctx, t.host, t.reg, t.mcp, b.sink)
+	t.configSpecs, t.mcpSchemaKnown = registerMCPTools(b.ctx, t.host, t.reg, t.mcp, b.sink)
 	b.cleanup = t.host.Close
 	if opts.SharedHost != nil {
 		b.cleanup = func() {}
@@ -329,7 +332,7 @@ func (b *builder) controller() (*control.Controller, error) {
 	ctrl.SetCapabilityProxyRouting(true)
 	// Every role setting sees one provider-visible surface, fixed before the
 	// snapshot freezes registry schemas for cache diagnostics.
-	applyUnifiedProviderToolSurface(t.reg, b.opts.GoalTurnsUnreachable, b.opts.Ablation)
+	applyUnifiedProviderToolSurface(t.reg, b.opts.GoalTurnsUnreachable, b.opts.Ablation, pinnedMCPServers(t.mcp.alwaysLoad, t.mcpSchemaKnown))
 	return ctrl, nil
 }
 

@@ -625,7 +625,7 @@ func TestParseClaudePluginMapsConventionCapabilities(t *testing.T) {
   "hooks": {"SessionStart": [{"hooks": [{"type":"command","command":"bin/start","args":["--hook"],"async":true}]}]}
 }`)
 	writeTestFile(t, filepath.Join(root, ".mcp.json"), `{
-  "mcpServers": {"Google Drive": {"type":"local","command":"uvx","args":["drive-mcp"],"title":"Drive"}}
+  "mcpServers": {"Google Drive": {"type":"local","command":"uvx","args":["drive-mcp"],"title":"Drive","alwaysLoad":true}}
 }`)
 
 	pkg, warnings, err := ParseDir(root)
@@ -650,7 +650,7 @@ func TestParseClaudePluginMapsConventionCapabilities(t *testing.T) {
 		t.Fatalf("MCP servers = %+v", pkg.Manifest.MCPServers)
 	}
 	for name, server := range pkg.Manifest.MCPServers {
-		if !IsValidName(name) || server.Type != "stdio" || server.DisplayName != "Drive" || server.AutoStart == nil || *server.AutoStart {
+		if !IsValidName(name) || server.Type != "stdio" || server.DisplayName != "Drive" || server.AutoStart == nil || *server.AutoStart || server.Load != "always" {
 			t.Fatalf("MCP %q = %+v", name, server)
 		}
 	}

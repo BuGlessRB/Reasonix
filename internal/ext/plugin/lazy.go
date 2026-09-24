@@ -26,11 +26,6 @@ import (
 	"reasonix/internal/contract/tool"
 )
 
-// DefaultStartupBudget is the per-plugin latency budget used by boot when
-// deciding whether to auto-demote (see Recommend). Kept here rather than in
-// stats.go because it's the value boot.go pairs with each Recommend call.
-func DefaultStartupBudget() time.Duration { return defaultStartTimeout }
-
 // spawnState is the lazy-spawn state machine. Transitions are:
 //
 //	idle → inFlight → ready
@@ -98,9 +93,8 @@ func (s *lazySpawn) broadcastReady() {
 	}
 }
 
-// kick starts the spawn if it has not yet started. Cache-miss catalog discovery
-// and tests may call this; cache-hit boot registration uses kick=false so the
-// process starts on first real tool call via EnsureConnected.
+// kick starts the spawn if it has not yet started. A cache-hit kick changes no
+// registry entry: the placeholders keep presenting the cached schema.
 func (s *lazySpawn) kick() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -399,9 +393,9 @@ func (lt *lazyTool) reconcileLiveSafety(real tool.Tool) error {
 // "mcp__<server>__connect": the model can call it to drive the handshake, and
 // the real tools surface on the next turn.
 //
-// kick=true starts a one-shot catalog discovery immediately (used for cache-miss
-// servers at boot). kick=false leaves the process idle until the first real
-// tool call — the product default for cache-hit sessions.
+// kick=true starts the shared handshake immediately: catalog discovery for a
+// cache-miss server, or a warm connection for an always-loaded one. kick=false
+// leaves the process idle until the first real tool call.
 //
 // host is the Host that receives the real Client. reg is the registry where
 // real tools land after a successful spawn. sessionCtx must outlive any

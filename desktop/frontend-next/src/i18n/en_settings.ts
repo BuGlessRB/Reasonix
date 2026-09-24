@@ -600,4 +600,11 @@ export const EN_SETTINGS: Record<string, string> = {
   "已记住这项授权，以后同样的操作不再询问": "Approval remembered; the same action will not ask again",
   "已有的授权规则覆盖了这项操作，无需另存": "An existing rule already covers this action; nothing new was saved",
   "授权没能保存，只在本次会话内有效": "The approval could not be saved; it holds for this session only",
+  "常驻": "Always loaded",
+  "按需": "On demand",
+  "常驻 · 尚未生效": "Always loaded · not yet in effect",
+  "常驻 · 待撤下": "Always loaded · being removed",
+  "加载方式": "Loading",
+  "启动时预先连接，工具每轮随请求发送，模型直接调用，省去搜索往返，但占用上下文。": "Connected at startup; the tools go with every request and the model calls them directly: no search round trip, but they take up context.",
+  "用到时再搜索加载，不占上下文，调用前多一轮往返。": "Searched for and loaded when needed: no context used, one extra round trip before a call.",
 };

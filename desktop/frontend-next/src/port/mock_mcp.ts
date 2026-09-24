@@ -1,5 +1,5 @@
 import { MockProvider } from "./mock_provider";
-import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, McpRisk, ScopeLayer } from "./port";
+import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, McpLoad, McpRisk, ScopeLayer } from "./port";
 
 // Fixtures for the add-a-server flow: what a draft looks like once accepted,
 // and what the kernel would flag about it before it is.
@@ -129,6 +129,11 @@ export class MockMcp extends MockProvider {
     s.enabled = enabled;
     s.state = enabled ? (s.error ? "failed" : s.tools ? "standby" : "idle") : "disabled";
     s.localOverride = scope === "project";
+  }
+
+  async setMcpLoad(name: string, load: McpLoad) {
+    const s = this.servers.find((x) => x.name === name);
+    if (s) s.alwaysLoad = load === "always";
   }
 
   async clearMcpOverride(name: string) {

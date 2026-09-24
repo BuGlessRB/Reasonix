@@ -7,7 +7,7 @@ import type { AccountState, AccountUser, DeviceGrant } from "./account";
 import type { Adjudications } from "./adjudication";
 export type { AdjudicationEntry, AdjudicationState, Adjudications } from "./adjudication";
 import type { HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource } from "./hook";
-import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpRisk, McpTool, ScopeLayer } from "./mcp";
+import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpLoad, McpRisk, McpTool, ScopeLayer } from "./mcp";
 import type { MemoryCatalog, MemoryEdit, MemoryEntry } from "./memory";
 import type { UsageReport } from "./usage";
 export type { MemoryEdit } from "./memory";
@@ -26,7 +26,7 @@ import type { ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, Wor
 export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, CapabilityScope,
   Checkpoint, CompactionSettings, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage, HostTodo, BrowserTab,
   HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource, JobEntry, McpCatalog, McpDraft,
-  McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpRisk, McpTool, MemoryCatalog,
+  McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpLoad, McpRisk, McpTool, MemoryCatalog,
   MemoryEntry, ModelEntry, ModelPrice, NetworkProbe, NetworkSettings, Preset, RewindPlan,
   RewindResult, RewindScope, RoleAssignments, ScopeLayer, SessionEntry, SessionStatus,
   ShellOption, ShellSettings, SkillCatalog, SkillEntry, UpdateProgress, VersionEntry,
@@ -225,6 +225,7 @@ export interface AgentPort {
   reconnectMcp(name: string): Promise<{ state: string; tools?: number; error?: string }>;
   setMcpEnabled(name: string, enabled: boolean, scope?: ScopeLayer, root?: string): Promise<void>;
   clearMcpOverride(name: string, root?: string): Promise<void>;
+  setMcpLoad(name: string, load: McpLoad): Promise<void>;
   // The project a capability listing answers for, on its own — a surface can
   // name its folder before either list has loaded.
   capabilityScope(): Promise<CapabilityScope>;

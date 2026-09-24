@@ -362,6 +362,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	fmt.Fprintf(&b, "bash_timeout_seconds = %d   # foreground safety cap; set 0 for no tool-local cap\n", c.BashTimeoutSeconds())
 	fmt.Fprintf(&b, "mcp_startup_timeout_seconds = %d   # background initialize + tools/list safety cap; per-plugin overrides may raise it\n", c.MCPStartupTimeoutSeconds())
 	fmt.Fprintf(&b, "mcp_call_timeout_seconds = %d   # default MCP call safety cap; per-plugin/tool overrides may raise it\n\n", c.MCPCallTimeoutSeconds())
+	renderMCPLoadSection(&b, c.Tools.MCPLoad)
 
 	b.WriteString("[tools.background_jobs]\n")
 	fmt.Fprintf(&b, "stalled_warning_seconds = %d   # warn once per background job after this many quiet seconds; 0 disables\n\n", c.BackgroundJobStalledWarningSeconds())
@@ -831,6 +832,7 @@ func RenderTOMLProjectDelta(c *Config) string {
 		}
 		b.WriteString("\n")
 	}
+	renderMCPLoadSection(&b, c.Tools.MCPLoad)
 
 	// [tools.background_jobs]
 	if c.Tools.BackgroundJobs != d.Tools.BackgroundJobs {

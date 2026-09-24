@@ -33,6 +33,7 @@ type PackageMCPServer struct {
 	Headers   map[string]string
 	AutoStart *bool
 	Tier      string
+	Load      string
 }
 
 // installedPackages lists the enabled plugin packages under a Reasonix home.
@@ -83,6 +84,7 @@ func (r Roots) mergeInstalledPluginPackages(cfg *Config, root string) []string {
 				Headers:   pluginPackageWorkspaceMap(item.Root, root, srv.Headers),
 				AutoStart: srv.AutoStart,
 				Tier:      srv.Tier,
+				Load:      srv.Load,
 				Source:    MCPSourcePluginPackage,
 			}
 			if existing, ok := pluginEntryByName(cfg.Plugins, name); ok {

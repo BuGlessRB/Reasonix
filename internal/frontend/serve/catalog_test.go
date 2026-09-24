@@ -485,3 +485,37 @@ func TestServerTextIsSanitizedAndBounded(t *testing.T) {
 		t.Fatalf("displayText kept %d runes, want it bounded at %d", len([]rune(bounded)), mcpServerTextLimit)
 	}
 }
+
+// A load choice lands in the user config, where the rebuilt runtime's boot
+// reads it; an unknown mode is refused with the modes that would have been
+// accepted. This controller has no model to rebuild on, so the save is followed
+// by the rebuild refusal rather than a 200.
+func TestMcpLoadWritesTheUserConfig(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	ctrl := control.New(control.Options{})
+	defer ctrl.Close()
+	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	for _, tc := range []struct {
+		body string
+		want int
+	}{
+		{`{"name":"ops","load":"sometimes"}`, http.StatusBadRequest},
+		{`{"load":"always"}`, http.StatusBadRequest},
+		{`{"name":"ops","load":"always"}`, http.StatusConflict},
+	} {
+		resp, err := http.Post(srv.URL+"/mcp/load", "application/json", strings.NewReader(tc.body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Fatalf("POST /mcp/load %s = %d, want %d", tc.body, resp.StatusCode, tc.want)
+		}
+	}
+	cfg := config.LoadForEdit(config.UserConfigPath())
+	if cfg == nil || !cfg.MCPAlwaysLoad(config.PluginEntry{Name: "ops"}) {
+		t.Fatalf("the user config does not carry the choice: %+v", cfg)
+	}
+}

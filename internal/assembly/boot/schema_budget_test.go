@@ -23,7 +23,7 @@ func TestProviderVisibleSchemaSurfaceStaysWithinBudget(t *testing.T) {
 	for _, x := range tool.Builtins() {
 		reg.Add(x)
 	}
-	applyUnifiedProviderToolSurface(reg, false, ablation.Set{})
+	applyUnifiedProviderToolSurface(reg, false, ablation.Set{}, nil)
 
 	type row struct {
 		name string

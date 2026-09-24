@@ -19,7 +19,7 @@ func configPackages(home string) []config.InstalledPackage {
 		for name, srv := range pkg.Manifest.MCPServers {
 			servers[name] = config.PackageMCPServer{
 				Type: srv.Type, Command: srv.Command, Args: srv.Args, Env: srv.Env,
-				URL: srv.URL, Headers: srv.Headers, AutoStart: srv.AutoStart, Tier: srv.Tier,
+				URL: srv.URL, Headers: srv.Headers, AutoStart: srv.AutoStart, Tier: srv.Tier, Load: srv.Load,
 			}
 		}
 		out = append(out, config.InstalledPackage{

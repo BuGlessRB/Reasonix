@@ -251,9 +251,9 @@ type StartPolicy struct {
 	// on the host and other plugins keep going (StartAvailable semantics).
 	AbortOnError bool
 
-	// SkipPersistence disables RecordStartup / SaveCachedSchema side effects.
-	// Use for read-only live probes (capability diagnostics) that must not
-	// write MCP stats or schema cache files under Reasonix home.
+	// SkipPersistence disables the SaveCachedSchema side effect. Use for
+	// read-only live probes (capability diagnostics) that must not write
+	// schema cache files under Reasonix home.
 	SkipPersistence bool
 }
 
@@ -365,35 +365,20 @@ func Start(ctx context.Context, specs []Spec, p StartPolicy) (*Host, []tool.Tool
 			}
 
 			phaseAStart := time.Now()
-			recordedPhaseADur := func() time.Duration {
-				dur := time.Since(phaseAStart)
-				if p.PerPluginTimeout > 0 && callCtx.Err() == context.DeadlineExceeded && dur < p.PerPluginTimeout {
-					return p.PerPluginTimeout
-				}
-				return dur
-			}
 
 			// Transport on the parent ctx, startup RPCs on the timed callCtx: the
 			// per-plugin timeout caps initialize+listTools, but the long-lived
 			// stdio child must outlive the startup scope and later phase-B calls.
 			c, err := start(ctx, callCtx, spec)
 			if err != nil {
-				phaseADur := recordedPhaseADur()
 				cancelStartup()
-				if !p.SkipPersistence {
-					h.bgWrites.Go(func() { ; _ = RecordStartup(spec.Name, phaseADur) })
-				}
 				ch <- result{idx: idx, spec: spec, err: fmt.Errorf("start plugin %q: %w", spec.Name, err)}
 				return
 			}
 
 			ts, err := c.listTools(callCtx)
 			if err != nil {
-				phaseADur := recordedPhaseADur()
 				cancelStartup()
-				if !p.SkipPersistence {
-					h.bgWrites.Go(func() { ; _ = RecordStartup(spec.Name, phaseADur) })
-				}
 				c.close()
 				err = newStartupFailure("tools/list", phaseAStart, c.startupStderr(), err)
 				ch <- result{idx: idx, spec: spec, err: fmt.Errorf("list tools from %q: %w", spec.Name, err)}
@@ -401,16 +386,11 @@ func Start(ctx context.Context, specs []Spec, p StartPolicy) (*Host, []tool.Tool
 			}
 			c.toolCount = len(ts)
 
-			// Persist for next launch on the side: a slow stats/cache write
-			// must not delay tools coming online, and either failure is
-			// recoverable (we just re-handshake or skip auto-demote).
-			phaseADur := recordedPhaseADur()
+			// Persist for next launch on the side: a slow cache write must not
+			// delay tools coming online, and a failed one only costs a handshake.
 			cancelStartup()
 			if !p.SkipPersistence {
-				h.bgWrites.Go(func() {
-					_ = RecordStartup(spec.Name, phaseADur)
-					c.saveHandshakeSchema(spec, ts)
-				})
+				h.bgWrites.Go(func() { c.saveHandshakeSchema(spec, ts) })
 			}
 
 			// Prompts and resources are deferred to StartPhaseB so the boot path

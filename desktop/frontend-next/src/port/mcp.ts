@@ -20,7 +20,16 @@ export interface McpEntry {
   httpStatus?: number;
   // This project decided the switch for itself instead of inheriting it.
   localOverride?: boolean;
+  // What config asks for now, and whether this session's schema carries the
+  // server's tools. The schema is fixed when a session starts, so the two
+  // differ until the next one.
+  alwaysLoad?: boolean;
+  inSchema?: boolean;
 }
+
+// always puts a server's tools in every request; deferred reaches them through
+// search; empty hands the choice back to the server's own declaration.
+export type McpLoad = "always" | "deferred" | "";
 
 // One tool as its own server describes it. error carries a schema this host
 // rejected: listed but not callable, which is not the same as absent.

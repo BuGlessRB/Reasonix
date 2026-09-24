@@ -20,6 +20,14 @@ const MCP_STATE: Record<string, string> = {
   idle: "未连接",
 };
 
+// A tag only when the schema carries the server's tools or config asks it to:
+// deferred is the default, and a badge on every row is a badge on none.
+function loadTag(m: McpEntry): { text: string; pending: boolean } | null {
+  if (m.alwaysLoad) return { text: m.inSchema ? t("常驻") : t("常驻 · 尚未生效"), pending: !m.inSchema };
+  if (m.inSchema) return { text: t("常驻 · 待撤下"), pending: true };
+  return null;
+}
+
 // The tool list is the long half and the least urgent, so it folds behind its
 // own count — the same idiom a long file read uses in the transcript.
 export function ServerRow({
@@ -106,11 +114,36 @@ export function ServerRow({
   );
 
   const tools = m.toolList ?? [];
+  const tag = loadTag(m);
+  // The tool list is what gets loaded, so the choice sits above it; a server
+  // whose tools are not known yet has nothing to load either way.
+  const load = live && m.enabled && tools.length > 0 && (
+    <div className="load">
+      <span className="lb">{t("加载方式")}</span>
+      <div className="seg" data-text role="group" aria-label={t("加载方式")}>
+        {(["deferred", "always"] as const).map((mode) => (
+          <button key={mode} data-action="mcp.load" data-target={m.name} data-value={mode}
+            aria-pressed={(mode === "always") === !!m.alwaysLoad} disabled={!!busy}
+            onClick={() => {
+              if ((mode === "always") !== !!m.alwaysLoad) void run("load", () => port.setMcpLoad(m.name, mode));
+            }}>
+            {t(mode === "always" ? "常驻" : "按需")}
+          </button>
+        ))}
+      </div>
+      <span className="hn">
+        {t(m.alwaysLoad
+          ? "启动时预先连接，工具每轮随请求发送，模型直接调用，省去搜索往返，但占用上下文。"
+          : "用到时再搜索加载，不占上下文，调用前多一轮往返。")}
+      </span>
+    </div>
+  );
   const head = (
     <>
       <i className="pip" />
       <Clip className="nm">{m.name}</Clip>
       {tools.length ? <Clip className="fold">{t("{n} 个工具", { n: m.tools })}</Clip> : null}
+      {tag && <i className="ld" data-pending={tag.pending ? "" : undefined}>{tag.text}</i>}
       <Clip className="meta">{meta}</Clip>
       {m.localOverride && <Exception onClear={() => void run("clear", () => port.clearMcpOverride(m.name, root || undefined))} busy={busy === "clear"} />}
       {actions}
@@ -147,6 +180,7 @@ export function ServerRow({
       {about}
       {why && <div className="why">{why}</div>}
       {confirm}
+      {load}
       <div className="peek">
         {tools.map((tool) => (
           // 一行一个工具：它叫什么、它自己说它干什么、以及这一刀下去会不会动

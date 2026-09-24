@@ -248,6 +248,10 @@ type mcpEntry struct {
 	// LocalOverride marks a switch this project set for itself instead of
 	// inheriting the global one, which the surface shows as a local exception.
 	LocalOverride bool `json:"localOverride,omitempty"`
+	// AlwaysLoad is what config asks for now; InSchema is what this session's
+	// schema carries. They differ until the next session starts.
+	AlwaysLoad bool `json:"alwaysLoad,omitempty"`
+	InSchema   bool `json:"inSchema,omitempty"`
 }
 
 // mcpTool is one tool as the server describes it, plus the two hints that
@@ -362,6 +366,11 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 			Transport: st.Entry.Type, Source: string(st.Entry.Source),
 		}))
 	}
+	for i := range out {
+		if st, ok := declared[out[i].Name]; ok {
+			out[i].AlwaysLoad, out[i].InSchema = st.AlwaysLoad, st.InSchema
+		}
+	}
 	writeJSON(w, map[string]any{"servers": out, "scope": scopeView(ctl)})
 }
 
@@ -413,6 +422,39 @@ func (s *Server) mcpReconnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"name": name, "state": "ready", "tools": tools})
+}
+
+// mcpLoad sets whether a server's tools load into the provider schema. An
+// empty load clears the user's choice so the server's declaration applies.
+// The schema is fixed when a runtime is assembled, so the runtime is rebuilt.
+func (s *Server) mcpLoad(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+		Load string `json:"load"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		missingField(w, "name")
+		return
+	}
+	switch body.Load {
+	case "", config.MCPLoadAlways, config.MCPLoadDeferred:
+	default:
+		badValue(w, "load", config.MCPLoadAlways, config.MCPLoadDeferred, "")
+		return
+	}
+	if err := config.SetUserMCPLoad(name, body.Load); err != nil {
+		writeCatalogError(w, err)
+		return
+	}
+	if err := s.rebuildInPlace(r.Context()); err != nil {
+		rebuildFailed(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"name": name, "load": body.Load})
 }
 
 // mcpEnabled flips the durable activation switch for one server at the

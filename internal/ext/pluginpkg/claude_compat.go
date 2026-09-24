@@ -14,6 +14,7 @@ import (
 
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/base/frontmatter"
+	"reasonix/internal/contract/config"
 )
 
 const (
@@ -315,6 +316,7 @@ func appendClaudeMCPFile(root string, manifest *Manifest) ([]string, []Compatibi
 			Headers     map[string]string `json:"headers"`
 			Title       string            `json:"title"`
 			Description string            `json:"description"`
+			AlwaysLoad  bool              `json:"alwaysLoad"`
 		} `json:"mcpServers"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -375,6 +377,10 @@ func appendClaudeMCPFile(root string, manifest *Manifest) ([]string, []Compatibi
 			continue
 		}
 		autoStart := false
+		load := ""
+		if spec.AlwaysLoad {
+			load = config.MCPLoadAlways
+		}
 		manifest.MCPServers[id] = MCPServer{
 			Type:        typ,
 			Command:     strings.TrimSpace(spec.Command),
@@ -383,6 +389,7 @@ func appendClaudeMCPFile(root string, manifest *Manifest) ([]string, []Compatibi
 			URL:         strings.TrimSpace(spec.URL),
 			Headers:     cloneHookEnv(spec.Headers),
 			AutoStart:   &autoStart,
+			Load:        load,
 			DisplayName: firstNonEmpty(strings.TrimSpace(spec.Title), strings.TrimSpace(displayName)),
 			Description: strings.TrimSpace(spec.Description),
 			Imported:    true,

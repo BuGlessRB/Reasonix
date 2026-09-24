@@ -3,23 +3,10 @@ package boot
 import (
 	"strings"
 
-	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/plugin"
 	"reasonix/internal/ext/skill"
 )
-
-func partitionByTier(entries []config.PluginEntry) (eager, bg []config.PluginEntry) {
-	for _, e := range entries {
-		switch e.ResolvedTier() {
-		case "eager":
-			eager = append(eager, e)
-		default:
-			bg = append(bg, e)
-		}
-	}
-	return eager, bg
-}
 
 func skillMCPBindings(sk skill.Skill, reg *tool.Registry, specs []plugin.Spec, cachedTools map[string][]plugin.CachedTool, cacheKeyOK map[string]bool) []tool.MCPBinding {
 	var out []tool.MCPBinding

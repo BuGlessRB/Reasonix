@@ -20,7 +20,7 @@ func TestConfigPackagesProjectsEnabledPackages(t *testing.T) {
   "contributes": {
     "commands": ["commands"],
     "prompts": ["prompts"],
-    "mcpServers": {"srv": {"type": "stdio", "command": "./srv", "args": ["--serve"]}}
+    "mcpServers": {"srv": {"type": "stdio", "command": "./srv", "args": ["--serve"], "load": "always"}}
   }
 }`)
 	writeTestFile(t, filepath.Join(root, "commands", "go.md"), "Go")
@@ -44,7 +44,7 @@ func TestConfigPackagesProjectsEnabledPackages(t *testing.T) {
 		t.Fatalf("command dirs = %+v, want the commands and the prompts root", pkg.CommandDirs)
 	}
 	srv, ok := pkg.MCPServers["srv"]
-	if !ok || srv.Type != "stdio" || srv.Command == "" || len(srv.Args) != 1 || srv.Args[0] != "--serve" {
+	if !ok || srv.Type != "stdio" || srv.Command == "" || len(srv.Args) != 1 || srv.Args[0] != "--serve" || srv.Load != "always" {
 		t.Fatalf("servers = %+v", pkg.MCPServers)
 	}
 }

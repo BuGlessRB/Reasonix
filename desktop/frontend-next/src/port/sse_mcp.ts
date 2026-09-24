@@ -1,5 +1,5 @@
 import { SseProvider } from "./sse_provider";
-import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, ScopeLayer } from "./port";
+import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, McpLoad, ScopeLayer } from "./port";
 import { rootQuery } from "./sse_http";
 
 // External services and the project they answer for. A draft is parsed before it
@@ -37,6 +37,9 @@ export class SseMcp extends SseProvider {
   }
   clearMcpOverride(name: string, root?: string) {
     return this.post("/mcp/enabled", { name, clear: true, scope: "project", root });
+  }
+  setMcpLoad(name: string, load: McpLoad) {
+    return this.post("/mcp/load", { name, load });
   }
 
   // A parse failure is the normal case while typing, and its message is the

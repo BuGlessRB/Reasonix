@@ -1359,6 +1359,9 @@ type ToolsConfig struct {
 	Search                   SearchConfig         `toml:"search"`
 	Shell                    ShellConfig          `toml:"shell"`
 	SystemOne                SystemOneConfig      `toml:"system_one"`
+	// MCPLoad maps a server name to "always" or "deferred", overriding what
+	// the server's own declaration says.
+	MCPLoad map[string]string `toml:"mcp_load"`
 }
 
 const (
@@ -1483,29 +1486,6 @@ func (s MCPConfigSource) ProjectScoped() bool {
 
 func (e PluginEntry) ShouldAutoStart() bool {
 	return e.AutoStart == nil || *e.AutoStart
-}
-
-// ResolvedTier returns the normalized tier ("eager"|"background") with the
-// project default applied. Legacy lazy and unknown values fall back to
-// background so enabled MCPs are available without manual connection.
-//
-// Tier no longer changes runtime process start timing; it remains for config
-// compatibility and diagnostics only.
-func (e PluginEntry) ResolvedTier() string {
-	return resolvedMCPTier(e.Tier)
-}
-
-func resolvedMCPTier(tier string) string {
-	switch strings.ToLower(strings.TrimSpace(tier)) {
-	case "eager":
-		return "eager"
-	case "background", "lazy":
-		return "background"
-	case "":
-		return "background"
-	default:
-		return "background"
-	}
 }
 
 // AutoStartPlugins returns enabled MCP entries for the catalog. Durable

@@ -185,6 +185,7 @@ func parseMCPJSON(b []byte) ([]config.PluginEntry, []string, error) {
 			CallTimeoutSeconds    int               `json:"call_timeout_seconds"`
 			ToolTimeoutSeconds    map[string]int    `json:"tool_timeout_seconds"`
 			Tier                  string            `json:"tier"`
+			AlwaysLoad            bool              `json:"alwaysLoad"`
 		} `json:"mcpServers"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
@@ -233,6 +234,9 @@ func parseMCPJSON(b []byte) ([]config.PluginEntry, []string, error) {
 			CallTimeoutSeconds:    s.CallTimeoutSeconds,
 			ToolTimeoutSeconds:    s.ToolTimeoutSeconds,
 			Tier:                  tier,
+		}
+		if s.AlwaysLoad {
+			e.Load = config.MCPLoadAlways
 		}
 		// An empty Type is the canonical "stdio" form; keep it that way so
 		// the rest of the config layer (UpsertPlugin / ShouldAutoStart)

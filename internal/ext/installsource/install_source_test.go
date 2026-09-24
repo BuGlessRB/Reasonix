@@ -2532,3 +2532,22 @@ func TestBackupPathCannotCollideWithSiblingPlugin(t *testing.T) {
 		t.Fatalf("foo version = %q, want the update applied", pkg.Manifest.Version)
 	}
 }
+
+func TestPlanMCPJSONAlwaysLoadCarriesToTheEntry(t *testing.T) {
+	entries, _, err := parseMCPJSON([]byte(`{
+  "mcpServers": {
+    "pinned": { "command": "node", "alwaysLoad": true },
+    "plain": { "command": "node" }
+  }
+}`))
+	if err != nil {
+		t.Fatalf("parseMCPJSON: %v", err)
+	}
+	loads := map[string]string{}
+	for _, e := range entries {
+		loads[e.Name] = e.DeclaredMCPLoad()
+	}
+	if loads["pinned"] != config.MCPLoadAlways || loads["plain"] != config.MCPLoadDeferred {
+		t.Fatalf("loads = %v", loads)
+	}
+}

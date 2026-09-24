@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -238,6 +239,7 @@ type MCPServer struct {
 	Headers     map[string]string `json:"headers,omitempty"`
 	AutoStart   *bool             `json:"auto_start,omitempty"`
 	Tier        string            `json:"tier,omitempty"`
+	Load        string            `json:"load,omitempty"`
 	DisplayName string            `json:"display_name,omitempty"`
 	Description string            `json:"description,omitempty"`
 	Imported    bool              `json:"imported,omitempty"`
@@ -1166,11 +1168,7 @@ func (p Package) hookRefs() []HookRef {
 }
 
 func (p Package) mcpServerRefs() []MCPServerRef {
-	names := make([]string, 0, len(p.Manifest.MCPServers))
-	for name := range p.Manifest.MCPServers {
-		names = append(names, name)
-	}
-	slices.Sort(names)
+	names := slices.Sorted(maps.Keys(p.Manifest.MCPServers))
 	out := make([]MCPServerRef, 0, len(names))
 	for _, name := range names {
 		server := p.Manifest.MCPServers[name]

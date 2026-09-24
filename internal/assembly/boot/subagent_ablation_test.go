@@ -64,7 +64,7 @@ func TestEvidenceArmRemovesTheEvidenceToolSchema(t *testing.T) {
 		for _, x := range tool.Builtins() {
 			reg.Add(x)
 		}
-		applyUnifiedProviderToolSurface(reg, false, arm)
+		applyUnifiedProviderToolSurface(reg, false, arm, nil)
 		names := map[string]bool{}
 		for _, s := range reg.Schemas() {
 			names[s.Name] = true
@@ -123,7 +123,7 @@ func TestRecallSearchArmRemovesTheQueryParameter(t *testing.T) {
 		for _, x := range tool.Builtins() {
 			reg.Add(x)
 		}
-		applyUnifiedProviderToolSurface(reg, false, arm)
+		applyUnifiedProviderToolSurface(reg, false, arm, nil)
 		for _, s := range reg.Schemas() {
 			if s.Name == "recall" {
 				b, err := json.Marshal(s)

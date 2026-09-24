@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -15,6 +17,23 @@ func renderPluginPolicy(b *strings.Builder, pl PluginEntry) {
 	if pl.AutoStart != nil {
 		fmt.Fprintf(b, "auto_start = %v\n", *pl.AutoStart)
 	}
+	if pl.DeclaredMCPLoad() == MCPLoadAlways {
+		fmt.Fprintf(b, "load = %q\n", MCPLoadAlways)
+	}
+}
+
+// renderMCPLoadSection writes [tools.mcp_load] when the user has chosen a mode
+// for any server.
+func renderMCPLoadSection(b *strings.Builder, modes map[string]string) {
+	if len(modes) == 0 {
+		return
+	}
+	b.WriteString("[tools.mcp_load]\n")
+	for _, name := range slices.Sorted(maps.Keys(modes)) {
+		mode, _ := normalizeMCPLoad(modes[name])
+		fmt.Fprintf(b, "%s = %q\n", renderTOMLKeyPart(name), mode)
+	}
+	b.WriteString("\n")
 }
 
 // renderPluginOverrides writes a server's own timeouts and OAuth allowance,

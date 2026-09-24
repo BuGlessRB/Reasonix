@@ -141,6 +141,10 @@ type MCPServerState struct {
 	// off, and a surface that shows only Enabled cannot tell that from one the
 	// user switched off — which reads as the project's MCP having vanished.
 	Pending bool
+	// AlwaysLoad is what config asks for now; InSchema is whether this
+	// session's provider schema carries the server's tools, fixed at its start.
+	AlwaysLoad bool
+	InSchema   bool
 }
 
 // ConfiguredMCPServers lists every configured server with its resolved
@@ -159,6 +163,7 @@ func (c *Controller) ConfiguredMCPServers() []MCPServerState {
 			local[row.Name] = true
 		}
 	}
+	inSchema := c.mcpServersInSchema()
 	out := make([]MCPServerState, 0, len(cfg.Plugins))
 	for _, p := range cfg.Plugins {
 		enabled, err := store.IsEnabled(p, c.workspaceRoot)
@@ -167,7 +172,8 @@ func (c *Controller) ConfiguredMCPServers() []MCPServerState {
 		}
 		state := MCPServerState{
 			Entry: p, Enabled: enabled, LocalOverride: local[p.Name],
-			Pending: store.AwaitingDecision(p, c.workspaceRoot),
+			Pending:    store.AwaitingDecision(p, c.workspaceRoot),
+			AlwaysLoad: cfg.MCPAlwaysLoad(p), InSchema: inSchema[p.Name],
 		}
 		state.Description, state.Tools, state.Stale = mcpCachedFacts(c.mcpSpec(p))
 		out = append(out, state)
@@ -343,4 +349,20 @@ func mcpCachedFacts(spec plugin.Spec) (description string, tools []plugin.ToolIn
 		})
 	}
 	return cs.Instructions, tools, !keyOK
+}
+
+// mcpServersInSchema names the servers with at least one tool in this
+// session's provider schema.
+func (c *Controller) mcpServersInSchema() map[string]bool {
+	out := map[string]bool{}
+	reg := c.mcp.registry()
+	if reg == nil {
+		return out
+	}
+	for _, b := range reg.MCPBindings() {
+		if reg.ProviderVisible(b.CallableName) {
+			out[b.Server] = true
+		}
+	}
+	return out
 }

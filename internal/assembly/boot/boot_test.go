@@ -3754,28 +3754,6 @@ func TestBuildSkipsLegacySessionMigrationWhenIsolated(t *testing.T) {
 	}
 }
 
-// TestPartitionByTier pins the bucket assignment contract that the rest of
-// boot.go's plugin orchestration depends on: eager keeps its blocking startup
-// slice, while empty, background, legacy lazy, and unknown tiers all warm up in
-// the background.
-func TestPartitionByTier(t *testing.T) {
-	entries := []config.PluginEntry{
-		{Name: "e1", Tier: "eager"},
-		{Name: "l1", Tier: "lazy"},
-		{Name: "b1", Tier: "background"},
-		{Name: "default", Tier: ""}, // empty defaults to background
-	}
-
-	eager, bg := partitionByTier(entries)
-
-	if len(eager) != 1 || eager[0].Name != "e1" {
-		t.Fatalf("eager bucket = %+v, want [e1]", eager)
-	}
-	if len(bg) != 3 || bg[0].Name != "l1" || bg[1].Name != "b1" || bg[2].Name != "default" {
-		t.Fatalf("background bucket = %+v, want [l1, b1, default] preserving input order", bg)
-	}
-}
-
 func TestSkillMCPBindingsUseOnlyValidOwnedCache(t *testing.T) {
 	specs := []plugin.Spec{
 		{Name: "figma", Package: "design-plugin", StripRawPrefix: "figma_"},
@@ -4179,73 +4157,6 @@ model = "x"
 	}
 	if got, err := os.ReadFile(target); err != nil || string(got) != "ok" {
 		t.Fatalf("sandboxed file = %q, err=%v", got, err)
-	}
-}
-
-func TestBuildMigratesLegacyEagerBeforeStatsDemotion(t *testing.T) {
-	isolateConfigHome(t)
-	dir := robustTempDir(t)
-	t.Chdir(dir)
-
-	// Three samples above 2*budget — the rule in stats.go's Recommend triggers
-	// when the trailing window is entirely over the threshold. Use 30s so even
-	// future budget bumps stay below the threshold.
-	for i := range 3 {
-		if err := plugin.RecordStartup("slowserver", 30*time.Second); err != nil {
-			t.Fatalf("RecordStartup #%d: %v", i, err)
-		}
-	}
-
-	writeFile(t, dir, "reasonix.toml", `
-default_model = "test-model"
-
-[agent]
-system_prompt = "BASE"
-
-[[providers]]
-name = "test-model"
-kind = "openai"
-base_url = "https://example.invalid"
-model = "x"
-api_key_env = "REASONIX_TEST_KEY_UNSET"
-
-[[plugins]]
-name = "slowserver"
-command = "reasonix-missing-slow-mcp-binary"
-tier = "eager"
-`)
-
-	var notices []event.Event
-	approveProjectServer(t, dir, "slowserver")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	ctrl, err := Build(ctx, Options{
-		Sink: event.FuncSink(func(e event.Event) {
-			if e.Kind == event.Notice {
-				notices = append(notices, e)
-			}
-		}),
-	})
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-	defer ctrl.Close()
-
-	failures := waitForMCPFailure(t, ctrl.Host(), "slowserver", 2*time.Second)
-	if len(failures) != 1 || failures[0].Name != "slowserver" {
-		t.Fatalf("Host.Failures() = %+v, want background startup failure for migrated plugin", failures)
-	}
-
-	foundDemoteNotice := false
-	for _, n := range notices {
-		if strings.Contains(n.Text, "lazy") {
-			foundDemoteNotice = true
-			break
-		}
-	}
-	if foundDemoteNotice {
-		t.Fatalf("demotion notice should not mention legacy lazy tier; got notices %+v", notices)
 	}
 }
 
