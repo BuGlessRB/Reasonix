@@ -206,6 +206,17 @@ func (t *reconnectingTransport) dialOne() (transport, error) {
 	return next, nil
 }
 
+// setProtocolVersion reaches the live connection. A replacement is brought up
+// by handshake, which negotiates and sets its own.
+func (t *reconnectingTransport) setProtocolVersion(version string) {
+	t.mu.Lock()
+	active := t.active
+	t.mu.Unlock()
+	if versioned, ok := active.(protocolVersioned); ok {
+		versioned.setProtocolVersion(version)
+	}
+}
+
 func (t *reconnectingTransport) registerProgress(token string, sink tool.ProgressFunc) func() {
 	if token == "" || sink == nil {
 		return func() {}

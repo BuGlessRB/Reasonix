@@ -32,7 +32,7 @@ import (
 )
 
 // protocolVersion is the MCP revision Reasonix advertises during initialize.
-const protocolVersion = "2024-11-05"
+const protocolVersion = "2025-11-25"
 
 // MCPProcessMode selects how a local stdio MCP process is launched.
 // It is an internal runtime field, not a user-facing config knob.
@@ -1684,42 +1684,4 @@ func (t *remoteTool) ExecuteWithImages(ctx context.Context, args json.RawMessage
 		return "", nil, err
 	}
 	return parseToolResult(res)
-}
-
-// parseToolResult flattens an MCP tools/call result into plain text plus the
-// image content items as data URLs. Every image item leaves a short placeholder
-// in the text at its position, so text-only consumers (and non-vision models)
-// still learn an image was returned.
-func parseToolResult(res json.RawMessage) (string, []string, error) {
-	var out struct {
-		Content []struct {
-			Type     string `json:"type"`
-			Text     string `json:"text"`
-			Data     string `json:"data"`
-			MimeType string `json:"mimeType"`
-		} `json:"content"`
-		IsError bool `json:"isError"`
-	}
-	if err := json.Unmarshal(res, &out); err != nil {
-		return "", nil, fmt.Errorf("decode tool result: %w", err)
-	}
-	var sb strings.Builder
-	var images []string
-	for _, c := range out.Content {
-		switch c.Type {
-		case "text":
-			sb.WriteString(c.Text)
-		case "image":
-			placeholder, url := toolResultImage(c.MimeType, c.Data, len(images))
-			sb.WriteString(placeholder)
-			if url != "" {
-				images = append(images, url)
-			}
-		}
-	}
-	text := sb.String()
-	if out.IsError {
-		return text, images, fmt.Errorf("plugin tool reported error: %s", text)
-	}
-	return text, images, nil
 }

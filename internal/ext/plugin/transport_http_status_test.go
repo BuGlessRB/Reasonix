@@ -53,6 +53,7 @@ func TestAnExpiredSessionIsStillItsOwnIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer transport.close()
+	transport.session.id = "issued-earlier"
 
 	_, err = transport.call(context.Background(), "ping", nil)
 	var expired *httpSessionExpiredError
@@ -62,5 +63,41 @@ func TestAnExpiredSessionIsStillItsOwnIdentity(t *testing.T) {
 	var status *httpStatusError
 	if errors.As(err, &status) {
 		t.Errorf("it also reads as a plain http %d, which is the arm that would swallow it", status.Status)
+	}
+}
+
+// The spec's rule is the status alone: a 404 to a request that carried a
+// session id means the session is gone, whatever the body says. Reading the
+// body's wording to decide was a judgement made from an external server's
+// prose, and a server that answers with plain text was never re-initialised.
+func TestA404ToASessionRequestIsExpiryWhateverTheBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("not found"))
+	}))
+	defer srv.Close()
+	transport, err := newHTTPTransport(Spec{Name: "remote", Type: "http", URL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer transport.close()
+
+	_, err = transport.call(context.Background(), "ping", nil)
+	var expired *httpSessionExpiredError
+	if errors.As(err, &expired) {
+		t.Fatalf("a 404 with no session held is a wrong address, not an expiry: %v", err)
+	}
+
+	transport.session.id = "issued-earlier"
+	_, err = transport.call(context.Background(), "ping", nil)
+	if !errors.As(err, &expired) {
+		t.Fatalf("a 404 to a session request = %v, want an expired session", err)
+	}
+	if transport.sessionID() != "" {
+		t.Fatal("the expired session id was kept")
 	}
 }

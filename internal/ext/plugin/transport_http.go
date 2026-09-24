@@ -42,7 +42,14 @@ type httpTransport struct {
 
 	mu      sync.Mutex
 	nextID  int
-	session string // Mcp-Session-Id, captured from responses
+	session httpSession
+}
+
+// httpSession is what the server issued at initialize: the Mcp-Session-Id it
+// hands back, and the protocol revision the session agreed on.
+type httpSession struct {
+	id      string
+	version string
 }
 
 func newHTTPTransport(s Spec) (*httpTransport, error) {
@@ -100,13 +107,19 @@ func sameHTTPOrigin(a, b *url.URL) bool {
 	return effectivePort(a) == effectivePort(b)
 }
 
-func (t *httpTransport) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+func (t *httpTransport) call(ctx context.Context, method string, params any) (result json.RawMessage, err error) {
 	id := t.nextRequestID()
 	body, err := json.Marshal(rpcRequest{JSONRPC: "2.0", ID: id, Method: method, Params: params})
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil && ctx.Err() != nil {
+			cancelInFlight(t, method, id, ctx.Err())
+		}
+	}()
 
+	heldSession := t.sessionID() != ""
 	resp, err := t.do(ctx, body)
 	if err != nil {
 		return nil, fmt.Errorf("plugin %q: %s: %w", t.name, method, err)
@@ -117,7 +130,9 @@ func (t *httpTransport) call(ctx context.Context, method string, params any) (js
 	if resp.StatusCode/100 != 2 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		msg := strings.TrimSpace(string(b))
-		if isHTTPSessionExpiredResponse(resp.StatusCode, b) {
+		// The spec's rule, whatever the body says: a 404 to a request that
+		// carried a session id means that session is gone.
+		if resp.StatusCode == http.StatusNotFound && heldSession {
 			t.clearSession()
 			return nil, fmt.Errorf("plugin %q: %s: %w", t.name, method, &httpSessionExpiredError{
 				status: resp.StatusCode,
@@ -151,8 +166,30 @@ func (t *httpTransport) notify(ctx context.Context, method string, params any) e
 	return nil
 }
 
+// close ends the server's session too, when there is one. Best effort: a
+// server that does not allow DELETE answers 405, and the session then expires
+// on its own.
 func (t *httpTransport) close() {
+	if sid := t.sessionID(); sid != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), cancelNotifyLimit)
+		if req, err := http.NewRequestWithContext(ctx, http.MethodDelete, t.url, nil); err == nil {
+			for k, v := range t.headers {
+				req.Header.Set(k, v)
+			}
+			req.Header.Set("Mcp-Session-Id", sid)
+			if resp, err := t.client.Do(req); err == nil {
+				_ = resp.Body.Close()
+			}
+		}
+		cancel()
+	}
 	t.client.CloseIdleConnections()
+}
+
+func (t *httpTransport) setProtocolVersion(version string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.session.version = version
 }
 
 func (t *httpTransport) registerProgress(token string, sink tool.ProgressFunc) func() {
@@ -172,13 +209,19 @@ func (t *httpTransport) nextRequestID() int {
 func (t *httpTransport) sessionID() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.session
+	return t.session.id
+}
+
+func (t *httpTransport) protocolVersion() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.session.version
 }
 
 func (t *httpTransport) clearSession() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.session = ""
+	t.session.id = ""
 }
 
 // do POSTs one JSON-RPC body with the standard MCP headers, the configured
@@ -216,6 +259,9 @@ func (t *httpTransport) doOAuth(ctx context.Context, body []byte, refreshed bool
 	if sid := t.sessionID(); sid != "" {
 		req.Header.Set("Mcp-Session-Id", sid)
 	}
+	if v := t.protocolVersion(); v != "" {
+		req.Header.Set("MCP-Protocol-Version", v)
+	}
 	resp, err := t.client.Do(req)
 	if err != nil || refreshed || resp.StatusCode != http.StatusUnauthorized || !usedOAuth || !t.oauth.canRefresh() {
 		return resp, err
@@ -230,7 +276,7 @@ func (t *httpTransport) doOAuth(ctx context.Context, body []byte, refreshed bool
 func (t *httpTransport) captureSession(resp *http.Response) {
 	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
 		t.mu.Lock()
-		t.session = sid
+		t.session.id = sid
 		t.mu.Unlock()
 	}
 }
@@ -262,17 +308,6 @@ func (e *httpSessionExpiredError) Error() string {
 		return fmt.Sprintf("http %d: MCP session expired", e.status)
 	}
 	return fmt.Sprintf("http %d: %s", e.status, e.body)
-}
-
-func isHTTPSessionExpiredResponse(status int, body []byte) bool {
-	if status != http.StatusNotFound {
-		return false
-	}
-	var resp rpcResponse
-	if err := json.Unmarshal(bytes.TrimSpace(body), &resp); err != nil || resp.Error == nil {
-		return false
-	}
-	return resp.Error.Code == -32001 && strings.Contains(strings.ToLower(resp.Error.Message), "session not found")
 }
 
 // readSSEResponse scans an SSE stream for the JSON-RPC response matching id,

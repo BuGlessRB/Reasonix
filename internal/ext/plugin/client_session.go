@@ -159,6 +159,12 @@ func (c *Client) initializeSessionOn(ctx context.Context, t transport, recordCap
 	if len(mcpRoots(c.spec.WorkspaceRoot)) > 0 {
 		capabilities["roots"] = map[string]any{"listChanged": false}
 	}
+	versioned, _ := t.(protocolVersioned)
+	if versioned != nil {
+		// A re-initialize starts over: the header belongs to a session, and
+		// initialize is what opens one.
+		versioned.setProtocolVersion("")
+	}
 	res, err := c.callOn(ctx, t, "initialize", map[string]any{
 		"protocolVersion": protocolVersion,
 		"capabilities":    capabilities,
@@ -166,6 +172,17 @@ func (c *Client) initializeSessionOn(ctx context.Context, t transport, recordCap
 	})
 	if err != nil {
 		return err
+	}
+	var chosen struct {
+		ProtocolVersion string `json:"protocolVersion"`
+	}
+	_ = json.Unmarshal(res, &chosen)
+	version, err := negotiatedVersion(chosen.ProtocolVersion)
+	if err != nil {
+		return fmt.Errorf("plugin %q: %w", c.name, err)
+	}
+	if versioned != nil {
+		versioned.setProtocolVersion(version)
 	}
 	if !recordCapabilities {
 		// Runtime session refresh must not rewrite startup-only capability flags.
