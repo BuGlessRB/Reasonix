@@ -142,6 +142,15 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-22.04
     steps:
+      # Real-time scanning inspects every file the job writes, and packaging
+      # writes a quarter of a gigabyte twice. The runner is thrown away after
+      # the job; if the image refuses the switch the build is only slower.
+      - name: Stop Defender scanning the build
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.resolve.outputs.sha }}
@@ -370,15 +379,24 @@ jobs:
 
       # The installer and the portable archive are both built from the bundle
       # that now holds the signed executables, which is what makes the archive
-      # carry them too rather than a second unsigned copy.
+      # carry them too rather than a second unsigned copy. They are built at
+      # once, the zip from its own copy: NSIS writes elevate.exe into the tree
+      # it packs, and a zip read beside that would hold it or not by timing.
       - name: Package Windows from the bundle
         if: runner.os == 'Windows'
         working-directory: desktop/electron
         shell: bash
         run: |
           version="${{ needs.resolve.outputs.version }}"
-          pnpm exec electron-builder --prepackaged ../../dist/win-unpacked \
+          rm -rf ../../zip-src ../../dist-zip
+          cp -r ../../dist/win-unpacked ../../zip-src
+          pnpm exec electron-builder --prepackaged ../../zip-src --win zip \
+            -c.extraMetadata.version="${version#v}" -c.directories.output=../../dist-zip &
+          zip_pid=$!
+          pnpm exec electron-builder --prepackaged ../../dist/win-unpacked --win nsis \
             -c.extraMetadata.version="${version#v}"
+          wait "$zip_pid"
+          mv ../../dist-zip/ReasonixStudio-windows-amd64.zip ../../dist/
 
       # Stage two: the finished NSIS container, signed only once the payload it
       # was built from is present and already signed — the artifact
@@ -682,6 +700,9 @@ jobs:
           aws configure set aws_access_key_id "${{ secrets.R2_ACCESS_KEY_ID }}"
           aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}"
           aws configure set default.region auto
+          # A release's delta is tens of thousands of chunks of about 10 KB, so
+          # the sync is bound by request round trips, not bandwidth.
+          aws configure set default.s3.max_concurrent_requests 64
           endpoint="https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com"
 
           # Chunks before anything that names them: they are named by their
