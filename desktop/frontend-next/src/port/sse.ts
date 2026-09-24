@@ -422,6 +422,9 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.get<WorkspaceFile>(`/workspace/file?path=${encodeURIComponent(path)}`);
   }
 
+  workspaceImageURL(path: string) {
+    return `${this.base}/workspace/image?path=${encodeURIComponent(path)}`;
+  }
   saveWorkspaceFile(file: WorkspaceFile) {
     return this.put0<WorkspaceFile>("/workspace/file", file);
   }

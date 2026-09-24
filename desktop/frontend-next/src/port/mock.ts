@@ -414,6 +414,7 @@ export class MockPort extends MockTheme implements AgentPort {
     return { files: ["README.md"], directories: ["internal"] };
   }
   async workspaceFile(path: string) { return { path, content: `// ${path}\n`, revision: "fixture" }; }
+  workspaceImageURL(path: string) { return `/fixture/${path}`; }
   async saveWorkspaceFile(file: import("./port").WorkspaceFile) { return { ...file, revision: file.revision + "-saved" }; }
 
   async trajectory(): Promise<TrajectoryRead> {

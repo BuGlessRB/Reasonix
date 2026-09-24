@@ -154,7 +154,16 @@ function textOf(node: ReactNode): string {
   return "";
 }
 
-const Block = memo(function Block({ src, math, emoji, code, tail }: { src: string; math: Plugin | null; emoji: Plugin | null; code: Plugin | null; tail?: boolean }) {
+/** How a document shown from the workspace reads its own references: a link to
+ *  another file there, and an image stored beside it. Absent for a reply. */
+export interface LocalRefs {
+  /** An action for href, or null when it is not a file in the workspace. */
+  link(href: string): (() => void) | null;
+  /** Where to load src from, or null to leave it as written. */
+  image(src: string): string | null;
+}
+
+const Block = memo(function Block({ src, math, emoji, code, tail, local }: { src: string; math: Plugin | null; emoji: Plugin | null; code: Plugin | null; tail?: boolean; local?: LocalRefs }) {
   // Inside the memo, so a settled block normalises once instead of per chunk.
   const body = normalizeMath(tail ? balanceFences(src) : src);
   return (
@@ -164,10 +173,32 @@ const Block = memo(function Block({ src, math, emoji, code, tail }: { src: strin
       components={{
         // Every link here comes from model output; a webview navigating away
         // would replace the app with the page.
-        a: ({ children, href }) => (
-          <a href={href} target="_blank" rel="noreferrer noopener">
-            {children}
-          </a>
+        a: ({ children, href }) => {
+          const open = local && href ? local.link(href) : null;
+          if (open) {
+            return (
+              <a
+                href={href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  open();
+                }}
+              >
+                {children}
+              </a>
+            );
+          }
+          // An anchor alone points into a document this view does not number
+          // headings for; followed as a link it would reload the window.
+          if (local && href?.startsWith("#")) return <a>{children}</a>;
+          return (
+            <a href={href} target="_blank" rel="noreferrer noopener">
+              {children}
+            </a>
+          );
+        },
+        img: ({ src, alt, title }) => (
+          <img src={(local && typeof src === "string" && local.image(src)) || (src as string | undefined)} alt={alt} title={title} />
         ),
         pre: ({ children }) => (
           <div className="code-wrap" data-lang={langOf(children) || undefined}>
@@ -187,7 +218,7 @@ const Block = memo(function Block({ src, math, emoji, code, tail }: { src: strin
   );
 });
 
-export function Markdown({ text, streaming }: { text: string; streaming?: boolean }) {
+export function Markdown({ text, streaming, local }: { text: string; streaming?: boolean; local?: LocalRefs }) {
   const shown = useRevealed(text, streaming);
   const math = usePlugin(MATH.test(text), KATEX);
   const emoji = usePlugin(EMOJI.test(text), EMOJIS);
@@ -206,9 +237,9 @@ export function Markdown({ text, streaming }: { text: string; streaming?: boolea
     // handing a listing over would hand over something that was never said.
     <div className="md" data-live={streaming ? "" : undefined}>
       {parts.map((p, i) => (
-        <Block key={i} src={p} math={math} emoji={emoji} code={code} />
+        <Block key={i} src={p} math={math} emoji={emoji} code={code} local={local} />
       ))}
-      <Block src={shown.slice(at)} math={math} emoji={emoji} code={code} tail />
+      <Block src={shown.slice(at)} math={math} emoji={emoji} code={code} local={local} tail />
       {streaming && <span className="caret" />}
     </div>
   );

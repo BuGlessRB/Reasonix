@@ -357,6 +357,8 @@ export interface AgentPort {
   workspaceFiles(path?: string, query?: string): Promise<WorkspaceFiles>;
   workspaceFile(path: string): Promise<WorkspaceFile>;
   saveWorkspaceFile(file: WorkspaceFile): Promise<WorkspaceFile>;
+  // Where an image in the workspace is served, for a rendered document to show.
+  workspaceImageURL(path: string): string;
   // Saves bytes into the workspace's attachment directory and returns the
   // "@path" token a turn references it by. This is the door for what has no
   // path to offer — the clipboard, and a browser tab's dropped File. A window

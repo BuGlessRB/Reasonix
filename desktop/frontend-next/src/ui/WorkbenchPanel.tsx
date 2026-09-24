@@ -12,6 +12,8 @@ import { AgentBrowserPanel, ManualBrowserPanel, UNREAD_TABS } from "./BrowserPan
 import { DiffView } from "./cards/DiffView";
 import { StudioIcon } from "./StudioIcon";
 import { LazyMarkdown } from "./LazyMarkdown";
+import type { LocalRefs } from "./Markdown";
+import { docRef } from "./docrefs";
 
 // The editor and its grammars load with the first file opened, not with Studio.
 const CodeEditor = lazy(() => import("./CodeEditor"));
@@ -295,6 +297,23 @@ export function WorkbenchPanel({
     });
     setSelected(`file:${path}`);
   };
+  // A rendered document's own links open beside it and its images load from the
+  // tree. Held stable per document, so typing re-renders the text alone.
+  const openRef = useRef(openFile);
+  openRef.current = openFile;
+  const docRefs = useMemo<LocalRefs>(
+    () => ({
+      link: (href) => {
+        const to = docRef(filePath, href);
+        return to ? () => openRef.current(to) : null;
+      },
+      image: (src) => {
+        const at = docRef(filePath, src);
+        return at ? port.workspaceImageURL(at) : null;
+      },
+    }),
+    [filePath, port],
+  );
   const toggleFolder = async (path: string) => {
     if (!collapsed.has(path)) {
       setCollapsed((v) => new Set(v).add(path));
@@ -500,7 +519,7 @@ export function WorkbenchPanel({
                 </div>
               ) : mode === "read" && file && file.path === active.path ? (
                 <div className="workbench-read">
-                  <LazyMarkdown text={draft} />
+                  <LazyMarkdown text={draft} local={docRefs} />
                 </div>
               ) : file && file.path === active.path ? (
                 <Suspense fallback={<div className="workbench-empty">{t("正在读取…")}</div>}>
