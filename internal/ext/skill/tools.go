@@ -27,6 +27,9 @@ type SubagentRunOptions struct {
 	// UI events, but that ephemeral event ID must not be persisted as though it
 	// were a provider-visible parent tool call.
 	HostInitiated bool
+	// MaxSteps caps the child's tool-call rounds for this run, below the
+	// default budget; zero keeps the default.
+	MaxSteps int
 }
 
 type SubagentRunner func(ctx context.Context, sk Skill, task string, opts SubagentRunOptions) (string, error)
@@ -329,6 +332,7 @@ type subagentSkillTool struct {
 	store       *Store
 	runner      SubagentRunner
 	profile     ProfileResolver
+	maxSteps    int
 }
 
 func (t *subagentSkillTool) Name() string        { return t.toolName }
@@ -369,7 +373,7 @@ func (t *subagentSkillTool) Execute(ctx context.Context, args json.RawMessage) (
 	if t.runner == nil {
 		return "", fmt.Errorf("%s: no subagent runner is configured in this session", t.toolName)
 	}
-	opts := SubagentRunOptions{ContinueFrom: strings.TrimSpace(p.Continue), ForkFrom: strings.TrimSpace(p.Fork)}
+	opts := SubagentRunOptions{ContinueFrom: strings.TrimSpace(p.Continue), ForkFrom: strings.TrimSpace(p.Fork), MaxSteps: t.maxSteps}
 	if opts.ContinueFrom != "" && opts.ForkFrom != "" {
 		return "", fmt.Errorf("%s: continue_from and fork_from are mutually exclusive; pass only continue_from", t.toolName)
 	}
@@ -399,19 +403,23 @@ func BuiltinSubagentTools(store *Store, runner SubagentRunner, profileResolver .
 	}
 	specs := []struct {
 		toolName, skillName, description, taskDesc string
+		maxSteps                                   int
 	}{
 		{"explore", "explore",
 			"Run a focused read-only codebase investigation in an isolated subagent. Use for broad survey questions across many files — 'find all places that X', 'how does Y work across the project', 'audit Z'. Returns one distilled answer with file:line citations. Its reads + reasoning never enter your context, unlike chained read_file.",
-			"Concrete investigation question. The subagent has none of your context — write a self-contained prompt naming the symbol / pattern / behavior to survey."},
+			"Concrete investigation question. The subagent has none of your context — write a self-contained prompt naming the symbol / pattern / behavior to survey.", 0},
+		{"locate", "locate",
+			"Find where something lives in the codebase: a read-only subagent that runs its searches in parallel within four rounds and returns only file:line ranges, one reason each. Use before read_file or edits when you do not yet know which files matter — 'where is X defined / handled / configured'. Cheaper and faster than explore; use explore when you need an explanation, not locations.",
+			"What to find. The subagent has none of your context — name the symbol, error text, config key or behavior, and any spelling variants you know.", 4},
 		{"research", "research",
 			"Combine web_fetch + code reading in an isolated subagent. Use when the answer needs both an external reference and local verification — 'is X supported by lib Y', 'compare our impl against the spec'. Returns one synthesis citing code (file:line) and web (URL).",
-			"Concrete research question. The subagent has none of your context — name the external thing to look up and the local code to compare against."},
+			"Concrete research question. The subagent has none of your context — name the external thing to look up and the local code to compare against.", 0},
 		{"review", "review",
 			"Review the pending changes (current branch diff) in an isolated subagent — flags correctness / security / missing-tests / hidden behavior per file:line. Read-only; you decide what to act on. Use before suggesting a PR-shaped change or after finishing a multi-step edit.",
-			"What to focus the review on (e.g. 'focus on the auth changes' or 'general'). The subagent reads the diff itself."},
+			"What to focus the review on (e.g. 'focus on the auth changes' or 'general'). The subagent reads the diff itself.", 0},
 		{"security_review", "security-review",
 			"Security-focused review of the current branch diff in an isolated subagent — injection / authz / secrets / deserialization / path-traversal / crypto, severity-tagged. Read-only. Use when shipping changes that touch auth, input parsing, file IO, or external requests.",
-			"Optional scope hint (e.g. 'focus on token handling in internal/auth/') or 'full' for everything in the diff."},
+			"Optional scope hint (e.g. 'focus on token handling in internal/auth/') or 'full' for everything in the diff.", 0},
 	}
 	var out []tool.Tool
 	for _, s := range specs {
@@ -428,6 +436,7 @@ func BuiltinSubagentTools(store *Store, runner SubagentRunner, profileResolver .
 			store:       store,
 			runner:      runner,
 			profile:     pr,
+			maxSteps:    s.maxSteps,
 		})
 	}
 	return out

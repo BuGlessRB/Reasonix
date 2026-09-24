@@ -88,7 +88,7 @@ func (a *Agent) noteCapabilityInvocation(toolName string, args json.RawMessage, 
 
 func capabilityIDFromToolCall(toolName string, args json.RawMessage) string {
 	switch toolName {
-	case "run_skill", "read_skill", "read_only_skill", "explore", "research", "review", "security_review":
+	case "run_skill", "read_skill", "read_only_skill", "explore", "locate", "research", "review", "security_review":
 		var p struct {
 			Name string `json:"name"`
 		}
@@ -97,7 +97,7 @@ func capabilityIDFromToolCall(toolName string, args json.RawMessage) string {
 		if name == "" {
 			// Dedicated wrappers use the tool name as the skill name.
 			switch toolName {
-			case "explore", "research", "review", "security_review":
+			case "explore", "locate", "research", "review", "security_review":
 				name = toolName
 			}
 		}

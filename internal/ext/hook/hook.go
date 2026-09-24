@@ -486,33 +486,6 @@ func MatchesTool(h ResolvedHook, toolName string) bool {
 	return slices.ContainsFunc(claudeMatchNames(toolName), re.MatchString)
 }
 
-// claudeAgentSpawningTools are every Reasonix tool that spawns a subagent and
-// so corresponds to Claude's single "Agent" tool: the general task delegator
-// (task/read_only_task/parallel_tasks) and the dedicated named wrappers
-// around a runAs=subagent skill (BuiltinSubagentTools in
-// internal/ext/skill/tools.go — each is a distinct, directly-callable tool, not
-// routed through run_skill). A Claude "Agent" safety matcher must see all of
-// them, or a hook scoped to it silently misses whichever entry point wasn't
-// mapped.
-var claudeAgentSpawningTools = []string{
-	"task", "read_only_task", "parallel_tasks",
-	"explore", "research", "review", "security_review",
-}
-
-// claudeAgentDefaultDescriptions fill Claude Agent's required description
-// field when the corresponding Reasonix tool does not expose one or the model
-// omitted Reasonix's optional description. These are stable operation labels;
-// the complete task remains in prompt for hook policy decisions.
-var claudeAgentDefaultDescriptions = map[string]string{
-	"task":            "Run delegated subagent task",
-	"read_only_task":  "Run read-only research task",
-	"parallel_tasks":  "Run parallel subagent tasks",
-	"explore":         "Explore the codebase",
-	"research":        "Research external references",
-	"review":          "Review the current changes",
-	"security_review": "Review security risks",
-}
-
 // claudeToolNames maps Reasonix's own tool names to the *current* Claude Code
 // built-in tool name (https://code.claude.com/docs/en/tools-reference) — what
 // an imported hook's emitted tool_name payload field shows, and a script's own
@@ -613,6 +586,7 @@ var claudeToolInputKeyRenames = map[string]map[string]string{
 	// The dedicated subagent wrappers take their task text as "task";
 	// Claude's Agent tool calls the same thing "prompt".
 	"explore":         {"task": "prompt"},
+	"locate":          {"task": "prompt"},
 	"research":        {"task": "prompt"},
 	"review":          {"task": "prompt"},
 	"security_review": {"task": "prompt"},

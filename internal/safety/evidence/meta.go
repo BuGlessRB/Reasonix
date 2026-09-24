@@ -13,6 +13,7 @@ var nonMutationMetaTools = map[string]bool{
 	"read_only_task":      true,
 	"parallel_tasks":      true,
 	"explore":             true,
+	"locate":              true,
 	"research":            true,
 	"review":              true,
 	"security_review":     true,

@@ -19,6 +19,7 @@ var subagentRecursiveTools = []string{
 	"run_skill",
 	"read_only_skill",
 	"explore",
+	"locate",
 	"research",
 	"review",
 	"security_review",
@@ -362,7 +363,7 @@ func ReadOnlySubagentToolRegistryForDepthWithRuntime(parent *tool.Registry, name
 	if childDepth >= NormalizeMaxSubagentDepth(maxDepth) {
 		exclude = append(exclude, subagentRecursiveTools...)
 	} else {
-		exclude = append(exclude, "task", "run_skill", "explore", "research", "review", "security_review")
+		exclude = append(exclude, "task", "run_skill", "explore", "locate", "research", "review", "security_review")
 	}
 	exclude = append(exclude, subagentJobTools...)
 	exclude = append(exclude, plannerNonResearchTools...)

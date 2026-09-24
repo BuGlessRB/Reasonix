@@ -42,6 +42,22 @@ Your final answer:
 
 The 'task' the parent gave you is the question you must answer. Treat any other reading of it as scope creep.`
 
+const builtinLocateBody = `You are running as a locate subagent. Find where in the codebase the thing the parent named lives, and return only locations. You have a few tool rounds at most, so spend them in parallel.
+
+How to operate:
+- Issue every search you can think of in ONE message: several grep patterns (identifiers, error strings, config keys, spelling variants), glob for likely file names, code_index for definitions. They run concurrently; one search per round wastes the budget.
+- Use a second round only to confirm candidates: read_file the few most likely hits around the matching lines. Do not read whole files you do not need.
+- Stop as soon as the locations are pinned down. You are not explaining how the code works; the parent reads the locations itself.
+
+Your final answer is a list and nothing else, most relevant first, at most 12 lines:
+path:start-end — one short reason (what is there)
+
+If nothing matched, say "no match" and list the patterns you tried, so the parent does not repeat them.
+
+` + negativeClaimRule + `
+
+The 'task' the parent gave you names what to find. Do not answer anything else.`
+
 const builtinResearchBody = `You are running as a research subagent. Gather information from code AND the web, synthesize it, and return one focused conclusion.
 
 How to operate:
@@ -322,6 +338,18 @@ func builtinSkills() []Skill {
 			RunAs:        RunSubagent,
 			AllowedTools: append([]string(nil), readCodeTools...),
 			Triggers:     []string{"how does", "find all", "architecture", "callers", "references", "impact analysis", "代码架构", "怎么实现", "如何实现", "调用链", "所有引用", "影响范围", "分析代码"},
+			AutoUse:      "suggest",
+		},
+		{
+			Name:         "locate",
+			Description:  "Find where something lives in the codebase, fast — a read-only subagent that fires its searches in parallel within a few rounds and returns only file:line ranges with a one-line reason each. Best for: 'where is X defined / handled / configured', before reading or editing.",
+			Body:         builtinLocateBody,
+			Scope:        ScopeBuiltin,
+			Path:         "(builtin)",
+			RunAs:        RunSubagent,
+			ReadOnly:     true,
+			AllowedTools: append([]string(nil), readCodeTools...),
+			Triggers:     []string{"where is", "where does", "which file", "locate", "find the file", "在哪", "哪个文件", "定位"},
 			AutoUse:      "suggest",
 		},
 		{

@@ -301,7 +301,7 @@ func cleanToolList(names []string) []string {
 // NamedBuiltinProfile reports whether name is a built-in named subagent profile.
 func NamedBuiltinProfile(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "explore", "research", "review", "security-review", "security_review":
+	case "explore", "locate", "research", "review", "security-review", "security_review":
 		return true
 	default:
 		return false

@@ -76,6 +76,16 @@ func (r *skillSubagents) halfSteps() int {
 	return steps
 }
 
+// stepsFor is the tighter of the default budget and the run's own cap; zero on
+// either side means that side sets no limit.
+func (r *skillSubagents) stepsFor(runOpts skill.SubagentRunOptions) int {
+	steps := r.halfSteps()
+	if runOpts.MaxSteps > 0 && (steps <= 0 || runOpts.MaxSteps < steps) {
+		return runOpts.MaxSteps
+	}
+	return steps
+}
+
 // resolveModel picks the child's provider: the parent's unless the skill or
 // config names one of its own.
 func (r *skillSubagents) resolveModel(sk skill.Skill) (provider.Provider, *provider.Pricing, int, string, string, error) {
@@ -150,6 +160,11 @@ func (r *skillSubagents) runReadOnly(sctx context.Context, sk skill.Skill, task 
 // verdict a reviewer owes — and nothing about how an execution is admitted,
 // carried out or ended, which belong to the runner every other delegation uses.
 func (r *skillSubagents) run(sctx context.Context, sk skill.Skill, task string, runOpts skill.SubagentRunOptions) (string, error) {
+	if runOpts.MaxSteps > 0 {
+		// A cap the entry point chose is the host's, not the user's: the round
+		// it grants to finalize ends with the answer instead of a pause.
+		sctx = agent.WithRunStepLimit(sctx, r.stepsFor(runOpts), sk.Name+" rounds")
+	}
 	spec, err := r.compile(sctx, sk, task, runOpts)
 	if err != nil {
 		return "", err
@@ -183,7 +198,7 @@ func (r *skillSubagents) compile(sctx context.Context, sk skill.Skill, task stri
 			ContinueFrom: runOpts.ContinueFrom, ForkFrom: runOpts.ForkFrom,
 			TopLevel: runOpts.HostInitiated,
 		},
-		Sched: agent.SchedulerPolicy{MaxSteps: r.halfSteps(), Nested: agent.SubagentDepth(sctx) > 0},
+		Sched: agent.SchedulerPolicy{MaxSteps: r.stepsFor(runOpts), Nested: agent.SubagentDepth(sctx) > 0},
 	}
 	if !sk.ReadOnly {
 		// Writer skills without declared paths claim the whole workspace, so
