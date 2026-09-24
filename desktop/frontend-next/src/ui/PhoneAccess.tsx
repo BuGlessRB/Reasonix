@@ -15,10 +15,14 @@ interface Props {
 // pairs, the code on screen is spent. Nothing pushes that, so it is read.
 const POLL_MS = 3000;
 
-function clock(iso: string): string {
+export function clock(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
+
+// A device is named by when it paired. Its user agent is kept, as the title,
+// but read as a name it is a hundred characters and every one starts the same.
+export const deviceLabel = (i: number) => t("设备 {n}", { n: i + 1 });
 
 export type Share = ReturnType<typeof useShare>;
 
@@ -176,9 +180,9 @@ export function ShareBody({ share }: { share: Share }) {
           )}
 
           <div className="sharedevs">
-            {st.devices.map((d) => (
+            {st.devices.map((d, i) => (
               <div className="sharedev" key={d.id}>
-                <span className="nm" title={d.name}>{d.name || t("未知设备")}</span>
+                <span className="nm" title={d.name}>{deviceLabel(i)}</span>
                 <span className="st">{t("{time} 配对 · 最近 {seen}", { time: clock(d.pairedAt), seen: clock(d.lastSeen) })}</span>
                 {confirm === d.id ? (
                   <span className="rmtconfirm" role="alertdialog">

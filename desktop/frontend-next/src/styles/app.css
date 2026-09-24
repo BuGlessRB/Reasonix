@@ -4719,16 +4719,62 @@
   .phone-action[aria-expanded="true"] { background: var(--overlay); color: var(--text) }
   .phonecard {
     position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
-    width: min(380px, calc(100vw - 24px)); max-height: min(640px, calc(100dvh - var(--chrome-h, 45px) - 24px));
-    overflow: auto; padding: 14px 16px 16px;
-    border: 1px solid var(--border); border-radius: var(--r-md);
-    background: var(--float); box-shadow: var(--shadow-float); color: var(--text);
-    cursor: default; text-align: left;
+    width: min(318px, calc(100vw - 24px)); max-height: calc(100dvh - var(--chrome-h, 45px) - 24px); overflow: auto;
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 11px; padding: 13px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--raised); box-shadow: 0 20px 50px -20px #000;
+    color: var(--faint); font: var(--w-med) var(--fs-meta)/1.4 var(--ui); cursor: default; text-align: left;
+    animation: pcin var(--t-card, .14s) var(--ease-out, ease-out) both;
   }
-  .phonecard-hd { margin-bottom: 6px; font: var(--w-med) var(--fs-ui) var(--ui) }
-  .phonecard .lrow { padding-inline: 0 }
-  .phonecard .shareqr { flex-direction: column; align-items: center; text-align: center }
-  .phonecard .sharehow { justify-items: center; min-width: 0 }
+  @keyframes pcin { from { opacity: 0; transform: translateY(-4px) scale(.985) } }
+  .phonecard > header {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .phonecard > header > span { display: grid; gap: 3px; min-width: 0 }
+  .phonecard > header b { color: var(--text); font: var(--w-semi) var(--fs-ui)/1.3 var(--ui) }
+  .phonecard > header small { color: var(--ghost); font: var(--w-reg) var(--fs-micro)/1.45 var(--ui) }
+  .pc-code { display: grid; justify-items: center; gap: 7px; padding-top: 2px }
+  .pc-code img {
+    width: 148px; height: 148px; padding: 8px; box-sizing: content-box;
+    border: 1px solid var(--hair); border-radius: 8px; background: #fff; image-rendering: pixelated;
+  }
+  .pc-when { color: var(--muted); font: var(--w-med) var(--fs-meta)/1 var(--ui) }
+  .pc-acts { display: flex; align-items: center; gap: 9px }
+  .pc-acts > i { width: 1px; height: 10px; background: var(--border) }
+  .pc-acts button, .pc-mint, .pc-dev button {
+    padding: 2px 0; border: 0; background: none; cursor: pointer;
+    color: var(--muted); font: var(--w-med) var(--fs-meta)/1 var(--ui);
+  }
+  .pc-acts button:hover, .pc-mint:hover { color: var(--text) }
+  .pc-acts button:disabled, .pc-mint:disabled { opacity: .5; cursor: default }
+  .pc-row {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px;
+    padding-top: 10px; border-top: 1px solid var(--border);
+  }
+  .pc-row > span { color: var(--ghost) }
+  .pc-row select {
+    min-width: 0; height: 24px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); color: var(--text); font: var(--w-reg) var(--fs-meta)/1 var(--ui);
+  }
+  .pc-row select:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .phonecard > section { display: grid; gap: 4px; padding-top: 10px; border-top: 1px solid var(--border) }
+  .pc-hd { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 2px }
+  .pc-hd b { color: var(--text); font: var(--w-semi) var(--fs-meta)/1 var(--ui) }
+  .pc-hd small { color: var(--ghost); font: var(--w-reg) var(--fs-micro)/1 var(--mono) }
+  .pc-dev {
+    min-height: 24px; display: grid; grid-template-columns: 6px minmax(0, 1fr) auto auto; align-items: center; gap: 8px;
+    padding: 0 5px; border-radius: 5px;
+  }
+  .pc-dev:hover { background: var(--overlay) }
+  .pc-dev > i { width: 6px; height: 6px; border-radius: 50%; background: var(--net) }
+  .pc-dev > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted) }
+  .pc-dev > small { color: var(--ghost); font: var(--w-reg) var(--fs-micro)/1 var(--mono) }
+  .pc-dev button { color: var(--ghost); font-size: var(--fs-micro) }
+  .pc-dev button:hover, .pc-dev button[data-armed] { color: var(--err) }
+  .pc-dev button[data-armed] { font-weight: var(--w-semi) }
+  .phonecard > section > p { margin: 0; padding: 2px 5px; color: var(--ghost) }
+  .pc-note { margin: 0; padding-top: 10px; border-top: 1px solid var(--border); color: var(--ghost); font: var(--w-reg) var(--fs-micro)/1.5 var(--ui) }
   [data-fold~="scene"] .phonecard { position: fixed; top: calc(var(--chrome-h, 45px) + 6px); right: 12px; left: 12px; width: auto }
   .share .rmtf { margin-top: 10px }
   .shareopen { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 12px }
