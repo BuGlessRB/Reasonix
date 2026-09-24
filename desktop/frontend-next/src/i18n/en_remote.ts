@@ -122,6 +122,7 @@ export const EN_REMOTE: Record<string, string> = {
   "这台电脑现在没有局域网地址，连上 Wi-Fi 或网线后再试。": "This computer has no private network address right now. Connect to Wi-Fi or Ethernet and try again.",
   "手机和这台电脑在同一个网络里，扫码后就能看会话、发消息、批准操作。关闭或退出 Studio 会断开所有手机。": "A phone on the same network as this computer can scan a code to follow sessions, send messages and approve actions. Turning this off or quitting Studio disconnects every phone.",
   "虚拟网卡": "virtual adapter",
+  "换网络会断开已连接的手机，它们需要扫新的二维码。": "Switching networks disconnects the connected phones; they will need to scan the new code.",
   "配对二维码": "Pairing QR code",
   "用手机相机扫码": "Scan with your phone's camera",
   "二维码只能配对一台手机，{time} 前有效。别把它发到群里或截图外传。": "The code pairs one phone and is valid until {time}. Do not post it to a group chat or share a screenshot of it.",

@@ -64,10 +64,17 @@ export function useShare(hub: HubPort, onError: (e: unknown) => void, watch = tr
     [onError],
   );
 
-  const newCode = useCallback(() => run(async () => {
-    setOffer(await hub.offerShare());
-    await read();
-  }), [run, hub, read]);
+  // The code and the status that knows it is on offer land together; set one
+  // at a time, the effect above reads a fresh code against a status that has
+  // not heard of it yet and drops it.
+  const mint = useCallback(async () => {
+    const next = await hub.offerShare();
+    const now = await hub.shareStatus();
+    setSt(now);
+    setOffer(next);
+  }, [hub]);
+
+  const newCode = useCallback(() => run(mint), [run, mint]);
 
   const toggle = () => run(async () => {
     if (st?.open) {
@@ -76,19 +83,30 @@ export function useShare(hub: HubPort, onError: (e: unknown) => void, watch = tr
       return;
     }
     const at = ip || st?.addresses[0]?.ip || "";
-    setSt(await hub.openShare(at));
-    setOffer(await hub.offerShare());
-    await read();
+    await hub.openShare(at);
+    await mint();
   });
 
   const revoke = (id: string) => run(async () => setSt(await hub.revokeDevice(id)));
 
-  return { st, ip, setIp, offer, busy, confirm, setConfirm, newCode, toggle, revoke, refresh: read };
+  // Choosing another network while the door is open moves it there: the old
+  // address stops answering, so the code and every pairing go with it.
+  const pick = (next: string) => {
+    setIp(next);
+    if (!st?.open) return;
+    void run(async () => {
+      setOffer(null);
+      await hub.openShare(next);
+      await mint();
+    });
+  };
+
+  return { st, ip, pick, offer, busy, confirm, setConfirm, newCode, toggle, revoke, refresh: read };
 }
 
 /** The switch, the network, the code and the paired phones. */
 export function ShareBody({ share }: { share: Share }) {
-  const { st, ip, setIp, offer, busy, confirm, setConfirm, newCode, toggle, revoke } = share;
+  const { st, ip, pick, offer, busy, confirm, setConfirm, newCode, toggle, revoke } = share;
   if (!st) return null;
   const chosen = ip || (st.open ? st.origin?.replace(/^https?:\/\//, "").replace(/:\d+$/, "") : "") || st.addresses[0]?.ip || "";
   const noNetwork = st.addresses.length === 0;
@@ -113,8 +131,8 @@ export function ShareBody({ share }: { share: Share }) {
           <select
             data-action="share.address"
             value={chosen}
-            disabled={busy || st.open}
-            onChange={(e) => setIp(e.target.value)}
+            disabled={busy}
+            onChange={(e) => pick(e.target.value)}
           >
             {st.addresses.map((a) => (
               <option key={a.ip} value={a.ip}>
@@ -123,6 +141,9 @@ export function ShareBody({ share }: { share: Share }) {
             ))}
           </select>
         </label>
+      )}
+      {st.addresses.length > 1 && st.open && st.devices.length > 0 && (
+        <p className="rmthint">{t("换网络会断开已连接的手机，它们需要扫新的二维码。")}</p>
       )}
 
       {st.open && (
