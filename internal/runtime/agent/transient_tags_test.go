@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/runtime/langpref"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
@@ -49,7 +50,7 @@ func TestStripTransientUserBlocksHandlesAttributedTags(t *testing.T) {
 	}
 }
 
-// hasLeadingInjectedBlock walks the same list, so a block already present
+// langpref.HasLeadingInjectedBlock walks the same list, so a block already present
 // behind other injected blocks is detected instead of being added twice.
 func TestHasLeadingInjectedBlockSkipsEveryDeclaredTag(t *testing.T) {
 	const target = "reasoning-language"
@@ -60,18 +61,18 @@ func TestHasLeadingInjectedBlockSkipsEveryDeclaredTag(t *testing.T) {
 		t.Run(tag, func(t *testing.T) {
 			content := "<" + tag + ">\nx\n</" + tag + ">\n\n" +
 				"<" + target + ">\nprefer zh\n</" + target + ">\n\nhello"
-			if !hasLeadingInjectedBlock(content, target) {
-				t.Fatalf("hasLeadingInjectedBlock(%q) = false, want the existing %s block detected", content, target)
+			if !langpref.HasLeadingInjectedBlock(content, target) {
+				t.Fatalf("langpref.HasLeadingInjectedBlock(%q) = false, want the existing %s block detected", content, target)
 			}
 		})
 	}
 }
 
 func TestHasLeadingInjectedBlockIgnoresUserProse(t *testing.T) {
-	if hasLeadingInjectedBlock("what does <response-language> mean?", "response-language") {
+	if langpref.HasLeadingInjectedBlock("what does <response-language> mean?", "response-language") {
 		t.Fatal("prose mentioning a tag must not count as an injected block")
 	}
-	if hasLeadingInjectedBlock("<active-goal>\ng\n</active-goal>\n\nplain text", "reasoning-language") {
+	if langpref.HasLeadingInjectedBlock("<active-goal>\ng\n</active-goal>\n\nplain text", "reasoning-language") {
 		t.Fatal("walking past other blocks must not invent a target block")
 	}
 }

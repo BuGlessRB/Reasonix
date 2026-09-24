@@ -9,7 +9,7 @@ import (
 
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/ext/skill"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/langpref"
 	"reasonix/internal/state/memory"
 )
 
@@ -207,7 +207,7 @@ func escapeHookContext(s string) string {
 }
 
 func reasoningLanguageBlock(lang string) string {
-	return agent.ReasoningLanguageBlock(lang)
+	return langpref.ReasoningLanguageBlock(lang)
 }
 
 func (c *Controller) ComposeSynthetic(text string) string {
@@ -215,8 +215,8 @@ func (c *Controller) ComposeSynthetic(text string) string {
 	responseLang := c.display.responseLanguage
 	lang := c.display.reasoningLanguage
 	c.mu.Unlock()
-	text = agent.WithResponseLanguage(text, responseLang)
-	return agent.WithReasoningLanguageForSource(text, lang, text)
+	text = langpref.WithResponseLanguage(text, responseLang)
+	return langpref.WithReasoningLanguageForSource(text, lang, text)
 }
 
 // activeGoalBlockForTurn states the full task contract when the model cannot see

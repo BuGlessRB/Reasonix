@@ -1,6 +1,9 @@
 package agent
 
-import "strconv"
+import (
+	"reasonix/internal/runtime/langpref"
+	"strconv"
+)
 
 // WorkspaceBlock renders the transient block carrying this turn's per-project
 // facts. They ride the turn rather than the system prompt because every byte
@@ -25,7 +28,7 @@ func WorkspaceBlock(root, vcs string) string {
 // turn already starts with one.
 func WithWorkspace(content, root, vcs string) string {
 	block := WorkspaceBlock(root, vcs)
-	if block == "" || hasLeadingInjectedBlock(content, "workspace") {
+	if block == "" || langpref.HasLeadingInjectedBlock(content, "workspace") {
 		return content
 	}
 	return block + "\n\n" + content

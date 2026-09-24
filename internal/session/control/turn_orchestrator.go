@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/langpref"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/tools/jobs"
 )
@@ -116,8 +117,8 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	ctx = jobs.WithSession(ctx, parentSession)
 	ctx = agent.WithUserImages(ctx, images.userImages)
 	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, images.candidates))
-	ctx = agent.WithResponseLanguagePreference(ctx, c.display.responseLanguage)
-	ctx = agent.WithReasoningLanguagePreference(ctx, c.display.reasoningLanguage)
+	ctx = langpref.WithResponseLanguagePreference(ctx, c.display.responseLanguage)
+	ctx = langpref.WithReasoningLanguagePreference(ctx, c.display.reasoningLanguage)
 
 	input := c.imageRoutingPrefix(images) + c.compose(task, raw, true)
 	startMessages := c.messageCount()

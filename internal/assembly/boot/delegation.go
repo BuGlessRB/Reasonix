@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/delegation"
+	"reasonix/internal/runtime/langpref"
 )
 
 // delegationInputs is what a sub-agent inherits from the executor: its model,
@@ -102,8 +103,8 @@ func (w roleWiring) skillRunOptions(in delegationInputs) func(context.Context, i
 			ContextEditing:    w.cfg.Agent.ContextEditing,
 			ArchiveDir:        w.roots.ArchiveDir(),
 			KeepPolicy:        w.keep,
-			ResponseLanguage:  agent.ResponseLanguageFromContext(sctx),
-			ReasoningLanguage: agent.ReasoningLanguageFromContext(sctx),
+			ResponseLanguage:  langpref.ResponseLanguageFromContext(sctx),
+			ReasoningLanguage: langpref.ReasoningLanguageFromContext(sctx),
 			SubagentDepth:     childDepth,
 			MaxSubagentDepth:  in.sub.maxDepth,
 			DeliveryProfile:   in.delivery,

@@ -11,7 +11,7 @@
     "doc-prose": 2324,
     "error-text": 9,
     "essay": 2829,
-    "file-size": 21932,
+    "file-size": 21934,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 3335,
@@ -974,7 +974,7 @@
     "internal/runtime/agent/agent.go": {
       "complexity": 37,
       "essay": 33,
-      "file-size": 1215,
+      "file-size": 1216,
       "function-size": 102
     },
     "internal/runtime/agent/agent_options.go": {
@@ -1040,9 +1040,6 @@
     },
     "internal/runtime/agent/listsessions_bench_test.go": {
       "essay": 4
-    },
-    "internal/runtime/agent/reasoning_language.go": {
-      "essay": 2
     },
     "internal/runtime/agent/reasoning_warn_state.go": {
       "complexity": 2,
@@ -1114,7 +1111,7 @@
     "internal/runtime/delegation/task.go": {
       "complexity": 12,
       "essay": 12,
-      "file-size": 257,
+      "file-size": 258,
       "function-size": 94,
       "orphan": 1
     },
@@ -1126,6 +1123,9 @@
     },
     "internal/runtime/guardian/guardian_policy.md": {
       "doc-prose": 1
+    },
+    "internal/runtime/langpref/langpref.go": {
+      "essay": 2
     },
     "internal/runtime/plancontract/project.go": {
       "orphan": 1

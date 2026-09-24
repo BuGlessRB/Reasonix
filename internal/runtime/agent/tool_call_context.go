@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/runtime/langpref"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/tool"
@@ -48,12 +49,12 @@ func (a *Agent) toolCallContext(ctx context.Context, plan *toolCallPlan) context
 	}
 	if v := a.responseLanguage.Load(); v != nil {
 		if lang, ok := v.(string); ok {
-			cctx = WithResponseLanguagePreference(cctx, lang)
+			cctx = langpref.WithResponseLanguagePreference(cctx, lang)
 		}
 	}
 	if v := a.reasoningLanguage.Load(); v != nil {
 		if lang, ok := v.(string); ok {
-			cctx = WithReasoningLanguagePreference(cctx, lang)
+			cctx = langpref.WithReasoningLanguagePreference(cctx, lang)
 		}
 	}
 	if a.svc.memQueue != nil {

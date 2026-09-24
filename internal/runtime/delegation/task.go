@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/langpref"
 	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/sessionstore"
 	"runtime/debug"
@@ -924,8 +925,8 @@ func (t *TaskTool) subagentOptions(ctx context.Context, maxSteps int, pricing *p
 		CompactRatio:      t.compactRatio,
 		ArchiveDir:        t.archiveDir,
 		KeepPolicy:        t.keepPolicy,
-		ResponseLanguage:  agent.ResponseLanguageFromContext(ctx),
-		ReasoningLanguage: agent.ReasoningLanguageFromContext(ctx),
+		ResponseLanguage:  langpref.ResponseLanguageFromContext(ctx),
+		ReasoningLanguage: langpref.ReasoningLanguageFromContext(ctx),
 		SubagentDepth:     childDepth,
 		MaxSubagentDepth:  t.maxDepth(),
 		DeliveryProfile:   t.deliveryProfile,

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reasonix/internal/runtime/langpref"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
@@ -389,7 +390,7 @@ func (a *Agent) SetReasoningLanguage(lang string) {
 	if a == nil {
 		return
 	}
-	a.reasoningLanguage.Store(NormalizeReasoningLanguage(lang))
+	a.reasoningLanguage.Store(langpref.NormalizeReasoningLanguage(lang))
 }
 
 // SetResponseLanguage updates the final-answer language preference for
@@ -398,7 +399,7 @@ func (a *Agent) SetResponseLanguage(lang string) {
 	if a == nil {
 		return
 	}
-	a.responseLanguage.Store(NormalizeResponseLanguage(lang))
+	a.responseLanguage.Store(langpref.NormalizeResponseLanguage(lang))
 }
 
 // SetGate installs the per-call permission gate. Used by interactive CLI sessions to swap the
@@ -480,7 +481,7 @@ func (a *Agent) withTurnPreferences(input string) string {
 			responseLang = s
 		}
 	}
-	input = WithResponseLanguage(input, responseLang)
+	input = langpref.WithResponseLanguage(input, responseLang)
 
 	lang := "auto"
 	if v := a.reasoningLanguage.Load(); v != nil {
@@ -488,7 +489,7 @@ func (a *Agent) withTurnPreferences(input string) string {
 			lang = s
 		}
 	}
-	input = WithReasoningLanguage(input, lang)
+	input = langpref.WithReasoningLanguage(input, lang)
 	input = WithWorkspace(input, a.writeWorkspaceRoot, a.workspaceVCS)
 	// The frozen role setting rides the per-turn <execution-policy>, not a marker.
 	return input

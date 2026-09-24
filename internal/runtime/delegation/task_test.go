@@ -6,6 +6,7 @@ import (
 	"io"
 	"path/filepath"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/langpref"
 	"reasonix/internal/state/sessionstore"
 	"strconv"
 	"strings"
@@ -154,7 +155,7 @@ func TestTaskToolInheritsReasoningLanguageFromContext(t *testing.T) {
 	}}
 	task := newTestTaskTool(t, sub, tool.NewRegistry(), "sys", "", "", nil)
 
-	ctx := agent.WithReasoningLanguagePreference(testTaskContext(), "zh")
+	ctx := langpref.WithReasoningLanguagePreference(testTaskContext(), "zh")
 	if _, err := task.Execute(ctx, []byte(`{"prompt":"inspect auth"}`)); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/langpref"
 )
 
 // A checkpoint opens with the composed turn, so its stored prompt carries the
@@ -31,7 +32,7 @@ func TestCheckpointsReturnUserPromptWithoutComposedPrefixes(t *testing.T) {
 	})
 
 	const typed = "修复登录逻辑"
-	composed := agent.ReasoningLanguageBlock("zh") + "\n\n" +
+	composed := langpref.ReasoningLanguageBlock("zh") + "\n\n" +
 		PlanModeMarker + "\n\n" +
 		typed
 	o := newTurnOrchestrator(c)

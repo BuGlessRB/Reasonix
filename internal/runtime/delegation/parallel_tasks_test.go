@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/langpref"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -185,8 +186,8 @@ func TestParallelTasksInheritLanguagePreferencesFromContext(t *testing.T) {
 	task := newTestTaskTool(t, promptRoutingProvider{}, tool.NewRegistry(), "sys", "", "", nil)
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
 	ctx := agent.WithCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
-	ctx = agent.WithResponseLanguagePreference(ctx, "zh")
-	ctx = agent.WithReasoningLanguagePreference(ctx, "zh")
+	ctx = langpref.WithResponseLanguagePreference(ctx, "zh")
+	ctx = langpref.WithReasoningLanguagePreference(ctx, "zh")
 
 	out, err := parallel.Execute(ctx, json.RawMessage(`{"tasks":[{"prompt":"inspect one"},{"prompt":"inspect two"}]}`))
 	if err != nil {

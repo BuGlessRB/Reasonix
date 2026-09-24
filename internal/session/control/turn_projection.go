@@ -7,7 +7,7 @@ import (
 
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/langpref"
 	"reasonix/internal/state/memory"
 )
 
@@ -58,8 +58,8 @@ func (c *Controller) turnBlocksFor(source string, includeOwed bool, notes []stri
 	return append(blocks,
 		turnBlock{"background-jobs", c.backgroundJobsBlock()},
 		turnBlock{"memory-update", memoryUpdateBlock(notes)},
-		turnBlock{"reasoning-language", agent.ReasoningLanguageBlock(agent.ResolveReasoningLanguage(reasoningLanguage, source))},
-		turnBlock{"response-language", agent.ResponseLanguageBlock(responseLanguage)},
+		turnBlock{"reasoning-language", langpref.ReasoningLanguageBlock(langpref.ResolveReasoningLanguage(reasoningLanguage, source))},
+		turnBlock{"response-language", langpref.ResponseLanguageBlock(responseLanguage)},
 		turnBlock{"", planModeMarkerBlock(plan)},
 		turnBlock{"active-goal", c.activeGoalTurnBlock(goal, goalStatus)},
 	)

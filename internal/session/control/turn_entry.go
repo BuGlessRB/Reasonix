@@ -18,6 +18,7 @@ import (
 	"reasonix/internal/ext/extension"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/langpref"
 	"reasonix/internal/tools/jobs"
 )
 
@@ -249,8 +250,8 @@ func (c *Controller) RunSubagentProfile(ctx context.Context, name, task string, 
 	ctx = agent.WithParentSession(ctx, parentSession)
 	ctx = jobs.WithSession(ctx, parentSession)
 	ctx, turnImgs := c.withTurnImages(ctx, task)
-	ctx = agent.WithResponseLanguagePreference(ctx, c.display.responseLanguage)
-	ctx = agent.WithReasoningLanguagePreference(ctx, c.display.reasoningLanguage)
+	ctx = langpref.WithResponseLanguagePreference(ctx, c.display.responseLanguage)
+	ctx = langpref.WithReasoningLanguagePreference(ctx, c.display.reasoningLanguage)
 	ctx = agent.WithSubagentDepth(ctx, 0)
 	answer, err := runner(ctx, sk, c.imageRoutingPrefix(turnImgs)+task, skill.SubagentRunOptions{HostInitiated: true})
 	if err != nil {

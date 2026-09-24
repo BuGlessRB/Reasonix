@@ -1,4 +1,4 @@
-package agent
+package langpref
 
 import (
 	"context"
@@ -231,7 +231,7 @@ func reasoningLanguageBlockForSource(lang, source string) string {
 // block unless the turn already starts with one.
 func WithResponseLanguage(content, lang string) string {
 	block := ResponseLanguageBlock(lang)
-	if block == "" || hasLeadingInjectedBlock(content, "response-language") {
+	if block == "" || HasLeadingInjectedBlock(content, "response-language") {
 		return content
 	}
 	return block + "\n\n" + content
@@ -251,19 +251,19 @@ func WithReasoningLanguage(content, lang string) string {
 // user's actual conversation language.
 func WithReasoningLanguageForSource(content, lang, source string) string {
 	block := reasoningLanguageBlockForSource(lang, source)
-	if block == "" || hasLeadingInjectedBlock(content, "reasoning-language") {
+	if block == "" || HasLeadingInjectedBlock(content, "reasoning-language") {
 		return content
 	}
 	return block + "\n\n" + content
 }
 
-// hasLeadingInjectedBlock reports whether target is already among the transient
+// HasLeadingInjectedBlock reports whether target is already among the transient
 // blocks leading content, skipping past any other injected block on the way.
 // It walks TransientUserBlockTags rather than a list of its own: when the two
 // disagreed, a block the host had started injecting was treated as user prose
 // and stopped the walk early, so an already-present target went undetected and
 // was injected a second time.
-func hasLeadingInjectedBlock(content, target string) bool {
+func HasLeadingInjectedBlock(content, target string) bool {
 	s := strings.TrimLeft(content, " \t\r\n")
 	for {
 		if sessionstore.HasOpenTag(s, target) {
