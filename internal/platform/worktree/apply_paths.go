@@ -78,9 +78,9 @@ func ApplyPaths(ctx context.Context, snap Snapshot, tree string, changes []Chang
 	var conflicts []string
 	pending := make([]Change, 0, len(changes))
 	for _, ch := range changes {
-		switch now := live[ch.Path]; {
-		case now == target[ch.Path]:
-		case now == base[ch.Path]:
+		switch live[ch.Path] {
+		case target[ch.Path]:
+		case base[ch.Path]:
 			pending = append(pending, ch)
 		default:
 			conflicts = append(conflicts, ch.Path)

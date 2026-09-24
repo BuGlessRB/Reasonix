@@ -782,10 +782,13 @@ func missingReasoningWarnStateFor(dir string) *missingReasoningWarnState {
 // reserveParentWrite holds write claims for the duration of a parent-agent
 // write tool call. Returns a no-op release when reservation is not needed
 // (subagent, read-only, no scheduler, or non-write tool).
-func (a *Agent) reserveParentWrite(runTool tool.Tool, args json.RawMessage, readOnly bool) (release func(), err error) {
+func (a *Agent) reserveParentWrite(runTool tool.Tool, args json.RawMessage, readOnly bool, declared []string) (release func(), err error) {
 	noop := func() {}
 	if a == nil || a.svc.writeScheduler == nil || a.subagentDepth > 0 || readOnly || runTool == nil {
 		return noop, nil
+	}
+	if len(declared) > 0 {
+		return a.reserveDeclaredWrite(declared)
 	}
 	name := runTool.Name()
 	if !parentWriteGuardTarget(name) {

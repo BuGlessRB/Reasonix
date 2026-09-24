@@ -131,6 +131,11 @@ func decorateObservedPaths(rec *evidence.Receipt, plan *toolCallPlan) {
 	}
 	if rec.Success {
 		rec.CriteriaRewritten = plan.criteriaRewritten
+		for _, path := range plan.declaredPaths {
+			if !holdsPath(rec.Paths, path) {
+				rec.Paths = append(rec.Paths, path)
+			}
+		}
 	}
 	if plan.pathsBefore.empty() || !rec.Success {
 		return
@@ -244,6 +249,9 @@ func (a *Agent) observeBeforeMutation(ctx context.Context, plan *toolCallPlan) {
 			plan.mutationWitness = evidence.ChangedLines(change.OldText, change.NewText)
 			return
 		}
+		if a.observeDeclaredPaths(plan, toolName) {
+			return
+		}
 		// Non-previewable writers: record a coverage gap (do not guess paths).
 		switch toolName {
 		case "bash":
@@ -266,14 +274,19 @@ func (a *Agent) observeBeforeMutation(ctx context.Context, plan *toolCallPlan) {
 // observeAfterMutation records the after fingerprint when a concrete path was
 // known before execution, regardless of tool success or failure.
 func (a *Agent) observeAfterMutation(plan *toolCallPlan) {
-	if a == nil || plan == nil || plan.mutationPath == "" || a.svc.mutationObserver == nil {
+	if a == nil || plan == nil || a.svc.mutationObserver == nil {
 		return
 	}
 	toolName := plan.evidenceName
 	if toolName == "" {
 		toolName = plan.call.Name
 	}
-	a.svc.mutationObserver.AfterMutation(plan.mutationPath, toolName)
+	if plan.mutationPath != "" {
+		a.svc.mutationObserver.AfterMutation(plan.mutationPath, toolName)
+	}
+	for _, p := range plan.declaredPaths {
+		a.svc.mutationObserver.AfterMutation(p, toolName)
+	}
 }
 
 // workspaceScanLimit bounds the walk. Past it the scan reports itself

@@ -265,7 +265,7 @@ func TestAgentReserveParentWriteSkipsSubagentDepth(t *testing.T) {
 	inner := &recordingWriter{name: "write_file", writesPaths: true}
 	release, err := a.reserveParentWrite(inner, mustJSON(t, map[string]string{
 		"path": filepath.Join(root, "a.md"), "content": "x",
-	}), false)
+	}), false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestAgentReserveParentWriteHoldsClaim(t *testing.T) {
 	inner := &recordingWriter{name: "write_file", writesPaths: true}
 	release, err := a.reserveParentWrite(inner, mustJSON(t, map[string]string{
 		"path": filepath.Join(root, "a.md"), "content": "x",
-	}), false)
+	}), false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

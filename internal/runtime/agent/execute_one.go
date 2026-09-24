@@ -66,6 +66,7 @@ type toolCallPlan struct {
 	// which lines a later output has to carry to have shown this change.
 	mutationWitness   []string
 	mutationPath      string
+	declaredPaths     []string
 	criteriaRewritten []string
 	mutationObserved  bool
 	mutationAfterDone bool
@@ -568,7 +569,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 	// check-before-write TOCTOU windows. Dynamic Economy/MCP tools are covered
 	// here after registry lookup without schema-changing wrappers.
 	// executeOne defers plan.releaseParentWrite so every return path releases.
-	if releaseParentWrite, perr := a.reserveParentWrite(plan.runTool, plan.runArgs, plan.readOnly); perr != nil {
+	if releaseParentWrite, perr := a.reserveParentWrite(plan.runTool, plan.runArgs, plan.readOnly, a.declareWritePaths(ctx, plan)); perr != nil {
 		return toolOutcome{
 			output:  "blocked: " + perr.Error(),
 			blocked: true,
@@ -594,7 +595,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 	// writers record explicit coverage gaps instead of guessing targets.
 	if !plan.readOnly {
 		a.observeBeforeMutation(ctx, plan)
-		plan.mutationObserved = plan.mutationPath != ""
+		plan.mutationObserved = plan.mutationPath != "" || len(plan.declaredPaths) > 0
 		if toolHooksMayMutateWorkspace(a.svc.hooks) && a.svc.mutationObserver != nil {
 			a.svc.mutationObserver.RecordGap(checkpoint.CoverageGap{Reason: checkpoint.GapHookWrite, Tool: plan.evidenceName, Detail: "tool hook may write paths that are not declared by the tool"})
 		}
@@ -623,7 +624,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 				errMsg:  "blocked: baseline criteria could not be held",
 			}, true
 		}
-		plan.pathsBefore = snapshotPaths(a.task.ledger, a.writeWorkspaceRoot, evidence.ToolCallPaths(plan.evidenceArgs))
+		plan.pathsBefore = snapshotPaths(a.task.ledger, a.writeWorkspaceRoot, append(evidence.ToolCallPaths(plan.evidenceArgs), plan.declaredPaths...))
 		plan.scanBefore = a.scanBeforeUnprovenCall(ctx, plan)
 	}
 	return toolOutcome{}, false
