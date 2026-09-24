@@ -17,10 +17,10 @@ import (
 	"reasonix/internal/ext/extension"
 	"reasonix/internal/ext/extension/dispatch"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/jobs"
-	"reasonix/internal/safety/guardian"
+	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/state/sessioninbox"
 	"reasonix/internal/state/store"
+	"reasonix/internal/tools/jobs"
 )
 
 // Snapshot writes the executor's conversation to the active session file. No-op

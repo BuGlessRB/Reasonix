@@ -7,13 +7,13 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/extension/dispatch"
 	"reasonix/internal/runtime/capability"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/checkpoint"
 	"reasonix/internal/state/instruction"
 	"reasonix/internal/state/memory"
 	"reasonix/internal/state/workspacelease"
+	"reasonix/internal/tools/jobs"
 )
 
 // Options configures an Agent.

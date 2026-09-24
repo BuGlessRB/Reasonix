@@ -13,7 +13,7 @@ import (
 	"reasonix/internal/ext/extension"
 	"reasonix/internal/ext/extension/dispatch"
 	"reasonix/internal/platform/browser"
-	"reasonix/internal/safety/guardian"
+	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/state/sessiontemp"
 )
 

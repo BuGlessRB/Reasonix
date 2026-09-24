@@ -23,8 +23,8 @@ import (
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/agent/testutil"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/session/control"
+	"reasonix/internal/tools/jobs"
 )
 
 // fakes: a Factory wrapping a behavior-driven runner in a real Controller

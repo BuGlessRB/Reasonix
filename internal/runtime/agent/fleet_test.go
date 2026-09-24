@@ -14,8 +14,8 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/state/checkpoint"
+	"reasonix/internal/tools/jobs"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/agentgraph"

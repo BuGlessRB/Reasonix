@@ -15,8 +15,8 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/safety/evidence"
+	"reasonix/internal/tools/jobs"
 )
 
 // turnOrchestrator owns foreground turn execution while Controller keeps the

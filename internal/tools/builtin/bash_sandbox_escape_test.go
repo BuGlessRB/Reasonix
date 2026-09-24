@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/safety/sandbox"
+	"reasonix/internal/tools/jobs"
 )
 
 type fakeSandboxEscapeApprover struct {

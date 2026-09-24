@@ -14,10 +14,10 @@ import (
 	"reasonix/internal/model/billing"
 	"reasonix/internal/platform/browser"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/checkpoint"
 	"reasonix/internal/state/memory"
+	"reasonix/internal/tools/jobs"
 )
 
 // This file defines the driving port: the typed, segregated interface surface

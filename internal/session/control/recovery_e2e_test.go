@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/contract/hostaudit"
 	"reasonix/internal/state/sessionstore"
 	"testing"
 
@@ -89,7 +90,7 @@ func TestRecoveryCheckpointScriptedE2E(t *testing.T) {
 	if delta.FailureEvents == 0 || delta.HumanPrompts != 0 || delta.HumanContinues != 0 {
 		t.Fatalf("drained metrics = %+v", delta)
 	}
-	if next := c.DrainRecoveryMetrics(); next != (recovery.Metrics{}) {
+	if next := c.DrainRecoveryMetrics(); next != (hostaudit.RecoveryMetrics{}) {
 		t.Fatalf("second metrics drain = %+v, want zero delta", next)
 	}
 }

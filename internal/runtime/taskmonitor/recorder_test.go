@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/tools/jobs"
 )
 
 func newRecorderForTest(t *testing.T, projectDir string) (*TaskRecorder, *FileStore) {

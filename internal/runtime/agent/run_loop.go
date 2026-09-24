@@ -16,9 +16,9 @@ import (
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/runtime/taskpolicy"
 	"reasonix/internal/safety/evidence"
+	"reasonix/internal/tools/jobs"
 )
 
 // streamedTurn is one provider completion collected by stream. Keeping the

@@ -4,7 +4,7 @@
 // This first slice owns the session-artifact sidecars — the files and
 // directories that live beside a session's .jsonl (branch metadata, goal state,
 // checkpoints, background-job artifacts, the cleanup-pending marker). They were
-// previously derived independently in internal/runtime/agent, internal/runtime/jobs,
+// previously derived independently in internal/runtime/agent, internal/tools/jobs,
 // internal/session/control and internal/frontend/acp, each re-spelling the suffix convention; a
 // layout change meant hunting across packages. Centralizing them here makes
 // store the one place that knows where a session's artifacts go.

@@ -16,8 +16,8 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/state/sessioninbox"
+	"reasonix/internal/tools/jobs"
 )
 
 func backgroundJobEvent(id string) jobs.CompletionEvent {

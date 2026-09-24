@@ -21,10 +21,10 @@ import (
 	"reasonix/internal/ext/extension/uihub"
 	"reasonix/internal/ext/plugin"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/store"
 	"reasonix/internal/tools/builtin"
+	"reasonix/internal/tools/jobs"
 )
 
 // SessionParams is everything a Factory needs to assemble one ACP session's

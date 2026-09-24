@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"reasonix/internal/contract/hostaudit"
 	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
@@ -256,15 +257,15 @@ func (c *Controller) saveRecoveryState(path string) {
 }
 
 // RecoveryMetrics returns content-free recovery counters for export/observation.
-func (c *Controller) RecoveryMetrics() recovery.Metrics {
+func (c *Controller) RecoveryMetrics() hostaudit.RecoveryMetrics {
 	if c == nil {
-		return recovery.Metrics{}
+		return hostaudit.RecoveryMetrics{}
 	}
 	c.mu.Lock()
 	gate := c.recoveryGate
 	c.mu.Unlock()
 	if gate == nil {
-		return recovery.Metrics{}
+		return hostaudit.RecoveryMetrics{}
 	}
 	return gate.Metrics()
 }
@@ -272,15 +273,15 @@ func (c *Controller) RecoveryMetrics() recovery.Metrics {
 // DrainRecoveryMetrics returns only counters recorded since the previous
 // drain. Desktop calls this once per completed turn to avoid re-emitting the
 // controller's cumulative lifetime totals.
-func (c *Controller) DrainRecoveryMetrics() recovery.Metrics {
+func (c *Controller) DrainRecoveryMetrics() hostaudit.RecoveryMetrics {
 	if c == nil {
-		return recovery.Metrics{}
+		return hostaudit.RecoveryMetrics{}
 	}
 	c.mu.Lock()
 	gate := c.recoveryGate
 	c.mu.Unlock()
 	if gate == nil {
-		return recovery.Metrics{}
+		return hostaudit.RecoveryMetrics{}
 	}
 	return gate.DrainMetrics()
 }

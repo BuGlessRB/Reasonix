@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"reasonix/internal/contract/hostaudit"
 	"regexp"
 	"runtime"
 	"slices"
@@ -14,7 +15,6 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/surface"
-	"reasonix/internal/runtime/recovery"
 )
 
 type Options struct {
@@ -83,7 +83,7 @@ func (r *Reporter) Wrap(inner event.Sink) event.Sink {
 	return &sink{AuditForwarder: event.AuditForwarder{Inner: inner}, inner: inner, reporter: r, counts: countersFrom(r.static)}
 }
 
-func (r *Reporter) RecordRecovery(m recovery.Metrics) {
+func (r *Reporter) RecordRecovery(m hostaudit.RecoveryMetrics) {
 	if r == nil {
 		return
 	}

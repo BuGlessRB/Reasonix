@@ -48,7 +48,7 @@ var docClassByPrefix = []struct {
 	{".github/", classMachine},
 	{".reasonix/", classMachine},
 	{"internal/ext/skill/builtincontent/", classMachine},
-	{"internal/safety/guardian/", classMachine},
+	{"internal/runtime/guardian/", classMachine},
 }
 
 // docSkippedPrefixes are corpora and fixtures: text a benchmark or a test

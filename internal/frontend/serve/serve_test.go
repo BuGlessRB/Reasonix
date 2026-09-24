@@ -22,9 +22,9 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/session/control"
+	"reasonix/internal/tools/jobs"
 )
 
 func TestTitlePromptRequiresUserMessageLanguage(t *testing.T) {

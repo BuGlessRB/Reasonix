@@ -18,7 +18,7 @@ import (
 	"reasonix/internal/ext/extension"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/tools/jobs"
 )
 
 func turnOutcome(err error) string {

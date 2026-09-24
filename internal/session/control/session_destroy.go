@@ -5,7 +5,7 @@ import (
 	"reasonix/internal/state/sessionstore"
 	"time"
 
-	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/tools/jobs"
 )
 
 // SessionDestroyHandle separates cancelled-job waiting from ending the destroy

@@ -23,9 +23,9 @@ import (
 	"reasonix/internal/base/secrets"
 	"reasonix/internal/base/shellparse"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/sessiontemp"
+	"reasonix/internal/tools/jobs"
 	"reasonix/internal/tools/shellrun"
 )
 

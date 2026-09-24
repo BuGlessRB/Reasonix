@@ -9,8 +9,8 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/planmode"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/safety/evidence"
+	"reasonix/internal/tools/jobs"
 )
 
 // End-to-end through the actual tools: a background bash job runs under a manager

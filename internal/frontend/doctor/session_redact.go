@@ -256,7 +256,7 @@ func redactSessionTranscript(path string, dryRun bool) (int64, int64, error) {
 	if dryRun {
 		return files, redactedEncodedSize(s.Messages), nil
 	}
-	s.Replace(secrets.RedactMessages(s.Messages))
+	s.Replace(provider.RedactMessages(s.Messages))
 	// Redaction is an intentional rewrite, but it must still be CAS-protected:
 	// the loaded transcript may have gone stale while the doctor inspected it.
 	// SaveRewrite preserves the newer external transcript and reports a conflict
@@ -304,7 +304,7 @@ func eventLogNeedsRedaction(path string) bool {
 // storage encoding of msgs. Comparing encoded forms (not struct equality)
 // matches exactly what a rewrite would put on disk.
 func messagesNeedRedaction(msgs []provider.Message) bool {
-	redacted := secrets.RedactMessages(msgs)
+	redacted := provider.RedactMessages(msgs)
 	for i := range msgs {
 		before, errB := json.Marshal(msgs[i])
 		after, errA := json.Marshal(redacted[i])
@@ -317,7 +317,7 @@ func messagesNeedRedaction(msgs []provider.Message) bool {
 
 func redactedEncodedSize(msgs []provider.Message) int64 {
 	var n int64
-	for _, m := range secrets.RedactMessages(msgs) {
+	for _, m := range provider.RedactMessages(msgs) {
 		if b, err := json.Marshal(m); err == nil {
 			n += int64(len(b)) + 1
 		}

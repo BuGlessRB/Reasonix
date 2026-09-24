@@ -6,7 +6,7 @@ import (
 
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/tools/jobs"
 )
 
 type visibilityRecorder struct{}

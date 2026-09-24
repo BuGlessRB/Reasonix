@@ -13,7 +13,7 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/tools/jobs"
 )
 
 // fakeProgressClock drives the merger's pacing deterministically: tests advance

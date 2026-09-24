@@ -18,8 +18,8 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/state/execjournal"
+	"reasonix/internal/tools/jobs"
 )
 
 // A lone delegation reaches the same runner a fan-out item does and, until this

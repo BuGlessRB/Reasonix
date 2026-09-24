@@ -8,7 +8,7 @@ import (
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/safety/guardian"
+	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/state/store"
 )
 

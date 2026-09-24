@@ -7,9 +7,9 @@ import (
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/workspacelease"
+	"reasonix/internal/tools/jobs"
 )
 
 // sessionRuntime is the session-scoped machinery a build hands to the

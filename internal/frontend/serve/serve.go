@@ -28,10 +28,10 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/surface"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/stats"
 	"reasonix/internal/state/store"
+	"reasonix/internal/tools/jobs"
 )
 
 //go:embed logo-wordmark.svg

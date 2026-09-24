@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"reasonix/internal/contract/config"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/session/control"
+	"reasonix/internal/tools/jobs"
 )
 
 // lockProbeController wraps a real controller but intercepts the two blocking

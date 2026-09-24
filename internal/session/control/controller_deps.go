@@ -13,13 +13,13 @@ import (
 	"reasonix/internal/model/billing"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/goaleval"
-	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/runtime/promptrefine"
 	"reasonix/internal/runtime/recovery"
-	"reasonix/internal/safety/guardian"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/workspacelease"
+	"reasonix/internal/tools/jobs"
 )
 
 // controllerDeps is what assembly hands the controller and never rebinds. The

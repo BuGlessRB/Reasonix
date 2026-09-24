@@ -23,7 +23,6 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/extension/dispatch"
 	"reasonix/internal/runtime/capability"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/runtime/plancontract"
 	"reasonix/internal/runtime/taskpolicy"
 	"reasonix/internal/safety/evidence"
@@ -31,6 +30,7 @@ import (
 	"reasonix/internal/state/checkpoint"
 	"reasonix/internal/state/instruction"
 	"reasonix/internal/state/memory"
+	"reasonix/internal/tools/jobs"
 )
 
 // maxToolOutputBytes caps a single tool result before it goes into the model's

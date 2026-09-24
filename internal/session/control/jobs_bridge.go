@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/runtime/taskmonitor"
 	"reasonix/internal/state/sessioninbox"
+	"reasonix/internal/tools/jobs"
 )
 
 // hostContinuationSource labels inbox items the runtime authored for itself.

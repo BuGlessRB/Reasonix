@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reasonix/internal/contract/hostaudit"
 	"runtime"
 	"strings"
 	"sync"
@@ -18,7 +19,6 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/surface"
-	"reasonix/internal/runtime/recovery"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -397,7 +397,7 @@ func TestEverySignalTheSinkRecordsSurvivesTheUploadAllowList(t *testing.T) {
 	sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: event.Compaction{Trigger: "auto"}})
 	event.RecordProtocolRecovery(sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningRetryReplaced})
 	sink.Emit(event.Event{Kind: event.TurnDone})
-	reporter.RecordRecovery(recovery.Metrics{FailureEvents: 1, ReviewLatencyMsSum: 400, ReviewLatencyCount: 1})
+	reporter.RecordRecovery(hostaudit.RecoveryMetrics{FailureEvents: 1, ReviewLatencyMsSum: 400, ReviewLatencyCount: 1})
 
 	entries, err := os.ReadDir(filepath.Join(home, pendingDirName))
 	if err != nil || len(entries) == 0 {

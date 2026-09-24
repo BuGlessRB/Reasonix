@@ -31,12 +31,12 @@ import (
 	"reasonix/internal/ext/pluginpkg"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/jobs"
-	"reasonix/internal/safety/guardian"
+	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/state/checkpoint"
 	"reasonix/internal/state/memory"
 	"reasonix/internal/state/store"
+	"reasonix/internal/tools/jobs"
 )
 
 type typedNilControllerSink struct{}

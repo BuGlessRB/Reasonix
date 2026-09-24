@@ -12,8 +12,8 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/state/checkpoint"
+	"reasonix/internal/tools/jobs"
 )
 
 // TestBackgroundTaskReturnsBeforeSlotFrees ensures run_in_background returns a

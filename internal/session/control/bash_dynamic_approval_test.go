@@ -12,7 +12,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/safety/guardian"
+	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/safety/permission"
 )
 

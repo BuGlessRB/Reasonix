@@ -5,11 +5,11 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/instruction"
 	"reasonix/internal/state/memory"
+	"reasonix/internal/tools/jobs"
 )
 
 // toolCallContext assembles the context one tool call runs under: the host

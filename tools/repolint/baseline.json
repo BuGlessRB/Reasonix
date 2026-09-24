@@ -10,12 +10,12 @@
     "doc-owner": 43,
     "doc-prose": 2324,
     "error-text": 9,
-    "essay": 2891,
-    "file-size": 23694,
+    "essay": 2890,
+    "file-size": 23695,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4348,
-    "layer-order": 5,
+    "layer-order": 0,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -284,9 +284,7 @@
       "essay": 5
     },
     "internal/base/secrets/redact.go": {
-      "complexity": 9,
-      "essay": 1,
-      "layer-order": 1
+      "complexity": 9
     },
     "internal/base/shellparse/bash.go": {
       "essay": 8
@@ -965,9 +963,6 @@
     "internal/platform/repair/update_test.go": {
       "essay": 2
     },
-    "internal/platform/telemetry/sink.go": {
-      "layer-order": 1
-    },
     "internal/platform/update/apply_darwin.go": {
       "complexity": 42,
       "essay": 1,
@@ -1129,19 +1124,11 @@
     "internal/runtime/capability/catalog.go": {
       "essay": 1
     },
-    "internal/runtime/jobs/artifacts_test.go": {
-      "essay": 5
+    "internal/runtime/guardian/guardian.go": {
+      "essay": 25
     },
-    "internal/runtime/jobs/jobs.go": {
-      "essay": 42,
-      "file-size": 1135,
-      "orphan": 1
-    },
-    "internal/runtime/jobs/jobs_extra_test.go": {
-      "essay": 1
-    },
-    "internal/runtime/jobs/jobs_security_test.go": {
-      "essay": 4
+    "internal/runtime/guardian/guardian_policy.md": {
+      "doc-prose": 1
     },
     "internal/runtime/plancontract/project.go": {
       "orphan": 1
@@ -1154,7 +1141,7 @@
     },
     "internal/runtime/recovery/gate.go": {
       "essay": 4,
-      "file-size": 393
+      "file-size": 394
     },
     "internal/runtime/recovery/rules.go": {
       "complexity": 19,
@@ -1204,13 +1191,6 @@
     },
     "internal/safety/evidence/verification_summary_test.go": {
       "essay": 1
-    },
-    "internal/safety/guardian/guardian.go": {
-      "essay": 25,
-      "layer-order": 1
-    },
-    "internal/safety/guardian/guardian_policy.md": {
-      "doc-prose": 1
     },
     "internal/safety/permission/bash_decompose.go": {
       "essay": 23
@@ -1514,15 +1494,13 @@
     },
     "internal/tools/builtin/bash.go": {
       "essay": 11,
-      "layer-order": 1,
       "orphan": 1
     },
     "internal/tools/builtin/bash_env_test.go": {
       "essay": 4
     },
     "internal/tools/builtin/bgjobs.go": {
-      "essay": 10,
-      "layer-order": 1
+      "essay": 10
     },
     "internal/tools/builtin/bgjobs_test.go": {
       "essay": 6
@@ -1581,6 +1559,20 @@
     },
     "internal/tools/builtin/writefile.go": {
       "essay": 2
+    },
+    "internal/tools/jobs/artifacts_test.go": {
+      "essay": 5
+    },
+    "internal/tools/jobs/jobs.go": {
+      "essay": 42,
+      "file-size": 1135,
+      "orphan": 1
+    },
+    "internal/tools/jobs/jobs_extra_test.go": {
+      "essay": 1
+    },
+    "internal/tools/jobs/jobs_security_test.go": {
+      "essay": 4
     },
     "internal/tools/shellrun/runner.go": {
       "essay": 4
