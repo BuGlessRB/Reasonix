@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"sync/atomic"
+	"time"
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
@@ -32,6 +33,9 @@ func (p *isolationPosture) mode() string {
 	return control.ToolApprovalAsk
 }
 
+// isolatedResultTTL is how long a result nobody applied or discarded is kept.
+const isolatedResultTTL = 14 * 24 * time.Hour
+
 // isolationWiring is what a session offering worktree isolation holds.
 type isolationWiring struct {
 	store   *isolation.Store
@@ -45,7 +49,8 @@ func (b *builder) addIsolation() {
 	if !b.cfg.Agent.WorktreeIsolation || b.opts.UnattendedChild || b.tools.taskTool == nil {
 		return
 	}
-	store := isolation.NewStore(filepath.Join(config.DeliveryWorktreeDir(), "isolated"))
+	store := isolation.NewStore(filepath.Join(config.DeliveryWorktreeDir(), "isolated"), b.root)
+	go store.SweepExpired(context.WithoutCancel(b.ctx), isolatedResultTTL)
 	posture := &isolationPosture{}
 	b.tools.isolation = &isolationWiring{store: store, posture: posture}
 	b.tools.reg.Add(isolation.NewApplyTool(store))
@@ -63,18 +68,6 @@ func (b *builder) addIsolation() {
 func (w *isolationWiring) bind(ctrl *control.Controller) {
 	if w != nil {
 		w.posture.bind(ctrl)
-	}
-}
-
-// closeAfter removes every worktree the session still holds once the rest of
-// its cleanup has run.
-func (w *isolationWiring) closeAfter(cleanup func()) func() {
-	if w == nil {
-		return cleanup
-	}
-	return func() {
-		cleanup()
-		w.store.Close(context.Background())
 	}
 }
 

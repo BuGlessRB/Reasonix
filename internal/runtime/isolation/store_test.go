@@ -82,8 +82,7 @@ func args(id string) json.RawMessage { return json.RawMessage(`{"id":"` + id + `
 // apply writes them beside whatever the workspace did meanwhile.
 func TestIsolatedRunIsHeldUntilApplied(t *testing.T) {
 	repo := gitRepo(t)
-	store := NewStore(testenv.TempDir(t))
-	defer store.Close(context.Background())
+	store := NewStore(testenv.TempDir(t), repo)
 	ctx := context.Background()
 
 	report, err := store.Execute(ctx, writes(map[string]string{"a.txt": "isolated\n", "b.txt": "new\n"}), repo, "do it", "")
@@ -119,8 +118,7 @@ func TestIsolatedRunIsHeldUntilApplied(t *testing.T) {
 // and keeps the result so it can still be discarded.
 func TestApplyConflictKeepsTheResult(t *testing.T) {
 	repo := gitRepo(t)
-	store := NewStore(testenv.TempDir(t))
-	defer store.Close(context.Background())
+	store := NewStore(testenv.TempDir(t), repo)
 	ctx := context.Background()
 
 	report, err := store.Execute(ctx, writes(map[string]string{"a.txt": "isolated\n"}), repo, "do it", "")
@@ -149,7 +147,7 @@ func TestApplyConflictKeepsTheResult(t *testing.T) {
 // A run that changed nothing leaves nothing to settle.
 func TestUnchangedRunLeavesNoEntry(t *testing.T) {
 	repo := gitRepo(t)
-	store := NewStore(testenv.TempDir(t))
+	store := NewStore(testenv.TempDir(t), repo)
 	report, err := store.Execute(context.Background(), writes(nil), repo, "look", "")
 	if err != nil {
 		t.Fatal(err)
@@ -159,25 +157,54 @@ func TestUnchangedRunLeavesNoEntry(t *testing.T) {
 	}
 }
 
-// Closing the store removes every worktree it still holds.
-func TestCloseRemovesPendingWorktrees(t *testing.T) {
+// A pending result is its worktree, not the store's memory of it: a store
+// built afresh, as after a restart, finds it by id and can apply it.
+func TestPendingResultOutlivesItsStore(t *testing.T) {
 	repo := gitRepo(t)
 	managed := testenv.TempDir(t)
-	store := NewStore(managed)
-	if _, err := store.Execute(context.Background(), writes(map[string]string{"a.txt": "x\n"}), repo, "do it", ""); err != nil {
+	report, err := NewStore(managed, repo).Execute(context.Background(), writes(map[string]string{"a.txt": "isolated\n"}), repo, "do it", "")
+	if err != nil {
 		t.Fatal(err)
 	}
-	store.Close(context.Background())
-	left, _ := filepath.Glob(filepath.Join(managed, "*", "*"))
-	if len(left) != 0 {
-		t.Fatalf("worktrees left after Close: %v", left)
+	id := idOf(t, report)
+	resumed := NewStore(managed, repo)
+	if got := resumed.Pending(); len(got) != 1 || got[0] != id {
+		t.Fatalf("pending after rebuild = %v, want [%s]", got, id)
+	}
+	if _, err := NewApplyTool(resumed).Execute(context.Background(), args(id)); err != nil {
+		t.Fatalf("apply after rebuild: %v", err)
+	}
+	if read(t, repo, "a.txt") != "isolated\n" {
+		t.Fatal("the rebuilt store did not apply the result")
+	}
+	if left, _ := filepath.Glob(filepath.Join(managed, "*", "*")); len(left) != 0 {
+		t.Fatalf("an applied result left %v behind", left)
+	}
+}
+
+// A result taken from another workspace is never offered: applying it would
+// write into that workspace from this one.
+func TestPendingResultsBelongToTheirWorkspace(t *testing.T) {
+	repo, other := gitRepo(t), gitRepo(t)
+	managed := testenv.TempDir(t)
+	report, err := NewStore(managed, repo).Execute(context.Background(), writes(map[string]string{"a.txt": "x\n"}), repo, "do it", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := NewStore(managed, other)
+	if got := elsewhere.Pending(); len(got) != 0 {
+		t.Fatalf("another workspace sees %v", got)
+	}
+	var refusal tool.Refusal
+	if _, err := NewApplyTool(elsewhere).Execute(context.Background(), args(idOf(t, report))); !errors.As(err, &refusal) || refusal.Code != CodeUnknownID {
+		t.Fatalf("apply from another workspace: %v", err)
 	}
 }
 
 // Isolation is never faked: a workspace git cannot snapshot is refused, and
 // the runner is never started.
 func TestNonGitWorkspaceIsRefused(t *testing.T) {
-	store := NewStore(testenv.TempDir(t))
+	store := NewStore(testenv.TempDir(t), testenv.TempDir(t))
 	ran := false
 	_, err := store.Execute(context.Background(), func(context.Context, Run) (Outcome, error) {
 		ran = true

@@ -30,26 +30,29 @@ var errUnavailable = tool.Refusal{Code: CodeUnavailable, Message: "worktree isol
 
 // Entry is one finished isolated run whose changes wait on the parent.
 type Entry struct {
-	ID      string
-	Snap    worktree.Snapshot
-	Cand    worktree.Candidate
-	Tree    string
-	Changes []worktree.Change
-	Stats   []worktree.FileStat
+	ID        string
+	Workspace string
+	Snap      worktree.Snapshot
+	Cand      worktree.Candidate
+	Tree      string
+	Changes   []worktree.Change
+	Stats     []worktree.FileStat
 }
 
-// Store owns the worktrees of one session's isolated runs. Nothing in it
-// outlives the process: Close removes every worktree it still holds.
+// Store indexes the pending isolated results of one workspace. The worktrees
+// are the results; the index is rebuilt from them, so a result outlives the
+// process that produced it and ends only when it is applied or discarded.
 type Store struct {
 	managedRoot string
+	workspace   string
 	mu          sync.Mutex
 	entries     map[string]*Entry
-	closed      bool
 }
 
-// NewStore keeps its worktrees under managedRoot.
-func NewStore(managedRoot string) *Store {
-	return &Store{managedRoot: managedRoot, entries: map[string]*Entry{}}
+// NewStore keeps worktrees under managedRoot and answers for results taken
+// from workspaceRoot.
+func NewStore(managedRoot, workspaceRoot string) *Store {
+	return &Store{managedRoot: managedRoot, workspace: workspaceRoot, entries: map[string]*Entry{}}
 }
 
 // Begin checks the workspace out into a fresh worktree. A workspace git cannot
@@ -71,7 +74,7 @@ func (s *Store) Begin(ctx context.Context, workspaceRoot string) (*Entry, error)
 		_ = worktree.RemoveCandidate(context.WithoutCancel(ctx), snap, cand)
 		return nil, err
 	}
-	return &Entry{ID: id, Snap: snap, Cand: cand}, nil
+	return &Entry{ID: id, Workspace: workspaceRoot, Snap: snap, Cand: cand}, nil
 }
 
 // Finish records what the run changed. A run that changed nothing leaves no
@@ -86,13 +89,13 @@ func (s *Store) Finish(ctx context.Context, e *Entry) (bool, error) {
 		return false, err
 	}
 	e.Tree, e.Changes = tree, changes
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		go s.remove(context.WithoutCancel(ctx), e)
-		return false, errors.New("the session closed while the isolated run was finishing")
+	if err := persist(e); err != nil {
+		s.remove(ctx, e)
+		return false, err
 	}
+	s.mu.Lock()
 	s.entries[e.ID] = e
+	s.mu.Unlock()
 	return true, nil
 }
 
@@ -139,34 +142,21 @@ func (s *Store) Discard(ctx context.Context, id string) (*Entry, error) {
 	return e, nil
 }
 
-// Pending lists the ids still waiting on the parent, oldest first by id.
+// Pending lists this workspace's results still waiting on the parent, by id.
 func (s *Store) Pending() []string {
 	if s == nil {
 		return nil
 	}
+	ids := s.durableIDs()
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	ids := make([]string, 0, len(s.entries))
 	for id := range s.entries {
-		ids = append(ids, id)
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
 	}
+	s.mu.Unlock()
 	slices.Sort(ids)
 	return ids
-}
-
-// Close removes every worktree the store still holds.
-func (s *Store) Close(ctx context.Context) {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	s.closed = true
-	entries := s.entries
-	s.entries = map[string]*Entry{}
-	s.mu.Unlock()
-	for _, e := range entries {
-		s.remove(ctx, e)
-	}
 }
 
 func (s *Store) lookup(id string) (*Entry, error) {
@@ -177,6 +167,9 @@ func (s *Store) lookup(id string) (*Entry, error) {
 	s.mu.Lock()
 	e, ok := s.entries[id]
 	s.mu.Unlock()
+	if !ok {
+		e, ok = s.recover(id)
+	}
 	if !ok {
 		pending := s.Pending()
 		known := "none are pending"
@@ -199,6 +192,7 @@ func (s *Store) drop(ctx context.Context, id string) {
 }
 
 func (s *Store) remove(ctx context.Context, e *Entry) {
+	forget(e)
 	_ = worktree.RemoveCandidate(context.WithoutCancel(ctx), e.Snap, e.Cand)
 }
 

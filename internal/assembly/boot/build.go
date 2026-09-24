@@ -498,7 +498,7 @@ func (b *builder) freeze(ctrl *control.Controller) (*BuildResult, error) {
 	if b.providers.extension != nil {
 		providerResolver = b.providers.extension
 	}
-	b.cleanup = t.isolation.closeAfter(wireRuntimeScopeCleanup(runtimeSet, b.cleanup, b.opts.SharedHost, t.host, t.lsp, b.opts.SessionTemp))
+	b.cleanup = wireRuntimeScopeCleanup(runtimeSet, b.cleanup, b.opts.SharedHost, t.host, t.lsp, b.opts.SessionTemp)
 	ctrl.SetExtensions(dispatcher)
 	if extensionMgr == nil {
 		hub = nil
