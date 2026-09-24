@@ -174,14 +174,13 @@ func TestRestartEquivalence(t *testing.T) {
 			settles:      2,
 		},
 		{
-			// The review is owed through the checkpoint, so a restart keeps it.
-			// What it does not keep is the proof already given for the change.
+			// The review is owed through the checkpoint, and the proof already
+			// given rides it too, so a restart asks for exactly the review.
 			name: "high-risk change still owes review",
 			scenario: restartScenario{scope: "goal-auth", task: "change auth", registry: deliveryRegistry,
 				options: Options{DeliveryProfile: true, ProjectSensitivePaths: []string{"auth/**"}},
 				steps:   []restartStep{shipStep("auth/login.go"), finishStep, reverifyStep("auth/login.go")}},
-			restartAfter:  1,
-			knownStricter: map[int][]string{2: {"path_inspection", "signoff", "verification"}},
+			restartAfter: 1,
 		},
 	}
 	for _, tc := range cases {

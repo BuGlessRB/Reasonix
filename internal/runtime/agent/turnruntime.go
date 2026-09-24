@@ -64,6 +64,8 @@ type turnRuntime struct {
 
 	// reviewWarnings are warn-level findings to surface in the final summary.
 	reviewWarnings []string
+	// lastReadiness is the verdict the turn last asked to stop under.
+	lastReadiness *finalReadinessCheck
 }
 
 // pendingTurn is what someone outside the Run arms for the next one: a

@@ -62,6 +62,19 @@ type DeliveryCheckpoint struct {
 	// OwedReview is the structured review a change in this scope still owes. It
 	// rides the checkpoint because the ledger it is derived from does not.
 	OwedReview *OwedReview `json:"owedReview,omitempty"`
+	// Proven is what a pending change had already proven when the checkpoint
+	// was written; it stands only while every path still holds that content.
+	Proven *ProvenMutation `json:"proven,omitempty"`
+}
+
+// ProvenMutation pairs the proof a pending change had earned with a content
+// fingerprint of each path it changed, taken when that proof was current.
+type ProvenMutation struct {
+	Paths         map[string]string `json:"paths"`
+	Verified      bool              `json:"verified,omitempty"`
+	SignedOff     bool              `json:"signedOff,omitempty"`
+	Inspected     bool              `json:"inspected,omitempty"`
+	ProjectChecks bool              `json:"projectChecks,omitempty"`
 }
 
 // OwedReview names the review kinds a high-risk change owes and the paths a

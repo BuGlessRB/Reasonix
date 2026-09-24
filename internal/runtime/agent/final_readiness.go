@@ -164,6 +164,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	deliveryVerificationOnly := false
 	checkpoint := a.task.checkpoint
 	checkpointApplies := a.deliveryCheckpointApplies()
+	var carried *evidence.ProvenMutation
 	if a.deliveryProfile {
 		if mutation, ok := a.mutationBaseline(true); ok {
 			writer, hasWriter = mutation, true
@@ -174,6 +175,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 			// without manufacturing another write.
 			writer, hasWriter = -1, true
 			deliveryMutation = true
+			carried = a.carriedProof()
 		} else if checkpointApplies && checkpoint.MutationObserved {
 			deliveryMutation = true
 		}
@@ -213,7 +215,9 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	// what it cannot owe is a passing one, since the task being impossible is
 	// exactly why the check does not pass. Nothing else about the turn is waived.
 	verified, blockedWithCheck := a.postWriteVerification(writer)
-	missing = a.appendVerificationGap(&out, missing, writer, blockedWithCheck, verified)
+	if carried == nil || !carried.Verified {
+		missing = a.appendVerificationGap(&out, missing, writer, blockedWithCheck, verified)
+	}
 	missing = a.appendReviewGap(&out, missing)
 	missing = a.appendUnprovenMutationGap(&out, missing)
 	missing = a.appendUnseenRenderGap(&out, missing, writer)
@@ -223,30 +227,11 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	out.applies = true
 	if a.deliveryProfile {
 		a.emitTurnPhase(event.TurnPhaseVerifying)
-		criteriaEstablished := a.turn.deliveryCriteriaEstablished || (checkpointApplies && checkpoint.CriteriaEstablished)
-		if !criteriaEstablished {
-			out.missingAcceptanceCriteria++
-			missing = append(missing, "establish concrete acceptance criteria with todo_write before changing state")
-		}
-		hasCompleteStep := a.task.ledger.HasSuccessfulCompleteStepAfter(writer)
-		if !hasCompleteStep {
-			out.missingSignoff++
-			missing = append(missing, "call complete_step after the latest mutation")
-		}
-		// A sign-off that cited a passing check but lacks the review is missing
-		// the review, not the verification. Reporting both sends the model to
-		// re-run and re-cite a check it already ran, cited, and watched pass.
-		if !a.task.ledger.HasSuccessfulDeliverySignoffAfter(writer) && !blockedWithCheck &&
-			!a.task.ledger.HasCitedVerificationAfter(writer) {
-			out.missingVerification++
-			missing = append(missing, "run relevant verification after the latest mutation and cite that successful command in complete_step")
-		}
-		if deliveryMutation {
-			missing = a.appendSelfInspectionGap(&out, missing, writer)
-		}
+		criteria := a.turn.deliveryCriteriaEstablished || (checkpointApplies && checkpoint.CriteriaEstablished)
+		missing = a.appendDeliveryGaps(&out, missing, writer, carried, criteria, blockedWithCheck, deliveryMutation)
 		// The capability gate already ran before the no-writer fast path above.
 	}
-	if !deliveryVerificationOnly {
+	if !deliveryVerificationOnly && (carried == nil || !carried.ProjectChecks) {
 		missing = a.appendProjectCheckGaps(&out, missing, writer)
 	}
 
@@ -258,6 +243,33 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	}
 	out.reason = strings.Join(missing, "; ")
 	return out
+}
+
+// appendDeliveryGaps is what a Delivery turn owes on top of any turn: criteria,
+// sign-off, a cited check, and inspection of what changed. carried is proof a
+// restart brought in for a pending change, and discharges what it proved.
+func (a *Agent) appendDeliveryGaps(out *finalReadinessCheck, missing []string, writer int, carried *evidence.ProvenMutation, criteria, blockedWithCheck, deliveryMutation bool) []string {
+	if !criteria {
+		out.missingAcceptanceCriteria++
+		missing = append(missing, "establish concrete acceptance criteria with todo_write before changing state")
+	}
+	signedOff := carried != nil && carried.SignedOff
+	if !signedOff && !a.task.ledger.HasSuccessfulCompleteStepAfter(writer) {
+		out.missingSignoff++
+		missing = append(missing, "call complete_step after the latest mutation")
+	}
+	// A sign-off that cited a passing check but lacks the review is missing
+	// the review, not the verification. Reporting both sends the model to
+	// re-run and re-cite a check it already ran, cited, and watched pass.
+	if !signedOff && !a.task.ledger.HasSuccessfulDeliverySignoffAfter(writer) && !blockedWithCheck &&
+		!a.task.ledger.HasCitedVerificationAfter(writer) {
+		out.missingVerification++
+		missing = append(missing, "run relevant verification after the latest mutation and cite that successful command in complete_step")
+	}
+	if deliveryMutation && (carried == nil || !carried.Inspected) {
+		missing = a.appendSelfInspectionGap(out, missing, writer)
+	}
+	return missing
 }
 
 // appendIncompleteTodoGap records a list the turn left open. It needs a progress

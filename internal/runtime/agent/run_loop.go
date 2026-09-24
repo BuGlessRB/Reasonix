@@ -566,6 +566,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 	// it happens where the turn asks whether it may stop, not per tool call.
 	a.evaluateBaselineCriteriaOnce(ctx)
 	readiness := a.finalReadinessCheckFor()
+	a.turn.lastReadiness = &readiness
 	if state.graceRound && (readiness.reason != "" || !hasVisibleFinalAnswer(text)) {
 		return false, a.gracePause(state)
 	}
