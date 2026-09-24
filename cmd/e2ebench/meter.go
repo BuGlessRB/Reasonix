@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // meter is the harness-neutral measuring point: a proxy every harness talks to
@@ -138,7 +140,16 @@ func (m *meter) serve() (base string, stop func(), err error) {
 	}
 	srv := &http.Server{Handler: m}
 	go func() { _ = srv.Serve(ln) }()
-	return "http://" + ln.Addr().String(), func() { _ = srv.Close() }, nil
+	// A handler records its tape after the client has read the last byte, so
+	// stopping waits for handlers instead of cutting them off.
+	stop = func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if srv.Shutdown(ctx) != nil {
+			_ = srv.Close()
+		}
+	}
+	return "http://" + ln.Addr().String(), stop, nil
 }
 
 func (m *meter) snapshot() meterUsage {
