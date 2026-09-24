@@ -174,7 +174,7 @@ func (a *Agent) LiveContract() *taskcontract.Contract {
 	if a == nil || a.task.ledger == nil {
 		return nil
 	}
-	return buildShadowContract(a.turn.turnInput, a.task.ledger.Receipts(), a.planContractSnapshot())
+	return buildShadowContract(a.turn.turnInput, a.task.ledger.Receipts(), a.PlanContract())
 }
 
 // emitTurnShadows records the end-of-turn shadow observations: the contract's
@@ -186,7 +186,7 @@ func (a *Agent) emitTurnShadows(input string, blocked bool) {
 	if a.task.ledger == nil {
 		return
 	}
-	c := buildShadowContract(input, a.task.ledger.Receipts(), a.planContractSnapshot())
+	c := buildShadowContract(input, a.task.ledger.Receipts(), a.PlanContract())
 	// Prefer the live contract when present so Suppressed/Partial state is not
 	// lost in the pure replay path.
 	if live := a.LiveContract(); live != nil && (live.HasSuppressed() || len(live.Requirements) > 0 || len(live.Checks) > 0) {

@@ -1,6 +1,7 @@
-package agent
+package coordinator
 
 import (
+	"reasonix/internal/runtime/agent"
 	"strings"
 
 	"reasonix/internal/contract/provider"
@@ -22,7 +23,7 @@ func (c *Coordinator) rollbackPlannerTurn(before []provider.Message, rewriteBefo
 			msgs = msgs[:len(msgs)-1]
 			continue
 		}
-		if last.Role != provider.RoleUser || isCompactionSummary(last) {
+		if last.Role != provider.RoleUser || agent.IsCompactionSummary(last) {
 			break
 		}
 		msgs = msgs[:len(msgs)-1]

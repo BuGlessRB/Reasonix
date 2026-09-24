@@ -252,9 +252,9 @@ func coalesceProjectionUserRuns(msgs []provider.Message) []provider.Message {
 func formatSummaryMessage(summary string) provider.Message {
 	return provider.Message{
 		Role: provider.RoleUser,
-		Content: summaryTagOpen + "\n" +
+		Content: SummaryTagOpen + "\n" +
 			"Summary of earlier conversation (older messages were compacted to save context):\n" +
 			summary + "\n" +
-			summaryTagClose,
+			SummaryTagClose,
 	}
 }

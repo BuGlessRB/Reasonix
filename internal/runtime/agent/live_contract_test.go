@@ -58,7 +58,7 @@ func TestLiveContractMatchesTheEndOfTurnReplay(t *testing.T) {
 	a.task.ledger.Record(evidence.Receipt{ToolName: "bash", Command: "go test ./internal/contract/provider/", Success: true})
 
 	live := contractShadowAudit(a.LiveContract())
-	replay := contractShadowAudit(buildShadowContract(a.turn.turnInput, a.task.ledger.Receipts(), a.planContractSnapshot()))
+	replay := contractShadowAudit(buildShadowContract(a.turn.turnInput, a.task.ledger.Receipts(), a.PlanContract()))
 	if live != replay {
 		t.Fatalf("live view %+v disagrees with the end-of-turn replay %+v", live, replay)
 	}

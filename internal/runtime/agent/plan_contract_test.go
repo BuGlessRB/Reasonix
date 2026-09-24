@@ -1,12 +1,9 @@
 package agent
 
 import (
-	"context"
 	"slices"
 	"testing"
 
-	"reasonix/internal/contract/event"
-	"reasonix/internal/contract/provider"
 	"reasonix/internal/runtime/plancontract"
 	"reasonix/internal/runtime/taskcontract"
 	"reasonix/internal/safety/evidence"
@@ -129,33 +126,5 @@ func TestShadowContractFallsBackToTodosWithoutAPlan(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("without a plan the todo list must still stand in as the requirement set")
-	}
-}
-
-// A turn must never inherit the previous turn's plan: the executor-only route
-// runs with no contract at all.
-func TestCoordinatorClearsThePlanContractEachTurn(t *testing.T) {
-	planner := &mockProvider{name: "planner", streams: submitPlanCall(e2ePlanArgs)}
-	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Done."},
-		{Type: provider.ChunkDone},
-	}}
-	coord, executor := submitPlanCoordinator(t, planner, exec, event.Discard)
-
-	if err := coord.Run(context.Background(), "fix the cache key"); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if executor.planContractSnapshot() == nil {
-		t.Fatal("the approved plan never reached the executor's contract")
-	}
-
-	coord.plannerPolicy = func(context.Context, string) PlannerDecision {
-		return PlannerDecision{Route: PlannerRouteExecutorOnly, Reason: "test"}
-	}
-	if err := coord.Run(context.Background(), "just answer me"); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if executor.planContractSnapshot() != nil {
-		t.Fatal("an executor-only turn inherited the previous turn's plan")
 	}
 }

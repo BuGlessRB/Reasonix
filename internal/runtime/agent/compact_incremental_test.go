@@ -56,7 +56,7 @@ func TestIncrementalFoldSummarizesPriorDigestPlusNewWork(t *testing.T) {
 		}
 	}
 	joinedStr := joined.String()
-	if !strings.Contains(joinedStr, summaryTagOpen) && !strings.Contains(joinedStr, "merged digest") && !strings.Contains(joinedStr, "Summary of earlier") {
+	if !strings.Contains(joinedStr, SummaryTagOpen) && !strings.Contains(joinedStr, "merged digest") && !strings.Contains(joinedStr, "Summary of earlier") {
 		// The prior digest may be rendered as user content under the summary tag.
 		if !strings.Contains(joinedStr, "new work") {
 			t.Fatalf("second fold input missing new work:\n%.400s", joinedStr)

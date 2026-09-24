@@ -28,7 +28,7 @@ func longSession(n int) *Agent {
 		Projection: sessionstore.ContextProjection{
 			Messages: []provider.Message{
 				{Role: provider.RoleSystem, Content: "sys"},
-				{Role: provider.RoleUser, Content: summaryTagOpen + "digest" + summaryTagClose},
+				{Role: provider.RoleUser, Content: SummaryTagOpen + "digest" + SummaryTagClose},
 			},
 			TranscriptVersion: sess.TranscriptVersion(),
 			CoveredCount:      covered,

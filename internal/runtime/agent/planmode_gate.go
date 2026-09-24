@@ -62,7 +62,7 @@ func planPhaseBlockReason(d planmode.Decision) string {
 // well as before permission: a resolve-only state transition is still one, and
 // Commit's own contract puts it after the host's checks.
 func (a *Agent) planPhaseGateForTarget(plan *toolCallPlan) (toolOutcome, bool) {
-	if !a.planningPhase() {
+	if !a.PlanningPhase() {
 		return toolOutcome{}, false
 	}
 	if plan.resolved.TargetName != "" {
@@ -99,7 +99,7 @@ func (a *Agent) planPhaseGateForTarget(plan *toolCallPlan) (toolOutcome, bool) {
 // execute what the phase gate never admitted. Reaching it means a pre-execution
 // path skipped the gate, which is a host bug and says so.
 func (a *Agent) assertPlanPhaseAdmitted(plan *toolCallPlan) (toolOutcome, bool) {
-	if !a.planningPhase() {
+	if !a.PlanningPhase() {
 		return toolOutcome{}, false
 	}
 	if plan.admission != nil && plan.admission.Epoch == a.plan().State().Epoch {
@@ -126,9 +126,9 @@ func (a *Agent) plan() *planmode.Runtime {
 	return a.planRuntime.Load()
 }
 
-// planningPhase reports whether side effects are still waiting for approval.
+// PlanningPhase reports whether side effects are still waiting for approval.
 // Executing is inside the workflow too, which is why Active is not the question.
-func (a *Agent) planningPhase() bool {
+func (a *Agent) PlanningPhase() bool {
 	switch a.plan().State().Phase {
 	case planmode.Planning, planmode.AwaitingApproval:
 		return true

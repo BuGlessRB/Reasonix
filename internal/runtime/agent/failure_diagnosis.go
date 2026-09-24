@@ -100,7 +100,7 @@ func (a *Agent) selectDiagnosticLines(ctx context.Context, content string) ([]in
 				Pricing: a.svc.pricing, UsageSource: event.UsageSourceCompaction})
 		}
 	}()
-	defer trackPublishedHostStream(ctx, cancel)()
+	defer TrackPublishedHostStream(ctx, cancel)()
 
 	ch, err := a.svc.prov.Stream(ctx, provider.Request{
 		Messages: []provider.Message{

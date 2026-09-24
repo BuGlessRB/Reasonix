@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/coordinator"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/safety/sandbox"
 )
@@ -776,7 +777,7 @@ func TestApplyModePropagatesPlanToCoordinatorPlannerAndKeepsYolo(t *testing.T) {
 	}}
 	execProvider := &scriptedTurns{turns: [][]provider.Chunk{textTurn("executor done")}}
 	executor := agent.New(execProvider, tool.NewRegistry(), sessionstore.NewSession("exec"), agent.Options{}, event.Discard)
-	coordinator := agent.NewCoordinator(planner, sessionstore.NewSession("planner"), nil, plannerTools, agent.Options{}, executor, 0, event.Discard, nil)
+	coordinator := coordinator.NewCoordinator(planner, sessionstore.NewSession("planner"), nil, plannerTools, agent.Options{}, executor, 0, event.Discard, nil)
 	c := New(Options{Runner: coordinator, Executor: executor})
 
 	c.ApplyMode(true, true)

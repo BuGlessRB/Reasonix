@@ -1001,13 +1001,6 @@
     "internal/runtime/agent/context_manager.go": {
       "essay": 1
     },
-    "internal/runtime/agent/coordinator.go": {
-      "essay": 14,
-      "orphan": 1
-    },
-    "internal/runtime/agent/coordinator_test.go": {
-      "essay": 3
-    },
     "internal/runtime/agent/delivery_hardening_test.go": {
       "essay": 3
     },
@@ -1120,6 +1113,13 @@
     },
     "internal/runtime/capability/catalog.go": {
       "essay": 1
+    },
+    "internal/runtime/coordinator/coordinator.go": {
+      "essay": 14,
+      "orphan": 1
+    },
+    "internal/runtime/coordinator/coordinator_test.go": {
+      "essay": 3
     },
     "internal/runtime/guardian/guardian.go": {
       "essay": 25

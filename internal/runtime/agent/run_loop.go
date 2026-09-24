@@ -161,7 +161,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	// change without the final-readiness gate ever seeing it. Plan turns defer
 	// this lease like collectBackgroundEvidence does so execution evidence is
 	// consumed and audited only after plan approval.
-	if a.task.ledger != nil && a.svc.jobs != nil && !a.planningPhase() {
+	if a.task.ledger != nil && a.svc.jobs != nil && !a.PlanningPhase() {
 		session := jobs.SessionFromContext(ctx)
 		for _, jobID := range a.svc.jobs.PendingEvidenceJobIDsForSession(session) {
 			summary, ready := a.svc.jobs.TryLeaseEvidenceForSession(session, jobID)
@@ -195,7 +195,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	} else {
 		a.turn.policy = taskpolicy.Derive(taskpolicy.Input{
 			Preset:   agentpreset.AgentPreset(a.AgentPreset()),
-			PlanMode: a.planningPhase(),
+			PlanMode: a.PlanningPhase(),
 		})
 	}
 	a.turn.policySet = true
@@ -235,7 +235,7 @@ func (a *Agent) openUserTurn(ctx context.Context, providerInput, rawInput string
 	}
 	pending := provider.Message{
 		Role: provider.RoleUser, Content: input, RawContent: rawContent,
-		Images: userImages(ctx),
+		Images: UserImages(ctx),
 	}
 	a.announceOwnTurn(ctx, pending)
 	a.emitTurnPhase(event.TurnPhaseWorking)

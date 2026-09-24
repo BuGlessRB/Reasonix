@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/ext/extension/providerext"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/capability"
+	"reasonix/internal/runtime/coordinator"
 	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/runtime/recovery"
 	"reasonix/internal/session/control"
@@ -56,7 +57,7 @@ func (w roleWiring) planner(opts Options, executor *agent.Agent, executorModel, 
 	if err != nil {
 		return nil, "", fmt.Errorf("planner %q: %w", pm, err)
 	}
-	plannerSess := sessionstore.NewSession(agent.PlannerPromptWithContext(staticContext))
+	plannerSess := sessionstore.NewSession(coordinator.PlannerPromptWithContext(staticContext))
 	// Its own ledger and use_capability frontend keep the planner's MCP calls
 	// from satisfying or poisoning the executor's delivery gates.
 	plannerLedger := capability.NewLedger()
@@ -84,7 +85,7 @@ func (w roleWiring) planner(opts Options, executor *agent.Agent, executorModel, 
 		CapabilityAudit:              plannerAudit,
 		MissingReasoningWarnStateDir: config.MissingReasoningWarnStateDir(),
 	}
-	runner := agent.NewCoordinatorWithPlannerPolicy(plannerProv, plannerSess, pe.Price, plannerTools, plannerOpts, executor, w.cfg.Agent.Temperature, w.sink, control.NewPlannerPolicy())
+	runner := coordinator.NewCoordinatorWithPlannerPolicy(plannerProv, plannerSess, pe.Price, plannerTools, plannerOpts, executor, w.cfg.Agent.Temperature, w.sink, control.NewPlannerPolicy())
 	return runner, executorModel + " + planner " + pe.Model, nil
 }
 

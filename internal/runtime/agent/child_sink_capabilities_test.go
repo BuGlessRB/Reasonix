@@ -17,7 +17,6 @@ func TestChildAgentSinksForwardEveryAuditCapability(t *testing.T) {
 
 	for name, sink := range map[string]event.Sink{
 		"subSinkFor":                   subSinkFor("parent", event.Discard),
-		"plannerSink":                  plannerSink(event.Discard),
 		"subagentProgressTracker.wrap": tracker.wrap(),
 	} {
 		if missing := event.MissingCapabilities(sink); len(missing) > 0 {

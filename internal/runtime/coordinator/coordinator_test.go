@@ -1,10 +1,11 @@
-package agent
+package coordinator
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"reasonix/internal/contract/event"
+	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strconv"
@@ -66,9 +67,9 @@ func TestCoordinatorHandsPlanToExecutor(t *testing.T) {
 		{Type: provider.ChunkDone},
 	}}
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	plannerSess := sessionstore.NewSession("planner-sys")
-	coord := NewCoordinator(planner, plannerSess, nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, plannerSess, nil, nil, agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "fix the bug"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -201,9 +202,9 @@ func TestCoordinatorSkipsPlannerForTrivialTurn(t *testing.T) {
 		{Type: provider.ChunkDone},
 	}}
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	plannerSess := sessionstore.NewSession("planner-sys")
-	coord := NewCoordinator(planner, plannerSess, nil, nil, Options{}, executor, 0, event.Discard, func(context.Context, string) bool { return false })
+	coord := NewCoordinator(planner, plannerSess, nil, nil, agent.Options{}, executor, 0, event.Discard, func(context.Context, string) bool { return false })
 
 	if err := coord.Run(context.Background(), "what does this function do?"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -229,21 +230,21 @@ func TestCoordinatorStructuredPolicyUsesStableDepthMetadata(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "Light done."}, {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "Full done."}, {Type: provider.ChunkDone}},
 	}}
-	policy := func(_ context.Context, input string) PlannerDecision {
+	policy := func(_ context.Context, input string) agent.PlannerDecision {
 		if strings.Contains(input, "light") {
-			return PlannerDecision{
-				Route: PlannerRoutePlanAndExecute, Depth: PlannerDepthLight,
+			return agent.PlannerDecision{
+				Route: agent.PlannerRoutePlanAndExecute, Depth: agent.PlannerDepthLight,
 				Reason: "test_light", MaxResearchRounds: 2,
 			}
 		}
-		return PlannerDecision{
-			Route: PlannerRoutePlanAndExecute, Depth: PlannerDepthFull,
+		return agent.PlannerDecision{
+			Route: agent.PlannerRoutePlanAndExecute, Depth: agent.PlannerDepthFull,
 			Reason: "test_full", MaxResearchRounds: 6,
 		}
 	}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	coord := NewCoordinatorWithPlannerPolicy(
-		planner, sessionstore.NewSession("stable planner system"), nil, nil, Options{},
+		planner, sessionstore.NewSession("stable planner system"), nil, nil, agent.Options{},
 		executor, 0, event.Discard, policy,
 	)
 
@@ -291,15 +292,15 @@ func TestCoordinatorPlanForApprovalDoesNotDependOnPlannerMarker(t *testing.T) {
 		{Type: provider.ChunkText, Text: "must not run"},
 		{Type: provider.ChunkDone},
 	}}
-	policy := func(context.Context, string) PlannerDecision {
-		return PlannerDecision{
-			Route: PlannerRoutePlanForApproval, Depth: PlannerDepthFull,
+	policy := func(context.Context, string) agent.PlannerDecision {
+		return agent.PlannerDecision{
+			Route: agent.PlannerRoutePlanForApproval, Depth: agent.PlannerDepthFull,
 			Reason: "user_plan_for_approval", MaxResearchRounds: 6,
 		}
 	}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	coord := NewCoordinatorWithPlannerPolicy(
-		planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{},
+		planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{},
 		executor, 0, event.Discard, policy,
 	)
 	approval := &coordinatorApprovalGate{allow: false}
@@ -325,12 +326,12 @@ func TestCoordinatorPlanForApprovalHandsOffAfterApproval(t *testing.T) {
 		{Type: provider.ChunkText, Text: "Done."},
 		{Type: provider.ChunkDone},
 	}}
-	policy := func(context.Context, string) PlannerDecision {
-		return PlannerDecision{Route: PlannerRoutePlanForApproval, Depth: PlannerDepthFull, Reason: "user_plan_for_approval"}
+	policy := func(context.Context, string) agent.PlannerDecision {
+		return agent.PlannerDecision{Route: agent.PlannerRoutePlanForApproval, Depth: agent.PlannerDepthFull, Reason: "user_plan_for_approval"}
 	}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	coord := NewCoordinatorWithPlannerPolicy(
-		planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{},
+		planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{},
 		executor, 0, event.Discard, policy,
 	)
 	approval := &coordinatorApprovalGate{allow: true}
@@ -361,13 +362,13 @@ func TestCoordinatorHeadlessPlanForApprovalPersistsForContinuation(t *testing.T)
 		{Type: provider.ChunkText, Text: "must not run"},
 		{Type: provider.ChunkDone},
 	}}
-	policy := func(context.Context, string) PlannerDecision {
-		return PlannerDecision{Route: PlannerRoutePlanForApproval, Depth: PlannerDepthFull, Reason: "user_plan_for_approval"}
+	policy := func(context.Context, string) agent.PlannerDecision {
+		return agent.PlannerDecision{Route: agent.PlannerRoutePlanForApproval, Depth: agent.PlannerDepthFull, Reason: "user_plan_for_approval"}
 	}
 	sink := &recordSink{}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, sink)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, sink)
 	coord := NewCoordinatorWithPlannerPolicy(
-		planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{},
+		planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{},
 		executor, 0, sink, policy,
 	)
 
@@ -392,13 +393,13 @@ func TestCoordinatorPlanOnlyDoesNotRunExecutor(t *testing.T) {
 		{Type: provider.ChunkText, Text: "must not run"},
 		{Type: provider.ChunkDone},
 	}}
-	policy := func(context.Context, string) PlannerDecision {
-		return PlannerDecision{Route: PlannerRoutePlanOnly, Depth: PlannerDepthFull, Reason: "user_plan_only"}
+	policy := func(context.Context, string) agent.PlannerDecision {
+		return agent.PlannerDecision{Route: agent.PlannerRoutePlanOnly, Depth: agent.PlannerDepthFull, Reason: "user_plan_only"}
 	}
 	sink := &recordSink{}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, sink)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, sink)
 	coord := NewCoordinatorWithPlannerPolicy(
-		planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{},
+		planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{},
 		executor, 0, sink, policy,
 	)
 	approval := &coordinatorApprovalGate{allow: true}
@@ -428,15 +429,15 @@ func TestCoordinatorPlanOnlyContinuesWithExecutorOnNextTurn(t *testing.T) {
 		{Type: provider.ChunkText, Text: "Migration complete."},
 		{Type: provider.ChunkDone},
 	}}
-	policy := func(_ context.Context, input string) PlannerDecision {
+	policy := func(_ context.Context, input string) agent.PlannerDecision {
 		if strings.Contains(input, "只规划") {
-			return PlannerDecision{Route: PlannerRoutePlanOnly, Depth: PlannerDepthFull, Reason: "user_plan_only"}
+			return agent.PlannerDecision{Route: agent.PlannerRoutePlanOnly, Depth: agent.PlannerDepthFull, Reason: "user_plan_only"}
 		}
-		return PlannerDecision{Route: PlannerRouteExecutorOnly, Depth: PlannerDepthNone, Reason: "short_reply"}
+		return agent.PlannerDecision{Route: agent.PlannerRouteExecutorOnly, Depth: agent.PlannerDepthNone, Reason: "short_reply"}
 	}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	coord := NewCoordinatorWithPlannerPolicy(
-		planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{},
+		planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{},
 		executor, 0, event.Discard, policy,
 	)
 
@@ -477,19 +478,19 @@ func TestCoordinatorPlanOnlyContinuesWithExecutorOnNextTurn(t *testing.T) {
 func TestCoordinatorPlannerFailurePreservesExecutionBoundary(t *testing.T) {
 	cases := []struct {
 		name   string
-		route  PlannerRoute
+		route  agent.PlannerRoute
 		reason string
 		input  string
 	}{
 		{
 			name:   "plan only",
-			route:  PlannerRoutePlanOnly,
+			route:  agent.PlannerRoutePlanOnly,
 			reason: "user_plan_only",
 			input:  "只规划认证迁移，不要执行",
 		},
 		{
 			name:   "plan for approval",
-			route:  PlannerRoutePlanForApproval,
+			route:  agent.PlannerRoutePlanForApproval,
 			reason: "user_plan_for_approval",
 			input:  "先规划认证迁移，等我确认后再执行",
 		},
@@ -503,12 +504,12 @@ func TestCoordinatorPlannerFailurePreservesExecutionBoundary(t *testing.T) {
 				{Type: provider.ChunkText, Text: "must not run"},
 				{Type: provider.ChunkDone},
 			}}
-			policy := func(context.Context, string) PlannerDecision {
-				return PlannerDecision{Route: tc.route, Depth: PlannerDepthFull, Reason: tc.reason}
+			policy := func(context.Context, string) agent.PlannerDecision {
+				return agent.PlannerDecision{Route: tc.route, Depth: agent.PlannerDepthFull, Reason: tc.reason}
 			}
-			executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+			executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 			coord := NewCoordinatorWithPlannerPolicy(
-				planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{},
+				planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{},
 				executor, 0, event.Discard, policy,
 			)
 
@@ -562,9 +563,9 @@ func TestCoordinatorPlannerUsesReadOnlyResearchTools(t *testing.T) {
 	parentReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, writesPaths: true})
 	parentReg.Add(coordinatorTestTool{name: "todo_write", readOnly: true})
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	plannerSess := sessionstore.NewSession(PlannerPromptWithContext("Rule: keep changes narrow."))
-	coord := NewCoordinator(planner, plannerSess, nil, PlannerToolRegistry(parentReg), Options{MaxSteps: 4}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, plannerSess, nil, agent.PlannerToolRegistry(parentReg), agent.Options{MaxSteps: 4}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "fix the bug"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -600,8 +601,8 @@ func TestCoordinatorSetReasoningLanguageClearsPlannerAgent(t *testing.T) {
 		{Type: provider.ChunkDone},
 	}}
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{ReasoningLanguage: "zh"}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, tool.NewRegistry(), Options{ReasoningLanguage: "zh"}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{ReasoningLanguage: "zh"}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, tool.NewRegistry(), agent.Options{ReasoningLanguage: "zh"}, executor, 0, event.Discard, nil)
 	coord.SetReasoningLanguage("auto")
 
 	if err := coord.Run(context.Background(), "plan a change"); err != nil {
@@ -629,9 +630,9 @@ func TestCoordinatorPlannerMaxStepsUsesExplicitRuntimeKey(t *testing.T) {
 	parentReg := tool.NewRegistry()
 	parentReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "keep reading"})
 	sink := &recordSink{}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, sink)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, sink)
 	plannerSess := sessionstore.NewSession("planner-sys")
-	coord := NewCoordinator(planner, plannerSess, nil, PlannerToolRegistry(parentReg), Options{
+	coord := NewCoordinator(planner, plannerSess, nil, agent.PlannerToolRegistry(parentReg), agent.Options{
 		MaxSteps:    2,
 		MaxStepsKey: "planner max_steps",
 	}, executor, 0, sink, nil)
@@ -684,8 +685,8 @@ func TestCoordinatorPlannerMaxStepsZeroIsUnlimited(t *testing.T) {
 
 	parentReg := tool.NewRegistry()
 	parentReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "ok"})
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, PlannerToolRegistry(parentReg), Options{
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, agent.PlannerToolRegistry(parentReg), agent.Options{
 		MaxSteps:    0,
 		MaxStepsKey: "planner max_steps",
 	}, executor, 0, event.Discard, nil)
@@ -713,15 +714,15 @@ func TestCoordinatorPlannerDepthAppliesPerTurnResearchBudget(t *testing.T) {
 	}}
 	parentReg := tool.NewRegistry()
 	parentReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "ok"})
-	policy := func(context.Context, string) PlannerDecision {
-		return PlannerDecision{
-			Route: PlannerRoutePlanAndExecute, Depth: PlannerDepthLight,
+	policy := func(context.Context, string) agent.PlannerDecision {
+		return agent.PlannerDecision{
+			Route: agent.PlannerRoutePlanAndExecute, Depth: agent.PlannerDepthLight,
 			Reason: "bounded_work", MaxResearchRounds: 2,
 		}
 	}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	coord := NewCoordinatorWithPlannerPolicy(
-		planner, sessionstore.NewSession("planner-sys"), nil, PlannerToolRegistry(parentReg), Options{MaxSteps: 0},
+		planner, sessionstore.NewSession("planner-sys"), nil, agent.PlannerToolRegistry(parentReg), agent.Options{MaxSteps: 0},
 		executor, 0, event.Discard, policy,
 	)
 
@@ -769,8 +770,8 @@ func TestCoordinatorNudgesExecutorThatAnswersWithoutActing(t *testing.T) {
 
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
-	executor := New(exec, execReg, sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, execReg, sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "install the skill"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -783,21 +784,6 @@ func TestCoordinatorNudgesExecutorThatAnswersWithoutActing(t *testing.T) {
 	}
 }
 
-func TestExecutorHandoffRetryMessageKeepsUserChoicesInteractive(t *testing.T) {
-	msg := executorHandoffRetryMessage()
-	lower := strings.ToLower(msg)
-	for _, want := range []string{
-		"ask tool",
-		"wait for its tool result",
-		"do not ask in prose",
-		"do not claim the user answered",
-	} {
-		if !strings.Contains(lower, want) {
-			t.Fatalf("executorHandoffRetryMessage() missing %q:\n%s", want, msg)
-		}
-	}
-}
-
 func TestCoordinatorAllowsGuidanceOnlyExecutorHandoff(t *testing.T) {
 	planner := &mockProvider{name: "planner", streams: submitPlanCall(`{"objective":"guide the user through the audio settings","steps":[{"title":"explain how to enable the checkbox and compare by ear"}]}`)}
 	exec := &mockProvider{name: "executor", streams: [][]provider.Chunk{
@@ -807,8 +793,8 @@ func TestCoordinatorAllowsGuidanceOnlyExecutorHandoff(t *testing.T) {
 		},
 	}}
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "I just installed EqualizerAPO, now what?"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -830,8 +816,8 @@ func TestCoordinatorAllowsGuidanceOnlyPlanWithExecutorToolContext(t *testing.T) 
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "file"})
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
-	executor := New(exec, execReg, sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, execReg, sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "Please advise on the manual audio check."); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -860,8 +846,8 @@ func TestCoordinatorNudgesWorkTaskEvenIfPlannerMentionsUserGuidance(t *testing.T
 
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
-	executor := New(exec, execReg, sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, execReg, sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "fix the bug"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -893,8 +879,8 @@ func TestCoordinatorNudgesMixedGuidanceAndWorkTask(t *testing.T) {
 
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
-	executor := New(exec, execReg, sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, execReg, sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "summarize the current behavior and update the README"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -940,7 +926,7 @@ func TestCoordinatorSkipsExecutorWhenPlannerConcludesNoChanges(t *testing.T) {
 	if got := len(exec.requests); got != 0 {
 		t.Fatalf("executor requests = %d, want skip after no-op planner conclusion", got)
 	}
-	messages := executor.sess.conversation.Messages
+	messages := executor.Session().Messages
 	if got := len(messages); got != 3 {
 		t.Fatalf("executor session messages = %d, want system + user + no-op assistant", got)
 	}
@@ -962,8 +948,8 @@ func TestCoordinatorDoesNotTreatGenericPositivePlanAsNoOp(t *testing.T) {
 		{Type: provider.ChunkDone},
 	}}
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "fix the missing guard"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -991,8 +977,8 @@ func TestCoordinatorDoesNotSkipExecutorForPartialNoOpPlanWithActions(t *testing.
 
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "bash", readOnly: false, output: "ok"})
-	executor := New(exec, execReg, sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, execReg, sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "check the implementation and test it"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1021,8 +1007,8 @@ func TestCoordinatorHandoffAffirmsExecutorToolSchemasWhenPlannerClaimsNoMCP(t *t
 
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "mcp__github__search", readOnly: true, output: "discussion results"})
-	executor := New(exec, execReg, sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, execReg, sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "search GitHub discussions"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1073,8 +1059,8 @@ func TestCoordinatorDoesNotNudgeExecutorThatActs(t *testing.T) {
 
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
-	executor := New(exec, execReg, sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, execReg, sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "install the skill"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1114,7 +1100,7 @@ func BenchmarkPlannerToolRegistry(b *testing.B) {
 
 	b.ReportAllocs()
 	for range b.N {
-		reg := PlannerToolRegistry(parentReg)
+		reg := agent.PlannerToolRegistry(parentReg)
 		if reg.Len() == 0 {
 			b.Fatal("planner registry should retain read-only research tools")
 		}
@@ -1129,35 +1115,35 @@ func TestCoordinatorSetPlanModePropagates(t *testing.T) {
 	plannerSess := sessionstore.NewSession("planner-sys")
 	plannerReg := tool.NewRegistry()
 	plannerReg.Add(coordinatorTestTool{name: "read_file", readOnly: true})
-	plannerTools := PlannerToolRegistry(plannerReg)
+	plannerTools := agent.PlannerToolRegistry(plannerReg)
 
-	exec := New(nil, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	exec := agent.New(nil, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 
-	coord := NewCoordinator(prov, plannerSess, nil, plannerTools, Options{MaxSteps: 2}, exec, 0, event.Discard, nil)
+	coord := NewCoordinator(prov, plannerSess, nil, plannerTools, agent.Options{MaxSteps: 2}, exec, 0, event.Discard, nil)
 
 	// Both should start with planMode=false
-	if coord.plannerAgent.planningPhase() {
+	if coord.plannerAgent.PlanningPhase() {
 		t.Error("planner should start with planMode=false")
 	}
-	if coord.executor.planningPhase() {
+	if coord.executor.PlanningPhase() {
 		t.Error("executor should start with planMode=false")
 	}
 
 	// SetPlanMode(true) should propagate to both
 	coord.SetPlanMode(true)
-	if !coord.plannerAgent.planningPhase() {
+	if !coord.plannerAgent.PlanningPhase() {
 		t.Error("planner should have planMode=true after SetPlanMode(true)")
 	}
-	if !coord.executor.planningPhase() {
+	if !coord.executor.PlanningPhase() {
 		t.Error("executor should have planMode=true after SetPlanMode(true)")
 	}
 
 	// SetPlanMode(false) should propagate to both
 	coord.SetPlanMode(false)
-	if coord.plannerAgent.planningPhase() {
+	if coord.plannerAgent.PlanningPhase() {
 		t.Error("planner should have planMode=false after SetPlanMode(false)")
 	}
-	if coord.executor.planningPhase() {
+	if coord.executor.PlanningPhase() {
 		t.Error("executor should have planMode=false after SetPlanMode(false)")
 	}
 }
@@ -1192,8 +1178,8 @@ func TestNoOpConclusionComesOnlyFromTheStructuredExit(t *testing.T) {
 			t.Errorf("prose %q produced exit=%v approval=%v, want an inert prose outcome", prose, got.exit, got.requestsApproval())
 		}
 	}
-	tool := NewConcludeNoChangesTool()
-	ctx, submission := WithPlanSubmission(context.Background())
+	tool := agent.NewConcludeNoChangesTool()
+	ctx, submission := agent.WithPlanSubmission(context.Background())
 	if _, err := tool.Execute(ctx, json.RawMessage(`{"reason":"already handled by the retry helper"}`)); err != nil {
 		t.Fatalf("conclude_no_changes: %v", err)
 	}
@@ -1208,18 +1194,18 @@ func TestNoOpConclusionComesOnlyFromTheStructuredExit(t *testing.T) {
 
 // A planner turn ends one way: the later exit retracts the earlier one.
 func TestPlanAndNoChangesExitsAreMutuallyExclusive(t *testing.T) {
-	ctx, submission := WithPlanSubmission(context.Background())
+	ctx, submission := agent.WithPlanSubmission(context.Background())
 	plan := json.RawMessage(`{"objective":"fix the guard","steps":[{"title":"edit main.go"}]}`)
-	if _, err := NewSubmitPlanTool().Execute(ctx, plan); err != nil {
+	if _, err := agent.NewSubmitPlanTool().Execute(ctx, plan); err != nil {
 		t.Fatalf("submit_plan: %v", err)
 	}
-	if _, err := NewConcludeNoChangesTool().Execute(ctx, json.RawMessage(`{"reason":"actually nothing to do"}`)); err != nil {
+	if _, err := agent.NewConcludeNoChangesTool().Execute(ctx, json.RawMessage(`{"reason":"actually nothing to do"}`)); err != nil {
 		t.Fatalf("conclude_no_changes: %v", err)
 	}
 	if _, ok := submission.Plan(); ok {
 		t.Fatal("concluding no changes must retract the earlier plan")
 	}
-	if _, err := NewSubmitPlanTool().Execute(ctx, plan); err != nil {
+	if _, err := agent.NewSubmitPlanTool().Execute(ctx, plan); err != nil {
 		t.Fatalf("resubmit: %v", err)
 	}
 	if _, ok := submission.NoChanges(); ok {
@@ -1267,8 +1253,8 @@ func TestCoordinatorDoesNotSkipExecutorForAlreadyImplementedPlanWithFollowUp(t *
 		{Type: provider.ChunkDone},
 	}}
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "add refresh token support"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1304,9 +1290,9 @@ func TestCoordinatorFallsBackToExecutorWhenPlannerFails(t *testing.T) {
 			var events []event.Event
 			sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
 
-			executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+			executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 			plannerSess := sessionstore.NewSession("planner-sys")
-			coord := NewCoordinator(tc.planner, plannerSess, nil, nil, Options{}, executor, 0, sink, nil)
+			coord := NewCoordinator(tc.planner, plannerSess, nil, nil, agent.Options{}, executor, 0, sink, nil)
 
 			if err := coord.Run(context.Background(), "fix the bug"); err != nil {
 				t.Fatalf("Run should fall back to the executor, got: %v", err)
@@ -1341,8 +1327,8 @@ func TestCoordinatorPropagatesPlannerErrorWhenTurnCancelled(t *testing.T) {
 		{Type: provider.ChunkText, Text: "Should not run."},
 		{Type: provider.ChunkDone},
 	}}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(&errorProvider{name: "planner"}, sessionstore.NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(&errorProvider{name: "planner"}, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{}, executor, 0, event.Discard, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -1386,9 +1372,9 @@ func TestCoordinatorRollsBackPlannerSessionOnToolPlannerFailure(t *testing.T) {
 			plannerReg := tool.NewRegistry()
 			plannerReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "package main"})
 
-			executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+			executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 			plannerSess := sessionstore.NewSession("planner-sys")
-			coord := NewCoordinator(tc.planner, plannerSess, nil, plannerReg, Options{}, executor, 0, event.Discard, nil)
+			coord := NewCoordinator(tc.planner, plannerSess, nil, plannerReg, agent.Options{}, executor, 0, event.Discard, nil)
 
 			if err := coord.Run(context.Background(), "fix the bug"); err != nil {
 				t.Fatalf("Run should fall back to the executor, got: %v", err)
@@ -1404,7 +1390,7 @@ func TestCoordinatorRollsBackPlannerSessionOnToolPlannerFailure(t *testing.T) {
 }
 
 func TestCoordinatorPlannerResearchPausePreservesExecutionBoundaries(t *testing.T) {
-	for _, route := range []PlannerRoute{PlannerRoutePlanOnly, PlannerRoutePlanForApproval} {
+	for _, route := range []agent.PlannerRoute{agent.PlannerRoutePlanOnly, agent.PlannerRoutePlanForApproval} {
 		t.Run(string(route), func(t *testing.T) {
 			planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
 				{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "call-1", Name: "read_file", Arguments: `{"path":"main.go"}`}},
@@ -1413,14 +1399,14 @@ func TestCoordinatorPlannerResearchPausePreservesExecutionBoundaries(t *testing.
 			exec := &mockProvider{name: "executor"}
 			plannerReg := tool.NewRegistry()
 			plannerReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "package main"})
-			policy := func(context.Context, string) PlannerDecision {
-				return PlannerDecision{Route: route, Depth: PlannerDepthFull, Reason: "explicit_boundary", MaxResearchRounds: 1}
+			policy := func(context.Context, string) agent.PlannerDecision {
+				return agent.PlannerDecision{Route: route, Depth: agent.PlannerDepthFull, Reason: "explicit_boundary", MaxResearchRounds: 1}
 			}
 
-			executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+			executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 			plannerSess := sessionstore.NewSession("planner-sys")
 			coord := NewCoordinatorWithPlannerPolicy(
-				planner, plannerSess, nil, plannerReg, Options{MaxSteps: 0},
+				planner, plannerSess, nil, plannerReg, agent.Options{MaxSteps: 0},
 				executor, 0, event.Discard, policy,
 			)
 
@@ -1448,7 +1434,7 @@ func TestCoordinatorRollbackAfterRewriteDropsPausedPlannerToolCall(t *testing.T)
 
 	plannerSess.Replace([]provider.Message{
 		{Role: provider.RoleSystem, Content: "planner-sys"},
-		{Role: provider.RoleUser, Content: summaryTagOpen + "\ncompacted research\n</summary>"},
+		{Role: provider.RoleUser, Content: agent.SummaryTagOpen + "\ncompacted research\n</summary>"},
 		{Role: provider.RoleAssistant, Content: "Completed evidence from the bounded research rounds."},
 	})
 	plannerSess.IncrementRewrite()
@@ -1489,8 +1475,8 @@ func TestCoordinatorRunsExecutorWhenMarkerNotAlone(t *testing.T) {
 		{Type: provider.ChunkDone},
 	}}
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "add the missing tests"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1527,7 +1513,7 @@ func TestCoordinatorHandoffSurvivesPlannerCompaction(t *testing.T) {
 	plannerReg := tool.NewRegistry()
 	plannerReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "ok"})
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	plannerSess := sessionstore.NewSession("planner-sys")
 	// Preset enough planner history that context preflight compacts before the
 	// plan stream. Canonical history stays intact; the handoff must still find
@@ -1537,7 +1523,7 @@ func TestCoordinatorHandoffSurvivesPlannerCompaction(t *testing.T) {
 		plannerSess.Add(provider.Message{Role: provider.RoleUser, Content: filler})
 		plannerSess.Add(provider.Message{Role: provider.RoleAssistant, Content: filler})
 	}
-	coord := NewCoordinator(planner, plannerSess, nil, plannerReg, Options{ContextWindow: 2000}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, plannerSess, nil, plannerReg, agent.Options{ContextWindow: 2000}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "fix the bug"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1596,8 +1582,8 @@ func TestCoordinatorHandoffOmitsToolContextWithoutMCPTools(t *testing.T) {
 
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "ok", writesPaths: true})
-	executor := New(exec, execReg, sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, execReg, sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "fix the missing guard"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1622,14 +1608,14 @@ func TestCoordinatorPassesTurnContextToPlannerGate(t *testing.T) {
 		{Type: provider.ChunkText, Text: "It does X."},
 		{Type: provider.ChunkDone},
 	}}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 
 	var sawTurnValue bool
 	gate := func(ctx context.Context, _ string) bool {
 		sawTurnValue = ctx.Value(gateCtxKey{}) != nil
 		return false
 	}
-	coord := NewCoordinator(&mockProvider{name: "planner"}, sessionstore.NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, gate)
+	coord := NewCoordinator(&mockProvider{name: "planner"}, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{}, executor, 0, event.Discard, gate)
 
 	ctx := context.WithValue(context.Background(), gateCtxKey{}, "turn")
 	if err := coord.Run(ctx, "what does this do?"); err != nil {
@@ -1668,14 +1654,14 @@ func TestCoordinatorFailedTurnRollbackKeepsCompaction(t *testing.T) {
 	plannerReg := tool.NewRegistry()
 	plannerReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "package main"})
 
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
 	plannerSess := sessionstore.NewSession("planner-sys")
 	filler := strings.Repeat("planner history filler. ", 150)
 	for range 3 {
 		plannerSess.Add(provider.Message{Role: provider.RoleUser, Content: filler})
 		plannerSess.Add(provider.Message{Role: provider.RoleAssistant, Content: filler})
 	}
-	coord := NewCoordinator(planner, plannerSess, nil, plannerReg, Options{ContextWindow: 2000}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, plannerSess, nil, plannerReg, agent.Options{ContextWindow: 2000}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "fix the bug"); err != nil {
 		t.Fatalf("Run should fall back to the executor, got: %v", err)
@@ -1691,7 +1677,7 @@ func TestCoordinatorFailedTurnRollbackKeepsCompaction(t *testing.T) {
 	// next plan can continue. Projection lives on the planner agent and is not
 	// wiped by snapshot rollback of Session.Messages alone.
 	msgs := plannerSess.Snapshot()
-	if last := msgs[len(msgs)-1]; last.Role == provider.RoleUser && !isCompactionSummary(last) {
+	if last := msgs[len(msgs)-1]; last.Role == provider.RoleUser && !agent.IsCompactionSummary(last) {
 		t.Fatalf("planner session ends in a plain user message after rollback: %q", last.Content)
 	}
 }
@@ -1721,7 +1707,7 @@ func TestCoordinatorPersistsDeniedPlanTurnToExecutorSession(t *testing.T) {
 	if len(exec.requests) != 0 {
 		t.Fatal("executor must not run when the plan is denied")
 	}
-	msgs := executor.sess.conversation.Messages
+	msgs := executor.Session().Messages
 	if len(msgs) < 2 {
 		t.Fatalf("executor session messages = %d, want the denied turn persisted", len(msgs))
 	}
@@ -1756,8 +1742,8 @@ func TestCoordinatorSkipsApprovalGateForNegatedApprovalWording(t *testing.T) {
 		{Type: provider.ChunkText, Text: "Done."},
 		{Type: provider.ChunkDone},
 	}}
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, nil, agent.Options{}, executor, 0, event.Discard, nil)
 	gate := &coordinatorApprovalGate{allow: false}
 	coord.SetPlannerPlanApprover(gate)
 

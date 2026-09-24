@@ -134,7 +134,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	// Planning returns a proposal; the controller owns approval and starts a
 	// fresh execution turn, which is where delivery requirements belong. A
 	// workflow boundary only — tool calls still take the usual permission path.
-	if a.planningPhase() {
+	if a.PlanningPhase() {
 		return out
 	}
 	missing = a.appendIncompleteTodoGap(&out, missing)

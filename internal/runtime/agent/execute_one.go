@@ -288,7 +288,7 @@ func (a *Agent) applyMutationDependencyBarrier(plan *toolCallPlan) (toolOutcome,
 func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (toolOutcome, bool) {
 	t := plan.tool
 	call := plan.call
-	if a.planningPhase() {
+	if a.PlanningPhase() {
 		// Translate the tool's optional plan-mode self-report into the policy's
 		// tri-state. Mirrors the t.(tool.Previewer) assertion precedent below.
 		safety := planmode.PlanSafetyUnknown

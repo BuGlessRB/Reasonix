@@ -14,7 +14,7 @@ func TestTrackPublishedHostStreamUsesContextOwner(t *testing.T) {
 	second.Gate.Publish(2)
 
 	streamCtx, cancel := context.WithCancel(context.Background())
-	untrack := trackPublishedHostStream(extension.ContextWithRuntimeOwner(streamCtx, first), cancel)
+	untrack := TrackPublishedHostStream(extension.ContextWithRuntimeOwner(streamCtx, first), cancel)
 	defer untrack()
 
 	second.Gate.ForceExpireDrain(2)

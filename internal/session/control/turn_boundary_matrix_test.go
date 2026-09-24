@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/agent/testutil"
+	"reasonix/internal/runtime/coordinator"
 )
 
 // visibleTurnWork is the model's own output. A turn's identity has to exist
@@ -58,7 +59,7 @@ func twoModelTurn(t *testing.T, route boundaryRoute, prompt string) ([]event.Eve
 		plannerTools.Add(tl)
 	}
 	sink, done, events := collectSink()
-	coordinator := agent.NewCoordinatorWithPlannerPolicy(
+	coordinator := coordinator.NewCoordinatorWithPlannerPolicy(
 		testutil.NewMock("planner", route.planner...), sessionstore.NewSession("planner sys"), nil,
 		plannerTools, agent.Options{}, exec, 0, sink,
 		func(context.Context, string) agent.PlannerDecision { return route.policy },

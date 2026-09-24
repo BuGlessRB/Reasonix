@@ -144,7 +144,7 @@ func (a *Agent) withAgentContext(ctx context.Context) context.Context {
 	} else {
 		ctx = memory.WithoutQueue(ctx)
 	}
-	return planmode.WithActive(ctx, a.planningPhase())
+	return planmode.WithActive(ctx, a.PlanningPhase())
 }
 
 // WithParentSession stamps the active parent session ID onto a turn context so
@@ -185,7 +185,7 @@ func WithUserImages(ctx context.Context, images []string) context.Context {
 	return context.WithValue(ctx, userImagesContextKey{}, images)
 }
 
-func userImages(ctx context.Context) []string {
+func UserImages(ctx context.Context) []string {
 	images, _ := ctx.Value(userImagesContextKey{}).([]string)
 	return images
 }
@@ -1039,7 +1039,7 @@ func toolResultFailed(content string) bool {
 // already established the hard part — no tool ran — so the only question left
 // is whether this plan called for one, which the plan contract states outright.
 func (a *Agent) shouldNudgeExecutorHandoff() bool {
-	plan := a.planContractSnapshot()
+	plan := a.PlanContract()
 	if plan == nil {
 		// No contract, no basis: nudging would interrupt an answer that may be
 		// exactly right, on nothing but a guess about what the plan wanted.
@@ -1157,7 +1157,7 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 		req = prepared.req
 	}
 	// Host stream cancels on generation drain (OpenAI/Anthropic HTTP reads).
-	defer trackPublishedHostStream(ctx, cancel)()
+	defer TrackPublishedHostStream(ctx, cancel)()
 	ch, err := a.streamProviderRequest(ctx, req)
 	if err != nil {
 		return streamedTurn{usage: provider.UsageWithRequestAttemptCount(ctx, nil), err: err}
@@ -1627,7 +1627,7 @@ func completedMCPConnect(reg *tool.Registry, name string) (string, bool) {
 // path; changing step identity, order, or hierarchy while work remains is a
 // semantic transition for the independent Auto reviewer.
 func (a *Agent) recoveryPlanTransition(toolName string, args json.RawMessage) (bool, string, string, string) {
-	if a == nil || toolName != "todo_write" || a.planningPhase() {
+	if a == nil || toolName != "todo_write" || a.PlanningPhase() {
 		return false, "", "", ""
 	}
 	before := a.CanonicalTodoState()

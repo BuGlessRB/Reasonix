@@ -1,7 +1,8 @@
-package agent
+package coordinator
 
 import (
 	"context"
+	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
@@ -40,14 +41,14 @@ func submitPlanCall(args string) [][]provider.Chunk {
 	}
 }
 
-func submitPlanCoordinator(t *testing.T, planner, exec *mockProvider, sink event.Sink) (*Coordinator, *Agent) {
+func submitPlanCoordinator(t *testing.T, planner, exec *mockProvider, sink event.Sink) (*Coordinator, *agent.Agent) {
 	t.Helper()
 	parentReg := tool.NewRegistry()
 	parentReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "contents"})
-	parentReg.Add(NewAskTool())
-	executor := New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, PlannerToolRegistry(parentReg),
-		Options{MaxSteps: 4}, executor, 0, sink, nil)
+	parentReg.Add(agent.NewAskTool())
+	executor := agent.New(exec, tool.NewRegistry(), sessionstore.NewSession("exec-sys"), agent.Options{}, event.Discard)
+	coord := NewCoordinator(planner, sessionstore.NewSession("planner-sys"), nil, agent.PlannerToolRegistry(parentReg),
+		agent.Options{MaxSteps: 4}, executor, 0, sink, nil)
 	return coord, executor
 }
 
@@ -237,9 +238,9 @@ func TestPlannerAsksWithTheRealToolAndPlansFromTheAnswer(t *testing.T) {
 
 func TestPlannerRegistryCarriesAsk(t *testing.T) {
 	parent := tool.NewRegistry()
-	parent.Add(NewAskTool())
+	parent.Add(agent.NewAskTool())
 	parent.Add(coordinatorTestTool{name: "read_file", readOnly: true})
-	reg := PlannerToolRegistry(parent)
+	reg := agent.PlannerToolRegistry(parent)
 	if _, ok := reg.Get("ask"); !ok {
 		t.Fatalf("planner registry lacks ask: %v", reg.Names())
 	}

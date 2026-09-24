@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/coordinator"
 )
 
 func TestBranchAndSwitch(t *testing.T) {
@@ -112,7 +113,7 @@ func TestBranchResetsTwoModelPlannerContext(t *testing.T) {
 		textTurn("branch done"),
 	}}
 	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
-	coord := agent.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
+	coord := coordinator.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: filepath.Join(dir, "root.jsonl"), Label: "test"})
 
 	if err := c.Run(context.Background(), "old task alpha"); err != nil {
@@ -150,7 +151,7 @@ func TestSwitchBranchResetsTwoModelPlannerContext(t *testing.T) {
 		textTurn("root again done"),
 	}}
 	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
-	coord := agent.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
+	coord := coordinator.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	rootPath := filepath.Join(dir, "root.jsonl")
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: rootPath, Label: "test"})
 

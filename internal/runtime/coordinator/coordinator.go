@@ -1,9 +1,9 @@
-package agent
+package coordinator
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"time"
@@ -16,18 +16,6 @@ import (
 	"reasonix/internal/runtime/plancontract"
 	"reasonix/internal/safety/sandbox"
 )
-
-// Runner carries out one task turn. Both Agent (single model) and Coordinator
-// (two-model) satisfy it, so the CLI stays agnostic to which is in use.
-type Runner interface {
-	Run(ctx context.Context, input string) error
-}
-
-// PlannerPlanApprover lets hosts bind a planner-authored approval request to
-// their native approval UI without making the agent package depend on control.
-type PlannerPlanApprover interface {
-	RunWithPlannerApproval(ctx context.Context, plan string, run func(context.Context) error) error
-}
 
 // DefaultPlannerPrompt steers the planner toward concise plans, not execution.
 const DefaultPlannerPrompt = `You are the planner in a two-model coding agent.
@@ -112,29 +100,29 @@ type Coordinator struct {
 	plannerSystem   string
 	plannerPricing  *provider.Pricing
 	plannerModelRef string
-	plannerAgent    *Agent
-	executor        *Agent
+	plannerAgent    *agent.Agent
+	executor        *agent.Agent
 	temperature     float64
 	sink            event.Sink
 	// plannerPolicy chooses executor-only, plan-and-execute, or plan-for-approval
 	// per turn. nil preserves the historical "plan every turn" constructor
 	// behavior used by direct Coordinator callers.
-	plannerPolicy       PlannerPolicy
-	plannerPlanApprover PlannerPlanApprover
+	plannerPolicy       agent.PlannerPolicy
+	plannerPlanApprover agent.PlannerPlanApprover
 }
 
 // NewCoordinator wires a planner provider (with its own session) to an executor.
 // sink receives the planner's phase/text/usage events; the executor emits its
 // own events to its own sink (the CLI wires the same sink into both). A nil
 // sink is replaced with event.Discard.
-func NewCoordinator(planner provider.Provider, plannerSession *sessionstore.Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, shouldPlan func(context.Context, string) bool) *Coordinator {
-	var policy PlannerPolicy
+func NewCoordinator(planner provider.Provider, plannerSession *sessionstore.Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions agent.Options, executor *agent.Agent, temperature float64, sink event.Sink, shouldPlan func(context.Context, string) bool) *Coordinator {
+	var policy agent.PlannerPolicy
 	if shouldPlan != nil {
-		policy = func(ctx context.Context, input string) PlannerDecision {
+		policy = func(ctx context.Context, input string) agent.PlannerDecision {
 			if !shouldPlan(ctx, input) {
-				return PlannerDecision{Route: PlannerRouteExecutorOnly, Reason: "legacy_skip"}
+				return agent.PlannerDecision{Route: agent.PlannerRouteExecutorOnly, Reason: "legacy_skip"}
 			}
-			return PlannerDecision{Route: PlannerRoutePlanAndExecute, Depth: PlannerDepthFull, Reason: "legacy_plan"}
+			return agent.PlannerDecision{Route: agent.PlannerRoutePlanAndExecute, Depth: agent.PlannerDepthFull, Reason: "legacy_plan"}
 		}
 	}
 	return newCoordinator(planner, plannerSession, plannerPricing, plannerTools, plannerOptions, executor, temperature, sink, policy)
@@ -143,11 +131,11 @@ func NewCoordinator(planner provider.Provider, plannerSession *sessionstore.Sess
 // NewCoordinatorWithPlannerPolicy wires the structured deterministic planner
 // router used by the product boot path. NewCoordinator remains as a compatibility
 // adapter for direct callers and older tests that still provide a bool gate.
-func NewCoordinatorWithPlannerPolicy(planner provider.Provider, plannerSession *sessionstore.Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, policy PlannerPolicy) *Coordinator {
+func NewCoordinatorWithPlannerPolicy(planner provider.Provider, plannerSession *sessionstore.Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions agent.Options, executor *agent.Agent, temperature float64, sink event.Sink, policy agent.PlannerPolicy) *Coordinator {
 	return newCoordinator(planner, plannerSession, plannerPricing, plannerTools, plannerOptions, executor, temperature, sink, policy)
 }
 
-func newCoordinator(planner provider.Provider, plannerSession *sessionstore.Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, policy PlannerPolicy) *Coordinator {
+func newCoordinator(planner provider.Provider, plannerSession *sessionstore.Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions agent.Options, executor *agent.Agent, temperature float64, sink event.Sink, policy agent.PlannerPolicy) *Coordinator {
 	if nilutil.IsNil(sink) {
 		sink = event.Discard
 	}
@@ -155,15 +143,15 @@ func newCoordinator(planner provider.Provider, plannerSession *sessionstore.Sess
 		plannerSession = sessionstore.NewSession("")
 	}
 	plannerSystem := sessionSystemPrompt(plannerSession)
-	var plannerAgent *Agent
+	var plannerAgent *agent.Agent
 	if plannerTools != nil {
 		plannerOptions.Temperature = temperature
 		plannerOptions.Pricing = plannerPricing
 		plannerOptions.UsageSource = event.UsageSourcePlanner
-		plannerAgent = NewPlannerAgent(planner, plannerTools, plannerSession, plannerOptions, plannerSink(sink))
+		plannerAgent = agent.NewPlannerAgent(planner, plannerTools, plannerSession, plannerOptions, plannerSink(sink))
 	}
 	if executor != nil {
-		executor.role.executorHandoff = true
+		executor.MarkExecutorHandoff()
 	}
 	return &Coordinator{
 		planner:         planner,
@@ -213,7 +201,7 @@ func (c *Coordinator) ResetPlannerSession() {
 // PlannerAgent returns the tool-enabled planner agent, if any. Controllers use
 // it to seed turn-scoped capability routes without coupling to Coordinator
 // internals beyond this accessor.
-func (c *Coordinator) PlannerAgent() *Agent {
+func (c *Coordinator) PlannerAgent() *agent.Agent {
 	if c == nil {
 		return nil
 	}
@@ -308,7 +296,7 @@ func (c *Coordinator) SetConfigWriteApprover(g tool.ConfigWriteApprover) {
 // SetPlannerPlanApprover connects planner-authored "wait for approval" outputs
 // to the host's approval surface. Without one, Coordinator keeps the legacy
 // direct handoff behavior so non-interactive runs cannot block forever.
-func (c *Coordinator) SetPlannerPlanApprover(g PlannerPlanApprover) {
+func (c *Coordinator) SetPlannerPlanApprover(g agent.PlannerPlanApprover) {
 	if c == nil {
 		return
 	}
@@ -320,29 +308,29 @@ func (c *Coordinator) Run(ctx context.Context, input string) error {
 	// A host that announced this turn owns its boundary; opening a second one
 	// here would make planner work and executor work two turns to every sink
 	// that resets on a start.
-	if _, hosted := HostTurnBoundaryFrom(ctx); !hosted {
-		c.sink.Emit(event.Event{Kind: event.TurnStarted, ModelRef: c.executor.modelRef})
+	if _, hosted := agent.HostTurnBoundaryFrom(ctx); !hosted {
+		c.sink.Emit(event.Event{Kind: event.TurnStarted, ModelRef: c.executor.ModelRef()})
 	}
 	// A turn starts owing nothing to the last one's plan; deliverPlan installs
 	// this turn's plan only once the executor is actually about to run it.
 	c.executor.SetPlanContract(nil)
-	decision := PlannerDecision{
-		Route:  PlannerRoutePlanAndExecute,
-		Depth:  PlannerDepthFull,
+	decision := agent.PlannerDecision{
+		Route:  agent.PlannerRoutePlanAndExecute,
+		Depth:  agent.PlannerDepthFull,
 		Reason: "always_plan",
 	}
 	if c.plannerPolicy != nil {
-		decision = normalizePlannerDecision(c.plannerPolicy(ctx, input))
+		decision = agent.NormalizePlannerDecision(c.plannerPolicy(ctx, input))
 	}
 	routeDetail := fmt.Sprintf("planner route=%s depth=%s reason=%s", decision.Route, decision.Depth, decision.Reason)
-	if decision.Route == PlannerRouteExecutorOnly {
-		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.svc.prov.Name() + " · executing", Detail: routeDetail, Source: event.UsageSourceExecutor})
+	if decision.Route == agent.PlannerRouteExecutorOnly {
+		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.ProviderName() + " · executing", Detail: routeDetail, Source: event.UsageSourceExecutor})
 		return c.executor.Run(ctx, input)
 	}
 	c.sink.Emit(event.Event{Kind: event.Phase, Text: c.planner.Name() + " · planning", Detail: routeDetail, Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 	plannerCtx := tool.WithoutGoalTurnRecorder(ctx)
 	if decision.MaxResearchRounds > 0 {
-		plannerCtx = withRunStepLimit(plannerCtx, decision.MaxResearchRounds, "planner research rounds")
+		plannerCtx = agent.WithRunStepLimit(plannerCtx, decision.MaxResearchRounds, "planner research rounds")
 	}
 	plannerInput := plannerTurnInput(input, decision)
 	outcome, err := c.plan(plannerCtx, plannerInput)
@@ -350,13 +338,13 @@ func (c *Coordinator) Run(ctx context.Context, input string) error {
 		if ctx.Err() != nil {
 			return fmt.Errorf("planner: %w", err)
 		}
-		if isToolLoopPause(err) {
+		if agent.IsToolLoopPause(err) {
 			// Per-turn research depth is host policy, not a user-facing
 			// configuration or a reason to strand the conversation. Ordinary
 			// plan-and-execute work degrades to the executor with the pristine
 			// task. Explicit execution boundaries fail closed because no
 			// complete plan exists to approve or return.
-			if decision.Route != PlannerRoutePlanAndExecute {
+			if decision.Route != agent.PlannerRoutePlanAndExecute {
 				return fmt.Errorf("%s", plannerResearchBoundaryError)
 			}
 			c.sink.Emit(event.Event{
@@ -366,21 +354,21 @@ func (c *Coordinator) Run(ctx context.Context, input string) error {
 				Detail: plannerResearchPauseDetail(err),
 				Source: event.UsageSourcePlanner,
 			})
-			c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.svc.prov.Name() + " · executing", Source: event.UsageSourceExecutor})
+			c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.ProviderName() + " · executing", Source: event.UsageSourceExecutor})
 			return c.executor.Run(ctx, input)
 		}
 		// Plan-only explicitly excludes execution, while plan-for-approval
 		// excludes it until the host records approval. Falling back directly
 		// to the executor would turn a planner outage into an unauthorized
 		// state change, so preserve either boundary and surface the failure.
-		if decision.Route == PlannerRoutePlanOnly || decision.Route == PlannerRoutePlanForApproval {
+		if decision.Route == agent.PlannerRoutePlanOnly || decision.Route == agent.PlannerRoutePlanForApproval {
 			return fmt.Errorf("planner: %w", err)
 		}
 		// A planner failure must not take down the turn: the executor is
 		// healthy and owns the full tool set, so degrade to single-model for
 		// this turn.
 		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: plannerFallbackNotice, Detail: "planner failed; running the executor without a plan: " + err.Error(), Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
-		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.svc.prov.Name() + " · executing", Source: event.UsageSourceExecutor})
+		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.ProviderName() + " · executing", Source: event.UsageSourceExecutor})
 		return c.executor.Run(ctx, input)
 	}
 	return c.deliverPlan(ctx, input, outcome, decision)
@@ -389,20 +377,20 @@ func (c *Coordinator) Run(ctx context.Context, input string) error {
 // deliverPlan routes a finished plan to its ending: relayed conclusion, plan
 // only, approval gate, user decision, or straight to the executor. Split out of
 // Run so the routing reads as one decision table.
-func (c *Coordinator) deliverPlan(ctx context.Context, input string, outcome plannerOutcome, decision PlannerDecision) error {
+func (c *Coordinator) deliverPlan(ctx context.Context, input string, outcome plannerOutcome, decision agent.PlannerDecision) error {
 	plan := outcome.text
 	if outcome.exit == plannerExitNoChanges {
 		c.persistExecutorNoOp(ctx, input, plan)
 		// The relayed conclusion is planner text; keep its source so sinks
 		// attribute it like every other planner emission.
-		c.sink.Emit(event.Event{Kind: event.Text, Text: DisplayAssistantText(plan), Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
+		c.sink.Emit(event.Event{Kind: event.Text, Text: agent.DisplayAssistantText(plan), Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 		return nil
 	}
 	runExecutorWithPlan := func(ctx context.Context, planText string) error {
 		if outcome.exit == plannerExitPlan {
 			c.executor.SetPlanContract(&outcome.plan)
 		}
-		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.svc.prov.Name() + " · executing", Source: event.UsageSourceExecutor})
+		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.ProviderName() + " · executing", Source: event.UsageSourceExecutor})
 		return c.executor.Run(ctx, formatHandoffWithDecision(input, planText, decision, executorToolHandoffContext(c.executor)))
 	}
 	runWithPlanApproval := func() error {
@@ -425,12 +413,12 @@ func (c *Coordinator) deliverPlan(ctx context.Context, input string, outcome pla
 		}
 		return err
 	}
-	if decision.Route == PlannerRoutePlanOnly {
+	if decision.Route == agent.PlannerRoutePlanOnly {
 		c.persistExecutorNoOp(ctx, input, plan+"\n\n"+plannerPlanOnlyNote)
 		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: plannerPlanOnlyNotice, Source: event.UsageSourcePlanner, ModelRef: c.plannerModelRef})
 		return nil
 	}
-	if decision.Route == PlannerRoutePlanForApproval {
+	if decision.Route == agent.PlannerRoutePlanForApproval {
 		return runWithPlanApproval()
 	}
 	if outcome.requestsApproval() {
@@ -454,18 +442,18 @@ const (
 )
 
 func (c *Coordinator) persistExecutorNoOp(ctx context.Context, input, plan string) {
-	if c == nil || c.executor == nil || c.executor.sess.conversation == nil {
+	if c == nil || c.executor == nil || c.executor.Session() == nil {
 		return
 	}
 	// A turn nobody executed is still the turn the host named. It lands through
 	// the same seam an executed one does, so the identity published for it holds
 	// whichever way the turn ended.
 	c.executor.LandAuthoredUserMessage(ctx, provider.Message{
-		Role: provider.RoleUser, Content: c.executor.withTurnPreferences(input),
-		RawContent: RawUserInput(ctx, input),
-		Images:     userImages(ctx), CreatedAt: time.Now().UnixMilli(),
+		Role: provider.RoleUser, Content: c.executor.WithTurnPreferences(input),
+		RawContent: agent.RawUserInput(ctx, input),
+		Images:     agent.UserImages(ctx), CreatedAt: time.Now().UnixMilli(),
 	})
-	c.executor.sess.conversation.Add(provider.Message{Role: provider.RoleAssistant, Content: plan})
+	c.executor.Session().Add(provider.Message{Role: provider.RoleAssistant, Content: plan})
 }
 
 // plannerOutcome is one planning turn's result. A submitted plan is the
@@ -517,7 +505,7 @@ func (c *Coordinator) planFromStream(ctx context.Context, input string) (string,
 	// providers reject), and Run's executor fallback keeps the turn alive
 	// after this error, so the planner session must stay coherent.
 	before := c.plannerSess.Snapshot()
-	rawInput := RawUserInput(ctx, input)
+	rawInput := agent.RawUserInput(ctx, input)
 	rawContent := ""
 	if input != rawInput {
 		rawContent = rawInput
@@ -535,7 +523,7 @@ func (c *Coordinator) planFromStream(ctx context.Context, input string) (string,
 
 	planCtx, planCancel := context.WithCancel(ctx)
 	defer planCancel()
-	defer trackPublishedHostStream(planCtx, planCancel)()
+	defer agent.TrackPublishedHostStream(planCtx, planCancel)()
 	ch, err := c.planner.Stream(planCtx, provider.Request{
 		Messages:    provider.ModelMessages(c.plannerSess.Messages),
 		Temperature: provider.OptionalTemperature(c.temperature),
@@ -570,7 +558,7 @@ func (c *Coordinator) planFromStream(ctx context.Context, input string) (string,
 func (c *Coordinator) planWithTools(ctx context.Context, input string) (plannerOutcome, error) {
 	before := c.plannerSess.Snapshot()
 	rewriteBefore := c.plannerSess.RewriteVersion()
-	ctx, submission := WithPlanSubmission(ctx)
+	ctx, submission := agent.WithPlanSubmission(ctx)
 	if err := c.plannerAgent.Run(ctx, input); err != nil {
 		// Mirror plan()'s rollback: Run already appended the user message
 		// (and possibly partial assistant/tool rounds) to the planner
@@ -618,12 +606,11 @@ func (c *Coordinator) planWithTools(ctx context.Context, input string) (plannerO
 }
 
 func plannerResearchPauseDetail(err error) string {
-	var maxPause *maxStepsPause
-	if errors.As(err, &maxPause) {
+	if steps, key, ok := agent.MaxStepsPauseOf(err); ok {
 		return fmt.Sprintf(
 			"planner did not finalize after %d bounded tool-call rounds (%s) and one finalization round",
-			maxPause.steps,
-			maxPause.key,
+			steps,
+			key,
 		)
 	}
 	return "planner did not finalize after its bounded research and finalization rounds"
@@ -656,7 +643,7 @@ func plannerSink(sink event.Sink) event.Sink {
 	return plannerEventSink{AuditForwarder: event.AuditForwarder{Inner: sink}, inner: sink}
 }
 
-func plannerTurnInput(input string, decision PlannerDecision) string {
+func plannerTurnInput(input string, decision agent.PlannerDecision) string {
 	return fmt.Sprintf(`%s
 
 <planner-turn>
@@ -666,14 +653,14 @@ route: %s
 }
 
 func formatHandoff(task, plan string, toolContext ...string) string {
-	return formatHandoffWithDecision(task, plan, PlannerDecision{
-		Route:  PlannerRoutePlanAndExecute,
-		Depth:  PlannerDepthFull,
+	return formatHandoffWithDecision(task, plan, agent.PlannerDecision{
+		Route:  agent.PlannerRoutePlanAndExecute,
+		Depth:  agent.PlannerDepthFull,
 		Reason: "legacy_handoff",
 	}, toolContext...)
 }
 
-func formatHandoffWithDecision(task, plan string, decision PlannerDecision, toolContext ...string) string {
+func formatHandoffWithDecision(task, plan string, decision agent.PlannerDecision, toolContext ...string) string {
 	toolBlock := ""
 	if len(toolContext) > 0 {
 		toolBlock = strings.TrimSpace(toolContext[0])
@@ -714,11 +701,8 @@ Carry out the task, adapting the plan as needed.`, sessionstore.ExecutorHandoffM
 // planner registry filters them away), so the block is only emitted when the
 // executor carries MCP tools; the built-in tool list would just restate the
 // schema already attached to the request and pay its tokens every planned turn.
-func executorToolHandoffContext(a *Agent) string {
-	if a == nil || a.svc.tools == nil {
-		return ""
-	}
-	schemas := a.svc.tools.Schemas()
+func executorToolHandoffContext(a *agent.Agent) string {
+	schemas := a.ToolSchemas()
 	if len(schemas) == 0 {
 		return ""
 	}
@@ -760,7 +744,7 @@ func boundedToolNames(names []string, max int) string {
 // SetAsker gives both models the host's question surface. The planner needs it
 // as much as the executor: a decision that shapes the plan must be settled
 // while planning, not stapled to a finished plan.
-func (c *Coordinator) SetAsker(as Asker) {
+func (c *Coordinator) SetAsker(as agent.Asker) {
 	if c == nil {
 		return
 	}

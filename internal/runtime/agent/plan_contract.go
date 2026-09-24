@@ -27,7 +27,8 @@ func (a *Agent) SetPlanContract(plan *plancontract.Plan) {
 	a.planContract = &copied
 }
 
-func (a *Agent) planContractSnapshot() *plancontract.Plan {
+// PlanContract is the plan the current turn runs under, or nil for none.
+func (a *Agent) PlanContract() *plancontract.Plan {
 	if a == nil {
 		return nil
 	}
@@ -90,7 +91,7 @@ func appendUnseen(dst []string, seen map[string]bool, add []string) []string {
 // acceptanceCriterionIDs lists the approved plan's criterion ids so a tool call
 // can check a citation against the plan the user approved.
 func (a *Agent) acceptanceCriterionIDs() []string {
-	plan := a.planContractSnapshot()
+	plan := a.PlanContract()
 	if plan == nil {
 		return nil
 	}
@@ -119,7 +120,7 @@ func (a *Agent) withContractState(ctx context.Context) context.Context {
 // "is this actually done", named criterion by criterion, including proofs that
 // went stale under a later mutation.
 func (a *Agent) outstandingPlanCriteria() []string {
-	if a == nil || a.planContractSnapshot() == nil {
+	if a == nil || a.PlanContract() == nil {
 		return nil
 	}
 	c := a.LiveContract()
@@ -135,7 +136,7 @@ func (a *Agent) outstandingPlanCriteria() []string {
 // out of bounds. Directory containment counts — a plan naming a file implies
 // its directory is in play, which is how a test file beside it stays in scope.
 func (a *Agent) mutationEscapesPlan(toolName string, args json.RawMessage) bool {
-	plan := a.planContractSnapshot()
+	plan := a.PlanContract()
 	if plan == nil {
 		return false
 	}

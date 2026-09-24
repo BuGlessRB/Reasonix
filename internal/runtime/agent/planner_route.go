@@ -41,7 +41,7 @@ type PlannerDecision struct {
 // context plus the composed model input.
 type PlannerPolicy func(context.Context, string) PlannerDecision
 
-func normalizePlannerDecision(d PlannerDecision) PlannerDecision {
+func NormalizePlannerDecision(d PlannerDecision) PlannerDecision {
 	switch d.Route {
 	case PlannerRouteExecutorOnly:
 		d.Depth = PlannerDepthNone
@@ -72,7 +72,7 @@ type runStepLimit struct {
 
 type runStepLimitContextKey struct{}
 
-func withRunStepLimit(ctx context.Context, steps int, key string) context.Context {
+func WithRunStepLimit(ctx context.Context, steps int, key string) context.Context {
 	if steps <= 0 {
 		return ctx
 	}

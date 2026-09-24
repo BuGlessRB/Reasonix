@@ -116,13 +116,13 @@ func splitLegacyCoalescedSummary(msg provider.Message) (provider.Message, provid
 	if !isCompactionSummary(msg) {
 		return provider.Message{}, provider.Message{}, false
 	}
-	separator := summaryTagClose + "\n\n"
+	separator := SummaryTagClose + "\n\n"
 	i := strings.Index(msg.Content, separator)
 	if i < 0 || i+len(separator) >= len(msg.Content) {
 		return provider.Message{}, provider.Message{}, false
 	}
 	summary := msg
-	summary.Content = msg.Content[:i+len(summaryTagClose)]
+	summary.Content = msg.Content[:i+len(SummaryTagClose)]
 	summary.RawContent = ""
 	summary.Images = nil
 	summary.ToolCalls = nil

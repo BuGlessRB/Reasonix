@@ -18,7 +18,7 @@ func (e *maxStepsPause) Error() string {
 	return fmt.Sprintf("paused after %d tool-call rounds (%s) — the work so far is saved; send another message to continue, or set %s higher or to 0 for no limit", e.steps, e.key, e.key)
 }
 
-func isToolLoopPause(err error) bool {
+func IsToolLoopPause(err error) bool {
 	var maxPause *maxStepsPause
 	var budgetPause *taskBudgetPause
 	return errors.As(err, &maxPause) || errors.As(err, &budgetPause)

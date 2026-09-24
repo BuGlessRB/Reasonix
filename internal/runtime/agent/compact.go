@@ -47,8 +47,8 @@ var (
 // summaryTag wraps the compaction summary so the model can distinguish it from
 // live user input and later strip or skip it when reasoning about the current turn.
 const (
-	summaryTagOpen  = "<compaction-summary>"
-	summaryTagClose = "</compaction-summary>"
+	SummaryTagOpen  = "<compaction-summary>"
+	SummaryTagClose = "</compaction-summary>"
 )
 
 // summaryTimeout bounds one summarizer call so a stalled stream surfaces a clear
@@ -290,7 +290,7 @@ func (a *Agent) activeTurnStart(msgs []provider.Message) int {
 // isCompactionSummary reports whether m is a rolling summary from a prior fold.
 func isCompactionSummary(m provider.Message) bool {
 	return m.Role == provider.RoleUser &&
-		strings.HasPrefix(strings.TrimLeft(m.Content, "\n "), summaryTagOpen)
+		strings.HasPrefix(strings.TrimLeft(m.Content, "\n "), SummaryTagOpen)
 }
 
 // pinnedPrefixLen counts the leading messages a fold keeps verbatim ahead of
@@ -631,7 +631,7 @@ func (a *Agent) summarize(ctx context.Context, region []provider.Message, instru
 			a.svc.sink.Emit(event.Event{Kind: event.Usage, ModelRef: a.modelRef, Usage: usage, Pricing: a.svc.pricing, UsageSource: event.UsageSourceCompaction})
 		}
 	}()
-	defer trackPublishedHostStream(ctx, cancel)()
+	defer TrackPublishedHostStream(ctx, cancel)()
 	maxOut := summaryOutputMaxTokens
 	if a.maxOutputTokens > 0 && a.maxOutputTokens < maxOut {
 		maxOut = a.maxOutputTokens

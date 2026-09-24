@@ -31,6 +31,7 @@ import (
 	"reasonix/internal/ext/pluginpkg"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/coordinator"
 	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/state/checkpoint"
@@ -2512,7 +2513,7 @@ func TestNewSessionResetsTwoModelPlannerContext(t *testing.T) {
 	}}
 	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
 	plannerSess := sessionstore.NewSession("planner sys")
-	coord := agent.NewCoordinator(planner, plannerSess, nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
+	coord := coordinator.NewCoordinator(planner, plannerSess, nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	path := filepath.Join(dir, "session.jsonl")
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: path, Label: "test"})
 
@@ -2549,7 +2550,7 @@ func TestTwoModelPlannerApprovalUsesHostGate(t *testing.T) {
 		textTurn("approved execution complete"),
 	}}
 	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
-	coord := agent.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, exec, 0, event.Discard, nil)
+	coord := coordinator.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, exec, 0, event.Discard, nil)
 
 	ids := make(chan string, 1)
 	var prompts int
@@ -2617,7 +2618,7 @@ func TestResumeResetsTwoModelPlannerContext(t *testing.T) {
 	}}
 	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
 	plannerSess := sessionstore.NewSession("planner sys")
-	coord := agent.NewCoordinator(planner, plannerSess, nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
+	coord := coordinator.NewCoordinator(planner, plannerSess, nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: filepath.Join(dir, "old.jsonl"), Label: "test"})
 
 	if err := c.Run(context.Background(), "old task alpha"); err != nil {
@@ -2654,7 +2655,7 @@ func TestResetPlannerSessionClearsPlannerHistory(t *testing.T) {
 	}}
 	exec := agent.New(execProv, tool.NewRegistry(), sessionstore.NewSession("exec sys"), agent.Options{}, event.Discard)
 	plannerSess := sessionstore.NewSession("planner sys")
-	coord := agent.NewCoordinator(planner, plannerSess, nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
+	coord := coordinator.NewCoordinator(planner, plannerSess, nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
 	path := filepath.Join(dir, "session.jsonl")
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: path, Label: "test"})
 
@@ -2691,7 +2692,7 @@ func TestTwoModelShortChoiceReplySkipsPlanner(t *testing.T) {
 	execSess.Add(provider.Message{Role: provider.RoleUser, Content: "先给我两个执行方案"})
 	execSess.Add(provider.Message{Role: provider.RoleAssistant, Content: "两个执行方式可选：\n\n1. Subagent-Driven（推荐）\n2. 当前会话执行\n\n你选哪种？"})
 	exec := agent.New(execProv, tool.NewRegistry(), execSess, agent.Options{}, event.Discard)
-	coord := agent.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, NewPlannerGate())
+	coord := coordinator.NewCoordinator(planner, sessionstore.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, NewPlannerGate())
 	c := New(Options{Runner: coord, Executor: exec, SystemPrompt: "exec sys", SessionDir: dir, SessionPath: filepath.Join(dir, "session.jsonl"), Label: "test"})
 
 	if err := c.Run(context.Background(), "1"); err != nil {

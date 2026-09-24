@@ -133,7 +133,7 @@ func TestPinnedPrefixLen(t *testing.T) {
 	sys := provider.Message{Role: provider.RoleSystem}
 	small := provider.Message{Role: provider.RoleUser, Content: "do X with token T"}
 	big := provider.Message{Role: provider.RoleUser, Content: strings.Repeat("x", 100000)}
-	sum := provider.Message{Role: provider.RoleUser, Content: summaryTagOpen + "\ndigest\n" + summaryTagClose}
+	sum := provider.Message{Role: provider.RoleUser, Content: SummaryTagOpen + "\ndigest\n" + SummaryTagClose}
 	as := provider.Message{Role: provider.RoleAssistant, Content: "a"}
 
 	newA := func(win int) *Agent {
@@ -179,7 +179,7 @@ func TestKeepIndexesKeepsSiblingToolResultsForKeptError(t *testing.T) {
 }
 
 func TestKeepIndexesScopesPolicyAfterLatestSummary(t *testing.T) {
-	priorSummary := provider.Message{Role: provider.RoleUser, Content: summaryTagOpen + "\nprior digest\n" + summaryTagClose}
+	priorSummary := provider.Message{Role: provider.RoleUser, Content: SummaryTagOpen + "\nprior digest\n" + SummaryTagClose}
 	region := []provider.Message{
 		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "old", Name: "bash", Arguments: `{}`}}},
 		{Role: provider.RoleTool, ToolCallID: "old", Name: "bash", Content: "error: old failure"},
@@ -669,8 +669,8 @@ func TestCompactTriggerIgnoresConfiguredOutputBudget(t *testing.T) {
 func TestCompactRollsOldDigestsIntoNew(t *testing.T) {
 	// A1 rolling merge: prior digests enter the fold region and are merged into
 	// one new provider-visible summary. The canonical transcript stays intact.
-	oldDigest := summaryTagOpen + "\n" + strings.Repeat("old standing fact ", 60) + "\n" + summaryTagClose // >1500 chars → not pinnable
-	newestDigest := summaryTagOpen + "\nnewest digest\n" + summaryTagClose
+	oldDigest := SummaryTagOpen + "\n" + strings.Repeat("old standing fact ", 60) + "\n" + SummaryTagClose // >1500 chars → not pinnable
+	newestDigest := SummaryTagOpen + "\nnewest digest\n" + SummaryTagClose
 	big := strings.Repeat("work output ", 200)
 	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},

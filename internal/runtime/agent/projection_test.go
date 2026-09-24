@@ -590,7 +590,7 @@ func TestCompactKeepsPriorDigests(t *testing.T) {
 	// A1 rolling merge: prior digests enter the fold and the summarizer must
 	// carry durable facts forward into a single latest summary. The fake
 	// provider echoes the prior fact so we can assert the fold input included it.
-	priorDigest := summaryTagOpen + "\n## Standing facts\n- db is orion_prod_42\n" + summaryTagClose
+	priorDigest := SummaryTagOpen + "\n## Standing facts\n- db is orion_prod_42\n" + SummaryTagClose
 	big := strings.Repeat("work output ", 200)
 	sess := &sessionstore.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},

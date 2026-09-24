@@ -116,7 +116,7 @@ func TestPartitionKeepsUserTurnsAcrossPriorDigest(t *testing.T) {
 	a := &Agent{}
 	region := []provider.Message{
 		{Role: provider.RoleUser, Content: "constraint from before the digest"},
-		{Role: provider.RoleUser, Content: summaryTagOpen + "\nprior digest\n" + summaryTagClose},
+		{Role: provider.RoleUser, Content: SummaryTagOpen + "\nprior digest\n" + SummaryTagClose},
 		{Role: provider.RoleAssistant, Content: "work"},
 	}
 	kept, fold := partitionCoversRegion(t, a, region)
@@ -133,8 +133,8 @@ func TestPartitionFoldsPriorDigests(t *testing.T) {
 	// never sees a chain of digests.
 	a := &Agent{}
 	region := []provider.Message{
-		{Role: provider.RoleUser, Content: summaryTagOpen + "\nolder digest\n" + summaryTagClose},
-		{Role: provider.RoleUser, Content: summaryTagOpen + "\nnewer digest\n" + summaryTagClose},
+		{Role: provider.RoleUser, Content: SummaryTagOpen + "\nolder digest\n" + SummaryTagClose},
+		{Role: provider.RoleUser, Content: SummaryTagOpen + "\nnewer digest\n" + SummaryTagClose},
 		{Role: provider.RoleAssistant, Content: "work"},
 	}
 	kept, fold := partitionCoversRegion(t, a, region)

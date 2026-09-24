@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/agent/testutil"
+	"reasonix/internal/runtime/coordinator"
 )
 
 // TestTwoModelTurnSaysWhichModelWroteEachFrame runs a real plan-and-execute turn
@@ -33,7 +34,7 @@ func TestTwoModelTurnSaysWhichModelWroteEachFrame(t *testing.T) {
 	plannerTools := tool.NewRegistry()
 	plannerTools.Add(&attributionProbeTool{})
 	sink, done, events := collectSink()
-	coordinator := agent.NewCoordinatorWithPlannerPolicy(
+	coordinator := coordinator.NewCoordinatorWithPlannerPolicy(
 		testutil.NewMock("planner",
 			testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "planner-probe", Name: "probe", Arguments: `{}`}}},
 			testutil.Turn{Reasoning: "the shape is clear", Text: "1. do the thing"},
