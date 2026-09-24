@@ -193,6 +193,7 @@ func renderBody(results []result) string {
 		s.passed, s.ran, pct(s.passed, s.ran),
 		costPerSolved(s.cost, s.accountedSolved, s.currency), tokensPerSolved(s.pTok+s.cTok, s.accountedSolved), dur(median(s.walls)))
 	b.WriteString(kpiLine(s))
+	b.WriteString(trialsLine(results))
 	fmt.Fprintf(&b, "**Cache hit:** %s · **Tokens:** %s (prompt %s / completion %s) · **Tool calls:** %s (%s failed) · **Compactions:** %d · **Cost:** %s%.4f\n\n",
 		pct(s.hit, s.hit+s.miss), comma(s.pTok+s.cTok), comma(s.pTok), comma(s.cTok),
 		comma(s.tools), comma(s.toolFails), s.compacts, currencySym(s.currency), s.cost)

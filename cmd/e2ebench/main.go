@@ -182,6 +182,7 @@ type result struct {
 	// Attempt is this entry's 1-based try for its task; suite retries stop at
 	// the first passing attempt. Zero on skipped entries and old JSON.
 	Attempt int `json:"attempt,omitempty"`
+	Trial   int `json:"trial,omitempty"`
 	// TTCSMs is the time to correct solution: wall clock summed across this
 	// task's attempts up to and including the one that passed. Zero if unsolved.
 	TTCSMs int64 `json:"ttcs_ms,omitempty"`
@@ -284,7 +285,12 @@ func main() {
 	maxSteps := flag.Int("max-steps", 0, "diff mode: agent tool-call cap (0 = unbounded, the shipped default; the timeout is the resource bound)")
 	timeoutSec := flag.Int("timeout", 1200, "agent timeout in seconds (diff mode)")
 	attempts := flag.Int("attempts", 1, "suite/diff modes: retry a task up to N times until an attempt passes (stochastic agent); enables Pass@≤N")
+	trials := flag.Int("trials", 1, "suite mode: run every task N times and keep every outcome; reports pass^N (all passed) beside mean pass@1")
 	flag.Parse()
+	if *trials > 1 && *attempts > 1 {
+		fmt.Fprintln(os.Stderr, "e2ebench: -trials and -attempts count repeats differently; use one")
+		os.Exit(2)
+	}
 	axes, err := resolveExperimentAxes(*profileFlag, *ablateFlag, *cacheArm, *anchorFlag, *foldIndexFlag)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -330,7 +336,7 @@ func main() {
 	meterSource, faults, segments, steers := pressure.settings()
 	runSuiteMode(suiteConfig{
 		bin: *bin, model: *model, profile: profile, arm: arm, budget: *budget,
-		trajDir: *trajDir, forcePlanner: *forcePlanner, attempts: *attempts, anchor: anchor,
+		trajDir: *trajDir, forcePlanner: *forcePlanner, attempts: *attempts, trials: *trials, anchor: anchor,
 		cacheArm: cache, effort: *effort, checkpoints: *checkpoints, policy: *policyFlag,
 		meterConfig: meterSource, meterFaults: faults, segments: segments, steers: steers,
 		replyLanguage: agentReplyLanguage(),
@@ -470,7 +476,7 @@ type suiteConfig struct {
 	policy                                string
 	trajDir                               string
 	forcePlanner, checkpoints             bool
-	attempts, budget                      int
+	attempts, trials, budget              int
 	// meterConfig is the real config.toml whose provider endpoint each run is
 	// redirected through the neutral meter; empty leaves runs unmetered.
 	meterConfig string
@@ -496,6 +502,10 @@ func runSuite(cfg suiteConfig, tasks []task) []result {
 		}
 		if skipped, ok := anchorSkip(cfg, t); ok {
 			results = append(results, skipped)
+			continue
+		}
+		if cfg.trials > 1 {
+			results = append(results, runTrials(cfg, t, &total)...)
 			continue
 		}
 		var cumWallMs int64

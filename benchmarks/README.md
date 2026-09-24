@@ -420,6 +420,7 @@ own outcome).
 | `-suite` | `benchmarks/e2e` | Suite root (must contain `tasks/<id>/`). |
 | `-task` | *(all)* | Suite mode: run only these comma-separated task IDs (e.g. `-task fix-add-bug`); unknown IDs fail with the available list. |
 | `-attempts` | `1` | Suite and diff modes: retry a task until an attempt passes, up to N; enables the `Pass@≤N` KPI, and TTCS charges a retried solve with its failed attempts' wall. |
+| `-trials` | `1` | Suite mode: run every task N times and keep every outcome. Adds a **Reliability** line: `pass^N` (tasks that passed every trial), `pass@N` (any trial), mean `pass@1` over all trials, and the flaky tasks by name. `Pass@≤N` asks whether the agent can solve a task; `pass^N` asks whether it does so every time. Cannot be combined with `-attempts`. |
 | `-bin` | `reasonix` | Path to the reasonix binary. |
 | `-model` | *(config default)* | Provider/model name. |
 | `-profile` | `baseline` | Tool-surface/runtime tier: `baseline` \| `economy` \| `balanced` \| `delivery`. All but `baseline` append `--profile <tier>` to the agent invocation; `baseline` passes no flag (byte-identical legacy control, behaviorally `balanced`). Economy starts with the core tool set and pays `connect_tool_source` rounds plus prefix resets to grow it — the report's Tool surface line prices that trade. |
