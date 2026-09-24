@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
 	"reasonix/internal/state/sessioninbox"
 )
 
@@ -42,6 +43,8 @@ type InboxRequest struct {
 	Extra       map[string]string
 	// FreezeRefs lists workspace-relative paths to freeze at enqueue time.
 	FreezeRefs []string
+	// Via is the paired device the item came from; nil is the window.
+	Via *provider.Via
 }
 
 // Inbox port on SessionAPI.
@@ -303,6 +306,7 @@ func (c *Controller) EnqueueInbox(req InboxRequest) (sessioninbox.InboxReceipt, 
 		ExplicitRefs: append([]string(nil), req.FreezeRefs...),
 		Invocations:  sessionInboxInvocations(req.Invocations),
 		Extra:        maps.Clone(req.Extra),
+		Via:          req.Via,
 	}
 	env.FrozenRefBlock, env.FrozenImages, env.ReferenceErrors = c.freezeInboxReferences(context.Background(), submit, req.FreezeRefs)
 	intent := req.Intent
@@ -389,6 +393,7 @@ func (c *Controller) UpdateInboxItem(id, display, raw, submit string) (sessionin
 		Invocations:  append([]sessioninbox.StructuredInvocation(nil), previous.Invocations...),
 		Attachments:  append([]string(nil), previous.Attachments...),
 		Extra:        maps.Clone(previous.Extra),
+		Via:          previous.Via,
 	}
 	env.FrozenRefBlock, env.FrozenImages, env.ReferenceErrors = c.freezeInboxReferences(context.Background(), submit, env.ExplicitRefs)
 	updated, err := st.UpdateItem(id, env)
@@ -442,6 +447,7 @@ func (c *Controller) AppendInboxItem(id, text, idempotency string, extra map[str
 		SubmitText:  text,
 		Source:      previous.Source,
 		Extra:       maps.Clone(extra),
+		Via:         previous.Via,
 	}
 	updated, err := st.UpdateItemWithIdempotency(id, env, idempotency, aliasEnv)
 	if err != nil {

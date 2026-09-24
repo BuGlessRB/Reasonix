@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decisionSource, messageSource } from "./source";
+import { answerSource, decisionSource, messageSource } from "./source";
 
 const phone = { id: "dev-a", ordinal: 1, machine: "desk" };
 
@@ -26,5 +26,19 @@ describe("where a message or a decision came from", () => {
     expect(decisionSource("window", phone)).toBe("在电脑上处理");
     expect(decisionSource("window", null)).toBe("");
     expect(decisionSource(undefined, phone)).toBe("");
+  });
+});
+
+describe("who answered a question elsewhere", () => {
+  it("names the device and what it chose", () => {
+    expect(answerSource({ device: "dev-b", ordinal: 2 }, null, "框架: React")).toBe("由 设备 2 回答：框架: React");
+  });
+
+  it("tells a phone the computer answered", () => {
+    expect(answerSource("window", { id: "dev-a", ordinal: 1, machine: "m" }, "")).toBe("在电脑上回答");
+  });
+
+  it("leaves the window's old line where nothing better is known", () => {
+    expect(answerSource("window", null, "x")).toBe("");
   });
 });

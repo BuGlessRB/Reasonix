@@ -813,7 +813,7 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 		missingField(w, "id")
 		return
 	}
-	s.ctl().AnswerQuestion(body.ID, body.Answers)
+	answerAs(s.ctl(), r, body.ID, body.Answers)
 	w.WriteHeader(http.StatusNoContent)
 }
 

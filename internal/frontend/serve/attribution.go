@@ -3,6 +3,7 @@ package serve
 import (
 	"net/http"
 
+	"reasonix/internal/contract/event"
 	"reasonix/internal/session/control"
 )
 
@@ -24,4 +25,13 @@ func approveAs(ctrl control.SessionAPI, r *http.Request, id string, allow, sessi
 		return
 	}
 	ctrl.Approve(id, allow, session, persist)
+}
+
+// answerAs settles a question as the one who answered it.
+func answerAs(ctrl control.SessionAPI, r *http.Request, id string, answers []event.AskAnswer) {
+	if via := viaOf(r); via != nil {
+		ctrl.AnswerQuestionFrom(id, answers, via)
+		return
+	}
+	ctrl.AnswerQuestion(id, answers)
 }

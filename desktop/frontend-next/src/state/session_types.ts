@@ -35,7 +35,9 @@ export type Item =
   // by is who settled it when that was not this screen: the device named on
   // the kernel's receipt, or the window when the receipt names none.
   | { t: "approval"; id: string; a: Approval; verdict?: string; by?: Via | "window" }
-  | { t: "ask"; id: string; ask: Ask; answered?: string[][]; answeredElsewhere?: boolean }
+  // An ask answered on another screen keeps who answered it and what the
+  // kernel recorded they said, since this screen never saw the selection.
+  | { t: "ask"; id: string; ask: Ask; answered?: string[][]; answeredElsewhere?: boolean; by?: Via | "window"; said?: string }
   | { t: "compaction"; id: string; c: Compaction; done: boolean }
   | { t: "remember"; id: string; m: RememberedFact; forgotten?: boolean }
   | { t: "receipt"; id: string; r: Receipt }

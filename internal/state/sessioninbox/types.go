@@ -3,6 +3,8 @@ package sessioninbox
 import (
 	"errors"
 	"time"
+
+	"reasonix/internal/contract/provider"
 )
 
 // SchemaVersion is the on-disk format version. Unknown higher versions load
@@ -159,6 +161,10 @@ type PromptEnvelope struct {
 	Idempotency     string            `json:"idempotencyKey,omitempty"`
 	Source          string            `json:"source,omitempty"`
 	Extra           map[string]string `json:"extra,omitempty"`
+	// Via is the paired device the item was queued from; nil is the window.
+	// Kept with the item, because the turn it becomes runs long after the
+	// request that queued it is gone.
+	Via *provider.Via `json:"via,omitempty"`
 }
 
 // Capacity describes current usage against limits.

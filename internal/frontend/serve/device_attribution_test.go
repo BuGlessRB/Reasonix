@@ -180,3 +180,29 @@ func TestADevicesApprovalIsRecordedOnItsReceipt(t *testing.T) {
 		t.Fatal("the approved turn never finished")
 	}
 }
+
+// A line queued on a phone runs long after the request that queued it, so the
+// device rides the queued item and the turn it becomes is still the phone's.
+func TestAQueuedLineRunsAsTheDevicesOwn(t *testing.T) {
+	rig := newAttributionRig(t, testutil.Turn{Text: "done"})
+	req := httptest.NewRequest(http.MethodPost, "/inbox/items", strings.NewReader(`{"input":"queued on the phone"}`))
+	req = req.WithContext(withDeviceReach(context.Background(), "dev-c", 4))
+	rec := httptest.NewRecorder()
+	rig.s.inboxEnqueue(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("POST /inbox/items = %d %s", rec.Code, rec.Body.String())
+	}
+	select {
+	case <-rig.done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("the queued line never ran")
+	}
+	rig.mu.Lock()
+	defer rig.mu.Unlock()
+	if len(rig.started) != 1 {
+		t.Fatalf("announced %d turns, want 1", len(rig.started))
+	}
+	if got := rig.started[0]; got.Text != "queued on the phone" || got.Via == nil || got.Via.Device != "dev-c" || got.Via.Ordinal != 4 {
+		t.Fatalf("the queued turn announced text %q via %+v", got.Text, got.Via)
+	}
+}

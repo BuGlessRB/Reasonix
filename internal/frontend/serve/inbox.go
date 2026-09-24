@@ -113,6 +113,7 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 		Submit:      body.Input,
 		Source:      "http",
 		Idempotency: body.IdempotencyKey,
+		Via:         viaOf(r),
 	}
 	var rec sessioninbox.InboxReceipt
 	var err error

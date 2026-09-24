@@ -3,6 +3,8 @@ import { Sym } from "../Sym";
 import { useState } from "react";
 import { t } from "../../i18n";
 import type { Item } from "../../state/session";
+import { answerSource } from "../source";
+import { useViewer } from "../../state/viewer";
 
 const ADVANCE_MS = 220;
 
@@ -13,6 +15,7 @@ interface Props {
 
 export function AskCard({ item, onAnswer }: Props) {
   const qs = item.ask.questions;
+  const answeredBy = answerSource(item.by, useViewer(), item.said);
   const [tab, setTab] = useState(0);
   const [picks, setPicks] = useState<string[][]>(() => qs.map(() => []));
   // The wire carries selections as free strings and the kernel joins them into
@@ -172,7 +175,7 @@ export function AskCard({ item, onAnswer }: Props) {
             {sealed && (
               <div className="ask-done">
                 {item.answeredElsewhere ? (
-                  <b>{t("已在其他窗口处理，请以最新运行状态为准。")}</b>
+                  <b>{answeredBy || t("已在其他窗口处理，请以最新运行状态为准。")}</b>
                 ) : (
                   <>
                     {qs.map((q, i) => (

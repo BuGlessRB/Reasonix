@@ -345,6 +345,7 @@ type Settings interface {
 type Provenance interface {
 	SubmitHTTPFrom(input, format string, via *provider.Via)
 	ApproveFrom(id string, allow, session, persist bool, via *provider.Via)
+	AnswerQuestionFrom(id string, answers []event.AskAnswer, via *provider.Via)
 }
 
 // SessionAPI is the full driving port — the composition of every sub-port, for

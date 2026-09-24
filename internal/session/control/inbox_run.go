@@ -61,7 +61,7 @@ func (c *Controller) prepareInboxRun(env sessioninbox.PromptEnvelope, origin ses
 	requests := controlInvocationsFromInbox(env)
 	if len(requests) == 0 {
 		return func(ctx context.Context) error {
-			return c.runTurnLoop(c.withTurnFormat(ctx, strings.TrimSpace(env.Format)), orchestratedTurn{
+			return c.runTurnLoop(c.withTurnTags(ctx, turnTags{format: strings.TrimSpace(env.Format), via: env.Via}), orchestratedTurn{
 				input: submit, raw: raw, display: display, images: c.frozenTurnImages(frozenImages),
 				synthetic: origin.IsHost(),
 			})
@@ -72,7 +72,7 @@ func (c *Controller) prepareInboxRun(env sessioninbox.PromptEnvelope, origin ses
 		return nil, err.Error(), nil
 	}
 	return func(ctx context.Context) error {
-		return c.runPreparedInvocationTurn(c.withTurnFormat(ctx, strings.TrimSpace(env.Format)), prepared, submit, raw, display, frozenImages)
+		return c.runPreparedInvocationTurn(c.withTurnTags(ctx, turnTags{format: strings.TrimSpace(env.Format), via: env.Via}), prepared, submit, raw, display, frozenImages)
 	}, "", nil
 }
 

@@ -303,6 +303,12 @@ func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]
 // AnswerQuestion resolves a pending AskRequest by ID with the user's selections.
 // Unknown/expired IDs are ignored.
 func (c *Controller) AnswerQuestion(id string, answers []event.AskAnswer) {
+	c.AnswerQuestionFrom(id, answers, nil)
+}
+
+// AnswerQuestionFrom is AnswerQuestion for answers given on a paired device,
+// which the answer's receipt names and nothing else reads.
+func (c *Controller) AnswerQuestionFrom(id string, answers []event.AskAnswer, via *provider.Via) {
 	if pending, ok := c.approval.resolveAsk(id); ok {
 		// An answer batch with no selections is the explicit "skip and continue
 		// chat" path. End the current turn instead of feeding a prose dismissal
@@ -316,12 +322,12 @@ func (c *Controller) AnswerQuestion(id string, answers []event.AskAnswer) {
 				return
 			}
 		}
-		c.recordAskDecisionReceipt(id, pending, answers)
+		c.recordAskDecisionReceipt(id, pending, answers, via)
 		pending.reply <- answers // buffered, never blocks
 	}
 }
 
-func (c *Controller) recordAskDecisionReceipt(id string, pending pendingAsk, answers []event.AskAnswer) {
+func (c *Controller) recordAskDecisionReceipt(id string, pending pendingAsk, answers []event.AskAnswer, via *provider.Via) {
 	if c == nil || c.executor == nil {
 		return
 	}
@@ -349,6 +355,7 @@ func (c *Controller) recordAskDecisionReceipt(id string, pending pendingAsk, ans
 		Kind:    "ask",
 		Subject: clipUTF8(strings.Join(parts, " · "), 240),
 		Outcome: "answered",
+		Via:     via,
 	}
 	c.executor.Session().AddDecisionReceipt(receipt)
 	c.sink.Emit(event.Event{
