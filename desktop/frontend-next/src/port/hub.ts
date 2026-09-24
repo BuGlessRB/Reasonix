@@ -1,6 +1,6 @@
 import { HttpError, type AgentPort } from "./port";
 import type { RemoteAsk, RemoteHost, RemoteHostEdit, RemoteListing, RemoteProbe } from "./remote";
-import type { ShareOffer, SharePort, ShareStatus } from "./share";
+import type { DeviceSelf, ShareOffer, SharePort, ShareStatus } from "./share";
 import { SsePort } from "./sse";
 
 // How often a client waiting on a dial looks for the question it might be
@@ -383,6 +383,17 @@ export class SseHub implements HubPort {
 
   revokeDevice(id: string) {
     return this.post<ShareStatus>("/share/revoke", { id });
+  }
+
+  async device() {
+    const res = await fetch("/device", { credentials: "same-origin" });
+    if (res.status === 404) return null;
+    if (!res.ok) await SseHub.fail("/device", res);
+    return (await res.json()) as DeviceSelf;
+  }
+
+  async leaveDevice() {
+    await this.post<void>("/device/leave", {});
   }
 
   portFor(rt: RuntimeView): AgentPort {

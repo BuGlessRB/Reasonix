@@ -17,6 +17,16 @@ export interface PairedDevice {
   name: string;
   pairedAt: string;
   lastSeen: string;
+  // Holding an event stream open now: a page on screen.
+  online: boolean;
+}
+
+// A paired device's answer about itself. Mirrors serve.DeviceSelf.
+export interface DeviceSelf {
+  id: string;
+  // The number the window lists it under, so both say 设备 N.
+  ordinal: number;
+  machine: string;
 }
 
 export interface ShareStatus {
@@ -42,4 +52,9 @@ export interface SharePort {
   closeShare(): Promise<ShareStatus>;
   offerShare(): Promise<ShareOffer>;
   revokeDevice(id: string): Promise<ShareStatus>;
+  // What this page is to the kernel: a paired device, or null for the window
+  // and for a browser on a networked serve.
+  device(): Promise<DeviceSelf | null>;
+  // Unpairs this device from its own side.
+  leaveDevice(): Promise<void>;
 }

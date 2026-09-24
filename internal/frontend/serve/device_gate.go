@@ -15,12 +15,17 @@ const (
 	DeviceCookie = "reasonix_device"
 	// PairPath is where a device trades a pairing code for its credential.
 	PairPath = "/pair"
+	// DevicePath is where a paired device asks what it is and what it reaches.
+	DevicePath = "/device"
+	// DeviceLeavePath is where a device unpairs itself.
+	DeviceLeavePath = "/device/leave"
 
 	codeDeviceHost         = "device.host_rejected"
 	codeDeviceOrigin       = "device.origin_rejected"
 	codeDeviceUnauthorized = "device.unauthorized"
 	codeDevicePairing      = "device.pairing_invalid"
 	codeDeviceMisconfig    = "device.misconfigured"
+	codeNotADevice         = "device.not_a_device"
 
 	deviceCookieMaxAge = 30 * 24 * 60 * 60
 )
@@ -35,6 +40,17 @@ type DeviceGateOptions struct {
 	// Page is the built frontend. Its files are public here, because a device
 	// that has not paired yet needs the page to pair from.
 	Page fs.FS
+	// Machine names the computer the device reaches, for the device to show.
+	Machine string
+}
+
+// DeviceSelf is a paired device's answer about itself: which of the host's
+// devices it is, by the ordinal the host lists it under, and which machine
+// it is driving.
+type DeviceSelf struct {
+	ID      string `json:"id"`
+	Ordinal int    `json:"ordinal"`
+	Machine string `json:"machine"`
 }
 
 // NewDeviceGate guards a kernel reached by paired devices. Every request must
@@ -64,7 +80,7 @@ func NewDeviceGate(next http.Handler, opts DeviceGateOptions) http.Handler {
 		}
 		if c, err := r.Cookie(DeviceCookie); err == nil {
 			if id, ok := reg.Authenticate(c.Value); ok {
-				next.ServeHTTP(w, r.WithContext(withDeviceReach(r.Context(), id)))
+				serveDevice(w, r, next, reg, id, opts.Machine, secure)
 				return
 			}
 		}
@@ -76,6 +92,39 @@ func NewDeviceGate(next http.Handler, opts DeviceGateOptions) http.Handler {
 		}
 		refuse(w, http.StatusUnauthorized, codeDeviceUnauthorized, "this device is not paired", nil)
 	})
+}
+
+// serveDevice answers a paired device: its own two routes here, everything
+// else through next under device reach. An event stream runs under a context
+// unpairing cancels, so a device dropped mid-stream stops receiving at once.
+func serveDevice(w http.ResponseWriter, r *http.Request, next http.Handler, reg *DeviceRegistry, id, machine string, secure bool) {
+	switch {
+	case r.URL.Path == DevicePath && r.Method == http.MethodGet:
+		w.Header().Set("Cache-Control", "no-store")
+		_, ordinal, _ := reg.Self(id)
+		writeJSON(w, DeviceSelf{ID: id, Ordinal: ordinal, Machine: machine})
+		return
+	case r.URL.Path == DeviceLeavePath && r.Method == http.MethodPost:
+		reg.Revoke(id)
+		// codeql[go/cookie-secure-not-set] Secure follows the origin's scheme; a LAN listener is plain HTTP.
+		http.SetCookie(w, &http.Cookie{Name: DeviceCookie, Value: "", Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, MaxAge: -1})
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	ctx := withDeviceReach(r.Context(), id)
+	if r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		var release func()
+		ctx, release = reg.holdStream(ctx, id)
+		defer release()
+	}
+	next.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// notADevice answers the device routes for whoever reached the kernel through
+// the host's own boundary: the window, or a browser on a networked serve. A
+// page reads the 404 as "this is not a paired device".
+func notADevice(w http.ResponseWriter, _ *http.Request) {
+	refuse(w, http.StatusNotFound, codeNotADevice, "this client is not a paired device", nil)
 }
 
 // devicePublicPath is what an unpaired device may load: the page's own files

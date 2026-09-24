@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort } from "../port/hub";
+import type { PairedDevice } from "../port/share";
 import { copyText } from "./CopyButton";
 import { useDismiss } from "./dismiss";
 import { clock, deviceLabel, type Share, useShare } from "./PhoneAccess";
@@ -14,7 +15,9 @@ export function PhonePop({ hub, onError }: { hub: HubPort; onError: (e: unknown)
   const box = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(open, box, close);
-  const share = useShare(hub, onError, open);
+  // Watched while the door is open, card or not: the count on the button and
+  // the note that a phone came or went are the window's to show unasked.
+  const share = useShare(hub, onError);
   const { refresh, newCode } = share;
   const shareOpen = share.st?.open ?? false;
   const hasOffer = share.offer !== null;
@@ -39,17 +42,20 @@ export function PhonePop({ hub, onError }: { hub: HubPort; onError: (e: unknown)
     }
   }, [open, shareOpen, hasOffer, newCode]);
 
+  const note = usePresenceNote(share.st?.devices, open);
+
   if (!share.st) return null;
-  const paired = share.st.devices.length;
+  const online = share.st.devices.filter((d) => d.online).length;
   return (
     <div className="phonepop" ref={box}>
       <button
         className="thbtn phone-action"
         data-action="share.card"
         data-live={shareOpen ? "" : undefined}
+        data-online={online > 0 ? "" : undefined}
         aria-expanded={open}
         aria-label={t("手机扫码访问")}
-        title={shareOpen ? t("手机访问已开启 · {n} 台已连接", { n: paired }) : t("手机扫码访问")}
+        title={shareOpen ? t("手机访问已开启 · {n} 台在线", { n: online }) : t("手机扫码访问")}
         onClick={() => setOpen((v) => !v)}
       >
         <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -58,10 +64,49 @@ export function PhonePop({ hub, onError }: { hub: HubPort; onError: (e: unknown)
           <rect x="2.5" y="9.5" width="4" height="4" rx=".6" />
           <path d="M9.5 9.5h1.6v1.6M13.5 9.5v.01M9.5 13.5h.01M12 12h1.5v1.5H12Z" />
         </svg>
+        {online > 0 && <b className="pc-count">{online}</b>}
       </button>
       {open && <PhoneCard share={share} />}
+      {note && <div className="pc-note-pop" role="status">{note}</div>}
     </div>
   );
+}
+
+/** What changed between two reads of the device list, as the one line worth
+ *  saying: a phone that came online, went offline, or was unpaired. Each is
+ *  named by its place in the list it was read from. */
+export function presenceNote(prev: PairedDevice[], next: PairedDevice[]): string {
+  let said = "";
+  next.forEach((d, i) => {
+    const was = prev.find((p) => p.id === d.id);
+    if (d.online && !was?.online) said = t("设备 {n} 已连接", { n: i + 1 });
+    else if (!d.online && was?.online) said = t("设备 {n} 已断开", { n: i + 1 });
+  });
+  prev.forEach((p, i) => {
+    if (!next.some((d) => d.id === p.id)) said = t("设备 {n} 已断开", { n: i + 1 });
+  });
+  return said;
+}
+
+/** A line under the button when a phone comes or goes, for as long as it takes
+ *  to read. Not while the card is open: the list there already shows it. */
+function usePresenceNote(devices: PairedDevice[] | undefined, open: boolean): string {
+  const [note, setNote] = useState("");
+  const before = useRef<PairedDevice[] | null>(null);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
+  useEffect(() => {
+    if (!devices) return;
+    const prev = before.current;
+    before.current = devices;
+    if (!prev || open) return;
+    const said = presenceNote(prev, devices);
+    if (!said) return;
+    setNote(said);
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setNote(""), 3200);
+  }, [devices, open]);
+  return open ? "" : note;
 }
 
 /** The card's own arrangement of the share: the switch in the header, the code
@@ -148,10 +193,10 @@ function PhoneCard({ share }: { share: Share }) {
             <small>{st.devices.length}</small>
           </div>
           {st.devices.map((d, i) => (
-            <div className="pc-dev" key={d.id}>
+            <div className="pc-dev" key={d.id} data-online={d.online ? "" : undefined}>
               <i aria-hidden="true" />
               <span title={d.name}>{deviceLabel(i)}</span>
-              <small>{clock(d.lastSeen)}</small>
+              <small>{d.online ? t("在线") : t("最近 {time}", { time: clock(d.lastSeen) })}</small>
               <button
                 data-action={arming === d.id ? "share.revoke" : "share.ask-revoke"}
                 data-target={d.id}

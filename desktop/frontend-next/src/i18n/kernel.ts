@@ -107,6 +107,7 @@ const SAID: Record<string, string> = {
   "device.origin_rejected": "请求来自其他网页，已拒绝。",
   "device.unauthorized": "这台设备还没配对，或已被移除。请在电脑上重新显示二维码并扫码。",
   "device.pairing_invalid": "配对码已失效：可能已被使用、已过期，或已换了新码。请在电脑上重新显示二维码。",
+  "device.not_a_device": "这不是一台已配对的设备。",
   "device.misconfigured": "共享入口配置不完整，无法接受连接。",
   "share.closed": "手机访问已关闭，请先开启。",
   "share.address_rejected": "地址 {ip} 不是本机的局域网地址。",

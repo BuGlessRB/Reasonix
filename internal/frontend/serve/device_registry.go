@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -48,7 +49,13 @@ type pairedDevice struct {
 	digest [sha256.Size]byte
 	paired time.Time
 	seen   time.Time
+	// streams are the event streams this device holds open. Each can be cut,
+	// because a credential checked when a stream opened says nothing about
+	// whether the device is still paired an hour into it.
+	streams map[*deviceStream]struct{}
 }
+
+type deviceStream struct{ cancel context.CancelFunc }
 
 // DeviceView is a paired device as the host lists it.
 type DeviceView struct {
@@ -56,6 +63,9 @@ type DeviceView struct {
 	Name     string    `json:"name"`
 	PairedAt time.Time `json:"pairedAt"`
 	LastSeen time.Time `json:"lastSeen"`
+	// Online is whether the device holds an event stream open right now: a
+	// page on screen, not a page that was last opened some time ago.
+	Online bool `json:"online"`
 }
 
 // NewDeviceRegistry returns an empty registry with no code on offer.
@@ -111,11 +121,12 @@ func (d *DeviceRegistry) Redeem(code, name string) (credential string, view Devi
 	credential = randomSecret()
 	now := d.now()
 	dev := &pairedDevice{
-		id:     deviceID(),
-		name:   deviceLabel(name),
-		digest: sha256.Sum256([]byte(credential)),
-		paired: now,
-		seen:   now,
+		id:      deviceID(),
+		name:    deviceLabel(name),
+		digest:  sha256.Sum256([]byte(credential)),
+		paired:  now,
+		seen:    now,
+		streams: map[*deviceStream]struct{}{},
 	}
 	d.devices[dev.id] = dev
 	return credential, dev.view(), nil
@@ -156,27 +167,73 @@ func (d *DeviceRegistry) Devices() []DeviceView {
 	return out
 }
 
-// Revoke unpairs one device. Its next request is refused.
+// Revoke unpairs one device. Its next request is refused and every stream it
+// holds open is cut now.
 func (d *DeviceRegistry) Revoke(id string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if _, ok := d.devices[id]; !ok {
+	dev, ok := d.devices[id]
+	if !ok {
 		return false
 	}
 	delete(d.devices, id)
+	dev.cut()
 	return true
 }
 
-// RevokeAll unpairs every device and withdraws the code on offer.
+// RevokeAll unpairs every device, cuts their streams and withdraws the code on
+// offer.
 func (d *DeviceRegistry) RevokeAll() {
 	d.mu.Lock()
+	for _, dev := range d.devices {
+		dev.cut()
+	}
 	d.devices = map[string]*pairedDevice{}
 	d.pending = pairingOffer{}
 	d.mu.Unlock()
 }
 
+// holdStream registers a stream the device opened and derives the context it
+// runs under, which unpairing the device cancels. The returned func ends the
+// hold; a device already unpaired gets a context that is done.
+func (d *DeviceRegistry) holdStream(ctx context.Context, id string) (context.Context, func()) {
+	ctx, cancel := context.WithCancel(ctx)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	dev, ok := d.devices[id]
+	if !ok {
+		cancel()
+		return ctx, func() {}
+	}
+	s := &deviceStream{cancel: cancel}
+	dev.streams[s] = struct{}{}
+	return ctx, func() {
+		d.mu.Lock()
+		delete(dev.streams, s)
+		d.mu.Unlock()
+		cancel()
+	}
+}
+
+// Self is the device as it sees itself: its view and its place in the list
+// the host draws, so both name it the same.
+func (d *DeviceRegistry) Self(id string) (DeviceView, int, bool) {
+	for i, v := range d.Devices() {
+		if v.ID == id {
+			return v, i + 1, true
+		}
+	}
+	return DeviceView{}, 0, false
+}
+
+func (p *pairedDevice) cut() {
+	for s := range p.streams {
+		s.cancel()
+	}
+}
+
 func (p *pairedDevice) view() DeviceView {
-	return DeviceView{ID: p.id, Name: p.name, PairedAt: p.paired, LastSeen: p.seen}
+	return DeviceView{ID: p.id, Name: p.name, PairedAt: p.paired, LastSeen: p.seen, Online: len(p.streams) > 0}
 }
 
 // deviceLabel is display text only; nothing decides on it.

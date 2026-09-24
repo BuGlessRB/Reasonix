@@ -8,7 +8,9 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -128,7 +130,7 @@ func (s *DeviceShare) Open(ip string) (ShareStatus, error) {
 	origin := "http://" + ln.Addr().String()
 	ctx, stop := context.WithCancel(context.Background())
 	live := &shareListener{origin: origin, stop: stop, done: make(chan struct{})}
-	gate := NewDeviceGate(handler, DeviceGateOptions{Registry: s.registry, Origin: origin, Page: s.page})
+	gate := NewDeviceGate(handler, DeviceGateOptions{Registry: s.registry, Origin: origin, Page: s.page, Machine: machineName()})
 	s.mu.Lock()
 	s.live = live
 	s.mu.Unlock()
@@ -194,6 +196,15 @@ func (s *DeviceShare) Status() ShareStatus {
 		st.OfferExpires = &exp
 	}
 	return st
+}
+
+// machineName is what a device is told it is driving: this computer's name,
+// or a plain word where the system will not say.
+func machineName() string {
+	if name, err := os.Hostname(); err == nil && strings.TrimSpace(name) != "" {
+		return name
+	}
+	return "this computer"
 }
 
 // OffInternet reports whether plain HTTP to ip stays off the public internet:

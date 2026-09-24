@@ -183,7 +183,7 @@ export function ShareBody({ share }: { share: Share }) {
             {st.devices.map((d, i) => (
               <div className="sharedev" key={d.id}>
                 <span className="nm" title={d.name}>{deviceLabel(i)}</span>
-                <span className="st">{t("{time} 配对 · 最近 {seen}", { time: clock(d.pairedAt), seen: clock(d.lastSeen) })}</span>
+                <span className="st">{d.online ? t("{time} 配对 · 在线", { time: clock(d.pairedAt) }) : t("{time} 配对 · 最近 {seen}", { time: clock(d.pairedAt), seen: clock(d.lastSeen) })}</span>
                 {confirm === d.id ? (
                   <span className="rmtconfirm" role="alertdialog">
                     <span>{t("断开这台手机？它需要重新扫码才能再连上。")}</span>

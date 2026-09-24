@@ -617,6 +617,20 @@ what exists.
 - Without hover, controls revealed on hover stay visible. A phone turns the
   first tap into a hover, so a hidden control costs a blind tap to find.
 
+## A paired device
+
+- A paired device is told so on every screen: `.devicebar` sits above the
+  chrome naming the machine it drives, the device's own number, and a way to
+  leave. The page is otherwise the window's, and nothing else says the
+  sessions on it live somewhere else.
+- The bar is a fixed 30px so the rail, which is `position: fixed` from the
+  top, can start under it; a bar that sized itself would leave the rail
+  covering its text.
+- On the window the phone button trades its dot for a count once a device is
+  online, and a line under it says when one comes or goes. Online is an open
+  event stream, not a recent request, so a phone whose page is shut reads as
+  gone within one read.
+
 ## Onboarding
 
 - The connect card grows inside the opening scene rather than starting a second

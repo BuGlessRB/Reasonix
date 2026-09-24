@@ -248,6 +248,14 @@ export class MockHub implements HubPort {
     return Promise.resolve({ url: `${this.share.origin}/#pair=mock-code`, qr, expires });
   }
 
+  device() {
+    return Promise.resolve(null);
+  }
+
+  leaveDevice() {
+    return Promise.resolve();
+  }
+
   revokeDevice(id: string) {
     this.share = { ...this.share, devices: this.share.devices.filter((d) => d.id !== id) };
     return Promise.resolve({ ...this.share });

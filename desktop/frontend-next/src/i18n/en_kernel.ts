@@ -109,6 +109,7 @@ export const EN_KERNEL: Record<string, string> = {
   "请求来自其他网页，已拒绝。": "The request came from another page and was refused.",
   "这台设备还没配对，或已被移除。请在电脑上重新显示二维码并扫码。": "This device is not paired, or was removed. Show a new code on the computer and scan it.",
   "配对码已失效：可能已被使用、已过期，或已换了新码。请在电脑上重新显示二维码。": "That pairing code is no longer valid: it was used, expired, or replaced. Show a new code on the computer.",
+  "这不是一台已配对的设备。": "This is not a paired device.",
   "共享入口配置不完整，无法接受连接。": "The sharing listener is not fully configured and cannot accept connections.",
   "手机访问已关闭，请先开启。": "Phone access is off. Turn it on first.",
   "地址 {ip} 不是本机的局域网地址。": "{ip} is not a private address on this computer.",

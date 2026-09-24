@@ -308,3 +308,75 @@ func TestTheWindowDrivesTheShareOverItsRoutes(t *testing.T) {
 		t.Fatalf("offer on a closed share = %d %q, want 409 %s", resp.StatusCode, code, codeShareClosed)
 	}
 }
+
+func TestADeviceKnowsWhichMachineItDrives(t *testing.T) {
+	rig := newShareRig(t)
+	cookie := rig.pair(t)
+	resp := rig.device(t, http.MethodGet, DevicePath, "", cookie)
+	var self DeviceSelf
+	_ = json.NewDecoder(resp.Body).Decode(&self)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || self.Ordinal != 1 || self.Machine == "" {
+		t.Fatalf("GET /device = %d %+v, want device 1 on a named machine", resp.StatusCode, self)
+	}
+	win, err := http.Get(rig.window.URL + DevicePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := deviceRefusal(t, win); win.StatusCode != http.StatusNotFound || code != codeNotADevice {
+		t.Fatalf("window GET /device = %d %q, want 404 %s", win.StatusCode, code, codeNotADevice)
+	}
+}
+
+func TestADeviceUnpairsItself(t *testing.T) {
+	rig := newShareRig(t)
+	cookie := rig.pair(t)
+	resp := rig.device(t, http.MethodPost, DeviceLeavePath, "{}", cookie)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("POST /device/leave = %d, want 204", resp.StatusCode)
+	}
+	if devs := rig.share.Status().Devices; len(devs) != 0 {
+		t.Fatalf("after leaving the window still lists %+v", devs)
+	}
+	again := rig.device(t, http.MethodGet, "/runtimes", "", cookie)
+	if code := deviceRefusal(t, again); again.StatusCode != http.StatusUnauthorized || code != codeDeviceUnauthorized {
+		t.Fatalf("a device that left = %d %q, want 401", again.StatusCode, code)
+	}
+}
+
+// A credential checked when a stream opened says nothing about whether the
+// device is still paired later, so unpairing has to end the stream itself.
+func TestUnpairingCutsTheStreamADeviceHoldsOpen(t *testing.T) {
+	rig := newShareRig(t)
+	cookie := rig.pair(t)
+	req, _ := http.NewRequest(http.MethodGet, rig.origin+"/events", nil)
+	req.Header.Set("Accept", "text/event-stream")
+	req.AddCookie(cookie)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /events = %d", resp.StatusCode)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for !rig.share.Status().Devices[0].Online {
+		if time.Now().After(deadline) {
+			t.Fatal("a device holding /events open is not listed online")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	ended := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		close(ended)
+	}()
+	rig.share.Revoke(rig.share.Status().Devices[0].ID)
+	select {
+	case <-ended:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the stream outlived the device's pairing")
+	}
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort } from "../port/hub";
 import type { AccountState, AgentPort, SessionStatus, WorkspaceInfo } from "../port/port";
+import { DeviceBar } from "./DeviceBar";
 import { PhonePop } from "./PhonePop";
 import { WindowControls, zoomOnTitleBar } from "./WindowControls";
 
@@ -52,6 +53,8 @@ export function Chrome({ port, status, title, steer, onSettings, onBrowser, brow
   }, [port, root]);
 
   return (
+    <>
+    {hub && <DeviceBar hub={hub} />}
     <div className="chrome" onDoubleClick={zoomOnTitleBar}>
       <button className="thbtn studio-menu" data-action="chrome.rail" onClick={onRail} aria-pressed={rail} aria-label={rail ? t("收起工作区栏") : t("展开工作区栏")}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h10" /></svg>
@@ -103,5 +106,6 @@ export function Chrome({ port, status, title, steer, onSettings, onBrowser, brow
         <WindowControls />
       </div>
     </div>
+    </>
   );
 }

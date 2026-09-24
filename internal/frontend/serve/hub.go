@@ -480,6 +480,8 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("POST /runtimes/{id}/close", h.closeRuntime)
 	h.registerTreeRoutes(mux)
 	h.registerStudioVersionRoutes(mux)
+	mux.HandleFunc("GET /device", notADevice)
+	mux.HandleFunc("POST /device/leave", notADevice)
 	mux.HandleFunc(runtimePrefix+"{id}/", h.routeRuntime)
 	mux.HandleFunc("/", h.routeDefault)
 	// What acts on the machine behind the window, or dials onward from it,
