@@ -19,23 +19,17 @@ type Resource struct {
 }
 
 func (c *Client) listResources(ctx context.Context) ([]Resource, error) {
-	res, err := c.call(ctx, "resources/list", map[string]any{})
+	listed, err := listAllPages[struct {
+		URI         string `json:"uri"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		MimeType    string `json:"mimeType"`
+	}](ctx, c, "resources/list", "resources")
 	if err != nil {
 		return nil, err
 	}
-	var out struct {
-		Resources []struct {
-			URI         string `json:"uri"`
-			Name        string `json:"name"`
-			Description string `json:"description"`
-			MimeType    string `json:"mimeType"`
-		} `json:"resources"`
-	}
-	if err := json.Unmarshal(res, &out); err != nil {
-		return nil, fmt.Errorf("plugin %q: decode resources/list: %w", c.name, err)
-	}
-	resources := make([]Resource, 0, len(out.Resources))
-	for _, r := range out.Resources {
+	resources := make([]Resource, 0, len(listed))
+	for _, r := range listed {
 		resources = append(resources, Resource{
 			Server:      c.name,
 			URI:         r.URI,

@@ -1416,17 +1416,7 @@ func schemaValidationError(err error) string {
 }
 
 func (c *Client) listToolsRaw(ctx context.Context) ([]mcpTool, error) {
-	res, err := c.call(ctx, "tools/list", map[string]any{})
-	if err != nil {
-		return nil, err
-	}
-	var out struct {
-		Tools []mcpTool `json:"tools"`
-	}
-	if err := json.Unmarshal(res, &out); err != nil {
-		return nil, fmt.Errorf("plugin %q: decode tools/list: %w", c.name, err)
-	}
-	return out.Tools, nil
+	return listAllPages[mcpTool](ctx, c, "tools/list", "tools")
 }
 
 // listToolsRawSettled gives dynamically registering servers a bounded startup

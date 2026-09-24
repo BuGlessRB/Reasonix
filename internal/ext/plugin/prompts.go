@@ -34,22 +34,16 @@ func (p Prompt) Get(ctx context.Context, args map[string]string) (string, error)
 }
 
 func (c *Client) listPrompts(ctx context.Context) ([]Prompt, error) {
-	res, err := c.call(ctx, "prompts/list", map[string]any{})
+	listed, err := listAllPages[struct {
+		Name        string      `json:"name"`
+		Description string      `json:"description"`
+		Arguments   []PromptArg `json:"arguments"`
+	}](ctx, c, "prompts/list", "prompts")
 	if err != nil {
 		return nil, err
 	}
-	var out struct {
-		Prompts []struct {
-			Name        string      `json:"name"`
-			Description string      `json:"description"`
-			Arguments   []PromptArg `json:"arguments"`
-		} `json:"prompts"`
-	}
-	if err := json.Unmarshal(res, &out); err != nil {
-		return nil, fmt.Errorf("plugin %q: decode prompts/list: %w", c.name, err)
-	}
-	prompts := make([]Prompt, 0, len(out.Prompts))
-	for _, p := range out.Prompts {
+	prompts := make([]Prompt, 0, len(listed))
+	for _, p := range listed {
 		prompts = append(prompts, Prompt{
 			Name:        "mcp__" + normalizeName(c.name) + "__" + normalizeName(p.Name),
 			Server:      c.name,
