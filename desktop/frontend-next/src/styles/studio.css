@@ -674,7 +674,7 @@ body { background: var(--page) !important; }
 .rail .wsnode[data-current] > .wsrow .wsname { color: var(--text); font-weight: 620; }
 .rail .wsnode[data-current] > .wsrow .wsdot { background: var(--accent-ink); opacity: 1; }
 .rail .wsrow:hover { background: var(--overlay); }
-.rail .wsname { color: var(--text); font-size: 11px; }
+.rail .wsname { color: var(--text); font-size: 12px; letter-spacing: -.01em; }
 .rail .wsmeta { color: var(--faint); }
 .rail .kids { margin-left: 18px; border-left-color: var(--hair); }
 .rail .sessrow { min-height: 42px; margin: 1px 12px 1px 3px; padding-inline: 9px 6px; border-radius: 7px; color: var(--muted); }
