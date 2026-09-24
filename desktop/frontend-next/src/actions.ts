@@ -147,6 +147,7 @@ export const ACTIONS: UIAction[] = [
   { id: "account.sign-in", kind: "kernel-mutation", target: "none", proof: "interaction" },
   { id: "account.sign-out", kind: "kernel-mutation", target: "none", proof: "interaction" },
   { id: "ask.answer", kind: "interaction", target: "none", proof: "authority-effect" },
+  { id: "ask.step", kind: "view", target: "none", proof: "interaction" },
   { id: "remote-ask.answer", kind: "interaction", target: "none", proof: "interaction" },
   { id: "browser.login", kind: "interaction", target: "none", proof: "interaction" },
   { id: "browser.trust-certificate", kind: "shell-native", target: "none", proof: "interaction" },
