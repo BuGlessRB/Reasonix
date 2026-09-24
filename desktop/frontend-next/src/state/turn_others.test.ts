@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WireEvent } from "../port/wire";
-import { nameTurnStart } from "./turn_start";
+import { nameTurnStart, othersSteer } from "./turn_start";
 import type { SessionState } from "./session_types";
 
 const started = (text: string, msgIndex: number, via?: { device: string; ordinal: number }) =>
@@ -26,5 +26,23 @@ describe("a turn another client started", () => {
     const s = nameTurnStart(empty(mine, ["m"]), started("hi", 5, { device: "dev-a", ordinal: 1 }));
     expect(s.items).toHaveLength(1);
     expect(s.items[0]).toMatchObject({ id: "m", msgIndex: 5, via: { device: "dev-a", ordinal: 1 } });
+  });
+});
+
+describe("guidance another client said into the running turn", () => {
+  const steer = (extra: Partial<WireEvent>) => ({ kind: "steer", text: "use the other file", ...extra }) as WireEvent;
+
+  it("is drawn, with the device it came from", () => {
+    const items = othersSteer([], steer({ itemId: "i1", via: { device: "dev-a", ordinal: 1 } }));
+    expect(items[0]).toMatchObject({ t: "user", text: "use the other file", steer: true, via: { device: "dev-a", ordinal: 1 } });
+  });
+
+  it("is never drawn when the host wrote it", () => {
+    expect(othersSteer([], steer({ hostAuthored: true }))).toHaveLength(0);
+  });
+
+  it("is drawn once per item", () => {
+    const once = othersSteer([], steer({ itemId: "i1" }));
+    expect(othersSteer(once, steer({ itemId: "i1" }))).toHaveLength(1);
   });
 });

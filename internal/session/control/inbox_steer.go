@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
 	"reasonix/internal/state/sessioninbox"
 )
 
@@ -157,7 +158,7 @@ func (c *Controller) TrySteerInboxItem(id string) (sessioninbox.InboxReceipt, er
 		}
 	}
 	c.mu.Lock()
-	accepted := !c.gate.closed && !c.gate.rotating && c.gate.running && c.executor != nil && len(env.FrozenImages) == 0 && c.steerItemAs(meta.Origin, id, loader)
+	accepted := !c.gate.closed && !c.gate.rotating && c.gate.running && c.executor != nil && len(env.FrozenImages) == 0 && c.steerItemAs(meta.Origin, id, loader, env.Via)
 	if accepted {
 		c.inbox.mu.Lock()
 		c.inbox.trackActive(id)
@@ -195,11 +196,11 @@ func (c *Controller) TrySteerInboxItem(id string) (sessioninbox.InboxReceipt, er
 
 // steerItemAs queues the item under the attribution the manifest recorded, so a
 // host-authored item is never delivered as something the user said. Holds c.mu.
-func (c *Controller) steerItemAs(origin sessioninbox.PromptOrigin, id string, loader func() (string, error)) bool {
+func (c *Controller) steerItemAs(origin sessioninbox.PromptOrigin, id string, loader func() (string, error), via *provider.Via) bool {
 	if origin.IsHost() {
 		return c.executor.SteerHostItem(id, loader)
 	}
-	return c.executor.SteerItem(id, loader)
+	return c.executor.SteerItemFrom(id, loader, via)
 }
 
 // TrySteer queues mid-turn guidance only when the active agent turn accepts it.

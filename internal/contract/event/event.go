@@ -546,10 +546,12 @@ type Event struct {
 	// turn opened no authored message.
 	AuthoredTurn *int
 	MsgIndex     *int
-	// TurnStarted: the paired device the authored message came from; nil is
+	// TurnStarted / Steer: the paired device the message came from; nil is
 	// the window. Text carries the message itself, which a client that did not
 	// send it has no other way to draw.
-	Via             *provider.Via
+	Via *provider.Via
+	// Steer: the host wrote this guidance, so no client draws it as the user's.
+	HostAuthored    bool
 	Compaction      Compaction          // Compaction
 	Maintenance     *ContextMaintenance // ContextMaintenanceEvent
 	TodoProgress    *TodoProgress       // TodoProgressEvent

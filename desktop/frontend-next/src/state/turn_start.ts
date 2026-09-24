@@ -33,3 +33,15 @@ function drawOthersTurn(s: SessionState, ev: WireEvent): SessionState {
   const row: Item = { t: "user", id: `turn-${ev.msgIndex}`, text, authoredTurn: ev.authoredTurn, msgIndex: ev.msgIndex, via: ev.via };
   return { ...s, items: [...s.items, row] };
 }
+
+// Guidance another client said into the running turn: the kernel's delivery
+// is the only account this screen gets of it. The host's own guidance rides
+// the same event and is never drawn as the person's; an item already drawn is
+// not drawn twice.
+export function othersSteer(items: Item[], ev: WireEvent): Item[] {
+  const text = (ev.text ?? "").trim();
+  if (!text || ev.hostAuthored) return items;
+  if (ev.itemId && items.some((i) => i.t === "user" && i.itemId === ev.itemId)) return items;
+  const id = `steer-${ev.itemId || items.length}`;
+  return [...items, { t: "user", id, text, steer: true, itemId: ev.itemId, via: ev.via }];
+}

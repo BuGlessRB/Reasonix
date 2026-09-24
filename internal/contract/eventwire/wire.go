@@ -49,9 +49,11 @@ type Event struct {
 	// own user row, so this is the only thing that names which one.
 	AuthoredTurn *int `json:"authoredTurn,omitempty"`
 	MsgIndex     *int `json:"msgIndex,omitempty"`
-	// turn_started: the paired device the message came from; absent is the
-	// window. The message itself rides text.
+	// turn_started / steer: the paired device the message came from; absent is
+	// the window. The message itself rides text.
 	Via *Via `json:"via,omitempty"`
+	// steer: the host wrote this guidance, not the person.
+	HostAuthored bool `json:"hostAuthored,omitempty"`
 	// Which model wrote this. None means the turn's own, which a client
 	// reading it off the composer instead got wrong once the setting moved.
 	ModelRef      string         `json:"modelRef,omitempty"`
@@ -175,6 +177,9 @@ func ToWire(e event.Event) Event {
 		w.AuthoredTurn = e.AuthoredTurn
 		w.MsgIndex = e.MsgIndex
 		w.Via = ToWireVia(e.Via)
+	case event.Steer:
+		w.Via = ToWireVia(e.Via)
+		w.HostAuthored = e.HostAuthored
 	case event.TurnDone:
 		w.Cancelled = e.Cancelled
 		w.Outcome = e.Outcome

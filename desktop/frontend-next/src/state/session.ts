@@ -15,7 +15,7 @@ import { splitProviderSearch } from "./providersearch";
 export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TodoStatus, TurnTerminal, Waiting };
 export { currentStep, stepDone, stepLabel };
 import { promptOpen, prompted, sealByReceipt } from "./prompts";
-import { nameTurnStart } from "./turn_start";
+import { nameTurnStart, othersSteer } from "./turn_start";
 import { appendText, foldMessage, sealSay } from "./say";
 import { nextId } from "./ids";
 import { dropTool, foldLastRead, foldTool, mergeReads } from "./fold";
@@ -514,8 +514,8 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       const at = s.items.findIndex(
         (i) => i.t === "user" && i.pending && (ev.itemId ? i.itemId === ev.itemId : i.text === ev.text),
       );
-      if (at < 0) return { ...s, steerQueue: q };
-      const row = { ...(s.items[at] as Extract<Item, { t: "user" }>), pending: false, steer: true };
+      if (at < 0) return { ...s, steerQueue: q, items: othersSteer(s.items, ev) };
+      const row = { ...(s.items[at] as Extract<Item, { t: "user" }>), pending: false, steer: true, via: ev.via };
       return { ...s, steerQueue: q, items: [...s.items.slice(0, at), ...s.items.slice(at + 1), row] };
     }
 

@@ -663,9 +663,12 @@ export interface WireEvent {
   // that says which row the kernel just started a turn for.
   authoredTurn?: number;
   msgIndex?: number;
-  // turn_started: the paired device the message came from; absent is the
-  // window. The message itself rides text, for every client that did not send it.
+  // turn_started / steer: the paired device the message came from; absent is
+  // the window. The message itself rides text, for every client that did not
+  // send it.
   via?: Via;
+  // steer: the host wrote this guidance, so it is never drawn as the person's.
+  hostAuthored?: boolean;
   // recovery_paused is no longer emitted; sessions recorded before the retry
   // budgets were removed still carry it, so a reader has to render it.
   outcome?: "final_readiness" | "recovery_paused";

@@ -174,3 +174,44 @@ func TestSteerRejectedWithoutActiveTurn(t *testing.T) {
 		t.Fatalf("Steer between turns must be rejected")
 	}
 }
+
+// Guidance sent from a paired device lands and is announced as that device's,
+// and the host's own guidance is announced as the host's, so no client draws
+// it as something the person said.
+func TestSteerCarriesWhoSentIt(t *testing.T) {
+	via := &provider.Via{Device: "dev-e", Ordinal: 6}
+	var a *Agent
+	var steers []event.Event
+	sink := event.FuncSink(func(e event.Event) {
+		switch e.Kind {
+		case event.TurnStarted:
+			a.SteerItemFrom("it-1", func() (string, error) { return "use the other file", nil }, via)
+			a.SteerHostNotice("host guidance")
+		case event.Steer:
+			steers = append(steers, e)
+		}
+	})
+	sess := sessionstore.NewSession("")
+	a = New(testutil.NewMock("m", testutil.Turn{Text: "one"}, testutil.Turn{Text: "two"}, testutil.Turn{Text: "three"}), tool.NewRegistry(), sess, Options{}, sink)
+	if err := a.Run(context.Background(), "go"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(steers) != 2 {
+		t.Fatalf("delivered %d steers, want 2", len(steers))
+	}
+	if got := steers[0]; got.Via == nil || *got.Via != *via || got.HostAuthored {
+		t.Fatalf("the device's steer was announced via %+v host=%v", got.Via, got.HostAuthored)
+	}
+	if got := steers[1]; got.Via != nil || !got.HostAuthored {
+		t.Fatalf("the host's steer was announced via %+v host=%v", got.Via, got.HostAuthored)
+	}
+	var landed *provider.Via
+	for _, m := range sess.Messages {
+		if m.Role == provider.RoleUser && m.Via != nil {
+			landed = m.Via
+		}
+	}
+	if landed == nil || *landed != *via {
+		t.Fatalf("the device's steer landed via %+v", landed)
+	}
+}

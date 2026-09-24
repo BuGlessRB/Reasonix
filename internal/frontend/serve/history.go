@@ -65,7 +65,7 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 			if steerText, host, isSteer := sessionstore.SteerKind(m.Content); isSteer {
 				out = append(out, historyMessage{
 					Role: string(provider.RoleUser), Content: steerText, Steer: true,
-					HostAuthored: host || m.HostAuthored, MsgIndex: i,
+					HostAuthored: host || m.HostAuthored, MsgIndex: i, Via: eventwire.ToWireVia(m.Via),
 				})
 				continue
 			}

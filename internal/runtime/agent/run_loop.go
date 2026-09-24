@@ -255,13 +255,13 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		// survives tab switches and history replay. The model sees it as
 		// guidance (with a prefix), not a new task. One cache miss per
 		// steer is unavoidable — the model must see the new instruction.
-		if text, itemID, host, ok := a.consumeSteer(); ok {
-			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(sessionstore.MidTurnSteerMessage(text, host))})
-			a.svc.sink.Emit(event.Event{Kind: event.Steer, Text: text, ItemID: itemID})
-		} else if itemID != "" {
+		if text, entry, ok := a.consumeSteer(); ok {
+			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(sessionstore.MidTurnSteerMessage(text, entry.host)), Via: entry.via})
+			a.svc.sink.Emit(event.Event{Kind: event.Steer, Text: text, ItemID: entry.itemID, Via: entry.via, HostAuthored: entry.host})
+		} else if entry.itemID != "" {
 			// Loader failed after dequeue: durable entry stays for inspection
 			// (unapplied path marks uncertain + pause via the notice sink).
-			a.recordUnappliedSteer("(body load failed)", host, itemID)
+			a.recordUnappliedSteer("(body load failed)", entry.host, entry.itemID)
 		}
 		// Context pressure rides the turn tail, never the cached prefix: an
 		// append leaves the prefix byte-stable, and a model that knows a fold
