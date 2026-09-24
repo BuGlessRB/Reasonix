@@ -95,7 +95,7 @@ type ShareOffer struct {
 
 // NewDeviceShare returns a closed share serving page to devices.
 func NewDeviceShare(page fs.FS) *DeviceShare {
-	return &DeviceShare{registry: NewDeviceRegistry(), page: page, addresses: privateAddresses}
+	return &DeviceShare{registry: NewDeviceRegistry(), page: page, addresses: PrivateAddresses}
 }
 
 // Attach names the handler devices reach. The hub is built after the share it
@@ -196,9 +196,17 @@ func (s *DeviceShare) Status() ShareStatus {
 	return st
 }
 
-// privateAddresses is every private IPv4 address on an up interface, the ones
+// OffInternet reports whether plain HTTP to ip stays off the public internet:
+// loopback, a private range, or a tailnet, whose traffic is already encrypted.
+// Only there may a credential ride an unencrypted link.
+func OffInternet(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	return ip.IsLoopback() || ip.IsPrivate() || tailnetPrefix.Contains(ip)
+}
+
+// PrivateAddresses is every private IPv4 address on an up interface, the ones
 // a phone is likeliest to reach first: the first entry is the default.
-func privateAddresses() []ShareAddress {
+func PrivateAddresses() []ShareAddress {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil

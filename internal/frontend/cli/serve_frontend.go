@@ -61,6 +61,9 @@ type serveFrontendOptions struct {
 	pidFile     string
 	openBrowser bool
 	hasSession  bool
+	// publicURL is what a phone opens to reach this server, when that is not
+	// the bound address: a TLS proxy's origin, say.
+	publicURL string
 	// brokered is a serve whose provider credentials come from the machine that
 	// started it. It holds none of its own, so anything reading them here fails
 	// by design rather than because something is wrong.
@@ -150,16 +153,24 @@ func runServeFrontend(ctrl *control.Controller, srv serveHost, cfg config.ServeC
 
 func reportServeFrontend(ctrl *control.Controller, srv serveHost, cfg config.ServeConfig, address string, opts serveFrontendOptions) {
 	fmt.Printf("reasonix %s — %s on http://%s\n", opts.command, ctrl.Label(), address)
+	origin := "http://" + address
+	if public := strings.TrimRight(strings.TrimSpace(opts.publicURL), "/"); public != "" {
+		origin = public
+	}
+	// Supervised Serve already owns the token file, so avoid logging its value.
+	supervised := opts.portFile != "" && opts.tokenFile != ""
 	if srv.AuthMode() == "token" {
 		fmt.Println("  auth: token")
-		// Supervised Serve already owns the token file, so avoid logging its value.
-		if opts.portFile != "" && opts.tokenFile != "" {
-			fmt.Printf("  share: http://%s/ (token in %s)\n", address, opts.tokenFile)
+		if supervised {
+			fmt.Printf("  share: %s/ (token in %s)\n", origin, opts.tokenFile)
 		} else {
-			fmt.Printf("  share: http://%s/#token=%s\n", address, url.QueryEscape(srv.AuthToken()))
+			fmt.Printf("  share: %s/#token=%s\n", origin, url.QueryEscape(srv.AuthToken()))
 		}
 	} else if srv.AuthMode() == "password" {
-		fmt.Printf("  auth: password (login at http://%s/login)\n", address)
+		fmt.Printf("  auth: password (login at %s/login)\n", origin)
+	}
+	if !supervised && isTTY(os.Stdout) && ansiConsoleReady() {
+		reportShareQR(os.Stdout, srv.AuthMode(), srv.AuthToken(), address, opts.publicURL)
 	}
 	if warning := serve.PlainHTTPAuthWarning(cfg, address); warning != "" {
 		fmt.Fprintf(os.Stderr, "  %s\n", warning)
@@ -238,6 +249,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	password := fs.String("password", "", "password for auth=password (use --hash-password to store a hash instead)")
 	hashPassword := fs.Bool("hash-password", false, "print a bcrypt hash of --password and exit")
 	behindProxy := fs.Bool("behind-proxy", false, "trust X-Forwarded-For / X-Forwarded-Proto headers from a reverse proxy")
+	publicURL := fs.String("public-url", "", "the address a phone opens to reach this server, e.g. https://agent.example.com behind a TLS proxy; used for the share link and its QR code")
 	portFile := fs.String("port-file", "", "write the actual bound listen address (host:port) to this file after binding")
 	tokenFile := fs.String("token-file", "", "read the auth=token pre-shared token from this file (overrides --token; keeps the secret out of argv)")
 	pidFile := fs.String("pid-file", "", "write the server process id to this file")
@@ -321,19 +333,8 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 		return 1
 	}
 	serveCfg.AuthMode = mode
-	if *password != "" && serveCfg.AuthMode == "password" {
-		// Hash the password at startup so the config never stores plaintext.
-		// If a PasswordHash is already set in config, the CLI password overrides it.
-		h, err := serve.HashPassword(*password)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "failed to hash password:", err)
-			return 1
-		}
-		serveCfg.PasswordHash = h
-	}
-	if serveCfg.AuthMode == "password" && strings.TrimSpace(serveCfg.PasswordHash) == "" {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "auth mode password requires --password or serve.password_hash")
-		return 1
+	if code := applyServePassword(&serveCfg, *password); code != 0 {
+		return code
 	}
 
 	// Own the active session file for the server's lifetime; the serve
@@ -410,7 +411,27 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 		portFile: *portFile, tokenFile: *tokenFile, pidFile: *pidFile,
 		openBrowser: *openBrowser && !*noOpen, brokered: providerResolver != nil,
 		hasSession: *resume != "" || *sessionID != "",
+		publicURL:  *publicURL,
 	})
+}
+
+// applyServePassword settles password auth before anything is served: a
+// --password is hashed at startup so the config never holds plaintext, and
+// overrides a configured hash; password mode with neither refuses to start.
+func applyServePassword(serveCfg *config.ServeConfig, password string) int {
+	if password != "" && serveCfg.AuthMode == "password" {
+		h, err := serve.HashPassword(password)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "failed to hash password:", err)
+			return 1
+		}
+		serveCfg.PasswordHash = h
+	}
+	if serveCfg.AuthMode == "password" && strings.TrimSpace(serveCfg.PasswordHash) == "" {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "auth mode password requires --password or serve.password_hash")
+		return 1
+	}
+	return 0
 }
 
 // pageOrWarn resolves the built Studio page this serve mounts under
