@@ -494,6 +494,7 @@ const (
 	UsageSourceRecoveryReviewer = "recovery-reviewer"
 	UsageSourceGoalEvaluator    = "goal-evaluator"
 	UsageSourcePromptRefine     = "prompt-refine"
+	UsageSourceInjectionScreen  = "injection-screen"
 )
 
 // Event is one increment in a turn's event stream. Read the field(s) documented

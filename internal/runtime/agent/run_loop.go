@@ -656,6 +656,7 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 
 	batch := a.executeBatch(ctx, state, calls)
 	results, images := batch.results, batch.images
+	flagged := a.screenExternal(ctx, calls, batch)
 	for i, call := range calls {
 		msg := provider.Message{
 			Role:       provider.RoleTool,
@@ -667,7 +668,11 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 		// The host names content written outside the workspace before the model
 		// reads it; the label is fixed once here and never rewritten.
 		if i < len(batch.outcomes) {
-			msg.Content = tool.ProvenanceHeader(batch.outcomes[i].provenance) + msg.Content
+			head := tool.ProvenanceHeader(batch.outcomes[i].provenance)
+			if flagged[i] {
+				head += suspectedInjectionLine
+			}
+			msg.Content = head + msg.Content
 		}
 		// First-visible Content is always the bounded form in results[i].
 		// Full originals ride on RawContent only when truncation applied.

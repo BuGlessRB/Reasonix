@@ -45,6 +45,9 @@ type Options struct {
 	// on rather than the turn's.
 	TriageModelRef string
 	TriagePricing  *provider.Pricing
+	// ScreenExternalContent sends external tool results past TriageProvider for
+	// an advisory prompt-injection verdict. Without a triage provider it is off.
+	ScreenExternalContent bool
 	// ModelRef names the canonical "provider/model" ref backing this agent's
 	// provider instance. It is attached to emitted Usage events so downstream
 	// usage accounting can attribute tokens to the exact model.

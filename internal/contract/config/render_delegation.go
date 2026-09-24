@@ -51,6 +51,11 @@ func renderAgentDelegation(b *strings.Builder, c *Config) {
 	} else {
 		b.WriteString("# triage_model = \"deepseek-flash\"   # small classifications; point it somewhere cheap\n")
 	}
+	if c.Agent.ScreenExternalContent {
+		b.WriteString("screen_external_content = true   # triage flags external results that address the agent\n")
+	} else {
+		b.WriteString("# screen_external_content = true   # triage flags external results that address the agent\n")
+	}
 	if c.Agent.TaskCostBudget > 0 {
 		fmt.Fprintf(b, "task_cost_budget = %s   # a task lands on one summary once it spends this much\n", formatFloat(c.Agent.TaskCostBudget))
 	} else {

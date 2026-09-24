@@ -35,4 +35,6 @@ const (
 	NoticeCodeWorkspaceLeaseResumed, NoticeCodeWorkspaceLeaseAbandoned = "workspace_lease_resumed", "workspace_lease_abandoned"
 	// A remembered approval: Detail carries what it allows, the rule's subject.
 	NoticeCodePermissionSaved, NoticeCodePermissionCovered, NoticeCodePermissionSaveFailed = "permission_saved", "permission_covered", "permission_save_failed"
+	// An external tool result a screening model judged to address the agent.
+	NoticeCodeSuspectedInjection = "suspected_injection"
 )

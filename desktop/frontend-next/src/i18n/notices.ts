@@ -12,4 +12,5 @@ export const NOTICE_TEXT: Record<string, string> = {
   permission_saved: "已记住这项授权，以后同样的操作不再询问",
   permission_covered: "已有的授权规则覆盖了这项操作，无需另存",
   permission_save_failed: "授权没能保存，只在本次会话内有效",
+  suspected_injection: "一条外部内容看起来在向智能体下指令，已提醒它只当资料看待",
 };

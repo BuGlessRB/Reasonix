@@ -1043,6 +1043,9 @@ type AgentConfig struct {
 	// short on (is this unrecognized command read-only?). Empty falls back to
 	// subagent_model, then the main model — set it to point them somewhere cheap.
 	TriageModel string `toml:"triage_model"`
+	// ScreenExternalContent asks the triage model whether each external tool
+	// result tries to instruct the agent. Advisory only: a hit adds a notice.
+	ScreenExternalContent bool `toml:"screen_external_content"`
 	// DecisionModel names the backend system_one asks. It is on a decision
 	// wire, so it never falls back to the main model: a chat model has no
 	// answer for a question set, and falling back would hide that.
@@ -1531,18 +1534,6 @@ func (c *Config) EnabledPlugins(workspace string, activation *ActivationStore) [
 const DefaultSystemPrompt = `You are Reasonix, a coding agent.
 Use the available tools when they help you complete the user's request.
 Keep changes focused and responses concise.`
-
-// UserDecisionPolicy is appended to every system prompt, including user-custom
-// prompts, so custom personas cannot accidentally remove the `ask` UI contract.
-const UserDecisionPolicy = `User-owned choices: when a consequential decision has no safe, obvious default, call the ask tool so the user can choose. Otherwise proceed with a sensible reversible default. Do not ask in prose when ask is available. In non-interactive runs, state the assumption and take the safest reversible path.`
-
-// LanguagePolicy is the auto fallback appended to the system prompt when no
-// concrete UI language is resolved. It is static English text, so it stays part
-// of the cache-stable prefix and avoids per-turn language injection.
-const LanguagePolicy = `Reply in the same language the user is using in their most recent message: ` +
-	`if they write in Chinese answer in Chinese, in English answer in English, and switch ` +
-	`whenever they switch. Let this also guide the language you think in. Always keep code, ` +
-	`identifiers, file paths, shell commands, and technical terms in their original form — never translate them.`
 
 // Default returns the built-in default configuration.
 func Default() *Config {

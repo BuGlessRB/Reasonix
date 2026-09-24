@@ -150,6 +150,13 @@ func (a *Agent) triageProvider() provider.Provider {
 // affirmative word. Both host questions share it: the shape is the same, only
 // the criterion and the word differ.
 func (a *Agent) askClass(ctx context.Context, systemPrompt, segment, affirmative string) bool {
+	reply, ok := a.askTriage(ctx, systemPrompt, segment, event.UsageSourceClassifier)
+	return ok && parseClassVerdict(reply, affirmative)
+}
+
+// askTriage runs one bounded request on the triage model and returns its reply;
+// ok is false when the request or the stream failed. Usage is billed to source.
+func (a *Agent) askTriage(ctx context.Context, systemPrompt, input, source string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, commandClassTimeout)
 	defer cancel()
 
@@ -164,21 +171,21 @@ func (a *Agent) askClass(ctx context.Context, systemPrompt, segment, affirmative
 				modelRef, pricing = ref, a.svc.triagePricing
 			}
 			a.svc.sink.Emit(event.Event{Kind: event.Usage, ModelRef: modelRef, Usage: usage,
-				Pricing: pricing, UsageSource: event.UsageSourceClassifier})
+				Pricing: pricing, UsageSource: source})
 		}
 	}()
 
 	ch, err := a.triageProvider().Stream(ctx, provider.Request{
 		Messages: []provider.Message{
 			{Role: provider.RoleSystem, Content: systemPrompt},
-			{Role: provider.RoleUser, Content: segment},
+			{Role: provider.RoleUser, Content: input},
 		},
 		MaxTokens:      commandClassMaxOutTokens,
 		EffortOverride: commandClassEffort,
 		Temperature:    classTemperature,
 	})
 	if err != nil {
-		return false
+		return "", false
 	}
 	var reply strings.Builder
 	for chunk := range ch {
@@ -188,10 +195,10 @@ func (a *Agent) askClass(ctx context.Context, systemPrompt, segment, affirmative
 		case provider.ChunkUsage:
 			usage = chunk.Usage
 		case provider.ChunkError:
-			return false
+			return "", false
 		}
 	}
-	return parseClassVerdict(reply.String(), affirmative)
+	return reply.String(), true
 }
 
 // parseClassVerdict reads the verdict defensively: only the bare affirmative

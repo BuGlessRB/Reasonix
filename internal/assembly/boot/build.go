@@ -334,9 +334,10 @@ func (b *builder) executor() *agent.Agent {
 		Pricing:        entry.Price,
 		ModelRef:       b.model.ref,
 		TriageProvider: triageProv, TriageModelRef: triageRef, TriagePricing: triagePrice,
-		Gate:  t.gate,
-		Hooks: t.hookRunner,
-		Jobs:  b.session.jobs,
+		ScreenExternalContent: cfg.Agent.ScreenExternalContent,
+		Gate:                  t.gate,
+		Hooks:                 t.hookRunner,
+		Jobs:                  b.session.jobs,
 		// Reserving writes at the executor entry covers every writer, late MCP
 		// adds included, without wrapping tool schemas.
 		WriteScheduler:     t.sub.scheduler,

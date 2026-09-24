@@ -31,6 +31,8 @@ type agentServices struct {
 	// attributed to the model that answered it and priced at its tier.
 	triageRef     string
 	triagePricing *provider.Pricing
+	// screenExternal asks triage about every external result; see injection_screen.go.
+	screenExternal bool
 	// pricing turns provider usage into money for the task budget.
 	pricing *provider.Pricing
 	// sink receives the turn's typed event stream. Frontends decide how to
@@ -97,6 +99,7 @@ func newAgentServices(
 		triage:           opts.TriageProvider,
 		triageRef:        opts.TriageModelRef,
 		triagePricing:    opts.TriagePricing,
+		screenExternal:   opts.ScreenExternalContent,
 		tools:            tools,
 		pricing:          opts.Pricing,
 		sink:             sink,
