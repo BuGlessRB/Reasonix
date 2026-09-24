@@ -2837,12 +2837,12 @@ body { font-size: 14px; line-height: 1.75; }
 }
 .studio-brand-mark .studio-icon { width: 18px; height: 18px; stroke-width: 1.75; }
 .studio-brand > .studio-brand-word {
-  min-width: 0; display: grid; grid-template-rows: 17px 9px; align-content: center; gap: 1px;
+  min-width: 0; display: grid; grid-template-rows: 17px 9px; align-content: center; gap: 4px;
 }
 .studio-brand-word b {
   display: block; color: var(--text);
   font-family: "Reasonix Display", var(--ui); font-size: 18.5px; font-style: normal;
-  font-weight: 690; line-height: 17px; letter-spacing: -.065em;
+  font-weight: 690; line-height: 17px; letter-spacing: -.025em;
   font-variation-settings: "wght" 690, "opsz" 30;
   -webkit-font-smoothing: antialiased;
 }

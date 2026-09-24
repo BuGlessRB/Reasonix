@@ -587,9 +587,9 @@ export function App({ hub }: { hub: HubPort }) {
         focus={focus}
         onFocus={() => setFocus((v) => !v)}
         rail={rail}
-        theme={theme}
+        theme={scheme}
         onRail={() => setRail((v) => !v)}
-        onTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
+        onTheme={() => setTheme(scheme === "dark" ? "light" : "dark")}
       />
 
       {pack?.sky && <Sky />}

@@ -81,7 +81,11 @@ export function Chrome({ port, status, title, steer, onSettings, onBrowser, brow
           aria-label={theme === "dark" ? t("切换浅色主题") : t("切换深色主题")}
           title={theme === "dark" ? t("切换浅色主题") : t("切换深色主题")}
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a5.5 5.5 0 1 0 0 11V2.5Z" /></svg>
+          {theme === "dark" ? (
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.9 9.7A5.3 5.3 0 0 1 6.3 3.1a5.3 5.3 0 1 0 6.6 6.6Z" /></svg>
+          ) : (
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.7" /><path d="M8 1.7v1.4M8 12.9v1.4M1.7 8h1.4M12.9 8h1.4M3.5 3.5l1 1M11.5 11.5l1 1M3.5 12.5l1-1M11.5 4.5l1-1" /></svg>
+          )}
         </button>
         <button className="top-action" data-action="settings.section" data-value="tools" onClick={() => onSettings("tools")} aria-label={t("沙盒")} title={t("沙盒与运行边界")}>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 2.5 5 2.7v5.6l-5 2.7-5-2.7V5.2Z" /><path d="m3 5.2 5 2.7 5-2.7M8 7.9v5.6" /></svg><span>{t("沙盒")}</span>
