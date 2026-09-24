@@ -161,6 +161,7 @@ func (g globTool) globRecursive(ctx context.Context, pattern, displayPattern str
 
 	var matches []string
 	truncated := false
+	confine := newWalkConfine(g.forbidRoots, root)
 
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if ctx.Err() != nil {
@@ -170,12 +171,12 @@ func (g globTool) globRecursive(ctx context.Context, pattern, displayPattern str
 			return nil // skip unreadable entries
 		}
 		if d.IsDir() {
-			if skipWalkDir(root, path, d.Name()) || skipForbidDir(path, g.forbidRoots) {
+			if skipWalkDir(root, path, d.Name()) || confine.blocked(path, d) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if confineRead(g.forbidRoots, path) {
+		if confine.blocked(path, d) {
 			return nil
 		}
 		rel, rerr := filepath.Rel(root, path)

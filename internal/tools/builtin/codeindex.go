@@ -124,6 +124,7 @@ func (c codeIndex) collect(ctx context.Context, root string, limit int, outline 
 			files = append(files, root)
 		}
 	} else {
+		confine := newWalkConfine(c.forbidRoots, root)
 		err = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -132,7 +133,7 @@ func (c codeIndex) collect(ctx context.Context, root string, limit int, outline 
 				return nil
 			}
 			if d.IsDir() {
-				if skipForbidDir(path, c.forbidRoots) {
+				if confine.blocked(path, d) {
 					return filepath.SkipDir
 				}
 				if path != root && skipCodeIndexDir(d.Name()) {
@@ -140,7 +141,7 @@ func (c codeIndex) collect(ctx context.Context, root string, limit int, outline 
 				}
 				return nil
 			}
-			if supportedCodeIndexFile(path) && !confineRead(c.forbidRoots, path) {
+			if supportedCodeIndexFile(path) && !confine.blocked(path, d) {
 				files = append(files, path)
 				if len(files) >= codeIndexMaxFiles {
 					return filepath.SkipAll

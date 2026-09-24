@@ -163,6 +163,11 @@ func confineRead(forbidRoots []string, target string) bool {
 	if err != nil {
 		return false // can't resolve -> let the caller's normal error path handle it
 	}
+	return confineResolved(forbidRoots, abs, protect)
+}
+
+// confineResolved is confineRead for a path already free of symlinks.
+func confineResolved(forbidRoots []string, abs string, protect bool) bool {
 	if secrets.CredentialReadPath(abs) {
 		return true
 	}

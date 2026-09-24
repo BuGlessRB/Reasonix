@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,13 +36,13 @@ type walkIgnorer struct {
 	// wide drops the ignore rules and the build-output directories, and only
 	// those: confinement and the VCS store stay pruned above it. It is what a
 	// second pass uses after the first found nothing in the tracked tree.
-	wide        bool
-	frames      []ignoreFrame // shallow→deep; the deepest is the active matcher
-	forbidRoots []string      // directories the walk must never enter
+	wide    bool
+	frames  []ignoreFrame // shallow→deep; the deepest is the active matcher
+	confine walkConfine   // what the walk may not read, forbid roots included
 }
 
 func newWalkIgnorer(root string, forbidRoots []string, wide bool) *walkIgnorer {
-	ig := &walkIgnorer{root: absClean(root), forbidRoots: forbidRoots, wide: wide}
+	ig := &walkIgnorer{root: absClean(root), confine: newWalkConfine(forbidRoots, root), wide: wide}
 	// The reader is this package's: a .gitignore written as UTF-16 is decoded
 	// here the way every other file this tool reads is.
 	rules := gitignore.At(ig.root, gitignore.Options{ReadLines: readIgnoreLines})
@@ -73,7 +74,8 @@ func (ig *walkIgnorer) enter(path string) {
 // skip reports whether a walked entry should be pruned, popping frames the walk
 // has moved past. The root is never pruned; hidden entries and vendorDirs always
 // are; everything else is pruned when the active matcher ignores it.
-func (ig *walkIgnorer) skip(path, name string, isDir bool) bool {
+func (ig *walkIgnorer) skip(path string, d fs.DirEntry) bool {
+	name, isDir := d.Name(), d.IsDir()
 	abs := absClean(path)
 	for len(ig.frames) > 1 && !underDir(ig.frames[len(ig.frames)-1].dir, abs) {
 		ig.frames = ig.frames[:len(ig.frames)-1]
@@ -83,7 +85,7 @@ func (ig *walkIgnorer) skip(path, name string, isDir bool) bool {
 	}
 	// Confinement first, and above the wide switch: what a caller may not read
 	// is not an ignore rule, and widening a search must not widen that.
-	if isDir && (isProtectedDir(abs) || skipForbidDir(abs, ig.forbidRoots)) {
+	if isDir && (isProtectedDir(abs) || ig.confine.blocked(path, d)) {
 		return true
 	}
 	// A VCS store is skipped either way. It is not where a build writes, it is

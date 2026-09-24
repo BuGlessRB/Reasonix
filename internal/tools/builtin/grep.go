@@ -222,9 +222,6 @@ func (g grepTool) nativePass(ctx context.Context, pattern, path, glob string, in
 
 	// searchFile returns io.EOF as a sentinel once the cap is reached.
 	searchFile := func(file string) error {
-		if confineRead(g.forbidRoots, file) {
-			return nil
-		}
 		f, err := os.Open(file)
 		if err != nil {
 			return nil // skip unreadable files
@@ -302,13 +299,13 @@ func (g grepTool) nativePass(ctx context.Context, pattern, path, glob string, in
 				return nil
 			}
 			if d.IsDir() {
-				if ig.skip(path, d.Name(), true) {
+				if ig.skip(path, d) {
 					return filepath.SkipDir
 				}
 				ig.enter(path)
 				return nil
 			}
-			if ig.skip(path, d.Name(), false) || !grepGlobMatches(glob, root, path) {
+			if ig.skip(path, d) || ig.confine.blocked(path, d) || !grepGlobMatches(glob, root, path) {
 				return nil
 			}
 			if errors.Is(searchFile(path), io.EOF) {
@@ -316,7 +313,7 @@ func (g grepTool) nativePass(ctx context.Context, pattern, path, glob string, in
 			}
 			return nil
 		})
-	} else {
+	} else if !confineRead(g.forbidRoots, path) {
 		_ = searchFile(path)
 	}
 
