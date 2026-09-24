@@ -48,6 +48,7 @@ type ManifestExpectation struct {
 	Replaces     []string          `json:"replaces,omitempty"`
 	Providers    []string          `json:"providers,omitempty"`
 	UIActions    []string          `json:"uiActions,omitempty"`
+	Tools        []string          `json:"tools,omitempty"`
 	Capabilities []string          `json:"capabilities,omitempty"`
 	Requires     []RequirementWire `json:"requires,omitempty"`
 	Provides     []CapabilityWire  `json:"provides,omitempty"`
@@ -81,6 +82,7 @@ type InitializeResult struct {
 	Replaces           []string             `json:"replaces,omitempty"`
 	Providers          []ProviderDescriptor `json:"providers,omitempty"`
 	UIActions          []UIActionDecl       `json:"uiActions,omitempty"`
+	Tools              []string             `json:"tools,omitempty"`
 	Requires           []RequirementWire    `json:"requires,omitempty"`
 	Provides           []CapabilityWire     `json:"provides,omitempty"`
 	StateSchemaVersion int                  `json:"stateSchemaVersion" validate:"min=0"`

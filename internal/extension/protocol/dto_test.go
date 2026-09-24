@@ -136,6 +136,10 @@ var methodFixtures = map[Method]struct {
 		},
 		result: UISubmitResult{Accepted: true},
 	},
+	MethodExtensionToolCall: {
+		params: ToolCallParams{Name: "lookup", Arguments: json.RawMessage(`{"q":"x"}`), TimeoutMillis: 120000},
+		result: ToolCallResult{Content: "found 3", IsError: true},
+	},
 	MethodHostUIPublish: {
 		params: UIPublishParams{
 			SurfaceID: "card-1", SessionID: "s-1", Generation: 3,

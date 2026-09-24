@@ -292,7 +292,19 @@ Native Reasonix extensions use the exact v2 `apiVersion`:
     "priority": 0,
     "intercepts": ["input.receive", "tool.before"],
     "replaces": [],
-    "capabilities": ["interceptors"]
+    "capabilities": ["interceptors", "tools"],
+    "tools": [
+      {
+        "name": "glossary_lookup",
+        "description": "Look a term up in the team glossary",
+        "inputSchema": {
+          "type": "object",
+          "properties": { "term": { "type": "string" } },
+          "required": ["term"]
+        },
+        "readOnly": true
+      }
+    ]
   }
 }
 ```
@@ -352,8 +364,17 @@ see `docs/EXTENSION_PROTOCOL.generated.md` for the method index and
   slot has exactly one owner across all installed plugins; a collision fails
   the build with both sources named.
 - `capabilities` gates whole feature families: `interceptors`, `strategies`,
-  `providers`, `ui`. Anything the sidecar announces beyond the manifest is
-  rejected during the handshake.
+  `providers`, `ui`, `tools`. Anything the sidecar announces beyond the
+  manifest is rejected during the handshake.
+- `tools` declares the model-callable tools the runtime serves; it needs the
+  `tools` capability. Each tool has:
+  - a `name` of 1-48 letters, digits, `_` or `-`, unique in the package;
+  - a `description` the model chooses the tool by;
+  - an `inputSchema`, a JSON schema whose `type` is `object`;
+  - an optional `readOnly`, the author's claim that the tool changes nothing.
+- The model sees a tool as `ext__<plugin>__<name>` and calls it through
+  `use_capability`; every call passes the normal permission check. The
+  install plan and the package list show the tools a runtime brings.
 - Provider models contributed by an extension appear as
   `plugin/<plugin>/<provider>/<model>` in the model picker; the ref also
   works as `default_model` (including on first boot) and in `/model`,

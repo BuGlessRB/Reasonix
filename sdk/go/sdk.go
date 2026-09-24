@@ -149,6 +149,9 @@ type Options struct {
 	Provider Provider
 	// UI serves extension/ui/action and extension/ui/submit.
 	UI UIHandler
+	// Tools serves extension/tool/call, keyed by the tool names the manifest
+	// declares under runtime.tools.
+	Tools map[string]ToolFunc
 	// Shutdown runs on extension/shutdown, bounded by the host's
 	// TimeoutMillis. After it returns (or times out) the SDK answers
 	// {accepted:true} and closes the transport; the process should then
@@ -299,6 +302,7 @@ func Serve(ctx context.Context, h Handler, opts Options) error {
 	c.reqH[MethodExtensionProviderStreamCancel] = s.withConnRequest(s.handleStreamCancel)
 	c.reqH[MethodExtensionUIAction] = s.withConnRequest(s.handleUIAction)
 	c.reqH[MethodExtensionUISubmit] = s.withConnRequest(s.handleUISubmit)
+	c.reqH[MethodExtensionToolCall] = s.withConnRequest(s.handleToolCall)
 	c.notH[MethodExtensionInitialized] = s.withConnNotification(s.handleInitialized)
 	c.notH[MethodExtensionEvent] = s.withConnNotification(s.handleEvent)
 	c.notH[MethodExtensionResourcesChanged] = s.withConnNotification(s.handleResourcesChanged)
@@ -418,6 +422,7 @@ func (s *server) handleInitialize(ctx context.Context, raw json.RawMessage) (any
 	if result.StateSchemaVersion < 0 {
 		return nil, &fatalError{err: errors.New("extension: stateSchemaVersion must be non-negative")}
 	}
+	s.declareTools(result)
 	return result, nil
 }
 
@@ -710,36 +715,6 @@ func (s *server) sendStreamEnd(end *StreamEndParams) {
 }
 
 // UI handlers (Host → Extension)
-
-func (s *server) handleUIAction(ctx context.Context, raw json.RawMessage) (any, error) {
-	if s.opts.UI.Action == nil {
-		return nil, MustProtocolError(ErrUnknownMethod)
-	}
-	var p UIActionParams
-	if err := strictDecode(raw, &p); err != nil || strings.TrimSpace(p.ActionID) == "" || strings.TrimSpace(p.SessionID) == "" {
-		return nil, MustProtocolError(ErrInvalidParams)
-	}
-	if err := s.opts.UI.Action(ctx, p.ActionID, p.Args); err != nil {
-		return UIActionResult{Accepted: false, Message: err.Error()}, nil
-	}
-	return UIActionResult{Accepted: true}, nil
-}
-
-func (s *server) handleUISubmit(ctx context.Context, raw json.RawMessage) (any, error) {
-	if s.opts.UI.Submit == nil {
-		return nil, MustProtocolError(ErrUnknownMethod)
-	}
-	var p UISubmitParams
-	if err := strictDecode(raw, &p); err != nil || strings.TrimSpace(p.SurfaceID) == "" ||
-		strings.TrimSpace(p.SessionID) == "" || p.Values == nil {
-		return nil, MustProtocolError(ErrInvalidParams)
-	}
-	if err := s.opts.UI.Submit(ctx, p.SurfaceID, p.Values); err != nil {
-		s.log.Printf("extension: UI submit for surface %q failed: %v", p.SurfaceID, err)
-		return UISubmitResult{Accepted: false}, nil
-	}
-	return UISubmitResult{Accepted: true}, nil
-}
 
 // HostUI: Extension → Host UI client
 

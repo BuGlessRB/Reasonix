@@ -5,7 +5,7 @@
 - Protocol ID: `reasonix.extension.v2`
 - Protocol major: `2`
 - Schema: `internal/extension/protocol/schema.generated.json`
-- Schema hash: `sha256:c19003186419665354115b5a71e525423303edf788b0738ebcbfd6427732001b`
+- Schema hash: `sha256:085c014bb6d1713f722177dda5d79b1224d9bf611cb3947d3331aeb0768449fa`
 
 Within major v2 only optional fields, new enum values, and new methods may
 be added; existing required fields, directions, limits, error reasons, and
@@ -26,6 +26,7 @@ semantics never change.
 | `extension/provider/stream/open` | `host_to_extension_request` | `provider` | `StreamOpenParams` | `StreamOpenResult` |
 | `extension/resources/changed` | `host_to_extension_notification` | `observation` | `ResourcesChangedParams` | `-` |
 | `extension/shutdown` | `host_to_extension_request` | `lifecycle` | `ShutdownParams` | `ShutdownResult` |
+| `extension/tool/call` | `host_to_extension_request` | `tool` | `ToolCallParams` | `ToolCallResult` |
 | `extension/ui/action` | `host_to_extension_request` | `ui` | `UIActionParams` | `UIActionResult` |
 | `extension/ui/submit` | `host_to_extension_request` | `ui` | `UISubmitParams` | `UISubmitResult` |
 | `host/content/read` | `extension_to_host_request` | `content` | `ContentReadParams` | `ContentReadResult` |

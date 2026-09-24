@@ -176,6 +176,13 @@ func runBootFakeSidecar(stdin io.Reader, stdout io.Writer) {
 					result = `{"accepted":true,"message":"boot fake action ran"}`
 				case "extension/ui/submit":
 					result = `{"accepted":true}`
+				case "extension/tool/call":
+					var params struct {
+						Arguments json.RawMessage `json:"arguments"`
+					}
+					_ = json.Unmarshal(frame.Params, &params)
+					content, _ := json.Marshal("looked up " + string(params.Arguments))
+					result = fmt.Sprintf(`{"content":%s}`, content)
 				case "extension/intercept":
 					result = bootFakeInterceptAnswer(frame.Params)
 				case "extension/event":

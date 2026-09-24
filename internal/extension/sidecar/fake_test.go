@@ -269,6 +269,16 @@ func runFakeSidecar(stdin io.Reader, stdout io.Writer) {
 					respond(frame.ID, json.RawMessage(`{"accepted":true,"message":`+string(message)+`}`))
 				case string(protocol.MethodExtensionUISubmit):
 					respond(frame.ID, json.RawMessage(`{"accepted":true}`))
+				case string(protocol.MethodExtensionToolCall):
+					// Echo the call so the host-side test proves which tool ran
+					// with which arguments; "fail" reports a tool-level error.
+					var params struct {
+						Name      string          `json:"name"`
+						Arguments json.RawMessage `json:"arguments"`
+					}
+					_ = json.Unmarshal(frame.Params, &params)
+					content, _ := json.Marshal("ran " + params.Name + " " + string(params.Arguments))
+					respond(frame.ID, json.RawMessage(fmt.Sprintf(`{"content":%s,"isError":%t}`, content, params.Name == "fail")))
 				default:
 					respond(frame.ID, json.RawMessage(`{}`))
 				}

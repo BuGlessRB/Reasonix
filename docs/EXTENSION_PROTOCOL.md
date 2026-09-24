@@ -130,6 +130,27 @@ Actions declared at initialize are namespaced `/<plugin>:<action>` and are
 invoked via `extension/ui/action`; form submissions arrive via
 `extension/ui/submit`.
 
+## Tools
+
+A runtime with the `tools` capability serves model-callable tools:
+
+- **Declared in the manifest.** Each tool's name, description and input
+  schema sit under `runtime.tools`, so the host knows them before the process
+  starts and an install plan shows them.
+- **Activated at initialize.** `InitializeResult.tools` names the declared
+  tools this process serves; a name the manifest does not declare fails the
+  handshake with `capability_not_declared`. `ManifestExpectation.tools`
+  tells the extension which names the host will accept.
+- **Called through the host.** The model sees each tool as
+  `ext__<plugin>__<tool>` and reaches it through the capability catalog, as
+  it does MCP tools, so installing a plugin never moves the cached prompt
+  prefix. Every call passes the host's permission check first.
+- **Answered by `extension/tool/call`.** Params carry the declared `name`,
+  the model's `arguments` and a `timeoutMillis` budget (5 minutes today).
+- **Two kinds of failure.** The result's `content` is what the model reads,
+  and `isError` marks a failure the tool reports about its own work. A call
+  the extension cannot run at all answers with a protocol error instead.
+
 ## Errors
 
 Domain errors travel as JSON-RPC error code `-32000` with structured data

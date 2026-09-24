@@ -2,6 +2,7 @@ package pluginpkg
 
 import (
 	"reasonix/internal/extensioncontract"
+	"regexp"
 
 	"bytes"
 	"encoding/json"
@@ -40,6 +41,30 @@ type RuntimeSpec struct {
 	// budget. Zero keeps the host's per-point defaults; the host clamps any
 	// value to its 60s ceiling at dispatch time.
 	TimeoutMillis int `json:"timeoutMillis,omitempty"`
+	// Tools are model-callable tools this runtime serves. They are declared
+	// here, not only at initialize, so an install plan can show them and the
+	// host knows their schemas before the process starts.
+	Tools []RuntimeTool `json:"tools,omitempty"`
+}
+
+// ToolNames lists the tools this runtime declares, in manifest order.
+func (rt *RuntimeSpec) ToolNames() []string {
+	var out []string
+	for _, t := range rt.Tools {
+		out = append(out, t.Name)
+	}
+	return out
+}
+
+// RuntimeTool is one tool a runtime serves. The model sees it under a name the
+// host qualifies with the plugin's; Name is how the runtime knows it.
+type RuntimeTool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"inputSchema"`
+	// ReadOnly is the author's claim that the tool changes nothing, which lets
+	// it run where only read-only tools may; it is never inferred.
+	ReadOnly bool `json:"readOnly,omitempty"`
 }
 
 // sniffManifestAPIVersion extracts just the apiVersion field so parseNative
@@ -332,7 +357,43 @@ var runtimeNamedSlots = map[string]bool{
 	"frontend_events":   true,
 }
 
-var runtimeCapabilities = []string{"interceptors", "strategies", "providers", "ui"}
+var runtimeCapabilities = []string{"interceptors", "strategies", "providers", "ui", "tools"}
+
+var runtimeToolName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,48}$`)
+
+const maxRuntimeToolSchemaBytes = 64 << 10
+
+// validateRuntimeTools holds each declared tool to what a provider accepts as
+// a tool definition: a bounded name, a description the model can choose by,
+// and an object schema for its arguments.
+func validateRuntimeTools(rt *RuntimeSpec) error {
+	if len(rt.Tools) > 0 && !slices.Contains(rt.Capabilities, "tools") {
+		return errors.New(`runtime.tools needs "tools" in runtime.capabilities`)
+	}
+	seen := map[string]bool{}
+	for i, t := range rt.Tools {
+		if !runtimeToolName.MatchString(t.Name) {
+			return fmt.Errorf("runtime.tools[%d].name %q must be 1-48 letters, digits, _ or -", i, t.Name)
+		}
+		if seen[t.Name] {
+			return fmt.Errorf("runtime.tools: %q is declared twice", t.Name)
+		}
+		seen[t.Name] = true
+		if strings.TrimSpace(t.Description) == "" {
+			return fmt.Errorf("runtime.tools[%d] (%s): description is required", i, t.Name)
+		}
+		if len(t.InputSchema) > maxRuntimeToolSchemaBytes {
+			return fmt.Errorf("runtime.tools[%d] (%s): inputSchema is over %d bytes", i, t.Name, maxRuntimeToolSchemaBytes)
+		}
+		var schema struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(t.InputSchema, &schema); err != nil || schema.Type != "object" {
+			return fmt.Errorf(`runtime.tools[%d] (%s): inputSchema must be a JSON schema with "type": "object"`, i, t.Name)
+		}
+	}
+	return nil
+}
 
 // validateRuntimeSlot mirrors extension.ParseSlot: bare names must be
 // declared slots; tool:/provider: forms must carry a well-formed target.
@@ -407,6 +468,9 @@ func parseV1Runtime(raw json.RawMessage) (*RuntimeSpec, error) {
 		if !known {
 			return nil, fmt.Errorf("runtime.capabilities: unknown capability %q (want one of: %s)", capability, strings.Join(runtimeCapabilities, ", "))
 		}
+	}
+	if err := validateRuntimeTools(&rt); err != nil {
+		return nil, err
 	}
 	return &rt, nil
 }

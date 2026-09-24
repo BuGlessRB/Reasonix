@@ -57,12 +57,16 @@ func main() {
 }
 ```
 
-Everything else is optional and declared through `Options`: an `Observer`
-for fire-and-forget events, a `Provider` for extension-hosted model
-providers, `UI` callbacks plus the `HostUI` client for structured surfaces
-(status, cards, forms, notifications and blocking prompts — never HTML/JS),
-`ReadContentRef`/`ResolveExternalized` for large externalized payloads, and a
-`Shutdown` hook.
+Everything else is optional and declared through `Options`:
+
+- `Observer` for fire-and-forget events;
+- `Tools` for model-callable tools the manifest declares under
+  `runtime.tools` — the handshake names them for you;
+- `Provider` for extension-hosted model providers;
+- `UI` callbacks plus the `HostUI` client for structured surfaces (status,
+  cards, forms, notifications and blocking prompts — never HTML/JS);
+- `ReadContentRef`/`ResolveExternalized` for large externalized payloads;
+- `Shutdown`, run when the host asks the process to stop.
 
 ## Concurrency contract
 

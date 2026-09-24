@@ -10,8 +10,8 @@ func TestRegistryIsSortedAndPinned(t *testing.T) {
 		t.Fatalf("ValidateRegistry: %v", err)
 	}
 	registry := Registry()
-	if len(registry) != 16 {
-		t.Fatalf("registry has %d methods, want 16", len(registry))
+	if len(registry) != 17 {
+		t.Fatalf("registry has %d methods, want 17", len(registry))
 	}
 	for i := 1; i < len(registry); i++ {
 		if registry[i-1].Name >= registry[i].Name {
@@ -35,12 +35,13 @@ func TestRegistryMethodDirections(t *testing.T) {
 		MethodExtensionProviderStreamEnd:    DirectionExtensionToHostNotification,
 		MethodExtensionUIAction:             DirectionHostToExtensionRequest,
 		MethodExtensionUISubmit:             DirectionHostToExtensionRequest,
+		MethodExtensionToolCall:             DirectionHostToExtensionRequest,
 		MethodHostUIPublish:                 DirectionExtensionToHostRequest,
 		MethodHostUIRequest:                 DirectionExtensionToHostRequest,
 		MethodHostContentRead:               DirectionExtensionToHostRequest,
 	}
-	if len(want) != 16 {
-		t.Fatalf("test pins %d methods, want 16", len(want))
+	if len(want) != 17 {
+		t.Fatalf("test pins %d methods, want 17", len(want))
 	}
 	for method, direction := range want {
 		spec, ok := LookupMethod(method)

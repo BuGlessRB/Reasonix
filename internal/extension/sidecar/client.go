@@ -409,6 +409,9 @@ func (c *Client) validateHandshakeResult(result protocol.InitializeResult) error
 	if len(result.UIActions) > 0 && !containsString(rt.Capabilities, "ui") {
 		return capabilityErr("extension %s declared UI actions without the ui capability", c.pluginID)
 	}
+	if err := c.validateTools(result.Tools); err != nil {
+		return err
+	}
 	// Manifest provides is the capability ceiling: handshake must not claim
 	// capabilities the package never declared. Declared-but-missing provides
 	// stay Unavailable (no forge) — callers read Status via the lifecycle registry.

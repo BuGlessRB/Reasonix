@@ -357,7 +357,13 @@ func TestManifestV2RuntimeValidation(t *testing.T) {
 		{"unknown replace slot", `{"command": "./run", "replaces": ["systemprompt"]}`, `runtime.replaces: unknown slot "systemprompt"`},
 		{"bad tool slot", `{"command": "./run", "replaces": ["tool:"]}`, `runtime.replaces: invalid tool slot "tool:"`},
 		{"bad provider slot", `{"command": "./run", "replaces": ["provider:openai"]}`, `runtime.replaces: invalid provider slot "provider:openai"`},
-		{"unknown capability", `{"command": "./run", "capabilities": ["filesystem"]}`, `runtime.capabilities: unknown capability "filesystem" (want one of: interceptors, strategies, providers, ui)`},
+		{"unknown capability", `{"command": "./run", "capabilities": ["filesystem"]}`, `runtime.capabilities: unknown capability "filesystem" (want one of: interceptors, strategies, providers, ui, tools)`},
+		{"tools without capability", `{"command": "./run", "tools": [{"name": "t", "description": "d", "inputSchema": {"type": "object"}}]}`, `runtime.tools needs "tools" in runtime.capabilities`},
+		{"bad tool name", `{"command": "./run", "capabilities": ["tools"], "tools": [{"name": "a b", "description": "d", "inputSchema": {"type": "object"}}]}`, `runtime.tools[0].name "a b"`},
+		{"duplicate tool", `{"command": "./run", "capabilities": ["tools"], "tools": [{"name": "t", "description": "d", "inputSchema": {"type": "object"}}, {"name": "t", "description": "d", "inputSchema": {"type": "object"}}]}`, `runtime.tools: "t" is declared twice`},
+		{"tool without description", `{"command": "./run", "capabilities": ["tools"], "tools": [{"name": "t", "description": " ", "inputSchema": {"type": "object"}}]}`, `description is required`},
+		{"tool schema not an object", `{"command": "./run", "capabilities": ["tools"], "tools": [{"name": "t", "description": "d", "inputSchema": {"type": "string"}}]}`, `inputSchema must be a JSON schema with "type": "object"`},
+		{"tool unknown field", `{"command": "./run", "capabilities": ["tools"], "tools": [{"name": "t", "description": "d", "inputSchema": {"type": "object"}, "exec": "rm"}]}`, `exec`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -541,5 +547,19 @@ func TestExpandRuntimeCommand(t *testing.T) {
 	}
 	if got := ExpandRuntimeCommand("plugin-runtime", root); got != "plugin-runtime" {
 		t.Fatalf("ExpandRuntimeCommand bare name = %q", got)
+	}
+}
+
+func TestManifestV2RuntimeDeclaresTools(t *testing.T) {
+	root := testenv.TempDir(t)
+	writeV2Plugin(t, root, `{"apiVersion": "reasonix.io/plugin/v2", "name": "rt-tools", "runtime": {"command": "./run", "capabilities": ["tools"], "tools": [
+		{"name": "lookup", "description": "Look a term up", "inputSchema": {"type": "object", "properties": {"q": {"type": "string"}}}, "readOnly": true}]}}`)
+	pkg, _, err := ParseDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := pkg.Manifest.Runtime.Tools
+	if len(tools) != 1 || tools[0].Name != "lookup" || !tools[0].ReadOnly || !strings.Contains(string(tools[0].InputSchema), `"q"`) {
+		t.Fatalf("tools = %+v", tools)
 	}
 }

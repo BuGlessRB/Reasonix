@@ -187,6 +187,13 @@ function Package({
             <span className="sc">{[p.runtime.command, ...(p.runtime.args ?? [])].join(" ")}</span>
           </div>
         )}
+        {p.runtime?.tools?.map((name) => (
+          <div className="row" data-run key={"tool:" + name}>
+            <span className="d">▸</span>
+            <span>{t("工具")}</span>
+            <span className="sc">{name}</span>
+          </div>
+        ))}
         {p.hooks?.map((h) => (
           <div className="row" data-run key={h.event + h.command}>
             <span className="d">▸</span>

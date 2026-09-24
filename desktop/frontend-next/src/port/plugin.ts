@@ -35,6 +35,8 @@ export interface PluginRuntime {
   intercepts?: string[];
   replaces?: string[];
   capabilities?: string[];
+  // Tools the process serves to the agent, by the name its manifest gives.
+  tools?: string[];
 }
 
 export interface PluginSkipped {

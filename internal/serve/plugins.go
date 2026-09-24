@@ -86,6 +86,7 @@ type pluginRuntime struct {
 	Intercepts   []string `json:"intercepts,omitempty"`
 	Replaces     []string `json:"replaces,omitempty"`
 	Capabilities []string `json:"capabilities,omitempty"`
+	Tools        []string `json:"tools,omitempty"`
 }
 
 func (s *Server) plugins(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +160,7 @@ func pluginViewFor(home, workspaceRoot string, p pluginpkg.InstalledPlugin) plug
 	if rt := pkg.Manifest.Runtime; rt != nil {
 		view.Runtime = &pluginRuntime{
 			Command: rt.Command, Args: rt.Args, Intercepts: rt.Intercepts,
-			Replaces: rt.Replaces, Capabilities: rt.Capabilities,
+			Replaces: rt.Replaces, Capabilities: rt.Capabilities, Tools: rt.ToolNames(),
 		}
 	}
 	view.Warnings = append(view.Warnings, hookRuntimeWarnings(pkg, workspaceRoot)...)

@@ -140,6 +140,7 @@ type RuntimePlanInfo struct {
 	Intercepts   []string `json:"intercepts,omitempty"`
 	Replaces     []string `json:"replaces,omitempty"`
 	Capabilities []string `json:"capabilities,omitempty"`
+	Tools        []string `json:"tools,omitempty"`
 	FullTrust    bool     `json:"fullTrust"`
 }
 

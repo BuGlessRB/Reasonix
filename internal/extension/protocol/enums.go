@@ -33,6 +33,7 @@ const (
 	ClassProvider    OperationClass = "provider"
 	ClassUI          OperationClass = "ui"
 	ClassContent     OperationClass = "content"
+	ClassTool        OperationClass = "tool"
 )
 
 // InterceptEvent names one of the 17 frozen kernel hook points an extension

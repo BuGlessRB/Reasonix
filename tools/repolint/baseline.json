@@ -8,13 +8,13 @@
     "complexity": 1009,
     "doc-language": 0,
     "doc-owner": 43,
-    "doc-prose": 2325,
+    "doc-prose": 2324,
     "error-text": 9,
     "essay": 2907,
-    "file-size": 24032,
+    "file-size": 23965,
     "flat-view": 0,
     "frontend-parity": 32,
-    "function-size": 4350,
+    "function-size": 4348,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -480,8 +480,8 @@
     "internal/boot/boot.go": {
       "complexity": 125,
       "essay": 76,
-      "file-size": 939,
-      "function-size": 1015
+      "file-size": 897,
+      "function-size": 1013
     },
     "internal/boot/boot_test.go": {
       "essay": 10
@@ -1654,7 +1654,7 @@
     },
     "sdk/go/README.md": {
       "doc-owner": 1,
-      "doc-prose": 11
+      "doc-prose": 10
     },
     "sdk/go/examples/fullsidecar/main.go": {
       "essay": 25
@@ -1664,7 +1664,7 @@
     },
     "sdk/go/sdk.go": {
       "essay": 27,
-      "file-size": 367
+      "file-size": 342
     },
     "sdk/go/types_ext.go": {
       "essay": 7

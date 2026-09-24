@@ -2,6 +2,7 @@ package boot
 
 import (
 	"context"
+	"reasonix/internal/capability"
 	"runtime"
 	"strings"
 
@@ -110,4 +111,13 @@ func buildPromptAssembly(ctx context.Context, opts Options, cfg *config.Config, 
 		allSkills:      skillSet.allSkills,
 		implicitSkills: implicit,
 	}, nil
+}
+
+// gateSkillsOnCatalog lets a skill be invoked only once what it requires is
+// ready in the capability catalog.
+func gateSkillsOnCatalog(store *skill.Store, catalog func() capability.Catalog) {
+	store.ConfigureInvocationPolicy(func(requires []string) []string {
+		_, missing := catalog().RequiresReady(requires)
+		return missing
+	})
 }

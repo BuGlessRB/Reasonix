@@ -1135,4 +1135,8 @@ export const EN: Record<string, string> = {
     "The model returned nothing; try again",
   "优化请求格式不正确":
     "The refine request was malformed",
+  "新增工具":
+    "New tools",
+  "agent 可以调用，每次调用照常经过权限确认":
+    "The agent can call them; every call still goes through permission checks",
 };

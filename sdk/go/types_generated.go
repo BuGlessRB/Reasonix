@@ -45,6 +45,7 @@ const (
 	MethodExtensionProviderStreamOpen   = "extension/provider/stream/open"
 	MethodExtensionResourcesChanged     = "extension/resources/changed"
 	MethodExtensionShutdown             = "extension/shutdown"
+	MethodExtensionToolCall             = "extension/tool/call"
 	MethodExtensionUIAction             = "extension/ui/action"
 	MethodExtensionUISubmit             = "extension/ui/submit"
 	MethodHostContentRead               = "host/content/read"
@@ -143,6 +144,7 @@ type ManifestExpectation struct {
 	Replaces     []string          `json:"replaces,omitempty"`
 	Providers    []string          `json:"providers,omitempty"`
 	UIActions    []string          `json:"uiActions,omitempty"`
+	Tools        []string          `json:"tools,omitempty"`
 	Capabilities []string          `json:"capabilities,omitempty"`
 	Requires     []RequirementWire `json:"requires,omitempty"`
 	Provides     []CapabilityWire  `json:"provides,omitempty"`
@@ -204,6 +206,7 @@ type InitializeResult struct {
 	Replaces           []string             `json:"replaces,omitempty"`
 	Providers          []ProviderDescriptor `json:"providers,omitempty"`
 	UIActions          []UIActionDecl       `json:"uiActions,omitempty"`
+	Tools              []string             `json:"tools,omitempty"`
 	Requires           []RequirementWire    `json:"requires,omitempty"`
 	Provides           []CapabilityWire     `json:"provides,omitempty"`
 	StateSchemaVersion int                  `json:"stateSchemaVersion" validate:"min=0"`
@@ -434,6 +437,19 @@ type ShutdownParams struct {
 // ShutdownResult is a generated Extension Protocol v2 wire DTO.
 type ShutdownResult struct {
 	Accepted bool `json:"accepted"`
+}
+
+// ToolCallParams is a generated Extension Protocol v2 wire DTO.
+type ToolCallParams struct {
+	Name          string          `json:"name" validate:"nonempty"`
+	Arguments     json.RawMessage `json:"arguments"`
+	TimeoutMillis int             `json:"timeoutMillis" validate:"min=0"`
+}
+
+// ToolCallResult is a generated Extension Protocol v2 wire DTO.
+type ToolCallResult struct {
+	Content string `json:"content"`
+	IsError bool   `json:"isError,omitempty"`
 }
 
 // UIActionParams is a generated Extension Protocol v2 wire DTO.

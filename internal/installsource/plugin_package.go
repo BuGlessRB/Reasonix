@@ -407,6 +407,7 @@ func runtimePlanInfo(rt *pluginpkg.RuntimeSpec) *RuntimePlanInfo {
 		Intercepts:   append([]string(nil), rt.Intercepts...),
 		Replaces:     append([]string(nil), rt.Replaces...),
 		Capabilities: append([]string(nil), rt.Capabilities...),
+		Tools:        rt.ToolNames(),
 		FullTrust:    true,
 	}
 }

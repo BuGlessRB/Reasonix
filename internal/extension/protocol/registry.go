@@ -33,6 +33,9 @@ const (
 	MethodHostUIPublish     Method = "host/ui/publish"
 	MethodHostUIRequest     Method = "host/ui/request"
 
+	// Tools the extension declared, called by the model through the host.
+	MethodExtensionToolCall Method = "extension/tool/call"
+
 	// Externalized content reads (Extension → Host).
 	MethodHostContentRead Method = "host/content/read"
 )
@@ -85,6 +88,7 @@ var frozenRegistry = []MethodSpec{
 	extensionNotification[StreamEndParams](MethodExtensionProviderStreamEnd, ClassProvider),
 	hostRequest[UIActionParams, UIActionResult](MethodExtensionUIAction, ClassUI),
 	hostRequest[UISubmitParams, UISubmitResult](MethodExtensionUISubmit, ClassUI),
+	hostRequest[ToolCallParams, ToolCallResult](MethodExtensionToolCall, ClassTool),
 	extensionRequest[UIPublishParams, UIPublishResult](MethodHostUIPublish, ClassUI),
 	extensionRequest[UIRequestParams, UIRequestResult](MethodHostUIRequest, ClassUI),
 	extensionRequest[ContentReadParams, ContentReadResult](MethodHostContentRead, ClassContent),
@@ -172,12 +176,12 @@ func ValidateRegistry() error {
 			return fmt.Errorf("method %s has invalid direction %q", spec.Name, spec.Direction)
 		}
 	}
-	// Extension Protocol v2: 8 lifecycle/intercept/provider/UI Host →
+	// Extension Protocol v2: 9 lifecycle/intercept/provider/UI/tool Host →
 	// Extension requests, 3 Extension → Host requests (UI publish/request,
 	// content read), 3 Host → Extension notifications, 2 provider stream
 	// notifications.
-	if len(frozenRegistry) != 16 || hostReq != 8 || extReq != 3 || hostNotif != 3 || extNotif != 2 {
-		return fmt.Errorf("registry count = total=%d hostReq=%d extReq=%d hostNotif=%d extNotif=%d, want 16/8/3/3/2",
+	if len(frozenRegistry) != 17 || hostReq != 9 || extReq != 3 || hostNotif != 3 || extNotif != 2 {
+		return fmt.Errorf("registry count = total=%d hostReq=%d extReq=%d hostNotif=%d extNotif=%d, want 17/9/3/3/2",
 			len(frozenRegistry), hostReq, extReq, hostNotif, extNotif)
 	}
 	return nil

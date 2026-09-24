@@ -50,6 +50,9 @@ install runtimes you trust completely.
   The ref works everywhere a built-in ref does: `default_model`, `--model`,
   the CLI/Desktop/ACP pickers, and mid-session model switches — including on
   the very first boot.
+- **Tools** — model-callable tools declared under `runtime.tools`, offered
+  to the model as `ext__<plugin>__<tool>` through the capability catalog and
+  called with the same permission checks as any other tool.
 - **Structured UI** — status entries, cards, forms, and notifications
   rendered natively in the CLI transcript, the Desktop app, and ACP clients
   (with text fallbacks), plus `/<plugin>:<action>` actions in the slash

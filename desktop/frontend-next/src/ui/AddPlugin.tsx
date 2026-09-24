@@ -290,6 +290,9 @@ function executes(a: PluginAction): { label: string; detail: string; why?: strin
       why: "运行于 Reasonix 内部，可读取整个会话、绕过权限并直接操作本机",
     });
   }
+  if (a.runtime?.tools?.length) {
+    out.push({ label: "新增工具", detail: a.runtime.tools.join("、"), why: "agent 可以调用，每次调用照常经过权限确认" });
+  }
   if (a.hookCount) {
     out.push({ label: "自动化钩子", detail: `${a.hookCount} 条`, why: "在会话生命周期内自动执行" });
   }
@@ -316,6 +319,8 @@ function newlyGained(current: PluginPackage, actions: PluginAction[]): string[] 
   const plugin = actions.find((a) => a.kind === "plugin");
   const out: string[] = [];
   if (plugin?.runtime && !current.runtime) out.push("一个常驻进程");
+  const tools = (plugin?.runtime?.tools ?? []).filter((name) => !current.runtime?.tools?.includes(name));
+  if (tools.length > 0) out.push(`工具 ${tools.join("、")}`);
   const hooks = (plugin?.hookCount ?? 0) - (current.hooks?.length ?? 0);
   if (hooks > 0) out.push(`${hooks} 条钩子`);
   const servers = (plugin?.toolCount ?? 0) - (current.mcpServers?.length ?? 0);
