@@ -93,7 +93,7 @@ func (bashOutput) Execute(ctx context.Context, args json.RawMessage) (string, er
 		}
 		text = filtered
 	}
-	header := fmt.Sprintf("[%s] %s", p.JobID, status)
+	header := fmt.Sprintf("[%s] %s%s", p.JobID, status, status.Cause())
 	if strings.TrimSpace(text) == "" {
 		return header + "\n(no new output)", nil
 	}
@@ -223,7 +223,7 @@ func (waitJob) Execute(ctx context.Context, args json.RawMessage) (string, error
 		if r.Label != "" {
 			label = fmt.Sprintf("%s (%s)", r.ID, r.Label)
 		}
-		fmt.Fprintf(&b, "[%s] %s", label, r.Status)
+		fmt.Fprintf(&b, "[%s] %s%s", label, r.Status, r.Status.Cause())
 		b.WriteString(stillRunning(r.Progress))
 		if strings.TrimSpace(r.Output) != "" {
 			b.WriteString("\n" + r.Output)

@@ -43,17 +43,6 @@ var (
 	}{ids: map[string]struct{}{}}
 )
 
-// Status is a job's lifecycle state.
-type Status string
-
-const (
-	Running     Status = "running"
-	Done        Status = "done"
-	Failed      Status = "failed"
-	Killed      Status = "killed"
-	Interrupted Status = "interrupted"
-)
-
 // DefaultTeardownGrace bounds Close and destroy waits for non-cooperative jobs.
 const DefaultTeardownGrace = 15 * time.Second
 
@@ -450,7 +439,7 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		var st Status
 		switch {
 		case ctx.Err() != nil:
-			st = Killed
+			st = m.cancelledStatus()
 		case err != nil:
 			st = Failed
 			if result == "" {
@@ -497,7 +486,7 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		ev := m.recordCompletion(parentSession, id, kind, label, resultRef, st, err)
 
 		j.mu.Lock()
-		if j.status != Killed { // a concurrent Kill already published Killed — keep it
+		if j.status != Killed && j.status != Interrupted { // a status published on cancel stands
 			j.status = st
 		}
 		if j.artifact.path != "" && j.artifact.complete {
@@ -1704,9 +1693,9 @@ func (m *Manager) closeTargets() []teardownTarget {
 		j.mu.Lock()
 		switch j.status {
 		case Running:
-			j.status = Killed
+			j.status = Interrupted
 			targets = append(targets, teardownTarget{info: TeardownJob{ID: j.ID, Kind: j.Kind, Label: j.Label}, done: j.done})
-		case Killed:
+		case Killed, Interrupted:
 			targets = append(targets, teardownTarget{info: TeardownJob{ID: j.ID, Kind: j.Kind, Label: j.Label}, done: j.done})
 		}
 		j.mu.Unlock()

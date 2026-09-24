@@ -483,8 +483,9 @@ func TestCloseCancels(t *testing.T) {
 	m.Close()
 
 	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
-	if len(res) != 1 || res[0].Status != Killed {
-		t.Fatalf("want Killed after Close, got %+v", res)
+	// Close ends the session under the job; nobody killed it.
+	if len(res) != 1 || res[0].Status != Interrupted {
+		t.Fatalf("want Interrupted after Close, got %+v", res)
 	}
 }
 
@@ -774,10 +775,36 @@ func TestCloseWithGraceTimesOutForNonCooperativeJob(t *testing.T) {
 
 	releaseJob()
 	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
-	if len(res) != 1 || res[0].Status != Killed {
-		t.Fatalf("want killed after delayed close cleanup, got %+v", res)
+	if len(res) != 1 || res[0].Status != Interrupted {
+		t.Fatalf("want interrupted after delayed close cleanup, got %+v", res)
 	}
 	if running := m.Running(); len(running) != 0 {
 		t.Fatalf("close job remained running after delayed cleanup, got %+v", running)
+	}
+}
+
+// A job the caller kills is Killed; one the manager's Close ends is
+// Interrupted. The two differ in who acted, which is what the model is told.
+func TestKillAndCloseEndJobsDifferently(t *testing.T) {
+	m := NewManager(event.Discard)
+	started := make(chan struct{}, 2)
+	block := func(ctx context.Context, _ io.Writer) (string, error) {
+		started <- struct{}{}
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	killed := m.Start("task", "", block)
+	closed := m.Start("task", "", block)
+	<-started
+	<-started
+	m.Kill(killed.ID)
+	m.Close()
+	res, _ := m.Wait(context.Background(), []string{killed.ID, closed.ID}, WaitOptions{Timeout: 5 * time.Second})
+	got := map[string]Status{}
+	for _, r := range res {
+		got[r.ID] = r.Status
+	}
+	if got[killed.ID] != Killed || got[closed.ID] != Interrupted {
+		t.Fatalf("statuses = %v, want %s killed and %s interrupted", got, killed.ID, closed.ID)
 	}
 }
