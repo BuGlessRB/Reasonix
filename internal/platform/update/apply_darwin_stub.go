@@ -7,5 +7,6 @@ package update
 // keeping the stub means no host has to know which platform it is compiled for.
 func MaybeRunMacHandoff([]string) (handled bool, exitCode int) { return false, 0 }
 
-// ApplicationAt has nothing to state off macOS for the same reason.
-func ApplicationAt(string, int) (Application, error) { return Application{}, nil }
+// ApplicationAt off macOS has no bundle to name, only the process a staged
+// swap must wait out.
+func ApplicationAt(_ string, pid int) (Application, error) { return Application{PID: pid}, nil }

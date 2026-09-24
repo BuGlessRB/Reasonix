@@ -135,6 +135,9 @@ func (c *capability) apply(ctx context.Context, install update.Install, target s
 	if err := update.Pin(target); err != nil {
 		return err
 	}
+	if c.tryDelta(ctx, install, target, dir, m) {
+		return nil
+	}
 	cached, err := u.DownloadManifest(ctx, m, c.report(target))
 	if err != nil {
 		return err

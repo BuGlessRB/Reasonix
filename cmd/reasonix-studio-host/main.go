@@ -101,6 +101,11 @@ func main() {
 	if handled, code := update.MaybeRunMacHandoff(os.Args[1:]); handled {
 		os.Exit(code)
 	}
+	// Windows swaps a staged tree the same way: a copy of this binary, started
+	// with the plan, waits for the application to exit and moves it in.
+	if handled, code := update.MaybeRunTreeHandoff(os.Args[1:]); handled {
+		os.Exit(code)
+	}
 	page := flag.String("page", "", "directory holding the built Studio page")
 	identity := flag.Bool("instance-id", false, "print the Studio instance this data home belongs to, and exit")
 	// The shell around this process knows which build it is; this process does
