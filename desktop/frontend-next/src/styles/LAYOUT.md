@@ -98,6 +98,12 @@ rules are written in.
   and the strokes spill out of it.
 - Only identity is left on the top bar — which project, which session. The goal
   and the measurements moved to the run header.
+- A card the bar opens is a `[role="dialog"]`, and a dialog opts out whole:
+  the drag rule claims every non-control descendant of the bar, so without the
+  exemption a card's text and its QR code would be title bar, and a press on
+  them would move the window.
+- The phone card's dot is the door being open, not a notification: a live
+  listener is state the person at the window should see without opening it.
 
 ## Pickers and menus
 

@@ -623,6 +623,7 @@ export function App({ hub }: { hub: HubPort }) {
         theme={scheme}
         onRail={() => setRail((v) => !v)}
         onTheme={() => setTheme(scheme === "dark" ? "light" : "dark")}
+        hub={hub} onError={fail}
       />
 
       {pack?.sky && <Sky />}

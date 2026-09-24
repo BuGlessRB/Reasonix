@@ -19,9 +19,12 @@ function clock(iso: string): string {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-/** A phone on the same network drives this window's panes. Nothing here is
- *  kept: the door shuts with the window, and shutting it unpairs every phone. */
-export function PhoneAccess({ hub, onError }: Props) {
+export type Share = ReturnType<typeof useShare>;
+
+/** The window's door for phones, as one state both the settings block and the
+ *  chrome's card draw from. `watch` is whether this surface is on screen: only
+ *  then is the device list worth reading on a timer. */
+export function useShare(hub: HubPort, onError: (e: unknown) => void, watch = true) {
   const [st, setSt] = useState<ShareStatus | null>(null);
   const [ip, setIp] = useState("");
   const [offer, setOffer] = useState<ShareOffer | null>(null);
@@ -35,10 +38,11 @@ export function PhoneAccess({ hub, onError }: Props) {
   }, [read]);
 
   useEffect(() => {
-    if (!st?.open) return;
+    if (!st?.open || !watch) return;
+    void read().catch(() => {});
     const timer = setInterval(() => read().catch(() => {}), POLL_MS);
     return () => clearInterval(timer);
-  }, [st?.open, read]);
+  }, [st?.open, watch, read]);
 
   // The kernel withdraws a code once it pairs or lapses; the picture of it has
   // to go too, or the next phone scans a code that can no longer work.
@@ -60,10 +64,10 @@ export function PhoneAccess({ hub, onError }: Props) {
     [onError],
   );
 
-  const newCode = () => run(async () => {
+  const newCode = useCallback(() => run(async () => {
     setOffer(await hub.offerShare());
     await read();
-  });
+  }), [run, hub, read]);
 
   const toggle = () => run(async () => {
     if (st?.open) {
@@ -77,17 +81,20 @@ export function PhoneAccess({ hub, onError }: Props) {
     await read();
   });
 
-  // A settings page must not grow a heading for a door this kernel cannot open.
+  const revoke = (id: string) => run(async () => setSt(await hub.revokeDevice(id)));
+
+  return { st, ip, setIp, offer, busy, confirm, setConfirm, newCode, toggle, revoke, refresh: read };
+}
+
+/** The switch, the network, the code and the paired phones. */
+export function ShareBody({ share }: { share: Share }) {
+  const { st, ip, setIp, offer, busy, confirm, setConfirm, newCode, toggle, revoke } = share;
   if (!st) return null;
   const chosen = ip || (st.open ? st.origin?.replace(/^https?:\/\//, "").replace(/:\d+$/, "") : "") || st.addresses[0]?.ip || "";
   const noNetwork = st.addresses.length === 0;
 
   return (
-    <section className="grp" id="set-phone" data-setting="phone">
-      <div className="grp-hd">
-        <h3>{t("手机访问")}</h3>
-      </div>
-      <div className="grp-items share">
+    <>
       <div className="lrow">
         <span className="tx">
           <span className="lb">{t("允许手机访问")}</span>
@@ -151,7 +158,7 @@ export function PhoneAccess({ hub, onError }: Props) {
                       autoFocus
                       onClick={() => {
                         setConfirm("");
-                        void run(async () => setSt(await hub.revokeDevice(d.id)));
+                        void revoke(d.id);
                       }}
                     >
                       {t("断开")}
@@ -172,6 +179,23 @@ export function PhoneAccess({ hub, onError }: Props) {
           </p>
         </div>
       )}
+    </>
+  );
+}
+
+/** A phone on the same network drives this window's panes. Nothing here is
+ *  kept: the door shuts with the window, and shutting it unpairs every phone. */
+export function PhoneAccess({ hub, onError }: Props) {
+  const share = useShare(hub, onError);
+  // A settings page must not grow a heading for a door this kernel cannot open.
+  if (!share.st) return null;
+  return (
+    <section className="grp" id="set-phone" data-setting="phone">
+      <div className="grp-hd">
+        <h3>{t("手机访问")}</h3>
+      </div>
+      <div className="grp-items share">
+        <ShareBody share={share} />
       </div>
       <ApplyNote id="phone" />
     </section>

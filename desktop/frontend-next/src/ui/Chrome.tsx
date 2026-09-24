@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
+import type { HubPort } from "../port/hub";
 import type { AccountState, AgentPort, SessionStatus, WorkspaceInfo } from "../port/port";
+import { PhonePop } from "./PhonePop";
 import { WindowControls, zoomOnTitleBar } from "./WindowControls";
 
 const base = (p: string) => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || p;
@@ -30,9 +32,12 @@ interface Props {
   theme: string;
   onRail: () => void;
   onTheme: () => void;
+  // The window's port, for what belongs to the window rather than a pane.
+  hub?: HubPort;
+  onError?: (e: unknown) => void;
 }
 
-export function Chrome({ port, status, title, steer, onSettings, onBrowser, browser, account, host, rail, theme, onRail, onTheme }: Props) {
+export function Chrome({ port, status, title, steer, onSettings, onBrowser, browser, account, host, rail, theme, onRail, onTheme, hub, onError }: Props) {
   const root = status?.workspaceRoot || status?.cwd || "";
   const project = root ? base(root) : "—";
   // Only for the "隔离" tag: the folder list and the switch itself moved to the
@@ -74,6 +79,7 @@ export function Chrome({ port, status, title, steer, onSettings, onBrowser, brow
       </span>
 
       <div className="r">
+        {hub && onError && <PhonePop hub={hub} onError={onError} />}
         <button
           className="thbtn theme-toggle"
           data-action="appearance.theme"

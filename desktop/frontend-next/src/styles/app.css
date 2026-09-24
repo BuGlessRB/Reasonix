@@ -146,13 +146,13 @@
   [data-titlebar="app"] .chrome { -webkit-app-region: drag }
   [data-titlebar="app"] .chrome
     *:not(:is(button, a[href], input, select, textarea, summary, .picker,
-              [role="button"], [role="tab"], [role="menuitem"], [role="switch"]) *) {
+              [role="button"], [role="tab"], [role="menuitem"], [role="switch"], [role="dialog"]) *) {
     -webkit-app-region: drag;
   }
 
   [data-titlebar="app"] .chrome
     :is(button, a[href], input, select, textarea, summary, .picker,
-        [role="button"], [role="tab"], [role="menuitem"], [role="switch"]) {
+        [role="button"], [role="tab"], [role="menuitem"], [role="switch"], [role="dialog"]) {
     -webkit-app-region: no-drag;
   }
 
@@ -4696,6 +4696,27 @@
   }
   .rmtadd:hover { border-color: var(--accent); color: var(--text) }
 
+  .phonepop { position: relative; display: flex }
+  .phone-action[data-live] { color: var(--accent-ink) }
+  .phone-action[data-live]::after {
+    content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--net);
+  }
+  .phone-action { position: relative }
+  .phone-action[aria-expanded="true"] { background: var(--overlay); color: var(--text) }
+  .phonecard {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+    width: min(380px, calc(100vw - 24px)); max-height: min(640px, calc(100dvh - var(--chrome-h, 45px) - 24px));
+    overflow: auto; padding: 14px 16px 16px;
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    background: var(--float); box-shadow: var(--shadow-float); color: var(--text);
+    cursor: default; text-align: left;
+  }
+  .phonecard-hd { margin-bottom: 6px; font: var(--w-med) var(--fs-ui) var(--ui) }
+  .phonecard .lrow { padding-inline: 0 }
+  .phonecard .shareqr { flex-direction: column; align-items: center; text-align: center }
+  .phonecard .sharehow { justify-items: center; min-width: 0 }
+  [data-fold~="scene"] .phonecard { position: fixed; top: calc(var(--chrome-h, 45px) + 6px); right: 12px; left: 12px; width: auto }
   .share .rmtf { margin-top: 10px }
   .shareopen { display: grid; gap: 12px; margin-top: 12px }
   .shareopen .rmtadd { margin-top: 0; justify-self: start }
