@@ -1,6 +1,7 @@
-package config
+package catalog
 
 import (
+	"reasonix/internal/contract/config"
 	"slices"
 	"testing"
 
@@ -33,7 +34,7 @@ func TestProtocolsDeclaredByIsEmptyWhenNothingSaysAnything(t *testing.T) {
 	if got := ProtocolsDeclaredBy(listed); len(got) != 0 {
 		t.Fatalf("declared wires = %v, want none", got)
 	}
-	discovered := ProtocolsDiscoveredAs("openai")
+	discovered := config.ProtocolsDiscoveredAs("openai")
 	if got := mergeProtocolChoices(discovered, nil); !slices.Equal(got, discovered) {
 		t.Fatalf("merge with nothing declared = %v, want discovery untouched %v", got, discovered)
 	}
@@ -48,7 +49,7 @@ func TestMergeProtocolChoicesAddsWithoutNarrowing(t *testing.T) {
 	if !slices.Equal(declared, []string{"anthropic"}) {
 		t.Fatalf("declared = %v, want the unknown name ignored", declared)
 	}
-	got := mergeProtocolChoices(ProtocolsDiscoveredAs("openai"), declared)
+	got := mergeProtocolChoices(config.ProtocolsDiscoveredAs("openai"), declared)
 	for _, want := range []string{"openai", "responses", "anthropic"} {
 		if !slices.Contains(got, want) {
 			t.Fatalf("merged = %v, want it to still offer %q", got, want)

@@ -1,10 +1,11 @@
 // probe.go — identify an unknown endpoint from a base URL and a key.
-package config
+package catalog
 
 import (
 	"context"
 	"fmt"
 	"net/http"
+	"reasonix/internal/contract/config"
 	"strings"
 )
 
@@ -145,16 +146,15 @@ func allClaude(models []string) bool {
 }
 
 func listChatModels(ctx context.Context, s shape, baseURL, apiKey string, client *http.Client) ([]string, []string, error) {
-	entry := &ProviderEntry{
+	// The key is held for this call only — a probe runs before there is a
+	// provider to store it against, and nothing here writes to disk.
+	entry := (&config.ProviderEntry{
 		Name:       "probe",
 		Kind:       s.kind,
 		BaseURL:    baseURL,
 		AuthHeader: s.authHeader,
-	}
-	// The key is held for this call only — a probe runs before there is a
-	// provider to store it against, and nothing here writes to disk.
-	entry.resolvedAPIKey = strings.TrimSpace(apiKey)
-	listed, err := entry.FetchModelListingVia(ctx, client)
+	}).WithAPIKeyForProbe(apiKey)
+	listed, err := FetchModelListingVia(ctx, &entry, client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -183,14 +183,14 @@ func listChatModels(ctx context.Context, s shape, baseURL, apiKey string, client
 func describe(baseURL string, s shape, chat []string) Probe {
 	p := Probe{
 		Kind:       s.kind,
-		Kinds:      ProtocolsDiscoveredAs(s.kind),
+		Kinds:      config.ProtocolsDiscoveredAs(s.kind),
 		AuthHeader: s.authHeader,
 		Models:     chat,
 		Default:    chat[0],
 		Vision:     inferVisionModelsForEndpoint(baseURL, s.kind, chat),
 	}
-	entry := &ProviderEntry{Kind: s.kind, BaseURL: baseURL, AuthHeader: s.authHeader, Model: p.Default}
-	if capability := EffortCapabilityForEntry(entry); capability.Supported {
+	entry := &config.ProviderEntry{Kind: s.kind, BaseURL: baseURL, AuthHeader: s.authHeader, Model: p.Default}
+	if capability := config.EffortCapabilityForEntry(entry); capability.Supported {
 		p.Efforts, p.Effort = capability.Levels, capability.Default
 	}
 	return p
@@ -204,12 +204,12 @@ func describe(baseURL string, s shape, chat []string) Probe {
 func inferVisionModelsForEndpoint(baseURL, kind string, models []string) []string {
 	candidates, declared := declaredVisionModels(baseURL, models)
 	if !declared {
-		candidates = InferVisionModels(models)
+		candidates = config.InferVisionModels(models)
 	}
 	out := make([]string, 0, len(candidates))
 	for _, model := range candidates {
-		entry := &ProviderEntry{Kind: kind, BaseURL: baseURL, Model: model}
-		if CanConfigureVision(entry) {
+		entry := &config.ProviderEntry{Kind: kind, BaseURL: baseURL, Model: model}
+		if config.CanConfigureVision(entry) {
 			out = append(out, model)
 		}
 	}
@@ -219,7 +219,7 @@ func inferVisionModelsForEndpoint(baseURL, kind string, models []string) []strin
 func chatModelsOf(models []string) []string {
 	out := make([]string, 0, len(models))
 	for _, m := range models {
-		if m = strings.TrimSpace(m); m != "" && IsLikelyChatModel(m) {
+		if m = strings.TrimSpace(m); m != "" && config.IsLikelyChatModel(m) {
 			out = append(out, m)
 		}
 	}
@@ -233,9 +233,9 @@ func chatModelsOf(models []string) []string {
 // "no preset covers this address".
 func declaredVisionModels(baseURL string, models []string) ([]string, bool) {
 	declared, found := map[string]bool{}, false
-	for _, preset := range CuratedProviderPresets() {
+	for _, preset := range config.CuratedProviderPresets() {
 		for _, entry := range preset.Entries {
-			if normalizedBaseURLForMigration(entry.BaseURL) != normalizedBaseURLForMigration(baseURL) {
+			if trimBaseURL(entry.BaseURL) != trimBaseURL(baseURL) {
 				continue
 			}
 			found = true
@@ -255,3 +255,5 @@ func declaredVisionModels(baseURL string, models []string) ([]string, bool) {
 	}
 	return out, true
 }
+
+func trimBaseURL(raw string) string { return strings.TrimRight(strings.TrimSpace(raw), "/") }

@@ -1,10 +1,11 @@
 // fetch.go — model auto-discovery via the OpenAI-compatible GET /models API.
-package config
+package catalog
 
 import (
 	"context"
 	"fmt"
 	"net/http"
+	"reasonix/internal/contract/config"
 	"slices"
 	"strings"
 
@@ -25,16 +26,16 @@ var knownModelFetchCompatSuffixes = []string{
 
 // FetchModels queries the provider's OpenAI-compatible GET /models endpoint and
 // returns the available model IDs, sorted alphabetically.
-func (e *ProviderEntry) FetchModels(ctx context.Context) ([]string, error) {
-	return e.FetchModelsVia(ctx, nil)
+func FetchModels(ctx context.Context, e *config.ProviderEntry) ([]string, error) {
+	return FetchModelsVia(ctx, e, nil)
 }
 
 // FetchModelsVia is FetchModels over a caller-supplied client. A caller that
 // holds the user's proxy settings must use it: listing models over a plain
 // client while chatting over a proxied one reports an empty catalog for an
 // endpoint that works.
-func (e *ProviderEntry) FetchModelsVia(ctx context.Context, client *http.Client) ([]string, error) {
-	listed, err := e.FetchModelListingVia(ctx, client)
+func FetchModelsVia(ctx context.Context, e *config.ProviderEntry, client *http.Client) ([]string, error) {
+	listed, err := FetchModelListingVia(ctx, e, client)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +49,7 @@ func (e *ProviderEntry) FetchModelsVia(ctx context.Context, client *http.Client)
 // FetchModelListingVia is FetchModelsVia without discarding what each row
 // declares about itself — the probe reads the wires a relay names there rather
 // than inferring them from the shape of the listing.
-func (e *ProviderEntry) FetchModelListingVia(ctx context.Context, client *http.Client) ([]openai.ListedModel, error) {
+func FetchModelListingVia(ctx context.Context, e *config.ProviderEntry, client *http.Client) ([]openai.ListedModel, error) {
 	if e.BaseURL == "" {
 		return nil, fmt.Errorf("fetch models: provider %q has no base_url", e.Name)
 	}
@@ -83,7 +84,7 @@ func (e *ProviderEntry) FetchModelListingVia(ctx context.Context, client *http.C
 	return nil, lastErr
 }
 
-func modelFetchAuthMode(e *ProviderEntry) openai.ModelFetchAuthMode {
+func modelFetchAuthMode(e *config.ProviderEntry) openai.ModelFetchAuthMode {
 	if e == nil || !strings.EqualFold(strings.TrimSpace(e.Kind), "anthropic") {
 		return openai.ModelFetchAuthAuto
 	}

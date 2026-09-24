@@ -10,12 +10,12 @@
     "doc-owner": 43,
     "doc-prose": 2324,
     "error-text": 9,
-    "essay": 2898,
-    "file-size": 23928,
+    "essay": 2891,
+    "file-size": 23824,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4348,
-    "layer-order": 29,
+    "layer-order": 26,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -331,9 +331,6 @@
     "internal/contract/config/effort_test.go": {
       "essay": 2
     },
-    "internal/contract/config/fetch.go": {
-      "layer-order": 1
-    },
     "internal/contract/config/load.go": {
       "essay": 24,
       "file-size": 1194,
@@ -363,12 +360,6 @@
     },
     "internal/contract/config/plugin_packages.go": {
       "essay": 2
-    },
-    "internal/contract/config/probe_failure.go": {
-      "layer-order": 1
-    },
-    "internal/contract/config/protocol_declared.go": {
-      "layer-order": 1
     },
     "internal/contract/config/provider_isolation_test.go": {
       "essay": 3
@@ -756,8 +747,8 @@
     },
     "internal/frontend/cli/cli.go": {
       "complexity": 32,
-      "essay": 41,
-      "file-size": 1079,
+      "essay": 34,
+      "file-size": 1016,
       "function-size": 167
     },
     "internal/frontend/cli/cli_test.go": {
@@ -807,7 +798,7 @@
     },
     "internal/frontend/cli/setup_manager.go": {
       "essay": 2,
-      "file-size": 93
+      "file-size": 52
     },
     "internal/frontend/cli/shell_completion.go": {
       "function-size": 76

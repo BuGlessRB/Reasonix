@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reasonix/internal/model/catalog"
 	"runtime"
 	"slices"
 	"strings"
@@ -305,7 +306,7 @@ func probeProviderNetwork(ctx context.Context, report *DiagnosticReport, cfg *co
 		if validateHTTPURL(entry.BaseURL) != nil {
 			continue
 		}
-		urls, err := config.BuildModelFetchURLs(entry.BaseURL, entry.ModelsURL)
+		urls, err := catalog.BuildModelFetchURLs(entry.BaseURL, entry.ModelsURL)
 		if err != nil || len(urls) == 0 {
 			continue
 		}

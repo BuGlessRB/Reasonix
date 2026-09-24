@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"reasonix/internal/model/catalog"
 	"strings"
 
 	"reasonix/internal/assembly/boot"
@@ -71,7 +72,7 @@ func (s *Server) checkProvider(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), providerProbeTimeout)
 	defer cancel()
 	proxied, direct := probeClients()
-	got, probeErr := config.ProbeEndpoint(ctx, config.ProbeOptions{
+	got, probeErr := catalog.ProbeEndpoint(ctx, catalog.ProbeOptions{
 		BaseURL: entry.BaseURL,
 		APIKey:  entry.APIKey(),
 		Client:  proxied,

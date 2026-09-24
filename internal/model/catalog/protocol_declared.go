@@ -1,8 +1,9 @@
 // Which wires an endpoint says it serves, as opposed to which one its model
 // listing looks like.
-package config
+package catalog
 
 import (
+	"reasonix/internal/contract/config"
 	"slices"
 	"strings"
 
@@ -24,7 +25,7 @@ func ProtocolsDeclaredBy(listed []openai.ListedModel) []string {
 			if slices.Contains(out, kind) {
 				continue
 			}
-			if p, known := ProtocolFor(kind); known {
+			if p, known := config.ProtocolFor(kind); known {
 				out = append(out, p.Kind)
 			}
 		}
@@ -36,7 +37,7 @@ func ProtocolsDeclaredBy(listed []openai.ListedModel) []string {
 // so a declared list and a discovered one read the same on screen.
 func protocolsInDisplayOrder(kinds []string) []string {
 	out := make([]string, 0, len(kinds))
-	for _, p := range protocols {
+	for _, p := range config.Protocols() {
 		if slices.Contains(kinds, p.Kind) {
 			out = append(out, p.Kind)
 		}

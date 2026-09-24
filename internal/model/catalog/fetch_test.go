@@ -1,10 +1,11 @@
-package config
+package catalog
 
 import (
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reasonix/internal/contract/config"
 	"testing"
 )
 
@@ -87,8 +88,8 @@ func TestProviderFetchModelsFallsBackToV1Models(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ProviderEntry{Name: "test", BaseURL: srv.URL, APIKeyEnv: "FETCH_MODELS_TEST_KEY", resolvedAPIKey: "test-key"}
-	got, err := p.FetchModels(context.Background())
+	p := (&config.ProviderEntry{Name: "test", BaseURL: srv.URL, APIKeyEnv: "FETCH_MODELS_TEST_KEY"}).WithAPIKeyForProbe("test-key")
+	got, err := FetchModels(context.Background(), &p)
 	if err != nil {
 		t.Fatalf("FetchModels: %v", err)
 	}
@@ -118,8 +119,8 @@ func TestProviderFetchModelsContinuesAfterRootAuthFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ProviderEntry{Name: "test", BaseURL: srv.URL, APIKeyEnv: "FETCH_MODELS_TEST_KEY", resolvedAPIKey: "test-key"}
-	got, err := p.FetchModels(context.Background())
+	p := (&config.ProviderEntry{Name: "test", BaseURL: srv.URL, APIKeyEnv: "FETCH_MODELS_TEST_KEY"}).WithAPIKeyForProbe("test-key")
+	got, err := FetchModels(context.Background(), &p)
 	if err != nil {
 		t.Fatalf("FetchModels: %v", err)
 	}
@@ -145,9 +146,9 @@ func TestProviderFetchModelsUsesSetupProbeEnv(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ProviderEntry{Name: "probe", BaseURL: srv.URL, APIKeyEnv: key}
+	p := config.ProviderEntry{Name: "probe", BaseURL: srv.URL, APIKeyEnv: key}
 	p.ResolveAPIKeyFromProcessEnvForProbe()
-	got, err := p.FetchModels(context.Background())
+	got, err := FetchModels(context.Background(), &p)
 	if err != nil {
 		t.Fatalf("FetchModels: %v", err)
 	}
@@ -168,8 +169,8 @@ func TestProviderFetchModelsAllowsNoAuthEndpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := ProviderEntry{Name: "local", BaseURL: srv.URL}
-	got, err := p.FetchModels(context.Background())
+	p := config.ProviderEntry{Name: "local", BaseURL: srv.URL}
+	got, err := FetchModels(context.Background(), &p)
 	if err != nil {
 		t.Fatalf("FetchModels no-auth: %v", err)
 	}
@@ -225,15 +226,14 @@ func TestProviderFetchModelsUsesAnthropicAuthMode(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			p := ProviderEntry{
-				Name:           "anthropic-compatible",
-				Kind:           "anthropic",
-				BaseURL:        srv.URL + "/anthropic",
-				APIKeyEnv:      "ANTHROPIC_COMPATIBLE_KEY",
-				AuthHeader:     tt.authHeader,
-				resolvedAPIKey: "anthropic-key",
-			}
-			got, err := p.FetchModels(context.Background())
+			p := (&config.ProviderEntry{
+				Name:       "anthropic-compatible",
+				Kind:       "anthropic",
+				BaseURL:    srv.URL + "/anthropic",
+				APIKeyEnv:  "ANTHROPIC_COMPATIBLE_KEY",
+				AuthHeader: tt.authHeader,
+			}).WithAPIKeyForProbe("anthropic-key")
+			got, err := FetchModels(context.Background(), &p)
 			if err != nil {
 				t.Fatalf("FetchModels: %v", err)
 			}

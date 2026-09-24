@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reasonix/internal/model/catalog"
 	"regexp"
 	"slices"
 	"strings"
@@ -195,7 +196,7 @@ func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), providerProbeTimeout)
 	defer cancel()
 	proxied, direct := probeClients()
-	got, err := config.ProbeEndpoint(ctx, config.ProbeOptions{
+	got, err := catalog.ProbeEndpoint(ctx, catalog.ProbeOptions{
 		BaseURL: body.BaseURL,
 		APIKey:  body.APIKey,
 		Client:  proxied,
@@ -456,28 +457,28 @@ const (
 // switch rather than by building the code from the reason: the parity guard
 // reads these call sites, and a concatenated code is one it cannot check.
 func writeProbeFailure(w http.ResponseWriter, err error) {
-	var probe *config.ProbeError
+	var probe *catalog.ProbeError
 	if !errors.As(err, &probe) {
 		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
 	msg, params := probe.Error(), probe.Params
 	switch probe.Reason {
-	case config.ProbeAddressMissing:
+	case catalog.ProbeAddressMissing:
 		refuse(w, http.StatusBadRequest, codeProbeAddressMissing, msg, params)
-	case config.ProbeUnauthorized:
+	case catalog.ProbeUnauthorized:
 		refuse(w, http.StatusUnauthorized, codeProbeUnauthorized, msg, params)
-	case config.ProbePaymentRequired:
+	case catalog.ProbePaymentRequired:
 		refuse(w, http.StatusPaymentRequired, codeProbePaymentRequired, msg, params)
-	case config.ProbeRateLimited:
+	case catalog.ProbeRateLimited:
 		refuse(w, http.StatusTooManyRequests, codeProbeRateLimited, msg, params)
-	case config.ProbePathNotFound:
+	case catalog.ProbePathNotFound:
 		refuse(w, http.StatusNotFound, codeProbePathNotFound, msg, params)
-	case config.ProbeNoChatModels:
+	case catalog.ProbeNoChatModels:
 		refuse(w, http.StatusUnprocessableEntity, codeProbeNoChatModels, msg, params)
-	case config.ProbeUpstreamError:
+	case catalog.ProbeUpstreamError:
 		refuse(w, http.StatusBadGateway, codeProbeUpstreamError, msg, params)
-	case config.ProbeUnreachable:
+	case catalog.ProbeUnreachable:
 		refuse(w, http.StatusBadGateway, codeProbeUnreachable, msg, params)
 	default:
 		refuse(w, http.StatusBadGateway, codeProbeNotCompatible, msg, params)

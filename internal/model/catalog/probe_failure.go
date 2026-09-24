@@ -1,5 +1,5 @@
 // probe_failure.go — why a probe failed, as an identity rather than a sentence.
-package config
+package catalog
 
 import (
 	"errors"

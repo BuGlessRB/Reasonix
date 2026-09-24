@@ -12,7 +12,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 	"math"
 	"net/url"
 	"os"
@@ -31,7 +30,6 @@ import (
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/model/openai"
 	"reasonix/internal/platform/notify"
 	"reasonix/internal/platform/telemetry"
 	"reasonix/internal/runtime/agent"
@@ -852,67 +850,6 @@ func familyStaticModels(providers []config.ProviderEntry, idxs []int) []string {
 		}
 	}
 	return out
-}
-
-// fetchOrFallback tries the OpenAI-compatible GET /models endpoint
-// (honoring the entry's ModelsURL when set) and returns the live model IDs.
-// On any failure — no base URL, no key set yet (the key is collected in a
-// later wizard step), network/auth error, or a vendor without /models — it
-// silently returns the preset's static model list so the wizard can always
-// present something. The fetch has a 10s timeout and is best-effort.
-func fetchOrFallback(probe *config.ProviderEntry, famName string) []string {
-	static := probe.ModelList()
-	if probe.BaseURL == "" {
-		return static
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	models, err := probe.FetchModels(ctx)
-	if err != nil || len(models) == 0 {
-		if len(static) > 0 {
-			fmt.Fprintf(os.Stderr, "  %s\n", dim(fmt.Sprintf(i18n.M.FetchModelsUsingPresetsFmt, famName)))
-		}
-		return static
-	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.FetchModelsSuccessFmt, len(models), famName)))
-	return models
-}
-
-// fetchModelListCompat walks the full set of model-list URL candidates a given
-// base URL can resolve to (root, /v1, known OpenAI/Anthropic compat suffixes)
-// and returns the first successful fetch. This is the wizard-time probe for a
-// *user-supplied* custom provider — its baseURL is whatever the user pasted,
-// and "whatever they pasted" might be https://x.com (root, probe /v1/models)
-// or https://x.com/v1 (versioned, probe /v1/models directly). Previously the
-// wizard hardcoded `baseURL + "/models"`, which works for OpenAI-shape URLs
-// but silently fails for Anthropic-shape roots and the reverse — so the
-// wizard's idea of "what models exist" diverged from the chat client's actual
-// endpoint. Returning the empty slice (not an error) on full miss lets the
-// wizard fall through to a manual text input without an error message.
-func fetchModelListCompat(ctx context.Context, baseURL, apiKey string) ([]string, error) {
-	candidates, err := config.BuildModelFetchURLs(baseURL, "")
-	if err != nil {
-		return nil, err
-	}
-	var lastErr error
-	var firstHardErr error
-	for _, u := range candidates {
-		models, err := openai.FetchModels(ctx, u, apiKey, nil)
-		if err == nil {
-			return models, nil
-		}
-		lastErr = err
-		if !openai.IsModelFetchEndpointMiss(err) && firstHardErr == nil {
-			firstHardErr = err
-		}
-	}
-	if firstHardErr != nil {
-		return nil, firstHardErr
-	}
-	if lastErr != nil {
-		slog.Debug("model-list probe: all candidates missed", "base_url", baseURL, "err", lastErr)
-	}
-	return nil, nil
 }
 
 // buildFamilyEntry returns a single ProviderEntry exposing the user's

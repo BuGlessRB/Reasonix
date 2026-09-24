@@ -1,4 +1,4 @@
-package config
+package catalog
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reasonix/internal/contract/config"
 	"slices"
 	"strings"
 	"testing"
@@ -158,21 +159,21 @@ func TestProbeReadsCapabilitiesFromTheSameRegistries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProbeEndpoint: %v", err)
 	}
-	want := EffortCapabilityForEntry(&ProviderEntry{Kind: "openai", Model: "deepseek-v4-flash"})
+	want := config.EffortCapabilityForEntry(&config.ProviderEntry{Kind: "openai", Model: "deepseek-v4-flash"})
 	if !slices.Equal(got.Efforts, want.Levels) || got.Effort != want.Default {
 		t.Fatalf("efforts = %v/%q, want %v/%q from the registry", got.Efforts, got.Effort, want.Levels, want.Default)
 	}
-	if !slices.Equal(got.Vision, InferVisionModels(got.Models)) {
+	if !slices.Equal(got.Vision, config.InferVisionModels(got.Models)) {
 		t.Fatalf("vision = %v, want the inferred set", got.Vision)
 	}
 }
 
 func TestProbeUsesDeepSeekOfficialVisionCatalog(t *testing.T) {
-	models := []string{DeepSeekFlashModel, deepSeekProModel, "deepseek-v5-vision"}
+	models := []string{config.DeepSeekFlashModel, "deepseek-v4-pro", "deepseek-v5-vision"}
 	got := describe("https://api.deepseek.com", shape{kind: "openai"}, models)
 	// Flash spells nothing about vision and pro does not refuse an image, so a
 	// name reading would take the wrong two of these three.
-	if !slices.Equal(got.Vision, []string{DeepSeekFlashModel}) {
+	if !slices.Equal(got.Vision, []string{config.DeepSeekFlashModel}) {
 		t.Fatalf("vision = %v, want only the model the catalog declares", got.Vision)
 	}
 }
@@ -219,38 +220,6 @@ func (rtErr) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, errors.New("proxy: connection reset")
 }
 
-// responses_stateful was replaced by responses_mode, and the provider resolved
-// both on every request. Folding at load means one field reaches the wire — but
-// a nil has to stay nil, or every endpoint without either would be called
-// stateful instead of vendor-detected.
-func TestLegacyResponsesStatefulFoldsIntoMode(t *testing.T) {
-	yes, no := true, false
-	cases := []struct {
-		name     string
-		entry    ProviderEntry
-		wantMode string
-	}{
-		{"legacy true becomes stateful", ProviderEntry{ResponsesStateful: &yes}, "stateful"},
-		{"legacy false becomes stateless", ProviderEntry{ResponsesStateful: &no}, "stateless"},
-		{"the newer field still wins", ProviderEntry{ResponsesMode: "stateless", ResponsesStateful: &yes}, "stateless"},
-		{"an unusable mode falls back to the legacy field", ProviderEntry{ResponsesMode: " ", ResponsesStateful: &yes}, "stateful"},
-		{"neither set stays undetected", ProviderEntry{}, ""},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			cfg := &Config{Providers: []ProviderEntry{c.entry}}
-			normalizeLegacyResponsesMode(cfg)
-			got := cfg.Providers[0]
-			if got.ResponsesMode != c.wantMode {
-				t.Fatalf("mode = %q, want %q", got.ResponsesMode, c.wantMode)
-			}
-			if got.ResponsesStateful != nil {
-				t.Fatal("the legacy field survived the fold, so downstream still has two forms to resolve")
-			}
-		})
-	}
-}
-
 // A curated preset states which of its models read images. Probing that same
 // address has to answer with what the preset says rather than with what the
 // names look like: the spelling misses every Kimi, Qwen, MiniMax and Claude
@@ -258,17 +227,17 @@ func TestLegacyResponsesStatefulFoldsIntoMode(t *testing.T) {
 // picking the preset from the list would be told none of them can see.
 func TestProbeAnswersFromThePresetCoveringTheAddress(t *testing.T) {
 	checked := 0
-	for _, preset := range CuratedProviderPresets() {
+	for _, preset := range config.CuratedProviderPresets() {
 		for _, entry := range preset.Entries {
 			if len(entry.Models) == 0 || len(entry.VisionModels) == 0 {
 				continue
 			}
 			got := describe(entry.BaseURL, shape{kind: entry.Kind}, entry.Models)
 			for _, model := range entry.VisionModels {
-				if !containsString(entry.Models, model) {
+				if !slices.Contains(entry.Models, model) {
 					continue
 				}
-				if !containsString(got.Vision, model) {
+				if !slices.Contains(got.Vision, model) {
 					t.Errorf("%s: probing %s offered %v, and the preset declares %s reads images",
 						preset.ID, entry.BaseURL, got.Vision, model)
 				}
@@ -287,7 +256,7 @@ func TestProbeAnswersFromThePresetCoveringTheAddress(t *testing.T) {
 func TestProbeFallsBackToTheSpellingForUndeclaredAddresses(t *testing.T) {
 	models := []string{"some-vl-model", "plain-text-model"}
 	got := describe("https://relay.example.com/v1", shape{kind: "openai"}, models)
-	if !containsString(got.Vision, "some-vl-model") || containsString(got.Vision, "plain-text-model") {
+	if !slices.Contains(got.Vision, "some-vl-model") || slices.Contains(got.Vision, "plain-text-model") {
 		t.Fatalf("vision = %v, want the spelling's suggestion for an undeclared address", got.Vision)
 	}
 	if _, declared := declaredVisionModels("https://relay.example.com/v1", models); declared {
