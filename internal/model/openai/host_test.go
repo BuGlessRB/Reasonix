@@ -1,6 +1,10 @@
 package openai
 
-import "testing"
+import (
+	"testing"
+
+	"reasonix/internal/contract/provider"
+)
 
 // TestIsDeepSeek pins the host-matching rule for DeepSeek: the canonical
 // api.deepseek.com, any *.deepseek.com subdomain, but NOT the apex
@@ -211,8 +215,8 @@ func TestIsTokenRhythm(t *testing.T) {
 		{"https://opencode.ai/zen/go/v1", false},
 		{"", false},
 	} {
-		if got := IsTokenRhythm(tc.baseURL); got != tc.want {
-			t.Errorf("IsTokenRhythm(%q) = %v, want %v", tc.baseURL, got, tc.want)
+		if got := provider.IsTokenRhythmEndpoint(tc.baseURL); got != tc.want {
+			t.Errorf("IsTokenRhythmEndpoint(%q) = %v, want %v", tc.baseURL, got, tc.want)
 		}
 	}
 }

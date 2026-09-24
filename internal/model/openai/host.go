@@ -2,58 +2,10 @@ package openai
 
 import (
 	"net/url"
-	"slices"
 	"strings"
 
 	"reasonix/internal/contract/provider"
 )
-
-// matchesVendorHost reports whether baseURL points at one of the canonical
-// hostnames (exact match, case-insensitive) or at any subdomain of apex.
-// Returns false on any parse error or empty host.
-//
-// We take the apex separately from the canonical because they differ: the
-// canonical (e.g. api.minimaxi.com) is the specific endpoint, but regional
-// subdomains like eu.minimaxi.com or us.minimaxi.com should also match —
-// the wire shape is the same, just hosted in a different region. The bare
-// apex (e.g. minimaxi.com) is intentionally rejected: it would only happen
-// if the user pointed their base_url at the apex domain, which is a
-// misconfiguration — not a path we want to silently accept.
-func matchesVendorHost(baseURL, apex string, canonical ...string) bool {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return false
-	}
-	host := strings.ToLower(u.Hostname())
-	if slices.Contains(canonical, host) {
-		return true
-	}
-	return strings.HasSuffix(host, "."+apex)
-}
-
-// IsDeepSeek reports whether baseURL points at DeepSeek's API
-// (api.deepseek.com or any *.deepseek.com subdomain).
-func IsDeepSeek(baseURL string) bool {
-	return matchesVendorHost(baseURL, "deepseek.com", "api.deepseek.com")
-}
-
-// deepSeekImageModels are the official DeepSeek models that accept image input.
-// Declared, not inferred: measured 2026-09-13 on both the OpenAI- and the
-// Anthropic-shaped endpoint, the flash names answer from the pixels while pro
-// takes the same image, returns 200 and answers as if it saw nothing. A refusal
-// would have been evidence; a name is not, and nothing here spells vision.
-var deepSeekImageModels = map[string]bool{
-	"deepseek-flash":               true,
-	"deepseek-v4-flash":            true,
-	"deepseek-v4-flash-vision-exp": true,
-}
-
-// DeepSeekTakesImages reports whether this official DeepSeek model accepts
-// image content. Callers pair it with IsDeepSeek: the host alone stopped being
-// the answer when one endpoint began serving both kinds.
-func DeepSeekTakesImages(model string) bool {
-	return deepSeekImageModels[strings.ToLower(strings.TrimSpace(model))]
-}
 
 // visionReachesModel folds the host question into the model one, so a caller
 // carries a single boolean instead of the pair.
@@ -75,17 +27,6 @@ func detailAccepted(detail string, officialDeepSeek bool) bool {
 	return false
 }
 
-// IsOpenAI reports whether baseURL points at OpenAI's official API host. Keep
-// this exact-host so a compatible gateway under another openai.com subdomain
-// cannot accidentally receive the official max_completion_tokens wire shape.
-func IsOpenAI(baseURL string) bool {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return false
-	}
-	return strings.EqualFold(u.Hostname(), "api.openai.com")
-}
-
 // deepSeekPrefixChatURL returns the official Beta chat endpoint that enables
 // assistant-prefix completion. Derive it only from a URL already hosted by
 // DeepSeek: custom gateways may opt into the DeepSeek reasoning wire shape, but
@@ -103,17 +44,6 @@ func deepSeekPrefixChatURL(chatURL string) string {
 	u.RawQuery = ""
 	u.Fragment = ""
 	return u.String()
-}
-
-// IsGeminiAPI reports whether baseURL points at Google's Gemini Developer API.
-// Keep this exact-host: other googleapis.com services do not share Gemini's
-// model resource-name compatibility quirk.
-func IsGeminiAPI(baseURL string) bool {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return false
-	}
-	return strings.EqualFold(u.Hostname(), "generativelanguage.googleapis.com")
 }
 
 // usesGeminiThoughtSignatures reports whether the current endpoint/model speaks
@@ -147,15 +77,6 @@ func normalizeModelID(baseURL, model string) string {
 	return model
 }
 
-// IsMiniMax reports whether baseURL points at MiniMax's OpenAI-compatible
-// endpoint (api.minimaxi.com or any *.minimaxi.com subdomain).
-//
-// The host string is matched exactly — the spelling is `minimaxi`, not
-// `minimax` — to avoid clashing with any future minimax-branded gateway.
-func IsMiniMax(baseURL string) bool {
-	return matchesVendorHost(baseURL, "minimaxi.com", "api.minimaxi.com")
-}
-
 // IsMiMo reports whether baseURL points at Xiaomi MiMo's OpenAI-compatible API.
 // MiMo follows the OpenAI chat shape but authenticates with an `api-key` header
 // instead of the usual Authorization bearer header.
@@ -163,55 +84,14 @@ func IsMiMo(baseURL string) bool {
 	return provider.IsMiMoEndpoint(baseURL)
 }
 
-// IsZhipu reports whether baseURL points at Zhipu's OpenAI-compatible endpoint
-// for GLM models — either the China host (open.bigmodel.cn, *.bigmodel.cn) or
-// the international Z.ai host (api.z.ai, *.z.ai). Both speak the same wire shape,
-// where chain-of-thought is gated by `thinking.type` (enabled|disabled) and
-// `reasoning_effort` is silently ignored, so the client routes reasoning control
-// to the thinking knob for either host.
-func IsZhipu(baseURL string) bool {
-	return matchesVendorHost(baseURL, "bigmodel.cn", "open.bigmodel.cn") ||
-		matchesVendorHost(baseURL, "z.ai", "api.z.ai")
-}
-
-// IsTokenRhythm reports whether baseURL points at Token Rhythm's official
-// OpenAI-compatible gateway. Keep this exact-host: model-aware protocol
-// upgrades must not affect unrelated subdomains or similarly named relays.
-func IsTokenRhythm(baseURL string) bool {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return false
-	}
-	return strings.EqualFold(u.Hostname(), "tokenrhythm.studio")
-}
-
-// IsLongCat reports whether baseURL points at LongCat's OpenAI-compatible API.
-// LongCat uses the OpenAI chat shape, but gates thinking with thinking.type
-// enabled|disabled rather than the generic reasoning_effort field.
-func IsLongCat(baseURL string) bool {
-	return matchesVendorHost(baseURL, "longcat.chat", "api.longcat.chat")
-}
-
-// IsKimiAPI reports whether baseURL is one of Moonshot's official Kimi direct
-// API endpoints. Gate Kimi-specific wire compatibility on the exact API hosts
-// so OpenAI-compatible relays carrying the same model ID remain untouched.
-func IsKimiAPI(baseURL string) bool {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return false
-	}
-	switch strings.ToLower(u.Hostname()) {
-	case "api.moonshot.cn", "api.moonshot.ai":
-		return true
-	default:
-		return false
-	}
-}
-
-// IsOllamaCloud reports whether baseURL points at Ollama Cloud's hosted
-// OpenAI-compatible endpoint. Local Ollama servers intentionally do not match:
-// the hosted API accepts the reasoning_effort=max extension, while localhost
-// deployments vary by model/version.
-func IsOllamaCloud(baseURL string) bool {
-	return matchesVendorHost(baseURL, "ollama.com", "ollama.com")
-}
+// The vendor an endpoint belongs to is contract/provider's; these keep the
+// names this package's wire code reads.
+func IsDeepSeek(baseURL string) bool        { return provider.IsDeepSeekEndpoint(baseURL) }
+func IsOpenAI(baseURL string) bool          { return provider.IsOpenAIEndpoint(baseURL) }
+func IsGeminiAPI(baseURL string) bool       { return provider.IsGeminiEndpoint(baseURL) }
+func IsMiniMax(baseURL string) bool         { return provider.IsMiniMaxEndpoint(baseURL) }
+func IsZhipu(baseURL string) bool           { return provider.IsZhipuEndpoint(baseURL) }
+func IsLongCat(baseURL string) bool         { return provider.IsLongCatEndpoint(baseURL) }
+func IsKimiAPI(baseURL string) bool         { return provider.IsKimiEndpoint(baseURL) }
+func IsOllamaCloud(baseURL string) bool     { return provider.IsOllamaCloudEndpoint(baseURL) }
+func DeepSeekTakesImages(model string) bool { return provider.DeepSeekTakesImages(model) }

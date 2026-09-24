@@ -10,12 +10,12 @@
     "doc-owner": 43,
     "doc-prose": 2324,
     "error-text": 9,
-    "essay": 2905,
+    "essay": 2898,
     "file-size": 23928,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4348,
-    "layer-order": 32,
+    "layer-order": 29,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -291,9 +291,6 @@
     "internal/base/shellparse/bash.go": {
       "essay": 8
     },
-    "internal/contract/config/anthropic_contract.go": {
-      "layer-order": 1
-    },
     "internal/contract/config/billing.go": {
       "orphan": 1
     },
@@ -329,8 +326,7 @@
     },
     "internal/contract/config/effort.go": {
       "complexity": 1,
-      "essay": 11,
-      "layer-order": 1
+      "essay": 11
     },
     "internal/contract/config/effort_test.go": {
       "essay": 2
@@ -389,7 +385,6 @@
     },
     "internal/contract/config/vision.go": {
       "essay": 1,
-      "layer-order": 1,
       "orphan": 1
     },
     "internal/contract/event/audit_forwarder.go": {
@@ -870,7 +865,7 @@
       "essay": 1
     },
     "internal/model/openai/host.go": {
-      "essay": 8
+      "essay": 1
     },
     "internal/model/openai/openai.go": {
       "complexity": 58,

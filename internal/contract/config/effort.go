@@ -3,10 +3,9 @@ package config
 import (
 	"fmt"
 	"maps"
+	"reasonix/internal/contract/provider"
 	"slices"
 	"strings"
-
-	"reasonix/internal/model/openai"
 )
 
 const (
@@ -454,21 +453,21 @@ func effortInContract(e *ProviderEntry, level string) bool {
 // actual host matching lives in provider/openai so the openai package and
 // the config layer stay in lockstep when new gateways are added.
 func isDeepSeekEntry(e *ProviderEntry) bool {
-	return e != nil && e.Kind == "openai" && openai.IsDeepSeek(e.BaseURL)
+	return e != nil && e.Kind == "openai" && provider.IsDeepSeekEndpoint(e.BaseURL)
 }
 
 // isMiniMaxEntry reports whether the entry points at MiniMax's OpenAI-compatible
-// endpoint. See openai.IsMiniMax for the host-matching rule; the entry-wrapper
+// endpoint. See provider.IsMiniMaxEndpoint for the host-matching rule; the entry-wrapper
 // just gates on the openai kind.
 func isMiniMaxEntry(e *ProviderEntry) bool {
-	return e != nil && e.Kind == "openai" && openai.IsMiniMax(e.BaseURL)
+	return e != nil && e.Kind == "openai" && provider.IsMiniMaxEndpoint(e.BaseURL)
 }
 
 // isZhipuEntry reports whether the entry points at Zhipu's OpenAI-compatible
-// endpoint for GLM models. See openai.IsZhipu for the host-matching rule; the
+// endpoint for GLM models. See provider.IsZhipuEndpoint for the host-matching rule; the
 // entry-wrapper just gates on the openai kind.
 func isZhipuEntry(e *ProviderEntry) bool {
-	return e != nil && e.Kind == "openai" && openai.IsZhipu(e.BaseURL)
+	return e != nil && e.Kind == "openai" && provider.IsZhipuEndpoint(e.BaseURL)
 }
 
 // isTokenRhythmGLMEntry upgrades older Token Rhythm configurations that predate
@@ -476,7 +475,7 @@ func isZhipuEntry(e *ProviderEntry) bool {
 // official model IDs so unrelated mixed-model providers retain their existing
 // request shape.
 func isTokenRhythmGLMEntry(e *ProviderEntry) bool {
-	if e == nil || e.Kind != "openai" || !openai.IsTokenRhythm(e.BaseURL) {
+	if e == nil || e.Kind != "openai" || !provider.IsTokenRhythmEndpoint(e.BaseURL) {
 		return false
 	}
 	switch strings.ToLower(strings.TrimSpace(e.Model)) {
@@ -490,14 +489,14 @@ func isTokenRhythmGLMEntry(e *ProviderEntry) bool {
 // isLongCatEntry reports whether the entry points at LongCat's OpenAI-compatible
 // endpoint. See openai.IsLongCat for the host-matching rule.
 func isLongCatEntry(e *ProviderEntry) bool {
-	return e != nil && e.Kind == "openai" && openai.IsLongCat(e.BaseURL)
+	return e != nil && e.Kind == "openai" && provider.IsLongCatEndpoint(e.BaseURL)
 }
 
 // isOllamaCloudEntry reports whether the entry points at hosted Ollama Cloud,
 // whose OpenAI-compatible endpoint accepts reasoning_effort=max. Local Ollama
 // endpoints intentionally do not match.
 func isOllamaCloudEntry(e *ProviderEntry) bool {
-	return e != nil && e.Kind == "openai" && openai.IsOllamaCloud(e.BaseURL)
+	return e != nil && e.Kind == "openai" && provider.IsOllamaCloudEndpoint(e.BaseURL)
 }
 
 // isMimoEntry reports whether the entry points at Xiaomi MiMo's Responses API

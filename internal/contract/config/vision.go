@@ -2,10 +2,9 @@ package config
 
 import (
 	"net/url"
+	"reasonix/internal/contract/provider"
 	"slices"
 	"strings"
-
-	"reasonix/internal/model/openai"
 )
 
 var mimoVisionModels = map[string]bool{
@@ -71,10 +70,10 @@ func CanConfigureVision(e *ProviderEntry) bool {
 	if e == nil {
 		return false
 	}
-	if !openai.IsDeepSeek(e.BaseURL) {
+	if !provider.IsDeepSeekEndpoint(e.BaseURL) {
 		return true
 	}
-	return openai.DeepSeekTakesImages(e.Model)
+	return provider.DeepSeekTakesImages(e.Model)
 }
 
 // EffectiveVision resolves whether the selected model accepts image input.

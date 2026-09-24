@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/openai"
 )
 
 // isAnthropicDepthEntry reports whether an Anthropic-kind endpoint implements
@@ -17,7 +16,7 @@ func isAnthropicDepthEntry(e *ProviderEntry) bool {
 	if e == nil || !strings.EqualFold(strings.TrimSpace(e.Kind), "anthropic") {
 		return false
 	}
-	if openai.IsDeepSeek(e.BaseURL) {
+	if provider.IsDeepSeekEndpoint(e.BaseURL) {
 		// DeepSeek's Anthropic-compatible endpoint has depth of its own, on a
 		// different dialect (thinking.type=enabled with output_config.effort).
 		return false
