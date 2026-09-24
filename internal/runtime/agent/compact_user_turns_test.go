@@ -89,20 +89,21 @@ func TestCompactionSilentWhenEveryUserTurnKept(t *testing.T) {
 	}
 }
 
-// A sub-agent's "user turns" are the parent's instructions, and nothing else in
-// the child transcript records them — so the protection has to travel down the
-// one construction point sub-agents share. This pins the inheritance rather than
-// the mechanism, which compact_partition_test.go already covers.
-func TestSubagentInheritsUserTurnRetention(t *testing.T) {
-	parent := &TaskTool{keepPolicy: KeepErrors | KeepUserMarked, recentKeep: 2, compactRatio: 0.85}
-	opts := parent.subagentOptions(context.Background(), 8, nil, 32_000, 1, "", nil)
-	if opts.KeepPolicy != KeepErrors|KeepUserMarked {
-		t.Fatalf("child KeepPolicy = %v, want the parent's", opts.KeepPolicy)
+func noticeTexts(events []event.Event) []string {
+	var out []string
+	for _, e := range events {
+		if e.Kind == event.Notice {
+			out = append(out, e.Text)
+		}
 	}
-	if opts.ContextWindow != 32_000 {
-		t.Fatalf("child ContextWindow = %d, want the resolved sub-session window", opts.ContextWindow)
-	}
+	return out
+}
 
+// A child is built from the options its parent's task tool derives; with those
+// options it holds the parent's instructions within a budget scaled to its own
+// window. The inheritance itself is pinned on the delegation side.
+func TestChildRetentionScalesToItsOwnWindow(t *testing.T) {
+	opts := Options{KeepPolicy: KeepErrors | KeepUserMarked, RecentKeep: 2, CompactRatio: 0.85, ContextWindow: 32_000, SubagentDepth: 1}
 	child := New(&fakeProvider{reply: "ok"}, tool.NewRegistry(), &sessionstore.Session{}, opts, event.Discard)
 	if got, want := child.keptUserTurnsBudget(), int(32_000*keptUserTurnsWindowFrac); got != want {
 		t.Fatalf("child retention budget = %d, want %d scaled to its own window", got, want)
@@ -114,14 +115,4 @@ func TestSubagentInheritsUserTurnRetention(t *testing.T) {
 	if retention.Kept != 1 || len(kept) != 1 {
 		t.Fatalf("kept=%d retention=%+v, want the parent's instruction held verbatim", len(kept), retention)
 	}
-}
-
-func noticeTexts(events []event.Event) []string {
-	var out []string
-	for _, e := range events {
-		if e.Kind == event.Notice {
-			out = append(out, e.Text)
-		}
-	}
-	return out
 }

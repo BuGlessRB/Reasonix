@@ -13,7 +13,7 @@ import (
 
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/execjournal"
@@ -313,7 +313,7 @@ func listingObs(root armRoot, sessionPath string) ListingObs {
 	if strings.TrimSpace(sessionPath) == "" {
 		return ListingObs{}
 	}
-	store := agent.NewSubagentStore(filepath.Join(root.Sessions, "subagents"))
+	store := delegation.NewSubagentStore(filepath.Join(root.Sessions, "subagents"))
 	parent := strings.TrimSuffix(filepath.Base(sessionPath), ".jsonl")
 	artifacts, err := store.ListForParent(parent, root.Workspace)
 	if err != nil {

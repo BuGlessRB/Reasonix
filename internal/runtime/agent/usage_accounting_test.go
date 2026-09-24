@@ -186,23 +186,6 @@ func TestStreamReturnsRequestOnlyUsageOnProviderFailure(t *testing.T) {
 	}
 }
 
-func TestTaskUsageModelRefUsesCanonicalRuntimeIdentity(t *testing.T) {
-	task := (&TaskTool{baseModel: "deepseek/deepseek-v4-pro"}).WithTranscriptIdentityResolver(
-		func(modelRef, effort string) (string, string) {
-			if modelRef == "flash" {
-				return "deepseek/deepseek-v4-flash", effort
-			}
-			return "deepseek/deepseek-v4-pro", effort
-		},
-	)
-	if got := task.usageModelRef("flash", "high"); got != "deepseek/deepseek-v4-flash" {
-		t.Fatalf("alias usage model = %q", got)
-	}
-	if got := task.usageModelRef("", ""); got != "deepseek/deepseek-v4-pro" {
-		t.Fatalf("inherited usage model = %q", got)
-	}
-}
-
 // The trajectory pane attaches a round's tokens by the attempt id on the usage
 // event. A stream that retries is where a positional guess goes wrong, so this
 // asserts the billed attempt is the committed one and not the discarded one.

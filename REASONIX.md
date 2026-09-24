@@ -21,7 +21,7 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   thinks, `TaskSpec` what this call wants, `CapabilityGrant` what it may touch,
   `ContextRequest` what it starts from, `SchedulerPolicy` when it runs. Put a
   field in whichever member decides its value — profiles carry ceilings, never
-  per-call values. `internal/runtime/agent/profile_boundary_test.go` enforces it.
+  per-call values. `internal/runtime/delegation/profile_boundary_test.go` enforces it.
 - Cache-first: the system-prompt prefix (base prompt, tools, declared prefix
   configuration) must stay byte-stable across turns so DeepSeek's automatic
   prefix cache stays warm. Never mutate it mid-session — ride the turn tail

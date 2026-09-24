@@ -33,11 +33,11 @@ import (
 	"reasonix/internal/tools/jobs"
 )
 
-// maxToolOutputBytes caps a single tool result before it goes into the model's
+// MaxToolOutputBytes caps a single tool result before it goes into the model's
 // context. ~32KB is roughly 8K tokens — enough for a full file read or a busy
 // grep, while preventing one accidental "read this 5 MB log" from blowing the
 // window before the next compaction runs.
-const maxToolOutputBytes = 32 * 1024
+const MaxToolOutputBytes = 32 * 1024
 
 const maxEmptyFinalBlocks = 3
 
@@ -87,12 +87,12 @@ type callContext struct {
 	planMode bool
 }
 
-// withCallContext stamps ctx with the executing call's ID, the agent's sink, and
+// WithCallContext stamps ctx with the executing call's ID, the agent's sink, and
 // the asker. executeOne sets this before every Execute; `task` reads it (via
 // CallContext) to nest sub-agent events, and `ask` reads the asker to prompt.
 // The plan-mode flag is mirrored onto the leaf planmode key so tools that must
 // not import this package (for example internal/tools/builtin) can still read it.
-func withCallContext(ctx context.Context, parentID string, sink event.Sink, asker Asker, planMode bool) context.Context {
+func WithCallContext(ctx context.Context, parentID string, sink event.Sink, asker Asker, planMode bool) context.Context {
 	ctx = planmode.WithActive(ctx, planMode)
 	return context.WithValue(ctx, callContextKey{}, callContext{parentID: parentID, sink: sink, asker: asker, planMode: planMode})
 }
@@ -104,7 +104,7 @@ func withCallContext(ctx context.Context, parentID string, sink event.Sink, aske
 // activity still reaches the parent event stream and plan-mode policy remains
 // visible to the invoked runner.
 func WithToolCallContext(ctx context.Context, parentID string, sink event.Sink, asker Asker, planMode bool) context.Context {
-	return withCallContext(ctx, parentID, sink, asker, planMode)
+	return WithCallContext(ctx, parentID, sink, asker, planMode)
 }
 
 // CallContext returns the executing call's ID, the agent's sink, and the asker,
@@ -1922,11 +1922,11 @@ func firstLine(s string) string {
 
 // truncateToolOutput is the first-visible hard cap for a tool result. Under-cap
 // bodies are returned byte-identical. Over-cap bodies keep a tool-aware head and
-// tail under maxToolOutputBytes; the full original is stored separately as
+// tail under MaxToolOutputBytes; the full original is stored separately as
 // RawContent by the session writer. The bounded form is stable for the message
 // lifetime and is never re-truncated by later maintenance.
 func truncateToolOutput(s string) (string, string) {
-	return truncateToolOutputFor(s, "", "", maxToolOutputBytes, defaultSideEffectingSnip)
+	return truncateToolOutputFor(s, "", "", MaxToolOutputBytes, defaultSideEffectingSnip)
 }
 
 // truncateToolOutputFor is the first-visible limiter. The geometry comes from
@@ -1934,7 +1934,7 @@ func truncateToolOutput(s string) (string, string) {
 // toolCallID only populate the marker so the model can re-fetch.
 func truncateToolOutputFor(s, toolName, toolCallID string, cap int, strategy snipStrategy) (string, string) {
 	if cap <= 0 {
-		cap = maxToolOutputBytes
+		cap = MaxToolOutputBytes
 	}
 	if len(s) <= cap {
 		return s, ""

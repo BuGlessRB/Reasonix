@@ -89,11 +89,11 @@ func TestReviewReportAcceptsOneReportPerExecution(t *testing.T) {
 // would still describe a tool the model can reach for; there is none.
 func TestOrdinaryWorkerIsNeverMountedTheReportTool(t *testing.T) {
 	reg := tool.NewRegistry()
-	attachReviewReport(reg, ReviewReportGrant{})
+	AttachReviewReport(reg, ReviewReportGrant{})
 	if _, ok := reg.Get("review_report"); ok {
 		t.Fatal("a worker owing no verdict must not be mounted the report tool")
 	}
-	attachReviewReport(reg, reviewGrant(evidence.ReviewKindReview))
+	AttachReviewReport(reg, reviewGrant(evidence.ReviewKindReview))
 	if _, ok := reg.Get("review_report"); !ok {
 		t.Fatal("a worker owing a verdict must be mounted the report tool")
 	}

@@ -259,60 +259,6 @@ func TestPlanningPhaseStopsWritersBeforePermission(t *testing.T) {
 	}
 }
 
-// Planning keeps the delegation it was designed around. read_only_task exists
-// so a plan can research in an isolated context; a barrier reading "delegation"
-// as "side effect" would take that away, and one reading "no mutation receipt"
-// as "safe" lets the writer-capable ones through — the hole this closes.
-func TestPlanningPhaseSplitsDelegationByWriterCapability(t *testing.T) {
-	task := &TaskTool{}
-	reg := tool.NewRegistry()
-	a := New(nil, reg, sessionstore.NewSession(""), Options{}, event.Discard)
-	a.SetPlanMode(true)
-
-	blocked := map[string]bool{}
-	for _, tl := range []tool.Tool{
-		task,
-		NewReadOnlyTaskTool(task),
-		NewFleetTool(task),
-		NewParallelTasksTool(task, reg),
-		NewSubagentResultTool(task),
-		NewSubagentListTool(task),
-	} {
-		safety := planmode.PlanSafetyUnknown
-		if c, ok := tl.(tool.PlanModeClassifier); ok {
-			safety = planmode.PlanSafetyUnsafe
-			if c.PlanModeSafe() {
-				safety = planmode.PlanSafetySafe
-			}
-		}
-		got := a.planModeDecision(tl, tl.Name(), tl.ReadOnly(), safety, nil)
-		blocked[tl.Name()] = got.Blocked
-		// The verdict has to follow what the tool declares about itself, or the
-		// barrier has started classifying delegation by name.
-		want := !tl.ReadOnly() && safety != planmode.PlanSafetySafe
-		if got.Blocked != want {
-			t.Errorf("%q readOnly=%v safety=%v blocked=%v, want %v", tl.Name(), tl.ReadOnly(), safety, got.Blocked, want)
-		}
-	}
-
-	for name, wantBlocked := range map[string]bool{
-		"read_only_task":       false,
-		"parallel_tasks":       false,
-		"read_subagent_result": false,
-		"list_subagents":       false,
-		"task":                 true,
-	} {
-		got, ok := blocked[name]
-		if !ok {
-			t.Errorf("%q was not registered; the anchor no longer measures anything", name)
-			continue
-		}
-		if got != wantBlocked {
-			t.Errorf("%q blocked=%v during planning, want %v", name, got, wantBlocked)
-		}
-	}
-}
-
 func TestPlanModeCanReplacePriorExecutionTodoState(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(mustBuiltinTool(t, "todo_write"))
@@ -539,11 +485,11 @@ func TestRunSubAgentWithSessionInheritsPlanWorkflow(t *testing.T) {
 }
 
 func TestCallContextMirrorsPlanModeOntoLeafKey(t *testing.T) {
-	on := withCallContext(context.Background(), "c", event.Discard, nil, true)
+	on := WithCallContext(context.Background(), "c", event.Discard, nil, true)
 	if !PlanModeFromContext(on) || !planmode.Active(on) {
 		t.Fatal("plan-mode flags disagree for an active planning call")
 	}
-	off := withCallContext(context.Background(), "c", event.Discard, nil, false)
+	off := WithCallContext(context.Background(), "c", event.Discard, nil, false)
 	if PlanModeFromContext(off) || planmode.Active(off) {
 		t.Fatal("plan-mode flags disagree for a standard call")
 	}

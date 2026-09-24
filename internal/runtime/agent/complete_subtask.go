@@ -119,10 +119,10 @@ func (a *Agent) CompletionReport() (evidence.CompletionReport, []string, bool) {
 	return adjudicated, reasons, true
 }
 
-// completeSubtaskContract is appended to a sub-agent's task prompt when the
+// CompleteSubtaskContract is appended to a sub-agent's task prompt when the
 // host expects a typed completion claim. The profile body says how to work;
 // this states the non-negotiable closing protocol.
-const completeSubtaskContract = `<completion-contract>
+const CompleteSubtaskContract = `<completion-contract>
 Call complete_subtask when you believe this sub-task is done. State the acceptance
 criteria you were held to and attach, for each, the command you ran or the paths you
 changed or inspected. The host checks every citation against what it observed you

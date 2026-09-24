@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/execjournal"
 )
@@ -175,12 +176,12 @@ func probeSkill() skill.Skill {
 
 // skillOwnerFixture builds the runner against a real store and scheduler. callID
 // empty stands for a run the host started with no tool call of its own.
-func skillOwnerFixture(t *testing.T, callID string) (*skillSubagents, context.Context, string, *agent.SubagentStore) {
+func skillOwnerFixture(t *testing.T, callID string) (*skillSubagents, context.Context, string, *delegation.SubagentStore) {
 	t.Helper()
 	root, sessions := testenv.TempDir(t), testenv.TempDir(t)
-	store := agent.NewSubagentStore(filepath.Join(sessions, "subagents"))
+	store := delegation.NewSubagentStore(filepath.Join(sessions, "subagents"))
 	reg := tool.NewRegistry()
-	task := agent.NewTaskToolWithOptions(agent.TaskToolOptions{
+	task := delegation.NewTaskToolWithOptions(delegation.TaskToolOptions{
 		Provider: &skillOwnerProvider{}, ParentRegistry: reg, MaxSteps: 8, ContextWindow: 8192,
 	}).WithTranscripts(store, root, "base", "high").WithScheduler(writeclaim.NewSubagentScheduler(2, 2))
 	runner := &skillSubagents{root: root, cfg: config.Default(), registry: reg, tasks: task, maxSteps: 8}
@@ -189,7 +190,7 @@ func skillOwnerFixture(t *testing.T, callID string) (*skillSubagents, context.Co
 	if callID != "" {
 		ctx = agent.WithToolCallContext(ctx, callID, event.Discard, nil, false)
 	}
-	ctx = agent.WithTurnIdentity(agent.WithParentSession(ctx, "probe"), "turn-1")
+	ctx = delegation.WithTurnIdentity(agent.WithParentSession(ctx, "probe"), "turn-1")
 	return runner, ctx, filepath.Join(sessions, "probe.jsonl"), store
 }
 
@@ -202,7 +203,7 @@ func journalEntry(sessionPath, id string) (execjournal.Entry, bool) {
 	return execjournal.Entry{}, false
 }
 
-func ownedChildren(t *testing.T, store *agent.SubagentStore, sessionPath string) []sessionstore.SubagentArtifact {
+func ownedChildren(t *testing.T, store *delegation.SubagentStore, sessionPath string) []sessionstore.SubagentArtifact {
 	t.Helper()
 	sessions := filepath.Dir(sessionPath)
 	stem := strings.TrimSuffix(filepath.Base(sessionPath), ".jsonl")

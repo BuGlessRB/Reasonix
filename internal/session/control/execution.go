@@ -5,7 +5,7 @@ import (
 	"reasonix/internal/state/sessionstore"
 	"strings"
 
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/state/execjournal"
 )
 
@@ -14,7 +14,7 @@ import (
 // the only thing a delegation opened mid-turn can be recorded against.
 func (c *Controller) beginTurn(ctx context.Context, startMessageIndex int, preserveUser bool) (context.Context, sessionstore.InFlightTurnMeta) {
 	marker := c.markInFlightTurn(startMessageIndex, preserveUser)
-	return agent.WithTurnIdentity(ctx, marker.ID), marker
+	return delegation.WithTurnIdentity(ctx, marker.ID), marker
 }
 
 // A delegation opened mid-turn is a fact no later state can re-derive: its turn

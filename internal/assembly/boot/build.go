@@ -26,6 +26,7 @@ import (
 	"reasonix/internal/platform/browser"
 	"reasonix/internal/platform/lsp"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/session/control"
@@ -79,7 +80,7 @@ type toolStage struct {
 	hookRunner  *hook.Runner
 	roles       roleWiring
 	sub         subagentConfig
-	taskTool    *agent.TaskTool
+	taskTool    *delegation.TaskTool
 	skillRun    *skillSubagents
 	runners     skillRunners
 	cmds        []command.Command

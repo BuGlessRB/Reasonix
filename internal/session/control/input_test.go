@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
@@ -103,7 +104,7 @@ func TestSubmitSlashSubagentRunsIsolatedAndPersistsDistilledAnswer(t *testing.T)
 		gotCallID, _, _, _ = agent.CallContext(ctx)
 		gotPlanMode = agent.PlanModeFromContext(ctx)
 		gotHostInitiated = opts.HostInitiated
-		agent.NestedSink(ctx, event.Discard).Emit(event.Event{
+		delegation.NestedSink(ctx, event.Discard).Emit(event.Event{
 			Kind: event.ToolDispatch,
 			Tool: event.Tool{ID: "child-read", Name: "read_file", ReadOnly: true},
 		})

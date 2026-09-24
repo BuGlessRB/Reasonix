@@ -9,7 +9,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 )
 
 type staticResolver struct {
@@ -161,8 +161,8 @@ func TestNewSubagentStoreRequiresSessionDir(t *testing.T) {
 
 func TestNewSubagentStoreCleansStaleRunningRefs(t *testing.T) {
 	sessionDir := robustTempDir(t)
-	store := agent.NewSubagentStore(filepath.Join(sessionDir, "subagents"))
-	spec := agent.SubagentSpec{ExecutionID: "exec-test",
+	store := delegation.NewSubagentStore(filepath.Join(sessionDir, "subagents"))
+	spec := delegation.SubagentSpec{ExecutionID: "exec-test",
 		Kind:          "task",
 		Name:          "task",
 		WorkspaceRoot: robustTempDir(t),

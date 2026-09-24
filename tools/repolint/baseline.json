@@ -11,7 +11,7 @@
     "doc-prose": 2324,
     "error-text": 9,
     "essay": 2829,
-    "file-size": 21931,
+    "file-size": 21932,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 3335,
@@ -1035,23 +1035,10 @@
     "internal/runtime/agent/final_readiness.go": {
       "complexity": 1
     },
-    "internal/runtime/agent/fleet.go": {
-      "essay": 3
-    },
     "internal/runtime/agent/format.go": {
       "orphan": 1
     },
     "internal/runtime/agent/listsessions_bench_test.go": {
-      "essay": 4
-    },
-    "internal/runtime/agent/parallel_tasks.go": {
-      "essay": 3,
-      "function-size": 71
-    },
-    "internal/runtime/agent/parallel_tasks_test.go": {
-      "essay": 2
-    },
-    "internal/runtime/agent/profile_spec.go": {
       "essay": 4
     },
     "internal/runtime/agent/reasoning_language.go": {
@@ -1077,22 +1064,6 @@
     },
     "internal/runtime/agent/steer_flush_test.go": {
       "essay": 1
-    },
-    "internal/runtime/agent/subagent_progress.go": {
-      "essay": 10
-    },
-    "internal/runtime/agent/subagent_store.go": {
-      "essay": 5
-    },
-    "internal/runtime/agent/task.go": {
-      "complexity": 12,
-      "essay": 12,
-      "file-size": 256,
-      "function-size": 94,
-      "orphan": 1
-    },
-    "internal/runtime/agent/task_test.go": {
-      "essay": 4
     },
     "internal/runtime/agent/testutil/mock_provider.go": {
       "essay": 10
@@ -1120,6 +1091,35 @@
     },
     "internal/runtime/coordinator/coordinator_test.go": {
       "essay": 3
+    },
+    "internal/runtime/delegation/fleet.go": {
+      "essay": 3
+    },
+    "internal/runtime/delegation/parallel_tasks.go": {
+      "essay": 3,
+      "function-size": 71
+    },
+    "internal/runtime/delegation/parallel_tasks_test.go": {
+      "essay": 2
+    },
+    "internal/runtime/delegation/profile_spec.go": {
+      "essay": 4
+    },
+    "internal/runtime/delegation/subagent_progress.go": {
+      "essay": 10
+    },
+    "internal/runtime/delegation/subagent_store.go": {
+      "essay": 5
+    },
+    "internal/runtime/delegation/task.go": {
+      "complexity": 12,
+      "essay": 12,
+      "file-size": 257,
+      "function-size": 94,
+      "orphan": 1
+    },
+    "internal/runtime/delegation/task_test.go": {
+      "essay": 4
     },
     "internal/runtime/guardian/guardian.go": {
       "essay": 25

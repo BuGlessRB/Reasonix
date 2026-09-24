@@ -35,6 +35,7 @@ import (
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/agent/testutil"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/memory"
@@ -509,7 +510,7 @@ model = "x"
 	if err := ctrl.Run(context.Background(), "continue review"); err != nil {
 		t.Fatalf("second Run: %v", err)
 	}
-	store := agent.NewSubagentStore(filepath.Join(config.SessionDir(), "subagents"))
+	store := delegation.NewSubagentStore(filepath.Join(config.SessionDir(), "subagents"))
 	meta, err := store.LoadMeta(ref)
 	if err != nil {
 		t.Fatalf("LoadMeta: %v", err)
@@ -565,7 +566,7 @@ model = "x"
 	}
 	ref := subagentRefFromHistory(t, ctrl.History())
 
-	overrideStore := agent.NewSubagentStore(filepath.Join(sessionDir, "subagents"))
+	overrideStore := delegation.NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	meta, err := overrideStore.LoadMeta(ref)
 	if err != nil {
 		t.Fatalf("LoadMeta from override dir: %v", err)

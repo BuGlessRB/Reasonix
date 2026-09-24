@@ -53,7 +53,7 @@ func (a *Agent) spillToolOutput(body, toolName, toolCallID string) (string, stri
 // whole buys both to arrive exactly where leaving it would have. Past that limit
 // the model reads a window instead, which is the case a pointer exists for.
 func spillPays(body, pointer int) bool {
-	if body <= maxToolOutputBytes {
+	if body <= MaxToolOutputBytes {
 		return false
 	}
 	return body-pointer >= pointer
@@ -244,7 +244,7 @@ func (a *Agent) boundToolOutput(body, toolName, toolCallID, toolArgs string, fai
 			return pointer, bound, ""
 		}
 	}
-	if len(body) <= maxToolOutputBytes {
+	if len(body) <= MaxToolOutputBytes {
 		bound.KeptBytes = len(body)
 		return body, bound, ""
 	}
@@ -252,15 +252,15 @@ func (a *Agent) boundToolOutput(body, toolName, toolCallID, toolArgs string, fai
 	// window discards nothing: the model reads on from where this stops. Snipping
 	// its middle would, and would also undo the paging the tool already did.
 	if paged {
-		out := windowToolOutput(body, maxToolOutputBytes)
+		out := windowToolOutput(body, MaxToolOutputBytes)
 		bound.Kind, bound.KeptBytes = event.BoundWindowed, len(out)
 		return out, bound, ""
 	}
 	strategy := a.snipStrategyFor(toolName)
 	if failed {
-		strategy = strategy.forFailure(maxToolOutputBytes)
+		strategy = strategy.forFailure(MaxToolOutputBytes)
 	}
-	out, notice := truncateToolOutputFor(body, toolName, toolCallID, maxToolOutputBytes, strategy)
+	out, notice := truncateToolOutputFor(body, toolName, toolCallID, MaxToolOutputBytes, strategy)
 	bound.Kind, bound.KeptBytes = event.BoundTruncated, len(out)
 	return out, bound, notice
 }

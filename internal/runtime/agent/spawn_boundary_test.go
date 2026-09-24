@@ -1,17 +1,10 @@
 package agent
 
 import (
-	"context"
 	"os"
 	"path/filepath"
-	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"testing"
-
-	"reasonix/internal/base/testenv"
-	"reasonix/internal/contract/event"
-	"reasonix/internal/contract/provider"
-	"reasonix/internal/contract/tool"
 )
 
 // knownDirectChildRunners are the entry points that still construct a child
@@ -21,7 +14,7 @@ import (
 // the pull request.
 var knownDirectChildRunners = map[string]string{
 	"internal/runtime/agent/child_run.go":      "defines the runners",
-	"internal/runtime/agent/task.go":           "the unified path itself",
+	"internal/runtime/delegation/task.go":      "the unified path itself",
 	"internal/assembly/boot/skill_subagent.go": "run_skill + read_only_skill runners",
 	"internal/frontend/cli/review.go":          "reasonix review",
 	"desktop/subagents_app.go":                 "desktop profile preview",
@@ -69,32 +62,5 @@ func TestChildConstructionForksStayEnumerated(t *testing.T) {
 	if len(found) > 0 {
 		t.Fatalf("these files construct a sub-agent outside the unified runner: %s\n\nCompile the call into a ProfileExecSpec and run it through TaskTool.RunProfileSpec so it inherits tool scoping, depth caps, write claims, scheduler slots, and the completion contract. If a direct runner is genuinely required, add the file to knownDirectChildRunners with a reason.",
 			strings.Join(found, ", "))
-	}
-}
-
-// Converging read_only_task onto the unified runner must not quietly give it
-// durable side effects: its contract is that the call leaves nothing behind.
-func TestReadOnlyTaskStaysEphemeralOnTheUnifiedRunner(t *testing.T) {
-	root := testenv.TempDir(t)
-	reg := tool.NewRegistry()
-	reg.Add(fakeReadFileTool{})
-	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
-		{{Type: provider.ChunkText, Text: "research done"}, {Type: provider.ChunkDone}},
-	}}
-	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
-
-	ctx := withCallContext(context.Background(), "call-1", event.Discard, nil, false)
-	ctx = WithParentSession(ctx, filepath.Join(root, "parent.jsonl"))
-	out, err := NewReadOnlyTaskTool(task).Execute(ctx, []byte(`{"prompt":"inspect the parser"}`))
-	if err != nil {
-		t.Fatalf("read_only_task: %v", err)
-	}
-	if !strings.Contains(out, "research done") {
-		t.Fatalf("answer = %q", out)
-	}
-	if strings.Contains(out, "Subagent reference") {
-		t.Fatalf("read_only_task must not persist a transcript even under a parent session:\n%s", out)
 	}
 }

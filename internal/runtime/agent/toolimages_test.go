@@ -38,7 +38,7 @@ func (f *fakeImageTool) ExecuteWithImages(ctx context.Context, args json.RawMess
 // so images ride outside the text rather than inside it.
 func TestToolResultImagesBypassTruncation(t *testing.T) {
 	dataURL := "data:image/png;base64," + strings.Repeat("QUFB", 20000) // ~80KB payload, alone over the text budget
-	longText := strings.Repeat("x", maxToolOutputBytes+1024) + "[image: image/png]"
+	longText := strings.Repeat("x", MaxToolOutputBytes+1024) + "[image: image/png]"
 	reg := tool.NewRegistry()
 	reg.Add(&fakeImageTool{text: longText, images: []string{dataURL}})
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{

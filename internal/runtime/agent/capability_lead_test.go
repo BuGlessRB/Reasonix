@@ -33,8 +33,8 @@ func TestTheCatalogFitsInContext(t *testing.T) {
 	if after >= before/2 {
 		t.Fatalf("descriptions %d -> %d; the listing still carries most of the text", before, after)
 	}
-	if total := len(raw) - before + after; total > maxToolOutputBytes {
-		t.Fatalf("listing would still be %d bytes, over the %d cap that spills it", total, maxToolOutputBytes)
+	if total := len(raw) - before + after; total > MaxToolOutputBytes {
+		t.Fatalf("listing would still be %d bytes, over the %d cap that spills it", total, MaxToolOutputBytes)
 	}
 }
 

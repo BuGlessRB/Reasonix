@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/runtime/writeclaim"
 )
 
@@ -18,7 +19,7 @@ import (
 type subagentConfig struct {
 	resolveProvider func(modelRef, effort string) (provider.Provider, *provider.Pricing, int, error)
 	identity        func(modelRef, effort string) (string, string)
-	profileLookup   func(name string) (agent.ProfileDefinition, bool)
+	profileLookup   func(name string) (delegation.ProfileDefinition, bool)
 	profileModel    func(profile string) string
 	profileEffort   func(profile string) string
 	scheduler       *writeclaim.SubagentScheduler
@@ -71,12 +72,12 @@ func newSubagentConfig(opts Options, cfg *config.Config, entry *config.ProviderE
 		identity: func(modelRef, effort string) (string, string) {
 			return subagentEffectiveIdentity(cfg, opts.ProviderResolver, modelName, entry, modelRef, effort)
 		},
-		profileLookup: func(name string) (agent.ProfileDefinition, bool) {
+		profileLookup: func(name string) (delegation.ProfileDefinition, bool) {
 			sk, ok := skills.Read(name)
 			if !ok || sk.RunAs != skill.RunSubagent {
-				return agent.ProfileDefinition{}, false
+				return delegation.ProfileDefinition{}, false
 			}
-			return agent.ProfileFromSkill(skills.Prepare(sk)), true
+			return delegation.ProfileFromSkill(skills.Prepare(sk)), true
 		},
 		profileModel:  func(profile string) string { return firstConfigured(cfg.Agent.SubagentModels, profile) },
 		profileEffort: func(profile string) string { return firstConfigured(cfg.Agent.SubagentEfforts, profile) },

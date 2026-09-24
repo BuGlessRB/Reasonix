@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 )
 
 // delegationInputs is what a sub-agent inherits from the executor: its model,
@@ -22,7 +23,7 @@ type delegationInputs struct {
 	root         string
 	maxSteps     int
 	delivery     bool
-	store        *agent.SubagentStore
+	store        *delegation.SubagentStore
 	session      sessionRuntime
 	bashEnforced func() bool
 }
@@ -30,8 +31,8 @@ type delegationInputs struct {
 // delegation builds the task tool and the skill sub-agent runner. Wired after
 // built-ins and MCP, so a child inherits the full tool set minus task itself.
 // The capability runtime does not exist yet; the caller binds it later.
-func (w roleWiring) delegation(in delegationInputs) (*agent.TaskTool, *skillSubagents) {
-	var taskTool *agent.TaskTool
+func (w roleWiring) delegation(in delegationInputs) (*delegation.TaskTool, *skillSubagents) {
+	var taskTool *delegation.TaskTool
 	if !in.opts.Ablation.Off(ablation.Subagent) {
 		taskTool = w.taskTool(in)
 		addDelegationTools(w.reg, taskTool)
@@ -52,8 +53,8 @@ func (w roleWiring) delegation(in delegationInputs) (*agent.TaskTool, *skillSuba
 	}
 }
 
-func (w roleWiring) taskTool(in delegationInputs) *agent.TaskTool {
-	return agent.NewTaskToolWithOptions(agent.TaskToolOptions{
+func (w roleWiring) taskTool(in delegationInputs) *delegation.TaskTool {
+	return delegation.NewTaskToolWithOptions(delegation.TaskToolOptions{
 		Provider:          in.exec,
 		Pricing:           in.entry.Price,
 		ParentRegistry:    w.reg,

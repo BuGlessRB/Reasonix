@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/safety/evidence"
 )
@@ -72,13 +73,13 @@ func TestBuiltInReviewersDeclareTheirVerdict(t *testing.T) {
 		if got := sk.Delivery.ReviewReport; got != want {
 			t.Errorf("built-in %q declares %q, want %q", name, got, want)
 		}
-		if got := agent.ProfileFromSkill(sk).Delivery.ReviewReport; got != evidence.ReviewKind(want) {
+		if got := delegation.ProfileFromSkill(sk).Delivery.ReviewReport; got != evidence.ReviewKind(want) {
 			t.Errorf("built-in %q projects %q, want %q", name, got, want)
 		}
 		// What it may prove is declared beside what it owes, and neither is
 		// read off the other: a reviewer authorized for its own obligation and
 		// for nothing else is the whole point of the pair.
-		authority := agent.ProfileFromSkill(sk).Authority.Review
+		authority := delegation.ProfileFromSkill(sk).Authority.Review
 		for _, kind := range evidence.ReviewKinds() {
 			if got, expect := authority.Proves(kind), want != "" && evidence.ReviewKind(want) == kind; got != expect {
 				t.Errorf("built-in %q proves %q = %v, want %v", name, kind, got, expect)
@@ -188,7 +189,7 @@ func reviewToolOffered(t *testing.T, sk skill.Skill, via string) bool {
 }
 
 type reviewWorld struct {
-	tasks    *agent.TaskTool
+	tasks    *delegation.TaskTool
 	skills   *skillSubagents
 	provider reviewProbeProvider
 	ctx      context.Context
@@ -210,20 +211,20 @@ func newReviewWorldWith(t *testing.T, prov reviewProbeProvider, profiles ...skil
 	root, sessions := testenv.TempDir(t), testenv.TempDir(t)
 	reg := tool.NewRegistry()
 	reg.Add(matrixReadTool{})
-	tasks := agent.NewTaskToolWithOptions(agent.TaskToolOptions{
+	tasks := delegation.NewTaskToolWithOptions(delegation.TaskToolOptions{
 		Provider: prov, ParentRegistry: reg, MaxSteps: 4, ContextWindow: 8192,
-	}).WithTranscripts(agent.NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").
+	}).WithTranscripts(delegation.NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").
 		WithScheduler(writeclaim.NewSubagentScheduler(2, 2)).
-		WithProfileLookup(func(name string) (agent.ProfileDefinition, bool) {
+		WithProfileLookup(func(name string) (delegation.ProfileDefinition, bool) {
 			for _, sk := range profiles {
 				if sk.Name == name {
-					return agent.ProfileFromSkill(sk), true
+					return delegation.ProfileFromSkill(sk), true
 				}
 			}
-			return agent.ProfileDefinition{}, false
+			return delegation.ProfileDefinition{}, false
 		})
 	ctx := agent.WithToolCallContext(context.Background(), "review-call", event.Discard, nil, false)
-	ctx = agent.WithTurnIdentity(agent.WithParentSession(ctx, "probe"), "turn-1")
+	ctx = delegation.WithTurnIdentity(agent.WithParentSession(ctx, "probe"), "turn-1")
 	return &reviewWorld{
 		tasks: tasks,
 		skills: &skillSubagents{

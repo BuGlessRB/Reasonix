@@ -28,6 +28,7 @@ import (
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/platform/lsp"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/safety/permission"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/session/control"
@@ -353,12 +354,12 @@ func isGitMarker(path string) bool {
 	return err == nil && (fi.IsDir() || fi.Mode().IsRegular())
 }
 
-func newSubagentStore(sessionDir string, parentLive func(sessionPath string) bool) (*agent.SubagentStore, error) {
+func newSubagentStore(sessionDir string, parentLive func(sessionPath string) bool) (*delegation.SubagentStore, error) {
 	sessionDir = strings.TrimSpace(sessionDir)
 	if sessionDir == "" {
 		return nil, nil
 	}
-	store := agent.NewSubagentStore(filepath.Join(sessionDir, "subagents")).WithParentSessionProbe(parentLive)
+	store := delegation.NewSubagentStore(filepath.Join(sessionDir, "subagents")).WithParentSessionProbe(parentLive)
 	if _, err := store.CleanupStaleRunning(); err != nil {
 		return nil, fmt.Errorf("cleanup stale subagents: %w", err)
 	}

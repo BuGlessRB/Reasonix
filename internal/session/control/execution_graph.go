@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/agentgraph"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/state/execgraph"
 	"reasonix/internal/state/execjournal"
 )
@@ -77,7 +77,7 @@ func (c *Controller) executionChildren(path string, history []execjournal.Entry)
 	}
 	out := make([]execgraph.ChildOutcome, 0, len(artifacts))
 	for _, a := range artifacts {
-		identity := agent.ResolveExecutionIdentity(a.Meta, func(id string) bool { return opened[id] })
+		identity := delegation.ResolveExecutionIdentity(a.Meta, func(id string) bool { return opened[id] })
 		out = append(out, execgraph.ChildOutcome{
 			Execution: identity.Execution, Ref: a.Ref, Status: string(a.Meta.Status),
 		})

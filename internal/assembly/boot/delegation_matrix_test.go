@@ -18,6 +18,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/execgraph"
 	"reasonix/internal/state/execjournal"
@@ -172,18 +173,18 @@ func delegationMatrix() []matrixRow {
 			return w.tasks.Execute(ctx, json.RawMessage(`{"prompt":"look","description":"one"}`))
 		}},
 		{name: "fleet", durable: true, call: func(ctx context.Context, w *matrixWorld) (string, error) {
-			return agent.NewFleetTool(w.tasks).Execute(ctx, json.RawMessage(
+			return delegation.NewFleetTool(w.tasks).Execute(ctx, json.RawMessage(
 				`{"tasks":[{"prompt":"one","read_only":true},{"prompt":"two","read_only":true}]}`))
 		}},
 		{name: "parallel_tasks", durable: true, call: func(ctx context.Context, w *matrixWorld) (string, error) {
-			return agent.NewParallelTasksTool(w.tasks, w.registry).Execute(ctx, json.RawMessage(
+			return delegation.NewParallelTasksTool(w.tasks, w.registry).Execute(ctx, json.RawMessage(
 				`{"tasks":[{"prompt":"one"},{"prompt":"two"}]}`))
 		}},
 		{name: "run_skill (model-invoked)", durable: true, call: func(ctx context.Context, w *matrixWorld) (string, error) {
 			return w.skills.run(ctx, probeSkill(), "look", skill.SubagentRunOptions{})
 		}},
 		{name: "read_only_task", durable: false, call: func(ctx context.Context, w *matrixWorld) (string, error) {
-			return agent.NewReadOnlyTaskTool(w.tasks).Execute(ctx, json.RawMessage(`{"prompt":"look","description":"one"}`))
+			return delegation.NewReadOnlyTaskTool(w.tasks).Execute(ctx, json.RawMessage(`{"prompt":"look","description":"one"}`))
 		}},
 		{name: "run_skill (host-initiated)", durable: true, root: true, call: func(ctx context.Context, w *matrixWorld) (string, error) {
 			return w.skills.run(ctx, probeSkill(), "look", skill.SubagentRunOptions{HostInitiated: true})
@@ -197,7 +198,7 @@ func delegationMatrix() []matrixRow {
 // matrixWorld is one session with one slot: a real store, a real scheduler, and
 // a sink that records what was drawn.
 type matrixWorld struct {
-	tasks       *agent.TaskTool
+	tasks       *delegation.TaskTool
 	skills      *skillSubagents
 	registry    *tool.Registry
 	scheduler   *writeclaim.SubagentScheduler
@@ -215,9 +216,9 @@ func newMatrixWorld(t *testing.T) *matrixWorld {
 	reg.Add(matrixReadTool{})
 	prov := &matrixProvider{}
 	sched := writeclaim.NewSubagentScheduler(1, 1)
-	tasks := agent.NewTaskToolWithOptions(agent.TaskToolOptions{
+	tasks := delegation.NewTaskToolWithOptions(delegation.TaskToolOptions{
 		Provider: prov, ParentRegistry: reg, MaxSteps: 6, ContextWindow: 8192,
-	}).WithTranscripts(agent.NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").
+	}).WithTranscripts(delegation.NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").
 		WithScheduler(sched)
 	prov.inspect = func() []string {
 		var out []string
@@ -232,7 +233,7 @@ func newMatrixWorld(t *testing.T) *matrixWorld {
 	}
 	sink := &matrixSink{}
 	ctx := agent.WithToolCallContext(context.Background(), "matrix-call", sink, nil, false)
-	ctx = agent.WithTurnIdentity(agent.WithParentSession(ctx, "probe"), "turn-1")
+	ctx = delegation.WithTurnIdentity(agent.WithParentSession(ctx, "probe"), "turn-1")
 	return &matrixWorld{
 		tasks: tasks,
 		skills: &skillSubagents{

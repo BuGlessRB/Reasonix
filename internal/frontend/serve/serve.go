@@ -27,7 +27,7 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/surface"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/stats"
 	"reasonix/internal/state/store"
@@ -1167,7 +1167,7 @@ func removeSessionFiles(absDir, abs string) error {
 	// The marker already hides them all, so stopping at the first refusal would
 	// strand the rest for no gain.
 	held := store.RemoveSessionArtifacts(abs)
-	if err := agent.DeleteSubagentsByParent(absDir, sessionstore.BranchID(abs)); err != nil {
+	if err := delegation.DeleteSubagentsByParent(absDir, sessionstore.BranchID(abs)); err != nil {
 		held = errors.Join(held, err)
 	}
 	if err := jobs.RemoveArtifacts(abs); err != nil {

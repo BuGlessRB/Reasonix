@@ -16,7 +16,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/extension"
 	"reasonix/internal/ext/extension/dispatch"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/runtime/guardian"
 	"reasonix/internal/state/sessioninbox"
 	"reasonix/internal/state/store"
@@ -495,7 +495,7 @@ func removeSessionArtifacts(path string) error {
 			return err
 		}
 	}
-	if err := agent.DeleteSubagentsByParent(filepath.Dir(path), sessionstore.BranchID(path)); err != nil {
+	if err := delegation.DeleteSubagentsByParent(filepath.Dir(path), sessionstore.BranchID(path)); err != nil {
 		return err
 	}
 	if err := sessionstore.ClearCleanupPending(path); err != nil {

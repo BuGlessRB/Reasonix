@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/platform/environment"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/runtime/writeclaim"
 )
 
@@ -28,7 +29,7 @@ type skillSubagents struct {
 	// tasks is the one runner every delegated execution goes through. A skill
 	// that kept its own would be a second owner of admission, of the child's
 	// loop and of how a run ended, and the three drifted apart once already.
-	tasks      *agent.TaskTool
+	tasks      *delegation.TaskTool
 	scheduler  *writeclaim.SubagentScheduler
 	provider   provider.Provider
 	entry      *config.ProviderEntry
@@ -47,7 +48,7 @@ type skillSubagents struct {
 func (r *skillSubagents) systemPrompt(sk skill.Skill) string {
 	body := strings.TrimSpace(sk.Body)
 	if body == "" {
-		body = agent.DefaultReadOnlyTaskSystemPrompt
+		body = delegation.DefaultReadOnlyTaskSystemPrompt
 	}
 	return body + r.workspaceFacts()
 }
@@ -131,7 +132,7 @@ func (r *skillSubagents) runReadOnly(sctx context.Context, sk skill.Skill, task 
 	// The tool that produces a verdict, bound to what this worker may prove.
 	// Outside the delegation lifecycle there is no execution to name, so the
 	// grant withholds authority: the report is owed and a block still lands.
-	def := agent.ProfileFromSkill(sk)
+	def := delegation.ProfileFromSkill(sk)
 	review := def.Delivery.ReviewReport
 	grant := agent.IssueReviewGrant(review, def.Authority.Review, "")
 	if review != "" {
@@ -152,7 +153,7 @@ func (r *skillSubagents) runReadOnly(sctx context.Context, sk skill.Skill, task 
 	// attachment metadata locally but never receive image parts on the wire.
 	childCtx := agent.WithUserImages(sctx, agent.SubagentImageCandidates(sctx))
 	return agent.RunReadOnlySubAgentWithSession(childCtx, prov, subReg, sessionstore.NewSession(sysPrompt), task,
-		runOptions, agent.NestedSink(sctx, event.Discard))
+		runOptions, delegation.NestedSink(sctx, event.Discard))
 }
 
 // run executes a subagent skill as what it is: one delegated execution. It owns
@@ -175,11 +176,11 @@ func (r *skillSubagents) run(sctx context.Context, sk skill.Skill, task string, 
 // compile turns a skill and one invocation into the shared execution spec. Every
 // value here is one the skill layer alone knows; anything the runner can resolve
 // for itself is left to it, so the two cannot come to disagree.
-func (r *skillSubagents) compile(sctx context.Context, sk skill.Skill, task string, runOpts skill.SubagentRunOptions) (agent.ProfileExecSpec, error) {
+func (r *skillSubagents) compile(sctx context.Context, sk skill.Skill, task string, runOpts skill.SubagentRunOptions) (delegation.ProfileExecSpec, error) {
 	sk = skill.WithCodeGraphTools(sk, skill.CodeGraphReadTools(r.registry))
-	spec := agent.ProfileExecSpec{
-		Task: agent.TaskSpec{Objective: task, Description: sk.Name},
-		Worker: agent.WorkerSpec{
+	spec := delegation.ProfileExecSpec{
+		Task: delegation.TaskSpec{Objective: task, Description: sk.Name},
+		Worker: delegation.WorkerSpec{
 			Kind: "skill", Name: sk.Name, Profile: sk.Name,
 			// The body alone is not the prefix: the workspace facts a child
 			// cannot discover for free are part of it, and letting the runner
@@ -190,15 +191,15 @@ func (r *skillSubagents) compile(sctx context.Context, sk skill.Skill, task stri
 			// A verdict the parent must act on carries an identity, never a
 			// sentence, so the typed report is required at every role setting.
 			// What that verdict may close is the separate grant beside it.
-			ReviewReport:    agent.ProfileFromSkill(sk).Delivery.ReviewReport,
-			ReviewAuthority: agent.ProfileFromSkill(sk).Authority.Review,
+			ReviewReport:    delegation.ProfileFromSkill(sk).Delivery.ReviewReport,
+			ReviewAuthority: delegation.ProfileFromSkill(sk).Authority.Review,
 		},
-		Grant: agent.CapabilityGrant{ReadOnly: sk.ReadOnly, ProfileTools: sk.AllowedTools},
-		Context: agent.ContextRequest{
+		Grant: delegation.CapabilityGrant{ReadOnly: sk.ReadOnly, ProfileTools: sk.AllowedTools},
+		Context: delegation.ContextRequest{
 			ContinueFrom: runOpts.ContinueFrom, ForkFrom: runOpts.ForkFrom,
 			TopLevel: runOpts.HostInitiated,
 		},
-		Sched: agent.SchedulerPolicy{MaxSteps: r.stepsFor(runOpts), Nested: agent.SubagentDepth(sctx) > 0},
+		Sched: delegation.SchedulerPolicy{MaxSteps: r.stepsFor(runOpts), Nested: agent.SubagentDepth(sctx) > 0},
 	}
 	if !sk.ReadOnly {
 		// Writer skills without declared paths claim the whole workspace, so
@@ -206,7 +207,7 @@ func (r *skillSubagents) compile(sctx context.Context, sk skill.Skill, task stri
 		// ones rather than racing them.
 		whole, err := writeclaim.WholeWorkspaceWriteClaim(r.root)
 		if err != nil {
-			return agent.ProfileExecSpec{}, fmt.Errorf("subagent skill %q write claim: %w", sk.Name, err)
+			return delegation.ProfileExecSpec{}, fmt.Errorf("subagent skill %q write claim: %w", sk.Name, err)
 		}
 		spec.Grant.WritePaths = whole
 	}

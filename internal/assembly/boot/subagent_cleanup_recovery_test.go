@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 )
 
 func prepareRunningSubagent(t *testing.T, sessionDir string) string {
 	t.Helper()
-	store := agent.NewSubagentStore(filepath.Join(sessionDir, "subagents"))
-	spec := agent.SubagentSpec{ExecutionID: "exec-test",
+	store := delegation.NewSubagentStore(filepath.Join(sessionDir, "subagents"))
+	spec := delegation.SubagentSpec{ExecutionID: "exec-test",
 		Kind:          "task",
 		Name:          "task",
 		WorkspaceRoot: robustTempDir(t),
@@ -36,7 +36,7 @@ func prepareRunningSubagent(t *testing.T, sessionDir string) string {
 
 func requireSubagentStatus(t *testing.T, sessionDir, ref string, want sessionstore.SubagentStatus) {
 	t.Helper()
-	meta, err := agent.NewSubagentStore(filepath.Join(sessionDir, "subagents")).LoadMeta(ref)
+	meta, err := delegation.NewSubagentStore(filepath.Join(sessionDir, "subagents")).LoadMeta(ref)
 	if err != nil {
 		t.Fatalf("LoadMeta(%s): %v", ref, err)
 	}

@@ -20,7 +20,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/extension/uihub"
 	"reasonix/internal/ext/plugin"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/store"
 	"reasonix/internal/tools/builtin"
@@ -1579,7 +1579,7 @@ func deleteSessionFiles(sessionPath string) error {
 			return err
 		}
 	}
-	if err := agent.DeleteSubagentsByParent(filepath.Dir(sessionPath), sessionstore.BranchID(sessionPath)); err != nil {
+	if err := delegation.DeleteSubagentsByParent(filepath.Dir(sessionPath), sessionstore.BranchID(sessionPath)); err != nil {
 		return err
 	}
 	if err := jobs.RemoveArtifacts(sessionPath); err != nil {

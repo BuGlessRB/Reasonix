@@ -40,7 +40,7 @@ func TestSpillNeverGrowsTheContext(t *testing.T) {
 // Everyday bash and read_file output lives in this range.
 func TestResultsThatFitOneReadBackStayInContext(t *testing.T) {
 	a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
-	for _, size := range []int{1 << 10, 4 << 10, 16 << 10, maxToolOutputBytes} {
+	for _, size := range []int{1 << 10, 4 << 10, 16 << 10, MaxToolOutputBytes} {
 		body := strings.Repeat("x", size)
 		out, _, notice := a.boundToolOutput(body, "bash", fmt.Sprintf("fit-%d", size), "", false)
 		if out != body || notice != "" {
@@ -113,10 +113,10 @@ func TestSpillBarDoesNotFollowLineLength(t *testing.T) {
 	}
 	// The bar belongs at the point where one fetch stops recovering the whole
 	// result. Below it, spilling costs a turn and returns nothing for it.
-	if lo <= maxToolOutputBytes {
-		t.Errorf("lowest bar = %d, at or under the %d a single fetch carries", lo, maxToolOutputBytes)
+	if lo <= MaxToolOutputBytes {
+		t.Errorf("lowest bar = %d, at or under the %d a single fetch carries", lo, MaxToolOutputBytes)
 	}
-	if hi > maxToolOutputBytes+1024 {
+	if hi > MaxToolOutputBytes+1024 {
 		t.Errorf("highest bar = %d; past the cap it should engage within one line's rounding", hi)
 	}
 }

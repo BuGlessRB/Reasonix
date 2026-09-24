@@ -16,7 +16,7 @@ func awaitCtx(todos []evidence.TodoItem, interactive bool) context.Context {
 	if interactive {
 		asker = &recordingAsker{}
 	}
-	return withCallContext(ctx, "", nil, asker, false)
+	return WithCallContext(ctx, "", nil, asker, false)
 }
 
 func newsList() []evidence.TodoItem {

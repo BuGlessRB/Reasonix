@@ -81,7 +81,7 @@ func TestAskToolRejectsExactDuplicateOptionLabels(t *testing.T) {
 
 func TestAskToolTrimsPromptAndOptionsBeforePrompting(t *testing.T) {
 	asker := &recordingAsker{}
-	ctx := withCallContext(context.Background(), "call_1", event.Discard, asker, false)
+	ctx := WithCallContext(context.Background(), "call_1", event.Discard, asker, false)
 	out, err := NewAskTool().Execute(ctx, []byte(`{
 		"questions":[{
 			"header":" Direction ",
@@ -127,7 +127,7 @@ func TestAskToolProviderContractStable(t *testing.T) {
 }
 
 func TestAskToolDismissTellsModelToStopNotProceed(t *testing.T) {
-	ctx := withCallContext(context.Background(), "call_1", event.Discard, fixedAsker{answers: nil}, false)
+	ctx := WithCallContext(context.Background(), "call_1", event.Discard, fixedAsker{answers: nil}, false)
 	out, err := NewAskTool().Execute(ctx, []byte(`{
 		"questions":[{
 			"header":"Config",
@@ -147,7 +147,7 @@ func TestAskToolDismissTellsModelToStopNotProceed(t *testing.T) {
 }
 
 func TestAskToolPartialAnswerMarksUnansweredQuestions(t *testing.T) {
-	ctx := withCallContext(context.Background(), "call_1", event.Discard,
+	ctx := WithCallContext(context.Background(), "call_1", event.Discard,
 		fixedAsker{answers: []event.AskAnswer{{QuestionID: "q1", Selected: []string{"Deploy"}}}}, false)
 	out, err := NewAskTool().Execute(ctx, []byte(`{
 		"questions":[

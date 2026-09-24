@@ -53,11 +53,11 @@ func CaptureShape(systemPrompt string, schemas []provider.ToolSchema, rewriteVer
 // can persist the schema set a run sampled against and a reader can recompute
 // the hash from it rather than trusting a second serialization.
 func NormalizedToolSchemas(schemas []provider.ToolSchema) []byte {
-	b, _ := json.Marshal(normalizeToolSchemas(schemas))
+	b, _ := json.Marshal(NormalizeToolSchemas(schemas))
 	return b
 }
 
-func normalizeToolSchemas(schemas []provider.ToolSchema) []provider.ToolSchema {
+func NormalizeToolSchemas(schemas []provider.ToolSchema) []provider.ToolSchema {
 	out := make([]provider.ToolSchema, len(schemas))
 	copy(out, schemas)
 	sort.Slice(out, func(i, j int) bool {

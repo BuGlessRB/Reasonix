@@ -125,7 +125,7 @@ func FilterRegistry(parent *tool.Registry, names []string, exclude ...string) *t
 	if !customAllowlist {
 		src = parent.Names()
 	} else {
-		src = expandToolPatterns(parent, src)
+		src = ExpandToolPatterns(parent, src)
 	}
 	for _, name := range src {
 		if ex[name] {
@@ -285,7 +285,7 @@ func mcpCapabilityAllowlist(parent *tool.Registry, names []string) map[string]bo
 	}
 	expanded := names
 	if parent != nil {
-		expanded = expandToolPatterns(parent, names)
+		expanded = ExpandToolPatterns(parent, names)
 	}
 	allowed := map[string]bool{}
 	for _, name := range expanded {
@@ -380,7 +380,7 @@ func ReadOnlySubagentToolRegistryForDepthWithRuntime(parent *tool.Registry, name
 	if len(src) == 0 {
 		src = parent.Names()
 	} else {
-		src = expandToolPatterns(parent, src)
+		src = ExpandToolPatterns(parent, src)
 	}
 	for _, name := range src {
 		if ex[name] {
@@ -410,10 +410,10 @@ func ReadOnlySubagentToolRegistryForDepthWithRuntime(parent *tool.Registry, name
 	return sub
 }
 
-// expandToolPatterns resolves explicit wildcard allowlist entries from imported
+// ExpandToolPatterns resolves explicit wildcard allowlist entries from imported
 // agent profiles against the current registry. Expansion is deterministic and
 // session-local, so optional MCP tools only enter a child after connection.
-func expandToolPatterns(parent *tool.Registry, names []string) []string {
+func ExpandToolPatterns(parent *tool.Registry, names []string) []string {
 	if parent == nil {
 		return nil
 	}

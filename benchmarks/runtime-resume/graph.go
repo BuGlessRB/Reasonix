@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/agentgraph"
-	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/delegation"
 	"reasonix/internal/state/execgraph"
 	"reasonix/internal/state/execjournal"
 )
@@ -259,7 +259,7 @@ func rebuiltGraph(o Observation) execgraph.Result {
 	}
 	children := make([]execgraph.ChildOutcome, 0, len(o.Children.Facts))
 	for _, f := range o.Children.Facts {
-		identity := agent.ResolveExecutionIdentity(
+		identity := delegation.ResolveExecutionIdentity(
 			sessionstore.SubagentMeta{ExecutionID: f.ExecutionID, ParentToolCallID: f.ParentToolCallID},
 			func(id string) bool { return opened[id] })
 		children = append(children, execgraph.ChildOutcome{

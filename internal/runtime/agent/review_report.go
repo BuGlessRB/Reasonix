@@ -148,10 +148,10 @@ func IssueReviewGrant(delivery evidence.ReviewKind, authority evidence.ReviewAut
 	return ReviewReportGrant{Delivery: delivery, Authority: authority, Execution: execution}
 }
 
-// attachReviewReport mounts the report tool for a worker that owes a verdict.
+// AttachReviewReport mounts the report tool for a worker that owes a verdict.
 // A worker owing none never sees it, which is also why an ordinary task cannot
 // file one: the instrument is absent, not merely refused.
-func attachReviewReport(reg *tool.Registry, grant ReviewReportGrant) {
+func AttachReviewReport(reg *tool.Registry, grant ReviewReportGrant) {
 	if grant.Delivery == "" {
 		return
 	}

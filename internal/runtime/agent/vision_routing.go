@@ -31,12 +31,12 @@ func WithVisionRouting(ctx context.Context, model string, reads func(modelRef st
 	return context.WithValue(ctx, visionRoutingKey{}, visionRouting{model: model, reads: reads})
 }
 
-// visionRefFor swaps in the vision role when this turn carries images the child
+// VisionRefFor swaps in the vision role when this turn carries images the child
 // would drop during serialization. It answers with the ref it was given whenever
 // nothing is configured, no image is in play, or the child already reads images —
 // so a review sub-agent spawned in a turn that happened to carry an attachment
 // keeps the model it was chosen for.
-func visionRefFor(ctx context.Context, childRef string) string {
+func VisionRefFor(ctx context.Context, childRef string) string {
 	if ctx == nil || len(SubagentImageCandidates(ctx)) == 0 {
 		return childRef
 	}
@@ -50,11 +50,11 @@ func visionRefFor(ctx context.Context, childRef string) string {
 	return routing.model
 }
 
-// subagentImageNote tells a delegate that the pictures ride the message it is
+// SubagentImageNote tells a delegate that the pictures ride the message it is
 // reading. Without it the child sees a path in its task and calls read_file,
 // which reads text and refuses — the delegation exists precisely because
 // something had to look at the image instead.
-func subagentImageNote(ctx context.Context) string {
+func SubagentImageNote(ctx context.Context) string {
 	n := len(SubagentImageCandidates(ctx))
 	if n == 0 {
 		return ""

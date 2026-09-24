@@ -704,7 +704,7 @@ retry or verification policy — those are decided by the task or the scheduler.
 Skill frontmatter may keep growing; `agent.ProfileFromSkill` is the single
 narrowing point, and routing metadata (triggers, auto-use, cost, freshness)
 stops there because it decides *when* a worker is chosen, not how it thinks.
-`internal/runtime/agent/profile_boundary_test.go` fails on any widening.
+`internal/runtime/delegation/profile_boundary_test.go` fails on any widening.
 
 ### 3.11 Sub-agents close with a host-adjudicated claim
 
