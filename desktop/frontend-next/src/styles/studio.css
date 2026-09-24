@@ -747,16 +747,25 @@ body { background: var(--page) !important; }
 .flow[data-empty] { display: flex; align-items: center; justify-content: center; }
 .flow:not([data-empty]) {
   flex: 0 0 auto;
-  margin-top: 18px;
-  margin-bottom: 16px;
+  width: auto;
+  margin: 0;
   padding: 28px 28px 36px;
+  box-sizing: border-box;
+}
+[data-pane="flow"]:has(> .flow:not([data-empty])) {
+  flex: 1 1 0;
+  width: min(var(--measure, 760px), calc(100% - var(--srail-w) - 34px));
+  margin: 18px auto 12px;
   border: 1px solid var(--hair);
   border-radius: 20px;
   background: rgb(30 31 30 / .98);
   box-shadow: 0 14px 46px rgb(0 0 0 / .18);
-  min-height: calc(100vh - 257px);
   box-sizing: border-box;
 }
+[data-pane="flow"]:has(> .flow:not([data-empty]))::-webkit-scrollbar-track { margin-block: 16px; }
+[data-pane="flow"]::-webkit-scrollbar-button { display: none; }
+[data-pane="flow"]:has(> .flow:not([data-empty])) .srail { right: 2px; }
+[data-fold~="side"] [data-pane="flow"]:has(> .flow:not([data-empty])) { width: calc(100% - 28px); }
 .hero { min-height: 420px; justify-content: center; }
 .hero .mk { color: #555951; font-size: 66px; font-weight: 300; }
 .hero .t { color: var(--text); font-size: 23px; letter-spacing: -.025em; }
@@ -1434,7 +1443,7 @@ body { background: var(--page) !important; }
 :root[data-theme="light"] .panes,
 :root[data-theme="light"] .pane,
 :root[data-theme="light"] .pane > .scroll { background: var(--page) !important; }
-:root[data-theme="light"] .flow:not([data-empty]) { background: rgb(255 255 252 / .98); border-color: var(--border); box-shadow: 0 14px 46px rgb(70 74 67 / .12); }
+:root[data-theme="light"] [data-pane="flow"]:has(> .flow:not([data-empty])) { background: rgb(255 255 252 / .98); border-color: var(--border); box-shadow: 0 14px 46px rgb(70 74 67 / .12); }
 :root[data-theme="light"] .flow .call[data-k="say"] > .g .sym { background: var(--accent); }
 :root[data-theme="light"] .flow .call[data-k="say"] > .g .sym::after { color: var(--accent-fg); }
 :root[data-theme="light"] .flow .call[data-k="say"] .hl .nm { color: var(--muted); }
@@ -3224,7 +3233,7 @@ body { font-size: 14px; line-height: 1.75; }
 /* A wallpaper remains visible, while cards keep enough of the selected pack's
    own surface to stay readable. */
 :root[data-bg] .compose,
-:root[data-bg] .flow:not([data-empty]) {
+:root[data-bg] [data-pane="flow"]:has(> .flow:not([data-empty])) {
   background: color-mix(in srgb, var(--raised) 78%, transparent) !important;
   -webkit-backdrop-filter: blur(11px) saturate(1.04);
   backdrop-filter: blur(11px) saturate(1.04);
