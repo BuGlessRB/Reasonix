@@ -686,7 +686,7 @@ body { background: var(--page) !important; }
 .rail .sessrow > .wsdel { opacity: 0; transition: opacity 100ms ease; }
 .rail .sessrow:hover > .wsdel,
 .rail .sessrow:focus-within > .wsdel { opacity: 1; }
-.rail .sessmore { margin: 4px 18px; color: var(--faint); }
+.rail .sessmore { width: calc(100% - 36px); margin: 4px 18px; color: var(--faint); }
 .railfoot {
   min-height: 50px; display: flex; align-items: center; gap: 4px;
   padding: 7px 14px; border-top: 1px solid var(--hair); background: var(--page);
