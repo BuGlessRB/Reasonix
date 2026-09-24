@@ -1181,11 +1181,12 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 	var partialToolStarted bool
 	var maxArgChars int
 	var lastArgProgress time.Time
+	var thought thoughtClock
 	// collect packages the stream state accumulated so far; stored is the
 	// finishReasoning output that becomes the round-tripped reasoning.
 	collect := func(stored string, err error) streamedTurn {
 		return streamedTurn{
-			text: text.String(), reasoning: stored, signature: signature,
+			text: text.String(), reasoning: stored, signature: signature, thoughtMs: thought.ms(),
 			reasoningID: reasoningID, reasoningStatus: reasoningStatus,
 			calls: calls, responsesItems: responsesItems, usage: usage,
 			partialToolStarted: partialToolStarted, partialCalls: partialCalls,
@@ -1246,18 +1247,12 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 					// and what the closing Message event re-renders must agree.
 					display = finalReasoning
 				}
-				if finalText != "" || display != "" {
-					sink.Emit(event.Event{
-						Kind:      event.Message,
-						Text:      DisplayAssistantText(finalText),
-						Reasoning: display,
-					})
-				}
+				emitAssistantMessage(sink, finalText, display, thought.ms())
 				usage = provider.UsageWithRequestAttemptCount(ctx, usage)
 				// A clean terminal never reports partialToolStarted: the calls
 				// slice is now authoritative and the partial cards were merged.
 				return streamedTurn{
-					text: finalText, reasoning: finalReasoning, signature: signature,
+					text: finalText, reasoning: finalReasoning, signature: signature, thoughtMs: thought.ms(),
 					reasoningID: reasoningID, reasoningStatus: reasoningStatus,
 					calls: calls, responsesItems: responsesItems, usage: usage,
 					partialCalls: partialCalls, maxArgChars: maxArgChars,
@@ -1265,6 +1260,7 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 			}
 			chunk = c
 		}
+		thought.observe(chunk, time.Now())
 		switch chunk.Type {
 		case provider.ChunkReasoning:
 			reasoning.WriteString(chunk.Text)

@@ -18,6 +18,7 @@ export interface HistoryMessage {
   // read it off, and the composer's current setting is a different fact.
   modelRef?: string;
   reasoning?: string;
+  thoughtMs?: number; // kernel-measured; absent on turns recorded before it was
   images?: number; // attachments on a user turn; an image-only one has no text
   toolCalls?: HistoryToolCall[];
   toolCallId?: string;

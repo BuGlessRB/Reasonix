@@ -715,7 +715,7 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions
         // Thinking came before the search that follows it, so it cannot ride the
         // next text part when the turn opened with a search.
         if (reasoning && (parts.length === 0 || parts[0].search)) {
-          out.push({ t: "say", id: nextId(), text: "", reasoning, done: true, model: m.modelRef });
+          out.push({ t: "say", id: nextId(), text: "", reasoning, done: true, model: m.modelRef, thoughtMs: m.thoughtMs });
           reasoning = undefined;
         }
         for (const part of parts) {
@@ -730,7 +730,7 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions
             continue;
           }
           if (!part.text && !reasoning) continue;
-          out.push({ t: "say", id: nextId(), text: part.text, reasoning, done: true, model: m.modelRef });
+          out.push({ t: "say", id: nextId(), text: part.text, reasoning, done: true, model: m.modelRef, thoughtMs: reasoning ? m.thoughtMs : undefined });
           reasoning = undefined;
         }
       }

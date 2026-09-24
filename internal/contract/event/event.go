@@ -514,6 +514,7 @@ type Event struct {
 	Detail           string                    // Notice: optional diagnostic text for expandable details
 	Code             string                    // Notice: stable id for frontend localization; empty = unmapped
 	Reasoning        string                    // Message: the full reasoning chain
+	ThoughtMs        int64                     // Message: host-measured thinking time; 0 = none
 	MemoryCitations  []provider.MemoryCitation // Message: local memory references displayed by rich frontends
 	Tool             Tool                      // ToolDispatch / ToolResult
 	Usage            *provider.Usage           // Usage

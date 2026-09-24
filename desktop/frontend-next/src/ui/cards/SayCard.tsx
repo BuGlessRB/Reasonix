@@ -1,10 +1,11 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStartsOpen } from "../../state/foldpref";
 import { StudioIcon } from "../StudioIcon";
 import { t } from "../../i18n";
 import { count, decimals } from "../../i18n/format";
 import { Sym } from "../Sym";
 import type { Item } from "../../state/session";
+import { thoughtStartedAt } from "../../state/say";
 import { LazyMarkdown } from "../LazyMarkdown";
 import { Boundary } from "../Boundary";
 import { CopyButton } from "../CopyButton";
@@ -21,6 +22,22 @@ function thoughtLabel(item: Extract<Item, { t: "say" }>) {
   return item.thoughtMs
     ? t("思考 {secs} 秒 · {chars}", { secs: decimals(item.thoughtMs / 1000, 1), chars })
     : t("思考 {chars}", { chars });
+}
+
+const LIVE_TICK_MS = 100;
+
+// While the model is still thinking the reader sees the clock run, not a bare
+// ellipsis; a card this window did not watch begin has no start to count from.
+function LiveThought({ id }: { id: string }) {
+  const since = thoughtStartedAt(id);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (since === undefined) return;
+    const h = window.setInterval(() => setNow(Date.now()), LIVE_TICK_MS);
+    return () => window.clearInterval(h);
+  }, [since]);
+  if (since === undefined) return <>{t("思考中…")}</>;
+  return <>{t("思考中 {secs} 秒", { secs: decimals(Math.max(0, now - since) / 1000, 1) })}</>;
 }
 
 // A ref is "provider/model"; the model is what identifies it to a reader, and
@@ -98,7 +115,7 @@ export function SayCard({ item, afterAnswer, reply }: { item: Extract<Item, { t:
           {item.reasoning?.trim() && (
             <details className="think" open={open} onToggle={(e) => e.currentTarget.open !== open && setOpen(e.currentTarget.open)}>
               <summary>
-                <span className="fold">{item.done ? thoughtLabel(item) : t("思考中…")}</span>
+                <span className="fold">{item.done || item.thoughtMs !== undefined ? thoughtLabel(item) : <LiveThought id={item.id} />}</span>
               </summary>
               <div className="tk">
                 {thought}

@@ -6,6 +6,12 @@ import { nextId } from "./ids";
 // what the card renders, and putting it there would make every append rewrite it.
 const thoughtSince = new Map<string, number>();
 
+/** When this window saw the card start thinking; undefined for a card it did
+ *  not watch begin, which then has no clock to run. */
+export function thoughtStartedAt(id: string): number | undefined {
+  return thoughtSince.get(id);
+}
+
 export function appendText(items: Item[], text: string, field: "text" | "reasoning", source?: string, model?: string): Item[] {
   const last = items[items.length - 1];
   if (last && last.t === "say" && !last.done) {
@@ -62,13 +68,16 @@ export function foldMessage(items: Item[], ev: WireEvent): Item[] {
       break;
     }
   }
+  // The kernel's measure wins over this window's: it is the one the transcript
+  // keeps, so a reopened turn says the same thing.
+  const measured = ev.thoughtMs || undefined;
   if (at < 0) {
     if (!ev.text && !ev.reasoning) return items;
-    return [...items, { t: "say", id: nextId(), text: ev.text ?? "", reasoning: ev.reasoning, done: true, source: ev.source }];
+    return [...items, { t: "say", id: nextId(), text: ev.text ?? "", reasoning: ev.reasoning, done: true, source: ev.source, thoughtMs: measured }];
   }
   const open = items[at] as Extract<Item, { t: "say" }>;
   const next = items.slice();
-  const ran = open.thoughtMs ?? (open.reasoning ? Date.now() - (thoughtSince.get(open.id) ?? Date.now()) : undefined);
+  const ran = measured ?? open.thoughtMs ?? (open.reasoning ? Date.now() - (thoughtSince.get(open.id) ?? Date.now()) : undefined);
   thoughtSince.delete(open.id);
   next[at] = {
     ...open,

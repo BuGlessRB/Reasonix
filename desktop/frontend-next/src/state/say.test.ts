@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { initialState, reduce, type Item, type SessionEvent } from "./session";
+import { fromHistory, initialState, reduce, type Item, type SessionEvent } from "./session";
+import { appendText, foldMessage } from "./say";
 
 // The kinds internal/frontend/serve/wirelog.go keeps. Everything else is dropped from
 // the record on purpose — streamed deltas are one frame per chunk and say
@@ -73,5 +74,24 @@ describe("the settled message frame is enough to rebuild the card", () => {
     expect(says(partial.reduce(reduce, initialState).items)).toEqual([
       { text: "half an answer", reasoning: "thinking about it", done: true },
     ]);
+  });
+});
+
+// The kernel times the thought and keeps it with the turn; this window's own
+// clock is only a stand-in for turns recorded before it did.
+describe("thinking time", () => {
+  it("takes the kernel's measure over the window's own", () => {
+    let items = appendText([], "weighing", "reasoning");
+    items = foldMessage(items, { kind: "message", text: "answer", reasoning: "weighing", thoughtMs: 65800 });
+    expect((items[0] as Extract<Item, { t: "say" }>).thoughtMs).toBe(65800);
+  });
+
+  it("keeps it when a transcript is reopened", () => {
+    const { items } = fromHistory([
+      { role: "user", content: "q", msgIndex: 0 },
+      { role: "assistant", content: "a", reasoning: "r", thoughtMs: 4200, msgIndex: 1 },
+    ]);
+    const say = items.find((i) => i.t === "say") as Extract<Item, { t: "say" }>;
+    expect(say.thoughtMs).toBe(4200);
   });
 });

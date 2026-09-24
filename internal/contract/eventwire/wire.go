@@ -17,6 +17,7 @@ type Event struct {
 	Detail          string           `json:"detail,omitempty" externalizable:"true"`
 	Code            string           `json:"code,omitempty"`
 	Reasoning       string           `json:"reasoning,omitempty" externalizable:"true"`
+	ThoughtMs       int64            `json:"thoughtMs,omitempty"`
 	MemoryCitations []MemoryCitation `json:"memoryCitations,omitempty"`
 	Level           string           `json:"level,omitempty"`
 	// Audience separates a notice about this conversation from one about the
@@ -120,7 +121,7 @@ type StreamAttempt struct {
 
 // ToWire converts a typed runtime event into the shared frontend JSON contract.
 func ToWire(e event.Event) Event {
-	w := Event{Kind: kindNames[e.Kind], Text: e.Text, Detail: e.Detail, Reasoning: e.Reasoning, ItemID: e.ItemID, Source: e.Source}
+	w := Event{Kind: kindNames[e.Kind], Text: e.Text, Detail: e.Detail, Reasoning: e.Reasoning, ThoughtMs: e.ThoughtMs, ItemID: e.ItemID, Source: e.Source}
 	w.ModelRef = wireModelRef(e)
 	if len(e.MemoryCitations) > 0 {
 		w.MemoryCitations = ToWireMemoryCitations(e.MemoryCitations)

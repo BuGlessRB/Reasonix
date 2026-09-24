@@ -611,6 +611,8 @@ export interface WireEvent {
   detail?: string;
   code?: string;
   reasoning?: string;
+  // message: how long the kernel measured this reply thinking, in ms.
+  thoughtMs?: number;
   level?: string;
   // "operator" means the notice is about the machine running this conversation,
   // not about the conversation. Only the latter belongs in a transcript.

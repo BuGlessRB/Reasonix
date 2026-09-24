@@ -29,6 +29,7 @@ import (
 type streamedTurn struct {
 	text               string
 	reasoning          string
+	thoughtMs          int64 // see thoughtClock
 	signature          string
 	reasoningID        string
 	reasoningStatus    string
@@ -329,6 +330,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 			ToolCalls:          calls,
 			ResponsesItems:     responsesItems,
 			WorkDurationMs:     state.workDurationMs(),
+			ThoughtMs:          streamed.thoughtMs,
 			ModelRef:           a.modelRef,
 		})
 

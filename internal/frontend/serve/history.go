@@ -41,6 +41,7 @@ type historyMessage struct {
 	// turn_started to read it off, and the composer's current setting is a
 	// different fact that has usually moved on.
 	ModelRef   string            `json:"modelRef,omitempty"`
+	ThoughtMs  int64             `json:"thoughtMs,omitempty"` // host-measured, so a reopened turn keeps it
 	ToolCalls  []historyToolCall `json:"toolCalls,omitempty"`
 	ToolCallID string            `json:"toolCallId,omitempty"`
 	// The host's own account of a result that did not succeed. Without it a
@@ -75,6 +76,7 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 		if m.Role == provider.RoleAssistant {
 			hm.ModelRef = m.ModelRef
 			hm.Reasoning = m.ReasoningContent
+			hm.ThoughtMs = m.ThoughtMs
 			if len(m.ToolCalls) > 0 {
 				hm.ToolCalls = make([]historyToolCall, len(m.ToolCalls))
 				for i, tc := range m.ToolCalls {

@@ -78,6 +78,7 @@ type Message struct {
 	Name            string            `json:"name,omitempty"`            // tool message: tool name
 	MemoryCitations []MemoryCitation  `json:"memoryCitations,omitempty"` // local UI metadata; provider requests ignore it
 	WorkDurationMs  int64             `json:"workDurationMs,omitempty"`  // local UI metadata; provider requests ignore it
+	ThoughtMs       int64             `json:"thoughtMs,omitempty"`       // host-measured thinking time; local UI metadata
 	CreatedAt       int64             `json:"createdAt,omitempty"`       // local UI metadata; unix milliseconds; stripped before provider requests
 	Edited          bool              `json:"edited,omitempty"`          // local UI metadata; provider requests ignore it
 	Original        string            `json:"original,omitempty"`        // user prompt before inline edit
@@ -225,20 +226,6 @@ func AutoOutputBudget(reasoningEnabled bool, effort string) int {
 	default:
 		return DefaultReasoningOutputTokens
 	}
-}
-
-// TemperaturePtr wraps v in a pointer so callers that explicitly want a
-// specific temperature, including 0 for deterministic output, can distinguish
-// that intent from "not set, use the provider default".
-func TemperaturePtr(v float64) *float64 { return new(v) }
-
-// OptionalTemperature returns nil when v is zero, matching the historical
-// config behavior where 0 meant "not configured", and a pointer otherwise.
-func OptionalTemperature(v float64) *float64 {
-	if v == 0 {
-		return nil
-	}
-	return &v
 }
 
 // interruptedToolResult stands in for a tool result that never landed — an

@@ -57,6 +57,7 @@ export const EN: Record<string, string> = {
   "连接已断开，重试 {attempt}/{max} · {secs}s": "Connection dropped · retry {attempt}/{max} · {secs}s",
   "Agent": "Agent",
   "思考中…": "Thinking…",
+  "思考中 {secs} 秒": "Thinking · {secs}s",
   "复制": "Copy",
   "已复制": "Copied",
   "复制不了": "Copy blocked",
