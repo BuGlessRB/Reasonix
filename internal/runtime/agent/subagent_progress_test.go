@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"sync"
 	"testing"
@@ -753,8 +754,8 @@ func TestBackgroundTaskEmitsQueuedRunningCompleted(t *testing.T) {
 	ctx = jobs.WithSession(ctx, "sess-bg")
 	ctx = WithParentSession(ctx, "sess-bg")
 
-	sched := NewSubagentScheduler(1, 1)
-	holdRelease, err := sched.Acquire(context.Background(), AcquireRequest{Writer: false})
+	sched := writeclaim.NewSubagentScheduler(1, 1)
+	holdRelease, err := sched.Acquire(context.Background(), writeclaim.AcquireRequest{Writer: false})
 	if err != nil {
 		t.Fatal(err)
 	}

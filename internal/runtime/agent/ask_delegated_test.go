@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"testing"
 
@@ -27,7 +28,7 @@ func TestADelegatedRunReachesTheAskerTheParentWasGiven(t *testing.T) {
 	}}
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), testenv.TempDir(t), "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 
 	ctx := withCallContext(context.Background(), "call-1", event.Discard, asker, false)
 	args, err := json.Marshal(map[string]string{"prompt": "Decide which path to take."})
@@ -58,7 +59,7 @@ func TestABackgroundRunKeepsTheHeadlessFallback(t *testing.T) {
 	}}
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), testenv.TempDir(t), "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 
 	// What fleet items and parallel tasks build: the same call context with the
 	// asker deliberately dropped.

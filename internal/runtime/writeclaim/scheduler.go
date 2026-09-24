@@ -1,4 +1,4 @@
-package agent
+package writeclaim
 
 import (
 	"cmp"
@@ -79,6 +79,13 @@ func NewSubagentScheduler(maxTotal, maxWriters int) *SubagentScheduler {
 }
 
 // Limits returns the effective total/writer caps.
+// Queued is how many acquires are waiting for a slot.
+func (s *SubagentScheduler) Queued() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.waiters)
+}
+
 func (s *SubagentScheduler) Limits() (total, writers int) {
 	if s == nil {
 		return DefaultMaxSubagentConcurrency, DefaultMaxParallelWriters

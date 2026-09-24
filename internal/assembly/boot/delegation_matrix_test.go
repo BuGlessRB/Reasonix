@@ -18,6 +18,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/execgraph"
 	"reasonix/internal/state/execjournal"
 )
@@ -32,7 +33,7 @@ func TestDelegationClassesStayApart(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Run("asks the session scheduler, and stores nothing until it is admitted", func(t *testing.T) {
 				w := newMatrixWorld(t)
-				release, err := w.scheduler.Acquire(context.Background(), agent.AcquireRequest{})
+				release, err := w.scheduler.Acquire(context.Background(), writeclaim.AcquireRequest{})
 				if err != nil {
 					t.Fatalf("hold the only slot: %v", err)
 				}
@@ -199,7 +200,7 @@ type matrixWorld struct {
 	tasks       *agent.TaskTool
 	skills      *skillSubagents
 	registry    *tool.Registry
-	scheduler   *agent.SubagentScheduler
+	scheduler   *writeclaim.SubagentScheduler
 	provider    *matrixProvider
 	sink        *matrixSink
 	ctx         context.Context
@@ -213,7 +214,7 @@ func newMatrixWorld(t *testing.T) *matrixWorld {
 	reg := tool.NewRegistry()
 	reg.Add(matrixReadTool{})
 	prov := &matrixProvider{}
-	sched := agent.NewSubagentScheduler(1, 1)
+	sched := writeclaim.NewSubagentScheduler(1, 1)
 	tasks := agent.NewTaskToolWithOptions(agent.TaskToolOptions{
 		Provider: prov, ParentRegistry: reg, MaxSteps: 6, ContextWindow: 8192,
 	}).WithTranscripts(agent.NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").

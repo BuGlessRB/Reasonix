@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"sync"
 	"testing"
@@ -114,7 +115,7 @@ func TestFleetAggregateCarriesTheFailureIdentity(t *testing.T) {
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(3, 3))
+		WithScheduler(writeclaim.NewSubagentScheduler(3, 3))
 	fleet := NewFleetTool(task)
 	ctx := withCallContext(context.Background(), "fleet-call", event.Discard, nil, false)
 	ctx = WithParentSession(ctx, "parent-session")
@@ -156,7 +157,7 @@ func TestFleetCancellationStillAnswersCanceled(t *testing.T) {
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(2, 2))
+		WithScheduler(writeclaim.NewSubagentScheduler(2, 2))
 	fleet := NewFleetTool(task)
 	ctx, cancel := context.WithCancel(withCallContext(context.Background(), "fleet-call", event.Discard, nil, false))
 	cancel()
@@ -182,7 +183,7 @@ func TestFleetAggregateLeavesAnUnnamedFailureUnclassified(t *testing.T) {
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(2, 2))
+		WithScheduler(writeclaim.NewSubagentScheduler(2, 2))
 	fleet := NewFleetTool(task)
 	ctx := withCallContext(context.Background(), "fleet-call", event.Discard, nil, false)
 	ctx = WithParentSession(ctx, "parent-session")

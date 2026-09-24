@@ -6,30 +6,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/safety/permission"
 )
-
-// answerGate records what it was asked and answers with a fixed verdict.
-type answerGate struct {
-	allow    bool
-	reason   string
-	asked    []string
-	askedFor []string
-}
-
-func (g *answerGate) Check(_ context.Context, toolName string, args json.RawMessage, _ bool) (bool, string, error) {
-	g.asked = append(g.asked, toolName)
-	var body struct {
-		Path string `json:"path"`
-	}
-	_ = json.Unmarshal(args, &body)
-	g.askedFor = append(g.askedFor, body.Path)
-	return g.allow, g.reason, nil
-}
 
 func fenceFixture(t *testing.T, gate Gate) (root string, writer tool.Tool, inner *recordingWriter) {
 	t.Helper()
@@ -40,14 +23,14 @@ func fenceFixture(t *testing.T, gate Gate) (root string, writer tool.Tool, inner
 	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	claim, err := NormalizeWritePaths(root, []string{"auth"})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"auth"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	inner = &recordingWriter{name: "write_file", writesPaths: true}
 	reg := tool.NewRegistry()
 	reg.Add(inner)
-	bound, _ := BindWritePaths(reg, NewWriteGrant(claim), gate, NewSubagentScheduler(4, 2), root, false)
+	bound, _ := BindWritePaths(reg, writeclaim.NewWriteGrant(claim), gate, writeclaim.NewSubagentScheduler(4, 2), root, false)
 	return root, mustGet(t, bound, "write_file"), inner
 }
 
@@ -79,7 +62,7 @@ func TestWideningRefusedLeavesTheFenceClosed(t *testing.T) {
 	root, writer, inner := fenceFixture(t, gate)
 
 	_, err := writer.Execute(context.Background(), json.RawMessage(`{"path":`+jsonPath(filepath.Join(root, "package.json"))+`,"content":"x"}`))
-	if !errors.Is(err, ErrWriteFenceClosed) {
+	if !errors.Is(err, writeclaim.ErrWriteFenceClosed) {
 		t.Fatalf("refused widening = %v, want ErrWriteFenceClosed", err)
 	}
 	if inner.calls != 0 {
@@ -121,32 +104,20 @@ func TestADeclaredPathIsNeverAskedAbout(t *testing.T) {
 	}
 }
 
-// The audit compares observed mutations against everything the run was allowed
-// to write. A path the user granted must not surface as an escape.
-func TestGrantedPathsCountAsAllowedInTheAudit(t *testing.T) {
-	root := testenv.TempDir(t)
-	if err := os.MkdirAll(filepath.Join(root, "auth"), 0o755); err != nil {
-		t.Fatal(err)
+// answerGate records what it was asked and answers with a fixed verdict.
+type answerGate struct {
+	allow    bool
+	reason   string
+	asked    []string
+	askedFor []string
+}
+
+func (g *answerGate) Check(_ context.Context, toolName string, args json.RawMessage, _ bool) (bool, string, error) {
+	g.asked = append(g.asked, toolName)
+	var body struct {
+		Path string `json:"path"`
 	}
-	outside := filepath.Join(root, "package.json")
-	if err := os.WriteFile(outside, []byte("{}"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	claim, err := NormalizeWritePaths(root, []string{"auth"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	grant := NewWriteGrant(claim)
-	if grant.Scope().AllowsPath(outside) {
-		t.Fatal("an ungranted path is already in scope")
-	}
-	grant.Add(outside)
-	if !grant.Scope().AllowsPath(outside) {
-		t.Error("a granted path is missing from the audit scope; it would be reported as an escape")
-	}
-	// Scheduling still reads only what was declared: nothing added later was
-	// proven against the runs that had already started.
-	if grant.Declared().AllowsPath(outside) {
-		t.Error("a granted path leaked into the declared set that scheduling parallelizes on")
-	}
+	_ = json.Unmarshal(args, &body)
+	g.askedFor = append(g.askedFor, body.Path)
+	return g.allow, g.reason, nil
 }

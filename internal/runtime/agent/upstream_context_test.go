@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"sync"
 	"testing"
@@ -104,7 +105,7 @@ func TestFleetDeliversUpstreamAnswerToTheDependentChild(t *testing.T) {
 	store := mustSubagentStore(t)
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, root, "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 	fleet := NewFleetTool(task)
 	ctx := withCallContext(context.Background(), "fleet-call", event.Discard, nil, false)
 	ctx = WithParentSession(ctx, "upstream-parent")
@@ -165,7 +166,7 @@ func TestUpstreamAblationOrdersWithoutDelivering(t *testing.T) {
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4)).
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4)).
 		WithAblation(ablation.New(ablation.Upstream))
 	fleet := NewFleetTool(task)
 	ctx := withCallContext(context.Background(), "fleet-call", event.Discard, nil, false)

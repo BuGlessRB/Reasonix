@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/writeclaim"
 )
 
 // subagentConfig is what a build resolves about sub-agents before any of them
@@ -20,7 +21,7 @@ type subagentConfig struct {
 	profileLookup   func(name string) (agent.ProfileDefinition, bool)
 	profileModel    func(profile string) string
 	profileEffort   func(profile string) string
-	scheduler       *agent.SubagentScheduler
+	scheduler       *writeclaim.SubagentScheduler
 	taskModel       string
 	taskEffort      string
 	maxDepth        int
@@ -28,7 +29,7 @@ type subagentConfig struct {
 
 func newSubagentConfig(opts Options, cfg *config.Config, entry *config.ProviderEntry, modelName string,
 	resolver provider.Resolver, proxy netclient.ProxySpec, skills *skill.Store) subagentConfig {
-	maxConcurrency, maxWriters := agent.NormalizeConcurrencyLimits(
+	maxConcurrency, maxWriters := writeclaim.NormalizeConcurrencyLimits(
 		cfg.Agent.MaxSubagentConcurrency, cfg.Agent.MaxParallelWriters,
 	)
 	return subagentConfig{
@@ -79,7 +80,7 @@ func newSubagentConfig(opts Options, cfg *config.Config, entry *config.ProviderE
 		},
 		profileModel:  func(profile string) string { return firstConfigured(cfg.Agent.SubagentModels, profile) },
 		profileEffort: func(profile string) string { return firstConfigured(cfg.Agent.SubagentEfforts, profile) },
-		scheduler:     agent.NewSubagentScheduler(maxConcurrency, maxWriters),
+		scheduler:     writeclaim.NewSubagentScheduler(maxConcurrency, maxWriters),
 		taskModel:     firstNonEmpty(cfg.Agent.SubagentModels["task"], cfg.Agent.SubagentModel),
 		taskEffort:    firstNonEmpty(cfg.Agent.SubagentEfforts["task"], cfg.Agent.SubagentEffort),
 		maxDepth:      agent.NormalizeMaxSubagentDepth(cfg.Agent.MaxSubagentDepth),

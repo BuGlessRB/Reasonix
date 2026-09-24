@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"sync"
 	"testing"
@@ -78,7 +79,7 @@ func TestFleetPlanOrdersTransitiveDependents(t *testing.T) {
 // flat fleet could never express.
 func TestFleetOrderedWritersMayShareWritePaths(t *testing.T) {
 	root := testenv.TempDir(t)
-	claim, err := NormalizeWritePaths(root, []string{"api"})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"api"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestFleetOrderedWritersMayShareWritePaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ordered.validateConcurrentWriteClaims([]WritePathSet{claim, claim}); err != nil {
+	if err := ordered.validateConcurrentWriteClaims([]writeclaim.WritePathSet{claim, claim}); err != nil {
 		t.Fatalf("ordered writers must be allowed to share paths: %v", err)
 	}
 
@@ -97,7 +98,7 @@ func TestFleetOrderedWritersMayShareWritePaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := concurrent.validateConcurrentWriteClaims([]WritePathSet{claim, claim}); err == nil {
+	if err := concurrent.validateConcurrentWriteClaims([]writeclaim.WritePathSet{claim, claim}); err == nil {
 		t.Fatal("two writers that can run at once must still fail preflight on overlap")
 	}
 }
@@ -138,7 +139,7 @@ func TestFleetSkipsDependentsOfFailedTask(t *testing.T) {
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 	fleet := NewFleetTool(task)
 	ctx := withCallContext(context.Background(), "fleet-call", event.Discard, nil, false)
 

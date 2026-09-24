@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"testing"
 
@@ -78,7 +79,7 @@ func newAdoptionFleet(t *testing.T, store *SubagentStore, root string, prov *ups
 	reg.Add(fakeReadFileTool{})
 	return NewFleetTool(NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, root, "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4)))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4)))
 }
 
 func adoptionCtx(sink event.Sink) context.Context {

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestTaskWriterWithoutPathsClaimsWholeWorkspace(t *testing.T) {
 	root := testenv.TempDir(t)
 	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(6, 3))
+		WithScheduler(writeclaim.NewSubagentScheduler(6, 3))
 
 	spec, err := task.buildTaskSpec(context.Background(), "rewrite docs", "", "", nil, nil, 0, "", "", "", "", false, false)
 	if err != nil {

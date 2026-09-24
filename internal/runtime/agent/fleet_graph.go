@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/runtime/writeclaim"
 	"slices"
 	"strconv"
 	"strings"
@@ -214,7 +215,7 @@ func (p fleetPlan) ordered(a, b int) bool {
 // that can actually run at the same time. Two writers joined by a dependency are
 // serialised by the graph, so an implement → review chain may legitimately share
 // paths that two parallel writers never could.
-func (p fleetPlan) validateConcurrentWriteClaims(claims []WritePathSet) error {
+func (p fleetPlan) validateConcurrentWriteClaims(claims []writeclaim.WritePathSet) error {
 	for i := range claims {
 		if claims[i].Empty() {
 			continue

@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/safety/evidence"
 )
 
@@ -212,7 +213,7 @@ func newReviewWorldWith(t *testing.T, prov reviewProbeProvider, profiles ...skil
 	tasks := agent.NewTaskToolWithOptions(agent.TaskToolOptions{
 		Provider: prov, ParentRegistry: reg, MaxSteps: 4, ContextWindow: 8192,
 	}).WithTranscripts(agent.NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").
-		WithScheduler(agent.NewSubagentScheduler(2, 2)).
+		WithScheduler(writeclaim.NewSubagentScheduler(2, 2)).
 		WithProfileLookup(func(name string) (agent.ProfileDefinition, bool) {
 			for _, sk := range profiles {
 				if sk.Name == name {
@@ -228,7 +229,7 @@ func newReviewWorldWith(t *testing.T, prov reviewProbeProvider, profiles ...skil
 		skills: &skillSubagents{
 			root: root, cfg: config.Default(), registry: reg, tasks: tasks, maxSteps: 4,
 			maxDepth: 3, provider: prov, entry: &config.ProviderEntry{},
-			scheduler: agent.NewSubagentScheduler(2, 2),
+			scheduler: writeclaim.NewSubagentScheduler(2, 2),
 			identity:  func(m, e string) (string, string) { return m, e },
 			runOptions: func(_ context.Context, steps int, price *provider.Pricing, ctxWin, depth int) agent.Options {
 				return agent.Options{MaxSteps: steps, Pricing: price, ContextWindow: ctxWin, SubagentDepth: depth}

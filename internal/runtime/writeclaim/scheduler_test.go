@@ -1,4 +1,4 @@
-package agent
+package writeclaim
 
 import (
 	"context"
@@ -123,10 +123,7 @@ func waitForQueuedAcquires(t *testing.T, s *SubagentScheduler, want int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		s.mu.Lock()
-		got := len(s.waiters)
-		s.mu.Unlock()
-		if got == want {
+		if s.Queued() == want {
 			return
 		}
 		time.Sleep(time.Millisecond)

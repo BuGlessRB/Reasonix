@@ -6,6 +6,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/extension/dispatch"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/checkpoint"
 	"reasonix/internal/state/memory"
@@ -73,7 +74,7 @@ type agentServices struct {
 	jobs *jobs.Manager
 	// writeScheduler coordinates parent-agent writes against background
 	// subagent write claims. Set on the parent executor only.
-	writeScheduler *SubagentScheduler
+	writeScheduler *writeclaim.SubagentScheduler
 	// workspaceLease is shared by every writer-capable agent in one Delivery
 	// session, acquired lazily on the first mutation and held through the final
 	// participating run so verification stays isolated.

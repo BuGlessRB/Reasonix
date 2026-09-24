@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"testing"
 
@@ -81,7 +82,7 @@ func TestReadOnlyTaskStaysEphemeralOnTheUnifiedRunner(t *testing.T) {
 	}}
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 
 	ctx := withCallContext(context.Background(), "call-1", event.Discard, nil, false)
 	ctx = WithParentSession(ctx, filepath.Join(root, "parent.jsonl"))

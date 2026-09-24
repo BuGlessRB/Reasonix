@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"testing"
 
@@ -25,14 +26,14 @@ func boundWriterFixture(t *testing.T) (root string, writer tool.Tool, inner *rec
 	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	claim, err := NormalizeWritePaths(root, []string{"auth"})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"auth"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	inner = &recordingWriter{name: "write_file", writesPaths: true}
 	reg := tool.NewRegistry()
 	reg.Add(inner)
-	bound, _ := BindWritePaths(reg, NewWriteGrant(claim), nil, NewSubagentScheduler(4, 2), root, false)
+	bound, _ := BindWritePaths(reg, writeclaim.NewWriteGrant(claim), nil, writeclaim.NewSubagentScheduler(4, 2), root, false)
 	return root, mustGet(t, bound, "write_file"), inner
 }
 
@@ -46,7 +47,7 @@ func mustRejectWrite(t *testing.T, writer tool.Tool, inner *recordingWriter, arg
 	if err == nil {
 		t.Fatalf("write %s was allowed (result %q); it escapes the declared write_paths", args, out)
 	}
-	if !errors.Is(err, ErrWriteFenceClosed) {
+	if !errors.Is(err, writeclaim.ErrWriteFenceClosed) {
 		t.Fatalf("unexpected rejection reason: %v", err)
 	}
 	if inner.calls != 0 {
@@ -77,14 +78,14 @@ func TestWriteClaimChecksMoveDestination(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "auth"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	claim, err := NormalizeWritePaths(root, []string{"auth"})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"auth"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	inner := &recordingWriter{name: "move_file", writesPaths: true}
 	reg := tool.NewRegistry()
 	reg.Add(inner)
-	bound, _ := BindWritePaths(reg, NewWriteGrant(claim), nil, NewSubagentScheduler(4, 2), root, false)
+	bound, _ := BindWritePaths(reg, writeclaim.NewWriteGrant(claim), nil, writeclaim.NewSubagentScheduler(4, 2), root, false)
 	mover := mustGet(t, bound, "move_file")
 
 	args := `{"source_path":` + jsonPath(filepath.Join(root, "auth", "a.go")) +
@@ -100,14 +101,14 @@ func TestWriteClaimChecksMoveDestination(t *testing.T) {
 // A writer the host cannot path-scope is dropped, never silently trusted.
 func TestWriteClaimDropsUnbindableWriters(t *testing.T) {
 	root := testenv.TempDir(t)
-	claim, err := NormalizeWritePaths(root, []string{"."})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"."})
 	if err != nil {
 		t.Fatal(err)
 	}
 	reg := tool.NewRegistry()
 	reg.Add(&recordingWriter{name: "deploy_release"})
 	reg.Add(&recordingWriter{name: "read_notes", readOnly: true})
-	bound, removed := BindWritePaths(reg, NewWriteGrant(claim), nil, NewSubagentScheduler(4, 2), root, false)
+	bound, removed := BindWritePaths(reg, writeclaim.NewWriteGrant(claim), nil, writeclaim.NewSubagentScheduler(4, 2), root, false)
 	if _, ok := bound.Get("deploy_release"); ok {
 		t.Fatal("an unbindable writer survived the write_paths boundary")
 	}
@@ -123,7 +124,7 @@ func TestWriteClaimDropsUnbindableWriters(t *testing.T) {
 // could not bind, the host reports it to the parent rather than staying silent.
 func TestClaimViolationsSurfaceOutOfClaimMutations(t *testing.T) {
 	root := testenv.TempDir(t)
-	claim, err := NormalizeWritePaths(root, []string{"auth"})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"auth"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +147,7 @@ func TestClaimViolationsSurfaceOutOfClaimMutations(t *testing.T) {
 // real semantics so the SPEC claim stays honest.
 func TestUndeclaredWriterHasNoIntraWorkspaceEnforcement(t *testing.T) {
 	root := testenv.TempDir(t)
-	whole, err := WholeWorkspaceWriteClaim(root)
+	whole, err := writeclaim.WholeWorkspaceWriteClaim(root)
 	if err != nil {
 		t.Fatal(err)
 	}

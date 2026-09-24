@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 
 	"reasonix/internal/contract/agentgraph"
@@ -141,7 +142,7 @@ type CapabilityGrant struct {
 	// ProfileTools is the profile frontmatter allowed-tools ceiling.
 	ProfileTools []string
 	// WritePaths is the normalized write claim (empty for read-only).
-	WritePaths WritePathSet
+	WritePaths writeclaim.WritePathSet
 }
 
 // ContextRequest is the context a child starts from, as opposed to the task it

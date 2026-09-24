@@ -11,7 +11,7 @@
     "doc-prose": 2324,
     "error-text": 9,
     "essay": 2829,
-    "file-size": 22797,
+    "file-size": 22798,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 3335,
@@ -1069,9 +1069,6 @@
       "complexity": 1,
       "essay": 5
     },
-    "internal/runtime/agent/scheduler.go": {
-      "essay": 1
-    },
     "internal/runtime/agent/steer_flush_test.go": {
       "essay": 1
     },
@@ -1084,7 +1081,7 @@
     "internal/runtime/agent/task.go": {
       "complexity": 12,
       "essay": 35,
-      "file-size": 1122,
+      "file-size": 1123,
       "function-size": 94,
       "orphan": 1
     },
@@ -1104,9 +1101,6 @@
     },
     "internal/runtime/agent/width.go": {
       "essay": 1
-    },
-    "internal/runtime/agent/write_claims.go": {
-      "orphan": 1
     },
     "internal/runtime/capability/audit.go": {
       "struct-state": 6
@@ -1168,6 +1162,12 @@
       "essay": 8
     },
     "internal/runtime/taskmonitor/tmux.go": {
+      "orphan": 1
+    },
+    "internal/runtime/writeclaim/scheduler.go": {
+      "essay": 1
+    },
+    "internal/runtime/writeclaim/write_claims.go": {
       "orphan": 1
     },
     "internal/safety/evidence/evidence.go": {

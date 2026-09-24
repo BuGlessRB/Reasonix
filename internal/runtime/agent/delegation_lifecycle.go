@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"reasonix/internal/runtime/writeclaim"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -30,7 +31,7 @@ type delegationLifecycle struct {
 // Called once every deterministic failure is behind it — a prompt that would
 // not settle or a runtime that would not resolve is not work the orchestration
 // ever held, and a journal that said otherwise would be inventing history.
-func (t *TaskTool) openDelegation(ctx context.Context, spec *ProfileExecSpec, req *AcquireRequest, trk *subagentProgressTracker) (*delegationLifecycle, error) {
+func (t *TaskTool) openDelegation(ctx context.Context, spec *ProfileExecSpec, req *writeclaim.AcquireRequest, trk *subagentProgressTracker) (*delegationLifecycle, error) {
 	parentID, sink, _, _ := CallContext(ctx)
 	_, declared := graphNodeDeclared(ctx)
 	// An ephemeral run opens nothing, picture included: a node no record

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
@@ -137,7 +138,7 @@ func TestSubagentListingRecoversFleetChildrenByReference(t *testing.T) {
 	store := mustSubagentStore(t)
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, root, "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 	ctx := withCallContext(context.Background(), "fleet-call", event.Discard, nil, false)
 	ctx = WithParentSession(ctx, "listing-parent")
 

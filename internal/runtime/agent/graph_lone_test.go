@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/runtime/writeclaim"
 	"slices"
 	"testing"
 
@@ -33,7 +34,7 @@ func loneTaskTool(t *testing.T) *TaskTool {
 	reg.Add(fakeReadFileTool{})
 	return NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), testenv.TempDir(t), "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 }
 
 // A sub-agent ran eight steps and the run graph said "nothing was delegated":

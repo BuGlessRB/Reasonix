@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"sync"
 	"time"
@@ -254,11 +255,11 @@ func (f *FleetTool) preflight(ctx context.Context, tasks []fleetTaskItem, failFa
 // buildItemSpecs compiles one ProfileExecSpec per runnable item. An adopted item
 // gets none: nothing constructs a child for it, which is also why it holds no
 // write claim and cannot collide with a concurrent writer.
-func (f *FleetTool) buildItemSpecs(ctx context.Context, items []fleetTaskItem, adopted map[int]adoptedItem) ([]ProfileExecSpec, []WritePathSet, error) {
+func (f *FleetTool) buildItemSpecs(ctx context.Context, items []fleetTaskItem, adopted map[int]adoptedItem) ([]ProfileExecSpec, []writeclaim.WritePathSet, error) {
 	specs := make([]ProfileExecSpec, len(items))
 	// Keep one claim slot per original task so preflight errors report the
 	// caller-visible task numbers even when read-only items are interleaved.
-	claims := make([]WritePathSet, len(items))
+	claims := make([]writeclaim.WritePathSet, len(items))
 	for i, item := range items {
 		if _, isAdopted := adopted[i]; isAdopted {
 			continue
@@ -271,7 +272,7 @@ func (f *FleetTool) buildItemSpecs(ctx context.Context, items []fleetTaskItem, a
 			return nil, nil, fmt.Errorf("task %d: %w", i+1, err)
 		}
 		if forceBackgroundClaim && !spec.Grant.ReadOnly && spec.Grant.WritePaths.Empty() {
-			whole, werr := WholeWorkspaceWriteClaim(f.taskTool.workspaceRoot)
+			whole, werr := writeclaim.WholeWorkspaceWriteClaim(f.taskTool.workspaceRoot)
 			if werr != nil {
 				return nil, nil, fmt.Errorf("task %d: %w", i+1, werr)
 			}

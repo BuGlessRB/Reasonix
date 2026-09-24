@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/sessionstore"
 	"runtime/debug"
 	"slices"
@@ -101,7 +102,7 @@ const subagentToolBoundarySummary = "Recursive agent/skill tools are exposed onl
 // maxConcurrentBackgroundTasks is the legacy writer-background fallback used
 // only when a TaskTool has no session scheduler (tests). Production boots
 // inject MaxParallelWriters via SubagentScheduler.
-const maxConcurrentBackgroundTasks = DefaultMaxParallelWriters
+const maxConcurrentBackgroundTasks = writeclaim.DefaultMaxParallelWriters
 
 // SubagentMetaTools returns the tool names that spawned agents should not inherit
 // from the parent registry unless a future call site deliberately opts into a
@@ -229,7 +230,7 @@ type TaskTool struct {
 	workspaceLease                *workspacelease.Owner
 	// scheduler is the session-scoped concurrency + write-claim controller.
 	// nil falls back to the legacy jobs.ReserveStart cap for background tasks.
-	scheduler *SubagentScheduler
+	scheduler *writeclaim.SubagentScheduler
 	// profileLookup resolves profile= names from the live Skill store without
 	// embedding the name list in the tool schema (cache stability).
 	profileLookup ProfileLookup
@@ -380,13 +381,13 @@ func (t *TaskTool) WithWorkspaceLease(owner *workspacelease.Owner) *TaskTool {
 
 // WithScheduler attaches the session-scoped concurrency and write-claim
 // controller used by task, fleet, parallel_tasks, and profile skill runners.
-func (t *TaskTool) WithScheduler(s *SubagentScheduler) *TaskTool {
+func (t *TaskTool) WithScheduler(s *writeclaim.SubagentScheduler) *TaskTool {
 	t.scheduler = s
 	return t
 }
 
 // Scheduler returns the attached session scheduler (may be nil in unit tests).
-func (t *TaskTool) Scheduler() *SubagentScheduler {
+func (t *TaskTool) Scheduler() *writeclaim.SubagentScheduler {
 	if t == nil {
 		return nil
 	}
@@ -635,14 +636,14 @@ func (t *TaskTool) buildTaskSpec(ctx context.Context, prompt, description, profi
 	return spec, nil
 }
 
-func (t *TaskTool) resolveWriterClaims(writePaths []string, requireClaim bool) (WritePathSet, error) {
+func (t *TaskTool) resolveWriterClaims(writePaths []string, requireClaim bool) (writeclaim.WritePathSet, error) {
 	if len(writePaths) > 0 {
-		return NormalizeWritePaths(t.workspaceRoot, writePaths)
+		return writeclaim.NormalizeWritePaths(t.workspaceRoot, writePaths)
 	}
 	if !requireClaim {
-		return WritePathSet{}, nil
+		return writeclaim.WritePathSet{}, nil
 	}
-	return WholeWorkspaceWriteClaim(t.workspaceRoot)
+	return writeclaim.WholeWorkspaceWriteClaim(t.workspaceRoot)
 }
 
 // settleSpecPrompts rejects a run with nothing to do and fills in the system
@@ -698,7 +699,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 	// What this run may write, over its whole life. The tools bound below hold
 	// it and widen it with the user's answer; the audit at the end reads the
 	// same object, so a path the user granted is not reported as an escape.
-	writeGrant := NewWriteGrant(spec.Grant.WritePaths)
+	writeGrant := writeclaim.NewWriteGrant(spec.Grant.WritePaths)
 	subReg, err := t.subRegistryFor(&spec, childDepth, writeGrant)
 	if err != nil {
 		return "", err
@@ -766,7 +767,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 		if spec.Grant.ReadOnly {
 			return t.runReadOnlySubSession(withUpstream(runCtx, spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver, "read_only_"+spec.Worker.Kind, grant)
 		}
-		return t.runSubSession(withUpstream(WithSubagentWriteGrant(runCtx, writeGrant), spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver, spec.Worker.Kind, grant)
+		return t.runSubSession(withUpstream(writeclaim.WithSubagentWriteGrant(runCtx, writeGrant), spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver, spec.Worker.Kind, grant)
 	}
 
 	if spec.Sched.RunInBackground {
@@ -1692,7 +1693,7 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 		// Still merge any partial child evidence so parent gates see real writes.
 		mergeChildEvidence(ctx, sub)
 		if answer, ok := salvageReadinessExhaustedAnswer(sub, sess, opts, err); ok {
-			return composeSubagentAnswer(ctx, answer, sub, SubagentWriteClaim(ctx), opts.ClassifierTaskText), nil
+			return composeSubagentAnswer(ctx, answer, sub, writeclaim.SubagentWriteClaim(ctx), opts.ClassifierTaskText), nil
 		}
 		return "", fmt.Errorf("sub-agent: %w", err)
 	}
@@ -1718,7 +1719,7 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 			// no report is no block, the state a killed run leaves anyway.
 			if !opts.DeliveryProfile {
 				if answer := latestAssistantAnswer(sess); answer != "" {
-					return composeSubagentAnswer(ctx, reviewWithoutVerdictNote+answer, sub, SubagentWriteClaim(ctx), opts.ClassifierTaskText), nil
+					return composeSubagentAnswer(ctx, reviewWithoutVerdictNote+answer, sub, writeclaim.SubagentWriteClaim(ctx), opts.ClassifierTaskText), nil
 				}
 			}
 			dumpRef := dumpFailedSubagentSession(opts.ArchiveDir, string(kind), sess)
@@ -1733,7 +1734,7 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 	}
 	mergeChildEvidence(ctx, sub)
 	if answer := latestAssistantAnswer(sess); answer != "" {
-		return composeSubagentAnswer(ctx, answer, sub, SubagentWriteClaim(ctx), opts.ClassifierTaskText), nil
+		return composeSubagentAnswer(ctx, answer, sub, writeclaim.SubagentWriteClaim(ctx), opts.ClassifierTaskText), nil
 	}
 	return "", fmt.Errorf("sub-agent finished without producing a final answer")
 }

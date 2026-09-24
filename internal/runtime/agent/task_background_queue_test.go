@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"sync"
 	"testing"
@@ -23,9 +24,9 @@ func TestBackgroundTaskReturnsBeforeSlotFrees(t *testing.T) {
 	root := testenv.TempDir(t)
 	store := checkpoint.New("", root)
 	observer := checkpoint.NewMutationObserver(checkpoint.ObserverOptions{Store: store})
-	sched := NewSubagentScheduler(1, 1)
+	sched := writeclaim.NewSubagentScheduler(1, 1)
 	// Hold the only slot.
-	holdRelease, err := sched.Acquire(context.Background(), AcquireRequest{Writer: false})
+	holdRelease, err := sched.Acquire(context.Background(), writeclaim.AcquireRequest{Writer: false})
 	if err != nil {
 		t.Fatal(err)
 	}

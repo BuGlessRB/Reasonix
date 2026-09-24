@@ -1,4 +1,4 @@
-package agent
+package writeclaim
 
 import (
 	"context"
@@ -84,7 +84,7 @@ func NormalizeWritePaths(workspaceRoot string, raw []string) (WritePathSet, erro
 		if err != nil {
 			return WritePathSet{}, fmt.Errorf("write_paths[%d]: %w", i, err)
 		}
-		if !pathWithinFold(root, abs) {
+		if !PathWithin(root, abs) {
 			return WritePathSet{}, fmt.Errorf("write_paths[%d]: path %q is outside the workspace", i, entry)
 		}
 		key := foldPathKey(abs)
@@ -140,12 +140,12 @@ func (s WritePathSet) Overlaps(other WritePathSet) bool {
 		if s.WorkspaceRoot == "" || other.WorkspaceRoot == "" {
 			return true
 		}
-		return pathWithinFold(s.WorkspaceRoot, other.WorkspaceRoot) ||
-			pathWithinFold(other.WorkspaceRoot, s.WorkspaceRoot)
+		return PathWithin(s.WorkspaceRoot, other.WorkspaceRoot) ||
+			PathWithin(other.WorkspaceRoot, s.WorkspaceRoot)
 	}
 	for _, a := range s.Paths {
 		for _, b := range other.Paths {
-			if pathWithinFold(a, b) || pathWithinFold(b, a) {
+			if PathWithin(a, b) || PathWithin(b, a) {
 				return true
 			}
 		}
@@ -185,10 +185,10 @@ func (s WritePathSet) AllowsPath(target string) bool {
 		if s.WorkspaceRoot == "" {
 			return true
 		}
-		return pathWithinFold(s.WorkspaceRoot, abs)
+		return PathWithin(s.WorkspaceRoot, abs)
 	}
 	for _, root := range s.Paths {
-		if pathWithinFold(root, abs) {
+		if PathWithin(root, abs) {
 			return true
 		}
 	}
@@ -265,7 +265,9 @@ func realPathForClaim(path string) (string, error) {
 	}
 }
 
-func pathWithinFold(root, path string) bool {
+// PathWithin reports whether path is root or below it, folding case where the
+// filesystem does.
+func PathWithin(root, path string) bool {
 	if root == "" || path == "" {
 		return false
 	}

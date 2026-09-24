@@ -3,6 +3,7 @@ package agent
 
 import (
 	"fmt"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 
 	"reasonix/internal/contract/tool"
@@ -13,7 +14,7 @@ import (
 // for the grant, and the write claim bound into the tools that must honour it.
 // The report tool is not here: it carries a permission, and a permission is
 // issued once the execution it belongs to exists (see attachReviewReport).
-func (t *TaskTool) subRegistryFor(spec *ProfileExecSpec, childDepth int, grant *WriteGrant) (*tool.Registry, error) {
+func (t *TaskTool) subRegistryFor(spec *ProfileExecSpec, childDepth int, grant *writeclaim.WriteGrant) (*tool.Registry, error) {
 	toolNames, err := IntersectToolLists(t.parentReg, spec.Grant.ProfileTools, spec.Grant.CallTools)
 	if err != nil {
 		return nil, err

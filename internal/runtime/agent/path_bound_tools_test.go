@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ import (
 
 func TestBindWritePathsRebindsBashWriteRoots(t *testing.T) {
 	root := testenv.TempDir(t)
-	claim, err := NormalizeWritePaths(root, []string{"docs"})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"docs"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +30,7 @@ func TestBindWritePathsRebindsBashWriteRoots(t *testing.T) {
 	}, builtin.SessionDataGuard{}))
 	reg.Add(foregroundOnlyBash{inner: mustGet(t, reg, "bash")})
 
-	bound, removed := BindWritePaths(reg, NewWriteGrant(claim), nil, NewSubagentScheduler(4, 2), root, true)
+	bound, removed := BindWritePaths(reg, writeclaim.NewWriteGrant(claim), nil, writeclaim.NewSubagentScheduler(4, 2), root, true)
 	if len(removed) != 0 {
 		t.Fatalf("removed = %v, want none", removed)
 	}
@@ -37,7 +38,7 @@ func TestBindWritePathsRebindsBashWriteRoots(t *testing.T) {
 		t.Fatal("bash should be kept when sandbox can rebind")
 	}
 
-	_, removed = BindWritePaths(reg, NewWriteGrant(claim), nil, NewSubagentScheduler(4, 2), root, false)
+	_, removed = BindWritePaths(reg, writeclaim.NewWriteGrant(claim), nil, writeclaim.NewSubagentScheduler(4, 2), root, false)
 	if len(removed) != 1 || removed[0] != "bash" {
 		t.Fatalf("removed = %v, want [bash]", removed)
 	}
@@ -45,7 +46,7 @@ func TestBindWritePathsRebindsBashWriteRoots(t *testing.T) {
 
 func TestBindWritePathsKeepsCapabilitySchemaButBlocksResolvedWriter(t *testing.T) {
 	root := testenv.TempDir(t)
-	claim, err := NormalizeWritePaths(root, []string{"frontend"})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"frontend"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +61,7 @@ func TestBindWritePathsKeepsCapabilitySchemaButBlocksResolvedWriter(t *testing.T
 	}}
 	reg := tool.NewRegistry()
 	reg.Add(proxy)
-	bound, removed := BindWritePaths(reg, NewWriteGrant(claim), nil, NewSubagentScheduler(4, 2), root, false)
+	bound, removed := BindWritePaths(reg, writeclaim.NewWriteGrant(claim), nil, writeclaim.NewSubagentScheduler(4, 2), root, false)
 	if len(removed) != 0 {
 		t.Fatalf("removed = %v, want stable proxy retained", removed)
 	}
@@ -86,7 +87,7 @@ func TestBindWritePathsKeepsCapabilitySchemaButBlocksResolvedWriter(t *testing.T
 
 func TestBindWritePathsAllowsResolvedReadOnlyCapability(t *testing.T) {
 	root := testenv.TempDir(t)
-	claim, err := NormalizeWritePaths(root, []string{"frontend"})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"frontend"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,7 @@ func TestBindWritePathsAllowsResolvedReadOnlyCapability(t *testing.T) {
 		ReadOnly:    true,
 		Args:        json.RawMessage(`{}`),
 	}})
-	bound, _ := BindWritePaths(reg, NewWriteGrant(claim), nil, NewSubagentScheduler(4, 2), root, false)
+	bound, _ := BindWritePaths(reg, writeclaim.NewWriteGrant(claim), nil, writeclaim.NewSubagentScheduler(4, 2), root, false)
 	a := New(nil, bound, sessionstore.NewSession("sys"), Options{}, event.Discard)
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		ID: "reader", Name: "use_capability",
@@ -142,7 +143,7 @@ func TestTaskExplicitWritePathsCannotBypassBoundaryThroughCapabilityProxy(t *tes
 
 func TestParentWriteReservationBlocksOverlappingSubagentAcquire(t *testing.T) {
 	root := testenv.TempDir(t)
-	sched := NewSubagentScheduler(4, 2)
+	sched := writeclaim.NewSubagentScheduler(4, 2)
 	claim, err := parentWriteReservation(root, "write_file", mustJSON(t, map[string]string{
 		"path":    filepath.Join(root, "a.md"),
 		"content": "x",
@@ -156,11 +157,11 @@ func TestParentWriteReservationBlocksOverlappingSubagentAcquire(t *testing.T) {
 	}
 
 	// Nested acquire must fail-fast while parent holds the path.
-	subClaim, err := NormalizeWritePaths(root, []string{"a.md"})
+	subClaim, err := writeclaim.NormalizeWritePaths(root, []string{"a.md"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = sched.Acquire(context.Background(), AcquireRequest{
+	_, err = sched.Acquire(context.Background(), writeclaim.AcquireRequest{
 		Writer: true, WritePaths: subClaim, Nested: true,
 	})
 	if err == nil {
@@ -169,7 +170,7 @@ func TestParentWriteReservationBlocksOverlappingSubagentAcquire(t *testing.T) {
 	release()
 
 	// After release, acquire succeeds.
-	rel2, err := sched.Acquire(context.Background(), AcquireRequest{
+	rel2, err := sched.Acquire(context.Background(), writeclaim.AcquireRequest{
 		Writer: true, WritePaths: subClaim,
 	})
 	if err != nil {
@@ -183,7 +184,7 @@ func TestParentWriteReservationBlocksOverlappingSubagentAcquire(t *testing.T) {
 // same path after a check-but-before-write window would have opened.
 func TestParentWriteReservationClosesTOCTOU(t *testing.T) {
 	root := testenv.TempDir(t)
-	sched := NewSubagentScheduler(4, 2)
+	sched := writeclaim.NewSubagentScheduler(4, 2)
 	path := filepath.Join(root, "race.md")
 	args := mustJSON(t, map[string]string{"path": path, "content": "parent"})
 
@@ -214,12 +215,12 @@ func TestParentWriteReservationClosesTOCTOU(t *testing.T) {
 
 	<-parentStarted
 
-	subClaim, err := NormalizeWritePaths(root, []string{"race.md"})
+	subClaim, err := writeclaim.NormalizeWritePaths(root, []string{"race.md"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Non-nested would queue; Nested fail-fast proves conflict under reservation.
-	_, err = sched.Acquire(context.Background(), AcquireRequest{
+	_, err = sched.Acquire(context.Background(), writeclaim.AcquireRequest{
 		Writer: true, WritePaths: subClaim, Nested: true,
 	})
 	if err == nil {
@@ -234,8 +235,8 @@ func TestParentWriteReservationClosesTOCTOU(t *testing.T) {
 
 func TestAgentReservesParentWriteBeforePreToolUse(t *testing.T) {
 	root := testenv.TempDir(t)
-	sched := NewSubagentScheduler(4, 2)
-	claim, err := NormalizeWritePaths(root, []string{"hook-race.md"})
+	sched := writeclaim.NewSubagentScheduler(4, 2)
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"hook-race.md"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +289,7 @@ func TestParentWriteReservationBashClaimsWholeWorkspace(t *testing.T) {
 
 func TestAgentReserveParentWriteSkipsSubagentDepth(t *testing.T) {
 	root := testenv.TempDir(t)
-	sched := NewSubagentScheduler(4, 2)
+	sched := writeclaim.NewSubagentScheduler(4, 2)
 	a := &Agent{agentConfig: agentConfig{writeWorkspaceRoot: root, subagentDepth: 1}, svc: agentServices{writeScheduler: sched}}
 	inner := &recordingWriter{name: "write_file", writesPaths: true}
 	release, err := a.reserveParentWrite(inner, mustJSON(t, map[string]string{
@@ -306,7 +307,7 @@ func TestAgentReserveParentWriteSkipsSubagentDepth(t *testing.T) {
 
 func TestAgentReserveParentWriteHoldsClaim(t *testing.T) {
 	root := testenv.TempDir(t)
-	sched := NewSubagentScheduler(4, 2)
+	sched := writeclaim.NewSubagentScheduler(4, 2)
 	a := &Agent{agentConfig: agentConfig{writeWorkspaceRoot: root, subagentDepth: 0}, svc: agentServices{writeScheduler: sched}}
 	inner := &recordingWriter{name: "write_file", writesPaths: true}
 	release, err := a.reserveParentWrite(inner, mustJSON(t, map[string]string{
@@ -350,13 +351,13 @@ type recordingWriter struct {
 }
 
 type parentClaimProbeHooks struct {
-	scheduler  *SubagentScheduler
-	claim      WritePathSet
+	scheduler  *writeclaim.SubagentScheduler
+	claim      writeclaim.WritePathSet
 	acquireErr error
 }
 
 func (h *parentClaimProbeHooks) PreToolUse(context.Context, string, json.RawMessage) (bool, string) {
-	release, err := h.scheduler.Acquire(context.Background(), AcquireRequest{
+	release, err := h.scheduler.Acquire(context.Background(), writeclaim.AcquireRequest{
 		Writer: true, WritePaths: h.claim, Nested: true,
 	})
 	h.acquireErr = err

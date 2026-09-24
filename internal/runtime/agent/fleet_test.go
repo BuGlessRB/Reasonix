@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -28,7 +29,7 @@ func TestBackgroundFleetRegistersEveryWriterUntilCompletion(t *testing.T) {
 	observer := checkpoint.NewMutationObserver(checkpoint.ObserverOptions{Store: store})
 	task := NewTaskTool(prov, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(2, 2)).
+		WithScheduler(writeclaim.NewSubagentScheduler(2, 2)).
 		WithMutationObserver(observer)
 	fleet := NewFleetTool(task)
 	manager := jobs.NewManager(event.Discard)
@@ -80,7 +81,7 @@ func TestBackgroundFleetProgressLifecycleUsesStableIDs(t *testing.T) {
 	prov := &fleetHoldProvider{started: make(chan struct{}, 2), release: make(chan struct{})}
 	task := NewTaskTool(prov, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(2, 2))
+		WithScheduler(writeclaim.NewSubagentScheduler(2, 2))
 	fleet := NewFleetTool(task)
 	manager := jobs.NewManager(event.Discard)
 	defer manager.Close()
@@ -166,8 +167,8 @@ func TestBackgroundFleetRegistersReservationWhileItemsAreQueued(t *testing.T) {
 	root := testenv.TempDir(t)
 	store := checkpoint.New("", root)
 	observer := checkpoint.NewMutationObserver(checkpoint.ObserverOptions{Store: store})
-	scheduler := NewSubagentScheduler(1, 1)
-	releaseSlot, err := scheduler.Acquire(context.Background(), AcquireRequest{Writer: false})
+	scheduler := writeclaim.NewSubagentScheduler(1, 1)
+	releaseSlot, err := scheduler.Acquire(context.Background(), writeclaim.AcquireRequest{Writer: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +231,7 @@ func TestFleetRejectsSingleTaskAndPathConflict(t *testing.T) {
 	root := testenv.TempDir(t)
 	task := newTestTaskTool(t, &mockProvider{name: "sub"}, tool.NewRegistry(), "sys", "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(6, 3))
+		WithScheduler(writeclaim.NewSubagentScheduler(6, 3))
 	f := NewFleetTool(task)
 
 	_, err := f.Execute(context.Background(), json.RawMessage(`{"tasks":[{"prompt":"only one"}]}`))
@@ -274,7 +275,7 @@ func TestFleetCancellationPreservesStartedItemStatus(t *testing.T) {
 	reg := tool.NewRegistry()
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(2, 2))
+		WithScheduler(writeclaim.NewSubagentScheduler(2, 2))
 	f := NewFleetTool(task)
 
 	ctx, cancel := context.WithCancel(withCallContext(context.Background(), "fleet-call", event.Discard, nil, false))
@@ -355,7 +356,7 @@ func TestFleetParallelDisjointWriters(t *testing.T) {
 	// No writer tools needed — provider finishes without tools.
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(10, 10))
+		WithScheduler(writeclaim.NewSubagentScheduler(10, 10))
 	f := NewFleetTool(task)
 
 	tasks := make([]map[string]any, 0, 4)

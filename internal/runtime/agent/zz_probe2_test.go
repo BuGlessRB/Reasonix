@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"reasonix/internal/contract/hostaudit"
+	"reasonix/internal/runtime/writeclaim"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -29,7 +30,7 @@ func TestZZProbeThroughTaskTool(t *testing.T) {
 	}}
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 	ctx := withCallContext(context.Background(), "call-1", probe, nil, false)
 	if _, err := task.Execute(ctx, []byte(`{"prompt":"inspect a.go"}`)); err != nil {
 		t.Fatalf("task: %v", err)

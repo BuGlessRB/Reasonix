@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/extension/dispatch"
 	"reasonix/internal/runtime/capability"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/checkpoint"
@@ -109,7 +110,7 @@ type Options struct {
 	// controller. When set on the parent executor, write-capable tools reserve
 	// paths for the duration of Execute so background writers cannot TOCTOU
 	// race parent writes. Subagents leave this nil (or depth > 0 skips it).
-	WriteScheduler *SubagentScheduler
+	WriteScheduler *writeclaim.SubagentScheduler
 	// WriteWorkspaceRoot normalizes parent write reservations.
 	WriteWorkspaceRoot string
 	// RenderRoot is the workspace a written page or image is opened from to look

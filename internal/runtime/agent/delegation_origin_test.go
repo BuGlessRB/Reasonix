@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reasonix/internal/contract/hostaudit"
+	"reasonix/internal/runtime/writeclaim"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -33,7 +34,7 @@ func runDelegationForOrigin(t *testing.T, prompt string) hostaudit.DelegationAud
 	}}
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), testenv.TempDir(t), "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 	ctx := withCallContext(context.Background(), "call-1", probe, nil, false)
 	args, err := json.Marshal(map[string]string{"prompt": prompt})
 	if err != nil {

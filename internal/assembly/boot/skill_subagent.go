@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/platform/environment"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/writeclaim"
 )
 
 // skillSubagents runs a skill inside its own sub-agent loop: an isolated turn
@@ -28,7 +29,7 @@ type skillSubagents struct {
 	// that kept its own would be a second owner of admission, of the child's
 	// loop and of how a run ended, and the three drifted apart once already.
 	tasks      *agent.TaskTool
-	scheduler  *agent.SubagentScheduler
+	scheduler  *writeclaim.SubagentScheduler
 	provider   provider.Provider
 	entry      *config.ProviderEntry
 	capRuntime *agent.MCPCapabilityRuntime
@@ -95,7 +96,7 @@ func (r *skillSubagents) runReadOnly(sctx context.Context, sk skill.Skill, task 
 	if strings.TrimSpace(runOpts.ContinueFrom) != "" || strings.TrimSpace(runOpts.ForkFrom) != "" {
 		return "", fmt.Errorf("read_only_skill does not support continue_from/fork_from")
 	}
-	releaseSlot, err := r.scheduler.Acquire(sctx, agent.AcquireRequest{
+	releaseSlot, err := r.scheduler.Acquire(sctx, writeclaim.AcquireRequest{
 		Writer: false,
 		Nested: agent.SubagentDepth(sctx) > 0,
 		Label:  sk.Name,
@@ -188,7 +189,7 @@ func (r *skillSubagents) compile(sctx context.Context, sk skill.Skill, task stri
 		// Writer skills without declared paths claim the whole workspace, so
 		// they serialize against fleet and task writers that declared disjoint
 		// ones rather than racing them.
-		whole, err := agent.WholeWorkspaceWriteClaim(r.root)
+		whole, err := writeclaim.WholeWorkspaceWriteClaim(r.root)
 		if err != nil {
 			return agent.ProfileExecSpec{}, fmt.Errorf("subagent skill %q write claim: %w", sk.Name, err)
 		}

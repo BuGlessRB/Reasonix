@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/sessionstore"
 	"runtime"
 	"slices"
@@ -36,7 +37,7 @@ func loneFixture(t *testing.T, prov *loneProvider, total int) (*TaskTool, contex
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(total, total))
+		WithScheduler(writeclaim.NewSubagentScheduler(total, total))
 	sessionPath := filepath.Join(sessions, "probe.jsonl")
 	sink := &loneSink{sessionPath: sessionPath, node: loneNodeID}
 	ctx := withCallContext(context.Background(), "lone-call", sink, nil, false)
@@ -190,7 +191,7 @@ func TestLoneDelegationIsRecordedBeforeItIsDrawn(t *testing.T) {
 func TestHeldBackDelegationIsNeverDrawnRunning(t *testing.T) {
 	prov := newLoneProvider()
 	task, ctx, sessionPath, sink := loneFixture(t, prov, 1)
-	hold, err := task.scheduler.Acquire(context.Background(), AcquireRequest{Writer: false})
+	hold, err := task.scheduler.Acquire(context.Background(), writeclaim.AcquireRequest{Writer: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +271,7 @@ func TestBackgroundDelegationIsNotMarkedRunningWhileQueued(t *testing.T) {
 	jm := jobs.NewManager(event.Discard)
 	defer jm.Close()
 	ctx = jobs.WithSession(jobs.WithManager(ctx, jm), "sess-lone")
-	hold, err := task.scheduler.Acquire(context.Background(), AcquireRequest{Writer: false})
+	hold, err := task.scheduler.Acquire(context.Background(), writeclaim.AcquireRequest{Writer: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -384,7 +385,7 @@ func TestRefusedAdmissionLeavesNoChildTerminal(t *testing.T) {
 	jm := jobs.NewManager(event.Discard)
 	defer jm.Close()
 	ctx = jobs.WithSession(jobs.WithManager(ctx, jm), "sess-lone")
-	hold, err := task.scheduler.Acquire(context.Background(), AcquireRequest{Writer: false})
+	hold, err := task.scheduler.Acquire(context.Background(), writeclaim.AcquireRequest{Writer: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +474,7 @@ func refusingStoreFixture(t *testing.T, node string, total int) (*TaskTool, cont
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(NewSubagentStore(storeDir), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(total, total))
+		WithScheduler(writeclaim.NewSubagentScheduler(total, total))
 	sessionPath := filepath.Join(sessions, "probe.jsonl")
 	sink := &loneSink{sessionPath: sessionPath, node: node}
 	callID := fanOutCall
@@ -504,7 +505,7 @@ func assertRefusedBeforeActing(t *testing.T, task *TaskTool, prov *loneProvider,
 	}
 	total, _ := task.scheduler.Limits()
 	for slot := range total {
-		release, err := task.scheduler.Acquire(context.Background(), AcquireRequest{Nested: true})
+		release, err := task.scheduler.Acquire(context.Background(), writeclaim.AcquireRequest{Nested: true})
 		if err != nil {
 			t.Fatalf("slot %d did not come back after the refusal: %v", slot+1, err)
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 
 	"reasonix/internal/contract/tool"
@@ -17,9 +18,9 @@ import (
 // are dropped from the parallel-writer registry instead (see BindWritePaths).
 type pathBoundWriter struct {
 	inner   tool.Tool
-	grant   *WriteGrant
+	grant   *writeclaim.WriteGrant
 	gate    Gate
-	sched   *SubagentScheduler
+	sched   *writeclaim.SubagentScheduler
 	workDir string
 }
 
@@ -111,9 +112,9 @@ func (w pathBoundWriter) Execute(ctx context.Context, args json.RawMessage) (str
 		}
 		// Granted or not, every write outside the declared set reserves: a
 		// grant says this run may be here, never that another may not.
-		release, err := w.sched.ReserveWrite(WritePathSet{Paths: []string{p}})
+		release, err := w.sched.ReserveWrite(writeclaim.WritePathSet{Paths: []string{p}})
 		if err != nil {
-			return "", fmt.Errorf("%w: %s", ErrWritePathBusy, p)
+			return "", fmt.Errorf("%w: %s", writeclaim.ErrWritePathBusy, p)
 		}
 		held = append(held, release)
 	}
@@ -126,7 +127,7 @@ func (w pathBoundWriter) Execute(ctx context.Context, args json.RawMessage) (str
 // would not be confined at all.
 func (w pathBoundWriter) askToWiden(ctx context.Context, path string) error {
 	if w.gate == nil {
-		return fmt.Errorf("%w: %s", ErrWriteFenceClosed, path)
+		return fmt.Errorf("%w: %s", writeclaim.ErrWriteFenceClosed, path)
 	}
 	subject, err := json.Marshal(map[string]string{"path": path})
 	if err != nil {
@@ -138,9 +139,9 @@ func (w pathBoundWriter) askToWiden(ctx context.Context, path string) error {
 	}
 	if !allow {
 		if reason = strings.TrimSpace(reason); reason != "" {
-			return fmt.Errorf("%w: %s (%s)", ErrWriteFenceClosed, path, reason)
+			return fmt.Errorf("%w: %s (%s)", writeclaim.ErrWriteFenceClosed, path, reason)
 		}
-		return fmt.Errorf("%w: %s", ErrWriteFenceClosed, path)
+		return fmt.Errorf("%w: %s", writeclaim.ErrWriteFenceClosed, path)
 	}
 	w.grant.Add(path)
 	return nil
@@ -162,7 +163,7 @@ var pathBoundWriterNames = map[string]bool{
 // the claim and non-path-scoped writer tools (MCP/custom) are dropped.
 // Bash is kept only when keepBash is true AND its OS sandbox WriteRoots can be
 // re-bound to the claim roots; otherwise bash is removed.
-func BindWritePaths(reg *tool.Registry, grant *WriteGrant, gate Gate, sched *SubagentScheduler, workDir string, keepBash bool) (bound *tool.Registry, removed []string) {
+func BindWritePaths(reg *tool.Registry, grant *writeclaim.WriteGrant, gate Gate, sched *writeclaim.SubagentScheduler, workDir string, keepBash bool) (bound *tool.Registry, removed []string) {
 	bound = tool.NewRegistry()
 	if reg == nil {
 		return bound, nil
@@ -248,11 +249,11 @@ func parentWriteGuardTarget(name string) bool {
 // parentWriteReservation builds the WritePathSet a parent tool must hold while
 // executing. Path-aware built-ins reserve concrete targets; bash/MCP reserve
 // the whole workspace (targets cannot be judged reliably).
-func parentWriteReservation(workDir, toolName string, args json.RawMessage) (WritePathSet, error) {
+func parentWriteReservation(workDir, toolName string, args json.RawMessage) (writeclaim.WritePathSet, error) {
 	if pathBoundWriterNames[toolName] {
 		paths, err := extractWritePathsFromArgs(toolName, workDir, args)
 		if err != nil {
-			return WritePathSet{}, fmt.Errorf("could not parse %s path for write reservation: %w", toolName, err)
+			return writeclaim.WritePathSet{}, fmt.Errorf("could not parse %s path for write reservation: %w", toolName, err)
 		}
 		// NormalizeWritePaths accepts relative paths against the workspace.
 		// Absolute paths already inside the workspace also work.
@@ -260,21 +261,21 @@ func parentWriteReservation(workDir, toolName string, args json.RawMessage) (Wri
 		for _, p := range paths {
 			raw = append(raw, resolveMaybeRelative(workDir, p))
 		}
-		set, err := NormalizeWritePaths(workDir, raw)
+		set, err := writeclaim.NormalizeWritePaths(workDir, raw)
 		if err != nil {
 			// Outside workspace: still take a whole-workspace reservation so we
 			// cannot race background writers while writing managed paths outside
 			// roots (config write approval path).
-			whole, werr := WholeWorkspaceWriteClaim(workDir)
+			whole, werr := writeclaim.WholeWorkspaceWriteClaim(workDir)
 			if werr != nil {
-				return WritePathSet{}, err
+				return writeclaim.WritePathSet{}, err
 			}
 			return whole, nil
 		}
 		return set, nil
 	}
 	// Bash and MCP/custom writers.
-	return WholeWorkspaceWriteClaim(workDir)
+	return writeclaim.WholeWorkspaceWriteClaim(workDir)
 }
 
 func extractWritePathsFromArgs(toolName, workDir string, args json.RawMessage) ([]string, error) {

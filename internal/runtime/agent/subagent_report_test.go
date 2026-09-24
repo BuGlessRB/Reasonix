@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"testing"
@@ -24,7 +25,7 @@ func TestHostReceiptsAttestChangesAndVerifications(t *testing.T) {
 		{ToolName: "bash", Success: true, Command: "ls -la", ExitCode: new(0), Verification: evidence.VerificationNotVerification},
 	}}
 
-	got := formatHostReceipts(summary, WritePathSet{})
+	got := formatHostReceipts(summary, writeclaim.WritePathSet{})
 	for _, want := range []string{"changed: parser.go, parser_test.go", "go test ./parser (verification passed, exit 0)"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("receipts block %q missing %q", got, want)
@@ -42,10 +43,10 @@ func TestHostReceiptsStaySilentForReadOnlyChildren(t *testing.T) {
 		{ToolName: "read_file", Success: true, Read: true, Paths: []string{"parser.go"}},
 		{ToolName: "grep", Success: true, Read: true},
 	}}
-	if got := formatHostReceipts(summary, WritePathSet{}); got != "" {
+	if got := formatHostReceipts(summary, writeclaim.WritePathSet{}); got != "" {
 		t.Fatalf("read-only child produced a receipts block: %q", got)
 	}
-	if got := appendHostReceipts("just prose", summary, WritePathSet{}); got != "just prose" {
+	if got := appendHostReceipts("just prose", summary, writeclaim.WritePathSet{}); got != "just prose" {
 		t.Fatalf("answer = %q, want it unchanged", got)
 	}
 }
@@ -55,7 +56,7 @@ func TestHostReceiptsRecordFailedCommands(t *testing.T) {
 		{ToolName: "bash", Success: true, Command: "go build ./...", ExitCode: new(2)},
 		{ToolName: "bash", Success: true, Command: "go test ./parser", ExitCode: new(1), Verification: evidence.VerificationFailed},
 	}}
-	got := formatHostReceipts(summary, WritePathSet{})
+	got := formatHostReceipts(summary, writeclaim.WritePathSet{})
 	for _, want := range []string{"go build ./... (exit 2)", "go test ./parser (verification failed, exit 1)"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("receipts block %q missing %q", got, want)
@@ -126,7 +127,7 @@ func TestSplitHostReceiptsSeparatesProseFromAttestation(t *testing.T) {
 	answer := appendHostReceipts("did the thing",
 		evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{
 			{ToolName: "write_file", Success: true, Mutation: true, Paths: []string{"a.go"}},
-		}}, WritePathSet{})
+		}}, writeclaim.WritePathSet{})
 	prose, receipts := splitHostReceipts(answer)
 	if prose != "did the thing" {
 		t.Fatalf("prose = %q", prose)
@@ -146,7 +147,7 @@ func TestAggregateReservesHostReceiptsAgainstLongProse(t *testing.T) {
 		evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{
 			{ToolName: "write_file", Success: true, Mutation: true, Paths: []string{"payments.go"}},
 			{ToolName: "bash", Success: true, Command: "go test ./pay", ExitCode: new(1), Verification: evidence.VerificationFailed},
-		}}, WritePathSet{})
+		}}, writeclaim.WritePathSet{})
 
 	out := formatBoundedSubagentAggregate("fleet:\n", []subagentAggregateItem{
 		{header: "1. writer\n", status: "completed\n", answer: answer, ref: "sa_1"},
@@ -165,7 +166,7 @@ func TestAggregateReservesHostReceiptsAgainstLongProse(t *testing.T) {
 // fact that a write escaped the declared claim.
 func TestAggregateDegradesReceiptsButKeepsViolations(t *testing.T) {
 	root := testenv.TempDir(t)
-	claim, err := NormalizeWritePaths(root, []string{"auth"})
+	claim, err := writeclaim.NormalizeWritePaths(root, []string{"auth"})
 	if err != nil {
 		t.Fatal(err)
 	}

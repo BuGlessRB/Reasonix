@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/sessionstore"
 	"slices"
 	"strings"
@@ -186,7 +187,7 @@ func fanOutJournalFixture(t *testing.T, prov *fleetScriptedFailureProvider) (*Fl
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 	sessionPath := filepath.Join(sessions, "probe.jsonl")
 	sink := &openingProbeSink{sessionPath: sessionPath}
 	ctx := withCallContext(context.Background(), "fleet-call", sink, nil, false)
@@ -308,7 +309,7 @@ func TestFanOutIsDurableBeforeRunningIsObservable(t *testing.T) {
 	sink := &runningProbeSink{sessionPath: sessionPath}
 	task := NewTaskTool(&fleetScriptedFailureProvider{}, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 	ctx := withCallContext(context.Background(), "fleet-call", sink, nil, false)
 	ctx = WithTurnIdentity(WithParentSession(ctx, "probe"), "turn-1")
 
@@ -436,7 +437,7 @@ func TestRefusalIsDurableBeforeWaitingIsObservable(t *testing.T) {
 	sink := &queuedProbeSink{sessionPath: sessionPath}
 	task := NewTaskTool(&fleetScriptedFailureProvider{}, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(NewSubagentStore(filepath.Join(sessions, "subagents")), root, "base", "high").
-		WithScheduler(NewSubagentScheduler(1, 1))
+		WithScheduler(writeclaim.NewSubagentScheduler(1, 1))
 	ctx := withCallContext(context.Background(), "fleet-call", sink, nil, false)
 	ctx = WithTurnIdentity(WithParentSession(ctx, "probe"), "turn-1")
 

@@ -2,13 +2,14 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/runtime/writeclaim"
 )
 
 // acquireSlot queues this run for a session concurrency/write slot and tells its
 // policy the moment one is held. That moment is the only place the wait can be
 // read from: everything before it the run spent ready and not running, which no
 // participant except the scheduler is in a position to notice.
-func (t *TaskTool) acquireSlot(ctx context.Context, req AcquireRequest, sched SchedulerPolicy) (func(), error) {
+func (t *TaskTool) acquireSlot(ctx context.Context, req writeclaim.AcquireRequest, sched SchedulerPolicy) (func(), error) {
 	if t.scheduler == nil {
 		return func() {}, sched.started()
 	}
@@ -29,8 +30,8 @@ func (t *TaskTool) acquireSlot(ctx context.Context, req AcquireRequest, sched Sc
 // background writer that arrived without a claim: a caller that assembled the
 // spec by hand instead of through buildTaskSpec would otherwise queue against
 // nothing and run unserialised against every other writer.
-func (t *TaskTool) acquireRequestFor(spec *ProfileExecSpec) (AcquireRequest, error) {
-	req := AcquireRequest{
+func (t *TaskTool) acquireRequestFor(spec *ProfileExecSpec) (writeclaim.AcquireRequest, error) {
+	req := writeclaim.AcquireRequest{
 		Writer:     !spec.Grant.ReadOnly,
 		WritePaths: spec.Grant.WritePaths,
 		Nested:     spec.Sched.Nested,
@@ -41,9 +42,9 @@ func (t *TaskTool) acquireRequestFor(spec *ProfileExecSpec) (AcquireRequest, err
 	if !req.Writer || !spec.Grant.WritePaths.Empty() || !spec.Sched.RunInBackground {
 		return req, nil
 	}
-	whole, err := WholeWorkspaceWriteClaim(t.workspaceRoot)
+	whole, err := writeclaim.WholeWorkspaceWriteClaim(t.workspaceRoot)
 	if err != nil {
-		return AcquireRequest{}, err
+		return writeclaim.AcquireRequest{}, err
 	}
 	req.WritePaths = whole
 	spec.Grant.WritePaths = whole

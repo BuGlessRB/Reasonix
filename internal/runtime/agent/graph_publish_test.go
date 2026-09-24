@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/runtime/writeclaim"
 	"slices"
 	"testing"
 
@@ -48,10 +49,10 @@ func requireState(t *testing.T, g agentgraph.Graph, id string, want agentgraph.N
 
 func newProbeFleet(t *testing.T, prov *upstreamProbeProvider, arm ablation.Set) *FleetTool {
 	t.Helper()
-	return newProbeFleetOn(t, prov, arm, NewSubagentScheduler(4, 4), mustSubagentStore(t))
+	return newProbeFleetOn(t, prov, arm, writeclaim.NewSubagentScheduler(4, 4), mustSubagentStore(t))
 }
 
-func newProbeFleetOn(t *testing.T, prov *upstreamProbeProvider, arm ablation.Set, sched *SubagentScheduler, store *SubagentStore) *FleetTool {
+func newProbeFleetOn(t *testing.T, prov *upstreamProbeProvider, arm ablation.Set, sched *writeclaim.SubagentScheduler, store *SubagentStore) *FleetTool {
 	t.Helper()
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})
@@ -145,7 +146,7 @@ func TestFleetGraphRecordsTheBranchAFailureKilled(t *testing.T) {
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(&fleetAPIErrorProvider{status: 429}, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), testenv.TempDir(t), "base", "high").
-		WithScheduler(NewSubagentScheduler(3, 3))
+		WithScheduler(writeclaim.NewSubagentScheduler(3, 3))
 	ctx := WithParentSession(withCallContext(context.Background(), "fleet-call", rec, nil, false), "skip-parent")
 
 	if _, err := NewFleetTool(task).Execute(ctx, json.RawMessage(fleetGraphFailureTasks)); err != nil {
@@ -410,8 +411,8 @@ const parallelGraphTasks = `{"tasks":[
 // until both roots have queued is what makes the winner the pump's decision
 // rather than a race between the goroutines that ask for one.
 func TestFleetGivesAContendedSlotToTheItemHoldingUpTheChain(t *testing.T) {
-	sched := NewSubagentScheduler(1, 1)
-	held, err := sched.Acquire(context.Background(), AcquireRequest{})
+	sched := writeclaim.NewSubagentScheduler(1, 1)
+	held, err := sched.Acquire(context.Background(), writeclaim.AcquireRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,9 +455,9 @@ const fleetRankTasks = `{"tasks":[
 // is also what the slot-wait figure prices, and every millisecond of that setup
 // was being billed to a concurrency ceiling that had not caused it.
 func TestQueuedFleetItemsReserveNoTranscript(t *testing.T) {
-	sched := NewSubagentScheduler(1, 1)
+	sched := writeclaim.NewSubagentScheduler(1, 1)
 	store := mustSubagentStore(t)
-	held, err := sched.Acquire(context.Background(), AcquireRequest{})
+	held, err := sched.Acquire(context.Background(), writeclaim.AcquireRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -528,8 +529,8 @@ const parallelPerItemModelTasks = `{"tasks":[
 // picture as the same word — and only the scheduler is in a position to tell
 // them apart.
 func TestFleetGraphSaysWhatHeldAQueuedItemBack(t *testing.T) {
-	sched := NewSubagentScheduler(1, 1)
-	held, err := sched.Acquire(context.Background(), AcquireRequest{})
+	sched := writeclaim.NewSubagentScheduler(1, 1)
+	held, err := sched.Acquire(context.Background(), writeclaim.AcquireRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reasonix/internal/contract/hostaudit"
+	"reasonix/internal/runtime/writeclaim"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -35,7 +36,7 @@ func TestDelegationAuditSurvivesCapabilityProxy(t *testing.T) {
 	}}
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), testenv.TempDir(t), "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4))
+		WithScheduler(writeclaim.NewSubagentScheduler(4, 4))
 	reg.Add(task)
 
 	ctx := context.Background()

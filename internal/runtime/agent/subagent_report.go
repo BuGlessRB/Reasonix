@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reasonix/internal/contract/hostaudit"
+	"reasonix/internal/runtime/writeclaim"
 	"strings"
 
 	"reasonix/internal/contract/event"
@@ -85,7 +86,7 @@ const browserExecutionKind = "browser"
 // composeSubagentAnswer assembles everything the parent is shown for one child
 // run: the host-adjudicated completion claim when the child submitted one, the
 // child's own prose, then the host's receipts.
-func composeSubagentAnswer(ctx context.Context, answer string, sub *Agent, claims WritePathSet, delegationText string) string {
+func composeSubagentAnswer(ctx context.Context, answer string, sub *Agent, claims writeclaim.WritePathSet, delegationText string) string {
 	summary := sub.EvidenceSummary()
 	report, reasons, hasReport := sub.CompletionReport()
 	if hasReport {
@@ -100,7 +101,7 @@ func composeSubagentAnswer(ctx context.Context, answer string, sub *Agent, claim
 // benchmark can separate real gains from extra tokens spent. delegationText is
 // the parent-authored task before host framing, which is what makes the
 // evidence-origin split a host record rather than a claim.
-func recordDelegationAudit(ctx context.Context, summary evidence.ChildEvidenceSummary, claims WritePathSet, report evidence.CompletionReport, reasons []string, hasReport bool, delegationText string) {
+func recordDelegationAudit(ctx context.Context, summary evidence.ChildEvidenceSummary, claims writeclaim.WritePathSet, report evidence.CompletionReport, reasons []string, hasReport bool, delegationText string) {
 	audit := hostaudit.DelegationAudit{
 		Depth:           SubagentDepth(ctx),
 		ToolCalls:       len(summary.Receipts),
@@ -164,7 +165,7 @@ func criterionProof(c evidence.AcceptanceCriterion) string {
 // A child cannot write, suppress, or contradict these lines. An empty block is
 // omitted entirely, so read-only research children stay exactly as cheap as
 // they were before.
-func appendHostReceipts(answer string, summary evidence.ChildEvidenceSummary, claims WritePathSet) string {
+func appendHostReceipts(answer string, summary evidence.ChildEvidenceSummary, claims writeclaim.WritePathSet) string {
 	block := formatHostReceipts(summary, claims)
 	if block == "" {
 		return answer
@@ -179,7 +180,7 @@ func appendHostReceipts(answer string, summary evidence.ChildEvidenceSummary, cl
 // claim the child declared. Tool-level confinement already refuses these, so a
 // non-empty result means a write reached the workspace through a surface the
 // claim could not bind — the parent must not treat the run as scoped.
-func claimViolations(summary evidence.ChildEvidenceSummary, claims WritePathSet) []string {
+func claimViolations(summary evidence.ChildEvidenceSummary, claims writeclaim.WritePathSet) []string {
 	if claims.Empty() {
 		return nil
 	}
@@ -196,7 +197,7 @@ func claimViolations(summary evidence.ChildEvidenceSummary, claims WritePathSet)
 // the child really changed, and commands whose outcome the host observed.
 // Ordinary reads and greps are excluded on purpose — they are not claims a
 // parent has to adjudicate, and every rendered line costs parent context.
-func formatHostReceipts(summary evidence.ChildEvidenceSummary, claims WritePathSet) string {
+func formatHostReceipts(summary evidence.ChildEvidenceSummary, claims writeclaim.WritePathSet) string {
 	changed := summary.MutationPaths()
 	commands := hostReceiptCommands(summary)
 	violations := claimViolations(summary, claims)

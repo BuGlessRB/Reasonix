@@ -1,5 +1,5 @@
 // write_grant.go — what one delegated run may write, over the whole run.
-package agent
+package writeclaim
 
 import (
 	"errors"

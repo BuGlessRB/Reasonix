@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reasonix/internal/runtime/writeclaim"
 	"slices"
 	"strings"
 
@@ -197,7 +198,7 @@ func (a *Agent) pathInWorkspace(path string) bool {
 	if a.writeWorkspaceRoot == "" {
 		return true
 	}
-	return !filepath.IsAbs(path) || pathWithinFold(a.writeWorkspaceRoot, path)
+	return !filepath.IsAbs(path) || writeclaim.PathWithin(a.writeWorkspaceRoot, path)
 }
 
 // mutationBaseline is what the turn's remaining obligations are measured from:

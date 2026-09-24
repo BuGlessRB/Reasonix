@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
+	"reasonix/internal/runtime/writeclaim"
 	"reasonix/internal/state/execjournal"
 )
 
@@ -181,7 +182,7 @@ func skillOwnerFixture(t *testing.T, callID string) (*skillSubagents, context.Co
 	reg := tool.NewRegistry()
 	task := agent.NewTaskToolWithOptions(agent.TaskToolOptions{
 		Provider: &skillOwnerProvider{}, ParentRegistry: reg, MaxSteps: 8, ContextWindow: 8192,
-	}).WithTranscripts(store, root, "base", "high").WithScheduler(agent.NewSubagentScheduler(2, 2))
+	}).WithTranscripts(store, root, "base", "high").WithScheduler(writeclaim.NewSubagentScheduler(2, 2))
 	runner := &skillSubagents{root: root, cfg: config.Default(), registry: reg, tasks: task, maxSteps: 8}
 
 	ctx := context.Background()
