@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // recordToolReceipts files the turn-scoped evidence for one executed call:

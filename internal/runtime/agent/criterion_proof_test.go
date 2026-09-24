@@ -5,9 +5,9 @@ import (
 	"reasonix/internal/state/sessionstore"
 	"testing"
 
-	"reasonix/internal/contract/plancontract"
-	"reasonix/internal/contract/taskcontract"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/runtime/plancontract"
+	"reasonix/internal/runtime/taskcontract"
+	"reasonix/internal/safety/evidence"
 )
 
 func completeStepReceipt(t *testing.T, criterionID, kind, command string) evidence.Receipt {

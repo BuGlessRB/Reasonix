@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"reasonix/internal/contract/hostaudit"
 	"reasonix/internal/state/sessionstore"
 	"sync"
 
@@ -12,7 +13,6 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/extension"
 	"reasonix/internal/ext/extension/dispatch"
-	"reasonix/internal/runtime/evidence"
 )
 
 // Extension dispatch wiring. Nil dispatcher is a no-op.
@@ -201,7 +201,7 @@ func extensionFailurePlugin(err error) string {
 // user-facing events, never to the content-free telemetry channels — without
 // these, enabling extensions severed every audit from the recorder.
 
-func (s *frontendEventSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
+func (s *frontendEventSink) RecordReadinessAudit(a hostaudit.ReadinessAudit) {
 	event.RecordReadinessAudit(s.inner, a)
 }
 
@@ -209,7 +209,7 @@ func (s *frontendEventSink) RecordContractShadow(a event.ContractShadowAudit) {
 	event.RecordContractShadow(s.inner, a)
 }
 
-func (s *frontendEventSink) RecordDelegationAudit(a evidence.DelegationAudit) {
+func (s *frontendEventSink) RecordDelegationAudit(a hostaudit.DelegationAudit) {
 	event.RecordDelegationAudit(s.inner, a)
 }
 
@@ -217,7 +217,7 @@ func (s *frontendEventSink) RecordCompletionReport(a event.CompletionReportAudit
 	event.RecordCompletionReport(s.inner, a)
 }
 
-func (s *frontendEventSink) RecordOutcomeProgress(sample evidence.OutcomeSample) {
+func (s *frontendEventSink) RecordOutcomeProgress(sample hostaudit.OutcomeSample) {
 	event.RecordOutcomeProgress(s.inner, sample)
 }
 

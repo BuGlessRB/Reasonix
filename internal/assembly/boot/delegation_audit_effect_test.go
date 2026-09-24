@@ -5,21 +5,21 @@ package boot
 // counters read "no delegation" for a run whose graph showed four members.
 
 import (
+	"reasonix/internal/contract/hostaudit"
 	"sync"
 	"testing"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
 )
 
 type delegationAuditSink struct {
 	mu     sync.Mutex
-	audits []evidence.DelegationAudit
+	audits []hostaudit.DelegationAudit
 }
 
 func (s *delegationAuditSink) Emit(event.Event) {}
 
-func (s *delegationAuditSink) RecordDelegationAudit(a evidence.DelegationAudit) {
+func (s *delegationAuditSink) RecordDelegationAudit(a hostaudit.DelegationAudit) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.audits = append(s.audits, a)

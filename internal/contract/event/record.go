@@ -2,7 +2,7 @@ package event
 
 import (
 	"reasonix/internal/base/nilutil"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/contract/hostaudit"
 )
 
 // Forwarding a turn's audit signals to sinks that opt into them. Each is a
@@ -21,7 +21,7 @@ func RecordTurnCompletion(s Sink) {
 }
 
 // RecordReadinessAudit forwards a readiness audit receipt to sinks that opt in.
-func RecordReadinessAudit(s Sink, a evidence.ReadinessAudit) {
+func RecordReadinessAudit(s Sink, a hostaudit.ReadinessAudit) {
 	if nilutil.IsNil(s) {
 		return
 	}
@@ -171,12 +171,12 @@ func RecordMemoryRecall(s Sink, a MemoryRecallAudit) {
 // scorer's per-round samples: counts only, never paths or commands. Shadow
 // means observed, not enforced — the novelty guard still decides behavior.
 type OutcomeProgressSink interface {
-	RecordOutcomeProgress(evidence.OutcomeSample)
+	RecordOutcomeProgress(hostaudit.OutcomeSample)
 }
 
 // RecordOutcomeProgress forwards a shadow outcome sample only to sinks that
 // explicitly opt in. Ordinary UI sinks receive nothing.
-func RecordOutcomeProgress(s Sink, sample evidence.OutcomeSample) {
+func RecordOutcomeProgress(s Sink, sample hostaudit.OutcomeSample) {
 	if nilutil.IsNil(s) {
 		return
 	}

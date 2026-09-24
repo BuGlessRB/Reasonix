@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // probeProjectChecks compares the gate's project-check derivation against the

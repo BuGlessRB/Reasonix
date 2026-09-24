@@ -9,8 +9,8 @@ import (
 
 	"reasonix/internal/contract/agentpreset"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/taskpolicy"
+	"reasonix/internal/safety/evidence"
 )
 
 // reviewLedgerWithRead is a run that has read one file and nothing else, which

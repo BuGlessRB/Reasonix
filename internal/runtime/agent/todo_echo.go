@@ -10,7 +10,7 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // emitEagerToolDispatch draws a call's card up front, where a running state is

@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // todoIdentityNote renders the ids a sign-off must cite. It states whose list

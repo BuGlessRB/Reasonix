@@ -10,7 +10,7 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/capability"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // capabilityGateState is one user turn's gate memory, scoped to the same turn

@@ -3,14 +3,15 @@ package agent
 import (
 	"fmt"
 	"path/filepath"
+	"reasonix/internal/contract/hostaudit"
 	"slices"
 	"strconv"
 	"strings"
 
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/taskpolicy"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/instruction"
 )
 
@@ -70,8 +71,8 @@ func (c finalReadinessCheck) missingIDs() []string {
 	return missing
 }
 
-func (c finalReadinessCheck) audit(result evidence.ReadinessAuditResult, recovered bool) evidence.ReadinessAudit {
-	return evidence.ReadinessAudit{
+func (c finalReadinessCheck) audit(result hostaudit.ReadinessAuditResult, recovered bool) hostaudit.ReadinessAudit {
+	return hostaudit.ReadinessAudit{
 		Result:                    result,
 		Recovered:                 recovered,
 		MissingProjectChecks:      c.missingProjectChecks,

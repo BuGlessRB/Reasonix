@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 type recordingSink struct {

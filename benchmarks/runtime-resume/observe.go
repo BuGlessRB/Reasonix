@@ -14,7 +14,7 @@ import (
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/execjournal"
 	"reasonix/internal/state/store"

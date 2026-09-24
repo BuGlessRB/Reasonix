@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"encoding/json"
+	"reasonix/internal/contract/hostaudit"
 	"testing"
 )
 
@@ -72,7 +73,7 @@ func TestOutcomeTrackerDelegationAndRepeatsAreExplorationAtBest(t *testing.T) {
 	}
 
 	var nilTracker *OutcomeTracker
-	if got := nilTracker.ScoreRound([]Receipt{task}); got != (OutcomeSample{}) {
+	if got := nilTracker.ScoreRound([]Receipt{task}); got != (hostaudit.OutcomeSample{}) {
 		t.Fatalf("nil tracker sample = %+v, want zero", got)
 	}
 }

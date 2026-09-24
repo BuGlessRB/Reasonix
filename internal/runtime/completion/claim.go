@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // Claim is the model's own account of the work, as passed to update_goal. It

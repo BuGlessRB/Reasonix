@@ -15,7 +15,7 @@ import (
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func TestCompletedJobPersistsOutputAndReleasesMemory(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"reasonix/internal/contract/taskcontract"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/runtime/taskcontract"
+	"reasonix/internal/safety/evidence"
 )
 
 // Verdict is the report's headline. Partial is terminal: the work is proven

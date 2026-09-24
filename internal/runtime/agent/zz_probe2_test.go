@@ -2,21 +2,21 @@ package agent
 
 import (
 	"context"
+	"reasonix/internal/contract/hostaudit"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 )
 
 type auditProbe2 struct {
 	event.Sink
-	got []evidence.DelegationAudit
+	got []hostaudit.DelegationAudit
 }
 
-func (p *auditProbe2) RecordDelegationAudit(a evidence.DelegationAudit) { p.got = append(p.got, a) }
+func (p *auditProbe2) RecordDelegationAudit(a hostaudit.DelegationAudit) { p.got = append(p.got, a) }
 
 func TestZZProbeThroughTaskTool(t *testing.T) {
 	root := testenv.TempDir(t)

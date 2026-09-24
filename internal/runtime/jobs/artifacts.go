@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	fileencoding "reasonix/internal/base/fileutil/encoding"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/store"
 )
 

@@ -5,8 +5,8 @@ import (
 	"reasonix/internal/state/sessionstore"
 	"testing"
 
-	"reasonix/internal/contract/plancontract"
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/plancontract"
 )
 
 func scopedAgent(t *testing.T, plan *plancontract.Plan) *Agent {

@@ -3,7 +3,7 @@ package agent
 
 import (
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // toolFacts reads a resolved tool's own contracts. Callers holding the tool use

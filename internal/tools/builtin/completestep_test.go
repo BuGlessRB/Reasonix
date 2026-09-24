@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/instruction"
 )
 
@@ -95,7 +95,7 @@ func TestCompleteStepVerifiesHostReceipts(t *testing.T) {
 	ledger.Record(evidence.Receipt{
 		ToolName: "write_file",
 		Success:  true,
-		Paths:    []string{"internal/runtime/evidence/evidence.go"},
+		Paths:    []string{"internal/safety/evidence/evidence.go"},
 		Write:    true,
 	})
 	ledger.Record(evidence.Receipt{
@@ -111,7 +111,7 @@ func TestCompleteStepVerifiesHostReceipts(t *testing.T) {
 		"result":"complete_step checks host receipts",
 		"evidence":[
 			{"kind":"verification","summary":"tests passed","command":"go test ./internal/..."},
-			{"kind":"diff","summary":"ledger package added","paths":["internal/runtime/evidence/evidence.go"]},
+			{"kind":"diff","summary":"ledger package added","paths":["internal/safety/evidence/evidence.go"]},
 			{"kind":"files","summary":"complete_step implementation inspected","paths":["internal/tools/builtin/completestep.go"]}
 		]}`))
 	if err != nil {

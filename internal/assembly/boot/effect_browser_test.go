@@ -14,7 +14,7 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/safety/permission"
 )
 

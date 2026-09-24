@@ -10,7 +10,7 @@ import (
 
 	"reasonix/internal/base/diff"
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 const (

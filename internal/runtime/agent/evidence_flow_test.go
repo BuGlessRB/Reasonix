@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"reasonix/internal/contract/hostaudit"
 	"reasonix/internal/state/sessionstore"
 	"reflect"
 	"slices"
@@ -12,7 +13,7 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/instruction"
 )
 
@@ -102,12 +103,12 @@ func sessionHasUserMessageContaining(s *sessionstore.Session, needle string) boo
 }
 
 type readinessAuditSink struct {
-	events []evidence.ReadinessAudit
+	events []hostaudit.ReadinessAudit
 }
 
 func (s *readinessAuditSink) Emit(event.Event) {}
 
-func (s *readinessAuditSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
+func (s *readinessAuditSink) RecordReadinessAudit(a hostaudit.ReadinessAudit) {
 	s.events = append(s.events, a)
 }
 
@@ -227,13 +228,13 @@ func TestDeliveryProfileRequiresReviewBeforeFinalAnswer(t *testing.T) {
 	}
 	// The debt here is inspection of what the turn changed, not a structured
 	// review report — a distinction the single review counter could not make.
-	if len(sink.events) != 1 || sink.events[0].Result != evidence.ReadinessErrored || sink.events[0].MissingPathInspection == 0 {
+	if len(sink.events) != 1 || sink.events[0].Result != hostaudit.ReadinessErrored || sink.events[0].MissingPathInspection == 0 {
 		t.Fatalf("readiness audits = %+v, want one errored audit owing changed-path inspection", sink.events)
 	}
 	if err := a.Run(ctx, "finish the goal"); err != nil {
 		t.Fatalf("follow-up Run: %v", err)
 	}
-	if len(sink.events) != 2 || sink.events[len(sink.events)-1].Result != evidence.ReadinessAllowed {
+	if len(sink.events) != 2 || sink.events[len(sink.events)-1].Result != hostaudit.ReadinessAllowed {
 		t.Fatalf("readiness audits = %+v, want a final allowed audit", sink.events)
 	}
 }
@@ -575,14 +576,14 @@ func TestFinalReadinessAuditRecordsBlockAndRecovery(t *testing.T) {
 		t.Fatalf("readiness audit events = %d, want 1: %+v", len(sink.events), sink.events)
 	}
 	blocked := sink.events[0]
-	if blocked.Result != evidence.ReadinessErrored || blocked.MissingProjectChecks != 1 {
+	if blocked.Result != hostaudit.ReadinessErrored || blocked.MissingProjectChecks != 1 {
 		t.Fatalf("blocked audit = %+v, want missing project check command", blocked)
 	}
 	if err := a.Run(ctx, "finish"); err != nil {
 		t.Fatalf("verified Run: %v", err)
 	}
 	recovered := sink.events[len(sink.events)-1]
-	if recovered.Result != evidence.ReadinessAllowed || !recovered.Recovered {
+	if recovered.Result != hostaudit.ReadinessAllowed || !recovered.Recovered {
 		t.Fatalf("recovery audit = %+v, want allowed recovered", recovered)
 	}
 }
@@ -754,7 +755,7 @@ func TestFinalReadinessAuditRecordsTerminalError(t *testing.T) {
 		t.Fatalf("readiness audit events = %d, want 1 (no retries): %+v", len(sink.events), sink.events)
 	}
 	last := sink.events[len(sink.events)-1]
-	if last.Result != evidence.ReadinessErrored || last.IncompleteTodos == 0 {
+	if last.Result != hostaudit.ReadinessErrored || last.IncompleteTodos == 0 {
 		t.Fatalf("terminal audit = %+v, want errored with incomplete todos", last)
 	}
 }

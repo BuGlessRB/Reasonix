@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // recoveryIdentity is who this agent is to the shared gate: the labels a

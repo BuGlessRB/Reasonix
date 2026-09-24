@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reasonix/internal/contract/hostaudit"
 	"reasonix/internal/state/sessionstore"
 	"sync/atomic"
 	"testing"
@@ -11,7 +12,6 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 )
 
 type scriptedTool struct {
@@ -63,7 +63,7 @@ func (p *seriesProvider) Stream(context.Context, provider.Request) (<-chan provi
 	return ch, nil
 }
 
-func outcomeSeries(t *testing.T, calls []scriptedCall) []evidence.OutcomeSample {
+func outcomeSeries(t *testing.T, calls []scriptedCall) []hostaudit.OutcomeSample {
 	t.Helper()
 	sink := &outcomeSeriesSink{}
 	reg := tool.NewRegistry()
@@ -78,10 +78,10 @@ func outcomeSeries(t *testing.T, calls []scriptedCall) []evidence.OutcomeSample 
 	return sink.samples
 }
 
-type outcomeSeriesSink struct{ samples []evidence.OutcomeSample }
+type outcomeSeriesSink struct{ samples []hostaudit.OutcomeSample }
 
 func (s *outcomeSeriesSink) Emit(event.Event) {}
-func (s *outcomeSeriesSink) RecordOutcomeProgress(sample evidence.OutcomeSample) {
+func (s *outcomeSeriesSink) RecordOutcomeProgress(sample hostaudit.OutcomeSample) {
 	s.samples = append(s.samples, sample)
 }
 

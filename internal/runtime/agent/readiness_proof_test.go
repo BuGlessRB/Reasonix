@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/instruction"
 )
 

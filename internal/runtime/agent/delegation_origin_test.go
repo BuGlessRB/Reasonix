@@ -3,25 +3,25 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/contract/hostaudit"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 )
 
 type originProbe struct {
 	event.Sink
-	got []evidence.DelegationAudit
+	got []hostaudit.DelegationAudit
 }
 
-func (p *originProbe) RecordDelegationAudit(a evidence.DelegationAudit) { p.got = append(p.got, a) }
+func (p *originProbe) RecordDelegationAudit(a hostaudit.DelegationAudit) { p.got = append(p.got, a) }
 
 // runDelegationForOrigin spawns one real child through TaskTool that reads
 // src/parser.go and src/scanner.go, and returns the audit the sink received.
-func runDelegationForOrigin(t *testing.T, prompt string) evidence.DelegationAudit {
+func runDelegationForOrigin(t *testing.T, prompt string) hostaudit.DelegationAudit {
 	t.Helper()
 	probe := &originProbe{Sink: event.Discard}
 	reg := tool.NewRegistry()

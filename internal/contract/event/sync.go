@@ -1,10 +1,10 @@
 package event
 
 import (
+	"reasonix/internal/contract/hostaudit"
 	"sync"
 
 	"reasonix/internal/base/nilutil"
-	"reasonix/internal/runtime/evidence"
 )
 
 // Sync wraps a Sink so concurrent Emit calls are serialized. The base Sink
@@ -32,13 +32,13 @@ func (s *syncSink) Emit(e Event) {
 	s.inner.Emit(e)
 }
 
-func (s *syncSink) RecordDelegationAudit(a evidence.DelegationAudit) {
+func (s *syncSink) RecordDelegationAudit(a hostaudit.DelegationAudit) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	RecordDelegationAudit(s.inner, a)
 }
 
-func (s *syncSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
+func (s *syncSink) RecordReadinessAudit(a hostaudit.ReadinessAudit) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if rs, ok := s.inner.(ReadinessAuditSink); ok {
@@ -102,7 +102,7 @@ func (s *syncSink) RecordCompletionReport(a CompletionReportAudit) {
 	}
 }
 
-func (s *syncSink) RecordOutcomeProgress(sample evidence.OutcomeSample) {
+func (s *syncSink) RecordOutcomeProgress(sample hostaudit.OutcomeSample) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if op, ok := s.inner.(OutcomeProgressSink); ok {

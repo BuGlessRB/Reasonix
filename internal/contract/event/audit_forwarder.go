@@ -2,7 +2,7 @@ package event
 
 import (
 	"reasonix/internal/base/nilutil"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/contract/hostaudit"
 )
 
 // AuditForwarder forwards every optional sink capability to Inner. Embed it in
@@ -11,7 +11,7 @@ import (
 // capabilities at multiple wrappers even while their owning tests stayed green.
 type AuditForwarder struct{ Inner Sink }
 
-func (f AuditForwarder) RecordReadinessAudit(a evidence.ReadinessAudit) {
+func (f AuditForwarder) RecordReadinessAudit(a hostaudit.ReadinessAudit) {
 	RecordReadinessAudit(f.Inner, a)
 }
 
@@ -29,7 +29,7 @@ func (f AuditForwarder) RecordMemoryRecall(a MemoryRecallAudit) {
 	RecordMemoryRecall(f.Inner, a)
 }
 
-func (f AuditForwarder) RecordOutcomeProgress(s evidence.OutcomeSample) {
+func (f AuditForwarder) RecordOutcomeProgress(s hostaudit.OutcomeSample) {
 	RecordOutcomeProgress(f.Inner, s)
 }
 
@@ -37,7 +37,7 @@ func (f AuditForwarder) RecordProtocolRecovery(a ProtocolRecoveryAudit) {
 	RecordProtocolRecovery(f.Inner, a)
 }
 
-func (f AuditForwarder) RecordDelegationAudit(a evidence.DelegationAudit) {
+func (f AuditForwarder) RecordDelegationAudit(a hostaudit.DelegationAudit) {
 	RecordDelegationAudit(f.Inner, a)
 }
 
@@ -63,11 +63,11 @@ func (f AuditForwarder) RecordVerificationContractDrift(d VerificationContractDr
 
 // DelegationAuditSink receives one receipt per completed sub-agent run.
 type DelegationAuditSink interface {
-	RecordDelegationAudit(a evidence.DelegationAudit)
+	RecordDelegationAudit(a hostaudit.DelegationAudit)
 }
 
 // RecordDelegationAudit forwards a delegation receipt to sinks that opt in.
-func RecordDelegationAudit(s Sink, a evidence.DelegationAudit) {
+func RecordDelegationAudit(s Sink, a hostaudit.DelegationAudit) {
 	if nilutil.IsNil(s) {
 		return
 	}

@@ -11,7 +11,7 @@ import (
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // boundWriterFixture builds a workspace with an in-claim directory and an

@@ -8,7 +8,7 @@ import (
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // ProfileDefinition is the delegation-facing narrowing of a stored Skill: what

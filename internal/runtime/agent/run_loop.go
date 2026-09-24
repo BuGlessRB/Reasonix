@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"reasonix/internal/contract/hostaudit"
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync/atomic"
@@ -15,9 +16,9 @@ import (
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/jobs"
 	"reasonix/internal/runtime/taskpolicy"
+	"reasonix/internal/safety/evidence"
 )
 
 // streamedTurn is one provider completion collected by stream. Keeping the
@@ -578,7 +579,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		// what happens next. In Goal mode the FSM auto-continues under budget
 		// with the missing list as the next turn; plain Delivery turns surface
 		// the recovery card for an explicit user continuation.
-		event.RecordReadinessAudit(a.svc.sink, readiness.audit(evidence.ReadinessErrored, false))
+		event.RecordReadinessAudit(a.svc.sink, readiness.audit(hostaudit.ReadinessErrored, false))
 		a.pending.deliveryRecovery = true
 		// The blocked turn is the one whose summary matters most — it is where
 		// a rewritten check or an unverified mutation is still outstanding —
@@ -615,7 +616,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		return true, nil
 	}
 	if readiness.applies {
-		event.RecordReadinessAudit(a.svc.sink, readiness.audit(evidence.ReadinessAllowed, a.turn.readinessRecovered))
+		event.RecordReadinessAudit(a.svc.sink, readiness.audit(hostaudit.ReadinessAllowed, a.turn.readinessRecovered))
 	}
 	a.emitTurnShadows(a.turn.turnInput, false)
 	if !a.closeSteerIntakeIfIdle() {

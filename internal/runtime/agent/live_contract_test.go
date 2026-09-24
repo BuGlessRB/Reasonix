@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/contract/taskcontract"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/runtime/taskcontract"
+	"reasonix/internal/safety/evidence"
 )
 
 func liveContractAgent(t *testing.T, sink event.Sink) *Agent {

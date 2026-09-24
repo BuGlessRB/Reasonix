@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/contract/plancontract"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/runtime/plancontract"
+	"reasonix/internal/safety/evidence"
 )
 
 func rejectionAgent(t *testing.T, plan *plancontract.Plan) *Agent {

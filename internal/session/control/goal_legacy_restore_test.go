@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"testing"
 
 	"reasonix/internal/base/testenv"

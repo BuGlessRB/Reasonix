@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 const witnessBefore = "package tally\n\nfunc Sum(xs []int) int {\n\ttotal := 0\n\treturn total\n}\n"

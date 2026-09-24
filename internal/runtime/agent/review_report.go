@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // ReviewReportGrant is what the host bound one report tool to before its

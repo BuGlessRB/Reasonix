@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"path/filepath"
+	"reasonix/internal/contract/hostaudit"
 	"slices"
 	"testing"
 
@@ -91,8 +92,8 @@ func TestClassifyEvidenceOriginCreditsWorkInsideAScopeHint(t *testing.T) {
 		filepath.Join(root, "pkg", "romeo.py"),
 	}
 
-	var scoped DelegationAudit
-	scoped.ClassifyEvidenceOrigin("Search pkg/ for the module that gets it wrong.", looked)
+	var scoped hostaudit.DelegationAudit
+	ClassifyEvidenceOrigin(&scoped, "Search pkg/ for the module that gets it wrong.", looked)
 	if scoped.ParentScopeHints != 1 || scoped.ParentNamedFiles != 0 {
 		t.Fatalf("scoped = %+v, want 1 scope hint and no named file", scoped)
 	}
@@ -100,8 +101,8 @@ func TestClassifyEvidenceOriginCreditsWorkInsideAScopeHint(t *testing.T) {
 		t.Errorf("a scope hint erased the child's credit: %d/2", scoped.DiscoveredPaths)
 	}
 
-	var told DelegationAudit
-	told.ClassifyEvidenceOrigin("The bug is in pkg/romeo.py.", looked)
+	var told hostaudit.DelegationAudit
+	ClassifyEvidenceOrigin(&told, "The bug is in pkg/romeo.py.", looked)
 	if told.ParentNamedFiles != 1 || told.DiscoveredPaths != 1 {
 		t.Errorf("told = %+v, want 1 named file and 1 of 2 discovered", told)
 	}
@@ -115,14 +116,14 @@ func TestClassifyEvidenceOriginSplitsBlindFromSeededDelegation(t *testing.T) {
 		filepath.Join(root, "tests", "test_parser.py"),
 	}
 
-	var blind DelegationAudit
-	blind.ClassifyEvidenceOrigin("Diagnose the failing parser test.", looked)
+	var blind hostaudit.DelegationAudit
+	ClassifyEvidenceOrigin(&blind, "Diagnose the failing parser test.", looked)
 	if blind.ParentNamedFiles != 0 || blind.DiscoveredPaths != 3 || blind.EvidencePaths != 3 {
 		t.Fatalf("blind = %+v, want 0 named and 3/3 discovered", blind)
 	}
 
-	var seeded DelegationAudit
-	seeded.ClassifyEvidenceOrigin("I suspect src/parser.go double-normalizes CRLF.", looked)
+	var seeded hostaudit.DelegationAudit
+	ClassifyEvidenceOrigin(&seeded, "I suspect src/parser.go double-normalizes CRLF.", looked)
 	if seeded.ParentNamedFiles != 1 {
 		t.Fatalf("seeded.ParentNamedFiles = %d, want 1", seeded.ParentNamedFiles)
 	}

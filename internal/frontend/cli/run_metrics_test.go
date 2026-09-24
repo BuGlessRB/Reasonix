@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/contract/hostaudit"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
 )
 
 func TestMetricsSinkForwardsEachEventOnce(t *testing.T) {
@@ -40,8 +40,8 @@ func TestMetricsSinkUsesProviderCacheWriteCost(t *testing.T) {
 func TestMetricsSinkAccumulatesReadinessAudit(t *testing.T) {
 	s := &metricsSink{inner: event.Discard}
 
-	s.RecordReadinessAudit(evidence.ReadinessAudit{
-		Result:                    evidence.ReadinessBlocked,
+	s.RecordReadinessAudit(hostaudit.ReadinessAudit{
+		Result:                    hostaudit.ReadinessBlocked,
 		MissingProjectChecks:      2,
 		IncompleteTodos:           3,
 		MissingAcceptanceCriteria: 1,
@@ -51,12 +51,12 @@ func TestMetricsSinkAccumulatesReadinessAudit(t *testing.T) {
 		MissingSignoff:            1,
 		MissingMutation:           1,
 	})
-	s.RecordReadinessAudit(evidence.ReadinessAudit{
-		Result:    evidence.ReadinessAllowed,
+	s.RecordReadinessAudit(hostaudit.ReadinessAudit{
+		Result:    hostaudit.ReadinessAllowed,
 		Recovered: true,
 	})
-	s.RecordReadinessAudit(evidence.ReadinessAudit{
-		Result: evidence.ReadinessErrored,
+	s.RecordReadinessAudit(hostaudit.ReadinessAudit{
+		Result: hostaudit.ReadinessErrored,
 	})
 
 	if s.m.ReadinessChecks != 3 {

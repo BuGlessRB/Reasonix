@@ -10,7 +10,7 @@ import (
 
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // A digest carries what the fold changed and what failed; everything else

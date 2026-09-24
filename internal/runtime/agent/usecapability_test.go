@@ -25,7 +25,7 @@ import (
 	"reasonix/internal/ext/plugin"
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/capability"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/safety/permission"
 )
 

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"reasonix/internal/contract/plancontract"
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/plancontract"
 )
 
 // SubmitPlanTool is the planner's structured exit: it hands the host a plan as

@@ -11,7 +11,7 @@ import (
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/store"
 )
 

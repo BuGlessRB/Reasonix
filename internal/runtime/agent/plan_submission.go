@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"reasonix/internal/contract/plancontract"
+	"reasonix/internal/runtime/plancontract"
 )
 
 // PlanSubmission is where submit_plan leaves an accepted plan for the host that

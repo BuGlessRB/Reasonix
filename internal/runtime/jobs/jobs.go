@@ -29,7 +29,7 @@ import (
 
 	"reasonix/internal/base/nilutil"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 var renamePath = os.Rename

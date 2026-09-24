@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // classified is a bash receipt carrying the host's verification verdict, which

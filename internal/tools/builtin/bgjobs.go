@@ -10,8 +10,8 @@ import (
 
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/safety/evidence"
 )
 
 // bash_output / kill_shell / wait operate the background jobs registered by

@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // baselineBackend names the capability that produced a result, so a claim never

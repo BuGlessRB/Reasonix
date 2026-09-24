@@ -10,10 +10,10 @@ import (
 
 	"reasonix/internal/base/nilutil"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/contract/plancontract"
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/plancontract"
 	"reasonix/internal/safety/sandbox"
 )
 

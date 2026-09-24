@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // Measuring the stall is worth nothing unless it reaches a person, and it has

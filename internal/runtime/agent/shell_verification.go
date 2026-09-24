@@ -6,7 +6,7 @@ import (
 
 	"reasonix/internal/base/shellparse"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // shellVerificationVerdict reads a verification's outcome off what the host

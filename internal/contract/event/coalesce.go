@@ -1,13 +1,13 @@
 package event
 
 import (
+	"reasonix/internal/contract/hostaudit"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"reasonix/internal/base/nilutil"
-	"reasonix/internal/runtime/evidence"
 )
 
 // coalesceMaxBytes bounds a merged delta so one event never carries an
@@ -139,14 +139,14 @@ func (c *coalescer) drainAndUnlock() {
 // Optional sink capabilities flush first so audits never overtake a buffered
 // delta, then forward to inner sinks that opt in.
 
-func (c *coalescer) RecordDelegationAudit(a evidence.DelegationAudit) {
+func (c *coalescer) RecordDelegationAudit(a hostaudit.DelegationAudit) {
 	c.mu.Lock()
 	c.enqueueFlushLocked()
 	c.drainAndUnlock()
 	RecordDelegationAudit(c.inner, a)
 }
 
-func (c *coalescer) RecordReadinessAudit(a evidence.ReadinessAudit) {
+func (c *coalescer) RecordReadinessAudit(a hostaudit.ReadinessAudit) {
 	c.mu.Lock()
 	c.enqueueFlushLocked()
 	c.drainAndUnlock()
@@ -202,7 +202,7 @@ func (c *coalescer) RecordCompletionReport(a CompletionReportAudit) {
 	RecordCompletionReport(c.inner, a)
 }
 
-func (c *coalescer) RecordOutcomeProgress(sample evidence.OutcomeSample) {
+func (c *coalescer) RecordOutcomeProgress(sample hostaudit.OutcomeSample) {
 	c.mu.Lock()
 	c.enqueueFlushLocked()
 	c.drainAndUnlock()

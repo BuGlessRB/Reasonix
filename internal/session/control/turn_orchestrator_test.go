@@ -19,7 +19,7 @@ import (
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/capability"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 type plannerMetadataRunner struct {

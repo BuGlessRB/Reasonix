@@ -1,22 +1,23 @@
 package cli
 
 import (
+	"reasonix/internal/contract/hostaudit"
 	"testing"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // The instrument must be able to say, from one run, whether delegation
 // produced verified work or just more tokens.
 func TestDelegationMetricsAggregateAcrossChildren(t *testing.T) {
 	s := &metricsSink{}
-	s.RecordDelegationAudit(evidence.DelegationAudit{
+	s.RecordDelegationAudit(hostaudit.DelegationAudit{
 		Depth: 1, ToolCalls: 6, Mutations: 2,
 		MutationPaths:     []string{"api/handler.go", "api/handler_test.go"},
 		HasReport:         true,
 		AdjudicatedStatus: string(evidence.CompletionComplete),
 	})
-	s.RecordDelegationAudit(evidence.DelegationAudit{
+	s.RecordDelegationAudit(hostaudit.DelegationAudit{
 		Depth: 2, ToolCalls: 4, Mutations: 1,
 		MutationPaths:     []string{"api/handler.go"},
 		ClaimViolations:   1,
@@ -24,7 +25,7 @@ func TestDelegationMetricsAggregateAcrossChildren(t *testing.T) {
 		AdjudicatedStatus: string(evidence.CompletionPartial),
 		Downgrades:        2,
 	})
-	s.RecordDelegationAudit(evidence.DelegationAudit{Depth: 1, ToolCalls: 3})
+	s.RecordDelegationAudit(hostaudit.DelegationAudit{Depth: 1, ToolCalls: 3})
 
 	m := s.m
 	if m.SubagentRuns != 3 || m.SubagentNestedRuns != 1 {
@@ -55,10 +56,10 @@ func TestDelegationMetricsAggregateAcrossChildren(t *testing.T) {
 // swept twenty. Summing here is what makes the published rate that ratio.
 func TestDelegationMetricsSumEvidenceOriginForARatioOfTotals(t *testing.T) {
 	s := &metricsSink{}
-	s.RecordDelegationAudit(evidence.DelegationAudit{
+	s.RecordDelegationAudit(hostaudit.DelegationAudit{
 		Depth: 1, ParentNamedFiles: 1, EvidencePaths: 20, DiscoveredPaths: 19,
 	})
-	s.RecordDelegationAudit(evidence.DelegationAudit{
+	s.RecordDelegationAudit(hostaudit.DelegationAudit{
 		Depth: 1, ParentNamedFiles: 2, EvidencePaths: 1, DiscoveredPaths: 0,
 	})
 

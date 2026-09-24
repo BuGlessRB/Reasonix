@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"reasonix/internal/contract/ablation"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func TestEvidenceAblationStandsDownTheReadinessGate(t *testing.T) {

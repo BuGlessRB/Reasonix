@@ -11,7 +11,7 @@ import (
 	"reasonix/internal/base/diff"
 	"reasonix/internal/base/fileutil"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/checkpoint"
 )
 

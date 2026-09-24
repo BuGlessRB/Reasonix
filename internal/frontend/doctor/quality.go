@@ -9,7 +9,7 @@ import (
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/usagereport"
 )
 

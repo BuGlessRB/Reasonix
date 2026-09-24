@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // A real module, a real toolchain run: the criterion the task began under is

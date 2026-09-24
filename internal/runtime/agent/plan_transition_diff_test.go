@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func todoList(items ...[2]string) []evidence.TodoItem {

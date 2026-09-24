@@ -13,11 +13,11 @@ package event
 
 import (
 	"encoding/json"
+	"reasonix/internal/contract/hostaudit"
 	"reasonix/internal/contract/pricing"
 
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
 )
 
 // Kind tags an Event. Read the field(s) documented for that kind.
@@ -593,7 +593,7 @@ type WorkspaceChangedPayload struct {
 // ReadinessAuditSink is an optional sink capability. Sinks that do not care
 // about readiness audit receipts can implement only Sink and will ignore them.
 type ReadinessAuditSink interface {
-	RecordReadinessAudit(evidence.ReadinessAudit)
+	RecordReadinessAudit(hostaudit.ReadinessAudit)
 }
 
 // TurnCompletionSink is an optional sink capability for synchronous controller

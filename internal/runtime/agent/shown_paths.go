@@ -4,7 +4,7 @@ import (
 	"os"
 	"slices"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // witnessFileLimit bounds how much of a file the host will read to build a

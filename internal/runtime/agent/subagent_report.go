@@ -3,11 +3,12 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reasonix/internal/contract/hostaudit"
 	"strings"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // hostReceiptsMaxItems bounds each rendered line so a long child run cannot
@@ -100,7 +101,7 @@ func composeSubagentAnswer(ctx context.Context, answer string, sub *Agent, claim
 // the parent-authored task before host framing, which is what makes the
 // evidence-origin split a host record rather than a claim.
 func recordDelegationAudit(ctx context.Context, summary evidence.ChildEvidenceSummary, claims WritePathSet, report evidence.CompletionReport, reasons []string, hasReport bool, delegationText string) {
-	audit := evidence.DelegationAudit{
+	audit := hostaudit.DelegationAudit{
 		Depth:           SubagentDepth(ctx),
 		ToolCalls:       len(summary.Receipts),
 		MutationPaths:   summary.MutationPaths(),
@@ -109,7 +110,7 @@ func recordDelegationAudit(ctx context.Context, summary evidence.ChildEvidenceSu
 		Downgrades:      len(reasons),
 	}
 	audit.Mutations = len(audit.MutationPaths)
-	audit.ClassifyEvidenceOrigin(delegationText, summary.EvidencePaths())
+	evidence.ClassifyEvidenceOrigin(&audit, delegationText, summary.EvidencePaths())
 	if hasReport {
 		audit.AdjudicatedStatus = string(report.Status)
 	}

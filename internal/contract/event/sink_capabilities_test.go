@@ -1,11 +1,10 @@
 package event
 
 import (
+	"reasonix/internal/contract/hostaudit"
 	"reflect"
 	"testing"
 	"time"
-
-	"reasonix/internal/runtime/evidence"
 )
 
 // capturingSink implements every optional capability so a chain test can prove
@@ -17,10 +16,10 @@ type capturingSink struct {
 
 func (s *capturingSink) Emit(e Event) { s.events = append(s.events, e) }
 
-func (s *capturingSink) RecordDelegationAudit(evidence.DelegationAudit) {
+func (s *capturingSink) RecordDelegationAudit(hostaudit.DelegationAudit) {
 	s.recorded = append(s.recorded, "DelegationAudit")
 }
-func (s *capturingSink) RecordReadinessAudit(evidence.ReadinessAudit) {
+func (s *capturingSink) RecordReadinessAudit(hostaudit.ReadinessAudit) {
 	s.recorded = append(s.recorded, "ReadinessAudit")
 }
 func (s *capturingSink) RecordTurnCompletion() {
@@ -38,7 +37,7 @@ func (s *capturingSink) RecordCompletionReport(CompletionReportAudit) {
 func (s *capturingSink) RecordMemoryRecall(MemoryRecallAudit) {
 	s.recorded = append(s.recorded, "MemoryRecall")
 }
-func (s *capturingSink) RecordOutcomeProgress(evidence.OutcomeSample) {
+func (s *capturingSink) RecordOutcomeProgress(hostaudit.OutcomeSample) {
 	s.recorded = append(s.recorded, "OutcomeProgress")
 }
 func (s *capturingSink) RecordWorkspaceMutation(WorkspaceMutation) {
@@ -59,14 +58,14 @@ func (s *capturingSink) RecordVerificationContractDrift(VerificationContractDrif
 
 // recordAll drives every optional capability once through s.
 func recordAll(s Sink) {
-	RecordDelegationAudit(s, evidence.DelegationAudit{})
-	RecordReadinessAudit(s, evidence.ReadinessAudit{})
+	RecordDelegationAudit(s, hostaudit.DelegationAudit{})
+	RecordReadinessAudit(s, hostaudit.ReadinessAudit{})
 	RecordTurnCompletion(s)
 	RecordProtocolRecovery(s, ProtocolRecoveryAudit{})
 	RecordContractShadow(s, ContractShadowAudit{})
 	RecordCompletionReport(s, CompletionReportAudit{})
 	RecordMemoryRecall(s, MemoryRecallAudit{})
-	RecordOutcomeProgress(s, evidence.OutcomeSample{})
+	RecordOutcomeProgress(s, hostaudit.OutcomeSample{})
 	RecordWorkspaceMutation(s, WorkspaceMutation{})
 	RecordRunBudget(s, RunBudgetSample{})
 	RecordProjectCheckProbe(s, ProjectCheckProbe{})

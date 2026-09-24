@@ -2,7 +2,7 @@ package agent
 
 import (
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // observeTodoTransition records what one task-list write did to the plan. It

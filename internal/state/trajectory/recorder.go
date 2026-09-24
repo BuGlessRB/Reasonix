@@ -8,13 +8,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"reasonix/internal/contract/hostaudit"
 	"reflect"
 	"sync"
 	"time"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/eventwire"
-	"reasonix/internal/runtime/evidence"
 )
 
 // SchemaVersion identifies the record layout; bump on breaking changes.
@@ -81,7 +81,7 @@ type MemoryRecallHit struct {
 	Score     float64 `json:"score,omitempty"`
 }
 
-// OutcomeProgress mirrors evidence.OutcomeSample with stable snake_case keys.
+// OutcomeProgress mirrors hostaudit.OutcomeSample with stable snake_case keys.
 type OutcomeProgress struct {
 	Round          int `json:"round"`
 	Exploration    int `json:"exploration,omitempty"`
@@ -175,7 +175,7 @@ type CompletionReport struct {
 	ClaimsUnbacked            int      `json:"claims_unbacked,omitempty"`
 }
 
-// ReadinessAudit mirrors evidence.ReadinessAudit with stable snake_case keys.
+// ReadinessAudit mirrors hostaudit.ReadinessAudit with stable snake_case keys.
 type ReadinessAudit struct {
 	Result                    string `json:"result"`
 	Recovered                 bool   `json:"recovered,omitempty"`
@@ -325,11 +325,11 @@ func (r *Recorder) Emit(e event.Event) {
 
 // RecordDelegationAudit forwards without persisting: delegation receipts are
 // aggregated by run metrics, and the trajectory schema stays unchanged.
-func (r *Recorder) RecordDelegationAudit(a evidence.DelegationAudit) {
+func (r *Recorder) RecordDelegationAudit(a hostaudit.DelegationAudit) {
 	event.RecordDelegationAudit(r.inner, a)
 }
 
-func (r *Recorder) RecordReadinessAudit(a evidence.ReadinessAudit) {
+func (r *Recorder) RecordReadinessAudit(a hostaudit.ReadinessAudit) {
 	r.append(Record{ReadinessAudit: &ReadinessAudit{
 		Result:                    string(a.Result),
 		Recovered:                 a.Recovered,
@@ -424,7 +424,7 @@ func (r *Recorder) RecordCompletionReport(a event.CompletionReportAudit) {
 	event.RecordCompletionReport(r.inner, a)
 }
 
-func (r *Recorder) RecordOutcomeProgress(sample evidence.OutcomeSample) {
+func (r *Recorder) RecordOutcomeProgress(sample hostaudit.OutcomeSample) {
 	r.append(Record{OutcomeProgress: &OutcomeProgress{
 		Round:          sample.Round,
 		Exploration:    sample.Exploration,

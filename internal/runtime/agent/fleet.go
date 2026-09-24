@@ -14,8 +14,8 @@ import (
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/safety/evidence"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func init() { tool.RegisterBuiltin(todoWrite{}) }

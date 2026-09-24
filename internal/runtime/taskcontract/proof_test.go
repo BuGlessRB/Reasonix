@@ -3,7 +3,7 @@ package taskcontract
 import (
 	"testing"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // A suite whose exit status the shell hid neither satisfies a declared check

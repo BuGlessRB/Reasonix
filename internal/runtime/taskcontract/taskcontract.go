@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // Risk is the highest risk any upstream signal assigned to the task.

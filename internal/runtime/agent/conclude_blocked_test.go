@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/contract/taskcontract"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/runtime/taskcontract"
+	"reasonix/internal/safety/evidence"
 )
 
 func blockedCtx(ledger *evidence.Ledger) context.Context {

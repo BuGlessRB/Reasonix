@@ -15,7 +15,7 @@
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4348,
-    "layer-order": 18,
+    "layer-order": 5,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -378,29 +378,14 @@
       "essay": 1,
       "orphan": 1
     },
-    "internal/contract/event/audit_forwarder.go": {
-      "layer-order": 1
-    },
-    "internal/contract/event/coalesce.go": {
-      "layer-order": 1
-    },
     "internal/contract/event/event.go": {
-      "essay": 7,
-      "layer-order": 1
-    },
-    "internal/contract/event/record.go": {
-      "layer-order": 1
+      "essay": 7
     },
     "internal/contract/event/subagent_progress.go": {
       "essay": 9
     },
     "internal/contract/event/sync.go": {
-      "essay": 2,
-      "layer-order": 1
-    },
-    "internal/contract/plancontract/project.go": {
-      "layer-order": 1,
-      "orphan": 1
+      "essay": 2
     },
     "internal/contract/pricing/migrate.go": {
       "orphan": 1
@@ -426,13 +411,6 @@
     },
     "internal/contract/provider/usage.go": {
       "essay": 11
-    },
-    "internal/contract/taskcontract/proof.go": {
-      "layer-order": 1
-    },
-    "internal/contract/taskcontract/taskcontract.go": {
-      "essay": 1,
-      "layer-order": 1
     },
     "internal/contract/tool/contract.go": {
       "essay": 1,
@@ -1151,25 +1129,6 @@
     "internal/runtime/capability/catalog.go": {
       "essay": 1
     },
-    "internal/runtime/evidence/evidence.go": {
-      "essay": 2
-    },
-    "internal/runtime/evidence/ledger_queries.go": {
-      "essay": 6
-    },
-    "internal/runtime/evidence/review_report.go": {
-      "essay": 7
-    },
-    "internal/runtime/evidence/todos.go": {
-      "essay": 8
-    },
-    "internal/runtime/evidence/verification_command.go": {
-      "complexity": 6,
-      "essay": 18
-    },
-    "internal/runtime/evidence/verification_summary_test.go": {
-      "essay": 1
-    },
     "internal/runtime/jobs/artifacts_test.go": {
       "essay": 5
     },
@@ -1183,6 +1142,9 @@
     },
     "internal/runtime/jobs/jobs_security_test.go": {
       "essay": 4
+    },
+    "internal/runtime/plancontract/project.go": {
+      "orphan": 1
     },
     "internal/runtime/recovery/decision.go": {
       "essay": 9
@@ -1200,6 +1162,9 @@
       "file-size": 154
     },
     "internal/runtime/recovery/types.go": {
+      "essay": 1
+    },
+    "internal/runtime/taskcontract/taskcontract.go": {
       "essay": 1
     },
     "internal/runtime/taskmonitor/control.go": {
@@ -1220,6 +1185,25 @@
     },
     "internal/runtime/taskmonitor/tmux.go": {
       "orphan": 1
+    },
+    "internal/safety/evidence/evidence.go": {
+      "essay": 2
+    },
+    "internal/safety/evidence/ledger_queries.go": {
+      "essay": 6
+    },
+    "internal/safety/evidence/review_report.go": {
+      "essay": 7
+    },
+    "internal/safety/evidence/todos.go": {
+      "essay": 8
+    },
+    "internal/safety/evidence/verification_command.go": {
+      "complexity": 6,
+      "essay": 18
+    },
+    "internal/safety/evidence/verification_summary_test.go": {
+      "essay": 1
     },
     "internal/safety/guardian/guardian.go": {
       "essay": 25,
@@ -1528,9 +1512,6 @@
     "internal/state/store/session.go": {
       "essay": 8
     },
-    "internal/state/trajectory/recorder.go": {
-      "layer-order": 1
-    },
     "internal/tools/builtin/bash.go": {
       "essay": 11,
       "layer-order": 1,
@@ -1541,7 +1522,7 @@
     },
     "internal/tools/builtin/bgjobs.go": {
       "essay": 10,
-      "layer-order": 2
+      "layer-order": 1
     },
     "internal/tools/builtin/bgjobs_test.go": {
       "essay": 6
@@ -1553,8 +1534,7 @@
       "essay": 14
     },
     "internal/tools/builtin/completestep.go": {
-      "essay": 1,
-      "layer-order": 1
+      "essay": 1
     },
     "internal/tools/builtin/confine.go": {
       "essay": 16
@@ -1580,9 +1560,6 @@
     "internal/tools/builtin/notebookedit.go": {
       "essay": 6
     },
-    "internal/tools/builtin/pipe_status.go": {
-      "layer-order": 1
-    },
     "internal/tools/builtin/preview.go": {
       "essay": 7
     },
@@ -1591,9 +1568,6 @@
     },
     "internal/tools/builtin/session_guard.go": {
       "essay": 25
-    },
-    "internal/tools/builtin/todo.go": {
-      "layer-order": 1
     },
     "internal/tools/builtin/updategoal.go": {
       "essay": 2

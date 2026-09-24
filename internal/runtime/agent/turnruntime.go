@@ -4,7 +4,7 @@ import (
 	"reasonix/internal/runtime/completion"
 	"reasonix/internal/runtime/taskpolicy"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // turnRuntime is the host state for exactly one Agent.Run. beginRunTurn builds

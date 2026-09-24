@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func TestTodoWriteAcceptsLevels(t *testing.T) {

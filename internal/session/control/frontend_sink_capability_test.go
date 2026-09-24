@@ -1,10 +1,10 @@
 package control
 
 import (
+	"reasonix/internal/contract/hostaudit"
 	"testing"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
 )
 
 // Enabling extensions must never sever the audit channels: every capability
@@ -12,7 +12,7 @@ import (
 func TestFrontendEventSinkForwardsAuditCapabilities(t *testing.T) {
 	inner := &capabilityProbeSink{Sink: event.Discard}
 	s := newFrontendEventSink(inner, nil)
-	event.RecordOutcomeProgress(s, evidence.OutcomeSample{Round: 1})
+	event.RecordOutcomeProgress(s, hostaudit.OutcomeSample{Round: 1})
 	event.RecordMemoryRecall(s, event.MemoryRecallAudit{Suppressed: "probe"})
 	event.RecordContractShadow(s, event.ContractShadowAudit{Verdict: "probe"})
 	event.RecordCompletionReport(s, event.CompletionReportAudit{Verdict: "probe"})
@@ -26,7 +26,7 @@ type capabilityProbeSink struct {
 	outcome, recall, contract, completion int
 }
 
-func (p *capabilityProbeSink) RecordOutcomeProgress(evidence.OutcomeSample)   { p.outcome++ }
+func (p *capabilityProbeSink) RecordOutcomeProgress(hostaudit.OutcomeSample)  { p.outcome++ }
 func (p *capabilityProbeSink) RecordMemoryRecall(event.MemoryRecallAudit)     { p.recall++ }
 func (p *capabilityProbeSink) RecordContractShadow(event.ContractShadowAudit) { p.contract++ }
 func (p *capabilityProbeSink) RecordCompletionReport(event.CompletionReportAudit) {

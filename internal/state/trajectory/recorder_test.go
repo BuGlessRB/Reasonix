@@ -4,33 +4,33 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/contract/hostaudit"
 	"strings"
 	"testing"
 	"time"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
 )
 
 type capabilitySink struct {
 	events     []event.Event
-	readiness  []evidence.ReadinessAudit
+	readiness  []hostaudit.ReadinessAudit
 	recoveries []event.ProtocolRecoveryAudit
-	outcomes   []evidence.OutcomeSample
+	outcomes   []hostaudit.OutcomeSample
 	reports    []event.CompletionReportAudit
 	turns      int
 }
 
 func (s *capabilitySink) Emit(e event.Event) { s.events = append(s.events, e) }
-func (s *capabilitySink) RecordReadinessAudit(a evidence.ReadinessAudit) {
+func (s *capabilitySink) RecordReadinessAudit(a hostaudit.ReadinessAudit) {
 	s.readiness = append(s.readiness, a)
 }
 func (s *capabilitySink) RecordProtocolRecovery(a event.ProtocolRecoveryAudit) {
 	s.recoveries = append(s.recoveries, a)
 }
 func (s *capabilitySink) RecordTurnCompletion() { s.turns++ }
-func (s *capabilitySink) RecordOutcomeProgress(sample evidence.OutcomeSample) {
+func (s *capabilitySink) RecordOutcomeProgress(sample hostaudit.OutcomeSample) {
 	s.outcomes = append(s.outcomes, sample)
 }
 func (s *capabilitySink) RecordCompletionReport(a event.CompletionReportAudit) {
@@ -117,10 +117,10 @@ func TestRecorderRecordsAndForwardsOptionalCapabilities(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	r.RecordReadinessAudit(evidence.ReadinessAudit{Result: evidence.ReadinessBlocked, MissingVerification: 2})
+	r.RecordReadinessAudit(hostaudit.ReadinessAudit{Result: hostaudit.ReadinessBlocked, MissingVerification: 2})
 	r.RecordProtocolRecovery(event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningDetected})
 	r.RecordTurnCompletion()
-	r.RecordOutcomeProgress(evidence.OutcomeSample{Round: 3, Exploration: 2, Objective: 1, LegacyGain: 4})
+	r.RecordOutcomeProgress(hostaudit.OutcomeSample{Round: 3, Exploration: 2, Objective: 1, LegacyGain: 4})
 	r.RecordCompletionReport(event.CompletionReportAudit{
 		Verdict: "partial", Changes: 2, ChangesUnreviewed: 1, Gaps: 1, GapKinds: []string{"unreviewed_change"},
 	})

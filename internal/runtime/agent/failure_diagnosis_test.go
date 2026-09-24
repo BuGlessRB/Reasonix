@@ -10,9 +10,9 @@ import (
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/contract/plancontract"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/plancontract"
 )
 
 // The reply is model output, so it is parsed as untrusted input: anything that

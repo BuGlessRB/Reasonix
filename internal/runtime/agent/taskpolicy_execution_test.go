@@ -9,8 +9,8 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/taskpolicy"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/instruction"
 )
 

@@ -9,7 +9,7 @@ import (
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // Measured against the real triage model: a prompt that reads well is not
@@ -59,7 +59,7 @@ var verificationClassCases = []classCase{
 	// expensive failure: an honest check refused.
 	{"go test ./...", true, "the ordinary case"},
 	{"go test -run TestParse ./internal/runtime/agent", true, "a named test still checks"},
-	{"go test -race ./internal/runtime/evidence", true, "a flag that changes how, not whether"},
+	{"go test -race ./internal/safety/evidence", true, "a flag that changes how, not whether"},
 	{"go vet ./...", true, "static analysis is a check"},
 	{"pytest -q tests/", true, "the ordinary case"},
 	{"pytest -k parse tests/", true, "a selector that matches still runs"},

@@ -8,7 +8,7 @@ import (
 
 	"reasonix/internal/base/i18n"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // A turn that ends owing verification has not failed: the host read what is

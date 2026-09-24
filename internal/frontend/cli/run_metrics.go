@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"maps"
 	"os"
+	"reasonix/internal/contract/hostaudit"
 	"reasonix/internal/contract/pricing"
 	"slices"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"reasonix/internal/base/fileutil"
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
 )
 
 // SourceUsage is one Usage origin's share of a run. Steps counts every billed
@@ -465,7 +465,7 @@ func (s *metricsSink) recordToolResult(t event.Tool) {
 }
 
 // RecordDelegationAudit folds one finished child run into the arm totals.
-func (s *metricsSink) RecordDelegationAudit(a evidence.DelegationAudit) {
+func (s *metricsSink) RecordDelegationAudit(a hostaudit.DelegationAudit) {
 	if s == nil {
 		return
 	}
@@ -504,7 +504,7 @@ func (s *metricsSink) RecordDelegationAudit(a evidence.DelegationAudit) {
 	}
 }
 
-func (s *metricsSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
+func (s *metricsSink) RecordReadinessAudit(a hostaudit.ReadinessAudit) {
 	if s == nil {
 		return
 	}
@@ -513,11 +513,11 @@ func (s *metricsSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	defer s.mu.Unlock()
 	s.m.ReadinessChecks++
 	switch a.Result {
-	case evidence.ReadinessAllowed:
+	case hostaudit.ReadinessAllowed:
 		s.m.ReadinessAllowed++
-	case evidence.ReadinessBlocked:
+	case hostaudit.ReadinessBlocked:
 		s.m.ReadinessBlocks++
-	case evidence.ReadinessErrored:
+	case hostaudit.ReadinessErrored:
 		s.m.ReadinessErrors++
 	}
 	if a.Recovered {

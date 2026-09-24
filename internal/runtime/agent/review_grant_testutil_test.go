@@ -3,7 +3,7 @@ package agent
 import (
 	"encoding/json"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // reviewGrant is the grant a host issues to a worker contracted for one kind:

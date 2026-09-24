@@ -7,7 +7,7 @@ package agent
 import (
 	"strings"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // withObligationDelta appends what this call did to the host's debts. A call

@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // sessionRuntime is the host state one conversation owns. Its lifetime sits

@@ -8,7 +8,7 @@ import (
 
 	"reasonix/internal/base/shellparse"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 type workspaceEffectiveCall struct {

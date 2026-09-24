@@ -6,7 +6,7 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/runtime/completion"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func shadowReport(input string, receipts ...evidence.Receipt) (event.ContractShadowAudit, event.CompletionReportAudit) {

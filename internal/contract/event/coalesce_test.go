@@ -1,12 +1,11 @@
 package event
 
 import (
+	"reasonix/internal/contract/hostaudit"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"reasonix/internal/runtime/evidence"
 )
 
 type coalesceRecordSink struct {
@@ -24,7 +23,7 @@ func (s *coalesceRecordSink) Emit(e Event) {
 	s.events = append(s.events, e)
 }
 
-func (s *coalesceRecordSink) RecordReadinessAudit(evidence.ReadinessAudit) {
+func (s *coalesceRecordSink) RecordReadinessAudit(hostaudit.ReadinessAudit) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.readiness++
@@ -142,7 +141,7 @@ func TestCoalesceCapabilitiesFlushFirstAndForward(t *testing.T) {
 	c := Coalesce(inner, time.Hour)
 	c.Emit(Event{Kind: Text, Text: "lead"})
 	c.Emit(Event{Kind: Text, Text: "tail"})
-	c.(ReadinessAuditSink).RecordReadinessAudit(evidence.ReadinessAudit{})
+	c.(ReadinessAuditSink).RecordReadinessAudit(hostaudit.ReadinessAudit{})
 	c.(TurnCompletionSink).RecordTurnCompletion()
 	c.(ProtocolRecoveryAuditSink).RecordProtocolRecovery(ProtocolRecoveryAudit{})
 	c.(WorkspaceMutationSink).RecordWorkspaceMutation(WorkspaceMutation{Content: true})

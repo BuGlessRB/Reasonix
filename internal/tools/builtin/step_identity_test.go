@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func todoWriteArgs(t *testing.T, todos []evidence.TodoItem) json.RawMessage {

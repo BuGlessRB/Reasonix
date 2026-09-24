@@ -2,9 +2,10 @@ package agent
 
 import (
 	"fmt"
+	"reasonix/internal/contract/hostaudit"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // stallNoticeAge is when a check that will not move becomes worth saying out
@@ -35,7 +36,7 @@ func (a *Agent) observeOutcomeShadow(cancelled bool, receiptMark int) {
 // can cross the threshold — the age stands still through the edits in between —
 // so this fires on that one round, and a different check getting stuck later
 // starts a streak that has to climb again.
-func (a *Agent) noticeStalledVerification(sample evidence.OutcomeSample) {
+func (a *Agent) noticeStalledVerification(sample hostaudit.OutcomeSample) {
 	if sample.Stall == 0 || sample.StallAge != stallNoticeAge {
 		return
 	}

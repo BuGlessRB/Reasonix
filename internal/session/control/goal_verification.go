@@ -7,7 +7,7 @@ import (
 	"slices"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // observeVerificationContractDrift compares the contract a resumed Goal was

@@ -9,7 +9,7 @@ import (
 
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/skill"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // Evidence that moves a durable decision has to be attributable to the run that

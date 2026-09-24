@@ -5,7 +5,7 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/runtime/completion"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func TestReceiptCarriesWhatProseDoesNot(t *testing.T) {

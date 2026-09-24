@@ -13,8 +13,8 @@ import (
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/goaleval"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/store"
 )
 

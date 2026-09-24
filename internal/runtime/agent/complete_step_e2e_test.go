@@ -12,7 +12,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/agent/testutil"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 
 	_ "reasonix/internal/tools/builtin"
 )

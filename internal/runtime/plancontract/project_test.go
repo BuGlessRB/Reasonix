@@ -3,7 +3,7 @@ package plancontract
 import (
 	"testing"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func TestProjectTodosBuildsTheTwoLevelList(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 
 	"reasonix/internal/base/diff"
 	"reasonix/internal/base/fileutil"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // captureRewrittenCriteria files what a criterion said before this edit. It runs

@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/contract/plancontract"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/contract/taskcontract"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/runtime/plancontract"
+	"reasonix/internal/runtime/taskcontract"
+	"reasonix/internal/safety/evidence"
 )
 
 func contractPlan() plancontract.Plan {

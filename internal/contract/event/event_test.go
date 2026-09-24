@@ -1,11 +1,11 @@
 package event
 
 import (
+	"reasonix/internal/contract/hostaudit"
 	"sync"
 	"testing"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
 )
 
 // Kind constants
@@ -79,7 +79,7 @@ func TestSyncTreatsTypedNilSinkAsDiscard(t *testing.T) {
 }
 
 type readinessAuditRecorder struct {
-	events    []evidence.ReadinessAudit
+	events    []hostaudit.ReadinessAudit
 	recovery  []ProtocolRecoveryAudit
 	workspace []WorkspaceMutation
 	turns     int
@@ -87,7 +87,7 @@ type readinessAuditRecorder struct {
 
 func (r *readinessAuditRecorder) Emit(Event) {}
 
-func (r *readinessAuditRecorder) RecordReadinessAudit(a evidence.ReadinessAudit) {
+func (r *readinessAuditRecorder) RecordReadinessAudit(a hostaudit.ReadinessAudit) {
 	r.events = append(r.events, a)
 }
 
@@ -122,15 +122,15 @@ func TestSyncForwardsReadinessAuditReceipts(t *testing.T) {
 	rec := &readinessAuditRecorder{}
 	sink := Sync(rec)
 
-	RecordReadinessAudit(sink, evidence.ReadinessAudit{
-		Result:               evidence.ReadinessBlocked,
+	RecordReadinessAudit(sink, hostaudit.ReadinessAudit{
+		Result:               hostaudit.ReadinessBlocked,
 		MissingProjectChecks: 1,
 	})
 
 	if len(rec.events) != 1 {
 		t.Fatalf("readiness audit events = %d, want 1", len(rec.events))
 	}
-	if rec.events[0].Result != evidence.ReadinessBlocked || rec.events[0].MissingProjectChecks != 1 {
+	if rec.events[0].Result != hostaudit.ReadinessBlocked || rec.events[0].MissingProjectChecks != 1 {
 		t.Fatalf("readiness audit not forwarded through Sync: %+v", rec.events[0])
 	}
 }

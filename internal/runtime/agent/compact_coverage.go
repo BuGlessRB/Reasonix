@@ -10,7 +10,7 @@ import (
 
 	"reasonix/internal/base/shellparse"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // Acceptance used to ask a digest one question: is it smaller? A digest that

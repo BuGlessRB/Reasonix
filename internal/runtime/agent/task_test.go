@@ -15,8 +15,8 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/safety/evidence"
 )
 
 func testTaskContext() context.Context {

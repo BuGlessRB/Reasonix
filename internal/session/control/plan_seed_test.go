@@ -8,7 +8,7 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/runtime/agent"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func TestParsePlanTodos(t *testing.T) {

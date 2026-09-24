@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"reasonix/internal/base/testenv"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 func TestObservationNamesWhatAnOpaqueCommandTouched(t *testing.T) {

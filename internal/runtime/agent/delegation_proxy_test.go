@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"reasonix/internal/contract/hostaudit"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -11,7 +12,6 @@ import (
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/plugin"
 	"reasonix/internal/runtime/capability"
-	"reasonix/internal/runtime/evidence"
 )
 
 // A capability-proxied call must still produce the delegation receipt: the
@@ -20,10 +20,10 @@ import (
 // violations and criterion downgrades unrecorded, not just a counter at zero.
 type proxyProbe struct {
 	event.Sink
-	got []evidence.DelegationAudit
+	got []hostaudit.DelegationAudit
 }
 
-func (p *proxyProbe) RecordDelegationAudit(a evidence.DelegationAudit) { p.got = append(p.got, a) }
+func (p *proxyProbe) RecordDelegationAudit(a hostaudit.DelegationAudit) { p.got = append(p.got, a) }
 
 func TestDelegationAuditSurvivesCapabilityProxy(t *testing.T) {
 	probe := &proxyProbe{Sink: event.Discard}

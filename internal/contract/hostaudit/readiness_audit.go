@@ -1,4 +1,4 @@
-package evidence
+package hostaudit
 
 // ReadinessAuditResult classifies one host final-answer readiness audit receipt.
 type ReadinessAuditResult string

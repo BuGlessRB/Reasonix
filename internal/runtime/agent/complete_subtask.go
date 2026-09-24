@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // CompleteSubtaskTool is visible only inside sub-agent registries. It ends a

@@ -5,8 +5,8 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/jobs"
+	"reasonix/internal/safety/evidence"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/instruction"
 	"reasonix/internal/state/memory"

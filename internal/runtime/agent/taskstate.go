@@ -3,7 +3,7 @@ package agent
 import (
 	"sync/atomic"
 
-	"reasonix/internal/runtime/evidence"
+	"reasonix/internal/safety/evidence"
 )
 
 // taskRuntime is the host state shared by every Agent.Run continuing one

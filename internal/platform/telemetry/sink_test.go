@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reasonix/internal/contract/hostaudit"
 	"slices"
 	"strings"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/runtime/evidence"
 )
 
 type readinessSink struct {
@@ -22,7 +22,7 @@ type readinessSink struct {
 }
 
 func (s *readinessSink) Emit(event.Event) { s.events++ }
-func (s *readinessSink) RecordReadinessAudit(evidence.ReadinessAudit) {
+func (s *readinessSink) RecordReadinessAudit(hostaudit.ReadinessAudit) {
 	s.audits++
 }
 func (s *readinessSink) RecordProtocolRecovery(event.ProtocolRecoveryAudit) {
@@ -55,7 +55,7 @@ func TestSinkWritesOnlyWhitelistedContentFreeCounters(t *testing.T) {
 	sink.Emit(event.Event{Kind: event.TurnDone, Err: &provider.APIError{
 		Provider: secret, Status: 429, Body: secret, TraceID: secret,
 	}})
-	event.RecordReadinessAudit(sink, evidence.ReadinessAudit{})
+	event.RecordReadinessAudit(sink, hostaudit.ReadinessAudit{})
 
 	entries, err := os.ReadDir(filepath.Join(home, pendingDirName))
 	if err != nil || len(entries) != 1 {

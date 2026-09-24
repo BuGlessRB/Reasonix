@@ -7,8 +7,8 @@ import (
 
 	"reasonix/internal/contract/agentpreset"
 	"reasonix/internal/contract/tool"
-	"reasonix/internal/runtime/evidence"
 	"reasonix/internal/runtime/taskpolicy"
+	"reasonix/internal/safety/evidence"
 )
 
 // Every production turn freezes a TaskPolicy before the first request, so the
