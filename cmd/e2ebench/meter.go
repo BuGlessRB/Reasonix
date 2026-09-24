@@ -24,6 +24,7 @@ type meter struct {
 	upstream *url.URL
 	client   *http.Client
 	faults   faultScript
+	tape     *tape
 
 	mu        sync.Mutex
 	lastFault int
@@ -44,6 +45,12 @@ type meterUsage struct {
 	// RequestsAfterFault counts requests issued after the first injected
 	// failure: the harness's own evidence that it retried rather than died.
 	RequestsAfterFault int `json:"requests_after_fault,omitempty"`
+	// Replayed counts requests answered from a tape; DivergedAt is the first
+	// whose body differed from the recorded one, and Divergence says where.
+	Replayed    int    `json:"replayed,omitempty"`
+	DivergedAt  int    `json:"diverged_at,omitempty"`
+	Divergence  string `json:"divergence,omitempty"`
+	TapeMissing int    `json:"tape_missing,omitempty"`
 }
 
 // faultScript decides which requests fail. Absolute indices pin a failure to
@@ -170,6 +177,10 @@ func (m *meter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body = requestUsageOptIn(body)
+	if m.tape != nil && m.tape.mode == tapeReplay {
+		m.replay(w, index, body)
+		return
+	}
 
 	target := *m.upstream
 	target.Path = strings.TrimSuffix(m.upstream.Path, "/") + r.URL.Path
@@ -194,11 +205,17 @@ func (m *meter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	maps.Copy(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
+	var captured bytes.Buffer
+	src := io.Reader(resp.Body)
+	if m.tape != nil {
+		src = io.TeeReader(resp.Body, &captured)
+		defer func() { m.tape.save(index, body, resp.StatusCode, resp.Header.Get("Content-Type"), captured.Bytes()) }()
+	}
 	if strings.Contains(resp.Header.Get("Content-Type"), "event-stream") {
-		m.pipeStream(w, resp.Body)
+		m.pipeStream(w, src)
 		return
 	}
-	m.pipeJSON(w, resp.Body)
+	m.pipeJSON(w, src)
 }
 
 // requestUsageOptIn asks for a usage block on streamed completions. Without it

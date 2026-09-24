@@ -285,6 +285,7 @@ func main() {
 	maxSteps := flag.Int("max-steps", 0, "diff mode: agent tool-call cap (0 = unbounded, the shipped default; the timeout is the resource bound)")
 	timeoutSec := flag.Int("timeout", 1200, "agent timeout in seconds (diff mode)")
 	attempts := flag.Int("attempts", 1, "suite/diff modes: retry a task up to N times until an attempt passes (stochastic agent); enables Pass@≤N")
+	tapeRecord, tapeReplay := registerTapeFlags()
 	trials := flag.Int("trials", 1, "suite mode: run every task N times and keep every outcome; reports pass^N (all passed) beside mean pass@1")
 	flag.Parse()
 	if *trials > 1 && *attempts > 1 {
@@ -334,9 +335,10 @@ func main() {
 	}
 
 	meterSource, faults, segments, steers := pressure.settings()
+	tapeCfg := tapeSettings(*tapeRecord, *tapeReplay, meterSource)
 	runSuiteMode(suiteConfig{
 		bin: *bin, model: *model, profile: profile, arm: arm, budget: *budget,
-		trajDir: *trajDir, forcePlanner: *forcePlanner, attempts: *attempts, trials: *trials, anchor: anchor,
+		trajDir: *trajDir, forcePlanner: *forcePlanner, attempts: *attempts, trials: *trials, tape: tapeCfg, anchor: anchor,
 		cacheArm: cache, effort: *effort, checkpoints: *checkpoints, policy: *policyFlag,
 		meterConfig: meterSource, meterFaults: faults, segments: segments, steers: steers,
 		replyLanguage: agentReplyLanguage(),
@@ -476,7 +478,8 @@ type suiteConfig struct {
 	policy                                string
 	trajDir                               string
 	forcePlanner, checkpoints             bool
-	attempts, trials, budget              int
+	attempts, trials, trial, budget       int
+	tape                                  tapeConfig
 	// meterConfig is the real config.toml whose provider endpoint each run is
 	// redirected through the neutral meter; empty leaves runs unmetered.
 	meterConfig string
@@ -552,7 +555,7 @@ func runTask(cfg suiteConfig, t task) result {
 		}
 	}
 
-	work, err := os.MkdirTemp("", "e2ebench-"+t.ID+"-")
+	work, err := taskWorkdir(cfg, t.ID)
 	if err != nil {
 		r.Note = "mktemp: " + err.Error()
 		return r
@@ -564,6 +567,7 @@ func runTask(cfg suiteConfig, t task) result {
 			r.Note = "copy seed: " + err.Error()
 			return r
 		}
+		pinTapeTimes(cfg, work)
 	}
 
 	extraEnv, dropState, seedNote := taskExperimentEnv(cfg, t, work)

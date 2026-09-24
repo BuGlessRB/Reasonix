@@ -76,7 +76,7 @@ func TestMeterAccountingRendersNothingUnmetered(t *testing.T) {
 }
 
 func TestStartTaskMeterIsOffByDefault(t *testing.T) {
-	env, m, stop, err := startTaskMeter(suiteConfig{})
+	env, m, stop, err := startTaskMeter(suiteConfig{}, "")
 	if err != nil || env != nil || m != nil || stop != nil {
 		t.Fatalf("metering must be opt-in: env=%v meter=%v err=%v", env, m, err)
 	}
@@ -84,7 +84,7 @@ func TestStartTaskMeterIsOffByDefault(t *testing.T) {
 
 func TestStartTaskMeterPointsTheChildAtTheProxy(t *testing.T) {
 	cfg := suiteConfig{meterConfig: writeConfig(t, twoProviderConfig), model: "kimi-k2"}
-	env, m, stop, err := startTaskMeter(cfg)
+	env, m, stop, err := startTaskMeter(cfg, "")
 	if err != nil {
 		t.Fatalf("startTaskMeter: %v", err)
 	}

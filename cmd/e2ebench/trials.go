@@ -16,7 +16,9 @@ func runTrials(cfg suiteConfig, t task, total *int) []result {
 			out = append(out, result{task: t, Profile: cfg.profile, Trial: trial, Skipped: true, Note: "skipped: token budget reached"})
 			continue
 		}
-		r := runTask(cfg, t)
+		run := cfg
+		run.trial = trial
+		r := runTask(run, t)
 		r.Trial = trial
 		*total += r.PromptTokens + r.CompletionTokens
 		out = append(out, r)

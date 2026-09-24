@@ -34,7 +34,7 @@ type runMeter struct {
 // attachMeter starts the run's meter, folding a setup failure into the run's
 // note instead of aborting the suite: an unmetered run is still a data point.
 func attachMeter(cfg suiteConfig, r *result) runMeter {
-	env, m, stop, err := startTaskMeter(cfg)
+	env, m, stop, err := startTaskMeter(cfg, r.ID)
 	if err != nil {
 		r.Note = strings.TrimSpace(r.Note + " meter: " + err.Error())
 	}
@@ -61,7 +61,7 @@ func (rm runMeter) record(r *result) {
 // points the child at it. One meter per task keeps spend attributable to the
 // task that incurred it. A nil meter means metering is off, which is the
 // default: the proxy carries provider credentials and must be opt-in.
-func startTaskMeter(cfg suiteConfig) (env []string, m *meter, stop func(), err error) {
+func startTaskMeter(cfg suiteConfig, taskID string) (env []string, m *meter, stop func(), err error) {
 	if strings.TrimSpace(cfg.meterConfig) == "" {
 		return nil, nil, nil, nil
 	}
@@ -71,6 +71,9 @@ func startTaskMeter(cfg suiteConfig) (env []string, m *meter, stop func(), err e
 	}
 	m, err = newMeter(upstream, cfg.meterFaults)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	if m.tape, err = cfg.tape.forRun(taskID, cfg.trial); err != nil {
 		return nil, nil, nil, err
 	}
 	base, stopServer, err := m.serve()
