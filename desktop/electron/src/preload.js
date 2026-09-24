@@ -9,6 +9,12 @@ function rectOf(rect) {
   return { x: Number(rect?.x), y: Number(rect?.y), width: Number(rect?.width), height: Number(rect?.height) };
 }
 
+function subscribe(channel, listener) {
+  const handler = (_event, payload) => listener(payload);
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+}
+
 // Verbs, and the two facts a layout needs. The origin the page was loaded from
 // is already its own; the credential that opens it never crosses here at all.
 contextBridge.exposeInMainWorld("reasonixHost", {
@@ -39,6 +45,12 @@ contextBridge.exposeInMainWorld("reasonixHost", {
   hideBrowserView: () => ipcRenderer.invoke("browser:hide"),
   controlBrowserView: (targetId, action) => ipcRenderer.invoke("browser:control", String(targetId), String(action)),
   navigateBrowserView: (targetId, address) => ipcRenderer.invoke("browser:navigate", String(targetId), String(address)),
+  // Why a page did not load, and a login a page or proxy asks for. The password
+  // goes back to this window's main process only; the kernel never sees it.
+  onBrowserLoadState: (listener) => subscribe("browser:load-state", listener),
+  onBrowserLogin: (listener) => subscribe("browser:login", listener),
+  answerBrowserLogin: (id, username, password) =>
+    ipcRenderer.invoke("browser:login-answer", String(id), String(username || ""), String(password || "")),
 });
 
 // localStorage is keyed by origin and the kernel's port is new each launch, so

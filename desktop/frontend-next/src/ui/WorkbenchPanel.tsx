@@ -178,9 +178,18 @@ export function WorkbenchPanel({
       setSelected(`browser:${agentNow.current}`);
       return;
     }
+    // A shell that draws views opens a view here too: a framed page is refused
+    // by any site sending X-Frame-Options or frame-ancestors, as many do.
+    if (host().drawsBrowserViews()) {
+      port
+        .browserOpen("about:blank", true)
+        .then((tab) => setSelected(`browser:${tab.target}`))
+        .catch((e) => setFailed(reason(e)));
+      return;
+    }
     setBrowsers((open) => (open.length ? open : ["b0"]));
     setSelected((at) => (at.startsWith("manual:") ? at : "manual:b0"));
-  }, [manual, dropBlankStart]);
+  }, [manual, dropBlankStart, port]);
   // A page that has just appeared is the one somebody wants to see, whoever
   // opened it: the agent's popup, or a link the person followed, which opens
   // beside the agent's tab without becoming the one it acts on.

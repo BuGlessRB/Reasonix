@@ -41,6 +41,35 @@ export interface HostPort {
   controlBrowserView(target: string, action: BrowserControl): void;
   /** Load what the person typed. false when the shell refused the address. */
   navigateBrowserView(target: string, address: string): Promise<boolean>;
+  /** Why a page did not load, or null once another load starts. */
+  onBrowserLoadState(listener: (state: BrowserLoadState) => void): () => void;
+  /** A page or a proxy asking for a login; answered with answerBrowserLogin. */
+  onBrowserLogin(listener: (ask: BrowserLogin) => void): () => void;
+  /** An empty username cancels the login. */
+  answerBrowserLogin(id: string, username: string, password: string): void;
+}
+
+export interface BrowserLoadFailure {
+  url: string;
+  /** Chromium's net error number, negative. */
+  code: number;
+  /** Chromium's net error name, e.g. ERR_CERT_AUTHORITY_INVALID. */
+  reason: string;
+}
+
+export interface BrowserLoadState {
+  targetId: string;
+  failure: BrowserLoadFailure | null;
+}
+
+export interface BrowserLogin {
+  id: string;
+  targetId: string;
+  url: string;
+  host: string;
+  port: number;
+  realm: string;
+  proxy: boolean;
 }
 
 export interface ViewRect {
@@ -71,6 +100,9 @@ interface ElectronBridge {
   hideBrowserView?(): Promise<void>;
   controlBrowserView?(target: string, action: string): Promise<void>;
   navigateBrowserView?(target: string, address: string): Promise<boolean>;
+  onBrowserLoadState?(listener: (state: BrowserLoadState) => void): () => void;
+  onBrowserLogin?(listener: (ask: BrowserLogin) => void): () => void;
+  answerBrowserLogin?(id: string, username: string, password: string): Promise<void>;
 }
 
 const bridge = () => (window as unknown as { reasonixHost?: ElectronBridge }).reasonixHost;
@@ -136,6 +168,15 @@ class ElectronHost implements HostPort {
   navigateBrowserView(target: string, address: string) {
     return this.api.navigateBrowserView?.(target, address) ?? Promise.resolve(false);
   }
+  onBrowserLoadState(listener: (state: BrowserLoadState) => void) {
+    return this.api.onBrowserLoadState?.(listener) ?? (() => {});
+  }
+  onBrowserLogin(listener: (ask: BrowserLogin) => void) {
+    return this.api.onBrowserLogin?.(listener) ?? (() => {});
+  }
+  answerBrowserLogin(id: string, username: string, password: string) {
+    void this.api.answerBrowserLogin?.(id, username, password);
+  }
 }
 
 class BrowserHost implements HostPort {
@@ -172,6 +213,13 @@ class BrowserHost implements HostPort {
   navigateBrowserView() {
     return Promise.resolve(false);
   }
+  onBrowserLoadState() {
+    return () => {};
+  }
+  onBrowserLogin() {
+    return () => {};
+  }
+  answerBrowserLogin() {}
 }
 
 function pick(): HostPort {

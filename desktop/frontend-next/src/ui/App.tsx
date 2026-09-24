@@ -11,6 +11,7 @@ import { Pane, type PaneReport } from "./Pane";
 import { DOCK, Gutter, RAIL, keepWidth, widthOf } from "./Gutter";
 import { folded as roomGaveUp, onFolds } from "./viewport";
 import { RemoteAsk } from "./RemoteAsk";
+import { BrowserLogin } from "./BrowserLogin";
 import type { RemoteAsk as RemoteAskT, RemoteHost } from "../port/remote";
 import { Boundary } from "./Boundary";
 import { SettingsUnavailable } from "./SettingsUnavailable";
@@ -573,6 +574,7 @@ export function App({ hub }: { hub: HubPort }) {
       style={{ "--rail-open": `${railW}px`, "--dock-open": `${dockW}px` } as CSSProperties}
     >
       {ask && <RemoteAsk ask={ask} onAnswer={answerRemote} />}
+      <BrowserLogin />
 
       <Chrome
         host={runtimes.find((rt) => rt.id === active)?.host}

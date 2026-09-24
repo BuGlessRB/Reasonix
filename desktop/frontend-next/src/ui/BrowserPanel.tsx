@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { t } from "../i18n";
 import type { AgentPort, BrowserTab } from "../port/port";
-import { host, type BrowserControl, type ViewRect } from "../port/host";
+import { host, type BrowserControl, type BrowserLoadFailure, type ViewRect } from "../port/host";
 import { SWAP_MARK } from "./swap";
+import { BrowserFailure } from "./BrowserFailure";
 
 const START = "reasonix://start";
 
@@ -10,7 +11,7 @@ function normalise(value: string): string | null {
   const raw = value.trim();
   if (!raw) return START;
   if (/^reasonix:\/\//i.test(raw)) return START;
-  const local = /^(?:localhost|127(?:\.\d+){3}|\[::1\])(?::\d+)?(?:\/|$)/i.test(raw);
+  const local = /^(?:localhost|127(?:\.\d+){3}|10(?:\.\d+){3}|192\.168(?:\.\d+){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d+){2}|\[::1\]|[^./:]+)(?::\d+)?(?:\/|$)/i.test(raw);
   const candidate = local ? `http://${raw}` : /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
   try {
     const url = new URL(candidate);
@@ -180,13 +181,31 @@ export function AgentBrowserPanel({ tabs, shown, showTabs = true }: { tabs: Brow
   const [picked, setPicked] = useState("");
   const current = tabs.find((tab) => tab.target === picked) ?? tabs.find((tab) => tab.active) ?? tabs[0];
   const [address, setAddress] = useState(current?.url ?? "");
+  const [failures, setFailures] = useState<Record<string, BrowserLoadFailure>>({});
+  const [refused, setRefused] = useState(false);
   const target = current?.target ?? "";
+  const failure = failures[target];
 
   useEffect(() => setAddress(current?.url ?? ""), [current?.url]);
+  useEffect(
+    () =>
+      host().onBrowserLoadState(({ targetId, failure: next }) =>
+        setFailures((prev) => {
+          if (!next && !prev[targetId]) return prev;
+          const out = { ...prev };
+          if (next) out[targetId] = next;
+          else delete out[targetId];
+          return out;
+        }),
+      ),
+    [],
+  );
+  // A page that did not load is put away, so the reason drawn in its slot is
+  // not hidden under the native view.
   useLayoutEffect(() => {
     const el = slot.current;
     const shell = host();
-    if (!el || !shown || !target) {
+    if (!el || !shown || !target || failure) {
       shell.hideBrowserView();
       return;
     }
@@ -213,12 +232,18 @@ export function AgentBrowserPanel({ tabs, shown, showTabs = true }: { tabs: Brow
       removeEventListener("resize", schedule);
       shell.hideBrowserView();
     };
-  }, [shown, target]);
+  }, [shown, target, failure]);
 
   const control = (action: BrowserControl) => target && host().controlBrowserView(target, action);
+  const open = (to: string) => {
+    if (!target) return;
+    void host()
+      .navigateBrowserView(target, to)
+      .then((ok) => setRefused(!ok));
+  };
   const go = (event: FormEvent) => {
     event.preventDefault();
-    if (target) void host().navigateBrowserView(target, address);
+    open(address);
   };
   return (
     <div className="bpanel">
@@ -235,11 +260,18 @@ export function AgentBrowserPanel({ tabs, shown, showTabs = true }: { tabs: Brow
           <button className="bbtn" data-action="browser.control" data-target={current?.id} data-value="forward" aria-label={t("前进")} onClick={() => control("forward")}>→</button>
           <button className="bbtn" data-action="browser.control" data-target={current?.id} data-value="reload" aria-label={t("重新加载")} onClick={() => control("reload")}>↻</button>
           <form className="baddr" data-action="browser.navigate" data-target={current?.id} onSubmit={go}>
-            <input data-action="browser.navigate" data-target={current?.id} value={address} spellCheck={false} aria-label={t("网址")} onChange={(event) => setAddress(event.target.value)} />
+            <input data-action="browser.navigate" data-target={current?.id} value={address} spellCheck={false} aria-label={t("网址")} onChange={(event) => { setAddress(event.target.value); setRefused(false); }} />
           </form>
         </div>
       </div>
-      <div className="bview" ref={slot}><p className="bhint">{t("页面被遮住时暂停显示")}</p></div>
+      {refused && <p className="studio-browser-error" role="alert">{t("请输入有效的 http 或 https 地址")}</p>}
+      <div className="bview" ref={slot}>
+        {failure ? (
+          <BrowserFailure failure={failure} onRetry={() => open(failure.url)} onExternal={() => host().openExternal(failure.url)} />
+        ) : (
+          <p className="bhint">{t("页面被遮住时暂停显示")}</p>
+        )}
+      </div>
     </div>
   );
 }

@@ -505,9 +505,32 @@ test("a page may go to the web and never to the kernel's own origin", () => {
   for (const refused of ["http://127.0.0.1:4455/_studio/", "http://127.0.0.1:4455/rt/1/approve", "file:///etc/hosts", "javascript:alert(1)", "chrome://settings", "devtools://x", "not a url"]) {
     assert.equal(guestNavigationAllowed(refused, kernel), false, refused);
   }
-  assert.equal(typedAddress("example.com/docs"), "https://example.com/docs");
-  assert.equal(typedAddress("http://localhost:3000"), "http://localhost:3000");
-  assert.equal(typedAddress("  "), "");
+  assert.deepEqual(typedAddress("example.com/docs"), { url: "https://example.com/docs", fallback: "http://example.com/docs" });
+  assert.deepEqual(typedAddress("http://localhost:3000"), { url: "http://localhost:3000", fallback: "" });
+  assert.deepEqual(typedAddress("  "), { url: "", fallback: "" });
+});
+
+test("a typed host and port is an address, never a scheme", () => {
+  for (const raw of ["intranet:8080", "oa.corp.example:8080/login", "localhost:3000"]) {
+    const { url } = typedAddress(raw);
+    assert.ok(guestNavigationAllowed(url, "http://127.0.0.1:1"), `refused ${raw} as ${url}`);
+  }
+});
+
+test("a host that cannot be public is read as http, anything else tries https first", () => {
+  for (const raw of ["10.1.2.3:18081", "192.168.0.5", "172.20.0.1/app", "127.0.0.1:5173", "intranet", "localhost:3000", "[::1]:8080", "[fd00::1]"]) {
+    assert.deepEqual(typedAddress(raw), { url: "http://" + raw, fallback: "" }, raw);
+  }
+  assert.deepEqual(typedAddress("oa.example.com"), { url: "https://oa.example.com", fallback: "http://oa.example.com" });
+  assert.deepEqual(typedAddress("8.8.8.8"), { url: "https://8.8.8.8", fallback: "http://8.8.8.8" });
+  assert.deepEqual(typedAddress("172.32.0.1"), { url: "https://172.32.0.1", fallback: "http://172.32.0.1" });
+});
+
+test("an address that names its scheme is loaded as written", () => {
+  assert.deepEqual(typedAddress("https://10.1.2.3"), { url: "https://10.1.2.3", fallback: "" });
+  assert.deepEqual(typedAddress("about:blank"), { url: "about:blank", fallback: "" });
+  assert.equal(guestNavigationAllowed(typedAddress("javascript://x%0Aalert(1)").url, "http://127.0.0.1:1"), false);
+  assert.equal(guestNavigationAllowed(typedAddress("file:///C:/x").url, "http://127.0.0.1:1"), false);
 });
 
 test("the relay reads whole SSE data frames and keeps what is unfinished", () => {

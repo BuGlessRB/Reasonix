@@ -790,6 +790,11 @@
   .baddr input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .bview { flex: 1; min-height: 0; display: grid; place-items: center; background: var(--surface) }
   .bhint { margin: 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .bfail { max-width: 460px; padding: 24px; display: grid; gap: 8px; justify-items: start; color: var(--muted) }
+  .bfail b { font: var(--w-med) var(--fs-lead) var(--ui); color: var(--text) }
+  .bfail p { margin: 0; font: var(--w-reg) var(--fs-ui)/1.7 var(--ui) }
+  .bfail code { max-width: 100%; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); overflow-wrap: anywhere }
+  .bfail-acts { display: flex; gap: 8px; margin-top: 8px }
   .tab.more { display: inline-flex; align-items: center; gap: 5px }
   .tab.more .cv { font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--faint); font-style: normal; transition: transform var(--t-card) var(--ease) }
   .tab.more[aria-expanded="true"] .cv { transform: rotate(180deg) }
@@ -4485,6 +4490,7 @@
     background: var(--surface); color: var(--text); font: var(--w-reg) var(--fs-ui) var(--mono);
   }
   .askcard input:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .askcard input + input { margin-top: 8px }
   .askfacts {
     display: grid; grid-template-columns: 5em 1fr; gap: 6px 12px; margin: 0 0 4px;
     font: var(--w-reg) var(--fs-ui) var(--ui);

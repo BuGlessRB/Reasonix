@@ -145,6 +145,7 @@ export const ACTIONS: UIAction[] = [
   { id: "account.sign-out", kind: "kernel-mutation", target: "none", proof: "interaction" },
   { id: "ask.answer", kind: "interaction", target: "none", proof: "authority-effect" },
   { id: "remote-ask.answer", kind: "interaction", target: "none", proof: "interaction" },
+  { id: "browser.login", kind: "interaction", target: "none", proof: "interaction" },
   { id: "memory.reload", kind: "repeatable", target: "none", proof: "interaction" },
   { id: "memory.save", kind: "kernel-mutation", target: "entity", proof: "interaction" },
   { id: "memory.restore", kind: "kernel-mutation", target: "entity", proof: "interaction" },

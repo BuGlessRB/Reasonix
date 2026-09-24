@@ -20,6 +20,7 @@ class BrowserViews {
     this.kernelOrigin = kernelOrigin;
     this.entries = new Map();
     this.guarded = new Set();
+    this.logins = new Map();
     this.shown = "";
     win.on("resize", () => {
       for (const [id, entry] of this.entries) if (id !== this.shown) this.putAway(entry.view);
@@ -92,7 +93,8 @@ class BrowserViews {
       }
       onEvent(method, params);
     });
-    const entry = { view, onDownload };
+    const entry = { view, onDownload, typed: 0 };
+    this.watchLoads(targetId, entry);
     let closed = false;
     const close = () => {
       if (closed) return;
@@ -182,15 +184,89 @@ class BrowserViews {
   }
 
   navigate(targetId, address) {
-    const contents = this.entries.get(targetId)?.view.webContents;
-    const to = typedAddress(address);
-    if (!contents || !guestNavigationAllowed(to, this.kernelOrigin)) return false;
-    void contents.loadURL(to).catch(() => {});
+    const entry = this.entries.get(targetId);
+    const { url, fallback } = typedAddress(address);
+    if (!entry || !guestNavigationAllowed(url, this.kernelOrigin)) return false;
+    void this.loadTyped(targetId, entry, url, fallback);
     return true;
   }
 
+  // loadTyped owns the outcome of an address the person typed. loadURL's own
+  // answer is read rather than did-fail-load: a refused port or scheme never
+  // starts a navigation, so no event would say why nothing happened.
+  async loadTyped(targetId, entry, url, fallback) {
+    const turn = ++entry.typed;
+    const contents = entry.view.webContents;
+    let failed = await loadResult(contents, url);
+    if (failed && fallback && entry.typed === turn) failed = await loadResult(contents, fallback);
+    if (entry.typed !== turn) return;
+    entry.typed = 0;
+    if (failed) this.report(targetId, failed);
+  }
+
+  // watchLoads tells the window why a page did not load, since Electron draws
+  // no error page of its own, and answers a login a page or a proxy asks for
+  // with what the person types rather than cancelling it.
+  watchLoads(targetId, entry) {
+    const contents = entry.view.webContents;
+    contents.on("did-start-navigation", (details) => {
+      if (details.isMainFrame && !details.isSameDocument) this.report(targetId, null);
+    });
+    contents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
+      // -3 is ERR_ABORTED: a navigation replaced by another, or stopped. A
+      // typed address reports through loadTyped, which may still retry it.
+      if (!isMainFrame || code === -3 || entry.typed) return;
+      this.report(targetId, { url, code, reason: description });
+    });
+    contents.on("login", (event, details, authInfo, callback) => {
+      event.preventDefault();
+      const id = crypto.randomUUID();
+      this.logins.set(id, callback);
+      this.send("browser:login", {
+        id,
+        targetId,
+        url: details.url,
+        host: authInfo.host,
+        port: authInfo.port,
+        realm: authInfo.realm,
+        proxy: authInfo.isProxy,
+      });
+    });
+  }
+
+  // answerLogin settles one login the window was asked for. No answer, or an
+  // empty one, cancels it the way Electron would have.
+  answerLogin(id, username, password) {
+    const callback = this.logins.get(id);
+    if (!callback) return;
+    this.logins.delete(id);
+    if (username) callback(username, password);
+    else callback();
+  }
+
+  report(targetId, failure) {
+    this.send("browser:load-state", { targetId, failure });
+  }
+
+  send(channel, payload) {
+    if (!this.win.isDestroyed()) this.win.webContents.send(channel, payload);
+  }
+
   closeAll() {
+    for (const id of [...this.logins.keys()]) this.answerLogin(id);
     for (const entry of [...this.entries.values()]) entry.view.webContents.close();
+  }
+}
+
+// loadResult is null when the page loaded, or why it did not. An abort is
+// another navigation taking over, which is not a failure of this one.
+async function loadResult(contents, url) {
+  try {
+    await contents.loadURL(url);
+    return null;
+  } catch (err) {
+    if (err?.code === "ERR_ABORTED") return null;
+    return { url: err?.url || url, code: Number(err?.errno) || 0, reason: String(err?.code || "") };
   }
 }
 
