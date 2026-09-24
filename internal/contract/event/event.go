@@ -13,10 +13,10 @@ package event
 
 import (
 	"encoding/json"
+	"reasonix/internal/contract/pricing"
 
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 	"reasonix/internal/runtime/evidence"
 )
 
@@ -511,7 +511,7 @@ type Event struct {
 	Tool             Tool                      // ToolDispatch / ToolResult
 	Usage            *provider.Usage           // Usage
 	Pricing          *provider.Pricing         // Usage: rate card for quote middleware (nil = omit cost)
-	CostQuote        *billing.CostQuote        // Usage: host-side quote; sinks must not reprice
+	CostQuote        *pricing.CostQuote        // Usage: host-side quote; sinks must not reprice
 	Source           string                    // optional display/event source (executor, planner, subagent, ...)
 	UsageSource      string                    // Usage: billable call source; empty means executor for compatibility
 	AttemptID        string                    // Usage: stream attempt these tokens were billed for; empty off the round path

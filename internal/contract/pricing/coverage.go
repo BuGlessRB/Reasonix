@@ -1,4 +1,4 @@
-package billing
+package pricing
 
 // Coverage says how much of the usage behind a quote carries a complete price
 // fact. CostComplete answers that for one call; an aggregate has two answers

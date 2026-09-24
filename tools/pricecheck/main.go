@@ -15,11 +15,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reasonix/internal/contract/pricing"
 	"slices"
 	"strings"
 	"time"
-
-	"reasonix/internal/model/billing"
 )
 
 type verdict string
@@ -103,7 +102,7 @@ func offlineName(s source) string {
 }
 
 func reportModel(s source, got published) verdict {
-	want := billing.CurrentRate(s.Provider, got.Model, s.Currency)
+	want := pricing.CurrentRate(s.Provider, got.Model, s.Currency)
 	if want == nil {
 		fmt.Printf("    %-11s %s is priced by the page and by nothing local\n", differs, got.Model)
 		return differs
@@ -122,7 +121,7 @@ func reportModel(s source, got published) verdict {
 // what a reader needs to decide whether to go and look.
 func reportCheckedOn() {
 	oldest := map[string]string{}
-	for _, entry := range billing.OfficialCatalog() {
+	for _, entry := range pricing.OfficialCatalog() {
 		if current, seen := oldest[entry.Provider]; !seen || entry.CheckedOn < current {
 			oldest[entry.Provider] = entry.CheckedOn
 		}

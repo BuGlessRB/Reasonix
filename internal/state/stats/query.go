@@ -3,11 +3,11 @@ package stats
 import (
 	"context"
 	"maps"
+	"reasonix/internal/contract/pricing"
 	"sort"
 	"strings"
 	"time"
 
-	"reasonix/internal/model/billing"
 	"reasonix/internal/state/usagecatalog"
 )
 
@@ -21,7 +21,7 @@ type DailyTokens struct {
 	Turns      int              `json:"turns"`          // completed turns
 	CacheHit   int64            `json:"cacheHit"`       // cached input tokens that day
 	CacheMiss  int64            `json:"cacheMiss"`      // uncached input tokens that day
-	Cost       []billing.Money  `json:"cost,omitempty"` // one entry per billing currency
+	Cost       []pricing.Money  `json:"cost,omitempty"` // one entry per billing currency
 }
 
 // ModelUsage is one model's aggregate within the range.
@@ -54,7 +54,7 @@ type RangeStats struct {
 	// Derived
 	// Cost is one entry per billing currency: summing two would have to invent
 	// an exchange rate, and the rate a turn was billed at is not today's.
-	Cost []billing.Money `json:"cost,omitempty"`
+	Cost []pricing.Money `json:"cost,omitempty"`
 	// CostEstimated marks a total that folded in at least one quote priced from
 	// a fallback rate card. A surface labelling the sum "paid" has to say so.
 	CostEstimated bool   `json:"costEstimated,omitempty"`
@@ -120,11 +120,11 @@ func (w *Writer) queryJSONL(f SourceFilter) (RangeStats, error) {
 	}
 	modelTotals := map[string]int64{}
 	providerTotals := map[string]int64{}
-	totalCost := map[string]billing.Amount{}
+	totalCost := map[string]pricing.Amount{}
 	active := map[string]bool{} // day -> active
 	for _, day := range days {
 		recs := recordsByDay[day]
-		dayCost := map[string]billing.Amount{}
+		dayCost := map[string]pricing.Amount{}
 		dayTotals := map[string]int64{}
 		dayTurns := 0
 		dayRequests := 0
@@ -224,10 +224,10 @@ func rangeStatsFromRollups(f SourceFilter, days []string, rows []usagecatalog.Ro
 	}
 	modelTotals := map[string]int64{}
 	providerTotals := map[string]int64{}
-	totalCost := map[string]billing.Amount{}
+	totalCost := map[string]pricing.Amount{}
 	active := map[string]bool{}
 	for _, day := range days {
-		dayCost := map[string]billing.Amount{}
+		dayCost := map[string]pricing.Amount{}
 		dayModels := map[string]int64{}
 		dayProviders := map[string]int64{}
 		dayRequests, dayTurns := int64(0), int64(0)
@@ -257,12 +257,12 @@ func rangeStatsFromRollups(f SourceFilter, days []string, rows []usagecatalog.Ro
 				dayProviders[provider] += row.Total
 			}
 			for _, entry := range row.Costs {
-				currency := billing.NormalizeCurrency(entry.Currency)
+				currency := pricing.NormalizeCurrency(entry.Currency)
 				if currency == "" || entry.Amount == 0 {
 					continue
 				}
-				dayCost[currency] += billing.Amount(entry.Amount)
-				totalCost[currency] += billing.Amount(entry.Amount)
+				dayCost[currency] += pricing.Amount(entry.Amount)
+				totalCost[currency] += pricing.Amount(entry.Amount)
 				out.CostEstimated = out.CostEstimated || entry.Estimated
 			}
 			if row.Total > 0 || row.Requests > 0 {
@@ -295,7 +295,7 @@ func rangeStatsFromRollups(f SourceFilter, days []string, rows []usagecatalog.Ro
 }
 
 // dailyRow assembles one day of the trend series.
-func dailyRow(day string, byModel, byProvider map[string]int64, cost map[string]billing.Amount,
+func dailyRow(day string, byModel, byProvider map[string]int64, cost map[string]pricing.Amount,
 	requests, turns int, cacheHit, cacheMiss int64,
 ) DailyTokens {
 	return DailyTokens{
@@ -307,12 +307,12 @@ func dailyRow(day string, byModel, byProvider map[string]int64, cost map[string]
 
 // addCost folds one row's quote into a per-currency tally. An unparseable
 // amount is skipped rather than guessed: a missing total beats a wrong one.
-func addCost(into map[string]billing.Amount, amount, currency string) bool {
-	currency = billing.NormalizeCurrency(currency)
+func addCost(into map[string]pricing.Amount, amount, currency string) bool {
+	currency = pricing.NormalizeCurrency(currency)
 	if currency == "" || strings.TrimSpace(amount) == "" {
 		return false
 	}
-	parsed, err := billing.ParseAmount(amount)
+	parsed, err := pricing.ParseAmount(amount)
 	if err != nil {
 		return false
 	}
@@ -322,13 +322,13 @@ func addCost(into map[string]billing.Amount, amount, currency string) bool {
 
 // moneySorted renders the tally in a stable currency order so a repeated query
 // returns the same JSON.
-func moneySorted(tally map[string]billing.Amount) []billing.Money {
+func moneySorted(tally map[string]pricing.Amount) []pricing.Money {
 	if len(tally) == 0 {
 		return nil
 	}
-	out := make([]billing.Money, 0, len(tally))
+	out := make([]pricing.Money, 0, len(tally))
 	for currency, amount := range tally {
-		out = append(out, billing.MoneyOf(amount, currency))
+		out = append(out, pricing.MoneyOf(amount, currency))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Currency < out[j].Currency })
 	return out

@@ -2,11 +2,11 @@ package eventwire
 
 import (
 	"encoding/json"
+	"reasonix/internal/contract/pricing"
 	"testing"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 // Ensures older clients still see cost/currency aliases while new clients get costQuote.
@@ -16,10 +16,10 @@ func TestToWireUsageDualWritesCostQuoteAndLegacyAliases(t *testing.T) {
 		ModelRef: "deepseek-flash/deepseek-v4-flash",
 		Usage:    &provider.Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000, TotalTokens: 2_000_000},
 		Pricing:  &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 4, Currency: "¥"},
-		CostQuote: func() *billing.CostQuote {
-			q := billing.BuildQuote(billing.QuoteInput{
-				Usage:           billing.UsageTokens{PromptTokens: 1_000_000, CompletionTokens: 1_000_000},
-				Rates:           billing.RateCard{CacheHit: 0.02, Input: 1, Output: 4, Currency: "CNY"},
+		CostQuote: func() *pricing.CostQuote {
+			q := pricing.BuildQuote(pricing.QuoteInput{
+				Usage:           pricing.UsageTokens{PromptTokens: 1_000_000, CompletionTokens: 1_000_000},
+				Rates:           pricing.RateCard{CacheHit: 0.02, Input: 1, Output: 4, Currency: "CNY"},
 				DisplayCurrency: "USD",
 				ProviderKind:    "deepseek",
 				ModelID:         "deepseek-flash",
@@ -31,7 +31,7 @@ func TestToWireUsageDualWritesCostQuoteAndLegacyAliases(t *testing.T) {
 	if w.Usage == nil || w.Usage.CostQuote == nil {
 		t.Fatal("missing costQuote")
 	}
-	if w.Usage.CostQuote.Valuations["USD"].Basis != billing.BasisOfficialTable {
+	if w.Usage.CostQuote.Valuations["USD"].Basis != pricing.BasisOfficialTable {
 		t.Fatalf("USD basis = %q, want official_table", w.Usage.CostQuote.Valuations["USD"].Basis)
 	}
 	if w.Usage.Cost <= 0 || w.Usage.CostUSD != w.Usage.Cost {
@@ -66,8 +66,8 @@ func TestToWireUsageCarriesCoverageToTheJSON(t *testing.T) {
 		pricing *provider.Pricing
 		want    string
 	}{
-		{"a priced round", &provider.Pricing{Input: 1.5, Output: 4.5, Currency: "¥"}, billing.CoverageComplete},
-		{"a round with no price to quote", nil, billing.CoverageIncomplete},
+		{"a priced round", &provider.Pricing{Input: 1.5, Output: 4.5, Currency: "¥"}, pricing.CoverageComplete},
+		{"a round with no price to quote", nil, pricing.CoverageIncomplete},
 	}
 	for _, c := range cases {
 		e := event.Event{Kind: event.Usage, ModelRef: "m", Usage: usage, Pricing: c.pricing}
@@ -88,7 +88,7 @@ func TestToWireUsageCarriesCoverageToTheJSON(t *testing.T) {
 		if m.CostQuote.Coverage != c.want {
 			t.Errorf("%s: coverage on the wire = %q, want %q (%s)", c.name, m.CostQuote.Coverage, c.want, raw)
 		}
-		if m.CostQuote.CostComplete != (c.want == billing.CoverageComplete) {
+		if m.CostQuote.CostComplete != (c.want == pricing.CoverageComplete) {
 			t.Errorf("%s: costComplete = %v against coverage %q", c.name, m.CostQuote.CostComplete, m.CostQuote.Coverage)
 		}
 	}

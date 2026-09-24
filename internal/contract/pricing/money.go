@@ -1,6 +1,7 @@
-// Package billing models wallet balances, fixed-point money, and cost quotes.
-// It is a utility-layer package (stdlib only).
-package billing
+// Package pricing is what a model call costs: fixed-point money, the official
+// rate tables, and the quote a usage record is priced by. It is data and
+// arithmetic only; asking a provider for its wallet balance is model/billing's.
+package pricing
 
 import (
 	"fmt"

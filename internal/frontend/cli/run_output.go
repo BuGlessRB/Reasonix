@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reasonix/internal/contract/pricing"
 	"strings"
 	"sync"
 	"time"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/eventwire"
-	"reasonix/internal/model/billing"
 )
 
 type runOutputFormat string
@@ -73,8 +73,8 @@ type runResult struct {
 	AggregateMode   string `json:"aggregate_mode,omitempty"`
 	// OriginalCosts lists per-ISO original totals (never cross-added).
 	OriginalCosts  map[string]float64 `json:"original_costs,omitempty"`
-	OriginalTotals []billing.Money    `json:"original_totals,omitempty"`
-	CostQuote      *billing.CostQuote `json:"cost_quote,omitempty"`
+	OriginalTotals []pricing.Money    `json:"original_totals,omitempty"`
+	CostQuote      *pricing.CostQuote `json:"cost_quote,omitempty"`
 	Usage          runResultUsage     `json:"usage"`
 }
 
@@ -143,10 +143,10 @@ type runOutputSink struct {
 	displayComplete     bool
 	displayStatus       string
 	aggregateMode       string
-	originalTotals      []billing.Money
+	originalTotals      []pricing.Money
 	sawQuote            bool
 	originalCosts       map[string]float64
-	quoteLedger         *billing.Ledger
+	quoteLedger         *pricing.Ledger
 	turns               int
 	sequence            uint64
 	machineToolIDs      map[string]string
@@ -195,7 +195,7 @@ func (s *runOutputSink) Emit(e event.Event) {
 			if s.originalCosts == nil {
 				s.originalCosts = map[string]float64{}
 			}
-			if cur := billing.NormalizeCurrency(q.Original.Currency); cur != "" {
+			if cur := pricing.NormalizeCurrency(q.Original.Currency); cur != "" {
 				s.originalCosts[cur] += q.Original.Float64()
 			}
 			if q.Selected != nil && (s.currency == "" || s.currency == q.LegacyCurrencyCode()) {
@@ -206,9 +206,9 @@ func (s *runOutputSink) Emit(e event.Event) {
 				s.cost = 0
 			}
 			if s.quoteLedger == nil {
-				s.quoteLedger = billing.NewLedger()
+				s.quoteLedger = pricing.NewLedger()
 			}
-			s.quoteLedger.Add(*q, billing.UsageTokens{
+			s.quoteLedger.Add(*q, pricing.UsageTokens{
 				PromptTokens:           e.Usage.PromptTokens,
 				CompletionTokens:       e.Usage.CompletionTokens,
 				CacheHitTokens:         e.Usage.CacheHitTokens,
@@ -305,7 +305,7 @@ func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr err
 	if turns == 0 && !completion.isError {
 		turns = 1
 	}
-	var aggQuote *billing.CostQuote
+	var aggQuote *pricing.CostQuote
 	if s.quoteLedger != nil && len(s.quoteLedger.Entries) > 0 {
 		agg := s.quoteLedger.Total("")
 		aggQuote = &agg
@@ -322,7 +322,7 @@ func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr err
 		s.displayStatus = agg.DisplayStatus
 		s.aggregateMode = agg.AggregateMode
 		if agg.OriginalTotals != nil {
-			s.originalTotals = append([]billing.Money(nil), agg.OriginalTotals...)
+			s.originalTotals = append([]pricing.Money(nil), agg.OriginalTotals...)
 		}
 	}
 	return s.encoder.Encode(runResult{

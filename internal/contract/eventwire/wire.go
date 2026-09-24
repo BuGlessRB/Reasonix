@@ -4,8 +4,8 @@ package eventwire
 import (
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/pricing"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 // Event is the JSON-friendly form shared by event frontends.
@@ -272,7 +272,7 @@ func toWireUsage(e event.Event) *Usage {
 		wire.DisplayComplete = quote.DisplayComplete
 		wire.DisplayStatus = quote.DisplayStatus
 		wire.AggregateMode = quote.AggregateMode
-		wire.OriginalTotals = append([]billing.Money(nil), quote.OriginalTotals...)
+		wire.OriginalTotals = append([]pricing.Money(nil), quote.OriginalTotals...)
 		if quote.Selected != nil {
 			wire.Cost = quote.Selected.Float64()
 			wire.Currency = quote.LegacyCurrencySymbol()
@@ -562,12 +562,12 @@ type Usage struct {
 	CostUSD float64 `json:"costUsd,omitempty"`
 	// CostQuote is the structured host-side quote. New consumers must prefer it
 	// over cost/currency aliases. Never sent to model providers.
-	CostQuote       *billing.CostQuote `json:"costQuote,omitempty"`
+	CostQuote       *pricing.CostQuote `json:"costQuote,omitempty"`
 	CostComplete    bool               `json:"costComplete,omitempty"`
 	DisplayComplete bool               `json:"displayComplete,omitempty"`
 	DisplayStatus   string             `json:"displayStatus,omitempty"`
 	AggregateMode   string             `json:"aggregateMode,omitempty"`
-	OriginalTotals  []billing.Money    `json:"originalTotals,omitempty"`
+	OriginalTotals  []pricing.Money    `json:"originalTotals,omitempty"`
 }
 
 // CacheDiagnostics is the JSON form of cache prefix diagnostics.

@@ -75,7 +75,7 @@ type Pricing struct {
 }
 
 // Cost estimates the spend for a usage record. Compatibility adapter only —
-// new host code must consume billing.CostQuote instead of aggregating floats.
+// new host code must consume pricing.CostQuote instead of aggregating floats.
 func (p *Pricing) Cost(u *Usage) float64 {
 	if p == nil || u == nil {
 		return 0

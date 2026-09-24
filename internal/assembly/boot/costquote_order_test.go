@@ -1,13 +1,13 @@
 package boot
 
 import (
+	"reasonix/internal/contract/pricing"
 	"sync"
 	"testing"
 	"time"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 // offPeak pins these quotes to an hour DeepSeek bills at its base rate. Without
@@ -74,7 +74,7 @@ func TestCostQuoteReachesInnerSinkBeforeRecording(t *testing.T) {
 		Usage:    &provider.Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000, TotalTokens: 2_000_000},
 		Pricing:  &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 4, Currency: "¥"},
 	})
-	if basis != billing.BasisOfficialTable {
+	if basis != pricing.BasisOfficialTable {
 		t.Fatalf("USD valuation basis = %q, want official_table", basis)
 	}
 }
@@ -86,7 +86,7 @@ func TestCostQuoteUsesConfiguredBillingMode(t *testing.T) {
 		CatalogProviderForModel: func(string) string { return "mimo" },
 		BillingModeForModel: func(modelRef string) string {
 			if modelRef == "custom/mimo-v2.5-pro" {
-				return billing.BillingModeSubscriptionEquivalent
+				return pricing.BillingModeSubscriptionEquivalent
 			}
 			return ""
 		},
@@ -102,7 +102,7 @@ func TestCostQuoteUsesConfiguredBillingMode(t *testing.T) {
 		Usage:   &provider.Usage{PromptTokens: 1_000_000, TotalTokens: 1_000_000},
 		Pricing: &provider.Pricing{Input: 1, Currency: "CNY"},
 	})
-	if got != billing.BillingModeSubscriptionEquivalent {
+	if got != pricing.BillingModeSubscriptionEquivalent {
 		t.Fatalf("billing mode = %q, want subscription_equivalent", got)
 	}
 }

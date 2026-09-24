@@ -2,13 +2,13 @@ package stats
 
 import (
 	"context"
+	"reasonix/internal/contract/pricing"
 	"strings"
 	"sync"
 	"time"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 // Recorder is a passthrough event.Sink that snapshots token usage (event.Usage)
@@ -187,7 +187,7 @@ func (r *Recorder) recordUsage(e event.Event) {
 	r.recordProviderUsage(e.ModelRef, e.Usage, e.CostQuote, e.UsageSource)
 }
 
-func (r *Recorder) recordProviderUsage(modelRef string, usage *provider.Usage, quote *billing.CostQuote, usageSource string) {
+func (r *Recorder) recordProviderUsage(modelRef string, usage *provider.Usage, quote *pricing.CostQuote, usageSource string) {
 	if usage == nil || (usage.TotalTokens <= 0 && usage.RequestCount <= 0) {
 		return
 	}

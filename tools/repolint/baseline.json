@@ -15,7 +15,7 @@
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 4348,
-    "layer-order": 40,
+    "layer-order": 32,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -295,7 +295,6 @@
       "layer-order": 1
     },
     "internal/contract/config/billing.go": {
-      "layer-order": 1,
       "orphan": 1
     },
     "internal/contract/config/cache_policy.go": {
@@ -317,9 +316,6 @@
     },
     "internal/contract/config/decode.go": {
       "essay": 9
-    },
-    "internal/contract/config/deepseek_catalog.go": {
-      "layer-order": 1
     },
     "internal/contract/config/deepseek_protocol_migration.go": {
       "orphan": 2
@@ -346,7 +342,6 @@
       "essay": 24,
       "file-size": 1194,
       "function-size": 46,
-      "layer-order": 1,
       "orphan": 2
     },
     "internal/contract/config/main_test.go": {
@@ -373,9 +368,6 @@
     "internal/contract/config/plugin_packages.go": {
       "essay": 2
     },
-    "internal/contract/config/pricing.go": {
-      "layer-order": 1
-    },
     "internal/contract/config/probe_failure.go": {
       "layer-order": 1
     },
@@ -393,8 +385,7 @@
       "complexity": 195,
       "essay": 2,
       "file-size": 571,
-      "function-size": 696,
-      "layer-order": 1
+      "function-size": 696
     },
     "internal/contract/config/vision.go": {
       "essay": 1,
@@ -407,12 +398,9 @@
     "internal/contract/event/coalesce.go": {
       "layer-order": 1
     },
-    "internal/contract/event/costquote_sink.go": {
-      "layer-order": 1
-    },
     "internal/contract/event/event.go": {
       "essay": 7,
-      "layer-order": 2
+      "layer-order": 1
     },
     "internal/contract/event/record.go": {
       "layer-order": 1
@@ -424,11 +412,11 @@
       "essay": 2,
       "layer-order": 1
     },
-    "internal/contract/eventwire/wire.go": {
-      "layer-order": 1
-    },
     "internal/contract/plancontract/project.go": {
       "layer-order": 1,
+      "orphan": 1
+    },
+    "internal/contract/pricing/migrate.go": {
       "orphan": 1
     },
     "internal/contract/provider/provider.go": {
@@ -880,9 +868,6 @@
     },
     "internal/model/anthropic/anthropic_test.go": {
       "essay": 1
-    },
-    "internal/model/billing/migrate.go": {
-      "orphan": 1
     },
     "internal/model/openai/host.go": {
       "essay": 8

@@ -2,21 +2,20 @@ package cli
 
 import (
 	"encoding/json"
+	"reasonix/internal/contract/pricing"
 	"reflect"
 	"testing"
-
-	"reasonix/internal/model/billing"
 )
 
-func money(amount, currency string) billing.Money {
-	return billing.Money{Amount: amount, Currency: currency}
+func money(amount, currency string) pricing.Money {
+	return pricing.Money{Amount: amount, Currency: currency}
 }
 
-func quote(usd, cny string) billing.CostQuote {
+func quote(usd, cny string) pricing.CostQuote {
 	selected := money(usd, "USD")
-	return billing.CostQuote{
+	return pricing.CostQuote{
 		Original: money(usd, "USD"),
-		Valuations: map[string]billing.Valuation{
+		Valuations: map[string]pricing.Valuation{
 			"USD": {Money: money(usd, "USD"), Basis: "official_table", Source: "https://example.test/pricing", AsOf: "2026-08-28"},
 			"CNY": {Money: money(cny, "CNY"), Basis: "official_table", Source: "https://example.test/pricing", AsOf: "2026-08-28"},
 		},
@@ -31,11 +30,11 @@ func quote(usd, cny string) billing.CostQuote {
 // unfold rebuilds the quotes from what the fold wrote. It lives in the test
 // because nothing in the product reads the file back — but the fold is only
 // worth doing if what it drops is the repetition and not the audit.
-func unfold(a *costAudit) []billing.CostQuote {
-	out := make([]billing.CostQuote, 0, len(a.Calls))
+func unfold(a *costAudit) []pricing.CostQuote {
+	out := make([]pricing.CostQuote, 0, len(a.Calls))
 	for _, call := range a.Calls {
 		book := a.Books[call.Book]
-		q := billing.CostQuote{
+		q := pricing.CostQuote{
 			Original: call.Original, OriginalTotals: call.OriginalTotals, Selected: call.Selected,
 			BillingMode: book.BillingMode, Estimated: book.Estimated,
 			CostComplete: book.CostComplete, DisplayComplete: book.DisplayComplete,
@@ -47,10 +46,10 @@ func unfold(a *costAudit) []billing.CostQuote {
 		}
 		for currency, amount := range call.Amounts {
 			if q.Valuations == nil {
-				q.Valuations = map[string]billing.Valuation{}
+				q.Valuations = map[string]pricing.Valuation{}
 			}
 			basis := book.Bases[currency]
-			q.Valuations[currency] = billing.Valuation{
+			q.Valuations[currency] = pricing.Valuation{
 				Money: amount, Basis: basis.Basis, Source: basis.Source,
 				AsOf: basis.AsOf, Rate: basis.Rate, Stale: basis.Stale,
 			}
@@ -61,7 +60,7 @@ func unfold(a *costAudit) []billing.CostQuote {
 }
 
 func TestFoldCostQuotesLosesNothing(t *testing.T) {
-	quotes := []billing.CostQuote{quote("0.000395144", "0.0027186"), quote("0.001515952", "0.0103628")}
+	quotes := []pricing.CostQuote{quote("0.000395144", "0.0027186"), quote("0.001515952", "0.0103628")}
 	folded := foldCostQuotes(quotes)
 	if folded == nil {
 		t.Fatal("foldCostQuotes = nil")
@@ -73,7 +72,7 @@ func TestFoldCostQuotesLosesNothing(t *testing.T) {
 
 // Ten calls against one price book are one book, not ten copies of it.
 func TestFoldCostQuotesWritesOneBookPerPriceBook(t *testing.T) {
-	quotes := make([]billing.CostQuote, 10)
+	quotes := make([]pricing.CostQuote, 10)
 	for i := range quotes {
 		quotes[i] = quote("0.000395144", "0.0027186")
 	}
@@ -103,7 +102,7 @@ func TestFoldCostQuotesSeparatesDifferentPriceBooks(t *testing.T) {
 	other := quote("0.002", "0.0138")
 	other.ModelRef = "deepseek/deepseek-v4-pro"
 	other.PricingFingerprint = "0000aaaa1111bbbb"
-	folded := foldCostQuotes([]billing.CostQuote{quote("0.001", "0.0069"), other})
+	folded := foldCostQuotes([]pricing.CostQuote{quote("0.001", "0.0069"), other})
 	if len(folded.Books) != 2 {
 		t.Fatalf("books = %d, want 2", len(folded.Books))
 	}

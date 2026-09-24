@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reasonix/internal/contract/pricing"
 	"reflect"
 	"slices"
 	"strings"
@@ -15,7 +16,6 @@ import (
 
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 // Load builds the configuration: defaults, then user config, then project
@@ -391,7 +391,7 @@ func officialProviderKind(p *ProviderEntry) string {
 	if p == nil {
 		return ""
 	}
-	return billing.OfficialProviderForEndpoint(p.BaseURL)
+	return pricing.OfficialProviderForEndpoint(p.BaseURL)
 }
 
 func resolveRoot(root string) string {

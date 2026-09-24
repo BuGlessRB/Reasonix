@@ -1,6 +1,6 @@
 // rates.go — every rate this project has shipped for a vendor's model, and the
 // two questions that asks: what it costs now, and what it used to cost.
-package billing
+package pricing
 
 import (
 	"slices"

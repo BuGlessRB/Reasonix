@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"maps"
 	"os"
+	"reasonix/internal/contract/pricing"
 	"slices"
 	"strings"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	"reasonix/internal/base/fileutil"
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/model/billing"
 	"reasonix/internal/runtime/evidence"
 )
 
@@ -49,12 +49,12 @@ type RunMetrics struct {
 	DisplayComplete bool            `json:"display_complete"`
 	DisplayStatus   string          `json:"display_status,omitempty"`
 	AggregateMode   string          `json:"aggregate_mode,omitempty"`
-	OriginalTotals  []billing.Money `json:"original_totals,omitempty"`
+	OriginalTotals  []pricing.Money `json:"original_totals,omitempty"`
 	// OriginalCosts is per-ISO original currency totals (never cross-added).
 	OriginalCosts map[string]float64 `json:"original_costs,omitempty"`
 	// CostQuotes retains occurrence-time quotes for audit (capped). It is folded
 	// into CostAudit for the file: the quotes repeat one price book n times.
-	CostQuotes []billing.CostQuote `json:"-"`
+	CostQuotes []pricing.CostQuote `json:"-"`
 	CostAudit  *costAudit          `json:"cost_audit,omitempty"`
 	// CompletionVerdict and CompletionGapKinds are the turn's own verdict on
 	// itself. Outcome answers only whether the run errored, so without these a
@@ -242,7 +242,7 @@ func (m RunMetrics) clone() RunMetrics {
 	out.ToolCallsByName = cloneCounts(m.ToolCallsByName)
 	out.ToolFailuresByName = cloneCounts(m.ToolFailuresByName)
 	out.OriginalCosts = cloneFloatMap(m.OriginalCosts)
-	out.OriginalTotals = append([]billing.Money(nil), m.OriginalTotals...)
+	out.OriginalTotals = append([]pricing.Money(nil), m.OriginalTotals...)
 	// The fold builds its own structures, so the snapshot carries it instead of
 	// a second copy of the quotes nothing downstream reads.
 	out.CostAudit = foldCostQuotes(m.CostQuotes)
@@ -332,7 +332,7 @@ func (s *metricsSink) record(e event.Event) {
 			s.m.DisplayComplete = q.DisplayComplete
 			s.m.DisplayStatus = q.DisplayStatus
 			s.m.AggregateMode = q.AggregateMode
-			origCur := billing.NormalizeCurrency(q.Original.Currency)
+			origCur := pricing.NormalizeCurrency(q.Original.Currency)
 			if origCur != "" {
 				if s.m.OriginalCosts == nil {
 					s.m.OriginalCosts = map[string]float64{}
@@ -357,7 +357,7 @@ func (s *metricsSink) record(e event.Event) {
 		} else if p := e.Pricing; p != nil {
 			stepCost = p.Cost(u)
 			s.m.Cost += stepCost
-			s.m.Currency = billing.NormalizeCurrency(p.Currency)
+			s.m.Currency = pricing.NormalizeCurrency(p.Currency)
 		}
 		s.recordSource(e.UsageSource, u.PromptTokens, u.CompletionTokens, stepCost, q)
 		if e.UsageSource == event.UsageSourceCapabilityRouter {
@@ -394,14 +394,14 @@ func (s *metricsSink) record(e event.Event) {
 	}
 }
 
-func originalTotalsFromFloatMap(totals map[string]float64) []billing.Money {
+func originalTotalsFromFloatMap(totals map[string]float64) []pricing.Money {
 	if len(totals) == 0 {
 		return nil
 	}
 	codes := slices.Sorted(maps.Keys(totals))
-	out := make([]billing.Money, 0, len(codes))
+	out := make([]pricing.Money, 0, len(codes))
 	for _, code := range codes {
-		out = append(out, billing.MoneyOf(billing.NewAmountFromFloat(totals[code]), code))
+		out = append(out, pricing.MoneyOf(pricing.NewAmountFromFloat(totals[code]), code))
 	}
 	return out
 }
@@ -410,7 +410,7 @@ func originalTotalsFromFloatMap(totals map[string]float64) []billing.Money {
 // executor, per the Usage event contract. An unrecognised source is kept under
 // its own key rather than dropped, so a future origin cannot silently vanish
 // from a total that is meant to reconcile.
-func (s *metricsSink) recordSource(source string, prompt, completion int, cost float64, q *billing.CostQuote) {
+func (s *metricsSink) recordSource(source string, prompt, completion int, cost float64, q *pricing.CostQuote) {
 	if strings.TrimSpace(source) == "" {
 		source = event.UsageSourceExecutor
 	}
@@ -423,7 +423,7 @@ func (s *metricsSink) recordSource(source string, prompt, completion int, cost f
 	agg.CompletionTokens += completion
 	agg.Cost += cost
 	if q != nil {
-		cur := billing.NormalizeCurrency(q.Original.Currency)
+		cur := pricing.NormalizeCurrency(q.Original.Currency)
 		if cur != "" {
 			if agg.OriginalCosts == nil {
 				agg.OriginalCosts = map[string]float64{}

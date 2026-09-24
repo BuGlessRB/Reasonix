@@ -156,7 +156,7 @@ func TestCostsStaySeparatePerCurrencyInTheProjection(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("costs = %+v, want one entry per currency", rows[0].Costs)
 	}
-	// billing.Amount is fixed-point at 1e9.
+	// pricing.Amount is fixed-point at 1e9.
 	if got["CNY"] != 4_000_000_000 {
 		t.Errorf("CNY = %d, want 4.00", got["CNY"])
 	}

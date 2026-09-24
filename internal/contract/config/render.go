@@ -3,13 +3,13 @@ package config
 import (
 	"fmt"
 	"maps"
+	"reasonix/internal/contract/pricing"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 type RenderScope string
@@ -311,7 +311,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 				fmt.Fprintf(&b, "prices      = %s   # per-model prices, per 1M tokens\n", renderPricingMap(p.Prices))
 			}
 			if cur := strings.TrimSpace(p.BillingCurrency); cur != "" {
-				fmt.Fprintf(&b, "billing_currency = %q   # frozen list-price currency; independent of display_currency\n", billing.NormalizeCurrency(cur))
+				fmt.Fprintf(&b, "billing_currency = %q   # frozen list-price currency; independent of display_currency\n", pricing.NormalizeCurrency(cur))
 			}
 			if mode := strings.TrimSpace(p.BillingMode); mode != "" && mode != "payg" {
 				fmt.Fprintf(&b, "billing_mode = %q   # payg|subscription_equivalent\n", mode)
@@ -780,7 +780,7 @@ func RenderTOMLProjectDelta(c *Config) string {
 				fmt.Fprintf(&b, "prices      = %s\n", renderPricingMap(p.Prices))
 			}
 			if cur := strings.TrimSpace(p.BillingCurrency); cur != "" {
-				fmt.Fprintf(&b, "billing_currency = %q\n", billing.NormalizeCurrency(cur))
+				fmt.Fprintf(&b, "billing_currency = %q\n", pricing.NormalizeCurrency(cur))
 			}
 			if mode := strings.TrimSpace(p.BillingMode); mode != "" && mode != "payg" {
 				fmt.Fprintf(&b, "billing_mode = %q\n", mode)

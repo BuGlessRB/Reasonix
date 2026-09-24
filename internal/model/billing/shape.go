@@ -9,7 +9,7 @@ import (
 )
 
 // walletShapes maps a vendor's own API hostname to the decoder for its balance
-// response. Host equality is the test, the same as OfficialProviderForEndpoint:
+// response. Host equality is the test, the same as pricing.OfficialProviderForEndpoint:
 // only the vendor's own endpoint is known to answer in its own shape, and an
 // entry merely named after a vendor is not evidence of that endpoint.
 var walletShapes = map[string]func(host string, body []byte) (*Balance, error){

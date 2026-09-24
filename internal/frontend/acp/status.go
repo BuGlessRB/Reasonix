@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"reasonix/internal/contract/pricing"
 	"runtime"
 	"slices"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"reasonix/internal/base/secrets"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
 )
@@ -117,8 +117,8 @@ type ReasonixUsage struct {
 	DisplayComplete  *bool              `json:"displayComplete,omitempty"`
 	DisplayStatus    string             `json:"displayStatus,omitempty"`
 	AggregateMode    string             `json:"aggregateMode,omitempty"`
-	OriginalTotals   []billing.Money    `json:"originalTotals,omitempty"`
-	CostQuote        *billing.CostQuote `json:"costQuote,omitempty"`
+	OriginalTotals   []pricing.Money    `json:"originalTotals,omitempty"`
+	CostQuote        *pricing.CostQuote `json:"costQuote,omitempty"`
 	UsageSource      string             `json:"usageSource"`
 }
 
@@ -169,10 +169,10 @@ type usageAccumulator struct {
 	source           string
 	costComplete     bool
 	quoteEvents      int
-	quoteLedger      *billing.Ledger
+	quoteLedger      *pricing.Ledger
 }
 
-func (a *usageAccumulator) addQuoted(u *provider.Usage, pricing *provider.Pricing, quote *billing.CostQuote, source string) {
+func (a *usageAccumulator) addQuoted(u *provider.Usage, rates *provider.Pricing, quote *pricing.CostQuote, source string) {
 	if u == nil {
 		return
 	}
@@ -192,17 +192,17 @@ func (a *usageAccumulator) addQuoted(u *provider.Usage, pricing *provider.Pricin
 	} else if a.source != source {
 		a.source = "mixed"
 	}
-	if quote == nil && pricing != nil {
-		quote = event.EnsureCostQuote(event.Event{Kind: event.Usage, Usage: u, Pricing: pricing, UsageSource: source}, nil)
+	if quote == nil && rates != nil {
+		quote = event.EnsureCostQuote(event.Event{Kind: event.Usage, Usage: u, Pricing: rates, UsageSource: source}, nil)
 	}
 	if quote != nil {
 		a.pricedEvents++
 		a.quoteEvents++
 		a.estimated = true
 		if a.quoteLedger == nil {
-			a.quoteLedger = billing.NewLedger()
+			a.quoteLedger = pricing.NewLedger()
 		}
-		a.quoteLedger.Add(*quote, billing.UsageTokens{
+		a.quoteLedger.Add(*quote, pricing.UsageTokens{
 			PromptTokens:           u.PromptTokens,
 			CompletionTokens:       u.CompletionTokens,
 			CacheHitTokens:         u.CacheHitTokens,
@@ -224,20 +224,20 @@ func (a *usageAccumulator) addQuoted(u *provider.Usage, pricing *provider.Pricin
 				a.costComplete = false
 			}
 			a.estimatedCost += quote.Selected.Float64()
-		} else if pricing != nil {
+		} else if rates != nil {
 			// Incomplete display valuation: keep original, mark incomplete.
 			a.costComplete = false
 			a.estimatedCost += quote.Original.Float64()
 			if a.currency == "" {
-				a.currency = billing.NormalizeCurrency(quote.Original.Currency)
+				a.currency = pricing.NormalizeCurrency(quote.Original.Currency)
 			}
 		}
 		return
 	}
-	if pricing != nil {
-		currency := billing.NormalizeCurrency(pricing.Currency)
+	if rates != nil {
+		currency := pricing.NormalizeCurrency(rates.Currency)
 		if currency == "" {
-			currency = pricing.Symbol()
+			currency = rates.Symbol()
 		}
 		if a.pricedEvents == 0 {
 			a.currency = currency
@@ -246,7 +246,7 @@ func (a *usageAccumulator) addQuoted(u *provider.Usage, pricing *provider.Pricin
 			a.currency = ""
 			a.costComplete = false
 		}
-		a.estimatedCost += pricing.Cost(u)
+		a.estimatedCost += rates.Cost(u)
 		a.pricedEvents++
 	}
 }
@@ -277,7 +277,7 @@ func (a usageAccumulator) wire() ReasonixUsage {
 		usage.DisplayComplete = &displayComplete
 		usage.DisplayStatus = agg.DisplayStatus
 		usage.AggregateMode = agg.AggregateMode
-		usage.OriginalTotals = append([]billing.Money(nil), agg.OriginalTotals...)
+		usage.OriginalTotals = append([]pricing.Money(nil), agg.OriginalTotals...)
 		if agg.Selected != nil && !math.IsNaN(agg.Selected.Float64()) && !math.IsInf(agg.Selected.Float64(), 0) {
 			cost := agg.Selected.Float64()
 			currency := agg.LegacyCurrencyCode()

@@ -3,16 +3,15 @@ package main
 
 import (
 	"fmt"
+	"reasonix/internal/contract/pricing"
 	"strconv"
 	"strings"
-
-	"reasonix/internal/model/billing"
 )
 
 // published is one rate a vendor's page states for a model.
 type published struct {
 	Model string
-	Rate  billing.RateCard
+	Rate  pricing.RateCard
 }
 
 // source is one vendor's price page in one currency. Read is nil where no
@@ -32,25 +31,25 @@ func sources() []source {
 		{
 			Provider: "deepseek", Currency: "USD",
 			Models: []string{"deepseek-flash", "deepseek-v4-pro"},
-			URL:    billing.DocDeepSeekPricing,
+			URL:    pricing.DocDeepSeekPricing,
 			Read:   readDeepSeek,
 		},
 		{
 			Provider: "longcat", Currency: "USD",
 			Models: []string{"LongCat-2.0"},
-			URL:    billing.DocLongCatPricingUSD,
+			URL:    pricing.DocLongCatPricingUSD,
 			Read:   readLongCat,
 		},
 		{
 			Provider: "longcat", Currency: "CNY",
 			Models: []string{"LongCat-2.0"},
-			URL:    billing.DocLongCatPricingCNY,
+			URL:    pricing.DocLongCatPricingCNY,
 			Read:   readLongCat,
 		},
 		{
 			Provider: "mimo", Currency: "CNY",
 			Models: []string{"mimo-v2.5-pro", "mimo-v2.5", "mimo-v2-flash"},
-			URL:    billing.DocMiMoPAYG,
+			URL:    pricing.DocMiMoPAYG,
 			Unread: "the page renders its prices in the browser; fetching it returns no table",
 		},
 	}
@@ -83,7 +82,7 @@ func readDeepSeek(t table, models []string) ([]published, error) {
 	}
 	out := make([]published, 0, len(models))
 	for i, model := range models {
-		out = append(out, published{Model: model, Rate: billing.RateCard{
+		out = append(out, published{Model: model, Rate: pricing.RateCard{
 			CacheHit: cacheHit[i], Input: input[i], Output: output[i],
 		}})
 	}
@@ -97,7 +96,7 @@ func readLongCat(t table, models []string) ([]published, error) {
 	if len(models) != 1 {
 		return nil, fmt.Errorf("this page prices one model, the local table expects %d", len(models))
 	}
-	rate := billing.RateCard{}
+	rate := pricing.RateCard{}
 	// Labelled cells, in both languages the vendor publishes. A label it stops
 	// using reads as unreadable, which is the point: the alternative is a
 	// checker that quietly compares nothing and reports agreement.

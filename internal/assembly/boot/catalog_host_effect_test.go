@@ -6,12 +6,12 @@ package boot
 
 import (
 	"context"
+	"reasonix/internal/contract/pricing"
 	"sync"
 	"testing"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 type effectUsageProvider struct{}
@@ -32,7 +32,7 @@ func (effectUsageProvider) Stream(_ context.Context, _ provider.Request) (<-chan
 
 // quoteThroughBuild runs one turn against baseURL and returns the CostQuote the
 // frontend sink actually received.
-func quoteThroughBuild(t *testing.T, kind, baseURL string) *billing.CostQuote {
+func quoteThroughBuild(t *testing.T, kind, baseURL string) *pricing.CostQuote {
 	t.Helper()
 	isolateConfigHome(t)
 	dir := robustTempDir(t)
@@ -56,7 +56,7 @@ price = { cache_hit = 0.15, input = 4.5, output = 13.5, currency = "¥" }
 `)
 
 	var mu sync.Mutex
-	var seen *billing.CostQuote
+	var seen *pricing.CostQuote
 	sink := event.FuncSink(func(e event.Event) {
 		if e.Kind == event.Usage && e.CostQuote != nil {
 			mu.Lock()
@@ -86,7 +86,7 @@ func TestEffectOfficialTableFollowsTheEndpointHost(t *testing.T) {
 	if onVendor.CatalogSource == "" {
 		t.Fatalf("the vendor's own endpoint was not quoted against its table: %+v", onVendor)
 	}
-	if v, ok := onVendor.Valuations["USD"]; !ok || v.Basis != billing.BasisOfficialTable {
+	if v, ok := onVendor.Valuations["USD"]; !ok || v.Basis != pricing.BasisOfficialTable {
 		t.Fatalf("vendor endpoint lost its official cross-currency valuation: %+v", onVendor.Valuations)
 	}
 }

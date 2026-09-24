@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"reasonix/internal/contract/pricing"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 	"reasonix/internal/runtime/agent"
 )
 
@@ -22,14 +22,14 @@ type statusFactory struct {
 func TestUsageAccumulatorTotalsMoreThanAuditLimit(t *testing.T) {
 	var accumulator usageAccumulator
 	usage := &provider.Usage{PromptTokens: 1_000_000}
-	pricing := &provider.Pricing{Input: 1, Currency: "USD"}
+	rates := &provider.Pricing{Input: 1, Currency: "USD"}
 	for range 65 {
-		quote := billing.BuildQuote(billing.QuoteInput{
-			Usage:           billing.UsageTokens{PromptTokens: usage.PromptTokens},
-			Rates:           billing.RateCard{Input: pricing.Input, Currency: pricing.Currency},
+		quote := pricing.BuildQuote(pricing.QuoteInput{
+			Usage:           pricing.UsageTokens{PromptTokens: usage.PromptTokens},
+			Rates:           pricing.RateCard{Input: rates.Input, Currency: rates.Currency},
 			DisplayCurrency: "USD",
 		})
-		accumulator.addQuoted(usage, pricing, &quote, event.UsageSourceExecutor)
+		accumulator.addQuoted(usage, rates, &quote, event.UsageSourceExecutor)
 	}
 	wire := accumulator.wire()
 	if wire.EstimatedCost == nil || *wire.EstimatedCost != 65 || wire.Currency == nil || *wire.Currency != "USD" {
@@ -50,13 +50,13 @@ func TestRestoredUsageKeepsFullScalarTotalAfterNewQuote(t *testing.T) {
 		EstimatedCost: 2, Currency: "USD", CostComplete: &complete,
 	})
 	usage := &provider.Usage{PromptTokens: 1_000_000}
-	pricing := &provider.Pricing{Input: 1, Currency: "USD"}
-	quote := billing.BuildQuote(billing.QuoteInput{
-		Usage:           billing.UsageTokens{PromptTokens: usage.PromptTokens},
-		Rates:           billing.RateCard{Input: pricing.Input, Currency: pricing.Currency},
+	rates := &provider.Pricing{Input: 1, Currency: "USD"}
+	quote := pricing.BuildQuote(pricing.QuoteInput{
+		Usage:           pricing.UsageTokens{PromptTokens: usage.PromptTokens},
+		Rates:           pricing.RateCard{Input: rates.Input, Currency: rates.Currency},
 		DisplayCurrency: "USD",
 	})
-	accumulator.addQuoted(usage, pricing, &quote, event.UsageSourceExecutor)
+	accumulator.addQuoted(usage, rates, &quote, event.UsageSourceExecutor)
 	wire := accumulator.wire()
 	if wire.EstimatedCost == nil || *wire.EstimatedCost != 3 {
 		t.Fatalf("restored scalar history was replaced by the new ledger fragment: %+v", wire)

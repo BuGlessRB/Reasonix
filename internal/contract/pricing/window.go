@@ -1,5 +1,5 @@
 // window.go — when a vendor charges its peak rates.
-package billing
+package pricing
 
 import "time"
 

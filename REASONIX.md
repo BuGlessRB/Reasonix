@@ -231,11 +231,11 @@ file only if all of them land, so a failure midway leaves nothing half-edited.
 ## Vendor rates
 
 Official list prices live in one place: `officialRates` in
-`internal/model/billing/rates.go`, oldest generation first, the last being what a
+`internal/contract/pricing/rates.go`, oldest generation first, the last being what a
 model charges today. A price change is an **append, never an edit** — the
 superseded rate is what lets an installed config be recognised as holding one
 of ours and brought forward, instead of quoting a retired rate for the rest of
-its life. `config` reads these through `billing.CurrentRate` and
+its life. `config` reads these through `pricing.CurrentRate` and
 `SupersededRates` and restates none of them; a table written twice is one that
 drifts, which is how a vendor's USD rate ended up published on one side only.
 

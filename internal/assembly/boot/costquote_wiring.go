@@ -4,7 +4,7 @@ package boot
 import (
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
-	"reasonix/internal/model/billing"
+	"reasonix/internal/contract/pricing"
 	"reasonix/internal/state/stats"
 )
 
@@ -15,9 +15,9 @@ import (
 //	Coalesce → GoalUsageTee → Sync → CostQuote → [Recorder] → frontend
 func quotedSink(cfg *config.Config, opts Options) event.Sink {
 	ctx := &event.QuoteContext{
-		DisplayRequest: billing.DisplayRequest{
+		DisplayRequest: pricing.DisplayRequest{
 			Currency: cfg.ExplicitDisplayCurrency(),
-			Source:   billing.DisplaySourceExplicit,
+			Source:   pricing.DisplaySourceExplicit,
 		},
 		BillingModeForModel: func(modelRef string) string {
 			entry, ok := cfg.ResolveModel(modelRef)

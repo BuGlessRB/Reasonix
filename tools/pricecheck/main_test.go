@@ -2,10 +2,9 @@ package main
 
 import (
 	"os"
+	"reasonix/internal/contract/pricing"
 	"strings"
 	"testing"
-
-	"reasonix/internal/model/billing"
 )
 
 func tableFrom(t *testing.T, path string) table {
@@ -134,6 +133,6 @@ func TestAmbiguousRowsDoNotResolve(t *testing.T) {
 	}
 }
 
-func card(cacheHit, input, output float64) billing.RateCard {
-	return billing.RateCard{CacheHit: cacheHit, Input: input, Output: output}
+func card(cacheHit, input, output float64) pricing.RateCard {
+	return pricing.RateCard{CacheHit: cacheHit, Input: input, Output: output}
 }

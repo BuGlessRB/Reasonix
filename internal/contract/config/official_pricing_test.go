@@ -1,11 +1,11 @@
 package config
 
 import (
+	"reasonix/internal/contract/pricing"
 	"slices"
 	"testing"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 // Every rate this project has shipped as a default must still be recognised,
@@ -13,8 +13,8 @@ import (
 // has to be able to bring up to date.
 func TestEverySupersededOfficialRateRefreshes(t *testing.T) {
 	checked := 0
-	for _, row := range billing.OfficialCatalog() {
-		for _, card := range billing.SupersededRates(row.Provider, row.Model, row.Currency) {
+	for _, row := range pricing.OfficialCatalog() {
+		for _, card := range pricing.SupersededRates(row.Provider, row.Model, row.Currency) {
 			stored := pricingFromRateCard(&card)
 			want := officialVendorPrice(row.Provider, row.Currency, row.Model)
 			if got := supersededOfficialRefresh(row.Provider, row.Model, stored); !samePricing(got, want) {
@@ -66,7 +66,7 @@ func TestEveryDeepSeekModelIsPriced(t *testing.T) {
 	declared := append([]string{DeepSeekFlashModel, deepSeekProModel}, retiredDeepSeekFlashModels...)
 	for _, model := range declared {
 		for _, currency := range []string{"CNY", "USD"} {
-			if billing.CurrentRate("deepseek", model, currency) == nil {
+			if pricing.CurrentRate("deepseek", model, currency) == nil {
 				t.Errorf("%s has no %s rate in billing's history", model, currency)
 			}
 		}
@@ -74,7 +74,7 @@ func TestEveryDeepSeekModelIsPriced(t *testing.T) {
 	// The catalog is what a quote actually reads, so a model the history prices
 	// but the catalog never publishes still quotes as nothing.
 	published := map[string]map[string]bool{}
-	for _, row := range billing.OfficialCatalog() {
+	for _, row := range pricing.OfficialCatalog() {
 		if row.Provider != "deepseek" {
 			continue
 		}

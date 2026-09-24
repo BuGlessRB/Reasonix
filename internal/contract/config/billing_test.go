@@ -1,10 +1,10 @@
 package config
 
 import (
+	"reasonix/internal/contract/pricing"
 	"testing"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 func TestDisplayCurrencyIndependentOfListPrices(t *testing.T) {
@@ -26,20 +26,20 @@ func TestDisplayCurrencyIndependentOfListPrices(t *testing.T) {
 }
 
 func TestCustomPriceProtectedFromCatalog(t *testing.T) {
-	custom := billing.RateCard{CacheHit: 9, Input: 9, Output: 9, Currency: "USD"}
-	if _, ok := billing.MatchesCatalog("deepseek", "deepseek-v4-flash", custom); ok {
+	custom := pricing.RateCard{CacheHit: 9, Input: 9, Output: 9, Currency: "USD"}
+	if _, ok := pricing.MatchesCatalog("deepseek", "deepseek-v4-flash", custom); ok {
 		t.Fatal("custom price must not match official catalog")
 	}
 }
 
 func TestQuoteForUsageUsesSelectedDisplay(t *testing.T) {
 	price := deepSeekOfficialRate(DeepSeekFlashModel, "USD")
-	q := QuoteForUsage(price, nil, "USD", "m", "executor", billing.BillingModePAYG, "")
+	q := QuoteForUsage(price, nil, "USD", "m", "executor", pricing.BillingModePAYG, "")
 	if q.Complete {
 		t.Fatal("nil usage should be incomplete")
 	}
 	u := &provider.Usage{PromptTokens: 1_000_000, CompletionTokens: 0}
-	q = QuoteForUsage(price, u, "USD", "m", "executor", billing.BillingModePAYG, "")
+	q = QuoteForUsage(price, u, "USD", "m", "executor", pricing.BillingModePAYG, "")
 	if q.Original.Currency != "USD" || q.Selected == nil {
 		t.Fatalf("quote = %+v", q)
 	}

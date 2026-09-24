@@ -4,8 +4,7 @@ package cli
 
 import (
 	"encoding/json"
-
-	"reasonix/internal/model/billing"
+	"reasonix/internal/contract/pricing"
 )
 
 // costAudit is the run's quotes with the price book lifted out of them. Every
@@ -44,25 +43,25 @@ type costBasis struct {
 	Basis  string                `json:"basis,omitempty"`
 	Source string                `json:"source,omitempty"`
 	AsOf   string                `json:"asOf,omitempty"`
-	Rate   *billing.RateSnapshot `json:"rateSnapshot,omitempty"`
+	Rate   *pricing.RateSnapshot `json:"rateSnapshot,omitempty"`
 	Stale  bool                  `json:"stale,omitempty"`
 }
 
 // costCall is one model call: which book priced it, and what it came to.
 type costCall struct {
 	Book           int             `json:"book"`
-	Original       billing.Money   `json:"original"`
-	OriginalTotals []billing.Money `json:"originalTotals,omitempty"`
-	Selected       *billing.Money  `json:"selected,omitempty"`
+	Original       pricing.Money   `json:"original"`
+	OriginalTotals []pricing.Money `json:"originalTotals,omitempty"`
+	Selected       *pricing.Money  `json:"selected,omitempty"`
 	// Amounts is the per-currency valuation, keyed the way Bases is.
-	Amounts map[string]billing.Money `json:"amounts,omitempty"`
+	Amounts map[string]pricing.Money `json:"amounts,omitempty"`
 }
 
 // foldCostQuotes splits quotes into the books they were priced against and the
 // per-call amounts. It is lossless: every field of a quote lands in exactly one
 // of the two, which is what lets the metrics file drop the repetition without
 // dropping the audit.
-func foldCostQuotes(quotes []billing.CostQuote) *costAudit {
+func foldCostQuotes(quotes []pricing.CostQuote) *costAudit {
 	if len(quotes) == 0 {
 		return nil
 	}
@@ -88,7 +87,7 @@ func foldCostQuotes(quotes []billing.CostQuote) *costAudit {
 	return out
 }
 
-func bookOf(q billing.CostQuote) costBook {
+func bookOf(q pricing.CostQuote) costBook {
 	book := costBook{
 		ModelRef: q.ModelRef, UsageSource: q.UsageSource,
 		PricingFingerprint: q.PricingFingerprint, CatalogSource: q.CatalogSource,
@@ -116,10 +115,10 @@ func bookOf(q billing.CostQuote) costBook {
 	return book
 }
 
-func callOf(q billing.CostQuote, book int) costCall {
+func callOf(q pricing.CostQuote, book int) costCall {
 	call := costCall{Book: book, Original: q.Original}
 	if len(q.OriginalTotals) > 0 {
-		call.OriginalTotals = append([]billing.Money(nil), q.OriginalTotals...)
+		call.OriginalTotals = append([]pricing.Money(nil), q.OriginalTotals...)
 	}
 	if q.Selected != nil {
 		selected := *q.Selected
@@ -127,7 +126,7 @@ func callOf(q billing.CostQuote, book int) costCall {
 	}
 	for currency, valuation := range q.Valuations {
 		if call.Amounts == nil {
-			call.Amounts = map[string]billing.Money{}
+			call.Amounts = map[string]pricing.Money{}
 		}
 		call.Amounts[currency] = valuation.Money
 	}

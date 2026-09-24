@@ -2,10 +2,10 @@ package config
 
 import (
 	"fmt"
+	"reasonix/internal/contract/pricing"
 	"strings"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 // BillingConfig controls host-side cost display. It never changes provider
@@ -86,12 +86,12 @@ func (e *ProviderEntry) ProviderBillingCurrency() string {
 	if e == nil {
 		return ""
 	}
-	if v := billing.NormalizeCurrency(e.BillingCurrency); v != "" {
+	if v := pricing.NormalizeCurrency(e.BillingCurrency); v != "" {
 		return v
 	}
 	// Infer from configured prices when field is absent (pre-migration).
 	if e.Price != nil {
-		if v := billing.NormalizeCurrency(e.Price.Currency); v != "" {
+		if v := pricing.NormalizeCurrency(e.Price.Currency); v != "" {
 			return v
 		}
 	}
@@ -99,7 +99,7 @@ func (e *ProviderEntry) ProviderBillingCurrency() string {
 		if p == nil {
 			continue
 		}
-		if v := billing.NormalizeCurrency(p.Currency); v != "" {
+		if v := pricing.NormalizeCurrency(p.Currency); v != "" {
 			return v
 		}
 	}
@@ -109,27 +109,27 @@ func (e *ProviderEntry) ProviderBillingCurrency() string {
 // ProviderBillingMode returns payg or subscription_equivalent.
 func (e *ProviderEntry) ProviderBillingMode() string {
 	if e == nil {
-		return billing.BillingModePAYG
+		return pricing.BillingModePAYG
 	}
 	switch strings.ToLower(strings.TrimSpace(e.BillingMode)) {
-	case billing.BillingModeSubscriptionEquivalent, "subscription", "token_plan":
-		return billing.BillingModeSubscriptionEquivalent
+	case pricing.BillingModeSubscriptionEquivalent, "subscription", "token_plan":
+		return pricing.BillingModeSubscriptionEquivalent
 	default:
-		return billing.BillingModePAYG
+		return pricing.BillingModePAYG
 	}
 }
 
-// RateCardForModel builds a billing.RateCard for the active model price.
-func (e *ProviderEntry) RateCardForModel(model string) billing.RateCard {
+// RateCardForModel builds a pricing.RateCard for the active model price.
+func (e *ProviderEntry) RateCardForModel(model string) pricing.RateCard {
 	p := e.PriceForModel(model)
 	if p == nil {
-		return billing.RateCard{Currency: e.ProviderBillingCurrency()}
+		return pricing.RateCard{Currency: e.ProviderBillingCurrency()}
 	}
-	cur := billing.NormalizeCurrency(p.Currency)
+	cur := pricing.NormalizeCurrency(p.Currency)
 	if cur == "" {
 		cur = e.ProviderBillingCurrency()
 	}
-	return billing.RateCard{
+	return pricing.RateCard{
 		CacheHit: p.CacheHit,
 		Input:    p.Input,
 		Output:   p.Output,
@@ -147,7 +147,7 @@ func freezeProviderBillingCurrencies(c *Config) {
 	for i := range c.Providers {
 		p := &c.Providers[i]
 		if strings.TrimSpace(p.BillingCurrency) != "" {
-			p.BillingCurrency = billing.NormalizeCurrency(p.BillingCurrency)
+			p.BillingCurrency = pricing.NormalizeCurrency(p.BillingCurrency)
 			continue
 		}
 		if cur := p.ProviderBillingCurrency(); cur != "" {
@@ -158,9 +158,9 @@ func freezeProviderBillingCurrencies(c *Config) {
 		}
 		if strings.TrimSpace(p.BillingMode) == "" {
 			if isMiMoTokenPlanProvider(p) {
-				p.BillingMode = billing.BillingModeSubscriptionEquivalent
+				p.BillingMode = pricing.BillingModeSubscriptionEquivalent
 			} else {
-				p.BillingMode = billing.BillingModePAYG
+				p.BillingMode = pricing.BillingModePAYG
 			}
 		}
 	}
@@ -221,21 +221,21 @@ func (c *Config) OfficialCatalogProvider(modelRef string) string {
 }
 
 // QuoteForUsage builds a CostQuote from a provider price and usage tokens.
-func QuoteForUsage(price *provider.Pricing, usage *provider.Usage, display string, modelRef, usageSource, billingMode, catalogSource string) billing.CostQuote {
+func QuoteForUsage(price *provider.Pricing, usage *provider.Usage, display string, modelRef, usageSource, billingMode, catalogSource string) pricing.CostQuote {
 	if price == nil || usage == nil {
-		return billing.CostQuote{Estimated: true, CostComplete: false, DisplayComplete: false, Complete: false, Coverage: billing.CoverageIncomplete, DisplayStatus: billing.DisplayStatusUnavailable, IncompleteReason: "missing_price_or_usage"}
+		return pricing.CostQuote{Estimated: true, CostComplete: false, DisplayComplete: false, Complete: false, Coverage: pricing.CoverageIncomplete, DisplayStatus: pricing.DisplayStatusUnavailable, IncompleteReason: "missing_price_or_usage"}
 	}
-	card := billing.RateCard{
+	card := pricing.RateCard{
 		CacheHit: price.CacheHit,
 		Input:    price.Input,
 		Output:   price.Output,
-		Currency: billing.NormalizeCurrency(price.Currency),
+		Currency: pricing.NormalizeCurrency(price.Currency),
 	}
 	if card.Currency == "" {
 		card.Currency = "CNY"
 	}
-	return billing.BuildQuote(billing.QuoteInput{
-		Usage: billing.UsageTokens{
+	return pricing.BuildQuote(pricing.QuoteInput{
+		Usage: pricing.UsageTokens{
 			PromptTokens:           usage.PromptTokens,
 			CompletionTokens:       usage.CompletionTokens,
 			CacheHitTokens:         usage.CacheHitTokens,

@@ -1,4 +1,4 @@
-package billing
+package pricing
 
 import (
 	"net/url"

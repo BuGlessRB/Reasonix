@@ -1,12 +1,12 @@
 package event
 
 import (
+	"reasonix/internal/contract/pricing"
 	"strings"
 	"sync"
 	"time"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 // QuoteContext supplies an explicit display request for the CostQuote
@@ -14,7 +14,7 @@ import (
 type QuoteContext struct {
 	mu              sync.RWMutex
 	DisplayCurrency string
-	DisplayRequest  billing.DisplayRequest
+	DisplayRequest  pricing.DisplayRequest
 	// Now overrides the clock in tests.
 	Now func() time.Time
 	// BillingModeForModel resolves provider-owned billing semantics from the
@@ -33,18 +33,18 @@ func (c *QuoteContext) SetDisplay(currency string) {
 		return
 	}
 	c.mu.Lock()
-	c.DisplayCurrency = billing.NormalizeCurrency(currency)
-	c.DisplayRequest = billing.DisplayRequest{Currency: c.DisplayCurrency, Source: billing.DisplaySourceExplicit}
+	c.DisplayCurrency = pricing.NormalizeCurrency(currency)
+	c.DisplayRequest = pricing.DisplayRequest{Currency: c.DisplayCurrency, Source: pricing.DisplaySourceExplicit}
 	c.mu.Unlock()
 }
 
-func (c *QuoteContext) SetDisplayRequest(request billing.DisplayRequest) {
+func (c *QuoteContext) SetDisplayRequest(request pricing.DisplayRequest) {
 	if c == nil {
 		return
 	}
-	request.Currency = billing.NormalizeCurrency(request.Currency)
+	request.Currency = pricing.NormalizeCurrency(request.Currency)
 	if request.Source == "" {
-		request.Source = billing.DisplaySourceAuto
+		request.Source = pricing.DisplaySourceAuto
 	}
 	c.mu.Lock()
 	c.DisplayRequest = request
@@ -52,9 +52,9 @@ func (c *QuoteContext) SetDisplayRequest(request billing.DisplayRequest) {
 	c.mu.Unlock()
 }
 
-func (c *QuoteContext) snapshot() (request billing.DisplayRequest, now time.Time) {
+func (c *QuoteContext) snapshot() (request pricing.DisplayRequest, now time.Time) {
 	if c == nil {
-		return billing.DisplayRequest{Source: billing.DisplaySourceAuto}, time.Now().UTC()
+		return pricing.DisplayRequest{Source: pricing.DisplaySourceAuto}, time.Now().UTC()
 	}
 	c.mu.RLock()
 	request = c.DisplayRequest
@@ -63,9 +63,9 @@ func (c *QuoteContext) snapshot() (request billing.DisplayRequest, now time.Time
 	}
 	if request.Source == "" {
 		if request.Currency != "" {
-			request.Source = billing.DisplaySourceExplicit
+			request.Source = pricing.DisplaySourceExplicit
 		} else {
-			request.Source = billing.DisplaySourceAuto
+			request.Source = pricing.DisplaySourceAuto
 		}
 	}
 	nowFn := c.Now
@@ -134,29 +134,29 @@ func (s *CostQuoteSink) Emit(e Event) {
 }
 
 // EnsureCostQuote builds a CostQuote for an event when missing.
-func EnsureCostQuote(e Event, ctx *QuoteContext) *billing.CostQuote {
+func EnsureCostQuote(e Event, ctx *QuoteContext) *pricing.CostQuote {
 	if e.Usage == nil {
 		return nil
 	}
 	display, now := ctx.snapshot()
 	if e.Pricing == nil {
-		q := billing.CostQuote{
+		q := pricing.CostQuote{
 			Estimated: true, CostComplete: false, DisplayComplete: false, Complete: false,
-			Coverage:      billing.CoverageIncomplete,
-			DisplayStatus: billing.DisplayStatusUnavailable, IncompleteReason: "no_price",
+			Coverage:      pricing.CoverageIncomplete,
+			DisplayStatus: pricing.DisplayStatusUnavailable, IncompleteReason: "no_price",
 			ModelRef: e.ModelRef, UsageSource: e.UsageSource,
 		}
 		return &q
 	}
-	mode := billing.BillingModePAYG
+	mode := pricing.BillingModePAYG
 	if configured := ctx.billingMode(e.ModelRef); configured != "" {
 		mode = configured
 	} else if strings.Contains(strings.ToLower(e.ModelRef), "token-plan") ||
 		strings.Contains(strings.ToLower(e.Source), "token-plan") {
-		mode = billing.BillingModeSubscriptionEquivalent
+		mode = pricing.BillingModeSubscriptionEquivalent
 	}
 	card := rateCardFromPricing(e.Pricing)
-	q := billing.BuildQuote(billing.QuoteInput{
+	q := pricing.BuildQuote(pricing.QuoteInput{
 		Usage:        usageTokens(e.Usage),
 		Rates:        card,
 		OccurredAt:   now,
@@ -179,23 +179,23 @@ func firstUsageSource(e Event) string {
 	return UsageSourceExecutor
 }
 
-func rateCardFromPricing(p *provider.Pricing) billing.RateCard {
+func rateCardFromPricing(p *provider.Pricing) pricing.RateCard {
 	if p == nil {
-		return billing.RateCard{}
+		return pricing.RateCard{}
 	}
-	return billing.RateCard{
+	return pricing.RateCard{
 		CacheHit: p.CacheHit,
 		Input:    p.Input,
 		Output:   p.Output,
-		Currency: billing.NormalizeCurrency(p.Currency),
+		Currency: pricing.NormalizeCurrency(p.Currency),
 	}
 }
 
-func usageTokens(u *provider.Usage) billing.UsageTokens {
+func usageTokens(u *provider.Usage) pricing.UsageTokens {
 	if u == nil {
-		return billing.UsageTokens{}
+		return pricing.UsageTokens{}
 	}
-	return billing.UsageTokens{
+	return pricing.UsageTokens{
 		PromptTokens:           u.PromptTokens,
 		CompletionTokens:       u.CompletionTokens,
 		CacheHitTokens:         u.CacheHitTokens,

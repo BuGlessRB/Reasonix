@@ -2,12 +2,12 @@ package serve
 
 import (
 	"encoding/json"
+	"reasonix/internal/contract/pricing"
 	"sync"
 	"time"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/eventwire"
-	"reasonix/internal/model/billing"
 )
 
 // Broadcaster is the event.Sink the controller emits to in server mode: one
@@ -18,7 +18,7 @@ import (
 type Broadcaster struct {
 	mu              sync.Mutex
 	subs            map[*subscriber]struct{}
-	ledger          *billing.Ledger
+	ledger          *pricing.Ledger
 	displayCurrency string
 	// The transport's, not the session's: numbering outlives /new and /resume, so
 	// resuming across one is told to rebuild rather than handed another
@@ -29,7 +29,7 @@ type Broadcaster struct {
 
 // NewBroadcaster returns an empty Broadcaster ready to accept subscribers.
 func NewBroadcaster() *Broadcaster {
-	return &Broadcaster{subs: map[*subscriber]struct{}{}, ledger: billing.NewLedger()}
+	return &Broadcaster{subs: map[*subscriber]struct{}{}, ledger: pricing.NewLedger()}
 }
 
 // droppable reports whether losing this frame degrades the view rather than
@@ -53,7 +53,7 @@ func (b *Broadcaster) SetDisplayCurrency(currency string) {
 		return
 	}
 	b.mu.Lock()
-	b.displayCurrency = billing.NormalizeCurrency(currency)
+	b.displayCurrency = pricing.NormalizeCurrency(currency)
 	b.mu.Unlock()
 }
 
@@ -78,20 +78,20 @@ func (b *Broadcaster) ResetSession() {
 		return
 	}
 	b.mu.Lock()
-	b.ledger = billing.NewLedger()
+	b.ledger = pricing.NewLedger()
 	b.replay.reset()
 	b.mu.Unlock()
 }
 
 // SessionCostQuote returns the current aggregate quote without repricing.
-func (b *Broadcaster) SessionCostQuote() billing.CostQuote {
+func (b *Broadcaster) SessionCostQuote() pricing.CostQuote {
 	if b == nil {
-		return billing.AggregateQuotes(nil, "")
+		return pricing.AggregateQuotes(nil, "")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.ledger == nil {
-		b.ledger = billing.NewLedger()
+		b.ledger = pricing.NewLedger()
 	}
 	return b.ledger.Total(b.displayCurrency)
 }
@@ -119,9 +119,9 @@ func (b *Broadcaster) Emit(e event.Event) {
 	}
 	if e.Kind == event.Usage && e.Usage != nil && e.CostQuote != nil {
 		if b.ledger == nil {
-			b.ledger = billing.NewLedger()
+			b.ledger = pricing.NewLedger()
 		}
-		b.ledger.Add(*e.CostQuote, billing.UsageTokens{
+		b.ledger.Add(*e.CostQuote, pricing.UsageTokens{
 			PromptTokens: e.Usage.PromptTokens, CompletionTokens: e.Usage.CompletionTokens,
 			CacheHitTokens: e.Usage.CacheHitTokens, CacheMissTokens: e.Usage.CacheMissTokens,
 			CacheWriteTokens: e.Usage.CacheWriteTokens, CacheWriteBilledTokens: e.Usage.CacheWriteBilledTokens,

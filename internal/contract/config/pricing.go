@@ -2,10 +2,10 @@ package config
 
 import (
 	"fmt"
+	"reasonix/internal/contract/pricing"
 	"strings"
 
 	"reasonix/internal/contract/provider"
-	"reasonix/internal/model/billing"
 )
 
 // DeepSeek's rates live in billing's history, which publishes the current
@@ -15,13 +15,13 @@ func deepSeekOfficialRate(model, currency string) *provider.Pricing {
 	return officialVendorPrice("deepseek", currency, model)
 }
 
-func pricingFromRateCard(card *billing.RateCard) *provider.Pricing {
+func pricingFromRateCard(card *pricing.RateCard) *provider.Pricing {
 	if card == nil {
 		return nil
 	}
 	return &provider.Pricing{
 		CacheHit: card.CacheHit, Input: card.Input, Output: card.Output,
-		Currency: billing.CurrencySymbol(card.Currency),
+		Currency: pricing.CurrencySymbol(card.Currency),
 	}
 }
 
@@ -55,7 +55,7 @@ func deepSeekOfficialPricesForConfig(c *Config) map[string]*provider.Pricing {
 }
 
 func deepSeekOfficialPriceForModel(currency, model string) *provider.Pricing {
-	return clonePricing(DeepSeekOfficialPricesForCurrency(currency)[billing.RateModelFor("deepseek", model)])
+	return clonePricing(DeepSeekOfficialPricesForCurrency(currency)[pricing.RateModelFor("deepseek", model)])
 }
 
 // DeepSeekOfficialPricingLanguage is retained for older settings/template call
@@ -103,7 +103,7 @@ func applyOfficialDefaultPricingWithOverride(c *Config, overridePersisted bool) 
 		}
 		currency := p.ProviderBillingCurrency()
 		if currency == "" {
-			currency = billing.DefaultCurrency(vendor)
+			currency = pricing.DefaultCurrency(vendor)
 		}
 		// Only refresh when the row still matches a known official default in
 		// the provider's own billing currency. Display currency must not win.
@@ -204,7 +204,7 @@ func officialVendorPrices(vendor, currency string, models []string) map[string]*
 }
 
 func officialVendorPrice(vendor, currency, model string) *provider.Pricing {
-	return pricingFromRateCard(billing.CurrentRate(vendor, model, currency))
+	return pricingFromRateCard(pricing.CurrentRate(vendor, model, currency))
 }
 
 func mimoDomesticPrices(models []string) map[string]*provider.Pricing {
@@ -353,7 +353,7 @@ func supersededOfficialRefresh(vendor, model string, price *provider.Pricing) *p
 	if price == nil {
 		return nil
 	}
-	for _, card := range billing.SupersededRates(vendor, model, price.Currency) {
+	for _, card := range pricing.SupersededRates(vendor, model, price.Currency) {
 		if samePricing(price, pricingFromRateCard(&card)) {
 			return officialVendorPrice(vendor, price.Currency, model)
 		}

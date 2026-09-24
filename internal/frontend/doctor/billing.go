@@ -2,11 +2,11 @@ package doctor
 
 import (
 	"fmt"
+	"reasonix/internal/contract/pricing"
 	"strings"
 	"time"
 
 	"reasonix/internal/contract/config"
-	"reasonix/internal/model/billing"
 )
 
 // BillingReport is the structured output of `reasonix doctor billing`.
@@ -70,17 +70,17 @@ func CollectBilling(cfg *config.Config) BillingReport {
 		}
 		price := p.PriceForModel(p.Model)
 		if price != nil {
-			info.PriceCurrency = billing.NormalizeCurrency(price.Currency)
+			info.PriceCurrency = pricing.NormalizeCurrency(price.Currency)
 			info.PriceInput = price.Input
 			info.PriceOutput = price.Output
 			info.PriceCacheHit = price.CacheHit
-			card := billing.RateCard{
+			card := pricing.RateCard{
 				CacheHit: price.CacheHit, Input: price.Input, Output: price.Output,
 				Currency: info.PriceCurrency,
 			}
-			info.Fingerprint = billing.PricingFingerprint(card)
+			info.Fingerprint = pricing.PricingFingerprint(card)
 			providerKind := officialKindForBilling(p)
-			if entry, ok := billing.MatchesCatalog(providerKind, p.Model, card); ok {
+			if entry, ok := pricing.MatchesCatalog(providerKind, p.Model, card); ok {
 				info.CatalogMatch = true
 				info.CatalogSource = entry.DocURL
 			} else if price != nil {
@@ -113,7 +113,7 @@ func officialKindForBilling(p *config.ProviderEntry) string {
 	if p == nil {
 		return ""
 	}
-	return billing.OfficialProviderForEndpoint(p.BaseURL)
+	return pricing.OfficialProviderForEndpoint(p.BaseURL)
 }
 
 // RenderBillingText formats a human-readable billing doctor report.

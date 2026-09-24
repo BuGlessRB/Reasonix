@@ -14,12 +14,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reasonix/internal/contract/pricing"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"reasonix/internal/model/billing"
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/state/projectiondb"
@@ -50,7 +49,7 @@ type Entry struct {
 	Total      int
 	Requests   int
 	Turns      int
-	// Cost is billing.Amount fixed-point, never a float. CostCurrency is empty
+	// Cost is pricing.Amount fixed-point, never a float. CostCurrency is empty
 	// on rows written before cost was recorded, which is not the same as zero.
 	Cost          int64
 	CostCurrency  string
@@ -457,7 +456,7 @@ func costOf(raw rawRecord) int64 {
 	if strings.TrimSpace(raw.CostAmount) == "" {
 		return 0
 	}
-	amount, err := billing.ParseAmount(raw.CostAmount)
+	amount, err := pricing.ParseAmount(raw.CostAmount)
 	if err != nil {
 		return 0
 	}
@@ -479,7 +478,7 @@ func entryFromRaw(day string, raw rawRecord) Entry {
 	return Entry{Day: day, Source: raw.Source, ModelRef: raw.ModelRef, Provider: providerOf(raw.ModelRef), Prompt: raw.Prompt,
 		Completion: raw.Completion, Reasoning: raw.Reasoning, CacheHit: raw.CacheHit, CacheMiss: raw.CacheMiss,
 		Total: raw.Total, Requests: raw.Requests, Turns: turns,
-		Cost: costOf(raw), CostCurrency: billing.NormalizeCurrency(raw.CostCurrency), CostEstimated: raw.CostEstimated}
+		Cost: costOf(raw), CostCurrency: pricing.NormalizeCurrency(raw.CostCurrency), CostEstimated: raw.CostEstimated}
 }
 
 // recordDays is every day the file's records were filed under, plus the day it

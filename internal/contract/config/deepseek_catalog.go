@@ -1,9 +1,8 @@
 package config
 
 import (
+	"reasonix/internal/contract/pricing"
 	"strings"
-
-	"reasonix/internal/model/billing"
 )
 
 // The vendor folded its Flash names into one model that reads images, so a
@@ -23,7 +22,7 @@ const deepSeekProModel = "deepseek-v4-pro"
 // its price — measured 2026-09-13, including the image read the first of them
 // never had. Migrated rather than kept: the reply echoes the name it was asked
 // by, so a list carrying one of these reports a model nobody serves.
-var retiredDeepSeekFlashModels = billing.RetiredDeepSeekFlashModels()
+var retiredDeepSeekFlashModels = pricing.RetiredDeepSeekFlashModels()
 
 // retiredDeepSeekVisionProvider was the connection shipped when reading images
 // needed a model of its own. It folds into the flash entry, which now does that.
