@@ -1184,8 +1184,6 @@
   .copy[data-state="done"] { color: var(--ok) }
   .copy[data-state="failed"] { color: var(--warn-ink) }
 
-  .code-copy span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%) }
-  .code-copy { padding: 5px }
 
   .out .txt.bad { padding-left: 10px; border-left: 2px solid var(--warn) }
 
@@ -3830,13 +3828,48 @@
     border-left: 2px solid var(--border); color: var(--faint);
   }
 
-  .code-wrap { position: relative; margin: 0 0 .7em }
-  .code-wrap > pre.term {
-    margin: 0; padding-top: 22px; border-radius: var(--r-md);
-    background: var(--face-code); border: 1px solid var(--hair);
-
-    tab-size: 4;
+  .code-wrap {
+    position: relative; margin: 0 0 .7em; overflow: hidden;
+    border: 1px solid var(--hair); border-radius: var(--r-md); background: var(--face-code);
+    transition: border-color var(--m-line);
   }
+  .code-wrap:hover { border-color: color-mix(in oklab, var(--border), var(--muted) 34%) }
+  .code-hd {
+    display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 6px 0 12px;
+    border-bottom: 1px solid var(--hair); background: color-mix(in oklab, var(--face-code), var(--text) 3%);
+  }
+  .code-lang { font: var(--w-med) var(--fs-meta) var(--ui); color: var(--muted) }
+  .code-lines { font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost) }
+  .code-acts { display: flex; gap: 2px; margin-inline-start: auto }
+  .code-act {
+    display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+    border: 0; border-radius: var(--r-sm); background: transparent; color: var(--faint); cursor: pointer;
+    transition: color var(--m-line), background var(--m-line);
+  }
+  .code-act:hover, .code-act:focus-visible { color: var(--text); background: var(--overlay) }
+  .code-act .studio-icon { width: 14px; height: 14px }
+  .code-act[data-state="done"] { color: var(--ok) }
+  .code-body { display: flex; align-items: flex-start }
+  .code-gutter {
+    flex: none; padding: 11px 10px 12px 12px; text-align: end;
+    font: var(--w-reg) var(--fs-ui)/19px var(--mono); color: var(--ghost); user-select: none;
+    border-inline-end: 1px solid var(--hair);
+  }
+  .code-gutter > span { display: block }
+  .code-body > pre.term { flex: 1; min-width: 0; margin: 0; border-radius: 0; background: none; tab-size: 4 }
+  .code-wrap[data-folded] .code-body {
+    max-height: calc(19px * 12 + 11px); overflow: hidden;
+    mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  }
+  .code-more {
+    display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 30px;
+    border: 0; border-top: 1px solid var(--hair); background: transparent; color: var(--faint);
+    font: var(--w-reg) var(--fs-meta) var(--ui); cursor: pointer;
+    transition: color var(--m-line), background var(--m-line);
+  }
+  .code-more:hover, .code-more:focus-visible { color: var(--text); background: var(--overlay) }
+  .code-more .studio-icon { width: 13px; height: 13px; transform: rotate(90deg); transition: transform var(--m-line) }
+  .code-more[aria-expanded="true"] .studio-icon { transform: rotate(-90deg) }
   .md pre.term code { font: inherit; color: inherit; white-space: pre }
   .md pre.term .hljs-comment, .md pre.term .hljs-quote { color: var(--faint); font-style: italic }
   .md pre.term :is(.hljs-punctuation, .hljs-operator, .hljs-meta, .hljs-params, .hljs-subst) { color: var(--muted) }
@@ -3848,27 +3881,6 @@
   .md pre.term :is(.hljs-strong, .hljs-title.function_, .hljs-title.class_) { font-weight: var(--w-med) }
   .md pre.term .hljs-emphasis { font-style: italic }
 
-  .code-wrap::after {
-    content: attr(data-lang); position: absolute; top: 6px; inset-inline-end: 12px;
-    font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap);
-    text-transform: uppercase; color: var(--ghost); transition: opacity var(--m-line);
-    pointer-events: none;
-  }
-  .code-wrap:hover::after, .code-wrap:focus-within::after { opacity: 0 }
-  .code-copy {
-    position: absolute; top: 4px; inset-inline-end: 6px; opacity: 0;
-    transition: opacity var(--m-line), color var(--m-line), background var(--m-line);
-  }
-  .code-wrap:hover > .code-copy, .code-copy:focus-visible { opacity: 1 }
-  .md[data-live] .code-copy { display: none }
-
-  @media (hover: none) {
-    .code-copy { opacity: 1 }
-    .code-wrap::after { opacity: 0 }
-  }
-
-  .code-wrap > pre.term { transition: border-color var(--m-line) }
-  .code-wrap:hover > pre.term { border-color: color-mix(in oklab, var(--border), var(--muted) 34%) }
   .md mark { background: var(--accent-wash); color: var(--text); padding: 0 2px; border-radius: var(--r-xs) }
   .md sub, .md sup { font-size: .75em; line-height: 0 }
   .md kbd {

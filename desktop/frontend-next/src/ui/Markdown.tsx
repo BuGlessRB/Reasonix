@@ -1,7 +1,6 @@
 import { isValidElement, memo, useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
-import { t } from "../i18n";
-import { CopyButton } from "./CopyButton";
+import { CodeBlock } from "./CodeBlock";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { remarkTrimAutolink } from "./autolink";
@@ -163,7 +162,9 @@ export interface LocalRefs {
   image(src: string): string | null;
 }
 
-const Block = memo(function Block({ src, math, emoji, code, tail, local }: { src: string; math: Plugin | null; emoji: Plugin | null; code: Plugin | null; tail?: boolean; local?: LocalRefs }) {
+// live is the tail of a message still arriving; tail alone is only the last
+// block, which a settled message has too.
+const Block = memo(function Block({ src, math, emoji, code, tail, live, local }: { src: string; math: Plugin | null; emoji: Plugin | null; code: Plugin | null; tail?: boolean; live?: boolean; local?: LocalRefs }) {
   // Inside the memo, so a settled block normalises once instead of per chunk.
   const body = normalizeMath(tail ? balanceFences(src) : src);
   return (
@@ -201,10 +202,7 @@ const Block = memo(function Block({ src, math, emoji, code, tail, local }: { src
           <img src={(local && typeof src === "string" && local.image(src)) || (src as string | undefined)} alt={alt} title={title} />
         ),
         pre: ({ children }) => (
-          <div className="code-wrap" data-lang={langOf(children) || undefined}>
-            <pre className="term">{children}</pre>
-            <CopyButton text={textOf(children)} className="code-copy" label={t("复制这段代码")} />
-          </div>
+          <CodeBlock lang={langOf(children)} source={textOf(children)} live={live}>{children}</CodeBlock>
         ),
         table: ({ children }) => (
           <div className="md-tw">
@@ -239,7 +237,7 @@ export function Markdown({ text, streaming, local }: { text: string; streaming?:
       {parts.map((p, i) => (
         <Block key={i} src={p} math={math} emoji={emoji} code={code} local={local} />
       ))}
-      <Block src={shown.slice(at)} math={math} emoji={emoji} code={code} local={local} tail />
+      <Block src={shown.slice(at)} math={math} emoji={emoji} code={code} local={local} tail live={streaming} />
       {streaming && <span className="caret" />}
     </div>
   );
