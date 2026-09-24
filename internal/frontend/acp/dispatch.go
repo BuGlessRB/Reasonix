@@ -486,6 +486,12 @@ func (s *updateSink) requestAsk(ctx context.Context, a event.Ask) {
 	if s.answer == nil {
 		return
 	}
+	// ACP has nothing but the permission prompt to show a question in, and a
+	// server's form drawn there reads as the agent asking leave. It is declined.
+	if a.Origin != nil {
+		s.answer(a.ID, nil)
+		return
+	}
 	answers := make([]event.AskAnswer, 0, len(a.Questions))
 	for _, q := range a.Questions {
 		selected, ok := s.requestAskQuestion(ctx, a.ID, q)

@@ -1395,6 +1395,34 @@ func TestHelperProcess(t *testing.T) {
 			result = map[string]any{"content": []map[string]any{
 				{"type": "text", "text": "echo: " + p.Arguments.Msg},
 			}}
+			// GO_WANT_HELPER_ELICIT asks the client for a form mid call, the way
+			// a 2025-11-25 server does over stdio, and reports what came back.
+			if os.Getenv("GO_WANT_HELPER_ELICIT") == "1" {
+				ask, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": "e1", "method": "elicitation/create", "params": map[string]any{
+					"message": "Who is deploying?",
+					"requestedSchema": map[string]any{"type": "object", "required": []string{"name"}, "properties": map[string]any{
+						"name": map[string]any{"type": "string", "title": "Name"},
+						"age":  map[string]any{"type": "integer", "minimum": 0},
+					}},
+				}})
+				os.Stdout.Write(append(ask, '\n'))
+				var answer json.RawMessage
+				for answer == nil {
+					reply, err := in.ReadBytes('\n')
+					if err != nil {
+						return
+					}
+					var r struct {
+						ID     string          `json:"id"`
+						Result json.RawMessage `json:"result"`
+						Error  json.RawMessage `json:"error"`
+					}
+					if json.Unmarshal(reply, &r) == nil && r.ID == "e1" {
+						answer = append(r.Result, r.Error...)
+					}
+				}
+				result = map[string]any{"content": []map[string]any{{"type": "text", "text": "elicited: " + string(answer)}}}
+			}
 		}
 
 		resp := map[string]any{"jsonrpc": "2.0", "id": *req.ID, "result": result}

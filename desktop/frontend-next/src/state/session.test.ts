@@ -482,6 +482,16 @@ describe("a question the run is still blocked on", () => {
     const s = reduce(local, receipt("apv-1", "allow_session"));
     expect((s.items[0] as Extract<Item, { t: "approval" }>).verdict).toBe("always");
   });
+
+  // The receipt can also overtake the answer's own reply. The card then reads
+  // what this window sent, not "handled in another window".
+  it("keeps this window's answer when the receipt overtook it", () => {
+    const racing = run([asking("ask-1"), receipt("ask-1", "answered")]);
+    const s = reduce(racing, { kind: "__decided", id: racing.items[0].id, answers: [["B"]] } as SessionEvent);
+    const ask = s.items[0] as Extract<Item, { t: "ask" }>;
+    expect(ask.answeredElsewhere).toBe(false);
+    expect(ask.answered).toEqual([["B"]]);
+  });
 });
 
 // A session's coverage is the kernel's answer, not this side's running guess:

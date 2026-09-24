@@ -265,6 +265,10 @@ func (c *Controller) refreshInteractiveGate() {
 // tool exists to get a genuine user decision, and YOLO only auto-approves
 // tool calls; it must not answer the user's questions for them.
 func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]event.AskAnswer, error) {
+	return c.ask(ctx, questions, nil)
+}
+
+func (c *Controller) ask(ctx context.Context, questions []event.AskQuestion, origin *event.AskOrigin) ([]event.AskAnswer, error) {
 	// Registering after the lock left a queued question invisible everywhere:
 	// no event, absent from the snapshot, unreachable by ReplayPendingPrompts.
 	// The record comes first: registration is what makes it answerable.
@@ -272,7 +276,7 @@ func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]
 	if err := c.openBarrier(id, string(DecisionAsk), barrierSummary(questions)); err != nil {
 		return nil, err
 	}
-	reply := c.approval.registerAsk(id, questions)
+	reply := c.approval.registerAsk(id, questions, origin)
 
 	if !c.lockPromptFor(ctx, "question") {
 		c.approval.cancelAsk(id)
@@ -283,7 +287,7 @@ func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]
 
 	c.approval.promptEmitMu.Lock()
 	c.approval.markAskEmitted(id)
-	c.sink.Emit(event.Event{Kind: event.AskRequest, Ask: event.Ask{ID: id, Questions: questions}})
+	c.sink.Emit(event.Event{Kind: event.AskRequest, Ask: event.Ask{ID: id, Questions: questions, Origin: origin}})
 	c.approval.promptEmitMu.Unlock()
 
 	waitCtx, cancelWait := c.approval.waitContext(ctx)
@@ -310,10 +314,10 @@ func (c *Controller) AnswerQuestion(id string, answers []event.AskAnswer) {
 // which the answer's receipt names and nothing else reads.
 func (c *Controller) AnswerQuestionFrom(id string, answers []event.AskAnswer, via *provider.Via) {
 	if pending, ok := c.approval.resolveAsk(id); ok {
-		// An answer batch with no selections is the explicit "skip and continue
-		// chat" path. End the current turn instead of feeding a prose dismissal
-		// back to the model and trusting it not to ask again (#6869).
-		if !askAnswersHaveSelection(answers) {
+		// No selections is the explicit "skip" path: it ends the turn rather than
+		// feeding a prose dismissal back to the model (#6869). An external
+		// party's form is refused to that party instead, and the turn goes on.
+		if !askAnswersHaveSelection(answers) && pending.origin == nil {
 			c.mu.Lock()
 			activeTurn := c.gate.cancel != nil
 			c.mu.Unlock()
@@ -350,11 +354,15 @@ func (c *Controller) recordAskDecisionReceipt(id string, pending pendingAsk, ans
 		}
 		parts = append(parts, prompt+": "+answer)
 	}
+	subject, outcome := clipUTF8(strings.Join(parts, " · "), 240), "answered"
+	if pending.origin != nil {
+		subject, outcome = formReceipt(pending.origin, pending.questions, answers)
+	}
 	receipt := &provider.DecisionReceipt{
 		ID:      id,
 		Kind:    "ask",
-		Subject: clipUTF8(strings.Join(parts, " · "), 240),
-		Outcome: "answered",
+		Subject: subject,
+		Outcome: outcome,
 		Via:     via,
 	}
 	c.executor.Session().AddDecisionReceipt(receipt)
@@ -362,7 +370,7 @@ func (c *Controller) recordAskDecisionReceipt(id string, pending pendingAsk, ans
 		Kind:            event.Notice,
 		Code:            event.NoticeCodeDecisionReceipt,
 		Level:           event.LevelInfo,
-		Text:            "Decision recorded: answered",
+		Text:            "Decision recorded: " + outcome,
 		DecisionReceipt: receipt,
 	})
 }

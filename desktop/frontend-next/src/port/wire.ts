@@ -267,11 +267,22 @@ export interface AskQuestion {
   reason?: "user_decision" | "missing_value";
   options: AskOption[];
   multi?: boolean;
+  // Prefilled answer: a form sent back to be corrected keeps what was given.
+  default?: string[];
+}
+
+// Who is asking, when it is not the agent: an MCP server's form.
+export interface AskOrigin {
+  kind: "mcp";
+  source: string;
+  message?: string;
+  note?: string;
 }
 
 export interface Ask {
   id: string;
   questions: AskQuestion[];
+  origin?: AskOrigin;
 }
 
 export interface Guardian {

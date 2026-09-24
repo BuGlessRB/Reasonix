@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/contract/tool"
 )
 
 // modernServer is a strict 2026-07-28 Streamable HTTP server: it refuses
@@ -91,8 +93,14 @@ func (m *modernServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.rounds++
 		m.mu.Unlock()
 		if req.Params["name"] == "form" {
+			if answers, ok := req.Params["inputResponses"].(map[string]any); ok {
+				who, _ := json.Marshal(answers["who"])
+				result = map[string]any{"resultType": "complete", "content": []map[string]any{{"type": "text", "text": string(who)}}}
+				break
+			}
 			result = map[string]any{"resultType": "input_required", "inputRequests": map[string]any{
-				"who": map[string]any{"method": "elicitation/create", "params": map[string]any{"mode": "form", "message": "Name?"}},
+				"who": map[string]any{"method": "elicitation/create", "params": map[string]any{"mode": "form", "message": "Name?",
+					"requestedSchema": map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}}}}},
 			}}
 			break
 		}
@@ -168,8 +176,12 @@ func TestModernHTTPServerIsReachedWithoutAHandshake(t *testing.T) {
 	if got := last.Get("Mcp-Param-Region"); got != encodeHeaderValue("亚太-1") || !strings.HasPrefix(got, "=?base64?") {
 		t.Fatalf("Mcp-Param-Region = %q, want the base64 form of a non-ASCII value", got)
 	}
-	if _, err := form.Execute(ctx, json.RawMessage(`{}`)); !errors.Is(err, ErrMCPInputRequired) {
-		t.Fatalf("elicitation err = %v, want ErrMCPInputRequired", err)
+	if out, err := form.Execute(ctx, json.RawMessage(`{}`)); err != nil || out != `{"action":"decline"}` {
+		t.Fatalf("a form with nobody to ask = %q, %v; want declined", out, err)
+	}
+	person := &fakeElicitor{replies: []tool.ElicitReply{{Values: map[string][]string{"name": {"Ada"}}}}}
+	if out, err := form.Execute(tool.WithElicitor(ctx, person), json.RawMessage(`{}`)); err != nil || out != `{"action":"accept","content":{"name":"Ada"}}` {
+		t.Fatalf("a form answered = %q, %v", out, err)
 	}
 }
 

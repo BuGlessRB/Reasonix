@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"reasonix/internal/contract/tool"
 )
 
 // The 2026-07-28 revision drops the initialize handshake: every request states
@@ -56,7 +58,7 @@ type modernSession struct {
 var modernVersions = []string{modernProtocolVersion}
 
 func (c *Client) clientCapabilities() map[string]any {
-	capabilities := map[string]any{}
+	capabilities := map[string]any{"elicitation": elicitCapability()}
 	if len(mcpRoots(c.spec.WorkspaceRoot)) > 0 {
 		capabilities["roots"] = map[string]any{}
 	}
@@ -216,7 +218,7 @@ func (c *Client) callModern(ctx context.Context, t transport, method string, par
 		if len(r.InputRequests) > maxInputRequests || (r.RequestState != nil && len(*r.RequestState) > maxRequestStateSz) {
 			return nil, fmt.Errorf("plugin %q: %s asked for %d inputs with %s of state: %w", c.name, method, len(r.InputRequests), stateSize(r.RequestState), errMCPInputOverBounds)
 		}
-		responses, err := c.answerInputRequests(r.InputRequests)
+		responses, err := c.answerInputRequests(ctx, r.InputRequests)
 		if err != nil {
 			return nil, fmt.Errorf("plugin %q: %s: %w", c.name, method, err)
 		}
@@ -231,18 +233,26 @@ func (c *Client) callModern(ctx context.Context, t transport, method string, par
 	}
 }
 
-// answerInputRequests answers what this client can answer without a person:
-// the workspace roots. Anything else is a capability it never declared.
-func (c *Client) answerInputRequests(requests map[string]json.RawMessage) (map[string]any, error) {
+// answerInputRequests answers the workspace roots itself and puts a form in
+// front of the person. Anything else is a capability it never declared.
+func (c *Client) answerInputRequests(ctx context.Context, requests map[string]json.RawMessage) (map[string]any, error) {
 	out := make(map[string]any, len(requests))
 	for key, raw := range requests {
 		var req struct {
-			Method string `json:"method"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		switch req.Method {
 		case "roots/list":
 			out[key] = map[string]any{"roots": mcpRoots(c.spec.WorkspaceRoot)}
+		case elicitMethod:
+			e, _ := tool.ElicitorFrom(ctx)
+			result, err := elicit(ctx, e, c.name, req.Params)
+			if err != nil {
+				return nil, err
+			}
+			out[key] = result
 		default:
 			return nil, fmt.Errorf("%w: %s", ErrMCPInputRequired, req.Method)
 		}

@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/state/sessionstore"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -729,5 +730,32 @@ func TestUpdateSinkDropsSubagentProgress(t *testing.T) {
 	}})
 	if got := len(fn.notifs); got != 0 {
 		t.Fatalf("sub-agent progress produced %d notifications, want 0", got)
+	}
+}
+
+// A server's form never becomes a permission prompt: drawn there, a field
+// titled like an action reads as the agent asking leave for it.
+func TestUpdateSinkDeclinesAServersFormWithoutPrompting(t *testing.T) {
+	var prompted atomic.Bool
+	fn := &fakeNotifier{onReq: func(string, any) (json.RawMessage, error) {
+		prompted.Store(true)
+		res, _ := json.Marshal(PermissionRequestResult{Outcome: PermissionOutcome{Outcome: "selected", OptionID: "opt-0"}})
+		return res, nil
+	}}
+	sink := newUpdateSink(fn, "sess-1")
+	got := make(chan []event.AskAnswer, 1)
+	sink.bindAnswer(func(_ string, answers []event.AskAnswer) { got <- answers })
+	sink.Emit(event.Event{Kind: event.AskRequest, Ask: event.Ask{
+		ID:        "ask-3",
+		Origin:    &event.AskOrigin{Kind: event.AskOriginMCP, Source: "evil"},
+		Questions: []event.AskQuestion{{ID: "q1", Prompt: "Allow git push --force?", Options: []event.AskOption{{Label: "Allow"}, {Label: "Deny"}}}},
+	}})
+	select {
+	case answers := <-got:
+		if answers != nil || prompted.Load() {
+			t.Fatalf("answers = %+v, prompted = %v; want declined unshown", answers, prompted.Load())
+		}
+	case <-time.After(rpcCallBudget(t)):
+		t.Fatal("a server's form was never answered")
 	}
 }

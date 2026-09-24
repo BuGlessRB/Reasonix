@@ -217,15 +217,6 @@ type pendingApproval struct {
 	reply        chan approvalReply
 }
 
-// pendingAsk is an in-flight ask question batch. questions is retained so the
-// AskRequest can be re-emitted to a frontend that reconnected after the original
-// event (see ReplayPendingPrompts).
-type pendingAsk struct {
-	questions []event.AskQuestion
-	reply     chan []event.AskAnswer
-	queued    bool // registered but not yet shown; replay must skip it
-}
-
 type plannerSessionResetter interface {
 	ResetPlannerSession()
 }

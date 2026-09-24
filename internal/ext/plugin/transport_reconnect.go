@@ -217,6 +217,18 @@ func (t *reconnectingTransport) setProtocolVersion(version string) {
 	}
 }
 
+// registerElicitCall reaches the connection live when the call starts; a call
+// that outlives its connection has lost the server that would ask.
+func (t *reconnectingTransport) registerElicitCall(ctx context.Context) func() {
+	t.mu.Lock()
+	router, ok := t.active.(elicitTransport)
+	t.mu.Unlock()
+	if !ok {
+		return func() {}
+	}
+	return router.registerElicitCall(ctx)
+}
+
 func (t *reconnectingTransport) registerProgress(token string, sink tool.ProgressFunc) func() {
 	if token == "" || sink == nil {
 		return func() {}

@@ -9,6 +9,7 @@ import { ToolCard } from "./cards/ToolCard";
 import { GuardianCard } from "./cards/GuardianCard";
 import { ApprovalCard, type PlanAction } from "./cards/ApprovalCard";
 import { AskCard } from "./cards/AskCard";
+import { ElicitCard } from "./cards/ElicitCard";
 import { SayCard, type ReplyActions } from "./cards/SayCard";
 import { CompactionCard } from "./cards/CompactionCard";
 import { ReceiptCard } from "./cards/ReceiptCard";
@@ -687,7 +688,7 @@ const Row = memo(function Row({
     case "approval":
       return <ApprovalCard item={it} onApprove={onApprove} onFullAccess={onFullAccess} onPlan={onPlan} />;
     case "ask":
-      return <AskCard item={it} onAnswer={onAnswer} />;
+      return it.ask.origin ? <ElicitCard item={it} onAnswer={onAnswer} /> : <AskCard item={it} onAnswer={onAnswer} />;
     case "compaction":
       return <CompactionCard c={it.c} done={it.done} />;
 

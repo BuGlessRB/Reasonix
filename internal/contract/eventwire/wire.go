@@ -380,12 +380,22 @@ type AskQuestion struct {
 	Reason  string      `json:"reason,omitempty"`
 	Options []AskOption `json:"options"`
 	Multi   bool        `json:"multi,omitempty"`
+	Default []string    `json:"default,omitempty"`
+}
+
+// AskOrigin is the JSON form of an event.AskOrigin.
+type AskOrigin struct {
+	Kind    string `json:"kind"`
+	Source  string `json:"source"`
+	Message string `json:"message,omitempty" externalizable:"true"`
+	Note    string `json:"note,omitempty"`
 }
 
 // Ask is the JSON form of an event.Ask.
 type Ask struct {
 	ID        string        `json:"id"`
 	Questions []AskQuestion `json:"questions"`
+	Origin    *AskOrigin    `json:"origin,omitempty"`
 }
 
 // Profile carries the subagent model/effort resolved for a tool call.
@@ -643,9 +653,13 @@ func ToWireAsk(a event.Ask) *Ask {
 		for j, o := range q.Options {
 			opts[j] = AskOption{Label: o.Label, Description: o.Description}
 		}
-		qs[i] = AskQuestion{ID: q.ID, Header: q.Header, Prompt: q.Prompt, Reason: q.Reason, Options: opts, Multi: q.Multi}
+		qs[i] = AskQuestion{ID: q.ID, Header: q.Header, Prompt: q.Prompt, Reason: q.Reason, Options: opts, Multi: q.Multi, Default: q.Default}
 	}
-	return &Ask{ID: a.ID, Questions: qs}
+	out := &Ask{ID: a.ID, Questions: qs}
+	if o := a.Origin; o != nil {
+		out.Origin = &AskOrigin{Kind: o.Kind, Source: o.Source, Message: o.Message, Note: o.Note}
+	}
+	return out
 }
 
 // ToWireCacheDiagnostics converts cache diagnostics into their JSON wire form.

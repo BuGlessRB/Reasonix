@@ -396,10 +396,14 @@ func (t *httpTransport) readSSEResponse(ctx context.Context, body io.Reader, id 
 }
 
 // replyServerRequest sends a JSON-RPC response on a separate Streamable HTTP
-// POST while the original response stream remains open. call holds t.mu here,
-// so do can safely read the current session id without taking another lock.
+// POST while the original response stream remains open.
 func (t *httpTransport) replyServerRequest(ctx context.Context, message inboundMessage) error {
-	body, err := json.Marshal(serverRequestReply(message.ID, message.Method, t.roots))
+	reply := serverRequestReply(message.ID, message.Method, t.roots)
+	if message.Method == elicitMethod {
+		e, _ := tool.ElicitorFrom(ctx)
+		reply = elicitationReply(ctx, e, t.name, message.ID, message.Params)
+	}
+	body, err := json.Marshal(reply)
 	if err != nil {
 		return err
 	}

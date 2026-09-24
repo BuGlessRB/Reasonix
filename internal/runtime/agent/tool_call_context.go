@@ -49,6 +49,10 @@ func (a *Agent) toolCallContext(ctx context.Context, plan *toolCallPlan) context
 	if a.svc.configWrite != nil {
 		cctx = tool.WithConfigWriteApprover(cctx, a.svc.configWrite)
 	}
+	// Whoever answers this run's questions also fills an external party's form.
+	if e, ok := a.svc.asker.(tool.Elicitor); ok {
+		cctx = tool.WithElicitor(cctx, e)
+	}
 	if v := a.responseLanguage.Load(); v != nil {
 		if lang, ok := v.(string); ok {
 			cctx = langpref.WithResponseLanguagePreference(cctx, lang)

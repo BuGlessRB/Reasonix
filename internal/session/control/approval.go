@@ -417,15 +417,25 @@ func (p *promptIDs) issue() string {
 	return p.prefix + "-" + strconv.Itoa(p.next)
 }
 
+// pendingAsk is an in-flight ask question batch. questions is retained so the
+// AskRequest can be re-emitted to a frontend that reconnected after the original
+// event (see ReplayPendingPrompts).
+type pendingAsk struct {
+	questions []event.AskQuestion
+	reply     chan []event.AskAnswer
+	queued    bool // registered but not yet shown; replay must skip it
+	origin    *event.AskOrigin
+}
+
 // registerAsk records the pending question batch under an identity already
 // issued and returns the reply channel. It is the moment the ask becomes
 // observable — queued, so a question waiting behind another prompt is visible
 // rather than living only inside a blocked goroutine.
-func (a *approvalManager) registerAsk(id string, questions []event.AskQuestion) chan []event.AskAnswer {
+func (a *approvalManager) registerAsk(id string, questions []event.AskQuestion, origin *event.AskOrigin) chan []event.AskAnswer {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	reply := make(chan []event.AskAnswer, 1)
-	a.asks[id] = pendingAsk{questions: questions, reply: reply, queued: true}
+	a.asks[id] = pendingAsk{questions: questions, reply: reply, queued: true, origin: origin}
 	return reply
 }
 
@@ -572,7 +582,7 @@ func (a *approvalManager) snapshotPrompts() ([]event.Approval, []event.Ask) {
 		if p.queued {
 			continue
 		}
-		asks = append(asks, event.Ask{ID: id, Questions: p.questions})
+		asks = append(asks, event.Ask{ID: id, Questions: p.questions, Origin: p.origin})
 	}
 	return approvals, asks
 }

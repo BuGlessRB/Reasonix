@@ -32,6 +32,9 @@ func (c *Client) callOn(ctx context.Context, t transport, method string, params 
 func (c *Client) callOnce(ctx context.Context, t transport, method string, params any) (json.RawMessage, error) {
 	params, unregisterProgress := c.withProgress(ctx, t, method, params)
 	defer unregisterProgress()
+	if router, ok := t.(elicitTransport); ok && method == "tools/call" {
+		defer router.registerElicitCall(ctx)()
+	}
 
 	callCtx, cancel, timeout := c.contextWithCallTimeout(ctx, method, params)
 	if cancel != nil {
@@ -167,6 +170,7 @@ func (c *Client) initializeSessionOn(ctx context.Context, t transport, recordCap
 	if len(mcpRoots(c.spec.WorkspaceRoot)) > 0 {
 		capabilities["roots"] = map[string]any{"listChanged": false}
 	}
+	capabilities["elicitation"] = elicitCapability()
 	versioned, _ := t.(protocolVersioned)
 	if versioned != nil {
 		// A re-initialize starts over: the header belongs to a session, and

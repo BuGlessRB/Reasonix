@@ -278,7 +278,10 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
           : i.t === "approval"
             ? { ...i, verdict: ev.verdict ?? "once" }
             : i.t === "ask"
-              ? { ...i, answered: ev.answers ?? [] }
+              // This window's own answer, landed. The receipt it caused rides the
+              // event stream and can arrive first, sealing the card as answered
+              // elsewhere; the answer this window sent is the truer account.
+              ? { ...i, answered: ev.answers ?? [], answeredElsewhere: false, by: undefined, said: undefined }
               : i,
       ),
     };

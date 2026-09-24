@@ -384,8 +384,21 @@ type AskQuestion struct {
 	Prompt  string // the question text
 	Reason  string // AskReasonUserDecision or AskReasonMissingValue
 	Options []AskOption
-	Multi   bool // allow selecting more than one option
+	Multi   bool     // allow selecting more than one option
+	Default []string // prefilled answer, for a form sent back to be corrected
 }
+
+// AskOrigin names the external party behind an AskRequest the agent did not
+// write, so a frontend can say who is asking. A nil origin is the agent's ask.
+type AskOrigin struct {
+	Kind    string // AskOriginMCP
+	Source  string // the party, e.g. the MCP server's configured name
+	Message string // what the party said it needs
+	Note    string // the host's remark, e.g. why the last answer was refused
+}
+
+// AskOriginMCP is an MCP server's elicitation.
+const AskOriginMCP = "mcp"
 
 // Ask carries an AskRequest: a batch of questions and the ID that correlates the
 // controller's AnswerQuestion(ID, …) reply.
@@ -400,6 +413,7 @@ const (
 type Ask struct {
 	ID        string
 	Questions []AskQuestion
+	Origin    *AskOrigin
 }
 
 // Compaction carries a context-compaction pass for the CompactionStarted /
