@@ -11,7 +11,7 @@ import (
 
 // TranscriptEntry is one simplified conversation entry for guardian review.
 type TranscriptEntry struct {
-	Kind string // "user" | "assistant" | "tool"
+	Kind string // "user" | "tool"
 	Text string
 }
 
@@ -30,43 +30,25 @@ const (
 	maxRecentEntries      = 40    // max non-user entries from the tail
 )
 
-// ExtractTranscript builds a compact transcript from the agent session messages
-// suitable for guardian review. Returns entries in chronological order.
+// ExtractTranscript builds the guardian's evidence from the agent session:
+// what the user said, and every tool call the agent made. The agent's own prose
+// and every tool result are left out: both are where a page, a file or an MCP
+// server can plant text that argues for the very action under review.
 func ExtractTranscript(msgs []provider.Message) []TranscriptEntry {
 	var entries []TranscriptEntry
 	for _, m := range msgs {
 		switch m.Role {
-		case provider.RoleSystem:
-			// skip — guardian gets its own system prompt
-			continue
 		case provider.RoleUser:
 			if text := strings.TrimSpace(m.Content); text != "" {
 				entries = append(entries, TranscriptEntry{Kind: "user", Text: text})
 			}
 		case provider.RoleAssistant:
-			text := m.Content
-			if text == "" && len(m.ToolCalls) > 0 {
-				// assistant turn that only issued tool calls — include as "tool_calls"
-				for _, tc := range m.ToolCalls {
-					entries = append(entries, TranscriptEntry{
-						Kind: "tool",
-						Text: fmt.Sprintf("tool %s call: %s", tc.Name, firstRunesStr(tc.Arguments, 500)),
-					})
-				}
-				continue
+			for _, tc := range m.ToolCalls {
+				entries = append(entries, TranscriptEntry{
+					Kind: "tool",
+					Text: fmt.Sprintf("tool %s call: %s", tc.Name, firstRunesStr(tc.Arguments, 500)),
+				})
 			}
-			text = strings.TrimSpace(text)
-			if text == "" {
-				continue
-			}
-			entries = append(entries, TranscriptEntry{Kind: "assistant", Text: text})
-		case provider.RoleTool:
-			text := strings.TrimSpace(m.Content)
-			if text == "" {
-				continue
-			}
-			label := fmt.Sprintf("tool %s result", m.Name)
-			entries = append(entries, TranscriptEntry{Kind: "tool", Text: label + ": " + text})
 		}
 	}
 	return entries
