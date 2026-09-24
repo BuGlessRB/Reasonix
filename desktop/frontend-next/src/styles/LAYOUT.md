@@ -559,8 +559,12 @@ told apart by the colour of a symbol.
   - Laid out horizontally, a dragged width means nothing and there is nowhere to
     drag, so the handle is dropped only in that state — collapsed, the column is
     hidden entirely and the handle on the seam is the only way back.
-  - The left column is only narrowed to zero, so its column and seam are still
-    there and hiding its grip would be the removal this section forbids.
+  - Above the scene fold the left column is only narrowed to zero, so its
+    column and seam are still there and hiding its grip would be the removal
+    this section forbids.
+  - Under it the rail is a drawer, not a column (see *Phones*). No seam is left
+    to drag and the chrome's rail button is the entrance, so the grip goes; so
+    does the workbench grip, whose entrance is the 「工作台」 tab.
 - When both side columns have yielded, the transcript rail yields too; its ticks
   and viewport remain separately reachable.
 - A short window divides its height proportionally, and what is left over is the
@@ -574,6 +578,34 @@ told apart by the colour of a symbol.
 - Two buttons side by side must be the same height: "do not ask again" is one
   size down from "refuse", and centred their top edges differ by 1px — which
   reads as one unaligned row and counts as two.
+
+## Phones
+
+The scene fold is where the window is a phone: a paired device's browser, or a
+window dragged that narrow. What changes there is how things are reached, not
+what exists.
+
+- The rail is a drawer over the conversation. Its grid track is zero whatever
+  `--rail-w` says, so opening it covers the pane instead of squeezing it to a
+  strip. `.railveil` dims what it covers and closes it on a tap.
+- Going somewhere from the drawer — another session, the settings — puts it
+  away (`useDrawerCloses`): on a phone the drawer is a route, not a column kept
+  beside the work.
+- The docked workbench is the pane's whole width. Beside a 390px conversation a
+  560px dock leaves neither usable, so while it is open the conversation and
+  the composer step aside; the 「对话」 tab brings them back.
+- The settings sheet fills the screen; its inset and rounded frame are a
+  desktop's margin, and here they cost a sixth of the width.
+- The transcript never scrolls sideways; wide content scrolls inside its own
+  block. The wallpaper's reading plate bleeds 64px past the column to fade in,
+  and where there is no room for the bleed it is clipped, not allowed to widen
+  the page.
+- Heights are `dvh`: `vh` on a phone includes the browser's own bar, and the
+  composer sat behind it.
+- A coarse pointer gets a composer at no less than 16px. iOS zooms the page on
+  focus into anything smaller, and nothing zooms it back.
+- Without hover, controls revealed on hover stay visible. A phone turns the
+  first tap into a hover, so a hidden control costs a blind tap to find.
 
 ## Onboarding
 

@@ -1065,6 +1065,7 @@ body { background: var(--page) !important; }
 .compose .prompt { display: none; }
 .compose .fmain { display: block; }
 .compose textarea { min-height: 48px; color: var(--text); font-size: var(--read); line-height: 1.65; }
+@media (pointer: coarse) { .compose textarea { font-size: max(16px, var(--read)); } }
 .compose textarea::placeholder { color: var(--ghost); }
 .compose .row {
   margin: 8px 0 -3px; padding: 3px 0 0; border-top: 0;
@@ -1396,6 +1397,8 @@ body { background: var(--page) !important; }
   view-transition-name: none;
 }
 @keyframes studio-prefs-in { from { opacity: 0; } to { opacity: 1; } }
+[data-fold~="scene"] .prefs { padding: 0; }
+[data-fold~="scene"] .prefs-sheet { width: 100%; height: 100%; border: 0; border-radius: 0; }
 .prefs-hd { min-height: 58px; background: var(--surface); border-color: var(--hair); }
 .prefs-body { background: var(--surface); }
 .prefs-nav { background: var(--page); border-right-color: var(--hair); }
@@ -2289,7 +2292,8 @@ body { font-size: 14px; line-height: 1.75; }
 
 @container conversation (max-width: 720px) {
   .studio-branch-pop .studio-branch { width: 30px; justify-content: center; padding-inline: 0; }
-  .studio-branch-pop .studio-branch .lb { display: none; }
+  .studio-branch-pop .studio-branch .lb,
+  .studio-branch-pop .studio-branch small { display: none; }
   .turntools-spacer { min-width: 4px; }
   .studio-model-group { max-width: 190px; }
   .studio-model-control { max-width: 142px; }
@@ -3721,3 +3725,12 @@ body { font-size: 14px; line-height: 1.75; }
 .refine-error { margin: 0; color: var(--err); font: 400 12px/1.5 var(--ui); }
 .refine-card footer { display: flex; justify-content: flex-end; gap: 6px; }
 :root[data-theme="light"] .refine-card { background: var(--page); }
+@media (hover: none) {
+  .wsdel,
+  .rail .sessrow > .wsdel,
+  .rail .session-more,
+  .stepctl,
+  .call > .c .reask-open,
+  .rrow .act.ghost,
+  .ptab-x { opacity: 1; }
+}

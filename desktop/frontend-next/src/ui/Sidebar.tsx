@@ -158,6 +158,7 @@ export function Sidebar({
     {/* 收起而不是卸载：卸掉就丢了侧栏的滚动位置、Inspector 的展开、当前选
         中的面板。inert 是「看不见就够不着」那一半 —— 只做视觉隐藏的话，
         屏幕上没有的栏还能被 Tab 走进去。 */}
+    <button className="railveil" data-action="chrome.rail" tabIndex={-1} aria-label={t("收起工作区栏")} onClick={() => onCollapse()} />
     <div className="rail" inert={focus}>
       <div className="railscroll">
       <div className="studio-rail-head">

@@ -10,6 +10,7 @@ import { useLinkRouting } from "./links";
 import { Pane, type PaneReport } from "./Pane";
 import { DOCK, Gutter, RAIL, keepWidth, widthOf } from "./Gutter";
 import { folded as roomGaveUp, onFolds } from "./viewport";
+import { useDrawerCloses } from "./drawer";
 import { RemoteAsk } from "./RemoteAsk";
 import { BrowserLogin } from "./BrowserLogin";
 import type { RemoteAsk as RemoteAskT, RemoteHost } from "../port/remote";
@@ -401,6 +402,7 @@ export function App({ hub }: { hub: HubPort }) {
   const needsProject = !claimed && tree.every((ws) => !ws.remembered);
 
   useFoldAway("rail", setRail);
+  useDrawerCloses(setRail, active, settings);
 
   const onRailW = useCallback((w: number) => { setRailW(w); keepWidth(RAIL, w); }, []);
   const onDockW = useCallback((w: number) => { setDockW(w); keepWidth(DOCK, w); }, []);

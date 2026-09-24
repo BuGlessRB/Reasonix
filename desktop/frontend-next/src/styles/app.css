@@ -8,7 +8,7 @@
   body {
     margin: 0; padding: 0; background: var(--page); color: var(--text);
     font: var(--w-reg) var(--fs-lead)/1.6 var(--ui);
-    height: calc(100vh / var(--zoom, 1)); overflow: hidden;
+    height: calc(100dvh / var(--zoom, 1)); overflow: hidden;
   }
 
   [data-platform="darwin"] body { -webkit-font-smoothing: antialiased }
@@ -114,7 +114,7 @@
     --lights-w: 0px;
     --lights-h: 0px;
     background: var(--page); border: 0; border-radius: 0; box-shadow: none;
-    overflow: hidden; display: flex; flex-direction: column; height: calc(100vh / var(--zoom, 1));
+    overflow: hidden; display: flex; flex-direction: column; height: calc(100dvh / var(--zoom, 1));
   }
 
   :root[data-boot] .app { animation: appin 1.2s cubic-bezier(.4, 0, .2, 1) both }
@@ -852,7 +852,7 @@
   .pane { --srail-w: 54px; --flow-pad: 20px }
   .railhost { position: sticky; top: 0; height: 0; z-index: 4; pointer-events: none }
 
-  [data-pane="flow"] { scrollbar-width: none }
+  [data-pane="flow"] { overflow-x: hidden; scrollbar-width: none }
   [data-pane="flow"]::-webkit-scrollbar { display: none }
 
   .srail {
@@ -2299,6 +2299,16 @@
   [data-fold~="side"] [data-side="on"] .gutter-r { display: none }
   [data-fold~="side"] .app:not([data-side="on"]) .side { display: none }
 
+  .railveil { display: none }
+  [data-fold~="scene"] .cols { grid-template-columns: var(--nav-w) 0 minmax(0, 1fr) var(--side-w) }
+  [data-fold~="scene"] :is(.gutter-l, .pane > .gutter-r) { display: none }
+  [data-fold~="scene"] .app[data-browser="on"] .pane:has(> .pbody[data-dock]) { grid-template-columns: 0 minmax(0, 1fr) }
+  [data-fold~="scene"] .app[data-browser="on"] .pane:has(> .pbody[data-dock]) > :is(.pbody, .compose) { display: none }
+  [data-fold~="scene"] .app[data-browser="on"] .pane:has(> .pbody[data-dock]) > .scroll[data-pane="browser"] { border-left: 0 }
+  [data-fold~="scene"] .app[data-rail="on"]:not([data-focus="true"]) .railveil {
+    display: block; position: fixed; inset: 0; z-index: 11; padding: 0; border: 0;
+    background: color-mix(in srgb, #000 34%, transparent); cursor: default;
+  }
   [data-fold~="short"] .compose { --aux-budget: min(calc(24vh / var(--zoom, 1)), 176px) }
   [data-fold~="short"] .compose textarea { max-height: min(calc(var(--read, 15px) * 9.6), calc(24vh / var(--zoom, 1))) }
   [data-fold~="short"] .slashmenu { max-height: min(calc(38vh / var(--zoom, 1)), 220px) }
