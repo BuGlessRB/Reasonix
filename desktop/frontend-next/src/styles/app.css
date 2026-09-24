@@ -4731,7 +4731,7 @@
   .phonecard .sharehow { justify-items: center; min-width: 0 }
   [data-fold~="scene"] .phonecard { position: fixed; top: calc(var(--chrome-h, 45px) + 6px); right: 12px; left: 12px; width: auto }
   .share .rmtf { margin-top: 10px }
-  .shareopen { display: grid; gap: 12px; margin-top: 12px }
+  .shareopen { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 12px }
   .shareopen .rmtadd { margin-top: 0; justify-self: start }
   .shareqr { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap }
   .shareqr img {
@@ -4745,7 +4745,7 @@
   .sharehow .sharecopy { border: 0; background: none; padding: 2px 4px; cursor: pointer; font: var(--w-med) var(--fs-meta) var(--ui); color: var(--accent-ink) }
   .sharehow .sharecopy:hover { text-decoration: underline }
   .sharehow code { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--muted); overflow-wrap: anywhere }
-  .sharedevs { display: grid; gap: 4px }
+  .sharedevs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px }
   .sharedev { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 2px; border-top: 1px solid var(--hair) }
   .sharedev .nm {
     flex: 1 1 18ch; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
