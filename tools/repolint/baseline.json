@@ -5,16 +5,16 @@
     "claude-dialect": 1,
     "codeowners": 0,
     "commented-code": 0,
-    "complexity": 1009,
+    "complexity": 893,
     "doc-language": 0,
     "doc-owner": 43,
     "doc-prose": 2324,
     "error-text": 9,
-    "essay": 2890,
-    "file-size": 23695,
+    "essay": 2838,
+    "file-size": 22964,
     "flat-view": 0,
     "frontend-parity": 32,
-    "function-size": 4348,
+    "function-size": 3633,
     "layer-order": 0,
     "layering": 0,
     "marker": 0,
@@ -213,10 +213,10 @@
       "doc-prose": 2
     },
     "internal/assembly/boot/boot.go": {
-      "complexity": 125,
-      "essay": 76,
-      "file-size": 898,
-      "function-size": 1013
+      "complexity": 9,
+      "essay": 24,
+      "file-size": 167,
+      "function-size": 298
     },
     "internal/assembly/boot/boot_test.go": {
       "essay": 10
