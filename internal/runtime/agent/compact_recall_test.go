@@ -24,8 +24,8 @@ func recallAgent(t *testing.T, covered int, window int) *Agent {
 	sess.Add(provider.Message{Role: provider.RoleTool, ToolCallID: "c1", Name: "read_file", Content: "func estimateTextTokens(s string) int {"})
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "keep going"})
 	a := New(nil, nil, sess, Options{ContextWindow: window}, event.Discard)
-	a.sess.compactionState.Generation = 1
-	a.sess.compactionState.Projection = sessionstore.ContextProjection{CoveredCount: covered}
+	a.sess.win.compactionState.Generation = 1
+	a.sess.win.compactionState.Projection = sessionstore.ContextProjection{CoveredCount: covered}
 	return a
 }
 
@@ -40,8 +40,8 @@ func TestRecallReturnsFoldedPositions(t *testing.T) {
 	if !strings.Contains(res.Text, "never rewrite history") {
 		t.Fatalf("recall lost the user turn it addressed:\n%s", res.Text)
 	}
-	if res.Tokens <= 0 || res.BudgetLeft >= a.recallBudget() {
-		t.Fatalf("recall did not draw on the budget: tokens=%d left=%d of %d", res.Tokens, res.BudgetLeft, a.recallBudget())
+	if res.Tokens <= 0 || res.BudgetLeft >= a.window().recallBudget() {
+		t.Fatalf("recall did not draw on the budget: tokens=%d left=%d of %d", res.Tokens, res.BudgetLeft, a.window().recallBudget())
 	}
 }
 
@@ -72,7 +72,7 @@ func TestRecallRefusesWhatIsStillVisible(t *testing.T) {
 // window. It refuses whole: half a span reads as the whole of what was there.
 func TestRecallBudgetRefusesRatherThanTruncates(t *testing.T) {
 	a := recallAgent(t, 3, 128_000)
-	a.sess.compactionState.Recall = sessionstore.RecallLedger{Generation: 1, SpentTokens: a.recallBudget() - 1}
+	a.sess.win.compactionState.Recall = sessionstore.RecallLedger{Generation: 1, SpentTokens: a.window().recallBudget() - 1}
 	_, err := a.RecallContext(context.Background(), tool.RecallRequest{Positions: []int{1}})
 	if err == nil || !strings.Contains(err.Error(), "recall budget") {
 		t.Fatalf("err = %v, want the budget to refuse the request", err)
@@ -83,8 +83,8 @@ func TestRecallBudgetRefusesRatherThanTruncates(t *testing.T) {
 // look back. The ledger carries its generation, so nothing has to reset it.
 func TestRecallBudgetResetsWithTheGeneration(t *testing.T) {
 	a := recallAgent(t, 3, 128_000)
-	a.sess.compactionState.Recall = sessionstore.RecallLedger{Generation: 1, SpentTokens: a.recallBudget()}
-	a.sess.compactionState.Generation = 2
+	a.sess.win.compactionState.Recall = sessionstore.RecallLedger{Generation: 1, SpentTokens: a.window().recallBudget()}
+	a.sess.win.compactionState.Generation = 2
 
 	res, err := a.RecallContext(context.Background(), tool.RecallRequest{Positions: []int{1}})
 	if err != nil {

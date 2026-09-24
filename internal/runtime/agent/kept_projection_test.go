@@ -100,7 +100,7 @@ func TestUserTurnRetentionBudgetHoldsMoreRealTurns(t *testing.T) {
 	}
 
 	keep := make([]bool, len(region))
-	ret := a.keepUserTurns(region, keep)
+	ret := a.window().keepUserTurns(region, keep)
 	if ret.Dropped != 0 || ret.Kept != len(region) {
 		t.Fatalf("kept %d dropped %d of %d; boilerplate is still charged to the budget",
 			ret.Kept, ret.Dropped, len(region))
@@ -112,7 +112,7 @@ func TestUserTurnRetentionBudgetHoldsMoreRealTurns(t *testing.T) {
 func TestKeptForProjectionLeavesStandingStateToTheSupersedePass(t *testing.T) {
 	a := &Agent{}
 	turn := provider.Message{Role: provider.RoleUser, Content: testGoalBlock + "\n\nwords"}
-	if got := a.keptForProjection(turn); got.Content != turn.Content {
+	if got := a.window().keptForProjection(turn); got.Content != turn.Content {
 		t.Fatalf("a single-message pass rewrote standing state: %q", got.Content)
 	}
 }

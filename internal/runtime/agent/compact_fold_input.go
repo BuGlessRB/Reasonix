@@ -44,7 +44,7 @@ type foldSummary struct {
 // would read this fold as four times its cost. The rendered transcript is what
 // actually rides in the request, so its per-message framing is measured rather
 // than assumed away.
-func (a *Agent) summaryInputTokens(msgs []provider.Message) int {
+func (a *contextWindow) summaryInputTokens(msgs []provider.Message) int {
 	if len(msgs) == 0 {
 		return 0
 	}
@@ -55,7 +55,7 @@ func (a *Agent) summaryInputTokens(msgs []provider.Message) int {
 
 // summaryInputBudget is the transcript ceiling for one summarizer call.
 // Zero means the window cannot host a useful summary request.
-func (a *Agent) summaryInputBudget(instructions string) int {
+func (a *contextWindow) summaryInputBudget(instructions string) int {
 	window := a.effectiveContextWindow()
 	if window <= 0 {
 		return 0
@@ -78,7 +78,7 @@ func (a *Agent) summaryInputBudget(instructions string) int {
 // foldToSummary turns a fold region into one digest with at most one provider
 // request. Oversized input is shortened deterministically for the summarizer
 // only; multi-span merge and application-layer retries are gone.
-func (a *Agent) foldToSummary(ctx context.Context, fold []provider.Message, instructions string) (foldSummary, error) {
+func (a *contextWindow) foldToSummary(ctx context.Context, fold []provider.Message, instructions string) (foldSummary, error) {
 	res := foldSummary{Mode: CompactionModeSummarized, Spans: 1, FoldTokens: a.summaryInputTokens(fold)}
 	budget := a.summaryInputBudget(instructions)
 	if budget <= 0 {
@@ -105,7 +105,7 @@ func (a *Agent) foldToSummary(ctx context.Context, fold []provider.Message, inst
 	return a.singleCallSummary(ctx, res, input, instructions)
 }
 
-func (a *Agent) singleCallSummary(ctx context.Context, res foldSummary, fold []provider.Message, instructions string) (foldSummary, error) {
+func (a *contextWindow) singleCallSummary(ctx context.Context, res foldSummary, fold []provider.Message, instructions string) (foldSummary, error) {
 	summary, mode, usage, reqID, err := a.runCompactionSummary(ctx, fold, instructions)
 	res.Text, res.Mode, res.Usage, res.RequestID = summary, mode, usage, reqID
 	return res, err
@@ -114,7 +114,7 @@ func (a *Agent) singleCallSummary(ctx context.Context, res foldSummary, fold []p
 // foldOrDegrade summarizes a fold and, when that fold is the only way out,
 // converts a summarizer failure into a mechanical one. The telemetry it returns
 // always reports the original failure, even when the fold recovered from it.
-func (a *Agent) foldOrDegrade(ctx context.Context, trigger string, mustFree bool, fold []provider.Message, instructions string, sourceTokens int) (foldSummary, CompactionTelemetry, error) {
+func (a *contextWindow) foldOrDegrade(ctx context.Context, trigger string, mustFree bool, fold []provider.Message, instructions string, sourceTokens int) (foldSummary, CompactionTelemetry, error) {
 	spend := compactionSpendFrom(ctx)
 	res, err := a.foldToSummary(ctx, fold, instructions)
 	if err == nil {
@@ -122,17 +122,17 @@ func (a *Agent) foldOrDegrade(ctx context.Context, trigger string, mustFree bool
 		if err = rejectDigestThatCarriedNothing(res, mustFree); err == nil {
 			res = backstopFoldCoverage(res)
 		}
-		tele := compactionTelemetryFromSummary(trigger, a.CacheState(), sourceTokens, res, spend.read())
+		tele := compactionTelemetryFromSummary(trigger, a.cacheState(), sourceTokens, res, spend.read())
 		return res, tele, err
 	}
-	tele := compactionTelemetryFromSummary(trigger, a.CacheState(), sourceTokens, res, spend.read())
+	tele := compactionTelemetryFromSummary(trigger, a.cacheState(), sourceTokens, res, spend.read())
 	cause := err.Error()
 	if res, err = a.degradeFoldSummary(res, mustFree, fold, err); err != nil {
 		tele.Error = cause
 		return res, tele, err
 	}
 	res = backstopFoldCoverage(res)
-	tele = compactionTelemetryFromSummary(trigger, a.CacheState(), sourceTokens, res, spend.read())
+	tele = compactionTelemetryFromSummary(trigger, a.cacheState(), sourceTokens, res, spend.read())
 	tele.Error = cause
 	return res, tele, nil
 }
@@ -148,7 +148,7 @@ func mechanicalFoldDigest(n int) string {
 // where that fold is the only way out; below the ceiling the turn still goes
 // out, so the error is kept and a recoverable view is not folded blind.
 // Cancellation is the caller's decision, never a summarizer failure.
-func (a *Agent) degradeFoldSummary(res foldSummary, mustFree bool, fold []provider.Message, cause error) (foldSummary, error) {
+func (a *contextWindow) degradeFoldSummary(res foldSummary, mustFree bool, fold []provider.Message, cause error) (foldSummary, error) {
 	if !mustFree || errors.Is(cause, context.Canceled) {
 		return res, cause
 	}
@@ -181,7 +181,7 @@ func backstopFoldCoverage(res foldSummary) foldSummary {
 // deterministic head+tail sketches. The body it sketches is the one the
 // conversation carried — a sketch of the local full copy would hand the digest
 // a tail the model was never given, and the digest becomes the memory of it.
-func (a *Agent) shortenFoldForSummary(fold []provider.Message) []provider.Message {
+func (a *contextWindow) shortenFoldForSummary(fold []provider.Message) []provider.Message {
 	out := make([]provider.Message, len(fold))
 	copy(out, fold)
 	saved := 0
@@ -213,7 +213,7 @@ func (a *Agent) shortenFoldForSummary(fold []provider.Message) []provider.Messag
 
 // compressFoldArgsForSummary reduces long tool-call argument payloads to key
 // names and sizes so the summarizer request can fit.
-func (a *Agent) compressFoldArgsForSummary(fold []provider.Message) []provider.Message {
+func (a *contextWindow) compressFoldArgsForSummary(fold []provider.Message) []provider.Message {
 	out := make([]provider.Message, len(fold))
 	copy(out, fold)
 	changed := false
@@ -240,7 +240,7 @@ func (a *Agent) compressFoldArgsForSummary(fold []provider.Message) []provider.M
 
 // omitLowValueForSummary drops low-value middle tool results while keeping
 // protected errors, existing digests, and the ends of the fold.
-func (a *Agent) omitLowValueForSummary(fold []provider.Message, budget int) []provider.Message {
+func (a *contextWindow) omitLowValueForSummary(fold []provider.Message, budget int) []provider.Message {
 	if a.summaryInputTokens(fold) <= budget {
 		return fold
 	}

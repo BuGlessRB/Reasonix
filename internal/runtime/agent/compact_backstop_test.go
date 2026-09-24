@@ -88,7 +88,7 @@ func foldableSessionWithChanges(turns int) *sessionstore.Session {
 }
 
 func projectionDigest(a *Agent) string {
-	return latestDigest(a.sess.compactionState.Projection.Messages)
+	return latestDigest(a.sess.win.compactionState.Projection.Messages)
 }
 
 // The hard-pressure path is the one that used to lose changes: the repair pass

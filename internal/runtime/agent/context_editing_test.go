@@ -18,12 +18,12 @@ func TestNativeContextEditingRemoved(t *testing.T) {
 		ContextEditing: "native", // deprecated input; ignored
 	}, event.Discard)
 	// No native lineage suffix on the prompt cache key.
-	if key := a.currentPromptCacheKey(); key != a.currentPromptCacheKey() {
+	if key := a.window().currentPromptCacheKey(); key != a.window().currentPromptCacheKey() {
 		t.Fatal("prompt cache key unstable")
 	}
 	// Nothing installs a projection outside Prepare: observing usage is not a
 	// maintenance entry, and there is no longer a hook that could pretend to be.
-	if got := a.currentProjectionVersion(); got != 0 {
+	if got := a.window().currentProjectionVersion(); got != 0 {
 		t.Fatalf("projection version %d installed without Prepare", got)
 	}
 }

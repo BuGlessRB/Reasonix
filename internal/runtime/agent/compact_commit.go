@@ -29,42 +29,42 @@ type summaryProjectionCommit struct {
 // transcript version/hash, projection version, and generation must still match.
 // The maintenance event is emitted only after the lock is released so a sink
 // that re-enters ContextMaintenanceSnapshot cannot deadlock.
-func (a *Agent) commitSummaryProjection(commit summaryProjectionCommit) (sessionstore.CompactionState, error) {
+func (a *contextWindow) commitSummaryProjection(commit summaryProjectionCommit) (sessionstore.CompactionState, error) {
 	if commit.covered <= 0 || commit.covered > len(commit.canonical) {
 		return sessionstore.CompactionState{}, fmt.Errorf("compaction commit: covered %d outside canonical length %d",
 			commit.covered, len(commit.canonical))
 	}
 	state := a.summaryProjectionState(commit)
-	a.sess.compactionMu.Lock()
+	a.sess.win.compactionMu.Lock()
 	current, currentVersion := a.sess.conversation.SnapshotMessagesVersion()
 	if currentVersion != commit.transcriptVersion ||
 		len(current) != len(commit.canonical) ||
 		sessionstore.CoveredPrefixHash(current, len(current)) != sessionstore.CoveredPrefixHash(commit.canonical, len(commit.canonical)) ||
-		a.sess.compactionState.Projection.ProjectionVersion != commit.projectionVersion ||
-		a.sess.compactionState.Generation != commit.generation {
-		a.sess.compactionMu.Unlock()
+		a.sess.win.compactionState.Projection.ProjectionVersion != commit.projectionVersion ||
+		a.sess.win.compactionState.Generation != commit.generation {
+		a.sess.win.compactionMu.Unlock()
 		return sessionstore.CompactionState{}, errCompressStaleContext
 	}
-	prev := a.sess.compactionState
-	a.sess.compactionState = state
+	prev := a.sess.win.compactionState
+	a.sess.win.compactionState = state
 	if err := a.persistCompactionStateLocked(); err != nil {
-		a.sess.compactionState = prev
-		a.sess.compactionMu.Unlock()
+		a.sess.win.compactionState = prev
+		a.sess.win.compactionMu.Unlock()
 		if errors.Is(err, errCompressStaleContext) {
 			return sessionstore.CompactionState{}, err
 		}
 		return sessionstore.CompactionState{}, fmt.Errorf("persist projection: %w", err)
 	}
-	a.sess.checkpointState = "applied"
+	a.sess.win.checkpointState = "applied"
 	receipt := state.LastReceipt
-	a.sess.compactionMu.Unlock()
+	a.sess.win.compactionMu.Unlock()
 	// The installed projection carries the step ids, either in what it kept or
 	// in the note the fold appended, so the next round owes nothing.
 	a.emitContextMaintenance(receipt)
 	return state, nil
 }
 
-func (a *Agent) summaryProjectionState(commit summaryProjectionCommit) sessionstore.CompactionState {
+func (a *contextWindow) summaryProjectionState(commit summaryProjectionCommit) sessionstore.CompactionState {
 	projectionVersion := commit.projectionVersion + 1
 	now := time.Now().UTC()
 	summaryHash := summaryContentHash(commit.summary)

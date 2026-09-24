@@ -41,10 +41,10 @@ func TestMaintenanceBoundaryIsTheNearerOfCapacityAndEconomics(t *testing.T) {
 				CompactRatio:      tc.ratio,
 				CompactionBudgets: CompactionBudgets{ContextSoftLimitTokens: tc.soft},
 			}, event.Discard)
-			if got := a.compactTrigger(); got != tc.trigger {
+			if got := a.window().compactTrigger(); got != tc.trigger {
 				t.Errorf("compactTrigger = %d, want %d", got, tc.trigger)
 			}
-			if got := a.compactBoundary(); got != tc.boundary {
+			if got := a.window().compactBoundary(); got != tc.boundary {
 				t.Errorf("compactBoundary = %q, want %q", got, tc.boundary)
 			}
 		})
@@ -87,15 +87,15 @@ func economicFixture(t *testing.T, soft int, activeTurnRound int) (*Agent, *reco
 // nowhere near the window share, and one below it must not be.
 func TestEconomicTriggerFoldsBelowCapacityShare(t *testing.T) {
 	a, sink := economicFixture(t, 160_000, -1)
-	visible := a.estimatedVisibleRequestTokens(a.modelVisibleMessages())
-	if visible <= a.economicCompactTrigger() || visible >= a.capacityCompactTrigger() {
+	visible := a.window().estimatedVisibleRequestTokens(a.window().modelVisibleMessages())
+	if visible <= a.window().economicCompactTrigger() || visible >= a.window().capacityCompactTrigger() {
 		t.Fatalf("fixture input %d is not between the economic (%d) and capacity (%d) boundaries",
-			visible, a.economicCompactTrigger(), a.capacityCompactTrigger())
+			visible, a.window().economicCompactTrigger(), a.window().capacityCompactTrigger())
 	}
-	if _, err := a.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+	if _, err := a.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 		t.Fatal(err)
 	}
-	if got := a.currentProjectionVersion(); got == 0 {
+	if got := a.window().currentProjectionVersion(); got == 0 {
 		t.Fatal("input above the economic boundary installed no projection")
 	}
 	if got := appliedMaintenanceEvents(sink); got != 1 {
@@ -105,10 +105,10 @@ func TestEconomicTriggerFoldsBelowCapacityShare(t *testing.T) {
 
 func TestInputBelowBothBoundariesIsNotMaintained(t *testing.T) {
 	a, sink := economicFixture(t, 4_000_000, -1)
-	if _, err := a.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+	if _, err := a.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 		t.Fatal(err)
 	}
-	if got := a.currentProjectionVersion(); got != 0 {
+	if got := a.window().currentProjectionVersion(); got != 0 {
 		t.Fatalf("input below both boundaries installed projection version %d", got)
 	}
 	if got := appliedMaintenanceEvents(sink); got != 0 {
@@ -164,19 +164,19 @@ func TestRepeatedMaintenanceInsideOneTurn(t *testing.T) {
 	var versions []uint64
 	var covered []int
 	for round := range 3 {
-		if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+		if _, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 			t.Fatalf("round %d: %v", round+1, err)
 		}
-		version := a.currentProjectionVersion()
+		version := a.window().currentProjectionVersion()
 		if version == 0 {
 			t.Fatalf("round %d installed no projection; codes so far = %v", round+1, maintenanceCodes(sink, "noop"))
 		}
 		versions = append(versions, version)
-		a.sess.compactionMu.Lock()
-		covered = append(covered, a.sess.compactionState.Projection.CoveredCount)
-		a.sess.compactionMu.Unlock()
-		if visible := a.estimatedVisibleRequestTokens(a.modelVisibleMessages()); visible >= a.compactTrigger() {
-			t.Fatalf("round %d left %d visible tokens, still at or above the %d boundary", round+1, visible, a.compactTrigger())
+		a.sess.win.compactionMu.Lock()
+		covered = append(covered, a.sess.win.compactionState.Projection.CoveredCount)
+		a.sess.win.compactionMu.Unlock()
+		if visible := a.window().estimatedVisibleRequestTokens(a.window().modelVisibleMessages()); visible >= a.window().compactTrigger() {
+			t.Fatalf("round %d left %d visible tokens, still at or above the %d boundary", round+1, visible, a.window().compactTrigger())
 		}
 		growTurn(a, 30)
 	}
@@ -205,7 +205,7 @@ func TestRepeatedMaintenanceInsideOneTurn(t *testing.T) {
 	t.Fatal("the active turn's request is gone from the canonical transcript")
 found:
 	// And it is still verbatim in what the model sees.
-	for _, m := range a.modelVisibleMessages() {
+	for _, m := range a.window().modelVisibleMessages() {
 		if m.Role == provider.RoleUser && m.CreatedAt == economicActiveTurnAt {
 			return
 		}
@@ -221,15 +221,15 @@ func TestGrowthWithNoClosedTransactionStaysBelowFoldEconomics(t *testing.T) {
 	a, sink := economicFixture(t, 160_000, 30)
 	a.activeTurnCreatedAt.Store(economicActiveTurnAt)
 	ctx := context.Background()
-	if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+	if _, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 		t.Fatal(err)
 	}
-	if a.currentProjectionVersion() == 0 {
+	if a.window().currentProjectionVersion() == 0 {
 		t.Fatal("the first fold did not install a projection")
 	}
 	openTransaction(a, 40)
 	for range 3 {
-		if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+		if _, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -264,7 +264,7 @@ func TestActiveTurnBoundaryLeavesNothingToFold(t *testing.T) {
 		CompactionBudgets: CompactionBudgets{ContextSoftLimitTokens: 160_000},
 	}, sink)
 	a.activeTurnCreatedAt.Store(economicActiveTurnAt)
-	if _, err := a.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+	if _, err := a.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 		t.Fatal(err)
 	}
 	codes := maintenanceCodes(sink, "noop")

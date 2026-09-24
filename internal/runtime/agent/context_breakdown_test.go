@@ -49,7 +49,7 @@ func TestContextBreakdownCarriesTheBoundaryInForce(t *testing.T) {
 	// Under a window small enough that its capacity share is the lower of the
 	// two, the same field must follow the other bound.
 	small := New(nil, nil, sessionstore.NewSession("你是一个助手"), Options{ContextWindow: 128_000}, nil)
-	if got, want := small.ContextBreakdown().CompactAt, small.compactTrigger(); got != want {
+	if got, want := small.ContextBreakdown().CompactAt, small.window().compactTrigger(); got != want {
 		t.Fatalf("CompactAt = %d, want the capacity share %d", got, want)
 	}
 	if small.ContextBreakdown().CompactAt >= small.ContextBreakdown().Window {

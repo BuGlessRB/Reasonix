@@ -20,12 +20,16 @@ func (a *Agent) ContextBudget() tool.ContextBudget {
 	if a == nil {
 		return unmeasuredContextBudget("no active agent session")
 	}
+	return a.window().contextBudget()
+}
+
+func (a *contextWindow) contextBudget() tool.ContextBudget {
 	trigger := a.compactTrigger()
 	window := a.effectiveContextWindow()
 	if trigger <= 0 || window <= 0 {
 		return unmeasuredContextBudget("the active provider declares no context window, so compaction is disabled")
 	}
-	used := a.ContextUsedTokens()
+	used := a.contextUsedTokens()
 	return tool.ContextBudget{
 		Status:          "ok",
 		TokensRemaining: max(0, trigger-used),
@@ -52,15 +56,15 @@ type budgetNoticeLatch struct {
 // contextBudgetNotice returns the message to append before the next sampling
 // call, or "" when the model has already been told what current pressure
 // warrants. It advances the latch, so each rung fires once per fold.
-func (a *Agent) contextBudgetNotice() string {
+func (a *contextWindow) contextBudgetNotice() string {
 	if a == nil {
 		return ""
 	}
 	if a.Session() == nil {
 		return ""
 	}
-	notice, latch := advanceBudgetNotice(a.sess.budgetNotice, a.ContextBudget(), a.ContextGeneration())
-	a.sess.budgetNotice = latch
+	notice, latch := advanceBudgetNotice(a.sess.win.budgetNotice, a.contextBudget(), a.contextGeneration())
+	a.sess.win.budgetNotice = latch
 	return notice
 }
 

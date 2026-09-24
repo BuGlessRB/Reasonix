@@ -23,7 +23,7 @@ func TestUserTurnKeepBudgetScalesWithTheWindow(t *testing.T) {
 	} {
 		a := &Agent{}
 		a.contextWindow = tc.window
-		if got := a.keptUserTurnsBudget(); got != tc.want {
+		if got := a.window().keptUserTurnsBudget(); got != tc.want {
 			t.Errorf("window %d: budget = %d, want %d", tc.window, got, tc.want)
 		}
 	}
@@ -41,12 +41,12 @@ func TestRecentTailIsMeasuredInTheUnitItsBudgetUses(t *testing.T) {
 			provider.Message{Role: provider.RoleUser, Content: "continue"},
 		)
 	}
-	_, start, ok := a.planCompaction(msgs, 1, false)
+	_, start, ok := a.window().planCompaction(msgs, 1, false)
 	if !ok {
 		t.Fatal("fixture produced no fold region")
 	}
-	budget := a.recentTailBudget()
-	if tail := a.estimatedPromptTokens(msgs[start:]); tail*2 < budget {
+	budget := a.window().recentTailBudget()
+	if tail := a.window().estimatedPromptTokens(msgs[start:]); tail*2 < budget {
 		t.Fatalf("verbatim tail = %d tokens against a %d budget; the tail was measured in the wrong unit", tail, budget)
 	}
 }
@@ -67,11 +67,11 @@ func TestLargeFixedPrefixDoesNotRefuseCompaction(t *testing.T) {
 	}
 	a := New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), sess,
 		Options{ContextWindow: 128_000, CompactRatio: 0.85, RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
-	if len(prefix) < a.compactTrigger() {
-		t.Fatalf("fixture prefix is %d characters, under the %d trigger; it cannot show the bug", len(prefix), a.compactTrigger())
+	if len(prefix) < a.window().compactTrigger() {
+		t.Fatalf("fixture prefix is %d characters, under the %d trigger; it cannot show the bug", len(prefix), a.window().compactTrigger())
 	}
 
-	if _, _, err := a.compactToProjection(context.Background(), CompactionTriggerManual, "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}, false); err != nil {
+	if _, _, err := a.window().compactToProjection(context.Background(), CompactionTriggerManual, "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}, false); err != nil {
 		t.Fatalf("compaction refused a prefix that fits: %v", err)
 	}
 }
@@ -84,21 +84,21 @@ func TestConfiguredCompactionBudgetsAreHonoured(t *testing.T) {
 	a.budgets = CompactionBudgets{
 		UserTurnKeepTokens: 40_000, FirstTurnPinTokens: 9_000, CheckpointCeilingRatio: 0.8,
 	}
-	if got := a.keptUserTurnsBudget(); got != 40_000 {
+	if got := a.window().keptUserTurnsBudget(); got != 40_000 {
 		t.Errorf("keep budget = %d, want the configured value", got)
 	}
-	if got := a.checkpointCeiling(); got != 160_000 {
+	if got := a.window().checkpointCeiling(); got != 160_000 {
 		t.Errorf("checkpoint ceiling = %d, want 80%% of the window", got)
 	}
 	// The first-turn pin still answers to the window guard: it rides the fixed
 	// prefix and is paid for on every request of the session.
-	if !a.fixedPinnableUserTurn(provider.Message{Role: provider.RoleUser, Content: shortText(8_000)}) {
+	if !a.window().fixedPinnableUserTurn(provider.Message{Role: provider.RoleUser, Content: shortText(8_000)}) {
 		t.Error("a turn inside the configured pin budget was refused")
 	}
 	huge := &Agent{}
 	huge.contextWindow = 20_000
 	huge.budgets = CompactionBudgets{FirstTurnPinTokens: 1_000_000}
-	if huge.fixedPinnableUserTurn(provider.Message{Role: provider.RoleUser, Content: shortText(40_000)}) {
+	if huge.window().fixedPinnableUserTurn(provider.Message{Role: provider.RoleUser, Content: shortText(40_000)}) {
 		t.Error("the window guard must still bound the pinned first turn")
 	}
 }
@@ -107,10 +107,10 @@ func TestConfiguredCompactionBudgetsAreHonoured(t *testing.T) {
 func TestUnsetCompactionBudgetsKeepTheDefaults(t *testing.T) {
 	a := &Agent{}
 	a.contextWindow = 200_000
-	if got, want := a.checkpointCeiling(), 100_000; got != want {
+	if got, want := a.window().checkpointCeiling(), 100_000; got != want {
 		t.Errorf("checkpoint ceiling = %d, want the default half-window %d", got, want)
 	}
-	if got, want := a.keptUserTurnsBudget(), 10_000; got != want {
+	if got, want := a.window().keptUserTurnsBudget(), 10_000; got != want {
 		t.Errorf("keep budget = %d, want the default window share %d", got, want)
 	}
 }

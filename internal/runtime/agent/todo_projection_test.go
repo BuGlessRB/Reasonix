@@ -175,19 +175,19 @@ func TestRealFoldLeavesTheStepIDsReadable(t *testing.T) {
 		}
 	}
 
-	a.sess.compactionMu.Lock()
-	projected := a.sess.compactionState.Projection.Messages
-	a.sess.compactionMu.Unlock()
+	a.sess.win.compactionMu.Lock()
+	projected := a.sess.win.compactionState.Projection.Messages
+	a.sess.win.compactionMu.Unlock()
 	if len(projected) == 0 {
 		t.Fatal("no fold was installed; this test asserts nothing without one")
 	}
-	visible := a.modelVisibleMessages()
+	visible := a.window().modelVisibleMessages()
 	for _, id := range []string{"plan_step_01", "plan_step_02", "plan_step_03"} {
 		if !messagesMention(visible, id) {
 			t.Fatalf("the request after the fold cannot cite %s", id)
 		}
 	}
-	if messagesMention(projected, "plan_step_02") && !messagesMention(a.modelVisibleHistory(), "plan_step_02") {
+	if messagesMention(projected, "plan_step_02") && !messagesMention(a.window().modelVisibleHistory(), "plan_step_02") {
 		t.Fatal("the frozen body carries host step state; it is history, not host state")
 	}
 }

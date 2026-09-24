@@ -56,25 +56,25 @@ func TestContextManagerPersistsAndRestoresBlockedFailureFingerprint(t *testing.T
 	first := newAgent(firstProvider)
 	// fold = 8500; hard = 9744. Observe between them so failure is non-fatal.
 	policy := ContextPreparePolicy{Trigger: CompactionTriggerPressure, ObservedInputTokens: 8600}
-	if _, err := first.contextManager().Prepare(context.Background(), policy); err != nil {
+	if _, err := first.window().contextManager().Prepare(context.Background(), policy); err != nil {
 		t.Fatalf("above-ratio failure should persist blocked state without rejecting this request: %v", err)
 	}
 	if firstProvider.calls != 1 { // single summary attempt; no summarizeOnce second pass
 		t.Fatalf("summary calls = %d, want 1", firstProvider.calls)
 	}
-	if first.sess.compactionState.LastReceipt == nil {
+	if first.sess.win.compactionState.LastReceipt == nil {
 		t.Fatal("failed summary did not persist a maintenance receipt")
 	}
-	if status := first.sess.compactionState.LastReceipt.Status; status != "blocked" && status != "failed" {
+	if status := first.sess.win.compactionState.LastReceipt.Status; status != "blocked" && status != "failed" {
 		t.Fatalf("receipt status = %q, want blocked or failed", status)
 	}
-	if first.sess.compactionState.LastReceipt.BlockedInputHash == "" {
+	if first.sess.win.compactionState.LastReceipt.BlockedInputHash == "" {
 		t.Fatal("failure receipt missing input hash")
 	}
-	if first.sess.compactionState.BlockedInputHash != "" {
-		t.Fatalf("top-level blocked mirror should not be written: %q", first.sess.compactionState.BlockedInputHash)
+	if first.sess.win.compactionState.BlockedInputHash != "" {
+		t.Fatalf("top-level blocked mirror should not be written: %q", first.sess.win.compactionState.BlockedInputHash)
 	}
-	if _, err := first.contextManager().Prepare(context.Background(), policy); err != nil {
+	if _, err := first.window().contextManager().Prepare(context.Background(), policy); err != nil {
 		t.Fatal(err)
 	}
 	if firstProvider.calls != 1 {
@@ -83,13 +83,13 @@ func TestContextManagerPersistsAndRestoresBlockedFailureFingerprint(t *testing.T
 
 	resumedProvider := &failingSummaryProvider{}
 	resumed := newAgent(resumedProvider)
-	if resumed.sess.compactionState.LastReceipt == nil {
+	if resumed.sess.win.compactionState.LastReceipt == nil {
 		t.Fatal("failure receipt was not restored")
 	}
-	if status := resumed.sess.compactionState.LastReceipt.Status; status != "blocked" && status != "failed" {
+	if status := resumed.sess.win.compactionState.LastReceipt.Status; status != "blocked" && status != "failed" {
 		t.Fatalf("restored receipt status = %q, want blocked or failed", status)
 	}
-	if _, err := resumed.contextManager().Prepare(context.Background(), policy); err != nil {
+	if _, err := resumed.window().contextManager().Prepare(context.Background(), policy); err != nil {
 		t.Fatal(err)
 	}
 	if resumedProvider.calls != 0 {
@@ -125,7 +125,7 @@ func TestPrepareThresholdSkipsExtensionInterceptors(t *testing.T) {
 	}, event.Discard)
 
 	// Below fold: Prepare sizes the view and must not touch interceptors.
-	if _, err := a.contextManager().Prepare(context.Background(), ContextPreparePolicy{
+	if _, err := a.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{
 		Trigger: CompactionTriggerPressure, ObservedInputTokens: 100,
 	}); err != nil {
 		t.Fatalf("Prepare: %v", err)
@@ -161,7 +161,7 @@ func TestStrictAlternatingRolesStillConvergesBeforeSampling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepareSamplingRequest: %v", err)
 	}
-	if got := a.currentProjectionVersion(); got != 1 {
+	if got := a.window().currentProjectionVersion(); got != 1 {
 		t.Fatalf("projection version = %d, want pressure fold", got)
 	}
 	if len(prepared.req.Messages) >= len(sess.Snapshot()) {

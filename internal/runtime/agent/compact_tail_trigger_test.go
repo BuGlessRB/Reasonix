@@ -80,14 +80,14 @@ func TestTailBudgetYieldsToLowTrigger(t *testing.T) {
 			if err := a.Run(context.Background(), "one turn: keep reading until done"); err != nil {
 				t.Fatalf("run: %v", err)
 			}
-			if trigger, tail := a.compactTrigger(), a.recentTailBudget(); tail > trigger/2 {
+			if trigger, tail := a.window().compactTrigger(), a.window().recentTailBudget(); tail > trigger/2 {
 				t.Fatalf("tail %d leaves no fold region under trigger %d", tail, trigger)
 			}
-			if mock.peak <= a.compactTrigger() {
-				t.Fatalf("peak prompt %d never reached trigger %d; the case proves nothing", mock.peak, a.compactTrigger())
+			if mock.peak <= a.window().compactTrigger() {
+				t.Fatalf("peak prompt %d never reached trigger %d; the case proves nothing", mock.peak, a.window().compactTrigger())
 			}
 			if started == 0 {
-				t.Fatalf("context passed the trigger (peak %d > %d) but nothing folded", mock.peak, a.compactTrigger())
+				t.Fatalf("context passed the trigger (peak %d > %d) but nothing folded", mock.peak, a.window().compactTrigger())
 			}
 		})
 	}

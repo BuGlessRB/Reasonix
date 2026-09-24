@@ -36,6 +36,9 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   the move this blocks — group by lifetime into a named sub-state instead
   (`agent.perTurnState` is the pattern), which costs one field and removes the
   whole product.
+- The context window (projection, compaction, estimation) owns `windowState`;
+  the loop reaches it via `a.window()`, it reaches the loop via `windowHost`.
+  `window-state` fails any other read of `sess.win`.
 - Judgements read structure, never wording: shell ASTs (`shellparse`), types,
   contracts, tool schemas. Phrase tables and message sniffing have been retired
   in batches (task-policy prose, the planner's approval phrases, the executor

@@ -9,15 +9,15 @@ import (
 // status gauge alone walks several times a turn.
 func TestProjectionCheckReusesThePrefixFingerprint(t *testing.T) {
 	a := longSession(200)
-	a.modelVisibleMessages()
-	first := a.sess.coveredHash.Load()
+	a.window().modelVisibleMessages()
+	first := a.sess.win.coveredHash.Load()
 	if first == nil {
 		t.Fatal("no fingerprint was memoised")
 	}
 
-	a.modelVisibleMessages()
+	a.window().modelVisibleMessages()
 
-	if a.sess.coveredHash.Load() != first {
+	if a.sess.win.coveredHash.Load() != first {
 		t.Fatal("the fingerprint was recomputed although nothing was rewritten")
 	}
 }
@@ -26,7 +26,7 @@ func TestProjectionCheckReusesThePrefixFingerprint(t *testing.T) {
 // rewrite: a projection built over edited history must stop validating.
 func TestRewrittenPrefixInvalidatesTheProjection(t *testing.T) {
 	a := longSession(200)
-	if visible := len(a.modelVisibleMessages()); visible > 8 {
+	if visible := len(a.window().modelVisibleMessages()); visible > 8 {
 		t.Fatalf("fixture projection is not in force: %d visible messages", visible)
 	}
 
@@ -34,7 +34,7 @@ func TestRewrittenPrefixInvalidatesTheProjection(t *testing.T) {
 	msgs[1].Content = "the user asked for something else entirely"
 	a.sess.conversation.Rewrite(msgs, "test rewrite")
 
-	if visible := len(a.modelVisibleMessages()); visible != len(msgs) {
+	if visible := len(a.window().modelVisibleMessages()); visible != len(msgs) {
 		t.Fatalf("a rewritten prefix must drop the projection; visible = %d of %d", visible, len(msgs))
 	}
 }
@@ -44,7 +44,7 @@ func TestRewrittenPrefixInvalidatesTheProjection(t *testing.T) {
 func TestFingerprintMemoIsKeyedOnTheCoveredLength(t *testing.T) {
 	a := longSession(50)
 	msgs, _, rewriteVersion := a.sess.conversation.SnapshotWithVersion()
-	hasher := a.prefixHasher(rewriteVersion)
+	hasher := a.window().prefixHasher(rewriteVersion)
 
 	short, long := hasher(msgs, 10), hasher(msgs, 40)
 

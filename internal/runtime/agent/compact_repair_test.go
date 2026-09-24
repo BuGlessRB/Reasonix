@@ -34,7 +34,7 @@ func TestCoverageCorrectionNeverRereadsTheFold(t *testing.T) {
 	})
 	ctx, spend := withCompactionSpend(context.Background())
 
-	res, _, err := a.foldOrDegrade(ctx, CompactionTriggerPressure, false, foldWithADroppedChange(), "", 4000)
+	res, _, err := a.window().foldOrDegrade(ctx, CompactionTriggerPressure, false, foldWithADroppedChange(), "", 4000)
 	if err != nil {
 		t.Fatalf("foldOrDegrade: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestCoverageCorrectionClosesTheGapItFound(t *testing.T) {
 	a, _ := repairAgent(t, []scriptedReply{{text: digestNamingOneChange, usage: billed(9000, 400)}})
 	fold := foldWithADroppedChange()
 
-	res, tele, err := a.foldOrDegrade(context.Background(), CompactionTriggerPressure, false, fold, "", 4000)
+	res, tele, err := a.window().foldOrDegrade(context.Background(), CompactionTriggerPressure, false, fold, "", 4000)
 	if err != nil {
 		t.Fatalf("foldOrDegrade: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestADigestThatNamedNoChangeIsStillRefused(t *testing.T) {
 		{text: "a second answer nobody should have asked for", usage: billed(9500, 450)},
 	})
 
-	_, _, err := a.foldOrDegrade(context.Background(), CompactionTriggerPressure, false, foldWithADroppedChange(), "", 4000)
+	_, _, err := a.window().foldOrDegrade(context.Background(), CompactionTriggerPressure, false, foldWithADroppedChange(), "", 4000)
 	if err == nil {
 		t.Fatal("a digest naming none of the fold's changes was installed")
 	}
@@ -115,7 +115,7 @@ func TestADigestBeyondTheBackstopIsRefused(t *testing.T) {
 	}
 
 	a, prov := repairAgent(t, []scriptedReply{{text: "did some work", usage: billed(9000, 400)}})
-	_, _, err := a.foldOrDegrade(context.Background(), CompactionTriggerPressure, false, region, "", 4000)
+	_, _, err := a.window().foldOrDegrade(context.Background(), CompactionTriggerPressure, false, region, "", 4000)
 	if err == nil {
 		t.Fatal("a digest carrying none of 25 changes was installed")
 	}
@@ -130,7 +130,7 @@ func TestADigestBeyondTheBackstopIsRefused(t *testing.T) {
 // A fold that is the only way out is never refused: there is nowhere else to go.
 func TestAFoldThatMustFreeIsNeverRefused(t *testing.T) {
 	a, _ := repairAgent(t, []scriptedReply{{text: "did some work", usage: billed(9000, 400)}})
-	if _, _, err := a.foldOrDegrade(context.Background(), CompactionTriggerOverflow, true, foldWithADroppedChange(), "", 4000); err != nil {
+	if _, _, err := a.window().foldOrDegrade(context.Background(), CompactionTriggerOverflow, true, foldWithADroppedChange(), "", 4000); err != nil {
 		t.Fatalf("a must-free fold was refused: %v", err)
 	}
 }

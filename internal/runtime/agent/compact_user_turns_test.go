@@ -34,7 +34,7 @@ func compactWithSink(t *testing.T, sess *sessionstore.Session) []event.Event {
 	sink := event.FuncSink(func(e event.Event) { got = append(got, e) })
 	a := New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), sess,
 		Options{ContextWindow: 8_000, CompactRatio: 0.85, RecentKeep: 2}, sink)
-	if err := a.compact(context.Background(), "manual", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
+	if err := a.window().compact(context.Background(), "manual", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
 	return got
@@ -105,10 +105,10 @@ func noticeTexts(events []event.Event) []string {
 func TestChildRetentionScalesToItsOwnWindow(t *testing.T) {
 	opts := Options{KeepPolicy: KeepErrors | KeepUserMarked, RecentKeep: 2, CompactRatio: 0.85, ContextWindow: 32_000, SubagentDepth: 1}
 	child := New(&fakeProvider{reply: "ok"}, tool.NewRegistry(), &sessionstore.Session{}, opts, event.Discard)
-	if got, want := child.keptUserTurnsBudget(), int(32_000*keptUserTurnsWindowFrac); got != want {
+	if got, want := child.window().keptUserTurnsBudget(), int(32_000*keptUserTurnsWindowFrac); got != want {
 		t.Fatalf("child retention budget = %d, want %d scaled to its own window", got, want)
 	}
-	kept, _, retention, _ := child.partitionFoldForProjection([]provider.Message{
+	kept, _, retention, _ := child.window().partitionFoldForProjection([]provider.Message{
 		{Role: provider.RoleUser, Content: "parent instruction: do not touch the public API"},
 		{Role: provider.RoleAssistant, Content: "child work"},
 	})

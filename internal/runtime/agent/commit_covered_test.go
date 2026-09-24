@@ -40,7 +40,7 @@ func TestSummaryProjectionStateRecordsTheCommittedBoundary(t *testing.T) {
 	canonical := commitCanonical(12)
 	const covered = 7
 
-	state := a.summaryProjectionState(summaryProjectionCommit{
+	state := a.window().summaryProjectionState(summaryProjectionCommit{
 		canonical: canonical, covered: covered,
 		projected: []provider.Message{{Role: provider.RoleSystem, Content: "digest"}},
 		summary:   "digest", trigger: CompactionTriggerManual,
@@ -72,7 +72,7 @@ func TestCommitSummaryProjectionRefusesBoundaryOutsideCanonical(t *testing.T) {
 	canonical := commitCanonical(6)
 	for _, covered := range []int{0, -1, len(canonical) + 1} {
 		a := commitTestAgent(t)
-		if _, err := a.commitSummaryProjection(summaryProjectionCommit{
+		if _, err := a.window().commitSummaryProjection(summaryProjectionCommit{
 			canonical: canonical, covered: covered,
 			projected: []provider.Message{{Role: provider.RoleSystem, Content: "digest"}},
 		}); err == nil {
@@ -99,7 +99,7 @@ func TestFoldedProjectionCarriesTheOldBodyRemainder(t *testing.T) {
 		provider.Message{Role: provider.RoleUser, Content: "live-tail"})
 
 	const start = 2 // inside the body, past the head
-	got, boundary := a.foldedProjection(state, true, view, nil, 1, start, "new digest")
+	got, boundary := a.window().foldedProjection(state, true, view, nil, 1, start, "new digest")
 
 	if boundary.Covered != 19 {
 		t.Fatalf("Covered = %d, want the previous coverage 19", boundary.Covered)

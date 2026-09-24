@@ -12,7 +12,7 @@ import (
 	"reasonix/internal/contract/provider"
 )
 
-func (a *Agent) contextMaintenanceInputHash(visible []provider.Message) string {
+func (a *contextWindow) contextMaintenanceInputHash(visible []provider.Message) string {
 	if a == nil {
 		return ""
 	}
@@ -21,18 +21,18 @@ func (a *Agent) contextMaintenanceInputHash(visible []provider.Message) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (a *Agent) contextMaintenanceBlocked(inputHash string) (bool, string) {
+func (a *contextWindow) contextMaintenanceBlocked(inputHash string) (bool, string) {
 	if a == nil {
 		return false, ""
 	}
-	a.sess.compactionMu.Lock()
-	defer a.sess.compactionMu.Unlock()
-	r := a.sess.compactionState.LastReceipt
+	a.sess.win.compactionMu.Lock()
+	defer a.sess.win.compactionMu.Unlock()
+	r := a.sess.win.compactionState.LastReceipt
 	if r == nil {
 		// Legacy sidecars may only have BlockedInputHash without a receipt.
-		if a.sess.compactionState.BlockedInputHash != "" &&
-			(inputHash == "" || a.sess.compactionState.BlockedInputHash == inputHash) {
-			return true, a.sess.compactionState.BlockedReason
+		if a.sess.win.compactionState.BlockedInputHash != "" &&
+			(inputHash == "" || a.sess.win.compactionState.BlockedInputHash == inputHash) {
+			return true, a.sess.win.compactionState.BlockedReason
 		}
 		return false, ""
 	}
@@ -42,10 +42,10 @@ func (a *Agent) contextMaintenanceBlocked(inputHash string) (bool, string) {
 	// Generation-scoped: once this generation fails, automatic maintenance
 	// does not pay for another summary until a successful install, manual
 	// compress, or lineage change advances the generation.
-	return true, firstNonEmpty(a.sess.compactionState.BlockedReason, r.Reason)
+	return true, firstNonEmpty(a.sess.win.compactionState.BlockedReason, r.Reason)
 }
 
-func (a *Agent) emitContextMaintenance(r *sessionstore.ContextMaintenanceReceipt) {
+func (a *contextWindow) emitContextMaintenance(r *sessionstore.ContextMaintenanceReceipt) {
 	if a == nil || r == nil || a.svc.sink == nil {
 		return
 	}
@@ -61,14 +61,14 @@ func (a *Agent) emitContextMaintenance(r *sessionstore.ContextMaintenanceReceipt
 // compactionFrame stamps the boundary that sent a fold onto one frame. Every
 // emitter carries it, and four copies of the same two lookups is how one of
 // them comes to report a threshold the session is not running under.
-func (a *Agent) compactionFrame(c event.Compaction) event.Compaction {
+func (a *contextWindow) compactionFrame(c event.Compaction) event.Compaction {
 	c.Boundary, c.TriggerTokens = a.compactBoundary(), a.compactTrigger()
 	return c
 }
 
 // compactBoundary names the threshold that decides maintenance right now: the
 // window share, or the absolute visible-input size that does not come from it.
-func (a *Agent) compactBoundary() string {
+func (a *contextWindow) compactBoundary() string {
 	capacity := a.capacityCompactTrigger()
 	if capacity <= 0 || a.compactRatio > 1 {
 		return ""
@@ -83,15 +83,15 @@ func (a *Agent) compactBoundary() string {
 // receipt and advances no generation: nothing was spent and nothing is blocked,
 // so the next round is free to try again — which is exactly why the attempt
 // would otherwise leave no trace at all.
-func (a *Agent) noteMaintenanceNoop(trigger string, reason CompactionNoopReason, inputTokens int) {
+func (a *contextWindow) noteMaintenanceNoop(trigger string, reason CompactionNoopReason, inputTokens int) {
 	if a == nil || reason == "" || a.svc.sink == nil {
 		return
 	}
 	turn := a.activeTurnCreatedAt.Load()
-	if a.sess.compaction.lastNoop.reason == reason && a.sess.compaction.lastNoop.turn == turn {
+	if a.sess.win.compaction.lastNoop.reason == reason && a.sess.win.compaction.lastNoop.turn == turn {
 		return
 	}
-	a.sess.compaction.lastNoop = maintenanceNoop{reason: reason, turn: turn}
+	a.sess.win.compaction.lastNoop = maintenanceNoop{reason: reason, turn: turn}
 	a.svc.sink.Emit(event.Event{Kind: event.ContextMaintenanceEvent, Maintenance: &event.ContextMaintenance{
 		Status: "noop", Action: "summary", Trigger: trigger, Code: string(reason),
 		Boundary: a.compactBoundary(), TriggerTokens: a.compactTrigger(), InputTokens: inputTokens,
@@ -100,14 +100,14 @@ func (a *Agent) noteMaintenanceNoop(trigger string, reason CompactionNoopReason,
 
 // recordContextMaintenanceBlocked persists a generation-scoped blocked receipt.
 // code is empty where the verdict has no identity beyond its sentence.
-func (a *Agent) recordContextMaintenanceBlocked(inputHash, trigger, action string, code CompactionNoopReason, reason string) {
+func (a *contextWindow) recordContextMaintenanceBlocked(inputHash, trigger, action string, code CompactionNoopReason, reason string) {
 	a.recordContextMaintenanceOutcome(inputHash, trigger, action, "blocked", code, reason)
 }
 
 // recordContextMaintenanceOutcome records blocked or failed for the current
 // generation. Automatic Prepare will not re-enter summary until the generation
 // advances (successful install, manual compress, or lineage change).
-func (a *Agent) recordContextMaintenanceOutcome(inputHash, trigger, action, status string, code CompactionNoopReason, reason string) {
+func (a *contextWindow) recordContextMaintenanceOutcome(inputHash, trigger, action, status string, code CompactionNoopReason, reason string) {
 	if a == nil || a.sess.conversation == nil {
 		return
 	}
@@ -125,13 +125,13 @@ func (a *Agent) recordContextMaintenanceOutcome(inputHash, trigger, action, stat
 	}
 	_, transcriptVersion := a.sess.conversation.SnapshotMessagesVersion()
 	promptCacheKey := a.currentPromptCacheKey()
-	a.sess.compactionMu.Lock()
-	state := a.sess.compactionState
+	a.sess.win.compactionMu.Lock()
+	state := a.sess.win.compactionState
 	previous := state
 	if state.LastReceipt != nil &&
 		(state.LastReceipt.Status == "blocked" || state.LastReceipt.Status == "failed") &&
 		state.LastReceipt.Action == action {
-		a.sess.compactionMu.Unlock()
+		a.sess.win.compactionMu.Unlock()
 		return
 	}
 	now := time.Now().UTC()
@@ -156,17 +156,17 @@ func (a *Agent) recordContextMaintenanceOutcome(inputHash, trigger, action, stat
 		Code: string(code), Boundary: a.compactBoundary(), TriggerTokens: a.compactTrigger(),
 	}
 	state.UpdatedAt = now
-	a.sess.compactionState = state
+	a.sess.win.compactionState = state
 	if err := a.persistCompactionStateLocked(); err != nil {
-		a.sess.compactionState = previous
-		a.sess.compactionMu.Unlock()
+		a.sess.win.compactionState = previous
+		a.sess.win.compactionMu.Unlock()
 		return
 	}
-	a.sess.compactionMu.Unlock()
+	a.sess.win.compactionMu.Unlock()
 	a.emitContextMaintenance(state.LastReceipt)
 }
 
-func (a *Agent) emitCompactionTelemetry(t CompactionTelemetry) {
+func (a *contextWindow) emitCompactionTelemetry(t CompactionTelemetry) {
 	detail := fmt.Sprintf("trigger=%s mode=%s cache=%s src=%d fold=%d spans=%d proj=%d in=%d out=%d hit=%d miss=%d write=%d reqs=%d user_kept=%d user_dropped=%d",
 		t.Trigger, t.Mode, t.CacheState, t.SourceTokens, t.FoldTokens, t.Spans, t.ProjectionTokens,
 		t.InputTokens, t.OutputTokens, t.CacheHitTokens, t.CacheMissTokens, t.CacheWriteTokens, t.RequestCount,
@@ -186,6 +186,6 @@ func (a *Agent) emitCompactionTelemetry(t CompactionTelemetry) {
 	a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "compaction telemetry", Detail: detail})
 }
 
-func (a *Agent) emitCompactionAborted(trigger string) {
+func (a *contextWindow) emitCompactionAborted(trigger string) {
 	a.svc.sink.Emit(event.Event{Kind: event.CompactionDone, Compaction: event.Compaction{Trigger: trigger}})
 }

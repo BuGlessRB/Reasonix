@@ -94,7 +94,7 @@ func TestContextUsedTokensIncludesToolSchemasLikeTheTrigger(t *testing.T) {
 	}
 	// The gauge must include the tool schemas the trigger counts. The old
 	// message-only estimator ignored them and reported exactly the message cost.
-	if msgOnly := a.estimatedPromptTokens(a.modelVisibleMessages()); used <= msgOnly {
+	if msgOnly := a.window().estimatedPromptTokens(a.window().modelVisibleMessages()); used <= msgOnly {
 		t.Fatalf("gauge = %d, message-only estimate = %d; the gauge must price tool schemas like the trigger", used, msgOnly)
 	}
 }

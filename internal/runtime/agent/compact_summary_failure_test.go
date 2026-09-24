@@ -54,25 +54,25 @@ func agentOverForceWindow(t *testing.T, prov provider.Provider, sess *sessionsto
 // standing in for the summary. The receipt is the host record that the
 // projection was installed; the digest text is what the model is actually told.
 func degradedFold(a *Agent) bool {
-	r := a.sess.compactionState.LastReceipt
+	r := a.sess.win.compactionState.LastReceipt
 	return r != nil && r.Status == "applied" &&
-		strings.Contains(latestDigest(a.sess.compactionState.Projection.Messages), "summary was unavailable")
+		strings.Contains(latestDigest(a.sess.win.compactionState.Projection.Messages), "summary was unavailable")
 }
 
 func prepareContext(ctx context.Context, a *Agent, trigger string) error {
-	_, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: trigger})
+	_, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: trigger})
 	return err
 }
 
 // foldRegionOf is the region the next compaction would hand the summarizer.
 func foldRegionOf(a *Agent) []provider.Message {
 	canonical, version := a.sess.conversation.SnapshotMessagesVersion()
-	msgs, _ := a.visibleInputForFold(a.sess.compactionState, canonical, version)
-	head, start, ok, _ := a.planFoldRegion(msgs, false)
+	msgs, _ := a.window().visibleInputForFold(a.sess.win.compactionState, canonical, version)
+	head, start, ok, _ := a.window().planFoldRegion(msgs, false)
 	if !ok {
 		return nil
 	}
-	_, fold, _, _ := a.partitionFoldForProjection(msgs[head:start])
+	_, fold, _, _ := a.window().partitionFoldForProjection(msgs[head:start])
 	return fold
 }
 
@@ -89,7 +89,7 @@ func latestDigest(msgs []provider.Message) string {
 // projectionTokens reports what the model would actually see.
 func projectionTokens(a *Agent) int {
 	msgs, _ := a.sess.conversation.SnapshotMessagesVersion()
-	return a.estimatedPromptTokens(provider.ModelMessages(modelVisibleFromProjection(a.sess.compactionState.Projection, msgs)))
+	return a.window().estimatedPromptTokens(provider.ModelMessages(modelVisibleFromProjection(a.sess.win.compactionState.Projection, msgs)))
 }
 
 // The 90s summary bound is deliberately not retried, so a summarizer that never
@@ -98,7 +98,7 @@ func projectionTokens(a *Agent) int {
 func TestSummarizerTimeoutWhereFoldIsTheOnlyWayOutDegrades(t *testing.T) {
 	sess := foldableSessionOverForce(6)
 	a := agentOverForce(t, &fakeProvider{hang: true}, sess)
-	before := a.estimatedPromptTokens(provider.ModelMessages(sess.Messages))
+	before := a.window().estimatedPromptTokens(provider.ModelMessages(sess.Messages))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -113,7 +113,7 @@ func TestSummarizerTimeoutWhereFoldIsTheOnlyWayOutDegrades(t *testing.T) {
 	}
 	if !degradedFold(a) {
 		t.Errorf("no degraded fold committed: receipt=%+v digest=%q",
-			a.sess.compactionState.LastReceipt, latestDigest(a.sess.compactionState.Projection.Messages))
+			a.sess.win.compactionState.LastReceipt, latestDigest(a.sess.win.compactionState.Projection.Messages))
 	}
 }
 
@@ -123,7 +123,7 @@ func TestSummarizerTimeoutWhereFoldIsTheOnlyWayOutDegrades(t *testing.T) {
 func TestOverflowSummarizerFailureDegradesInsteadOfBlockingTheTurn(t *testing.T) {
 	sess := foldableSessionOverForce(6)
 	a := agentOverForce(t, &fakeProvider{streamErr: errors.New("provider down")}, sess)
-	before := a.estimatedPromptTokens(provider.ModelMessages(sess.Messages))
+	before := a.window().estimatedPromptTokens(provider.ModelMessages(sess.Messages))
 
 	if err := prepareContext(context.Background(), a, CompactionTriggerOverflow); err != nil {
 		t.Fatalf("prepare = %v, want a degraded fold instead of ErrCompactionRequired", err)
@@ -132,7 +132,7 @@ func TestOverflowSummarizerFailureDegradesInsteadOfBlockingTheTurn(t *testing.T)
 		t.Fatalf("degraded fold freed no context: %d -> %d", before, after)
 	}
 	if !degradedFold(a) {
-		t.Errorf("no degraded fold committed: receipt=%+v", a.sess.compactionState.LastReceipt)
+		t.Errorf("no degraded fold committed: receipt=%+v", a.sess.win.compactionState.LastReceipt)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestOverflowSummarizerFailureDegradesInsteadOfBlockingTheTurn(t *testing.T)
 func TestSummarizerFailureOnOversizedFoldDegrades(t *testing.T) {
 	sess := foldableSessionOverForce(120)
 	a := agentOverForceWindow(t, &fakeProvider{streamErr: errors.New("provider exploded")}, sess, 60000)
-	if tokens, budget := a.summaryInputTokens(foldRegionOf(a)), a.summaryInputBudget(""); budget <= 0 || tokens <= budget {
+	if tokens, budget := a.window().summaryInputTokens(foldRegionOf(a)), a.window().summaryInputBudget(""); budget <= 0 || tokens <= budget {
 		t.Fatalf("fixture fold is %d tokens against a %d budget; the shortening path is not exercised", tokens, budget)
 	}
 
@@ -150,7 +150,7 @@ func TestSummarizerFailureOnOversizedFoldDegrades(t *testing.T) {
 		t.Fatalf("prepare = %v, want a degraded fold", err)
 	}
 	if !degradedFold(a) {
-		t.Errorf("no degraded fold committed: receipt=%+v", a.sess.compactionState.LastReceipt)
+		t.Errorf("no degraded fold committed: receipt=%+v", a.sess.win.compactionState.LastReceipt)
 	}
 }
 
@@ -160,7 +160,7 @@ func TestSummarizerFailureOnOversizedFoldDegrades(t *testing.T) {
 func TestPressureBelowHardCeilingKeepsTheFailure(t *testing.T) {
 	sess := foldableSessionOverForce(6)
 	a := agentOverForce(t, &fakeProvider{streamErr: errors.New("provider down")}, sess)
-	if est, hard := a.estimatedPromptTokens(sess.Messages), a.hardInputCeiling(); est >= hard {
+	if est, hard := a.window().estimatedPromptTokens(sess.Messages), a.window().hardInputCeiling(); est >= hard {
 		t.Fatalf("fixture estimates %d tokens against a %d ceiling; it is not below it", est, hard)
 	}
 
@@ -170,7 +170,7 @@ func TestPressureBelowHardCeilingKeepsTheFailure(t *testing.T) {
 	if degradedFold(a) {
 		t.Error("a recoverable view was folded without a summary")
 	}
-	if r := a.sess.compactionState.LastReceipt; r == nil || (r.Status != "blocked" && r.Status != "failed") {
+	if r := a.sess.win.compactionState.LastReceipt; r == nil || (r.Status != "blocked" && r.Status != "failed") {
 		t.Errorf("receipt = %+v, want the failure recorded so the summary is not paid for twice", r)
 	}
 }

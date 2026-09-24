@@ -42,8 +42,8 @@ func addTurns(sess *sessionstore.Session, n, words int) {
 // large enough that it would have folded on its own.
 func TestManualCompactRunsBelowTheAutomaticTrigger(t *testing.T) {
 	a, prov := manualAgent(t, foldableSessionOverForce(60))
-	if est := a.estimatedPromptTokens(a.modelVisibleMessages()); est >= a.compactTrigger() {
-		t.Fatalf("fixture is not below the trigger: %d >= %d", est, a.compactTrigger())
+	if est := a.window().estimatedPromptTokens(a.window().modelVisibleMessages()); est >= a.window().compactTrigger() {
+		t.Fatalf("fixture is not below the trigger: %d >= %d", est, a.window().compactTrigger())
 	}
 	verdict, err := a.CompactNow(context.Background(), CompactRequest{})
 	if err != nil {
@@ -151,7 +151,7 @@ func TestForcedCompactWaivesEconomicsOnly(t *testing.T) {
 	// Whatever it bought, the projection stays a projection: a candidate that
 	// is not smaller than what it replaces is still refused.
 	if err == nil && verdict.Compacted() {
-		state := a.sess.compactionState
+		state := a.sess.win.compactionState
 		if state.LastReceipt == nil || state.LastReceipt.ResultTokens >= state.LastReceipt.InputTokens {
 			t.Errorf("forced fold installed a projection that is not smaller: %+v", state.LastReceipt)
 		}

@@ -265,7 +265,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		// Context pressure rides the turn tail, never the cached prefix: an
 		// append leaves the prefix byte-stable, and a model that knows a fold
 		// is near can restate what the summary would drop.
-		if notice := a.contextBudgetNotice(); notice != "" {
+		if notice := a.window().contextBudgetNotice(); notice != "" {
 			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: sessionstore.MidTurnSteerMessage(notice, true)})
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: contextBudgetNoticeSummary(a.ContextBudget())})
 		}

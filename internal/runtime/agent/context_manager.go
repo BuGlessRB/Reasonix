@@ -43,7 +43,7 @@ func (p *compactionProgress) restart() {
 // Canonical session messages are immutable inputs; Prepare evolves only the
 // durable projection and returns the exact visible view for one sampling round.
 type ContextManager struct {
-	agent *Agent
+	agent *contextWindow
 }
 
 // ContextPreparePolicy describes one maintenance transaction.
@@ -71,12 +71,12 @@ type PreparedContext struct {
 	Maintenance CompactVerdict
 }
 
-func (a *Agent) contextManager() ContextManager { return ContextManager{agent: a} }
+func (a *contextWindow) contextManager() ContextManager { return ContextManager{agent: a} }
 
 // PrepareContext is the public automatic-maintenance entry used by smoke tools
 // and controllers that need a one-shot Prepare without sampling.
 func (a *Agent) PrepareContext(ctx context.Context) error {
-	_, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure})
+	_, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure})
 	return err
 }
 
@@ -126,9 +126,9 @@ func (m ContextManager) prepareOnce(ctx context.Context, policy ContextPreparePo
 		return prepared, nil
 	}
 	if est < fold {
-		a.sess.compaction.stuck = false
+		a.sess.win.compaction.stuck = false
 	}
-	if a.sess.compaction.stuck && policy.Trigger == CompactionTriggerPressure {
+	if a.sess.win.compaction.stuck && policy.Trigger == CompactionTriggerPressure {
 		return prepared, nil
 	}
 	// Asking, overflow and a physical ceiling each waive the trigger. Only the
@@ -223,7 +223,7 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 	if result.InputTokens >= fold {
 		reason := fmt.Sprintf("summary result remains above fold trigger (%d >= %d)", result.InputTokens, fold)
 		a.recordContextMaintenanceBlocked(a.contextMaintenanceInputHash(result.Messages), policy.Trigger, "summary", "", reason)
-		a.sess.compaction.stuck = true
+		a.sess.win.compaction.stuck = true
 		// Only a provider that already refused ends the turn here. Our ceiling
 		// is an estimate, and refusing on it turns a window too small to
 		// summarize one turn into a failed run the provider would have served.
@@ -250,7 +250,7 @@ func (m ContextManager) currentPrepared() PreparedContext {
 // estimatedVisibleRequestTokens sizes the pre-interceptor sampling shape:
 // ModelMessages + role projection + tool schemas. Extension interceptors are
 // intentionally omitted here (see prepareOnce) to avoid double side effects.
-func (a *Agent) estimatedVisibleRequestTokens(visible []provider.Message) int {
+func (a *contextWindow) estimatedVisibleRequestTokens(visible []provider.Message) int {
 	if a == nil {
 		return 0
 	}

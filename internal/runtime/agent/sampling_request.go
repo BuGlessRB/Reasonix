@@ -45,7 +45,7 @@ func (a *Agent) handleSamplingError(
 		}
 		return true, streamedTurn{}
 	}
-	if attempt < maxSamplingAttempts && a.recoverContextOverflow(ctx, frozen, result.err) {
+	if attempt < maxSamplingAttempts && a.window().recoverContextOverflow(ctx, frozen, result.err) {
 		streamSink.Discard()
 		a.emitStreamAttempt(attemptID, event.StreamAttemptDiscard, attempt, "context overflow", result.err)
 		return true, streamedTurn{}
@@ -65,9 +65,9 @@ func (a *Agent) prepareSamplingRequest(ctx context.Context) (samplingRequest, er
 	if err != nil {
 		return samplingRequest{}, err
 	}
-	if budget, clipped, budgetErr := a.effectiveOutputBudget(frozen.req); budgetErr != nil {
+	if budget, clipped, budgetErr := a.window().effectiveOutputBudget(frozen.req); budgetErr != nil {
 		// One-shot physical overflow recovery. Do not loop.
-		if _, perr := a.contextManager().Prepare(ctx, ContextPreparePolicy{
+		if _, perr := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{
 			Trigger: CompactionTriggerOverflow,
 		}); perr != nil {
 			return samplingRequest{}, budgetErr
@@ -76,20 +76,20 @@ func (a *Agent) prepareSamplingRequest(ctx context.Context) (samplingRequest, er
 		if rerr != nil {
 			return samplingRequest{}, rerr
 		}
-		if _, _, budgetErr2 := a.effectiveOutputBudget(rebuilt.req); budgetErr2 != nil {
+		if _, _, budgetErr2 := a.window().effectiveOutputBudget(rebuilt.req); budgetErr2 != nil {
 			return samplingRequest{}, budgetErr2
 		}
 		// Re-apply clipping on the recovered view.
-		if budget2, clipped2, err2 := a.effectiveOutputBudget(rebuilt.req); err2 == nil && clipped2 {
+		if budget2, clipped2, err2 := a.window().effectiveOutputBudget(rebuilt.req); err2 == nil && clipped2 {
 			rebuilt.req.MaxTokens = budget2
 		}
-		shape := a.requestCalibrationShape(rebuilt.req)
+		shape := a.window().requestCalibrationShape(rebuilt.req)
 		a.sess.output.activeReqShape.Store(&shape)
 		return samplingRequest{req: freezeProviderRequest(rebuilt.req)}, nil
 	} else if clipped {
 		frozen.req.MaxTokens = budget
 	}
-	shape := a.requestCalibrationShape(frozen.req)
+	shape := a.window().requestCalibrationShape(frozen.req)
 	a.sess.output.activeReqShape.Store(&shape)
 	return samplingRequest{req: freezeProviderRequest(frozen.req)}, nil
 }
@@ -98,7 +98,7 @@ func (a *Agent) buildSamplingRequest(ctx context.Context, trigger string) (sampl
 	// CreatedAt is durable UI metadata, not model input. Strip it from the
 	// transport copy so wall-clock differences never invalidate the provider's
 	// prompt-cache prefix (and custom providers cannot accidentally send it).
-	prepared, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: trigger})
+	prepared, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: trigger})
 	if err != nil {
 		return samplingRequest{}, err
 	}

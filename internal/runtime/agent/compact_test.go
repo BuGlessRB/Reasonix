@@ -18,9 +18,9 @@ func prepareForObservedUsage(a *Agent, ctx context.Context, usage *provider.Usag
 	if a == nil || usage == nil || usage.LatestPromptTokens() <= 0 {
 		return
 	}
-	view := a.modelVisibleMessages()
-	a.setPromptTokenCalibration(usage.LatestPromptTokens(), a.requestCalibrationShape(provider.Request{Messages: view}))
-	_, _ = a.contextManager().Prepare(ctx, ContextPreparePolicy{
+	view := a.window().modelVisibleMessages()
+	a.window().setPromptTokenCalibration(usage.LatestPromptTokens(), a.window().requestCalibrationShape(provider.Request{Messages: view}))
+	_, _ = a.window().contextManager().Prepare(ctx, ContextPreparePolicy{
 		Trigger: CompactionTriggerPressure, ObservedInputTokens: usage.LatestPromptTokens(),
 	})
 }
@@ -153,7 +153,7 @@ func TestPinnedPrefixLen(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := newA(tc.win).pinnedPrefixLen(tc.msgs); got != tc.want {
+			if got := newA(tc.win).window().pinnedPrefixLen(tc.msgs); got != tc.want {
 				t.Errorf("pinnedPrefixLen = %d, want %d", got, tc.want)
 			}
 		})
@@ -170,7 +170,7 @@ func TestKeepIndexesKeepsSiblingToolResultsForKeptError(t *testing.T) {
 		{Role: provider.RoleTool, ToolCallID: "ok", Name: "read_file", Content: "package main"},
 	}
 
-	keep, _ := (&Agent{keepPolicy: KeepErrors}).keepIndexes(region)
+	keep, _ := (&Agent{keepPolicy: KeepErrors}).window().keepIndexes(region)
 	for i, kept := range keep {
 		if !kept {
 			t.Fatalf("keep[%d] = false, want all sibling tool-call messages kept: %v", i, keep)
@@ -188,7 +188,7 @@ func TestKeepIndexesScopesPolicyAfterLatestSummary(t *testing.T) {
 		{Role: provider.RoleTool, ToolCallID: "new", Name: "bash", Content: "error: new failure"},
 	}
 
-	keep, _ := (&Agent{keepPolicy: KeepErrors}).keepIndexes(region)
+	keep, _ := (&Agent{keepPolicy: KeepErrors}).window().keepIndexes(region)
 	want := []bool{false, false, false, true, true}
 	for i := range want {
 		if keep[i] != want[i] {
@@ -228,7 +228,7 @@ func TestSummarizeRespectsContextCancel(t *testing.T) {
 	a := New(&fakeProvider{hang: true}, tool.NewRegistry(), &sessionstore.Session{}, Options{}, event.Discard)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, _, err := a.summarize(ctx, []provider.Message{{Role: provider.RoleUser, Content: "x"}}, ""); err == nil {
+	if _, _, err := a.window().summarize(ctx, []provider.Message{{Role: provider.RoleUser, Content: "x"}}, ""); err == nil {
 		t.Fatal("summarize must return when ctx is cancelled, not hang")
 	}
 }
@@ -251,7 +251,7 @@ func TestCompactEmitsEvents(t *testing.T) {
 	sink := event.FuncSink(func(e event.Event) { got = append(got, e) })
 	a := New(prov, tool.NewRegistry(), sess, Options{ContextWindow: 50_000, RecentKeep: 2}, sink)
 
-	if err := a.compact(context.Background(), "auto", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
+	if err := a.window().compact(context.Background(), "auto", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
 
@@ -301,7 +301,7 @@ func TestCompactInjectsFocusAndPreCompactHook(t *testing.T) {
 		Hooks: &stubHooks{preCompactOut: "KEEP-THE-MIGRATION-PLAN"},
 	}, event.Discard)
 
-	if err := a.compact(context.Background(), "manual", "focus on the auth refactor", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
+	if err := a.window().compact(context.Background(), "manual", "focus on the auth refactor", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
 	if len(prov.got) == 0 || prov.got[0].Role != provider.RoleSystem {
@@ -326,7 +326,7 @@ func TestCompactSkipsSingleSmallMessage(t *testing.T) {
 	}}
 	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 
-	if err := a.compact(context.Background(), "auto", "", compactionScope{}); err != nil {
+	if err := a.window().compact(context.Background(), "auto", "", compactionScope{}); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
 	if got := len(sess.Messages); got != 4 {
@@ -373,8 +373,8 @@ func TestMaybeCompactThreshold(t *testing.T) {
 	prov = &fakeProvider{reply: "s"}
 	a = New(prov, tool.NewRegistry(), sess, opts, event.Discard)
 	prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: 6000})
-	if a.currentProjectionVersion() != 0 || len(prov.got) != 0 {
-		t.Fatalf("60%% should not maintain: version=%d calls=%d", a.currentProjectionVersion(), len(prov.got))
+	if a.window().currentProjectionVersion() != 0 || len(prov.got) != 0 {
+		t.Fatalf("60%% should not maintain: version=%d calls=%d", a.window().currentProjectionVersion(), len(prov.got))
 	}
 
 	// At/above compact_ratio: one summary projection; canonical stays full.
@@ -452,8 +452,8 @@ func TestMaybeCompactSkipsLowValueRegionBeforeForceCeiling(t *testing.T) {
 	if len(prov.got) != 0 {
 		t.Fatalf("summarizer was called for low-value non-forced region: %+v", prov.got)
 	}
-	if a.currentProjectionVersion() != 0 {
-		t.Fatalf("low-value region installed projection version %d", a.currentProjectionVersion())
+	if a.window().currentProjectionVersion() != 0 {
+		t.Fatalf("low-value region installed projection version %d", a.window().currentProjectionVersion())
 	}
 }
 
@@ -517,7 +517,7 @@ func TestInterruptedDisplayStaysOutOfCompactionPromptAndProjection(t *testing.T)
 		InterruptedTurn: &provider.InterruptedTurnRecovery{Pending: true},
 	}
 	a := &Agent{}
-	kept, fold, retention, _ := a.partitionFoldForProjection([]provider.Message{local})
+	kept, fold, retention, _ := a.window().partitionFoldForProjection([]provider.Message{local})
 	if len(kept) != 0 || len(fold) != 0 {
 		t.Fatalf("compaction partition kept=%+v fold=%+v, want display-only output in neither", kept, fold)
 	}
@@ -551,10 +551,10 @@ func TestCompactKeepsActiveTurnVerbatim(t *testing.T) {
 	}, event.Discard)
 	a.activeTurnCreatedAt.Store(currentCreatedAt)
 
-	if err := a.compact(context.Background(), "auto", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
+	if err := a.window().compact(context.Background(), "auto", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
-	start := a.activeTurnStart(sess.Messages)
+	start := a.window().activeTurnStart(sess.Messages)
 	if start < 0 || len(sess.Messages)-start != 3 {
 		t.Fatalf("active turn boundary = %d in %+v, want three-message verbatim tail", start, sess.Messages)
 	}
@@ -624,11 +624,11 @@ func TestMaybeCompactClearsStuckLatchAnywhereBelowTrigger(t *testing.T) {
 			sess := sessionstore.NewSession("sys")
 			sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 			a := New(&fakeProvider{reply: "- summary"}, tool.NewRegistry(), sess, Options{ContextWindow: 20000}, event.Discard)
-			a.sess.compaction.stuck = true
+			a.sess.win.compaction.stuck = true
 
 			prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: tc.prompt})
 
-			if a.sess.compaction.stuck {
+			if a.sess.win.compaction.stuck {
 				t.Fatalf("prompt %d sits under the trigger; want the latch cleared", tc.prompt)
 			}
 		})
@@ -643,25 +643,25 @@ func TestMaybeCompactDefersWhenOnlyActiveTurnRemains(t *testing.T) {
 	a := New(&fakeProvider{reply: "- summary"}, tool.NewRegistry(), sess, Options{ContextWindow: 20000}, event.Discard)
 
 	prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: 17000})
-	if a.sess.compaction.stuck {
+	if a.sess.win.compaction.stuck {
 		t.Fatal("active turn should be deferred, not durably blocked")
 	}
-	version := a.currentProjectionVersion()
+	version := a.window().currentProjectionVersion()
 	prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: 17000})
-	if got := a.currentProjectionVersion(); got != version {
+	if got := a.window().currentProjectionVersion(); got != version {
 		t.Fatalf("blocked fingerprint retried: projection version %d -> %d", version, got)
 	}
 }
 
 func TestCompactTriggerIgnoresConfiguredOutputBudget(t *testing.T) {
 	a := &Agent{agentConfig: agentConfig{contextWindow: 100_000, maxOutputTokens: 20_000, compactRatio: 0.85}}
-	if got := a.compactTrigger(); got != 85_000 {
+	if got := a.window().compactTrigger(); got != 85_000 {
 		t.Fatalf("trigger = %d, want 85000 (output budget must not change it)", got)
 	}
-	if got := a.hardInputCeiling(); got != 100_000-protocolReserveTokens {
+	if got := a.window().hardInputCeiling(); got != 100_000-protocolReserveTokens {
 		t.Fatalf("hard ceiling = %d, want window minus protocol reserve only", got)
 	}
-	if got := a.checkpointCeiling(); got != 50_000 {
+	if got := a.window().checkpointCeiling(); got != 50_000 {
 		t.Fatalf("checkpoint ceiling = %d, want 50000", got)
 	}
 }
@@ -684,7 +684,7 @@ func TestCompactRollsOldDigestsIntoNew(t *testing.T) {
 	a := New(&fakeProvider{reply: "merged digest"}, tool.NewRegistry(), sess,
 		Options{RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 
-	if err := a.compact(context.Background(), "manual", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
+	if err := a.window().compact(context.Background(), "manual", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
 	canonical := sess.Snapshot()

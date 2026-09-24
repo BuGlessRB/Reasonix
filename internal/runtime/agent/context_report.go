@@ -43,14 +43,18 @@ func (a *Agent) ContextReport() ContextReport {
 	if a == nil {
 		return ContextReport{}
 	}
+	return a.window().contextReport()
+}
+
+func (a *contextWindow) contextReport() ContextReport {
 	rep := ContextReport{
 		Window:             a.effectiveContextWindow(),
 		HardCeiling:        a.hardInputCeiling(),
 		OutputBudget:       a.maxOutputTokens,
-		CacheState:         a.CacheState(),
+		CacheState:         a.cacheState(),
 		UserTurnKeepBudget: a.keptUserTurnsBudget(),
 	}
-	retention := a.sess.compaction.lastUserTurns
+	retention := a.sess.win.compaction.lastUserTurns
 	rep.UserTurnsKept, rep.UserTurnsDropped = retention.Kept, retention.Dropped
 	rep.UserTurnsDroppedToks = retention.DroppedTokens
 	if u := a.sess.output.lastUsage.Load(); u != nil {
@@ -71,9 +75,9 @@ func (a *Agent) ContextReport() ContextReport {
 		}
 	}
 
-	a.sess.compactionMu.Lock()
-	st := a.sess.compactionState
-	a.sess.compactionMu.Unlock()
+	a.sess.win.compactionMu.Lock()
+	st := a.sess.win.compactionState
+	a.sess.win.compactionMu.Unlock()
 	// Prefer LastReceipt; fall back to legacy top-level mirrors from older sidecars.
 	if r := st.LastReceipt; r != nil && r.Status == "applied" {
 		rep.LastTrigger = r.Trigger

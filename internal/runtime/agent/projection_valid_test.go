@@ -162,15 +162,15 @@ func TestLoadProjectionSidecarRebindsMatchingContentAcrossLineage(t *testing.T) 
 	// New() already called LoadProjectionSidecar; the projection body matches
 	// the canonical covered prefix, so it must be rebound to the current key
 	// instead of being dropped (upgrade / model-switch path).
-	if len(a.sess.compactionState.Projection.Messages) == 0 {
+	if len(a.sess.win.compactionState.Projection.Messages) == 0 {
 		t.Fatal("matching projection body was dropped on lineage change")
 	}
 	wantKey := promptCacheKey("ws", sessionstore.BranchID(path), "this-model")
-	if a.sess.compactionState.PromptCacheKey != wantKey {
-		t.Fatalf("PromptCacheKey = %q, want %q", a.sess.compactionState.PromptCacheKey, wantKey)
+	if a.sess.win.compactionState.PromptCacheKey != wantKey {
+		t.Fatalf("PromptCacheKey = %q, want %q", a.sess.win.compactionState.PromptCacheKey, wantKey)
 	}
-	if a.sess.checkpointState != "restored" {
-		t.Fatalf("checkpointState = %q, want restored", a.sess.checkpointState)
+	if a.sess.win.checkpointState != "restored" {
+		t.Fatalf("checkpointState = %q, want restored", a.sess.win.checkpointState)
 	}
 	// The rebind must be persisted so the next launch does not re-downgrade.
 	disk, ok, err := sessionstore.LoadCompactionState(path)
@@ -207,8 +207,8 @@ func TestLoadProjectionSidecarDropsForeignCacheKey(t *testing.T) {
 	}, event.Discard)
 	// New() already called LoadProjectionSidecar; mismatched content must drop
 	// the projection body and keep the sidecar file for the other model.
-	if len(a.sess.compactionState.Projection.Messages) != 0 {
-		t.Fatalf("foreign projection loaded: %+v", a.sess.compactionState.Projection)
+	if len(a.sess.win.compactionState.Projection.Messages) != 0 {
+		t.Fatalf("foreign projection loaded: %+v", a.sess.win.compactionState.Projection)
 	}
 	if _, ok, err := sessionstore.LoadCompactionState(path); err != nil || !ok {
 		t.Fatalf("sidecar should remain on disk: ok=%v err=%v", ok, err)
@@ -231,7 +231,7 @@ func TestForceThresholdNoopReturnsCompactionRequired(t *testing.T) {
 		RecentKeep:    2,
 	}, event.Discard)
 
-	_, err := a.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure})
+	_, err := a.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure})
 	if err == nil {
 		t.Fatal("expected ErrCompactionRequired when force threshold has no fold region")
 	}
@@ -248,7 +248,7 @@ func TestSummarizeOnceDoesNotRetry(t *testing.T) {
 		usage2:   &provider.Usage{PromptTokens: 11, CompletionTokens: 3, TotalTokens: 14, RequestCount: 1},
 	}
 	a := New(fp, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
-	_, _, err := a.summarizeOnce(context.Background(), []provider.Message{
+	_, _, err := a.window().summarizeOnce(context.Background(), []provider.Message{
 		{Role: provider.RoleUser, Content: "fold me"},
 	}, "")
 	if err == nil {
@@ -309,7 +309,7 @@ func TestCompactInstallsCoveredPrefixHash(t *testing.T) {
 	if _, err := a.CompactNow(context.Background(), CompactRequest{}); err != nil {
 		t.Fatal(err)
 	}
-	st := a.sess.compactionState
+	st := a.sess.win.compactionState
 	if st.Projection.CoveredPrefixHash == "" {
 		t.Fatal("CoveredPrefixHash not set")
 	}

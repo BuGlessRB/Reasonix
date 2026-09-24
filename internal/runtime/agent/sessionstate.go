@@ -18,6 +18,8 @@ type sessionRuntime struct {
 	mu           sync.Mutex // guards conversation for external Session()/SetSession
 	conversation *sessionstore.Session
 	output       outputBudgetState
+	// win is the context window's own state; only context-window files touch it.
+	win windowState
 
 	// cacheHit/cacheMiss are the session aggregate, which compaction must not
 	// reset — the hit-rate would crater every time the visible prefix is folded.
@@ -27,34 +29,15 @@ type sessionRuntime struct {
 
 	missingReasoning missingReasoningWatch
 
-	// coveredHash remembers the folded prefix's fingerprint under the rewrite
-	// counter that makes it valid; gauges read it off the run loop.
-	coveredHash atomic.Pointer[coveredHashMemo]
-
-	// compactionMu guards projection snapshots/install and the in-memory sidecar
-	// generation. Network summarization never runs while this lock is held.
-	compactionMu sync.Mutex
-	// compactionRunMu singleflights the expensive summary transaction without
-	// holding the session lock during network I/O.
-	compactionRunMu sync.Mutex
-	compaction      compactionProgress
-	compactionState sessionstore.CompactionState
-	cacheState      string // legacy resume telemetry; never provider-visible
-
-	// path and checkpointState are rebound by preflight when a transcript is
-	// bound, so reset leaves them to their owner rather than blanking them.
-	path            string // bound transcript path for projection sidecars
-	checkpointState string // none|restored|applied; runtime-only
+	// path is rebound by preflight when a transcript is bound, so reset leaves
+	// it to its owner rather than blanking it.
+	path string // bound transcript path for projection sidecars
 
 	// todoState is the host's canonical task list. It never rides in the prompt,
 	// so it survives compaction, and SetSession rebuilds it from the incoming
 	// snapshot rather than letting reset blank it.
 	todoMu    sync.Mutex
 	todoState []evidence.TodoItem
-
-	// budgetNotice latches which context-pressure rung the model has already
-	// been told about. Plain fields: the run loop is the only reader/writer.
-	budgetNotice budgetNoticeLatch
 
 	// lastPrefixShape records the previous provider request's cacheable prefix
 	// so usage events can explain prefix churn on the next request. Carried
@@ -78,15 +61,7 @@ func (r *sessionRuntime) reset(s *sessionstore.Session) {
 	r.cacheMiss.Store(0)
 	r.output.reset()
 	r.missingReasoning = missingReasoningWatch{}
-	// Keyed on a rewrite counter that restarts with the new transcript, so a
-	// carried-over entry could answer for history this session never had.
-	r.coveredHash.Store(nil)
-	r.compactionMu.Lock()
-	r.compactionState = sessionstore.CompactionState{} // lineage change; disk reloaded on Resume
-	r.cacheState = CacheStateUnknown
-	r.compactionMu.Unlock()
-	r.compaction.restart()
-	r.budgetNotice = budgetNoticeLatch{}
+	r.win.reset()
 }
 
 // session returns the bound conversation under the lock that guards the

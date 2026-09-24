@@ -51,7 +51,7 @@ const (
 var allRules = []string{
 	ruleEssay, ruleBanner, ruleMarker, ruleDeadCode,
 	ruleNarrative, ruleFileSize, ruleLayering, ruleLayerOrder,
-	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText,
+	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText, ruleWindowState,
 	ruleClaudeDialect, ruleWireParity, ruleOrphan,
 	ruleFrontendParity, ruleFlatView, ruleBuildArtifact,
 	ruleCodeOwners, ruleDocOwner, ruleDocProse, ruleDocLanguage, ruleReleaseNote,
@@ -187,6 +187,7 @@ func run(root string) ([]Finding, error) {
 		findings = append(findings, checkRefusalPath(src)...)
 		findings = append(findings, checkErrorText(src)...)
 		findings = append(findings, checkFlatView(src)...)
+		findings = append(findings, checkWindowState(src)...)
 		orphans.observe(src)
 		wires.observe(src)
 		entries, vars := dialectRefs(src)

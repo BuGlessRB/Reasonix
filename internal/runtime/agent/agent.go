@@ -569,7 +569,7 @@ func (a *Agent) SessionCache() (hit, miss int) {
 
 // ContextWindow returns the configured context-window size in tokens. 0
 // means compaction is disabled for this agent.
-func (a *Agent) ContextWindow() int { return a.effectiveContextWindow() }
+func (a *Agent) ContextWindow() int { return a.window().effectiveContextWindow() }
 
 // SetSink replaces the agent's event sink. Controllers use this to wrap the
 // sink after construction (e.g. durable inbox observation) without rebuilding
@@ -593,7 +593,7 @@ func (a *Agent) CompactRatio() float64 { return a.compactRatio }
 // fold has to be worth, so a context nothing was added to is declined rather
 // than summarized a second time. Only IgnoreEconomics waives that.
 func (a *Agent) CompactNow(ctx context.Context, req CompactRequest) (CompactVerdict, error) {
-	prepared, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{
+	prepared, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{
 		Trigger:         CompactionTriggerManual,
 		Instructions:    req.Instructions,
 		IgnoreThreshold: true,
@@ -678,7 +678,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *sessionstore.Ses
 		sess: sessionRuntime{
 			conversation: session,
 			path:         strings.TrimSpace(opts.SessionPath),
-			cacheState:   CacheStateUnknown,
+			win:          windowState{cacheState: CacheStateUnknown},
 		},
 		task: taskRuntime{
 			ledger: evidence.NewLedger(),

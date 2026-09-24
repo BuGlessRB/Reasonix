@@ -55,7 +55,7 @@ func TestEstimateMeasuresTheSurfaceTheRequestCarried(t *testing.T) {
 		t.Fatalf("the gated tool reached the request, so this arm measures nothing: %v", sent)
 	}
 
-	estimated := toolSchemaNames(a.estimationSurface())
+	estimated := toolSchemaNames(a.window().estimationSurface())
 	if !slices.Equal(estimated, sent) {
 		t.Fatalf("the estimate measures a surface no request carried\nestimated %v\nsent      %v", estimated, sent)
 	}
@@ -69,7 +69,7 @@ func TestEstimateFallsBackToTheWholeSurfaceBeforeAnyRequest(t *testing.T) {
 	reg.Add(estimationProbe{name: "always_here"})
 	reg.SetProviderVisibleTools([]string{"always_here"})
 	a := New(&scriptedProvider{name: "estimation-cold"}, reg, sessionstore.NewSession("sys"), Options{}, event.Discard)
-	if got := toolSchemaNames(a.estimationSurface()); !slices.Equal(got, []string{"always_here"}) {
+	if got := toolSchemaNames(a.window().estimationSurface()); !slices.Equal(got, []string{"always_here"}) {
 		t.Fatalf("cold estimate = %v, want the whole visible surface", got)
 	}
 }

@@ -162,14 +162,14 @@ func TestRequestImageTokensCountOnlyWhatTheRequestCarries(t *testing.T) {
 func TestCalibrationDeclinesARequestThatCarriedImages(t *testing.T) {
 	a := New(nil, tool.NewRegistry(), sessionstore.NewSession("sys"), Options{}, event.Discard)
 	text := requestCalibrationShape{requestChars: 4000}
-	a.setPromptTokenCalibration(1000, text)
+	a.window().setPromptTokenCalibration(1000, text)
 	pictured := text
 	pictured.imageTokens = 3000
-	a.setPromptTokenCalibration(4000, pictured)
+	a.window().setPromptTokenCalibration(4000, pictured)
 	if cal := a.sess.output.promptCalibration.Load(); cal == nil || cal.promptTokens != 1000 {
 		t.Fatalf("calibration learned from a request billed for pixels: %+v", cal)
 	}
-	if got := a.estimatedShapeTokens(pictured); got != 1000+3000 {
+	if got := a.window().estimatedShapeTokens(pictured); got != 1000+3000 {
 		t.Fatalf("estimate = %d, want calibrated text plus the image estimate", got)
 	}
 }

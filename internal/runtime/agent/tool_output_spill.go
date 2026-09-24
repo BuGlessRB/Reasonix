@@ -256,7 +256,7 @@ func (a *Agent) boundToolOutput(body, toolName, toolCallID, toolArgs string, fai
 		bound.Kind, bound.KeptBytes = event.BoundWindowed, len(out)
 		return out, bound, ""
 	}
-	strategy := a.snipStrategyFor(toolName)
+	strategy := a.window().snipStrategyFor(toolName)
 	if failed {
 		strategy = strategy.forFailure(MaxToolOutputBytes)
 	}

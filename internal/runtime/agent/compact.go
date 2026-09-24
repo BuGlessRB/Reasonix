@@ -89,7 +89,7 @@ Rules: be terse — bullet points and fragments, not prose. Preserve identifiers
 // at send time and must never make compaction happen earlier than the user's
 // configured compact_ratio.
 // capacityCompactTrigger answers how close a prompt is to not fitting.
-func (a *Agent) capacityCompactTrigger() int {
+func (a *contextWindow) capacityCompactTrigger() int {
 	window := a.effectiveContextWindow()
 	if window <= 0 {
 		return 0
@@ -108,7 +108,7 @@ func (a *Agent) capacityCompactTrigger() int {
 // property of its size and not of what the model could have held. It is an
 // explicit override: an unset or negative value leaves capacity as the only
 // automatic boundary.
-func (a *Agent) economicCompactTrigger() int {
+func (a *contextWindow) economicCompactTrigger() int {
 	if a.ablation.Off(ablation.Compaction) {
 		return 0
 	}
@@ -122,13 +122,13 @@ func (a *Agent) economicCompactTrigger() int {
 // CompactTrigger is the boundary in force, which is the number a frontend has
 // to show: the two bounds are configured separately and only one of them fires,
 // so a panel that renders the settings alone cannot say which.
-func (a *Agent) CompactTrigger() int { return a.compactTrigger() }
+func (a *Agent) CompactTrigger() int { return a.window().compactTrigger() }
 
 // compactTrigger is whichever boundary is reached first. An unmeasured window
 // leaves both unset rather than guessing at a size, and a ratio placed past the
 // window is how maintenance is turned off — economics tightens a live boundary,
 // never revives a retired one.
-func (a *Agent) compactTrigger() int {
+func (a *contextWindow) compactTrigger() int {
 	capacity := a.capacityCompactTrigger()
 	if capacity <= 0 || a.compactRatio > 1 {
 		return capacity
@@ -141,7 +141,7 @@ func (a *Agent) compactTrigger() int {
 
 // hardInputCeiling is a physical input-safety boundary, not another user
 // compaction threshold. Reply budgets are resolved independently at send time.
-func (a *Agent) hardInputCeiling() int {
+func (a *contextWindow) hardInputCeiling() int {
 	window := a.effectiveContextWindow()
 	if window <= 0 {
 		return 0
@@ -153,7 +153,7 @@ func (a *Agent) hardInputCeiling() int {
 // tail. Production windows use clamp(window×10%, 32K, 96K). Smaller synthetic
 // windows (tests / constrained providers) drop the 32K floor so the tail cannot
 // alone exceed the window.
-func (a *Agent) recentTailBudget() int {
+func (a *contextWindow) recentTailBudget() int {
 	window := a.effectiveContextWindow()
 	if window <= 0 {
 		return minRecentTailTokens
@@ -183,7 +183,7 @@ func (a *Agent) recentTailBudget() int {
 // below it are accepted without padding. The default is half the window; a
 // user who would rather accept a looser fold than pay for another summary
 // raises it.
-func (a *Agent) checkpointCeiling() int {
+func (a *contextWindow) checkpointCeiling() int {
 	window := a.effectiveContextWindow()
 	if window <= 0 {
 		return 0
@@ -197,7 +197,7 @@ func (a *Agent) checkpointCeiling() int {
 
 // exceptionalMinimumSavings is required only when the fixed prefix alone already
 // exceeds the 50% ceiling; otherwise ordinary candidates simply stay under 50%.
-func (a *Agent) exceptionalMinimumSavings() int {
+func (a *contextWindow) exceptionalMinimumSavings() int {
 	window := a.effectiveContextWindow()
 	if window <= 0 {
 		return 0
@@ -209,7 +209,7 @@ func (a *Agent) exceptionalMinimumSavings() int {
 // tokens to justify the summarization API call. It returns false when the
 // region is too small for the savings to outweigh the extra round-trip cost
 // and latency of calling the summarizer.
-func (a *Agent) foldEconomics(region []provider.Message) bool {
+func (a *contextWindow) foldEconomics(region []provider.Message) bool {
 	const minFoldTokens = 100
 	return a.estimatedPromptTokens(region) >= minFoldTokens
 }
@@ -217,16 +217,16 @@ func (a *Agent) foldEconomics(region []provider.Message) bool {
 // SummarizeFrom keeps the compatibility index contract while installing a
 // projection that compresses from that user-turn boundary onward.
 func (a *Agent) SummarizeFrom(ctx context.Context, fromIdx int) error {
-	return a.summarizeAtProjectionBoundary(ctx, fromIdx, "after")
+	return a.window().summarizeAtProjectionBoundary(ctx, fromIdx, "after")
 }
 
 // SummarizeUpTo keeps the compatibility index contract while installing a
 // projection that compresses everything before that user-turn boundary.
 func (a *Agent) SummarizeUpTo(ctx context.Context, toIdx int) error {
-	return a.summarizeAtProjectionBoundary(ctx, toIdx, "before")
+	return a.window().summarizeAtProjectionBoundary(ctx, toIdx, "before")
 }
 
-func (a *Agent) summarizeAtProjectionBoundary(ctx context.Context, canonicalIndex int, direction string) error {
+func (a *contextWindow) summarizeAtProjectionBoundary(ctx context.Context, canonicalIndex int, direction string) error {
 	snap := a.snapshotExplicitCompression()
 	if canonicalIndex < 0 || canonicalIndex >= len(snap.canonical) {
 		return nil
@@ -274,7 +274,7 @@ func (a *Agent) summarizeAtProjectionBoundary(ctx context.Context, canonicalInde
 // disposable user message.
 func IsCompactionSummary(m provider.Message) bool { return isCompactionSummary(m) }
 
-func (a *Agent) activeTurnStart(msgs []provider.Message) int {
+func (a *contextWindow) activeTurnStart(msgs []provider.Message) int {
 	createdAt := a.activeTurnCreatedAt.Load()
 	if createdAt == 0 {
 		return -1
@@ -298,7 +298,7 @@ func isCompactionSummary(m provider.Message) bool {
 // facts/constraints) when it is small enough to be a brief. Digests are never
 // pinned — any digest in the transcript enters the fold region and is merged
 // into the next one, so a session cannot accumulate a chain of them.
-func (a *Agent) pinnedPrefixLen(msgs []provider.Message) int {
+func (a *contextWindow) pinnedPrefixLen(msgs []provider.Message) int {
 	i := 0
 	if i < len(msgs) && msgs[i].Role == provider.RoleSystem {
 		i++
@@ -309,7 +309,7 @@ func (a *Agent) pinnedPrefixLen(msgs []provider.Message) int {
 	return i
 }
 
-func (a *Agent) fixedPinnableUserTurn(m provider.Message) bool {
+func (a *contextWindow) fixedPinnableUserTurn(m provider.Message) bool {
 	budget := defaultPinnedFirstUserTokens
 	if a.budgets.FirstTurnPinTokens > 0 {
 		budget = a.budgets.FirstTurnPinTokens
@@ -345,7 +345,7 @@ func closedPrefixEnd(msgs []provider.Message) int {
 	return end
 }
 
-func (a *Agent) keepIndexes(region []provider.Message) ([]bool, userTurnRetention) {
+func (a *contextWindow) keepIndexes(region []provider.Message) ([]bool, userTurnRetention) {
 	keep := make([]bool, len(region))
 	activeTurn := a.activeTurnCreatedAt.Load()
 	policyStart := 0
@@ -482,7 +482,7 @@ func toolCallIDs(m provider.Message) map[string]bool {
 
 // planCompaction returns [head:start] to fold; the tail is recentTailBudget
 // unless force halves it so CompactNow still reduces mid-size sessions.
-func (a *Agent) planCompaction(msgs []provider.Message, min int, force bool) (head, start int, ok bool) {
+func (a *contextWindow) planCompaction(msgs []provider.Message, min int, force bool) (head, start int, ok bool) {
 	head = a.pinnedPrefixLen(msgs)
 	if a.effectiveContextWindow() > 0 {
 		budget := a.recentTailBudget()
@@ -517,7 +517,7 @@ func (a *Agent) planCompaction(msgs []provider.Message, min int, force bool) (he
 // the sum of its messages', so the measurement is carried and decremented per
 // message dropped; measuring each candidate whole instead re-scanned the whole
 // remaining transcript per step, and copied it whenever a receipt was present.
-func (a *Agent) remeasuredTailStart(msgs []provider.Message, start, floor, budget int) int {
+func (a *contextWindow) remeasuredTailStart(msgs []provider.Message, start, floor, budget int) int {
 	policy := sharedWindowInputPolicyOf(a.svc.prov)
 	tail := requestCalibrationShape{}
 	for i := len(msgs) - 1; i >= start; i-- {
@@ -536,7 +536,7 @@ func (a *Agent) remeasuredTailStart(msgs []provider.Message, start, floor, budge
 	return start
 }
 
-func (a *Agent) tailFloor() int {
+func (a *contextWindow) tailFloor() int {
 	if a.recentKeep > minRecentKeep {
 		return a.recentKeep
 	}
@@ -573,7 +573,7 @@ func tailStart(msgs []provider.Message, head, budgetTokens int, tokPerChar float
 // one. Reasoning content is excluded from the char count to match the prompt
 // actually sent (the provider strips it). Falls back to ~4 chars/token before
 // any usage is known, and ignores absurd ratios.
-func (a *Agent) tokPerChar() float64 {
+func (a *contextWindow) tokPerChar() float64 {
 	if cal := a.sess.output.promptCalibration.Load(); cal != nil && cal.compactChars > 0 {
 		if r := float64(cal.promptTokens) / float64(cal.compactChars); r > 0.05 && r < 2 {
 			return r
@@ -585,7 +585,7 @@ func (a *Agent) tokPerChar() float64 {
 // textTokens sizes a bare string in real tokens. estimatedPromptTokens is for
 // whole messages; budgeting text one line at a time, its per-message framing
 // would outweigh the line.
-func (a *Agent) textTokens(s string) int {
+func (a *contextWindow) textTokens(s string) int {
 	return int(float64(len(s)) * a.tokPerChar())
 }
 
@@ -614,7 +614,7 @@ func charsOfMessages(msgs []provider.Message) int {
 // summarize asks the executor's own provider (no tools) to distill the region
 // into a briefing. instructions is optional /compact focus + PreCompact text.
 // Named returns so defer can attach RequestCount and still return usage.
-func (a *Agent) summarize(ctx context.Context, region []provider.Message, instructions string) (summary string, usage *provider.Usage, err error) {
+func (a *contextWindow) summarize(ctx context.Context, region []provider.Message, instructions string) (summary string, usage *provider.Usage, err error) {
 	ctx, cancel := context.WithTimeout(ctx, summaryTimeout)
 	defer cancel()
 	ctx = provider.WithRequestAttemptCounter(ctx)
@@ -699,7 +699,7 @@ func (a *Agent) summarize(ctx context.Context, region []provider.Message, instru
 // summarizeOnce performs exactly one application-layer summary request.
 // Timeouts, empty results, stream errors, and output truncation all fail once
 // with no second attempt.
-func (a *Agent) summarizeOnce(ctx context.Context, fold []provider.Message, instructions string) (string, *provider.Usage, error) {
+func (a *contextWindow) summarizeOnce(ctx context.Context, fold []provider.Message, instructions string) (string, *provider.Usage, error) {
 	return a.summarize(ctx, fold, instructions)
 }
 

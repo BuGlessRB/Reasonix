@@ -30,7 +30,7 @@ func projectionWithLiveTail(t *testing.T) (*Agent, *sessionstore.Session, int) {
 	if _, err := a.CompactNow(context.Background(), CompactRequest{}); err != nil {
 		t.Fatal(err)
 	}
-	covered := a.sess.compactionState.Projection.CoveredCount
+	covered := a.sess.win.compactionState.Projection.CoveredCount
 	if covered <= 1 {
 		t.Fatalf("fold covered %d messages, nothing to rewrite around", covered)
 	}
@@ -45,9 +45,9 @@ func projectionWithLiveTail(t *testing.T) (*Agent, *sessionstore.Session, int) {
 }
 
 func hasProjection(a *Agent) bool {
-	a.sess.compactionMu.Lock()
-	defer a.sess.compactionMu.Unlock()
-	return len(a.sess.compactionState.Projection.Messages) > 0
+	a.sess.win.compactionMu.Lock()
+	defer a.sess.win.compactionMu.Unlock()
+	return len(a.sess.win.compactionState.Projection.Messages) > 0
 }
 
 // TestRevalidateProjectionAfterRewrite is the contract a caller that rewrites

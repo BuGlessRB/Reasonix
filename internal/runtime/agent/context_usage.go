@@ -24,6 +24,10 @@ func (a *Agent) ContextUsedTokens() int {
 	if a == nil {
 		return 0
 	}
+	return a.window().contextUsedTokens()
+}
+
+func (a *contextWindow) contextUsedTokens() int {
 	session := a.Session()
 	if session == nil {
 		return 0

@@ -22,13 +22,13 @@ type coveredHashMemo struct {
 // given rewrite counter. Passing the counter in rather than reading it keeps
 // the answer tied to the snapshot being checked: a rewrite that lands between
 // the snapshot and the check must miss the memo, not silently validate it.
-func (a *Agent) prefixHasher(rewriteVersion int) func([]provider.Message, int) string {
+func (a *contextWindow) prefixHasher(rewriteVersion int) func([]provider.Message, int) string {
 	return func(msgs []provider.Message, n int) string {
-		if m := a.sess.coveredHash.Load(); m != nil && m.n == n && m.rewriteVersion == rewriteVersion {
+		if m := a.sess.win.coveredHash.Load(); m != nil && m.n == n && m.rewriteVersion == rewriteVersion {
 			return m.hash
 		}
 		hash := sessionstore.CoveredPrefixHash(msgs, n)
-		a.sess.coveredHash.Store(&coveredHashMemo{rewriteVersion: rewriteVersion, n: n, hash: hash})
+		a.sess.win.coveredHash.Store(&coveredHashMemo{rewriteVersion: rewriteVersion, n: n, hash: hash})
 		return hash
 	}
 }
@@ -41,7 +41,7 @@ type visibleSnapshot struct {
 	fingerprint func([]provider.Message, int) string
 }
 
-func (a *Agent) snapshotForProjection() visibleSnapshot {
+func (a *contextWindow) snapshotForProjection() visibleSnapshot {
 	msgs, version, rewriteVersion := a.sess.conversation.SnapshotWithVersion()
 	return visibleSnapshot{msgs: msgs, version: version, fingerprint: a.prefixHasher(rewriteVersion)}
 }
@@ -51,18 +51,18 @@ func (a *Agent) snapshotForProjection() visibleSnapshot {
 // runs only where the covered-prefix hash is already memoised: a fold or a
 // rewrite moves the memo, and that one turn pays the full pass and refills it.
 // The judgement is projectionCoversTail's, the same one the slow path makes.
-func (a *Agent) visibleBehindMemoisedFold() ([]provider.Message, bool) {
-	a.sess.compactionMu.Lock()
-	st := a.sess.compactionState
+func (a *contextWindow) visibleBehindMemoisedFold() ([]provider.Message, bool) {
+	a.sess.win.compactionMu.Lock()
+	st := a.sess.win.compactionState
 	key := a.currentPromptCacheKeyLocked()
-	a.sess.compactionMu.Unlock()
+	a.sess.win.compactionMu.Unlock()
 
 	covered := st.Projection.CoveredCount
 	if len(st.Projection.Messages) == 0 || covered <= 0 || !projectionLineageOK(st, key) {
 		return nil, false
 	}
 	tail, total, _, rewriteVersion := a.sess.conversation.SnapshotTail(covered)
-	memo := a.sess.coveredHash.Load()
+	memo := a.sess.win.coveredHash.Load()
 	if memo == nil || memo.n != covered || memo.rewriteVersion != rewriteVersion {
 		return nil, false
 	}

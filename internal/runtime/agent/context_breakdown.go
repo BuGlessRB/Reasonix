@@ -33,14 +33,14 @@ func (a *Agent) ContextBreakdown() ContextBreakdown {
 	if a == nil {
 		return ContextBreakdown{}
 	}
-	visible := a.modelVisibleMessages()
+	visible := a.window().modelVisibleMessages()
 	out := ContextBreakdown{
 		Total:      a.ContextUsedTokens(),
 		Window:     a.ContextWindow(),
-		CompactAt:  a.compactTrigger(),
-		Boundary:   a.compactBoundary(),
-		CapacityAt: a.capacityCompactTrigger(),
-		Tools:      a.classTokens(nil, true),
+		CompactAt:  a.window().compactTrigger(),
+		Boundary:   a.window().compactBoundary(),
+		CapacityAt: a.window().capacityCompactTrigger(),
+		Tools:      a.window().classTokens(nil, true),
 	}
 	for _, class := range []struct {
 		role provider.Role
@@ -51,7 +51,7 @@ func (a *Agent) ContextBreakdown() ContextBreakdown {
 		{provider.RoleAssistant, &out.Reply},
 		{provider.RoleTool, &out.Output},
 	} {
-		*class.to = a.classTokens(messagesWithRole(visible, class.role), false)
+		*class.to = a.window().classTokens(messagesWithRole(visible, class.role), false)
 	}
 	return out
 }
@@ -59,7 +59,7 @@ func (a *Agent) ContextBreakdown() ContextBreakdown {
 // classTokens estimates one slice of the request. The schemas ride their own
 // call because they are not messages at all, and on a small transcript they are
 // the largest single item in the prompt.
-func (a *Agent) classTokens(msgs []provider.Message, schemas bool) int {
+func (a *contextWindow) classTokens(msgs []provider.Message, schemas bool) int {
 	req := provider.Request{MaxTokens: a.maxOutputTokens, Temperature: provider.OptionalTemperature(a.temperature)}
 	if len(msgs) > 0 {
 		projected := a.providerProjectionMessages(provider.ModelMessages(msgs))
@@ -90,7 +90,7 @@ func messagesWithRole(msgs []provider.Message, role provider.Role) []provider.Me
 // estimationSurface is the tool surface an estimate is measured against: what
 // the last request actually carried, or the whole provider-visible set before
 // one has gone out — which overstates rather than understates.
-func (a *Agent) estimationSurface() []provider.ToolSchema {
+func (a *contextWindow) estimationSurface() []provider.ToolSchema {
 	if a == nil {
 		return nil
 	}

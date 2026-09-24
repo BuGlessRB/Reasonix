@@ -26,7 +26,7 @@ func BenchmarkPlanCompaction(b *testing.B) {
 		b.Run(fmt.Sprintf("turns=%d/cjk=%v/receipts=%v", tc.turns, tc.cjk, tc.receipts), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				a.planCompaction(msgs, minCompactMessages, false)
+				a.window().planCompaction(msgs, minCompactMessages, false)
 			}
 		})
 	}

@@ -65,7 +65,7 @@ func TestCommitSummaryEmitsOutsideCompactionLock(t *testing.T) {
 	if n == 0 {
 		t.Fatal("expected context_maintenance emit after checkpoint install")
 	}
-	if got := a.currentProjectionVersion(); got != 1 {
+	if got := a.window().currentProjectionVersion(); got != 1 {
 		t.Fatalf("projection version = %d, want 1", got)
 	}
 }
@@ -97,7 +97,7 @@ func TestCommitSurvivesPostPublishDirSyncFailure(t *testing.T) {
 	if _, err := a.CompactNow(context.Background(), CompactRequest{}); err != nil {
 		t.Fatalf("CompactNow with post-publish dir sync fault: %v", err)
 	}
-	memVer := a.currentProjectionVersion()
+	memVer := a.window().currentProjectionVersion()
 	if memVer != 1 {
 		t.Fatalf("memory projection version = %d, want 1", memVer)
 	}
@@ -108,8 +108,8 @@ func TestCommitSurvivesPostPublishDirSyncFailure(t *testing.T) {
 	if disk.Projection.ProjectionVersion != memVer {
 		t.Fatalf("disk/memory fork: disk=%d mem=%d", disk.Projection.ProjectionVersion, memVer)
 	}
-	if disk.Generation != a.sess.compactionState.Generation {
-		t.Fatalf("generation fork: disk=%d mem=%d", disk.Generation, a.sess.compactionState.Generation)
+	if disk.Generation != a.sess.win.compactionState.Generation {
+		t.Fatalf("generation fork: disk=%d mem=%d", disk.Generation, a.sess.win.compactionState.Generation)
 	}
 }
 
@@ -139,26 +139,26 @@ func TestBlockedReceiptSurvivesPostPublishDirSyncFailure(t *testing.T) {
 	a.BindSessionPath(path, true)
 
 	policy := ContextPreparePolicy{Trigger: CompactionTriggerPressure, ObservedInputTokens: 8600}
-	if _, err := a.contextManager().Prepare(context.Background(), policy); err != nil {
+	if _, err := a.window().contextManager().Prepare(context.Background(), policy); err != nil {
 		t.Fatalf("above-ratio failure should not reject: %v", err)
 	}
 	if prov.calls != 1 {
 		t.Fatalf("summary calls = %d, want 1", prov.calls)
 	}
-	if a.sess.compactionState.LastReceipt == nil {
+	if a.sess.win.compactionState.LastReceipt == nil {
 		t.Fatal("memory lost blocked/failed receipt after post-publish dir-sync fault")
 	}
-	if status := a.sess.compactionState.LastReceipt.Status; status != "blocked" && status != "failed" {
+	if status := a.sess.win.compactionState.LastReceipt.Status; status != "blocked" && status != "failed" {
 		t.Fatalf("receipt status = %q", status)
 	}
 	disk, ok, err := sessionstore.LoadCompactionState(path)
 	if err != nil || !ok || disk.LastReceipt == nil {
 		t.Fatalf("disk receipt missing: ok=%v err=%v", ok, err)
 	}
-	if disk.Generation != a.sess.compactionState.Generation {
-		t.Fatalf("blocked generation fork: disk=%d mem=%d", disk.Generation, a.sess.compactionState.Generation)
+	if disk.Generation != a.sess.win.compactionState.Generation {
+		t.Fatalf("blocked generation fork: disk=%d mem=%d", disk.Generation, a.sess.win.compactionState.Generation)
 	}
-	if _, err := a.contextManager().Prepare(context.Background(), policy); err != nil {
+	if _, err := a.window().contextManager().Prepare(context.Background(), policy); err != nil {
 		t.Fatal(err)
 	}
 	if prov.calls != 1 {
@@ -195,8 +195,8 @@ func TestLoadProjectionSidecarDoesNotRewriteExactKey(t *testing.T) {
 		SessionPath: path, WorkspaceID: "ws", ModelRef: "p/m",
 	}, event.Discard)
 	a.LoadProjectionSidecar(path)
-	if a.currentProjectionVersion() != 3 {
-		t.Fatalf("version = %d, want 3", a.currentProjectionVersion())
+	if a.window().currentProjectionVersion() != 3 {
+		t.Fatalf("version = %d, want 3", a.window().currentProjectionVersion())
 	}
 	after, err := os.ReadFile(sessionstore.ContextStatePath(path))
 	if err != nil {
@@ -276,8 +276,8 @@ func TestLoadProjectionSidecarNormalizesNativeKeyOnce(t *testing.T) {
 		SessionPath: path, WorkspaceID: "ws", ModelRef: "p/m",
 	}, event.Discard)
 	a.LoadProjectionSidecar(path)
-	if a.currentProjectionVersion() != 2 {
-		t.Fatalf("version = %d, want 2", a.currentProjectionVersion())
+	if a.window().currentProjectionVersion() != 2 {
+		t.Fatalf("version = %d, want 2", a.window().currentProjectionVersion())
 	}
 	loaded, ok, err := sessionstore.LoadCompactionState(path)
 	if err != nil || !ok {

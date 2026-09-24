@@ -74,7 +74,7 @@ func (p *contextWindowProbe) window() int {
 // effectiveContextWindow is the window every context budget is taken from: the
 // configured one, or the bound probed from a rejection when no window was
 // declared. Zero still means no window is known, which leaves compaction off.
-func (a *Agent) effectiveContextWindow() int {
+func (a *contextWindow) effectiveContextWindow() int {
 	if a == nil {
 		return 0
 	}
@@ -88,7 +88,7 @@ func (a *Agent) effectiveContextWindow() int {
 // bound on the window. It applies the same trust rule as prompt calibration: an
 // estimate is our own arithmetic, and a turn whose provider ran its own tools
 // was billed for pages we never sent.
-func (a *Agent) noteAcceptedPromptTokens(usage *provider.Usage) {
+func (a *contextWindow) noteAcceptedPromptTokens(usage *provider.Usage) {
 	if a == nil || usage == nil || usage.Estimated || usage.ServerToolRequests > 0 {
 		return
 	}
@@ -100,7 +100,7 @@ func (a *Agent) noteAcceptedPromptTokens(usage *provider.Usage) {
 // replayed instead of failing the turn. It reports false when the fold freed
 // nothing, because resending a request the provider already refused only spends
 // another call to be told the same thing.
-func (a *Agent) recoverContextOverflow(ctx context.Context, frozen *samplingRequest, err error) bool {
+func (a *contextWindow) recoverContextOverflow(ctx context.Context, frozen *samplingRequest, err error) bool {
 	if a == nil || frozen == nil || frozen.overflowFolded || !provider.IsContextOverflow(err) {
 		return false
 	}

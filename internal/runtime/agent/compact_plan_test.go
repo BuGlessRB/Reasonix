@@ -43,7 +43,7 @@ func foldFixture(turns int, cjk, receipts bool) []provider.Message {
 
 func calibratedFoldAgent(msgs []provider.Message) *Agent {
 	a := &Agent{agentConfig: agentConfig{contextWindow: 128_000, recentKeep: 2}}
-	a.setPromptTokenCalibration(64_000, a.requestCalibrationShape(provider.Request{Messages: msgs}))
+	a.window().setPromptTokenCalibration(64_000, a.window().requestCalibrationShape(provider.Request{Messages: msgs}))
 	return a
 }
 
@@ -82,19 +82,19 @@ func TestRemeasuredTailStartMatchesTheRescanningWalk(t *testing.T) {
 	for _, cjk := range []bool{false, true} {
 		msgs := foldFixture(200, cjk, true)
 		a := calibratedFoldAgent(msgs)
-		head := a.pinnedPrefixLen(msgs)
-		budget := a.recentTailBudget()
-		from := tailStart(msgs, head, budget, a.tokPerChar(), a.tailFloor())
-		floor := max(head, len(msgs)-a.tailFloor())
+		head := a.window().pinnedPrefixLen(msgs)
+		budget := a.window().recentTailBudget()
+		from := tailStart(msgs, head, budget, a.window().tokPerChar(), a.window().tailFloor())
+		floor := max(head, len(msgs)-a.window().tailFloor())
 
 		want := from
-		for want < floor && a.estimatedPromptTokens(provider.ModelMessages(msgs[want:])) > budget {
+		for want < floor && a.window().estimatedPromptTokens(provider.ModelMessages(msgs[want:])) > budget {
 			want++
 			for want < floor && want < len(msgs) && msgs[want].Role == provider.RoleTool {
 				want++
 			}
 		}
-		if got := a.remeasuredTailStart(msgs, from, floor, budget); got != want {
+		if got := a.window().remeasuredTailStart(msgs, from, floor, budget); got != want {
 			t.Fatalf("cjk=%v: incremental walk stopped at %d, rescanning walk at %d", cjk, got, want)
 		}
 	}

@@ -179,9 +179,9 @@ func TestCompactionPausesWhenWindowTooSmall(t *testing.T) {
 	if started > 2 {
 		t.Fatalf("summary transactions started = %d, want ≤2 (no multi-span / retry loop)", started)
 	}
-	if blocked == 0 && a.currentProjectionVersion() == 0 {
+	if blocked == 0 && a.window().currentProjectionVersion() == 0 {
 		// Either a durable block or a successful install is fine; looping is not.
-		t.Logf("started=%d blocked=%d version=%d", started, blocked, a.currentProjectionVersion())
+		t.Logf("started=%d blocked=%d version=%d", started, blocked, a.window().currentProjectionVersion())
 	}
 }
 

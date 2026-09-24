@@ -49,7 +49,7 @@ var (
 	defaultSideEffectingSnip = snipStrategy{head: 40, tail: 40, headChars: 8000, tailChars: 8000}
 )
 
-func (a *Agent) snipStrategyFor(name string) snipStrategy {
+func (a *contextWindow) snipStrategyFor(name string) snipStrategy {
 	if a.svc.tools != nil {
 		if t, ok := a.svc.tools.Get(name); ok {
 			if h, ok := t.(tool.SnipHinter); ok {

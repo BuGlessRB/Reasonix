@@ -32,11 +32,11 @@ func TestMaintenanceUsesSummaryNotPruneAtFoldTrigger(t *testing.T) {
 	a := New(prov, tool.NewRegistry(), &sessionstore.Session{Messages: msgs}, Options{
 		ContextWindow: 20_000, CompactRatio: 0.5, RecentKeep: 2,
 	}, event.Discard)
-	if _, err := a.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+	if _, err := a.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 		t.Fatal(err)
 	}
-	if a.currentProjectionVersion() != 1 {
-		t.Fatalf("projection version = %d, want 1", a.currentProjectionVersion())
+	if a.window().currentProjectionVersion() != 1 {
+		t.Fatalf("projection version = %d, want 1", a.window().currentProjectionVersion())
 	}
 	if len(prov.got) != 1 {
 		t.Fatalf("summarizer calls = %d, want 1", len(prov.got))
@@ -45,7 +45,7 @@ func TestMaintenanceUsesSummaryNotPruneAtFoldTrigger(t *testing.T) {
 
 func TestSnipStrategyStillAvailableForFirstVisibleAndSummaryInput(t *testing.T) {
 	a := &Agent{svc: agentServices{tools: tool.NewRegistry()}}
-	s := a.snipStrategyFor("read_file")
+	s := a.window().snipStrategyFor("read_file")
 	if s.head <= 0 || s.tail <= 0 {
 		t.Fatalf("snip strategy for read_file = %+v", s)
 	}

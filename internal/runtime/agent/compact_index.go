@@ -108,7 +108,7 @@ func buildFoldIndex(region []provider.Message, kept []bool, facts func(string) e
 
 // renderFoldIndex writes the section, dropping the lowest-ranked entries when
 // the budget binds. Ties keep transcript order so the section reads forward.
-func (a *Agent) renderFoldIndex(entries []foldIndexEntry, budgetTokens int) string {
+func (a *contextWindow) renderFoldIndex(entries []foldIndexEntry, budgetTokens int) string {
 	if len(entries) == 0 || budgetTokens <= 0 {
 		return ""
 	}
@@ -164,7 +164,7 @@ func splitFoldIndex(digest string) (prose, index string) {
 // mergeFoldIndex carries the previous index forward ahead of the new lines and
 // trims from the oldest when the budget binds — an entry that has survived more
 // folds is the one whose original is furthest out of reach.
-func (a *Agent) mergeFoldIndex(previous, fresh string, budgetTokens int) string {
+func (a *contextWindow) mergeFoldIndex(previous, fresh string, budgetTokens int) string {
 	previous, fresh = strings.TrimSpace(previous), strings.TrimSpace(fresh)
 	if previous == "" {
 		return fresh
@@ -227,7 +227,7 @@ func quotedOpening(content string) string {
 // — shared by every generation, since the index is cumulative. It is still the
 // cheapest thing a fold keeps: prose needs hundreds of tokens to say what a
 // line says, and only a line can be recalled.
-func (a *Agent) foldIndexBudget() int {
+func (a *contextWindow) foldIndexBudget() int {
 	const floor = 256
 	// The bench axis scales the whole allowance, floor included: a floor that
 	// survived would make the off arm a small index rather than none.
@@ -265,7 +265,7 @@ func stripFoldIndexFromDigests(fold []provider.Message) ([]provider.Message, str
 }
 
 // attachFoldIndex appends the merged index to a digest.
-func (a *Agent) attachFoldIndex(digest, priorIndex string, entries []foldIndexEntry) string {
+func (a *contextWindow) attachFoldIndex(digest, priorIndex string, entries []foldIndexEntry) string {
 	budget := a.foldIndexBudget()
 	merged := a.mergeFoldIndex(priorIndex, a.renderFoldIndex(entries, budget), budget)
 	if merged == "" {
@@ -278,7 +278,7 @@ func (a *Agent) attachFoldIndex(digest, priorIndex string, entries []foldIndexEn
 // canonical transcript, which is what an index address has to name. Positions
 // inside a previous projection have no canonical address of their own — that
 // content was already folded once — so they answer -1.
-func (a *Agent) canonicalOriginFor(state sessionstore.CompactionState, canonical, msgs []provider.Message, head int) func(int) int {
+func (a *contextWindow) canonicalOriginFor(state sessionstore.CompactionState, canonical, msgs []provider.Message, head int) func(int) int {
 	projected := len(state.Projection.Messages)
 	// visibleInputForFold either returned canonical itself, or the projection
 	// spliced with canonical[CoveredCount:]. The two cases differ only in where
@@ -306,7 +306,7 @@ func (a *Agent) canonicalOriginFor(state sessionstore.CompactionState, canonical
 
 // droppedIndexHint names what can still reach a trimmed line. With search
 // ablated the arm must not be told about a capability it does not have.
-func (a *Agent) droppedIndexHint() string {
+func (a *contextWindow) droppedIndexHint() string {
 	if a.ablation.Off(ablation.RecallSearch) {
 		return "the full transcript still holds them"
 	}

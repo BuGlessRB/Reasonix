@@ -47,14 +47,14 @@ func TestEveryNoopVerdictIsReachable(t *testing.T) {
 		NoopNoNewClosedPrefix: func(t *testing.T) []string {
 			a := windowedFoldFixture(t, 120_000)
 			ctx := context.Background()
-			if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+			if _, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 				t.Fatal(err)
 			}
-			if a.currentProjectionVersion() == 0 {
+			if a.window().currentProjectionVersion() == 0 {
 				t.Fatal("the first fold installed no projection")
 			}
 			a.sess.conversation.Add(provider.Message{Role: provider.RoleAssistant, Content: "one more step"})
-			_, reason, err := a.compactToProjection(ctx, CompactionTriggerPressure, "", compactionScope{}, false)
+			_, reason, err := a.window().compactToProjection(ctx, CompactionTriggerPressure, "", compactionScope{}, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -126,12 +126,12 @@ func TestEveryNoopVerdictIsReachable(t *testing.T) {
 			a, sink := economicFixture(t, 160_000, 30)
 			a.activeTurnCreatedAt.Store(economicActiveTurnAt)
 			ctx := context.Background()
-			if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+			if _, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 				t.Fatal(err)
 			}
 			openTransaction(a, 40)
 			for range 3 {
-				if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+				if _, err := a.window().contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -185,7 +185,7 @@ func directNoop(t *testing.T, a *Agent) string {
 	// A rejected checkpoint reports its verdict and an error together, and the
 	// verdict is what this reads: refusing to fold and failing to are the same
 	// answer to "why was nothing folded".
-	_, reason, err := a.compactToProjection(context.Background(), CompactionTriggerPressure, "", compactionScope{}, false)
+	_, reason, err := a.window().compactToProjection(context.Background(), CompactionTriggerPressure, "", compactionScope{}, false)
 	if reason == "" && err != nil {
 		t.Fatalf("compactToProjection: %v", err)
 	}

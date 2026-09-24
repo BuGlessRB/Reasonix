@@ -23,7 +23,7 @@ func longSession(n int) *Agent {
 	sess := &sessionstore.Session{Messages: msgs}
 	a := New(nil, nil, sess, Options{ContextWindow: 128_000}, event.Discard)
 	covered := len(msgs) - 4 // a fold leaves a short verbatim tail
-	a.sess.compactionState = sessionstore.CompactionState{
+	a.sess.win.compactionState = sessionstore.CompactionState{
 		TranscriptVersion: sess.TranscriptVersion(),
 		Projection: sessionstore.ContextProjection{
 			Messages: []provider.Message{
@@ -34,10 +34,10 @@ func longSession(n int) *Agent {
 			CoveredCount:      covered,
 			CoveredPrefixHash: sessionstore.CoveredPrefixHash(msgs, covered),
 		},
-		PromptCacheKey: a.currentPromptCacheKey(),
+		PromptCacheKey: a.window().currentPromptCacheKey(),
 		Generation:     1,
 	}
-	if got := len(a.modelVisibleMessages()); got > 8 {
+	if got := len(a.window().modelVisibleMessages()); got > 8 {
 		panic(fmt.Sprintf("fixture projection is not in force: %d visible messages", got))
 	}
 	return a
@@ -51,7 +51,7 @@ func BenchmarkModelVisibleMessages(b *testing.B) {
 		a := longSession(turns)
 		b.Run(fmt.Sprint(turns), func(b *testing.B) {
 			for b.Loop() {
-				if got := a.modelVisibleMessages(); len(got) == 0 {
+				if got := a.window().modelVisibleMessages(); len(got) == 0 {
 					b.Fatal("no visible messages")
 				}
 			}
@@ -78,7 +78,7 @@ func BenchmarkPreparedRequestSize(b *testing.B) {
 		a := longSession(turns)
 		b.Run(fmt.Sprint(turns), func(b *testing.B) {
 			for b.Loop() {
-				a.estimatedPromptTokens(a.modelVisibleMessages())
+				a.window().estimatedPromptTokens(a.window().modelVisibleMessages())
 			}
 		})
 	}

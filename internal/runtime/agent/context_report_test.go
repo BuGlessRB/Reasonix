@@ -37,7 +37,7 @@ func TestContextReportThresholdsMatchTheDecision(t *testing.T) {
 	}, event.Discard)
 
 	rep := a.ContextReport()
-	fold := a.compactTrigger()
+	fold := a.window().compactTrigger()
 	if rep.FoldThreshold != fold {
 		t.Errorf("report FoldThreshold %d differs from compactTrigger %d", rep.FoldThreshold, fold)
 	}

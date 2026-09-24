@@ -120,7 +120,7 @@ func growSession(a *Agent, gen int) {
 // whether or not the index happens to have kept the line.
 func indexCarriesAddress(a *Agent, pos int) bool {
 	canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
-	for _, m := range modelVisibleFromProjection(a.sess.compactionState.Projection, canonical) {
+	for _, m := range modelVisibleFromProjection(a.sess.win.compactionState.Projection, canonical) {
 		_, index := splitFoldIndex(m.Content)
 		if index == "" {
 			continue
@@ -223,7 +223,7 @@ func TestLongHorizonRankHoldsAcrossCorpusSizes(t *testing.T) {
 			if rank == 0 {
 				t.Fatalf("search returned %v, want #%d", hitPositions(res), at)
 			}
-			folded := a.sess.compactionState.Projection.CoveredCount
+			folded := a.sess.win.compactionState.Projection.CoveredCount
 			t.Logf("corpus=%d folded=%d rank=%d cost=%d tokens", turns, folded, rank, res.Tokens)
 			if rank > 3 {
 				t.Errorf("rank %d in a %d-message folded region; the fact is being crowded out", rank, folded)
@@ -242,12 +242,12 @@ func TestLongHorizonSearchCostStaysBounded(t *testing.T) {
 		t.Fatalf("prepare = %v", err)
 	}
 	res := searchRecall(t, a, c.query)
-	budget := a.recallBudget()
+	budget := a.window().recallBudget()
 	if res.Tokens > budget/4 {
 		t.Errorf("one search cost %d tokens of a %d budget; three would exhaust it", res.Tokens, budget)
 	}
 	t.Logf("search over %d folded messages cost %d tokens (budget %d)",
-		a.sess.compactionState.Projection.CoveredCount, res.Tokens, budget)
+		a.sess.win.compactionState.Projection.CoveredCount, res.Tokens, budget)
 }
 
 // Every carrier is reachable from a cold read of the transcript, with no index

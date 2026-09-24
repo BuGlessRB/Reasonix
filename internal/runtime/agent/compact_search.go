@@ -187,7 +187,7 @@ func normalizeRecallLimit(limit int) int {
 
 // searchRecallLocked ranks the folded region and charges the snippets to this
 // generation's recall budget. Callers hold compactionMu.
-func (a *Agent) searchRecallLocked(region []provider.Message, query string, req tool.RecallRequest, budget, left int) (tool.RecallResult, error) {
+func (a *contextWindow) searchRecallLocked(region []provider.Message, query string, req tool.RecallRequest, budget, left int) (tool.RecallResult, error) {
 	hits, err := searchFoldedRegion(region, query, normalizeRecallLimit(req.Limit))
 	if err != nil {
 		return tool.RecallResult{BudgetLeft: left}, err
@@ -206,9 +206,9 @@ func (a *Agent) searchRecallLocked(region []provider.Message, query string, req 
 		return tool.RecallResult{BudgetLeft: left},
 			fmt.Errorf("recall: %d tokens exceeds the %d left in this generation's recall budget — ask for fewer results", cost, left)
 	}
-	a.sess.compactionState.Recall.SpentTokens += cost
+	a.sess.win.compactionState.Recall.SpentTokens += cost
 	return tool.RecallResult{
 		Text: text, Hits: hits, Searched: len(region),
-		Tokens: cost, BudgetLeft: budget - a.sess.compactionState.Recall.SpentTokens,
+		Tokens: cost, BudgetLeft: budget - a.sess.win.compactionState.Recall.SpentTokens,
 	}, nil
 }

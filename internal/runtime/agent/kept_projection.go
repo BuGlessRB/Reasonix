@@ -12,7 +12,7 @@ import (
 // projection. Retention promises the message survives the fold, not that every
 // byte it arrived with does: a failure keeps its diagnosis without its passing
 // noise.
-func (a *Agent) keptForProjection(m provider.Message) provider.Message {
+func (a *contextWindow) keptForProjection(m provider.Message) provider.Message {
 	if !failedExecution(m.ToolExecution) {
 		return m
 	}
@@ -127,7 +127,7 @@ func (a *Agent) SeesStandingBlock(opening string) bool {
 	if a == nil || opening == "" {
 		return false
 	}
-	for _, m := range a.modelVisibleMessages() {
+	for _, m := range a.window().modelVisibleMessages() {
 		if carriesStandingState(m) && strings.Contains(m.Content, opening) {
 			return true
 		}

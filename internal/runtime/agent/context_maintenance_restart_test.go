@@ -76,10 +76,10 @@ func TestContextMaintenanceWaitsForCompactRatioAcrossRestart(t *testing.T) {
 	if before.ProjectedTokens < 600_000 || before.ProjectedTokens >= before.FoldTrigger {
 		t.Fatalf("fixture prompt/trigger = %d/%d, want prompt in [600000, fold)", before.ProjectedTokens, before.FoldTrigger)
 	}
-	if _, err := first.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+	if _, err := first.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 		t.Fatal(err)
 	}
-	if got := first.currentProjectionVersion(); got != 0 {
+	if got := first.window().currentProjectionVersion(); got != 0 {
 		t.Fatalf("60%% prompt installed projection version %d below compact_ratio", got)
 	}
 	if got := appliedMaintenanceEvents(firstSink); got != 0 {
@@ -88,10 +88,10 @@ func TestContextMaintenanceWaitsForCompactRatioAcrossRestart(t *testing.T) {
 
 	reopenedSink := &recordSink{}
 	reopened := newRestartMaintenanceAgent(path, messages, reopenedSink)
-	if _, err := reopened.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+	if _, err := reopened.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 		t.Fatal(err)
 	}
-	if got := reopened.currentProjectionVersion(); got != 0 {
+	if got := reopened.window().currentProjectionVersion(); got != 0 {
 		t.Fatalf("reopened 60%% prompt installed projection version %d", got)
 	}
 	if got := appliedMaintenanceEvents(reopenedSink); got != 0 {
@@ -120,10 +120,10 @@ func TestContextMaintenanceRestoresAppliedProjectionWithoutReapplying(t *testing
 	if before.ProjectedTokens < before.FoldTrigger {
 		t.Fatalf("fixture prompt/trigger = %d/%d, want prompt at or above fold", before.ProjectedTokens, before.FoldTrigger)
 	}
-	if _, err := first.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+	if _, err := first.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 		t.Fatal(err)
 	}
-	if got := first.currentProjectionVersion(); got != 1 {
+	if got := first.window().currentProjectionVersion(); got != 1 {
 		t.Fatalf("first maintenance projection version = %d, want 1", got)
 	}
 	if got := appliedMaintenanceEvents(firstSink); got != 1 {
@@ -145,16 +145,16 @@ func TestContextMaintenanceRestoresAppliedProjectionWithoutReapplying(t *testing
 			WorkspaceID:   "workspace",
 			ModelRef:      "provider/model",
 		}, reopenedSink)
-	if got := reopened.currentProjectionVersion(); got != 1 {
+	if got := reopened.window().currentProjectionVersion(); got != 1 {
 		t.Fatalf("restored projection version = %d, want 1", got)
 	}
 	if got := reopened.ContextMaintenanceSnapshot().CheckpointState; got != "restored" {
 		t.Fatalf("checkpoint state = %q, want restored", got)
 	}
-	if _, err := reopened.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+	if _, err := reopened.window().contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 		t.Fatal(err)
 	}
-	if got := reopened.currentProjectionVersion(); got != 1 {
+	if got := reopened.window().currentProjectionVersion(); got != 1 {
 		t.Fatalf("reopen advanced unchanged projection to version %d", got)
 	}
 	if got := appliedMaintenanceEvents(reopenedSink); got != 0 {

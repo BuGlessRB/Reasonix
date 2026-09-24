@@ -12,7 +12,7 @@ import (
 // every provider-visible message in the region lands in exactly one group.
 func partitionCoversRegion(t *testing.T, a *Agent, region []provider.Message) (kept, fold []provider.Message) {
 	t.Helper()
-	kept, fold, retention, _ := a.partitionFoldForProjection(region)
+	kept, fold, retention, _ := a.window().partitionFoldForProjection(region)
 	userTurns := 0
 	for _, m := range region {
 		if m.Role == provider.RoleUser && !m.LocalOnly && !isCompactionSummary(m) {
@@ -99,7 +99,7 @@ func TestPartitionUserTurnBudgetIsBoundedInTotal(t *testing.T) {
 	if len(fold) == 0 {
 		t.Fatal("total budget never engaged: every turn was kept")
 	}
-	budget := a.keptUserTurnsBudget()
+	budget := a.window().keptUserTurnsBudget()
 	spent := 0
 	for _, m := range kept {
 		spent += fixedTokenEstimate(m)

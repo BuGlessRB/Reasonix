@@ -25,15 +25,19 @@ type ContextMaintenanceSnapshot struct {
 }
 
 func (a *Agent) ContextMaintenanceSnapshot() ContextMaintenanceSnapshot {
+	return a.window().contextMaintenanceSnapshot()
+}
+
+func (a *contextWindow) contextMaintenanceSnapshot() ContextMaintenanceSnapshot {
 	if a == nil || a.sess.conversation == nil {
 		return ContextMaintenanceSnapshot{}
 	}
 	snap := a.snapshotForProjection()
 	canonical := snap.msgs
-	a.sess.compactionMu.Lock()
-	state := a.sess.compactionState
-	checkpointState := a.sess.checkpointState
-	a.sess.compactionMu.Unlock()
+	a.sess.win.compactionMu.Lock()
+	state := a.sess.win.compactionState
+	checkpointState := a.sess.win.checkpointState
+	a.sess.win.compactionMu.Unlock()
 	visible := canonical
 	valid := projectionValid(state, canonical, a.currentPromptCacheKey(), snap.fingerprint)
 	if valid {

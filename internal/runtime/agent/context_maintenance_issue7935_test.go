@@ -46,13 +46,13 @@ func TestIssue7935Maintains206ToolResultsOnceAndOnlyProcessesNewTail(t *testing.
 
 	// Below the fold trigger nothing may be rewritten.
 	prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: 5_000})
-	if got := a.currentProjectionVersion(); got != 0 {
+	if got := a.window().currentProjectionVersion(); got != 0 {
 		t.Fatalf("history was rewritten below the fold trigger: projection version %d", got)
 	}
 
 	// Crossing the sole trigger installs one summary checkpoint, never prune.
 	prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: 7_000})
-	firstVersion := a.currentProjectionVersion()
+	firstVersion := a.window().currentProjectionVersion()
 	if firstVersion != 1 {
 		t.Fatalf("first maintenance version = %d, want 1", firstVersion)
 	}
@@ -72,7 +72,7 @@ func TestIssue7935Maintains206ToolResultsOnceAndOnlyProcessesNewTail(t *testing.
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "continue"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "ok"})
 	prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: 1_500})
-	if got := a.currentProjectionVersion(); got != firstVersion {
+	if got := a.window().currentProjectionVersion(); got != firstVersion {
 		t.Fatalf("below-threshold append advanced version to %d, want %d", got, firstVersion)
 	}
 

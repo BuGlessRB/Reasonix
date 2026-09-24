@@ -48,7 +48,7 @@ func TestCompressContextBeforePreservesCanonicalAndTail(t *testing.T) {
 	if !reflect.DeepEqual(sess.Snapshot(), before) {
 		t.Fatal("compress changed the canonical transcript")
 	}
-	visible := a.modelVisibleMessages()
+	visible := a.window().modelVisibleMessages()
 	if visible[0].Role != provider.RoleSystem || visible[0].Content != "system stays" {
 		t.Fatalf("system message changed: %+v", visible)
 	}
@@ -61,7 +61,7 @@ func TestCompressContextBeforePreservesCanonicalAndTail(t *testing.T) {
 	if len(prov.got) < 2 || strings.Contains(prov.got[1].Content, local.Content) {
 		t.Fatalf("LocalOnly content reached summarizer: %+v", prov.got)
 	}
-	state := a.sess.compactionState
+	state := a.sess.win.compactionState
 	if state.Generation != 1 || state.Projection.ViewInputHash == "" || state.Projection.ViewOutputHash == "" {
 		t.Fatalf("range compression did not install complete v3 lineage: %+v", state)
 	}
@@ -97,14 +97,14 @@ func TestCompressContextAfterExcludesActiveTurnAndAppendsToolResult(t *testing.T
 	if !reflect.DeepEqual(sess.Snapshot(), before) {
 		t.Fatal("compress changed the active canonical turn")
 	}
-	visible := a.modelVisibleMessages()
+	visible := a.window().modelVisibleMessages()
 	if !strings.Contains(joinContents(visible), "active request") || len(visible[len(visible)-1].ToolCalls) != 1 || visible[len(visible)-1].ToolCalls[0].ID != "compress-1" {
 		t.Fatalf("active turn was not retained: %+v", visible)
 	}
 
 	toolResult := provider.Message{Role: provider.RoleTool, ToolCallID: "compress-1", Name: "compress", Content: `{"status":"ok"}`}
 	sess.Add(toolResult)
-	visible = a.modelVisibleMessages()
+	visible = a.window().modelVisibleMessages()
 	if last := visible[len(visible)-1]; last.ToolCallID != "compress-1" || last.Content != toolResult.Content {
 		t.Fatalf("post-projection tool result missing: %+v", visible)
 	}
@@ -132,7 +132,7 @@ func TestCompressContextAnchorErrorsDoNotChangeState(t *testing.T) {
 			t.Fatalf("anchor %q error = %v, want %q", tc.anchor, err, tc.want)
 		}
 	}
-	if !reflect.DeepEqual(sess.Snapshot(), before) || len(a.sess.compactionState.Projection.Messages) != 0 {
+	if !reflect.DeepEqual(sess.Snapshot(), before) || len(a.sess.win.compactionState.Projection.Messages) != 0 {
 		t.Fatal("failed anchor lookup changed state")
 	}
 }
@@ -156,7 +156,7 @@ func TestCompressContextConsecutiveCallsMergeSummary(t *testing.T) {
 			t.Fatalf("compress before %q = %+v, %v", anchor, got, err)
 		}
 	}
-	visible := a.modelVisibleMessages()
+	visible := a.window().modelVisibleMessages()
 	summaries := 0
 	for _, msg := range visible {
 		if isCompactionSummary(msg) {
@@ -215,7 +215,7 @@ func TestCompressContextNoSavingsIsNoop(t *testing.T) {
 	if got.Status != "noop" || !strings.Contains(got.Reason, "not be smaller") {
 		t.Fatalf("result = %+v", got)
 	}
-	if len(a.sess.compactionState.Projection.Messages) != 0 {
+	if len(a.sess.win.compactionState.Projection.Messages) != 0 {
 		t.Fatal("noop installed a projection")
 	}
 	if reasons := sess.DrainContentRewriteReasons(); len(reasons) != 0 {
@@ -243,8 +243,8 @@ func TestCompressContextFailureDoesNotArchiveUncommittedRange(t *testing.T) {
 	if len(entries) != 0 {
 		t.Fatalf("failed range compression left %d archive files", len(entries))
 	}
-	if a.sess.compactionState.Generation != 0 || a.sess.compactionState.LastReceipt != nil {
-		t.Fatalf("failed range compression changed sidecar state: %+v", a.sess.compactionState)
+	if a.sess.win.compactionState.Generation != 0 || a.sess.win.compactionState.LastReceipt != nil {
+		t.Fatalf("failed range compression changed sidecar state: %+v", a.sess.win.compactionState)
 	}
 }
 
@@ -314,7 +314,7 @@ func TestCompressContextRejectsStaleTranscript(t *testing.T) {
 	if err := <-errCh; !errors.Is(err, errCompressStaleContext) {
 		t.Fatalf("error = %v, want stale context", err)
 	}
-	if len(a.sess.compactionState.Projection.Messages) != 0 {
+	if len(a.sess.win.compactionState.Projection.Messages) != 0 {
 		t.Fatal("stale compression installed a projection")
 	}
 	if reasons := sess.DrainContentRewriteReasons(); len(reasons) != 0 {
@@ -334,12 +334,12 @@ func TestRangeCompressionSharesSummarySingleflight(t *testing.T) {
 	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	autoErr := make(chan error, 1)
 	go func() {
-		_, _, err := a.compactToProjection(context.Background(), CompactionTriggerPressure, "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}, false)
+		_, _, err := a.window().compactToProjection(context.Background(), CompactionTriggerPressure, "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}, false)
 		autoErr <- err
 	}()
 	<-prov.started
 
-	snap := a.snapshotExplicitCompression()
+	snap := a.window().snapshotExplicitCompression()
 	anchor := -1
 	for i, msg := range snap.visible {
 		if strings.Contains(sessionstore.UserMessageText(msg), "keep unique") {
@@ -352,7 +352,7 @@ func TestRangeCompressionSharesSummarySingleflight(t *testing.T) {
 	}
 	rangeErr := make(chan error, 1)
 	go func() {
-		_, err := a.compressVisibleRange(context.Background(), snap, CompactionTriggerTool, "before", anchor, "keep unique", "")
+		_, err := a.window().compressVisibleRange(context.Background(), snap, CompactionTriggerTool, "before", anchor, "keep unique", "")
 		rangeErr <- err
 	}()
 	close(prov.release)

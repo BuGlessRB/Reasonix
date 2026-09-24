@@ -111,14 +111,14 @@ func TestContextOverflowProbesAnUndeclaredWindow(t *testing.T) {
 		RecentKeep: 2,
 		ArchiveDir: testenv.TempDir(t),
 	}, event.Discard)
-	if got := a.effectiveContextWindow(); got != 0 {
+	if got := a.window().effectiveContextWindow(); got != 0 {
 		t.Fatalf("window before the refusal = %d, want none", got)
 	}
 
 	if err := a.Run(context.Background(), "continue"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := a.effectiveContextWindow(); got <= 0 {
+	if got := a.window().effectiveContextWindow(); got <= 0 {
 		t.Fatal("the refusal taught the agent nothing about the window")
 	}
 	requests := prov.Requests()
@@ -171,7 +171,7 @@ func TestContextOverflowRecoveryIsOneShotPerRound(t *testing.T) {
 	if got := len(prov.Requests()); got != 3 {
 		t.Fatalf("provider saw %d requests, want refused + summary + one replay", got)
 	}
-	if text := strings.TrimSpace(latestDigest(a.sess.compactionState.Projection.Messages)); text == "" {
+	if text := strings.TrimSpace(latestDigest(a.sess.win.compactionState.Projection.Messages)); text == "" {
 		t.Fatal("the recovery fold left no projection behind")
 	}
 }

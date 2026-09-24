@@ -55,7 +55,7 @@ func (o *outputBudgetState) reset() {
 // A request that carried images was billed for pixels at a rate the host never
 // sees, and a ratio learned from it would price every later character as part
 // of a picture.
-func (a *Agent) setPromptTokenCalibration(promptTokens int, shape requestCalibrationShape) {
+func (a *contextWindow) setPromptTokenCalibration(promptTokens int, shape requestCalibrationShape) {
 	if a == nil || promptTokens <= 0 || shape.requestChars <= 0 || shape.imageTokens > 0 {
 		return
 	}
@@ -68,7 +68,7 @@ func (a *Agent) setPromptTokenCalibration(promptTokens int, shape requestCalibra
 	})
 }
 
-func (a *Agent) setPromptTokenCalibrationFromActive(promptTokens int) {
+func (a *contextWindow) setPromptTokenCalibrationFromActive(promptTokens int) {
 	if a == nil {
 		return
 	}
@@ -80,7 +80,7 @@ func (a *Agent) setPromptTokenCalibrationFromActive(promptTokens int) {
 // setPromptTokenCalibrationFromUsage trusts provider telemetry only, and only
 // about our own request: a turn whose provider ran its own tools bills pages we
 // never sent, and a ratio learned from it inflates every later estimate.
-func (a *Agent) setPromptTokenCalibrationFromUsage(usage *provider.Usage) {
+func (a *contextWindow) setPromptTokenCalibrationFromUsage(usage *provider.Usage) {
 	if a == nil || usage == nil || usage.Estimated || usage.ServerToolRequests > 0 {
 		return
 	}
@@ -116,7 +116,7 @@ func sharedWindowInputPolicyOf(p provider.Provider) provider.SharedWindowInputPo
 	return policy.SharedWindowInputPolicy()
 }
 
-func (a *Agent) configuredOutputBudget(explicit int) int {
+func (a *contextWindow) configuredOutputBudget(explicit int) int {
 	if explicit != 0 {
 		return explicit
 	}
@@ -127,7 +127,7 @@ func requestCalibrationShapeOf(req provider.Request) requestCalibrationShape {
 	return requestCalibrationShapeWithPolicy(req, provider.SharedWindowInputPolicy{})
 }
 
-func (a *Agent) requestCalibrationShape(req provider.Request) requestCalibrationShape {
+func (a *contextWindow) requestCalibrationShape(req provider.Request) requestCalibrationShape {
 	return requestCalibrationShapeWithPolicy(req, sharedWindowInputPolicyOf(a.svc.prov))
 }
 
@@ -221,7 +221,7 @@ func projectedMessageCalibrationShape(msg provider.Message, policy provider.Shar
 	return messageCalibrationShape(msg, policy)
 }
 
-func (a *Agent) calibratedPromptTokens(shape requestCalibrationShape) (int, bool) {
+func (a *contextWindow) calibratedPromptTokens(shape requestCalibrationShape) (int, bool) {
 	if shape.requestChars <= 0 {
 		return 0, false
 	}
@@ -250,15 +250,15 @@ func (a *Agent) calibratedPromptTokens(shape requestCalibrationShape) (int, bool
 // calibrates it; before that the wire character count carries the ~4 chars per
 // token shape. estimateMessagesTokens counts characters and is for internal
 // planning budgets only; against the window it would compact 4x early.
-func (a *Agent) estimatedPromptTokens(msgs []provider.Message) int {
+func (a *contextWindow) estimatedPromptTokens(msgs []provider.Message) int {
 	return a.estimatedShapeTokens(a.requestCalibrationShape(provider.Request{Messages: msgs}))
 }
 
-func (a *Agent) estimatedRequestTokens(req provider.Request) int {
+func (a *contextWindow) estimatedRequestTokens(req provider.Request) int {
 	return a.estimatedShapeTokens(a.requestCalibrationShape(req))
 }
 
-func (a *Agent) estimatedShapeTokens(shape requestCalibrationShape) int {
+func (a *contextWindow) estimatedShapeTokens(shape requestCalibrationShape) int {
 	if shape.requestChars <= 0 {
 		return 0
 	}
@@ -277,7 +277,7 @@ func isCJKRune(r rune) bool {
 
 // effectiveOutputBudget clips completion tokens at send time only; it never
 // moves compact_ratio. Exhausted windows fail locally before HTTP 400.
-func (a *Agent) effectiveOutputBudget(req provider.Request) (int, bool, error) {
+func (a *contextWindow) effectiveOutputBudget(req provider.Request) (int, bool, error) {
 	window := a.effectiveContextWindow()
 	if window <= 0 || !sharesContextWindow(a.svc.prov) {
 		return 0, false, nil

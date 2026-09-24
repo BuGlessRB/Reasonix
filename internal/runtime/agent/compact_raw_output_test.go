@@ -30,7 +30,7 @@ func TestSummaryNeverPromotesRawToolOutput(t *testing.T) {
 	prov := &countingProvider{reply: "digest"}
 	a := newFoldAgent(t, 200000, prov)
 
-	if _, err := a.foldToSummary(context.Background(), boundedToolResult(200), ""); err != nil {
+	if _, err := a.window().foldToSummary(context.Background(), boundedToolResult(200), ""); err != nil {
 		t.Fatalf("foldToSummary: %v", err)
 	}
 	if len(prov.got) != 1 {
@@ -53,10 +53,10 @@ func TestFoldIsSizedByWhatTheModelSees(t *testing.T) {
 	a := newFoldAgent(t, 200000, prov)
 	small, large := boundedToolResult(10), boundedToolResult(20000)
 
-	if got, want := a.summaryInputTokens(large), a.summaryInputTokens(small); got != want {
+	if got, want := a.window().summaryInputTokens(large), a.window().summaryInputTokens(small); got != want {
 		t.Errorf("a longer local-only copy moved the fold's size: %d vs %d", got, want)
 	}
-	if _, err := a.foldToSummary(context.Background(), large, ""); err != nil {
+	if _, err := a.window().foldToSummary(context.Background(), large, ""); err != nil {
 		t.Fatalf("foldToSummary: %v", err)
 	}
 	if len(prov.got) != 1 {
@@ -95,7 +95,7 @@ func TestShortenedFoldSketchesOnlyWhatTheModelSaw(t *testing.T) {
 		},
 	}
 
-	if _, err := a.foldToSummary(context.Background(), fold, ""); err != nil {
+	if _, err := a.window().foldToSummary(context.Background(), fold, ""); err != nil {
 		t.Fatalf("foldToSummary: %v", err)
 	}
 	if len(prov.got) != 1 {

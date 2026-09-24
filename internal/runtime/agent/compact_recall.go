@@ -19,7 +19,7 @@ const recallBudgetRatio = 0.10
 const minRecallBudgetTokens = 2000
 
 // recallBudget is one generation's ceiling on pulling folded content back.
-func (a *Agent) recallBudget() int {
+func (a *contextWindow) recallBudget() int {
 	window := a.effectiveContextWindow()
 	if window <= 0 {
 		return minRecallBudgetTokens
@@ -31,7 +31,11 @@ func (a *Agent) recallBudget() int {
 // comes back re-enters context as an ordinary tool result, never a projection.
 // Both operations spend one generation budget: two would let a search refill
 // what a read was refused.
-func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.RecallResult, error) {
+func (a *Agent) RecallContext(ctx context.Context, req tool.RecallRequest) (tool.RecallResult, error) {
+	return a.window().recallContext(ctx, req)
+}
+
+func (a *contextWindow) recallContext(_ context.Context, req tool.RecallRequest) (tool.RecallResult, error) {
 	query := strings.TrimSpace(req.Query)
 	if query != "" && a.ablation.Off(ablation.RecallSearch) {
 		return tool.RecallResult{}, fmt.Errorf("recall: searching the folded region is not available in this configuration; read a #n address from the folded work index")
@@ -44,9 +48,9 @@ func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.R
 	}
 	canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
 
-	a.sess.compactionMu.Lock()
-	defer a.sess.compactionMu.Unlock()
-	state := &a.sess.compactionState
+	a.sess.win.compactionMu.Lock()
+	defer a.sess.win.compactionMu.Unlock()
+	state := &a.sess.win.compactionState
 	covered := min(state.Projection.CoveredCount, len(canonical))
 	if covered <= 0 {
 		return tool.RecallResult{}, fmt.Errorf("recall: nothing has been folded in this session yet, so every position is still in your context")
@@ -102,7 +106,7 @@ func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.R
 // recallSpan returns the message at pos plus the tool results that answer it.
 // An index line addresses the call, and a call without its result is the half
 // that says least.
-func (a *Agent) recallSpan(canonical []provider.Message, pos int) []provider.Message {
+func (a *contextWindow) recallSpan(canonical []provider.Message, pos int) []provider.Message {
 	span := []provider.Message{canonical[pos]}
 	wanted := map[string]bool{}
 	for _, tc := range canonical[pos].ToolCalls {

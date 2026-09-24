@@ -15,6 +15,10 @@ func (a *Agent) ContextGeneration() ContextGeneration {
 	if a == nil {
 		return ContextGeneration{}
 	}
+	return a.window().contextGeneration()
+}
+
+func (a *contextWindow) contextGeneration() ContextGeneration {
 	var rewrite int
 	if session := a.Session(); session != nil {
 		rewrite = session.RewriteVersion()

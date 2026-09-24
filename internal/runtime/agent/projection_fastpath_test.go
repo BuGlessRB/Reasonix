@@ -41,20 +41,20 @@ func TestFastPathNeverDisagreesWithFullScan(t *testing.T) {
 		{
 			name: "projection built for another model",
 			setUp: func(a *Agent) {
-				a.sess.compactionState.PromptCacheKey = "other|other|other"
+				a.sess.win.compactionState.PromptCacheKey = "other|other|other"
 			},
 		},
 		{
 			name:  "legacy sidecar with no covered hash",
-			setUp: func(a *Agent) { a.sess.compactionState.Projection.CoveredPrefixHash = "" },
+			setUp: func(a *Agent) { a.sess.win.compactionState.Projection.CoveredPrefixHash = "" },
 		},
 		{
 			name:  "covered count past the end of the transcript",
-			setUp: func(a *Agent) { a.sess.compactionState.Projection.CoveredCount = 1 << 20 },
+			setUp: func(a *Agent) { a.sess.win.compactionState.Projection.CoveredCount = 1 << 20 },
 		},
 		{
 			name:  "no projection at all",
-			setUp: func(a *Agent) { a.sess.compactionState = sessionstore.CompactionState{} },
+			setUp: func(a *Agent) { a.sess.win.compactionState = sessionstore.CompactionState{} },
 		},
 	}
 
@@ -66,9 +66,9 @@ func TestFastPathNeverDisagreesWithFullScan(t *testing.T) {
 			}
 			// One full pass first, exactly as a real turn would take it: the
 			// memo is a warm cache, never a precondition the caller arranges.
-			want := a.visibleByFullScan()
+			want := a.window().visibleByFullScan()
 
-			got, ok := a.visibleBehindMemoisedFold()
+			got, ok := a.window().visibleBehindMemoisedFold()
 			if ok != tc.fast {
 				t.Fatalf("fast path carried=%v, want %v", ok, tc.fast)
 			}
@@ -102,13 +102,13 @@ func TestTurnCostDoesNotTrackTranscriptLength(t *testing.T) {
 
 func perTurnBytes(t *testing.T, a *Agent) uint64 {
 	t.Helper()
-	a.modelVisibleMessages() // warm the memo, as the previous turn would have
+	a.window().modelVisibleMessages() // warm the memo, as the previous turn would have
 	const runs = 50
 	var before, after runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)
 	for range runs {
-		if got := a.modelVisibleMessages(); len(got) == 0 {
+		if got := a.window().modelVisibleMessages(); len(got) == 0 {
 			t.Fatal("no visible messages")
 		}
 	}

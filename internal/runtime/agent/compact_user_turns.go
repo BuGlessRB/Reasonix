@@ -22,7 +22,7 @@ type userTurnRetention struct {
 // the work it governs stays re-derivable from the workspace. Unlike the keep
 // policy it ignores policyStart — a bounded budget, not a fold horizon, is what
 // stops it growing.
-func (a *Agent) keepUserTurns(region []provider.Message, keep []bool) userTurnRetention {
+func (a *contextWindow) keepUserTurns(region []provider.Message, keep []bool) userTurnRetention {
 	budget := a.keptUserTurnsBudget()
 	var ret userTurnRetention
 	// Oldest-first: the recent tail already covers the newest turns verbatim,
@@ -58,7 +58,7 @@ func (a *Agent) keepUserTurns(region []provider.Message, keep []bool) userTurnRe
 // the acceptance ceiling, which fails compaction outright rather than degrading
 // it — so a bound stays, but it scales with the window instead of stopping at a
 // fixed token count, and the user can name their own.
-func (a *Agent) keptUserTurnsBudget() int {
+func (a *contextWindow) keptUserTurnsBudget() int {
 	if a.budgets.UserTurnKeepTokens > 0 {
 		return a.budgets.UserTurnKeepTokens
 	}
@@ -75,7 +75,7 @@ func (a *Agent) keptUserTurnsBudget() int {
 // noticeDroppedUserTurns reports the turns the budget could not hold. Without
 // it the drop is invisible: the projection reads as complete, and the escape
 // hatch is only useful to someone told it exists at the moment it is needed.
-func (a *Agent) noticeDroppedUserTurns(ret userTurnRetention) {
+func (a *contextWindow) noticeDroppedUserTurns(ret userTurnRetention) {
 	if ret.Dropped == 0 {
 		return
 	}

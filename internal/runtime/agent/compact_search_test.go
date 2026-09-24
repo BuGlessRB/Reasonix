@@ -42,7 +42,7 @@ func searchableSession(turns int) (*sessionstore.Session, int) {
 // Every claim about search rests on this being true first.
 func foldedOutOfSight(a *Agent, needle string) bool {
 	canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
-	for _, m := range modelVisibleFromProjection(a.sess.compactionState.Projection, canonical) {
+	for _, m := range modelVisibleFromProjection(a.sess.win.compactionState.Projection, canonical) {
 		if strings.Contains(m.Content, needle) {
 			return false
 		}
@@ -174,7 +174,7 @@ func TestSearchNeverReturnsTheLiveTail(t *testing.T) {
 	a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: "note: " + tailMarker})
 
 	res := searchRecall(t, a, tailMarker)
-	covered := a.sess.compactionState.Projection.CoveredCount
+	covered := a.sess.win.compactionState.Projection.CoveredCount
 	for _, h := range res.Hits {
 		if h.Position >= covered {
 			t.Errorf("search returned #%d from the live tail (covered=%d)", h.Position, covered)
@@ -210,7 +210,7 @@ func TestSearchSpendsTheSameBudgetAsRead(t *testing.T) {
 	if first.Tokens <= 0 {
 		t.Fatalf("search reported no cost: %+v", first)
 	}
-	spent := a.sess.compactionState.Recall.SpentTokens
+	spent := a.sess.win.compactionState.Recall.SpentTokens
 	if spent != first.Tokens {
 		t.Errorf("ledger spent %d, search cost %d", spent, first.Tokens)
 	}

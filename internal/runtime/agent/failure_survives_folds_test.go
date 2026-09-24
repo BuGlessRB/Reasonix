@@ -54,7 +54,7 @@ func TestRecordedFailureSurvivesRepeatedCompaction(t *testing.T) {
 	for round := 1; round <= 3; round++ {
 		sess.Add(provider.Message{Role: provider.RoleAssistant, Content: bulk})
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("continue %d", round)})
-		if err := a.compact(context.Background(), "manual", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
+		if err := a.window().compact(context.Background(), "manual", "", compactionScope{ignoreThreshold: true, ignoreEconomics: true}); err != nil {
 			t.Fatalf("round %d compact: %v", round, err)
 		}
 

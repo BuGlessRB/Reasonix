@@ -20,23 +20,16 @@ var sessionReset = map[string]bool{
 	"cacheHit":         true,
 	"cacheMiss":        true,
 	"missingReasoning": true,
-	"compactionMu":     true,
-	"compactionState":  true,
-	"cacheState":       true,
-	"compaction":       true,
-	"coveredHash":      true,
-	"budgetNotice":     true,
+	"win":              true, // windowState.reset, held to its own lists below
 }
 
 // sessionCarryOver names the fields reset deliberately leaves alone, each with
 // an owner that rebinds it. Being on this list is a claim that someone else
 // sets the field for the new conversation — not that it does not matter.
 var sessionCarryOver = map[string]bool{
-	"compactionRunMu": true, // a singleflight latch, not conversation state
-	"path":            true, // preflight rebinds on the next transcript bind
-	"checkpointState": true, // preflight rebinds with the transcript
-	"todoMu":          true,
-	"todoState":       true, // SetSession rebuilds it from the new snapshot
+	"path":      true, // preflight rebinds on the next transcript bind
+	"todoMu":    true,
+	"todoState": true, // SetSession rebuilds it from the new snapshot
 	// lastPrefixShape survives the swap today; the next request compares its
 	// prefix against the replaced conversation's shape. Left as found here.
 	"lastPrefixShape":     true,
@@ -46,17 +39,43 @@ var sessionCarryOver = map[string]bool{
 	"lastProviderSchemas": true,
 }
 
-func sessionRuntimeFields(t *testing.T) map[string]bool {
+// windowReset and windowCarryOver are the same two lists for windowState.
+var windowReset = map[string]bool{
+	"compactionMu":    true,
+	"compactionState": true,
+	"cacheState":      true,
+	"compaction":      true,
+	"coveredHash":     true,
+	"budgetNotice":    true,
+}
+
+var windowCarryOver = map[string]bool{
+	"compactionRunMu": true, // a singleflight latch, not conversation state
+	"checkpointState": true, // preflight rebinds with the transcript
+}
+
+// lifetimeSubject is one struct whose reset the lists describe.
+type lifetimeSubject struct {
+	file, typeName, recv string
+	reset, carry         map[string]bool
+}
+
+var lifetimeSubjects = []lifetimeSubject{
+	{"sessionstate.go", "sessionRuntime", "r", sessionReset, sessionCarryOver},
+	{"context_window.go", "windowState", "w", windowReset, windowCarryOver},
+}
+
+func structFields(t *testing.T, path, typeName string) map[string]bool {
 	t.Helper()
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "sessionstate.go", nil, 0)
+	file, err := parser.ParseFile(fset, path, nil, 0)
 	if err != nil {
-		t.Fatalf("parse sessionstate.go: %v", err)
+		t.Fatalf("parse %s: %v", path, err)
 	}
 	fields := map[string]bool{}
 	ast.Inspect(file, func(n ast.Node) bool {
 		spec, ok := n.(*ast.TypeSpec)
-		if !ok || spec.Name.Name != "sessionRuntime" {
+		if !ok || spec.Name.Name != typeName {
 			return true
 		}
 		st, ok := spec.Type.(*ast.StructType)
@@ -78,26 +97,28 @@ func sessionRuntimeFields(t *testing.T) map[string]bool {
 		return false
 	})
 	if len(fields) == 0 {
-		t.Fatal("sessionRuntime has no fields; the guard would pass vacuously")
+		t.Fatalf("%s has no fields; the guard would pass vacuously", typeName)
 	}
 	return fields
 }
 
 func TestSessionRuntimeLifetimeListsCoverTheStruct(t *testing.T) {
-	fields := sessionRuntimeFields(t)
-	for _, list := range []map[string]bool{sessionReset, sessionCarryOver} {
-		for name := range list {
-			if !fields[name] {
-				t.Errorf("the lifetime lists name %q, which sessionRuntime no longer has", name)
+	for _, sub := range lifetimeSubjects {
+		fields := structFields(t, sub.file, sub.typeName)
+		for _, list := range []map[string]bool{sub.reset, sub.carry} {
+			for name := range list {
+				if !fields[name] {
+					t.Errorf("the lifetime lists name %q, which %s no longer has", name, sub.typeName)
+				}
 			}
 		}
-	}
-	for name := range fields {
-		switch {
-		case sessionReset[name] && sessionCarryOver[name]:
-			t.Errorf("sessionRuntime.%s is listed as both reset and carried", name)
-		case !sessionReset[name] && !sessionCarryOver[name]:
-			t.Errorf("sessionRuntime.%s is on neither list; decide whether a new conversation starts from it", name)
+		for name := range fields {
+			switch {
+			case sub.reset[name] && sub.carry[name]:
+				t.Errorf("%s.%s is listed as both reset and carried", sub.typeName, name)
+			case !sub.reset[name] && !sub.carry[name]:
+				t.Errorf("%s.%s is on neither list; decide whether a new conversation starts from it", sub.typeName, name)
+			}
 		}
 	}
 }
@@ -106,10 +127,22 @@ func TestSessionRuntimeLifetimeListsCoverTheStruct(t *testing.T) {
 // source: a field dropped from reset stops being covered, and the mismatch
 // fails here instead of surfacing as state leaking between conversations.
 func TestSessionRuntimeResetAssignsEveryResetField(t *testing.T) {
+	for _, sub := range lifetimeSubjects {
+		touched := resetTouched(t, sub.file, sub.recv)
+		for name := range sub.reset {
+			if !touched[name] {
+				t.Errorf("reset never touches %s.%s, but the list says a new conversation starts from it", sub.typeName, name)
+			}
+		}
+	}
+}
+
+func resetTouched(t *testing.T, path, recv string) map[string]bool {
+	t.Helper()
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "sessionstate.go", nil, 0)
+	file, err := parser.ParseFile(fset, path, nil, 0)
 	if err != nil {
-		t.Fatalf("parse sessionstate.go: %v", err)
+		t.Fatalf("parse %s: %v", path, err)
 	}
 	touched := map[string]bool{}
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -122,18 +155,14 @@ func TestSessionRuntimeResetAssignsEveryResetField(t *testing.T) {
 			if !ok {
 				return true
 			}
-			if recv, ok := sel.X.(*ast.Ident); ok && recv.Name == "r" {
+			if ident, ok := sel.X.(*ast.Ident); ok && ident.Name == recv {
 				touched[sel.Sel.Name] = true
 			}
 			return true
 		})
 		return false
 	})
-	for name := range sessionReset {
-		if !touched[name] {
-			t.Errorf("reset never touches sessionRuntime.%s, but the list says a new conversation starts from it", name)
-		}
-	}
+	return touched
 }
 
 func TestSetSessionRestartsTheConversationState(t *testing.T) {
@@ -141,9 +170,9 @@ func TestSetSessionRestartsTheConversationState(t *testing.T) {
 	a.sess.cacheHit.Store(11)
 	a.sess.cacheMiss.Store(7)
 	a.sess.missingReasoning = missingReasoningWatch{active: true, stateRecorded: true, healthyStreak: 2}
-	a.sess.compaction.stuck = true
-	a.sess.compaction.lastNoop = maintenanceNoop{reason: NoopNoNewClosedPrefix, turn: 9}
-	a.sess.compactionState = sessionstore.CompactionState{}
+	a.sess.win.compaction.stuck = true
+	a.sess.win.compaction.lastNoop = maintenanceNoop{reason: NoopNoNewClosedPrefix, turn: 9}
+	a.sess.win.compactionState = sessionstore.CompactionState{}
 	a.unwrittenResolve.at = time.Unix(1, 0)
 
 	next := sessionstore.NewSession("")
@@ -158,12 +187,12 @@ func TestSetSessionRestartsTheConversationState(t *testing.T) {
 	if a.sess.missingReasoning != (missingReasoningWatch{}) {
 		t.Errorf("missingReasoning = %+v, want the incident to end with its conversation", a.sess.missingReasoning)
 	}
-	if a.sess.compaction.stuck || a.sess.compaction.lastNoop.turn != 0 {
+	if a.sess.win.compaction.stuck || a.sess.win.compaction.lastNoop.turn != 0 {
 		t.Errorf("compaction progress = stuck:%t lastNoop:%+v, want it restarted",
-			a.sess.compaction.stuck, a.sess.compaction.lastNoop)
+			a.sess.win.compaction.stuck, a.sess.win.compaction.lastNoop)
 	}
-	if a.sess.cacheState != CacheStateUnknown {
-		t.Errorf("cacheState = %q, want %q", a.sess.cacheState, CacheStateUnknown)
+	if a.sess.win.cacheState != CacheStateUnknown {
+		t.Errorf("cacheState = %q, want %q", a.sess.win.cacheState, CacheStateUnknown)
 	}
 	if a.unwrittenResolve.at.IsZero() {
 		t.Error("unwrittenResolve was cleared; the retry it owes belongs to the provider configuration, not the conversation")

@@ -58,13 +58,13 @@ func TestFoldIndexScaleChangesWhatTheModelSees(t *testing.T) {
 		}
 		canonical, _ := a.sess.conversation.SnapshotMessagesVersion()
 		lines := 0
-		for _, m := range modelVisibleFromProjection(a.sess.compactionState.Projection, canonical) {
+		for _, m := range modelVisibleFromProjection(a.sess.win.compactionState.Projection, canonical) {
 			if _, index := splitFoldIndex(m.Content); index != "" {
 				lines += len(indexBodyLines(index))
 			}
 		}
 		sizes[scale] = lines
-		t.Logf("scale=%-7q budget=%4d index lines=%d", scale, a.foldIndexBudget(), lines)
+		t.Logf("scale=%-7q budget=%4d index lines=%d", scale, a.window().foldIndexBudget(), lines)
 	}
 	if sizes[ablation.FoldIndexOff] != 0 {
 		t.Errorf("the off arm still published %d index lines", sizes[ablation.FoldIndexOff])
@@ -91,7 +91,7 @@ func TestRecallSearchArmIsToldNothingItCannotUse(t *testing.T) {
 	if err := prepareContext(context.Background(), a, CompactionTriggerOverflow); err != nil {
 		t.Fatalf("prepare = %v", err)
 	}
-	if hint := a.droppedIndexHint(); strings.Contains(hint, "query") {
+	if hint := a.window().droppedIndexHint(); strings.Contains(hint, "query") {
 		t.Errorf("the dropped-entries line offers a query to an arm without search: %q", hint)
 	}
 	if _, err := a.RecallContext(context.Background(), tool.RecallRequest{Query: "timeout ownership"}); err == nil {
@@ -111,7 +111,7 @@ func TestControlArmKeepsSearch(t *testing.T) {
 	if err := prepareContext(context.Background(), a, CompactionTriggerOverflow); err != nil {
 		t.Fatalf("prepare = %v", err)
 	}
-	if hint := a.droppedIndexHint(); !strings.Contains(hint, "query") {
+	if hint := a.window().droppedIndexHint(); !strings.Contains(hint, "query") {
 		t.Errorf("the control arm's dropped-entries line does not mention search: %q", hint)
 	}
 	res, err := a.RecallContext(context.Background(), tool.RecallRequest{
