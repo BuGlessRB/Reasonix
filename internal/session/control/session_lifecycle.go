@@ -608,14 +608,16 @@ func (c *Controller) BrowserOpen(ctx context.Context, rawURL, tabID string, newT
 		return browser.TabInfo{}, errors.New("this session has no browser")
 	}
 	if !newTab {
-		return c.browser.Open(ctx, rawURL, tabID, newTab)
+		return c.browser.Visit(ctx, rawURL, tabID, newTab)
 	}
 	return openBeside(ctx, c.browser, rawURL)
 }
 
+// A person's open answers once the page is drawn; only the agent's waits for
+// every subresource, since it reads what loaded.
 type tabOpener interface {
 	Tabs() []browser.TabInfo
-	Open(ctx context.Context, rawURL, tabID string, newTab bool) (browser.TabInfo, error)
+	Visit(ctx context.Context, rawURL, tabID string, newTab bool) (browser.TabInfo, error)
 	Switch(tabID string) (browser.TabInfo, error)
 }
 
@@ -628,7 +630,7 @@ func openBeside(ctx context.Context, b tabOpener, rawURL string) (browser.TabInf
 			held = t.ID
 		}
 	}
-	info, err := b.Open(ctx, rawURL, "", true)
+	info, err := b.Visit(ctx, rawURL, "", true)
 	if held == "" || info.ID == "" || info.ID == held {
 		return info, err
 	}

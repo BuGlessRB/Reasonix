@@ -229,6 +229,18 @@ func (s *Session) tab(id string) (*tab, error) {
 // Open navigates a tab to rawURL and waits for it to load. newTab opens a fresh
 // tab; otherwise the named tab, or the active one, navigates.
 func (s *Session) Open(ctx context.Context, rawURL, tabID string, newTab bool) (TabInfo, error) {
+	return s.open(ctx, rawURL, tabID, newTab, true)
+}
+
+// Visit is Open for a person watching the page: it returns once the page has
+// committed rather than when every subresource has loaded. An intranet page
+// referencing a host it cannot reach never fires load, and the person already
+// sees it; the agent's Open still waits, because it reads what loaded.
+func (s *Session) Visit(ctx context.Context, rawURL, tabID string, newTab bool) (TabInfo, error) {
+	return s.open(ctx, rawURL, tabID, newTab, false)
+}
+
+func (s *Session) open(ctx context.Context, rawURL, tabID string, newTab, untilLoaded bool) (TabInfo, error) {
 	target, err := checkURL(rawURL, s.cfg.Roots)
 	if err != nil {
 		return TabInfo{}, err
@@ -247,7 +259,14 @@ func (s *Session) Open(ctx context.Context, rawURL, tabID string, newTab bool) (
 		return TabInfo{}, err
 	}
 	s.activate(t)
-	if err := t.navigate(ctx, target); err != nil {
+	if untilLoaded {
+		err = t.navigate(ctx, target)
+	} else {
+		startCtx, cancel := context.WithTimeout(ctx, navigationTimeout)
+		_, err = t.start(startCtx, target)
+		cancel()
+	}
+	if err != nil {
 		return t.info(true), err
 	}
 	s.mu.Lock()

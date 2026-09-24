@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -517,20 +518,31 @@ func (t *tab) currentDialog() *Dialog {
 
 // navigate loads url in this tab and waits for its load event.
 func (t *tab) navigate(ctx context.Context, url string) error {
+	loaderID, err := t.start(ctx, url)
+	if err != nil || loaderID == "" {
+		return err
+	}
+	return t.waitLoaded(ctx, loaderID, navigationTimeout)
+}
+
+// start begins a navigation and returns once the page has committed: the
+// document is arriving and the view draws it, though its subresources may
+// never finish. The loader id is empty for a navigation within the document.
+func (t *tab) start(ctx context.Context, url string) (string, error) {
 	var r struct {
 		LoaderID  string `json:"loaderId"`
 		ErrorText string `json:"errorText"`
 	}
 	if err := t.call(ctx, "Page.navigate", map[string]any{"url": url}, &r); err != nil {
-		return engineFailure(err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", fail(CodeNavigationTimeout, "%s did not start answering within %s", url, navigationTimeout)
+		}
+		return "", engineFailure(err)
 	}
 	if r.ErrorText != "" {
-		return fail(CodeNavigationFailed, "%s: %s", url, r.ErrorText)
+		return "", fail(CodeNavigationFailed, "%s: %s", url, r.ErrorText)
 	}
-	if r.LoaderID == "" {
-		return nil
-	}
-	return t.waitLoaded(ctx, r.LoaderID, navigationTimeout)
+	return r.LoaderID, nil
 }
 
 func (t *tab) waitLoaded(ctx context.Context, loaderID string, limit time.Duration) error {

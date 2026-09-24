@@ -18,6 +18,9 @@ type hostedBrowser struct {
 	methods []string
 	closed  chan struct{}
 	once    sync.Once
+	// neverLoads withholds the load event, like a page whose script comes
+	// from a host the network cannot reach.
+	neverLoads bool
 }
 
 func newHostedBrowser() *hostedBrowser {
@@ -61,6 +64,9 @@ func (h *hostedBrowser) WriteMessage(raw []byte) error {
 		result["frameTree"] = map[string]any{"frame": map[string]any{"id": "F1", "url": "about:blank"}}
 	case "Page.navigate":
 		result["loaderId"] = "L1"
+		if h.neverLoads {
+			break
+		}
 		defer h.send(map[string]any{"method": "Page.lifecycleEvent", "sessionId": msg.SessionID,
 			"params": map[string]any{"frameId": "F1", "loaderId": "L1", "name": "load"}})
 	case "Runtime.evaluate":
@@ -121,5 +127,47 @@ func TestNoHostFallsBackToLaunching(t *testing.T) {
 	s = NewSession(Config{Launch: LaunchSpec{Executable: "/nonexistent/chrome", ProfileDir: t.TempDir()}, Pool: pool})
 	if _, err := s.Open(context.Background(), "https://example.com/", "", false); CodeOf(err) != CodeEngineFailed {
 		t.Fatalf("a host that refuses = %v, want %s rather than a silent launch", err, CodeEngineFailed)
+	}
+}
+
+// A person watching the page sees it as soon as it commits; waiting for a load
+// that a missing subresource never lets fire left the panel blank for the
+// whole navigation timeout. The agent's Open still waits for the load.
+func TestVisitAnswersOnCommitWhileOpenWaitsForLoad(t *testing.T) {
+	host := newHostedBrowser()
+	host.neverLoads = true
+	pool := &Pool{}
+	pool.SetEndpoint(func(context.Context, string) (Endpoint, error) { return host, nil })
+	s := NewSession(Config{Launch: LaunchSpec{Executable: "/nonexistent/chrome", ProfileDir: "/profiles/w1"}, Pool: pool})
+	defer s.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	info, err := s.Visit(ctx, "https://intranet.example/", "", true)
+	if err != nil {
+		t.Fatalf("Visit of a page that never fires load: %v", err)
+	}
+	if info.Target != "view-1" {
+		t.Fatalf("info = %+v", info)
+	}
+
+	short, cancelShort := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancelShort()
+	if _, err := s.Open(short, "https://intranet.example/", "", false); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Open = %v, want it still waiting for load when its context ends", err)
+	}
+}
+
+func TestVisitRefusesWhatOpenRefuses(t *testing.T) {
+	pool := &Pool{}
+	pool.SetEndpoint(func(context.Context, string) (Endpoint, error) { return newHostedBrowser(), nil })
+	s := NewSession(Config{Launch: LaunchSpec{Executable: "/nonexistent/chrome", ProfileDir: "/profiles/w1"}, Pool: pool})
+	defer s.Close()
+	for _, raw := range []string{"file:///etc/passwd", "javascript:alert(1)", "example.com"} {
+		_, visitErr := s.Visit(context.Background(), raw, "", true)
+		_, openErr := s.Open(context.Background(), raw, "", true)
+		if visitErr == nil || CodeOf(visitErr) != CodeOf(openErr) {
+			t.Errorf("%s: Visit = %v, Open = %v; want the same refusal", raw, visitErr, openErr)
+		}
 	}
 }

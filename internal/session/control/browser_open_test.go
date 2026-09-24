@@ -23,7 +23,7 @@ func (f *fakeTabs) Tabs() []browser.TabInfo {
 	return out
 }
 
-func (f *fakeTabs) Open(_ context.Context, rawURL, _ string, _ bool) (browser.TabInfo, error) {
+func (f *fakeTabs) Visit(_ context.Context, rawURL, _ string, _ bool) (browser.TabInfo, error) {
 	t := browser.TabInfo{ID: "t" + string(rune('1'+len(f.tabs))), URL: rawURL, Active: true}
 	f.tabs = append(f.tabs, t)
 	f.active = t.ID
