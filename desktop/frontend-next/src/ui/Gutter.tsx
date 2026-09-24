@@ -135,6 +135,7 @@ export function Gutter({ edge, span, width, label, open, onWidth, onOpen }: Prop
   };
 
   const toggle = () => onOpen(!open);
+  const rail = edge === "l";
 
   const key = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     // The pointer commits by pushing through; the keyboard says it outright.
@@ -187,6 +188,7 @@ export function Gutter({ edge, span, width, label, open, onWidth, onOpen }: Prop
       onPointerDown={drag}
       onDoubleClick={() => open && onWidth(span.def)}
       onKeyDown={key}
+      data-action-keydown={rail ? "chrome.rail" : "browser.open"}
     >
       {/* The one control for both directions, sitting where the hand already is.
           Not a tab stop of its own — Enter on the separator does the same thing,
@@ -200,6 +202,7 @@ export function Gutter({ edge, span, width, label, open, onWidth, onOpen }: Prop
         title={open ? t("收起") : t("展开")}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={toggle}
+        data-action-click={rail ? "chrome.rail" : "browser.open"}
       >
         <i className="knurl" aria-hidden="true" />
         <span className="dir" aria-hidden="true">{(edge === "l") === open ? "‹" : "›"}</span>

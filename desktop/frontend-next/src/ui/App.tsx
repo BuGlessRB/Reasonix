@@ -9,6 +9,7 @@ import { Nav } from "./Nav";
 import { useLinkRouting } from "./links";
 import { Pane, type PaneReport } from "./Pane";
 import { DOCK, Gutter, RAIL, keepWidth, widthOf } from "./Gutter";
+import { listenAction } from "./listen";
 import { folded as roomGaveUp, onFolds } from "./viewport";
 import { useDrawerCloses } from "./drawer";
 import { RemoteAsk } from "./RemoteAsk";
@@ -451,8 +452,10 @@ export function App({ hub }: { hub: HubPort }) {
         else setFocus(false);
       }
     };
-    addEventListener("keydown", onKey);
-    return () => removeEventListener("keydown", onKey);
+    return listenAction(window, "keydown", {
+      action: browser ? "browser.open" : running ? "session.stop" : "chrome.focus",
+      listener: onKey as EventListener,
+    });
   }, [activePort, browser, running, settings, shortcuts]);
 
   // A setting changed in the pane is a fact about the session behind it, and

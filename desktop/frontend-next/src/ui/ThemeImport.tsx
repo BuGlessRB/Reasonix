@@ -59,6 +59,7 @@ export function ThemeImport({ port, empty, onImported, onUse }: Props) {
         multiple
         accept={ACCEPT}
         hidden
+        data-action="theme.import"
         onChange={(e) => {
           void take([...(e.target.files ?? [])]);
           e.target.value = "";
