@@ -267,7 +267,12 @@ export function AgentBrowserPanel({ tabs, shown, showTabs = true }: { tabs: Brow
       {refused && <p className="studio-browser-error" role="alert">{t("请输入有效的 http 或 https 地址")}</p>}
       <div className="bview" ref={slot}>
         {failure ? (
-          <BrowserFailure failure={failure} onRetry={() => open(failure.url)} onExternal={() => host().openExternal(failure.url)} />
+          <BrowserFailure
+            failure={failure}
+            onRetry={() => open(failure.url)}
+            onExternal={() => host().openExternal(failure.url)}
+            onTrust={() => void host().trustBrowserCertificate(target)}
+          />
         ) : (
           <p className="bhint">{t("页面被遮住时暂停显示")}</p>
         )}

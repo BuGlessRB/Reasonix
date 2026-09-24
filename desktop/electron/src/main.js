@@ -260,6 +260,9 @@ ipcMain.handle("browser:control", (event, targetId, action) => {
 ipcMain.handle("browser:navigate", (event, targetId, address) =>
   fromWindow(event) ? (browserViews?.navigate(String(targetId), String(address)) ?? false) : false,
 );
+ipcMain.handle("browser:trust-certificate", (event, targetId) =>
+  fromWindow(event) ? (browserViews?.trustCertificate(String(targetId)) ?? false) : false,
+);
 ipcMain.handle("browser:login-answer", (event, id, username, password) => {
   if (fromWindow(event)) browserViews?.answerLogin(String(id), String(username || ""), String(password || ""));
 });

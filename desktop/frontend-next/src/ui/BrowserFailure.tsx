@@ -35,10 +35,12 @@ interface Props {
   failure: BrowserLoadFailure;
   onRetry: () => void;
   onExternal: () => void;
+  onTrust: () => void;
 }
 
 /** BrowserFailure takes the place of a page that did not load, and says why. */
-export function BrowserFailure({ failure, onRetry, onExternal }: Props) {
+export function BrowserFailure({ failure, onRetry, onExternal, onTrust }: Props) {
+  const cert = failure.certificate;
   return (
     <div className="bfail" role="alert">
       <b>{t("这个网页打不开")}</b>
@@ -46,6 +48,20 @@ export function BrowserFailure({ failure, onRetry, onExternal }: Props) {
       <code>
         {failure.reason || failure.code} · {failure.url}
       </code>
+      {/* What the person is about to trust, shown before they trust it: the
+          issuer is how a company certificate is told from an impostor's. */}
+      {cert && (
+        <dl className="bfail-cert">
+          <dt>{t("颁发给")}</dt>
+          <dd>{cert.subject}</dd>
+          <dt>{t("颁发者")}</dt>
+          <dd>{cert.issuer}</dd>
+          <dt>{t("有效期至")}</dt>
+          <dd>{cert.expiry ? new Date(cert.expiry * 1000).toLocaleDateString() : "—"}</dd>
+          <dt>{t("指纹")}</dt>
+          <dd className="fp">{cert.fingerprint}</dd>
+        </dl>
+      )}
       <div className="bfail-acts">
         <button className="btn sm" data-action="browser.control" data-value="retry" onClick={onRetry}>
           {t("重试")}
@@ -53,7 +69,13 @@ export function BrowserFailure({ failure, onRetry, onExternal }: Props) {
         <button className="btn sm" data-action="browser.external" onClick={onExternal}>
           {t("在外部浏览器打开")}
         </button>
+        {cert && (
+          <button className="btn sm" data-action="browser.trust-certificate" onClick={onTrust}>
+            {t("仍然访问（仅本次运行）")}
+          </button>
+        )}
       </div>
+      {cert && <p className="bfail-note">{t("只在确认这是公司内网站点时继续。只信任这个站点的这张证书，重启 Studio 后需要重新确认。")}</p>}
     </div>
   );
 }

@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld("reasonixHost", {
   // goes back to this window's main process only; the kernel never sees it.
   onBrowserLoadState: (listener) => subscribe("browser:load-state", listener),
   onBrowserLogin: (listener) => subscribe("browser:login", listener),
+  trustBrowserCertificate: (targetId) => ipcRenderer.invoke("browser:trust-certificate", String(targetId)),
   answerBrowserLogin: (id, username, password) =>
     ipcRenderer.invoke("browser:login-answer", String(id), String(username || ""), String(password || "")),
 });

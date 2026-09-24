@@ -794,7 +794,12 @@
   .bfail b { font: var(--w-med) var(--fs-lead) var(--ui); color: var(--text) }
   .bfail p { margin: 0; font: var(--w-reg) var(--fs-ui)/1.7 var(--ui) }
   .bfail code { max-width: 100%; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint); overflow-wrap: anywhere }
-  .bfail-acts { display: flex; gap: 8px; margin-top: 8px }
+  .bfail-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px }
+  .bfail-cert { margin: 4px 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; font: var(--w-reg) var(--fs-meta)/1.6 var(--ui) }
+  .bfail-cert dt { color: var(--faint) }
+  .bfail-cert dd { margin: 0; color: var(--muted); overflow-wrap: anywhere }
+  .bfail-cert .fp { font-family: var(--mono) }
+  .bfail .bfail-note { font-size: var(--fs-meta); color: var(--faint) }
   .tab.more { display: inline-flex; align-items: center; gap: 5px }
   .tab.more .cv { font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--faint); font-style: normal; transition: transform var(--t-card) var(--ease) }
   .tab.more[aria-expanded="true"] .cv { transform: rotate(180deg) }

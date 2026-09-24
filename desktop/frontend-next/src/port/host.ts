@@ -47,6 +47,8 @@ export interface HostPort {
   onBrowserLogin(listener: (ask: BrowserLogin) => void): () => void;
   /** An empty username cancels the login. */
   answerBrowserLogin(id: string, username: string, password: string): void;
+  /** Proceed past the certificate this page was refused for, for this run. */
+  trustBrowserCertificate(target: string): Promise<boolean>;
 }
 
 export interface BrowserLoadFailure {
@@ -55,6 +57,18 @@ export interface BrowserLoadFailure {
   code: number;
   /** Chromium's net error name, e.g. ERR_CERT_AUTHORITY_INVALID. */
   reason: string;
+  /** The certificate a certificate error was raised for. */
+  certificate?: BrowserCertificate;
+}
+
+export interface BrowserCertificate {
+  host: string;
+  error: string;
+  fingerprint: string;
+  subject: string;
+  issuer: string;
+  /** Seconds since the epoch. */
+  expiry: number;
 }
 
 export interface BrowserLoadState {
@@ -103,6 +117,7 @@ interface ElectronBridge {
   onBrowserLoadState?(listener: (state: BrowserLoadState) => void): () => void;
   onBrowserLogin?(listener: (ask: BrowserLogin) => void): () => void;
   answerBrowserLogin?(id: string, username: string, password: string): Promise<void>;
+  trustBrowserCertificate?(target: string): Promise<boolean>;
 }
 
 const bridge = () => (window as unknown as { reasonixHost?: ElectronBridge }).reasonixHost;
@@ -177,6 +192,9 @@ class ElectronHost implements HostPort {
   answerBrowserLogin(id: string, username: string, password: string) {
     void this.api.answerBrowserLogin?.(id, username, password);
   }
+  trustBrowserCertificate(target: string) {
+    return this.api.trustBrowserCertificate?.(target) ?? Promise.resolve(false);
+  }
 }
 
 class BrowserHost implements HostPort {
@@ -220,6 +238,9 @@ class BrowserHost implements HostPort {
     return () => {};
   }
   answerBrowserLogin() {}
+  trustBrowserCertificate() {
+    return Promise.resolve(false);
+  }
 }
 
 function pick(): HostPort {

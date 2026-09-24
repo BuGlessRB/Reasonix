@@ -21,6 +21,9 @@ class BrowserViews {
     this.entries = new Map();
     this.guarded = new Set();
     this.logins = new Map();
+    // host + certificate fingerprint pairs the person chose to proceed past,
+    // for this run only: a restart, or a different certificate, asks again.
+    this.trusted = new Set();
     this.shown = "";
     win.on("resize", () => {
       for (const [id, entry] of this.entries) if (id !== this.shown) this.putAway(entry.view);
@@ -201,7 +204,7 @@ class BrowserViews {
     if (failed && fallback && entry.typed === turn) failed = await loadResult(contents, fallback);
     if (entry.typed !== turn) return;
     entry.typed = 0;
-    if (failed) this.report(targetId, failed);
+    if (failed) this.report(targetId, failed, entry);
   }
 
   // watchLoads tells the window why a page did not load, since Electron draws
@@ -216,7 +219,28 @@ class BrowserViews {
       // -3 is ERR_ABORTED: a navigation replaced by another, or stopped. A
       // typed address reports through loadTyped, which may still retry it.
       if (!isMainFrame || code === -3 || entry.typed) return;
-      this.report(targetId, { url, code, reason: description });
+      this.report(targetId, { url, code, reason: description }, entry);
+    });
+    // Electron rejects a certificate it cannot verify unless told otherwise,
+    // and only a pair the person trusted through trustCertificate is.
+    contents.on("certificate-error", (event, url, error, certificate, callback, isMainFrame) => {
+      const host = hostOf(url);
+      if (this.trusted.has(trustKey(host, certificate.fingerprint))) {
+        event.preventDefault();
+        callback(true);
+        return;
+      }
+      if (isMainFrame) {
+        entry.certificate = {
+          host,
+          url,
+          error,
+          fingerprint: certificate.fingerprint,
+          subject: certificate.subjectName,
+          issuer: certificate.issuerName,
+          expiry: certificate.validExpiry,
+        };
+      }
     });
     contents.on("login", (event, details, authInfo, callback) => {
       event.preventDefault();
@@ -244,8 +268,26 @@ class BrowserViews {
     else callback();
   }
 
-  report(targetId, failure) {
+  report(targetId, failure, entry) {
+    const cert = entry?.certificate;
+    if (failure && cert && failure.reason.startsWith("ERR_CERT_") && cert.host === hostOf(failure.url)) {
+      const { host, error, fingerprint, subject, issuer, expiry } = cert;
+      failure = { ...failure, certificate: { host, error, fingerprint, subject, issuer, expiry } };
+    }
     this.send("browser:load-state", { targetId, failure });
+  }
+
+  // trustCertificate proceeds past the certificate a page's last load was
+  // refused for. It is reached only from the window's own page, so neither
+  // the kernel nor the agent driving the browser can trust one.
+  trustCertificate(targetId) {
+    const entry = this.entries.get(targetId);
+    const cert = entry?.certificate;
+    if (!cert) return false;
+    this.trusted.add(trustKey(cert.host, cert.fingerprint));
+    entry.certificate = null;
+    void this.loadTyped(targetId, entry, cert.url, "");
+    return true;
   }
 
   send(channel, payload) {
@@ -256,6 +298,18 @@ class BrowserViews {
     for (const id of [...this.logins.keys()]) this.answerLogin(id);
     for (const entry of [...this.entries.values()]) entry.view.webContents.close();
   }
+}
+
+function hostOf(raw) {
+  try {
+    return new URL(raw).host;
+  } catch {
+    return "";
+  }
+}
+
+function trustKey(host, fingerprint) {
+  return `${host} ${fingerprint}`;
 }
 
 // loadResult is null when the page loaded, or why it did not. An abort is
