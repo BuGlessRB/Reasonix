@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import type { AccountState, AgentPort, ProviderSetup } from "../port/port";
@@ -10,7 +10,8 @@ import { useLinkRouting } from "./links";
 import { Pane, type PaneReport } from "./Pane";
 import { DOCK, Gutter, RAIL, keepWidth, widthOf } from "./Gutter";
 import { listenAction } from "./listen";
-import { folded as roomGaveUp, onFolds } from "./viewport";
+import { folded as roomGaveUp } from "./viewport";
+import { useFoldAway } from "./foldaway";
 import { useDrawerCloses } from "./drawer";
 import { RemoteAsk } from "./RemoteAsk";
 import { BrowserLogin } from "./BrowserLogin";
@@ -64,25 +65,6 @@ function savedPins(): Set<string> {
   } catch {
     return new Set();
   }
-}
-
-// 两栏共用一条规则：窄到放不下就收起，缝和把手留在原处。宽档下的那个选择要留
-// 着 —— 拖窄一下再拖回来，不该把用户自己收起或展开的决定抹掉。
-function useFoldAway(name: string, set: Dispatch<SetStateAction<boolean>>, wideDefault = true) {
-  const wide = useRef(wideDefault);
-  useEffect(() => {
-    let tight = roomGaveUp(name);
-    return onFolds((f) => {
-      const now = f.split(" ").includes(name);
-      if (now === tight) return;
-      tight = now;
-      set((cur) => {
-        if (!now) return wide.current;
-        wide.current = cur;
-        return false;
-      });
-    });
-  }, [name, set]);
 }
 
 // App is the window around the panes, not a session itself: the workspace tree,
