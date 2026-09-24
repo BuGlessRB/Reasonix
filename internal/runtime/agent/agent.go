@@ -516,8 +516,8 @@ func (a *Agent) SetMutationObserver(obs *checkpoint.MutationObserver) {
 		return
 	}
 	if t, ok := a.svc.tools.Get("task"); ok {
-		if task, ok := t.(*TaskTool); ok {
-			task.WithMutationObserver(obs)
+		if observed, ok := t.(mutationObserverSetter); ok {
+			observed.SetMutationObserver(obs)
 		}
 	}
 }

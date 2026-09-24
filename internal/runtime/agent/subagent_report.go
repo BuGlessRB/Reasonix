@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/contract/tool"
 	"reasonix/internal/safety/evidence"
 )
 
@@ -53,47 +52,6 @@ func boundedHostReceipts(receipts string, limit int) string {
 		return withHeader
 	}
 	return utf8Prefix(strings.Join(violations, "\n"), limit)
-}
-
-// decorateExecutionReceipt records what the host itself observed about one tool
-// call. The output length and the process outcome never come from model
-// arguments, which is what makes the resulting attestation trustworthy.
-func decorateExecutionReceipt(rec *evidence.Receipt, result string, ex *tool.ShellExecution) {
-	if rec == nil {
-		return
-	}
-	rec.ObserveOutput(result)
-	if ex == nil {
-		return
-	}
-	if ex.ExitCode != nil {
-		code := *ex.ExitCode
-		rec.ExitCode = &code
-	}
-	rec.Verification = ex.Verification
-	// A screenshot of a local file is a look at that file. The page is the one
-	// the browser reported, so a model naming a different file changes nothing.
-	if ex.Kind == browserExecutionKind && ex.State == tool.ShellStateCompleted && rec.ToolName == "browser_read" {
-		if viewed := evidence.ViewedPath(ex.Subject); viewed != "" {
-			rec.Viewed = []string{viewed}
-		}
-	}
-}
-
-// browserExecutionKind marks a host record a browser tool produced.
-const browserExecutionKind = "browser"
-
-// composeSubagentAnswer assembles everything the parent is shown for one child
-// run: the host-adjudicated completion claim when the child submitted one, the
-// child's own prose, then the host's receipts.
-func composeSubagentAnswer(ctx context.Context, answer string, sub *Agent, claims writeclaim.WritePathSet, delegationText string) string {
-	summary := sub.EvidenceSummary()
-	report, reasons, hasReport := sub.CompletionReport()
-	if hasReport {
-		answer = strings.TrimSpace(formatCompletionReport(report, reasons) + "\n\n" + answer)
-	}
-	recordDelegationAudit(ctx, summary, claims, report, reasons, hasReport, delegationText)
-	return appendHostReceipts(answer, summary, claims)
 }
 
 // recordDelegationAudit emits one structured receipt per child run. It reports

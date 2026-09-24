@@ -80,3 +80,31 @@ func stampReviewGrant(rec *evidence.Receipt, plan *toolCallPlan) {
 	rec.ReviewAuthority = &authority
 	rec.SourceExecutionID = grant.Execution
 }
+
+// decorateExecutionReceipt records what the host itself observed about one tool
+// call. The output length and the process outcome never come from model
+// arguments, which is what makes the resulting attestation trustworthy.
+func decorateExecutionReceipt(rec *evidence.Receipt, result string, ex *tool.ShellExecution) {
+	if rec == nil {
+		return
+	}
+	rec.ObserveOutput(result)
+	if ex == nil {
+		return
+	}
+	if ex.ExitCode != nil {
+		code := *ex.ExitCode
+		rec.ExitCode = &code
+	}
+	rec.Verification = ex.Verification
+	// A screenshot of a local file is a look at that file. The page is the one
+	// the browser reported, so a model naming a different file changes nothing.
+	if ex.Kind == browserExecutionKind && ex.State == tool.ShellStateCompleted && rec.ToolName == "browser_read" {
+		if viewed := evidence.ViewedPath(ex.Subject); viewed != "" {
+			rec.Viewed = []string{viewed}
+		}
+	}
+}
+
+// browserExecutionKind marks a host record a browser tool produced.
+const browserExecutionKind = "browser"

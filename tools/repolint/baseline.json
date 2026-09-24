@@ -11,7 +11,7 @@
     "doc-prose": 2324,
     "error-text": 9,
     "essay": 2829,
-    "file-size": 22798,
+    "file-size": 21931,
     "flat-view": 0,
     "frontend-parity": 32,
     "function-size": 3335,
@@ -995,6 +995,12 @@
     "internal/runtime/agent/capability_gate_test.go": {
       "essay": 1
     },
+    "internal/runtime/agent/child_registry.go": {
+      "essay": 16
+    },
+    "internal/runtime/agent/child_run.go": {
+      "essay": 7
+    },
     "internal/runtime/agent/compact_test.go": {
       "essay": 1
     },
@@ -1080,8 +1086,8 @@
     },
     "internal/runtime/agent/task.go": {
       "complexity": 12,
-      "essay": 35,
-      "file-size": 1123,
+      "essay": 12,
+      "file-size": 256,
       "function-size": 94,
       "orphan": 1
     },

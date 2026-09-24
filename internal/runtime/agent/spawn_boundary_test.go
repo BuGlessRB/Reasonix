@@ -20,7 +20,8 @@ import (
 // gets missed in another. The list may shrink; adding to it needs a reason in
 // the pull request.
 var knownDirectChildRunners = map[string]string{
-	"internal/runtime/agent/task.go":           "defines the runners and is the unified path itself",
+	"internal/runtime/agent/child_run.go":      "defines the runners",
+	"internal/runtime/agent/task.go":           "the unified path itself",
 	"internal/assembly/boot/skill_subagent.go": "run_skill + read_only_skill runners",
 	"internal/frontend/cli/review.go":          "reasonix review",
 	"desktop/subagents_app.go":                 "desktop profile preview",

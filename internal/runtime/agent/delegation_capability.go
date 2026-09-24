@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/event"
-	"reasonix/internal/contract/tool"
 )
 
 // The delegation namespace. These ids are the whole discovery surface for the
@@ -39,18 +38,6 @@ func batchDelegation(name string, args json.RawMessage) *event.Profile {
 		return &event.Profile{Name: name}
 	}
 	return &event.Profile{Name: name, Count: len(p.Tasks)}
-}
-
-// delegationProfile reports the sub-agents a call dispatches. A nil profile is
-// what says the call kept the work in this context.
-func delegationProfile(t tool.Tool, args json.RawMessage) *event.Profile {
-	pr, ok := t.(interface {
-		ResolveProfile(json.RawMessage) *event.Profile
-	})
-	if !ok {
-		return nil
-	}
-	return pr.ResolveProfile(args)
 }
 
 // ResolveProfile extracts model/effort from task args (and optional profile
