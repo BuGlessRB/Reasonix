@@ -87,6 +87,7 @@ type toolStage struct {
 	cmds        []command.Command
 	caps        *capabilitySurface
 	candidates  *candidateApproval // nil unless best_of_n is offered
+	isolation   *isolationWiring   // nil unless worktree isolation is offered
 	// mcpSchemaKnown names the configured servers whose tools were known at
 	// registration, the only ones an always-load can show this session.
 	mcpSchemaKnown map[string]bool
@@ -113,6 +114,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		return nil, err
 	}
 	b.tools.candidates.bind(ctrl)
+	b.tools.isolation.bind(ctrl)
 	return b.freeze(ctrl)
 }
 
@@ -250,6 +252,7 @@ func (b *builder) wireTools() error {
 	t.taskTool, t.skillRun = t.roles.delegation(delegationInputs{opts: opts, sub: t.sub, exec: b.execProv, entry: b.model.entry,
 		modelName: b.model.name, root: root, maxSteps: t.maxSteps, delivery: b.model.delivery, store: subagentStore,
 		session: b.session, bashEnforced: env.bash.Enforce})
+	b.addIsolation()
 	registerSessionTools(t.reg, opts.Ablation, b.roots, b.session.dir, b.prompt.memory.Store)
 
 	t.runners = skillRunners{readOnly: t.skillRun.runReadOnly, run: t.skillRun.run, profile: skillProfile(cfg)}
@@ -495,7 +498,7 @@ func (b *builder) freeze(ctrl *control.Controller) (*BuildResult, error) {
 	if b.providers.extension != nil {
 		providerResolver = b.providers.extension
 	}
-	b.cleanup = wireRuntimeScopeCleanup(runtimeSet, b.cleanup, b.opts.SharedHost, t.host, t.lsp, b.opts.SessionTemp)
+	b.cleanup = t.isolation.closeAfter(wireRuntimeScopeCleanup(runtimeSet, b.cleanup, b.opts.SharedHost, t.host, t.lsp, b.opts.SessionTemp))
 	ctrl.SetExtensions(dispatcher)
 	if extensionMgr == nil {
 		hub = nil

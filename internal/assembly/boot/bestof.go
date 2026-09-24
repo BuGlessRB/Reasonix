@@ -43,7 +43,7 @@ func (c *candidateApproval) mode() string {
 // addBestOf offers best_of_n when [agent] best_of_n is on. A candidate's own
 // kernel never offers it, so attempts cannot fan out again.
 func (b *builder) addBestOf() {
-	if !b.cfg.Agent.BestOfN || b.opts.BestOfCandidate {
+	if !b.cfg.Agent.BestOfN || b.opts.UnattendedChild {
 		return
 	}
 	approval := &candidateApproval{}
@@ -69,45 +69,50 @@ func (b *builder) addBestOf() {
 	}))
 }
 
-// candidateRunner builds one throwaway kernel per attempt, rooted at the
-// attempt's worktree, and runs the prompt to its end. Its transcript lives in a
-// temp dir removed with it; only its usage reaches the parent session.
+// candidateRunner runs each attempt as an unattended child kernel.
 func candidateRunner(parent Options, sink event.Sink, approval *candidateApproval) bestof.Runner {
 	return func(ctx context.Context, run bestof.Run) (bestof.Outcome, error) {
-		sessDir, err := os.MkdirTemp("", "reasonix-candidate-")
-		if err != nil {
-			return bestof.Outcome{}, err
-		}
-		defer os.RemoveAll(sessDir)
-		ctrl, err := Build(ctx, Options{
-			WorkspaceRoot:        run.WorkspaceRoot,
-			Home:                 parent.Home,
-			Model:                run.Model,
-			AgentPreset:          parent.AgentPreset,
-			ProviderResolver:     parent.ProviderResolver,
-			Sink:                 candidateUsage{sink},
-			Stderr:               io.Discard,
-			SessionDir:           sessDir,
-			HeadlessApprovalMode: approval.mode(),
-			ApprovalTimeout:      time.Second,
-			GoalTurnsUnreachable: true,
-			BestOfCandidate:      true,
-		})
-		if err != nil {
-			return bestof.Outcome{}, err
-		}
-		defer ctrl.Close()
-		out := bestof.Outcome{}
-		if err := ctrl.Run(ctx, run.Prompt); err != nil {
-			var unready *agent.FinalReadinessError
-			if !errors.As(err, &unready) {
-				return bestof.Outcome{}, err
-			}
-			out.Unverified = unready.Reason
-		}
-		out.Answer = finalAnswer(ctrl)
-		return out, nil
+		answer, unverified, err := runUnattended(ctx, parent, candidateUsage{sink}, approval.mode(), run.WorkspaceRoot, run.Prompt, run.Model)
+		return bestof.Outcome{Answer: answer, Unverified: unverified}, err
 	}
+}
+
+// runUnattended builds one throwaway kernel rooted at root and runs prompt to
+// its end. Its transcript lives in a temp dir removed with it; only what sink
+// forwards reaches the parent session. A run that stopped without proving its
+// work is not an error: its readiness reason comes back as unverified.
+func runUnattended(ctx context.Context, parent Options, sink event.Sink, mode, root, prompt, model string) (answer, unverified string, err error) {
+	sessDir, err := os.MkdirTemp("", "reasonix-candidate-")
+	if err != nil {
+		return "", "", err
+	}
+	defer os.RemoveAll(sessDir)
+	ctrl, err := Build(ctx, Options{
+		WorkspaceRoot:        root,
+		Home:                 parent.Home,
+		Model:                model,
+		AgentPreset:          parent.AgentPreset,
+		ProviderResolver:     parent.ProviderResolver,
+		Sink:                 sink,
+		Stderr:               io.Discard,
+		SessionDir:           sessDir,
+		HeadlessApprovalMode: mode,
+		ApprovalTimeout:      time.Second,
+		GoalTurnsUnreachable: true,
+		UnattendedChild:      true,
+	})
+	if err != nil {
+		return "", "", err
+	}
+	defer ctrl.Close()
+	if err := ctrl.Run(ctx, prompt); err != nil {
+		var unready *agent.FinalReadinessError
+		if !errors.As(err, &unready) {
+			return "", "", err
+		}
+		unverified = unready.Reason
+	}
+	return finalAnswer(ctrl), unverified, nil
 }
 
 // finalAnswer is the attempt's last visible message; empty when it ended

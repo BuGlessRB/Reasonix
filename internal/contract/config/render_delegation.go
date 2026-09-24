@@ -61,6 +61,11 @@ func renderAgentDelegation(b *strings.Builder, c *Config) {
 	} else {
 		b.WriteString("# best_of_n = true   # parallel attempts in git worktrees; a judge applies the best\n")
 	}
+	if c.Agent.WorktreeIsolation {
+		b.WriteString("worktree_isolation = true   # task can run a writer in a git worktree; changes wait for apply_isolated\n")
+	} else {
+		b.WriteString("# worktree_isolation = true   # task can run a writer in a git worktree; changes wait for apply_isolated\n")
+	}
 	if c.Agent.CodeMode {
 		b.WriteString("code_mode = true   # run_script: tool calls from a short script, one round trip\n")
 	} else {

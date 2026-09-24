@@ -1052,6 +1052,9 @@ type AgentConfig struct {
 	// BestOfN offers best_of_n: parallel unattended attempts in git worktrees,
 	// judged, with the winner applied. Off by default; every attempt is a full run.
 	BestOfN bool `toml:"best_of_n"`
+	// WorktreeIsolation lets task run a writer in a git worktree of the
+	// workspace, its changes held until applied. Off by default.
+	WorktreeIsolation bool `toml:"worktree_isolation"`
 	// CodeMode offers run_script: a Starlark script whose tool calls each pass
 	// the ordinary checks, so dependent steps cost one round trip.
 	CodeMode bool `toml:"code_mode"`

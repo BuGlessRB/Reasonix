@@ -101,7 +101,7 @@ type Options struct {
 	HeadlessApprovalMode string
 
 	GoalTurnsUnreachable bool // this assembly never arms a Goal turn; see GoalOnlyToolNames
-	BestOfCandidate      bool // this assembly is one best_of_n attempt and offers no best_of_n
+	UnattendedChild      bool // an unattended child run: it offers neither best_of_n nor isolation
 	// SessionRecoveryMeta and OnSessionRecovered let richer frontends attach
 	// local UI metadata to automatic transcript recovery branches.
 	SessionRecoveryMeta func(control.SessionRecoveryRequest) sessionstore.BranchMeta

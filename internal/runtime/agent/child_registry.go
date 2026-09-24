@@ -33,6 +33,8 @@ var subagentAlwaysHiddenTools = []string{
 	"list_subagents",
 	"install_skill",
 	"install_source",
+	"apply_isolated",
+	"discard_isolated",
 }
 
 var subagentJobTools = []string{
