@@ -664,6 +664,11 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 			ToolCallID: call.ID,
 			Name:       call.Name,
 		}
+		// The host names content written outside the workspace before the model
+		// reads it; the label is fixed once here and never rewritten.
+		if i < len(batch.outcomes) {
+			msg.Content = tool.ProvenanceHeader(batch.outcomes[i].provenance) + msg.Content
+		}
 		// First-visible Content is always the bounded form in results[i].
 		// Full originals ride on RawContent only when truncation applied.
 		if i < len(batch.outcomes) && batch.outcomes[i].rawOutput != "" && batch.outcomes[i].rawOutput != results[i] {

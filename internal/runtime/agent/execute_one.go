@@ -727,7 +727,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		// A failed call's screenshot is often the only record of why it failed.
 		out := toolOutcome{
 			output: body, images: images, errMsg: firstLine(err.Error()), bound: bound, truncMsg: truncMsg,
-			execution: execution,
+			execution: execution, provenance: tool.ProvenanceOf(runTool, runArgs),
 		}
 		if truncMsg != "" {
 			out.rawOutput = rawErr
@@ -744,7 +744,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	body, bound, truncMsg := a.boundToolOutput(result, call.Name, call.ID, call.Arguments, false)
 	out := toolOutcome{
 		output: body, images: images, bound: bound, truncMsg: truncMsg,
-		execution: execution,
+		execution: execution, provenance: tool.ProvenanceOf(runTool, runArgs),
 	}
 	if truncMsg != "" {
 		out.rawOutput = result

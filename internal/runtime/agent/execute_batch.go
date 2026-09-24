@@ -59,9 +59,12 @@ type toolOutcome struct {
 	errMsg    string
 	// refusalCode is the identity of a host refusal, carried beside the words
 	// rather than recovered from them. Empty when the call was not refused.
-	refusalCode  string
-	bound        event.OutputBound
-	truncMsg     string
+	refusalCode string
+	bound       event.OutputBound
+	truncMsg    string
+	// provenance is where the result's content came from, read after the call
+	// ran; only the provider-bound message is labelled with it.
+	provenance   tool.Provenance
 	resolved     bool
 	resolvedName string
 	capabilityID string

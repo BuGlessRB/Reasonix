@@ -11,6 +11,7 @@ var corePolicies = []string{
 	config.ToolBatchPolicy,
 	config.LanguagePolicy,
 	config.InstructionDeliveryPolicy,
+	config.ExternalContentPolicy,
 }
 
 func appendCorePolicies(prompt string) string {
