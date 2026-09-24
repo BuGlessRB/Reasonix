@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -66,11 +67,16 @@ func TestWorkspaceImageSandboxesWhatItServes(t *testing.T) {
 func TestWorkspaceImageRefusesWhatIsNotAnImageInTheTree(t *testing.T) {
 	srv := imageServer(t, map[string]string{"notes.html": "<script>1</script>", "a.png": "x"})
 	cases := map[string]int{
-		"notes.html":       http.StatusBadRequest,
-		"../outside.png":   http.StatusBadRequest,
-		"missing.png":      http.StatusNotFound,
-		"%2e%2e/etc.png":   http.StatusBadRequest,
-		"C:/Windows/x.png": http.StatusBadRequest,
+		"notes.html":     http.StatusBadRequest,
+		"../outside.png": http.StatusBadRequest,
+		"missing.png":    http.StatusNotFound,
+		"%2e%2e/etc.png": http.StatusBadRequest,
+		"/etc/x.png":     http.StatusBadRequest,
+	}
+	// A drive letter only makes a path absolute on Windows; elsewhere
+	// "C:/Windows/x.png" is a relative name, and not finding it is a 404.
+	if runtime.GOOS == "windows" {
+		cases["C:/Windows/x.png"] = http.StatusBadRequest
 	}
 	for path, want := range cases {
 		resp, err := http.Get(srv.URL + "/workspace/image?path=" + path)
