@@ -15,7 +15,7 @@ import (
 // release-studio.yml. It is a constant rather than something a caller names: a
 // catalog that could be pointed elsewhere is one whose entries would offer to
 // "update" Studio into a different product.
-const StudioCatalog = "https://dl.reasonix.io/studio/versions.json"
+const StudioCatalog = StudioMirror + "/studio/versions.json"
 
 // Install is what a shell knows about itself that the kernel cannot work out.
 // A Go process inside an Electron bundle resolves neither half: os.Executable()

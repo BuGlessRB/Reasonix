@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"reasonix/internal/platform/delta"
+	"reasonix/internal/platform/update"
 )
 
 func main() {
@@ -26,21 +27,22 @@ func main() {
 }
 
 const usage = `usage:
-  studio-delta build <archive.zip> <version> <platform> <outdir>
-  studio-delta simulate <outdir> <install-root> <staging-dir>`
+  studio-delta build <archive.zip> <version> <platform> <delta-dir>
+  studio-delta simulate <delta-dir> <platform> <install-root> <staging-dir>`
 
 func run(args []string) error {
 	switch {
 	case len(args) == 5 && args[0] == "build":
 		return build(args[1], args[2], args[3], args[4])
-	case len(args) == 4 && args[0] == "simulate":
-		return simulate(args[1], args[2], args[3])
+	case len(args) == 5 && args[0] == "simulate":
+		return simulate(args[1], args[2], args[3], args[4])
 	default:
 		return errors.New(usage)
 	}
 }
 
-// build writes <outdir>/index.json and <outdir>/chunks/<hash>.zst.
+// build writes <delta-dir>/<platform>/index.json.zst and every chunk to
+// <delta-dir>/chunks, the store all platforms and releases share.
 func build(archive, version, platform, outdir string) error {
 	entries, err := readArchive(archive)
 	if err != nil {
@@ -65,10 +67,19 @@ func build(archive, version, platform, outdir string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(outdir, "index.json"), raw, 0o644); err != nil {
+	dir := filepath.Join(outdir, platform)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	fmt.Printf("%s %s: %d files, %d chunks, %.1f MB stored, index %.1f KB\n", version, platform, len(x.Files), n, float64(stored)/1e6, float64(len(raw))/1e3)
+	packed, err := delta.PackIndex(raw)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, update.DeltaIndexName), packed, 0o644); err != nil {
+		return err
+	}
+	fmt.Printf("%s %s: %d files, %d chunks, %.1f MB stored, index %.1f KB (%.1f KB packed)\n",
+		version, platform, len(x.Files), n, float64(stored)/1e6, float64(len(raw))/1e3, float64(len(packed))/1e3)
 	return nil
 }
 
@@ -121,12 +132,12 @@ func stripTop(entries []delta.Entry) []delta.Entry {
 
 // simulate updates install-root to the release in outdir, fetching chunks from
 // outdir's store as a client would from the network, and reports the cost.
-func simulate(outdir, install, staging string) error {
-	raw, err := os.ReadFile(filepath.Join(outdir, "index.json"))
+func simulate(outdir, platform, install, staging string) error {
+	packed, err := os.ReadFile(filepath.Join(outdir, platform, update.DeltaIndexName))
 	if err != nil {
 		return err
 	}
-	x, err := delta.Decode(raw)
+	x, err := delta.UnpackIndex(packed)
 	if err != nil {
 		return err
 	}

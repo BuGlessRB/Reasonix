@@ -53,3 +53,31 @@ func Decompress(stored []byte, hash string) ([]byte, error) {
 	}
 	return plain, nil
 }
+
+// maxIndex bounds an unpacked Index; a real one is a few megabytes.
+const maxIndex = 64 << 20
+
+// PackIndex is an encoded Index as it is published: zstd-compressed, and
+// signed as those bytes.
+func PackIndex(encoded []byte) ([]byte, error) {
+	w, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBestCompression))
+	if err != nil {
+		return nil, err
+	}
+	return w.EncodeAll(encoded, nil), nil
+}
+
+// UnpackIndex reads a published Index. Its signature is checked by the caller
+// on the packed bytes, before this is called.
+func UnpackIndex(packed []byte) (Index, error) {
+	r, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(maxIndex))
+	if err != nil {
+		return Index{}, err
+	}
+	defer r.Close()
+	raw, err := r.DecodeAll(packed, nil)
+	if err != nil {
+		return Index{}, fmt.Errorf("%w: %w", ErrInvalidIndex, err)
+	}
+	return Decode(raw)
+}

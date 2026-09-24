@@ -30,7 +30,7 @@ func TestManifestRecordsEveryArtifactWithItsSignature(t *testing.T) {
 		}
 	}
 
-	if err := run(dir, "v0.1.0", "studio-v0.1.0"); err != nil {
+	if err := run(dir, "v0.1.0", "studio-v0.1.0", ""); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 
@@ -85,7 +85,7 @@ func TestManifestResolvesOnlyWhatCanInstallItself(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := run(dir, "v0.1.0", "studio-v0.1.0"); err != nil {
+	if err := run(dir, "v0.1.0", "studio-v0.1.0", ""); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	var m update.Manifest
@@ -128,7 +128,7 @@ func TestManifestResolvesOnlyWhatCanInstallItself(t *testing.T) {
 
 func TestEmptyDirIsAFailedRelease(t *testing.T) {
 	t.Setenv("GITHUB_REPOSITORY", "esengine/DeepSeek-Reasonix")
-	if err := run(t.TempDir(), "v0.1.0", "studio-v0.1.0"); err == nil {
+	if err := run(t.TempDir(), "v0.1.0", "studio-v0.1.0", ""); err == nil {
 		t.Fatal("a release with no artifacts must fail, not publish an empty manifest")
 	}
 }

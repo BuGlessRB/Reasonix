@@ -596,11 +596,31 @@ jobs:
             go run ./cmd/sign verify "$f"
           done
 
+      # A chunked update beside the installer: the index of the signed portable
+      # tree and the chunks it is made of. It stays out of dist, which is what
+      # is counted and published as the release's artifacts.
+      - name: Build the Windows delta
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          go run ./cmd/studio-delta build dist/ReasonixStudio-windows-amd64.zip "$VERSION" windows-amd64 delta
+          cd desktop
+          go run ./cmd/sign sign ../delta/windows-amd64/index.json.zst
+          go run ./cmd/sign verify ../delta/windows-amd64/index.json.zst
+
+      # Deltas are served from the mirror only, so a release that cannot reach
+      # it does not offer one: a client would fetch an index nobody uploaded.
       - name: Generate manifest
         working-directory: desktop
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: go run ./cmd/studio-manifest ../dist "${{ needs.resolve.outputs.version }}" "${{ needs.resolve.outputs.tag }}"
+          HAS_R2: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ACCOUNT_ID != '' && secrets.R2_BUCKET != '' }}
+        run: |
+          delta_dir=""
+          if [ "$HAS_R2" = "true" ]; then delta_dir=../delta; fi
+          go run ./cmd/studio-manifest ../dist "${{ needs.resolve.outputs.version }}" "${{ needs.resolve.outputs.tag }}" $delta_dir
 
       # Always a prerelease: this line is not the public product line, and
       # GitHub never promotes a prerelease to the repository-wide "latest".
@@ -663,6 +683,15 @@ jobs:
           aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}"
           aws configure set default.region auto
           endpoint="https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com"
+
+          # Chunks before anything that names them: they are named by their
+          # content and never change, so the sync only sends the new ones, and an
+          # index published ahead of its chunks is one no client can apply.
+          aws s3 sync delta/chunks "s3://${R2_BUCKET}/studio/chunks/" --size-only \
+            --endpoint-url "$endpoint" \
+            --content-type application/zstd \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp delta/ "s3://${R2_BUCKET}/${TAG}/delta/" --recursive --exclude "chunks/*" --endpoint-url "$endpoint"
 
           # Immutable per-tag objects. The tag prefix cannot collide with the
           # desktop line's because the tag names differ (studio-v* vs desktop-v*).

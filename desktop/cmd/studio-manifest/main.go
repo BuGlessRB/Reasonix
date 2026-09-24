@@ -23,17 +23,21 @@ import (
 const artifactPrefix = "ReasonixStudio-"
 
 func main() {
-	if len(os.Args) != 4 {
-		fmt.Fprintln(os.Stderr, "usage: studio-manifest <dir> <version> <tag>")
+	if len(os.Args) != 4 && len(os.Args) != 5 {
+		fmt.Fprintln(os.Stderr, "usage: studio-manifest <dir> <version> <tag> [delta-dir]")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1], os.Args[2], os.Args[3]); err != nil {
+	deltaDir := ""
+	if len(os.Args) == 5 {
+		deltaDir = os.Args[4]
+	}
+	if err := run(os.Args[1], os.Args[2], os.Args[3], deltaDir); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(dir, version, tag string) error {
+func run(dir, version, tag, deltaDir string) error {
 	repo := os.Getenv("GITHUB_REPOSITORY")
 	if strings.TrimSpace(repo) == "" {
 		return fmt.Errorf("studio-manifest: GITHUB_REPOSITORY is unset, so asset URLs cannot be built")
@@ -94,6 +98,11 @@ func run(dir, version, tag string) error {
 	}
 	if seen == 0 {
 		return fmt.Errorf("studio-manifest: no %s* artifacts in %s", artifactPrefix, dir)
+	}
+	if deltaDir != "" {
+		if m.Deltas, err = deltas(deltaDir, tag); err != nil {
+			return err
+		}
 	}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {

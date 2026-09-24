@@ -20,7 +20,25 @@ type Manifest struct {
 	Platforms       map[string]Asset `json:"platforms"`                   // keyed by PlatformKey, e.g. "darwin-arm64"
 	NativePackages  map[string]Asset `json:"native_packages,omitempty"`   // optional OS package assets, e.g. linux-amd64 → .deb
 	Downloads       map[string]Asset `json:"downloads,omitempty"`         // optional signed human-download assets keyed by exact filename
+	Deltas          map[string]Delta `json:"deltas,omitempty"`            // optional chunked update per PlatformKey; see package delta
 }
+
+// Delta is one platform's chunked update: the signed, zstd-compressed index of
+// the release tree, and the store its chunks are fetched from. A client that
+// cannot use it falls back to the platform's full artifact.
+type Delta struct {
+	Index  Asset  `json:"index"`
+	Chunks string `json:"chunks"` // base URL; a chunk is Chunks + "/" + delta.ObjectName(hash)
+}
+
+// StudioMirror is the release mirror Studio's catalog and deltas live on.
+const StudioMirror = "https://dl.reasonix.io"
+
+// StudioChunks is the one chunk store every Studio release shares.
+const StudioChunks = StudioMirror + "/studio/chunks"
+
+// DeltaIndexName is a platform's index file inside a release's delta directory.
+const DeltaIndexName = "index.json.zst"
 
 // Asset is one platform's downloadable artifact plus the metadata the updater
 // needs to verify and report on it.
