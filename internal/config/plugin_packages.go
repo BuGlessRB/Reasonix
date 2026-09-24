@@ -120,11 +120,10 @@ func (c *Config) PluginPackageAgentOwners() map[string][]string {
 	return out
 }
 
-// pluginPackageCommandRoots returns the command directories contributed by
-// enabled installed plugin packages, in deterministic (name, path) order.
-// CommandRootsForRoot places them ahead of every user/project dir so explicit
-// commands win exact canonical-name clashes; LoadInstalled filters to enabled
-// packages.
+// pluginPackageCommandRoots returns the command and prompt directories of
+// enabled plugin packages in (name, path) order; both are invoked as
+// /<plugin>:<name>. CommandRootsForRoot places them ahead of every user and
+// project dir so explicit commands win exact canonical-name clashes.
 func (r Roots) pluginPackageCommandRoots() []command.Root {
 	reasonixHome := r.Home()
 	if strings.TrimSpace(reasonixHome) == "" {
@@ -133,7 +132,7 @@ func (r Roots) pluginPackageCommandRoots() []command.Root {
 	installed, _ := pluginpkg.LoadInstalled(reasonixHome)
 	var out []command.Root
 	for _, item := range installed {
-		for _, root := range item.Package.CommandRoots() {
+		for _, root := range append(item.Package.CommandRoots(), item.Package.PromptRoots()...) {
 			out = append(out, command.Root{Path: root, Plugin: item.Installed.Name})
 		}
 	}

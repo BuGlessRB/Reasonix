@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reasonix/internal/command"
 	"testing"
 
 	"reasonix/internal/pluginpkg"
@@ -185,4 +186,34 @@ func TestCommandDirsWithoutPluginState(t *testing.T) {
 	if dirs := CommandDirsForRoot(testenv.TempDir(t)); len(dirs) == 0 {
 		t.Fatal("CommandDirsForRoot must still return the conventional dirs")
 	}
+}
+
+// A package's prompts are invoked the way its commands are: /<plugin>:<name>.
+func TestPluginPromptsAreInvokedLikeItsCommands(t *testing.T) {
+	home := testenv.TempDir(t)
+	t.Setenv("REASONIX_HOME", home)
+	root := filepath.Join(home, "plugins", "review")
+	writeConfigTestFile(t, filepath.Join(root, pluginpkg.NativeManifest), `{
+  "apiVersion": "reasonix.io/plugin/v2",
+  "name": "review",
+  "version": "1.0.0",
+  "contributes": {"prompts": ["prompts"]}
+}`)
+	writeConfigTestFile(t, filepath.Join(root, "prompts", "diff.md"), `---
+description: review the diff
+---
+Review $ARGUMENTS`)
+	if err := pluginpkg.Upsert(home, pluginpkg.InstalledPlugin{Name: "review", Root: "plugins/review", Version: "1.0.0", ManifestKind: "reasonix", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	cmds, err := command.LoadRoots(CommandRootsForRoot(testenv.TempDir(t))...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cmds {
+		if c.Name == "review:diff" {
+			return
+		}
+	}
+	t.Fatalf("no /review:diff among %d commands", len(cmds))
 }

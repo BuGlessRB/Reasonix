@@ -143,6 +143,11 @@ func List() []Pack {
 			byID[pack.ID] = pack
 		}
 	}
+	for _, p := range pluginPacks() {
+		if pack, err := load(filepath.Join(p.dir, manifestName), p.id); err == nil {
+			byID[pack.ID] = pack
+		}
+	}
 	out := make([]Pack, 0, len(byID))
 	for _, pack := range byID {
 		out = append(out, pack)
@@ -177,6 +182,13 @@ func Load(id string) (Pack, error) {
 	id = strings.TrimSpace(id)
 	if err := validID(id); err != nil {
 		return Pack{}, err
+	}
+	if isPluginID(id) {
+		dir, ok := pluginDir(id)
+		if !ok {
+			return Pack{}, fmt.Errorf("theme: no enabled plugin contributes %q", id)
+		}
+		return load(filepath.Join(dir, manifestName), id)
 	}
 	if pack, err := load(filepath.Join(Dir(), id, manifestName), id); err == nil {
 		return pack, nil

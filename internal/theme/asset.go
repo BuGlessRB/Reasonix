@@ -55,8 +55,12 @@ func Asset(id string, kind Kind) ([]byte, string, error) {
 	if err := validID(id); err != nil {
 		return nil, "", err
 	}
+	dir, local := assetDir(id)
 	for _, ext := range extensions {
-		path := filepath.Join(Dir(), id, string(kind)+ext)
+		if !local {
+			break
+		}
+		path := filepath.Join(dir, string(kind)+ext)
 		info, err := os.Stat(path)
 		if err != nil || info.IsDir() {
 			continue
@@ -71,6 +75,9 @@ func Asset(id string, kind Kind) ([]byte, string, error) {
 		return raw, contentTypes[ext], nil
 	}
 	for _, ext := range extensions {
+		if isPluginID(id) {
+			break
+		}
 		raw, err := builtin.ReadFile(builtinAssetName(id, kind, ext))
 		if err != nil {
 			continue
@@ -84,9 +91,16 @@ func hasAsset(id string, kind Kind) bool {
 	if validID(id) != nil {
 		return false
 	}
+	dir, local := assetDir(id)
 	for _, ext := range extensions {
-		if info, err := os.Stat(filepath.Join(Dir(), id, string(kind)+ext)); err == nil && !info.IsDir() {
+		if !local {
+			break
+		}
+		if info, err := os.Stat(filepath.Join(dir, string(kind)+ext)); err == nil && !info.IsDir() {
 			return true
+		}
+		if isPluginID(id) {
+			continue
 		}
 		if _, err := fs.Stat(builtin, builtinAssetName(id, kind, ext)); err == nil {
 			return true

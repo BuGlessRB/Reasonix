@@ -14,9 +14,9 @@
 // lives in the existing packages (internal/skill, internal/command,
 // internal/hook, internal/tool, internal/plugin, internal/provider), which
 // run it and hand the kernel the resolved records; adapters.go maps one such
-// record onto one Contribution. KindPrompt and KindTheme are declared in the
-// catalog but have no contributor: a plugin package's prompts and themes are
-// parsed by pluginpkg and reach no snapshot. Winner rules are resolved here,
+// record onto one Contribution. KindPrompt and KindTheme have no contributor:
+// a package's prompts are found with its commands, and internal/theme reads
+// its themes. Winner rules are resolved here,
 // once, identically for every caller: a higher-tier scope shadows a lower one
 // for the same canonical ID, same-tier duplicates from different sources are
 // hard conflicts instead of silent overrides, and hooks/interceptors stay

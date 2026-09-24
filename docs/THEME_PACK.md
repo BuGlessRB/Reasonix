@@ -1,5 +1,13 @@
 # Reasonix Theme Pack V2
 
+**Status:** this describes the retired Wails desktop and its `.reasonix-theme`
+archives. What Reasonix Studio reads instead:
+
+- one directory per pack, holding a `theme.json` (`schemaVersion: 1`) and
+  optional `background` and `preview` images, read by `internal/theme`;
+- plugin themes are packs of that shape, listed as
+  `plugin:<plugin>:<directory>` (see `docs/PLUGIN_PACKAGES.md`).
+
 Native theme packs for the Reasonix desktop app. Packs are controlled skins:
 semantic color tokens, density/corner recipes, and optional local images for
 the home and task/workspace scenes. They **cannot** run CSS, JavaScript, fonts,

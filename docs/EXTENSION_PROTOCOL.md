@@ -110,8 +110,9 @@ Streams follow `extension/provider/stream/open` → `stream/chunk` →
 
 ## Structured UI
 
-Extensions with the `ui` capability publish `status`, `card`, `form`, and
-`notification` payloads (`host/ui/publish`) and ask questions
+Extensions with the `ui` capability publish `status`, `card`, `form`,
+`notification`, `panel`, and `view` payloads (`host/ui/publish`) and ask
+questions
 (`host/ui/request`: confirm, input, select, multiselect). Surfaces are
 **structured only**: no HTML, CSS, JavaScript, remote scripts, arbitrary
 frontend components, or uncontrolled URLs; Markdown renders through each
@@ -119,6 +120,11 @@ frontend's existing safe renderer. Every surface update carries the plugin
 ID, surface ID, session ID, and runtime generation; stale-generation
 updates are dropped so late results after a tab switch or reload can never
 overwrite current state.
+
+A `panel` holds a place in the frontend's side rail rather than scrolling
+past in the transcript: re-publishing the same surface id updates what is
+already on screen. A `view` is composed rather than filled in: its payload is a
+tree of host primitives, for a shape the fixed kinds do not have.
 
 Actions declared at initialize are namespaced `/<plugin>:<action>` and are
 invoked via `extension/ui/action`; form submissions arrive via

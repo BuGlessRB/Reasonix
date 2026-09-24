@@ -54,8 +54,10 @@ install runtimes you trust completely.
   rendered natively in the CLI transcript, the Desktop app, and ACP clients
   (with text fallbacks), plus `/<plugin>:<action>` actions in the slash
   menu, the Desktop command palette, and ACP's discoverable commands.
-- **Prompts and themes** — `/<plugin>:<name>` prompt templates and
-  read-only plugin themes (`plugin:<plugin>:<theme>`) in Desktop Settings.
+- **Prompts and themes** — `/<plugin>:<name>` prompt templates, discovered
+  with the package's commands, and theme packs (`theme.json` directories)
+  offered read-only in Studio's appearance settings as
+  `plugin:<plugin>:<directory>`.
 
 ## Runtime reload
 

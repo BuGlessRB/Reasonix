@@ -148,20 +148,20 @@ the CLI.
 
 ### Install Plugins
 
-The installer has two modes:
+The installer takes one source:
 
-- **Local folder**: click **Choose plugin folder** and select a plugin directory
-  on disk. The selected path is shown next to the button.
-- **Git repository**: enter a Git source such as
-  `git:github.com/obra/superpowers`. **Install name (optional)** can override
-  the plugin manifest name for this install or overwrite.
+- **A repository address**, such as `https://github.com/obra/superpowers`, a
+  branch, or a subdirectory of one.
+- **A local folder**: drag it onto the installer or click **选文件夹** (Choose
+  folder).
 
-Use the action buttons after choosing the source and options:
+A local `.zip` archive, such as one made by **Export**, installs through the CLI
+(`reasonix plugin install ./pkg.zip`) and the `install_source` tool.
 
-- **Preview** validates the source and shows the planned install actions without
-  writing files.
-- **Install plugin** installs the selected source using the current options.
-- **Refresh plugins** reloads the installed-plugin list from disk and config.
+Installing is always two steps: the installer first reads the source and shows
+what it will add and what it needs, without writing anything; **Install**
+then applies exactly that plan. A changed source between the two is refused
+rather than installed.
 
 Installer options:
 
@@ -282,7 +282,7 @@ Native Reasonix extensions use the exact v2 `apiVersion`:
     "prompts": ["prompts"],
     "hooks": {},
     "mcpServers": {},
-    "themes": ["themes/*.reasonix-theme"]
+    "themes": ["themes/*/theme.json"]
   },
   "runtime": {
     "command": "${REASONIX_PLUGIN_ROOT}/bin/example",
@@ -325,13 +325,16 @@ Parsing rules:
 New resource types:
 
 - `prompts` are prompt templates using the same semantics and argument
-  substitution as commands, invoked as `/<plugin>:<name>`. `commands` remains
-  a compatible alias.
-- `themes` are `.reasonix-theme` files shown read-only in Desktop Settings as
-  plugin themes (IDs `plugin:<plugin>:<theme>`); they are never copied into
-  the user theme library. If the plugin is disabled or uninstalled while its
-  theme is active, the desktop falls back to the base style but keeps the
-  ID, so reinstalling the same plugin restores the theme.
+  substitution as commands, invoked as `/<plugin>:<name>`. The two are
+  discovered together; `commands` remains a compatible alias.
+- `themes` are Studio theme packs:
+  - each entry names a pack's `theme.json`, as a path or a per-segment glob
+    such as `themes/*/theme.json`; its `background` and `preview` images sit
+    beside it;
+  - a pack appears in appearance settings as `plugin:<plugin>:<directory>`;
+  - packs are read in place, never copied into the user's library, and leave
+    with the plugin;
+  - any other file listed under `themes` is ignored.
 
 The `runtime` block declares a code extension — a sidecar process Reasonix
 launches and talks to over the Extension Protocol (JSON-RPC 2.0 over stdio;
@@ -521,14 +524,17 @@ Plugin hooks receive these environment variables:
 - `CLAUDE_PROJECT_DIR`
 - `CLAUDE_PLUGIN_ROOT`
 
-## Desktop Backend Methods
+## Studio HTTP routes
 
-Desktop exposes plugin package operations through Wails methods:
+Studio drives plugin packages through these kernel routes:
 
-- `Plugins`
-- `PlanPluginInstall`
-- `InstallPlugin`
-- `RemovePlugin`
-- `SetPluginEnabled`
-- `UpdatePlugin`
-- `PluginDoctor`
+- `GET /plugins` lists installed packages and what each contributes
+- `POST /plugins/plan` reads a source and returns the install plan
+- `POST /plugins/install` applies a plan, echoing its `planId`; with `replace`
+  set it is also the update path
+- `POST /plugins/enabled` enables or disables a package
+- `DELETE /plugins/{name}` removes a package
+- `GET /plugins/{name}/export` packs a package as a `.zip`, credentials stripped
+- `POST /extensions/reload` rebuilds the runtime from what is on disk
+
+`reasonix plugin doctor` has no route; run it from the CLI.

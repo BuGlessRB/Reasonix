@@ -99,7 +99,7 @@ type CommandRef struct {
 // PromptRef is one prompt template a v2 plugin contributes from a prompts
 // directory (distinct from legacy command contributions).
 // Prompt files share the slash-command file shape (flat <name>.md with
-// frontmatter) but map to kernel KindPrompt contributions, not commands.
+// frontmatter) and are discovered with the package's commands.
 type PromptRef struct {
 	Name        string
 	Description string
@@ -151,9 +151,9 @@ type Manifest struct {
 	Commands   []string
 	Hooks      map[string][]Hook
 	MCPServers map[string]MCPServer
-	// Prompts are directories of flat <name>.md prompt templates. The two are
-	// separate semantic sets: commands become slash commands, prompts become
-	// kernel KindPrompt contributions. A path listed under both stays in both.
+	// Prompts are directories of flat <name>.md prompt templates, invoked the
+	// same way as commands: /<plugin>:<name>. A path listed under both is read
+	// once.
 	Prompts []string
 	// Themes are *.reasonix-theme file paths or per-segment glob patterns
 	// (e.g. "themes/*.reasonix-theme"), all lexically inside the plugin root.
@@ -894,7 +894,7 @@ func (p Package) AgentCount() int { return len(p.agentRefs()) }
 func (p Package) PromptCount() int { return len(p.promptRefs()) }
 
 // ThemeCount counts the theme files resolved from Manifest.Themes.
-func (p Package) ThemeCount() int { return len(p.themeRefs()) }
+func (p Package) ThemeCount() int { return len(p.ThemeFiles()) }
 
 // CapabilitySummary is the full per-package capability count set. The
 // four-value CapabilityCounts predates native runtime manifests and keeps its
@@ -922,7 +922,7 @@ func (p Package) CapabilitySummary() CapabilitySummary {
 		Hooks:      hooks,
 		MCPServers: mcp,
 		Prompts:    len(p.promptRefs()),
-		Themes:     len(p.themeRefs()),
+		Themes:     len(p.ThemeFiles()),
 		Runtime:    p.Manifest.Runtime != nil,
 	}
 }
@@ -933,7 +933,7 @@ func (p Package) Inventory() Inventory {
 		Agents:     p.agentRefs(),
 		Commands:   p.commandRefs(),
 		Prompts:    p.promptRefs(),
-		Themes:     p.themeRefs(),
+		Themes:     p.ThemeFiles(),
 		Hooks:      p.hookRefs(),
 		MCPServers: p.mcpServerRefs(),
 	}
@@ -983,11 +983,11 @@ func (p Package) promptRefs() []PromptRef {
 	return out
 }
 
-// themeRefs resolves the manifest's themes list (plain paths and
+// ThemeFiles resolves the manifest's themes list (plain paths and
 // per-segment globs) to concrete theme files. Parse-time validation has
 // already rejected escapes and non-regular files, so unreadable entries
 // here simply drop out (they were reported as parse warnings).
-func (p Package) themeRefs() []ThemeRef {
+func (p Package) ThemeFiles() []ThemeRef {
 	seen := map[string]bool{}
 	var out []ThemeRef
 	for _, pattern := range p.Manifest.Themes {
