@@ -256,6 +256,7 @@ export const ACTIONS: UIAction[] = [
   { id: "remotes.save", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "remotes.remove", kind: "destructive", target: "entity", proof: "authority-effect" },
   { id: "share.card", kind: "view", target: "none", proof: "interaction" },
+  { id: "share.copy", kind: "shell-native", target: "none", proof: "interaction" },
   { id: "share.toggle", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "share.address", kind: "view", target: "none", proof: "interaction" },
   { id: "share.offer", kind: "kernel-mutation", target: "none", proof: "authority-effect" },

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort } from "../port/hub";
 import type { ShareOffer, ShareStatus } from "../port/share";
+import { copyText } from "./CopyButton";
 import { ApplyNote } from "./Group";
 import { Switch } from "./Switch";
 
@@ -107,7 +108,15 @@ export function useShare(hub: HubPort, onError: (e: unknown) => void, watch = tr
 /** The switch, the network, the code and the paired phones. */
 export function ShareBody({ share }: { share: Share }) {
   const { st, ip, pick, offer, busy, confirm, setConfirm, newCode, toggle, revoke } = share;
+  const [copied, setCopied] = useState<"" | "done" | "failed">("");
   if (!st) return null;
+  // The link the code draws, for a device that cannot scan: the same one-time
+  // credential, so it is copied on request and never shown as text.
+  const copyLink = (url: string) =>
+    copyText(url)
+      .then(() => setCopied("done"))
+      .catch(() => setCopied("failed"))
+      .finally(() => window.setTimeout(() => setCopied(""), 1600));
   const chosen = ip || (st.open ? st.origin?.replace(/^https?:\/\//, "").replace(/:\d+$/, "") : "") || st.addresses[0]?.ip || "";
   const noNetwork = st.addresses.length === 0;
 
@@ -155,6 +164,9 @@ export function ShareBody({ share }: { share: Share }) {
                 <span className="lb">{t("用手机相机扫码")}</span>
                 <span className="ds">{t("二维码只能配对一台手机，{time} 前有效。别把它发到群里或截图外传。", { time: clock(offer.expires) })}</span>
                 <code dir="ltr">{st.origin}</code>
+                <button className="rmtlnk sharecopy" data-action="share.copy" onClick={() => void copyLink(offer.url)}>
+                  {copied === "done" ? t("已复制") : copied === "failed" ? t("复制不了") : t("复制配对链接")}
+                </button>
               </div>
             </div>
           ) : (

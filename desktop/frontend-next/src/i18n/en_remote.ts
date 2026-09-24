@@ -124,6 +124,7 @@ export const EN_REMOTE: Record<string, string> = {
   "虚拟网卡": "virtual adapter",
   "换网络会断开已连接的手机，它们需要扫新的二维码。": "Switching networks disconnects the connected phones; they will need to scan the new code.",
   "配对二维码": "Pairing QR code",
+  "复制配对链接": "Copy pairing link",
   "用手机相机扫码": "Scan with your phone's camera",
   "二维码只能配对一台手机，{time} 前有效。别把它发到群里或截图外传。": "The code pairs one phone and is valid until {time}. Do not post it to a group chat or share a screenshot of it.",
   "显示配对二维码": "Show a pairing code",

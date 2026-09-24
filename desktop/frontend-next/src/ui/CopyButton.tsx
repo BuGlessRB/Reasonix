@@ -5,7 +5,7 @@ import { StudioIcon } from "./StudioIcon";
 // Wails serves the window over a custom scheme on macOS and Linux, so those two
 // hosts are not a secure context and navigator.clipboard is undefined there.
 // execCommand is deprecated and is still the only path they have.
-async function write(text: string) {
+export async function copyText(text: string) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
   const carrier = document.createElement("textarea");
   carrier.value = text;
@@ -26,7 +26,7 @@ export function CopyButton({ text, iconOnly = false, className, label: what }: {
 
   const copy = () => {
     if (timer.current !== null) window.clearTimeout(timer.current);
-    write(text)
+    copyText(text)
       .then(() => setState("done"))
       .catch(() => setState("failed"))
       .finally(() => { timer.current = window.setTimeout(() => setState("idle"), 1600); });

@@ -4742,6 +4742,8 @@
   .sharehow { display: grid; gap: 6px; flex: 1; min-width: 22ch }
   .sharehow .lb { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
   .sharehow .ds { font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: var(--faint) }
+  .sharehow .sharecopy { border: 0; background: none; padding: 2px 4px; cursor: pointer; font: var(--w-med) var(--fs-meta) var(--ui); color: var(--accent-ink) }
+  .sharehow .sharecopy:hover { text-decoration: underline }
   .sharehow code { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--muted); overflow-wrap: anywhere }
   .sharedevs { display: grid; gap: 4px }
   .sharedev { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 2px; border-top: 1px solid var(--hair) }
