@@ -378,7 +378,7 @@ func (a *Agent) settleUnchangedWorkspace(ctx context.Context, rec *evidence.Rece
 // host could not classify. A proven writer already reports its paths, and a
 // proven reader has nothing to settle, so neither pays for the walk.
 func (a *Agent) scanBeforeUnprovenCall(ctx context.Context, plan *toolCallPlan) workspaceScan {
-	if evidence.ToolCallMutationClass(plan.evidenceName, plan.evidenceArgs, plan.readOnly) != evidence.MutationUnknown {
+	if evidence.ToolCallMutationClassWith(plan.evidenceName, plan.evidenceArgs, plan.facts()) != evidence.MutationUnknown {
 		return workspaceScan{}
 	}
 	// A backgrounded job's receipt is written when it starts, so the workspace

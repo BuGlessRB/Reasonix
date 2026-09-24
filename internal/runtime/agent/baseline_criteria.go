@@ -80,7 +80,7 @@ func (a *Agent) captureCriteriaBefore(ctx context.Context, plan *toolCallPlan) e
 		return nil
 	}
 	store := a.baselineCriteriaStore()
-	if evidence.ToolCallMutationClass(plan.evidenceName, plan.evidenceArgs, plan.readOnly) == evidence.MutationUnknown {
+	if evidence.ToolCallMutationClassWith(plan.evidenceName, plan.evidenceArgs, plan.facts()) == evidence.MutationUnknown {
 		return a.captureCriteriaOnce(ctx, store)
 	}
 	for _, path := range evidence.ToolCallPaths(plan.evidenceArgs) {

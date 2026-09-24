@@ -71,11 +71,13 @@ url = "`+server.URL+`"
 	}
 }
 
-// capabilityCallProvider makes one use_capability call, then answers.
+// capabilityCallProvider makes one call per turn, then answers: a
+// use_capability call with arguments call, or the tool named direct.
 type capabilityCallProvider struct {
-	mu   sync.Mutex
-	call string
-	reqs []provider.Request
+	mu     sync.Mutex
+	call   string
+	direct string
+	reqs   []provider.Request
 }
 
 func (p *capabilityCallProvider) Name() string { return "boot-runtime-ctx" }
@@ -86,9 +88,12 @@ func (p *capabilityCallProvider) Stream(_ context.Context, req provider.Request)
 	p.mu.Unlock()
 	first := len(req.Messages) > 0 && req.Messages[len(req.Messages)-1].Role == provider.RoleUser
 	ch := make(chan provider.Chunk, 2)
-	if first {
+	switch {
+	case first && p.direct != "":
+		ch <- provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "call-1", Name: p.direct, Arguments: `{}`}}
+	case first:
 		ch <- provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "cap-1", Name: "use_capability", Arguments: p.call}}
-	} else {
+	default:
 		ch <- provider.Chunk{Type: provider.ChunkText, Text: "done"}
 	}
 	ch <- provider.Chunk{Type: provider.ChunkDone}

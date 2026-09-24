@@ -486,7 +486,7 @@ func failedSessionCallIDs(msgs []provider.Message) map[string]bool {
 }
 
 func ReceiptFromToolCall(toolName string, args json.RawMessage, success bool, facts ToolFacts) Receipt {
-	class := ToolCallMutationClass(toolName, args, facts.ReadOnly)
+	class := ToolCallMutationClassWith(toolName, args, facts)
 	r := Receipt{
 		ToolName: toolName,
 		Args:     args,

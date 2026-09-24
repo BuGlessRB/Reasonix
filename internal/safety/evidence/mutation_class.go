@@ -51,6 +51,17 @@ func ToolCallMutationClass(toolName string, args json.RawMessage, readOnly bool)
 	}
 }
 
+// ToolCallMutationClassWith is ToolCallMutationClass for a call whose tool is
+// known: a tool with unstated effects is unknown rather than proven, so the
+// workspace it ran against says whether it changed anything.
+func ToolCallMutationClassWith(toolName string, args json.RawMessage, facts ToolFacts) string {
+	class := ToolCallMutationClass(toolName, args, facts.ReadOnly)
+	if class == MutationProven && facts.EffectsUnstated {
+		return MutationUnknown
+	}
+	return class
+}
+
 func bashMutationClass(command string) string {
 	class, _ := bashScanMutation(command)
 	return class

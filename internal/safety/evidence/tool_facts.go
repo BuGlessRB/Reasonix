@@ -9,4 +9,7 @@ type ToolFacts struct {
 	// WritesNamedPaths marks a tool whose effect is writing the paths its
 	// arguments name, which is what makes the write attributable to a file.
 	WritesNamedPaths bool
+	// EffectsUnstated marks a tool acting through a program the host does not
+	// see into, whose call is a mutation only if the workspace shows one.
+	EffectsUnstated bool
 }

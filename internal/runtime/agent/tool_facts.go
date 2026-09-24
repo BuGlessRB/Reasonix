@@ -12,7 +12,7 @@ func toolFacts(t tool.Tool) evidence.ToolFacts {
 	if t == nil {
 		return readOnlyFacts
 	}
-	return evidence.ToolFacts{ReadOnly: t.ReadOnly(), WritesNamedPaths: tool.WritesNamedPaths(t)}
+	return evidence.ToolFacts{ReadOnly: t.ReadOnly(), WritesNamedPaths: tool.WritesNamedPaths(t), EffectsUnstated: tool.EffectsUnstated(t)}
 }
 
 // readOnlyFacts is what an unresolvable call is credited with. A replay of a
@@ -23,7 +23,11 @@ var readOnlyFacts = evidence.ToolFacts{ReadOnly: true}
 // the host already settled — which for bash comes from parsing the command, not
 // from the schema — and whether the tool that ran writes the paths it names.
 func (p *toolCallPlan) facts() evidence.ToolFacts {
-	return evidence.ToolFacts{ReadOnly: p.readOnly, WritesNamedPaths: tool.WritesNamedPaths(p.execTool)}
+	facts := evidence.ToolFacts{ReadOnly: p.readOnly}
+	if p.execTool != nil {
+		facts.WritesNamedPaths, facts.EffectsUnstated = tool.WritesNamedPaths(p.execTool), tool.EffectsUnstated(p.execTool)
+	}
+	return facts
 }
 
 // toolFactsFor looks the name up in the live registry, which is the same route

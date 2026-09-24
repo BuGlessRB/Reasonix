@@ -113,6 +113,14 @@ func WritesNamedPaths(t Tool) bool {
 	return ok && w.WritesNamedPaths()
 }
 
+// EffectsUnstated reports whether a tool acts through a program the host does
+// not see into: an MCP server may write the workspace, or act only on a remote
+// system. What such a call did is settled by observing the workspace.
+func EffectsUnstated(t Tool) bool {
+	_, mcp := t.(MCPMetadata)
+	return mcp && !WritesNamedPaths(t)
+}
+
 // ImageTool is an optional capability a Tool may implement when its results can
 // carry images alongside text (e.g. an MCP tool returning a screenshot).
 // ExecuteWithImages returns the same text Execute would — including a short

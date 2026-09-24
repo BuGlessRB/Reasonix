@@ -111,3 +111,26 @@ func TestCheckAfterEditKeepsPathScoredRisk(t *testing.T) {
 		t.Fatalf("risk after check = %s, want %s", got, RiskMedium)
 	}
 }
+
+// A tool the host cannot see into is unknown until the workspace answers; a
+// writer that names its paths stays proven, and read-only stays none.
+func TestToolCallMutationClassWithUnstatedEffects(t *testing.T) {
+	args := json.RawMessage(`{}`)
+	cases := []struct {
+		facts ToolFacts
+		want  string
+	}{
+		{ToolFacts{EffectsUnstated: true}, MutationUnknown},
+		{ToolFacts{EffectsUnstated: true, ReadOnly: true}, MutationNone},
+		{ToolFacts{WritesNamedPaths: true}, MutationProven},
+		{ToolFacts{}, MutationProven},
+	}
+	for _, c := range cases {
+		if got := ToolCallMutationClassWith("mcp__ops__deploy", args, c.facts); got != c.want {
+			t.Fatalf("%+v: class = %q, want %q", c.facts, got, c.want)
+		}
+	}
+	if r := ReceiptFromToolCall("mcp__ops__deploy", args, true, ToolFacts{EffectsUnstated: true}); !r.Mutation || r.MutationEvidence != MutationUnknown {
+		t.Fatalf("receipt = %+v, want an unproven mutation for the workspace to settle", r)
+	}
+}
