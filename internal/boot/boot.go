@@ -35,7 +35,6 @@ import (
 	"reasonix/internal/extension/providerext"
 	"reasonix/internal/extension/sidecar"
 	"reasonix/internal/extension/uihub"
-	"reasonix/internal/goaleval"
 	"reasonix/internal/guardian"
 	"reasonix/internal/history"
 	"reasonix/internal/hook"
@@ -1086,28 +1085,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		// that capability: a frontend can bound the wait and still answer prompts.
 		ctrlOpts.RecoveryHeadless = recoveryHeadlessMode(opts)
 	}
-	// Goal evaluator: the same zero-config model fallback as the recovery
-	// reviewer (recovery_model → guardian_model → main model), isolated session
-	// and policy. When unavailable, Goal turns without an update_goal report
-	// fail closed and pause instead of defaulting to continue.
-	{
-		evalModel := strings.TrimSpace(cfg.Agent.RecoveryModel)
-		if evalModel == "" {
-			evalModel = strings.TrimSpace(cfg.Agent.GuardianModel)
-		}
-		if evalModel == "" {
-			evalModel = modelRef
-		}
-		if evalModel != "" {
-			if re, ok := cfg.ResolveModel(evalModel); ok {
-				if eProv, err := NewProviderWithProxy(re, proxySpec); err == nil {
-					ctrlOpts.GoalEvaluator = goaleval.NewSessionWithSink(eProv, re.Price, modelRefFromEntry(re), sink)
-				} else {
-					slog.Warn("goal evaluator provider construction failed — goals without an update_goal report will pause", "model", evalModel, "err", err)
-				}
-			}
-		}
-	}
+	ctrlOpts.GoalEvaluator = goalEvaluator(cfg, modelRef, proxySpec, sink)
+	ctrlOpts.PromptRefiner = promptRefiner(entry, proxySpec, sink)
 	ctrl := withWindowPosture(control.New(ctrlOpts), cfg, opts.StatsSource)
 	// Publish the controller to the extension UI hub's indirection: from here
 	// on, host/ui/* publishes ride ctrl.EmitExtensionEvent and blocking prompts
@@ -1605,7 +1584,11 @@ func subagentEffectiveIdentity(cfg *config.Config, resolver provider.Resolver, b
 // NewProviderWithProxy builds a provider.Provider with the configured ordinary
 // network proxy settings.
 func NewProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec) (provider.Provider, error) {
-	return provider.New(e.Kind, provider.Config{
+	return provider.New(e.Kind, providerConfig(e, proxy))
+}
+
+func providerConfig(e *config.ProviderEntry, proxy netclient.ProxySpec) provider.Config {
+	return provider.Config{
 		Name:    e.Name,
 		BaseURL: e.BaseURL,
 		Model:   e.Model,
@@ -1635,7 +1618,7 @@ func NewProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec) (p
 			// default instead of accidentally treating every endpoint as stateful.
 			"stateful": e.ResponsesStateful,
 		},
-	})
+	}
 }
 
 // addBuiltins adds enabled built-in tools to reg. An empty list means all of

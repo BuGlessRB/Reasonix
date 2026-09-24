@@ -132,6 +132,14 @@ const SAID: Record<string, string> = {
   "effort.unsupported_level": "{provider} 不提供「{level}」档位，可选值为：{levels}",
   "effort.no_provider": "无法识别当前使用的来源，请先切换一次模型",
 
+  "prompt_refine.empty": "输入框是空的，先写点内容再优化",
+  "prompt_refine.too_long": "内容超过 {max_bytes} 字节，无法优化",
+  "prompt_refine.no_model": "当前会话没有可用的模型，无法优化提示词",
+  "prompt_refine.timeout": "优化超时，请重试",
+  "prompt_refine.no_answer": "模型没有给出结果，请重试",
+  "prompt_refine.failed": "优化失败，请重试",
+  "prompt_refine.bad_request": "优化请求格式不正确",
+
   // ── 会话 ─────────────────────────────────────────────────────────
   "session.disabled": "这台服务器已关闭会话切换",
   "session.pending_cleanup": "该会话正在清理，请稍后再打开",

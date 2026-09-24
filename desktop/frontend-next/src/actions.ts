@@ -96,6 +96,11 @@ export const ACTIONS: UIAction[] = [
   { id: "session.send", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "session.stop", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "plan.mode", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  // A rewrite is asked of the kernel but changes nothing there; taking it only
+  // replaces what is in the box.
+  { id: "prompt.refine", kind: "repeatable", target: "none", proof: "interaction" },
+  { id: "prompt.adopt", kind: "view", target: "none", proof: "interaction" },
+  { id: "prompt.discard", kind: "view", target: "none", proof: "interaction" },
 
   // ── What is waiting to be sent ───────────────────────────────────────────
   { id: "queue.edit", kind: "kernel-mutation", target: "entity", proof: "interaction" },

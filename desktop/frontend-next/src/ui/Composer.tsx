@@ -13,6 +13,7 @@ import { useIntake } from "./useIntake";
 import type { Dropped } from "./filedrop";
 import type { Quote } from "./cards/SayCard";
 import { StudioIcon } from "./StudioIcon";
+import { usePromptRefine } from "./PromptRefine";
 
 interface Props {
   port: AgentPort;
@@ -127,6 +128,11 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const box = useRef<HTMLTextAreaElement>(null);
+  const refine = usePromptRefine(port, text, (next) => {
+    setText(next);
+    setCaret(next.length);
+    box.current?.focus();
+  });
   const guide = useId();
   const completionId = useId();
   const attachTipId = useId();
@@ -407,6 +413,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
           {planVerb(drag)}
         </p>
       )}
+      {refine.card}
       {shots.length > 0 && (
         <ul className="shots">
           {shots.map((c, i) => (
@@ -536,6 +543,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
           }}
           {...ime.handlers}
           onKeyDown={(e) => {
+            if (!ime.isIme(e.nativeEvent) && refine.onKey(e)) return;
             // Picking a word from an input method is not typing in this box: its
             // Enter confirms a candidate, and acting on it would send a
             // half-written message or accept a completion nobody asked for.
@@ -624,6 +632,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
               <span>{t("也可直接拖入或粘贴")}</span>
             </span>
           </button>
+          {refine.button}
         <div className="studio-mode-control">
           <Picker
             className="mode studio-mode-picker"

@@ -328,6 +328,7 @@ type Input interface {
 	CompletionData(lang string) CompletionData
 	ImageInputEnabled() bool
 	DroppedRef(path string) (token, displayPath string, err error)
+	RefinePrompt(ctx context.Context, draft string) (string, error)
 }
 
 // Settings covers runtime session settings that don't fit a richer domain.

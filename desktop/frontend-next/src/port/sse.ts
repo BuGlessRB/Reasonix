@@ -52,6 +52,18 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.get<Completion>("/complete?" + q);
   }
 
+  async refinePrompt(draft: string, signal?: AbortSignal) {
+    const res = await fetch(this.base + "/prompt/refine", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ draft }),
+      signal,
+    });
+    if (!res.ok) await SsePort.fail("/prompt/refine", res);
+    return ((await res.json()) as { text: string }).text;
+  }
+
   async exportPlugin(name: string): Promise<PluginExport> {
     const res = await fetch(this.base + "/plugins/" + encodeURIComponent(name) + "/export", {
       credentials: "same-origin",

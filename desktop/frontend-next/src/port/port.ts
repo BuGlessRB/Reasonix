@@ -138,6 +138,9 @@ export interface AgentPort {
   // answer depends on the caret, so it cannot be cached into a static list the
   // way slash() is.
   complete(line: string, cursor: number): Promise<Completion>;
+  // The draft rewritten by the session's model, for the person to take or
+  // leave; nothing is sent. Aborting the signal abandons the rewrite.
+  refinePrompt(draft: string, signal?: AbortSignal): Promise<string>;
   skills(root?: string): Promise<SkillCatalog>;
   // Persisted, and live in the session that flips it: the next eligible turn
   // owes the model a catalogue without the skill, and a slash invocation stops

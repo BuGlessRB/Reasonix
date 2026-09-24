@@ -288,6 +288,11 @@ export class MockPort extends MockTheme implements AgentPort {
     { label: "/security-review", insert: "/security-review ", hint: "只读地过一遍安全面", kind: "subagent" },
   ];
 
+  async refinePrompt(draft: string): Promise<string> {
+    await new Promise((r) => setTimeout(r, 600));
+    return `目标：${draft.trim()}\n\n约束：不改变现有行为。\n\n完成标准：相关测试通过。`;
+  }
+
   async complete(line: string, cursor: number): Promise<Completion> {
     const before = line.slice(0, cursor);
     const at = before.lastIndexOf("@");

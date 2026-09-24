@@ -46,6 +46,7 @@ import (
 	"reasonix/internal/permission"
 	"reasonix/internal/planmode"
 	"reasonix/internal/plugin"
+	"reasonix/internal/promptrefine"
 	"reasonix/internal/provider"
 	"reasonix/internal/recovery"
 	"reasonix/internal/sandbox"
@@ -299,6 +300,8 @@ type Options struct {
 	// when the working model submits no update_goal report. nil fails closed:
 	// the goal pauses instead of defaulting to continue.
 	GoalEvaluator goaleval.Evaluator
+	// PromptRefiner rewrites a draft before it is sent; nil refuses the ask.
+	PromptRefiner *promptrefine.Refiner
 	Sink          event.Sink
 	Policy        permission.Policy
 	// SubagentGate is the shared, mutable gate every headless-only sub-agent
@@ -1092,33 +1095,6 @@ const recoveryDepthCapNoticeText = "repeated save conflicts were detected; saved
 // SessionDir reports the directory new session files land in ("" disables
 // persistence), so the caller can decide whether to mint a path.
 func (c *Controller) SessionDir() string { return c.sessionDir }
-
-// History returns the executor's current message log (for repopulating a
-// resumed frontend's view).
-func (c *Controller) History() []provider.Message {
-	if c.executor == nil {
-		return nil
-	}
-	return c.executor.Session().Snapshot() // copy — a turn may be appending concurrently
-}
-
-// HistoryLen returns the number of messages in the live log.
-func (c *Controller) HistoryLen() int {
-	if c.executor == nil {
-		return 0
-	}
-	return c.executor.Session().Len()
-}
-
-// HistoryWindow returns a copy of the messages in [start, end) of the live
-// log. Paging frontends use it to convert a display window without copying
-// the whole history.
-func (c *Controller) HistoryWindow(start, end int) []provider.Message {
-	if c.executor == nil {
-		return []provider.Message{}
-	}
-	return c.executor.Session().MessageRange(start, end)
-}
 
 // ContextSnapshot returns (usedTokens, contextWindow) for the gauge. usedTokens
 // is what the next request will send, measured the way the compaction trigger

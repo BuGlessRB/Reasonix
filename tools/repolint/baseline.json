@@ -5,16 +5,16 @@
     "claude-dialect": 1,
     "codeowners": 0,
     "commented-code": 0,
-    "complexity": 1014,
+    "complexity": 1009,
     "doc-language": 0,
     "doc-owner": 43,
     "doc-prose": 2326,
     "error-text": 9,
-    "essay": 2908,
-    "file-size": 24073,
+    "essay": 2907,
+    "file-size": 24032,
     "flat-view": 0,
     "frontend-parity": 32,
-    "function-size": 4370,
+    "function-size": 4350,
     "layering": 0,
     "marker": 0,
     "narrative": 0,
@@ -478,10 +478,10 @@
       "orphan": 1
     },
     "internal/boot/boot.go": {
-      "complexity": 130,
-      "essay": 77,
-      "file-size": 956,
-      "function-size": 1035
+      "complexity": 125,
+      "essay": 76,
+      "file-size": 939,
+      "function-size": 1015
     },
     "internal/boot/boot_test.go": {
       "essay": 10
@@ -732,7 +732,7 @@
     },
     "internal/control/controller.go": {
       "essay": 32,
-      "file-size": 618,
+      "file-size": 594,
       "frontend-parity": 6
     },
     "internal/control/controller_test.go": {

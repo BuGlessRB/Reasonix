@@ -1105,4 +1105,34 @@ export const EN: Record<string, string> = {
   "搜索文件": "Search files",
   "清除搜索": "Clear search",
   "没有匹配的文件": "No matching files",
+  "优化提示词":
+    "Refine prompt",
+  "用当前模型改写得更清楚，采用前不会替换原文 · Ctrl+Shift+E":
+    "Rewrite it more clearly with the current model; your text stays until you adopt it · Ctrl+Shift+E",
+  "优化后的提示词":
+    "Refined prompt",
+  "输入框已修改，采用会覆盖当前内容":
+    "The box has changed; adopting replaces what is there now",
+  "正在优化…":
+    "Refining…",
+  "优化失败，请重试":
+    "Refining failed; try again",
+  "采用":
+    "Adopt",
+  "再来一次":
+    "Try again",
+  "放弃":
+    "Discard",
+  "输入框是空的，先写点内容再优化":
+    "The box is empty; write something first",
+  "内容超过 {max_bytes} 字节，无法优化":
+    "The text is over {max_bytes} bytes and cannot be refined",
+  "当前会话没有可用的模型，无法优化提示词":
+    "This session has no model to refine the prompt with",
+  "优化超时，请重试":
+    "Refining timed out; try again",
+  "模型没有给出结果，请重试":
+    "The model returned nothing; try again",
+  "优化请求格式不正确":
+    "The refine request was malformed",
 };

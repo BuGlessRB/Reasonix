@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/jobs"
 	"reasonix/internal/permission"
 	"reasonix/internal/plugin"
+	"reasonix/internal/promptrefine"
 	"reasonix/internal/recovery"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/skill"
@@ -39,6 +40,7 @@ type controllerDeps struct {
 	// working model submits no update_goal report. nil fails closed: the goal
 	// pauses instead of defaulting to continue.
 	evaluator goaleval.Evaluator
+	refiner   *promptrefine.Refiner
 	// goalUsageTee accounts billable usage events into the active goal turn's
 	// observational token total. It wraps the public sink when the caller didn't provide one.
 	goalUsageTee *goalUsageTee
@@ -120,6 +122,7 @@ func newControllerDeps(opts Options, sink event.Sink, usageTee *goalUsageTee, ru
 		executor:               opts.Executor,
 		guardianSess:           opts.Guardian,
 		evaluator:              opts.GoalEvaluator,
+		refiner:                opts.PromptRefiner,
 		goalUsageTee:           usageTee,
 		sink:                   sink,
 		policy:                 opts.Policy,
