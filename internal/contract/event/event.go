@@ -335,7 +335,10 @@ type Approval struct {
 	// RawInput is the exact structured tool input. ACP permission clients use it
 	// together with locations/reason instead of parsing a human title.
 	RawInput json.RawMessage
-	Fresh    bool // current human decision required; do not offer remembered grants
+	// Scope names what approving authorizes beyond the call itself, as the
+	// tool declares it (tool.ApprovalScoper); empty for the call alone.
+	Scope string
+	Fresh bool // current human decision required; do not offer remembered grants
 	// Which answers beyond "once" this host will honour: a grant for the rest of
 	// the session, and writing the answer down as a rule. A frontend that offers
 	// one the host drops promises what it cannot keep.

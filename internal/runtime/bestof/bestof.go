@@ -211,3 +211,7 @@ func (b bestOf) settle(ctx context.Context, snap worktree.Snapshot, cands []work
 	}
 	return report(results, winner, reason, applyErr, cands[winner].WorkspaceRoot), nil
 }
+
+// ApprovalScope says that approving best_of_n also starts attempts that run
+// their own tool calls unattended.
+func (bestOf) ApprovalScope() string { return tool.ApprovalScopeUnattendedAttempts }

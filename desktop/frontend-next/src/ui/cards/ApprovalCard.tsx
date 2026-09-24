@@ -23,6 +23,40 @@ const EXPLICIT_APPROVAL: Record<string, string> = {
   computer_pointer: "这一步会接管你正在用的鼠标指针——移动它、用它点击，并把那个应用切到前台，而不是让界面元素自己动作。自动放行、该应用已有的授权和宽泛规则都不能代你回答；要么批准，要么切到全部放行。用完指针会回到原处。",
 };
 
+const TASK_PREVIEW = 280;
+
+// What approving authorizes beyond this one call, named by the kernel. A scope
+// this window does not know still says that one exists rather than nothing.
+function ApprovalScope({ scope, input }: { scope: string; input?: Record<string, unknown> }) {
+  if (scope === "unattended_attempts") {
+    const n = typeof input?.n === "number" ? input.n : undefined;
+    const task = typeof input?.prompt === "string" ? input.prompt.trim() : "";
+    return (
+      <>
+        <div className="apv-dt" data-scope={scope}>
+          <span className="apv-dt-label">{t("批准后还会发生")}</span>
+          <span>
+            {n ? t("并行启动 {n} 个候选", { n }) : t("并行启动多个候选")}
+            {t("，各自在独立的 git 工作副本里无人值守地运行：它们的工具调用按「自动审核」处理，不再逐个询问（拒绝规则仍然生效；会话为「不询问」时候选也不询问）。最后由评审选出一个写回工作区。")}
+          </span>
+        </div>
+        {task && (
+          <div className="apv-dt">
+            <span className="apv-dt-label">{t("候选要做的任务")}</span>
+            <span title={task}>{task.length > TASK_PREVIEW ? task.slice(0, TASK_PREVIEW) + "…" : task}</span>
+          </div>
+        )}
+      </>
+    );
+  }
+  return (
+    <div className="apv-dt" data-scope={scope}>
+      <span className="apv-dt-label">{t("批准后还会发生")}</span>
+      <span>{t("这次批准的效力超出这一次调用本身。")}</span>
+    </div>
+  );
+}
+
 function approvalReason(a: { reason?: string; reasonCode?: string }): string {
   if (a.reasonCode && EXPLICIT_APPROVAL[a.reasonCode]) return t(EXPLICIT_APPROVAL[a.reasonCode]);
   // Older kernels only sent the English sentence. Keep that compatibility
@@ -89,6 +123,7 @@ export function ApprovalCard({ item, onApprove, onFullAccess, onPlan }: Props) {
               <span className="tool">{item.a.tool === FENCE_TOOL ? t("这个子任务声明之外的文件") : item.a.tool}</span>
               <span className="sub" title={item.a.subject}>{item.a.subject}</span>
             </div>
+            {item.a.scope && <ApprovalScope scope={item.a.scope} input={item.a.input} />}
             {approvalReason(item.a) && (
               <div className="apv-dt">
                 <span className="apv-dt-label">{t("需要确认的原因")}</span>

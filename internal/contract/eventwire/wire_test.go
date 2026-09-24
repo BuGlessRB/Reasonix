@@ -403,6 +403,18 @@ func TestToWireInteractionAndLifecyclePayloads(t *testing.T) {
 			want: []string{`"kind":"approval_request"`, `"approval":{"id":"a1","tool":"bash","subject":"rm"}`},
 		},
 		{
+			name: "approval arguments stay home without a scope",
+			in: event.Event{Kind: event.ApprovalRequest, Approval: event.Approval{
+				ID: "a3", Tool: "write_file", Subject: "a.go", RawInput: json.RawMessage(`{"path":"a.go","content":"x"}`)}},
+			want: []string{`"approval":{"id":"a3","tool":"write_file","subject":"a.go"}`},
+		},
+		{
+			name: "scoped approval carries what it covers",
+			in: event.Event{Kind: event.ApprovalRequest, Approval: event.Approval{
+				ID: "a4", Tool: "best_of_n", Scope: "unattended_attempts", RawInput: json.RawMessage(`{"prompt":"p","n":2}`)}},
+			want: []string{`"scope":"unattended_attempts"`, `"input":{"prompt":"p","n":2}`},
+		},
+		{
 			name: "fresh approval",
 			in:   event.Event{Kind: event.ApprovalRequest, Approval: event.Approval{ID: "a2", Tool: "mcp__srv__wipe", Subject: "srv/wipe", Fresh: true}},
 			want: []string{`"kind":"approval_request"`, `"tool":"mcp__srv__wipe"`, `"fresh":true`},

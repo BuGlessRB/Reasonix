@@ -582,5 +582,6 @@ func (c *Controller) requestApprovalDecision(ctx context.Context, req approvalRe
 }
 
 func (c *Controller) approvalRequestEvent(approval event.Approval) event.Event {
+	approval.Scope = c.approvalScope(approval.Tool)
 	return event.Event{Kind: event.ApprovalRequest, Approval: approval}
 }

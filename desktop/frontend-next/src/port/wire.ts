@@ -221,6 +221,10 @@ export interface Approval {
   allowsSession?: boolean;
   allowsPersist?: boolean;
   kind?: "tool" | "plan" | "recovery";
+  // What approving authorizes beyond the call, as the tool declares it; the
+  // call's arguments ride along only then, because they are what it covers.
+  scope?: string;
+  input?: Record<string, unknown>;
 }
 
 // DecisionReceipt is what the kernel recorded when a prompt was settled, on the
