@@ -25,10 +25,11 @@ jobs:
     timeout-minutes: 90
     steps:
       # The machine's PATH finds WSL's bash before Git's, and a bash step run in
-      # WSL sees neither this checkout's toolchain nor Windows paths.
+      # WSL sees neither this checkout's toolchain nor Windows paths. cmd, since
+      # the machine's execution policy refuses the script a powershell step is.
       - name: Put Git Bash first on PATH
-        shell: powershell
-        run: Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files\Git\bin'
+        shell: cmd
+        run: '>>"%GITHUB_PATH%" echo C:\Program Files\Git\bin'
 
       - uses: actions/checkout@v7
         with:
