@@ -1,6 +1,10 @@
 package openai
 
-import "strings"
+import (
+	"strings"
+
+	"reasonix/internal/provider"
+)
 
 // canonicalKnownVendorChatURL rewrites official-vendor bases whose documented
 // form differs from the OpenAI-compatible shape (Token Rhythm, StepFun step_plan).
@@ -17,9 +21,7 @@ func resolveOpenAIChatURL(baseURL string, extra map[string]any) string {
 	if canonical, ok := canonicalKnownVendorChatURL(requestURL); ok {
 		return canonical
 	}
-	// A request_url that merely repeats the base URL is a no-op: fall through
-	// to the derived endpoint instead of POSTing to the base itself.
-	if requestURL != "" && strings.TrimRight(requestURL, "/") != strings.TrimRight(strings.TrimSpace(baseURL), "/") {
+	if requestURL != "" && !provider.EndpointOverrideRepeatsBase(requestURL, baseURL) {
 		return requestURL
 	}
 	legacyChatURL, _ := extra["chat_url"].(string)
@@ -27,7 +29,8 @@ func resolveOpenAIChatURL(baseURL string, extra map[string]any) string {
 }
 
 func normalizeChatURL(baseURL, chatURL string) string {
-	if legacy := strings.TrimRight(strings.TrimSpace(chatURL), "/"); legacy != "" {
+	legacy := strings.TrimRight(strings.TrimSpace(chatURL), "/")
+	if legacy != "" && !provider.EndpointOverrideRepeatsBase(legacy, baseURL) {
 		if canonical, ok := canonicalKnownVendorChatURL(legacy); ok {
 			return canonical
 		}

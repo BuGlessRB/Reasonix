@@ -157,16 +157,7 @@ func New(cfg Config) provider.Provider {
 	if cfg.HTTPClient != nil {
 		httpClient = cfg.HTTPClient
 	}
-	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
-	requestURL := strings.TrimSpace(cfg.RequestURL)
-	// A request_url that merely repeats the base URL is a no-op: fall through
-	// to the derived endpoint instead of POSTing to the base itself.
-	if requestURL != "" && strings.TrimRight(requestURL, "/") == baseURL {
-		requestURL = ""
-	}
-	if requestURL == "" {
-		requestURL = baseURL + "/responses"
-	}
+	baseURL, requestURL := resolveEndpoints(cfg.BaseURL, cfg.RequestURL)
 	modelInfo := provider.ModelInfo{ID: cfg.Model, InputModalities: []provider.ModelModality{provider.ModalityText}}
 	if cfg.ModelInfo != nil {
 		modelInfo = *cfg.ModelInfo
