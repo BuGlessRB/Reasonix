@@ -74,32 +74,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
-	// Anthropic's API surface is at {root}/v1/messages, so c.baseURL stores
-	// the *root* -- without any trailing /v1. The setup wizard, however, lets
-	// users paste a full OpenAI-compatible URL (e.g.
-	// "https://proxy.example.com/v1") because that's what /models probes
-	// expect. Stripping the trailing /v1 here makes both forms land on the
-	// same endpoint without forcing users to remember Anthropic's quirky
-	// root-vs-versioned split. Without this, a user pasting
-	// "https://proxy.example.com/v1" would probe /v1/models successfully
-	// but get the chat client concatenating onto
-	// "https://proxy.example.com/v1/v1/messages" -- a 404.
-	root := strings.TrimRight(baseURL, "/")
-	root = strings.TrimSuffix(root, "/v1")
-	if root == "" {
-		root = defaultBaseURL
-	}
-	requestURL, _ := cfg.Extra["request_url"].(string)
-	requestURL = strings.TrimSpace(requestURL)
-	// A request_url that merely repeats the base root (e.g. the settings UI
-	// mirroring base_url into the exact-URL field) is a no-op: treat it as
-	// unset and derive the canonical endpoint instead of POSTing to the root.
-	if requestURL != "" && strings.TrimSuffix(strings.TrimRight(requestURL, "/"), "/v1") == root {
-		requestURL = ""
-	}
-	if requestURL == "" {
-		requestURL = root + "/v1/messages"
-	}
+	root, requestURL := resolveEndpoints(baseURL, cfg.Extra)
 	officialDeepSeek := openai.IsDeepSeek(root)
 	reasoningProtocol, _ := cfg.Extra["reasoning_protocol"].(string)
 	reasoningProtocol = strings.ToLower(strings.TrimSpace(reasoningProtocol))

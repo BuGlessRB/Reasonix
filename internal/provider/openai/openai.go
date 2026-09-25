@@ -870,6 +870,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	var lastFinishReason string
 	var sawDone bool
 	var think thinkSplitter
+	var probe sseProbe
 
 	scanner := provider.NewStreamScanner(resp.Body, 1024*1024)
 
@@ -879,7 +880,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		default:
 		}
 		line := strings.TrimSpace(scanner.Text())
-		if line == "" || !strings.HasPrefix(line, "data:") {
+		if !probe.dataLine(line) {
 			continue
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
@@ -950,17 +951,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 				cur.Name = tc.Function.Name
 			}
 			cur.Arguments += tc.Function.Arguments
-			thoughtSignature := ""
-			if tc.ExtraContent != nil {
-				thoughtSignature = tc.ExtraContent.Google.ThoughtSignature
-			}
-			if thoughtSignature == "" {
-				// Early Gemini OpenAI-compatible responses placed the field in
-				// function. Accept that shape when replaying older sessions and
-				// when talking to compatibility gateways that still emit it.
-				thoughtSignature = tc.Function.ThoughtSignature
-			}
-			if thoughtSignature != "" {
+			if thoughtSignature := tc.thoughtSignature(); thoughtSignature != "" {
 				cur.ThoughtSignature = thoughtSignature
 			}
 			// Signal the call's start the moment its name is known, so a frontend
@@ -1004,7 +995,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	// tool-call arguments, which then 400 on every replay (#3953). OpenAI Chat
 	// accepts either [DONE] or a legal finish_reason as a complete terminal.
 	if !sawDone && lastFinishReason == "" {
-		return emitted, fmt.Errorf("%s: stream ended before completion: %w", c.name, io.ErrUnexpectedEOF)
+		return emitted, probe.incompleteErr(c.name, resp.Header.Get("Content-Type"))
 	}
 
 	if r, txt := think.flush(); r != "" || txt != "" {
@@ -1234,6 +1225,15 @@ type chatToolCall struct {
 		// use extra_content.google.thought_signature.
 		ThoughtSignature string `json:"thought_signature,omitempty"`
 	} `json:"function"`
+}
+
+// thoughtSignature also accepts the early Gemini shape that placed the field in
+// function, still emitted by some compatibility gateways and older sessions.
+func (tc chatToolCall) thoughtSignature() string {
+	if tc.ExtraContent != nil && tc.ExtraContent.Google.ThoughtSignature != "" {
+		return tc.ExtraContent.Google.ThoughtSignature
+	}
+	return tc.Function.ThoughtSignature
 }
 
 type chatToolCallExtraContent struct {

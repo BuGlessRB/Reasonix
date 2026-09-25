@@ -528,6 +528,7 @@ var ChineseTraditional = Messages{
 	ProviderErrReasonMissing:        "上游拒絕了請求，但未提供具體原因。",
 	ProviderErrStreamInterruptedFmt: "模型回覆中斷，已收到的內容會保留。確認服務恢復後可重新傳送。\n詳細資訊：%s",
 	ProviderErrDisconnectedFmt:      "模型連線在完成前中斷，請檢查供應商或代理連線後重新傳送。\n詳細資訊：%s",
+	ProviderErrNonStreamingFmt:      "模型端點回傳了完整頁面而非串流回應，請將 request_url 或 base_url 指向完整的 API 端點（而非閘道根路徑）後重新傳送。\n詳細資訊：%s",
 	SearchSourcesNotProvided:        "搜尋已完成，供應商未提供可用的結構化來源。",
 	SearchModelUnavailable:          "指定的網頁搜尋模型不可用；不會改用其他帳號。",
 	ProtocolRecoveryLabel:           "從有效歷史恢復",

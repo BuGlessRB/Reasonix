@@ -556,6 +556,7 @@ var Chinese = Messages{
 	ProviderErrReasonMissing:        "上游拒绝了请求，但未提供具体原因。",
 	ProviderErrStreamInterruptedFmt: "模型回复中断，已收到的内容会保留。确认服务恢复后可重新发送。\n详细信息：%s",
 	ProviderErrDisconnectedFmt:      "模型连接在完成前断开，请检查供应商或代理连接后重新发送。\n详细信息：%s",
+	ProviderErrNonStreamingFmt:      "模型端点返回了完整页面而非流式响应，请把 request_url 或 base_url 指向完整的 API 端点（而非网关根路径）后重新发送。\n详细信息：%s",
 	SearchSourcesNotProvided:        "搜索已完成，供应商未提供可用的结构化来源。",
 	SearchModelUnavailable:          "指定的网页搜索模型不可用；不会改用其他账号。",
 	ProtocolRecoveryLabel:           "从有效历史恢复",
