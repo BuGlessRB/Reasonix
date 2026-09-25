@@ -7,9 +7,16 @@ type streamWireError struct {
 	Message string `json:"message"`
 }
 
-func anthropicStreamError(name string, wire *streamWireError) error {
-	if wire == nil {
-		return &provider.StreamPayloadError{Provider: name, Message: "stream error"}
+// anthropicStreamError types an in-stream `error` event. Before any output the
+// attempt can be made again, so it leaves as an upstream interruption; after
+// output a replay would show it twice, so it stays a plain payload error.
+func anthropicStreamError(name string, wire *streamWireError, emitted bool) error {
+	payload := &provider.StreamPayloadError{Provider: name, Message: "stream error"}
+	if wire != nil {
+		payload.Message, payload.Type = wire.Message, wire.Type
 	}
-	return &provider.StreamPayloadError{Provider: name, Message: wire.Message, Type: wire.Type}
+	if !emitted {
+		return provider.StreamInterrupt(payload, provider.StreamInterruptUpstreamError)
+	}
+	return payload
 }

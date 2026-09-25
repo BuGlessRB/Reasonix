@@ -536,9 +536,8 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		}
 	}()
 
-	send := func(chunk provider.Chunk) bool {
-		return sendChunk(ctx, out, chunk)
-	}
+	sink := &chunkSink{ctx: ctx, out: out}
+	send := sink.send
 
 	tools := map[int]*provider.ToolCall{} // tool_use blocks, keyed by content index
 	argBuckets := map[int]int{}           // last emitted 2KB progress bucket per block
@@ -669,7 +668,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			// reclassify a complete response as interrupted.
 			goto finalize
 		case "error":
-			send(provider.Chunk{Type: provider.ChunkError, Err: anthropicStreamError(c.name, ev.Error)})
+			send(provider.Chunk{Type: provider.ChunkError, Err: anthropicStreamError(c.name, ev.Error, sink.emitted)})
 			return
 		}
 	}
@@ -717,20 +716,6 @@ finalize:
 		}
 	}
 	send(provider.Chunk{Type: provider.ChunkDone})
-}
-
-func sendChunk(ctx context.Context, out chan<- provider.Chunk, chunk provider.Chunk) bool {
-	select {
-	case out <- chunk:
-		return true
-	default:
-	}
-	select {
-	case <-ctx.Done():
-		return false
-	case out <- chunk:
-		return true
-	}
 }
 
 // mapStopReason translates Anthropic stop reasons to the OpenAI-style finish
