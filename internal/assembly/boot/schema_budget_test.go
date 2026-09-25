@@ -14,7 +14,7 @@ import (
 // provider is actually shown. builtin's own budget guards the whole built-in
 // set, and the two move independently — a tool promoted out of use_capability
 // onto the core surface costs every session without touching that number.
-const visibleSchemaTokenBudget = 3700
+const visibleSchemaTokenBudget = 3708
 
 func TestProviderVisibleSchemaSurfaceStaysWithinBudget(t *testing.T) {
 	// goalTurnsUnreachable=false is the larger surface: it keeps update_goal.

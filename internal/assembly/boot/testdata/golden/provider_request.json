@@ -297,6 +297,7 @@
             "type": "string"
           }
         },
+        "required": [],
         "type": "object"
       }
     },
@@ -332,6 +333,7 @@
             "type": "string"
           }
         },
+        "required": [],
         "type": "object"
       }
     },
@@ -452,6 +454,7 @@
       "parameters": {
         "additionalProperties": false,
         "properties": {},
+        "required": [],
         "type": "object"
       }
     },
@@ -550,6 +553,7 @@
             "type": "string"
           }
         },
+        "required": [],
         "type": "object"
       }
     },
@@ -723,6 +727,7 @@
             "type": "string"
           }
         },
+        "required": [],
         "type": "object"
       }
     },

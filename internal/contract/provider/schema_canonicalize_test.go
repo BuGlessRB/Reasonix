@@ -29,7 +29,7 @@ func TestCanonicalizeSchemaAddsEmptyPropertiesForNoArgumentObject(t *testing.T) 
 		json.RawMessage(`{"type":"object"}`),
 	} {
 		got := string(CanonicalizeSchema(raw))
-		want := `{"properties":{},"type":"object"}`
+		want := `{"properties":{},"required":[],"type":"object"}`
 		if got != want {
 			t.Fatalf("CanonicalizeSchema(%s) = %s, want %s", string(raw), got, want)
 		}
@@ -38,12 +38,27 @@ func TestCanonicalizeSchemaAddsEmptyPropertiesForNoArgumentObject(t *testing.T) 
 
 func TestCanonicalizeSchemaAddsMissingRootType(t *testing.T) {
 	for _, tc := range []struct{ raw, want string }{
-		{`{}`, `{"properties":{},"type":"object"}`},
-		{`{"properties":{"q":{"type":"string"}}}`, `{"properties":{"q":{"type":"string"}},"type":"object"}`},
+		{`{}`, `{"properties":{},"required":[],"type":"object"}`},
+		{`{"properties":{"q":{"type":"string"}}}`, `{"properties":{"q":{"type":"string"}},"required":[],"type":"object"}`},
 		// Explicit non-object root types are preserved verbatim; validation
 		// quarantines them instead of silently rewriting declared semantics.
 		{`{"type":"string"}`, `{"type":"string"}`},
 		{`{"type":["object","null"]}`, `{"type":["object","null"]}`},
+	} {
+		if got := string(CanonicalizeSchema(json.RawMessage(tc.raw))); got != tc.want {
+			t.Fatalf("CanonicalizeSchema(%s) = %s, want %s", tc.raw, got, tc.want)
+		}
+	}
+}
+
+// A relay re-serializing an absent "required" sends null, which upstream
+// rejects; the root object always carries an array.
+func TestCanonicalizeSchemaRootObjectAlwaysHasRequiredArray(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{`{"type":"object","additionalProperties":false,"properties":{}}`, `{"additionalProperties":false,"properties":{},"required":[],"type":"object"}`},
+		{`{"type":"object","required":null}`, `{"properties":{},"required":[],"type":"object"}`},
+		{`{"type":"object","required":true}`, `{"properties":{},"required":[],"type":"object"}`},
+		{`{"type":"object","properties":{"a":{"type":"object"}},"required":["a"]}`, `{"properties":{"a":{"type":"object"}},"required":["a"],"type":"object"}`},
 	} {
 		if got := string(CanonicalizeSchema(json.RawMessage(tc.raw))); got != tc.want {
 			t.Fatalf("CanonicalizeSchema(%s) = %s, want %s", tc.raw, got, tc.want)
@@ -78,7 +93,7 @@ func TestCanonicalizeSchemaDependentRequired(t *testing.T) {
 	}`)
 
 	got := string(CanonicalizeSchema(raw))
-	want := `{"dependentRequired":{"cc":["billing_address","name"]},"properties":{},"type":"object"}`
+	want := `{"dependentRequired":{"cc":["billing_address","name"]},"properties":{},"required":[],"type":"object"}`
 	if got != want {
 		t.Fatalf("CanonicalizeSchema() = %s, want %s", got, want)
 	}
@@ -97,7 +112,7 @@ func TestCanonicalizeSchemaPreservesDependentRequiredPropertyName(t *testing.T) 
 	}`)
 
 	got := string(CanonicalizeSchema(raw))
-	want := `{"dependentRequired":{"dependentRequired":["x"]},"properties":{"dependentRequired":{"type":"string"},"x":{"type":"string"}},"type":"object"}`
+	want := `{"dependentRequired":{"dependentRequired":["x"]},"properties":{"dependentRequired":{"type":"string"},"x":{"type":"string"}},"required":[],"type":"object"}`
 	if got != want {
 		t.Fatalf("CanonicalizeSchema() = %s, want %s", got, want)
 	}
@@ -173,7 +188,7 @@ func TestNormalizeLegacyTupleItemsPreservesModernArrayItems(t *testing.T) {
 
 func TestCanonicalizeSchemaPreservesLegacyTupleItems(t *testing.T) {
 	raw := json.RawMessage(`{"type":"object","properties":{"pair":{"type":"array","items":[{"type":"string"},{"type":"number"}],"additionalItems":false}}}`)
-	want := `{"properties":{"pair":{"additionalItems":false,"items":[{"type":"string"},{"type":"number"}],"type":"array"}},"type":"object"}`
+	want := `{"properties":{"pair":{"additionalItems":false,"items":[{"type":"string"},{"type":"number"}],"type":"array"}},"required":[],"type":"object"}`
 	if got := string(CanonicalizeSchema(raw)); got != want {
 		t.Fatalf("CanonicalizeSchema() = %s, want provider-neutral bytes %s", got, want)
 	}
