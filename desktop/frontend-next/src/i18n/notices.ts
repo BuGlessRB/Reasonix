@@ -13,4 +13,5 @@ export const NOTICE_TEXT: Record<string, string> = {
   permission_covered: "已有的授权规则覆盖了这项操作，无需另存",
   permission_save_failed: "授权没能保存，只在本次会话内有效",
   suspected_injection: "一条外部内容看起来在向智能体下指令，已提醒它只当资料看待",
+  perseveration_loop: "模型卡在重复输出同一段文字，这一轮回复被提前截断；可以重试、补充引导，或换一个供应商/模型",
 };

@@ -14,13 +14,14 @@ import (
 // holding atomics and mutexes cannot be assigned, so reset must name each field
 // and this list is what keeps it honest.
 var sessionReset = map[string]bool{
-	"mu":               true,
-	"conversation":     true,
-	"output":           true,
-	"cacheHit":         true,
-	"cacheMiss":        true,
-	"missingReasoning": true,
-	"win":              true, // windowState.reset, held to its own lists below
+	"mu":                   true,
+	"conversation":         true,
+	"output":               true,
+	"cacheHit":             true,
+	"cacheMiss":            true,
+	"missingReasoning":     true,
+	"win":                  true, // windowState.reset, held to its own lists below
+	"perseverationStrikes": true,
 }
 
 // sessionCarryOver names the fields reset deliberately leaves alone, each with

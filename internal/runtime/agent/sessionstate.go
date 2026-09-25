@@ -47,6 +47,11 @@ type sessionRuntime struct {
 	// lastProviderSchemas is the tool surface the last request carried, so an
 	// estimate reports what was sent rather than what the registry holds.
 	lastProviderSchemas []provider.ToolSchema
+
+	// perseverationStrikes counts consecutive degenerate-generation aborts with no
+	// successfully completed provider response in between. It gates the single
+	// nudge-and-retry: the first strike retries, the next one stops for the user.
+	perseverationStrikes int
 }
 
 // reset rebinds the runtime to a new conversation. Every field is named here or
@@ -62,6 +67,7 @@ func (r *sessionRuntime) reset(s *sessionstore.Session) {
 	r.output.reset()
 	r.missingReasoning = missingReasoningWatch{}
 	r.win.reset()
+	r.perseverationStrikes = 0
 }
 
 // session returns the bound conversation under the lock that guards the
