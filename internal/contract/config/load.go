@@ -126,7 +126,7 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	userDefaultModel := cfg.DefaultModel
 	globalCLI := cfg.CLI
 	globalSecrets := cfg.Secrets
-	globalHostAuthorities := slices.Clone(cfg.Sandbox.HostAuthorities)
+	globalSandbox := holdUserSandbox(cfg.Sandbox)
 	globalRemote, globalStorage := cfg.Remote.Clone(), maps.Clone(cfg.Storage)
 	globalDesktopLanguage := cfg.Desktop.Language
 	globalPricingCurrency := cfg.Desktop.Currency
@@ -155,9 +155,8 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	// reasonix.toml must not be able to flip on the workflow-breaking env/path
 	// protections.
 	cfg.Secrets = globalSecrets
-	// Host-authority grants are the same kind of control: a cloned repo must not
-	// be able to hand itself the container daemon socket.
-	cfg.Sandbox.HostAuthorities = globalHostAuthorities
+	// Sandbox grants are the same kind of control (see heldSandbox).
+	globalSandbox.restore(&cfg.Sandbox)
 	// Remote SSH hosts and storage locations are equally user-global: a cloned
 	// repo must not inject hosts, jump chains, or port forwards, nor redirect
 	// where this machine keeps its transcripts, catalogs, and checkouts.

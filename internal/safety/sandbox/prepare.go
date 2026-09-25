@@ -17,6 +17,9 @@ type Prepared struct {
 	// LinuxSandboxed is true when SessionTemp is mapped at virtual /tmp under
 	// Linux bubblewrap; env overrides then point at /tmp.
 	LinuxSandboxed bool
+	// EgressToken names this launch to the egress proxy, so refusals are
+	// charged to it. Empty when the launch is not routed through one.
+	EgressToken string
 }
 
 // PrepareArgs builds argv for a raw argument vector (e.g. ripgrep).

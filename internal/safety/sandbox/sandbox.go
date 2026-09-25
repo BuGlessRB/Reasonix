@@ -51,6 +51,13 @@ type Spec struct {
 	Network bool
 	// HostAuthorities are the host services this command may call.
 	HostAuthorities []HostAuthority
+	// Egress, set with Network where EgressSupported, confines external egress
+	// to the host egress proxy. Loopback itself stays open so a command can
+	// serve and reach its own listeners.
+	Egress EgressRoute
+	// ClosedLoopbackPorts stay shut while loopback is open: a host proxy
+	// listening there would carry traffic around the egress proxy.
+	ClosedLoopbackPorts []int
 	// MinimalWrites omits the broad build-tool cache write allowances used by
 	// the bash sandbox. MCP profiles set it and explicitly provide only their
 	// private state/temp directories (plus approved writer roots).
@@ -66,6 +73,22 @@ type Spec struct {
 	// keeps the platform default (ephemeral tmpfs on Linux bwrap, host temp
 	// elsewhere). MCP and other independent sandboxes leave this empty.
 	SessionTemp string
+}
+
+// EgressRoute is the host proxy a confined command's external traffic goes
+// through. A command presents its token so refusals are charged to it.
+type EgressRoute interface {
+	Port() int
+	Env(token string) []string
+	Refusals(token string) []string
+}
+
+// egressPort is the proxy port a confined profile opens, or 0 for none.
+func (s Spec) egressPort() int {
+	if s.Egress == nil || !s.Network {
+		return 0
+	}
+	return s.Egress.Port()
 }
 
 // Enforce reports whether the spec asks for confinement.

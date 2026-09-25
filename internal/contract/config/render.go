@@ -431,6 +431,14 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	fmt.Fprintf(&b, "bash    = %q\n", c.BashMode())
 	fmt.Fprintf(&b, "network = %v\n", c.Sandbox.Network)
 	fmt.Fprintf(&b, "host_authorities = %s   # host services bash may call; user-global\n", renderStringArray(c.Sandbox.HostAuthorities))
+	if len(c.Sandbox.AllowedDomains) > 0 {
+		fmt.Fprintf(&b, "allowed_domains = %s\n", renderStringArray(c.Sandbox.AllowedDomains))
+	} else {
+		b.WriteString("# allowed_domains = [\"github.com\", \"*.npmjs.org\"]   # limit bash egress to these hosts (macOS)\n")
+	}
+	if len(c.Sandbox.DeniedDomains) > 0 {
+		fmt.Fprintf(&b, "denied_domains = %s\n", renderStringArray(c.Sandbox.DeniedDomains))
+	}
 	b.WriteString("\n")
 
 	b.WriteString("[statusline]\n")

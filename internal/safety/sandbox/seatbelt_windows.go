@@ -22,3 +22,7 @@ func CommandArgs(spec Spec, args []string) ([]string, bool) {
 func Available() bool {
 	return false
 }
+
+// EgressSupported reports whether this platform can confine egress to the
+// egress proxy: Windows has no OS-level bash sandbox.
+func EgressSupported() bool { return false }

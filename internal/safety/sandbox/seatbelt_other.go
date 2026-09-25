@@ -259,3 +259,8 @@ func dirExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
 }
+
+// EgressSupported reports whether this platform can confine egress to the
+// egress proxy: bubblewrap has no route to a host loopback port
+// from inside its network namespace yet.
+func EgressSupported() bool { return false }

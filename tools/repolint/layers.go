@@ -45,6 +45,7 @@ var leaves = []string{
 	"internal/platform/packagegrant",
 	"internal/contract/planmode",
 	"internal/base/proc",
+	"internal/safety/egress",
 	"internal/safety/redirectguard",
 	"internal/platform/releaseasset",
 	"internal/base/retrieval",

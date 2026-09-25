@@ -103,8 +103,11 @@ func seatbeltProfile(spec Spec) string {
 	for _, p := range forbidReadDirs(spec.ForbidReadRoots) {
 		fmt.Fprintf(&b, "(deny file-read* (subpath %s))\n", sbplString(p))
 	}
-	if !spec.Network {
+	switch {
+	case !spec.Network:
 		b.WriteString("(deny network*)\n")
+	case spec.egressPort() > 0:
+		writeEgressRules(&b, spec)
 	}
 	// Authority rules last, and denies before grants: SBPL takes the final
 	// match, so a granted endpoint survives the blanket denial above. Without
@@ -117,6 +120,30 @@ func seatbeltProfile(spec Spec) string {
 	}
 	return b.String()
 }
+
+// writeEgressRules shuts every destination but loopback, Unix sockets and the
+// egress proxy; a host proxy outside ClosedLoopbackPorts stays reachable, and
+// lookups still reach the resolver's socket. Bind, inbound and outbound are
+// separate grants: (local ip "localhost:*") on network* matches the local end
+// of every outbound connection and would admit all of them.
+func writeEgressRules(b *strings.Builder, spec Spec) {
+	b.WriteString("(deny network*)\n")
+	b.WriteString("(allow network-bind (local ip \"localhost:*\"))\n")
+	b.WriteString("(allow network-inbound (local ip \"localhost:*\"))\n")
+	b.WriteString("(allow network-outbound (remote ip \"localhost:*\"))\n")
+	b.WriteString("(allow network-outbound (remote unix-socket))\n")
+	proxyPort := spec.egressPort()
+	for _, port := range spec.ClosedLoopbackPorts {
+		if port > 0 && port != proxyPort {
+			fmt.Fprintf(b, "(deny network-outbound (remote ip \"localhost:%d\"))\n", port)
+		}
+	}
+	fmt.Fprintf(b, "(allow network-outbound (remote ip \"localhost:%d\"))\n", proxyPort)
+}
+
+// EgressSupported reports whether this platform can confine egress to the
+// egress proxy.
+func EgressSupported() bool { return true }
 
 // writeAllowDirs is the deduplicated, symlink-resolved set of directories the
 // sandbox permits writes to: the caller's roots plus temp dirs, /dev, and the

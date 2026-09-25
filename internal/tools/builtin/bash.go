@@ -285,6 +285,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 			if shouldReapAfterRun(jobCtx, sh, p.Command, p.PreserveBackgroundProcesses) {
 				reapShellProcess(cmd, tracked) // reap process-group stragglers the job left running (#3702)
 			}
+			b.writeEgressNote(out, prepared.EgressToken)
 			return "", normalizeBashRunError(jobCtx, runErr, p.PreserveBackgroundProcesses)
 		})
 		msg := fmt.Sprintf("Started background job %q. It keeps running across turns; read new output with bash_output(job_id=%q), wait for it with wait, or stop it with kill_shell(job_id=%q).", job.ID, job.ID, job.ID)
@@ -303,7 +304,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	mergeRunInto(ex, runEx)
 	ex.DurationMs = time.Since(start).Milliseconds()
 	return tool.DetailedResult{
-		Output:    appendSessionDataHint(appendSessionDataHint(out, b.guard.CommandHint(b.workDir, p.Command)), nul.note()),
+		Output:    appendSessionDataHint(appendSessionDataHint(appendSessionDataHint(out, b.egressNote(prepared.EgressToken)), b.guard.CommandHint(b.workDir, p.Command)), nul.note()),
 		Execution: ex,
 	}, err
 }
@@ -423,6 +424,7 @@ func (b bash) prepareLaunch(ctx context.Context, sh sandbox.Shell, p bashParams,
 		prepared.LinuxSandboxed = false
 		prepared.EnvOverrides = sandbox.SessionTempEnv(sessionDir, false)
 	}
+	b.routeEgress(&prepared)
 	return prepared, probe, lease, nil
 }
 

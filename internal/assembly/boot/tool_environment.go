@@ -3,10 +3,16 @@ package boot
 import (
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 
+	"golang.org/x/net/http/httpproxy"
+
 	"reasonix/internal/contract/config"
+	"reasonix/internal/safety/egress"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/sessiontemp"
 	"reasonix/internal/tools/builtin"
@@ -26,6 +32,7 @@ type toolEnvironment struct {
 	managedConfig   builtin.ManagedConfigPaths
 	readPaths       *builtin.PathResolver
 	sessionTemp     *sessiontemp.Manager
+	egress          *egress.Proxy
 }
 
 func resolveToolEnvironment(opts Options, cfg *config.Config, roots config.Roots, root string, additionalDirs []string, shell sandbox.Shell, stderr io.Writer) toolEnvironment {
@@ -62,6 +69,7 @@ func resolveToolEnvironment(opts Options, cfg *config.Config, roots config.Roots
 	if env.bash.Mode == "enforce" && !sandbox.Available() {
 		fmt.Fprintln(stderr, "warning: "+sandbox.UnavailableMessage())
 	}
+	env.routeEgress(cfg, stderr)
 	if autoShellPrefer(cfg.Tools.Shell.Prefer) && shell.Kind == sandbox.ShellPowerShell {
 		fmt.Fprintln(stderr, "warning: bash not found on PATH; the shell tool will run commands under Windows PowerShell. Install Git for Windows or WSL to use bash, or set [tools.shell] prefer=\"powershell\" to silence this.")
 	}
@@ -72,4 +80,32 @@ func resolveToolEnvironment(opts Options, cfg *config.Config, roots config.Roots
 		env.sessionTemp = sessiontemp.New()
 	}
 	return env
+}
+
+var _ sandbox.EgressRoute = (*egress.Proxy)(nil)
+
+// routeEgress confines bash's external traffic to [sandbox] allowed_domains.
+// It applies only where network is on and the bash sandbox confines, so the
+// list can narrow what a command reaches and never open what was shut. Where
+// the platform cannot enforce it, it says so instead of implying it holds.
+func (env *toolEnvironment) routeEgress(cfg *config.Config, stderr io.Writer) {
+	if len(cfg.Sandbox.AllowedDomains) == 0 || !env.bash.Network || !env.bash.Enforce() || !sandbox.Available() {
+		return
+	}
+	if !sandbox.EgressSupported() {
+		fmt.Fprintln(stderr, "warning: [sandbox] allowed_domains is not enforced on this platform; bash network egress stays open")
+		return
+	}
+	upstream := httpproxy.FromEnvironment().ProxyFunc()
+	p, err := egress.Start(egress.Policy{Allow: cfg.Sandbox.AllowedDomains, Deny: cfg.Sandbox.DeniedDomains}, egress.Options{
+		Upstream: func(r *http.Request) (*url.URL, error) { return upstream(r.URL) },
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "warning: [sandbox] allowed_domains could not start the egress proxy (%v); bash network egress is shut\n", err)
+		env.bash.Network = false
+		return
+	}
+	env.egress = p
+	env.bash.Egress = p
+	env.bash.ClosedLoopbackPorts = egress.LoopbackProxyPorts(os.Getenv)
 }

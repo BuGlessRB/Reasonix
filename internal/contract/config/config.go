@@ -904,6 +904,12 @@ type SandboxConfig struct {
 	// ssh_agent alone: signing is routine, a daemon socket is host-wide
 	// execution. User-global (LoadForRoot); a repo cannot grant itself one.
 	HostAuthorities []string `toml:"host_authorities"`
+	// AllowedDomains, when set with Network, limits bash egress (not MCP
+	// servers') to these hosts through the host's egress proxy; "*.x" names
+	// every host beneath x. A repo may set it only where the user has not.
+	AllowedDomains []string `toml:"allowed_domains"`
+	// DeniedDomains outrank AllowedDomains. The repo's are added to the user's.
+	DeniedDomains []string `toml:"denied_domains"`
 }
 
 // WriteRoots returns the directories file-writer tools may modify: the

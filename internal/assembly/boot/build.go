@@ -303,6 +303,10 @@ func (b *builder) wireMCP() {
 		prev, mgr := b.cleanup, t.lsp
 		b.cleanup = func() { prev(); mgr.Close() }
 	}
+	if proxy := t.env.egress; proxy != nil {
+		prev := b.cleanup
+		b.cleanup = func() { prev(); _ = proxy.Close() }
+	}
 }
 
 // controller builds the executor, the optional planner around it, and the
