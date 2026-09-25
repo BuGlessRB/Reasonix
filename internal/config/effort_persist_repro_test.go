@@ -6,12 +6,8 @@ import (
 	"testing"
 )
 
-// Regression for #8337: a per-provider effort selection written by /effort or
-// the desktop must not make the DeepSeek family non-canonicalizable on the
-// next load. Before the fix, the canonical member carrying effort="max" next
-// to legacy family members with empty effort failed the family-equality check,
-// so canonicalization was bypassed and the stored level was unreachable
-// (the model came back as Auto).
+// A per-provider effort on the canonical member must not make the DeepSeek
+// family non-canonicalizable, or the stored level is unreachable (#8337).
 func TestDeepSeekEffortDoesNotBreakFamilyCanonicalization(t *testing.T) {
 	body := `config_version = 5
 default_model = "deepseek/deepseek-v4-flash"
@@ -45,5 +41,41 @@ api_key_env = "DEEPSEEK_API_KEY"
 	}
 	if got := p.Effort; got != "max" {
 		t.Fatalf("stored effort = %q, want max", got)
+	}
+}
+
+func TestDeepSeekLegacyMembersWithDifferentEffortsStaySeparate(t *testing.T) {
+	body := `config_version = 5
+default_model = "deepseek-pro/deepseek-v4-pro"
+
+[[providers]]
+name = "deepseek-flash"
+kind = "anthropic"
+base_url = "https://api.deepseek.com/anthropic"
+model = "deepseek-v4-flash"
+api_key_env = "DEEPSEEK_API_KEY"
+
+[[providers]]
+name = "deepseek-pro"
+kind = "anthropic"
+base_url = "https://api.deepseek.com/anthropic"
+model = "deepseek-v4-pro"
+api_key_env = "DEEPSEEK_API_KEY"
+effort = "max"
+`
+	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := LoadForEdit(path)
+	if canCanonicalizeLegacyDeepSeekProviders(c) {
+		t.Fatal("legacy members with different efforts must not merge: the merge keeps only the first member's effort")
+	}
+	p, ok := c.Provider("deepseek-pro")
+	if !ok {
+		t.Fatal("legacy deepseek-pro provider missing")
+	}
+	if got := p.Effort; got != "max" {
+		t.Fatalf("deepseek-pro effort = %q, want max", got)
 	}
 }
