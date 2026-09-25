@@ -9,6 +9,7 @@ import { useRemoteStore, waitForRemoteConnection } from "../store/remote";
 import { SettingsOptions } from "./SettingsOptions";
 import { RemoteStatusChip } from "./RemoteHostsPage";
 import type { RemoteDirEntry, RemoteHostInput, RemoteHostView } from "../lib/types";
+import { formatBytes, parentOf } from "./remoteWizardFormat";
 
 type WizardStep = "config" | "connecting" | "workspace";
 const STEP_ORDER: WizardStep[] = ["config", "connecting", "workspace"];
@@ -26,25 +27,6 @@ const blankInput: RemoteHostInput = {
   credentialMode: "remote",
   useSSHConfig: false,
 };
-
-function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return "";
-  const units = ["B", "KiB", "MiB", "GiB"];
-  let value = n;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
-}
-
-function parentOf(path: string): string {
-  const trimmed = path.replace(/\/+$/, "");
-  const idx = trimmed.lastIndexOf("/");
-  if (idx <= 0) return "/";
-  return trimmed.slice(0, idx);
-}
 
 /**
  * RemoteConnectWizard — three-step dialog behind the add-project "remote
