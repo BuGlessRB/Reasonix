@@ -595,6 +595,7 @@ type Messages struct {
 	ProviderErrReasonMissing        string
 	ProviderErrStreamInterruptedFmt string
 	ProviderErrDisconnectedFmt      string
+	ProviderErrNonStreamingFmt      string
 	SearchSourcesNotProvided        string
 	SearchModelUnavailable          string
 	ProtocolRecoveryLabel           string

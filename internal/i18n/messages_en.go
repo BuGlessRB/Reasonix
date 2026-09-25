@@ -555,6 +555,7 @@ var English = Messages{
 	ProviderErrReasonMissing:        "The upstream rejected the request but did not provide a specific reason.",
 	ProviderErrStreamInterruptedFmt: "Model stream interrupted. The partial response was kept; send again when ready.\nDetails: %s",
 	ProviderErrDisconnectedFmt:      "Model connection closed before completion. Check the provider or proxy before sending again.\nDetails: %s",
+	ProviderErrNonStreamingFmt:      "The model endpoint answered with a complete page instead of a stream. Point request_url or base_url at a full API endpoint, not a gateway root, before sending again.\nDetails: %s",
 	SearchSourcesNotProvided:        "Search completed; the provider did not supply usable structured sources.",
 	SearchModelUnavailable:          "Assigned web search model is unavailable; no other account will be used.",
 	ProtocolRecoveryLabel:           "Recover from valid history",
