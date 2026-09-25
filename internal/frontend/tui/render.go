@@ -64,7 +64,7 @@ func renderItem(it *Item, width, shown int) string {
 	case ItemNotice:
 		return renderNotice(it)
 	case ItemCompaction:
-		return termrender.Dim("  ⟲ context compacted")
+		return termrender.Dim("  ⟲ " + i18n.M.CompactionTitle)
 	case ItemReceipt:
 		return renderReceipt(it)
 	case ItemUsage:

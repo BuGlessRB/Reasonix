@@ -79,7 +79,12 @@ type (
 	edgeMsg      struct{}
 )
 
-const edgeEvery = 80 * time.Millisecond
+const (
+	edgeEvery = 80 * time.Millisecond
+	// printGap lets the renderer redraw between two pieces of one print: it
+	// places each piece from where the last redraw left the frame.
+	printGap = 40 * time.Millisecond
+)
 
 // wrapLines splits out into rows no wider than width, each padded to it so
 // the scrollbar column stays put.
@@ -96,30 +101,54 @@ func wrapLines(out string, width int) []string {
 	return rows
 }
 
-// emit sends a settled print where this screen keeps them.
-func (m *model) emit(render func(int) string) tea.Cmd {
-	if m.scr == nil {
-		if out := render(m.width); out != "" {
-			return tea.Println(out)
+// settledPrint is one settled piece of the transcript: how to draw it, and
+// the row it draws when it draws one.
+type settledPrint struct {
+	render func(width int) string
+	row    *Item
+}
+
+// settledRow keeps a copy of the row to draw from. Full screen, a shell
+// call's output starts shut and can open later.
+func (m *model) settledRow(row Item, shown int) settledPrint {
+	if m.scr != nil && row.Kind == ItemTool {
+		row.Fold = foldShut
+	}
+	return settledPrint{render: func(w int) string { return renderItem(&row, w, shown) }, row: &row}
+}
+
+// publish sends what settled where this screen keeps it: blocks of the full
+// screen transcript, or one print into the terminal's scrollback.
+func (m *model) publish(out []settledPrint) tea.Cmd {
+	if m.scr != nil {
+		for _, p := range out {
+			m.scr.blocks = append(m.scr.blocks, block{render: p.render, row: p.row})
 		}
 		return nil
 	}
-	m.scr.blocks = append(m.scr.blocks, block{render: render})
-	return nil
+	parts := make([]string, 0, len(out))
+	for _, p := range out {
+		if s := p.render(m.width); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return m.printAbove(strings.Join(parts, "\n"))
 }
 
-// emitRow sends a settled row. Full screen keeps a copy the block draws from,
-// so its shell output can open later.
-func (m *model) emitRow(row Item, shown int) tea.Cmd {
-	render := func(w int) string { return renderItem(&row, w, shown) }
-	if m.scr == nil {
-		return m.emit(render)
+func (m *model) emit(render func(int) string) tea.Cmd {
+	return m.publish([]settledPrint{{render: render}})
+}
+
+// fillScreen pushes whatever the terminal shows into its scrollback before a
+// burst of prints. The renderer places a print by scrolling it in above a
+// frame it takes to sit at the bottom of the screen; on a screen not yet full
+// the frame sits higher, and prints that arrive before a redraw land out of
+// order.
+func (m *model) fillScreen() tea.Cmd {
+	if m.scr != nil {
+		return nil
 	}
-	if row.Kind == ItemTool {
-		row.Fold = foldShut
-	}
-	m.scr.blocks = append(m.scr.blocks, block{render: render, row: &row})
-	return nil
+	return tea.Println(strings.Repeat("\n", max(m.height-2, 0)))
 }
 
 // foldable reports a block whose shell output has more than its preview.
@@ -160,6 +189,44 @@ func (m *model) blockEndingAt(idx int) *block {
 		}
 	}
 	return nil
+}
+
+// printAbove prints out into the terminal's scrollback in pieces the
+// renderer can place. It makes room for a print by scrolling it in and then
+// climbing over the frame, so a print taller than the rows above the frame
+// climbs past the top of the screen and lands out of order.
+func (m *model) printAbove(out string) tea.Cmd {
+	if out == "" {
+		return nil
+	}
+	var prints []tea.Cmd
+	for i, piece := range pieces(out, max(min(m.height-m.frameRows-1, m.height/2), 1), m.width) {
+		if i > 0 {
+			prints = append(prints, tea.Tick(printGap, func(time.Time) tea.Msg { return nil }))
+		}
+		prints = append(prints, tea.Println(piece))
+	}
+	return tea.Sequence(prints...)
+}
+
+// pieces splits out into runs of at most room terminal rows, counting a line
+// wider than width as the rows it wraps to. A single line taller than room
+// still goes whole.
+func pieces(out string, room, width int) []string {
+	lines := strings.Split(out, "\n")
+	var outs []string
+	for len(lines) > 0 {
+		n := 0
+		for rows := 0; n < len(lines); n++ {
+			rows += 1 + ansi.StringWidth(lines[n])/max(width, 1)
+			if rows > room && n > 0 {
+				break
+			}
+		}
+		outs = append(outs, strings.Join(lines[:n], "\n"))
+		lines = lines[n:]
+	}
+	return outs
 }
 
 func (m *model) contentWidth() int { return max(m.width-scrollbarCol, 10) }

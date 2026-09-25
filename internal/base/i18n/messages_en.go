@@ -257,6 +257,9 @@ var English = Messages{
 	MouseCaptureOnHint:           "mouse capture on — in-app drag-select/scrollbar/wheel active",
 	MouseCaptureOffHint:          "mouse capture off — your terminal now handles selection and right-click",
 	MouseCaptureTag:              "native mouse",
+	ShellWaitsForTurn:            "a shell command runs between turns; wait for this one to finish",
+	StreamReloaded:               "the event stream skipped ahead; the conversation was reloaded from the record",
+	AskDeclined:                  "declined",
 
 	ShellExecEmpty:      "usage: !<command>  (e.g. !ls -la)",
 	ShellExecFailedFmt:  "shell command failed: %v",

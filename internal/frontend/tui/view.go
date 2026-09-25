@@ -64,6 +64,7 @@ func (m *model) View() tea.View {
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, max(m.width-1, 1), "")
 	}
+	m.frameRows = len(lines)
 	v := tea.NewView(strings.Join(lines, "\n"))
 	if c := m.composer.Cursor(); c != nil && b.composerAt >= 0 {
 		c.X += 3

@@ -149,3 +149,24 @@ func TestSelectionAtTheEdgeScrolls(t *testing.T) {
 		t.Fatalf("yoff = %d, head = %+v", m.scr.yoff, m.scr.sel.head)
 	}
 }
+
+func TestPiecesFitTheRowsAboveTheFrame(t *testing.T) {
+	var lines []string
+	for i := range 25 {
+		lines = append(lines, fmt.Sprintf("line %d", i))
+	}
+	lines[3] = strings.Repeat("x", 25)
+	got := pieces(strings.Join(lines, "\n"), 10, 10)
+	if strings.Join(got, "\n") != strings.Join(lines, "\n") {
+		t.Fatal("pieces lost or reordered text")
+	}
+	for _, p := range got {
+		rows := 0
+		for l := range strings.SplitSeq(p, "\n") {
+			rows += 1 + len(l)/10
+		}
+		if rows > 10 {
+			t.Fatalf("a piece of %d rows over a room of 10:\n%s", rows, p)
+		}
+	}
+}

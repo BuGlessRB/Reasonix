@@ -249,6 +249,9 @@ type Messages struct {
 	MouseCaptureOnHint           string // "/mouse" turned in-app mouse handling back on
 	MouseCaptureOffHint          string // "/mouse" released mouse capture to the terminal
 	MouseCaptureTag              string // persistent status-line marker while mouse capture is off
+	ShellWaitsForTurn            string // a ! command typed while a turn runs
+	StreamReloaded               string // the event stream skipped ahead and the record was reread
+	AskDeclined                  string // a question panel answered with nothing
 
 	// shell execution (! prefix).
 	ShellExecEmpty      string // bare "!" with no command

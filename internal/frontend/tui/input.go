@@ -9,6 +9,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"reasonix/internal/base/i18n"
 )
 
 // A paste this large stands in the composer as one token, the way the reader
@@ -198,7 +200,7 @@ func (m *model) send(steer bool) tea.Cmd {
 		m.shell = false
 		display, text = "! "+display, "!"+text
 		if m.tr.Running {
-			m.tr.AddNotice("warn", "a shell command runs between turns; wait for this one to finish")
+			m.tr.AddNotice("warn", i18n.M.ShellWaitsForTurn)
 			return m.commit()
 		}
 	}

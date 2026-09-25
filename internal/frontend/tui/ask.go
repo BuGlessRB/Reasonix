@@ -177,7 +177,7 @@ func (m *model) sendAsk(it *Item) tea.Cmd {
 			said = append(said, strings.Join(sel, ", "))
 		}
 	}
-	verdict := "declined"
+	verdict := i18n.M.AskDeclined
 	if len(said) > 0 {
 		verdict = strings.Join(said, " · ")
 	}

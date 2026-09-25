@@ -248,6 +248,9 @@ var ChineseTraditional = Messages{
 	MouseCaptureOnHint:           "滑鼠接管已開啟 — 應用內拖拽選取/捲軸/滾輪生效",
 	MouseCaptureOffHint:          "滑鼠接管已關閉 — 由終端原生處理選取與右鍵選單",
 	MouseCaptureTag:              "終端原生滑鼠",
+	ShellWaitsForTurn:            "Shell 指令在兩輪之間執行；請等這一輪結束",
+	StreamReloaded:               "事件串流有跳躍，已從紀錄重新載入對話",
+	AskDeclined:                  "未作答",
 
 	ShellExecEmpty:      "用法：!<命令>  （例如 !ls -la）",
 	ShellExecFailedFmt:  "Shell 命令執行失敗：%v",

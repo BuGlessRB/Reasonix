@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 
+	"reasonix/internal/base/i18n"
 	"reasonix/internal/frontend/termrender"
 )
 
@@ -73,6 +74,9 @@ type model struct {
 	compaction    Compaction
 	scr           *screen
 	picker        *sessionPicker
+	// frameRows is how tall the last inline frame was: a print has only the
+	// rows above it to land in.
+	frameRows int
 }
 
 type (
@@ -281,7 +285,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) noteTurnEnd() {
 	switch m.tr.Terminal {
 	case TurnCancelled:
-		m.tr.AddNotice("warn", "interrupted")
+		m.tr.AddNotice("warn", i18n.M.TurnCancelled)
 	case TurnFailed:
 		m.tr.AddNotice("error", m.tr.EndReason)
 	}
@@ -302,9 +306,10 @@ func (m *model) restore(msg historyMsg) tea.Cmd {
 		for _, it := range m.tr.Items {
 			m.committed[it.ID] = true
 		}
-		m.tr.AddNotice("warn", "the event stream skipped ahead; the conversation was reloaded from the record")
+		m.tr.AddNotice("warn", i18n.M.StreamReloaded)
+		return m.commit()
 	}
-	return m.commit()
+	return tea.Sequence(m.fillScreen(), m.commit())
 }
 
 // commit prints, in order, every row from the top that has settled. It stops
@@ -312,7 +317,7 @@ func (m *model) restore(msg historyMsg) tea.Cmd {
 // conversation happened in; input still waiting in the queue does not hold the
 // rows after it back.
 func (m *model) commit() tea.Cmd {
-	var prints []tea.Cmd
+	var out []settledPrint
 	for i := range m.tr.Items {
 		it := &m.tr.Items[i]
 		if m.committed[it.ID] {
@@ -323,7 +328,7 @@ func (m *model) commit() tea.Cmd {
 		}
 		if it.Kind == ItemSay && !it.Done {
 			if chunk := m.settledChunk(it); chunk != nil {
-				prints = append(prints, m.emit(chunk))
+				out = append(out, settledPrint{render: chunk})
 			}
 			break
 		}
@@ -331,9 +336,9 @@ func (m *model) commit() tea.Cmd {
 			break
 		}
 		m.committed[it.ID] = true
-		prints = append(prints, m.emitRow(*it, m.sayShown[it.ID]))
+		out = append(out, m.settledRow(*it, m.sayShown[it.ID]))
 	}
-	return tea.Sequence(prints...)
+	return m.publish(out)
 }
 
 // settledChunk draws the part of a streaming answer that has become final

@@ -258,6 +258,9 @@ var Chinese = Messages{
 	MouseCaptureOnHint:           "鼠标接管已开启 — 应用内拖拽选中/滚动条/滚轮生效",
 	MouseCaptureOffHint:          "鼠标接管已关闭 — 由终端原生处理选中和右键菜单",
 	MouseCaptureTag:              "终端原生鼠标",
+	ShellWaitsForTurn:            "Shell 命令在两轮之间执行；请等这一轮结束",
+	StreamReloaded:               "事件流有跳跃，已从记录重新加载对话",
+	AskDeclined:                  "未作答",
 
 	ShellExecEmpty:      "用法：!<命令>  （例如 !ls -la）",
 	ShellExecFailedFmt:  "Shell 命令执行失败：%v",
