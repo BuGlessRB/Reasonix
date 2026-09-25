@@ -48,6 +48,7 @@ export class MockBoundary extends MockShell {
     network: true,
     workspaceRoot: "",
     allowWrite: ["/tmp/scratch"],
+    protectChangedFiles: true,
     effectiveWriteRoots: ["/Users/you/code/site", "/tmp/scratch"],
     effectiveBash: "enforce",
     available: true,

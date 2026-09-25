@@ -39,6 +39,7 @@ type readFile struct {
 	// editor buffers) before falling back to disk. Consulted only after path
 	// resolution and read confinement, and never for external alias paths.
 	overlay FileOverlay
+	views   *FileViews
 }
 
 const (
@@ -88,6 +89,19 @@ func (r readFile) ReadTarget(args json.RawMessage) string {
 }
 
 func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	out, err := r.read(ctx, args)
+	if err == nil && r.views != nil {
+		var p struct {
+			Path string `json:"path"`
+		}
+		if json.Unmarshal(args, &p) == nil {
+			r.views.sawFile(ctx, r.overlay, resolveReadablePath(r.workDir, p.Path, r.paths).Path)
+		}
+	}
+	return out, err
+}
+
+func (r readFile) read(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Path   string `json:"path"`
 		Offset int    `json:"offset,omitempty"`

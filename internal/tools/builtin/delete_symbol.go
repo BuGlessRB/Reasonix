@@ -26,6 +26,7 @@ type deleteSymbol struct {
 	sessionTemp *sessiontemp.Manager
 	workDir     string
 	overlay     FileOverlay
+	views       *FileViews
 }
 
 type symbolMatch struct {
@@ -103,6 +104,7 @@ func (d deleteSymbol) Execute(ctx context.Context, args json.RawMessage) (string
 	if err := src.write(ctx, d.overlay, p.Path, newContent); err != nil {
 		return "", fmt.Errorf("write %s: %w", p.Path, err)
 	}
+	d.views.saw(p.Path, newContent)
 
 	change := diff.Build(p.Path, original, newContent, diff.Modify)
 	return change.Diff, nil

@@ -139,6 +139,20 @@ export function Sandbox({ port, onChanged }: { port: AgentPort; onChanged: () =>
             {box.effectiveWriteRoots.length ? box.effectiveWriteRoots.map((r) => <code key={r}>{r}</code>) : "—"}
           </span>
         </div>
+
+        <div className="lrow">
+          <span className="tx">
+            <span className="lb">{t("保护被改动的文件")}</span>
+            <span className="ds">{t("模型读过或写过的文件若之后被你或其他程序改动，它整文件覆盖时会被拒绝，需要先重新读取")}</span>
+          </span>
+          <Switch
+            data-action="sandbox.protect-changed-files"
+            on={box.protectChangedFiles}
+            busy={busy === "protect"}
+            label={t("保护被改动的文件")}
+            onClick={() => void save("protect", { ...box, protectChangedFiles: !box.protectChangedFiles })}
+          />
+        </div>
       </div>
 
       <CommandMode

@@ -227,6 +227,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "配置中设置为「{want}」，本机实际按「{now}」运行。": "Configured as {want}; running as {now} on this machine.",
   "沙箱里允许联网": "Allow network inside the sandbox",
   "关闭后安装依赖、拉取仓库等操作都会失败，这正是该选项的用途": "With this off, installing dependencies and cloning repositories will fail — which is what it is for",
+  "保护被改动的文件": "Protect changed files",
+  "模型读过或写过的文件若之后被你或其他程序改动，它整文件覆盖时会被拒绝，需要先重新读取": "If a file the model read or wrote is changed afterwards by you or another program, a whole-file overwrite is refused until the model reads it again",
 
   "宣告做完": "Claims it is done",
   "还在做": "Still working",

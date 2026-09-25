@@ -24,6 +24,7 @@ type multiEdit struct {
 	sessionTemp *sessiontemp.Manager
 	workDir     string
 	overlay     FileOverlay
+	views       *FileViews
 }
 
 // editStep is one edit in a multi_edit operation. Mirrors edit_file's args
@@ -123,6 +124,7 @@ func (m multiEdit) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if err := src.write(ctx, m.overlay, p.Path, content); err != nil {
 		return "", fmt.Errorf("write %s: %w", p.Path, err)
 	}
+	m.views.saw(p.Path, content)
 	summary := fmt.Sprintf("multi_edit %s: %d edits applied (%d total replacements)", p.Path, len(p.Edits), applied)
 	if usedFuzzy {
 		summary += " (fuzzy match)"

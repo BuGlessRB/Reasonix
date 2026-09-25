@@ -8,6 +8,7 @@ const jail = (over: Partial<SandboxSettings> = {}): SandboxSettings => ({
   network: true,
   workspaceRoot: "",
   allowWrite: [],
+  protectChangedFiles: true,
   effectiveWriteRoots: ["/Users/you/code/site"],
   effectiveBash: "enforce",
   available: true,

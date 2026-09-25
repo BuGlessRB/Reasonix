@@ -357,6 +357,7 @@ export const ACTIONS: UIAction[] = [
   { id: "permissions.remove-rule", kind: "destructive", target: "entity", proof: "authority-effect" },
   { id: "sandbox.mode", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "sandbox.network", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "sandbox.protect-changed-files", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "sandbox.add-write-root", kind: "kernel-mutation", target: "optional", proof: "authority-effect" },
   { id: "sandbox.remove-write-root", kind: "destructive", target: "entity", proof: "authority-effect" },
   { id: "provider.remove", kind: "destructive", target: "entity", proof: "interaction" },

@@ -46,6 +46,9 @@ type SandboxSettings struct {
 	Network       bool     `json:"network"`
 	WorkspaceRoot string   `json:"workspaceRoot"`
 	AllowWrite    []string `json:"allowWrite"`
+	// ProtectChangedFiles refuses a whole-file write over a change made since
+	// the agent last read or wrote that file.
+	ProtectChangedFiles bool `json:"protectChangedFiles"`
 
 	EffectiveWriteRoots []string `json:"effectiveWriteRoots"`
 	// EffectiveBash is the mode the confiner will use. Windows forces off, an
@@ -133,14 +136,15 @@ func (c *Controller) SandboxSettings() SandboxSettings {
 	path := config.UserConfigPath()
 	cfg := config.LoadForEdit(path)
 	out := SandboxSettings{
-		Bash:          strings.TrimSpace(cfg.Sandbox.Bash),
-		Network:       cfg.Sandbox.Network,
-		WorkspaceRoot: strings.TrimSpace(cfg.Sandbox.WorkspaceRoot),
-		AllowWrite:    append([]string{}, cfg.Sandbox.AllowWrite...),
-		Available:     sandbox.Available(),
-		Platform:      runtime.GOOS,
-		Path:          path,
-		ShadowedBy:    shadowingConfig(path, c.WorkspaceRoot()),
+		Bash:                strings.TrimSpace(cfg.Sandbox.Bash),
+		Network:             cfg.Sandbox.Network,
+		WorkspaceRoot:       strings.TrimSpace(cfg.Sandbox.WorkspaceRoot),
+		AllowWrite:          append([]string{}, cfg.Sandbox.AllowWrite...),
+		ProtectChangedFiles: cfg.Tools.ChangedFilesProtected(),
+		Available:           sandbox.Available(),
+		Platform:            runtime.GOOS,
+		Path:                path,
+		ShadowedBy:          shadowingConfig(path, c.WorkspaceRoot()),
 	}
 	if !out.Available {
 		out.Why, out.WhyCode = sandbox.UnavailableMessage(), sandbox.UnavailableCode()
@@ -175,6 +179,8 @@ func (c *Controller) SaveSandboxSettings(in SandboxSettings) error {
 	cfg.Sandbox.Network = in.Network
 	cfg.Sandbox.WorkspaceRoot = strings.TrimSpace(in.WorkspaceRoot)
 	cfg.Sandbox.AllowWrite = trimmedList(in.AllowWrite)
+	protect := in.ProtectChangedFiles
+	cfg.Tools.ProtectChangedFiles = &protect
 	return cfg.SaveTo(path)
 }
 

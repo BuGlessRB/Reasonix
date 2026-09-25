@@ -35,6 +35,7 @@ type writeFile struct {
 	// receipt is an optional per-runtime effect hook. hadPrior means an existing
 	// file was overwritten; prior is its previous content.
 	receipt func(path string, hadPrior bool, prior []byte)
+	views   *FileViews
 }
 
 func (writeFile) Name() string { return "write_file" }
@@ -74,6 +75,11 @@ func (w writeFile) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if rerr == nil && src.content == p.Content {
 		return fmt.Sprintf("%s already contains the exact content; no changes made", p.Path), nil
 	}
+	if rerr == nil {
+		if err := w.views.checkOverwrite(p.Path, src.content); err != nil {
+			return "", err
+		}
+	}
 	// The host overlay applies the write to the editor buffer and the file in
 	// one step. Text-only, so it handles plain UTF-8 targets (and new files);
 	// non-UTF-8 files stay on the local encoding-preserving path below.
@@ -85,6 +91,7 @@ func (w writeFile) Execute(ctx context.Context, args json.RawMessage) (string, e
 			if w.receipt != nil {
 				w.receipt(p.Path, rerr == nil, []byte(src.content))
 			}
+			w.views.saw(p.Path, p.Content)
 			return fmt.Sprintf("wrote %d bytes to %s", len(p.Content), p.Path), nil
 		}
 	}
@@ -104,6 +111,7 @@ func (w writeFile) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if w.receipt != nil {
 		w.receipt(p.Path, hadPrior, prior)
 	}
+	w.views.saw(p.Path, p.Content)
 	return fmt.Sprintf("wrote %d bytes to %s", len(p.Content), p.Path), nil
 }
 

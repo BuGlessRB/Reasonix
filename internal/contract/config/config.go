@@ -1369,6 +1369,7 @@ type ToolsConfig struct {
 	Search                   SearchConfig         `toml:"search"`
 	Shell                    ShellConfig          `toml:"shell"`
 	SystemOne                SystemOneConfig      `toml:"system_one"`
+	ProtectChangedFiles      *bool                `toml:"protect_changed_files"`
 	// MCPLoad maps a server name to "always" or "deferred", overriding what
 	// the server's own declaration says.
 	MCPLoad map[string]string `toml:"mcp_load"`

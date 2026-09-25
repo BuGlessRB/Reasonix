@@ -23,6 +23,7 @@ type deleteRange struct {
 	sessionTemp *sessiontemp.Manager
 	workDir     string
 	overlay     FileOverlay
+	views       *FileViews
 }
 
 func (deleteRange) Name() string { return "delete_range" }
@@ -63,6 +64,7 @@ func (d deleteRange) Execute(ctx context.Context, args json.RawMessage) (string,
 	if err := src.write(ctx, d.overlay, change.Path, change.NewText); err != nil {
 		return "", fmt.Errorf("write %s: %w", change.Path, err)
 	}
+	d.views.saw(change.Path, change.NewText)
 	return change.Diff, nil
 }
 

@@ -31,6 +31,8 @@ export interface SandboxSettings {
   network: boolean;
   workspaceRoot: string;
   allowWrite: string[];
+  // Refuse a whole-file write over a change made since the agent last saw the file.
+  protectChangedFiles: boolean;
   effectiveWriteRoots: string[];
   // The mode that will actually run, which the configured one does not always
   // survive to: Windows has no OS backend and forces off, an unset value
