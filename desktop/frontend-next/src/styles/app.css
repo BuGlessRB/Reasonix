@@ -349,6 +349,8 @@
 
   .mode { --press: translateY(0) scale(.975) }
   .mode:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .mode:disabled { cursor: default }
+  .mode:disabled:hover { transform: none }
 
   .mode[aria-expanded="true"] { color: var(--text); border-color: var(--faint); background: var(--overlay) }
   .mode .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--ok); transition: background var(--m-card) }
@@ -2327,6 +2329,7 @@
     .call:not([data-k="me"], [data-k="say"], [data-k="ask"]) > .c > .hl .cost { margin-left: 0 }
     .ask-foot { flex-direction: column; align-items: stretch; gap: 9px }
     .ask-foot .dismiss { align-self: flex-end; margin-left: 0; white-space: nowrap }
+    .ask-foot .btn { order: -1 }
     .apv-ft .btn[data-primary] { flex: 1 0 100% }
 
     .apv-ft .btn:not([data-primary]) { flex: 1; align-self: stretch }
