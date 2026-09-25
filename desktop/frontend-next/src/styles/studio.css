@@ -1876,7 +1876,7 @@ body { font-size: 14px; line-height: 1.75; }
   border-radius: 5px;
   background: transparent;
   color: var(--ghost);
-  opacity: 0;
+  opacity: .35;
   cursor: pointer;
 }
 .rail .session-more { color: var(--faint); }
@@ -2891,6 +2891,8 @@ body { font-size: 14px; line-height: 1.75; }
 
 .studio-new-task { background: var(--overlay); border-color: var(--hair); color: var(--text); }
 .studio-new-task:hover { background: color-mix(in srgb, var(--overlay) 92%, var(--text)); border-color: var(--border); color: var(--text); }
+:root[data-theme="light"] .studio-new-task,
+:root[data-theme="light"] .studio-session-segments { background: color-mix(in oklab, var(--overlay), var(--text) 3%); }
 .studio-search,
 .studio-section-label,
 .studio-section-label button,
