@@ -27,6 +27,10 @@ type Options struct {
 	// uses the default guard; a negative value disables only this client guard.
 	// Provider output budgets are a separate protocol/model capability.
 	ReasoningByteLimit int
+	// MaxPerseverationRetries bounds nudge-and-retry attempts after a detected
+	// perseveration (= mindless repetition) loop. nil keeps the default (1); *0
+	// stops on the first loop; *N allows N retries. Negative values clamp to 0.
+	MaxPerseverationRetries *int
 	// MaxOutputTokens overrides the provider's configured/default total output
 	// budget. Zero delegates to the provider; a negative value asks optional
 	// protocols to omit the budget (Anthropic still requires max_tokens).
