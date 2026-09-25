@@ -69,9 +69,9 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.setExpansionEnv(expansionEnv)
 	cfg.CredentialsStore = r.credentialsStoreMode()
 
-	projectTOML := "reasonix.toml"
-	if root != "." {
-		projectTOML = filepath.Join(root, "reasonix.toml")
+	projectTOML := ProjectConfigPath(root)
+	if bothProjectConfigsExist(root) {
+		slog.Warn("project config: reasonix.toml and .reasonix/config.toml both exist; reasonix.toml wins", "root", root)
 	}
 	if primary := r.userConfigPath(); primary != "" {
 		if _, err := resolveConfigAccessPath(primary, true); err != nil {
