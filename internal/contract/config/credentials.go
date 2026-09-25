@@ -149,10 +149,7 @@ func (r Roots) credentialEnvNamesForRoot(root string) []string {
 	root = resolveRoot(root)
 	cfg := Default()
 
-	projectTOML := "reasonix.toml"
-	if root != "." {
-		projectTOML = filepath.Join(root, "reasonix.toml")
-	}
+	projectTOML := ProjectConfigPath(root)
 	if uc := r.userConfigLoadPath(); uc != "" {
 		_ = mergeFile(cfg, uc)
 	}
