@@ -15,6 +15,7 @@ var frontends = []string{
 	"internal/assembly/boot",
 	"internal/frontend/cli",
 	"internal/frontend/serve",
+	"internal/frontend/tui",
 }
 
 // Utility layer: these packages carry no knowledge of the kernel and must
