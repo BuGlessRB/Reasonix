@@ -21,6 +21,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/esengine/DeepSeek-Reasonix/releases?q=studio-v&expanded=true"><img src="https://img.shields.io/github/v/release/esengine/DeepSeek-Reasonix.svg?filter=studio-v*&include_prereleases&style=flat-square&color=8250df&labelColor=161b22&label=studio%202.x" alt="Reasonix Studio 2.x"/></a>
   <a href="https://www.npmjs.com/package/reasonix"><img src="https://img.shields.io/npm/v/reasonix.svg?style=flat-square&color=cb3837&labelColor=161b22&logo=npm&logoColor=white" alt="npm version"/></a>
   <a href="https://github.com/esengine/DeepSeek-Reasonix/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/esengine/DeepSeek-Reasonix/ci.yml?style=flat-square&label=ci&labelColor=161b22&logo=githubactions&logoColor=white" alt="CI"/></a>
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/reasonix.svg?style=flat-square&color=8b949e&labelColor=161b22" alt="license"/></a>
@@ -54,6 +55,24 @@
 
 <br/>
 
+## Versions
+
+Reasonix ships on two lines. See the [version roadmap announcement](https://github.com/esengine/DeepSeek-Reasonix/discussions/10748) for the reasoning behind the split.
+
+| Line | Branch | Status | Get it |
+| --- | --- | --- | --- |
+| **Reasonix 2.x** | `studio` (this branch) | Active development, pre-release | [Studio releases](https://github.com/esengine/DeepSeek-Reasonix/releases?q=studio-v&expanded=true) |
+| **Reasonix 1.x** | [`main-v2`](https://github.com/esengine/DeepSeek-Reasonix/tree/main-v2) | Maintenance / stable | `npm i -g reasonix` · [desktop download](https://reasonix.io/?download=desktop#start) |
+
+- **Want something stable?** Stay on 1.x. It keeps receiving bug fixes,
+  provider/API compatibility, updater and security fixes; its core architecture
+  is no longer being extended.
+- **Want the new architecture?** Use 2.x Reasonix Studio. It is still moving
+  quickly; reports are welcome.
+
+Valuable fixes, tests and behaviour from 1.x are reviewed one by one and ported
+or reimplemented on 2.x where they fit the new architecture.
+
 ## Features
 
 - **Config-driven.** Providers, the agent, enabled tools, and plugins are all
@@ -73,53 +92,61 @@
 
 ## Install
 
-Choose the path that matches how you want to use Reasonix. The CLI/TUI,
-desktop app, and VS Code extension all use the same local Reasonix engine.
+This branch is **Reasonix 2.x**. Its desktop app is Reasonix Studio; the CLI,
+Studio, and editor integrations all run the same local Reasonix engine.
 
-### Path A: CLI / TUI
+### Reasonix Studio (2.x)
 
-Install the native binary through npm on any supported platform, or use
-Homebrew on macOS:
+Download the package for your platform from the latest
+[Studio release](https://github.com/esengine/DeepSeek-Reasonix/releases?q=studio-v&expanded=true)
+(tagged `studio-v2.*`, published as pre-releases while 2.x is in active
+development):
+
+| Platform | Package | Architecture |
+| --- | --- | --- |
+| macOS | `.dmg` or `.zip` | Apple Silicon (`arm64`) / Intel (`amd64`) |
+| Windows | Installer `-installer.exe` or portable `.zip` | x64 |
+| Linux | `.deb` | x64 |
+
+Every package ships with a `.minisig` signature, and the release carries
+`SHA256SUMS`. Once installed, Studio updates itself in place.
+
+The same release also carries the 2.x `reasonix` CLI as archives for
+`darwin|linux|windows × amd64|arm64`.
+
+### Reasonix 1.x (stable)
+
+The 1.x CLI installs through npm on any supported platform, or Homebrew on
+macOS:
 
 ```sh
 npm i -g reasonix                  # any OS; pulls the prebuilt native binary
 brew install esengine/reasonix/reasonix   # macOS
 ```
 
-Prebuilt archives (`darwin|linux|windows × amd64|arm64`) and `SHA256SUMS` are on
-every [GitHub release](https://github.com/esengine/DeepSeek-Reasonix/releases).
+The 1.x desktop app is on the
+[official download page](https://reasonix.io/?download=desktop#start). Windows
+installers are code-signed through [SignPath.io](https://signpath.io/) with a
+free certificate provided by the [SignPath Foundation](https://signpath.org/).
 
-### Path B: Desktop app
+### VS Code extension
 
-Use the [official download page](https://reasonix.io/?download=desktop#start)
-for the latest desktop build.
-
-| Platform | Package | Architecture |
-| --- | --- | --- |
-| macOS | Universal `.dmg` or `.zip` | Apple Silicon / Intel |
-| Windows | Installer `.exe` or portable `.zip` | x64 / ARM64 |
-| Linux | `.deb` or `.tar.gz` | x64 |
-
-Windows installers are code-signed through [SignPath.io](https://signpath.io/)
-with a free certificate provided by the [SignPath Foundation](https://signpath.org/).
-
-### Path C: VS Code extension
-
-Complete Path A first. The extension does not bundle the CLI; it starts your
-local `reasonix acp` backend and adds native chat, editor context, tool-call
-approvals, model selection, and workspace sessions.
+The extension does not bundle the CLI; it starts your local `reasonix acp`
+backend and adds native chat, editor context, tool-call approvals, model
+selection, and workspace sessions. Install the 1.x CLI first.
 
 - **VS Code:** [install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SivanLiu.reasonix-agent)
 - **VSCodium / Eclipse Theia:** [install from Open VSX Registry](https://open-vsx.org/extension/SivanLiu/reasonix-agent)
 - **Extension ID:** `SivanLiu.reasonix-agent` · [source and usage guide](https://github.com/SivanCola/reasonix-vscode)
 
-### Path D: Build from source
+### Build from source
 
-Clone the repository first:
+Clone the repository; `studio` builds 2.x and `main-v2` builds 1.x:
 
 ```sh
 git clone https://github.com/esengine/DeepSeek-Reasonix.git
 cd DeepSeek-Reasonix
+git switch studio
 ```
 
 #### CLI
@@ -146,9 +173,12 @@ webview dependencies and Linux build tags.
 
 ## Quick start
 
-### CLI / TUI
+### Reasonix Studio
 
-These commands are for the CLI/TUI installed through Path A:
+Install and launch Studio, then connect a provider and model in the app. No CLI
+setup is needed.
+
+### CLI / TUI
 
 ```sh
 reasonix setup                      # configure a provider and model
@@ -158,13 +188,6 @@ reasonix run "implement the TODOs in main.go"
 
 In an interactive session, run `/init` when you want Reasonix to create project
 instructions.
-
-### Desktop app
-
-Download the installer for your platform from the
-[official download page](https://reasonix.io/?download=desktop#start), install
-and launch Reasonix, then configure a provider and model in the app. The CLI
-commands above are not required for the desktop app.
 
 For advanced CLI usage and configuration, see the **[CLI reference](./docs/CLI.md)**,
 **[Guide](./docs/GUIDE.md)**, and

@@ -1,3 +1,9 @@
+<!--
+Target branch: 2.x features and fixes go to `studio`. 1.x takes bug fixes,
+provider/API compatibility, release/updater, security and platform stability
+only, on `main-v2`.
+-->
+
 ## Summary
 
 -

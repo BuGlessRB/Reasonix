@@ -7,23 +7,25 @@ body:
     attributes:
       value: |
         Thanks for filing a bug. Pick which version line you're on below — it gets
-        labeled (`v1`/`v2`) automatically, no maintainer action needed.
+        labeled automatically, no maintainer action needed. Not sure which line
+        you run? See the [version roadmap](https://github.com/esengine/DeepSeek-Reasonix/discussions/10748).
   - type: dropdown
     id: version-line
     attributes:
       label: Version line
       description: Which line are you running?
       options:
-        - "v2 — Go rewrite (1.x), main-v2 (active development)"
-        - "v1 — Legacy TypeScript (0.x), maintenance only"
+        - "2.x — Reasonix Studio, studio branch (active development)"
+        - "1.x — main-v2 branch (maintenance / stable)"
+        - "0.x — legacy TypeScript (maintenance only)"
     validations:
       required: true
   - type: input
     id: version
     attributes:
       label: Exact version
-      description: Output of `reasonix --version`.
-      placeholder: e.g. 1.0.0
+      description: Output of `reasonix --version`, or the version shown in Studio's settings.
+      placeholder: e.g. 2.20.0 or 1.39.0
     validations:
       required: true
   - type: textarea

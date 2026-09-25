@@ -1,5 +1,6 @@
 version: 2
 updates:
+  # 2.x (studio): the development line.
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -21,7 +22,7 @@ updates:
         update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
-    directory: "/desktop/frontend"
+    directory: "/desktop/frontend-next"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -31,7 +32,7 @@ updates:
         update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
-    directory: "/site"
+    directory: "/desktop/electron"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -47,3 +48,61 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # 1.x (main-v2): maintenance. Dependabot reads this file from the default
+  # branch only, so the 1.x line is named here; it takes patch updates alone.
+  - package-ecosystem: "gomod"
+    directory: "/"
+    target-branch: "main-v2"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      go-1x:
+        patterns: ["*"]
+        update-types: ["patch"]
+
+  - package-ecosystem: "gomod"
+    directory: "/desktop"
+    target-branch: "main-v2"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      go-1x:
+        patterns: ["*"]
+        update-types: ["patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/desktop/frontend"
+    target-branch: "main-v2"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      npm-1x:
+        patterns: ["*"]
+        update-types: ["patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/site"
+    target-branch: "main-v2"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      npm-1x:
+        patterns: ["*"]
+        update-types: ["patch"]

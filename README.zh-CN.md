@@ -21,6 +21,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/esengine/DeepSeek-Reasonix/releases?q=studio-v&expanded=true"><img src="https://img.shields.io/github/v/release/esengine/DeepSeek-Reasonix.svg?filter=studio-v*&include_prereleases&style=flat-square&color=8250df&labelColor=161b22&label=studio%202.x" alt="Reasonix Studio 2.x"/></a>
   <a href="https://www.npmjs.com/package/reasonix"><img src="https://img.shields.io/npm/v/reasonix.svg?style=flat-square&color=cb3837&labelColor=161b22&logo=npm&logoColor=white" alt="npm version"/></a>
   <a href="https://github.com/esengine/DeepSeek-Reasonix/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/esengine/DeepSeek-Reasonix/ci.yml?style=flat-square&label=ci&labelColor=161b22&logo=githubactions&logoColor=white" alt="CI"/></a>
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/reasonix.svg?style=flat-square&color=8b949e&labelColor=161b22" alt="license"/></a>
@@ -52,6 +53,21 @@
 > [!IMPORTANT]
 > **加入社区 · Community** — 双语 Discord，提供安装答疑（`#help` / `#求助`）、工作流展示与功能想法。→ **<https://discord.gg/XF78rEME2D>**
 
+## 版本
+
+Reasonix 分为两条版本线，调整的原因见[版本路线公告](https://github.com/esengine/DeepSeek-Reasonix/discussions/10748)。
+
+| 版本线 | 分支 | 状态 | 获取方式 |
+| --- | --- | --- | --- |
+| **Reasonix 2.x** | `studio`（当前分支） | 活跃开发，预发布 | [Studio 发布页](https://github.com/esengine/DeepSeek-Reasonix/releases?q=studio-v&expanded=true) |
+| **Reasonix 1.x** | [`main-v2`](https://github.com/esengine/DeepSeek-Reasonix/tree/main-v2) | 维护 / 稳定 | `npm i -g reasonix` · [桌面端下载](https://reasonix.io/?download=desktop#start) |
+
+- **想要稳定**：继续使用 1.x。它会持续收到 Bug 修复、Provider / API 兼容、
+  更新器和安全修复，但不再扩展核心架构。
+- **想体验新架构**：使用 2.x Reasonix Studio。它仍在快速迭代，欢迎反馈问题。
+
+1.x 中有价值的修复、测试和行为会逐项 review，适合新架构的会迁移或重新实现到 2.x。
+
 ## 特性
 
 - **配置驱动**：provider、agent、启用的工具、插件全部在 `reasonix.toml` 中声明，
@@ -67,57 +83,84 @@
 
 ## 安装
 
-选择适合你的使用路径。CLI/TUI、桌面端和 VS Code 扩展都使用同一套本地
-Reasonix 引擎。
+当前分支是 **Reasonix 2.x**，桌面端是 Reasonix Studio；CLI、Studio 和编辑器集成
+都运行同一套本地 Reasonix 引擎。
 
-### 路径 A：CLI / TUI
+### Reasonix Studio（2.x）
 
-任意支持的平台都可以通过 npm 安装原生二进制；macOS 也可以使用 Homebrew：
+从最新的 [Studio 发布](https://github.com/esengine/DeepSeek-Reasonix/releases?q=studio-v&expanded=true)
+下载对应平台的安装包（标签为 `studio-v2.*`，2.x 活跃开发期间以预发布形式发布）：
+
+| 平台 | 安装包 | 架构 |
+| --- | --- | --- |
+| macOS | `.dmg` 或 `.zip` | Apple Silicon（`arm64`）/ Intel（`amd64`） |
+| Windows | 安装器 `-installer.exe` 或便携 `.zip` | x64 |
+| Linux | `.deb` | x64 |
+
+每个安装包都附带 `.minisig` 签名，发布页另有 `SHA256SUMS`。安装后 Studio 会在
+应用内自行更新。
+
+同一个发布页也提供 2.x 的 `reasonix` CLI 归档（`darwin|linux|windows × amd64|arm64`）。
+
+### Reasonix 1.x（稳定版）
+
+1.x CLI 在任意支持的平台上都可以通过 npm 安装，macOS 也可以使用 Homebrew：
 
 ```sh
 npm i -g reasonix                  # 任意系统;自动拉取对应平台的原生二进制
 brew install esengine/reasonix/reasonix   # macOS
 ```
 
-预编译归档(`darwin|linux|windows × amd64|arm64`)和 `SHA256SUMS` 见每个
-[GitHub release](https://github.com/esengine/DeepSeek-Reasonix/releases)。
-
-### 路径 B：桌面端
-
-前往[官方下载页](https://reasonix.io/?download=desktop#start)获取最新桌面版本。
-
-| 平台 | 安装包 | 架构 |
-| --- | --- | --- |
-| macOS | 通用 `.dmg` 或 `.zip` | Apple Silicon / Intel |
-| Windows | 安装器 `.exe` 或便携 `.zip` | x64 / ARM64 |
-| Linux | `.deb` 或 `.tar.gz` | x64 |
-
+1.x 桌面端请前往[官方下载页](https://reasonix.io/?download=desktop#start)。
 Windows 安装器通过 [SignPath.io](https://signpath.io/) 完成代码签名，证书由
 [SignPath 基金会](https://signpath.org/) 免费提供。
 
-### 路径 C：VS Code 扩展
+### VS Code 扩展
 
-请先完成路径 A。扩展不内置 CLI，而是启动本机的 `reasonix acp` 后端，
-并提供原生聊天、编辑器上下文、工具调用审批、模型选择和工作区会话。
+扩展不内置 CLI，而是启动本机的 `reasonix acp` 后端，并提供原生聊天、编辑器
+上下文、工具调用审批、模型选择和工作区会话。请先安装 1.x CLI。
 
 - **VS Code：** [从 Visual Studio Marketplace 安装](https://marketplace.visualstudio.com/items?itemName=SivanLiu.reasonix-agent)
 - **VSCodium / Eclipse Theia：** [从 Open VSX Registry 安装](https://open-vsx.org/extension/SivanLiu/reasonix-agent)
 - **扩展 ID：** `SivanLiu.reasonix-agent` · [源码与使用说明](https://github.com/SivanCola/reasonix-vscode)
 
-### 路径 D：从源码构建
+### 从源码构建
+
+克隆仓库；`studio` 构建 2.x，`main-v2` 构建 1.x：
 
 ```sh
 git clone https://github.com/esengine/DeepSeek-Reasonix.git
 cd DeepSeek-Reasonix
+git switch studio
+```
+
+#### CLI
+
+CLI 构建需要 **Go 1.25+**。模块固定了 `toolchain`，保持 `GOTOOLCHAIN=auto`
+即可让 Go 自动下载对应工具链，也可以手动安装。
+
+```sh
 make build      # -> bin/reasonix(.exe)
 make cross      # -> dist/（darwin|linux|windows × amd64|arm64）
 ```
 
+#### Studio
+
+Studio 的前端还需要 **Node 24+ 与 pnpm 10**（`npm install -g pnpm@10`）。
+
+```sh
+make studio
+```
+
+各平台的 webview 依赖和 Linux 构建标签见 [Studio 构建指南](desktop/README.md#prerequisites)。
+
 ## 快速开始
 
-### CLI / TUI
+### Reasonix Studio
 
-以下命令仅适用于通过路径 A 安装的 CLI/TUI：
+安装并启动 Studio，然后在应用内连接 provider 和模型即可使用，无需配置 CLI。
+
+### CLI / TUI
 
 ```sh
 reasonix setup                      # 配置 provider 和模型
@@ -126,12 +169,6 @@ reasonix run "把 main.go 里的 TODO 实现掉"
 ```
 
 需要项目指令时，可在交互式会话中运行 `/init`。
-
-### 桌面端
-
-从[官方下载页](https://reasonix.io/?download=desktop#start)下载对应系统的安装包，
-安装并启动 Reasonix，然后在应用内配置 provider 和模型即可使用。桌面端无需执行
-上面的 CLI 命令。
 
 CLI 进阶用法和详细配置见 **[CLI 命令参考](./docs/CLI.zh-CN.md)**、
 **[指南](./docs/GUIDE.zh-CN.md)** 和
