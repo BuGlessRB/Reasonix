@@ -59,6 +59,9 @@ type treeSession struct {
 	// keeps conflicting writes one file per turn, all under the one title, and
 	// unfolded that is a sidebar of rows the user never made.
 	Copies []treeSession `json:"copies,omitempty"`
+	// Versions are this conversation as it stood before each rewind cut it,
+	// newest first. Each is a whole conversation and opens like one.
+	Versions []treeSession `json:"versions,omitempty"`
 }
 
 func (h *Hub) registerTreeRoutes(mux *http.ServeMux) {
@@ -153,7 +156,24 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 			Path: si.Path, Name: name, Title: title, Turns: si.Turns, RuntimeID: runtimeID, Archived: si.Archived,
 		})
 	}
+	attachVersions(dir, out)
 	return append(h.unlistedOpenSessions(root, out), out...)
+}
+
+// attachVersions hangs each conversation's earlier versions under its row. It
+// runs after the rows exist because a version can be newer than its parent.
+func attachVersions(dir string, rows []treeSession) {
+	byParent, err := sessionstore.ListSessionVersions(dir)
+	if err != nil || len(byParent) == 0 {
+		return
+	}
+	for i := range rows {
+		for _, v := range byParent[sessionstore.BranchID(rows[i].Path)] {
+			rows[i].Versions = append(rows[i].Versions, treeSession{
+				Path: v.Path, Name: strings.TrimSuffix(filepath.Base(v.Path), ".jsonl"), Title: previewTitle(v.Preview), Turns: v.Turns,
+			})
+		}
+	}
 }
 
 // unlistedOpenSessions are the conversations a pane in root holds that the

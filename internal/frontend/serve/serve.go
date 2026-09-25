@@ -1166,7 +1166,7 @@ func removeSessionFiles(absDir, abs string) error {
 	}
 	// The marker already hides them all, so stopping at the first refusal would
 	// strand the rest for no gain.
-	held := store.RemoveSessionArtifacts(abs)
+	held := errors.Join(store.RemoveSessionArtifacts(abs), removeSessionVersions(absDir, abs))
 	if err := delegation.DeleteSubagentsByParent(absDir, sessionstore.BranchID(abs)); err != nil {
 		held = errors.Join(held, err)
 	}

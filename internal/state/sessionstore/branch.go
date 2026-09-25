@@ -55,9 +55,12 @@ type BranchMeta struct {
 	// Walking ParentID instead breaks the moment GC reclaims a middle link,
 	// which is exactly what GC does.
 	RecoveryRootID string `json:"recovery_root_id,omitempty"`
-	Revision       int64  `json:"revision,omitempty"`
-	ContentDigest  string `json:"content_digest,omitempty"`
-	WriterID       string `json:"writer_id,omitempty"`
+	// Superseded marks a version of ParentID that a rewind replaced; it stays
+	// out of session lists and is reached through its parent.
+	Superseded    bool   `json:"superseded,omitempty"`
+	Revision      int64  `json:"revision,omitempty"`
+	ContentDigest string `json:"content_digest,omitempty"`
+	WriterID      string `json:"writer_id,omitempty"`
 	// SchemaVersion records the BranchMeta version that last wrote the listing
 	// fields (Turns/Preview) FROM the session's content. It is stamped only by the
 	// writers that actually derive those counts — Controller.snapshot's
@@ -616,6 +619,10 @@ func UpdateSessionMeta(sessionPath, model, preview string, turns int, markActivi
 	}
 	if strings.TrimSpace(model) != "" {
 		m.Model = strings.TrimSpace(model)
+	}
+	// A version someone carried on is a conversation of its own now.
+	if m.Superseded && markActivity && turns > m.Turns {
+		m.Superseded = false
 	}
 	m.Preview = preview
 	m.Turns = turns

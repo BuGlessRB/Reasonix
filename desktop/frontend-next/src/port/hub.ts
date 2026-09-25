@@ -43,6 +43,9 @@ export interface TreeSession {
   // Conflict-recovery copies of this same conversation. A save that keeps
   // conflicting writes one per turn, all under one title.
   copies?: TreeSession[];
+  // This conversation as it stood before each edit, regenerate or rewind cut
+  // it, newest first. Each opens as a whole conversation.
+  versions?: TreeSession[];
 }
 
 export interface TreeWorkspace {

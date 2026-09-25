@@ -1966,6 +1966,9 @@ func ListSessionOrder(dir string) ([]SessionOrderInfo, error) {
 		revision := int64(0)
 		contentDigest := ""
 		if meta, ok, err := LoadBranchMeta(full); err == nil && ok {
+			if meta.Superseded {
+				continue
+			}
 			if !meta.CreatedAt.IsZero() {
 				createdAt = meta.CreatedAt
 			}
@@ -2069,13 +2072,3 @@ func ContinueSessionPath(prevPath, dir, model string) string {
 	return NewSessionPath(dir, model)
 }
 
-// NewSessionPath returns the path to use for a fresh session, namespaced by
-// the model so the filename hints at what the conversation was with. dir is
-// typically config.SessionDir().
-func NewSessionPath(dir, model string) string {
-	safe := strings.NewReplacer("/", "-", "\\", "-", ":", "-", "<", "-", ">", "-", "\"", "-", "|", "-", "?", "-", "*", "-").Replace(model)
-	if safe == "" {
-		safe = "session"
-	}
-	return filepath.Join(dir, fmt.Sprintf("%s-%s.jsonl", time.Now().UTC().Format("20060102-150405.000000000"), safe))
-}

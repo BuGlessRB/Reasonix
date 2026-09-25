@@ -366,7 +366,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         />
                       );
                     }
+                    const versions = session.versions ?? [];
                     const copies = session.copies ?? [];
+                    const kept = [...versions.map((s) => ({ s, version: true })), ...copies.map((s) => ({ s, version: false }))];
                     const open = spread.has(session.path);
                     return (
                       <Fragment key={session.path}>
@@ -426,11 +428,17 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         ) : (
                           <span className="sesstitle" title={rowLabel(session)}><span>{rowLabel(session)}</span></span>
                         )}
-                        {copies.length > 0 && (
+                        {kept.length > 0 && (
                           <button
                             className="sesscopies"
                             aria-expanded={open}
-                            title={t("本次对话被外部程序改写时留下的副本")}
+                            title={
+                              versions.length && copies.length
+                                ? t("早先版本与恢复副本")
+                                : versions.length
+                                  ? t("编辑、重新生成或回退之前的对话版本")
+                                  : t("本次对话被外部程序改写时留下的副本")
+                            }
                             onClick={(ev) => {
                               ev.stopPropagation();
                               setSpread((prev) => {
@@ -441,7 +449,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                               });
                             }}
                           >
-                            {`+${copies.length}`}
+                            {`+${kept.length}`}
                           </button>
                         )}
                         <button
@@ -531,11 +539,11 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         )}
                       </div>
                       {open &&
-                        copies.map((copy) =>
+                        kept.map(({ s: copy, version }) =>
                           confirm === copy.path ? (
                             <Confirm
                               key={copy.path}
-                              what={t("删除这份恢复副本？")}
+                              what={version ? t("删除这个早先版本？") : t("删除这份恢复副本？")}
                               hint={t("连同其记录一并删除")}
                               go={t("删除")}
                               danger
@@ -562,7 +570,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                               }}
                             >
                               <i className="pip" />
-                              <span className="sesstitle"><span>{t("恢复副本")}</span></span>
+                              <span className="sesstitle">
+                                <span>{version ? t("早先版本 · {n} 轮", { n: copy.turns ?? 0 }) : t("恢复副本")}</span>
+                              </span>
                               <button
                                 className="wsdel"
                                 title={t("删除该会话")}

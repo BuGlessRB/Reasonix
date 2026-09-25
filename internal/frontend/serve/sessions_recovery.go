@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"path/filepath"
 	"reasonix/internal/state/sessionstore"
@@ -86,4 +87,14 @@ func (s *Server) sweepRecoveryBranches(grace time.Duration) int {
 		slog.Info("serve: moved redundant recovery branches to the session trash", "count", swept)
 	}
 	return swept
+}
+
+// removeSessionVersions removes the earlier versions of the session at abs: a
+// version nobody lists must not outlive its conversation.
+func removeSessionVersions(absDir, abs string) error {
+	var errs error
+	for _, version := range sessionstore.SessionVersionPaths(abs) {
+		errs = errors.Join(errs, removeSessionFiles(absDir, version))
+	}
+	return errs
 }

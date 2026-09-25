@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/state/checkpoint"
+	"reasonix/internal/state/sessionstore"
 )
 
 // ErrRewindCoverageConfirmationRequired is returned by the compatibility
@@ -48,6 +49,7 @@ func (a conversationApplier) ApplyConversationTruncate(boundary int, forward []b
 			return err
 		}
 	}
+	c.keepSupersededVersion(msgs, boundary)
 	s.Rewrite(msgs[:boundary], "rewind_truncate")
 	// Ask whether the projection still covers what is left rather than assuming
 	// it cannot: a truncation inside the live tail leaves the folded prefix
@@ -73,6 +75,11 @@ func (a conversationApplier) RestoreConversation(forward []byte) error {
 	c.executor.RevalidateProjection()
 	if err := c.SnapshotRewrite(); err != nil {
 		return fmt.Errorf("restore conversation: %w", err)
+	}
+	if path := c.SessionPath(); path != "" {
+		if err := sessionstore.DropVersionMatching(path, msgs); err != nil {
+			slog.Warn("rewind: drop the version the restore made redundant", "path", path, "err", err)
+		}
 	}
 	return nil
 }
