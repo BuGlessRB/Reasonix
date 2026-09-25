@@ -76,10 +76,12 @@ type Spec struct {
 }
 
 // EgressRoute is the host proxy a confined command's external traffic goes
-// through. A command presents its token so refusals are charged to it.
+// through. A command presents its token so refusals are charged to it; Ask
+// lets a host outside the list be put to a person, and Refusals ends the token.
 type EgressRoute interface {
 	Port() int
 	Env(token string) []string
+	Ask(token string, ask func(host string) (bool, error))
 	Refusals(token string) []string
 }
 

@@ -55,7 +55,34 @@ type Proxy struct {
 
 	mu      sync.Mutex
 	denials map[string][]Denial
+	askers  map[string]*asker
 	tunnels map[net.Conn]struct{}
+}
+
+// asker puts one command's out-of-list hosts to a person, one question at a
+// time, and remembers each answer for the rest of that command.
+type asker struct {
+	mu      sync.Mutex
+	ask     func(host string) (bool, error)
+	answers map[string]Reason
+}
+
+func (a *asker) decide(host string) Reason {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if r, ok := a.answers[host]; ok {
+		return r
+	}
+	allowed, err := a.ask(host)
+	r := Reason("")
+	switch {
+	case err != nil:
+		r = ReasonNotAllowed
+	case !allowed:
+		r = ReasonDeclined
+	}
+	a.answers[host] = r
+	return r
 }
 
 // Start listens on an ephemeral loopback port and serves until Close.
@@ -81,6 +108,7 @@ func newProxy(policy Policy, opts Options, ln net.Listener) *Proxy {
 		dial:    d.DialContext,
 		local:   interfaceAddresses,
 		denials: map[string][]Denial{},
+		askers:  map[string]*asker{},
 		tunnels: map[net.Conn]struct{}{},
 	}
 	p.srv = &http.Server{Handler: p, ReadHeaderTimeout: dialTimeout}
@@ -135,13 +163,41 @@ func (p *Proxy) Env(token string) []string {
 	return out
 }
 
-// TakeDenials returns what was refused under token since the last call.
+// Ask lets a host outside the allow list be put to a person for the command
+// holding token, instead of refused outright. Denied hosts are never asked.
+func (p *Proxy) Ask(token string, ask func(host string) (bool, error)) {
+	if token == "" || ask == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.askers[token] = &asker{ask: ask, answers: map[string]Reason{}}
+}
+
+// TakeDenials returns what was refused under token and ends the token.
 func (p *Proxy) TakeDenials(token string) []Denial {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	d := p.denials[token]
 	delete(p.denials, token)
+	delete(p.askers, token)
 	return d
+}
+
+// decide applies the policy, putting a host outside the list to the command's
+// asker when it has one.
+func (p *Proxy) decide(token, host string) Reason {
+	reason := p.policy.Decide(host)
+	if reason != ReasonNotAllowed {
+		return reason
+	}
+	p.mu.Lock()
+	a := p.askers[token]
+	p.mu.Unlock()
+	if a == nil {
+		return reason
+	}
+	return a.decide(normalizeHost(host))
 }
 
 // Refusals renders TakeDenials for the sandbox's EgressRoute.
@@ -184,8 +240,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // admit decides host:port and returns where to dial. Through an upstream the
 // name is passed on, since the upstream resolves it; the local lookup still
 // refuses a name this host sees resolving only to forbidden addresses.
-func (p *Proxy) admit(ctx context.Context, host, port string, upstream *url.URL) (string, Reason, error) {
-	if reason := p.policy.Decide(host); reason != "" {
+func (p *Proxy) admit(ctx context.Context, token, host, port string, upstream *url.URL) (string, Reason, error) {
+	if reason := p.decide(token, host); reason != "" {
 		return "", reason, nil
 	}
 	if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil {
@@ -271,7 +327,7 @@ func (p *Proxy) serveConnect(w http.ResponseWriter, r *http.Request, token strin
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	addr, reason, err := p.admit(r.Context(), host, port, up)
+	addr, reason, err := p.admit(r.Context(), token, host, port, up)
 	switch {
 	case reason != "":
 		p.refuse(w, token, host, reason)
@@ -378,7 +434,7 @@ func (p *Proxy) serveForward(w http.ResponseWriter, r *http.Request, token strin
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	addr, reason, err := p.admit(r.Context(), host, port, up)
+	addr, reason, err := p.admit(r.Context(), token, host, port, up)
 	switch {
 	case reason != "":
 		p.refuse(w, token, host, reason)

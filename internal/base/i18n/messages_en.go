@@ -143,6 +143,7 @@ var English = Messages{
 	SandboxEscapeWrapReason:         "Windows does not provide an OS-level Bash sandbox for this command. Run it unconfined one time? This bypasses OS isolation for this command only.",
 	SandboxEscapeRuntimeReason:      "The OS sandbox could not start this command. Run it unconfined one time? This bypasses OS isolation for this command only.",
 	SandboxEscapeDeclined:           "the user declined to run this command without the OS sandbox - do not retry it unconfined; ask how they would like to proceed.",
+	EgressApprovalReasonFmt:         "A bash command wants to reach %s, which is not in [sandbox] allowed_domains. Allow it?",
 	ApprovalToolLabelConfigWrite:    "Reasonix config write",
 	ConfigWriteSubjectPrefix:        "write Reasonix config: ",
 	ConfigWriteReason:               "This write targets a Reasonix-managed configuration file outside the workspace. It can change providers, sandbox rules, permissions, and MCP servers for future sessions, so it needs your explicit approval.",

@@ -625,6 +625,10 @@ const (
 // to rerun a shell command without the OS sandbox after the sandbox failed.
 const SandboxEscapeApprovalTool = "sandbox_escape"
 
+// NetworkEgressApprovalTool is the internal Tool name used to ask whether bash
+// may reach a host outside [sandbox] allowed_domains; the subject is the host.
+const NetworkEgressApprovalTool = permission.NetworkEgress
+
 // ManagedConfigWriteApprovalTool is the internal Tool name used for per-write
 // approval when a file tool targets a Reasonix-managed config file outside the
 // workspace write roots. It is a fresh human decision: config files control

@@ -424,7 +424,7 @@ func (b bash) prepareLaunch(ctx context.Context, sh sandbox.Shell, p bashParams,
 		prepared.LinuxSandboxed = false
 		prepared.EnvOverrides = sandbox.SessionTempEnv(sessionDir, false)
 	}
-	b.routeEgress(&prepared)
+	b.routeEgress(ctx, &prepared)
 	return prepared, probe, lease, nil
 }
 

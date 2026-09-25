@@ -122,6 +122,18 @@ func TestSessionGrantForAnInstallPlanNamesTheTicket(t *testing.T) {
 // and nothing re-states them, so a tool cannot arrive with one and not the
 // others — what can still go wrong is an entry whose question is never true,
 // which would sit in the table looking like protection while granting none.
+// A session grant for one host must not answer for another, or approving a
+// harmless host first would open every host after it.
+func TestSessionGrantForEgressNamesTheHost(t *testing.T) {
+	rule := SessionGrantRuleForScope(NetworkEgress, "pypi.org")
+	if !SessionGrantMatches(rule, NetworkEgress, "pypi.org") {
+		t.Errorf("rule %q does not cover the host it was granted for", rule)
+	}
+	if SessionGrantMatches(rule, NetworkEgress, "evil.example") {
+		t.Errorf("rule %q covers another host", rule)
+	}
+}
+
 func TestEverySubjectSensitiveToolActuallyAsksSomething(t *testing.T) {
 	if len(subjectSensitiveTools) == 0 {
 		t.Fatal("the table is empty; every consequence below would pass by examining nothing")
@@ -131,6 +143,7 @@ func TestEverySubjectSensitiveToolActuallyAsksSomething(t *testing.T) {
 	probes := map[string][]string{
 		ExtendWritePaths:  {"/ws/any/path"},
 		installSourceTool: {selfExtendHumanRisk + "sha256:abc"},
+		NetworkEgress:     {"pypi.org"},
 	}
 	for tool := range subjectSensitiveTools {
 		subjects, ok := probes[tool]

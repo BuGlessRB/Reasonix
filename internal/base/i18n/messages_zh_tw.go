@@ -140,6 +140,7 @@ var ChineseTraditional = Messages{
 	SandboxEscapeWrapReason:         "Windows 不提供這條命令所需的 OS 級 Bash 沙箱。是否僅本次不受限執行？這只會對此命令繞過 OS 隔離。",
 	SandboxEscapeRuntimeReason:      "OS 沙箱無法啟動這條命令。是否僅本次不受限執行？這只會對此命令繞過 OS 隔離。",
 	SandboxEscapeDeclined:           "使用者拒絕在沒有 OS 沙箱的情況下執行這條命令；不要不進沙箱重試，請詢問使用者希望如何繼續。",
+	EgressApprovalReasonFmt:         "一條 bash 命令要存取 %s，它不在 [sandbox] allowed_domains 中。是否允許？",
 	ApprovalToolLabelConfigWrite:    "Reasonix 設定寫入核准",
 	ConfigWriteSubjectPrefix:        "寫入 Reasonix 設定：",
 	ConfigWriteReason:               "這次寫入的目標是工作區之外的 Reasonix 託管設定檔。它可以改變後續工作階段的模型供應商、沙箱規則、權限和 MCP 伺服器，因此需要你的明確核准。",

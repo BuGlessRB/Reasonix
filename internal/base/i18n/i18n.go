@@ -161,6 +161,7 @@ type Messages struct {
 	SandboxEscapeWrapReason         string // reason when no OS sandbox can wrap the command
 	SandboxEscapeRuntimeReason      string // fallback reason when an OS sandbox cannot start the command
 	SandboxEscapeDeclined           string // model-facing denial when the user declines a one-shot unconfined retry
+	EgressApprovalReasonFmt         string // reason for a host outside allowed_domains, %s = host
 	ApprovalToolLabelConfigWrite    string // user-facing label for Reasonix-managed config write approvals
 	ConfigWriteSubjectPrefix        string // subject prefix before the config file path for managed config write approval
 	ConfigWriteReason               string // reason shown for managed config write approval

@@ -12,6 +12,10 @@ import (
 // moves, not whether one write happens.
 const ExtendWritePaths = "extend_write_paths"
 
+// NetworkEgress asks whether bash may reach a host outside [sandbox]
+// allowed_domains; the subject is the host.
+const NetworkEgress = "network_egress"
+
 // subjectSensitiveTools maps each tool whose authorization reads its subject to
 // the question it asks of that subject. Membership is one declaration carrying
 // three consequences, so none can arrive without the others: the decision
@@ -19,6 +23,7 @@ const ExtendWritePaths = "extend_write_paths"
 // rather than answering for them, and a grant must name the subject it covers.
 var subjectSensitiveTools = map[string]func(subject string) bool{
 	ExtendWritePaths:  func(string) bool { return true },
+	NetworkEgress:     func(string) bool { return true },
 	installSourceTool: func(s string) bool { return strings.HasPrefix(s, selfExtendHumanRisk) },
 }
 

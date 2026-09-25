@@ -27,6 +27,12 @@ type EscapeSessionChecker interface {
 	SandboxEscapeSessionAllowed(ctx context.Context, req EscapeRequest) bool
 }
 
+// EgressApprover asks whether a confined command may reach a host outside the
+// egress allow list. The escape approver carries it when the frontend can ask.
+type EgressApprover interface {
+	ApproveEgress(ctx context.Context, host string) (bool, error)
+}
+
 type escapeApproverContextKey struct{}
 
 // WithEscapeApprover stamps an interactive sandbox-escape approver onto a tool

@@ -17,6 +17,9 @@ const (
 	// ReasonAddress is an allowed name that resolves only to loopback,
 	// link-local, metadata or this host's own addresses.
 	ReasonAddress Reason = "blocked-by-address"
+	// ReasonDeclined is a host outside the list a person was asked about and
+	// refused.
+	ReasonDeclined Reason = "declined-by-user"
 )
 
 // Policy is the domain list. A pattern is an exact host name, or "*.name" for

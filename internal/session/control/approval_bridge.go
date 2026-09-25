@@ -201,6 +201,21 @@ func (s sandboxEscapeApprover) SandboxEscapeSessionAllowed(_ context.Context, re
 	return s.c.approval.preApprovedForDecision(SandboxEscapeApprovalTool, sandboxEscapeApprovalSubject(req.Command), nil, true)
 }
 
+// ApproveEgress asks whether bash may reach a host the allow list does not
+// name. The user configured that list, so no approval mode answers for them;
+// only a person, once or for the rest of the session, widens it.
+func (s sandboxEscapeApprover) ApproveEgress(ctx context.Context, host string) (bool, error) {
+	reply, err := s.c.requestApprovalDecision(ctx, approvalRequest{tool: NetworkEgressApprovalTool, subject: host,
+		reason: fmt.Sprintf(i18n.M.EgressApprovalReasonFmt, host), fresh: true})
+	if err != nil || !reply.allow {
+		return false, err
+	}
+	if reply.session {
+		s.c.approval.grantSession(NetworkEgressApprovalTool, host)
+	}
+	return true, nil
+}
+
 func sandboxEscapeApprovalSubject(command string) string {
 	subject := strings.TrimSpace(command)
 	if subject == "" {

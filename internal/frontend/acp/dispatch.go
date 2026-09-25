@@ -564,13 +564,16 @@ func approvalSessionOptionName(tool, subject string) string {
 	if tool == control.SandboxEscapeApprovalTool {
 		return "Use real environment for this session"
 	}
+	if tool == control.NetworkEgressApprovalTool {
+		return "Allow " + subject + " for this session"
+	}
 	sessionRule := permission.SessionGrantRuleForScope(tool, subject)
 	return "Allow " + sessionRule + " for this session"
 }
 
 func approvalOptions(tool, subject string, fresh bool) []PermissionOption {
 	if fresh || control.RequiresFreshHumanApprovalTool(tool) {
-		if tool == control.SandboxEscapeApprovalTool {
+		if tool == control.SandboxEscapeApprovalTool || tool == control.NetworkEgressApprovalTool {
 			return []PermissionOption{
 				{OptionID: string(OptAllowOnce), Name: "Allow", Kind: OptAllowOnce},
 				{OptionID: string(OptAllowAlways), Name: approvalSessionOptionName(tool, subject), Kind: OptAllowAlways},

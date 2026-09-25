@@ -383,3 +383,55 @@ func TestParseScutilProxies(t *testing.T) {
 		t.Fatalf("scutil proxies = %v", got)
 	}
 }
+
+// A host outside the list is put to the command's asker once, however many
+// connections ask for it; denied hosts and other commands are never asked.
+func TestAskPutsUnlistedHostsToAPerson(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer backend.Close()
+	names := map[string]string{"asked.test": "93.184.216.34", "refused.test": "93.184.216.35", "broken.test": "93.184.216.36", "gist.test": "93.184.216.37"}
+	h := newHarness(t, Policy{Allow: []string{"allowed.test"}, Deny: []string{"gist.test"}}, Options{}, names, backend.Listener.Addr().String())
+	var mu sync.Mutex
+	var asked []string
+	h.proxy.Ask("cmd1", func(host string) (bool, error) {
+		mu.Lock()
+		asked = append(asked, host)
+		mu.Unlock()
+		switch host {
+		case "asked.test":
+			return true, nil
+		case "broken.test":
+			return false, errors.New("nobody is there")
+		}
+		return false, nil
+	})
+	c := h.client("cmd1")
+	var wg sync.WaitGroup
+	for range 3 {
+		wg.Go(func() {
+			if resp, _ := get(t, c, "http://asked.test/"); resp.StatusCode != http.StatusOK {
+				t.Errorf("approved host = %d", resp.StatusCode)
+			}
+		})
+	}
+	wg.Wait()
+	for host, want := range map[string]Reason{"refused.test": ReasonDeclined, "broken.test": ReasonNotAllowed, "gist.test": ReasonDenied} {
+		if resp, _ := get(t, c, "http://"+host+"/"); resp.Header.Get("X-Proxy-Error") != string(want) {
+			t.Errorf("%s = %q, want %q", host, resp.Header.Get("X-Proxy-Error"), want)
+		}
+	}
+	if resp, _ := get(t, h.client("cmd2"), "http://asked.test/"); resp.Header.Get("X-Proxy-Error") != string(ReasonNotAllowed) {
+		t.Errorf("another command rode cmd1's answer: %q", resp.Header.Get("X-Proxy-Error"))
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if !slices.Equal(asked, []string{"asked.test", "refused.test", "broken.test"}) {
+		t.Fatalf("asked %v, want each unlisted host once and no denied host", asked)
+	}
+	h.proxy.TakeDenials("cmd1")
+	if resp, _ := get(t, c, "http://asked.test/"); resp.Header.Get("X-Proxy-Error") != string(ReasonNotAllowed) {
+		t.Fatalf("an ended token kept its asker: %q", resp.Header.Get("X-Proxy-Error"))
+	}
+}

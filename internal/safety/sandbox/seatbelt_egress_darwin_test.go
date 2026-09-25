@@ -139,6 +139,7 @@ func TestEgressRulesOnlyWhenNetworkIsOn(t *testing.T) {
 
 type fixedRoute int
 
-func (r fixedRoute) Port() int              { return int(r) }
-func (fixedRoute) Env(string) []string      { return nil }
-func (fixedRoute) Refusals(string) []string { return nil }
+func (r fixedRoute) Port() int                            { return int(r) }
+func (fixedRoute) Env(string) []string                    { return nil }
+func (fixedRoute) Ask(string, func(string) (bool, error)) {}
+func (fixedRoute) Refusals(string) []string               { return nil }
