@@ -118,10 +118,6 @@ func TestSessionGrantForAnInstallPlanNamesTheTicket(t *testing.T) {
 	}
 }
 
-// The guard over the single declaration. Membership carries three consequences
-// and nothing re-states them, so a tool cannot arrive with one and not the
-// others — what can still go wrong is an entry whose question is never true,
-// which would sit in the table looking like protection while granting none.
 // A session grant for one host must not answer for another, or approving a
 // harmless host first would open every host after it.
 func TestSessionGrantForEgressNamesTheHost(t *testing.T) {
@@ -134,6 +130,10 @@ func TestSessionGrantForEgressNamesTheHost(t *testing.T) {
 	}
 }
 
+// The guard over the single declaration. Membership carries three consequences
+// and nothing re-states them, so a tool cannot arrive with one and not the
+// others — what can still go wrong is an entry whose question is never true,
+// which would sit in the table looking like protection while granting none.
 func TestEverySubjectSensitiveToolActuallyAsksSomething(t *testing.T) {
 	if len(subjectSensitiveTools) == 0 {
 		t.Fatal("the table is empty; every consequence below would pass by examining nothing")

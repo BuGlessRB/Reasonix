@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -442,6 +443,9 @@ func TestAskPutsUnlistedHostsToAPerson(t *testing.T) {
 // A sandbox in its own network namespace reaches the proxy on its socket, under
 // the same policy and the same per-command accounting.
 func TestListenUnixServesTheSamePolicy(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no sandbox reaches the proxy on a socket here")
+	}
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, "via socket")
 	}))
