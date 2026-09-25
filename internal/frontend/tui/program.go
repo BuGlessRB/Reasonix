@@ -127,7 +127,7 @@ func newModel(ctx context.Context, opts Options) *model {
 		composer: ta, width: 80, height: 24,
 	}
 	if !opts.Inline {
-		m.scr = &screen{follow: true}
+		m.scr = &screen{follow: true, mouseOff: mouseCaptureOffByDefault()}
 	}
 	return m
 }

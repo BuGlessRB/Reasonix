@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -167,6 +168,29 @@ func TestPiecesFitTheRowsAboveTheFrame(t *testing.T) {
 		}
 		if rows > 10 {
 			t.Fatalf("a piece of %d rows over a room of 10:\n%s", rows, p)
+		}
+	}
+}
+
+// Capture starts off over SSH and wherever 1.x's REASONIX_DISABLE_MOUSE says
+// so; 0 captures even over SSH.
+func TestMouseCaptureStartsFromTheEnvironment(t *testing.T) {
+	for _, tc := range []struct {
+		env, ssh string
+		off      bool
+	}{
+		{"", "", false},
+		{"", "host 22 client 1234", true},
+		{"1", "", true},
+		{"0", "host 22 client 1234", false},
+	} {
+		t.Setenv("REASONIX_DISABLE_MOUSE", tc.env)
+		t.Setenv("SSH_CONNECTION", tc.ssh)
+		t.Setenv("SSH_CLIENT", "")
+		t.Setenv("SSH_TTY", "")
+		m := newModel(context.Background(), Options{})
+		if m.scr.mouseOff != tc.off {
+			t.Errorf("REASONIX_DISABLE_MOUSE=%q SSH_CONNECTION=%q: mouseOff = %v, want %v", tc.env, tc.ssh, m.scr.mouseOff, tc.off)
 		}
 	}
 }

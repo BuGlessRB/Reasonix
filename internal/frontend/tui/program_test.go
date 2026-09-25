@@ -62,6 +62,7 @@ func (k *recordingKernel) seen() []string {
 
 func testModel(t *testing.T) (*model, *recordingKernel) {
 	t.Helper()
+	t.Setenv("REASONIX_DISABLE_MOUSE", "0")
 	k := &recordingKernel{}
 	srv := httptest.NewServer(k)
 	t.Cleanup(srv.Close)
