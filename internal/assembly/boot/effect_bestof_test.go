@@ -152,6 +152,15 @@ model = "x"
 	if len(results) != 1 || !strings.Contains(results[0], "Attempt 1 won") {
 		t.Fatalf("tool results = %q", results)
 	}
+	var judged []string
+	for _, req := range rec.requests() {
+		if len(req.Tools) == 0 {
+			judged = append(judged, req.Messages[len(req.Messages)-1].Content)
+		}
+	}
+	if len(judged) != 1 || strings.Count(judged[0], "## Host record\n\nverdict ") != 2 {
+		t.Fatalf("judge input does not carry each attempt's completion summary: %q", judged)
+	}
 	if n := strings.Count(gitInDir(t, dir, "worktree", "list", "--porcelain"), "worktree "); n != 1 {
 		t.Fatalf("%d worktrees left, want only the workspace", n)
 	}

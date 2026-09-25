@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"reasonix/internal/base/testenv"
+	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/platform/gitcmd"
 )
@@ -109,6 +110,42 @@ func TestBestOfAppliesTheJudgesPickAndRemovesEveryWorktree(t *testing.T) {
 	}
 	if len(judge.seen) != 1 || !strings.Contains(judge.seen[0], "+attempt 3") {
 		t.Fatalf("the judge did not see every attempt's diff")
+	}
+}
+
+// The judge and the parent both read each attempt's host record next to its
+// diff: a failed check and a rewritten test are observations, not claims.
+func TestBestOfShowsEachAttemptsHostRecord(t *testing.T) {
+	repo := repoWithFile(t)
+	judge := &judgeStub{reply: `{"winner": 1, "reason": "its checks held"}`}
+	base := writer()
+	runner := func(ctx context.Context, run Run) (Outcome, error) {
+		out, err := base(ctx, run)
+		if run.Index == 2 {
+			out.Host = &event.CompletionSummaryInfo{Verdict: "complete", ChecksPassed: 1, ChecksFailed: 1, CriteriaRewritten: []string{"a_test.go:TestA"}}
+		}
+		return out, err
+	}
+	tl := New(Spec{WorkspaceRoot: repo, ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: runner, Judge: JudgeSpec{Provider: judge}})
+	out, err := tl.Execute(t.Context(), json.RawMessage(`{"prompt":"rewrite a.txt","n":2}`))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(judge.seen) != 1 {
+		t.Fatalf("judge calls = %d", len(judge.seen))
+	}
+	seen := judge.seen[0]
+	for _, want := range []string{
+		"no completion summary",
+		"checks 1 passed, 1 failed, 0 suppressed",
+		"rewrote or removed existing tests: a_test.go:TestA",
+	} {
+		if !strings.Contains(seen, want) {
+			t.Fatalf("judge evidence missing %q:\n%s", want, seen)
+		}
+	}
+	if !strings.Contains(out, "Host: verdict complete; checks 1 passed, 1 failed") {
+		t.Fatalf("report does not carry the host record: %q", out)
 	}
 }
 

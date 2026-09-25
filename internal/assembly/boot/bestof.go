@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -72,8 +73,9 @@ func (b *builder) addBestOf() {
 // candidateRunner runs each attempt as an unattended child kernel.
 func candidateRunner(parent Options, sink event.Sink, approval *candidateApproval) bestof.Runner {
 	return func(ctx context.Context, run bestof.Run) (bestof.Outcome, error) {
-		answer, unverified, err := runUnattended(ctx, parent, candidateUsage{sink}, approval.mode(), run.WorkspaceRoot, run.Prompt, run.Model)
-		return bestof.Outcome{Answer: answer, Unverified: unverified}, err
+		cs := &candidateSink{parent: sink}
+		answer, unverified, err := runUnattended(ctx, parent, cs, approval.mode(), run.WorkspaceRoot, run.Prompt, run.Model)
+		return bestof.Outcome{Answer: answer, Unverified: unverified, Host: cs.summary()}, err
 	}
 }
 
@@ -126,14 +128,34 @@ func finalAnswer(ctrl *control.Controller) string {
 	return ""
 }
 
-// candidateUsage forwards a candidate's billable usage to the parent session
-// under the best-of source and drops everything else it emits.
-type candidateUsage struct{ parent event.Sink }
+// candidateSink forwards a candidate's billable usage to the parent session
+// under the best-of source, keeps the last completion summary its kernel
+// emitted for the judge, and drops everything else.
+type candidateSink struct {
+	parent event.Sink
+	mu     sync.Mutex
+	last   *event.CompletionSummaryInfo
+}
 
-func (s candidateUsage) Emit(e event.Event) {
+func (s *candidateSink) Emit(e event.Event) {
+	if e.Kind == event.CompletionSummary && e.Completion != nil {
+		c := *e.Completion
+		c.GapKinds = slices.Clone(c.GapKinds)
+		c.CriteriaRewritten = slices.Clone(c.CriteriaRewritten)
+		s.mu.Lock()
+		s.last = &c
+		s.mu.Unlock()
+		return
+	}
 	if e.Kind != event.Usage || s.parent == nil {
 		return
 	}
 	e.UsageSource, e.Source = event.UsageSourceBestOf, event.UsageSourceBestOf
 	s.parent.Emit(e)
+}
+
+func (s *candidateSink) summary() *event.CompletionSummaryInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.last
 }

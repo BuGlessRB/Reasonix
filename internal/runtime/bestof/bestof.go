@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/platform/worktree"
 )
@@ -41,9 +42,12 @@ type Run struct {
 
 // Outcome is how an attempt ended. Unverified is the host's reason when the
 // attempt stopped short of its own readiness checks; its work is still judged.
+// Host is the last completion summary the attempt's kernel emitted; nil when
+// the turn changed nothing and flagged nothing.
 type Outcome struct {
 	Answer     string
 	Unverified string
+	Host       *event.CompletionSummaryInfo
 }
 
 // Runner builds an unattended kernel at Run.WorkspaceRoot, runs the prompt to
