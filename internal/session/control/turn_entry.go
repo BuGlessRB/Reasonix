@@ -49,11 +49,17 @@ func (c *Controller) SendWithRaw(input, raw string) {
 // plan as an ordinary answer; approving it exits plan mode and continues into
 // execution, rejecting it leaves the next turn free to revise.
 func (c *Controller) runTurnLoop(ctx context.Context, turn orchestratedTurn) error {
+	if err := c.leaveForeignSession(); err != nil {
+		return err
+	}
 	return newTurnOrchestrator(c).runTurnLoop(ctx, turn)
 }
 
 // runOneTurn runs a single model turn with no Goal loop behind it.
 func (c *Controller) runOneTurn(ctx context.Context, turn orchestratedTurn) error {
+	if err := c.leaveForeignSession(); err != nil {
+		return err
+	}
 	return newTurnOrchestrator(c).runOrchestratedTurn(ctx, turn)
 }
 

@@ -37,4 +37,6 @@ const (
 	NoticeCodePermissionSaved, NoticeCodePermissionCovered, NoticeCodePermissionSaveFailed = "permission_saved", "permission_covered", "permission_save_failed"
 	// An external tool result a screening model judged to address the agent.
 	NoticeCodeSuspectedInjection = "suspected_injection"
+	// A conversation opened from a 1.x log went on in a new session of its own.
+	NoticeCodeSessionContinuedFrom1x = "session_continued_from_1x"
 )

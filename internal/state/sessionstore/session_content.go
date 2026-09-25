@@ -69,7 +69,14 @@ func loadSessionUserMessagesWithLimits(path string, limits sessionReplayLimits) 
 		return nil, err
 	}
 	if probe.futureSchema {
-		return nil, fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", path, probe.schemaVersion, sessionEventSchemaVersion)
+		return nil, fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", path, probe.schemaVersion, sessionDAGSchemaVersion)
+	}
+	if probe.dag {
+		msgs, _, err := loadSessionDAGMessages(path, limits)
+		if err != nil {
+			return nil, err
+		}
+		return userMessagesOf(msgs), nil
 	}
 	if probe.native && probe.size > 0 {
 		replay, err := replaySessionEventLogWithLimits(store.SessionEventLog(path), limits)
@@ -98,6 +105,12 @@ func loadSessionUserMessagesWithLimits(path string, limits sessionReplayLimits) 
 	if err != nil {
 		return nil, err
 	}
+	return userMessagesOf(msgs), nil
+}
+
+// userMessagesOf is the user turns of a transcript that carries no per-turn
+// times beyond the messages' own.
+func userMessagesOf(msgs []provider.Message) []SessionUserMessage {
 	out := make([]SessionUserMessage, 0, len(msgs))
 	for _, m := range msgs {
 		if m.Role != provider.RoleUser {
@@ -109,7 +122,7 @@ func loadSessionUserMessagesWithLimits(path string, limits sessionReplayLimits) 
 		}
 		out = append(out, SessionUserMessage{Text: m.Content, At: at})
 	}
-	return out, nil
+	return out
 }
 
 // SessionContentModTime returns when the session transcript last changed on

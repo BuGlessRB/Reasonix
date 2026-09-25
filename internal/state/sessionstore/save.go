@@ -270,8 +270,8 @@ func (s *Session) saveLocked(path string, mode sessionSaveMode) error {
 	if err != nil {
 		return err
 	}
-	if probe.futureSchema {
-		return fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", path, probe.schemaVersion, sessionEventSchemaVersion)
+	if err := probeRefusesSave(path, probe, digest); err != nil {
+		return err
 	}
 	if probe.native && probe.size > 0 {
 		// Drop any torn tail a crashed or disk-full append left behind before

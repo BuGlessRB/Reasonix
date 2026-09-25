@@ -134,6 +134,10 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 		return false, strategyErr
 	}
 	err, forceRewrite := persistSessionSnapshot(s, path, forceRewrite)
+	var stop bool
+	if path, stop, err = c.settleForeignSave(path, err); stop {
+		return false, err
+	}
 	if authoritySaveError(err) {
 		// Missing/stale authority must not enter diverged/recovery. Frontends
 		// rebind the lease or surface the typed error.

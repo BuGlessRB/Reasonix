@@ -21,7 +21,7 @@ func SessionPreviewFromMessages(msgs []provider.Message) (string, int) {
 	first := ""
 	turns := 0
 	for _, m := range msgs {
-		if m.Role == provider.RoleUser && IsUserAuthoredTurn(UserMessageText(m)) {
+		if m.Role == provider.RoleUser && !m.HostAuthored && IsUserAuthoredTurn(UserMessageText(m)) {
 			turns++
 			if first == "" {
 				first = TruncatePreview(PreviewProse(UserMessageText(m)))
