@@ -340,10 +340,12 @@ func ThemeFg(c Color, s string) string {
 	return sgr(fgSGR(c), s)
 }
 
-// ThemeBg paints s on c. A reset inside s ends the background with it, so s is
-// plain text.
-func ThemeBg(c Color, s string) string {
-	return sgr(bgSGR(c), s)
+// NewColor is a color outside the palette, with its 256-color fallback.
+func NewColor(hex string, xterm int) Color { return Color{hex, xterm} }
+
+// Badge is s in bold on a solid background, padded one cell each side.
+func Badge(bg, fg Color, s string) string {
+	return sgr(bgSGR(bg)+fgSGR(fg)+ansiBold, " "+s+" ")
 }
 
 // ThemeLipColor pre-resolves the fallback rather than handing lipgloss a 24-bit

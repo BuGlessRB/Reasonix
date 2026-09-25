@@ -19,6 +19,8 @@ const (
 	ItemNotice
 	ItemCompaction
 	ItemReceipt
+	// ItemUsage is what one model request cost.
+	ItemUsage
 )
 
 // Item is one row of the transcript. Which fields are set follows Kind.
@@ -61,6 +63,7 @@ type Item struct {
 
 	Compaction *eventwire.Compaction
 	Receipt    *eventwire.CompletionReceipt
+	Usage      *eventwire.Usage
 }
 
 // Terminal is how the last turn ended.
@@ -84,6 +87,10 @@ type Transcript struct {
 	// EndReason is the kernel's account of a turn that did not complete.
 	EndReason string
 	Usage     *eventwire.Usage
+	// Phase is the kernel's name for what the running turn is doing, and
+	// TurnOut the output tokens its requests have billed so far.
+	Phase   string
+	TurnOut int
 	// TodosMoved says the kernel's task list changed and should be re-read.
 	TodosMoved bool
 	// QueueMoved says the durable input queue changed and should be re-read.
@@ -175,6 +182,7 @@ func (t *Transcript) Apply(ev eventwire.Event) {
 	switch ev.Kind {
 	case "turn_started":
 		t.Running, t.Terminal, t.EndReason = true, TurnOpen, ""
+		t.Phase, t.TurnOut = "", 0
 		t.nameTurnStart(ev)
 	case "reasoning":
 		t.appendSay(ev.Text, true)
@@ -215,6 +223,9 @@ func (t *Transcript) Apply(ev eventwire.Event) {
 		t.QueueMoved = true
 	case "usage":
 		t.Usage = ev.Usage
+		t.foldUsage(ev.Usage)
+	case "turn_phase":
+		t.Phase = ev.Phase
 	case "notice":
 		t.foldNotice(ev)
 	case "turn_done":
@@ -476,4 +487,37 @@ func (t *Transcript) sealByReceipt(r *eventwire.DecisionReceipt) {
 			it.Verdict = "elsewhere"
 		}
 	}
+}
+
+// foldUsage records a request's usage. A later frame of the same attempt
+// restates it rather than billing it again.
+func (t *Transcript) foldUsage(u *eventwire.Usage) {
+	if u == nil || u.TotalTokens == 0 {
+		return
+	}
+	if u.AttemptID != "" {
+		for i, it := range slices.Backward(t.Items) {
+			if it.Kind != ItemUsage {
+				continue
+			}
+			if it.Usage.AttemptID == u.AttemptID {
+				t.TurnOut += u.CompletionTokens - it.Usage.CompletionTokens
+				t.Items[i].Usage = u
+				return
+			}
+			break
+		}
+	}
+	t.TurnOut += u.CompletionTokens
+	at := len(t.Items)
+	for at > 0 && isCallRow(t.Items[at-1].Kind) {
+		at--
+	}
+	t.Items = slices.Insert(t.Items, at, Item{ID: t.id(), Kind: ItemUsage, Usage: u})
+}
+
+// isCallRow is a row a request's calls produce. The request's usage goes
+// above them, under the answer that asked for them, where the request ended.
+func isCallRow(k ItemKind) bool {
+	return k == ItemTool || k == ItemApproval || k == ItemAsk
 }

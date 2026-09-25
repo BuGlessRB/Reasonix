@@ -91,6 +91,7 @@ var Chinese = Messages{
 	ChatStatusCompactLabel:          "压缩",
 	ChatStatusJobsLabel:             "任务",
 	ChatStatusBalanceLabel:          "余额",
+	ChatStatusCostLabel:             "费用",
 	ChatStatusCacheNowFmt:           "本次命中 %s",
 	ChatStatusCacheAvgFmt:           "平均 %s",
 	ChatStatusPlanApproval:          "1 开始执行 · 2 修改计划 · 3 暂不执行并退出 · n/Esc 继续规划 · PgUp/PgDn/Ctrl+Home/End 滚动",

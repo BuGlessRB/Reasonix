@@ -87,6 +87,7 @@ var ChineseTraditional = Messages{
 	ChatStatusCompactLabel:          "壓縮",
 	ChatStatusJobsLabel:             "任務",
 	ChatStatusBalanceLabel:          "餘額",
+	ChatStatusCostLabel:             "費用",
 	ChatStatusCacheNowFmt:           "本次命中 %s",
 	ChatStatusCacheAvgFmt:           "平均 %s",
 	ChatStatusPlanApproval:          "1 開始執行 · 2 修改計畫 · 3 暫不執行並退出 · n/Esc 繼續規劃 · PgUp/PgDn/Ctrl+Home/End 捲動",

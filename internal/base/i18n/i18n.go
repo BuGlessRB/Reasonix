@@ -116,6 +116,7 @@ type Messages struct {
 	ChatStatusCompactLabel          string
 	ChatStatusJobsLabel             string
 	ChatStatusBalanceLabel          string
+	ChatStatusCostLabel             string
 	ChatStatusCacheNowFmt           string // cache status tag, "%s" = latest-turn hit rate with percent sign
 	ChatStatusCacheAvgFmt           string // cache status tag, "%s" = session-average hit rate with percent sign
 	ChatStatusPlanApproval          string // shortcuts hint while a plan is pending

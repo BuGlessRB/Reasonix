@@ -90,6 +90,7 @@ var English = Messages{
 	ChatStatusCompactLabel:          "COMPACT",
 	ChatStatusJobsLabel:             "JOBS",
 	ChatStatusBalanceLabel:          "BAL",
+	ChatStatusCostLabel:             "COST",
 	ChatStatusCacheNowFmt:           "turn hit %s",
 	ChatStatusCacheAvgFmt:           "avg %s",
 	ChatStatusPlanApproval:          "1 execute · 2 revise · 3 exit without executing · n/Esc keeps planning · PgUp/PgDn/Ctrl+Home/End scrolls",

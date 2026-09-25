@@ -102,6 +102,7 @@ func press(m *model, k string) tea.Cmd {
 		"y":      {Code: 'y', Text: "y"},
 		"a":      {Code: 'a', Text: "a"},
 		"n":      {Code: 'n', Text: "n"},
+		"down":   {Code: tea.KeyDown},
 	}
 	_, cmd := m.Update(codes[k])
 	return cmd
@@ -203,6 +204,22 @@ func TestApprovalKeysAnswerOnlyWhatTheHostAllows(t *testing.T) {
 	}
 }
 
+// The panel lists only the grants the host offers; the cursor walks them and
+// enter answers with the row it is on.
+func TestApprovalPanelAnswersTheRowUnderTheCursor(t *testing.T) {
+	m, k := testModel(t)
+	apply(m, eventwire.Event{Kind: "approval_request", Approval: &eventwire.Approval{ID: "ap1", Tool: "bash", Subject: "rm x", AllowsSession: true}})
+	v := m.View().Content
+	if strings.Count(v, "\n") == 0 || !strings.Contains(v, "rm x") || strings.Contains(v, "4. ") {
+		t.Fatalf("panel should show three rows for the subject:\n%s", v)
+	}
+	run(m, press(m, "down"))
+	run(m, press(m, "enter"))
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, `POST /approve {"allow":true,"id":"ap1","persist":false,"session":true}`) {
+		t.Fatalf("session grant missing:\n%s", calls)
+	}
+}
+
 func TestLargePasteFoldsAndExpandsOnSend(t *testing.T) {
 	m, k := testModel(t)
 	big := strings.Repeat("line\n", 10)
@@ -240,20 +257,25 @@ func askEvent() eventwire.Event {
 	}}}
 }
 
-// A question card is answered one question at a time: a number answers a
-// single choice, numbers toggle a multi choice, typed text joins the picks as
-// an answer no option offered, and enter sends the batch.
+// A question panel is answered one question at a time: a number answers a
+// single choice, numbers toggle a multi choice, the typed row adds an answer
+// no option offered, and the submit tab sends the batch.
 func TestAskIsAnsweredQuestionByQuestion(t *testing.T) {
 	m, k := testModel(t)
 	apply(m, askEvent())
 	m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
-	if v := m.View().Content; !strings.Contains(v, "Question 2 of 2") {
-		t.Fatalf("the card did not move to the second question:\n%s", v)
+	if v := m.View().Content; !strings.Contains(v, "Which extras?") {
+		t.Fatalf("the panel did not move to the second question:\n%s", v)
 	}
 	m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
 	m.Update(tea.KeyPressMsg{Code: '3', Text: "3"})
 	m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	m.Update(tea.KeyPressMsg{Code: '4', Text: "4"})
 	typeText(m, "metrics")
+	run(m, press(m, "enter"))
+	if m.tr.OpenPrompt() == nil {
+		t.Fatal("the panel sent before the answers were reviewed")
+	}
 	run(m, press(m, "enter"))
 	if m.tr.OpenPrompt() != nil {
 		t.Fatal("the answered card stayed open")
@@ -317,13 +339,13 @@ func TestTodosFollowTheKernel(t *testing.T) {
 	_, cmd := m.Update(updateMsg{u: Update{Event: eventwire.Event{Kind: "todo_progress"}}, ok: true})
 	run(m, cmd)
 	v := m.View().Content
-	for _, want := range []string{"✓ read the code", "fixing the bug", "○ run tests"} {
+	for _, want := range []string{"✔ read the code", "▶ fix the bug", "○ run tests"} {
 		if !strings.Contains(v, want) {
 			t.Fatalf("view missing %q:\n%s", want, v)
 		}
 	}
 	m.todos = []TodoItem{{Content: "done", Status: "completed"}}
-	if strings.Contains(m.View().Content, "Tasks") {
+	if strings.Contains(m.View().Content, "To-dos") {
 		t.Fatal("a finished list stayed on screen")
 	}
 }

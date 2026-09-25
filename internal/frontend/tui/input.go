@@ -53,14 +53,8 @@ func (p *pasteStore) expand(s string) string {
 }
 
 func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if open := m.tr.OpenPrompt(); open != nil {
-		answer := m.answerApproval
-		if open.Kind == ItemAsk {
-			answer = m.answerAsk
-		}
-		if cmd, handled := answer(open, msg.String()); handled {
-			return m, cmd
-		}
+	if cmd, handled := m.promptKey(msg); handled {
+		return m, cmd
 	}
 	if cmd, handled := m.menuKey(msg.String()); handled {
 		return m, cmd
@@ -75,6 +69,7 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.send(true)
 	case "esc":
 		if m.tr.Running {
+			m.cancelling = true
 			return m, m.call("cancel", m.client.Cancel)
 		}
 		if m.shell && empty {
@@ -84,6 +79,7 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		switch {
 		case m.tr.Running:
+			m.cancelling = true
 			return m, m.call("cancel", m.client.Cancel)
 		case !empty:
 			m.composer.Reset()
@@ -98,7 +94,9 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case "shift+tab":
-		return m, m.cycleApprovalMode()
+		return m, m.cycleMode()
+	case "ctrl+y":
+		return m, m.toggleYolo()
 	case "backspace":
 		if m.shell && empty {
 			m.shell = false
@@ -121,6 +119,29 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, m.refreshMenu())
 	}
 	return m, cmd
+}
+
+// promptKey gives an open panel the keys it owns. The composer is hidden
+// behind the panel unless a typed answer has it, so the rest go nowhere but
+// ctrl+c, which still stops the turn.
+func (m *model) promptKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	open := m.tr.OpenPrompt()
+	if open == nil {
+		return nil, false
+	}
+	answer := m.answerApproval
+	if open.Kind == ItemAsk {
+		answer = m.answerAsk
+	}
+	if cmd, handled := answer(open, msg.String()); handled {
+		return cmd, true
+	}
+	if open.Kind == ItemAsk && m.ask != nil && m.ask.typing {
+		var cmd tea.Cmd
+		m.composer, cmd = m.composer.Update(msg)
+		return cmd, true
+	}
+	return nil, msg.String() != "ctrl+c"
 }
 
 // send hands the composer's text to the kernel. Idle, it starts a turn (or
@@ -172,69 +193,37 @@ func (m *model) recall(back bool) bool {
 	return true
 }
 
-var approvalModes = []string{"ask", "auto"}
-
-func (m *model) cycleApprovalMode() tea.Cmd {
-	next := approvalModes[0]
-	for i, mode := range approvalModes {
-		if mode == m.status.ToolApprovalMode {
-			next = approvalModes[(i+1)%len(approvalModes)]
+// cycleMode steps ask → auto → plan → ask, the order the footer names them.
+// Plan is its own switch on the kernel, so entering it leaves the approval
+// mode where it was and leaving it returns to ask.
+func (m *model) cycleMode() tea.Cmd {
+	s := &m.status
+	var step func(context.Context) error
+	switch {
+	case s.Plan:
+		s.Plan, s.ToolApprovalMode = false, "ask"
+		step = func(ctx context.Context) error {
+			if err := m.client.SetPlan(ctx, false); err != nil {
+				return err
+			}
+			return m.client.SetApprovalMode(ctx, "ask")
 		}
+	case s.ToolApprovalMode == "auto":
+		s.Plan = true
+		step = func(ctx context.Context) error { return m.client.SetPlan(ctx, true) }
+	default:
+		s.ToolApprovalMode = "auto"
+		step = func(ctx context.Context) error { return m.client.SetApprovalMode(ctx, "auto") }
+	}
+	return tea.Sequence(m.call("mode", step), m.fetchStatus())
+}
+
+// toggleYolo flips between skipping approvals and asking for them.
+func (m *model) toggleYolo() tea.Cmd {
+	next := "yolo"
+	if m.status.ToolApprovalMode == "yolo" {
+		next = "ask"
 	}
 	m.status.ToolApprovalMode = next
 	return tea.Sequence(m.call("mode", func(ctx context.Context) error { return m.client.SetApprovalMode(ctx, next) }), m.fetchStatus())
-}
-
-// answerApproval takes the single-key answers an approval card offers. Only
-// the answers the host said it will honour are accepted.
-func (m *model) answerApproval(it *Item, k string) (tea.Cmd, bool) {
-	a := it.Approval
-	if a.Kind == "plan" {
-		return m.answerPlan(it, k)
-	}
-	var verdict string
-	var allow, session, persist bool
-	switch k {
-	case "y":
-		verdict, allow = "once", true
-	case "a":
-		if !a.AllowsSession {
-			return nil, true
-		}
-		verdict, allow, session = "session", true, true
-	case "p":
-		if !a.AllowsPersist {
-			return nil, true
-		}
-		verdict, allow, persist = "always", true, true
-	case "n", "esc":
-		verdict = "deny"
-	default:
-		return nil, false
-	}
-	m.tr.Decide(it.ID, verdict)
-	id := a.ID
-	return tea.Batch(m.commit(), m.call("approve", func(ctx context.Context) error {
-		return m.client.Approve(ctx, id, allow, session, persist)
-	})), true
-}
-
-// planActions are the plan card's three endings: run it, send it back for a
-// revision, or leave plan mode without running it.
-var planActions = map[string]string{"y": "start_execution", "n": "revise_plan", "esc": "revise_plan", "x": "exit_plan"}
-
-func (m *model) answerPlan(it *Item, k string) (tea.Cmd, bool) {
-	action, ok := planActions[k]
-	if !ok {
-		return nil, false
-	}
-	m.tr.Decide(it.ID, action)
-	id := it.Approval.ID
-	return tea.Batch(m.commit(), m.call("plan", func(ctx context.Context) error {
-		err := m.client.PlanDecision(ctx, id, action)
-		if Code(err) == CodePlanStale {
-			return nil
-		}
-		return err
-	})), true
 }

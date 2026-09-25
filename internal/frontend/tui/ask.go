@@ -8,21 +8,26 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"reasonix/internal/base/i18n"
 	"reasonix/internal/frontend/termrender"
 )
 
-// askState walks an open question card one question at a time. picks holds
-// each question's answer so far: option labels, plus typed text, which the
-// kernel takes as an answer no option offered.
+// askState walks an open question panel. tab is the question in view, and
+// with more than one question one tab past the last reviews the answers.
+// Each question's rows are its options, then a typed answer, then declining.
 type askState struct {
-	item  int
-	at    int
-	picks [][]string
+	item   int
+	tab    int
+	cursor int
+	picks  [][]string
+	custom []string
+	typing bool
 }
 
 func (m *model) openAsk(it *Item) *askState {
 	if m.ask == nil || m.ask.item != it.ID {
-		m.ask = &askState{item: it.ID, picks: make([][]string, len(it.Ask.Questions))}
+		n := len(it.Ask.Questions)
+		m.ask = &askState{item: it.ID, picks: make([][]string, n), custom: make([]string, n)}
 		for i, q := range it.Ask.Questions {
 			m.ask.picks[i] = slices.Clone(q.Default)
 		}
@@ -30,67 +35,146 @@ func (m *model) openAsk(it *Item) *askState {
 	return m.ask
 }
 
-// answerAsk takes a key while a question card is open. A digit picks an
-// option: on a single-choice question that answers it, on a multi-choice one
-// it toggles. Enter answers with the typed text, or, with nothing typed,
-// confirms what is picked. Esc answers with nothing, which is the kernel's
-// way of hearing "no answer".
+func (st *askState) onSubmitTab(n int) bool { return n > 1 && st.tab == n }
+
+func (st *askState) answered(i int) bool { return len(st.picks[i]) > 0 || st.custom[i] != "" }
+
+// answerAsk takes a key while a question panel is open.
 func (m *model) answerAsk(it *Item, k string) (tea.Cmd, bool) {
 	st := m.openAsk(it)
-	q := it.Ask.Questions[st.at]
-	switch {
-	case k == "esc":
-		for i := range st.picks {
-			st.picks[i] = nil
-		}
-		return m.sendAsk(it), true
-	case len(k) == 1 && k[0] >= '1' && k[0] <= '9' && m.composer.Value() == "":
-		n := int(k[0] - '1')
-		if n >= len(q.Options) {
-			return nil, true
-		}
-		label := q.Options[n].Label
-		if !q.Multi {
-			st.picks[st.at] = []string{label}
-			return m.nextQuestion(it), true
-		}
-		if i := slices.Index(st.picks[st.at], label); i >= 0 {
-			st.picks[st.at] = slices.Delete(st.picks[st.at], i, i+1)
-		} else {
-			st.picks[st.at] = append(st.picks[st.at], label)
+	qs := it.Ask.Questions
+	if st.typing {
+		return m.typeAnswer(it, k)
+	}
+	if k == "esc" {
+		return m.declineAsk(it), true
+	}
+	tabs := len(qs)
+	if tabs > 1 {
+		tabs++
+	}
+	switch k {
+	case "left":
+		st.tab, st.cursor = max(st.tab-1, 0), 0
+		return nil, true
+	case "right":
+		st.tab, st.cursor = min(st.tab+1, tabs-1), 0
+		return nil, true
+	}
+	if st.onSubmitTab(len(qs)) {
+		if k == "enter" {
+			return m.sendAsk(it), true
 		}
 		return nil, true
-	case k == "enter":
-		if typed := strings.TrimSpace(m.composer.Value()); typed != "" {
-			m.composer.Reset()
-			st.picks[st.at] = append(st.picks[st.at], typed)
-		}
-		if len(st.picks[st.at]) == 0 {
-			return nil, true
-		}
-		return m.nextQuestion(it), true
 	}
-	return nil, false
+	q := qs[st.tab]
+	rows := len(q.Options) + 2
+	switch {
+	case k == "up":
+		st.cursor = (st.cursor + rows - 1) % rows
+	case k == "down" || k == "tab":
+		st.cursor = (st.cursor + 1) % rows
+	case k == "space" && st.cursor < len(q.Options) && q.Multi:
+		st.toggle(q.Options[st.cursor].Label)
+	case k == "enter":
+		return m.chooseRow(it, st.cursor), true
+	case len(k) == 1 && k[0] >= '1' && k[0] <= '9':
+		if n := int(k[0] - '1'); n < rows {
+			st.cursor = n
+			return m.chooseRow(it, n), true
+		}
+	default:
+		return nil, false
+	}
+	return nil, true
+}
+
+func (st *askState) toggle(label string) {
+	if i := slices.Index(st.picks[st.tab], label); i >= 0 {
+		st.picks[st.tab] = slices.Delete(st.picks[st.tab], i, i+1)
+		return
+	}
+	st.picks[st.tab] = append(st.picks[st.tab], label)
+}
+
+// chooseRow acts on a row: an option answers a single-choice question and
+// toggles a multi-choice one, the typed row opens the composer, and the last
+// row declines the whole panel.
+func (m *model) chooseRow(it *Item, row int) tea.Cmd {
+	st := m.ask
+	q := it.Ask.Questions[st.tab]
+	switch {
+	case row < len(q.Options) && q.Multi:
+		st.toggle(q.Options[row].Label)
+		return nil
+	case row < len(q.Options):
+		st.picks[st.tab] = []string{q.Options[row].Label}
+		return m.nextQuestion(it)
+	case row == len(q.Options):
+		st.typing = true
+		m.composer.Placeholder = i18n.M.AskTypingHint
+		m.composer.SetValue(st.custom[st.tab])
+		return nil
+	}
+	return m.declineAsk(it)
+}
+
+// typeAnswer runs the composer while the typed row is open: enter keeps what
+// was typed as this question's answer, esc goes back to the rows.
+func (m *model) typeAnswer(it *Item, k string) (tea.Cmd, bool) {
+	st := m.ask
+	switch k {
+	case "esc":
+		st.typing = false
+	case "enter":
+		st.typing = false
+		st.custom[st.tab] = strings.TrimSpace(m.composer.Value())
+		if st.custom[st.tab] != "" && !it.Ask.Questions[st.tab].Multi {
+			st.picks[st.tab] = nil
+		}
+		m.composer.Reset()
+		m.composer.Placeholder = ""
+		if st.answered(st.tab) {
+			return m.nextQuestion(it), true
+		}
+		return nil, true
+	default:
+		return nil, false
+	}
+	m.composer.Reset()
+	m.composer.Placeholder = ""
+	return nil, true
 }
 
 func (m *model) nextQuestion(it *Item) tea.Cmd {
 	st := m.ask
-	if st.at+1 < len(it.Ask.Questions) {
-		st.at++
-		return nil
+	if len(it.Ask.Questions) == 1 {
+		return m.sendAsk(it)
+	}
+	st.tab, st.cursor = st.tab+1, 0
+	return nil
+}
+
+func (m *model) declineAsk(it *Item) tea.Cmd {
+	for i := range m.ask.picks {
+		m.ask.picks[i], m.ask.custom[i] = nil, ""
 	}
 	return m.sendAsk(it)
 }
 
-// sendAsk answers the card. The verdict it seals the card with is what was
+// sendAsk answers the panel. The verdict it seals the row with is what was
 // answered, so the line left in the scrollback says it.
 func (m *model) sendAsk(it *Item) tea.Cmd {
 	answers := make([]AskAnswer, len(it.Ask.Questions))
 	said := make([]string, 0, len(it.Ask.Questions))
 	for i, q := range it.Ask.Questions {
-		answers[i] = AskAnswer{QuestionID: q.ID, Selected: m.ask.picks[i]}
-		if len(m.ask.picks[i]) > 0 {
-			said = append(said, strings.Join(m.ask.picks[i], ", "))
+		sel := slices.Clone(m.ask.picks[i])
+		if c := m.ask.custom[i]; c != "" {
+			sel = append(sel, c)
+		}
+		answers[i] = AskAnswer{QuestionID: q.ID, Selected: sel}
+		if len(sel) > 0 {
+			said = append(said, strings.Join(sel, ", "))
 		}
 	}
 	verdict := "declined"
@@ -98,38 +182,99 @@ func (m *model) sendAsk(it *Item) tea.Cmd {
 		verdict = strings.Join(said, " · ")
 	}
 	m.ask = nil
+	m.composer.Placeholder = ""
 	m.tr.Decide(it.ID, verdict)
 	id := it.Ask.ID
 	return tea.Batch(m.commit(), m.call("answer", func(ctx context.Context) error { return m.client.Answer(ctx, id, answers) }))
 }
 
-// askCard draws the question in hand, with what is picked so far.
-func (m *model) askCard(it *Item) []string {
+// askPanel draws the question in view with its rows, or the review of every
+// answer on the submit tab.
+func (m *model) askPanel(it *Item) []string {
 	st := m.openAsk(it)
 	qs := it.Ask.Questions
 	if len(qs) == 0 {
 		return nil
 	}
-	q := qs[st.at]
-	title := "A question for you"
+	var lines []string
 	if len(qs) > 1 {
-		title = fmt.Sprintf("Question %d of %d", st.at+1, len(qs))
+		lines = append(lines, m.askTabs(it), "")
 	}
-	lines := []string{termrender.Accent("◇ ") + termrender.Bold(title), "  " + oneLine(q.Prompt, m.width-10), ""}
-	for i, o := range q.Options {
-		mark := "  "
-		if slices.Contains(st.picks[st.at], o.Label) {
-			mark = termrender.Green("✓ ")
+	if st.onSubmitTab(len(qs)) {
+		lines = append(lines, termrender.Accent(i18n.M.AskSubmitTitle))
+		for i, q := range qs {
+			ans := termrender.Dim(i18n.M.AskUnanswered)
+			if st.answered(i) {
+				ans = strings.Join(append(slices.Clone(st.picks[i]), st.custom[i]), ", ")
+				ans = strings.TrimSuffix(ans, ", ")
+			}
+			lines = append(lines, "  "+termrender.Dim(header(q.Header, i))+": "+ans)
 		}
-		line := fmt.Sprintf("  %s%s %s", mark, termrender.Accent(termrender.Bold(fmt.Sprint(i+1))), oneLine(o.Label, m.width-14))
+		return panel(append(lines, termrender.Dim(i18n.M.AskSubmitHint)), m.width, accentEdge)
+	}
+	q := qs[st.tab]
+	lines = append(lines, termrender.Accent("? ")+oneLine(q.Prompt, m.width-6))
+	for j, o := range q.Options {
+		box := ""
+		if q.Multi {
+			box = "☐ "
+			if slices.Contains(st.picks[st.tab], o.Label) {
+				box = "☑ "
+			}
+		}
+		lines = append(lines, rowLine(st.cursor == j, j+1, box, oneLine(o.Label, m.width-12), false))
 		if o.Description != "" {
-			line += termrender.Dim(" — " + oneLine(o.Description, max(m.width-16-termrender.VisibleWidth(o.Label), 10)))
+			lines = append(lines, termrender.Dim("       "+oneLine(o.Description, m.width-10)))
 		}
-		lines = append(lines, line)
 	}
-	hint := keyHints("1-9", "choose", "enter", "send typed answer", "esc", "decline")
-	if q.Multi {
-		hint = keyHints("1-9", "toggle", "enter", "confirm", "esc", "decline")
+	typed := len(q.Options)
+	label := i18n.M.AskTypeSomething
+	switch {
+	case st.custom[st.tab] != "":
+		label = st.custom[st.tab]
+	case st.typing:
+		label = i18n.M.AskTypingHint
 	}
-	return card(append(lines, "", hint), m.width, termrender.Accent)
+	lines = append(lines,
+		rowLine(st.cursor == typed, typed+1, "", oneLine(label, m.width-10), st.typing && st.custom[st.tab] == ""),
+		termrender.Dim(strings.Repeat("─", min(m.width-2, 40))),
+		rowLine(st.cursor == typed+1, typed+2, "", i18n.M.AskChatInstead, false),
+	)
+	return panel(lines, m.width, accentEdge)
+}
+
+func (m *model) askTabs(it *Item) string {
+	st := m.ask
+	qs := it.Ask.Questions
+	parts := make([]string, 0, len(qs)+1)
+	all := true
+	for i, q := range qs {
+		mark := "☐"
+		if st.answered(i) {
+			mark = "✔"
+		} else {
+			all = false
+		}
+		parts = append(parts, tabLabel(mark+" "+header(q.Header, i), i == st.tab))
+	}
+	mark := "☐"
+	if all {
+		mark = "✔"
+	}
+	parts = append(parts, tabLabel(mark+" Submit", st.onSubmitTab(len(qs))))
+	return termrender.Dim("← ") + strings.Join(parts, "  ") + termrender.Dim(" →")
+}
+
+func tabLabel(s string, cur bool) string {
+	if cur {
+		return termrender.Reverse(" " + s + " ")
+	}
+	return termrender.Dim(s)
+}
+
+func header(h string, i int) string {
+	if h != "" {
+		return h
+	}
+	return fmt.Sprintf("Q%d", i+1)
 }

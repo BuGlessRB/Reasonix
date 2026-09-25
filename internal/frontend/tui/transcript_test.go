@@ -67,6 +67,25 @@ func TestFrameAfterACallSettlesTheAnswerTheCallClosed(t *testing.T) {
 	}
 }
 
+// A request's usage lands under the answer that ended it, above the calls it
+// asked for, and a later frame of the same attempt restates it in place.
+func TestUsageSitsAboveTheCallsItsRequestMade(t *testing.T) {
+	tr := fold(
+		eventwire.Event{Kind: "turn_started"},
+		eventwire.Event{Kind: "text", Text: "Checking."},
+		eventwire.Event{Kind: "tool_dispatch", Tool: &eventwire.Tool{ID: "c1", Name: "bash"}},
+		eventwire.Event{Kind: "usage", Usage: &eventwire.Usage{TotalTokens: 10, CompletionTokens: 4, AttemptID: "a1"}},
+		eventwire.Event{Kind: "usage", Usage: &eventwire.Usage{TotalTokens: 12, CompletionTokens: 6, AttemptID: "a1"}},
+	)
+	want := []ItemKind{ItemSay, ItemUsage, ItemTool}
+	if got := kinds(tr); len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("kinds = %v, want %v", got, want)
+	}
+	if tr.Items[1].Usage.TotalTokens != 12 || tr.TurnOut != 6 {
+		t.Fatalf("usage = %+v, turn out = %d", tr.Items[1].Usage, tr.TurnOut)
+	}
+}
+
 func TestToolFramesFoldIntoOneCard(t *testing.T) {
 	tr := fold(
 		eventwire.Event{Kind: "text", Text: "let me look"},

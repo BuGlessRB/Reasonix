@@ -65,6 +65,10 @@ type model struct {
 	todos         []TodoItem
 	runSince      time.Time
 	spinning      bool
+	cancelling    bool
+	apSel         approvalSel
+	balance       string
+	compaction    Compaction
 }
 
 type (
@@ -104,7 +108,6 @@ func newModel(ctx context.Context, opts Options) *model {
 	ta.MaxHeight = composerMaxRow
 	ta.SetVirtualCursor(false)
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j", "shift+enter", "alt+enter"))
-	ta.Placeholder = "Ask Reasonix anything…"
 	termrender.ApplyTextareaTheme(&ta)
 	ta.Focus()
 	return &model{
@@ -116,7 +119,7 @@ func newModel(ctx context.Context, opts Options) *model {
 
 func (m *model) Init() tea.Cmd {
 	m.updates = m.client.Subscribe(m.ctx)
-	cmds := []tea.Cmd{m.waitUpdate(), m.fetchStatus(), tickStatus()}
+	cmds := []tea.Cmd{m.waitUpdate(), m.fetchStatus(), tickStatus(), m.fetchMeters()}
 	if m.opts.Restore {
 		cmds = append(cmds, m.fetchHistory(true))
 	}
@@ -152,6 +155,24 @@ func (m *model) fetchHistory(reprint bool) tea.Cmd {
 	}
 }
 
+type metersMsg struct {
+	balance    string
+	compaction *Compaction
+}
+
+// fetchMeters reads what the footer shows that changes only between turns:
+// the wallet and where the session folds.
+func (m *model) fetchMeters() tea.Cmd {
+	return func() tea.Msg {
+		var out metersMsg
+		out.balance, _, _ = m.client.Balance(m.ctx)
+		if c, err := m.client.Compaction(m.ctx); err == nil {
+			out.compaction = &c
+		}
+		return out
+	}
+}
+
 func tickStatus() tea.Cmd {
 	return tea.Tick(statusEvery, func(time.Time) tea.Msg { return statusTickMsg{} })
 }
@@ -171,10 +192,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		was := m.tr.Running
 		m.tr.Apply(msg.u.Event)
+		cmds := []tea.Cmd{m.commit(), m.waitUpdate(), m.noteRunning(was)}
 		if msg.u.Event.Kind == "turn_done" {
 			m.noteTurnEnd()
+			cmds = append(cmds, m.commit(), m.fetchMeters())
 		}
-		cmds := []tea.Cmd{m.commit(), m.waitUpdate(), m.noteRunning(was)}
 		if m.tr.TodosMoved {
 			m.tr.TodosMoved = false
 			cmds = append(cmds, m.fetchTodos())
@@ -185,6 +207,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statusMsg:
 		if msg.err == nil {
 			m.status = msg.s
+		}
+		return m, nil
+	case metersMsg:
+		m.balance = msg.balance
+		if msg.compaction != nil {
+			m.compaction = *msg.compaction
 		}
 		return m, nil
 	case spinMsg:

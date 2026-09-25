@@ -204,6 +204,54 @@ type Status struct {
 	CacheMiss        int    `json:"cacheMiss"`
 	Cwd              string `json:"cwd"`
 	SessionPath      string `json:"sessionPath"`
+	WorkspaceRoot    string `json:"workspaceRoot"`
+	Plan             bool   `json:"plan"`
+	LastUsage        *struct {
+		CacheHitTokens  int
+		CacheMissTokens int
+	} `json:"lastUsage"`
+	SessionCostQuote *CostQuote `json:"sessionCostQuote"`
+}
+
+// CostQuote is the session's spend as the kernel priced it.
+type CostQuote struct {
+	Original     Money  `json:"original"`
+	Selected     *Money `json:"selected"`
+	CostComplete bool   `json:"costComplete"`
+}
+
+type Money struct {
+	Amount   string `json:"amount"`
+	Currency string `json:"currency"`
+}
+
+// Balance is the provider wallet as the kernel reads it; ok is false when no
+// wallet is configured for the active provider.
+func (c *Client) Balance(ctx context.Context) (display string, ok bool, err error) {
+	var out struct {
+		Display string `json:"display"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/balance", nil, &out); err != nil {
+		return "", false, err
+	}
+	return out.Display, out.Display != "", nil
+}
+
+// Compaction is where the session folds its history.
+type Compaction struct {
+	Ratio   float64 `json:"ratio"`
+	Trigger int     `json:"trigger"`
+	Window  int     `json:"context_window"`
+}
+
+func (c *Client) Compaction(ctx context.Context) (Compaction, error) {
+	var out Compaction
+	err := c.do(ctx, http.MethodGet, "/compaction", nil, &out)
+	return out, err
+}
+
+func (c *Client) SetPlan(ctx context.Context, on bool) error {
+	return c.do(ctx, http.MethodPost, "/plan", map[string]bool{"on": on}, nil)
 }
 
 func (c *Client) Status(ctx context.Context) (Status, error) {

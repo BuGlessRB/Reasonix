@@ -4,7 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
+
+	"reasonix/internal/base/i18n"
 	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/eventwire"
+	"reasonix/internal/contract/pricing"
 	"reasonix/internal/frontend/termrender"
 )
 
@@ -18,16 +23,14 @@ const (
 func renderItem(it *Item, width, shown int) string {
 	switch it.Kind {
 	case ItemUser:
-		mark := "›"
+		mark := "› "
 		if it.Steer {
-			mark = "↳"
+			mark = "↳ "
 		}
-		rows := strings.Split(strings.TrimRight(it.Text, "\n"), "\n")
+		rows := strings.Split(ansi.Hardwrap(strings.TrimRight(it.Text, "\n"), max(width-5, 10), true), "\n")
 		for i, r := range rows {
-			if i > 0 {
-				mark = " "
-			}
-			rows[i] = termrender.UserRow(mark, r, width-1)
+			rows[i] = "  " + termrender.Accent(mark+r)
+			mark = "  "
 		}
 		return "\n" + strings.Join(rows, "\n")
 	case ItemSay:
@@ -64,6 +67,8 @@ func renderItem(it *Item, width, shown int) string {
 		return termrender.Dim("  ⟲ context compacted")
 	case ItemReceipt:
 		return renderReceipt(it)
+	case ItemUsage:
+		return renderUsage(it.Usage, width)
 	}
 	return ""
 }
@@ -82,15 +87,17 @@ func withThought(it *Item, shown int, out string) string {
 	if shown > 0 || it.Reasoning == "" {
 		return out
 	}
-	return "\n" + thoughtLine(it.ThoughtMs) + out
+	return "\n" + thoughtLine(it.ThoughtMs) + "\n" + out
 }
 
 func thoughtLine(ms int64) string {
-	if ms < 1000 {
-		return termrender.Dim("  ✻ thought")
-	}
-	return termrender.Dim(fmt.Sprintf("  ✻ thought for %ds", (ms+500)/1000))
+	return termrender.Dim("  ▎ " + fmt.Sprintf(i18n.M.ChatThoughtForFmt, (ms+500)/1000))
 }
+
+const (
+	connector         = "  ⎿  "
+	shellPreviewLines = 10
+)
 
 func renderTool(it *Item, width int) string {
 	t := it.Tool
@@ -98,41 +105,84 @@ func renderTool(it *Item, width int) string {
 		return "\n" + strings.Join(termrender.DiffBlock(t.Name, t.Args, event.FileDiff{Diff: t.Diff, Added: t.Added, Removed: t.Removed}, width, diffPreviewLines), "\n")
 	}
 	lines := []string{termrender.ToolCard(t.Name, t.Args, width)}
+	avail := width - len([]rune(connector))
 	switch {
 	case t.Err != "":
-		lines = append(lines, "  ⎿ "+termrender.Red(oneLine(t.Err, width-6)))
+		lines = append(lines, termrender.Dim(connector)+termrender.Red(oneLine(t.Err, avail)))
 	case it.Running:
 		if last := lastLine(t.Output); last != "" {
-			lines = append(lines, termrender.Dim("  ⎿ "+oneLine(last, width-6)))
+			lines = append(lines, termrender.Dim(connector+oneLine(last, avail)))
 		}
 	default:
-		lines = append(lines, previewOutput(t.Output, width)...)
+		lines = append(lines, outputSummary(t.Name, t.Output, avail)...)
 	}
 	if n := len(it.Children); n > 0 {
-		lines = append(lines, termrender.Dim(fmt.Sprintf("  ⎿ %d sub-agent call(s)", n)))
+		lines = append(lines, termrender.Dim(connector+fmt.Sprintf("%d sub-agent call(s)", n)))
 	}
 	return "\n" + strings.Join(lines, "\n")
 }
 
-func previewOutput(out string, width int) []string {
+// outputSummary leaves a marker of a finished call: a shell command's first
+// lines, since what it printed is what the user ran it for, and a line count
+// for any other tool, whose output the model already has.
+func outputSummary(name, out string, width int) []string {
 	out = strings.TrimRight(out, "\n")
 	if out == "" {
-		return []string{termrender.Dim("  ⎿ (no output)")}
+		return nil
 	}
 	src := strings.Split(out, "\n")
-	shown := src[:min(len(src), toolPreviewLines)]
+	if !termrender.IsShellTool(name) {
+		return []string{termrender.Dim(connector + fmt.Sprintf("%d lines", len(src)))}
+	}
+	shown := src[:min(len(src), shellPreviewLines)]
 	lines := make([]string, 0, len(shown)+1)
 	for i, l := range shown {
-		gutter := "    "
+		gutter := strings.Repeat(" ", len([]rune(connector)))
 		if i == 0 {
-			gutter = "  ⎿ "
+			gutter = connector
 		}
-		lines = append(lines, termrender.Dim(gutter+oneLine(l, width-6)))
+		lines = append(lines, termrender.Dim(gutter+oneLine(l, width)))
 	}
 	if extra := len(src) - len(shown); extra > 0 {
-		lines = append(lines, termrender.Dim(fmt.Sprintf("    … +%d lines", extra)))
+		lines = append(lines, termrender.Dim(strings.Repeat(" ", len([]rune(connector)))+fmt.Sprintf("… %d more lines", extra)))
 	}
 	return lines
+}
+
+// renderUsage is what one model request cost, under a quiet rule: history,
+// so it stays in the scrollback in a quieter voice than the footer.
+func renderUsage(u *eventwire.Usage, width int) string {
+	total := shortTokens(u.TotalTokens) + " tok"
+	if u.Estimated {
+		total = "≈" + total
+	}
+	groups := []string{total}
+	if u.PromptTokens > 0 {
+		fresh := u.CacheMissTokens
+		if fresh == 0 {
+			fresh = max(u.PromptTokens-u.CacheHitTokens, 0)
+		}
+		groups = append(groups, "in "+shortTokens(u.PromptTokens), "cached "+shortTokens(u.CacheHitTokens), "new "+shortTokens(fresh))
+	}
+	groups = append(groups, "out "+shortTokens(u.CompletionTokens))
+	if u.ReasoningTokens > 0 {
+		groups = append(groups, "reasoning "+shortTokens(u.ReasoningTokens))
+	}
+	if u.Cost > 0 {
+		code := u.CurrencyCode
+		if code == "" {
+			code = u.Currency
+		}
+		groups = append(groups, fmt.Sprintf("≈%s%.4f", pricing.CurrencySymbol(code), u.Cost))
+	}
+	if u.Estimated {
+		groups = append(groups, "estimated")
+	}
+	for i, g := range groups {
+		groups[i] = footerValue(g)
+	}
+	rule := footerIndent + termrender.ThemeFg(termrender.ActiveTheme().Border, strings.Repeat("─", max(width-1-len(footerIndent), 1)))
+	return "\n" + rule + "\n" + footerIndent + footerLabel(i18n.M.ChatTurnReceiptLabel) + "  " + strings.Join(groups, footerLabel(" · "))
 }
 
 func renderNotice(it *Item) string {
