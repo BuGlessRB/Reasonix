@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
@@ -36,8 +35,6 @@ func workspacePath(raw string) (string, error) {
 
 func (s *Server) workspaceFiles(w http.ResponseWriter, r *http.Request) {
 	root := s.ctl().WorkspaceRoot()
-	files := make([]string, 0, 64)
-	directories := make([]string, 0, 16)
 	query := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	requested := strings.TrimSpace(r.URL.Query().Get("path"))
 	if requested != "" {
@@ -49,59 +46,26 @@ func (s *Server) workspaceFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		requested = filepath.ToSlash(requested)
 	}
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if path == root {
-			return nil
-		}
-		name := entry.Name()
-		if entry.IsDir() && (name == ".git" || name == "node_modules" || name == "vendor") {
-			return filepath.SkipDir
-		}
-		if strings.HasPrefix(name, ".") {
-			if entry.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		rel, relErr := filepath.Rel(root, path)
-		if relErr != nil || !filepath.IsLocal(rel) {
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-		if query != "" {
-			if !entry.IsDir() && strings.Contains(strings.ToLower(rel), query) {
-				files = append(files, rel)
-			}
-			return nil
-		}
-		parent := filepath.ToSlash(filepath.Dir(rel))
-		if parent == "." {
-			parent = ""
-		}
-		if parent != requested {
-			return nil
-		}
-		if entry.IsDir() {
-			directories = append(directories, rel)
-			return filepath.SkipDir
-		}
-		files = append(files, rel)
-		return nil
-	})
-	if err != nil {
+	var listing workspaceListing
+	var err error
+	if query != "" {
+		listing, err = searchFiles(root, query)
+	} else {
+		listing, err = listFolder(root, requested)
+	}
+	switch {
+	case errors.Is(err, errListingOutsideTree):
+		refuse(w, http.StatusBadRequest, "workspace.path_outside_tree", err.Error(), nil)
+		return
+	case errors.Is(err, fs.ErrNotExist):
+		refuse(w, http.StatusNotFound, "workspace.file_missing", err.Error(), nil)
+		return
+	case err != nil:
 		refuse(w, http.StatusInternalServerError, "workspace.files_failed", err.Error(), nil)
 		return
 	}
-	sort.Strings(files)
-	sort.Strings(directories)
 	w.Header().Set("content-type", "application/json")
-	_ = json.NewEncoder(w).Encode(struct {
-		Files       []string `json:"files"`
-		Directories []string `json:"directories"`
-	}{Files: files, Directories: directories})
+	_ = json.NewEncoder(w).Encode(listing)
 }
 
 func (s *Server) workspaceFileRead(w http.ResponseWriter, r *http.Request) {

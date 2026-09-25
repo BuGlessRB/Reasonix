@@ -129,6 +129,11 @@ export function WorkbenchPanel({
     [selected, setSelected] = useState("");
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set()),
     [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  // The explorer's own failure, drawn in the explorer: the file view's error
+  // sits in a canvas the docked file list hides.
+  const [listFailed, setListFailed] = useState("");
+  const openFolders = useRef<string[]>([]);
+  openFolders.current = directories.filter((path) => !collapsed.has(path));
   const [browsers, setBrowsers] = useState<string[]>([]),
     [hosts, setHosts] = useState<Record<string, string>>({});
   const minted = useRef(0);
@@ -151,15 +156,43 @@ export function WorkbenchPanel({
     .map((change) => `${change.status}:${change.path}`)
     .join("\n");
   useEffect(() => {
-    if (shown)
-      port.workspaceFiles("", query).then(
-        (r) => {
-          setFiles(r.files);
-          setDirectories(r.directories);
-          setCollapsed(query ? new Set() : new Set(r.directories));
-        },
-        (e) => setFailed(reason(e)),
-      );
+    if (!shown) return;
+    let live = true;
+    void (async () => {
+      try {
+        const top = await port.workspaceFiles("", query);
+        let files = top.files;
+        let dirs = top.directories;
+        // A reload is the tree read again, not the reader's place in it lost:
+        // the folders they had open are read again, parents before children,
+        // and one that is gone or unreadable now simply closes.
+        const open = new Set<string>();
+        if (!query) {
+          const depth = (path: string) => path.split("/").length;
+          for (const path of [...openFolders.current].sort((a, b) => depth(a) - depth(b))) {
+            if (!dirs.includes(path)) continue;
+            try {
+              const inner = await port.workspaceFiles(path);
+              files = [...files, ...inner.files];
+              dirs = [...dirs, ...inner.directories];
+              open.add(path);
+            } catch {
+              // Left closed; the next click says why.
+            }
+          }
+        }
+        if (!live) return;
+        setFiles([...new Set(files)]);
+        setDirectories([...new Set(dirs)]);
+        setCollapsed(query ? new Set() : new Set(dirs.filter((path) => !open.has(path))));
+        setListFailed("");
+      } catch (e) {
+        if (live) setListFailed(reason(e));
+      }
+    })();
+    return () => {
+      live = false;
+    };
   }, [port, shown, changeKey, query]);
   // The button in the chrome says "show me the browser", not "show me this one
   // browser". When the agent has a page, that page is the browser; the start
@@ -329,8 +362,9 @@ export function WorkbenchPanel({
         result.directories.forEach((dir) => n.add(dir));
         return n;
       });
+      setListFailed("");
     } catch (e) {
-      setFailed(reason(e));
+      setListFailed(reason(e));
     }
   };
   // One browser: a tab opened here is a tab the agent can read and drive, and
@@ -567,6 +601,11 @@ export function WorkbenchPanel({
               </button>
             )}
           </label>
+          {listFailed && (
+            <div className="workbench-error" role="alert">
+              {listFailed}
+            </div>
+          )}
           {/* What differs, without opening anything. The tree marks a changed
               file only once its folder is expanded, so a change three levels
               down was invisible until someone went looking for it. */}
