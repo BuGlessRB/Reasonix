@@ -56,3 +56,14 @@ func TestTUIFlagsKeepSessionOptions(t *testing.T) {
 		t.Fatal("bare -r does not open the picker")
 	}
 }
+
+// --native-mouse starts the session with the terminal owning the mouse; the
+// default keeps in-app capture on.
+func TestTUIFlagsNativeMouse(t *testing.T) {
+	if *parsedTUIFlags(t).nativeMouse {
+		t.Fatal("--native-mouse defaulted on")
+	}
+	if !*parsedTUIFlags(t, "--native-mouse").nativeMouse {
+		t.Fatal("--native-mouse did not parse")
+	}
+}

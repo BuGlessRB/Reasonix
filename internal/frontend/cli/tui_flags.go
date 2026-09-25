@@ -20,6 +20,7 @@ type tuiFlags struct {
 	resume, effort *string
 	permissionMode *string
 	inline, cont   *bool
+	nativeMouse    *bool
 	yolo, copy     *bool
 	maxSteps       *int
 	addDirs        []string
@@ -34,6 +35,7 @@ func newTUIFlags() *tuiFlags {
 	f.profile = fs.String("profile", "", "deprecated: use --preset")
 	f.dir = fs.String("dir", "", "change to this directory first (project root)")
 	f.inline = fs.Bool("inline", false, "write the conversation into the terminal's scrollback instead of taking the full screen")
+	f.nativeMouse = fs.Bool("native-mouse", false, "hand the mouse back to the terminal for its own selection and right-click (same as /mouse off)")
 	f.cont = registerContinueFlag(fs)
 	f.resume = fs.StringP("resume", "r", "", "resume by session file path, session ID, or machine session ID; bare -r picks one (takes precedence over --continue)")
 	fs.Lookup("resume").NoOptDefVal = resumePickerSentinel

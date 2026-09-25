@@ -119,6 +119,7 @@ func runTUI(args []string, version string) int {
 		Restore:     resumed != nil,
 		PickSession: *f.resume == resumePickerSentinel,
 		Inline:      *f.inline,
+		NativeMouse: *f.nativeMouse,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

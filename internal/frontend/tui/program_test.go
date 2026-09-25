@@ -74,6 +74,24 @@ func testModel(t *testing.T) (*model, *recordingKernel) {
 	return m, k
 }
 
+// --native-mouse must reach the screen, or the terminal's own selection never
+// gets the mouse; the default keeps in-app capture on.
+func TestNativeMouseStartsCaptureOff(t *testing.T) {
+	k := &recordingKernel{}
+	srv := httptest.NewServer(k)
+	t.Cleanup(srv.Close)
+	client := &Client{HTTP: srv.Client(), Base: srv.URL}
+
+	m := newModel(context.Background(), Options{Client: client, NativeMouse: true})
+	if m.scr == nil || !m.scr.mouseOff {
+		t.Fatal("--native-mouse did not start the screen with capture off")
+	}
+	def := newModel(context.Background(), Options{Client: client})
+	if def.scr == nil || def.scr.mouseOff {
+		t.Fatal("the default start should keep in-app mouse capture on")
+	}
+}
+
 // run executes a command tree the way the program would, feeding every
 // message it produces back into the model, except prints and ticks.
 func run(m *model, cmd tea.Cmd) {

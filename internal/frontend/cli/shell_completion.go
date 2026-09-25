@@ -673,6 +673,7 @@ func cliTUICompletionFlags(model, preset, permissionMode, effort, help cliComple
 		completionFlag("--add-dir", cliCompletionPathValue),
 		completionFlag("--allowed-tools --allowedTools", cliCompletionStaticValue),
 		completionFlag("--inline", cliCompletionNoValue),
+		completionFlag("--native-mouse", cliCompletionNoValue),
 		help,
 	}
 }

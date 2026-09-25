@@ -36,6 +36,7 @@ reasonix --dir /path/to/project
 | `--allowed-tools RULES` | 增加仅当前会话生效的权限 allow 规则；可重复传入，`--allowedTools` 是别名。 |
 | `--permission-mode MODE` | 以指定的权限姿态启动：`ask`、`auto`、`acceptEdits`、`dontAsk`、`plan` 或 `bypassPermissions`。1.x 的 `workspace-write`、`danger-full-access`、`read-only` 也能用，分别对应 Auto、Yolo、Ask。 |
 | `--yolo` | 以 YOLO 模式启动；是 `--dangerously-skip-permissions` 的别名。 |
+| `--native-mouse` | 启动时关闭应用内鼠标接管，交由终端处理原生拖选和右键菜单（等同于 `/mouse` 关闭）。 |
 
 适用时，参数可以放在 prompt 前面或后面。
 

@@ -40,6 +40,7 @@ is configured.
 | `--permission-mode MODE` | Start with a specific permission posture: `ask`, `auto`, `acceptEdits`, `dontAsk`, `plan` or `bypassPermissions`. 1.x's `workspace-write`, `danger-full-access` and `read-only` also work, as Auto, Yolo and Ask. |
 | `--yolo` | Start in YOLO mode; alias for `--dangerously-skip-permissions`. |
 | `--inline` | Write the conversation into the terminal's scrollback instead of taking the full screen. |
+| `--native-mouse` | Start with in-app mouse capture off, so the terminal keeps its own click-drag selection and right-click menu (same as `/mouse` off). |
 
 Flags may appear before or after the prompt where applicable.
 

@@ -26,6 +26,9 @@ type Options struct {
 	// Inline writes the conversation into the terminal's own scrollback
 	// instead of taking the full screen.
 	Inline bool
+	// NativeMouse starts the full-screen UI with in-app mouse capture off, so
+	// the terminal keeps its own click-drag selection and right-click menu.
+	NativeMouse bool
 }
 
 // Run drives the terminal until the user quits or ctx ends.
@@ -124,7 +127,7 @@ func newModel(ctx context.Context, opts Options) *model {
 		composer: ta, width: 80, height: 24,
 	}
 	if !opts.Inline {
-		m.scr = &screen{follow: true}
+		m.scr = &screen{follow: true, mouseOff: opts.NativeMouse}
 	}
 	return m
 }
