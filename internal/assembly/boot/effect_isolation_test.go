@@ -143,7 +143,7 @@ model = "x"
 	if rec.landedBeforeApp {
 		t.Fatal("the child's write reached the workspace before it was applied")
 	}
-	if b, err := os.ReadFile(filepath.Join(dir, "out.txt")); err != nil || string(b) != "made in isolation\n" {
+	if b, err := os.ReadFile(filepath.Join(dir, "out.txt")); err != nil || strings.ReplaceAll(string(b), "\r\n", "\n") != "made in isolation\n" {
 		t.Fatalf("out.txt after apply = %q, %v", b, err)
 	}
 	left, _ := filepath.Glob(filepath.Join(config.DeliveryWorktreeDir(), "isolated", "*", "*"))
