@@ -55,10 +55,12 @@ homebrew_casks:
     # The CLI archive is not notarized, so the cask still strips quarantine.
     # GoReleaser's hooks field renders the deprecated `postflight do` stanza;
     # emit Homebrew's `postflight_steps` directly until upstream supports it.
+    # The cask is rendered as a Go template, so Homebrew's own `{{staged_path}}`
+    # placeholder is escaped as a string literal.
     custom_block: |
       postflight_steps do
         on_macos do
-          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{staged_path}}/reasonix"]
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/reasonix"]
         end
       end
 
