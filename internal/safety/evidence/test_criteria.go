@@ -9,9 +9,10 @@ import (
 	"strings"
 )
 
-// PathMayHoldTestCriteria reports whether a path could carry criteria at all.
-// The name settles it without the bytes, so a caller walking a tree can decide
-// what to read instead of reading everything to find out.
+// PathMayHoldTestCriteria reports whether a path could carry criteria the host
+// holds. The name settles it without the bytes, so a caller walking a tree can
+// decide what to read. Only criteria the host can re-run are held: a capture no
+// backend evaluates is an obligation nothing discharges.
 func PathMayHoldTestCriteria(path string) bool {
 	return strings.HasSuffix(strings.ToLower(path), "_test.go")
 }
@@ -29,15 +30,21 @@ func HoldsTestCriteria(path string, src []byte) bool {
 
 // RewrittenTestCriteria names the tests an edit changed the meaning of: one
 // that existed before and now asserts something else, or one that is gone. A
-// suite green afterwards is not the suite that was green before, so a run that
-// edits its own checks has to say so. Only Go test files are read, and only
-// when both sides parse; tests present only in the new file are additions.
+// suite green afterwards is not the suite that was green before. Go test files
+// and pytest modules are read, only when both sides parse; tests present only
+// in the new file are additions.
 func RewrittenTestCriteria(path, oldText, newText string) []string {
-	if !PathMayHoldTestCriteria(path) {
+	var bodies func(string) (map[string]string, bool)
+	switch {
+	case PathMayHoldTestCriteria(path):
+		bodies = testFunctionBodies
+	case isPytestModule(path):
+		bodies = pytestBodies
+	default:
 		return nil
 	}
-	before, okBefore := testFunctionBodies(oldText)
-	after, okAfter := testFunctionBodies(newText)
+	before, okBefore := bodies(oldText)
+	after, okAfter := bodies(newText)
 	if !okBefore || !okAfter {
 		return nil
 	}

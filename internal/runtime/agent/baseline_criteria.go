@@ -26,7 +26,7 @@ func (a *Agent) captureRewrittenCriteria(change diff.Change, rewritten []string)
 		return
 	}
 	store := a.baselineCriteriaStore()
-	if store == nil || len(rewritten) == 0 || change.OldText == "" {
+	if store == nil || len(rewritten) == 0 || change.OldText == "" || !evidence.PathMayHoldTestCriteria(change.Path) {
 		return
 	}
 	criterion, err := store.Capture(change.Path, []byte(change.OldText))

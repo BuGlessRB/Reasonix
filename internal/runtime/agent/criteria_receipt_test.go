@@ -90,3 +90,27 @@ func TestMedianEven(t *testing.T) {
 		t.Fatalf("adding a test reported %v, want none", got)
 	}
 }
+
+// A rewritten pytest case reaches the ledger like a Go one, but is not held:
+// nothing re-runs a captured Python criterion, so holding it would owe the
+// turn a baseline run no backend can settle.
+func TestRewrittenPytestCaseIsReportedNotHeld(t *testing.T) {
+	before := "def test_median():\n    assert median([3, 1, 2]) == 2\n"
+	after := "def test_median():\n    assert median([3, 1, 2]) == 1\n"
+	reg := tool.NewRegistry()
+	reg.Add(previewingEdit{change: diff.Build("tests/test_calc.py", before, after, diff.Modify)})
+	a := New(nil, reg, sessionstore.NewSession(""), Options{ArchiveDir: t.TempDir()}, event.Discard)
+
+	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
+		Name: "edit_file", Arguments: `{"path":"tests/test_calc.py"}`,
+	})
+	if strings.HasPrefix(out.output, "blocked:") || out.errMsg != "" {
+		t.Fatalf("edit did not run: %+v", out)
+	}
+	if got := a.task.ledger.RewrittenCriteria(); len(got) != 1 || got[0] != "test_median" {
+		t.Fatalf("ledger rewritten criteria = %v, want [test_median]", got)
+	}
+	if len(a.task.baselineCriteria) != 0 {
+		t.Fatalf("a pytest criterion was held: %v", a.task.baselineCriteria)
+	}
+}
