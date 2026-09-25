@@ -74,6 +74,22 @@ var families = []family{
 // given and is the only candidate, so a person who names one is never
 // second-guessed by a search that finds something else first.
 func Discover(configured string) (Spec, error) {
+	return discover(configured, systemHost())
+}
+
+// host is what discovery reads of the machine it runs on.
+type host struct {
+	goos   string
+	getenv func(string) string
+	// applications is the system-wide folder macOS installs app bundles into.
+	applications string
+}
+
+func systemHost() host {
+	return host{goos: runtime.GOOS, getenv: os.Getenv, applications: "/Applications"}
+}
+
+func discover(configured string, h host) (Spec, error) {
 	if c := strings.TrimSpace(configured); c != "" {
 		if path, err := resolve(c); err == nil {
 			return Spec{Name: filepath.Base(path), Executable: path}, nil
@@ -81,15 +97,15 @@ func Discover(configured string) (Spec, error) {
 		return Spec{}, fmt.Errorf("%w: the configured editor %q is not an executable on this machine", ErrNoEditor, c)
 	}
 	for _, f := range families {
-		if path, ok := f.find(runtime.GOOS, os.Getenv); ok {
+		if path, ok := f.find(h); ok {
 			return Spec{Name: f.name, Executable: path}, nil
 		}
 	}
 	return Spec{}, ErrNoEditor
 }
 
-func (f family) find(goos string, getenv func(string) string) (string, bool) {
-	for _, candidate := range f.installed(goos, getenv) {
+func (f family) find(h host) (string, bool) {
+	for _, candidate := range f.installed(h) {
 		if isExecutableFile(candidate) {
 			return candidate, true
 		}
@@ -102,8 +118,9 @@ func (f family) find(goos string, getenv func(string) string) (string, bool) {
 	return "", false
 }
 
-func (f family) installed(goos string, getenv func(string) string) []string {
-	switch goos {
+func (f family) installed(h host) []string {
+	getenv := h.getenv
+	switch h.goos {
 	case "windows":
 		var out []string
 		for _, root := range []string{getenv("LOCALAPPDATA"), getenv("ProgramFiles")} {
@@ -118,7 +135,7 @@ func (f family) installed(goos string, getenv func(string) string) []string {
 	case "darwin":
 		var out []string
 		for _, rel := range f.darwin {
-			out = append(out, filepath.Join("/Applications", rel))
+			out = append(out, filepath.Join(h.applications, rel))
 			if home := getenv("HOME"); home != "" {
 				out = append(out, filepath.Join(home, "Applications", rel))
 			}

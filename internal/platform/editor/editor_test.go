@@ -14,7 +14,9 @@ func TestDiscoverRefusesWithAnIdentityWhenNothingIsInstalled(t *testing.T) {
 	t.Setenv("ProgramFiles", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
 
-	_, err := Discover("")
+	// The system application folder is the machine's own; an empty one stands
+	// in for a Mac with nothing installed there.
+	_, err := discover("", host{goos: runtime.GOOS, getenv: os.Getenv, applications: t.TempDir()})
 	if !errors.Is(err, ErrNoEditor) {
 		t.Fatalf("Discover on a bare machine = %v, want ErrNoEditor", err)
 	}
@@ -71,7 +73,7 @@ func TestInstalledPathsAreSearchedBeforePath(t *testing.T) {
 		}
 		return ""
 	}
-	got, ok := f.find(runtime.GOOS, getenv)
+	got, ok := f.find(host{goos: runtime.GOOS, getenv: getenv, applications: t.TempDir()})
 	if !ok || got != placed {
 		t.Fatalf("find = %q %v, want the installed %q", got, ok, placed)
 	}

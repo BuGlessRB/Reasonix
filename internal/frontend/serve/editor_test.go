@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -45,12 +48,19 @@ func TestEditorOpenRefusesWithoutAHostGrant(t *testing.T) {
 }
 
 // A machine with no editor is not a failure to launch one: the two ask the
-// person for different things, so they carry different codes.
+// person for different things, so they carry different codes. An editor the
+// user named that does not exist is the missing class on every machine,
+// whatever it has installed, which a search of the machine could not promise.
 func TestEditorOpenSeparatesMissingFromFailedToStart(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	t.Setenv("LOCALAPPDATA", t.TempDir())
-	t.Setenv("ProgramFiles", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	path := config.UserConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	absent := filepath.Join(t.TempDir(), "no-such-editor")
+	if err := os.WriteFile(path, []byte("[desktop]\neditor = "+strconv.Quote(absent)+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	s := editorServer(t, true)
 	rec := httptest.NewRecorder()
