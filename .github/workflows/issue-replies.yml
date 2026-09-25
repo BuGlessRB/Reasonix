@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   reply:
-    runs-on: ubuntu-latest
+    runs-on: win-gpu
     timeout-minutes: 180
     steps:
       - uses: actions/github-script@v9
