@@ -91,11 +91,6 @@ export function App({ hub }: { hub: HubPort }) {
   // 跟着没了，剩下的入口只有一个没人知道的快捷键。
   const [rail, setRail] = useState(() => !roomGaveUp("rail"));
   const [pinnedSessions, setPinnedSessions] = useState<Set<string>>(savedPins);
-  // 三层所有权，只在用的地方相乘：wanted（用户的选择，rail 在 useFoldAway 的
-  // 记忆里、side 还在盘上）、allowed（当前视口，useFoldAway 管）、focus（临时
-  // 观看状态）。focus 绝不调 setRail/chooseSide —— 那会把临时状态写回偏好，退
-  // 出后就恢复不了了。它也不存盘：重开一次窗口不该还在专注里。
-  const [focus, setFocus] = useState(false);
   const [railW, setRailW] = useState(() => widthOf(RAIL));
   const [dockW, setDockW] = useState(() => widthOf(DOCK));
   const [report, setReport] = useState<PaneReport>(NO_REPORT);
@@ -423,19 +418,15 @@ export function App({ hub }: { hub: HubPort }) {
       // Anything transient above this — a menu, a picker, the overflow bubble —
       // takes the press in the capture phase and stops it there (see
       // useDismiss), so a press that reaches this listener is one nothing else
-      // wanted. Leaving focus is last: stopping a turn is the more urgent of
-      // the two, and doing both on one press would be neither.
-      // Escape is two actions on one key, the way send and stop share one
-      // button: session.stop while a turn is live, chrome.focus otherwise.
+      // wanted.
       if (e.key === "Escape" && browser) {
         setBrowser(false);
-      } else if (e.key === "Escape" && !settings) {
-        if (running) activePort?.cancel();
-        else setFocus(false);
+      } else if (e.key === "Escape" && !settings && running) {
+        activePort?.cancel();
       }
     };
     return listenAction(window, "keydown", {
-      action: browser ? "browser.open" : running ? "session.stop" : "chrome.focus",
+      action: browser ? "browser.open" : "session.stop",
       listener: onKey as EventListener,
     });
   }, [activePort, browser, running, settings, shortcuts]);
@@ -591,7 +582,6 @@ export function App({ hub }: { hub: HubPort }) {
       data-run={report.run}
       data-rail={rail ? "on" : "off"}
       data-browser={browser ? "on" : "off"}
-      data-focus={focus ? "true" : undefined}
       data-plan={report.status?.plan ? "on" : "off"}
       data-apv={report.status?.toolApprovalMode ?? "ask"}
       data-prefs={settings ? "" : undefined}
@@ -611,8 +601,6 @@ export function App({ hub }: { hub: HubPort }) {
         onBrowser={() => setBrowser((value) => !value)}
         browser={browser}
         account={account}
-        focus={focus}
-        onFocus={() => setFocus((v) => !v)}
         rail={rail}
         theme={scheme}
         onRail={() => setRail((v) => !v)}
@@ -630,7 +618,7 @@ export function App({ hub }: { hub: HubPort }) {
         />
         <Sidebar
           hub={hub}
-          focus={focus}
+          collapsed={!rail}
           tree={tree}
           runtimes={runtimes}
           runs={runs}

@@ -15,7 +15,7 @@ interface Props {
   hub: HubPort;
   // Collapsed, the column keeps its scroll position and its folds; inert is the
   // other half of that — a column nobody can see must not be reachable by Tab.
-  focus: boolean;
+  collapsed: boolean;
   tree: TreeWorkspace[];
   runtimes: RuntimeView[];
   runs: Record<string, { run: string; live: boolean }>;
@@ -56,7 +56,7 @@ interface Props {
  *  folded. Everything else belongs to the window and arrives as a prop. */
 export function Sidebar({
   hub,
-  focus,
+  collapsed,
   tree,
   runtimes,
   runs,
@@ -159,7 +159,7 @@ export function Sidebar({
         中的面板。inert 是「看不见就够不着」那一半 —— 只做视觉隐藏的话，
         屏幕上没有的栏还能被 Tab 走进去。 */}
     <button className="railveil" data-action="chrome.rail" tabIndex={-1} aria-label={t("收起工作区栏")} onClick={() => onCollapse()} />
-    <div className="rail" inert={focus}>
+    <div className="rail" inert={collapsed}>
       <div className="railscroll">
       <div className="studio-rail-head">
         <div className="studio-brand" aria-label="Reasonix Studio">

@@ -598,7 +598,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         <Gutter edge="r" span={DOCK} width={dockW} label={t("调整浏览器宽度")} open={docked}
           onWidth={onDockW} onOpen={(on) => onManualBrowser?.(on)} />
       )}
-      <div className="scroll" data-pane="browser" hidden={tab === "analysis"}>
+      <div className="scroll" data-pane="browser" hidden={tab === "analysis"} inert={!workbench}>
           <WorkbenchPanel
             port={port}
             tabs={pages}

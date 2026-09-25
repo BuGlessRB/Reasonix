@@ -22,9 +22,6 @@ interface Props {
   status: SessionStatus | null;
   title?: string;
   steer: number;
-  // 临时观看状态，不是偏好：窗口决定它，这里只负责把开关画出来。
-  focus: boolean;
-  onFocus: () => void;
   onSettings: (section?: string) => void;
   onBrowser: () => void;
   browser: boolean;

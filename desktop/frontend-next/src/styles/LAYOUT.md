@@ -213,11 +213,16 @@ rules are written in.
   goes transparent rather than away, or the column loses its alignment.
 - Its actions are quiet but present: a row of controls that exists only under the
   pointer reads as a row that does nothing.
+- Everything stacked above the input shares one ceiling, `--aux-budget`, so a
+  full queue scrolls inside it instead of taking the transcript. The studio
+  composer's own chrome is taller than the one the budget was set against, so
+  studio lowers it (28vh, 19vh when short) to keep the transcript at 40% of the
+  pane with 64 queued lines; `perf/budget.mjs` holds the 40%.
 - The queued line is the only thing on screen that has not happened yet, so its
   cancel sits beside "queued" and stays visible. A cancel revealed on hover is no
   cancel.
 
-## Columns, focus and the seam
+## Columns and the seam
 
 - Column widths change on `.app`, so the tween belongs there and `.cols` only
   reads the result into a track. The tween must be cut during a drag: a .34s
@@ -255,16 +260,11 @@ rules are written in.
 - Only 「这台机器」 is hidden, by `[data-here]` rather than by `.machrow`: the
   section label above already carries that name, its count and its add button,
   while a remote host's row is the only thing naming that machine.
-- Focus mode takes the surroundings away and changes nothing else.
-  - The columns collapse rather than unmount — unmounting loses the side
-    column's scroll position and the inspector's disclosure, and this is a
-    temporary state that has to return the world exactly as it was.
-  - It reuses the collapse path, so the tween, the border and the opacity all
-    follow it.
-  - The seam, the grip and the horizontal tier's labels go with it: an invisible
-    column should not keep a draggable edge.
-  - In the narrow tier the side column is a full-width row under the flow, where
-    a zero width means nothing.
+- A collapsed column is inert, not only narrow: at zero width its controls are
+  still in the tab order, and focusing one scrolls a column nobody can see. The
+  rail and the workbench are both `inert` while collapsed, and the workbench
+  stops painting once the collapse has finished. The shortcut and the gutter
+  that reopen a column sit outside it, so they stay reachable.
 - Collapsing reflows the text inside a column, which is what makes it feel
   wrong. The contents are locked to the open width so they are clipped rather
   than squeezed, and they shrink faster than the container: what is seen is

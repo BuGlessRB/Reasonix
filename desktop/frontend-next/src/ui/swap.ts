@@ -21,7 +21,11 @@ export function swapping(apply: () => void, kind: string) {
   // types by a long way, and this only needs that much of it.
   const root = document.documentElement;
   root.setAttribute(SWAP_MARK, kind);
-  document.startViewTransition(() => flushSync(apply)).finished.finally(() => {
+  const vt = document.startViewTransition(() => flushSync(apply));
+  // A transition the browser skips or aborts has still applied the swap; only
+  // the animation was lost, which is not a failure worth an uncaught rejection.
+  vt.ready.catch(() => {});
+  vt.finished.finally(() => {
     if (root.getAttribute(SWAP_MARK) === kind) root.removeAttribute(SWAP_MARK);
   });
 }

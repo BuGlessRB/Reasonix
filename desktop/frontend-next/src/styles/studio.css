@@ -1060,6 +1060,8 @@ body { background: var(--page) !important; }
 }
 .compose::after { border-color: var(--border); }
 .compose:hover::after { border-color: var(--border); }
+.compose { --aux-budget: min(calc(28vh / var(--zoom, 1)), 280px); }
+[data-fold~="short"] .compose { --aux-budget: min(calc(19vh / var(--zoom, 1)), 150px); }
 .compose:focus-within { box-shadow: 0 0 0 3px rgb(197 201 192 / .055), 0 20px 48px -32px #000; }
 .compose:focus-within::after { border-color: #4a4e47; }
 .compose .prompt { display: none; }
