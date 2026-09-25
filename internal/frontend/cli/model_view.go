@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"reasonix/internal/base/i18n"
+	"reasonix/internal/frontend/termrender"
 )
 
 func renderModels(width int, refs []string, active string) string {
@@ -15,7 +16,7 @@ func renderModels(width int, refs []string, active string) string {
 		if ref == active {
 			status = "  " + viewStatus("active")
 		}
-		fmt.Fprintf(&b, "  %s%s\n", viewCompactText(ref, viewBudget(width, 2+visibleWidth(status))), status)
+		fmt.Fprintf(&b, "  %s%s\n", viewCompactText(ref, viewBudget(width, 2+termrender.VisibleWidth(status))), status)
 	}
 	b.WriteString(viewHint(viewCompactText("switch with /model <provider/model>", viewBudget(width, 2))))
 	return strings.TrimRight(b.String(), "\n")

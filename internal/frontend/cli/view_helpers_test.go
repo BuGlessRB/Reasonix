@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/ext/hook"
 	"reasonix/internal/ext/plugin"
 	"reasonix/internal/ext/skill"
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/runtime/outputstyle"
 	"reasonix/internal/state/memory"
 )
@@ -49,7 +50,7 @@ func TestRenderSkillShowCapsLongBody(t *testing.T) {
 func TestViewProtectLinesCompactsLongBodyLines(t *testing.T) {
 	got := viewProtectLines(strings.Repeat("x", 80)+"\nshort", 20)
 	lines := strings.Split(got, "\n")
-	if len(lines) != 2 || !strings.HasSuffix(lines[0], "…") || visibleWidth(lines[0]) > 20 || lines[1] != "short" {
+	if len(lines) != 2 || !strings.HasSuffix(lines[0], "…") || termrender.VisibleWidth(lines[0]) > 20 || lines[1] != "short" {
 		t.Fatalf("protected lines = %q", got)
 	}
 }
@@ -213,7 +214,7 @@ func TestRenderMCPStatusStaysWithinWidth(t *testing.T) {
 func assertLinesWithin(t *testing.T, s string, width int) {
 	t.Helper()
 	for i, line := range strings.Split(s, "\n") {
-		if got := visibleWidth(line); got > width {
+		if got := termrender.VisibleWidth(line); got > width {
 			t.Fatalf("line %d exceeds width %d with %d cols:\n%s\n\nfull output:\n%s", i+1, width, got, line, s)
 		}
 		if strings.Contains(line, "\n") {

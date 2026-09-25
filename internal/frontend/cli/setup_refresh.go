@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/base/i18n"
 	"reasonix/internal/contract/config"
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/model/catalog"
 )
 
@@ -47,5 +48,5 @@ func testAndRefreshProvider(s *providerSetupSession, p config.ProviderEntry) {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.FetchModelsSuccessFmt, len(models), p.Name)))
+	fmt.Printf("  %s\n", termrender.Green(fmt.Sprintf(i18n.M.FetchModelsSuccessFmt, len(models), p.Name)))
 }

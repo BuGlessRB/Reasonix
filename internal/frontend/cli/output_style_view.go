@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/runtime/outputstyle"
 )
 
@@ -20,7 +21,7 @@ func renderOutputStyles(width int, styles []outputstyle.OutputStyle, active stri
 			status = "  " + viewStatus("active")
 		}
 		scopeText := "(" + scope + ")"
-		used := 2 + viewPadWidth(st.Name, 16) + 1 + visibleWidth(scopeText) + 2 + visibleWidth(status)
+		used := 2 + viewPadWidth(st.Name, 16) + 1 + termrender.VisibleWidth(scopeText) + 2 + termrender.VisibleWidth(status)
 		desc := viewCompactText(st.Description, viewBudget(width, used))
 		fmt.Fprintf(&b, "  %-16s %s  %s%s\n", st.Name, viewMeta(scopeText), desc, status)
 	}

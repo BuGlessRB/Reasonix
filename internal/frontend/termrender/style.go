@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"os"
@@ -10,13 +10,21 @@ import (
 // colorprofile owns the NO_COLOR, CLICOLOR_FORCE, TERM=dumb and isatty rules,
 // so piped output stays plain. Colour fidelity is derived from it, never probed
 // a second time.
-var activeColorProfile = detectColorProfile(ansiConsoleReady())
+var activeColorProfile = detectColorProfile(ANSIConsoleReady())
 
 func detectColorProfile(ansiReady bool) colorprofile.Profile {
 	if !ansiReady {
 		return colorprofile.ASCII
 	}
 	return colorprofile.Detect(os.Stdout, os.Environ())
+}
+
+// SetColorProfile replaces the terminal's detected rendering profile and
+// returns the one it replaced, for a caller that knows the output better.
+func SetColorProfile(p colorprofile.Profile) colorprofile.Profile {
+	prev := activeColorProfile
+	activeColorProfile = p
+	return prev
 }
 
 func colorOn() bool {
@@ -43,10 +51,10 @@ func sgr(code, s string) string {
 	return code + s + ansiReset
 }
 
-func bold(s string) string    { return sgr(ansiBold, s) }
-func dim(s string) string     { return themeFg(activeCLITheme.faint, s) }
-func green(s string) string   { return themeFg(activeCLITheme.success, s) }
-func red(s string) string     { return themeFg(activeCLITheme.err, s) }
-func yellow(s string) string  { return themeFg(activeCLITheme.warn, s) }
-func accent(s string) string  { return themeFg(activeCLITheme.accent, s) }
-func reverse(s string) string { return sgr(ansiReverse, s) }
+func Bold(s string) string    { return sgr(ansiBold, s) }
+func Dim(s string) string     { return ThemeFg(activeTheme.Faint, s) }
+func Green(s string) string   { return ThemeFg(activeTheme.Success, s) }
+func Red(s string) string     { return ThemeFg(activeTheme.Err, s) }
+func Yellow(s string) string  { return ThemeFg(activeTheme.Warn, s) }
+func Accent(s string) string  { return ThemeFg(activeTheme.Accent, s) }
+func Reverse(s string) string { return sgr(ansiReverse, s) }

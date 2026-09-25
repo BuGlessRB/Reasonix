@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/platform/telemetry"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/session/control"
@@ -39,7 +40,7 @@ func buildRunSink(format runOutputFormat, printOnly, showThinking bool, metricsP
 			if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
 				termW = w
 			}
-			renderer = newMarkdownRenderer(termW)
+			renderer = termrender.NewMarkdownRenderer(termW)
 		}
 		textSink := agent.NewTextSink(os.Stdout, renderer, termW)
 		textSink.SetShowReasoning(showThinking)

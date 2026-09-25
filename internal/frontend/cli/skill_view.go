@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"reasonix/internal/ext/skill"
+	"reasonix/internal/frontend/termrender"
 )
 
 const skillShowMaxLines = 80
@@ -22,7 +23,7 @@ func renderSkillList(width int, skills []skill.Skill, disabled map[string]bool) 
 		if disabled[s.Name] {
 			tag += "  " + viewMeta("disabled")
 		}
-		used := 2 + viewPadWidth(name, 18) + 1 + visibleWidth(scope) + 2 + visibleWidth(tag)
+		used := 2 + viewPadWidth(name, 18) + 1 + termrender.VisibleWidth(scope) + 2 + termrender.VisibleWidth(tag)
 		desc := viewCompactText(s.Description, viewBudget(width, used))
 		fmt.Fprintf(&b, "  %-18s %s  %s%s\n", name, viewMeta(scope), desc, tag)
 	}

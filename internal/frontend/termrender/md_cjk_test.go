@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"strings"
@@ -94,7 +94,7 @@ func TestFixCJKEmphasis(t *testing.T) {
 }
 
 func TestFixCJKEmphasisRenderIntegration(t *testing.T) {
-	r := newMarkdownRenderer(80)
+	r := NewMarkdownRenderer(80)
 
 	tests := []struct {
 		name     string
@@ -132,7 +132,7 @@ func TestFixCJKEmphasisRenderIntegration(t *testing.T) {
 }
 
 func TestFixCJKEmphasisPunctBeforeOpenerRendersBold(t *testing.T) {
-	r := newMarkdownRenderer(80)
+	r := NewMarkdownRenderer(80)
 	for _, in := range []string{"注意：**重要**事项", "他说，**重点**是"} {
 		if rendered := r.Render(in); strings.Contains(rendered, "**") {
 			t.Errorf("punct before opener left literal ** (not bold):\n%s", rendered)

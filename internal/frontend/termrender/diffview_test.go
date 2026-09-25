@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"strings"
@@ -48,14 +48,14 @@ func TestDiffBodyNoFoldWhenShort(t *testing.T) {
 
 func TestDiffBlockHeader(t *testing.T) {
 	d := event.FileDiff{Diff: "@@ -1 +1 @@\n-a\n+b\n", Added: 1, Removed: 1}
-	block := diffBlock("edit_file", `{"path":"pkg/x.go"}`, d, 80, 40)
+	block := DiffBlock("edit_file", `{"path":"pkg/x.go"}`, d, 80, 40)
 	if len(block) == 0 || !strings.Contains(block[0], "Update") || !strings.Contains(block[0], "pkg/x.go") {
 		t.Fatalf("header should name verb + path, got %q", block[0])
 	}
 }
 
 func TestDiffBlockNilWithoutDiff(t *testing.T) {
-	if diffBlock("write_file", `{"path":"x"}`, event.FileDiff{}, 80, 40) != nil {
+	if DiffBlock("write_file", `{"path":"x"}`, event.FileDiff{}, 80, 40) != nil {
 		t.Fatal("no diff should yield no block")
 	}
 }
@@ -85,12 +85,12 @@ func TestDiffBarReappliesBackground(t *testing.T) {
 }
 
 func TestActiveDiffChromaStyleFollowsCLITheme(t *testing.T) {
-	previous := activeCLITheme
-	defer func() { activeCLITheme = previous }()
+	previous := activeTheme
+	defer func() { activeTheme = previous }()
 
 	tests := []struct {
 		name  string
-		theme cliPalette
+		theme Palette
 		want  string
 	}{
 		{name: "dark", theme: cliDarkTheme, want: "github-dark"},
@@ -98,7 +98,7 @@ func TestActiveDiffChromaStyleFollowsCLITheme(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			activeCLITheme = tt.theme
+			activeTheme = tt.theme
 			if got := activeDiffChromaStyle().Name; got != tt.want {
 				t.Fatalf("diff syntax style = %q, want %q", got, tt.want)
 			}
@@ -107,18 +107,18 @@ func TestActiveDiffChromaStyleFollowsCLITheme(t *testing.T) {
 }
 
 func TestHighlightCodeUpdatesOnThemeSwitch(t *testing.T) {
-	previousTheme := activeCLITheme
+	previousTheme := activeTheme
 	previousProfile := activeColorProfile
 	defer func() {
-		activeCLITheme = previousTheme
+		activeTheme = previousTheme
 		activeColorProfile = previousProfile
 	}()
 	activeColorProfile = colorprofile.ANSI256
 
 	code := `const answer = "value"`
-	activeCLITheme = cliLightTheme
+	activeTheme = cliLightTheme
 	light := highlightCode("example.ts", code)
-	activeCLITheme = cliDarkTheme
+	activeTheme = cliDarkTheme
 	dark := highlightCode("example.ts", code)
 
 	if light == dark {

@@ -19,7 +19,7 @@
     "layering": 0,
     "marker": 0,
     "narrative": 0,
-    "orphan": 74,
+    "orphan": 82,
     "refusal-path": 0,
     "release-note": 661,
     "struct-state": 32,
@@ -737,14 +737,8 @@
     "internal/frontend/cli/hook_machine.go": {
       "essay": 3
     },
-    "internal/frontend/cli/mathnode.go": {
-      "essay": 1
-    },
     "internal/frontend/cli/mcp.go": {
       "essay": 1
-    },
-    "internal/frontend/cli/md.go": {
-      "essay": 7
     },
     "internal/frontend/cli/remote_connect.go": {
       "essay": 3
@@ -777,16 +771,10 @@
     "internal/frontend/cli/shell_completion.go": {
       "function-size": 76
     },
-    "internal/frontend/cli/transcript.go": {
-      "essay": 1
-    },
     "internal/frontend/cli/upgrade.go": {
       "complexity": 1,
       "essay": 2,
       "function-size": 28
-    },
-    "internal/frontend/cli/width_test.go": {
-      "essay": 1
     },
     "internal/frontend/doctor/report.go": {
       "essay": 3
@@ -818,6 +806,34 @@
     },
     "internal/frontend/serve/switch_recovery_test.go": {
       "essay": 2
+    },
+    "internal/frontend/termrender/clipboard.go": {
+      "orphan": 1
+    },
+    "internal/frontend/termrender/diffview.go": {
+      "orphan": 1
+    },
+    "internal/frontend/termrender/mathnode.go": {
+      "essay": 1
+    },
+    "internal/frontend/termrender/md.go": {
+      "essay": 7,
+      "orphan": 1
+    },
+    "internal/frontend/termrender/style.go": {
+      "orphan": 1
+    },
+    "internal/frontend/termrender/theme.go": {
+      "orphan": 2
+    },
+    "internal/frontend/termrender/toolcard.go": {
+      "orphan": 1
+    },
+    "internal/frontend/termrender/transcript.go": {
+      "orphan": 1
+    },
+    "internal/frontend/termrender/width_test.go": {
+      "essay": 1
     },
     "internal/model/anthropic/anthropic.go": {
       "complexity": 40,

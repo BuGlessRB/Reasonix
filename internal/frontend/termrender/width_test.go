@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"testing"
@@ -25,8 +25,8 @@ func TestVisibleWidthGraphemeClusters(t *testing.T) {
 		{"mixed", "a中🔥", 5},
 	}
 	for _, c := range cases {
-		if got := visibleWidth(c.s); got != c.want {
-			t.Errorf("%s: visibleWidth(%q) = %d, want %d", c.name, c.s, got, c.want)
+		if got := VisibleWidth(c.s); got != c.want {
+			t.Errorf("%s: VisibleWidth(%q) = %d, want %d", c.name, c.s, got, c.want)
 		}
 	}
 }

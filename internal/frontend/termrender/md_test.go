@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"strings"
@@ -9,7 +9,7 @@ import (
 // returns "" — callers rely on this to skip a redraw when there's nothing
 // substantive to show.
 func TestRenderEmpty(t *testing.T) {
-	r := newMarkdownRenderer(80)
+	r := NewMarkdownRenderer(80)
 	for _, in := range []string{"", " ", "\n", "\t\n  \n"} {
 		if got := r.Render(in); got != "" {
 			t.Errorf("Render(%q) = %q, want empty", in, got)
@@ -22,7 +22,7 @@ func TestRenderEmpty(t *testing.T) {
 // sequences (palette could shift) — only that key visible text survives and
 // that we don't degrade to literal markdown.
 func TestRenderConstructs(t *testing.T) {
-	r := newMarkdownRenderer(80)
+	r := NewMarkdownRenderer(80)
 	cases := []struct {
 		name     string
 		in       string
@@ -110,7 +110,7 @@ func TestWrapAnsiCJK(t *testing.T) {
 	if len(lines) < 2 {
 		t.Fatalf("expected wrap, got 1 line: %q", out)
 	}
-	if visibleWidth(lines[0]) > 10 {
-		t.Errorf("first line exceeds width: %d > 10", visibleWidth(lines[0]))
+	if VisibleWidth(lines[0]) > 10 {
+		t.Errorf("first line exceeds width: %d > 10", VisibleWidth(lines[0]))
 	}
 }

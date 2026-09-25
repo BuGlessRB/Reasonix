@@ -2,6 +2,8 @@ package cli
 
 import (
 	"strings"
+
+	"reasonix/internal/frontend/termrender"
 )
 
 func renderBranchTree(tree string) string {
@@ -14,7 +16,7 @@ func renderBranchTree(tree string) string {
 
 func renderBranchTreeLine(line string) string {
 	if line == "branches:" {
-		return accent(line)
+		return termrender.Accent(line)
 	}
 	joint := strings.LastIndex(line, "├─ ")
 	if alt := strings.LastIndex(line, "└─ "); alt > joint {
@@ -35,10 +37,10 @@ func renderBranchTreeLine(line string) string {
 	if before, after, ok := strings.Cut(meta, "  "); ok {
 		turns = before
 		if strings.TrimSpace(after) == "current" {
-			current = "  " + accent("current")
+			current = "  " + termrender.Accent("current")
 		} else if strings.TrimSpace(after) != "" {
 			current = "  " + after
 		}
 	}
-	return dim(treePrefix) + dim(id) + "  " + title + "  " + dim(turns) + current
+	return termrender.Dim(treePrefix) + termrender.Dim(id) + "  " + title + "  " + termrender.Dim(turns) + current
 }

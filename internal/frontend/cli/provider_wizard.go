@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/base/i18n"
 	"reasonix/internal/contract/config"
+	"reasonix/internal/frontend/termrender"
 )
 
 // protocolMenuText names a wire for a person. A kind the translators have not
@@ -99,7 +100,7 @@ func promptCustomProviderManualWith(in *bufio.Scanner, kind, baseURL, keyEnv, ap
 		Name: providerName, Kind: kind, BaseURL: baseURL,
 		Model: modelName, APIKeyEnv: keyEnv, ContextWindow: askContextWindow(in, os.Stdout),
 	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.CustomAddedFmt, entry.Name+"/"+modelName)))
+	fmt.Printf("  %s\n", termrender.Green(fmt.Sprintf(i18n.M.CustomAddedFmt, entry.Name+"/"+modelName)))
 	return newProviderPromptResult([]config.ProviderEntry{entry}, keyEnv, apiKey), nil
 }
 
@@ -119,19 +120,19 @@ func promptCustomProviderFromURL(kind string) (providerPromptResult, error) {
 	keyEnv := promptAPIKeyEnvName(in, os.Stdout, i18n.M.CustomPromptKeyEnv, apiKeyEnvFromProviderName(providerName))
 	apiKey := ask(in, os.Stdout, i18n.M.CustomPromptAPIKey, "")
 
-	fmt.Printf("  %s\n", dim(fmt.Sprintf(i18n.M.FetchingModelsFmt, "custom")))
+	fmt.Printf("  %s\n", termrender.Dim(fmt.Sprintf(i18n.M.FetchingModelsFmt, "custom")))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	models, err := fetchModelListCompat(ctx, baseURL, apiKey)
 	if err != nil || len(models) == 0 {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  %s\n", dim(fmt.Sprintf(i18n.M.FetchModelsFailedFmt, "custom", err)))
+			fmt.Fprintf(os.Stderr, "  %s\n", termrender.Dim(fmt.Sprintf(i18n.M.FetchModelsFailedFmt, "custom", err)))
 		} else {
-			fmt.Fprintf(os.Stderr, "  %s\n", dim(i18n.M.CustomFetchEmpty))
+			fmt.Fprintf(os.Stderr, "  %s\n", termrender.Dim(i18n.M.CustomFetchEmpty))
 		}
 		return promptCustomProviderManualWith(in, kind, baseURL, keyEnv, apiKey)
 	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.FetchModelsSuccessFmt, len(models), "custom")))
+	fmt.Printf("  %s\n", termrender.Green(fmt.Sprintf(i18n.M.FetchModelsSuccessFmt, len(models), "custom")))
 
 	items := make([]menuItem, len(models))
 	for i, m := range models {
@@ -149,7 +150,7 @@ func promptCustomProviderFromURL(kind string) (providerPromptResult, error) {
 		Name: providerName, Kind: kind, BaseURL: baseURL,
 		Models: selected, Model: selected[0], APIKeyEnv: keyEnv, ContextWindow: askContextWindow(in, os.Stdout),
 	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.CustomAddedFmt, entry.Name+"/"+selected[0])))
+	fmt.Printf("  %s\n", termrender.Green(fmt.Sprintf(i18n.M.CustomAddedFmt, entry.Name+"/"+selected[0])))
 	return newProviderPromptResult([]config.ProviderEntry{entry}, keyEnv, apiKey), nil
 }
 

@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"strings"
+
+	"reasonix/internal/frontend/termrender"
 )
 
 const defaultViewWidth = 80
@@ -15,30 +17,30 @@ func viewWidth(width int) int {
 }
 
 func viewHeader(format string, args ...any) string {
-	return accent(fmt.Sprintf(format, args...))
+	return termrender.Accent(fmt.Sprintf(format, args...))
 }
 
 func viewSubhead(s string) string {
-	return dim("  " + s)
+	return termrender.Dim("  " + s)
 }
 
 func viewMeta(s string) string {
-	return dim(s)
+	return termrender.Dim(s)
 }
 
 func viewStatus(s string) string {
-	return accent(s)
+	return termrender.Accent(s)
 }
 
 func viewHint(s string) string {
-	return dim("  " + s)
+	return termrender.Dim("  " + s)
 }
 
 func viewMore(n int, noun string) string {
 	if n <= 0 {
 		return ""
 	}
-	return dim(fmt.Sprintf("  +%d more %s", n, noun))
+	return termrender.Dim(fmt.Sprintf("  +%d more %s", n, noun))
 }
 
 func viewCompactPath(path string, width int) string {
@@ -73,7 +75,7 @@ func viewProtectLines(s string, width int) string {
 }
 
 func viewPadWidth(s string, minWidth int) int {
-	if w := visibleWidth(s); w > minWidth {
+	if w := termrender.VisibleWidth(s); w > minWidth {
 		return w
 	}
 	return minWidth

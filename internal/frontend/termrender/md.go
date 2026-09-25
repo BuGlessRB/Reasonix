@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"fmt"
@@ -15,13 +15,13 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-// mdRenderer turns the model's markdown answer into ANSI-styled terminal text
+// MarkdownRenderer turns the model's markdown answer into ANSI-styled terminal text
 // using the brand palette. It implements only the constructs a chat-style
 // model reliably emits — headings, paragraphs, lists, fenced code, blockquotes,
 // strong/em/code-spans, links, thematic breaks — and degrades to plain text
 // for anything else. Word-wrapping respects CJK widths and skips over ANSI
 // SGR codes when counting columns.
-type mdRenderer struct {
+type MarkdownRenderer struct {
 	md             goldmark.Markdown
 	width          int
 	copyMath       bool
@@ -29,13 +29,13 @@ type mdRenderer struct {
 	nextCopyMathID int
 }
 
-func newMarkdownRenderer(width int) *mdRenderer {
+func NewMarkdownRenderer(width int) *MarkdownRenderer {
 	if width <= 0 {
 		width = 80
 	}
 	// Enable the GFM table extension so | header | rows | get parsed into
 	// a Table node rather than falling through as a literal text block.
-	return &mdRenderer{
+	return &MarkdownRenderer{
 		md: goldmark.New(
 			goldmark.WithExtensions(extension.Table),
 			goldmark.WithParserOptions(
@@ -44,6 +44,11 @@ func newMarkdownRenderer(width int) *mdRenderer {
 		),
 		width: width,
 	}
+}
+
+// RenderMarkdown renders raw as a styled Markdown body wrapped to width.
+func RenderMarkdown(raw string, width int) string {
+	return NewMarkdownRenderer(width).Render(raw)
 }
 
 func italic(s string) string {
@@ -56,7 +61,7 @@ func italic(s string) string {
 // Render parses input as markdown and returns ANSI-styled output with a
 // trailing newline. Empty input returns an empty string so callers can
 // reliably distinguish "nothing to draw" from "draw a blank line".
-func (r *mdRenderer) Render(input string) string {
+func (r *MarkdownRenderer) Render(input string) string {
 	if strings.TrimSpace(input) == "" {
 		return ""
 	}
@@ -76,7 +81,7 @@ func (r *mdRenderer) Render(input string) string {
 // zero-width internal markers. The markers are consumed only when the user
 // copies a transcript selection, so display wrapping and selection coordinates
 // stay identical without maintaining a second raw transcript.
-func (r *mdRenderer) RenderCopy(input, prefix string) string {
+func (r *MarkdownRenderer) RenderCopy(input, prefix string) string {
 	if strings.TrimSpace(input) == "" {
 		return ""
 	}
@@ -190,13 +195,13 @@ func isSpace(r rune) bool {
 	return r == ' ' || r == '\t' || r == '\n' || r == '\r'
 }
 
-func (r *mdRenderer) renderBlocks(buf *strings.Builder, parent ast.Node, src []byte, indent int) {
+func (r *MarkdownRenderer) renderBlocks(buf *strings.Builder, parent ast.Node, src []byte, indent int) {
 	for c := parent.FirstChild(); c != nil; c = c.NextSibling() {
 		r.renderBlock(buf, c, src, indent)
 	}
 }
 
-func (r *mdRenderer) renderBlock(buf *strings.Builder, node ast.Node, src []byte, indent int) {
+func (r *MarkdownRenderer) renderBlock(buf *strings.Builder, node ast.Node, src []byte, indent int) {
 	switch n := node.(type) {
 	case *ast.Heading:
 		r.renderHeading(buf, n, src, indent)
@@ -217,7 +222,7 @@ func (r *mdRenderer) renderBlock(buf *strings.Builder, node ast.Node, src []byte
 	case *ast.ThematicBreak:
 		w := max(r.width-indent, 8)
 		buf.WriteString(strings.Repeat(" ", indent))
-		buf.WriteString(dim(strings.Repeat("─", w)))
+		buf.WriteString(Dim(strings.Repeat("─", w)))
 		buf.WriteString("\n\n")
 	default:
 		// Unknown block: drop into children rather than dropping content.
@@ -225,31 +230,31 @@ func (r *mdRenderer) renderBlock(buf *strings.Builder, node ast.Node, src []byte
 	}
 }
 
-func (r *mdRenderer) renderHeading(buf *strings.Builder, n *ast.Heading, src []byte, indent int) {
+func (r *MarkdownRenderer) renderHeading(buf *strings.Builder, n *ast.Heading, src []byte, indent int) {
 	inline := r.collectInline(n, src)
 	buf.WriteString(strings.Repeat(" ", indent))
-	buf.WriteString(bold(accent(inline)))
+	buf.WriteString(Bold(Accent(inline)))
 	buf.WriteString("\n")
 	// Level-1 headings get an accent underline; deeper levels rely on
-	// bold+colour alone so the hierarchy reads at a glance without piling
+	// Bold+colour alone so the hierarchy reads at a glance without piling
 	// on visual weight on every "###" in a long response.
 	if n.Level == 1 {
 		buf.WriteString(strings.Repeat(" ", indent))
-		buf.WriteString(accent(strings.Repeat("─", visibleWidth(inline))))
+		buf.WriteString(Accent(strings.Repeat("─", VisibleWidth(inline))))
 		buf.WriteString("\n")
 	}
 	buf.WriteString("\n")
 }
 
-func (r *mdRenderer) renderParagraph(buf *strings.Builder, n *ast.Paragraph, src []byte, indent int) {
+func (r *MarkdownRenderer) renderParagraph(buf *strings.Builder, n *ast.Paragraph, src []byte, indent int) {
 	r.renderInlineBlock(buf, n, src, indent, true)
 }
 
-func (r *mdRenderer) renderTextBlock(buf *strings.Builder, n *ast.TextBlock, src []byte, indent int) {
+func (r *MarkdownRenderer) renderTextBlock(buf *strings.Builder, n *ast.TextBlock, src []byte, indent int) {
 	r.renderInlineBlock(buf, n, src, indent, false)
 }
 
-func (r *mdRenderer) renderInlineBlock(buf *strings.Builder, n ast.Node, src []byte, indent int, trailingBlank bool) {
+func (r *MarkdownRenderer) renderInlineBlock(buf *strings.Builder, n ast.Node, src []byte, indent int, trailingBlank bool) {
 	inline := r.collectInline(n, src)
 	prefix := strings.Repeat(" ", indent)
 	wrapped := wrapAnsi(inline, r.width-indent)
@@ -263,7 +268,7 @@ func (r *mdRenderer) renderInlineBlock(buf *strings.Builder, n ast.Node, src []b
 	}
 }
 
-func (r *mdRenderer) renderList(buf *strings.Builder, n *ast.List, src []byte, indent int) {
+func (r *MarkdownRenderer) renderList(buf *strings.Builder, n *ast.List, src []byte, indent int) {
 	idx := 1
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		item, ok := c.(*ast.ListItem)
@@ -278,8 +283,8 @@ func (r *mdRenderer) renderList(buf *strings.Builder, n *ast.List, src []byte, i
 			marker = "•"
 		}
 		buf.WriteString(strings.Repeat(" ", indent))
-		buf.WriteString(accent(marker) + " ")
-		markerW := visibleWidth(marker) + 1
+		buf.WriteString(Accent(marker) + " ")
+		markerW := VisibleWidth(marker) + 1
 
 		first := item.FirstChild()
 		// goldmark uses TextBlock for tight list items, Paragraph for loose
@@ -306,38 +311,38 @@ func (r *mdRenderer) renderList(buf *strings.Builder, n *ast.List, src []byte, i
 	buf.WriteString("\n")
 }
 
-func (r *mdRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []byte, indent int) {
-	prefix := strings.Repeat(" ", indent) + dim("│ ")
+func (r *MarkdownRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []byte, indent int) {
+	prefix := strings.Repeat(" ", indent) + Dim("│ ")
 	for i := range n.Lines().Len() {
 		l := n.Lines().At(i)
 		line := strings.TrimRight(string(l.Value(src)), "\n")
 		buf.WriteString(prefix)
-		buf.WriteString(accent(line))
+		buf.WriteString(Accent(line))
 		buf.WriteString("\n")
 	}
 	buf.WriteString("\n")
 }
 
-func (r *mdRenderer) renderBlockquote(buf *strings.Builder, n *ast.Blockquote, src []byte, indent int) {
+func (r *MarkdownRenderer) renderBlockquote(buf *strings.Builder, n *ast.Blockquote, src []byte, indent int) {
 	var inner strings.Builder
 	r.renderBlocks(&inner, n, src, 0)
-	prefix := strings.Repeat(" ", indent) + dim("▎ ")
+	prefix := strings.Repeat(" ", indent) + Dim("▎ ")
 	for line := range strings.SplitSeq(strings.TrimRight(inner.String(), "\n"), "\n") {
 		buf.WriteString(prefix)
-		buf.WriteString(dim(line))
+		buf.WriteString(Dim(line))
 		buf.WriteString("\n")
 	}
 	buf.WriteString("\n")
 }
 
 // collectInline walks an inline subtree and returns its ANSI-styled flat text.
-func (r *mdRenderer) collectInline(n ast.Node, src []byte) string {
+func (r *MarkdownRenderer) collectInline(n ast.Node, src []byte) string {
 	var b strings.Builder
 	r.appendInline(&b, n, src)
 	return b.String()
 }
 
-func (r *mdRenderer) appendInline(b *strings.Builder, n ast.Node, src []byte) {
+func (r *MarkdownRenderer) appendInline(b *strings.Builder, n ast.Node, src []byte) {
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		switch v := c.(type) {
 		case *ast.Text:
@@ -352,19 +357,19 @@ func (r *mdRenderer) appendInline(b *strings.Builder, n ast.Node, src []byte) {
 			var inner strings.Builder
 			r.appendInline(&inner, v, src)
 			if v.Level == 2 {
-				b.WriteString(bold(inner.String()))
+				b.WriteString(Bold(inner.String()))
 			} else {
 				b.WriteString(italic(inner.String()))
 			}
 		case *ast.CodeSpan:
 			var inner strings.Builder
 			r.appendInline(&inner, v, src)
-			b.WriteString(accent(inner.String()))
+			b.WriteString(Accent(inner.String()))
 		case *ast.Link:
 			var inner strings.Builder
 			r.appendInline(&inner, v, src)
 			b.WriteString(inner.String())
-			b.WriteString(dim(" (" + string(v.Destination) + ")"))
+			b.WriteString(Dim(" (" + string(v.Destination) + ")"))
 		case *ast.AutoLink:
 			b.WriteString(string(v.URL(src)))
 		case *ast.RawHTML:
@@ -399,7 +404,7 @@ func (r *mdRenderer) appendInline(b *strings.Builder, n ast.Node, src []byte) {
 // wrapped across multiple visual rows (the whole logical row inflates to
 // the tallest cell), not truncated, so no content is lost. Alignment is
 // left-only — Markdown's ":---:" hints are read but not honoured yet.
-func (r *mdRenderer) renderTable(buf *strings.Builder, n *extast.Table, src []byte, indent int) {
+func (r *MarkdownRenderer) renderTable(buf *strings.Builder, n *extast.Table, src []byte, indent int) {
 	var header []string
 	var rows [][]string
 
@@ -433,11 +438,11 @@ func (r *mdRenderer) renderTable(buf *strings.Builder, n *extast.Table, src []by
 		}
 	}
 	for i, h := range header {
-		pick(i, visibleWidth(h))
+		pick(i, VisibleWidth(h))
 	}
 	for _, row := range rows {
 		for i, c := range row {
-			pick(i, visibleWidth(c))
+			pick(i, VisibleWidth(c))
 		}
 	}
 
@@ -457,16 +462,16 @@ func (r *mdRenderer) renderTable(buf *strings.Builder, n *extast.Table, src []by
 	}
 
 	prefix := strings.Repeat(" ", indent)
-	sep := dim(" │ ")
+	sep := Dim(" │ ")
 
 	if len(header) > 0 {
 		r.renderTableRow(buf, prefix, sep, header, widths, true)
 		buf.WriteString(prefix)
 		for i := range widths {
 			if i > 0 {
-				buf.WriteString(dim("─┼─"))
+				buf.WriteString(Dim("─┼─"))
 			}
-			buf.WriteString(dim(strings.Repeat("─", widths[i])))
+			buf.WriteString(Dim(strings.Repeat("─", widths[i])))
 		}
 		buf.WriteByte('\n')
 	}
@@ -480,7 +485,7 @@ func (r *mdRenderer) renderTable(buf *strings.Builder, n *extast.Table, src []by
 // any cell wraps. wrapAnsi handles per-cell word + hard-break wrapping; the
 // row's visual height = max wrapped lines across all cells. Cells that ran
 // out of content get padded with spaces so the rail "│" stays aligned.
-func (r *mdRenderer) renderTableRow(buf *strings.Builder, prefix, sep string, cells []string, widths []int, isHeader bool) {
+func (r *MarkdownRenderer) renderTableRow(buf *strings.Builder, prefix, sep string, cells []string, widths []int, isHeader bool) {
 	cols := len(widths)
 	wrapped := make([][]string, cols)
 	maxLines := 1
@@ -504,9 +509,9 @@ func (r *mdRenderer) renderTableRow(buf *strings.Builder, prefix, sep string, ce
 			if line < len(wrapped[i]) {
 				cell = wrapped[i][line]
 			}
-			padded := padRight(cell, widths[i])
+			padded := PadRight(cell, widths[i])
 			if isHeader {
-				padded = bold(padded)
+				padded = Bold(padded)
 			}
 			buf.WriteString(padded)
 		}
@@ -516,7 +521,7 @@ func (r *mdRenderer) renderTableRow(buf *strings.Builder, prefix, sep string, ce
 
 // collectCells walks a TableHeader / TableRow node and pulls each TableCell's
 // inline content as an ANSI-styled string. Non-cell children are ignored.
-func (r *mdRenderer) collectCells(parent ast.Node, src []byte) []string {
+func (r *MarkdownRenderer) collectCells(parent ast.Node, src []byte) []string {
 	var out []string
 	for c := parent.FirstChild(); c != nil; c = c.NextSibling() {
 		if cell, ok := c.(*extast.TableCell); ok {

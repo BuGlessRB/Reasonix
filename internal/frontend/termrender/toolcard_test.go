@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"strings"
@@ -21,7 +21,7 @@ func TestToolCard(t *testing.T) {
 		{"use_capability", `{"action":"list"}`, []string{"MCP", "list"}, []string{"action"}},
 	}
 	for _, c := range cases {
-		got := toolCard(c.name, c.args, 120)
+		got := ToolCard(c.name, c.args, 120)
 		for _, w := range c.want {
 			if !strings.Contains(got, w) {
 				t.Errorf("%s: %q missing %q", c.name, got, w)
@@ -36,7 +36,7 @@ func TestToolCard(t *testing.T) {
 }
 
 func TestToolCardUnknownFallsBackToName(t *testing.T) {
-	if got := toolCard("frobnicate", `{}`, 80); !strings.Contains(got, "frobnicate") {
+	if got := ToolCard("frobnicate", `{}`, 80); !strings.Contains(got, "frobnicate") {
 		t.Errorf("unknown tool should show its raw name, got %q", got)
 	}
 }

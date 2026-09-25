@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"strings"
@@ -56,7 +56,7 @@ func TestNormalizeMath(t *testing.T) {
 
 func TestRenderInlineMath(t *testing.T) {
 	activeColorProfile = colorprofile.NoTTY
-	r := newMarkdownRenderer(80)
+	r := NewMarkdownRenderer(80)
 
 	out := r.Render(`The mass-energy relation is $E = mc^2$ exactly.`)
 	if !strings.Contains(out, "E = mc²") {

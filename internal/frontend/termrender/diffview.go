@@ -1,6 +1,6 @@
 // Renders a unified diff as line-numbered, syntax-highlighted rows on
-// green/red background bars with a +/- gutter.
-package cli
+// Green/red background bars with a +/- gutter.
+package termrender
 
 import (
 	"encoding/json"
@@ -37,20 +37,20 @@ var (
 // frames cannot retain syntax colours from the previous light/dark mode.
 func activeDiffChromaStyle() *chroma.Style {
 	mode := chroma.Dark
-	if activeCLITheme.name == "light" {
+	if activeTheme.Name == "light" {
 		mode = chroma.Light
 	}
 	return styles.GetForMode("github-dark", mode)
 }
 
-// diffStat renders a change's "+A -B" tally, green/red, omitting a zero side.
-func diffStat(d event.FileDiff) string {
+// DiffStat renders a change's "+A -B" tally, green/red, omitting a zero side.
+func DiffStat(d event.FileDiff) string {
 	parts := make([]string, 0, 2)
 	if d.Added > 0 {
-		parts = append(parts, green("+"+strconv.Itoa(d.Added)))
+		parts = append(parts, Green("+"+strconv.Itoa(d.Added)))
 	}
 	if d.Removed > 0 {
-		parts = append(parts, red("-"+strconv.Itoa(d.Removed)))
+		parts = append(parts, Red("-"+strconv.Itoa(d.Removed)))
 	}
 	return strings.Join(parts, " ")
 }
@@ -63,15 +63,15 @@ func diffPath(args string) string {
 	return p.Path
 }
 
-// diffBlock renders a writer call as a header line ("✎ name path  +A -B") plus
+// DiffBlock renders a writer call as a header line ("✎ name path  +A -B") plus
 // the highlighted, folded diff body. Returns nil when there's no textual diff.
-func diffBlock(name, args string, d event.FileDiff, width, maxLines int) []string {
+func DiffBlock(name, args string, d event.FileDiff, width, maxLines int) []string {
 	if d.Diff == "" {
 		return nil
 	}
 	path := diffPath(args)
-	header := "  " + toolDot(name) + " " + toolHead(name, path, width)
-	if stat := diffStat(d); stat != "" {
+	header := "  " + ToolDot(name) + " " + ToolHead(name, path, width)
+	if stat := DiffStat(d); stat != "" {
 		header += "  " + stat
 	}
 	return append([]string{header}, diffBody(d, path, width, maxLines)...)
@@ -105,17 +105,17 @@ func diffBody(d event.FileDiff, path string, width, maxLines int) []string {
 				oldNo, newNo = atoi(m[1]), atoi(m[3])
 			}
 			if hunks > 0 {
-				rows = append(rows, "  "+dim("⋮"))
+				rows = append(rows, "  "+Dim("⋮"))
 			}
 			hunks++
 		case '+':
-			rows = append(rows, diffBar('+', ln[1:], path, width, bgSGR(activeCLITheme.diffAddBG), fgSGR(activeCLITheme.success), newNo, gw))
+			rows = append(rows, diffBar('+', ln[1:], path, width, bgSGR(activeTheme.DiffAddBG), fgSGR(activeTheme.Success), newNo, gw))
 			newNo++
 		case '-':
-			rows = append(rows, diffBar('-', ln[1:], path, width, bgSGR(activeCLITheme.diffDelBG), fgSGR(activeCLITheme.err), oldNo, gw))
+			rows = append(rows, diffBar('-', ln[1:], path, width, bgSGR(activeTheme.DiffDelBG), fgSGR(activeTheme.Err), oldNo, gw))
 			oldNo++
 		case '\\':
-			rows = append(rows, "  "+dim(clampPlain(ln, width-2)))
+			rows = append(rows, "  "+Dim(clampPlain(ln, width-2)))
 		default:
 			code := ln
 			if ln[0] == ' ' {
@@ -130,7 +130,7 @@ func diffBody(d event.FileDiff, path string, width, maxLines int) []string {
 	if maxLines > 0 && len(rows) > maxLines {
 		folded := len(rows) - (maxLines - 1)
 		rows = rows[:maxLines-1]
-		rows = append(rows, "  "+dim(fmt.Sprintf(i18n.M.DiffFoldedFmt, folded)))
+		rows = append(rows, "  "+Dim(fmt.Sprintf(i18n.M.DiffFoldedFmt, folded)))
 	}
 	return rows
 }
@@ -139,21 +139,21 @@ func diffBody(d event.FileDiff, path string, width, maxLines int) []string {
 // bg is re-applied after every chroma reset — \033[0m would otherwise end the
 // bar mid-line — and padded to the bar width so it runs edge to edge.
 func diffBar(sign byte, code, path string, width int, bg, signFg string, lineNo, gw int) string {
-	gutter := dim(lpad(strconv.Itoa(lineNo), gw))
+	gutter := Dim(lpad(strconv.Itoa(lineNo), gw))
 	barW := max(width-2-gw-1, 4)
 	code = clampPlain(code, barW-2)
 	if !colorOn() {
 		return "  " + gutter + " " + string(sign) + " " + code
 	}
 	hl := reapplyBG(highlightCode(path, code), bg)
-	pad := max(barW-2-visibleWidth(code), 0)
+	pad := max(barW-2-VisibleWidth(code), 0)
 	return "  " + gutter + " " + bg + signFg + string(sign) + ansiReset + bg + " " + hl + strings.Repeat(" ", pad) + ansiReset
 }
 
 // diffContext draws an unchanged line: the gutter, no background, code aligned
 // under the +/- rows' code column.
 func diffContext(code, path string, width, lineNo, gw int) string {
-	gutter := dim(lpad(strconv.Itoa(lineNo), gw))
+	gutter := Dim(lpad(strconv.Itoa(lineNo), gw))
 	return "  " + gutter + "   " + highlightClamped(code, path, width-4-gw)
 }
 

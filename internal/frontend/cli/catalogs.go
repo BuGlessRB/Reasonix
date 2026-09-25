@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/contract/config"
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/state/projectiondb"
 )
 
@@ -82,7 +83,7 @@ func defaultSessionCatalogTargets() []sessionDirTarget {
 }
 
 func runSessionOrCatalogCommand(command string, args []string) int {
-	configureCLIThemeFromConfig()
+	termrender.ConfigureThemeFromConfig()
 	if command != "catalogs" {
 		return sessionCommand(args)
 	}

@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/base/i18n"
 	"reasonix/internal/contract/config"
+	"reasonix/internal/frontend/termrender"
 )
 
 type providerSetupSession struct {
@@ -473,7 +474,7 @@ func runProviderSetupManager(s *providerSetupSession, configPath, envPath string
 		s.recordProviderMutation(repaired[i].Name, before, providerSetupEntryPtr(repaired[i]))
 	}
 	for _, repair := range repairs {
-		fmt.Fprintf(os.Stderr, "  %s\n", dim(fmt.Sprintf(i18n.M.RepairedAPIKeyEnvFmt, repair.provider, repair.old, repair.new)))
+		fmt.Fprintf(os.Stderr, "  %s\n", termrender.Dim(fmt.Sprintf(i18n.M.RepairedAPIKeyEnvFmt, repair.provider, repair.old, repair.new)))
 	}
 	for {
 		items := providerManagerItems(s)
@@ -818,8 +819,7 @@ func saveProviderSetupSession(s *providerSetupSession, configPath, envPath strin
 	for _, line := range s.summary() {
 		fmt.Println("  " + line)
 	}
-	in := bufio.NewScanner(os.Stdin)
-	answer := ask(in, os.Stdout, i18n.M.SetupConfirmSave, "Y/n")
+	answer := ask(bufio.NewScanner(os.Stdin), os.Stdout, i18n.M.SetupConfirmSave, "Y/n")
 	if answer == "n" || answer == "N" {
 		return setupManagerContinue
 	}
@@ -834,7 +834,7 @@ func saveProviderSetupSession(s *providerSetupSession, configPath, envPath strin
 		return 1
 	}
 	if configWritten {
-		fmt.Printf("\n%s %s\n", green("✓"), fmt.Sprintf(i18n.M.WroteFileFmt, displayPath(configPath)))
+		fmt.Printf("\n%s %s\n", termrender.Green("✓"), fmt.Sprintf(i18n.M.WroteFileFmt, displayPath(configPath)))
 	}
 	if lines := s.credentialLines(); len(lines) > 0 {
 		target, err := config.StoreCredentialLines(lines)
@@ -845,8 +845,8 @@ func saveProviderSetupSession(s *providerSetupSession, configPath, envPath strin
 		if target == "" {
 			target = envPath
 		}
-		fmt.Printf("%s %s\n", green("✓"), fmt.Sprintf(i18n.M.WroteFileFmt, displayPath(target)))
+		fmt.Printf("%s %s\n", termrender.Green("✓"), fmt.Sprintf(i18n.M.WroteFileFmt, displayPath(target)))
 	}
-	fmt.Printf("\n%s %s\n", accent("◆"), i18n.M.SetupComplete)
+	fmt.Printf("\n%s %s\n", termrender.Accent("◆"), i18n.M.SetupComplete)
 	return 0
 }

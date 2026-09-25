@@ -20,6 +20,7 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/surface"
 	"reasonix/internal/frontend/serve"
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/platform/telemetry"
 	"reasonix/internal/session/control"
 )
@@ -169,7 +170,7 @@ func reportServeFrontend(ctrl *control.Controller, srv serveHost, cfg config.Ser
 	} else if srv.AuthMode() == "password" {
 		fmt.Printf("  auth: password (login at %s/login)\n", origin)
 	}
-	if !supervised && isTTY(os.Stdout) && ansiConsoleReady() {
+	if !supervised && isTTY(os.Stdout) && termrender.ANSIConsoleReady() {
 		reportShareQR(os.Stdout, srv.AuthMode(), srv.AuthToken(), address, opts.publicURL)
 	}
 	if warning := serve.PlainHTTPAuthWarning(cfg, address); warning != "" {

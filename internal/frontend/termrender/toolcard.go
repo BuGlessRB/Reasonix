@@ -1,6 +1,6 @@
 // Formats a tool call as a Claude-style card line: a "● Verb(primary arg)"
 // header instead of the raw "-> name {json}", plus the "⎿" continuation gutter.
-package cli
+package termrender
 
 import (
 	"encoding/json"
@@ -57,24 +57,24 @@ var toolArgKey = map[string]string{
 	"task":          "description",
 }
 
-// toolDot returns the "●" status glyph coloured by the tool's category so the eye
+// ToolDot returns the "●" status glyph coloured by the tool's category so the eye
 // can tell reads (cyan) from writes (green), shell (yellow), process control
 // (magenta), and everything else (copper) at a glance.
-func toolDot(name string) string {
-	var c cliColor
+func ToolDot(name string) string {
+	var c Color
 	switch toolCategory[name] {
 	case "read":
-		c = activeCLITheme.toolRead
+		c = activeTheme.ToolRead
 	case "write":
-		c = activeCLITheme.success
+		c = activeTheme.Success
 	case "exec":
-		c = activeCLITheme.warn
+		c = activeTheme.Warn
 	case "proc":
-		c = activeCLITheme.toolProc
+		c = activeTheme.ToolProc
 	default:
-		c = activeCLITheme.accent
+		c = activeTheme.Accent
 	}
-	return themeFg(c, "●")
+	return ThemeFg(c, "●")
 }
 
 var toolCategory = map[string]string{
@@ -86,9 +86,9 @@ var toolCategory = map[string]string{
 	"wait": "proc", "kill_shell": "proc",
 }
 
-// toolDisplayName returns the card verb for a tool: a mapped builtin verb, the
+// ToolDisplayName returns the card verb for a tool: a mapped builtin verb, the
 // short name for an MCP tool (mcp__server__tool), or the raw id as a fallback.
-func toolDisplayName(name string) string {
+func ToolDisplayName(name string) string {
 	if _, short, ok := tool.SplitMCPName(name); ok {
 		return short
 	}
@@ -98,8 +98,8 @@ func toolDisplayName(name string) string {
 	return name
 }
 
-// toolArg pulls the primary argument shown in the card's parentheses.
-func toolArg(name, args string) string {
+// ToolArg pulls the primary argument shown in the card's parentheses.
+func ToolArg(name, args string) string {
 	var m map[string]any
 	if json.Unmarshal([]byte(args), &m) != nil {
 		return ""
@@ -146,19 +146,19 @@ func argList(v any) string {
 	return strings.Join(parts, ", ")
 }
 
-// toolCard renders the dispatch line: "  ⏺ Verb(arg)", arg clamped to width.
-func toolCard(name, args string, width int) string {
-	return "  " + toolDot(name) + " " + toolHead(name, toolArg(name, args), width)
+// ToolCard renders the dispatch line: "  ⏺ Verb(arg)", arg clamped to width.
+func ToolCard(name, args string, width int) string {
+	return "  " + ToolDot(name) + " " + ToolHead(name, ToolArg(name, args), width)
 }
 
-// toolHead builds "Verb(arg)" with the verb bold and the arg clamped to fit the
+// ToolHead builds "Verb(arg)" with the verb bold and the arg clamped to fit the
 // remaining width; shared by toolCard and the diff block header.
-func toolHead(name, arg string, width int) string {
-	label := toolDisplayName(name)
-	head := bold(label)
+func ToolHead(name, arg string, width int) string {
+	label := ToolDisplayName(name)
+	head := Bold(label)
 	if arg != "" {
 		avail := width - 4 - len([]rune(label)) - 2
-		head += dim("(") + clampPlain(arg, avail) + dim(")")
+		head += Dim("(") + clampPlain(arg, avail) + Dim(")")
 	}
 	return head
 }

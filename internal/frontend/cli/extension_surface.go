@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/base/i18n"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/ext/extension/uihub"
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/session/control"
 )
 
@@ -54,11 +55,11 @@ func extensionNotificationLine(p *event.ExtensionSurfacePayload) string {
 func extensionSeverityLine(severity, text string) string {
 	switch severity {
 	case "warn":
-		return themeStyle(activeCLITheme.warn).Render("  ! " + text)
+		return termrender.ThemeStyle(termrender.ActiveTheme().Warn).Render("  ! " + text)
 	case "error":
-		return themeStyle(activeCLITheme.danger).Render("  ✗ " + text)
+		return termrender.ThemeStyle(termrender.ActiveTheme().Danger).Render("  ✗ " + text)
 	default:
-		return dim("  · " + text)
+		return termrender.Dim("  · " + text)
 	}
 }
 
@@ -88,11 +89,11 @@ func extensionCardLines(pluginID string, c *event.ExtensionCardView, width int) 
 	if title == "" {
 		title = pluginID
 	}
-	lines := []string{accent("◆ " + title)}
+	lines := []string{termrender.Accent("◆ " + title)}
 	body := c.Text
 	if c.Markdown != "" {
-		bodyWidth := max(width-visibleWidth("  │ "), 1)
-		if rendered := newMarkdownRenderer(bodyWidth).Render(c.Markdown); rendered != "" {
+		bodyWidth := max(width-termrender.VisibleWidth("  │ "), 1)
+		if rendered := termrender.NewMarkdownRenderer(bodyWidth).Render(c.Markdown); rendered != "" {
 			body = rendered
 		} else {
 			body = c.Markdown
@@ -106,17 +107,17 @@ func extensionCardLines(pluginID string, c *event.ExtensionCardView, width int) 
 		lines = append(lines, "  │ "+ln)
 	}
 	for _, f := range c.Fields {
-		lines = append(lines, dim("  │ "+f.Key+": "+f.Value))
+		lines = append(lines, termrender.Dim("  │ "+f.Key+": "+f.Value))
 	}
 	if c.Progress != nil {
-		lines = append(lines, dim(fmt.Sprintf("  │ %.0f%%", *c.Progress*100)))
+		lines = append(lines, termrender.Dim(fmt.Sprintf("  │ %.0f%%", *c.Progress*100)))
 	}
 	for _, a := range c.Actions {
 		hint := fmt.Sprintf(i18n.M.ExtRunActionFmt, uihub.SlashName(pluginID, a.ActionID))
 		if a.Label != "" {
 			hint = a.Label + " — " + hint
 		}
-		lines = append(lines, dim("  │ → "+hint))
+		lines = append(lines, termrender.Dim("  │ → "+hint))
 	}
 	return lines
 }
@@ -130,14 +131,14 @@ func extensionFormLines(pluginID string, f *event.ExtensionFormView) []string {
 	if title == "" {
 		title = pluginID
 	}
-	lines := []string{accent("◆ " + title)}
+	lines := []string{termrender.Accent("◆ " + title)}
 	for ln := range strings.SplitSeq(strings.TrimRight(f.Message, "\n"), "\n") {
 		if ln == "" {
 			continue
 		}
-		lines = append(lines, dim("  │ "+ln))
+		lines = append(lines, termrender.Dim("  │ "+ln))
 	}
-	lines = append(lines, dim("  │ "+i18n.M.ExtFormFieldsHint))
+	lines = append(lines, termrender.Dim("  │ "+i18n.M.ExtFormFieldsHint))
 	return lines
 }
 

@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"strings"
@@ -11,16 +11,16 @@ func testSweepRows(width int) (before, after []string) {
 	// mix wide runes, pre-styled text and plain text
 	for range 4 {
 		before = append(before, strings.Repeat("宽", width/2), strings.Repeat("a", width),
-			themeFg(activeCLITheme.warn, strings.Repeat("s", width)))
+			ThemeFg(activeTheme.Warn, strings.Repeat("s", width)))
 		after = append(after, strings.Repeat("窄", width/2), strings.Repeat("b", width),
-			themeFg(activeCLITheme.info, strings.Repeat("t", width)))
+			ThemeFg(activeTheme.Info, strings.Repeat("t", width)))
 	}
 	return before, after
 }
 
 func TestThemeSweepHoldsExactRowWidth(t *testing.T) {
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
-	configureCLIThemeWithStyle("dark", "graphite")
+	defer restoreThemeForTest(activeColorProfile, activeTheme)
+	configureThemeWithStyle("dark", "graphite")
 
 	for _, profile := range []colorprofile.Profile{colorprofile.ANSI256, colorprofile.TrueColor} {
 		activeColorProfile = profile
@@ -29,7 +29,7 @@ func TestThemeSweepHoldsExactRowWidth(t *testing.T) {
 		s := &themeSweep{before: before, after: after, step: 3, width: width}
 		for s.col = 0; s.col <= width; s.col++ {
 			for i, row := range strings.Split(s.render(), "\n") {
-				if got := visibleWidth(row); got != width {
+				if got := VisibleWidth(row); got != width {
 					t.Fatalf("%v col=%d row=%d width=%d, want %d: %q", profile, s.col, i, got, width, row)
 				}
 			}

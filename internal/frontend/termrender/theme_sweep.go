@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"strings"
@@ -54,7 +54,7 @@ func (s *themeSweep) composeRow(after, before string) string {
 // padCells restores the exact column count after a truncation that landed on a
 // double-width cell.
 func padCells(s string, w int) string {
-	if d := w - visibleWidth(s); d > 0 {
+	if d := w - VisibleWidth(s); d > 0 {
 		return s + strings.Repeat(" ", d)
 	}
 	return s

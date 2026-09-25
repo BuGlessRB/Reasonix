@@ -31,6 +31,7 @@ import (
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/platform/notify"
 	"reasonix/internal/platform/telemetry"
 	"reasonix/internal/session/control"
@@ -107,52 +108,52 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 	case "web":
 		return runWebCommand(rest, version)
 	case "setup":
-		configureCLIThemeFromConfigForTTYOutput()
+		configureThemeForTTYOutput()
 		return setupConfig(rest)
 	case "config":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return configCommand(rest)
 	case "init":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return initHint()
 	case "acp":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return acpCommand(rest, version)
 	case "mcp":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return mcpCommand(rest)
 	case "login", "whoami", "logout":
 		return accountCommand(cmd, rest, version)
 	case "remote":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return remoteCommand(rest, version)
 	case "plugin":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return pluginCommand(rest)
 	case "subagent":
-		configureCLIThemeFromConfigForTTYOutput()
+		configureThemeForTTYOutput()
 		return subagentCommand(rest)
 	case "doctor":
 		if !doctorRepair {
-			configureCLIThemeFromConfig()
+			termrender.ConfigureThemeFromConfig()
 		}
 		return doctorCommand(rest, version)
 	case "report":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return reportCommand(rest)
 	case "session", "sessions", "catalogs":
 		return runSessionOrCatalogCommand(cmd, rest)
 	case "hook", "hooks":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return hookCommand(rest)
 	case "task":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return taskCommand(rest)
 	case "review":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return reviewCommand(rest)
 	case "upgrade", "update":
-		configureCLIThemeFromConfig()
+		termrender.ConfigureThemeFromConfig()
 		return upgradeCommand(rest, version)
 	case "version":
 		// Detailed identity: version --verbose / --json. Top-level --version/-v
@@ -215,23 +216,9 @@ func migrateMCPConfigForCLIWorkspace() {
 	}
 }
 
-func configureCLIThemeFromConfig() {
-	if cfg, err := config.Load(); err == nil {
-		configureCLIThemeWithStyle(cfg.UITheme(), cfg.UIThemeStyle())
-		cliCursorShape = cfg.UICursorShape()
-	} else {
-		configureCLITheme("auto")
-		cliCursorShape = "bar"
-	}
-}
-
-func configureCLIThemeFromConfigForTTYOutput() {
-	if isTTY(os.Stdout) {
-		withTerminalProbe(configureCLIThemeFromConfig)
-		return
-	}
-	configureCLIThemeFromConfig()
-}
+// configureThemeForTTYOutput is the one theme setup that may probe the
+// terminal; metadata commands must never reach it.
+var configureThemeForTTYOutput = termrender.ConfigureThemeFromConfigForTTYOutput
 
 // setupProfile builds a ready-to-drive Controller from config via boot.Build.
 // The assembly (model resolution, tool registry, permission gate, two-model
@@ -435,7 +422,7 @@ func runAgent(args []string, version string) int {
 		return 1
 	}
 	cfg, _ := config.Load()
-	configureCLIThemeFromConfigForTTYOutput()
+	configureThemeForTTYOutput()
 
 	prompt := strings.TrimSpace(strings.Join(fs.Args(), " "))
 	if prompt == "" {
@@ -698,7 +685,7 @@ func setupConfig(args []string) int {
 	if isInteractive() {
 		rc := interactiveSetup(t.config, t.env)
 		if rc == 0 {
-			fmt.Printf(i18n.M.TryHintFmt+"\n", bold("reasonix"))
+			fmt.Printf(i18n.M.TryHintFmt+"\n", termrender.Bold("reasonix"))
 		}
 		return rc
 	}
@@ -769,10 +756,10 @@ func interactiveSetup(configPath, envPath string) int {
 	// Now that the catalogue matches the user's choice, show the welcome banner
 	// in their language before any substantive prompt.
 	fmt.Println()
-	fmt.Print(boxed([]string{
-		accent("◆") + " " + fmt.Sprintf(i18n.M.WelcomeTitleFmt, bold("reasonix")),
+	fmt.Print(termrender.Boxed([]string{
+		termrender.Accent("◆") + " " + fmt.Sprintf(i18n.M.WelcomeTitleFmt, termrender.Bold("reasonix")),
 		"",
-		dim(i18n.M.NoConfigYet),
+		termrender.Dim(i18n.M.NoConfigYet),
 	}))
 	fmt.Println()
 
@@ -1074,7 +1061,7 @@ func promptAnthropicProviderManualWith(in *bufio.Scanner, baseURL, keyEnv, apiKe
 		Name: providerSlug("anthropic", baseURL), Kind: "anthropic", BaseURL: baseURL,
 		Model: modelName, APIKeyEnv: keyEnv, ContextWindow: askContextWindow(in, os.Stdout),
 	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.AnthropicAddedFmt, entry.Name+"/"+modelName)))
+	fmt.Printf("  %s\n", termrender.Green(fmt.Sprintf(i18n.M.AnthropicAddedFmt, entry.Name+"/"+modelName)))
 	return newProviderPromptResult([]config.ProviderEntry{entry}, keyEnv, apiKey), nil
 }
 
@@ -1094,19 +1081,19 @@ func promptAnthropicProviderFromURL() (providerPromptResult, error) {
 	keyEnv := promptAPIKeyEnvName(in, os.Stdout, i18n.M.AnthropicPromptKeyEnv, "ANTHROPIC_API_KEY")
 	apiKey := ask(in, os.Stdout, i18n.M.AnthropicPromptAPIKey, "")
 
-	fmt.Printf("  %s\n", dim(fmt.Sprintf(i18n.M.AnthropicFetchingModelsFmt, "anthropic")))
+	fmt.Printf("  %s\n", termrender.Dim(fmt.Sprintf(i18n.M.AnthropicFetchingModelsFmt, "anthropic")))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	models, err := fetchModelListCompat(ctx, baseURL, apiKey)
 	if err != nil || len(models) == 0 {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  %s\n", dim(fmt.Sprintf(i18n.M.AnthropicFetchModelsFailedFmt, "anthropic", err)))
+			fmt.Fprintf(os.Stderr, "  %s\n", termrender.Dim(fmt.Sprintf(i18n.M.AnthropicFetchModelsFailedFmt, "anthropic", err)))
 		} else {
-			fmt.Fprintf(os.Stderr, "  %s\n", dim(i18n.M.AnthropicFetchEmpty))
+			fmt.Fprintf(os.Stderr, "  %s\n", termrender.Dim(i18n.M.AnthropicFetchEmpty))
 		}
 		return promptAnthropicProviderManualWith(in, baseURL, keyEnv, apiKey)
 	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.AnthropicFetchModelsSuccessFmt, len(models), "anthropic")))
+	fmt.Printf("  %s\n", termrender.Green(fmt.Sprintf(i18n.M.AnthropicFetchModelsSuccessFmt, len(models), "anthropic")))
 
 	items := make([]menuItem, len(models))
 	for i, m := range models {
@@ -1124,7 +1111,7 @@ func promptAnthropicProviderFromURL() (providerPromptResult, error) {
 		Name: providerSlug("anthropic", baseURL), Kind: "anthropic", BaseURL: baseURL,
 		Models: selected, Model: selected[0], APIKeyEnv: keyEnv, ContextWindow: askContextWindow(in, os.Stdout),
 	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.AnthropicAddedFmt, entry.Name+"/"+selected[0])))
+	fmt.Printf("  %s\n", termrender.Green(fmt.Sprintf(i18n.M.AnthropicAddedFmt, entry.Name+"/"+selected[0])))
 	return newProviderPromptResult([]config.ProviderEntry{entry}, keyEnv, apiKey), nil
 }
 
@@ -1238,7 +1225,7 @@ func configureKeys(selected []config.ProviderEntry, r io.Reader, w io.Writer) []
 					continue
 				}
 			}
-			fmt.Fprintf(w, "  %s %s\n", green("✓"), fmt.Sprintf(i18n.M.APIKeyAlreadySetFmt, p.APIKeyEnv))
+			fmt.Fprintf(w, "  %s %s\n", termrender.Green("✓"), fmt.Sprintf(i18n.M.APIKeyAlreadySetFmt, p.APIKeyEnv))
 			envLines = append(envLines, p.APIKeyEnv+"="+cur)
 			continue
 		}
@@ -1348,7 +1335,7 @@ func usage() {
 // A console this process owns alone was opened by a double-click and closes
 // on exit, so it points at Studio and waits instead of vanishing.
 func bareUsage() int {
-	configureCLIThemeFromConfigForTTYOutput()
+	configureThemeForTTYOutput()
 	usage()
 	if ownsConsoleAlone() {
 		fmt.Print("\n" + i18n.M.StandaloneConsoleHint)

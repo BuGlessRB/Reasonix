@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"strings"
@@ -36,7 +36,7 @@ func TestRenderNarrowNoPanic(t *testing.T) {
 	d := event.FileDiff{Diff: "@@ -1 +1 @@\n-\told 你好\n+\tnew 世界\n", Added: 1, Removed: 1}
 	for _, w := range []int{1, 2, 3, 5, 8, 20} {
 		_ = diffBody(d, "x.go", w, 40)
-		_ = toolCard("bash", `{"command":"go test ./... 你好 long command"}`, w)
+		_ = ToolCard("bash", `{"command":"go test ./... 你好 long command"}`, w)
 	}
 }
 

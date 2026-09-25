@@ -7,6 +7,7 @@ import (
 
 	"reasonix/internal/base/textutil"
 	"reasonix/internal/ext/plugin"
+	"reasonix/internal/frontend/termrender"
 )
 
 const mcpMaxItemsPerSection = 6
@@ -72,8 +73,8 @@ func writeMCPServer(b *strings.Builder, width int, s plugin.ServerStatus, prompt
 	if len(invalidTools) > 0 {
 		meta += " · " + countText(len(invalidTools), "unavailable tool")
 	}
-	name := viewCompactText(sanitizeExternalDisplayText(s.Name), viewBudget(width, 4+2+1+visibleWidth(meta)))
-	fmt.Fprintf(b, "    %s %s %s\n", accent("✓"), bold(name), viewMeta(meta))
+	name := viewCompactText(sanitizeExternalDisplayText(s.Name), viewBudget(width, 4+2+1+termrender.VisibleWidth(meta)))
+	fmt.Fprintf(b, "    %s %s %s\n", termrender.Accent("✓"), termrender.Bold(name), viewMeta(meta))
 	// What the server says it is for, when it said anything: nothing local can
 	// stand in for it.
 	if desc := sanitizeExternalDisplayText(s.Description); desc != "" {
@@ -153,8 +154,8 @@ func writeMCPFailure(b *strings.Builder, width int, f plugin.Failure) {
 		transport = "unknown"
 	}
 	meta := fmt.Sprintf("(%s)  %s", transport, sanitizeExternalDisplayText(f.Error))
-	name := viewCompactText(sanitizeExternalDisplayText(f.Name), viewBudget(width, 4+2+1+visibleWidth(meta)))
-	fmt.Fprintf(b, "    %s %s %s\n", yellow("!"), bold(name), viewMeta(viewCompactText(meta, viewBudget(width, 10+visibleWidth(name)))))
+	name := viewCompactText(sanitizeExternalDisplayText(f.Name), viewBudget(width, 4+2+1+termrender.VisibleWidth(meta)))
+	fmt.Fprintf(b, "    %s %s %s\n", termrender.Yellow("!"), termrender.Bold(name), viewMeta(viewCompactText(meta, viewBudget(width, 10+termrender.VisibleWidth(name)))))
 }
 
 func writeMCPPromptList(b *strings.Builder, width int, prompts []plugin.Prompt) {
@@ -194,7 +195,7 @@ func writeMCPResourceList(b *strings.Builder, width int, resources []plugin.Reso
 func writeMCPItem(b *strings.Builder, width int, indent, ref, desc string) {
 	desc = sanitizeExternalDisplayText(desc)
 	ref = sanitizeExternalDisplayText(ref)
-	available := viewBudget(width, visibleWidth(indent))
+	available := viewBudget(width, termrender.VisibleWidth(indent))
 	if desc == "" || available < 30 {
 		b.WriteString(indent + compactMiddle(ref, available))
 		b.WriteByte('\n')
@@ -235,7 +236,7 @@ func countText(n int, noun string) string {
 }
 
 func compactEnd(s string, maxWidth int) string {
-	if maxWidth <= 0 || visibleWidth(s) <= maxWidth {
+	if maxWidth <= 0 || termrender.VisibleWidth(s) <= maxWidth {
 		return s
 	}
 	if maxWidth <= 1 {
@@ -244,7 +245,7 @@ func compactEnd(s string, maxWidth int) string {
 	var out strings.Builder
 	for _, r := range s {
 		next := out.String() + string(r)
-		if visibleWidth(next)+1 > maxWidth {
+		if termrender.VisibleWidth(next)+1 > maxWidth {
 			break
 		}
 		out.WriteRune(r)
@@ -253,7 +254,7 @@ func compactEnd(s string, maxWidth int) string {
 }
 
 func compactMiddle(s string, maxWidth int) string {
-	if maxWidth <= 0 || visibleWidth(s) <= maxWidth {
+	if maxWidth <= 0 || termrender.VisibleWidth(s) <= maxWidth {
 		return s
 	}
 	if maxWidth <= 3 {
@@ -271,7 +272,7 @@ func takeLeftWidth(s string, maxWidth int) string {
 	var out strings.Builder
 	for _, r := range s {
 		next := out.String() + string(r)
-		if visibleWidth(next) > maxWidth {
+		if termrender.VisibleWidth(next) > maxWidth {
 			break
 		}
 		out.WriteRune(r)
@@ -283,7 +284,7 @@ func takeRightWidth(s string, maxWidth int) string {
 	var out []rune
 	width := 0
 	for _, r := range reverseRunes([]rune(s)) {
-		w := visibleWidth(string(r))
+		w := termrender.VisibleWidth(string(r))
 		if width+w > maxWidth {
 			break
 		}

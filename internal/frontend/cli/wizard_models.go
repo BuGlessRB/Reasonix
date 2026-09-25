@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/base/i18n"
 	"reasonix/internal/contract/config"
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/model/catalog"
 	"reasonix/internal/model/openai"
 )
@@ -26,11 +27,11 @@ func fetchOrFallback(probe *config.ProviderEntry, famName string) []string {
 	models, err := catalog.FetchModels(ctx, probe)
 	if err != nil || len(models) == 0 {
 		if len(static) > 0 {
-			fmt.Fprintf(os.Stderr, "  %s\n", dim(fmt.Sprintf(i18n.M.FetchModelsUsingPresetsFmt, famName)))
+			fmt.Fprintf(os.Stderr, "  %s\n", termrender.Dim(fmt.Sprintf(i18n.M.FetchModelsUsingPresetsFmt, famName)))
 		}
 		return static
 	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.FetchModelsSuccessFmt, len(models), famName)))
+	fmt.Printf("  %s\n", termrender.Green(fmt.Sprintf(i18n.M.FetchModelsSuccessFmt, len(models), famName)))
 	return models
 }
 

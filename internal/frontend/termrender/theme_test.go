@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"reflect"
@@ -15,22 +15,22 @@ import (
 func TestConfigureCLIThemeSwitchesModeAndDefaultStyle(t *testing.T) {
 	t.Setenv("REASONIX_THEME", "")
 	t.Setenv("REASONIX_THEME_STYLE", "")
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	defer restoreThemeForTest(activeColorProfile, activeTheme)
 	activeColorProfile = colorprofile.ANSI256
 
-	configureCLITheme("light")
-	if activeCLITheme.name != "light" || activeCLITheme.style != "sandstone" {
-		t.Fatalf("light theme = %s/%s, want light/sandstone", activeCLITheme.name, activeCLITheme.style)
+	ConfigureTheme("light")
+	if activeTheme.Name != "light" || activeTheme.Style != "sandstone" {
+		t.Fatalf("light theme = %s/%s, want light/sandstone", activeTheme.Name, activeTheme.Style)
 	}
-	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;173m") {
+	if got := Accent("x"); !strings.HasPrefix(got, "\033[38;5;173m") {
 		t.Fatalf("light default accent = %q, want sandstone xterm 173", got)
 	}
 
-	configureCLITheme("dark")
-	if activeCLITheme.name != "dark" || activeCLITheme.style != "graphite" {
-		t.Fatalf("dark theme = %s/%s, want dark/graphite", activeCLITheme.name, activeCLITheme.style)
+	ConfigureTheme("dark")
+	if activeTheme.Name != "dark" || activeTheme.Style != "graphite" {
+		t.Fatalf("dark theme = %s/%s, want dark/graphite", activeTheme.Name, activeTheme.Style)
 	}
-	if got := accent("x"); !strings.HasPrefix(got, ansiAccent) {
+	if got := Accent("x"); !strings.HasPrefix(got, ansiAccent) {
 		t.Fatalf("dark accent = %q, want %q", got, ansiAccent)
 	}
 }
@@ -38,51 +38,51 @@ func TestConfigureCLIThemeSwitchesModeAndDefaultStyle(t *testing.T) {
 func TestConfigureCLIThemeStyleOverride(t *testing.T) {
 	t.Setenv("REASONIX_THEME", "")
 	t.Setenv("REASONIX_THEME_STYLE", "")
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	defer restoreThemeForTest(activeColorProfile, activeTheme)
 	activeColorProfile = colorprofile.ANSI256
 
-	configureCLIThemeWithStyle("dark", "aurora")
-	if activeCLITheme.name != "dark" || activeCLITheme.style != "aurora" {
-		t.Fatalf("theme = %s/%s, want dark/aurora", activeCLITheme.name, activeCLITheme.style)
+	configureThemeWithStyle("dark", "aurora")
+	if activeTheme.Name != "dark" || activeTheme.Style != "aurora" {
+		t.Fatalf("theme = %s/%s, want dark/aurora", activeTheme.Name, activeTheme.Style)
 	}
-	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;79m") {
+	if got := Accent("x"); !strings.HasPrefix(got, "\033[38;5;79m") {
 		t.Fatalf("aurora accent = %q, want xterm 79", got)
 	}
 
-	configureCLITheme("glacier")
-	if activeCLITheme.name != "light" || activeCLITheme.style != "glacier" {
-		t.Fatalf("theme style command resolved %s/%s, want light/glacier", activeCLITheme.name, activeCLITheme.style)
+	ConfigureTheme("glacier")
+	if activeTheme.Name != "light" || activeTheme.Style != "glacier" {
+		t.Fatalf("theme style command resolved %s/%s, want light/glacier", activeTheme.Name, activeTheme.Style)
 	}
 }
 
 func TestConfigureCLIThemeHonorsEnvOverride(t *testing.T) {
 	t.Setenv("REASONIX_THEME", "ember")
 	t.Setenv("REASONIX_THEME_STYLE", "")
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	defer restoreThemeForTest(activeColorProfile, activeTheme)
 	activeColorProfile = colorprofile.ANSI256
 
-	configureCLIThemeWithStyle("light", "glacier")
-	if activeCLITheme.name != "dark" || activeCLITheme.style != "ember" {
-		t.Fatalf("REASONIX_THEME override resolved %s/%s, want dark/ember", activeCLITheme.name, activeCLITheme.style)
+	configureThemeWithStyle("light", "glacier")
+	if activeTheme.Name != "dark" || activeTheme.Style != "ember" {
+		t.Fatalf("REASONIX_THEME override resolved %s/%s, want dark/ember", activeTheme.Name, activeTheme.Style)
 	}
 }
 
 func TestThemeRendersAtProfileFidelity(t *testing.T) {
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
-	configureCLIThemeWithStyle("dark", "graphite")
+	defer restoreThemeForTest(activeColorProfile, activeTheme)
+	configureThemeWithStyle("dark", "graphite")
 
 	activeColorProfile = colorprofile.TrueColor
-	if got := accent("x"); !strings.HasPrefix(got, "\033[38;2;217;119;87m") {
+	if got := Accent("x"); !strings.HasPrefix(got, "\033[38;2;217;119;87m") {
 		t.Fatalf("truecolor accent = %q, want 24-bit #d97757", got)
 	}
 
 	activeColorProfile = colorprofile.ANSI256
-	if got := accent("x"); !strings.HasPrefix(got, ansiAccent) {
+	if got := Accent("x"); !strings.HasPrefix(got, ansiAccent) {
 		t.Fatalf("256-colour accent = %q, want %q", got, ansiAccent)
 	}
 
 	activeColorProfile = colorprofile.NoTTY
-	if got := accent("x"); got != "x" {
+	if got := Accent("x"); got != "x" {
 		t.Fatalf("no-tty accent = %q, want unstyled text", got)
 	}
 }
@@ -129,16 +129,16 @@ func TestParseOSC11Response(t *testing.T) {
 }
 
 func TestAutoThemeFallsBackToColorFGBG(t *testing.T) {
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	defer restoreThemeForTest(activeColorProfile, activeTheme)
 	activeColorProfile = colorprofile.NoTTY
 
 	t.Setenv("COLORFGBG", "0;15")
-	if got := resolveCLITheme("auto").name; got != "light" {
+	if got := resolveCLITheme("auto").Name; got != "light" {
 		t.Fatalf("COLORFGBG light fallback resolved %q, want light", got)
 	}
 
 	t.Setenv("COLORFGBG", "15;0")
-	if got := resolveCLITheme("auto").name; got != "dark" {
+	if got := resolveCLITheme("auto").Name; got != "dark" {
 		t.Fatalf("COLORFGBG dark fallback resolved %q, want dark", got)
 	}
 }
@@ -146,7 +146,7 @@ func TestAutoThemeFallsBackToColorFGBG(t *testing.T) {
 func TestApplyTextareaThemeClearsCursorLineBackground(t *testing.T) {
 	t.Setenv("REASONIX_THEME", "")
 	t.Setenv("REASONIX_THEME_STYLE", "")
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	defer restoreThemeForTest(activeColorProfile, activeTheme)
 	activeColorProfile = colorprofile.ANSI256
 
 	for _, mode := range []string{"dark", "light", "auto"} {
@@ -156,10 +156,10 @@ func TestApplyTextareaThemeClearsCursorLineBackground(t *testing.T) {
 			} else {
 				t.Setenv("COLORFGBG", "")
 			}
-			configureCLITheme(mode)
+			ConfigureTheme(mode)
 
 			ti := textarea.New()
-			applyTextareaTheme(&ti)
+			ApplyTextareaTheme(&ti)
 			styles := ti.Styles()
 			emptyBG := lipgloss.NewStyle().GetBackground()
 
@@ -182,11 +182,11 @@ func TestApplyTextareaThemeClearsCursorLineBackground(t *testing.T) {
 func TestApplyTextareaThemeHonorsCursorShape(t *testing.T) {
 	t.Setenv("REASONIX_THEME", "")
 	t.Setenv("REASONIX_THEME_STYLE", "")
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
-	prevShape := cliCursorShape
-	defer func() { cliCursorShape = prevShape }()
+	defer restoreThemeForTest(activeColorProfile, activeTheme)
+	prevShape := cursorShape
+	defer func() { cursorShape = prevShape }()
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	ConfigureTheme("dark")
 
 	for _, tt := range []struct {
 		name string
@@ -200,9 +200,9 @@ func TestApplyTextareaThemeHonorsCursorShape(t *testing.T) {
 		{name: "unknown", in: "unknown", want: tea.CursorBar},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			cliCursorShape = tt.in
+			cursorShape = tt.in
 			ti := textarea.New()
-			applyTextareaTheme(&ti)
+			ApplyTextareaTheme(&ti)
 			if got := ti.Styles().Cursor.Shape; got != tt.want {
 				t.Fatalf("cursor shape = %v, want %v", got, tt.want)
 			}
@@ -218,7 +218,7 @@ func TestRuntimeAutoThemeDoesNotProbeStdin(t *testing.T) {
 	t.Setenv("REASONIX_THEME", "")
 	t.Setenv("REASONIX_THEME_STYLE", "")
 	t.Setenv("COLORFGBG", "15;0")
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	defer restoreThemeForTest(activeColorProfile, activeTheme)
 	activeColorProfile = colorprofile.ANSI256
 
 	probed := false
@@ -228,7 +228,7 @@ func TestRuntimeAutoThemeDoesNotProbeStdin(t *testing.T) {
 		return terminalRGB{255, 255, 255}, true
 	}
 
-	if got := setCLIThemeMode("auto").name; got != "dark" {
+	if got := setCLIThemeMode("auto").Name; got != "dark" {
 		t.Fatalf("auto with COLORFGBG=15;0 resolved %q, want dark", got)
 	}
 	if probed {
@@ -236,7 +236,7 @@ func TestRuntimeAutoThemeDoesNotProbeStdin(t *testing.T) {
 	}
 
 	withTerminalProbe(func() {
-		if got := resolveCLITheme("auto").name; got != "light" {
+		if got := resolveCLITheme("auto").Name; got != "light" {
 			t.Fatalf("opted-in probe resolved %q, want light", got)
 		}
 	})
@@ -245,8 +245,8 @@ func TestRuntimeAutoThemeDoesNotProbeStdin(t *testing.T) {
 	}
 }
 
-func restoreThemeForTest(prevColor colorprofile.Profile, prevTheme cliPalette) {
+func restoreThemeForTest(prevColor colorprofile.Profile, prevTheme Palette) {
 	activeColorProfile = prevColor
-	activeCLITheme = prevTheme
+	activeTheme = prevTheme
 	refreshCLIStyles()
 }

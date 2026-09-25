@@ -1,4 +1,4 @@
-package cli
+package termrender
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-type cliColor struct {
+type Color struct {
 	hex string
 	// Distance-based downsampling collapses the dark, low-chroma diff backgrounds
 	// to plain grey and loses the red/green tint that carries their meaning, so
@@ -20,106 +20,112 @@ type cliColor struct {
 	xterm int
 }
 
-type cliPalette struct {
-	name         string
-	style        string
-	accent       cliColor
-	muted        cliColor
-	faint        cliColor
-	subtle       cliColor
-	success      cliColor
-	warn         cliColor
-	err          cliColor
-	danger       cliColor
-	info         cliColor
-	secondary    cliColor
-	border       cliColor
-	selection    cliColor
-	userBubbleBG cliColor
-	diffAddBG    cliColor
-	diffDelBG    cliColor
-	toolRead     cliColor
-	toolProc     cliColor
+type Palette struct {
+	Name         string
+	Style        string
+	Accent       Color
+	Muted        Color
+	Faint        Color
+	Subtle       Color
+	Success      Color
+	Warn         Color
+	Err          Color
+	Danger       Color
+	Info         Color
+	Secondary    Color
+	Border       Color
+	Selection    Color
+	UserBubbleBG Color
+	DiffAddBG    Color
+	DiffDelBG    Color
+	ToolRead     Color
+	ToolProc     Color
 }
 
 type cliThemeStyle struct {
 	name        string
 	mode        string
-	accent      cliColor
+	accent      Color
 	description string
 }
 
 var (
-	cliDarkTheme = cliPalette{
-		name:         "dark",
-		style:        "graphite",
-		accent:       cliColor{"#d97757", 173},
-		muted:        cliColor{"#c0c4cc", 251},
-		faint:        cliColor{"#858b96", 245},
-		subtle:       cliColor{"#a4a9b3", 248},
-		success:      cliColor{"#74b87a", 108},
-		warn:         cliColor{"#d9a441", 179},
-		err:          cliColor{"#e0696a", 167},
-		danger:       cliColor{"#e5484d", 167},
-		info:         cliColor{"#56b6c2", 80},
-		secondary:    cliColor{"#b18cff", 141},
-		border:       cliColor{"#343945", 237},
-		selection:    cliColor{"#d97757", 173},
-		userBubbleBG: cliColor{"#222631", 235},
-		diffAddBG:    cliColor{"#14351d", 22},
-		diffDelBG:    cliColor{"#3a1619", 52},
-		toolRead:     cliColor{"#56b6c2", 80},
-		toolProc:     cliColor{"#c678dd", 176},
+	cliDarkTheme = Palette{
+		Name:         "dark",
+		Style:        "graphite",
+		Accent:       Color{"#d97757", 173},
+		Muted:        Color{"#c0c4cc", 251},
+		Faint:        Color{"#858b96", 245},
+		Subtle:       Color{"#a4a9b3", 248},
+		Success:      Color{"#74b87a", 108},
+		Warn:         Color{"#d9a441", 179},
+		Err:          Color{"#e0696a", 167},
+		Danger:       Color{"#e5484d", 167},
+		Info:         Color{"#56b6c2", 80},
+		Secondary:    Color{"#b18cff", 141},
+		Border:       Color{"#343945", 237},
+		Selection:    Color{"#d97757", 173},
+		UserBubbleBG: Color{"#222631", 235},
+		DiffAddBG:    Color{"#14351d", 22},
+		DiffDelBG:    Color{"#3a1619", 52},
+		ToolRead:     Color{"#56b6c2", 80},
+		ToolProc:     Color{"#c678dd", 176},
 	}
-	cliLightTheme = cliPalette{
-		name:         "light",
-		style:        "sandstone",
-		accent:       cliColor{"#2f5fa8", 25},
-		muted:        cliColor{"#555049", 239},
-		faint:        cliColor{"#82796f", 243},
-		subtle:       cliColor{"#6f675f", 241},
-		success:      cliColor{"#5d9b66", 65},
-		warn:         cliColor{"#b68120", 136},
-		err:          cliColor{"#b94b4d", 131},
-		danger:       cliColor{"#e5484d", 167},
-		info:         cliColor{"#2f5fa8", 25},
-		secondary:    cliColor{"#7d63c8", 104},
-		border:       cliColor{"#ded4c6", 252},
-		selection:    cliColor{"#6f91d9", 68},
-		userBubbleBG: cliColor{"#f5f0e8", 255},
-		diffAddBG:    cliColor{"#e5f3e7", 254},
-		diffDelBG:    cliColor{"#fae8e8", 255},
-		toolRead:     cliColor{"#6f91d9", 68},
-		toolProc:     cliColor{"#8a6bb8", 97},
+	cliLightTheme = Palette{
+		Name:         "light",
+		Style:        "sandstone",
+		Accent:       Color{"#2f5fa8", 25},
+		Muted:        Color{"#555049", 239},
+		Faint:        Color{"#82796f", 243},
+		Subtle:       Color{"#6f675f", 241},
+		Success:      Color{"#5d9b66", 65},
+		Warn:         Color{"#b68120", 136},
+		Err:          Color{"#b94b4d", 131},
+		Danger:       Color{"#e5484d", 167},
+		Info:         Color{"#2f5fa8", 25},
+		Secondary:    Color{"#7d63c8", 104},
+		Border:       Color{"#ded4c6", 252},
+		Selection:    Color{"#6f91d9", 68},
+		UserBubbleBG: Color{"#f5f0e8", 255},
+		DiffAddBG:    Color{"#e5f3e7", 254},
+		DiffDelBG:    Color{"#fae8e8", 255},
+		ToolRead:     Color{"#6f91d9", 68},
+		ToolProc:     Color{"#8a6bb8", 97},
 	}
 	cliThemeStyles = []cliThemeStyle{
-		{name: "graphite", mode: "dark", accent: cliColor{"#d97757", 173}, description: "warm clay accent"},
-		{name: "ember", mode: "dark", accent: cliColor{"#f06d38", 209}, description: "hot orange accent"},
-		{name: "aurora", mode: "dark", accent: cliColor{"#34c3a6", 79}, description: "cool teal accent"},
-		{name: "midnight", mode: "dark", accent: cliColor{"#b18cff", 141}, description: "quiet violet accent"},
-		{name: "sandstone", mode: "light", accent: cliColor{"#c2613f", 173}, description: "default warm light accent"},
-		{name: "porcelain", mode: "light", accent: cliColor{"#7d63c8", 104}, description: "soft violet light accent"},
-		{name: "linen", mode: "light", accent: cliColor{"#bd5d4d", 167}, description: "muted coral light accent"},
-		{name: "glacier", mode: "light", accent: cliColor{"#357fa8", 74}, description: "cool blue light accent"},
+		{name: "graphite", mode: "dark", accent: Color{"#d97757", 173}, description: "warm clay accent"},
+		{name: "ember", mode: "dark", accent: Color{"#f06d38", 209}, description: "hot orange accent"},
+		{name: "aurora", mode: "dark", accent: Color{"#34c3a6", 79}, description: "cool teal accent"},
+		{name: "midnight", mode: "dark", accent: Color{"#b18cff", 141}, description: "quiet violet accent"},
+		{name: "sandstone", mode: "light", accent: Color{"#c2613f", 173}, description: "default warm light accent"},
+		{name: "porcelain", mode: "light", accent: Color{"#7d63c8", 104}, description: "soft violet light accent"},
+		{name: "linen", mode: "light", accent: Color{"#bd5d4d", 167}, description: "muted coral light accent"},
+		{name: "glacier", mode: "light", accent: Color{"#357fa8", 74}, description: "cool blue light accent"},
 	}
-	activeCLITheme = applyCLIThemeStyle(cliDarkTheme, cliThemeStyles[0])
+	activeTheme = applyCLIThemeStyle(cliDarkTheme, cliThemeStyles[0])
 	// activeBackgroundProbe stays inert unless a caller that owns stdin opts in
 	// through withTerminalProbe; terminalProbe is what opting in installs.
 	activeBackgroundProbe = noTerminalBackground
 	terminalProbe         = queryTerminalBackground
 )
 
+// ActiveTheme returns the palette every styling helper currently draws with.
+func ActiveTheme() Palette { return activeTheme }
+
+// ThemeName is the active palette's mode: "dark" or "light".
+func ThemeName() string { return activeTheme.Name }
+
 func noTerminalBackground() (terminalRGB, bool) { return terminalRGB{}, false }
 
-// cliCursorShape is the active cursor shape for the textarea input, configured
+// cursorShape is the active cursor shape for the textarea input, configured
 // via [ui] cursor_shape. Defaults to the slim bar used by the chat composer.
-var cliCursorShape = "bar"
+var cursorShape = "bar"
 
-func configureCLITheme(mode string) {
-	configureCLIThemeWithStyle(mode, "")
+func ConfigureTheme(mode string) {
+	configureThemeWithStyle(mode, "")
 }
 
-func configureCLIThemeWithStyle(mode, style string) {
+func configureThemeWithStyle(mode, style string) {
 	if env := strings.TrimSpace(os.Getenv("REASONIX_THEME")); env != "" {
 		if st, ok := cliThemeStyleByName(env); ok {
 			mode = st.mode
@@ -131,15 +137,15 @@ func configureCLIThemeWithStyle(mode, style string) {
 	if env := strings.TrimSpace(os.Getenv("REASONIX_THEME_STYLE")); env != "" {
 		style = env
 	}
-	activeCLITheme = resolveCLIThemeWithStyle(mode, style)
+	activeTheme = resolveCLIThemeWithStyle(mode, style)
 	refreshCLIStyles()
 }
 
-func resolveCLITheme(mode string) cliPalette {
+func resolveCLITheme(mode string) Palette {
 	return resolveCLIThemeWithStyle(mode, "")
 }
 
-func resolveCLIThemeWithStyle(mode, style string) cliPalette {
+func resolveCLIThemeWithStyle(mode, style string) Palette {
 	mode = strings.ToLower(strings.TrimSpace(mode))
 	if st, ok := cliThemeStyleByName(mode); ok {
 		return buildCLITheme(st.mode, st.name)
@@ -174,22 +180,22 @@ func resolveCLIThemeMode(mode string) string {
 	}
 }
 
-func buildCLITheme(mode, style string) cliPalette {
+func buildCLITheme(mode, style string) Palette {
 	base := cliDarkTheme
 	if mode == "light" {
 		base = cliLightTheme
 	}
 	st, ok := cliThemeStyleByName(style)
-	if !ok || st.mode != base.name {
-		st = defaultCLIThemeStyle(base.name)
+	if !ok || st.mode != base.Name {
+		st = defaultCLIThemeStyle(base.Name)
 	}
 	return applyCLIThemeStyle(base, st)
 }
 
-func applyCLIThemeStyle(base cliPalette, style cliThemeStyle) cliPalette {
-	base.style = style.name
-	base.accent = style.accent
-	base.selection = style.accent
+func applyCLIThemeStyle(base Palette, style cliThemeStyle) Palette {
+	base.Style = style.name
+	base.Accent = style.accent
+	base.Selection = style.accent
 	return base
 }
 
@@ -224,10 +230,10 @@ func withTerminalProbe(fn func()) {
 	fn()
 }
 
-func setCLIThemeMode(mode string) cliPalette {
-	activeCLITheme = resolveCLIThemeWithStyle(mode, activeCLITheme.style)
+func setCLIThemeMode(mode string) Palette {
+	activeTheme = resolveCLIThemeWithStyle(mode, activeTheme.Style)
 	refreshCLIStyles()
-	return activeCLITheme
+	return activeTheme
 }
 
 type terminalRGB struct {
@@ -301,7 +307,7 @@ func colorFGBGLooksLight() bool {
 	return err == nil && (bg == 7 || bg == 15)
 }
 
-func fgSGR(c cliColor) string {
+func fgSGR(c Color) string {
 	if trueColorTerminal() {
 		if r, g, b, ok := parseHexColor(c.hex); ok {
 			return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
@@ -310,7 +316,7 @@ func fgSGR(c cliColor) string {
 	return fmt.Sprintf("\033[38;5;%dm", c.xterm)
 }
 
-func bgSGR(c cliColor) string {
+func bgSGR(c Color) string {
 	if trueColorTerminal() {
 		if r, g, b, ok := parseHexColor(c.hex); ok {
 			return fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b)
@@ -330,25 +336,25 @@ func parseHexColor(hex string) (int, int, int, bool) {
 	return int(r), int(g), int(b), errR == nil && errG == nil && errB == nil
 }
 
-func themeFg(c cliColor, s string) string {
+func ThemeFg(c Color, s string) string {
 	return sgr(fgSGR(c), s)
 }
 
-// themeLipColor pre-resolves the fallback rather than handing lipgloss a 24-bit
+// ThemeLipColor pre-resolves the fallback rather than handing lipgloss a 24-bit
 // value: the bubbletea renderer would otherwise downsample it with the same
 // distance metric the hand-chosen xterm indices exist to avoid.
-func themeLipColor(c cliColor) color.Color {
+func ThemeLipColor(c Color) color.Color {
 	if trueColorTerminal() {
 		return lipgloss.Color(c.hex)
 	}
 	return lipgloss.Color(strconv.Itoa(c.xterm))
 }
 
-func themeStyle(c cliColor) lipgloss.Style {
+func ThemeStyle(c Color) lipgloss.Style {
 	if !colorOn() {
 		return lipgloss.NewStyle()
 	}
-	return lipgloss.NewStyle().Foreground(themeLipColor(c))
+	return lipgloss.NewStyle().Foreground(ThemeLipColor(c))
 }
 
 func init() {
@@ -358,9 +364,9 @@ func init() {
 func refreshCLIStyles() {
 }
 
-func applyTextareaTheme(ti *textarea.Model) {
+func ApplyTextareaTheme(ti *textarea.Model) {
 	plain := lipgloss.NewStyle()
-	weak := themeStyle(activeCLITheme.faint)
+	weak := ThemeStyle(activeTheme.Faint)
 	if !colorOn() {
 		weak = plain
 	}
@@ -387,11 +393,11 @@ func applyTextareaTheme(ti *textarea.Model) {
 		Prompt:           weak,
 	}
 	if colorOn() {
-		styles.Cursor.Color = themeLipColor(activeCLITheme.accent)
+		styles.Cursor.Color = ThemeLipColor(activeTheme.Accent)
 	} else {
 		styles.Cursor.Color = nil
 	}
-	switch cliCursorShape {
+	switch cursorShape {
 	case "block":
 		styles.Cursor.Shape = tea.CursorBlock
 	case "underline":
