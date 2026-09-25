@@ -87,11 +87,11 @@ func (m *model) liveLines() []string {
 		case it.Kind == ItemSay:
 			shown := m.sayShown[it.ID]
 			if rest := it.Text[min(shown, len(it.Text)):]; rest != "" {
-				out = append(out, strings.Split(renderSayPart(rest, shown == 0, m.width), "\n")...)
+				out = append(out, strings.Split(renderSayPart(rest, shown == 0, m.width, m.scrollbarHidden()), "\n")...)
 			}
 		case (it.Kind == ItemApproval || it.Kind == ItemAsk) && it.Verdict == "":
 		default:
-			if r := renderItem(it, m.width, 0); r != "" {
+			if r := renderItem(it, m.width, 0, m.scrollbarHidden()); r != "" {
 				out = append(out, strings.Split(r, "\n")...)
 			}
 		}

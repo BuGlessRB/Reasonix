@@ -120,8 +120,24 @@ func TestWrapAnsiCJK(t *testing.T) {
 // An ordered list counts from the number it was written with, so one that
 // resumes after a code block does not restart at 1.
 func TestOrderedListKeepsItsStartNumber(t *testing.T) {
-	out := ansi.Strip(RenderMarkdown("3. third\n4. fourth\n", 40))
+	out := ansi.Strip(RenderMarkdown("3. third\n4. fourth\n", 40, false))
 	if !strings.Contains(out, "3. third") || !strings.Contains(out, "4. fourth") {
 		t.Fatalf("list renumbered:\n%s", out)
+	}
+}
+
+// hideRail draws the fenced-code gutter as spaces so a terminal that owns the
+// mouse gets clean copy with no "│" rail.
+func TestRenderMarkdownHideRail(t *testing.T) {
+	const src = "```\ncode\n```\n"
+	if got := ansi.Strip(RenderMarkdown(src, 40, false)); !strings.Contains(got, "│") {
+		t.Fatalf("default render should keep the rail:\n%q", got)
+	}
+	got := ansi.Strip(RenderMarkdown(src, 40, true))
+	if strings.Contains(got, "│") {
+		t.Fatalf("hideRail render should drop the rail:\n%q", got)
+	}
+	if !strings.Contains(got, "code") {
+		t.Fatalf("hideRail render should keep the code:\n%q", got)
 	}
 }

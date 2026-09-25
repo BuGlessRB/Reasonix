@@ -18,6 +18,24 @@ func fillTranscript(m *model, n int) {
 	m.commit()
 }
 
+// Native mouse mode hands the mouse to the terminal, so the transcript drops its
+// scrollbar column and reclaims it for content.
+func TestNativeMouseDropsScrollbar(t *testing.T) {
+	m, _ := testModel(t)
+	fillTranscript(m, 60)
+	m.scr.mouseOff = true
+	if got, want := m.contentWidth(), m.width; got != want {
+		t.Fatalf("native-mouse content width = %d, want full width %d", got, want)
+	}
+	if c := m.View().Content; strings.Contains(c, "█") || strings.Contains(c, "│") {
+		t.Fatalf("native mouse mode should drop the scrollbar:\n%s", c)
+	}
+	m.scr.mouseOff = false
+	if !strings.Contains(m.View().Content, "█") {
+		t.Fatal("capture-on should draw the scrollbar again")
+	}
+}
+
 // The transcript follows new output until the user scrolls away, and picks
 // the tail up again once they scroll back down to it.
 func TestFullScreenScrollsAndFollowsTheTail(t *testing.T) {

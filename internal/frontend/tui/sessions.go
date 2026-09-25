@@ -169,7 +169,7 @@ func (m *model) onResumed(msg resumedMsg) tea.Cmd {
 	if m.scr != nil {
 		m.scr.blocks, m.scr.sel, m.scr.follow = nil, selection{}, true
 	}
-	title := m.emit(func(int) string { return termrender.Accent("◆ ") + termrender.Bold(i18n.M.ResumedTitle) })
+	title := m.emit(func(int, bool) string { return termrender.Accent("◆ ") + termrender.Bold(i18n.M.ResumedTitle) })
 	return tea.Sequence(title, m.fetchHistory(true), tea.Batch(m.fetchStatus(), m.fetchTodos(), m.fetchMeters()))
 }
 

@@ -20,7 +20,7 @@ const (
 
 // renderItem is a settled row as it goes into the scrollback. shown is how much
 // of an answer's text an earlier print already carried.
-func renderItem(it *Item, width, shown int) string {
+func renderItem(it *Item, width, shown int, hideRail bool) string {
 	switch it.Kind {
 	case ItemUser:
 		mark := "› "
@@ -45,7 +45,7 @@ func renderItem(it *Item, width, shown int) string {
 		if shown >= len(it.Text) && shown > 0 {
 			return ""
 		}
-		return withThought(it, shown, renderSayPart(it.Text[shown:], shown == 0, width))
+		return withThought(it, shown, renderSayPart(it.Text[shown:], shown == 0, width, hideRail))
 	case ItemTool:
 		return renderTool(it, width)
 	case ItemApproval:
@@ -76,11 +76,11 @@ func renderItem(it *Item, width, shown int) string {
 // renderSayPart renders a stretch of an answer. Only the first stretch carries
 // the speaker's header; the rest continue under it. A stretch is cut after a
 // blank line, so each later one starts a new block and gets that line back.
-func renderSayPart(text string, first bool, width int) string {
+func renderSayPart(text string, first bool, width int, hideRail bool) string {
 	if first {
-		return "\n" + termrender.AssistantBlock(text, width)
+		return "\n" + termrender.AssistantBlock(text, width, hideRail)
 	}
-	return "\n" + indent(strings.TrimRight(termrender.RenderMarkdown(text, max(width-2, 10)), "\n"), "  ")
+	return "\n" + indent(strings.TrimRight(termrender.RenderMarkdown(text, max(width-2, 10), hideRail), "\n"), "  ")
 }
 
 // withThought puts the thinking marker above the first stretch of an answer.

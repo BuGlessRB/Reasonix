@@ -285,7 +285,7 @@ func (m *model) onScreenMsg(msg tea.Msg) (tea.Cmd, bool) {
 	case resumedMsg:
 		return m.onResumed(msg), true
 	case bannerMsg:
-		return m.emit(func(int) string { return banner(msg.s) }), true
+		return m.emit(func(int, bool) string { return banner(msg.s) }), true
 	case tea.MouseMsg:
 		return m.onMouse(msg), true
 	case termrender.ClipboardCopyMsg:
@@ -361,7 +361,7 @@ func (m *model) commit() tea.Cmd {
 
 // settledChunk draws the part of a streaming answer that has become final
 // since it was last printed, or nil when nothing new has.
-func (m *model) settledChunk(it *Item) func(int) string {
+func (m *model) settledChunk(it *Item) func(int, bool) string {
 	end := settledPrefix(it.Text)
 	shown := m.sayShown[it.ID]
 	if end <= shown {
@@ -369,7 +369,9 @@ func (m *model) settledChunk(it *Item) func(int) string {
 	}
 	m.sayShown[it.ID] = end
 	row := *it
-	return func(w int) string { return withThought(&row, shown, renderSayPart(row.Text[shown:end], shown == 0, w)) }
+	return func(w int, hideRail bool) string {
+		return withThought(&row, shown, renderSayPart(row.Text[shown:end], shown == 0, w, hideRail))
+	}
 }
 
 func settled(it *Item) bool {

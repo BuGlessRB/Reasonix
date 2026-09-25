@@ -27,6 +27,9 @@ type MarkdownRenderer struct {
 	copyMath       bool
 	copyMathPrefix string
 	nextCopyMathID int
+	// hideRail renders the fenced-code "│" gutter as spaces when the terminal
+	// owns the viewport chrome (native mouse mode).
+	hideRail bool
 }
 
 func NewMarkdownRenderer(width int) *MarkdownRenderer {
@@ -47,8 +50,11 @@ func NewMarkdownRenderer(width int) *MarkdownRenderer {
 }
 
 // RenderMarkdown renders raw as a styled Markdown body wrapped to width.
-func RenderMarkdown(raw string, width int) string {
-	return NewMarkdownRenderer(width).Render(raw)
+// hideRail draws the fenced-code gutter as spaces instead of the "│" rail.
+func RenderMarkdown(raw string, width int, hideRail bool) string {
+	r := NewMarkdownRenderer(width)
+	r.hideRail = hideRail
+	return r.Render(raw)
 }
 
 func italic(s string) string {
@@ -313,6 +319,9 @@ func (r *MarkdownRenderer) renderList(buf *strings.Builder, n *ast.List, src []b
 
 func (r *MarkdownRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []byte, indent int) {
 	prefix := strings.Repeat(" ", indent) + Dim("│ ")
+	if r.hideRail {
+		prefix = strings.Repeat(" ", indent+VisibleWidth("│ "))
+	}
 	for i := range n.Lines().Len() {
 		l := n.Lines().At(i)
 		line := strings.TrimRight(string(l.Value(src)), "\n")

@@ -12,7 +12,7 @@ import (
 func screenRows(m *model) []string {
 	var rows []string
 	for i := range m.scr.blocks {
-		for _, l := range m.scr.blocks[i].at(80) {
+		for _, l := range m.scr.blocks[i].at(80, false) {
 			rows = append(rows, strings.TrimRight(ansi.Strip(l), " "))
 		}
 	}
