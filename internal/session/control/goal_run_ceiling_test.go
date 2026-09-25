@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/state/sessionstore"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
@@ -70,7 +71,8 @@ func TestGoalTurnRunsPastTheOldRoundCeiling(t *testing.T) {
 
 	c.SetGoal("apply every pending edit")
 	c.Submit("start")
-	waitForDone(t, done)
+	// Two dozen rounds, which a slow Windows runner takes past the default wait.
+	waitForDoneWithin(t, done, 30*time.Second)
 
 	if got := prov.calls.Load(); got <= 16 {
 		t.Fatalf("provider rounds = %d, want productive work to run past the retired 16-round ceiling", got)
