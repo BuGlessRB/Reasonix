@@ -19,7 +19,8 @@ import (
 var jobIDPattern = regexp.MustCompile(`bash-[0-9]+`)
 
 // restartJobsProvider starts a background job in the START turn and reads it
-// in the CHECK turn, keeping what the host answered.
+// in the CHECK turn, keeping what the host answered. Any other turn, such as
+// the host delivering a job's interruption, is only acknowledged.
 type restartJobsProvider struct {
 	mu     sync.Mutex
 	answer string
@@ -57,8 +58,10 @@ func (p *restartJobsProvider) Stream(_ context.Context, req provider.Request) (<
 			}
 		}
 		call("o1", "bash_output", map[string]string{"job_id": id})
-	default:
+	case strings.Contains(lastUser, "START"):
 		call("b1", "bash", map[string]any{"command": "sleep 30", "run_in_background": true})
+	default:
+		ch <- provider.Chunk{Type: provider.ChunkText, Text: "noted"}
 	}
 	ch <- provider.Chunk{Type: provider.ChunkDone}
 	close(ch)

@@ -195,16 +195,15 @@ func (c *Controller) runRefTurnSync(ctx context.Context, r refTurn) error {
 	})
 }
 
-// Run executes a turn synchronously, returning the agent's error. Used by the
-// headless `reasonix run` path, where the Sink renders to stdout and the caller
-// just needs the exit status — no TurnDone event, no cancel bookkeeping.
+// runReady is the body of the headless `reasonix run` turn, where the Sink
+// renders to stdout and the caller just needs the exit status — no TurnDone
+// event. Run admits it through runSynchronousTurn.
 func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 	ctx = extension.ContextWithRuntimeOwner(ctx, c.RuntimeOwner())
 	if c.RuntimePhase() == RuntimePhaseDraining {
 		c.emitDrainingNotice()
 		return ErrRuntimeDraining
 	}
-	defer event.RecordTurnCompletion(c.sink)
 	c.maybeSessionStart(ctx)
 	parentSession := c.parentSessionID()
 	ctx = agent.WithParentSession(ctx, parentSession)
