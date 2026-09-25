@@ -40,7 +40,7 @@ This page tracks what Reasonix 2.x still has to deliver, how it ships, and which
 | ID | Gate | Status |
 | --- | --- | --- |
 | G1 | Every row of [Terminal takeover](#terminal-takeover) is done | Open |
-| G2 | W1a and W1b are done, so a person moving from npm 1.x finds their conversations in 2.x | Open |
+| G2 | W1a and W1b are done, so a person moving from npm 1.x finds their conversations in 2.x | Met |
 | G3 | Session and config formats carry a version and a migration path, and are frozen for the 2.x line | Open |
 | G4 | Two consecutive weeks of `next` builds with no open P0 or P1 issue | Open |
 | G5 | Every porting-list row marked required (W3) is done | Open |
@@ -67,8 +67,8 @@ The 2.x terminal UI (`reasonix tui`) replaces the 1.x chat screen for people who
 | ID | Item | Line | Status |
 | --- | --- | --- | --- |
 | W1a | 2.x opens sessions 1.x 1.38.2 to 1.38.7 saved (event log schema 2), and continues them in a 2.x session | 2.x | Done |
-| W1b | 2.x lists and opens sessions 1.x 1.38.8 or later keep in `sessions-v4`; see [Sessions](./MIGRATING.md#sessions) | 2.x | Not started |
-| W2 | 1.x stops listing the `.wire.jsonl`, `.adjudication.jsonl` and `.execution.jsonl` files 2.x writes as conversations | 1.x | Not started |
+| W1b | 2.x lists and opens sessions 1.x 1.38.8 or later keep in `sessions-v4`; see [Sessions](./MIGRATING.md#sessions) | 2.x | Done |
+| W2 | 1.x stops listing the `.wire.jsonl`, `.adjudication.jsonl` and `.execution.jsonl` files 2.x writes as conversations | 1.x | In review: #10767 |
 | W3 | 1.x to 2.x porting list: 1.x fixes, tests and behavior, each marked ported, reimplemented or not carried over | Both | Not started |
 | W4 | 2.x contribution and architecture review rules in `CONTRIBUTING.md` | 2.x | Partly done: branch table, dependency direction and cache-first review gate exist |
 | W5 | Version note in the 1.x `README.md` on `main-v2` | 1.x | Not started |

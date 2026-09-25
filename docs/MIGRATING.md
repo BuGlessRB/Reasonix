@@ -45,15 +45,16 @@ Where 1.x keeps a conversation depends on the 1.x version that last saved it.
 | --- | --- | --- |
 | 1.x before 1.38.2 | `sessions/`, event log schema 1 | Yes |
 | 1.x 1.38.2 to 1.38.7 | `sessions/`, event log schema 2 | Yes |
-| 1.x 1.38.8 or later | `sessions-v4/<id>/` | No. 2.x does not list them yet. |
+| 1.x 1.38.8 or later | `sessions-v4/<id>/` | Yes. Opening one imports it to `sessions/v4-<id>.jsonl`. |
 | 2.x | `sessions/`, event log schema 1 | Yes |
 
 | ID | Rule |
 | --- | --- |
 | S1 | 2.x never writes a file of a session 1.x saved. Opening one and leaving it changes nothing. |
-| S2 | Continuing a 1.x session in 2.x moves it to a new 2.x session with the same title before the first turn runs, and says so. 1.x keeps the original. |
+| S2 | Continuing a `sessions/` 1.x session in 2.x moves it to a new 2.x session with the same title before the first turn runs, and says so. 1.x keeps the original. |
 | S3 | 1.x 1.38.8 or later copies an older session into `sessions-v4` when it opens it. The copy under `sessions/` stays as it was, and 2.x still opens it. |
-| S4 | Conversations started or continued in 1.x 1.38.8 or later exist only in `sessions-v4`. Reading them in 2.x is roadmap item [W1b](./ROADMAP.md#other-workstreams). |
+| S4 | A `sessions-v4` conversation is imported to `sessions/v4-<id>.jsonl` the first time 2.x opens it. If 1.x continues it later, 2.x refreshes the import on the next open while the import has no 2.x turns; after it has, the two copies go their own ways. |
+| S6 | `reasonix session list --json` lists 2.x transcripts only; a `sessions-v4` conversation appears there once it has been imported. |
 | S5 | 1.x lists the `.wire.jsonl`, `.adjudication.jsonl` and `.execution.jsonl` files 2.x writes as extra conversations. Ignore them in 1.x; they belong to the 2.x session with the same name. |
 
 ## Commands
