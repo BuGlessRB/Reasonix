@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { money } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
@@ -112,9 +112,11 @@ interface Props {
   onDockW: (w: number) => void;
   manualBrowser?: boolean;
   onManualBrowser?: (on: boolean) => void;
+  // The window's failed-request notice, handed only to the pane in front.
+  alert?: ReactNode;
 }
 
-function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere, theme, dockW, onDockW, manualBrowser = false, onManualBrowser }: Props) {
+function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere, theme, dockW, onDockW, manualBrowser = false, onManualBrowser, alert }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
   const [status, setStatus] = useState<SessionStatus | null>(null);
@@ -686,6 +688,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             </div>
           )}
         </div>
+        {alert && <div className="cmpalert">{alert}</div>}
         <Composer port={port} status={status} running={s.running} quote={quote} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} pulse={pulse} />
         <div className="studio-meterrail" ref={meterRef} aria-label={t("运行统计")}>
           <div className="studio-speed-anchor">

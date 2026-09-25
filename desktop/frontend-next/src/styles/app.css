@@ -3776,13 +3776,16 @@
   .ws-empty { padding: 12px 13px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
 
   .errbar {
-    display: flex; align-items: center; gap: 10px; margin-top: 9px; padding: 7px 10px;
+    display: flex; align-items: center; gap: 10px; padding: 7px 10px; max-width: min(460px, calc(100% - 24px));
     border-radius: var(--r-sm); border: 1px solid color-mix(in srgb, var(--err) 40%, var(--border));
-    background: color-mix(in srgb, var(--err) 9%, transparent);
+    background: color-mix(in srgb, var(--err) 9%, var(--surface)); box-shadow: var(--shadow-float);
     font: var(--w-reg) var(--fs-ui)/1.5 var(--ui); color: var(--err);
     animation: card var(--t-card) var(--ease-out) both;
   }
   .errbar span { flex: 1; min-width: 0; word-break: break-word }
+  .cmpalert { position: absolute; top: 0; left: 0; right: 0; height: 0; z-index: 6; pointer-events: none }
+  .cmpalert > .errbar { position: absolute; right: 0; bottom: 8px; max-width: min(460px, 100%); pointer-events: auto }
+  .main > .errbar { position: absolute; right: 16px; bottom: 16px; z-index: 6 }
   .errbar button {
     flex: none; border: 0; background: transparent; cursor: pointer;
     color: var(--err); font: var(--w-med) var(--fs-meta) var(--ui); text-decoration: underline; text-underline-offset: 3px;

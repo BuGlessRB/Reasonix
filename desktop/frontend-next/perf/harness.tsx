@@ -186,10 +186,16 @@ declare global {
     // Give each save a round trip and reset the tally. 0 turns it off.
     __saveLag: (ms: number) => void;
     __saves: () => { count: number; peak: number; last: Appearance | null };
+    // Refuse the next calls to one hub method, so a guard can reach the
+    // window's error bar through the path a real failure takes.
+    __refuse: (method: string, message: string) => void;
   }
 }
 window.__feed = (ev) => hub.feeds.forEach((p) => p.feed(ev));
 window.__panes = () => hub.feeds.size;
+window.__refuse = (method, message) => {
+  (hub as unknown as Record<string, unknown>)[method] = () => Promise.reject(new Error(message));
+};
 window.__saveLag = (ms) => {
   saveLag = ms;
   saves.length = 0;

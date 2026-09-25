@@ -918,6 +918,12 @@ what exists.
 - The runtime's report about itself is not something said in the conversation, so
   it does not enter the prose; it sits against the composer until it has been
   read. It is one tier lighter than `.errbar`, which says "this request failed".
+- `.errbar` floats: it rides a zero-height anchor (`.cmpalert`) pinned to the
+  top edge of the composer card of the pane in front, so it never moves the
+  conversation and rises with the card instead of covering its send button.
+  The anchor spans the card's width because the bar's width is a share of it. With no pane on
+  screen it takes the main area's bottom-right corner. It floats over content,
+  so its fill is mixed into `--surface`, never into transparency.
 
 ## Deck readings
 

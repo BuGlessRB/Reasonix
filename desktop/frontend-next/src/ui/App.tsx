@@ -477,6 +477,15 @@ export function App({ hub }: { hub: HubPort }) {
   // The folder only earns tab space when the panes actually span more than one.
   const manyRoots = useMemo(() => new Set(runtimes.map((rt) => rt.root)).size > 1, [runtimes]);
   const activeRuntime = runtimes.find((rt) => rt.id === active);
+  // A failed request floats above the composer of the pane in front, where the
+  // eye already is; with no pane on screen it takes the main area's corner.
+  const activePaneShown = !!activeRuntime && panePorts.has(activeRuntime.id);
+  const errorBar = error ? (
+    <div className="errbar" role="alert">
+      <span>{error}</span>
+      <button onClick={() => setError("")}>{t("知道了")}</button>
+    </div>
+  ) : null;
   const activeWorkspace = tree.find((ws) => ws.root === activeRuntime?.root) ?? tree[0];
   // The folder a new session opens in is the one the switcher above names —
   // the window's, not whichever project happens to sit first in the tree.
@@ -697,6 +706,7 @@ export function App({ hub }: { hub: HubPort }) {
                   onSessionChanged={reloadPanes}
                   pulse={settingsPulse}
                   findPulse={findPulse}
+                  alert={rt.id === active ? (errorBar ?? undefined) : undefined}
                   needsProject={needsProject}
                   onOpenProject={() => {
                     setRail(true);
@@ -738,12 +748,7 @@ export function App({ hub }: { hub: HubPort }) {
             )}
           </div>
 
-          {error && (
-            <div className="errbar" role="alert">
-              <span>{error}</span>
-              <button onClick={() => setError("")}>{t("知道了")}</button>
-            </div>
-          )}
+          {errorBar && !activePaneShown && errorBar}
         </div>
 
       </div>
