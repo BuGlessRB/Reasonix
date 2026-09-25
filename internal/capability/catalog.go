@@ -179,11 +179,9 @@ func MCPServerEntries(opts CatalogOptions) []Entry {
 		}
 		out = append(out, e)
 
-		// Surface concrete tools that are not on the provider-visible registry:
-		// live proxy-observed tools once the server is connected, cached schema
-		// before any connection exists. Pinned cache-hit registrations can lag
-		// the live server, so registry presence only suppresses per-tool
-		// duplicates, never the whole live directory.
+		// Surface tools missing from the provider-visible registry: live proxy
+		// tools once connected, cached schema before. Pinned registrations can lag
+		// the live server, so a registered tool hides only itself, not the rest.
 		registered := map[string]bool{}
 		prefix := plugin.ToolPrefix(name)
 		for _, te := range opts.Tools {
