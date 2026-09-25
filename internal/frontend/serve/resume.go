@@ -56,6 +56,12 @@ func (s *Server) resumeInto(path string) (int, error) {
 	if err != nil || !store.IsSessionTranscriptName(filepath.Base(absPath)) {
 		return http.StatusBadRequest, refusal(http.StatusBadRequest, codeSessionBadPath, errors.New("invalid session path"), nil)
 	}
+	// A 1.x v4 conversation the list offered becomes a transcript here first.
+	if filepath.Dir(absPath) == absDir {
+		if err := sessionstore.PrepareSessionPath(absPath); err != nil {
+			return http.StatusBadRequest, fmt.Errorf("open 1.x session: %w", err)
+		}
+	}
 	// A transcript that is gone lands here: the delete took the file, and the
 	// list the click came from was drawn before it did.
 	realPath, err := filepath.EvalSymlinks(absPath)

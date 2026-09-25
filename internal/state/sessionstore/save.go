@@ -1382,6 +1382,9 @@ func CanonicalSessionPath(path string) string {
 // Missing files surface as os.IsNotExist so callers can fall through to a
 // new session.
 func LoadSession(path string) (*Session, error) {
+	if err := PrepareSessionPath(path); err != nil {
+		return nil, err
+	}
 	unlock := lockSessionSavePath(path)
 	defer unlock()
 	return loadSessionUnlocked(path)
@@ -2054,7 +2057,7 @@ func ListSessions(dir string) ([]SessionInfo, error) {
 		}
 		out = append(out, sessionInfoFromOrder(session, preview, turns, true))
 	}
-	return out, nil
+	return withV4Sessions(dir, out), nil
 }
 
 // ContinueSessionPath returns where a conversation carried into a rebuilt

@@ -78,6 +78,7 @@ type BranchMeta struct {
 	Turns        int               `json:"turns,omitempty"`
 	Preview      string            `json:"preview,omitempty"`
 	InFlightTurn *InFlightTurnMeta `json:"in_flight_turn,omitempty"`
+	ImportedFrom *ImportSource     `json:"imported_from,omitempty"`
 }
 
 const (
