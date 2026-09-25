@@ -6,13 +6,18 @@ import (
 	"testing"
 
 	"reasonix/internal/base/testenv"
+	"reasonix/internal/contract/provider"
 	"reasonix/internal/safety/permission"
 )
 
-// A `!` prompt is the user's own command: it runs without the model, streams
-// back as a tool call, and ends the prompt when it finishes.
+// A `!` prompt is the user's own command: it runs as the user typed it,
+// streams back as a tool call, and the model answers its output before the
+// prompt ends.
 func TestE2EShellPromptRunsTheUsersCommand(t *testing.T) {
-	prov := &scriptedProvider{name: "fake"}
+	prov := &scriptedProvider{name: "fake", responses: [][]provider.Chunk{{
+		{Type: provider.ChunkText, Text: "the marker printed"},
+		{Type: provider.ChunkDone},
+	}}}
 	factory := &e2eFactory{
 		prov:       prov,
 		tool:       fakeTool{name: "peek", ro: true, out: "unused"},
@@ -58,7 +63,7 @@ func TestE2EShellPromptRunsTheUsersCommand(t *testing.T) {
 	prov.mu.Lock()
 	n := prov.calls
 	prov.mu.Unlock()
-	if n != 0 {
-		t.Fatalf("the model was asked %d times about the user's own command", n)
+	if n != 1 {
+		t.Fatalf("the model answered the user's command %d times, want once", n)
 	}
 }

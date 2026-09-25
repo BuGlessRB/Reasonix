@@ -818,7 +818,7 @@ func (c *Controller) RunShell(command string) {
 				DurationMs: durationMs, Execution: ex, Issuer: event.IssuedByUser,
 			},
 		})
-		return nil
+		return c.answerShell(ctx, command, res.State, ex.ExitCode, res.Combined, errText)
 	})
 }
 

@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -134,4 +135,38 @@ func shellOption(sh sandbox.Shell) ShellOption {
 		opt.Prefer = "powershell"
 	}
 	return opt
+}
+
+// shellContextBytes bounds how much of a user command's output goes into the
+// conversation; the rest is cut from the middle and the cut is said.
+const shellContextBytes = 24 << 10
+
+// answerShell puts a command the user ran into the conversation and lets the
+// model respond to it, the way a line typed to the agent would be. A command
+// the user stopped is not followed by a turn, and neither is one run with no
+// model to answer it.
+func (c *Controller) answerShell(ctx context.Context, command, state string, exit *int, output, errText string) error {
+	if c.runner == nil || state == tool.ShellStateCancelled {
+		return nil
+	}
+	input := shellTurnInput(command, exit, output, errText)
+	return c.runTurnLoop(ctx, orchestratedTurn{input: input, raw: input, display: "!" + command})
+}
+
+func shellTurnInput(command string, exit *int, output, errText string) string {
+	var b strings.Builder
+	b.WriteString("I ran this command in my terminal:\n<bash-input>" + command + "</bash-input>\n")
+	if exit != nil {
+		fmt.Fprintf(&b, "<bash-exit-code>%d</bash-exit-code>\n", *exit)
+	}
+	if errText != "" {
+		b.WriteString("<bash-error>" + errText + "</bash-error>\n")
+	}
+	if len(output) > shellContextBytes {
+		half := shellContextBytes / 2
+		head, tail := strings.ToValidUTF8(output[:half], ""), strings.ToValidUTF8(output[len(output)-half:], "")
+		output = fmt.Sprintf("%s\n[… %d bytes of output cut from the middle …]\n%s", head, len(output)-2*half, tail)
+	}
+	b.WriteString("<bash-output>\n" + output + "\n</bash-output>")
+	return b.String()
 }

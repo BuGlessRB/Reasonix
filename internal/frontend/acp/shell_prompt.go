@@ -11,7 +11,8 @@ import (
 const shellPollInterval = 20 * time.Millisecond
 
 // runPrompt runs one prompt: a `!` line is the user's own shell command, run
-// directly and streamed back as a tool call; anything else is a model turn.
+// as typed and streamed back as a tool call before the model answers it;
+// anything else is a model turn.
 // The editor is a frontend in the kernel's process, so it holds that grant.
 func runPrompt(ctx context.Context, ctrl acpController, text string) error {
 	cmd, ok := strings.CutPrefix(strings.TrimSpace(text), "!")

@@ -304,3 +304,69 @@ func waitForFileContainingWithin(path, want string, d time.Duration) bool {
 func controlShellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
+
+type inputRecorder struct {
+	mu     sync.Mutex
+	inputs []string
+}
+
+func (r *inputRecorder) Run(_ context.Context, input string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.inputs = append(r.inputs, input)
+	return nil
+}
+
+func (r *inputRecorder) seen() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.inputs...)
+}
+
+// A command the user ran reaches the model as something they said: the
+// command, its exit code and its output, answered in a turn of its own.
+func TestRunShellHandsTheOutputToTheModel(t *testing.T) {
+	sink, done, _ := collectSink()
+	runner := &inputRecorder{}
+	ctrl := New(Options{Runner: runner, Sink: sink})
+	t.Cleanup(ctrl.Close)
+
+	ctrl.RunShell("echo shell-into-context")
+	waitForDone(t, done)
+	inputs := runner.seen()
+	if len(inputs) != 1 {
+		t.Fatalf("model turns = %d, want 1", len(inputs))
+	}
+	for _, want := range []string{"<bash-input>echo shell-into-context</bash-input>", "<bash-exit-code>0</bash-exit-code>", "shell-into-context\n"} {
+		if !strings.Contains(inputs[0], want) {
+			t.Fatalf("model input missing %q:\n%s", want, inputs[0])
+		}
+	}
+}
+
+// A command the user stopped is not something to answer.
+func TestCancelledShellIsNotAnswered(t *testing.T) {
+	sink, done, _ := collectSink()
+	runner := &inputRecorder{}
+	ctrl := New(Options{Runner: runner, Sink: sink})
+	t.Cleanup(ctrl.Close)
+	command := "sleep 30"
+	if sandbox.ResolveShell("", "", nil).Kind == sandbox.ShellPowerShell {
+		command = "Start-Sleep -Seconds 30"
+	}
+	ctrl.RunShell(command)
+	time.Sleep(100 * time.Millisecond)
+	ctrl.Cancel()
+	waitForDoneWithin(t, done, shellWaitDelay+10*time.Second)
+	if n := len(runner.seen()); n != 0 {
+		t.Fatalf("a cancelled command was answered %d times", n)
+	}
+}
+
+func TestShellTurnInputCutsLongOutputAndSaysSo(t *testing.T) {
+	long := strings.Repeat("a", shellContextBytes*2)
+	got := shellTurnInput("cat big", nil, long, "")
+	if len(got) > shellContextBytes+512 || !strings.Contains(got, "bytes of output cut from the middle") {
+		t.Fatalf("long output not bounded (%d bytes)", len(got))
+	}
+}
