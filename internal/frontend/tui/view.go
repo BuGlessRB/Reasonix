@@ -14,7 +14,7 @@ import (
 // View draws the live region: what is still changing, the composer and the
 // status line. Everything settled is already in the terminal's scrollback.
 func (m *model) View() tea.View {
-	live := m.liveLines()
+	live := append(append(m.liveLines(), m.todoLines()...), m.menuLines()...)
 	composer := m.composerLines()
 	status := m.statusLine()
 	// The live region is redrawn in place, so it must stay well inside the
@@ -35,7 +35,7 @@ func (m *model) View() tea.View {
 		lines[i] = ansi.Truncate(l, max(m.width-1, 1), "")
 	}
 	v := tea.NewView(strings.Join(lines, "\n"))
-	if c := m.composer.Cursor(); c != nil && m.tr.OpenPrompt() == nil {
+	if c := m.composer.Cursor(); c != nil && (m.tr.OpenPrompt() == nil || m.tr.OpenPrompt().Kind == ItemAsk) {
 		c.X += 2
 		c.Y += above
 		v.Cursor = c
@@ -63,7 +63,7 @@ func (m *model) liveLines() []string {
 		case it.Kind == ItemApproval && it.Verdict == "":
 			out = append(out, approvalCard(it, m.width)...)
 		case it.Kind == ItemAsk && it.Verdict == "":
-			out = append(out, askCard(it, m.width)...)
+			out = append(out, m.askCard(it)...)
 		default:
 			if r := renderItem(it, m.width, 0); r != "" {
 				out = append(out, strings.Split(r, "\n")...)
@@ -99,17 +99,6 @@ func approvalCard(it *Item, width int) []string {
 		keys += " · p always"
 	}
 	return append(lines, termrender.Dim("    "+keys+" · n deny"))
-}
-
-func askCard(it *Item, width int) []string {
-	lines := []string{termrender.Accent("  ◇ ") + termrender.Bold("A question for you")}
-	for _, q := range it.Ask.Questions {
-		lines = append(lines, "    "+oneLine(q.Prompt, width-6))
-		for i, o := range q.Options {
-			lines = append(lines, termrender.Dim(fmt.Sprintf("      %d. %s", i+1, oneLine(o.Label, width-10))))
-		}
-	}
-	return lines
 }
 
 func (m *model) composerLines() []string {

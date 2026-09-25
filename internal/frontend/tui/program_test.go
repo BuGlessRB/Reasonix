@@ -28,6 +28,16 @@ func (k *recordingKernel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	k.calls = append(k.calls, r.Method+" "+r.URL.Path+" "+strings.TrimSpace(string(body)))
 	k.mu.Unlock()
 	switch r.URL.Path {
+	case "/complete":
+		// "看 @no": the token starts after one CJK rune and a space, two UTF-16 units.
+		_ = json.NewEncoder(w).Encode(map[string]any{"kind": "ref", "from": 2, "to": 5,
+			"items": []map[string]any{{"label": "notes.md", "insert": "@notes.md "}, {"label": "notes/", "insert": "@notes/"}}})
+	case "/todos":
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"content": "read the code", "status": "completed"},
+			{"content": "fix the bug", "status": "in_progress", "activeForm": "fixing the bug"},
+			{"content": "run tests", "status": "pending"},
+		})
 	case "/inbox/items":
 		_ = json.NewEncoder(w).Encode(map[string]string{"itemId": "q-7"})
 	default:
@@ -47,6 +57,10 @@ func testModel(t *testing.T) (*model, *recordingKernel) {
 	srv := httptest.NewServer(k)
 	t.Cleanup(srv.Close)
 	m := newModel(context.Background(), Options{Client: &Client{HTTP: srv.Client(), Base: srv.URL}})
+	// No stream in these tests: a closed channel answers the wait at once.
+	closed := make(chan Update)
+	close(closed)
+	m.updates = closed
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	return m, k
 }
@@ -216,5 +230,100 @@ func TestCtrlCTwiceQuitsWhenIdle(t *testing.T) {
 	}
 	if _, quit := cmd().(tea.QuitMsg); !quit {
 		t.Fatal("second ctrl+c did not quit")
+	}
+}
+
+func askEvent() eventwire.Event {
+	return eventwire.Event{Kind: "ask_request", Ask: &eventwire.Ask{ID: "ask1", Questions: []eventwire.AskQuestion{
+		{ID: "q1", Prompt: "Which database?", Options: []eventwire.AskOption{{Label: "Postgres"}, {Label: "SQLite"}}},
+		{ID: "q2", Prompt: "Which extras?", Multi: true, Options: []eventwire.AskOption{{Label: "cache"}, {Label: "search"}, {Label: "queue"}}},
+	}}}
+}
+
+// A question card is answered one question at a time: a number answers a
+// single choice, numbers toggle a multi choice, typed text joins the picks as
+// an answer no option offered, and enter sends the batch.
+func TestAskIsAnsweredQuestionByQuestion(t *testing.T) {
+	m, k := testModel(t)
+	apply(m, askEvent())
+	m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
+	if v := m.View().Content; !strings.Contains(v, "Question 2 of 2") {
+		t.Fatalf("the card did not move to the second question:\n%s", v)
+	}
+	m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	m.Update(tea.KeyPressMsg{Code: '3', Text: "3"})
+	m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	typeText(m, "metrics")
+	run(m, press(m, "enter"))
+	if m.tr.OpenPrompt() != nil {
+		t.Fatal("the answered card stayed open")
+	}
+	want := `POST /answer {"answers":[{"QuestionID":"q1","Selected":["SQLite"]},{"QuestionID":"q2","Selected":["queue","metrics"]}],"id":"ask1"}`
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, want) {
+		t.Fatalf("answer call missing:\n%s", calls)
+	}
+}
+
+func TestAskEscDeclinesWithNothingSelected(t *testing.T) {
+	m, k := testModel(t)
+	apply(m, askEvent())
+	run(m, press(m, "esc"))
+	want := `POST /answer {"answers":[{"QuestionID":"q1","Selected":null},{"QuestionID":"q2","Selected":null}],"id":"ask1"}`
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, want) {
+		t.Fatalf("decline call missing:\n%s", calls)
+	}
+}
+
+// An @-token opens the menu as it is typed, and the chosen item replaces the
+// token the kernel named — counted in UTF-16, so a CJK line splices where the
+// kernel meant.
+func TestCompletionReplacesTheTokenTheKernelNamed(t *testing.T) {
+	m, k := testModel(t)
+	for _, r := range "看 @no" {
+		_, cmd := m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+		run(m, cmd)
+	}
+	if m.menu == nil || len(m.menu.c.Items) != 2 {
+		t.Fatalf("menu = %+v", m.menu)
+	}
+	if !strings.Contains(strings.Join(k.seen(), "\n"), "GET /complete") {
+		t.Fatal("the menu was not asked for")
+	}
+	run(m, press(m, "enter"))
+	if got := m.composer.Value(); got != "看 @notes.md " {
+		t.Fatalf("composer = %q", got)
+	}
+	if m.menu != nil {
+		t.Fatal("the menu stayed open after a file was chosen")
+	}
+}
+
+func TestUTF16Offsets(t *testing.T) {
+	line := "看 @no😀x"
+	for b, u := range map[int]int{0: 0, len("看"): 1, len("看 "): 2, len("看 @no"): 5, len("看 @no😀"): 7} {
+		if got := utf16At(line, b); got != u {
+			t.Errorf("utf16At(%d) = %d, want %d", b, got, u)
+		}
+		if got := byteAt(line, u); got != b {
+			t.Errorf("byteAt(%d) = %d, want %d", u, got, b)
+		}
+	}
+}
+
+// The task list is read from the kernel when it says the list moved, and drawn
+// while it still has work in it.
+func TestTodosFollowTheKernel(t *testing.T) {
+	m, _ := testModel(t)
+	_, cmd := m.Update(updateMsg{u: Update{Event: eventwire.Event{Kind: "todo_progress"}}, ok: true})
+	run(m, cmd)
+	v := m.View().Content
+	for _, want := range []string{"✓ read the code", "fixing the bug", "○ run tests"} {
+		if !strings.Contains(v, want) {
+			t.Fatalf("view missing %q:\n%s", want, v)
+		}
+	}
+	m.todos = []TodoItem{{Content: "done", Status: "completed"}}
+	if strings.Contains(m.View().Content, "Tasks") {
+		t.Fatal("a finished list stayed on screen")
 	}
 }

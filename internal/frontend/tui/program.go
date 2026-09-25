@@ -55,6 +55,9 @@ type model struct {
 	pastes        pasteStore
 	status        Status
 	quitArmedAt   time.Time
+	ask           *askState
+	menu          *menu
+	todos         []TodoItem
 }
 
 type (
@@ -161,7 +164,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.u.Event.Kind == "turn_done" {
 			m.noteTurnEnd()
 		}
-		return m, tea.Batch(m.commit(), m.waitUpdate())
+		cmds := []tea.Cmd{m.commit(), m.waitUpdate()}
+		if m.tr.TodosMoved {
+			m.tr.TodosMoved = false
+			cmds = append(cmds, m.fetchTodos())
+		}
+		return m, tea.Batch(cmds...)
 	case historyMsg:
 		return m, m.restore(msg)
 	case statusMsg:
@@ -184,6 +192,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tr.AddNotice("error", "queue: "+msg.err.Error())
 		}
 		return m, m.commit()
+	case todosMsg:
+		if msg.err == nil {
+			m.todos = msg.items
+		}
+		return m, nil
+	case completionMsg:
+		m.onCompletion(msg)
+		return m, nil
 	case tea.PasteMsg:
 		m.composer.InsertString(m.pastes.fold(msg.Content))
 		return m, nil

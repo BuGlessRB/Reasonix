@@ -26,7 +26,7 @@ func renderItem(it *Item, width, shown int) string {
 	case ItemSay:
 		// Thinking with nothing said after it is a step, not an answer: it gets
 		// its marker and no speaker header.
-		if it.Text == "" {
+		if strings.TrimSpace(it.Text) == "" {
 			if it.Reasoning == "" {
 				return ""
 			}
@@ -50,7 +50,11 @@ func renderItem(it *Item, width, shown int) string {
 		}
 		return termrender.Dim(fmt.Sprintf("  ✗ declined %s %s", it.Approval.Tool, oneLine(it.Approval.Subject, width-20)))
 	case ItemAsk:
-		return termrender.Dim("  ? question → " + it.Verdict)
+		prompt := "question"
+		if len(it.Ask.Questions) > 0 {
+			prompt = it.Ask.Questions[0].Prompt
+		}
+		return termrender.Dim("  ? " + oneLine(prompt, width/2) + " → " + oneLine(it.Verdict, width/2))
 	case ItemNotice:
 		return renderNotice(it)
 	case ItemCompaction:
@@ -148,7 +152,7 @@ func renderReceipt(it *Item) string {
 		parts = append(parts, termrender.Yellow(fmt.Sprintf("%d gap(s)", n)))
 	}
 	mark := termrender.Green("  ✓ ")
-	if r.Verdict != "complete" {
+	if r.Verdict != "done" {
 		mark = termrender.Yellow("  ! ")
 	}
 	return mark + strings.Join(parts, termrender.Dim(" · "))

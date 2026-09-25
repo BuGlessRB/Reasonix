@@ -1,0 +1,161 @@
+package tui
+
+import (
+	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
+
+	tea "charm.land/bubbletea/v2"
+
+	"reasonix/internal/frontend/termrender"
+)
+
+const menuRows = 8
+
+// menu is the composer's open completion list for the line it was asked
+// about; an answer for any other line is stale and dropped.
+type menu struct {
+	line string
+	c    Completion
+	sel  int
+}
+
+type completionMsg struct {
+	line string
+	c    Completion
+	err  error
+}
+
+// cursorByte is the composer cursor as a byte offset into its value.
+func (m *model) cursorByte() int {
+	value := m.composer.Value()
+	lines := strings.Split(value, "\n")
+	row := min(m.composer.Line(), len(lines)-1)
+	off := 0
+	for _, l := range lines[:row] {
+		off += len(l) + 1
+	}
+	cur := []rune(lines[row])
+	return off + len(string(cur[:min(m.composer.Column(), len(cur))]))
+}
+
+// utf16At is the UTF-16 offset of byte offset b in s: the unit /complete
+// counts in, since a browser indexes the same string that way.
+func utf16At(s string, b int) int {
+	return len(utf16.Encode([]rune(s[:min(b, len(s))])))
+}
+
+// byteAt is the byte offset of UTF-16 offset u in s.
+func byteAt(s string, u int) int {
+	units := 0
+	for i, r := range s {
+		if units >= u {
+			return i
+		}
+		units += utf16.RuneLen(r)
+	}
+	return len(s)
+}
+
+// wantsMenu reports a line whose cursor sits in a token the menu answers
+// without being asked: a bare slash command, or an @-reference.
+func wantsMenu(line string, cursor int) bool {
+	if strings.HasPrefix(line, "/") && !strings.ContainsAny(line, " \n") {
+		return true
+	}
+	start := strings.LastIndexAny(line[:cursor], " \n\t") + 1
+	return strings.HasPrefix(line[start:cursor], "@")
+}
+
+func (m *model) fetchCompletion() tea.Cmd {
+	line := m.composer.Value()
+	cursor := utf16At(line, m.cursorByte())
+	return func() tea.Msg {
+		c, err := m.client.Complete(m.ctx, line, cursor)
+		return completionMsg{line: line, c: c, err: err}
+	}
+}
+
+// refreshMenu follows the composer after an edit: it asks again where the
+// menu answers on its own, and closes the menu anywhere else.
+func (m *model) refreshMenu() tea.Cmd {
+	line := m.composer.Value()
+	if !wantsMenu(line, m.cursorByte()) {
+		m.menu = nil
+		return nil
+	}
+	return m.fetchCompletion()
+}
+
+func (m *model) onCompletion(msg completionMsg) {
+	if msg.err != nil || msg.line != m.composer.Value() || len(msg.c.Items) == 0 {
+		m.menu = nil
+		return
+	}
+	m.menu = &menu{line: msg.line, c: msg.c}
+}
+
+// menuKey takes the keys an open menu owns.
+func (m *model) menuKey(k string) (tea.Cmd, bool) {
+	if m.menu == nil {
+		return nil, false
+	}
+	n := len(m.menu.c.Items)
+	switch k {
+	case "tab", "down":
+		m.menu.sel = (m.menu.sel + 1) % n
+	case "shift+tab", "up":
+		m.menu.sel = (m.menu.sel + n - 1) % n
+	case "esc":
+		m.menu = nil
+	case "enter":
+		return m.acceptCompletion(), true
+	default:
+		return nil, false
+	}
+	return nil, true
+}
+
+// acceptCompletion replaces the token the menu answered with the chosen item.
+// A directory keeps the menu open one level down.
+func (m *model) acceptCompletion() tea.Cmd {
+	c, item := m.menu.c, m.menu.c.Items[m.menu.sel]
+	line := m.menu.line
+	from, to := byteAt(line, c.From), byteAt(line, c.To)
+	head := line[:from] + item.Insert
+	m.composer.SetValue(head + line[to:])
+	if !strings.Contains(line, "\n") {
+		m.composer.SetCursorColumn(utf8.RuneCountInString(head))
+	}
+	m.menu = nil
+	if item.Descend {
+		return m.fetchCompletion()
+	}
+	return nil
+}
+
+func (m *model) menuLines() []string {
+	if m.menu == nil {
+		return nil
+	}
+	items := m.menu.c.Items
+	first := max(0, min(m.menu.sel-menuRows/2, len(items)-menuRows))
+	last := min(len(items), first+menuRows)
+	lines := make([]string, 0, last-first+1)
+	for i := first; i < last; i++ {
+		it := items[i]
+		label := oneLine(it.Label, m.width/2)
+		row := "    " + label
+		if i == m.menu.sel {
+			row = termrender.Accent("  › ") + termrender.Bold(label)
+		}
+		if it.Hint != "" {
+			row += termrender.Dim("  " + oneLine(it.Hint, max(m.width-8-termrender.VisibleWidth(label), 10)))
+		}
+		lines = append(lines, row)
+	}
+	if len(items) > menuRows {
+		lines = append(lines, termrender.Dim("    tab/↑↓ to move · enter to choose · esc to close"))
+	}
+	return lines
+}

@@ -53,13 +53,22 @@ func (p *pasteStore) expand(s string) string {
 }
 
 func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if open := m.tr.OpenPrompt(); open != nil && open.Kind == ItemApproval {
-		if cmd, handled := m.answerApproval(open, msg.String()); handled {
+	if open := m.tr.OpenPrompt(); open != nil {
+		answer := m.answerApproval
+		if open.Kind == ItemAsk {
+			answer = m.answerAsk
+		}
+		if cmd, handled := answer(open, msg.String()); handled {
 			return m, cmd
 		}
 	}
+	if cmd, handled := m.menuKey(msg.String()); handled {
+		return m, cmd
+	}
 	empty := m.composer.Value() == ""
 	switch msg.String() {
+	case "tab":
+		return m, m.fetchCompletion()
 	case "enter":
 		return m, m.send(false)
 	case "ctrl+s":
@@ -105,8 +114,12 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
+	before := m.composer.Value()
 	var cmd tea.Cmd
 	m.composer, cmd = m.composer.Update(msg)
+	if m.composer.Value() != before {
+		return m, tea.Batch(cmd, m.refreshMenu())
+	}
 	return m, cmd
 }
 
