@@ -1739,12 +1739,13 @@ func topicActivityStatusFromEvent(e event.Event) (string, bool) {
 	switch e.Kind {
 	case event.TurnStarted, event.Reasoning, event.ToolDispatch, event.ToolProgress, event.ToolResultPreview, event.ToolResult, event.CompactionStarted, event.Retrying:
 		return topicStatusThinking, true
-	// CompactionDone is an ending state: the pass finished (successfully or was
-	// aborted). Reset the topic to idle instead of leaving it in "thinking",
-	// which would otherwise stay until a later TurnDone (manual /compact turns
-	// don't always fire one) — #9230.
+	// A manual /compact runs outside a turn, so no TurnDone follows to clear it;
+	// any other trigger compacts inside a running turn, which is still thinking.
 	case event.CompactionDone:
-		return "", true
+		if e.Compaction.Trigger == agent.CompactionTriggerManual {
+			return "", true
+		}
+		return topicStatusThinking, true
 	case event.Text, event.Message:
 		return topicStatusStreaming, true
 	case event.ApprovalRequest, event.AskRequest:
