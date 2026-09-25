@@ -33,6 +33,7 @@ var jsonlSidecarSuffixes = []string{
 	".wire.jsonl",
 	".adjudication.jsonl",
 	".execution.jsonl",
+	".turns.jsonl", // 1.x writes it into the session directory both lines share
 }
 
 // IsSessionTranscriptName reports whether name is a primary session transcript

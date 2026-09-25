@@ -88,6 +88,7 @@ func TestIsSessionTranscriptName(t *testing.T) {
 		{"session.wire.jsonl", false},
 		{"session.adjudication.jsonl", false},
 		{"session.execution.jsonl", false},
+		{"session.turns.jsonl", false},
 		{"session.guardian.events.jsonl", false},
 		{"session.events.jsonl.damaged", false},
 		{"session.jsonl.meta", false},
