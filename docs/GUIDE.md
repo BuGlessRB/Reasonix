@@ -1369,6 +1369,11 @@ an explicit run budget is needed.
 tokens, not time, not money. It runs until the model finishes, an adaptive
 guard decides it stopped making progress, or you stop it.
 
+One such guard is the **perseveration guard** (perseveration = mindless
+repetition): when the model repeats the same short block of text or reasoning,
+Reasonix cuts the stream, appends a `[retrying (N) avoiding perseveration]`
+nudge, and retries once by default; a second consecutive loop stops the turn.
+
 An optional spend gate is available when you want one. It bounds a whole task
 (every "continue" included, until you start unrelated work), and on crossing it
 the task produces one tool-free summary and pauses; the work is saved and the
