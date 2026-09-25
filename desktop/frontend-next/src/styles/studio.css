@@ -3677,7 +3677,6 @@ body { font-size: 14px; line-height: 1.75; }
 .svcrow[aria-pressed="true"] {
   border-color: var(--border);
   background: var(--raised);
-  box-shadow: inset 2px 0 0 var(--accent);
 }
 .svcrow .tx { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
 .svcrow .nm {
