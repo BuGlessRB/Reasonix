@@ -242,7 +242,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           REASONIX_RELEASE_CACHE_GUARD: "1"
-        run: go test -race ./internal/runtime/agent/... ./internal/ext/plugin/... ./internal/runtime/jobs/... ./internal/base/proc/... ./internal/safety/sandbox/... ./internal/base/filelock/... ./internal/contract/eventwire/... ./internal/platform/remote/... ./internal/ext/extension/... ./internal/assembly/boot/... ./internal/session/control/... ./internal/contract/tool/...
+        run: go test -race ./internal/runtime/agent/... ./internal/ext/plugin/... ./internal/tools/jobs/... ./internal/base/proc/... ./internal/safety/sandbox/... ./internal/base/filelock/... ./internal/contract/eventwire/... ./internal/platform/remote/... ./internal/ext/extension/... ./internal/assembly/boot/... ./internal/session/control/... ./internal/contract/tool/...
 
       - name: test -race (full)
         if: github.event_name != 'pull_request'
