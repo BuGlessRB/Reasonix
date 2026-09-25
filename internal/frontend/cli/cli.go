@@ -79,6 +79,12 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 	}
 
 	if len(args) == 0 || cmd == "" {
+		// A bare reasonix, or one given only session options, is the chat a
+		// person opens in a terminal, as it was in 1.x; without a terminal
+		// there is no one to chat with, so it prints how to run a task.
+		if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+			return runTUI(args, version)
+		}
 		return bareUsage()
 	}
 

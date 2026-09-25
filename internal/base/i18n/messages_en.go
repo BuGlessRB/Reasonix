@@ -593,6 +593,7 @@ var English = Messages{
 	UsageBody: `reasonix — a config- and plugin-driven coding agent (multi-model)
 
 Usage:
+  reasonix [--model NAME] [-c|--continue] [-r|--resume [QUERY]] [--permission-mode MODE] [--effort LEVEL] [--add-dir PATH]   interactive session (the terminal UI, same as reasonix tui)
   reasonix -p|--print [--model NAME] [--output-format text|json|stream-json] [--allowed-tools RULES] [--add-dir PATH] <task>
   reasonix run [--model NAME] [--max-steps N] [-c|--continue] [--resume PATH] [--copy] [--output-format FORMAT] <task>
   reasonix run --events-jsonl [--model NAME] <task>      emit redacted structured events as JSONL

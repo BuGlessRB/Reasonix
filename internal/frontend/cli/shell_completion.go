@@ -126,7 +126,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 
 	root.subcommands = []cliCompletionSpec{
 		completionSpec("run", runFlags),
-		completionSpec("serve", serveFlags), completionSpec("tui", cliTUICompletionFlags(model, preset, help)),
+		completionSpec("serve", serveFlags), completionSpec("tui", cliTUICompletionFlags(model, preset, permissionMode, effort, help)),
 		completionSpec("web", serveFlags),
 		completionSpec("setup", []cliCompletionFlag{completionFlag("--local -l", cliCompletionNoValue), help}),
 		completionSpec("config", []cliCompletionFlag{help},
@@ -661,12 +661,17 @@ end
 complete -c reasonix -a '(__reasonix_completion)'
 `
 
-func cliTUICompletionFlags(model, preset, help cliCompletionFlag) []cliCompletionFlag {
+func cliTUICompletionFlags(model, preset, permissionMode, effort, help cliCompletionFlag) []cliCompletionFlag {
 	return []cliCompletionFlag{
-		model, preset,
+		model, preset, permissionMode, effort,
 		completionFlag("--dir", cliCompletionPathValue),
 		completionFlag("--continue -c", cliCompletionNoValue),
 		completionFlag("--resume -r", cliCompletionSessionValue),
+		completionFlag("--copy", cliCompletionNoValue),
+		completionFlag("--dangerously-skip-permissions --yolo", cliCompletionNoValue),
+		completionFlag("--max-steps", cliCompletionStaticValue),
+		completionFlag("--add-dir", cliCompletionPathValue),
+		completionFlag("--allowed-tools --allowedTools", cliCompletionStaticValue),
 		completionFlag("--inline", cliCompletionNoValue),
 		help,
 	}

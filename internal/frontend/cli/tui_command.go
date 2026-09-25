@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
 	"reasonix/internal/base/i18n"
@@ -30,32 +29,34 @@ const tuiBase = "http://reasonix.local/rt/r1"
 // no port, so there is nothing on the machine to authenticate against.
 func runTUI(args []string, version string) int {
 	defer closeCLIUsageCatalogs()
-	fs := pflag.NewFlagSet("tui", pflag.ContinueOnError)
-	model := fs.String("model", "", "provider name (default: config default_model)")
-	preset := fs.String("preset", "balanced", "agent execution setting: light | balanced | delivery")
-	dir := fs.String("dir", "", "change to this directory first (project root)")
-	inline := fs.Bool("inline", false, "write the conversation into the terminal's scrollback instead of taking the full screen")
-	cont := registerContinueFlag(fs)
-	resume := fs.StringP("resume", "r", "", "resume by session file path, session ID, or machine session ID; bare -r picks one (takes precedence over --continue)")
-	fs.Lookup("resume").NoOptDefVal = resumePickerSentinel
-	if code, ok := parseCommandFlags(fs, normalizeOptionalResumeArg(args)); !ok {
+	f := newTUIFlags()
+	if code, ok := parseCommandFlags(f.fs, normalizeOptionalResumeArg(args)); !ok {
 		return code
 	}
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "reasonix tui needs an interactive terminal; use `reasonix run` for scripts")
 		return 2
 	}
-	profile, err := parseRuntimeProfile(*preset)
+	profile, err := f.runtimeProfile()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-		return 2
+		return tuiUsageError(err)
 	}
-	workspaceRoot, err := workspaceRootForDir(*dir)
+	permissions, allowed, permissionsSet, err := f.permissions()
+	if err != nil {
+		return tuiUsageError(err)
+	}
+	if rc := chdirTo(*f.dir); rc != 0 {
+		return rc
+	}
+	workspaceRoot, err := workspaceRootForDir(*f.dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 1
 	}
-	resumePath, err := tuiResumePath(workspaceRoot, *resume, *cont)
+	resumePath, err := tuiResumePath(workspaceRoot, *f.resume, *f.cont)
+	if err == nil && *f.copy {
+		resumePath, err = tuiCopyResume(resumePath)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 1
@@ -83,8 +84,9 @@ func runTUI(args []string, version string) int {
 	}
 	bc := serve.NewBroadcaster()
 	cfg, _ := config.Load()
-	ctrl, err := setupProfileWithOverrides(ctx, *model, 0, false, withNotifications(bc, cfg), profile, cliBuildOverrides{
+	ctrl, err := setupProfileWithOverrides(ctx, *f.model, *f.maxSteps, false, withNotifications(bc, cfg), profile, cliBuildOverrides{
 		Version: version, WorkspaceRoot: workspaceRoot, OnSessionRecovered: cliSessionRecoveredHandler(leases),
+		Effort: f.effortOverride(), PermissionAllow: allowed, AdditionalDirs: f.addDirs,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
@@ -94,6 +96,12 @@ func runTUI(args []string, version string) int {
 	SetTaskJobKiller(ctrlKillerAdapter{ctrl})
 	if resumed != nil {
 		_ = ctrl.Resume(resumed, resumePath)
+	}
+	if permissionsSet {
+		ctrl.SetToolApprovalMode(permissions.approval)
+	}
+	if permissions.plan {
+		ctrl.SetPlanMode(true)
 	}
 	ctrl.EnsureSessionPath()
 	if err := rebindCLIControllerAuthority(leases, ctrl); err != nil {
@@ -107,10 +115,10 @@ func runTUI(args []string, version string) int {
 
 	err = tui.Run(ctx, tui.Options{
 		Client:      &tui.Client{HTTP: hub.InProcessClient(), Base: tuiBase},
-		Prompt:      strings.Join(fs.Args(), " "),
+		Prompt:      strings.Join(f.fs.Args(), " "),
 		Restore:     resumed != nil,
-		PickSession: *resume == resumePickerSentinel,
-		Inline:      *inline,
+		PickSession: *f.resume == resumePickerSentinel,
+		Inline:      *f.inline,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
@@ -155,4 +163,12 @@ func routeLogsAwayFromTerminal() func() {
 		slog.SetDefault(prev)
 		_ = f.Close()
 	}
+}
+
+// tuiCopyResume gives --copy a session of its own to continue in.
+func tuiCopyResume(resumePath string) (string, error) {
+	if resumePath == "" || resumePath == resumePickerSentinel {
+		return "", errors.New("--copy requires --resume or --continue")
+	}
+	return copySessionForWriting(resumePath)
 }
