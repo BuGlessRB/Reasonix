@@ -20,6 +20,8 @@ type Options struct {
 	// Restore reads the session back from /history before the first frame:
 	// the session was resumed, and its conversation belongs on screen.
 	Restore bool
+	// PickSession opens the saved-session picker on the first frame.
+	PickSession bool
 	// Inline writes the conversation into the terminal's own scrollback
 	// instead of taking the full screen.
 	Inline bool
@@ -70,6 +72,7 @@ type model struct {
 	balance       string
 	compaction    Compaction
 	scr           *screen
+	picker        *sessionPicker
 }
 
 type (
@@ -127,6 +130,9 @@ func (m *model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.waitUpdate(), m.fetchStatus(), tickStatus(), m.fetchMeters()}
 	if m.opts.Restore {
 		cmds = append(cmds, m.fetchHistory(true))
+	}
+	if m.opts.PickSession {
+		cmds = append(cmds, m.openPicker())
 	}
 	if p := strings.TrimSpace(m.opts.Prompt); p != "" {
 		m.tr.AddUser(p)
@@ -214,6 +220,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = msg.s
 		}
 		return m, nil
+	case sessionsMsg:
+		return m, m.onSessions(msg)
+	case resumedMsg:
+		return m, m.onResumed(msg)
 	case bannerMsg:
 		return m, m.emit(func(int) string { return banner(msg.s) })
 	case tea.MouseMsg:

@@ -172,25 +172,6 @@ func (c *Client) History(ctx context.Context) ([]HistoryMessage, error) {
 	return out, err
 }
 
-// SessionInfo is one saved conversation of this workspace.
-type SessionInfo struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	Title   string `json:"title,omitempty"`
-	Turns   int    `json:"turns,omitempty"`
-	Current bool   `json:"current,omitempty"`
-}
-
-func (c *Client) Sessions(ctx context.Context) ([]SessionInfo, error) {
-	var out []SessionInfo
-	err := c.do(ctx, http.MethodGet, "/sessions", nil, &out)
-	return out, err
-}
-
-func (c *Client) Resume(ctx context.Context, path string) error {
-	return c.do(ctx, http.MethodPost, "/resume", map[string]string{"path": path}, nil)
-}
-
 // Status is the subset of /status the TUI draws.
 type Status struct {
 	Label            string `json:"label"`

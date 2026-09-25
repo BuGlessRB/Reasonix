@@ -36,8 +36,9 @@ func runTUI(args []string, version string) int {
 	dir := fs.String("dir", "", "change to this directory first (project root)")
 	inline := fs.Bool("inline", false, "write the conversation into the terminal's scrollback instead of taking the full screen")
 	cont := registerContinueFlag(fs)
-	resume := fs.StringP("resume", "r", "", "resume by session file path, session ID, or machine session ID (takes precedence over --continue)")
-	if code, ok := parseCommandFlags(fs, args); !ok {
+	resume := fs.StringP("resume", "r", "", "resume by session file path, session ID, or machine session ID; bare -r picks one (takes precedence over --continue)")
+	fs.Lookup("resume").NoOptDefVal = resumePickerSentinel
+	if code, ok := parseCommandFlags(fs, normalizeOptionalResumeArg(args)); !ok {
 		return code
 	}
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
@@ -81,7 +82,8 @@ func runTUI(args []string, version string) int {
 		}
 	}
 	bc := serve.NewBroadcaster()
-	ctrl, err := setupProfileWithOverrides(ctx, *model, 0, false, bc, profile, cliBuildOverrides{
+	cfg, _ := config.Load()
+	ctrl, err := setupProfileWithOverrides(ctx, *model, 0, false, withNotifications(bc, cfg), profile, cliBuildOverrides{
 		Version: version, WorkspaceRoot: workspaceRoot, OnSessionRecovered: cliSessionRecoveredHandler(leases),
 	})
 	if err != nil {
@@ -104,10 +106,11 @@ func runTUI(args []string, version string) int {
 	adoptFirstPane(hub, ctrl, bc, bc, serveCfg, leases)
 
 	err = tui.Run(ctx, tui.Options{
-		Client:  &tui.Client{HTTP: hub.InProcessClient(), Base: tuiBase},
-		Prompt:  strings.Join(fs.Args(), " "),
-		Restore: resumed != nil,
-		Inline:  *inline,
+		Client:      &tui.Client{HTTP: hub.InProcessClient(), Base: tuiBase},
+		Prompt:      strings.Join(fs.Args(), " "),
+		Restore:     resumed != nil,
+		PickSession: *resume == resumePickerSentinel,
+		Inline:      *inline,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

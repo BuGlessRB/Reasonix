@@ -130,6 +130,9 @@ func (m *model) screenKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if m.scrollKey(msg.String()) {
 		return nil, true
 	}
+	if cmd, handled := m.pickerKey(msg); handled {
+		return cmd, true
+	}
 	return m.promptKey(msg)
 }
 
@@ -179,9 +182,13 @@ func (m *model) send(steer bool) tea.Cmd {
 	if display == "" {
 		return nil
 	}
-	if display == "/mouse" && m.scr != nil {
+	switch {
+	case display == "/mouse" && m.scr != nil:
 		m.composer.Reset()
 		return m.toggleMouse()
+	case display == "/resume":
+		m.composer.Reset()
+		return m.openPicker()
 	}
 	text := m.pastes.expand(display)
 	m.history = append(m.history, display)

@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"reasonix/internal/base/i18n"
 	"reasonix/internal/frontend/termrender"
 )
 
@@ -88,11 +89,39 @@ func (m *model) refreshMenu() tea.Cmd {
 }
 
 func (m *model) onCompletion(msg completionMsg) {
-	if msg.err != nil || msg.line != m.composer.Value() || len(msg.c.Items) == 0 {
+	if msg.err != nil || msg.line != m.composer.Value() {
 		m.menu = nil
 		return
 	}
-	m.menu = &menu{line: msg.line, c: msg.c}
+	c := msg.c
+	c.Items = append(m.localCommands(msg.line), c.Items...)
+	if len(c.Items) == 0 {
+		m.menu = nil
+		return
+	}
+	if len(msg.c.Items) == 0 {
+		c.From, c.To = 0, utf16At(msg.line, len(msg.line))
+	}
+	m.menu = &menu{line: msg.line, c: c}
+}
+
+// localCommands are the slash commands this screen answers itself, offered
+// beside the kernel's while a bare command is being typed.
+func (m *model) localCommands(line string) []CompletionItem {
+	if !strings.HasPrefix(line, "/") || strings.ContainsAny(line, " \n") {
+		return nil
+	}
+	cmds := []CompletionItem{{Label: "/resume", Insert: "/resume", Hint: i18n.M.CmdResume}}
+	if m.scr != nil {
+		cmds = append(cmds, CompletionItem{Label: "/mouse", Insert: "/mouse", Hint: i18n.M.CmdMouse})
+	}
+	var out []CompletionItem
+	for _, c := range cmds {
+		if strings.HasPrefix(c.Label, line) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // menuKey takes the keys an open menu owns.

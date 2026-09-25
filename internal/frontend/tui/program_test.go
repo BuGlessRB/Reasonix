@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -38,6 +39,14 @@ func (k *recordingKernel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			{"content": "fix the bug", "status": "in_progress", "activeForm": "fixing the bug"},
 			{"content": "run tests", "status": "pending"},
 		})
+	case "/sessions":
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"name": "a", "path": "/s/a.jsonl", "title": "fix the parser", "turns": 3, "current": true},
+			{"name": "b", "path": "/s/b.jsonl", "title": "write the docs", "turns": 2},
+			{"name": "c", "path": "/s/c.jsonl", "title": "fix the lexer", "turns": 1},
+		})
+	case "/history":
+		_ = json.NewEncoder(w).Encode([]map[string]any{{"role": "user", "content": "write the docs"}})
 	case "/inbox/items":
 		_ = json.NewEncoder(w).Encode(map[string]string{"itemId": "q-7"})
 	default:
@@ -80,6 +89,13 @@ func run(m *model, cmd tea.Cmd) {
 	case nil, statusTickMsg:
 	default:
 		if _, isSeq := msg.(tea.Cmd); isSeq {
+			return
+		}
+		// A sequence arrives as bubbletea's own slice of commands.
+		if v := reflect.ValueOf(msg); v.Kind() == reflect.Slice && v.Type().Elem() == reflect.TypeFor[tea.Cmd]() {
+			for i := range v.Len() {
+				run(m, v.Index(i).Interface().(tea.Cmd))
+			}
 			return
 		}
 		_, next := m.Update(msg)
