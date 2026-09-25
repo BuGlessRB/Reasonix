@@ -22,7 +22,8 @@ type menuItem struct {
 }
 
 // termSize returns the terminal's column and row counts, falling back to the
-// classic 80×24 for any dimension the terminal fails to report.
+// classic 80×24 for any dimension the terminal fails to report. fd must be the
+// output handle: a Windows console input handle has no screen buffer to size.
 func termSize(fd int) (cols, rows int) {
 	cols, rows, err := term.GetSize(fd)
 	if err != nil || cols <= 0 {
@@ -126,7 +127,7 @@ func selectOne(label string, items []menuItem) (int, error) {
 	defer term.Restore(fd, old)
 
 	w := os.Stdout
-	cols, th := termSize(fd)
+	cols, th := termSize(int(w.Fd()))
 	f := menuFrame{w: w, cols: cols}
 
 	// search state
@@ -305,7 +306,7 @@ func selectMany(label string, items []menuItem) ([]int, error) {
 	defer term.Restore(fd, old)
 
 	w := os.Stdout
-	cols, th := termSize(fd)
+	cols, th := termSize(int(w.Fd()))
 	f := menuFrame{w: w, cols: cols}
 
 	// search state
