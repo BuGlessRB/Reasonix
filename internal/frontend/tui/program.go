@@ -20,9 +20,9 @@ type Options struct {
 	// Restore reads the session back from /history before the first frame:
 	// the session was resumed, and its conversation belongs on screen.
 	Restore bool
-	// Version and Workspace are shown on the welcome card.
-	Version   string
-	Workspace string
+	// Inline writes the conversation into the terminal's own scrollback
+	// instead of taking the full screen.
+	Inline bool
 }
 
 // Run drives the terminal until the user quits or ctx ends.
@@ -69,6 +69,7 @@ type model struct {
 	apSel         approvalSel
 	balance       string
 	compaction    Compaction
+	scr           *screen
 }
 
 type (
@@ -110,11 +111,15 @@ func newModel(ctx context.Context, opts Options) *model {
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j", "shift+enter", "alt+enter"))
 	termrender.ApplyTextareaTheme(&ta)
 	ta.Focus()
-	return &model{
+	m := &model{
 		ctx: ctx, client: opts.Client, opts: opts,
 		committed: map[int]bool{}, sayShown: map[int]int{},
 		composer: ta, width: 80, height: 24,
 	}
+	if !opts.Inline {
+		m.scr = &screen{follow: true}
+	}
+	return m
 }
 
 func (m *model) Init() tea.Cmd {
@@ -209,6 +214,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = msg.s
 		}
 		return m, nil
+	case bannerMsg:
+		return m, m.emit(func(int) string { return banner(msg.s) })
+	case tea.MouseMsg:
+		return m, m.onMouse(msg)
+	case termrender.ClipboardCopyMsg:
+		return m, m.onCopied(msg)
+	case flashDoneMsg:
+		return m, nil
 	case metersMsg:
 		m.balance = msg.balance
 		if msg.compaction != nil {
@@ -297,8 +310,8 @@ func (m *model) commit() tea.Cmd {
 			continue
 		}
 		if it.Kind == ItemSay && !it.Done {
-			if chunk := m.settledChunk(it); chunk != "" {
-				prints = append(prints, tea.Println(chunk))
+			if chunk := m.settledChunk(it); chunk != nil {
+				prints = append(prints, m.emit(chunk))
 			}
 			break
 		}
@@ -306,23 +319,23 @@ func (m *model) commit() tea.Cmd {
 			break
 		}
 		m.committed[it.ID] = true
-		if out := renderItem(it, m.width, m.sayShown[it.ID]); out != "" {
-			prints = append(prints, tea.Println(out))
-		}
+		row, shown := *it, m.sayShown[it.ID]
+		prints = append(prints, m.emit(func(w int) string { return renderItem(&row, w, shown) }))
 	}
 	return tea.Sequence(prints...)
 }
 
-// settledChunk renders the part of a streaming answer that has become final
-// since it was last printed.
-func (m *model) settledChunk(it *Item) string {
+// settledChunk draws the part of a streaming answer that has become final
+// since it was last printed, or nil when nothing new has.
+func (m *model) settledChunk(it *Item) func(int) string {
 	end := settledPrefix(it.Text)
 	shown := m.sayShown[it.ID]
 	if end <= shown {
-		return ""
+		return nil
 	}
 	m.sayShown[it.ID] = end
-	return withThought(it, shown, renderSayPart(it.Text[shown:end], shown == 0, m.width))
+	row := *it
+	return func(w int) string { return withThought(&row, shown, renderSayPart(row.Text[shown:end], shown == 0, w)) }
 }
 
 func settled(it *Item) bool {

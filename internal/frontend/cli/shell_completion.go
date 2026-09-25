@@ -667,6 +667,7 @@ func cliTUICompletionFlags(model, preset, help cliCompletionFlag) []cliCompletio
 		completionFlag("--dir", cliCompletionPathValue),
 		completionFlag("--continue -c", cliCompletionNoValue),
 		completionFlag("--resume -r", cliCompletionSessionValue),
+		completionFlag("--inline", cliCompletionNoValue),
 		help,
 	}
 }

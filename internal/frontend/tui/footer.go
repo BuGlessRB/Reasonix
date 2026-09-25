@@ -56,7 +56,13 @@ func (m *model) modeTag() string {
 
 func (m *model) stateText() string {
 	open := m.tr.OpenPrompt()
+	tag := ""
+	if m.scr != nil && m.scr.mouseOff {
+		tag = " · " + termrender.Dim(i18n.M.MouseCaptureTag)
+	}
 	switch {
+	case m.flashText() != "":
+		return termrender.Green(m.flashText()) + tag
 	case open != nil && open.Kind == ItemAsk:
 		return footerLabel(i18n.M.ChatStatusQuestion)
 	case open != nil && open.Approval.Kind == "plan":
@@ -70,7 +76,7 @@ func (m *model) stateText() string {
 	case m.tr.Running:
 		return footerLabel(i18n.M.ChatStatusCycleHintCompact)
 	}
-	return footerValue(i18n.M.ChatStatusIdle) + " · " + footerLabel(i18n.M.ChatStatusCycleHintCompact)
+	return footerValue(i18n.M.ChatStatusIdle) + " · " + footerLabel(i18n.M.ChatStatusCycleHintCompact) + tag
 }
 
 func (m *model) modelGroup() string {

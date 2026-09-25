@@ -34,6 +34,7 @@ func runTUI(args []string, version string) int {
 	model := fs.String("model", "", "provider name (default: config default_model)")
 	preset := fs.String("preset", "balanced", "agent execution setting: light | balanced | delivery")
 	dir := fs.String("dir", "", "change to this directory first (project root)")
+	inline := fs.Bool("inline", false, "write the conversation into the terminal's scrollback instead of taking the full screen")
 	cont := registerContinueFlag(fs)
 	resume := fs.StringP("resume", "r", "", "resume by session file path, session ID, or machine session ID (takes precedence over --continue)")
 	if code, ok := parseCommandFlags(fs, args); !ok {
@@ -103,11 +104,10 @@ func runTUI(args []string, version string) int {
 	adoptFirstPane(hub, ctrl, bc, bc, serveCfg, leases)
 
 	err = tui.Run(ctx, tui.Options{
-		Client:    &tui.Client{HTTP: hub.InProcessClient(), Base: tuiBase},
-		Prompt:    strings.Join(fs.Args(), " "),
-		Restore:   resumed != nil,
-		Version:   version,
-		Workspace: workspaceRoot,
+		Client:  &tui.Client{HTTP: hub.InProcessClient(), Base: tuiBase},
+		Prompt:  strings.Join(fs.Args(), " "),
+		Restore: resumed != nil,
+		Inline:  *inline,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

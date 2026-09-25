@@ -32,12 +32,17 @@ func tickSpin() tea.Cmd {
 	return tea.Tick(spinEvery, func(time.Time) tea.Msg { return spinMsg{} })
 }
 
-// greet prints the banner before anything else reaches the scrollback; it
-// asks for the status itself because the first frame has not been drawn.
+type bannerMsg struct{ s Status }
+
+// greet puts the banner above anything else in the transcript; it asks for
+// the status itself because the first frame has not been drawn.
 func (m *model) greet() tea.Cmd {
 	return func() tea.Msg {
 		s, _ := m.client.Status(m.ctx)
-		return tea.Println(banner(s))()
+		if m.scr == nil {
+			return tea.Println(banner(s))()
+		}
+		return bannerMsg{s: s}
 	}
 }
 

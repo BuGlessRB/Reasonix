@@ -9,50 +9,63 @@ import (
 	"reasonix/internal/frontend/termrender"
 )
 
-// View draws the live region: what is still changing, then the pinned bottom
-// — the task list, a prompt waiting on the user, the completion menu, the
-// working line, the composer, and the footer. Everything settled is already
-// in the terminal's scrollback.
-func (m *model) View() tea.View {
-	var bottom []string
-	bottom = append(bottom, m.todoLines()...)
+// bottom is the pinned region under the transcript: the task list, a prompt
+// waiting on the user, the completion menu, the working line, the composer,
+// and the footer. composerAt is the composer's first row, or -1 when hidden.
+type bottom struct {
+	rows       []string
+	composerAt int
+}
+
+func (m *model) bottomLines() bottom {
+	var rows []string
+	rows = append(rows, m.todoLines()...)
 	open := m.tr.OpenPrompt()
 	switch {
 	case open == nil:
 	case open.Kind == ItemAsk:
-		bottom = append(bottom, m.askPanel(open)...)
+		rows = append(rows, m.askPanel(open)...)
 	default:
-		bottom = append(bottom, m.approvalPanel(open)...)
+		rows = append(rows, m.approvalPanel(open)...)
 	}
-	bottom = append(bottom, m.menuLines()...)
+	rows = append(rows, m.menuLines()...)
 	if w := m.workingLine(); w != "" {
-		bottom = append(bottom, w)
+		rows = append(rows, w)
 	}
-	composerAt := -1
+	at := -1
 	if open == nil || (open.Kind == ItemAsk && m.ask != nil && m.ask.typing) {
-		composerAt = len(bottom)
-		bottom = append(bottom, m.composerLines()...)
+		at = len(rows)
+		rows = append(rows, m.composerLines()...)
 	}
-	bottom = append(bottom, m.statusBlock()...)
+	return bottom{rows: append(rows, m.statusBlock()...), composerAt: at}
+}
 
+// View draws the frame. Full screen, the transcript is a viewport above the
+// bottom region; otherwise everything settled is already in the terminal's
+// scrollback and only what is still changing is drawn above it.
+func (m *model) View() tea.View {
+	b := m.bottomLines()
+	if m.scr != nil {
+		return m.fullView(b.rows, b.composerAt)
+	}
 	// The live region is redrawn in place, so the whole frame must stay inside
 	// the screen: a frame taller than the screen scrolls, and the rows that
 	// scrolled off can no longer be cleared before the next print.
 	live := m.liveLines()
-	room := max(min(m.height/2, m.height-len(bottom)-1), 0)
+	room := max(min(m.height/2, m.height-len(b.rows)-1), 0)
 	if len(live) > room {
 		live = live[len(live)-room:]
 	}
-	lines := append(live, bottom...)
+	lines := append(live, b.rows...)
 	// A row as wide as the terminal wraps on its own, which adds a row the
 	// renderer does not know it drew.
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, max(m.width-1, 1), "")
 	}
 	v := tea.NewView(strings.Join(lines, "\n"))
-	if c := m.composer.Cursor(); c != nil && composerAt >= 0 {
+	if c := m.composer.Cursor(); c != nil && b.composerAt >= 0 {
 		c.X += 3
-		c.Y += len(live) + composerAt + 1
+		c.Y += len(live) + b.composerAt + 1
 		v.Cursor = c
 	}
 	return v

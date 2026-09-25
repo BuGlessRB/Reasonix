@@ -95,14 +95,16 @@ func typeText(m *model, s string) {
 
 func press(m *model, k string) tea.Cmd {
 	codes := map[string]tea.KeyPressMsg{
-		"enter":  {Code: tea.KeyEnter},
-		"esc":    {Code: tea.KeyEscape},
-		"ctrl+s": {Code: 's', Mod: tea.ModCtrl},
-		"ctrl+c": {Code: 'c', Mod: tea.ModCtrl},
-		"y":      {Code: 'y', Text: "y"},
-		"a":      {Code: 'a', Text: "a"},
-		"n":      {Code: 'n', Text: "n"},
-		"down":   {Code: tea.KeyDown},
+		"enter":     {Code: tea.KeyEnter},
+		"esc":       {Code: tea.KeyEscape},
+		"ctrl+s":    {Code: 's', Mod: tea.ModCtrl},
+		"ctrl+c":    {Code: 'c', Mod: tea.ModCtrl},
+		"y":         {Code: 'y', Text: "y"},
+		"a":         {Code: 'a', Text: "a"},
+		"n":         {Code: 'n', Text: "n"},
+		"down":      {Code: tea.KeyDown},
+		"ctrl+home": {Code: tea.KeyHome, Mod: tea.ModCtrl},
+		"ctrl+end":  {Code: tea.KeyEnd, Mod: tea.ModCtrl},
 	}
 	_, cmd := m.Update(codes[k])
 	return cmd

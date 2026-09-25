@@ -53,7 +53,7 @@ func (p *pasteStore) expand(s string) string {
 }
 
 func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if cmd, handled := m.promptKey(msg); handled {
+	if cmd, handled := m.screenKey(msg); handled {
 		return m, cmd
 	}
 	if cmd, handled := m.menuKey(msg.String()); handled {
@@ -121,6 +121,33 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// screenKey takes what a key means before it reaches the composer: copying a
+// selection, moving the transcript, answering an open panel.
+func (m *model) screenKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	if cmd, handled := m.selectionKey(msg.String()); handled {
+		return cmd, true
+	}
+	if m.scrollKey(msg.String()) {
+		return nil, true
+	}
+	return m.promptKey(msg)
+}
+
+// selectionKey ends a transcript selection on any key; the copy keys copy
+// it first, since the terminal never sees a highlight the app drew.
+func (m *model) selectionKey(k string) (tea.Cmd, bool) {
+	if m.scr == nil || !m.scr.sel.active {
+		return nil, false
+	}
+	copyIt := !m.scr.sel.empty() && (k == "ctrl+c" || k == "super+c" || k == "ctrl+insert")
+	var cmd tea.Cmd
+	if copyIt {
+		cmd = m.copySelection()
+	}
+	m.scr.sel = selection{}
+	return cmd, copyIt
+}
+
 // promptKey gives an open panel the keys it owns. The composer is hidden
 // behind the panel unless a typed answer has it, so the rest go nowhere but
 // ctrl+c, which still stops the turn.
@@ -151,6 +178,10 @@ func (m *model) send(steer bool) tea.Cmd {
 	display := strings.TrimSpace(m.composer.Value())
 	if display == "" {
 		return nil
+	}
+	if display == "/mouse" && m.scr != nil {
+		m.composer.Reset()
+		return m.toggleMouse()
 	}
 	text := m.pastes.expand(display)
 	m.history = append(m.history, display)
