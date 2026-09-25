@@ -535,8 +535,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	trimmed := strings.TrimSpace(body.Input)
-	if strings.HasPrefix(trimmed, "!") {
-		refuse(w, http.StatusForbidden, "shell.unavailable_over_http", "shell commands are unavailable over HTTP", nil)
+	if refuseNetworkShell(w, r, trimmed) {
 		return
 	}
 	// Intercept /model <ref> for runtime model switching (the controller's
@@ -600,7 +599,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	submitAs(ctrl, r, body.Input, body.Format)
+	submitOrShell(ctrl, r, body.Input, body.Format)
 	// After synchronous admission, a successful start sets Running. A silent
 	// drop (rotating/closed) leaves Running false — return 409 instead of 202.
 	// Finishing-window park also leaves Running false briefly; prefer 202 only
