@@ -126,7 +126,7 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	userDefaultModel := cfg.DefaultModel
 	globalCLI := cfg.CLI
 	globalSecrets := cfg.Secrets
-	globalHostAuthorities := cfg.Sandbox.HostAuthorities
+	globalHostAuthorities := slices.Clone(cfg.Sandbox.HostAuthorities)
 	globalRemote, globalStorage := cfg.Remote.Clone(), maps.Clone(cfg.Storage)
 	globalDesktopLanguage := cfg.Desktop.Language
 	globalPricingCurrency := cfg.Desktop.Currency
