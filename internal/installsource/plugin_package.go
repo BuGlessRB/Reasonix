@@ -717,15 +717,9 @@ func (t *installSourceTool) applyRemovePluginPackage(_ request, act *action) err
 	return nil
 }
 
-// repairPluginModelRefs moves default_model and the optional agent model refs
-// off a plugin that has just been removed. Its models stop resolving the
-// moment the package is gone, and boot rejects an unknown default_model, so
-// leaving the ref in place locks the user out of every session until they edit
-// the file by hand.
-//
-// Only the user config is repaired: plugin packages install globally, so a
-// project reasonix.toml that names a plugin model is the project's own choice
-// to make and to undo.
+// repairPluginModelRefs moves user-config model refs off a removed plugin,
+// since boot rejects an unknown default_model. Project configs are left alone:
+// a project naming a plugin model made that choice itself.
 func repairPluginModelRefs(pluginID string) error {
 	path := config.UserConfigPath()
 	if strings.TrimSpace(path) == "" {
@@ -734,13 +728,8 @@ func repairPluginModelRefs(pluginID string) error {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
-	// Probe a throwaway copy first. A config with no ref to this plugin is left
-	// byte-for-byte alone, and a malformed one is left for the user to recover:
-	// rewriting it here would trade a stale ref for a lost file.
-	//
-	// Credentials load with it: the fallback provider must be one the user can
-	// actually reach, and Configured() reports false for every provider when
-	// the keys are absent.
+	// A strict read-only probe leaves an unaffected or malformed file untouched;
+	// credentials load so the fallback is a provider the user can reach.
 	probe, err := config.LoadForEditReadOnlyStrict(path)
 	if err != nil || probe == nil || !probe.RemovePluginModelRefs(pluginID) {
 		return nil
