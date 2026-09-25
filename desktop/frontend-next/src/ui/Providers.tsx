@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Clip } from "./Clip";
 import { useEscape } from "./dismiss";
 import { t } from "../i18n";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe } from "../port/port";
 import { AddProvider } from "./AddProvider";
-import { EditConn } from "./EditConn";
-import { KIND_LABEL, accountKey, accountLabel, disambiguate, hostOf } from "./vendors";
-import { PROVIDER_EDIT_DISABLED, reason } from "../i18n/kernel";
-import { HttpError } from "../port/http_error";
+import { ProviderDetail } from "./ProviderDetail";
+import { accountKey, accountLabel, disambiguate, hostOf } from "./vendors";
+import { reason } from "../i18n/kernel";
 
 // A connection is an account, not a config row. One endpoint answering two
 // protocols is two rows in the file and one service to the person paying for it,
@@ -31,7 +30,7 @@ export type Port = {
 };
 
 // One account: every configured entry that answers on the same host.
-interface Account {
+export interface Account {
   key: string;
   label: string;
   host: string;
@@ -70,7 +69,7 @@ interface ProvidersProps {
   // missed, and the page above already has one place to say it.
   onFailed: (why: string) => void;
   // Which protocol each account is showing, and how to change it. The model
-  // list reads the same map, so switching here re-lists the models below.
+  // list reads the same map, so switching here re-lists the models there.
   protocol: Record<string, string>;
   onProtocol: (account: Account, kind: string) => void;
   activeKindFor: (account: Account) => string;
@@ -79,16 +78,42 @@ interface ProvidersProps {
   declare?: string;
 }
 
+const SEARCH_FROM = 6;
+
+// A list of accounts beside the one being edited: picking a row is navigation,
+// and every field of the picked account is on screen without a second click.
 export function Providers({ port, onChanged, onFailed, protocol, onProtocol, activeKindFor, declare }: ProvidersProps) {
   const [list, setList] = useState<ProviderEntry[] | null>(null);
   const [adding, setAdding] = useState(false);
   useEscape(adding, () => setAdding(false));
   const [busy, setBusy] = useState("");
+  const [picked, setPicked] = useState("");
+  const [q, setQ] = useState("");
+  // The accounts that existed when an add began: the one that is new afterwards
+  // is the one just added, and it is what the detail should show.
+  const before = useRef<Set<string> | null>(null);
 
   const reload = useCallback(() => {
     port.providers().then(setList).catch(() => setList([]));
   }, [port]);
   useEffect(reload, [reload]);
+
+  const accounts = list ? groupAccounts(list) : [];
+  useEffect(() => {
+    if (!list) return;
+    const keys = groupAccounts(list).map((a) => a.key);
+    if (before.current) {
+      const fresh = keys.find((k) => !before.current?.has(k));
+      before.current = null;
+      if (fresh) return setPicked(fresh);
+    }
+    if (keys.includes(picked)) return;
+    const all = groupAccounts(list);
+    const want = all.find((a) => declare && Object.values(a.byKind).some((e) => e.name === declare))
+      ?? all.find((a) => Object.values(a.byKind).some((e) => e.inUse))
+      ?? all[0];
+    setPicked(want?.key ?? "");
+  }, [list, picked, declare]);
 
   const remove = async (name: string) => {
     setBusy(name);
@@ -106,285 +131,68 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
 
   if (list === null) return <p className="acct-note">{t("正在读取…")}</p>;
 
+  const query = q.trim().toLowerCase();
+  const shown = accounts.filter((a) => !query || a.label.toLowerCase().includes(query) || a.host.toLowerCase().includes(query));
+  const current = accounts.find((a) => a.key === picked);
   return (
-    <>
-      <div className="provider-toolbar">
-        <span>{t("{n} 个来源", { n: groupAccounts(list).length })}</span>
-        {!adding && (
-          <button className="act" data-primary data-action="provider.add-start" onClick={() => setAdding(true)}>
-            <b aria-hidden="true">＋</b>{t("添加来源")}
-          </button>
+    <div className="psplit">
+      <div className="plist">
+        {accounts.length >= SEARCH_FROM && (
+          <input className="psearch" type="search" value={q} spellCheck={false}
+            placeholder={t("搜索已添加的服务")} aria-label={t("搜索已添加的服务")}
+            onChange={(e) => setQ(e.target.value)} />
         )}
+        <div className="plist-rows" role="group" aria-label={t("{n} 个来源", { n: accounts.length })}>
+          {shown.map((a) => {
+            const entries = Object.values(a.byKind);
+            const inUse = entries.some((e) => e.inUse);
+            const keyless = entries.every((e) => !e.hasKey);
+            return (
+              <button key={a.key} className="svcrow" data-action="provider.select" data-target={a.key}
+                aria-pressed={!adding && a.key === picked}
+                onClick={() => { setAdding(false); setPicked(a.key); }}>
+                <span className="tx">
+                  <span className="nm">{a.label}</span>
+                  <Clip className="ds">{a.host}</Clip>
+                </span>
+                <i className="pstate" data-state={inUse ? "use" : keyless ? "warn" : undefined}
+                  title={t(inUse ? "正在用" : keyless ? "缺 key" : "")} />
+              </button>
+            );
+          })}
+          {accounts.length === 0 && <div className="empty">{t("尚未配置任何模型来源。")}</div>}
+          {accounts.length > 0 && shown.length === 0 && <div className="empty">{t("没有匹配的服务。")}</div>}
+        </div>
+        <button className="act padd" data-action="provider.add-start" aria-pressed={adding} onClick={() => setAdding(true)}>
+          <b aria-hidden="true">＋</b>{t("添加模型服务")}
+        </button>
       </div>
-      {adding && (
-        <AddProvider
-          port={port}
-          taken={list.map((p) => p.name)}
-          known={list}
-          onDone={() => {
-            setAdding(false);
-            reload();
-            onChanged();
-          }}
-          onCancel={() => setAdding(false)}
-        />
-      )}
-      <div className="vlist">
-        {groupAccounts(list).map((a) => (
-          <Conn key={a.key} a={a} port={port} busy={busy} setBusy={setBusy}
-            kind={protocol[a.key] ?? activeKindFor(a)}
-            onProtocol={(k) => onProtocol(a, k)}
+      <div className="pmain">
+        {adding ? (
+          <AddProvider
+            port={port}
+            taken={list.map((p) => p.name)}
+            known={list}
+            onDone={() => {
+              before.current = new Set(accounts.map((a) => a.key));
+              setAdding(false);
+              reload();
+              onChanged();
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        ) : current ? (
+          <ProviderDetail key={current.key} a={current} port={port} busy={busy} setBusy={setBusy}
+            kind={protocol[current.key] ?? activeKindFor(current)}
+            onProtocol={(k) => onProtocol(current, k)}
             onRemove={remove}
             declare={declare}
             onEdited={() => { reload(); onChanged(); }}
             onFailed={onFailed} />
-        ))}
-        {list.length === 0 && <div className="empty">{t("尚未配置任何模型来源。")}</div>}
+        ) : (
+          <div className="empty">{t("添加一个模型服务后，在这里查看和修改它。")}</div>
+        )}
       </div>
-    </>
-  );
-}
-
-// How a turn's context reaches the next one. Auto is vendor detection, which is
-// the only honest answer for an endpoint nobody has characterised; the other two
-// are what a reader picks when the endpoint has already contradicted it.
-const CONTINUATIONS: ReadonlyArray<readonly [string, string]> = [
-  ["", "自动"],
-  ["stateful", "引用上一轮"],
-  ["stateless", "每轮完整发送"],
-];
-
-const CONTINUATION_WHY: Record<string, string> = {
-  "": "按端点厂商判断。中转站若回报 previous_response_id 不受支持，改为「每轮完整发送」。",
-  stateful: "只发送新的一轮，历史由端点自己保存 —— 前缀缓存命中率最高，但要求端点真的存了。",
-  stateless: "每轮重发完整历史。中转站只转发、不保存状态时用这一档。",
-};
-
-// One account. The protocol is a switch on it rather than a fact on a row,
-// because both entries are the same key at the same host; 测一下 is what turns
-// "which protocol did we record" back into a finding when the endpoint moved.
-function Conn({
-  a, port, busy, setBusy, kind, onProtocol, onRemove, onEdited, onFailed, declare,
-}: {
-  a: Account; port: Port; busy: string; setBusy: (b: string) => void;
-  kind: string; onProtocol: (kind: string) => void; onRemove: (name: string) => void;
-  onEdited: () => void; onFailed: (why: string) => void; declare?: string;
-}) {
-  const [found, setFound] = useState<ProviderCheck | null>(null);
-  // A refusal is not a failed probe. The kernel withholds these routes from a
-  // server reachable over the network, because adding a source writes a key
-  // into the credential store of the machine running the kernel — so nothing
-  // was tried, and "cannot connect" names the wrong thing to go fix.
-  const [refused, setRefused] = useState("");
-  const entry = a.byKind[kind] ?? a.byKind[a.kinds[0]];
-  const declaring = !!declare && entry.name === declare;
-  const [editing, setEditing] = useState(declaring);
-  useEscape(editing, () => setEditing(false));
-  const checking = busy === `check:${entry.name}`;
-  const inUse = a.kinds.some((k) => a.byKind[k].inUse);
-
-  const setSearch = async (on: boolean) => {
-    setBusy(`search:${entry.name}`);
-    onFailed("");
-    try {
-      await port.setProviderWebSearch(entry.name, on);
-      onEdited();
-    } catch (e) {
-      onFailed(reason(e));
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const setThinking = async (on: boolean) => {
-    setBusy(`thinking:${entry.name}`);
-    onFailed("");
-    try {
-      await port.setProviderThinking(entry.name, on);
-      onEdited();
-    } catch (e) {
-      onFailed(reason(e));
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const setContinuation = async (mode: string) => {
-    setBusy(`continuation:${entry.name}`);
-    onFailed("");
-    try {
-      await port.setProviderContinuation(entry.name, mode);
-      onEdited();
-    } catch (e) {
-      onFailed(reason(e));
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const check = async () => {
-    setBusy(`check:${entry.name}`);
-    setFound(null);
-    setRefused("");
-    try {
-      setFound(await port.checkProvider(entry.name));
-    } catch (e) {
-      // Read off the code the kernel sent, never the status: 403 is also what a
-      // gateway in front of it answers, and that is a different thing to do next.
-      if (e instanceof HttpError && e.reason?.code === PROVIDER_EDIT_DISABLED) setRefused(reason(e));
-      else setFound({ ok: false, error: reason(e) });
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const models = entry.models.length;
-  // What the endpoint answered with that this connection does not list. The
-  // vendor adds models to endpoints we already know; a stored list never finds
-  // out on its own, and the probe is the one place that already has the answer.
-  const unlisted = (found?.models ?? []).filter((m) => !entry.models.includes(m));
-  return (
-    <>
-      <div className="vrow" data-on={inUse ? "" : undefined}>
-        <span className="nm">{a.label}</span>
-        <Clip className="ds">
-          {a.host + (models > 0 ? ` · ${t("{n} 个模型", { n: models })}` : "") + t(entry.hasKey ? "" : " · 缺 key")}
-        </Clip>
-        <span className="sc">{t(inUse ? "正在用" : "")}</span>
-        {/* Hover-reveal is right for 删除; a diagnostic nobody can find is not
-            a diagnostic, so this one stays on the row. */}
-        <button className="sa lnk" data-keep onClick={() => setEditing((v) => !v)} disabled={busy !== ""}>
-          {t(editing ? "收起" : "编辑")}
-        </button>
-        <button className="sa lnk" data-keep data-action="provider.probe" onClick={check} disabled={busy !== ""}>
-          {t(checking ? "测试中…" : "测试连接")}
-        </button>
-        <button className="sa lnk" data-action="provider.remove" data-target={entry.name} onClick={() => onRemove(entry.name)} disabled={busy !== ""}>
-          {t("删除")}
-        </button>
-      </div>
-      {(a.kinds.length > 1 || entry.canWebSearch || entry.canSetThinking || entry.canSetContinuation) && (
-        <details className="provider-options">
-          <summary>
-            <span className="tx">
-              <strong>{t("请求与能力")}</strong>
-              <small>{t("思考、联网搜索与上下文续接")}</small>
-            </span>
-            <span className="provider-options-state">
-              {entry.canSetThinking && t(entry.sendsThinking === false ? "不发送思考参数" : "思考自动")}
-            </span>
-          </summary>
-      {a.kinds.length > 1 && (
-        <div className="vway">
-          <span className="lb">{t("接入方式")}</span>
-          <div className="seg" role="group" aria-label={t("{name} 的接入方式", { name: a.label })}>
-            {a.kinds.map((k) => (
-              <button key={k} data-action="provider.protocol" data-target={entry.name} data-value={k} aria-pressed={k === kind} disabled={busy !== ""} onClick={() => onProtocol(k)}>
-                {t(KIND_LABEL[k] ?? k)}
-                {/* A door that carries a capability the other lacks has to say
-                    so on itself: switching is otherwise a silent downgrade. */}
-                {a.byKind[k].canWebSearch && <i className="perk">{t("联网搜索")}</i>}
-              </button>
-            ))}
-          </div>
-          <span className="why">
-            {t(a.kinds.some((k) => a.byKind[k].canWebSearch) && !entry.canWebSearch ? "同一账号的两种接入方式。当前这一种不支持联网搜索；这是协议差异，不是可配置项。" : "同一账号的两种接入方式。切换后下方的模型列表随之改变。")}
-          </span>
-        </div>
-      )}
-      {entry.canWebSearch && (
-        <div className="vway">
-          <span className="lb">{t("联网搜索")}</span>
-          <div className="seg" role="group" aria-label={t("{name} 的联网搜索", { name: a.label })}>
-            {[true, false].map((on) => (
-              <button key={String(on)} data-action="provider.web-search" data-target={entry.name} data-value={String(on)}
-                aria-pressed={entry.webSearch === on} disabled={busy !== ""}
-                onClick={() => setSearch(on)}>
-                {t(on ? "开" : "关")}
-              </button>
-            ))}
-          </div>
-          <span className="why">{t("端点自己执行的搜索，不占本地工具。")}</span>
-        </div>
-      )}
-      {entry.canSetThinking && (
-        <div className="vway">
-          <span className="lb">{t("思考参数")}</span>
-          <div className="seg" role="group" aria-label={t("{name} 的思考参数", { name: a.label })}>
-            {[true, false].map((on) => (
-              <button key={String(on)} data-action="provider.thinking" data-target={entry.name} data-value={String(on)}
-                aria-pressed={(entry.sendsThinking ?? true) === on} disabled={busy !== ""}
-                onClick={() => setThinking(on)}>
-                {t(on ? "自动" : "不发送")}
-              </button>
-            ))}
-          </div>
-          <span className="why">
-            {t(entry.sendsThinking === false ? "只发送常规聊天参数，不再指定思考深度；模型自身的推理行为不受影响。" : "部分中转站不支持 thinking 字段，会拒绝整个请求。遇到这种情况请切换为「不发送」。")}
-          </span>
-        </div>
-      )}
-      {entry.canSetContinuation && (
-        <div className="vway">
-          <span className="lb">{t("上下文续接")}</span>
-          <div className="seg" role="group" aria-label={t("{name} 的上下文续接方式", { name: a.label })}>
-            {CONTINUATIONS.map(([mode, label]) => (
-              <button key={mode} data-action="provider.continuation" data-target={entry.name} data-value={mode}
-                aria-pressed={(entry.continuation ?? "") === mode} disabled={busy !== ""}
-                onClick={() => setContinuation(mode)}>
-                {t(label)}
-              </button>
-            ))}
-          </div>
-          <span className="why">{t(CONTINUATION_WHY[entry.continuation ?? ""] ?? CONTINUATION_WHY[""])}</span>
-        </div>
-      )}
-        </details>
-      )}
-      {editing && (
-        <EditConn
-          entry={entry}
-          initialCheck={found?.ok ? found : undefined}
-          port={port}
-          busy={busy}
-          setBusy={setBusy}
-          declare={declaring}
-          onDone={() => {
-            setEditing(false);
-            onEdited();
-          }}
-        />
-      )}
-      {refused && (
-        <div className="find" data-lvl="warn" role="status">
-          <span className="t">{refused}</span>
-          <span className="why">{t("模型来源要在运行内核的那台机器上配置。")}</span>
-        </div>
-      )}
-      {found && (
-        <div className="find" data-lvl={found.ok ? "ok" : "warn"} role="status">
-          <span className="t">
-            {found.ok
-              ? `${t("连上了")} · ${t(KIND_LABEL[found.kind ?? ""] ?? found.kind ?? "")} · ${t("{n} 个模型", { n: found.models?.length ?? 0 })}`
-              : t("无法连接")}
-          </span>
-          <span className="why">
-            {!found.ok && found.error}
-            {found.ok && found.matches === false &&
-              t("记的是 {had}，但它答的是 {got}。", { had: t(KIND_LABEL[entry.kind] ?? entry.kind), got: t(KIND_LABEL[found.kind ?? ""] ?? found.kind ?? "") })}
-            {found.ok && found.matches !== false && t("key 有效，协议也对得上。")}
-            {found.ok && found.noProxy && " " + t("走代理连不上、直连可以。")}
-            {/* A stored list cannot learn that the vendor shipped something. The
-                probe already knows, so saying it costs nothing and is the only
-                moment anyone finds out. */}
-            {found.ok && unlisted.length > 0 &&
-              " " + t("这个端点还有 {n} 个模型不在列表里：{names}。点「编辑」把它们加进来。", {
-                n: unlisted.length,
-                names: unlisted.slice(0, 3).join("、") + (unlisted.length > 3 ? "…" : ""),
-              })}
-          </span>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

@@ -695,7 +695,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
             menuTitle={<><b>{t("选择模型")}</b><small>{t("用于后续任务")}</small></>}
             onOpen={loadModels}
             pending={busy["model"]}
-            onPick={(ref) => ref === "__manage-models" ? onSettings("model") : change("model", () => port.setModel(ref))}
+            onPick={(ref) => ref === "__manage-models" ? onSettings("providers") : change("model", () => port.setModel(ref))}
             label={<><span className="nm">{modelLb}</span><StudioIcon name="down" /></>}
           />
           {/* 推理强度属于模型能力，因此与模型共用一组轮廓。 */}
@@ -712,7 +712,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
                 current={declared ? status.effort || "auto" : ""}
                 pending={busy["effort"]}
                 items={effortMenu(efforts, modelLb, "__effort-declare")}
-                onPick={(value) => value === "__effort-declare" ? onSettings("model:effort-declare") : change("effort", () => port.setEffort(value))}
+                onPick={(value) => value === "__effort-declare" ? onSettings("providers:effort-declare") : change("effort", () => port.setEffort(value))}
                 label={<><span>{declared ? effortReading(status.effort) : t("未声明")}</span><StudioIcon name="down" /></>}
               />
             </div>

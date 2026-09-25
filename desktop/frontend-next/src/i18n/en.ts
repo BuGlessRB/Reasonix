@@ -245,8 +245,6 @@ export const EN: Record<string, string> = {
   "{n} 个无法连接": "{n} unreachable",
   "{n} 个待批准": "{n} awaiting approval",
   "{n} 个无法连接 · {p} 个待批准": "{n} unreachable · {p} awaiting approval",
-  "这个端点还有 {n} 个模型不在列表里：{names}。点「编辑」把它们加进来。":
-    "This endpoint serves {n} models this connection does not list: {names}. Add them under Edit.",
   "另有 {n} 个，均在设置中": "{n} more, all in Settings",
   "到设置里重连": "Reconnect from Settings",
   "在设置的 MCP 面板中修复": "Fix it in the MCP panel under Settings",

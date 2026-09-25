@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 /** The settings table of contents: which sections exist, what each is called,
  *  what mark it carries and which question it answers. Kept out of Settings
  *  itself because it is a table, not a screen — the screen reads it. */
-export type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "remote" | "memory" | "usage" | "storage" | "account" | "versions" | "appearance" | "advanced";
+export type Section = "session" | "model" | "providers" | "tools" | "hooks" | "ext" | "network" | "remote" | "memory" | "usage" | "storage" | "account" | "versions" | "appearance" | "advanced";
 
 // Drawn on the same 16-unit grid at 1.45 stroke as the rest of this screen's
 // marks. The rail in Nav.tsx keeps its own set on purpose: those name panes to
@@ -14,6 +14,13 @@ export const ICON: Record<Section, ReactNode> = {
     <>
       <circle cx="8" cy="8" r="2.4" />
       <path d="M8 1.8v2.2M8 12v2.2M1.8 8h2.2M12 8h2.2" />
+    </>
+  ),
+  providers: (
+    <>
+      <rect x="2.4" y="2.6" width="11.2" height="4.2" rx="1.2" />
+      <rect x="2.4" y="9.2" width="11.2" height="4.2" rx="1.2" />
+      <path d="M5 4.7h3.4M5 11.3h3.4M11 4.7h.01M11 11.3h.01" />
     </>
   ),
   tools: (
@@ -82,7 +89,8 @@ export const NAV: [string, [Section, string][]][] = [
     "本轮执行",
     [
       ["session", "会话"],
-      ["model", "模型"],
+      ["model", "模型偏好"],
+      ["providers", "模型服务"],
       ["tools", "工具与权限"],
       ["hooks", "自动化"],
       ["ext", "扩展"],
@@ -197,7 +205,7 @@ export const SETTINGS: SettingEntry[] = [
   // reached through switches the model, and that does. The stronger of the two
   // is what the row promises, because the weaker one would be a promise this
   // block cannot keep.
-  { section: "model", anchor: "providers", title: "模型来源", scope: "machine", apply: "runtime-rebuild", keywords: ["连接", "提供商", "api key", "密钥", "协议", "地址"] },
+  { section: "providers", anchor: "providers", title: "模型服务", scope: "machine", apply: "runtime-rebuild", keywords: ["模型来源", "连接", "提供商", "供应商", "api key", "密钥", "协议", "地址"] },
 
   // Takes effect on this session at once and is also persisted as the default
   // every later session starts from. Machine is the wider of the two answers

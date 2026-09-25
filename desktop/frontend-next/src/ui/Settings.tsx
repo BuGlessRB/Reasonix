@@ -275,6 +275,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
   const nav: Record<Section, string> = {
     session: status?.plan ? t("计划模式") : preset,
     model: status?.modelRef?.split("/").pop() ?? "—",
+    providers: models.length ? t("{n} 个服务", { n: groupVendors(models).length }) : "",
     tools: ruleCount ? `${approval} · ${ruleCount}` : approval,
     hooks: hookCount ? t("{n} 条", { n: hookCount }) : t("关"),
     ext: broken ? t("{n} 个异常", { n: broken }) : packages.length ? t("{n} 个包", { n: packages.length }) : `${looseMcp.length + looseOn}`,
@@ -512,17 +513,18 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
             </>
           )}
 
+          {at === "providers" && (
+            <Group id="providers" title={t("模型服务")}
+              hint={t("选择一个服务查看和修改；地址、密钥与模型列表保存后生效。自定义中转站的协议与模型会在连接后自动探测。")}>
+              <Providers port={port} onChanged={() => { loadModels(); onChanged(); }} onFailed={setFailed} protocol={protocol}
+                activeKindFor={(a) => kindFor(a.key)}
+                declare={declare}
+                onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
+            </Group>
+          )}
+
           {at === "model" && (
             <>
-              <Group id="providers"
-                title={t("模型来源")}
-                hint={t("先连接模型服务，再从其目录选择主模型。自定义中转站可以命名，协议与模型会在连接后自动探测。")}
-              >
-                <Providers port={port} onChanged={() => { loadModels(); onChanged(); }} onFailed={setFailed} protocol={protocol}
-                  activeKindFor={(a) => kindFor(a.key)}
-                  declare={declare}
-                  onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
-              </Group>
               <Group id="model" title={t("主模型")} now={nav.model} hint={t("用于当前对话和大多数任务。切换会保留对话并重建运行时；任务执行期间无法修改。端点没有声明的能力不会显示标签。")}>
                 <Models models={models} current={status?.modelRef} busy={busy} protocol={protocol}
                   onPick={(ref) => run(ref, () => port.setModel(ref))} />
