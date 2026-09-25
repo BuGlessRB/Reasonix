@@ -39,6 +39,9 @@ type Item struct {
 	Reasoning string
 	Done      bool
 	ThoughtMs int64
+	// Framed is set once the kernel's message frame has settled the answer; a
+	// dispatch closes one before its frame arrives.
+	Framed bool
 
 	// ItemTool. Children are a sub-agent's calls, folded under its task.
 	Tool     *eventwire.Tool
@@ -257,14 +260,17 @@ func (t *Transcript) appendSay(text string, reasoning bool) {
 	}
 }
 
-// foldMessage settles the open answer with the frame's own text, which wins
-// over the deltas: it is what the transcript keeps, so a stream that dropped a
-// chunk is repaired here rather than preserved. With no open answer (a rebuild,
-// or a turn whose deltas never came) the frame is the answer.
+// foldMessage settles this turn's latest unframed answer, open or closed by
+// the call after it, with the frame's text: the record wins over the deltas,
+// so a dropped chunk is repaired. With no such answer (a rebuild, or deltas
+// that never came) the frame is the answer.
 func (t *Transcript) foldMessage(ev eventwire.Event) {
 	at := -1
 	for i, it := range slices.Backward(t.Items) {
-		if it.Kind == ItemSay && !it.Done {
+		if it.Kind == ItemUser && !it.Pending {
+			break
+		}
+		if it.Kind == ItemSay && !it.Framed {
 			at = i
 			break
 		}
@@ -273,11 +279,11 @@ func (t *Transcript) foldMessage(ev eventwire.Event) {
 		if ev.Text == "" && ev.Reasoning == "" {
 			return
 		}
-		t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemSay, Text: ev.Text, Reasoning: ev.Reasoning, Done: true, ThoughtMs: ev.ThoughtMs})
+		t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemSay, Text: ev.Text, Reasoning: ev.Reasoning, Done: true, Framed: true, ThoughtMs: ev.ThoughtMs})
 		return
 	}
 	it := &t.Items[at]
-	it.Done = true
+	it.Done, it.Framed = true, true
 	if ev.Text != "" {
 		it.Text = ev.Text
 	}

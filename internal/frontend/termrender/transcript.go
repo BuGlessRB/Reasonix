@@ -58,3 +58,13 @@ func copyMathStartMarker(id, source string) string {
 func copyMathEndMarker(id string) string {
 	return copyMathEndPrefix + id + copyMathTerminator
 }
+
+// UserRow paints one line of what the user said as a band on the bubble
+// background, padded to width so consecutive lines read as one block.
+func UserRow(mark, line string, width int) string {
+	pad := strings.Repeat(" ", max(width-VisibleWidth(" "+mark+" "+line), 0))
+	if !colorOn() {
+		return " " + mark + " " + line
+	}
+	return bgSGR(activeTheme.UserBubbleBG) + fgSGR(activeTheme.Accent) + " " + mark + " \033[39m" + ansiBold + line + pad + ansiReset
+}

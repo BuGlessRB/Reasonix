@@ -340,6 +340,12 @@ func ThemeFg(c Color, s string) string {
 	return sgr(fgSGR(c), s)
 }
 
+// ThemeBg paints s on c. A reset inside s ends the background with it, so s is
+// plain text.
+func ThemeBg(c Color, s string) string {
+	return sgr(bgSGR(c), s)
+}
+
 // ThemeLipColor pre-resolves the fallback rather than handing lipgloss a 24-bit
 // value: the bubbletea renderer would otherwise downsample it with the same
 // distance metric the hand-chosen xterm indices exist to avoid.

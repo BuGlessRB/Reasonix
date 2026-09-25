@@ -46,6 +46,27 @@ func TestMessageSettlesTheStreamedAnswer(t *testing.T) {
 
 // One call is one card: its later frames fill it in rather than stacking, and a
 // sub-agent's calls fold under the task that spawned them.
+// A call closes the answer before it, and that answer's frame can arrive
+// after the call: it settles the closed answer instead of repeating it.
+func TestFrameAfterACallSettlesTheAnswerTheCallClosed(t *testing.T) {
+	tr := fold(
+		eventwire.Event{Kind: "turn_started"},
+		eventwire.Event{Kind: "reasoning", Text: "think"},
+		eventwire.Event{Kind: "text", Text: "Let me ask.\n"},
+		eventwire.Event{Kind: "tool_dispatch", Tool: &eventwire.Tool{ID: "c1", Name: "ask"}},
+		eventwire.Event{Kind: "message", Text: "Let me ask.\n\n", Reasoning: "think", ThoughtMs: 900},
+		eventwire.Event{Kind: "text", Text: "Next"},
+		eventwire.Event{Kind: "message", Text: "Next"},
+	)
+	want := []ItemKind{ItemSay, ItemTool, ItemSay}
+	if got := kinds(tr); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("kinds = %v, want %v", got, want)
+	}
+	if tr.Items[0].Text != "Let me ask.\n\n" || tr.Items[0].ThoughtMs != 900 || tr.Items[2].Text != "Next" {
+		t.Fatalf("items = %+v", tr.Items)
+	}
+}
+
 func TestToolFramesFoldIntoOneCard(t *testing.T) {
 	tr := fold(
 		eventwire.Event{Kind: "text", Text: "let me look"},

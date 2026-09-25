@@ -18,11 +18,18 @@ const (
 func renderItem(it *Item, width, shown int) string {
 	switch it.Kind {
 	case ItemUser:
-		mark := "› "
+		mark := "›"
 		if it.Steer {
-			mark = "↳ "
+			mark = "↳"
 		}
-		return termrender.Accent(mark) + termrender.Bold(it.Text)
+		rows := strings.Split(strings.TrimRight(it.Text, "\n"), "\n")
+		for i, r := range rows {
+			if i > 0 {
+				mark = " "
+			}
+			rows[i] = termrender.UserRow(mark, r, width-1)
+		}
+		return "\n" + strings.Join(rows, "\n")
 	case ItemSay:
 		// Thinking with nothing said after it is a step, not an answer: it gets
 		// its marker and no speaker header.
@@ -30,16 +37,12 @@ func renderItem(it *Item, width, shown int) string {
 			if it.Reasoning == "" {
 				return ""
 			}
-			return thoughtLine(it.ThoughtMs)
+			return "\n" + thoughtLine(it.ThoughtMs)
 		}
 		if shown >= len(it.Text) && shown > 0 {
 			return ""
 		}
-		out := renderSayPart(it.Text[shown:], shown == 0, width)
-		if shown == 0 && it.Reasoning != "" {
-			out = thoughtLine(it.ThoughtMs) + "\n" + out
-		}
-		return out
+		return withThought(it, shown, renderSayPart(it.Text[shown:], shown == 0, width))
 	case ItemTool:
 		return renderTool(it, width)
 	case ItemApproval:
@@ -69,13 +72,21 @@ func renderItem(it *Item, width, shown int) string {
 // the speaker's header; the rest continue under it.
 func renderSayPart(text string, first bool, width int) string {
 	if first {
-		return termrender.AssistantBlock(text, width)
+		return "\n" + termrender.AssistantBlock(text, width)
 	}
 	return indent(strings.TrimRight(termrender.RenderMarkdown(text, max(width-2, 10)), "\n"), "  ")
 }
 
+// withThought puts the thinking marker above the first stretch of an answer.
+func withThought(it *Item, shown int, out string) string {
+	if shown > 0 || it.Reasoning == "" {
+		return out
+	}
+	return "\n" + thoughtLine(it.ThoughtMs) + out
+}
+
 func thoughtLine(ms int64) string {
-	if ms <= 0 {
+	if ms < 1000 {
 		return termrender.Dim("  ✻ thought")
 	}
 	return termrender.Dim(fmt.Sprintf("  ✻ thought for %ds", (ms+500)/1000))
@@ -84,7 +95,7 @@ func thoughtLine(ms int64) string {
 func renderTool(it *Item, width int) string {
 	t := it.Tool
 	if t.Diff != "" {
-		return strings.Join(termrender.DiffBlock(t.Name, t.Args, event.FileDiff{Diff: t.Diff, Added: t.Added, Removed: t.Removed}, width, diffPreviewLines), "\n")
+		return "\n" + strings.Join(termrender.DiffBlock(t.Name, t.Args, event.FileDiff{Diff: t.Diff, Added: t.Added, Removed: t.Removed}, width, diffPreviewLines), "\n")
 	}
 	lines := []string{termrender.ToolCard(t.Name, t.Args, width)}
 	switch {
@@ -100,7 +111,7 @@ func renderTool(it *Item, width int) string {
 	if n := len(it.Children); n > 0 {
 		lines = append(lines, termrender.Dim(fmt.Sprintf("  ⎿ %d sub-agent call(s)", n)))
 	}
-	return strings.Join(lines, "\n")
+	return "\n" + strings.Join(lines, "\n")
 }
 
 func previewOutput(out string, width int) []string {
@@ -155,7 +166,7 @@ func renderReceipt(it *Item) string {
 	if r.Verdict != "done" {
 		mark = termrender.Yellow("  ! ")
 	}
-	return mark + strings.Join(parts, termrender.Dim(" · "))
+	return "\n" + mark + strings.Join(parts, termrender.Dim(" · "))
 }
 
 func oneLine(s string, width int) string {

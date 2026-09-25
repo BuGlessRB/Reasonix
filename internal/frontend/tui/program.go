@@ -8,6 +8,8 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
+
+	"reasonix/internal/frontend/termrender"
 )
 
 // Options is what a TUI session starts with.
@@ -18,6 +20,9 @@ type Options struct {
 	// Restore reads the session back from /history before the first frame:
 	// the session was resumed, and its conversation belongs on screen.
 	Restore bool
+	// Version and Workspace are shown on the welcome card.
+	Version   string
+	Workspace string
 }
 
 // Run drives the terminal until the user quits or ctx ends.
@@ -58,6 +63,8 @@ type model struct {
 	ask           *askState
 	menu          *menu
 	todos         []TodoItem
+	runSince      time.Time
+	spinning      bool
 }
 
 type (
@@ -97,6 +104,8 @@ func newModel(ctx context.Context, opts Options) *model {
 	ta.MaxHeight = composerMaxRow
 	ta.SetVirtualCursor(false)
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j", "shift+enter", "alt+enter"))
+	ta.Placeholder = "Ask Reasonix anything…"
+	termrender.ApplyTextareaTheme(&ta)
 	ta.Focus()
 	return &model{
 		ctx: ctx, client: opts.Client, opts: opts,
@@ -115,7 +124,7 @@ func (m *model) Init() tea.Cmd {
 		m.tr.AddUser(p)
 		cmds = append(cmds, m.commit(), m.call("submit", func(ctx context.Context) error { return m.client.Submit(ctx, p) }))
 	}
-	return tea.Batch(cmds...)
+	return tea.Sequence(m.greet(), tea.Batch(cmds...))
 }
 
 func (m *model) waitUpdate() tea.Cmd {
@@ -160,11 +169,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.u.Gap {
 			return m, tea.Batch(m.fetchHistory(false), m.waitUpdate())
 		}
+		was := m.tr.Running
 		m.tr.Apply(msg.u.Event)
 		if msg.u.Event.Kind == "turn_done" {
 			m.noteTurnEnd()
 		}
-		cmds := []tea.Cmd{m.commit(), m.waitUpdate()}
+		cmds := []tea.Cmd{m.commit(), m.waitUpdate(), m.noteRunning(was)}
 		if m.tr.TodosMoved {
 			m.tr.TodosMoved = false
 			cmds = append(cmds, m.fetchTodos())
@@ -177,6 +187,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = msg.s
 		}
 		return m, nil
+	case spinMsg:
+		return m, m.onSpin()
 	case statusTickMsg:
 		return m, tea.Batch(m.fetchStatus(), tickStatus())
 	case actionMsg:
@@ -282,7 +294,7 @@ func (m *model) settledChunk(it *Item) string {
 		return ""
 	}
 	m.sayShown[it.ID] = end
-	return renderSayPart(it.Text[shown:end], shown == 0, m.width)
+	return withThought(it, shown, renderSayPart(it.Text[shown:end], shown == 0, m.width))
 }
 
 func settled(it *Item) bool {

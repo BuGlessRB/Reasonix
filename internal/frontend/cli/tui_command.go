@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/base/i18n"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/frontend/serve"
+	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/frontend/tui"
 	"reasonix/internal/session/control"
 	"reasonix/internal/state/sessionstore"
@@ -57,6 +58,7 @@ func runTUI(args []string, version string) int {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 1
 	}
+	termrender.ConfigureThemeFromConfigForTTYOutput()
 	restoreLog := routeLogsAwayFromTerminal()
 	defer restoreLog()
 
@@ -101,9 +103,11 @@ func runTUI(args []string, version string) int {
 	adoptFirstPane(hub, ctrl, bc, bc, serveCfg, leases)
 
 	err = tui.Run(ctx, tui.Options{
-		Client:  &tui.Client{HTTP: hub.InProcessClient(), Base: tuiBase},
-		Prompt:  strings.Join(fs.Args(), " "),
-		Restore: resumed != nil,
+		Client:    &tui.Client{HTTP: hub.InProcessClient(), Base: tuiBase},
+		Prompt:    strings.Join(fs.Args(), " "),
+		Restore:   resumed != nil,
+		Version:   version,
+		Workspace: workspaceRoot,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

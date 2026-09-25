@@ -20,7 +20,7 @@ func (t *Transcript) Restore(msgs []HistoryMessage) {
 			t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemUser, Text: m.Content, Steer: m.Steer})
 		case "assistant":
 			if m.Content != "" || m.Reasoning != "" {
-				t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemSay, Text: m.Content, Reasoning: m.Reasoning, Done: true, ThoughtMs: m.ThoughtMs})
+				t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemSay, Text: m.Content, Reasoning: m.Reasoning, Done: true, Framed: true, ThoughtMs: m.ThoughtMs})
 			}
 			for _, c := range m.ToolCalls {
 				if c.ID != "" {

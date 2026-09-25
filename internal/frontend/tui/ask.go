@@ -115,21 +115,21 @@ func (m *model) askCard(it *Item) []string {
 	if len(qs) > 1 {
 		title = fmt.Sprintf("Question %d of %d", st.at+1, len(qs))
 	}
-	lines := []string{termrender.Accent("  ◇ ") + termrender.Bold(title), "    " + oneLine(q.Prompt, m.width-6)}
+	lines := []string{termrender.Accent("◇ ") + termrender.Bold(title), "  " + oneLine(q.Prompt, m.width-10), ""}
 	for i, o := range q.Options {
 		mark := "  "
 		if slices.Contains(st.picks[st.at], o.Label) {
 			mark = termrender.Green("✓ ")
 		}
-		line := fmt.Sprintf("    %s%d. %s", mark, i+1, oneLine(o.Label, m.width-12))
+		line := fmt.Sprintf("  %s%s %s", mark, termrender.Accent(termrender.Bold(fmt.Sprint(i+1))), oneLine(o.Label, m.width-14))
 		if o.Description != "" {
 			line += termrender.Dim(" — " + oneLine(o.Description, max(m.width-16-termrender.VisibleWidth(o.Label), 10)))
 		}
 		lines = append(lines, line)
 	}
-	hint := "number to choose · or type an answer and press enter · esc to decline"
+	hint := keyHints("1-9", "choose", "enter", "send typed answer", "esc", "decline")
 	if q.Multi {
-		hint = "numbers to toggle · enter to confirm · type to add your own · esc to decline"
+		hint = keyHints("1-9", "toggle", "enter", "confirm", "esc", "decline")
 	}
-	return append(lines, termrender.Dim("    "+hint))
+	return card(append(lines, "", hint), m.width, termrender.Accent)
 }
