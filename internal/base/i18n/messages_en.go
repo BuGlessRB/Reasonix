@@ -593,6 +593,7 @@ var English = Messages{
 	UsageBody: `reasonix — a config- and plugin-driven coding agent (multi-model)
 
 Usage:
+  reasonix tui [--model NAME] [--preset balanced|delivery] [-c|--continue] [-r|--resume QUERY] [prompt]  interactive terminal UI
   reasonix -p|--print [--model NAME] [--output-format text|json|stream-json] [--allowed-tools RULES] [--add-dir PATH] <task>
   reasonix run [--model NAME] [--max-steps N] [-c|--continue] [--resume PATH] [--copy] [--output-format FORMAT] <task>
   reasonix run --events-jsonl [--model NAME] <task>      emit redacted structured events as JSONL
@@ -624,6 +625,7 @@ Usage:
   reasonix help
 
 Examples:
+  reasonix tui
   reasonix web
   reasonix run "implement the TODOs in main.go"
   reasonix run --model mimo-pro "add unit tests for this function"

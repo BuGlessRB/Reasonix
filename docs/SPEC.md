@@ -560,7 +560,7 @@ func (p Policy) Decide(toolName string, readOnly bool, args json.RawMessage) Dec
 | YOLO approval / `yolo` | Ordinary prompts auto-allowed; deny rules and fresh reviews remain | Waits for user | Waits for user |
 | Approved-plan execution window | Approved plan's writer fallback is auto-allowed; explicit `ask` / `deny` rules remain | Future plans still wait | Waits for user |
 
-Out of the box (`mode = "ask"`, no rules), interactive `reasonix` prompts before
+Out of the box (`mode = "ask"`, no rules), interactive `reasonix tui` prompts before
 each writer/bash call and `reasonix run` fails closed on those calls because it
 has no approver. Use `reasonix run --auto ...` / `-y` to allow ordinary writer
 fallback in unattended automation; `--permission-mode auto` is equivalent.

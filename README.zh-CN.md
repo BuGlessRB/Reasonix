@@ -158,7 +158,7 @@ make studio
 
 ```sh
 reasonix setup                      # 配置 provider 和模型
-reasonix                            # 启动交互式会话
+reasonix tui                        # 启动交互式会话
 reasonix run "把 main.go 里的 TODO 实现掉"
 ```
 

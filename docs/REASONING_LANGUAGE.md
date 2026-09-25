@@ -50,7 +50,7 @@ By default this writes the user config. To write a project-local override:
 reasonix config reasoning-language --local zh
 ```
 
-Inside `reasonix`, use the slash command:
+Inside `reasonix tui`, use the slash command:
 
 ```text
 /reasoning-language auto

@@ -1034,7 +1034,7 @@ convenient.
 
 ## Slash commands
 
-In an interactive `reasonix` session, built-in commands (`/compact`, `/context`, `/new`, `/clear`, `/rewind`,
+In an interactive `reasonix tui` session, built-in commands (`/compact`, `/context`, `/new`, `/clear`, `/rewind`,
 `/tree`, `/branch`, `/switch`, `/todo`, `/model`, `/work-mode`, `/mcp`, `/skills`, `/hooks`,
 `/memory`, `/goal`, `/output-style`, `/sandbox`, `/language`,
 `/reasoning-language`, `/help`) run

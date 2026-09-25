@@ -138,7 +138,7 @@ Reasonix loads its capabilities into normal interactive sessions:
   Reasonix can call the plugin's tools when they are relevant.
 
 After installing, enabling, disabling, or updating a plugin from a separate
-terminal while a session is already running, start a new `reasonix` session or
+terminal while a session is already running, start a new `reasonix tui` session or
 reopen `/skills` to verify the current session sees the expected skills.
 
 ## Desktop Settings

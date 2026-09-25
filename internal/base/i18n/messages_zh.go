@@ -594,6 +594,7 @@ var Chinese = Messages{
 	UsageBody: `reasonix — 由配置和插件驱动的 coding agent（多模型）
 
 用法：
+  reasonix tui [--model NAME] [--preset balanced|delivery] [-c|--continue] [-r|--resume QUERY] [prompt]  交互式终端界面
   reasonix -p|--print [--model NAME] [--output-format text|json|stream-json] [--allowed-tools RULES] [--add-dir PATH] <task>
   reasonix run [--model NAME] [--max-steps N] [-c|--continue] [--resume PATH] [--copy] [--output-format FORMAT] <task>
   reasonix run --events-jsonl [--model NAME] <task>      输出脱敏结构化事件 JSONL
@@ -625,6 +626,7 @@ var Chinese = Messages{
   reasonix help
 
 示例：
+  reasonix tui
   reasonix web
   reasonix run "把 main.go 里的 TODO 实现掉"
   reasonix run --model mimo-pro "给这个函数补单元测试"

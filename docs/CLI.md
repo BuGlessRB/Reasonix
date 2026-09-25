@@ -13,30 +13,24 @@ configuration, plugins, and sandbox policy, see the [Guide](./GUIDE.md).
 ## Start a session
 
 ```sh
-reasonix
-reasonix --model deepseek-pro
-reasonix --preset delivery --effort high
-reasonix --dir /path/to/project
+reasonix tui
+reasonix tui --model deepseek-pro
+reasonix tui --preset delivery
+reasonix tui --dir /path/to/project
 ```
 
-Running `reasonix` without a subcommand starts the interactive terminal UI. Use
-`reasonix setup` first when no provider is configured.
+Running `reasonix tui` starts the interactive terminal UI. Use `reasonix setup`
+first when no provider is configured.
 
 | Flag | Purpose |
 | --- | --- |
 | `--model NAME` | Select a configured provider or `provider/model` reference. |
 | `--preset balanced\|delivery` | Select the agent execution setting (执行设定). Default: `balanced`. |
-| `--profile economy\|balanced\|delivery` | Deprecated alias for `--preset`. `economy` and `light` resolve to `balanced`. |
-| `--effort LEVEL` | Override reasoning effort for this session. |
-| `--max-steps N` | Set a one-off maximum tool-call round budget; `0` uses automatic execution. |
 | `--dir PATH` | Change the workspace root before loading config and tools. |
-| `--add-dir PATH` | Add another writable tool directory; repeat for multiple directories. |
+| `--inline` | Write the conversation into the terminal's scrollback instead of taking the full screen. |
+| `--permission-mode MODE` | Start with a specific permission posture (`danger-full-access` is YOLO). |
 | `-c`, `--continue` | Resume the most recent session. |
 | `-r`, `--resume [QUERY]` | Open the session picker, or resume a matching session. |
-| `--copy` | Continue in a writable copy of the resumed session. |
-| `--allowed-tools RULES` | Add session-only permission allow rules. Repeatable; `--allowedTools` is an alias. |
-| `--permission-mode MODE` | Start with a specific permission posture. |
-| `--yolo` | Start in YOLO mode; alias for `--dangerously-skip-permissions`. |
 
 Flags may appear before or after the prompt where applicable.
 
@@ -300,11 +294,11 @@ Schema compatibility rules for version 1:
 ## Resume sessions
 
 ```sh
-reasonix --continue
-reasonix --resume
-reasonix --resume provider-config
-reasonix --resume <session-id>
-reasonix --resume provider-config --copy
+reasonix tui --continue
+reasonix tui --resume
+reasonix tui --resume provider-config
+reasonix tui --resume <session-id>
+reasonix run --resume provider-config --copy "task"
 ```
 
 - `--continue` resumes the newest saved session immediately.
@@ -324,12 +318,12 @@ from writing the same transcript concurrently.
 ## Permissions
 
 ```sh
-reasonix --permission-mode plan
-reasonix --permission-mode acceptEdits
+reasonix tui --permission-mode plan
+reasonix run --permission-mode acceptEdits "apply the requested changes"
 reasonix run -y "apply the requested changes"
 reasonix -p "run the focused tests" --allowed-tools "Bash(go test ./...)"
-reasonix --allowed-tools "Bash(git *) Edit"
-reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
+reasonix run --allowed-tools "Bash(git *) Edit" "refactor the CLI"
+reasonix run --allowed-tools "Bash(go test ./...)" --allowed-tools read_file "run the focused tests"
 ```
 
 | Mode | Behavior |
@@ -338,7 +332,7 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 | `auto` | Automatically approve normal fallback operations while preserving explicit ask and deny rules. |
 | `acceptEdits` | Allow file-editing tools; this is not full Auto mode. |
 | `dontAsk` | Deny unapproved requests without opening an approval prompt. |
-| `plan` | Start the plan-first workflow; tool calls still use the active permissions and sandbox. |
+| `plan` | Start the plan-first workflow in an interactive session (toggle with `Shift+Tab`); tool calls still use the active permissions and sandbox. |
 | `bypassPermissions` | Bypass approval prompts; equivalent to YOLO. |
 
 For unattended execution with ordinary writer fallback enabled, use
@@ -371,7 +365,7 @@ mutations remain denied without a human.
 ## Additional directories
 
 ```sh
-reasonix --add-dir ../shared
+reasonix run --add-dir ../shared "update both projects"
 reasonix -p "update both projects" \
   --add-dir ../frontend \
   --add-dir ../backend

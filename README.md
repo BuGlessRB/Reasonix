@@ -176,7 +176,7 @@ setup is needed.
 
 ```sh
 reasonix setup                      # configure a provider and model
-reasonix                            # start an interactive session
+reasonix tui                        # start an interactive session
 reasonix run "implement the TODOs in main.go"
 ```
 

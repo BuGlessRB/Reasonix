@@ -12,30 +12,24 @@
 ## 启动会话
 
 ```sh
-reasonix
-reasonix --model deepseek-pro
-reasonix --preset delivery --effort high
-reasonix --dir /path/to/project
+reasonix tui
+reasonix tui --model deepseek-pro
+reasonix tui --preset delivery
+reasonix tui --dir /path/to/project
 ```
 
-不带子命令运行 `reasonix` 会进入交互式终端界面。尚未配置 provider 时，先运行
+运行 `reasonix tui` 会进入交互式终端界面。尚未配置 provider 时，先运行
 `reasonix setup`。
 
 | 参数 | 用途 |
 | --- | --- |
 | `--model NAME` | 选择已配置的 provider 或 `provider/model` 引用。 |
 | `--preset balanced\|delivery` | 选择 Agent 执行设定。默认 `balanced`。 |
-| `--profile economy\|balanced\|delivery` | 已弃用，等同 `--preset`（`economy` → `light`）。 |
-| `--effort LEVEL` | 覆盖当前会话的 reasoning effort。 |
-| `--max-steps N` | 为本次运行设置工具调用轮数上限；`0` 使用自动执行。 |
 | `--dir PATH` | 加载配置和工具前切换 workspace 根目录。 |
-| `--add-dir PATH` | 增加一个允许工具写入的目录；可重复传入。 |
+| `--inline` | 把对话写入终端回滚缓冲，而不是占用整个屏幕。 |
+| `--permission-mode MODE` | 以指定的权限姿态启动（`danger-full-access` 即 YOLO）。 |
 | `-c`、`--continue` | 恢复最近一次会话。 |
 | `-r`、`--resume [QUERY]` | 打开会话选择器，或恢复匹配的会话。 |
-| `--copy` | 复制要恢复的会话，并在可写副本中继续。 |
-| `--allowed-tools RULES` | 增加仅当前会话生效的权限 allow 规则；可重复传入，`--allowedTools` 是别名。 |
-| `--permission-mode MODE` | 以指定的权限姿态启动。 |
-| `--yolo` | 以 YOLO 模式启动；是 `--dangerously-skip-permissions` 的别名。 |
 
 适用时，参数可以放在 prompt 前面或后面。
 
@@ -269,11 +263,11 @@ Schema version 1 的兼容规则：
 ## 恢复会话
 
 ```sh
-reasonix --continue
-reasonix --resume
-reasonix --resume provider-config
-reasonix --resume <session-id>
-reasonix --resume provider-config --copy
+reasonix tui --continue
+reasonix tui --resume
+reasonix tui --resume provider-config
+reasonix tui --resume <session-id>
+reasonix run --resume provider-config --copy "任务"
 ```
 
 - `--continue` 立即恢复最新保存的会话。
@@ -291,11 +285,11 @@ machine session ID。Session lease 会阻止桌面端和 CLI 同时写入同一�
 ## 权限
 
 ```sh
-reasonix --permission-mode plan
-reasonix --permission-mode acceptEdits
+reasonix tui --permission-mode plan
+reasonix run --permission-mode acceptEdits "应用这些改动"
 reasonix -p "运行指定测试" --allowed-tools "Bash(go test ./...)"
-reasonix --allowed-tools "Bash(git *) Edit"
-reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
+reasonix run --allowed-tools "Bash(git *) Edit" "重构 CLI"
+reasonix run --allowed-tools "Bash(go test ./...)" --allowed-tools read_file "运行指定测试"
 ```
 
 | 模式 | 行为 |
@@ -304,7 +298,7 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 | `auto` | 自动批准普通 fallback 操作，同时保留显式 ask 和 deny 规则。 |
 | `acceptEdits` | 允许文件编辑工具；不等同于完整 Auto 模式。 |
 | `dontAsk` | 未预先允许的请求直接拒绝，不弹出审批。 |
-| `plan` | 以只读 Plan 模式启动交互式会话。 |
+| `plan` | 在交互式会话中启动 Plan 优先流程（用 `Shift+Tab` 切换）；工具调用仍使用当前权限与沙盒。 |
 | `bypassPermissions` | 跳过审批；等同于 YOLO。 |
 
 无人值守执行需要放行普通 writer fallback 时，使用 `reasonix run --auto ...`
@@ -325,7 +319,7 @@ fallback，但仍拒绝显式 ask 规则；`dontAsk` 拒绝未批准的 writer�
 ## 附加目录
 
 ```sh
-reasonix --add-dir ../shared
+reasonix run --add-dir ../shared "同时更新两个项目"
 reasonix -p "同时更新两个项目" \
   --add-dir ../frontend \
   --add-dir ../backend
