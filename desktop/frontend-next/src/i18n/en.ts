@@ -99,6 +99,7 @@ export const EN: Record<string, string> = {
   "正在处理…": "Working…",
   "已完成": "Done",
   "已中断": "Interrupted",
+  "已停止": "Stopped",
   "请求未能送达内核（HTTP {status}）": "That request never reached the kernel (HTTP {status})",
   "移动 {id} 的界面": "Move {id}'s view",
   "等待批准": "Waiting for approval",

@@ -3,6 +3,15 @@ import { t } from "../../i18n";
 import type { JobEntry } from "../../port/port";
 import { StudioIcon } from "../StudioIcon";
 
+// How an ended job finished, by the kernel's status: only "done" is a success,
+// and a job someone stopped is neither a success nor a fault.
+const ENDED: Record<string, { label: string; tone: string }> = {
+  done: { label: "已完成", tone: "var(--ok)" },
+  failed: { label: "失败", tone: "var(--err)" },
+  killed: { label: "已停止", tone: "var(--faint)" },
+  interrupted: { label: "已中断", tone: "var(--faint)" },
+};
+
 export function Jobs({ jobs, onCancel }: { jobs: JobEntry[]; onCancel?: (id: string) => Promise<void> }) {
   const [, tick] = useState(0);
   const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
@@ -27,15 +36,15 @@ export function Jobs({ jobs, onCancel }: { jobs: JobEntry[]; onCancel?: (id: str
       <div className="jobs">
         {jobs.map((j) => {
           const running = j.status === "running";
+          const ended = ENDED[j.status];
           return (
-            <div className="job" key={j.id} data-done={running ? undefined : ""}>
+            <div className="job" key={j.id} data-done={running ? undefined : ""} data-status={j.status}>
               <i
                 className="pip"
-                data-settled={running ? undefined : ""}
-                style={running ? { background: "var(--net)", animation: "tick 1.6s ease-in-out infinite" } : undefined}
+                style={running ? { background: "var(--net)", animation: "tick 1.6s ease-in-out infinite" } : { background: ended?.tone ?? "var(--faint)" }}
               />
               <span className="cmd">{j.label || j.id}</span>
-              <span className="rt">{running ? `${Math.floor((Date.now() - j.startedAt) / 1000)}s` : j.status}</span>
+              <span className="rt">{running ? `${Math.floor((Date.now() - j.startedAt) / 1000)}s` : ended ? t(ended.label) : j.status}</span>
               {running && onCancel && (
                 <button
                   type="button"

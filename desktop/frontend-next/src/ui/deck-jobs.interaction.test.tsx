@@ -45,3 +45,16 @@ it("closes on a press outside and on Escape, not only on its own chip", async ()
   await userEvent.keyboard("{Escape}");
   expect(chip().getAttribute("aria-expanded")).toBe("false");
 });
+
+it("reads a stopped job as stopped, not as a success", async () => {
+  const { Jobs } = await import("./panels/Jobs");
+  const ended = ["done", "failed", "killed", "interrupted"].map((status, i) => ({ id: `e${i}`, kind: "bash", label: status, status, startedAt: 0 }));
+  const { container } = render(<Jobs jobs={ended} />);
+  const row = (status: string) => container.querySelector<HTMLElement>(`.job[data-status="${status}"]`)!;
+  const tone = (status: string) => row(status).querySelector<HTMLElement>(".pip")!.style.background;
+  expect(row("killed").querySelector(".rt")!.textContent).toBe("已停止");
+  expect(tone("done")).toBe("var(--ok)");
+  expect(tone("failed")).toBe("var(--err)");
+  expect(tone("killed")).toBe("var(--faint)");
+  expect(tone("interrupted")).toBe("var(--faint)");
+});
