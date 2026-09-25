@@ -2071,4 +2071,3 @@ func ContinueSessionPath(prevPath, dir, model string) string {
 	}
 	return NewSessionPath(dir, model)
 }
-
