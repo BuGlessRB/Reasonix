@@ -225,14 +225,13 @@ func TestHandleCardActionDoesNotTrustCardRequesterAsOperator(t *testing.T) {
 	}
 }
 
+// Allowlists record open_id and handleSDKMessage resolves open_id first, so a
+// card callback carrying both ids must resolve the same way.
 func TestHandleCardActionPrefersOpenIDOverUnionID(t *testing.T) {
 	a := &adapter{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		msgCh:  make(chan bot.InboundMessage, 1),
 	}
-	// 真实飞书回调会同时携带 union_id 与 open_id；准入名单通常以 open_id
-	// 记录，因此 operator 必须优先解析 open_id（与普通消息身份解析一致），
-	// 否则按钮回调会被当成未知用户并误触发配对。
 	raw := []byte(`{
 		"event": {
 			"operator": {
