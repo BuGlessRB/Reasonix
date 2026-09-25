@@ -214,7 +214,7 @@ type App struct {
 	historicalSessionServices map[string]*session.Service
 	// skillWatch is the one skill-watch service this host shares across every
 	// controller build, so the host owns a single watcher helper process
-	// instead of one per rebuild. Created on first use; closed at shutdown.
+	// instead of one per rebuild. Created on first use; closed, never cleared, at shutdown.
 	skillWatchMu sync.Mutex
 	skillWatch   *skillwatch.Service
 	desktopPersistenceState

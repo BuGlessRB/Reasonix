@@ -28,16 +28,16 @@ func (a *App) sharedSkillWatchService() *skillwatch.Service {
 	return a.skillWatch
 }
 
-// closeSharedSkillWatchService closes the host watcher. It runs once every
-// controller that subscribed to it is gone: boot.Build leaves a caller-owned
-// service alone, so nothing else closes it.
+// closeSharedSkillWatchService closes the host watcher; boot.Build leaves a
+// caller-owned service alone, so nothing else closes it. The closed service
+// stays in place: a build racing shutdown gets dead subscriptions from it
+// instead of a fresh helper process that nothing would close.
 func (a *App) closeSharedSkillWatchService() {
 	if a == nil {
 		return
 	}
 	a.skillWatchMu.Lock()
 	service := a.skillWatch
-	a.skillWatch = nil
 	a.skillWatchMu.Unlock()
 	if service == nil {
 		return

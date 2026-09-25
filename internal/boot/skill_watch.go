@@ -23,6 +23,16 @@ func newSkillWatchService(enabled bool, stderr io.Writer) *skillwatch.Service {
 	return skillwatch.NewService(skillwatch.Options{Stderr: stderr})
 }
 
+// buildSkillWatchService picks the one watch service a build's enabled and
+// all-skill stores share: the caller's host-lifetime service when supplied
+// (hostOwned), otherwise one this build owns and closes.
+func buildSkillWatchService(shared *skillwatch.Service, enabled bool, stderr io.Writer) (svc *skillwatch.Service, hostOwned bool) {
+	if shared != nil {
+		return shared, true
+	}
+	return newSkillWatchService(enabled, stderr), false
+}
+
 // NewHostSkillWatchService returns a caller-owned watcher that every controller
 // on one host can share, or nil when watching is disabled. Pass it as
 // Options.SharedSkillWatchService and close it once the host's controllers are

@@ -50,12 +50,30 @@ func TestCloseSharedSkillWatchServiceClosesTheWatcher(t *testing.T) {
 
 	app.skillWatch = service
 	app.closeSharedSkillWatchService()
-	if app.skillWatch != nil {
-		t.Fatal("the host must forget a service it closed")
-	}
 	if service.Diagnostics().LogicalSubscriptions != 0 {
 		t.Fatal("the host watcher must be closed")
 	}
+}
+
+// A rebuild that races shutdown must not re-create the watcher: nothing runs
+// the shutdown step again, so a fresh service would leave its helper behind.
+func TestSharedSkillWatchServiceIsNotRecreatedAfterClose(t *testing.T) {
+	app := NewApp()
+	service := skillwatch.NewService(skillwatch.Options{ScanOnly: true, Stderr: io.Discard})
+	app.skillWatch = service
+	app.closeSharedSkillWatchService()
+	if got := app.sharedSkillWatchService(); got != service {
+		t.Fatal("a build after shutdown must get the closed host service, not a new one")
+	}
+	sub := service.Subscribe(t.TempDir(), 1,
+		func(context.Context, string, int) ([]string, bool) { return nil, true },
+		func(context.Context, string, int) ([32]byte, int, bool) { return [32]byte{}, 0, true },
+		func(string) {})
+	t.Cleanup(sub.Release)
+	if service.Diagnostics().LogicalSubscriptions != 0 {
+		t.Fatal("a closed host service must hand out dead subscriptions")
+	}
+	app.closeSharedSkillWatchService()
 }
 
 // shutdownStatus carries no step names, but the coordinator records them in
