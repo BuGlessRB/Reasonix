@@ -214,10 +214,10 @@ rules are written in.
 - Its actions are quiet but present: a row of controls that exists only under the
   pointer reads as a row that does nothing.
 - Everything stacked above the input shares one ceiling, `--aux-budget`, so a
-  full queue scrolls inside it instead of taking the transcript. The studio
-  composer's own chrome is taller than the one the budget was set against, so
-  studio lowers it (28vh, 19vh when short) to keep the transcript at 40% of the
-  pane with 64 queued lines; `perf/budget.mjs` holds the 40%.
+  full queue scrolls inside it instead of taking the transcript.
+- The studio composer's chrome is taller than the one the budget was set
+  against, so studio lowers it (28vh, 19vh when short): with 64 queued lines the
+  transcript keeps 40% of the pane, which `perf/budget.mjs` holds.
 - The queued line is the only thing on screen that has not happened yet, so its
   cancel sits beside "queued" and stays visible. A cancel revealed on hover is no
   cancel.
@@ -261,8 +261,8 @@ rules are written in.
   section label above already carries that name, its count and its add button,
   while a remote host's row is the only thing naming that machine.
 - A collapsed column is inert, not only narrow: at zero width its controls are
-  still in the tab order, and focusing one scrolls a column nobody can see. The
-  rail and the workbench are both `inert` while collapsed, and the workbench
+  still in the tab order, and focusing one scrolls a column nobody can see.
+- The rail and the workbench are both `inert` while collapsed, and the workbench
   stops painting once the collapse has finished. The shortcut and the gutter
   that reopen a column sit outside it, so they stay reachable.
 - Collapsing reflows the text inside a column, which is what makes it feel
@@ -921,9 +921,10 @@ what exists.
 - `.errbar` floats: it rides a zero-height anchor (`.cmpalert`) pinned to the
   top edge of the composer card of the pane in front, so it never moves the
   conversation and rises with the card instead of covering its send button.
-  The anchor spans the card's width because the bar's width is a share of it. With no pane on
-  screen it takes the main area's bottom-right corner. It floats over content,
-  so its fill is mixed into `--surface`, never into transparency.
+- The anchor spans the card's width because the bar's width is a share of it.
+  With no pane on screen the bar takes the main area's bottom-right corner. It
+  floats over content, so its fill is mixed into `--surface`, never into
+  transparency.
 
 ## Deck readings
 

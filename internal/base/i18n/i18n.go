@@ -635,7 +635,8 @@ type Messages struct {
 	CLITelemetryConsentCleanupFailedFmt string
 
 	// usage / help
-	UsageBody string // full multi-line help text
+	UsageBody             string // full multi-line help text
+	StandaloneConsoleHint string
 }
 
 // ProviderStatusMessage returns an actionable explanation for a known provider

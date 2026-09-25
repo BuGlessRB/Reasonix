@@ -521,6 +521,7 @@ var ChineseTraditional = Messages{
 	CLITelemetryConsentSaveFailedFmt:    "由於無法儲存偏好設定，CLI 使用統計仍維持關閉：%v",
 	CLITelemetryConsentCleanupFailedFmt: "CLI 使用統計已關閉，但無法刪除待傳送統計：%v",
 
+	StandaloneConsoleHint: "這是 Reasonix 命令列工具，需要在 PowerShell 等終端機裡執行。\n要使用桌面應用程式，請安裝 Reasonix Studio（ReasonixStudio-windows-amd64-installer.exe）：\n  https://github.com/esengine/DeepSeek-Reasonix/releases?q=studio-v&expanded=true\n\n按 Enter 關閉此視窗。\n",
 	UsageBody: `reasonix — 由設定和插件驅動的 coding agent（多模型）
 
 用法：
@@ -555,9 +556,6 @@ var ChineseTraditional = Messages{
   reasonix help
 
 範例：
-  reasonix
-  reasonix --continue
-  reasonix --resume provider-config
   reasonix web
   reasonix run "把 main.go 裡的 TODO 實現掉"
   reasonix run --model mimo-pro "給這個函式補單元測試"

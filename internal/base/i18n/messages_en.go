@@ -585,6 +585,7 @@ var English = Messages{
 	CLITelemetryConsentSaveFailedFmt:    "CLI telemetry remains disabled because the preference could not be saved: %v",
 	CLITelemetryConsentCleanupFailedFmt: "CLI telemetry is disabled, but pending statistics could not be deleted: %v",
 
+	StandaloneConsoleHint: "This is the Reasonix command-line tool; run it from a terminal such as PowerShell.\nFor the desktop app, install Reasonix Studio (ReasonixStudio-windows-amd64-installer.exe):\n  https://github.com/esengine/DeepSeek-Reasonix/releases?q=studio-v&expanded=true\n\nPress Enter to close this window.\n",
 	UsageBody: `reasonix — a config- and plugin-driven coding agent (multi-model)
 
 Usage:
@@ -619,9 +620,6 @@ Usage:
   reasonix help
 
 Examples:
-  reasonix
-  reasonix --continue
-  reasonix --resume provider-config
   reasonix web
   reasonix run "implement the TODOs in main.go"
   reasonix run --model mimo-pro "add unit tests for this function"
