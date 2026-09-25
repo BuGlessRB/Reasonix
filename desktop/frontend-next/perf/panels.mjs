@@ -25,8 +25,7 @@ const span = (name) => {
 
 const PAGE = process.env.PERF_URL ?? "http://localhost:4399/perf.html";
 const RAIL = span("RAIL");
-const SIDE = span("SIDE");
-if (!Number.isFinite(RAIL.def) || !Number.isFinite(SIDE.def)) {
+if (!Number.isFinite(RAIL.def)) {
   console.log("未能从 Gutter.tsx 读到栏宽定义：该检查将始终通过。");
   process.exit(1);
 }
@@ -84,16 +83,20 @@ const sweep = (which) =>
     return out;
   }, which);
 
-for (const [which, open] of [["rail", RAIL.def], ["side", SIDE.def]]) {
+// A collapsed column is out of the tab order, not only out of sight.
+const railInert = () => page.evaluate(() => document.querySelector(".rail").inert);
+for (const [which, open] of [["rail", RAIL.def]]) {
   const shut = await sweep(which);
   const between = new Set(shut.filter((w) => w > 0.5 && w < open - 0.5).map((w) => Math.round(w)));
   check(`收起 ${which} 是补间的`, between.size >= 6, `${between.size} 个中间宽度`);
   check(`收起 ${which} 收到底`, shut[shut.length - 1] === 0);
+  check(`收起 ${which} 后键盘够不着`, await railInert());
 
   const back = await sweep(which);
   const rising = new Set(back.filter((w) => w > 0.5 && w < open - 0.5).map((w) => Math.round(w)));
   check(`展开 ${which} 是补间的`, rising.size >= 6, `${rising.size} 个中间宽度`);
   check(`展开 ${which} 回到 ${open}`, Math.round(back[back.length - 1]) === open);
+  check(`展开 ${which} 后键盘够得着`, !(await railInert()));
   await page.waitForTimeout(200);
 }
 
@@ -181,20 +184,18 @@ await page.keyboard.press("Home");
 await page.waitForTimeout(450);
 check("Home 回默认", (await widthOf(".rail")) === RAIL.def, `${await widthOf(".rail")}px`);
 
-// 6) 窄到放不下时栏让开，但不能让到回不来，页面也不横向溢出。
-// 两栏让开的方式不同，所以留下的东西也不同：右栏横过来占满一行，人还看得见它，
-// 竖着的拖动条在那儿没有意义；左栏是收窄到 0，栏本身看不见了，于是缝上那个把手
-// 就是唯一的入口，必须留着。把它一起藏掉，用户读到的是「会话列表没了」(#9507)。
+// 6) Narrowed past room, the rail collapses to zero and its seam is the only
+//    way back, so the seam stays; the page does not overflow sideways (#9507).
 const shown = (sel) => page.evaluate((s) => {
   const el = document.querySelector(s);
   return !!el && getComputedStyle(el).display !== "none";
 }, sel);
-for (const [w, keep] of [[1100, "左栏收起，把手留着"], [780, "两栏都收起，两个把手都留着"]]) {
+for (const [w, keep] of [[1100, "左栏收起，把手留着"], [780, "左栏收起，把手留着"]]) {
   await page.setViewportSize({ width: w, height: 800 });
   await page.waitForTimeout(300);
   check(
     `窄到 ${w}px：${keep}`,
-    (await shown(".gutter-l")) === true && (await shown(".gutter-r")) === true,
+    (await shown(".gutter-l")) === true,
   );
   check(
     `窄到 ${w}px 不横向溢出`,

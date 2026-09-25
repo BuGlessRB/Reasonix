@@ -64,6 +64,9 @@ for (const width of WIDTHS) {
     }
     const past = [];
     for (const el of document.querySelectorAll("body *")) {
+      // A collapsed column keeps its boxes but is inert and unpainted; what it
+      // lays out past the edge is neither seen nor reachable.
+      if (el.closest("[inert]") || !el.checkVisibility({ visibilityProperty: true })) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 12 || r.height < 6) continue;
       if (r.right > innerWidth + 2 && !scrolled(el)) {

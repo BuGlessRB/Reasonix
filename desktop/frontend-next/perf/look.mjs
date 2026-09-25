@@ -1,7 +1,7 @@
 // 真机验证外观设置：字号、界面缩放、字体、壁纸，都要真的作用到页面上。
 import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
 const PAGE = process.env.PERF_URL ?? "http://localhost:4399/perf.html";
 const SHOTS = fileURLToPath(new URL("shots", import.meta.url));
@@ -57,9 +57,12 @@ const readPx = () =>
 const rootVar = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
 
 const base = await readPx();
-// 默认字号按界面语言分档（readDefault(): 中文 16、西文 15）—— 写死一个常数
-// 的时候，这条在中文界面上一直是红的，而红的是断言不是产品。
-const wantRead = (await page.evaluate(() => document.documentElement.lang)).startsWith("zh") ? 16 : 15;
+// The default body size depends on the interface language and is read from
+// readDefault(), the one place it is decided, so it cannot drift from it.
+const [zhRead, enRead] = (readFileSync(new URL("../src/ui/look.ts", import.meta.url), "utf8")
+  .match(/readDefault = \(\): number => \(current\(\) === "zh" \? ([\d.]+) : ([\d.]+)\)/) ?? []).slice(1).map(Number);
+if (!Number.isFinite(zhRead) || !Number.isFinite(enRead)) fails.push("未能从 look.ts 读到 readDefault");
+const wantRead = (await page.evaluate(() => document.documentElement.lang)).startsWith("zh") ? zhRead : enRead;
 check("默认正文字号", Math.abs(base - wantRead) < 0.6, `${base}px（该是 ${wantRead}px）`);
 
 // 打开设置 → 外观
@@ -101,20 +104,22 @@ await page.screenshot({ path: `${SHOTS}/look-2-放大后.png` });
 // details 的内容浏览器不渲染 —— 上面那些判据是拿 DOM 的 .click() 点的，不过
 // 可见性这一关，所以它们一路绿着，而第一个真正的用户动作（往框里打字）撞上
 // 它。展开一次，后面两槽共用。
+// Every fold opens: the page has more than one, and the font slots are named by
+// what they set rather than by where they happen to sit.
 await page.evaluate(() => {
-  const box = document.querySelector("details.advset");
-  if (box && !box.open) box.open = true;
+  for (const box of document.querySelectorAll("details.advset")) box.open = true;
 });
 await page.waitForTimeout(300);
-check("字体设置所在的高级区能展开", await page.locator(".fontrow .fontown").first().isVisible());
-await page.locator(".fontrow .fontown").first().fill("Georgia");
+const uiFont = page.locator('.fontrow .fontown[data-target="ui"]');
+check("字体设置所在的高级区能展开", await uiFont.isVisible());
+await uiFont.fill("Georgia");
 await page.waitForTimeout(600);
 const ui = await rootVar("--ui");
 check("自定义字体生效", ui.startsWith("Georgia,"), ui.slice(0, 46));
 check("字体带兜底", ui.includes("sans-serif"), "写错名字不会把界面弄花");
 
 // 3b) 等宽是另一个槽位，要单独验 —— 之前就是这里没测出来
-await page.locator(".fontrow .fontown").nth(1).fill("Menlo");
+await page.locator('.fontrow .fontown[data-target="mono"]').fill("Menlo");
 await page.waitForTimeout(700);
 const mono = await rootVar("--mono");
 check("等宽字体生效", mono.startsWith("Menlo,"), mono.slice(0, 42));
@@ -134,6 +139,10 @@ check("终端块真的换了字", termFont.startsWith("Menlo"), termFont.slice(0
 async function wallpaperReaches(page, browser) {
   const setAlpha = (v) => page.evaluate((a) => document.documentElement.style.setProperty("--bg-alpha", a), String(v));
   const keep = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--bg-alpha").trim());
+  // The dim drag above leaves the overlay near opaque; what is measured here is
+  // whether the image reaches the screen, not how dark the reader chose it.
+  const overlay = await page.evaluate(() => document.documentElement.style.getPropertyValue("--bg-overlay"));
+  await page.evaluate(() => document.documentElement.style.setProperty("--bg-overlay", "0"));
   await setAlpha(0.95);
   await page.waitForTimeout(500);
   const on = (await page.screenshot({ type: "png" })).toString("base64");
@@ -141,6 +150,7 @@ async function wallpaperReaches(page, browser) {
   await page.waitForTimeout(500);
   const off = (await page.screenshot({ type: "png" })).toString("base64");
   await setAlpha(keep);
+  await page.evaluate((v) => document.documentElement.style.setProperty("--bg-overlay", v), overlay);
   await page.waitForTimeout(300);
   return avgDiff(browser, on, off);
 }
@@ -181,7 +191,7 @@ async function avgDiff(browser, on, off) {
 // 4) 壁纸：塞一张真图片进去
 // 限定在壁纸那一组里 —— 输入框自己也有一个文件输入，不限定的话选择器命中两个，
 // 这一整段就在这里抛异常退出，下面所有断言从来没有跑过。
-const shot = page.locator('.grp:has(.paperpick) input[type="file"]');
+const shot = page.locator('#set-wallpaper input[type="file"][data-action="wallpaper.change"]');
 await shot.setInputFiles({
   name: "paper.png",
   mimeType: "image/png",
@@ -206,7 +216,7 @@ await page.screenshot({ path: `${SHOTS}/look-3-壁纸.png` });
 
 // 5) 浓度滑块。限定在壁纸那一组：字体「微调」也是 .slider，而且排在它前面 ——
 //    .first() 一直拉的是那一根，这条断言从来没碰过浓度。
-const sliders = page.locator(".grp:has(.paperpick) .slider");
+const sliders = page.locator("#set-wallpaper .slider");
 await sliders.first().fill("0.9");
 await page.waitForTimeout(600);
 check("浓度可调", Number(await rootVar("--bg-alpha")) > 0.8, `alpha=${await rootVar("--bg-alpha")}`);
@@ -241,8 +251,8 @@ await shot.setInputFiles({
 });
 await page.waitForTimeout(900);
 const paperview = page.locator(".paperview");
-const focusX = page.locator(".grp:has(.paperpick) .prow", { hasText: "横向焦点" }).locator(".slider");
-const focusY = page.locator(".grp:has(.paperpick) .prow", { hasText: "纵向焦点" }).locator(".slider");
+const focusX = page.locator("#set-wallpaper .prow", { hasText: "横向焦点" }).locator(".slider");
+const focusY = page.locator("#set-wallpaper .prow", { hasText: "纵向焦点" }).locator(".slider");
 // Ask before dragging: let the preview go back to a strip and horizontal is the
 // axis with no room, so fill() would time out here and take every assertion
 // below it down with the exception — which is the thing this section guards.
@@ -260,7 +270,7 @@ if (canX) {
   moved = await avgDiff(browser, left, right);
 }
 check("横向焦点真的移动了画面", moved > 2, `0 与 1 两端的平均色差 ${moved}/255`);
-const why = await page.locator(".grp:has(.paperpick) .note").innerText().catch(() => "");
+const why = await page.locator("#set-wallpaper .note").innerText().catch(() => "");
 check("并且说得出为什么", why.includes("上下"), why || "(旁边什么也没说)");
 if (canX) await focusX.fill("0.5");
 await page.waitForTimeout(400);
@@ -273,7 +283,7 @@ await page.screenshot({ path: `${SHOTS}/look-6-焦点.png` });
 //     give the save a round trip first, then count what actually went out.
 const LAG = 400;
 await page.evaluate((ms) => window.__saveLag(ms), LAG);
-const dim = page.locator(".grp:has(.paperpick) .prow", { hasText: "压暗" }).locator(".slider");
+const dim = page.locator("#set-wallpaper .prow", { hasText: "压暗" }).locator(".slider");
 await dim.scrollIntoViewIfNeeded();
 await page.waitForTimeout(200);
 await dim.evaluate((el) => {

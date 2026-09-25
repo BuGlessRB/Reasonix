@@ -55,12 +55,12 @@
   --accent-fg: #ffffff;
   --accent-ink: #303330;
   --accent-wash: #e9eae6;
-  --net: #6579b8;
+  --net: #566aa9;
   --net-wash: #eef1fa;
   --focus: #7388c8;
   --text: #292b29;
   --muted: #5f625d;
-  --faint: #777a74;
+  --faint: #666a63;
   --ghost: #93968f;
   --shadow-float: 0 1px 2px rgb(24 29 24 / .08), 0 18px 50px -22px rgb(24 29 24 / .25);
   --r-xs: 5px;
@@ -135,12 +135,12 @@
   --accent-fg: #ffffff;
   --accent-ink: #303330;
   --accent-wash: #e9eae6;
-  --net: #6579b8;
+  --net: #566aa9;
   --net-wash: #eef1fa;
   --focus: #7388c8;
   --text: #292b29;
   --muted: #5f625d;
-  --faint: #777a74;
+  --faint: #666a63;
   --ghost: #93968f;
 }
 
@@ -451,7 +451,7 @@ body { background: var(--page); }
   --focus: #68736d;
   --text: #292b29;
   --muted: #5e625c;
-  --faint: #777b74;
+  --faint: #666a63;
   --ghost: #92968e;
 }
 
@@ -611,6 +611,7 @@ body { background: var(--page) !important; }
 .studio-new-task:hover { background: var(--raised); border-color: var(--border); color: var(--text); }
 .studio-new-task kbd,
 .studio-search kbd { margin-left: auto; color: var(--faint); font: 500 9px/1 var(--mono); }
+.studio-new-task kbd { color: var(--muted); }
 .studio-search {
   width: 100%; height: 32px; display: flex; align-items: center; gap: 9px;
   padding: 0 9px; margin: 3px 0 10px; border: 0; border-radius: 6px;
@@ -948,7 +949,7 @@ body { background: var(--page) !important; }
 .activity-body .tool-state { order: -10; margin: 0 0 0 1px; color: var(--ghost); }
 .tool-state .studio-icon { width: 11px; height: 11px; }
 .tool-state[data-state="done"] { color: var(--ghost); }
-.tool-state[data-state="failed"] { color: #b87970; }
+.tool-state[data-state="failed"] { color: var(--err-ink); }
 .tool-state[data-state="running"] { color: var(--net); background: var(--net-wash); }
 .tool-fold {
   width: 5px; height: 5px; margin: 0 4px 0 1px; flex: none; align-self: center;
@@ -988,7 +989,7 @@ body { background: var(--page) !important; }
 .tool-disclosure[open] > summary .tool-fold { transform: rotate(225deg) translate(-1px, 1px); }
 .tool-delta { display: inline-flex; align-items: center; gap: 5px; flex: none; font: 500 9.5px/1 var(--mono); }
 .tool-delta b { color: var(--ghost); font-weight: 500; }
-.tool-delta i { color: #b87970; font-style: normal; }
+.tool-delta i { color: var(--err-ink); font-style: normal; }
 .reads-disclosure > .out { margin-top: 2px !important; padding: 2px 0 4px !important; }
 .reads-disclosure .peek { gap: 1px; }
 .reads-disclosure .peek button.row {
@@ -1489,7 +1490,7 @@ body { background: var(--page) !important; }
 :root[data-theme="light"] .studio-context-ring::after { background: var(--surface); }
 :root[data-theme="light"] .chrome .crumb-proj { color: var(--muted); }
 :root[data-theme="light"] .chrome .crumb b { color: var(--text); }
-:root[data-theme="light"] .chrome .crumbsep { color: #b4b7af; }
+:root[data-theme="light"] .chrome .crumbsep { color: var(--faint); }
 :root[data-theme="light"] .chrome .thbtn,
 :root[data-theme="light"] .chrome .top-action { color: var(--muted); }
 :root[data-theme="light"] .chrome .thbtn:hover,
@@ -2631,7 +2632,7 @@ body { font-size: 14px; line-height: 1.75; }
   margin-top: 1px;
   padding: 3px 6px;
   border-radius: 5px;
-  color: var(--warn);
+  color: var(--warn-ink);
   background: var(--float);
   font: 600 9px/1.25 var(--mono);
   letter-spacing: 0;
@@ -2767,7 +2768,7 @@ body { font-size: 14px; line-height: 1.75; }
   color: #7d5d27; background: var(--hair);
 }
 :root[data-theme="light"] .flow .call[data-approval] .apv-hd .tool {
-  color: var(--warn); background: var(--overlay);
+  color: var(--warn-ink); background: var(--overlay);
 }
 :root[data-theme="light"] .flow .call[data-approval] .apv-hd .sub { color: var(--text); }
 :root[data-theme="light"] .flow .call[data-approval] .apv-dt {
@@ -2960,10 +2961,10 @@ body { font-size: 14px; line-height: 1.75; }
 
 .studio-session-segments,
 .rail .wsfind { background: var(--overlay); }
-.studio-session-segments button { color: var(--faint); }
-.studio-session-segments button:hover { background: var(--float-hi); color: var(--muted); }
+.studio-session-segments button { color: var(--muted); }
+.studio-session-segments button:hover { background: var(--float-hi); color: var(--text); }
 .studio-session-segments button[aria-pressed="true"] { background: var(--raised); color: var(--text); }
-.studio-session-segments b,
+.studio-session-segments b { color: var(--muted); }
 .studio-filter-search { color: var(--ghost); }
 .rail .wsrow:hover,
 .rail .sessrow:hover { background: var(--overlay); color: var(--text); }

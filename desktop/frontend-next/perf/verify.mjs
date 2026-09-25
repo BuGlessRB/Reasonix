@@ -22,16 +22,19 @@ const check = (name, ok, detail = "") => {
 page.on("pageerror", (e) => fails.push("页面异常: " + e.message));
 page.on("console", (m) => m.type() === "error" && fails.push("控制台错误: " + m.text()));
 
-await page.goto(PAGE, { waitUntil: "networkidle" });
+// One queued line: its withdraw control lives in the composer's queue panel.
+await page.goto(`${PAGE}?queue=1`, { waitUntil: "networkidle" });
 await page.waitForSelector(".app", { timeout: 15000 });
 await page.waitForTimeout(700);
 
-// 灌 60 轮，制造一条需要滚动的记录。
+// 灌 60 轮，制造一条需要滚动的记录。A turn opens at the person's own line, so
+// each one carries it: without it sixty turns read as one, and one block can
+// neither unmount nor keep its earlier work folded.
 await page.evaluate(async (n) => {
   const yieldFrame = () => new Promise((r) => requestAnimationFrame(r));
   for (let i = 0; i < n; i++) {
     const id = `t${i}`;
-    window.__feed({ kind: "turn_started" });
+    window.__feed({ kind: "turn_started", authoredTurn: i + 1, msgIndex: i * 2, text: `问题 ${i}` });
     window.__feed({ kind: "tool_dispatch", tool: { id, name: "edit_file", args: JSON.stringify({ path: `pkg/f${i}.go` }) } });
     window.__feed({ kind: "tool_result", tool: { id, name: "edit_file", args: JSON.stringify({ path: `pkg/f${i}.go` }), output: "写入完成", durationMs: 210, added: 4, removed: 2 } });
     window.__feed({ kind: "text", text: `第 ${i} 段回答。\n\n- 要点一\n- 要点二\n\n` });
@@ -60,7 +63,7 @@ check("自动停在底部", g1.h - g1.top - g1.c < 60, `距底 ${(g1.h - g1.top 
 
 // 3) 流式增量继续时保持跟随。
 await page.evaluate(async () => {
-  window.__feed({ kind: "turn_started" });
+  window.__feed({ kind: "turn_started", authoredTurn: 61, msgIndex: 120, text: "继续" });
   for (let i = 0; i < 40; i++) {
     window.__feed({ kind: "text", text: "继续写下去的一段话。" });
     await new Promise((r) => requestAnimationFrame(r));
@@ -110,17 +113,13 @@ await page.waitForTimeout(500);
 const back = await geom();
 check("回到最新可用", back.h - back.top - back.c < 60, `距底 ${(back.h - back.top - back.c).toFixed(0)}px`);
 
-// 6) 切到轨迹再切回，记录仍在且仍贴底。轨迹不在标签条上了：时间线、事件轨迹、
-//     运行图三个视图收进了「运行详情」那个下拉，标签条只剩对话和任务。原来点
-//     nth(1) 点的是「任务」，于是这条断言从那次重构起就在一个没有 table.traj 的
-//     页面上数行 —— 一直是 0，而它排在一条更早就超时的断言后面，从没跑到过。
-await page.locator(".tab.more").click();
-await page.waitForTimeout(200);
-await page.getByRole("menuitem", { name: "事件轨迹" }).click();
+// 6) Switching to another view and back keeps the transcript. The run's
+//    analysis is the other view a conversation has.
+await page.locator('[data-action="pane.view"][data-value="analysis"]').click();
 await page.waitForTimeout(400);
-const trajRows = await page.locator("table.traj tbody tr").count();
-check("轨迹页有内容", trajRows > 50, `${trajRows} 行`);
-await page.screenshot({ path: `${SHOTS}/3-轨迹页.png` });
+const trajRows = await page.locator(".run-analysis").count();
+check("运行分析页有内容", trajRows > 0, `${trajRows} 个`);
+await page.screenshot({ path: `${SHOTS}/3-运行分析页.png` });
 await page.locator('[role="tab"]').nth(0).click();
 await page.waitForTimeout(400);
 const after = await page.locator('[data-pane="flow"] .call').count();
@@ -131,13 +130,6 @@ await page.screenshot({ path: `${SHOTS}/4-切回活动页.png` });
 //      那一段里右对齐的控件就有多少按不到 —— 看得见、点不着，报上来的正是这个。
 //      量的是不变式本身（内容右缘 ≤ 轨道左缘），不是某一个按钮：右对齐的控件
 //      有四处，逐个断言总会漏掉下一个。
-// 轨道只在有标记时才画，而标记来自用户消息 —— 先放一条进去，顺带它自己就是
-// 那条轨道下面最窄的一个控件：「撤回」36px 宽，整个落在里面过。
-await page.evaluate(() => {
-  window.__feed({ kind: "__user", id: "u-cancel", text: "排队的这一行", pending: true });
-  window.__feed({ kind: "__queued", id: "u-cancel", itemId: "q1", queued: "steer" });
-});
-await page.waitForTimeout(500);
 
 const lane = await page.evaluate(() => {
   const flow = document.querySelector(".flow");
@@ -154,7 +146,7 @@ check(
 );
 
 const cancelHit = await page.evaluate(() => {
-  const el = document.querySelector(".pcancel");
+  const el = document.querySelector('.queue [data-action="queue.cancel"]');
   if (!el) return null;
   const b = el.getBoundingClientRect();
   const hit = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
@@ -175,7 +167,7 @@ const reach = await page.evaluate(() => {
       if (!(el === e || e.contains(el))) break; } return n; };
     return { 高: Math.round(b.height) + out(0, 1) + out(0, -1) };
   };
-  return box(".pcancel");
+  return box('.queue [data-action="queue.cancel"]');
 });
 check("「撤回」的命中框够大", (reach?.高 ?? 0) >= 28, `命中高 ${reach?.高 ?? "—"}px`);
 
@@ -231,7 +223,9 @@ check("审批卡出现", await page.locator("text=/批准|允许|拒绝/").first
 //     「允许这一次 / 这一类不再问 / 拒绝」—— 其中「这一类不再问」对计划没有意义
 //     （内核对这道门拒绝任何记住的授权），而真正想要的那个出路（继续规划、把计划
 //     改掉）藏在「拒绝」这个词后面，谁也认不出来。
-await page.evaluate(() => [...document.querySelectorAll(".compose button")].find((b) => b.textContent.trim() === "计划")?.click());
+// Plan is one mode of the composer's mode picker.
+await page.locator('.compose [data-action="plan.mode"]').click();
+await page.locator('.menu[role="menu"]:not([hidden]) button.mi[data-value="plan"]').click();
 await page.waitForTimeout(700);
 const planOn = await page.evaluate(() => document.querySelector(".app")?.dataset.plan);
 check("进得了计划模式", planOn === "on", `data-plan=${planOn}`);
@@ -288,6 +282,9 @@ await firstWs.locator("button.twist").click();
 await page.waitForTimeout(300);
 check("折叠后收起", (await firstWs.locator(".sessrow").count()) === 0);
 await page.screenshot({ path: `${SHOTS}/6-大会话树.png` });
+// Only the workspace in front opens on first load; the next one is unfolded by hand.
+await page.locator(".wsnode").nth(1).locator(".wsrow").click();
+await page.waitForTimeout(300);
 const second = page.locator(".wsnode").nth(1).locator(".sessrow").first();
 await second.click();
 await page.waitForTimeout(800);

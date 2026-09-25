@@ -5,6 +5,7 @@ import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/h
 import type { Adder } from "./addws";
 import { useRailQuery } from "./railsearch";
 import { StudioIcon } from "./StudioIcon";
+import { Cross } from "./glyphs";
 import { download } from "../port/download";
 import { host } from "../port/host";
 import { useTreeKeys } from "./tree";
@@ -340,7 +341,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                           setConfirm(ws.root);
                         }}
                       >
-                        ×
+                        <Cross />
                       </button>
                     </span>
                   </div>
@@ -582,7 +583,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                                   setConfirm(copy.path);
                                 }}
                               >
-                                ×
+                                <Cross />
                               </button>
                             </div>
                           ),

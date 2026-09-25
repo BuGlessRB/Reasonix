@@ -80,8 +80,9 @@ class BenchPort extends MockPort {
     if (!QUEUE) return q;
     const items = Array.from({ length: QUEUE }, (_, i) => ({
       id: `seed-${i}`,
+      // Lines the person queued: the panel leaves out the host's own queued
+      // continuations, so a seed of those would draw nothing.
       intent: "followup" as const,
-      origin: "host" as const,
       state: "queued" as const,
       // 三种长度，各有各的对照：第一条没被截断（不该弹），第二条长到撞天花板
       // （浮层要自己滚），其余是寻常的被截断行。内核把 preview 截到 120 runes，

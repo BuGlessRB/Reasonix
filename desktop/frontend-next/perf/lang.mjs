@@ -23,18 +23,21 @@ await page.waitForTimeout(800);
 
 check("<html lang> 是 en", (await page.evaluate(() => document.documentElement.lang)) === "en");
 
-await page.evaluate(async () => {
-  const y = () => new Promise((r) => requestAnimationFrame(r));
-  window.__feed({ kind: "turn_started" });
-  window.__feed({ kind: "tool_dispatch", tool: { id: "t1", name: "edit_file", args: '{"path":"pkg/a.go"}' } });
-  window.__feed({ kind: "tool_result", tool: { id: "t1", name: "edit_file", args: '{"path":"pkg/a.go"}', output: "done", durationMs: 210, added: 4, removed: 2 } });
-  window.__feed({ kind: "text", text: "A short answer.\n\n" });
-  window.__feed({ kind: "message" });
-  await y();
-});
+// Both windows get the same turn, so what differs between them is the language
+// and not what the turn put on screen.
+const feedTurn = (pg) =>
+  pg.evaluate(async () => {
+    const y = () => new Promise((r) => requestAnimationFrame(r));
+    window.__feed({ kind: "turn_started" });
+    window.__feed({ kind: "tool_dispatch", tool: { id: "t1", name: "edit_file", args: '{"path":"pkg/a.go"}' } });
+    window.__feed({ kind: "tool_result", tool: { id: "t1", name: "edit_file", args: '{"path":"pkg/a.go"}', output: "done", durationMs: 210, added: 4, removed: 2 } });
+    window.__feed({ kind: "text", text: "A short answer.\n\n" });
+    window.__feed({ kind: "message" });
+    await y();
+  });
+await feedTurn(page);
 await page.waitForTimeout(500);
 
-const seen = (s) => page.locator(`text=${s}`).first().isVisible().catch(() => false);
 // 固件替用户造的数据不该翻：技能描述、钩子名、记忆条目、代理地址、会话标题，
 // 真机上都是用户自己写的内容。语言名同理：英文界面里「中文」就该是「中文」。
 // 豁免表连内容带清单都从固件目录读出来 —— 曾经只有内容是读的、文件名是手写的
@@ -54,12 +57,11 @@ const isFixture = (s) => s === "中文" || [...FIXTURE_TEXT].some((f) => f.inclu
 //
 // 所以不认词，认结构：同一批元素在两种语言下都得在，逐个位置文本必须变过，
 // 且英文那边不留中文。面板改名、增减，这条都跟得上；真漏译才红。
-const LABELS = '[role="tab"], .side .sect, .side .lbl, .rail .lbl, .prefs-nav [id^="prefs-"]';
+const LABELS = '[role="tab"], .chrome-context-parts span, .rail .lbl, .prefs-nav [id^="prefs-"]';
 const labelsNow = () => page.evaluate((sel) =>
   [...document.querySelectorAll(sel)].map((e) => e.textContent.trim()).filter(Boolean), LABELS);
 const enLabels = await labelsNow();
 check("界面上认得出标签", enLabels.length >= 2, `${enLabels.length} 处`);
-check("外部服务面板译成英文", await seen("External services"));
 await page.screenshot({ path: `${SHOTS}/lang-en.png` });
 
 // 设置页：逐个分区看有没有漏译
@@ -132,6 +134,8 @@ await zh.addInitScript(() => localStorage.setItem("rx-lang", "zh"));
 await zh.goto(`${PAGE}?pref=zh`, { waitUntil: "networkidle" });
 await zh.waitForSelector(".app", { timeout: 20000 });
 await zh.waitForTimeout(700);
+await feedTurn(zh);
+await zh.waitForTimeout(500);
 // 同一批位置读两次：都得在，且逐个位置文本变过。认词的那版在这里也过期了
 // ——「前缀缓存」那块这份固件不渲染，于是它一直在等一个不会出现的字。
 const zhLabels = await zh.evaluate((sel) =>
@@ -151,8 +155,8 @@ check(
 // 不是数据 —— 所以两边都读，一边要求全变，一边要求逐位不变。
 const legend = (pg) =>
   pg.evaluate(() =>
-    [...document.querySelectorAll('[data-b="ctx"] .ctxlg .r')].map((r) => ({
-      label: r.querySelector(".t")?.textContent?.trim() ?? "",
+    [...document.querySelectorAll(".chrome-context-card .chrome-context-parts > div")].map((r) => ({
+      label: r.querySelector("span")?.textContent?.trim() ?? "",
       value: r.querySelector("b")?.textContent?.trim() ?? "",
     })),
   );

@@ -893,7 +893,8 @@
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
 
-  .call[data-hit] > .c > .hl > :is(.nm, .arg) { animation: hitmark 1.1s var(--ease-out) }
+  .call[data-hit] > .c > .hl > :is(.nm, .arg),
+  .call[data-hit] > .c > .tool-disclosure > .hl > :is(.nm, .arg) { animation: hitmark 1.1s var(--ease-out) }
   .call[data-hit]:not([data-running]) > .g .sym { animation: hitglyph 1.1s var(--ease-out) }
   @keyframes hitmark {
     from { color: var(--accent-ink); text-shadow: 0 0 7px color-mix(in srgb, var(--accent) 44%, transparent) }
@@ -1287,8 +1288,8 @@
 
   .out-clip { position: relative }
 
-  .call:not([data-running]):not(:has(> .c > .hl .fail)) .out-clip { --out-peek: 5.5rem }
-  .call:not([data-running]):not(:has(> .c > .hl .fail)) .out-clip[data-over]:not([data-open])::after { height: 2rem }
+  .call:not([data-running]):not(:has(> .c > .hl .fail, > .c > .tool-disclosure > .hl .fail)) .out-clip { --out-peek: 5.5rem }
+  .call:not([data-running]):not(:has(> .c > .hl .fail, > .c > .tool-disclosure > .hl .fail)) .out-clip[data-over]:not([data-open])::after { height: 2rem }
   .out-body {
     max-height: var(--out-peek, 16rem); overflow: auto;
     transition: max-height var(--t-panel) var(--ease-out);
@@ -3973,7 +3974,7 @@
   .hl .fail {
     font: var(--w-med) var(--fs-micro) var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase;
     padding: 1.5px 5px; border-radius: var(--r-xs); flex: none;
-    color: var(--err-ink); background: color-mix(in srgb, var(--err) 13%, transparent);
+    color: color-mix(in oklab, var(--err-ink) 75%, var(--text)); background: color-mix(in srgb, var(--err) 13%, transparent);
   }
 
   .extcard, .extform { margin-top: 7px; display: flex; flex-direction: column; gap: 8px }

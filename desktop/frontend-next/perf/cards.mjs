@@ -86,23 +86,6 @@ check("长工具输出在折叠态即可横向阅读", output?.overflow === "aut
 check("合并读取仍显示失败", await page.locator(".call .fail", { hasText: "项失败" }).count() === 1);
 check("回执没有重复根容器", await page.locator(".rc > .rc").count() === 0);
 
-await page.getByRole("tab", { name: "任务", exact: true }).click();
-await page.waitForTimeout(400);
-const task = await page.evaluate(() => {
-  const rows = [...document.querySelectorAll(".tk-acts button")];
-  return {
-    nestedBoxes: rows.filter((row) => {
-      const s = getComputedStyle(row);
-      return parseFloat(s.borderLeftWidth) > 0 || parseFloat(s.borderRightWidth) > 0;
-    }).length,
-    overflow: document.querySelector(".tkv")?.scrollWidth - document.querySelector(".tkv")?.clientWidth,
-    empty: document.querySelector(".tk-now h2")?.textContent ?? "",
-  };
-});
-check("快速操作是轻量行，不再卡中套卡", task.nestedBoxes === 0);
-check("任务看板不横向溢出", (task.overflow ?? 999) <= 1);
-check("空目标是状态，不是输入指令", task.empty.includes("尚未生成"));
-
 await browser.close();
 if (fails.length) {
   console.error(`\n${fails.length} 项不合格：\n  ` + fails.join("\n  "));

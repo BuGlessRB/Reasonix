@@ -26,27 +26,16 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, col
 await page.goto(PAGE, { waitUntil: "networkidle" });
 await page.waitForSelector(".compose");
 
-await page.getByRole("tab", { name: "任务", exact: true }).click();
-await page.waitForTimeout(320);
-// 快捷操作已经从「卡中套卡」改成一行一条，反馈也跟着换了通道：容器不再有自己
-// 的边和影，悬停落在那一行上 —— 底色浮起来，行首让开 8px，箭头前移。问的还是
-// 同一件事（悬停要有反馈，且是克制的那种），只是问在它现在画的地方。
-const row = page.locator(".tk-acts button").first();
-const before = await row.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, pad: getComputedStyle(el).paddingLeft }));
-await row.hover();
-await page.waitForTimeout(260);
-const after = await row.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, pad: getComputedStyle(el).paddingLeft }));
-check("任务快捷操作悬停有克制的层次反馈", before.bg !== after.bg && before.pad !== after.pad, `${before.bg} / ${before.pad} → ${after.bg} / ${after.pad}`);
-
-await page.getByRole("tab", { name: "对话", exact: true }).click();
 const located = await page.evaluate(() => {
   const card = [...document.querySelectorAll(".call[data-k='write']")].at(-1);
-  const head = card?.querySelector(":scope > .c > .hl");
+  const head = card?.querySelector(":scope > .c > .tool-disclosure > .hl, :scope > .c > .hl");
   const name = head?.querySelector(".nm");
   const arg = head?.querySelector(".arg");
   if (!(card instanceof HTMLElement) || !(name instanceof HTMLElement) || !(arg instanceof HTMLElement)) return null;
+  const before = getComputedStyle(card).backgroundColor;
   card.setAttribute("data-hit", "");
   return {
+    before,
     cardAnimations: card.getAnimations({ subtree: false }).map((a) => a.animationName),
     cardBackground: getComputedStyle(card).backgroundColor,
     nameAnimation: getComputedStyle(name).animationName,
@@ -56,7 +45,7 @@ const located = await page.evaluate(() => {
 check(
   "定位 Update 时只强调标题而不闪整张输出",
   located?.cardAnimations.length === 0
-    && located.cardBackground === "rgba(0, 0, 0, 0)"
+    && located.cardBackground === located.before
     && located.nameAnimation === "hitmark"
     && located.argAnimation === "hitmark",
   JSON.stringify(located),
@@ -103,8 +92,7 @@ check("窄屏消息定位轨让出正文宽度", narrow.lane === "24px", narrow.
 check("窄屏面包屑保持单行", narrow.oneLine);
 check("窄屏没有横向溢出", narrow.overflow <= 1, `${narrow.overflow}px`);
 
-const thumb = page.locator(".srail-view");
-await thumb.focus();
+await page.locator('[data-pane="flow"]').focus();
 await page.keyboard.press("End");
 await page.waitForTimeout(80);
 check("消息定位轨可用键盘滚动", await page.evaluate(() => document.querySelector('[data-pane="flow"]').scrollTop > 0));

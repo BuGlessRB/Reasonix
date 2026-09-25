@@ -225,7 +225,7 @@ for (const scheme of ["light", "dark"]) {
   await settled(page);
   for (const row of await sweep(page, scheme, "工作台")) found.set(row.key, row);
 
-  await page.locator(".navbtn").nth(1).click();
+  await page.locator('[data-action="chrome.settings"]').first().click();
   await settled(page);
   for (const row of await sweep(page, scheme, "设置")) if (!found.has(row.key)) found.set(row.key, row);
   await page.close();

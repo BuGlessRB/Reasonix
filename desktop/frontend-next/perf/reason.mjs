@@ -49,7 +49,8 @@ async function refuse(lang) {
   await page.waitForTimeout(400);
   // The kernel accepts five image formats; TIFF is refused, and the refusal
   // carries wallpaper.unsupported_type.
-  await page.locator('.prefs input[type="file"]').first().setInputFiles({
+  // The appearance page also takes a theme pack; the refusal under test is the wallpaper's.
+  await page.locator('.prefs input[type="file"][data-action="wallpaper.change"]').setInputFiles({
     name: "x.tiff",
     mimeType: "image/tiff",
     buffer: Buffer.from([0x49, 0x49, 0x2a, 0x00]),
