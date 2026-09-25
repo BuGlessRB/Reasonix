@@ -31,6 +31,13 @@ func TestNormalizeNullRedirects(t *testing.T) {
 		{"run 2>&1", bash, "run 2>&1"},
 		{"rm nul", bash, "rm nul"},
 		{"echo nullish", bash, "echo nullish"},
+		// An escaped quote does not close the string, so the redirect-looking
+		// text after it is still quoted; the real redirect after the string is not.
+		{`echo "a \" >nul b" >nul`, bash, `echo "a \" >nul b" >/dev/null`},
+		{"echo \"a `\" >nul b\" >nul", "$null", "echo \"a `\" >nul b\" >$null"},
+		// Single quotes are literal in both shells: a backtick there escapes
+		// nothing, so the string closes and the redirect after it is real.
+		{"echo 'a `' >nul", bash, "echo 'a `' >/dev/null"},
 	}
 	for _, c := range cases {
 		if got := normalizeNullRedirects(c.in, c.sink); got != c.want {

@@ -336,7 +336,9 @@ func normalizeNullRedirects(command, sink string) string {
 				i++
 				continue
 			}
-			if c == '`' && i < len(command) {
+			// PowerShell's escape, and only inside its double quotes: single-quoted
+			// text is literal in both shells, so a backtick there ends nothing.
+			if c == '`' && quote == '"' && i < len(command) {
 				write(command[i])
 				i++
 				continue
