@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -427,11 +429,55 @@ func TestAskPutsUnlistedHostsToAPerson(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if !slices.Equal(asked, []string{"asked.test", "refused.test", "broken.test"}) {
+	slices.Sort(asked)
+	if !slices.Equal(asked, []string{"asked.test", "broken.test", "refused.test"}) {
 		t.Fatalf("asked %v, want each unlisted host once and no denied host", asked)
 	}
 	h.proxy.TakeDenials("cmd1")
 	if resp, _ := get(t, c, "http://asked.test/"); resp.Header.Get("X-Proxy-Error") != string(ReasonNotAllowed) {
 		t.Fatalf("an ended token kept its asker: %q", resp.Header.Get("X-Proxy-Error"))
+	}
+}
+
+// A sandbox in its own network namespace reaches the proxy on its socket, under
+// the same policy and the same per-command accounting.
+func TestListenUnixServesTheSamePolicy(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "via socket")
+	}))
+	defer backend.Close()
+	h := newHarness(t, Policy{Allow: []string{"allowed.test"}}, Options{}, names, backend.Listener.Addr().String())
+	dir, err := os.MkdirTemp("/tmp", "egs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "sub", "p.sock")
+	if err := h.proxy.ListenUnix(sock); err != nil {
+		t.Fatal(err)
+	}
+	if h.proxy.SocketPath() != sock {
+		t.Fatalf("SocketPath = %q", h.proxy.SocketPath())
+	}
+	if info, err := os.Stat(sock); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("socket mode = %v, %v", info, err)
+	}
+	u, _ := url.Parse("http://cmd9@proxy.invalid")
+	c := &http.Client{Transport: &http.Transport{
+		Proxy: http.ProxyURL(u),
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", sock)
+		},
+	}}
+	if resp, body := get(t, c, "http://allowed.test/"); resp.StatusCode != http.StatusOK || body != "via socket" {
+		t.Fatalf("allowed via socket = %d %q", resp.StatusCode, body)
+	}
+	get(t, c, "http://other.test/")
+	if got := h.proxy.TakeDenials("cmd9"); !slices.Equal(got, []Denial{{"other.test", ReasonNotAllowed}}) {
+		t.Fatalf("denials via socket = %v", got)
+	}
+	_ = h.proxy.Close()
+	if _, err := os.Stat(sock); !os.IsNotExist(err) {
+		t.Fatalf("Close left the socket behind: %v", err)
 	}
 }

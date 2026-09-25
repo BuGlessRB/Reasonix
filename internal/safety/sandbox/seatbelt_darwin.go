@@ -121,6 +121,14 @@ func seatbeltProfile(spec Spec) string {
 	return b.String()
 }
 
+// egressPort is the proxy port a confined profile opens, or 0 for none.
+func (s Spec) egressPort() int {
+	if s.Egress == nil || !s.Network {
+		return 0
+	}
+	return s.Egress.Port()
+}
+
 // writeEgressRules shuts every destination but loopback, Unix sockets and the
 // egress proxy; a host proxy outside ClosedLoopbackPorts stays reachable, and
 // lookups still reach the resolver's socket. Bind, inbound and outbound are
@@ -144,6 +152,10 @@ func writeEgressRules(b *strings.Builder, spec Spec) {
 // EgressSupported reports whether this platform can confine egress to the
 // egress proxy.
 func EgressSupported() bool { return true }
+
+// EgressNeedsSocket reports whether the proxy must also listen on a Unix
+// socket; Seatbelt reaches it on its loopback port.
+func EgressNeedsSocket() bool { return false }
 
 // writeAllowDirs is the deduplicated, symlink-resolved set of directories the
 // sandbox permits writes to: the caller's roots plus temp dirs, /dev, and the

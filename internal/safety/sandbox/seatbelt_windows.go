@@ -26,3 +26,6 @@ func Available() bool {
 // EgressSupported reports whether this platform can confine egress to the
 // egress proxy: Windows has no OS-level bash sandbox.
 func EgressSupported() bool { return false }
+
+// EgressNeedsSocket reports whether the proxy must also listen on a Unix socket.
+func EgressNeedsSocket() bool { return false }

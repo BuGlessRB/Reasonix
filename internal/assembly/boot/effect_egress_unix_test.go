@@ -1,3 +1,5 @@
+//go:build darwin || linux
+
 package boot
 
 import (
@@ -44,8 +46,8 @@ func (p *egressScriptProvider) Stream(_ context.Context, req provider.Request) (
 // egress proxy, and a host the list does not name reaches the model as the
 // host's refusal rather than as a bare connection error.
 func TestEffectEgressRefusalReachesTheModel(t *testing.T) {
-	if !sandbox.Available() {
-		t.Skip("sandbox-exec not available")
+	if !sandbox.Available() || !sandbox.EgressSupported() {
+		t.Skip("egress confinement not available on this host")
 	}
 	if _, err := exec.LookPath("curl"); err != nil {
 		t.Skip("curl not installed")
@@ -104,8 +106,8 @@ model = "x"
 // Where the frontend can ask, a host outside the list reaches the user as a
 // network_egress approval, and a refusal reaches the model as theirs.
 func TestEffectUnlistedHostIsPutToTheUser(t *testing.T) {
-	if !sandbox.Available() {
-		t.Skip("sandbox-exec not available")
+	if !sandbox.Available() || !sandbox.EgressSupported() {
+		t.Skip("egress confinement not available on this host")
 	}
 	if _, err := exec.LookPath("curl"); err != nil {
 		t.Skip("curl not installed")

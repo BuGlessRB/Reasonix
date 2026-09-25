@@ -80,17 +80,12 @@ type Spec struct {
 // lets a host outside the list be put to a person, and Refusals ends the token.
 type EgressRoute interface {
 	Port() int
+	// SocketPath is the proxy's Unix socket, where EgressNeedsSocket; "" when
+	// it has none, which leaves egress shut rather than open.
+	SocketPath() string
 	Env(token string) []string
 	Ask(token string, ask func(host string) (bool, error))
 	Refusals(token string) []string
-}
-
-// egressPort is the proxy port a confined profile opens, or 0 for none.
-func (s Spec) egressPort() int {
-	if s.Egress == nil || !s.Network {
-		return 0
-	}
-	return s.Egress.Port()
 }
 
 // Enforce reports whether the spec asks for confinement.

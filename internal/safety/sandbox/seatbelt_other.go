@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -83,6 +84,9 @@ func Available() bool {
 // rest of the filesystem is mounted read-only (matching macOS Seatbelt).
 func bwrapArgs(spec Spec, sh Shell, command string) []string {
 	args := bwrapBaseArgs(spec)
+	if egressBridged(spec) {
+		args = append(args, egressBridgeArgs(spec)...)
+	}
 	return append(args, sh.argv(command)...)
 }
 
@@ -99,6 +103,9 @@ func bwrapArgsForArgs(spec Spec, args []string) []string {
 	// siblings. Session-private binds already contain the generation's files,
 	// so only host-/tmp executables need this re-mount.
 	out = append(out, bwrapExecutableMountArgs(args)...)
+	if egressBridged(spec) {
+		out = append(out, egressBridgeArgs(spec)...)
+	}
 	return append(out, args...)
 }
 
@@ -115,7 +122,7 @@ func bwrapBaseArgs(spec Spec) []string {
 		"--proc", "/proc",
 	}
 	args = append(args, bwrapTmpMountArgs(spec)...)
-	if spec.Network {
+	if spec.Network && !egressBridged(spec) {
 		// Re-allow network by removing the network namespace.
 		args = args[1:] // drop --unshare-net
 	}
@@ -261,6 +268,40 @@ func dirExists(path string) bool {
 }
 
 // EgressSupported reports whether this platform can confine egress to the
-// egress proxy: bubblewrap has no route to a host loopback port
-// from inside its network namespace yet.
-func EgressSupported() bool { return false }
+// egress proxy: the command keeps its own network namespace, and this binary,
+// run inside it as the egress bridge, is its one way out.
+func EgressSupported() bool { return egressBridgeExe() != "" }
+
+// EgressNeedsSocket reports whether the proxy must also listen on a Unix
+// socket: a separate network namespace cannot reach the host's loopback.
+func EgressNeedsSocket() bool { return true }
+
+var egressBridgeExe = sync.OnceValue(func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return exe
+})
+
+// egressBridged reports whether this launch reaches the network only through
+// the bridge. A route with no socket is not bridged and keeps the namespace
+// without one: egress stays shut rather than falling back to open.
+func egressBridged(spec Spec) bool {
+	return spec.Network && spec.Egress != nil
+}
+
+// egressBridgeArgs mounts the proxy socket read-only, hands the bridge its
+// orders, and puts this binary in front of the command.
+func egressBridgeArgs(spec Spec) []string {
+	socket, exe := spec.Egress.SocketPath(), egressBridgeExe()
+	if socket == "" || exe == "" {
+		return nil
+	}
+	args := []string{"--ro-bind", socket, socket, "--setenv", egressBridgeEnv, strconv.Itoa(spec.Egress.Port()) + " " + socket}
+	args = append(args, bwrapExecutableMountArgs([]string{exe})...)
+	return append(args, exe)
+}

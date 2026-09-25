@@ -12,6 +12,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +50,7 @@ type Proxy struct {
 	upstream func(*http.Request) (*url.URL, error)
 	ln       net.Listener
 	srv      *http.Server
+	socket   string
 
 	lookup func(ctx context.Context, host string) ([]net.IP, error)
 	dial   func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -121,9 +124,42 @@ func (p *Proxy) Addr() string { return p.ln.Addr().String() }
 // Port is the loopback port the OS sandbox leaves open.
 func (p *Proxy) Port() int { return p.ln.Addr().(*net.TCPAddr).Port }
 
-// Close stops the listener and every tunnel still open through it.
+// ListenUnix also serves on a Unix socket at path, for a sandbox whose own
+// network namespace cannot reach this host's loopback. Only this user may
+// connect to it.
+func (p *Proxy) ListenUnix(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	_ = os.Remove(path)
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		return err
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		_ = ln.Close()
+		return err
+	}
+	p.mu.Lock()
+	p.socket = path
+	p.mu.Unlock()
+	go func() { _ = p.srv.Serve(ln) }()
+	return nil
+}
+
+// SocketPath is where ListenUnix serves, or "".
+func (p *Proxy) SocketPath() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.socket
+}
+
+// Close stops the listeners and every tunnel still open through them.
 func (p *Proxy) Close() error {
 	err := p.srv.Close()
+	if socket := p.SocketPath(); socket != "" {
+		_ = os.Remove(socket)
+	}
 	p.mu.Lock()
 	for c := range p.tunnels {
 		_ = c.Close()

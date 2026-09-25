@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -100,6 +101,11 @@ func (env *toolEnvironment) routeEgress(cfg *config.Config, stderr io.Writer) {
 	p, err := egress.Start(egress.Policy{Allow: cfg.Sandbox.AllowedDomains, Deny: cfg.Sandbox.DeniedDomains}, egress.Options{
 		Upstream: func(r *http.Request) (*url.URL, error) { return upstream(r.URL) },
 	})
+	if err == nil && sandbox.EgressNeedsSocket() {
+		if err = listenEgressSocket(p); err != nil {
+			_ = p.Close()
+		}
+	}
 	if err != nil {
 		fmt.Fprintf(stderr, "warning: [sandbox] allowed_domains could not start the egress proxy (%v); bash network egress is shut\n", err)
 		env.bash.Network = false
@@ -108,4 +114,14 @@ func (env *toolEnvironment) routeEgress(cfg *config.Config, stderr io.Writer) {
 	env.egress = p
 	env.bash.Egress = p
 	env.bash.ClosedLoopbackPorts = egress.LoopbackProxyPorts(os.Getenv)
+}
+
+// listenEgressSocket puts the proxy's socket under the user's cache, which the
+// sandbox sees; bubblewrap mounts it read-only into each confined command.
+func listenEgressSocket(p *egress.Proxy) error {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		return err
+	}
+	return p.ListenUnix(filepath.Join(dir, "reasonix", "egress", egress.NewToken()+".sock"))
 }
