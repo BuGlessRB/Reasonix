@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"strings"
 
 	"reasonix/internal/remote"
 )
