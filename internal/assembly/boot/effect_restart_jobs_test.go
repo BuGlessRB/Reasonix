@@ -81,6 +81,10 @@ default_model = "test-model"
 [agent]
 system_prompt = "BASE"
 
+# What is measured is how a job's end is attributed, not where it runs.
+[sandbox]
+bash = "off"
+
 [codegraph]
 enabled = false
 
