@@ -12,6 +12,7 @@ on:
 
 permissions:
   issues: write
+  pull-requests: write
 
 concurrency:
   group: issue-replies
@@ -32,6 +33,12 @@ jobs:
             const { owner, repo } = context.repo;
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
             const failed = [];
+            // Only a rate limit is worth waiting out; any other refusal is final.
+            const rateLimited = (error) => {
+              const headers = error.response?.headers ?? {};
+              return error.status === 429 ||
+                (error.status === 403 && (headers['retry-after'] !== undefined || headers['x-ratelimit-remaining'] === '0'));
+            };
             for (const { issue, body, close } of replies) {
               if (!Number.isInteger(issue) || typeof body !== 'string' || body.trim() === '') {
                 failed.push(`${issue}: malformed entry`);
@@ -46,7 +53,7 @@ jobs:
                       await github.rest.issues.createComment({ owner, repo, issue_number: issue, body });
                       break;
                     } catch (error) {
-                      if (attempt >= 5) throw error;
+                      if (attempt >= 5 || !rateLimited(error)) throw error;
                       core.warning(`#${issue}: ${error.message}; retrying in 2 minutes`);
                       await sleep(120_000);
                     }
