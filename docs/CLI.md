@@ -19,8 +19,10 @@ reasonix --preset delivery --effort high
 reasonix --dir /path/to/project
 ```
 
-Running `reasonix` without a subcommand starts the interactive terminal UI. Use
-`reasonix setup` first when no provider is configured.
+Running `reasonix` without a subcommand starts the interactive terminal UI;
+`reasonix tui` is the same command. Without a terminal, for example in a script
+or a pipe, it prints usage instead. Use `reasonix setup` first when no provider
+is configured.
 
 | Flag | Purpose |
 | --- | --- |
@@ -35,8 +37,9 @@ Running `reasonix` without a subcommand starts the interactive terminal UI. Use
 | `-r`, `--resume [QUERY]` | Open the session picker, or resume a matching session. |
 | `--copy` | Continue in a writable copy of the resumed session. |
 | `--allowed-tools RULES` | Add session-only permission allow rules. Repeatable; `--allowedTools` is an alias. |
-| `--permission-mode MODE` | Start with a specific permission posture. |
+| `--permission-mode MODE` | Start with a specific permission posture: `ask`, `auto`, `acceptEdits`, `dontAsk`, `plan` or `bypassPermissions`. 1.x's `workspace-write`, `danger-full-access` and `read-only` also work, as Auto, Yolo and Ask. |
 | `--yolo` | Start in YOLO mode; alias for `--dangerously-skip-permissions`. |
+| `--inline` | Write the conversation into the terminal's scrollback instead of taking the full screen. |
 
 Flags may appear before or after the prompt where applicable.
 

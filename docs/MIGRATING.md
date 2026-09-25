@@ -61,7 +61,11 @@ Where 1.x keeps a conversation depends on the 1.x version that last saved it.
 
 | 1.x | 2.x |
 | --- | --- |
-| `reasonix`, `reasonix -c`, `reasonix -r` | `reasonix tui`, `reasonix tui -c`, `reasonix tui -r`. Bare `reasonix` prints usage in 2.x. |
+| `reasonix`, `reasonix -c`, `reasonix -r` | The same, in a terminal. `reasonix tui` is another name for it. |
+| `--permission-mode workspace-write` | Auto |
+| `--permission-mode danger-full-access` | Yolo |
+| `--permission-mode read-only` | Ask. 2.x has no read-only mode, so this is the most careful one it has. |
+| `--yolo`, `--permission-mode yolo` or `bypassPermissions` | Yolo. In 1.x these meant `workspace-write`; in 2.x they skip ordinary approval prompts. |
 | `reasonix run`, `serve`, `web`, `acp`, `mcp`, `setup`, `doctor` | Same names |
 | `reasonix bot` | Not in 2.x. The `[bot]` config section stays for 1.x. |
 | VS Code extension | Starts the `reasonix` found on `PATH`, so it runs whichever line's CLI comes first there. |

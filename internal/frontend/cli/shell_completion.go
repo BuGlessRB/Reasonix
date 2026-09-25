@@ -81,7 +81,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 	resume := completionFlag("--resume -r", cliCompletionOptionalValue) // optional QUERY
 	effort := completionFlag("--effort", cliCompletionStaticValue, "auto", "low", "medium", "high", "max")
 	permissionMode := completionFlag("--permission-mode", cliCompletionStaticValue,
-		"manual", "ask", "auto", "acceptEdits", "dontAsk", "plan", "bypassPermissions")
+		"manual", "ask", "auto", "acceptEdits", "dontAsk", "plan", "bypassPermissions", "read-only", "workspace-write", "danger-full-access")
 	help := completionFlag("--help -h", cliCompletionNoValue)
 
 	// run/serve --resume require a value; only interactive root --resume [QUERY] is optional.

@@ -231,11 +231,14 @@ type cliPermissionMode struct {
 	allow    []string
 }
 
+// parsePermissionMode also reads 1.x's three names, so a 1.x command line
+// keeps working: workspace-write is Auto, danger-full-access is Yolo, and
+// read-only, which 2.x has no mode for, falls back to the most careful one.
 func parsePermissionMode(value string) (cliPermissionMode, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "default", "ask":
+	case "", "default", "ask", "read-only":
 		return cliPermissionMode{approval: control.ToolApprovalAsk}, nil
-	case "auto":
+	case "auto", "workspace-write":
 		return cliPermissionMode{approval: control.ToolApprovalAuto}, nil
 	case "acceptedits", "accept-edits":
 		return cliPermissionMode{approval: control.ToolApprovalAsk, allow: []string{
@@ -247,10 +250,10 @@ func parsePermissionMode(value string) (cliPermissionMode, error) {
 		return cliPermissionMode{approval: control.ToolApprovalDontAsk}, nil
 	case "plan":
 		return cliPermissionMode{approval: control.ToolApprovalAsk, plan: true}, nil
-	case "bypasspermissions", "bypass-permissions", "yolo":
+	case "bypasspermissions", "bypass-permissions", "yolo", "danger-full-access":
 		return cliPermissionMode{approval: control.ToolApprovalYolo}, nil
 	default:
-		return cliPermissionMode{}, fmt.Errorf("unknown permission mode %q (want manual, ask, auto, acceptEdits, dontAsk, plan, or bypassPermissions)", value)
+		return cliPermissionMode{}, fmt.Errorf("unknown permission mode %q (want manual, ask, auto, acceptEdits, dontAsk, plan, or bypassPermissions; 1.x's read-only, workspace-write and danger-full-access also work)", value)
 	}
 }
 
