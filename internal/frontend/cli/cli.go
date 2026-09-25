@@ -65,24 +65,7 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 	// welcome banner) come through localized. Env-only first; if a config
 	// exists and pins a language, that wins.
 	i18n.DetectLanguage("")
-	cmd := ""
-	if len(args) > 0 {
-		cmd = args[0]
-	}
-	if cmd == "--acp" {
-		cmd = "acp"
-	}
-	// -p/--print is one-shot print mode. reasonix has no interactive -p, so a
-	// print flag anywhere in a leading flag run (no explicit subcommand) routes
-	// the whole set to `run --print` — `reasonix --model X -p "task"` works, not
-	// only `reasonix -p ...`.
-	if cmd == "-p" || cmd == "--print" || (isDefaultInteractiveFlag(cmd) && hasLeadingPrintFlag(args)) {
-		args = append([]string{"run", "--print"}, stripLeadingPrintFlag(args)...)
-		cmd = "run"
-	}
-	if len(args) > 0 && isDefaultInteractiveFlag(cmd) {
-		cmd = ""
-	}
+	cmd, args := normalizeCommand(args)
 	doctorRepair := isDoctorRepairCommand(args)
 	if shouldMigrateLegacyConfigForCLI(cmd) && !doctorRepair {
 		migrateLegacyConfigForCLI()
@@ -105,6 +88,8 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 		return runAgent(rest, version)
 	case "serve":
 		return runServe(rest, version)
+	case "tui":
+		return runTUI(rest, version)
 	case "web":
 		return runWebCommand(rest, version)
 	case "setup":
@@ -1325,6 +1310,27 @@ func readStdin() string {
 	}
 	data, _ := io.ReadAll(os.Stdin)
 	return strings.TrimSpace(string(data))
+}
+
+// normalizeCommand names the subcommand argv asks for. -p/--print is one-shot
+// print mode and reasonix has no interactive -p, so a print flag anywhere in a
+// leading flag run routes the whole set to `run --print`: `reasonix --model X
+// -p "task"` works, not only `reasonix -p ...`. Other leading flags name none.
+func normalizeCommand(args []string) (string, []string) {
+	cmd := ""
+	if len(args) > 0 {
+		cmd = args[0]
+	}
+	if cmd == "--acp" {
+		cmd = "acp"
+	}
+	if cmd == "-p" || cmd == "--print" || (isDefaultInteractiveFlag(cmd) && hasLeadingPrintFlag(args)) {
+		return "run", append([]string{"run", "--print"}, stripLeadingPrintFlag(args)...)
+	}
+	if len(args) > 0 && isDefaultInteractiveFlag(cmd) {
+		cmd = ""
+	}
+	return cmd, args
 }
 
 func usage() {

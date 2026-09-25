@@ -126,7 +126,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 
 	root.subcommands = []cliCompletionSpec{
 		completionSpec("run", runFlags),
-		completionSpec("serve", serveFlags),
+		completionSpec("serve", serveFlags), completionSpec("tui", cliTUICompletionFlags(model, preset, help)),
 		completionSpec("web", serveFlags),
 		completionSpec("setup", []cliCompletionFlag{completionFlag("--local -l", cliCompletionNoValue), help}),
 		completionSpec("config", []cliCompletionFlag{help},
@@ -660,3 +660,13 @@ const fishCompletionScript = `function __reasonix_completion
 end
 complete -c reasonix -a '(__reasonix_completion)'
 `
+
+func cliTUICompletionFlags(model, preset, help cliCompletionFlag) []cliCompletionFlag {
+	return []cliCompletionFlag{
+		model, preset,
+		completionFlag("--dir", cliCompletionPathValue),
+		completionFlag("--continue -c", cliCompletionNoValue),
+		completionFlag("--resume -r", cliCompletionSessionValue),
+		help,
+	}
+}

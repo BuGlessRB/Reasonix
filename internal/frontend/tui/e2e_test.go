@@ -116,7 +116,7 @@ func TestATurnThroughTheInProcessKernel(t *testing.T) {
 	updates := c.Subscribe(ctx)
 
 	tr := &tui.Transcript{}
-	tr.AddUser("run the marker", false, "")
+	tr.AddUser("run the marker")
 	if err := c.Submit(ctx, "run the marker"); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}

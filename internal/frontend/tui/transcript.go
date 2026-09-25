@@ -27,11 +27,13 @@ type Item struct {
 	Kind ItemKind
 
 	// ItemUser. Pending is input the kernel has not taken into a turn yet;
-	// Steer is input a running turn read at a tool boundary.
-	Text    string
-	Pending bool
-	Steer   bool
-	QueueID string
+	// Steer is input a running turn read at a tool boundary. MsgIndex is the
+	// kernel's name for the message once a turn has started on it.
+	Text     string
+	Pending  bool
+	Steer    bool
+	QueueID  string
+	MsgIndex int
 
 	// ItemSay.
 	Reasoning string
@@ -83,7 +85,10 @@ type Transcript struct {
 	TodosMoved bool
 	// QueueMoved says the durable input queue changed and should be re-read.
 	QueueMoved bool
-	next       int
+	// awaiting are rows this screen sent that no turn has started on yet, in
+	// the order sent. Steered input is not among them: a steer event takes it.
+	awaiting []int
+	next     int
 }
 
 func (t *Transcript) id() int {
@@ -91,10 +96,47 @@ func (t *Transcript) id() int {
 	return t.next
 }
 
-// AddUser records what this screen sent. pending marks input handed to a
-// running turn, which stays pending until the steer event says it was read.
-func (t *Transcript) AddUser(text string, pending bool, queueID string) {
-	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemUser, Text: text, Pending: pending, QueueID: queueID})
+// AddUser records a message this screen sent to start a turn.
+func (t *Transcript) AddUser(text string) int {
+	id := t.id()
+	t.Items = append(t.Items, Item{ID: id, Kind: ItemUser, Text: text})
+	t.awaiting = append(t.awaiting, id)
+	return id
+}
+
+// AddQueued records input handed to a running turn. It stays pending until the
+// kernel takes it: a steer event for guidance, the start of its own turn for a
+// follow-up.
+func (t *Transcript) AddQueued(text string, steer bool) int {
+	id := t.id()
+	t.Items = append(t.Items, Item{ID: id, Kind: ItemUser, Text: text, Pending: true})
+	if !steer {
+		t.awaiting = append(t.awaiting, id)
+	}
+	return id
+}
+
+// AddNotice records something this screen has to say, such as a request the
+// kernel refused.
+func (t *Transcript) AddNotice(level, text string) {
+	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemNotice, Level: level, Text: text})
+}
+
+// SetQueueID names a pending row by the id the kernel queued it under, which
+// is what the steer event that consumes it will carry.
+func (t *Transcript) SetQueueID(row int, queueID string) {
+	for i := range t.Items {
+		if t.Items[i].ID == row {
+			t.Items[i].QueueID = queueID
+			return
+		}
+	}
+}
+
+// Drop removes a row the kernel never took: it is not part of what happened.
+func (t *Transcript) Drop(row int) {
+	t.Items = slices.DeleteFunc(t.Items, func(it Item) bool { return it.ID == row })
+	t.awaiting = slices.DeleteFunc(t.awaiting, func(id int) bool { return id == row })
 }
 
 // Decide seals an approval or ask this screen answered.
@@ -130,6 +172,7 @@ func (t *Transcript) Apply(ev eventwire.Event) {
 	switch ev.Kind {
 	case "turn_started":
 		t.Running, t.Terminal, t.EndReason = true, TurnOpen, ""
+		t.nameTurnStart(ev)
 	case "reasoning":
 		t.appendSay(ev.Text, true)
 	case "text":
@@ -313,6 +356,38 @@ func (t *Transcript) foldTool(tool eventwire.Tool, running bool) {
 		t.Items[at].Done = true
 	}
 	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemTool, Tool: &tool, Running: running})
+}
+
+// nameTurnStart seats the message a turn began on. The oldest row this screen
+// sent and no turn has taken is the one: a follow-up that waited in the queue
+// moves to where its turn began. With none waiting, another client started
+// the turn, and the kernel's text is the only account of what was said.
+func (t *Transcript) nameTurnStart(ev eventwire.Event) {
+	if ev.AuthoredTurn == nil || ev.MsgIndex == nil {
+		return
+	}
+	for len(t.awaiting) > 0 {
+		id := t.awaiting[0]
+		t.awaiting = t.awaiting[1:]
+		at := slices.IndexFunc(t.Items, func(it Item) bool { return it.ID == id })
+		if at < 0 {
+			continue
+		}
+		row := t.Items[at]
+		row.MsgIndex = *ev.MsgIndex
+		if !row.Pending {
+			t.Items[at] = row
+			return
+		}
+		row.Pending = false
+		t.Items = append(append(t.Items[:at:at], t.Items[at+1:]...), row)
+		return
+	}
+	text := strings.TrimSpace(ev.Text)
+	if text == "" || slices.ContainsFunc(t.Items, func(it Item) bool { return it.Kind == ItemUser && it.MsgIndex == *ev.MsgIndex }) {
+		return
+	}
+	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemUser, Text: text, MsgIndex: *ev.MsgIndex})
 }
 
 // foldSteer moves pending input to where the turn read it: the work that ran

@@ -101,8 +101,9 @@ func TestPromptsSettleHereOrElsewhere(t *testing.T) {
 // then sits where it was read, not where it was typed.
 func TestSteerMovesPendingInputToWhereItWasRead(t *testing.T) {
 	tr := &Transcript{}
-	tr.AddUser("start", false, "")
-	tr.AddUser("also check tests", true, "q-1")
+	tr.AddUser("start")
+	row := tr.AddQueued("also check tests", true)
+	tr.SetQueueID(row, "q-1")
 	tr.Apply(eventwire.Event{Kind: "tool_dispatch", Tool: &eventwire.Tool{ID: "t1", Name: "bash"}})
 	tr.Apply(eventwire.Event{Kind: "steer", Text: "also check tests", ItemID: "q-1"})
 	last := tr.Items[len(tr.Items)-1]
@@ -155,5 +156,64 @@ func TestTurnDoneSealsAndSaysHowItEnded(t *testing.T) {
 	loud := fold(eventwire.Event{Kind: "turn_done", Receipt: &eventwire.CompletionReceipt{Verdict: "partial", SaysSomething: true}})
 	if len(quiet.Items) != 0 || len(loud.Items) != 1 || loud.Items[0].Kind != ItemReceipt {
 		t.Fatalf("receipts: quiet=%+v loud=%+v", quiet.Items, loud.Items)
+	}
+}
+
+// A rebuilt transcript is the same conversation: the person's lines but not the
+// host's, answers settled, each call with the output the record paired to it.
+func TestRestoreRebuildsFromTheRecord(t *testing.T) {
+	tr := &Transcript{}
+	tr.AddUser("stale row")
+	tr.Restore([]HistoryMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "fix the build"},
+		{Role: "user", Content: "host guidance", HostAuthored: true},
+		{Role: "assistant", Content: "checking", Reasoning: "hmm", ToolCalls: []HistoryToolCall{{ID: "c1", Name: "bash", Arguments: `{"command":"make"}`}}},
+		{Role: "tool", ToolCallID: "c1", Content: "make: *** error", ToolFailed: true},
+		{Role: "assistant", Content: "fixed"},
+	})
+	if got := kinds(tr); len(got) != 4 || got[0] != ItemUser || got[1] != ItemSay || got[2] != ItemTool || got[3] != ItemSay {
+		t.Fatalf("kinds = %v (%+v)", got, tr.Items)
+	}
+	call := tr.Items[2].Tool
+	if call.Name != "bash" || call.Output != "make: *** error" || call.Err == "" || tr.Items[2].Running {
+		t.Fatalf("call = %+v", call)
+	}
+	if tr.Items[1].Reasoning != "hmm" || !tr.Items[1].Done {
+		t.Fatalf("answer = %+v", tr.Items[1])
+	}
+}
+
+// A follow-up that waited takes its seat where its own turn began; guidance
+// steered into a turn is not what a turn starts on; a turn another client
+// started is drawn from the kernel's text, once.
+func TestTurnStartSeatsTheMessageItBeganOn(t *testing.T) {
+	tr := &Transcript{}
+	tr.AddUser("write the essay")
+	tr.Apply(eventwire.Event{Kind: "turn_started", AuthoredTurn: new(1), MsgIndex: new(1)})
+	tr.AddQueued("steer this", true)
+	follow := tr.AddQueued("then summarise", false)
+	tr.Apply(eventwire.Event{Kind: "text", Text: "essay…"})
+	tr.Apply(eventwire.Event{Kind: "turn_done", Cancelled: true})
+	tr.Apply(eventwire.Event{Kind: "turn_started", AuthoredTurn: new(2), MsgIndex: new(3), Text: "then summarise"})
+	last := tr.Items[len(tr.Items)-1]
+	if last.ID != follow || last.Pending || last.MsgIndex != 3 {
+		t.Fatalf("follow-up row = %+v; items %+v", last, tr.Items)
+	}
+	for _, it := range tr.Items {
+		if it.Text == "steer this" && !it.Pending {
+			t.Fatal("a turn start took the steered row")
+		}
+	}
+	tr.Apply(eventwire.Event{Kind: "turn_started", AuthoredTurn: new(3), MsgIndex: new(5), Text: "from the phone"})
+	tr.Apply(eventwire.Event{Kind: "turn_started", AuthoredTurn: new(3), MsgIndex: new(5), Text: "from the phone"})
+	n := 0
+	for _, it := range tr.Items {
+		if it.Text == "from the phone" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("another client's turn drawn %d times", n)
 	}
 }
