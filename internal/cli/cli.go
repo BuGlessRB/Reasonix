@@ -1421,9 +1421,6 @@ func defaultEnvTarget() string {
 	return config.CredentialsTargetDescription()
 }
 
-// resolveSetupTargets picks where `reasonix setup` writes. Keys always go to the
-// global env. The config goes to the user-global dir by default, to ./reasonix.toml
-// under --local, or to an explicit path argument when given.
 func setupUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage: reasonix setup [--local|-l] [path]")
 	fmt.Fprintln(w, "Interactive configuration wizard. Writes a reasonix config and stores the")
@@ -1432,6 +1429,9 @@ func setupUsage(w io.Writer) {
 	fmt.Fprintln(w, "  path          write the config to this path instead of the default")
 }
 
+// resolveSetupTargets picks where `reasonix setup` writes. Keys always go to the
+// global env. The config goes to the user-global dir by default, to ./reasonix.toml
+// under --local, or to an explicit path argument when given.
 func resolveSetupTargets(args []string) setupTargets {
 	t := setupTargets{config: defaultConfigTarget(), env: defaultEnvTarget()}
 	for _, a := range args {
