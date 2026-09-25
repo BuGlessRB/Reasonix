@@ -162,7 +162,10 @@ func tuiResumePath(workspaceRoot, resume string, cont bool) (string, error) {
 	reclaimCLIRecoveryBranches(sessionDir)
 	session, ok := mostRecentSession(sessionDir)
 	if !ok {
-		return "", errors.New(i18n.M.NoSessionToResume)
+		// --continue that found nothing starts a fresh session instead of failing,
+		// so the UI opens with no resumed history.
+		fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResumeStartingNew)
+		return "", nil
 	}
 	return session.Path, nil
 }
