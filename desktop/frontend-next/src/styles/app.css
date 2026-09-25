@@ -4822,6 +4822,7 @@
   .pc-dev button:hover, .pc-dev button[data-armed] { color: var(--err) }
   .pc-dev button[data-armed] { font-weight: var(--w-semi) }
   .phonecard > section > p { margin: 0; padding: 2px 5px; color: var(--ghost) }
+  .pc-err { margin: 0; color: var(--err); font: var(--w-reg) var(--fs-micro)/1.5 var(--ui); word-break: break-word }
   .pc-note { margin: 0; padding-top: 10px; border-top: 1px solid var(--border); color: var(--ghost); font: var(--w-reg) var(--fs-micro)/1.5 var(--ui) }
   [data-fold~="scene"] .phonecard { position: fixed; top: calc(var(--chrome-h, 45px) + 6px); right: 12px; left: 12px; width: auto }
   .share .rmtf { margin-top: 10px }

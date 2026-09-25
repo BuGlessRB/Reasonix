@@ -82,7 +82,7 @@ export function Chrome({ port, status, title, steer, onSettings, onBrowser, brow
       </span>
 
       <div className="r">
-        {hub && onError && <PhonePop hub={hub} onError={onError} />}
+        {hub && onError && <PhonePop hub={hub} />}
         <button
           className="thbtn theme-toggle"
           data-action="appearance.theme"

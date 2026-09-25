@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
+import { reason } from "../i18n/kernel";
 import type { HubPort } from "../port/hub";
 import type { PairedDevice } from "../port/share";
 import { copyText } from "./CopyButton";
@@ -10,37 +11,43 @@ import { Switch } from "./Switch";
 /** The chrome's way to put a phone on this window: a code on a card, one
  *  press from anywhere. Drawn only where the kernel has a window to share —
  *  a browser tab or a paired phone gets nothing here. */
-export function PhonePop({ hub, onError }: { hub: HubPort; onError: (e: unknown) => void }) {
+export function PhonePop({ hub }: { hub: HubPort }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(open, box, close);
   // Watched while the door is open, card or not: the count on the button and
   // the note that a phone came or went are the window's to show unasked.
-  const share = useShare(hub, onError);
+  // A failure in the card is said in the card, next to what failed.
+  const [failure, setFailure] = useState("");
+  const share = useShare(hub, useCallback((e: unknown) => setFailure(reason(e)), []));
   const { refresh, newCode } = share;
   const shareOpen = share.st?.open ?? false;
-  const hasOffer = share.offer !== null;
+  const offerHeld = useRef(false);
+  offerHeld.current = share.offer !== null;
 
-  // Another surface may have opened or shut the door since this card was last
-  // drawn, so opening it reads first.
-  useEffect(() => {
-    if (open) void refresh().catch(() => {});
-  }, [open, refresh]);
-
-  // Opening the card is asking for a code. Once per opening: after a phone
-  // spends it, the next one is asked for by hand rather than minted behind it.
+  // Opening the card is asking for a code, once per opening: after a phone
+  // spends it, the next one is asked for by hand. Another surface may have shut
+  // the door since the card was last drawn, so the code waits for the read.
   const minted = useRef(false);
   useEffect(() => {
     if (!open) {
       minted.current = false;
+      setFailure("");
       return;
     }
-    if (shareOpen && !hasOffer && !minted.current) {
-      minted.current = true;
-      void newCode();
-    }
-  }, [open, shareOpen, hasOffer, newCode]);
+    let live = true;
+    refresh()
+      .then((now) => {
+        if (!live || minted.current || !now?.open || (offerHeld.current && now.offerExpires)) return;
+        minted.current = true;
+        void newCode();
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [open, refresh, newCode]);
 
   const note = usePresenceNote(share.st?.devices, open);
 
@@ -66,7 +73,7 @@ export function PhonePop({ hub, onError }: { hub: HubPort; onError: (e: unknown)
         </svg>
         {online > 0 && <b className="pc-count">{online}</b>}
       </button>
-      {open && <PhoneCard share={share} />}
+      {open && <PhoneCard share={share} failure={failure} />}
       {note && <div className="pc-note-pop" role="status">{note}</div>}
     </div>
   );
@@ -112,7 +119,7 @@ function usePresenceNote(devices: PairedDevice[] | undefined, open: boolean): st
 /** The card's own arrangement of the share: the switch in the header, the code
  *  as the one large thing, everything else a line. The settings block keeps
  *  the long form, where there is room to explain. */
-function PhoneCard({ share }: { share: Share }) {
+function PhoneCard({ share, failure }: { share: Share; failure: string }) {
   const { st, ip, pick, offer, busy, newCode, toggle, revoke } = share;
   const [copied, setCopied] = useState(false);
   const [arming, setArming] = useState("");
@@ -152,6 +159,8 @@ function PhoneCard({ share }: { share: Share }) {
         </span>
         <Switch data-action="share.toggle" on={st.open} busy={busy || noNetwork} label={t("允许手机访问")} onClick={() => void toggle()} />
       </header>
+
+      {failure && <p className="pc-err" role="alert">{failure}</p>}
 
       {st.open && (
         <div className="pc-code">

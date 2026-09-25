@@ -36,7 +36,14 @@ export function useShare(hub: HubPort, onError: (e: unknown) => void, watch = tr
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState("");
 
-  const read = useCallback(() => hub.shareStatus().then(setSt), [hub]);
+  const read = useCallback(
+    () =>
+      hub.shareStatus().then((now) => {
+        setSt(now);
+        return now;
+      }),
+    [hub],
+  );
 
   useEffect(() => {
     read().catch(() => setSt(null));
