@@ -744,3 +744,55 @@ jobs:
             --content-type "application/json; charset=utf-8" \
             --cache-control "public, max-age=300, stale-if-error=86400"
           echo "Studio catalog -> $VERSION"
+
+  # The CLI's install channels. This line is the only one that publishes the
+  # CLI, so npm's `reasonix` and the Homebrew tap follow it. They run once the
+  # release exists, because the cask points at its archives. A candidate goes
+  # to npm's `next` tag and leaves the tap alone: brew has no prerelease
+  # channel, so a candidate cask would become the default install.
+  cli-channels:
+    name: publish the CLI to npm and Homebrew
+    needs: [resolve, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: node npm/build.mjs "$VERSION" --publish
+      - uses: actions/download-artifact@v6
+        if: needs.resolve.outputs.candidate != 'true'
+        with:
+          name: cli-archives
+          path: cli-archives
+      - name: Update the Homebrew cask
+        if: needs.resolve.outputs.candidate != 'true'
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/esengine/homebrew-reasonix.git" tap
+          bash scripts/render-brew-cask.sh "${VERSION#v}" "$TAG" cli-archives/SHA256SUMS > tap/Casks/reasonix.rb
+          cd tap
+          git add Casks/reasonix.rb
+          if git diff --cached --quiet; then
+            echo "cask already at ${VERSION#v}"
+            exit 0
+          fi
+          git -c user.name=reasonix -c user.email=reasonix@deepseek.com commit -m "reasonix ${VERSION#v}"
+          git push origin HEAD:main
