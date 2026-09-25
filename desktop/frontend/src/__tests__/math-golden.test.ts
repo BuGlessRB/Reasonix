@@ -15,7 +15,6 @@ import { classifyInlineMath, isLikelyInlineMath } from "../components/mathClassi
 import { reasonixRehypePlugins, reasonixRemarkPlugins } from "../components/markdownRemarkPlugins";
 import {
   normalizeMath,
-  resolveProtectedInlineMathSource,
   restoreProtectedInlineMathSource,
 } from "../components/mathNormalize";
 
