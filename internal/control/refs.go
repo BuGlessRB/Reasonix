@@ -21,7 +21,6 @@ import (
 	"reasonix/internal/instruction"
 	"reasonix/internal/proc"
 	"reasonix/internal/secrets"
-	"reasonix/internal/textutil"
 )
 
 // maxFileRefBytes caps how much of an @-referenced file is injected into a
@@ -458,7 +457,7 @@ func (c *Controller) SearchExternalFolderRefs(query string, limit int) []Externa
 
 func sortExternalFolderRefEntries(entries []ExternalFolderRefEntry) {
 	sort.Slice(entries, func(i, j int) bool {
-		return textutil.NaturalLess(entries[i].DisplayName, entries[j].DisplayName)
+		return fileref.NaturalLess(entries[i].DisplayName, entries[j].DisplayName)
 	})
 }
 
@@ -968,7 +967,7 @@ func walkRootDir(root *os.Root, dir, base string, b *strings.Builder, n *int, de
 		if entries[i].IsDir() != entries[j].IsDir() {
 			return entries[i].IsDir()
 		}
-		return textutil.NaturalLess(entries[i].Name(), entries[j].Name())
+		return fileref.NaturalLess(entries[i].Name(), entries[j].Name())
 	})
 	for _, e := range entries {
 		if *n >= maxDirEntries {

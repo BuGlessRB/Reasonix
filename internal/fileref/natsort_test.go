@@ -1,4 +1,4 @@
-package textutil
+package fileref
 
 import "testing"
 
@@ -91,7 +91,7 @@ func TestNaturalLessSort(t *testing.T) {
 
 	sorted := make([]string, len(items))
 	copy(sorted, items)
-	for i := 0; i < len(sorted); i++ {
+	for i := range sorted {
 		for j := i + 1; j < len(sorted); j++ {
 			if NaturalLess(sorted[j], sorted[i]) {
 				sorted[i], sorted[j] = sorted[j], sorted[i]

@@ -1,4 +1,4 @@
-package textutil
+package fileref
 
 import (
 	"strconv"
@@ -6,13 +6,9 @@ import (
 	"unicode"
 )
 
-// NaturalLess compares two strings using natural sort order:
-// numeric substrings are compared as numbers, and the rest is
-// compared case-insensitively. This produces the ordering humans
-// expect: "file2" < "file10", "第1章" < "第10章".
-//
-// When a digit run and a non-digit run meet, digits sort first
-// (matching the behaviour of Windows File Explorer and macOS Finder).
+// NaturalLess orders names the way file managers do: digit runs compare by
+// numeric value ("file2" < "file10", "第2卷" < "第10卷"), everything else
+// case-insensitively, and a digit sorts before a non-digit.
 func NaturalLess(a, b string) bool {
 	a = strings.ToLower(a)
 	b = strings.ToLower(b)
@@ -25,7 +21,6 @@ func NaturalLess(a, b string) bool {
 		bDig := unicode.IsDigit(rb[j])
 
 		if aDig && bDig {
-			// Both are digit runs: extract and compare numerically.
 			aStart := i
 			for i < len(ra) && unicode.IsDigit(ra[i]) {
 				i++
@@ -47,14 +42,12 @@ func NaturalLess(a, b string) bool {
 				return aLen < bLen
 			}
 		} else if !aDig && !bDig {
-			// Both non-digits: compare runes.
 			if ra[i] != rb[j] {
 				return ra[i] < rb[j]
 			}
 			i++
 			j++
 		} else {
-			// Mixed digit / non-digit: digit comes first.
 			return aDig
 		}
 	}
