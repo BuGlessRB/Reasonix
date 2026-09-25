@@ -724,10 +724,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	forbidReadRoots := RuntimeForbidReadRoots(cfg, root)
 	// managedConfig names the Reasonix-owned config FILES (config.toml,
 	// compatibility TOMLs, legacy v0.x config.json) the file-writers gate behind
-	// a fresh per-write human approval at any location, inside or outside the
-	// roots. The bash OS-sandbox write roots deliberately stay unwidened:
-	// config repair goes through the approval-gated file tools, not raw shell
-	// writes.
+	// a fresh per-write human approval wherever they sit, inside the roots too.
+	// The bash OS-sandbox write roots stay unwidened: config repair goes through
+	// the approval-gated file tools, not raw shell writes.
 	managedConfig := builtin.NewManagedConfigPaths(config.ReasonixManagedConfigPaths())
 	bashSpec := sandbox.Spec{Mode: bashMode, WriteRoots: writeRoots, ForbidReadRoots: forbidReadRoots, Network: networkEnabled}
 	bashSpec.Shell = shell
