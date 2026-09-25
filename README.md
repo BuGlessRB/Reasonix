@@ -67,6 +67,11 @@ Reasonix ships on two lines. See the [version roadmap announcement](https://gith
 Valuable fixes, tests and behaviour from 1.x are reviewed one by one and ported
 or reimplemented on 2.x where they fit the new architecture.
 
+- [Moving from 1.x to 2.x](./docs/MIGRATING.md): what the two lines share, and
+  how to run both on one machine without losing sessions.
+- [2.x roadmap](./docs/ROADMAP.md): what 2.x still has to deliver, how it ships,
+  and the decisions still open.
+
 ## Features
 
 - **Config-driven.** Providers, the agent, enabled tools, and plugins are all
@@ -198,7 +203,8 @@ For advanced CLI usage and configuration, see the **[CLI reference](./docs/CLI.m
   [Checkpoints & rewind](./docs/CHECKPOINTS.md)
 - **Engineering & migration:** [Spec](./docs/SPEC.md) ·
   [Task contracts & pause policy](./docs/TASK_CONTRACT.md) ·
-  [Tool contract](./docs/TOOL_CONTRACT.md) · [Migrating from 0.x](./docs/MIGRATING.md)
+  [Tool contract](./docs/TOOL_CONTRACT.md) · [Moving from 1.x to 2.x](./docs/MIGRATING.md) ·
+  [2.x roadmap](./docs/ROADMAP.md)
 - **Extension development:** [Extensions](./docs/EXTENSIONS.md) ·
   [Plugin packages and Manifest v1](./docs/PLUGIN_PACKAGES.md) ·
   [Extension Protocol](./docs/EXTENSION_PROTOCOL.md) ·

@@ -62,6 +62,10 @@ Reasonix 分为两条版本线，调整的原因见[版本路线公告](https://
 
 1.x 中有价值的修复、测试和行为会逐项 review，适合新架构的会迁移或重新实现到 2.x。
 
+- [从 1.x 迁移到 2.x](./docs/MIGRATING.md)（英文）：两条线共用哪些数据，以及如何在同一台
+  机器上同时使用而不丢会话。
+- [2.x 路线图](./docs/ROADMAP.md)（英文）：2.x 还要交付什么、如何发布、哪些决定尚未做出。
+
 ## 特性
 
 - **配置驱动**：provider、agent、启用的工具、插件全部在 `reasonix.toml` 中声明，
@@ -181,7 +185,8 @@ CLI 进阶用法和详细配置见 **[CLI 命令参考](./docs/CLI.zh-CN.md)**�
 - **工程与迁移：** [规格](./docs/SPEC.md) ·
   [任务合约与暂停策略](./docs/TASK_CONTRACT.md) ·
   [工具合约](./docs/TOOL_CONTRACT.md) ·
-  [从 0.x 迁移](./docs/MIGRATING.md)
+  [从 1.x 迁移到 2.x](./docs/MIGRATING.md) ·
+  [2.x 路线图](./docs/ROADMAP.md)
 - **扩展开发：** [扩展概览](./docs/EXTENSIONS.md) ·
   [插件包与 Manifest v1](./docs/PLUGIN_PACKAGES.md) ·
   [Extension Protocol](./docs/EXTENSION_PROTOCOL.md) ·

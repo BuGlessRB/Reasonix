@@ -26,6 +26,7 @@ Current areas:
 | Kernel, Studio shell, tooling, standing instructions | `*` | @esengine | @SivanCola |
 | User guides and references | `docs/`, `sdk/`, `README*`, `SECURITY.md` | @SivanCola | @esengine |
 | Studio contracts and processes | `docs/STUDIO_*.md`, `docs/DOCS_STANDARD.md` | @esengine | @SivanCola |
+| Release lines and moving between them | `docs/ROADMAP.md`, `docs/MIGRATING.md` | @esengine | @SivanCola |
 | Release notes and release signing | `release-notes/`, `.signpath/`, `release-studio.yml` | @esengine | @SivanCola |
 
 ## 2. Document classes
