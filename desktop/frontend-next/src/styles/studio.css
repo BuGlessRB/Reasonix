@@ -2026,7 +2026,7 @@ body { font-size: 14px; line-height: 1.75; }
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-.session-pop-head small { display: block; margin-top: 5px; color: var(--faint); font: 400 9px/1.4 var(--ui); }
+.session-pop-head small { display: block; margin-top: 5px; overflow: hidden; color: var(--faint); font: 400 9px/1.4 var(--ui); text-overflow: ellipsis; white-space: nowrap; }
 .session-pop-group { display: flex; flex-direction: column; gap: 1px; }
 .session-pop-group > button {
   min-height: 35px;

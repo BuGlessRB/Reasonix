@@ -292,10 +292,10 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                   />
                 ) : (
                   <div
+                    ref={sessionMenu === ws.root ? sessionMenuBox : undefined}
                     className="wsrow"
                     role="treeitem"
                     aria-expanded={!shut}
-                    data-open={ws.open ? "" : undefined}
                     onClick={() => onFold(ws.root, !shut)}
                   >
                     <button className="twist" tabIndex={-1} aria-hidden="true">
@@ -333,17 +333,42 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         </svg>
                       </button>
                       <button
-                        className="wsdel"
-                        title={t("从列表移除（不删除任何文件）")}
-                        aria-label={t("从列表移除")}
+                        className="wsmore"
+                        data-action="workspace.menu"
+                        data-target={ws.root}
+                        title={t("更多操作")}
+                        aria-label={t("项目操作：{name}", { name: ws.name })}
+                        aria-expanded={sessionMenu === ws.root}
                         onClick={(ev) => {
                           ev.stopPropagation();
-                          setConfirm(ws.root);
+                          const opening = sessionMenu !== ws.root;
+                          if (opening) {
+                            const anchor = ev.currentTarget.getBoundingClientRect();
+                            setSessionMenuAt({
+                              left: Math.min(window.innerWidth - 240, anchor.right + 8),
+                              top: Math.max(12, Math.min(window.innerHeight - 140, anchor.top - 7)),
+                            });
+                          }
+                          setSessionMenu(opening ? ws.root : "");
                         }}
                       >
-                        <Cross />
+                        <StudioIcon name="more" />
                       </button>
                     </span>
+                    {sessionMenu === ws.root && createPortal(
+                      <div ref={sessionMenuPortal} className="session-pop" role="menu" aria-label={t("项目操作")} style={sessionMenuAt} onClick={(ev) => ev.stopPropagation()}>
+                        <div className="session-pop-head">
+                          <b>{ws.name}</b>
+                          <small title={ws.root}>{ws.root}</small>
+                        </div>
+                        <div className="session-pop-group">
+                          <button className="danger" role="menuitem" data-action="workspace.remove" onClick={() => { setConfirm(ws.root); setSessionMenu(""); }}>
+                            <StudioIcon name="close" /><span>{t("从列表移除")}</span><small>{t("不删除文件")}</small>
+                          </button>
+                        </div>
+                      </div>,
+                      document.body,
+                    )}
                   </div>
                 )}
 

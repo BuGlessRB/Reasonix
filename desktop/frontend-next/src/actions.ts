@@ -73,6 +73,7 @@ export const ACTIONS: UIAction[] = [
   { id: "chrome.account", kind: "navigation", target: "none", proof: "interaction" },
   { id: "metrics.details", kind: "view", target: "optional", proof: "interaction" },
   { id: "session.menu", kind: "view", target: "entity", proof: "interaction" },
+  { id: "workspace.menu", kind: "view", target: "entity", proof: "interaction" },
   { id: "session.pin", kind: "view", target: "entity", proof: "interaction" },
   { id: "session.pause", kind: "kernel-mutation", target: "entity", proof: "interaction" },
   // Closing a conversation's pane ends its runtime and keeps the transcript;
