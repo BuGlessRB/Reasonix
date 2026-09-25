@@ -201,6 +201,7 @@ const SAID: Record<string, string> = {
 
   // ── 待送达：条目、队列、这份存档各自会拒 ─────────────────────────
   "inbox.not_found": "该条已不在待送达队列中",
+  "job.not_running": "这个后台任务已经不在运行了",
   "inbox.invalid_state": "该条当前状态不允许此操作",
   "inbox.paused": "待送达已暂停，请先恢复派发再进行操作",
   "inbox.capacity_items": "待送达条数已达上限，请先发送部分内容",

@@ -733,7 +733,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           )}
           {cost && <span className="studio-meter-cost"><span>{t("本轮")}</span><b>{cost}</b></span>}
           {wallet.kind === "read" && <button className="studio-meter-wallet" data-action="settings.section" data-value="usage" aria-label={t("查看钱包余额")} onClick={() => onSettings("usage")}><StudioIcon name="wallet" /><b>{wallet.reading.display}</b></button>}
-          <DeckChips tasks={rail.tasks} jobs={jobs} open={deck} onOpen={setDeck} />
+          <DeckChips tasks={rail.tasks} jobs={jobs} open={deck} onOpen={setDeck} onCancelJob={(id) => port.cancelJob(id).then(refreshStatus, fail)} />
         </div>
         {/* Below the box, under a ceiling of their own. Both arrive unbidden and
             both are dismissed one at a time, so nothing else bounds how many can

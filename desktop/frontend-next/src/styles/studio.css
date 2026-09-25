@@ -1245,12 +1245,15 @@ body { background: var(--page) !important; }
 .studio-context-anchor { position: relative; height: 25px; display: flex; align-items: center; }
 .studio-context-anchor .studio-context-summary {
   top: auto; right: auto; bottom: calc(100% + 8px); left: 0;
-  width: 326px; transform: translateY(4px) scale(.985); transform-origin: bottom left;
+  width: min(326px, calc(100vw - 32px)); transform: translateY(4px) scale(.985); transform-origin: bottom left;
 }
-.studio-context-anchor:hover .studio-context-summary,
-.studio-context-anchor:focus-within .studio-context-summary,
 .studio-context-anchor[data-open] .studio-context-summary {
   opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition-delay: 0s;
+}
+@media (hover: hover) {
+  .studio-context-anchor:hover .studio-context-summary {
+    opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition-delay: 0s;
+  }
 }
 
 /* The inspector is contextual, not a permanent dashboard. */
@@ -1895,7 +1898,7 @@ body { font-size: 14px; line-height: 1.75; }
    the detail behind it stay one object rather than two places to look. */
 .studio-deck-anchor {
   position: relative; height: 25px; display: flex; align-items: center;
-  --deck-gap: 8px; --deck-w: 320px;
+  --deck-gap: 8px; --deck-w: min(320px, calc(100vw - 32px));
 }
 .studio-deck-pop {
   position: absolute; z-index: 1; right: 0; bottom: calc(100% + var(--deck-gap));
@@ -1906,24 +1909,39 @@ body { font-size: 14px; line-height: 1.75; }
   transform: translateY(4px) scale(.985); transform-origin: bottom right;
   transition: opacity var(--m-line), transform var(--m-line), visibility 0s linear var(--t-line);
 }
-.studio-deck-anchor:hover .studio-deck-pop,
-.studio-deck-anchor:focus-within .studio-deck-pop,
 .studio-deck-anchor[data-open] .studio-deck-pop {
   opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition-delay: 0s;
 }
-.studio-deck-anchor:hover::after,
-.studio-deck-anchor:focus-within::after,
 .studio-deck-anchor[data-open]::after {
   content: ""; position: absolute; right: 0; bottom: 100%;
   width: var(--deck-w); height: var(--deck-gap);
 }
+@media (hover: hover) {
+  .studio-deck-anchor:hover .studio-deck-pop {
+    opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition-delay: 0s;
+  }
+  .studio-deck-anchor:hover::after {
+    content: ""; position: absolute; right: 0; bottom: 100%;
+    width: var(--deck-w); height: var(--deck-gap);
+  }
+}
 .studio-deckchip {
+  flex: none; white-space: nowrap;
   height: 22px; display: inline-flex; align-items: center; gap: 5px;
   padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-pill);
   background: transparent; color: var(--muted); font: 500 10px/1 var(--ui); cursor: pointer;
   transition: color var(--m-line), background var(--m-line), border-color var(--m-line);
 }
 .studio-deckchip .studio-icon { width: 12px; height: 12px; color: var(--faint); }
+.job-stop {
+  flex: none; width: 22px; height: 22px; display: grid; place-items: center; margin: -3px -4px -3px 0;
+  padding: 0; border: 0; border-radius: var(--r-xs); background: transparent; color: var(--muted); cursor: pointer;
+}
+.job-stop .studio-icon { width: 10px; height: 10px; fill: currentColor; }
+.job-stop:hover { background: var(--overlay); color: var(--err-ink); }
+.job-stop:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; }
+.job-stop:disabled { opacity: .45; cursor: default; }
+@media (pointer: coarse) { .job-stop { width: 32px; height: 32px; margin: -8px -8px -8px 0; } }
 .studio-deckchip b { font: 600 10px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
 .studio-deckchip:hover,
 .studio-deckchip[aria-expanded="true"] { color: var(--text); background: var(--overlay); border-color: var(--hair); }
@@ -2319,6 +2337,8 @@ body { font-size: 14px; line-height: 1.75; }
   .studio-mode-picker,
   .studio-effort-picker,
   .model-picker { padding-inline: 5px !important; }
+  .studio-meter-speed .spark,
+  .studio-meterrail .studio-meter-wallet { display: none; }
 }
 
 :root[data-theme="light"] .turntools .policy > .mode[data-risk] { color: var(--warn); }
@@ -2331,6 +2351,9 @@ body { font-size: 14px; line-height: 1.75; }
   .turntools { width: 100%; padding-right: 38px; box-sizing: border-box; flex-wrap: wrap; row-gap: 2px; }
   .turntools-spacer { flex-basis: 12px; }
   .compose .row .go { position: absolute; right: 0; bottom: 0; margin-left: 0; }
+  .studio-speed-anchor { display: none; }
+  .studio-meterrail .studio-context-anchor,
+  .studio-meterrail .studio-deck-anchor { position: static; }
 }
 
 @container conversation (max-width: 360px) {
@@ -2338,6 +2361,7 @@ body { font-size: 14px; line-height: 1.75; }
   .studio-mode-picker { width: 30px; justify-content: center; padding-inline: 0 !important; }
   .studio-mode-picker > span:not(.studio-sr-label),
   .studio-mode-picker > .studio-icon:last-child { display: none; }
+  .studio-meterrail .studio-meter-cost { display: none; }
 }
 
 .portmenu,

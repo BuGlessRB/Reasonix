@@ -100,10 +100,28 @@ class BenchPort extends MockPort {
 
   // ?statusms= stands in for what the kernel's /status really costs when the
   // provider declares a wallet endpoint: that read goes out to the network.
+  // ?jobs= seeds that many background jobs; stopping one is kept here because
+  // the mock's own status carries none.
+  private readonly stopped = new Set<string>();
+  private readonly jobsSince = Date.now() - 739_000;
+
   async status() {
     const st = await super.status();
     if (STATUS_MS > 0) await new Promise((r) => setTimeout(r, STATUS_MS));
-    return st;
+    if (!JOBS) return st;
+    const jobs = Array.from({ length: JOBS }, (_, i) => ({
+      id: `job-${i}`,
+      kind: "bash",
+      label: i === 0 ? "npm run tauri:test 2>&1 | Select-Object -Last 40" : `go test ./internal/... -run Case${i}`,
+      status: this.stopped.has(`job-${i}`) ? "killed" : "running",
+      startedAt: this.jobsSince,
+    }));
+    return { ...st, jobs };
+  }
+
+  async cancelJob(jobId: string) {
+    if (!JOBS) return super.cancelJob(jobId);
+    this.stopped.add(jobId);
   }
 }
 
@@ -136,6 +154,7 @@ const TURNS = Number(query.get("turns") ?? 0);
 const STATUS_MS = Number(query.get("statusms") ?? 0);
 // ?queue= is how many lines are already waiting when the window opens.
 const QUEUE = Number(query.get("queue") ?? 0);
+const JOBS = Number(query.get("jobs") ?? 0);
 
 class BenchHub extends MockHub {
   readonly feeds = new Map<string, BenchPort>();

@@ -657,6 +657,12 @@ export class MockPort extends MockTheme implements AgentPort {
 
   // Nothing in the fixture blocks, so nothing can be retried out of it. The
   // port is still a contract, and half of one is not a contract.
+  async cancelJob(jobId: string) {
+    const job = this.state.jobs?.find((j) => j.id === jobId && j.status === "running");
+    if (!job) throw new HttpError(409, "no running background job with this id", { code: "job.not_running" });
+    this.state = { ...this.state, jobs: this.state.jobs?.map((j) => (j === job ? { ...j, status: "killed" } : j)) };
+  }
+
   async retryQueued(itemId: string) {
     void itemId;
   }

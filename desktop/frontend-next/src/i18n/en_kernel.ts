@@ -12,6 +12,7 @@ export const EN_KERNEL: Record<string, string> = {
   "开关未能保存：其存储文件无法读取或写入": "The switch was not stored: its file could not be read or written",
   // 待送达：条目、队列、这份存档各自会拒
   "该条已不在待送达队列中": "That entry is no longer in the pending queue",
+  "这个后台任务已经不在运行了": "That background job is no longer running",
   "该条当前状态不允许此操作": "That entry's current state does not allow this",
   "待送达已暂停，请先恢复派发再进行操作": "The pending queue is on hold - resume it first",
   "待送达条数已达上限，请先发送部分内容": "The pending queue is full - let a few go out first",

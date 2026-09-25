@@ -411,6 +411,9 @@ export interface AgentPort {
   // Puts a blocked entry back in line. What blocked it is the kernel's to say
   // and the panel's to show; retrying is the user deciding it is worth another.
   retryQueued(itemId: string): Promise<void>;
+  // Stops one background job this session started; a job that already ended
+  // is refused (job.not_running), not silently acknowledged.
+  cancelJob(jobId: string): Promise<void>;
   // Re-freezes the files an entry references. A line that waited through the
   // work that changed them would otherwise arrive quoting what is no longer.
   refreshQueued(itemId: string): Promise<void>;

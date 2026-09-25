@@ -72,7 +72,7 @@ const model = await page.evaluate(() => {
   // Every other control on the composer's toolbar, wherever the layout puts it.
   const peers = [...document.querySelectorAll(".compose button")].filter((el) => {
     const r = el.getBoundingClientRect();
-    return !pick.contains(el) && r.width > 0 && r.height > 0;
+    return !pick.contains(el) && r.width > 0 && r.height > 0 && el.checkVisibility({ visibilityProperty: true });
   });
   const covered = peers.filter((el) => {
     const r = el.getBoundingClientRect();

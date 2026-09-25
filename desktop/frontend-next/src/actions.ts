@@ -99,6 +99,7 @@ export const ACTIONS: UIAction[] = [
   // live turn the first steers and the second cancels the current turn.
   { id: "session.send", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "session.stop", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "job.cancel", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   { id: "plan.mode", kind: "kernel-mutation", target: "none", proof: "interaction" },
   // A rewrite is asked of the kernel but changes nothing there; taking it only
   // replaces what is in the box.

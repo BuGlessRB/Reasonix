@@ -114,7 +114,7 @@
     --lights-w: 0px;
     --lights-h: 0px;
     background: var(--page); border: 0; border-radius: 0; box-shadow: none;
-    overflow: hidden; display: flex; flex-direction: column; height: calc(100dvh / var(--zoom, 1));
+    overflow: clip; display: flex; flex-direction: column; height: calc(100dvh / var(--zoom, 1));
   }
 
   :root[data-boot] .app { animation: appin 1.2s cubic-bezier(.4, 0, .2, 1) both }

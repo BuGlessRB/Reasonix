@@ -237,6 +237,8 @@ export const EN: Record<string, string> = {
   "正在执行已批准的计划": "Executing an approved plan",
   "尚未制定": "None yet",
   "后台任务": "Background jobs",
+  "停止后台任务：{cmd}": "Stop background job: {cmd}",
+  "停止": "Stop",
   "无": "None",
   "外部服务": "External services",
   "{n} 个无法连接": "{n} unreachable",

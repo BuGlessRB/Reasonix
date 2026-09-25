@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";
 import type { JobEntry } from "../../port/port";
+import { StudioIcon } from "../StudioIcon";
 
-export function Jobs({ jobs }: { jobs: JobEntry[] }) {
+export function Jobs({ jobs, onCancel }: { jobs: JobEntry[]; onCancel?: (id: string) => Promise<void> }) {
   const [, tick] = useState(0);
+  const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     if (!jobs.some((j) => j.status === "running")) return;
@@ -34,6 +36,27 @@ export function Jobs({ jobs }: { jobs: JobEntry[] }) {
               />
               <span className="cmd">{j.label || j.id}</span>
               <span className="rt">{running ? `${Math.floor((Date.now() - j.startedAt) / 1000)}s` : j.status}</span>
+              {running && onCancel && (
+                <button
+                  type="button"
+                  className="job-stop"
+                  data-action="job.cancel"
+                  data-target={j.id}
+                  disabled={stopping.has(j.id)}
+                  title={t("停止")}
+                  aria-label={t("停止后台任务：{cmd}", { cmd: j.label || j.id })}
+                  onClick={() => {
+                    setStopping((prev) => new Set(prev).add(j.id));
+                    void onCancel(j.id).finally(() => setStopping((prev) => {
+                      const next = new Set(prev);
+                      next.delete(j.id);
+                      return next;
+                    }));
+                  }}
+                >
+                  <StudioIcon name="stop" />
+                </button>
+              )}
             </div>
           );
         })}

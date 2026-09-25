@@ -302,6 +302,11 @@ type Status interface {
 	BrowserOpen(ctx context.Context, rawURL, tabID string, newTab bool) (browser.TabInfo, error)
 }
 
+// BackgroundJobs stops work a session left running outside any turn.
+type BackgroundJobs interface {
+	CancelJob(id string) bool
+}
+
 // SessionPersistence covers snapshotting a session and tearing down its on-disk
 // state.
 type SessionPersistence interface {
@@ -366,6 +371,7 @@ type SessionAPI interface {
 	Settings
 	Inbox
 	Provenance
+	BackgroundJobs
 }
 
 // EditorAPI is what an editor integration drives over ACP: turns, approvals and
@@ -393,6 +399,7 @@ var (
 	_ TurnControl        = (*Controller)(nil)
 	_ Approvals          = (*Controller)(nil)
 	_ Goals              = (*Controller)(nil)
+	_ BackgroundJobs     = (*Controller)(nil)
 	_ SessionHistory     = (*Controller)(nil)
 	_ MemoryControl      = (*Controller)(nil)
 	_ SlashDispatch      = (*Controller)(nil)
