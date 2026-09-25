@@ -2957,70 +2957,6 @@
   .srv[data-local] .srv-hd, .srv[data-local] > summary,
   .skrow[data-local] { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 55%, transparent) }
 
-  .band { margin-top: 14px }
-  .anchor { display: block; padding-bottom: 13px }
-  .anchor .cap { font: var(--w-med) var(--fs-micro) var(--ui); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--faint) }
-  .anchor .nm { display: block; margin-top: 5px; font: var(--w-med) var(--fs-lead) var(--mono); color: var(--text);
-    overflow-wrap: anywhere }
-  .anchor .meta { display: block; margin-top: 3px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
-
-  .fan { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px }
-  @keyframes rail { from { transform: scaleY(0) } to { transform: scaleY(1) } }
-
-  .grp:has(.rpick) { position: relative; z-index: 5 }
-  .mgrp:has(.rpick) { overflow: visible }
-
-  .slotbox { position: relative }
-  .slot {
-    display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr) 14px; gap: 10px;
-    align-items: center; width: 100%; min-height: 58px; padding: 9px 11px; text-align: left;
-    background: var(--raised); border: 1px solid var(--hair); border-radius: var(--r-sm); cursor: pointer;
-    transition: border-color var(--t-line) var(--ease-out), background var(--t-line) var(--ease-out);
-  }
-  .slot:hover { background: var(--overlay); border-color: var(--border) }
-  .slot:disabled { cursor: default }
-  .slot:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-  .slot .rolecopy { min-width: 0; display: flex; flex-direction: column; gap: 2px }
-  .slot .role { font: var(--w-semi) var(--fs-ui) var(--ui); color: var(--text) }
-  .slot .val { min-width: 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .slot .tag { font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .slot .slotchev { color: var(--ghost); font: var(--w-reg) var(--fs-ui) var(--ui); font-style: normal; transition: transform var(--t-line) var(--ease-out) }
-  .slot[aria-expanded="true"] .slotchev { transform: rotate(180deg) }
-  .slot[data-set] { border-color: color-mix(in srgb, var(--deleg) 30%, var(--hair)); background: color-mix(in srgb, var(--deleg) 5%, var(--raised)) }
-  .slot[data-set] .val { color: var(--text) }
-
-  .rpick {
-    position: absolute; z-index: 30; top: calc(100% + 5px); left: 0; min-width: 260px;
-    max-height: 288px; overflow: auto; padding: 4px; background: var(--float);
-    border: 1px solid var(--border); border-radius: var(--r-md);
-    box-shadow: var(--shadow-float);
-    transform-origin: top;
-    transition: opacity var(--t-card) var(--ease-out),
-                transform var(--t-card) var(--ease-out);
-  }
-
-  @starting-style {
-    .rpick { opacity: 0; transform: translateY(-4px) scaleY(.985) }
-  }
-
-  @supports (position-try-fallbacks: flip-block) {
-    .slot[aria-expanded="true"] { anchor-name: --slot }
-    .rpick {
-      position-anchor: --slot; position-try-fallbacks: flip-block;
-      top: calc(anchor(bottom) + 5px); bottom: auto;
-    }
-  }
-  .rpick button {
-    display: flex; width: 100%; gap: 9px; align-items: baseline; padding: 6px 9px;
-    background: none; border: 0; border-radius: var(--r-sm); text-align: left; cursor: pointer;
-    font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--text);
-  }
-  .rpick button:hover { background: var(--float-hi) }
-  .rpick button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-  .rpick button[data-cur] { background: var(--deleg-wash); color: var(--deleg) }
-  .rpick button .sub { margin-left: auto; font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost) }
-  .rpick .sep { height: 1px; margin: 4px 0; background: var(--hair) }
-
   .msearch { display: flex; align-items: center; gap: 10px; margin-bottom: 12px }
   .msearch input {
     flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border);
@@ -3028,88 +2964,6 @@
   }
   .msearch input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .msearch .cnt { flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
-
-  .model-list-hd {
-    display: flex; align-items: baseline; justify-content: space-between;
-    margin: 0 2px 8px; color: var(--faint);
-    font: var(--w-med) var(--fs-meta) var(--ui);
-  }
-  .model-list-hd span:last-child { font-family: var(--mono); font-weight: var(--w-reg); color: var(--ghost) }
-
-  .models-scroll {
-    max-height: 360px; overflow-y: auto; overscroll-behavior: contain;
-    padding-right: 3px; scrollbar-gutter: stable;
-  }
-
-  .mgrp { margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden;
-    animation: card var(--t-card) var(--ease-out) both }
-  .mgrp:last-child { margin-bottom: 0 }
-  .mgrp-hd {
-    display: flex; align-items: center; gap: 9px; padding: 8px 12px;
-    background: var(--surface); border-bottom: 1px solid var(--hair);
-  }
-  .mgrp-hd .nm { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
-  .mgrp-hd .protocol {
-    flex: none; padding: 1px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
-    font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--muted); background: var(--raised);
-  }
-  .mgrp-hd .url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
-  .mgrp-hd .n { margin-left: auto; flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
-
-  .mrow { display: flex; align-items: center; gap: 11px; width: 100%; padding: 11px 12px;
-    background: var(--raised); border: 0; border-bottom: 1px solid var(--hair);
-    text-align: left }
-  button.mrow { cursor: pointer }
-  button.mrow:disabled { opacity: .5; cursor: default }
-  .mrow:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-  .mrow:last-child { border-bottom: 0 }
-  button.mrow:hover { background: var(--overlay) }
-  .mrow[data-on] { background: color-mix(in oklab, var(--raised), var(--text) 6%); box-shadow: inset 2px 0 var(--muted) }
-  .mrow .pick {
-    flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px;
-    padding: 9px 12px; background: none; border: 0; text-align: left; cursor: pointer;
-  }
-  .mrow .pick:disabled { opacity: .5; cursor: default }
-  .mrow .pick:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-
-  .mrow .mark { flex: none; width: 13px; height: 13px; border: 1.5px solid var(--ghost);
-    border-radius: 50%; position: relative;
-    transition: border-color var(--t-line) var(--ease-out), background var(--t-line) var(--ease-out) }
-  .mrow[data-on] .mark { border-color: var(--accent); background: var(--accent) }
-
-  .mrow .mark::after { content: ""; position: absolute; inset: 3.5px; border-radius: 50%;
-    background: var(--raised); transform: scale(0);
-    transition: transform var(--t-line) var(--ease-out) }
-  .mrow[data-on] .mark::after { transform: scale(1) }
-  .mrow .model-copy { min-width: 150px; flex: 1; display: flex; flex-direction: column; gap: 3px }
-  .mrow .model-name { min-width: 0; display: flex; align-items: baseline; gap: 7px }
-  .mrow .nm { min-width: 0; font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--text); overflow-wrap: anywhere }
-  .mrow .current {
-    flex: none; padding: 1px 6px; border-radius: var(--r-pill); font-style: normal;
-    font: var(--w-med) var(--fs-micro) var(--ui); color: var(--accent-ink);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-  }
-  .mrow .model-route {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: var(--w-reg) var(--fs-micro) var(--ui); color: var(--ghost);
-  }
-  .mrow .caps { margin-left: auto; max-width: 56%; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px }
-  .mrow .cap {
-    padding: 1.5px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
-    background: var(--surface); color: var(--faint); font: var(--w-reg) var(--fs-micro) var(--ui); white-space: nowrap;
-  }
-  .mrow .cap[data-k="vis"] { color: var(--deleg); background: var(--deleg-wash);
-    border-color: color-mix(in srgb, var(--deleg) 30%, transparent) }
-  .mrow .cap[data-k="think"] { color: var(--net); background: var(--net-wash);
-    border-color: color-mix(in srgb, var(--net) 26%, transparent) }
-
-  @media (max-width: 720px) {
-    .mgrp-hd .url { display: none }
-    .mrow { align-items: flex-start; flex-wrap: wrap }
-    .mrow .model-copy { min-width: calc(100% - 28px) }
-    .mrow .caps { margin-left: 24px; max-width: none; justify-content: flex-start }
-  }
 
   .vway { display: flex; align-items: center; gap: 10px; padding: 2px 12px 10px;
     border-bottom: 1px solid var(--hair) }
@@ -3210,14 +3064,6 @@
   .mnew .tx { min-width: 0 }
   .mnew .lb { display: block; font: var(--w-med) var(--fs-ui) var(--mono); color: var(--text); overflow-wrap: anywhere }
   .mnew .ds { display: block; margin-top: 2px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
-  .mrow .via {
-    padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--muted); font: var(--w-reg) var(--fs-meta) var(--mono); cursor: pointer;
-    transition: border-color var(--t-line) var(--ease-out), color var(--t-line) var(--ease-out);
-  }
-  .mrow .via:hover, .mrow .via[aria-expanded="true"] { border-color: var(--ghost); color: var(--text) }
-  .mrow .via:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-
   .addp {
     margin: 0 0 14px; padding: 14px; border: 1px solid var(--border); border-radius: var(--r-md);
     background: color-mix(in srgb, var(--raised) 88%, var(--overlay));
@@ -3365,7 +3211,6 @@
   .threshold-presets button:disabled { opacity: .4; cursor: default }
 
   @media (max-width: 680px) {
-    .fan { grid-template-columns: 1fr }
     .threshold-control { align-items: stretch; flex-direction: column }
   }
 
@@ -3754,10 +3599,6 @@
     .app[data-prefs] > .chrome, .app[data-prefs] > .cols { transform: none }
 
     .vrow, .vnow .lb { animation: none !important; animation-delay: 0s !important }
-
-    .fan::before, .slot, .slot .val, .rpick, .mgrp {
-      animation: none !important; animation-delay: 0s !important;
-    }
 
     .queue, .qi, .ovf, .tabconfirm, .grp[data-landed] { animation: none !important }
   }
@@ -5438,7 +5279,7 @@
   transition-duration: var(--t-press);
 }
 
-:is([role="treeitem"], .acctrow, .srvrow, .mrow, .memrow) { --press: translateY(1px) }
+:is([role="treeitem"], .acctrow, .srvrow, .memrow) { --press: translateY(1px) }
 .dif-ask {
   display: flex; flex-direction: column; gap: 7px;
   padding: 9px 11px; border-bottom: 1px solid var(--hair); background: var(--overlay);
@@ -5450,15 +5291,11 @@
 
 @supports (animation-delay: calc(sibling-index() * 1ms)) {
   .compose .row > *,
-  .fan > .slotbox .slot,
-  .mgrp,
   .hits > *,
   .steps > * {
     animation-delay: calc((sibling-index() - 1) * var(--m-step));
   }
   .compose .row { --m-step: 30ms }
-  .fan { --m-step: 40ms }
-  .mgrp { --m-step: 50ms }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -100,20 +100,18 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
 
   const accounts = list ? groupAccounts(list) : [];
   useEffect(() => {
-    if (!list) return;
-    const keys = groupAccounts(list).map((a) => a.key);
-    if (before.current) {
-      const fresh = keys.find((k) => !before.current?.has(k));
-      before.current = null;
-      if (fresh) return setPicked(fresh);
-    }
-    if (keys.includes(picked)) return;
-    const all = groupAccounts(list);
-    const want = all.find((a) => declare && Object.values(a.byKind).some((e) => e.name === declare))
-      ?? all.find((a) => Object.values(a.byKind).some((e) => e.inUse))
-      ?? all[0];
-    setPicked(want?.key ?? "");
-  }, [list, picked, declare]);
+    if (!list || !before.current) return;
+    const fresh = groupAccounts(list).find((a) => !before.current?.has(a.key));
+    before.current = null;
+    if (fresh) setPicked(fresh.key);
+  }, [list]);
+  // Until someone picks, the page shows the service it was sent to, else the
+  // one in use, else the first.
+  const selected = accounts.some((a) => a.key === picked) ? picked : (
+    accounts.find((a) => declare && Object.values(a.byKind).some((e) => e.name === declare))
+    ?? accounts.find((a) => Object.values(a.byKind).some((e) => e.inUse))
+    ?? accounts[0]
+  )?.key ?? "";
 
   const remove = async (name: string) => {
     setBusy(name);
@@ -133,7 +131,7 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
 
   const query = q.trim().toLowerCase();
   const shown = accounts.filter((a) => !query || a.label.toLowerCase().includes(query) || a.host.toLowerCase().includes(query));
-  const current = accounts.find((a) => a.key === picked);
+  const current = accounts.find((a) => a.key === selected);
   return (
     <div className="psplit">
       <div className="plist">
@@ -149,7 +147,7 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
             const keyless = entries.every((e) => !e.hasKey);
             return (
               <button key={a.key} className="svcrow" data-action="provider.select" data-target={a.key}
-                aria-pressed={!adding && a.key === picked}
+                aria-pressed={!adding && a.key === selected}
                 onClick={() => { setAdding(false); setPicked(a.key); }}>
                 <span className="tx">
                   <span className="nm">{a.label}</span>

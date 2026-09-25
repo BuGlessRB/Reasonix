@@ -710,10 +710,8 @@ export const EN: Record<string, string> = {
     "Used for posting to the community and following up crashes. Unrelated to your model API keys — signing in uploads none of your conversations, code or secrets.",
 
   // ── 分工与模型 ───────────────────────────────────────────────────
-  "对话 · 主模型": "Conversation · main model",
   "跟随主模型": "Follow the main model",
   "无法读取角色分工。": "Could not read the role assignments.",
-  "搜索模型": "Search models",
   "搜索模型名称，或输入「图」仅显示支持读图的模型…": "Search by name, or type “vision” for the ones that read images…",
   "没有匹配的模型。": "No models match.",
   "无法读取模型列表。": "Could not read the model list.",
@@ -820,8 +818,6 @@ export const EN: Record<string, string> = {
   "只在这台机器上": "This machine only",
   "这个项目": "This project",
   "导出": "Export",
-  "{n} 个已指派": "{n} assigned",
-  "所有角色均跟随主模型": "Every role follows it",
   "已指派": "Assigned",
   "{name}用哪个模型": "Which model for {name}",
   "主模型看不了的图会交给 {model}，它读图，所以附件真的会被看到。":
