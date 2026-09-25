@@ -34,11 +34,35 @@ type CatalogEntry struct {
 }
 
 // deepseekPeak is the schedule DeepSeek publishes: peak on weekday mornings and
-// afternoons, and — since 2026-08-23 — never at a weekend.
+// afternoons, and — since 2026-08-23 — never at a weekend. Chinese public
+// holidays bill off-peak in full, per the same page.
 var deepseekPeak = &PeakWindow{
 	OffsetSeconds:  beijing,
 	Hours:          [][2]int{{9, 12}, {14, 18}},
 	WeekendOffPeak: "2026-08-23",
+	HolidayOffPeak: chineseStatutoryHolidays,
+}
+
+// chineseStatutoryHolidays are the State Council's 2026 public holidays, which
+// DeepSeek bills off-peak in full; extend it when the next notice is out. Make-up
+// workdays are absent: they fall on weekends, which are off-peak anyway.
+var chineseStatutoryHolidays = []string{
+	// New Year's Day: Jan 1-3.
+	"2026-01-01", "2026-01-02", "2026-01-03",
+	// Spring Festival: Feb 15-23.
+	"2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19",
+	"2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
+	// Qingming Festival: Apr 4-6.
+	"2026-04-04", "2026-04-05", "2026-04-06",
+	// Labor Day: May 1-5.
+	"2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05",
+	// Dragon Boat Festival: Jun 19-21.
+	"2026-06-19", "2026-06-20", "2026-06-21",
+	// Mid-Autumn Festival: Sep 25-27.
+	"2026-09-25", "2026-09-26", "2026-09-27",
+	// National Day: Oct 1-7.
+	"2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04",
+	"2026-10-05", "2026-10-06", "2026-10-07",
 }
 
 // checkedOn is when the tables below were last read off the vendors' pages.

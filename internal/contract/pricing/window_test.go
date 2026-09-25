@@ -37,6 +37,34 @@ func TestPeakWindowReadsTheVendorsClock(t *testing.T) {
 	}
 }
 
+// Public holidays bill off-peak even on weekdays (Mid-Autumn Fri 2026-09-25,
+// Spring Festival Tue 2026-02-17, National Day Thu 2026-10-01), and a make-up
+// workday (Sat 2026-10-10) is still a weekend.
+func TestPeakWindowReadsTheHolidayTable(t *testing.T) {
+	cases := []struct {
+		name string
+		at   time.Time
+		peak bool
+	}{
+		{"mid-autumn friday morning window", beijingAt(2026, 9, 25, 10), false},
+		{"mid-autumn friday afternoon window", beijingAt(2026, 9, 25, 15), false},
+		{"thursday before mid-autumn", beijingAt(2026, 9, 24, 10), true},
+		{"monday after mid-autumn", beijingAt(2026, 9, 28, 10), true},
+		{"spring festival new year's day", beijingAt(2026, 2, 17, 9), false},
+		{"friday before spring festival", beijingAt(2026, 2, 13, 10), true},
+		{"national day morning window", beijingAt(2026, 10, 1, 10), false},
+		{"first workday after national day", beijingAt(2026, 10, 8, 10), true},
+		{"make-up workday saturday", beijingAt(2026, 10, 10, 10), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := deepseekPeak.IsPeak(c.at); got != c.peak {
+				t.Fatalf("IsPeak(%s) = %v, want %v", c.at.Format(time.RFC3339), got, c.peak)
+			}
+		})
+	}
+}
+
 // The instant is what decides, not the clock of whoever reads it: the same
 // moment expressed in UTC has to land on the same side of the window.
 func TestPeakWindowIsAboutTheInstantNotTheReader(t *testing.T) {
