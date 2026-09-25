@@ -486,6 +486,12 @@ func (m *model) showFlash(text string) tea.Cmd {
 	return tea.Tick(flashFor, func(time.Time) tea.Msg { return flashDoneMsg{} })
 }
 
+func (m *model) clearFlash() {
+	if m.scr != nil {
+		m.scr.flash = ""
+	}
+}
+
 func (m *model) flashText() string {
 	if m.scr == nil || m.scr.flash == "" || time.Since(m.scr.flashAt) >= flashFor {
 		return ""

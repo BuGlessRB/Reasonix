@@ -18,6 +18,10 @@ type ClipboardCopyMsg struct {
 
 var writeNativeClipboardText = clipboard.WriteAll
 
+// RemoteClipboardSession reports an SSH session, where the native clipboard
+// is the remote host's rather than the user's.
+func RemoteClipboardSession() bool { return remoteClipboardSession() }
+
 func remoteClipboardSession() bool {
 	return os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_CLIENT") != "" || os.Getenv("SSH_TTY") != ""
 }

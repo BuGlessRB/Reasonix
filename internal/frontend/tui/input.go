@@ -20,11 +20,22 @@ const (
 	pasteFoldLines = 3
 )
 
-var pasteToken = regexp.MustCompile(`\[Pasted text #(\d+) \+\d+ lines\]`)
+var (
+	pasteToken = regexp.MustCompile(`\[Pasted text #(\d+) \+\d+ lines\]`)
+	imageToken = regexp.MustCompile(`\[image #(\d+)\]`)
+)
 
 type pasteStore struct {
-	next  int
-	texts map[int]string
+	next   int
+	texts  map[int]string
+	images []string
+}
+
+// image returns the composer's token for a pasted image; sending turns it
+// back into the reference the kernel stored the image under.
+func (p *pasteStore) image(ref string) string {
+	p.images = append(p.images, ref)
+	return fmt.Sprintf("[image #%d]", len(p.images))
 }
 
 // fold returns what the composer shows for a paste: the text itself, or a
@@ -45,6 +56,13 @@ func (p *pasteStore) fold(text string) string {
 
 // expand replaces each paste token with the text it stands for.
 func (p *pasteStore) expand(s string) string {
+	s = imageToken.ReplaceAllStringFunc(s, func(tok string) string {
+		n, _ := strconv.Atoi(imageToken.FindStringSubmatch(tok)[1])
+		if n >= 1 && n <= len(p.images) {
+			return p.images[n-1]
+		}
+		return tok
+	})
 	return pasteToken.ReplaceAllStringFunc(s, func(tok string) string {
 		n, _ := strconv.Atoi(pasteToken.FindStringSubmatch(tok)[1])
 		if text, ok := p.texts[n]; ok {
@@ -56,6 +74,9 @@ func (p *pasteStore) expand(s string) string {
 
 func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.screenKey(msg); handled {
+		return m, cmd
+	}
+	if cmd, handled := m.shortcutKey(msg.String()); handled {
 		return m, cmd
 	}
 	if cmd, handled := m.menuKey(msg.String()); handled {
@@ -95,10 +116,7 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if empty && !m.tr.Running {
 			return m, tea.Quit
 		}
-	case "shift+tab":
-		return m, m.cycleMode()
-	case "ctrl+y":
-		return m, m.toggleYolo()
+
 	case "backspace":
 		if m.shell && empty {
 			m.shell = false
@@ -121,6 +139,20 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, m.refreshMenu())
 	}
 	return m, cmd
+}
+
+// shortcutKey takes the keys that act without touching the composer: the
+// approval modes and the clipboard's image.
+func (m *model) shortcutKey(k string) (tea.Cmd, bool) {
+	switch {
+	case k == "shift+tab":
+		return m.cycleMode(), true
+	case k == "ctrl+y":
+		return m.toggleYolo(), true
+	case imagePasteKey(k):
+		return m.pasteClipboard(), true
+	}
+	return nil, false
 }
 
 // screenKey takes what a key means before it reaches the composer: copying a

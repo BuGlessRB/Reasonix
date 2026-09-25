@@ -224,20 +224,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = msg.s
 		}
 		return m, nil
-	case sessionsMsg:
-		return m, m.onSessions(msg)
-	case resumedMsg:
-		return m, m.onResumed(msg)
-	case bannerMsg:
-		return m, m.emit(func(int) string { return banner(msg.s) })
-	case tea.MouseMsg:
-		return m, m.onMouse(msg)
-	case termrender.ClipboardCopyMsg:
-		return m, m.onCopied(msg)
-	case flashDoneMsg:
-		return m, nil
-	case edgeMsg:
-		return m, m.onEdge()
 	case metersMsg:
 		m.balance = msg.balance
 		if msg.compaction != nil {
@@ -275,9 +261,38 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.onKey(msg)
 	}
+	if cmd, ok := m.onScreenMsg(msg); ok {
+		return m, cmd
+	}
 	var cmd tea.Cmd
 	m.composer, cmd = m.composer.Update(msg)
 	return m, cmd
+}
+
+// onScreenMsg takes the answers to what this screen asked for itself: the
+// clipboard, the session list, the mouse and its timers.
+func (m *model) onScreenMsg(msg tea.Msg) (tea.Cmd, bool) {
+	switch msg := msg.(type) {
+	case clipImageMsg:
+		return m.onClipImage(msg), true
+	case clipTextMsg:
+		return m.onClipText(msg), true
+	case sessionsMsg:
+		return m.onSessions(msg), true
+	case resumedMsg:
+		return m.onResumed(msg), true
+	case bannerMsg:
+		return m.emit(func(int) string { return banner(msg.s) }), true
+	case tea.MouseMsg:
+		return m.onMouse(msg), true
+	case termrender.ClipboardCopyMsg:
+		return m.onCopied(msg), true
+	case flashDoneMsg:
+		return nil, true
+	case edgeMsg:
+		return m.onEdge(), true
+	}
+	return nil, false
 }
 
 // noteTurnEnd says how a turn that did not finish ended; a finished one says

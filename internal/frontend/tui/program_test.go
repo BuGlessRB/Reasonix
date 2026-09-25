@@ -367,3 +367,18 @@ func TestTodosFollowTheKernel(t *testing.T) {
 		t.Fatal("a finished list stayed on screen")
 	}
 }
+
+// A pasted image stands in the composer as a token and goes to the kernel as
+// the reference it was stored under.
+func TestPastedImageSendsItsReference(t *testing.T) {
+	m, k := testModel(t)
+	typeText(m, "what is this ")
+	m.Update(clipImageMsg{ref: "@.reasonix/attachments/shot.png"})
+	if got := m.composer.Value(); got != "what is this [image #1] " {
+		t.Fatalf("composer = %q", got)
+	}
+	run(m, press(m, "enter"))
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, `{"input":"what is this @.reasonix/attachments/shot.png"}`) {
+		t.Fatalf("submit missing the reference:\n%s", calls)
+	}
+}
