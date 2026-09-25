@@ -26,7 +26,7 @@ function draw(calls: Partial<AgentPort> = {}) {
     ...calls,
   } as unknown as AgentPort;
   const view = render(<Policy port={port} status={STATUS} onChanged={onChanged} />);
-  const open = () => userEvent.click(screen.getByRole("button", { name: "执行权限：逐项确认" }));
+  const open = () => userEvent.click(screen.getByRole("button", { name: "执行权限：询问" }));
   const option = (name: string) => within(screen.getByRole("group", { name: "执行权限" })).getByRole("button", { name: new RegExp(`^${name}`) });
   return { ...view, port, onChanged, open, option };
 }
@@ -35,7 +35,7 @@ describe("execution permission changes", () => {
   it("changes only the approval mode", async () => {
     const { open, option, port } = draw();
     await open();
-    await userEvent.click(option("自动继续"));
+    await userEvent.click(option("自动批准"));
     expect(port.setApprovalMode).toHaveBeenCalledWith("auto");
   });
 
@@ -44,9 +44,9 @@ describe("execution permission changes", () => {
     const setApprovalMode = vi.fn(() => call.promise);
     const { open, option } = draw({ setApprovalMode });
     await open();
-    await userEvent.click(option("自动继续"));
-    expect((option("逐项确认") as HTMLButtonElement).disabled).toBe(true);
-    await userEvent.click(option("逐项确认"));
+    await userEvent.click(option("自动批准"));
+    expect((option("询问") as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(option("询问"));
     expect(setApprovalMode).toHaveBeenCalledTimes(1);
     call.settle();
   });
@@ -58,7 +58,7 @@ describe("execution permission changes", () => {
     await userEvent.click(option("全部放行"));
     call.fail(new HttpError(409, "a turn is running", { code: "busy.switch_model" }));
     await waitFor(() => expect(container.querySelector('[role="alert"]')).toBeTruthy());
-    expect(option("逐项确认").getAttribute("aria-pressed")).toBe("true");
+    expect(option("询问").getAttribute("aria-pressed")).toBe("true");
     expect(onChanged).not.toHaveBeenCalled();
   });
 

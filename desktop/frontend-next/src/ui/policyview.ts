@@ -1,5 +1,6 @@
 import { t } from "../i18n";
 import type { ApprovalMode, SessionStatus } from "../port/port";
+import { approvalName } from "./approvals";
 
 /** What the shelf says about how the next turn will run.
  *
@@ -33,11 +34,6 @@ const presetName = (id: string): string =>
 // missing is the one it renders blank.
 const rung = (id: string): string => id.charAt(0).toUpperCase() + id.slice(1);
 
-// The menu says 自动 because it sits under a 工具权限 heading. On the shelf that
-// word stands next to a reasoning rung with nothing to tell them apart, so the
-// summary says what is automatic. The other three read the same in both places.
-const briefApproval = (mode: ApprovalMode): string =>
-  ({ dontAsk: t("不询问"), ask: t("询问"), auto: t("自动批准"), yolo: t("全部放行") })[mode];
 
 /** The collapsed projection of the three values that decide how a turn runs.
  *
@@ -65,10 +61,10 @@ export function policySummary(status: SessionStatus | null, hasEffort: boolean):
     // being asked. auto lets some calls through unasked, dontAsk refuses what
     // it would have asked about, and yolo asks about nothing — none of those
     // is a preference the shelf may keep to itself.
-    approval: mode === BASELINE_APPROVAL ? undefined : briefApproval(mode),
+    approval: mode === BASELINE_APPROVAL ? undefined : approvalName(mode),
     danger: mode === "yolo" || undefined,
     // The whole reading, for hover. Nothing is deleted by this projection; the
     // baseline values stop occupying the shelf and stay one pointer away.
-    reading: [presetName(status.preset), hasEffort ? effort : "", briefApproval(mode)].filter(Boolean).join(" · "),
+    reading: [presetName(status.preset), hasEffort ? effort : "", approvalName(mode)].filter(Boolean).join(" · "),
   };
 }

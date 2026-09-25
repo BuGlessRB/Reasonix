@@ -26,8 +26,8 @@ describe("what the composer shows when nothing is unusual", () => {
   it("keeps policy discoverable without default-state noise", () => {
     const { container } = draw();
     expect(container.querySelector(".policy[data-quiet]")).toBeTruthy();
-    expect(container.querySelector('[data-action="chrome.policy"]')?.getAttribute("aria-label")).toBe("执行权限：逐项确认");
-    expect(container.querySelector('[data-action="chrome.policy"]')?.textContent).toMatch(/逐项确认/);
+    expect(container.querySelector('[data-action="chrome.policy"]')?.getAttribute("aria-label")).toBe("执行权限：询问");
+    expect(container.querySelector('[data-action="chrome.policy"]')?.textContent).toMatch(/询问/);
   });
 
   // A status may recede to its baseline. The only way into a mode may not: the
@@ -70,7 +70,7 @@ describe("every deviation is visible", () => {
   it.each([
 
     ["effort", status({ effort: "high" }), /High/],
-    ["approval", status({ toolApprovalMode: "auto" as ApprovalMode }), /自动继续/],
+    ["approval", status({ toolApprovalMode: "auto" as ApprovalMode }), /自动批准/],
     ["a stricter approval", status({ toolApprovalMode: "dontAsk" as ApprovalMode }), /不询问/],
   ])("surfaces %s", (_what, st, want) => {
     const { container } = draw(st);

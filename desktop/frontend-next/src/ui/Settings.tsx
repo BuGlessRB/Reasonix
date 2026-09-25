@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { t } from "../i18n";
 import { listenAction } from "./listen";
 import { useRuntimeReload } from "./RuntimeReload";
-import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, CapabilityScope, McpEntry, ModelEntry, PluginPackage, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
+import type { AccountState, AgentPort, Appearance as Look, CapabilityScope, McpEntry, ModelEntry, PluginPackage, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { bytes, tokens as fmtTokens } from "../i18n/format";
 import { ICON, NAV, SECTION_NAME, SETTINGS, settingMatches } from "./prefsnav";
@@ -41,13 +41,7 @@ import { Appearance, SCHEMES } from "./Appearance";
 import { ScopeBar } from "./CapabilityScope";
 import { reason } from "../i18n/kernel";
 import { SettingsHeading } from "./SettingsHeading";
-
-const APPROVALS: [ApprovalMode, string, string][] = [
-  ["dontAsk", "不询问", "不显示审批请求；需要批准的操作一律不执行"],
-  ["ask", "询问", "每次执行操作前请求确认"],
-  ["auto", "自动", "低风险操作自动放行，写入操作仍需确认"],
-  ["yolo", "全部放行", "不再请求确认，仅在完全信任当前工作区时使用"],
-];
+import { APPROVALS, approvalName, approvalNote } from "./approvals";
 
 // What still lives in the old desktop app. Bots are not on the roadmap, so
 // they are not a promise to keep here either. Signing in and reading
@@ -261,7 +255,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
   const efforts = models.find((m) => m.ref === status?.modelRef)?.efforts ?? [];
   const assigned = roles ? Object.values(roles).filter(Boolean).length : 0;
   const preset = t("自动");
-  const approval = t(APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—");
+  const approval = approvalName(status?.toolApprovalMode, "—");
   const broken = mcp.filter((m) => m.state === "failed").length;
   // A package owns what it brought, and its own row already lists it. What is
   // left is what the user added by hand, which is the only thing these two
@@ -580,7 +574,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
                     </button>
                   ))}
                 </div>
-                <p className="note">{t(APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[2] ?? "")}</p>
+                <p className="note">{approvalNote(status?.toolApprovalMode)}</p>
               </Group>
               <Group id="rules"
                 title={t("明确的规则")}
