@@ -68,7 +68,9 @@ const unseen = () =>
         else if (Number(cs.opacity) === 0) why = `${node.tagName.toLowerCase()}.${node.className?.toString().slice(0, 24)} opacity:0`;
         if (why) break;
       }
-      const box = el.getBoundingClientRect();
+      // An SVG shape's box leaves out its stroke, so a drawn straight line has
+      // no area of its own; whether it is seen is its drawing's question.
+      const box = (el instanceof SVGGeometryElement && el.ownerSVGElement ? el.ownerSVGElement : el).getBoundingClientRect();
       if (!why && box.width * box.height === 0) why = "盒子没有面积";
       if (why) out.push(`${a.animationName ?? "?"} 在 ${el.tagName.toLowerCase()}.${el.className?.toString().slice(0, 24) || ""} 上（${why}）`);
     }
@@ -87,9 +89,11 @@ async function busy() {
 }
 
 // 那道流光的两头都要看：只断言「看不见的不许动」，把它焊死成永远不动也是绿的。
+// In studio the running signal is the run mark's R being traced (studio-r-run);
+// the border glow is no longer part of the design.
 const glow = () =>
   page.evaluate(() =>
-    document.getAnimations().some((a) => a.animationName === "trace" && a.playState === "running"),
+    document.getAnimations().some((a) => a.animationName === "studio-r-run" && a.playState === "running"),
   );
 
 const idleUnseen = await unseen();
