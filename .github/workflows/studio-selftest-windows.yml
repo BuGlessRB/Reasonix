@@ -68,6 +68,12 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Version: \`$version\` from \`$(git rev-parse --short HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
 
+      # The intranet's route to the module proxy drops connections now and then.
+      # What arrives stays in this machine's module cache, so a retry resumes.
+      - name: Fetch Go modules
+        shell: bash
+        run: for i in 1 2 3 4 5; do go mod download && exit 0; sleep 10; done; exit 1
+
       - name: Build the SPA
         working-directory: desktop/frontend-next
         shell: bash
