@@ -99,3 +99,53 @@ func TestInlineWritesToTheTerminalScrollback(t *testing.T) {
 		t.Fatal("inline mode took the full screen")
 	}
 }
+
+func shellRow(lines int) eventwire.Event {
+	out := make([]string, lines)
+	for i := range out {
+		out[i] = fmt.Sprintf("out %03d", i)
+	}
+	return eventwire.Event{Kind: "tool_result", Tool: &eventwire.Tool{ID: "c1", Name: "bash", Args: `{"command":"seq"}`, Output: strings.Join(out, "\n")}}
+}
+
+// A long shell output shows its preview and opens with Ctrl+B or a click on
+// its "more lines" row, as 1.x's did.
+func TestShellOutputOpensAndShuts(t *testing.T) {
+	m, _ := testModel(t)
+	apply(m, eventwire.Event{Kind: "tool_dispatch", Tool: &eventwire.Tool{ID: "c1", Name: "bash", Args: `{"command":"seq"}`}}, shellRow(30))
+	all := func() string { return strings.Join(m.content(nil), "\n") }
+	if !strings.Contains(all(), "20 more lines (Ctrl+B)") || strings.Contains(all(), "out 029") {
+		t.Fatalf("preview wrong:\n%s", all())
+	}
+	m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	if !strings.Contains(all(), "out 029") {
+		t.Fatalf("ctrl+b did not open the output:\n%s", all())
+	}
+	m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	rows := m.content(nil)
+	press(m, "ctrl+home")
+	m.View()
+	m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: len(rows) - 1 - m.scr.yoff})
+	if !strings.Contains(all(), "out 029") {
+		t.Fatalf("a click on the hint row did not open the output:\n%s", all())
+	}
+}
+
+// A selection dragged against the bottom edge keeps scrolling the transcript.
+func TestSelectionAtTheEdgeScrolls(t *testing.T) {
+	m, _ := testModel(t)
+	fillTranscript(m, 60)
+	press(m, "ctrl+home")
+	m.View()
+	h := m.viewportHeight()
+	m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 2, Y: 1})
+	_, cmd := m.Update(tea.MouseMotionMsg{Button: tea.MouseLeft, X: 2, Y: h - 1})
+	if cmd == nil {
+		t.Fatal("holding the bottom edge did not start scrolling")
+	}
+	m.Update(edgeMsg{})
+	m.Update(edgeMsg{})
+	if m.scr.yoff != 2 || m.scr.sel.head.line != 2+h-1 {
+		t.Fatalf("yoff = %d, head = %+v", m.scr.yoff, m.scr.sel.head)
+	}
+}

@@ -232,6 +232,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.onCopied(msg)
 	case flashDoneMsg:
 		return m, nil
+	case edgeMsg:
+		return m, m.onEdge()
 	case metersMsg:
 		m.balance = msg.balance
 		if msg.compaction != nil {
@@ -329,8 +331,7 @@ func (m *model) commit() tea.Cmd {
 			break
 		}
 		m.committed[it.ID] = true
-		row, shown := *it, m.sayShown[it.ID]
-		prints = append(prints, m.emit(func(w int) string { return renderItem(&row, w, shown) }))
+		prints = append(prints, m.emitRow(*it, m.sayShown[it.ID]))
 	}
 	return tea.Sequence(prints...)
 }

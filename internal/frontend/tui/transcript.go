@@ -49,6 +49,7 @@ type Item struct {
 	Tool     *eventwire.Tool
 	Children []eventwire.Tool
 	Running  bool
+	Fold     outputFold
 
 	// ItemApproval / ItemAsk. Verdict is how this screen settled it; empty
 	// while it is still open.
@@ -65,6 +66,16 @@ type Item struct {
 	Receipt    *eventwire.CompletionReceipt
 	Usage      *eventwire.Usage
 }
+
+// outputFold is how much of a finished shell call's output its row shows: a fixed
+// preview where the rows cannot be redrawn, else a preview that opens.
+type outputFold int8
+
+const (
+	foldFixed outputFold = iota
+	foldShut
+	foldOpen
+)
 
 // Terminal is how the last turn ended.
 type Terminal int

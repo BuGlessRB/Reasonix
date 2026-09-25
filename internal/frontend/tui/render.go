@@ -97,6 +97,7 @@ func thoughtLine(ms int64) string {
 const (
 	connector         = "  ⎿  "
 	shellPreviewLines = 10
+	shellExpandLines  = 200
 )
 
 func renderTool(it *Item, width int) string {
@@ -114,7 +115,7 @@ func renderTool(it *Item, width int) string {
 			lines = append(lines, termrender.Dim(connector+oneLine(last, avail)))
 		}
 	default:
-		lines = append(lines, outputSummary(t.Name, t.Output, avail)...)
+		lines = append(lines, outputSummary(t.Name, t.Output, avail, it.Fold)...)
 	}
 	if n := len(it.Children); n > 0 {
 		lines = append(lines, termrender.Dim(connector+fmt.Sprintf("%d sub-agent call(s)", n)))
@@ -125,7 +126,7 @@ func renderTool(it *Item, width int) string {
 // outputSummary leaves a marker of a finished call: a shell command's first
 // lines, since what it printed is what the user ran it for, and a line count
 // for any other tool, whose output the model already has.
-func outputSummary(name, out string, width int) []string {
+func outputSummary(name, out string, width int, f outputFold) []string {
 	out = strings.TrimRight(out, "\n")
 	if out == "" {
 		return nil
@@ -134,7 +135,11 @@ func outputSummary(name, out string, width int) []string {
 	if !termrender.IsShellTool(name) {
 		return []string{termrender.Dim(connector + fmt.Sprintf("%d lines", len(src)))}
 	}
-	shown := src[:min(len(src), shellPreviewLines)]
+	limit := shellPreviewLines
+	if f == foldOpen {
+		limit = shellExpandLines
+	}
+	shown := src[:min(len(src), limit)]
 	lines := make([]string, 0, len(shown)+1)
 	for i, l := range shown {
 		gutter := strings.Repeat(" ", len([]rune(connector)))
@@ -143,8 +148,12 @@ func outputSummary(name, out string, width int) []string {
 		}
 		lines = append(lines, termrender.Dim(gutter+oneLine(l, width)))
 	}
+	hint := ""
+	if f != foldFixed {
+		hint = " (Ctrl+B)"
+	}
 	if extra := len(src) - len(shown); extra > 0 {
-		lines = append(lines, termrender.Dim(strings.Repeat(" ", len([]rune(connector)))+fmt.Sprintf("… %d more lines", extra)))
+		lines = append(lines, termrender.Dim(strings.Repeat(" ", len([]rune(connector)))+fmt.Sprintf("… %d more lines", extra)+hint))
 	}
 	return lines
 }

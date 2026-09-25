@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -32,6 +33,10 @@ type screen struct {
 	grab     int
 	flash    string
 	flashAt  time.Time
+	// edge is the direction a selection held against the top or bottom of
+	// the viewport scrolls it, and dragX the column that drag is at.
+	edge  int
+	dragX int
 }
 
 // block is one settled print, kept as how to draw it so a resize redraws the
@@ -40,6 +45,9 @@ type block struct {
 	render func(width int) string
 	width  int
 	lines  []string
+	// row is the settled row the block draws, when it draws one: a shell
+	// call's output opens and shuts through it.
+	row *Item
 }
 
 func (b *block) at(width int) []string {
@@ -66,7 +74,12 @@ func (s selection) ordered() (selPos, selPos) {
 
 func (s selection) empty() bool { return s.anchor == s.head }
 
-type flashDoneMsg struct{}
+type (
+	flashDoneMsg struct{}
+	edgeMsg      struct{}
+)
+
+const edgeEvery = 80 * time.Millisecond
 
 // wrapLines splits out into rows no wider than width, each padded to it so
 // the scrollbar column stays put.
@@ -92,6 +105,60 @@ func (m *model) emit(render func(int) string) tea.Cmd {
 		return nil
 	}
 	m.scr.blocks = append(m.scr.blocks, block{render: render})
+	return nil
+}
+
+// emitRow sends a settled row. Full screen keeps a copy the block draws from,
+// so its shell output can open later.
+func (m *model) emitRow(row Item, shown int) tea.Cmd {
+	render := func(w int) string { return renderItem(&row, w, shown) }
+	if m.scr == nil {
+		return m.emit(render)
+	}
+	if row.Kind == ItemTool {
+		row.Fold = foldShut
+	}
+	m.scr.blocks = append(m.scr.blocks, block{render: render, row: &row})
+	return nil
+}
+
+// foldable reports a block whose shell output has more than its preview.
+func (b *block) foldable() bool {
+	r := b.row
+	if r == nil || r.Kind != ItemTool || r.Tool == nil || !termrender.IsShellTool(r.Tool.Name) {
+		return false
+	}
+	return strings.Count(strings.TrimRight(r.Tool.Output, "\n"), "\n")+1 > shellPreviewLines
+}
+
+func (b *block) toggle() {
+	b.row.Fold = foldShut + foldOpen - b.row.Fold
+	b.lines = nil
+}
+
+// toggleLatestShell opens or shuts the newest shell output that has more to
+// show than its preview.
+func (m *model) toggleLatestShell() {
+	for i := range slices.Backward(m.scr.blocks) {
+		if b := &m.scr.blocks[i]; b.foldable() {
+			b.toggle()
+			return
+		}
+	}
+}
+
+// blockEndingAt is the settled block whose last row is transcript row idx.
+func (m *model) blockEndingAt(idx int) *block {
+	cw, at := m.contentWidth(), 0
+	for i := range m.scr.blocks {
+		at += len(m.scr.blocks[i].at(cw))
+		if at-1 == idx {
+			return &m.scr.blocks[i]
+		}
+		if at > idx {
+			return nil
+		}
+	}
 	return nil
 }
 
@@ -214,6 +281,8 @@ func (m *model) scrollKey(k string) bool {
 		m.scr.yoff, m.scr.follow = 0, false
 	case "ctrl+end":
 		m.scr.follow = true
+	case "ctrl+b":
+		m.toggleLatestShell()
 	default:
 		return false
 	}
@@ -249,6 +318,10 @@ func (m *model) onMouse(msg tea.MouseMsg) tea.Cmd {
 			m.dragScrollbar(mouse.Y, h)
 			return nil
 		}
+		if b := m.blockEndingAt(s.yoff + mouse.Y); b != nil && b.foldable() {
+			b.toggle()
+			return nil
+		}
 		at := m.caret(mouse.X, mouse.Y)
 		s.sel = selection{active: true, anchor: at, head: at}
 	case tea.MouseMotionMsg:
@@ -257,8 +330,14 @@ func (m *model) onMouse(msg tea.MouseMsg) tea.Cmd {
 			m.dragScrollbar(mouse.Y, h)
 		case s.sel.active:
 			s.sel.head = m.caret(mouse.X, min(max(mouse.Y, 0), h-1))
+			prev := s.edge
+			s.edge, s.dragX = edgeDir(mouse.Y, h), mouse.X
+			if s.edge != 0 && prev == 0 {
+				return edgeTick()
+			}
 		}
 	case tea.MouseReleaseMsg:
+		s.edge = 0
 		if s.drag {
 			s.drag = false
 			return nil
@@ -358,4 +437,38 @@ func (m *model) toggleMouse() tea.Cmd {
 		return m.showFlash(i18n.M.MouseCaptureOffHint)
 	}
 	return m.showFlash(i18n.M.MouseCaptureOnHint)
+}
+
+func edgeTick() tea.Cmd { return tea.Tick(edgeEvery, func(time.Time) tea.Msg { return edgeMsg{} }) }
+
+// edgeDir is -1 for a drag at the viewport's top row, 1 at its bottom row.
+func edgeDir(y, h int) int {
+	switch {
+	case y <= 0:
+		return -1
+	case y >= h-1:
+		return 1
+	}
+	return 0
+}
+
+// onEdge scrolls a selection held against an edge one row and keeps going
+// until the drag leaves the edge or the transcript runs out.
+func (m *model) onEdge() tea.Cmd {
+	s := m.scr
+	if s == nil || !s.sel.active || s.edge == 0 {
+		return nil
+	}
+	before := s.yoff
+	m.scrollBy(s.edge)
+	row := 0
+	if s.edge > 0 {
+		row = m.viewportHeight() - 1
+	}
+	s.sel.head = m.caret(s.dragX, row)
+	if s.yoff == before {
+		s.edge = 0
+		return nil
+	}
+	return edgeTick()
 }
