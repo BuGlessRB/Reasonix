@@ -136,6 +136,39 @@ func TestDiskFileDSNUsesCrossPlatformURI(t *testing.T) {
 	}
 }
 
+// The limit is per connection, so every pooled connection must carry it.
+func TestDiskOpenCapsWALOnEveryConnection(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	handle, err := Open(ctx, OpenOptions{
+		Path: filepath.Join(testenv.TempDir(t), "wal.sqlite"), MemoryName: "wal", Migrations: testMigrations(), RequireDisk: true, MaxOpenConns: 4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = handle.DB.Close() })
+	var conns []*sql.Conn
+	for range 3 {
+		conn, err := handle.DB.Conn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		conns = append(conns, conn)
+	}
+	for i, conn := range conns {
+		var limit int64
+		if err := conn.QueryRowContext(ctx, `PRAGMA journal_size_limit`).Scan(&limit); err != nil {
+			t.Fatal(err)
+		}
+		if limit != walSizeLimit {
+			t.Fatalf("connection %d journal_size_limit = %d, want %d", i, limit, walSizeLimit)
+		}
+	}
+	for _, conn := range conns {
+		_ = conn.Close()
+	}
+}
+
 func TestOpenBlankPathUsesMemoryWithoutRequireDisk(t *testing.T) {
 	t.Parallel()
 	handle, err := Open(context.Background(), OpenOptions{Path: "", MemoryName: "blank", Migrations: testMigrations()})

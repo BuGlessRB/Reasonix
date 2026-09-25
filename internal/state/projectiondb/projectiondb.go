@@ -186,8 +186,14 @@ func diskFileDSN(path string) string {
 		slash = "/" + slash
 	}
 	u := &url.URL{Scheme: "file", Path: slash}
-	return u.String() + "?_pragma=busy_timeout%28150%29&_pragma=foreign_keys%281%29"
+	return u.String() + "?_pragma=busy_timeout%28150%29&_pragma=foreign_keys%281%29" +
+		fmt.Sprintf("&_pragma=journal_size_limit%%28%d%%29", walSizeLimit)
 }
+
+// walSizeLimit caps the WAL a checkpoint leaves behind; without it the file
+// keeps its high-water size. The pragma is per connection, so it rides the DSN
+// to reach every pooled one.
+const walSizeLimit = 4 << 20
 
 func open(ctx context.Context, opts OpenOptions, mode Mode) (*sql.DB, error) {
 	var dsn string
