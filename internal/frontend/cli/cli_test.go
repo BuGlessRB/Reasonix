@@ -327,12 +327,13 @@ func TestRunPrintAliasDispatchesRunFlags(t *testing.T) {
 
 func TestParsePermissionModeClaudeAliases(t *testing.T) {
 	tests := map[string]cliPermissionMode{
-		"ask":               {approval: control.ToolApprovalAsk},
-		"manual":            {approval: control.ToolApprovalAsk},
-		"acceptEdits":       {approval: control.ToolApprovalAsk, allow: []string{"write_file", "edit_file", "multi_edit", "move_file", "notebook_edit", "delete_range", "delete_symbol"}},
-		"dontAsk":           {approval: control.ToolApprovalDontAsk},
-		"plan":              {approval: control.ToolApprovalAsk, plan: true},
-		"bypassPermissions": {approval: control.ToolApprovalYolo},
+		"ask":                {approval: control.ToolApprovalAsk},
+		"manual":             {approval: control.ToolApprovalAsk},
+		"acceptEdits":        {approval: control.ToolApprovalAsk, allow: []string{"write_file", "edit_file", "multi_edit", "move_file", "notebook_edit", "delete_range", "delete_symbol"}},
+		"dontAsk":            {approval: control.ToolApprovalDontAsk},
+		"plan":               {approval: control.ToolApprovalAsk, plan: true},
+		"bypassPermissions":  {approval: control.ToolApprovalYolo},
+		"danger-full-access": {approval: control.ToolApprovalYolo},
 	}
 	for input, want := range tests {
 		got, err := parsePermissionMode(input)

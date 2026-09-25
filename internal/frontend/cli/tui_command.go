@@ -35,6 +35,7 @@ func runTUI(args []string, version string) int {
 	preset := fs.String("preset", "balanced", "agent execution setting: light | balanced | delivery")
 	dir := fs.String("dir", "", "change to this directory first (project root)")
 	inline := fs.Bool("inline", false, "write the conversation into the terminal's scrollback instead of taking the full screen")
+	permissionMode := fs.String("permission-mode", "ask", "permission mode: manual | ask | auto | acceptEdits | dontAsk | plan | bypassPermissions | danger-full-access")
 	cont := registerContinueFlag(fs)
 	resume := fs.StringP("resume", "r", "", "resume by session file path, session ID, or machine session ID; bare -r picks one (takes precedence over --continue)")
 	fs.Lookup("resume").NoOptDefVal = resumePickerSentinel
@@ -46,6 +47,11 @@ func runTUI(args []string, version string) int {
 		return 2
 	}
 	profile, err := parseRuntimeProfile(*preset)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 2
+	}
+	permissions, err := parsePermissionMode(*permissionMode)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 2
@@ -85,6 +91,7 @@ func runTUI(args []string, version string) int {
 	cfg, _ := config.Load()
 	ctrl, err := setupProfileWithOverrides(ctx, *model, 0, false, withNotifications(bc, cfg), profile, cliBuildOverrides{
 		Version: version, WorkspaceRoot: workspaceRoot, OnSessionRecovered: cliSessionRecoveredHandler(leases),
+		PermissionAllow: permissions.allow,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
@@ -99,6 +106,12 @@ func runTUI(args []string, version string) int {
 	if err := rebindCLIControllerAuthority(leases, ctrl); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)
 		return 1
+	}
+	if fs.Changed("permission-mode") {
+		ctrl.SetToolApprovalMode(permissions.approval)
+		if permissions.plan {
+			ctrl.SetPlanMode(true)
+		}
 	}
 	serveCfg := config.ServeConfig{AuthMode: "none"}
 	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg})

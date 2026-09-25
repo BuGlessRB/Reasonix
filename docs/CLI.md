@@ -340,6 +340,7 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 | `dontAsk` | Deny unapproved requests without opening an approval prompt. |
 | `plan` | Start the plan-first workflow; tool calls still use the active permissions and sandbox. |
 | `bypassPermissions` | Bypass approval prompts; equivalent to YOLO. |
+| `danger-full-access` | Alias of `bypassPermissions`; bypass approval prompts. |
 
 For unattended execution with ordinary writer fallback enabled, use
 `reasonix run --auto ...` (or `-y`). The alias cannot be combined with an

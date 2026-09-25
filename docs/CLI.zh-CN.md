@@ -306,6 +306,7 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 | `dontAsk` | 未预先允许的请求直接拒绝，不弹出审批。 |
 | `plan` | 以只读 Plan 模式启动交互式会话。 |
 | `bypassPermissions` | 跳过审批；等同于 YOLO。 |
+| `danger-full-access` | `bypassPermissions` 的别名；跳过审批。 |
 
 无人值守执行需要放行普通 writer fallback 时，使用 `reasonix run --auto ...`
 （或 `-y`）。这个别名不能和显式 `--permission-mode` 同时使用。

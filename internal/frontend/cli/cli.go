@@ -241,10 +241,10 @@ func parsePermissionMode(value string) (cliPermissionMode, error) {
 		return cliPermissionMode{approval: control.ToolApprovalDontAsk}, nil
 	case "plan":
 		return cliPermissionMode{approval: control.ToolApprovalAsk, plan: true}, nil
-	case "bypasspermissions", "bypass-permissions", "yolo":
+	case "bypasspermissions", "bypass-permissions", "yolo", "danger-full-access", "full-access", "full":
 		return cliPermissionMode{approval: control.ToolApprovalYolo}, nil
 	default:
-		return cliPermissionMode{}, fmt.Errorf("unknown permission mode %q (want manual, ask, auto, acceptEdits, dontAsk, plan, or bypassPermissions)", value)
+		return cliPermissionMode{}, fmt.Errorf("unknown permission mode %q (want manual, ask, auto, acceptEdits, dontAsk, plan, bypassPermissions, or danger-full-access)", value)
 	}
 }
 
@@ -336,7 +336,7 @@ func runAgent(args []string, version string) int {
 	resume := fs.String("resume", "", "resume by session file path, session ID, or machine session ID (takes precedence over --continue)")
 	copySession := fs.Bool("copy", false, "with --resume/--continue: duplicate the session and continue in the copy (escape hatch when the original is held by another Reasonix process)")
 	effort := fs.String("effort", "", "session reasoning effort override")
-	permissionMode := fs.String("permission-mode", "ask", "permission mode: manual | ask | auto | acceptEdits | dontAsk | plan | bypassPermissions")
+	permissionMode := fs.String("permission-mode", "ask", "permission mode: manual | ask | auto | acceptEdits | dontAsk | plan | bypassPermissions | danger-full-access")
 	autoApprove := fs.BoolP("auto", "y", false, "explicitly auto-approve ordinary writer fallbacks (alias for --permission-mode auto)")
 	printOnly := fs.BoolP("print", "p", false, "print only the final response")
 	eventsJSONL := fs.Bool("events-jsonl", false, "emit a redacted structured event stream as JSONL")
