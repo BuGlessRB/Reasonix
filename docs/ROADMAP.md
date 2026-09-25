@@ -29,7 +29,22 @@ This page tracks what Reasonix 2.x still has to deliver, how it ships, and which
 | R2 | Studio updates itself in place from the release it was installed from ([Studio release runbook](./STUDIO_RELEASE.md)). |
 | R3 | The same release publishes the CLI to npm and to the `esengine/reasonix` Homebrew tap. A stable version such as `2.21.0` moves npm `latest`; a candidate skips Homebrew. |
 | R4 | 1.x no longer publishes the CLI to npm, Homebrew or the CLI update pointers. |
-| R5 | The next stable `studio-v2.*` release MUST NOT be tagged until every row of [Terminal takeover](#terminal-takeover) is done, because R3 makes it the release that moves `npm i -g reasonix` and `brew install` from 1.x to 2.x. |
+| R5 | The next stable `studio-v2.*` release MUST NOT be tagged until every gate in [General availability](#general-availability) is met, because R3 makes it the release that moves `npm i -g reasonix` and `brew install` from 1.x to 2.x. |
+| R6 | Planned, not in place: stable releases follow a weekly train. Builds publish to npm `next` as they land, and one fixed day each week promotes the previous week's `next` to `latest` unless a P0 or P1 regression is open. Today every stable tag moves `latest` at once. |
+| R7 | Planned, not in place: Studio offers a `stable` and a `latest` update channel that follow the same two tags. |
+
+## General availability
+
+2.x leaves pre-release in the same stable release that moves npm and Homebrew to it. Every gate MUST hold first.
+
+| ID | Gate | Status |
+| --- | --- | --- |
+| G1 | Every row of [Terminal takeover](#terminal-takeover) is done | Open |
+| G2 | W1a and W1b are done, so a person moving from npm 1.x finds their conversations in 2.x | Open |
+| G3 | Session and config formats carry a version and a migration path, and are frozen for the 2.x line | Open |
+| G4 | Two consecutive weeks of `next` builds with no open P0 or P1 issue | Open |
+| G5 | Every porting-list row marked required (W3) is done | Open |
+| G6 | Signed, self-updating builds on macOS, Windows and Linux | Met |
 
 ## Terminal takeover
 
@@ -51,11 +66,21 @@ The 2.x terminal UI (`reasonix tui`) replaces the 1.x chat screen for people who
 
 | ID | Item | Line | Status |
 | --- | --- | --- | --- |
-| W1 | 2.x reads 1.x schema 2 session logs (1.x 1.38.2 and later); see [Sessions](./MIGRATING.md#sessions) | 2.x | Not started |
+| W1a | 2.x opens sessions 1.x 1.38.2 to 1.38.7 saved (event log schema 2), and continues them in a 2.x session | 2.x | Done |
+| W1b | 2.x lists and opens sessions 1.x 1.38.8 or later keep in `sessions-v4`; see [Sessions](./MIGRATING.md#sessions) | 2.x | Not started |
 | W2 | 1.x stops listing the `.wire.jsonl`, `.adjudication.jsonl` and `.execution.jsonl` files 2.x writes as conversations | 1.x | Not started |
 | W3 | 1.x to 2.x porting list: 1.x fixes, tests and behavior, each marked ported, reimplemented or not carried over | Both | Not started |
 | W4 | 2.x contribution and architecture review rules in `CONTRIBUTING.md` | 2.x | Partly done: branch table, dependency direction and cache-first review gate exist |
 | W5 | Version note in the 1.x `README.md` on `main-v2` | 1.x | Not started |
+
+## 1.x maintenance
+
+| ID | Rule | Status |
+| --- | --- | --- |
+| M1 | 1.x takes bug fixes, security fixes and provider or API compatibility only. It gets no new features and no new session, config or storage formats. | Proposed, needs agreement with the 1.x maintainers |
+| M2 | 1.x maintenance ends 3 months after 2.x general availability, or on a fixed backstop date, whichever comes first. | Proposed |
+| M3 | The backstop date is set by @esengine and published in the version announcement. | Open |
+| M4 | A fix that matters on both lines lands on `main-v2` and is recorded in the porting list (W3). | Active |
 
 ## Open decisions
 
@@ -63,6 +88,5 @@ These are decided by @esengine and recorded here when made.
 
 | ID | Decision | State |
 | --- | --- | --- |
-| D1 | How long 1.x is maintained, and what it receives until then | Open. The announcement says the period will be published separately. |
-| D2 | What ends the 2.x pre-release status of Studio | Open |
-| D3 | Release cadence of 2.x | Open |
+| D1 | The backstop date that ends 1.x maintenance (M2, M3) | Open |
+| D2 | Agreement with the 1.x maintainers on the feature and format freeze (M1) | Open |

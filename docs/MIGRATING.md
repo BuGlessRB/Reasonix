@@ -35,24 +35,25 @@ Both lines read and write the same Reasonix home: `~/.reasonix` on macOS and Lin
 | Slash commands, skills, hooks | `<home>/commands/`, `<home>/skills/`, `<home>/settings.json` | Yes |
 | Memory | `<home>/memory/`, `<home>/projects/` | Yes |
 | Project instructions | `REASONIX.md`, `AGENTS.md`, `CLAUDE.md` in the project | Yes |
-| Sessions | `<home>/projects/<project>/sessions/` | Partly. See [Sessions](#sessions). |
+| Sessions | `<home>/projects/<project>/sessions/`; 1.x 1.38.8 or later also `sessions-v4/` | Partly. See [Sessions](#sessions). |
 
 ## Sessions
 
-1.x 1.38.2 and later save sessions in an event log format (schema 2) that 2.x cannot read yet. Opening such a session in 2.x fails with `session event log for … uses schema 2; this build supports up to 1`.
+Where 1.x keeps a conversation depends on the 1.x version that last saved it.
 
-| Session last saved by | Opens in 1.x | Opens in 2.x |
+| Saved by | Kept in | Opens in 2.x |
 | --- | --- | --- |
-| 2.x | Yes | Yes |
-| 1.x before 1.38.2 | Yes | Yes |
-| 1.x 1.38.2 or later, without `REASONIX_SESSION_LOG=v1` | Yes | No |
+| 1.x before 1.38.2 | `sessions/`, event log schema 1 | Yes |
+| 1.x 1.38.2 to 1.38.7 | `sessions/`, event log schema 2 | Yes |
+| 1.x 1.38.8 or later | `sessions-v4/<id>/` | No. 2.x does not list them yet. |
+| 2.x | `sessions/`, event log schema 1 | Yes |
 
 | ID | Rule |
 | --- | --- |
-| S1 | A 2.x session that 1.x 1.38.2 or later continues is upgraded to schema 2 in place and stops opening in 2.x. |
-| S2 | Neither line converts a schema 2 session back. |
-| S3 | Starting 1.x with `REASONIX_SESSION_LOG=v1` keeps sessions it has not upgraded yet on schema 1. Sessions already upgraded stay schema 2. |
-| S4 | A person who runs both lines on one machine SHOULD set `REASONIX_SESSION_LOG=v1` for 1.x until 2.x reads schema 2. |
+| S1 | 2.x never writes a file of a session 1.x saved. Opening one and leaving it changes nothing. |
+| S2 | Continuing a 1.x session in 2.x moves it to a new 2.x session with the same title before the first turn runs, and says so. 1.x keeps the original. |
+| S3 | 1.x 1.38.8 or later copies an older session into `sessions-v4` when it opens it. The copy under `sessions/` stays as it was, and 2.x still opens it. |
+| S4 | Conversations started or continued in 1.x 1.38.8 or later exist only in `sessions-v4`. Reading them in 2.x is roadmap item [W1b](./ROADMAP.md#other-workstreams). |
 | S5 | 1.x lists the `.wire.jsonl`, `.adjudication.jsonl` and `.execution.jsonl` files 2.x writes as extra conversations. Ignore them in 1.x; they belong to the 2.x session with the same name. |
 
 ## Commands
@@ -68,27 +69,15 @@ Both lines read and write the same Reasonix home: `~/.reasonix` on macOS and Lin
 
 1. Download Reasonix Studio for your platform from the latest [`studio-v2.*` release](https://github.com/esengine/DeepSeek-Reasonix/releases?q=studio-v&expanded=true) and install it. Studio updates itself after that.
 2. For the 2.x terminal UI, download the `reasonix` archive for your platform from the same release and unpack it into a directory of your choice.
-3. Keep 1.x from upgrading sessions 2.x still has to open. Add this to your shell profile:
-
-   ```sh
-   export REASONIX_SESSION_LOG=v1
-   ```
-
-   On Windows:
-
-   ```powershell
-   setx REASONIX_SESSION_LOG v1
-   ```
-
-4. Start the 2.x terminal UI from the unpacked directory:
+3. Start the 2.x terminal UI from the unpacked directory:
 
    ```sh
    ./reasonix tui
    ```
 
-5. Report 2.x problems with **Version line: 2.x** in the issue form, and the version from Studio's settings or `reasonix --version`.
+4. Report 2.x problems with **Version line: 2.x** in the issue form, and the version from Studio's settings or `reasonix --version`.
 
 ## Steps: go back to 1.x
 
 1. Keep using the 1.x desktop app or `reasonix` from npm or Homebrew. Config, keys, skills and memory are the same files.
-2. Sessions 2.x saved open in 1.x. Continuing one in 1.x 1.38.2 or later upgrades it to schema 2 (rule S1).
+2. Sessions 2.x saved open in 1.x. 1.x 1.38.8 or later copies them into `sessions-v4` first (rule S3).
