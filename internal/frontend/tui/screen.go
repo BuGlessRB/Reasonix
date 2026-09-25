@@ -95,7 +95,7 @@ func wrapLines(out string, width int) []string {
 	}
 	var rows []string
 	for l := range strings.SplitSeq(out, "\n") {
-		for r := range strings.SplitSeq(ansi.Hardwrap(l, width, true), "\n") {
+		for r := range strings.SplitSeq(ansi.Hardwrap(termrender.ExpandTabs(l), width, true), "\n") {
 			rows = append(rows, termrender.PadRight(r, width))
 		}
 	}

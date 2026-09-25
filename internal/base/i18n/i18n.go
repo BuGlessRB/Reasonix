@@ -56,6 +56,7 @@ type Messages struct {
 	// verify — a declaration, kept apart from the gaps the host found.
 	ReceiptUnverifiedHeader string // end-of-turn receipt, header above declared risks
 	ReceiptMore             string // end-of-turn receipt, "and N more" tail
+	ReceiptChangedFmt       string // end-of-turn receipt, how many files the turn changed
 	// ReceiptGapKinds maps a completion gap kind to its short human phrase.
 	ReceiptGapKinds     map[string]string
 	NoSessionToResume   string // shown when --continue / --resume finds nothing
@@ -122,6 +123,7 @@ type Messages struct {
 	ChatStatusCacheAvgFmt           string // cache status tag, "%s" = session-average hit rate with percent sign
 	ChatStatusPlanApproval          string // shortcuts hint while a plan is pending
 	PlanApprovalPrompt              string // one-line "plan above is ready" banner shown above the input
+	ApprovalChoiceHint              string // keys under an approval's choices
 	PlanApprovalChoices             string // start / revise / exit-without-executing choice list
 	ChatStatusToolApproval          string // shortcuts hint while a tool call awaits approval
 	ToolApprovalPromptFmt           string // approval banner — tool, subject suffix, source/intent detail, choices

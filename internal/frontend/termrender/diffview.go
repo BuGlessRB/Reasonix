@@ -206,14 +206,14 @@ func clampPlain(s string, w int) string {
 	if w < 1 {
 		w = 1
 	}
-	return ansi.Truncate(expandTabs(s), w, "")
+	return ansi.Truncate(ExpandTabs(s), w, "")
 }
 
-// expandTabs replaces tabs with spaces to the next tabWidth stop. A literal tab
+// ExpandTabs replaces tabs with spaces to the next tabWidth stop. A literal tab
 // has zero StringWidth but the terminal advances it to a tab stop, so leaving
 // tabs in a background-bar row overflows the bar — expand them so the measured
 // width matches what's drawn.
-func expandTabs(s string) string {
+func ExpandTabs(s string) string {
 	if !strings.ContainsRune(s, '\t') {
 		return s
 	}

@@ -3,6 +3,8 @@ package termrender
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // TestRenderEmpty covers the contract that empty / whitespace-only input
@@ -112,5 +114,14 @@ func TestWrapAnsiCJK(t *testing.T) {
 	}
 	if VisibleWidth(lines[0]) > 10 {
 		t.Errorf("first line exceeds width: %d > 10", VisibleWidth(lines[0]))
+	}
+}
+
+// An ordered list counts from the number it was written with, so one that
+// resumes after a code block does not restart at 1.
+func TestOrderedListKeepsItsStartNumber(t *testing.T) {
+	out := ansi.Strip(RenderMarkdown("3. third\n4. fourth\n", 40))
+	if !strings.Contains(out, "3. third") || !strings.Contains(out, "4. fourth") {
+		t.Fatalf("list renumbered:\n%s", out)
 	}
 }

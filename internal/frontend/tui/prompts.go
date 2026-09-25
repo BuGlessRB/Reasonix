@@ -140,20 +140,22 @@ func (m *model) approvalPanel(it *Item) []string {
 	width := max(m.width-2, 20)
 	var text []string
 	if a.Kind == "plan" {
-		text = []string{"⏸ " + i18n.M.PlanApprovalPrompt}
+		text = []string{approvalTitle(i18n.M.PlanApprovalPrompt)}
 	} else {
 		name, detail := approvalToolDetails(a.Tool)
 		subject := strings.TrimSpace(a.Subject)
-		preview := ""
+		preview, shown := "", ""
 		if subject != "" {
-			preview = " " + oneLine(subject, max(width-28, 16))
+			shown = oneLine(subject, max(width-28, 16))
+			preview = " " + termrender.Accent(shown)
 		}
 		body := strings.TrimSpace(fmt.Sprintf(i18n.M.ToolApprovalPromptFmt, name, preview, detail, ""))
 		if reason := strings.TrimSpace(a.Reason); reason != "" {
 			body += " · " + oneLine(reason, width)
 		}
-		text = strings.Split("⏸ "+body, "\n")
-		if strings.TrimSpace(preview) != subject {
+		text = strings.Split(body, "\n")
+		text[0] = approvalTitle(text[0])
+		if shown != subject {
 			text = append(text, subjectRows(subject, width)...)
 		}
 	}
@@ -161,9 +163,14 @@ func (m *model) approvalPanel(it *Item) []string {
 	for i, c := range approvalChoices(a) {
 		text = append(text, rowLine(i == row, i+1, "", c.label, false))
 	}
-	text = append(text, termrender.Dim("↑/↓ navigate · Enter select · y/a/p/n shortcuts"))
+	text = append(text, termrender.Dim(i18n.M.ApprovalChoiceHint))
 	return panel(text, m.width, accentEdge)
 }
+
+// approvalTitle heads the panel in its accent, with no pictograph: a terminal
+// that draws one as a two-cell emoji where the width tables say one cell
+// overprints the text beside it.
+func approvalTitle(s string) string { return termrender.Bold(termrender.Accent(s)) }
 
 // subjectRows shows a subject the one-line preview had to clip, because the
 // part it cut can be the part that matters.

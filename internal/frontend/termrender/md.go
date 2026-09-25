@@ -269,7 +269,7 @@ func (r *MarkdownRenderer) renderInlineBlock(buf *strings.Builder, n ast.Node, s
 }
 
 func (r *MarkdownRenderer) renderList(buf *strings.Builder, n *ast.List, src []byte, indent int) {
-	idx := 1
+	idx := n.Start
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		item, ok := c.(*ast.ListItem)
 		if !ok {

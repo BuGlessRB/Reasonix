@@ -66,7 +66,7 @@ func renderItem(it *Item, width, shown int) string {
 	case ItemCompaction:
 		return termrender.Dim("  ⟲ " + i18n.M.CompactionTitle)
 	case ItemReceipt:
-		return renderReceipt(it)
+		return renderReceipt(it.Receipt, width)
 	case ItemUsage:
 		return renderUsage(it.Usage, width)
 	}
@@ -74,12 +74,13 @@ func renderItem(it *Item, width, shown int) string {
 }
 
 // renderSayPart renders a stretch of an answer. Only the first stretch carries
-// the speaker's header; the rest continue under it.
+// the speaker's header; the rest continue under it. A stretch is cut after a
+// blank line, so each later one starts a new block and gets that line back.
 func renderSayPart(text string, first bool, width int) string {
 	if first {
 		return "\n" + termrender.AssistantBlock(text, width)
 	}
-	return indent(strings.TrimRight(termrender.RenderMarkdown(text, max(width-2, 10)), "\n"), "  ")
+	return "\n" + indent(strings.TrimRight(termrender.RenderMarkdown(text, max(width-2, 10)), "\n"), "  ")
 }
 
 // withThought puts the thinking marker above the first stretch of an answer.
@@ -209,30 +210,12 @@ func renderNotice(it *Item) string {
 	return mark + text
 }
 
-func renderReceipt(it *Item) string {
-	r := it.Receipt
-	parts := []string{r.Verdict}
-	if n := len(r.Changes); n > 0 {
-		parts = append(parts, fmt.Sprintf("%d change(s)", n))
-	}
-	if n := len(r.Verifications); n > 0 {
-		parts = append(parts, fmt.Sprintf("%d check(s)", n))
-	}
-	if n := len(r.Gaps); n > 0 {
-		parts = append(parts, termrender.Yellow(fmt.Sprintf("%d gap(s)", n)))
-	}
-	mark := termrender.Green("  ✓ ")
-	if r.Verdict != "done" {
-		mark = termrender.Yellow("  ! ")
-	}
-	return "\n" + mark + strings.Join(parts, termrender.Dim(" · "))
-}
-
+// oneLine fits s on one row of width cells: a wide rune takes two, so the cut
+// is measured on screen rather than in runes.
 func oneLine(s string, width int) string {
 	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
-	r := []rune(s)
-	if width > 1 && termrender.VisibleWidth(s) > width && len(r) > width-1 {
-		return string(r[:width-1]) + "…"
+	if width > 1 && termrender.VisibleWidth(s) > width {
+		return ansi.Truncate(s, width, "…")
 	}
 	return s
 }
