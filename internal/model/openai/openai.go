@@ -92,6 +92,8 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	prefixChatURL := deepSeekPrefixChatURL(chatURL)
 	headers, _ := cfg.Extra["headers"].(map[string]string)
 	extraBody, _ := cfg.Extra["extra_body"].(map[string]any)
+	userID, _ := cfg.Extra["user_id"].(string)
+	sessionID, _ := cfg.Extra["session_id"].(string)
 	vision, _ := cfg.Extra["vision"].(bool)
 	officialDeepSeek := IsDeepSeek(cfg.BaseURL)
 	// DeepSeek's official chat API takes image parts only on the models that
@@ -245,6 +247,8 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		prefixChatURL:       prefixChatURL,
 		headers:             cleanCustomHeaders(headers),
 		extraBody:           cleanExtraBody(extraBody),
+		userID:              userID,
+		sessionID:           sessionID,
 		model:               normalizeModelID(cfg.BaseURL, cfg.Model),
 		deepseek:            deepseek,
 		stripChainOfThought: stripChainOfThought,
@@ -285,6 +289,8 @@ type client struct {
 	prefixChatURL       string // official DeepSeek Beta endpoint; empty for custom gateways
 	headers             map[string]string
 	extraBody           map[string]any
+	userID              string // workspace user attribution id; sent as the `user` body field
+	sessionID           string // derived OpenRouter session_id; sent as the top-level `session_id` body field
 	model               string
 	http                *http.Client
 	deepseek            bool
@@ -774,6 +780,8 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 		Temperature:     req.Temperature,
 		MaxTokens:       maxOutputTokens,
 		ReasoningEffort: kimiK3ReasoningEffort(c.kimiK3, c.requestEffort(req)),
+		User:            c.userID,
+		SessionID:       c.sessionID,
 		ExtraBody:       c.extraBody,
 		reasoningHint:   reasoningHint,
 	}
@@ -1153,6 +1161,8 @@ type chatRequest struct {
 	MaxCompletionTokens int                  `json:"max_completion_tokens,omitempty"`
 	ReasoningEffort     string               `json:"reasoning_effort,omitempty"`
 	Thinking            *thinkingMode        `json:"thinking,omitempty"`
+	User                string               `json:"user,omitempty"`
+	SessionID           string               `json:"session_id,omitempty"`
 	ExtraBody           map[string]any       `json:"-"`
 	reasoningHint       provider.RequestHint // host-side, never serialized: what this body left out
 }

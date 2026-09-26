@@ -225,6 +225,9 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	}
 	cfg.CredentialsStore = r.credentialsStoreMode()
 	cfg.setExpansionEnv(expansionEnv)
+	if cfg.LogName != "" && cfg.User != "" {
+		cfg.addLoadWarning("both logname and user are set; logname wins for the auto cachecontext")
+	}
 	r.resolveProviderCredentialsForRoot(root, cfg)
 	return cfg, nil
 }

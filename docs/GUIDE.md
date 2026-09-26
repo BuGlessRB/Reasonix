@@ -580,6 +580,39 @@ extra_body  = { enable_thinking = true }
 fields such as `model`, `messages`, `tools`, `stream`, and `thinking` under its
 own control.
 
+## Per-project user id (`cachecontext`)
+
+To attribute each project separately (DeepSeek KV-cache isolation / abuse
+tracking), set the top-level `cachecontext` per project instead of repeating the
+provider entry. It is sent as the DeepSeek `user_id` (`metadata.user_id` on the
+Anthropic endpoint, `user` on the OpenAI endpoint):
+
+```toml
+cachecontext = "my-project"
+```
+
+The value must match `^[a-zA-Z0-9_-]+$` (≤512 chars); anything else makes
+DeepSeek return an HTTP 400. It is a project-local setting, not a user-global one.
+
+When a workspace sets no `cachecontext`, Reasonix sends an auto-derived value
+from `<unix-user>:<repo-path>` — e.g. `alice:/home/alice/my-project` — sanitized
+to the same `^[a-zA-Z0-9_-]+$` rule, so the emitted id is
+`alice--home-alice-my-project`. Over-long paths keep the `<user>-` prefix and
+the path tail, hashing the overflowing middle so the value is always ≤512
+chars. The auto value is never written to a config file — it only appears on
+the provider wire — so an explicit `cachecontext` is the only way to pin one.
+
+The username in that auto value resolves in this priority order: a repo-local `logname` (in the project-local config), then a user-global
+`logname` (in the global config), then `user` (an older alias for `logname`),
+then the `$LOGNAME` environment variable, then the system account. If both
+`logname` and `user` are set, `logname` prevails and a load warning is recorded.
+
+From the same auto derivation Reasonix also sends a `session_id` (≤256 chars,
+OpenRouter's ceiling) as the top-level `session_id` on OpenAI-compatible
+provider requests. Like the `user` id it is derived per project, so a
+conversation's continuation stays stable across runs; gateways that do not
+define the field ignore it.
+
 ## Desktop hooks
 
 Desktop hooks run local commands at lifecycle events such as `SessionStart`,
