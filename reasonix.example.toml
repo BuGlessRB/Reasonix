@@ -63,6 +63,8 @@ compact_ratio       = 0.85  # sole auto trigger; presets 0.70 (active) / 0.80 (s
 # max_parallel_writers = 3       # concurrent writers with non-overlapping write_paths
 # output_style = "explanatory"   # persona/tone folded into the prompt: explanatory | learning | concise,
 #                                  or a custom .reasonix/output-styles/<name>.md ; empty = default
+# embedded_diff_detection = true   # mark a shell result whose whole output is a unified diff (e.g. `git diff`)
+#                                  so the transcript renders it as a diff instead of flat text; default false
 
 # A provider is a vendor endpoint (one base_url + key) that offers one or more
 # models. Use `models = [...]` to expose several under a single entry — switching

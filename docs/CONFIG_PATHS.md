@@ -134,6 +134,11 @@ failure, timeout, or empty output the built-in renderer is used. Like
 `[cli].update_channel` it is user/global only — a project-local `reasonix.toml`
 cannot set it.
 
+`[agent].embedded_diff_detection = true` marks a shell result whose whole output
+is a unified diff — e.g. `bash` running `git diff` — so a frontend renders it as
+a coloured diff instead of flat text. Detection is whole-text, so `git log -p`,
+mixed output, and `--stat` stay prose. The default is `false`.
+
 ### Custom provider `api_key_env` names
 
 When a custom provider is added from the desktop settings or `reasonix setup`,

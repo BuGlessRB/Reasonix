@@ -73,6 +73,19 @@ describe("tool outcome cards", () => {
     expect(screen.getByLabelText("新增 1 行，删除 1 行").textContent).toBe("+1−1");
   });
 
+  // A shell result the host marked as a whole diff draws as a diff, not as flat
+  // output text.
+  it("renders a marked shell result as a diff", () => {
+    const diff = "diff --git a/x.go b/x.go\n--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-old\n+new\n";
+    const { container } = render(
+      <ToolCard tool={{ id: "d", name: "bash", args: '{"command":"git diff"}', output: diff, outputDiff: true, readOnly: false }} running={false} />,
+    );
+    fireEvent.click(container.querySelector("details.tool-disclosure summary")!);
+    const rows = container.querySelectorAll(".dl");
+    expect(rows.length).toBeGreaterThan(0);
+    expect([...rows].some((r) => r.getAttribute("data-d") === "+" && r.textContent?.includes("new"))).toBe(true);
+  });
+
   it("uses the prototype's compact audit row and structured details inside activity", () => {
     const { container } = render(
       <ToolCard

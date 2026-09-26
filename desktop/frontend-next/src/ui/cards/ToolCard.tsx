@@ -201,14 +201,15 @@ export function ToolCard({
               onCommit={onCommitFileRevert}
             />
           )}
-          {!tool.diff && tool.name === "todo_write" && <Steps tool={tool} />}
+          {!tool.diff && tool.outputDiff && tool.output && <DiffView diff={tool.output} />}
+          {!tool.diff && !tool.outputDiff && tool.name === "todo_write" && <Steps tool={tool} />}
           {goal && (
             <div className="goalup" data-s={GOAL_STATUS[goal.status]?.[1] ?? "run"}>
               <span className="st">{t(GOAL_STATUS[goal.status]?.[0] ?? goal.status)}</span>
               {goal.reason && <span className="rs">{goal.reason}</span>}
             </div>
           )}
-          {!tool.diff && !goal && tool.name !== "todo_write" && tool.output && !echoed && children.length === 0 && (
+          {!tool.diff && !tool.outputDiff && !goal && tool.name !== "todo_write" && tool.output && !echoed && children.length === 0 && (
             <ToolOutput name={shown} text={tool.output} bound={tool.bound} id={tool.id} />
           )}
           <ToolShots images={tool.images} />
