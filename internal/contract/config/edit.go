@@ -843,10 +843,7 @@ func (c *Config) ClearPluginAuthentication(name string) (PluginEntry, bool, erro
 }
 
 func pluginTOMLSourcePathForRoot(root, name string) string {
-	projectTOML := "reasonix.toml"
-	if resolved := resolveRoot(root); resolved != "." {
-		projectTOML = filepath.Join(resolved, "reasonix.toml")
-	}
+	projectTOML := ProjectConfigPath(resolveRoot(root))
 	paths := append([]string{projectTOML}, processRoots().userConfigCandidatePaths()...)
 	for _, path := range paths {
 		if strings.TrimSpace(path) == "" {
@@ -868,10 +865,9 @@ func pluginTOMLSourcePathForRoot(root, name string) string {
 // the highest priority.
 func MCPConfigPathForEntry(root string, entry PluginEntry) string {
 	resolvedRoot := resolveRoot(root)
-	projectTOML := "reasonix.toml"
+	projectTOML := ProjectConfigPath(resolvedRoot)
 	projectMCPJSON := mcpJSONFile
 	if resolvedRoot != "." {
-		projectTOML = filepath.Join(resolvedRoot, "reasonix.toml")
 		projectMCPJSON = filepath.Join(resolvedRoot, mcpJSONFile)
 	}
 	switch entry.Source {
@@ -1078,10 +1074,9 @@ func RemovePluginFromEffectiveSourceForRoot(root, name string) (PluginEntry, boo
 // of a now-shadowed source.
 func mcpConfigSourcePathsForRoot(root string) []string {
 	resolvedRoot := resolveRoot(root)
-	projectTOML := "reasonix.toml"
+	projectTOML := ProjectConfigPath(resolvedRoot)
 	projectMCPJSON := mcpJSONFile
 	if resolvedRoot != "." {
-		projectTOML = filepath.Join(resolvedRoot, "reasonix.toml")
 		projectMCPJSON = filepath.Join(resolvedRoot, mcpJSONFile)
 	}
 	paths := append([]string{}, processRoots().userConfigCandidatePaths()...)
@@ -2105,7 +2100,7 @@ func IsUserConfigPath(path string) bool {
 func (c *Config) Save() error {
 	path := SourcePath()
 	if path == "" {
-		path = "reasonix.toml"
+		path = projectConfigLocal
 	}
 	return c.SaveTo(path)
 }
@@ -2115,10 +2110,7 @@ func (c *Config) Save() error {
 // are edited from their own TOML only, never from a runtime user+project merge.
 func (c *Config) SaveForRoot(root string) error {
 	root = resolveRoot(root)
-	projectTOML := "reasonix.toml"
-	if root != "." {
-		projectTOML = filepath.Join(root, "reasonix.toml")
-	}
+	projectTOML := ProjectConfigPath(root)
 	if _, err := os.Stat(projectTOML); err == nil {
 		projectCfg := LoadForEditWithoutCredentials(projectTOML)
 		return projectCfg.SaveTo(projectTOML)
