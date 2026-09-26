@@ -14,13 +14,15 @@ func (c *client) toolCallReasoning(m provider.Message) (*string, bool) {
 		// Kimi K3 requires the complete assistant message on multi-turn and
 		// tool-call requests, including provider-issued reasoning.
 		return &m.ReasoningContent, false
-	case c.deepseek && len(m.ToolCalls) > 0:
-		// DeepSeek 400s a tool_calls turn whose reasoning_content key is absent;
-		// an empty value passes. Thinking off tolerates any shape, so the key
-		// stays absent there and mixed sessions keep their cache prefix.
-		if c.RequiresToolCallReasoning() || m.ReasoningContent != "" {
-			return &m.ReasoningContent, false
-		}
+	case c.RequiresToolCallReasoning():
+		// DeepSeek thinking mode 400s an assistant history turn whose
+		// reasoning_content key is absent, a plain turn included; an empty
+		// value passes.
+		return c.replayedReasoning(m), false
+	case c.deepseek && m.ReasoningContent != "":
+		// Thinking off tolerates any shape, so a keyless plain turn keeps its
+		// cache prefix; reasoning the endpoint already issued still replays.
+		return c.replayedReasoning(m), false
 	case c.zhipu && m.ReasoningContent != "":
 		// GLM interleaved and preserved thinking require provider-issued reasoning
 		// returned unchanged in later history, including after thinking is turned
@@ -30,4 +32,15 @@ func (c *client) toolCallReasoning(m provider.Message) (*string, bool) {
 	// Nothing went out. A tool_calls turn that had reasoning is the one shape a
 	// thinking endpoint refuses, and the only one worth reporting.
 	return nil, len(m.ToolCalls) > 0 && m.ReasoningContent != ""
+}
+
+// replayedReasoning is the reasoning_content to send back on a DeepSeek
+// assistant turn. The key must be present, but strip_chain_of_thought sends it
+// empty so the endpoint does not bill the replayed reasoning as prompt input.
+func (c *client) replayedReasoning(m provider.Message) *string {
+	if c.stripChainOfThought {
+		empty := ""
+		return &empty
+	}
+	return &m.ReasoningContent
 }

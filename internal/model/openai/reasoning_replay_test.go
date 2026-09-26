@@ -98,3 +98,77 @@ func TestNoHintWhenThereWasNoReasoningToDrop(t *testing.T) {
 		})
 	}
 }
+
+// In thinking mode the deepseek reasoning protocol rejects an assistant
+// history turn whose reasoning_content KEY is missing, a plain text turn with
+// no reasoning and no tool call included: the key must serialize as an empty
+// string. The contract hinges on the protocol, not on thinking alone, so
+// generic thinking, non-DeepSeek and thinking-disabled turns keep omitting it.
+func TestPlainDeepSeekThinkingTurnSerializesEmptyReasoningKey(t *testing.T) {
+	msgs := []provider.Message{
+		{Role: provider.RoleUser, Content: "explain"},
+		{Role: provider.RoleAssistant, Content: "plain answer"},
+		{Role: provider.RoleUser, Content: "thanks"},
+	}
+	messages := func(c *client) string {
+		t.Helper()
+		body, err := json.Marshal(c.buildRequest(provider.Request{Messages: msgs}).Messages)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		return string(body)
+	}
+
+	deepseek := &client{model: "deepseek-v4", deepseek: true, thinkingType: "enabled"}
+	if got := messages(deepseek); !strings.Contains(got, `"reasoning_content":""`) {
+		t.Errorf("plain DeepSeek thinking turn must serialize an empty reasoning_content key: %s", got)
+	}
+
+	for _, tc := range []struct {
+		name string
+		c    *client
+	}{
+		{name: "generic thinking", c: &client{model: "mimo-v2", thinkingType: "enabled"}},
+		{name: "deepseek thinking disabled", c: &client{model: "deepseek-v4", deepseek: true, thinkingType: "disabled"}},
+		{name: "non-deepseek backend", c: &client{model: "mimo-v2"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := messages(tc.c); strings.Contains(got, "reasoning_content") {
+				t.Errorf("a plain turn must not serialize reasoning_content here: %s", got)
+			}
+		})
+	}
+}
+
+// strip_chain_of_thought keeps the key (the API 400s without it) but empties the
+// value, so a replayed chain-of-thought is not billed as prompt input. Off by
+// default, which replays the exact reasoning.
+func TestStripChainOfThoughtEmptiesReplayedReasoning(t *testing.T) {
+	msgs := []provider.Message{
+		{Role: provider.RoleUser, Content: "explain"},
+		{Role: provider.RoleAssistant, Content: "the answer", ReasoningContent: "SECRET-CHAIN-OF-THOUGHT"},
+		{Role: provider.RoleUser, Content: "thanks"},
+	}
+	messages := func(c *client) string {
+		t.Helper()
+		body, err := json.Marshal(c.buildRequest(provider.Request{Messages: msgs}).Messages)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		return string(body)
+	}
+
+	replay := &client{model: "deepseek-reasoner", deepseek: true}
+	if got := messages(replay); !strings.Contains(got, "SECRET-CHAIN-OF-THOUGHT") {
+		t.Errorf("default must replay the chain-of-thought: %s", got)
+	}
+
+	strip := &client{model: "deepseek-reasoner", deepseek: true, stripChainOfThought: true}
+	got := messages(strip)
+	if strings.Contains(got, "SECRET-CHAIN-OF-THOUGHT") {
+		t.Errorf("strip_chain_of_thought must not re-upload the chain-of-thought: %s", got)
+	}
+	if !strings.Contains(got, `"reasoning_content":""`) {
+		t.Errorf("strip_chain_of_thought must still serialize the key, empty: %s", got)
+	}
+}
