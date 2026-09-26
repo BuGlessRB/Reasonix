@@ -104,15 +104,15 @@
     },
     "docs/CLI.md": {
       "doc-owner": 1,
-      "doc-prose": 50
+      "doc-prose": 55
     },
     "docs/CLI.zh-CN.md": {
       "doc-owner": 1,
-      "doc-prose": 17
+      "doc-prose": 20
     },
     "docs/CONFIG_PATHS.md": {
       "doc-owner": 1,
-      "doc-prose": 30
+      "doc-prose": 35
     },
     "docs/DESKTOP_CRASH_DIAGNOSTICS_RUNBOOK.md": {
       "doc-owner": 1,
@@ -805,6 +805,9 @@
     },
     "internal/frontend/termrender/clipboard.go": {
       "orphan": 1
+    },
+    "internal/frontend/termrender/diffformatter.go": {
+      "essay": 2
     },
     "internal/frontend/termrender/diffview.go": {
       "orphan": 1

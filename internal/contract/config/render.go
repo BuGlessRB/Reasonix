@@ -87,6 +87,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	}
 
 	if scope != RenderScopeProject {
+		renderCLIConfig(&b, c, scope)
 		renderDesktopSection(&b, c)
 	} else if c.Desktop.ProviderAccess != nil {
 		// provider_access is intentionally mergeable across user and project

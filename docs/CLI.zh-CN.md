@@ -52,6 +52,14 @@ reasonix upgrade --force          # 重新安装当前正式版
 `[cli].update_channel` 值不再影响更新，并会在 Reasonix 下次保存配置时移除。别名
 `reasonix update` 的行为完全相同。
 
+`[cli].diff_formatter` 指定一个可选的外部命令，在 CLI/TUI 写入 diff 之前对其格式化：
+既包括回答流中的围栏 ` ```diff ` / ` ```patch ` 块，也包括 transcript 中写文件工具的
+diff 卡片，例如 `delta --color-only --paging=never`。它是 argv 形式、不经过 shell：整个
+diff 写入该命令的 stdin，其 stdout 原样回写——不加行号槽、不做宽度裁剪、不过滤转义序列，
+因此格式化器输出的颜色与控制序列会完整送达终端。命令失败、超时或输出为空时回退到内置
+渲染器。与 `[cli].update_channel` 一样，它仅属于用户/全局配置，项目内的
+`reasonix.toml` 无法设置。
+
 ## 配置供应商
 
 ```sh
