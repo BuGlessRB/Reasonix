@@ -11,7 +11,7 @@ const assistantTranscriptIndent = "  "
 // identity that user, reasoning, tool, and receipt blocks already have. The
 // body keeps a restrained two-cell gutter instead of using a heavy card, and
 // rendering at the reduced width keeps every indented row inside the viewport.
-func AssistantBlock(raw string, contentWidth int) string {
+func AssistantBlock(raw string, contentWidth int, hideRail bool) string {
 	contentWidth = max(contentWidth, 1)
 	indent := assistantTranscriptIndent
 	if contentWidth <= VisibleWidth(indent) {
@@ -19,6 +19,7 @@ func AssistantBlock(raw string, contentWidth int) string {
 	}
 	bodyWidth := max(contentWidth-VisibleWidth(indent), 1)
 	renderer := NewMarkdownRenderer(bodyWidth)
+	renderer.hideRail = hideRail
 	rendered := renderer.Render(raw)
 	if rendered == "" {
 		rendered = raw

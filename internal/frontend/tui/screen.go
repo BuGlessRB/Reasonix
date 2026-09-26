@@ -43,17 +43,18 @@ type screen struct {
 // block is one settled print, kept as how to draw it so a resize redraws the
 // transcript at the new width rather than keeping the old wrapping.
 type block struct {
-	render func(width int) string
-	width  int
-	lines  []string
+	render   func(width int, hideRail bool) string
+	width    int
+	hideRail bool
+	lines    []string
 	// row is the settled row the block draws, when it draws one: a shell
 	// call's output opens and shuts through it.
 	row *Item
 }
 
-func (b *block) at(width int) []string {
-	if b.lines == nil || b.width != width {
-		b.width, b.lines = width, wrapLines(b.render(width), width)
+func (b *block) at(width int, hideRail bool) []string {
+	if b.lines == nil || b.width != width || b.hideRail != hideRail {
+		b.width, b.hideRail, b.lines = width, hideRail, wrapLines(b.render(width, hideRail), width)
 	}
 	return b.lines
 }
@@ -105,7 +106,7 @@ func wrapLines(out string, width int) []string {
 // settledPrint is one settled piece of the transcript: how to draw it, and
 // the row it draws when it draws one.
 type settledPrint struct {
-	render func(width int) string
+	render func(width int, hideRail bool) string
 	row    *Item
 }
 
@@ -115,7 +116,7 @@ func (m *model) settledRow(row Item, shown int) settledPrint {
 	if m.scr != nil && row.Kind == ItemTool {
 		row.Fold = foldShut
 	}
-	return settledPrint{render: func(w int) string { return renderItem(&row, w, shown) }, row: &row}
+	return settledPrint{render: func(w int, hideRail bool) string { return renderItem(&row, w, shown, hideRail) }, row: &row}
 }
 
 // publish sends what settled where this screen keeps it: blocks of the full
@@ -129,14 +130,14 @@ func (m *model) publish(out []settledPrint) tea.Cmd {
 	}
 	parts := make([]string, 0, len(out))
 	for _, p := range out {
-		if s := p.render(m.width); s != "" {
+		if s := p.render(m.width, m.scrollbarHidden()); s != "" {
 			parts = append(parts, s)
 		}
 	}
 	return m.printAbove(strings.Join(parts, "\n"))
 }
 
-func (m *model) emit(render func(int) string) tea.Cmd {
+func (m *model) emit(render func(int, bool) string) tea.Cmd {
 	return m.publish([]settledPrint{{render: render}})
 }
 
@@ -179,9 +180,9 @@ func (m *model) toggleLatestShell() {
 
 // blockEndingAt is the settled block whose last row is transcript row idx.
 func (m *model) blockEndingAt(idx int) *block {
-	cw, at := m.contentWidth(), 0
+	cw, hideRail, at := m.contentWidth(), m.scrollbarHidden(), 0
 	for i := range m.scr.blocks {
-		at += len(m.scr.blocks[i].at(cw))
+		at += len(m.scr.blocks[i].at(cw, hideRail))
 		if at-1 == idx {
 			return &m.scr.blocks[i]
 		}
@@ -230,14 +231,26 @@ func pieces(out string, room, width int) []string {
 	return outs
 }
 
-func (m *model) contentWidth() int { return max(m.width-scrollbarCol, 10) }
+func (m *model) contentWidth() int {
+	if m.scrollbarHidden() {
+		return max(m.width, 10)
+	}
+	return max(m.width-scrollbarCol, 10)
+}
+
+// scrollbarHidden reports whether the transcript drops its right-hand scrollbar
+// column. Native mouse mode hands the mouse to the terminal, so the in-app bar
+// can't be dragged and its column is reclaimed for content.
+func (m *model) scrollbarHidden() bool {
+	return m.scr != nil && m.scr.mouseOff
+}
 
 // content is every transcript row: the settled blocks, then what is live.
 func (m *model) content(live []string) []string {
 	cw := m.contentWidth()
 	var rows []string
 	for i := range m.scr.blocks {
-		rows = append(rows, m.scr.blocks[i].at(cw)...)
+		rows = append(rows, m.scr.blocks[i].at(cw, m.scrollbarHidden())...)
 	}
 	return append(rows, wrapLines(strings.Join(live, "\n"), cw)...)
 }
@@ -255,7 +268,11 @@ func (m *model) fullView(bottom []string, composerAt int) tea.View {
 	s.yoff = max(min(s.yoff, total-h), 0)
 	cw := m.contentWidth()
 	blank := strings.Repeat(" ", cw)
-	thumbStart, thumbSize := scrollbarThumb(h, s.yoff, total)
+	showBar := !m.scrollbarHidden()
+	thumbStart, thumbSize := 0, 0
+	if showBar {
+		thumbStart, thumbSize = scrollbarThumb(h, s.yoff, total)
+	}
 	lo, hi := s.sel.ordered()
 	out := make([]string, 0, h+len(bottom))
 	for r := range h {
@@ -269,7 +286,10 @@ func (m *model) fullView(bottom []string, composerAt int) tea.View {
 				line = lipgloss.StyleRanges(line, lipgloss.NewRange(a, b, lipgloss.NewStyle().Reverse(true)))
 			}
 		}
-		out = append(out, line+scrollbarCell(r, total, h, thumbStart, thumbSize))
+		if showBar {
+			line += scrollbarCell(r, total, h, thumbStart, thumbSize)
+		}
+		out = append(out, line)
 	}
 	for _, l := range bottom {
 		out = append(out, ansi.Truncate(l, max(m.width-1, 1), ""))

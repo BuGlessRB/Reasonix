@@ -161,7 +161,7 @@ func TestCommitKeepsTheOrderTheConversationHappenedIn(t *testing.T) {
 	if !m.committed[a.ID] || !m.committed[b.ID] {
 		t.Fatalf("settled calls were not committed: %v", m.committed)
 	}
-	if got := renderItem(&m.tr.Items[1], 80, m.sayShown[say.ID]); strings.Contains(got, "first block") {
+	if got := renderItem(&m.tr.Items[1], 80, m.sayShown[say.ID], false); strings.Contains(got, "first block") {
 		t.Fatalf("the answer's printed block was printed again: %q", got)
 	}
 }
