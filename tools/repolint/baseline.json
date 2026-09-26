@@ -5,16 +5,16 @@
     "claude-dialect": 1,
     "codeowners": 0,
     "commented-code": 0,
-    "complexity": 872,
+    "complexity": 873,
     "doc-language": 0,
     "doc-owner": 42,
     "doc-prose": 2288,
     "error-text": 9,
     "essay": 2793,
-    "file-size": 21633,
+    "file-size": 21640,
     "flat-view": 0,
     "frontend-parity": 30,
-    "function-size": 3325,
+    "function-size": 3344,
     "layer-order": 0,
     "layering": 0,
     "marker": 0,
@@ -963,10 +963,10 @@
       "essay": 1
     },
     "internal/runtime/agent/agent.go": {
-      "complexity": 35,
+      "complexity": 36,
       "essay": 33,
-      "file-size": 1207,
-      "function-size": 98
+      "file-size": 1214,
+      "function-size": 103
     },
     "internal/runtime/agent/agent_options.go": {
       "essay": 10
@@ -1041,7 +1041,7 @@
     },
     "internal/runtime/agent/run_loop.go": {
       "essay": 21,
-      "function-size": 2
+      "function-size": 16
     },
     "internal/runtime/agent/run_usage.go": {
       "complexity": 1,

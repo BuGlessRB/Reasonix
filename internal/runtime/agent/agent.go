@@ -652,29 +652,31 @@ func New(prov provider.Provider, tools *tool.Registry, session *sessionstore.Ses
 	if reasoningByteLimit == 0 {
 		reasoningByteLimit = defaultReasoningByteLimit
 	}
+	perseverationMaxRetries := resolvePerseverationRetries(opts.MaxPerseverationRetries)
 	a := &Agent{
 		svc: newAgentServices(prov, tools, sink, gate,
 			sandboxEscapeApprover, configWriteApprover, hooks, opts),
 		agentConfig: agentConfig{
-			maxSteps:           opts.MaxSteps,
-			maxStepsKey:        maxStepsKey,
-			reasoningByteLimit: reasoningByteLimit,
-			maxOutputTokens:    opts.MaxOutputTokens,
-			temperature:        opts.Temperature,
-			usageSource:        usageSourceOrDefault(opts.UsageSource, event.UsageSourceExecutor),
-			modelRef:           strings.TrimSpace(opts.ModelRef),
-			workspaceID:        strings.TrimSpace(opts.WorkspaceID),
-			classifierTaskText: opts.ClassifierTaskText,
-			writeWorkspaceRoot: strings.TrimSpace(opts.WriteWorkspaceRoot),
-			renderRoot:         strings.TrimSpace(opts.RenderRoot),
-			workspaceVCS:       strings.TrimSpace(opts.WorkspaceVCS),
-			subagentDepth:      subagentDepth,
-			maxSubagentDepth:   maxSubagentDepth,
-			contextWindow:      opts.ContextWindow,
-			compactRatio:       opts.CompactRatio,
-			recentKeep:         opts.RecentKeep,
-			budgets:            opts.CompactionBudgets,
-			archiveDir:         opts.ArchiveDir,
+			maxSteps:                opts.MaxSteps,
+			maxStepsKey:             maxStepsKey,
+			reasoningByteLimit:      reasoningByteLimit,
+			perseverationMaxRetries: perseverationMaxRetries,
+			maxOutputTokens:         opts.MaxOutputTokens,
+			temperature:             opts.Temperature,
+			usageSource:             usageSourceOrDefault(opts.UsageSource, event.UsageSourceExecutor),
+			modelRef:                strings.TrimSpace(opts.ModelRef),
+			workspaceID:             strings.TrimSpace(opts.WorkspaceID),
+			classifierTaskText:      opts.ClassifierTaskText,
+			writeWorkspaceRoot:      strings.TrimSpace(opts.WriteWorkspaceRoot),
+			renderRoot:              strings.TrimSpace(opts.RenderRoot),
+			workspaceVCS:            strings.TrimSpace(opts.WorkspaceVCS),
+			subagentDepth:           subagentDepth,
+			maxSubagentDepth:        maxSubagentDepth,
+			contextWindow:           opts.ContextWindow,
+			compactRatio:            opts.CompactRatio,
+			recentKeep:              opts.RecentKeep,
+			budgets:                 opts.CompactionBudgets,
+			archiveDir:              opts.ArchiveDir,
 		},
 		sess: sessionRuntime{
 			conversation: session,
@@ -1186,6 +1188,7 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 	var maxArgChars int
 	var lastArgProgress time.Time
 	var thought thoughtClock
+	perseveration := newPerseverationGuards()
 	// collect packages the stream state accumulated so far; stored is the
 	// finishReasoning output that becomes the round-tripped reasoning.
 	collect := func(stored string, err error) streamedTurn {
@@ -1353,6 +1356,10 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 			}
 			usage = provider.UsageWithRequestAttemptCount(ctx, usage)
 			return collect(stored, chunk.Err)
+		}
+		// Cut off a degenerate generation loop before it burns the output budget.
+		if perseveration.forChunk(chunk.Type).observe(chunk.Text) {
+			return abortOnPerseveration(collect, finishReasoning)
 		}
 	}
 }

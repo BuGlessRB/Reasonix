@@ -42,7 +42,11 @@ type streamedTurn struct {
 	maxArgChars        int      // peak streaming tool-arg size for failed-attempt estimates
 	attemptID          string   // the stream attempt this result came from, for usage correlation
 	bodyChain          []string // cumulative hashes of the messages this request actually sent
-	err                error
+	// perseverationAborted marks a stream the client-side perseveration guard cut
+	// short. It is a clean terminal (err == nil): the final-response path
+	// nudges and retries once, then stops for the user on a second strike.
+	perseverationAborted bool
+	err                  error
 }
 
 // deferredStreamSink keeps selected stream events local until the caller
@@ -340,7 +344,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 				// answer was finished, so the host fact is this round's result.
 				continue
 			}
-			cont, ferr := a.handleFinalResponse(ctx, state, text, reasoning, usage)
+			cont, ferr := a.handleFinalResponse(ctx, state, text, reasoning, usage, streamed.perseverationAborted)
 			if !cont {
 				return ferr
 			}
@@ -444,6 +448,16 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 		last = result
 		last.usage = finalizeSamplingUsage(billable, result.usage)
 
+		if result.perseverationAborted {
+			// The guard cut this attempt short on purpose. Settle it as the
+			// round's result instead of replaying the truncated stream; the run
+			// loop decides whether to nudge-and-retry once or stop for the user.
+			streamSink.Flush()
+			a.emitStreamAttempt(attemptID, event.StreamAttemptCommit, attempt, "", nil)
+			result.usage = finalizeSamplingUsage(billable, result.usage)
+			return result
+		}
+
 		if result.err != nil {
 			retry, terminal := a.handleSamplingError(ctx, attemptID, attempt, streamSink, &frozen, result, last, billable)
 			if retry {
@@ -451,6 +465,10 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 			}
 			return terminal
 		}
+
+		// A clean, non-perseveration provider terminal proves the model can
+		// answer this conversation; the consecutive-loop count resets.
+		a.sess.perseverationStrikes = 0
 
 		// Clean terminal. Optionally repair missing reasoning with one extra
 		// exact replay of the same frozen request (no synthetic prompt).
@@ -561,7 +579,12 @@ func sleepStreamRetryBackoff(ctx context.Context, attempt int) bool {
 // readiness retry, empty final retry, executor handoff nudge, steer drain, and
 // final compaction. cont=true continues the tool loop; cont=false returns err
 // from Run (err may be nil for a clean final answer).
-func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, text, reasoning string, usage *provider.Usage) (cont bool, err error) {
+func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, text, reasoning string, usage *provider.Usage, perseverationAborted bool) (cont bool, err error) {
+	if perseverationAborted {
+		// A degenerate loop is a terminal for this attempt; the guard already
+		// stopped generation. Retry once with a nudge, or stop for the user.
+		return a.handlePerseverationAbort()
+	}
 	// A captured criterion is owed until it has run. The run costs a build, so
 	// it happens where the turn asks whether it may stop, not per tool call.
 	a.evaluateBaselineCriteriaOnce(ctx)
@@ -645,7 +668,7 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 			a.sess.conversation.Add(provider.Message{Role: provider.RoleTool, Content: msg, ToolCallID: call.ID, Name: call.Name})
 		}
 		if hasVisibleFinalAnswer(text) {
-			return a.handleFinalResponse(ctx, state, text, reasoning, usage)
+			return a.handleFinalResponse(ctx, state, text, reasoning, usage, false)
 		}
 		if len(unavailableContextTools) == 1 && unavailableContextTools[0] == "update_goal" {
 			return false, fmt.Errorf("model repeatedly called update_goal outside Goal mode without a visible answer")
@@ -702,7 +725,7 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 		if hasVisibleFinalAnswer(text) {
 			// Keep the assistant tool call and host error paired in the transcript,
 			// but accept a co-streamed answer without another repair request.
-			return a.handleFinalResponse(ctx, state, text, reasoning, usage)
+			return a.handleFinalResponse(ctx, state, text, reasoning, usage, false)
 		}
 		state.contextToolRepairs++
 		nudge := fmt.Sprintf("The following tools are unavailable in the current workflow phase: %s. Do not call them again. Respond to the user's request with visible answer text now; call a different tool only if it is still needed to complete the request.", strings.Join(unavailableContextTools, ", "))
