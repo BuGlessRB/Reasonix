@@ -58,11 +58,12 @@ type Messages struct {
 	ReceiptMore             string // end-of-turn receipt, "and N more" tail
 	ReceiptChangedFmt       string // end-of-turn receipt, how many files the turn changed
 	// ReceiptGapKinds maps a completion gap kind to its short human phrase.
-	ReceiptGapKinds     map[string]string
-	NoSessionToResume   string // shown when --continue / --resume finds nothing
-	ResumeRequiresTTY   string // shown when --resume runs piped instead of on a terminal
-	PickSessionLabel    string // header on the --resume picker
-	AmbiguousResumeHint string // under the sessions a --resume query matched
+	ReceiptGapKinds              map[string]string
+	NoSessionToResume            string // shown when --continue / --resume finds nothing
+	NoSessionToResumeStartingNew string // shown when --continue finds nothing and a fresh session starts
+	ResumeRequiresTTY            string // shown when --resume runs piped instead of on a terminal
+	PickSessionLabel             string // header on the --resume picker
+	AmbiguousResumeHint          string // under the sessions a --resume query matched
 
 	// in-chat /resume command
 	ResumeBusy          string // shown when /resume is used mid-turn

@@ -325,7 +325,7 @@ func loadResumableSession(path string) (*sessionstore.Session, error) {
 // registers "c" as a long flag name, which leaves "-c" unparseable
 // ("unknown shorthand flag: 'c' in -c") while accidentally accepting "--c".
 func registerContinueFlag(fs *pflag.FlagSet) *bool {
-	return fs.BoolP("continue", "c", false, "resume the most recent saved session")
+	return fs.BoolP("continue", "c", false, "resume the most recent saved session, or start a fresh one when none exists")
 }
 
 func runAgent(args []string, version string) int {
@@ -453,10 +453,10 @@ func runAgent(args []string, version string) int {
 		reclaimCLIRecoveryBranches(sessionDir)
 		session, ok := mostRecentSession(sessionDir)
 		if !ok {
-			fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResume)
-			return 1
+			fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResumeStartingNew)
+		} else {
+			resumePath = session.Path
 		}
-		resumePath = session.Path
 	}
 	if *copySession && resumePath == "" {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--copy requires --resume or --continue")
@@ -478,7 +478,7 @@ func runAgent(args []string, version string) int {
 		}
 		resumePath = copied
 	}
-	sessionMode := cliTelemetrySessionMode(*cont, strings.TrimSpace(*resume) != "", *copySession)
+	sessionMode := cliTelemetrySessionMode(resumePath != "", strings.TrimSpace(*resume) != "", *copySession)
 	reporter := startCLITelemetry(cfg, telemetry.Options{
 		Version: version, Interactive: false, CLIMode: "run", Profile: profile,
 		PermissionMode: *permissionMode, SessionMode: sessionMode,
