@@ -578,6 +578,14 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		// immediately open another Run and silently bypass the chosen limit.
 		return false, a.gracePause(state)
 	}
+	// An executor that has not acted yet gets its one in-turn nudge before the
+	// gate ends the run: what it owes is still something this turn can supply.
+	if state.executorHandoff && !state.usedAnyTool && state.handoffNudges < maxExecutorHandoffNudges && a.shouldNudgeExecutorHandoff() {
+		state.handoffNudges++
+		a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeExecutorHandoff, Text: executorHandoffNoticeText(), Detail: "executor answered without taking any action; nudging it to use its tools"})
+		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(executorHandoffRetryMessage()), HostAuthored: true})
+		return true, nil
+	}
 	if readiness.reason != "" {
 		// Delivery no longer retries readiness with hidden model messages: the
 		// run ends immediately with the missing requirements, and the host owns
@@ -609,12 +617,6 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(emptyFinalRetryMessage()), HostAuthored: true})
 			return true, nil
 		}
-	}
-	if state.executorHandoff && !state.usedAnyTool && state.handoffNudges < maxExecutorHandoffNudges && a.shouldNudgeExecutorHandoff() {
-		state.handoffNudges++
-		a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeExecutorHandoff, Text: executorHandoffNoticeText(), Detail: "executor answered without taking any action; nudging it to use its tools"})
-		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(executorHandoffRetryMessage()), HostAuthored: true})
-		return true, nil
 	}
 	if readiness.applies {
 		event.RecordReadinessAudit(a.svc.sink, readiness.audit(hostaudit.ReadinessAllowed, a.turn.readinessRecovered))
