@@ -621,6 +621,9 @@ jobs:
     concurrency:
       group: certum-signing
       cancel-in-progress: false
+    # The signed installer's hash, which publish requires of what it downloads.
+    outputs:
+      installer-sha256: ${{ steps.signed.outputs.installer-sha256 }}
     steps:
       # Only the workflow's own commit is checked out: these jobs run the signer
       # and its checks, never anything the release tag builds.
@@ -707,15 +710,20 @@ jobs:
         run: Get-Process -Name '*SimplySign*' -ErrorAction SilentlyContinue | Stop-Process -Force
 
       - name: Verify the installer signature
+        id: signed
         shell: pwsh
         env:
           CERTUM_KEY_ID: ${{ secrets.CERTUM_KEY_ID }}
           EXPECTED_SUBJECT: ${{ vars.STUDIO_SIGNING_SUBJECT }}
         run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = 'dist/ReasonixStudio-windows-amd64-installer.exe'
           ./scripts/verify-windows-authenticode.ps1 `
-            -FilePath "dist/ReasonixStudio-windows-amd64-installer.exe" `
+            -FilePath $installer `
             -ExpectedThumbprint $env:CERTUM_KEY_ID `
             -ExpectedSubject $env:EXPECTED_SUBJECT
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
+          "installer-sha256=$hash" >> $env:GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -859,6 +867,35 @@ jobs:
         with:
           name: studio-windows-signed
           path: staging/studio-windows
+
+      # Any job can upload an artifact, so the signed Windows packages are
+      # taken only if they are the bytes the signing jobs recorded: the
+      # installer as signed, the zip as windows-verify-package checked it.
+      - name: Require the recorded Windows packages
+        if: needs.windows-sign-installer.result == 'success'
+        env:
+          INSTALLER_SHA256: ${{ needs.windows-sign-installer.outputs.installer-sha256 }}
+          ARCHIVE_SHA256: ${{ needs.windows-verify-package.outputs.archive-sha256 }}
+        run: |
+          check() {
+            local file="staging/studio-windows/$1" want="$2" got
+            if [[ ! "$want" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error title=studio-signing.package-hash-missing::no recorded SHA-256 for $1"
+              return 1
+            fi
+            got="$(sha256sum "$file" | awk '{print $1}')" || return 1
+            if [ "$got" != "$want" ]; then
+              echo "::error title=studio-signing.package-hash-mismatch::$1 is $got, the signing jobs recorded $want"
+              return 1
+            fi
+          }
+          files="$(cd staging/studio-windows && find . -type f | sed 's|^\./||' | LC_ALL=C sort | tr '\n' ' ')"
+          if [ "$files" != "ReasonixStudio-windows-amd64-installer.exe ReasonixStudio-windows-amd64.zip " ]; then
+            echo "::error title=studio-signing.package-set-mismatch::studio-windows-signed holds: $files"
+            exit 1
+          fi
+          check ReasonixStudio-windows-amd64-installer.exe "$INSTALLER_SHA256"
+          check ReasonixStudio-windows-amd64.zip "$ARCHIVE_SHA256"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         if: needs.windows-sign-installer.result != 'success'

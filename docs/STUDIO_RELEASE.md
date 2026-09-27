@@ -57,7 +57,7 @@ Jobs in the run:
 | `windows-sign-payload` | Only with `STUDIO_SIGNING_ENABLED=true`. Refuses a bundle whose PE files differ from the declared list, signs the release PE files, verifies them and the two Microsoft-signed DLLs, and records a digest of the whole signed tree as a job output. Installs no toolchain. | shared concurrency group `certum-signing`, environment `studio-release` |
 | `windows-package` | Builds the installer and zip from the signed tree as it came. Holds no secrets. | none |
 | `windows-verify-package` | Checks the payload against the recorded digest, unpacks the zip and the installer, requires both trees to match the payload file for file, and outputs the SHA-256 of both packages. Holds no secrets and no environment. | none |
-| `windows-sign-installer` | Requires both packages to hash to the checked values, signs the installer, and verifies its signature. Opens no archive. | shared concurrency group `certum-signing`, environment `studio-release` |
+| `windows-sign-installer` | Requires both packages to hash to the checked values, signs the installer, verifies its signature, and outputs the signed installer's SHA-256. Opens no archive. | shared concurrency group `certum-signing`, environment `studio-release` |
 | `cli` | Builds `reasonix` archives for six OS/arch targets plus `SHA256SUMS`. | fails on a missing archive |
 | `publish` | Renders the notes with their authors, minisigns, writes `latest.json`, creates the GitHub prerelease, mirrors to R2. | environment `studio-release`; skipped unless all four Windows signing jobs succeeded or signing is off; an unresolved `#N` stops it before signing |
 
@@ -172,7 +172,7 @@ What is signed:
 | File | Signed by | Why |
 | --- | --- | --- |
 | The release PE files | the project | Windows loads each one, and Smart App Control judges an unsigned DLL on its own reputation. |
-| `d3dcompiler_47.dll`, `dxil.dll` | Microsoft, left as shipped | Verified to carry a trusted, timestamped signature from an `O=Microsoft Corporation` signer under a Microsoft PCA. |
+| `d3dcompiler_47.dll`, `dxil.dll` | Microsoft, left as shipped | Verified to carry a trusted, timestamped signature from an `O=Microsoft Corporation` signer under a Microsoft PCA, chaining to Microsoft Root Certificate Authority 2010 by thumbprint. |
 | The installer | the project | Signed only after `windows-verify-package` has matched its contents. |
 | `resources/elevate.exe` | nobody | `windows-package` writes it after the payload is signed; its SHA-256 is pinned instead. |
 | The NSIS uninstaller | nobody | electron-builder signs it only through an in-process hook, which would put the session in the packaging job. |
@@ -201,6 +201,7 @@ How the payload is carried from signing to publishing:
 | The zip's tree equals the payload, file for file | `windows-verify-package` | a file added, dropped or changed while packaging, PE or not |
 | The installer's `app-64.7z`, unpacked with the runner image's 7-Zip, equals the payload plus the pinned `resources/elevate.exe` | `windows-verify-package` | the same, inside the installer |
 | Both packages hash to the values `windows-verify-package` output | `windows-sign-installer`, before connecting | a package replaced after it was checked |
+| The downloaded installer hashes to `windows-sign-installer`'s output and the zip to `windows-verify-package`'s, and nothing else is in the artifact | `publish` | a Windows artifact replaced after signing; fails with `studio-signing.package-hash-mismatch`, `package-hash-missing` or `package-set-mismatch` |
 
 The SimplySign session can sign for any process on its runner while it is up. The two signing jobs therefore check out only the workflow's own commit, install no toolchain, parse no archive, and stop SimplySign after signing.
 
