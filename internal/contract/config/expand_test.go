@@ -169,7 +169,7 @@ func TestWorkspaceRootVarsStayOutOfConfigPathExpansion(t *testing.T) {
 	cfg := Default()
 	cfg.Sandbox.ForbidRead = []string{"${REASONIX_WORKSPACE_ROOT}/secret"}
 	got := cfg.ForbidReadRootsForRoot(root)
-	if len(got) != 1 || got[0] != filepath.Join(env, "secret") {
+	if len(got) != 1 || filepath.Clean(got[0]) != filepath.Join(env, "secret") {
 		t.Fatalf("ForbidReadRootsForRoot = %v, want the variable left to the environment", got)
 	}
 }
