@@ -37,7 +37,7 @@ func TestRouteMatchesAuthoredTriggersNotTopicWords(t *testing.T) {
 	}
 }
 
-func TestRouteRequiresExplicitSkill(t *testing.T) {
+func TestRouteDoesNotTreatTextMentionAsInvocation(t *testing.T) {
 	entries := SkillEntries([]skill.Skill{{
 		Name:        "audit",
 		Description: "audit something",
@@ -45,16 +45,11 @@ func TestRouteRequiresExplicitSkill(t *testing.T) {
 	}}, []tool.ContractEntry{{Name: "run_skill"}})
 
 	decision := Route("/audit 检查一下", entries)
-	if len(decision.Candidates) == 0 {
-		t.Fatal("Route returned no candidates")
-	}
-	if got := decision.Candidates[0].Policy; got != AutoUseRequire {
-		t.Fatalf("policy = %s, want require", got)
+	if len(decision.Candidates) != 0 {
+		t.Fatalf("text mention must not create a structural skill invocation: %+v", decision.Candidates)
 	}
 
-	// Prose naming is not the host's syntax: it hands off to the semantic
-	// router, which reads the whole request. The phrase forms this replaced
-	// demanded "use audit skill" with no article, so real phrasing missed.
+	// Prose naming also hands off to the semantic router.
 	for _, prose := range []string{"请使用 audit skill 检查一下", "use the audit skill", "don't use the audit skill"} {
 		if d := Route(prose, entries); len(d.Candidates) != 0 {
 			t.Errorf("%q routed deterministically: %+v", prose, d.Candidates)

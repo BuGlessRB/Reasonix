@@ -126,9 +126,13 @@ func (c *Controller) prepareInvocationTurn(input string, requests []InvocationRe
 	if strings.TrimSpace(input) == "" && len(subagents) > 0 {
 		return preparedInvocationTurn{}, fmt.Errorf("subagent invocation requires a task")
 	}
+	inlineSkillNames := make([]string, 0, len(inline))
+	for _, sk := range inline {
+		inlineSkillNames = append(inlineSkillNames, sk.Name)
+	}
 	// A lone inline skill takes the typed text as its arguments, as "/name task" does.
 	if len(inline) == 1 && len(subagents) == 0 {
-		return preparedInvocationTurn{composed: c.skills.renderInvocation(inline[0], strings.TrimSpace(input))}, nil
+		return preparedInvocationTurn{composed: c.skills.renderInvocation(inline[0], strings.TrimSpace(input)), inlineSkillNames: inlineSkillNames}, nil
 	}
 	parts := make([]string, 0, len(inline)+1)
 	for _, sk := range inline {
@@ -137,7 +141,7 @@ func (c *Controller) prepareInvocationTurn(input string, requests []InvocationRe
 	if strings.TrimSpace(input) != "" {
 		parts = append(parts, input)
 	}
-	return preparedInvocationTurn{composed: strings.Join(parts, "\n\n"), subagents: subagents}, nil
+	return preparedInvocationTurn{composed: strings.Join(parts, "\n\n"), subagents: subagents, inlineSkillNames: inlineSkillNames}, nil
 }
 
 func (c *Controller) runPreparedInvocationTurn(
@@ -146,6 +150,7 @@ func (c *Controller) runPreparedInvocationTurn(
 	input, raw, display string,
 	frozenImages []string,
 ) error {
+	ctx = withInvokedSkills(ctx, prepared.inlineSkillNames)
 	if len(prepared.subagents) == 0 {
 		return c.runTurnLoop(ctx, orchestratedTurn{
 			input: prepared.composed, raw: raw, display: display, images: c.frozenTurnImages(frozenImages),
@@ -381,7 +386,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 			}
 			sent := c.skills.renderInvocation(sk, task)
 			c.runGuarded(func(ctx context.Context) error {
-				return runTurnLoop(ctx, sent, sent, display)
+				return runTurnLoop(withInvokedSkills(ctx, []string{sk.Name}), sent, input, display)
 			})
 			return
 		}
