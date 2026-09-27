@@ -47,6 +47,13 @@ function RemoteAwareApp({ hub, remote }: { hub: HubPort; remote: boolean }) {
 async function pick(): Promise<HubPort> {
   const remoteDevice = new URLSearchParams(location.search).get("device")?.trim();
   if (remoteDevice) return remoteHub(remoteDevice);
+  // The hosted web build has no kernel behind its origin; without a device it
+  // can only send the visitor to pick one.
+  const remoteHome = import.meta.env.VITE_REMOTE_HOME;
+  if (remoteHome) {
+    location.replace(remoteHome);
+    return new Promise<never>(() => {});
+  }
   try {
     // The hub's own list rather than a pane's /status: it answers with every
     // pane closed, which is when a reload has to find the kernel again.
