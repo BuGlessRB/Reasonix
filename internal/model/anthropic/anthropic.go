@@ -281,6 +281,7 @@ type requestHeaders struct {
 func (h requestHeaders) apply(req *http.Request) {
 	applyCustomHeaders(req.Header, h.custom)
 	provider.ApplyOpenCodeGoIdentity(req, h.openCodeSession)
+	provider.ApplyClientIdentity(req)
 }
 
 func applyCustomHeaders(h http.Header, headers map[string]string) {

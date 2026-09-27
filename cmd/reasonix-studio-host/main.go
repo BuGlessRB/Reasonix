@@ -27,6 +27,7 @@ import (
 	"reasonix/internal/base/netclient"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/surface"
 	"reasonix/internal/frontend/remotehost"
 	"reasonix/internal/frontend/serve"
@@ -101,6 +102,7 @@ func studioUpdateHost(shell shellIdentity, to io.Writer) appupdate.Capability {
 }
 
 func main() {
+	provider.SetClientVersion(version)
 	// Ahead of this host's own flags: a macOS install re-executes this binary
 	// to swap the bundle, and that child's argv is the update's. Parsed as this
 	// host's, it exits on an undefined flag and the parent reads EOF.
