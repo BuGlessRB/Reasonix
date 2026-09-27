@@ -126,7 +126,7 @@ func (a *Agent) outstandingPlanCriteria() []string {
 	if a == nil || plan == nil || a.task.ledger == nil {
 		return nil
 	}
-	at, changed := a.task.ledger.LatestSuccessfulMutationIndex()
+	at, changed := a.task.ledger.LatestProvenMutationIndex()
 	if !changed {
 		at = -1
 	}
