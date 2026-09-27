@@ -23,6 +23,42 @@ export function setShowsReceipt(on: boolean): void {
   }
 }
 
+// Off unless this machine turned it on. The balance and the session's cost are
+// what a shared screen or a recording leaks; masking changes only what is drawn,
+// so the reads behind them keep running and revealing shows the current value.
+const AMOUNTS_KEY = "rx-hide-amounts";
+
+let amountsHidden: boolean | null = null;
+const amountListeners = new Set<() => void>();
+
+export function hidesAmounts(): boolean {
+  if (amountsHidden === null) {
+    try {
+      amountsHidden = localStorage.getItem(AMOUNTS_KEY) === "on";
+    } catch {
+      amountsHidden = false;
+    }
+  }
+  return amountsHidden;
+}
+
+export function onHidesAmountsChange(fn: () => void): () => void {
+  amountListeners.add(fn);
+  return () => {
+    amountListeners.delete(fn);
+  };
+}
+
+export function setHidesAmounts(on: boolean): void {
+  amountsHidden = on;
+  try {
+    localStorage.setItem(AMOUNTS_KEY, on ? "on" : "off");
+  } catch {
+    /* the choice holds for this window and is forgotten on the next */
+  }
+  amountListeners.forEach((fn) => fn());
+}
+
 // How each foldable part of the transcript starts. "live" opens while the part
 // is still being written and folds once it is done; "failed" opens only a step
 // that failed; "changed" opens only what wrote a file. A block the reader opened

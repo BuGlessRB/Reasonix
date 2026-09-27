@@ -1,4 +1,6 @@
+import { useSyncExternalStore } from "react";
 import { t } from "../i18n";
+import { hidesAmounts, onHidesAmountsChange } from "../state/prefs";
 import type { WalletReading } from "../port/port";
 
 /** The answers to "how much is left" that must not collapse into one number: a
@@ -28,3 +30,10 @@ export function since(iso: string, now: number): string {
 /** The account a wallet belongs to. modelRef is "<provider>/<model>", and the
  *  provider half is the name the user gave that connection. */
 export const accountOf = (modelRef?: string): string => (modelRef ?? "").split("/")[0] ?? "";
+
+/** What stands in for an amount while this machine hides amounts. */
+export const MASK = "•••";
+
+export function useHidesAmounts(): boolean {
+  return useSyncExternalStore(onHidesAmountsChange, hidesAmounts, hidesAmounts);
+}

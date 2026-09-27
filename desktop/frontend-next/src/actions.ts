@@ -72,6 +72,7 @@ export const ACTIONS: UIAction[] = [
   { id: "transcript.fold-preview", kind: "view", target: "none", proof: "interaction" },
   { id: "chrome.account", kind: "navigation", target: "none", proof: "interaction" },
   { id: "metrics.details", kind: "view", target: "optional", proof: "interaction" },
+  { id: "metrics.hide-amounts", kind: "view", target: "none", proof: "interaction" },
   { id: "session.menu", kind: "view", target: "entity", proof: "interaction" },
   { id: "workspace.menu", kind: "view", target: "entity", proof: "interaction" },
   { id: "session.pin", kind: "view", target: "entity", proof: "interaction" },

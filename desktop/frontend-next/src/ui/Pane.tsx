@@ -25,7 +25,8 @@ import { SlottedView } from "./SlottedView";
 import { key as slotKey, placement } from "./slots";
 import { Metrics } from "./Metrics";
 import { railOf } from "./panels/derive";
-import { ABSENT, accountOf, type Wallet } from "./wallet";
+import { ABSENT, MASK, accountOf, useHidesAmounts, type Wallet } from "./wallet";
+import { setHidesAmounts } from "../state/prefs";
 import { swapping } from "./swap";
 import { PaneNav, type PaneView } from "./PaneNav";
 import { useRate, useTrail } from "./num";
@@ -253,6 +254,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // /status's 250ms poll, which is what it used to ride. A provider with no
   // wallet endpoint answers absent, which renders as nothing.
   const [wallet, setWallet] = useState<Wallet>(ABSENT);
+  const hideAmounts = useHidesAmounts();
   const refreshWallet = useCallback(() => {
     port
       .balance()
@@ -733,8 +735,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
               />
             </div>
           )}
-          {cost && <span className="studio-meter-cost"><span>{t("本轮")}</span><b>{cost}</b></span>}
-          {wallet.kind === "read" && <button className="studio-meter-wallet" data-action="settings.section" data-value="usage" aria-label={t("查看钱包余额")} onClick={() => onSettings("usage")}><StudioIcon name="wallet" /><b>{wallet.reading.display}</b></button>}
+          {cost && <span className="studio-meter-cost"><span>{t("本轮")}</span><b>{hideAmounts ? MASK : cost}</b></span>}
+          <button className="studio-meter-mask" type="button" data-action="metrics.hide-amounts" aria-pressed={hideAmounts} aria-label={hideAmounts ? t("显示金额") : t("隐藏金额")} title={hideAmounts ? t("显示金额") : t("隐藏金额")} onClick={() => setHidesAmounts(!hideAmounts)}><StudioIcon name={hideAmounts ? "eyeoff" : "eye"} /></button>
+          {wallet.kind === "read" && <button className="studio-meter-wallet" data-action="settings.section" data-value="usage" aria-label={t("查看钱包余额")} onClick={() => onSettings("usage")}><StudioIcon name="wallet" /><b>{hideAmounts ? MASK : wallet.reading.display}</b></button>}
           <DeckChips tasks={rail.tasks} jobs={jobs} open={deck} onOpen={setDeck} onCancelJob={(id) => port.cancelJob(id).then(refreshStatus, fail)} />
         </div>
         {/* Below the box, under a ceiling of their own. Both arrive unbidden and

@@ -4,7 +4,7 @@ import { Spark } from "../Spark";
 import { money, tokens } from "../../i18n/format";
 import type { Metrics } from "../../state/session";
 import type { WalletLine, WalletReading } from "../../port/port";
-import { since, type Wallet } from "../wallet";
+import { MASK, since, useHidesAmounts, type Wallet } from "../wallet";
 import { Grp, Row } from "./kit";
 
 // The kernel states why a total is not final. Repeating one sentence for all of
@@ -34,32 +34,34 @@ interface Props {
 }
 
 export function Cost({ metrics, wallet, account, onRefreshWallet }: Props) {
+  const hidden = useHidesAmounts();
+  const shown = (amount: number, currency: string) => (hidden ? MASK : money(amount, currency));
   const sources = Object.entries(metrics.bySource).filter(([, v]) => v > 0);
   const peak = metrics.rounds.length ? Math.max(...metrics.rounds) : 0;
   const avg = metrics.rounds.length ? Math.round(metrics.rounds.reduce((a, b) => a + b, 0) / metrics.rounds.length) : 0;
   return (
     <Grp id="cost" name={t("成本")} aside={t("本会话")}>
       <div className="mtop">
-        <span className="amt">{money(metrics.cost, metrics.currency)}</span>
+        <span className="amt">{shown(metrics.cost, metrics.currency)}</span>
         {/* 一个按公布价计出来的数和一个拿兑底表估的数是两种断言。 */}
         {sources.length > 0 && (
           <span className="pill" data-tone={metrics.estimated ? "warn" : "ok"}>
             {metrics.estimated ? t("按兜底价估算") : t("已结算")}
           </span>
         )}
-        {metrics.turn > 0 && <span className="delta">{t("本回合")}+{money(metrics.turn, metrics.currency)}</span>}
+        {metrics.turn > 0 && <span className="delta">{t("本回合")}+{shown(metrics.turn, metrics.currency)}</span>}
         {sources.length === 0 && (
           <span className="msub">{t(REASON[metrics.incompleteReason] ?? "价目未上报")}</span>
         )}
       </div>
       {metrics.alt && (
         <div className="mtop" data-alt="">
-          <span className="amt">{money(metrics.alt.amount, metrics.alt.currency)}</span>
+          <span className="amt">{shown(metrics.alt.amount, metrics.alt.currency)}</span>
           <span className="msub">{t("原币种")}</span>
         </div>
       )}
       {metrics.alt && <p className="mnote">{t("两种结算币种不予合并 —— 合成单一总额需要虚构一个汇率。")}</p>}
-      {sources.map(([k, v]) => <Row key={k} k={t(SRC[k] ?? k)} v={money(v, metrics.currency)} />)}
+      {sources.map(([k, v]) => <Row key={k} k={t(SRC[k] ?? k)} v={shown(v, metrics.currency)} />)}
       <WalletRows wallet={wallet} account={account} onRefresh={onRefreshWallet} />
       {metrics.rounds.length > 1 && (
         <div className="sparkbox">
@@ -104,6 +106,7 @@ function WalletRows({ wallet, account, onRefresh }: { wallet: Wallet; account: s
 }
 
 function WalletRead({ reading, name }: { reading: WalletReading; name: ReactNode }) {
+  const hidden = useHidesAmounts();
   const lines = reading.lines ?? [];
   const k = (
     <>
@@ -113,6 +116,7 @@ function WalletRead({ reading, name }: { reading: WalletReading; name: ReactNode
       {reading.stale && <span className="msub">{since(reading.fetchedAt, Date.now())}</span>}
     </>
   );
+  if (hidden) return <Row k={k} v={MASK} />;
   if (lines.length > 1) {
     return (
       <>
