@@ -108,6 +108,7 @@ export function WorkbenchPanel({
   scheme,
   changes,
   running = false,
+  wrote = 0,
   remote = false,
   onCloseManual,
   onSurfaces,
@@ -122,6 +123,8 @@ export function WorkbenchPanel({
   /** Whether a turn is in flight: one that settles can have written files git
    *  does not list, so the change set alone does not say the tree moved. */
   running?: boolean;
+  /** Finished calls that may have written, so the tree follows a turn mid-way. */
+  wrote?: number;
   /** The workspace is on another machine, so its paths mean nothing here. */
   remote?: boolean;
   onCloseManual: () => void;
@@ -242,7 +245,7 @@ export function WorkbenchPanel({
     return () => {
       live = false;
     };
-  }, [port, shown, changeKey, query, glance, running]);
+  }, [port, shown, changeKey, query, glance, running, wrote]);
   // The button in the chrome says "show me the browser", not "show me this one
   // browser". When the agent has a page, that page is the browser; the start
   // page is only for an empty column, and steps aside unused once the agent
@@ -384,7 +387,7 @@ export function WorkbenchPanel({
     return () => {
       live = false;
     };
-  }, [port, openPath, shown, changeKey, glance, running]);
+  }, [port, openPath, shown, changeKey, glance, running, wrote]);
   useMarkdownPoll({ port, filePath: shown && readable && mode === "read" ? filePath : "", held, issued, setFailed, setFile, setDraft });
   // Picking a file is asking to read it. Docked, the list and the file share one
   // column, so the list steps aside; side by side it stays where it is.

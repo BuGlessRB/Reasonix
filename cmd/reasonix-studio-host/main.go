@@ -27,6 +27,7 @@ import (
 	"reasonix/internal/base/netclient"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/surface"
 	"reasonix/internal/frontend/remotehost"
 	"reasonix/internal/frontend/serve"
@@ -101,6 +102,7 @@ func studioUpdateHost(shell shellIdentity, to io.Writer) appupdate.Capability {
 }
 
 func main() {
+	provider.SetClientVersion(version)
 	// Ahead of this host's own flags: a macOS install re-executes this binary
 	// to swap the bundle, and that child's argv is the update's. Parsed as this
 	// host's, it exits on an undefined flag and the parent reads EOF.
@@ -356,11 +358,11 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 		return nil, err
 	}
 	hub.StartRecoveryGC(ctx)
-	startCloudRemote(ctx, cfg, logs)
+	startCloudRemote(ctx, cfg, logs, hub)
 	return hub, nil
 }
 
-func startCloudRemote(ctx context.Context, cfg *config.Config, logs io.Writer) {
+func startCloudRemote(ctx context.Context, cfg *config.Config, logs io.Writer, tasks remotecloud.TaskService) {
 	httpClient, err := netclient.NewHTTPClient(cfg.NetworkProxySpec(), netclient.TransportOptions{})
 	if err != nil {
 		fmt.Fprintf(logs, "remote cloud: %v\n", err)
@@ -375,7 +377,10 @@ func startCloudRemote(ctx context.Context, cfg *config.Config, logs io.Writer) {
 	dialer.Proxy = nil
 	dialer.NetDialContext = stream.DialContext
 	client := account.New(os.Getenv("REASONIX_ACCOUNTS_URL"), "reasonix-studio/"+version, httpClient)
-	host := remotecloud.New(client, &dialer, os.Getenv("REASONIX_REMOTE_URL"), version)
+	host := remotecloud.New(client, &dialer, os.Getenv("REASONIX_REMOTE_URL"), version, tasks)
+	if registrar, ok := tasks.(interface{ SetCloudControllerDisconnect(func(string) error) }); ok {
+		registrar.SetCloudControllerDisconnect(host.DisconnectController)
+	}
 	go host.Run(ctx)
 }
 

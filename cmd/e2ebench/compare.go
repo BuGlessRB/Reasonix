@@ -314,6 +314,7 @@ func compareReports(pathA, pathB string) (string, error) {
 	b.WriteString(marginalUtilitySection(a, bStats))
 	b.WriteString(memoryUtilitySection(pathA, pathB))
 	b.WriteString("\n" + paretoSection([]paretoPoint{newParetoPoint(pathA, a), newParetoPoint(pathB, bStats)}))
+	b.WriteString(reproductionSection(pathA, pathB))
 	b.WriteString("<sub>Per-solved figures divide each arm's accounted totals (failures included) by its accounted solves.</sub>\n")
 	return b.String(), nil
 }

@@ -7,12 +7,14 @@ import (
 	"context"
 	"crypto/ecdh"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +25,8 @@ import (
 )
 
 const DefaultRelayURL = "wss://remote.reasonix.io"
+
+const desktopResponseChunk = 24 << 10
 
 type Status struct {
 	DeviceID string `json:"deviceId,omitempty"`
@@ -36,18 +40,62 @@ type hostState struct {
 }
 
 type Host struct {
-	client   *account.Client
-	dialer   *websocket.Dialer
-	relayURL string
-	version  string
-	name     string
-	token    func() string
+	client     *account.Client
+	dialer     *websocket.Dialer
+	relayURL   string
+	version    string
+	name       string
+	token      func() string
+	tasks      TaskService
+	desktop    DesktopService
+	presence   ControllerPresence
+	disconnect chan controllerDisconnect
 
 	mu    sync.RWMutex
 	state hostState
 }
 
-func New(client *account.Client, dialer *websocket.Dialer, relayURL, version string) *Host {
+type controllerDisconnect struct {
+	id   string
+	done chan error
+}
+
+type TaskService interface {
+	CloudTasks(context.Context) (any, error)
+	CloudTask(context.Context, string) (any, error)
+	CloudSubmit(context.Context, string, string, string, int) error
+}
+
+type DesktopRequest struct {
+	Method  string
+	Path    string
+	Body    []byte
+	Ordinal int
+}
+
+type DesktopResponse struct {
+	Status      int
+	ContentType string
+	ETag        string
+	Body        []byte
+}
+
+type DesktopService interface {
+	CloudDesktop(context.Context, DesktopRequest, string) (DesktopResponse, error)
+}
+
+type ControllerPresence interface {
+	CloudControllerConnected(string, string) int
+	CloudControllerSeen(string)
+	CloudControllerDisconnected(string)
+}
+
+type controllerSession struct {
+	cipher  *sessionCipher
+	ordinal int
+}
+
+func New(client *account.Client, dialer *websocket.Dialer, relayURL, version string, tasks ...TaskService) *Host {
 	if dialer == nil {
 		dialer = websocket.DefaultDialer
 	}
@@ -62,9 +110,42 @@ func New(client *account.Client, dialer *websocket.Dialer, relayURL, version str
 	if len(name) > 80 {
 		name = name[:80]
 	}
-	return &Host{
+	host := &Host{
 		client: client, dialer: dialer, relayURL: strings.TrimRight(relayURL, "/"),
-		version: version, name: name, token: account.Token,
+		version: version, name: name, token: account.Token, disconnect: make(chan controllerDisconnect),
+	}
+	if len(tasks) > 0 {
+		host.tasks = tasks[0]
+		host.desktop, _ = tasks[0].(DesktopService)
+		host.presence, _ = tasks[0].(ControllerPresence)
+	}
+	return host
+}
+
+// DisconnectController asks the relay to close one authenticated controller.
+// The live connection owns WebSocket writes, so callers hand the request to it
+// instead of writing concurrently from the local HTTP handler.
+func (h *Host) DisconnectController(id string) error {
+	id = strings.TrimSpace(id)
+	if len(id) != 32 {
+		return errors.New("remote cloud: invalid controller identity")
+	}
+	if _, err := hex.DecodeString(id); err != nil {
+		return errors.New("remote cloud: invalid controller identity")
+	}
+	request := controllerDisconnect{id: id, done: make(chan error, 1)}
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	select {
+	case h.disconnect <- request:
+	case <-timer.C:
+		return errors.New("remote cloud: device is offline")
+	}
+	select {
+	case err := <-request.done:
+		return err
+	case <-timer.C:
+		return errors.New("remote cloud: disconnect timed out")
 	}
 }
 
@@ -123,23 +204,50 @@ func (h *Host) ensureIdentity(ctx context.Context, token string) (*identity, *ec
 	saved, err := loadIdentity()
 	if err == nil && saved != nil && saved.OwnerID == user.ID {
 		private, keyErr := privateKey(saved)
-		if keyErr == nil {
+		if keyErr == nil && h.identityCurrent(ctx, token, saved) {
 			return saved, private, nil
+		}
+		if keyErr == nil {
+			return h.registerIdentity(ctx, token, user.ID, private)
 		}
 	}
 	private, public, err := generatePrivateKey()
 	if err != nil {
 		return nil, nil, err
 	}
+	return h.registerIdentityWithPublic(ctx, token, user.ID, private, public)
+}
+
+func (h *Host) identityCurrent(ctx context.Context, token string, saved *identity) bool {
+	devices, err := h.client.RemoteDevices(ctx, token)
+	if err != nil {
+		return true
+	}
+	for _, device := range devices {
+		if device.ID == saved.DeviceID {
+			return slices.Contains(device.Capabilities, account.RemoteDesktop)
+		}
+	}
+	return false
+}
+
+func (h *Host) registerIdentity(ctx context.Context, token string, ownerID int64, private *ecdh.PrivateKey) (*identity, *ecdh.PrivateKey, error) {
+	public := base64.RawURLEncoding.EncodeToString(private.PublicKey().Bytes())
+	return h.registerIdentityWithPublic(ctx, token, ownerID, private, public)
+}
+
+func (h *Host) registerIdentityWithPublic(ctx context.Context, token string, ownerID int64, private *ecdh.PrivateKey, public string) (*identity, *ecdh.PrivateKey, error) {
 	registered, err := h.client.RegisterRemoteDevice(ctx, token, account.RemoteDeviceRegistration{
 		Name: h.name, Platform: platformName(runtime.GOOS), PublicKey: public,
-		Capabilities: []account.RemoteCapability{account.RemoteTasks, account.RemoteLogs, account.RemoteFiles},
+		Capabilities: []account.RemoteCapability{
+			account.RemoteTasks, account.RemoteLogs, account.RemoteFiles, account.RemoteDesktop,
+		},
 	})
 	if err != nil {
 		return nil, nil, err
 	}
-	saved = &identity{
-		OwnerID: user.ID, DeviceID: registered.Device.ID,
+	saved := &identity{
+		OwnerID: ownerID, DeviceID: registered.Device.ID,
 		DeviceCredential: registered.DeviceCredential,
 		PrivateKey:       base64.RawURLEncoding.EncodeToString(private.Bytes()),
 	}
@@ -167,6 +275,11 @@ type controllerCommand struct {
 	Version int    `json:"v"`
 	Type    string `json:"type"`
 	ID      string `json:"id"`
+	TaskID  string `json:"taskId,omitempty"`
+	Text    string `json:"text,omitempty"`
+	Method  string `json:"method,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Body    string `json:"body,omitempty"`
 }
 
 func (h *Host) connect(ctx context.Context, token string, saved *identity, private *ecdh.PrivateKey) error {
@@ -212,7 +325,15 @@ func (h *Host) connect(ctx context.Context, token string, saved *identity, priva
 		}
 	}()
 
-	sessions := make(map[string]*sessionCipher)
+	sessions := make(map[string]*controllerSession)
+	defer func() {
+		if h.presence == nil {
+			return
+		}
+		for id := range sessions {
+			h.presence.CloudControllerDisconnected(id)
+		}
+	}()
 	pingTicker := time.NewTicker(20 * time.Second)
 	tokenTicker := time.NewTicker(time.Second)
 	defer pingTicker.Stop()
@@ -231,8 +352,26 @@ func (h *Host) connect(ctx context.Context, token string, saved *identity, priva
 			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
 				return err
 			}
+		case request := <-h.disconnect:
+			if _, ok := sessions[request.id]; !ok {
+				request.done <- errors.New("remote cloud: controller is no longer connected")
+				continue
+			}
+			wire, err := json.Marshal(map[string]string{
+				"type": "disconnect_controller", "connectionId": request.id,
+			})
+			if err == nil {
+				err = conn.WriteMessage(websocket.TextMessage, wire)
+			}
+			if err == nil {
+				delete(sessions, request.id)
+				if h.presence != nil {
+					h.presence.CloudControllerDisconnected(request.id)
+				}
+			}
+			request.done <- err
 		case payload := <-messages:
-			if err := h.handle(conn, saved, private, sessions, payload); err != nil {
+			if err := h.handle(ctx, conn, saved, private, sessions, payload); err != nil {
 				continue
 			}
 		}
@@ -240,10 +379,11 @@ func (h *Host) connect(ctx context.Context, token string, saved *identity, priva
 }
 
 func (h *Host) handle(
+	ctx context.Context,
 	conn *websocket.Conn,
 	saved *identity,
 	private *ecdh.PrivateKey,
-	sessions map[string]*sessionCipher,
+	sessions map[string]*controllerSession,
 	payload []byte,
 ) error {
 	var message gatewayMessage
@@ -252,6 +392,9 @@ func (h *Host) handle(
 	}
 	switch message.Type {
 	case "controller_disconnected":
+		if h.presence != nil {
+			h.presence.CloudControllerDisconnected(message.ConnectionID)
+		}
 		delete(sessions, message.ConnectionID)
 		return nil
 	case "controller_connected":
@@ -266,7 +409,11 @@ func (h *Host) handle(
 		if err != nil {
 			return err
 		}
-		sessions[message.ConnectionID] = created
+		ordinal := 0
+		if h.presence != nil {
+			ordinal = h.presence.CloudControllerConnected(message.ConnectionID, "Web Studio")
+		}
+		sessions[message.ConnectionID] = &controllerSession{cipher: created, ordinal: ordinal}
 		ready, err := created.seal(map[string]any{
 			"v": protocolVersion, "type": "ready", "deviceId": saved.DeviceID,
 			"name": h.name, "platform": platformName(runtime.GOOS), "version": h.version,
@@ -277,20 +424,124 @@ func (h *Host) handle(
 		return writeDirected(conn, message.ConnectionID, ready)
 	}
 	var command controllerCommand
-	if err := session.open(message.Payload, &command); err != nil {
+	if h.presence != nil {
+		h.presence.CloudControllerSeen(message.ConnectionID)
+	}
+	if err := session.cipher.open(message.Payload, &command); err != nil {
 		return err
 	}
-	if command.Version != protocolVersion || command.Type != "ping" || command.ID == "" {
+	if command.Version != protocolVersion || command.ID == "" {
 		return errors.New("remote cloud: unsupported controller command")
 	}
-	pong, err := session.seal(map[string]any{
-		"v": protocolVersion, "type": "pong", "id": command.ID,
-		"at": time.Now().UTC().Format(time.RFC3339Nano),
+	var response map[string]any
+	switch command.Type {
+	case "ping":
+		response = map[string]any{"v": protocolVersion, "type": "pong", "id": command.ID, "at": time.Now().UTC().Format(time.RFC3339Nano)}
+	case "tasks.list", "tasks.get", "tasks.send":
+		response = h.taskCommand(ctx, "cloud:"+message.ConnectionID, session.ordinal, message.Scopes, command)
+	case "desktop.request":
+		return h.desktopCommand(ctx, conn, session.cipher, "cloud:"+message.ConnectionID, session.ordinal, message.ConnectionID, message.Scopes, command)
+	default:
+		return errors.New("remote cloud: unsupported controller command")
+	}
+	reply, err := session.cipher.seal(response)
+	if err != nil {
+		return err
+	}
+	return writeDirected(conn, message.ConnectionID, reply)
+}
+
+func (h *Host) desktopCommand(
+	ctx context.Context,
+	conn *websocket.Conn,
+	session *sessionCipher,
+	deviceID string,
+	ordinal int,
+	connectionID string,
+	scopes []account.RemoteCapability,
+	command controllerCommand,
+) error {
+	if h.desktop == nil || !hasScope(scopes, account.RemoteDesktop) {
+		return h.writeDesktopError(conn, session, connectionID, command.ID, "desktop access is unavailable")
+	}
+	body, err := base64.RawURLEncoding.DecodeString(command.Body)
+	if err != nil {
+		return h.writeDesktopError(conn, session, connectionID, command.ID, "desktop request body is invalid")
+	}
+	response, err := h.desktop.CloudDesktop(ctx, DesktopRequest{
+		Method: command.Method, Path: command.Path, Body: body, Ordinal: ordinal,
+	}, deviceID)
+	if err != nil {
+		return h.writeDesktopError(conn, session, connectionID, command.ID, err.Error())
+	}
+	chunks := (len(response.Body) + desktopResponseChunk - 1) / desktopResponseChunk
+	if chunks == 0 {
+		chunks = 1
+	}
+	for index := range chunks {
+		start := index * desktopResponseChunk
+		end := min(start+desktopResponseChunk, len(response.Body))
+		chunk := ""
+		if start < len(response.Body) {
+			chunk = base64.RawURLEncoding.EncodeToString(response.Body[start:end])
+		}
+		payload := map[string]any{
+			"v": protocolVersion, "type": "desktop.response", "id": command.ID,
+			"status": response.Status, "contentType": response.ContentType, "etag": response.ETag,
+			"index": index, "done": index == chunks-1, "body": chunk,
+		}
+		reply, sealErr := session.seal(payload)
+		if sealErr != nil {
+			return sealErr
+		}
+		if writeErr := writeDirected(conn, connectionID, reply); writeErr != nil {
+			return writeErr
+		}
+	}
+	return nil
+}
+
+func (h *Host) writeDesktopError(conn *websocket.Conn, session *sessionCipher, connectionID, id, message string) error {
+	reply, err := session.seal(map[string]any{
+		"v": protocolVersion, "type": "error", "id": id, "error": message,
 	})
 	if err != nil {
 		return err
 	}
-	return writeDirected(conn, message.ConnectionID, pong)
+	return writeDirected(conn, connectionID, reply)
+}
+
+func (h *Host) taskCommand(ctx context.Context, deviceID string, ordinal int, scopes []account.RemoteCapability, command controllerCommand) map[string]any {
+	response := map[string]any{"v": protocolVersion, "id": command.ID}
+	if h.tasks == nil || !hasScope(scopes, account.RemoteTasks) {
+		response["type"] = "error"
+		response["error"] = "tasks access is unavailable"
+		return response
+	}
+	var value any
+	var err error
+	switch command.Type {
+	case "tasks.list":
+		value, err = h.tasks.CloudTasks(ctx)
+		response["type"] = "tasks.list"
+		response["tasks"] = value
+	case "tasks.get":
+		value, err = h.tasks.CloudTask(ctx, command.TaskID)
+		response["type"] = "tasks.get"
+		response["snapshot"] = value
+	case "tasks.send":
+		err = h.tasks.CloudSubmit(ctx, command.TaskID, command.Text, deviceID, ordinal)
+		response["type"] = "tasks.sent"
+	}
+	if err != nil {
+		response["type"] = "error"
+		response["error"] = err.Error()
+	}
+	return response
+}
+
+func hasScope(scopes []account.RemoteCapability, want account.RemoteCapability) bool {
+	return slices.Contains(scopes, want)
 }
 
 func writeDirected(conn *websocket.Conn, connectionID, payload string) error {

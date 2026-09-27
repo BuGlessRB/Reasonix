@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import { CodeBlock } from "./CodeBlock";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import { remarkTrimAutolink } from "./autolink";
+import { remarkCodeSpanLink, remarkTrimAutolink } from "./autolink";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { useRevealed } from "./reveal";
@@ -26,7 +26,7 @@ const schema = {
 
 // A single tilde is how "500~1000" writes a range; read as strikethrough, two
 // ranges on one line strike out everything between them. Only ~~ strikes.
-const BASE_REMARK = [[remarkGfm, { singleTilde: false }], remarkMath, remarkTrimAutolink];
+const BASE_REMARK = [[remarkGfm, { singleTilde: false }], remarkMath, remarkTrimAutolink, remarkCodeSpanLink];
 // Order is load-bearing: raw parses HTML into nodes, sanitize prunes them, and
 // katex renders afterwards so its generated markup is not pruned in turn.
 const BASE_REHYPE = [rehypeRaw, [rehypeSanitize, schema]];

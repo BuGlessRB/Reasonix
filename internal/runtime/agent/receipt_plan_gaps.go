@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"reasonix/internal/runtime/completion"
+	"reasonix/internal/runtime/contract"
 	"reasonix/internal/runtime/verdict"
 	"reasonix/internal/safety/evidence"
 )
@@ -22,6 +23,9 @@ func (a *Agent) planCriterionGaps(gaps []completion.Gap) []completion.Gap {
 		return gaps
 	}
 	out := slices.DeleteFunc(slices.Clone(gaps), func(g completion.Gap) bool { return g.Kind == completion.GapUnprovenCriterion })
+	if planChangesOf(plan) && !frozenSatisfied(res, "contract@"+contract.PlanDeliverable) {
+		out = append(out, completion.Gap{Kind: completion.GapUnprovenCriterion, Detail: "plan: the plan names files to change, and no change was proven"})
+	}
 	for _, step := range plan.Steps {
 		var failing []string
 		for _, v := range step.Verification {

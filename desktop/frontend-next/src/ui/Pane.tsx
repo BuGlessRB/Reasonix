@@ -323,11 +323,13 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const counts = useMemo(() => {
     let steps = 0;
     let steer = 0;
+    let wrote = 0;
     for (const i of s.items) {
+      if (i.t === "tool" && !i.running && !i.tool.readOnly) wrote++;
       if (i.t === "tool") steps++;
       else if (i.t === "user" && i.pending) steer++;
     }
-    return { steps, steer };
+    return { steps, steer, wrote };
   }, [s.revision]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
@@ -337,8 +339,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     reloadMcp();
     // A finished turn is exactly when the kernel has one more checkpoint.
     port.checkpoints().then(setCheckpoints).catch(() => {});
-    port.changes().then(setTree).catch(() => setTree(null));
   }, [reloadMcp, port, status?.sessionPath, s.running]);
+  // A call that may write can have moved the tree before the turn ends.
+  useEffect(() => void port.changes().then(setTree).catch(() => setTree(null)), [port, status?.sessionPath, s.running, counts.wrote]);
 
   // One turn can be dozens of model round trips — the session this was measured
   // on ran thirty, from 9k tokens to 57k. Reading the gauge only at the turn
@@ -611,6 +614,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             scheme={theme === "light" ? "light" : "dark"}
             changes={tree?.changes ?? []}
             running={s.running}
+            wrote={counts.wrote}
             remote={!!rt.host}
             onCloseManual={() => onManualBrowser?.(false)}
             onExternal={(url) => void port.openExternal(url).catch(fail)}

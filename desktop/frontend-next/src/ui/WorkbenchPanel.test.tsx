@@ -154,6 +154,20 @@ describe("WorkbenchPanel", () => {
     expect(await screen.findByRole("button", { name: "report.html" })).toBeTruthy();
   });
 
+  it("reads the tree again when a call that may write finishes mid-turn", async () => {
+    const disk = new Set(["notes.md"]);
+    const port = new MockPort();
+    vi.spyOn(port, "workspaceFiles").mockImplementation(async () => ({ files: [...disk], directories: [] }));
+    const props = { port, tabs: [], manual: false, shown: true, scheme: "light" as const, changes: [], running: true, onCloseManual: vi.fn(), onSurfaces: vi.fn(), onExternal: vi.fn() };
+    const { rerender } = render(<WorkbenchPanel {...props} wrote={0} />);
+    await screen.findByRole("button", { name: "notes.md" });
+
+    disk.add("draft.txt");
+    rerender(<WorkbenchPanel {...props} wrote={1} />);
+
+    expect(await screen.findByRole("button", { name: "draft.txt" })).toBeTruthy();
+  });
+
   it("shows the workspace and any entry in the system file manager through the port", async () => {
     const user = userEvent.setup();
     const port = new MockPort();

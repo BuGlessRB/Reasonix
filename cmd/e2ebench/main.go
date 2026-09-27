@@ -247,7 +247,7 @@ func main() {
 		fmt.Fprintf(flag.CommandLine.Output(), "  %[1]s -profile delivery\n", strings.Replace(flag.CommandLine.Name(), "e2ebench", "go run ./cmd/e2ebench", 1))
 	}
 
-	mode := flag.String("mode", "suite", "suite | diff | swebench | compare | traj | barrier | sft | serve")
+	mode := flag.String("mode", "suite", "suite | diff | swebench | compare | rollout | traj | barrier | sft | serve")
 	addr := flag.String("addr", "127.0.0.1:7480", "serve mode: live dashboard listen address")
 	subset := flag.String("subset", "benchmarks/swebench/subset.json", "swebench mode: instance subset file")
 	reportIn := flag.String("report", "", "sft mode: the run report (-json output) whose grader verdicts decide which runs are exported")
@@ -320,7 +320,7 @@ func main() {
 	}
 
 	if dispatchOfflineMode(*mode, offlineModeArgs{
-		trajDir: *trajDir, suite: *suite, reportIn: *reportIn, outMD: *outMD, addr: *addr,
+		trajDir: *trajDir, suite: *suite, reportIn: *reportIn, outMD: *outMD, outJSON: *outJSON, addr: *addr,
 	}) {
 		return
 	}
