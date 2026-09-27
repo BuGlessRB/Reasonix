@@ -89,7 +89,7 @@ func TestInProcessClientStreamsEventsAndRunsTheUsersShell(t *testing.T) {
 // mark a request, and nothing a network client sends reaches that mark.
 func TestShellOverTheNetworkStaysRefused(t *testing.T) {
 	h, _, _ := adoptedPane(t, control.ToolApprovalAsk)
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 	resp := clientPostJSON(t, srv.Client(), srv.URL+"/rt/r1/submit", `{"input":"!echo over-the-network"}`)
 	defer resp.Body.Close()

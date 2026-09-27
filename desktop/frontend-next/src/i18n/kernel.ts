@@ -320,6 +320,8 @@ const SAID: Record<string, string> = {
   "loopback.origin_rejected": "该页面不属于 Studio，无法对其操作",
   "loopback.unauthorized": "缺少本次启动的凭据，请重新打开 Studio 后重试",
   "loopback.misconfigured": "本机通道未建立，请重新打开 Studio 后重试",
+  "serve.host_rejected": "该服务未开启认证，只接受发往本机或其监听地址的请求",
+  "auth.launch_token_required": "该服务未开启认证，修改与审批需要本次启动的令牌，请用启动时打印的链接打开",
 };
 
 /** Reason is what a refused request answers with. `error` is English fallback

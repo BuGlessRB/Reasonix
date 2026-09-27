@@ -53,7 +53,7 @@ func TestHubResolverPaneNeverFallsBackToThisMachinesConfig(t *testing.T) {
 
 	h := NewHub(HubOptions{ProviderResolver: homeResolver()})
 	defer h.Shutdown()
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 
 	rt, err := h.Open(context.Background(), OpenRequest{Root: testenv.TempDir(t)})

@@ -48,7 +48,7 @@ func trayServer(t *testing.T, host TrayHost) *httptest.Server {
 	t.Helper()
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	h := NewHub(HubOptions{Tray: host})
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -92,7 +92,7 @@ func trayPut(t *testing.T, srv *httptest.Server, body string) (int, TrayPrefs) {
 func TestATraySurfaceExistsOnlyWhereAWindowDoes(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	h := NewHub(HubOptions{})
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 
 	for _, path := range []string{"/tray/prefs", "/tray/state"} {

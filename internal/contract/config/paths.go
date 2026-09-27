@@ -293,8 +293,12 @@ func ReasonixHomeDir() string { return processRoots().Home() }
 // RemoteStateDir is local state for the remote-SSH module (the managed
 // known_hosts file, cached host metadata): <Reasonix home>/remote. Routed
 // through the home resolver so REASONIX_HOME isolation holds.
-func RemoteStateDir() string {
-	home := processRoots().Home()
+func RemoteStateDir() string { return processRoots().RemoteStateDir() }
+
+// RemoteStateDir is <home>/remote under these roots. A serve launched over SSH
+// keeps its launch token there, so runtime sandboxes deny reading it.
+func (r Roots) RemoteStateDir() string {
+	home := r.Home()
 	if strings.TrimSpace(home) == "" {
 		return ""
 	}

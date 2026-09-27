@@ -33,7 +33,7 @@ func TestStatusProjectsThePendingApprovalTheEventAnnounced(t *testing.T) {
 		Policy: permission.New("ask", nil, nil, nil),
 	})
 	ctrl.EnableInteractiveApproval()
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	frames, cancel := bc.Subscribe()

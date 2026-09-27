@@ -19,7 +19,7 @@ func accountServer(t *testing.T, granted bool) *httptest.Server {
 	if granted {
 		s.AllowAccountAuth()
 	}
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	t.Cleanup(srv.Close)
 	return srv
 }

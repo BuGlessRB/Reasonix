@@ -136,7 +136,7 @@ allow = ["Bash(go test:*)"]                  # 从不询问
 # forbid_read    = ["${HOME}/.ssh"]   # agent 不可读取或列出的路径
 
 [serve]
-auth_mode = "none"             # none|token|password；绑定到非 localhost 前请先开启认证
+# auth_mode = "token"          # token(默认)|password|none；none 下修改与审批仍需启动令牌
 # token = ""                   # 可选固定 token；token 模式为空时启动时自动生成
 # password_hash = ""           # 用 reasonix serve --hash-password --password '...' 生成
 # behind_proxy = false         # 只在可信反向代理后方设为 true
@@ -243,9 +243,16 @@ reasonix web
 按 Ctrl-C 停止。
 
 显式传入 `reasonix web --auth none` 可以关闭默认 Token，只应在监听地址确定可信时使用。
-`reasonix serve` 则保持向后兼容：默认监听 `127.0.0.1:8787`，认证模式仍由配置决定，空配置为
-`auth_mode = "none"`。如果要绑定到非 loopback 地址、通过 tunnel 暴露，或放到反向代理后面，
-请先开启认证再分享 URL：
+`reasonix serve` 在未配置 `[serve].auth_mode` 且未传 `--auth` 时，同样默认使用每次启动新生成的 Token。
+
+- `--auth none`（或 `auth_mode = "none"`）是给自行在前面加认证的部署用的显式退出，读取接口只对发往本机或监听地址的请求开放，其他 Host 返回 421 `serve.host_rejected`。
+- 所有会改变状态的请求（包括审批）仍需启动令牌：`Authorization: Bearer <token>`，或启动时打印的 `approvals:` 链接设置的 Cookie；否则返回 403 `auth.launch_token_required`。
+- serve 把令牌写进 `<Reasonix home>/remote/` 下 0600 文件，终端只打印路径，在链接后拼上 `#token=<文件内容>` 即可；带 `--token-file` 的托管启动打印该文件路径。token 模式下终端显示的手机二维码仍含令牌。
+- 优先用 `--token-file` 而不是 `--token`：命令行参数对其他进程可见，沙盒内的进程也能看到。全局配置里明文的 `[serve].token` 在沙盒内可读，密钥请放文件。
+- macOS 和 Linux 的系统沙盒会拒绝读取该状态目录和所有令牌文件；Windows 没有 bash 沙盒，只有读文件工具会拒绝。
+- `[serve]` 只从用户配置读取，项目里的 `reasonix.toml` 不能设置它。
+
+绑定到非 loopback 地址时请显式选择认证模式：
 
 ```bash
 reasonix serve --auth token

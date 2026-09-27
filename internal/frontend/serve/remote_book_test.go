@@ -16,7 +16,7 @@ import (
 func bookServer(t *testing.T, attacher RemoteAttacher) *httptest.Server {
 	t.Helper()
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
-	front := httptest.NewServer(NewHub(HubOptions{Remote: attacher}).Handler())
+	front := httptest.NewServer(operatorHandler(NewHub(HubOptions{Remote: attacher})))
 	t.Cleanup(front.Close)
 	return front
 }
@@ -97,7 +97,7 @@ func TestRemovingAHostClosesItsIdlePanes(t *testing.T) {
 	}, nil); err != nil {
 		t.Fatal(err)
 	}
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	resp := bookPost(t, front, "/remotes/remove", `{"name":"gpu-box"}`)
@@ -125,7 +125,7 @@ func TestRemovingAHostIsRefusedWhileItsPaneRuns(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	resp := bookPost(t, front, "/remotes/remove", `{"name":"gpu-box"}`)
@@ -201,7 +201,7 @@ func TestRemoteTreeIsReadWithOrWithoutAnOpenPane(t *testing.T) {
 	writeOpenableConfig(t)
 	far := NewHub(HubOptions{})
 	defer far.Shutdown()
-	farSide := httptest.NewServer(far.Handler())
+	farSide := httptest.NewServer(operatorHandler(far))
 	defer farSide.Close()
 
 	var attached, released int
@@ -214,7 +214,7 @@ func TestRemoteTreeIsReadWithOrWithoutAnOpenPane(t *testing.T) {
 			}, func() { released++ }, nil
 		},
 	}})
-	nearSide := httptest.NewServer(near.Handler())
+	nearSide := httptest.NewServer(operatorHandler(near))
 	defer nearSide.Close()
 
 	panes := len(near.Runtimes())
@@ -391,7 +391,7 @@ func TestOpeningARemoteFolderWritesItIntoTheBook(t *testing.T) {
 	writeOpenableConfig(t)
 	far := NewHub(HubOptions{})
 	defer far.Shutdown()
-	farSide := httptest.NewServer(far.Handler())
+	farSide := httptest.NewServer(operatorHandler(far))
 	defer farSide.Close()
 
 	workspace := testenv.TempDir(t)
@@ -406,7 +406,7 @@ func TestOpeningARemoteFolderWritesItIntoTheBook(t *testing.T) {
 		},
 	}})
 	defer near.Shutdown()
-	nearSide := httptest.NewServer(near.Handler())
+	nearSide := httptest.NewServer(operatorHandler(near))
 	defer nearSide.Close()
 	if got := bookPost(t, nearSide, "/remotes", `{"name":"gpu-box","host":"10.0.0.4"}`).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("save host = %d", got)
@@ -444,7 +444,7 @@ func TestAFolderWithAnIdlePaneOnItIsDroppedWithThePane(t *testing.T) {
 	writeOpenableConfig(t)
 	far := NewHub(HubOptions{})
 	defer far.Shutdown()
-	farSide := httptest.NewServer(far.Handler())
+	farSide := httptest.NewServer(operatorHandler(far))
 	defer farSide.Close()
 
 	workspace := testenv.TempDir(t)
@@ -457,7 +457,7 @@ func TestAFolderWithAnIdlePaneOnItIsDroppedWithThePane(t *testing.T) {
 		},
 	}})
 	defer near.Shutdown()
-	nearSide := httptest.NewServer(near.Handler())
+	nearSide := httptest.NewServer(operatorHandler(near))
 	defer nearSide.Close()
 	bookPost(t, nearSide, "/remotes", `{"name":"gpu-box","host":"10.0.0.4"}`)
 
@@ -491,7 +491,7 @@ func TestReopeningAKnownFolderLeavesTheConfigAlone(t *testing.T) {
 	writeOpenableConfig(t)
 	far := NewHub(HubOptions{})
 	defer far.Shutdown()
-	farSide := httptest.NewServer(far.Handler())
+	farSide := httptest.NewServer(operatorHandler(far))
 	defer farSide.Close()
 
 	workspace := testenv.TempDir(t)
@@ -504,7 +504,7 @@ func TestReopeningAKnownFolderLeavesTheConfigAlone(t *testing.T) {
 		},
 	}})
 	defer near.Shutdown()
-	nearSide := httptest.NewServer(near.Handler())
+	nearSide := httptest.NewServer(operatorHandler(near))
 	defer nearSide.Close()
 	bookPost(t, nearSide, "/remotes", `{"name":"gpu-box","host":"10.0.0.4"}`)
 
@@ -562,7 +562,7 @@ func TestRemoteSessionIsRemovedByTheFarKernel(t *testing.T) {
 		},
 	}})
 	defer near.Shutdown()
-	nearSide := httptest.NewServer(near.Handler())
+	nearSide := httptest.NewServer(operatorHandler(near))
 	defer nearSide.Close()
 
 	remove := func() *http.Response {

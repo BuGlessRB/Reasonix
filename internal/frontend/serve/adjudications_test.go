@@ -19,7 +19,7 @@ func adjudicationServer(t *testing.T) (*httptest.Server, *control.Controller) {
 	t.Cleanup(ctrl.Close)
 	ctrl.SetSessionPath(filepath.Join(testenv.TempDir(t), "s.jsonl"))
 	s := New(ctrl, NewBroadcaster(), config.ServeConfig{})
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	t.Cleanup(srv.Close)
 	return srv, ctrl
 }

@@ -128,7 +128,7 @@ allow = ["Bash(go test:*)"]                  # never prompted
 # forbid_read    = ["${HOME}/.ssh"]   # paths the agent must not read or list
 
 [serve]
-auth_mode = "none"             # none|token|password; use auth before binding beyond localhost
+# auth_mode = "token"          # token (default)|password|none; none still requires the launch token for changes
 # token = ""                   # optional fixed token; empty token mode generates one at startup
 # password_hash = ""           # bcrypt hash generated with reasonix serve --hash-password --password '...'
 # behind_proxy = false         # true only behind a trusted reverse proxy
@@ -254,11 +254,29 @@ owner process is confirmed dead. Multiple Web instances can therefore share one
 Reasonix home without overwriting registry state. The process stays attached to
 the terminal; stop it with Ctrl-C.
 
-An explicit `reasonix web --auth none` disables the default token and should be
-used only when the listener is intentionally trusted. `reasonix serve` keeps its
-backward-compatible, config-driven `auth_mode = "none"` default on
-`127.0.0.1:8787`. If you bind Serve outside loopback, expose it through a tunnel,
-or put it behind a reverse proxy, enable authentication before sharing the URL:
+`reasonix serve` also defaults to a freshly generated per-launch token unless
+`[serve].auth_mode` or `--auth` says otherwise.
+
+- `--auth none` (or `auth_mode = "none"`) is an explicit opt-out for a Serve
+  fronted by its own authentication. Reads are open to whoever reaches a
+  loopback or bound address; other Host names get 421 `serve.host_rejected`.
+- Every state-changing request, approvals included, still needs the launch
+  token: `Authorization: Bearer <token>`, or the cookie the printed
+  `approvals:` link sets. Without it the answer is 403
+  `auth.launch_token_required`.
+- Serve writes the token to a 0600 file under `<Reasonix home>/remote/` and
+  prints only its path; append `#token=<file contents>` to the printed link.
+  A managed launch with `--token-file` names that file instead. The phone QR
+  code a terminal shows in token mode still carries the token.
+- Prefer `--token-file` over `--token`: argv is visible to other processes,
+  sandboxed ones included. A plaintext `[serve].token` in the global config is
+  readable from inside the sandbox; keep the secret in a file.
+- On macOS and Linux the OS sandbox denies the remote state directory and every
+  token file. Windows has no bash sandbox, so there only the read tools refuse.
+- `[serve]` is read from the user config only; a project `reasonix.toml`
+  cannot set it.
+
+Choose the mode explicitly when binding outside loopback:
 
 ```bash
 reasonix serve --auth token

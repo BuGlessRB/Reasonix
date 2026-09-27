@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"syscall"
 
 	"reasonix/internal/base/i18n"
+	"reasonix/internal/base/secrets"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/surface"
@@ -36,6 +38,7 @@ type serveHost interface {
 	RunGracefulListener(ctx context.Context, ln net.Listener) error
 	StartRecoveryGC(ctx context.Context)
 	EnableProviderSetupForListener(addr string) bool
+	AllowHost(host string)
 }
 
 // runServe exposes the controller's HTTP and SSE frontend.
@@ -69,6 +72,9 @@ type serveFrontendOptions struct {
 	// started it. It holds none of its own, so anything reading them here fails
 	// by design rather than because something is wrong.
 	brokered bool
+	// launchTokenPath names the file holding the launch token, so the
+	// terminal shows a path rather than the secret.
+	launchTokenPath string
 }
 
 type serveFrontendResources struct {
@@ -142,6 +148,15 @@ func runServeFrontend(ctrl *control.Controller, srv serveHost, cfg config.ServeC
 	}
 	defer resources.release(false)
 	srv.EnableProviderSetupForListener(resources.displayAddr)
+	if public, err := url.Parse(strings.TrimSpace(opts.publicURL)); err == nil && public.Hostname() != "" {
+		srv.AllowHost(public.Hostname())
+	}
+	if srv.AuthMode() == "none" || srv.AuthMode() == "token" {
+		if opts.launchTokenPath, err = launchTokenLocation(srv.AuthToken(), opts, resources); err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+			return 1
+		}
+	}
 	reportServeFrontend(ctrl, srv, cfg, resources.displayAddr, opts)
 	// Not for a brokered kernel: its credentials live on the machine that
 	// started it, so this fails by design into a log only opened during a
@@ -158,23 +173,28 @@ func reportServeFrontend(ctrl *control.Controller, srv serveHost, cfg config.Ser
 	if public := strings.TrimRight(strings.TrimSpace(opts.publicURL), "/"); public != "" {
 		origin = public
 	}
-	// Supervised Serve already owns the token file, so avoid logging its value.
+	reportServeAuth(os.Stdout, srv.AuthMode(), origin, opts.launchTokenPath)
 	supervised := opts.portFile != "" && opts.tokenFile != ""
-	if srv.AuthMode() == "token" {
-		fmt.Println("  auth: token")
-		if supervised {
-			fmt.Printf("  share: %s/ (token in %s)\n", origin, opts.tokenFile)
-		} else {
-			fmt.Printf("  share: %s/#token=%s\n", origin, url.QueryEscape(srv.AuthToken()))
-		}
-	} else if srv.AuthMode() == "password" {
-		fmt.Printf("  auth: password (login at %s/login)\n", origin)
-	}
 	if !supervised && isTTY(os.Stdout) && termrender.ANSIConsoleReady() {
 		reportShareQR(os.Stdout, srv.AuthMode(), srv.AuthToken(), address, opts.publicURL)
 	}
 	if warning := serve.PlainHTTPAuthWarning(cfg, address); warning != "" {
 		fmt.Fprintf(os.Stderr, "  %s\n", warning)
+	}
+}
+
+// reportServeAuth names the file holding the launch token, never the token: a
+// sandboxed command can read back a terminal multiplexer's scrollback.
+func reportServeAuth(w io.Writer, mode, origin, tokenPath string) {
+	switch mode {
+	case "token":
+		fmt.Fprintln(w, "  auth: token")
+		fmt.Fprintf(w, "  share: %s/#token=<token> (token in %s)\n", origin, tokenPath)
+	case "password":
+		fmt.Fprintf(w, "  auth: password (login at %s/login)\n", origin)
+	case "none":
+		fmt.Fprintln(w, "  auth: none (changes and approvals still require the launch token)")
+		fmt.Fprintf(w, "  approvals: %s/#token=<token> (token in %s)\n", origin, tokenPath)
 	}
 }
 
@@ -211,9 +231,9 @@ func serveFrontendLoop(ctrl *control.Controller, srv serveHost, resources *serve
 		serveErr = runServeListenerAfterReady(ctx, srv, resources.listener, resources.displayAddr, func() {
 			browserURL, err := launchWebBrowser(srv, resources.displayAddr, sessionID)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  browser: could not open %s — %v\n", browserURL, err)
+				fmt.Fprintf(os.Stderr, "  browser: could not open %s — %v\n", withoutFragment(browserURL), err)
 			} else {
-				fmt.Printf("  browser: %s\n", browserURL)
+				fmt.Printf("  browser: %s\n", withoutFragment(browserURL))
 			}
 		})
 	} else {
@@ -241,7 +261,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	if opts.command == "web" {
 		sessionID = fs.String("session-id", "", "bind a fresh Web session identity (used by /web handoff)")
 	}
-	authHelp := "auth mode: none, token, or password (default: config/none)"
+	authHelp := "auth mode: none, token, or password (default: config, else a generated token; none still requires the token for changes)"
 	if opts.command == "web" {
 		authHelp = "auth mode: none, token, or password (default: generated token)"
 	}
@@ -308,9 +328,8 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 
 	// Build serve config, merging CLI flags over config file.
 	serveCfg := serveConfigWithCommandDefaults(opts.command, authExplicit, cfg.Serve)
-	// `reasonix web` is a local browser entry point and defaults to a freshly
-	// generated token. `reasonix serve` keeps its existing config-driven default,
-	// and an explicit --auth always wins for both commands.
+	// Both commands default to a freshly generated token; an explicit --auth
+	// always wins, and serve also honours a configured auth_mode.
 	if *auth != "" {
 		serveCfg.AuthMode = *auth
 	}
@@ -324,6 +343,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 			return 1
 		}
 		serveCfg.Token = tok
+		secrets.RegisterHostSecretPath(*tokenFile)
 	}
 	if *behindProxy {
 		serveCfg.BehindProxy = true

@@ -505,7 +505,7 @@ func (h *Hub) Handler() http.Handler {
 	h.registerUpdateRoutes(hostMux)
 	h.registerAskRoutes(hostMux)
 	h.registerShareRoutes(hostMux)
-	return logMiddleware(h.auth.middleware(withPage(csrfGuard(hostOnly(hostMux, mux)), h.opts.Page)))
+	return logMiddleware(h.auth.middleware(h.auth.hostGuard(withPage(csrfGuard(h.auth.mutationGate(hostOnly(hostMux, mux))), h.opts.Page))))
 }
 
 func (h *Hub) listRuntimes(w http.ResponseWriter, _ *http.Request) {

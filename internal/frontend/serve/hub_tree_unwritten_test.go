@@ -22,7 +22,7 @@ func TestTreeListsAHeldSessionBeforeItIsWritten(t *testing.T) {
 	path := sessionstore.NewSessionPath(SessionDirFor(root), "test")
 	rt.Server.Controller().SetSessionPath(path)
 
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 	tree := hubGet[[]treeWorkspace](t, srv, "/tree")
 	if len(tree) != 1 {

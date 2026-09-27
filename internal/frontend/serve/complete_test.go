@@ -20,7 +20,7 @@ import (
 
 func completeAt(t *testing.T, ctrl *control.Controller, line string, cursor int) control.Completion {
 	t.Helper()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	q := url.Values{"line": {line}, "cursor": {strconv.Itoa(cursor)}}
@@ -113,7 +113,7 @@ func TestCompleteRefusesPathsOutsideWorkspace(t *testing.T) {
 func TestSubmitAcceptsAVerbThatStartsNoTurn(t *testing.T) {
 	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t), WorkspaceRoot: testenv.TempDir(t)})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	for _, verb := range []string{"/compact", "/context", "/clear"} {
@@ -155,7 +155,7 @@ func TestHistoryShowsWhatWasTypedNotWhatWasSent(t *testing.T) {
 func TestCompleteVerbsFollowTheAskingWindow(t *testing.T) {
 	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t), WorkspaceRoot: testenv.TempDir(t)})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	hints := func(lang string) map[string]string {
