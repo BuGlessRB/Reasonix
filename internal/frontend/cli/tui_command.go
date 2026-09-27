@@ -119,6 +119,7 @@ func runTUI(args []string, version string) int {
 		PickAmong:     ambiguousSessionPaths(ambiguous),
 		Inline:        *f.inline,
 		HideTurnUsage: cfg != nil && !cfg.UI.ShowTurnUsage,
+		CommandMode:   cfg != nil && cfg.UICommandMode(),
 		Statusline:    statuslineRunner(cfg),
 	})
 	if err != nil {
