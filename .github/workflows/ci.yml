@@ -33,13 +33,14 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       desktop: ${{ steps.filter.outputs.desktop }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      scripts: ${{ steps.filter.outputs.scripts }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - id: filter
         run: |
-          code=true; desktop=true; sdk=true
+          code=true; desktop=true; sdk=true; scripts=true
           base=""
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
@@ -49,7 +50,7 @@ jobs:
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
             files=$(git diff --name-only "$base" HEAD)
             if [ -n "$files" ]; then
-              code=false; desktop=false; sdk=false
+              code=false; desktop=false; sdk=false; scripts=false
               # Root-module CI: desktop/ is a separate module, so only the
               # clearly unrelated paths below can skip it.
               if echo "$files" | grep -qvE '^(docs/|release-notes/|desktop/|workers/|[^/]+\.md$)'; then code=true; fi
@@ -60,9 +61,26 @@ jobs:
               # its DTOs are generated from internal/ext/extension/protocol, so
               # both paths must trigger the sdk job.
               if echo "$files" | grep -qE '^(sdk/|internal/ext/extension/)'; then sdk=true; fi
+              # The release-note tests render every committed Studio note.
+              if echo "$files" | grep -qE '^(scripts/|release-notes/studio/)'; then scripts=true; fi
             fi
           fi
-          { echo "code=$code"; echo "desktop=$desktop"; echo "sdk=$sdk"; } >> "$GITHUB_OUTPUT"
+          { echo "code=$code"; echo "desktop=$desktop"; echo "sdk=$sdk"; echo "scripts=$scripts"; } >> "$GITHUB_OUTPUT"
+
+  release-notes-scripts:
+    needs: changes
+    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.scripts != 'false')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "22"
+      - run: node --test scripts/release-credits.test.mjs scripts/markdown-refs.test.mjs scripts/studio-release-notes.test.mjs
 
   # The ruleset requires the per-OS check names (test (ubuntu-latest) etc.).
   # A matrix job skipped at job level reports no per-leg checks at all, so
