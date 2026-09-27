@@ -92,6 +92,10 @@ func stricterReasons(c *taskcontract.Contract, res Result) []string {
 		if claimed[o.ID] {
 			add(ReasonClaimOnly)
 		}
+		if o.Cause == CauseHostObligation {
+			add(o.Source)
+			continue
+		}
 		add(o.Cause)
 	}
 	slices.Sort(reasons)
