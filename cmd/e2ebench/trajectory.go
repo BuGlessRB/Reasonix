@@ -128,6 +128,7 @@ type trajectorySummary struct {
 	// Evidence bundle (last of the run): the host-evidence outcome and how it
 	// diverged from the completion report's verdict.
 	BundleOutcome     string   `json:"bundle_outcome,omitempty"`
+	CapabilitiesHash  string   `json:"capabilities_hash,omitempty"`
 	DivergenceClass   string   `json:"divergence_class,omitempty"`
 	DivergenceReasons []string `json:"divergence_reasons,omitempty"`
 
@@ -175,6 +176,9 @@ type trajectoryRecord struct {
 		ClaimsVerified int      `json:"claims_verified"`
 		ClaimsUnbacked int      `json:"claims_unbacked"`
 	} `json:"completion_report"`
+	RunHeader *struct {
+		CapabilitiesHash string `json:"capabilities_hash"`
+	} `json:"run_header"`
 	EvidenceBundle *struct {
 		Outcome           string   `json:"outcome"`
 		DivergenceClass   string   `json:"divergence_class"`
@@ -352,6 +356,9 @@ func (t *trajScan) record(rec trajectoryRecord) {
 		t.s.CompletionGapKinds = cr.GapKinds
 		t.s.ClaimsVerified = cr.ClaimsVerified
 		t.s.ClaimsUnbacked = cr.ClaimsUnbacked
+	}
+	if rh := rec.RunHeader; rh != nil && rh.CapabilitiesHash != "" {
+		t.s.CapabilitiesHash = rh.CapabilitiesHash
 	}
 	if eb := rec.EvidenceBundle; eb != nil && eb.Outcome != "" {
 		t.s.BundleOutcome = eb.Outcome
