@@ -1,11 +1,13 @@
 package remotecloud
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +21,17 @@ import (
 type taskStub struct {
 	sentTask string
 	sentText string
+}
+
+type desktopStub struct {
+	body []byte
+}
+
+func (s *desktopStub) CloudDesktop(_ context.Context, request DesktopRequest, deviceID string) (DesktopResponse, error) {
+	if request.Method != http.MethodGet || request.Path != "/history" || deviceID == "" {
+		return DesktopResponse{}, errors.New("unexpected desktop request")
+	}
+	return DesktopResponse{Status: http.StatusOK, ContentType: "application/json", Body: s.body}, nil
 }
 
 func (s *taskStub) CloudTasks(context.Context) (any, error) {
@@ -88,7 +101,8 @@ func TestHandshakeAndPingCrossTheDirectedEncryptedChannel(t *testing.T) {
 		PublicKey: base64.RawURLEncoding.EncodeToString(controller.PublicKey().Bytes()),
 		Salt:      base64.RawURLEncoding.EncodeToString(salt),
 	})
-	host := &Host{name: "Home Mac", version: "2.20.1"}
+	desktopBody := bytes.Repeat([]byte("x"), desktopResponseChunk+17)
+	host := &Host{name: "Home Mac", version: "2.20.1", desktop: &desktopStub{body: desktopBody}}
 	sessions := make(map[string]*sessionCipher)
 	if err := host.handle(t.Context(), deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
 		Type: "controller_message", ConnectionID: connectionID, Payload: string(greeting),
@@ -121,6 +135,34 @@ func TestHandshakeAndPingCrossTheDirectedEncryptedChannel(t *testing.T) {
 	pong := readDirected(t, controllerWire, controllerCipher)
 	if pong["type"] != "pong" || pong["id"] != "probe-1" || pong["at"] == "" {
 		t.Fatalf("pong = %+v", pong)
+	}
+
+	desktopRequest, err := controllerCipher.seal(controllerCommand{
+		Version: 1, Type: "desktop.request", ID: "desktop-1", Method: http.MethodGet, Path: "/history",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := host.handle(t.Context(), deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
+		Type: "controller_message", ConnectionID: connectionID, Scopes: []account.RemoteCapability{account.RemoteDesktop}, Payload: desktopRequest,
+	})); err != nil {
+		t.Fatal(err)
+	}
+	first := readDirected(t, controllerWire, controllerCipher)
+	second := readDirected(t, controllerWire, controllerCipher)
+	if first["type"] != "desktop.response" || first["done"] != false || second["done"] != true {
+		t.Fatalf("desktop chunks = %+v / %+v", first, second)
+	}
+	firstBody, err := base64.RawURLEncoding.DecodeString(first["body"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondBody, err := base64.RawURLEncoding.DecodeString(second["body"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(append(firstBody, secondBody...), desktopBody) {
+		t.Fatal("desktop response body changed across chunks")
 	}
 }
 

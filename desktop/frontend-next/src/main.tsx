@@ -14,12 +14,15 @@ import { install as installFileDrop } from "./ui/filedrop";
 import { host } from "./port/host";
 import { play } from "./boot/intro";
 import { settled } from "./boot/gate";
+import { remoteHub } from "./port/cloud_remote";
 
 // The dev proxy only exists when REASONIX_SERVE was set at vite start; probing
 // /runtimes decides which port to boot on, so neither mode needs a build flag.
 // Without the proxy vite answers it with the SPA shell at 200, so the content
 // type — not res.ok — is what says a kernel is really there.
 async function pick(): Promise<HubPort> {
+  const remoteDevice = new URLSearchParams(location.search).get("device")?.trim();
+  if (remoteDevice) return remoteHub(remoteDevice);
   try {
     // The hub's own list rather than a pane's /status: it answers with every
     // pane closed, which is when a reload has to find the kernel again.
