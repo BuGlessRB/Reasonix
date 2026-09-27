@@ -126,7 +126,7 @@ func TestSilentReportIsItsOwnClass(t *testing.T) {
 		t.Fatalf("divergence = %+v, want old_silent for blocked", d)
 	}
 	owed := Evaluate(Input{HostObligations: []evidence.Obligation{{ID: "o@1", Kind: evidence.ObligationUnprovenMutation}}})
-	if d := Classify(completion.VerdictUnknown, nil, owed); d.Class != ClassOldSilent || !slices.Equal(d.Reasons, []string{CauseHostObligation}) {
+	if d := Classify(completion.VerdictUnknown, nil, owed); d.Class != ClassOldSilent || !slices.Equal(d.Reasons, []string{"host:unproven_mutation"}) {
 		t.Fatalf("divergence = %+v, want old_silent for an outstanding obligation", d)
 	}
 }
@@ -135,5 +135,18 @@ func TestBlockedAgainstADoneReportNamesTheBlock(t *testing.T) {
 	d := Classify(completion.VerdictDone, nil, Evaluate(Input{Blocked: true}))
 	if d.Class != ClassNewStricter || !slices.Equal(d.Reasons, []string{ReasonBlocked}) {
 		t.Fatalf("divergence = %+v", d)
+	}
+}
+
+// A host obligation is named by its kind, which is content-free and is what
+// decides which old path owes the difference.
+func TestStricterReasonNamesTheHostObligationKind(t *testing.T) {
+	res := Evaluate(Input{HostObligations: []evidence.Obligation{
+		{ID: "stale@1", Kind: evidence.ObligationStaleVerification},
+		{ID: "unproven@2", Kind: evidence.ObligationUnprovenMutation},
+	}})
+	d := Classify(completion.VerdictDone, nil, res)
+	if !slices.Equal(d.Reasons, []string{"host:stale_verification", "host:unproven_mutation"}) {
+		t.Fatalf("reasons = %v", d.Reasons)
 	}
 }
