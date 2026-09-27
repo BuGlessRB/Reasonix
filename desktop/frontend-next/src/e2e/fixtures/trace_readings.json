@@ -520,6 +520,10 @@
      "attempt": 1,
      "max": 6
     }
+   },
+   {
+    "kind": "turn_done",
+    "checkpointTurn": 0
    }
   ],
   "replay": [
@@ -624,6 +628,10 @@
      "attempt": 1,
      "max": 6
     }
+   },
+   {
+    "kind": "turn_done",
+    "checkpointTurn": 0
    }
   ]
  },
@@ -885,6 +893,10 @@
      "attempt": 1,
      "max": 6
     }
+   },
+   {
+    "kind": "turn_done",
+    "checkpointTurn": 0
    }
   ],
   "replay": [
@@ -1010,6 +1022,10 @@
      "attempt": 1,
      "max": 6
     }
+   },
+   {
+    "kind": "turn_done",
+    "checkpointTurn": 0
    }
   ]
  }
