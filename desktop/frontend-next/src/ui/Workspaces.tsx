@@ -10,6 +10,7 @@ import { download } from "../port/download";
 import { host } from "../port/host";
 import { useTreeKeys } from "./tree";
 import { useDismiss } from "./dismiss";
+import { asksDelete } from "./keys";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -62,6 +63,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   // holds it.
   const [hereShut, setHereShut] = useState(false);
   const [confirm, setConfirm] = useState("");
+  // The row a Delete key asked about. The question replaces that row, so focus
+  // goes back to it once the question is gone, or a keyboard is left nowhere.
+  const askedByKey = useRef("");
   const needle = useRailQuery();
   const treeKeys = useTreeKeys();
   // Renaming is a pencil, not a double-click: a single click already opens the
@@ -164,11 +168,32 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
     }
   };
 
+  useEffect(() => {
+    const path = askedByKey.current;
+    if (!path || confirm === path) return;
+    askedByKey.current = "";
+    // Another question took over: its own button holds focus now.
+    if (confirm) return;
+    const rows = treeKeys.ref.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? [];
+    for (const el of rows) if (el.dataset.target === path) el.focus();
+  }, [confirm, treeKeys.ref]);
+
+  const askDelete = (path: string) => {
+    askedByKey.current = path;
+    setConfirm(path);
+  };
+
   const dropSession = async (session: TreeSession) => {
     if (confirm !== session.path) {
       setConfirm(session.path);
       return;
     }
+    // The row is about to go, and focus with it: the next row takes it, or the
+    // one before when this was the last.
+    const rows = [...(treeKeys.ref.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? [])];
+    const asked = treeKeys.ref.current?.querySelector('[role="alertdialog"]');
+    const after = asked ? rows.findIndex((el) => asked.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) : -1;
+    const heir = after >= 0 ? rows[after] : rows[rows.length - 1];
     setConfirm("");
     try {
       // An idle pane is closed and waited on, since its runtime holds the
@@ -177,6 +202,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
       if (session.runtimeId && liveIds([session.runtimeId]).length === 0) await onClose([session.runtimeId]);
       await hub.removeSession(session.path);
       await reload();
+      if (document.activeElement && document.activeElement !== document.body) return;
+      (heir?.isConnected ? heir : treeKeys.ref.current?.querySelector<HTMLElement>('[role="treeitem"]'))?.focus();
     } catch (e) {
       onError(e);
     }
@@ -401,7 +428,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                       <div
                         ref={sessionMenu === session.path ? sessionMenuBox : undefined}
                         data-action-click="session.open"
-                        data-action-keydown="session.open"
+                        data-action-keydown={["session.open", "session.delete"]}
                         data-target={session.path}
                         className="sessrow"
                         role="treeitem"
@@ -419,6 +446,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                           if (ev.key === "Enter" || ev.key === " ") {
                             ev.preventDefault();
                             void pick(ws, session);
+                          } else if (asksDelete(ev)) {
+                            ev.preventDefault();
+                            askDelete(session.path);
                           }
                         }}
                       >
@@ -579,7 +609,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                           ) : (
                             <div
                               data-action-click="session.open"
-                              data-action-keydown="session.open"
+                              data-action-keydown={["session.open", "session.delete"]}
                               data-target={copy.path}
                               key={copy.path}
                               className="sessrow sesscopy"
@@ -592,6 +622,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                                 if (ev.key === "Enter" || ev.key === " ") {
                                   ev.preventDefault();
                                   void pick(ws, copy);
+                                } else if (asksDelete(ev)) {
+                                  ev.preventDefault();
+                                  askDelete(copy.path);
                                 }
                               }}
                             >
@@ -601,6 +634,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                               </span>
                               <button
                                 className="wsdel"
+                                data-action="session.delete"
+                                data-target={copy.path}
                                 title={t("删除该会话")}
                                 aria-label={t("删除该会话")}
                                 onClick={(ev) => {
@@ -688,13 +723,24 @@ export function Confirm({
   onCancel: () => void;
 }) {
   return (
-    <div className="wsconfirm" role="alertdialog" aria-label={what}>
+    <div
+      className="wsconfirm"
+      role="alertdialog"
+      aria-label={what}
+      data-action-keydown="layer.dismiss"
+      onKeyDown={(ev) => {
+        if (ev.key !== "Escape") return;
+        // Dismissing the question is not stopping the run behind it.
+        ev.stopPropagation();
+        onCancel();
+      }}
+    >
       <div className="wsconfirm-t">
         <span className="q">{what}</span>
         {hint && <span className="h">{hint}</span>}
       </div>
       <div className="wsconfirm-a">
-        <button onClick={onCancel}>{t("取消")}</button>
+        <button data-action="layer.dismiss" onClick={onCancel}>{t("取消")}</button>
         <button autoFocus data-action="workspace.remove" data-danger={danger ? "" : undefined} onClick={onGo}>
           {go}
         </button>
