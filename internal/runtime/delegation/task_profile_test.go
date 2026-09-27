@@ -28,6 +28,46 @@ func TestTaskSchemaIncludesProfileAndWritePaths(t *testing.T) {
 	}
 }
 
+func TestWritePathsGuidanceNamesFilesOverDirectories(t *testing.T) {
+	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
+	fleet := NewFleetTool(task)
+
+	type props map[string]struct {
+		Description string `json:"description"`
+	}
+	var taskSchema struct {
+		Properties props `json:"properties"`
+	}
+	if err := json.Unmarshal(task.Schema(), &taskSchema); err != nil {
+		t.Fatal(err)
+	}
+	var fleetSchema struct {
+		Properties struct {
+			Tasks struct {
+				Items struct {
+					Properties props `json:"properties"`
+				} `json:"items"`
+			} `json:"tasks"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(fleet.Schema(), &fleetSchema); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, text := range map[string]string{
+		"task description":        task.Description(),
+		"task write_paths":        taskSchema.Properties["write_paths"].Description,
+		"fleet description":       fleet.Description(),
+		"fleet items write_paths": fleetSchema.Properties.Tasks.Items.Properties["write_paths"].Description,
+	} {
+		for _, want := range []string{"file paths when the targets are known", "a directory overlaps every path beneath it"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s does not say %q: %s", name, want, text)
+			}
+		}
+	}
+}
+
 func TestTaskWriterWithoutPathsClaimsWholeWorkspace(t *testing.T) {
 	root := testenv.TempDir(t)
 	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
