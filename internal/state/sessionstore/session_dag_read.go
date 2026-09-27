@@ -347,7 +347,7 @@ func IsForeignSessionLog(sessionPath string) bool {
 func probeRefusesSave(path string, probe sessionEventLogProbe, digest [32]byte) error {
 	switch {
 	case probe.futureSchema:
-		return fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", path, probe.schemaVersion, sessionDAGSchemaVersion)
+		return fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", path, probe.schemaVersion, sessionEventImageBlobsSchemaVersion)
 	case probe.dag && dagTranscriptMatches(path, digest):
 		return fmt.Errorf("%w: %s", ErrSessionLogUnchanged, path)
 	case probe.dag:
@@ -360,7 +360,7 @@ func probeRefusesSave(path string, probe sessionEventLogProbe, digest [32]byte) 
 // from a schema newer than it can read at all.
 func loadUnownedEventLog(sessionPath string, probe sessionEventLogProbe, limits sessionReplayLimits) ([]provider.Message, bool, error) {
 	if probe.futureSchema {
-		return nil, false, fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", sessionPath, probe.schemaVersion, sessionDAGSchemaVersion)
+		return nil, false, fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", sessionPath, probe.schemaVersion, sessionEventImageBlobsSchemaVersion)
 	}
 	return loadSessionDAGMessages(sessionPath, limits)
 }

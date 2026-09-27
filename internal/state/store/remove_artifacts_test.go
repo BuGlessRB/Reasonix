@@ -78,3 +78,25 @@ func write(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+// Image blobs are part of the conversation: deleting it must not leave its
+// pictures behind, and a replay finds them from the event log's name alone.
+func TestRemoveSessionArtifactsTakesTheImageBlobs(t *testing.T) {
+	dir := testenv.TempDir(t)
+	path := filepath.Join(dir, "session.jsonl")
+	write(t, path, "{}\n")
+	blobs := SessionBlobsDir(path)
+	if got := SessionBlobsDirForEventLog(SessionEventLog(path)); got != blobs {
+		t.Fatalf("blob dir from the event log = %s, want %s", got, blobs)
+	}
+	if err := os.MkdirAll(blobs, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(blobs, "0123"), "data:image/png;base64,AAAA")
+	if err := RemoveSessionArtifacts(path); err != nil {
+		t.Fatalf("RemoveSessionArtifacts: %v", err)
+	}
+	if _, err := os.Stat(blobs); !os.IsNotExist(err) {
+		t.Fatalf("image blobs survived the delete: %v", err)
+	}
+}

@@ -41,10 +41,20 @@ func TestDeleteSubagentsByParentSweepsEventLogLeftovers(t *testing.T) {
 		}
 	}
 
+	dirs := store.SessionSidecarDirs(sessionPath)
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, "entry"), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	if err := DeleteSubagentsByParent(sessionDir, "parent-1"); err != nil {
 		t.Fatalf("DeleteSubagentsByParent: %v", err)
 	}
-	for _, p := range files {
+	for _, p := range append(files, dirs...) {
 		if _, err := os.Stat(p); !os.IsNotExist(err) {
 			t.Errorf("subagent artifact survived delete: %s (err=%v)", p, err)
 		}

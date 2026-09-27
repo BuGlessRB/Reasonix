@@ -96,10 +96,10 @@ func probeSessionEventLogWithLimits(sessionPath string, limits sessionReplayLimi
 	probe.schemaVersion = schemaVersion
 	probe.dag = schemaVersion == sessionDAGSchemaVersion
 	switch {
-	case schemaVersion == sessionEventSchemaVersion &&
+	case nativeSessionEventSchema(schemaVersion) &&
 		(eventType == sessionEventTypeReplace || eventType == sessionEventTypeAppend):
 		probe.native = true
-	case schemaVersion > sessionDAGSchemaVersion:
+	case schemaVersion > sessionEventImageBlobsSchemaVersion:
 		// A newer writer owns this log; ignoring or truncating it would
 		// silently discard that writer's transcript.
 		probe.futureSchema = true

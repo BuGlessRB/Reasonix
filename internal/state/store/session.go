@@ -257,6 +257,31 @@ func SessionOutputsDir(sessionPath string) string {
 	return sessionStem(sessionPath) + ".outputs"
 }
 
+// SessionBlobsDir holds the image payloads the event log references by content
+// hash (<id>.blobs/), so the log a writer replays grows with text only.
+func SessionBlobsDir(sessionPath string) string {
+	sessionPath = strings.TrimSpace(sessionPath)
+	if sessionPath == "" {
+		return ""
+	}
+	return sessionStem(sessionPath) + ".blobs"
+}
+
+// SessionPathForEventLog inverts SessionEventLog: the transcript a replay,
+// which is handed only the log, belongs to. Empty when the path is not one.
+func SessionPathForEventLog(logPath string) string {
+	stem, ok := strings.CutSuffix(strings.TrimSpace(logPath), ".events.jsonl")
+	if !ok || stem == "" {
+		return ""
+	}
+	return stem + ".jsonl"
+}
+
+// SessionBlobsDirForEventLog is SessionBlobsDir named from the event log.
+func SessionBlobsDirForEventLog(logPath string) string {
+	return SessionBlobsDir(SessionPathForEventLog(logPath))
+}
+
 // RemoveSessionArtifacts deletes a transcript and everything beside it. Each
 // front end hand-rolled this loop and each dropped something different: a path
 // list handed to os.Remove silently skips whatever is not a file, which is how
@@ -360,5 +385,5 @@ func SessionSidecarDirs(sessionPath string) []string {
 	if sessionPath == "" {
 		return nil
 	}
-	return []string{SessionOutputsDir(sessionPath)}
+	return []string{SessionOutputsDir(sessionPath), SessionBlobsDir(sessionPath)}
 }
