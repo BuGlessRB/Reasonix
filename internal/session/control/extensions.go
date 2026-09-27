@@ -217,6 +217,10 @@ func (s *frontendEventSink) RecordCompletionReport(a event.CompletionReportAudit
 	event.RecordCompletionReport(s.inner, a)
 }
 
+func (s *frontendEventSink) RecordEvidenceBundle(a event.EvidenceBundleAudit) {
+	event.RecordEvidenceBundle(s.inner, a)
+}
+
 func (s *frontendEventSink) RecordOutcomeProgress(sample hostaudit.OutcomeSample) {
 	event.RecordOutcomeProgress(s.inner, sample)
 }

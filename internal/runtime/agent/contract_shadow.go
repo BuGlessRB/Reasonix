@@ -204,6 +204,7 @@ func (a *Agent) emitTurnShadows(input string, blocked bool) {
 	rep := completion.Build(c, a.task.ledger, a.pathInWorkspace)
 	a.turn.completion = &rep
 	event.RecordCompletionReport(a.svc.sink, completionReportAudit(rep))
+	a.sealShadowBundle(input, c, rep, a.task.ledger.Receipts(), blocked)
 	a.emitCompletionSummary(c, rep, blocked)
 }
 

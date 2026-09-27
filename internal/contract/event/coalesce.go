@@ -202,6 +202,13 @@ func (c *coalescer) RecordCompletionReport(a CompletionReportAudit) {
 	RecordCompletionReport(c.inner, a)
 }
 
+func (c *coalescer) RecordEvidenceBundle(a EvidenceBundleAudit) {
+	c.mu.Lock()
+	c.enqueueFlushLocked()
+	c.drainAndUnlock()
+	RecordEvidenceBundle(c.inner, a)
+}
+
 func (c *coalescer) RecordOutcomeProgress(sample hostaudit.OutcomeSample) {
 	c.mu.Lock()
 	c.enqueueFlushLocked()

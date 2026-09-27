@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"reasonix/internal/contract/tool"
 )
 
 // SessionDataGuard rejects agent writes into Reasonix's own session stores:
@@ -60,6 +62,11 @@ func (g SessionDataGuard) Check(target string) error {
 			"Ask the user to edit it themselves, or to add the directory to [sandbox] allow_write in reasonix.toml if raw access is truly intended",
 			target, g.stateRoot)
 	}
+	if g.deniesTrusted(abs) {
+		return tool.Refusal{Code: CodeTrustedStateWrite, Message: fmt.Sprintf(
+			"write refused: `%s` is inside Reasonix's trusted host state (%s). The host alone records evidence and contracts there, so agents may not modify it; report the underlying problem instead",
+			target, filepath.Join(g.stateRoot, TrustedStateDir))}
+	}
 	if !g.denies(abs) {
 		return nil
 	}
@@ -106,6 +113,26 @@ func (g SessionDataGuard) deniesSecurity(abs string) bool {
 		return false
 	}
 	return securityStateFile(rel)
+}
+
+// TrustedStateDir is the state-root subdirectory holding Trusted Host State.
+const TrustedStateDir = "trusted"
+
+// CodeTrustedStateWrite identifies a file-tool write refused for landing in
+// Trusted Host State.
+const CodeTrustedStateWrite = "workspace.trusted_state_write"
+
+// deniesTrusted reports whether abs lies in Trusted Host State and no explicit
+// allow_write root covers it. An allow_write entry there also reaches the bash
+// sandbox's write roots, which is what drops the host's integrity level.
+func (g SessionDataGuard) deniesTrusted(abs string) bool {
+	root := filepath.Join(g.stateRoot, TrustedStateDir)
+	for _, a := range g.allowRoots {
+		if withinFold(a, abs) {
+			return false
+		}
+	}
+	return withinFold(root, abs)
 }
 
 // runtimeStateFile reports whether name (a state-root-direct file name, already
