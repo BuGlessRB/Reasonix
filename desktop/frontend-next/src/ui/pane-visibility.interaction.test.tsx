@@ -47,6 +47,7 @@ function open(visible: boolean) {
     onKeepHere: () => {},
     theme: "dark",
     dockW: 560,
+    dockMax: 880,
     onDockW: () => {},
   };
   const view = render(<Pane {...props} />);

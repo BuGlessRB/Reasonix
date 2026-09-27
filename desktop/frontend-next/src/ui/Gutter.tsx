@@ -20,7 +20,9 @@ export const RAIL: Span = { min: 176, max: 440, def: 264, key: "rx-rail-w", css:
 export const SIDE: Span = { min: 244, max: 540, def: 316, key: "rx-side-w", css: "--side-open", col: "--side-w" };
 // The workbench beside the conversation. Wider than the rail because what sits
 // in it is a page someone is reading, not a list of names.
-export const DOCK: Span = { min: 320, max: 880, def: 560, key: "rx-dock-w", css: "--dock-open", col: "--dock-w" };
+export const DOCK: Span = { min: 320, max: 1600, def: 560, key: "rx-dock-w", css: "--dock-open", col: "--dock-w" };
+
+export const dockMax = (room: number) => Math.min(DOCK.max, Math.max(880, room / 2));
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -50,13 +52,14 @@ interface Props {
   edge: "l" | "r";
   span: Span;
   width: number;
+  max?: number;
   label: string;
   open: boolean;
   onWidth: (w: number) => void;
   onOpen: (v: boolean) => void;
 }
 
-export function Gutter({ edge, span, width, label, open, onWidth, onOpen }: Props) {
+export function Gutter({ edge, span, width, max = span.max, label, open, onWidth, onOpen }: Props) {
   const held = useRef(0);
 
   const drag = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -92,14 +95,14 @@ export function Gutter({ edge, span, width, label, open, onWidth, onOpen }: Prop
       let pull = 0;
       if (wasShut) {
         shut = dx < COMMIT;
-        now = shut ? span.min : clamp(dx, span.min, span.max);
+        now = shut ? span.min : clamp(dx, span.min, max);
         pull = shut ? give(Math.max(0, dx)) : 0;
       } else {
         const want = width + dx;
         if (want >= span.min) {
           shut = false;
-          now = Math.min(span.max, want);
-          pull = want > span.max ? give(want - span.max) : 0;
+          now = Math.min(max, want);
+          pull = want > max ? give(want - max) : 0;
         } else {
           shut = span.min - want > COMMIT;
           now = span.min;
@@ -149,7 +152,7 @@ export function Gutter({ edge, span, width, label, open, onWidth, onOpen }: Prop
       if (!open) return;
       e.preventDefault();
       const bar = e.currentTarget;
-      const next = clamp(width + dir * (e.shiftKey ? 48 : 12) * (edge === "l" ? 1 : -1), span.min, span.max);
+      const next = clamp(width + dir * (e.shiftKey ? 48 : 12) * (edge === "l" ? 1 : -1), span.min, max);
       // At the limit. The drag has its rubber band; without one here the keyboard
       // just stops responding, which is indistinguishable from a broken key.
       if (next === width) {
@@ -182,7 +185,7 @@ export function Gutter({ edge, span, width, label, open, onWidth, onOpen }: Prop
       aria-label={label}
       aria-valuenow={open ? Math.round(width) : 0}
       aria-valuemin={0}
-      aria-valuemax={span.max}
+      aria-valuemax={max}
       data-shut={open ? undefined : ""}
       tabIndex={0}
       onPointerDown={drag}
