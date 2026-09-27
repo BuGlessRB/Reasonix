@@ -3965,3 +3965,41 @@ body { font-size: 14px; line-height: 1.75; }
   .rrow .act.ghost,
   .ptab-x { opacity: 1; }
 }
+
+.remote-closed {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--raised) 94%, transparent);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(16px);
+  animation: remote-toast-in 180ms ease-out both;
+}
+.remote-closed > span { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--err); box-shadow: 0 0 0 4px color-mix(in srgb, var(--err) 14%, transparent); }
+.remote-closed > div { min-width: 0; flex: 1; }
+.remote-closed b { display: block; font: 600 13px/1.4 var(--ui); color: var(--text); }
+.remote-closed p { margin: 2px 0 0; color: var(--muted); font: 400 11px/1.45 var(--ui); }
+.remote-closed button {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--hair);
+  color: var(--text);
+  font: 600 11px/1.4 var(--ui);
+  cursor: pointer;
+}
+.remote-closed button:hover { background: var(--hover); }
+@keyframes remote-toast-in { from { opacity: 0; transform: translateY(8px); } }
+@media (max-width: 560px) {
+  .remote-closed { right: 12px; bottom: 12px; width: calc(100vw - 24px); }
+}
