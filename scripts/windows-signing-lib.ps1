@@ -23,6 +23,8 @@ $script:MicrosoftSignedPe = @(
     "d3dcompiler_47.dll",
     "dxil.dll"
 )
+# Microsoft Root Certificate Authority 2010, the root their signer chains to.
+$script:MicrosoftRootThumbprint = "3B1EFD3A66EA28B16697394703A72CA340A05BD5"
 # Written by NSIS packaging after the payload is signed, so pinned by content.
 # The hash is electron-builder's; an electron-builder upgrade that changes it
 # fails the release until it is reviewed and updated here.
@@ -193,6 +195,22 @@ function Assert-MicrosoftSignature {
     if ((Get-NameAttribute -Name $certificate.IssuerName -Oid $organization) -cnotcontains "Microsoft Corporation" -or
         @($issuerNames | Where-Object { $_ -cmatch '^Microsoft .*PCA( \d{4})?$' }).Count -ne 1) {
         throw "Expected a Microsoft PCA issuer, got '$($certificate.Issuer)': $Path"
+    }
+    # Names can be issued to anyone a trusted CA vouches for; the root cannot.
+    $chain = [Security.Cryptography.X509Certificates.X509Chain]::new()
+    try {
+        $chain.ChainPolicy.RevocationMode = [Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+        # SignTool has already checked validity at the timestamped signing time.
+        $chain.ChainPolicy.VerificationFlags = [Security.Cryptography.X509Certificates.X509VerificationFlags]::IgnoreNotTimeValid
+        $built = $chain.Build($certificate)
+        $elements = @($chain.ChainElements)
+        $root = if ($elements.Count -gt 0) { $elements[-1].Certificate.Thumbprint } else { "" }
+        if (-not $built -or $root -ne $script:MicrosoftRootThumbprint) {
+            throw "Microsoft signer does not chain to Microsoft Root Certificate Authority 2010 (root $root): $Path"
+        }
+    }
+    finally {
+        $chain.Dispose()
     }
     Write-Host "Authenticode verified (Microsoft): $Path"
 }
