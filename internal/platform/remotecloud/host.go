@@ -25,6 +25,8 @@ import (
 
 const DefaultRelayURL = "wss://remote.reasonix.io"
 
+const desktopResponseChunk = 24 << 10
+
 type Status struct {
 	DeviceID string `json:"deviceId,omitempty"`
 	Name     string `json:"name,omitempty"`
@@ -44,6 +46,7 @@ type Host struct {
 	name     string
 	token    func() string
 	tasks    TaskService
+	desktop  DesktopService
 
 	mu    sync.RWMutex
 	state hostState
@@ -53,6 +56,23 @@ type TaskService interface {
 	CloudTasks(context.Context) (any, error)
 	CloudTask(context.Context, string) (any, error)
 	CloudSubmit(context.Context, string, string, string) error
+}
+
+type DesktopRequest struct {
+	Method string
+	Path   string
+	Body   []byte
+}
+
+type DesktopResponse struct {
+	Status      int
+	ContentType string
+	ETag        string
+	Body        []byte
+}
+
+type DesktopService interface {
+	CloudDesktop(context.Context, DesktopRequest, string) (DesktopResponse, error)
 }
 
 func New(client *account.Client, dialer *websocket.Dialer, relayURL, version string, tasks ...TaskService) *Host {
@@ -76,6 +96,7 @@ func New(client *account.Client, dialer *websocket.Dialer, relayURL, version str
 	}
 	if len(tasks) > 0 {
 		host.tasks = tasks[0]
+		host.desktop, _ = tasks[0].(DesktopService)
 	}
 	return host
 }
@@ -135,23 +156,50 @@ func (h *Host) ensureIdentity(ctx context.Context, token string) (*identity, *ec
 	saved, err := loadIdentity()
 	if err == nil && saved != nil && saved.OwnerID == user.ID {
 		private, keyErr := privateKey(saved)
-		if keyErr == nil {
+		if keyErr == nil && h.identityCurrent(ctx, token, saved) {
 			return saved, private, nil
+		}
+		if keyErr == nil {
+			return h.registerIdentity(ctx, token, user.ID, private)
 		}
 	}
 	private, public, err := generatePrivateKey()
 	if err != nil {
 		return nil, nil, err
 	}
+	return h.registerIdentityWithPublic(ctx, token, user.ID, private, public)
+}
+
+func (h *Host) identityCurrent(ctx context.Context, token string, saved *identity) bool {
+	devices, err := h.client.RemoteDevices(ctx, token)
+	if err != nil {
+		return true
+	}
+	for _, device := range devices {
+		if device.ID == saved.DeviceID {
+			return slices.Contains(device.Capabilities, account.RemoteDesktop)
+		}
+	}
+	return false
+}
+
+func (h *Host) registerIdentity(ctx context.Context, token string, ownerID int64, private *ecdh.PrivateKey) (*identity, *ecdh.PrivateKey, error) {
+	public := base64.RawURLEncoding.EncodeToString(private.PublicKey().Bytes())
+	return h.registerIdentityWithPublic(ctx, token, ownerID, private, public)
+}
+
+func (h *Host) registerIdentityWithPublic(ctx context.Context, token string, ownerID int64, private *ecdh.PrivateKey, public string) (*identity, *ecdh.PrivateKey, error) {
 	registered, err := h.client.RegisterRemoteDevice(ctx, token, account.RemoteDeviceRegistration{
 		Name: h.name, Platform: platformName(runtime.GOOS), PublicKey: public,
-		Capabilities: []account.RemoteCapability{account.RemoteTasks, account.RemoteLogs, account.RemoteFiles},
+		Capabilities: []account.RemoteCapability{
+			account.RemoteTasks, account.RemoteLogs, account.RemoteFiles, account.RemoteDesktop,
+		},
 	})
 	if err != nil {
 		return nil, nil, err
 	}
-	saved = &identity{
-		OwnerID: user.ID, DeviceID: registered.Device.ID,
+	saved := &identity{
+		OwnerID: ownerID, DeviceID: registered.Device.ID,
 		DeviceCredential: registered.DeviceCredential,
 		PrivateKey:       base64.RawURLEncoding.EncodeToString(private.Bytes()),
 	}
@@ -181,6 +229,9 @@ type controllerCommand struct {
 	ID      string `json:"id"`
 	TaskID  string `json:"taskId,omitempty"`
 	Text    string `json:"text,omitempty"`
+	Method  string `json:"method,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Body    string `json:"body,omitempty"`
 }
 
 func (h *Host) connect(ctx context.Context, token string, saved *identity, private *ecdh.PrivateKey) error {
@@ -304,6 +355,8 @@ func (h *Host) handle(
 		response = map[string]any{"v": protocolVersion, "type": "pong", "id": command.ID, "at": time.Now().UTC().Format(time.RFC3339Nano)}
 	case "tasks.list", "tasks.get", "tasks.send":
 		response = h.taskCommand(ctx, "cloud:"+message.ConnectionID, message.Scopes, command)
+	case "desktop.request":
+		return h.desktopCommand(ctx, conn, session, "cloud:"+message.ConnectionID, message.ConnectionID, message.Scopes, command)
 	default:
 		return errors.New("remote cloud: unsupported controller command")
 	}
@@ -312,6 +365,64 @@ func (h *Host) handle(
 		return err
 	}
 	return writeDirected(conn, message.ConnectionID, reply)
+}
+
+func (h *Host) desktopCommand(
+	ctx context.Context,
+	conn *websocket.Conn,
+	session *sessionCipher,
+	deviceID, connectionID string,
+	scopes []account.RemoteCapability,
+	command controllerCommand,
+) error {
+	if h.desktop == nil || !hasScope(scopes, account.RemoteDesktop) {
+		return h.writeDesktopError(conn, session, connectionID, command.ID, "desktop access is unavailable")
+	}
+	body, err := base64.RawURLEncoding.DecodeString(command.Body)
+	if err != nil {
+		return h.writeDesktopError(conn, session, connectionID, command.ID, "desktop request body is invalid")
+	}
+	response, err := h.desktop.CloudDesktop(ctx, DesktopRequest{
+		Method: command.Method, Path: command.Path, Body: body,
+	}, deviceID)
+	if err != nil {
+		return h.writeDesktopError(conn, session, connectionID, command.ID, err.Error())
+	}
+	chunks := (len(response.Body) + desktopResponseChunk - 1) / desktopResponseChunk
+	if chunks == 0 {
+		chunks = 1
+	}
+	for index := range chunks {
+		start := index * desktopResponseChunk
+		end := min(start+desktopResponseChunk, len(response.Body))
+		chunk := ""
+		if start < len(response.Body) {
+			chunk = base64.RawURLEncoding.EncodeToString(response.Body[start:end])
+		}
+		payload := map[string]any{
+			"v": protocolVersion, "type": "desktop.response", "id": command.ID,
+			"status": response.Status, "contentType": response.ContentType, "etag": response.ETag,
+			"index": index, "done": index == chunks-1, "body": chunk,
+		}
+		reply, sealErr := session.seal(payload)
+		if sealErr != nil {
+			return sealErr
+		}
+		if writeErr := writeDirected(conn, connectionID, reply); writeErr != nil {
+			return writeErr
+		}
+	}
+	return nil
+}
+
+func (h *Host) writeDesktopError(conn *websocket.Conn, session *sessionCipher, connectionID, id, message string) error {
+	reply, err := session.seal(map[string]any{
+		"v": protocolVersion, "type": "error", "id": id, "error": message,
+	})
+	if err != nil {
+		return err
+	}
+	return writeDirected(conn, connectionID, reply)
 }
 
 func (h *Host) taskCommand(ctx context.Context, deviceID string, scopes []account.RemoteCapability, command controllerCommand) map[string]any {
