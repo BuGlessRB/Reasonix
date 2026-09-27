@@ -24,6 +24,7 @@ const { BrowserProtocol } = require("./browserprotocol");
 const { BrowserViews } = require("./browserviews");
 const { startBrowserRelay } = require("./browserrelay");
 const { prefsFile, registerPrefs } = require("./prefs");
+const { openLogs, redactArgv, failStartup } = require("./shelllog");
 
 // A page in a minimized or fully covered window counts as hidden, and a hidden
 // page drops the input the agent sends it: measured, its clicks never arrive and
@@ -43,6 +44,7 @@ const PAGE_PATH = "/";
 const LIGHTS = { x: 11, y: 20 };
 const DEFAULT_SIZE = { width: 1440, height: 900 };
 const MIN_SIZE = { width: 760, height: 480 };
+const HOST_DRAIN_MS = 1000;
 
 const where = {
   packaged: app.isPackaged,
@@ -65,6 +67,8 @@ let grants = null;
 let browserViews = null;
 let browserRelay = null;
 let reload = null;
+let logs = null;
+let handshaken = false;
 
 async function boot() {
   // Which build this is belongs to the shell: inside the bundle the kernel's
@@ -82,14 +86,26 @@ async function boot() {
     // inside the bundle rather than being it.
     args.push("-studio-app", process.execPath, "-studio-app-pid", String(process.pid));
   }
+  logs.shell.line(`host: starting ${hostBinary}`);
   kernel = start(hostBinary, args, {
-    onStderr: (text) => process.stderr.write(text),
-    onExit: (code) => {
-      if (code !== 0 && !quitting) app.quit();
+    onStderr: (text) => {
+      logs.host.raw(text);
+      process.stderr.write(text);
+    },
+    onExit: (code, signal) => {
+      logs.shell.line(`host: exited code=${code} signal=${signal}${handshaken ? "" : " before its handshake"}`);
+      // Before the handshake the launch itself fails, and boot's catch owns
+      // telling the person why; quitting here would race that dialog.
+      if (handshaken && code !== 0 && !quitting) app.quit();
     },
     onAct: handOver,
   });
+  kernel.child.on("error", (err) => logs.shell.line(`host: spawn failed: ${err.message}`));
+  kernel.child.stderr.on("close", () => logs.host.flush());
   const ready = await kernel.ready;
+  logs.addSecret(ready.token);
+  handshaken = true;
+  logs.shell.line(`host: handshake from ${ready.origin}`);
   origin = ready.origin;
   client = new StudioHost(ready.origin, ready.token);
   await armCredential(ready);
@@ -151,7 +167,10 @@ function cleanUpLegacyInstalls() {
       return response === 0;
     },
     trash: (bundle) => shell.trashItem(bundle),
-  }).catch((err) => console.error("reasonix-studio: legacy cleanup:", err.message));
+  }).catch((err) => {
+    console.error("reasonix-studio: legacy cleanup:", err.message);
+    logs.shell.line(`legacy cleanup: ${err.message}`);
+  });
 }
 
 // Set before anything is loaded, or the first request answers 403 and the
@@ -330,15 +349,27 @@ app.setName("Reasonix Studio");
 // already running owns those session files.
 const identity = instanceID(hostBinary);
 app.setPath("userData", profileFor(app.getPath("userData"), identity));
+// A launch from a shortcut has no console, so this file is the only place a
+// failure before the window can be read back from.
+logs = openLogs(app.getPath("userData"));
+logs.shell.line(
+  `shell: start version=${app.getVersion()} packaged=${app.isPackaged} platform=${process.platform}/${process.arch} ` +
+    `instance=${identity || "(unknown)"} argv=${JSON.stringify(redactArgv(process.argv))}`,
+);
 const primary = app.requestSingleInstanceLock();
 if (!primary) {
+  // The ordinary second launch: the running instance raises its own window.
+  logs.shell.line(`shell: another instance holds the lock (instance=${identity || "(unknown)"}); leaving`);
   app.quit();
 } else {
   app.on("second-instance", showWindow);
   grants = stripPackageGrants(hostBinary, { ...where, execPath: process.execPath });
   if (grants?.stripped.length) {
-    console.error(`reasonix-studio: removed app-package grants that stop sandboxed processes loading: ${grants.stripped.join(", ")}`);
+    const note = `removed app-package grants that stop sandboxed processes loading: ${grants.stripped.join(", ")}`;
+    console.error(`reasonix-studio: ${note}`);
+    logs.shell.line(note);
   }
+  if (grants?.refused.length) logs.shell.line(`app-package grants that could not be removed: ${grants.refused.join(", ")}`);
 }
 
 app.whenReady().then(() => {
@@ -346,9 +377,33 @@ app.whenReady().then(() => {
   installApplicationMenu();
   boot().catch((err) => {
     console.error("reasonix-studio:", err.message);
-    app.quit();
+    if (quitting) {
+      logs.shell.line(`startup ended by quit: ${err.message}`);
+      return;
+    }
+    void hostLastWords().then((words) => {
+      if (quitting) return logs.shell.line(`startup ended by quit: ${err.message}`);
+      failStartup({ app, dialog, logs, locale: app.getLocale() }, err, words);
+    });
   });
 });
+
+// A child's exit can be reported before its stderr has drained, and what it
+// said last is usually the reason it gave up. Bounded, for a host still running.
+async function hostLastWords() {
+  if (handshaken || !kernel) return "";
+  const stderr = kernel.child.stderr;
+  if (!stderr.closed) {
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, HOST_DRAIN_MS);
+      stderr.once("close", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+  return logs.host.tail();
+}
 
 // The acts a handover asks of the application. The kernel decides when: it has
 // downloaded and staged a replacement, and what is left is the part only this
@@ -375,6 +430,7 @@ module.exports = { current: () => ({ win, tray, client, origin }) };
 
 app.on("before-quit", () => {
   quitting = true;
+  logs.shell.line("shell: quitting");
   browserRelay?.stop();
   tray?.close();
   kernel?.child.stdin.end();

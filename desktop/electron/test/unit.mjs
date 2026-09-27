@@ -913,3 +913,258 @@ test("a renderer that died while the window was hidden is reloaded before the wi
   revive();
   assert.equal(state.reloads, 1, "a destroyed window was reloaded");
 });
+
+test("the shell log rotates at its cap and keeps a fixed number of files", () => {
+  const { rotatingLog } = require("../src/shelllog.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reasonix-log-"));
+  try {
+    const file = path.join(dir, "shell.log");
+    const log = rotatingLog(file, [], { maxBytes: 200, keep: 3, now: () => new Date(0) });
+    for (let i = 0; i < 40; i++) log.line(`entry ${String(i).padStart(2, "0")}`);
+    const names = fs.readdirSync(dir).sort();
+    assert.deepEqual(names, ["shell.log", "shell.log.1", "shell.log.2"]);
+    for (const name of names) assert.ok(fs.statSync(path.join(dir, name)).size <= 200, `${name} ran past its cap`);
+    assert.match(fs.readFileSync(file, "utf8"), /entry 39\n$/, "the newest entry is not in the live file");
+    assert.doesNotMatch(fs.readFileSync(path.join(dir, "shell.log.2"), "utf8"), /entry 00/, "the oldest entry outlived the rotation");
+
+    const reopened = rotatingLog(file, [], { maxBytes: 200, keep: 3 });
+    reopened.line("x".repeat(150));
+    assert.doesNotMatch(fs.readFileSync(file, "utf8"), /entry 39/, "a reopened log forgot how full its file already was");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("no secret reaches the shell or host log", () => {
+  const { openLogs, redact, redactArgv } = require("../src/shelllog.js");
+  const handshake = line();
+  assert.ok(!redact(handshake).includes(TOKEN), "the handshake's credential survived redaction");
+  assert.match(redact(handshake), /"origin":"http:\/\/127\.0\.0\.1:8080"/, "redaction took more than the secret");
+  assert.ok(!redact(`GET /?token=${TOKEN}&x=1`).includes(TOKEN));
+  assert.deepEqual(
+    redactArgv(["studio.exe", "--token=abc", "--api-key", "sk-1", "--flag", "-page", "C:\\dist"]),
+    ["studio.exe", "--token=[redacted]", "--api-key", "[redacted]", "--flag", "-page", "C:\\dist"],
+  );
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reasonix-log-"));
+  try {
+    const logs = openLogs(dir);
+    const bare = "b".repeat(40);
+    logs.addSecret(bare);
+    logs.host.raw(`${handshake}\n`);
+    logs.host.raw(`kernel said ${bare} in passing\n`);
+    logs.shell.line(`echo ${bare}`);
+    for (const name of ["host.log", "shell.log"]) {
+      const text = fs.readFileSync(path.join(logs.dir, name), "utf8");
+      assert.ok(!text.includes(TOKEN) && !text.includes(bare), `${name} carried a credential: ${text}`);
+    }
+    assert.ok(!logs.host.tail().includes(bare), "the host tail shown in a dialog carried a credential");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a secret split across pipe chunks is still redacted", () => {
+  const { openLogs } = require("../src/shelllog.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reasonix-log-"));
+  try {
+    const logs = openLogs(dir);
+    logs.host.raw("mcp: using api_");
+    logs.host.raw("key=sk-live-12");
+    logs.host.raw("3456 for the call\nnext: Authorization: Bea");
+    logs.host.raw("rer abcdef0123456789\n");
+    logs.host.raw("an unterminated password=hunter22");
+    logs.host.flush();
+    const text = fs.readFileSync(path.join(logs.dir, "host.log"), "utf8");
+    for (const leak of ["sk-live", "3456", "abcdef0123456789", "hunter22"]) {
+      assert.ok(!text.includes(leak), `${leak} reached host.log: ${text}`);
+    }
+    assert.match(text, /for the call\n/, "the rest of the line was lost");
+
+    logs.host.raw("x".repeat(20 * 1024));
+    logs.host.raw("tail\n");
+    const after = fs.readFileSync(path.join(logs.dir, "host.log"), "utf8");
+    assert.match(after, /characters without a line break dropped/);
+    assert.ok(!after.includes("x".repeat(100)), "an unterminated run was written instead of dropped");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("secrets named by their structure are redacted in every common spelling", () => {
+  const { redact } = require("../src/shelllog.js");
+  const cases = [
+    ["Authorization: Bearer sk-abc123", "sk-abc123"],
+    ['{"Authorization":"Bearer sk-abc123"}', "sk-abc123"],
+    ["x-api-key: sk-ant-abc123", "sk-ant-abc123"],
+    ["api_key: sk-abc123", "sk-abc123"],
+    ['level=INFO token="abc def"', "abc def"],
+    ["dial postgres://user:pa55word@db:5432/x", "pa55word"],
+    ["GET https://example.com/v1?key=AIzaSyAbc&q=1", "AIzaSyAbc"],
+    ['{"token": 12345}', "12345"],
+    ["cfg={Name:x Token:abc123}", "abc123"],
+    ["client_secret='s3cr3t'", "s3cr3t"],
+  ];
+  for (const [input, secret] of cases) {
+    const out = redact(input);
+    assert.ok(!out.includes(secret), `${input} -> ${out}`);
+  }
+  assert.equal(redact("dial postgres://user:pa55word@db:5432/x"), "dial postgres://user:[redacted]@db:5432/x");
+  assert.equal(redact("listening on http://127.0.0.1:8080/ in 12ms"), "listening on http://127.0.0.1:8080/ in 12ms");
+  for (const plain of [
+    "open /home/u/.config/reasonix/token.json: no such file or directory",
+    "keyboard: us layout",
+    "author: esengine",
+    "oauth: token expired",
+    "keyring: the name is not activatable",
+    "keychain: item not found",
+    "max_tokens=8192 exceeded",
+    "sort_key=name",
+    "primary_key: id",
+  ]) {
+    assert.equal(redact(plain), plain, "a diagnostic lost its cause");
+  }
+  for (const [input, secret] of [
+    ["access_token=abc123", "abc123"],
+    ["GITHUB_TOKEN=ghp_abc123", "ghp_abc123"],
+    ["private_key: -----x", "-----x"],
+    ["password=hunter22", "hunter22"],
+  ]) {
+    assert.ok(!redact(input).includes(secret), input);
+  }
+  // Accepted trade-offs: a whole identifier that names a secret loses the
+  // word after it even where that word is not one.
+  assert.equal(redact("credentials: open /x/y: denied"), "credentials: [redacted] /x/y: denied");
+  assert.equal(redact("key=model"), "key=[redacted]");
+});
+
+test("a log whose live file cannot be renamed still stays under its cap", () => {
+  const { rotatingLog, openLogs } = require("../src/shelllog.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reasonix-log-"));
+  try {
+    const file = path.join(dir, "shell.log");
+    // A non-empty directory where the first rotation lands makes the rename fail.
+    fs.mkdirSync(path.join(dir, "shell.log.1", "blocker"), { recursive: true });
+    const log = rotatingLog(file, [], { maxBytes: 200, keep: 2 });
+    for (let i = 0; i < 40; i++) log.line(`entry ${i}`);
+    assert.ok(fs.statSync(file).size <= 200, "the live file grew past its cap");
+    assert.match(fs.readFileSync(file, "utf8"), /entry 39\n$/);
+
+    if (process.platform !== "win32") {
+      const logs = openLogs(path.join(dir, "home"));
+      logs.shell.line("x");
+      assert.equal(fs.statSync(logs.dir).mode & 0o777, 0o700);
+      assert.equal(fs.statSync(logs.shell.file).mode & 0o777, 0o600);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a launch that cannot start says why and where the logs are, then quits", () => {
+  const { failStartup } = require("../src/shelllog.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reasonix-log-"));
+  try {
+    const { openLogs } = require("../src/shelllog.js");
+    for (const [locale, title] of [["zh-CN", /无法启动/], ["en-US", /could not start/]]) {
+      const logs = openLogs(dir);
+      const calls = [];
+      const dialog = { showErrorBox: (t, d) => calls.push(["dialog", t, d]) };
+      const app = { quit: () => calls.push(["quit"]) };
+      failStartup({ app, dialog, logs, locale }, new Error("the kernel exited with 3 before saying anything"), "config: bad value");
+      assert.deepEqual(calls.map((c) => c[0]), ["dialog", "quit"], locale);
+      const [, shownTitle, detail] = calls[0];
+      assert.match(shownTitle, title, locale);
+      assert.ok(detail.includes("exited with 3") && detail.includes("config: bad value") && detail.includes(logs.dir), detail);
+    }
+    assert.match(fs.readFileSync(path.join(dir, "logs", "shell.log"), "utf8"), /startup failed: Error: the kernel exited with 3/);
+
+    const logs = openLogs(dir);
+    const calls = [];
+    const dialog = { showErrorBox: () => { throw new Error("no display"); } };
+    failStartup({ app: { quit: () => calls.push("quit") }, dialog, logs, locale: "en" }, new Error("x"));
+    assert.deepEqual(calls, ["quit"], "a dialog that could not be shown kept the launch alive");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Loads the real main.js against a stand-in electron and reports what it did.
+function loadShell({ lock, host }) {
+  const Module = require("node:module");
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), "reasonix-shell-"));
+  const calls = [];
+  let quit;
+  const quitted = new Promise((resolve) => { quit = resolve; });
+  const inert = new Proxy(function () {}, { get: (_t, key) => (key === "then" ? undefined : inert), apply: () => inert });
+  const app = new Proxy({}, {
+    get: (_t, key) => {
+      if (key === "requestSingleInstanceLock") return () => lock;
+      if (key === "whenReady") return () => Promise.resolve();
+      if (key === "getPath") return () => userData;
+      if (key === "getVersion") return () => "9.9.9";
+      if (key === "getLocale") return () => "en-US";
+      if (key === "isPackaged") return false;
+      if (key === "quit") return () => { calls.push(["quit"]); quit(); };
+      return inert;
+    },
+  });
+  const dialog = { showErrorBox: (title, detail) => calls.push(["dialog", title, detail]) };
+  const fake = new Proxy({ app, dialog }, { get: (t, key) => t[key] ?? inert });
+  const load = Module._load;
+  const main = require.resolve("../src/main.js");
+  const saved = { REASONIX_STUDIO_HOST: process.env.REASONIX_STUDIO_HOST, REASONIX_OZONE_PLATFORM: process.env.REASONIX_OZONE_PLATFORM };
+  Module._load = function (request, ...rest) {
+    return request === "electron" ? fake : load.call(this, request, ...rest);
+  };
+  Object.assign(process.env, { REASONIX_STUDIO_HOST: host, REASONIX_OZONE_PLATFORM: "wayland" });
+  try {
+    delete require.cache[main];
+    require(main);
+  } finally {
+    Module._load = load;
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    delete require.cache[main];
+  }
+  const logDir = path.join(userData, "logs");
+  const shellLog = () => fs.readFileSync(path.join(logDir, "shell.log"), "utf8");
+  const hostLog = () => fs.readFileSync(path.join(logDir, "host.log"), "utf8");
+  return { calls, quitted, logDir, shellLog, hostLog, cleanup: () => fs.rmSync(userData, { recursive: true, force: true }) };
+}
+
+test("a second launch leaves a line in the log and no dialog", async () => {
+  const shell = loadShell({ lock: false, host: path.join(os.tmpdir(), "no-such-host") });
+  try {
+    await shell.quitted;
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(shell.calls, [["quit"]], "a second launch showed a dialog");
+    assert.match(shell.shellLog(), /shell: start version=9\.9\.9/);
+    assert.match(shell.shellLog(), /another instance holds the lock/);
+  } finally {
+    shell.cleanup();
+  }
+});
+
+test("a host that exits before its handshake is logged and shown, not swallowed", async () => {
+  // node refuses the shell's first argument, which makes it a host that
+  // writes to stderr and exits non-zero without ever handshaking.
+  const shell = loadShell({ lock: true, host: process.execPath });
+  try {
+    await shell.quitted;
+    const kinds = shell.calls.map((c) => c[0]);
+    assert.deepEqual(kinds, ["dialog", "quit"], "the launch ended without telling anyone");
+    const [, title, detail] = shell.calls[0];
+    assert.match(title, /could not start/);
+    assert.match(detail, /bad option/, "the host's own words were not shown");
+    assert.ok(detail.includes(shell.logDir), detail);
+    assert.match(shell.hostLog(), /bad option/, "the host's stderr never reached host.log");
+    const log = shell.shellLog();
+    assert.match(log, /host: exited code=9 signal=null before its handshake/);
+    assert.match(log, /startup failed: Error: /);
+  } finally {
+    shell.cleanup();
+  }
+});
