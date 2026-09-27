@@ -68,8 +68,13 @@ func (c *Controller) runOneTurn(ctx context.Context, turn orchestratedTurn) erro
 // composition, checkpoints, hooks, and plan approval. It is for transports that
 // need a blocking request/response boundary, such as ACP session/prompt.
 func (c *Controller) RunTurn(ctx context.Context, input string) error {
+	return c.RunTurnWithRaw(ctx, input, input)
+}
+
+// RunTurnWithRaw runs a blocking turn with the user's text separate from the composed input.
+func (c *Controller) RunTurnWithRaw(ctx context.Context, input, raw string) error {
 	return c.runSynchronousTurn(ctx, nil, func(runCtx context.Context) error {
-		return c.runTurnLoop(runCtx, orchestratedTurn{input: input, raw: input})
+		return c.runTurnLoop(runCtx, orchestratedTurn{input: input, raw: raw})
 	})
 }
 

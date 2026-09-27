@@ -276,6 +276,7 @@ func (s *service) sessionPrompt(ctx context.Context, raw json.RawMessage) (any, 
 	if text == "" {
 		return nil, &RPCError{Code: ErrInvalidParams, Message: "session/prompt: empty prompt"}
 	}
+	rawText := text
 	text = s.resolveSlashPrompt(ctx, sess, text)
 
 	runCtx, cancel, ok := sess.begin(ctx)
@@ -297,7 +298,7 @@ func (s *service) sessionPrompt(ctx context.Context, raw json.RawMessage) (any, 
 		s.finishTurn(ctx, sess)
 		cancel()
 	}()
-	runErr := drainACPInbox(runCtx, sess.ctrl, runPrompt(runCtx, sess.ctrl, text))
+	runErr := drainACPInbox(runCtx, sess.ctrl, runPrompt(runCtx, sess.ctrl, text, rawText))
 
 	statusEvent := sess.status.finishTurn(
 		runErr,
