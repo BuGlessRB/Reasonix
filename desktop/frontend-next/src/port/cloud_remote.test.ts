@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { REMOTE_DISCONNECTED_EVENT, remoteCodec, remoteConnectionEnded } from "./cloud_remote";
+import { onRemoteConnectionEnded, remoteCodec, remoteConnectionEnded } from "./cloud_remote";
 
 describe("remote Studio binary framing", () => {
   it("round-trips binary bodies and joins response chunks in index order", () => {
@@ -16,10 +16,9 @@ describe("remote Studio binary framing", () => {
 
   it("announces a relay disconnect to the Web Studio shell", () => {
     let reason = "";
-    window.addEventListener(REMOTE_DISCONNECTED_EVENT, (event) => {
-      reason = (event as CustomEvent<{ reason: string }>).detail.reason;
-    }, { once: true });
+    const stop = onRemoteConnectionEnded((value) => { reason = value; });
     remoteCodec.announceClosed("Disconnected by device");
+    stop();
     expect(reason).toBe("Disconnected by device");
     expect(remoteConnectionEnded()).toBe(true);
   });

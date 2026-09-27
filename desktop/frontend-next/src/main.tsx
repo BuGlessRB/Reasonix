@@ -14,15 +14,14 @@ import { install as installFileDrop } from "./ui/filedrop";
 import { host } from "./port/host";
 import { play } from "./boot/intro";
 import { settled } from "./boot/gate";
-import { REMOTE_DISCONNECTED_EVENT, remoteConnectionEnded, remoteHub } from "./port/cloud_remote";
+import { onRemoteConnectionEnded, remoteConnectionEnded, remoteHub } from "./port/cloud_remote";
 
 function RemoteAwareApp({ hub, remote }: { hub: HubPort; remote: boolean }) {
   const [disconnected, setDisconnected] = useState(() => remote && remoteConnectionEnded());
   useEffect(() => {
     if (!remote) return;
     const closed = () => setDisconnected(true);
-    addEventListener(REMOTE_DISCONNECTED_EVENT, closed);
-    return () => removeEventListener(REMOTE_DISCONNECTED_EVENT, closed);
+    return onRemoteConnectionEnded(closed);
   }, [remote]);
   return (
     <>

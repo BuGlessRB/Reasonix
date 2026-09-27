@@ -5,15 +5,19 @@ import { t } from "../i18n";
 const ACCOUNT = (import.meta.env.VITE_ACCOUNTS_API || "https://id.reasonix.io").replace(/\/$/, "");
 const RELAY = (import.meta.env.VITE_REMOTE_GATEWAY || "wss://remote.reasonix.io").replace(/\/$/, "");
 const REQUEST_TIMEOUT_MS = 30_000;
-export const REMOTE_DISCONNECTED_EVENT = "reasonix:remote-disconnected";
 let connectionEnded = false;
+const connectionEndedListeners = new Set<(reason: string) => void>();
 
 function announceClosed(reason = "") {
   connectionEnded = true;
-  globalThis.dispatchEvent(new CustomEvent(REMOTE_DISCONNECTED_EVENT, { detail: { reason } }));
+  for (const listener of connectionEndedListeners) listener(reason);
 }
 
 export const remoteConnectionEnded = () => connectionEnded;
+export const onRemoteConnectionEnded = (listener: (reason: string) => void) => {
+  connectionEndedListeners.add(listener);
+  return () => { connectionEndedListeners.delete(listener); };
+};
 
 interface RemoteDevice {
   id: string;
