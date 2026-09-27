@@ -225,7 +225,11 @@ func (s *service) sessionLoad(ctx context.Context, raw json.RawMessage) (any, er
 	}
 	return afterResponse{
 		result: SessionLoadResult{Models: cfgState.Models, Modes: s.sessionModesFor(p.SessionID), ConfigOptions: cfgState.ConfigOptions},
-		after:  func() { s.sendAvailableCommands(s.session(p.SessionID)) },
+		after: func() {
+			sess := s.session(p.SessionID)
+			s.sendAvailableCommands(sess)
+			s.sendUsageUpdate(sess)
+		},
 	}, nil
 }
 
@@ -252,7 +256,11 @@ func (s *service) sessionResume(ctx context.Context, raw json.RawMessage) (any, 
 	}
 	return afterResponse{
 		result: SessionResumeResult{Models: cfgState.Models, Modes: s.sessionModesFor(p.SessionID), ConfigOptions: cfgState.ConfigOptions},
-		after:  func() { s.sendAvailableCommands(s.session(p.SessionID)) },
+		after: func() {
+			sess := s.session(p.SessionID)
+			s.sendAvailableCommands(sess)
+			s.sendUsageUpdate(sess)
+		},
 	}, nil
 }
 
@@ -307,6 +315,7 @@ func (s *service) sessionPrompt(ctx context.Context, raw json.RawMessage) (any, 
 		finalAssistantSummary(sess.currentCtrl()),
 	)
 	s.publishStatus(sess, statusEvent)
+	s.sendUsageUpdate(sess)
 	// Persist after status finalization (best-effort) so reconnect recovers both
 	// the transcript and the same sequence/usage/outcome snapshot.
 	sess.persistAfterTurn(text)

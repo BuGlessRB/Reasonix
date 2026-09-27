@@ -256,6 +256,8 @@ type acpController interface {
 	control.SessionPersistence
 	// Goals backs ACP's normal/plan/goal collaboration-mode surface.
 	control.Goals
+	// ContextSnapshot feeds the protocol's usage_update context gauge.
+	ContextSnapshot() (int, int)
 }
 
 // acpSession is one open session: its controller, the on-disk transcript path
