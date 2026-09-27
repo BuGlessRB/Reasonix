@@ -246,6 +246,7 @@ func (s *service) bindClientIO(p *SessionParams, sessionID string) {
 type acpController interface {
 	control.Lifecycle
 	control.TurnControl
+	RunTurnWithRaw(ctx context.Context, input, raw string) error
 	TrySteer(text string) bool
 	control.Approvals
 	control.SlashDispatch

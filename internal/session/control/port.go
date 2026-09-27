@@ -64,7 +64,6 @@ type TurnControl interface {
 	SendWithRaw(input, raw string)
 	Run(ctx context.Context, input string) error
 	RunTurn(ctx context.Context, input string) error
-	RunTurnWithRaw(ctx context.Context, input, raw string) error
 	RunShell(command string)
 	Cancel()
 	Steer(text string)
