@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -42,12 +43,19 @@ type Host struct {
 	version  string
 	name     string
 	token    func() string
+	tasks    TaskService
 
 	mu    sync.RWMutex
 	state hostState
 }
 
-func New(client *account.Client, dialer *websocket.Dialer, relayURL, version string) *Host {
+type TaskService interface {
+	CloudTasks(context.Context) (any, error)
+	CloudTask(context.Context, string) (any, error)
+	CloudSubmit(context.Context, string, string, string) error
+}
+
+func New(client *account.Client, dialer *websocket.Dialer, relayURL, version string, tasks ...TaskService) *Host {
 	if dialer == nil {
 		dialer = websocket.DefaultDialer
 	}
@@ -62,10 +70,14 @@ func New(client *account.Client, dialer *websocket.Dialer, relayURL, version str
 	if len(name) > 80 {
 		name = name[:80]
 	}
-	return &Host{
+	host := &Host{
 		client: client, dialer: dialer, relayURL: strings.TrimRight(relayURL, "/"),
 		version: version, name: name, token: account.Token,
 	}
+	if len(tasks) > 0 {
+		host.tasks = tasks[0]
+	}
+	return host
 }
 
 func (h *Host) Status() Status {
@@ -167,6 +179,8 @@ type controllerCommand struct {
 	Version int    `json:"v"`
 	Type    string `json:"type"`
 	ID      string `json:"id"`
+	TaskID  string `json:"taskId,omitempty"`
+	Text    string `json:"text,omitempty"`
 }
 
 func (h *Host) connect(ctx context.Context, token string, saved *identity, private *ecdh.PrivateKey) error {
@@ -232,7 +246,7 @@ func (h *Host) connect(ctx context.Context, token string, saved *identity, priva
 				return err
 			}
 		case payload := <-messages:
-			if err := h.handle(conn, saved, private, sessions, payload); err != nil {
+			if err := h.handle(ctx, conn, saved, private, sessions, payload); err != nil {
 				continue
 			}
 		}
@@ -240,6 +254,7 @@ func (h *Host) connect(ctx context.Context, token string, saved *identity, priva
 }
 
 func (h *Host) handle(
+	ctx context.Context,
 	conn *websocket.Conn,
 	saved *identity,
 	private *ecdh.PrivateKey,
@@ -280,17 +295,56 @@ func (h *Host) handle(
 	if err := session.open(message.Payload, &command); err != nil {
 		return err
 	}
-	if command.Version != protocolVersion || command.Type != "ping" || command.ID == "" {
+	if command.Version != protocolVersion || command.ID == "" {
 		return errors.New("remote cloud: unsupported controller command")
 	}
-	pong, err := session.seal(map[string]any{
-		"v": protocolVersion, "type": "pong", "id": command.ID,
-		"at": time.Now().UTC().Format(time.RFC3339Nano),
-	})
+	var response map[string]any
+	switch command.Type {
+	case "ping":
+		response = map[string]any{"v": protocolVersion, "type": "pong", "id": command.ID, "at": time.Now().UTC().Format(time.RFC3339Nano)}
+	case "tasks.list", "tasks.get", "tasks.send":
+		response = h.taskCommand(ctx, "cloud:"+message.ConnectionID, message.Scopes, command)
+	default:
+		return errors.New("remote cloud: unsupported controller command")
+	}
+	reply, err := session.seal(response)
 	if err != nil {
 		return err
 	}
-	return writeDirected(conn, message.ConnectionID, pong)
+	return writeDirected(conn, message.ConnectionID, reply)
+}
+
+func (h *Host) taskCommand(ctx context.Context, deviceID string, scopes []account.RemoteCapability, command controllerCommand) map[string]any {
+	response := map[string]any{"v": protocolVersion, "id": command.ID}
+	if h.tasks == nil || !hasScope(scopes, account.RemoteTasks) {
+		response["type"] = "error"
+		response["error"] = "tasks access is unavailable"
+		return response
+	}
+	var value any
+	var err error
+	switch command.Type {
+	case "tasks.list":
+		value, err = h.tasks.CloudTasks(ctx)
+		response["type"] = "tasks.list"
+		response["tasks"] = value
+	case "tasks.get":
+		value, err = h.tasks.CloudTask(ctx, command.TaskID)
+		response["type"] = "tasks.get"
+		response["snapshot"] = value
+	case "tasks.send":
+		err = h.tasks.CloudSubmit(ctx, command.TaskID, command.Text, deviceID)
+		response["type"] = "tasks.sent"
+	}
+	if err != nil {
+		response["type"] = "error"
+		response["error"] = err.Error()
+	}
+	return response
+}
+
+func hasScope(scopes []account.RemoteCapability, want account.RemoteCapability) bool {
+	return slices.Contains(scopes, want)
 }
 
 func writeDirected(conn *websocket.Conn, connectionID, payload string) error {

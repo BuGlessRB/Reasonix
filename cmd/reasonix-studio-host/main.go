@@ -356,11 +356,11 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 		return nil, err
 	}
 	hub.StartRecoveryGC(ctx)
-	startCloudRemote(ctx, cfg, logs)
+	startCloudRemote(ctx, cfg, logs, hub)
 	return hub, nil
 }
 
-func startCloudRemote(ctx context.Context, cfg *config.Config, logs io.Writer) {
+func startCloudRemote(ctx context.Context, cfg *config.Config, logs io.Writer, tasks remotecloud.TaskService) {
 	httpClient, err := netclient.NewHTTPClient(cfg.NetworkProxySpec(), netclient.TransportOptions{})
 	if err != nil {
 		fmt.Fprintf(logs, "remote cloud: %v\n", err)
@@ -375,7 +375,7 @@ func startCloudRemote(ctx context.Context, cfg *config.Config, logs io.Writer) {
 	dialer.Proxy = nil
 	dialer.NetDialContext = stream.DialContext
 	client := account.New(os.Getenv("REASONIX_ACCOUNTS_URL"), "reasonix-studio/"+version, httpClient)
-	host := remotecloud.New(client, &dialer, os.Getenv("REASONIX_REMOTE_URL"), version)
+	host := remotecloud.New(client, &dialer, os.Getenv("REASONIX_REMOTE_URL"), version, tasks)
 	go host.Run(ctx)
 }
 

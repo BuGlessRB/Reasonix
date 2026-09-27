@@ -1,6 +1,7 @@
 package remotecloud
 
 import (
+	"context"
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
@@ -11,7 +12,38 @@ import (
 	"testing"
 
 	"github.com/gorilla/websocket"
+
+	"reasonix/internal/platform/account"
 )
+
+type taskStub struct {
+	sentTask string
+	sentText string
+}
+
+func (s *taskStub) CloudTasks(context.Context) (any, error) {
+	return []map[string]string{{"id": "r1", "name": "project"}}, nil
+}
+func (s *taskStub) CloudTask(context.Context, string) (any, error) { return nil, nil }
+func (s *taskStub) CloudSubmit(_ context.Context, task, text, _ string) error {
+	s.sentTask, s.sentText = task, text
+	return nil
+}
+
+func TestTaskCommandsRequireScopeAndReachTypedBackend(t *testing.T) {
+	stub := &taskStub{}
+	host := &Host{tasks: stub}
+	denied := host.taskCommand(t.Context(), "device", nil, controllerCommand{Type: "tasks.list", ID: "1"})
+	if denied["type"] != "error" {
+		t.Fatalf("unscoped response = %+v", denied)
+	}
+	response := host.taskCommand(t.Context(), "device", []account.RemoteCapability{account.RemoteTasks}, controllerCommand{
+		Type: "tasks.send", ID: "2", TaskID: "r1", Text: "run tests",
+	})
+	if response["type"] != "tasks.sent" || stub.sentTask != "r1" || stub.sentText != "run tests" {
+		t.Fatalf("response = %+v, stub = %+v", response, stub)
+	}
+}
 
 func TestHandshakeAndPingCrossTheDirectedEncryptedChannel(t *testing.T) {
 	connections := make(chan *websocket.Conn, 1)
@@ -58,7 +90,7 @@ func TestHandshakeAndPingCrossTheDirectedEncryptedChannel(t *testing.T) {
 	})
 	host := &Host{name: "Home Mac", version: "2.20.1"}
 	sessions := make(map[string]*sessionCipher)
-	if err := host.handle(deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
+	if err := host.handle(t.Context(), deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
 		Type: "controller_message", ConnectionID: connectionID, Payload: string(greeting),
 	})); err != nil {
 		t.Fatal(err)
@@ -81,7 +113,7 @@ func TestHandshakeAndPingCrossTheDirectedEncryptedChannel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := host.handle(deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
+	if err := host.handle(t.Context(), deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
 		Type: "controller_message", ConnectionID: connectionID, Payload: ping,
 	})); err != nil {
 		t.Fatal(err)
