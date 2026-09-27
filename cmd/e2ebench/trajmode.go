@@ -56,6 +56,7 @@ type offlineModeArgs struct {
 	suite    string
 	reportIn string
 	outMD    string
+	outJSON  string
 	addr     string
 }
 
@@ -71,6 +72,8 @@ func dispatchOfflineMode(mode string, a offlineModeArgs) bool {
 	switch mode {
 	case "compare":
 		runCompareMode(a.outMD)
+	case "rollout":
+		fail("rollout", runRolloutMode(a.outMD, a.outJSON))
 	case "traj":
 		emitTrajMode(a.trajDir, a.outMD)
 	case "barrier":

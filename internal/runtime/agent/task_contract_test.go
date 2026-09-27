@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -267,4 +268,63 @@ func hasObligation(t *testing.T, store *trustedstate.Store, record, id string) b
 	}) bool {
 		return o.ID == id
 	})
+}
+
+func deliverablePlan() plancontract.Plan {
+	return plancontract.Plan{
+		Objective: "fix the parser",
+		Steps: []plancontract.Step{{
+			ID: "p1", Title: "fix it", CandidateFiles: []string{"parser.go"},
+			Acceptance: []plancontract.Criterion{{Text: "quoted fields parse"}},
+		}},
+	}.Normalize()
+}
+
+// replyOnly answers without touching anything, which is what a model told to
+// describe the change instead of making it does.
+func replyOnly() *scriptedProvider {
+	return &scriptedProvider{name: "p", turns: [][]provider.Chunk{{{Type: provider.ChunkText, Text: "done and verified"}, {Type: provider.ChunkDone}}}}
+}
+
+// A plan that names files to touch is owed a proven change: a turn that only
+// says it is done ends incomplete on the sealed verdict and the receipt says
+// why, while one that changed something settles it.
+func TestAPlanNamingFilesIsOwedAProvenChange(t *testing.T) {
+	plan := deliverablePlan()
+	for _, tc := range []struct {
+		name string
+		prov *scriptedProvider
+		owed bool
+	}{{"reply only", replyOnly(), true}, {"changed a file", writeThenRun("go vet ./..."), false}} {
+		store := trustedstate.Open(t.TempDir(), nil)
+		a, sink := contractAgent(t, tc.prov, "", store)
+		a.SetPlanContract(&plan)
+		_ = a.Run(deliveryGoalContext("goal-1", "fix"), "fix")
+		got := sink.last(t)
+		v := sealedVerdict(t, store, got.Record, "contract@"+contract.PlanDeliverable)
+		listed := slices.ContainsFunc(unprovenDetails(a.CompletionReceipt()), func(d string) bool { return strings.Contains(d, "no change was proven") })
+		if tc.owed && (v != "owed" || got.Outcome == "completed" || !listed) {
+			t.Fatalf("%s: deliverable %q, outcome %q, receipt lists it %v; want owed, not completed, listed", tc.name, v, got.Outcome, listed)
+		}
+		if !tc.owed && (v != "satisfied" || listed) {
+			t.Fatalf("%s: deliverable %q, receipt lists it %v; want satisfied and not listed", tc.name, v, listed)
+		}
+	}
+}
+
+func TestReplanningKeepsTheDeliverableWhileThePlanStillNamesFiles(t *testing.T) {
+	plan := deliverablePlan()
+	a, _ := contractAgent(t, writeThenRun("go vet ./..."), "", trustedstate.Open(t.TempDir(), nil))
+	a.SetPlanContract(&plan)
+	_ = a.Run(deliveryGoalContext("goal-1", "fix"), "fix")
+	moved := deliverablePlan()
+	moved.Steps[0].CandidateFiles = []string{"lexer.go"}
+	if a.PlanDropsAcceptedChecks(moved) {
+		t.Fatal("a replan that still names files was read as dropping the deliverable")
+	}
+	analysis := deliverablePlan()
+	analysis.Steps[0].CandidateFiles = nil
+	if !a.PlanDropsAcceptedChecks(analysis) {
+		t.Fatal("a replan naming no files dropped the deliverable without being routed to the user")
+	}
 }

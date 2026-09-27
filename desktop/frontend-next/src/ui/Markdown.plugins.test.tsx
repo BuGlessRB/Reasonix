@@ -28,3 +28,20 @@ it("reads a single tilde as a range, and only a doubled one as strikethrough", (
   expect(struck[0].textContent).toBe("旧值");
   expect(container.textContent).toContain("500~1000 或 2000~3000");
 });
+
+// Models often put an address in backticks. A code span holding nothing but a
+// web address is a link; any other code span, and every fenced block, is not.
+it("links a code span that holds exactly one web address", () => {
+  const { container } = render(<Markdown text={"打开 `https://example.com/a?b=1` 查看"} />);
+  const link = container.querySelector("a[href='https://example.com/a?b=1']");
+  expect(link).toBeTruthy();
+  expect(link?.querySelector("code")?.textContent).toBe("https://example.com/a?b=1");
+});
+
+it("leaves code spans that are not one web address as code", () => {
+  const { container } = render(
+    <Markdown text={"`curl https://example.com` 与 `file:///etc/hosts` 与 `http://`\n\n```\nhttps://example.com\n```"} />,
+  );
+  expect(container.querySelector("a")).toBeNull();
+  expect(container.querySelectorAll("code").length).toBe(4);
+});

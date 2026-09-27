@@ -12,6 +12,8 @@ import (
 const (
 	VerifierCommand = "command"
 	VerifierTest    = "test"
+	// VerifierChange is satisfied by any change the host proved in the task.
+	VerifierChange = "change"
 )
 
 // Verifier is what satisfies a criterion: a verification command recognised
@@ -49,6 +51,9 @@ type Sources struct {
 	// criteria, by identity: criterion ids are positional within one plan and
 	// mean nothing across two, while a command's identity does.
 	PlanChecks []string
+	// PlanChanges says the plan names files the work is expected to touch,
+	// which makes a proven change one of the task's deliverables.
+	PlanChanges bool
 }
 
 // Sources a criterion came from.
@@ -57,6 +62,11 @@ const (
 	SourceBaselineTest = "baseline_test"
 	SourcePlan         = "plan"
 )
+
+// PlanDeliverable is the criterion a plan naming files to touch adds: the task
+// must end with a change the host proved. It binds no path, because the plan's
+// files are inferred and a replan moves them.
+const PlanDeliverable = "change@plan"
 
 // PolicyTemplate names the host policy that accepts a derived revision.
 const PolicyTemplate = "host_policy:template/1"
@@ -80,6 +90,9 @@ func Derive(s Sources) []Criterion {
 	add(SourceProjectCheck, VerifierCommand, s.Checks)
 	add(SourceBaselineTest, VerifierTest, s.Tests)
 	add(SourcePlan, VerifierCommand, s.PlanChecks)
+	if s.PlanChanges {
+		out = append(out, Criterion{ID: PlanDeliverable, Source: SourcePlan, Required: true, Verifier: Verifier{Kind: VerifierChange, Identity: "plan"}})
+	}
 	slices.SortFunc(out, func(a, b Criterion) int { return strings.Compare(a.ID, b.ID) })
 	return out
 }

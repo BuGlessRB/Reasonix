@@ -72,13 +72,15 @@ func buildRunSink(format runOutputFormat, printOnly, showThinking bool, metricsP
 // cannot carry. The hashes come from the same capture the cache diagnostics
 // report, so a reader can prove the header belongs to the rounds it precedes
 // instead of assuming the run it was found next to.
-func recordTrajectoryHeader(rec *trajectory.Recorder, ctrl *control.Controller) {
+func recordTrajectoryHeader(rec *trajectory.Recorder, ctrl *control.Controller, version string) {
 	if rec == nil || ctrl == nil {
 		return
 	}
 	schemas := ctrl.ToolSchemas()
 	prompt := ctrl.SystemPrompt()
 	shape := agent.CaptureShape(prompt, schemas, 0)
+	build := BuildInfo{Version: version}.withDefaults()
+	caps, capsHash := capabilityVersions(build.Version+"@"+build.GitCommit, shape.SystemHash, schemas, ctrl.Skills())
 	rec.RecordRunHeader(trajectory.RunHeader{
 		ModelRef:      ctrl.ModelRef(),
 		WorkspaceRoot: ctrl.WorkspaceRoot(),
@@ -87,5 +89,8 @@ func recordTrajectoryHeader(rec *trajectory.Recorder, ctrl *control.Controller) 
 		Tools:         agent.NormalizedToolSchemas(schemas),
 		ToolsHash:     shape.ToolsHash,
 		PrefixHash:    shape.PrefixHash,
+
+		Capabilities:     caps,
+		CapabilitiesHash: capsHash,
 	})
 }

@@ -31,6 +31,9 @@ const (
 	Incomplete Outcome = "incomplete"
 	Failed     Outcome = "failed"
 	Blocked    Outcome = "blocked"
+	// NoOutcome is a turn that owes nothing and changed nothing the host saw:
+	// there is no evidence it completed anything, so it is not called done.
+	NoOutcome Outcome = "none"
 )
 
 // Causes an obligation is not satisfied, in the design's failure vocabulary.
@@ -113,7 +116,11 @@ func Evaluate(in Input) Result {
 		}
 		obs = append(obs, Obligation{ID: o.ID, Source: "host:" + string(o.Kind), Required: true, Verdict: Owed, Cause: CauseHostObligation})
 	}
-	return Result{Outcome: outcomeOf(obs, in.Blocked), Obligations: obs}
+	outcome := outcomeOf(obs, in.Blocked)
+	if outcome == Completed && len(obs) == 0 && !changedAnything(in.Receipts) {
+		outcome = NoOutcome
+	}
+	return Result{Outcome: outcome, Obligations: obs}
 }
 
 // criterion has a host verifier only when the ask is its own evidence: an
@@ -200,4 +207,8 @@ func coveredByContract(o evidence.Obligation, covered map[string]bool) bool {
 		return covered[o.Subject()]
 	}
 	return false
+}
+
+func changedAnything(receipts []evidence.Receipt) bool {
+	return slices.ContainsFunc(receipts, func(r evidence.Receipt) bool { return r.Success && (r.Mutation || r.Write) })
 }

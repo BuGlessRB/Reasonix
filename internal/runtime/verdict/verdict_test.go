@@ -88,13 +88,27 @@ func TestBlockedWinsAndFailureBeatsIncomplete(t *testing.T) {
 	}
 }
 
+// A turn that owes nothing and changed nothing has no evidence of completing
+// anything: it gets no outcome, which agrees with a report that gave none. The
+// same turn with a change the host saw completed what it was asked to.
 func TestNothingDeclaredAgreesWithAnUnknownReport(t *testing.T) {
 	res := Evaluate(Input{})
-	if res.Outcome != Completed || len(res.Obligations) != 0 {
-		t.Fatalf("result = %+v", res)
+	if res.Outcome != NoOutcome || len(res.Obligations) != 0 {
+		t.Fatalf("result = %+v, want no outcome", res)
 	}
 	if d := Classify(completion.VerdictUnknown, nil, res); d.Class != ClassAgree {
 		t.Fatalf("divergence = %+v", d)
+	}
+	if d := Classify(completion.VerdictDone, nil, res); d.Class != ClassNewStricter {
+		t.Fatalf("a report calling nothing done must diverge from no outcome: %+v", d)
+	}
+	changed := Evaluate(Input{Receipts: []evidence.Receipt{{ToolName: "edit_file", Success: true, Write: true}}})
+	if changed.Outcome != Completed {
+		t.Fatalf("a proven change owing nothing = %+v, want completed", changed)
+	}
+	failed := Evaluate(Input{Receipts: []evidence.Receipt{{ToolName: "edit_file", Success: false, Write: true}}})
+	if failed.Outcome != NoOutcome {
+		t.Fatalf("a failed write is no change: %+v", failed)
 	}
 }
 

@@ -94,3 +94,16 @@ func TestPlanChecksAreFrozenByCommandIdentity(t *testing.T) {
 		t.Fatalf("relaxed = %+v", relaxed)
 	}
 }
+
+// A plan naming files to touch makes a proven change a deliverable. Losing it
+// — a later plan naming no files — is a relaxation like any other.
+func TestPlanDeliverableIsACriterion(t *testing.T) {
+	with := Derive(Sources{PlanChanges: true})
+	if len(with) != 1 || with[0].ID != PlanDeliverable || with[0].Verifier.Kind != VerifierChange || !with[0].Required {
+		t.Fatalf("Derive = %+v, want the change deliverable", with)
+	}
+	first, _ := Accept(nil, "", with, "t")
+	if _, dec := Accept(&first, "r", Derive(Sources{}), "t"); dec != RelaxationRefused {
+		t.Fatalf("dropping the deliverable was %s, want refused", dec)
+	}
+}
