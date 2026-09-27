@@ -292,9 +292,9 @@ function isOtherOption(label: string): boolean {
 function reasonLabel(reason: AskReason): string {
   switch (reason) {
     case "user_decision":
-      return "需要你决定";
+      return t("需要你决定");
     case "missing_value":
-      return "需要你补充信息";
+      return t("需要你补充信息");
     default: {
       const unhandled: never = reason;
       return unhandled;
