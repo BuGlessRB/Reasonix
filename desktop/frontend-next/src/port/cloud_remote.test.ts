@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { REMOTE_DISCONNECTED_EVENT, remoteCodec } from "./cloud_remote";
+import { REMOTE_DISCONNECTED_EVENT, remoteCodec, remoteConnectionEnded } from "./cloud_remote";
 
 describe("remote Studio binary framing", () => {
   it("round-trips binary bodies and joins response chunks in index order", () => {
@@ -21,5 +21,6 @@ describe("remote Studio binary framing", () => {
     }, { once: true });
     remoteCodec.announceClosed("Disconnected by device");
     expect(reason).toBe("Disconnected by device");
+    expect(remoteConnectionEnded()).toBe(true);
   });
 });

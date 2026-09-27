@@ -6,10 +6,14 @@ const ACCOUNT = (import.meta.env.VITE_ACCOUNTS_API || "https://id.reasonix.io").
 const RELAY = (import.meta.env.VITE_REMOTE_GATEWAY || "wss://remote.reasonix.io").replace(/\/$/, "");
 const REQUEST_TIMEOUT_MS = 30_000;
 export const REMOTE_DISCONNECTED_EVENT = "reasonix:remote-disconnected";
+let connectionEnded = false;
 
 function announceClosed(reason = "") {
+  connectionEnded = true;
   globalThis.dispatchEvent(new CustomEvent(REMOTE_DISCONNECTED_EVENT, { detail: { reason } }));
 }
+
+export const remoteConnectionEnded = () => connectionEnded;
 
 interface RemoteDevice {
   id: string;
