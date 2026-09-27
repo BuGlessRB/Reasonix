@@ -363,13 +363,22 @@ func (a *Agent) settleUnchangedWorkspace(ctx context.Context, rec *evidence.Rece
 	// Nothing to compare against is not a reason to walk: a call that took no
 	// before-scan can only reach changed() to be told so, and that walk costs
 	// what one that answers costs.
-	if !plan.scanBefore.complete || a.svc.mutationObserver.HasActiveWriters() {
+	if !plan.scanBefore.complete || !a.mayAttributeObserved(ctx) {
 		return
 	}
 	after := scanWorkspace(ctx, a.observeRoot)
 	changed, ok := plan.scanBefore.changed(after)
 	if !ok {
 		return
+	}
+	if scope := scopedGrant(ctx); scope != nil && len(changed) > 0 {
+		// Inside a run's own declared paths a change is taken as that run's:
+		// the claims are proven disjoint up front and writer tools are fenced
+		// to them. Outside them it is someone else's, so it says nothing here.
+		changed = slices.DeleteFunc(changed, func(p string) bool { return !scope.Allows(p) })
+		if len(changed) == 0 {
+			return
+		}
 	}
 	if len(changed) == 0 {
 		rec.Mutation = false
@@ -405,9 +414,7 @@ func (a *Agent) scanBeforeUnprovenCall(ctx context.Context, plan *toolCallPlan) 
 	if a.task.workspaceOverScanLimit() {
 		return workspaceScan{}
 	}
-	// While a background writer runs, what changed between the two walks is not
-	// this call's alone, so the walk could only attribute its writes here.
-	if a.svc.mutationObserver.HasActiveWriters() {
+	if !a.mayAttributeObserved(ctx) {
 		return workspaceScan{}
 	}
 	scan := scanWorkspace(ctx, a.observeRoot)
@@ -415,4 +422,21 @@ func (a *Agent) scanBeforeUnprovenCall(ctx context.Context, plan *toolCallPlan) 
 		a.task.noteWorkspaceOverScanLimit()
 	}
 	return scan
+}
+
+// mayAttributeObserved says whether what a walk sees change can be charged to
+// this agent's call: when it holds a declared write scope to filter by, or
+// when no other background writer is running beside it.
+func (a *Agent) mayAttributeObserved(ctx context.Context) bool {
+	return scopedGrant(ctx) != nil || !a.svc.mutationObserver.HasOtherActiveWriters()
+}
+
+// scopedGrant is the running child's write grant when it names paths; a
+// whole-workspace grant filters nothing, so it is not one.
+func scopedGrant(ctx context.Context) *writeclaim.WriteGrant {
+	g := writeclaim.SubagentWriteGrant(ctx)
+	if g == nil || g.Declared().WholeWorkspace || g.Scope().Empty() {
+		return nil
+	}
+	return g
 }

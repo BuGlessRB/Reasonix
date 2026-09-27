@@ -612,7 +612,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 		if spec.Grant.ReadOnly {
 			return t.runReadOnlySubSession(withUpstream(runCtx, spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver, "read_only_"+spec.Worker.Kind, grant)
 		}
-		return t.runSubSession(withUpstream(writeclaim.WithSubagentWriteGrant(runCtx, writeGrant), spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver, spec.Worker.Kind, grant, t.observeRootFor(backgroundWriter))
+		return t.runSubSession(withUpstream(writeclaim.WithSubagentWriteGrant(runCtx, writeGrant), spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver, spec.Worker.Kind, grant, t.observeRootFor(backgroundWriter, writeGrant))
 	}
 
 	if spec.Sched.RunInBackground {
@@ -1048,11 +1048,11 @@ func reviewGrantFor(worker WorkerSpec, execution string) agent.ReviewReportGrant
 }
 
 // observeRootFor is where a writer child may observe its own effects. A
-// foreground child runs while its parent waits on it, so what changes in the
-// workspace during one of its calls is that call's; a background writer runs
-// beside others, and a walk would hand it their writes too.
-func (t *TaskTool) observeRootFor(backgroundWriter bool) string {
-	if backgroundWriter {
+// foreground child runs while its parent waits on it; a background writer
+// runs beside the parent, which registers as no writer, so it may observe only
+// through the paths it declared, where a change is taken as its own.
+func (t *TaskTool) observeRootFor(backgroundWriter bool, grant *writeclaim.WriteGrant) string {
+	if backgroundWriter && (grant == nil || grant.Declared().WholeWorkspace || grant.Scope().Empty()) {
 		return ""
 	}
 	return t.workspaceRoot
