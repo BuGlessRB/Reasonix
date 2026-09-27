@@ -158,6 +158,171 @@ func TestCheckProviderModelUsesUnsavedEndpointAndKeyOnlyForTheProbe(t *testing.T
 	}
 }
 
+func TestCheckProviderModelUsesSystemOneForTypeSafe(t *testing.T) {
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer one-time-key" {
+			t.Errorf("request = %s %s auth=%q", r.Method, r.URL.Path, r.Header.Get("Authorization"))
+		}
+		var request struct {
+			State     any    `json:"state"`
+			Model     string `json:"model"`
+			Questions map[string]struct {
+				Type         string `json:"type"`
+				Instructions any    `json:"instructions"`
+			} `json:"questions"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+		}
+		if request.State == nil || request.Model != "jev-latest" || len(request.Questions) != 1 {
+			t.Errorf("decision request = %+v", request)
+		}
+		for _, question := range request.Questions {
+			if question.Type != "noul" || question.Instructions == nil {
+				t.Errorf("question = %+v", question)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"jev-latest","answers":{"probe":{"type":"noul","noul":0.9}}}`))
+	}))
+	defer upstream.Close()
+
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+	body := fmt.Sprintf(`{"name":"not-saved","model":"jev-latest","baseUrl":%q,"apiKey":"one-time-key","kind":"typesafe"}`, upstream.URL)
+	resp := postProvider(t, srv.URL, "/providers/check/model", body)
+	defer resp.Body.Close()
+	var got providerModelCheck
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "available" || got.Model != "jev-latest" || calls != 1 {
+		t.Fatalf("check = %+v, upstream calls = %d; want one successful System One request", got, calls)
+	}
+}
+
+func TestCheckProviderModelUsesSavedDecisionKindAndEnvironmentKey(t *testing.T) {
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer process-key" {
+			t.Errorf("request path/auth = %q/%q", r.URL.Path, r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"answers":{"probe":{"type":"noul","noul":0.5}}}`))
+	}))
+	defer upstream.Close()
+
+	s := newProviderEditServer(t)
+	t.Setenv("TYPESAFE_API_KEY", "process-key")
+	edit := config.LoadForEdit(config.UserConfigPath())
+	entry, ok := edit.Provider("existing")
+	if !ok {
+		t.Fatal("fixture provider is missing")
+	}
+	entry.Kind = "TypeSafe"
+	entry.BaseURL = upstream.URL
+	entry.APIKeyEnv = "TYPESAFE_API_KEY"
+	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
+		t.Fatal(err)
+	}
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+	resp := postProvider(t, srv.URL, "/providers/check/model", `{"name":"existing","model":"jev-latest"}`)
+	defer resp.Body.Close()
+	var got providerModelCheck
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "available" || calls != 1 {
+		t.Fatalf("check = %+v, upstream calls = %d; want env-authenticated decision request", got, calls)
+	}
+}
+
+func TestCheckProviderModelRejectsMalformedTypeSafeSuccess(t *testing.T) {
+	for _, body := range []string{
+		`{}`,
+		`{"answers":{"probe":{"type":"choice","noul":0.5}}}`,
+		`{"answers":{"probe":{"type":"noul"}}}`,
+		`{"answers":{"probe":{"type":"noul","noul":1.1}}}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			defer upstream.Close()
+			s := newProviderEditServer(t)
+			s.AllowProviderEdit()
+			srv := httptest.NewServer(s.Handler())
+			defer srv.Close()
+			request := fmt.Sprintf(`{"name":"not-saved","model":"jev-latest","baseUrl":%q,"apiKey":"one-time-key","kind":"typesafe"}`, upstream.URL)
+			resp := postProvider(t, srv.URL, "/providers/check/model", request)
+			defer resp.Body.Close()
+			var got providerModelCheck
+			if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != "unknown" || got.Reason != "rejected" {
+				t.Fatalf("check = %+v for response %s; want unconfirmed rejection", got, body)
+			}
+		})
+	}
+}
+
+func TestCheckProviderModelClassifiesTypeSafeHTTPFailure(t *testing.T) {
+	tests := []struct {
+		name       string
+		httpStatus int
+		body       string
+		status     string
+		reason     string
+	}{
+		{"auth", http.StatusUnauthorized, `{"detail":"one-time-key is invalid"}`, "unknown", "auth"},
+		{"rate limit", http.StatusTooManyRequests, `{"detail":"one-time-key is limited"}`, "unknown", "rate_limited"},
+		{"missing model", http.StatusNotFound, `{"error":{"code":"model_not_found"}}`, "unavailable", "not_found"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := 0
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if r.URL.Path != "/v1/systemone" {
+					t.Errorf("path = %q", r.URL.Path)
+				}
+				w.WriteHeader(tt.httpStatus)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer upstream.Close()
+
+			s := newProviderEditServer(t)
+			s.AllowProviderEdit()
+			srv := httptest.NewServer(s.Handler())
+			defer srv.Close()
+			body := fmt.Sprintf(`{"name":"not-saved","model":"jev-latest","baseUrl":%q,"apiKey":"one-time-key","kind":"typesafe"}`, upstream.URL)
+			resp := postProvider(t, srv.URL, "/providers/check/model", body)
+			defer resp.Body.Close()
+			raw, err := readAllString(resp)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(raw, "one-time-key") {
+				t.Fatalf("response leaked the temporary key: %s", raw)
+			}
+			var got providerModelCheck
+			if err := json.Unmarshal([]byte(raw), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != tt.status || got.Reason != tt.reason || got.HTTPStatus != tt.httpStatus || calls != 1 {
+				t.Fatalf("check = %+v, upstream calls = %d; want %s/%s/%d in one request", got, calls, tt.status, tt.reason, tt.httpStatus)
+			}
+		})
+	}
+}
+
 // A gateway that answers chat and refuses a tools array is the case a check
 // without tools calls available, leaving the failure to the first real turn.
 // The finding is established by the second attempt succeeding, never by

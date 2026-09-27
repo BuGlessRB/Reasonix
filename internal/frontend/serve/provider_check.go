@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/base/netclient"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/provider"
+	"reasonix/internal/safety/typesafe"
 )
 
 // providerCheck is what re-probing a saved provider found. Kind is the protocol
@@ -168,13 +169,43 @@ func (s *Server) checkProviderModel(w http.ResponseWriter, r *http.Request) {
 	if candidate.NoProxy && proxy.Mode != netclient.ModeCustom {
 		proxy = netclient.ProxySpec{Mode: netclient.ModeOff}
 	}
+	ctx, cancel := context.WithTimeout(provider.WithRetryLimit(r.Context(), 0), providerProbeTimeout)
+	defer cancel()
+	if config.AnswersFor(candidate.Kind) == config.AnswersDecision {
+		client, err := netclient.NewHTTPClient(proxy, netclient.TransportOptions{})
+		if err != nil {
+			writeJSON(w, providerModelCheck{Model: model, Status: "unknown", Reason: "rejected"})
+			return
+		}
+		defer client.CloseIdleConnections()
+		if candidate.APIKey() == "" {
+			candidate.ResolveAPIKeyFromProcessEnvForProbe()
+		}
+		result, err := (typesafe.Client{HTTP: client, BaseURL: candidate.BaseURL, APIKey: candidate.APIKey}).Evaluate(ctx, typesafe.Request{
+			State: "Connectivity probe",
+			Model: model,
+			Questions: map[string]typesafe.Question{
+				"probe": {Type: "noul", Instructions: "Is this a connectivity probe?"},
+			},
+		})
+		if err == nil {
+			var answer struct {
+				Type string   `json:"type"`
+				Noul *float64 `json:"noul"`
+			}
+			if json.Unmarshal(result.Answers["probe"], &answer) != nil || answer.Type != "noul" || answer.Noul == nil || *answer.Noul < 0 || *answer.Noul > 1 {
+				err = errors.New("TypeSafe probe returned no valid Noul answer")
+			}
+		}
+		status, reason, httpStatus := classifyProviderModelCheck(err)
+		writeJSON(w, providerModelCheck{Model: model, Status: status, Reason: reason, HTTPStatus: httpStatus})
+		return
+	}
 	modelProvider, err := boot.NewProviderWithProxy(&candidate, proxy)
 	if err != nil {
 		writeJSON(w, providerModelCheck{Model: model, Status: "unknown", Reason: "rejected"})
 		return
 	}
-	ctx, cancel := context.WithTimeout(provider.WithRetryLimit(r.Context(), 0), providerProbeTimeout)
-	defer cancel()
 	err = runProviderModelCheck(ctx, modelProvider)
 	status, reason, httpStatus := classifyProviderModelCheck(err)
 	writeJSON(w, providerModelCheck{Model: model, Status: status, Reason: reason, HTTPStatus: httpStatus})
@@ -253,6 +284,13 @@ func classifyProviderModelCheck(err error) (status, reason string, httpStatus in
 	}
 	if errors.Is(err, errToolsUnsupported) {
 		return "unavailable", "tools", 0
+	}
+	var typeSafeErr *typesafe.HTTPError
+	if errors.As(err, &typeSafeErr) {
+		if typeSafeErr.Status == http.StatusUnauthorized || typeSafeErr.Status == http.StatusForbidden {
+			return "unknown", "auth", typeSafeErr.Status
+		}
+		return classifyProviderModelCheck(&provider.APIError{Status: typeSafeErr.Status, Body: typeSafeErr.Body})
 	}
 	var auth *provider.AuthError
 	if errors.As(err, &auth) {
