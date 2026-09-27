@@ -19,55 +19,60 @@ func rejectionAgent(t *testing.T, plan *plancontract.Plan) *Agent {
 	return a
 }
 
-// The gate has to name what is missing. A criterion nobody proved is exactly
-// what "pretending to be done" looks like from the host's side.
-func TestUnprovenPlanCriterionBlocksTheFinalAnswer(t *testing.T) {
+func checkedPlan() plancontract.Plan {
 	plan := criterionPlan()
+	plan.Steps[0].Verification = []plancontract.Verification{{Command: "go test ./pay/"}}
+	return plan.Normalize()
+}
+
+// The gate has to name what is missing: a criterion whose step names a check
+// that has not passed since the change, with the check that settles it.
+func TestUnprovenPlanCriterionBlocksTheFinalAnswer(t *testing.T) {
+	plan := checkedPlan()
 	a := rejectionAgent(t, &plan)
 	a.task.ledger.Record(evidence.Receipt{ToolName: "edit_file", Mutation: true, Write: true, Success: true, Paths: []string{"pay.go"}})
 
-	outstanding := a.outstandingPlanCriteria()
-	if len(outstanding) == 0 {
-		t.Fatal("a plan whose criteria have no evidence must have something outstanding")
-	}
-	joined := strings.Join(outstanding, "; ")
-	if !strings.Contains(joined, "retries no longer double-charge") {
-		t.Fatalf("outstanding = %v, want the criterion named", outstanding)
+	joined := strings.Join(a.outstandingPlanCriteria(), "; ")
+	if !strings.Contains(joined, "retries no longer double-charge") || !strings.Contains(joined, "run go test ./pay/") {
+		t.Fatalf("outstanding = %q, want the criterion and the check that settles it", joined)
 	}
 }
 
-// Once every criterion carries fresh proof the gate must let go, or the model
-// can never finish.
-func TestProvenPlanCriteriaLeaveNothingOutstanding(t *testing.T) {
-	plan := criterionPlan()
+// A citation is the model's word: it does not settle a criterion whose step
+// names a check, and a criterion no command checks is not held at all.
+func TestACitationSettlesNoPlanCriterion(t *testing.T) {
+	plan := checkedPlan()
 	a := rejectionAgent(t, &plan)
+	a.task.ledger.Record(evidence.Receipt{ToolName: "edit_file", Mutation: true, Write: true, Success: true, Paths: []string{"pay.go"}})
 	for _, c := range plan.Steps[0].Acceptance {
 		a.task.ledger.Record(completeStepReceipt(t, c.ID, "manual", ""))
 	}
-	if outstanding := a.outstandingPlanCriteria(); len(outstanding) != 0 {
-		t.Fatalf("outstanding = %v, want none once every criterion is proven", outstanding)
+	if len(a.outstandingPlanCriteria()) == 0 {
+		t.Fatal("manual citations settled criteria whose step names a check")
+	}
+	unchecked := criterionPlan()
+	b := rejectionAgent(t, &unchecked)
+	b.task.ledger.Record(evidence.Receipt{ToolName: "edit_file", Mutation: true, Write: true, Success: true, Paths: []string{"pay.go"}})
+	if outstanding := b.outstandingPlanCriteria(); len(outstanding) != 0 {
+		t.Fatalf("outstanding = %v, want criteria no command checks left to the receipt, not the gate", outstanding)
 	}
 }
 
-// Freshness has to survive the trip into the gate: a proof from before the last
-// mutation is not a proof of the current code.
-func TestStaleProofBecomesOutstandingAgain(t *testing.T) {
-	plan := criterionPlan()
+// Once the step's check passes after the change the gate lets go, and a later
+// change reopens it: a pass from before the last change proves nothing now.
+func TestPlanCheckMustPassAfterTheLatestChange(t *testing.T) {
+	plan := checkedPlan()
 	a := rejectionAgent(t, &plan)
-	for _, c := range plan.Steps[0].Acceptance {
-		a.task.ledger.Record(completeStepReceipt(t, c.ID, "verification", "go test ./..."))
-	}
+	edit := evidence.Receipt{ToolName: "edit_file", Mutation: true, Write: true, Success: true, Paths: []string{"pay.go"}}
+	a.task.ledger.Record(edit)
+	zero := 0
+	a.task.ledger.Record(evidence.Receipt{ToolName: "bash", Command: "go test ./pay/", Success: true, ExitCode: &zero})
 	if outstanding := a.outstandingPlanCriteria(); len(outstanding) != 0 {
-		t.Fatalf("outstanding = %v, want none while the proofs are fresh", outstanding)
+		t.Fatalf("outstanding = %v, want none once the step's check passed after the change", outstanding)
 	}
-
-	a.task.ledger.Record(evidence.Receipt{ToolName: "edit_file", Mutation: true, Write: true, Success: true, Paths: []string{"pay.go"}})
-	outstanding := a.outstandingPlanCriteria()
-	if len(outstanding) == 0 {
-		t.Fatal("a mutation after the proofs must reopen them")
-	}
-	if !strings.Contains(strings.Join(outstanding, "; "), "stale") {
-		t.Fatalf("outstanding = %v, want the staleness said out loud", outstanding)
+	a.task.ledger.Record(edit)
+	if len(a.outstandingPlanCriteria()) == 0 {
+		t.Fatal("a change after the check must reopen the criteria")
 	}
 }
 

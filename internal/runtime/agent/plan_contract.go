@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
+	"strings"
 
 	"reasonix/internal/runtime/plancontract"
 	"reasonix/internal/runtime/taskcontract"
@@ -115,19 +117,38 @@ func (a *Agent) withContractState(ctx context.Context) context.Context {
 	return evidence.WithAcceptanceCriteria(ctx, a.acceptanceCriterionIDs())
 }
 
-// outstandingPlanCriteria lists what the approved plan still lacks fresh
-// evidence for, empty when the turn is unplanned. It is the contract's answer to
-// "is this actually done", named criterion by criterion, including proofs that
-// went stale under a later mutation.
+// outstandingPlanCriteria lists the approved plan's required criteria whose
+// step names a check that has not passed since the latest change, or has never
+// passed when nothing changed. A criterion no command checks is not held here:
+// the host cannot settle it, and a citation would only be the model's word.
 func (a *Agent) outstandingPlanCriteria() []string {
-	if a == nil || a.PlanContract() == nil {
+	plan := a.PlanContract()
+	if a == nil || plan == nil || a.task.ledger == nil {
 		return nil
 	}
-	c := a.LiveContract()
-	if c == nil {
-		return nil
+	at, changed := a.task.ledger.LatestSuccessfulMutationIndex()
+	if !changed {
+		at = -1
 	}
-	return c.Outstanding()
+	var out []string
+	for _, step := range plan.Steps {
+		var failing []string
+		for _, v := range step.Verification {
+			id := evidence.VerificationIdentity(strings.TrimSpace(v.Command))
+			if id != "" && !a.task.ledger.HasSuccessfulCommandAfter(id, at) {
+				failing = append(failing, v.Command)
+			}
+		}
+		if len(failing) == 0 {
+			continue
+		}
+		for _, c := range step.Acceptance {
+			if !c.Optional {
+				out = append(out, fmt.Sprintf("%s: %s — run %s after the latest change", c.ID, c.Text, strings.Join(failing, ", ")))
+			}
+		}
+	}
+	return out
 }
 
 // mutationEscapesPlan reports whether a pending write touches a path the
