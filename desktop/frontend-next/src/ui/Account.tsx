@@ -22,10 +22,11 @@ export function Account({ port, state, unread, reload }: { port: AgentPort; stat
     cancelled.current = false;
     try {
       const grant = await port.accountLogin();
-      setCode({ userCode: grant.userCode, uri: grant.verificationUriComplete || grant.verificationUri });
+      const uri = grant.verificationUriComplete || grant.verificationUri;
+      setCode({ userCode: grant.userCode, uri });
       // The approval page opens in the real browser: a window with no address
       // bar cannot be checked, and the password manager lives there anyway.
-      window.open(grant.verificationUriComplete || grant.verificationUri, "_blank", "noopener");
+      await port.openExternal(uri);
       const deadline = Date.now() + grant.expiresIn * 1000;
       let wait = Math.max(grant.interval, 1) * 1000;
       while (!cancelled.current && Date.now() < deadline) {
