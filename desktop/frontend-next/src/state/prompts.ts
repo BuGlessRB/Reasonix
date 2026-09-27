@@ -5,7 +5,7 @@
 // arrives more than once, and it must not become two answerable cards — and
 // survival, because a rebuild re-reads the record and a prompt is not in it.
 import type { Item, SessionState } from "./session_types";
-import type { DecisionReceipt } from "../port/wire";
+import type { Ask, AskQuestion, DecisionReceipt } from "../port/wire";
 
 // The id the kernel correlates an answer by, which is what makes two frames one
 // prompt. Local item ids cannot: a replay mints a new one every time.
@@ -75,4 +75,39 @@ function verdictOf(outcome: string): string {
     default:
       return "unknown";
   }
+}
+
+interface AskArgs {
+  questions?: {
+    header?: string;
+    question?: string;
+    reason?: string;
+    multiSelect?: boolean;
+    options?: { label?: string; description?: string }[];
+  }[];
+}
+
+// A reload does not replay ask_request, so the question is read back off the
+// ask call's own arguments, shaped as agent.AskTool shapes them for the wire.
+export function askFromCall(id: string, args: string | undefined): Ask | null {
+  let p: AskArgs;
+  try {
+    p = JSON.parse(args ?? "");
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(p?.questions) || p.questions.length === 0) return null;
+  const questions: AskQuestion[] = [];
+  for (const [i, q] of p.questions.entries()) {
+    if (!Array.isArray(q?.options)) return null;
+    questions.push({
+      id: `q${i + 1}`,
+      header: q.header?.trim() ?? "",
+      prompt: q.question?.trim() ?? "",
+      reason: q.reason?.trim() === "missing_value" ? "missing_value" : "user_decision",
+      multi: q.multiSelect === true,
+      options: q.options.map((o) => ({ label: o.label?.trim() ?? "", description: o.description?.trim() || undefined })),
+    });
+  }
+  return { id, questions };
 }

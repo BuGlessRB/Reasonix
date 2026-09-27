@@ -1555,6 +1555,7 @@
     background: var(--accent-wash);
   }
   .ask-done b { color: var(--text); font-weight: var(--w-med) }
+  .ask-done[data-recorded] { white-space: pre-line; color: var(--text) }
 
   .dropzone { display: contents }
 

@@ -14,7 +14,7 @@ import { splitProviderSearch } from "./providersearch";
 
 export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, TodoStatus, TurnTerminal, Waiting };
 export { currentStep, stepDone, stepLabel };
-import { promptOpen, prompted, sealByReceipt } from "./prompts";
+import { askFromCall, promptOpen, prompted, sealByReceipt } from "./prompts";
 import { nameTurnStart, othersSteer } from "./turn_start";
 import { appendText, foldMessage, sealSay } from "./say";
 import { nextId } from "./ids";
@@ -765,6 +765,11 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions
       const at = m.toolCallId === undefined ? undefined : calls.get(m.toolCallId);
       if (at !== undefined) {
         const prev = out[at] as Extract<Item, { t: "tool" }>;
+        const ask = prev.tool.name === "ask" && !m.toolFailed ? askFromCall(prev.tool.id ?? "", prev.tool.args) : null;
+        if (ask) {
+          out[at] = { t: "ask", id: prev.id, ask, answered: [], recorded: m.content };
+          continue;
+        }
         out[at] = {
           ...prev,
           tool: {
