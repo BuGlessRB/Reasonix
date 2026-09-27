@@ -129,3 +129,65 @@ export function setFoldModes(patch: Partial<FoldModes>): void {
   }
   foldListeners.forEach((fn) => fn());
 }
+
+// Service order is a display choice, independent of the provider configuration.
+export const PROVIDER_ORDER_KEY = "rx-provider-order";
+let providerOrderRaw: string | null | undefined;
+let providerOrderValue: readonly string[] = [];
+const providerOrderListeners = new Set<() => void>();
+
+export function normalizeProviderOrder(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((item): item is string => typeof item === "string" && item.trim() !== "").map((item) => item.trim()))];
+}
+
+export function readProviderOrder(): readonly string[] {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(PROVIDER_ORDER_KEY);
+  } catch {
+    /* storage is unavailable; keep the default order */
+  }
+  if (raw !== providerOrderRaw) {
+    providerOrderRaw = raw;
+    try {
+      providerOrderValue = normalizeProviderOrder(JSON.parse(raw ?? "[]"));
+    } catch {
+      providerOrderValue = [];
+    }
+  }
+  return providerOrderValue;
+}
+
+export function writeProviderOrder(order: readonly string[]): boolean {
+  const next = normalizeProviderOrder(order);
+  const raw = JSON.stringify(next);
+  try {
+    localStorage.setItem(PROVIDER_ORDER_KEY, raw);
+  } catch {
+    return false;
+  }
+  if (raw !== providerOrderRaw) {
+    providerOrderRaw = raw;
+    providerOrderValue = next;
+    providerOrderListeners.forEach((fn) => fn());
+  }
+  return true;
+}
+
+function refreshProviderOrder(event: StorageEvent): void {
+  if (event.key !== PROVIDER_ORDER_KEY && event.key !== null) return;
+  const before = providerOrderRaw;
+  providerOrderRaw = undefined;
+  readProviderOrder();
+  if (providerOrderRaw !== before) providerOrderListeners.forEach((fn) => fn());
+}
+
+export function onProviderOrderChange(fn: () => void): () => void {
+  providerOrderListeners.add(fn);
+  if (providerOrderListeners.size === 1) window.addEventListener("storage", refreshProviderOrder);
+  return () => {
+    providerOrderListeners.delete(fn);
+    if (providerOrderListeners.size === 0) window.removeEventListener("storage", refreshProviderOrder);
+  };
+}
