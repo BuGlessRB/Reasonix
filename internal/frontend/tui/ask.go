@@ -15,19 +15,32 @@ import (
 // askState walks an open question panel. tab is the question in view, and
 // with more than one question one tab past the last reviews the answers.
 // Each question's rows are its options, then a typed answer, then declining.
+// A single-choice pick may carry a note, sent after it as a second selection.
 type askState struct {
 	item   int
 	tab    int
 	cursor int
 	picks  [][]string
 	custom []string
-	typing bool
+	notes  []string
+	entry  askEntry
 }
+
+// askEntry is what the composer is taking while the panel is open.
+type askEntry int
+
+const (
+	entryNone   askEntry = iota
+	entryAnswer          // an answer no option offered
+	entryNote            // a note under this question's single-choice pick
+)
+
+func (st *askState) entering() bool { return st.entry != entryNone }
 
 func (m *model) openAsk(it *Item) *askState {
 	if m.ask == nil || m.ask.item != it.ID {
 		n := len(it.Ask.Questions)
-		m.ask = &askState{item: it.ID, picks: make([][]string, n), custom: make([]string, n)}
+		m.ask = &askState{item: it.ID, picks: make([][]string, n), custom: make([]string, n), notes: make([]string, n)}
 		for i, q := range it.Ask.Questions {
 			m.ask.picks[i] = slices.Clone(q.Default)
 		}
@@ -43,7 +56,7 @@ func (st *askState) answered(i int) bool { return len(st.picks[i]) > 0 || st.cus
 func (m *model) answerAsk(it *Item, k string) (tea.Cmd, bool) {
 	st := m.openAsk(it)
 	qs := it.Ask.Questions
-	if st.typing {
+	if st.entering() {
 		return m.typeAnswer(it, k)
 	}
 	if k == "esc" {
@@ -70,6 +83,8 @@ func (m *model) answerAsk(it *Item, k string) (tea.Cmd, bool) {
 	q := qs[st.tab]
 	rows := len(q.Options) + 2
 	switch {
+	case k == "tab" && st.cursor < len(q.Options) && !q.Multi:
+		m.openNote(q.Options[st.cursor].Label)
 	case k == "up":
 		st.cursor = (st.cursor + rows - 1) % rows
 	case k == "down" || k == "tab":
@@ -108,10 +123,13 @@ func (m *model) chooseRow(it *Item, row int) tea.Cmd {
 		st.toggle(q.Options[row].Label)
 		return nil
 	case row < len(q.Options):
-		st.picks[st.tab] = []string{q.Options[row].Label}
+		if label := q.Options[row].Label; !slices.Equal(st.picks[st.tab], []string{label}) {
+			st.picks[st.tab], st.notes[st.tab] = []string{label}, ""
+		}
+		st.custom[st.tab] = ""
 		return m.nextQuestion(it)
 	case row == len(q.Options):
-		st.typing = true
+		st.entry = entryAnswer
 		m.composer.Placeholder = i18n.M.AskTypingHint
 		m.composer.SetValue(st.custom[st.tab])
 		return nil
@@ -119,19 +137,37 @@ func (m *model) chooseRow(it *Item, row int) tea.Cmd {
 	return m.declineAsk(it)
 }
 
-// typeAnswer runs the composer while the typed row is open: enter keeps what
-// was typed as this question's answer, esc goes back to the rows.
+// openNote picks a single-choice option and opens the composer for a note to
+// send with it, for an option that asks for more than itself.
+func (m *model) openNote(label string) {
+	st := m.ask
+	if !slices.Equal(st.picks[st.tab], []string{label}) {
+		st.picks[st.tab], st.notes[st.tab] = []string{label}, ""
+	}
+	st.custom[st.tab] = ""
+	st.entry = entryNote
+	m.composer.Placeholder = i18n.M.AskNoteHint
+	m.composer.SetValue(st.notes[st.tab])
+}
+
+// typeAnswer runs the composer while an entry is open: enter keeps what was
+// typed as this question's answer or its pick's note, esc goes back to the rows.
 func (m *model) typeAnswer(it *Item, k string) (tea.Cmd, bool) {
 	st := m.ask
 	switch k {
 	case "esc":
-		st.typing = false
+		st.entry = entryNone
 	case "enter":
-		st.typing = false
-		st.custom[st.tab] = strings.TrimSpace(m.composer.Value())
-		if st.custom[st.tab] != "" && !it.Ask.Questions[st.tab].Multi {
-			st.picks[st.tab] = nil
+		text := strings.TrimSpace(m.composer.Value())
+		if st.entry == entryNote {
+			st.notes[st.tab] = text
+		} else {
+			st.custom[st.tab] = text
+			if text != "" && !it.Ask.Questions[st.tab].Multi {
+				st.picks[st.tab], st.notes[st.tab] = nil, ""
+			}
 		}
+		st.entry = entryNone
 		m.composer.Reset()
 		m.composer.Placeholder = ""
 		if st.answered(st.tab) {
@@ -157,7 +193,7 @@ func (m *model) nextQuestion(it *Item) tea.Cmd {
 
 func (m *model) declineAsk(it *Item) tea.Cmd {
 	for i := range m.ask.picks {
-		m.ask.picks[i], m.ask.custom[i] = nil, ""
+		m.ask.picks[i], m.ask.custom[i], m.ask.notes[i] = nil, "", ""
 	}
 	return m.sendAsk(it)
 }
@@ -168,10 +204,7 @@ func (m *model) sendAsk(it *Item) tea.Cmd {
 	answers := make([]AskAnswer, len(it.Ask.Questions))
 	said := make([]string, 0, len(it.Ask.Questions))
 	for i, q := range it.Ask.Questions {
-		sel := slices.Clone(m.ask.picks[i])
-		if c := m.ask.custom[i]; c != "" {
-			sel = append(sel, c)
-		}
+		sel := m.ask.selected(i)
 		answers[i] = AskAnswer{QuestionID: q.ID, Selected: sel}
 		if len(sel) > 0 {
 			said = append(said, strings.Join(sel, ", "))
@@ -205,8 +238,7 @@ func (m *model) askPanel(it *Item) []string {
 		for i, q := range qs {
 			ans := termrender.Dim(i18n.M.AskUnanswered)
 			if st.answered(i) {
-				ans = strings.Join(append(slices.Clone(st.picks[i]), st.custom[i]), ", ")
-				ans = strings.TrimSuffix(ans, ", ")
+				ans = strings.Join(st.selected(i), ", ")
 			}
 			lines = append(lines, "  "+termrender.Dim(header(q.Header, i))+": "+ans)
 		}
@@ -226,21 +258,41 @@ func (m *model) askPanel(it *Item) []string {
 		if o.Description != "" {
 			lines = append(lines, termrender.Dim("       "+oneLine(o.Description, m.width-10)))
 		}
+		if !q.Multi && slices.Equal(st.picks[st.tab], []string{o.Label}) {
+			switch {
+			case st.notes[st.tab] != "":
+				lines = append(lines, termrender.Dim("       ↳ ")+oneLine(st.notes[st.tab], m.width-12))
+			case st.entry == entryNote:
+				lines = append(lines, termrender.Yellow("       ↳ "+i18n.M.AskNoteHint))
+			}
+		}
 	}
 	typed := len(q.Options)
 	label := i18n.M.AskTypeSomething
 	switch {
 	case st.custom[st.tab] != "":
 		label = st.custom[st.tab]
-	case st.typing:
+	case st.entry == entryAnswer:
 		label = i18n.M.AskTypingHint
 	}
 	lines = append(lines,
-		rowLine(st.cursor == typed, typed+1, "", oneLine(label, m.width-10), st.typing && st.custom[st.tab] == ""),
+		rowLine(st.cursor == typed, typed+1, "", oneLine(label, m.width-10), st.entry == entryAnswer && st.custom[st.tab] == ""),
 		termrender.Dim(strings.Repeat("─", min(m.width-2, 40))),
 		rowLine(st.cursor == typed+1, typed+2, "", i18n.M.AskChatInstead, false),
 	)
 	return panel(lines, m.width, accentEdge)
+}
+
+// selected is what question i answers: its picks, then a typed answer or the
+// pick's note.
+func (st *askState) selected(i int) []string {
+	sel := slices.Clone(st.picks[i])
+	for _, extra := range []string{st.custom[i], st.notes[i]} {
+		if extra != "" {
+			sel = append(sel, extra)
+		}
+	}
+	return sel
 }
 
 func (m *model) askTabs(it *Item) string {

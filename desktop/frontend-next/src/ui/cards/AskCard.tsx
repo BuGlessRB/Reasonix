@@ -23,6 +23,9 @@ export function AskCard({ item, onAnswer }: Props) {
   // the tool result untouched, so "其他" is a label like any other.
   const [other, setOther] = useState<string[]>(() => qs.map(() => ""));
   const [otherOn, setOtherOn] = useState<boolean[]>(() => qs.map(() => false));
+  // A pick's note is its own text: an Other answer left behind by a pick is
+  // not a note, and returning to Other finds it where it was.
+  const [note, setNote] = useState<string[]>(() => qs.map(() => ""));
   const [submitting, setSubmitting] = useState(false);
   // Every request is a new object, so asking for the same pane twice still moves focus.
   const [focusTo, setFocusTo] = useState<{ q: number } | null>(null);
@@ -35,7 +38,10 @@ export function AskCard({ item, onAnswer }: Props) {
   const sealed = item.answered !== undefined;
   const chosen = item.answered ?? picks;
 
-  const free = (i: number) => (otherOn[i] ? other[i].trim() : "");
+  // A single-choice pick keeps the box open as a note that rides with it, so an
+  // option asking for more ("paste the output") has somewhere to take it.
+  const noting = (i: number) => !qs[i].multi && !otherOn[i] && picks[i].length > 0;
+  const free = (i: number) => (otherOn[i] ? other[i].trim() : noting(i) ? note[i].trim() : "");
   const selected = (i: number) => (free(i) ? [...picks[i], free(i)] : picks[i]);
   const answered = (i: number) => (sealed ? (chosen[i]?.length ?? 0) > 0 : selected(i).length > 0);
   const left = qs.reduce((n, _, i) => n + (answered(i) ? 0 : 1), 0);
@@ -45,12 +51,15 @@ export function AskCard({ item, onAnswer }: Props) {
     const offered = new Set(qs[i].options.map((o) => o.label));
     return (chosen[i] ?? []).filter((v) => !offered.has(v)).join("、");
   };
-  const freeShown = (i: number) => (sealed ? sealedFree(i) : other[i]);
+  const freeShown = (i: number) => (sealed ? sealedFree(i) : noting(i) ? note[i] : other[i]);
   const customOption = (i: number) => qs[i].options.find((option) => isOtherOption(option.label));
+  const sealedPick = (i: number) =>
+    qs[i].options.some((o) => !isOtherOption(o.label) && (chosen[i] ?? []).includes(o.label));
+  const noteShown = (i: number) => (sealed ? !qs[i].multi && sealedPick(i) && !!sealedFree(i) : noting(i));
   const customChosen = (i: number) => {
     const offered = customOption(i);
     return sealed
-      ? !!sealedFree(i) || (!!offered && (chosen[i] ?? []).includes(offered.label))
+      ? (!!sealedFree(i) && !noteShown(i)) || (!!offered && (chosen[i] ?? []).includes(offered.label))
       : otherOn[i];
   };
 
@@ -91,11 +100,11 @@ export function AskCard({ item, onAnswer }: Props) {
   };
 
   // A pane is display:none until it is the current one, so focus moves after
-  // the render that shows it: into its open free-text box, else its first option.
+  // the render that shows it: into its open free-text or note box, else its first option.
   useEffect(() => {
     if (!focusTo) return;
     const box = boxes.current[focusTo.q];
-    if (otherOn[focusTo.q] && box) box.focus();
+    if ((otherOn[focusTo.q] || noting(focusTo.q)) && box) box.focus();
     else panes.current[focusTo.q]?.querySelector<HTMLElement>("button.opt")?.focus();
   }, [focusTo]);
 
@@ -199,17 +208,17 @@ export function AskCard({ item, onAnswer }: Props) {
                     </span>
                   </button>
                 </div>
-                <div className="other-wrap" data-on={customChosen(i) ? "" : undefined}>
+                <div className="other-wrap" data-on={customChosen(i) || noteShown(i) ? "" : undefined}>
                   <input
                     ref={(el) => {
                       boxes.current[i] = el;
                     }}
                     data-action-keydown="ask.answer"
-                    aria-label={customOption(i)?.label ?? t("其他 —— 自行填写")}
+                    aria-label={noteShown(i) ? t("补充说明（可选）") : (customOption(i)?.label ?? t("其他 —— 自行填写"))}
                     value={freeShown(i)}
                     readOnly={sealed}
-                    placeholder={t("在此填写你希望采用的方案")}
-                    onChange={(e) => setOther((prev) => at(prev, i, e.target.value))}
+                    placeholder={noteShown(i) ? t("补充说明（可选），会随所选项一起发送") : t("在此填写你希望采用的方案")}
+                    onChange={(e) => (noting(i) ? setNote : setOther)((prev) => at(prev, i, e.target.value))}
                     onKeyDown={(e) => {
                       if (e.key !== "Enter" || sealed || ime.isIme(e.nativeEvent)) return;
                       e.preventDefault();

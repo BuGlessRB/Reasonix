@@ -183,6 +183,7 @@ type Messages struct {
 	// `ask` tool question card.
 	AskTypeSomething   string // the "type your own answer" option label
 	AskTypingHint      string // shown on that row while entering free text
+	AskNoteHint        string // shown under a single-choice pick while typing its note
 	AskChatInstead     string // the "don't pick, just chat" option label
 	ChatStatusQuestion string // shortcuts hint while a question card is open
 	StatusResumePicker string // status tag while the resume picker is open (e.g. "select session")
