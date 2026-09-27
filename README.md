@@ -126,8 +126,7 @@ brew install esengine/reasonix/reasonix   # macOS
 
 The 1.x desktop app is on the
 [official download page](https://reasonix.io/?download=desktop#start). Windows
-installers are code-signed through [SignPath.io](https://signpath.io/) with a
-free certificate provided by the [SignPath Foundation](https://signpath.org/).
+installers are code-signed with a Certum code-signing certificate.
 
 ### VS Code extension
 

@@ -10,11 +10,12 @@ run-name: Release Studio ${{ inputs.tag || github.ref_name }}
 # the desktop line's catalog. Studio artifacts land under the tag prefix, which
 # cannot collide because the tag name itself differs.
 #
-# Windows artifacts are Authenticode-signed through SignPath in two stages: the
-# executables a user runs, then the installer built around them. Signing only
-# the container leaves them unsigned on disk after installation, which is what
-# reputation heuristics quarantine. Signing engages only when SIGNPATH_API_TOKEN
-# is set, so forks and token-less runs still build unsigned.
+# Windows artifacts are Authenticode-signed with a Certum SimplySign cloud
+# certificate in two stages: the executables a user runs, then the installer
+# built around them. Signing only the container leaves them unsigned on disk
+# after installation, which is what reputation heuristics quarantine. The
+# repository variable STUDIO_SIGNING_ENABLED=true turns it on; once on, a
+# release that cannot sign does not publish.
 #
 # Windows and macOS both package in two steps because both need something done
 # to the bundle in between — a signature there, notarization here.
@@ -94,13 +95,14 @@ jobs:
             exit 1
           fi
 
-  # The contract is this repository's mirror of what SignPath's console trusts:
-  # which branch and which workflow may request the release certificate. It is
-  # checked before anything is built so a widened origin fails here rather than
-  # at the signing request, and fingerprinted so the protected files cannot move
-  # under an attestation that was recorded against different bytes.
+  # The contract names which branch and which workflows may reach the release
+  # certificate. The call graph is read from the workflows themselves, so a
+  # second workflow that learns to use the credentials fails here before
+  # anything is built, and the fingerprint pins the files the signing runs.
+  # Both trees are checked: the tag's, which is built, and the workflow's,
+  # whose scripts do the signing.
   signing-contract:
-    name: validate SignPath release contract
+    name: validate release signing contract
     needs: resolve
     runs-on: ubuntu-latest
     permissions:
@@ -109,6 +111,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: release-control
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
@@ -116,7 +124,10 @@ jobs:
       - name: Validate and fingerprint the contract
         run: |
           go run ./cmd/signpath-contract validate
-          echo "fingerprint=$(go run ./cmd/signpath-contract fingerprint)" >> "$GITHUB_STEP_SUMMARY"
+          echo "release fingerprint=$(go run ./cmd/signpath-contract fingerprint)" >> "$GITHUB_STEP_SUMMARY"
+          cd release-control
+          go run ./cmd/signpath-contract validate
+          echo "workflow fingerprint=$(go run ./cmd/signpath-contract fingerprint)" >> "$GITHUB_STEP_SUMMARY"
 
   build:
     name: build (${{ matrix.platform }})
@@ -124,16 +135,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
-      actions: read # SignPath reads run details and downloads the unsigned artifact
     env:
-      # Two conditions, because they answer different questions. The token says
-      # a fork cannot try — that is the APPLE_* gate's shape. The variable says
-      # SignPath's console has been told to trust this line's origin, which no
-      # secret can express: SIGNPATH_API_TOKEN is a repository secret, so it is
-      # already set here, and without the second gate merging this file would
-      # make the next release request a signature the policy still refuses.
-      # Set STUDIO_SIGNING_ENABLED=true once the studio origin is provisioned.
-      HAS_SIGNPATH: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.STUDIO_SIGNING_ENABLED == 'true' }}
+      # The switch alone decides the path, never the presence of credentials:
+      # with it on, the Windows leg hands its bundle to windows-sign-payload,
+      # and a missing secret fails there instead of shipping an unsigned build.
+      SIGN_WINDOWS: ${{ vars.STUDIO_SIGNING_ENABLED == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -141,17 +147,22 @@ jobs:
         # beside the release one rather than mapped in a step: the two
         # vocabularies disagree (x64 / amd64) and a reviewer has to see both.
         # Absent means the runner's own, which is what Windows and Linux build.
+        # artifact is the exact name publish downloads this leg's packages by.
         include:
           - platform: windows/amd64
             runner: windows-latest
+            artifact: studio-build-windows-amd64
           - platform: darwin/amd64
             runner: macos-latest
             ebarch: x64
+            artifact: studio-build-darwin-amd64
           - platform: darwin/arm64
             runner: macos-latest
             ebarch: arm64
+            artifact: studio-build-darwin-arm64
           - platform: linux/amd64
             runner: ubuntu-22.04
+            artifact: studio-build-linux-amd64
     steps:
       # Real-time scanning inspects every file the job writes, and packaging
       # writes a quarter of a gigabyte twice. The runner is thrown away after
@@ -327,74 +338,22 @@ jobs:
           pnpm exec electron-builder --prepackaged "../../$app" $arch \
             -c.extraMetadata.version="${version#v}"
 
-      # Stage one: the executables a user actually runs, signed while they are
-      # still loose files. This shell ships two of its own -- the window and the
-      # kernel it spawns -- where the Wails one was a single binary. Everything
-      # else in the bundle belongs to Chromium or to electron-builder (the NSIS
-      # elevate.exe it writes in during the packaging step below, after this), so
-      # it is not listed: this request must not re-sign somebody else's binary.
-      - name: Stage the Windows payload
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
-        shell: bash
-        run: |
-          mkdir -p payload
-          cp "dist/win-unpacked/Reasonix Studio.exe" payload/
-          cp dist/win-unpacked/resources/bin/reasonix-studio-host.exe payload/
-
-      - name: Upload unsigned Windows payload for SignPath
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
-        id: unsigned-payload
+      # With signing on, this leg only hands the bundle on: the signing jobs
+      # run nothing but the signer, and windows-package packages in between.
+      - name: Upload the unsigned Windows bundle for signing
+        if: runner.os == 'Windows' && env.SIGN_WINDOWS == 'true'
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: unsigned-studio-payload-amd64
-          path: payload/*.exe
+          name: unsigned-studio-windows-bundle
+          path: dist/win-unpacked
           if-no-files-found: error
           retention-days: 1
 
-      - name: Submit Windows payload for Authenticode signing
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
-        id: submit-payload
-        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: DeepSeek-Reasonix
-          signing-policy-slug: release-signing
-          artifact-configuration-slug: studio-windows-payload
-          github-artifact-id: ${{ steps.unsigned-payload.outputs.artifact-id }}
-          github-token: ${{ github.token }}
-          wait-for-completion: false
-
-      # The release certificate requires an approval per request. The publish
-      # job's environment gate is the human one; the SignPath CI identity records
-      # the request approval so this does not become a second prompt.
-      - name: Approve and download signed payload
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
-        shell: pwsh
-        env:
-          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
-        run: |
-          ./scripts/complete-signpath-request.ps1 `
-            -OrganizationId "${{ secrets.SIGNPATH_ORGANIZATION_ID }}" `
-            -SigningRequestId "${{ steps.submit-payload.outputs.signing-request-id }}" `
-            -ExpectedSigningPolicySlug "release-signing" `
-            -OutputArtifactDirectory "signed-payload" `
-            -TimeoutSeconds 1800
-
-      - name: Put the signed executables back in the bundle
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
-        shell: bash
-        run: |
-          cp "signed-payload/Reasonix Studio.exe" "dist/win-unpacked/Reasonix Studio.exe"
-          cp signed-payload/reasonix-studio-host.exe dist/win-unpacked/resources/bin/reasonix-studio-host.exe
-
-      # The installer and the portable archive are both built from the bundle
-      # that now holds the signed executables, which is what makes the archive
-      # carry them too rather than a second unsigned copy. They are built at
-      # once, the zip from its own copy: NSIS writes elevate.exe into the tree
-      # it packs, and a zip read beside that would hold it or not by timing.
+      # The installer and the portable archive are built at once, the zip from
+      # its own copy: NSIS writes elevate.exe into the tree it packs, and a zip
+      # read beside that would hold it or not by timing.
       - name: Package Windows from the bundle
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && env.SIGN_WINDOWS != 'true'
         working-directory: desktop/electron
         shell: bash
         run: |
@@ -409,76 +368,300 @@ jobs:
           wait "$zip_pid"
           mv ../../dist-zip/ReasonixStudio-windows-amd64.zip ../../dist/
 
-      # Stage two: the finished NSIS container, signed only once the payload it
-      # was built from is present and already signed — the artifact
-      # configuration verifies that rather than trusting this job's ordering.
-      - name: Upload unsigned installer for SignPath
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
-        id: unsigned-installer
-        shell: bash
-        run: |
-          mkdir -p installer-bundle
-          cp dist/ReasonixStudio-windows-amd64-installer.exe installer-bundle/
-          cp "dist/win-unpacked/Reasonix Studio.exe" installer-bundle/
-          cp dist/win-unpacked/resources/bin/reasonix-studio-host.exe installer-bundle/
-
-      - name: Upload installer bundle
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
-        id: installer-artifact
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: runner.os != 'Windows' || env.SIGN_WINDOWS != 'true'
         with:
-          name: unsigned-studio-installer-amd64
-          path: installer-bundle/*.exe
+          name: ${{ matrix.artifact }}
+          path: dist/ReasonixStudio-*
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
-      - name: Submit installer for Authenticode signing
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
-        id: submit-installer
-        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+  # Windows signing is three jobs so the SimplySign session is never up while
+  # third-party code runs: the two signing jobs install no toolchain and run
+  # only the signer, and packaging runs between them on its own runner with no
+  # secrets. Both signing jobs share one group with the Studio smoke test, so no
+  # two runs drive the same SimplySign account at once.
+  windows-sign-payload:
+    name: sign Windows executables (Certum)
+    needs: [resolve, signing-contract, build]
+    if: vars.STUDIO_SIGNING_ENABLED == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 30
+    environment: studio-release
+    permissions:
+      contents: read
+    concurrency:
+      group: studio-certum-signing
+      cancel-in-progress: false
+    steps:
+      # Only the workflow's own commit is checked out: these jobs run the signer
+      # and its checks, never anything the release tag builds.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: DeepSeek-Reasonix
-          signing-policy-slug: release-signing
-          artifact-configuration-slug: studio-windows-installer
-          github-artifact-id: ${{ steps.installer-artifact.outputs.artifact-id }}
-          github-token: ${{ github.token }}
-          wait-for-completion: false
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
 
-      - name: Approve and download signed installer
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+      # The switch is on, so nothing below may fall back to an unsigned build.
+      # Every missing value is reported under its own code before any fails.
+      - name: Require Certum configuration
         shell: pwsh
         env:
-          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          CERTUM_USERNAME: ${{ secrets.STUDIO_CERTUM_USERNAME }}
+          CERTUM_OTP_URI: ${{ secrets.STUDIO_CERTUM_OTP_URI }}
+          CERTUM_KEY_ID: ${{ secrets.STUDIO_CERTUM_KEY_ID }}
+          EXPECTED_SUBJECT: ${{ vars.STUDIO_SIGNING_SUBJECT }}
         run: |
-          ./scripts/complete-signpath-request.ps1 `
-            -OrganizationId "${{ secrets.SIGNPATH_ORGANIZATION_ID }}" `
-            -SigningRequestId "${{ steps.submit-installer.outputs.signing-request-id }}" `
-            -ExpectedSigningPolicySlug "release-signing" `
-            -OutputArtifactDirectory "signed-installer" `
-            -TimeoutSeconds 1800
+          $ErrorActionPreference = 'Stop'
+          $failed = $false
+          function Refuse([string]$code, [string]$message) {
+            Write-Output "::error title=$code::$message"
+            Set-Variable -Scope Script -Name failed -Value $true
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CERTUM_USERNAME)) {
+            Refuse 'studio-signing.missing-username' 'Secret STUDIO_CERTUM_USERNAME is not set'
+          }
+          if ($env:CERTUM_OTP_URI -notmatch '^otpauth://totp/') {
+            Refuse 'studio-signing.invalid-otp-uri' 'Secret STUDIO_CERTUM_OTP_URI must be a complete otpauth://totp/ URI'
+          }
+          if ($env:CERTUM_KEY_ID -notmatch '^[0-9a-fA-F]{40}$') {
+            Refuse 'studio-signing.invalid-key-id' 'Secret STUDIO_CERTUM_KEY_ID must be the 40-character SHA-1 certificate thumbprint'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:EXPECTED_SUBJECT)) {
+            Refuse 'studio-signing.subject-unset' 'Variable STUDIO_SIGNING_SUBJECT is empty; run the Studio Certum signing smoke test and copy the subject it reports'
+          }
+          if ($failed) { exit 1 }
 
-      - name: Replace the installer with the signed build
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
-        shell: bash
-        run: cp signed-installer/*installer*.exe dist/
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: unsigned-studio-windows-bundle
+          path: bundle
 
-      # Both stages are read back off the artifacts that will actually ship. A
-      # signature this job believes it applied but that is not on the bytes in
-      # dist/ is the one failure the two requests above cannot catch themselves.
-      - name: Verify the Windows Authenticode chain
-        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+      # Stage one: the executables this project builds, as loose files.
+      - name: Stage the Windows payload
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory payload | Out-Null
+          Copy-Item -LiteralPath 'bundle/Reasonix Studio.exe' payload/
+          Copy-Item -LiteralPath bundle/resources/bin/reasonix-studio-host.exe payload/
+          Copy-Item -LiteralPath bundle/resources/bin/reasonix-computer-helper.exe payload/
+          @('Reasonix Studio.exe', 'reasonix-studio-host.exe', 'reasonix-computer-helper.exe') |
+            Set-Content payload/signing-files.txt
+
+      - name: Connect to Certum
+        uses: ./.github/actions/setup-certum
+        with:
+          username: ${{ secrets.STUDIO_CERTUM_USERNAME }}
+          otp-uri: ${{ secrets.STUDIO_CERTUM_OTP_URI }}
+          thumbprint: ${{ secrets.STUDIO_CERTUM_KEY_ID }}
+
+      - name: Sign the executables
+        shell: pwsh
+        env:
+          CERTUM_KEY_ID: ${{ secrets.STUDIO_CERTUM_KEY_ID }}
+        run: ./scripts/sign-certum.ps1 -PayloadDirectory payload
+
+      # The session signs for any process on the runner while it is up.
+      - name: Disconnect from Certum
+        if: always()
+        shell: pwsh
+        run: Get-Process -Name '*SimplySign*' -ErrorAction SilentlyContinue | Stop-Process -Force
+
+      - name: Verify the signed executables
+        shell: pwsh
+        env:
+          CERTUM_KEY_ID: ${{ secrets.STUDIO_CERTUM_KEY_ID }}
+          EXPECTED_SUBJECT: ${{ vars.STUDIO_SIGNING_SUBJECT }}
+        run: |
           ./scripts/verify-windows-authenticode.ps1 `
-            -PayloadDirectory signed-payload `
-            -InstallerPath "dist/ReasonixStudio-windows-amd64-installer.exe" `
-            -PortableArchivePath "dist/ReasonixStudio-windows-amd64.zip"
+            -PayloadDirectory payload `
+            -ExpectedThumbprint $env:CERTUM_KEY_ID `
+            -ExpectedSubject $env:EXPECTED_SUBJECT
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: studio-${{ strategy.job-index }}
+          name: signed-studio-windows-payload
+          path: payload/*.exe
+          if-no-files-found: error
+          retention-days: 1
+
+  # No environment and no secrets: electron-builder and its dependencies run
+  # here, on a runner that never held a signing session.
+  windows-package:
+    name: package Windows from the signed executables
+    needs: [resolve, windows-sign-payload]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Stop Defender scanning the build
+        continue-on-error: true
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 10
+          run_install: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: desktop/electron/pnpm-lock.yaml
+
+      - name: Install the packager
+        working-directory: desktop/electron
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: unsigned-studio-windows-bundle
+          path: dist/win-unpacked
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: signed-studio-windows-payload
+          path: payload
+
+      - name: Put the signed executables in the bundle
+        shell: bash
+        run: |
+          cp "payload/Reasonix Studio.exe" "dist/win-unpacked/Reasonix Studio.exe"
+          cp payload/reasonix-studio-host.exe dist/win-unpacked/resources/bin/reasonix-studio-host.exe
+          cp payload/reasonix-computer-helper.exe dist/win-unpacked/resources/bin/reasonix-computer-helper.exe
+
+      # Both packages come from the bundle that now holds the signed executables,
+      # so the archive carries them too rather than a second unsigned copy. The
+      # zip is packed from its own copy for the reason the build job gives.
+      - name: Package Windows from the signed bundle
+        working-directory: desktop/electron
+        shell: bash
+        run: |
+          version="${{ needs.resolve.outputs.version }}"
+          rm -rf ../../zip-src ../../dist-zip
+          cp -r ../../dist/win-unpacked ../../zip-src
+          pnpm exec electron-builder --prepackaged ../../zip-src --win zip \
+            -c.extraMetadata.version="${version#v}" -c.directories.output=../../dist-zip &
+          zip_pid=$!
+          pnpm exec electron-builder --prepackaged ../../dist/win-unpacked --win nsis \
+            -c.extraMetadata.version="${version#v}"
+          wait "$zip_pid"
+          mv ../../dist-zip/ReasonixStudio-windows-amd64.zip ../../dist/
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: packaged-studio-windows
+          path: |
+            dist/ReasonixStudio-windows-amd64-installer.exe
+            dist/ReasonixStudio-windows-amd64.zip
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-sign-installer:
+    name: sign the Windows installer (Certum)
+    needs: [resolve, windows-sign-payload, windows-package]
+    runs-on: windows-2022
+    timeout-minutes: 30
+    environment: studio-release
+    permissions:
+      contents: read
+    concurrency:
+      group: studio-certum-signing
+      cancel-in-progress: false
+    steps:
+      # Only the workflow's own commit is checked out: these jobs run the signer
+      # and its checks, never anything the release tag builds.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      # The switch is on, so nothing below may fall back to an unsigned build.
+      # Every missing value is reported under its own code before any fails.
+      - name: Require Certum configuration
+        shell: pwsh
+        env:
+          CERTUM_USERNAME: ${{ secrets.STUDIO_CERTUM_USERNAME }}
+          CERTUM_OTP_URI: ${{ secrets.STUDIO_CERTUM_OTP_URI }}
+          CERTUM_KEY_ID: ${{ secrets.STUDIO_CERTUM_KEY_ID }}
+          EXPECTED_SUBJECT: ${{ vars.STUDIO_SIGNING_SUBJECT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $failed = $false
+          function Refuse([string]$code, [string]$message) {
+            Write-Output "::error title=$code::$message"
+            Set-Variable -Scope Script -Name failed -Value $true
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CERTUM_USERNAME)) {
+            Refuse 'studio-signing.missing-username' 'Secret STUDIO_CERTUM_USERNAME is not set'
+          }
+          if ($env:CERTUM_OTP_URI -notmatch '^otpauth://totp/') {
+            Refuse 'studio-signing.invalid-otp-uri' 'Secret STUDIO_CERTUM_OTP_URI must be a complete otpauth://totp/ URI'
+          }
+          if ($env:CERTUM_KEY_ID -notmatch '^[0-9a-fA-F]{40}$') {
+            Refuse 'studio-signing.invalid-key-id' 'Secret STUDIO_CERTUM_KEY_ID must be the 40-character SHA-1 certificate thumbprint'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:EXPECTED_SUBJECT)) {
+            Refuse 'studio-signing.subject-unset' 'Variable STUDIO_SIGNING_SUBJECT is empty; run the Studio Certum signing smoke test and copy the subject it reports'
+          }
+          if ($failed) { exit 1 }
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: packaged-studio-windows
+          path: dist
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: signed-studio-windows-payload
+          path: payload
+
+      - name: Connect to Certum
+        uses: ./.github/actions/setup-certum
+        with:
+          username: ${{ secrets.STUDIO_CERTUM_USERNAME }}
+          otp-uri: ${{ secrets.STUDIO_CERTUM_OTP_URI }}
+          thumbprint: ${{ secrets.STUDIO_CERTUM_KEY_ID }}
+
+      # Stage two: the NSIS container, only once the payload inside it is signed.
+      - name: Sign the installer
+        shell: pwsh
+        env:
+          CERTUM_KEY_ID: ${{ secrets.STUDIO_CERTUM_KEY_ID }}
+        run: ./scripts/sign-certum.ps1 -FilePath dist/ReasonixStudio-windows-amd64-installer.exe
+
+      # The session signs for any process on the runner while it is up.
+      - name: Disconnect from Certum
+        if: always()
+        shell: pwsh
+        run: Get-Process -Name '*SimplySign*' -ErrorAction SilentlyContinue | Stop-Process -Force
+
+      # Read back off the bytes that will ship: the payload, the installer, and
+      # the executables inside the portable archive.
+      - name: Verify the Windows Authenticode chain
+        shell: pwsh
+        env:
+          CERTUM_KEY_ID: ${{ secrets.STUDIO_CERTUM_KEY_ID }}
+          EXPECTED_SUBJECT: ${{ vars.STUDIO_SIGNING_SUBJECT }}
+        run: |
+          ./scripts/verify-windows-authenticode.ps1 `
+            -PayloadDirectory payload `
+            -InstallerPath "dist/ReasonixStudio-windows-amd64-installer.exe" `
+            -PortableArchivePath "dist/ReasonixStudio-windows-amd64.zip" `
+            -ExpectedThumbprint $env:CERTUM_KEY_ID `
+            -ExpectedSubject $env:EXPECTED_SUBJECT
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: studio-windows-signed
           path: dist/ReasonixStudio-*
           if-no-files-found: error
           retention-days: 7
@@ -549,7 +732,15 @@ jobs:
 
   publish:
     name: sign, publish and mirror
-    needs: [resolve, build, cli]
+    needs: [resolve, build, cli, windows-sign-payload, windows-package, windows-sign-installer]
+    # The Windows signing jobs may be skipped only while the switch is off; with
+    # it on, any of them failing, cancelled or absent blocks the release.
+    if: >-
+      ${{ !cancelled() && needs.resolve.result == 'success' && needs.build.result == 'success' &&
+      needs.cli.result == 'success' && ((needs.windows-sign-payload.result == 'success' &&
+      needs.windows-package.result == 'success' && needs.windows-sign-installer.result == 'success') ||
+      (vars.STUDIO_SIGNING_ENABLED != 'true' && needs.windows-sign-payload.result == 'skipped' &&
+      needs.windows-package.result == 'skipped' && needs.windows-sign-installer.result == 'skipped')) }}
     runs-on: ubuntu-latest
     # Owner approval for the whole line. The gate sits here rather than before
     # build so the approval is given with the artifacts already proven to build.
@@ -585,21 +776,56 @@ jobs:
       # One directory per artifact, because both sets below are taken from the
       # job that produced them. Merging them flattens that away, and the name
       # alone cannot tell a package apart from an input to signing it.
+      # Every package by its exact name, never a pattern: any job without
+      # secrets can upload an artifact, and a pattern would publish it. Windows
+      # comes from the installer signing job when it ran, else the build leg.
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
-          path: staging
+          name: studio-build-darwin-amd64
+          path: staging/studio-build-darwin-amd64
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: studio-build-darwin-arm64
+          path: staging/studio-build-darwin-arm64
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: studio-build-linux-amd64
+          path: staging/studio-build-linux-amd64
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        if: needs.windows-sign-installer.result == 'success'
+        with:
+          name: studio-windows-signed
+          path: staging/studio-windows
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        if: needs.windows-sign-installer.result != 'success'
+        with:
+          name: studio-build-windows-amd64
+          path: staging/studio-windows
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: cli-archives
+          path: staging/cli-archives
 
       - name: Collect artifacts
         run: |
           mkdir -p dist
-          # The packages, from the build jobs. The SignPath flow uploads the
-          # unsigned copies it hands over under their own artifacts, and those
-          # match ReasonixStudio-* as well — taking them by name would publish
-          # whichever the move happened to write last.
-          find staging/studio-* -type f -name 'ReasonixStudio-*' -exec mv {} dist/ \;
-          # The CLI archives and their digest list, from the job that produced
-          # them: a reasonix-studio-host.exe left in staging matched reasonix-*.
-          find staging/cli-archives -type f -exec mv {} dist/ \;
+          # The packages, from the build and signing jobs, then the CLI archives
+          # and their digest list. Two artifacts carrying one file name fail the
+          # release rather than letting move order pick.
+          while IFS= read -r -d '' f; do
+            name="$(basename "$f")"
+            if [ -e "dist/$name" ]; then
+              echo "::error::$name arrived in more than one artifact"
+              exit 1
+            fi
+            mv "$f" "dist/$name"
+          done < <(find staging/studio-* -type f -name 'ReasonixStudio-*' -print0
+            find staging/cli-archives -type f -print0)
           ls -la dist
           # Two Windows artifacts (installer, portable zip), two per macOS
           # architecture (dmg, zip) and the Linux .deb. Fewer means an artifact
@@ -673,7 +899,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.resolve.outputs.tag }}
           VERSION: ${{ needs.resolve.outputs.version }}
-          SIGNED_WINDOWS: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.STUDIO_SIGNING_ENABLED == 'true' }}
+          SIGNED_WINDOWS: ${{ needs.windows-sign-installer.result == 'success' }}
         run: |
           # A version's own notes live in release-notes/studio/<semver>.md, named
           # without the v the tag carries, and were rendered with their authors
@@ -699,12 +925,11 @@ jobs:
             -f previous_tag_name="$previous_tag" \
             --jq '.body' >> "$notes"
           printf '\n\n' >> "$notes"
-          # The Windows sentence follows the condition that decides it, read
-          # here from the same pair the build job gates signing on. Asserting a
-          # constant is how this line came to tell users to click through
-          # SmartScreen for a package that was signed.
+          # The Windows sentence follows the job that signed, not the switch
+          # that asked for it: a constant here tells users to click through
+          # SmartScreen for a signed package, or the reverse.
           if [ "$SIGNED_WINDOWS" = "true" ]; then
-            windows='**Windows** 的窗口、内核与安装器都经 SignPath 做了 Authenticode 签名。'
+            windows='**Windows** 的窗口、内核与安装器都经 Certum 代码签名证书做了 Authenticode 签名。'
           else
             windows='**Windows 包未签名**，SmartScreen 会告警：选「更多信息」，再选「仍要运行」。'
           fi

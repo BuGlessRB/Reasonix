@@ -2,7 +2,7 @@
 owner: @esengine
 backup: @SivanCola
 status: active
-reviewed: 2026-09-17
+reviewed: 2026-09-26
 ---
 
 # Studio release runbook
@@ -24,7 +24,7 @@ Workflow: `.github/workflows/release-studio.yml`. Trigger: push of a `studio-vX.
 | P2 | Every job of `CI` and `Studio` succeeded on that commit. A flaky job is rerun, not ignored. | `gh run list --branch studio --commit <sha> --json name,conclusion` |
 | P3 | `release-notes/studio/X.Y.Z.md` is in that commit and passes `make check`. | `git cat-file -e <sha>:release-notes/studio/X.Y.Z.md` |
 | P4 | The version is valid semver and above the latest tag. | `git tag -l 'studio-v*' --sort=-v:refname \| head -1` |
-| P5 | The Windows signing mode is known. `true` signs through SignPath; `false` ships unsigned and the body says so. | `gh variable list \| grep STUDIO_SIGNING_ENABLED` |
+| P5 | The Windows signing mode is known. `true` signs with Certum and blocks the release if signing fails; anything else ships unsigned and the body says so. | `gh variable list \| grep STUDIO_SIGNING` |
 
 ## 3. Steps
 
@@ -52,10 +52,13 @@ Jobs in the run:
 | Job | Does | Gate |
 | --- | --- | --- |
 | `resolve` | Validates the tag shape and that the commit is on `studio`. | fails on any other ref |
-| `signing-contract` | Validates `.signpath/` locally and prints its fingerprint. | does not call SignPath |
-| `build` | Builds windows/amd64, darwin/amd64, darwin/arm64, linux/amd64; signs macOS and, if enabled, Windows. | Apple secrets are required |
+| `signing-contract` | Validates `.signpath/contracts/release-signing.yml` against the workflows that reach the Certum credentials and prints its fingerprint. | fails on an undeclared signing workflow |
+| `build` | Builds windows/amd64, darwin/amd64, darwin/arm64, linux/amd64; signs macOS. With signing on, the Windows leg uploads its bundle instead of packaging it. | Apple secrets are required |
+| `windows-sign-payload` | Only with `STUDIO_SIGNING_ENABLED=true`. Signs the window, kernel and computer-use helper and verifies them. Installs no toolchain. | concurrency group `studio-certum-signing`, environment `studio-release` |
+| `windows-package` | Builds the installer and zip from the signed executables. Holds no secrets. | none |
+| `windows-sign-installer` | Signs the installer, then verifies trust, thumbprint, subject and timestamp on it, on the executables, and on their copies in the zip. | concurrency group `studio-certum-signing`, environment `studio-release` |
 | `cli` | Builds `reasonix` archives for six OS/arch targets plus `SHA256SUMS`. | fails on a missing archive |
-| `publish` | Renders the notes with their authors, minisigns, writes `latest.json`, creates the GitHub prerelease, mirrors to R2. | environment `studio-release`; an unresolved `#N` stops it before signing |
+| `publish` | Renders the notes with their authors, minisigns, writes `latest.json`, creates the GitHub prerelease, mirrors to R2. | environment `studio-release`; skipped unless all three Windows signing jobs succeeded or signing is off; an unresolved `#N` stops it before signing |
 
 The `studio-release` environment allows the `studio-v*` tag and the `studio` branch. It has no required reviewer.
 
@@ -74,7 +77,10 @@ The `studio-release` environment allows the `studio-v*` tag and the `studio` bra
 | --- | --- | --- |
 | No run appears, or a rerun ends in `startup_failure` with no jobs. | GitHub Actions runner outage. | Wait for queued runs to drain, then `gh workflow run release-studio.yml --ref studio -f tag=studio-vX.Y.Z`. |
 | A build or publish step failed. | Workflow or runner fault. | Fix on `studio` if needed, then dispatch as above. The dispatch rebuilds from the tag's commit with the workflow from `studio`. |
-| Windows signing fails with `Invalid request to SignPath API.` | SignPath rejected the request; the action hides the status. | `gh run rerun <run> --failed --debug` to see it. On quota exhaustion set `STUDIO_SIGNING_ENABLED=false` and dispatch. |
+| A signing job fails with an error titled `studio-signing.*`. | A credential or an expected-signer variable is missing or malformed; the title names which. | Fix it (section 7), then dispatch the same tag. |
+| A signing job fails at `Connect to Certum` or `Sign the executables`. | SimplySign login, OTP or certificate problem. | Run the smoke test (section 7). To ship unsigned instead, set `STUDIO_SIGNING_ENABLED=false` and dispatch. |
+| A signing job fails with `Unexpected signer subject` or `thumbprint`. | The certificate changed, or a value was copied wrong. | Compare with the smoke test's summary; correct `STUDIO_SIGNING_SUBJECT` or `STUDIO_CERTUM_KEY_ID`. |
+| A signing job waits before starting. | A smoke test or another release holds `studio-certum-signing`. | Wait. A second run queued behind the same group cancels the earlier queued one; dispatch again if that happens. |
 | Signing is restored after an unsigned release. | Artifacts were published unsigned. | Set `STUDIO_SIGNING_ENABLED=true` and dispatch the same tag; `publish` replaces the assets. |
 | The body is missing or wrong. | Notes are read from the tag's commit, not the branch. | `gh release edit studio-vX.Y.Z --notes-file <file>`; append the standing text from the previous body. |
 | The tag points at the wrong commit and `publish` has not run. | Tagging error. | `git push origin :refs/tags/studio-vX.Y.Z`, delete the local tag, restart at step 3. |
@@ -114,13 +120,66 @@ A lookup GitHub refuses, or cannot answer after retries, fails `publish` with a 
 - Windows 安装目录带 AppContainer 包 SID 授权时窗口可以正常打开 #10435
 ```
 
-## 7. Reference
+## 7. Windows signing
+
+Windows builds are signed with Studio's own Certum certificate through SimplySign cloud signing: the 1.x mechanism, not its certificate or account.
+
+| Rule | Detail |
+| --- | --- |
+| Signing authority | The private key stays in Certum's cloud, but whoever holds the three secrets can sign. |
+| Default | Off until `STUDIO_SIGNING_ENABLED` is `true`; until then releases ship unsigned and the body says so. |
+| Fail closed | With the switch on, a missing value or a failed signature blocks `publish`. |
+
+| Name | Kind | Content |
+| --- | --- | --- |
+| `STUDIO_CERTUM_USERNAME` | secret | SimplySign account |
+| `STUDIO_CERTUM_OTP_URI` | secret | the complete `otpauth://totp/...` provisioning URI |
+| `STUDIO_CERTUM_KEY_ID` | secret | the certificate's 40-character SHA-1 thumbprint |
+| `STUDIO_SIGNING_SUBJECT` | variable | the certificate subject every signed executable must carry, exactly as the smoke test reports it |
+| `STUDIO_SIGNING_ENABLED` | variable | `true` turns signing on |
+
+Prerequisites. The environment alone does not confine the secrets: its deployment rule admits any `studio-v*` tag, and without a ruleset anyone with write access can push one, or edit a workflow on a branch the rule admits. Before enabling, the maintainer decides on:
+
+| Setting | Effect |
+| --- | --- |
+| A tag ruleset on `studio-v*` restricting creation, update and deletion to maintainers | Only maintainers can start a signing release. |
+| A required reviewer on `studio-release` | Every job that reads the secrets waits for a person; a release then asks for approval at each signing job and at `publish`. |
+| `studio` branch protection requiring review | The workflow and scripts that do the signing change only through review. |
+
+Once the certificate arrives:
+
+1. Add the three secrets as environment secrets of `studio-release`, so only jobs bound to that environment can read them:
+
+   ```bash
+   gh secret set STUDIO_CERTUM_USERNAME --env studio-release
+   gh secret set STUDIO_CERTUM_OTP_URI --env studio-release
+   gh secret set STUDIO_CERTUM_KEY_ID --env studio-release
+   ```
+
+2. Run the smoke test. It signs two probes, publishes nothing, and writes the signer's subject, issuer, thumbprint and timestamp to the job summary:
+
+   ```bash
+   gh workflow run studio-certum-signing-smoke.yml --ref studio
+   ```
+
+3. Copy the subject from that summary, character for character: `gh variable set STUDIO_SIGNING_SUBJECT --body '<subject>'`.
+4. Run the smoke test again. It now fails unless the signer's subject matches.
+5. `gh variable set STUDIO_SIGNING_ENABLED --body true`. From the next release on, the three Windows signing jobs must succeed before `publish` runs, and the body states that Windows is signed. A missing secret or subject fails the release with an error titled `studio-signing.*`.
+
+What is signed: the three executables Studio builds and the installer. Electron's DLLs, electron-builder's `elevate.exe` and the NSIS uninstaller are not signed by this workflow; electron-builder signs the uninstaller only through an in-process hook, which would put the session inside the packaging job.
+
+The SimplySign session can sign for any process on its runner while it is up. The two signing jobs therefore check out only the workflow's own commit, install no toolchain, and stop SimplySign after signing; `windows-package` runs electron-builder on a separate runner with no secrets.
+
+The release and the smoke test share the concurrency group `studio-certum-signing`, so no two runs hold a SimplySign session at once.
+
+## 8. Reference
 
 | Name | Kind | Used by |
 | --- | --- | --- |
 | `APPLE_CERT_P12`, `APPLE_CERT_PASSWORD`, `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID` | secret | macOS signing and notarization |
-| `SIGNPATH_API_TOKEN`, `SIGNPATH_ORGANIZATION_ID` | secret | Windows Authenticode signing |
-| `STUDIO_SIGNING_ENABLED` | variable | Windows signing switch and the body's Windows sentence |
+| `STUDIO_CERTUM_USERNAME`, `STUDIO_CERTUM_OTP_URI`, `STUDIO_CERTUM_KEY_ID` | secret | Windows Authenticode signing (section 7) |
+| `STUDIO_SIGNING_ENABLED` | variable | Windows signing switch |
+| `STUDIO_SIGNING_SUBJECT` | variable | the signer subject every signed executable must carry; required when signing is on |
 | `MINISIGN_PRIVATE_KEY`, `MINISIGN_PASSWORD` | secret | detached signatures verified by the updater |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, `R2_BUCKET` | secret | artifact mirror and catalog |
 

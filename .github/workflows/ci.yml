@@ -492,6 +492,7 @@ jobs:
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 \
             -ignore 'label "windows-11-arm" is unknown' \
             .github/workflows/release-studio.yml \
+            .github/workflows/studio-certum-signing-smoke.yml \
             .github/workflows/ci.yml
 
   govulncheck:

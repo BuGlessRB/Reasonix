@@ -26,10 +26,13 @@ func TestTopLevelSignPathWorkflowCallGraph(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The studio line publishes from one workflow. This is not a restatement of
-	// the contract — it is read from the call graph, so a second workflow that
-	// learns to reach SignPath fails here even if nobody widened the contract.
-	want := []string{".github/workflows/release-studio.yml"}
+	// The studio line signs from its release and its smoke test. Read from the
+	// call graph, not the contract, so a third workflow that learns to reach the
+	// signer fails here even if nobody widened the contract.
+	want := []string{
+		".github/workflows/release-studio.yml",
+		".github/workflows/studio-certum-signing-smoke.yml",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("top-level workflows that reach SignPath = %v, want %v", got, want)
 	}
@@ -64,5 +67,26 @@ jobs:
 	}
 	if !info.externallyTriggered || !info.directSigning {
 		t.Fatalf("token-backed workflow was not classified as a signing entry point: %+v", info)
+	}
+}
+
+func TestWorkflowUsingCertumCredentialsIsSigningEntryPoint(t *testing.T) {
+	for _, secret := range []string{"CERTUM_OTP_URI", "STUDIO_CERTUM_OTP_URI"} {
+		info, err := parseWorkflow([]byte(`
+on: workflow_dispatch
+jobs:
+  sign:
+    runs-on: windows-2022
+    steps:
+      - uses: ./.github/actions/setup-certum
+        with:
+          otp-uri: ${{ secrets.` + secret + ` }}
+`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.externallyTriggered || !info.directSigning {
+			t.Fatalf("%s signing entry point not detected: %+v", secret, info)
+		}
 	}
 }

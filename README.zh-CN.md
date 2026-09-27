@@ -111,8 +111,7 @@ brew install esengine/reasonix/reasonix   # macOS
 ```
 
 1.x 桌面端请前往[官方下载页](https://reasonix.io/?download=desktop#start)。
-Windows 安装器通过 [SignPath.io](https://signpath.io/) 完成代码签名，证书由
-[SignPath 基金会](https://signpath.org/) 免费提供。
+Windows 安装器使用 Certum 代码签名证书签名。
 
 ### VS Code 扩展
 

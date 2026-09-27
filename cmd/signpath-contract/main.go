@@ -293,7 +293,8 @@ func parseWorkflow(data []byte) (workflowInfo, error) {
 		if uses := mappingScalar(job, "uses"); strings.HasPrefix(uses, "./.github/workflows/") {
 			info.calls = append(info.calls, strings.TrimPrefix(uses, "./"))
 		}
-		if nodeContains(job, "secrets.SIGNPATH_API_TOKEN") {
+		if nodeContains(job, "secrets.SIGNPATH_API_TOKEN") || nodeContains(job, "secrets.CERTUM_OTP_URI") ||
+			nodeContains(job, "secrets.STUDIO_CERTUM_OTP_URI") {
 			info.directSigning = true
 		}
 		steps := mappingValue(job, "steps")

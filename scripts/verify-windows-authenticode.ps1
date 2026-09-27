@@ -2,32 +2,40 @@
 # ship. A signature the release job believes it applied but that is not on the
 # bytes in dist/ is the one failure the signing requests cannot catch about
 # themselves, so every artifact is checked from disk rather than trusted from
-# the order the steps ran in.
+# the order the steps ran in. Given only the payload, it checks the payload.
+[CmdletBinding(DefaultParameterSetName = "Payload")]
 param(
     [Parameter(Mandatory = $true)]
     [string]$PayloadDirectory,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = "Release")]
     [string]$InstallerPath,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = "Release")]
     [string]$PortableArchivePath,
 
-    [switch]$RequireTrusted
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[0-9a-fA-F]{40}$')]
+    [string]$ExpectedThumbprint,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$ExpectedSubject
 )
 
 $ErrorActionPreference = "Stop"
 
-# The executables Studio ships of its own: the window, and the kernel it spawns.
-# Everything else the bundle carries belongs to Chromium or to electron-builder
-# -- resources/elevate.exe is the one that is also a PE file -- and arrives from
-# its own publisher, so this verifies what we signed, not what we shipped.
+# The executables Studio builds itself: the window, the kernel it spawns, and
+# the computer-use helper. The release signs these and the installer, nothing
+# else. Electron's DLLs, electron-builder's resources/elevate.exe and the NSIS
+# uninstaller the installer writes ship with whatever signature their builder
+# gave them, which for most of them is none.
 #
-# Keyed by the path inside the bundle; the flat signing payload carries the leaf
-# name, because SignPath receives a directory rather than a tree.
+# Keyed by the path inside the bundle; the flat signing payload carries the leaf.
 $signedExecutables = [ordered]@{
-    "Reasonix Studio.exe"                    = "Reasonix Studio.exe"
-    "resources/bin/reasonix-studio-host.exe" = "reasonix-studio-host.exe"
+    "Reasonix Studio.exe"                        = "Reasonix Studio.exe"
+    "resources/bin/reasonix-studio-host.exe"     = "reasonix-studio-host.exe"
+    "resources/bin/reasonix-computer-helper.exe" = "reasonix-computer-helper.exe"
 }
 
 function Assert-AuthenticodeSignature {
@@ -43,8 +51,24 @@ function Assert-AuthenticodeSignature {
     if ($null -eq $signature.SignerCertificate -or $signature.SignatureType -eq "None") {
         throw "Authenticode signature is missing: $Path"
     }
-    if ($RequireTrusted -and $signature.Status -ne "Valid") {
+    if ($signature.Status -ne "Valid") {
         throw "Authenticode signature is not trusted for $Path`: $($signature.Status) $($signature.StatusMessage)"
+    }
+    $certificate = $signature.SignerCertificate
+    if ($certificate.Thumbprint -ne $ExpectedThumbprint.ToUpperInvariant()) {
+        throw "Unexpected signer thumbprint $($certificate.Thumbprint): $Path"
+    }
+    if ($certificate.Subject -cne $ExpectedSubject) {
+        throw "Unexpected signer subject '$($certificate.Subject)': $Path"
+    }
+    # The thumbprint pins one certificate and so its issuer; a Valid status
+    # already means that issuer chains to a trusted root.
+    if ([string]::IsNullOrWhiteSpace($certificate.Issuer)) {
+        throw "Signer certificate has no issuer: $Path"
+    }
+    Write-Host "Signer: $($certificate.Subject) / issuer: $($certificate.Issuer)"
+    if ($null -eq $signature.TimeStamperCertificate) {
+        throw "Authenticode timestamp is missing: $Path"
     }
     Write-Host "Authenticode $($signature.Status): $Path"
 }
@@ -57,6 +81,11 @@ foreach ($leaf in $signedExecutables.Values) {
     $path = Join-Path $PayloadDirectory $leaf
     Assert-AuthenticodeSignature -Path $path
     $payloadPaths[$leaf] = $path
+}
+
+if ($PSCmdlet.ParameterSetName -eq "Payload") {
+    Write-Host "Windows Authenticode payload verified."
+    exit 0
 }
 
 Assert-AuthenticodeSignature -Path $InstallerPath

@@ -27,6 +27,8 @@
 # Release signing: provider policy, its contract and the workflow that uses it.
 /.signpath/                               @esengine @SivanCola
 /.github/workflows/release-studio.yml     @esengine @SivanCola
+/.github/workflows/studio-certum-signing-smoke.yml @esengine @SivanCola
+/.github/actions/setup-certum/            @esengine @SivanCola
 /cmd/signpath-contract/                   @esengine @SivanCola
-/scripts/complete-signpath-request.ps1    @esengine @SivanCola
+/scripts/sign-certum.ps1                  @esengine @SivanCola
 /scripts/verify-windows-authenticode.ps1  @esengine @SivanCola
