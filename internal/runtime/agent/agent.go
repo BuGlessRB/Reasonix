@@ -660,6 +660,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *sessionstore.Ses
 			workspaceID:        strings.TrimSpace(opts.WorkspaceID),
 			classifierTaskText: opts.ClassifierTaskText,
 			writeWorkspaceRoot: strings.TrimSpace(opts.WriteWorkspaceRoot),
+			observeRoot:        opts.observeRoot(),
 			renderRoot:         strings.TrimSpace(opts.RenderRoot),
 			workspaceVCS:       strings.TrimSpace(opts.WorkspaceVCS),
 			subagentDepth:      subagentDepth,

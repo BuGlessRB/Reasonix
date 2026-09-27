@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/state/memory"
 	"reasonix/internal/state/workspacelease"
 	"reasonix/internal/tools/jobs"
+	"strings"
 )
 
 // Options configures an Agent.
@@ -116,6 +117,10 @@ type Options struct {
 	WriteScheduler *writeclaim.SubagentScheduler
 	// WriteWorkspaceRoot normalizes parent write reservations.
 	WriteWorkspaceRoot string
+	// ObserveRoot is where an unclassified call's effect is observed by walking
+	// the workspace before and after it. Set it only for an agent no other
+	// foreground writer runs beside; empty falls back to WriteWorkspaceRoot.
+	ObserveRoot string
 	// RenderRoot is the workspace a written page or image is opened from to look
 	// at it. Empty when this agent has no browser or its model cannot see one.
 	RenderRoot string
@@ -206,4 +211,11 @@ type Options struct {
 	// (or cloned for) sub-agents. nil disables v2 capture. Does not affect
 	// provider-visible tool schemas or prompts.
 	MutationObserver *checkpoint.MutationObserver
+}
+
+func (o Options) observeRoot() string {
+	if root := strings.TrimSpace(o.ObserveRoot); root != "" {
+		return root
+	}
+	return strings.TrimSpace(o.WriteWorkspaceRoot)
 }
