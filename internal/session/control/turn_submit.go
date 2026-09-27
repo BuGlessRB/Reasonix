@@ -123,20 +123,21 @@ func (c *Controller) prepareInvocationTurn(input string, requests []InvocationRe
 		}
 	}
 
+	if strings.TrimSpace(input) == "" && len(subagents) > 0 {
+		return preparedInvocationTurn{}, fmt.Errorf("subagent invocation requires a task")
+	}
+	// A lone inline skill takes the typed text as its arguments, as "/name task" does.
+	if len(inline) == 1 && len(subagents) == 0 {
+		return preparedInvocationTurn{composed: c.skills.renderInvocation(inline[0], strings.TrimSpace(input))}, nil
+	}
 	parts := make([]string, 0, len(inline)+1)
 	for _, sk := range inline {
-		parts = append(parts, c.skills.render(sk, ""))
+		parts = append(parts, c.skills.renderInvocation(sk, ""))
 	}
 	if strings.TrimSpace(input) != "" {
 		parts = append(parts, input)
 	}
-	composed := strings.Join(parts, "\n\n")
-	if strings.TrimSpace(input) == "" {
-		if len(subagents) > 0 {
-			return preparedInvocationTurn{}, fmt.Errorf("subagent invocation requires a task")
-		}
-	}
-	return preparedInvocationTurn{composed: composed, subagents: subagents}, nil
+	return preparedInvocationTurn{composed: strings.Join(parts, "\n\n"), subagents: subagents}, nil
 }
 
 func (c *Controller) runPreparedInvocationTurn(
@@ -378,7 +379,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 				c.runSubagentSkillSlash(sk, task, trimmed, display)
 				return
 			}
-			sent := c.skills.render(sk, task)
+			sent := c.skills.renderInvocation(sk, task)
 			c.runGuarded(func(ctx context.Context) error {
 				return runTurnLoop(ctx, sent, sent, display)
 			})

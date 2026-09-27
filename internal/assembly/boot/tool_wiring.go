@@ -113,7 +113,9 @@ func registerSkillTools(reg *tool.Registry, set ablation.Set, store *skill.Store
 			entries = append(entries, command.SlashEntry{
 				Name:        sk.SlashName(),
 				Description: sk.Description,
-				Render:      func(args []string) string { return store.Render(sk, strings.Join(args, " ")) },
+				Render: func(args []string) string {
+					return skill.RenderInvocation(store.Prepare(sk), strings.Join(args, " "))
+				},
 			})
 		}
 	}
