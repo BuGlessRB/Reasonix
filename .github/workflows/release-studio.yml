@@ -83,6 +83,17 @@ jobs:
             echo "candidate=$candidate"; } >> "$GITHUB_OUTPUT"
           echo "resolved $tag -> $version at $sha (candidate=$candidate)"
 
+      - name: Require versioned release notes
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          notes="release-notes/studio/${VERSION#v}.md"
+          if ! git cat-file -e "$SHA:$notes"; then
+            echo "::error::$notes must exist in the tagged commit before a Studio release can build"
+            exit 1
+          fi
+
   # The contract is this repository's mirror of what SignPath's console trusts:
   # which branch and which workflow may request the release certificate. It is
   # checked before anything is built so a widened origin fails here rather than
@@ -549,6 +560,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.resolve.outputs.sha }}
+          fetch-depth: 0
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
@@ -659,8 +671,19 @@ jobs:
             cat "$version_notes" >> "$notes"
             printf '\n' >> "$notes"
           else
-            echo "::warning::no $version_notes; publishing the standing text only"
+            echo "::error::no $version_notes; every Studio release requires user-visible notes"
+            exit 1
           fi
+          previous_tag="$(git tag --merged "${{ needs.resolve.outputs.sha }}" --sort=-version:refname 'studio-v*' | grep -Fxv "$TAG" | head -n 1)"
+          if [ -z "$previous_tag" ]; then
+            echo "::error::cannot resolve the previous Studio tag for $TAG"
+            exit 1
+          fi
+          gh api -X POST "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="$TAG" \
+            -f previous_tag_name="$previous_tag" \
+            --jq '.body' >> "$notes"
+          printf '\n\n' >> "$notes"
           # The Windows sentence follows the condition that decides it, read
           # here from the same pair the build job gates signing on. Asserting a
           # constant is how this line came to tell users to click through
@@ -676,6 +699,7 @@ jobs:
             printf '%s\n' '三个平台都能自更新：Linux 走自己的包，Windows 运行下一个安装器，macOS 替换自身 bundle。'
           } >> "$notes"
           if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file "$notes"
             gh release upload "$TAG" dist/* --clobber
           else
             gh release create "$TAG" dist/* \
