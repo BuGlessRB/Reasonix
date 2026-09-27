@@ -3,6 +3,7 @@ package agent
 import (
 	"reasonix/internal/runtime/completion"
 	"reasonix/internal/runtime/taskpolicy"
+	"reasonix/internal/runtime/verdict"
 
 	"reasonix/internal/safety/evidence"
 )
@@ -68,6 +69,9 @@ type turnRuntime struct {
 	lastReadiness *finalReadinessCheck
 	// snapshot is the workspace as this turn found it; nil when unobserved.
 	snapshot *turnSnapshot
+	// outcome is the host-evidence verdict sealed for this turn; nil when no
+	// contract revision was in force to answer from.
+	outcome *verdict.Result
 	// uncountedCheckNoted marks that the model was told this turn why a command
 	// it ran was not a check; once a turn is enough to be learned.
 	uncountedCheckNoted bool
