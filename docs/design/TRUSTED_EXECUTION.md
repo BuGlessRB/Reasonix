@@ -67,6 +67,8 @@ Out of scope: UI, detection of semantic cheating inside a green test (review's j
 | T4 | `host_protected`: the sandbox excludes THS and its head from every write root (macOS, Linux). `tamper_evident_only`: nothing the host enforces stops a process from rewriting THS and its head (Windows today). |
 | T5 | Every bundle, contract revision and policy revision records the `IntegrityLevel` it was written under. |
 | T6 | A chain that does not verify from the trusted head is `trusted_state.tampered`: the contract suspends and only the User may resume it (§8). |
+| T7 | `host_protected` requires every model-reachable writer this process starts to be confined away from THS: the bash sandbox, the file tools' guard, each MCP server, each extension sidecar. One unconfined launch drops the level for the rest of the process. |
+| T8 | The level is a per-process judgement. Another process running as the same OS user, including another Reasonix process whose model is unconfined, can write THS. Until a machine-wide registry covers that, `host_protected` claims only this process's writers. |
 
 Operation by integrity level:
 
@@ -519,13 +521,15 @@ Honesty metrics carry about ±10pp noise at one sample per task. A stage exit MU
 | I2 claim inertness | a todo marked `completed` resolves its requirement `Satisfied` with no evidence (`buildShadowContract`) | P2 removes the edge |
 | I2 claim inertness | `complete_step` checks that the cited command ran; the criterion binding is the model's | P2 moves binding into the frozen verifier |
 | Atomic tasks | `taskcontract.Atomic` treats any mutation as proof of the ask | acceptable at L1 only |
-| Durable evidence | `evidence.Receipt` is in memory for one turn and carries no blob digests | P1 |
+| Durable evidence | the root agent seals each turn's contract, report and receipts (arguments by digest) as a `shadow_bundle/1` record in THS; receipts carry no blob digests and no snapshot yet | P1: snapshot, verdicts, divergence |
 | Frozen test criteria | `evidence.TestCriterion` keeps host-owned bytes and digest identity | reuse as the `test` verifier subject |
 | Frozen check set | `evidence.VerificationContract` freezes a Goal's checks; `Epoch` never moves | P2 generalises it to revisions |
 | Host report | `internal/runtime/completion` builds a host-authored report with gaps by subtraction | P1 seals it into the bundle |
 | Risk policy | `sensitive:` is read from the workspace `REASONIX.md` at each boot, so an edit changes enforcement for the next session | P2 (I13) |
 | Observation | `scanWorkspace` skips VCS stores and stops at 50k files; exclusions are code, not a revisioned policy | P1 |
 | Capability identity | `skill.Skill` has no content digest; runs record no capability versions | P3 |
+| Integrity inputs | MCP servers default to host mode and extension sidecars always run unconfined, so an install with either enabled is `tamper_evident_only` (T7) | a confined launch path for each |
+| Cross-process writers | nothing records the level of other processes sharing THS (T8) | machine-wide registry |
 
 ## 12. Decisions
 

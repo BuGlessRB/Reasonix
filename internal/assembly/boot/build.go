@@ -364,6 +364,7 @@ func (b *builder) executor() *agent.Agent {
 		WriteScheduler:     t.sub.scheduler,
 		WriteWorkspaceRoot: b.root, WorkspaceVCS: b.prompt.workspaceVCS, RenderRoot: renderRoot(t.browser, entry, b.root),
 		ProjectChecks: b.prompt.projectChecks, ProjectSensitivePaths: b.prompt.sensitivePaths,
+		EvidenceSeal:                 t.env.evidenceSeal,
 		AgentPreset:                  b.model.preset,
 		DeliveryProfile:              b.model.delivery,
 		Ablation:                     b.opts.Ablation,

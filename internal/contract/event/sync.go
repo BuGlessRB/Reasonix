@@ -102,6 +102,14 @@ func (s *syncSink) RecordCompletionReport(a CompletionReportAudit) {
 	}
 }
 
+func (s *syncSink) RecordEvidenceBundle(a EvidenceBundleAudit) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if es, ok := s.inner.(EvidenceBundleAuditSink); ok {
+		es.RecordEvidenceBundle(a)
+	}
+}
+
 func (s *syncSink) RecordOutcomeProgress(sample hostaudit.OutcomeSample) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

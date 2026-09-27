@@ -129,6 +129,34 @@ func RecordCompletionReport(s Sink, a CompletionReportAudit) {
 	}
 }
 
+// EvidenceBundleAudit is the end-of-turn shadow bundle's seal: its record
+// identity in Trusted Host State, never the bundle's content. FailureCode is
+// the store's typed cause when nothing was sealed.
+type EvidenceBundleAudit struct {
+	Sealed      bool
+	Record      string
+	Generation  uint64
+	Integrity   string
+	Receipts    int
+	FailureCode string
+}
+
+// EvidenceBundleAuditSink is an optional sink capability; implementations must
+// keep it content-free, like every other audit channel.
+type EvidenceBundleAuditSink interface {
+	RecordEvidenceBundle(EvidenceBundleAudit)
+}
+
+// RecordEvidenceBundle forwards the seal only to sinks that opt in.
+func RecordEvidenceBundle(s Sink, a EvidenceBundleAudit) {
+	if nilutil.IsNil(s) {
+		return
+	}
+	if es, ok := s.(EvidenceBundleAuditSink); ok {
+		es.RecordEvidenceBundle(a)
+	}
+}
+
 // MemoryRecallAudit summarizes one automatic-recall decision: identifiers,
 // scores, and budget numbers only — never the query or fact text.
 type MemoryRecallAudit struct {

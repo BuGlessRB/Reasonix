@@ -12,10 +12,15 @@ import (
 
 	"golang.org/x/net/http/httpproxy"
 
+	"reasonix/internal/base/workspaceid"
 	"reasonix/internal/contract/config"
+	"reasonix/internal/ext/extension/sidecar"
+	"reasonix/internal/ext/plugin"
+	"reasonix/internal/runtime/agent"
 	"reasonix/internal/safety/egress"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/state/sessiontemp"
+	"reasonix/internal/state/trustedstate"
 	"reasonix/internal/tools/builtin"
 )
 
@@ -34,6 +39,7 @@ type toolEnvironment struct {
 	readPaths       *builtin.PathResolver
 	sessionTemp     *sessiontemp.Manager
 	egress          *egress.Proxy
+	evidenceSeal    *agent.EvidenceSeal
 }
 
 func resolveToolEnvironment(opts Options, cfg *config.Config, roots config.Roots, root string, additionalDirs []string, shell sandbox.Shell, stderr io.Writer) toolEnvironment {
@@ -67,6 +73,7 @@ func resolveToolEnvironment(opts Options, cfg *config.Config, roots config.Roots
 		allowWriteRoots = nil
 	}
 	env.sessionGuard = builtin.NewSessionDataGuard(roots.MemoryUserDir(), allowWriteRoots)
+	env.evidenceSeal = openEvidenceSeal(roots.MemoryUserDir(), root, env.bash)
 	if env.bash.Mode == "enforce" && !sandbox.Available() {
 		fmt.Fprintln(stderr, "warning: "+sandbox.UnavailableMessage())
 	}
@@ -124,4 +131,23 @@ func listenEgressSocket(p *egress.Proxy) error {
 		return err
 	}
 	return p.ListenUnix(filepath.Join(dir, "reasonix", "egress", egress.NewToken()+".sock"))
+}
+
+// openEvidenceSeal places Trusted Host State where the file tools' guard
+// refuses writes. At every write it asks the components that start what the
+// model drives — the bash sandbox, the MCP and extension launchers — whether
+// any of them left a way in; only they know the integrity level.
+func openEvidenceSeal(stateRoot, workspace string, bash sandbox.Spec) *agent.EvidenceSeal {
+	stream := workspaceid.PathFingerprint(workspace)
+	if strings.TrimSpace(stateRoot) == "" || stream == "" {
+		return nil
+	}
+	dir := filepath.Join(stateRoot, builtin.TrustedStateDir)
+	integrity := func() trustedstate.IntegrityLevel {
+		if !plugin.LaunchedUnconfinedProcess() && !sidecar.LaunchedUnconfinedProcess() && sandbox.WriteProtects(bash, dir) {
+			return trustedstate.HostProtected
+		}
+		return trustedstate.TamperEvidentOnly
+	}
+	return &agent.EvidenceSeal{Store: trustedstate.Open(dir, integrity), Stream: stream}
 }

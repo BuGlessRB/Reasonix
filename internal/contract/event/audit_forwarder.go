@@ -21,6 +21,10 @@ func (f AuditForwarder) RecordContractShadow(a ContractShadowAudit) {
 	RecordContractShadow(f.Inner, a)
 }
 
+func (f AuditForwarder) RecordEvidenceBundle(a EvidenceBundleAudit) {
+	RecordEvidenceBundle(f.Inner, a)
+}
+
 func (f AuditForwarder) RecordCompletionReport(a CompletionReportAudit) {
 	RecordCompletionReport(f.Inner, a)
 }
