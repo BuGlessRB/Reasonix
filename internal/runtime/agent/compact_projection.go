@@ -215,7 +215,7 @@ func (a *contextWindow) compressVisibleRange(
 	projection := buildVisibleCompressionProjection(snap.visible, plan, summary)
 	// Priced on the request this produces, not the history it stores: the note
 	// the fold makes owed cannot be folded, which does not make it free.
-	projectionTokens := a.estimatedPromptTokens(a.providerProjectionMessages(a.withTodoIdentityTail(projection)))
+	projectionTokens := a.estimatedPromptTokens(a.providerProjectionMessages(provider.ModelMessages(a.withTodoIdentityTail(projection))))
 	tele.ProjectionTokens = projectionTokens
 	result.Messages = len(plan.fold)
 	result.ProjectionTokens = projectionTokens
@@ -228,7 +228,7 @@ func (a *contextWindow) compressVisibleRange(
 	}
 
 	inputHash := sessionstore.ProviderVisibleFingerprint(provider.ModelMessages(snap.visible))
-	outputHash := sessionstore.ProviderVisibleFingerprint(projection)
+	outputHash := sessionstore.ProviderVisibleFingerprint(provider.ModelMessages(projection))
 	// This fold masks a range rather than cutting a prefix, so its body keeps
 	// messages from both sides of the digest. Claiming less than the whole
 	// transcript would splice copies of them back in behind it.
@@ -355,7 +355,7 @@ func buildVisibleCompressionProjection(visible []provider.Message, plan visibleC
 			projection = append(projection, msg)
 		}
 	}
-	return provider.ModelMessages(projection)
+	return provider.ProjectionMessages(projection)
 }
 
 // spend is the transaction's bill, not the adopted call's usage: a repair that

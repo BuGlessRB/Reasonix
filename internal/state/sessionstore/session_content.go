@@ -69,7 +69,7 @@ func loadSessionUserMessagesWithLimits(path string, limits sessionReplayLimits) 
 		return nil, err
 	}
 	if probe.futureSchema {
-		return nil, fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", path, probe.schemaVersion, sessionDAGSchemaVersion)
+		return nil, fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", path, probe.schemaVersion, sessionEventImageBlobsSchemaVersion)
 	}
 	if probe.dag {
 		msgs, _, err := loadSessionDAGMessages(path, limits)

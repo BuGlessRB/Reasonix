@@ -122,18 +122,10 @@ func DeleteSubagentsByParent(sessionDir, parentSession string) error {
 		return err
 	}
 	for _, artifact := range artifacts {
-		paths := []string{artifact.SessionPath, artifact.MetaPath}
-		// Sub-agent saves are single-file today, but sweep transcript sidecars
-		// (event log, event index, …) so no earlier build's artifacts survive
-		// the delete.
-		paths = append(paths, store.SessionSidecarFiles(artifact.SessionPath)...)
-		for _, path := range paths {
-			if path == "" {
-				continue
-			}
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return err
-			}
+		// A sub-agent transcript owns the same sidecars as any other, image
+		// blobs and spilled output included.
+		if err := store.RemoveSessionArtifacts(artifact.SessionPath, artifact.MetaPath); err != nil {
+			return err
 		}
 	}
 	return nil

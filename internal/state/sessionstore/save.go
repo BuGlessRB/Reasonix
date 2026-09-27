@@ -337,7 +337,7 @@ func (s *Session) saveLocked(path string, mode sessionSaveMode) error {
 				return err
 			}
 			displayModelCurrent, err = appendSessionDisplayReadModel(path, msgs, decision.appendFrom, decision.revision)
-		case sessionEventLogOversized(logSize, contentBytes):
+		case sessionEventLogOversized(logSize, contentBytes, msgs):
 			// Fold history into one replace event and refresh the random-read
 			// model atomically. Normal appends keep it current below too.
 			if err := compactSessionEventLog(path, msgs, digest, decision.revision, "compact"); err != nil {
@@ -411,7 +411,7 @@ func (s *Session) saveLocked(path string, mode sessionSaveMode) error {
 		if err := compactSessionEventLog(path, msgs, digest, baseRevision, reason); err != nil {
 			return err
 		}
-	case repairLog, sessionEventLogOversized(logSize, contentBytes):
+	case repairLog, sessionEventLogOversized(logSize, contentBytes, msgs):
 		if err := compactSessionEventLog(path, msgs, digest, baseRevision, reason); err != nil {
 			return err
 		}
@@ -445,6 +445,9 @@ func (s *Session) saveLocked(path string, mode sessionSaveMode) error {
 }
 
 func writeSessionMessages(path string, msgs []provider.Message) error {
+	if err := refuseDegradedCheckpointRewrite(path, msgs); err != nil {
+		return err
+	}
 	// Write to a sibling tmp file then rename, so a crash mid-write can't
 	// leave a partial JSONL that won't reload. The fsync guards the anchor
 	// against power loss — it is the fallback when the event log is damaged.
@@ -480,7 +483,7 @@ func writeSessionMessages(path string, msgs []provider.Message) error {
 // checkSnapshotWrite decides whether this session may write msgs over path, and
 // whether the safe write shape is a no-op, append-only suffix, or full rewrite.
 func (s *Session) checkSnapshotWrite(path string, next []provider.Message, nextDigest [sha256.Size]byte, nextVersion uint64, allowOwnedRewrite bool) (snapshotWriteDecision, error) {
-	current, err := loadSessionUnlocked(path)
+	current, err := loadSnapshotBaseline(path, next)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return snapshotWriteDecision{}, nil
@@ -1866,17 +1869,7 @@ func migrateSessionSidecars(oldPath, newPath, newID string) error {
 			}
 		}
 	}
-	for _, pair := range [][2]string{
-		{store.SessionGoalState(oldPath), store.SessionGoalState(newPath)},
-		{store.SessionEventLog(oldPath), store.SessionEventLog(newPath)},
-		{store.SessionEventLogDamaged(oldPath), store.SessionEventLogDamaged(newPath)},
-		{store.SessionEventIndex(oldPath), store.SessionEventIndex(newPath)},
-		{store.SessionConflictLog(oldPath), store.SessionConflictLog(newPath)},
-		{store.SessionRecoveryState(oldPath), store.SessionRecoveryState(newPath)},
-		{store.SessionCheckpointDir(oldPath), store.SessionCheckpointDir(newPath)},
-		{store.SessionJobsDir(oldPath), store.SessionJobsDir(newPath)},
-		{store.SessionInboxDir(oldPath), store.SessionInboxDir(newPath)},
-	} {
+	for _, pair := range sessionSidecarMoves(oldPath, newPath) {
 		// A source name past the filesystem limit cannot exist; renaming it
 		// would just manufacture ENAMETOOLONG instead of a clean not-exist.
 		if len(filepath.Base(pair[0])) > nameMaxBytes {

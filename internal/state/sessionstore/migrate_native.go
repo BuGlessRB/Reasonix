@@ -92,6 +92,9 @@ func moveNativeFlatImport(oldPath, newPath string) (moved, decided bool) {
 			return false, true
 		}
 	}
+	if err := os.RemoveAll(store.SessionBlobsDir(oldPath)); err != nil {
+		return false, true
+	}
 	if err := os.Remove(oldPath); err != nil && !os.IsNotExist(err) {
 		return false, true
 	}

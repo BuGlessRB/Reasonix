@@ -619,6 +619,7 @@ func recoveryTrashSidecars(path string) []string {
 		store.SessionJobsDir(path),
 		store.SessionInboxDir(path),
 		store.SessionOutputsDir(path),
+		store.SessionBlobsDir(path),
 	)
 	return artifacts
 }
@@ -632,6 +633,7 @@ func moveRecoverySubagentArtifacts(dir, path, itemDir string) error {
 	for _, artifact := range artifacts {
 		paths := []string{artifact.SessionPath, artifact.MetaPath}
 		paths = append(paths, store.SessionSidecarFiles(artifact.SessionPath)...)
+		paths = append(paths, store.SessionSidecarDirs(artifact.SessionPath)...)
 		for _, src := range paths {
 			if err := moveRecoveryTrashPath(src, filepath.Join(targetDir, filepath.Base(src))); err != nil {
 				return err

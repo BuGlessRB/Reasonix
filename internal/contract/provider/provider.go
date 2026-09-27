@@ -50,9 +50,13 @@ type Message struct {
 	RawContent string `json:"raw_content,omitempty"`
 	// ProviderContent is a transitional field written by early Context Engine v2
 	// builds. Loaders migrate it into Content/RawContent before normal use.
-	ProviderContent  string   `json:"provider_content,omitempty"`
-	Images           []string `json:"images,omitempty"`            // data URLs (data:<mime>;base64,…) on user (attachments) and tool (MCP image results) messages; embedded only for vision-capable models
-	ReasoningContent string   `json:"reasoning_content,omitempty"` // assistant: thinking-mode chain-of-thought, round-tripped on multi-turn
+	ProviderContent string   `json:"provider_content,omitempty"`
+	Images          []string `json:"images,omitempty"` // data URLs (data:<mime>;base64,…) on user (attachments) and tool (MCP image results) messages; embedded only for vision-capable models
+	// UnavailableImages are images this message holds whose stored bytes the
+	// session store could not read back. Host-owned: ModelMessages says so to
+	// the model, and a stored copy that reappears restores the image.
+	UnavailableImages []UnavailableImage `json:"unavailable_images,omitempty"`
+	ReasoningContent  string             `json:"reasoning_content,omitempty"` // assistant: thinking-mode chain-of-thought, round-tripped on multi-turn
 	// ReasoningID is the provider-issued reasoning-item id (OpenAI Responses:
 	// Reasoning.id is required on input items), captured from the streamed
 	// output item and round-tripped back into later inputs.
@@ -116,6 +120,13 @@ type Message struct {
 	// The host's own account of a result that did not succeed: non-nil is the
 	// fact, RefusalCode names a refusal. Local metadata, like ToolExecution.
 	ToolFailure *ToolFailure `json:"tool_failure,omitempty"`
+}
+
+// UnavailableImage names one image by its stored content hash and its position
+// among the message's images as written.
+type UnavailableImage struct {
+	Index int    `json:"index"`
+	Ref   string `json:"ref"`
 }
 
 // InterruptedTurnRecovery is the durable, provider-excluded handoff for a turn
