@@ -255,6 +255,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		requestEfforts:     requestEfforts,
 		http:               httpClient,
 		idleTimeout:        defaultStreamIdleTimeout,
+		openCodeSession:    provider.NewOpenCodeSessionID(),
 	}, nil
 }
 
@@ -294,6 +295,7 @@ type client struct {
 	effort             string        // reasoning_effort for OpenAI; thinking.type for MiniMax; "" = auto/provider default
 	requestEfforts     []string      // depth levels a per-request EffortOverride may take; empty = overrides ignored
 	idleTimeout        time.Duration // SSE stall watchdog window; defaultStreamIdleTimeout unless a test overrides
+	openCodeSession    string        // x-opencode-session this client presents to OpenCode Go
 	learned            endpointFacts
 }
 
@@ -484,6 +486,7 @@ func (c *client) openStream(ctx context.Context, targetURL string, wireReq chatR
 		applyAPIKeyHeader(httpReq.Header, c.baseURL, c.apiKey())
 		httpReq.Header.Set("Accept", "text/event-stream")
 		applyCustomHeaders(httpReq.Header, c.headers)
+		provider.ApplyOpenCodeGoIdentity(httpReq, c.openCodeSession)
 		return httpReq, nil
 	}
 	resp, err := provider.SendWithRetry(requestCtx, c.http, c.sendOpts(wireReq.reasoningHint), newReq)
@@ -663,6 +666,7 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 	// run would break the API's tool-call pairing validation).
 	var pendingToolImages []string
 	var reasoningHint provider.RequestHint
+	openCodeGo := provider.IsOpenCodeGoEndpoint(c.chatURL)
 	flushToolImages := func() {
 		if len(pendingToolImages) == 0 {
 			return
@@ -681,9 +685,9 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 			Role:       string(m.Role),
 			ToolCallID: m.ToolCallID,
 		}
-		if m.Role == provider.RoleTool {
-			// Always send the tool message's name, even when empty: strict
-			// backends (MiMo) 400 a tool result without the key (#4711).
+		if m.Role == provider.RoleTool && !openCodeGo {
+			// Strict backends (MiMo) 400 a tool result without the key, even
+			// empty (#4711); OpenCode Go 400s one that carries it.
 			name := m.Name
 			cm.Name = &name
 		}
@@ -1208,10 +1212,8 @@ type chatMessage struct {
 	ToolCalls        []chatToolCall `json:"tool_calls,omitempty"`
 	ToolCallID       string         `json:"tool_call_id,omitempty"`
 	// Name is the role=tool message's function name. A pointer so ordinary
-	// messages omit the key (byte-stable prefix), while tool messages always
-	// serialize it — even empty: strict OpenAI-compatible backends (MiMo, per
-	// its error table) reject a tool message whose `name` key is absent
-	// ("name is not set"), and OpenAI's spec requires the field on role=tool.
+	// messages omit the key (byte-stable prefix), while tool messages keep it
+	// even empty for strict backends (MiMo); OpenCode Go rejects the key.
 	Name *string `json:"name,omitempty"`
 }
 
