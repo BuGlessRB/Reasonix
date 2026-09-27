@@ -43,6 +43,7 @@
 <p align="center"><strong>开源 · MIT · 单个 Go 二进制</strong></p>
 <h3 align="center">可以一直开着跑的编码 Agent。</h3>
 <p align="center">一套本地引擎,四个入口——终端、桌面端、浏览器,或通过 ACP 接入你的编辑器。计划模式、权限、工作区沙箱与逐轮 checkpoint,让长时间自治运行始终可读、可撤销。</p>
+<p align="center">维护者：<strong>Huahui Yu</strong>。</p>
 
 > [!IMPORTANT]
 > **加入社区 · Community** — 双语 Discord，提供安装答疑（`#help` / `#求助`）、工作流展示与功能想法。→ **<https://discord.gg/XF78rEME2D>**
