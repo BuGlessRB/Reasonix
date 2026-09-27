@@ -32,3 +32,5 @@
 /cmd/signpath-contract/                   @esengine @SivanCola
 /scripts/sign-certum.ps1                  @esengine @SivanCola
 /scripts/verify-windows-authenticode.ps1  @esengine @SivanCola
+/scripts/verify-windows-package.ps1       @esengine @SivanCola
+/scripts/windows-signing-lib.ps1          @esengine @SivanCola

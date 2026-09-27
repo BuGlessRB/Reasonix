@@ -13,5 +13,7 @@ fingerprint_files:
   - .github/actions/setup-certum/action.yml
   - scripts/sign-certum.ps1
   - scripts/verify-windows-authenticode.ps1
+  - scripts/verify-windows-package.ps1
+  - scripts/windows-signing-lib.ps1
   - desktop/electron/electron-builder.yml
   - cmd/signpath-contract/main.go

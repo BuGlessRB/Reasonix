@@ -9,9 +9,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $thumbprint = $env:CERTUM_KEY_ID
 if ($thumbprint -notmatch '^[0-9a-fA-F]{40}$') { throw 'Invalid CERTUM_KEY_ID' }
-$tool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
-    Sort-Object FullName -Descending | Select-Object -First 1
-if (-not $tool) { throw 'Windows SDK SignTool not found' }
+. (Join-Path $PSScriptRoot 'windows-signing-lib.ps1')
+$tool = Get-SignTool
 
 if ($PSCmdlet.ParameterSetName -eq 'Payload') {
     $root = (Resolve-Path -LiteralPath $PayloadDirectory).Path
@@ -35,12 +34,7 @@ foreach ($file in $files) {
     if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing signing input: $file" }
 }
 foreach ($file in $files) {
-    & $tool.FullName sign /sha1 $thumbprint /fd SHA256 /tr http://timestamp.certum.pl /td SHA256 $file
+    & $tool sign /sha1 $thumbprint /fd SHA256 /tr http://timestamp.certum.pl /td SHA256 $file
     if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed: $file" }
-    & $tool.FullName verify /pa /all /tw $file
-    if ($LASTEXITCODE -ne 0) { throw "Authenticode verification failed: $file" }
-    $signature = Get-AuthenticodeSignature -LiteralPath $file
-    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Thumbprint -ne $thumbprint -or -not $signature.TimeStamperCertificate) {
-        throw "Unexpected signer, untrusted signature, or missing timestamp: $file"
-    }
+    Assert-EmbeddedSignature -Path $file -Thumbprint $thumbprint
 }

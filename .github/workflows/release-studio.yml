@@ -11,8 +11,8 @@ run-name: Release Studio ${{ inputs.tag || github.ref_name }}
 # cannot collide because the tag name itself differs.
 #
 # Windows artifacts are Authenticode-signed with a Certum SimplySign cloud
-# certificate in two stages: the executables a user runs, then the installer
-# built around them. Signing only the container leaves them unsigned on disk
+# certificate in two stages: every PE file in the application tree, then the
+# installer built around them. Signing only the container leaves them unsigned on disk
 # after installation, which is what reputation heuristics quarantine. The
 # repository variable STUDIO_SIGNING_ENABLED=true turns it on; once on, a
 # release that cannot sign does not publish.
@@ -376,13 +376,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Windows signing is three jobs so the SimplySign session is never up while
-  # third-party code runs: the two signing jobs install no toolchain and run
-  # only the signer, and packaging runs between them on its own runner with no
-  # secrets. Both signing jobs share one group with the Studio smoke test, so no
-  # two runs drive the same SimplySign account at once.
+  # Windows signing is four jobs so the SimplySign session is never up while
+  # third-party code runs or untrusted archives are parsed: the two signing jobs
+  # install no toolchain and run only the signer, while packaging and the
+  # package check run between them on their own runners with no secrets. Both
+  # signing jobs share one group with the Studio smoke test, so no two runs
+  # drive the same SimplySign account at once.
   windows-sign-payload:
-    name: sign Windows executables (Certum)
+    name: sign the Windows PE files (Certum)
     needs: [resolve, signing-contract, build]
     if: vars.STUDIO_SIGNING_ENABLED == 'true'
     runs-on: windows-2022
@@ -393,6 +394,10 @@ jobs:
     concurrency:
       group: certum-signing
       cancel-in-progress: false
+    # Recorded here because no later job can write this job's outputs: the
+    # installer signing job refuses a payload artifact that no longer hashes to it.
+    outputs:
+      payload-digest: ${{ steps.verify.outputs.digest }}
     steps:
       # Only the workflow's own commit is checked out: these jobs run the signer
       # and its checks, never anything the release tag builds.
@@ -434,19 +439,20 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: unsigned-studio-windows-bundle
-          path: bundle
+          path: signing/app
 
-      # Stage one: the executables this project builds, as loose files.
-      - name: Stage the Windows payload
+      # Stage one: every PE file in the application tree that Microsoft has
+      # not signed, Electron's DLLs included. Windows loads each of them, and
+      # Smart App Control judges an unsigned one on its own reputation. The
+      # tree has to hold exactly the PE files the signing library declares.
+      - name: List the PE files to sign
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory payload | Out-Null
-          Copy-Item -LiteralPath 'bundle/Reasonix Studio.exe' payload/
-          Copy-Item -LiteralPath bundle/resources/bin/reasonix-studio-host.exe payload/
-          Copy-Item -LiteralPath bundle/resources/bin/reasonix-computer-helper.exe payload/
-          @('Reasonix Studio.exe', 'reasonix-studio-host.exe', 'reasonix-computer-helper.exe') |
-            Set-Content payload/signing-files.txt
+          . ./scripts/windows-signing-lib.ps1
+          Assert-DeclaredPeSet -Root signing/app
+          $script:ReleaseSignedPe | ForEach-Object { "app/$_" } | Set-Content signing/signing-files.txt
+          Get-Content signing/signing-files.txt
 
       - name: Connect to Certum
         uses: ./.github/actions/setup-certum
@@ -455,11 +461,11 @@ jobs:
           otp-uri: ${{ secrets.CERTUM_OTP_URI }}
           thumbprint: ${{ secrets.CERTUM_KEY_ID }}
 
-      - name: Sign the executables
+      - name: Sign the PE files
         shell: pwsh
         env:
           CERTUM_KEY_ID: ${{ secrets.CERTUM_KEY_ID }}
-        run: ./scripts/sign-certum.ps1 -PayloadDirectory payload
+        run: ./scripts/sign-certum.ps1 -PayloadDirectory signing
 
       # The session signs for any process on the runner while it is up.
       - name: Disconnect from Certum
@@ -467,28 +473,34 @@ jobs:
         shell: pwsh
         run: Get-Process -Name '*SimplySign*' -ErrorAction SilentlyContinue | Stop-Process -Force
 
-      - name: Verify the signed executables
+      # Enumerates the tree again rather than reading the list it signed from,
+      # so a PE file the list missed fails here unsigned.
+      - name: Verify the signed tree
+        id: verify
         shell: pwsh
         env:
           CERTUM_KEY_ID: ${{ secrets.CERTUM_KEY_ID }}
           EXPECTED_SUBJECT: ${{ vars.STUDIO_SIGNING_SUBJECT }}
         run: |
+          $ErrorActionPreference = 'Stop'
           ./scripts/verify-windows-authenticode.ps1 `
-            -PayloadDirectory payload `
+            -PayloadDirectory signing/app `
+            -DigestPath "$env:RUNNER_TEMP/payload-digest" `
             -ExpectedThumbprint $env:CERTUM_KEY_ID `
             -ExpectedSubject $env:EXPECTED_SUBJECT
+          "digest=$(Get-Content -Raw "$env:RUNNER_TEMP/payload-digest")" >> $env:GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: signed-studio-windows-payload
-          path: payload/*.exe
+          path: signing/app
           if-no-files-found: error
           retention-days: 1
 
   # No environment and no secrets: electron-builder and its dependencies run
   # here, on a runner that never held a signing session.
   windows-package:
-    name: package Windows from the signed executables
+    name: package Windows from the signed tree
     needs: [resolve, windows-sign-payload]
     runs-on: windows-latest
     timeout-minutes: 30
@@ -521,26 +533,15 @@ jobs:
         shell: bash
         run: pnpm install --frozen-lockfile
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: unsigned-studio-windows-bundle
-          path: dist/win-unpacked
-
+      # The signed payload is the whole bundle, so it is packaged as it came.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: signed-studio-windows-payload
-          path: payload
+          path: dist/win-unpacked
 
-      - name: Put the signed executables in the bundle
-        shell: bash
-        run: |
-          cp "payload/Reasonix Studio.exe" "dist/win-unpacked/Reasonix Studio.exe"
-          cp payload/reasonix-studio-host.exe dist/win-unpacked/resources/bin/reasonix-studio-host.exe
-          cp payload/reasonix-computer-helper.exe dist/win-unpacked/resources/bin/reasonix-computer-helper.exe
-
-      # Both packages come from the bundle that now holds the signed executables,
-      # so the archive carries them too rather than a second unsigned copy. The
-      # zip is packed from its own copy for the reason the build job gives.
+      # Both packages come from the signed tree, so the archive carries the
+      # signed files too rather than a second unsigned copy. The zip is packed
+      # from its own copy for the reason the build job gives.
       - name: Package Windows from the signed bundle
         working-directory: desktop/electron
         shell: bash
@@ -565,9 +566,53 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Unpacks what windows-package built and compares it with the signed payload.
+  # Archive parsing happens here, on a runner with no environment and no
+  # secrets, never in a job that holds the Certum credentials. Its outputs are
+  # the hashes of the two files it checked, which the signing job requires.
+  windows-verify-package:
+    name: check the Windows packages against the signed tree
+    needs: [resolve, windows-sign-payload, windows-package]
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      installer-sha256: ${{ steps.check.outputs.installer-sha256 }}
+      archive-sha256: ${{ steps.check.outputs.archive-sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-studio-windows-payload
+          path: payload
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: packaged-studio-windows
+          path: dist
+
+      # 7-Zip is the runner image's, not the tag's.
+      - name: Compare both packages with the signed payload
+        id: check
+        shell: pwsh
+        env:
+          PAYLOAD_DIGEST: ${{ needs.windows-sign-payload.outputs.payload-digest }}
+        run: |
+          ./scripts/verify-windows-package.ps1 `
+            -PayloadDirectory payload `
+            -ExpectedPayloadDigest $env:PAYLOAD_DIGEST `
+            -InstallerPath "dist/ReasonixStudio-windows-amd64-installer.exe" `
+            -PortableArchivePath "dist/ReasonixStudio-windows-amd64.zip" `
+            -OutputPath $env:GITHUB_OUTPUT
+
   windows-sign-installer:
     name: sign the Windows installer (Certum)
-    needs: [resolve, windows-sign-payload, windows-package]
+    needs: [resolve, windows-package, windows-verify-package]
     runs-on: windows-2022
     timeout-minutes: 30
     environment: studio-release
@@ -619,10 +664,27 @@ jobs:
           name: packaged-studio-windows
           path: dist
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: signed-studio-windows-payload
-          path: payload
+      # Only the two files windows-verify-package checked, byte for byte. This
+      # job opens no archive: what is inside was settled on a runner without
+      # the credentials, so Certum never signs an installer that did not match.
+      - name: Require the checked packages
+        shell: pwsh
+        env:
+          INSTALLER_SHA256: ${{ needs.windows-verify-package.outputs.installer-sha256 }}
+          ARCHIVE_SHA256: ${{ needs.windows-verify-package.outputs.archive-sha256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = [ordered]@{
+            'ReasonixStudio-windows-amd64-installer.exe' = $env:INSTALLER_SHA256
+            'ReasonixStudio-windows-amd64.zip'           = $env:ARCHIVE_SHA256
+          }
+          $present = @(Get-ChildItem -LiteralPath dist -Recurse -Force | ForEach-Object { $_.Name })
+          if (Compare-Object -CaseSensitive @($expected.Keys) $present) { throw "dist holds $($present -join ', ')" }
+          foreach ($entry in $expected.GetEnumerator()) {
+            if ($entry.Value -notmatch '^[0-9a-f]{64}$') { throw "No checked hash for $($entry.Key)" }
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path dist $entry.Key)).Hash.ToLowerInvariant()
+            if ($hash -cne $entry.Value) { throw "$($entry.Key) is not the file windows-verify-package checked" }
+          }
 
       - name: Connect to Certum
         uses: ./.github/actions/setup-certum
@@ -644,18 +706,14 @@ jobs:
         shell: pwsh
         run: Get-Process -Name '*SimplySign*' -ErrorAction SilentlyContinue | Stop-Process -Force
 
-      # Read back off the bytes that will ship: the payload, the installer, and
-      # the executables inside the portable archive.
-      - name: Verify the Windows Authenticode chain
+      - name: Verify the installer signature
         shell: pwsh
         env:
           CERTUM_KEY_ID: ${{ secrets.CERTUM_KEY_ID }}
           EXPECTED_SUBJECT: ${{ vars.STUDIO_SIGNING_SUBJECT }}
         run: |
           ./scripts/verify-windows-authenticode.ps1 `
-            -PayloadDirectory payload `
-            -InstallerPath "dist/ReasonixStudio-windows-amd64-installer.exe" `
-            -PortableArchivePath "dist/ReasonixStudio-windows-amd64.zip" `
+            -FilePath "dist/ReasonixStudio-windows-amd64-installer.exe" `
             -ExpectedThumbprint $env:CERTUM_KEY_ID `
             -ExpectedSubject $env:EXPECTED_SUBJECT
 
@@ -732,15 +790,17 @@ jobs:
 
   publish:
     name: sign, publish and mirror
-    needs: [resolve, build, cli, windows-sign-payload, windows-package, windows-sign-installer]
+    needs: [resolve, build, cli, windows-sign-payload, windows-package, windows-verify-package, windows-sign-installer]
     # The Windows signing jobs may be skipped only while the switch is off; with
     # it on, any of them failing, cancelled or absent blocks the release.
     if: >-
       ${{ !cancelled() && needs.resolve.result == 'success' && needs.build.result == 'success' &&
       needs.cli.result == 'success' && ((needs.windows-sign-payload.result == 'success' &&
-      needs.windows-package.result == 'success' && needs.windows-sign-installer.result == 'success') ||
+      needs.windows-package.result == 'success' && needs.windows-verify-package.result == 'success' &&
+      needs.windows-sign-installer.result == 'success') ||
       (vars.STUDIO_SIGNING_ENABLED != 'true' && needs.windows-sign-payload.result == 'skipped' &&
-      needs.windows-package.result == 'skipped' && needs.windows-sign-installer.result == 'skipped')) }}
+      needs.windows-package.result == 'skipped' && needs.windows-verify-package.result == 'skipped' &&
+      needs.windows-sign-installer.result == 'skipped')) }}
     runs-on: ubuntu-latest
     # Owner approval for the whole line. The gate sits here rather than before
     # build so the approval is given with the artifacts already proven to build.
