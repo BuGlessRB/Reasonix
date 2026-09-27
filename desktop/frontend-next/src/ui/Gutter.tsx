@@ -22,7 +22,8 @@ export const SIDE: Span = { min: 244, max: 540, def: 316, key: "rx-side-w", css:
 // in it is a page someone is reading, not a list of names.
 export const DOCK: Span = { min: 320, max: 1600, def: 560, key: "rx-dock-w", css: "--dock-open", col: "--dock-w" };
 
-export const dockMax = (room: number) => Math.min(DOCK.max, Math.max(880, room / 2));
+const STANDARD_DOCK_MAX = 880;
+export const dockMax = (room: number) => Math.min(DOCK.max, Math.max(STANDARD_DOCK_MAX, room / 2));
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 

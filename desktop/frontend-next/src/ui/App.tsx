@@ -10,7 +10,7 @@ import { useLinkRouting } from "./links";
 import { Pane, type PaneReport } from "./Pane";
 import { DOCK, Gutter, RAIL, dockMax, keepWidth, widthOf } from "./Gutter";
 import { listenAction } from "./listen";
-import { folded as roomGaveUp } from "./viewport";
+import { folded as roomGaveUp, onRoomWidth } from "./viewport";
 import { useFoldAway } from "./foldaway";
 import { useDrawerCloses } from "./drawer";
 import { RemoteAsk } from "./RemoteAsk";
@@ -96,7 +96,7 @@ export function App({ hub }: { hub: HubPort }) {
   const [pinnedSessions, setPinnedSessions] = useState<Set<string>>(savedPins);
   const [railW, setRailW] = useState(() => widthOf(RAIL));
   const [dockW, setDockW] = useState(() => widthOf(DOCK));
-  const [roomW, setRoomW] = useState(() => document.body.clientWidth);
+  const [dockLimit, setDockLimit] = useState(() => dockMax(document.body.clientWidth));
   const [report, setReport] = useState<PaneReport>(NO_REPORT);
   const [findPulse, setFindPulse] = useState(0);
   const [error, setError] = useState("");
@@ -386,12 +386,7 @@ export function App({ hub }: { hub: HubPort }) {
 
   useFoldAway("rail", setRail);
   useDrawerCloses(setRail, active, settings);
-  useEffect(() => {
-    const observer = new ResizeObserver(() => setRoomW(document.body.clientWidth));
-    observer.observe(document.body);
-    return () => observer.disconnect();
-  }, []);
-  const dockLimit = dockMax(roomW);
+  useEffect(() => onRoomWidth((width) => setDockLimit(dockMax(width))), []);
   const shownDockW = Math.min(dockW, dockLimit);
 
   const onRailW = useCallback((w: number) => { setRailW(w); keepWidth(RAIL, w); }, []);
