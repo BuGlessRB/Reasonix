@@ -145,6 +145,11 @@ type EvidenceBundleAudit struct {
 	// turn and this one, when UnobservedCompared says that was established.
 	UnobservedCompared bool
 	UnobservedChanges  int
+	// Outcome is the host-evidence outcome; DivergenceClass and its reason
+	// codes say how it differs from the completion report's verdict.
+	Outcome           string
+	DivergenceClass   string
+	DivergenceReasons []string
 }
 
 // EvidenceBundleAuditSink is an optional sink capability; implementations must

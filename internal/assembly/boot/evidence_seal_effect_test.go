@@ -179,3 +179,88 @@ model = "x"
 		t.Fatalf("bundle = %s, want a blocked turn's write_file receipt carrying only its argument digest", payload)
 	}
 }
+
+// scriptedProvider issues one tool call per round from calls, then replies.
+type scriptedProvider struct {
+	mu    sync.Mutex
+	round int
+	calls []provider.ToolCall
+}
+
+func (p *scriptedProvider) Name() string { return "boot-scripted" }
+
+func (p *scriptedProvider) Stream(context.Context, provider.Request) (<-chan provider.Chunk, error) {
+	p.mu.Lock()
+	i := p.round
+	p.round++
+	p.mu.Unlock()
+	ch := make(chan provider.Chunk, 2)
+	if i < len(p.calls) {
+		call := p.calls[i]
+		ch <- provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &call}
+	} else {
+		ch <- provider.Chunk{Type: provider.ChunkText, Text: "done"}
+	}
+	ch <- provider.Chunk{Type: provider.ChunkDone}
+	close(ch)
+	return ch, nil
+}
+
+// A todo the model marks completed is the report's criterion satisfied by a
+// claim. The host-evidence outcome refuses it, and the divergence names why.
+func TestEffectClaimOnlyCompletionDivergesThroughRealBuild(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+	provider.Register("boot-claim-only", func(provider.Config) (provider.Provider, error) {
+		return &scriptedProvider{calls: []provider.ToolCall{{
+			ID: "t1", Name: "todo_write", Arguments: `{"todos":[{"content":"ship the feature","status":"completed"}]}`,
+		}}}, nil
+	})
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+
+[[providers]]
+name = "test-model"
+kind = "boot-claim-only"
+model = "x"
+`)
+	sink := &bundleAuditSink{}
+	ctrl, err := Build(context.Background(), Options{Sink: sink, HeadlessApprovalMode: control.ToolApprovalAuto})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+	if err := ctrl.Run(context.Background(), "ship the feature"); err != nil {
+		t.Fatalf("the existing path let the claim finish the turn, so Run must succeed: %v", err)
+	}
+	audits := sink.audits()
+	if len(audits) != 1 {
+		t.Fatalf("got %d bundle audits, want 1", len(audits))
+	}
+	a := audits[0]
+	if a.Outcome != "incomplete" || a.DivergenceClass != "new_stricter" || !slices.Contains(a.DivergenceReasons, "claim_only") {
+		t.Fatalf("audit = %+v, want an incomplete outcome diverging for claim_only", a)
+	}
+
+	store := trustedstate.Open(filepath.Join(config.MemoryUserDir(), builtin.TrustedStateDir), nil)
+	rec, err := store.Record(trustedstate.Digest(a.Record))
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := store.Object(rec.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle struct {
+		Divergence struct {
+			Old string `json:"old"`
+		} `json:"divergence"`
+	}
+	if err := json.Unmarshal(payload, &bundle); err != nil || bundle.Divergence.Old != "done" {
+		t.Fatalf("sealed divergence = %s (%v), want the report's own verdict done", payload, err)
+	}
+}

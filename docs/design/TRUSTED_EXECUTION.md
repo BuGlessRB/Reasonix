@@ -521,7 +521,7 @@ Honesty metrics carry about ±10pp noise at one sample per task. A stage exit MU
 | Target | Today | Gap |
 | --- | --- | --- |
 | Canonical contract | `internal/runtime/taskcontract` is rebuilt from receipts each turn (`agent/contract_shadow.go`); no id, revision, digest or persistence | P2 |
-| I2 claim inertness | a todo marked `completed` resolves its requirement `Satisfied` with no evidence (`buildShadowContract`) | P2 removes the edge |
+| I2 claim inertness | a todo marked `completed` resolves its requirement `Satisfied` with no evidence (`buildShadowContract`); the shadow bundle's `verdict.Evaluate` takes no claim input and records such a turn as `new_stricter` / `claim_only` | P2 removes the edge from the gate |
 | I2 claim inertness | `complete_step` checks that the cited command ran; the criterion binding is the model's | P2 moves binding into the frozen verifier |
 | Atomic tasks | `taskcontract.Atomic` treats any mutation as proof of the ask | acceptable at L1 only |
 | Durable evidence | the root agent seals each turn's contract, report and receipts (arguments by digest) as a `shadow_bundle/1` record in THS; receipts carry no blob digests and no snapshot yet | P1: snapshot, verdicts, divergence |

@@ -125,6 +125,12 @@ type trajectorySummary struct {
 	ClaimsVerified     int      `json:"claims_verified,omitempty"`
 	ClaimsUnbacked     int      `json:"claims_unbacked,omitempty"`
 
+	// Evidence bundle (last of the run): the host-evidence outcome and how it
+	// diverged from the completion report's verdict.
+	BundleOutcome     string   `json:"bundle_outcome,omitempty"`
+	DivergenceClass   string   `json:"divergence_class,omitempty"`
+	DivergenceReasons []string `json:"divergence_reasons,omitempty"`
+
 	// Outcome shadow: the runtime outcome scorer's per-round series condensed,
 	// or a verification-receipt backfill for recordings that predate it.
 	Outcome *outcomeSummary `json:"outcome,omitempty"`
@@ -169,6 +175,11 @@ type trajectoryRecord struct {
 		ClaimsVerified int      `json:"claims_verified"`
 		ClaimsUnbacked int      `json:"claims_unbacked"`
 	} `json:"completion_report"`
+	EvidenceBundle *struct {
+		Outcome           string   `json:"outcome"`
+		DivergenceClass   string   `json:"divergence_class"`
+		DivergenceReasons []string `json:"divergence_reasons"`
+	} `json:"evidence_bundle"`
 	OutcomeProgress *struct {
 		Exploration    int `json:"exploration"`
 		Verification   int `json:"verification"`
@@ -341,6 +352,11 @@ func (t *trajScan) record(rec trajectoryRecord) {
 		t.s.CompletionGapKinds = cr.GapKinds
 		t.s.ClaimsVerified = cr.ClaimsVerified
 		t.s.ClaimsUnbacked = cr.ClaimsUnbacked
+	}
+	if eb := rec.EvidenceBundle; eb != nil && eb.Outcome != "" {
+		t.s.BundleOutcome = eb.Outcome
+		t.s.DivergenceClass = eb.DivergenceClass
+		t.s.DivergenceReasons = eb.DivergenceReasons
 	}
 	if op := rec.OutcomeProgress; op != nil {
 		t.outcomePoints = append(t.outcomePoints, outcomePoint{

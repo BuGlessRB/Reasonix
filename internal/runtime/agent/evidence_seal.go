@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/runtime/completion"
 	"reasonix/internal/runtime/taskcontract"
+	"reasonix/internal/runtime/verdict"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/observation"
 	"reasonix/internal/state/trustedstate"
@@ -42,6 +43,8 @@ type shadowBundle struct {
 	Receipts    []sealedReceipt            `json:"receipts"`
 	Blocked     bool                       `json:"blocked,omitempty"`
 	Criteria    []taskcontract.Requirement `json:"criteria,omitempty"`
+	Verdict     verdict.Result             `json:"verdict"`
+	Divergence  verdict.Divergence         `json:"divergence"`
 	workspaceObservation
 }
 
@@ -86,6 +89,13 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 		return
 	}
 	obs := a.observeWorkspace(seal)
+	res := verdict.Evaluate(verdict.Input{
+		Contract:        c,
+		Receipts:        receipts,
+		HostObligations: a.task.ledger.Obligations(a.checkContract()),
+		Blocked:         c.Blocked(),
+	})
+	div := verdict.Classify(rep.Verdict, c, res)
 	payload, err := json.Marshal(shadowBundle{
 		Kind:        shadowBundleKind,
 		InputDigest: sha256Hex([]byte(input)),
@@ -94,6 +104,8 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 		Receipts:    sealReceipts(receipts),
 		Blocked:     blocked,
 		Criteria:    c.Requirements,
+		Verdict:     res,
+		Divergence:  div,
 
 		workspaceObservation: obs,
 	})
@@ -102,6 +114,9 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 		SnapshotComplete:   obs.After != nil && obs.After.Complete,
 		UnobservedCompared: obs.Unobserved.Compared,
 		UnobservedChanges:  obs.Unobserved.Changed,
+		Outcome:            string(res.Outcome),
+		DivergenceClass:    div.Class,
+		DivergenceReasons:  div.Reasons,
 	}
 	if err != nil {
 		audit.FailureCode = "trusted_state.encode"
