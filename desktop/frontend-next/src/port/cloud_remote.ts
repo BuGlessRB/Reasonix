@@ -236,24 +236,22 @@ class RemoteEventSource {
   }
 }
 
-async function device(deviceId: string, nativeFetch: typeof fetch): Promise<RemoteDevice> {
-  const response = await nativeFetch(`${ACCOUNT}/me/devices`, { credentials: "include" });
-  if (!response.ok) throw new Error(t("请先登录 Reasonix，再打开 Web Studio。"));
-  const body = await response.json() as { devices?: RemoteDevice[] };
-  const found = body.devices?.find((item) => item.id === deviceId && !item.revokedAt);
-  if (!found || !found.capabilities.includes("desktop")) throw new Error(t("请先更新这台电脑上的 Studio，再连接。"));
-  return found;
-}
-
 async function connect(deviceId: string, nativeFetch: typeof fetch) {
-  const target = await device(deviceId, nativeFetch);
-  const issued = await nativeFetch(`${ACCOUNT}/me/remote-grants`, {
+  const bootstrap = (globalThis as typeof globalThis & {
+    __rxRemoteBootstrap?: Promise<Response> | null;
+  }).__rxRemoteBootstrap;
+  if (!bootstrap) performance.mark("reasonix:remote:start");
+  const issued = await (bootstrap ?? nativeFetch(`${ACCOUNT}/me/remote-grants`, {
     method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ targetDeviceId: target.id, scopes: ["desktop"] }),
-  });
+    body: JSON.stringify({ targetDeviceId: deviceId, scopes: ["desktop"] }),
+  }));
   if (!issued.ok) throw new Error(t("无法授权 Web Studio，请重新登录后再试。"));
-  const grant = await issued.json() as { grant: { ticket: string } };
-  const socket = new WebSocket(`${RELAY}/v1/sessions/connect`, ["reasonix.remote.v1", `reasonix.auth.${grant.grant.ticket}`]);
+  const { grant, device: target } = await issued.json() as { grant: { ticket: string }; device?: RemoteDevice };
+  if (!target || target.id !== deviceId || target.revokedAt || !target.capabilities.includes("desktop")) {
+    throw new Error(t("请先更新这台电脑上的 Studio，再连接。"));
+  }
+  performance.mark("reasonix:remote:authorized");
+  const socket = new WebSocket(`${RELAY}/v1/sessions/connect`, ["reasonix.remote.v1", `reasonix.auth.${grant.ticket}`]);
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(t("连接远程 Studio 超时，请检查电脑是否在线。"))), 10_000);
     socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
@@ -263,6 +261,10 @@ async function connect(deviceId: string, nativeFetch: typeof fetch) {
   const channel = await encryptedChannel(target, socket);
   const ready = await channel.open(await readyWire);
   if (ready.type !== "ready" || ready.deviceId !== target.id) throw new Error(t("远程 Studio 身份校验失败，请停止连接并检查设备。"));
+  performance.mark("reasonix:remote:ready");
+  performance.measure("reasonix:remote:authorize", "reasonix:remote:start", "reasonix:remote:authorized");
+  performance.measure("reasonix:remote:handshake", "reasonix:remote:authorized", "reasonix:remote:ready");
+  performance.measure("reasonix:remote:connect", "reasonix:remote:start", "reasonix:remote:ready");
   return new RemoteTransport(socket, channel);
 }
 
