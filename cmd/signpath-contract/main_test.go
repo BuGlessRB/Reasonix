@@ -71,7 +71,7 @@ jobs:
 }
 
 func TestWorkflowUsingCertumCredentialsIsSigningEntryPoint(t *testing.T) {
-	for _, secret := range []string{"CERTUM_OTP_URI", "STUDIO_CERTUM_OTP_URI"} {
+	for _, secret := range []string{"CERTUM_OTP_URI"} {
 		info, err := parseWorkflow([]byte(`
 on: workflow_dispatch
 jobs:
