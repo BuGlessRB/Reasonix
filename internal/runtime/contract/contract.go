@@ -10,15 +10,19 @@ import (
 
 // Verifier kinds.
 const (
-	VerifierCommand = "command"
-	VerifierTest    = "test"
+	VerifierCommand  = "command"
+	VerifierTest     = "test"
+	VerifierCommands = "commands"
+	VerifierNone     = "none"
 )
 
 // Verifier is what satisfies a criterion: a verification command recognised
-// by its canonical identity, or a captured test criterion by its identity.
+// by its canonical identity, a captured test criterion by its identity, every
+// command of a plan step by theirs, or nothing the host can run.
 type Verifier struct {
-	Kind     string `json:"kind"`
-	Identity string `json:"identity"`
+	Kind       string   `json:"kind"`
+	Identity   string   `json:"identity,omitempty"`
+	Identities []string `json:"identities,omitempty"`
 }
 
 // Criterion is one accepted acceptance criterion.
@@ -45,12 +49,24 @@ type Sources struct {
 	Checks []string
 	// Tests are captured test criterion identities.
 	Tests []string
+	// Plan are the approved plan's acceptance criteria, each verified by the
+	// verification commands of the step it belongs to.
+	Plan []PlanCriterion
+}
+
+// PlanCriterion is one plan acceptance criterion and the canonical identities
+// of its step's verification commands; none means the host cannot check it.
+type PlanCriterion struct {
+	ID       string
+	Required bool
+	Commands []string
 }
 
 // Sources a criterion came from.
 const (
 	SourceProjectCheck = "project_check"
 	SourceBaselineTest = "baseline_test"
+	SourcePlan         = "plan"
 )
 
 // PolicyTemplate names the host policy that accepts a derived revision.
@@ -74,6 +90,17 @@ func Derive(s Sources) []Criterion {
 	}
 	add(SourceProjectCheck, VerifierCommand, s.Checks)
 	add(SourceBaselineTest, VerifierTest, s.Tests)
+	for _, p := range s.Plan {
+		id := strings.TrimSpace(p.ID)
+		if id == "" || slices.ContainsFunc(out, func(x Criterion) bool { return x.ID == "plan@"+id }) {
+			continue
+		}
+		v := Verifier{Kind: VerifierNone}
+		if ids := canonicalIDs(p.Commands); len(ids) > 0 {
+			v = Verifier{Kind: VerifierCommands, Identities: ids}
+		}
+		out = append(out, Criterion{ID: "plan@" + id, Source: SourcePlan, Required: p.Required, Verifier: v})
+	}
 	slices.SortFunc(out, func(a, b Criterion) int { return strings.Compare(a.ID, b.ID) })
 	return out
 }
@@ -101,7 +128,7 @@ func Accept(current *Contract, parentDigest string, derived []Criterion, id stri
 		return Contract{ID: id, Revision: 1, Criteria: derived, AcceptedBy: PolicyTemplate}, Accepted
 	}
 	for _, c := range current.Criteria {
-		if !slices.Contains(derived, c) {
+		if !slices.ContainsFunc(derived, func(d Criterion) bool { return d.Equal(c) }) {
 			return *current, RelaxationRefused
 		}
 	}
@@ -125,3 +152,21 @@ func (c Contract) Encode() []byte {
 
 // Digest identifies a revision's exact content.
 func (c Contract) Digest() string { return string(trustedstate.DigestOf(c.Encode())) }
+
+func canonicalIDs(in []string) []string {
+	var out []string
+	for _, id := range in {
+		if id = strings.TrimSpace(id); id != "" && !slices.Contains(out, id) {
+			out = append(out, id)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// Equal reports whether two criteria demand the same thing of the same verifier.
+func (c Criterion) Equal(o Criterion) bool {
+	return c.ID == o.ID && c.Source == o.Source && c.Required == o.Required &&
+		c.Verifier.Kind == o.Verifier.Kind && c.Verifier.Identity == o.Verifier.Identity &&
+		slices.Equal(c.Verifier.Identities, o.Verifier.Identities)
+}

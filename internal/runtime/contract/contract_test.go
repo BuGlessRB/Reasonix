@@ -12,7 +12,7 @@ import (
 func TestDeriveIsCanonical(t *testing.T) {
 	a := Derive(Sources{Checks: []string{"go test ./...", "  ", "go vet ./..."}, Tests: []string{"baseline_test@x@1"}})
 	b := Derive(Sources{Checks: []string{"go vet ./...", "go test ./...", "go test ./..."}, Tests: []string{"baseline_test@x@1"}})
-	if !slices.Equal(a, b) || len(a) != 3 {
+	if !slices.EqualFunc(a, b, Criterion.Equal) || len(a) != 3 {
 		t.Fatalf("derivations differ or kept blanks/duplicates:\n%v\n%v", a, b)
 	}
 	if (Contract{Criteria: a}).Digest() != (Contract{Criteria: b}).Digest() {
@@ -69,5 +69,24 @@ func TestLoadRefusesARecordOfAnotherKind(t *testing.T) {
 	}
 	if _, err := Load(store, "sha256:"+string(make([]byte, 0))); err == nil {
 		t.Fatal("a malformed record name loaded")
+	}
+}
+
+func TestPlanCriteriaCarryTheirStepsCommands(t *testing.T) {
+	got := Derive(Sources{Plan: []PlanCriterion{
+		{ID: "c1", Required: true, Commands: []string{"go vet ./...", "go test ./...", "go test ./..."}},
+		{ID: "c2", Required: false},
+	}})
+	want := []Criterion{
+		{ID: "plan@c1", Source: SourcePlan, Required: true, Verifier: Verifier{Kind: VerifierCommands, Identities: []string{"go test ./...", "go vet ./..."}}},
+		{ID: "plan@c2", Source: SourcePlan, Verifier: Verifier{Kind: VerifierNone}},
+	}
+	if !slices.EqualFunc(got, want, Criterion.Equal) {
+		t.Fatalf("Derive = %+v, want %+v", got, want)
+	}
+	first, _ := Accept(nil, "", got, "t")
+	changed := Derive(Sources{Plan: []PlanCriterion{{ID: "c1", Required: true, Commands: []string{"go test ./..."}}, {ID: "c2"}}})
+	if _, dec := Accept(&first, "r", changed, "t"); dec != RelaxationRefused {
+		t.Fatalf("dropping a verifier command was %s, want refused", dec)
 	}
 }

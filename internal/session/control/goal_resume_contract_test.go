@@ -69,7 +69,7 @@ func TestGoalResumeKeepsTheAcceptedContractRevision(t *testing.T) {
 		ID: "command@" + evidence.VerificationIdentity(checkA), Source: contract.SourceProjectCheck, Required: true,
 		Verifier: contract.Verifier{Kind: contract.VerifierCommand, Identity: evidence.VerificationIdentity(checkA)},
 	}
-	if c.Revision != 1 || !slices.Equal(c.Criteria, []contract.Criterion{want}) {
+	if c.Revision != 1 || !slices.EqualFunc(c.Criteria, []contract.Criterion{want}, contract.Criterion.Equal) {
 		t.Fatalf("revision = %+v, want revision 1 holding only the check the goal began under", c)
 	}
 }

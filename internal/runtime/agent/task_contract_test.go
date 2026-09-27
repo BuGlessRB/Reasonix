@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/runtime/contract"
+	"reasonix/internal/runtime/plancontract"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/instruction"
 	"reasonix/internal/state/sessionstore"
@@ -46,10 +47,11 @@ func contractAgent(t *testing.T, prov *scriptedProvider, declared string, store 
 	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	reg.Add(fakeTool{name: "bash", readOnly: false})
 	sink := &contractAuditSink{}
-	a := New(prov, reg, sessionstore.NewSession(""), Options{
-		ProjectChecks: []instruction.VerifyCheck{{Command: declared, SourcePath: "REASONIX.md", Line: 3}},
-		EvidenceSeal:  &EvidenceSeal{Store: store, Stream: "ws"},
-	}, sink)
+	opts := Options{EvidenceSeal: &EvidenceSeal{Store: store, Stream: "ws"}}
+	if declared != "" {
+		opts.ProjectChecks = []instruction.VerifyCheck{{Command: declared, SourcePath: "REASONIX.md", Line: 3}}
+	}
+	a := New(prov, reg, sessionstore.NewSession(""), opts, sink)
 	return a, sink
 }
 
@@ -74,7 +76,7 @@ func TestContractOwesTheCheckTheTaskBeganUnder(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := contract.Derive(contract.Sources{Checks: []string{evidence.VerificationIdentity(began)}})
-	if !slices.Equal(c.Criteria, want) {
+	if !slices.EqualFunc(c.Criteria, want, contract.Criterion.Equal) {
 		t.Fatalf("criteria = %+v, want %+v", c.Criteria, want)
 	}
 }
@@ -158,4 +160,75 @@ func TestContractLoadFailureIsNotReplaced(t *testing.T) {
 	if got.ContractFailure == "" || got.ContractRevision != 0 {
 		t.Fatalf("audit = %+v, want a failure and no revision accepted in its place", got)
 	}
+}
+
+func verifiedPlan() plancontract.Plan {
+	return plancontract.Plan{
+		Objective: "fix the parser",
+		Steps: []plancontract.Step{
+			{
+				ID: "p1", Title: "fix it",
+				Acceptance: []plancontract.Criterion{
+					{Text: "quoted fields parse"},
+					{Text: "timing is logged", Optional: true},
+				},
+				Verification: []plancontract.Verification{{Command: "go test ./parser/"}},
+			},
+			{ID: "p2", Title: "document it", Acceptance: []plancontract.Criterion{{Text: "the README says so"}}},
+		},
+	}.Normalize()
+}
+
+// An approved plan's criterion is verified by the commands its step names:
+// they came with the plan the user approved, so the host runs them against the
+// ledger instead of taking a citation on the model's word.
+func TestPlanCriterionIsVerifiedByItsStepsCommands(t *testing.T) {
+	plan := verifiedPlan()
+	quoted, readme := plan.Steps[0].Acceptance[0].ID, plan.Steps[1].Acceptance[0].ID
+	for _, tc := range []struct {
+		ran  string
+		want string
+	}{{"go test ./parser/", "satisfied"}, {"go vet ./...", "owed"}} {
+		store := trustedstate.Open(t.TempDir(), nil)
+		a, sink := contractAgent(t, writeThenRun(tc.ran), "", store)
+		a.SetPlanContract(&plan)
+		_ = a.Run(deliveryGoalContext("goal-1", "fix"), "fix")
+		record := sink.last(t).Record
+		if v := sealedVerdict(t, store, record, "contract@plan@"+quoted); v != tc.want {
+			t.Fatalf("after %q the plan criterion is %q, want %q", tc.ran, v, tc.want)
+		}
+		if v := sealedVerdict(t, store, record, "contract@plan@"+readme); v != "unverifiable" {
+			t.Fatalf("a criterion whose step names no command is %q, want unverifiable", v)
+		}
+		if hasObligation(t, store, record, "criterion@"+quoted) {
+			t.Fatal("the plan criterion is counted twice: once frozen, once from the replayed contract")
+		}
+	}
+}
+
+func hasObligation(t *testing.T, store *trustedstate.Store, record, id string) bool {
+	t.Helper()
+	rec, err := store.Record(trustedstate.Digest(record))
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := store.Object(rec.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b struct {
+		Verdict struct {
+			Obligations []struct {
+				ID string `json:"id"`
+			} `json:"obligations"`
+		} `json:"verdict"`
+	}
+	if err := json.Unmarshal(payload, &b); err != nil {
+		t.Fatal(err)
+	}
+	return slices.ContainsFunc(b.Verdict.Obligations, func(o struct {
+		ID string `json:"id"`
+	}) bool {
+		return o.ID == id
+	})
 }
