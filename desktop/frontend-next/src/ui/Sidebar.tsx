@@ -18,6 +18,7 @@ interface Props {
   // other half of that — a column nobody can see must not be reachable by Tab.
   collapsed: boolean;
   tree: TreeWorkspace[];
+  treeRead: boolean;
   runtimes: RuntimeView[];
   runs: Record<string, { run: string; live: boolean }>;
   active: string;
@@ -59,6 +60,7 @@ export function Sidebar({
   hub,
   collapsed,
   tree,
+  treeRead,
   runtimes,
   runs,
   active,
@@ -202,6 +204,7 @@ export function Sidebar({
       <Workspaces
         hub={hub}
         tree={tree}
+        treeRead={treeRead}
         runtimes={runtimes}
         active={active}
         folded={folded}

@@ -25,6 +25,7 @@ function draw(onOpen = vi.fn(async (_: { root?: string; sessionPath?: string }) 
     <Workspaces
       hub={{} as never}
       tree={tree}
+      treeRead
       runtimes={[]}
       active=""
       folded={new Set()}

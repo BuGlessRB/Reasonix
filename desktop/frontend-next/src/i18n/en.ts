@@ -272,6 +272,7 @@ export const EN: Record<string, string> = {
   "打开或新建项目…": "Open or start a project…",
   "文件夹的完整路径": "Full path to the folder",
   "尚无文件夹": "No folders yet",
+  "正在读取文件夹…": "Reading folders…",
   "打开项目…": "Open a project…",
   "先打开一个项目": "Open a project first",
   "读取代码、运行测试与修改文件均只在你选定的文件夹内进行。": "Reading code, running tests and editing files all happen inside the folder you choose.",

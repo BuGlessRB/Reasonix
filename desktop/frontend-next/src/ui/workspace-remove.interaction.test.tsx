@@ -17,6 +17,7 @@ function draw() {
     <Workspaces
       hub={{ removeWorkspace } as never}
       tree={workspaces}
+      treeRead
       runtimes={[]}
       active=""
       folded={new Set()}
