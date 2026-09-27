@@ -22,6 +22,8 @@ type agentConfig struct {
 	classifierTaskText string
 	// writeWorkspaceRoot scopes write reservations when writeScheduler is set.
 	writeWorkspaceRoot string
+	// observeRoot is the workspace an unclassified call's effect is observed in.
+	observeRoot string
 	// renderRoot opens written pages for a look; empty owes no look.
 	renderRoot string
 	// workspaceVCS rides the turn block; in the prefix it would diverge it.

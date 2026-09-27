@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/state/checkpoint"
 	"runtime"
 	"slices"
 	"testing"
@@ -228,7 +229,7 @@ func TestUnprovenCallSettlesAgainstTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &Agent{}
-	a.writeWorkspaceRoot = root
+	a.observeRoot = root
 
 	unproven := func() evidence.Receipt {
 		return evidence.Receipt{
@@ -319,7 +320,7 @@ func TestTheVCSStoreIsNotTheWorkspace(t *testing.T) {
 // is about to write to still looks untouched. It must never settle.
 func TestABackgroundJobNeverSettles(t *testing.T) {
 	a := &Agent{}
-	a.writeWorkspaceRoot = testenv.TempDir(t)
+	a.observeRoot = testenv.TempDir(t)
 	plan := &toolCallPlan{
 		evidenceName: "bash",
 		evidenceArgs: []byte(`{"command":"make build","run_in_background":true}`),
@@ -359,5 +360,58 @@ func TestOneFileIsWatchedOnceAcrossSpellings(t *testing.T) {
 	decorateObservedPaths(&rec, &toolCallPlan{pathsBefore: snap})
 	if len(rec.Paths) != 1 {
 		t.Fatalf("Paths = %v, want the one file it changed", rec.Paths)
+	}
+}
+
+// A background writer running beside a call writes into the same tree, so the
+// difference between the two walks is not this call's to claim. Nothing settles
+// while one is registered, and the call's scope stays unknown.
+func TestAnActiveBackgroundWriterSettlesNothing(t *testing.T) {
+	root := testenv.TempDir(t)
+	a := &Agent{}
+	a.observeRoot = root
+	a.svc.mutationObserver = checkpoint.NewMutationObserver(checkpoint.ObserverOptions{})
+	if err := a.svc.mutationObserver.RegisterWriter("sibling", "background_subagent", 0); err != nil {
+		t.Fatal(err)
+	}
+	plan := &toolCallPlan{evidenceName: "bash", evidenceArgs: []byte(`{"command":"make build"}`)}
+	if a.scanBeforeUnprovenCall(t.Context(), plan).complete {
+		t.Fatal("a call took a before-scan while another writer was running")
+	}
+	plan.scanBefore = scanWorkspace(t.Context(), root)
+	if err := os.WriteFile(filepath.Join(root, "sibling.go"), []byte("package x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec := evidence.Receipt{ToolName: "bash", Success: true, Mutation: true, MutationEvidence: evidence.MutationUnknown, Command: "make build"}
+	a.settleUnchangedWorkspace(t.Context(), &rec, plan)
+	if rec.MutationEvidence != evidence.MutationUnknown || len(rec.Paths) != 0 {
+		t.Fatalf("receipt = %+v, want the sibling's write not attributed to this call", rec)
+	}
+	a.svc.mutationObserver.UnregisterWriter("sibling")
+	if !a.scanBeforeUnprovenCall(t.Context(), plan).complete {
+		t.Fatal("with no other writer running the call should scan")
+	}
+}
+
+// A child is built without the parent's write root; the observe root alone is
+// what lets its unclassified calls settle.
+func TestObserveRootAloneLetsAChildSettle(t *testing.T) {
+	root := testenv.TempDir(t)
+	child := New(nil, nil, nil, Options{ObserveRoot: root}, nil)
+	if child.writeWorkspaceRoot != "" || child.observeRoot != root {
+		t.Fatalf("child roots = write %q observe %q, want only the observe root", child.writeWorkspaceRoot, child.observeRoot)
+	}
+	plan := &toolCallPlan{evidenceName: "bash", evidenceArgs: []byte(`{"command":"sed -i s/a/b/ f.txt"}`)}
+	plan.scanBefore = child.scanBeforeUnprovenCall(t.Context(), plan)
+	if err := os.WriteFile(filepath.Join(root, "f.txt"), []byte("b"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec := evidence.Receipt{ToolName: "bash", Success: true, Mutation: true, MutationEvidence: evidence.MutationUnknown, Command: "sed -i s/a/b/ f.txt"}
+	child.settleUnchangedWorkspace(t.Context(), &rec, plan)
+	if rec.MutationEvidence != evidence.MutationProven || !holdsPath(rec.Paths, filepath.Join(root, "f.txt")) {
+		t.Fatalf("receipt = %+v, want the child's own write proven by observation", rec)
+	}
+	if New(nil, nil, nil, Options{WriteWorkspaceRoot: root}, nil).observeRoot != root {
+		t.Fatal("an agent with a write root observes it when no observe root is set")
 	}
 }

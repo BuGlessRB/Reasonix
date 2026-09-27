@@ -363,10 +363,10 @@ func (a *Agent) settleUnchangedWorkspace(ctx context.Context, rec *evidence.Rece
 	// Nothing to compare against is not a reason to walk: a call that took no
 	// before-scan can only reach changed() to be told so, and that walk costs
 	// what one that answers costs.
-	if !plan.scanBefore.complete {
+	if !plan.scanBefore.complete || a.svc.mutationObserver.HasActiveWriters() {
 		return
 	}
-	after := scanWorkspace(ctx, a.writeWorkspaceRoot)
+	after := scanWorkspace(ctx, a.observeRoot)
 	changed, ok := plan.scanBefore.changed(after)
 	if !ok {
 		return
@@ -405,7 +405,12 @@ func (a *Agent) scanBeforeUnprovenCall(ctx context.Context, plan *toolCallPlan) 
 	if a.task.workspaceOverScanLimit() {
 		return workspaceScan{}
 	}
-	scan := scanWorkspace(ctx, a.writeWorkspaceRoot)
+	// While a background writer runs, what changed between the two walks is not
+	// this call's alone, so the walk could only attribute its writes here.
+	if a.svc.mutationObserver.HasActiveWriters() {
+		return workspaceScan{}
+	}
+	scan := scanWorkspace(ctx, a.observeRoot)
 	if scan.overLimit {
 		a.task.noteWorkspaceOverScanLimit()
 	}
