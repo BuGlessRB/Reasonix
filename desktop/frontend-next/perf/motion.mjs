@@ -11,7 +11,8 @@ const check = (name, ok, detail = "") => {
 
 const browser = await chromium.launch();
 
-// What a loop reports is where it is drawn: the run mark reports the turn, a
+// What a loop reports is where it is drawn: the run mark reports the turn, the
+// sidebar's reading row reports the first tree read, a
 // call's state mark (or its folded group's) reports that call. Anything else
 // looping while work runs is decoration.
 const runningLoops = (page) => page.evaluate(() =>
@@ -23,8 +24,8 @@ const runningLoops = (page) => page.evaluate(() =>
     const s = getComputedStyle(el);
     if (s.visibility === "hidden" || s.display === "none" || box.width === 0 || box.height === 0) return [];
     const call = el.closest(".call[data-running] .tool-state, .activity-group[data-running] > summary .activity-status-icon");
-    const owner = el.closest(".rmark") ? "run" : call ? "call" : "";
-    return [{ name: a.animationName, owner, target: el.closest(".rmark, .tool-state, .activity-status-icon") }];
+    const owner = el.closest(".rmark") ? "run" : call ? "call" : el.closest(".ws-reading") ? "reading" : "";
+    return [{ name: a.animationName, owner, target: el.closest(".rmark, .tool-state, .activity-status-icon, .ws-reading") }];
   }).map((l, _, all) => ({
     name: l.name, owner: l.owner,
     shared: all.filter((o) => o.target && o.target === l.target).length,

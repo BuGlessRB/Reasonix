@@ -885,6 +885,10 @@ body { background: var(--page) !important; }
 .activity-group:not([open]) .activity-body .tool-state .studio-icon { animation: none; }
 .pane[data-off] :is(.activity-status-icon, .tool-state .studio-icon) { animation-play-state: paused; }
 @keyframes tool-running { to { transform: rotate(360deg); } }
+.ws-reading { display: flex; align-items: center; gap: 6px; }
+.ws-reading .studio-icon { width: 12px; height: 12px; flex: none; color: var(--net); animation: tool-running 2.4s linear infinite; }
+.ws-reading-t { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .ws-reading .studio-icon { animation: none; } }
 .activity-running { color: var(--net); font: 500 9.5px/1.5 var(--ui); }
 .activity-title { color: var(--text); font: 590 11px/1.5 var(--ui); }
 .activity-errors { color: var(--err-ink); font: 500 9.5px/1.5 var(--ui); }

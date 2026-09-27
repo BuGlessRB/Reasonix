@@ -76,6 +76,9 @@ export function App({ hub }: { hub: HubPort }) {
   const [panesRead, setPanesRead] = useState(false);
   const [active, setActive] = useState("");
   const [tree, setTree] = useState<TreeWorkspace[]>([]);
+  // An empty tree before the first read settles is an unread one, not a
+  // machine with no folders; only the kernel's answer can say the latter.
+  const [treeRead, setTreeRead] = useState(false);
   // Null until asked, and null again where this kernel refuses remote panes —
   // which is what keeps the section out of a browser rather than drawing a
   // heading over a feature that cannot work there.
@@ -150,7 +153,8 @@ export function App({ hub }: { hub: HubPort }) {
       hub
         .tree()
         .then(setTree)
-        .catch(() => setTree([])),
+        .catch(() => setTree([]))
+        .finally(() => setTreeRead(true)),
     [hub],
   );
 
@@ -377,7 +381,7 @@ export function App({ hub }: { hub: HubPort }) {
   // 每个窗口都有一个根 —— 没选过项目时那是它碰巧启动的地方。两者读起来一样，
   // 于是「从哪加项目」这句问题永远问不出口；只有内核说的 remembered 分得开。
   const [claimed, setClaimed] = useState(() => localStorage.getItem("rx-claim") === "off");
-  const needsProject = !claimed && tree.every((ws) => !ws.remembered);
+  const needsProject = treeRead && !claimed && tree.every((ws) => !ws.remembered);
 
   useFoldAway("rail", setRail);
   useDrawerCloses(setRail, active, settings);
@@ -620,6 +624,7 @@ export function App({ hub }: { hub: HubPort }) {
           hub={hub}
           collapsed={!rail}
           tree={tree}
+          treeRead={treeRead}
           runtimes={runtimes}
           runs={runs}
           active={active}
@@ -721,7 +726,7 @@ export function App({ hub }: { hub: HubPort }) {
                 <p className="t">{t("没有打开的会话")}</p>
                 {/* With no folder there is nowhere a session could open, so the
                     one button offered is the step that makes it possible. */}
-                {tree.length === 0 ? (
+                {!treeRead ? null : tree.length === 0 ? (
                   <>
                     <p className="h">{t("会话在文件夹里打开，先添加一个")}</p>
                     <button data-action="workspace.add" disabled={adder.busy} onClick={() => adder.add()}>{t("添加文件夹")}</button>
