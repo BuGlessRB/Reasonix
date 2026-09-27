@@ -27,6 +27,7 @@ import { Compaction } from "./Compaction";
 import { Sandbox } from "./Sandbox";
 import { BrowserTools } from "./BrowserTools";
 import { Account } from "./Account";
+import { Backup } from "./Backup";
 import { Providers } from "./Providers";
 import { activeKind, groupVendors } from "./Models";
 import { ModelUsage } from "./ModelUsage";
@@ -725,6 +726,11 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
               hint={t("Reasonix 本身不需要账号，仅在需要联网的功能中使用：社区发帖、崩溃问题跟进，以及后续的技能发布。")}
             >
               <Account port={port} state={acct} unread={accountUnread} reload={reloadAccount} />
+            </Group>
+          )}
+          {at === "account" && acct?.signedIn && acct.user && (
+            <Group id="backup" title={t("云备份")} hint={t("把本机的模型、扩展、记忆等配置加密保存到账号，换机器或重装后按项恢复。")}>
+              <Backup port={port} />
             </Group>
           )}
 

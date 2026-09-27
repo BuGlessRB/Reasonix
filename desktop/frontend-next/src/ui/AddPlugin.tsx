@@ -27,12 +27,14 @@ interface Props {
   // already known, so the box is skipped and the plan is read against what is
   // installed — a new version's new hook is the thing worth seeing.
   updating?: PluginPackage;
+  // A source someone already chose, such as a plugin named in a restored backup.
+  source?: string;
 }
 
-export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
+export function AddPlugin({ port, onClose, onInstalled, updating, source }: Props) {
   // Mounted only while open, so this component is the layer Escape closes.
   useEscape(true, onClose);
-  const [text, setText] = useState(updating?.source ?? "");
+  const [text, setText] = useState(updating?.source ?? source ?? "");
   const [plan, setPlan] = useState<PluginPlan | null>(null);
   const [done, setDone] = useState<PluginPlan | null>(null);
   const [busy, setBusy] = useState(false);

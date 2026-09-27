@@ -27,6 +27,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /submit", s.submit)
 	s.registerExtensionRoutes(mux)
 	s.registerPluginRoutes(mux)
+	s.registerBackupRoutes(mux)
 	s.registerThemeRoutes(mux)
 	s.registerAppearanceRoutes(mux)
 	s.registerSurfaceRoutes(mux)

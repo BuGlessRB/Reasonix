@@ -5,6 +5,8 @@ export type { Attachment, DroppedRef };
 
 import type { AccountState, AccountUser, DeviceGrant } from "./account";
 import type { Adjudications } from "./adjudication";
+import type { BackupApplyResult, BackupCatalog, BackupCreated, BackupCreateRequest, BackupPlan } from "./backup";
+export type * from "./backup";
 export type { AdjudicationEntry, AdjudicationState, Adjudications } from "./adjudication";
 import type { HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource } from "./hook";
 import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpLoad, McpRisk, McpTool, ScopeLayer } from "./mcp";
@@ -297,6 +299,12 @@ export interface AgentPort {
   accountLogin(): Promise<DeviceGrant>;
   accountPoll(deviceCode: string): Promise<{ status: "pending" | "complete"; slowDown?: boolean }>;
   accountLogout(): Promise<void>;
+  // Backups exist only for a signed-in account; every call refuses otherwise.
+  backups(): Promise<BackupCatalog>;
+  createBackup(req: BackupCreateRequest): Promise<BackupCreated>;
+  deleteBackup(id: string): Promise<void>;
+  previewBackup(id: string, passphrase: string): Promise<BackupPlan>;
+  applyBackup(planId: string, items: string[], consented: string[]): Promise<BackupApplyResult>;
   workspaces(): Promise<WorkspaceInfo>;
   // Rebuilds the whole runtime against another folder. The conversation does
   // not come along, so the caller has to reload the transcript afterwards.
