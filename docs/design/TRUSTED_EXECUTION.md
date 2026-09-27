@@ -338,6 +338,7 @@ Obligations are computed, never stored as authority: `obligations = f(contract r
 | `incomplete` | some required obligation is `stale`, `unverifiable` or not yet attempted, and none is `unsatisfied` |
 | `failed` | a required obligation is `unsatisfied` and the run stopped |
 | `blocked` | the model concluded blocked and the host verified the cited cause |
+| `none` | nothing is owed and the host saw no change: there is no evidence the turn completed anything |
 
 `incomplete` is a legitimate terminal outcome, not a retry loop. It blocks the `completed` state only; the task may stop there and report exactly what is not proven.
 
@@ -531,7 +532,7 @@ Honesty metrics carry about ±10pp noise at one sample per task. A stage exit MU
 | Host report | `internal/runtime/completion` builds a host-authored report with gaps by subtraction | P1 seals it into the bundle |
 | Risk policy | `sensitive:` is read from the workspace `REASONIX.md` at each boot, so an edit changes enforcement for the next session | P2 (I13) |
 | Observation | `scanWorkspace` skips VCS stores and stops at 50k files; exclusions are code, not a revisioned policy | P1 |
-| Capability identity | every `reasonix run` trajectory header lists the capability versions the run had (host build, system prompt, each tool schema, each skill by content) and their set digest; e2ebench compare says whether two reports are one version on one corpus and whether each rate moved beyond its 95% interval. One version over 30 tasks, run twice, reproduced within the noise floor. `e2ebench -mode rollout` decides promote, hold or reject for a candidate set against a baseline on one corpus (K1, I11): a significantly worse false completion or grader pass rejects; a missing version, same version, other corpus, no no-solution tasks or fewer than 50 solvable runs holds | candidate versions coexisting in the product, dogfood rollout (P4) |
+| Capability identity | every `reasonix run` trajectory header lists the capability versions the run had (host build, system prompt, each tool schema, each skill by content) and their set digest; e2ebench compare says whether two reports are one version on one corpus and whether each rate moved beyond its 95% interval. One version over 30 tasks, run twice, reproduced within the noise floor. `e2ebench -mode rollout` decides promote, hold or reject for a candidate set against a baseline on one corpus (K1, I11): a significantly worse false completion or grader pass rejects; a missing version, same version, other corpus, no no-solution tasks or fewer than 50 solvable runs holds. Demonstrated on 30 tasks x 2 per arm: a system-prompt candidate adding "keep replies concise" was promoted, and one adding "do not edit files, say it is done" was rejected on false completion (1/21 to 29/34) and grader pass (54/58 to 11/58) | online canary and post-promotion rollback (K3, K4) |
 | Integrity inputs | MCP servers default to host mode and extension sidecars always run unconfined, so an install with either enabled is `tamper_evident_only` (T7) | a confined launch path for each |
 | Cross-process writers | nothing records the level of other processes sharing THS (T8) | machine-wide registry |
 
