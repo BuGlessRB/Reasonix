@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/runtime/contract"
 	"reasonix/internal/runtime/plancontract"
 	"reasonix/internal/safety/evidence"
 )
@@ -82,5 +83,32 @@ func TestUnplannedTurnHasNoOutstandingCriteria(t *testing.T) {
 	a.task.ledger.Record(evidence.Receipt{ToolName: "edit_file", Mutation: true, Write: true, Success: true, Paths: []string{"pay.go"}})
 	if outstanding := a.outstandingPlanCriteria(); len(outstanding) != 0 {
 		t.Fatalf("outstanding = %v, want none without an approved plan", outstanding)
+	}
+}
+
+// A plan's check that the host cannot classify is not a change of its own: were
+// it one, a `python -c` check would owe itself a later run and never settle.
+func TestAnUnclassifiedPlanCheckSettlesItsCriterion(t *testing.T) {
+	plan := checkedPlan()
+	plan.Steps[0].Verification = []plancontract.Verification{{Command: `python -c "import pay"`}}
+	a := rejectionAgent(t, &plan)
+	a.task.ledger.Record(evidence.Receipt{ToolName: "edit_file", Mutation: true, MutationEvidence: evidence.MutationProven, Write: true, Success: true, Paths: []string{"pay.go"}})
+	a.task.ledger.Record(evidence.Receipt{ToolName: "bash", Command: `python -c "import pay"`, Mutation: true, Success: true})
+	if outstanding := a.outstandingPlanCriteria(); len(outstanding) != 0 {
+		t.Fatalf("outstanding = %v, want the check that ran after the edit to settle its criteria", outstanding)
+	}
+}
+
+// The sealed verdict answers a frozen plan check against the same baseline.
+func TestAnUnclassifiedPlanCheckSettlesItsFrozenCriterion(t *testing.T) {
+	plan := checkedPlan()
+	a := rejectionAgent(t, &plan)
+	command := `python -c "import pay"`
+	a.task.ledger.Record(evidence.Receipt{ToolName: "edit_file", Mutation: true, MutationEvidence: evidence.MutationProven, Write: true, Success: true, Paths: []string{"pay.go"}})
+	a.task.ledger.Record(evidence.Receipt{ToolName: "bash", Command: command, Mutation: true, Success: true})
+	got := a.frozenResults([]contract.Criterion{{ID: "command@x", Source: contract.SourcePlan, Required: true,
+		Verifier: contract.Verifier{Kind: contract.VerifierCommand, Identity: evidence.VerificationIdentity(command)}}})
+	if len(got) != 1 || !got[0].Satisfied {
+		t.Fatalf("frozen = %+v, want the check that ran after the edit satisfied", got)
 	}
 }

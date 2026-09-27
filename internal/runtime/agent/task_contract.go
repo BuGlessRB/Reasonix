@@ -97,7 +97,7 @@ func (a *Agent) frozenResults(criteria []contract.Criterion) []verdict.Frozen {
 		return nil
 	}
 	ledger := a.task.ledger
-	at, changed := ledger.LatestSuccessfulMutationIndex()
+	at, changed := ledger.LatestProvenMutationIndex()
 	owedTests := map[string]bool{}
 	for _, o := range evidence.BaselineTestObligations(a.baselineFacts(), a.mutationEpoch()) {
 		owedTests[o.ID] = true
