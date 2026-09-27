@@ -266,6 +266,7 @@ WorkspaceSnapshot {
 | W5 | Symlinks are recorded as links (target string digest), never followed. |
 | W8 | A file's snapshot identity is its stamp: size, modification time, and on macOS and Linux inode change time, inode and device. Change time cannot be set from user space, so every write shows; a write that restores identical bytes also shows. Windows has no change time, so its stamp is weaker. |
 | W9 | Content digests are computed for the paths a verdict names (criterion subjects, mutation evidence), not for every file. |
+| W11 | A delegated run that declared write paths takes a change the walk sees inside them as its own, even while other writers run. This is an inference the User accepted, not a proof: claims are disjoint and writer tools are fenced to them, but a sibling's shell command writing into another run's paths is not excluded. A change outside the declared paths is never attributed, and never read as "nothing changed". |
 | W10 | Tree nodes are content-addressed index objects written without a disk flush. A snapshot's authority is its digest inside a sealed record; a node lost to a crash makes a later diff `unverifiable`, never a satisfied comparison. |
 | W6 | Two snapshots compare only under the same observation policy digest. Different digests make every freshness comparison fail as `observation.policy_changed`. |
 | W7 | An incomplete snapshot (entry limit, walk error) establishes nothing: scope and "no other changes" obligations become `unverifiable`. |

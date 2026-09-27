@@ -191,6 +191,18 @@ func (o *MutationObserver) HasActiveWriters() bool {
 	return len(o.ActiveWriters()) > 0
 }
 
+// HasOtherActiveWriters reports whether a background writer other than this
+// observer's own is still running: a background child is itself registered,
+// and its own run is not another writer beside it.
+func (o *MutationObserver) HasOtherActiveWriters() bool {
+	for _, w := range o.ActiveWriters() {
+		if w.ID != o.writerID {
+			return true
+		}
+	}
+	return false
+}
+
 // BeforeMutation captures the preimage for a known path before a tool or hook runs.
 // Prefer this over the legacy Snapshot(diff.Change) path for built-in tools.
 func (o *MutationObserver) BeforeMutation(path, tool string, source CaptureSource) {
