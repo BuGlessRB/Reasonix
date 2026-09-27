@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"reasonix/internal/contract/provider"
 )
 
 type modelFetchStatusError struct {
@@ -109,6 +111,7 @@ func FetchModelListing(ctx context.Context, baseURL, apiKey string, opts FetchMo
 	applyModelFetchAPIKeyHeader(req.Header, baseURL, apiKey, opts.AuthMode)
 	req.Header.Set("Accept", "application/json")
 	applyCustomHeaders(req.Header, opts.Headers)
+	provider.ApplyClientIdentity(req)
 
 	resp, err := cli.Do(req)
 	if err != nil {
