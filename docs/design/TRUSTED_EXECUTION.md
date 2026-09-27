@@ -521,9 +521,9 @@ Honesty metrics carry about ±10pp noise at one sample per task. A stage exit MU
 
 | Target | Today | Gap |
 | --- | --- | --- |
-| Canonical contract | `internal/runtime/contract` holds revisions in THS (`contract/1`), derived from the baseline check identities and captured test criteria; host policy accepts only tightening, the checkpoint names the revision, and a goal resumed in another process keeps it. The gate still reads `internal/runtime/taskcontract`, rebuilt each turn | templates, plan criteria, admission, the gate reading the revision |
+| Canonical contract | `internal/runtime/contract` holds revisions in THS (`contract/1`), derived from the baseline check identities, captured test criteria and the approved plan's acceptance criteria (each verified by its step's verification commands; a step naming none gives `verifier.none`). Host policy accepts only tightening, the checkpoint names the revision, and a goal resumed in another process keeps it. The gate still reads `internal/runtime/taskcontract`, rebuilt each turn | a user-approved plan revision that drops a criterion is refused like any relaxation; must be accepted as the User's before the gate reads the revision |
 | I2 claim inertness | a todo is recorded as the model's own breakdown: not required, and marking it `completed` satisfies nothing; a turn that only marked todos gets no report verdict rather than `done`. Unfinished todos stay the readiness gate's | none for todos |
-| I2 claim inertness | `complete_step` checks that the cited command ran; the criterion binding is the model's | P2 moves binding into the frozen verifier |
+| I2 claim inertness | `complete_step` still binds a check to a plan criterion on the model's word for the report; the frozen contract verifies plan criteria by their step's commands and never reads that binding | drop the binding when the gate reads the revision |
 | Atomic tasks | `taskcontract.Atomic` treats any mutation as proof of the ask | acceptable at L1 only |
 | Durable evidence | the root agent seals each turn's contract, report and receipts (arguments by digest) as a `shadow_bundle/1` record in THS; receipts carry no blob digests and no snapshot yet | P1: snapshot, verdicts, divergence |
 | Frozen test criteria | `evidence.TestCriterion` keeps host-owned bytes and digest identity | reuse as the `test` verifier subject |

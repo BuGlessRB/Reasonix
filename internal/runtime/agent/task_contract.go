@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"slices"
+	"strings"
 
 	"reasonix/internal/runtime/contract"
 	"reasonix/internal/runtime/verdict"
@@ -29,7 +31,7 @@ func (a *Agent) settleContract(ctx context.Context, seal *EvidenceSeal) contract
 	if err != nil {
 		return contractState{Failure: trustedstate.FailureCode(err)}
 	}
-	derived := contract.Derive(contract.Sources{Checks: a.task.checkpoint.BaselineChecks, Tests: a.baselineTestIdentities()})
+	derived := contract.Derive(contract.Sources{Checks: a.task.checkpoint.BaselineChecks, Tests: a.baselineTestIdentities(), Plan: a.planCriteria()})
 	next, decision := contract.Accept(cur, record, derived, a.contractID())
 	if decision == contract.Accepted || decision == contract.Tightened {
 		rec, err := contract.Seal(ctx, seal.Store, seal.Stream, next)
@@ -109,10 +111,37 @@ func (a *Agent) frozenResults(criteria []contract.Criterion) []verdict.Frozen {
 		case contract.VerifierTest:
 			f.Unverifiable = !known[c.Verifier.Identity]
 			f.Satisfied = !f.Unverifiable && !owedTests["baseline_test@"+c.Verifier.Identity]
+		case contract.VerifierCommands:
+			f.Satisfied = !changed || !slices.ContainsFunc(c.Verifier.Identities, func(id string) bool {
+				return !ledger.HasSuccessfulCommandAfter(id, at)
+			})
 		default:
-			f.Unverifiable = true
+			f.Unverifiable, f.NoVerifier = true, true
 		}
 		out = append(out, f)
+	}
+	return out
+}
+
+// planCriteria are the approved plan's acceptance criteria, each verified by
+// the verification commands its step names. The user approved those commands
+// with the plan, so they are the plan's own verifiers rather than the model's.
+func (a *Agent) planCriteria() []contract.PlanCriterion {
+	plan := a.PlanContract()
+	if plan == nil {
+		return nil
+	}
+	var out []contract.PlanCriterion
+	for _, step := range plan.Steps {
+		var commands []string
+		for _, v := range step.Verification {
+			if id := evidence.VerificationIdentity(strings.TrimSpace(v.Command)); id != "" {
+				commands = append(commands, id)
+			}
+		}
+		for _, c := range step.Acceptance {
+			out = append(out, contract.PlanCriterion{ID: c.ID, Required: !c.Optional, Commands: commands})
+		}
 	}
 	return out
 }
