@@ -209,6 +209,7 @@ func renderBody(results []result) string {
 	b.WriteString(renderRefusals(results))
 	b.WriteString(renderContractShadow(results))
 	b.WriteString(renderCompletionReport(results))
+	b.WriteString(renderEvidenceBundle(results))
 	b.WriteString(renderCompletionIntegrity(results))
 	b.WriteString(renderOutcomeProgress(results))
 	b.WriteString(renderMemoryShadow(results))

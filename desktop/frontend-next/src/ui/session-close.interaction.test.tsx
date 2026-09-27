@@ -22,6 +22,7 @@ function draw(live: boolean, held: string | null = "r1") {
     <Workspaces
       hub={{} as never}
       tree={workspaces}
+      treeRead
       runtimes={runtimeId ? [{ id: runtimeId, base: "", root: "/w", name: "w", sessionPath: SESSION }] : []}
       active=""
       folded={new Set()}

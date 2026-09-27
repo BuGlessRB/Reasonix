@@ -23,6 +23,7 @@ func TestAuditCapabilitiesAreForwardedByEveryWrapper(t *testing.T) {
 		"DelegationAuditSink":       reflect.TypeFor[event.DelegationAuditSink](),
 		"ReadinessAuditSink":        reflect.TypeFor[event.ReadinessAuditSink](),
 		"ContractShadowAuditSink":   reflect.TypeFor[event.ContractShadowAuditSink](),
+		"EvidenceBundleAuditSink":   reflect.TypeFor[event.EvidenceBundleAuditSink](),
 		"MemoryRecallSink":          reflect.TypeFor[event.MemoryRecallSink](),
 		"OutcomeProgressSink":       reflect.TypeFor[event.OutcomeProgressSink](),
 		"ProtocolRecoveryAuditSink": reflect.TypeFor[event.ProtocolRecoveryAuditSink](),

@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode, memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n";
+import { seconds } from "../i18n/format";
 import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/hub";
 import type { Adder } from "./addws";
 import { useRailQuery } from "./railsearch";
@@ -17,6 +18,8 @@ const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).sl
 interface Props {
   hub: HubPort;
   tree: TreeWorkspace[];
+  // False until the kernel first answers; an empty tree before then is unread.
+  treeRead: boolean;
   runtimes: RuntimeView[];
   active: string;
   // Collapsed workspaces are the window's own state, not the kernel's, so the
@@ -57,7 +60,7 @@ const SHOWN = 30;
 const rowLabel = (session: TreeSession) =>
   session.title || (session.runtimeId && !session.turns ? t("新会话") : session.name);
 
-function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, runs, scope = "all", pinned = new Set(), onPin = () => {}, onPause = () => {}, onArchive = async () => {}, onRename, onError, adder, children }: Props) {
+function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, runs, scope = "all", pinned = new Set(), onPin = () => {}, onPause = () => {}, onArchive = async () => {}, onRename, onError, adder, children }: Props) {
   const [busy, setBusy] = useState("");
   // Folding a machine is the reader's own preference, held the way a host row
   // holds it.
@@ -282,7 +285,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
             </button>
             <i className="rmtpip" aria-hidden="true" />
             <span className="rmtname">{t("这台机器")}</span>
-            <span className="rmtsub">{t("{n} 个项目", { n: tree.length })}</span>
+            {treeRead && <span className="rmtsub">{t("{n} 个项目", { n: tree.length })}</span>}
             <button
               className="machpick"
               data-busy={adder.busy ? "" : undefined}
@@ -668,12 +671,35 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
           {!shutHere && tree.length > 0 && shownTree.length === 0 && (
             <div className="ws-empty">{t("没有匹配的会话")}</div>
           )}
-          {!shutHere && tree.length === 0 && <div className="ws-empty">{t("尚无文件夹")}</div>}
+          {!shutHere && tree.length === 0 && (treeRead ? (
+            <div className="ws-empty">{t("尚无文件夹")}</div>
+          ) : (
+            <TreeReading />
+          ))}
           {children}
         </div>
       </div>
 
     </>
+  );
+}
+
+// Display only, timed from this row's mount; whether the tree is read is `treeRead`.
+export function TreeReading() {
+  const [since] = useState(() => Date.now());
+  const [now, setNow] = useState(since);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const ms = now - since;
+  return (
+    <div className="ws-empty ws-reading" role="status" aria-busy="true">
+      <StudioIcon name="clock" />
+      <span>{t("正在读取文件夹…")}</span>
+      {/* Outside the live region's speech: a status that re-announces itself every second is noise. */}
+      {ms >= 1000 && <span className="ws-reading-t" aria-hidden="true">{seconds(ms, 0)}</span>}
+    </div>
   );
 }
 

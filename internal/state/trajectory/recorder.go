@@ -34,6 +34,7 @@ type Record struct {
 	TurnCompletion   bool                 `json:"turn_completion,omitempty"`
 	ContractShadow   *ContractShadowAudit `json:"contract_shadow,omitempty"`
 	CompletionReport *CompletionReport    `json:"completion_report,omitempty"`
+	EvidenceBundle   *EvidenceBundle      `json:"evidence_bundle,omitempty"`
 	OutcomeProgress  *OutcomeProgress     `json:"outcome_progress,omitempty"`
 	MemoryRecall     *MemoryRecall        `json:"memory_recall,omitempty"`
 	ProjectCheck     *ProjectCheckProbe   `json:"project_check_probe,omitempty"`
@@ -173,6 +174,24 @@ type CompletionReport struct {
 	GapKinds                  []string `json:"gap_kinds,omitempty"`
 	ClaimsVerified            int      `json:"claims_verified,omitempty"`
 	ClaimsUnbacked            int      `json:"claims_unbacked,omitempty"`
+}
+
+// EvidenceBundle mirrors event.EvidenceBundleAudit with stable keys.
+type EvidenceBundle struct {
+	Sealed      bool   `json:"sealed"`
+	Record      string `json:"record,omitempty"`
+	Generation  uint64 `json:"generation,omitempty"`
+	Integrity   string `json:"integrity,omitempty"`
+	Receipts    int    `json:"receipts,omitempty"`
+	FailureCode string `json:"failure_code,omitempty"`
+
+	SnapshotComplete   bool `json:"snapshot_complete,omitempty"`
+	UnobservedCompared bool `json:"unobserved_compared,omitempty"`
+	UnobservedChanges  int  `json:"unobserved_changes,omitempty"`
+
+	Outcome           string   `json:"outcome,omitempty"`
+	DivergenceClass   string   `json:"divergence_class,omitempty"`
+	DivergenceReasons []string `json:"divergence_reasons,omitempty"`
 }
 
 // ReadinessAudit mirrors hostaudit.ReadinessAudit with stable snake_case keys.
@@ -402,6 +421,26 @@ func (r *Recorder) RecordContractShadow(a event.ContractShadowAudit) {
 		ReadyToFinalize:       a.ReadyToFinalize,
 	}})
 	event.RecordContractShadow(r.inner, a)
+}
+
+func (r *Recorder) RecordEvidenceBundle(a event.EvidenceBundleAudit) {
+	r.append(Record{EvidenceBundle: &EvidenceBundle{
+		Sealed:      a.Sealed,
+		Record:      a.Record,
+		Generation:  a.Generation,
+		Integrity:   a.Integrity,
+		Receipts:    a.Receipts,
+		FailureCode: a.FailureCode,
+
+		SnapshotComplete:   a.SnapshotComplete,
+		UnobservedCompared: a.UnobservedCompared,
+		UnobservedChanges:  a.UnobservedChanges,
+
+		Outcome:           a.Outcome,
+		DivergenceClass:   a.DivergenceClass,
+		DivergenceReasons: a.DivergenceReasons,
+	}})
+	event.RecordEvidenceBundle(r.inner, a)
 }
 
 func (r *Recorder) RecordCompletionReport(a event.CompletionReportAudit) {

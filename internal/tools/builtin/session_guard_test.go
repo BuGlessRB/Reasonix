@@ -3,12 +3,14 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
+	"reasonix/internal/contract/tool"
 	"reasonix/internal/safety/sandbox"
 )
 
@@ -337,5 +339,26 @@ func TestBashAppendsSessionDataHint(t *testing.T) {
 	}
 	if strings.Contains(out, "WARNING") {
 		t.Fatalf("bash output has spurious warning:\n%s", out)
+	}
+}
+
+func TestSessionDataGuardDeniesTrustedState(t *testing.T) {
+	root, _, _ := stateRootFor(t)
+	trusted := filepath.Join(root, TrustedStateDir)
+	for _, target := range []string{
+		filepath.Join(trusted, "streams", "ws", "HEAD"),
+		filepath.Join(trusted, "objects", "ab", "new"),
+		trusted,
+	} {
+		var refusal tool.Refusal
+		if err := NewSessionDataGuard(root, nil).Check(target); !errors.As(err, &refusal) || refusal.Code != CodeTrustedStateWrite {
+			t.Errorf("Check(%q) = %v, want a %s refusal", target, err, CodeTrustedStateWrite)
+		}
+	}
+	if err := NewSessionDataGuard(root, []string{trusted}).Check(filepath.Join(trusted, "x")); err != nil {
+		t.Errorf("an explicit allow_write root keeps raw access: %v", err)
+	}
+	if err := NewSessionDataGuard(root, nil).Check(filepath.Join(root, "trusted-notes.md")); err != nil {
+		t.Errorf("a sibling that only shares the prefix is not trusted state: %v", err)
 	}
 }

@@ -32,6 +32,7 @@ function draw(over: { runtimes?: RuntimeView[]; workspaces?: TreeWorkspace[] } =
     <Workspaces
       hub={hub}
       tree={workspaces}
+      treeRead
       runtimes={over.runtimes ?? []}
       active=""
       folded={new Set()}
@@ -62,6 +63,7 @@ it("projects each open session's run state onto its own row", () => {
     <Workspaces
       hub={{} as never}
       tree={workspaces}
+      treeRead
       runtimes={[runtime]}
       active=""
       folded={new Set()}

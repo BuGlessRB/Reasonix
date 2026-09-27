@@ -153,6 +153,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 		a.task.checkpoint = evidence.DeliveryCheckpoint{ScopeID: scope.ID}
 	}
 	a.captureBaselineChecks()
+	a.startTurnSnapshot(ctx)
 	// Re-lease this session's background-job mutations that no turn has
 	// committed yet. The Reset above just wiped any lease a failed or
 	// cancelled turn held (its ledger is gone), and a process restart starts
@@ -673,6 +674,7 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 		return false, boundaryErr
 	}
 
+	state.snapshot.await(ctx)
 	batch := a.executeBatch(ctx, state, calls)
 	results, images := batch.results, batch.images
 	flagged := a.screenExternal(ctx, calls, batch)

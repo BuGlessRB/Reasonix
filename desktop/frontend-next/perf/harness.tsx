@@ -9,7 +9,7 @@ import { MockHub } from "../src/port/mock_hub";
 import { MockPort } from "../src/port/mock";
 import { fromHistory } from "../src/state/session";
 import type { AgentPort, Appearance, HistoryMessage } from "../src/port/port";
-import type { RuntimeView } from "../src/port/hub";
+import type { RuntimeView, TreeWorkspace } from "../src/port/hub";
 import type { WireEvent } from "../src/port/wire";
 
 // Saves are coalesced (src/ui/trailing.ts), and a fixture answers too fast for
@@ -155,6 +155,11 @@ const STATUS_MS = Number(query.get("statusms") ?? 0);
 // ?queue= is how many lines are already waiting when the window opens.
 const QUEUE = Number(query.get("queue") ?? 0);
 const JOBS = Number(query.get("jobs") ?? 0);
+// ?treems= holds every tree read back until that long after load, so the
+// window can be seen before the kernel has named a single folder.
+const TREE_AT = performance.now() + Number(query.get("treems") ?? 0);
+// ?panes=0 opens the window with no conversation open.
+const NO_PANES = query.get("panes") === "0";
 
 class BenchHub extends MockHub {
   readonly feeds = new Map<string, BenchPort>();
@@ -165,7 +170,13 @@ class BenchHub extends MockHub {
     return port;
   }
 
-  tree() {
+  runtimes(): Promise<RuntimeView[]> {
+    return NO_PANES ? Promise.resolve([]) : super.runtimes();
+  }
+
+  tree(): Promise<TreeWorkspace[]> {
+    const wait = TREE_AT - performance.now();
+    if (wait > 0) return new Promise((resolve) => setTimeout(() => resolve(this.tree()), wait));
     if (!WORKSPACES) return super.tree();
     return Promise.resolve(
       Array.from({ length: WORKSPACES }, (_, w) => ({
