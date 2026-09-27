@@ -8,9 +8,9 @@ import { useLaunchHealth } from "./launchhealth";
 import { Nav } from "./Nav";
 import { useLinkRouting } from "./links";
 import { Pane, type PaneReport } from "./Pane";
-import { DOCK, Gutter, RAIL, keepWidth, widthOf } from "./Gutter";
+import { DOCK, Gutter, RAIL, dockMax, keepWidth, widthOf } from "./Gutter";
 import { listenAction } from "./listen";
-import { folded as roomGaveUp } from "./viewport";
+import { folded as roomGaveUp, onRoomWidth } from "./viewport";
 import { useFoldAway } from "./foldaway";
 import { useDrawerCloses } from "./drawer";
 import { RemoteAsk } from "./RemoteAsk";
@@ -96,6 +96,7 @@ export function App({ hub }: { hub: HubPort }) {
   const [pinnedSessions, setPinnedSessions] = useState<Set<string>>(savedPins);
   const [railW, setRailW] = useState(() => widthOf(RAIL));
   const [dockW, setDockW] = useState(() => widthOf(DOCK));
+  const [dockLimit, setDockLimit] = useState(() => dockMax(document.body.clientWidth));
   const [report, setReport] = useState<PaneReport>(NO_REPORT);
   const [findPulse, setFindPulse] = useState(0);
   const [error, setError] = useState("");
@@ -385,6 +386,8 @@ export function App({ hub }: { hub: HubPort }) {
 
   useFoldAway("rail", setRail);
   useDrawerCloses(setRail, active, settings);
+  useEffect(() => onRoomWidth((width) => setDockLimit(dockMax(width))), []);
+  const shownDockW = Math.min(dockW, dockLimit);
 
   const onRailW = useCallback((w: number) => { setRailW(w); keepWidth(RAIL, w); }, []);
   const onDockW = useCallback((w: number) => { setDockW(w); keepWidth(DOCK, w); }, []);
@@ -590,7 +593,7 @@ export function App({ hub }: { hub: HubPort }) {
       data-apv={report.status?.toolApprovalMode ?? "ask"}
       data-prefs={settings ? "" : undefined}
       data-tabs={runtimes.length > 1 ? "" : undefined}
-      style={{ "--rail-open": `${railW}px`, "--dock-open": `${dockW}px` } as CSSProperties}
+      style={{ "--rail-open": `${railW}px`, "--dock-open": `${shownDockW}px` } as CSSProperties}
     >
       {ask && <RemoteAsk ask={ask} onAnswer={answerRemote} />}
       <BrowserLogin />
@@ -711,7 +714,8 @@ export function App({ hub }: { hub: HubPort }) {
                   }}
                   onSettings={(section) => section ? showPrefs(section) : showPrefs()}
                   theme={scheme}
-                  dockW={dockW}
+                  dockW={shownDockW}
+                  dockMax={dockLimit}
                   onDockW={onDockW}
                   manualBrowser={rt.id === active && browser}
                   onManualBrowser={setBrowser}

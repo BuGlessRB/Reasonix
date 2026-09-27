@@ -40,6 +40,7 @@ function open(port: MockPort) {
       onKeepHere={() => {}}
       theme="dark"
       dockW={560}
+      dockMax={880}
       onDockW={() => {}}
     />,
   );

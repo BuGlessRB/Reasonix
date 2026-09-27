@@ -110,6 +110,7 @@ interface Props {
   theme: string;
   // Rides on `.app`: that is where the divider writes while a drag is in flight.
   dockW: number;
+  dockMax: number;
   onDockW: (w: number) => void;
   manualBrowser?: boolean;
   onManualBrowser?: (on: boolean) => void;
@@ -117,7 +118,7 @@ interface Props {
   alert?: ReactNode;
 }
 
-function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere, theme, dockW, onDockW, manualBrowser = false, onManualBrowser, alert }: Props) {
+function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, findPulse, onSettings, needsProject, onOpenProject, onKeepHere, theme, dockW, dockMax, onDockW, manualBrowser = false, onManualBrowser, alert }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
   const [status, setStatus] = useState<SessionStatus | null>(null);
@@ -597,7 +598,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           brings the browser back, which is the only affordance left once the
           column has no width. */}
       {tab === "flow" && (
-        <Gutter edge="r" span={DOCK} width={dockW} label={t("调整浏览器宽度")} open={docked}
+        <Gutter edge="r" span={DOCK} width={dockW} max={dockMax} label={t("调整浏览器宽度")} open={docked}
           onWidth={onDockW} onOpen={(on) => onManualBrowser?.(on)} />
       )}
       <div className="scroll" data-pane="browser" hidden={tab === "analysis"} inert={!workbench}>

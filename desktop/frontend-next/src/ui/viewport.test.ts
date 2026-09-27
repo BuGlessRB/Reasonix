@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { foldsAt } from "./viewport";
+import { foldsAt, onRoomWidth, refresh } from "./viewport";
 
 describe("layout folds", () => {
   it("keeps both columns when there is room", () => {
@@ -46,4 +47,15 @@ describe("height folds", () => {
     expect(foldsAt(1200)).toBe("rail");
     expect(foldsAt(1920)).toBe("");
   });
+});
+
+it("publishes room width even when the fold stays the same", () => {
+  const widths: number[] = [];
+  const stop = onRoomWidth((width) => widths.push(width));
+  Object.defineProperty(document.body, "clientWidth", { configurable: true, value: 1600 });
+  refresh();
+  Object.defineProperty(document.body, "clientWidth", { configurable: true, value: 1700 });
+  refresh();
+  stop();
+  expect(widths).toEqual([1600, 1700]);
 });
