@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -147,12 +148,44 @@ func validateContract(root string, contract releaseSigningContract) error {
 		}
 	}
 
+	if err := requireScriptClosure(root, contract.FingerprintFiles); err != nil {
+		return err
+	}
+
 	reachable, err := discoverTopLevelSigningWorkflows(root)
 	if err != nil {
 		return err
 	}
 	if err := requireExactSet("top-level workflows that reach SignPath", reachable, contract.AllowedBuildDefinitions); err != nil {
 		return fmt.Errorf("SignPath build-definition drift: %w", err)
+	}
+	return nil
+}
+
+var scriptReference = regexp.MustCompile(`[A-Za-z0-9_.-]+\.ps1\b`)
+
+// A pinned file that runs a script under scripts/ pins nothing unless that
+// script is pinned too, so every one a fingerprint file names must be listed.
+func requireScriptClosure(root string, fingerprintFiles []string) error {
+	pinned := make(map[string]bool, len(fingerprintFiles))
+	for _, name := range fingerprintFiles {
+		pinned[name] = true
+	}
+	for _, name := range fingerprintFiles {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(name)))
+		if err != nil {
+			return fmt.Errorf("read fingerprint file %q: %w", name, err)
+		}
+		for _, leaf := range scriptReference.FindAllString(string(data), -1) {
+			script := "scripts/" + leaf
+			info, err := os.Stat(filepath.Join(root, filepath.FromSlash(script)))
+			if err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			if !pinned[script] {
+				return fmt.Errorf("fingerprint file %q runs %q, which fingerprint_files does not list", name, script)
+			}
+		}
 	}
 	return nil
 }
