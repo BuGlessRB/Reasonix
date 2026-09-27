@@ -2,7 +2,7 @@
 owner: @esengine
 backup: @SivanCola
 status: active
-reviewed: 2026-09-26
+reviewed: 2026-09-27
 ---
 
 # Studio release runbook
@@ -122,7 +122,7 @@ A lookup GitHub refuses, or cannot answer after retries, fails `publish` with a 
 
 ## 7. Windows signing
 
-Windows builds are signed with Studio's own Certum certificate through SimplySign cloud signing: the 1.x mechanism, not its certificate or account.
+Windows builds are signed through Certum SimplySign cloud signing with the project's certificate, the same account and certificate 1.x releases use.
 
 | Rule | Detail |
 | --- | --- |
@@ -146,9 +146,9 @@ Prerequisites. The environment alone does not confine the secrets: its deploymen
 | A required reviewer on `studio-release` | Every job that reads the secrets waits for a person; a release then asks for approval at each signing job and at `publish`. |
 | `studio` branch protection requiring review | The workflow and scripts that do the signing change only through review. |
 
-Once the certificate arrives:
+To enable signing:
 
-1. Replace the three repository secrets used by both Studio and 1.x:
+1. Confirm the three repository secrets hold the project certificate; both lines read them, so replacing one changes 1.x too:
 
    ```bash
    gh secret set CERTUM_USERNAME
@@ -170,7 +170,7 @@ What is signed: the three executables Studio builds and the installer. Electron'
 
 The SimplySign session can sign for any process on its runner while it is up. The two signing jobs therefore check out only the workflow's own commit, install no toolchain, and stop SimplySign after signing; `windows-package` runs electron-builder on a separate runner with no secrets.
 
-Studio and 1.x releases and smoke tests share the concurrency group `certum-signing`, so no two runs hold the shared SimplySign session at once.
+Studio and 1.x signing jobs and smoke tests share the concurrency group `certum-signing`: they run one at a time, so no two runs hold the shared SimplySign session at once.
 
 ## 8. Reference
 
