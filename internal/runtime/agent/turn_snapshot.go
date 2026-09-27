@@ -21,6 +21,9 @@ type turnSnapshot struct {
 // itself as cancelled rather than holding the turn open.
 const snapshotWait = 10 * time.Second
 
+// maxRecordsBack bounds how far back previousSnapshot looks for a bundle.
+const maxRecordsBack = 8
+
 // changedPathLimit bounds how many changed paths a bundle lists; the count is
 // always exact.
 const changedPathLimit = 200
@@ -78,13 +81,17 @@ func compareSnapshots(o *observation.Observer, a, b observation.Snapshot) snapsh
 	return snapshotDelta{Compared: true, Changed: count, Paths: paths}
 }
 
-// previousSnapshot reads the snapshot the stream's newest bundle ended with.
+// previousSnapshot reads the snapshot the stream's newest bundle ended with,
+// stepping back over contract revisions sealed after it.
 func previousSnapshot(seal *EvidenceSeal) (observation.Snapshot, bool) {
 	head, err := seal.Store.Head(seal.Stream)
 	if err != nil {
 		return observation.Snapshot{}, false
 	}
 	rec, err := seal.Store.Record(head.Record)
+	for step := 0; err == nil && rec.Kind != shadowBundleKind && rec.Parent != "" && step < maxRecordsBack; step++ {
+		rec, err = seal.Store.Record(rec.Parent)
+	}
 	if err != nil || rec.Kind != shadowBundleKind {
 		return observation.Snapshot{}, false
 	}

@@ -39,7 +39,20 @@ const (
 	CauseCheckFailed     = "check.failed"
 	CauseHostObligation  = "obligation.outstanding"
 	CauseSuppressedCheck = "verifier.suppressed"
+	CauseContractOwed    = "contract.criterion_owed"
+	CauseSubjectMissing  = "verifier.subject_missing"
 )
+
+// Frozen is one accepted contract criterion and what the ledger says of it.
+// Identity is the verifier's, so a host obligation naming the same subject is
+// recognised as the same debt rather than counted twice.
+type Frozen struct {
+	ID           string
+	Source       string
+	Identity     string
+	Satisfied    bool
+	Unverifiable bool
+}
 
 // Obligation is one derived obligation and its verdict.
 type Obligation struct {
@@ -67,6 +80,8 @@ type Input struct {
 	// Blocked is the host-checked conclusion that the task cannot be done as
 	// specified.
 	Blocked bool
+	// Frozen are the accepted contract's criteria, answered from the ledger.
+	Frozen []Frozen
 }
 
 // Evaluate derives every obligation's verdict and the outcome.
@@ -80,7 +95,15 @@ func Evaluate(in Input) Result {
 			obs = append(obs, checkObligation(check))
 		}
 	}
+	covered := map[string]bool{}
+	for _, f := range in.Frozen {
+		covered[f.Identity] = true
+		obs = append(obs, frozenObligation(f))
+	}
 	for _, o := range in.HostObligations {
+		if coveredByContract(o, covered) {
+			continue
+		}
 		obs = append(obs, Obligation{ID: o.ID, Source: "host:" + string(o.Kind), Required: true, Verdict: Owed, Cause: CauseHostObligation})
 	}
 	return Result{Outcome: outcomeOf(obs, in.Blocked), Obligations: obs}
@@ -145,4 +168,29 @@ func outcomeOf(obs []Obligation, blocked bool) Outcome {
 		}
 	}
 	return outcome
+}
+
+func frozenObligation(f Frozen) Obligation {
+	o := Obligation{ID: "contract@" + f.ID, Source: "contract:" + f.Source, Required: true}
+	switch {
+	case f.Unverifiable:
+		o.Verdict, o.Cause = Unverifiable, CauseSubjectMissing
+	case f.Satisfied:
+		o.Verdict = Satisfied
+	default:
+		o.Verdict, o.Cause = Owed, CauseContractOwed
+	}
+	return o
+}
+
+// coveredByContract reports a host obligation that owes the same verifier an
+// accepted criterion already owes.
+func coveredByContract(o evidence.Obligation, covered map[string]bool) bool {
+	switch o.Kind {
+	case evidence.ObligationBaselineCheck, evidence.ObligationMissingProjectCheck:
+		return covered[o.Subject()]
+	case evidence.ObligationBaselineTest:
+		return covered[o.Subject()]
+	}
+	return false
 }

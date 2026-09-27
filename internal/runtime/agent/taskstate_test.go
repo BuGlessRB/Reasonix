@@ -69,6 +69,10 @@ var taskRestarted = map[string]bool{
 	// The capture answers for the workspace one task began under. A new task
 	// begins under whatever the tree says then, alongside baselineCriteria.
 	"criteriaEpoch": true,
+	// A new task is accepted under a new contract; the cache goes with the
+	// record name restartLedger clears from the carried checkpoint.
+	"contract":       true,
+	"contractRecord": true,
 }
 
 // restartLedger is one assignment, so an unlisted field resets by default —
@@ -115,5 +119,21 @@ func TestTaskRuntimeLifetimeListsCoverTheStruct(t *testing.T) {
 		case !taskCarryOver[name] && !taskRestarted[name]:
 			t.Errorf("taskRuntime.%s is on neither list; decide whether a new task keeps it and assert that above", name)
 		}
+	}
+}
+
+func TestTaskRuntimeRestartStartsANewContract(t *testing.T) {
+	before := &taskRuntime{
+		checkpoint:     evidence.DeliveryCheckpoint{ScopeID: "scope-1", Contract: "sha256:rev"},
+		ledger:         evidence.NewLedger(),
+		contractRecord: "sha256:rev",
+	}
+	after := *before
+	after.restartLedger()
+	if after.checkpoint.Contract != "" || after.contractRecord != "" || after.contract != nil {
+		t.Fatalf("checkpoint.Contract=%q record=%q, want a new task to start without the last one's contract", after.checkpoint.Contract, after.contractRecord)
+	}
+	if after.checkpoint.ScopeID != "scope-1" {
+		t.Fatal("the scope still carries")
 	}
 }

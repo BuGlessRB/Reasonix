@@ -36,15 +36,16 @@ const shadowBundleKind = "shadow_bundle/1"
 const sealWait = 2 * time.Second
 
 type shadowBundle struct {
-	Kind        string                     `json:"kind"`
-	InputDigest string                     `json:"input_digest"`
-	Contract    shadowContract             `json:"contract"`
-	Report      completion.Report          `json:"report"`
-	Receipts    []sealedReceipt            `json:"receipts"`
-	Blocked     bool                       `json:"blocked,omitempty"`
-	Criteria    []taskcontract.Requirement `json:"criteria,omitempty"`
-	Verdict     verdict.Result             `json:"verdict"`
-	Divergence  verdict.Divergence         `json:"divergence"`
+	Kind         string                     `json:"kind"`
+	InputDigest  string                     `json:"input_digest"`
+	Contract     shadowContract             `json:"contract"`
+	Report       completion.Report          `json:"report"`
+	Receipts     []sealedReceipt            `json:"receipts"`
+	Blocked      bool                       `json:"blocked,omitempty"`
+	Criteria     []taskcontract.Requirement `json:"criteria,omitempty"`
+	TaskContract contractState              `json:"task_contract"`
+	Verdict      verdict.Result             `json:"verdict"`
+	Divergence   verdict.Divergence         `json:"divergence"`
 	workspaceObservation
 }
 
@@ -89,7 +90,11 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 		return
 	}
 	obs := a.observeWorkspace(seal)
+	ctx, cancel := context.WithTimeout(context.Background(), sealWait)
+	defer cancel()
+	cs := a.settleContract(ctx, seal)
 	res := verdict.Evaluate(verdict.Input{
+		Frozen:          a.frozenResults(cs.Criteria),
 		Contract:        c,
 		Receipts:        receipts,
 		HostObligations: a.task.ledger.Obligations(a.checkContract()),
@@ -97,15 +102,16 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 	})
 	div := verdict.Classify(rep.Verdict, c, res)
 	payload, err := json.Marshal(shadowBundle{
-		Kind:        shadowBundleKind,
-		InputDigest: sha256Hex([]byte(input)),
-		Contract:    shadowContract{Kind: c.Kind.String(), Risk: uint8(c.Risk), Checks: c.Checks},
-		Report:      rep,
-		Receipts:    sealReceipts(receipts),
-		Blocked:     blocked,
-		Criteria:    c.Requirements,
-		Verdict:     res,
-		Divergence:  div,
+		Kind:         shadowBundleKind,
+		InputDigest:  sha256Hex([]byte(input)),
+		Contract:     shadowContract{Kind: c.Kind.String(), Risk: uint8(c.Risk), Checks: c.Checks},
+		Report:       rep,
+		Receipts:     sealReceipts(receipts),
+		Blocked:      blocked,
+		Criteria:     c.Requirements,
+		TaskContract: cs,
+		Verdict:      res,
+		Divergence:   div,
 
 		workspaceObservation: obs,
 	})
@@ -117,14 +123,15 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 		Outcome:            string(res.Outcome),
 		DivergenceClass:    div.Class,
 		DivergenceReasons:  div.Reasons,
+		ContractRevision:   cs.Revision,
+		ContractDecision:   string(cs.Decision),
+		ContractFailure:    cs.Failure,
 	}
 	if err != nil {
 		audit.FailureCode = "trusted_state.encode"
 		event.RecordEvidenceBundle(a.svc.sink, audit)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), sealWait)
-	defer cancel()
 	rec, digest, err := seal.Store.Append(ctx, seal.Stream, shadowBundleKind, payload)
 	if err != nil {
 		audit.FailureCode = trustedstate.FailureCode(err)

@@ -107,10 +107,12 @@ model = "x"
 	if len(audits) != 3 {
 		t.Fatalf("got %d bundle audits, want one per turn: %+v", len(audits), audits)
 	}
+	var last uint64
 	for i, a := range audits {
-		if !a.Sealed || a.FailureCode != "" || a.Generation != uint64(i+1) {
-			t.Fatalf("turn %d audit = %+v, want sealed at generation %d", i+1, a, i+1)
+		if !a.Sealed || a.FailureCode != "" || a.Generation <= last {
+			t.Fatalf("turn %d audit = %+v, want sealed after generation %d", i+1, a, last)
 		}
+		last = a.Generation
 	}
 	if audits[0].Receipts == 0 {
 		t.Fatal("the writing turn sealed no receipts")
@@ -136,7 +138,7 @@ model = "x"
 	if err != nil {
 		t.Fatalf("a fresh process cannot verify the chain: %v", err)
 	}
-	if head.Generation != 3 || string(head.Record) != audits[2].Record || string(head.Integrity) != audits[2].Integrity {
+	if head.Generation != last || string(head.Record) != audits[2].Record || string(head.Integrity) != audits[2].Integrity {
 		t.Fatalf("head = %+v, want the third audit's record %s", head, audits[2].Record)
 	}
 

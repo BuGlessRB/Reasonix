@@ -150,3 +150,35 @@ func TestStricterReasonNamesTheHostObligationKind(t *testing.T) {
 		t.Fatalf("reasons = %v", d.Reasons)
 	}
 }
+
+func TestFrozenCriteriaAndTheHostObligationsTheyCover(t *testing.T) {
+	res := Evaluate(Input{
+		Frozen: []Frozen{
+			{ID: "command@go test", Source: "project_check", Identity: "go test", Satisfied: false},
+			{ID: "test@T", Source: "baseline_test", Identity: "T", Unverifiable: true},
+			{ID: "command@go vet", Source: "project_check", Identity: "go vet", Satisfied: true},
+		},
+		HostObligations: []evidence.Obligation{
+			{ID: "baseline_required_check@go test", Kind: evidence.ObligationBaselineCheck},
+			{ID: "baseline_test@T", Kind: evidence.ObligationBaselineTest},
+			{ID: "missing_project_check@go build", Kind: evidence.ObligationMissingProjectCheck},
+		},
+	})
+	var got []string
+	for _, o := range res.Obligations {
+		got = append(got, o.ID+"="+string(o.Verdict))
+	}
+	want := []string{
+		"contract@command@go test=owed",
+		"contract@test@T=unverifiable",
+		"contract@command@go vet=satisfied",
+		"missing_project_check@go build=owed",
+	}
+	if !slices.Equal(got, want) || res.Outcome != Incomplete {
+		t.Fatalf("obligations = %v (%s), want %v", got, res.Outcome, want)
+	}
+	d := Classify(completion.VerdictDone, nil, res)
+	if !slices.Equal(d.Reasons, []string{"contract:project_check", "host:missing_project_check", CauseSubjectMissing}) {
+		t.Fatalf("reasons = %v", d.Reasons)
+	}
+}
