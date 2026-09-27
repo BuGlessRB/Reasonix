@@ -405,6 +405,7 @@ func (c *Coordinator) deliverPlan(ctx context.Context, input string, outcome pla
 		executed := false
 		err := c.plannerPlanApprover.RunWithPlannerApproval(ctx, plan, func(ctx context.Context) error {
 			executed = true
+			outcome.plan.ApprovedByUser = true
 			return runExecutorWithPlan(ctx, plan)
 		})
 		if err == nil && !executed && ctx.Err() == nil {
@@ -425,6 +426,12 @@ func (c *Coordinator) deliverPlan(ctx context.Context, input string, outcome pla
 		return runWithPlanApproval()
 	}
 	if outcome.requestsApproval() {
+		return runWithPlanApproval()
+	}
+	// A plan that drops a check the task already accepted relaxes its contract,
+	// which is the user's to decide; without anyone to ask it runs and the
+	// dropped check stays owed.
+	if c.plannerPlanApprover != nil && outcome.exit == plannerExitPlan && c.executor.PlanDropsAcceptedChecks(outcome.plan) {
 		return runWithPlanApproval()
 	}
 	return runExecutorWithPlan(ctx, plan)

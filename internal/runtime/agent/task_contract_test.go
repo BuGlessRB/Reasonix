@@ -179,9 +179,9 @@ func verifiedPlan() plancontract.Plan {
 	}.Normalize()
 }
 
-// An approved plan's criterion is verified by the commands its step names:
-// they came with the plan the user approved, so the host runs them against the
-// ledger instead of taking a citation on the model's word.
+// An approved plan's criterion is answered by the check its step names: the
+// command came with the plan the user approved, so the host runs it against
+// the ledger instead of taking a citation on the model's word.
 func TestPlanCriterionIsVerifiedByItsStepsCommands(t *testing.T) {
 	plan := verifiedPlan()
 	quoted, readme := plan.Steps[0].Acceptance[0].ID, plan.Steps[1].Acceptance[0].ID
@@ -194,14 +194,50 @@ func TestPlanCriterionIsVerifiedByItsStepsCommands(t *testing.T) {
 		a.SetPlanContract(&plan)
 		_ = a.Run(deliveryGoalContext("goal-1", "fix"), "fix")
 		record := sink.last(t).Record
-		if v := sealedVerdict(t, store, record, "contract@plan@"+quoted); v != tc.want {
-			t.Fatalf("after %q the plan criterion is %q, want %q", tc.ran, v, tc.want)
+		if v := sealedVerdict(t, store, record, "contract@command@"+evidence.VerificationIdentity("go test ./parser/")); v != tc.want {
+			t.Fatalf("after %q the plan check is %q, want %q", tc.ran, v, tc.want)
 		}
-		if v := sealedVerdict(t, store, record, "contract@plan@"+readme); v != "unverifiable" {
+		if v := sealedVerdict(t, store, record, "criterion@"+readme); v != "unverifiable" {
 			t.Fatalf("a criterion whose step names no command is %q, want unverifiable", v)
 		}
 		if hasObligation(t, store, record, "criterion@"+quoted) {
-			t.Fatal("the plan criterion is counted twice: once frozen, once from the replayed contract")
+			t.Fatal("the plan criterion is counted twice: once by its frozen check, once from the replayed contract")
+		}
+	}
+}
+
+// Dropping a check an earlier plan put in the contract relaxes it. Host
+// policy refuses that; a plan the user approved carries the user's acceptance.
+func TestDroppingAPlanCheckNeedsTheUsersApproval(t *testing.T) {
+	store := trustedstate.Open(t.TempDir(), nil)
+	first := verifiedPlan()
+	a, sink := contractAgent(t, writeThenRun("go test ./parser/"), "", store)
+	a.SetPlanContract(&first)
+	ctx := deliveryGoalContext("goal-1", "fix")
+	_ = a.Run(ctx, "fix")
+
+	narrowed := verifiedPlan()
+	narrowed.Steps[0].Verification = nil
+	if !a.PlanDropsAcceptedChecks(narrowed) {
+		t.Fatal("a plan without the accepted check was not recognised as dropping it")
+	}
+	if a.PlanDropsAcceptedChecks(first) {
+		t.Fatal("the accepted plan itself was read as dropping its own check")
+	}
+	for _, tc := range []struct {
+		approved bool
+		want     contract.Decision
+		revision int
+	}{{false, contract.RelaxationRefused, 1}, {true, contract.UserRelaxed, 2}} {
+		plan := narrowed
+		plan.ApprovedByUser = tc.approved
+		a.SetPlanContract(&plan)
+		prov := writeThenRun("go vet ./...")
+		a.svc.prov = prov
+		_ = a.Run(ctx, "continue")
+		got := sink.last(t)
+		if got.ContractDecision != string(tc.want) || got.ContractRevision != tc.revision {
+			t.Fatalf("approved=%v: audit = %+v, want %s at revision %d", tc.approved, got, tc.want, tc.revision)
 		}
 	}
 }

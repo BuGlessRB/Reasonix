@@ -95,6 +95,7 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 	cs := a.settleContract(ctx, seal)
 	res := verdict.Evaluate(verdict.Input{
 		Frozen:          a.frozenResults(cs.Criteria),
+		CoveredCriteria: a.planCriteriaCovered(cs.Criteria),
 		Contract:        c,
 		Receipts:        receipts,
 		HostObligations: a.task.ledger.Obligations(a.checkContract()),

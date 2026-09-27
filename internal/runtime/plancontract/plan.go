@@ -22,6 +22,9 @@ type Plan struct {
 	NonGoals         []string     `json:"non_goals,omitempty"`
 	Steps            []Step       `json:"steps"`
 	RequiresApproval bool         `json:"requires_approval,omitempty"`
+	// ApprovedByUser is set by the host when the user approved this plan before
+	// it ran. A planner cannot submit it.
+	ApprovedByUser bool `json:"-"`
 }
 
 // Assumption is an unverified premise the plan rests on. Confirm names the
