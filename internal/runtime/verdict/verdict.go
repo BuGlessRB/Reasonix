@@ -6,7 +6,7 @@
 package verdict
 
 import (
-	"strings"
+	"slices"
 
 	"reasonix/internal/runtime/taskcontract"
 	"reasonix/internal/safety/evidence"
@@ -54,8 +54,6 @@ type Frozen struct {
 	Identity     string
 	Satisfied    bool
 	Unverifiable bool
-	// NoVerifier marks a criterion the accepted contract gives nothing to run.
-	NoVerifier bool
 }
 
 // Obligation is one derived obligation and its verdict.
@@ -86,20 +84,16 @@ type Input struct {
 	Blocked bool
 	// Frozen are the accepted contract's criteria, answered from the ledger.
 	Frozen []Frozen
+	// CoveredCriteria are plan criterion ids a frozen check answers for.
+	CoveredCriteria []string
 }
 
 // Evaluate derives every obligation's verdict and the outcome.
 func Evaluate(in Input) Result {
 	var obs []Obligation
-	frozenPlan := map[string]bool{}
-	for _, f := range in.Frozen {
-		if id, ok := strings.CutPrefix(f.ID, "plan@"); ok {
-			frozenPlan[id] = true
-		}
-	}
 	if c := in.Contract; c != nil {
 		for _, req := range c.Requirements {
-			if frozenPlan[req.ID] {
+			if slices.Contains(in.CoveredCriteria, req.ID) {
 				continue
 			}
 			obs = append(obs, criterion(req, in.Receipts))
@@ -186,8 +180,6 @@ func outcomeOf(obs []Obligation, blocked bool) Outcome {
 func frozenObligation(f Frozen) Obligation {
 	o := Obligation{ID: "contract@" + f.ID, Source: "contract:" + f.Source, Required: true}
 	switch {
-	case f.NoVerifier:
-		o.Verdict, o.Cause = Unverifiable, CauseNoVerifier
 	case f.Unverifiable:
 		o.Verdict, o.Cause = Unverifiable, CauseSubjectMissing
 	case f.Satisfied:

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/runtime/contract"
+	"reasonix/internal/runtime/plancontract"
 	"reasonix/internal/runtime/verdict"
 	"reasonix/internal/safety/evidence"
 	"reasonix/internal/state/trustedstate"
@@ -31,9 +32,12 @@ func (a *Agent) settleContract(ctx context.Context, seal *EvidenceSeal) contract
 	if err != nil {
 		return contractState{Failure: trustedstate.FailureCode(err)}
 	}
-	derived := contract.Derive(contract.Sources{Checks: a.task.checkpoint.BaselineChecks, Tests: a.baselineTestIdentities(), Plan: a.planCriteria()})
+	derived := contract.Derive(contract.Sources{Checks: a.task.checkpoint.BaselineChecks, Tests: a.baselineTestIdentities(), PlanChecks: a.planChecks()})
 	next, decision := contract.Accept(cur, record, derived, a.contractID())
-	if decision == contract.Accepted || decision == contract.Tightened {
+	if decision == contract.RelaxationRefused && a.userApprovedPlanDrops(cur, derived) {
+		next, decision = contract.AcceptRelaxation(*cur, record, derived, userPlanApproval), contract.UserRelaxed
+	}
+	if decision == contract.Accepted || decision == contract.Tightened || decision == contract.UserRelaxed {
 		rec, err := contract.Seal(ctx, seal.Store, seal.Stream, next)
 		if err != nil {
 			st := contractState{Failure: trustedstate.FailureCode(err)}
@@ -111,37 +115,93 @@ func (a *Agent) frozenResults(criteria []contract.Criterion) []verdict.Frozen {
 		case contract.VerifierTest:
 			f.Unverifiable = !known[c.Verifier.Identity]
 			f.Satisfied = !f.Unverifiable && !owedTests["baseline_test@"+c.Verifier.Identity]
-		case contract.VerifierCommands:
-			f.Satisfied = !changed || !slices.ContainsFunc(c.Verifier.Identities, func(id string) bool {
-				return !ledger.HasSuccessfulCommandAfter(id, at)
-			})
 		default:
-			f.Unverifiable, f.NoVerifier = true, true
+			f.Unverifiable = true
 		}
 		out = append(out, f)
 	}
 	return out
 }
 
-// planCriteria are the approved plan's acceptance criteria, each verified by
-// the verification commands its step names. The user approved those commands
-// with the plan, so they are the plan's own verifiers rather than the model's.
-func (a *Agent) planCriteria() []contract.PlanCriterion {
+// userPlanApproval names the act that carries a User's acceptance of a plan.
+const userPlanApproval = "user:plan_approval"
+
+// planChecks are the verification commands the plan names for its required
+// acceptance criteria. The user approved them with the plan, so they are the
+// plan's own verifiers rather than checks the model picked.
+func (a *Agent) planChecks() []string { return planChecksOf(a.PlanContract()) }
+
+func planChecksOf(plan *plancontract.Plan) []string {
+	if plan == nil {
+		return nil
+	}
+	var out []string
+	for _, step := range plan.Steps {
+		if !slices.ContainsFunc(step.Acceptance, func(c plancontract.Criterion) bool { return !c.Optional }) {
+			continue
+		}
+		for _, v := range step.Verification {
+			if id := evidence.VerificationIdentity(strings.TrimSpace(v.Command)); id != "" {
+				out = append(out, id)
+			}
+		}
+	}
+	return out
+}
+
+// userApprovedPlanDrops reports a derivation whose only losses are plan
+// checks, under a plan the user approved. Losing a project check or a
+// captured test is never the plan's to decide.
+func (a *Agent) userApprovedPlanDrops(cur *contract.Contract, derived []contract.Criterion) bool {
+	plan := a.PlanContract()
+	if cur == nil || plan == nil || !plan.ApprovedByUser {
+		return false
+	}
+	dropped := contract.Dropped(cur, derived)
+	return len(dropped) > 0 && !slices.ContainsFunc(dropped, func(c contract.Criterion) bool { return c.Source != contract.SourcePlan })
+}
+
+// planCriteriaCovered are the plan's criterion ids whose step names a check
+// the contract holds; the frozen check answers for them, so the replayed
+// contract must not count them again.
+func (a *Agent) planCriteriaCovered(criteria []contract.Criterion) []string {
 	plan := a.PlanContract()
 	if plan == nil {
 		return nil
 	}
-	var out []contract.PlanCriterion
+	held := map[string]bool{}
+	for _, c := range criteria {
+		if c.Verifier.Kind == contract.VerifierCommand {
+			held[c.Verifier.Identity] = true
+		}
+	}
+	var out []string
 	for _, step := range plan.Steps {
-		var commands []string
+		named := false
 		for _, v := range step.Verification {
-			if id := evidence.VerificationIdentity(strings.TrimSpace(v.Command)); id != "" {
-				commands = append(commands, id)
+			if held[evidence.VerificationIdentity(strings.TrimSpace(v.Command))] {
+				named = true
 			}
 		}
+		if !named {
+			continue
+		}
 		for _, c := range step.Acceptance {
-			out = append(out, contract.PlanCriterion{ID: c.ID, Required: !c.Optional, Commands: commands})
+			out = append(out, c.ID)
 		}
 	}
 	return out
+}
+
+// PlanDropsAcceptedChecks reports whether running plan would drop a check the
+// accepted contract took from an earlier plan. Only the User may accept that,
+// so the host routes such a plan to approval instead of running it.
+func (a *Agent) PlanDropsAcceptedChecks(plan plancontract.Plan) bool {
+	if a == nil || a.task.contract == nil || a.task.contractRecord != a.task.checkpoint.Contract {
+		return false
+	}
+	kept := planChecksOf(&plan)
+	return slices.ContainsFunc(a.task.contract.Criteria, func(c contract.Criterion) bool {
+		return c.Source == contract.SourcePlan && !slices.Contains(kept, c.Verifier.Identity)
+	})
 }
