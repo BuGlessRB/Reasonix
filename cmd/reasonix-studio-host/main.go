@@ -20,17 +20,22 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/gorilla/websocket"
+
 	"reasonix/internal/assembly/boot"
 	"reasonix/internal/base/i18n"
+	"reasonix/internal/base/netclient"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/surface"
 	"reasonix/internal/frontend/remotehost"
 	"reasonix/internal/frontend/serve"
 	"reasonix/internal/frontend/traystate"
+	"reasonix/internal/platform/account"
 	"reasonix/internal/platform/appupdate"
 	"reasonix/internal/platform/instanceid"
 	"reasonix/internal/platform/notify"
+	"reasonix/internal/platform/remotecloud"
 	"reasonix/internal/platform/telemetry"
 	"reasonix/internal/platform/update"
 	// Kinds register from init, so a binary builds only what it links. Without
@@ -351,7 +356,27 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 		return nil, err
 	}
 	hub.StartRecoveryGC(ctx)
+	startCloudRemote(ctx, cfg, logs)
 	return hub, nil
+}
+
+func startCloudRemote(ctx context.Context, cfg *config.Config, logs io.Writer) {
+	httpClient, err := netclient.NewHTTPClient(cfg.NetworkProxySpec(), netclient.TransportOptions{})
+	if err != nil {
+		fmt.Fprintf(logs, "remote cloud: %v\n", err)
+		return
+	}
+	stream, err := netclient.NewStreamDialer(cfg.NetworkProxySpec())
+	if err != nil {
+		fmt.Fprintf(logs, "remote cloud: %v\n", err)
+		return
+	}
+	dialer := *websocket.DefaultDialer
+	dialer.Proxy = nil
+	dialer.NetDialContext = stream.DialContext
+	client := account.New(os.Getenv("REASONIX_ACCOUNTS_URL"), "reasonix-studio/"+version, httpClient)
+	host := remotecloud.New(client, &dialer, os.Getenv("REASONIX_REMOTE_URL"), version)
+	go host.Run(ctx)
 }
 
 func studioTelemetryOptions(cfg *config.Config, studioVersion string) telemetry.Options {
