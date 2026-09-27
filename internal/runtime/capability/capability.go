@@ -283,15 +283,10 @@ func RenderTransientBlock(d RouteDecision) string {
 	return b.String()
 }
 
-// routeEntry answers only what the request states outright: a capability the
-// user named, or a trigger its own author declared. A capability nobody named
-// and no trigger matched is left to the model, which reads the whole request
-// rather than a word list.
+// routeEntry uses authored skill triggers and host-minted MCP tool names.
+// Resolved inline skill invocations are handled structurally by the controller.
 func routeEntry(text string, e Entry) (AutoUse, string, bool) {
 	if e.Kind == KindSkill {
-		if explicitSkill(text, e.Name) {
-			return AutoUseRequire, "the user explicitly referenced this skill", true
-		}
 		if e.AutoUse == AutoUseOff {
 			return "", "", false
 		}
@@ -303,14 +298,6 @@ func routeEntry(text string, e Entry) (AutoUse, string, bool) {
 		return AutoUsePrefer, "the user named this MCP tool", true
 	}
 	return "", "", false
-}
-
-// explicitSkill matches the host's own invocation syntax. Six prose forms used
-// to sit beside it in two languages, all demanding "use <name> skill" with no
-// article, so "use the review skill" — how anyone actually writes it — missed
-// while the phrasings that did match said nothing about wanting the skill.
-func explicitSkill(text, name string) bool {
-	return strings.Contains(text, "/"+normalize(name))
 }
 
 // namesMCPTool matches the identifier the host mints for the tool. Matching

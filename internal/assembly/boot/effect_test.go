@@ -27,21 +27,29 @@ import (
 )
 
 type effectRecordingProvider struct {
-	mu   sync.Mutex
-	reqs []provider.Request
+	mu        sync.Mutex
+	reqs      []provider.Request
+	rawInputs []string
 }
 
 func (p *effectRecordingProvider) Name() string { return "boot-effect-test" }
 
-func (p *effectRecordingProvider) Stream(_ context.Context, req provider.Request) (<-chan provider.Chunk, error) {
+func (p *effectRecordingProvider) Stream(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
 	p.mu.Lock()
 	p.reqs = append(p.reqs, req)
+	p.rawInputs = append(p.rawInputs, agent.RawUserInput(ctx, ""))
 	p.mu.Unlock()
 	ch := make(chan provider.Chunk, 2)
 	ch <- provider.Chunk{Type: provider.ChunkText, Text: "ok"}
 	ch <- provider.Chunk{Type: provider.ChunkDone}
 	close(ch)
 	return ch, nil
+}
+
+func (p *effectRecordingProvider) rawUserInputs() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.rawInputs...)
 }
 
 func (p *effectRecordingProvider) requests() []provider.Request {
