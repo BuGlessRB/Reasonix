@@ -1230,7 +1230,7 @@ func (c *Controller) ReloadCommands(ctx context.Context) error {
 		entries = append(entries, command.SlashEntry{
 			Name:        sk.SlashName(),
 			Description: sk.Description,
-			Render:      func(args []string) string { return c.skills.render(sk, strings.Join(args, " ")) },
+			Render:      func(args []string) string { return c.skills.renderInvocation(sk, strings.Join(args, " ")) },
 		})
 	}
 	for _, cmd := range cmds {

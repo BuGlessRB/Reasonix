@@ -102,11 +102,8 @@ func (s *skillSet) prepare(sk skill.Skill) skill.Skill {
 	return sk
 }
 
-func (s *skillSet) render(sk skill.Skill, args string) string {
-	if s.store != nil {
-		return s.store.Render(sk, args)
-	}
-	return skill.Render(sk, args)
+func (s *skillSet) renderInvocation(sk skill.Skill, args string) string {
+	return skill.RenderInvocation(s.prepare(sk), args)
 }
 
 // discovered returns the construction-time enabled snapshot (not the live store),
