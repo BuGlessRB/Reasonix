@@ -49,7 +49,7 @@ func (b *builder) addIsolation() {
 	if !b.cfg.Agent.WorktreeIsolation || b.opts.UnattendedChild || b.tools.taskTool == nil {
 		return
 	}
-	store := isolation.NewStore(filepath.Join(config.DeliveryWorktreeDir(), "isolated"), b.root)
+	store := isolation.NewStore(filepath.Join(config.DeliveryWorktreeDir(), "isolated"), b.root, b.repo)
 	go store.SweepExpired(context.WithoutCancel(b.ctx), isolatedResultTTL)
 	posture := &isolationPosture{}
 	b.tools.isolation = &isolationWiring{store: store, posture: posture}

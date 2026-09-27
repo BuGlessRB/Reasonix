@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"reasonix/internal/base/testenv"
+	"reasonix/internal/platform/gitcmd"
 )
 
 func TestParseGitNumstat(t *testing.T) {
@@ -39,7 +40,9 @@ func TestRunGitDisablesOptionalLocks(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	out, err := runGit(context.Background(), "", "status")
+	dir := testenv.TempDir(t)
+	repo := gitcmd.Repo{Dir: dir, GitDir: dir, CommonDir: dir, WorkTree: dir}
+	out, err := runGit(context.Background(), repo, "status")
 	if err != nil {
 		t.Fatalf("runGit: %v", err)
 	}

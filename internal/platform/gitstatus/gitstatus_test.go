@@ -10,7 +10,19 @@ import (
 	"testing"
 
 	"reasonix/internal/base/testenv"
+	"reasonix/internal/platform/gitcmd"
 )
+
+// opened is dir's identity as a session opening it resolves it; a directory
+// outside any work tree yields the unresolved Repo a session would hold.
+func opened(t *testing.T, dir string) gitcmd.Repo {
+	t.Helper()
+	repo, err := gitcmd.Open(context.Background(), dir)
+	if err != nil {
+		return gitcmd.Repo{Dir: dir}
+	}
+	return repo
+}
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -37,7 +49,7 @@ func TestCreatedThenDeletedIsNotAChange(t *testing.T) {
 	if err := os.WriteFile(scratch, []byte("package a\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	changes, ok, err := Status(context.Background(), dir)
+	changes, ok, err := Status(context.Background(), opened(t, dir))
 	if err != nil || !ok {
 		t.Fatalf("Status = %v ok=%v", err, ok)
 	}
@@ -48,7 +60,7 @@ func TestCreatedThenDeletedIsNotAChange(t *testing.T) {
 	if err := os.Remove(scratch); err != nil {
 		t.Fatal(err)
 	}
-	changes, _, err = Status(context.Background(), dir)
+	changes, _, err = Status(context.Background(), opened(t, dir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +72,7 @@ func TestCreatedThenDeletedIsNotAChange(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, "keep.go")); err != nil {
 		t.Fatal(err)
 	}
-	changes, _, err = Status(context.Background(), dir)
+	changes, _, err = Status(context.Background(), opened(t, dir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +82,7 @@ func TestCreatedThenDeletedIsNotAChange(t *testing.T) {
 }
 
 func TestNonRepoReportsFallbackNotFailure(t *testing.T) {
-	if _, ok, err := Status(context.Background(), testenv.TempDir(t)); ok || err != nil {
+	if _, ok, err := Status(context.Background(), opened(t, testenv.TempDir(t))); ok || err != nil {
 		t.Fatalf("Status(non-repo) = ok=%v err=%v, want ok=false with no error", ok, err)
 	}
 }
@@ -92,7 +104,7 @@ func TestDiffReportsATrackedEdit(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a\n\nfunc B() {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	text, truncated, err := Diff(context.Background(), dir, "a.go")
+	text, truncated, err := Diff(context.Background(), opened(t, dir), "a.go")
 	if err != nil || truncated {
 		t.Fatalf("Diff: %v truncated=%v", err, truncated)
 	}
@@ -109,7 +121,7 @@ func TestDiffIncludesAStagedEdit(t *testing.T) {
 		t.Fatal(err)
 	}
 	git(t, dir, "add", "a.go")
-	text, _, err := Diff(context.Background(), dir, "a.go")
+	text, _, err := Diff(context.Background(), opened(t, dir), "a.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +137,7 @@ func TestDiffShowsAnUntrackedFileAsAnAddition(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "new.go"), []byte("package a\n\nfunc N() {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	text, _, err := Diff(context.Background(), dir, "new.go")
+	text, _, err := Diff(context.Background(), opened(t, dir), "new.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +155,7 @@ func TestDiffRefusesAPathThatIsNotInTheTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"../secret.txt", "a/../../secret.txt", outside, "--output=/tmp/x", ""} {
-		text, _, err := Diff(context.Background(), dir, path)
+		text, _, err := Diff(context.Background(), opened(t, dir), path)
 		if !errors.Is(err, ErrPathOutsideTree) {
 			t.Fatalf("%q: want ErrPathOutsideTree, got %v (%q)", path, err, text)
 		}
@@ -159,7 +171,7 @@ func TestDiffCapsWhatItReturns(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "big.txt"), big, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	text, truncated, err := Diff(context.Background(), dir, "big.txt")
+	text, truncated, err := Diff(context.Background(), opened(t, dir), "big.txt")
 	if err != nil || !truncated || len(text) != MaxDiffBytes {
 		t.Fatalf("want a truncated %d-byte answer, got %d truncated=%v err=%v", MaxDiffBytes, len(text), truncated, err)
 	}

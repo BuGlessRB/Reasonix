@@ -18,6 +18,16 @@ import (
 	"reasonix/internal/platform/gitcmd"
 )
 
+// opened is dir's identity as a session opening it resolves it.
+func opened(t *testing.T, dir string) gitcmd.Repo {
+	t.Helper()
+	repo, err := gitcmd.Open(context.Background(), dir)
+	if err != nil {
+		return gitcmd.Repo{Dir: dir}
+	}
+	return repo
+}
+
 func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := gitcmd.Command(context.Background(), dir, args...)
@@ -94,7 +104,7 @@ func worktreeCount(t *testing.T, repo string) int {
 func TestBestOfAppliesTheJudgesPickAndRemovesEveryWorktree(t *testing.T) {
 	repo := repoWithFile(t)
 	judge := &judgeStub{reply: `{"winner": 2, "reason": "cleaner"}`}
-	tl := New(Spec{WorkspaceRoot: repo, ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: writer(), Judge: JudgeSpec{Provider: judge}})
+	tl := New(Spec{Repo: opened(t, repo), ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: writer(), Judge: JudgeSpec{Provider: judge}})
 	out, err := tl.Execute(t.Context(), json.RawMessage(`{"prompt":"rewrite a.txt","n":3}`))
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -126,7 +136,7 @@ func TestBestOfShowsEachAttemptsHostRecord(t *testing.T) {
 		}
 		return out, err
 	}
-	tl := New(Spec{WorkspaceRoot: repo, ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: runner, Judge: JudgeSpec{Provider: judge}})
+	tl := New(Spec{Repo: opened(t, repo), ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: runner, Judge: JudgeSpec{Provider: judge}})
 	out, err := tl.Execute(t.Context(), json.RawMessage(`{"prompt":"rewrite a.txt","n":2}`))
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -153,7 +163,7 @@ func TestBestOfShowsEachAttemptsHostRecord(t *testing.T) {
 func TestBestOfSkipsTheJudgeWhenOneAttemptFinished(t *testing.T) {
 	repo := repoWithFile(t)
 	judge := &judgeStub{reply: `{"winner": 1}`}
-	tl := New(Spec{WorkspaceRoot: repo, ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: writer(1), Judge: JudgeSpec{Provider: judge}})
+	tl := New(Spec{Repo: opened(t, repo), ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: writer(1), Judge: JudgeSpec{Provider: judge}})
 	out, err := tl.Execute(t.Context(), json.RawMessage(`{"prompt":"rewrite a.txt","n":2}`))
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -170,7 +180,7 @@ func TestBestOfSkipsTheJudgeWhenOneAttemptFinished(t *testing.T) {
 // untouched and the failure is the tool's, not a silent default.
 func TestBestOfAppliesNothingWhenTheJudgeDoesNotDecide(t *testing.T) {
 	repo := repoWithFile(t)
-	tl := New(Spec{WorkspaceRoot: repo, ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: writer(),
+	tl := New(Spec{Repo: opened(t, repo), ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: writer(),
 		Judge: JudgeSpec{Provider: &judgeStub{reply: `{"winner": 7}`}}})
 	if _, err := tl.Execute(t.Context(), json.RawMessage(`{"prompt":"rewrite a.txt","n":2}`)); !errors.Is(err, errJudgeReply) {
 		t.Fatalf("err = %v, want errJudgeReply", err)
@@ -182,7 +192,7 @@ func TestBestOfAppliesNothingWhenTheJudgeDoesNotDecide(t *testing.T) {
 
 func TestBestOfReportsWhenEveryAttemptFailed(t *testing.T) {
 	repo := repoWithFile(t)
-	tl := New(Spec{WorkspaceRoot: repo, ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: writer(1, 2)})
+	tl := New(Spec{Repo: opened(t, repo), ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: writer(1, 2)})
 	if _, err := tl.Execute(t.Context(), json.RawMessage(`{"prompt":"x","n":2}`)); !errors.Is(err, ErrNoCandidateFinished) {
 		t.Fatalf("err = %v, want ErrNoCandidateFinished", err)
 	}
@@ -198,7 +208,7 @@ func TestBestOfKeepsTheWinnerWhenTheWorkspaceMoved(t *testing.T) {
 		}
 		return writer()(ctx, run)
 	}
-	tl := New(Spec{WorkspaceRoot: repo, ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: moving,
+	tl := New(Spec{Repo: opened(t, repo), ManagedRoot: filepath.Join(testenv.TempDir(t), "c"), Runner: moving,
 		Judge: JudgeSpec{Provider: &judgeStub{reply: `{"winner": 1, "reason": "r"}`}}})
 	out, err := tl.Execute(t.Context(), json.RawMessage(`{"prompt":"x","n":2}`))
 	if err != nil {

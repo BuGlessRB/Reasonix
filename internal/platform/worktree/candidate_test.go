@@ -64,7 +64,7 @@ func TestCandidateStartsFromTheLiveWorkspaceAndAppliesBack(t *testing.T) {
 	head := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
 
 	ctx := context.Background()
-	snap, err := TakeSnapshot(ctx, repo)
+	snap, err := TakeSnapshot(ctx, opened(t, repo))
 	if err != nil {
 		t.Fatalf("TakeSnapshot: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestApplyRefusesAWorkspaceThatMoved(t *testing.T) {
 	gitIn(t, repo, "add", "-A")
 	gitIn(t, repo, "commit", "-q", "-m", "init")
 	ctx := context.Background()
-	snap, err := TakeSnapshot(ctx, repo)
+	snap, err := TakeSnapshot(ctx, opened(t, repo))
 	if err != nil {
 		t.Fatal(err)
 	}

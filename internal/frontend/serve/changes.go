@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net/http"
 
+	"reasonix/internal/platform/gitcmd"
 	"reasonix/internal/platform/gitstatus"
+	"reasonix/internal/session/control"
 )
 
 // changes reports what the working tree currently differs by. A frontend that
@@ -14,7 +16,7 @@ import (
 // Repo is false for a workspace that is not version-controlled, which is a
 // fallback signal and not a failure.
 func (s *Server) changes(w http.ResponseWriter, r *http.Request) {
-	list, ok, err := gitstatus.Status(r.Context(), s.ctl().WorkspaceRoot())
+	list, ok, err := gitstatus.Status(r.Context(), workspaceRepo(s.ctl()))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -36,7 +38,7 @@ func (s *Server) changes(w http.ResponseWriter, r *http.Request) {
 // carry different codes because a frontend has to say different things.
 func (s *Server) changeDiff(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
-	text, truncated, err := gitstatus.Diff(r.Context(), s.ctl().WorkspaceRoot(), path)
+	text, truncated, err := gitstatus.Diff(r.Context(), workspaceRepo(s.ctl()), path)
 	if errors.Is(err, gitstatus.ErrPathOutsideTree) {
 		refuse(w, http.StatusBadRequest, "changes.path_outside_tree",
 			"that path is not inside the working tree", map[string]any{"path": path})
@@ -52,4 +54,13 @@ func (s *Server) changeDiff(w http.ResponseWriter, r *http.Request) {
 		Diff      string `json:"diff"`
 		Truncated bool   `json:"truncated"`
 	}{Path: path, Diff: text, Truncated: truncated})
+}
+
+// workspaceRepo is the git identity the controller's session opened with. A
+// controller that carries none answers for a workspace git is not asked about.
+func workspaceRepo(ctl control.SessionAPI) gitcmd.Repo {
+	if c, ok := ctl.(interface{ WorkspaceRepo() gitcmd.Repo }); ok {
+		return c.WorkspaceRepo()
+	}
+	return gitcmd.Repo{Dir: ctl.WorkspaceRoot()}
 }
