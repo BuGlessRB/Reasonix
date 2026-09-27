@@ -483,3 +483,77 @@ func TestMultiEditBlankLineRunReplaceAllRejectsBlankOnly(t *testing.T) {
 		t.Fatalf("file must be untouched, got %q", got)
 	}
 }
+
+func TestEditFileNotFoundNamesBlankLinePresenceDrift(t *testing.T) {
+	cases := []struct {
+		name, seed, old, span string
+	}{
+		{
+			name: "old_string drops a blank line",
+			seed: "tex.uOffset = u;\r\ntex.vOffset = v;\r\n}\r\n\r\n/**\r\n * doc\r\n */\r\n",
+			old:  "tex.vOffset = v;\n}\n/**",
+			span: "lines 2-5",
+		},
+		{
+			name: "old_string invents a blank line",
+			seed: "x = 1\ny = 2\n",
+			old:  "x = 1\n\ny = 2",
+			span: "lines 1-2",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(testenv.TempDir(t), "src.ts")
+			if err := os.WriteFile(path, []byte(tc.seed), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := (editFile{}).Execute(context.Background(), argsJSON(t, map[string]any{
+				"path": path, "old_string": tc.old, "new_string": "replaced",
+			}))
+			if err == nil {
+				t.Fatal("a blank line's presence must still not match")
+			}
+			if msg := err.Error(); !strings.Contains(msg, tc.span) || !strings.Contains(msg, "blank lines") {
+				t.Fatalf("error must name the span and the blank-line cause, got %q", msg)
+			}
+			_, err = (multiEdit{}).Execute(context.Background(), argsJSON(t, map[string]any{
+				"path":  path,
+				"edits": []map[string]any{{"old_string": tc.old, "new_string": "replaced"}},
+			}))
+			if err == nil || !strings.Contains(err.Error(), tc.span) {
+				t.Fatalf("multi_edit must report the same cause, got %v", err)
+			}
+			if got, _ := os.ReadFile(path); string(got) != tc.seed {
+				t.Fatalf("file must be untouched, got %q", got)
+			}
+		})
+	}
+}
+
+func TestEditFileNotFoundBlankLineCauseNeedsOneSpan(t *testing.T) {
+	path := filepath.Join(testenv.TempDir(t), "dup.py")
+	seed := "a\nb\nz\na\nb\n"
+	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := (editFile{}).Execute(context.Background(), argsJSON(t, map[string]any{
+		"path": path, "old_string": "a\n\nb", "new_string": "c",
+	}))
+	if err == nil || strings.Contains(err.Error(), "blank lines") {
+		t.Fatalf("two spans match once blank lines are ignored, so no cause may be claimed, got %v", err)
+	}
+}
+
+func TestEditFileNotFoundBlankLineCauseNeedsDifferentLayout(t *testing.T) {
+	path := filepath.Join(testenv.TempDir(t), "eof.py")
+	seed := "a\n\nb"
+	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := (editFile{}).Execute(context.Background(), argsJSON(t, map[string]any{
+		"path": path, "old_string": "a\n\nb\n", "new_string": "c\n",
+	}))
+	if err == nil || strings.Contains(err.Error(), "blank lines") {
+		t.Fatalf("the blank lines agree and the miss is the final newline, got %v", err)
+	}
+}

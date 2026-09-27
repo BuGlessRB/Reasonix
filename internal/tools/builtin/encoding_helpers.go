@@ -176,11 +176,59 @@ func matchedRangeSample(content, fallback string, ranges []editRange) string {
 }
 
 func oldStringNotFoundError(path, oldString, content string) error {
+	if first, last, ok := blankLinePresenceSpan(oldString, content); ok {
+		return fmt.Errorf("old_string not found in %s: lines %d-%d match it only when blank lines are ignored, so its blank lines differ from the file's there. Copy that span again with every blank line exactly as the file has it.", path, first, last)
+	}
 	hint := oldStringNotFoundHint(oldString, content)
 	if line, text, ok := nearestContentLine(oldString, content); ok {
 		return fmt.Errorf("old_string not found in %s (nearest line %d: %q).%s", path, line, text, hint)
 	}
 	return fmt.Errorf("old_string not found in %s.%s", path, hint)
+}
+
+// blankLinePresenceSpan finds the one span old_string names once blank lines
+// are dropped on both sides. The matcher never accepts it, because a blank
+// line's presence is not free, but it is the cause the caller has to be told:
+// "re-read the file" sends it back to reproduce the same span the same way.
+func blankLinePresenceSpan(oldString, content string) (first, last int, ok bool) {
+	old := nonBlankLines(splitLineSegments(oldString))
+	if len(old) < 2 {
+		return 0, 0, false
+	}
+	lines := nonBlankLines(splitLineSegments(content))
+	matches, at := 0, 0
+	for i := 0; i+len(old) <= len(lines); i++ {
+		if slices.EqualFunc(lines[i:i+len(old)], old, func(a, b numberedLine) bool { return a.text == b.text }) {
+			matches, at = matches+1, i
+		}
+	}
+	if matches != 1 {
+		return 0, 0, false
+	}
+	span := lines[at : at+len(old)]
+	for k := range old {
+		// Same layout means the blank lines agree and the miss lies elsewhere.
+		if span[k].line-span[0].line != old[k].line-old[0].line {
+			return span[0].line, span[len(span)-1].line, true
+		}
+	}
+	return 0, 0, false
+}
+
+type numberedLine struct {
+	line int
+	text string
+}
+
+func nonBlankLines(lines []lineSegment) []numberedLine {
+	var out []numberedLine
+	for i, line := range lines {
+		text := strings.TrimRight(strings.TrimSuffix(line.raw, "\n"), " \t\r")
+		if strings.TrimSpace(text) != "" {
+			out = append(out, numberedLine{line: i + 1, text: text})
+		}
+	}
+	return out
 }
 
 func oldStringNotFoundHint(oldString, content string) string {
