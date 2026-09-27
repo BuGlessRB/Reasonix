@@ -68,6 +68,9 @@ type turnRuntime struct {
 	lastReadiness *finalReadinessCheck
 	// snapshot is the workspace as this turn found it; nil when unobserved.
 	snapshot *turnSnapshot
+	// uncountedCheckNoted marks that the model was told this turn why a command
+	// it ran was not a check; once a turn is enough to be learned.
+	uncountedCheckNoted bool
 }
 
 // pendingTurn is what someone outside the Run arms for the next one: a

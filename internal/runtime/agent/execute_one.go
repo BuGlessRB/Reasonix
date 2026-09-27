@@ -723,7 +723,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	err = usecap.WithContractHint(err, runTool, runArgs)
 	owedBefore := a.obligations()
 	a.recordToolReceipts(ctx, plan, result, execution, err)
-	result = withObligationDelta(result, evidence.DiffObligations(owedBefore, a.obligations()))
+	result = a.withObligationNotice(result, owedBefore, execution, readOnly)
 	// Track skill/capability outcomes for Delivery gates.
 	a.noteCapabilityInvocation(call.Name, json.RawMessage(call.Arguments), err)
 	a.notifyToolHooks(ctx, permName, permArgs, result, err)
