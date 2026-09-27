@@ -55,7 +55,7 @@ Jobs in the run:
 | `signing-contract` | Validates `.signpath/` locally and prints its fingerprint. | does not call SignPath |
 | `build` | Builds windows/amd64, darwin/amd64, darwin/arm64, linux/amd64; signs macOS and, if enabled, Windows. | Apple secrets are required |
 | `cli` | Builds `reasonix` archives for six OS/arch targets plus `SHA256SUMS`. | fails on a missing archive |
-| `publish` | Minisigns, writes `latest.json`, creates the GitHub prerelease, mirrors to R2. | environment `studio-release` |
+| `publish` | Renders the notes with their authors, minisigns, writes `latest.json`, creates the GitHub prerelease, mirrors to R2. | environment `studio-release`; an unresolved `#N` stops it before signing |
 
 The `studio-release` environment allows the `studio-v*` tag and the `studio` branch. It has no required reviewer.
 
@@ -91,6 +91,19 @@ File: `release-notes/studio/X.Y.Z.md`, without the tag's `v`. Language: Chinese.
 | R3 | One change is one list item within 200 display columns. |
 | R4 | Every item names its issue (`#123`), pull request or commit. |
 | R5 | Describe what the user observes. The explanation belongs in the linked commit. |
+
+The published body is rendered, not copied:
+
+| Reference | Rendered as |
+| --- | --- |
+| `#N`, a pull request | `#N by @author` |
+| `#N`, an issue closed by merged pull requests | `#N fixed in #M by @author` |
+| `#N`, an issue fixed by a direct push; a commit; a bot author | as written |
+| `#N`, a discussion or no such number | as written, with a warning |
+
+A `## 贡献者` list of the credited authors closes the notes. A `#N` counts only at a line start or after whitespace, `(`, `（`, `、`, `，` or `,`, and never in code, an HTML comment or a link target. Write colours such as `#333` in a code span.
+
+A lookup GitHub refuses, or cannot answer after retries, fails `publish` with a `release_credits.*` code. Preview with `node scripts/studio-release-notes.mjs release-notes/studio/X.Y.Z.md /tmp/notes.md`; it reads `GH_TOKEN`, else `gh auth token`.
 
 ```markdown
 本版修复读图模型误报看不到图，并让被 ACL 残留阻塞的 Windows 安装恢复启动。

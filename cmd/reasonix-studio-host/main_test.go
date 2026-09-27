@@ -26,6 +26,23 @@ func TestMain(m *testing.M) {
 	testenv.RunWithIsolatedUserState(m)
 }
 
+func TestStudioTelemetryUsesItsOwnSurfaceAndConsent(t *testing.T) {
+	cfg := config.Default()
+	disabled := false
+	cfg.Desktop.Telemetry = &disabled
+
+	opts := studioTelemetryOptions(cfg, "2.20.2")
+	if opts.Surface != surface.Studio {
+		t.Fatalf("surface = %q, want studio", opts.Surface)
+	}
+	if !opts.SuppressPing {
+		t.Fatal("disabled launch telemetry did not suppress the Studio ping")
+	}
+	if opts.Version != "2.20.2" || opts.Mode != "on" || !opts.Interactive {
+		t.Fatalf("Studio telemetry options = %+v", opts)
+	}
+}
+
 // recordingRunner stands in for the agent: a turn that reaches it proves the
 // request crossed the boundary and landed in the kernel, which is the only
 // thing a status code cannot say.
