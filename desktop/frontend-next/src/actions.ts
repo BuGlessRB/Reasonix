@@ -187,6 +187,19 @@ export const ACTIONS: UIAction[] = [
   { id: "extensions.export", kind: "repeatable", target: "none", proof: "interaction" },
   { id: "extensions.enabled", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
   { id: "extensions.remove", kind: "destructive", target: "entity", proof: "authority-effect" },
+  { id: "extensions.tab", kind: "view", target: "none", proof: "interaction" },
+  // The community market: reads are views, and the one write is the install
+  // its confirmation page answers with the plan the person just read.
+  { id: "market.search", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.kind", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.sort", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.more", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.open", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "market.back", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "market.cancel", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "market.inspect", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  { id: "market.confirm-many", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.install", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   // Taking back the innermost open thing: a popover, an inline form. One
   // intent, reached by pressing away and by Escape.
   { id: "layer.dismiss", kind: "navigation", target: "none", proof: "interaction" },

@@ -20,7 +20,7 @@ const ROUTES = [
   "/inbox", "/trajectory", "/mcp", "/skills", "/complete", "/prompt", "/workspace", "/capability-scope",
   "/providers", "/decision-models", "/roles", "/account", "/backups", "/hooks", "/memory", "/network", "/shell", "/todos",
   "/changes", "/attachments", "/drop", "/checkpoints", "/branches", "/compact", "/compaction", "/rewind",
-  "/extensions", "/themes", "/plugins", "/surfaces",
+  "/extensions", "/themes", "/plugins", "/market", "/surfaces",
   "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",
   "/permissions", "/sandbox", "/context", "/storage", "/tray", "/browser", "/browser-host", "/asks", "/update",
   "/host", "/notifications", "/share", "/pair", "/device",

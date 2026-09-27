@@ -1,0 +1,73 @@
+import type { PluginPlan } from "./plugin";
+
+// The community registry as the market tab reads it. Every text field is the
+// publisher's; what an install puts on disk is decided by the approved
+// version's pinned digest and the plan the person confirms, never by these.
+export type MarketKind = "skill" | "plugin" | "mcp";
+
+// What this machine holds of a listed package, read off the market's own
+// install record — and only while the things it installed are still there.
+export interface MarketInstalled {
+  version: string;
+  contentHash: string;
+}
+
+export interface MarketPackage {
+  kind: MarketKind;
+  handle: string;
+  name: string;
+  slug: string;
+  summary: string;
+  description: string;
+  homepage: string;
+  repoUrl: string;
+  tags: string[];
+  latestVersion: string;
+  installCount: number;
+  starCount: number;
+  verified: boolean;
+  updatedAt: string;
+  installed?: MarketInstalled;
+}
+
+// The version a reviewer let through. contentHash is the pin: an install is
+// refused unless the source still resolves to exactly this.
+export interface MarketVersion {
+  version: string;
+  source: string;
+  contentHash: string;
+  riskLevel: string;
+  createdAt: string;
+}
+
+export interface MarketDetail {
+  package: MarketPackage;
+  approved?: MarketVersion;
+  // False means the market will refuse to install it (market.unpinned).
+  pinned: boolean;
+  installed?: MarketInstalled;
+}
+
+export interface MarketList {
+  packages: MarketPackage[];
+  limit: number;
+  offset: number;
+}
+
+export interface MarketQuery {
+  kind?: MarketKind | "";
+  q?: string;
+  sort?: "trending" | "new" | "installs";
+  offset?: number;
+}
+
+// version is the approved version the person was shown; the kernel refuses an
+// install once a different one is approved (market.version_changed).
+export interface MarketRequest {
+  slug: string;
+  version?: string;
+  planId?: string;
+  replace?: boolean;
+}
+
+export type MarketPlan = PluginPlan & { slug: string; version: string; contentDigest?: string };

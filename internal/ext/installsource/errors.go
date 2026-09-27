@@ -58,6 +58,12 @@ var (
 	// ErrApprovalDenied: the host's ApprovalFunc returned a non-nil error,
 	// or the call set apply=true while the host requires explicit consent.
 	ErrApprovalDenied = errors.New("install_source: host denied the install")
+	// ErrDigestMismatch: the caller pinned a content digest and the source now
+	// resolves to different material. Nothing is written.
+	ErrDigestMismatch = errors.New("install_source: source content differs from the pinned digest")
+	// ErrNotPinnable: the caller pinned a content digest but the source resolves
+	// to material no digest can hold still (a local path, a link, no commit).
+	ErrNotPinnable = errors.New("install_source: source cannot be pinned by content")
 )
 
 // errKind wraps a sentinel with a human-readable detail so logs and the

@@ -67,7 +67,7 @@ func TestZipCannotBeLinked(t *testing.T) {
 	if err := os.WriteFile(zipPath, []byte("PK"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	tl := &installSourceTool{}
+	tl := &Tool{}
 	if _, _, _, err := tl.preparePluginZip(zipPath, "link"); err == nil {
 		t.Fatal("link mode accepted an archive, whose unpacked copy is deleted after the call")
 	}
