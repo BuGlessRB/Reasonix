@@ -376,6 +376,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "确认（还有 {n} 个没答）": "Confirm ({n} left)",
   "确认": "Confirm",
   "先不选择，直接回复": "Skip the choice and reply instead",
+  "需要你决定": "Need your decision",
+  "需要你补充信息": "Need more information from you",
   "MCP 服务器 {name} 请求信息": "MCP server {name} is asking for information",
   "这是外部服务器的请求，不是 agent 的提问。请勿填写密码、密钥等敏感信息。": "This request comes from an external server, not the agent. Do not enter passwords, keys or other secrets.",
   "上次填写未通过：{note}": "The last answer was not accepted: {note}",
