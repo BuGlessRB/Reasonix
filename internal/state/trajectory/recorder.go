@@ -184,6 +184,10 @@ type EvidenceBundle struct {
 	Integrity   string `json:"integrity,omitempty"`
 	Receipts    int    `json:"receipts,omitempty"`
 	FailureCode string `json:"failure_code,omitempty"`
+
+	SnapshotComplete   bool `json:"snapshot_complete,omitempty"`
+	UnobservedCompared bool `json:"unobserved_compared,omitempty"`
+	UnobservedChanges  int  `json:"unobserved_changes,omitempty"`
 }
 
 // ReadinessAudit mirrors hostaudit.ReadinessAudit with stable snake_case keys.
@@ -423,6 +427,10 @@ func (r *Recorder) RecordEvidenceBundle(a event.EvidenceBundleAudit) {
 		Integrity:   a.Integrity,
 		Receipts:    a.Receipts,
 		FailureCode: a.FailureCode,
+
+		SnapshotComplete:   a.SnapshotComplete,
+		UnobservedCompared: a.UnobservedCompared,
+		UnobservedChanges:  a.UnobservedChanges,
 	}})
 	event.RecordEvidenceBundle(r.inner, a)
 }

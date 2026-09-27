@@ -66,6 +66,8 @@ type turnRuntime struct {
 	reviewWarnings []string
 	// lastReadiness is the verdict the turn last asked to stop under.
 	lastReadiness *finalReadinessCheck
+	// snapshot is the workspace as this turn found it; nil when unobserved.
+	snapshot *turnSnapshot
 }
 
 // pendingTurn is what someone outside the Run arms for the next one: a

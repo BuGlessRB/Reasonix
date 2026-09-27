@@ -52,6 +52,7 @@ var leaves = []string{
 	"internal/base/retrieval",
 	"internal/base/shellparse",
 	"internal/state/store",
+	"internal/state/observation",
 	"internal/state/trustedstate",
 	"internal/contract/surface",
 	"internal/base/sysproxy",

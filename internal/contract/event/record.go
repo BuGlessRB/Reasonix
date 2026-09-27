@@ -139,6 +139,12 @@ type EvidenceBundleAudit struct {
 	Integrity   string
 	Receipts    int
 	FailureCode string
+	// SnapshotComplete says the turn-end workspace snapshot saw the whole tree.
+	SnapshotComplete bool
+	// UnobservedChanges counts paths that changed between the previous sealed
+	// turn and this one, when UnobservedCompared says that was established.
+	UnobservedCompared bool
+	UnobservedChanges  int
 }
 
 // EvidenceBundleAuditSink is an optional sink capability; implementations must

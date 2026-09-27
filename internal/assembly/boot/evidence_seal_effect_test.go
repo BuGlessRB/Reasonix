@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -97,9 +98,13 @@ model = "x"
 	if err := ctrl.Run(context.Background(), "and reply"); err != nil {
 		t.Fatalf("second turn: %v", err)
 	}
+	writeFile(t, dir, "edited-by-hand.txt", "the user, between turns")
+	if err := ctrl.Run(context.Background(), "and again"); err != nil {
+		t.Fatalf("third turn: %v", err)
+	}
 
 	audits := sink.audits()
-	if len(audits) != 2 {
+	if len(audits) != 3 {
 		t.Fatalf("got %d bundle audits, want one per turn: %+v", len(audits), audits)
 	}
 	for i, a := range audits {
@@ -110,6 +115,20 @@ model = "x"
 	if audits[0].Receipts == 0 {
 		t.Fatal("the writing turn sealed no receipts")
 	}
+	for i, a := range audits {
+		if !a.SnapshotComplete {
+			t.Fatalf("turn %d left the workspace snapshot incomplete", i+1)
+		}
+	}
+	if audits[0].UnobservedCompared {
+		t.Fatal("the first turn compared against a snapshot nobody sealed")
+	}
+	if !audits[1].UnobservedCompared || audits[1].UnobservedChanges != 0 {
+		t.Fatalf("turn 2 audit = %+v, want compared with nothing changed between turns", audits[1])
+	}
+	if !audits[2].UnobservedCompared || audits[2].UnobservedChanges != 1 {
+		t.Fatalf("turn 3 audit = %+v, want the one file edited between turns", audits[2])
+	}
 
 	store := trustedstate.Open(filepath.Join(config.MemoryUserDir(), builtin.TrustedStateDir), nil)
 	stream := workspaceid.PathFingerprint(dir)
@@ -117,8 +136,8 @@ model = "x"
 	if err != nil {
 		t.Fatalf("a fresh process cannot verify the chain: %v", err)
 	}
-	if head.Generation != 2 || string(head.Record) != audits[1].Record || string(head.Integrity) != audits[1].Integrity {
-		t.Fatalf("head = %+v, want the second audit's record %s", head, audits[1].Record)
+	if head.Generation != 3 || string(head.Record) != audits[2].Record || string(head.Integrity) != audits[2].Integrity {
+		t.Fatalf("head = %+v, want the third audit's record %s", head, audits[2].Record)
 	}
 
 	rec, err := store.Record(trustedstate.Digest(audits[0].Record))
@@ -133,6 +152,9 @@ model = "x"
 		t.Fatal("the bundle kept the bytes a tool call wrote")
 	}
 	var bundle struct {
+		WithinTurn struct {
+			Paths []string `json:"paths"`
+		} `json:"within_turn"`
 		Kind     string `json:"kind"`
 		Blocked  bool   `json:"blocked"`
 		Receipts []struct {
@@ -149,6 +171,9 @@ model = "x"
 		if r.ToolName == "write_file" {
 			found = r.ArgsDigest != ""
 		}
+	}
+	if !slices.Contains(bundle.WithinTurn.Paths, "note.txt") {
+		t.Fatalf("the writing turn's snapshot delta = %v, want note.txt", bundle.WithinTurn.Paths)
 	}
 	if bundle.Kind != "shadow_bundle/1" || !found || !bundle.Blocked {
 		t.Fatalf("bundle = %s, want a blocked turn's write_file receipt carrying only its argument digest", payload)

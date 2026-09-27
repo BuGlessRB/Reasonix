@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/runtime/completion"
 	"reasonix/internal/runtime/taskcontract"
 	"reasonix/internal/safety/evidence"
+	"reasonix/internal/state/observation"
 	"reasonix/internal/state/trustedstate"
 )
 
@@ -19,6 +20,10 @@ import (
 type EvidenceSeal struct {
 	Store  *trustedstate.Store
 	Stream string
+	// Root and Observer snapshot the workspace around each turn; either unset
+	// leaves the bundle without workspace observation.
+	Root     string
+	Observer *observation.Observer
 }
 
 // shadowBundleKind names the record kind. The bundle observes and gates
@@ -37,6 +42,7 @@ type shadowBundle struct {
 	Receipts    []sealedReceipt            `json:"receipts"`
 	Blocked     bool                       `json:"blocked,omitempty"`
 	Criteria    []taskcontract.Requirement `json:"criteria,omitempty"`
+	workspaceObservation
 }
 
 type shadowContract struct {
@@ -79,6 +85,7 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 	if seal == nil || seal.Store == nil || seal.Stream == "" {
 		return
 	}
+	obs := a.observeWorkspace(seal)
 	payload, err := json.Marshal(shadowBundle{
 		Kind:        shadowBundleKind,
 		InputDigest: sha256Hex([]byte(input)),
@@ -87,8 +94,15 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 		Receipts:    sealReceipts(receipts),
 		Blocked:     blocked,
 		Criteria:    c.Requirements,
+
+		workspaceObservation: obs,
 	})
-	audit := event.EvidenceBundleAudit{Receipts: len(receipts)}
+	audit := event.EvidenceBundleAudit{
+		Receipts:           len(receipts),
+		SnapshotComplete:   obs.After != nil && obs.After.Complete,
+		UnobservedCompared: obs.Unobserved.Compared,
+		UnobservedChanges:  obs.Unobserved.Changed,
+	}
 	if err != nil {
 		audit.FailureCode = "trusted_state.encode"
 		event.RecordEvidenceBundle(a.svc.sink, audit)

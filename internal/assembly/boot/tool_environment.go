@@ -19,6 +19,7 @@ import (
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/safety/egress"
 	"reasonix/internal/safety/sandbox"
+	"reasonix/internal/state/observation"
 	"reasonix/internal/state/sessiontemp"
 	"reasonix/internal/state/trustedstate"
 	"reasonix/internal/tools/builtin"
@@ -149,5 +150,6 @@ func openEvidenceSeal(stateRoot, workspace string, bash sandbox.Spec) *agent.Evi
 		}
 		return trustedstate.TamperEvidentOnly
 	}
-	return &agent.EvidenceSeal{Store: trustedstate.Open(dir, integrity), Stream: stream}
+	store := trustedstate.Open(dir, integrity)
+	return &agent.EvidenceSeal{Store: store, Stream: stream, Root: workspace, Observer: observation.NewObserver(store, observation.DefaultPolicy(stateRoot))}
 }

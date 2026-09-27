@@ -251,7 +251,7 @@ ObservationPolicy {
 WorkspaceSnapshot {
   rootIdentity
   observationPolicy Digest
-  entries[]         {path, kind: file|dir|symlink, mode, contentDigest}
+  entries[]         {path, kind: file|dir|symlink, mode, stamp}
   completeness      complete | incomplete{reason}
   digest
 }
@@ -261,9 +261,12 @@ WorkspaceSnapshot {
 | --- | --- |
 | W1 | Every "workspace digest" in this document is a `WorkspaceSnapshot.digest`. Nothing else stands in for it. |
 | W2 | The ObservationPolicy is host-owned and revisioned. `.gitignore`, workspace config, and any file the model can write MUST NOT add an exclusion. |
-| W3 | The default exclusions are the VCS store and host-declared build and cache directories, each with a stated reason. Excluded paths are outside the observation domain by declaration. |
+| W3 | The default exclusions are the VCS store and the host's own state root, each with a stated reason. Dependency trees stay observed because verifiers read them. Excluded paths are outside the observation domain by declaration. |
 | W4 | An excluded path cannot be a criterion subject or a protected scope. A contract that names one gets `observation.excluded` for that obligation, never `satisfied`. |
 | W5 | Symlinks are recorded as links (target string digest), never followed. |
+| W8 | A file's snapshot identity is its stamp: size, modification time, and on macOS and Linux inode change time, inode and device. Change time cannot be set from user space, so every write shows; a write that restores identical bytes also shows. Windows has no change time, so its stamp is weaker. |
+| W9 | Content digests are computed for the paths a verdict names (criterion subjects, mutation evidence), not for every file. |
+| W10 | Tree nodes are content-addressed index objects written without a disk flush. A snapshot's authority is its digest inside a sealed record; a node lost to a crash makes a later diff `unverifiable`, never a satisfied comparison. |
 | W6 | Two snapshots compare only under the same observation policy digest. Different digests make every freshness comparison fail as `observation.policy_changed`. |
 | W7 | An incomplete snapshot (entry limit, walk error) establishes nothing: scope and "no other changes" obligations become `unverifiable`. |
 
