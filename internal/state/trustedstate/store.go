@@ -155,7 +155,7 @@ func (s *Store) Append(ctx context.Context, stream, kind string, payload []byte)
 	if err != nil {
 		return Record{}, "", fmt.Errorf("%w: %w", ErrUnwritable, err)
 	}
-	if err := writeFileAtomic(filepath.Join(dir, "HEAD"), headBytes); err != nil {
+	if err := writeFileAtomic(filepath.Join(dir, "HEAD"), headBytes, true); err != nil {
 		return Record{}, "", err
 	}
 	s.observe(stream, next)
