@@ -531,7 +531,7 @@ Honesty metrics carry about ±10pp noise at one sample per task. A stage exit MU
 | Host report | `internal/runtime/completion` builds a host-authored report with gaps by subtraction | P1 seals it into the bundle |
 | Risk policy | `sensitive:` is read from the workspace `REASONIX.md` at each boot, so an edit changes enforcement for the next session | P2 (I13) |
 | Observation | `scanWorkspace` skips VCS stores and stops at 50k files; exclusions are code, not a revisioned policy | P1 |
-| Capability identity | `skill.Skill` has no content digest; runs record no capability versions | P3 |
+| Capability identity | every `reasonix run` trajectory header lists the capability versions the run had (host build, system prompt, each tool schema, each skill by content) and their set digest; e2ebench reports how many sets a report spans | eval corpus, reproduction within the noise floor, rollout |
 | Integrity inputs | MCP servers default to host mode and extension sidecars always run unconfined, so an install with either enabled is `tamper_evident_only` (T7) | a confined launch path for each |
 | Cross-process writers | nothing records the level of other processes sharing THS (T8) | machine-wide registry |
 
