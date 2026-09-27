@@ -10,6 +10,7 @@ type Surface string
 const (
 	CLI     Surface = "cli"
 	Desktop Surface = "desktop"
+	Studio  Surface = "studio"
 	Serve   Surface = "serve"
 	Bot     Surface = "bot"
 	Remote  Surface = "remote"
@@ -18,7 +19,7 @@ const (
 // Valid reports whether s names a surface this build knows.
 func (s Surface) Valid() bool {
 	switch s {
-	case CLI, Desktop, Serve, Bot, Remote:
+	case CLI, Desktop, Studio, Serve, Bot, Remote:
 		return true
 	}
 	return false
